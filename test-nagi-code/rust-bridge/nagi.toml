@@ -1,0 +1,7 @@
+entry = "bridge.nagi"
+
+[rust]
+file = "native.rs"
+
+[rust.dependencies]
+serde_json = "1.0"

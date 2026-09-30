@@ -9,8 +9,7 @@
 `rust-bridge/bridge.nagi` は別ファイルの宣言をimportし、Rustで書いたCRC-32と`serde_json`を呼び出します。
 
 ```powershell
-.\target\release\nagic.exe run test-nagi-code/rust-bridge/bridge.nagi `
-  --rust test-nagi-code/rust-bridge/native.rs --rust-dep serde_json=1.0
+.\target\release\nagic.exe run --project test-nagi-code/rust-bridge
 ```
 
 [../docs/modules-and-rust.md](../docs/modules-and-rust.md) にファイル分割と型付きRust連携の仕様をまとめています。VS Code拡張は [../editors/vscode-nagi/README.md](../editors/vscode-nagi/README.md) を参照してください。

@@ -40,6 +40,8 @@ async def get_user(db: Db, id: i64) -> Result[User?, Error]:
 
 Pythonコードとして実行する構文ではありません。`nagic`でビルドしてください。
 
+複数ファイルのアプリは[nagi.toml](docs/projects.md)に入口・Rust依存・手書きLowの設定を保存できます。たとえば `./target/release/nagic run --project test-nagi-code/rust-bridge` でRust連携サンプルを動かせます。[VS Code拡張](editors/vscode-nagi/README.md)も同じ設定を使い、補助ファイルから入口の検査・ビルド・実行を行います。
+
 ## HighとLow
 
 ```bash

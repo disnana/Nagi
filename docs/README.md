@@ -22,6 +22,7 @@
 | 値を渡すと再利用できない理由 | [所有権](ownership.md)、[viewとコピー](view-and-zero-copy.md) |
 | 失敗を返す、tryを使う | [エラー処理](error-handling.md) |
 | 複数ファイル、Rustのライブラリを使う | [importとRust連携](modules-and-rust.md) |
+| 入口・Rust依存・Lowの設定をまとめる | [nagi.tomlとプロジェクト](projects.md) |
 | JSONを読み書きする | [JSON](json.md) |
 | データを保存する | [SQLite](database.md) |
 | 非同期処理、子taskを待つ | [asyncとscope](async.md)、[並行処理](concurrency.md) |

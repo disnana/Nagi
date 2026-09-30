@@ -8,10 +8,10 @@ HTML/CSS/JavaScriptを埋め込み、NagiのJSON APIとSQLiteで動くサンプ�
 
 ```powershell
 cargo build --release --locked -p nagic
-.\target\release\nagic.exe run test-nagi-code/web-demo/tasks.nagi
+.\target\release\nagic.exe run --project test-nagi-code/web-demo
 ```
 
-ブラウザーで [http://127.0.0.1:8091](http://127.0.0.1:8091) を開いてください。`NAGI_PORT`でポートを、`NAGI_DB`でDBパスを変えられます。初期設定では起動時のフォルダーに`nagi-tasks.sqlite`を作り、再起動後も保存内容を使います。
+ブラウザーで [http://127.0.0.1:8091](http://127.0.0.1:8091) を開いてください。`NAGI_PORT`でポートを、`NAGI_DB`でDBパスを変えられます。プロジェクトとして起動した場合、初期設定では`test-nagi-code/web-demo/nagi-tasks.sqlite`を作り、再起動後も保存内容を使います。以前の`run tasks.nagi`形式やexeの直接実行では、起動時の作業フォルダーが基準になります。既存DBを引き継ぐ場合は`NAGI_DB`にその絶対パスを指定してください。
 
 Windows x64の配布用exeを作る場合：
 
@@ -26,6 +26,7 @@ Windows x64の配布用exeを作る場合：
 
 | ファイル | 内容 |
 |---|---|
+| `nagi.toml` | 入口ファイルの指定。CLIとVS Codeで共通 |
 | `tasks.nagi` | HTTP handlerと起動 |
 | `models.nagi` | JSONとDBの型 |
 | `validation.nagi` | 入力検証 |

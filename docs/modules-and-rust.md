@@ -1,5 +1,7 @@
 # ファイルのimportとRust連携
 
+入口・Rustファイル・crate依存を保存する場合は[nagi.tomlとプロジェクト](projects.md)を使ってください。CLIとVS Codeで同じ設定を利用できます。
+
 ## Nagiファイルを分割する
 
 ```python

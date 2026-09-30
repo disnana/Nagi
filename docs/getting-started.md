@@ -86,6 +86,8 @@ Linux / WSL2では、以降の`.\target\release\nagic.exe`を`./target/release/n
 
 コンパイルにはこのリポジトリの`runtime/`も必要です。`nagic.exe`だけを別の場所にコピーした場合は、環境変数`NAGI_ROOT`にNagiリポジトリの場所を指定してください。生成したアプリexeの配布例は[タスク管理デモ](../test-nagi-code/web-demo/README.md)にあります。
 
+アプリが複数ファイルになったら、[nagi.tomlとプロジェクト](projects.md)で入口やRust依存をまとめられます。設定のあるフォルダーで`nagic run`と実行でき、VS Codeも同じ入口を使います。
+
 ## 4. VS Codeで書く
 
 [Nagi拡張のインストール手順](../editors/vscode-nagi/README.md)に従ってVSIXをインストールし、このリポジトリのフォルダーを開きます。
