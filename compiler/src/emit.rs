@@ -587,70 +587,18 @@ pub fn rust(p: &Program) -> Result<String, String> {
 }
 
 pub fn cli(args: Vec<String>) -> Result<(), String> {
-    if args.len() < 2 {
-        return Err(
-            "nagic <check|lower|build|run> SOURCE [--native FILE.low] [--rust FILE.rs] [--rust-dep NAME=VERSION] [--out DIR] [--cost-report]"
-                .into(),
-        );
-    }
-    let cmd = &args[0];
-    let path = PathBuf::from(&args[1]);
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let options = crate::project::resolve(&args, &cwd)?;
+    let cmd = options.command.as_str();
+    let path = options.source;
     let high = path.extension().is_none_or(|x| x != "low");
     let mut sources = crate::source::load(&path, high)?;
     let mut p = std::mem::take(&mut sources.program);
-    let mut native = vec![];
-    let mut out = PathBuf::from("build").join(path.file_stem().unwrap());
-    let mut cost = false;
-    let mut rust_file = None;
-    let mut rust_deps = std::collections::BTreeMap::new();
-    let mut i = 2;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--rust" => {
-                i += 1;
-                if rust_file.is_some() {
-                    return Err("--rustは1ファイル指定してください".into());
-                }
-                rust_file = Some(
-                    fs::canonicalize(args.get(i).ok_or("--rust requires path")?)
-                        .map_err(|e| e.to_string())?,
-                );
-            }
-            "--rust-dep" => {
-                i += 1;
-                let (name, version) = args
-                    .get(i)
-                    .ok_or("--rust-dep requires NAME=VERSION")?
-                    .split_once('=')
-                    .ok_or("--rust-dep requires NAME=VERSION")?;
-                if name == "nagi-runtime"
-                    || name.is_empty()
-                    || version.is_empty()
-                    || !name.chars().enumerate().all(|(i, c)| {
-                        c == '_'
-                            || c.is_ascii_alphabetic()
-                            || i > 0 && (c.is_ascii_digit() || c == '-')
-                    })
-                    || rust_deps
-                        .insert(name.to_owned(), version.to_owned())
-                        .is_some()
-                {
-                    return Err("Rust依存の名前・versionが不正、または重複しています".into());
-                }
-            }
-            "--native" => {
-                i += 1;
-                native.push(PathBuf::from(args.get(i).ok_or("--native requires path")?));
-            }
-            "--out" => {
-                i += 1;
-                out = PathBuf::from(args.get(i).ok_or("--out requires path")?);
-            }
-            "--cost-report" => cost = true,
-            x => return Err(format!("unknown option: {x}")),
-        }
-        i += 1;
-    }
+    let native = options.native;
+    let out = options.out;
+    let cost = options.cost;
+    let rust_file = options.rust_file;
+    let rust_deps = options.rust_dependencies;
     let mut all = Program::default();
     for n in native {
         let native_sources = crate::source::load(&n, false)?;
@@ -752,8 +700,14 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     );
     fs::write(out.join("Cargo.toml"), manifest).map_err(|e| e.to_string())?;
     let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| root.join("native-target"));
+        .map(|p| cwd.join(p))
+        .unwrap_or_else(|| {
+            options
+                .project_root
+                .as_ref()
+                .map(|p| p.join("build/native-target"))
+                .unwrap_or_else(|| root.join("native-target"))
+        });
     let status = Command::new("cargo")
         .args(["build", "--release", "--manifest-path"])
         .arg(out.join("Cargo.toml"))
@@ -768,7 +722,11 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         .join(format!("{package}{}", std::env::consts::EXE_SUFFIX));
     println!("native: {}", binary.display());
     if cmd == "run" {
-        let status = Command::new(binary).status().map_err(|e| e.to_string())?;
+        let mut process = Command::new(binary);
+        if let Some(root) = options.project_root {
+            process.current_dir(root);
+        }
+        let status = process.status().map_err(|e| e.to_string())?;
         if !status.success() {
             return Err(format!("program exited: {status}"));
         }

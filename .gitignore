@@ -1,6 +1,6 @@
 /target/
 /native-target/
-/build/
+build/
 *.sqlite
 __pycache__/
 target/release/
