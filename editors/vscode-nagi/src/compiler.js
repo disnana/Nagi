@@ -64,9 +64,14 @@ function parseDiagnostics(output, fallbackFile) {
     message: message.replace(/^error:\s*/, '') }];
 }
 
-function runCheck(executable, args, cwd, timeout, callback, maxBuffer = 1024 * 1024) {
-  return execFile(executable, args, { cwd, timeout, maxBuffer, windowsHide: true, shell: false },
+function runCheck(executable, args, cwd, timeout, callback, maxBuffer = 1024 * 1024, input) {
+  const child = execFile(executable, args, { cwd, timeout, maxBuffer, windowsHide: true, shell: false },
     (error, stdout, stderr) => callback({ error, output: [stdout, stderr].filter(Boolean).join('\n') }));
+  if (input !== undefined) {
+    child.stdin.on('error', () => {}); // An early compiler failure is reported by execFile's callback.
+    child.stdin.end(input);
+  }
+  return child;
 }
 
 function definitionAt(index, file, line, character, root) {

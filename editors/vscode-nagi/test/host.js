@@ -50,6 +50,7 @@ async function run() {
   fs.writeFileSync(manifestFile, "entry = 'host-entry.nagi'\n[rust]\nfile = 'native.rs'\n[rust.dependencies]\nserde_json = '1.0'\n");
   fs.writeFileSync(path.join(project, 'host-entry.nagi'), 'import "helper.nagi"\n@rust("native::record")\nextern def record()\ndef answer() -> i64:\n    return 42\ndef main():\n    print(helper())\n    record()\n');
   fs.appendFileSync(path.join(project, 'host-entry.nagi'), '\ndef tagged() -> Number:\n    return Number(value=42)\n');
+  fs.appendFileSync(path.join(project, 'host-entry.nagi'), '\ndef add(left: i64, right: i64) -> i64:\n    return left + right\n');
   const modelsFile = path.join(project, 'models.nagi');
   fs.writeFileSync(modelsFile, 'class Number:\n    value: i64\n');
   fs.writeFileSync(helperFile, 'import "models.nagi"\ndef helper() -> i64:\n    return answer()\n');
@@ -79,6 +80,40 @@ async function run() {
   const typeLine = entryDocument.getText().split(/\r?\n/).findIndex(line => line.startsWith('def tagged'));
   const typeDefinition = await definitions(entryDocument, typeLine, 18);
   assert.equal(typeDefinition[0].uri.toString(), vscode.Uri.file(modelsFile).toString(), 'F12 on a class type resolves its import');
+  async function hovers(doc, line, column) {
+    const values = await vscode.commands.executeCommand('vscode.executeHoverProvider', doc.uri, new vscode.Position(line, column));
+    return values.flatMap(v => v.contents.map(c => c.value || String(c))).join('\n');
+  }
+  async function completions(doc, line, column) {
+    return vscode.commands.executeCommand('vscode.executeCompletionItemProvider', doc.uri, new vscode.Position(line, column));
+  }
+  assert.match(await hovers(helper, 2, 12), /def answer\(\) -> i64/, 'hover shows a function return type across imports');
+  assert.match(await hovers(entryDocument, typeLine, 18), /value: i64/, 'class hover lists fields');
+  const originalHelper = helper.getText();
+  await replaceHelper('import "models.nagi"\ndef helper() -> i64:\n    return Nu\n');
+  const candidates = await completions(helper, 2, 13);
+  const number = candidates.items.find(c => c.label === 'Number');
+  assert.ok(number, 'class completion follows the project import graph');
+  assert.equal(number.insertText.value, 'Number(value=${1:value})', 'class completion uses named arguments');
+  await replaceHelper(originalHelper);
+  async function replaceHelper(text) {
+    const change = new vscode.WorkspaceEdit();
+    change.replace(helper.uri, new vscode.Range(0, 0, helper.lineCount, 0), text);
+    await vscode.workspace.applyEdit(change);
+  }
+  await replaceHelper('import "models.nagi"\ndef helper(value: i64) -> i64:\n    return value\n');
+  assert.match(await hovers(entryDocument, 6, 12), /helper\(value: i64\)/, 'hover reads unsaved declarations in imported buffers');
+  assert.equal(fs.readFileSync(helperFile, 'utf8'), originalHelper, 'editor queries never save source files');
+  await replaceHelper('import "models.nagi"\ndef helper() -> i64:\n    return add(1, ');
+  const hint = await vscode.commands.executeCommand('vscode.executeSignatureHelpProvider', helper.uri, new vscode.Position(2, 18), '(');
+  assert.match(hint.signatures[0].label, /add\(left: i64, right: i64\)/, 'signature help survives incomplete syntax');
+  assert.equal(hint.activeParameter, 1);
+  const unfinished = await completions(helper, 2, 18);
+  assert.match(unfinished.items.find(c => c.label === 'helper').detail, /保存済み/, 'fallback candidates explicitly identify saved declarations');
+  await replaceHelper('import "models.nagi"\ndef helper() -> i64:\n    value: Re\n    return 0\n');
+  const typed = await completions(helper, 2, 13);
+  assert.ok(typed.items.some(c => c.label === 'Result'), 'type completion works while editing');
+  await replaceHelper(originalHelper);
   const commentEdit = new vscode.WorkspaceEdit();
   commentEdit.insert(helper.uri, new vscode.Position(helper.lineCount, 0), '# answer()\n');
   await vscode.workspace.applyEdit(commentEdit);
@@ -127,7 +162,8 @@ async function run() {
   const lowEntry = await vscode.workspace.openTextDocument(path.join(lowFolder, 'main.low'));
   const lowDefinition = await definitions(lowEntry, 1, 27);
   assert.equal(lowDefinition[0].uri.toString(), vscode.Uri.file(path.join(lowFolder, 'math.low')).toString(), 'Low import definition jump works');
-  console.log('PASS: VS Code Extension Host diagnostics, project run, Rust dependencies, manifest refresh, F12 functions/classes/imports/Low, unsaved and comment guards');
+  assert.match(await hovers(lowEntry, 1, 27), /fn twice\(x: i64\) -> i64/, 'Low hover displays its declaration');
+  console.log('PASS: VS Code Host diagnostics/run/F12, hover, completion, named fields, unsaved imports, partial syntax fallback, type completion, active signature parameters, High/Low');
 }
 
 module.exports = { run };
