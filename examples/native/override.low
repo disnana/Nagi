@@ -1,0 +1,6 @@
+# Highを再コンパイルしても、このファイルは書き換えない。
+@replace generated::score
+fn optimized_score(x: i64) -> i64 {
+    return x * 6;
+}
+

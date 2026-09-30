@@ -1,0 +1,12 @@
+# viewは元データを借用する。長生きさせる時だけcopyを明記する。
+def identity(data: view[str]) -> view[str]:
+    return data
+
+def main():
+    original = "tp-li"
+    borrowed = view(original)
+    returned = identity(borrowed)
+    print(returned)
+    copied = copy(returned)
+    print(copied)
+

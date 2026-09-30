@@ -1,0 +1,6 @@
+# 3回panicさせ、one_for_oneで該当workerを再起動する実試験。
+async def main() -> Result[unit, Error]:
+    restarts = try await supervisor_demo()
+    print(restarts)
+    return ok(print("独立workerは継続"))
+

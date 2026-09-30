@@ -1,0 +1,11 @@
+# 固定型の値を使う。Python互換の実行ではなくネイティブバイナリになる。
+class Point:
+    x: f64
+    y: f64
+
+def main():
+    print("Hello, Nagi!")
+    print("tpが作った新しい言語")
+    p = Point(x=1.5, y=2.5)
+    print(p.x + p.y)
+

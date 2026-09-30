@@ -1,0 +1,54 @@
+[
+  {
+    "requested": 1000,
+    "held": 1000,
+    "errors": [],
+    "error_count": 0,
+    "seconds_to_open_and_reply": 0.3872393469991948,
+    "before": {
+      "VmHWM": 4288,
+      "VmRSS": 4288,
+      "fds": 10
+    },
+    "held_stats": {
+      "VmHWM": 29028,
+      "VmRSS": 29028,
+      "fds": 1010
+    },
+    "after": {
+      "VmHWM": 29028,
+      "VmRSS": 29028,
+      "fds": 10
+    },
+    "client_fd_limit": [
+      16384,
+      16384
+    ]
+  },
+  {
+    "requested": 10000,
+    "held": 10000,
+    "errors": [],
+    "error_count": 0,
+    "seconds_to_open_and_reply": 4.484048712000003,
+    "before": {
+      "VmHWM": 29028,
+      "VmRSS": 29028,
+      "fds": 10
+    },
+    "held_stats": {
+      "VmHWM": 255572,
+      "VmRSS": 255572,
+      "fds": 10010
+    },
+    "after": {
+      "VmHWM": 255576,
+      "VmRSS": 255576,
+      "fds": 10
+    },
+    "client_fd_limit": [
+      16384,
+      16384
+    ]
+  }
+]

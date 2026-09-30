@@ -1,0 +1,54 @@
+# HTTP body -> CreateUser -> SQLバインド -> User -> JSON の実経路。
+class User:
+    id: i64
+    name: str
+    age: i32
+
+class CreateUser:
+    name: str
+    age: i32
+
+@get("/small")
+async def small() -> Result[User, Error]:
+    return ok(User(id=1, name="tp-li", age=18))
+
+@get("/query")
+async def query_params(limit: i32, name: str) -> Result[User, Error]:
+    return ok(User(id=i64(limit), name=name, age=18))
+
+@get("/users/{id}")
+async def get_user(db: Db, id: i64) -> Result[User?, Error]:
+    return await db_query[User](db, "SELECT id, name, age FROM users WHERE id = ?1", id)
+
+@get("/users")
+async def list_users(db: Db) -> Result[List[User], Error]:
+    return await db_all[User](db, "SELECT id, name, age FROM users ORDER BY id")
+
+@post("/users")
+async def create_user(db: Db, req: CreateUser) -> Result[User, Error]:
+    # nameはDB workerへmove。ageはnative i32のまま渡す。
+    return await db_insert[User](db, "INSERT INTO users(name, age) VALUES (?1, ?2) RETURNING id, name, age", req.name, req.age)
+
+@put("/users/{id}")
+async def update_user(db: Db, id: i64, req: CreateUser) -> Result[User, Error]:
+    return await db_update[User](db, "UPDATE users SET name = ?2, age = ?3 WHERE id = ?1 RETURNING id, name, age", id, req.name, req.age)
+
+@delete("/users/{id}")
+async def delete_user(db: Db, id: i64) -> Result[i64, Error]:
+    return await db_write(db, "DELETE FROM users WHERE id = ?1", id)
+
+@post("/echo")
+async def echo(body: view[bytes]) -> Result[CreateUser, Error]:
+    # body自体はHTTP受信Bytesを借用。文字列フィールドの所有化は別のコスト。
+    return json_decode[CreateUser](body)
+
+@get("/wait/{id}")
+async def wait_ms(id: i64) -> Result[i64, Error]:
+    await sleep(id)
+    return ok(id)
+
+async def main() -> Result[unit, Error]:
+    path = env("NAGI_DB", ":memory:")
+    db = try await db_open(path)
+    try await db_exec(db, "CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT NOT NULL, age INTEGER NOT NULL)")
+    return await serve(db, 8080)

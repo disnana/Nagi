@@ -1,0 +1,7 @@
+# 最適化の前の定義。native/override.lowで型を維持して差し替える。
+def score(x: i64) -> i64:
+    return x + 1
+
+def main():
+    print(score(7))
+

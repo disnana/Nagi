@@ -1,0 +1,126 @@
+# Isolated archive extraction; new compiler and native target directories; no build cache reused.
+# cargo build --release -p nagic --locked
+# nagic run examples/values.nagi --out build/portable-values
+# nagic run examples/hello.low --out build/portable-low
+# exit status: 0; values stdout: 10 and 16; standalone Low stdout: 4
+   Compiling memchr v2.8.3
+   Compiling nagic v0.1.0 (/tmp/nagi-distribution-check/nagi/compiler)
+    Finished `release` profile [optimized] target(s) in 10.60s
+     Locking 106 packages to latest compatible versions
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling libc v0.2.189
+   Compiling syn v3.0.6
+   Compiling itoa v1.0.18
+   Compiling bytes v1.12.1
+   Compiling pin-project-lite v0.2.17
+   Compiling version_check v0.9.5
+   Compiling generic-array v0.14.7
+   Compiling futures-core v0.3.34
+   Compiling http v1.5.0
+   Compiling zerocopy v0.8.59
+   Compiling cfg-if v1.0.5
+   Compiling getrandom v0.3.4
+   Compiling typenum v1.20.1
+   Compiling errno v0.3.14
+   Compiling serde_core v1.0.229
+   Compiling httparse v1.10.1
+   Compiling signal-hook-registry v1.4.8
+   Compiling tokio-macros v2.7.2
+   Compiling mio v1.2.3
+   Compiling socket2 v0.6.5
+   Compiling log v0.4.34
+   Compiling tokio v1.53.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling rand_core v0.9.5
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling http-body v1.1.0
+   Compiling once_cell v1.21.4
+   Compiling find-msvc-tools v0.1.14
+   Compiling thiserror v2.0.21
+   Compiling shlex v2.0.1
+   Compiling cc v1.5.1
+   Compiling tracing-core v0.1.36
+   Compiling digest v0.10.7
+   Compiling rand_chacha v0.9.0
+   Compiling futures-macro v0.3.34
+   Compiling thiserror-impl v2.0.21
+   Compiling futures-task v0.3.34
+   Compiling tower-service v0.3.3
+   Compiling serde v1.0.229
+   Compiling zmij v1.0.23
+   Compiling cpufeatures v0.2.17
+   Compiling slab v0.4.12
+   Compiling smallvec v1.16.2
+   Compiling vcpkg v0.2.15
+   Compiling futures-sink v0.3.34
+   Compiling pkg-config v0.3.34
+   Compiling futures-util v0.3.34
+   Compiling libsqlite3-sys v0.38.2
+   Compiling sha1 v0.10.7
+   Compiling rand v0.9.5
+   Compiling tracing v0.1.44
+   Compiling serde_derive v1.0.229
+   Compiling futures-channel v0.3.34
+   Compiling httpdate v1.0.3
+   Compiling sync_wrapper v1.0.2
+   Compiling data-encoding v2.11.1
+   Compiling serde_json v1.0.151
+   Compiling percent-encoding v2.3.2
+   Compiling tower-layer v0.3.3
+   Compiling atomic-waker v1.1.2
+   Compiling foldhash v0.2.0
+   Compiling hashbrown v0.17.1
+   Compiling hyper v1.11.1
+   Compiling form_urlencoded v1.2.2
+   Compiling tungstenite v0.29.0
+   Compiling http-body-util v0.1.5
+   Compiling memchr v2.8.3
+   Compiling ryu v1.0.23
+   Compiling mime v0.3.17
+   Compiling axum-core v0.5.6
+   Compiling serde_urlencoded v0.7.1
+   Compiling tokio-tungstenite v0.29.0
+   Compiling hyper-util v0.1.21
+   Compiling hashlink v0.12.2
+   Compiling tower v0.5.3
+   Compiling serde_path_to_error v0.1.20
+   Compiling matchit v0.8.4
+   Compiling fallible-iterator v0.3.0
+   Compiling base64 v0.22.1
+   Compiling bitflags v2.13.2
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling axum v0.8.9
+   Compiling bumpalo v3.20.3
+   Compiling rusqlite v0.40.2
+   Compiling nagi-runtime v0.1.0 (/tmp/nagi-distribution-check/nagi/runtime)
+   Compiling nagi-values v0.1.0 (/tmp/nagi-distribution-check/nagi/build/portable-values)
+warning: unused imports: `axum` and `serde_json`
+ --> src/main.rs:3:10
+  |
+3 | use rt::{axum, serde, serde_json};
+  |          ^^^^         ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `nagi-values` (bin "nagi-values") generated 1 warning (run `cargo fix --bin "nagi-values" -p nagi-values` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 1m 52s
+native: /tmp/nagi-distribution-native/release/nagi-values
+10
+16
+     Locking 106 packages to latest compatible versions
+   Compiling nagi-hello v0.1.0 (/tmp/nagi-distribution-check/nagi/build/portable-low)
+warning: unused imports: `axum` and `serde_json`
+ --> src/main.rs:3:10
+  |
+3 | use rt::{axum, serde, serde_json};
+  |          ^^^^         ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `nagi-hello` (bin "nagi-hello") generated 1 warning (run `cargo fix --bin "nagi-hello" -p nagi-hello` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 0.53s
+native: /tmp/nagi-distribution-native/release/nagi-hello
+4

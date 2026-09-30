@@ -1,0 +1,14 @@
+Running 3s test @ http://127.0.0.1:8080/query?limit=5&name=tp-li
+  2 threads and 64 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.11ms    1.37ms  25.22ms   94.14%
+    Req/Sec    34.65k     9.11k   59.13k    70.00%
+  Latency Distribution
+     50%  814.00us
+     75%    1.13ms
+     90%    1.80ms
+     99%    6.53ms
+  207042 requests in 3.03s, 27.64MB read
+Requests/sec:  68355.80
+Transfer/sec:      9.13MB
+RESULT {"requests":207042,"duration_us":3028887,"requests_s":68355.802,"p50_us":814.000,"p95_us":2680.000,"p99_us":6525.000,"max_us":25215,"connect_errors":0,"read_errors":0,"write_errors":0,"timeouts":0,"status_errors":0}

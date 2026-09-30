@@ -1,0 +1,9 @@
+# Supervisorと障害
+
+ランタイムでone_for_one型のworker再起動を実験しています。子taskをpanicさせ、JoinErrorを検出し、そのworkerだけを再作成します。別のworkerが継続することも確認します。
+
+restart回数には1秒のwindowで上限を付けます。crash loopが上限を越えると再起動を停止します。検出から新しい子taskが最初に実行される時刻までをrestart latencyとして記録します。backoffは1 msです。
+
+`examples/supervisor.nagi`は意図的なpanicを3回発生させます。stderrにpanicログが出るのは試験の一部です。normal shutdownでは独立workerもabort後にjoinします。
+
+Highのsupervisor tree宣言、任意のchild factory、one_for_all/rest_for_one、HTTP requestの再配送は未実装です。request lossはこのworker試験では測っていません。Rust panicを処理できても、SIGSEGV、abort、OSによるプロセス停止まで同一process内で隔離できるわけではありません。

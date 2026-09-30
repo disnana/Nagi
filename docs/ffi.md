@@ -1,0 +1,9 @@
+# FFIとABIの方針
+
+0.1にはLowのFFI構文はありません。SQLiteへのFFIは既存rusqlite/libsqlite3-sysが担当します。ユーザーのLowから任意C関数を呼ぶ経路は未実装です。
+
+High/Lowの同じprimitiveとclassは同じRust型へ生成します。同一ビルド内の呼び出しでserializationは不要です。ただし、Rust struct layout、String、Vec、ResultをそのままC ABIへ出す方針ではありません。
+
+将来のC ABIでは、固定幅primitive、pointer+lengthのslice、固定layout record、tag+payloadのerror表現、明示的allocator/deallocatorを定義します。所有権を受け渡すboundaryには、解放者とライブラリ寿命を指定する必要があります。
+
+RustとPython extensionへの接続も同じboundaryを使う計画です。ABIを先に固定する前に、borrowed buffer、async task、errorの寿命とlayoutを確定する必要があります。

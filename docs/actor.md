@@ -1,0 +1,9 @@
+# actor
+
+ランタイムにはbounded mailboxとoneshot返信を持つcounter actorがあります。counterのmutable stateは一つのactor taskのみが更新します。Highの`actor`宣言構文と任意のstate/methodの生成は未実装です。
+
+`examples/actor.nagi`はforwarder actor → counter actor → forwarder → callerの通信を実行します。二つのactorはchannelだけでデータを渡し、counterのstateを共有しません。senderをすべてdropした後にactor taskをjoinします。
+
+一件ずつreplyをawaitするRPC方式は、schedulerを往復する回数が多くなります。ランタイムのpipelined方式は32件を送ってから各replyを確認します。返信を捨てるfire-and-forgetとの比較ではありません。
+
+mailboxの容量は64です。送信側は満杯ならawaitし、無制限にqueueを伸ばしません。障害時のmessage再配送、永続mailbox、複数machineへのactor配置は未実装です。

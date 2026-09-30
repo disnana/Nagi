@@ -1,0 +1,19 @@
+
+thread 'tokio-rt-worker' (12) panicked at runtime/src/concurrent.rs:182:17:
+intentional supervised worker crash 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'tokio-rt-worker' (11) panicked at runtime/src/concurrent.rs:182:17:
+intentional supervised worker crash 1
+
+thread 'tokio-rt-worker' (11) panicked at runtime/src/concurrent.rs:182:17:
+intentional supervised worker crash 2
+
+thread 'tokio-rt-worker' (10) panicked at runtime/src/concurrent.rs:182:17:
+intentional supervised worker crash 0
+
+thread 'tokio-rt-worker' (11) panicked at runtime/src/concurrent.rs:182:17:
+intentional supervised worker crash 1
+
+thread 'tokio-rt-worker' (11) panicked at runtime/src/concurrent.rs:182:17:
+intentional supervised worker crash 2

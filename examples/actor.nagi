@@ -1,0 +1,6 @@
+# bounded mailboxのforwarder → counter actor。stateはactorのtaskのみが触る。
+async def main() -> Result[unit, Error]:
+    n = try await actor_pair_demo(1000)
+    print(n)
+    return ok(print("actor終了"))
+

@@ -1,0 +1,6 @@
+# 8worker・bounded queue。失敗はbackoff後に再試行し、上限でdead letterへ。
+async def main() -> Result[unit, Error]:
+    completed = try await queue_demo(40)
+    print(completed)
+    return ok(print("全job処理完了（dead letterを含む）"))
+

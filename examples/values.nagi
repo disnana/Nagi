@@ -1,0 +1,15 @@
+# classは値型。配列内のPointを個別heap objectにしない。
+class Point:
+    x: f64
+    y: f64
+
+def sum_points(points: view[Point]) -> f64:
+    total = 0.0
+    for point in points:
+        total += point.x + point.y
+    return total
+
+def main():
+    points = [Point(x=1.0, y=2.0), Point(x=3.0, y=4.0)]
+    print(sum_points(view(points)))
+    print(size_of[Point]())

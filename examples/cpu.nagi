@@ -1,0 +1,49 @@
+# 配列要素は連続したi64/f64。ループでboxing・型判定・中間配列を作らない。
+def integer_sum(values: view[i64]) -> i64:
+    total = 0
+    for value in values:
+        total += value
+    return total
+
+def integer_map(values: view[i64]) -> i64:
+    total = 0
+    for value in values:
+        total += value * 3 + 1
+    return total
+
+def integer_filter(values: view[i64]) -> i64:
+    total = 0
+    for value in values:
+        if value > 0:
+            total += value
+    return total
+
+def branch(values: view[i64]) -> i64:
+    total = 0
+    for value in values:
+        if value % 7 == 0:
+            total += value
+        else:
+            total -= value
+    return total
+
+def float_sum(values: view[f64]) -> f64:
+    total = 0.0
+    for value in values:
+        total += value
+    return total
+
+def integer_loop(n: i64) -> i64:
+    total = 0
+    for i in range(n):
+        total += i % 7
+    return total
+
+def main():
+    bench_i64("nagi_integer_sum", 100000, integer_sum)
+    bench_i64("nagi_map_reduce", 100000, integer_map)
+    bench_i64("nagi_filter_reduce", 100000, integer_filter)
+    bench_i64("nagi_branch", 100000, branch)
+    bench_f64("nagi_float_sum", 100000, float_sum)
+    bench_scalar("nagi_loop", 100000, integer_loop)
+

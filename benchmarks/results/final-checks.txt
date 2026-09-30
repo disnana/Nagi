@@ -1,0 +1,33 @@
+# Final verification: cargo test --locked --quiet; cargo clippy --all-targets -- -D warnings;
+# cargo build --release --examples --bins --locked; python3 scripts/build_examples.py
+
+running 23 tests
+.......................
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 39 tests
+.......................................
+test result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Checking nagi-runtime v0.1.0 (/workspace/scratch/0c9674258e69/nagi/runtime)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.17s
+   Compiling nagi-runtime v0.1.0 (/workspace/scratch/0c9674258e69/nagi/runtime)
+   Compiling nagic v0.1.0 (/workspace/scratch/0c9674258e69/nagi/compiler)
+    Finished `release` profile [optimized] target(s) in 15.42s
+{"samples": 12, "builds": "passed", "native_preserved": true}

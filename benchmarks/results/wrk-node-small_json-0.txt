@@ -1,0 +1,14 @@
+Running 3s test @ http://127.0.0.1:8081/small
+  2 threads and 64 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     2.32ms    1.87ms  25.92ms   90.57%
+    Req/Sec    15.53k     3.86k   20.37k    70.00%
+  Latency Distribution
+     50%    1.74ms
+     75%    2.42ms
+     90%    3.99ms
+     99%   10.43ms
+  92829 requests in 3.02s, 16.55MB read
+Requests/sec:  30748.55
+Transfer/sec:      5.48MB
+RESULT {"requests":92829,"duration_us":3018972,"requests_s":30748.546,"p50_us":1735.000,"p95_us":5749.000,"p99_us":10427.000,"max_us":25919,"connect_errors":0,"read_errors":0,"write_errors":0,"timeouts":0,"status_errors":0}

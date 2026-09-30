@@ -1,0 +1,21 @@
+name: Nagi checks
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --release --examples --bins --locked
+      - run: python scripts/build_examples.py
+      - run: pip install -r tests/requirements.txt
+      - run: python tests/http_integration.py
+      - run: ./target/release/examples/fuzz-smoke

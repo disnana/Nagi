@@ -1,0 +1,10 @@
+# Low単体を解析・型検査・ネイティブ生成できる。
+record Point {
+    x: f64;
+    y: f64;
+}
+fn main() -> unit {
+    let p: Point = Point(x=1.5, y=2.5);
+    print(p.x + p.y);
+}
+

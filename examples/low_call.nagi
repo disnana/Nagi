@@ -1,0 +1,4 @@
+# native/math.lowを--nativeで指定する。native_scaleの本体はLowだけに存在する。
+def main():
+    print(native_scale(7))
+

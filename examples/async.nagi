@@ -1,0 +1,12 @@
+# scopeの正常出口では全子taskをjoinする。エラー時にはcancelしてjoinする。
+async def work(ms: i64):
+    await sleep(ms)
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        spawn work(10)
+        spawn work(15)
+    n = try await task_demo(10000)
+    print(n)
+    return ok(print("全task完了"))
+
