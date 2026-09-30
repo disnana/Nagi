@@ -34,6 +34,7 @@
 これらは書き方を覚えたあとに読む資料です。
 
 - [目的と実装範囲](introduction.md)、[今後の開発](roadmap.md)
+- [開発の引き継ぎ](development-handoff.md)：完了した実装、検証結果、Cloudでの再開と次の作業候補
 - [メモリモデル](memory-model.md)、[コンパイラ内部](compiler-internals.md)、[FFI](ffi.md)
 - [actor](actor.md)、[Supervisor](supervisor.md)、[queue](queue.md)：現在は試験用の組み込み関数
 - [性能の読み方](performance.md)、[測定結果](../PERFORMANCE.md)
