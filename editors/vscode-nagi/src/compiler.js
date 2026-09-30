@@ -1,0 +1,61 @@
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const { execFile } = require('node:child_process');
+
+function findRoot(file, workspace) {
+  let dir = path.dirname(file);
+  while (true) {
+    if (fs.existsSync(path.join(dir, 'compiler', 'Cargo.toml')) &&
+        fs.existsSync(path.join(dir, 'runtime', 'Cargo.toml'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir || (workspace && dir === workspace)) break;
+    dir = parent;
+  }
+  return workspace || path.dirname(file);
+}
+
+function compilerPath(configured, root, workspace, platform = process.platform) {
+  if (configured) return path.isAbsolute(configured) ? configured : path.resolve(workspace || root, configured);
+  const name = platform === 'win32' ? 'nagic.exe' : 'nagic';
+  for (const profile of ['release', 'debug']) {
+    const candidate = path.join(root, 'target', profile, name);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return name;
+}
+
+function argumentsFor(command, file, nativeFiles, root, workspace, rustFile = '', rustDependencies = []) {
+  const args = [command, file];
+  for (const native of nativeFiles) args.push('--native', path.resolve(workspace || root, native));
+  if (rustFile) args.push('--rust', path.resolve(workspace || root, rustFile));
+  for (const dependency of rustDependencies) args.push('--rust-dep', dependency);
+  if (command === 'check') {
+    const id = crypto.createHash('sha256').update(file).digest('hex').slice(0, 16);
+    args.push('--out', path.join(root, 'build', 'vscode-nagi', id));
+  }
+  return args;
+}
+
+function normalizeFile(file, root) {
+  if (file.startsWith('\\\\?\\UNC\\')) file = '\\\\' + file.slice(8);
+  else if (file.startsWith('\\\\?\\')) file = file.slice(4);
+  return path.resolve(root, file);
+}
+
+function parseDiagnostics(output, fallbackFile) {
+  const lines = output.replace(/\x1b\[[0-9;]*m/g, '').split(/\r?\n/);
+  const message = lines.find(s => /^error:/.test(s)) || lines.find(s => s.trim()) || 'Nagi check failed';
+  const location = lines.map(s => s.match(/^\s*-->\s+(.+):(\d+)\s*$/)).find(Boolean);
+  const line = location ? Number(location[2]) : Number((message.match(/\bline (\d+):/) || [0, 1])[1]);
+  return [{ file: location ? location[1] : fallbackFile, line: Math.max(0, line - 1),
+    message: message.replace(/^error:\s*/, '') }];
+}
+
+function runCheck(executable, args, cwd, timeout, callback) {
+  return execFile(executable, args, { cwd, timeout, maxBuffer: 1024 * 1024, windowsHide: true, shell: false },
+    (error, stdout, stderr) => callback({ error, output: [stdout, stderr].filter(Boolean).join('\n') }));
+}
+
+module.exports = { findRoot, compilerPath, argumentsFor, parseDiagnostics, normalizeFile, runCheck };

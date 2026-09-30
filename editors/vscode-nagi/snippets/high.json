@@ -1,0 +1,10 @@
+{
+  "Function": { "prefix": "def", "body": ["def ${1:name}(${2:value: i64}) -> ${3:i64}:", "    ${0:return value}"], "description": "型付き関数" },
+  "Class": { "prefix": "class", "body": ["class ${1:Item}:", "    ${2:id}: ${3:i64}", "    ${0:name: str}"], "description": "値型class" },
+  "Main": { "prefix": "main", "body": ["def main():", "    print(\"${0:Hello, Nagi!}\")"], "description": "エントリーポイント" },
+  "Async main": { "prefix": "amain", "body": ["async def main() -> Result[unit, Error]:", "    ${0:db = try await db_open(\":memory:\")}", "    return await serve(db, 8090)"], "description": "非同期のmain" },
+  "GET handler": { "prefix": "get", "body": ["@get(\"${1:/items/{id}}\")", "async def ${2:get_item}(db: Db, id: i64) -> Result[${3:Item}?, Error]:", "    return await db_query[${3:Item}](db, \"${0:SELECT id, name FROM items WHERE id = ?1}\", id)"], "description": "HTTP GETとSQLite query" },
+  "POST handler": { "prefix": "post", "body": ["@post(\"${1:/items}\")", "async def ${2:create_item}(db: Db, req: ${3:CreateItem}) -> Result[${4:Item}, Error]:", "    return await db_insert[${4}](db, \"${0:INSERT INTO items(name, age) VALUES (?1, ?2) RETURNING id, name, age}\", req.name, req.age)"], "description": "HTTP POST" },
+  "Loop": { "prefix": "for", "body": ["for ${1:i} in range(${2:10}):", "    ${0:print(i)}"], "description": "整数のループ" },
+  "Borrowed array": { "prefix": "vsum", "body": ["def ${1:sum_values}(values: view[i64]) -> i64:", "    total = 0", "    for value in values:", "        total += value", "    return total", "$0"], "description": "配列を借用して集計" }
+}

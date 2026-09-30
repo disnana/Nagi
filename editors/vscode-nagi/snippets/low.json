@@ -1,0 +1,5 @@
+{
+  "Function": { "prefix": "fn", "body": ["fn ${1:name}(${2:x: i64}) -> ${3:i64} {", "    ${0:return x;}", "}"], "description": "Low関数" },
+  "Record": { "prefix": "record", "body": ["record ${1:Point} {", "    x: f64;", "    y: f64;", "}", "$0"], "description": "Lowの値型record" },
+  "Replace": { "prefix": "replace", "body": ["@replace generated::${1:name}", "fn ${1:name}(${2:x: i64}) -> ${3:i64} {", "    ${0:return x;}", "}"], "description": "生成関数を手書きLowで置換" }
+}

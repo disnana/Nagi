@@ -1,0 +1,7 @@
+{
+  "name": "Nagi Low", "scopeName": "source.nagi.low",
+  "patterns": [
+    { "include": "source.nagi" },
+    { "name": "keyword.control.nagi.low", "match": "\\b(?:fn|record|let)\\b" }
+  ]
+}
