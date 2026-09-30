@@ -169,13 +169,14 @@ function activate(context) {
     });
   }
 
-  function querySymbols(document, token) {
+  function querySymbols(document, token, member) {
     if (!isNagi(document) || !vscode.workspace.isTrusted || token.isCancellationRequested) return Promise.resolve();
     const settings = options(document);
     // Unsaved manifests cannot be passed as a source overlay.
     if (vscode.workspace.textDocuments.some(d => d.isDirty && d.uri.fsPath === settings.project)) return Promise.resolve();
-    const files = vscode.workspace.textDocuments.filter(d => isNagi(d) && d.isDirty && fs.existsSync(d.uri.fsPath))
-      .map(d => ({ file: d.uri.fsPath, text: d.getText() }));
+    if (member && !fs.existsSync(document.uri.fsPath)) return Promise.resolve();
+    const files = vscode.workspace.textDocuments.filter(d => isNagi(d) && (d.isDirty || member && d === document) && fs.existsSync(d.uri.fsPath))
+      .map(d => ({ file: d.uri.fsPath, text: member && d === document ? member.text : d.getText() }));
     const input = JSON.stringify({ files });
     if (Buffer.byteLength(input) > 16 * 1000 * 1000) return Promise.resolve();
     const args = argsFor('symbols', document, settings);
@@ -229,20 +230,21 @@ function activate(context) {
     const version = document.version;
     const snapshot = await querySymbols(document, token);
     if (!snapshot || token.isCancellationRequested || document.isClosed || document.version !== version) return;
-    const found = features.hoverAt(snapshot.index, document.getText(), document.offsetAt(position));
+    const found = features.hoverAt(snapshot.index, document.getText(), document.offsetAt(position), { file: document.uri.fsPath, saved: snapshot.saved });
     if (!found) return;
     return new vscode.Hover(documentation(found.item, snapshot), new vscode.Range(document.positionAt(found.start), document.positionAt(found.end)));
   }
 
   async function provideCompletionItems(document, position, token) {
     const version = document.version;
-    const snapshot = await querySymbols(document, token);
+    const member = features.memberContext(document.getText(), document.offsetAt(position));
+    const snapshot = await querySymbols(document, token, member);
     if (token.isCancellationRequested || !vscode.workspace.isTrusted || document.isClosed || document.version !== version) return [];
     const text = document.getText();
     const offset = document.offsetAt(position);
     const word = features.wordAt(text, offset);
-    return features.completionCandidates(snapshot?.index, text, offset, document.languageId === 'nagi-low').map(item => {
-      const kind = { function: vscode.CompletionItemKind.Function, class: vscode.CompletionItemKind.Class, type: vscode.CompletionItemKind.TypeParameter, keyword: vscode.CompletionItemKind.Keyword }[item.kind];
+    return features.completionCandidates(snapshot?.index, text, offset, document.languageId === 'nagi-low', { file: document.uri.fsPath, saved: snapshot?.saved }).map(item => {
+      const kind = { function: vscode.CompletionItemKind.Function, class: vscode.CompletionItemKind.Class, field: vscode.CompletionItemKind.Field, type: vscode.CompletionItemKind.TypeParameter, keyword: vscode.CompletionItemKind.Keyword }[item.kind];
       const completion = new vscode.CompletionItem(item.name, kind);
       completion.detail = item.signature + (snapshot?.saved && !item.builtin ? ' （保存済み）' : '');
       completion.documentation = documentation(item, snapshot);
@@ -278,7 +280,7 @@ function activate(context) {
   context.subscriptions.push(output, diagnostics,
     vscode.languages.registerDefinitionProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideDefinition }),
     vscode.languages.registerHoverProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideHover }),
-    vscode.languages.registerCompletionItemProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideCompletionItems }),
+    vscode.languages.registerCompletionItemProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideCompletionItems }, '.'),
     vscode.languages.registerSignatureHelpProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideSignatureHelp }, '(', ','),
     { dispose() { for (const job of pending.values()) job.child?.kill(); pending.clear(); for (const child of navigation) child.kill(); navigation.clear(); } },
     vscode.workspace.onDidOpenTextDocument(d => { if (optionsForAuto(d)) check(d); }),

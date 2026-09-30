@@ -2,7 +2,7 @@
   "name": "nagi-language",
   "displayName": "Nagi Language",
   "description": "Nagi High/Lowの型検査、定義ジャンプ、型表示、補完とビルド・実行",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "nagi-local",
   "license": "MIT",
   "engines": { "vscode": "^1.85.0" },
@@ -16,6 +16,12 @@
   },
   "scripts": { "test": "node --test test/*.test.js", "package": "python scripts/package_vsix.py" },
   "contributes": {
+    "taskDefinitions": [
+      { "type": "nagi", "required": ["command", "file"], "properties": {
+        "command": { "type": "string", "enum": ["check", "lower", "build", "run"] },
+        "file": { "type": "string" }
+      } }
+    ],
     "languages": [
       { "id": "nagi", "aliases": ["Nagi", "nagi"], "extensions": [".nagi"], "configuration": "./language-configuration.json" },
       { "id": "nagi-low", "aliases": ["Nagi Low"], "extensions": [".low"], "configuration": "./low-configuration.json" }

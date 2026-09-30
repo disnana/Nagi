@@ -53,3 +53,61 @@ test('signature argument tracking ignores nested calls, strings, arrays and gene
     ['other.read_item(', undefined],
   ]) assert.deepEqual(f.activeCall(text, text.length), expected, text);
 });
+
+test('local hovers use the exact UTF-16 occurrence and file rather than a shared name', () => {
+  const text = 'print("😀"); value = 7; print(value)\r\nprint(value)';
+  const declaration = text.indexOf('value');
+  const usage = text.indexOf('value', declaration + 1);
+  const locals = { ...index, locals: [
+    { name: 'value', type: 'i32', location: { file: '/project/main.nagi', line: 1, column: declaration + 1, length: 5 } },
+    { name: 'value', type: 'bool', location: { file: '/project/main.nagi', line: 1, column: usage + 1, length: 5 } },
+    { name: 'value', type: 'str', location: { file: '/project/other.nagi', line: 2, column: 7, length: 5 } },
+  ] };
+  const source = { file: '/project/main.nagi' };
+  assert.equal(f.hoverAt(locals, text, declaration + 1, source).item.signature, 'value: i32');
+  assert.equal(f.hoverAt(locals, text, usage + 1, source).item.signature, 'value: bool');
+  assert.equal(f.hoverAt(locals, text, text.lastIndexOf('value') + 1, source), undefined);
+  assert.equal(f.hoverAt(locals, text, usage + 1, { ...source, saved: true }), undefined);
+  assert.equal(f.hoverAt(index, 'thing. read_item(', 12), undefined);
+});
+
+test('member analysis masks just the edited member and preserves UTF-16 and CRLF positions', () => {
+  const text = 'print("😀"); item . naMore\r\nprint(1)';
+  const offset = text.indexOf('naMore') + 2;
+  const member = f.memberContext(text, offset);
+  assert.equal(member.start, text.indexOf('naMore'));
+  assert.equal(member.end, text.indexOf('naMore') + 6);
+  assert.equal(member.receiverEnd, text.indexOf('item') + 4);
+  assert.equal(member.text.length, text.length);
+  assert.equal(member.text, 'print("😀"); item         \r\nprint(1)');
+  for (const text of ['# item.', 'print("😀 item.', 'print("item.")', 'item # .', 'item']) {
+    assert.equal(f.memberContext(text, text.length), undefined, text);
+  }
+});
+
+test('field candidates come from the receiver occurrence and never from saved or other-file types', () => {
+  const text = 'item.na';
+  const expression = { location: { file: '/project/main.low', line: 1, column: 1 }, end_line: 1, end_column: 5,
+    type: 'Item', fields: [{ name: 'name', type: 'str' }] };
+  const fields = { ...index, expressions: [expression] };
+  const source = { file: '/project/main.low' };
+  const items = f.completionCandidates(fields, text, text.length, true, source);
+  assert.deepEqual(items, [{ name: 'name', kind: 'field', signature: 'name: str', type: 'str' }]);
+  assert.equal(f.insertion(items[0], '('), 'name');
+  for (const context of [{ file: '/project/other.low' }, { ...source, saved: true }, {}]) {
+    assert.deepEqual(f.completionCandidates(fields, text, text.length, true, context), []);
+  }
+  assert.deepEqual(f.completionCandidates(index, text, text.length, true, source), []);
+  const missing = { ...fields, expressions: [{ ...expression, fields: [] }] };
+  assert.deepEqual(f.completionCandidates(missing, text, text.length, true, source), []);
+});
+
+test('a trailing member binds inside try/await unless the receiver is parenthesized', () => {
+  const text = 'try fetch().';
+  const end_column = text.length;
+  const fields = { expressions: [
+    { location: { file: '/main.nagi', line: 1, column: 1 }, end_line: 1, end_column, type: 'Item', fields: [{ name: 'id', type: 'i64' }] },
+    { location: { file: '/main.nagi', line: 1, column: 5 }, end_line: 1, end_column, type: 'Result[Item, Error]', fields: [] },
+  ] };
+  assert.deepEqual(f.completionCandidates(fields, text, text.length, false, { file: '/main.nagi' }), []);
+});

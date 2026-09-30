@@ -52,7 +52,7 @@ test('configured compiler paths are workspace relative; PATH remains a fallback'
 test('compiler execution does not interpret shell metacharacters', async () => {
   const literal = 'spaces & $(not-a-command)';
   const result = await new Promise(resolve => compiler.runCheck(process.execPath,
-    ['-e', 'process.stdout.write(process.argv[1])', literal], process.cwd(), 5000, resolve));
+    ['-e', 'require("node:fs").writeSync(1, process.argv[1])', literal], process.cwd(), 5000, resolve));
   assert.equal(result.error, null);
   assert.equal(result.output, literal);
 });
