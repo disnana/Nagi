@@ -4,3 +4,4 @@
 *.sqlite
 __pycache__/
 target/release/
+.idea/
