@@ -185,6 +185,13 @@ fn shift(program: &mut Program, offset: usize) {
                     block(body, offset);
                 }
                 S::Scope(body) => block(body, offset),
+                S::Match(value, arms) => {
+                    expr(value, offset);
+                    for arm in arms {
+                        arm.line += offset;
+                        block(&mut arm.body, offset);
+                    }
+                }
                 S::Return(None) => {}
             }
         }
@@ -254,6 +261,12 @@ pub fn resolve_assets(program: &mut Program, source: &Path) -> Result<(), String
                     block(body, source)?;
                 }
                 S::Scope(body) => block(body, source)?,
+                S::Match(value, arms) => {
+                    expr(value, source)?;
+                    for arm in arms {
+                        block(&mut arm.body, source)?;
+                    }
+                }
                 S::Return(None) => {}
             }
         }

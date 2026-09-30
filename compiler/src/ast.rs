@@ -96,10 +96,18 @@ pub enum S {
     Return(Option<Expr>),
     Expr(Expr),
     If(Expr, Vec<Stmt>, Vec<Stmt>),
+    Match(Expr, Vec<MatchArm>),
     While(Expr, Vec<Stmt>),
     For(String, Expr, Vec<Stmt>),
     Scope(Vec<Stmt>),
     Spawn(Expr),
+}
+#[derive(Clone, Debug)]
+pub struct MatchArm {
+    pub ok: bool,
+    pub binding: Option<String>,
+    pub body: Vec<Stmt>,
+    pub line: usize,
 }
 #[derive(Clone, Debug)]
 pub struct Stmt {

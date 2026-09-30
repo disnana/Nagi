@@ -148,6 +148,7 @@ fn returns(ss: &[Stmt]) -> bool {
     ss.last().is_some_and(|s| match &s.kind {
         S::Return(_) => true,
         S::If(_, a, b) => returns(a) && returns(b),
+        S::Match(_, arms) => arms.len() == 2 && arms.iter().all(|arm| returns(&arm.body)),
         _ => false,
     })
 }
@@ -241,9 +242,9 @@ impl Checker {
         }
     }
     fn borrowed(&self, n: &str) -> bool {
-        self.vars
-            .iter()
-            .any(|(name, v)| name != n && v.ty.contains_view() && v.origin.as_deref() == Some(n))
+        self.vars.iter().any(|(name, v)| {
+            name != n && !v.moved && v.ty.contains_view() && v.origin.as_deref() == Some(n)
+        })
     }
     fn consume(&mut self, e: &Expr) -> Result<(), String> {
         if let E::Name(n) = &e.kind {
@@ -372,6 +373,60 @@ impl Checker {
                     self.demand(&t, &Type::named("bool"), s.line)?;
                     let m = self.child(b)?;
                     self.merge_moves(m);
+                }
+                S::Match(value, arms) => {
+                    let ty = self.expr(value, None)?;
+                    if ty.0 != "Result" {
+                        return Err(error(s.line, "matchの対象はResultです"));
+                    }
+                    let mut seen = HashSet::new();
+                    for arm in arms.iter() {
+                        if !seen.insert(arm.ok) {
+                            return Err(error(arm.line, "Ok / Errのcaseが重複しています"));
+                        }
+                    }
+                    if seen.len() != 2 {
+                        return Err(error(s.line, "matchにはOkとErrの両方のcaseが必要です"));
+                    }
+                    let origin = self.origin(value);
+                    self.consume(value)?;
+                    let before = self.vars.clone();
+                    let mut moves = vec![];
+                    for arm in arms {
+                        self.vars = before.clone();
+                        if let Some(name) = &arm.binding {
+                            if self.vars.contains_key(name) {
+                                return Err(error(
+                                    arm.line,
+                                    "caseの変数名は外側の変数と重複できません",
+                                ));
+                            }
+                            let payload = ty.1[usize::from(!arm.ok)].clone();
+                            self.vars.insert(
+                                name.clone(),
+                                Var {
+                                    origin: if payload.contains_view() {
+                                        origin.clone()
+                                    } else {
+                                        None
+                                    },
+                                    ty: payload,
+                                    moved: false,
+                                    param: false,
+                                },
+                            );
+                        }
+                        self.block(&mut arm.body)?;
+                        let mut after = self.vars.clone();
+                        if let Some(name) = &arm.binding {
+                            after.remove(name);
+                        }
+                        moves.push(after);
+                    }
+                    self.vars = before;
+                    for after in moves {
+                        self.merge_moves(after);
+                    }
                 }
                 S::For(n, e, b) => {
                     let t = self.expr(e, None)?;
@@ -670,9 +725,10 @@ impl Checker {
             "size_of" => 0,
             "print" | "write" | "html" | "include_text" | "view" | "copy" | "share"
             | "clone_shared" | "len" | "range" | "sleep" | "db_open" | "json_decode"
-            | "json_encode" | "ok" | "some" | "error" | "assert_true" | "parse_i64"
-            | "parse_f64" | "make_ints" | "actor_demo" | "actor_pair_demo" | "queue_demo"
-            | "task_demo" | "cpu_sum" | "i64" | "i32" | "uuid_parse" | "uuid_format" => 1,
+            | "json_encode" | "ok" | "some" | "error" | "not_found" | "internal_error" | "fail"
+            | "error_kind" | "error_message" | "assert_true" | "parse_i64" | "parse_f64"
+            | "make_ints" | "actor_demo" | "actor_pair_demo" | "queue_demo" | "task_demo"
+            | "cpu_sum" | "i64" | "i32" | "uuid_parse" | "uuid_format" => 1,
             "db_exec" | "db_all" | "append" | "serve" | "env" => 2,
             "db_query" | "db_write" | "slice" | "bench_i64" | "bench_f64" | "bench_scalar" => 3,
             "db_insert" => 4,
@@ -845,12 +901,19 @@ impl Checker {
                 self.consume(&args[0])?;
                 Ok(Type::generic("Option", vec![types[0].clone()]))
             }
-            "error" => {
-                require(0, Type::named("str"))?;
-                Ok(expected
+            "error" | "not_found" | "internal_error" | "fail" => {
+                require(0, Type::named(if n == "fail" { "Error" } else { "str" }))?;
+                let ret = expected
                     .filter(|t| t.0 == "Result")
                     .cloned()
-                    .unwrap_or_else(|| result(Type::named("unit"))))
+                    .unwrap_or_else(|| result(Type::named("unit")));
+                self.demand(&ret.1[1], &Type::named("Error"), line)?;
+                self.consume(&args[0])?;
+                Ok(ret)
+            }
+            "error_kind" | "error_message" => {
+                require(0, Type::named("Error"))?;
+                Ok(Type::named("str"))
             }
             "assert_true" => {
                 require(0, Type::named("bool"))?;

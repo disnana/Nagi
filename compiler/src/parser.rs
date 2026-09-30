@@ -292,6 +292,33 @@ impl Parser {
         } else if self.eat("while") {
             let c = self.expr(0)?;
             S::While(c, self.block()?)
+        } else if self.eat("match") {
+            let value = self.expr(0)?;
+            self.begin()?;
+            let mut arms = vec![];
+            while !self.ended() {
+                let line = self.t().line;
+                self.expect("case")?;
+                let ok = if self.eat("Ok") {
+                    true
+                } else if self.eat("Err") {
+                    false
+                } else {
+                    return Err(self.err("ResultのcaseにはOkまたはErrが必要です"));
+                };
+                self.expect("(")?;
+                let binding = self.name()?;
+                self.expect(")")?;
+                arms.push(MatchArm {
+                    ok,
+                    binding: (binding != "_").then_some(binding),
+                    body: self.block()?,
+                    line,
+                });
+                self.skip();
+            }
+            self.close()?;
+            S::Match(value, arms)
         } else if self.eat("for") {
             let n = self.name()?;
             self.expect("in")?;

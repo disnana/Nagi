@@ -1,12 +1,15 @@
 use nagic::{check, source};
 use std::{fs, path::PathBuf};
 
+static FIXTURE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
         let path = std::env::temp_dir().join(format!(
-            "nagi-import-{}-{}",
+            "nagi-import-{}-{}-{}",
             std::process::id(),
+            FIXTURE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -89,4 +92,25 @@ fn low_imports_use_the_low_parser() {
     );
     let mut loaded = source::load(&f.0.join("main.low"), false).unwrap();
     check::check(&mut loaded.program).unwrap();
+}
+
+#[test]
+fn match_arms_preserve_imported_diagnostics_and_embedded_assets() {
+    let f = Fixture::new();
+    f.write(
+        "main.nagi",
+        "import \"lib/read.nagi\"\ndef main():\n    print(read())\n",
+    );
+    f.write("lib/read.nagi", "def read() -> str:\n    match parse_i64(\"oops\"):\n        case Ok(_):\n            return include_text(\"text.txt\")\n        case Err(_):\n            return include_text(\"text.txt\")\n");
+    f.write("lib/text.txt", "embedded in both arms");
+    let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
+    check::check(&mut loaded.program).unwrap();
+    let low = nagic::emit::low(&loaded.program);
+    assert_eq!(low.matches("include_text(").count(), 2);
+    assert!(low.contains("lib"));
+    // Replace the asset return with an invalid payload type, keeping the same line.
+    f.write("lib/read.nagi", "def read() -> str:\n    match parse_i64(\"oops\"):\n        case Ok(_):\n            return 1\n        case Err(_):\n            return \"fallback\"\n");
+    let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
+    let error = check::check(&mut loaded.program).unwrap_err();
+    assert!(loaded.diagnostic(&error).contains("read.nagi:4"));
 }

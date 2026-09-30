@@ -5,12 +5,15 @@ use std::{
     process::Command,
 };
 
+static FIXTURE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
         let root = std::env::temp_dir().join(format!(
-            "nagi project {} {}",
+            "nagi project {} {} {}",
             std::process::id(),
+            FIXTURE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -219,7 +222,12 @@ fn actual_cli_manifest_and_import_errors_point_to_original_files() {
         "entry = 'main.nagi'\n[rust]\nfiile = 'bridge.rs'\n",
     );
     let result = f.run(&f.0, &["check"]);
-    assert!(!result.status.success());
+    assert!(
+        !result.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
     assert!(String::from_utf8_lossy(&result.stderr).contains("nagi.toml:3"));
     f.write("nagi.toml", "entry = 'main.nagi'\n");
     f.write(
@@ -231,7 +239,12 @@ fn actual_cli_manifest_and_import_errors_point_to_original_files() {
         "def helper() -> i32:\n    return \"wrong\"\n",
     );
     let result = f.run(&f.0, &["check"]);
-    assert!(!result.status.success());
+    assert!(
+        !result.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
     assert!(String::from_utf8_lossy(&result.stderr).contains("helper.nagi:2"));
 }
 

@@ -90,6 +90,19 @@ pub fn low(p: &Program) -> String {
                     block(b, n + 1, out);
                     out.push_str(&format!("{pad}}}\n"));
                 }
+                S::Match(value, arms) => {
+                    out.push_str(&format!("match {} {{\n", expr(value)));
+                    for arm in arms {
+                        out.push_str(&format!(
+                            "{pad}    case {}({}) {{\n",
+                            if arm.ok { "Ok" } else { "Err" },
+                            arm.binding.as_deref().unwrap_or("_")
+                        ));
+                        block(&arm.body, n + 2, out);
+                        out.push_str(&format!("{pad}    }}\n"));
+                    }
+                    out.push_str(&format!("{pad}}}\n"));
+                }
                 S::For(v, e, b) => {
                     out.push_str(&format!("for {v} in {} {{\n", expr(e)));
                     block(b, n + 1, out);
@@ -256,6 +269,14 @@ fn re(e: &Expr) -> String {
                 "ok" => format!("Ok({})", args[0]),
                 "some" => format!("Some({})", args[0]),
                 "error" => format!("Err(rt::Error::invalid({}))", args[0]),
+                "not_found" => format!(
+                    "Err(rt::Error {{ kind: rt::ErrorKind::NotFound, message: {} }})",
+                    args[0]
+                ),
+                "internal_error" => format!("Err(rt::Error::internal({}))", args[0]),
+                "fail" => format!("Err({})", args[0]),
+                "error_kind" => format!("rt::error_kind(&({})).to_owned()", args[0]),
+                "error_message" => format!("({}).message.clone()", args[0]),
                 "serve" => format!("__nagi_serve({}, {})", args[0], args[1]),
                 "env" => format!(
                     "std::env::var({}).unwrap_or_else(|_|({}).to_owned())",
@@ -368,6 +389,23 @@ fn rb(ss: &[Stmt], out: &mut String, n: usize) {
             S::While(c, b) => {
                 out.push_str(&format!("while {} {{\n", re(c)));
                 rb(b, out, n + 1);
+                out.push_str(&format!("{pad}}}\n"));
+            }
+            S::Match(value, arms) => {
+                out.push_str(&format!("match {} {{\n", re(value)));
+                for arm in arms {
+                    let binding = arm
+                        .binding
+                        .as_ref()
+                        .map(|s| format!("mut {s}"))
+                        .unwrap_or_else(|| "_".into());
+                    out.push_str(&format!(
+                        "{pad}    {}({binding}) => {{\n",
+                        if arm.ok { "Ok" } else { "Err" }
+                    ));
+                    rb(&arm.body, out, n + 2);
+                    out.push_str(&format!("{pad}    }},\n"));
+                }
                 out.push_str(&format!("{pad}}}\n"));
             }
             S::For(v, e, b) => {
@@ -755,6 +793,12 @@ pub fn cost_report(p: &Program) -> serde_json::Value {
                     stmts(b, a)
                 }
                 S::Scope(b) => stmts(b, a),
+                S::Match(value, arms) => {
+                    walk(value, a);
+                    for arm in arms {
+                        stmts(&arm.body, a);
+                    }
+                }
                 _ => {}
             }
         }

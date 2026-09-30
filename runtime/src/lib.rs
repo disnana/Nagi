@@ -59,6 +59,16 @@ impl fmt::Display for Error {
     }
 }
 impl std::error::Error for Error {}
+/// Stable names for branching and diagnostics from Nagi.
+pub fn error_kind(error: &Error) -> &'static str {
+    match error.kind {
+        ErrorKind::Invalid => "invalid",
+        ErrorKind::NotFound => "not_found",
+        ErrorKind::Busy => "busy",
+        ErrorKind::Database => "database",
+        ErrorKind::Internal => "internal",
+    }
+}
 impl From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Self {
         Self::invalid(e.to_string())
