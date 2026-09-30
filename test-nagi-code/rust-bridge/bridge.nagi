@@ -1,0 +1,16 @@
+import "api.nagi"
+
+async def main() -> Result[unit, Error]:
+    print("Nagi -> Rust -> native code")
+    print("CRC-32 of 123456789:")
+    checksum = crc32(view("123456789"))
+    assert_true(checksum == 3421780262)
+    print(checksum)
+    print("serde_json from the Rust ecosystem:")
+    formatted = try pretty_json(view("{\"language\":\"Nagi\",\"native\":true}"))
+    print(formatted)
+    value = try await double_later(21)
+    assert_true(value == 42)
+    print("Rust async result:")
+    print(value)
+    return ok(print("All calls completed."))

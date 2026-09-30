@@ -112,6 +112,7 @@ pub struct Function {
     pub params: Vec<(String, Type)>,
     pub ret: Type,
     pub asynchronous: bool,
+    pub external: bool,
     pub body: Vec<Stmt>,
     pub attrs: Vec<(String, String)>,
     pub line: usize,

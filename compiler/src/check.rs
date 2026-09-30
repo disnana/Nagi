@@ -113,6 +113,30 @@ pub fn check(p: &mut Program) -> Result<(), String> {
                 return Err(error(f.line, "引数の重複"));
             }
         }
+        let rust_paths: Vec<_> = f.attrs.iter().filter(|(name, _)| name == "rust").collect();
+        if f.external {
+            if f.name == "main" || rust_paths.len() != 1 || f.attrs.len() != 1 {
+                return Err(error(f.line, "extern関数には@rust(\"native::関数名\")を1つ指定してください。main・HTTP属性は使えません"));
+            }
+            let target = &rust_paths[0].1;
+            let valid = target.starts_with("native::")
+                && target.split("::").all(|part| {
+                    !part.is_empty()
+                        && part.chars().enumerate().all(|(i, ch)| {
+                            ch == '_' || ch.is_ascii_alphabetic() || i > 0 && ch.is_ascii_digit()
+                        })
+                });
+            if !valid || f.ret.contains_view() {
+                return Err(error(
+                    f.line,
+                    "Rustの関数パスが不正、またはexternの戻り値にviewがあります",
+                ));
+            }
+            continue;
+        }
+        if !rust_paths.is_empty() {
+            return Err(error(f.line, "@rustはextern関数にのみ指定できます"));
+        }
         c.block(&mut f.body)?;
         if f.ret.0 != "unit" && !returns(&f.body) {
             return Err(error(f.line, "すべての経路で戻り値を返してください"));

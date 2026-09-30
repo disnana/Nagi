@@ -9,6 +9,21 @@ fn hello() {
     high("def main():\n    print(\"hello\")\n").unwrap();
 }
 #[test]
+fn rust_extern_interface_and_low_roundtrip() {
+    let p = high("@rust(\"native::copy_text\")\nextern def copy_text(s: view[str]) -> str\ndef main():\n    print(copy_text(view(\"hello\")))\n").unwrap();
+    let mut low = parser::parse(&emit::low(&p), false).unwrap();
+    check::check(&mut low).unwrap();
+    assert!(low.functions[0].external);
+    assert!(emit::rust(&low).unwrap().contains("native::copy_text(s)"));
+    assert!(high("extern def missing() -> i64\n").is_err());
+    assert!(high("@rust(\"native::f(); panic!()\")\nextern def bad() -> i64\n").is_err());
+    assert!(
+        high("@rust(\"native::f\")\nextern def borrowed(x: view[str]) -> view[str]\n").is_err()
+    );
+    assert!(high("@rust(\"native::f\")\ndef normal() -> i64:\n    return 1\n").is_err());
+}
+
+#[test]
 fn html_route_is_not_encoded_as_json() {
     let p = high("@get(\"/\")\nasync def home() -> Result[Html, Error]:\n    return ok(html(\"<h1>Hello</h1>\"))\n").unwrap();
     let code = emit::rust(&p).unwrap();

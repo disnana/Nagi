@@ -124,7 +124,8 @@ pub fn low(p: &Program) -> String {
             }
         }
         out.push_str(&format!(
-            "{}fn {}({}) -> {} {{\n",
+            "{}{}fn {}({}) -> {}{}\n",
+            if f.external { "extern " } else { "" },
             if f.asynchronous { "async " } else { "" },
             f.name,
             f.params
@@ -132,10 +133,13 @@ pub fn low(p: &Program) -> String {
                 .map(|(n, t)| format!("{n}: {t}"))
                 .collect::<Vec<_>>()
                 .join(", "),
-            f.ret
+            f.ret,
+            if f.external { ";" } else { " {" }
         ));
-        block(&f.body, 1, &mut out);
-        out.push_str("}\n\n");
+        if !f.external {
+            block(&f.body, 1, &mut out);
+            out.push_str("}\n\n");
+        }
     }
     out
 }
@@ -451,7 +455,20 @@ pub fn rust(p: &Program) -> Result<String, String> {
                 .join(", "),
             rust_type(&f.ret)
         ));
-        rb(&f.body, &mut out, 1);
+        if f.external {
+            let target = &f.attrs.iter().find(|(a, _)| a == "rust").unwrap().1;
+            out.push_str(&format!(
+                "    {target}({}){}\n",
+                f.params
+                    .iter()
+                    .map(|(n, _)| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                if f.asynchronous { ".await" } else { "" }
+            ));
+        } else {
+            rb(&f.body, &mut out, 1);
+        }
         out.push_str("}\n");
     }
     let routes: Vec<_> = p
@@ -572,7 +589,7 @@ pub fn rust(p: &Program) -> Result<String, String> {
 pub fn cli(args: Vec<String>) -> Result<(), String> {
     if args.len() < 2 {
         return Err(
-            "nagic <check|lower|build|run> SOURCE [--native FILE.low] [--out DIR] [--cost-report]"
+            "nagic <check|lower|build|run> SOURCE [--native FILE.low] [--rust FILE.rs] [--rust-dep NAME=VERSION] [--out DIR] [--cost-report]"
                 .into(),
         );
     }
@@ -584,9 +601,43 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let mut native = vec![];
     let mut out = PathBuf::from("build").join(path.file_stem().unwrap());
     let mut cost = false;
+    let mut rust_file = None;
+    let mut rust_deps = std::collections::BTreeMap::new();
     let mut i = 2;
     while i < args.len() {
         match args[i].as_str() {
+            "--rust" => {
+                i += 1;
+                if rust_file.is_some() {
+                    return Err("--rustは1ファイル指定してください".into());
+                }
+                rust_file = Some(
+                    fs::canonicalize(args.get(i).ok_or("--rust requires path")?)
+                        .map_err(|e| e.to_string())?,
+                );
+            }
+            "--rust-dep" => {
+                i += 1;
+                let (name, version) = args
+                    .get(i)
+                    .ok_or("--rust-dep requires NAME=VERSION")?
+                    .split_once('=')
+                    .ok_or("--rust-dep requires NAME=VERSION")?;
+                if name == "nagi-runtime"
+                    || name.is_empty()
+                    || version.is_empty()
+                    || !name.chars().enumerate().all(|(i, c)| {
+                        c == '_'
+                            || c.is_ascii_alphabetic()
+                            || i > 0 && (c.is_ascii_digit() || c == '-')
+                    })
+                    || rust_deps
+                        .insert(name.to_owned(), version.to_owned())
+                        .is_some()
+                {
+                    return Err("Rust依存の名前・versionが不正、または重複しています".into());
+                }
+            }
             "--native" => {
                 i += 1;
                 native.push(PathBuf::from(args.get(i).ok_or("--native requires path")?));
@@ -671,7 +722,17 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                 .to_path_buf()
         });
     fs::create_dir_all(out.join("src")).map_err(|e| e.to_string())?;
-    fs::write(out.join("src/main.rs"), rust(&p)?).map_err(|e| e.to_string())?;
+    if p.functions.iter().any(|f| f.external) && rust_file.is_none() {
+        return Err("extern関数のビルドには--rust FILE.rsが必要です".into());
+    }
+    let mut generated_rust = rust(&p)?;
+    if let Some(file) = &rust_file {
+        generated_rust.push_str(&format!(
+            "\n#[path = {}]\nmod native;\n",
+            quote(&file.display().to_string())
+        ));
+    }
+    fs::write(out.join("src/main.rs"), generated_rust).map_err(|e| e.to_string())?;
     let package = format!(
         "nagi-{}",
         path.file_stem()
@@ -680,6 +741,15 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             .replace('_', "-")
     );
     let manifest=format!("[package]\nname={}\nversion=\"0.1.0\"\nedition=\"2021\"\n[workspace]\n[dependencies]\nnagi-runtime={{path={}}}\n[profile.release]\nopt-level=3\nlto=false\ncodegen-units=1\npanic=\"unwind\"\n",quote(&package),quote(&relative_path(&root.join("runtime"),&fs::canonicalize(&out).map_err(|e|e.to_string())?).display().to_string()));
+    let dependencies = rust_deps
+        .iter()
+        .map(|(name, version)| format!("{} = {}\n", quote(name), quote(version)))
+        .collect::<String>();
+    let manifest = manifest.replacen(
+        "[profile.release]",
+        &format!("{dependencies}[profile.release]"),
+        1,
+    );
     fs::write(out.join("Cargo.toml"), manifest).map_err(|e| e.to_string())?;
     let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
         .map(PathBuf::from)

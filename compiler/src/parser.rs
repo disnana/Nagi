@@ -203,6 +203,7 @@ impl Parser {
                 self.close()?;
                 p.classes.push(Class { name, fields, line });
             } else {
+                let external = self.eat("extern");
                 let asynchronous = self.eat("async");
                 self.expect(if self.high { "def" } else { "fn" })?;
                 let name = self.name()?;
@@ -224,12 +225,18 @@ impl Parser {
                 } else {
                     Type::named("unit")
                 };
-                let body = self.block()?;
+                let body = if external {
+                    self.end_stmt()?;
+                    Vec::new()
+                } else {
+                    self.block()?
+                };
                 p.functions.push(Function {
                     name,
                     params,
                     ret,
                     asynchronous,
+                    external,
                     body,
                     attrs: std::mem::take(&mut attrs),
                     line,

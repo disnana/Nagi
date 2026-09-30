@@ -1,0 +1,9 @@
+# Nagi側で呼び出しの型を宣言する。実装は--rustで渡すRustファイル。
+@rust("native::crc32")
+extern def crc32(text: view[str]) -> i64
+
+@rust("native::pretty_json")
+extern def pretty_json(text: view[str]) -> Result[str, Error]
+
+@rust("native::double_later")
+extern async def double_later(value: i64) -> Result[i64, Error]
