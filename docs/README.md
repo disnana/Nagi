@@ -7,6 +7,7 @@
 | やりたいこと | ページ | 分かること |
 |---|---|---|
 | Hello Worldを動かす | [準備と最初の実行](getting-started.md) | Windows / Linuxのコマンド、ファイル作成、ビルド、VS Code |
+| VS Codeで型と補完を使う | [エディターの操作例](editor.md) | 変数の型ホバー、フィールド補完、引数ヒント、F12 |
 | 文法を順番に覚える | [コードを書きながら学ぶ](language-guide.md) | 変数、関数、配列、class、view、Result、import |
 | 書き方をすぐ調べる | [文法の早見表](syntax.md) | 書式、演算子、Pythonと異なるところ |
 | 組み込み関数を探す | [よく使う関数](builtins.md) | 引数、戻り値、await / tryが必要な場面 |

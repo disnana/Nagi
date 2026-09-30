@@ -12,8 +12,10 @@
 | codegen | 安全なRust、Serde/FromRow/HTTP wrapperへ生成 |
 | backend | rustc/Cargoでネイティブを生成。借用・Sendも検査 |
 
-最初のcompilerはRustです。parserは小さい構文を追える手書き実装にし、構文が安定する前の依存を減らしました。Serde JSONは診断・cost report用です。
+コンパイラはRustで実装しています。HighとLowは共通の手書きparserを使い、字下げと波括弧の読み方を切り替えます。Serde JSONは診断・cost report・エディター向けのsymbol情報に使います。
+
+ASTは式・引数・束縛名の元ソースのtoken範囲を持ちます。`symbols`は通常のcheckerと同じ規則で確認できた型を、元ファイルのUTF-16位置とともに返します。編集補助では失敗した文の変数環境を戻して次の文を解析しますが、通常の`check`は最初のエラーで失敗します。型エラーのあるコードから補完情報が得られても、ビルド可能になったことを意味しません。
 
 codegenのscopeはJoinSet wrapperにします。classはnative structへ生成し、JSONとDB用の型付き実装を付けます。現在のCommon IRはSSAでも独自optimizerでもありません。LLVM最適化はRust backendに依存します。
 
-sourceは2 MB、式・型・ブロックの入れ子に上限を設けています。mutation smokeとmalformed sourceを試験します。coverage-guided fuzz、incremental parsing、複数module、精密なHigh/Low source mapは今後の作業です。
+ソースは1ファイル2 MBまでで、式・型・ブロックの入れ子にも上限があります。構文の変異試験と不正な入力の試験を行います。coverage-guided fuzz、incremental parsing、名前付きmodule、Rust診断をHighへ戻す精密なsource mapは今後の作業です。

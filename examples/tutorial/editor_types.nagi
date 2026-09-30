@@ -1,0 +1,17 @@
+class Count:
+    value: i64
+
+def parse_count(text: str) -> Result[Count, Error]:
+    number = try parse_i64(text)
+    return ok(Count(value=number))
+
+def show(count: Count):
+    print(count.value)
+
+def main():
+    result = parse_count("42")
+    match result:
+        case Ok(count):
+            show(count)
+        case Err(problem):
+            print(error_message(problem))
