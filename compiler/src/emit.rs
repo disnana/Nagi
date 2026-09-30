@@ -225,6 +225,8 @@ fn re(e: &Expr) -> String {
             };
             match n.as_str() {
                 "print" => format!("println!(\"{{}}\", {})", string_or_value(&a[0])),
+                "write" => format!("print!(\"{{}}\", {})", string_or_value(&a[0])),
+                "read_line" => "rt::read_line()".into(),
                 "assert_true" => format!("assert!({})", args[0]),
                 "view" => format!(
                     "({}).{}()",

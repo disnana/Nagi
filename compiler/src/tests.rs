@@ -189,3 +189,15 @@ fn cost_not_dynamic_count() {
     let p = high("def main():\n    s = \"hello\"\n    print(s)\n").unwrap();
     assert_eq!(emit::cost_report(&p)["format"], "nagi-cost-sites-v1");
 }
+
+#[test]
+fn console_io_roundtrip() {
+    let p = high("def main() -> Result[unit, Error]:\n    write(\"prompt: \")\n    text = try read_line()\n    return ok(print(text))\n").unwrap();
+    let mut low = parser::parse(&emit::low(&p), false).unwrap();
+    check::check(&mut low).unwrap();
+    let rust = emit::rust(&low).unwrap();
+    assert!(rust.contains("rt::read_line()"));
+    assert!(high("def main():\n    read_line()\n").is_err());
+    assert!(high("def main():\n    x = read_line(1)\n").is_err());
+    assert!(high("def main():\n    write([1, 2])\n").is_err());
+}

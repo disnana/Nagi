@@ -1,0 +1,74 @@
+# exeだけで見られる数値計算デモ。モジュールや外部データは不要。
+# z <- z*z+c を繰り返し、発散するまでの回数を文字の濃さにする。
+def escape_steps(real: f64, imaginary: f64, julia: bool) -> i64:
+    x = 0.0
+    y = 0.0
+    c_real = real
+    c_imaginary = imaginary
+    if julia:
+        x = real
+        y = imaginary
+        c_real = -0.8
+        c_imaginary = 0.156
+    steps = 0
+    while steps < 80 and x * x + y * y <= 4.0:
+        next_x = x * x - y * y + c_real
+        y = 2.0 * x * y + c_imaginary
+        x = next_x
+        steps += 1
+    return steps
+
+def shade(steps: i64) -> str:
+    if steps == 80:
+        return "@"
+    if steps > 30:
+        return "#"
+    if steps > 15:
+        return "*"
+    if steps > 8:
+        return "+"
+    if steps > 4:
+        return ":"
+    if steps > 2:
+        return "."
+    return " "
+
+def draw(julia: bool):
+    if julia:
+        print("Julia set: c = -0.8 + 0.156i")
+    else:
+        print("Mandelbrot set: z = z*z + c")
+    print("+------------------------------------------------------------------------------+")
+    imaginary = 1.2
+    for row in range(31):
+        write("|")
+        real = -2.2
+        for column in range(78):
+            write(shade(escape_steps(real, imaginary, julia)))
+            real += 0.04
+        print("|")
+        imaginary -= 0.08
+    print("+------------------------------------------------------------------------------+")
+    print("@ = did not escape within 80 iterations; lighter = escaped sooner")
+
+def main() -> Result[unit, Error]:
+    print("Nagi Fractal Demo")
+    print("Written in Nagi, compiled to a native Windows executable.")
+    print("")
+    draw(false)
+    running = true
+    while running:
+        print("")
+        write("1: Mandelbrot / 2: Julia / q (or Enter): quit > ")
+        command = try read_line()
+        if command == "q" or command == "":
+            running = false
+        else:
+            if command == "1":
+                draw(false)
+            else:
+                if command == "2":
+                    draw(true)
+                else:
+                    print("Please enter 1, 2 or q.")
+    return ok(print("Goodbye!"))

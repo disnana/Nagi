@@ -82,6 +82,18 @@ pub fn parse_i64(s: &str) -> Result<i64, Error> {
     s.parse()
         .map_err(|e: std::num::ParseIntError| Error::invalid(e.to_string()))
 }
+// Console-only blocking input. Flush prompts before waiting; preserve spaces.
+pub fn read_line() -> Result<String, Error> {
+    use std::io::Write;
+    std::io::stdout()
+        .flush()
+        .map_err(|e| Error::internal(e.to_string()))?;
+    let mut line = String::new();
+    std::io::stdin()
+        .read_line(&mut line)
+        .map_err(|e| Error::internal(e.to_string()))?;
+    Ok(line.trim_end_matches(['\r', '\n']).to_owned())
+}
 pub fn parse_f64(s: &str) -> Result<f64, Error> {
     let x: f64 = s
         .parse()

@@ -638,10 +638,10 @@ impl Checker {
         line: usize,
     ) -> Result<Type, String> {
         let arity = match n {
-            "clock_ns" | "supervisor_demo" => 0,
+            "clock_ns" | "supervisor_demo" | "read_line" => 0,
             "size_of" => 0,
-            "print" | "view" | "copy" | "share" | "clone_shared" | "len" | "range" | "sleep"
-            | "db_open" | "json_decode" | "json_encode" | "ok" | "some" | "error"
+            "print" | "write" | "view" | "copy" | "share" | "clone_shared" | "len" | "range"
+            | "sleep" | "db_open" | "json_decode" | "json_encode" | "ok" | "some" | "error"
             | "assert_true" | "parse_i64" | "parse_f64" | "make_ints" | "actor_demo"
             | "actor_pair_demo" | "queue_demo" | "task_demo" | "cpu_sum" | "i64" | "i32"
             | "uuid_parse" | "uuid_format" => 1,
@@ -685,12 +685,13 @@ impl Checker {
         let is_string =
             |t: &Type| t.0 == "str" || t == &Type::generic("view", vec![Type::named("str")]);
         match n {
-            "print" => {
+            "print" | "write" => {
                 if !types[0].is_copy() && types[0].0 != "str" {
-                    return Err(error(line, "printはprimitiveまたはstrを取ります"));
+                    return Err(error(line, "print/writeはprimitiveまたはstrを取ります"));
                 }
                 Ok(Type::named("unit"))
             }
+            "read_line" => Ok(result(Type::named("str"))),
             "view" => {
                 let t = &types[0];
                 if t.0 == "str" || t.0 == "bytes" {
