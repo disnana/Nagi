@@ -1,0 +1,6 @@
+class Item:
+    id: i64
+    name: str
+
+class Number:
+    value: i64

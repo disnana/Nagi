@@ -1,0 +1,56 @@
+import "storage.nagi"
+
+@get("/api/double")
+async def double(value: str) -> Result[Number, Error]:
+    match parse_i64(view(value)):
+        case Ok(number):
+            if number < 0 or number > 1000000:
+                return error("value must be between 0 and 1000000")
+            return ok(Number(value=number * 2))
+        case Err(_):
+            return error("value must be an integer")
+
+@get("/api/items/{id}")
+async def get_item(db: Db, id: i64) -> Result[Item?, Error]:
+    if id < 1:
+        return error("id must be positive")
+    if id > 1000000:
+        return not_found("item is outside the sample range")
+    match await read_item(db, id):
+        case Ok(item):
+            # NoneはHTTPルートで404になる。SomeはJSONになる。
+            return ok(item)
+        case Err(problem):
+            return fail(problem)
+
+@get("/api/fallback")
+async def fallback(db: Db) -> Result[Item?, Error]:
+    match await read_optional(db):
+        case Ok(item):
+            return ok(item)
+        case Err(problem):
+            print(error_kind(problem))
+            return ok(some(Item(id=0, name="cached item")))
+
+@get("/api/db-error")
+async def database_error(db: Db) -> Result[Item?, Error]:
+    match await read_optional(db):
+        case Ok(item):
+            return ok(item)
+        case Err(problem):
+            # kindを保持して失敗を返す。SQLの詳細はHTTP応答に出さない。
+            print(error_kind(problem))
+            return fail(problem)
+
+@get("/api/internal-error")
+async def internal_failure() -> Result[Number, Error]:
+    return internal_error("sample internal failure")
+
+async def main() -> Result[unit, Error]:
+    port = try parse_i64(env("NAGI_PORT", "8097"))
+    if port < 1 or port > 65535:
+        return error("NAGI_PORT must be between 1 and 65535")
+    db = try await db_open(":memory:")
+    try await db_exec(db, "CREATE TABLE sample_items(id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+    try await db_exec(db, "INSERT INTO sample_items(id, name) VALUES (1, 'notebook')")
+    return await serve(db, port)

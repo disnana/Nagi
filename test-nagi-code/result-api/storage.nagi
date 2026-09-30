@@ -1,0 +1,8 @@
+import "models.nagi"
+
+# optional_itemsは意図的に作らない。DB失敗時の分岐を再現するための例。
+async def read_optional(db: Db) -> Result[Item?, Error]:
+    return await db_query[Item](db, "SELECT id, name FROM optional_items WHERE id = ?1", 1)
+
+async def read_item(db: Db, id: i64) -> Result[Item?, Error]:
+    return await db_query[Item](db, "SELECT id, name FROM sample_items WHERE id = ?1", id)

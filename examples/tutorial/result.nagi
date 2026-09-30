@@ -1,0 +1,14 @@
+def number_or(text: str, fallback: i64) -> i64:
+    match parse_i64(view(text)):
+        case Ok(number):
+            return number
+        case Err(problem):
+            print(error_kind(problem))
+            # メッセージを読んでもproblemはmoveしない。
+            message = error_message(problem)
+            assert_true(len(view(message)) > 0)
+            return fallback
+
+def main():
+    print(number_or("21", 0))
+    print(number_or("oops", -1))
