@@ -226,7 +226,15 @@ fn re(e: &Expr) -> String {
             match n.as_str() {
                 "print" => format!("println!(\"{{}}\", {})", string_or_value(&a[0])),
                 "assert_true" => format!("assert!({})", args[0]),
-                "view" => format!("({}).as_ref()", args[0]),
+                "view" => format!(
+                    "({}).{}()",
+                    args[0],
+                    if a[0].ty.as_ref().is_some_and(|t| t.0 == "str") {
+                        "as_str"
+                    } else {
+                        "as_slice"
+                    }
+                ),
                 "copy" => format!("({}).to_owned()", args[0]),
                 "share" => format!("std::sync::Arc::new({})", args[0]),
                 "clone_shared" => format!("std::sync::Arc::clone(&{})", args[0]),
