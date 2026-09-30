@@ -1,19 +1,162 @@
-# 構文
+# 文法の早見表
 
-Highは空白による字下げ、Lowは`{ }`と`;`を使います。タブ、曖昧な字下げ、不明な文字、閉じていない文字列はlexer/parserが拒否します。コメントは両言語とも`#`です。
+[目次](README.md) · 初めて書くなら：[入門ガイド](language-guide.md) · 関数を調べる：[よく使う関数](builtins.md)
 
-```python
-def sum_values(values: view[i64]) -> i64:
-    total = 0
-    for value in values:
-        total += value
-    return total
+このページはHigh（`.nagi`）の書式を引くための資料です。短い例は関数内に書く断片も含みます。各例をまとめて動かすには[入門の完成コード](../examples/tutorial/basics.nagi)を使ってください。
+
+## ファイルと字下げ
+
+- UTF-8で保存し、拡張子を`.nagi`にする。
+- トップレベルには`import`、`class`、`def`、`async def`、Rustの外部関数宣言を書く。実行する文は関数内に書く。
+- ブロックの前に`:`を付け、空白で字下げする。空白4つを推奨する。タブは禁止。
+- コメントは`#`。識別子は英字・数字・`_`で、数字からは始めない。日本語の文字列・コメントは使える。
+- `()`や`[]`の中は複数行に分けられる。引数や要素の末尾の余分な`,`は未対応。
+
+```nagi
+def main():
+    # コメント
+    print("Hello, Nagi!")
 ```
 
-関数の引数と戻り値は型を記述します。戻り値の省略は`unit`です。ローカル変数は推論できます。再代入では最初に決まった型を維持します。
+## 値と変数
 
-対応する文は、代入、return、関数呼び出し、if/else、while、for、async with scope、spawnです。式には四則演算、比較、and/or、not、classの構築、フィールド参照、配列、index、await、tryがあります。classの生成は`Point(x=1.0, y=2.0)`のように全フィールドを名前で指定します。
+| 書き方 | 意味 |
+|---|---|
+| `count = 10` | 型を推論する。整数の標準は`i64` |
+| `count: i32 = 10` | 型を指定する |
+| `rate = 1.5` | 小数の標準は`f64` |
+| `enabled = True` / `False` | 真偽値。`true` / `false`も受け付ける |
+| `name = "Nagi"` / `'Nagi'` | UTF-8文字列 |
+| `values = [1, 2, 3]` | 同じ型の要素の配列 |
+| `values: List[i64] = []` | 空配列には型注釈を付ける |
+| `missing: i64? = None` | 値がないnullable。`null`も受け付ける |
+| `present: i64? = some(42)` | 値があるnullable |
+| `count = 11` | 同じ型で再代入 |
+| `count += 1` / `-= 1` / `*= 2` | 複合代入。`/=` / `%=`は未対応 |
 
-`elif`、break/continue、import、classのmethod、継承、lambda、汎用の辞書literal、SQLブロック構文は未実装です。これらを複雑なparserへ一度に入れる前に、型・寿命・ネイティブ実行を検証する方針です。
+文字列のエスケープは`\n`、`\r`、`\t`、`\"`、`\'`、`\\`です。f-string、文字列の補間、三重引用符はありません。型の一覧は[型](types.md)を参照してください。
 
-`len(str)`はUTF-8のbyte長です。文字数を数える操作との区別が必要です。整数のrelease演算はRust backendの固定幅演算の挙動に従い、加算等のoverflowはwrapします。debug Rust側ではtrapする場合があります。checked/wrapping算術を言語として統一することは仕様確定前の課題です。
+## 関数とreturn
+
+```nagi
+def add(a: i64, b: i64) -> i64:
+    return a + b
+
+def show(value: i64):
+    print(value)
+    return
+```
+
+引数の型は必須です。戻り値を省略すると`unit`。値を返す関数は全経路で戻り値が必要です。呼び出しは`add(1, 2)`のように位置引数を使います。デフォルト引数、可変長引数、ユーザー定義generic関数はありません。
+
+## 分岐とループ
+
+次は関数内の断片です。
+
+```nagi
+score = 80
+if score >= 80:
+    print("合格")
+else:
+    print("再挑戦")
+
+for index in range(3):
+    print(index)
+
+count = 0
+while count < 3:
+    count += 1
+```
+
+条件は`bool`です。`range(n)`は`0`以上`n`未満で、引数は1つです。配列やviewの`for`走査はprimitiveとCopy classの要素に対応します。`elif`、`break`、`continue`、`pass`はありません。
+
+## 演算子
+
+優先順位が高いものから並べています。同じ段の二項演算は左から評価する形で解析します。曖昧な式には`()`を付けてください。
+
+| 優先順位 | 演算子 | 例 |
+|---|---|---|
+| 高 | 呼び出し、フィールド、index | `add(1, 2)`、`point.x`、`values[0]` |
+| ↓ | `-`（単項）、`not`、`try`、`await` | `-count`、`not enabled`、`try await db_open(...)` |
+| ↓ | `*`、`/`、`%` | `count * 2` |
+| ↓ | `+`、`-` | `count + 1` |
+| ↓ | `<`、`>`、`<=`、`>=` | `count < 10` |
+| ↓ | `==`、`!=` | `count == 10` |
+| ↓ | `and` | `count > 0 and count < 10` |
+| 低 | `or` | `enabled or count == 0` |
+
+異なる数値型は暗黙に変換しません。`i32`から`i64`には`i64(value)`を使います。`i32(i64値)`は`Result[i32, Error]`を返すため、Result関数内で`try i32(value)`などと書きます。
+
+比較の連鎖`0 < count < 10`は使わず、`count > 0 and count < 10`と書きます。整数の`/`は整数除算です。`**`、`//`、ビット演算は未対応です。
+
+## class、配列、view
+
+```nagi
+class Point:
+    x: f64
+    y: f64
+
+def main():
+    point = Point(x=1.0, y=2.0)
+    print(point.x)
+    values = [10, 20]
+    append(values, 30)
+    print(values[0])
+    borrowed = view(values)
+    duplicate = copy(borrowed)
+    print(len(duplicate))
+```
+
+classは全フィールドを名前付きで指定します。フィールド・indexへの代入、method、継承は未対応です。indexは0からで、負数や範囲外は実行時panicになります。文字列のindexは使えません。配列や文字列の区間を借りる場合は`try slice(view(data), start, end)`です。
+
+自作関数への所有文字列・配列の引き渡しはmoveです。読むだけなら引数を`view[str]`や`view[i64]`にし、`view(value)`で渡します。詳細は[入門ガイド](language-guide.md)と[所有権](ownership.md)を参照してください。
+
+## Result、async、scope
+
+| 書き方 | 意味 |
+|---|---|
+| `-> Result[i64, Error]` | 成功なら整数、失敗ならErrorを返す |
+| `return ok(42)` | 成功を返す |
+| `return error("理由")` | 失敗を返す |
+| `value = try parse_i64("42")` | 値を取り出す。失敗なら呼び出し元へ返す |
+| `async def work():` | 非同期関数を定義する |
+| `await sleep(10)` | 非同期処理を待つ。単位はミリ秒 |
+| `db = try await db_open(":memory:")` | 非同期処理を待ち、Resultの失敗も伝える |
+
+`try`はResultを返す関数内、`await`はasync関数内で使います。子taskは次の完全なコードのようにscope内でspawnします。
+
+```nagi
+async def main() -> Result[unit, Error]:
+    async with scope:
+        spawn sleep(10)
+        spawn sleep(15)
+    return ok(print("完了"))
+```
+
+scopeを出るときに子taskを待ちます。scope内の`return`、viewを別taskへ渡すこと、値を返す子taskのspawnは現在未対応です。詳細は[async](async.md)を参照してください。
+
+## import、HTTP、Rust
+
+| 用途 | 書き方 | 詳細 |
+|---|---|---|
+| ファイルを読み込む | `import "models.nagi"` | [import](modules-and-rust.md)。同じ名前空間に読み込む |
+| GET handlerを定義する | 関数の前に`@get("/users/{id}")` | [HTTP](http.md)。`@post`、`@put`、`@delete`もある |
+| HTMLを返す | `return ok(html("<h1>Hello</h1>"))` | 戻り値は`Result[Html, Error]` |
+| テキストを埋め込む | `include_text("index.html")` | ソースの場所を基準に、コンパイル時に埋め込む |
+| Rust関数を宣言する | `@rust("native::crc32")`の次行に`extern def crc32(text: view[str]) -> i64` | [Rust連携](modules-and-rust.md)。本体・末尾の`:`は不要 |
+
+## Pythonに似ていても違うところ
+
+| Pythonでよく書く形 | Nagiでは |
+|---|---|
+| `def add(a, b):` | 引数型を書く。戻り値があるなら`-> 型`も書く |
+| `print(a, b)` | 1引数ずつ`print(a)`、`print(b)` |
+| `items.append(x)` | `append(items, x)` |
+| `try: ... except:` | `try 式`でResultの失敗を伝える |
+| `from models import User` | `import "models.nagi"` |
+| 辞書、tuple、内包表記、lambda | 未対応。class、配列、通常の関数・ループを使う |
+| `str(42)`、任意型へのcast | 汎用変換は未対応。直接`print(42)`などを使う |
+
+nullableには`None` / `some(value)`がありますが、`match`による取り出しや汎用のunwrap APIはありません。型を持つことと、完全な操作APIがあることは分けて考えてください。
+
+整数のrelease演算はRust backendの固定幅演算に従い、加算などのoverflowはwrapします。debug Rust側ではpanicする場合があります。checked / wrapping演算を言語として統一することは今後の課題です。Lowの構文・差し替えは[Low](low-language.md)、実装予定は[roadmap](roadmap.md)にあります。

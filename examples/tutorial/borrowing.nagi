@@ -1,0 +1,11 @@
+# 文字列を読み取るだけなら、所有権を受け取らずviewで借りる。
+def name_size(name: view[str]) -> i64:
+    return len(name)
+
+def main():
+    name = "Nagi"
+    print(name_size(view(name)))
+    print(name_size(view(name)))
+    duplicate = copy(view(name))
+    print(duplicate)
+    print(name)

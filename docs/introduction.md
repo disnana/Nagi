@@ -8,4 +8,4 @@ Highの字下げ構文は読みやすさのためです。動的なPythonオブ�
 
 独自性を検証する中心は、読み返せるLow、型を維持する関数置換、コストが見えるview/所有値、typed modelへ直接接続するバックエンド経路です。現在の実装だけで、新しいメモリ管理やBEAM級の障害分離を実現したとは判断できません。
 
-最初は [getting-started.md](getting-started.md)、仕様は [syntax.md](syntax.md)、実測は [../PERFORMANCE.md](../PERFORMANCE.md) を読んでください。
+書き始める場合は[ドキュメントの目次](README.md)から、[準備と最初の実行](getting-started.md)、[コードを書きながら学ぶ](language-guide.md)へ進んでください。書式を調べるには[文法の早見表](syntax.md)、実測は[性能の測定結果](../PERFORMANCE.md)を参照してください。

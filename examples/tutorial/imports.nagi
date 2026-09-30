@@ -1,0 +1,4 @@
+import "math.nagi"
+
+def main():
+    print(add(20, 22))

@@ -1,0 +1,32 @@
+# 入門ガイド: 型、関数、配列、class、分岐、繰り返し。
+class Point:
+    x: f64
+    y: f64
+
+def sum_numbers(values: view[i64]) -> i64:
+    total = 0
+    for value in values:
+        total += value
+    return total
+
+def main():
+    values = [1, 2, 3]
+    append(values, 4)
+    total = sum_numbers(view(values))
+    print(total)
+
+    point = Point(x=3.0, y=4.0)
+    print(point.x + point.y)
+
+    if total >= 10 and len(values) == 4:
+        print("OK")
+    else:
+        print("NG")
+
+    for index in range(3):
+        print(index)
+
+    count = 0
+    while count < 2:
+        count += 1
+    print(count)

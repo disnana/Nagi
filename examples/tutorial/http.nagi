@@ -1,0 +1,22 @@
+# SQLiteへの書き込みなしで、HTMLとJSONの応答を試す。
+class Greeting:
+    id: i64
+    name: str
+
+@get("/")
+async def home() -> Result[Html, Error]:
+    return ok(html("<!doctype html><html lang=\"ja\"><meta charset=\"utf-8\"><title>Nagi</title><h1>Hello, Nagi!</h1><a href=\"/greet/1\">JSONを見る</a></html>"))
+
+@get("/greet/{id}")
+async def greet(id: i64) -> Result[Greeting, Error]:
+    if id < 1:
+        return error("id must be positive")
+    return ok(Greeting(id=id, name="Nagi"))
+
+@post("/echo")
+async def echo(req: Greeting) -> Result[Greeting, Error]:
+    return ok(req)
+
+async def main() -> Result[unit, Error]:
+    db = try await db_open(":memory:")
+    return await serve(db, 8094)

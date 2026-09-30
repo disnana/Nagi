@@ -1,0 +1,13 @@
+# 例: 21を入力すると42。数値でない入力や負数はResultで失敗を返す。
+def double_nonnegative(text: view[str]) -> Result[i64, Error]:
+    value = try parse_i64(text)
+    if value < 0:
+        return error("0以上の整数を入力してください")
+    return ok(value * 2)
+
+def main() -> Result[unit, Error]:
+    write("整数を入力 > ")
+    text = try read_line()
+    doubled = try double_nonnegative(view(text))
+    print(doubled)
+    return ok(print("完了"))

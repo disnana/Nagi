@@ -1,5 +1,9 @@
 # 型と推論
 
+[目次](README.md) · 初めて読むなら：[入門ガイド](language-guide.md)
+
+変数は`count: i32 = 10`、関数の引数は`count: i32`、戻り値は`-> i32`と書きます。ローカル変数の型は省略できますが、決まった型を再代入で変更することはできません。
+
 | 型 | 実装上の表現 | 0.1の状況 |
 |---|---|---|
 | i8/i16/i32/i64、u8/u16/u32/u64 | native整数 | 対応。異なる型の演算に暗黙の変換をしない |
@@ -14,6 +18,8 @@
 | Map[K,V]、owned[T] | HashMap、所有値への型方針 | 型表記の足場のみ。完全な操作APIは未実装 |
 | generic、function/async function type | 静的特殊化を目標 | 汎用genericと型注釈の関数型は未実装 |
 
-`count = 10`はi64、`rate = 1.5`はf64です。型注釈がある整数literalはその範囲を確認します。型変換は、損失のない`i64(i32値)`、範囲を検査する`i32(i64値)`等を明示します。
+`count = 10`はi64、`rate = 1.5`はf64です。型注釈がある整数literalはその範囲を確認します。現在の数値変換APIは、i8 / i16 / i32 / u8 / u16 / u32からの損失のない`i64(value)`と、i64から範囲を検査する`i32(value) -> Result[i32, Error]`です。任意型への汎用castはありません。
+
+nullableは`missing: i64? = None`、値がある場合は`present: i64? = some(42)`です。`T?`は`Option[T]`の短い表記ですが、現在はmatchや汎用unwrap APIはありません。空配列は`values: List[i64] = []`と型を指定してください。
 
 全値をboxingする設計ではありません。ただし、String、Vec、task、channel等の内部allocationがなくなるわけではありません。RustのモノモーフィズムとLLVM最適化を利用します。ユーザー定義generic関数やtraitの実装は今後の段階です。
