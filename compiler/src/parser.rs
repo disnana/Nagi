@@ -23,6 +23,12 @@ impl Parser {
     fn t(&self) -> &Token {
         &self.ts[self.pos.min(self.ts.len() - 1)]
     }
+    fn span(&self, start: usize) -> Span {
+        Span {
+            start,
+            end: self.pos,
+        }
+    }
     fn err(&self, msg: &str) -> String {
         format!(
             "line {}:{}: {msg} (found {:?})",
@@ -209,9 +215,12 @@ impl Parser {
                 let name = self.name()?;
                 self.expect("(")?;
                 let mut params = vec![];
+                let mut parameter_spans = vec![];
                 if !self.eat(")") {
                     loop {
+                        let start = self.pos;
                         let n = self.name()?;
+                        parameter_spans.push(self.span(start));
                         self.expect(":")?;
                         params.push((n, self.ty()?));
                         if self.eat(")") {
@@ -234,6 +243,7 @@ impl Parser {
                 p.functions.push(Function {
                     name,
                     params,
+                    parameter_spans,
                     ret,
                     asynchronous,
                     external,
@@ -269,6 +279,7 @@ impl Parser {
     }
     fn stmt(&mut self) -> Result<Stmt, String> {
         let line = self.t().line;
+        let mut binding_span = None;
         let kind = if self.eat("return") {
             let e = if matches!(self.t().kind, K::Newline | K::Dedent | K::Eof)
                 || matches!(&self.t().kind,K::Sym(s)if s==";"||s=="}")
@@ -307,20 +318,26 @@ impl Parser {
                     return Err(self.err("ResultのcaseにはOkまたはErrが必要です"));
                 };
                 self.expect("(")?;
+                let start = self.pos;
                 let binding = self.name()?;
+                let binding_span = self.span(start);
                 self.expect(")")?;
                 arms.push(MatchArm {
                     ok,
                     binding: (binding != "_").then_some(binding),
                     body: self.block()?,
                     line,
+                    binding_span,
+                    binding_type: None,
                 });
                 self.skip();
             }
             self.close()?;
             S::Match(value, arms)
         } else if self.eat("for") {
+            let start = self.pos;
             let n = self.name()?;
+            binding_span = Some(self.span(start));
             self.expect("in")?;
             let e = self.expr(0)?;
             S::For(n, e, self.block()?)
@@ -338,7 +355,10 @@ impl Parser {
             let explicit = self.eat("let");
             let assignment=matches!(&self.t().kind,K::Id(_)) && self.ts.get(self.pos+1).is_some_and(|t|matches!(&t.kind,K::Sym(x)if ["=",":","+=","-=","*="].contains(&x.as_str())));
             if explicit || assignment {
+                let start = self.pos;
                 let n = self.name()?;
+                let name_span = self.span(start);
+                binding_span = Some(name_span);
                 let annotation = if self.eat(":") {
                     Some(self.ty()?)
                 } else {
@@ -356,17 +376,20 @@ impl Parser {
                     } else {
                         return Err(self.err("代入演算子が必要です"));
                     };
+                    let right = self.expr(0)?;
                     Expr {
                         line,
                         ty: None,
+                        span: self.span(start),
                         kind: E::Binary(
                             Box::new(Expr {
                                 line,
                                 ty: None,
                                 kind: E::Name(n.clone()),
+                                span: name_span,
                             }),
                             op.into(),
-                            Box::new(self.expr(0)?),
+                            Box::new(right),
                         ),
                     }
                 };
@@ -383,7 +406,12 @@ impl Parser {
                 S::Expr(e)
             }
         };
-        Ok(Stmt { kind, line })
+        Ok(Stmt {
+            kind,
+            line,
+            binding_span,
+            binding_type: None,
+        })
     }
     // Pratt parser。演算子の優先順位を一か所に集め、曖昧な構文を避ける。
     fn expr(&mut self, min: u8) -> Result<Expr, String> {
@@ -392,29 +420,34 @@ impl Parser {
             return Err(self.err("式の入れ子が深すぎます"));
         }
         let line = self.t().line;
+        let start = self.pos;
         let mut e = if self.eat("await") {
             Expr {
                 line,
                 ty: None,
                 kind: E::Await(Box::new(self.expr(7)?)),
+                span: self.span(start),
             }
         } else if self.eat("try") {
             Expr {
                 line,
                 ty: None,
                 kind: E::Try(Box::new(self.expr(7)?)),
+                span: self.span(start),
             }
         } else if self.eat("-") {
             Expr {
                 line,
                 ty: None,
                 kind: E::Unary("-".into(), Box::new(self.expr(7)?)),
+                span: self.span(start),
             }
         } else if self.eat("not") {
             Expr {
                 line,
                 ty: None,
                 kind: E::Unary("not".into(), Box::new(self.expr(7)?)),
+                span: self.span(start),
             }
         } else {
             let k = self.t().kind.clone();
@@ -456,6 +489,7 @@ impl Parser {
                 line,
                 ty: None,
                 kind,
+                span: self.span(start),
             }
         };
         loop {
@@ -465,6 +499,7 @@ impl Parser {
                     line,
                     ty: None,
                     kind: E::Field(Box::new(e), f),
+                    span: self.span(start),
                 };
                 continue;
             }
@@ -526,6 +561,7 @@ impl Parser {
                     } else {
                         E::Record(n, fields)
                     },
+                    span: self.span(start),
                 };
                 continue;
             }
@@ -536,6 +572,7 @@ impl Parser {
                     line,
                     ty: None,
                     kind: E::Index(Box::new(e), Box::new(idx)),
+                    span: self.span(start),
                 };
                 continue;
             }
@@ -561,6 +598,7 @@ impl Parser {
                 line,
                 ty: None,
                 kind: E::Binary(Box::new(e), op, Box::new(r)),
+                span: self.span(start),
             };
         }
         self.depth -= 1;

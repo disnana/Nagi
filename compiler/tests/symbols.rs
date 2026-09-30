@@ -28,6 +28,33 @@ impl Fixture {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     }
+    fn symbols(&self, files: serde_json::Value) -> serde_json::Value {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_nagic"));
+        command.args(["symbols", "--editor-input"]);
+        if !self.0.join("nagi.toml").exists() {
+            command.arg("main.nagi");
+        }
+        let mut child = command
+            .current_dir(&self.0)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(serde_json::json!({ "files": files }).to_string().as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        serde_json::from_slice(&output.stdout).unwrap()
+    }
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
@@ -229,4 +256,197 @@ fn editor_input_rejects_invalid_schema_alias_duplicates_and_other_commands() {
         let args = [cmd, "a.nagi", "--editor-input"].map(str::to_owned);
         assert!(nagic::project::resolve(&args, &f.0).is_err());
     }
+}
+
+fn local_types(index: &serde_json::Value, line: u64, name: &str) -> Vec<String> {
+    index["locals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|l| l["location"]["line"] == line && l["name"] == name)
+        .map(|l| l["type"].as_str().unwrap().to_owned())
+        .collect()
+}
+
+#[test]
+fn inferred_locals_parameters_and_loop_bindings_obey_exact_scopes() {
+    let f = Fixture::new();
+    let source = "def first(value: i32) -> i32:\n    return value\ndef second(value: bool) -> bool:\n    return value\ndef main():\n    count = first(7); flag = True; print(count); print(flag)\n    count += 1\n    if flag:\n        inside = 3\n        print(inside)\n    else:\n        print(count)\n    print(inside)\n    for count in [True]:\n        print(count)\n    print(count)\n    unknown = missing()\n    print(unknown)\n    print(count)\n";
+    f.write("main.nagi", source);
+    let index = f.symbols(serde_json::json!([]));
+    assert_eq!(local_types(&index, 1, "value"), ["i32"]);
+    assert_eq!(local_types(&index, 2, "value"), ["i32"]);
+    assert_eq!(local_types(&index, 3, "value"), ["bool"]);
+    assert_eq!(local_types(&index, 4, "value"), ["bool"]);
+    assert_eq!(local_types(&index, 6, "count"), ["i32", "i32"]);
+    assert_eq!(local_types(&index, 6, "flag"), ["bool", "bool"]);
+    assert_eq!(local_types(&index, 7, "count"), ["i32", "i32"]);
+    assert_eq!(local_types(&index, 10, "inside"), ["i64"]);
+    assert!(local_types(&index, 13, "inside").is_empty());
+    assert_eq!(local_types(&index, 14, "count"), ["bool"]);
+    assert_eq!(local_types(&index, 15, "count"), ["bool"]);
+    assert_eq!(local_types(&index, 16, "count"), ["i32"]);
+    assert!(local_types(&index, 17, "unknown").is_empty());
+    assert!(local_types(&index, 18, "unknown").is_empty());
+    assert_eq!(local_types(&index, 19, "count"), ["i32"]);
+    // Editor recovery must not turn the same source into a compilable program.
+    let mut parsed = nagic::parser::parse(source, true).unwrap();
+    assert!(nagic::check::check(&mut parsed).is_err());
+}
+
+#[test]
+fn match_payloads_and_child_locals_do_not_escape_their_arm() {
+    let f = Fixture::new();
+    f.write("main.nagi", "class Point:\n    x: i32\ndef inspect(result: Result[Point, Error]):\n    match result:\n        case Ok(point):\n            local = point\n            print(local.x)\n        case Err(problem):\n            print(error_kind(problem))\n            print(point.x)\n            print(local.x)\n    print(point.x)\n    print(problem)\ndef main():\n    print(0)\n");
+    let index = f.symbols(serde_json::json!([]));
+    assert_eq!(local_types(&index, 3, "result"), ["Result[Point, Error]"]);
+    assert_eq!(local_types(&index, 5, "point"), ["Point"]);
+    assert_eq!(local_types(&index, 6, "point"), ["Point"]);
+    assert_eq!(local_types(&index, 6, "local"), ["Point"]);
+    assert_eq!(local_types(&index, 7, "local"), ["Point"]);
+    assert_eq!(local_types(&index, 8, "problem"), ["Error"]);
+    assert_eq!(local_types(&index, 9, "problem"), ["Error"]);
+    for (line, name) in [(10, "point"), (11, "local"), (12, "point"), (13, "problem")] {
+        assert!(local_types(&index, line, name).is_empty());
+    }
+    let local = index["expressions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["location"]["line"] == 7 && e["type"] == "Point")
+        .unwrap();
+    assert_eq!(
+        local["fields"],
+        serde_json::json!([{ "name": "x", "type": "i32" }])
+    );
+}
+
+#[test]
+fn imported_and_native_types_use_unsaved_buffers_and_utf16_ranges() {
+    let f = Fixture::new();
+    f.write("nagi.toml", "entry = 'main.nagi'\nnative = ['make.low']\n");
+    let models = "class Point:\n    x: i64\n";
+    let entry =
+        "import \"models.nagi\"\ndef main():\n    print(\"😀\"); point = make(); print(point.x)\n";
+    f.write("models.nagi", models);
+    f.write("main.nagi", entry);
+    f.write("make.low", "fn make() -> Point { return Point(x=1); }\n");
+    let index = f.symbols(serde_json::json!([
+        { "file": "models.nagi", "text": "class Point:\n    x: i32\n    y: bool\n" },
+        { "file": "make.low", "text": "fn make() -> Point { let point = Point(x=7, y=True); return point; }\n" }
+    ]));
+    let point = index["locals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["name"] == "point" && l["location"]["line"] == 3)
+        .unwrap();
+    let line = entry.lines().nth(2).unwrap();
+    assert_eq!(
+        point["location"]["column"],
+        line[..line.find("point").unwrap()].encode_utf16().count() + 1
+    );
+    assert_eq!(point["type"], "Point");
+    let expression = index["expressions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["location"]["line"] == 3 && e["type"] == "Point")
+        .unwrap();
+    assert_eq!(
+        expression["fields"],
+        serde_json::json!([{ "name": "x", "type": "i32" }, { "name": "y", "type": "bool" }])
+    );
+    assert!(index["locals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|l| l["location"]["file"]
+            .as_str()
+            .unwrap()
+            .ends_with("make.low")
+            && l["name"] == "point"
+            && l["type"] == "Point"));
+    assert_eq!(fs::read_to_string(f.0.join("models.nagi")).unwrap(), models);
+    assert_eq!(fs::read_to_string(f.0.join("main.nagi")).unwrap(), entry);
+    assert!(!f.0.join("build").exists());
+}
+
+#[test]
+fn low_records_replacements_and_same_line_bindings_keep_their_source_positions() {
+    let f = Fixture::new();
+    f.write(
+        "nagi.toml",
+        "entry = 'main.nagi'\nnative = ['counter.low']\n",
+    );
+    f.write("main.nagi", "def twice(input: i32) -> i32:\n    return input * 2\ndef main():\n    counter = create(); print(twice(counter.value))\n");
+    f.write("counter.low", "record Counter { value: i32; }\nfn create() -> Counter { let item = Counter(value=7); return item; }\n@replace generated::twice\nfn replacement(payload: i32) -> i32 { let result = payload * 2; return result; }\n");
+    let index = f.symbols(serde_json::json!([]));
+    assert_eq!(local_types(&index, 1, "input"), ["i32"]);
+    assert_eq!(local_types(&index, 2, "item"), ["Counter", "Counter"]);
+    assert_eq!(local_types(&index, 4, "payload"), ["i32", "i32"]);
+    assert_eq!(local_types(&index, 4, "result"), ["i32", "i32"]);
+    let counter = index["expressions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["type"] == "Counter")
+        .unwrap();
+    assert_eq!(
+        counter["fields"],
+        serde_json::json!([{ "name": "value", "type": "i32" }])
+    );
+    let jump = index["references"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["location"]["line"] == 4 && r["target"]["line"] == 1)
+        .unwrap();
+    assert!(jump["target"]["file"]
+        .as_str()
+        .unwrap()
+        .ends_with("main.nagi"));
+}
+
+#[test]
+fn invalid_signatures_do_not_generate_guessed_local_types() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    point = unknown()\n    print(point.x)\ndef unknown() -> Missing:\n    return 1\n");
+    let index = f.symbols(serde_json::json!([]));
+    assert_eq!(index["locals"], serde_json::json!([]));
+    assert_eq!(index["expressions"], serde_json::json!([]));
+    assert_eq!(index["definitions"].as_array().unwrap().len(), 2);
+    assert!(!index["references"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn moved_values_and_scope_locals_have_no_later_inferred_type() {
+    let f = Fixture::new();
+    f.write("main.nagi", "class User:\n    name: str\ndef consume(user: User):\n    print(user.name)\nasync def work() -> Result[unit, Error]:\n    user = User(name=\"example\")\n    consume(user)\n    print(user.name)\n    async with scope:\n        hidden = 7\n        print(hidden)\n    print(hidden)\n    return ok(print(0))\ndef main():\n    print(0)\n");
+    let index = f.symbols(serde_json::json!([]));
+    assert_eq!(local_types(&index, 6, "user"), ["User"]);
+    assert_eq!(local_types(&index, 7, "user"), ["User"]);
+    assert!(local_types(&index, 8, "user").is_empty());
+    assert_eq!(local_types(&index, 11, "hidden"), ["i64"]);
+    assert!(local_types(&index, 12, "hidden").is_empty());
+}
+
+#[test]
+fn expression_ranges_cover_multiline_receivers_and_do_not_unwrap_results() {
+    let f = Fixture::new();
+    f.write("main.nagi", "class Point:\n    x: i64\ndef fetch() -> Result[Point, Error]:\n    return ok(Point(x=7))\ndef inspect() -> Result[unit, Error]:\n    point = (\n        try fetch()\n    )\n    print(point.x)\n    return ok(print(0))\ndef main():\n    result = fetch()\n");
+    let index = f.symbols(serde_json::json!([]));
+    let expressions = index["expressions"].as_array().unwrap();
+    let multiline = expressions
+        .iter()
+        .find(|e| e["location"]["line"] == 6 && e["type"] == "Point")
+        .unwrap();
+    assert_eq!(multiline["end_line"], 8);
+    assert_eq!(multiline["end_column"], 6);
+    assert_eq!(multiline["fields"][0]["name"], "x");
+    let result = expressions
+        .iter()
+        .find(|e| e["location"]["line"] == 12 && e["type"] == "Result[Point, Error]")
+        .unwrap();
+    assert_eq!(result["fields"], serde_json::json!([]));
 }

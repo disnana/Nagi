@@ -66,6 +66,14 @@ pub struct Expr {
     pub kind: E,
     pub line: usize,
     pub ty: Option<Type>,
+    pub span: Span,
+}
+/// Half-open token range in the original source file. Import loading shifts
+/// diagnostic lines, but keeps these ranges local to each file.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Span {
+    pub start: usize,
+    pub end: usize,
 }
 #[derive(Clone, Debug)]
 pub enum E {
@@ -108,16 +116,21 @@ pub struct MatchArm {
     pub binding: Option<String>,
     pub body: Vec<Stmt>,
     pub line: usize,
+    pub binding_span: Span,
+    pub binding_type: Option<Type>,
 }
 #[derive(Clone, Debug)]
 pub struct Stmt {
     pub kind: S,
     pub line: usize,
+    pub binding_span: Option<Span>,
+    pub binding_type: Option<Type>,
 }
 #[derive(Clone, Debug)]
 pub struct Function {
     pub name: String,
     pub params: Vec<(String, Type)>,
+    pub parameter_spans: Vec<Span>,
     pub ret: Type,
     pub asynchronous: bool,
     pub external: bool,
