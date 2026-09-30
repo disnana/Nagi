@@ -58,3 +58,39 @@ test('real Nagi checker diagnoses a source error', async () => {
   assert.equal(compiler.parseDiagnostics(result.output, file)[0].line, 1);
   assert.match(result.output, /expected i32/);
 });
+
+test('nearest manifest wins and project arguments delegate entry selection to nagic', () => {
+  const root = path.resolve(__dirname, '../../..');
+  const folder = path.join(root, 'build', 'vscode-project-tests');
+  fs.mkdirSync(path.join(folder, 'nested', 'src'), { recursive: true });
+  const outer = path.join(folder, 'nagi.toml');
+  const inner = path.join(folder, 'nested', 'nagi.toml');
+  fs.writeFileSync(outer, "entry = 'main.nagi'\n");
+  fs.writeFileSync(inner, "entry = 'main.nagi'\n");
+  const helper = path.join(folder, 'nested', 'src', 'helper.nagi');
+  assert.equal(compiler.findProject(helper), inner);
+  const args = compiler.argumentsFor('check', helper, [], path.dirname(inner), root, '', [], inner);
+  assert.deepEqual(args.slice(0, 3), ['check', '--project', inner]);
+  assert.equal(args.includes(helper), false);
+  assert.equal(args.at(-1), compiler.argumentsFor('check', path.join(path.dirname(inner), 'main.nagi'), [], path.dirname(inner), root, '', [], inner).at(-1));
+  fs.unlinkSync(inner);
+  assert.equal(compiler.findProject(helper), outer);
+  fs.unlinkSync(outer);
+  assert.equal(compiler.findProject(helper), undefined);
+});
+
+test('real checker resolves a helper through its manifest entry rather than checking it alone', async () => {
+  const root = path.resolve(__dirname, '../../..');
+  const folder = path.join(root, 'build', 'vscode-entry-test');
+  fs.mkdirSync(folder, { recursive: true });
+  const manifest = path.join(folder, 'nagi.toml');
+  const helper = path.join(folder, 'helper.nagi');
+  fs.writeFileSync(manifest, "entry = 'entry.nagi'\n");
+  fs.writeFileSync(path.join(folder, 'entry.nagi'), 'import "helper.nagi"\ndef answer() -> i64:\n    return 42\ndef main():\n    print(helper())\n');
+  fs.writeFileSync(helper, 'def helper() -> i64:\n    return answer()\n');
+  const exe = compiler.compilerPath('', root, root);
+  const result = await new Promise(resolve => compiler.runCheck(exe,
+    compiler.argumentsFor('check', helper, [], folder, root, '', [], manifest), folder, 5000, resolve));
+  assert.equal(result.error, null, result.output);
+  assert.match(result.output, /entry.nagi/);
+});

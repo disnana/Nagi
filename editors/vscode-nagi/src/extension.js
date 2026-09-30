@@ -27,7 +27,38 @@ function activate(context) {
     const workspace = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath;
     const root = compiler.findRoot(document.uri.fsPath, workspace);
     const config = vscode.workspace.getConfiguration('nagi', document.uri);
-    return { root, workspace, config, executable: compiler.compilerPath(config.get('compilerPath', ''), root, workspace) };
+    const project = compiler.findProject(document.uri.fsPath);
+    return { root: project ? path.dirname(project) : root, workspace, config, project,
+      executable: compiler.compilerPath(config.get('compilerPath', ''), root, workspace) };
+  }
+
+  function argsFor(name, document, options) {
+    const { root, workspace, config, project } = options;
+    return compiler.argumentsFor(name, document.uri.fsPath, config.get('nativeFiles', []), root, workspace,
+      config.get('rustFile', ''), config.get('rustDependencies', []), project);
+  }
+
+  function projectDirty(project) {
+    return project && vscode.workspace.textDocuments.some(d => d.isDirty && d.uri.scheme === 'file' &&
+      compiler.findProject(d.uri.fsPath) === project);
+  }
+
+  async function saveProject(project) {
+    for (const d of vscode.workspace.textDocuments) {
+      if (d.isDirty && d.uri.scheme === 'file' && compiler.findProject(d.uri.fsPath) === project && !await d.save()) return false;
+    }
+    return true;
+  }
+
+  function invalidate() {
+    epoch++;
+    for (const d of vscode.workspace.textDocuments) cancel(d);
+    results.clear();
+    diagnostics.clear();
+  }
+
+  function recheckOpen() {
+    for (const d of vscode.workspace.textDocuments) if (optionsForAuto(d)) check(d);
   }
 
   function cancel(document) {
@@ -41,14 +72,16 @@ function activate(context) {
     if (!isNagi(document) || !vscode.workspace.isTrusted || document.isDirty) return Promise.resolve();
     cancel(document);
     const key = document.uri.toString();
-    const { root, workspace, config, executable } = options(document);
+    const settings = options(document);
+    const { root, config, executable, project } = settings;
+    if (projectDirty(project)) return Promise.resolve();
     const version = document.version;
     const startEpoch = epoch;
     const job = {};
     pending.set(key, job);
     return new Promise(resolve => {
       job.child = compiler.runCheck(executable,
-        compiler.argumentsFor('check', document.uri.fsPath, config.get('nativeFiles', []), root, workspace, config.get('rustFile', ''), config.get('rustDependencies', [])),
+        argsFor('check', document, settings),
         root, config.get('checkTimeoutMs', 15000), result => {
           if (pending.get(key) !== job || document.isClosed || document.version !== version || document.isDirty || startEpoch !== epoch) return resolve();
           pending.delete(key);
@@ -58,7 +91,7 @@ function activate(context) {
             if (manual) vscode.window.setStatusBarMessage('Nagi: 型検査 OK', 3000);
           } else {
             const text = result.output || result.error.message;
-            const parsed = compiler.parseDiagnostics(text, document.uri.fsPath)[0];
+            const parsed = compiler.parseDiagnostics(text, project || document.uri.fsPath)[0];
             const target = vscode.Uri.file(compiler.normalizeFile(parsed.file, root));
             let sourceLines;
             try { sourceLines = fs.readFileSync(target.fsPath, 'utf8').split(/\r?\n/); } catch { sourceLines = ['']; }
@@ -86,13 +119,16 @@ function activate(context) {
     const document = vscode.window.activeTextEditor?.document;
     if (!isNagi(document)) return vscode.window.showInformationMessage('.nagi または .low ファイルを開いてください。');
     if (!await document.save()) return;
+    const settings = options(document);
+    // Imported files and the manifest must be saved before a project-wide command.
+    if (projectDirty(settings.project) && !await saveProject(settings.project)) return;
     if (name === 'check') return check(document, true);
-    const { root, workspace, config, executable } = options(document);
+    const { root, executable, project } = settings;
     const task = new vscode.Task({ type: 'nagi', command: name, file: document.uri.fsPath },
       vscode.workspace.getWorkspaceFolder(document.uri) || vscode.TaskScope.Workspace,
-      `Nagi ${name}: ${path.basename(document.uri.fsPath)}`, 'Nagi',
+      `Nagi ${name}: ${project ? path.basename(root) : path.basename(document.uri.fsPath)}`, 'Nagi',
       new vscode.ProcessExecution(executable,
-        compiler.argumentsFor(name, document.uri.fsPath, config.get('nativeFiles', []), root, workspace, config.get('rustFile', ''), config.get('rustDependencies', [])), { cwd: root }));
+        argsFor(name, document, settings), { cwd: root }));
     task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Dedicated };
     return vscode.tasks.executeTask(task);
   }
@@ -100,16 +136,24 @@ function activate(context) {
   context.subscriptions.push(output, diagnostics,
     { dispose() { for (const job of pending.values()) job.child?.kill(); pending.clear(); } },
     vscode.workspace.onDidOpenTextDocument(d => { if (optionsForAuto(d)) check(d); }),
-    vscode.workspace.onDidSaveTextDocument(d => { if (optionsForAuto(d)) check(d); }),
-    vscode.workspace.onDidChangeTextDocument(e => { if (isNagi(e.document)) { epoch++; for (const d of vscode.workspace.textDocuments) cancel(d); results.clear(); diagnostics.clear(); } }),
+    vscode.workspace.onDidSaveTextDocument(d => {
+      if (isNagi(d) || compiler.findProject(d.uri.fsPath)) { invalidate(); recheckOpen(); }
+    }),
+    vscode.workspace.onDidChangeTextDocument(e => {
+      if (isNagi(e.document) || compiler.findProject(e.document.uri.fsPath)) invalidate();
+    }),
     vscode.workspace.onDidCloseTextDocument(d => { cancel(d); results.delete(d.uri.toString()); publishDiagnostics(); }),
     vscode.workspace.onDidGrantWorkspaceTrust(() => { for (const d of vscode.workspace.textDocuments) if (optionsForAuto(d)) check(d); }),
+    vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('nagi')) { invalidate(); recheckOpen(); } }),
     vscode.commands.registerCommand('nagi.showOutput', () => output.show(true)));
   for (const name of ['check', 'lower', 'build', 'run']) {
     context.subscriptions.push(vscode.commands.registerCommand(`nagi.${name}`, () => command(name)));
   }
   function optionsForAuto(d) { return isNagi(d) && vscode.workspace.getConfiguration('nagi', d.uri).get('checkOnSave', true); }
   for (const d of vscode.workspace.textDocuments) if (optionsForAuto(d)) check(d);
+  const watcher = vscode.workspace.createFileSystemWatcher('**/nagi.toml');
+  context.subscriptions.push(watcher, watcher.onDidCreate(() => { invalidate(); recheckOpen(); }),
+    watcher.onDidChange(() => { invalidate(); recheckOpen(); }), watcher.onDidDelete(() => { invalidate(); recheckOpen(); }));
 }
 
 module.exports = { activate };

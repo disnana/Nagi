@@ -16,6 +16,17 @@ function findRoot(file, workspace) {
   return workspace || path.dirname(file);
 }
 
+function findProject(file) {
+  let dir = path.dirname(file);
+  while (true) {
+    const manifest = path.join(dir, 'nagi.toml');
+    if (fs.existsSync(manifest) && fs.statSync(manifest).isFile()) return manifest;
+    const parent = path.dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
+
 function compilerPath(configured, root, workspace, platform = process.platform) {
   if (configured) return path.isAbsolute(configured) ? configured : path.resolve(workspace || root, configured);
   const name = platform === 'win32' ? 'nagic.exe' : 'nagic';
@@ -26,13 +37,13 @@ function compilerPath(configured, root, workspace, platform = process.platform) 
   return name;
 }
 
-function argumentsFor(command, file, nativeFiles, root, workspace, rustFile = '', rustDependencies = []) {
-  const args = [command, file];
+function argumentsFor(command, file, nativeFiles, root, workspace, rustFile = '', rustDependencies = [], project) {
+  const args = project ? [command, '--project', project] : [command, file];
   for (const native of nativeFiles) args.push('--native', path.resolve(workspace || root, native));
   if (rustFile) args.push('--rust', path.resolve(workspace || root, rustFile));
   for (const dependency of rustDependencies) args.push('--rust-dep', dependency);
   if (command === 'check') {
-    const id = crypto.createHash('sha256').update(file).digest('hex').slice(0, 16);
+    const id = crypto.createHash('sha256').update(project || file).digest('hex').slice(0, 16);
     args.push('--out', path.join(root, 'build', 'vscode-nagi', id));
   }
   return args;
@@ -58,4 +69,4 @@ function runCheck(executable, args, cwd, timeout, callback) {
     (error, stdout, stderr) => callback({ error, output: [stdout, stderr].filter(Boolean).join('\n') }));
 }
 
-module.exports = { findRoot, compilerPath, argumentsFor, parseDiagnostics, normalizeFile, runCheck };
+module.exports = { findRoot, findProject, compilerPath, argumentsFor, parseDiagnostics, normalizeFile, runCheck };

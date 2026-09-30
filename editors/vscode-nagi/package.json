@@ -2,7 +2,7 @@
   "name": "nagi-language",
   "displayName": "Nagi Language",
   "description": "Nagi High/Lowの色付け、スニペット、型検査とビルド・実行",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "nagi-local",
   "license": "MIT",
   "engines": { "vscode": "^1.85.0" },
