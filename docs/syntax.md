@@ -118,12 +118,26 @@ classは全フィールドを名前付きで指定します。フィールド・
 | `-> Result[i64, Error]` | 成功なら整数、失敗ならErrorを返す |
 | `return ok(42)` | 成功を返す |
 | `return error("理由")` | 失敗を返す |
+| `return not_found("理由")` | 対象なしを返す。HTTPでは404 |
+| `return fail(problem)` | 元のErrorをそのまま返す |
 | `value = try parse_i64("42")` | 値を取り出す。失敗なら呼び出し元へ返す |
 | `async def work():` | 非同期関数を定義する |
 | `await sleep(10)` | 非同期処理を待つ。単位はミリ秒 |
 | `db = try await db_open(":memory:")` | 非同期処理を待ち、Resultの失敗も伝える |
 
-`try`はResultを返す関数内、`await`はasync関数内で使います。子taskは次の完全なコードのようにscope内でspawnします。
+`try`はResultを返す関数内、`await`はasync関数内で使います。その場でResultの成功・失敗を処理する場合は、次のように両方のcaseを書きます。これは関数内の断片です。
+
+```nagi
+match parse_i64("42"):
+    case Ok(number):
+        print(number)
+    case Err(problem):
+        print(error_kind(problem))
+```
+
+使わないpayloadは`_`にします。matchはResultを消費し、payloadの名前はcase内だけで使えます。外側の変数と同じ名前は使えません。完全な実行例と制限は[エラー処理](error-handling.md)にあります。
+
+子taskは次の完全なコードのようにscope内でspawnします。
 
 ```nagi
 async def main() -> Result[unit, Error]:
@@ -152,11 +166,11 @@ scopeを出るときに子taskを待ちます。scope内の`return`、viewを別
 | `def add(a, b):` | 引数型を書く。戻り値があるなら`-> 型`も書く |
 | `print(a, b)` | 1引数ずつ`print(a)`、`print(b)` |
 | `items.append(x)` | `append(items, x)` |
-| `try: ... except:` | `try 式`でResultの失敗を伝える |
+| `try: ... except:` | `try 式`で失敗を伝える、または`match`でResultを分岐する |
 | `from models import User` | `import "models.nagi"` |
 | 辞書、tuple、内包表記、lambda | 未対応。class、配列、通常の関数・ループを使う |
 | `str(42)`、任意型へのcast | 汎用変換は未対応。直接`print(42)`などを使う |
 
-nullableには`None` / `some(value)`がありますが、`match`による取り出しや汎用のunwrap APIはありません。型を持つことと、完全な操作APIがあることは分けて考えてください。
+nullableには`None` / `some(value)`がありますが、nullableを対象とする`match`や汎用のunwrap APIはありません。型を持つことと、完全な操作APIがあることは分けて考えてください。
 
 整数のrelease演算はRust backendの固定幅演算に従い、加算などのoverflowはwrapします。debug Rust側ではpanicする場合があります。checked / wrapping演算を言語として統一することは今後の課題です。Lowの構文・差し替えは[Low](low-language.md)、実装予定は[roadmap](roadmap.md)にあります。

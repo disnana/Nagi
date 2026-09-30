@@ -156,7 +156,18 @@ def main() -> Result[unit, Error]:
 
 `write`は改行なし、`read_line`は1行入力です。`return ok(print("完了"))`は、表示処理が返す`unit`を成功として返しています。
 
-Nagiの`try`はPythonの`try: ... except:`とは別の構文です。現在は`match`や、Resultの成功・失敗を自由に分岐する標準APIはありません。まず失敗を呼び出し元へ返す書き方を使います。
+Nagiの`try`はPythonの`try: ... except:`とは別の構文です。その場で既定値に回復するなど、成功・失敗を分けたいときは`match`を使います。次は関数の例です。
+
+```nagi
+def number_or(text: view[str], fallback: i64) -> i64:
+    match parse_i64(text):
+        case Ok(number):
+            return number
+        case Err(_):
+            return fallback
+```
+
+`Ok`と`Err`を1回ずつ書きます。括弧内の名前はそのcase内で使い、不要な値は`_`にします。`Result`以外のパターンは未対応です。実行できる完成コードとErrorの調べ方は[エラー処理](error-handling.md)にあります。
 
 ## 6. ファイルを分ける
 

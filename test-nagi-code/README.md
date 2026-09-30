@@ -1,5 +1,9 @@
 # Nagiのサンプル
 
+## 成功と失敗を分ける小さなAPI
+
+[result-api/README.md](result-api/README.md) は、数値変換とSQLiteの1件取得から始めるサンプルです。Resultの`match`で、入力不正・対象なし・DB失敗・代替データへの回復を書き分けます。Pythonのsmokeは自分で起動したサーバーへHTTPリクエストを送り、応答だけを照合します。
+
 ## 画面付きのタスク管理
 
 [web-demo/README.md](web-demo/README.md) に起動・exe配布・API確認の手順があります。ブラウザーでタスクを追加・編集・完了・削除でき、画面とAPIの両方をNagiサーバーが提供します。HTMLはexeへ埋め込みます。

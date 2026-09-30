@@ -73,8 +73,13 @@ GETの応答は`{"id":7,"name":"Nagi"}`、POSTは送った`{"id":2,"name":"sampl
 | `Result[Greeting?, Error]`と`ok(None)` | 対象なしを404にする |
 | `Result[Html, Error]`と`ok(html(...))` | 成功時に`text/html`応答 |
 | `error("理由")` | 入力エラーとして400のJSON応答 |
+| `not_found("理由")` | 対象なしとして404のJSON応答 |
+| `internal_error("理由")` | 詳細を伏せた500のJSON応答 |
+| `fail(problem)` | Errorの種類を保った応答。DBエラーなら500 |
 
 HTTP handlerは`async def`で定義し、`Result[..., Error]`を返します。属性には`@get`、`@post`、`@put`、`@delete`があります。JSONのfield欠落、型の違い、不明fieldなどは入力エラーです。
+
+`match await operation(...)`で失敗を分け、既定値を返して回復することもできます。[Result APIサンプル](../test-nagi-code/result-api/README.md)では、入力不正の400、対象なしの404、DB失敗の500、代替データを返す200を実HTTPで確認できます。
 
 ## 4. HTMLを別ファイルにする
 

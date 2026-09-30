@@ -40,12 +40,19 @@ sliceの位置はi64です。str / bytesの位置はbyte単位、Listの位置�
 | `i64(value)` | `i64` | i8 / i16 / i32 / u8 / u16 / u32の損失のない拡張 |
 | `i32(value)` | `Result[i32, Error]` | i64を範囲検査して縮小。`try i32(value)` |
 | `ok(value)` | `Result[T, Error]` | 成功を返す。`return ok(value)` |
-| `error("理由")` | 文脈に合うResult | 失敗を返す。`return error("invalid name")` |
+| `error("理由")` | 文脈に合う`Result[T, Error]` | 入力の失敗。HTTPでは400 |
+| `not_found("理由")` | 文脈に合う`Result[T, Error]` | 対象なし。HTTPでは404 |
+| `internal_error("理由")` | 文脈に合う`Result[T, Error]` | 内部の失敗。HTTPでは詳細を伏せた500 |
+| `fail(problem)` | 文脈に合う`Result[T, Error]` | Errorをmoveして、元のkindとmessageを保って返す |
+| `error_kind(problem)` | `str` | Errorを借りて種類を取得。例：`invalid`、`database` |
+| `error_message(problem)` | `str` | Errorを借りてmessageをコピー |
 | `some(value)` | `T?` | nullableの値ありを作る。値なしは`None` |
 | `uuid_parse(text)` | `Result[UUID, Error]` | 文字列からUUIDへ |
 | `uuid_format(value)` | `str` | UUIDから文字列へ |
 
-`try`は関数ではなく構文です。Resultを返す関数の中で成功値を取り出し、失敗なら呼び出し元へ返します。詳しくは[エラー処理](error-handling.md)を参照してください。
+`try`は関数ではなく構文です。Resultを返す関数の中で成功値を取り出し、失敗なら呼び出し元へ返します。その場で処理する場合は`match`と`case Ok(value)` / `case Err(problem)`を使います。
+
+Errorを作る関数はメッセージの所有文字列を受け取り、`fail`はErrorを消費します。`error_kind`と`error_message`はErrorを消費しません。成功型は戻り先などのResult型から決まり、型の文脈がなければ`Result[unit, Error]`です。詳しくは[エラー処理](error-handling.md)を参照してください。
 
 ## JSON、HTML
 

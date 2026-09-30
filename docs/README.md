@@ -12,6 +12,7 @@
 | 組み込み関数を探す | [よく使う関数](builtins.md) | 引数、戻り値、await / tryが必要な場面 |
 | 小さなサイトとAPIを作る | [HTTPとHTML](http.md) | 動くサーバー、JSONの送受信、HTMLの表示 |
 | 動くアプリを読む | [タスク管理デモ](../test-nagi-code/web-demo/README.md) | ブラウザー画面、CRUD API、SQLite、exe配布 |
+| APIの失敗を分ける | [Result APIサンプル](../test-nagi-code/result-api/README.md) | match、400・404・500、代替データへの回復 |
 
 ## 必要になったら読む
 
@@ -20,7 +21,7 @@
 | 型注釈、数値、nullable | [型](types.md) |
 | データのまとまりを定義する | [class](classes.md) |
 | 値を渡すと再利用できない理由 | [所有権](ownership.md)、[viewとコピー](view-and-zero-copy.md) |
-| 失敗を返す、tryを使う | [エラー処理](error-handling.md) |
+| 失敗を返す、try・matchを使う | [エラー処理](error-handling.md) |
 | 複数ファイル、Rustのライブラリを使う | [importとRust連携](modules-and-rust.md) |
 | 入口・Rust依存・Lowの設定をまとめる | [nagi.tomlとプロジェクト](projects.md) |
 | JSONを読み書きする | [JSON](json.md) |
@@ -43,4 +44,4 @@
 
 入門の完成ファイルは [examples/tutorial/](../examples/tutorial/) にあります。[文法の早見表](syntax.md)や関数一覧にある短いコードは、関数の中に書く断片も含みます。ページ内で「完全なコード」と示す例は、そのままファイルに保存して実行できます。
 
-この文書は現在の0.1実装を説明します。未実装の機能は各ページの末尾などで区別しています。たとえば`import "file.nagi"`は使えますが、`import package as alias`、classのmethod、`match`は使えません。
+この文書は現在の0.1実装を説明します。未実装の機能は各ページの末尾などで区別しています。`import "file.nagi"`とResultの`match`は使えます。`import package as alias`、classのmethod、nullableのmatchは未対応です。
