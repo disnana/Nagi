@@ -9,13 +9,16 @@ Nagi High (`.nagi`) とLow (`.low`)の開発補助です。
 - エディター右上の実行ボタン
 - `nagi.toml`の入口・Rust依存・Low設定を使ったプロジェクトの検査と実行
 - F12 /「定義へ移動」で関数・class・import先へ移動
+- ホバーで関数の引数・戻り値、async、classのフィールドを表示
+- プロジェクト内の関数・class・型と、代表的な組み込み関数の補完
+- 呼び出し時の引数ヒント、class生成時の名前付き引数の挿入
 
 ## インストール
 
-リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、`build/distribution/nagi-language-0.1.2.vsix` ができます。VS Codeの「拡張機能: VSIXからのインストール」で選択するか、次のコマンドを実行してください。
+リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、`build/distribution/nagi-language-0.1.3.vsix` ができます。VS Codeの「拡張機能: VSIXからのインストール」で選択するか、次のコマンドを実行してください。
 
 ```powershell
-code --install-extension build/distribution/nagi-language-0.1.2.vsix
+code --install-extension build/distribution/nagi-language-0.1.3.vsix
 ```
 
 色付けとスニペットはコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。Nagiリポジトリを開き、ルートで `cargo build --release --locked -p nagic` を実行してください。リポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
@@ -55,6 +58,20 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 
 対象は関数・class・importです。ローカル変数・引数・caseのpayload、組み込み関数、Rust実装への移動は未対応です。Lowの置換関数とHighの宣言が両方ある場合は、Highの宣言を優先します。
 
+## ホバー・補完・引数ヒント（0.1.3）
+
+最新版の`nagic`と拡張0.1.3を使います。関数名にマウスを置くと引数・戻り値・asyncの宣言が表示され、class名ではフィールド一覧を確認できます。`Result[Item?, Error]`や`view[str]`などの型も宣言どおりに表示します。
+
+名前を書きかけるかCtrl+Spaceを押すと、入口からimportされた関数・class、手書きLowの関数、代表的な組み込み関数の候補が出ます。関数を選ぶと位置引数の入力欄、classを選ぶと`Item(id=..., name=...)`の名前付き引数が入り、Tabで次の欄へ進めます。型注釈・戻り値の位置ではclass・型・`Result` / `List` / `view`などを候補にします。
+
+`(`や`,`を入力すると引数ヒントが出て、入力中の引数が選ばれます。既に`(`がある名前の補完では括弧を重複挿入しません。asyncとResultの宣言を見て、呼び出しに`await`、`try`、`match`が必要かを判断してください。
+
+一度保存した`.nagi` / `.low`の編集中の内容と、開いているimport先の未保存の宣言をメモリ上で読みます。型エラーがあっても、構文とimportが読めれば宣言情報を使えます。編集中のファイルを自動保存したり、ビルドしたりはしません。`nagi.toml`の変更は保存してから使ってください。
+
+書きかけの`add(1, `などで構文を読めない場合は、保存済みのプロジェクトの宣言を候補にします。その場合は「保存済み」と表示します。コメント・文字列の中には名前の補完やホバーを出しません。
+
+この版の型表示は関数・classに宣言された型を対象にします。ローカル変数の推論型、`value.field`の候補、caseのpayload名、Rust実装の解析は今後の範囲です。F12は引き続き保存後に使います。
+
 ## 開発
 
-Node.jsで `node --test editors/vscode-nagi/test/*.test.js` を実行できます。VS CodeのExtension Development Hostでは、`--extensionDevelopmentPath`にこのフォルダーを指定して試せます。LSPによる型に基づく補完、rename、デバッグはこの版の範囲に含みません。
+Node.jsで `node --test editors/vscode-nagi/test/*.test.js` を実行できます。VS CodeのExtension Development Hostでは、`--extensionDevelopmentPath`にこのフォルダーを指定して試せます。ローカル変数の推論型表示、値のフィールド候補、rename、デバッグは未対応です。
