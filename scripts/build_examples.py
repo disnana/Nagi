@@ -20,7 +20,8 @@ def main():
         row={'sample':name,'build':'passed'}
         if name not in ['cpu','crud']:
             r=run([ROOT/'native-target/release'/('nagi-'+name.replace('_','-')+EXE)])
-            row.update(stdout=r.stdout,stderr=r.stderr,run='passed')
+            stderr = r.stderr.replace(str(ROOT) + os.sep, '').replace(ROOT.as_posix() + '/', '')
+            row.update(stdout=r.stdout,stderr=stderr,run='passed')
             if name in ['low_call','override']:assert r.stdout.strip()=='42'
         rows.append(row)
     r=run([nagic,'build',ROOT/'examples/hello.low','--out',ROOT/'build/hello_low'])

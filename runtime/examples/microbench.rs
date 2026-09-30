@@ -82,7 +82,7 @@ fn main() {
     rt::bench_i64("rust_branch", 100000, branch);
     rt::bench_f64("rust_float_sum", 100000, floats);
     rt::bench_scalar("rust_loop", 100000, loops);
-    let input = br#"{"id":42,"name":"tp-li","age":18}"#;
+    let input = br#"{"id":42,"name":"alice","age":18}"#;
     let user: User = rt::decode(input).unwrap();
     benchmark("json_parse_tree", 1, || {
         black_box(rt::decode::<serde_json::Value>(black_box(input)).unwrap())
@@ -134,7 +134,7 @@ fn main() {
         {
             let mut stmt = tx.prepare("INSERT INTO users VALUES (?1,?2,?3)").unwrap();
             for i in 1..=10000 {
-                stmt.execute(rt::rusqlite::params![i, "tp-li", 18]).unwrap();
+                stmt.execute(rt::rusqlite::params![i, "alice", 18]).unwrap();
             }
         }
         tx.commit().unwrap();
@@ -196,7 +196,7 @@ fn main() {
         {
             let mut s = tx.prepare("INSERT INTO users VALUES(?1,?2,?3)").unwrap();
             for i in 10001..11001 {
-                s.execute(rt::rusqlite::params![i, "tp-li", 18]).unwrap();
+                s.execute(rt::rusqlite::params![i, "alice", 18]).unwrap();
             }
         }
         tx.rollback().unwrap();
@@ -205,7 +205,7 @@ fn main() {
         let tx = conn.transaction().unwrap();
         tx.execute(
             "INSERT INTO users VALUES(?1,?2,?3)",
-            rt::rusqlite::params![10001, "tp-li", 18],
+            rt::rusqlite::params![10001, "alice", 18],
         )
         .unwrap();
         tx.rollback().unwrap();

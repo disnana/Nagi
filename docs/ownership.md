@@ -7,7 +7,7 @@ def use_name(name: str):
     print(name)
 
 def main():
-    name = "tp-li"
+    name = "alice"
     use_name(name)
     # print(name) はmove後の使用
 ```

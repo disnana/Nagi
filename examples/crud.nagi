@@ -10,7 +10,7 @@ class CreateUser:
 
 @get("/small")
 async def small() -> Result[User, Error]:
-    return ok(User(id=1, name="tp-li", age=18))
+    return ok(User(id=1, name="alice", age=18))
 
 @get("/query")
 async def query_params(limit: i32, name: str) -> Result[User, Error]:

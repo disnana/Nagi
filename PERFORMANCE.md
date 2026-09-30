@@ -2,7 +2,7 @@
 
 この版は、Rust製コンパイラと実ランタイムを持つ、二層バックエンド言語の試作です。Highから編集可能なLowテキストを生成し、それを再解析・検査してRust経由でネイティブへコンパイルします。HTTP body → 型付きclass → SQLite → class → JSONのCRUD経路、Lowの通常関数呼び出し・関数置換、async/scope、actor間通信、worker再起動が実際に動きます。
 
-完成した汎用言語、本番用独自runtime、BEAM相当の障害隔離という評価には達していません。actor・Supervisor・queueは実ランタイムを呼ぶ標準試験関数で、Highの汎用宣言構文はまだありません。以下は今回の環境で採取した生ログから生成した数値です。過去の会話で報告され、今回再現できなかった数値は使っていません。
+汎用言語、本番用独自runtime、BEAM相当の障害隔離は未完成です。actor・Supervisor・queueは実ランタイムを呼ぶ標準試験関数で、Highの汎用宣言構文はまだありません。以下の数値は、記載した測定環境で採取したログに基づきます。サンプル名は公開用に匿名化し、測定時と同じASCIIのバイト長を維持しています。測定値は変更していません。
 
 ## 測定環境と再現条件
 
@@ -11,7 +11,7 @@
 | OS | Linux-6.18.44-x86_64-with-glibc2.39 |
 | CPU | INTEL(R) XEON(R) PLATINUM 8573C |
 | CPU割当 | affinity 0–8、cgroup quota 8 CPU。物理ホストの共有状況と周波数は制御していない |
-| メモリ上限 | 8 GiB cgroup。ユーザー側のRyzen/48 GB機での測定ではない |
+| メモリ上限 | 8 GiB cgroup |
 | Rust / Cargo | 1.98.1 (48a229cea 2026-09-01) / 1.98.1 |
 | ビルド | release、opt-level=3、LTO=false、codegen-units=1、panic=unwind。target-cpu=nativeは使用しない |
 | 主要依存 | Tokio 1.53.1、Axum 0.8.9、serde 1.0.229、serde_json 1.0.151、rusqlite 0.40.2（bundled SQLite）。Cargo.lockを同梱 |
@@ -47,7 +47,7 @@ Nagiはnative整数・連続配列を使い、動的な数値boxing・型判定�
 
 ## JSON・view・文字列のコスト
 
-以下のJSONは `id=42,name=tp-li,age=18` の小さい同一入力です。ns/opはparse/encode等の操作全体、allocationは1回の操作の動的測定です。
+以下のJSONは `id=42,name=alice,age=18` の小さい同一入力です。ns/opはparse/encode等の操作全体、allocationは1回の操作の動的測定です。
 
 | 操作 | ns/op | alloc回数 | realloc回数 | 要求byte累計 |
 | --- | --- | --- | --- | --- |
@@ -72,7 +72,7 @@ view試験は1 MiB bufferの範囲参照を作るだけです。入力pointer+1�
 
 ## SQLite → class：変換と所有化
 
-同じin-memory SQLiteへ10,000件を事前投入し、cached SELECTから1/100/1,000/10,000件を取得します。id i64、name TEXT「tp-li」、age i32です。SQL実行・row stepping・class生成・Vecへの格納を含み、接続生成・seed insertは含みません。
+同じin-memory SQLiteへ10,000件を事前投入し、cached SELECTから1/100/1,000/10,000件を取得します。id i64、name TEXT「alice」、age i32です。SQL実行・row stepping・class生成・Vecへの格納を含み、接続生成・seed insertは含みません。
 
 | row数 | 列名毎row µs | 列番号 µs | 列番号+reserve µs | idのみscan µs | 列番号alloc | 列番号byte累計 |
 | --- | --- | --- | --- | --- | --- | --- |

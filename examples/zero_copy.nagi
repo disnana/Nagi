@@ -3,7 +3,7 @@ def identity(data: view[str]) -> view[str]:
     return data
 
 def main():
-    original = "tp-li"
+    original = "alice"
     borrowed = view(original)
     returned = identity(borrowed)
     print(returned)

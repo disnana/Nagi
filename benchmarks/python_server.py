@@ -7,7 +7,7 @@ class CreateUser:
     name:str
     age:int
 async def health(request):return web.Response(text='ok')
-async def small(request):return web.Response(body=json.dumps({'id':1,'name':'tp-li','age':18},separators=(',',':')).encode('utf-8'),content_type='application/json')
+async def small(request):return web.Response(body=json.dumps({'id':1,'name':'alice','age':18},separators=(',',':')).encode('utf-8'),content_type='application/json')
 async def echo(request):
     try:
         p=json.loads(await request.read())

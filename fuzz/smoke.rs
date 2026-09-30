@@ -31,7 +31,7 @@ fn main() {
     }
     for i in 0..10000 {
         seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-        let mut data = br#"{"id":42,"name":"tp-li","age":18}"#.to_vec();
+        let mut data = br#"{"id":42,"name":"alice","age":18}"#.to_vec();
         let at = seed as usize % data.len();
         data[at] = (seed >> 32) as u8;
         let r = std::panic::catch_unwind(|| {

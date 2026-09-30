@@ -23,7 +23,7 @@ cargo build --release --locked
 
 ```bash
 curl http://127.0.0.1:8080/health
-curl -H 'Content-Type: application/json' -d '{"name":"tp-li","age":18}' http://127.0.0.1:8080/users
+curl -H 'Content-Type: application/json' -d '{"name":"alice","age":18}' http://127.0.0.1:8080/users
 curl http://127.0.0.1:8080/users/1
 ```
 

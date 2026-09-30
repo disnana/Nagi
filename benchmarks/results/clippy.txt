@@ -2,12 +2,12 @@
     Checking hyper v1.11.1
     Checking hashlink v0.12.2
     Checking tower v0.5.3
-    Checking nagic v0.1.0 (/workspace/scratch/0c9674258e69/nagi/compiler)
+    Checking nagic v0.1.0 (compiler)
     Checking rand v0.9.5
     Checking rusqlite v0.40.2
     Checking hyper-util v0.1.21
     Checking tungstenite v0.29.0
     Checking tokio-tungstenite v0.29.0
     Checking axum v0.8.9
-    Checking nagi-runtime v0.1.0 (/workspace/scratch/0c9674258e69/nagi/runtime)
+    Checking nagi-runtime v0.1.0 (runtime)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.74s

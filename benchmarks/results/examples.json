@@ -39,7 +39,7 @@
     "sample": "supervisor",
     "build": "passed",
     "stdout": "3\n独立workerは継続\n",
-    "stderr": "\nthread 'tokio-rt-worker' (608) panicked at /workspace/scratch/0c9674258e69/nagi/runtime/src/concurrent.rs:182:17:\nintentional supervised worker crash 0\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'tokio-rt-worker' (609) panicked at /workspace/scratch/0c9674258e69/nagi/runtime/src/concurrent.rs:182:17:\nintentional supervised worker crash 1\n\nthread 'tokio-rt-worker' (608) panicked at /workspace/scratch/0c9674258e69/nagi/runtime/src/concurrent.rs:182:17:\nintentional supervised worker crash 2\n",
+    "stderr": "\nthread 'tokio-rt-worker' (608) panicked at runtime/src/concurrent.rs:182:17:\nintentional supervised worker crash 0\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'tokio-rt-worker' (609) panicked at runtime/src/concurrent.rs:182:17:\nintentional supervised worker crash 1\n\nthread 'tokio-rt-worker' (608) panicked at runtime/src/concurrent.rs:182:17:\nintentional supervised worker crash 2\n",
     "run": "passed"
   },
   {
@@ -52,7 +52,7 @@
   {
     "sample": "zero_copy",
     "build": "passed",
-    "stdout": "tp-li\ntp-li\n",
+    "stdout": "alice\nalice\n",
     "stderr": "",
     "run": "passed"
   },

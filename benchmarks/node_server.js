@@ -2,7 +2,7 @@
 const http = require('http');
 http.createServer((req,res)=>{
   if(req.url==='/health'){res.end('ok');return;}
-  if(req.url==='/small'){res.setHeader('content-type','application/json');res.end(JSON.stringify({id:1,name:'tp-li',age:18}));return;}
+  if(req.url==='/small'){res.setHeader('content-type','application/json');res.end(JSON.stringify({id:1,name:'alice',age:18}));return;}
   if(req.url==='/echo'&&req.method==='POST'){
     let chunks=[],size=0;
     req.on('data',c=>{size+=c.length;if(size>1048576){req.destroy();return;}chunks.push(c);});

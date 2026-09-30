@@ -25,7 +25,7 @@ fn main() {
                 get(|| async {
                     rt::response(Ok(User {
                         id: 1,
-                        name: "tp-li".into(),
+                        name: "alice".into(),
                         age: 18,
                     }))
                 }),

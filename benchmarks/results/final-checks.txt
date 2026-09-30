@@ -25,9 +25,9 @@ running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-    Checking nagi-runtime v0.1.0 (/workspace/scratch/0c9674258e69/nagi/runtime)
+    Checking nagi-runtime v0.1.0 (runtime)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.17s
-   Compiling nagi-runtime v0.1.0 (/workspace/scratch/0c9674258e69/nagi/runtime)
-   Compiling nagic v0.1.0 (/workspace/scratch/0c9674258e69/nagi/compiler)
+   Compiling nagi-runtime v0.1.0 (runtime)
+   Compiling nagic v0.1.0 (compiler)
     Finished `release` profile [optimized] target(s) in 15.42s
 {"samples": 12, "builds": "passed", "native_preserved": true}

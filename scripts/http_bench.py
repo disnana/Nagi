@@ -43,12 +43,12 @@ def main():
                         break
                     except OSError:time.sleep(.05)
                 else:raise RuntimeError('readiness')
-                with urllib.request.urlopen(f'http://127.0.0.1:{port}/small') as r:assert json.load(r)=={'id':1,'name':'tp-li','age':18}
+                with urllib.request.urlopen(f'http://127.0.0.1:{port}/small') as r:assert json.load(r)=={'id':1,'name':'alice','age':18}
                 measured_cases=list(cases)
                 if name=='nagi':
-                    req=urllib.request.Request(f'http://127.0.0.1:{port}/users',data=b'{"name":"tp-li","age":18}',headers={'Content-Type':'application/json'})
+                    req=urllib.request.Request(f'http://127.0.0.1:{port}/users',data=b'{"name":"alice","age":18}',headers={'Content-Type':'application/json'})
                     with urllib.request.urlopen(req) as r:assert json.load(r)['id']==1
-                    measured_cases += [('query_parameter','/query?limit=5&name=tp-li',[]),('db_single_row','/users/1',[])]
+                    measured_cases += [('query_parameter','/query?limit=5&name=alice',[]),('db_single_row','/users/1',[])]
                 for case in measured_cases:
                     load(port,case,1);before=snapshot(p.pid);start=time.monotonic();r,raw=load(port,case,a.duration);wall=time.monotonic()-start;after=snapshot(p.pid)
                     r.update(framework=name,case=case[0],repeat=repeat,server_workers=1,server_affinity=[server_core],client_affinity=client_cores,before=before,after=after,cpu_seconds=(after['cpu_ticks']-before['cpu_ticks'])/os.sysconf('SC_CLK_TCK'),wall_seconds=wall)

@@ -386,7 +386,7 @@ mod tests {
         struct B<'a> {
             name: &'a str,
         }
-        let input = br#"{"name":"tp-li"}"#;
+        let input = br#"{"name":"alice"}"#;
         let b: B = decode(input).unwrap();
         let addr = b.name.as_ptr() as usize;
         assert!(

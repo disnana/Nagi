@@ -1,4 +1,4 @@
-Running 3s test @ http://127.0.0.1:8080/query?limit=5&name=tp-li
+Running 3s test @ http://127.0.0.1:8080/query?limit=5&name=alice
   2 threads and 64 connections
   Thread Stats   Avg      Stdev     Max   +/- Stdev
     Latency     1.04ms    0.89ms  10.93ms   86.90%
