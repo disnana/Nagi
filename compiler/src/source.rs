@@ -1,5 +1,5 @@
 use crate::ast::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -70,12 +70,22 @@ impl Sources {
 }
 
 pub fn load(path: &Path, high: bool) -> Result<Sources, String> {
+    load_with_overlays(path, high, &HashMap::new())
+}
+
+/// Overlays use canonical existing file paths and never alter files on disk.
+pub fn load_with_overlays(
+    path: &Path,
+    high: bool,
+    overlays: &HashMap<PathBuf, String>,
+) -> Result<Sources, String> {
     fn visit(
         path: &Path,
         high: bool,
         out: &mut Sources,
         stack: &mut HashSet<PathBuf>,
         seen: &mut HashSet<PathBuf>,
+        overlays: &HashMap<PathBuf, String>,
     ) -> Result<(), String> {
         let path = std::fs::canonicalize(path).map_err(|e| format!("{}: {e}", path.display()))?;
         if stack.contains(&path) {
@@ -87,8 +97,11 @@ pub fn load(path: &Path, high: bool) -> Result<Sources, String> {
         if stack.len() >= 64 || seen.len() + stack.len() >= 128 {
             return Err("importの深さまたはファイル数の上限を超えました".into());
         }
-        let source =
-            std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let source = if let Some(text) = overlays.get(&path) {
+            text.clone()
+        } else {
+            std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?
+        };
         out.bytes += source.len();
         if out.bytes > 8_000_000 {
             return Err("importを含むソースの合計は8 MBまでです".into());
@@ -111,7 +124,7 @@ pub fn load(path: &Path, high: bool) -> Result<Sources, String> {
                 ));
             }
             let dependency = path.parent().unwrap().join(dependency);
-            visit(&dependency, high, out, stack, seen).map_err(|e| {
+            visit(&dependency, high, out, stack, seen, overlays).map_err(|e| {
                 if e.starts_with("error:") {
                     e
                 } else {
@@ -146,6 +159,7 @@ pub fn load(path: &Path, high: bool) -> Result<Sources, String> {
         &mut out,
         &mut HashSet::new(),
         &mut HashSet::new(),
+        overlays,
     )?;
     Ok(out)
 }

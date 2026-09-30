@@ -630,7 +630,12 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let cmd = options.command.as_str();
     let path = options.source;
     let high = path.extension().is_none_or(|x| x != "low");
-    let mut sources = crate::source::load(&path, high)?;
+    let overlays = if options.editor_input {
+        crate::symbols::read_overlays(std::io::stdin().lock(), &cwd)?
+    } else {
+        std::collections::HashMap::new()
+    };
+    let mut sources = crate::source::load_with_overlays(&path, high, &overlays)?;
     let mut p = std::mem::take(&mut sources.program);
     let native = options.native;
     let out = options.out;
@@ -639,7 +644,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let rust_deps = options.rust_dependencies;
     let mut all = Program::default();
     for n in native {
-        let native_sources = crate::source::load(&n, false)?;
+        let native_sources = crate::source::load_with_overlays(&n, false, &overlays)?;
         let np = sources.append(native_sources);
         all.classes.extend(np.classes);
         all.functions.extend(np.functions);

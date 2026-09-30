@@ -4,10 +4,11 @@ use crate::{
     lexer::{lex, Token, K},
     source::Sources,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::Path,
+    collections::{BTreeMap, BTreeSet, HashMap},
+    io::Read,
+    path::{Path, PathBuf},
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -22,6 +23,60 @@ struct Definition {
     name: String,
     kind: &'static str,
     location: Location,
+    signature: String,
+    parameters: Vec<Member>,
+    fields: Vec<Member>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    return_type: Option<String>,
+    asynchronous: bool,
+}
+#[derive(Serialize)]
+struct Member {
+    name: String,
+    #[serde(rename = "type")]
+    ty: String,
+}
+
+pub fn read_overlays(input: impl Read, cwd: &Path) -> Result<HashMap<PathBuf, String>, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Input {
+        files: Vec<Buffer>,
+    }
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Buffer {
+        file: PathBuf,
+        text: String,
+    }
+    let mut data = vec![];
+    input
+        .take(16_000_001)
+        .read_to_end(&mut data)
+        .map_err(|e| e.to_string())?;
+    if data.len() > 16_000_000 {
+        return Err("editor inputは16 MBまでです".into());
+    }
+    let input: Input = serde_json::from_slice(&data).map_err(|e| format!("editor input: {e}"))?;
+    if input.files.len() > 128
+        || input.files.iter().map(|f| f.text.len()).sum::<usize>() > 8_000_000
+    {
+        return Err("editor buffersは128ファイル、合計8 MBまでです".into());
+    }
+    let mut overlays = HashMap::new();
+    for buffer in input.files {
+        if !matches!(
+            buffer.file.extension().and_then(|x| x.to_str()),
+            Some("nagi" | "low")
+        ) {
+            return Err("editor bufferには.nagi / .lowを指定してください".into());
+        }
+        let path = std::fs::canonicalize(cwd.join(buffer.file)).map_err(|e| e.to_string())?;
+        if overlays.insert(path, buffer.text).is_some() {
+            return Err("editor bufferのパスが重複しています".into());
+        }
+    }
+    Ok(overlays)
 }
 #[derive(Serialize)]
 struct Reference {
@@ -145,7 +200,66 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
                 name: name.clone(),
                 kind,
                 location,
+                signature: String::new(),
+                parameters: vec![],
+                fields: vec![],
+                return_type: None,
+                asynchronous: false,
             });
+            let definition = definitions.last_mut().unwrap();
+            let members = |items: &[(String, Type)]| {
+                items
+                    .iter()
+                    .map(|(name, ty)| Member {
+                        name: name.clone(),
+                        ty: ty.to_string(),
+                    })
+                    .collect::<Vec<_>>()
+            };
+            if kind == "function" {
+                let function = p
+                    .functions
+                    .iter()
+                    .find(|f| f.name == *name && f.line == line)
+                    .unwrap();
+                definition.parameters = members(&function.params);
+                definition.return_type = Some(function.ret.to_string());
+                definition.asynchronous = function.asynchronous;
+                definition.signature = format!(
+                    "{}{}{} {}({}) -> {}",
+                    if function.external { "extern " } else { "" },
+                    if function.asynchronous { "async " } else { "" },
+                    if file.path.extension().is_some_and(|x| x == "low") {
+                        "fn"
+                    } else {
+                        "def"
+                    },
+                    name,
+                    function
+                        .params
+                        .iter()
+                        .map(|(n, t)| format!("{n}: {t}"))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    function.ret
+                );
+            } else {
+                let class = p
+                    .classes
+                    .iter()
+                    .find(|c| c.name == *name && c.line == line)
+                    .unwrap();
+                definition.fields = members(&class.fields);
+                definition.signature = format!(
+                    "class {name}\n{}",
+                    class
+                        .fields
+                        .iter()
+                        .map(|(n, t)| format!("    {n}: {t}"))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                );
+            }
         }
     }
     let mut calls = BTreeSet::new();
@@ -265,6 +379,6 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
         });
     }
     Ok(
-        serde_json::json!({ "format": "nagi-symbols-v1", "definitions": definitions, "references": references }),
+        serde_json::json!({ "format": "nagi-symbols-v1", "definitions": definitions, "references": references, "files": files.iter().map(|f| f.path.display().to_string()).collect::<Vec<_>>() }),
     )
 }

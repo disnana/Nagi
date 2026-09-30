@@ -1,5 +1,10 @@
 use nagic::{source, symbols};
-use std::{fs, path::PathBuf, process::Command};
+use std::{
+    fs,
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 static FIXTURE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -142,4 +147,86 @@ fn symbols_work_despite_type_errors_and_skip_fields_and_local_names() {
         "indexing a local is not a function call"
     );
     assert_eq!(same_line[0]["location"]["column"], 29);
+}
+
+#[test]
+fn editor_buffers_update_imported_and_low_signatures_without_writing_files() {
+    let f = Fixture::new();
+    f.write("nagi.toml", "entry = 'main.nagi'\nnative = ['math.low']\n");
+    f.write(
+        "main.nagi",
+        "import \"models.nagi\"\ndef main():\n    print(1)\n",
+    );
+    let saved = "class User:\n    name: str\n";
+    f.write("models.nagi", saved);
+    f.write("math.low", "fn twice(x: i64) -> i64 { return x * 2; }\n");
+    let input = serde_json::json!({"files": [
+        {"file": "models.nagi", "text": "class User:\n    name: view[str]\n    count: i64\nasync def find(id: i64) -> Result[User?, Error]:\n    return error(\"demo\")\n@rust(\"native::fetch\")\nextern async def fetch() -> Result[i64, Error]\n"},
+        {"file": "math.low", "text": "fn twice(x: i32) -> i32 { return x * 2; }\n"}
+    ]});
+    let mut child = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .args(["symbols", "--editor-input"])
+        .current_dir(&f.0)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let index: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let defs = index["definitions"].as_array().unwrap();
+    let find = defs.iter().find(|d| d["name"] == "find").unwrap();
+    assert_eq!(
+        find["signature"],
+        "async def find(id: i64) -> Result[User?, Error]"
+    );
+    assert_eq!(find["return_type"], "Result[User?, Error]");
+    assert_eq!(find["asynchronous"], true);
+    let external = defs.iter().find(|d| d["name"] == "fetch").unwrap();
+    assert_eq!(
+        external["signature"],
+        "extern async def fetch() -> Result[i64, Error]"
+    );
+    let user = defs.iter().find(|d| d["name"] == "User").unwrap();
+    assert_eq!(user["fields"][0]["type"], "view[str]");
+    assert_eq!(user["fields"][1]["name"], "count");
+    let low = defs.iter().find(|d| d["name"] == "twice").unwrap();
+    assert_eq!(low["parameters"][0]["type"], "i32");
+    assert_eq!(low["signature"], "fn twice(x: i32) -> i32");
+    assert_eq!(index["files"].as_array().unwrap().len(), 3);
+    assert_eq!(fs::read_to_string(f.0.join("models.nagi")).unwrap(), saved);
+    assert!(!f.0.join("build").exists());
+}
+
+#[test]
+fn editor_input_rejects_invalid_schema_alias_duplicates_and_other_commands() {
+    let f = Fixture::new();
+    f.write("a.nagi", "def main():\n    print(1)\n");
+    let duplicate = serde_json::json!({"files": [{"file": "a.nagi", "text": ""}, {"file": "./a.nagi", "text": ""}]}).to_string();
+    for data in [
+        "{}",
+        "{\"files\":[],\"unknown\":true}",
+        &duplicate,
+        "{\"files\":[{\"file\":\"a.rs\",\"text\":\"\"}]}",
+    ] {
+        assert!(
+            symbols::read_overlays(data.as_bytes(), &f.0).is_err(),
+            "{data}"
+        );
+    }
+    for cmd in ["check", "build", "run", "lower"] {
+        let args = [cmd, "a.nagi", "--editor-input"].map(str::to_owned);
+        assert!(nagic::project::resolve(&args, &f.0).is_err());
+    }
 }

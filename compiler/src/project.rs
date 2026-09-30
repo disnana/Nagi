@@ -35,6 +35,8 @@ pub struct Options {
     pub rust_dependencies: BTreeMap<String, String>,
     pub out: PathBuf,
     pub cost: bool,
+    /// Read editor buffers from stdin only for the read-only symbols command.
+    pub editor_input: bool,
     /// Set only when a project is selected. Plain SOURCE commands keep their cwd.
     pub project_root: Option<PathBuf>,
 }
@@ -131,6 +133,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let mut dependencies = BTreeMap::new();
     let mut out = None;
     let mut cost = false;
+    let mut editor_input = false;
     let mut i = 1;
     while i < args.len() {
         let option = &args[i];
@@ -174,6 +177,12 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
             }
             "--no-project" => no_project = true,
             "--cost-report" => cost = true,
+            "--editor-input" => {
+                if command != "symbols" || editor_input {
+                    return Err("--editor-inputはsymbolsに1回だけ指定できます".into());
+                }
+                editor_input = true;
+            }
             x if x.starts_with('-') => return Err(format!("unknown option: {x}")),
             x => {
                 if source.replace(cwd.join(x)).is_some() {
@@ -237,6 +246,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         rust_dependencies,
         out,
         cost,
+        editor_input,
         project_root,
     })
 }
