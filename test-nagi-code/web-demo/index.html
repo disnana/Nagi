@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ひとつずつ — Nagi Tasks</title>
+  <style>
+    :root{color-scheme:light;--paper:#f5f4ef;--ink:#253329;--muted:#6b746d;--green:#345b44;--line:#dce0d5}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+    button,input{font:inherit}button{cursor:pointer}button:disabled,input:disabled{cursor:wait;opacity:.6}
+    button:focus-visible,input:focus-visible{outline:3px solid #83a384;outline-offset:3px}
+    .shell{max-width:860px;margin:auto;padding:32px 28px 48px}.brand{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:20px;font-size:14px}
+    .mark{display:inline-flex;gap:10px;align-items:center;font-weight:650}.logo{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--green);color:white;font-family:Georgia,serif;font-size:19px}.tag{color:var(--muted);font-size:12px}
+    .intro{padding:48px 0 24px}.eyebrow{font-size:12px;letter-spacing:.15em;color:var(--green)}h1{font-size:clamp(32px,6vw,48px);font-weight:650;letter-spacing:-.045em;margin:12px 0}p{line-height:1.8}.lead{margin:0;color:var(--muted);font-size:14px}
+    .counts{display:flex;gap:28px;margin:28px 0 30px}.count{border-left:2px solid var(--line);padding-left:14px}.count strong{display:block;font-size:28px;font-weight:600;line-height:1.1}.count span{display:block;font-size:12px;color:var(--muted);margin-top:6px}
+    .add-box{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 4px 12px #25332904}.add-box label{display:block;font-size:13px;font-weight:600;margin-bottom:10px}.add-row{display:flex;gap:10px}.add-row input{flex:1;min-width:0;background:#fafbf8;border:1px solid var(--line);border-radius:8px;padding:12px 14px;color:var(--ink)}.primary{border:0;border-radius:8px;padding:12px 22px;color:#fff;background:var(--green);white-space:nowrap}.hint{font-size:11px;color:var(--muted);margin:10px 0 0}
+    .toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:30px 0 14px}.filters{display:flex;gap:4px}.filter{background:transparent;border:0;border-radius:6px;color:var(--muted);padding:8px 12px;font-size:13px}.filter[aria-pressed=true]{background:#e3e9dc;color:var(--green);font-weight:650}.refresh{border:1px solid var(--line);border-radius:6px;padding:8px 12px;background:transparent;font-size:12px;color:var(--muted)}
+    ul{padding:0;margin:0;list-style:none}.task{display:flex;align-items:center;gap:12px;padding:17px 12px;border-bottom:1px solid var(--line)}.task input[type=checkbox]{width:19px;height:19px;accent-color:var(--green);flex:none}.task-title{flex:1;overflow-wrap:anywhere;min-width:0;font-size:14px;line-height:1.6}.task.done .task-title{text-decoration:line-through;color:var(--muted)}.task-action{border:0;background:transparent;color:var(--muted);font-size:12px;padding:8px;border-radius:5px}.task-action:hover{background:#e8eadf;color:var(--ink)}
+    .empty{padding:36px 20px;border:1px dashed #c9d1c2;border-radius:10px;text-align:center}.empty strong{font-size:15px}.empty p{font-size:13px;color:var(--muted);margin:8px 0 0}.status{font-size:13px;min-height:22px;line-height:1.6;margin:14px 0 0}.status.error{color:#a33828}.footer{display:flex;justify-content:space-between;gap:12px;margin-top:34px;padding-top:18px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+    .editing{display:flex;gap:8px;flex:1;min-width:0}.editing input{min-width:0;flex:1;padding:8px;border:1px solid var(--line);border-radius:5px}.editing button{background:#e3e9dc;border:0;border-radius:5px;padding:8px;color:var(--green);white-space:nowrap}
+    @media(max-width:540px){.shell{padding:22px 18px 32px}.intro{padding-top:32px}.add-box{padding:16px}.add-row{flex-direction:column}.primary{padding:12px}.counts{gap:20px}.task{gap:8px;padding:15px 0}.task-action{padding:7px 5px}.footer{flex-direction:column;gap:5px}.editing{flex-wrap:wrap}.editing input{flex-basis:100%}.tag{font-size:10px}}
+  </style>
+</head>
+<body>
+<main class="shell">
+  <header class="brand"><span class="mark"><span class="logo" aria-hidden="true">n</span>Nagi Tasks</span><span class="tag">小さく、気軽に。</span></header>
+  <section class="intro"><span class="eyebrow">ONE THING AT A TIME</span><h1>ひとつずつ、片づけよう。</h1><p class="lead">頭の中の「あとで」を、ここに。今日の一歩を見つける小さなメモ帳。</p></section>
+  <section class="counts" aria-label="全タスクの集計"><div class="count"><strong id="pending-count">—</strong><span>これから</span></div><div class="count"><strong id="done-count">—</strong><span>できた</span></div><div class="count"><strong id="total-count">—</strong><span>すべて</span></div></section>
+  <form id="add-form" class="add-box"><label for="title">次にやること</label><div class="add-row"><input id="title" name="title" placeholder="例：気になっていた本を読む" required autocomplete="off"><button class="primary" type="submit">＋ 追加する</button></div><p class="hint">日本語なら約80文字まで。Enterでも追加できます。</p></form>
+  <div class="toolbar"><div class="filters" aria-label="表示するタスク"><button class="filter" data-filter="all" aria-pressed="true">すべて</button><button class="filter" data-filter="pending" aria-pressed="false">これから</button><button class="filter" data-filter="done" aria-pressed="false">できた</button></div><button class="refresh" id="refresh">更新</button></div>
+  <ul id="tasks" aria-label="タスク一覧"></ul>
+  <div id="empty" class="empty" hidden><strong id="empty-title">まだ、なにもありません。</strong><p id="empty-text">まずは小さなことをひとつ、追加してみませんか。</p></div>
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+  <footer class="footer"><span>ひとつできたら、それで一歩。</span><span id="list-note">最新100件を表示</span></footer>
+</main>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+let tasks = [], filter = 'all', busy = false;
+function status(message, error = false) { $('status').textContent = message; $('status').classList.toggle('error', error); }
+async function api(path, method = 'GET', data) {
+  const response = await fetch(path, { method, headers: data ? {'Content-Type':'application/json'} : {}, body: data ? JSON.stringify(data) : undefined });
+  const value = await response.json();
+  if (!response.ok) throw new Error(value.error || `HTTP ${response.status}`);
+  return value;
+}
+function validate(title) {
+  const clean = title.trim();
+  if (!clean || new TextEncoder().encode(clean).length > 240) throw new Error('内容を1〜240 UTF-8 byteで入力してください。日本語なら約80文字です。');
+  return clean;
+}
+async function refresh() {
+  const [rows, stats] = await Promise.all([api('/api/tasks'), api('/api/stats')]);
+  tasks = rows;
+  $('pending-count').textContent = stats.total - stats.completed;
+  $('done-count').textContent = stats.completed;
+  $('total-count').textContent = stats.total;
+  $('list-note').textContent = stats.total > 100 ? `全${stats.total}件のうち最新100件を表示` : '最新100件まで表示';
+  render();
+}
+function lock(value) { busy = value; document.querySelectorAll('button,input').forEach(el => el.disabled = value); }
+async function perform(action, message) {
+  if (busy) return;
+  lock(true);
+  try { await action(); await refresh(); status(message); }
+  catch (error) { status(error.message === 'Failed to fetch' ? 'サーバーに接続できません。起動状態を確認して「更新」を押してください。' : error.message, true); }
+  finally { lock(false); }
+}
+function actionButton(text, callback) { const button = document.createElement('button'); button.type = 'button'; button.className = 'task-action'; button.textContent = text; button.addEventListener('click', callback); return button; }
+function edit(task, row) {
+  const form = document.createElement('form'); form.className = 'editing';
+  const input = document.createElement('input'); input.value = task.title; input.setAttribute('aria-label','タスクの内容を編集'); input.required = true;
+  const save = document.createElement('button'); save.textContent = '保存'; save.type = 'submit';
+  const cancel = document.createElement('button'); cancel.textContent = '戻る'; cancel.type = 'button'; cancel.addEventListener('click', render);
+  form.append(input, save, cancel); row.replaceChildren(form); input.focus();
+  form.addEventListener('submit', event => { event.preventDefault(); let title; try { title = validate(input.value); } catch (e) { status(e.message,true); return; } perform(() => api(`/api/tasks/${task.id}`,'PUT',{title,done:task.done}), '内容を保存しました。'); });
+}
+function render() {
+  const visible = tasks.filter(task => filter === 'all' || (filter === 'done' ? task.done : !task.done));
+  $('tasks').replaceChildren();
+  for (const task of visible) {
+    const row = document.createElement('li'); row.className = 'task' + (task.done ? ' done' : '');
+    const check = document.createElement('input'); check.type = 'checkbox'; check.checked = task.done; check.setAttribute('aria-label', `${task.title}を${task.done ? '未完了' : '完了'}にする`);
+    check.addEventListener('change', () => perform(() => api(`/api/tasks/${task.id}`, 'PUT', {title:task.title,done:check.checked}), check.checked ? 'ひとつ、できました。' : 'これからやることに戻しました。'));
+    const label = document.createElement('span'); label.className = 'task-title'; label.textContent = task.title;
+    row.append(check, label, actionButton('編集', () => edit(task,row)), actionButton('削除', () => perform(() => api(`/api/tasks/${task.id}`,'DELETE'),'タスクを削除しました。')));
+    $('tasks').append(row);
+  }
+  $('empty').hidden = visible.length > 0;
+  $('empty-title').textContent = tasks.length ? 'この一覧は、空っぽです。' : 'まだ、なにもありません。';
+  $('empty-text').textContent = tasks.length ? '表示を切り替えるか、新しいことを追加してください。' : 'まずは小さなことをひとつ、追加してみませんか。';
+}
+$('add-form').addEventListener('submit', event => { event.preventDefault(); let title; try { title = validate($('title').value); } catch (e) { status(e.message,true); return; } perform(async () => { await api('/api/tasks','POST',{title,done:false}); $('title').value = ''; },'新しい一歩を追加しました。'); });
+document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; document.querySelectorAll('[data-filter]').forEach(b => b.setAttribute('aria-pressed',String(b===button))); render(); }));
+$('refresh').addEventListener('click', () => perform(async () => {}, '一覧を更新しました。'));
+perform(async () => {}, '');
+</script>
+</body>
+</html>

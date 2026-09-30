@@ -1,0 +1,4 @@
+def validate_task(title: view[str]) -> Result[bool, Error]:
+    if len(title) == 0 or len(title) > 240:
+        return error("title must be between 1 and 240 UTF-8 bytes")
+    return ok(true)

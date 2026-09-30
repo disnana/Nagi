@@ -1,0 +1,55 @@
+# 画面もJSON APIも同じNagiサーバーから提供する、小さなタスク管理。
+import "models.nagi"
+import "validation.nagi"
+
+@get("/")
+async def home() -> Result[Html, Error]:
+    # このHTMLはコンパイル時に埋め込まれる。配布先にHTMLは不要。
+    return ok(html(include_text("index.html")))
+
+@get("/api/tasks")
+async def list_tasks(db: Db) -> Result[List[Task], Error]:
+    return await db_all[Task](db, "SELECT id, title, done FROM demo_tasks ORDER BY id DESC LIMIT 100")
+
+@get("/api/tasks/{id}")
+async def get_task(db: Db, id: i64) -> Result[Task?, Error]:
+    if id < 1:
+        return error("id must be positive")
+    return await db_query[Task](db, "SELECT id, title, done FROM demo_tasks WHERE id = ?1", id)
+
+@post("/api/tasks")
+async def create_task(db: Db, req: SaveTask) -> Result[Task, Error]:
+    try validate_task(view(req.title))
+    state: i32 = 0
+    if req.done:
+        state = 1
+    return await db_insert[Task](db, "INSERT INTO demo_tasks(title, done) VALUES (?1, ?2) RETURNING id, title, done", req.title, state)
+
+@put("/api/tasks/{id}")
+async def update_task(db: Db, id: i64, req: SaveTask) -> Result[Task, Error]:
+    if id < 1:
+        return error("id must be positive")
+    try validate_task(view(req.title))
+    state: i32 = 0
+    if req.done:
+        state = 1
+    return await db_update[Task](db, "UPDATE demo_tasks SET title = ?2, done = ?3 WHERE id = ?1 RETURNING id, title, done", id, req.title, state)
+
+@delete("/api/tasks/{id}")
+async def delete_task(db: Db, id: i64) -> Result[i64, Error]:
+    if id < 1:
+        return error("id must be positive")
+    return await db_write(db, "DELETE FROM demo_tasks WHERE id = ?1", id)
+
+@get("/api/stats")
+async def stats(db: Db) -> Result[TaskStats?, Error]:
+    return await db_query[TaskStats](db, "SELECT COUNT(*) AS total, COALESCE(SUM(done), 0) AS completed FROM demo_tasks WHERE id > ?1", 0)
+
+async def main() -> Result[unit, Error]:
+    port = try parse_i64(env("NAGI_PORT", "8091"))
+    if port < 1 or port > 65535:
+        return error("NAGI_PORT must be between 1 and 65535")
+    db = try await db_open(env("NAGI_DB", "nagi-tasks.sqlite"))
+    try await db_exec(db, "CREATE TABLE IF NOT EXISTS demo_tasks(id INTEGER PRIMARY KEY, title TEXT NOT NULL CHECK(length(CAST(title AS BLOB)) BETWEEN 1 AND 240), done INTEGER NOT NULL CHECK(done IN (0, 1)))")
+    print("Nagi Tasks: open the URL below in your browser.")
+    return await serve(db, port)

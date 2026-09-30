@@ -1,0 +1,12 @@
+class Task:
+    id: i64
+    title: str
+    done: bool
+
+class SaveTask:
+    title: str
+    done: bool
+
+class TaskStats:
+    total: i64
+    completed: i64
