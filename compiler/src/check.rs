@@ -30,6 +30,9 @@ fn matches_type(a: &Type, b: &Type) -> bool {
 }
 
 pub fn check(p: &mut Program) -> Result<(), String> {
+    if !p.imports.is_empty() {
+        return Err("importはnagicのファイル読み込み経路で解決してください".into());
+    }
     let mut c = Checker {
         classes: HashMap::new(),
         functions: HashMap::new(),
@@ -181,6 +184,7 @@ impl Checker {
                 "unit",
                 "Error",
                 "Db",
+                "Html",
                 "UUID",
                 "timestamp",
             ]
@@ -640,11 +644,11 @@ impl Checker {
         let arity = match n {
             "clock_ns" | "supervisor_demo" | "read_line" => 0,
             "size_of" => 0,
-            "print" | "write" | "view" | "copy" | "share" | "clone_shared" | "len" | "range"
-            | "sleep" | "db_open" | "json_decode" | "json_encode" | "ok" | "some" | "error"
-            | "assert_true" | "parse_i64" | "parse_f64" | "make_ints" | "actor_demo"
-            | "actor_pair_demo" | "queue_demo" | "task_demo" | "cpu_sum" | "i64" | "i32"
-            | "uuid_parse" | "uuid_format" => 1,
+            "print" | "write" | "html" | "include_text" | "view" | "copy" | "share"
+            | "clone_shared" | "len" | "range" | "sleep" | "db_open" | "json_decode"
+            | "json_encode" | "ok" | "some" | "error" | "assert_true" | "parse_i64"
+            | "parse_f64" | "make_ints" | "actor_demo" | "actor_pair_demo" | "queue_demo"
+            | "task_demo" | "cpu_sum" | "i64" | "i32" | "uuid_parse" | "uuid_format" => 1,
             "db_exec" | "db_all" | "append" | "serve" | "env" => 2,
             "db_query" | "db_write" | "slice" | "bench_i64" | "bench_f64" | "bench_scalar" => 3,
             "db_insert" => 4,
@@ -692,6 +696,20 @@ impl Checker {
                 Ok(Type::named("unit"))
             }
             "read_line" => Ok(result(Type::named("str"))),
+            "html" => {
+                require(0, Type::named("str"))?;
+                self.consume(&args[0])?;
+                Ok(Type::named("Html"))
+            }
+            "include_text" => {
+                if !matches!(args[0].kind, E::Str(_)) {
+                    return Err(error(
+                        line,
+                        "include_textにはファイルパスの文字列リテラルが必要です",
+                    ));
+                }
+                Ok(Type::named("str"))
+            }
             "view" => {
                 let t = &types[0];
                 if t.0 == "str" || t.0 == "bytes" {

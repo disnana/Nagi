@@ -124,6 +124,7 @@ pub struct Class {
 }
 #[derive(Clone, Debug, Default)]
 pub struct Program {
+    pub imports: Vec<(String, usize)>,
     pub classes: Vec<Class>,
     pub functions: Vec<Function>,
 }

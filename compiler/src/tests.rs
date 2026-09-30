@@ -9,6 +9,27 @@ fn hello() {
     high("def main():\n    print(\"hello\")\n").unwrap();
 }
 #[test]
+fn html_route_is_not_encoded_as_json() {
+    let p = high("@get(\"/\")\nasync def home() -> Result[Html, Error]:\n    return ok(html(\"<h1>Hello</h1>\"))\n").unwrap();
+    let code = emit::rust(&p).unwrap();
+    assert!(code.contains("IntoResponse::into_response(v)"));
+    assert!(high("def main():\n    html(123)\n").is_err());
+    assert!(
+        high("def main():\n    path = \"index.html\"\n    print(include_text(path))\n").is_err()
+    );
+}
+#[test]
+fn console_io_roundtrip() {
+    let p = high("def main() -> Result[unit, Error]:\n    write(\"prompt: \")\n    text = try read_line()\n    return ok(print(text))\n").unwrap();
+    let mut low = parser::parse(&emit::low(&p), false).unwrap();
+    check::check(&mut low).unwrap();
+    let rust = emit::rust(&low).unwrap();
+    assert!(rust.contains("rt::read_line()"));
+    assert!(high("def main():\n    read_line()\n").is_err());
+    assert!(high("def main():\n    x = read_line(1)\n").is_err());
+    assert!(high("def main():\n    write([1, 2])\n").is_err());
+}
+#[test]
 fn precedence() {
     let p = high("def main() -> i64:\n    return 2 + 3 * 4\n").unwrap();
     assert!(emit::low(&p).contains("(2 + (3 * 4))"));
@@ -188,16 +209,4 @@ fn low_standalone() {
 fn cost_not_dynamic_count() {
     let p = high("def main():\n    s = \"hello\"\n    print(s)\n").unwrap();
     assert_eq!(emit::cost_report(&p)["format"], "nagi-cost-sites-v1");
-}
-
-#[test]
-fn console_io_roundtrip() {
-    let p = high("def main() -> Result[unit, Error]:\n    write(\"prompt: \")\n    text = try read_line()\n    return ok(print(text))\n").unwrap();
-    let mut low = parser::parse(&emit::low(&p), false).unwrap();
-    check::check(&mut low).unwrap();
-    let rust = emit::rust(&low).unwrap();
-    assert!(rust.contains("rt::read_line()"));
-    assert!(high("def main():\n    read_line()\n").is_err());
-    assert!(high("def main():\n    x = read_line(1)\n").is_err());
-    assert!(high("def main():\n    write([1, 2])\n").is_err());
 }

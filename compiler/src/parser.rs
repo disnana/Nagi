@@ -149,6 +149,19 @@ impl Parser {
         let mut attrs = vec![];
         self.skip();
         while !matches!(self.t().kind, K::Eof) {
+            if self.eat("import") {
+                if !attrs.is_empty() {
+                    return Err(self.err("importに属性は付けられません"));
+                }
+                let line = self.t().line;
+                let K::Str(file) = self.t().kind.clone() else {
+                    return Err(self.err("importには相対ファイルパスの文字列が必要です"));
+                };
+                self.pos += 1;
+                self.end_stmt()?;
+                p.imports.push((file, line));
+                continue;
+            }
             if self.eat("@") {
                 let n = self.name()?;
                 let val = if self.eat("(") {

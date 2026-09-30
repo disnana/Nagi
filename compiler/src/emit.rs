@@ -105,6 +105,9 @@ pub fn low(p: &Program) -> String {
     }
     let mut out =
         String::from("# Nagi Low 0.1 / generated. 手書き変更はnative/で@replaceしてください。\n");
+    for (file, _) in &p.imports {
+        out.push_str(&format!("import {};\n", quote(file)));
+    }
     for c in &p.classes {
         out.push_str(&format!("record {} {{\n", c.name));
         for (n, t) in &c.fields {
@@ -142,6 +145,7 @@ pub fn rust_type(t: &Type) -> String {
         "bytes" => "Vec<u8>".into(),
         "unit" => "()".into(),
         "Error" => "rt::Error".into(),
+        "Html" => "rt::axum::response::Html<String>".into(),
         "Db" => "rt::Db".into(),
         "UUID" => "rt::Uuid".into(),
         "timestamp" => "rt::Timestamp".into(),
@@ -227,6 +231,8 @@ fn re(e: &Expr) -> String {
                 "print" => format!("println!(\"{{}}\", {})", string_or_value(&a[0])),
                 "write" => format!("print!(\"{{}}\", {})", string_or_value(&a[0])),
                 "read_line" => "rt::read_line()".into(),
+                "html" => format!("rt::axum::response::Html({})", args[0]),
+                "include_text" => format!("include_str!({}).to_owned()", string_arg(&a[0])),
                 "assert_true" => format!("assert!({})", args[0]),
                 "view" => format!(
                     "({}).{}()",
@@ -522,7 +528,9 @@ pub fn rust(p: &Program) -> Result<String, String> {
             // Body extractorはAxumの規則に従い最後。引数の順序は元の関数を維持する。
             extracts.sort_by_key(|s| s.contains("body::Bytes"));
             let invocation = format!("{}({}).await", f.name, call.join(", "));
-            let response = if f.ret.inner().0 == "Option" {
+            let response = if f.ret.inner().0 == "Html" {
+                format!("match {invocation} {{ Ok(v)=>rt::axum::response::IntoResponse::into_response(v),Err(e)=>rt::error_response(e) }}")
+            } else if f.ret.inner().0 == "Option" {
                 format!("match {invocation} {{ Ok(Some(v))=>rt::response(Ok(v)), Ok(None)=>rt::error_response(rt::Error::not_found()),Err(e)=>rt::error_response(e) }}")
             } else {
                 format!("rt::response({invocation})")
@@ -571,8 +579,8 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let cmd = &args[0];
     let path = PathBuf::from(&args[1]);
     let high = path.extension().is_none_or(|x| x != "low");
-    let src = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let mut p = crate::parser::parse(&src, high).map_err(|e| diagnostic(&path, &src, &e))?;
+    let mut sources = crate::source::load(&path, high)?;
+    let mut p = std::mem::take(&mut sources.program);
     let mut native = vec![];
     let mut out = PathBuf::from("build").join(path.file_stem().unwrap());
     let mut cost = false;
@@ -594,8 +602,8 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     }
     let mut all = Program::default();
     for n in native {
-        let s = fs::read_to_string(&n).map_err(|e| e.to_string())?;
-        let np = crate::parser::parse(&s, false).map_err(|e| diagnostic(&n, &s, &e))?;
+        let native_sources = crate::source::load(&n, false)?;
+        let np = sources.append(native_sources);
         all.classes.extend(np.classes);
         all.functions.extend(np.functions);
     }
@@ -610,7 +618,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             .filter(|f| !f.attrs.iter().any(|(a, _)| a == "replace"))
             .cloned(),
     );
-    crate::check::check(&mut resolution).map_err(|e| diagnostic(&path, &src, &e))?;
+    crate::check::check(&mut resolution).map_err(|e| sources.diagnostic(&e))?;
     p.classes = resolution.classes[..nc].to_vec();
     p.functions = resolution.functions[..nf].to_vec();
     fs::create_dir_all(&out).map_err(|e| e.to_string())?;
@@ -696,17 +704,6 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         }
     }
     Ok(())
-}
-fn diagnostic(path: &Path, src: &str, e: &str) -> String {
-    let line = e
-        .strip_prefix("line ")
-        .and_then(|s| s.split(':').next())
-        .and_then(|s| s.parse::<usize>().ok());
-    if let Some(n) = line {
-        format!("error: {e}\n --> {}:{n}\n {n} | {}\n help: 型注釈、所有権、scope、明示copyを確認してください",path.display(),src.lines().nth(n.saturating_sub(1)).unwrap_or(""))
-    } else {
-        format!("error: {e}\n --> {}", path.display())
-    }
 }
 pub fn cost_report(p: &Program) -> serde_json::Value {
     fn walk(e: &Expr, a: &mut Vec<serde_json::Value>) {
