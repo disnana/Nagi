@@ -5,5 +5,6 @@ pub mod lexer;
 pub mod parser;
 pub mod project;
 pub mod source;
+pub mod symbols;
 #[cfg(test)]
 mod tests;

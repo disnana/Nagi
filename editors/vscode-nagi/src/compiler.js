@@ -64,9 +64,24 @@ function parseDiagnostics(output, fallbackFile) {
     message: message.replace(/^error:\s*/, '') }];
 }
 
-function runCheck(executable, args, cwd, timeout, callback) {
-  return execFile(executable, args, { cwd, timeout, maxBuffer: 1024 * 1024, windowsHide: true, shell: false },
+function runCheck(executable, args, cwd, timeout, callback, maxBuffer = 1024 * 1024) {
+  return execFile(executable, args, { cwd, timeout, maxBuffer, windowsHide: true, shell: false },
     (error, stdout, stderr) => callback({ error, output: [stdout, stderr].filter(Boolean).join('\n') }));
 }
 
-module.exports = { findRoot, findProject, compilerPath, argumentsFor, parseDiagnostics, normalizeFile, runCheck };
+function definitionAt(index, file, line, character, root) {
+  if (index.format !== 'nagi-symbols-v1' || !Array.isArray(index.references)) throw new Error('Unsupported nagic symbols format');
+  const key = name => { const normalized = normalizeFile(name, root); return process.platform === 'win32' ? normalized.toLowerCase() : normalized; };
+  const valid = location => location && typeof location.file === 'string' &&
+    Number.isInteger(location.line) && location.line > 0 && Number.isInteger(location.column) && location.column > 0 &&
+    Number.isInteger(location.length) && location.length >= 0;
+  for (const reference of index.references) {
+    if (!valid(reference.location) || !valid(reference.target)) throw new Error('Invalid nagic symbol location');
+    const location = reference.location;
+    if (key(location.file) === key(file) && location.line === line + 1 &&
+        character >= location.column - 1 && character < location.column - 1 + location.length) return reference.target;
+  }
+  return undefined;
+}
+
+module.exports = { findRoot, findProject, compilerPath, argumentsFor, parseDiagnostics, normalizeFile, runCheck, definitionAt };

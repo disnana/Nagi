@@ -49,7 +49,10 @@ async function run() {
   const helperFile = path.join(project, 'helper.nagi');
   fs.writeFileSync(manifestFile, "entry = 'host-entry.nagi'\n[rust]\nfile = 'native.rs'\n[rust.dependencies]\nserde_json = '1.0'\n");
   fs.writeFileSync(path.join(project, 'host-entry.nagi'), 'import "helper.nagi"\n@rust("native::record")\nextern def record()\ndef answer() -> i64:\n    return 42\ndef main():\n    print(helper())\n    record()\n');
-  fs.writeFileSync(helperFile, 'def helper() -> i64:\n    return answer()\n');
+  fs.appendFileSync(path.join(project, 'host-entry.nagi'), '\ndef tagged() -> Number:\n    return Number(value=42)\n');
+  const modelsFile = path.join(project, 'models.nagi');
+  fs.writeFileSync(modelsFile, 'class Number:\n    value: i64\n');
+  fs.writeFileSync(helperFile, 'import "models.nagi"\ndef helper() -> i64:\n    return answer()\n');
   fs.writeFileSync(path.join(project, 'native.rs'), 'pub fn record() { std::fs::write("host-run.json", serde_json::to_string(&42).unwrap()).unwrap(); }\n');
   const witness = path.join(project, 'host-run.json');
   if (fs.existsSync(witness)) fs.unlinkSync(witness);
@@ -59,6 +62,29 @@ async function run() {
   await new Promise(resolve => setTimeout(resolve, 500));
   await vscode.commands.executeCommand('nagi.check');
   assert.equal(vscode.languages.getDiagnostics(helper.uri).length, 0, 'helper resolves symbols defined by the entry');
+  async function definitions(doc, line, column) {
+    return vscode.commands.executeCommand('vscode.executeDefinitionProvider', doc.uri, new vscode.Position(line, column));
+  }
+  const entryFile = path.join(project, 'host-entry.nagi');
+  const answerDefinition = await definitions(helper, 2, 12);
+  assert.equal(answerDefinition.length, 1, 'F12 on a helper resolves an entry-defined function');
+  assert.equal(answerDefinition[0].uri.toString(), vscode.Uri.file(entryFile).toString());
+  assert.equal(answerDefinition[0].range.start.line, 3);
+  const importDefinition = await definitions(helper, 0, 12);
+  assert.equal(importDefinition[0].uri.toString(), vscode.Uri.file(modelsFile).toString(), 'F12 on import opens the file');
+  const entryDocument = await vscode.workspace.openTextDocument(entryFile);
+  const helperDefinition = await definitions(entryDocument, 6, 12);
+  assert.equal(helperDefinition[0].uri.toString(), helper.uri.toString());
+  assert.equal(helperDefinition[0].range.start.line, 1);
+  const typeLine = entryDocument.getText().split(/\r?\n/).findIndex(line => line.startsWith('def tagged'));
+  const typeDefinition = await definitions(entryDocument, typeLine, 18);
+  assert.equal(typeDefinition[0].uri.toString(), vscode.Uri.file(modelsFile).toString(), 'F12 on a class type resolves its import');
+  const commentEdit = new vscode.WorkspaceEdit();
+  commentEdit.insert(helper.uri, new vscode.Position(helper.lineCount, 0), '# answer()\n');
+  await vscode.workspace.applyEdit(commentEdit);
+  assert.equal((await definitions(helper, 2, 12)).length, 0, 'unsaved source never uses stale definitions');
+  await helper.save();
+  assert.equal((await definitions(helper, 3, 3)).length, 0, 'comments never resolve as calls');
   let execution;
   const finished = new Map();
   let finish;
@@ -94,7 +120,14 @@ async function run() {
   await new Promise(resolve => setTimeout(resolve, 500));
   await vscode.commands.executeCommand('nagi.check');
   assert.equal(vscode.languages.getDiagnostics(manifest.uri).length, 0, 'fixed manifest clears the error');
-  console.log('PASS: VS Code Extension Host activation, High/Low, diagnostics, project helper check/run, Rust dependencies, manifest save refresh');
+  const lowFolder = path.join(project, '..', `low-navigation-${process.pid}`);
+  fs.mkdirSync(lowFolder, { recursive: true });
+  fs.writeFileSync(path.join(lowFolder, 'math.low'), 'fn twice(x: i64) -> i64 { return x * 2; }\n');
+  fs.writeFileSync(path.join(lowFolder, 'main.low'), 'import "math.low";\nfn main() -> unit { print(twice(21)); }\n');
+  const lowEntry = await vscode.workspace.openTextDocument(path.join(lowFolder, 'main.low'));
+  const lowDefinition = await definitions(lowEntry, 1, 27);
+  assert.equal(lowDefinition[0].uri.toString(), vscode.Uri.file(path.join(lowFolder, 'math.low')).toString(), 'Low import definition jump works');
+  console.log('PASS: VS Code Extension Host diagnostics, project run, Rust dependencies, manifest refresh, F12 functions/classes/imports/Low, unsaved and comment guards');
 }
 
 module.exports = { run };

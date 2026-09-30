@@ -9,6 +9,7 @@ function activate(context) {
   const diagnostics = vscode.languages.createDiagnosticCollection('nagi');
   const pending = new Map();
   const results = new Map();
+  const navigation = new Set();
   let epoch = 0;
   const isNagi = d => d && ['nagi', 'nagi-low'].includes(d.languageId) && d.uri.scheme === 'file';
   function publishDiagnostics() {
@@ -55,6 +56,8 @@ function activate(context) {
     for (const d of vscode.workspace.textDocuments) cancel(d);
     results.clear();
     diagnostics.clear();
+    for (const child of navigation) child.kill();
+    navigation.clear();
   }
 
   function recheckOpen() {
@@ -133,8 +136,38 @@ function activate(context) {
     return vscode.tasks.executeTask(task);
   }
 
+  function provideDefinition(document, position, token) {
+    if (!isNagi(document) || !vscode.workspace.isTrusted || token.isCancellationRequested) return [];
+    const settings = options(document);
+    if (document.isDirty || projectDirty(settings.project)) {
+      vscode.window.setStatusBarMessage('Nagi: 定義ジャンプの前にプロジェクトの変更を保存してください', 3000);
+      return [];
+    }
+    const version = document.version;
+    const startEpoch = epoch;
+    return new Promise(resolve => {
+      let cancellation;
+      const child = compiler.runCheck(settings.executable, argsFor('symbols', document, settings), settings.root,
+        settings.config.get('checkTimeoutMs', 15000), result => {
+          navigation.delete(child);
+          cancellation?.dispose();
+          if (token.isCancellationRequested || startEpoch !== epoch || document.isClosed || document.version !== version || document.isDirty) return resolve([]);
+          try {
+            if (result.error) throw new Error(result.output || result.error.message);
+            const target = compiler.definitionAt(JSON.parse(result.output), document.uri.fsPath, position.line, position.character, settings.root);
+            if (!target) return resolve([]);
+            const range = new vscode.Range(target.line - 1, target.column - 1, target.line - 1, target.column - 1 + target.length);
+            resolve([new vscode.Location(vscode.Uri.file(compiler.normalizeFile(target.file, settings.root)), range)]);
+          } catch (error) { output.appendLine(`[symbols] ${error.message}`); resolve([]); }
+        }, 16 * 1024 * 1024);
+      cancellation = token.onCancellationRequested(() => child.kill());
+      navigation.add(child);
+    });
+  }
+
   context.subscriptions.push(output, diagnostics,
-    { dispose() { for (const job of pending.values()) job.child?.kill(); pending.clear(); } },
+    vscode.languages.registerDefinitionProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideDefinition }),
+    { dispose() { for (const job of pending.values()) job.child?.kill(); pending.clear(); for (const child of navigation) child.kill(); navigation.clear(); } },
     vscode.workspace.onDidOpenTextDocument(d => { if (optionsForAuto(d)) check(d); }),
     vscode.workspace.onDidSaveTextDocument(d => {
       if (isNagi(d) || compiler.findProject(d.uri.fsPath)) { invalidate(); recheckOpen(); }

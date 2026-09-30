@@ -30,6 +30,11 @@ pub fn diagnostic(path: &Path, source: &str, message: &str) -> String {
 }
 
 impl Sources {
+    pub fn files(&self) -> impl Iterator<Item = (&Path, &str, usize)> {
+        self.files
+            .iter()
+            .map(|f| (f.path.as_path(), f.source.as_str(), f.start))
+    }
     pub fn append(&mut self, mut other: Sources) -> Program {
         let offset = self.text.lines().count();
         shift(&mut other.program, offset);

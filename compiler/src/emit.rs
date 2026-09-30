@@ -644,6 +644,10 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         all.classes.extend(np.classes);
         all.functions.extend(np.functions);
     }
+    if cmd == "symbols" {
+        println!("{}", crate::symbols::index(&sources, &[&p, &all])?);
+        return Ok(());
+    }
     // 手書きLowの通常関数はHighの名前解決にも使う。置換本体はLowの統合時に検査する。
     let mut resolution = p.clone();
     let nc = p.classes.len();

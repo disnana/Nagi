@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const USAGE: &str = "nagic <check|lower|build|run> [SOURCE] [--project DIR|nagi.toml] [--no-project] [--native FILE.low] [--rust FILE.rs] [--rust-dep NAME=VERSION] [--out DIR] [--cost-report]";
+const USAGE: &str = "nagic <check|lower|build|run|symbols> [SOURCE] [--project DIR|nagi.toml] [--no-project] [--native FILE.low] [--rust FILE.rs] [--rust-dep NAME=VERSION] [--out DIR] [--cost-report]";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -120,7 +120,7 @@ fn read_manifest(path: &Path) -> Result<Manifest, String> {
 /// With no SOURCE, search upward from cwd for the nearest nagi.toml.
 pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let command = args.first().ok_or(USAGE)?;
-    if !["check", "lower", "build", "run"].contains(&command.as_str()) {
+    if !["check", "lower", "build", "run", "symbols"].contains(&command.as_str()) {
         return Err(format!("unknown command: {command}\n{USAGE}"));
     }
     let mut source = None;

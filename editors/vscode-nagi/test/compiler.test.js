@@ -10,6 +10,18 @@ test('Windows diagnostics preserve the drive and convert to zero-based line', ()
   assert.deepEqual(parsed, [{ file: 'C:\\my project\\demo.nagi', line: 7, message: 'line 8: wrong type' }]);
 });
 
+test('symbol positions use UTF-16 ranges and exclude whitespace and other files', () => {
+  const root = path.resolve('symbol project');
+  const file = path.join(root, 'main.nagi');
+  const target = { file: path.join(root, 'lib', 'helper.nagi'), line: 2, column: 5, length: 6 };
+  const index = { format: 'nagi-symbols-v1', references: [{ location: { file, line: 3, column: 38, length: 6 }, target }] };
+  assert.deepEqual(compiler.definitionAt(index, file, 2, 37, root), target);
+  assert.equal(compiler.definitionAt(index, file, 2, 43, root), undefined);
+  assert.equal(compiler.definitionAt(index, file + '.other', 2, 37, root), undefined);
+  assert.throws(() => compiler.definitionAt({ format: 'wrong' }, file, 0, 0, root), /format/);
+  assert.throws(() => compiler.definitionAt({ format: 'nagi-symbols-v1', references: [{ location: { file } }] }, file, 0, 0, root), /location/);
+});
+
 test('Low integration errors and process errors have usable fallback locations', () => {
   assert.equal(compiler.parseDiagnostics('line 12: moved value', '/demo.nagi')[0].line, 11);
   assert.equal(compiler.parseDiagnostics('spawn nagic ENOENT', '/demo.nagi')[0].line, 0);
@@ -93,4 +105,24 @@ test('real checker resolves a helper through its manifest entry rather than chec
     compiler.argumentsFor('check', helper, [], folder, root, '', [], manifest), folder, 5000, resolve));
   assert.equal(result.error, null, result.output);
   assert.match(result.output, /entry.nagi/);
+});
+
+test('real symbol query navigates from a helper to its entry-defined function', async () => {
+  const root = path.resolve(__dirname, '../../..');
+  const folder = path.join(root, 'build', 'vscode-entry-test');
+  // This fixture is also used by the project-entry check above.
+  fs.mkdirSync(folder, { recursive: true });
+  const manifest = path.join(folder, 'nagi.toml');
+  const helper = path.join(folder, 'helper.nagi');
+  const entry = path.join(folder, 'entry.nagi');
+  fs.writeFileSync(manifest, "entry = 'entry.nagi'\n");
+  fs.writeFileSync(entry, 'import "helper.nagi"\ndef answer() -> i64:\n    return 42\ndef main():\n    print(helper())\n');
+  fs.writeFileSync(helper, 'def helper() -> i64:\n    return answer()\n');
+  const result = await new Promise(resolve => compiler.runCheck(compiler.compilerPath('', root, root),
+    compiler.argumentsFor('symbols', helper, [], folder, root, '', [], manifest), folder, 5000, resolve));
+  assert.equal(result.error, null, result.output);
+  const target = compiler.definitionAt(JSON.parse(result.output), helper, 1, 12, root);
+  assert.equal(compiler.normalizeFile(target.file, root), entry);
+  assert.equal(target.line, 2);
+  assert.equal(fs.existsSync(path.join(folder, 'build', 'entry')), false, 'symbol query generates no build output');
 });
