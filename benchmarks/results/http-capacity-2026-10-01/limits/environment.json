@@ -1,0 +1,59 @@
+{
+  "date_utc": "2026-10-01T11:59:25Z",
+  "source_commit": "c602abb349641cf1d5a274e2221e33d29a0acea4",
+  "nagi_version": "0.1.2",
+  "os": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "cpu": "AMD EPYC 7763 64-Core Processor",
+  "affinity": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "server_cpus": "0",
+  "client_cpus": "2,3",
+  "server_workers": 1,
+  "fd_limits": [
+    16384,
+    16384
+  ],
+  "cpu_quota": "400000 100000",
+  "memory_limit": "17179869184",
+  "ephemeral_ports": "32768\t60999",
+  "vegeta": "Version: v12.13.0\nCommit: 507c4f028fbad80168f3b734dab9530d3aabfefa\nRuntime: go1.22.12 linux/amd64\nDate: 2025-10-31T11:31:52Z+0000",
+  "binary_sha256": "934ddff23a6edf1588140d468cd4cc509d6e3c2aa8cc535860157efb3df9c511",
+  "load_generator_sha256": "c54d905541485153542dfcb850f9ab8ef801e7ab1a652d2cfc69cafdd4a5363f",
+  "harness_sha256": "f6af615081f8139bd83c8d6727e94777f18e0651c6b3fd8579433791a66666b7",
+  "source_sha256": {
+    "Cargo.toml": "6a916225893816fcfa121f48f0300acac125eed65288b18096535b45b30092d4",
+    "Cargo.lock": "e74a459f368a1bda39e0211474ff80dda2df5815c5ef3af7e7440c7b12cbd305",
+    "runtime/Cargo.toml": "75d71550f5439cdf8c542fefb99de45a5e1998b3490540ff161da724845ea86e",
+    "examples/crud.nagi": "374b193207b589f4b383b9ba113fc0a6ab3e0abd04c1f1ac0e2fb21b2654d505",
+    "runtime/examples/axum_baseline.rs": "55df7faaf4ec5159d9be4e01ef453d5df05f2ee6e19fbdc25e5c51066b156183",
+    "runtime/examples/concurrency_bench.rs": "00781f110e1d144a7c85720eae3de656650d08ccc401421e7c4abf0e19f1e0cd",
+    "runtime/examples/microbench.rs": "58d715378e6c74a547cd39af1db67686ca76b4fbca33a3064401200bf56063ae",
+    "runtime/src/concurrent.rs": "779b00f9263cb07a1a7f6f83bf4a3f11ecb25de71dd543490bcfc5a7b8fd17ca",
+    "runtime/src/database.rs": "200a6a4b4a8f613417e07b34454a6264b8b834d08d36fd59fbf5e9c19ef20684",
+    "runtime/src/lib.rs": "5e8c2aaaeeb35d32836c5ee9ec719a58566117eb1aa4d2b8ec9795d4f3125e72",
+    "runtime/src/metrics.rs": "e6562f697fa328e8f34b2a6a80f6a13fc87be0418731256a84638ceb2dfde5a3",
+    "compiler/src/ast.rs": "6608606f5481dc280359689ff7bcd62c635e2c608ee8468cdc100e35dfb95cb6",
+    "compiler/src/check.rs": "57d85d61fadc34e219f8ac7a22d29ec8c992b45ff3e9416c433b11e58c5318e6",
+    "compiler/src/diagnostics.rs": "d99f434a3382e32930fa2877039a41ee9a6495e6508180fdfcf5843952abbcb4",
+    "compiler/src/emit.rs": "1c2e6d9afacfe75d414fefe4ed3244356107357ad6948d17b8fe878f176234a5",
+    "compiler/src/lexer.rs": "8dab218949e8807293c3a85b0e440fd32de75b441c980d9b430e173b8814f3df",
+    "compiler/src/lib.rs": "51b0471c70724252104d40b67e1dfdc98008ed1696cc54dd7b8264f6ed99b0ca",
+    "compiler/src/main.rs": "191afb833de01bcf4458bd68a1a4e7be6c5ddc38e79e4c19c6e9e14155565ea7",
+    "compiler/src/parser.rs": "1e5e634c3b00d17ec52868de0c566aee900094c2b9c31e99b908e3d64f8d07db",
+    "compiler/src/project.rs": "d0462930b454e9974d17fcde055b5510d84d6ce3fcdf95efcf2d283d21089c54",
+    "compiler/src/source.rs": "f4d5c509fb12c180f20d08faacbc94fba359a5a31e7e324450ae1b91c9f8f6dc",
+    "compiler/src/symbols.rs": "013a832977dfb994f461b111c31d8d8183bae152288e37011b71f0f23199dd85",
+    "compiler/src/tests.rs": "10d45284c2966573a9ae4557475856631b4e4452f65e95111f66757e25bd8ea6"
+  },
+  "limitations": [
+    "local HTTP/1.1 without TLS",
+    "SQLite in-memory, one DB worker",
+    "paced client with bounded workers; inspect achieved rate",
+    "latencies measure dispatched requests, not unsent arrivals"
+  ]
+}

@@ -27,7 +27,7 @@ GROUPS = [
     ("言語の基本", [("types", "型と推論"), ("classes", "class"), ("ownership", "所有権"), ("view-and-zero-copy", "viewとコピー"), ("error-handling", "エラー処理")]),
     ("アプリを作る", [("http", "HTTPとHTML"), ("json", "JSON"), ("database", "SQLite"), ("modules-and-rust", "importとRust連携"), ("projects", "プロジェクト設定"), ("async", "asyncとscope"), ("concurrency", "並行処理")]),
     ("サンプル", [("web-demo", "タスク管理デモ"), ("result-api", "Result APIサンプル")]),
-    ("設計と開発", [("introduction", "目的と実装範囲"), ("low-language", "HighとLow"), ("memory-model", "メモリモデル"), ("compiler-internals", "コンパイラの構成"), ("actor", "actor"), ("supervisor", "Supervisor"), ("queue", "queue"), ("ffi", "FFI"), ("performance", "性能の読み方"), ("measurements", "測定結果"), ("roadmap", "今後の開発"), ("vscode-extension", "VS Code拡張の設定")]),
+    ("設計と開発", [("introduction", "目的と実装範囲"), ("low-language", "HighとLow"), ("memory-model", "メモリモデル"), ("compiler-internals", "コンパイラの構成"), ("actor", "actor"), ("supervisor", "Supervisor"), ("queue", "queue"), ("ffi", "FFI"), ("performance", "性能の読み方"), ("measurements", "測定結果"), ("http-capacity", "通信の負荷試験"), ("roadmap", "今後の開発"), ("vscode-extension", "VS Code拡張の設定")]),
 ]
 SOURCES = {ROOT / "docs/README.md": "docs/"}
 EXTRA = {
@@ -45,7 +45,7 @@ ENGLISH_GROUPS = [
     ("Language basics", [("types", "Types and inference"), ("classes", "Classes"), ("ownership", "Ownership"), ("view-and-zero-copy", "Views and copying"), ("error-handling", "Error handling")]),
     ("Build an application", [("http", "HTTP and HTML"), ("json", "JSON"), ("database", "SQLite"), ("modules-and-rust", "Imports and Rust"), ("projects", "Project configuration"), ("async", "Async and scopes"), ("concurrency", "Concurrency")]),
     ("Examples", [("web-demo", "Task management demo"), ("result-api", "Result API example")]),
-    ("Design and development", [("introduction", "Goals and scope"), ("low-language", "High and Low"), ("memory-model", "Memory model"), ("compiler-internals", "Compiler internals"), ("actor", "Actors"), ("supervisor", "Supervisors"), ("queue", "Queues"), ("ffi", "FFI"), ("performance", "Reading benchmarks"), ("measurements", "Measurements"), ("roadmap", "Roadmap"), ("vscode-extension", "VS Code extension settings")]),
+    ("Design and development", [("introduction", "Goals and scope"), ("low-language", "High and Low"), ("memory-model", "Memory model"), ("compiler-internals", "Compiler internals"), ("actor", "Actors"), ("supervisor", "Supervisors"), ("queue", "Queues"), ("ffi", "FFI"), ("performance", "Reading benchmarks"), ("measurements", "Measurements"), ("http-capacity", "HTTP load tests"), ("roadmap", "Roadmap"), ("vscode-extension", "VS Code extension settings")]),
 ]
 ENGLISH_SOURCES = {ROOT / "docs/en/README.md": "docs/"}
 for _, entries in ENGLISH_GROUPS:
@@ -221,6 +221,8 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
                 if target in SOURCES or target in ENGLISH_SOURCES:
                     target_route = SOURCES.get(target, ENGLISH_SOURCES.get(target))
                     url = base + ("en/" if locale == "en" else "") + target_route
+                elif target.is_relative_to(HERE / "assets"):
+                    url = base + "assets/" + quote(target.relative_to(HERE / "assets").as_posix())
                 else:
                     kind = "tree" if target.is_dir() else "blob"
                     url = f"{repo}/{kind}/{quote(ref, safe='')}/{quote(target.relative_to(ROOT).as_posix())}"
@@ -230,6 +232,21 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
             return md.renderer.renderToken(tokens, index, options, env)
 
         md.renderer.rules["link_open"] = link_open
+        render_image = md.renderer.rules["image"]
+
+        def image(tokens, index, options, env):
+            token = tokens[index]
+            src = token.attrGet("src") or ""
+            parsed = urlsplit(src)
+            if parsed.path and not parsed.scheme and not parsed.netloc:
+                target = (source.parent / unquote(parsed.path)).resolve()
+                assets = HERE / "assets"
+                if not target.is_relative_to(assets) or not target.is_file():
+                    raise ValueError(f"Invalid Docs image in {source.relative_to(ROOT)}: {src}")
+                token.attrSet("src", base + "assets/" + quote(target.relative_to(assets).as_posix()))
+            return render_image(tokens, index, options, env)
+
+        md.renderer.rules["image"] = image
         tokens = md.parse(source.read_text(encoding="utf-8"))
         headings = []
         titles = []

@@ -1,0 +1,954 @@
+{
+  "case": "json_4k",
+  "target_rps": 15000,
+  "duration_s": 1800,
+  "wall_seconds": 1804.9771927959955,
+  "client_max_workers": 4096,
+  "aborted": null,
+  "metrics": {
+    "latencies": {
+      "total": 56594465837092,
+      "mean": 2096070,
+      "50th": 250311,
+      "90th": 3827606,
+      "95th": 9574621,
+      "99th": 34111793,
+      "max": 594163695,
+      "min": 38612
+    },
+    "buckets": {
+      "0": 20877092,
+      "1000000": 2033717,
+      "2000000": 1472408,
+      "4000000": 1071561,
+      "8000000": 670807,
+      "16000000": 581263,
+      "32000000": 246391,
+      "64000000": 29594,
+      "128000000": 12344,
+      "256000000": 4900,
+      "512000000": 193,
+      "1000000000": 0,
+      "2000000000": 0,
+      "5000000000": 0,
+      "10000000000": 0
+    },
+    "bytes_in": {
+      "total": 0,
+      "mean": 0
+    },
+    "bytes_out": {
+      "total": 111133111320,
+      "mean": 4116
+    },
+    "earliest": "2026-10-01T10:43:09.084019687Z",
+    "latest": "2026-10-01T11:13:09.084865429Z",
+    "end": "2026-10-01T11:13:09.087742494Z",
+    "duration": 1800000845742,
+    "wait": 2877065,
+    "requests": 27000270,
+    "rate": 15000.142952082833,
+    "throughput": 15000.118976362262,
+    "success": 1,
+    "status_codes": {
+      "200": 27000270
+    },
+    "errors": []
+  },
+  "server_before": {
+    "pid": 60584,
+    "cpu_ticks": 17,
+    "rss_kib": 4500,
+    "hwm_kib": 4500,
+    "fds": 10,
+    "threads": 3
+  },
+  "server_after": {
+    "pid": 60584,
+    "cpu_ticks": 81485,
+    "rss_kib": 185080,
+    "hwm_kib": 185080,
+    "fds": 1049,
+    "threads": 3
+  },
+  "server_cpu_seconds": 814.68,
+  "server_cpu_percent_of_one_core": 45.13519634771794,
+  "server_peak_rss_kib": 185080,
+  "server_peak_fds": 6315,
+  "client_cpu_seconds_total": 2476.02583,
+  "client_cpu_seconds": {
+    "attack": 2205.91,
+    "reporter": 269.99
+  },
+  "commands": {
+    "attack": [
+      "taskset",
+      "-c",
+      "2,3",
+      "/workspace/test-tools/http-capacity-tools/vegeta",
+      "attack",
+      "-targets=/workspace/test-tools/http-capacity-review/soak-30m/soak/target.txt",
+      "-rate=15000/s",
+      "-duration=1800s",
+      "-workers=32",
+      "-max-workers=4096",
+      "-max-body=0",
+      "-timeout=5s",
+      "-http2=false",
+      "-keepalive=true"
+    ],
+    "report": [
+      "taskset",
+      "-c",
+      "2,3",
+      "/workspace/test-tools/http-capacity-tools/vegeta",
+      "report",
+      "-type=json",
+      "-buckets=[0,1ms,2ms,4ms,8ms,16ms,32ms,64ms,128ms,256ms,512ms,1s,2s,5s,10s]",
+      "-output=/workspace/test-tools/http-capacity-review/soak-30m/soak/reports.jsonl",
+      "-every=60s"
+    ]
+  },
+  "recovery": [
+    {
+      "elapsed_s": 0.017489100006059743,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81486,
+        "rss_kib": 185084,
+        "hwm_kib": 185084,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 17.370607994962484
+    },
+    {
+      "elapsed_s": 0.5206659830000717,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81486,
+        "rss_kib": 185088,
+        "hwm_kib": 185088,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.0228510072920471
+    },
+    {
+      "elapsed_s": 1.023992474001716,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81486,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.9487319912295789
+    },
+    {
+      "elapsed_s": 1.5276141830108827,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81486,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.1445480049587786
+    },
+    {
+      "elapsed_s": 2.0313380370062077,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81486,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.9207699913531542
+    },
+    {
+      "elapsed_s": 2.535988322008052,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.8505159969208762
+    },
+    {
+      "elapsed_s": 3.040175091009587,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.5314199990825728
+    },
+    {
+      "elapsed_s": 3.543239751001238,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7891840068623424
+    },
+    {
+      "elapsed_s": 4.046546262004995,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.0197550000157207
+    },
+    {
+      "elapsed_s": 4.5499370400066255,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.9943599870894104
+    },
+    {
+      "elapsed_s": 5.053672734997235,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1050,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.2871439976152033
+    },
+    {
+      "elapsed_s": 5.557168990009814,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.043510012095794
+    },
+    {
+      "elapsed_s": 6.060499913000967,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.9855609969235957
+    },
+    {
+      "elapsed_s": 6.563798282004427,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.9968830127036199
+    },
+    {
+      "elapsed_s": 7.0670959720009705,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.926250999327749
+    },
+    {
+      "elapsed_s": 7.570016238008975,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8366429974557832
+    },
+    {
+      "elapsed_s": 8.073049644008279,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8689329988555983
+    },
+    {
+      "elapsed_s": 8.576525744007085,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1050,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.21106299047824
+    },
+    {
+      "elapsed_s": 9.08010098199884,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.2306889984756708
+    },
+    {
+      "elapsed_s": 9.583751716010738,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.1875479976879433
+    },
+    {
+      "elapsed_s": 10.087619669007836,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.3126620033290237
+    },
+    {
+      "elapsed_s": 10.59084953200363,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1050,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7868200045777485
+    },
+    {
+      "elapsed_s": 11.094174035999458,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7967889978317544
+    },
+    {
+      "elapsed_s": 11.597660668005119,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.9250480070477352
+    },
+    {
+      "elapsed_s": 12.10088155399717,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81487,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8082610002020374
+    },
+    {
+      "elapsed_s": 12.603980936008156,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.793542989413254
+    },
+    {
+      "elapsed_s": 13.107305197001551,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7995140040293336
+    },
+    {
+      "elapsed_s": 13.610639888007427,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8379450009670109
+    },
+    {
+      "elapsed_s": 14.113973006999004,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.847071991302073
+    },
+    {
+      "elapsed_s": 14.620776287003537,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.1047540028812364
+    },
+    {
+      "elapsed_s": 15.124667159005185,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.0480459895916283
+    },
+    {
+      "elapsed_s": 15.628272021000157,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.1555910023162141
+    },
+    {
+      "elapsed_s": 16.131624811008805,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1050,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8017280051717535
+    },
+    {
+      "elapsed_s": 16.634926764003467,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8165760082192719
+    },
+    {
+      "elapsed_s": 17.137970041003427,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.6253589963307604
+    },
+    {
+      "elapsed_s": 17.64110066399735,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7663720025448129
+    },
+    {
+      "elapsed_s": 18.144362691004062,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8441069949185476
+    },
+    {
+      "elapsed_s": 18.647512123003253,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7756389968562871
+    },
+    {
+      "elapsed_s": 19.15095457600546,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7801269966876134
+    },
+    {
+      "elapsed_s": 19.654736336000497,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.769056990975514
+    },
+    {
+      "elapsed_s": 20.15790466600447,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7097560010151938
+    },
+    {
+      "elapsed_s": 20.661299500003224,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7995740015758201
+    },
+    {
+      "elapsed_s": 21.164741626009345,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.946408006711863
+    },
+    {
+      "elapsed_s": 21.667958204008755,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7812389958417043
+    },
+    {
+      "elapsed_s": 22.171444478997728,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8381950028706342
+    },
+    {
+      "elapsed_s": 22.675028320009005,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7279299898073077
+    },
+    {
+      "elapsed_s": 23.17832031499711,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8180580043699592
+    },
+    {
+      "elapsed_s": 23.68166541600658,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7858769968152046
+    },
+    {
+      "elapsed_s": 24.184947276007733,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.9060309967026114
+    },
+    {
+      "elapsed_s": 24.688248924998334,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8793309971224517
+    },
+    {
+      "elapsed_s": 25.1913727880019,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7296719995792955
+    },
+    {
+      "elapsed_s": 25.69450118399982,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7460829947376624
+    },
+    {
+      "elapsed_s": 26.197802816008334,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8589539938839152
+    },
+    {
+      "elapsed_s": 26.701076420009485,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7687559991609305
+    },
+    {
+      "elapsed_s": 27.204293492002762,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8245889912359416
+    },
+    {
+      "elapsed_s": 27.70744636299787,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8228570077335462
+    },
+    {
+      "elapsed_s": 28.210872474010102,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1050,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7930410065455362
+    },
+    {
+      "elapsed_s": 28.714272110009915,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8681619947310537
+    },
+    {
+      "elapsed_s": 29.217424554997706,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7163590053096414
+    },
+    {
+      "elapsed_s": 29.72074385000451,
+      "server": {
+        "pid": 60584,
+        "cpu_ticks": 81488,
+        "rss_kib": 185092,
+        "hwm_kib": 185092,
+        "fds": 1049,
+        "threads": 3
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8835889893816784
+    }
+  ]
+}

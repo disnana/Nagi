@@ -1,0 +1,9 @@
+{
+  "name": "wrk",
+  "version": "4.2.0",
+  "source_url": "https://github.com/wg/wrk",
+  "source_commit": "a211dd5a7050b1f9e8a9870b95513060e72ac4a0",
+  "build_command": "taskset -c 1 make -j2 WITH_OPENSSL=/usr",
+  "binary_sha256": "c443691c5591982b71304f351f5fd828dad26caaf1e91386eae8a439ce41da12",
+  "compiler": "gcc (Debian 14.2.0-19) 14.2.0"
+}

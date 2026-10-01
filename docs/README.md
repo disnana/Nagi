@@ -37,7 +37,7 @@
 - [目的と実装範囲](introduction.md)、[今後の開発](roadmap.md)
 - [メモリモデル](memory-model.md)、[コンパイラ内部](compiler-internals.md)、[FFI](ffi.md)
 - [actor](actor.md)、[Supervisor](supervisor.md)、[queue](queue.md)：現在は試験用の組み込み関数
-- [性能の読み方](performance.md)、[測定結果](../PERFORMANCE.md)
+- [性能の読み方](performance.md)、[測定結果](../PERFORMANCE.md)、[通信の負荷試験](http-capacity.md)
 
 ## サンプルの読み方
 

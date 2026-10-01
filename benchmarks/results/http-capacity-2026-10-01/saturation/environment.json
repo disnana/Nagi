@@ -1,0 +1,22 @@
+{
+  "date_utc": "2026-10-01T11:55:30Z",
+  "source_commit": "c602abb349641cf1d5a274e2221e33d29a0acea4",
+  "binary_sha256": "934ddff23a6edf1588140d468cd4cc509d6e3c2aa8cc535860157efb3df9c511",
+  "load_generator_sha256": "c443691c5591982b71304f351f5fd828dad26caaf1e91386eae8a439ce41da12",
+  "harness_sha256": "388f26b447496b63e511d338d3333192c2595153912c58d87ec6722a98597a80",
+  "http_helpers_sha256": "f6af615081f8139bd83c8d6727e94777f18e0651c6b3fd8579433791a66666b7",
+  "lua_sha256": "83504dd98edf2a90487399472f86b4f10148736e6d238a7dfa4d95f83534e367",
+  "server_cpus": "0",
+  "client_cpus": "2,3",
+  "server_workers": 1,
+  "client_threads": 2,
+  "fd_limits": [
+    16384,
+    16384
+  ],
+  "cpu_quota": "400000 100000",
+  "limitations": [
+    "fixed-concurrency closed-loop; excludes unsent arrivals",
+    "HTTP/1.1 without TLS on loopback"
+  ]
+}

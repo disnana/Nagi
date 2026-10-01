@@ -1,0 +1,313 @@
+"""Measure the local CRUD sample with a paced client and bounded resources.
+
+Linux only. Requires a built nagi-crud and Vegeta v12.13.0. No runtime settings
+or OS limits are changed; all traffic stays on 127.0.0.1:8080.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import platform
+import resource
+import signal
+import socket
+import subprocess
+import time
+import tomllib
+import urllib.request
+from contextlib import contextmanager
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+URL = "http://127.0.0.1:8080"
+BUCKETS = "[0,1ms,2ms,4ms,8ms,16ms,32ms,64ms,128ms,256ms,512ms,1s,2s,5s,10s]"
+CASES = {
+    "health": ("GET", "/health", None, [10000, 30000, 60000, 100000]),
+    "json_4k": ("POST", "/echo", {"name": "x" * 4096, "age": 18}, [5000, 10000, 15000, 20000, 30000, 50000]),
+    "db_read": ("GET", "/users/1", None, [5000, 10000, 20000, 40000]),
+    "db_write": ("POST", "/users", {"name": "alice", "age": 18}, [1000, 5000, 10000, 20000]),
+}
+
+
+def save(path: Path, value: object) -> None:
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def proc(pid: int) -> dict:
+    try:
+        folder = Path(f"/proc/{pid}")
+        stat = (folder / "stat").read_text().rsplit(")", 1)[1].split()
+        status = dict(line.split(":", 1) for line in (folder / "status").read_text().splitlines())
+        return {
+            "pid": pid,
+            "cpu_ticks": int(stat[11]) + int(stat[12]),
+            "rss_kib": int(status["VmRSS"].split()[0]),
+            "hwm_kib": int(status["VmHWM"].split()[0]),
+            "fds": len(list((folder / "fd").iterdir())),
+            "threads": int(status["Threads"]),
+        }
+    except (OSError, KeyError, IndexError):
+        return {"pid": pid, "exited": True}
+
+
+def cgroup() -> dict:
+    base = Path("/sys/fs/cgroup")
+    return {
+        "memory_current": int((base / "memory.current").read_text()),
+        "cpu_stat": dict((name, int(value)) for name, value in
+                         (line.split() for line in (base / "cpu.stat").read_text().splitlines())),
+    }
+
+
+def request(method: str, path: str, body=None) -> tuple[int, bytes, float]:
+    data = None if body is None else json.dumps(body, separators=(",", ":")).encode()
+    req = urllib.request.Request(URL + path, data=data, method=method,
+                                 headers={"Content-Type": "application/json"})
+    start = time.monotonic()
+    with urllib.request.urlopen(req, timeout=5) as response:
+        return response.status, response.read(), (time.monotonic() - start) * 1000
+
+
+def recovery(server: subprocess.Popen, seconds: int) -> list[dict]:
+    rows = []
+    start = time.monotonic()
+    while time.monotonic() - start < seconds:
+        try:
+            status, body, latency = request("GET", "/health")
+            result = {"status": status, "body_ok": body == b"ok", "latency_ms": latency}
+        except Exception as error:
+            result = {"error": type(error).__name__ + ": " + str(error)}
+        rows.append({"elapsed_s": time.monotonic() - start, "server": proc(server.pid), **result})
+        time.sleep(.5)
+    return rows
+
+
+def stop(process: subprocess.Popen) -> None:
+    if process.poll() is None:
+        process.send_signal(signal.SIGINT)
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
+@contextmanager
+def server_for(args, folder: Path):
+    # Fail before launching a server if another application owns this port.
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 8080))
+    environment = dict(os.environ, NAGI_THREADS="1", NAGI_DB=":memory:")
+    with (folder / "server.log").open("w") as log:
+        server = subprocess.Popen(["taskset", "-c", args.server_cpus, str(args.binary)],
+                                  env=environment, stdout=log, stderr=log)
+        try:
+            for _ in range(100):
+                if server.poll() is not None:
+                    raise RuntimeError("Server exited: " + (folder / "server.log").read_text())
+                try:
+                    assert request("GET", "/health")[:2] == (200, b"ok")
+                    break
+                except OSError:
+                    time.sleep(.05)
+            else:
+                raise RuntimeError("Server did not become ready")
+            # Keep the DB read workload fixed. Write workloads use a fresh DB.
+            assert json.loads(request("POST", "/users", {"name": "alice", "age": 18})[1])["id"] == 1
+            assert json.loads(request("GET", "/users/1")[1]) == {"id": 1, "name": "alice", "age": 18}
+            echo = {"name": "x" * 4096, "age": 18}
+            assert json.loads(request("POST", "/echo", echo)[1]) == echo
+            yield server
+        finally:
+            stop(server)
+
+
+def target(folder: Path, case: str) -> Path:
+    method, path, body, _ = CASES[case]
+    lines = [f"{method} {URL}{path}"]
+    if body is not None:
+        payload = folder / "body.json"
+        payload.write_text(json.dumps(body, separators=(",", ":")))
+        lines += ["Content-Type: application/json", "@" + str(payload)]
+    file = folder / "target.txt"
+    file.write_text("\n".join(lines) + "\n")
+    return file
+
+
+def load(args, folder: Path, server: subprocess.Popen, case: str, rate: int, seconds: int,
+         sample_seconds: float, report_seconds: int = 0) -> dict:
+    folder.mkdir(parents=True, exist_ok=True)
+    report_file = folder / "reports.jsonl"
+    prefix = ["taskset", "-c", args.client_cpus, str(args.vegeta)]
+    environment = dict(os.environ, GOMAXPROCS=str(len(args.client_cpus.split(","))))
+    attack_args = prefix + ["attack", "-targets=" + str(target(folder, case)),
+                           f"-rate={rate}/s", f"-duration={seconds}s", "-workers=32",
+                           f"-max-workers={args.max_workers}", "-max-body=0", "-timeout=5s",
+                           "-http2=false", "-keepalive=true"]
+    report_args = prefix + ["report", "-type=json", "-buckets=" + BUCKETS,
+                           "-output=" + str(report_file)]
+    if report_seconds:
+        report_args += [f"-every={report_seconds}s"]
+    before = proc(server.pid)
+    children_before = resource.getrusage(resource.RUSAGE_CHILDREN)
+    start = time.monotonic()
+    attack = reporter = None
+    samples = []
+    aborted = None
+    with (folder / "attack.stderr").open("w") as attack_log, (folder / "report.stderr").open("w") as report_log:
+        try:
+            reporter = subprocess.Popen(report_args, stdin=subprocess.PIPE, stderr=report_log, env=environment)
+            attack = subprocess.Popen(attack_args, stdout=reporter.stdin, stderr=attack_log, env=environment)
+            reporter.stdin.close()
+            last_progress = -1
+            with (folder / "resources.jsonl").open("w") as resources:
+                while attack.poll() is None:
+                    elapsed = time.monotonic() - start
+                    sample = {"elapsed_s": elapsed, "server": proc(server.pid),
+                              "attack": proc(attack.pid), "reporter": proc(reporter.pid),
+                              "cgroup": cgroup()}
+                    samples.append(sample)
+                    resources.write(json.dumps(sample) + "\n")
+                    resources.flush()
+                    if (sample["server"].get("exited") or
+                            sample["server"].get("rss_kib", 0) > 2 * 1024 * 1024 or
+                            sample["cgroup"]["memory_current"] > args.memory_ceiling or
+                            elapsed > seconds + 30):
+                        aborted = "server exit, resource ceiling, or client time budget reached"
+                        stop(attack)
+                        break
+                    minute = int(elapsed // 60)
+                    if report_seconds and minute > last_progress:
+                        print(json.dumps({"phase": "soak", "elapsed_s": round(elapsed),
+                                          "rss_mib": round(sample["server"].get("rss_kib", 0) / 1024, 2),
+                                          "fds": sample["server"].get("fds")}), flush=True)
+                        last_progress = minute
+                    time.sleep(sample_seconds)
+            attack.wait(timeout=10)
+            reporter.wait(timeout=15)
+            if attack.returncode or reporter.returncode:
+                raise RuntimeError("Vegeta failed; see stderr files in " + str(folder))
+        finally:
+            if attack is not None:
+                stop(attack)
+            if reporter is not None:
+                stop(reporter)
+    reports = [json.loads(line) for line in report_file.read_text().splitlines() if line.strip()]
+    if not reports:
+        raise RuntimeError("No load results")
+    final = reports[-1]
+    rows = [sample["server"] for sample in samples if "cpu_ticks" in sample["server"]]
+    after = proc(server.pid)
+    cpu = (after.get("cpu_ticks", before["cpu_ticks"]) - before["cpu_ticks"]) / os.sysconf("SC_CLK_TCK")
+    wall = time.monotonic() - start
+    children_after = resource.getrusage(resource.RUSAGE_CHILDREN)
+    result = {
+        "case": case, "target_rps": rate, "duration_s": seconds, "wall_seconds": wall,
+        "client_max_workers": args.max_workers, "aborted": aborted,
+        "metrics": final, "server_before": before, "server_after": after,
+        "server_cpu_seconds": cpu, "server_cpu_percent_of_one_core": cpu / wall * 100,
+        "server_peak_rss_kib": max(row["rss_kib"] for row in rows),
+        "server_peak_fds": max(row["fds"] for row in rows),
+        "client_cpu_seconds_total": (children_after.ru_utime + children_after.ru_stime -
+                                     children_before.ru_utime - children_before.ru_stime),
+        "client_cpu_seconds": {
+            name: ((max(sample[name].get("cpu_ticks", 0) for sample in samples) -
+                    min(sample[name]["cpu_ticks"] for sample in samples if "cpu_ticks" in sample[name])) /
+                   os.sysconf("SC_CLK_TCK")) for name in ("attack", "reporter")
+        },
+        "commands": {"attack": attack_args, "report": report_args},
+    }
+    save(folder / "result.json", result)
+    return result
+
+
+def environment(args) -> dict:
+    cpu = next(line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines()
+               if line.startswith("model name"))
+    source_files = [ROOT / "Cargo.toml", ROOT / "Cargo.lock", ROOT / "runtime/Cargo.toml", ROOT / "examples/crud.nagi"]
+    source_files += sorted((ROOT / "runtime").rglob("*.rs"))
+    source_files += sorted((ROOT / "compiler/src").rglob("*.rs"))
+    return {
+        "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "nagi_version": tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"],
+        "os": platform.platform(), "cpu": cpu, "affinity": sorted(os.sched_getaffinity(0)),
+        "server_cpus": args.server_cpus, "client_cpus": args.client_cpus, "server_workers": 1,
+        "fd_limits": resource.getrlimit(resource.RLIMIT_NOFILE),
+        "cpu_quota": Path("/sys/fs/cgroup/cpu.max").read_text().strip(),
+        "memory_limit": Path("/sys/fs/cgroup/memory.max").read_text().strip(),
+        "ephemeral_ports": Path("/proc/sys/net/ipv4/ip_local_port_range").read_text().strip(),
+        "vegeta": subprocess.check_output([str(args.vegeta), "-version"], text=True).strip(),
+        "binary_sha256": hashlib.sha256(args.binary.read_bytes()).hexdigest(),
+        "load_generator_sha256": hashlib.sha256(args.vegeta.read_bytes()).hexdigest(),
+        "harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "source_sha256": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
+                          for path in source_files},
+        "limitations": ["local HTTP/1.1 without TLS", "SQLite in-memory, one DB worker",
+                        "paced client with bounded workers; inspect achieved rate",
+                        "latencies measure dispatched requests, not unsent arrivals"],
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--binary", type=Path, default=ROOT / "native-target/release/nagi-crud")
+    parser.add_argument("--vegeta", type=Path, required=True)
+    parser.add_argument("--out", type=Path, default=ROOT / "build/http-capacity")
+    parser.add_argument("--phase", choices=["limits", "soak", "all"], default="all")
+    parser.add_argument("--duration", type=int, default=15)
+    parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--soak-seconds", type=int, default=1800)
+    parser.add_argument("--soak-rate", type=int, default=15000)
+    parser.add_argument("--max-workers", type=int, default=4096)
+    parser.add_argument("--server-cpus", default="0")
+    parser.add_argument("--client-cpus", default="2,3")
+    parser.add_argument("--memory-ceiling", type=int, default=12 * 1024 ** 3)
+    args = parser.parse_args()
+    if min(args.duration, args.repeats, args.soak_seconds, args.soak_rate, args.max_workers) < 1:
+        parser.error("Durations, repeats, rates, and worker count must be positive")
+    affinity = os.sched_getaffinity(0)
+    server_cpus = {int(value) for value in args.server_cpus.split(",")}
+    client_cpus = {int(value) for value in args.client_cpus.split(",")}
+    if server_cpus & client_cpus or not (server_cpus | client_cpus) <= affinity:
+        parser.error("Use disjoint server/client CPUs within the available affinity")
+    args.binary, args.vegeta, args.out = (path.resolve() for path in (args.binary, args.vegeta, args.out))
+    args.out.mkdir(parents=True, exist_ok=True)
+    if (args.out / "environment.json").exists():
+        parser.error("Choose a new output directory; existing measurements are never overwritten")
+    save(args.out / "environment.json", environment(args))
+    if args.phase in {"limits", "all"}:
+        results = []
+        for case, (_, _, _, rates) in CASES.items():
+            for rate in rates:
+                for repeat in range(args.repeats):
+                    folder = args.out / f"{case}-{rate}-{repeat}"
+                    folder.mkdir()
+                    with server_for(args, folder) as server:
+                        load(args, folder / "warmup", server, case, min(rate, 1000), 2, .5)
+                        row = load(args, folder, server, case, rate, args.duration, .5)
+                        row["repeat"] = repeat
+                        row["recovery"] = recovery(server, 2)
+                    results.append(row)
+                    save(args.out / "limits.json", results)
+                    print(json.dumps({"phase": "limits", "case": case, "target_rps": rate,
+                                      "repeat": repeat, "actual_rps": round(row["metrics"]["rate"]),
+                                      "success_rps": round(row["metrics"]["throughput"]),
+                                      "p99_ms": round(row["metrics"]["latencies"]["99th"] / 1e6, 2),
+                                      "success": row["metrics"]["success"]}), flush=True)
+    if args.phase in {"soak", "all"}:
+        folder = args.out / "soak"
+        folder.mkdir()
+        with server_for(args, folder) as server:
+            load(args, folder / "warmup", server, "json_4k", 1000, 3, .5)
+            row = load(args, folder, server, "json_4k", args.soak_rate, args.soak_seconds, 5, 60)
+            row["recovery"] = recovery(server, 30)
+        save(args.out / "soak.json", row)
+        print(json.dumps({"phase": "soak_complete", "requests": row["metrics"]["requests"],
+                          "success": row["metrics"]["success"], "aborted": row["aborted"]}), flush=True)
+
+
+if __name__ == "__main__":
+    main()

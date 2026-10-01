@@ -37,7 +37,7 @@ These pages are intended for reading after learning the basic language.
 - [Goals and scope](introduction.md), [development roadmap](roadmap.md)
 - [Memory model](memory-model.md), [compiler internals](compiler-internals.md), [FFI](ffi.md)
 - [Actors](actor.md), [supervisors](supervisor.md), and [queues](queue.md): currently experimental built-in functions
-- [Reading benchmarks](performance.md), [measurements](measurements.md)
+- [Reading benchmarks](performance.md), [measurements](measurements.md), [HTTP load tests](http-capacity.md)
 
 ## Reading the examples
 
