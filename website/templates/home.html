@@ -1,0 +1,46 @@
+<main id="main" class="landing">
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-copy">
+      <p class="eyebrow">開発中のプログラミング言語</p>
+      <h1 id="hero-title">読みやすいコードを、<br>実行ファイルに。</h1>
+      <p class="hero-description">Nagi（ナギ）は、コードの読みやすさと実行時の効率を大切にしている言語です。小さなプログラムから、データを読み書きするWeb APIまで試せます。</p>
+      <div class="hero-actions"><a class="button" href="{{base}}docs/getting-started/">まずは動かしてみる</a><a class="text-link" href="{{base}}docs/language-guide/">書き方を読む</a></div>
+      <p class="hero-note">現在は0.1の試作段階です。<a href="#status">開発状況を見る</a></p>
+    </div>
+    <div class="example-panel">
+      <div class="example-label"><span>double.nagi</span><span>数を2倍にする</span></div>
+      {{example}}
+      <div class="example-result"><span>このコードの出力</span><samp>42</samp></div>
+      <p class="example-caption"><code>double</code>は数を2倍にする関数。<code>main</code>から21を渡して呼び出すと、42を表示します。</p>
+    </div>
+  </section>
+
+  <section class="principles section" aria-labelledby="principles-title">
+    <div class="section-heading"><p class="eyebrow">Nagiの考え方</p><h2 id="principles-title">書くときも、読むときも、<br class="mobile-break">見通しよく。</h2></div>
+    <div class="principle-list">
+      <article><h3>書き方は、素直に。</h3><p>字下げで処理のまとまりを表します。変数の型は、値から分かるところをコンパイラが調べます。</p><a href="{{base}}docs/language-guide/">基本の書き方</a></article>
+      <article><h3>動かす前に、確かめる。</h3><p>値の型や、データを渡したあとの使い方を検査します。失敗する処理は、成功と失敗に分けて扱えます。</p><a href="{{base}}docs/error-handling/">失敗の扱い方</a></article>
+      <article><h3>変換した先も、読める。</h3><p>NagiはコードをLow、Rustへ変換して実行ファイルにします。必要になったらLowを読み、関数を差し替えられます。</p><a href="{{base}}docs/low-language/">HighとLowについて</a></article>
+    </div>
+  </section>
+
+  <section class="use-cases section" aria-labelledby="use-cases-title">
+    <div class="section-heading"><p class="eyebrow">いま試せること</p><h2 id="use-cases-title">小さく書いて、<br class="mobile-break">動きを確かめる。</h2></div>
+    <div class="use-case-list">
+      <article><h3>まずは1ファイルから</h3><p>文字や数字を表示するところから、関数、配列、データのまとまりへ。動くサンプルを使って順番に学べます。</p><a class="text-link" href="{{base}}docs/getting-started/">準備と最初の実行</a></article>
+      <article><h3>Web APIとデータ保存</h3><p>HTTPで受け取ったJSONを型のあるデータとして扱い、SQLiteへ保存して、結果を返すサンプルがあります。</p><a class="text-link" href="{{base}}docs/http/">HTTPとHTMLの入門</a></article>
+    </div>
+    <p class="editor-note">VS Codeでは、変数の型の表示、フィールド補完、定義への移動を使えます。<a href="{{base}}docs/editor/">エディターで試す</a></p>
+  </section>
+
+  <section class="name-section section" id="name" aria-labelledby="name-title">
+    <div class="section-heading"><p class="eyebrow">名前の由来</p><h2 id="name-title">Nagiは、日本語の「凪」。</h2></div>
+    <blockquote><p>内部は激しく動いていても、<br>表面は凪のように穏やか。</p></blockquote>
+    <p>この考え方を、Nagiという名前に込めています。内部で多くの処理が動いていても、書く人が触れるコードは穏やかで、見通しがよいものにしたい。その思いを軸に開発しています。</p>
+  </section>
+
+  <section class="status-section section" id="status" aria-labelledby="status-title">
+    <div><p class="eyebrow">開発状況</p><h2 id="status-title">少しずつ、形にしています。</h2><p>Nagiは0.1の試作段階です。文法や機能は開発中で、今後変わることがあります。Docsには、現在使える機能と未実装の機能を分けて記載しています。</p><p>Linux x86_64とWindowsでビルド・実行を確認しています。macOSは未検証です。試すにはRust/CargoとCのビルド環境が必要です。</p></div>
+    <nav class="status-links" aria-label="開発の資料"><a href="{{base}}docs/introduction/">目的と実装範囲</a><a href="{{base}}docs/roadmap/">今後の開発</a><a href="{{base}}docs/performance/">性能の読み方</a><a href="{{repo}}">ソースコードを見る</a></nav>
+  </section>
+</main>

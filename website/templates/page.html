@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{description}}">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>{{title}}</title>
+  <link rel="canonical" href="{{canonical}}">
+  <link rel="icon" type="image/svg+xml" href="{{base}}assets/favicon.svg">
+  <link rel="stylesheet" href="{{base}}assets/site.css">
+  <link rel="stylesheet" href="{{base}}assets/highlight.css">
+  <script src="{{base}}assets/site.js" defer></script>
+</head>
+<body class="{{body_class}}">
+  <a class="skip-link" href="#main">本文へ移動</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="{{base}}" aria-label="Nagi ホーム"><span class="brand-mark" aria-hidden="true">N</span>Nagi</a>
+      <nav class="top-nav" aria-label="サイトのメニュー">
+        <a href="{{base}}docs/getting-started/">はじめる</a>
+        <a href="{{base}}docs/">Docs</a>
+        <a href="{{repo}}">GitHub</a>
+      </nav>
+    </div>
+  </header>
+  {{layout}}
+  <footer class="site-footer">
+    <div class="footer-inner"><span>Nagi 0.1 · 開発中</span><nav aria-label="フッター"><a href="{{base}}docs/">Docs</a><a href="{{repo}}">GitHub</a><a href="{{repo}}/blob/{{ref}}/LICENSE">MIT License</a></nav></div>
+  </footer>
+  <span class="sr-only" id="copy-status" role="status" aria-live="polite"></span>
+</body>
+</html>
