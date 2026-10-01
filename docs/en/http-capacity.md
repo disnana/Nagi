@@ -120,7 +120,7 @@ We observed 100 connections in each condition concurrently for 120 seconds. This
 
 ## Follow-up tests with the wait deadline
 
-On October 1, 2026 (UTC), we compared Nagi 0.1.4 at [`1c013868`](https://github.com/disnana/Nagi/commit/1c01386894f7c156909771f4e6554292dd664243) with an implementation that adds a ten-second HTTP request-wait deadline. It uses unmodified Hyper 1.11.0. The results below come from these follow-up tests.
+On October 1, 2026 (UTC), we compared Nagi 0.1.4 at [`1c013868`](https://github.com/disnana/Nagi/commit/1c01386894f7c156909771f4e6554292dd664243) with an implementation that adds a ten-second HTTP request-wait deadline. It uses unmodified Hyper 1.11.1. The results below come from these follow-up tests.
 
 ### Connection recovery during regular traffic
 

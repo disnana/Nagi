@@ -26,7 +26,7 @@
   ],
   "platform": "Linux x86_64",
   "rust_version": "1.98.1",
-  "hyper_version": "1.11.0",
+  "hyper_version": "1.11.1",
   "hyper_util_version": "0.1.21",
   "server_workers": 1,
   "server_cpu": "0",
