@@ -4,9 +4,20 @@
 
 このページでは、Nagiのコンパイラを用意して、1ファイルのプログラムを動かします。コマンドは**このリポジトリのルート**で実行してください。
 
+コンパイラは、書いたコードを実行ファイルへ変換する道具です。以下のコマンドはターミナルに入力します。WindowsならPowerShell、Linuxなら端末アプリを使います。「リポジトリのルート」は、取得したNagiのフォルダーのことです。
+
+まだソースを取得していない場合は、[Git](https://git-scm.com/)を用意して次を実行します。
+
+```bash
+git clone https://github.com/disnana/Nagi.git
+cd Nagi
+```
+
+Gitを使わず、GitHubの「Code → Download ZIP」から取得することもできます。ZIPを展開したフォルダーをターミナルで開いてください。
+
 ## 1. コンパイラをビルドする
 
-必要なものはRust / CargoとCのビルド環境です。ランタイムに同梱されたSQLiteのCコードをビルドするため、Rustだけでは足りません。最初のビルドではCargoが依存パッケージを取得します。
+必要なものは[Rust / Cargo](https://www.rust-lang.org/tools/install)とCのビルド環境です。RustはNagiのコンパイラや生成したコードをビルドするために使い、CargoはRustのビルド・依存パッケージを管理します。ランタイムに同梱されたSQLiteのCコードをビルドするため、Rustだけでは足りません。最初のビルドではCargoが依存パッケージを取得します。
 
 WindowsではRustのMSVC toolchainとVisual Studio Build ToolsのC++ビルド環境を使います。このリポジトリではWindowsネイティブでコンパイラとデモexeのビルド・実行を確認しています。LinuxではCコンパイラを用意してください。WSL2もLinuxの手順です。
 
