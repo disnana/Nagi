@@ -10,10 +10,10 @@ Download and extract the Nagi archive for your OS from [GitHub Releases](https:/
 
 | Your system | File to download |
 |---|---|
-| Windows x64 | `nagi-0.1.3-windows-x86_64.zip` |
-| Linux x86_64 | `nagi-0.1.3-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `nagi-0.1.3-macos-arm64.tar.gz` |
-| macOS Intel | `nagi-0.1.3-macos-x86_64.tar.gz` |
+| Windows x64 | `nagi-0.1.4-windows-x86_64.zip` |
+| Linux x86_64 | `nagi-0.1.4-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `nagi-0.1.4-macos-arm64.tar.gz` |
+| macOS Intel | `nagi-0.1.4-macos-x86_64.tar.gz` |
 
 These archives include the compiler and source. Keep the folder structure, including `runtime/`. GitHub's **Source code** downloads contain only source. The VS Code extension is a separate `nagi-language-0.1.8.vsix` file.
 

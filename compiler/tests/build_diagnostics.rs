@@ -67,6 +67,41 @@ fn stderr(output: &Output) -> String {
     String::from_utf8(output.stderr.clone()).unwrap()
 }
 
+#[test]
+fn overflowing_f32_is_rejected_at_the_source_before_backend_build() {
+    for (name, source) in [
+        ("main.nagi", "def main():\n    value: f32 = 400000000000000000000000000000000000000.0\n"),
+        ("main.low", "fn main() -> unit {\n    let value: f32 = 400000000000000000000000000000000000000.0;\n}\n"),
+    ] {
+        let f = Fixture::new();
+        f.write(name, source);
+        for command in ["check", "build"] {
+            let output = f.cli(&[command, name]);
+            assert!(!output.status.success());
+            let error = stderr(&output);
+            assert!(error.contains("浮動小数リテラルが範囲外"), "{error}");
+            assert!(error.contains(&format!("{name}:2")), "{error}");
+            assert!(!f.0.join("build/main/src/main.rs").exists());
+        }
+    }
+}
+
+#[test]
+fn finite_f32_extremes_compile_and_run_after_lowering() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def maximum() -> f32:\n    return 340282346638528859811704183484516925440.0\ndef minimum() -> f32:\n    return -340282346638528859811704183484516925440.0\ndef main():\n    print(maximum())\n    print(minimum())\n");
+    let output = f.cli(&["run", "main.nagi"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let lines: Vec<_> = stdout.lines().collect();
+    assert!(lines.len() >= 2, "{stdout}");
+    let values: Vec<f32> = lines[lines.len() - 2..]
+        .iter()
+        .map(|line| line.parse().unwrap())
+        .collect();
+    assert_eq!(values, vec![f32::MAX, -f32::MAX]);
+}
+
 fn mapped_prefix(text: &str) -> &str {
     text.split(" note: Rust backend details (generated code):")
         .next()
