@@ -560,3 +560,33 @@ fn unix_backslashes_do_not_turn_a_dependency_path_into_the_generated_file() {
         "dependency diagnostic\n"
     );
 }
+
+#[test]
+fn source_names_with_spaces_and_dots_build_and_run() {
+    for name in [
+        "hello world.nagi",
+        "hello.world.nagi",
+        "凪 notes.nagi",
+        "résumé.notes.nagi",
+        "凪.nagi",
+        "résumé.nagi",
+        "hello_world.nagi",
+    ] {
+        let f = Fixture::new();
+        f.write(name, "def main():\n    print(42)\n");
+        let output = f.cli(&["run", name]);
+        assert!(output.status.success(), "{name}: {}", stderr(&output));
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap().lines().last(),
+            Some("42")
+        );
+    }
+    let f = Fixture::new();
+    f.write("hello world.low", "fn main() -> unit { print(42); }\n");
+    let output = f.cli(&["run", "hello world.low"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap().lines().last(),
+        Some("42")
+    );
+}

@@ -79,6 +79,8 @@ Linux / WSL2では、以降の`.\target\release\nagic.exe`を`./target/release/n
 
 `count = 3`の整数は`i64`になります。Pythonとして実行するコードではありません。ファイルの拡張子は`.nagi`にしてください。
 
+ファイル名に空白がある場合は、`nagic run "hello world.nagi"`のようにパスを引用符で囲んでください。
+
 ## 3. 検査とビルドを使い分ける
 
 | コマンド | 何をするか | 使う場面 |

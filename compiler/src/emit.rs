@@ -780,7 +780,15 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         path.file_stem()
             .unwrap()
             .to_string_lossy()
-            .replace('_', "-")
+            .chars()
+            .map(|ch| {
+                if ch.is_whitespace() || ch == '_' || ch == '.' {
+                    '-'
+                } else {
+                    ch
+                }
+            })
+            .collect::<String>()
     );
     let manifest=format!("[package]\nname={}\nversion=\"0.1.0\"\nedition=\"2021\"\n[workspace]\n[dependencies]\nnagi-runtime={{path={}}}\n[profile.release]\nopt-level=3\nlto=false\ncodegen-units=1\npanic=\"unwind\"\n",quote(&package),quote(&relative_path(&root.join("runtime"),&fs::canonicalize(&out).map_err(|e|e.to_string())?).display().to_string()));
     let dependencies = rust_deps
