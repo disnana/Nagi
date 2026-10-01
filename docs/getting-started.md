@@ -10,10 +10,10 @@
 
 | 使う環境 | ダウンロードするファイル |
 |---|---|
-| Windows x64 | `nagi-0.1.2-windows-x86_64.zip` |
-| Linux x86_64 | `nagi-0.1.2-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `nagi-0.1.2-macos-arm64.tar.gz` |
-| macOS Intel | `nagi-0.1.2-macos-x86_64.tar.gz` |
+| Windows x64 | `nagi-0.1.3-windows-x86_64.zip` |
+| Linux x86_64 | `nagi-0.1.3-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `nagi-0.1.3-macos-arm64.tar.gz` |
+| macOS Intel | `nagi-0.1.3-macos-x86_64.tar.gz` |
 
 この配布物はコンパイラとソースを含みます。`runtime/`などのフォルダーを保ったまま使ってください。GitHubが付ける「Source code」のファイルはソースだけです。VS Code拡張は別の`nagi-language-0.1.8.vsix`を使います。
 

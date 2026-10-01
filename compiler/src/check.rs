@@ -1,7 +1,7 @@
 use crate::ast::*;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct Var {
     ty: Type,
     moved: bool,
@@ -200,7 +200,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
     Ok(())
 }
 fn returns(ss: &[Stmt]) -> bool {
-    ss.last().is_some_and(|s| match &s.kind {
+    ss.iter().any(|s| match &s.kind {
         S::Return(_) => true,
         S::If(_, a, b) => returns(a) && returns(b),
         S::Match(_, arms) => arms.len() == 2 && arms.iter().all(|arm| returns(&arm.body)),
@@ -387,6 +387,100 @@ impl Checker {
             }
         }
     }
+    /// Only paths that reach the next statement contribute ownership state.
+    /// Reassignment can restore a value when every continuing path restores it.
+    fn join_moves(&mut self, paths: &[HashMap<String, Var>]) {
+        if paths.is_empty() {
+            return;
+        }
+        for (name, var) in &mut self.vars {
+            var.moved = paths.iter().any(|path| path[name].moved);
+            var.moved_fields = paths
+                .iter()
+                .flat_map(|path| path[name].moved_fields.iter().cloned())
+                .collect();
+        }
+    }
+    fn loop_body(
+        &mut self,
+        body: &mut [Stmt],
+        mut condition: Option<&mut Expr>,
+        binding: Option<(&str, Type)>,
+    ) -> Result<(), String> {
+        // Recheck the parsed body, not its annotated first pass: locals must be
+        // declared anew on each iteration. Only outer moves cross the backedge.
+        let template = body.to_vec();
+        let condition_template = condition.as_deref().cloned();
+        let mut header = self.vars.clone();
+        let mut first = true;
+        loop {
+            self.vars = header.clone();
+            let editor = self.editor;
+            if !first {
+                self.editor = false;
+            }
+            let checked = (|| {
+                if let Some(c) = condition.as_deref_mut() {
+                    let mut probe;
+                    let c = if first {
+                        c
+                    } else {
+                        probe = condition_template.clone().unwrap();
+                        &mut probe
+                    };
+                    let t = self.expr(c, Some(&Type::named("bool")))?;
+                    self.demand(&t, &Type::named("bool"), c.line)?;
+                }
+                // A while condition is also evaluated on its exit path. A for
+                // iterator was evaluated once before entering this helper.
+                let exit = self.vars.clone();
+                if let Some((name, ty)) = &binding {
+                    self.vars.insert(
+                        (*name).to_owned(),
+                        Var {
+                            ty: ty.clone(),
+                            moved: false,
+                            moved_fields: HashSet::new(),
+                            origin: None,
+                            param: false,
+                        },
+                    );
+                }
+                if first {
+                    self.block(body)?;
+                } else {
+                    self.block(&mut template.clone())?;
+                }
+                Ok::<_, String>((exit, self.vars.clone()))
+            })();
+            self.editor = editor;
+            let (exit, mut after) = checked.map_err(|message| {
+                if !first && message.contains("move後") && !message.contains("次の周回") {
+                    format!("{message}（ループの次の周回でも使用されるため）")
+                } else {
+                    message
+                }
+            })?;
+            if returns(body) {
+                self.vars = exit;
+                return Ok(());
+            }
+            if let Some((name, _)) = &binding {
+                after.remove(*name);
+            }
+            self.vars = header.clone();
+            self.merge_moves(after);
+            let next = self.vars.clone();
+            self.vars = exit;
+            if next == header {
+                return Ok(());
+            }
+            // This union only adds moved places from a finite source program.
+            // Stop when every possible iteration starts with the same state.
+            header = next;
+            first = false;
+        }
+    }
     fn block(&mut self, ss: &mut [Stmt]) -> Result<(), String> {
         for s in ss {
             if self.editor {
@@ -492,14 +586,17 @@ impl Checker {
                 self.demand(&t, &Type::named("bool"), s.line)?;
                 let am = self.child(a)?;
                 let bm = self.child(b)?;
-                self.merge_moves(am);
-                self.merge_moves(bm);
+                let mut paths = vec![];
+                if !returns(a) {
+                    paths.push(am);
+                }
+                if !returns(b) {
+                    paths.push(bm);
+                }
+                self.join_moves(&paths);
             }
             S::While(c, b) => {
-                let t = self.expr(c, Some(&Type::named("bool")))?;
-                self.demand(&t, &Type::named("bool"), s.line)?;
-                let m = self.child(b)?;
-                self.merge_moves(m);
+                self.loop_body(b, Some(c), None)?;
             }
             S::Match(value, arms) => {
                 let ty = self.expr(value, None)?;
@@ -550,12 +647,12 @@ impl Checker {
                     if let Some(name) = &arm.binding {
                         after.remove(name);
                     }
-                    moves.push(after);
+                    if !returns(&arm.body) {
+                        moves.push(after);
+                    }
                 }
                 self.vars = before;
-                for after in moves {
-                    self.merge_moves(after);
-                }
+                self.join_moves(&moves);
             }
             S::For(n, e, b) => {
                 let t = self.expr(e, None)?;
@@ -568,21 +665,7 @@ impl Checker {
                     return Err(error(s.line, "0.1のfor要素はprimitiveに限定されています"));
                 }
                 s.binding_type = Some(elem.clone());
-                let before = self.vars.clone();
-                self.vars.insert(
-                    n.clone(),
-                    Var {
-                        ty: elem,
-                        moved: false,
-                        moved_fields: HashSet::new(),
-                        origin: None,
-                        param: false,
-                    },
-                );
-                self.block(b)?;
-                let after = self.vars.clone();
-                self.vars = before;
-                self.merge_moves(after);
+                self.loop_body(b, None, Some((n, elem)))?;
             }
             S::Scope(b) => {
                 if !self.asynchronous || self.ret.0 != "Result" {

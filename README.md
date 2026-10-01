@@ -1,4 +1,4 @@
-# Nagi 0.1.2 — バックエンド向け二層言語の実行可能な試作
+# Nagi 0.1.3 — バックエンド向け二層言語の実行可能な試作
 
 読みやすいHighを、編集できるLowへ変換し、ネイティブ実行ファイルにする実験です。HTTP body → 型付きclass → SQLite → class → JSONの経路が実際に動きます。性能の根拠は [PERFORMANCE.md](PERFORMANCE.md) と生の測定ログです。
 

@@ -33,6 +33,38 @@ def main():
 
 関数に読み取り用の値を渡す例は、[読むだけならviewで借りる](language-guide.md#4-読むだけならviewで借りる)にあります。
 
+## ループで同じ値を使う
+
+ループの外で作った文字列を、毎回所有値として渡すと、1周目でmoveして次の周回で使えなくなります。`check`はこの再利用を拒否します。フィールドを取り出す場合や、`while`の条件で値を渡す場合も同じです。
+
+元の値を残して渡すには、周回ごとにコピーを作ります。読むだけの関数なら、引数を`view[str]`にして`view(name)`を渡せます。
+
+```nagi
+def use_name(name: str):
+    print(name)
+
+def main():
+    name = "Nagi"
+    for number in range(2):
+        use_name(copy(view(name)))
+    print(name)
+```
+
+次の周回までに新しい値を代入する方法もあります。
+
+```nagi
+def main():
+    name = "first"
+    for number in range(2):
+        use_name(name)
+        name = "next"
+    print(name)
+```
+
+分岐で再代入する場合は、次の周回へ進むすべての経路で値を用意してください。`return`で関数を終える経路は、次の周回や後続の処理へ影響しません。ループ内で新しく作った値は周回ごとに使えます。
+
+検査は実行回数を計算せず、繰り返しと0回の実行を考慮します。そのため、ループ内の代入だけでは、ループ後に値が使えるとは限りません。`while`の条件は、ループを抜けるときにも評価されます。
+
 ## 借用と検査の範囲
 
 viewを作った所有値をmove・再代入・appendすることも制限します。viewの借用は字句scopeで保守的に追跡します。Rustのnon-lexical lifetimeと同等の精密な解析はまだありません。

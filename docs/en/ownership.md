@@ -33,6 +33,38 @@ To keep the original field too, change the assignment above to `name = copy(view
 
 For a function that only needs to read, see [Borrow with view](language-guide.md#4-borrow-with-view-when-you-only-need-to-read).
 
+## Using a value in a loop
+
+Passing a string created outside a loop as an owned argument moves it on the first iteration. It is then unavailable on the next iteration, so `check` rejects this reuse. The same rule applies to taking fields and passing owned values in a `while` condition.
+
+To keep the original value, make a copy on each iteration. For a function that only reads, declare its argument as `view[str]` and pass `view(name)`.
+
+```nagi
+def use_name(name: str):
+    print(name)
+
+def main():
+    name = "Nagi"
+    for number in range(2):
+        use_name(copy(view(name)))
+    print(name)
+```
+
+You can also assign a new value before the next iteration.
+
+```nagi
+def main():
+    name = "first"
+    for number in range(2):
+        use_name(name)
+        name = "next"
+    print(name)
+```
+
+If reassignment depends on a branch, every path that continues to the next iteration must provide a value. A path that ends the function with `return` does not affect the next iteration or subsequent statements. Values created inside the loop are available anew on each iteration.
+
+The checker accounts for repetition and zero iterations without calculating the iteration count. An assignment inside a loop therefore does not always make a value available after the loop. A `while` condition is also evaluated when the loop exits.
+
 ## Borrowing and the limits of checking
 
 Moving, reassigning, or appending to an owned value is also restricted while a view borrows it. Borrows are tracked conservatively by lexical scope. This does not yet match Rust's non-lexical lifetime analysis.
