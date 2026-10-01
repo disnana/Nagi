@@ -2,7 +2,6 @@ name: Nagi website
 
 on:
   pull_request:
-    paths: ['website/**', 'docs/**', 'editors/vscode-nagi/README.md', 'test-nagi-code/**/README.md', 'PERFORMANCE.md', '.github/workflows/pages.yml']
   push:
     branches: [main]
     paths: ['website/**', 'docs/**', 'editors/vscode-nagi/README.md', 'test-nagi-code/**/README.md', 'PERFORMANCE.md', '.github/workflows/pages.yml']
