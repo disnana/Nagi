@@ -60,10 +60,10 @@ async function refresh() {
 }
 function lock(value) { busy = value; document.querySelectorAll('button,input').forEach(el => el.disabled = value); }
 async function perform(action, message) {
-  if (busy) return;
+  if (busy) return false;
   lock(true);
-  try { await action(); await refresh(); status(message); }
-  catch (error) { status(error.message === 'Failed to fetch' ? 'サーバーに接続できません。起動状態を確認して「更新」を押してください。' : error.message, true); }
+  try { await action(); await refresh(); status(message); return true; }
+  catch (error) { status(error.message === 'Failed to fetch' ? 'サーバーに接続できません。起動状態を確認して「更新」を押してください。' : error.message, true); return false; }
   finally { lock(false); }
 }
 function actionButton(text, callback) { const button = document.createElement('button'); button.type = 'button'; button.className = 'task-action'; button.textContent = text; button.addEventListener('click', callback); return button; }
@@ -81,7 +81,11 @@ function render() {
   for (const task of visible) {
     const row = document.createElement('li'); row.className = 'task' + (task.done ? ' done' : '');
     const check = document.createElement('input'); check.type = 'checkbox'; check.checked = task.done; check.setAttribute('aria-label', `${task.title}を${task.done ? '未完了' : '完了'}にする`);
-    check.addEventListener('change', () => perform(() => api(`/api/tasks/${task.id}`, 'PUT', {title:task.title,done:check.checked}), check.checked ? 'ひとつ、できました。' : 'これからやることに戻しました。'));
+    check.addEventListener('change', async () => {
+      const done = check.checked;
+      const saved = await perform(() => api(`/api/tasks/${task.id}`, 'PUT', {title:task.title,done}), done ? 'ひとつ、できました。' : 'これからやることに戻しました。');
+      if (!saved) check.checked = task.done;
+    });
     const label = document.createElement('span'); label.className = 'task-title'; label.textContent = task.title;
     row.append(check, label, actionButton('編集', () => edit(task,row)), actionButton('削除', () => perform(() => api(`/api/tasks/${task.id}`,'DELETE'),'タスクを削除しました。')));
     $('tasks').append(row);
