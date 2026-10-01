@@ -95,9 +95,19 @@ jobs:
           - os: ubuntu-latest
             platform: linux-x86_64
             executable: nagic
+            rust_host: x86_64-unknown-linux-gnu
           - os: windows-latest
             platform: windows-x86_64
             executable: nagic.exe
+            rust_host: x86_64-pc-windows-msvc
+          - os: macos-15
+            platform: macos-arm64
+            executable: nagic
+            rust_host: aarch64-apple-darwin
+          - os: macos-15-intel
+            platform: macos-x86_64
+            executable: nagic
+            rust_host: x86_64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -108,6 +118,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Verify the compiler host architecture
+        env:
+          RELEASE_RUST_HOST: ${{ matrix.rust_host }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          lines = subprocess.check_output(['rustc', '-vV'], text=True).splitlines()
+          host = next(line.removeprefix('host: ') for line in lines if line.startswith('host: '))
+          assert host == os.environ['RELEASE_RUST_HOST'], host
+          PY
       - run: cargo build --release --locked -p nagic
       - name: Check editor behavior on the target platform
         shell: bash

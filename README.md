@@ -1,4 +1,4 @@
-# Nagi 0.1 — バックエンド向け二層言語の実行可能な試作
+# Nagi 0.1.1 — バックエンド向け二層言語の実行可能な試作
 
 読みやすいHighを、編集できるLowへ変換し、ネイティブ実行ファイルにする実験です。HTTP body → 型付きclass → SQLite → class → JSONの経路が実際に動きます。性能の根拠は [PERFORMANCE.md](PERFORMANCE.md) と生の測定ログです。
 
@@ -14,7 +14,7 @@
 
 ## 最初に動かす
 
-必要なものはRust/Cargo、SQLiteのCコードをビルドできるCコンパイラです。Linux x86_64とWindowsネイティブでビルド・実行を確認しています。WindowsのMSVC環境とPowerShellのコマンドは[準備と最初の実行](docs/getting-started.md)にあります。WSL2では次のLinux手順を使えます。macOSは未検証です。
+必要なものはRust/Cargo、SQLiteのCコードをビルドできるCコンパイラです。[GitHub Releases](https://github.com/disnana/Nagi/releases)から、Windows x64、Linux x86_64、macOS Apple Silicon、macOS Intel用のコンパイラ入り配布物を取得できます。CIで各OSのビルド・実行を検証します。WindowsのMSVC環境とPowerShellのコマンド、macOSの準備は[準備と最初の実行](docs/getting-started.md)にあります。WSL2では次のLinux手順を使えます。
 
 ```bash
 cargo build --release --locked
@@ -103,7 +103,7 @@ primitive、値型class、連続配列、nullable、Result、関数、分岐、�
 
 Resultの`match`で成功・失敗を分け、既定値に回復したり、Errorの種類を保って返したりできます。[書き方](docs/error-handling.md)と[実HTTPで試すAPIサンプル](test-nagi-code/result-api/README.md)があります。
 
-[VS Code拡張0.1.6](editors/vscode-nagi/README.md)では、関数・class・import先・ローカル変数へのF12、宣言とローカル変数の型ホバー、classのフィールド補完、呼び出し時の引数ヒントを利用できます。一度保存したファイルの未保存の編集にも対応します。[操作例](docs/editor.md)で、型の表示や`value.`からの補完、定義への移動を試せます。
+[VS Code拡張0.1.7](editors/vscode-nagi/README.md)では、関数・class・import先・ローカル変数へのF12、宣言とローカル変数の型ホバー、classのフィールド補完、呼び出し時の引数ヒントを利用できます。一度保存したファイルの未保存の編集にも対応します。[操作例](docs/editor.md)で、型の表示や`value.`からの補完、定義への移動を試せます。
 
 専用のactor宣言、汎用generic関数、trait、名前付きmoduleとalias、nullableや一般的なパターンのmatch、PostgreSQL、SQLのコンパイル時検証、Highのrequest arena、Lowの生pointer/unsafe/C ABI、独自scheduler、self-hostingは未実装です。Rust連携は同じビルド内の呼び出しで、安定した外部ABIではありません。`Map`と`owned`は表現方針の段階で、完全な標準APIを提供していません。
 

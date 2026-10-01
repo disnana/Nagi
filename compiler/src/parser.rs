@@ -199,7 +199,9 @@ impl Parser {
                 let name = self.name()?;
                 self.begin()?;
                 let mut fields = vec![];
+                let mut field_lines = vec![];
                 while !self.ended() {
+                    field_lines.push(self.t().line);
                     let n = self.name()?;
                     self.expect(":")?;
                     let t = self.ty()?;
@@ -207,7 +209,12 @@ impl Parser {
                     fields.push((n, t));
                 }
                 self.close()?;
-                p.classes.push(Class { name, fields, line });
+                p.classes.push(Class {
+                    name,
+                    fields,
+                    field_lines,
+                    line,
+                });
             } else {
                 let external = self.eat("extern");
                 let asynchronous = self.eat("async");

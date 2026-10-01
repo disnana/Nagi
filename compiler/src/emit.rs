@@ -1,14 +1,20 @@
 use crate::ast::*;
+use crate::diagnostics::Generated;
 use std::{
     fs,
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
 };
 
 fn quote(s: &str) -> String {
     serde_json::to_string(s).unwrap()
 }
 pub fn low(p: &Program) -> String {
+    low_with_lines(p).text
+}
+
+pub fn low_with_lines(p: &Program) -> Generated {
     fn expr(e: &Expr) -> String {
         match &e.kind {
             E::Int(s) | E::Float(s) | E::Name(s) => s.clone(),
@@ -46,9 +52,10 @@ pub fn low(p: &Program) -> String {
             E::Try(x) => format!("try {}", expr(x)),
         }
     }
-    fn block(ss: &[Stmt], n: usize, out: &mut String) {
+    fn block(ss: &[Stmt], n: usize, out: &mut Generated) {
         let pad = "    ".repeat(n);
         for s in ss {
+            out.origin(Some(s.line));
             out.push_str(&pad);
             match &s.kind {
                 S::Assign {
@@ -77,10 +84,12 @@ pub fn low(p: &Program) -> String {
                 S::If(c, a, b) => {
                     out.push_str(&format!("if {} {{\n", expr(c)));
                     block(a, n + 1, out);
+                    out.origin(Some(s.line));
                     out.push_str(&format!("{pad}}}"));
                     if !b.is_empty() {
                         out.push_str(" else {\n");
                         block(b, n + 1, out);
+                        out.origin(Some(s.line));
                         out.push_str(&format!("{pad}}}"));
                     }
                     out.push('\n');
@@ -88,47 +97,58 @@ pub fn low(p: &Program) -> String {
                 S::While(c, b) => {
                     out.push_str(&format!("while {} {{\n", expr(c)));
                     block(b, n + 1, out);
+                    out.origin(Some(s.line));
                     out.push_str(&format!("{pad}}}\n"));
                 }
                 S::Match(value, arms) => {
                     out.push_str(&format!("match {} {{\n", expr(value)));
                     for arm in arms {
+                        out.origin(Some(arm.line));
                         out.push_str(&format!(
                             "{pad}    case {}({}) {{\n",
                             if arm.ok { "Ok" } else { "Err" },
                             arm.binding.as_deref().unwrap_or("_")
                         ));
                         block(&arm.body, n + 2, out);
+                        out.origin(Some(arm.line));
                         out.push_str(&format!("{pad}    }}\n"));
                     }
+                    out.origin(Some(s.line));
                     out.push_str(&format!("{pad}}}\n"));
                 }
                 S::For(v, e, b) => {
                     out.push_str(&format!("for {v} in {} {{\n", expr(e)));
                     block(b, n + 1, out);
+                    out.origin(Some(s.line));
                     out.push_str(&format!("{pad}}}\n"));
                 }
                 S::Scope(b) => {
                     out.push_str("scope {\n");
                     block(b, n + 1, out);
+                    out.origin(Some(s.line));
                     out.push_str(&format!("{pad}}}\n"));
                 }
             }
         }
     }
     let mut out =
-        String::from("# Nagi Low 0.1 / generated. 手書き変更はnative/で@replaceしてください。\n");
-    for (file, _) in &p.imports {
+        Generated::new("# Nagi Low 0.1 / generated. 手書き変更はnative/で@replaceしてください。\n");
+    for (file, line) in &p.imports {
+        out.origin(Some(*line));
         out.push_str(&format!("import {};\n", quote(file)));
     }
     for c in &p.classes {
+        out.origin(Some(c.line));
         out.push_str(&format!("record {} {{\n", c.name));
-        for (n, t) in &c.fields {
+        for (i, (n, t)) in c.fields.iter().enumerate() {
+            out.origin(Some(c.field_lines.get(i).copied().unwrap_or(c.line)));
             out.push_str(&format!("    {n}: {t};\n"));
         }
+        out.origin(Some(c.line));
         out.push_str("}\n\n");
     }
     for f in &p.functions {
+        out.origin(Some(f.line));
         for (a, v) in &f.attrs {
             if a == "replace" {
                 out.push_str(&format!("@replace {v}\n"));
@@ -151,6 +171,7 @@ pub fn low(p: &Program) -> String {
         ));
         if !f.external {
             block(&f.body, 1, &mut out);
+            out.origin(Some(f.line));
             out.push_str("}\n\n");
         }
     }
@@ -350,9 +371,10 @@ fn string_or_value(e: &Expr) -> String {
         re(e)
     }
 }
-fn rb(ss: &[Stmt], out: &mut String, n: usize) {
+fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
     let pad = "    ".repeat(n);
     for s in ss {
+        out.origin(Some(s.line));
         out.push_str(&pad);
         match &s.kind {
             S::Assign {
@@ -378,10 +400,12 @@ fn rb(ss: &[Stmt], out: &mut String, n: usize) {
             S::If(c, a, b) => {
                 out.push_str(&format!("if {} {{\n", re(c)));
                 rb(a, out, n + 1);
+                out.origin(Some(s.line));
                 out.push_str(&format!("{pad}}}"));
                 if !b.is_empty() {
                     out.push_str(" else {\n");
                     rb(b, out, n + 1);
+                    out.origin(Some(s.line));
                     out.push_str(&format!("{pad}}}"));
                 }
                 out.push('\n');
@@ -389,11 +413,13 @@ fn rb(ss: &[Stmt], out: &mut String, n: usize) {
             S::While(c, b) => {
                 out.push_str(&format!("while {} {{\n", re(c)));
                 rb(b, out, n + 1);
+                out.origin(Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
             S::Match(value, arms) => {
                 out.push_str(&format!("match {} {{\n", re(value)));
                 for arm in arms {
+                    out.origin(Some(arm.line));
                     let binding = arm
                         .binding
                         .as_ref()
@@ -404,8 +430,10 @@ fn rb(ss: &[Stmt], out: &mut String, n: usize) {
                         if arm.ok { "Ok" } else { "Err" }
                     ));
                     rb(&arm.body, out, n + 2);
+                    out.origin(Some(arm.line));
                     out.push_str(&format!("{pad}    }},\n"));
                 }
+                out.origin(Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
             S::For(v, e, b) => {
@@ -416,6 +444,7 @@ fn rb(ss: &[Stmt], out: &mut String, n: usize) {
                 };
                 out.push_str(&format!("for {v} in {iterator} {{\n"));
                 rb(b, out, n + 1);
+                out.origin(Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
             S::Spawn(e) => {
@@ -430,12 +459,17 @@ fn rb(ss: &[Stmt], out: &mut String, n: usize) {
                 out.push_str("{\n");
                 out.push_str(&format!("{pad}    let mut __scope = ::nagi_runtime::Scope::new();\n{pad}    let __scope_result: Result<(), ::nagi_runtime::Error> = async {{\n"));
                 rb(b, out, n + 2);
+                out.origin(Some(s.line));
                 out.push_str(&format!("{pad}        Ok(())\n{pad}    }}.await;\n{pad}    if let Err(e) = __scope_result {{ __scope.cancel().await; return Err(e); }}\n{pad}    __scope.join().await?;\n{pad}}}\n"));
             }
         }
     }
 }
 pub fn rust(p: &Program) -> Result<String, String> {
+    Ok(rust_with_lines(p)?.text)
+}
+
+pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
     fn copy_type(t: &Type, p: &Program, depth: usize) -> bool {
         if depth > 64 {
             false
@@ -450,13 +484,16 @@ pub fn rust(p: &Program) -> Result<String, String> {
         }
     }
     let mut out =
-        String::from("#![allow(unused_mut, unused_parens, unused_variables, dead_code)]\n");
+        Generated::new("#![allow(unused_mut, unused_parens, unused_variables, dead_code)]\n");
     for c in &p.classes {
+        out.origin(Some(c.line));
         let copy = c.fields.iter().all(|(_, t)| copy_type(t, p, 0));
         out.push_str(&format!("#[derive(Debug, ::nagi_runtime::serde::Serialize, ::nagi_runtime::serde::Deserialize{} )]\n#[serde(crate = \"::nagi_runtime::serde\", deny_unknown_fields)]\npub struct {} {{\n",if copy{", Clone, Copy"}else{""},c.name));
-        for (n, t) in &c.fields {
+        for (i, (n, t)) in c.fields.iter().enumerate() {
+            out.origin(Some(c.field_lines.get(i).copied().unwrap_or(c.line)));
             out.push_str(&format!("    pub {n}: {},\n", rust_type(t)));
         }
+        out.origin(Some(c.line));
         out.push_str("}\n");
         let db_compatible = c.fields.iter().all(|(_, t)| {
             [
@@ -466,6 +503,7 @@ pub fn rust(p: &Program) -> Result<String, String> {
                 || t.0 == "Option" && ["i64", "i32", "str"].contains(&t.inner().0.as_str())
         });
         if db_compatible {
+            out.origin(None);
             out.push_str(&format!("impl ::nagi_runtime::FromRow for {} {{\n fn columns() -> &'static [&'static str] {{ &[{}] }}\n fn read(row: &::nagi_runtime::rusqlite::Row<'_>, ix: &[usize]) -> ::nagi_runtime::rusqlite::Result<Self> {{ Ok(Self {{\n",c.name,c.fields.iter().map(|(n,_)|quote(n)).collect::<Vec<_>>().join(",")));
             for (i, (n, _)) in c.fields.iter().enumerate() {
                 out.push_str(&format!("{n}: row.get(ix[{i}])?,\n"));
@@ -474,6 +512,7 @@ pub fn rust(p: &Program) -> Result<String, String> {
         }
     }
     for f in &p.functions {
+        out.origin(Some(f.line));
         let name = if f.name == "main" {
             "__nagi_main"
         } else {
@@ -508,8 +547,10 @@ pub fn rust(p: &Program) -> Result<String, String> {
         } else {
             rb(&f.body, &mut out, 1);
         }
+        out.origin(Some(f.line));
         out.push_str("}\n");
     }
+    out.origin(None);
     let routes: Vec<_> = p
         .functions
         .iter()
@@ -544,6 +585,7 @@ pub fn rust(p: &Program) -> Result<String, String> {
         }
         out.push_str(".with_state(db); ::nagi_runtime::serve(router,port).await\n}\n");
         for (i, f) in routes.iter().enumerate() {
+            out.origin(Some(f.line));
             if !f.asynchronous || f.ret.0 != "Result" {
                 return Err(format!("route {} must be async and return Result", f.name));
             }
@@ -597,6 +639,7 @@ pub fn rust(p: &Program) -> Result<String, String> {
             ));
         }
     }
+    out.origin(None);
     if let Some(f) = p.functions.iter().find(|f| f.name == "main") {
         if !f.params.is_empty() {
             return Err("mainは引数を取りません".into());
@@ -670,12 +713,13 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     p.functions = resolution.functions[..nf].to_vec();
     fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     if high {
-        let low_source = low(&p);
-        fs::write(out.join("generated.low"), &low_source).map_err(|e| e.to_string())?;
+        let low_source = low_with_lines(&p);
+        fs::write(out.join("generated.low"), &low_source.text).map_err(|e| e.to_string())?;
         // 生成Lowの文字列を独立parserに通す。High ASTをcodegenへ直接渡さない。
-        p = crate::parser::parse(&low_source, false)?;
+        p = crate::parser::parse(&low_source.text, false)?;
+        low_source.restore_lines(&mut p)?;
     }
-    crate::check::integrate(&mut p, all)?;
+    crate::check::integrate(&mut p, all).map_err(|e| sources.diagnostic(&e))?;
     if cost {
         let report = cost_report(&p);
         fs::write(
@@ -721,14 +765,16 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     if p.functions.iter().any(|f| f.external) && rust_file.is_none() {
         return Err("extern関数のビルドには--rust FILE.rsが必要です".into());
     }
-    let mut generated_rust = rust(&p)?;
+    let mut generated_rust = rust_with_lines(&p)?;
     if let Some(file) = &rust_file {
+        generated_rust.origin(None);
         generated_rust.push_str(&format!(
             "\n#[path = {}]\nmod native;\n",
             quote(&file.display().to_string())
         ));
     }
-    fs::write(out.join("src/main.rs"), generated_rust).map_err(|e| e.to_string())?;
+    fs::write(out.join("src/main.rs"), &generated_rust.text).map_err(|e| e.to_string())?;
+    let generated_file = fs::canonicalize(out.join("src/main.rs")).map_err(|e| e.to_string())?;
     let package = format!(
         "nagi-{}",
         path.file_stem()
@@ -756,12 +802,35 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                 .map(|p| p.join("build/native-target"))
                 .unwrap_or_else(|| root.join("native-target"))
         });
-    let status = Command::new("cargo")
-        .args(["build", "--release", "--manifest-path"])
+    let mut child = Command::new("cargo")
+        .args([
+            "build",
+            "--release",
+            "--message-format=json",
+            "--manifest-path",
+        ])
         .arg(out.join("Cargo.toml"))
         .env("CARGO_TARGET_DIR", &target)
-        .status()
+        .stdout(Stdio::piped())
+        .spawn()
         .map_err(|e| format!("cargo/rustcがPATHに必要です: {e}"))?;
+    let stdout = child.stdout.take().unwrap();
+    for line in BufReader::new(stdout).lines() {
+        let line = match line {
+            Ok(line) => line,
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("Cargoの診断を読み取れません: {e}"));
+            }
+        };
+        if let Some(message) =
+            crate::diagnostics::cargo_message(&line, &generated_rust, &generated_file, &sources)
+        {
+            eprint!("{message}");
+        }
+    }
+    let status = child.wait().map_err(|e| e.to_string())?;
     if !status.success() {
         return Err("Rust backend rejected program。詳細は上の診断を参照してください".into());
     }

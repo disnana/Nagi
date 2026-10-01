@@ -4,9 +4,20 @@
 
 このページでは、Nagiのコンパイラを用意して、1ファイルのプログラムを動かします。コマンドは**このリポジトリのルート**で実行してください。
 
-コンパイラは、書いたコードを実行ファイルへ変換する道具です。以下のコマンドはターミナルに入力します。WindowsならPowerShell、Linuxなら端末アプリを使います。「リポジトリのルート」は、取得したNagiのフォルダーのことです。
+コンパイラは、書いたコードを実行ファイルへ変換する道具です。以下のコマンドはターミナルに入力します。WindowsならPowerShell、LinuxやmacOSなら端末アプリを使います。「リポジトリのルート」は、取得したNagiのフォルダーのことです。
 
-まだソースを取得していない場合は、[Git](https://git-scm.com/)を用意して次を実行します。
+[GitHub Releases](https://github.com/disnana/Nagi/releases)で、使うOSに合ったNagi本体のファイルを取得して展開します。
+
+| 使う環境 | ダウンロードするファイル |
+|---|---|
+| Windows x64 | `nagi-0.1.1-windows-x86_64.zip` |
+| Linux x86_64 | `nagi-0.1.1-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `nagi-0.1.1-macos-arm64.tar.gz` |
+| macOS Intel | `nagi-0.1.1-macos-x86_64.tar.gz` |
+
+この配布物はコンパイラとソースを含みます。`runtime/`などのフォルダーを保ったまま使ってください。GitHubが付ける「Source code」のファイルはソースだけです。VS Code拡張は別の`nagi-language-0.1.7.vsix`を使います。
+
+ソースからコンパイラもビルドする場合は、[Git](https://git-scm.com/)を用意して次を実行します。
 
 ```bash
 git clone https://github.com/disnana/Nagi.git
@@ -15,11 +26,13 @@ cd Nagi
 
 Gitを使わず、GitHubの「Code → Download ZIP」から取得することもできます。ZIPを展開したフォルダーをターミナルで開いてください。
 
-## 1. コンパイラをビルドする
+## 1. コンパイラを用意する
 
 必要なものは[Rust / Cargo](https://www.rust-lang.org/tools/install)とCのビルド環境です。RustはNagiのコンパイラや生成したコードをビルドするために使い、CargoはRustのビルド・依存パッケージを管理します。ランタイムに同梱されたSQLiteのCコードをビルドするため、Rustだけでは足りません。最初のビルドではCargoが依存パッケージを取得します。
 
-WindowsではRustのMSVC toolchainとVisual Studio Build ToolsのC++ビルド環境を使います。このリポジトリではWindowsネイティブでコンパイラとデモexeのビルド・実行を確認しています。LinuxではCコンパイラを用意してください。WSL2もLinuxの手順です。
+WindowsではRustのMSVC toolchainとVisual Studio Build ToolsのC++ビルド環境を使います。LinuxではCコンパイラを用意してください。WSL2もLinuxの手順です。macOSでは`xcode-select --install`でCommand Line Toolsを用意します。macOS版はmacOS 15のCIでビルド・実行を検証します。
+
+コンパイラ入りの配布物では、次の`cargo build`を省略できます。NagiのアプリをビルドするためのRust/CargoとCのビルド環境は必要です。
 
 ```powershell
 # Windows / PowerShell
@@ -28,7 +41,7 @@ cargo build --release --locked -p nagic
 ```
 
 ```bash
-# Linux / WSL2
+# Linux / WSL2 / macOS
 cargo build --release --locked -p nagic
 ./target/release/nagic run examples/hello.nagi
 ```
@@ -77,6 +90,8 @@ Linux / WSL2では、以降の`.\target\release\nagic.exe`を`./target/release/n
 
 `check`と`lower`は現在どちらもHighの生成Lowを保存します。`check`が成功しても、Rust側の型・借用などの検査で`build`が失敗する場合があります。
 
+ビルド時のエラーは、対応する元のNagi・Lowファイル名、文や定義の行番号、その行のコードを先に表示します。import先や`@replace`の手書きLowも対象です。続く`Rust backend details`には生成Rust側の詳しい診断を残します。手書きRustや、元の位置を特定できないエラーはRustの診断を表示します。
+
 ```powershell
 .\target\release\nagic.exe check hello.nagi
 .\target\release\nagic.exe build hello.nagi
@@ -114,7 +129,7 @@ Linux / WSL2では、以降の`.\target\release\nagic.exe`を`./target/release/n
 | `nagic.exe`が見つからない | ルートでコンパイラのビルドを終えたか |
 | VS Codeで`spawn nagic.exe ENOENT`やコンパイラ未検出の警告が出る | VSIXにはコンパイラを含まない。手順1でビルドしたあと「Nagi: 型検査」を実行する。別の場所にある場合は`nagi.compilerPath`にその実行ファイルを指定する |
 | タブや字下げのエラー | インデントを空白4つに統一する |
-| `Rust backend rejected program` | 直前のrustc診断を読む。Nagiの`check`より後の検査で失敗している |
+| `Rust backend rejected program` | 直前に表示されたNagi・Lowのファイル名と行を確認する。詳しい理由は続くRustの診断にある |
 | Windowsでexeを更新できない | そのアプリが実行中なら停止してから再ビルドする |
 | サーバーが終了しない | `serve`はリクエストを待ち続ける。ターミナルのCtrl+Cで終了する |
 

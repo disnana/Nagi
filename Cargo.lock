@@ -457,7 +457,7 @@ dependencies = [
 
 [[package]]
 name = "nagi-runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "bumpalo",
@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "nagic"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",

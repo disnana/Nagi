@@ -142,6 +142,7 @@ pub struct Function {
 pub struct Class {
     pub name: String,
     pub fields: Vec<(String, Type)>,
+    pub field_lines: Vec<usize>,
     pub line: usize,
 }
 #[derive(Clone, Debug, Default)]
