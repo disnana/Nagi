@@ -40,6 +40,37 @@ for _, entries in GROUPS:
     for slug, _ in entries:
         SOURCES[EXTRA.get(slug, ROOT / f"docs/{slug}.md")] = f"docs/{slug}/"
 
+ENGLISH_GROUPS = [
+    ("Start here", [("getting-started", "Setup and first run"), ("language-guide", "Learn by writing code"), ("editor", "Editor walkthrough"), ("syntax", "Syntax reference"), ("builtins", "Built-in functions")]),
+    ("Language basics", [("types", "Types and inference"), ("classes", "Classes"), ("ownership", "Ownership"), ("view-and-zero-copy", "Views and copying"), ("error-handling", "Error handling")]),
+    ("Build an application", [("http", "HTTP and HTML"), ("json", "JSON"), ("database", "SQLite"), ("modules-and-rust", "Imports and Rust"), ("projects", "Project configuration"), ("async", "Async and scopes"), ("concurrency", "Concurrency")]),
+    ("Examples", [("web-demo", "Task management demo"), ("result-api", "Result API example")]),
+    ("Design and development", [("introduction", "Goals and scope"), ("low-language", "High and Low"), ("memory-model", "Memory model"), ("compiler-internals", "Compiler internals"), ("actor", "Actors"), ("supervisor", "Supervisors"), ("queue", "Queues"), ("ffi", "FFI"), ("performance", "Reading benchmarks"), ("measurements", "Measurements"), ("roadmap", "Roadmap"), ("vscode-extension", "VS Code extension settings")]),
+]
+ENGLISH_SOURCES = {ROOT / "docs/en/README.md": "docs/"}
+for _, entries in ENGLISH_GROUPS:
+    for slug, _ in entries:
+        ENGLISH_SOURCES[ROOT / f"docs/en/{slug}.md"] = f"docs/{slug}/"
+if set(SOURCES.values()) != set(ENGLISH_SOURCES.values()):
+    raise ValueError("Japanese and English Docs must contain the same pages")
+
+LABELS = {
+    "ja": dict(skip_label="本文へ移動", home_label="Nagi ホーム", menu_label="サイトのメニュー",
+               start_label="はじめる", status_label="Nagi 0.1 · 開発中", footer_label="フッター",
+               other_language="en", other_label="English", switch_label="Read this page in English",
+               docs_contents="Docsの目次", page_contents="このページの目次", on_page="このページ",
+               source_label="このページのソース", docs_version="Nagi 0.1のドキュメント",
+               copy_label="コピー", copy_aria="このコードをコピー", code_aria="コード",
+               table_aria="表（横にスクロールできます）"),
+    "en": dict(skip_label="Skip to content", home_label="Nagi home", menu_label="Site navigation",
+               start_label="Get started", status_label="Nagi 0.1 · In development", footer_label="Footer",
+               other_language="ja", other_label="日本語", switch_label="このページを日本語で読む",
+               docs_contents="Docs contents", page_contents="On this page", on_page="On this page",
+               source_label="Page source", docs_version="Nagi 0.1 documentation",
+               copy_label="Copy", copy_aria="Copy this code", code_aria="Code",
+               table_aria="Table (scroll horizontally)"),
+}
+
 
 class CodeStyle(Style):
     background_color = "#f5f8fa"
@@ -67,14 +98,15 @@ class NagiLexer(RegexLexer):
     ]}
 
 
-def code_block(source: str, language: str) -> str:
+def code_block(source: str, language: str, locale: str = "ja") -> str:
     try:
         lexer = NagiLexer() if language in {"nagi", "low"} else get_lexer_by_name(language)
     except ClassNotFound:
         lexer = TextLexer()
     code = highlight(source, lexer, HtmlFormatter(nowrap=True))
-    button = '<button class="copy-button" type="button" data-copy aria-label="このコードをコピー">コピー</button>'
-    return f'<div class="code-block">{button}<pre class="highlight" tabindex="0" aria-label="コード"><code>{code}</code></pre></div>\n'
+    labels = LABELS[locale]
+    button = f'<button class="copy-button" type="button" data-copy aria-label="{labels["copy_aria"]}">{labels["copy_label"]}</button>'
+    return f'<div class="code-block">{button}<pre class="highlight" tabindex="0" aria-label="{labels["code_aria"]}"><code>{code}</code></pre></div>\n'
 
 
 def slugify(text: str) -> str:
@@ -140,35 +172,42 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
     (output / "assets/highlight.css").write_text(css, encoding="utf-8")
     template = (HERE / "templates/page.html").read_text(encoding="utf-8")
 
-    def page(route, title, description, layout, body_class=""):
+    def page(route, title, description, layout, locale, body_class=""):
+        prefix = "en/" if locale == "en" else ""
+        other_prefix = "" if locale == "en" else "en/"
         values = dict(base=base, repo=html.escape(repo, quote=True), ref=quote(ref, safe=""),
                       title=html.escape(title), description=html.escape(description, quote=True),
-                      canonical=html.escape(origin + base + route, quote=True), layout=layout, body_class=body_class)
+                      canonical=html.escape(origin + base + prefix + route, quote=True), layout=layout, body_class=body_class,
+                      language=locale, language_base=base + prefix, other_route=base + other_prefix + route,
+                      japanese_url=html.escape(origin + base + route, quote=True),
+                      english_url=html.escape(origin + base + "en/" + route, quote=True), **LABELS[locale])
         rendered = template
         for key, value in values.items():
             rendered = rendered.replace("{{" + key + "}}", value)
         if re.search(r"\{\{[a-z_]+\}\}", rendered):
             raise ValueError(f"Unresolved template value: {route}")
-        destination = output / route / "index.html" if not route.endswith(".html") else output / route
+        destination = output / prefix / route / "index.html" if not route.endswith(".html") else output / prefix / route
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(rendered, encoding="utf-8")
 
-    def navigation(current):
-        sections = [f'<a class="docs-nav-title" href="{base}docs/">Nagi Docs</a>']
-        for title, entries in GROUPS:
+    def navigation(current, locale):
+        language_base = base + ("en/" if locale == "en" else "")
+        sections = [f'<a class="docs-nav-title" href="{language_base}docs/">Nagi Docs</a>']
+        for title, entries in (ENGLISH_GROUPS if locale == "en" else GROUPS):
             links = []
             for slug, label in entries:
                 active = ' aria-current="page"' if current == f"docs/{slug}/" else ""
-                links.append(f'<li><a href="{base}docs/{slug}/"{active}>{label}</a></li>')
+                links.append(f'<li><a href="{language_base}docs/{slug}/"{active}>{label}</a></li>')
             sections.append(f'<section><h2>{title}</h2><ul>{"".join(links)}</ul></section>')
-        return '<nav class="docs-nav" aria-label="Docsの目次">' + "".join(sections) + "</nav>"
+        return f'<nav class="docs-nav" aria-label="{LABELS[locale]["docs_contents"]}">' + "".join(sections) + "</nav>"
 
-    for source, route in SOURCES.items():
+    def document(source, route, locale):
         if not source.is_file():
             raise ValueError(f"Missing Docs source: {source.relative_to(ROOT)}")
         md = MarkdownIt("commonmark", {"html": False}).enable("table").enable("strikethrough")
-        md.renderer.rules["fence"] = lambda tokens, index, options, env: code_block(tokens[index].content, tokens[index].info.split()[0] if tokens[index].info else "text")
-        md.renderer.rules["table_open"] = lambda *args: '<div class="table-scroll" tabindex="0" role="region" aria-label="表（横にスクロールできます）"><table>\n'
+        labels = LABELS[locale]
+        md.renderer.rules["fence"] = lambda tokens, index, options, env: code_block(tokens[index].content, tokens[index].info.split()[0] if tokens[index].info else "text", locale)
+        md.renderer.rules["table_open"] = lambda *args: f'<div class="table-scroll" tabindex="0" role="region" aria-label="{labels["table_aria"]}"><table>\n'
         md.renderer.rules["table_close"] = lambda *args: '</table></div>\n'
 
         def link_open(tokens, index, options, env):
@@ -179,8 +218,9 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
                 target = (source.parent / unquote(parsed.path)).resolve()
                 if not target.is_relative_to(ROOT) or not target.exists():
                     raise ValueError(f"Invalid source link in {source.relative_to(ROOT)}: {href}")
-                if target in SOURCES:
-                    url = base + SOURCES[target]
+                if target in SOURCES or target in ENGLISH_SOURCES:
+                    target_route = SOURCES.get(target, ENGLISH_SOURCES.get(target))
+                    url = base + ("en/" if locale == "en" else "") + target_route
                 else:
                     kind = "tree" if target.is_dir() else "blob"
                     url = f"{repo}/{kind}/{quote(ref, safe='')}/{quote(target.relative_to(ROOT).as_posix())}"
@@ -211,19 +251,33 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
             raise ValueError(f"Expected one page title: {source.relative_to(ROOT)}")
         body = md.renderer.render(tokens, md.options, {})
         outline = "".join(f'<li><a href="#{quote(slug)}">{html.escape(title)}</a></li>' for slug, title in headings)
-        sidebar = navigation(route)
+        sidebar = navigation(route, locale)
         relative = quote(source.relative_to(ROOT).as_posix())
-        meta = f'<div class="doc-meta"><span>Nagi 0.1のドキュメント</span><a href="{repo}/blob/{quote(ref, safe="")}/{relative}">このページのソース</a></div>'
-        layout = f'<div class="docs-shell"><div class="docs-layout">{sidebar}<div class="docs-content"><details class="mobile-doc-nav"><summary>Docsの目次</summary>{sidebar}</details><main id="main" class="docs-main">{body}{meta}</main></div><nav class="outline" aria-label="このページの目次"><p>このページ</p><ul>{outline}</ul></nav></div></div>'
-        page(route, f"{titles[0]} | Nagi Docs", f"Nagiの日本語ドキュメント。{titles[0]}について説明します。", layout, "docs-page")
+        meta = f'<div class="doc-meta"><span>{labels["docs_version"]}</span><a href="{repo}/blob/{quote(ref, safe="")}/{relative}">{labels["source_label"]}</a></div>'
+        layout = f'<div class="docs-shell"><div class="docs-layout">{sidebar}<div class="docs-content"><details class="mobile-doc-nav"><summary>{labels["docs_contents"]}</summary>{sidebar}</details><main id="main" class="docs-main">{body}{meta}</main></div><nav class="outline" aria-label="{labels["page_contents"]}"><p>{labels["on_page"]}</p><ul>{outline}</ul></nav></div></div>'
+        description = f"Nagi 0.1 documentation: {titles[0]}." if locale == "en" else f"Nagiの日本語ドキュメント。{titles[0]}について説明します。"
+        page(route, f"{titles[0]} | Nagi Docs", description, layout, locale, "docs-page")
+
+    for locale, sources in (("ja", SOURCES), ("en", ENGLISH_SOURCES)):
+        for source, route in sources.items():
+            document(source, route, locale)
 
     example = (HERE / "examples/double.nagi").read_text(encoding="utf-8")
-    home = (HERE / "templates/home.html").read_text(encoding="utf-8").replace("{{example}}", code_block(example, "nagi"))
-    home = home.replace("{{base}}", base).replace("{{repo}}", html.escape(repo, quote=True))
-    page("", "Nagi — 読みやすいコードを、実行ファイルに。", "Nagiは、コードの読みやすさと実行時の効率を大切にしている開発中のプログラミング言語です。日本語の入門ガイドとDocsを用意しています。", home)
-    page("404.html", "ページが見つかりません | Nagi", "ページが見つかりません。", f'<main id="main" class="landing section"><h1>ページが見つかりません</h1><p>リンク先が変わったか、URLが間違っているようです。</p><p><a href="{base}docs/">Docsの目次へ</a></p></main>')
+    for locale in ("ja", "en"):
+        english = locale == "en"
+        language_base = base + ("en/" if english else "")
+        home_source = HERE / ("templates/home.en.html" if english else "templates/home.html")
+        home = home_source.read_text(encoding="utf-8").replace("{{example}}", code_block(example, "nagi", locale))
+        home = home.replace("{{base}}", language_base).replace("{{repo}}", html.escape(repo, quote=True))
+        title = "Nagi — Readable code. Native programs." if english else "Nagi — 読みやすいコードを、実行ファイルに。"
+        description = "Nagi is a programming language in development that values readable code and efficient execution. Start with the introduction, then follow the guides and Docs." if english else "Nagiは、コードの読みやすさと実行時の効率を大切にしている開発中のプログラミング言語です。日本語と英語の入門ガイドとDocsを用意しています。"
+        page("", title, description, home, locale)
+        missing_title = "Page not found" if english else "ページが見つかりません"
+        missing_body = "The link may have changed, or the URL may be incorrect." if english else "リンク先が変わったか、URLが間違っているようです。"
+        contents_label = "Go to the Docs contents" if english else "Docsの目次へ"
+        page("404.html", f"{missing_title} | Nagi", missing_title, f'<main id="main" class="landing section"><h1>{missing_title}</h1><p>{missing_body}</p><p><a href="{language_base}docs/">{contents_label}</a></p></main>', locale)
     (output / ".nojekyll").touch()
-    locations = [origin + base] + [origin + base + route for route in SOURCES.values()]
+    locations = [origin + base + prefix + route for prefix in ("", "en/") for route in ["", *SOURCES.values()]]
     sitemap = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(f"<url><loc>{escape(url)}</loc></url>" for url in locations) + "</urlset>"
     (output / "sitemap.xml").write_text(sitemap, encoding="utf-8")
     pages = check_links(output, base)

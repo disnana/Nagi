@@ -1,5 +1,7 @@
 name: Nagi checks
 on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
 jobs:
   linux:
     runs-on: ubuntu-latest
@@ -19,7 +21,178 @@ jobs:
       - run: cargo test --locked
       - run: cargo build --release --examples --bins --locked
       - run: node --test editors/vscode-nagi/test/*.test.js
+      - run: python -m unittest discover -s scripts/releases -p 'test_*.py'
       - run: python scripts/build_examples.py
       - run: pip install -r tests/requirements.txt
       - run: python tests/http_integration.py
       - run: ./target/release/examples/fuzz-smoke
+
+  release-plan:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    needs: linux
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.plan.outputs.sha }}
+      nagi_version: ${{ steps.plan.outputs.nagi_version }}
+      vscode_version: ${{ steps.plan.outputs.vscode_version }}
+      release_nagi: ${{ steps.plan.outputs.release_nagi }}
+      release_vscode: ${{ steps.plan.outputs.release_vscode }}
+      package_nagi: ${{ steps.plan.outputs.package_nagi }}
+      package_vscode: ${{ steps.plan.outputs.package_vscode }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compare versions across the complete push or PR
+        id: plan
+        env:
+          RELEASE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          RELEASE_HEAD: ${{ github.sha }}
+        run: python scripts/releases/plan.py --base "$RELEASE_BASE" --head "$RELEASE_HEAD" --output "$GITHUB_OUTPUT"
+
+  vscode-package:
+    needs: release-plan
+    if: needs.release-plan.outputs.package_vscode == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python editors/vscode-nagi/scripts/package_vsix.py
+      - name: Verify and checksum the VSIX
+        env:
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.vscode_version }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          from zipfile import ZipFile
+          path = Path('build/distribution') / f'nagi-language-{os.environ["RELEASE_VERSION"]}.vsix'
+          with ZipFile(path) as archive:
+              assert archive.testzip() is None
+              assert json.loads(archive.read('extension/package.json'))['version'] == os.environ['RELEASE_VERSION']
+          path.with_name(path.name + '.sha256').write_text(f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n', encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-vscode
+          path: |
+            build/distribution/*.vsix
+            build/distribution/*.vsix.sha256
+          if-no-files-found: error
+
+  nagi-package:
+    needs: release-plan
+    if: needs.release-plan.outputs.package_nagi == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            executable: nagic
+          - os: windows-latest
+            platform: windows-x86_64
+            executable: nagic.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: cargo build --release --locked -p nagic
+      - name: Check editor behavior on the target platform
+        shell: bash
+        run: node --test editors/vscode-nagi/test/*.test.js
+      - name: Package tracked source and the compiler
+        env:
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_EXECUTABLE: ${{ matrix.executable }}
+        shell: bash
+        run: python scripts/releases/package.py --binary "target/release/$RELEASE_EXECUTABLE" --version "$RELEASE_VERSION" --platform "$RELEASE_PLATFORM"
+      - name: Verify an extracted distribution outside the checkout
+        env:
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_EXECUTABLE: ${{ matrix.executable }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, subprocess, tarfile, tempfile
+          from pathlib import Path
+          from zipfile import ZipFile
+          stem = f'nagi-{os.environ["RELEASE_VERSION"]}-{os.environ["RELEASE_PLATFORM"]}'
+          suffix = '.zip' if os.name == 'nt' else '.tar.gz'
+          archive = Path('build/distribution') / (stem + suffix)
+          with tempfile.TemporaryDirectory() as folder:
+              if os.name == 'nt':
+                  with ZipFile(archive) as source:
+                      source.extractall(folder)
+              else:
+                  with tarfile.open(archive) as source:
+                      source.extractall(folder, filter='data')
+              root = Path(folder) / stem
+              exe = root / 'target/release' / os.environ['RELEASE_EXECUTABLE']
+              environment = dict(os.environ)
+              environment.pop('NAGI_ROOT', None)
+              environment.pop('NAGI_NATIVE_TARGET_DIR', None)
+              subprocess.run([str(exe), 'check', str(root / 'examples/cpu.nagi')], cwd=folder, env=environment, check=True)
+              result = subprocess.run([str(exe), 'run', str(root / 'examples/hello.nagi')], cwd=folder, env=environment, check=True, capture_output=True, text=True)
+              assert result.stdout.splitlines()[-2:] == ['Hello, Nagi!', '4'], result.stdout
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: |
+            build/distribution/nagi-*.zip
+            build/distribution/nagi-*.tar.gz
+            build/distribution/nagi-*.sha256
+          if-no-files-found: error
+
+  publish-release:
+    needs: [linux, release-plan, vscode-package, nagi-package]
+    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.linux.result == 'success' && needs.release-plan.result == 'success' &&
+      (needs.vscode-package.result == 'success' || needs.vscode-package.result == 'skipped') &&
+      (needs.nagi-package.result == 'success' || needs.nagi-package.result == 'skipped') &&
+      (needs.release-plan.outputs.release_vscode == 'true' || needs.release-plan.outputs.release_nagi == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: build/release-assets
+      - name: Publish VS Code extension
+        if: needs.release-plan.outputs.release_vscode == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.vscode_version }}
+          RELEASE_SHA: ${{ needs.release-plan.outputs.sha }}
+        run: python scripts/releases/publish.py --repository "$GITHUB_REPOSITORY" --component vscode --version "$RELEASE_VERSION" --sha "$RELEASE_SHA" --assets build/release-assets
+      - name: Publish Nagi compiler and source
+        if: needs.release-plan.outputs.release_nagi == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
+          RELEASE_SHA: ${{ needs.release-plan.outputs.sha }}
+        run: python scripts/releases/publish.py --repository "$GITHUB_REPOSITORY" --component nagi --version "$RELEASE_VERSION" --sha "$RELEASE_SHA" --assets build/release-assets

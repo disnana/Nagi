@@ -13,6 +13,23 @@ async function run() {
   const extension = vscode.extensions.getExtension('nagi-local.nagi-language');
   assert.ok(extension, 'development extension is registered');
   await extension.activate();
+  const cpu = await vscode.workspace.openTextDocument(path.join(root, 'examples/cpu.nagi'));
+  await vscode.window.showTextDocument(cpu);
+  await vscode.commands.executeCommand('nagi.check');
+  assert.equal(vscode.languages.getDiagnostics(cpu.uri).length, 0, 'CPU sample has no source errors');
+  const compilerConfig = vscode.workspace.getConfiguration('nagi');
+  const previousCompiler = compilerConfig.inspect('compilerPath').globalValue;
+  try {
+    await compilerConfig.update('compilerPath', path.join(folder, 'missing-nagic-' + process.pid), vscode.ConfigurationTarget.Global);
+    await new Promise(resolve => setTimeout(resolve, 250));
+    await vscode.commands.executeCommand('nagi.check');
+    assert.equal(vscode.languages.getDiagnostics(cpu.uri).length, 0, 'missing compiler never marks the comment as a source error');
+  } finally {
+    await compilerConfig.update('compilerPath', previousCompiler, vscode.ConfigurationTarget.Global);
+  }
+  await new Promise(resolve => setTimeout(resolve, 250));
+  await vscode.commands.executeCommand('nagi.check');
+  assert.equal(vscode.languages.getDiagnostics(cpu.uri).length, 0, 'CPU sample checks normally after compiler configuration is restored');
   const document = await vscode.workspace.openTextDocument(file);
   await vscode.window.showTextDocument(document);
   assert.equal(document.languageId, 'nagi');
