@@ -6,12 +6,12 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     io::Read,
     path::{Path, PathBuf},
 };
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 struct Location {
     file: String,
     line: usize,
@@ -181,6 +181,143 @@ impl File<'_> {
     }
 }
 
+fn name_location(files: &[File<'_>], line: usize, span: Span, name: &str) -> Option<Location> {
+    let file = files
+        .iter()
+        .find(|f| line >= f.start && line < f.start + f.lines.len().max(1))?;
+    let token = file
+        .tokens
+        .get(span.start..span.end)?
+        .iter()
+        .find(|t| matches!(&t.kind, K::Id(n) if n == name))?;
+    Some(file.location(token, name.encode_utf16().count()))
+}
+
+// Resolve lexical bindings independently of type/ownership checking. Navigation
+// remains useful on a moved value or a binding whose initializer has a type error.
+struct Bindings<'a, 'b> {
+    files: &'a [File<'b>],
+    vars: HashMap<String, Location>,
+    references: Vec<Reference>,
+}
+impl Bindings<'_, '_> {
+    fn binding(&mut self, line: usize, span: Span, name: &str) {
+        if let Some(location) = name_location(self.files, line, span, name) {
+            self.vars.insert(name.into(), location.clone());
+            self.references.push(Reference {
+                target: location.clone(),
+                location,
+            });
+        }
+    }
+    fn reference(&mut self, line: usize, span: Span, name: &str) {
+        if let (Some(location), Some(target)) = (
+            name_location(self.files, line, span, name),
+            self.vars.get(name),
+        ) {
+            self.references.push(Reference {
+                location,
+                target: target.clone(),
+            });
+        }
+    }
+    fn expr(&mut self, e: &Expr) {
+        match &e.kind {
+            E::Name(name) => self.reference(e.line, e.span, name),
+            E::Call(_, _, args) | E::List(args) => {
+                for arg in args {
+                    self.expr(arg);
+                }
+            }
+            E::Record(_, fields) => {
+                for (_, value) in fields {
+                    self.expr(value);
+                }
+            }
+            E::Binary(a, _, b) | E::Index(a, b) => {
+                self.expr(a);
+                self.expr(b);
+            }
+            E::Unary(_, e) | E::Field(e, _) | E::Try(e) | E::Await(e) => self.expr(e),
+            _ => {}
+        }
+    }
+    fn child(&mut self, body: &[Stmt]) {
+        let before = self.vars.clone();
+        self.block(body);
+        self.vars = before;
+    }
+    fn block(&mut self, ss: &[Stmt]) {
+        for s in ss {
+            match &s.kind {
+                S::Assign {
+                    name,
+                    value,
+                    declare,
+                    ..
+                } => {
+                    // A use in the initializer resolves before the new binding.
+                    self.expr(value);
+                    if let Some(span) = s.binding_span {
+                        if !self.vars.contains_key(name) {
+                            self.binding(s.line, span, name);
+                        } else if !declare {
+                            self.reference(s.line, span, name);
+                        }
+                        // A duplicate `let` is invalid and cannot replace a binding.
+                    }
+                }
+                S::Return(Some(value)) | S::Expr(value) | S::Spawn(value) => self.expr(value),
+                S::If(value, a, b) => {
+                    self.expr(value);
+                    self.child(a);
+                    self.child(b);
+                }
+                S::While(value, body) => {
+                    self.expr(value);
+                    self.child(body);
+                }
+                S::For(name, value, body) => {
+                    self.expr(value);
+                    let before = self.vars.clone();
+                    if let Some(span) = s.binding_span {
+                        self.binding(s.line, span, name);
+                    }
+                    self.block(body);
+                    self.vars = before;
+                }
+                S::Match(value, arms) => {
+                    self.expr(value);
+                    let before = self.vars.clone();
+                    for arm in arms {
+                        self.vars = before.clone();
+                        if let Some(name) = &arm.binding {
+                            if self.vars.contains_key(name) {
+                                // Nagi forbids a case binding with an outer name.
+                                // Do not guess which declaration an invalid arm means.
+                                self.vars.remove(name);
+                            } else {
+                                self.binding(arm.line, arm.binding_span, name);
+                            }
+                        }
+                        self.block(&arm.body);
+                    }
+                    self.vars = before;
+                }
+                S::Scope(body) => self.child(body),
+                S::Return(None) => {}
+            }
+        }
+    }
+    fn function(&mut self, f: &Function) {
+        self.vars.clear();
+        for ((name, _), span) in f.params.iter().zip(&f.parameter_spans) {
+            self.binding(f.line, *span, name);
+        }
+        self.block(&f.body);
+    }
+}
+
 struct Types<'a, 'b> {
     files: &'a [File<'b>],
     classes: &'a [Class],
@@ -194,15 +331,9 @@ impl Types<'_, '_> {
             .find(|f| line >= f.start && line < f.start + f.lines.len().max(1))
     }
     fn binding(&mut self, line: usize, span: Span, name: &str, ty: &Type) {
-        let Some(file) = self.file(line) else { return };
-        let Some(token) = file.tokens.get(span.start..span.end).and_then(|tokens| {
-            tokens
-                .iter()
-                .find(|t| matches!(&t.kind, K::Id(n) if n == name))
-        }) else {
+        let Some(location) = name_location(self.files, line, span, name) else {
             return;
         };
-        let location = file.location(token, name.encode_utf16().count());
         self.locals.push(Local {
             name: name.into(),
             ty: ty.to_string(),
@@ -533,6 +664,20 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
             target: def.location.clone(),
         });
     }
+    let mut bindings = Bindings {
+        files: &files,
+        vars: HashMap::new(),
+        references: vec![],
+    };
+    for p in programs {
+        for f in &p.functions {
+            bindings.function(f);
+        }
+    }
+    references.extend(bindings.references);
+    // Compound assignments contain a synthetic read of their left-hand name.
+    let mut seen = HashSet::new();
+    references.retain(|r| seen.insert((r.location.clone(), r.target.clone())));
     let mut primary = Program::default();
     let mut native = Program::default();
     for (i, p) in programs.iter().enumerate() {

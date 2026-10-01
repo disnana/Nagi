@@ -42,6 +42,19 @@ async function run() {
   fs.writeFileSync(lowFile, 'fn main() -> unit { print(1); }\n');
   const low = await vscode.workspace.openTextDocument(lowFile);
   assert.equal(low.languageId, 'nagi-low');
+  await vscode.window.showTextDocument(low);
+  await vscode.commands.executeCommand('nagi.check');
+  let sourceClosed = false;
+  const closeListener = vscode.workspace.onDidCloseTextDocument(d => {
+    if (d.uri.toString() === low.uri.toString()) sourceClosed = true;
+  });
+  // Changing language closes the old document immediately; closing a tab may
+  // retain its model in VS Code's cache for a while.
+  await vscode.languages.setTextDocumentLanguage(low, 'plaintext');
+  closeListener.dispose();
+  await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  assert.ok(sourceClosed, 'unrelated Nagi source document is closed');
+  assert.equal(vscode.languages.getDiagnostics(vscode.Uri.file(moduleFile)).length, 1, 'closing another source preserves existing diagnostics');
 
   const project = path.join(folder, `project-${process.pid}`);
   fs.mkdirSync(project, { recursive: true });
@@ -117,7 +130,9 @@ async function run() {
   const commentEdit = new vscode.WorkspaceEdit();
   commentEdit.insert(helper.uri, new vscode.Position(helper.lineCount, 0), '# answer()\n');
   await vscode.workspace.applyEdit(commentEdit);
-  assert.equal((await definitions(helper, 2, 12)).length, 0, 'unsaved source never uses stale definitions');
+  const dirtyDefinition = await definitions(helper, 2, 12);
+  assert.equal(dirtyDefinition.length, 1, 'F12 reads parsable unsaved source');
+  assert.equal(dirtyDefinition[0].uri.toString(), entryDocument.uri.toString());
   await helper.save();
   assert.equal((await definitions(helper, 3, 3)).length, 0, 'comments never resolve as calls');
   let execution;
@@ -164,7 +179,8 @@ async function run() {
   assert.equal(lowDefinition[0].uri.toString(), vscode.Uri.file(path.join(lowFolder, 'math.low')).toString(), 'Low import definition jump works');
   assert.match(await hovers(lowEntry, 1, 27), /fn twice\(x: i64\) -> i64/, 'Low hover displays its declaration');
   await checkInferredTypes(folder, hovers, completions);
-  console.log('PASS: VS Code Host diagnostics/run/F12, declaration and inferred hovers, field completion, unsaved imports, fallback, signatures, UTF-16, High/Low');
+  await checkLocalNavigation(folder, definitions);
+  console.log('PASS: VS Code Host diagnostics/run/F12, local and unsaved definitions, declaration and inferred hovers, field completion, unsaved imports, fallback, signatures, UTF-16, High/Low');
 }
 
 async function checkInferredTypes(folder, hovers, completions) {
@@ -238,6 +254,91 @@ async function checkInferredTypes(folder, hovers, completions) {
   const low = await vscode.workspace.openTextDocument(lowFile);
   assert.match(await hover(low, 'value.id', 2), /value: Point/, 'Low local hover has the correct same-line position');
   assert.deepEqual((await fields(low, 'value.id', 'value.'.length)).map(c => c.label), ['id'], 'Low record fields complete');
+}
+
+async function checkLocalNavigation(folder, definitions) {
+  const project = path.join(folder, `navigation-${process.pid}`);
+  fs.mkdirSync(project, { recursive: true });
+  const entryFile = path.join(project, 'main.nagi');
+  const helperFile = path.join(project, 'helper.nagi');
+  const nativeFile = path.join(project, 'math.low');
+  const manifestFile = path.join(project, 'nagi.toml');
+  const manifestText = "entry = 'main.nagi'\nnative = ['math.low']\n";
+  const helperText = 'def helper(argument: i64) -> i64:\n    value = argument\n    return value\n';
+  const nativeText = '@replace("twice")\nfn twice(input: i64) -> i64 { let result = input * 2; print("😀"); return result; }\n';
+  const entryText = 'import "helper.nagi"\nclass User:\n    name: str\ndef consume(user: User):\n    print(user.name)\ndef twice(original: i64) -> i64:\n    return original * 2\nasync def inspect() -> Result[unit, Error]:\n    count = helper(21)\n    count += 1\n    print("😀"); print(count)\n    for count in [count]:\n        print(count)\n    print(count + 1)\n    match parse_i64("2"):\n        case Ok(payload):\n            print(payload)\n        case Err(problem):\n            print(error_kind(problem))\n    print(payload)\n    async with scope:\n        hidden = 1\n        print(hidden)\n    print(hidden)\n    user = User(name="example")\n    consume(user)\n    print(user.name)\n    unknown = missing()\n    print(unknown)\n    return ok(print(0))\ndef main():\n    print(twice(21))\n';
+  fs.writeFileSync(manifestFile, manifestText);
+  fs.writeFileSync(entryFile, entryText);
+  fs.writeFileSync(helperFile, helperText);
+  fs.writeFileSync(nativeFile, nativeText);
+  const doc = await vscode.workspace.openTextDocument(entryFile);
+  const helper = await vscode.workspace.openTextDocument(helperFile);
+  const native = await vscode.workspace.openTextDocument(nativeFile);
+  const manifest = await vscode.workspace.openTextDocument(manifestFile);
+  await vscode.window.showTextDocument(doc);
+  await new Promise(resolve => setTimeout(resolve, 500));
+  function position(document, needle, delta = 0) {
+    const offset = document.getText().indexOf(needle);
+    assert.ok(offset >= 0, needle);
+    return document.positionAt(offset + delta);
+  }
+  async function jump(document, needle, delta = 0) {
+    const p = position(document, needle, delta);
+    return definitions(document, p.line, p.character);
+  }
+  async function assertJump(document, needle, delta, targetDocument, declaration, declarationDelta = 0) {
+    const values = await jump(document, needle, delta);
+    assert.equal(values.length, 1, needle);
+    assert.equal(values[0].uri.toString(), targetDocument.uri.toString(), needle);
+    assert.ok(values[0].range.start.isEqual(position(targetDocument, declaration, declarationDelta)), needle);
+  }
+  async function replace(document, text) {
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(document.uri, new vscode.Range(0, 0, document.lineCount, 0), text);
+    await vscode.workspace.applyEdit(edit);
+  }
+  await assertJump(doc, 'count += 1', 0, doc, 'count = helper');
+  await assertJump(doc, 'print(count)\n    for', 6, doc, 'count = helper');
+  await assertJump(doc, 'for count in [count]', 14, doc, 'count = helper');
+  await assertJump(doc, 'print(count)\n    print', 6, doc, 'for count', 4);
+  await assertJump(doc, 'print(count + 1)', 6, doc, 'count = helper');
+  await assertJump(doc, 'print(payload)\n        case', 6, doc, 'Ok(payload)', 3);
+  await assertJump(doc, 'error_kind(problem)', 11, doc, 'Err(problem)', 4);
+  assert.equal((await jump(doc, 'print(payload)\n    async', 6)).length, 0, 'case binding does not escape');
+  await assertJump(doc, 'print(hidden)\n    print', 6, doc, 'hidden = 1');
+  assert.equal((await jump(doc, 'print(hidden)\n    user', 6)).length, 0, 'scope binding does not escape');
+  await assertJump(doc, 'user.name)\n    unknown', 0, doc, 'user = User');
+  await assertJump(doc, 'print(unknown)', 6, doc, 'unknown = missing');
+  assert.equal((await jump(doc, 'user.name)\n    unknown', 5)).length, 0, 'field name is not a local variable');
+  await assertJump(native, 'input * 2', 0, native, 'twice(input', 6);
+  await assertJump(native, 'return result', 7, native, 'result = input');
+  await assertJump(doc, 'twice(21)', 0, doc, 'def twice', 4);
+  await replace(doc, '# edited entry\n' + entryText);
+  await replace(helper, '# edited helper\n' + helperText);
+  await replace(native, '# edited Low\n' + nativeText);
+  await assertJump(doc, 'helper(21)', 0, helper, 'def helper', 4);
+  await assertJump(helper, 'value = argument', 8, helper, 'helper(argument', 7);
+  await assertJump(helper, 'return value', 7, helper, 'value = argument');
+  await assertJump(doc, 'print(count)\n    for', 6, doc, 'count = helper');
+  await assertJump(native, 'return result', 7, native, 'result = input');
+  const importJump = await jump(doc, '"helper.nagi"', 2);
+  assert.equal(importJump[0].uri.toString(), helper.uri.toString(), 'dirty import still opens its target');
+  await replace(helper, '# incomplete imported source\ndef unfinished(:\n');
+  assert.equal((await jump(doc, 'helper(21)')).length, 0, 'saved fallback never supplies stale cross-file navigation');
+  await replace(helper, '# edited helper\n' + helperText);
+  await replace(doc, '# shifted broken source\n' + entryText + '\ndef unfinished(:\n');
+  assert.equal((await jump(doc, 'print(count)\n    for', 6)).length, 0, 'saved fallback never supplies stale local navigation');
+  await replace(doc, '# edited entry\n' + entryText);
+  await replace(manifest, "entry = 'other.nagi'\n");
+  assert.equal((await jump(doc, 'helper(21)')).length, 0, 'unsaved manifest disables navigation');
+  await replace(manifest, manifestText);
+  for (const [file, text] of [[entryFile, entryText], [helperFile, helperText], [nativeFile, nativeText], [manifestFile, manifestText]]) {
+    assert.equal(fs.readFileSync(file, 'utf8'), text, 'navigation never saves a buffer');
+  }
+  await replace(doc, entryText);
+  await replace(helper, helperText);
+  await replace(native, nativeText);
+  await Promise.all([doc.save(), helper.save(), native.save(), manifest.save()]);
 }
 
 module.exports = { run };

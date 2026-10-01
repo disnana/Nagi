@@ -14,6 +14,7 @@ function activate(context) {
   const navigation = new Set();
   const symbolCache = new Map();
   let epoch = 0;
+  let symbolsEpoch = 0;
   const isNagi = d => d && ['nagi', 'nagi-low'].includes(d.languageId) && d.uri.scheme === 'file';
   function publishDiagnostics() {
     diagnostics.clear();
@@ -54,14 +55,19 @@ function activate(context) {
     return true;
   }
 
+  function invalidateSymbols() {
+    symbolsEpoch++;
+    for (const child of navigation) child.kill();
+    navigation.clear();
+    symbolCache.clear();
+  }
+
   function invalidate() {
     epoch++;
     for (const d of vscode.workspace.textDocuments) cancel(d);
     results.clear();
     diagnostics.clear();
-    for (const child of navigation) child.kill();
-    navigation.clear();
-    symbolCache.clear();
+    invalidateSymbols();
   }
 
   function recheckOpen() {
@@ -140,33 +146,20 @@ function activate(context) {
     return vscode.tasks.executeTask(task);
   }
 
-  function provideDefinition(document, position, token) {
+  async function provideDefinition(document, position, token) {
     if (!isNagi(document) || !vscode.workspace.isTrusted || token.isCancellationRequested) return [];
-    const settings = options(document);
-    if (document.isDirty || projectDirty(settings.project)) {
-      vscode.window.setStatusBarMessage('Nagi: 定義ジャンプの前にプロジェクトの変更を保存してください', 3000);
-      return [];
-    }
     const version = document.version;
-    const startEpoch = epoch;
-    return new Promise(resolve => {
-      let cancellation;
-      const child = compiler.runCheck(settings.executable, argsFor('symbols', document, settings), settings.root,
-        settings.config.get('checkTimeoutMs', 15000), result => {
-          navigation.delete(child);
-          cancellation?.dispose();
-          if (token.isCancellationRequested || startEpoch !== epoch || document.isClosed || document.version !== version || document.isDirty) return resolve([]);
-          try {
-            if (result.error) throw new Error(result.output || result.error.message);
-            const target = compiler.definitionAt(JSON.parse(result.output), document.uri.fsPath, position.line, position.character, settings.root);
-            if (!target) return resolve([]);
-            const range = new vscode.Range(target.line - 1, target.column - 1, target.line - 1, target.column - 1 + target.length);
-            resolve([new vscode.Location(vscode.Uri.file(compiler.normalizeFile(target.file, settings.root)), range)]);
-          } catch (error) { output.appendLine(`[symbols] ${error.message}`); resolve([]); }
-        }, 16 * 1024 * 1024);
-      cancellation = token.onCancellationRequested(() => child.kill());
-      navigation.add(child);
-    });
+    const startEpoch = symbolsEpoch;
+    const snapshot = await querySymbols(document, token);
+    if (!snapshot || snapshot.saved || token.isCancellationRequested || startEpoch !== symbolsEpoch ||
+        document.isClosed || document.version !== version) return [];
+    try {
+      const root = options(document).root;
+      const target = compiler.definitionAt(snapshot.index, document.uri.fsPath, position.line, position.character, root);
+      if (!target) return [];
+      const range = new vscode.Range(target.line - 1, target.column - 1, target.line - 1, target.column - 1 + target.length);
+      return [new vscode.Location(vscode.Uri.file(compiler.normalizeFile(target.file, root)), range)];
+    } catch (error) { output.appendLine(`[symbols] ${error.message}`); return []; }
   }
 
   function querySymbols(document, token, member) {
@@ -184,7 +177,7 @@ function activate(context) {
     const cached = symbolCache.get(key);
     const stamp = file => { try { const s = fs.statSync(file); return `${s.mtimeMs}:${s.size}`; } catch { return ''; } };
     if (cached && Date.now() - cached.created < 2000 && cached.stamps.every(([file, time]) => stamp(file) === time)) return Promise.resolve(cached.value);
-    const startEpoch = epoch;
+    const startEpoch = symbolsEpoch;
     const version = document.version;
     function run(editorInput) {
       return new Promise(resolve => {
@@ -193,7 +186,7 @@ function activate(context) {
           settings.root, settings.config.get('checkTimeoutMs', 15000), result => {
             navigation.delete(child);
             cancellation?.dispose();
-            if (token.isCancellationRequested || startEpoch !== epoch || document.isClosed || document.version !== version) return resolve();
+            if (token.isCancellationRequested || startEpoch !== symbolsEpoch || document.isClosed || document.version !== version) return resolve();
             if (result.error) return resolve();
             try {
               const index = JSON.parse(result.output);
@@ -207,7 +200,7 @@ function activate(context) {
     }
     return (async () => {
       let value = await run(files.length > 0);
-      if (!value && files.length > 0 && startEpoch === epoch && !token.isCancellationRequested) value = await run(false);
+      if (!value && files.length > 0 && startEpoch === symbolsEpoch && !token.isCancellationRequested) value = await run(false);
       if (value) {
         const paths = [...(value.index.files || []).map(file => compiler.normalizeFile(file, settings.root)), settings.project, settings.executable].filter(Boolean);
         symbolCache.set(key, { value, created: Date.now(), stamps: paths.map(file => [file, stamp(file)]) });
@@ -290,7 +283,12 @@ function activate(context) {
     vscode.workspace.onDidChangeTextDocument(e => {
       if (isNagi(e.document) || compiler.findProject(e.document.uri.fsPath)) invalidate();
     }),
-    vscode.workspace.onDidCloseTextDocument(d => { cancel(d); results.delete(d.uri.toString()); publishDiagnostics(); }),
+    vscode.workspace.onDidCloseTextDocument(d => {
+      cancel(d);
+      if (isNagi(d) || d.uri.scheme === 'file' && compiler.findProject(d.uri.fsPath)) invalidateSymbols();
+      results.delete(d.uri.toString());
+      publishDiagnostics();
+    }),
     vscode.workspace.onDidGrantWorkspaceTrust(() => { for (const d of vscode.workspace.textDocuments) if (optionsForAuto(d)) check(d); }),
     vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('nagi')) { invalidate(); recheckOpen(); } }),
     vscode.commands.registerCommand('nagi.showOutput', () => output.show(true)));

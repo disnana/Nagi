@@ -62,6 +62,290 @@ impl Drop for Fixture {
     }
 }
 
+fn reference_at<'a>(
+    index: &'a serde_json::Value,
+    file: &str,
+    source: &str,
+    needle: &str,
+    delta: usize,
+) -> Option<&'a serde_json::Value> {
+    let offset = source.find(needle).unwrap() + delta;
+    let prefix = &source[..offset];
+    let line = prefix.bytes().filter(|b| *b == b'\n').count() + 1;
+    let column = prefix.rsplit('\n').next().unwrap().encode_utf16().count() + 1;
+    index["references"].as_array().unwrap().iter().find(|r| {
+        r["location"]["file"].as_str().unwrap().ends_with(file)
+            && r["location"]["line"] == line
+            && r["location"]["column"] == column
+    })
+}
+
+fn assert_target(
+    index: &serde_json::Value,
+    file: &str,
+    source: &str,
+    needle: &str,
+    delta: usize,
+    definition: &str,
+    definition_delta: usize,
+) {
+    let reference = reference_at(index, file, source, needle, delta)
+        .unwrap_or_else(|| panic!("missing reference: {needle}"));
+    let declaration = reference_at(index, file, source, definition, definition_delta)
+        .unwrap_or_else(|| panic!("missing definition: {definition}"));
+    assert_eq!(reference["target"], declaration["location"], "{needle}");
+}
+
+#[test]
+fn local_navigation_preserves_binding_identity_across_reassignments_and_scopes() {
+    let f = Fixture::new();
+    let source = "def first(value: i32) -> i32:\n    return value\ndef second(value: bool) -> bool:\n    print(value)\n    return value\ndef main():\n    count = 7\n    count += 1\n    if True:\n        count = 9\n        inside = count\n        print(inside)\n    else:\n        other = count\n        print(other)\n    print(count)\n    print(inside); print(other)\n    for count in [count]:\n        count += 2\n        print(count)\n    print(count + 1)\n    while False:\n        temporary = count\n        print(temporary)\n    print(temporary)\n";
+    f.write("main.nagi", source);
+    let index = f.symbols(serde_json::json!([]));
+    assert_target(
+        &index,
+        "main.nagi",
+        source,
+        "return value",
+        7,
+        "first(value",
+        6,
+    );
+    assert_target(
+        &index,
+        "main.nagi",
+        source,
+        "print(value)",
+        6,
+        "second(value",
+        7,
+    );
+    for (needle, delta) in [
+        ("count += 1", 0),
+        ("count = 9", 0),
+        ("inside = count", 9),
+        ("other = count", 8),
+        ("print(count)", 6),
+        ("for count in [count]", 14),
+        ("print(count + 1)", 6),
+    ] {
+        assert_target(&index, "main.nagi", source, needle, delta, "count = 7", 0);
+    }
+    assert_target(&index, "main.nagi", source, "count += 2", 0, "for count", 4);
+    assert_target(
+        &index,
+        "main.nagi",
+        source,
+        "count)\n    print(count + 1)",
+        0,
+        "for count",
+        4,
+    );
+    assert_target(
+        &index,
+        "main.nagi",
+        source,
+        "print(inside)\n    else",
+        6,
+        "inside = count",
+        0,
+    );
+    assert!(reference_at(&index, "main.nagi", source, "print(inside);", 6).is_none());
+    assert!(reference_at(&index, "main.nagi", source, "print(other)\n    for", 6).is_none());
+    assert!(reference_at(&index, "main.nagi", source, "print(temporary)\n", 6).is_some());
+    let refs = index["references"].as_array().unwrap();
+    let last_line = source.lines().count();
+    assert!(!refs.iter().any(|r| r["location"]["line"] == last_line));
+    let count_increment = source.lines().nth(7).unwrap().find("count").unwrap() + 1;
+    assert_eq!(
+        refs.iter()
+            .filter(|r| r["location"]["line"] == 8 && r["location"]["column"] == count_increment)
+            .count(),
+        1,
+        "compound assignment exports one reference"
+    );
+}
+
+#[test]
+fn navigation_resolves_case_and_scope_bindings_without_leaking_them() {
+    let f = Fixture::new();
+    let source = "async def work(result: Result[i64, Error]) -> Result[unit, Error]:\n    match result:\n        case Ok(payload):\n            local = payload\n            print(local)\n        case Err(problem):\n            print(error_kind(problem))\n            print(payload); print(local)\n    print(payload); print(problem); print(local)\n    async with scope:\n        hidden = 7\n        print(hidden)\n    print(hidden)\n    return ok(print(0))\ndef main():\n    print(0)\n";
+    f.write("main.nagi", source);
+    let index = f.symbols(serde_json::json!([]));
+    for (needle, delta, definition, definition_delta) in [
+        ("match result", 6, "work(result", 5),
+        ("local = payload", 8, "Ok(payload)", 3),
+        ("print(local)\n        case", 6, "local = payload", 0),
+        ("error_kind(problem)", 11, "Err(problem)", 4),
+        ("print(hidden)\n    print", 6, "hidden = 7", 0),
+    ] {
+        assert_target(
+            &index,
+            "main.nagi",
+            source,
+            needle,
+            delta,
+            definition,
+            definition_delta,
+        );
+    }
+    for (needle, delta) in [
+        ("print(payload); print(local)", 6),
+        ("print(payload); print(local)", 22),
+        ("print(payload); print(problem)", 6),
+        ("print(problem); print(local)", 6),
+        ("print(local)\n    async", 6),
+        ("print(hidden)\n    return", 6),
+    ] {
+        assert!(
+            reference_at(&index, "main.nagi", source, needle, delta).is_none(),
+            "{needle}"
+        );
+    }
+}
+
+#[test]
+fn navigation_is_available_after_moves_and_invalid_types_but_not_before_binding() {
+    let f = Fixture::new();
+    let source = "class User:\n    name: str\ndef consume(user: User):\n    print(user.name)\ndef invalid(argument: Missing):\n    print(argument)\ndef main():\n    print(later)\n    later = 1\n    user = User(name=\"example\")\n    consume(user)\n    print(user.name)\n    unknown = missing()\n    print(unknown)\n    print(not_defined)\n";
+    f.write("main.nagi", source);
+    let index = f.symbols(serde_json::json!([]));
+    assert_target(
+        &index,
+        "main.nagi",
+        source,
+        "print(argument)",
+        6,
+        "invalid(argument",
+        8,
+    );
+    assert_target(
+        &index,
+        "main.nagi",
+        source,
+        "user.name)\n    unknown",
+        0,
+        "user = User",
+        0,
+    );
+    assert_target(
+        &index,
+        "main.nagi",
+        source,
+        "print(unknown)",
+        6,
+        "unknown = missing",
+        0,
+    );
+    assert!(reference_at(&index, "main.nagi", source, "print(later)", 6).is_none());
+    assert!(reference_at(&index, "main.nagi", source, "print(not_defined)", 6).is_none());
+    assert!(
+        index["locals"].as_array().unwrap().is_empty(),
+        "invalid signature suppresses inferred types, not navigation"
+    );
+    f.write(
+        "main.nagi",
+        &source.replace("def invalid(argument: Missing):\n    print(argument)\n", ""),
+    );
+    let index = f.symbols(serde_json::json!([]));
+    assert_target(
+        &index,
+        "main.nagi",
+        &source.replace("def invalid(argument: Missing):\n    print(argument)\n", ""),
+        "user.name)\n    unknown",
+        0,
+        "user = User",
+        0,
+    );
+    assert!(
+        local_types(&index, 10, "user").is_empty(),
+        "moved value has no inferred hover"
+    );
+}
+
+#[test]
+fn navigation_uses_unsaved_import_and_low_replacement_positions_in_utf16() {
+    let f = Fixture::new();
+    f.write("nagi.toml", "entry = 'main.nagi'\nnative = ['math.low']\n");
+    f.write("main.nagi", "import \"helper.nagi\"\ndef twice(original: i64) -> i64:\n    return original * 2\ndef main():\n    print(helper())\n");
+    let saved_helper = "def helper() -> i64:\n    value = 21\n    return twice(value)\n";
+    f.write("helper.nagi", saved_helper);
+    let saved_low = "@replace(\"twice\")\nfn twice(old: i64) -> i64 { return old * 2; }\n";
+    f.write("math.low", saved_low);
+    let helper = "# unsaved line\ndef helper() -> i64:\n    value = 21\n    print(\"😀\"); return twice(value)\n";
+    let low = "@replace(\"twice\")\r\nfn twice(input: i64) -> i64 { let result = input * 2; print(\"😀\"); return result; }\r\n";
+    let index = f.symbols(serde_json::json!([
+        {"file":"helper.nagi", "text":helper}, {"file":"math.low", "text":low}
+    ]));
+    assert_target(
+        &index,
+        "helper.nagi",
+        helper,
+        "twice(value)",
+        6,
+        "value = 21",
+        0,
+    );
+    assert_target(&index, "math.low", low, "input * 2", 0, "twice(input", 6);
+    assert_target(
+        &index,
+        "math.low",
+        low,
+        "return result",
+        7,
+        "result = input",
+        0,
+    );
+    let call = reference_at(&index, "helper.nagi", helper, "twice(value)", 0).unwrap();
+    assert!(call["target"]["file"]
+        .as_str()
+        .unwrap()
+        .ends_with("main.nagi"));
+    assert_eq!(
+        call["target"]["line"], 2,
+        "replacement call retains its High declaration"
+    );
+    assert_eq!(
+        fs::read_to_string(f.0.join("helper.nagi")).unwrap(),
+        saved_helper
+    );
+    assert_eq!(fs::read_to_string(f.0.join("math.low")).unwrap(), saved_low);
+    assert!(!f.0.join("build").exists());
+}
+
+#[test]
+fn duplicate_let_and_case_bindings_cannot_replace_an_outer_definition() {
+    let f = Fixture::new();
+    f.write(
+        "main.low",
+        "fn main() { let item = 1; let item = 2; print(item); }\n",
+    );
+    let loaded = source::load(&f.0.join("main.low"), false).unwrap();
+    let index = symbols::index(&loaded, &[&loaded.program]).unwrap();
+    assert_target(
+        &index,
+        "main.low",
+        &fs::read_to_string(f.0.join("main.low")).unwrap(),
+        "print(item)",
+        6,
+        "item = 1",
+        0,
+    );
+    let high = "def main():\n    item = 1\n    match parse_i64(\"2\"):\n        case Ok(item):\n            print(item)\n        case Err(_):\n            print(0)\n    print(item + 1)\n";
+    f.write("main.nagi", high);
+    let index = f.symbols(serde_json::json!([]));
+    assert!(reference_at(&index, "main.nagi", high, "print(item)\n", 6).is_none());
+    assert_target(
+        &index,
+        "main.nagi",
+        high,
+        "print(item + 1)",
+        6,
+        "item = 1",
+        0,
+    );
+}
+
 #[test]
 fn actual_symbols_command_resolves_transitive_imports_and_utf16_columns() {
     let f = Fixture::new();
@@ -105,10 +389,9 @@ fn actual_symbols_command_resolves_transitive_imports_and_utf16_columns() {
     assert_eq!(make["location"]["column"], 38);
     assert_eq!(make["target"]["line"], 2);
     assert_eq!(make["target"]["column"], 5);
-    assert!(!refs
-        .iter()
-        .any(|r| r["location"]["file"] == main
-            && matches!(r["location"]["line"].as_u64(), Some(4 | 5))));
+    assert!(!refs.iter().any(|r| r["location"]["file"] == main
+        && matches!(r["location"]["line"].as_u64(), Some(4 | 5))
+        && r["target"]["file"] == helper));
     let import = refs
         .iter()
         .find(|r| r["location"]["file"] == main && r["location"]["line"] == 1)
@@ -152,15 +435,20 @@ fn native_low_symbols_and_calls_inside_match_keep_original_files() {
 }
 
 #[test]
-fn symbols_work_despite_type_errors_and_skip_fields_and_local_names() {
+fn symbols_work_despite_type_errors_and_distinguish_fields_locals_and_calls() {
     let f = Fixture::new();
     f.write("main.nagi", "class User:\n    name: str\ndef helper() -> i64:\n    return \"wrong type\"\ndef main():\n    helper = 7\n    print(helper)\n    user = User(name=\"helper()\")\n    print(user.name)\n    helper = [1]\n    print(helper[0]); print(helper())\n");
     let loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
     let index = symbols::index(&loaded, &[&loaded.program]).unwrap();
     let refs = index["references"].as_array().unwrap();
-    assert!(!refs
-        .iter()
-        .any(|r| r["location"]["line"] == 7 || r["location"]["line"] == 9));
+    let local = refs.iter().find(|r| r["location"]["line"] == 7).unwrap();
+    assert_eq!(local["target"]["line"], 6);
+    let receiver = refs.iter().find(|r| r["location"]["line"] == 9).unwrap();
+    assert_eq!(
+        receiver["location"]["length"], 4,
+        "only the receiver, not its field"
+    );
+    assert_eq!(receiver["target"]["line"], 8);
     assert!(refs
         .iter()
         .any(|r| r["location"]["line"] == 8 && r["target"]["line"] == 1));
@@ -170,10 +458,19 @@ fn symbols_work_despite_type_errors_and_skip_fields_and_local_names() {
         .collect::<Vec<_>>();
     assert_eq!(
         same_line.len(),
-        1,
-        "indexing a local is not a function call"
+        2,
+        "the local and function have separate targets"
     );
-    assert_eq!(same_line[0]["location"]["column"], 29);
+    let call = same_line
+        .iter()
+        .find(|r| r["location"]["column"] == 29)
+        .unwrap();
+    assert_eq!(call["target"]["line"], 3);
+    let indexed = same_line
+        .iter()
+        .find(|r| r["location"]["column"] == 11)
+        .unwrap();
+    assert_eq!(indexed["target"]["line"], 6);
 }
 
 #[test]
