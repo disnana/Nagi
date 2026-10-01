@@ -2,13 +2,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const compiler = require('../src/compiler');
 
 const root = path.resolve(__dirname, '../../..');
 function fixture(t, files) {
-  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'nagi-navigation-'));
+  // Windows TEMP may use an 8.3 alias, while the compiler reports full paths.
+  const base = path.join(root, 'build', 'vscode-navigation');
+  fs.mkdirSync(base, { recursive: true });
+  const folder = fs.mkdtempSync(path.join(base, 'case-'));
   t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
   for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(folder, name), text);
   return folder;
@@ -37,11 +39,11 @@ test('real compiler navigation uses edited source and target positions across im
   const main = '# edited entry\n' + savedMain.replace('print(result)', 'print("😀"); print(result)');
   const index = await symbols(folder, 'main.nagi', [{ file: 'main.nagi', text: main }, { file: 'helper.nagi', text: helper }]);
   const result = target(index, folder, 'main.nagi', main, 'print(result)', 6);
-  assert.equal(result.file, fs.realpathSync(path.join(folder, 'main.nagi')));
+  assert.equal(compiler.normalizeFile(result.file, folder), fs.realpathSync(path.join(folder, 'main.nagi')));
   assert.equal(result.line, 4);
   assert.equal(result.column, 5);
   const call = target(index, folder, 'main.nagi', main, 'helper(21)');
-  assert.equal(call.file, fs.realpathSync(path.join(folder, 'helper.nagi')));
+  assert.equal(compiler.normalizeFile(call.file, folder), fs.realpathSync(path.join(folder, 'helper.nagi')));
   assert.equal(call.line, 2, 'target follows the unsaved imported line');
   const argument = target(index, folder, 'helper.nagi', helper, 'value = argument', 8);
   assert.equal(argument.line, 2);
