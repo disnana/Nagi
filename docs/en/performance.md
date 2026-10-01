@@ -6,6 +6,8 @@ Comparisons use the same machine, release opt-level=3, LTO disabled, warmup, and
 
 HTTP tests use wrk, pin every server to one logical CPU, and match request bodies and responses. They use 64 keep-alive connections, two load-generator threads, and three repetitions. Records include p50/p95/p99/max, socket/status errors, server CPU/RSS, and context switches. These closed-loop tests do not assess open-loop latency under overload.
 
+The additional [HTTP load tests](http-capacity.md) increase the requested send rate and include sustained traffic. They separate requested and dispatched rates, and record latency, memory, connection counts, and recovery after the load stops. The observed throughput is specific to the test environment and client constraints; it is not a fixed limit of Nagi itself.
+
 The allocation counter records Rust GlobalAlloc requests on the calling thread. Reallocations also count as allocations; requested bytes are cumulative. SQLite's C allocator and allocations on other threads are excluded. RSS and allocated bytes are different metrics. Even when disabled, the counter has a TLS branch that can affect measurements.
 
 Static cost reports identify locations where costs arise. They are not dynamic counts that account for loop iterations, runtime internals, or optimizer removal. Precise hardware cache-miss, branch-miss, instruction-count, and allocator-fragmentation measurements have not been performed.

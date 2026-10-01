@@ -1,0 +1,19 @@
+{
+  "date_utc": "2026-10-01T12:12:18Z",
+  "source_commit": "c602abb349641cf1d5a274e2221e33d29a0acea4",
+  "binary_sha256": "934ddff23a6edf1588140d468cd4cc509d6e3c2aa8cc535860157efb3df9c511",
+  "harness_sha256": "bfddc9fe11c3ae5bb7015e40897c5539f758a5c9f3fbde174030287306037309",
+  "http_helpers_sha256": "f6af615081f8139bd83c8d6727e94777f18e0651c6b3fd8579433791a66666b7",
+  "cpu_quota": "400000 100000",
+  "memory_limit": "17179869184",
+  "fd_limits": [
+    16384,
+    16384
+  ],
+  "server_cpus": "0",
+  "client_cpus": "2,3",
+  "server_workers": 1,
+  "client_count": 2,
+  "client_open_concurrency_each": 128,
+  "source_address_policy": "Two new 127/8 source addresses per case, avoiding port reuse between cases"
+}

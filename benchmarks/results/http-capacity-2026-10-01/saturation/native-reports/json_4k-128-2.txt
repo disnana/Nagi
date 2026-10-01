@@ -1,0 +1,14 @@
+Running 8s test @ http://127.0.0.1:8080/echo
+  2 threads and 128 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     3.29ms  486.71us  13.22ms   91.74%
+    Req/Sec    19.52k     1.57k   23.28k    84.38%
+  Latency Distribution
+     50%    3.21ms
+     75%    3.30ms
+     90%    3.60ms
+     99%    5.35ms
+  310837 requests in 8.04s, 1.22GB read
+Requests/sec:  38676.64
+Transfer/sec:    155.88MB
+RESULT {"requests":310837,"duration_us":8036814,"requests_s":38676.645,"p50_us":3206.000,"p95_us":4190.000,"p99_us":5347.000,"max_us":13220,"connect_errors":0,"read_errors":0,"write_errors":0,"timeouts":0,"status_errors":0}
