@@ -1,8 +1,12 @@
 # Nagi 0.1.3 — バックエンド向け二層言語の実行可能な試作
 
+[English](README.en.md)
+
 読みやすいHighを、編集できるLowへ変換し、ネイティブ実行ファイルにする実験です。HTTP body → 型付きclass → SQLite → class → JSONの経路が実際に動きます。性能の根拠は [PERFORMANCE.md](PERFORMANCE.md) と生の測定ログです。
 
 この版は仕様の完成版ではありません。コンパイラとランタイムの足場を動かし、所有権・view・生成コードの差し替え・実行コストを検証するためのプロトタイプです。
+
+名前は日本語の「凪」に由来します。「内部は激しく動いていても、表面は凪のように穏やか」という考えを込めています。
 
 ## 書き方を読む
 
@@ -15,6 +19,8 @@
 ## 最初に動かす
 
 必要なものはRust/Cargo、SQLiteのCコードをビルドできるCコンパイラです。[GitHub Releases](https://github.com/disnana/Nagi/releases)から、Windows x64、Linux x86_64、macOS Apple Silicon、macOS Intel用のコンパイラ入り配布物を取得できます。CIで各OSのビルド・実行を検証します。WindowsのMSVC環境とPowerShellのコマンド、macOSの準備は[準備と最初の実行](docs/getting-started.md)にあります。WSL2では次のLinux手順を使えます。
+
+コンパイラ入りの配布物を使う場合は、最初の`cargo build`を省略できます。NagiのアプリをビルドするためのRust/CargoとCのビルド環境は必要です。コンパイラが`runtime/`を参照できるよう、アーカイブ全体を展開してください。
 
 ```bash
 cargo build --release --locked
@@ -97,6 +103,8 @@ python3 scripts/summarize_results.py
 
 サーバーはloopbackへbindします。試験時に8080/8081/8082/8083を空けてください。DBを永続化する場合は`NAGI_DB=users.sqlite`を指定します。HTTP executorのworker数は`NAGI_THREADS`、標準は4です。比較試験では全サーバーを1論理CPUに固定します。
 
+接続数の限界、長時間の負荷、負荷が止まった後の回復は[通信の負荷試験](docs/http-capacity.md)で確認できます。
+
 ## 現在の範囲
 
 primitive、値型class、連続配列、nullable、Result、関数、分岐、ループ、async/await、scope、HTTPの基本、HTML応答、JSON、SQLite、手書きLow呼び出しと置換、相対ファイルのimport、型付きRust関数の呼び出しを実装しています。actor・Supervisor・queueは実ランタイムとHighから呼ぶ試験用標準関数を提供します。ファイル分割とRustのcrate利用は [docs/modules-and-rust.md](docs/modules-and-rust.md)、画面付きデモは [test-nagi-code/web-demo/README.md](test-nagi-code/web-demo/README.md) を参照してください。
@@ -110,3 +118,7 @@ Resultの`match`で成功・失敗を分け、既定値に回復したり、Erro
 CPUの速さは、型付きネイティブ演算・boxingの回避・LLVMのループ最適化で説明できます。ランタイムはTokio/Axum/Serde/rusqliteに依存します。これらを置き換える独自ランタイムの性能を証明したものではありません。
 
 詳細は [docs/introduction.md](docs/introduction.md)、[docs/roadmap.md](docs/roadmap.md)、[PERFORMANCE.md](PERFORMANCE.md) を参照してください。
+
+## 貢献とライセンス
+
+不具合の報告、コードの修正、Docsや翻訳の改善を受け付けます。手順とAI利用の方針は[貢献ガイド](CONTRIBUTING.md)にあります。Nagiは[MITライセンス](LICENSE)で公開しています。
