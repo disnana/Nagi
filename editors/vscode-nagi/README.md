@@ -19,10 +19,10 @@ Nagi High (`.nagi`) とLow (`.low`)の開発補助です。
 
 正式版のVSIXは[GitHub Releases](https://github.com/disnana/Nagi/releases)に掲載します。ファイル名は`nagi-language-バージョン.vsix`です。mainで拡張のバージョンを上げたとき、CI成功後に自動公開します。
 
-リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、`build/distribution/nagi-language-0.1.7.vsix` ができます。VS Codeの「拡張機能: VSIXからのインストール」で選択するか、次のコマンドを実行してください。
+リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、`build/distribution/nagi-language-0.1.8.vsix` ができます。VS Codeの「拡張機能: VSIXからのインストール」で選択するか、次のコマンドを実行してください。
 
 ```powershell
-code --install-extension build/distribution/nagi-language-0.1.7.vsix
+code --install-extension build/distribution/nagi-language-0.1.8.vsix
 ```
 
 色付けとスニペットはコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。Nagiリポジトリを開き、ルートで `cargo build --release --locked -p nagic` を実行してください。リポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
@@ -68,7 +68,7 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 
 ## ホバー・補完・引数ヒント
 
-最新版の`nagic`と拡張0.1.7を使います。関数名にマウスを置くと引数・戻り値・asyncの宣言が表示され、class名ではフィールド一覧を確認できます。`Result[Item?, Error]`や`view[str]`などの型も宣言どおりに表示します。[コードを使った操作例](../../docs/editor.md)もあります。
+最新版の`nagic`と拡張0.1.8を使います。関数名にマウスを置くと引数・戻り値・asyncの宣言が表示され、class名ではフィールド一覧を確認できます。`Result[Item?, Error]`や`view[str]`などの型も宣言どおりに表示します。[コードを使った操作例](../../docs/editor.md)もあります。
 
 変数名にマウスを置くと、コンパイラが確認できた型を表示します。たとえば`count = 3`は`count: i64`、classを返す関数から作った`item`は`item: Item`です。関数の引数、`for`の要素、Resultの`case Ok(value)`と`case Err(problem)`の束縛名にも対応します。宣言と使用箇所を扱い、caseやifなどのブロックを出た名前には型を表示しません。
 

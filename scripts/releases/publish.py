@@ -5,8 +5,8 @@ import argparse
 import hashlib
 import json
 import subprocess
-import tempfile
 from pathlib import Path
+from urllib.parse import quote
 
 from package import PLATFORMS, archive_name
 from plan import version_tuple
@@ -24,8 +24,32 @@ class GitHub:
             raise RuntimeError(result.stderr.decode(errors="replace"))
         return json.loads(result.stdout)
 
-    def command(self, *args: str) -> None:
-        subprocess.run(["gh", "release", *args, "--repo", self.repository], check=True)
+    def write_api(self, method: str, resource: str, *, data=None, file: Path | None = None):
+        endpoint = resource if resource.startswith("https://") else f"repos/{self.repository}/{resource}"
+        command = ["gh", "api", "--method", method, endpoint]
+        if file is None:
+            command.extend(["--input", "-", "-H", "Content-Type: application/json"])
+            body = json.dumps(data).encode()
+        else:
+            command.extend(["--input", str(file), "-H", "Content-Type: application/octet-stream"])
+            body = None
+        result = subprocess.run(command, input=body, capture_output=True)
+        if result.returncode:
+            raise RuntimeError(result.stderr.decode(errors="replace"))
+        return json.loads(result.stdout)
+
+    def create_release(self, tag: str, sha: str, title: str, notes: str):
+        return self.write_api("POST", "releases", data={
+            "tag_name": tag, "target_commitish": sha, "name": title,
+            "body": notes, "draft": True})
+
+    def upload_asset(self, release_id: int, file: Path):
+        endpoint = f"https://uploads.github.com/repos/{self.repository}/releases/{release_id}/assets?name={quote(file.name, safe='')}"
+        return self.write_api("POST", endpoint, file=file)
+
+    def make_public(self, release_id: int, latest: bool):
+        return self.write_api("PATCH", f"releases/{release_id}", data={
+            "draft": False, "make_latest": "true" if latest else "false"})
 
     def create_tag(self, tag: str, sha: str) -> None:
         subprocess.run(["gh", "api", "--method", "POST", f"repos/{self.repository}/git/refs",
@@ -117,14 +141,11 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
         client.create_tag(tag, sha)
     if not release:
         notes += f"\nBuilt from commit {sha} after Nagi checks succeeded. SHA-256 files accompany every download.\n"
-        with tempfile.TemporaryDirectory() as temporary:
-            notes_file = Path(temporary) / "notes.md"
-            notes_file.write_text(notes, encoding="utf-8")
-            client.command("create", tag, "--target", sha, "--draft", "--title", title,
-                           "--notes-file", str(notes_file))
-        release = release_for_tag(client, tag)
-        if release is None:
-            raise RuntimeError(f"Created draft release could not be found: {tag}")
+        # Use the creation response immediately. Draft listings can lag behind
+        # creation, so neither uploads nor publication should look up its tag.
+        release = client.create_release(tag, sha, title, notes)
+        if not release or release.get("tag_name") != tag or not release.get("draft") or not release.get("id"):
+            raise RuntimeError(f"Create release did not return the expected draft: {tag}")
     if tag_commit(client, tag) != sha:
         raise ValueError(f"Release tag changed unexpectedly: {tag}")
     remote = {asset["name"]: asset for asset in release["assets"]}
@@ -135,7 +156,7 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
         elif not release["draft"]:
             raise ValueError(f"Published release is missing {path.name}; it will not be changed")
         else:
-            client.command("upload", tag, str(path))
+            client.upload_asset(release["id"], path)
     # Read back all uploaded files before making the draft public.
     release = client.api(f"releases/{release['id']}")
     if release is None:
@@ -145,13 +166,15 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
         if path.name not in remote or client.digest(remote[path.name]) != hashlib.sha256(path.read_bytes()).hexdigest():
             raise ValueError(f"Release upload verification failed: {path.name}")
     if release["draft"]:
-        latest = "--latest=false"
+        latest = False
         if component == "nagi":
             previous_latest = client.api("releases/latest")
             previous_tag = previous_latest["tag_name"] if previous_latest else ""
             if not previous_tag.startswith("nagi-v") or version_tuple(version) > version_tuple(previous_tag.removeprefix("nagi-v")):
-                latest = "--latest"
-        client.command("edit", tag, "--draft=false", latest)
+                latest = True
+        published = client.make_public(release["id"], latest)
+        if not published or published.get("id") != release["id"] or published.get("tag_name") != tag or published.get("draft") is not False:
+            raise RuntimeError(f"Release response did not confirm publication: {tag}")
     print(f"Verified formal release: {tag} ({sha})")
 
 

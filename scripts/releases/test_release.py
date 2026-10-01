@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 from zipfile import ZipFile
 
 import package
@@ -150,15 +151,21 @@ class FakeGitHub:
         self.calls.append(("tag", tag, sha))
         self.sha = sha
 
-    def command(self, *args):
-        self.calls.append(args)
-        if args[0] == "create":
-            self.release = {"id": 1, "tag_name": args[1], "draft": True, "assets": []}
-        elif args[0] == "upload":
-            file = Path(args[2])
-            self.add(file.name, file.read_bytes())
-        elif args[0] == "edit":
-            self.release["draft"] = False
+    def create_release(self, tag, sha, title, notes):
+        self.calls.append(("create", tag, sha, title, notes))
+        self.release = {"id": 1, "tag_name": tag, "draft": True, "assets": []}
+        return self.release
+
+    def upload_asset(self, release_id, file):
+        self.calls.append(("upload", release_id, str(file)))
+        assert release_id == self.release["id"]
+        self.add(file.name, file.read_bytes())
+
+    def make_public(self, release_id, latest):
+        self.calls.append(("edit", release_id, latest))
+        assert release_id == self.release["id"]
+        self.release["draft"] = False
+        return self.release
 
     def add(self, name, data):
         asset = {"name": name, "id": len(self.files) + 1}
@@ -193,7 +200,7 @@ class PublicationTests(unittest.TestCase):
         self.publish(client)
         self.assertEqual([call[0] for call in client.calls], ["tag", "create", "upload", "upload", "edit"])
         self.assertFalse(client.release["draft"])
-        self.assertIn("--latest=false", client.calls[-1])
+        self.assertEqual(client.calls[-1], ("edit", 1, False))
         self.assertNotIn("--clobber", str(client.calls))
         self.assertIn("releases/1", client.api_calls)
 
@@ -246,7 +253,7 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual([call[0] for call in client.calls], ["upload", "upload", "edit"])
         self.assertIn("releases?per_page=100&page=2", client.api_calls)
 
-    def test_created_draft_missing_from_listing_stops_before_upload(self):
+    def test_created_draft_can_be_published_before_it_appears_in_listing(self):
         client = FakeGitHub()
         original = client.api
 
@@ -256,10 +263,16 @@ class PublicationTests(unittest.TestCase):
             return original(resource)
 
         with patch.object(client, "api", side_effect=api):
-            with self.assertRaisesRegex(RuntimeError, "Created draft release could not be found"):
+            self.publish(client)
+        self.assertEqual([call[0] for call in client.calls], ["tag", "create", "upload", "upload", "edit"])
+        self.assertFalse(client.release["draft"])
+
+    def test_creation_response_without_draft_identity_stops_before_upload(self):
+        client = FakeGitHub()
+        with patch.object(client, "create_release", return_value={"draft": True}):
+            with self.assertRaisesRegex(RuntimeError, "did not return the expected draft"):
                 self.publish(client)
-        self.assertEqual([call[0] for call in client.calls], ["tag", "create"])
-        self.assertTrue(client.release["draft"])
+        self.assertEqual([call[0] for call in client.calls], ["tag"])
 
     def test_disappearing_release_cannot_be_published(self):
         client = FakeGitHub("a" * 40, draft=True)
@@ -287,6 +300,13 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual([call[0] for call in client.calls], ["upload", "upload"])
         self.assertTrue(client.release["draft"])
 
+    def test_publication_must_be_confirmed_by_the_release_response(self):
+        client = FakeGitHub("a" * 40, draft=True)
+        with patch.object(client, "make_public", return_value=client.release):
+            with self.assertRaisesRegex(RuntimeError, "did not confirm publication"):
+                self.publish(client)
+        self.assertTrue(client.release["draft"])
+
     def test_draft_with_different_asset_is_not_overwritten(self):
         client = FakeGitHub("a" * 40, draft=True)
         client.add(self.filename, b"different build")
@@ -295,7 +315,7 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(client.calls, [])
 
     def test_older_nagi_completion_cannot_replace_a_newer_latest_release(self):
-        for version, flag in (("0.1.1", "--latest=false"), ("0.2.1", "--latest")):
+        for version, latest in (("0.1.1", False), ("0.2.1", True)):
             with self.subTest(version=version):
                 for platform, suffix in (("linux-x86_64", ".tar.gz"), ("windows-x86_64", ".zip"),
                                          ("macos-arm64", ".tar.gz"), ("macos-x86_64", ".tar.gz")):
@@ -304,7 +324,7 @@ class PublicationTests(unittest.TestCase):
                     (self.directory / (filename + ".sha256")).write_text(f"{hashlib.sha256(self.data).hexdigest()}  {filename}\n")
                 client = FakeGitHub(latest="nagi-v0.2.0")
                 publish.publish(client, "nagi", version, "a" * 40, self.directory)
-                self.assertIn(flag, client.calls[-1])
+                self.assertEqual(client.calls[-1], ("edit", 1, latest))
                 uploads = [Path(call[2]).name for call in client.calls if call[0] == "upload"]
                 self.assertEqual(len(uploads), 8)
                 for platform, suffix in (("linux-x86_64", ".tar.gz"), ("windows-x86_64", ".zip"),
@@ -323,6 +343,55 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaisesRegex(FileNotFoundError, "macos-arm64"):
             publish.publish(client, "nagi", "0.1.1", "a" * 40, self.directory)
         self.assertEqual(client.calls, [])
+
+
+class GitHubProtocolTests(unittest.TestCase):
+    def response(self, value):
+        return subprocess.CompletedProcess([], 0, stdout=json.dumps(value).encode(), stderr=b"")
+
+    def test_create_returns_the_api_identity_without_a_followup_lookup(self):
+        client = publish.GitHub("owner/repo")
+        release = {"id": 42, "tag_name": "vscode-v0.1.7", "draft": True, "assets": []}
+        with patch.object(publish.subprocess, "run", return_value=self.response(release)) as run:
+            self.assertEqual(client.create_release("vscode-v0.1.7", "a" * 40, "Nagi", "notes\n凪"), release)
+        run.assert_called_once()
+        command = run.call_args.args[0]
+        self.assertEqual(command[:5], ["gh", "api", "--method", "POST", "repos/owner/repo/releases"])
+        self.assertEqual(json.loads(run.call_args.kwargs["input"]), {
+            "tag_name": "vscode-v0.1.7", "target_commitish": "a" * 40,
+            "name": "Nagi", "body": "notes\n凪", "draft": True})
+
+    def test_upload_uses_the_release_id_and_a_raw_binary_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            file = Path(directory) / "凪 & bot.vsix"
+            file.write_bytes(b"PK\x00\xff\n")
+            with patch.object(publish.subprocess, "run", return_value=self.response({"id": 9})) as run:
+                publish.GitHub("owner/repo").upload_asset(42, file)
+            command = run.call_args.args[0]
+            self.assertEqual(command[:4], ["gh", "api", "--method", "POST"])
+            url = urlparse(command[4])
+            self.assertEqual(url.netloc, "uploads.github.com")
+            self.assertEqual(url.path, "/repos/owner/repo/releases/42/assets")
+            self.assertEqual(parse_qs(url.query), {"name": [file.name]})
+            self.assertEqual(command[command.index("--input") + 1], str(file))
+            self.assertIn("Content-Type: application/octet-stream", command)
+            self.assertIsNone(run.call_args.kwargs["input"])
+
+    def test_publication_patches_the_same_id_and_preserves_latest_selection(self):
+        for latest in (False, True):
+            with self.subTest(latest=latest):
+                with patch.object(publish.subprocess, "run", return_value=self.response({"draft": False})) as run:
+                    publish.GitHub("owner/repo").make_public(42, latest)
+                self.assertEqual(run.call_args.args[0][:5], [
+                    "gh", "api", "--method", "PATCH", "repos/owner/repo/releases/42"])
+                self.assertEqual(json.loads(run.call_args.kwargs["input"]), {
+                    "draft": False, "make_latest": "true" if latest else "false"})
+
+    def test_failed_write_is_not_treated_as_a_missing_read_result(self):
+        response = subprocess.CompletedProcess([], 1, stdout=b"", stderr=b"HTTP 404: Not Found")
+        with patch.object(publish.subprocess, "run", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "HTTP 404"):
+                publish.GitHub("owner/repo").create_release("vscode-v0.1.7", "a" * 40, "Nagi", "notes")
 
 
 if __name__ == "__main__":
