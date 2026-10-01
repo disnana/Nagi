@@ -57,6 +57,11 @@ impl Drop for Fixture {
 
 const HIGH_MOVE: &str = "def take(text: str):\n    print(text)\n\ndef main():\n    name = \"凪\"\n    for number in range(2):\n        take(name)\n";
 const LOW_MOVE: &str = "fn take(text: str) -> unit { print(text); }\n\nfn main() -> unit {\n    let name: str = \"凪\";\n    for number in range(2) {\n        take(name);\n    }\n}\n";
+// Iterator borrows still need Rust's final verification. Keep coverage of the
+// backend mapping after repeated moves become Nagi checker errors.
+const HIGH_BORROW: &str =
+    "def main():\n    values = [1, 2]\n    for value in values:\n        append(values, value)\n";
+const LOW_BORROW: &str = "fn main() -> unit {\n    let values: List[i64] = [1, 2];\n    for value in values {\n        append(values, value);\n    }\n}\n";
 
 fn stderr(output: &Output) -> String {
     String::from_utf8(output.stderr.clone()).unwrap()
@@ -71,18 +76,21 @@ fn mapped_prefix(text: &str) -> &str {
 #[test]
 fn high_build_points_to_nagi_and_keeps_rust_notes_and_failure_status() {
     let f = Fixture::new();
-    f.write("main.nagi", HIGH_MOVE);
+    f.write("main.nagi", HIGH_BORROW);
     assert!(f.cli(&["check", "main.nagi"]).status.success());
     let output = f.cli(&["build", "main.nagi"]);
     assert!(!output.status.success());
     let text = stderr(&output);
     let prefix = mapped_prefix(&text);
-    assert!(prefix.contains("error[E0382]"), "{text}");
-    assert!(prefix.contains("main.nagi:7"), "{text}");
-    assert!(prefix.contains("7 |         take(name)"), "{text}");
-    assert!(prefix.contains("main.nagi:5"), "{text}");
+    assert!(prefix.contains("error[E0502]"), "{text}");
+    assert!(prefix.contains("main.nagi:4"), "{text}");
+    assert!(
+        prefix.contains("4 |         append(values, value)"),
+        "{text}"
+    );
+    assert!(prefix.contains("main.nagi:3"), "{text}");
     assert!(!prefix.contains("src/main.rs:"), "{text}");
-    assert!(text.contains("name.clone()"), "{text}");
+    assert!(text.contains(".iter().copied()"), "{text}");
     assert!(text.contains("Rust backend rejected program"), "{text}");
 }
 
@@ -95,7 +103,7 @@ fn imported_high_uses_the_dependency_path_and_local_line() {
     );
     f.write(
         "lib/move.nagi",
-        &HIGH_MOVE.replace("def main():", "def repeat():"),
+        &HIGH_BORROW.replace("def main():", "def repeat():"),
     );
     f.write(
         "main.nagi",
@@ -105,21 +113,24 @@ fn imported_high_uses_the_dependency_path_and_local_line() {
     assert!(!output.status.success());
     let text = stderr(&output);
     let prefix = mapped_prefix(&text);
-    assert!(prefix.contains("move.nagi:7"), "{text}");
-    assert!(prefix.contains("7 |         take(name)"), "{text}");
+    assert!(prefix.contains("move.nagi:4"), "{text}");
+    assert!(
+        prefix.contains("4 |         append(values, value)"),
+        "{text}"
+    );
     assert!(!prefix.contains("main.nagi:"), "{text}");
 }
 
 #[test]
 fn standalone_low_uses_the_original_low_lines() {
     let f = Fixture::new();
-    f.write("main.low", LOW_MOVE);
+    f.write("main.low", LOW_BORROW);
     let output = f.cli(&["build", "main.low"]);
     assert!(!output.status.success());
     let text = stderr(&output);
-    assert!(mapped_prefix(&text).contains("main.low:6"), "{text}");
+    assert!(mapped_prefix(&text).contains("main.low:4"), "{text}");
     assert!(
-        mapped_prefix(&text).contains("6 |         take(name);"),
+        mapped_prefix(&text).contains("4 |         append(values, value);"),
         "{text}"
     );
 }
@@ -129,7 +140,7 @@ fn imported_low_uses_its_own_file_instead_of_the_entry_file() {
     let f = Fixture::new();
     f.write(
         "lib/move.low",
-        &LOW_MOVE.replace("fn main()", "fn repeat()"),
+        &LOW_BORROW.replace("fn main()", "fn repeat()"),
     );
     f.write(
         "main.low",
@@ -138,7 +149,7 @@ fn imported_low_uses_its_own_file_instead_of_the_entry_file() {
     let output = f.cli(&["build", "main.low"]);
     assert!(!output.status.success());
     let text = stderr(&output);
-    assert!(mapped_prefix(&text).contains("move.low:6"), "{text}");
+    assert!(mapped_prefix(&text).contains("move.low:4"), "{text}");
     assert!(!mapped_prefix(&text).contains("main.low:"), "{text}");
 }
 
@@ -153,13 +164,13 @@ fn replacement_body_errors_point_to_the_handwritten_low_file() {
         "native/replace.low",
         &format!(
             "@replace generated::repeat\n{}",
-            LOW_MOVE.replace("fn main()", "fn replace_body()")
+            LOW_BORROW.replace("fn main()", "fn replace_body()")
         ),
     );
     let output = f.cli(&["build", "main.nagi", "--native", "native/replace.low"]);
     assert!(!output.status.success());
     let text = stderr(&output);
-    assert!(mapped_prefix(&text).contains("replace.low:7"), "{text}");
+    assert!(mapped_prefix(&text).contains("replace.low:5"), "{text}");
     assert!(!mapped_prefix(&text).contains("main.nagi:"), "{text}");
 }
 
@@ -176,6 +187,151 @@ fn native_signature_errors_also_keep_the_native_low_location() {
     let text = stderr(&output);
     assert!(text.contains("native.low:2"), "{text}");
     assert!(text.contains("fn replacement()"), "{text}");
+}
+
+#[test]
+fn repeated_moves_fail_in_check_and_build_before_invoking_rust() {
+    for (file, source, line) in [("main.nagi", HIGH_MOVE, 7), ("main.low", LOW_MOVE, 6)] {
+        let f = Fixture::new();
+        f.write(file, source);
+        for action in ["check", "build"] {
+            let output = f.cli(&[action, file]);
+            let text = stderr(&output);
+            assert!(!output.status.success(), "{file}: {text}");
+            assert!(text.contains(&format!("{file}:{line}")), "{text}");
+            assert!(
+                text.contains("name はmove後") && text.contains("次の周回"),
+                "{text}"
+            );
+            assert!(!text.contains("Rust backend"), "{text}");
+            assert!(!f.0.join("build/main/src/main.rs").exists());
+        }
+    }
+}
+
+#[test]
+fn repeated_moves_keep_imported_and_replacement_source_locations() {
+    for (file, source, line) in [
+        (
+            "lib/move.nagi",
+            HIGH_MOVE.replace("def main():", "def repeat():"),
+            7,
+        ),
+        (
+            "lib/move.low",
+            LOW_MOVE.replace("fn main()", "fn repeat()"),
+            6,
+        ),
+    ] {
+        let f = Fixture::new();
+        let entry = if file.ends_with(".low") {
+            "main.low"
+        } else {
+            "main.nagi"
+        };
+        f.write(file, &source);
+        f.write(
+            entry,
+            &if entry.ends_with(".low") {
+                format!("import \"{file}\";\nfn main() -> unit {{ repeat(); }}\n")
+            } else {
+                format!("import \"{file}\"\ndef main():\n    repeat()\n")
+            },
+        );
+        let output = f.cli(&["check", entry]);
+        let text = stderr(&output);
+        assert!(!output.status.success());
+        assert!(
+            text.contains(&format!(
+                "move.{}:{line}",
+                if entry.ends_with(".low") {
+                    "low"
+                } else {
+                    "nagi"
+                }
+            )),
+            "{text}"
+        );
+        assert!(!text.contains(&format!("{entry}:")), "{text}");
+    }
+    let f = Fixture::new();
+    f.write(
+        "main.nagi",
+        "def repeat():\n    print(1)\ndef main():\n    repeat()\n",
+    );
+    f.write(
+        "replace.low",
+        "@replace generated::repeat\nfn replace_body() -> unit {\n    let name: str = \"凪\";\n    for number in range(2) {\n        take(name);\n    }\n}\nfn take(text: str) -> unit { print(text); }\n",
+    );
+    let output = f.cli(&["check", "main.nagi", "--native", "replace.low"]);
+    let text = stderr(&output);
+    assert!(!output.status.success());
+    assert!(text.contains("replace.low:5"), "{text}");
+    assert!(text.contains("次の周回"), "{text}");
+}
+
+#[test]
+fn safe_reinitialization_and_return_paths_check_build_and_run() {
+    let f = Fixture::new();
+    f.write(
+        "main.nagi",
+        r#"def take(text: str):
+    print(text)
+def restored():
+    name = "start"
+    for number in range(2):
+        take(name)
+        if number == 0:
+            name = "first"
+        else:
+            name = "next"
+    print(name)
+def early(name: str, count: i64):
+    for number in range(count):
+        take(name)
+        return
+    print(name)
+def restore_or_return():
+    name = "match"
+    for number in range(2):
+        take(name)
+        result: Result[i64, i64] = ok(number)
+        match result:
+            case Ok(_):
+                name = "again"
+            case Err(_):
+                return
+    print(name)
+def read(text: view[str]):
+    print(text)
+def main():
+    restored()
+    early("zero", 0)
+    early("once", 2)
+    restore_or_return()
+    for number in range(2):
+        fresh = "local"
+        take(fresh)
+    count = 0
+    name = "view"
+    while count < 2:
+        read(view(name))
+        count += 1
+    print(name)
+"#,
+    );
+    let checked = f.cli(&["check", "main.nagi"]);
+    assert!(checked.status.success(), "{}", stderr(&checked));
+    let output = f.cli(&["run", "main.nagi"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(
+        stdout.lines().skip(1).collect::<Vec<_>>(),
+        [
+            "start", "first", "next", "zero", "once", "match", "again", "again", "local", "local",
+            "view", "view", "view"
+        ]
+    );
 }
 
 #[test]
