@@ -20,4 +20,6 @@ Local names for definition navigation are resolved by walking the AST separately
 
 Scopes generate a JoinSet wrapper. Classes generate native structs with typed JSON and database implementations. The common IR is currently neither SSA nor a separate optimizer. LLVM optimization comes from the Rust backend.
 
-Each source file is limited to 2 MB. Expressions, types, and blocks also have nesting limits. Tests cover syntax mutations and invalid inputs. Coverage-guided fuzzing, incremental parsing, named modules, and precise source maps from Rust diagnostics back to High remain future work.
+Lowering and code generation retain a mapping from generated lines to the original statement, definition, or field line. Low is parsed independently, then its diagnostic lines are restored before integration. During a build, the compiler reads Cargo's JSON diagnostics and first shows the corresponding Nagi or Low file and line. Rust's notes and edit suggestions retain generated Rust coordinates. Handwritten Rust and unmapped diagnostics are not rewritten.
+
+Each source file is limited to 2 MB. Expressions, types, and blocks also have nesting limits. Tests cover syntax mutations and invalid inputs. Coverage-guided fuzzing, incremental parsing, named modules, precise expression columns, and mappings for every Rust diagnostic remain future work.

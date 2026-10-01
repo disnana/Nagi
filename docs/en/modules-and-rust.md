@@ -11,7 +11,7 @@ import "validation.nagi"
 
 Paths are relative to the source file containing the import. High imports `.nagi`; Low imports `.low`. Low permits a terminating `;`. Dependencies are read first, and each file is loaded once. Cycles, missing files, mixed languages, and duplicate names are errors. All files currently enter one namespace; named modules, aliases, selective imports, and visibility are not implemented.
 
-Limits are 128 files, depth 64, and 8 MB total. Each parser also retains its 2 MB per-file limit. High checking reports original imported filenames and lines. Generated Low integration and Rust backend diagnostics do not yet have a complete source map.
+Limits are 128 files, depth 64, and 8 MB total. Each parser also retains its 2 MB per-file limit. Type checking and Low integration report original imported filenames and lines. Rust backend diagnostics also show the original Nagi or Low location first when a corresponding statement or definition line is known. Unmapped diagnostics and handwritten Rust retain Rust's output. Precise column mappings are not implemented.
 
 `include_text("index.html") -> str` embeds a neighboring UTF-8 file at compile time. Its path must be a string literal. It does not read the file again on the machine running the distributed program.
 

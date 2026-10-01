@@ -77,6 +77,8 @@ The integer in `count = 3` has type `i64`. Save the file with a `.nagi` extensio
 
 Currently, both `check` and `lower` save the Low generated from High. A successful `check` can still be followed by a failed `build` if Rust's type or borrow checks reject the generated program.
 
+Build errors first show the original Nagi or Low filename, the line of the corresponding statement or definition, and its source text. This includes imports and handwritten Low used with `@replace`. The following `Rust backend details` preserves the full diagnostic for the generated Rust. Errors in handwritten Rust, or errors without an identifiable source location, retain Rust's diagnostics.
+
 ```powershell
 .\target\release\nagic.exe check hello.nagi
 .\target\release\nagic.exe build hello.nagi
@@ -112,7 +114,7 @@ Install the [Nagi extension](vscode-extension.md), then open this repository fol
 | VS Code reports `spawn nagic.exe ENOENT` or a missing compiler | The VSIX does not include the compiler. Build it in step 1, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set `nagi.compilerPath` to its executable |
 | The C compiler or linker is not found | Check your Windows C++ build tools or Linux C compiler |
 | Tabs or indentation errors | Use four spaces consistently |
-| A check succeeds but a build fails | Read the Rust backend diagnostics in the terminal |
+| A check succeeds but a build fails | Start with the Nagi or Low filename and line in the terminal; the following Rust diagnostic gives further details |
 | A port is already in use | Stop the earlier server before restarting |
 | Rebuilding a running exe fails on Windows | Stop the executable and rebuild |
 | A server does not exit | `serve` keeps waiting for requests; press Ctrl+C in its terminal |

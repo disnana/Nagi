@@ -86,4 +86,4 @@ DB・内部エラーの500応答は`{"error":"internal error"}`で、詳細は�
 
 JSON・DB・入力検査の失敗とpanicは別です。scopeでは子taskのpanicを検出し、Supervisorではworkerのpanicを再起動対象にします。メモリ破壊・process abortの回復機構ではありません。
 
-診断はsource path、行、該当ソース、理由とhelpを表示します。診断のsource spanは行中心です。VS Codeの定義ジャンプは元ソースの列位置も扱いますが、Rust backendの全診断をHighの厳密な列位置へ戻すsource mapは未実装です。
+診断はファイル名、行、該当ソース、理由を表示します。ビルド時も、元の位置を特定できるエラーはNagi・Lowの文や定義の行を先に表示し、生成Rustの詳しい診断を続けます。Rustの修正候補はRust向けなので、そのままNagiへ適用しないでください。手書きRustや位置を特定できない診断はRust側の表示を使います。厳密な列位置や全Rust診断の対応は未実装です。VS Codeの定義ジャンプは元ソースの列位置も扱います。
