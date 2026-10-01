@@ -8,6 +8,8 @@
 
 **[ドキュメントの目次](docs/README.md) → [準備と最初の実行](docs/getting-started.md) → [コードを書きながら学ぶ](docs/language-guide.md)** の順で進められます。書式を引くには[文法の早見表](docs/syntax.md)、引数を調べるには[組み込み関数](docs/builtins.md)、サイトやAPIを作るには[HTTPの入門](docs/http.md)を参照してください。動く入門例は[examples/tutorial/](examples/tutorial/)にあります。
 
+紹介と日本語Docsを静的サイトとして読むためのソースは[`website/`](website/README.md)にあります。GitHub Pages向けの生成・公開手順もここにまとめています。
+
 ## 最初に動かす
 
 必要なものはRust/Cargo、SQLiteのCコードをビルドできるCコンパイラです。Linux x86_64とWindowsネイティブでビルド・実行を確認しています。WindowsのMSVC環境とPowerShellのコマンドは[準備と最初の実行](docs/getting-started.md)にあります。WSL2では次のLinux手順を使えます。macOSは未検証です。

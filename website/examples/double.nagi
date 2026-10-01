@@ -1,0 +1,6 @@
+def double(number: i64) -> i64:
+    return number * 2
+
+def main():
+    answer = double(21)
+    print(answer)
