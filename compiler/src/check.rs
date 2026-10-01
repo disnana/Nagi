@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 struct Var {
     ty: Type,
     moved: bool,
+    moved_fields: HashSet<Vec<String>>,
     origin: Option<String>,
     param: bool,
 }
@@ -153,6 +154,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
                     Var {
                         ty: t.clone(),
                         moved: false,
+                        moved_fields: HashSet::new(),
                         origin: if t.contains_view() {
                             Some(n.clone())
                         } else {
@@ -299,17 +301,74 @@ impl Checker {
             name != n && !v.moved && v.ty.contains_view() && v.origin.as_deref() == Some(n)
         })
     }
-    fn consume(&mut self, e: &Expr) -> Result<(), String> {
-        if let E::Name(n) = &e.kind {
-            let v = self.vars.get(n).cloned();
-            if let Some(v) = v {
-                if !self.copy_type(&v.ty) {
-                    if self.borrowed(n) {
-                        return Err(error(e.line,format!("{n} はviewから参照されています。viewのscopeを終了するかcopyしてください")));
-                    }
-                    self.vars.get_mut(n).unwrap().moved = true;
-                }
+    fn place(e: &Expr) -> Option<(&str, Vec<String>)> {
+        match &e.kind {
+            E::Name(n) => Some((n, vec![])),
+            E::Field(parent, field) => {
+                let (name, mut fields) = Self::place(parent)?;
+                fields.push(field.clone());
+                Some((name, fields))
             }
+            _ => None,
+        }
+    }
+    fn available(&self, e: &Expr, projection: bool) -> Result<(), String> {
+        let Some((name, fields)) = Self::place(e) else {
+            return Ok(());
+        };
+        let Some(v) = self.vars.get(name) else {
+            return Ok(());
+        };
+        if v.moved {
+            return Err(error(e.line, format!("{name} はmove後に使用されています")));
+        }
+        if let Some(moved) = v
+            .moved_fields
+            .iter()
+            .filter(|moved| fields.starts_with(moved) || !projection && moved.starts_with(&fields))
+            .min()
+        {
+            let place = if fields.is_empty() {
+                name.to_owned()
+            } else {
+                format!("{name}.{}", fields.join("."))
+            };
+            let reason = if fields == *moved {
+                format!("{place} はmove後に使用されています")
+            } else {
+                format!(
+                    "{place} は {name}.{} のmove後に使用されています",
+                    moved.join(".")
+                )
+            };
+            return Err(error(e.line, format!("{reason}。再利用する値はmove前に複製してください（文字列などはcopy(view(...))）")));
+        }
+        Ok(())
+    }
+    fn consume(&mut self, e: &Expr) -> Result<(), String> {
+        self.available(e, false)?;
+        let Some((name, fields)) = Self::place(e) else {
+            return Ok(());
+        };
+        let Some(v) = self.vars.get(name) else {
+            return Ok(());
+        };
+        if self.copy_type(e.ty.as_ref().unwrap_or(&v.ty)) {
+            return Ok(());
+        }
+        if self.borrowed(name) {
+            return Err(error(
+                e.line,
+                format!(
+                    "{name} はviewから参照されています。viewのscopeを終了するかcopyしてください"
+                ),
+            ));
+        }
+        let v = self.vars.get_mut(name).unwrap();
+        if fields.is_empty() {
+            v.moved = true;
+        } else {
+            v.moved_fields.insert(fields);
         }
         Ok(())
     }
@@ -322,10 +381,9 @@ impl Checker {
     }
     fn merge_moves(&mut self, after: HashMap<String, Var>) {
         for (n, v) in after {
-            if v.moved {
-                if let Some(x) = self.vars.get_mut(&n) {
-                    x.moved = true;
-                }
+            if let Some(x) = self.vars.get_mut(&n) {
+                x.moved |= v.moved;
+                x.moved_fields.extend(v.moved_fields);
             }
         }
     }
@@ -381,6 +439,7 @@ impl Checker {
                     Var {
                         ty,
                         moved: false,
+                        moved_fields: HashSet::new(),
                         origin,
                         param: false,
                     },
@@ -481,6 +540,7 @@ impl Checker {
                                 },
                                 ty: payload,
                                 moved: false,
+                                moved_fields: HashSet::new(),
                                 param: false,
                             },
                         );
@@ -514,6 +574,7 @@ impl Checker {
                     Var {
                         ty: elem,
                         moved: false,
+                        moved_fields: HashSet::new(),
                         origin: None,
                         param: false,
                     },
@@ -572,6 +633,14 @@ impl Checker {
         Ok(())
     }
     fn expr(&mut self, e: &mut Expr, expected: Option<&Type>) -> Result<Type, String> {
+        self.expr_mode(e, expected, false)
+    }
+    fn expr_mode(
+        &mut self,
+        e: &mut Expr,
+        expected: Option<&Type>,
+        projection: bool,
+    ) -> Result<Type, String> {
         let line = e.line;
         let t = match &mut e.kind {
             E::Int(s) => {
@@ -617,9 +686,6 @@ impl Checker {
                 .ok_or_else(|| error(line, "Noneにはnullableの型注釈が必要です"))?,
             E::Name(n) => {
                 if let Some(v) = self.vars.get(n) {
-                    if v.moved {
-                        return Err(error(line, format!("{n} はmove後に使用されています")));
-                    }
                     v.ty.clone()
                 } else if let Some(f) = self.functions.get(n) {
                     let mut ts: Vec<Type> = f.params.iter().map(|p| p.1.clone()).collect();
@@ -666,7 +732,9 @@ impl Checker {
                 }
             }
             E::Field(x, n) => {
-                let t = self.expr(x, None)?;
+                // The parent is only a field base. Check the complete path so
+                // moving one field does not prevent access to its siblings.
+                let t = self.expr_mode(x, None, true)?;
                 self.classes
                     .get(&t.0)
                     .and_then(|c| c.fields.iter().find(|(k, _)| k == n))
@@ -777,6 +845,7 @@ impl Checker {
                 }
             }
         };
+        self.available(e, projection)?;
         e.ty = Some(t.clone());
         Ok(t)
     }

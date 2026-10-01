@@ -109,6 +109,7 @@ Install the [Nagi extension](vscode-extension.md), then open this repository fol
 |---|---|
 | `cargo` is not found | Install Rust/Cargo and reopen your terminal |
 | `nagic.exe` is not found | Run the compiler build from the repository root |
+| VS Code reports `spawn nagic.exe ENOENT` or a missing compiler | The VSIX does not include the compiler. Build it in step 1, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set `nagi.compilerPath` to its executable |
 | The C compiler or linker is not found | Check your Windows C++ build tools or Linux C compiler |
 | Tabs or indentation errors | Use four spaces consistently |
 | A check succeeds but a build fails | Read the Rust backend diagnostics in the terminal |

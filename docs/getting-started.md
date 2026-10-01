@@ -112,6 +112,7 @@ Linux / WSL2では、以降の`.\target\release\nagic.exe`を`./target/release/n
 | `cargo`が見つからない | Rust / CargoがPATHにあるか。インストール後にターミナルを開き直したか |
 | Cコンパイラやlinkerが見つからない | WindowsのC++ビルド環境、LinuxのCコンパイラがあるか |
 | `nagic.exe`が見つからない | ルートでコンパイラのビルドを終えたか |
+| VS Codeで`spawn nagic.exe ENOENT`やコンパイラ未検出の警告が出る | VSIXにはコンパイラを含まない。手順1でビルドしたあと「Nagi: 型検査」を実行する。別の場所にある場合は`nagi.compilerPath`にその実行ファイルを指定する |
 | タブや字下げのエラー | インデントを空白4つに統一する |
 | `Rust backend rejected program` | 直前のrustc診断を読む。Nagiの`check`より後の検査で失敗している |
 | Windowsでexeを更新できない | そのアプリが実行中なら停止してから再ビルドする |
