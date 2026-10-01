@@ -70,6 +70,19 @@ def main():
 
 ## 借用と検査の範囲
 
+`for value in values`は、走査する配列を借用します。次の周回へ進む経路では、その配列の`append`・再代入・moveを`check`で拒否します。`view(values)`や、そのviewを変数に入れて走査する場合も同じです。別の配列は変更でき、ループが終了すれば走査の借用は終わります。
+
+```nagi
+def main():
+    values = [1, 2]
+    output: List[i64] = []
+    for value in values:
+        append(output, value * 2)
+    append(values, 3)
+```
+
+フィールドの借用は場所ごとに追跡します。例えば`view(data.values)`が生きていても、別の`data.name`を取り出せます。`data`全体や`data.values`の移動はできません。
+
 viewを作った所有値をmove・再代入・appendすることも制限します。viewの借用は字句scopeで保守的に追跡します。Rustのnon-lexical lifetimeと同等の精密な解析はまだありません。
 
 部分fieldのmove、複雑な分岐・ループ、genericな借用のsoundnessをNagi checkerだけで証明していません。Rust codegenは安全なRustを出し、backendの借用検査にも通ったものだけを実行ファイルにします。`check`の成功と`build`の成功を区別してください。

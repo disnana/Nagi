@@ -342,3 +342,33 @@ fn actual_run_uses_rust_dependencies_and_a_stable_project_working_directory() {
         String::from_utf8_lossy(&result.stderr)
     );
 }
+
+#[test]
+fn a_borrowed_record_field_does_not_block_moving_a_disjoint_field() {
+    let f = Fixture::new();
+    f.write("nagi.toml", "entry='main.nagi'\n");
+    f.write("main.nagi", "class Data:\n    values: List[i64]\n    name: str\ndef main():\n    data = Data(values=[1, 2], name=\"Nagi\")\n    borrowed = view(data.values)\n    name = data.name\n    print(len(borrowed))\n    print(name)\n");
+    let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap()
+                .join("native-target")
+        });
+    let result = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .current_dir(&f.0)
+        .arg("run")
+        .env("NAGI_NATIVE_TARGET_DIR", target)
+        .env("CARGO_NET_OFFLINE", "true")
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let stdout = String::from_utf8(result.stdout).unwrap();
+    assert!(stdout.lines().any(|line| line == "2"));
+    assert!(stdout.lines().any(|line| line == "Nagi"));
+}

@@ -1,13 +1,29 @@
 use crate::ast::*;
 use std::collections::{HashMap, HashSet};
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct BindingId {
+    line: usize,
+    token: usize,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct BorrowedPlace {
+    binding: BindingId,
+    fields: Vec<String>,
+}
+impl BorrowedPlace {
+    fn overlaps(&self, other: &Self) -> bool {
+        self.binding == other.binding
+            && (self.fields.starts_with(&other.fields) || other.fields.starts_with(&self.fields))
+    }
+}
 #[derive(Clone, PartialEq, Eq)]
 struct Var {
+    binding: BindingId,
     ty: Type,
     moved: bool,
     moved_fields: HashSet<Vec<String>>,
-    origin: Option<String>,
-    param: bool,
+    origins: HashSet<BorrowedPlace>,
 }
 struct Checker {
     classes: HashMap<String, Class>,
@@ -17,6 +33,8 @@ struct Checker {
     asynchronous: bool,
     scope: usize,
     editor: bool,
+    parameter_views: HashSet<BindingId>,
+    iterators: Vec<HashSet<BorrowedPlace>>,
 }
 fn error(line: usize, s: impl AsRef<str>) -> String {
     format!("line {line}: {}", s.as_ref())
@@ -95,6 +113,8 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         asynchronous: false,
         scope: 0,
         editor,
+        parameter_views: HashSet::new(),
+        iterators: vec![],
     };
     let mut symbols = HashSet::new();
     for class in &p.classes {
@@ -157,25 +177,36 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
     }
     for f in &mut p.functions {
         c.vars.clear();
+        c.parameter_views.clear();
+        c.iterators.clear();
         c.ret = f.ret.clone();
         c.asynchronous = f.asynchronous;
         c.scope = 0;
         c.valid(&f.ret, f.line)?;
-        for (n, t) in &f.params {
+        for (index, (n, t)) in f.params.iter().enumerate() {
             c.valid(t, f.line)?;
+            let binding = BindingId {
+                line: f.line,
+                token: f.parameter_spans[index].start,
+            };
+            let origins = if t.contains_view() {
+                c.parameter_views.insert(binding);
+                HashSet::from([BorrowedPlace {
+                    binding,
+                    fields: vec![],
+                }])
+            } else {
+                HashSet::new()
+            };
             if c.vars
                 .insert(
                     n.clone(),
                     Var {
+                        binding,
                         ty: t.clone(),
                         moved: false,
                         moved_fields: HashSet::new(),
-                        origin: if t.contains_view() {
-                            Some(n.clone())
-                        } else {
-                            None
-                        },
-                        param: true,
+                        origins,
                     },
                 )
                 .is_some()
@@ -310,20 +341,74 @@ impl Checker {
             ))
         }
     }
-    fn origin(&self, e: &Expr) -> Option<String> {
+    fn origin(&self, e: &Expr) -> HashSet<BorrowedPlace> {
         match &e.kind {
             E::Name(n) => self
                 .vars
                 .get(n)
-                .and_then(|v| v.origin.clone().or_else(|| Some(n.clone()))),
-            E::Call(_, _, args) => args.iter().find_map(|x| self.origin(x)),
-            E::Field(e, _) | E::Try(e) | E::Await(e) => self.origin(e),
-            _ => None,
+                .map(|v| {
+                    if v.ty.contains_view() {
+                        v.origins.clone()
+                    } else {
+                        HashSet::from([BorrowedPlace {
+                            binding: v.binding,
+                            fields: vec![],
+                        }])
+                    }
+                })
+                .unwrap_or_default(),
+            E::Field(parent, field) => self
+                .origin(parent)
+                .into_iter()
+                .map(|mut place| {
+                    place.fields.push(field.clone());
+                    place
+                })
+                .collect(),
+            E::Call(n, _, args)
+                if n == "view" && !self.functions.contains_key(n) && !self.vars.contains_key(n) =>
+            {
+                let mut origins = self.origin(&args[0]);
+                if let Some((name, fields)) = Self::place(&args[0]) {
+                    if let Some(var) = self.vars.get(name) {
+                        origins.insert(BorrowedPlace {
+                            binding: var.binding,
+                            fields,
+                        });
+                    }
+                }
+                origins
+            }
+            E::Call(_, _, args) if e.ty.as_ref().is_some_and(Type::contains_view) => args
+                .iter()
+                .filter(|arg| arg.ty.as_ref().is_some_and(Type::contains_view))
+                .flat_map(|arg| self.origin(arg))
+                .collect(),
+            E::List(values) if e.ty.as_ref().is_some_and(Type::contains_view) => {
+                values.iter().flat_map(|value| self.origin(value)).collect()
+            }
+            E::Try(e) | E::Await(e) => self.origin(e),
+            _ => HashSet::new(),
         }
     }
+    fn borrowed_place(&self, place: &BorrowedPlace) -> bool {
+        self.vars.values().any(|v| {
+            v.binding != place.binding
+                && !v.moved
+                && v.ty.contains_view()
+                && v.origins.iter().any(|loan| loan.overlaps(place))
+        }) || self
+            .iterators
+            .iter()
+            .flatten()
+            .any(|loan| loan.overlaps(place))
+    }
     fn borrowed(&self, n: &str) -> bool {
-        self.vars.iter().any(|(name, v)| {
-            name != n && !v.moved && v.ty.contains_view() && v.origin.as_deref() == Some(n)
+        self.vars.get(n).is_some_and(|v| {
+            self.borrowed_place(&BorrowedPlace {
+                binding: v.binding,
+                fields: vec![],
+            })
         })
     }
     fn place(e: &Expr) -> Option<(&str, Vec<String>)> {
@@ -381,11 +466,14 @@ impl Checker {
         if self.copy_type(e.ty.as_ref().unwrap_or(&v.ty)) {
             return Ok(());
         }
-        if self.borrowed(name) {
+        if self.borrowed_place(&BorrowedPlace {
+            binding: v.binding,
+            fields: fields.clone(),
+        }) {
             return Err(error(
                 e.line,
                 format!(
-                    "{name} はviewから参照されています。viewのscopeを終了するかcopyしてください"
+                    "{name} はviewまたはループから参照されています。借用を終了するかcopyしてください"
                 ),
             ));
         }
@@ -399,9 +487,10 @@ impl Checker {
     }
     fn child(&mut self, ss: &mut [Stmt]) -> Result<HashMap<String, Var>, String> {
         let before = self.vars.clone();
-        self.block(ss)?;
+        let checked = self.block(ss);
         let after = self.vars.clone();
         self.vars = before;
+        checked?;
         Ok(after)
     }
     fn merge_moves(&mut self, after: HashMap<String, Var>) {
@@ -409,6 +498,7 @@ impl Checker {
             if let Some(x) = self.vars.get_mut(&n) {
                 x.moved |= v.moved;
                 x.moved_fields.extend(v.moved_fields);
+                x.origins.extend(v.origins);
             }
         }
     }
@@ -424,13 +514,17 @@ impl Checker {
                 .iter()
                 .flat_map(|path| path[name].moved_fields.iter().cloned())
                 .collect();
+            var.origins = paths
+                .iter()
+                .flat_map(|path| path[name].origins.iter().cloned())
+                .collect();
         }
     }
     fn loop_body(
         &mut self,
         body: &mut [Stmt],
         mut condition: Option<&mut Expr>,
-        binding: Option<(&str, Type)>,
+        binding: Option<(&str, Type, BindingId, HashSet<BorrowedPlace>)>,
     ) -> Result<(), String> {
         // Recheck the parsed body, not its annotated first pass: locals must be
         // declared anew on each iteration. Only outer moves cross the backedge.
@@ -459,15 +553,15 @@ impl Checker {
                 // A while condition is also evaluated on its exit path. A for
                 // iterator was evaluated once before entering this helper.
                 let exit = self.vars.clone();
-                if let Some((name, ty)) = &binding {
+                if let Some((name, ty, binding, origins)) = &binding {
                     self.vars.insert(
                         (*name).to_owned(),
                         Var {
+                            binding: *binding,
                             ty: ty.clone(),
                             moved: false,
                             moved_fields: HashSet::new(),
-                            origin: None,
-                            param: false,
+                            origins: origins.clone(),
                         },
                     );
                 }
@@ -490,7 +584,7 @@ impl Checker {
                 self.vars = exit;
                 return Ok(());
             }
-            if let Some((name, _)) = &binding {
+            if let Some((name, _, _, _)) = &binding {
                 after.remove(*name);
             }
             self.vars = header.clone();
@@ -507,6 +601,16 @@ impl Checker {
         }
     }
     fn block(&mut self, ss: &mut [Stmt]) -> Result<(), String> {
+        // A path that returns will never advance any enclosing iterator again.
+        // New loops inside this block still acquire their own loans.
+        let ending = returns(ss).then(|| std::mem::take(&mut self.iterators));
+        let checked = self.block_statements(ss);
+        if let Some(iterators) = ending {
+            self.iterators = iterators;
+        }
+        checked
+    }
+    fn block_statements(&mut self, ss: &mut [Stmt]) -> Result<(), String> {
         for s in ss {
             if self.editor {
                 let before = self.vars.clone();
@@ -541,13 +645,16 @@ impl Checker {
                 if let Some(a) = annotation.as_ref() {
                     self.valid(a, s.line)?;
                 }
-                if self.borrowed(name) {
-                    return Err(error(s.line, "viewが生きている所有値は再代入できません"));
+                if !old.as_ref().is_some_and(|v| v.ty.is_view()) && self.borrowed(name) {
+                    return Err(error(
+                        s.line,
+                        "viewまたはループから参照中の所有値は再代入できません",
+                    ));
                 }
                 let origin = if ty.contains_view() {
                     self.origin(value)
                 } else {
-                    None
+                    HashSet::new()
                 };
                 self.consume(value)?;
                 *declare = old.is_none();
@@ -556,11 +663,14 @@ impl Checker {
                 self.vars.insert(
                     name.clone(),
                     Var {
+                        binding: old.as_ref().map(|v| v.binding).unwrap_or(BindingId {
+                            line: s.line,
+                            token: s.binding_span.unwrap_or_default().start,
+                        }),
                         ty,
                         moved: false,
                         moved_fields: HashSet::new(),
-                        origin,
-                        param: false,
+                        origins: origin,
                     },
                 );
             }
@@ -576,10 +686,10 @@ impl Checker {
                     let ty = self.expr(e, Some(&ret))?;
                     if ty.contains_view() {
                         let origin = self.origin(e);
-                        if !origin
-                            .as_ref()
-                            .and_then(|n| self.vars.get(n))
-                            .is_some_and(|v| v.param && v.ty.contains_view())
+                        if origin.is_empty()
+                            || origin
+                                .iter()
+                                .any(|place| !self.parameter_views.contains(&place.binding))
                         {
                             return Err(error(s.line,"request/local-scoped view escapes its lifetime。長生きさせる値にはcopy()を使用してください"));
                         }
@@ -655,15 +765,18 @@ impl Checker {
                         self.vars.insert(
                             name.clone(),
                             Var {
-                                origin: if payload.contains_view() {
+                                binding: BindingId {
+                                    line: arm.line,
+                                    token: arm.binding_span.start,
+                                },
+                                origins: if payload.contains_view() {
                                     origin.clone()
                                 } else {
-                                    None
+                                    HashSet::new()
                                 },
                                 ty: payload,
                                 moved: false,
                                 moved_fields: HashSet::new(),
-                                param: false,
                             },
                         );
                     }
@@ -690,16 +803,47 @@ impl Checker {
                     return Err(error(s.line, "0.1のfor要素はprimitiveに限定されています"));
                 }
                 s.binding_type = Some(elem.clone());
-                self.loop_body(b, None, Some((n, elem)))?;
+                let origins = self.origin(e);
+                let mut loans = origins.clone();
+                if t.0 == "List" {
+                    if let Some((name, fields)) = Self::place(e) {
+                        if let Some(var) = self.vars.get(name) {
+                            loans.insert(BorrowedPlace {
+                                binding: var.binding,
+                                fields,
+                            });
+                        }
+                    }
+                }
+                self.iterators.push(loans);
+                let checked = self.loop_body(
+                    b,
+                    None,
+                    Some((
+                        n,
+                        elem.clone(),
+                        BindingId {
+                            line: s.line,
+                            token: s.binding_span.unwrap_or_default().start,
+                        },
+                        if elem.contains_view() {
+                            origins
+                        } else {
+                            HashSet::new()
+                        },
+                    )),
+                );
+                self.iterators.pop();
+                checked?;
             }
             S::Scope(b) => {
                 if !self.asynchronous || self.ret.0 != "Result" {
                     return Err(error(s.line, "scopeはasync Result関数内で使用してください"));
                 }
                 self.scope += 1;
-                let m = self.child(b)?;
+                let m = self.child(b);
                 self.scope -= 1;
-                self.merge_moves(m);
+                self.merge_moves(m?);
             }
             S::Spawn(e) => {
                 if self.scope == 0 {
@@ -1252,7 +1396,10 @@ impl Checker {
                 require(1, types[0].inner())?;
                 if let E::Name(n) = &args[0].kind {
                     if self.borrowed(n) {
-                        return Err(error(line, "viewが生きているListを変更できません"));
+                        return Err(error(
+                            line,
+                            "viewまたはループから参照中のListを変更できません",
+                        ));
                     }
                 } else {
                     return Err(error(line, "append対象は変数名です"));

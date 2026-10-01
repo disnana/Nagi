@@ -59,7 +59,7 @@ fn views_in_result_payloads_keep_borrowing_until_the_arm_ends() {
         "print(copy(part))",
         "text = \"changed too soon\"\n            print(copy(part))",
     );
-    assert!(checked(&bad).unwrap_err().contains("viewが生きている"));
+    assert!(checked(&bad).unwrap_err().contains("参照中"));
 }
 
 #[test]
