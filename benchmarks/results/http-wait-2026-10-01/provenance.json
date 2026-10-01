@@ -1,0 +1,42 @@
+{
+  "measurement_date_utc": "2026-10-01",
+  "baseline_commit": "1c01386894f7c156909771f4e6554292dd664243",
+  "candidate_base_commit": "1c01386894f7c156909771f4e6554292dd664243",
+  "candidate_working_tree_modified": true,
+  "source_commit_note": "The source_commit field in the original environments is the checked-out base commit. Candidate measurements include the runtime changes identified by the hashes below; they were not measurements of a pristine base checkout.",
+  "candidate_source_sha256": {
+    "Cargo.toml": "49300d8a1f3b681223c195248de925ac8dabce9bc6fedf04da266ebf9f9b3ba9",
+    "Cargo.lock": "1e9398c3dacd160d815ebb36b40b63a45cbe2293efbf64d3cb8f703000ab4bfb",
+    "runtime/Cargo.toml": "2518e550911e471bf25e0b20215d5b65991c0af6721d769d0add3226eae62543",
+    "runtime/src/lib.rs": "1b2eb374b57d45932b18bf475ed2414c502fc14a1011f3b79dabc437dbb3d21e",
+    "runtime/src/http.rs": "b7cb6b4146273ef4d53eccbfa71b1c43902b960567b73391ba397f93a5d463e0",
+    "runtime/src/http/tests.rs": "20c75d75465725aaef841378f2ff7989132b8e9a562c7626cf10e6141053f9a0",
+    "scripts/http_capacity.py": "fa709c767fed5c806a4e4566e72965102fa92af146aaf97f7b52a0ef5797126d",
+    "scripts/http_saturation.py": "388f26b447496b63e511d338d3333192c2595153912c58d87ec6722a98597a80",
+    "scripts/http_connection_lifecycle.py": "7f766d9ee2238af20ac7c2d5568747fcd7cb87e775d4bd9ecd3e15d159bd4635",
+    "benchmarks/http.lua": "83504dd98edf2a90487399472f86b4f10148736e6d238a7dfa4d95f83534e367",
+    "examples/crud.nagi": "374b193207b589f4b383b9ba113fc0a6ab3e0abd04c1f1ac0e2fb21b2654d505"
+  },
+  "candidate_changed_runtime_files": [
+    "Cargo.lock",
+    "runtime/Cargo.toml",
+    "runtime/src/lib.rs",
+    "runtime/src/http.rs",
+    "runtime/src/http/tests.rs"
+  ],
+  "platform": "Linux x86_64",
+  "rust_version": "1.98.1",
+  "hyper_version": "1.11.0",
+  "hyper_util_version": "0.1.21",
+  "server_workers": 1,
+  "server_cpu": "0",
+  "client_cpus": "1,2",
+  "fd_limit": [
+    16384,
+    16384
+  ],
+  "cpu_quota": "400000 100000",
+  "memory_max_bytes": 17179869184,
+  "request_wait_seconds": 10,
+  "limits": "HTTP/1.1 on loopback without TLS. Brief trials on one host do not establish internet capacity, DDoS resistance, or day-long stability."
+}

@@ -462,6 +462,8 @@ dependencies = [
  "axum",
  "bumpalo",
  "futures-util",
+ "hyper",
+ "hyper-util",
  "rusqlite",
  "serde",
  "serde_json",

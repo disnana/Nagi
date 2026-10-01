@@ -1,6 +1,6 @@
 # HTTP load tests
 
-We measured throughput, latency, memory, and connection recovery using Nagi's HTTP sample. The test date was October 1, 2026. The measured implementation was Nagi 0.1.2 at commit [`c602abb`](https://github.com/disnana/Nagi/commit/c602abb349641cf1d5a274e2221e33d29a0acea4).
+We measured throughput, latency, memory, and connection recovery using Nagi's HTTP sample. The initial tests ran on October 1, 2026, using Nagi 0.1.2 at commit [`c602abb`](https://github.com/disnana/Nagi/commit/c602abb349641cf1d5a274e2221e33d29a0acea4). The implementation with a request-wait deadline is compared separately in the [follow-up tests](#follow-up-tests-with-the-wait-deadline).
 
 The endpoint that receives a 4 KiB string and returns JSON handled 15,000 requests per second for 30 minutes. All 27,000,270 requests returned HTTP 200. However, connection counts and memory increased, and file descriptors remained after the load stopped. Throughput alone does not establish stability.
 
@@ -118,23 +118,60 @@ The OS FD limit was 16,384. The server also needs FDs for resources other than c
 
 We observed 100 connections in each condition concurrently for 120 seconds. This is a small local behavior test, not a distributed attack or an attack on a public service.
 
-### Connection management and DoS protection
+## Follow-up tests with the wait deadline
+
+On October 1, 2026 (UTC), we compared Nagi 0.1.4 at [`1c013868`](https://github.com/disnana/Nagi/commit/1c01386894f7c156909771f4e6554292dd664243) with an implementation that adds a ten-second HTTP request-wait deadline. It uses unmodified Hyper 1.11.0. The results below come from these follow-up tests.
+
+### Connection recovery during regular traffic
+
+We created 100 connections each for silence, partial headers, partial bodies, and unused keep-alive. Partial bodies received 408 under the existing two-second limit, and the remaining waiting connections also closed. FDs returned from 410 to 10. Connections were created sequentially before observation, so roughly ten seconds from the start of observation is not an exact lifetime for every connection. FDs also returned to 10 after 200 abrupt disconnects (RST).
+
+In a separate test, we created 350 connections each for silence, partial headers, and unused keep-alive, totaling 1,050, while requesting 5,000 `/health` responses per second for 25 seconds.
+
+| Item | Result |
+| --- | ---: |
+| Requests actually sent | 124,977 |
+| Non-200 responses or transport errors | 0 |
+| Regular traffic p99 | 7.01ms |
+| Observation when all waiting connections had closed | 11.28 seconds after load began |
+| Server FDs | Initially 10, sampled maximum 1,092, 42 after recovery during load, finally 10 |
+| Server RSS | Initially 4.34MiB, sampled maximum 20.08MiB, finally 17.73MiB |
+
+The 42 FDs after recovery include 32 connections carrying regular traffic. RSS did not return to its initial value. This short test does not establish a memory leak or long-term stability. In the first attempt, the generator sent 124,997 requests and all returned 200, but the harness failed because it required exactly 125,000 arrivals. We corrected the assertion to check actual dispatched counts and repeated the test shown above. The first response aggregate is also retained.
+
+Automated tests with a shorter deadline check that one-byte header progress does not reset the deadline, keep-alive can be reused within it, and long responses, slow response readers, streams, and upgraded WebSockets are not cut off by the request-wait deadline. These are not tests of large WebSocket fan-out or public-network capacity.
+
+### Effect on regular traffic
+
+We alternated the implementations on the same host: before/after, after/before, then before/after. Each condition used 128 client connections and three five-second trials. The table shows the median throughput and median trial p99.
+
+| Workload | Responses/s before | Responses/s after | Throughput change | p99 (before → after) | Errors |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| HTTP /health | 78,132 | 70,105 | −10.3% | 2.412 → 2.277ms | 0 |
+| 4KiB JSON | 40,018 | 38,207 | −4.5% | 4.540 → 5.090ms | 0 |
+
+The implementation that reclaims waiting connections has lower saturation throughput under these conditions. We have not profiled the cause. An earlier comparison that measured the baseline trials together also showed reductions of about 7.2% and 5.6%, respectively. The table uses the alternating-order repeat; raw data from both comparisons is retained. These brief trials on one host do not establish the same difference for every environment.
+
+The server used one logical CPU and one worker; the load generator used two different logical CPUs. The assignments were server `0`, clients `1,2`, with HTTP/1.1 without TLS on loopback. OS FD limits were not raised. The 128 connections are a client-side test condition.
+
+[Raw follow-up data and script snapshots](../../benchmarks/results/http-wait-2026-10-01/) record hashes of the binaries, implementation, and harnesses. The original environments' `source_commit` identifies the checked-out base commit; also consult `provenance.json` to identify the modified implementation.
+
+## Connection management and DoS protection
 
 The current [`serve`](../../runtime/src/lib.rs) has a 1 MiB HTTP body limit and a 2-second handler timeout. It binds only to `127.0.0.1` by default. These controls do not bound every connection's lifetime or the traffic reaching a public deployment.
 
-Rather than imposing a global limit of 128 connections, the proposed direction is to ensure disconnected clients release their resources and set deadlines for silent or stalled clients. Any policy must preserve valid HTTP requests, streams, and WebSocket sessions.
+The implementation adds no fixed connection cap. Silent connections and incomplete header sends now have a deadline.
 
-A candidate for the next PR uses configurable defaults of 10 seconds to complete initial or partial headers and 60 seconds for unused HTTP keep-alive after a response. The initial deadline includes silence immediately after accept. Idle deadlines would not be applied indiscriminately to active responses, streams, or upgraded WebSocket sessions. These are proposed compatibility changes, pending a policy decision before implementation.
+The initial measurements at `c602abb` predate connection deadlines. The server now uses a shared ten-second deadline for initial silence, incomplete headers, and the wait from a completed response until the next complete headers. Keeping Hyper unmodified means unused keep-alive does not have a separate 60-second deadline. The deadline is configurable through an environment variable and excludes active responses, streams, and upgraded WebSockets. See [HTTP](http.md) for configuration.
 
 | Proposed control | Intended effect | Decision still needed |
 | --- | --- | --- |
 | Investigate and fix connection teardown | Release resources after disconnects | Reproduce and identify the remaining FDs from the 30-minute run |
-| Header receive deadline | Bound silent or partial-header connections | Deadline and treatment of slow legitimate clients |
-| HTTP idle deadline | Reclaim unused connections | Configurable deadline and reconnection costs |
+| Header and HTTP wait deadline | Bound silent, partial-header, and unused connections | Shared ten-second deadline implemented; verify deployment settings and reconnection costs |
 | Body receive and work admission controls | Bound stalled uploads and queued work | Interaction with existing timeouts and queue capacity |
 | Fronting proxy or CDN | Filter excessive traffic to public services | Deployment, traffic and connection budgets, and source policies |
 
-This PR does not change runtime or deployment limits. If a DDoS attack fills the network link, controls inside Nagi cannot resolve that saturation; upstream protection is also needed.
+Deployment limits are needed separately from this wait deadline. If a DDoS attack fills the network link, controls inside Nagi cannot resolve that saturation; upstream protection is also needed.
 
 ## Environment and reproduction
 

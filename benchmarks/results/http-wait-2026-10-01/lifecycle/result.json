@@ -1,0 +1,1135 @@
+{
+  "baseline": {
+    "pid": 114371,
+    "cpu_ticks": 0,
+    "rss_kib": 4392,
+    "hwm_kib": 4392,
+    "fds": 10,
+    "threads": 3
+  },
+  "observations": [
+    {
+      "elapsed_s": 0.0005599659925792366,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 9860,
+        "hwm_kib": 9860,
+        "fds": 410,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "ESTABLISHED": 400,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 100,
+        "partial_header": 100,
+        "partial_body": 100,
+        "idle_keepalive": 100
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {},
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 1.008316991996253,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 9864,
+        "hwm_kib": 9864,
+        "fds": 363,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT1": 47,
+        "ESTABLISHED": 353,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 100,
+        "partial_header": 100,
+        "partial_body": 100,
+        "idle_keepalive": 100
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 47
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 2.0156661679939134,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 9864,
+        "hwm_kib": 9864,
+        "fds": 310,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 47,
+        "ESTABLISHED": 300,
+        "FIN_WAIT1": 53,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 100,
+        "partial_header": 100,
+        "partial_body": 53,
+        "idle_keepalive": 100
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 3.028002609993564,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 9864,
+        "hwm_kib": 9864,
+        "fds": 310,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 100,
+        "ESTABLISHED": 300,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 100,
+        "partial_header": 100,
+        "partial_body": 0,
+        "idle_keepalive": 100
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 4.038906222995138,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 9864,
+        "hwm_kib": 9864,
+        "fds": 310,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 100,
+        "ESTABLISHED": 300,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 100,
+        "partial_header": 100,
+        "partial_body": 0,
+        "idle_keepalive": 100
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 5.053897891993984,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 9864,
+        "hwm_kib": 9864,
+        "fds": 310,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 100,
+        "ESTABLISHED": 300,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 100,
+        "partial_header": 100,
+        "partial_body": 0,
+        "idle_keepalive": 100
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 6.069304094999097,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 9864,
+        "hwm_kib": 9864,
+        "fds": 310,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 100,
+        "ESTABLISHED": 300,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 100,
+        "partial_header": 100,
+        "partial_body": 0,
+        "idle_keepalive": 100
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 7.077812585994252,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 9864,
+        "hwm_kib": 9864,
+        "fds": 310,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 100,
+        "ESTABLISHED": 300,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 100,
+        "partial_header": 100,
+        "partial_body": 0,
+        "idle_keepalive": 100
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 8.088693661004072,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 9864,
+        "hwm_kib": 9864,
+        "fds": 310,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 100,
+        "ESTABLISHED": 300,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 100,
+        "partial_header": 100,
+        "partial_body": 0,
+        "idle_keepalive": 100
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 9.096757744991919,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 9868,
+        "hwm_kib": 9868,
+        "fds": 110,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 300,
+        "TIME_WAIT": 4,
+        "ESTABLISHED": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 100
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 10.102942262994475,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 400,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 11.109163262997754,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 400,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 12.11535759200342,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 400,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 13.121186303003924,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 400,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 14.127132790003088,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 400,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 15.13326935499208,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 400,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 16.139309878999484,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 400,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 17.145501018996583,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 400,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 18.151642422992154,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 400,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    },
+    {
+      "elapsed_s": 19.157681837998098,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "FIN_WAIT2": 400,
+        "TIME_WAIT": 4
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 100
+        },
+        "idle_keepalive": {}
+      }
+    }
+  ],
+  "after_client_close": [
+    {
+      "elapsed_s": 0.0009822139982134104,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 11,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 404,
+        "CLOSE_WAIT": 1
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.9092390100704506
+    },
+    {
+      "elapsed_s": 0.507352312997682,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 405
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.9844690066529438
+    },
+    {
+      "elapsed_s": 1.0135711309994804,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 406
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8146920008584857
+    },
+    {
+      "elapsed_s": 1.5196844169986434,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 407
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7746170012978837
+    },
+    {
+      "elapsed_s": 2.025865563991829,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 408
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8193600078811869
+    },
+    {
+      "elapsed_s": 2.5320404899975983,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 409
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8062359993346035
+    },
+    {
+      "elapsed_s": 3.0380748710012995,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 410
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7759199943393469
+    },
+    {
+      "elapsed_s": 3.5453633069992065,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 411
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.0229699983028695
+    },
+    {
+      "elapsed_s": 4.053930352994939,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 412
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7934619934530929
+    },
+    {
+      "elapsed_s": 4.560422711001593,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 2,
+        "rss_kib": 8940,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 413
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7890029955888167
+    }
+  ],
+  "abrupt_disconnect_count": 200,
+  "abrupt_before": {
+    "pid": 114371,
+    "cpu_ticks": 2,
+    "rss_kib": 8940,
+    "hwm_kib": 9792,
+    "fds": 10,
+    "threads": 3
+  },
+  "after_abrupt_disconnect": [
+    {
+      "elapsed_s": 0.0006089780072215945,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 3,
+        "rss_kib": 8984,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 414
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.5587140040006489
+    },
+    {
+      "elapsed_s": 0.5065704950102372,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 3,
+        "rss_kib": 8984,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 415
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7574449991807342
+    },
+    {
+      "elapsed_s": 1.0126065479998942,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 3,
+        "rss_kib": 8984,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 416
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.6837870023446158
+    },
+    {
+      "elapsed_s": 1.5187621140066767,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 3,
+        "rss_kib": 8984,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 417
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8819779905024916
+    },
+    {
+      "elapsed_s": 2.024939062001067,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 3,
+        "rss_kib": 8984,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 418
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8921770058805123
+    },
+    {
+      "elapsed_s": 2.531292209008825,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 3,
+        "rss_kib": 8984,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 419
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8900929969968274
+    },
+    {
+      "elapsed_s": 3.0374178159981966,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 3,
+        "rss_kib": 8984,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 420
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.796887994511053
+    },
+    {
+      "elapsed_s": 3.5437254950084025,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 3,
+        "rss_kib": 8984,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 421
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.9029960056068376
+    },
+    {
+      "elapsed_s": 4.049979016999714,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 3,
+        "rss_kib": 8984,
+        "hwm_kib": 9792,
+        "fds": 10,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 422
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7085340039338917
+    },
+    {
+      "elapsed_s": 4.556092127008014,
+      "server": {
+        "pid": 114371,
+        "cpu_ticks": 3,
+        "rss_kib": 8984,
+        "hwm_kib": 9792,
+        "fds": 11,
+        "threads": 3
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 422,
+        "CLOSE_WAIT": 1
+      },
+      "fd_types": {
+        "pipe": 1,
+        "file_or_device": 2,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8295399893540889
+    }
+  ]
+}

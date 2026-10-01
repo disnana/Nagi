@@ -1,0 +1,37 @@
+{
+  "healthy_report": {
+    "latencies": {
+      "total": 20122041029,
+      "mean": 160980,
+      "50th": 138015,
+      "90th": 226912,
+      "95th": 271130,
+      "99th": 672209,
+      "max": 6453465,
+      "min": 25831
+    },
+    "bytes_in": {
+      "total": 249994,
+      "mean": 2
+    },
+    "bytes_out": {
+      "total": 0,
+      "mean": 0
+    },
+    "earliest": "2026-10-01T22:38:04.315331214Z",
+    "latest": "2026-10-01T22:38:29.31554271Z",
+    "end": "2026-10-01T22:38:29.315715823Z",
+    "duration": 25000211496,
+    "wait": 173113,
+    "requests": 124997,
+    "rate": 4999.837702173014,
+    "throughput": 4999.803081229469,
+    "success": 1,
+    "status_codes": {
+      "200": 124997
+    },
+    "errors": []
+  },
+  "harness_failure": "The harness required exactly 125000 arrivals; the paced generator sent 124997. All responses were HTTP 200. The repeated trial accepts a small pacing shortfall and checks actual status counts.",
+  "binary_results_sha256": "b0151117147def3f7fba5674d148b17a63d00eeb8e0dc68c69aa35747c5d14cd"
+}
