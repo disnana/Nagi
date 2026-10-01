@@ -83,6 +83,23 @@ fn type_errors_point_to_the_original_imported_file_and_line() {
 }
 
 #[test]
+fn field_move_errors_point_to_the_original_imported_file_and_line() {
+    let f = Fixture::new();
+    f.write("model.nagi", "class Person:\n    name: str\n");
+    f.write("lib/move.nagi", "import \"../model.nagi\"\ndef duplicate(person: Person):\n    first = person.name\n    second = person.name\n");
+    f.write(
+        "main.nagi",
+        "import \"lib/move.nagi\"\ndef main():\n    duplicate(Person(name=\"Nagi\"))\n",
+    );
+    let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
+    let error = check::check(&mut loaded.program).unwrap_err();
+    let diagnostic = loaded.diagnostic(&error);
+    assert!(diagnostic.contains("move.nagi:4"), "{diagnostic}");
+    assert!(diagnostic.contains("person.name はmove後"), "{diagnostic}");
+    assert!(diagnostic.contains("second = person.name"), "{diagnostic}");
+}
+
+#[test]
 fn low_imports_use_the_low_parser() {
     let f = Fixture::new();
     f.write("math.low", "fn twice(x: i64) -> i64 { return x * 2; }\n");

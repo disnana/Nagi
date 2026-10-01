@@ -24,11 +24,9 @@ fn nested_views_compile_and_copy_strings_bytes_and_lists() {
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
     let mut code = emit::rust(&low).unwrap();
-    // These functions only use std. Supply empty modules for the emitter's
-    // unconditional runtime imports, so this regression needs no Cargo build.
+    // These functions only use std, so the emitted code needs no runtime crate.
     code.push_str(
-        "\nmod nagi_runtime { pub mod axum {} pub mod serde {} pub mod serde_json {} }\n\
-         #[test] fn generated_values() {\n\
+        "\n#[test] fn generated_values() {\n\
          assert_eq!(text_copy(String::from(\"Nagi\")), \"Nagi\");\n\
          assert_eq!(bytes_copy(vec![0, 128, 255]), vec![0, 128, 255]);\n\
          assert_eq!(list_copy(vec![1, 2, 3]), vec![1, 2, 3]);\n\
@@ -54,7 +52,7 @@ fn compile_and_run(code: String) {
         .join(format!("generated{}", std::env::consts::EXE_SUFFIX));
     fs::write(&source, code).unwrap();
     let output = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
-        .args(["--edition=2021", "--test"])
+        .args(["--edition=2021", "--test", "-D", "unused-imports"])
         .arg(&source)
         .arg("-o")
         .arg(&binary)
@@ -105,7 +103,6 @@ def borrowed(r: Result[view[str], i64]) -> str:
     let mut code = emit::rust(&low).unwrap();
     code.push_str(
         r#"
-mod nagi_runtime { pub mod axum {} pub mod serde {} pub mod serde_json {} }
 #[test] fn generated_matches() {
     assert_eq!(choose(Ok(41)), 42);
     assert_eq!(choose(Err(-1)), -1);

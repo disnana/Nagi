@@ -9,6 +9,11 @@ def run(args):
     if r.returncode:
         raise RuntimeError(r.stdout + r.stderr)
     return r
+def build(args):
+    r=run(args)
+    if 'unused import' in r.stderr:
+        raise RuntimeError(r.stderr)
+    return r
 def main():
     rows=[]
     nagic=TARGET/'release'/('nagic'+EXE)
@@ -16,7 +21,7 @@ def main():
         args=[nagic,'build',ROOT/'examples'/f'{name}.nagi','--out',ROOT/'build'/name,'--cost-report']
         if name=='low_call':args+=['--native',ROOT/'examples/native/math.low']
         if name=='override':args+=['--native',ROOT/'examples/native/override.low']
-        r=run(args)
+        r=build(args)
         row={'sample':name,'build':'passed'}
         if name not in ['cpu','crud']:
             r=run([ROOT/'native-target/release'/('nagi-'+name.replace('_','-')+EXE)])
@@ -24,13 +29,13 @@ def main():
             row.update(stdout=r.stdout,stderr=stderr,run='passed')
             if name in ['low_call','override']:assert r.stdout.strip()=='42'
         rows.append(row)
-    r=run([nagic,'build',ROOT/'examples/hello.low','--out',ROOT/'build/hello_low'])
+    r=build([nagic,'build',ROOT/'examples/hello.low','--out',ROOT/'build/hello_low'])
     r=run([ROOT/'native-target/release'/('nagi-hello'+EXE)])
     assert r.stdout.strip()=='4'
     rows.append({'sample':'hello.low','build':'passed','run':'passed','stdout':r.stdout})
     # 同じHighを再生成しても、手書き置換のbytesは変化しない。
     native=ROOT/'examples/native/override.low';before=native.read_bytes()
-    run([nagic,'build',ROOT/'examples/override.nagi','--native',native,'--out',ROOT/'build/override'])
+    build([nagic,'build',ROOT/'examples/override.nagi','--native',native,'--out',ROOT/'build/override'])
     assert native.read_bytes()==before
     (ROOT/'benchmarks/results').mkdir(parents=True,exist_ok=True)
     (ROOT/'benchmarks/results/examples.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2))

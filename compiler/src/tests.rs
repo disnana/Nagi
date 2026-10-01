@@ -39,7 +39,7 @@ fn console_io_roundtrip() {
     let mut low = parser::parse(&emit::low(&p), false).unwrap();
     check::check(&mut low).unwrap();
     let rust = emit::rust(&low).unwrap();
-    assert!(rust.contains("rt::read_line()"));
+    assert!(rust.contains("::nagi_runtime::read_line()"));
     assert!(high("def main():\n    read_line()\n").is_err());
     assert!(high("def main():\n    x = read_line(1)\n").is_err());
     assert!(high("def main():\n    write([1, 2])\n").is_err());

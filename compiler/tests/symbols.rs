@@ -729,6 +729,23 @@ fn moved_values_and_scope_locals_have_no_later_inferred_type() {
 }
 
 #[test]
+fn partial_moves_do_not_infer_invalid_bindings_or_hide_unmoved_fields() {
+    let f = Fixture::new();
+    f.write("main.nagi", "class User:\n    name: str\n    age: i64\ndef main():\n    user = User(name=\"Nagi\", age=1)\n    first = user.name\n    second = user.name\n    age = user.age\n    print(first)\n    print(age)\n    print(user.name)\n    user = User(name=\"new\", age=2)\n    print(user.name)\n");
+    let index = f.symbols(serde_json::json!([]));
+    assert!(local_types(&index, 7, "second").is_empty());
+    assert_eq!(local_types(&index, 8, "age"), ["i64"]);
+    assert_eq!(local_types(&index, 9, "first"), ["str"]);
+    let expressions = index["expressions"].as_array().unwrap();
+    assert!(!expressions
+        .iter()
+        .any(|e| e["location"]["line"] == 11 && e["type"] == "str"));
+    assert!(expressions
+        .iter()
+        .any(|e| e["location"]["line"] == 13 && e["type"] == "str"));
+}
+
+#[test]
 fn expression_ranges_cover_multiline_receivers_and_do_not_unwrap_results() {
     let f = Fixture::new();
     f.write("main.nagi", "class Point:\n    x: i64\ndef fetch() -> Result[Point, Error]:\n    return ok(Point(x=7))\ndef inspect() -> Result[unit, Error]:\n    point = (\n        try fetch()\n    )\n    print(point.x)\n    return ok(print(0))\ndef main():\n    result = fetch()\n");
