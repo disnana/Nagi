@@ -4,9 +4,20 @@
 
 This page helps you prepare the Nagi compiler and run a program in one file. Run the commands from **the root of this repository**.
 
-A compiler turns the code you write into an executable. Enter the commands below in a terminal: PowerShell on Windows, or a terminal application on Linux. The repository root means the Nagi folder you downloaded.
+A compiler turns the code you write into an executable. Enter the commands below in a terminal: PowerShell on Windows, or a terminal application on Linux or macOS. The repository root means the Nagi folder you downloaded.
 
-If you have not downloaded the source yet, install [Git](https://git-scm.com/) and run:
+Download and extract the Nagi archive for your OS from [GitHub Releases](https://github.com/disnana/Nagi/releases).
+
+| Your system | File to download |
+|---|---|
+| Windows x64 | `nagi-0.1.1-windows-x86_64.zip` |
+| Linux x86_64 | `nagi-0.1.1-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `nagi-0.1.1-macos-arm64.tar.gz` |
+| macOS Intel | `nagi-0.1.1-macos-x86_64.tar.gz` |
+
+These archives include the compiler and source. Keep the folder structure, including `runtime/`. GitHub's **Source code** downloads contain only source. The VS Code extension is a separate `nagi-language-0.1.7.vsix` file.
+
+To build the compiler from source instead, install [Git](https://git-scm.com/) and run:
 
 ```bash
 git clone https://github.com/disnana/Nagi.git
@@ -15,11 +26,13 @@ cd Nagi
 
 You can also use **Code → Download ZIP** on GitHub. Extract the ZIP and open that folder in your terminal.
 
-## 1. Build the compiler
+## 1. Prepare the compiler
 
 You need [Rust/Cargo](https://www.rust-lang.org/tools/install) and a C build environment. Rust builds the compiler and the generated code. Cargo manages Rust builds and dependencies. The bundled SQLite C code also needs a C compiler. The first build downloads dependencies through Cargo.
 
-On Windows, use the Rust MSVC toolchain and the C++ build tools from Visual Studio Build Tools. Native Windows compiler and demo executable builds have been verified for this repository. On Linux, install a C compiler. WSL2 follows the Linux instructions.
+On Windows, use the Rust MSVC toolchain and the C++ build tools from Visual Studio Build Tools. On Linux, install a C compiler. WSL2 follows the Linux instructions. On macOS, install Command Line Tools with `xcode-select --install`. The macOS archives are built and run in CI on macOS 15.
+
+With a compiler archive, skip the `cargo build` command below. Rust/Cargo and a C build environment are still needed to build your Nagi applications.
 
 ```powershell
 # Windows / PowerShell
@@ -28,7 +41,7 @@ cargo build --release --locked -p nagic
 ```
 
 ```bash
-# Linux / WSL2
+# Linux / WSL2 / macOS
 cargo build --release --locked -p nagic
 ./target/release/nagic run examples/hello.nagi
 ```
@@ -77,6 +90,8 @@ The integer in `count = 3` has type `i64`. Save the file with a `.nagi` extensio
 
 Currently, both `check` and `lower` save the Low generated from High. A successful `check` can still be followed by a failed `build` if Rust's type or borrow checks reject the generated program.
 
+Build errors first show the original Nagi or Low filename, the line of the corresponding statement or definition, and its source text. This includes imports and handwritten Low used with `@replace`. The following `Rust backend details` preserves the full diagnostic for the generated Rust. Errors in handwritten Rust, or errors without an identifiable source location, retain Rust's diagnostics.
+
 ```powershell
 .\target\release\nagic.exe check hello.nagi
 .\target\release\nagic.exe build hello.nagi
@@ -112,7 +127,7 @@ Install the [Nagi extension](vscode-extension.md), then open this repository fol
 | VS Code reports `spawn nagic.exe ENOENT` or a missing compiler | The VSIX does not include the compiler. Build it in step 1, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set `nagi.compilerPath` to its executable |
 | The C compiler or linker is not found | Check your Windows C++ build tools or Linux C compiler |
 | Tabs or indentation errors | Use four spaces consistently |
-| A check succeeds but a build fails | Read the Rust backend diagnostics in the terminal |
+| A check succeeds but a build fails | Start with the Nagi or Low filename and line in the terminal; the following Rust diagnostic gives further details |
 | A port is already in use | Stop the earlier server before restarting |
 | Rebuilding a running exe fails on Windows | Stop the executable and rebuild |
 | A server does not exit | `serve` keeps waiting for requests; press Ctrl+C in its terminal |

@@ -14,10 +14,19 @@ from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 from plan import ROOT, version_tuple
 
 
+PLATFORMS = ("linux-x86_64", "windows-x86_64", "macos-arm64", "macos-x86_64")
+
+
+def archive_name(version: str, platform: str) -> str:
+    if platform not in PLATFORMS:
+        raise ValueError(f"Unsupported release platform: {platform}")
+    suffix = ".zip" if platform == "windows-x86_64" else ".tar.gz"
+    return f"nagi-{version}-{platform}{suffix}"
+
+
 def package(binary: Path, version: str, platform: str, output: Path, commit: str = "HEAD") -> Path:
     version_tuple(version)
-    if platform not in {"linux-x86_64", "windows-x86_64"}:
-        raise ValueError(f"Unsupported release platform: {platform}")
+    filename = archive_name(version, platform)
     sha = subprocess.check_output(["git", "rev-parse", "--verify", f"{commit}^{{commit}}"], cwd=ROOT).decode().strip()
     manifest = subprocess.check_output(["git", "show", f"{sha}:Cargo.toml"], cwd=ROOT).decode()
     if tomllib.loads(manifest)["workspace"]["package"]["version"] != version:
@@ -30,7 +39,7 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
     binary_path = f"{stem}/target/release/{executable}"
     provenance = json.dumps({"version": version, "platform": platform, "commit": sha}, indent=2).encode() + b"\n"
     windows = platform == "windows-x86_64"
-    destination = output / (stem + (".zip" if windows else ".tar.gz"))
+    destination = output / filename
     with tarfile.open(fileobj=io.BytesIO(source), mode="r:") as sources:
         if windows:
             with ZipFile(destination, "w", ZIP_DEFLATED) as archive:
@@ -64,7 +73,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--version", required=True)
-    parser.add_argument("--platform", required=True, choices=("linux-x86_64", "windows-x86_64"))
+    parser.add_argument("--platform", required=True, choices=PLATFORMS)
     parser.add_argument("--out", type=Path, default=ROOT / "build/distribution")
     args = parser.parse_args()
     print(package(args.binary, args.version, args.platform, args.out))

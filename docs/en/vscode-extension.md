@@ -19,10 +19,10 @@ Development tools for Nagi High (`.nagi`) and Low (`.low`). Command labels and s
 
 Formal VSIX downloads are published on [GitHub Releases](https://github.com/disnana/Nagi/releases) as nagi-language-VERSION.vsix. Updating the extension version on main publishes a release after CI succeeds.
 
-From the repository root, run `python editors/vscode-nagi/scripts/package_vsix.py` to create `build/distribution/nagi-language-0.1.6.vsix`. Select it using **Extensions: Install from VSIX**, or run:
+From the repository root, run `python editors/vscode-nagi/scripts/package_vsix.py` to create `build/distribution/nagi-language-0.1.7.vsix`. Select it using **Extensions: Install from VSIX**, or run:
 
 ```powershell
-code --install-extension build/distribution/nagi-language-0.1.6.vsix
+code --install-extension build/distribution/nagi-language-0.1.7.vsix
 ```
 
 Highlighting and snippets work without a compiler. Checks and execution require nagic. Open the Nagi repository and run `cargo build --release --locked -p nagic` at its root. Discovery checks the repository's release build, then debug build, then PATH.
@@ -68,7 +68,7 @@ Name references resolve separately from type checks, so identifiable bindings ca
 
 ## Hovers, completion, and parameter hints
 
-Use the latest nagic and extension 0.1.6. Function hovers show parameters, returns, and async status; class hovers list fields. Types such as Result[Item?, Error] and view[str] retain their declared forms. See the [walkthrough](editor.md).
+Use the latest nagic and extension 0.1.7. Function hovers show parameters, returns, and async status; class hovers list fields. Types such as Result[Item?, Error] and view[str] retain their declared forms. See the [walkthrough](editor.md).
 
 Variable hovers show confirmed types: count = 3 gives count: i64, and item from a class-returning call gives item: Item. Arguments, for elements, and Ok/Err bindings are supported at declarations and uses. Names outside their blocks do not receive those types.
 

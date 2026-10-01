@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from package import PLATFORMS, archive_name
 from plan import version_tuple
 
 
@@ -55,6 +56,25 @@ def tag_commit(client, tag: str) -> str | None:
     raise ValueError(f"Release tag does not resolve to a commit: {tag}")
 
 
+def release_for_tag(client, tag: str):
+    release = client.api(f"releases/tags/{tag}")
+    if release:
+        return release
+    # The tag endpoint only returns published releases. Authenticated release
+    # listings also include drafts, including one left by an interrupted run.
+    page = 1
+    while True:
+        releases = client.api(f"releases?per_page=100&page={page}")
+        if releases is None:
+            raise RuntimeError(f"Could not list releases while looking for {tag}")
+        for release in releases:
+            if release["tag_name"] == tag:
+                return release
+        if len(releases) < 100:
+            return None
+        page += 1
+
+
 def publish(client, component: str, version: str, sha: str, directory: Path) -> None:
     version_tuple(version)
     tag = f"{component}-v{version}"
@@ -63,9 +83,9 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
         title = f"Nagi Language for VS Code {version}"
         notes = "Install the VSIX using Extensions: Install from VSIX in VS Code. Type checking and execution require the Nagi compiler separately; the VSIX does not include it.\n"
     elif component == "nagi":
-        filenames = [f"nagi-{version}-linux-x86_64.tar.gz", f"nagi-{version}-windows-x86_64.zip"]
+        filenames = [archive_name(version, platform) for platform in PLATFORMS]
         title = f"Nagi {version}"
-        notes = "Archives include the prebuilt compiler and the matching Git-tracked source, runtime, examples, and Docs. Extract the whole archive and keep its directory structure. The compiler is in target/release/. Building Nagi applications still requires Rust/Cargo and a C build environment. Linux x86_64 and Windows x64 are included.\n"
+        notes = "Archives include the prebuilt compiler and the matching Git-tracked source, runtime, examples, and Docs. Extract the whole archive and keep its directory structure. The compiler is in target/release/. Building Nagi applications still requires Rust/Cargo and a C build environment. Linux x86_64, Windows x64, macOS Apple Silicon (arm64), and macOS Intel (x86_64) are included. macOS archives are verified on macOS 15.\n"
     else:
         raise ValueError(f"Unknown release component: {component}")
     assets = []
@@ -80,7 +100,7 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
     existing_commit = tag_commit(client, tag)
     if existing_commit and existing_commit != sha:
         raise ValueError(f"{tag} already points to a different commit; increase the version")
-    release = client.api(f"releases/tags/{tag}")
+    release = release_for_tag(client, tag)
     if release and not release["draft"]:
         remote = {asset["name"]: asset for asset in release["assets"]}
         if existing_commit != sha:
@@ -102,7 +122,9 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
             notes_file.write_text(notes, encoding="utf-8")
             client.command("create", tag, "--target", sha, "--draft", "--title", title,
                            "--notes-file", str(notes_file))
-        release = client.api(f"releases/tags/{tag}")
+        release = release_for_tag(client, tag)
+        if release is None:
+            raise RuntimeError(f"Created draft release could not be found: {tag}")
     if tag_commit(client, tag) != sha:
         raise ValueError(f"Release tag changed unexpectedly: {tag}")
     remote = {asset["name"]: asset for asset in release["assets"]}
@@ -115,7 +137,9 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
         else:
             client.command("upload", tag, str(path))
     # Read back all uploaded files before making the draft public.
-    release = client.api(f"releases/tags/{tag}")
+    release = client.api(f"releases/{release['id']}")
+    if release is None:
+        raise RuntimeError(f"Release disappeared before upload verification: {tag}")
     remote = {asset["name"]: asset for asset in release["assets"]}
     for path in assets:
         if path.name not in remote or client.digest(remote[path.name]) != hashlib.sha256(path.read_bytes()).hexdigest():
