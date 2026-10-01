@@ -691,7 +691,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 }
             }
             if !query_fields.is_empty() {
-                out.push_str(&format!("#[derive(::nagi_runtime::serde::Deserialize)]\n#[serde(crate=\"::nagi_runtime::serde\")]\nstruct __NagiQuery{i} {{ {} }}\n",query_fields.iter().map(|(n,t)|format!("#[serde(rename = {})] {n}:{}",quote(names.original(n)),rust_type(t))).collect::<Vec<_>>().join(",")));
+                out.push_str(&format!("#[derive(::nagi_runtime::serde::Deserialize)]\n#[serde(crate=\"::nagi_runtime::serde\")]\nstruct __NagiQuery{i} {{ {} }}\n",query_fields.iter().map(|(n,t)|format!("#[serde(rename = {})] {n}: {}",quote(names.original(n)),rust_type(t))).collect::<Vec<_>>().join(",")));
                 extracts.push(format!(
                     "::nagi_runtime::axum::extract::Query(__query): ::nagi_runtime::axum::extract::Query<__NagiQuery{i}>"
                 ));

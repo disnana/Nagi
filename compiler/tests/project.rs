@@ -50,8 +50,11 @@ impl Drop for Fixture {
 #[test]
 fn escaped_record_and_route_names_preserve_json_sqlite_and_rust_bridges() {
     let f = Fixture::new();
-    f.write("nagi.toml", "entry='main.nagi'\n[rust]\nfile='native.rs'\n");
-    f.write("main.nagi", "class fn:\n    text: str\nclass type:\n    type: i64\n    self: i64\n    __nagi_ident_0: i64\n@rust(\"native::verify\")\nextern def verify(record: type)\n@get(\"/query\")\nasync def loop(type: i64, self: i64) -> Result[i64, Error]:\n    return ok(type + self)\n@post(\"/record\")\nasync def record(type: type) -> Result[type, Error]:\n    return ok(type)\ndef main():\n    verify(type(type=1, self=2, __nagi_ident_0=3))\n");
+    f.write(
+        "nagi.toml",
+        "entry='escaped-record.nagi'\n[rust]\nfile='native.rs'\n",
+    );
+    f.write("escaped-record.nagi", "class fn:\n    text: str\nclass type:\n    type: i64\n    self: i64\n    __nagi_ident_0: i64\n@rust(\"native::verify\")\nextern def verify(record: type)\n@get(\"/query\")\nasync def loop(type: i64, self: i64, name: str) -> Result[i64, Error]:\n    return ok(type + self + len(view(name)))\n@post(\"/record\")\nasync def record(type: type) -> Result[type, Error]:\n    return ok(type)\ndef main():\n    verify(type(type=1, self=2, __nagi_ident_0=3))\n");
     f.write("native.rs", r#"pub fn verify(value: crate::r#type) {
         let json = nagi_runtime::serde_json::to_value(&value).unwrap();
         assert_eq!(json, nagi_runtime::serde_json::json!({"type":1,"self":2,"__nagi_ident_0":3}));
