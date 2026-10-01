@@ -1,0 +1,11 @@
+{
+  "date_utc": "2026-10-01T22:20:39Z",
+  "source_commit": "1c01386894f7c156909771f4e6554292dd664243",
+  "binary_sha256": "624cfe348fd8dc91a665019d6fc6368b10e21b00555aefa00b97260b3e7eb0a9",
+  "harness_sha256": "7f766d9ee2238af20ac7c2d5568747fcd7cb87e775d4bd9ecd3e15d159bd4635",
+  "http_helpers_sha256": "fa709c767fed5c806a4e4566e72965102fa92af146aaf97f7b52a0ef5797126d",
+  "connections_per_group": 100,
+  "observation_seconds": 20,
+  "server_cpus": "0",
+  "server_workers": 1
+}

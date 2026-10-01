@@ -4,6 +4,7 @@ pub use serde;
 pub use serde_json;
 mod concurrent;
 mod database;
+mod http;
 pub mod metrics;
 use axum::{
     body::Body,
@@ -217,9 +218,8 @@ pub fn error_response(e: Error) -> Response {
     )
         .into_response()
 }
-pub async fn serve(router: Router, port: i64) -> Result<(), Error> {
-    let port = u16::try_from(port).map_err(|_| Error::invalid("port out of range"))?;
-    let router = router
+fn http_router(router: Router) -> Router {
+    router
         .route("/health", axum::routing::get(|| async { "ok" }))
         .route(
             "/stream",
@@ -239,17 +239,20 @@ pub async fn serve(router: Router, port: i64) -> Result<(), Error> {
                     Err(_) => (StatusCode::REQUEST_TIMEOUT, "timeout").into_response(),
                 }
             },
-        ));
+        ))
+}
+pub async fn serve(router: Router, port: i64) -> Result<(), Error> {
+    let port = u16::try_from(port).map_err(|_| Error::invalid("port out of range"))?;
+    let request_wait = http::request_wait_timeout()?;
     let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port))
         .await
         .map_err(|e| Error::internal(e.to_string()))?;
     println!("Nagi listening http://127.0.0.1:{port}");
-    axum::serve(listener, router)
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await
-        .map_err(|e| Error::internal(e.to_string()))
+    http::serve(listener, http_router(router), request_wait, async {
+        let _ = tokio::signal::ctrl_c().await;
+    })
+    .await;
+    Ok(())
 }
 async fn ws_handler(ws: axum::extract::ws::WebSocketUpgrade) -> Response {
     ws.max_message_size(1_048_576)
