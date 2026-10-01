@@ -68,12 +68,25 @@ fn normalized(path: &str) -> String {
 }
 
 fn same_file(path: &str, expected: &Path) -> bool {
-    normalized(path) == normalized(&expected.to_string_lossy())
+    let expected = expected.to_string_lossy();
+    if path == expected {
+        return true;
+    }
+    // On Unix, a backslash is part of a filename, not a path separator.
+    // Also recognize Windows paths in cross-platform diagnostic fixtures.
+    windows_path(&expected) && normalized(path) == normalized(&expected)
+}
+
+fn windows_path(path: &str) -> bool {
+    cfg!(windows) || path.starts_with(r"\\") || path.as_bytes().get(1) == Some(&b':')
 }
 
 fn span_origin(span: &Value, generated: &Generated, file: &Path) -> Option<usize> {
-    let name = normalized(span.get("file_name")?.as_str()?);
-    if name != "src/main.rs" && name != "./src/main.rs" && !same_file(&name, file) {
+    let name = span.get("file_name")?.as_str()?;
+    let relative = matches!(name, "src/main.rs" | "./src/main.rs")
+        || windows_path(&file.to_string_lossy())
+            && matches!(name, r"src\main.rs" | r".\src\main.rs");
+    if !relative && !same_file(name, file) {
         return None;
     }
     generated.line_origin(usize::try_from(span.get("line_start")?.as_u64()?).ok()?)

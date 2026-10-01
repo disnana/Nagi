@@ -338,3 +338,34 @@ fn dependency_synthetic_and_incomplete_diagnostics_fall_back_without_guessing() 
     )
     .is_none());
 }
+
+#[cfg(unix)]
+#[test]
+fn unix_backslashes_do_not_turn_a_dependency_path_into_the_generated_file() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(1)\n");
+    let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
+    check::check(&mut loaded.program).unwrap();
+    let rust = emit::rust_with_lines(&loaded.program).unwrap();
+    let line = rust
+        .text
+        .lines()
+        .position(|s| s.contains("println!"))
+        .unwrap()
+        + 1;
+    let file = f.0.join(r"build\src/main.rs");
+    let same = message(
+        &file,
+        &file.to_string_lossy(),
+        line,
+        "generated diagnostic\n",
+    );
+    let text = diagnostics::cargo_message(&same.to_string(), &rust, &file, &loaded).unwrap();
+    assert!(mapped_prefix(&text).contains("main.nagi:2"), "{text}");
+    let mut value = message(&file, "src/main.rs", line, "dependency diagnostic\n");
+    value["target"]["src_path"] = json!(f.0.join("build/src/main.rs"));
+    assert_eq!(
+        diagnostics::cargo_message(&value.to_string(), &rust, &file, &loaded).unwrap(),
+        "dependency diagnostic\n"
+    );
+}
