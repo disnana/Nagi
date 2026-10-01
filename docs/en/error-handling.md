@@ -86,4 +86,4 @@ The checker rejects directly discarded Results and futures that are not awaited.
 
 JSON, database, and input failures differ from panics. Scopes detect child task panics; supervisors can restart panicking workers. These mechanisms do not recover from memory corruption or process aborts.
 
-Diagnostics show the source path, line, relevant code, reason, and help. Diagnostic spans currently focus on lines. Definition navigation also uses original columns, but a precise source map for all Rust backend diagnostics back to High is not implemented.
+Diagnostics show the filename, line, relevant source text, and reason. Build errors with an identifiable origin first show the Nagi or Low statement or definition line, followed by the full generated Rust diagnostic. Rust edit suggestions apply to Rust; do not apply them directly to Nagi. Handwritten Rust and unmapped diagnostics retain Rust's output. Precise columns and mappings for every Rust diagnostic are not implemented. Definition navigation also uses original columns.

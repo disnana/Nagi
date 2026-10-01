@@ -17,6 +17,12 @@ pub struct Sources {
     bytes: usize,
 }
 
+pub struct Location<'a> {
+    pub path: &'a Path,
+    pub line: usize,
+    pub text: &'a str,
+}
+
 pub fn diagnostic(path: &Path, source: &str, message: &str) -> String {
     let line = message
         .strip_prefix("line ")
@@ -30,6 +36,18 @@ pub fn diagnostic(path: &Path, source: &str, message: &str) -> String {
 }
 
 impl Sources {
+    pub fn location(&self, line: usize) -> Option<Location<'_>> {
+        let file = self
+            .files
+            .iter()
+            .find(|f| line >= f.start && line < f.start + f.lines)?;
+        let local = line - file.start + 1;
+        Some(Location {
+            path: &file.path,
+            line: local,
+            text: file.source.lines().nth(local - 1).unwrap_or(""),
+        })
+    }
     pub fn files(&self) -> impl Iterator<Item = (&Path, &str, usize)> {
         self.files
             .iter()
@@ -165,50 +183,55 @@ pub fn load_with_overlays(
 }
 
 fn shift(program: &mut Program, offset: usize) {
-    fn expr(e: &mut Expr, offset: usize) {
-        e.line += offset;
+    map_lines(program, |line| line + offset);
+}
+
+/// Change diagnostic lines without changing file-local token ranges.
+pub fn map_lines(program: &mut Program, map: impl Fn(usize) -> usize) {
+    fn expr(e: &mut Expr, map: &impl Fn(usize) -> usize) {
+        e.line = map(e.line);
         match &mut e.kind {
             E::Call(_, _, args) | E::List(args) => {
                 for arg in args {
-                    expr(arg, offset);
+                    expr(arg, map);
                 }
             }
             E::Binary(a, _, b) | E::Index(a, b) => {
-                expr(a, offset);
-                expr(b, offset);
+                expr(a, map);
+                expr(b, map);
             }
-            E::Unary(_, a) | E::Try(a) | E::Await(a) | E::Field(a, _) => expr(a, offset),
+            E::Unary(_, a) | E::Try(a) | E::Await(a) | E::Field(a, _) => expr(a, map),
             E::Record(_, fields) => {
                 for (_, value) in fields {
-                    expr(value, offset);
+                    expr(value, map);
                 }
             }
             _ => {}
         }
     }
-    fn block(stmts: &mut [Stmt], offset: usize) {
+    fn block(stmts: &mut [Stmt], map: &impl Fn(usize) -> usize) {
         for stmt in stmts {
-            stmt.line += offset;
+            stmt.line = map(stmt.line);
             match &mut stmt.kind {
                 S::Assign { value, .. }
                 | S::Expr(value)
                 | S::Spawn(value)
-                | S::Return(Some(value)) => expr(value, offset),
+                | S::Return(Some(value)) => expr(value, map),
                 S::If(condition, yes, no) => {
-                    expr(condition, offset);
-                    block(yes, offset);
-                    block(no, offset);
+                    expr(condition, map);
+                    block(yes, map);
+                    block(no, map);
                 }
                 S::While(condition, body) | S::For(_, condition, body) => {
-                    expr(condition, offset);
-                    block(body, offset);
+                    expr(condition, map);
+                    block(body, map);
                 }
-                S::Scope(body) => block(body, offset),
+                S::Scope(body) => block(body, map),
                 S::Match(value, arms) => {
-                    expr(value, offset);
+                    expr(value, map);
                     for arm in arms {
-                        arm.line += offset;
-                        block(&mut arm.body, offset);
+                        arm.line = map(arm.line);
+                        block(&mut arm.body, map);
                     }
                 }
                 S::Return(None) => {}
@@ -216,11 +239,14 @@ fn shift(program: &mut Program, offset: usize) {
         }
     }
     for class in &mut program.classes {
-        class.line += offset;
+        class.line = map(class.line);
+        for line in &mut class.field_lines {
+            *line = map(*line);
+        }
     }
     for function in &mut program.functions {
-        function.line += offset;
-        block(&mut function.body, offset);
+        function.line = map(function.line);
+        block(&mut function.body, &map);
     }
 }
 

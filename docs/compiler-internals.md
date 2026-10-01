@@ -20,4 +20,6 @@ ASTは式・引数・束縛名の元ソースのtoken範囲を持ちます。`sy
 
 codegenのscopeはJoinSet wrapperにします。classはnative structへ生成し、JSONとDB用の型付き実装を付けます。現在のCommon IRはSSAでも独自optimizerでもありません。LLVM最適化はRust backendに依存します。
 
-ソースは1ファイル2 MBまでで、式・型・ブロックの入れ子にも上限があります。構文の変異試験と不正な入力の試験を行います。coverage-guided fuzz、incremental parsing、名前付きmodule、Rust診断をHighへ戻す精密なsource mapは今後の作業です。
+loweringとcodegenは、生成行と元の文・定義・フィールドの行の対応を保持します。Lowは独立して再解析し、統合前に診断の行番号を元へ戻します。ビルドではCargoのJSON診断を読み、対応するNagi・Lowのファイルと行を先に表示します。Rustの補足や修正候補は生成Rustの座標のまま残し、手書きRustや位置の不明な診断は書き換えません。
+
+ソースは1ファイル2 MBまでで、式・型・ブロックの入れ子にも上限があります。構文の変異試験と不正な入力の試験を行います。coverage-guided fuzz、incremental parsing、名前付きmodule、式の厳密な列位置や全Rust診断を扱うsource mapは今後の作業です。

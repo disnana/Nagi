@@ -77,6 +77,8 @@ Linux / WSL2では、以降の`.\target\release\nagic.exe`を`./target/release/n
 
 `check`と`lower`は現在どちらもHighの生成Lowを保存します。`check`が成功しても、Rust側の型・借用などの検査で`build`が失敗する場合があります。
 
+ビルド時のエラーは、対応する元のNagi・Lowファイル名、文や定義の行番号、その行のコードを先に表示します。import先や`@replace`の手書きLowも対象です。続く`Rust backend details`には生成Rust側の詳しい診断を残します。手書きRustや、元の位置を特定できないエラーはRustの診断を表示します。
+
 ```powershell
 .\target\release\nagic.exe check hello.nagi
 .\target\release\nagic.exe build hello.nagi
@@ -114,7 +116,7 @@ Linux / WSL2では、以降の`.\target\release\nagic.exe`を`./target/release/n
 | `nagic.exe`が見つからない | ルートでコンパイラのビルドを終えたか |
 | VS Codeで`spawn nagic.exe ENOENT`やコンパイラ未検出の警告が出る | VSIXにはコンパイラを含まない。手順1でビルドしたあと「Nagi: 型検査」を実行する。別の場所にある場合は`nagi.compilerPath`にその実行ファイルを指定する |
 | タブや字下げのエラー | インデントを空白4つに統一する |
-| `Rust backend rejected program` | 直前のrustc診断を読む。Nagiの`check`より後の検査で失敗している |
+| `Rust backend rejected program` | 直前に表示されたNagi・Lowのファイル名と行を確認する。詳しい理由は続くRustの診断にある |
 | Windowsでexeを更新できない | そのアプリが実行中なら停止してから再ビルドする |
 | サーバーが終了しない | `serve`はリクエストを待ち続ける。ターミナルのCtrl+Cで終了する |
 

@@ -1,0 +1,175 @@
+use crate::{ast::Program, source::Sources};
+use serde_json::Value;
+use std::{cell::Cell, path::Path};
+
+/// Generated lines point to the statement or definition that emitted them.
+/// Synthetic glue has no origin; columns and Rust edits are never translated.
+#[derive(Default)]
+pub struct Generated {
+    pub text: String,
+    lines: Vec<Option<usize>>,
+    origin: Option<usize>,
+    line_open: bool,
+}
+
+impl Generated {
+    pub(crate) fn new(text: &str) -> Self {
+        let mut out = Self::default();
+        out.push_str(text);
+        out
+    }
+
+    pub(crate) fn origin(&mut self, line: Option<usize>) {
+        self.origin = line.filter(|line| *line > 0);
+    }
+
+    pub(crate) fn push_str(&mut self, text: &str) {
+        for part in text.split_inclusive('\n') {
+            if !self.line_open {
+                self.lines.push(self.origin);
+            }
+            self.line_open = !part.ends_with('\n');
+        }
+        self.text.push_str(text);
+    }
+
+    pub(crate) fn push(&mut self, c: char) {
+        self.push_str(c.encode_utf8(&mut [0; 4]));
+    }
+
+    pub fn line_origin(&self, line: usize) -> Option<usize> {
+        self.lines.get(line.checked_sub(1)?).copied().flatten()
+    }
+
+    /// The Low parser remains independent. Restore only its diagnostic lines.
+    pub fn restore_lines(&self, program: &mut Program) -> Result<(), String> {
+        let missing = Cell::new(None);
+        crate::source::map_lines(program, |line| {
+            self.line_origin(line).unwrap_or_else(|| {
+                missing.set(Some(line));
+                0
+            })
+        });
+        if let Some(line) = missing.get() {
+            Err(format!("generated Low line {line} has no source location"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+fn normalized(path: &str) -> String {
+    let path = path.replace('\\', "/");
+    if let Some(rest) = path.strip_prefix("//?/UNC/") {
+        format!("//{rest}")
+    } else {
+        path.strip_prefix("//?/").unwrap_or(&path).to_owned()
+    }
+}
+
+fn same_file(path: &str, expected: &Path) -> bool {
+    normalized(path) == normalized(&expected.to_string_lossy())
+}
+
+fn span_origin(span: &Value, generated: &Generated, file: &Path) -> Option<usize> {
+    let name = normalized(span.get("file_name")?.as_str()?);
+    if name != "src/main.rs" && name != "./src/main.rs" && !same_file(&name, file) {
+        return None;
+    }
+    generated.line_origin(usize::try_from(span.get("line_start")?.as_u64()?).ok()?)
+}
+
+fn original(diagnostic: &Value) -> String {
+    let mut text = diagnostic
+        .get("rendered")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .unwrap_or_else(|| {
+            format!(
+                "{}: {}",
+                diagnostic["level"].as_str().unwrap_or("error"),
+                diagnostic["message"].as_str().unwrap_or("Rust diagnostic")
+            )
+        });
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    text
+}
+
+/// Cargo's progress remains on stderr. Artifacts stay quiet, and diagnostics
+/// from dependencies or native Rust retain rustc's complete rendered output.
+pub fn cargo_message(
+    line: &str,
+    generated: &Generated,
+    file: &Path,
+    sources: &Sources,
+) -> Option<String> {
+    let value: Value = match serde_json::from_str(line) {
+        Ok(value) => value,
+        Err(_) => return Some(format!("{line}\n")),
+    };
+    match value["reason"].as_str() {
+        Some("compiler-artifact" | "build-script-executed" | "build-finished") => return None,
+        Some("compiler-message") => {}
+        _ => return Some(format!("{line}\n")),
+    }
+    let diagnostic = &value["message"];
+    let fallback = original(diagnostic);
+    if !value["target"]["src_path"]
+        .as_str()
+        .is_some_and(|path| same_file(path, file))
+    {
+        return Some(fallback);
+    }
+    let Some(spans) = diagnostic["spans"].as_array() else {
+        return Some(fallback);
+    };
+    let mut mapped: Vec<_> = spans
+        .iter()
+        .filter_map(|span| {
+            let origin = span_origin(span, generated, file)?;
+            sources.location(origin)?;
+            Some((origin, span))
+        })
+        .collect();
+    if !mapped
+        .iter()
+        .any(|(_, span)| span["is_primary"].as_bool() == Some(true))
+    {
+        return Some(fallback);
+    }
+    mapped.sort_by_key(|(_, span)| span["is_primary"].as_bool() != Some(true));
+    let code = diagnostic["code"]["code"]
+        .as_str()
+        .map(|code| format!("[{code}]"))
+        .unwrap_or_default();
+    let mut out = format!(
+        "{}{code}: {}\n",
+        diagnostic["level"].as_str().unwrap_or("error"),
+        diagnostic["message"].as_str().unwrap_or("Rust diagnostic")
+    );
+    let mut seen = std::collections::HashSet::new();
+    for (origin, span) in mapped {
+        let label = span["label"].as_str().unwrap_or("");
+        if !seen.insert((origin, label)) {
+            continue;
+        }
+        let location = sources.location(origin).unwrap();
+        out.push_str(&format!(
+            " --> {}:{}\n {} | {}\n",
+            location.path.display(),
+            location.line,
+            location.line,
+            location.text
+        ));
+        if !label.is_empty() {
+            out.push_str(&format!("  = {label}\n"));
+        }
+    }
+    // Keep rustc's notes and suggestions in Rust coordinates. Replacements
+    // such as '&' or '.clone()' cannot safely be applied to Nagi source.
+    out.push_str(" note: Rust backend details (generated code):\n");
+    out.push_str(&fallback);
+    Some(out)
+}
