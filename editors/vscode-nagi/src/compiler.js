@@ -64,6 +64,16 @@ function parseDiagnostics(output, fallbackFile) {
     message: message.replace(/^error:\s*/, '') }];
 }
 
+function processFailure(error) {
+  if (!error || typeof error.code !== 'string' && !error.killed && !error.signal) return;
+  if (error.code === 'ENOENT') {
+    return 'Nagi: コンパイラが見つからないため、型検査を実行できません。nagicをビルドするか、nagi.compilerPathを設定してください。';
+  }
+  if (error.code === 'EACCES') return 'Nagi: コンパイラを実行する権限がありません。nagi.compilerPathと実行権限を確認してください。';
+  if (error.killed && typeof error.code !== 'string') return 'Nagi: 型検査がタイムアウトしました。Nagiの出力とnagi.checkTimeoutMsを確認してください。';
+  return `Nagi: 型検査を完了できませんでした。Nagiの出力で詳細を確認してください。${error.message}`;
+}
+
 function runCheck(executable, args, cwd, timeout, callback, maxBuffer = 1024 * 1024, input) {
   const child = execFile(executable, args, { cwd, timeout, maxBuffer, windowsHide: true, shell: false },
     (error, stdout, stderr) => callback({ error, output: [stdout, stderr].filter(Boolean).join('\n') }));
@@ -89,4 +99,4 @@ function definitionAt(index, file, line, character, root) {
   return undefined;
 }
 
-module.exports = { findRoot, findProject, compilerPath, argumentsFor, parseDiagnostics, normalizeFile, runCheck, definitionAt };
+module.exports = { findRoot, findProject, compilerPath, argumentsFor, parseDiagnostics, processFailure, normalizeFile, runCheck, definitionAt };

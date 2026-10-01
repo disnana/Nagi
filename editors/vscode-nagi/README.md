@@ -17,13 +17,15 @@ Nagi High (`.nagi`) とLow (`.low`)の開発補助です。
 
 ## インストール
 
-リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、`build/distribution/nagi-language-0.1.5.vsix` ができます。VS Codeの「拡張機能: VSIXからのインストール」で選択するか、次のコマンドを実行してください。
+リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、`build/distribution/nagi-language-0.1.6.vsix` ができます。VS Codeの「拡張機能: VSIXからのインストール」で選択するか、次のコマンドを実行してください。
 
 ```powershell
-code --install-extension build/distribution/nagi-language-0.1.5.vsix
+code --install-extension build/distribution/nagi-language-0.1.6.vsix
 ```
 
 色付けとスニペットはコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。Nagiリポジトリを開き、ルートで `cargo build --release --locked -p nagic` を実行してください。リポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
+
+VSIXにはコンパイラ本体を含めていません。`spawn nagic.exe ENOENT`などのメッセージは、コンパイラが見つからないことを示します。ビルド後に「Nagi: 型検査」を実行してください。別の場所にあるコンパイラを使う場合は`nagi.compilerPath`で指定します。コンパイラの起動失敗やタイムアウトは警告とNagiの出力に表示し、ソースの型エラーとして赤線を付けません。
 
 ## 設定
 
@@ -56,7 +58,7 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 
 たとえば`test-nagi-code/result-api/server.nagi`の`read_item`から`storage.nagi`へ、`Item`から`models.nagi`へ移動できます。ソースの場所はコンパイラの`symbols`コマンドから取得します。型エラーがあるコードでも構文とimportが読み込めれば使えます。
 
-拡張0.1.5では、引数、代入で作った変数、forの要素、caseの束縛名にも対応します。再代入した名前は最初の定義へ戻ります。forで外側と同じ名前を使った場合は、ループ内ではforの定義、ループ後では外側の定義へ戻ります。if・while・scope・case内で作った名前は、そのブロック内を対象にします。
+拡張0.1.5以降では、引数、代入で作った変数、forの要素、caseの束縛名にも対応します。再代入した名前は最初の定義へ戻ります。forで外側と同じ名前を使った場合は、ループ内ではforの定義、ループ後では外側の定義へ戻ります。if・while・scope・case内で作った名前は、そのブロック内を対象にします。
 
 一度保存したファイルは、未保存の編集からも移動できます。開いているimport先や手書きLowの変更もメモリ上で読み、編集後の位置へ移動します。新規ファイルと`nagi.toml`は保存してから使います。構文やimportを読み込めず保存済み情報へ切り替わった場合は、古い位置へのジャンプを止めます。問い合わせ中にソースや設定が変わった場合も、その結果を使いません。
 
@@ -64,7 +66,7 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 
 ## ホバー・補完・引数ヒント
 
-最新版の`nagic`と拡張0.1.5を使います。関数名にマウスを置くと引数・戻り値・asyncの宣言が表示され、class名ではフィールド一覧を確認できます。`Result[Item?, Error]`や`view[str]`などの型も宣言どおりに表示します。[コードを使った操作例](../../docs/editor.md)もあります。
+最新版の`nagic`と拡張0.1.6を使います。関数名にマウスを置くと引数・戻り値・asyncの宣言が表示され、class名ではフィールド一覧を確認できます。`Result[Item?, Error]`や`view[str]`などの型も宣言どおりに表示します。[コードを使った操作例](../../docs/editor.md)もあります。
 
 変数名にマウスを置くと、コンパイラが確認できた型を表示します。たとえば`count = 3`は`count: i64`、classを返す関数から作った`item`は`item: Item`です。関数の引数、`for`の要素、Resultの`case Ok(value)`と`case Err(problem)`の束縛名にも対応します。宣言と使用箇所を扱い、caseやifなどのブロックを出た名前には型を表示しません。
 

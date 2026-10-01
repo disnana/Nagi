@@ -13,6 +13,7 @@ function activate(context) {
   const results = new Map();
   const navigation = new Set();
   const symbolCache = new Map();
+  const notifiedFailures = new Set();
   let epoch = 0;
   let symbolsEpoch = 0;
   const isNagi = d => d && ['nagi', 'nagi-low'].includes(d.languageId) && d.uri.scheme === 'file';
@@ -99,8 +100,24 @@ function activate(context) {
           if (pending.get(key) !== job || document.isClosed || document.version !== version || document.isDirty || startEpoch !== epoch) return resolve();
           pending.delete(key);
           output.appendLine(`[check] ${document.uri.fsPath}\n${result.output || result.error?.message || ''}`);
-          if (!result.error) {
+          const failure = compiler.processFailure(result.error);
+          if (failure) {
             results.delete(key);
+            const failureKey = JSON.stringify([root, executable, result.error.code, result.error.signal]);
+            if (manual || !notifiedFailures.has(failureKey)) {
+              notifiedFailures.add(failureKey);
+              vscode.window.showWarningMessage(failure, 'Nagiの出力を開く', 'コンパイラの設定を開く').then(choice => {
+                if (choice === 'Nagiの出力を開く') output.show(true);
+                if (choice === 'コンパイラの設定を開く') vscode.commands.executeCommand('workbench.action.openSettings', 'nagi.compilerPath');
+              });
+            }
+            if (manual) output.show(true);
+          } else if (!result.error) {
+            results.delete(key);
+            for (const failureKey of notifiedFailures) {
+              const [failureRoot, failureExecutable] = JSON.parse(failureKey);
+              if (failureRoot === root && failureExecutable === executable) notifiedFailures.delete(failureKey);
+            }
             if (manual) vscode.window.setStatusBarMessage('Nagi: 型検査 OK', 3000);
           } else {
             const text = result.output || result.error.message;
