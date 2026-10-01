@@ -225,3 +225,64 @@ fn cost_not_dynamic_count() {
     let p = high("def main():\n    s = \"hello\"\n    print(s)\n").unwrap();
     assert_eq!(emit::cost_report(&p)["format"], "nagi-cost-sites-v1");
 }
+
+#[test]
+fn signed_minimum_literals_are_in_range_in_high_and_low() {
+    for (ty, minimum, below) in [
+        ("i8", "128", "129"),
+        ("i16", "32768", "32769"),
+        ("i32", "2147483648", "2147483649"),
+        ("i64", "9223372036854775808", "9223372036854775809"),
+    ] {
+        let program = high(&format!("def minimum() -> {ty}:\n    return -{minimum}\n")).unwrap();
+        let mut low = parser::parse(&emit::low(&program), false).unwrap();
+        check::check(&mut low).unwrap();
+        assert!(high(&format!("def too_low() -> {ty}:\n    return -{below}\n")).is_err());
+        assert!(high(&format!("def too_high() -> {ty}:\n    return {minimum}\n")).is_err());
+    }
+    high("def main():\n    minimum = -9223372036854775808\n").unwrap();
+    assert!(high("def unsigned() -> u8:\n    return -1\n").is_err());
+}
+
+#[test]
+fn signed_minimum_literals_compile_and_run_after_lowering() {
+    let program = high("def min_i8() -> i8:\n    return -128\ndef min_i16() -> i16:\n    return -32768\ndef min_i32() -> i32:\n    return -2147483648\ndef min_i64() -> i64:\n    return -9223372036854775808\ndef main():\n    print(min_i8())\n    print(min_i16())\n    print(min_i32())\n    print(min_i64())\n").unwrap();
+    let mut low = parser::parse(&emit::low(&program), false).unwrap();
+    check::check(&mut low).unwrap();
+    let folder = std::env::temp_dir().join(format!(
+        "nagi signed min {} {}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&folder).unwrap();
+    let source = folder.join("main.rs");
+    let binary = folder.join(format!("minimum{}", std::env::consts::EXE_SUFFIX));
+    std::fs::write(&source, emit::rust(&low).unwrap()).unwrap();
+    let build = std::process::Command::new("rustc")
+        .arg("--edition=2021")
+        .arg(&source)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let output = std::process::Command::new(&binary).output().unwrap();
+    assert!(output.status.success());
+    let actual: Vec<i64> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| line.parse().unwrap())
+        .collect();
+    assert_eq!(
+        actual,
+        vec![i8::MIN as i64, i16::MIN as i64, i32::MIN as i64, i64::MIN]
+    );
+    std::fs::remove_dir_all(folder).unwrap();
+}
