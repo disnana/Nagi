@@ -768,13 +768,19 @@ impl Checker {
                 ty
             }
             E::Float(s) => {
-                if !s.parse::<f64>().is_ok_and(|x| x.is_finite()) {
-                    return Err(error(line, "浮動小数リテラルが範囲外です"));
-                }
-                expected
+                let ty = expected
                     .filter(|t| t.0 == "f32" || t.0 == "f64")
                     .cloned()
-                    .unwrap_or_else(|| Type::named("f64"))
+                    .unwrap_or_else(|| Type::named("f64"));
+                let finite = if ty.0 == "f32" {
+                    s.parse::<f32>().is_ok_and(|x| x.is_finite())
+                } else {
+                    s.parse::<f64>().is_ok_and(|x| x.is_finite())
+                };
+                if !finite {
+                    return Err(error(line, "浮動小数リテラルが範囲外です"));
+                }
+                ty
             }
             E::Str(_) => Type::named("str"),
             E::Bool(_) => Type::named("bool"),

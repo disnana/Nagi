@@ -93,6 +93,51 @@ fn number_overflow() {
     assert!(high("def f() -> i8:\n    return 999\n").is_err());
 }
 #[test]
+fn floating_literals_reject_f32_overflow_in_high_and_low() {
+    let overflow = "400000000000000000000000000000000000000.0";
+    for literal in [overflow.to_owned(), format!("-{overflow}")] {
+        for (source, is_high) in [
+            (format!("def f() -> f32:\n    return {literal}\n"), true),
+            (format!("fn f() -> f32 {{ return {literal}; }}\n"), false),
+            (format!("def main():\n    value: f32 = {literal}\n"), true),
+            (format!("def take(value: f32):\n    print(value)\ndef main():\n    take({literal})\n"), true),
+            (format!("class Number:\n    value: f32\ndef main():\n    value = Number(value={literal})\n"), true),
+            (format!("def main():\n    values: List[f32] = [{literal}]\n"), true),
+        ] {
+            let mut program = parser::parse(&source, is_high).unwrap();
+            let error = check::check(&mut program).expect_err(&source);
+            assert!(error.contains("浮動小数リテラルが範囲外"), "{error}");
+            assert!(error.starts_with("line "), "{error}");
+        }
+    }
+}
+#[test]
+fn floating_literals_accept_f32_boundary_and_roundtrip() {
+    let maximum = "340282346638528859811704183484516925440.0";
+    for literal in [
+        "0.0".to_owned(),
+        "1.5".to_owned(),
+        maximum.to_owned(),
+        format!("-{maximum}"),
+    ] {
+        let program = high(&format!("def f() -> f32:\n    return {literal}\n")).unwrap();
+        let mut low = parser::parse(&emit::low(&program), false).unwrap();
+        check::check(&mut low).unwrap();
+        assert_eq!(low.functions[0].ret, crate::ast::Type::named("f32"));
+    }
+}
+#[test]
+fn floating_literals_keep_f64_range_and_default_inference() {
+    let outside_f32 = "400000000000000000000000000000000000000.0";
+    let inferred = high(&format!("def main():\n    value = {outside_f32}\n")).unwrap();
+    assert!(emit::low(&inferred).contains("let value: f64"));
+    high(&format!("def f() -> f64:\n    return {outside_f32}\n")).unwrap();
+    let finite = format!("1{}.0", "0".repeat(308));
+    high(&format!("def f() -> f64:\n    return {finite}\n")).unwrap();
+    let overflow = format!("1{}.0", "0".repeat(309));
+    assert!(high(&format!("def f() -> f64:\n    return {overflow}\n")).is_err());
+}
+#[test]
 fn class_field_check() {
     assert!(high("class A:\n    x: i64\ndef f() -> A:\n    return A(y=1)\n").is_err());
 }
