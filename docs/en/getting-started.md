@@ -79,6 +79,8 @@ Hello, Nagi!
 
 The integer in `count = 3` has type `i64`. Save the file with a `.nagi` extension and run it with Nagi.
 
+If the filename contains spaces, quote the path, as in `nagic run "hello world.nagi"`.
+
 ## 3. Choose between checking and building
 
 | Command | What it does | When to use it |
