@@ -8,7 +8,9 @@
 
 **[ドキュメントの目次](docs/README.md) → [準備と最初の実行](docs/getting-started.md) → [コードを書きながら学ぶ](docs/language-guide.md)** の順で進められます。書式を引くには[文法の早見表](docs/syntax.md)、引数を調べるには[組み込み関数](docs/builtins.md)、サイトやAPIを作るには[HTTPの入門](docs/http.md)を参照してください。動く入門例は[examples/tutorial/](examples/tutorial/)にあります。
 
-紹介と日本語Docsを静的サイトとして読むためのソースは[`website/`](website/README.md)にあります。GitHub Pages向けの生成・公開手順もここにまとめています。
+紹介と日英の全Docsは[公開サイト](https://disnana.github.io/Nagi/)で読めます。[English](https://disnana.github.io/Nagi/en/)もあります。ソースとPagesの自動公開手順は[`website/`](website/README.md)にあります。
+
+配布物は[GitHub Releases](https://github.com/disnana/Nagi/releases)に掲載します。mainでNagiまたはVS Code拡張のバージョンを上げると、CI成功後にその配布物を正式リリースします。[運用手順](scripts/releases/README.md)に条件と成果物をまとめています。
 
 ## 最初に動かす
 
@@ -101,7 +103,7 @@ primitive、値型class、連続配列、nullable、Result、関数、分岐、�
 
 Resultの`match`で成功・失敗を分け、既定値に回復したり、Errorの種類を保って返したりできます。[書き方](docs/error-handling.md)と[実HTTPで試すAPIサンプル](test-nagi-code/result-api/README.md)があります。
 
-[VS Code拡張0.1.5](editors/vscode-nagi/README.md)では、関数・class・import先・ローカル変数へのF12、宣言とローカル変数の型ホバー、classのフィールド補完、呼び出し時の引数ヒントを利用できます。一度保存したファイルの未保存の編集にも対応します。[操作例](docs/editor.md)で、型の表示や`value.`からの補完、定義への移動を試せます。
+[VS Code拡張0.1.6](editors/vscode-nagi/README.md)では、関数・class・import先・ローカル変数へのF12、宣言とローカル変数の型ホバー、classのフィールド補完、呼び出し時の引数ヒントを利用できます。一度保存したファイルの未保存の編集にも対応します。[操作例](docs/editor.md)で、型の表示や`value.`からの補完、定義への移動を試せます。
 
 専用のactor宣言、汎用generic関数、trait、名前付きmoduleとalias、nullableや一般的なパターンのmatch、PostgreSQL、SQLのコンパイル時検証、Highのrequest arena、Lowの生pointer/unsafe/C ABI、独自scheduler、self-hostingは未実装です。Rust連携は同じビルド内の呼び出しで、安定した外部ABIではありません。`Map`と`owned`は表現方針の段階で、完全な標準APIを提供していません。
 

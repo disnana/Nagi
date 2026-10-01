@@ -1,0 +1,176 @@
+# Syntax reference
+
+[Contents](README.md) · First program: [Language guide](language-guide.md) · [Built-in functions](builtins.md)
+
+This reference describes High (`.nagi`). Some short examples are fragments for a function body. Use the [complete introductory program](../../examples/tutorial/basics.nagi) to run several features together.
+
+## Files and indentation
+
+- Save as UTF-8 with a `.nagi` extension.
+- Put imports, classes, functions, async functions, and external Rust declarations at the top level. Executable statements go inside functions.
+- Introduce a block with `:` and indent with spaces. Four spaces are recommended; tabs are forbidden.
+- Comments start with `#`. Identifiers use ASCII letters, digits, and `_`, and cannot begin with a digit. Unicode strings and comments are supported.
+- Expressions inside `()` and `[]` can span lines. Trailing commas are not supported.
+
+```nagi
+def main():
+    # A comment
+    print("Hello, Nagi!")
+```
+
+## Values and variables
+
+| Form | Meaning |
+|---|---|
+| `count = 10` | Inferred type; integers default to i64 |
+| `count: i32 = 10` | Explicit type |
+| `rate = 1.5` | Floats default to f64 |
+| `enabled = True` / `False` | Boolean; lowercase true/false also accepted |
+| `name = "Nagi"` / `'Nagi'` | UTF-8 string |
+| `values = [1, 2, 3]` | List of elements with one type |
+| `values: List[i64] = []` | Type annotation for an empty list |
+| `missing: i64? = None` | Absent nullable value; null also accepted |
+| `present: i64? = some(42)` | Present nullable value |
+| `count = 11` | Reassignment with the same type |
+| `count += 1` / `-= 1` / `*= 2` | Compound assignment; `/=` and `%=` unsupported |
+
+String escapes are `\n`, `\r`, `\t`, `\"`, `\'`, and `\\`. There are no f-strings, interpolation, or triple-quoted strings. See [types](types.md).
+
+## Functions and return
+
+```nagi
+def add(a: i64, b: i64) -> i64:
+    return a + b
+
+def show(value: i64):
+    print(value)
+    return
+```
+
+Parameter types are required. An omitted return type means unit. Value-returning functions must return on every path. Calls use positional arguments, such as `add(1, 2)`. Default/variadic arguments and user-defined generics are unavailable.
+
+## Branches and loops
+
+This is a function-body fragment:
+
+```nagi
+score = 80
+if score >= 80:
+    print("Passed")
+else:
+    print("Try again")
+
+for index in range(3):
+    print(index)
+
+count = 0
+while count < 3:
+    count += 1
+```
+
+Conditions require bool. `range(n)` takes one argument and runs from zero up to but excluding n. List/view iteration supports primitives and Copy classes. `elif`, `break`, `continue`, and `pass` are unavailable.
+
+## Operators
+
+The table runs from highest to lowest precedence. Binary operators on the same level parse left to right. Use parentheses where an expression is unclear.
+
+| Precedence | Operator | Example |
+|---|---|---|
+| Highest | Call, field, index | `add(1, 2)`, `point.x`, `values[0]` |
+| ↓ | Unary `-`, `not`, `try`, `await` | `-count`, `not enabled`, `try await db_open(...)` |
+| ↓ | `*`, `/`, `%` | `count * 2` |
+| ↓ | `+`, `-` | `count + 1` |
+| ↓ | `<`, `>`, `<=`, `>=` | `count < 10` |
+| ↓ | `==`, `!=` | `count == 10` |
+| ↓ | `and` | `count > 0 and count < 10` |
+| Lowest | `or` | `enabled or count == 0` |
+
+Numeric types do not convert implicitly. Use `i64(value)` to widen i32. `i32(an_i64)` returns `Result[i32, Error]`; use forms such as `try i32(value)` inside a Result-returning function.
+
+Use `count > 0 and count < 10` rather than chained `0 < count < 10`. Integer `/` is integer division. `**`, `//`, and bitwise operations are unsupported.
+
+## Classes, lists, and views
+
+```nagi
+class Point:
+    x: f64
+    y: f64
+
+def main():
+    point = Point(x=1.0, y=2.0)
+    print(point.x)
+    values = [10, 20]
+    append(values, 30)
+    print(values[0])
+    borrowed = view(values)
+    duplicate = copy(borrowed)
+    print(len(duplicate))
+```
+
+Construct classes with every field named. Assigning fields/indices, methods, and inheritance are unsupported. Indices start at zero; negative or out-of-range indices panic at runtime. Strings cannot be indexed. Borrow a string/list range with `try slice(view(data), start, end)`.
+
+Passing owned strings/lists to user-defined functions moves them. For read-only arguments, accept `view[str]` or `view[i64]` and pass `view(value)`. See the [guide](language-guide.md) and [ownership](ownership.md).
+
+## Result, async, and scopes
+
+| Form | Meaning |
+|---|---|
+| `-> Result[i64, Error]` | Returns an integer or Error |
+| `return ok(42)` | Returns success |
+| `return error("reason")` | Returns failure |
+| `return not_found("reason")` | Missing target; HTTP 404 |
+| `return fail(problem)` | Returns the original Error |
+| `value = try parse_i64("42")` | Extracts a value or returns failure to the caller |
+| `async def work():` | Defines an async function |
+| `await sleep(10)` | Waits for 10 milliseconds |
+| `db = try await db_open(":memory:")` | Waits and propagates Result failure |
+
+Use `try` in Result-returning functions and `await` in async functions. Handle Result locally with both cases. This is a function-body fragment:
+
+```nagi
+match parse_i64("42"):
+    case Ok(number):
+        print(number)
+    case Err(problem):
+        print(error_kind(problem))
+```
+
+Use `_` for unused payloads. Matching consumes Result; names exist only in their case and cannot reuse outer variable names. See [error handling](error-handling.md) for complete examples and limits.
+
+Spawn child tasks inside a scope, as in this complete program:
+
+```nagi
+async def main() -> Result[unit, Error]:
+    async with scope:
+        spawn sleep(10)
+        spawn sleep(15)
+    return ok(print("Done"))
+```
+
+Leaving a scope waits for its children. Returning inside it, passing views to another task, and spawning value-returning tasks are currently unsupported. See [async](async.md).
+
+## Imports, HTTP, and Rust
+
+| Purpose | Form | Details |
+|---|---|---|
+| Load a file | `import "models.nagi"` | [Imports](modules-and-rust.md); one shared namespace |
+| Define a GET handler | `@get("/users/{id}")` before a function | [HTTP](http.md); post/put/delete also available |
+| Return HTML | `return ok(html("<h1>Hello</h1>"))` | Return type `Result[Html, Error]` |
+| Embed text | `include_text("index.html")` | Relative to source; embedded at compile time |
+| Declare a Rust function | `@rust("native::crc32")`, then `extern def crc32(text: view[str]) -> i64` | [Rust integration](modules-and-rust.md); no body or trailing colon |
+
+## Differences from Python
+
+| Common Python form | In Nagi |
+|---|---|
+| `def add(a, b):` | Annotate parameters; add a return type when returning a value |
+| `print(a, b)` | `print(a)` and `print(b)` separately |
+| `items.append(x)` | `append(items, x)` |
+| `try: ... except:` | `try expression` propagates failure; match branches on Result |
+| `from models import User` | `import "models.nagi"` |
+| Dictionaries, tuples, comprehensions, lambdas | Unsupported; use classes, lists, ordinary functions, and loops |
+| `str(42)` or arbitrary casts | No general conversion; use forms such as `print(42)` directly |
+
+Nullable values support None/some(value), but not matching or a general unwrap API. Having type notation does not imply a complete operations API.
+
+Release integer arithmetic follows the Rust backend's fixed-width behavior; overflow in operations such as addition wraps. Debug Rust builds may panic. A consistent language specification for checked/wrapping arithmetic is future work. See [Low](low-language.md) for its syntax/replacements and the [roadmap](roadmap.md) for plans.

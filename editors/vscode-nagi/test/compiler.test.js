@@ -67,8 +67,24 @@ test('real Nagi checker diagnoses a source error', async () => {
   const result = await new Promise(resolve => compiler.runCheck(exe,
     compiler.argumentsFor('check', file, [], root, root), root, 5000, resolve));
   assert.equal(result.error.code, 1);
+  assert.equal(compiler.processFailure(result.error), undefined, 'source errors remain compiler diagnostics');
   assert.equal(compiler.parseDiagnostics(result.output, file)[0].line, 1);
   assert.match(result.output, /expected i32/);
+});
+
+test('missing compiler is reported as an execution problem', async () => {
+  const executable = path.join(__dirname, 'missing-nagic-' + process.pid);
+  const result = await new Promise(resolve => compiler.runCheck(executable, [], process.cwd(), 5000, resolve));
+  assert.equal(result.error.code, 'ENOENT');
+  assert.match(compiler.processFailure(result.error), /コンパイラが見つからない/);
+  assert.match(compiler.processFailure(result.error), /nagi.compilerPath/);
+});
+
+test('timed out checker is reported as an execution problem', async () => {
+  const result = await new Promise(resolve => compiler.runCheck(process.execPath,
+    ['-e', 'setTimeout(() => {}, 10000)'], process.cwd(), 250, resolve));
+  assert.ok(result.error.killed);
+  assert.match(compiler.processFailure(result.error), /タイムアウト/);
 });
 
 test('nearest manifest wins and project arguments delegate entry selection to nagic', () => {

@@ -92,7 +92,8 @@ test('real unsaved High/Low imports supply local hovers and fields with UTF-16 p
   const member = features.memberContext(text, offset);
   const fields = await symbols(folder, file, [...overlays, { file, text: member.text }]);
   assert.deepEqual(features.completionCandidates(fields, text, offset, false, { file }).map(c => [c.name, c.type]), [['x', 'i32'], ['enabled', 'bool']]);
-  assert.equal(compiler.definitionAt(index, file, 2, saved.split('\n')[2].indexOf('make'), root).file, lowFile);
+  const target = compiler.definitionAt(index, file, 2, saved.split('\n')[2].indexOf('make'), root);
+  assert.equal(compiler.normalizeFile(target.file, root), lowFile);
   assert.equal(fs.readFileSync(file, 'utf8'), saved);
   assert.equal(fs.readFileSync(path.join(folder, 'models.nagi'), 'utf8'), 'class Point:\n    x: i64\n');
 });

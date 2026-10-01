@@ -33,7 +33,7 @@ button { font: inherit; }
 .top-nav { display: flex; flex-wrap: wrap; gap: .5rem 1.8rem; align-items: center; font-size: .95rem; }
 .top-nav a { text-decoration: none; color: var(--ink); }
 .top-nav a:hover { color: var(--blue); text-decoration: underline; }
-.landing { max-width: 76rem; padding: 0 2rem; margin: auto; }
+.landing { max-width: 76rem; padding: 0 2rem; margin: auto; overflow-wrap: anywhere; }
 .hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 4rem; align-items: center; padding: 5rem 0 5.5rem; }
 .eyebrow { font-size: .875rem; color: var(--muted); margin-bottom: .8rem; font-weight: 600; }
 .hero h1 { font-size: clamp(2rem, 3.5vw, 3rem); line-height: 1.55; margin: 0 0 1.4rem; letter-spacing: .03em; }

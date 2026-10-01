@@ -1,8 +1,8 @@
 # Nagiの紹介・Docsサイト
 
-紹介ページと日本語Docsを、GitHub Pagesで配信できる静的HTMLにします。サーバー側の処理や外部フォント、アクセス解析は使いません。紹介ページには名前の由来、動くコード例、現在の実装範囲を載せています。
+紹介ページと日本語・英語Docsを、GitHub Pagesで配信できる静的HTMLにします。サーバー側の処理や外部フォント、アクセス解析は使いません。紹介ページには名前の由来、動くコード例、現在の実装範囲を載せています。
 
-Docs本文は`docs/`などの既存Markdownを読みます。サイト用に本文を複製する必要はありません。生成時にサイト内のリンクへ変換し、リンク先・見出し・CSS・JavaScriptの存在を確認します。ソースコードやサンプルのフォルダーへのリンクはGitHubへ移動します。
+日本語のDocs本文は`docs/`などの既存Markdown、英語版は`docs/en/`を読みます。日本語は`/Nagi/`、英語は`/Nagi/en/`です。各ページの言語指定とmetadataを設定し、右上の言語リンクで対応するページへ切り替えます。生成時にサイト内のリンクへ変換し、リンク先・見出し・CSS・JavaScriptの存在を確認します。ソースコードやサンプルのフォルダーへのリンクはGitHubへ移動します。
 
 ## 手元で確認する
 
@@ -36,7 +36,7 @@ build/website-venv/bin/python website/build.py
 3. 既定ブランチを選んで実行する。
 4. `deploy`の成功後、表示されたPagesのURLを開く。
 
-PRとmainへのpushではサイトをビルド・検査し、HTMLをActionsの成果物へ保存します。**公開は既定ブランチでの手動実行時だけ**です。Docsを更新したあとも、公開したい時にRun workflowを実行します。公開設定、リポジトリのvisibility、custom domainはこのワークフローでは変更しません。
+PRではサイトをビルド・検査し、HTMLをActionsの成果物へ保存します。**サイト関連の変更がmainへ入ると、検査成功後に自動デプロイします。** 初回公開や再デプロイには、mainを選んでRun workflowを使えます。公開設定、リポジトリのvisibility、custom domainはこのワークフローでは変更しません。
 
 生成HTMLを別の方法で配信する場合も、`build/website/`の内容を使えます。GitHub Pagesへの配信でJekyllが処理しないように`.nojekyll`を含めています。
 
@@ -44,11 +44,11 @@ PRとmainへのpushではサイトをビルド・検査し、HTMLをActionsの�
 
 | 内容 | 更新するファイル |
 |---|---|
-| 紹介文、名前の由来、開発状況 | `website/templates/home.html` |
+| 紹介文、名前の由来、開発状況 | 日本語は`website/templates/home.html`、英語は`home.en.html` |
 | 紹介のコード例 | `website/examples/double.nagi`。実行して出力を確認する |
-| Docs本文 | 元の`docs/*.md`や各サンプルのREADME |
-| Docsの分類・掲載ページ | `website/build.py`の`GROUPS`と`EXTRA` |
+| Docs本文 | 日本語は元の`docs/*.md`や各サンプルのREADME、英語は`docs/en/*.md` |
+| Docsの分類・掲載ページ | `website/build.py`の`GROUPS`・`ENGLISH_GROUPS`と`EXTRA` |
 | 文字、余白、配色、画面幅への対応 | `website/assets/site.css` |
 | 共通メニュー、metadata | `website/templates/page.html` |
 
-新しいDocsページを追加した場合は、目次にも追加してください。公開サイトに載せるページは明示的に選び、未登録のMarkdownを自動で掲載しない構成です。
+新しいDocsページを追加した場合は、日英両方の本文と目次に追加してください。片方の本文がない場合や掲載ページが一致しない場合はビルドを止めます。本文の更新時も翻訳を合わせて更新します。公開サイトに載せるページは明示的に選び、未登録のMarkdownを自動で掲載しない構成です。
