@@ -48,6 +48,50 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn escaped_record_and_route_names_preserve_json_sqlite_and_rust_bridges() {
+    let f = Fixture::new();
+    f.write(
+        "nagi.toml",
+        "entry='escaped-record.nagi'\n[rust]\nfile='native.rs'\n",
+    );
+    f.write("escaped-record.nagi", "class fn:\n    text: str\nclass type:\n    type: i64\n    self: i64\n    __nagi_ident_0: i64\n@rust(\"native::verify\")\nextern def verify(record: type)\n@get(\"/query\")\nasync def loop(type: i64, self: i64, name: str) -> Result[i64, Error]:\n    return ok(type + self + len(view(name)))\n@post(\"/record\")\nasync def record(type: type) -> Result[type, Error]:\n    return ok(type)\ndef main():\n    verify(type(type=1, self=2, __nagi_ident_0=3))\n");
+    f.write("native.rs", r#"pub fn verify(value: crate::r#type) {
+        let json = nagi_runtime::serde_json::to_value(&value).unwrap();
+        assert_eq!(json, nagi_runtime::serde_json::json!({"type":1,"self":2,"__nagi_ident_0":3}));
+        let decoded: crate::r#type = nagi_runtime::serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(nagi_runtime::serde_json::to_value(decoded).unwrap(), json);
+        assert_eq!(<crate::r#type as nagi_runtime::FromRow>::columns(), &["type", "self", "__nagi_ident_0"]);
+        let db = nagi_runtime::rusqlite::Connection::open_in_memory().unwrap();
+        let from_db = db.query_row("SELECT 1 AS 'type', 2 AS 'self', 3 AS '__nagi_ident_0'", [], |row| <crate::r#type as nagi_runtime::FromRow>::read(row, &[0, 1, 2])).unwrap();
+        assert_eq!(nagi_runtime::serde_json::to_value(from_db).unwrap(), json);
+        println!("verified original names");
+    }"#);
+    // Reuse the repository's cached native dependencies; this test verifies
+    // generated names, not the project's default target directory.
+    let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap()
+                .join("native-target")
+        });
+    let result = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .current_dir(&f.0)
+        .arg("run")
+        .env("NAGI_NATIVE_TARGET_DIR", target)
+        .env("CARGO_NET_OFFLINE", "true")
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(String::from_utf8_lossy(&result.stdout).contains("verified original names"));
+}
+
+#[test]
 fn nearest_project_uses_manifest_relative_paths_from_any_subdirectory() {
     let f = Fixture::new();
     f.write("nagi.toml", "entry = 'src/main.nagi'\nnative = ['native/math.low']\n[rust]\nfile = 'bridge.rs'\n[rust.dependencies]\nserde_json = '1.0'\n");

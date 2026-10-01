@@ -387,11 +387,13 @@ impl Parser {
                     Expr {
                         line,
                         ty: None,
+                        resolution: None,
                         span: self.span(start),
                         kind: E::Binary(
                             Box::new(Expr {
                                 line,
                                 ty: None,
+                                resolution: None,
                                 kind: E::Name(n.clone()),
                                 span: name_span,
                             }),
@@ -432,6 +434,7 @@ impl Parser {
             Expr {
                 line,
                 ty: None,
+                resolution: None,
                 kind: E::Await(Box::new(self.expr(7)?)),
                 span: self.span(start),
             }
@@ -439,6 +442,7 @@ impl Parser {
             Expr {
                 line,
                 ty: None,
+                resolution: None,
                 kind: E::Try(Box::new(self.expr(7)?)),
                 span: self.span(start),
             }
@@ -446,6 +450,7 @@ impl Parser {
             Expr {
                 line,
                 ty: None,
+                resolution: None,
                 kind: E::Unary("-".into(), Box::new(self.expr(7)?)),
                 span: self.span(start),
             }
@@ -453,6 +458,7 @@ impl Parser {
             Expr {
                 line,
                 ty: None,
+                resolution: None,
                 kind: E::Unary("not".into(), Box::new(self.expr(7)?)),
                 span: self.span(start),
             }
@@ -495,6 +501,7 @@ impl Parser {
             Expr {
                 line,
                 ty: None,
+                resolution: None,
                 kind,
                 span: self.span(start),
             }
@@ -505,6 +512,7 @@ impl Parser {
                 e = Expr {
                     line,
                     ty: None,
+                    resolution: None,
                     kind: E::Field(Box::new(e), f),
                     span: self.span(start),
                 };
@@ -563,6 +571,7 @@ impl Parser {
                 e = Expr {
                     line,
                     ty: None,
+                    resolution: None,
                     kind: if fields.is_empty() {
                         E::Call(n, generics, args)
                     } else {
@@ -578,6 +587,7 @@ impl Parser {
                 e = Expr {
                     line,
                     ty: None,
+                    resolution: None,
                     kind: E::Index(Box::new(e), Box::new(idx)),
                     span: self.span(start),
                 };
@@ -604,6 +614,7 @@ impl Parser {
             e = Expr {
                 line,
                 ty: None,
+                resolution: None,
                 kind: E::Binary(Box::new(e), op, Box::new(r)),
                 span: self.span(start),
             };

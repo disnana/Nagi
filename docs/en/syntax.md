@@ -38,6 +38,10 @@ String escapes are `\n`, `\r`, `\t`, `\"`, `\'`, and `\\`. There are no f-string
 
 ## Functions and return
 
+Calls resolve to a local function value, a user-defined function, then a builtin, in that order. Defining your own `len` makes `len(...)` call that function. Variables containing other values cannot be called.
+
+Rust keywords such as `type` can be names wherever Nagi's grammar permits them. The compiler escapes names in generated Rust and preserves the original names in Low, JSON fields, and SQLite columns.
+
 ```nagi
 def add(a: i64, b: i64) -> i64:
     return a + b

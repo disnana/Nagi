@@ -241,6 +241,16 @@ impl Checker {
         visit(t, &self.classes, 0)
     }
     fn valid(&self, t: &Type, line: usize) -> Result<(), String> {
+        if t.0 == "fn" && !t.1.is_empty() {
+            for parameter in &t.1 {
+                if parameter.0 == "Future" && parameter.1.len() == 1 {
+                    self.valid(&parameter.inner(), line)?;
+                } else {
+                    self.valid(parameter, line)?;
+                }
+            }
+            return Ok(());
+        }
         let arity = match t.0.as_str() {
             "List" | "view" | "owned" | "shared" | "Option" => Some(1),
             "Map" | "Result" => Some(2),
@@ -740,6 +750,7 @@ impl Checker {
         projection: bool,
     ) -> Result<Type, String> {
         let line = e.line;
+        e.resolution = None;
         let t = match &mut e.kind {
             E::Int(s) => {
                 let ty = expected
@@ -790,10 +801,16 @@ impl Checker {
                 .ok_or_else(|| error(line, "Noneにはnullableの型注釈が必要です"))?,
             E::Name(n) => {
                 if let Some(v) = self.vars.get(n) {
+                    e.resolution = Some(NameResolution::Local);
                     v.ty.clone()
                 } else if let Some(f) = self.functions.get(n) {
+                    e.resolution = Some(NameResolution::Function);
                     let mut ts: Vec<Type> = f.params.iter().map(|p| p.1.clone()).collect();
-                    ts.push(f.ret.clone());
+                    ts.push(if f.asynchronous {
+                        future(f.ret.clone())
+                    } else {
+                        f.ret.clone()
+                    });
                     Type::generic("fn", ts)
                 } else {
                     return Err(error(line, format!("未定義の変数: {n}")));
@@ -937,24 +954,40 @@ impl Checker {
                 for t in ts.iter() {
                     self.valid(t, line)?;
                 }
-                if let Some(f) = self.functions.get(n).cloned() {
+                let signature = if let Some(v) = self.vars.get(n) {
+                    if v.ty.0 != "fn" {
+                        return Err(error(line, format!("{n} は呼び出せる関数ではありません")));
+                    }
+                    e.resolution = Some(NameResolution::Local);
+                    Some(v.ty.1.clone())
+                } else if let Some(f) = self.functions.get(n) {
+                    e.resolution = Some(NameResolution::Function);
+                    let mut signature: Vec<_> = f.params.iter().map(|(_, t)| t.clone()).collect();
+                    signature.push(if f.asynchronous {
+                        future(f.ret.clone())
+                    } else {
+                        f.ret.clone()
+                    });
+                    Some(signature)
+                } else {
+                    None
+                };
+                if let Some(mut signature) = signature {
                     if !ts.is_empty() {
                         return Err(error(line, "generic関数は未実装です"));
                     }
-                    if args.len() != f.params.len() {
+                    let ret = signature.pop().unwrap();
+                    if args.len() != signature.len() {
                         return Err(error(line, "引数の数が一致しません"));
                     }
-                    for (arg, (_, t)) in args.iter_mut().zip(&f.params) {
+                    for (arg, t) in args.iter_mut().zip(&signature) {
                         let got = self.expr(arg, Some(t))?;
                         self.demand(&got, t, line)?;
                         self.consume(arg)?;
                     }
-                    if f.asynchronous {
-                        future(f.ret)
-                    } else {
-                        f.ret
-                    }
+                    ret
                 } else {
+                    e.resolution = Some(NameResolution::Builtin);
                     self.builtin(n, ts, args, expected, line)?
                 }
             }
