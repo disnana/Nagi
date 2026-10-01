@@ -53,6 +53,9 @@ def main():
 You can also assign a new value before the next iteration.
 
 ```nagi
+def use_name(name: str):
+    print(name)
+
 def main():
     name = "first"
     for number in range(2):

@@ -53,6 +53,9 @@ def main():
 次の周回までに新しい値を代入する方法もあります。
 
 ```nagi
+def use_name(name: str):
+    print(name)
+
 def main():
     name = "first"
     for number in range(2):
