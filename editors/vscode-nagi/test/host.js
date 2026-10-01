@@ -163,7 +163,81 @@ async function run() {
   const lowDefinition = await definitions(lowEntry, 1, 27);
   assert.equal(lowDefinition[0].uri.toString(), vscode.Uri.file(path.join(lowFolder, 'math.low')).toString(), 'Low import definition jump works');
   assert.match(await hovers(lowEntry, 1, 27), /fn twice\(x: i64\) -> i64/, 'Low hover displays its declaration');
-  console.log('PASS: VS Code Host diagnostics/run/F12, hover, completion, named fields, unsaved imports, partial syntax fallback, type completion, active signature parameters, High/Low');
+  await checkInferredTypes(folder, hovers, completions);
+  console.log('PASS: VS Code Host diagnostics/run/F12, declaration and inferred hovers, field completion, unsaved imports, fallback, signatures, UTF-16, High/Low');
+}
+
+async function checkInferredTypes(folder, hovers, completions) {
+  const project = path.join(folder, `inferred-${process.pid}`);
+  fs.mkdirSync(project, { recursive: true });
+  const modelsFile = path.join(project, 'models.nagi');
+  const entryFile = path.join(project, 'main.nagi');
+  const modelsText = 'class Point:\n    id: i32\n';
+  const entryText = 'import "models.nagi"\ndef make() -> Point:\n    return Point(id=7)\nasync def inspect(argument: Point) -> Result[unit, Error]:\n    value = make()\n    print("😀"); print(value.id)\n    match ok(make()):\n        case Ok(payload):\n            print(payload.id)\n        case Err(problem):\n            print(error_kind(problem))\n    return ok(print(0))\ndef main():\n    print(0)\n';
+  fs.writeFileSync(path.join(project, 'nagi.toml'), "entry = 'main.nagi'\n");
+  fs.writeFileSync(modelsFile, modelsText);
+  fs.writeFileSync(entryFile, entryText);
+  const doc = await vscode.workspace.openTextDocument(entryFile);
+  const models = await vscode.workspace.openTextDocument(modelsFile);
+  await vscode.window.showTextDocument(doc);
+  await new Promise(resolve => setTimeout(resolve, 500));
+  const position = (document, needle, delta = 0) => {
+    const offset = document.getText().indexOf(needle);
+    assert.ok(offset >= 0, needle);
+    return document.positionAt(offset + delta);
+  };
+  async function hover(document, needle, delta = 0) {
+    const p = position(document, needle, delta);
+    return hovers(document, p.line, p.character);
+  }
+  async function fields(document, needle, delta) {
+    const p = position(document, needle, delta);
+    const result = await completions(document, p.line, p.character);
+    return result.items.filter(c => c.kind === vscode.CompletionItemKind.Field);
+  }
+  async function replace(document, text) {
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(document.uri, new vscode.Range(0, 0, document.lineCount, 0), text);
+    await vscode.workspace.applyEdit(edit);
+  }
+  assert.match(await hover(doc, 'argument: Point', 2), /argument: Point/, 'parameter declaration has a type hover');
+  assert.match(await hover(doc, 'value.id', 2), /value: Point/, 'inferred local hover uses UTF-16 after an emoji');
+  assert.match(await hover(doc, 'payload.id', 2), /payload: Point/, 'Ok payload type is supplied by the checker');
+  assert.match(await hover(doc, 'problem))', 2), /problem: Error/, 'Err payload hover shows Error');
+  const initial = await fields(doc, 'value.id', 'value.'.length);
+  assert.deepEqual(initial.map(c => c.label), ['id']);
+  assert.equal(initial[0].insertText.value, 'id', 'field completion inserts only its name');
+  assert.equal(initial[0].detail, 'id: i32');
+  assert.equal(doc.getText(initial[0].range), 'id', 'completion replaces an existing member suffix');
+  await replace(models, 'class Point:\n    id: i32\n    enabled: bool\n');
+  const changed = await fields(doc, 'payload.id', 'payload.'.length);
+  assert.deepEqual(changed.map(c => c.label).sort(), ['enabled', 'id'], 'unsaved imported class fields are used');
+  assert.equal(fs.readFileSync(modelsFile, 'utf8'), modelsText, 'query leaves imported file untouched');
+  await replace(models, modelsText);
+  await replace(doc, entryText.replace('value.id)', 'value.)'));
+  assert.deepEqual((await fields(doc, 'value.)', 'value.'.length)).map(c => c.label), ['id'], 'bare dot in an unsaved buffer offers fields');
+  assert.equal(fs.readFileSync(entryFile, 'utf8'), entryText, 'completion never writes its analysis buffer');
+  await replace(doc, entryText.replace('return ok(print(0))', 'print(payload.id)\n    return ok(print(0))'));
+  const outside = doc.getText().lastIndexOf('payload.id');
+  assert.ok(outside >= 0);
+  const p = doc.positionAt(outside + 'payload.'.length);
+  const outsideFields = (await completions(doc, p.line, p.character)).items.filter(c => c.kind === vscode.CompletionItemKind.Field);
+  assert.equal(outsideFields.length, 0, 'case payload does not leak outside match');
+  await replace(doc, entryText + '\ndef unfinished(:\n');
+  assert.equal(await hover(doc, 'value.id', 2), '', 'saved fallback does not show a stale local type');
+  assert.equal((await fields(doc, 'value.id', 'value.'.length)).length, 0, 'saved fallback does not guess receiver fields');
+  assert.match(await hover(doc, 'value = make()', 'value = ma'.length), /保存済み/, 'declaration fallback stays available and is labelled');
+  await replace(doc, entryText);
+  await doc.save();
+  await models.save();
+  const lowFolder = path.join(folder, `inferred-low-${process.pid}`);
+  fs.mkdirSync(lowFolder, { recursive: true });
+  const lowFile = path.join(lowFolder, 'main.low');
+  const lowText = 'record Point { id: i32; }\r\nfn main() { let value = Point(id=7); print("😀"); print(value.id); }\r\n';
+  fs.writeFileSync(lowFile, lowText);
+  const low = await vscode.workspace.openTextDocument(lowFile);
+  assert.match(await hover(low, 'value.id', 2), /value: Point/, 'Low local hover has the correct same-line position');
+  assert.deepEqual((await fields(low, 'value.id', 'value.'.length)).map(c => c.label), ['id'], 'Low record fields complete');
 }
 
 module.exports = { run };

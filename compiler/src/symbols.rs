@@ -37,6 +37,24 @@ struct Member {
     ty: String,
 }
 
+#[derive(Serialize)]
+struct Local {
+    name: String,
+    #[serde(rename = "type")]
+    ty: String,
+    location: Location,
+}
+
+#[derive(Serialize)]
+struct TypedExpression {
+    location: Location,
+    end_line: usize,
+    end_column: usize,
+    #[serde(rename = "type")]
+    ty: String,
+    fields: Vec<Member>,
+}
+
 pub fn read_overlays(input: impl Read, cwd: &Path) -> Result<HashMap<PathBuf, String>, String> {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
@@ -91,6 +109,18 @@ struct File<'a> {
     tokens: Vec<Token>,
 }
 impl File<'_> {
+    fn token_length(&self, token: &Token) -> usize {
+        match &token.kind {
+            K::Id(n) | K::Sym(n) => n.encode_utf16().count(),
+            K::Str(_) => self.string_length(token),
+            K::Num(_) => self.lines[token.line - 1]
+                .chars()
+                .skip(token.col - 1)
+                .take_while(|c| c.is_ascii_digit() || *c == '_' || *c == '.')
+                .count(),
+            _ => 0,
+        }
+    }
     fn follows_call(&self, index: usize) -> bool {
         let Some(token) = self.tokens.get(index + 1) else {
             return false;
@@ -147,6 +177,131 @@ impl File<'_> {
             line: token.line,
             column,
             length,
+        }
+    }
+}
+
+struct Types<'a, 'b> {
+    files: &'a [File<'b>],
+    classes: &'a [Class],
+    locals: Vec<Local>,
+    expressions: Vec<TypedExpression>,
+}
+impl Types<'_, '_> {
+    fn file(&self, line: usize) -> Option<&File<'_>> {
+        self.files
+            .iter()
+            .find(|f| line >= f.start && line < f.start + f.lines.len().max(1))
+    }
+    fn binding(&mut self, line: usize, span: Span, name: &str, ty: &Type) {
+        let Some(file) = self.file(line) else { return };
+        let Some(token) = file.tokens.get(span.start..span.end).and_then(|tokens| {
+            tokens
+                .iter()
+                .find(|t| matches!(&t.kind, K::Id(n) if n == name))
+        }) else {
+            return;
+        };
+        let location = file.location(token, name.encode_utf16().count());
+        self.locals.push(Local {
+            name: name.into(),
+            ty: ty.to_string(),
+            location,
+        });
+    }
+    fn expr(&mut self, e: &Expr) {
+        if let Some(ty) = &e.ty {
+            if let E::Name(name) = &e.kind {
+                if ty.0 != "fn" {
+                    self.binding(e.line, e.span, name, ty);
+                }
+            }
+            if let Some(file) = self.file(e.line) {
+                if let Some(tokens) = file
+                    .tokens
+                    .get(e.span.start..e.span.end)
+                    .filter(|t| !t.is_empty())
+                {
+                    let first = &tokens[0];
+                    let last = tokens.last().unwrap();
+                    let location = file.location(first, file.token_length(first));
+                    let end = file.location(last, file.token_length(last));
+                    let fields = self
+                        .classes
+                        .iter()
+                        .find(|c| c.name == ty.0 && ty.1.is_empty())
+                        .map(|c| {
+                            c.fields
+                                .iter()
+                                .map(|(name, ty)| Member {
+                                    name: name.clone(),
+                                    ty: ty.to_string(),
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    self.expressions.push(TypedExpression {
+                        location,
+                        end_line: end.line,
+                        end_column: end.column + end.length,
+                        ty: ty.to_string(),
+                        fields,
+                    });
+                }
+            }
+        }
+        match &e.kind {
+            E::Call(_, _, args) | E::List(args) => {
+                for arg in args {
+                    self.expr(arg);
+                }
+            }
+            E::Record(_, fields) => {
+                for (_, value) in fields {
+                    self.expr(value);
+                }
+            }
+            E::Binary(a, _, b) | E::Index(a, b) => {
+                self.expr(a);
+                self.expr(b);
+            }
+            E::Unary(_, e) | E::Field(e, _) | E::Try(e) | E::Await(e) => self.expr(e),
+            _ => {}
+        }
+    }
+    fn block(&mut self, ss: &[Stmt]) {
+        for s in ss {
+            if let (Some(span), Some(ty)) = (s.binding_span, &s.binding_type) {
+                if let S::Assign { name, .. } | S::For(name, _, _) = &s.kind {
+                    self.binding(s.line, span, name, ty);
+                }
+            }
+            match &s.kind {
+                S::Assign { value, .. }
+                | S::Return(Some(value))
+                | S::Expr(value)
+                | S::Spawn(value) => self.expr(value),
+                S::If(value, a, b) => {
+                    self.expr(value);
+                    self.block(a);
+                    self.block(b);
+                }
+                S::While(value, body) | S::For(_, value, body) => {
+                    self.expr(value);
+                    self.block(body);
+                }
+                S::Scope(body) => self.block(body),
+                S::Match(value, arms) => {
+                    self.expr(value);
+                    for arm in arms {
+                        if let (Some(name), Some(ty)) = (&arm.binding, &arm.binding_type) {
+                            self.binding(arm.line, arm.binding_span, name, ty);
+                        }
+                        self.block(&arm.body);
+                    }
+                }
+                S::Return(None) => {}
+            }
         }
     }
 }
@@ -378,7 +533,32 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
             target: def.location.clone(),
         });
     }
+    let mut primary = Program::default();
+    let mut native = Program::default();
+    for (i, p) in programs.iter().enumerate() {
+        let dest = if i == 0 { &mut primary } else { &mut native };
+        dest.classes.extend(p.classes.clone());
+        dest.functions.extend(p.functions.clone());
+    }
+    let typed = crate::check::editor_types(&primary, &native);
+    let mut types = Types {
+        files: &files,
+        classes: typed
+            .as_ref()
+            .map(|p| p.classes.as_slice())
+            .unwrap_or_default(),
+        locals: vec![],
+        expressions: vec![],
+    };
+    if let Some(p) = &typed {
+        for f in &p.functions {
+            for ((name, ty), span) in f.params.iter().zip(&f.parameter_spans) {
+                types.binding(f.line, *span, name, ty);
+            }
+            types.block(&f.body);
+        }
+    }
     Ok(
-        serde_json::json!({ "format": "nagi-symbols-v1", "definitions": definitions, "references": references, "files": files.iter().map(|f| f.path.display().to_string()).collect::<Vec<_>>() }),
+        serde_json::json!({ "format": "nagi-symbols-v1", "definitions": definitions, "references": references, "locals": types.locals, "expressions": types.expressions, "files": files.iter().map(|f| f.path.display().to_string()).collect::<Vec<_>>() }),
     )
 }

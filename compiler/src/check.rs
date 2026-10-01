@@ -15,6 +15,7 @@ struct Checker {
     ret: Type,
     asynchronous: bool,
     scope: usize,
+    editor: bool,
 }
 fn error(line: usize, s: impl AsRef<str>) -> String {
     format!("line {line}: {}", s.as_ref())
@@ -30,6 +31,43 @@ fn matches_type(a: &Type, b: &Type) -> bool {
 }
 
 pub fn check(p: &mut Program) -> Result<(), String> {
+    check_mode(p, false)
+}
+
+/// Uses the same type and ownership rules as compilation. Failed statements
+/// cannot introduce bindings or change the environment used by later statements.
+pub(crate) fn editor_types(primary: &Program, native: &Program) -> Option<Program> {
+    let mut p = primary.clone();
+    p.classes.extend(native.classes.clone());
+    p.functions.extend(
+        native
+            .functions
+            .iter()
+            .filter(|f| !f.attrs.iter().any(|(a, _)| a == "replace"))
+            .cloned(),
+    );
+    check_mode(&mut p, true).ok()?;
+    let replacement_lines: HashSet<_> = native
+        .functions
+        .iter()
+        .filter(|f| f.attrs.iter().any(|(a, _)| a == "replace"))
+        .map(|f| f.line)
+        .collect();
+    if !replacement_lines.is_empty() {
+        let mut replaced = primary.clone();
+        if integrate_mode(&mut replaced, native.clone(), true).is_ok() {
+            p.functions.extend(
+                replaced
+                    .functions
+                    .into_iter()
+                    .filter(|f| replacement_lines.contains(&f.line)),
+            );
+        }
+    }
+    Some(p)
+}
+
+fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
     if !p.imports.is_empty() {
         return Err("importはnagicのファイル読み込み経路で解決してください".into());
     }
@@ -40,6 +78,7 @@ pub fn check(p: &mut Program) -> Result<(), String> {
         ret: Type::named("unit"),
         asynchronous: false,
         scope: 0,
+        editor,
     };
     let mut symbols = HashSet::new();
     for class in &p.classes {
@@ -85,6 +124,20 @@ pub fn check(p: &mut Program) -> Result<(), String> {
             return Err(error(f.line, "関数の重複定義"));
         }
         c.functions.insert(f.name.clone(), f.clone());
+    }
+    // Do not infer calls from an invalid signature, including functions checked
+    // later in source order. Declaration-only symbol information remains usable.
+    if editor {
+        for f in &p.functions {
+            c.valid(&f.ret, f.line)?;
+            let mut names = HashSet::new();
+            for (n, t) in &f.params {
+                c.valid(t, f.line)?;
+                if !names.insert(n) {
+                    return Err(error(f.line, "引数の重複"));
+                }
+            }
+        }
     }
     for f in &mut p.functions {
         c.vars.clear();
@@ -138,7 +191,7 @@ pub fn check(p: &mut Program) -> Result<(), String> {
             return Err(error(f.line, "@rustはextern関数にのみ指定できます"));
         }
         c.block(&mut f.body)?;
-        if f.ret.0 != "unit" && !returns(&f.body) {
+        if !editor && f.ret.0 != "unit" && !returns(&f.body) {
             return Err(error(f.line, "すべての経路で戻り値を返してください"));
         }
     }
@@ -278,225 +331,240 @@ impl Checker {
     }
     fn block(&mut self, ss: &mut [Stmt]) -> Result<(), String> {
         for s in ss {
-            match &mut s.kind {
-                S::Assign {
-                    name,
-                    annotation,
-                    value,
-                    declare,
-                } => {
-                    let old = self.vars.get(name).cloned();
-                    if old.is_some() && *declare {
-                        return Err(error(s.line, "同じscope内でletを重複できません"));
-                    }
-                    let expected = annotation.as_ref().or_else(|| old.as_ref().map(|v| &v.ty));
-                    let ty = self.expr(value, expected)?;
-                    if let Some(t) = expected {
-                        self.demand(&ty, t, s.line)?;
-                    }
-                    if let Some(a) = annotation.as_ref() {
-                        self.valid(a, s.line)?;
-                    }
-                    if self.borrowed(name) {
-                        return Err(error(s.line, "viewが生きている所有値は再代入できません"));
-                    }
-                    let origin = if ty.contains_view() {
-                        self.origin(value)
-                    } else {
-                        None
-                    };
-                    self.consume(value)?;
-                    *declare = old.is_none();
-                    *annotation = Some(ty.clone());
-                    self.vars.insert(
-                        name.clone(),
-                        Var {
-                            ty,
-                            moved: false,
-                            origin,
-                            param: false,
-                        },
-                    );
-                }
-                S::Return(e) => {
-                    if self.scope > 0 {
-                        return Err(error(
-                            s.line,
-                            "scope内のreturnは0.1では未対応です。scope終了後に返してください",
-                        ));
-                    }
-                    let ret = self.ret.clone();
-                    let ty = if let Some(e) = e {
-                        let ty = self.expr(e, Some(&ret))?;
-                        if ty.contains_view() {
-                            let origin = self.origin(e);
-                            if !origin
-                                .as_ref()
-                                .and_then(|n| self.vars.get(n))
-                                .is_some_and(|v| v.param && v.ty.contains_view())
-                            {
-                                return Err(error(s.line,"request/local-scoped view escapes its lifetime。長生きさせる値にはcopy()を使用してください"));
-                            }
-                        }
-                        self.consume(e)?;
-                        ty
-                    } else {
-                        Type::named("unit")
-                    };
-                    self.demand(&ty, &ret, s.line)?;
-                }
-                S::Expr(e) => {
-                    let t = self.expr(e, None)?;
-                    if t.0 == "Future" {
-                        return Err(error(
-                            s.line,
-                            "async呼び出しはawaitまたはscope内のspawnで実行してください",
-                        ));
-                    }
-                    if t.0 == "Result" {
-                        return Err(error(
-                            s.line,
-                            "Resultを無視できません。tryで伝播するか変数へ受けてください",
-                        ));
-                    }
-                }
-                S::If(c, a, b) => {
-                    let t = self.expr(c, Some(&Type::named("bool")))?;
-                    self.demand(&t, &Type::named("bool"), s.line)?;
-                    let am = self.child(a)?;
-                    let bm = self.child(b)?;
-                    self.merge_moves(am);
-                    self.merge_moves(bm);
-                }
-                S::While(c, b) => {
-                    let t = self.expr(c, Some(&Type::named("bool")))?;
-                    self.demand(&t, &Type::named("bool"), s.line)?;
-                    let m = self.child(b)?;
-                    self.merge_moves(m);
-                }
-                S::Match(value, arms) => {
-                    let ty = self.expr(value, None)?;
-                    if ty.0 != "Result" {
-                        return Err(error(s.line, "matchの対象はResultです"));
-                    }
-                    let mut seen = HashSet::new();
-                    for arm in arms.iter() {
-                        if !seen.insert(arm.ok) {
-                            return Err(error(arm.line, "Ok / Errのcaseが重複しています"));
-                        }
-                    }
-                    if seen.len() != 2 {
-                        return Err(error(s.line, "matchにはOkとErrの両方のcaseが必要です"));
-                    }
-                    let origin = self.origin(value);
-                    self.consume(value)?;
-                    let before = self.vars.clone();
-                    let mut moves = vec![];
-                    for arm in arms {
-                        self.vars = before.clone();
-                        if let Some(name) = &arm.binding {
-                            if self.vars.contains_key(name) {
-                                return Err(error(
-                                    arm.line,
-                                    "caseの変数名は外側の変数と重複できません",
-                                ));
-                            }
-                            let payload = ty.1[usize::from(!arm.ok)].clone();
-                            self.vars.insert(
-                                name.clone(),
-                                Var {
-                                    origin: if payload.contains_view() {
-                                        origin.clone()
-                                    } else {
-                                        None
-                                    },
-                                    ty: payload,
-                                    moved: false,
-                                    param: false,
-                                },
-                            );
-                        }
-                        self.block(&mut arm.body)?;
-                        let mut after = self.vars.clone();
-                        if let Some(name) = &arm.binding {
-                            after.remove(name);
-                        }
-                        moves.push(after);
-                    }
+            if self.editor {
+                let before = self.vars.clone();
+                let scope = self.scope;
+                if self.statement(s).is_err() {
                     self.vars = before;
-                    for after in moves {
-                        self.merge_moves(after);
-                    }
+                    self.scope = scope;
                 }
-                S::For(n, e, b) => {
-                    let t = self.expr(e, None)?;
-                    let elem = match t.0.as_str() {
-                        "Range" => Type::named("i64"),
-                        "List" | "view" => t.inner(),
-                        _ => return Err(error(s.line, "forにはrangeまたは連続配列が必要です")),
-                    };
-                    if !self.copy_type(&elem) {
-                        return Err(error(s.line, "0.1のfor要素はprimitiveに限定されています"));
-                    }
-                    let before = self.vars.clone();
-                    self.vars.insert(
-                        n.clone(),
-                        Var {
-                            ty: elem,
-                            moved: false,
-                            origin: None,
-                            param: false,
-                        },
-                    );
-                    self.block(b)?;
-                    let after = self.vars.clone();
-                    self.vars = before;
-                    self.merge_moves(after);
+            } else {
+                self.statement(s)?;
+            }
+        }
+        Ok(())
+    }
+    fn statement(&mut self, s: &mut Stmt) -> Result<(), String> {
+        match &mut s.kind {
+            S::Assign {
+                name,
+                annotation,
+                value,
+                declare,
+            } => {
+                let old = self.vars.get(name).cloned();
+                if old.is_some() && *declare {
+                    return Err(error(s.line, "同じscope内でletを重複できません"));
                 }
-                S::Scope(b) => {
-                    if !self.asynchronous || self.ret.0 != "Result" {
-                        return Err(error(s.line, "scopeはasync Result関数内で使用してください"));
-                    }
-                    self.scope += 1;
-                    let m = self.child(b)?;
-                    self.scope -= 1;
-                    self.merge_moves(m);
+                let expected = annotation.as_ref().or_else(|| old.as_ref().map(|v| &v.ty));
+                let ty = self.expr(value, expected)?;
+                if let Some(t) = expected {
+                    self.demand(&ty, t, s.line)?;
                 }
-                S::Spawn(e) => {
-                    if self.scope == 0 {
-                        return Err(error(
-                            s.line,
-                            "spawnはasync with scopeの中で使用してください",
-                        ));
-                    }
-                    let t = self.expr(e, None)?;
-                    if t != future(Type::named("unit")) && t != future(result(Type::named("unit")))
-                    {
-                        return Err(error(
-                            s.line,
-                            "0.1のspawnはasync unitまたはResult[unit,Error]を取ります",
-                        ));
-                    }
-                    fn names(e: &Expr, out: &mut Vec<String>) {
-                        match &e.kind {
-                            E::Name(n) => out.push(n.clone()),
-                            E::Call(_, _, a) | E::List(a) => {
-                                for e in a {
-                                    names(e, out)
-                                }
-                            }
-                            _ => {}
+                if let Some(a) = annotation.as_ref() {
+                    self.valid(a, s.line)?;
+                }
+                if self.borrowed(name) {
+                    return Err(error(s.line, "viewが生きている所有値は再代入できません"));
+                }
+                let origin = if ty.contains_view() {
+                    self.origin(value)
+                } else {
+                    None
+                };
+                self.consume(value)?;
+                *declare = old.is_none();
+                *annotation = Some(ty.clone());
+                s.binding_type = Some(ty.clone());
+                self.vars.insert(
+                    name.clone(),
+                    Var {
+                        ty,
+                        moved: false,
+                        origin,
+                        param: false,
+                    },
+                );
+            }
+            S::Return(e) => {
+                if self.scope > 0 {
+                    return Err(error(
+                        s.line,
+                        "scope内のreturnは0.1では未対応です。scope終了後に返してください",
+                    ));
+                }
+                let ret = self.ret.clone();
+                let ty = if let Some(e) = e {
+                    let ty = self.expr(e, Some(&ret))?;
+                    if ty.contains_view() {
+                        let origin = self.origin(e);
+                        if !origin
+                            .as_ref()
+                            .and_then(|n| self.vars.get(n))
+                            .is_some_and(|v| v.param && v.ty.contains_view())
+                        {
+                            return Err(error(s.line,"request/local-scoped view escapes its lifetime。長生きさせる値にはcopy()を使用してください"));
                         }
                     }
-                    let mut ns = vec![];
-                    names(e, &mut ns);
-                    for n in ns {
-                        if self.vars.get(&n).is_some_and(|v| v.ty.contains_view()) {
+                    self.consume(e)?;
+                    ty
+                } else {
+                    Type::named("unit")
+                };
+                self.demand(&ty, &ret, s.line)?;
+            }
+            S::Expr(e) => {
+                let t = self.expr(e, None)?;
+                if t.0 == "Future" {
+                    return Err(error(
+                        s.line,
+                        "async呼び出しはawaitまたはscope内のspawnで実行してください",
+                    ));
+                }
+                if t.0 == "Result" {
+                    return Err(error(
+                        s.line,
+                        "Resultを無視できません。tryで伝播するか変数へ受けてください",
+                    ));
+                }
+            }
+            S::If(c, a, b) => {
+                let t = self.expr(c, Some(&Type::named("bool")))?;
+                self.demand(&t, &Type::named("bool"), s.line)?;
+                let am = self.child(a)?;
+                let bm = self.child(b)?;
+                self.merge_moves(am);
+                self.merge_moves(bm);
+            }
+            S::While(c, b) => {
+                let t = self.expr(c, Some(&Type::named("bool")))?;
+                self.demand(&t, &Type::named("bool"), s.line)?;
+                let m = self.child(b)?;
+                self.merge_moves(m);
+            }
+            S::Match(value, arms) => {
+                let ty = self.expr(value, None)?;
+                if ty.0 != "Result" {
+                    return Err(error(s.line, "matchの対象はResultです"));
+                }
+                let mut seen = HashSet::new();
+                for arm in arms.iter() {
+                    if !seen.insert(arm.ok) {
+                        return Err(error(arm.line, "Ok / Errのcaseが重複しています"));
+                    }
+                }
+                if seen.len() != 2 {
+                    return Err(error(s.line, "matchにはOkとErrの両方のcaseが必要です"));
+                }
+                let origin = self.origin(value);
+                self.consume(value)?;
+                let before = self.vars.clone();
+                let mut moves = vec![];
+                for arm in arms {
+                    self.vars = before.clone();
+                    if let Some(name) = &arm.binding {
+                        if self.vars.contains_key(name) {
                             return Err(error(
-                                s.line,
-                                "viewを別taskへ渡せません。copyを使用してください",
+                                arm.line,
+                                "caseの変数名は外側の変数と重複できません",
                             ));
                         }
+                        let payload = ty.1[usize::from(!arm.ok)].clone();
+                        arm.binding_type = Some(payload.clone());
+                        self.vars.insert(
+                            name.clone(),
+                            Var {
+                                origin: if payload.contains_view() {
+                                    origin.clone()
+                                } else {
+                                    None
+                                },
+                                ty: payload,
+                                moved: false,
+                                param: false,
+                            },
+                        );
+                    }
+                    self.block(&mut arm.body)?;
+                    let mut after = self.vars.clone();
+                    if let Some(name) = &arm.binding {
+                        after.remove(name);
+                    }
+                    moves.push(after);
+                }
+                self.vars = before;
+                for after in moves {
+                    self.merge_moves(after);
+                }
+            }
+            S::For(n, e, b) => {
+                let t = self.expr(e, None)?;
+                let elem = match t.0.as_str() {
+                    "Range" => Type::named("i64"),
+                    "List" | "view" => t.inner(),
+                    _ => return Err(error(s.line, "forにはrangeまたは連続配列が必要です")),
+                };
+                if !self.copy_type(&elem) {
+                    return Err(error(s.line, "0.1のfor要素はprimitiveに限定されています"));
+                }
+                s.binding_type = Some(elem.clone());
+                let before = self.vars.clone();
+                self.vars.insert(
+                    n.clone(),
+                    Var {
+                        ty: elem,
+                        moved: false,
+                        origin: None,
+                        param: false,
+                    },
+                );
+                self.block(b)?;
+                let after = self.vars.clone();
+                self.vars = before;
+                self.merge_moves(after);
+            }
+            S::Scope(b) => {
+                if !self.asynchronous || self.ret.0 != "Result" {
+                    return Err(error(s.line, "scopeはasync Result関数内で使用してください"));
+                }
+                self.scope += 1;
+                let m = self.child(b)?;
+                self.scope -= 1;
+                self.merge_moves(m);
+            }
+            S::Spawn(e) => {
+                if self.scope == 0 {
+                    return Err(error(
+                        s.line,
+                        "spawnはasync with scopeの中で使用してください",
+                    ));
+                }
+                let t = self.expr(e, None)?;
+                if t != future(Type::named("unit")) && t != future(result(Type::named("unit"))) {
+                    return Err(error(
+                        s.line,
+                        "0.1のspawnはasync unitまたはResult[unit,Error]を取ります",
+                    ));
+                }
+                fn names(e: &Expr, out: &mut Vec<String>) {
+                    match &e.kind {
+                        E::Name(n) => out.push(n.clone()),
+                        E::Call(_, _, a) | E::List(a) => {
+                            for e in a {
+                                names(e, out)
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                let mut ns = vec![];
+                names(e, &mut ns);
+                for n in ns {
+                    if self.vars.get(&n).is_some_and(|v| v.ty.contains_view()) {
+                        return Err(error(
+                            s.line,
+                            "viewを別taskへ渡せません。copyを使用してください",
+                        ));
                     }
                 }
             }
@@ -993,7 +1061,11 @@ impl Checker {
     }
 }
 
-pub fn integrate(p: &mut Program, mut native: Program) -> Result<(), String> {
+pub fn integrate(p: &mut Program, native: Program) -> Result<(), String> {
+    integrate_mode(p, native, false)
+}
+
+fn integrate_mode(p: &mut Program, mut native: Program, editor: bool) -> Result<(), String> {
     for c in native.classes.drain(..) {
         if p.classes.iter().any(|x| x.name == c.name) {
             return Err(error(c.line, "nativeとgeneratedでclassが重複しています"));
@@ -1033,5 +1105,5 @@ pub fn integrate(p: &mut Program, mut native: Program) -> Result<(), String> {
             p.functions.push(f);
         }
     }
-    check(p)
+    check_mode(p, editor)
 }

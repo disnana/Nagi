@@ -10,15 +10,17 @@ Nagi High (`.nagi`) とLow (`.low`)の開発補助です。
 - `nagi.toml`の入口・Rust依存・Low設定を使ったプロジェクトの検査と実行
 - F12 /「定義へ移動」で関数・class・import先へ移動
 - ホバーで関数の引数・戻り値、async、classのフィールドを表示
+- 引数・ローカル変数・caseの束縛名の型をホバーで表示
+- `value.`の入力時に、そのclassのフィールドを補完
 - プロジェクト内の関数・class・型と、代表的な組み込み関数の補完
 - 呼び出し時の引数ヒント、class生成時の名前付き引数の挿入
 
 ## インストール
 
-リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、`build/distribution/nagi-language-0.1.3.vsix` ができます。VS Codeの「拡張機能: VSIXからのインストール」で選択するか、次のコマンドを実行してください。
+リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、`build/distribution/nagi-language-0.1.4.vsix` ができます。VS Codeの「拡張機能: VSIXからのインストール」で選択するか、次のコマンドを実行してください。
 
 ```powershell
-code --install-extension build/distribution/nagi-language-0.1.3.vsix
+code --install-extension build/distribution/nagi-language-0.1.4.vsix
 ```
 
 色付けとスニペットはコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。Nagiリポジトリを開き、ルートで `cargo build --release --locked -p nagic` を実行してください。リポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
@@ -58,20 +60,26 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 
 対象は関数・class・importです。ローカル変数・引数・caseのpayload、組み込み関数、Rust実装への移動は未対応です。Lowの置換関数とHighの宣言が両方ある場合は、Highの宣言を優先します。
 
-## ホバー・補完・引数ヒント（0.1.3）
+## ホバー・補完・引数ヒント
 
-最新版の`nagic`と拡張0.1.3を使います。関数名にマウスを置くと引数・戻り値・asyncの宣言が表示され、class名ではフィールド一覧を確認できます。`Result[Item?, Error]`や`view[str]`などの型も宣言どおりに表示します。
+最新版の`nagic`と拡張0.1.4を使います。関数名にマウスを置くと引数・戻り値・asyncの宣言が表示され、class名ではフィールド一覧を確認できます。`Result[Item?, Error]`や`view[str]`などの型も宣言どおりに表示します。[コードを使った操作例](../../docs/editor.md)もあります。
+
+変数名にマウスを置くと、コンパイラが確認できた型を表示します。たとえば`count = 3`は`count: i64`、classを返す関数から作った`item`は`item: Item`です。関数の引数、`for`の要素、Resultの`case Ok(value)`と`case Err(problem)`の束縛名にも対応します。宣言と使用箇所を扱い、caseやifなどのブロックを出た名前には型を表示しません。
+
+`item.`を入力すると、`Item`のフィールドが候補に出ます。候補には`name: str`のように型も表示し、選ぶとフィールド名だけを挿入します。`item.na`からの補完では入力途中の名前を置き換えます。classを返す呼び出し、入れ子のフィールド、Copy classの配列要素も対象です。`Result[Item, Error]`や`Item?`を自動でItemとして扱うことはありません。Resultは`match`のOk側や`(try fetch()).`で中の値を取り出してください。
 
 名前を書きかけるかCtrl+Spaceを押すと、入口からimportされた関数・class、手書きLowの関数、代表的な組み込み関数の候補が出ます。関数を選ぶと位置引数の入力欄、classを選ぶと`Item(id=..., name=...)`の名前付き引数が入り、Tabで次の欄へ進めます。型注釈・戻り値の位置ではclass・型・`Result` / `List` / `view`などを候補にします。
 
 `(`や`,`を入力すると引数ヒントが出て、入力中の引数が選ばれます。既に`(`がある名前の補完では括弧を重複挿入しません。asyncとResultの宣言を見て、呼び出しに`await`、`try`、`match`が必要かを判断してください。
 
-一度保存した`.nagi` / `.low`の編集中の内容と、開いているimport先の未保存の宣言をメモリ上で読みます。型エラーがあっても、構文とimportが読めれば宣言情報を使えます。編集中のファイルを自動保存したり、ビルドしたりはしません。`nagi.toml`の変更は保存してから使ってください。
+一度保存した`.nagi` / `.low`の編集中の内容と、開いているimport先・手書きLowの未保存の内容をメモリ上で読みます。型エラーがあっても、構文とimportが読めれば宣言情報を使えます。ローカル型やフィールド候補は、型を確認できた箇所に出します。型が不明な名前、move後の値、スコープ外の名前について推測した候補は出しません。編集中のファイルを自動保存したり、ビルドしたりはしません。`nagi.toml`の変更は保存してから使ってください。
 
-書きかけの`add(1, `などで構文を読めない場合は、保存済みのプロジェクトの宣言を候補にします。その場合は「保存済み」と表示します。コメント・文字列の中には名前の補完やホバーを出しません。
+書きかけの`add(1, `などで構文を読めない場合は、保存済みのプロジェクトの宣言を候補にします。その場合は「保存済み」と表示します。この状態ではローカル変数の型やフィールド候補は出しません。コメント・文字列の中には名前の補完やホバーを出しません。
 
-この版の型表示は関数・classに宣言された型を対象にします。ローカル変数の推論型、`value.field`の候補、caseのpayload名、Rust実装の解析は今後の範囲です。F12は引き続き保存後に使います。
+ローカル型・フィールド補完は拡張0.1.4で追加しました。古い`nagic`には型情報がないため、コンパイラも更新してください。F12は引き続き保存後に使います。ローカル変数へのF12、rename、デバッグ、Rust実装の解析は未対応です。
 
 ## 開発
 
-Node.jsで `node --test editors/vscode-nagi/test/*.test.js` を実行できます。VS CodeのExtension Development Hostでは、`--extensionDevelopmentPath`にこのフォルダーを指定して試せます。ローカル変数の推論型表示、値のフィールド候補、rename、デバッグは未対応です。
+リポジトリのルートでコンパイラをビルドし、`node --test editors/vscode-nagi/test/*.test.js`を実行します。Nodeテストには文字列処理だけのテストと、実際の`nagic symbols`を使うテストがあります。
+
+VS Code上の確認は別に行います。Extension Development Hostに`--extensionDevelopmentPath`でこのフォルダー、`--extensionTestsPath`で`test/host.js`、ワークスペースとしてリポジトリのルートを指定します。こちらは実際に拡張を有効化し、診断・F12・ホバー・補完・引数ヒント・プロジェクトの実行を確認します。Nodeテストの成功だけでは、VS Code上の動作確認を済ませたことにはなりません。

@@ -97,9 +97,9 @@ python3 scripts/summarize_results.py
 
 primitive、値型class、連続配列、nullable、Result、関数、分岐、ループ、async/await、scope、HTTPの基本、HTML応答、JSON、SQLite、手書きLow呼び出しと置換、相対ファイルのimport、型付きRust関数の呼び出しを実装しています。actor・Supervisor・queueは実ランタイムとHighから呼ぶ試験用標準関数を提供します。ファイル分割とRustのcrate利用は [docs/modules-and-rust.md](docs/modules-and-rust.md)、画面付きデモは [test-nagi-code/web-demo/README.md](test-nagi-code/web-demo/README.md) を参照してください。
 
-Resultの`match`で成功・失敗を分け、既定値に回復したり、Errorの種類を保って返したりできます。[書き方](docs/error-handling.md)と[実HTTPで試すAPIサンプル](test-nagi-code/result-api/README.md)を用意しています。VS Code拡張0.1.2では関数・class・import先へのF12も使えます。
+Resultの`match`で成功・失敗を分け、既定値に回復したり、Errorの種類を保って返したりできます。[書き方](docs/error-handling.md)と[実HTTPで試すAPIサンプル](test-nagi-code/result-api/README.md)があります。
 
-[VS Code拡張0.1.3](editors/vscode-nagi/README.md)では、関数・classの宣言の型表示、引数を挿入する補完、呼び出し時の引数ヒントを利用できます。未保存のソースを読み込み、書きかけの構文では保存済みの宣言を表示して補助します。
+[VS Code拡張0.1.4](editors/vscode-nagi/README.md)では、関数・class・import先へのF12、宣言とローカル変数の型ホバー、classのフィールド補完、呼び出し時の引数ヒントを利用できます。未保存のソースにも対応します。[操作例](docs/editor.md)で、型の表示や`value.`からの補完を試せます。
 
 専用のactor宣言、汎用generic関数、trait、名前付きmoduleとalias、nullableや一般的なパターンのmatch、PostgreSQL、SQLのコンパイル時検証、Highのrequest arena、Lowの生pointer/unsafe/C ABI、独自scheduler、self-hostingは未実装です。Rust連携は同じビルド内の呼び出しで、安定した外部ABIではありません。`Map`と`owned`は表現方針の段階で、完全な標準APIを提供していません。
 

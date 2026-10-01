@@ -12,13 +12,15 @@
 | List[T]、[T] | Vec<T> | 連続格納。primitiveとCopy classの走査に対応 |
 | view[str]/view[bytes]/view[T] | &str、&[u8]、&[T] | 非所有。寿命を検査 |
 | T? | Option<T> | 対応。Noneには型の文脈が必要 |
-| Result[T, Error] | tagged Result | tryによる伝播に対応 |
+| Result[T, Error] | tagged Result | tryによる伝播、Ok / Errのmatchに対応 |
 | shared[T] | Arc<T> | share/clone_sharedによる明示的共有 |
 | UUID、timestamp | u128/i64のnewtype | native表現。UUIDは明示parse/format |
 | Map[K,V]、owned[T] | HashMap、所有値への型方針 | 型表記の足場のみ。完全な操作APIは未実装 |
 | generic、function/async function type | 静的特殊化を目標 | 汎用genericと型注釈の関数型は未実装 |
 
 `count = 10`はi64、`rate = 1.5`はf64です。型注釈がある整数literalはその範囲を確認します。現在の数値変換APIは、i8 / i16 / i32 / u8 / u16 / u32からの損失のない`i64(value)`と、i64から範囲を検査する`i32(value) -> Result[i32, Error]`です。任意型への汎用castはありません。
+
+VS Code拡張0.1.4では、変数名にマウスを置くと推論された型を確認できます。たとえば`count`は`count: i64`です。関数の引数やcaseの束縛名も対象です。[エディターの操作例](editor.md)で試せます。
 
 nullableは`missing: i64? = None`、値がある場合は`present: i64? = some(42)`です。`T?`は`Option[T]`の短い表記ですが、現在はmatchや汎用unwrap APIはありません。空配列は`values: List[i64] = []`と型を指定してください。
 

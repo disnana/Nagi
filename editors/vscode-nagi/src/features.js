@@ -1,4 +1,5 @@
 'use strict';
+const { normalizeFile } = require('./compiler');
 
 // These signatures describe the supported builtins, rather than inferred overloads.
 const builtinRows = [
@@ -90,11 +91,71 @@ function inTypeContext(before) {
   return brackets.some(i => /\b(?:Result|List|view|shared|json_decode|db_query|db_all)\s*$/.test(before.slice(0, i)));
 }
 
-function hoverAt(index, text, offset) {
+function fileMatches(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const key = file => {
+    const name = normalizeFile(file, '.');
+    return process.platform === 'win32' ? name.toLowerCase() : name;
+  };
+  return key(a) === key(b);
+}
+
+function sourceOffsets(text) {
+  const starts = [0];
+  for (let i = text.indexOf('\n'); i >= 0; i = text.indexOf('\n', i + 1)) {
+    starts.push(i + 1);
+  }
+  return (line, column) => {
+    if (!Number.isInteger(line) || line < 1 || !Number.isInteger(column) || column < 1) return undefined;
+    const start = starts[line - 1];
+    if (start === undefined) return undefined;
+    let end = starts[line] === undefined ? text.length : starts[line] - 1;
+    if (text[end - 1] === '\r') end--;
+    return column - 1 <= end - start ? start + column - 1 : undefined;
+  };
+}
+
+// Only the member being edited is masked. The compiler determines the receiver's
+// type from this in-memory source; no type is inferred from its spelling here.
+function memberContext(text, offset) {
   const state = context(text, offset);
   if (!state.allowed) return undefined;
   const word = wordAt(state.masked, offset);
-  if (!word.name || state.masked[word.start - 1] === '.') return undefined;
+  let dot = word.start - 1;
+  while (dot >= 0 && /[ \t\r]/.test(state.masked[dot])) dot--;
+  if (state.masked[dot] !== '.') return undefined;
+  let receiverEnd = dot;
+  while (receiverEnd > 0 && /\s/.test(state.masked[receiverEnd - 1])) receiverEnd--;
+  return { dot, receiverEnd, start: word.start, end: word.end,
+    text: text.slice(0, dot) + text.slice(dot, word.end).replace(/[^\r\n]/g, ' ') + text.slice(word.end) };
+}
+
+function fieldCandidates(index, text, member, source) {
+  if (!source.file || source.saved) return [];
+  const offsetAt = sourceOffsets(text);
+  const candidates = (index?.expressions || []).filter(e => fileMatches(e.location?.file, source.file) &&
+    offsetAt(e.end_line, e.end_column) === member.receiverEnd);
+  // A trailing dot binds to the innermost postfix expression: `try fetch().`
+  // accesses the Result, while `(try fetch()).` accesses its payload.
+  candidates.sort((a, b) => (offsetAt(b.location.line, b.location.column) ?? -1) -
+    (offsetAt(a.location.line, a.location.column) ?? -1));
+  const receiver = candidates[0];
+  return (receiver?.fields || []).filter(f => typeof f.name === 'string' && typeof f.type === 'string')
+    .map(f => ({ name: f.name, kind: 'field', signature: `${f.name}: ${f.type}`, type: f.type }));
+}
+
+function hoverAt(index, text, offset, source = {}) {
+  const state = context(text, offset);
+  if (!state.allowed) return undefined;
+  const word = wordAt(state.masked, offset);
+  if (!word.name || memberContext(text, offset)) return undefined;
+  if (source.file && !source.saved) {
+    const offsetAt = sourceOffsets(text);
+    const local = (index?.locals || []).find(item => item.name === word.name && typeof item.type === 'string' &&
+      fileMatches(item.location?.file, source.file) && offsetAt(item.location.line, item.location.column) === word.start &&
+      item.location.length === word.end - word.start);
+    if (local) return { item: { ...local, kind: 'variable', signature: `${local.name}: ${local.type}` }, start: word.start, end: word.end };
+  }
   const item = declarations(index).get(word.name);
   if (!item) return undefined;
   const before = state.masked.slice(0, word.start);
@@ -105,11 +166,12 @@ function hoverAt(index, text, offset) {
   return { item, start: word.start, end: word.end };
 }
 
-function completionCandidates(index, text, offset, low = false) {
+function completionCandidates(index, text, offset, low = false, source = {}) {
   const state = context(text, offset);
   if (!state.allowed) return [];
   const word = wordAt(state.masked, offset);
-  if (state.masked[word.start - 1] === '.') return [];
+  const member = memberContext(text, offset);
+  if (member) return fieldCandidates(index, text, member, source);
   const before = state.masked.slice(0, word.start);
   const all = [...declarations(index).values()];
   if (inTypeContext(before)) return [...all.filter(x => x.kind === 'class'), ...types.map(name => ({ name, kind: 'type', signature: name }))];
@@ -155,4 +217,4 @@ function activeCall(text, offset) {
   return undefined;
 }
 
-module.exports = { context, wordAt, declarations, hoverAt, completionCandidates, insertion, activeCall };
+module.exports = { context, wordAt, declarations, hoverAt, completionCandidates, insertion, activeCall, memberContext };
