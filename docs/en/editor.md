@@ -2,7 +2,7 @@
 
 [Contents](README.md) · [Setup](getting-started.md) · [Extension installation and settings](vscode-extension.md)
 
-Install Nagi extension 0.1.7 and the latest nagic, then open the Nagi repository in VS Code. This walkthrough uses working code to try type hovers, field completion, and definition navigation. Both High and Low are supported.
+Install Nagi extension 0.1.8 and the latest nagic, then open the Nagi repository in VS Code. This walkthrough uses working code to try type hovers, field completion, and definition navigation. Both High and Low are supported.
 
 ## Open the example
 

@@ -280,6 +280,41 @@ fn message(file: &Path, span_file: &str, line: usize, rendered: &str) -> Value {
 }
 
 #[test]
+fn existing_path_aliases_match_only_the_generated_file() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(1)\n");
+    let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
+    check::check(&mut loaded.program).unwrap();
+    let rust = emit::rust_with_lines(&loaded.program).unwrap();
+    let line = rust
+        .text
+        .lines()
+        .position(|s| s.contains("println!"))
+        .unwrap()
+        + 1;
+    f.write("build/src/main.rs", &rust.text);
+    f.write("dependency/src/main.rs", &rust.text);
+    fs::create_dir_all(f.0.join("build/alias")).unwrap();
+    let file = fs::canonicalize(f.0.join("build/src/main.rs")).unwrap();
+    let alias = f.0.join("build/alias/../src/main.rs");
+    for span_file in ["src/main.rs", alias.to_str().unwrap()] {
+        let value = message(&alias, span_file, line, "original Rust details\n");
+        let text = diagnostics::cargo_message(&value.to_string(), &rust, &file, &loaded).unwrap();
+        assert!(mapped_prefix(&text).contains("main.nagi:2"), "{text}");
+    }
+    let dependency = message(
+        &f.0.join("dependency/src/main.rs"),
+        "src/main.rs",
+        line,
+        "dependency details\n",
+    );
+    assert_eq!(
+        diagnostics::cargo_message(&dependency.to_string(), &rust, &file, &loaded).unwrap(),
+        "dependency details\n"
+    );
+}
+
+#[test]
 fn windows_paths_and_canonical_prefixes_match_only_the_generated_target() {
     let f = Fixture::new();
     f.write("main.nagi", "def main():\n    print(1)\n");

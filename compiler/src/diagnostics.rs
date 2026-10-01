@@ -68,10 +68,16 @@ fn normalized(path: &str) -> String {
 }
 
 fn same_file(path: &str, expected: &Path) -> bool {
-    let expected = expected.to_string_lossy();
-    if path == expected {
+    if path == expected.to_string_lossy() {
         return true;
     }
+    // Cargo can retain a Windows short path while emission uses its long form.
+    // Resolve existing files before comparing their textual representations.
+    if let (Ok(path), Ok(expected)) = (std::fs::canonicalize(path), std::fs::canonicalize(expected))
+    {
+        return path == expected;
+    }
+    let expected = expected.to_string_lossy();
     // On Unix, a backslash is part of a filename, not a path separator.
     // Also recognize Windows paths in cross-platform diagnostic fixtures.
     windows_path(&expected) && normalized(path) == normalized(&expected)

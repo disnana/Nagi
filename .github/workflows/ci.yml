@@ -130,6 +130,8 @@ jobs:
           assert host == os.environ['RELEASE_RUST_HOST'], host
           PY
       - run: cargo build --release --locked -p nagic
+      - name: Check source diagnostics on the target platform
+        run: cargo test --locked -p nagic --test build_diagnostics
       - name: Check editor behavior on the target platform
         shell: bash
         run: node --test editors/vscode-nagi/test/*.test.js
