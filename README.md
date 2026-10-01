@@ -8,7 +8,9 @@
 
 **[ドキュメントの目次](docs/README.md) → [準備と最初の実行](docs/getting-started.md) → [コードを書きながら学ぶ](docs/language-guide.md)** の順で進められます。書式を引くには[文法の早見表](docs/syntax.md)、引数を調べるには[組み込み関数](docs/builtins.md)、サイトやAPIを作るには[HTTPの入門](docs/http.md)を参照してください。動く入門例は[examples/tutorial/](examples/tutorial/)にあります。
 
-紹介と日本語Docsを静的サイトとして読むためのソースは[`website/`](website/README.md)にあります。GitHub Pages向けの生成・公開手順もここにまとめています。
+紹介と日英の全Docsは[公開サイト](https://disnana.github.io/Nagi/)で読めます。[English](https://disnana.github.io/Nagi/en/)もあります。ソースとPagesの自動公開手順は[`website/`](website/README.md)にあります。
+
+配布物は[GitHub Releases](https://github.com/disnana/Nagi/releases)に掲載します。mainでNagiまたはVS Code拡張のバージョンを上げると、CI成功後にその配布物を正式リリースします。[運用手順](scripts/releases/README.md)に条件と成果物をまとめています。
 
 ## 最初に動かす
 

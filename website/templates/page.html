@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja">
+<html lang="{{language}}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,26 +7,30 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'">
   <title>{{title}}</title>
   <link rel="canonical" href="{{canonical}}">
+  <link rel="alternate" hreflang="ja" href="{{japanese_url}}">
+  <link rel="alternate" hreflang="en" href="{{english_url}}">
+  <link rel="alternate" hreflang="x-default" href="{{japanese_url}}">
   <link rel="icon" type="image/svg+xml" href="{{base}}assets/favicon.svg">
   <link rel="stylesheet" href="{{base}}assets/site.css">
   <link rel="stylesheet" href="{{base}}assets/highlight.css">
   <script src="{{base}}assets/site.js" defer></script>
 </head>
 <body class="{{body_class}}">
-  <a class="skip-link" href="#main">本文へ移動</a>
+  <a class="skip-link" href="#main">{{skip_label}}</a>
   <header class="site-header">
     <div class="header-inner">
-      <a class="brand" href="{{base}}" aria-label="Nagi ホーム"><span class="brand-mark" aria-hidden="true">N</span>Nagi</a>
-      <nav class="top-nav" aria-label="サイトのメニュー">
-        <a href="{{base}}docs/getting-started/">はじめる</a>
-        <a href="{{base}}docs/">Docs</a>
+      <a class="brand" href="{{language_base}}" aria-label="{{home_label}}"><span class="brand-mark" aria-hidden="true">N</span>Nagi</a>
+      <nav class="top-nav" aria-label="{{menu_label}}">
+        <a href="{{language_base}}docs/getting-started/">{{start_label}}</a>
+        <a href="{{language_base}}docs/">Docs</a>
         <a href="{{repo}}">GitHub</a>
+        <a class="language-link" href="{{other_route}}" lang="{{other_language}}" hreflang="{{other_language}}" aria-label="{{switch_label}}">{{other_label}}</a>
       </nav>
     </div>
   </header>
   {{layout}}
   <footer class="site-footer">
-    <div class="footer-inner"><span>Nagi 0.1 · 開発中</span><nav aria-label="フッター"><a href="{{base}}docs/">Docs</a><a href="{{repo}}">GitHub</a><a href="{{repo}}/blob/{{ref}}/LICENSE">MIT License</a></nav></div>
+    <div class="footer-inner"><span>{{status_label}}</span><nav aria-label="{{footer_label}}"><a href="{{language_base}}docs/">Docs</a><a href="{{repo}}">GitHub</a><a href="{{repo}}/blob/{{ref}}/LICENSE">MIT License</a></nav></div>
   </footer>
   <span class="sr-only" id="copy-status" role="status" aria-live="polite"></span>
 </body>
