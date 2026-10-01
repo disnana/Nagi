@@ -31,6 +31,21 @@ fn matches_type(a: &Type, b: &Type) -> bool {
     a == b
 }
 
+fn negative_boundary_type(expr: &Expr, expected: Option<&Type>) -> Option<Type> {
+    let E::Int(value) = &expr.kind else {
+        return None;
+    };
+    let ty = expected.cloned().unwrap_or_else(|| Type::named("i64"));
+    let magnitude = match ty.0.as_str() {
+        "i8" => 1_u128 << 7,
+        "i16" => 1_u128 << 15,
+        "i32" => 1_u128 << 31,
+        "i64" => 1_u128 << 63,
+        _ => return None,
+    };
+    (value.parse::<u128>().ok() == Some(magnitude)).then_some(ty)
+}
+
 pub fn check(p: &mut Program) -> Result<(), String> {
     check_mode(p, false)
 }
@@ -779,7 +794,17 @@ impl Checker {
                 }
             }
             E::Unary(op, x) => {
-                let t = self.expr(x, expected)?;
+                let boundary = if op == "-" {
+                    negative_boundary_type(x, expected)
+                } else {
+                    None
+                };
+                let t = if let Some(ty) = boundary {
+                    x.ty = Some(ty.clone());
+                    ty
+                } else {
+                    self.expr(x, expected)?
+                };
                 if op == "not" {
                     self.demand(&t, &Type::named("bool"), line)?;
                 } else if !t.0.starts_with('i') && !t.0.starts_with('f') {

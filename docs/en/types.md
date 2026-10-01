@@ -25,3 +25,7 @@ Since VS Code extension 0.1.4, hovering a variable shows its inferred type, such
 Write `missing: i64? = None` for an absent nullable value and `present: i64? = some(42)` for a present value. `T?` abbreviates `Option[T]`; matching and a general unwrap API are not yet available. Annotate empty lists, for example `values: List[i64] = []`.
 
 Values are not all boxed. String, Vec, tasks, and channels still have internal allocations. Nagi uses Rust monomorphization and LLVM optimization. User-defined generic functions and traits remain future work.
+
+## Minimum signed integers
+
+The minimum values can be written directly as literals: `-128` for `i8`, `-32768` for `i16`, `-2147483648` for `i32`, and `-9223372036854775808` for `i64`. For example, `minimum: i8 = -128`. A literal outside the specified type's range fails type checking.
