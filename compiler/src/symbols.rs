@@ -198,6 +198,7 @@ fn name_location(files: &[File<'_>], line: usize, span: Span, name: &str) -> Opt
 struct Bindings<'a, 'b> {
     files: &'a [File<'b>],
     vars: HashMap<String, Location>,
+    functions: HashMap<String, Location>,
     references: Vec<Reference>,
 }
 impl Bindings<'_, '_> {
@@ -213,7 +214,7 @@ impl Bindings<'_, '_> {
     fn reference(&mut self, line: usize, span: Span, name: &str) {
         if let (Some(location), Some(target)) = (
             name_location(self.files, line, span, name),
-            self.vars.get(name),
+            self.vars.get(name).or_else(|| self.functions.get(name)),
         ) {
             self.references.push(Reference {
                 location,
@@ -224,7 +225,13 @@ impl Bindings<'_, '_> {
     fn expr(&mut self, e: &Expr) {
         match &e.kind {
             E::Name(name) => self.reference(e.line, e.span, name),
-            E::Call(_, _, args) | E::List(args) => {
+            E::Call(name, _, args) => {
+                self.reference(e.line, e.span, name);
+                for arg in args {
+                    self.expr(arg);
+                }
+            }
+            E::List(args) => {
                 for arg in args {
                     self.expr(arg);
                 }
@@ -667,6 +674,11 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
     let mut bindings = Bindings {
         files: &files,
         vars: HashMap::new(),
+        functions: targets
+            .iter()
+            .filter(|(name, _)| !classes.contains(name.as_str()))
+            .map(|(name, target)| (name.clone(), target.clone()))
+            .collect(),
         references: vec![],
     };
     for p in programs {
@@ -674,6 +686,12 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
             bindings.function(f);
         }
     }
+    let resolved: HashSet<_> = bindings
+        .references
+        .iter()
+        .map(|reference| &reference.location)
+        .collect();
+    references.retain(|reference| !resolved.contains(&reference.location));
     references.extend(bindings.references);
     // Compound assignments contain a synthetic read of their left-hand name.
     let mut seen = HashSet::new();

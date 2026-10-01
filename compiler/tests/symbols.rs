@@ -97,6 +97,27 @@ fn assert_target(
 }
 
 #[test]
+fn local_call_and_function_value_navigation_use_the_resolved_binding() {
+    let f = Fixture::new();
+    let text = "def len(values: view[i64]) -> i64:\n    return 99\ndef fixed(values: view[i64]) -> i64:\n    return 42\ndef main():\n    len = fixed\n    values = [1, 2]\n    print(len(view(values)))\n";
+    f.write("main.nagi", text);
+    let index = f.symbols(serde_json::json!([]));
+    assert_target(&index, "main.nagi", text, "print(len(", 6, "len = fixed", 0);
+    assert_target(&index, "main.nagi", text, "= fixed", 2, "def fixed", 4);
+    let reference = reference_at(&index, "main.nagi", text, "print(len(", 6).unwrap();
+    let at = &reference["location"];
+    assert_eq!(
+        index["references"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| &r["location"] == at)
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn local_navigation_preserves_binding_identity_across_reassignments_and_scopes() {
     let f = Fixture::new();
     let source = "def first(value: i32) -> i32:\n    return value\ndef second(value: bool) -> bool:\n    print(value)\n    return value\ndef main():\n    count = 7\n    count += 1\n    if True:\n        count = 9\n        inside = count\n        print(inside)\n    else:\n        other = count\n        print(other)\n    print(count)\n    print(inside); print(other)\n    for count in [count]:\n        count += 2\n        print(count)\n    print(count + 1)\n    while False:\n        temporary = count\n        print(temporary)\n    print(temporary)\n";
@@ -459,13 +480,16 @@ fn symbols_work_despite_type_errors_and_distinguish_fields_locals_and_calls() {
     assert_eq!(
         same_line.len(),
         2,
-        "the local and function have separate targets"
+        "the local read and call have separate source locations"
     );
     let call = same_line
         .iter()
         .find(|r| r["location"]["column"] == 29)
         .unwrap();
-    assert_eq!(call["target"]["line"], 3);
+    assert_eq!(
+        call["target"]["line"], 6,
+        "a local name shadows the function even when the call has a type error"
+    );
     let indexed = same_line
         .iter()
         .find(|r| r["location"]["column"] == 11)

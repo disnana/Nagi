@@ -116,3 +116,115 @@ def borrowed(r: Result[view[str], i64]) -> str:
     );
     compile_and_run(code);
 }
+
+#[test]
+fn user_functions_with_builtin_names_keep_their_call_targets() {
+    let source = "def len(values: view[i64]) -> i64:\n    return 99\ndef print(number: i64) -> i64:\n    return number + 1\ndef answer() -> i64:\n    values = [1, 2]\n    return print(len(view(values)))\n";
+    let mut high = parser::parse(source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let mut code = emit::rust(&low).unwrap();
+    code.push_str("\n#[test] fn calls_user_functions() { assert_eq!(answer(), 100); }\n");
+    compile_and_run(code);
+}
+
+#[test]
+fn rust_keywords_and_generated_helper_names_remain_valid_nagi_names() {
+    let source = "def type(self: i64, crate: i64, super: i64, Self: i64, __nagi_ident_0: i64) -> i64:\n    loop: i64 = self + crate + super + Self + __nagi_ident_0\n    return loop\ndef __nagi_main() -> i64:\n    return type(1, 2, 3, 4, 5)\ndef answer() -> i64:\n    return __nagi_main()\ndef main():\n    assert_true(answer() == 15)\n";
+    let mut high = parser::parse(source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let mut code = emit::rust(&low).unwrap();
+    code.push_str("\n#[test] fn calls_escaped_names() { assert_eq!(answer(), 15); main(); }\n");
+    compile_and_run(code);
+}
+
+#[test]
+fn local_function_values_shadow_builtins_and_functions() {
+    let source = "def fixed(values: view[i64]) -> i64:\n    return 99\ndef fallback(values: view[i64]) -> i64:\n    return 7\ndef answer() -> i64:\n    len = fixed\n    fallback = len\n    values = [1, 2]\n    return len(view(values)) + fallback(view(values))\n";
+    let mut high = parser::parse(source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let mut code = emit::rust(&low).unwrap();
+    code.push_str("\n#[test] fn local_calls() { assert_eq!(answer(), 198); }\n");
+    compile_and_run(code);
+    let mut invalid = parser::parse("def main():\n    len = 1\n    len([1, 2])\n", true).unwrap();
+    assert!(check::check(&mut invalid)
+        .unwrap_err()
+        .contains("呼び出せる関数"));
+}
+
+#[test]
+fn builtin_option_and_result_constructors_do_not_call_user_functions() {
+    let source = "def Some(value: i64) -> i64:\n    return 99\ndef Ok(value: i64) -> i64:\n    return 99\ndef option_value() -> i64?:\n    return some(42)\ndef result_value() -> Result[i64, i64]:\n    return ok(42)\n";
+    let mut high = parser::parse(source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let mut code = emit::rust(&low).unwrap();
+    code.push_str("\n#[test] fn intrinsic_constructors() { assert_eq!(option_value(), Some(42)); assert_eq!(result_value(), Ok(42)); }\n");
+    // The test's expected values also use fully qualified Rust constructors.
+    code = code
+        .replace(
+            "option_value(), Some(42)",
+            "option_value(), ::std::option::Option::Some(42)",
+        )
+        .replace(
+            "result_value(), Ok(42)",
+            "result_value(), ::std::result::Result::Ok(42)",
+        );
+    compile_and_run(code);
+}
+
+#[test]
+fn async_function_values_keep_their_future_return_type() {
+    let source = "async def type(value: i64) -> i64:\n    return value + 1\nasync def answer() -> i64:\n    len = type\n    return await len(41)\n";
+    let mut high = parser::parse(source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let mut code = emit::rust(&low).unwrap();
+    code.push_str(r#"
+#[test] fn async_alias() {
+    let future = answer();
+    let mut future = std::pin::pin!(future);
+    let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+    assert_eq!(std::future::Future::poll(future.as_mut(), &mut context), std::task::Poll::Ready(42));
+}
+"#);
+    compile_and_run(code);
+}
+
+#[test]
+fn a_record_named_fn_does_not_become_a_copy_function_value() {
+    let source = "class fn:\n    text: str\ndef take(value: fn):\n    print(value.text)\ndef main():\n    value = fn(text=\"Nagi\")\n    take(value)\n    take(value)\n";
+    let mut p = parser::parse(source, true).unwrap();
+    assert!(check::check(&mut p).unwrap_err().contains("move後"));
+}
+
+#[test]
+fn function_values_preserve_the_shared_view_lifetime() {
+    let source = "def select(first: view[i64], second: view[i64]) -> view[i64]:\n    return second\ndef answer() -> i64:\n    selected = select\n    first = [1]\n    second = [2, 3]\n    return len(selected(view(first), view(second)))\n";
+    let mut high = parser::parse(source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let mut code = emit::rust(&low).unwrap();
+    code.push_str("\n#[test] fn borrowed_alias() { assert_eq!(answer(), 2); }\n");
+    compile_and_run(code);
+}
+
+#[test]
+fn returning_a_function_value_does_not_borrow_local_data() {
+    let source = "def identity(values: view[i64]) -> view[i64]:\n    return values\ndef provide() -> fn[view[i64], view[i64]]:\n    return identity\ndef answer() -> i64:\n    selected = provide()\n    values = [1, 2]\n    return len(selected(view(values)))\n";
+    let mut high = parser::parse(source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let mut code = emit::rust(&low).unwrap();
+    code.push_str("\n#[test] fn returned_function() { assert_eq!(answer(), 2); }\n");
+    compile_and_run(code);
+}

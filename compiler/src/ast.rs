@@ -13,6 +13,11 @@ impl Type {
         self.0 == "view"
     }
     pub fn contains_view(&self) -> bool {
+        // Plain function values capture no data. Their view parameters have
+        // lifetimes bound by the function pointer, not by the value's scope.
+        if self.0 == "fn" && !self.1.is_empty() {
+            return false;
+        }
         self.is_view() || self.1.iter().any(Self::contains_view)
     }
     pub fn is_copy(&self) -> bool {
@@ -32,7 +37,7 @@ impl Type {
                 | "view"
                 | "UUID"
                 | "timestamp"
-        )
+        ) || self.0 == "fn" && !self.1.is_empty()
     }
     pub fn inner(&self) -> Type {
         self.1
@@ -66,7 +71,15 @@ pub struct Expr {
     pub kind: E,
     pub line: usize,
     pub ty: Option<Type>,
+    pub resolution: Option<NameResolution>,
     pub span: Span,
+}
+/// Preserve the checker's decision through Rust emission. Low keeps the name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NameResolution {
+    Builtin,
+    Function,
+    Local,
 }
 /// Half-open token range in the original source file. Import loading shifts
 /// diagnostic lines, but keeps these ranges local to each file.

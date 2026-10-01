@@ -178,35 +178,62 @@ pub fn low_with_lines(p: &Program) -> Generated {
     out
 }
 pub fn rust_type(t: &Type) -> String {
+    rust_type_at(t, 0)
+}
+fn rust_type_at(t: &Type, depth: usize) -> String {
     match t.0.as_str() {
-        "str" => "String".into(),
-        "bytes" => "Vec<u8>".into(),
+        "str" => "::std::string::String".into(),
+        "bytes" => "::std::vec::Vec<u8>".into(),
         "unit" => "()".into(),
         "Error" => "::nagi_runtime::Error".into(),
-        "Html" => "::nagi_runtime::axum::response::Html<String>".into(),
+        "Html" => "::nagi_runtime::axum::response::Html<::std::string::String>".into(),
         "Db" => "::nagi_runtime::Db".into(),
         "UUID" => "::nagi_runtime::Uuid".into(),
         "timestamp" => "::nagi_runtime::Timestamp".into(),
+        "fn" if !t.1.is_empty() => {
+            let signature = format!(
+                "fn({}) -> {}",
+                t.1[..t.1.len() - 1]
+                    .iter()
+                    .map(|arg| rust_type_at(arg, depth + 1))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                rust_type_at(t.1.last().unwrap(), depth + 1)
+            );
+            if t.1.iter().any(Type::contains_view) {
+                let lifetime = format!("'nagi_fn_{depth}");
+                format!(
+                    "for<{lifetime}> {}",
+                    signature.replace("&'a ", &format!("&{lifetime} "))
+                )
+            } else {
+                signature
+            }
+        }
         "view" => {
             let a = t.inner();
             match a.0.as_str() {
                 "str" => "&'a str".into(),
                 "bytes" => "&'a [u8]".into(),
-                _ => format!("&'a [{}]", rust_type(&a)),
+                _ => format!("&'a [{}]", rust_type_at(&a, depth + 1)),
             }
         }
-        "owned" => rust_type(&t.inner()),
-        "shared" => format!("std::sync::Arc<{}>", rust_type(&t.inner())),
-        "List" => format!("Vec<{}>", rust_type(&t.inner())),
+        "owned" => rust_type_at(&t.inner(), depth + 1),
+        "shared" => format!("::std::sync::Arc<{}>", rust_type_at(&t.inner(), depth + 1)),
+        "List" => format!("::std::vec::Vec<{}>", rust_type_at(&t.inner(), depth + 1)),
         "Map" => format!(
-            "std::collections::HashMap<{}, {}>",
-            rust_type(&t.1[0]),
-            rust_type(&t.1[1])
+            "::std::collections::HashMap<{}, {}>",
+            rust_type_at(&t.1[0], depth + 1),
+            rust_type_at(&t.1[1], depth + 1)
         ),
         "Option" | "Result" => format!(
-            "{}<{}>",
+            "::std::{}::{}<{}>",
+            if t.0 == "Option" { "option" } else { "result" },
             t.0,
-            t.1.iter().map(rust_type).collect::<Vec<_>>().join(", ")
+            t.1.iter()
+                .map(|arg| rust_type_at(arg, depth + 1))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         _ => t.0.clone(),
     }
@@ -223,10 +250,17 @@ fn string_arg(e: &Expr) -> String {
 }
 fn re(e: &Expr) -> String {
     match &e.kind {
-        E::Int(s) | E::Float(s) | E::Name(s) => s.clone(),
-        E::Str(s) => format!("String::from({})", quote(s)),
+        E::Int(s) | E::Float(s) => s.clone(),
+        E::Name(s) => {
+            if e.resolution == ::std::option::Option::Some(NameResolution::Function) {
+                format!("crate::{s}")
+            } else {
+                s.clone()
+            }
+        }
+        E::Str(s) => format!("::std::string::String::from({})", quote(s)),
         E::Bool(b) => b.to_string(),
-        E::Null => "None".into(),
+        E::Null => "::std::option::Option::None".into(),
         E::Binary(a, o, b) => format!(
             "({} {} {})",
             re(a),
@@ -257,6 +291,15 @@ fn re(e: &Expr) -> String {
         E::Call(n, ts, a) => {
             let args = a.iter().map(re).collect::<Vec<_>>();
             let join = args.join(", ");
+            match e.resolution {
+                ::std::option::Option::Some(NameResolution::Function) => {
+                    return format!("crate::{n}({join})")
+                }
+                ::std::option::Option::Some(NameResolution::Local) => {
+                    return format!("{n}({join})")
+                }
+                _ => {}
+            }
             let g = if ts.is_empty() {
                 String::new()
             } else {
@@ -282,25 +325,25 @@ fn re(e: &Expr) -> String {
                     }
                 ),
                 "copy" => format!("({}).to_owned()", args[0]),
-                "share" => format!("std::sync::Arc::new({})", args[0]),
-                "clone_shared" => format!("std::sync::Arc::clone(&{})", args[0]),
+                "share" => format!("::std::sync::Arc::new({})", args[0]),
+                "clone_shared" => format!("::std::sync::Arc::clone(&{})", args[0]),
                 "len" => format!("({}).len() as i64", string_or_value(&a[0])),
                 "range" => format!("0i64..{}", args[0]),
                 "append" => format!("{}.push({})", args[0], args[1]),
-                "ok" => format!("Ok({})", args[0]),
-                "some" => format!("Some({})", args[0]),
-                "error" => format!("Err(::nagi_runtime::Error::invalid({}))", args[0]),
+                "ok" => format!("::std::result::Result::Ok({})", args[0]),
+                "some" => format!("::std::option::Option::Some({})", args[0]),
+                "error" => format!("::std::result::Result::Err(::nagi_runtime::Error::invalid({}))", args[0]),
                 "not_found" => format!(
-                    "Err(::nagi_runtime::Error {{ kind: ::nagi_runtime::ErrorKind::NotFound, message: {} }})",
+                    "::std::result::Result::Err(::nagi_runtime::Error {{ kind: ::nagi_runtime::ErrorKind::NotFound, message: {} }})",
                     args[0]
                 ),
-                "internal_error" => format!("Err(::nagi_runtime::Error::internal({}))", args[0]),
-                "fail" => format!("Err({})", args[0]),
+                "internal_error" => format!("::std::result::Result::Err(::nagi_runtime::Error::internal({}))", args[0]),
+                "fail" => format!("::std::result::Result::Err({})", args[0]),
                 "error_kind" => format!("::nagi_runtime::error_kind(&({})).to_owned()", args[0]),
                 "error_message" => format!("({}).message.clone()", args[0]),
                 "serve" => format!("__nagi_serve({}, {})", args[0], args[1]),
                 "env" => format!(
-                    "std::env::var({}).unwrap_or_else(|_|({}).to_owned())",
+                    "::std::env::var({}).unwrap_or_else(|_|({}).to_owned())",
                     string_arg(&a[0]),
                     string_arg(&a[1])
                 ),
@@ -353,7 +396,7 @@ fn re(e: &Expr) -> String {
                     "i32::try_from({}).map_err(|e| ::nagi_runtime::Error::invalid(e.to_string()))",
                     args[0]
                 ),
-                "size_of" => format!("std::mem::size_of{}() as i64", g),
+                "size_of" => format!("::std::mem::size_of{}() as i64", g),
                 "bench_i64" | "bench_f64" | "bench_scalar" => {
                     format!("::nagi_runtime::{n}({}, {}, {})", string_arg(&a[0]), args[1], args[2])
                 }
@@ -374,7 +417,7 @@ fn string_or_value(e: &Expr) -> String {
 fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
     let pad = "    ".repeat(n);
     for s in ss {
-        out.origin(Some(s.line));
+        out.origin(::std::option::Option::Some(s.line));
         out.push_str(&pad);
         match &s.kind {
             S::Assign {
@@ -385,7 +428,11 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
             } => out.push_str(&format!(
                 "{}{name}{} = {};\n",
                 if *declare { "let mut " } else { "" },
-                if *declare {
+                if *declare
+                    && !annotation.as_ref().is_some_and(
+                        |t| t.0 == "fn" && t.1.last().is_some_and(|ret| ret.0 == "Future")
+                    )
+                {
                     format!(": {}", local_type(annotation.as_ref().unwrap()))
                 } else {
                     String::new()
@@ -400,12 +447,12 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
             S::If(c, a, b) => {
                 out.push_str(&format!("if {} {{\n", re(c)));
                 rb(a, out, n + 1);
-                out.origin(Some(s.line));
+                out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}"));
                 if !b.is_empty() {
                     out.push_str(" else {\n");
                     rb(b, out, n + 1);
-                    out.origin(Some(s.line));
+                    out.origin(::std::option::Option::Some(s.line));
                     out.push_str(&format!("{pad}}}"));
                 }
                 out.push('\n');
@@ -413,13 +460,13 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
             S::While(c, b) => {
                 out.push_str(&format!("while {} {{\n", re(c)));
                 rb(b, out, n + 1);
-                out.origin(Some(s.line));
+                out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
             S::Match(value, arms) => {
                 out.push_str(&format!("match {} {{\n", re(value)));
                 for arm in arms {
-                    out.origin(Some(arm.line));
+                    out.origin(::std::option::Option::Some(arm.line));
                     let binding = arm
                         .binding
                         .as_ref()
@@ -427,13 +474,17 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
                         .unwrap_or_else(|| "_".into());
                     out.push_str(&format!(
                         "{pad}    {}({binding}) => {{\n",
-                        if arm.ok { "Ok" } else { "Err" }
+                        if arm.ok {
+                            "::std::result::Result::Ok"
+                        } else {
+                            "::std::result::Result::Err"
+                        }
                     ));
                     rb(&arm.body, out, n + 2);
-                    out.origin(Some(arm.line));
+                    out.origin(::std::option::Option::Some(arm.line));
                     out.push_str(&format!("{pad}    }},\n"));
                 }
-                out.origin(Some(s.line));
+                out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
             S::For(v, e, b) => {
@@ -444,7 +495,7 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
                 };
                 out.push_str(&format!("for {v} in {iterator} {{\n"));
                 rb(b, out, n + 1);
-                out.origin(Some(s.line));
+                out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
             S::Spawn(e) => {
@@ -452,24 +503,31 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
                 out.push_str(&format!(
                     "__scope.spawn(async move {{ {}.await{} }});\n",
                     re(e),
-                    if returns_result { "" } else { "; Ok(())" }
+                    if returns_result {
+                        ""
+                    } else {
+                        "; ::std::result::Result::Ok(())"
+                    }
                 ));
             }
             S::Scope(b) => {
                 out.push_str("{\n");
                 out.push_str(&format!("{pad}    let mut __scope = ::nagi_runtime::Scope::new();\n{pad}    let __scope_result: Result<(), ::nagi_runtime::Error> = async {{\n"));
                 rb(b, out, n + 2);
-                out.origin(Some(s.line));
-                out.push_str(&format!("{pad}        Ok(())\n{pad}    }}.await;\n{pad}    if let Err(e) = __scope_result {{ __scope.cancel().await; return Err(e); }}\n{pad}    __scope.join().await?;\n{pad}}}\n"));
+                out.origin(::std::option::Option::Some(s.line));
+                out.push_str(&format!("{pad}        ::std::result::Result::Ok(())\n{pad}    }}.await;\n{pad}    if let ::std::result::Result::Err(e) = __scope_result {{ __scope.cancel().await; return ::std::result::Result::Err(e); }}\n{pad}    __scope.join().await?;\n{pad}}}\n"));
             }
         }
     }
 }
 pub fn rust(p: &Program) -> Result<String, String> {
-    Ok(rust_with_lines(p)?.text)
+    ::std::result::Result::Ok(rust_with_lines(p)?.text)
 }
 
 pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
+    let names = crate::rust_names::RustNames::new(p);
+    let mapped = names.program(p);
+    let p = &mapped;
     fn copy_type(t: &Type, p: &Program, depth: usize) -> bool {
         if depth > 64 {
             false
@@ -477,7 +535,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             true
         } else if t.0 == "Option" {
             copy_type(&t.inner(), p, depth + 1)
-        } else if let Some(c) = p.classes.iter().find(|c| c.name == t.0) {
+        } else if let ::std::option::Option::Some(c) = p.classes.iter().find(|c| c.name == t.0) {
             c.fields.iter().all(|(_, t)| copy_type(t, p, depth + 1))
         } else {
             false
@@ -486,14 +544,22 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
     let mut out =
         Generated::new("#![allow(unused_mut, unused_parens, unused_variables, dead_code)]\n");
     for c in &p.classes {
-        out.origin(Some(c.line));
+        out.origin(::std::option::Option::Some(c.line));
         let copy = c.fields.iter().all(|(_, t)| copy_type(t, p, 0));
-        out.push_str(&format!("#[derive(Debug, ::nagi_runtime::serde::Serialize, ::nagi_runtime::serde::Deserialize{} )]\n#[serde(crate = \"::nagi_runtime::serde\", deny_unknown_fields)]\npub struct {} {{\n",if copy{", Clone, Copy"}else{""},c.name));
+        out.push_str(&format!("#[allow(non_camel_case_types, non_snake_case)]\n#[derive(Debug, ::nagi_runtime::serde::Serialize, ::nagi_runtime::serde::Deserialize{} )]\n#[serde(crate = \"::nagi_runtime::serde\", deny_unknown_fields)]\npub struct {} {{\n",if copy{", Clone, Copy"}else{""},c.name));
         for (i, (n, t)) in c.fields.iter().enumerate() {
-            out.origin(Some(c.field_lines.get(i).copied().unwrap_or(c.line)));
+            out.origin(::std::option::Option::Some(
+                c.field_lines.get(i).copied().unwrap_or(c.line),
+            ));
+            if names.original(n) != n {
+                out.push_str(&format!(
+                    "    #[serde(rename = {})]\n",
+                    quote(names.original(n))
+                ));
+            }
             out.push_str(&format!("    pub {n}: {},\n", rust_type(t)));
         }
-        out.origin(Some(c.line));
+        out.origin(::std::option::Option::Some(c.line));
         out.push_str("}\n");
         let db_compatible = c.fields.iter().all(|(_, t)| {
             [
@@ -503,8 +569,8 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 || t.0 == "Option" && ["i64", "i32", "str"].contains(&t.inner().0.as_str())
         });
         if db_compatible {
-            out.origin(None);
-            out.push_str(&format!("impl ::nagi_runtime::FromRow for {} {{\n fn columns() -> &'static [&'static str] {{ &[{}] }}\n fn read(row: &::nagi_runtime::rusqlite::Row<'_>, ix: &[usize]) -> ::nagi_runtime::rusqlite::Result<Self> {{ Ok(Self {{\n",c.name,c.fields.iter().map(|(n,_)|quote(n)).collect::<Vec<_>>().join(",")));
+            out.origin(::std::option::Option::None);
+            out.push_str(&format!("impl ::nagi_runtime::FromRow for {} {{\n fn columns() -> &'static [&'static str] {{ &[{}] }}\n fn read(row: &::nagi_runtime::rusqlite::Row<'_>, ix: &[usize]) -> ::nagi_runtime::rusqlite::Result<Self> {{ ::std::result::Result::Ok(Self {{\n",c.name,c.fields.iter().map(|(n,_)|quote(names.original(n))).collect::<Vec<_>>().join(",")));
             for (i, (n, _)) in c.fields.iter().enumerate() {
                 out.push_str(&format!("{n}: row.get(ix[{i}])?,\n"));
             }
@@ -512,7 +578,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         }
     }
     for f in &p.functions {
-        out.origin(Some(f.line));
+        out.origin(::std::option::Option::Some(f.line));
         let name = if f.name == "main" {
             "__nagi_main"
         } else {
@@ -524,7 +590,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             ""
         };
         out.push_str(&format!(
-            "pub {}fn {name}{lifetime}({}) -> {} {{\n",
+            "#[allow(non_snake_case)]\npub {}fn {name}{lifetime}({}) -> {} {{\n",
             if f.asynchronous { "async " } else { "" },
             f.params
                 .iter()
@@ -547,10 +613,10 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         } else {
             rb(&f.body, &mut out, 1);
         }
-        out.origin(Some(f.line));
+        out.origin(::std::option::Option::Some(f.line));
         out.push_str("}\n");
     }
-    out.origin(None);
+    out.origin(::std::option::Option::None);
     let routes: Vec<_> = p
         .functions
         .iter()
@@ -585,15 +651,18 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         }
         out.push_str(".with_state(db); ::nagi_runtime::serve(router,port).await\n}\n");
         for (i, f) in routes.iter().enumerate() {
-            out.origin(Some(f.line));
+            out.origin(::std::option::Option::Some(f.line));
             if !f.asynchronous || f.ret.0 != "Result" {
-                return Err(format!("route {} must be async and return Result", f.name));
+                return ::std::result::Result::Err(format!(
+                    "route {} must be async and return Result",
+                    f.name
+                ));
             }
             let mut extracts = vec![];
             let mut call = vec![];
             let mut pre = String::new();
             let mut query_fields = vec![];
-            for (n, t) in &f.params {
+            for (parameter_index, (n, t)) in f.params.iter().enumerate() {
                 if t.0 == "Db" {
                     extracts.push(format!(
                         "::nagi_runtime::axum::extract::State({n}): ::nagi_runtime::axum::extract::State<::nagi_runtime::Db>"
@@ -606,30 +675,34 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                     extracts.push(format!("{n}: ::nagi_runtime::axum::body::Bytes"));
                     call.push(format!("&{n}"));
                 } else if p.classes.iter().any(|c| c.name == t.0) {
-                    extracts.push(format!("__body_{n}: ::nagi_runtime::axum::body::Bytes"));
-                    pre.push_str(&format!("let {n}: {} = match ::nagi_runtime::decode(&__body_{n}) {{Ok(x)=>x,Err(e)=>return ::nagi_runtime::error_response(e)}};\n",rust_type(t)));
+                    extracts.push(format!(
+                        "__body_{parameter_index}: ::nagi_runtime::axum::body::Bytes"
+                    ));
+                    pre.push_str(&format!("let {n}: {} = match ::nagi_runtime::decode(&__body_{parameter_index}) {{::std::result::Result::Ok(x)=>x,::std::result::Result::Err(e)=>return ::nagi_runtime::error_response(e)}};\n",rust_type(t)));
                     call.push(n.clone());
                 } else if ["str", "i64", "i32", "u64", "bool", "f64"].contains(&t.0.as_str()) {
                     query_fields.push((n.clone(), t.clone()));
                     pre.push_str(&format!("let {n}=__query.{n};\n"));
                     call.push(n.clone());
                 } else {
-                    return Err(format!("route parameter {n}: {t} は未対応です"));
+                    return ::std::result::Result::Err(format!(
+                        "route parameter {n}: {t} は未対応です"
+                    ));
                 }
             }
             if !query_fields.is_empty() {
-                out.push_str(&format!("#[derive(::nagi_runtime::serde::Deserialize)]\n#[serde(crate=\"::nagi_runtime::serde\")]\nstruct __Query_{i} {{ {} }}\n",query_fields.iter().map(|(n,t)|format!("{n}:{}",rust_type(t))).collect::<Vec<_>>().join(",")));
+                out.push_str(&format!("#[derive(::nagi_runtime::serde::Deserialize)]\n#[serde(crate=\"::nagi_runtime::serde\")]\nstruct __NagiQuery{i} {{ {} }}\n",query_fields.iter().map(|(n,t)|format!("#[serde(rename = {})] {n}:{}",quote(names.original(n)),rust_type(t))).collect::<Vec<_>>().join(",")));
                 extracts.push(format!(
-                    "::nagi_runtime::axum::extract::Query(__query): ::nagi_runtime::axum::extract::Query<__Query_{i}>"
+                    "::nagi_runtime::axum::extract::Query(__query): ::nagi_runtime::axum::extract::Query<__NagiQuery{i}>"
                 ));
             }
             // Body extractorはAxumの規則に従い最後。引数の順序は元の関数を維持する。
             extracts.sort_by_key(|s| s.contains("body::Bytes"));
-            let invocation = format!("{}({}).await", f.name, call.join(", "));
+            let invocation = format!("crate::{}({}).await", f.name, call.join(", "));
             let response = if f.ret.inner().0 == "Html" {
-                format!("match {invocation} {{ Ok(v)=>::nagi_runtime::axum::response::IntoResponse::into_response(v),Err(e)=>::nagi_runtime::error_response(e) }}")
+                format!("match {invocation} {{ ::std::result::Result::Ok(v)=>::nagi_runtime::axum::response::IntoResponse::into_response(v),::std::result::Result::Err(e)=>::nagi_runtime::error_response(e) }}")
             } else if f.ret.inner().0 == "Option" {
-                format!("match {invocation} {{ Ok(Some(v))=>::nagi_runtime::response(Ok(v)), Ok(None)=>::nagi_runtime::error_response(::nagi_runtime::Error::not_found()),Err(e)=>::nagi_runtime::error_response(e) }}")
+                format!("match {invocation} {{ ::std::result::Result::Ok(::std::option::Option::Some(v))=>::nagi_runtime::response(::std::result::Result::Ok(v)), ::std::result::Result::Ok(::std::option::Option::None)=>::nagi_runtime::error_response(::nagi_runtime::Error::not_found()),::std::result::Result::Err(e)=>::nagi_runtime::error_response(e) }}")
             } else {
                 format!("::nagi_runtime::response({invocation})")
             };
@@ -639,10 +712,10 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             ));
         }
     }
-    out.origin(None);
-    if let Some(f) = p.functions.iter().find(|f| f.name == "main") {
+    out.origin(::std::option::Option::None);
+    if let ::std::option::Option::Some(f) = p.functions.iter().find(|f| f.name == "main") {
         if !f.params.is_empty() {
-            return Err("mainは引数を取りません".into());
+            return ::std::result::Result::Err("mainは引数を取りません".into());
         }
         if f.asynchronous {
             out.push_str("fn main() { ::nagi_runtime::block_on(async {\n");
@@ -656,7 +729,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         };
         if f.ret.0 == "Result" {
             out.push_str(&format!(
-                "if let Err(e) = {call} {{ eprintln!(\"{{}}\",e); std::process::exit(1); }}\n"
+                "if let ::std::result::Result::Err(e) = {call} {{ eprintln!(\"{{}}\",e); std::process::exit(1); }}\n"
             ));
         } else {
             out.push_str(&format!("{call};\n"));
@@ -665,7 +738,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
     } else {
         out.push_str("fn main() {}\n");
     }
-    Ok(out)
+    ::std::result::Result::Ok(out)
 }
 
 pub fn cli(args: Vec<String>) -> Result<(), String> {
@@ -863,7 +936,7 @@ pub fn cost_report(p: &Program) -> serde_json::Value {
         match &e.kind{
         E::Str(_)=>a.push(serde_json::json!({"line":e.line,"kind":"owned_string_literal","cost":"allocation/copy unless borrowed by intrinsic/codegen"})),
         E::List(xs)=>{a.push(serde_json::json!({"line":e.line,"kind":"contiguous_list","cost":"heap allocation; element boxing 0"}));for e in xs{walk(e,a);}},
-        E::Call(n,_,xs)=>{if ["copy","share","clone_shared","json_decode","json_encode","db_query","db_all","db_insert","db_update"].contains(&n.as_str()){a.push(serde_json::json!({"line":e.line,"kind":n,"cost":"runtime/input dependent; measure allocation counters"}));}for e in xs{walk(e,a);}},E::Binary(ae,_,b)=>{walk(ae,a);walk(b,a)},E::Unary(_,e)|E::Try(e)|E::Await(e)|E::Field(e,_)=>walk(e,a),E::Record(_,fs)=>for(_,e)in fs{walk(e,a)},E::Index(e,i)=>{walk(e,a);walk(i,a)},_=>{}}
+        E::Call(n,_,xs)=>{if e.resolution == Some(NameResolution::Builtin) && ["copy","share","clone_shared","json_decode","json_encode","db_query","db_all","db_insert","db_update"].contains(&n.as_str()){a.push(serde_json::json!({"line":e.line,"kind":n,"cost":"runtime/input dependent; measure allocation counters"}));}for e in xs{walk(e,a);}},E::Binary(ae,_,b)=>{walk(ae,a);walk(b,a)},E::Unary(_,e)|E::Try(e)|E::Await(e)|E::Field(e,_)=>walk(e,a),E::Record(_,fs)=>for(_,e)in fs{walk(e,a)},E::Index(e,i)=>{walk(e,a);walk(i,a)},_=>{}}
     }
     fn stmts(ss: &[Stmt], a: &mut Vec<serde_json::Value>) {
         for s in ss {
