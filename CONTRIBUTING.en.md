@@ -12,7 +12,7 @@ Check existing [issues](https://github.com/disnana/Nagi/issues) and [PRs](https:
 - A minimal example and the commands needed to reproduce it.
 - The expected result, actual result, and error messages.
 
-Remove secrets and personal data from logs. Use the private reporting channel in the security policy for vulnerability details, rather than a public issue.
+Remove secrets and personal data from logs. Follow the [security policy](SECURITY.en.md) to report vulnerability details privately.
 
 Discuss changes to language syntax or semantics, public APIs, new dependencies, and release or deployment processes in an issue before implementing them. Small fixes to typos or existing behavior can go straight to a PR.
 

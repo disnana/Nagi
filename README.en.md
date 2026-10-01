@@ -119,4 +119,4 @@ Read the [introduction](docs/en/introduction.md), [roadmap](docs/en/roadmap.md),
 
 ## Contributing and license
 
-Bug reports, code fixes, documentation, and translations are welcome. See the [contribution guide](CONTRIBUTING.en.md) for the workflow and AI use policy. Nagi is available under the [MIT license](LICENSE).
+Bug reports, code fixes, documentation, and translations are welcome. See the [contribution guide](CONTRIBUTING.en.md) for the workflow and AI use policy, and the [security policy](SECURITY.en.md) to report vulnerabilities privately. Nagi is available under the [MIT license](LICENSE).
