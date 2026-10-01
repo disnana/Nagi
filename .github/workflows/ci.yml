@@ -2,17 +2,36 @@ name: Nagi checks
 on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
+concurrency:
+  # Each main commit may release a different version; keep those runs separate.
+  group: checks-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        id: rust
         with:
           components: rustfmt, clippy
+      - name: Cache Rust checks and sample builds
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**') }}
+          restore-keys: |
+            nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
+            nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tests/requirements.txt
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -29,7 +48,6 @@ jobs:
 
   release-plan:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    needs: linux
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.plan.outputs.sha }}
@@ -112,6 +130,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        id: rust
+      - name: Cache the target platform's Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**') }}
+          restore-keys: |
+            nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
+            nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
