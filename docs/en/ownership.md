@@ -70,6 +70,19 @@ The checker accounts for repetition and zero iterations without calculating the 
 
 ## Borrowing and the limits of checking
 
+`for value in values` borrows the array being iterated. On paths that continue to the next iteration, `check` rejects appending to, reassigning, or moving that array. This also applies when iterating through `view(values)` or a variable holding that view. Other arrays can be changed, and the iterator's borrow ends when the loop finishes.
+
+```nagi
+def main():
+    values = [1, 2]
+    output: List[i64] = []
+    for value in values:
+        append(output, value * 2)
+    append(values, 3)
+```
+
+Field borrows are tracked by place. While `view(data.values)` is live, you can still move a separate field such as `data.name`. Moving all of `data` or its `values` field is rejected.
+
 Moving, reassigning, or appending to an owned value is also restricted while a view borrows it. Borrows are tracked conservatively by lexical scope. This does not yet match Rust's non-lexical lifetime analysis.
 
 The Nagi checker alone does not establish soundness for partial field moves, complex branches and loops, or generic borrows. Code generation emits safe Rust; only programs accepted by the backend's borrow checker become executables. A successful `check` and a successful `build` are different guarantees.

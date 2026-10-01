@@ -57,11 +57,11 @@ impl Drop for Fixture {
 
 const HIGH_MOVE: &str = "def take(text: str):\n    print(text)\n\ndef main():\n    name = \"凪\"\n    for number in range(2):\n        take(name)\n";
 const LOW_MOVE: &str = "fn take(text: str) -> unit { print(text); }\n\nfn main() -> unit {\n    let name: str = \"凪\";\n    for number in range(2) {\n        take(name);\n    }\n}\n";
-// Iterator borrows still need Rust's final verification. Keep coverage of the
-// backend mapping after repeated moves become Nagi checker errors.
+// Temporary-view lifetimes still need Rust's final verification. Keep backend
+// diagnostic mapping coverage after iterator borrows become Nagi checker errors.
 const HIGH_BORROW: &str =
-    "def main():\n    values = [1, 2]\n    for value in values:\n        append(values, value)\n";
-const LOW_BORROW: &str = "fn main() -> unit {\n    let values: List[i64] = [1, 2];\n    for value in values {\n        append(values, value);\n    }\n}\n";
+    "def main():\n    values = [1, 2]\n    for value in values:\n        borrowed = view(\"Nagi\")\n        print(copy(borrowed))\n";
+const LOW_BORROW: &str = "fn main() -> unit {\n    let values: List[i64] = [1, 2];\n    for value in values {\n        let borrowed: view[str] = view(\"Nagi\");\n        print(copy(borrowed));\n    }\n}\n";
 
 fn stderr(output: &Output) -> String {
     String::from_utf8(output.stderr.clone()).unwrap()
@@ -81,6 +81,24 @@ fn overflowing_f32_is_rejected_at_the_source_before_backend_build() {
             let error = stderr(&output);
             assert!(error.contains("浮動小数リテラルが範囲外"), "{error}");
             assert!(error.contains(&format!("{name}:2")), "{error}");
+            assert!(!f.0.join("build/main/src/main.rs").exists());
+        }
+    }
+}
+
+#[test]
+fn iterator_mutation_fails_in_check_and_build_before_backend_generation() {
+    for (name, text) in [
+        ("main.nagi", "def main():\n    values = [1, 2]\n    for item in values:\n        append(values, item)\n"),
+        ("main.low", "fn main() -> unit {\n    let values: List[i64] = [1, 2];\n    for item in values {\n        append(values, item);\n    }\n}\n"),
+    ] {
+        let f = Fixture::new();
+        f.write(name, text);
+        for command in ["check", "build"] {
+            let result = f.cli(&[command, name]);
+            assert!(!result.status.success());
+            let error = stderr(&result);
+            assert!(error.contains(&format!("{name}:4")) && error.contains("参照"), "{error}");
             assert!(!f.0.join("build/main/src/main.rs").exists());
         }
     }
@@ -117,15 +135,15 @@ fn high_build_points_to_nagi_and_keeps_rust_notes_and_failure_status() {
     assert!(!output.status.success());
     let text = stderr(&output);
     let prefix = mapped_prefix(&text);
-    assert!(prefix.contains("error[E0502]"), "{text}");
+    assert!(prefix.contains("error[E0716]"), "{text}");
     assert!(prefix.contains("main.nagi:4"), "{text}");
     assert!(
-        prefix.contains("4 |         append(values, value)"),
+        prefix.contains("4 |         borrowed = view(\"Nagi\")"),
         "{text}"
     );
-    assert!(prefix.contains("main.nagi:3"), "{text}");
+    assert!(prefix.contains("main.nagi:5"), "{text}");
     assert!(!prefix.contains("src/main.rs:"), "{text}");
-    assert!(text.contains(".iter().copied()"), "{text}");
+    assert!(text.contains(".as_str()"), "{text}");
     assert!(text.contains("Rust backend rejected program"), "{text}");
 }
 
@@ -150,7 +168,7 @@ fn imported_high_uses_the_dependency_path_and_local_line() {
     let prefix = mapped_prefix(&text);
     assert!(prefix.contains("move.nagi:4"), "{text}");
     assert!(
-        prefix.contains("4 |         append(values, value)"),
+        prefix.contains("4 |         borrowed = view(\"Nagi\")"),
         "{text}"
     );
     assert!(!prefix.contains("main.nagi:"), "{text}");
@@ -165,7 +183,7 @@ fn standalone_low_uses_the_original_low_lines() {
     let text = stderr(&output);
     assert!(mapped_prefix(&text).contains("main.low:4"), "{text}");
     assert!(
-        mapped_prefix(&text).contains("4 |         append(values, value);"),
+        mapped_prefix(&text).contains("4 |         let borrowed: view[str] = view(\"Nagi\");"),
         "{text}"
     );
 }

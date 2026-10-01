@@ -474,6 +474,16 @@ fn symbols_work_despite_type_errors_and_distinguish_fields_locals_and_calls() {
 }
 
 #[test]
+fn failed_iterator_mutation_does_not_leak_a_loan_or_move_into_editor_types() {
+    let f = Fixture::new();
+    let text = "def main():\n    values = [1, 2]\n    for item in values:\n        failed = values\n        append(values, item)\n    after = values\n";
+    f.write("main.nagi", text);
+    let index = f.symbols(serde_json::json!([]));
+    assert!(local_types(&index, 4, "failed").is_empty());
+    assert_eq!(local_types(&index, 6, "after"), ["List[i64]"]);
+}
+
+#[test]
 fn editor_buffers_update_imported_and_low_signatures_without_writing_files() {
     let f = Fixture::new();
     f.write("nagi.toml", "entry = 'main.nagi'\nnative = ['math.low']\n");

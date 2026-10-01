@@ -112,7 +112,7 @@ fn reading_borrowing_and_copying_do_not_move_a_field() {
 fn a_borrowed_field_cannot_be_moved_but_copy_fields_can_be_read() {
     let source = program("    person = Person(name=\"Nagi\", note=\"note\", age=1)\n    borrowed = view(person.name)\n    name = person.name\n    print(copy(borrowed))\n");
     let message = checked(&source).unwrap_err();
-    assert!(message.contains("viewから参照"), "{message}");
+    assert!(message.contains("参照"), "{message}");
     accepts("    person = Person(name=\"Nagi\", note=\"note\", age=1)\n    borrowed = view(person.name)\n    age = person.age\n    print(age)\n    print(copy(borrowed))\n");
 }
 
