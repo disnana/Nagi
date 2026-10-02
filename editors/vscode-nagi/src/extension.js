@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const compiler = require('./compiler');
 const features = require('./features');
+const indentation = require('./indentation');
 
 function activate(context) {
   const output = vscode.window.createOutputChannel('Nagi');
@@ -288,6 +289,13 @@ function activate(context) {
   }
 
   context.subscriptions.push(output, diagnostics,
+    vscode.languages.registerOnTypeFormattingEditProvider([{ language: 'nagi' }, { language: 'nagi-low' }], {
+      provideOnTypeFormattingEdits(document, position, ch, options, token) {
+        if (token.isCancellationRequested) return [];
+        return indentation.edits(document.getText(), position.line, position.character, ch, options, document.languageId)
+          .map(edit => vscode.TextEdit.replace(new vscode.Range(edit.line, 0, edit.line, edit.length), edit.text));
+      },
+    }, '\n', ':', ')', ']', '}'),
     vscode.languages.registerDefinitionProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideDefinition }),
     vscode.languages.registerHoverProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideHover }),
     vscode.languages.registerCompletionItemProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideCompletionItems }, '.'),

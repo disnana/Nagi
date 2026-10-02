@@ -3,6 +3,7 @@
 Nagi High (`.nagi`) とLow (`.low`)の開発補助です。
 
 - 構文の色付け、コメント、括弧・引用符、4空白のインデント
+- 改行時の字下げ、`else`・`case`の位置調整、複数行の括弧の位置合わせ
 - class・関数・HTTP・借用・Low置換のスニペット
 - ファイルを開いた時と保存時の`nagic check`、Problemsへの診断表示
 - コマンドパレットの型検査、Low変換、ビルド、実行
@@ -33,9 +34,26 @@ code --install-extension Disnana.nagi-lang
 code --install-extension build/distribution/nagi-language-0.1.8.vsix
 ```
 
-色付けとスニペットはコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。[準備と最初の実行](https://disnana.github.io/Nagi/docs/getting-started/)の手順でインストールしてください。拡張はリポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
+色付け、スニペット、インデント補助はコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。[準備と最初の実行](https://disnana.github.io/Nagi/docs/getting-started/)の手順でインストールしてください。拡張はリポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
 
 VSIXにはコンパイラ本体を含めていません。`spawn nagic.exe ENOENT`などのメッセージは、コンパイラが見つからないことを示します。インストール後にVS Codeを再起動し、「Nagi: 型検査」を実行してください。別の場所にあるコンパイラを使う場合は`nagi.compilerPath`で指定します。コンパイラの起動失敗やタイムアウトは警告とNagiの出力に表示し、ソースの型エラーとして赤線を付けません。
+
+## 入力時のインデント
+
+以下の補助は次の拡張リリースで提供します。先に試す場合はmainからVSIXをビルドしてください。
+
+`def main():`や`async def`、`if`、`match`、`case`などのブロックの後でEnterを押すと、1段字下げします。`else:`や`case ...:`の最後のコロンを入力すると、対応する`if`や`match`の位置に揃えます。
+
+`(`・`[`の中で改行すると1段字下げし、行頭に閉じ括弧を書くと、開き括弧のある行に揃えます。Lowでは`{`・`}`も対象です。コメントや文字列の中の記号は字下げの判断に使いません。新規の未保存ファイルと、未信頼のワークスペースでも利用できます。
+
+既定は4スペースです。字下げ幅と空白・タブの選択は、VS Code右下の設定に従います。入力中の位置調整を止める場合は、設定から「Editor: Format On Type」を無効にしてください。Nagiだけで無効にする場合は次の設定を使います。
+
+```json
+{
+  "[nagi]": { "editor.formatOnType": false },
+  "[nagi-low]": { "editor.formatOnType": false }
+}
+```
 
 ## 設定
 
@@ -96,4 +114,4 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 
 リポジトリのルートでコンパイラをビルドし、`node --test editors/vscode-nagi/test/*.test.js`を実行します。Nodeテストには文字列処理だけのテストと、実際の`nagic symbols`を使うテストがあります。
 
-VS Code上の確認は別に行います。Extension Development Hostに`--extensionDevelopmentPath`でこのフォルダー、`--extensionTestsPath`で`test/host.js`、ワークスペースとしてリポジトリのルートを指定します。こちらは実際に拡張を有効化し、診断・F12・ホバー・補完・引数ヒント・プロジェクトの実行を確認します。Nodeテストの成功だけでは、VS Code上の動作確認を済ませたことにはなりません。
+VS Code上の確認は別に行います。Extension Development Hostに`--extensionDevelopmentPath`でこのフォルダー、`--extensionTestsPath`で`test/host.js`、ワークスペースとしてリポジトリのルートを指定します。診断・F12・ホバー・補完・引数ヒント・プロジェクトの実行と、実際の入力操作を確認します。入力補助だけをコンパイラなしで確認する場合は`test/indentation-host.js`を指定します。結果は`build/vscode-typing-result.json`に残します。

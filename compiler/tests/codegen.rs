@@ -352,3 +352,21 @@ fn explicit_local_async_function_annotations_compile_and_run() {
 "#);
     compile_and_run(code);
 }
+
+#[test]
+fn reassignment_of_the_same_async_function_through_aliases_compiles_and_runs() {
+    let source = "async def value() -> i64:\n    return 42\nasync def answer() -> i64:\n    selected = value\n    alias = selected\n    selected = alias\n    if True:\n        selected = value\n    for number in range(2):\n        selected = alias\n    return await selected()\n";
+    let mut high = parser::parse(source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let mut code = emit::rust(&low).unwrap();
+    code.push_str(r#"
+#[test] fn alias_calls() {
+    let mut future = std::pin::pin!(answer());
+    let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+    assert_eq!(std::future::Future::poll(future.as_mut(), &mut context), std::task::Poll::Ready(42));
+}
+"#);
+    compile_and_run(code);
+}

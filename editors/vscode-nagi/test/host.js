@@ -199,6 +199,7 @@ async function run() {
   await checkInferredTypes(folder, hovers, completions);
   await checkLocalNavigation(folder, definitions);
   await checkBuiltinCompletion(folder);
+  await require('./indentation-host').run();
   console.log('PASS: VS Code Host diagnostics/run/F12, local and unsaved definitions, declaration and inferred hovers, field completion, unsaved imports, fallback, signatures, UTF-16, High/Low');
 }
 
