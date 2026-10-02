@@ -5,6 +5,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -101,9 +102,14 @@ done
         old_command.write_text("#!/bin/sh\necho old compiler\n")
         old_command.chmod(0o755)
         environment = {**self.environment, "PATH": str(old_bin) + os.pathsep + self.environment["PATH"] + os.pathsep + str(self.root / "bin")}
-        result = subprocess.run(["bash", "--noprofile", "--norc", "-c", '. "$1"; nagic --version', "test", str(profile)],
-                                env=environment, capture_output=True, text=True, check=True)
-        self.assertEqual(result.stdout.strip(), f"nagic {VERSION}")
+        shells = ["bash"] + (["zsh"] if shutil.which("zsh") else [])
+        for shell in shells:
+            with self.subTest(shell=shell):
+                flags = ["--noprofile", "--norc"] if shell == "bash" else ["-f"]
+                result = subprocess.run([shell, *flags, "-c", '. "$1"; nagic --version', "test", str(profile)],
+                                        env=environment, capture_output=True, text=True, check=True)
+                self.assertEqual(result.stderr, "", profile.read_text())
+                self.assertEqual(result.stdout.strip(), f"nagic {VERSION}", profile.read_text())
         self.assertTrue((self.root / "bin/nagic").is_symlink())
 
     def test_checksum_failure_never_executes_or_registers_the_payload(self):

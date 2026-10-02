@@ -77,8 +77,9 @@ if [ -e "$link" ] || [ -L "$link" ]; then
 fi
 ln -s "$destination/nagic" "$work/nagic-link"
 mv -f "$work/nagic-link" "$link"
-# Single quotes preserve UTF-8 on macOS's Bash 3.2 as well as Bash and zsh.
-quoted="'${bin_dir//\'/\'\\\'\'}'"
+# Single quotes work in Bash 3.2 and zsh; keep replacement escapes outside double quotes.
+quoted=${bin_dir//\'/\'\\\'\'}
+quoted="'$quoted'"
 if [ "$no_path" -eq 0 ]; then
     # Quote a possibly custom path as shell data, never as executable syntax.
     line="case \"\$PATH\" in $quoted|$quoted:*) ;; *) export PATH=$quoted:\"\$PATH\" ;; esac # Nagi installer"
