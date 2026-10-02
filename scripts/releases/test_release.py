@@ -64,6 +64,32 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertEqual(result["release_nagi"], "false")
         self.assertEqual(result["package_nagi"], "false")
 
+    def test_publisher_change_packages_the_extension_without_releasing(self):
+        self.change("editors/vscode-nagi/package.json", '{"version":"0.1.5","publisher":"Disnana"}\n')
+        result = plan.plan(self.first, self.commit())
+        self.assertEqual(result["package_vscode"], "true")
+        for key in ("package_nagi", "release_nagi", "release_vscode"):
+            self.assertEqual(result[key], "false")
+
+    def test_extension_code_and_packaging_changes_produce_only_a_vsix(self):
+        for file in ("editors/vscode-nagi/src/extension.js", "editors/vscode-nagi/scripts/package_vsix.py"):
+            with self.subTest(file=file):
+                base = plan.git("rev-parse", "HEAD").strip()
+                self.change(file, "# Changed extension")
+                result = plan.plan(base, self.commit())
+                self.assertEqual(result["package_vscode"], "true")
+                for key in ("package_nagi", "release_nagi", "release_vscode"):
+                    self.assertEqual(result[key], "false")
+
+    def test_extension_docs_and_tests_do_not_package(self):
+        for file in ("editors/vscode-nagi/README.md", "editors/vscode-nagi/test/host.js"):
+            with self.subTest(file=file):
+                base = plan.git("rev-parse", "HEAD").strip()
+                self.change(file, "# Documentation or test change")
+                result = plan.plan(base, self.commit())
+                for key in ("package_nagi", "package_vscode", "release_nagi", "release_vscode"):
+                    self.assertEqual(result[key], "false")
+
     def test_pipeline_changes_verify_archives_without_publishing_unchanged_versions(self):
         self.change("scripts/releases/package.py", "# Packaging change")
         result = plan.plan(self.first, self.commit())
