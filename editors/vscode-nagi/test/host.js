@@ -198,8 +198,32 @@ async function run() {
   assert.match(await hovers(lowEntry, 1, 27), /fn twice\(x: i64\) -> i64/, 'Low hover displays its declaration');
   await checkInferredTypes(folder, hovers, completions);
   await checkLocalNavigation(folder, definitions);
+  await checkBuiltinCompletion(folder);
   await require('./indentation-host').run();
   console.log('PASS: VS Code Host diagnostics/run/F12, local and unsaved definitions, declaration and inferred hovers, field completion, unsaved imports, fallback, signatures, UTF-16, High/Low');
+}
+
+async function checkBuiltinCompletion(folder) {
+  const file = path.join(folder, 'builtin-completion.nagi');
+  const text = 'class Item:\n    id: i64\nasync def load(db: Db) -> Result[unit, Error]:\n    items = try await db_all[Item](db, "SELECT 1 AS id")\n    print(len(items))\n    return ok(print(0))\ndef main():\n    print(0)\n';
+  fs.writeFileSync(file, text);
+  const document = await vscode.workspace.openTextDocument(file);
+  await vscode.window.showTextDocument(document);
+  async function candidates(needle, delta = 0) {
+    return vscode.commands.executeCommand('vscode.executeCompletionItemProvider', document.uri,
+      document.positionAt(document.getText().indexOf(needle) + delta));
+  }
+  const existing = await candidates('db_all', 6);
+  assert.equal(existing.items.find(item => item.label === 'db_all').insertText.value, 'db_all', 'existing [Item] and arguments stay intact');
+  const globals = await candidates('print(len', 2);
+  assert.ok(globals.items.some(item => item.label === 'db_insert'), 'SQLite insertion is offered');
+  assert.ok(globals.items.some(item => item.label === 'uuid_parse'), 'UUID conversion is offered');
+  const change = new vscode.WorkspaceEdit();
+  change.insert(document.uri, document.positionAt(document.getText().length), '\n    ben');
+  await vscode.workspace.applyEdit(change);
+  const partial = await candidates('ben', 3);
+  const callback = partial.items.find(item => item.label === 'bench_i64');
+  assert.equal(callback.insertText.value, 'bench_i64(${1:name}, ${2:count}, ${3:kernel})', 'callback type commas do not create extra parameters');
 }
 
 async function checkInferredTypes(folder, hovers, completions) {
