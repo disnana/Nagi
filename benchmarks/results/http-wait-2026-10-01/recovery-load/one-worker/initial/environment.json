@@ -1,0 +1,24 @@
+{
+  "measurement_date_utc": "2026-10-02T00:08:23.134791+00:00",
+  "NAGI_THREADS": "1",
+  "NAGI_DB": ":memory:",
+  "NAGI_HTTP_REQUEST_WAIT_SECONDS": "10",
+  "server_cpus": "0",
+  "client_cpus": "1,2",
+  "server_threads_at_start": [
+    "nagi-crud",
+    "nagi-sqlite",
+    "tokio-rt-worker"
+  ],
+  "cpu_quota": "400000 100000",
+  "fd_limit": [
+    16384,
+    16384
+  ],
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "candidate_base_commit": "1c01386894f7c156909771f4e6554292dd664243",
+  "candidate_note": "Reused the original 0.1.4 candidate binary with the 10-second wait change; not current main.",
+  "binary_sha256": "624cfe348fd8dc91a665019d6fc6368b10e21b00555aefa00b97260b3e7eb0a9",
+  "harness_sha256": "c0e10f5c24e9fbb6687a1f758e0e176175321fa452a3d0075e096b9970616234",
+  "vegeta_sha256": "c54d905541485153542dfcb850f9ab8ef801e7ab1a652d2cfc69cafdd4a5363f"
+}

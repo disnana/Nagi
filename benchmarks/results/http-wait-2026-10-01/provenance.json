@@ -28,7 +28,16 @@
   "rust_version": "1.98.1",
   "hyper_version": "1.11.1",
   "hyper_util_version": "0.1.21",
-  "server_workers": 1,
+  "server_workers_by_test": {
+    "lifecycle": 1,
+    "baseline-saturation": 1,
+    "candidate-saturation": 1,
+    "paired": 1,
+    "recovery-load": null,
+    "recovery-load/one-worker": 1
+  },
+  "worker_setting_correction_date_utc": "2026-10-02",
+  "worker_setting_correction_note": "The original recovery-load harness set TOKIO_WORKER_THREADS, which Nagi does not read. Nagi reads NAGI_THREADS and defaults to four; the inherited value was not recorded, so the original worker count is unknown. Lifecycle and saturation helpers explicitly set NAGI_THREADS=1. The one-worker repeats record NAGI_THREADS=1 and one Tokio worker thread, using the unchanged original candidate binary.",
   "server_cpu": "0",
   "client_cpus": "1,2",
   "fd_limit": [
