@@ -1,4 +1,4 @@
-# Nagi Language for VS Code
+# Nagi for VS Code
 
 Nagi High (`.nagi`) とLow (`.low`)の開発補助です。
 
@@ -17,7 +17,13 @@ Nagi High (`.nagi`) とLow (`.low`)の開発補助です。
 
 ## インストール
 
-拡張のIDは`Disnana.nagi-language`です。以前の`nagi-local.nagi-language`を入れている場合は、先に無効化するかアンインストールしてから、この拡張をインストールしてください。
+VS Codeの拡張機能で「Nagi for VS Code」を検索するか、[Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)からインストールできます。コマンドで入れる場合は次を実行します。
+
+```bash
+code --install-extension Disnana.nagi-lang
+```
+
+拡張のIDは`Disnana.nagi-lang`です。以前の`nagi-local.nagi-language`や`Disnana.nagi-language`を入れている場合は、先に無効化するかアンインストールしてください。
 
 正式版のVSIXは[GitHub Releases](https://github.com/disnana/Nagi/releases)に掲載します。ファイル名は`nagi-language-バージョン.vsix`です。mainで拡張のバージョンを上げたとき、CI成功後に自動公開します。
 
@@ -27,9 +33,9 @@ Nagi High (`.nagi`) とLow (`.low`)の開発補助です。
 code --install-extension build/distribution/nagi-language-0.1.8.vsix
 ```
 
-色付けとスニペットはコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。Nagiリポジトリを開き、ルートで `cargo build --release --locked -p nagic` を実行してください。リポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
+色付けとスニペットはコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。[準備と最初の実行](https://disnana.github.io/Nagi/docs/getting-started/)の手順でインストールしてください。拡張はリポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
 
-VSIXにはコンパイラ本体を含めていません。`spawn nagic.exe ENOENT`などのメッセージは、コンパイラが見つからないことを示します。ビルド後に「Nagi: 型検査」を実行してください。別の場所にあるコンパイラを使う場合は`nagi.compilerPath`で指定します。コンパイラの起動失敗やタイムアウトは警告とNagiの出力に表示し、ソースの型エラーとして赤線を付けません。
+VSIXにはコンパイラ本体を含めていません。`spawn nagic.exe ENOENT`などのメッセージは、コンパイラが見つからないことを示します。インストール後にVS Codeを再起動し、「Nagi: 型検査」を実行してください。別の場所にあるコンパイラを使う場合は`nagi.compilerPath`で指定します。コンパイラの起動失敗やタイムアウトは警告とNagiの出力に表示し、ソースの型エラーとして赤線を付けません。
 
 ## 設定
 

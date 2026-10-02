@@ -5,6 +5,16 @@
   "version": "0.1.8",
   "publisher": "Disnana",
   "license": "MIT",
+  "files": [
+    "package.json",
+    "README.md",
+    "LICENSE.txt",
+    "language-configuration.json",
+    "low-configuration.json",
+    "src/**/*.js",
+    "syntaxes/*.json",
+    "snippets/*.json"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
