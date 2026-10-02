@@ -6,7 +6,29 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const USAGE: &str = "nagic <check|lower|build|run|symbols> [SOURCE] [--project DIR|nagi.toml] [--no-project] [--native FILE.low] [--rust FILE.rs] [--rust-dep NAME=VERSION] [--out DIR] [--cost-report]";
+pub const USAGE: &str = "Usage:
+  nagic <check|lower|build|run|symbols> [SOURCE] [OPTIONS]
+  nagic version
+
+Commands:
+  check    Check syntax, types, and ownership
+  lower    Check and write generated Low
+  build    Build a native executable
+  run      Build and run a program
+  symbols  Print type and definition information as JSON
+  version  Print the compiler version
+
+Options:
+  --project DIR|nagi.toml  Select a project
+  --no-project            Disable project discovery
+  --native FILE.low       Add handwritten Low
+  --rust FILE.rs          Add a Rust adapter
+  --rust-dep NAME=VERSION  Add a Rust dependency
+  --out DIR               Select the generated-source directory
+  --cost-report           Write an allocation/copy cost report
+  --editor-input          Read editor buffers from stdin (symbols only)
+  -h, --help              Show this help
+  -V, --version           Print the compiler version";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

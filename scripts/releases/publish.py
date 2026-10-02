@@ -109,7 +109,7 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
     elif component == "nagi":
         filenames = [archive_name(version, platform) for platform in PLATFORMS]
         title = f"Nagi {version}"
-        notes = "Archives include the prebuilt compiler and the matching Git-tracked source, runtime, examples, and Docs. Extract the whole archive and keep its directory structure. The compiler is in target/release/. Building Nagi applications still requires Rust/Cargo and a C build environment. Linux x86_64, Windows x64, macOS Apple Silicon (arm64), and macOS Intel (x86_64) are included. macOS archives are verified on macOS 15.\n"
+        notes = "Archives include the prebuilt compiler and the matching runtime sources, license, and installation notes. Extract the whole archive and add its root folder to PATH. Run `nagic --version` to verify the installed version. The compiler finds the bundled runtime automatically; NAGI_ROOT is normally unnecessary. Building Nagi applications still requires Rust/Cargo and a C build environment. Linux x86_64, Windows x64, macOS Apple Silicon (arm64), and macOS Intel (x86_64) are included. macOS archives are verified on macOS 15.\n"
     else:
         raise ValueError(f"Unknown release component: {component}")
     assets = []

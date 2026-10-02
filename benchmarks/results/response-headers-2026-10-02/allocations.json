@@ -1,0 +1,77 @@
+[
+  {
+    "baseline": {
+      "allocated_bytes": 856,
+      "allocations": 6,
+      "deallocations": 0,
+      "reallocations": 0
+    },
+    "candidate": {
+      "allocated_bytes": 840,
+      "allocations": 5,
+      "deallocations": 0,
+      "reallocations": 0
+    },
+    "case": "json_name_5"
+  },
+  {
+    "baseline": {
+      "allocated_bytes": 13192,
+      "allocations": 8,
+      "deallocations": 0,
+      "reallocations": 2
+    },
+    "candidate": {
+      "allocated_bytes": 13176,
+      "allocations": 7,
+      "deallocations": 0,
+      "reallocations": 2
+    },
+    "case": "json_name_4096"
+  },
+  {
+    "baseline": {
+      "allocated_bytes": 856,
+      "allocations": 6,
+      "deallocations": 1,
+      "reallocations": 0
+    },
+    "candidate": {
+      "allocated_bytes": 840,
+      "allocations": 5,
+      "deallocations": 1,
+      "reallocations": 0
+    },
+    "case": "invalid"
+  },
+  {
+    "baseline": {
+      "allocated_bytes": 856,
+      "allocations": 6,
+      "deallocations": 1,
+      "reallocations": 0
+    },
+    "candidate": {
+      "allocated_bytes": 840,
+      "allocations": 5,
+      "deallocations": 1,
+      "reallocations": 0
+    },
+    "case": "not_found"
+  },
+  {
+    "baseline": {
+      "allocated_bytes": 856,
+      "allocations": 6,
+      "deallocations": 1,
+      "reallocations": 0
+    },
+    "candidate": {
+      "allocated_bytes": 840,
+      "allocations": 5,
+      "deallocations": 1,
+      "reallocations": 0
+    },
+    "case": "busy"
+  }
+]

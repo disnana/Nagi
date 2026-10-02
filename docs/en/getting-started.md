@@ -2,56 +2,59 @@
 
 [Contents](README.md) → Setup and first run → [Learn by writing code](language-guide.md)
 
-This page helps you prepare the Nagi compiler and run a program in one file. Run the commands from **the root of this repository**.
+Prepare the Nagi compiler and run a single-file program. After installation, run commands from your own working folder. Use PowerShell on Windows, or a terminal on Linux/macOS.
 
-A compiler turns the code you write into an executable. Enter the commands below in a terminal: PowerShell on Windows, or a terminal application on Linux or macOS. The repository root means the Nagi folder you downloaded.
+## 1. Install the compiler
 
-Download and extract the Nagi archive for your OS from [GitHub Releases](https://github.com/disnana/Nagi/releases).
+Building Nagi applications requires [Rust / Cargo](https://www.rust-lang.org/tools/install) and a C build environment. Cargo downloads and builds dependencies. The bundled SQLite also contains C code, so Rust alone is not enough.
+
+On Windows, use the Rust MSVC toolchain and Visual Studio C++ Build Tools. Linux needs a C compiler; WSL2 follows the Linux steps. On macOS, run `xcode-select --install` for Command Line Tools. macOS distributions are verified on macOS 15 in CI.
+
+### Use the installer
+
+These commands download Nagi 0.1.6 from GitHub, verify SHA-256, and install it for your user. Windows adds the installation to User PATH. Linux/macOS add a PATH line to bash/zsh configuration. No administrator access is needed. Install Rust, C build tools, and the VS Code extension separately.
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/nagi-v0.1.6/scripts/install.ps1')))
+```
+
+```bash
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/nagi-v0.1.6/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
+```
+
+Windows installs under `%LOCALAPPDATA%\Nagi\versions`; Linux/macOS use `~/.local/share/nagi`, with the command in `~/.local/bin/nagic`. Restart VS Code after installing so it picks up the new PATH.
+
+```text
+nagic --version
+nagic --help
+```
+
+The version output is `nagic 0.1.6`. You can also use `nagic -V` or `nagic version`. Version and help work without Rust or project configuration.
+
+### Extract the archive yourself
+
+Download the file for your OS from [GitHub Releases](https://github.com/disnana/Nagi/releases).
 
 | Your system | File to download |
 |---|---|
-| Windows x64 | `nagi-0.1.5-windows-x86_64.zip` |
-| Linux x86_64 | `nagi-0.1.5-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `nagi-0.1.5-macos-arm64.tar.gz` |
-| macOS Intel | `nagi-0.1.5-macos-x86_64.tar.gz` |
+| Windows x64 | `nagi-0.1.6-windows-x86_64.zip` |
+| Linux x86_64 | `nagi-0.1.6-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `nagi-0.1.6-macos-arm64.tar.gz` |
+| macOS Intel | `nagi-0.1.6-macos-x86_64.tar.gz` |
 
-These archives include the compiler and source. Keep the folder structure, including `runtime/`. GitHub's **Source code** downloads contain only source. The VS Code extension is a separate `nagi-language-0.1.8.vsix` file.
+Extract the whole archive and keep `runtime/` beside `nagic` or `nagic.exe`. Add **the extracted folder itself** to PATH to run `nagic` from any directory. `NAGI_ROOT` is normally unnecessary. GitHub's “Source code” downloads do not contain a prebuilt compiler.
 
-To build the compiler from source instead, install [Git](https://git-scm.com/) and run:
+### Build the compiler from source
+
+Clone with [Git](https://git-scm.com/). You can also use GitHub's “Code → Download ZIP” and run the build in the extracted folder.
 
 ```bash
 git clone https://github.com/disnana/Nagi.git
 cd Nagi
-```
-
-You can also use **Code → Download ZIP** on GitHub. Extract the ZIP and open that folder in your terminal.
-
-## 1. Prepare the compiler
-
-You need [Rust/Cargo](https://www.rust-lang.org/tools/install) and a C build environment. Rust builds the compiler and the generated code. Cargo manages Rust builds and dependencies. The bundled SQLite C code also needs a C compiler. The first build downloads dependencies through Cargo.
-
-On Windows, use the Rust MSVC toolchain and the C++ build tools from Visual Studio Build Tools. On Linux, install a C compiler. WSL2 follows the Linux instructions. On macOS, install Command Line Tools with `xcode-select --install`. The macOS archives are built and run in CI on macOS 15.
-
-With a compiler archive, skip the `cargo build` command below. Rust/Cargo and a C build environment are still needed to build your Nagi applications.
-
-```powershell
-# Windows / PowerShell
 cargo build --release --locked -p nagic
-.\target\release\nagic.exe run examples/hello.nagi
 ```
 
-```bash
-# Linux / WSL2 / macOS
-cargo build --release --locked -p nagic
-./target/release/nagic run examples/hello.nagi
-```
-
-After the build logs, the program prints:
-
-```text
-Hello, Nagi!
-4
-```
+The compiler is `target/release/nagic` (`nagic.exe` on Windows). Add `target/release` to PATH, or replace `nagic` below with its executable path.
 
 ## 2. Write your own file
 
@@ -67,10 +70,8 @@ def main():
 `def main():` is the entry point. Indent its body with four spaces. `print` displays one value followed by a newline.
 
 ```powershell
-.\target\release\nagic.exe run hello.nagi
+nagic run hello.nagi
 ```
-
-On Linux/WSL2, replace `.\target\release\nagic.exe` in the following commands with `./target/release/nagic`.
 
 ```text
 Hello, Nagi!
@@ -95,8 +96,8 @@ Currently, both `check` and `lower` save the Low generated from High. A successf
 Build errors first show the original Nagi or Low filename, the line of the corresponding statement or definition, and its source text. This includes imports and handwritten Low used with `@replace`. The following `Rust backend details` preserves the full diagnostic for the generated Rust. Errors in handwritten Rust, or errors without an identifiable source location, retain Rust's diagnostics.
 
 ```powershell
-.\target\release\nagic.exe check hello.nagi
-.\target\release\nagic.exe build hello.nagi
+nagic check hello.nagi
+nagic build hello.nagi
 .\native-target\release\nagi-hello.exe
 ```
 
@@ -112,21 +113,22 @@ Default output locations:
 
 Generated files go to `build/<source filename without its extension>/`. Use `--out build/my-hello` to choose another location. Set `NAGI_NATIVE_TARGET_DIR` to change the executable build location.
 
-Compilation also needs this repository's `runtime/`. If you copy `nagic.exe` elsewhere on its own, set `NAGI_ROOT` to the Nagi repository location. The [task management demo](web-demo.md) shows how to distribute a generated application executable.
+Compilation also needs the bundled `runtime/`. If you copy `nagic.exe` elsewhere on its own, set `NAGI_ROOT` to the extracted folder containing `runtime/`. The [task management demo](web-demo.md) shows how to distribute a generated application executable.
 
 For multiple-file applications and Rust dependencies, use [project configuration](projects.md). From a configured folder, `nagic run` and VS Code use the same entry file.
 
 ## 4. Use VS Code
 
-Install the [Nagi extension](vscode-extension.md), then open this repository folder in VS Code. Saving a `.nagi` file runs a check and shows errors in Problems. The top-right run button and Nagi commands in the Command Palette can run or build it. Hover names to see types and type `value.` for field completion. F12 navigates to functions, classes, imports, and local bindings, including unsaved edits to files saved at least once. See the [editor walkthrough](editor.md).
+Install the [Nagi extension](vscode-extension.md), then open your project folder in VS Code. Saving a `.nagi` file runs a check and shows errors in Problems. The top-right run button and Nagi commands in the Command Palette can run or build it. Hover names to see types and type `value.` for field completion. F12 navigates to functions, classes, imports, and local bindings, including unsaved edits to files saved at least once. See the [editor walkthrough](editor.md).
 
 ## When something goes wrong
 
 | Symptom | What to check |
 |---|---|
 | `cargo` is not found | Install Rust/Cargo and reopen your terminal |
-| `nagic.exe` is not found | Run the compiler build from the repository root |
-| VS Code reports `spawn nagic.exe ENOENT` or a missing compiler | The VSIX does not include the compiler. Build it in step 1, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set `nagi.compilerPath` to its executable |
+| `nagic.exe` is not found | Add the extracted folder to PATH and reopen your terminal |
+| `runtime/Cargo.toml` is missing under `NAGI_ROOT` | Set `NAGI_ROOT` to the extracted folder containing `runtime/`, or unset it to use automatic discovery |
+| VS Code reports `spawn nagic.exe ENOENT` or a missing compiler | The VSIX does not include the compiler. Install Nagi and restart VS Code, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set `nagi.compilerPath` to its executable |
 | The C compiler or linker is not found | Check your Windows C++ build tools or Linux C compiler |
 | Tabs or indentation errors | Use four spaces consistently |
 | A check succeeds but a build fails | Start with the Nagi or Low filename and line in the terminal; the following Rust diagnostic gives further details |

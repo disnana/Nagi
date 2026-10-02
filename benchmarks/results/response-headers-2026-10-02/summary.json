@@ -1,0 +1,50 @@
+[
+  {
+    "case": "health",
+    "baseline_rps_median": 71068.83,
+    "candidate_rps_median": 70185.649,
+    "change_percent": -1.242712170722382,
+    "paired_change_percent": [
+      -0.42630105115387673,
+      -0.15778465322744406,
+      1.1872659223459925,
+      -4.621131076247719,
+      -4.320363953838857
+    ],
+    "baseline_p99_us_median": 2721.0,
+    "candidate_p99_us_median": 2859.0,
+    "errors": 0
+  },
+  {
+    "case": "small",
+    "baseline_rps_median": 65437.593,
+    "candidate_rps_median": 66191.068,
+    "change_percent": 1.1514405794235127,
+    "paired_change_percent": [
+      1.4095200598224888,
+      -1.4808674234905728,
+      0.5946202670588319,
+      1.3719077937129454,
+      7.574646604307533
+    ],
+    "baseline_p99_us_median": 2947.0,
+    "candidate_p99_us_median": 3127.0,
+    "errors": 0
+  },
+  {
+    "case": "json_4k",
+    "baseline_rps_median": 38632.218,
+    "candidate_rps_median": 38844.158,
+    "change_percent": 0.548609453384219,
+    "paired_change_percent": [
+      -0.11954822295380252,
+      -0.05895374980670054,
+      -4.168201162730845,
+      0.548609453384219,
+      2.983812598358715
+    ],
+    "baseline_p99_us_median": 3911.0,
+    "candidate_p99_us_median": 4233.0,
+    "errors": 0
+  }
+]

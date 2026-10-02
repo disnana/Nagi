@@ -1,0 +1,16 @@
+{
+  "order": "AB,BA,AB,BA,AB per endpoint",
+  "duration_s": 10,
+  "repetitions": 5,
+  "connections": 128,
+  "server_cpus": "0",
+  "client_cpus": "1,2",
+  "server_workers": 1,
+  "client_threads": 2,
+  "cpu_quota": "400000 100000",
+  "binary_sha256": {
+    "baseline": "cd03fc804daa57b49872178691d35615ce09de2c61865e6befc1c055447154b4",
+    "candidate": "fa1902ec84a9205fd9a1b973329c7c32115cb51a617ddc4225c0ad94865ad077"
+  },
+  "harness_sha256": "07d4c6be44cbabdf0af44e5dc5a213083c884b07fcaf08abefe7bd5f37f10a5e"
+}

@@ -1,4 +1,4 @@
-# Nagi 0.1.5 — a working prototype of a two-level backend language
+# Nagi 0.1.6 — a working prototype of a two-level backend language
 
 [日本語](README.md)
 
@@ -16,11 +16,34 @@ The introduction and all Docs are available on the [English website](https://dis
 
 Downloads are published on [GitHub Releases](https://github.com/disnana/Nagi/releases). Increasing the Nagi or VS Code extension version on `main` publishes that component after CI succeeds. The [release guide](scripts/releases/README.md) (Japanese) describes the conditions and artifacts.
 
+## Install
+
+Building Nagi applications needs Rust/Cargo and a C build environment. See [setup](docs/en/getting-started.md) for prerequisites.
+
+Windows (PowerShell):
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/nagi-v0.1.6/scripts/install.ps1')))
+```
+
+Linux / macOS (bash):
+
+```bash
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/nagi-v0.1.6/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
+```
+
+These commands download Nagi 0.1.6, verify SHA-256, install it for your user, and add it to PATH. Linux/macOS add a PATH line to bash/zsh configuration. Install Rust and the VS Code extension separately. Restart VS Code after installation.
+
+```bash
+nagic --version
+nagic --help
+```
+
+For manual installation, extract the complete OS archive from [GitHub Releases](https://github.com/disnana/Nagi/releases) and add the extracted folder to PATH. Keep `runtime/` beside the compiler; `NAGI_ROOT` is unnecessary.
+
 ## Run an example
 
-You need Rust/Cargo and a C compiler to build the bundled SQLite code. [GitHub Releases](https://github.com/disnana/Nagi/releases) provides compiler archives for Windows x64, Linux x86_64, macOS Apple Silicon, and macOS Intel. CI builds and runs them on each platform. See [setup](docs/en/getting-started.md) for MSVC, PowerShell, and macOS instructions. WSL2 follows the Linux commands below.
-
-If you use a compiler archive, skip the first command. Rust/Cargo and the C build environment are still needed to compile Nagi applications. Extract the whole archive so that the compiler can find `runtime/`.
+The commands below build the compiler and samples from source. With an installed compiler, use `nagic run <file>`.
 
 ```bash
 cargo build --release --locked
