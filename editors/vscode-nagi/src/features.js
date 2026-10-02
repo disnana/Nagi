@@ -8,9 +8,15 @@ const builtinRows = [
   ['len', 'value', 'i64', '文字列はbyte数、配列は要素数です。'],
   ['view', 'value', 'view[T]', '元の値を読み取り用に借ります。'],
   ['copy', 'borrowed', 'T', 'viewから独立した所有コピーを作ります。'],
+  ['share', 'value: T', 'shared[T]', '所有権を受け取り、共有する値を作ります。'],
+  ['clone_shared', 'value: shared[T]', 'shared[T]', '同じ値への共有参照を増やします。値全体はコピーしません。'],
   ['append', 'list, value', 'unit', '配列に同じ型の値を追加します。'],
   ['parse_i64', 'text: str | view[str]', 'Result[i64, Error]', '整数に変換します。tryまたはmatchで失敗を処理します。'],
   ['parse_f64', 'text: str | view[str]', 'Result[f64, Error]', '小数に変換します。'],
+  ['i64', 'value: i8 | i16 | i32 | u8 | u16 | u32', 'i64', '小さい整数を損失なくi64へ拡張します。'],
+  ['i32', 'value: i64', 'Result[i32, Error]', 'i64を範囲検査してi32へ縮小します。'],
+  ['uuid_parse', 'text: str | view[str]', 'Result[UUID, Error]', '文字列からUUIDを読みます。'],
+  ['uuid_format', 'value: UUID', 'str', 'UUIDを文字列に変換します。'],
   ['ok', 'value: T', 'Result[T, Error]', '成功値を返します。'],
   ['error', 'message: str', 'Result[T, Error]', '入力エラーを作ります。HTTPでは400です。'],
   ['not_found', 'message: str', 'Result[T, Error]', '対象なしを返します。HTTPでは404です。'],
@@ -32,17 +38,49 @@ const builtinRows = [
   ['db_all', 'db: Db, sql: str | view[str]', 'Result[List[T], Error]', '複数行を指定classへ読みます。', true],
   ['db_query', 'db: Db, sql: str | view[str], id: i64', 'Result[T?, Error]', '1行を読みます。値がなければNoneです。', true],
   ['db_write', 'db: Db, sql: str | view[str], id: i64', 'Result[i64, Error]', 'bind引数1つでSQLを実行します。', true],
+  ['db_insert', 'db: Db, sql: str | view[str], text: str, number: i32', 'Result[T, Error]', 'strとi32をbindして挿入します。RETURNINGで指定classの列を返してください。', true],
+  ['db_update', 'db: Db, sql: str | view[str], id: i64, text: str, number: i32', 'Result[T, Error]', 'i64、str、i32をbindして更新します。RETURNINGで指定classの列を返してください。', true],
   ['json_decode', 'input: str | bytes | view[str] | view[bytes]', 'Result[T, Error]', 'JSONを指定classへ読みます。'],
   ['json_encode', 'value: T', 'Result[str, Error]', '値をJSON文字列にします。'],
   ['slice', 'borrowed: view[T], start: i64, end: i64', 'Result[view[T], Error]', '終端を含まない区間を借ります。範囲とUTF-8境界を検査します。'],
+  ['size_of', '', 'i64', '型のサイズをbyte単位で返します。別に確保する文字列・配列の領域は含みません。'],
+  ['clock_ns', '', 'i64', '計測用の時刻をナノ秒単位で返します。'],
+  ['make_ints', 'count: i64', 'List[i64]', 'CPU試験用の整数配列を作ります。'],
+  ['bench_i64', 'name: str, count: i64, kernel: fn[view[i64], i64]', 'unit', '借用した整数配列を処理する同期関数を測定します。'],
+  ['bench_f64', 'name: str, count: i64, kernel: fn[view[f64], f64]', 'unit', '借用した小数配列を処理する同期関数を測定します。'],
+  ['bench_scalar', 'name: str, count: i64, kernel: fn[i64, i64]', 'unit', 'i64を受け取りi64を返す同期関数を測定します。'],
+  ['actor_demo', 'count: i64', 'Result[i64, Error]', 'カウンターへメッセージを送るランタイム試験です。', true],
+  ['actor_pair_demo', 'count: i64', 'Result[i64, Error]', '中継役とカウンター役が通信するランタイム試験です。', true],
+  ['queue_demo', 'count: i64', 'Result[i64, Error]', 'キューへ仕事を渡すランタイム試験です。', true],
+  ['task_demo', 'count: i64', 'Result[i64, Error]', '子taskを起動して終了を待つランタイム試験です。', true],
+  ['cpu_sum', 'count: i64', 'Result[i64, Error]', 'CPU処理を別の処理枠で実行するランタイム試験です。', true],
+  ['supervisor_demo', '', 'Result[i64, Error]', 'panicしたworkerを再起動するランタイム試験です。', true],
 ];
+const genericBuiltins = new Set(['db_all', 'db_query', 'db_insert', 'db_update', 'json_decode', 'size_of']);
+
+function builtinParameters(args) {
+  const parts = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '[') depth++;
+    else if (args[i] === ']') depth--;
+    else if (args[i] === ',' && !depth) { parts.push(args.slice(start, i).trim()); start = i + 1; }
+  }
+  if (args) parts.push(args.slice(start).trim());
+  return parts.map(arg => { const [name, type] = arg.split(': '); return { name, type: type || 'T' }; });
+}
+
 const builtins = builtinRows.map(([name, args, result, description, asynchronous = false]) => ({
-  name, kind: 'function', signature: `${asynchronous ? 'async ' : ''}def ${name}${['db_all', 'db_query', 'json_decode'].includes(name) ? '[T]' : ''}(${args}) -> ${result}`,
-  typeParameters: ['db_all', 'db_query', 'json_decode'].includes(name) ? ['T'] : [],
-  parameters: args ? args.split(', ').map(arg => { const [name, type] = arg.split(': '); return { name, type: type || 'T' }; }) : [],
+  name, kind: 'function', signature: `${asynchronous ? 'async ' : ''}def ${name}${genericBuiltins.has(name) ? '[T]' : ''}(${args}) -> ${result}`,
+  typeParameters: genericBuiltins.has(name) ? ['T'] : [],
+  parameters: builtinParameters(args),
   return_type: result, asynchronous, description, builtin: true,
 }));
-const types = ['i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64', 'bool', 'str', 'bytes', 'unit', 'Error', 'Db', 'Html', 'UUID', 'timestamp', 'List', 'Result', 'view', 'shared'];
+const types = ['i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64', 'bool', 'str', 'bytes', 'unit', 'Error', 'Db', 'Html', 'UUID', 'timestamp', 'List', 'Result', 'view', 'shared', 'Option', 'fn'];
+const typeInsertions = {
+  List: 'List[${1:T}]', Result: 'Result[${1:T}, Error]', view: 'view[${1:str}]', shared: 'shared[${1:T}]',
+  Option: 'Option[${1:T}]', fn: 'fn[${1:i64}, ${2:i64}]',
+};
 
 // Preserve UTF-16 offsets while masking strings/comments, including unfinished strings.
 function context(text, offset) {
@@ -88,7 +126,10 @@ function inTypeContext(before) {
   if (/(?:->|\b[A-Za-z_]\w*\s*:)\s*[\w\[\], ?]*$/.test(line)) return true;
   const brackets = [];
   for (let i = 0; i < before.length; i++) { if (before[i] === '[') brackets.push(i); else if (before[i] === ']') brackets.pop(); }
-  return brackets.some(i => /\b(?:Result|List|view|shared|json_decode|db_query|db_all)\s*$/.test(before.slice(0, i)));
+  return brackets.some(i => {
+    const name = /\b([A-Za-z_]\w*)\s*$/.exec(before.slice(0, i))?.[1];
+    return genericBuiltins.has(name) || Object.hasOwn(typeInsertions, name);
+  });
 }
 
 function fileMatches(a, b) {
@@ -180,12 +221,14 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
 
 function insertion(item, following) {
   if (item.kind === 'type') {
-    return { List: 'List[${1:T}]', Result: 'Result[${1:T}, Error]', view: 'view[${1:str}]', shared: 'shared[${1:T}]' }[item.name] || item.name;
+    return /^\s*\[/.test(following) ? item.name : typeInsertions[item.name] || item.name;
   }
-  if (!['function', 'class'].includes(item.kind) || /^\s*\(/.test(following)) return item.name;
+  if (!['function', 'class'].includes(item.kind)) return item.name;
   const args = item.kind === 'class' ? item.fields || [] : item.parameters || [];
   const types = item.typeParameters || [];
+  if (types.length && /^\s*\[/.test(following)) return item.name;
   const generic = types.length ? `[${types.map((name, i) => `\$\{${i + 1}:${name}\}`).join(', ')}]` : '';
+  if (/^\s*\(/.test(following)) return item.name + generic;
   return `${item.name}${generic}(${args.map((arg, i) => `${item.kind === 'class' ? arg.name + '=' : ''}\$\{${i + 1 + types.length}:${arg.name}\}`).join(', ')})`;
 }
 

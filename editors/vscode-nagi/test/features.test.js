@@ -111,3 +111,74 @@ test('a trailing member binds inside try/await unless the receiver is parenthesi
   ] };
   assert.deepEqual(f.completionCandidates(fields, text, text.length, false, { file: '/main.nagi' }), []);
 });
+
+test('builtin completion catalog matches compiler arities and required type arguments', () => {
+  const source = require('node:fs').readFileSync(require('node:path').resolve(__dirname, '../../../compiler/src/check.rs'), 'utf8');
+  const arityStart = source.indexOf('let arity = match n {');
+  const arityTable = source.slice(arityStart, source.indexOf('};', arityStart));
+  const expected = new Map();
+  for (const row of arityTable.matchAll(/((?:"[a-z][a-z0-9_]*"\s*\|\s*)*"[a-z][a-z0-9_]*")\s*=>\s*(\d+)/g)) {
+    for (const name of row[1].matchAll(/"([a-z][a-z0-9_]*)"/g)) expected.set(name[1], Number(row[2]));
+  }
+  assert.ok(expected.size > 0, 'read the compiler builtin arity table');
+  const builtins = f.declarations();
+  assert.deepEqual([...builtins.keys()].sort(), [...expected.keys()].sort());
+  for (const [name, arity] of expected) assert.equal(builtins.get(name).parameters.length, arity, name);
+  const genericStart = source.indexOf('let generic = matches!(');
+  const genericTable = source.slice(genericStart, source.indexOf(');', genericStart));
+  const generic = new Set([...genericTable.matchAll(/"([a-z][a-z0-9_]*)"/g)].map(row => row[1]));
+  assert.ok(generic.size > 0, 'read the compiler generic builtin table');
+  for (const [name, item] of builtins) assert.deepEqual(item.typeParameters, generic.has(name) ? ['T'] : [], name);
+});
+
+test('builtin help preserves conversion, SQLite, async and callback contracts', () => {
+  const builtins = f.declarations();
+  assert.equal(builtins.get('i64').signature, 'def i64(value: i8 | i16 | i32 | u8 | u16 | u32) -> i64');
+  assert.equal(builtins.get('i32').signature, 'def i32(value: i64) -> Result[i32, Error]');
+  assert.equal(builtins.get('uuid_parse').signature, 'def uuid_parse(text: str | view[str]) -> Result[UUID, Error]');
+  assert.equal(builtins.get('uuid_format').signature, 'def uuid_format(value: UUID) -> str');
+  assert.equal(builtins.get('share').return_type, 'shared[T]');
+  assert.equal(builtins.get('clone_shared').parameters[0].type, 'shared[T]');
+  assert.equal(builtins.get('size_of').signature, 'def size_of[T]() -> i64');
+  assert.equal(builtins.get('clock_ns').signature, 'def clock_ns() -> i64');
+  assert.equal(builtins.get('make_ints').return_type, 'List[i64]');
+  assert.equal(builtins.get('db_insert').signature, 'async def db_insert[T](db: Db, sql: str | view[str], text: str, number: i32) -> Result[T, Error]');
+  assert.equal(builtins.get('db_update').signature, 'async def db_update[T](db: Db, sql: str | view[str], id: i64, text: str, number: i32) -> Result[T, Error]');
+  for (const [name, kernel] of [['bench_i64', 'fn[view[i64], i64]'], ['bench_f64', 'fn[view[f64], f64]'], ['bench_scalar', 'fn[i64, i64]']]) {
+    assert.deepEqual(builtins.get(name).parameters, [{ name: 'name', type: 'str' }, { name: 'count', type: 'i64' }, { name: 'kernel', type: kernel }]);
+    assert.equal(f.insertion(builtins.get(name), ''), `${name}(\${1:name}, \${2:count}, \${3:kernel})`);
+  }
+  for (const name of ['actor_demo', 'actor_pair_demo', 'queue_demo', 'task_demo', 'cpu_sum', 'supervisor_demo']) {
+    assert.equal(builtins.get(name).asynchronous, true, name);
+    assert.equal(builtins.get(name).return_type, 'Result[i64, Error]', name);
+  }
+  const text = 'db_insert[Item](db, sql, text, number)';
+  assert.equal(f.hoverAt({}, text, 3).item.signature, builtins.get('db_insert').signature);
+  const override = { name: 'share', kind: 'function', signature: 'def share(value: i64) -> i64', parameters: [{ name: 'value', type: 'i64' }] };
+  assert.equal(f.declarations({ definitions: [override] }).get('share'), override);
+});
+
+test('function and nullable types complete inside all supported generic builtin contexts', () => {
+  for (const text of ['def apply(callback: f', 'value: Opt', 'value: Option[\n    ', 'def apply(callback: fn[\n    ', 'db_insert[\n    ', 'db_update[\n    ', 'size_of[\n    ']) {
+    const items = f.completionCandidates(index, text, text.length);
+    for (const name of ['Item', 'fn', 'Option', 'i64']) assert.ok(items.some(item => item.name === name), `${text}: ${name}`);
+    assert.ok(!items.some(item => item.name === 'print'), text);
+  }
+  assert.ok(f.completionCandidates(index, 'values[\n    ', 12).some(item => item.name === 'print'), 'ordinary indexing remains a value context');
+});
+
+test('completion preserves existing generic arguments and call parentheses', () => {
+  const builtins = f.declarations();
+  const query = builtins.get('db_query');
+  for (const following of ['[Item](db, sql, id)', ' [Item]', '[']) assert.equal(f.insertion(query, following), 'db_query', following);
+  assert.equal(f.insertion(query, '('), 'db_query[${1:T}]');
+  assert.equal(f.insertion(builtins.get('size_of'), '('), 'size_of[${1:T}]');
+  assert.equal(f.insertion(builtins.get('uuid_parse'), '(text)'), 'uuid_parse');
+  assert.equal(f.insertion(builtins.get('make_ints'), '[0]'), 'make_ints(${1:count})');
+  const types = f.completionCandidates(index, 'value: ', 7);
+  for (const name of ['List', 'Result', 'Option', 'fn']) {
+    assert.equal(f.insertion(types.find(item => item.name === name), '[i64]'), name);
+  }
+  assert.equal(f.insertion(types.find(item => item.name === 'Option'), ''), 'Option[${1:T}]');
+  assert.equal(f.insertion(types.find(item => item.name === 'fn'), ''), 'fn[${1:i64}, ${2:i64}]');
+});
