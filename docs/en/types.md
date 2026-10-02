@@ -17,6 +17,7 @@ Annotate variables with `count: i32 = 10`, parameters with `count: i32`, and ret
 | `Result[T, Error]` | A success value or an error | Propagate with `try`, or handle `Ok` / `Err` with `match` |
 | `shared[T]` | An owned value shared across multiple places | Create with `share`; duplicate its shared reference with `clone_shared` |
 | `UUID` / `timestamp` | UUID / time values | Use `uuid_parse` / `uuid_format` for UUID text conversion |
+| `fn[parameter types..., return type]` | Pass a function as a value | Supported in synchronous function signatures; the last type is the return type |
 | `unit` | No return value | The return type when a function omits its return annotation |
 
 `count = 10` infers i64; `rate = 1.5` infers f64. Annotated integer literals are checked against the type's range. Current conversions are lossless `i64(value)` from i8/i16/i32/u8/u16/u32 and range-checked `i32(value) -> Result[i32, Error]` from i64. There is no general cast to arbitrary types.
@@ -29,9 +30,35 @@ Write `missing: i64? = None` for an absent nullable value and `present: i64? = s
 
 See [syntax](syntax.md) for parameter, return, and borrow annotations; [ownership](ownership.md) for copy and move rules; and [built-in functions](builtins.md) for accepted argument types.
 
+## Pass a function as a value
+
+A function name can be assigned to a variable or passed to another function. `fn[i64, i64]` means a function taking one i64 and returning i64. For a function with no parameters, write only its return type, such as `fn[i64]`.
+
+Save this as `app.nagi`:
+
+```nagi
+def add_one(value: i64) -> i64:
+    return value + 1
+
+def apply(callback: fn[i64, i64], value: i64) -> i64:
+    return callback(value)
+
+def main():
+    chosen: fn[i64, i64] = add_one
+    print(apply(chosen, 41))
+```
+
+```sh
+nagic run app.nagi
+```
+
+The result is `42`. Local types can also be inferred: `chosen = add_one`. A function that returns another function can declare a return type such as `def choose() -> fn[i64]:`.
+
+You can also assign an async function with `selected = answer`, then call `await selected(...)` inside an async function. Type annotations for parameters receiving async functions, or functions returning them, are not yet supported. Lambdas and closures that capture surrounding local variables are also unsupported.
+
 ## Unsupported type operations
 
-`Map[K, V]` and `owned[T]` have type notation but incomplete operation APIs. User-defined generic functions, traits, and function/async-function type annotations are unsupported.
+`Map[K, V]` and `owned[T]` have type notation but incomplete operation APIs. User-defined generic functions and traits are unsupported.
 
 ## Rust representation
 

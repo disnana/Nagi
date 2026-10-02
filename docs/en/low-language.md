@@ -1,25 +1,51 @@
-# Low and handwritten integration
+# High and Low
 
-Low is readable and writable text with its own parser.
+High uses indentation in `.nagi` files. Low uses braces and semicolons in `.low` files. Both are Nagi languages. Write ordinary code in High and use Low when you want to replace a function's implementation.
 
-```low
-fn twice(x: i64) -> i64 {
-    return x * 2;
-}
+## Convert High to Low
+
+Save this as `app.nagi`:
+
+```nagi
+def score(value: i64) -> i64:
+    return value * 2
+
+def main():
+    print(score(7))
 ```
 
-Generated Low includes inferred types and let declarations. The compiler parses that text again, integrates ordinary and replacement functions from native Low, and checks the result. Native functions also participate in High name resolution.
+```sh
+nagic run app.nagi
+nagic lower app.nagi
+```
+
+The program prints `14`. `lower` checks types and ownership, then writes Low to `build/app/generated.low`. Low declares functions with `fn` and encloses blocks in `{ }`. Generated variable declarations include `let` and their inferred types.
+
+## Replace a function with handwritten Low
+
+Save this as `native.low` in the same directory:
 
 ```low
 @replace generated::score
-fn optimized_score(x: i64) -> i64 {
-    return x * 6;
+fn optimized_score(value: i64) -> i64 {
+    return value * 6;
 }
 ```
 
-The compiler checks that the target exists, that argument and return types and async status match, and that replacements are unique. Replacement works on whole functions. Patching individual generated lines and `@override`/`@custom` are not implemented. Direct edits to generated files do not survive regeneration; move those changes to native Low.
+```sh
+nagic check app.nagi --native native.low
+nagic run app.nagi --native native.low
+```
 
-Result matching replaces High's indentation with braces. This is a function example:
+The result is now `42`. High still calls `score(7)`, but the body that runs comes from Low's `optimized_score`. `@replace generated::score` specifies the function to replace.
+
+The replacement must match the original function's parameter count and types, return type, and async status. A missing target or multiple replacements of the same function is an error. Replacements affect whole functions.
+
+Commands regenerate `generated.low`. Save changes in `native.low` to keep them. `--native` can also add ordinary Low functions that High can call. See [project configuration](projects.md#add-rust-and-handwritten-low) to save these options.
+
+## Low syntax
+
+Types, ownership, borrowing, and Result handling follow the same rules as High. This function handles a Result:
 
 ```low
 fn number_or(text: view[str], fallback: i64) -> i64 {
@@ -30,6 +56,6 @@ fn number_or(text: view[str], fallback: i64) -> i64 {
 }
 ```
 
-Both cases are required. Payload types, ownership, and borrowing follow High's rules. See [error handling](error-handling.md).
+Both `Ok` and `Err` cases are required. See [error handling](error-handling.md).
 
-Low 0.1 handles typed values, views, classes/records, functions, branches, Result matching, loops, async functions, and scopes. Raw pointers, layout/alignment declarations, allocation/free, SIMD instructions, unsafe operations, and FFI remain future work. Rust source is not accepted as Low.
+Low currently supports typed variables, views, classes (called records in Low), functions, branches, loops, async functions, and scopes. Raw pointers, memory layout declarations, manual allocation and freeing, SIMD instructions, unsafe syntax, and a C ABI are unsupported. See [file imports and Rust integration](modules-and-rust.md) to call Rust functions.

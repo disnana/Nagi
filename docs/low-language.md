@@ -1,27 +1,53 @@
-# Lowと手書き統合
+# HighとLow
 
-Lowは内部のバイナリIRではなく、独立parserを持つ読み書きできるテキストです。
+Highは字下げでブロックを書く`.nagi`、Lowは波括弧と`;`で書く`.low`です。どちらもNagiの言語です。普段はHighで書き、関数の実装を差し替えたいときにLowを使えます。
 
-```text
-fn twice(x: i64) -> i64 {
-    return x * 2;
-}
+## HighをLowへ変換する
+
+次を`app.nagi`に保存します。
+
+```nagi
+def score(value: i64) -> i64:
+    return value * 2
+
+def main():
+    print(score(7))
 ```
 
-Highから生成したLowには推論済みの型とlet宣言を出します。生成テキストを再解析し、nativeの通常関数と置換関数を統合してから検査します。native関数はHighの名前解決にも使えます。
+```sh
+nagic run app.nagi
+nagic lower app.nagi
+```
 
-```text
+実行結果は`14`です。`lower`は型・所有権を検査し、`build/app/generated.low`にLowを出力します。Lowでは関数を`fn`で宣言し、ブロックを`{ }`で囲みます。生成された変数には`let`と推論した型が付きます。
+
+## 手書きLowで関数を差し替える
+
+次を同じディレクトリの`native.low`に保存します。
+
+```low
 @replace generated::score
-fn optimized_score(x: i64) -> i64 {
-    return x * 6;
+fn optimized_score(value: i64) -> i64 {
+    return value * 6;
 }
 ```
 
-対象の有無、引数・戻り値・asyncの一致、重複置換を検査します。置換は完全な関数単位です。生成関数の内部行をpatchする仕組みや、@override/@customは未実装です。生成ファイルそのものへの直接編集を再生成で保持する機能もありません。変更をnativeへ移す運用を使用します。
+```sh
+nagic check app.nagi --native native.low
+nagic run app.nagi --native native.low
+```
 
-Resultのmatchは、Highの字下げを次のように波括弧へ置き換えます。これは関数の例です。
+今度は`42`と表示されます。High側の呼び出しは`score(7)`のままで、実行する本体がLowの`optimized_score`に置き換わります。`@replace generated::score`が差し替える対象を指定しています。
 
-```text
+差し替え先は、引数の数・型、戻り値の型、asyncかどうかが元の関数と一致する必要があります。対象が存在しない場合や、同じ関数を複数回差し替える場合はエラーです。変更できるのは関数全体です。
+
+`generated.low`はコマンドを実行すると再生成されます。変更を残すには`native.low`へ書いてください。`--native`は差し替えに加えて通常のLow関数も追加でき、Highからその関数を呼べます。設定を保存する方法は[プロジェクト設定](projects.md#rustと手書きlowを追加する)にあります。
+
+## Lowの文法
+
+型、所有権、借用、Resultの扱いはHighと共通です。次はResultを処理する関数の例です。
+
+```low
 fn number_or(text: view[str], fallback: i64) -> i64 {
     match parse_i64(text) {
         case Ok(number) { return number; }
@@ -30,6 +56,6 @@ fn number_or(text: view[str], fallback: i64) -> i64 {
 }
 ```
 
-両方のcaseが必須です。payloadの型・所有権・借用はHighと同じ規則で検査します。[エラー処理](error-handling.md)も参照してください。
+`Ok`と`Err`の両方が必要です。詳しくは[エラー処理](error-handling.md)を参照してください。
 
-0.1のLowは型付き値、view、class/record、関数、分岐、Resultのmatch、ループ、async/scopeを扱います。生pointer、layout/alignment指定、allocation/free、SIMD命令、unsafe、FFIは今後実装する範囲です。RustのコードをLowとして受け取る方式ではありません。
+現在のLowは、型付きの変数、view、class（Lowではrecord）、関数、分岐、ループ、async、scopeに対応しています。生ポインター、メモリ配置の指定、手動の確保・解放、SIMD命令、unsafe構文、C ABIは未対応です。Rustの関数を呼ぶ方法は[ファイルのimportとRust連携](modules-and-rust.md)にあります。

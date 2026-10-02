@@ -17,6 +17,7 @@
 | `Result[T, Error]` | 成功値またはエラー | `try`で伝播、`match`で`Ok` / `Err`を処理する |
 | `shared[T]` | 複数の場所で共有する所有値 | `share`で作り、`clone_shared`で共有参照を増やす |
 | `UUID` / `timestamp` | UUID / 時刻の値 | UUIDの文字列変換には`uuid_parse` / `uuid_format`を使う |
+| `fn[引数の型..., 戻り値の型]` | 関数を値として渡す | 同期関数の引数・戻り値に使える。最後の型が戻り値 |
 | `unit` | 戻り値がないことを表す型 | 関数の戻り値型を省略したときの型 |
 
 `count = 10`はi64、`rate = 1.5`はf64です。型注釈がある整数literalはその範囲を確認します。現在の数値変換APIは、i8 / i16 / i32 / u8 / u16 / u32からの損失のない`i64(value)`と、i64から範囲を検査する`i32(value) -> Result[i32, Error]`です。任意型への汎用castはありません。
@@ -29,9 +30,35 @@ nullableは`missing: i64? = None`、値がある場合は`present: i64? = some(4
 
 関数の引数・戻り値・借用の書き方は[文法](syntax.md)、コピーとmoveの規則は[所有権](ownership.md)、各関数の対応する型は[組み込み関数](builtins.md)を参照してください。
 
+## 関数を値として渡す
+
+関数名を変数へ代入したり、別の関数へ渡したりできます。`fn[i64, i64]`は「i64を1つ受け取り、i64を返す関数」です。引数がない場合は、戻り値の型だけを書きます。たとえば`fn[i64]`です。
+
+次を`app.nagi`に保存してください。
+
+```nagi
+def add_one(value: i64) -> i64:
+    return value + 1
+
+def apply(callback: fn[i64, i64], value: i64) -> i64:
+    return callback(value)
+
+def main():
+    chosen: fn[i64, i64] = add_one
+    print(apply(chosen, 41))
+```
+
+```sh
+nagic run app.nagi
+```
+
+結果は`42`です。`chosen = add_one`のようにローカル変数の型を省略しても推論されます。関数を返す場合は、たとえば`def choose() -> fn[i64]:`と宣言します。
+
+async関数も`selected = answer`のように代入して、async関数内で`await selected(...)`と呼べます。async関数を受け取る引数や返す関数の型注釈にはまだ対応していません。ラムダ式や、周囲のローカル変数を取り込むクロージャも未対応です。
+
 ## 未対応の型操作
 
-`Map[K, V]`と`owned[T]`は型表記のみで、操作用のAPIは揃っていません。ユーザー定義generic関数、trait、関数型・async関数型の型注釈も未対応です。
+`Map[K, V]`と`owned[T]`は型表記のみで、操作用のAPIは揃っていません。利用者が型引数を持つ関数を定義する機能や、traitは未対応です。
 
 ## Rustでの表現
 
