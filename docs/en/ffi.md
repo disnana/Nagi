@@ -1,9 +1,11 @@
-# FFI and ABI plans
+# Calling other languages
 
-Low has no FFI syntax in 0.1. Existing rusqlite/libsqlite3-sys libraries handle SQLite's FFI. Calling arbitrary C functions from user-written Low is not implemented.
+Nagi can currently call Rust functions. Declare them with `@rust` and `extern def`, then include the Rust file and any Cargo dependencies in the build. See [Imports and Rust](modules-and-rust.md).
 
-Equivalent primitives and classes in High and Low generate the same Rust types. Calls within one build need no serialization. Rust struct layout, String, Vec, and Result are not intended to be exposed directly as a C ABI.
+Equivalent High and Low types compile to the same Rust types. Calls within one build do not need to convert values through JSON or another serialization format.
 
-A future C ABI needs fixed-width primitives, pointer-and-length slices, records with fixed layouts, tagged error payloads, and explicit allocator/deallocator functions. Ownership boundaries must specify who frees data and how long a library remains alive.
+## C interfaces
 
-Currently, `@rust` and `extern def/fn` call Rust functions within the same generated crate. Use `--rust` for a Rust module and `--rust-dep` for Cargo dependencies; see [imports and Rust integration](modules-and-rust.md). These calls do not go through a C ABI. Borrowed buffers, async tasks, and error lifetimes and layouts must be settled before offering a stable ABI for uses such as Python extensions.
+Direct calls to arbitrary C functions from Nagi or Low are not supported. The built-in SQLite implementation connects to C through Rust's `rusqlite` and `libsqlite3-sys` libraries.
+
+A fixed C-facing type layout and an ABI for transferring memory allocation and release are not defined. Nagi classes and strings cannot be treated directly as C values.

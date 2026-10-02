@@ -1,9 +1,9 @@
-# Supervisors and failures
+# Worker restart experiments
 
-The runtime experiments with one_for_one worker restarts. A child task panics, its JoinError is detected, and that worker is recreated. Tests also confirm that another worker continues.
+The runtime tests restarting a worker after it panics while other workers continue processing.
 
-Restarts are limited within a one-second window. When a crash loop exceeds the limit, restarts stop. Restart latency is measured from detection until the new child task first runs. Backoff is 1 ms.
+[supervisor.nagi](../../examples/supervisor.nagi) deliberately causes three panics. Panic logs are expected in this test. At normal shutdown, remaining workers are asked to stop and then joined.
 
-`examples/supervisor.nagi` deliberately causes three panics. Panic messages on stderr are part of the test. Normal shutdown also aborts and joins independent workers.
+A restart waits one millisecond. The number of restarts within one second is limited so a repeatedly failing worker eventually stops restarting.
 
-High supervisor-tree declarations, arbitrary child factories, one_for_all/rest_for_one, and HTTP request redelivery are not implemented. This worker test does not measure request loss. Handling Rust panics does not isolate SIGSEGV, aborts, or OS process termination within the same process.
+An API for defining worker trees and restart policies is not implemented. HTTP requests are not redelivered. Handling a panic does not provide recovery from OS process termination or memory corruption.

@@ -6,7 +6,7 @@
 
 Define the stored type with a class, open a database with `db_open`, and create a table with `db_exec`. Database operations are async and can fail, so use `try await`.
 
-This complete program inserts one row in memory and prints `Nagi`, then `Saved`.
+Save the following code as `database.nagi` and run `nagic run database.nagi`. It inserts one row in memory and prints `Nagi`, then `Saved`.
 
 ```nagi
 class User:
@@ -39,7 +39,7 @@ Bind argument shapes are currently fixed: query/write take one i64, all takes no
 
 ## Read from an API
 
-SQL is passed as text while parameters retain native types. Values are not concatenated into SQL. FromRow implementations generated from classes such as User read native primitive/String fields directly, without intermediate tuples, dictionaries, or ORM objects.
+Pass SQL values as arguments rather than concatenating them into the SQL string. Each returned row fills the fields of the specified class.
 
 This handler fragment uses the User type above:
 
@@ -52,10 +52,10 @@ For iteration over class lists, only Copy classes are currently supported. User 
 
 ## Implementation and limits
 
-A dedicated thread owns the SQLite connection. HTTP executor tasks communicate through a job channel of capacity 64 and oneshot replies. Closures/jobs and replies still allocate. An async query API does not make SQLite's internals async I/O.
+A dedicated thread runs SQLite operations in order. Its queue holds up to 64 jobs. Nagi waits for the result asynchronously, while SQLite reads and writes on that thread.
 
-Prepared statements are cached. Column names are resolved to indices once; rows then use indices. Up to 16 indices fit inline, avoiding a small Vec allocation per query. TEXT/BLOB results are owned because they outlive the SQLite row.
+Prepared statements and resolved column names are reused. Returned strings and byte sequences are owned so they remain valid after processing the SQLite row.
 
 General variable-length typed parameters, transaction APIs, database pools, and compile-time schema checking are not implemented. Column names, SQL, and column type mismatches produce runtime Result errors.
 
-SQL literals can reach the worker by static reference; dynamic SQL needs an owned String. A database job already accepted may complete and commit even after its HTTP caller times out. Cancellation does not mean rollback. PostgreSQL's binary protocol remains a design proposal.
+A database job already accepted may complete and commit even after its HTTP caller times out. Cancelling the caller does not guarantee that a write is rolled back.

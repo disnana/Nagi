@@ -4,7 +4,7 @@
 
 ## Nagiファイルを分割する
 
-```python
+```nagi
 import "models.nagi"
 import "validation.nagi"
 ```
@@ -19,7 +19,7 @@ import "validation.nagi"
 
 Nagiに型付きの外部関数を宣言します。Highの`extern def`には本体や末尾の`:`を付けません。
 
-```python
+```nagi
 @rust("native::crc32")
 extern def crc32(text: view[str]) -> i64
 

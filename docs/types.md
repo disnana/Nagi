@@ -4,29 +4,38 @@
 
 変数は`count: i32 = 10`、関数の引数は`count: i32`、戻り値は`-> i32`と書きます。ローカル変数の型は省略できますが、決まった型を再代入で変更することはできません。
 
-| 型 | 実装上の表現 | 0.1の状況 |
+| 型 | 用途 | 制約・値の扱い |
 |---|---|---|
-| i8/i16/i32/i64、u8/u16/u32/u64 | native整数 | 対応。異なる型の演算に暗黙の変換をしない |
-| f32/f64、bool | native値 | 対応 |
-| str、bytes | String、Vec<u8> | 所有値。strはUTF-8 |
-| List[T]、[T] | Vec<T> | 連続格納。primitiveとCopy classの走査に対応 |
-| view[str]/view[bytes]/view[T] | &str、&[u8]、&[T] | 非所有。寿命を検査 |
-| T? | Option<T> | 対応。Noneには型の文脈が必要 |
-| Result[T, Error] | tagged Result | tryによる伝播、Ok / Errのmatchに対応 |
-| shared[T] | Arc<T> | share/clone_sharedによる明示的共有 |
-| UUID、timestamp | u128/i64のnewtype | native表現。UUIDは明示parse/format |
-| Map[K,V]、owned[T] | HashMap、所有値への型方針 | 型表記の足場のみ。完全な操作APIは未実装 |
-| generic、function/async function type | 静的特殊化を目標 | 汎用genericと型注釈の関数型は未実装 |
+| `i8` / `i16` / `i32` / `i64` | 符号付き整数。数字はビット数 | コピーできる。異なる数値型の演算には明示的な変換が必要 |
+| `u8` / `u16` / `u32` / `u64` | 符号なし整数 | コピーできる。負数を格納できない |
+| `f32` / `f64` | 小数を扱う浮動小数点数 | コピーできる |
+| `bool` | `True` / `False` | 分岐・ループの条件に使う |
+| `str` / `bytes` | UTF-8文字列 / バイト列 | 所有値。自作関数へ渡すとmoveする |
+| `List[T]` / `[T]` | 同じ型の要素を持つ配列 | 所有値。forでの走査は基本型とCopy classに対応 |
+| `view[str]` / `view[bytes]` / `view[T]` | 文字列・バイト列・配列を借りて読む | 元データの所有者が必要。読むだけで元の値は変更できない |
+| `T?` / `Option[T]` | 値がある、または`None` | `None`には型の文脈が必要 |
+| `Result[T, Error]` | 成功値またはエラー | `try`で伝播、`match`で`Ok` / `Err`を処理する |
+| `shared[T]` | 複数の場所で共有する所有値 | `share`で作り、`clone_shared`で共有参照を増やす |
+| `UUID` / `timestamp` | UUID / 時刻の値 | UUIDの文字列変換には`uuid_parse` / `uuid_format`を使う |
+| `unit` | 戻り値がないことを表す型 | 関数の戻り値型を省略したときの型 |
 
 `count = 10`はi64、`rate = 1.5`はf64です。型注釈がある整数literalはその範囲を確認します。現在の数値変換APIは、i8 / i16 / i32 / u8 / u16 / u32からの損失のない`i64(value)`と、i64から範囲を検査する`i32(value) -> Result[i32, Error]`です。任意型への汎用castはありません。
 
 小数リテラルも、型注釈・引数・戻り値などで決まる`f32`または`f64`の範囲を検査します。その型で無限大になる値は、型検査でエラーになります。
 
-VS Code拡張0.1.4では、変数名にマウスを置くと推論された型を確認できます。たとえば`count`は`count: i64`です。関数の引数やcaseの束縛名も対象です。[エディターの操作例](editor.md)で試せます。
+VS Code拡張では、変数名にマウスを置くと推論された型を確認できます。たとえば`count`は`count: i64`です。関数の引数やcaseの束縛名も対象です。[エディターの操作例](editor.md)で試せます。
 
 nullableは`missing: i64? = None`、値がある場合は`present: i64? = some(42)`です。`T?`は`Option[T]`の短い表記ですが、現在はmatchや汎用unwrap APIはありません。空配列は`values: List[i64] = []`と型を指定してください。
 
-全値をboxingする設計ではありません。ただし、String、Vec、task、channel等の内部allocationがなくなるわけではありません。RustのモノモーフィズムとLLVM最適化を利用します。ユーザー定義generic関数やtraitの実装は今後の段階です。
+関数の引数・戻り値・借用の書き方は[文法](syntax.md)、コピーとmoveの規則は[所有権](ownership.md)、各関数の対応する型は[組み込み関数](builtins.md)を参照してください。
+
+## 未対応の型操作
+
+`Map[K, V]`と`owned[T]`は型表記のみで、操作用のAPIは揃っていません。ユーザー定義generic関数、trait、関数型・async関数型の型注釈も未対応です。
+
+## Rustでの表現
+
+数値とboolはRustの同じ型、`str`は`String`、`bytes`と`List`は`Vec`、`shared`は`Arc`へ変換します。`view`は参照、nullableは`Option`、成功・失敗は`Result`です。詳しくは[メモリの扱い](memory-model.md)を参照してください。
 
 ## 符号付き整数の最小値
 

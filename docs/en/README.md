@@ -1,48 +1,44 @@
-# Writing Nagi
+# Nagi Docs
 
-If this is your first time using Nagi, read **[Setup and first run](getting-started.md) → [Learn by writing code](language-guide.md)**. Use High (`.nagi`) to write applications. You do not need to learn Low first.
+Nagi's guides and reference documentation. To look up syntax or function behavior, use the [language reference](#language-reference) below.
 
-## Start here
+## First steps
 
-| What you want to do | Page | What you will learn |
-|---|---|---|
-| Run Hello World | [Setup and first run](getting-started.md) | Windows/Linux commands, creating files, building, and VS Code |
-| Use types and completion in VS Code | [Editor walkthrough](editor.md) | Variable type hovers, field completion, argument hints, and F12 |
-| Learn the language step by step | [Learn by writing code](language-guide.md) | Variables, functions, lists, classes, views, Result, and imports |
-| Look up syntax | [Syntax reference](syntax.md) | Notation, operators, and differences from Python |
-| Find a built-in function | [Built-in functions](builtins.md) | Arguments, return values, and when await/try are needed |
-| Build a small site and API | [HTTP and HTML](http.md) | A working server, JSON requests and responses, and HTML |
-| Read a working application | [Task management demo](web-demo.md) | Browser UI, CRUD API, SQLite, and executable distribution |
-| Handle API failures | [Result API example](result-api.md) | Matching, 400/404/500 responses, and fallback data |
+If you are new to Nagi, start here:
 
-## Read when you need it
+1. [Setup and first run](getting-started.md): install Nagi and run Hello World.
+2. [Learn by writing code](language-guide.md): variables, functions, lists, and error handling.
+3. [HTTP and HTML](http.md): build an API, then store data with [SQLite](database.md).
+
+Write applications in `.nagi` files and run them with `nagic run file.nagi`. See the [VS Code guide](editor.md) for editor support.
+
+## Language reference
 
 | Topic | Page |
 |---|---|
-| Type annotations, numbers, and nullable values | [Types](types.md) |
-| Define structured data | [Classes](classes.md) |
-| Why some values cannot be reused after passing them | [Ownership](ownership.md), [views and copying](view-and-zero-copy.md) |
-| Return failures and use try/match | [Error handling](error-handling.md) |
-| Multiple files and Rust libraries | [Imports and Rust](modules-and-rust.md) |
-| Configure an entry file, Rust dependencies, and Low | [Projects and nagi.toml](projects.md) |
+| Syntax, operators, and function definitions | [Syntax reference](syntax.md) |
+| Built-in function arguments, return values, and limits | [Built-in functions](builtins.md) |
+| Types and annotations | [Types and inference](types.md) |
+| Grouping related data | [Classes](classes.md) |
+| Passing, borrowing, and copying values | [Ownership](ownership.md), [views](view-and-zero-copy.md) |
+| Returning failures and handling success or failure | [Error handling](error-handling.md) |
+
+## Build applications
+
+| Task | Page |
+|---|---|
 | Read and write JSON | [JSON](json.md) |
-| Store data | [SQLite](database.md) |
-| Async operations and waiting for child tasks | [Async and scopes](async.md), [concurrency](concurrency.md) |
-| Read generated Low and replace functions | [Low](low-language.md) |
+| Split code into files or call Rust | [Imports and Rust](modules-and-rust.md) |
+| Save an entry file and build settings | [nagi.toml](projects.md) |
+| Wait for async work or start child operations | [Async and scopes](async.md), [concurrency](concurrency.md) |
+| Read working applications | [Task management demo](web-demo.md), [Result API example](result-api.md) |
 
-## Design and implementation
+Runnable introductory examples are in [examples/tutorial/](../../examples/tutorial/). Function and syntax references also contain code fragments rather than complete programs.
 
-These pages are intended for reading after learning the basic language.
+## Implementation and development
 
-- [Goals and scope](introduction.md), [development roadmap](roadmap.md)
-- [Memory model](memory-model.md), [compiler internals](compiler-internals.md), [FFI](ffi.md)
-- [Actors](actor.md), [supervisors](supervisor.md), and [queues](queue.md): currently experimental built-in functions
-- [Reading benchmarks](performance.md), [measurements](measurements.md), [HTTP load tests](http-capacity.md)
+See [About Nagi](introduction.md), [Low](low-language.md), [memory handling](memory-model.md), [compiler internals](compiler-internals.md), [language interfaces](ffi.md), and the [roadmap](roadmap.md).
 
-## Reading the examples
+[Actors](actor.md), [worker restarts](supervisor.md), and [queues](queue.md) are experimental implementations. For performance, read the [measurement methods](performance.md), [results](measurements.md), and [HTTP load tests](http-capacity.md).
 
-Code blocks contain Nagi code. Its indentation resembles Python, but the `python` command cannot run it. Use `nagic run file.nagi`.
-
-Complete introductory examples are in [examples/tutorial/](../../examples/tutorial/). Some short examples in the syntax and function references are fragments to place inside functions. Examples marked as complete programs can be saved in a file and run directly.
-
-These Docs describe the current 0.1 implementation. Each page identifies features that are not implemented. File imports such as `import "file.nagi"` and Result matching work. `import package as alias`, class methods, and nullable matching are not supported.
+These Docs describe the current 0.1 series. Each page identifies unsupported features.

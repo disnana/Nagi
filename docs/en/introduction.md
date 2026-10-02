@@ -1,11 +1,19 @@
-# Goals and implementation scope
+# About Nagi
 
-Nagi aims to reduce the cost of rebuilding the same data as different general-purpose objects at HTTP, JSON, database, and task boundaries. High is the language used to write applications; Low lets you inspect and adjust generated code.
+Nagi is a programming language for writing readable applications and compiling them into executables. It uses indentation for functions and blocks, then compiles through Rust.
 
-High uses indentation for readability. It does not use dynamic Python objects or provide Python compatibility. Low uses braces, explicit types, and declarations. Generated and handwritten Low go through the same parser and checker.
+Its name comes from the Japanese word 凪, meaning calm. The idea is that even when the internals are busy, the surface stays calm.
 
-The working path in 0.1 is High → Low text → Low AST → type checking → Rust → native executable. Working examples cover CRUD APIs with HTTP, JSON, and SQLite, CPU loops, tasks, actor communication, and worker panic recovery. Each page identifies features that remain design proposals.
+## Writing applications
 
-The main ideas being tested are readable Low, function replacement that preserves types, visible costs for views and owned values, and backend paths that connect directly to typed models. The current implementation does not establish a new memory management system or fault isolation comparable to BEAM.
+Use High, the `.nagi` format, for ordinary applications. It supports variables, functions, lists, classes, HTTP, JSON, and SQLite. Start with [Setup and first run](getting-started.md), then try the [HTTP example](http.md) or [task management demo](web-demo.md).
 
-Start with the [Docs contents](README.md), [setup and first run](getting-started.md), and [language guide](language-guide.md). Use the [syntax reference](syntax.md) to look up notation and the [measurements](measurements.md) for benchmark results.
+Borrow data for reading with `view`, return failures with `Result`, and make owned copies explicitly with `copy`. The syntax resembles Python, but importing Python libraries is not supported.
+
+## Adjusting generated code
+
+Use Low to inspect generated code or replace a function. Low has explicit types and braces for blocks. See [High and Low](low-language.md).
+
+## Development status
+
+Nagi is currently in the 0.1 development series. Rust performs the final borrow checks, so a program accepted by Nagi's `check` can still fail to build. See the [syntax reference](syntax.md) for supported forms and the [roadmap](roadmap.md) for remaining work.

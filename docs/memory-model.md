@@ -1,15 +1,15 @@
-# メモリモデル
+# メモリの扱い
 
-0.1の実装はnative値＋所有値＋非所有viewです。Rust backendが最後の借用・Send検査とdropを担当します。独自GCはありません。すべての値にatomic参照カウントを付ける方式でもありません。
+Nagiでは、データを所有する値と、元のデータを借りるviewを区別します。コンパイル先のRustが最終的な借用検査と値の解放を行います。
 
-| 値 | 主な保持・解放 |
+| 値 | 保持と解放 |
 |---|---|
-| primitive、Copy class | stack/register/配列要素として保持 |
-| str、bytes、List、所有class | moveで所有権を渡し、Rust dropで解放 |
-| view | 元データの寿命内で借用。所有権と解放責任を持たない |
-| shared | 明示Arc。clone/dropでatomic refcountが発生 |
-| task/channel/DB job | ランタイムがallocationし、終了・キャンセル・dropで解放 |
+| 数値・bool・コピーできるclass | 値を直接保持し、コピーして渡せる |
+| str・bytes・List・所有データを含むclass | 所有権を渡して使う。不要になったときに解放する |
+| view | 元のデータを借りる。自分ではそのデータを解放しない |
+| shared | データを共有する。保持している参照がなくなったときに解放する |
+| task・channel・DBの仕事 | 実行用の領域を確保し、終了や破棄に伴って解放する |
 
-request arenaは重要な設計候補ですが、Highへ暗黙に導入していません。bumpaloのscope内実験はあります。arena内にStringやFDを持つ値を置いた場合、一括メモリ解放だけではその値のdestructorを実行できない点も設計対象です。
+通常の値に参照カウントを一律に付ける方式ではありません。`shared`だけはRustの`Arc`を使い、参照の増減を管理します。アプリを書くときの具体例は[所有権](ownership.md)と[view](view-and-zero-copy.md)にあります。
 
-request arenaの導入には、借用データの脱出、async中の寿命、DB workerへのmove、再試行と共有cacheへの保存を区別する必要があります。0.1では安全に所有化する場所を明示し、測ったallocationが本当に減るかを先に確かめます。
+リクエストごとに領域をまとめて確保し、一括解放するarenaは実験段階です。アプリへ自動で適用していません。文字列やファイルなどの後始末、非同期処理をまたぐデータの寿命を含めて検討する必要があります。

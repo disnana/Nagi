@@ -1,16 +1,22 @@
-# 並行処理とscheduler
+# 並行処理
 
-TokioのM:N executorを使用します。Nagiの独自schedulerは未実装です。HTTP、timer、channelはasync待機し、SQLiteは専用native threadへ渡します。CPU処理は上限4のoffloadへ渡します。
+Nagiの非同期処理はTokio上で動きます。HTTPやタイマーを待っている間に、ほかの処理を進められます。使い方は[asyncとscope](async.md)から確認してください。
 
-通常のmutable stateを複数taskへ暗黙に共有しません。所有値のmove、immutable shared、bounded channel、actor内部のstateを基本にします。最終的なSend判定もRust backendが担当します。
+SQLiteは専用のスレッドで処理します。重いCPU処理も、非同期処理を進めるスレッドを長く占有しないよう、別の処理枠へ渡します。
 
-```python
+```nagi
 async def main() -> Result[unit, Error]:
     result = try await cpu_sum(100000)
     print(result)
     return ok(print("完了"))
 ```
 
-CPU offloadはevent loopを塞ぎにくくしますが、開始したspawn_blockingの処理を外側のキャンセルだけで停止できません。長いCPU kernelに協調的キャンセルと予算を追加する必要があります。
+`cpu_sum`はCPU処理を分けて実行するためのサンプルです。同時に実行するCPU処理は最大4件です。利用者が任意の関数をこの枠へ渡すAPIは未対応です。
 
-大量task試験では全taskの最初のpollを確認し、gateを解放するまで完了を止めます。全件待機時のRSSと、解放後の全join・未完了0件を記録します。生成したtask件数だけでは同時待機の証明になりません。接続数試験も別に扱います。
+## データの受け渡し
+
+複数のtaskへ、変更できる値を自動で共有することはありません。所有権を移して渡すか、`shared`で読み取り用に共有します。借用したviewは別のtaskへ渡せません。
+
+すでに始まったCPU処理は、呼び出し元をキャンセルしただけでは止まりません。長い処理には、その処理自身が停止の要求を確認する仕組みが必要です。
+
+task数とHTTPの接続数は別です。待ち時間やメモリを含む測定結果は、[測定結果](../PERFORMANCE.md)と[通信の負荷試験](http-capacity.md)を参照してください。

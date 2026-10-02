@@ -2,11 +2,11 @@
 
 [目次](README.md) · 前：[準備と最初の実行](getting-started.md) · 調べる：[文法の早見表](syntax.md)
 
-アプリを書くHigh（`.nagi`）を、変数 → 関数 → 配列 → class → 失敗の扱いの順に学びます。[準備と最初の実行](getting-started.md)でNagiをインストールし、自分の作業フォルダーにコードを保存してください。Windows・Linux・macOSで同じ`nagic`コマンドを使います。
+変数、関数、配列から順に、短いコードを動かして学びます。[Nagiをインストール](getting-started.md)したら、作業用のフォルダーを作ってください。コードは`.nagi`ファイルへ保存し、`nagic run`で実行します。
 
 ## 1. 値と型
 
-次は`main`などの関数の中に書く断片です。
+次のコードは、`main`などの関数の中に書きます。
 
 ```nagi
 count = 10            # i64。型は自動で決まる
@@ -32,13 +32,13 @@ def main():
     print(add(20, 22))
 ```
 
-この完全なコードを保存して実行すると`42`と表示します。引数は`名前: 型`、戻り値は`-> 型`です。戻り値を省略した関数は`unit`（値を返さない）です。`main`がプログラムの入口になります。
+このコードを保存して実行すると`42`と表示します。引数は`名前: 型`、戻り値は`-> 型`です。戻り値を省略した関数は`unit`（値を返さない）です。`main`がプログラムの入口になります。
 
 ## 3. 配列、class、分岐、繰り返し
 
 配列は`[1, 2, 3]`、型注釈は`List[i64]`です。`append(values, 4)`で末尾に追加します。`class`は名前付きフィールドをまとめる型です。
 
-次の完全なコードを`basics.nagi`として保存してください。[サンプル](../examples/tutorial/basics.nagi)にも同じコードがあります。
+次のコードを`basics.nagi`として保存してください。[サンプル](../examples/tutorial/basics.nagi)にも同じコードがあります。
 
 ```nagi
 class Point:
@@ -82,7 +82,7 @@ nagic run basics.nagi
 
 - `Point(x=..., y=...)`は全フィールドを名前付きで指定します。`Point(3.0, 4.0)`とは書きません。
 - `point.x`でフィールドを読みます。現在はclassにmethodや継承を定義できません。
-- `for value in values`は要素を順に読みます。現在は整数・小数・boolなどの基本の値（primitive）や、それだけを含むclassを走査できます。このように所有権を移さずコピーできる型をCopyと呼びます。`List[str]`の走査は未対応です。
+- `for value in values`は要素を順に読みます。現在は整数・小数・boolなどの基本の値（基本型）や、それだけを含むclassを走査できます。このように所有権を移さずコピーできる型をCopyと呼びます。`List[str]`の走査は未対応です。
 - `range(3)`は`0, 1, 2`です。引数は1つで、終端を含みません。
 - `while`は条件が`True`の間繰り返します。`break` / `continue`は未対応です。
 - `and` / `or` / `not`で条件を組み合わせます。`elif`はないため、必要なら`else`の中に`if`を書きます。
@@ -208,6 +208,6 @@ async def main() -> Result[unit, Error]:
     return ok(print("完了"))
 ```
 
-これは完全なコードです。`sleep`は`unit`を返すので`await`だけ、失敗し得るDB関数などは`try await db_open(...)`のように書きます。`await`は非同期処理を待ち、`try`は待った結果の失敗を伝えます。
+このコードはそのまま保存して実行できます。`sleep`は`unit`を返すので`await`だけ、失敗し得るDB関数などは`try await db_open(...)`のように書きます。`await`は非同期処理を待ち、`try`は待った結果の失敗を伝えます。
 
-次は[HTTPとHTML](http.md)で、ブラウザーから呼べるAPIを作ってください。書式だけ調べたいときは[文法の早見表](syntax.md)、関数の引数を調べたいときは[よく使う関数](builtins.md)を使えます。
+次は[HTTPとHTML](http.md)で、ブラウザーから呼べるAPIを作ってください。書式だけ調べたいときは[文法の早見表](syntax.md)、関数の引数を調べたいときは[組み込み関数](builtins.md)を使えます。
