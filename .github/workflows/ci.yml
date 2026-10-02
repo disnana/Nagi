@@ -160,8 +160,8 @@ jobs:
           assert host == os.environ['RELEASE_RUST_HOST'], host
           PY
       - run: cargo build --release --locked -p nagic
-      - name: Check ownership and source diagnostics on the target platform
-        run: cargo test --locked -p nagic --test loop_ownership --test build_diagnostics
+      - name: Check CLI, installation, ownership, and diagnostics on the target platform
+        run: cargo test --locked -p nagic --test cli --test installation --test loop_ownership --test build_diagnostics
       - name: Check editor behavior on the target platform
         shell: bash
         run: node --test editors/vscode-nagi/test/*.test.js
@@ -180,28 +180,23 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
-          import os, subprocess, tarfile, tempfile
+          import os, sys
           from pathlib import Path
-          from zipfile import ZipFile
-          stem = f'nagi-{os.environ["RELEASE_VERSION"]}-{os.environ["RELEASE_PLATFORM"]}'
+          sys.path.insert(0, 'scripts/releases')
+          from verify import verify
+          version, platform = os.environ['RELEASE_VERSION'], os.environ['RELEASE_PLATFORM']
           suffix = '.zip' if os.name == 'nt' else '.tar.gz'
-          archive = Path('build/distribution') / (stem + suffix)
-          with tempfile.TemporaryDirectory() as folder:
-              if os.name == 'nt':
-                  with ZipFile(archive) as source:
-                      source.extractall(folder)
-              else:
-                  with tarfile.open(archive) as source:
-                      source.extractall(folder, filter='data')
-              root = Path(folder) / stem
-              exe = root / 'target/release' / os.environ['RELEASE_EXECUTABLE']
-              environment = dict(os.environ)
-              environment.pop('NAGI_ROOT', None)
-              environment.pop('NAGI_NATIVE_TARGET_DIR', None)
-              subprocess.run([str(exe), 'check', str(root / 'examples/cpu.nagi')], cwd=folder, env=environment, check=True)
-              result = subprocess.run([str(exe), 'run', str(root / 'examples/hello.nagi')], cwd=folder, env=environment, check=True, capture_output=True, text=True)
-              assert result.stdout.splitlines()[-2:] == ['Hello, Nagi!', '4'], result.stdout
+          verify(Path('build/distribution') / f'nagi-{version}-{platform}{suffix}', version, platform)
           PY
+      - name: Verify the PowerShell installer and User PATH
+        if: matrix.platform == 'windows-x86_64'
+        env:
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
+        shell: pwsh
+        run: ./scripts/releases/test_install.ps1 -Archive "build/distribution/nagi-$env:RELEASE_VERSION-windows-x86_64.zip" -Version $env:RELEASE_VERSION -TestUserPath
+      - name: Verify the shell installer
+        if: matrix.platform != 'windows-x86_64'
+        run: python -m unittest discover -s scripts/releases -p 'test_install.py'
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.platform }}

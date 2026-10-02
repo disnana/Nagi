@@ -1,0 +1,10 @@
+{
+  "baseline_source_commit": "56975306711e5e057a0079cec389c1d250232bc6",
+  "baseline_runtime_lib_sha256": "1b2eb374b57d45932b18bf475ed2414c502fc14a1011f3b79dabc437dbb3d21e",
+  "candidate_runtime_lib_sha256": "92d82fd8ce2887b9477994d74840ad1855105287e4f4c2faf05eccc46ab35977",
+  "candidate_change": "runtime-lib.patch",
+  "allocation_example": "runtime/examples/response_allocations.rs",
+  "allocation_example_sha256": "b2ce8be39621ba185b729f3d8674ab360f25a7552ee1a37f503000db91d04ceb",
+  "native_build": "release, opt-level=3, codegen-units=1, lto=false; same lockfile dependency versions",
+  "measurement_date_utc": "2026-10-02"
+}

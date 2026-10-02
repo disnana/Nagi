@@ -2,6 +2,7 @@ pub mod ast;
 pub mod check;
 pub mod diagnostics;
 pub mod emit;
+mod installation;
 pub mod lexer;
 pub mod parser;
 pub mod project;

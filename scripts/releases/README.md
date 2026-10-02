@@ -16,8 +16,8 @@ PRをmainへマージすると、push前後のコミット全体を比較しま�
 ## 検証と公開の流れ
 
 1. バージョン差分を判定する。同時にLinuxで既存の型・所有権・ランタイム・HTTP・エディターの検証と、リリース条件の回帰テストを実行する。
-2. 判定が終わった対象の配布物を、Linuxの検証と並行してビルドする。NagiはWindows x64、Linux x86_64、macOS Apple Silicon、macOS Intelでコンパイラとエディターテストを確認する。Rustのhost architectureを確認し、別のCPU向けとして誤って配布しない。
-3. Nagiのアーカイブをチェックアウト外に展開し、その中のコンパイラでCPUサンプルを検査し、Hello Worldをビルド・実行する。
+2. 判定が終わった対象の配布物を、Linuxの検証と並行してビルドする。NagiはWindows x64、Linux x86_64、macOS Apple Silicon、macOS IntelでCLI・配布先から外部プロジェクトを使うテスト・エディターテストを確認する。Rustのhost architectureを確認し、別のCPU向けとして誤って配布しない。
+3. Nagiのアーカイブをチェックアウト外に展開し、版・ヘルプをビルド環境なしで表示する。展開フォルダーをPATHに追加し、同梱物と別の場所にあるプロジェクトをビルド・実行する。WindowsではPowerShell版、Linux/macOSではbash版のインストーラーも検証する。
 4. SHA-256を作り、Actionsの成果物へ保存する。
 5. Linuxの検証と対象の配布物の検証がすべて成功したmainのバージョン更新時だけ、検証したコミットに新しいタグを作り、draft releaseへファイルをアップロードする。内容を読み直してSHA-256を照合した後、正式版として公開する。
 
@@ -31,9 +31,13 @@ PRやmain以外のブランチでは、新しい実行が始まると同じPR・
 
 ## 配布物の内容
 
-Nagiのアーカイブは、**検証したコミットのGit管理下のソース**とコンパイラを含みます。`.git`、未追跡のメモ、ローカルのビルド・DB・ログは入りません。コンパイラは`target/release/nagic`または`nagic.exe`、コミット情報は`release.json`にあります。
+Nagiのアーカイブには、**検証したコミットのGit管理下にあるランタイムのソース**を使います。`.git`、未追跡のメモ、ローカルのビルド・DB・ログは入りません。コミット情報は`release.json`で確認できます。
 
-アーカイブ全体を展開し、`runtime/`を含むフォルダー構成を保って使います。コンパイラのビルドを省けますが、NagiのアプリをビルドするにはRust/CargoとCのビルド環境が必要です。Linux版はGitHubのUbuntu runnerでビルドするため、同等のglibc環境を想定します。macOS版はmacOS 15のrunnerで検証します。Apple Siliconは`macos-arm64`、Intelは`macos-x86_64`のファイルを選びます。
+配布物は直下の`nagic`または`nagic.exe`、ビルドに必要な`runtime/`、`LICENSE`、短い日英の`README.txt`、`release.json`です。ランタイムのCargo manifestは開発用workspaceから独立させ、配布と同じ版を明記します。コンパイラのソース、開発用テスト、測定ログ、サイト・Docsのソースは含めません。
+
+アーカイブ全体を展開し、展開フォルダーをPATHに追加します。`runtime/`との位置を保てば`NAGI_ROOT`は通常不要です。NagiアプリのビルドにはRust/CargoとCのビルド環境が必要です。Linux版はUbuntu runnerと同等のglibc環境、macOS版はmacOS 15を想定します。0.1.5以前の配布物では実行ファイルは`target/release/`にあります。
+
+[`install.ps1`](../install.ps1)と[`install.sh`](../install.sh)は指定版とそのSHA-256を取得します。WindowsはユーザーのPATHに追加し、Linux/macOSは`~/.local/bin/nagic`とbash/zshのPATH設定を用意します。PATHの永続変更を省く場合は`-NoPath`または`--no-path`を使います。Rust、C環境、VSIXは別途インストールします。
 
 VSIXにはコンパイラを含みません。VS Codeの「VSIXからのインストール」で入れ、`nagic`を別にビルドするかNagiの配布物を用意します。[拡張の設定](../../editors/vscode-nagi/README.md)を参照してください。
 
@@ -51,4 +55,4 @@ VSIXにはコンパイラを含みません。VS Codeの「VSIXからのイン�
 python -m unittest discover -s scripts/releases -p 'test_*.py'
 ```
 
-このテストはDocsだけの更新、独立したバージョン更新、複数コミットのpush、公開済みタグの保護、draftの再開、Git管理外ファイルの除外を確認します。実際のGitHubへの公開は行いません。
+このテストはインストーラーの正常動作・再実行・チェックサム不一致・アーカイブ経路・既存コマンドの保護、Docsだけの更新、独立したバージョン更新、複数コミットのpush、公開済みタグの保護、draftの再開、Git管理外ファイルの除外を確認します。実際のGitHubへの公開は行いません。

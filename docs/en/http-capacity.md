@@ -172,6 +172,20 @@ For the throughput comparisons and smaller lifecycle test, the server used one l
 
 [Raw follow-up data and script snapshots](../../benchmarks/results/http-wait-2026-10-01/) record hashes of the binaries, implementation, and harnesses. The original environments' `source_commit` identifies the checked-out base commit; also consult `provenance.json` to identify the modified implementation.
 
+### Reduce JSON response allocations
+
+In 0.1.6, JSON success and error responses use a static `Content-Type` value. Comparing small JSON, 4KiB JSON, and 400/404/503 response construction in one process shows one fewer allocation and 16 fewer allocated bytes per response. Status, headers, and body bytes match. Network operations and body consumption are outside this allocation measurement.
+
+Both versions keep the current ten-second connection wait deadline. Five alternating baseline/candidate pairs per endpoint use 128 client connections for ten seconds, one server CPU with `NAGI_THREADS=1`, and two separate load-generator CPUs.
+
+| Operation | Baseline responses/s | Candidate responses/s | Change in medians | p99 (before → after) | Errors |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| /health | 71,069 | 70,186 | −1.2% | 2.721 → 2.859ms | 0 |
+| Small JSON | 65,438 | 66,191 | +1.2% | 2.947 → 3.127ms | 0 |
+| 4KiB JSON | 38,632 | 38,844 | +0.5% | 3.911 → 4.233ms | 0 |
+
+Paired differences varied in both directions, including the unchanged `/health` endpoint. These trials do not establish a throughput improvement. The directly measured benefit is fewer allocations during response construction. [All 30 trials and reproduction steps](../../benchmarks/results/response-headers-2026-10-02/) are retained.
+
 ## Connection management and DoS protection
 
 The current [`serve`](../../runtime/src/lib.rs) has a 1 MiB HTTP body limit and a 2-second handler timeout. It binds only to `127.0.0.1` by default. These controls do not bound every connection's lifetime or the traffic reaching a public deployment.

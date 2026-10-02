@@ -1,4 +1,4 @@
-# Nagi 0.1.5 — バックエンド向け二層言語の実行可能な試作
+# Nagi 0.1.6 — バックエンド向け二層言語の実行可能な試作
 
 [English](README.en.md)
 
@@ -16,11 +16,34 @@
 
 配布物は[GitHub Releases](https://github.com/disnana/Nagi/releases)に掲載します。mainでNagiまたはVS Code拡張のバージョンを上げると、CI成功後にその配布物を正式リリースします。[運用手順](scripts/releases/README.md)に条件と成果物をまとめています。
 
+## インストール
+
+NagiアプリのビルドにはRust/CargoとCのビルド環境が必要です。準備は[最初の実行](docs/getting-started.md)を参照してください。
+
+Windows（PowerShell）:
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/nagi-v0.1.6/scripts/install.ps1')))
+```
+
+Linux / macOS（bash）:
+
+```bash
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/nagi-v0.1.6/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
+```
+
+Nagi 0.1.6を取得し、SHA-256を確認してユーザー用の場所へ展開し、PATHに登録します。Linux/macOSではbash/zshの設定にPATHの1行を追記します。RustやVS Code拡張は別途用意します。VS Codeはインストール後に再起動してください。
+
+```bash
+nagic --version
+nagic --help
+```
+
+自分で展開する場合は、[GitHub Releases](https://github.com/disnana/Nagi/releases)のOS別アーカイブ全体を展開し、展開フォルダーをPATHに追加します。`runtime/`を同じ場所に保てば、`NAGI_ROOT`の設定は不要です。
+
 ## 最初に動かす
 
-必要なものはRust/Cargo、SQLiteのCコードをビルドできるCコンパイラです。[GitHub Releases](https://github.com/disnana/Nagi/releases)から、Windows x64、Linux x86_64、macOS Apple Silicon、macOS Intel用のコンパイラ入り配布物を取得できます。CIで各OSのビルド・実行を検証します。WindowsのMSVC環境とPowerShellのコマンド、macOSの準備は[準備と最初の実行](docs/getting-started.md)にあります。WSL2では次のLinux手順を使えます。
-
-コンパイラ入りの配布物を使う場合は、最初の`cargo build`を省略できます。NagiのアプリをビルドするためのRust/CargoとCのビルド環境は必要です。コンパイラが`runtime/`を参照できるよう、アーカイブ全体を展開してください。
+以下はソースからコンパイラとサンプルをビルドする手順です。インストール済みのコンパイラでは`nagic run <ファイル>`を使います。
 
 ```bash
 cargo build --release --locked

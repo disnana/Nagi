@@ -742,6 +742,31 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
 }
 
 pub fn cli(args: Vec<String>) -> Result<(), String> {
+    if args
+        .first()
+        .is_some_and(|arg| matches!(arg.as_str(), "version" | "--version" | "-V"))
+    {
+        if args.len() != 1 {
+            return Err("version takes no additional arguments".into());
+        }
+        println!("nagic {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+    let help = matches!(
+        args.first().map(String::as_str),
+        Some("help" | "--help" | "-h")
+    ) || args.first().is_some_and(|command| {
+        ["check", "lower", "build", "run", "symbols"].contains(&command.as_str())
+            && args[1..].iter().any(|arg| arg == "--help" || arg == "-h")
+    });
+    if help {
+        println!(
+            "Nagi compiler {}\n\n{}",
+            env!("CARGO_PKG_VERSION"),
+            crate::project::USAGE
+        );
+        return Ok(());
+    }
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let options = crate::project::resolve(&args, &cwd)?;
     let cmd = options.command.as_str();
@@ -809,31 +834,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     if cmd != "build" && cmd != "run" {
         return Err(format!("unknown command: {cmd}"));
     }
-    let root = std::env::var_os("NAGI_ROOT")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::current_exe().ok().and_then(|exe| {
-                exe.ancestors()
-                    .find(|p| {
-                        p.join("runtime/Cargo.toml").is_file()
-                            && p.join("compiler/Cargo.toml").is_file()
-                    })
-                    .map(Path::to_path_buf)
-            })
-        })
-        .or_else(|| {
-            std::env::current_dir().ok().and_then(|cwd| {
-                cwd.ancestors()
-                    .find(|p| p.join("runtime/Cargo.toml").is_file())
-                    .map(Path::to_path_buf)
-            })
-        })
-        .unwrap_or_else(|| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .unwrap()
-                .to_path_buf()
-        });
+    let root = crate::installation::root()?;
     fs::create_dir_all(out.join("src")).map_err(|e| e.to_string())?;
     if p.functions.iter().any(|f| f.external) && rust_file.is_none() {
         return Err("extern関数のビルドには--rust FILE.rsが必要です".into());
@@ -881,7 +882,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                 .project_root
                 .as_ref()
                 .map(|p| p.join("build/native-target"))
-                .unwrap_or_else(|| root.join("native-target"))
+                .unwrap_or_else(|| cwd.join("native-target"))
         });
     let mut child = Command::new("cargo")
         .args([

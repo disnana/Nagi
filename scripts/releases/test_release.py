@@ -4,6 +4,7 @@ import json
 import subprocess
 import tarfile
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -20,7 +21,7 @@ class ReleasePlanTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
-        self.change("Cargo.toml", '[workspace.package]\nversion = "0.1.0"\n')
+        self.change("Cargo.toml", '[workspace.package]\nversion = "0.1.0"\nedition = "2021"\nlicense = "MIT"\n')
         self.change("editors/vscode-nagi/package.json", '{"version":"0.1.5"}\n')
         self.first = self.commit()
         self.root_patch = patch.object(plan, "ROOT", self.root)
@@ -85,11 +86,16 @@ class ReleasePlanTests(unittest.TestCase):
             plan.plan(self.first, self.commit())
 
     def test_package_uses_committed_source_and_excludes_untracked_files(self):
-        self.change("runtime/Cargo.toml", '[package]\nname="nagi-runtime"\n')
+        self.change("runtime/Cargo.toml", '[package]\nname="nagi-runtime"\nversion.workspace=true\nedition.workspace=true\nlicense.workspace=true\n[dev-dependencies]\nunused="1"\n')
+        self.change("runtime/src/lib.rs", "// committed runtime\n")
+        self.change("runtime/src/http/tests.rs", "// development test\n")
+        self.change("runtime/examples/bench.rs", "// development benchmark\n")
+        self.change("LICENSE", "MIT license fixture\n")
         self.change("compiler/Cargo.toml", '[package]\nname="nagic"\n')
         self.change("README.md", "Committed documentation")
         commit = self.commit()
         self.change("README.md", "Uncommitted private notes")
+        self.change("runtime/src/lib.rs", "// uncommitted runtime\n")
         self.change("private-note.txt", "Must never be in a release")
         binary = self.root / "compiler-test"
         binary.write_bytes(b"prebuilt compiler fixture")
@@ -101,7 +107,7 @@ class ReleasePlanTests(unittest.TestCase):
                     with tarfile.open(archive) as source:
                         names = source.getnames()
                         read = lambda name: source.extractfile(name).read()
-                        executable = next(name for name in names if name.endswith("/target/release/nagic"))
+                        executable = f"nagi-0.1.0-{platform}/nagic"
                         self.assertEqual(source.getmember(executable).mode, 0o755)
                         self.assertEqual(read(executable), binary.read_bytes())
                         self.check_source(names, read, commit, platform)
@@ -115,7 +121,15 @@ class ReleasePlanTests(unittest.TestCase):
 
     def check_source(self, names, read, commit, platform):
         self.assertFalse(any(name.endswith("private-note.txt") or "/.git/" in name for name in names))
-        self.assertEqual(read(next(name for name in names if name.endswith("/README.md"))), b"Committed documentation")
+        prefix = f"nagi-0.1.0-{platform}/"
+        self.assertEqual(set(names), {prefix + name for name in (
+            "nagic.exe" if platform == "windows-x86_64" else "nagic",
+            "runtime/Cargo.toml", "runtime/src/lib.rs", "LICENSE", "release.json", "README.txt")})
+        self.assertEqual(read(prefix + "runtime/src/lib.rs"), b"// committed runtime\n")
+        manifest = tomllib.loads(read(prefix + "runtime/Cargo.toml").decode())
+        self.assertEqual(manifest["package"], {"name": "nagi-runtime", "version": "0.1.0", "edition": "2021", "license": "MIT"})
+        self.assertIn("workspace", manifest)
+        self.assertNotIn("dev-dependencies", manifest)
         metadata = json.loads(read(next(name for name in names if name.endswith("/release.json"))))
         self.assertEqual(metadata, {"commit": commit, "platform": platform, "version": "0.1.0"})
 

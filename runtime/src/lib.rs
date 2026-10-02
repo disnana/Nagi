@@ -8,7 +8,7 @@ mod http;
 pub mod metrics;
 use axum::{
     body::Body,
-    http::{header, StatusCode},
+    http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     Router,
 };
@@ -187,7 +187,14 @@ impl fmt::Display for Uuid {
 pub fn response<T: Serialize>(r: Result<T, Error>) -> Response {
     match r {
         Ok(t) => match serde_json::to_vec(&t) {
-            Ok(v) => ([(header::CONTENT_TYPE, "application/json")], v).into_response(),
+            Ok(v) => (
+                [(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/json"),
+                )],
+                v,
+            )
+                .into_response(),
             Err(e) => error_response(Error::internal(e.to_string())),
         },
         Err(e) => error_response(e),
@@ -213,7 +220,10 @@ pub fn error_response(e: Error) -> Response {
     };
     (
         code,
-        [(header::CONTENT_TYPE, "application/json")],
+        [(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        )],
         serde_json::to_vec(&ErrorBody { error: msg }).unwrap(),
     )
         .into_response()
