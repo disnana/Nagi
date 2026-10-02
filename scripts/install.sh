@@ -77,9 +77,10 @@ if [ -e "$link" ] || [ -L "$link" ]; then
 fi
 ln -s "$destination/nagic" "$work/nagic-link"
 mv -f "$work/nagic-link" "$link"
+# Single quotes preserve UTF-8 on macOS's Bash 3.2 as well as Bash and zsh.
+quoted="'${bin_dir//\'/\'\\\'\'}'"
 if [ "$no_path" -eq 0 ]; then
     # Quote a possibly custom path as shell data, never as executable syntax.
-    printf -v quoted '%q' "$bin_dir"
     line="case \"\$PATH\" in $quoted|$quoted:*) ;; *) export PATH=$quoted:\"\$PATH\" ;; esac # Nagi installer"
     if [ -n "$profile" ]; then
         profiles=("$profile")
@@ -99,6 +100,6 @@ if [ "$no_path" -eq 0 ]; then
 fi
 "$link" --version
 printf '%s\n' "Installed: $destination"
-printf '%s\n' "For this terminal: export PATH=$(printf '%q' "$bin_dir"):\"\$PATH\""
+printf '%s\n' "For this terminal: export PATH=$quoted:\"\$PATH\""
 printf '%s\n' 'Building applications requires Rust/Cargo and a C build environment. Restart VS Code to refresh PATH.'
 if [ -n "${NAGI_ROOT:-}" ]; then printf '%s\n' 'NAGI_ROOT is set; unset it to use the installed runtime automatically.'; fi

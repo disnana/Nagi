@@ -27,7 +27,7 @@ class InstallerVersionTests(unittest.TestCase):
 @unittest.skipIf(os.name == "nt", "PowerShell installer has a separate Windows test")
 class ShellInstallTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="nagi installer 凪 ")
+        self.temporary = tempfile.TemporaryDirectory(prefix="nagi installer 凪 ' $() ")
         self.root = Path(self.temporary.name)
         system = "macos" if platform.system() == "Darwin" else "linux"
         architecture = "arm64" if platform.machine() in ("arm64", "aarch64") else "x86_64"
