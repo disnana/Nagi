@@ -139,6 +139,22 @@ In a separate test, we created 350 connections each for silence, partial headers
 
 The 42 FDs after recovery include 32 connections carrying regular traffic. RSS did not return to its initial value. This short test does not establish a memory leak or long-term stability. In the first attempt, the generator sent 124,997 requests and all returned 200, but the harness failed because it required exactly 125,000 arrivals. We corrected the assertion to check actual dispatched counts and repeated the test shown above. The first response aggregate is also retained.
 
+**Worker-count correction, October 2, 2026:** The recovery test above set `TOKIO_WORKER_THREADS=1`, but Nagi reads `NAGI_THREADS`. Its default is four. The original test did not record the inherited setting, so its actual worker count is unknown. The smaller lifecycle test and throughput comparisons explicitly set `NAGI_THREADS=1` through their shared helper. The original results and harness remain unchanged.
+
+We repeated the load with the same modified 0.1.4 binary, recording `NAGI_THREADS=1` and one actual Tokio worker thread. The test again used 1,050 waiting connections and 5,000 regular requests per second for 25 seconds.
+
+| Item | Trial recording server TCP states | Trial recording both peers' TCP states |
+| --- | ---: | ---: |
+| Requests actually sent | 124,997 | 125,000 |
+| Non-200 responses or transport errors | 0 | 0 |
+| Regular traffic p99 | 0.621ms | 0.610ms |
+| Observation when all waiting connections had closed | 12.37 seconds after load began | 11.26 seconds after load began |
+| Server FDs after load | 10 | 10 |
+
+Two preceding attempts returned successful responses for all regular requests but failed validation because some clients did not observe connection closure. In one attempt, 25 silent clients had not observed closure even though server FDs had returned to 10. The cause is unresolved. The table shows the two later trials after adding reads to observe closure and TCP-state capture; it does not establish that every attempt observed all connections closing. TCP sampling and observation periods also differ, so these p99 values should not be used as a performance comparison with the earlier result.
+
+At the end of both successful trials, 1,050 server-side connections were still in `FIN_WAIT2`, awaiting their peers' close, despite FD recovery. Reclaiming FDs does not mean every kernel TCP state has disappeared. [Correction and repeat records](../../benchmarks/results/http-wait-2026-10-01/recovery-load/one-worker/README.md) include the attempts that failed validation.
+
 Automated tests with a shorter deadline check that one-byte header progress does not reset the deadline, keep-alive can be reused within it, and long responses, slow response readers, streams, and upgraded WebSockets are not cut off by the request-wait deadline. These are not tests of large WebSocket fan-out or public-network capacity.
 
 ### Effect on regular traffic
@@ -152,7 +168,7 @@ We alternated the implementations on the same host: before/after, after/before, 
 
 The implementation that reclaims waiting connections has lower saturation throughput under these conditions. We have not profiled the cause. An earlier comparison that measured the baseline trials together also showed reductions of about 7.2% and 5.6%, respectively. The table uses the alternating-order repeat; raw data from both comparisons is retained. These brief trials on one host do not establish the same difference for every environment.
 
-The server used one logical CPU and one worker; the load generator used two different logical CPUs. The assignments were server `0`, clients `1,2`, with HTTP/1.1 without TLS on loopback. OS FD limits were not raised. The 128 connections are a client-side test condition.
+For the throughput comparisons and smaller lifecycle test, the server used one logical CPU and one worker; the load generator used two different logical CPUs. The assignments were server `0`, clients `1,2`, with HTTP/1.1 without TLS on loopback. OS FD limits were not raised. The 128 connections are a client-side test condition.
 
 [Raw follow-up data and script snapshots](../../benchmarks/results/http-wait-2026-10-01/) record hashes of the binaries, implementation, and harnesses. The original environments' `source_commit` identifies the checked-out base commit; also consult `provenance.json` to identify the modified implementation.
 
