@@ -4,6 +4,12 @@
 
 Install Nagi extension 0.1.8 and the latest nagic, then open the Nagi repository in VS Code. This walkthrough uses working code to try type hovers, field completion, and definition navigation. Both High and Low are supported.
 
+## Indentation support
+
+The next extension release adds indentation after headers such as `def main():`, else/case alignment, and closing delimiter alignment in multiline expressions. Build a VSIX from main to try it earlier.
+
+Typing the final colon of `else:` or `case ...:` aligns it with its enclosing `if` or `match`. The default is four spaces; the editor's indentation settings are respected. This runs without the compiler, including in new untitled files. See [indentation while typing](vscode-extension.md#indentation-while-typing) for behavior and settings.
+
 ## Open the example
 
 Open [examples/tutorial/editor_types.nagi](../../examples/tutorial/editor_types.nagi), which contains this complete program:
