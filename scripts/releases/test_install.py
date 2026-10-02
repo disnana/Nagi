@@ -20,7 +20,8 @@ VERSION = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package
 class ShellInstallTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="nagi installer 凪 ' $() ")
-        self.root = Path(self.temporary.name)
+        # macOS exposes /var through /private/var; the installer uses pwd -P.
+        self.root = Path(self.temporary.name).resolve()
         system = "macos" if platform.system() == "Darwin" else "linux"
         architecture = "arm64" if platform.machine() in ("arm64", "aarch64") else "x86_64"
         self.platform = f"{system}-{architecture}"
@@ -233,6 +234,7 @@ if [ "$head" = 1 ]; then printf '%s' "$NAGI_TEST_LATEST_URL"; exit 0; fi
                 self.assertNotEqual(result.returncode, 0)
                 self.assert_active(VERSION)
                 self.assertEqual((self.root / "profile").read_bytes(), profile)
+                self.assertFalse((self.root / "versions" / f"nagi-{self.next_version}-{self.platform}").exists())
 
     def test_profile_failure_rolls_back_the_active_command(self):
         self.assertEqual(self.install().returncode, 0)
@@ -251,6 +253,17 @@ if [ "$head" = 1 ]; then printf '%s' "$NAGI_TEST_LATEST_URL"; exit 0; fi
                 self.environment["NAGI_TEST_LATEST_URL"] = url
                 self.assertNotEqual(self.install().returncode, 0)
                 self.assertFalse((self.root / "executed").exists())
+
+    def test_dangling_profile_link_is_not_replaced_on_failure(self):
+        self.assertEqual(self.install("--no-path").returncode, 0)
+        profile = self.root / "profile"
+        target = self.root / "missing-profile"
+        profile.symlink_to(target)
+        result = self.activate_next_release()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(profile.is_symlink())
+        self.assertFalse(target.exists())
+        self.assert_active(VERSION)
 
     def test_concurrent_installer_is_rejected_without_changing_the_active_version(self):
         self.assertEqual(self.install().returncode, 0)

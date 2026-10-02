@@ -36,7 +36,7 @@ Linux / macOS (bash):
 
 These commands download the latest published Nagi release, verify SHA-256, install it for your user, and add it to PATH. **Run the same command to update.** The installer comes from main; the compiler comes from a published GitHub Release. Install Rust and the VS Code extension separately.
 
-Stop any Nagi builds before updating and restart VS Code afterward. After a successful update, unchanged older distributions are removed so only the selected version remains. Modified, added, busy, or unverifiable files are preserved, and the installer reports their location. A failed update preserves the previous command. See [updating and selecting a version](docs/en/getting-started.md#update).
+Stop any Nagi builds before updating and restart VS Code afterward. After a successful update, unchanged older distributions are removed so only the selected version remains. Modified or added files are preserved. The installer reports older copies it cannot verify or remove, including files locked by Windows. A failed update preserves the previous command. See [updating and selecting a version](docs/en/getting-started.md#update).
 
 ```bash
 nagic --version

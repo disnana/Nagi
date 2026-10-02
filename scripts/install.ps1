@@ -24,6 +24,7 @@ $previousUserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 $activated = $false
 $committed = $false
 $pathChanged = $false
+$createdDestination = $false
 
 function Get-Distribution([string]$Release, [string]$Folder) {
     $name = "nagi-$Release-windows-x86_64"
@@ -123,7 +124,10 @@ try {
     if ($LASTEXITCODE -ne 0 -or $actual -ne "nagic $Version") { throw 'Compiler version mismatch' }
     if (Test-Path -LiteralPath $destination) {
         if ((Get-InstallSnapshot $destination) -cne $snapshot) { throw "Existing install differs: $destination (not overwritten)" }
-    } else { Move-Item -LiteralPath $root -Destination $destination }
+    } else {
+        Move-Item -LiteralPath $root -Destination $destination
+        $createdDestination = $true
+    }
     # A junction needs no administrator/developer mode and keeps a real .exe
     # on PATH for editor subprocesses. Preserve the previous link until verified.
     New-Item -ItemType Junction -Path $next -Target $destination | Out-Null
@@ -177,6 +181,12 @@ try {
         $env:Path = $previousPath
         if ($pathChanged -and [Environment]::GetEnvironmentVariable('Path', 'User') -ne $previousUserPath) {
             [Environment]::SetEnvironmentVariable('Path', $previousUserPath, 'User')
+        }
+        if ($createdDestination) {
+            try {
+                if ((Get-InstallSnapshot $destination) -cne $snapshot) { throw 'Files changed during installation' }
+                Remove-Item -LiteralPath $destination -Recurse -Force
+            } catch { Write-Warning "Kept incomplete installation: $destination ($($_.Exception.Message))" }
         }
     }
     [Net.ServicePointManager]::SecurityProtocol = $previousTls

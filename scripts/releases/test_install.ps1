@@ -106,9 +106,18 @@ try {
         }
         if (-not $failed -or $env:Path -ne $savedPath -or [Environment]::GetEnvironmentVariable('Path', 'User') -ne $savedUserPath) { throw 'Failure did not restore PATH' }
         Assert-Active $installDir '0.0.1'
+        if (Test-Path -LiteralPath (Join-Path $installDir 'nagi-0.0.3-windows-x86_64')) { throw 'Failed update left a new installation behind' }
     }
     $downloadFixture.BadChecksum = $false
     & $installer @options
+
+    $unmanaged = Join-Path $temporary 'unmanaged'
+    New-Item -ItemType Directory -Path (Join-Path $unmanaged 'current') -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $unmanaged 'current\notes.txt'), 'user files')
+    $failed = $false
+    try { & $installer -InstallDir $unmanaged -NoPath }
+    catch { $failed = $_.Exception.Message -match 'Existing path not overwritten' }
+    if (-not $failed -or (Get-Content -Raw -LiteralPath (Join-Path $unmanaged 'current\notes.txt')) -ne 'user files') { throw 'Unmanaged current directory was overwritten' }
 
     # Original installer layout: direct version on PATH, no current junction.
     $legacy = Join-Path $temporary 'legacy'
@@ -163,7 +172,8 @@ try {
     # Delete installer junctions before recursively removing the temporary tree.
     Get-ChildItem -LiteralPath $temporary -Directory | ForEach-Object {
         $junction = Join-Path $_.FullName 'current'
-        if (Test-Path -LiteralPath $junction) { [IO.Directory]::Delete($junction) }
+        $item = Get-Item -Force -LiteralPath $junction -ErrorAction SilentlyContinue
+        if ($item -and $item.LinkType -eq 'Junction') { [IO.Directory]::Delete($junction) }
     }
     Remove-Item -LiteralPath $temporary -Recurse -Force
 }

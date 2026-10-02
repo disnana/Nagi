@@ -35,7 +35,7 @@ The version output is `nagic 0.1.6`. You can also use `nagic -V` or `nagic versi
 
 Run the installation command above again. It checks the latest published release, downloads and verifies it, then switches the command. It installs neither unreleased main builds nor the VSIX. Repeating an install of the same version does not add another copy.
 
-Stop Nagi builds before updating. After the new command starts successfully, the installer compares older distributions with their published archives and removes unchanged copies. Only the selected version remains; no rollback copy is kept permanently. Added, modified, busy, or unverifiable files are preserved, and their folder is reported. A failed update preserves the previous command and PATH.
+Stop Nagi builds before updating. After the new command starts successfully, the installer compares older distributions with their published archives and removes unchanged copies. Only the selected version remains; no rollback copy is kept permanently. Added or modified files are preserved. Older copies that cannot be verified or removed, including files locked by Windows, are also kept and their folder is reported. A failed update preserves the previous command and PATH.
 
 Old URLs such as `nagi-v0.1.6/scripts/install.ps1` are pinned to 0.1.6. Use this page's `main/scripts/install.ps1` to update. On Windows, version-specific PATH entries from the original installer are replaced with the fixed `current` entry. If VS Code's `nagi.compilerPath` points to an old version's absolute path, change it to `nagic` and restart VS Code.
 

@@ -39,6 +39,7 @@ link_work=''
 previous=''
 activated=0
 committed=0
+created=0
 changed_profiles=()
 cleanup() {
     local status=$? i file
@@ -57,6 +58,12 @@ cleanup() {
             else rm -f "$file"
             fi
         done
+        if [ "$created" -eq 1 ]; then
+            if snapshot "$destination" > "$work/failed-install" && cmp -s "$work/expected" "$work/failed-install"; then
+                rm -rf "$destination"
+            else printf 'Kept changed incomplete installation: %s\n' "$destination" >&2
+            fi
+        fi
     fi
     [ -z "$link_work" ] || rm -rf "$link_work"
     [ -z "$work" ] || rm -rf "$work"
@@ -133,7 +140,9 @@ snapshot "$root" > "$work/expected"
 [ "$("$root/nagic" --version)" = "nagic $version" ] || { echo 'Compiler version mismatch' >&2; exit 1; }
 if [ -e "$destination" ] || [ -L "$destination" ]; then
     snapshot "$destination" > "$work/existing" && cmp -s "$work/expected" "$work/existing" || { echo "Existing install differs: $destination (not overwritten)" >&2; exit 1; }
-else mv "$root" "$destination"
+else
+    mv "$root" "$destination"
+    created=1
 fi
 mkdir -p "$bin_dir"
 bin_dir=$(cd "$bin_dir" && pwd -P)
@@ -167,6 +176,7 @@ if [ "$no_path" -eq 0 ]; then
         profiles=("$login" "$HOME/.bashrc")
     fi
     for file in "${profiles[@]}"; do
+        [ ! -L "$file" ] || [ -f "$file" ] || { echo "Not a profile file: $file" >&2; exit 1; }
         [ ! -e "$file" ] || [ -f "$file" ] || { echo "Not a profile file: $file" >&2; exit 1; }
         if [ ! -f "$file" ] || ! grep -Fqx "$line" "$file"; then
             i=${#changed_profiles[@]}
