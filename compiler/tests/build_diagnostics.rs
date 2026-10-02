@@ -87,6 +87,47 @@ fn overflowing_f32_is_rejected_at_the_source_before_backend_build() {
 }
 
 #[test]
+fn invalid_operators_in_imports_report_nagi_lines_before_rust_or_cargo() {
+    for (expression, message) in [
+        ("-value", "UUIDは符号反転できません"),
+        ("value < value", "UUIDは<による比較に対応していません"),
+    ] {
+        let f = Fixture::new();
+        f.write(
+            "main.nagi",
+            "import \"helpers.nagi\"\ndef main():\n    print(42)\n",
+        );
+        let ret = if expression == "-value" {
+            "UUID"
+        } else {
+            "bool"
+        };
+        f.write(
+            "helpers.nagi",
+            &format!("def compare(value: UUID) -> {ret}:\n    return {expression}\n"),
+        );
+        for command in ["check", "build", "run"] {
+            let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+                .args([command, "main.nagi"])
+                .current_dir(&f.0)
+                .env("PATH", "")
+                .env("NAGI_ROOT", f.0.join("missing-runtime"))
+                .output()
+                .unwrap();
+            assert!(!output.status.success());
+            let error = stderr(&output);
+            assert!(
+                error.contains(message) && error.contains("helpers.nagi:2"),
+                "{error}"
+            );
+            assert!(error.contains(&format!("return {expression}")), "{error}");
+            assert!(!error.contains("明示copy"), "{error}");
+            assert!(!f.0.join("build/main/src/main.rs").exists());
+        }
+    }
+}
+
+#[test]
 fn iterator_mutation_fails_in_check_and_build_before_backend_generation() {
     for (name, text) in [
         ("main.nagi", "def main():\n    values = [1, 2]\n    for item in values:\n        append(values, item)\n"),

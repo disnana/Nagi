@@ -25,3 +25,18 @@ async def main() -> Result[unit, Error]:
 If a child returns a Result error or panics, the scope cancels the remaining children and waits for them. Spawned work must return `unit` or `Result[unit, Error]`. Returning from inside a scope and passing a view to a child are not supported.
 
 If the parent operation itself is dropped, or the scope body panics, cancellation is requested without a guarantee that every child has already stopped. See [Concurrency](concurrency.md) for CPU work and cancellation.
+
+## Call a function stored in a variable
+
+An async function name can be assigned to a variable and called through it. This example prints `42`.
+
+```nagi
+async def answer(value: i64) -> i64:
+    return value + 1
+
+async def main():
+    selected = answer
+    print(await selected(41))
+```
+
+This assignment stores the function itself. Storing a call result with `pending = answer(41)` is unsupported; await the call directly. See [types and inference](types.md#pass-a-function-as-a-value) for supported function signatures.

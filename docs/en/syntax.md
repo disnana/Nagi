@@ -89,6 +89,18 @@ The table runs from highest to lowest precedence. Binary operators on the same l
 | ↓ | `and` | `count > 0 and count < 10` |
 | Lowest | `or` | `enabled or count == 0` |
 
+Negation, `-value`, accepts signed integers (i8/i16/i32/i64) and floating-point numbers (f32/f64). It does not accept functions or class values.
+
+| Values being compared | `==` / `!=` | `<` / `>` / `<=` / `>=` |
+|---|---|---|
+| Numbers, bool, or str of the same type | Supported | Supported |
+| UUID or timestamp | Supported | Unsupported |
+| view[str] or view[bytes] | Supported | Supported |
+| view[T] | When T supports equality | When T supports ordering |
+| Classes or owned Lists | Unsupported | Unsupported |
+
+A borrowed list of classes, such as `view[Point]`, cannot be compared directly either. Compare the fields you need. List views compare their elements.
+
 Numeric types do not convert implicitly. Use `i64(value)` to widen i32. `i32(an_i64)` returns `Result[i32, Error]`; use forms such as `try i32(value)` inside a Result-returning function.
 
 Use `count > 0 and count < 10` rather than chained `0 < count < 10`. Integer `/` is integer division. `**`, `//`, and bitwise operations are unsupported.

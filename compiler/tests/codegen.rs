@@ -266,3 +266,71 @@ fn output_compiles_for_numbers_booleans_and_borrowed_strings() {
     code.push_str("\n#[test] fn generated_output() { output(String::from(\"凪\")); }\n");
     compile_and_run(code);
 }
+
+#[test]
+fn numeric_negation_and_nested_view_comparisons_compile_and_run() {
+    let mut source = String::new();
+    for ty in ["i8", "i16", "i32", "i64", "f32", "f64"] {
+        source.push_str(&format!(
+            "def negative_{ty}(value: {ty}) -> {ty}:\n    return -value\n"
+        ));
+    }
+    for (name, ty) in [
+        ("strings", "str"),
+        ("bytes", "bytes"),
+        ("lists", "List[i64]"),
+        ("optional", "Option[i64]"),
+        ("results", "Result[i64, i64]"),
+        ("shared", "shared[i64]"),
+        ("owned", "owned[i64]"),
+    ] {
+        source.push_str(&format!("def compare_{name}(values: view[{ty}]) -> bool:\n    return values == values and values <= values\n"));
+    }
+    source.push_str(
+        "def equal_maps(values: view[Map[i64, str]]) -> bool:\n    return values == values\n",
+    );
+    let mut high = parser::parse(&source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let mut code = emit::rust(&low).unwrap();
+    code.push_str(
+        r#"
+#[test] fn generated_operators() {
+    assert_eq!(negative_i8(1), -1);
+    assert_eq!(negative_i16(2), -2);
+    assert_eq!(negative_i32(3), -3);
+    assert_eq!(negative_i64(4), -4);
+    assert_eq!(negative_f32(1.5), -1.5);
+    assert_eq!(negative_f64(2.5), -2.5);
+    assert!(compare_strings("凪"));
+    assert!(compare_bytes(&[0, 128, 255]));
+    assert!(compare_lists(&[vec![1, 2], vec![3]]));
+    assert!(compare_optional(&[None, Some(42)]));
+    assert!(compare_results(&[Ok(42), Err(1)]));
+    assert!(compare_shared(&[std::sync::Arc::new(42)]));
+    assert!(compare_owned(&[42]));
+    assert!(equal_maps(&[std::collections::HashMap::from([(42, String::from("Nagi"))])]));
+}
+"#,
+    );
+    compile_and_run(code);
+}
+
+#[test]
+fn explicit_local_async_function_annotations_compile_and_run() {
+    let source = "async def increment(value: i64) -> i64:\n    return value + 1\nasync def answer() -> i64:\n    selected: fn[i64, Future[i64]] = increment\n    return await selected(41)\n";
+    let mut high = parser::parse(source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let mut code = emit::rust(&low).unwrap();
+    code.push_str(r#"
+#[test] fn explicit_async_alias() {
+    let mut future = std::pin::pin!(answer());
+    let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+    assert_eq!(std::future::Future::poll(future.as_mut(), &mut context), std::task::Poll::Ready(42));
+}
+"#);
+    compile_and_run(code);
+}

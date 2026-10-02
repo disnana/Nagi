@@ -49,6 +49,65 @@ fn matches_type(a: &Type, b: &Type) -> bool {
     a == b
 }
 
+// Generated records do not implement comparison or hashing. Borrowed slices
+// inherit these operations from their elements, including nested containers.
+fn comparable(t: &Type, ordered: bool) -> bool {
+    match t.0.as_str() {
+        "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" | "bool"
+        | "str" | "bytes" | "unit" => true,
+        "UUID" | "timestamp" => !ordered,
+        "fn" if !t.1.is_empty() => true,
+        "view" | "List" | "Option" | "owned" | "shared" => comparable(&t.inner(), ordered),
+        "Result" => t.1.iter().all(|arg| comparable(arg, ordered)),
+        "Map" => !ordered && hashable(&t.1[0]) && comparable(&t.1[1], false),
+        _ => false,
+    }
+}
+
+fn hashable(t: &Type) -> bool {
+    match t.0.as_str() {
+        "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "bool" | "str" | "bytes"
+        | "unit" => true,
+        "fn" if !t.1.is_empty() => true,
+        "view" | "List" | "Option" | "owned" | "shared" => hashable(&t.inner()),
+        "Result" => t.1.iter().all(hashable),
+        _ => false,
+    }
+}
+
+fn recursive_layout(
+    t: &Type,
+    classes: &HashMap<String, Class>,
+    visiting: &mut HashSet<String>,
+    checked: &mut HashSet<String>,
+) -> bool {
+    if t.1.is_empty() {
+        if let Some(class) = classes.get(&t.0) {
+            if checked.contains(&t.0) {
+                return false;
+            }
+            if !visiting.insert(t.0.clone()) {
+                return true;
+            }
+            let cyclic = class
+                .fields
+                .iter()
+                .any(|(_, field)| recursive_layout(field, classes, visiting, checked));
+            visiting.remove(&t.0);
+            if !cyclic {
+                checked.insert(t.0.clone());
+            }
+            return cyclic;
+        }
+    }
+    // These wrappers contain their values inline. Vec, Arc, HashMap and
+    // function pointers have fixed layouts independent of their contents.
+    matches!(t.0.as_str(), "Option" | "Result" | "owned")
+        && t.1
+            .iter()
+            .any(|inner| recursive_layout(inner, classes, visiting, checked))
+}
+
 fn negative_boundary_type(expr: &Expr, expected: Option<&Type>) -> Option<Type> {
     let E::Int(value) = &expr.kind else {
         return None;
@@ -123,32 +182,29 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         }
         c.classes.insert(class.name.clone(), class.clone());
     }
+    let mut checked_layouts = HashSet::new();
     for class in &p.classes {
         let mut fields = HashSet::new();
-        for (n, t) in &class.fields {
-            c.valid(t, class.line)?;
+        for (index, (n, t)) in class.fields.iter().enumerate() {
+            let line = class.field_lines.get(index).copied().unwrap_or(class.line);
+            c.valid(t, line)?;
+            c.emittable(t, line, false)?;
             if !fields.insert(n) {
-                return Err(error(class.line, "フィールドの重複"));
+                return Err(error(line, "フィールドの重複"));
             }
             if t.contains_view() {
                 return Err(error(
-                    class.line,
+                    line,
                     "0.1のclassにviewは保存できません。所有型またはcopyを使用してください",
                 ));
             }
         }
-        fn cycle(name: &str, classes: &HashMap<String, Class>, seen: &mut HashSet<String>) -> bool {
-            if !seen.insert(name.into()) {
-                return true;
-            }
-            let result = classes[name]
-                .fields
-                .iter()
-                .any(|(_, t)| classes.contains_key(&t.0) && cycle(&t.0, classes, seen));
-            seen.remove(name);
-            result
-        }
-        if cycle(&class.name, &c.classes, &mut HashSet::new()) {
+        if recursive_layout(
+            &Type::named(&class.name),
+            &c.classes,
+            &mut HashSet::new(),
+            &mut checked_layouts,
+        ) {
             return Err(error(
                 class.line,
                 "再帰する値型レイアウト。List等の間接格納が必要です",
@@ -166,9 +222,11 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
     if editor {
         for f in &p.functions {
             c.valid(&f.ret, f.line)?;
+            c.emittable(&f.ret, f.line, false)?;
             let mut names = HashSet::new();
             for (n, t) in &f.params {
                 c.valid(t, f.line)?;
+                c.emittable(t, f.line, false)?;
                 if !names.insert(n) {
                     return Err(error(f.line, "引数の重複"));
                 }
@@ -183,8 +241,10 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         c.asynchronous = f.asynchronous;
         c.scope = 0;
         c.valid(&f.ret, f.line)?;
+        c.emittable(&f.ret, f.line, false)?;
         for (index, (n, t)) in f.params.iter().enumerate() {
             c.valid(t, f.line)?;
+            c.emittable(t, f.line, false)?;
             let binding = BindingId {
                 line: f.line,
                 token: f.parameter_spans[index].start,
@@ -257,6 +317,31 @@ fn returns(ss: &[Stmt]) -> bool {
     })
 }
 impl Checker {
+    fn emittable(&self, t: &Type, line: usize, local: bool) -> Result<(), String> {
+        fn contains_future(t: &Type) -> bool {
+            t.0 == "Future" && t.1.len() == 1 || t.1.iter().any(contains_future)
+        }
+        // Direct local async aliases use Rust inference rather than a named
+        // Future type. Their nested signature types still need to be emitted.
+        let supported_alias = local
+            && t.0 == "fn"
+            && t.1
+                .last()
+                .is_some_and(|ret| ret.0 == "Future" && ret.1.len() == 1)
+            && t.1[..t.1.len() - 1].iter().all(|arg| !contains_future(arg))
+            && !contains_future(&t.1.last().unwrap().inner());
+        if contains_future(t) && !supported_alias {
+            return Err(error(
+                line,
+                if t.0 == "Future" {
+                    "非同期処理の戻り値は変数へ保存できません。呼び出し時にawaitしてください"
+                } else {
+                    "async関数を引数・戻り値・コンテナーの型として指定することは未対応です。ローカル変数への代入とawait呼び出しは使えます"
+                },
+            ));
+        }
+        Ok(())
+    }
     fn copy_type(&self, t: &Type) -> bool {
         fn visit(t: &Type, classes: &HashMap<String, Class>, depth: usize) -> bool {
             if depth > 64 {
@@ -648,6 +733,7 @@ impl Checker {
                 if let Some(a) = annotation.as_ref() {
                     self.valid(a, s.line)?;
                 }
+                self.emittable(&ty, s.line, true)?;
                 if !old.as_ref().is_some_and(|v| v.ty.is_view()) && self.borrowed(name) {
                     return Err(error(
                         s.line,
@@ -977,8 +1063,8 @@ impl Checker {
                 };
                 if op == "not" {
                     self.demand(&t, &Type::named("bool"), line)?;
-                } else if !t.0.starts_with('i') && !t.0.starts_with('f') {
-                    return Err(error(line, "符号反転には符号付き数値が必要です"));
+                } else if !matches!(t.0.as_str(), "i8" | "i16" | "i32" | "i64" | "f32" | "f64") {
+                    return Err(error(line, format!("{t}は符号反転できません。符号付き整数または浮動小数点数を指定してください")));
                 }
                 t
             }
@@ -992,8 +1078,12 @@ impl Checker {
                         Type::named("bool")
                     }
                     "==" | "!=" | "<" | ">" | "<=" | ">=" => {
-                        if !left.is_copy() && left.0 != "str" {
-                            return Err(error(line, "比較に対応していない型です"));
+                        let ordered = !matches!(op.as_str(), "==" | "!=");
+                        if (!left.is_copy() && left.0 != "str") || !comparable(&left, ordered) {
+                            return Err(error(
+                                line,
+                                format!("{left}は{op}による比較に対応していません"),
+                            ));
                         }
                         Type::named("bool")
                     }

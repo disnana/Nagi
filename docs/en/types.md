@@ -56,6 +56,8 @@ The result is `42`. Local types can also be inferred: `chosen = add_one`. A func
 
 You can also assign an async function with `selected = answer`, then call `await selected(...)` inside an async function. Type annotations for parameters receiving async functions, or functions returning them, are not yet supported. Lambdas and closures that capture surrounding local variables are also unsupported.
 
+Storing async functions in lists or classes is also unsupported. You cannot store the unawaited result of async work in a variable. Write `await sleep(10)` rather than `pending = sleep(10)`.
+
 ## Unsupported type operations
 
 `Map[K, V]` and `owned[T]` have type notation but incomplete operation APIs. User-defined generic functions and traits are unsupported.
