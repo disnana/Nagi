@@ -1,16 +1,35 @@
-# Views and zero-copy operations
+# Read without copying with view
 
-A view borrows existing memory. `view(str)`, `view(List)`, and `slice(view, start, end)` use the original memory. Invalid ranges and UTF-8 boundaries return Result errors.
+A `view` lets you borrow a string or list for reading. It does not copy the data or take ownership. It is usable only while the original data remains available.
 
-An HTTP handler's `body: view[bytes]` borrows a slice from the Bytes held by Axum. That borrow adds no body copy. Receiving data from the OS into HTTP buffers and collecting body frames still have their own costs.
+```nagi
+def main() -> Result[unit, Error]:
+    text = "Nagi language"
+    borrowed = view(text)
+    first = try slice(borrowed, 0, 4)
+    print(first)
+    saved = copy(first)
+    print(saved)
+    return ok(print(text))
+```
 
-Tests verify that the pointer offset between the source buffer and slice matches the requested offset and that allocations are zero. Borrowed JSON `&str` values are also checked to point within the input buffer.
+Save this as `view.nagi` and run `nagic run view.nagi`. It prints `Nagi`, `Nagi`, and `Nagi language`. `first` borrows part of the original string. `saved` is a separate owned string created with `copy`.
 
-Unescaping JSON strings can change the original bytes, requiring an owned String or copy. SQLite TEXT/BLOB values may become invalid on the next step, so values returned across the worker boundary must be owned.
+## Borrowing a range
+
+`slice(view(data), start, end)` borrows from `start` up to, but not including, `end`. String positions are UTF-8 byte offsets. An out-of-range position or an offset inside a character returns a Result error.
+
+To store a view, first put the original value in a variable, as above. Moving or changing the original value is restricted while it is borrowed. See [Ownership](ownership.md) for examples.
+
+## Returning a view
+
+A function can return its input view or part of it.
 
 ```nagi
 def identity(data: view[str]) -> view[str]:
     return data
 ```
 
-A view derived from an input view can be returned. References that would outlive local Strings, owned arguments, or requests are rejected. Version 0.1 does not support borrowed class fields or lending request views to other tasks.
+It cannot return a view into a string created inside that function: the original data disappears when the function ends. Return an owned value when the caller needs to retain the data. Storing views in class fields or passing them to another task is not supported.
+
+An HTTP `body: view[bytes]` also borrows received data. Creating that view adds no copy, but receiving data and decoding JSON still involve other work. See [Reading benchmarks](performance.md) for measurement details.

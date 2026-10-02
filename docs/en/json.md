@@ -1,14 +1,27 @@
-# JSON and typed classes
+# Read and write JSON
 
-`json_decode[User](input)` uses Serde's typed deserialization. It does not first read everything into a generic Value, convert that to a dictionary, and rebuild a model. Missing fields, type mismatches, out-of-range i32 values, unknown fields, and invalid UTF-8 are rejected.
+Define a class for the data you want to read. `json_decode[User](text)` turns JSON into a `User`; `json_encode(user)` turns it back into a JSON string.
 
 ```nagi
-def read_user(text: str) -> Result[User, Error]:
-    return json_decode[User](text)
+class User:
+    name: str
+    age: i32
+
+def main() -> Result[unit, Error]:
+    user = try json_decode[User](
+        "{\"name\":\"Nagi\",\"age\":20}"
+    )
+    print(user.name)
+    encoded = try json_encode(user)
+    return ok(print(encoded))
 ```
 
-Owned String fields require allocations and copies. The class itself and primitive fields are native values. Experiments with `&str` borrowed from input have confirmed zero allocations, but borrowed class fields are not available in High yet.
+Save this as `json.nagi` and run `nagic run json.nagi`. It prints `Nagi` and JSON containing the name and age. Both operations can fail, so `try` returns errors to the caller. See [Error handling](error-handling.md).
 
-`json_encode` encodes a class into an owned String. HTTP responses use the same typed serialization into `Vec<u8>`. Runtime comparisons also measure encoding with `to_writer` into a warm buffer. This buffer reuse is not automatically applied to HTTP responses.
+## Input validation
 
-Rules for NaN/Infinity, an option to allow unknown fields, nullable and default values, and direct encoding of response literals remain to be specified.
+Missing required fields, extra fields, incorrect types, out-of-range numbers, and invalid UTF-8 return errors. For example, an `age: i32` field cannot accept a string or an integer outside its range.
+
+JSON is read directly into the requested type. String fields own their data and allocate storage during decoding. Borrowed class fields and settings for default values are not supported.
+
+See [HTTP and HTML](http.md) for JSON requests and responses.

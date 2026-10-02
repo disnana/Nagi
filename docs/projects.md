@@ -20,7 +20,7 @@ entry = "main.nagi"
 
 `main.nagi`（完全なコード）：
 
-```python
+```nagi
 def main():
     print("Hello, Nagi project!")
 ```

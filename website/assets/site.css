@@ -100,7 +100,7 @@ button { font: inherit; }
 .table-scroll table { border-collapse: collapse; width: 100%; font-size: .9375rem; line-height: 1.7; }
 .table-scroll th, .table-scroll td { text-align: left; vertical-align: top; padding: .7rem .8rem; border-bottom: 1px solid var(--line); min-width: 6rem; overflow-wrap: normal; }
 .table-scroll th { background: var(--soft); font-weight: 600; border-top: 1px solid var(--line); }
-.table-scroll code { white-space: nowrap; }
+.table-scroll code { white-space: normal; }
 .docs-main hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
 .code-block { position: relative; margin: 1.5rem 0; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); overflow: hidden; }
 .code-block pre { margin: 0; padding: 1.3rem 1rem; overflow-x: auto; font-size: .9375rem; line-height: 1.8; tab-size: 4; }

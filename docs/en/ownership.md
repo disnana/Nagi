@@ -1,6 +1,6 @@
 # Ownership
 
-Passing str, bytes, List, or a class with owned fields to a function moves it. The checker rejects use of its name after the move. Copy values can be used repeatedly.
+Passing a string or list to a user-defined function transfers ownership of that data to the function. This is called a move. Reusing the original variable is an error. Copyable values, such as numbers, can be used repeatedly.
 
 ```nagi
 def use_name(name: str):
@@ -81,10 +81,10 @@ def main():
     append(values, 3)
 ```
 
-Field borrows are tracked by place. While `view(data.values)` is live, you can still move a separate field such as `data.name`. Moving all of `data` or its `values` field is rejected.
+Borrowing one field leaves separate fields available. For example, while `view(data.values)` is in use, you can still take `data.name`. You cannot move all of `data` or its `values` field.
 
-Moving, reassigning, or appending to an owned value is also restricted while a view borrows it. Borrows are tracked conservatively by lexical scope. This does not yet match Rust's non-lexical lifetime analysis.
+While a view borrows data, moving, reassigning, or appending to that data is restricted. The checker tracks borrows by code blocks; it does not determine the end of a borrow as precisely as Rust.
 
-The Nagi checker alone does not establish soundness for partial field moves, complex branches and loops, or generic borrows. Code generation emits safe Rust; only programs accepted by the backend's borrow checker become executables. A successful `check` and a successful `build` are different guarantees.
+Nagi's checker cannot yet decide every case involving partial field moves, complex branches, or borrows. Generated Rust is also checked for borrowing, and a program becomes an executable only after both checks pass. A successful `check` can therefore still be followed by a failed `build`.
 
-Ownership inference aims to show where copies are needed without adding lifetime notation to application code. To retain another owned copy, write `copy(view(data))`.
+To keep an independent owned copy of the original data, write `copy(view(data))`.

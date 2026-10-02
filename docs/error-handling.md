@@ -20,7 +20,7 @@ def read_id(text: view[str]) -> Result[i64, Error]:
 
 ## 成功と失敗を分ける
 
-次は完全なコードです。[result.nagi](../examples/tutorial/result.nagi)にもあります。失敗したら既定値に回復するため、この関数の戻り値は通常の`i64`にできます。
+次のコードは、そのまま保存して実行できます。[result.nagi](../examples/tutorial/result.nagi)にもあります。失敗したら既定値に回復するため、この関数の戻り値は通常の`i64`にできます。
 
 ```nagi
 def number_or(text: str, fallback: i64) -> i64:
@@ -38,10 +38,10 @@ def main():
     print(number_or("oops", -1))
 ```
 
-リポジトリのルートで実行します。
+`result.nagi`として保存したフォルダーで実行します。
 
 ```powershell
-.\target\release\nagic.exe run examples/tutorial/result.nagi
+nagic run result.nagi
 ```
 
 出力は順に`21`、`invalid`、`-1`です。`Ok`と`Err`は先頭が大文字のパターンです。値を作る関数は小文字の`ok(...)`や`error(...)`を使います。
@@ -78,11 +78,11 @@ HTTPではErrorの種類を次のように変換します。
 
 DB・内部エラーの500応答は`{"error":"internal error"}`で、詳細はサーバーのログに出します。`Result[T?, Error]`の成功値が`None`でも404になります。
 
-入力不正・対象なし・DB失敗と、失敗からの回復を試すには[Result APIサンプル](../test-nagi-code/result-api/README.md)を使ってください。Pythonのsmokeは起動済みサーバーにHTTPリクエストを送り、応答を照合します。
+入力不正・対象なし・DB失敗と、失敗からの回復を試すには[Result APIサンプル](../test-nagi-code/result-api/README.md)を使ってください。サンプルのテストは、起動したサーバーにリクエストを送り、応答を確認します。
 
 ## 検査とpanicの範囲
 
-直接捨てたResult、awaitしていないFutureはcheckerが拒否します。代入したResultを全経路で必ず処理する検査は未完成です。
+直接捨てたResult、awaitしていないFutureは型検査で拒否します。代入したResultを全経路で必ず処理する検査は未完成です。
 
 JSON・DB・入力検査の失敗とpanicは別です。scopeでは子taskのpanicを検出し、Supervisorではworkerのpanicを再起動対象にします。メモリ破壊・process abortの回復機構ではありません。
 

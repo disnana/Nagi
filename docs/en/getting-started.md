@@ -6,7 +6,7 @@ Prepare the Nagi compiler and run a single-file program. After installation, run
 
 ## 1. Install the compiler
 
-Building Nagi applications requires [Rust / Cargo](https://www.rust-lang.org/tools/install) and a C build environment. Cargo downloads and builds dependencies. The bundled SQLite also contains C code, so Rust alone is not enough.
+The installer downloads a prebuilt Nagi compiler. Building your own apps with `nagic build` or `nagic run` also requires [Rust / Cargo](https://www.rust-lang.org/tools/install) and a C build environment. Use your existing tools if installed. The bundled SQLite C code is compiled when building your app.
 
 On Windows, use the Rust MSVC toolchain and Visual Studio C++ Build Tools. Linux needs a C compiler; WSL2 follows the Linux steps. On macOS, run `xcode-select --install` for Command Line Tools. macOS distributions are verified on macOS 15 in CI.
 
@@ -30,51 +30,6 @@ nagic --help
 ```
 
 The version output is `nagic 0.1.6`. You can also use `nagic -V` or `nagic version`. Version and help work without Rust or project configuration.
-
-### Update
-
-Run the installation command above again. It checks the latest published release, downloads and verifies it, then switches the command. It installs neither unreleased main builds nor the VSIX. Repeating an install of the same version does not add another copy.
-
-Stop Nagi builds before updating. After the new command starts successfully, the installer compares older distributions with their published archives and removes unchanged copies. Only the selected version remains; no rollback copy is kept permanently. Added or modified files are preserved. Older copies that cannot be verified or removed, including files locked by Windows, are also kept and their folder is reported. A failed update preserves the previous command and PATH.
-
-Old URLs such as `nagi-v0.1.6/scripts/install.ps1` are pinned to 0.1.6. Use this page's `main/scripts/install.ps1` to update. On Windows, version-specific PATH entries from the original installer are replaced with the fixed `current` entry. If VS Code's `nagi.compilerPath` points to an old version's absolute path, change it to `nagic` and restart VS Code.
-
-To select a specific version, including an earlier release, use the commands below. The same one-version retention policy applies.
-
-```powershell
-& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.6
-```
-
-```bash
-(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.6) && export PATH="$HOME/.local/bin:$PATH"
-```
-
-If you used custom locations, pass the same `-InstallDir` (PowerShell) or `--prefix` and `--bin-dir` (bash) when updating. `-NoPath` / `--no-path` leave persistent PATH settings unchanged; register the fixed command location yourself in that case. Manually extracted distributions elsewhere are not removed.
-
-### Extract the archive yourself
-
-Download the file for your OS from [GitHub Releases](https://github.com/disnana/Nagi/releases).
-
-| Your system | File to download |
-|---|---|
-| Windows x64 | `nagi-0.1.6-windows-x86_64.zip` |
-| Linux x86_64 | `nagi-0.1.6-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `nagi-0.1.6-macos-arm64.tar.gz` |
-| macOS Intel | `nagi-0.1.6-macos-x86_64.tar.gz` |
-
-Extract the whole archive and keep `runtime/` beside `nagic` or `nagic.exe`. Add **the extracted folder itself** to PATH to run `nagic` from any directory. `NAGI_ROOT` is normally unnecessary. GitHub's “Source code” downloads do not contain a prebuilt compiler.
-
-### Build the compiler from source
-
-Clone with [Git](https://git-scm.com/). You can also use GitHub's “Code → Download ZIP” and run the build in the extracted folder.
-
-```bash
-git clone https://github.com/disnana/Nagi.git
-cd Nagi
-cargo build --release --locked -p nagic
-```
-
-The compiler is `target/release/nagic` (`nagic.exe` on Windows). Add `target/release` to PATH, or replace `nagic` below with its executable path.
 
 ## 2. Write your own file
 
@@ -141,17 +96,66 @@ For multiple-file applications and Rust dependencies, use [project configuration
 
 Install the [Nagi extension](vscode-extension.md), then open your project folder in VS Code. Saving a `.nagi` file runs a check and shows errors in Problems. The top-right run button and Nagi commands in the Command Palette can run or build it. Hover names to see types and type `value.` for field completion. F12 navigates to functions, classes, imports, and local bindings, including unsaved edits to files saved at least once. See the [editor walkthrough](editor.md).
 
+## Updates and other installation methods
+
+### Update
+
+Run the installation command above again. It checks the latest published release, downloads and verifies it, then switches the command. It installs neither unreleased main builds nor the VSIX. Repeating an install of the same version does not add another copy.
+
+Stop Nagi builds before updating. After the new command starts successfully, the installer compares older distributions with their published archives and removes unchanged copies. Only the selected version remains; no rollback copy is kept permanently. Added or modified files are preserved. Older copies that cannot be verified or removed, including files locked by Windows, are also kept and their folder is reported. A failed update preserves the previous command and PATH.
+
+Old URLs such as `nagi-v0.1.6/scripts/install.ps1` are pinned to 0.1.6. Use this page's `main/scripts/install.ps1` to update. On Windows, version-specific PATH entries from the original installer are replaced with the fixed `current` entry. If VS Code's `nagi.compilerPath` points to an old version's absolute path, change it to `nagic` and restart VS Code.
+
+To select a specific version, including an earlier release, use the commands below. The same one-version retention policy applies.
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.6
+```
+
+```bash
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.6) && export PATH="$HOME/.local/bin:$PATH"
+```
+
+If you used custom locations, pass the same `-InstallDir` (PowerShell) or `--prefix` and `--bin-dir` (bash) when updating. `-NoPath` / `--no-path` leave persistent PATH settings unchanged; register the fixed command location yourself in that case. Manually extracted distributions elsewhere are not removed.
+
+### Extract the archive yourself
+
+Download the file for your OS from [GitHub Releases](https://github.com/disnana/Nagi/releases).
+
+| Your system | File to download |
+|---|---|
+| Windows x64 | `nagi-0.1.6-windows-x86_64.zip` |
+| Linux x86_64 | `nagi-0.1.6-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `nagi-0.1.6-macos-arm64.tar.gz` |
+| macOS Intel | `nagi-0.1.6-macos-x86_64.tar.gz` |
+
+Extract the whole archive and keep `runtime/` beside `nagic` or `nagic.exe`. Add **the extracted folder itself** to PATH to run `nagic` from any directory. `NAGI_ROOT` is normally unnecessary. GitHub's “Source code” downloads do not contain a prebuilt compiler.
+
+### Build the compiler from source
+
+Clone with [Git](https://git-scm.com/). You can also use GitHub's “Code → Download ZIP” and run the build in the extracted folder.
+
+```bash
+git clone https://github.com/disnana/Nagi.git
+cd Nagi
+cargo build --release --locked -p nagic
+```
+
+The compiler is `target/release/nagic` (`nagic.exe` on Windows). Add `target/release` to PATH, or replace `nagic` below with its executable path.
+
 ## When something goes wrong
 
 | Symptom | What to check |
 |---|---|
-| `cargo` is not found | Install Rust/Cargo and reopen your terminal |
+| Cargo is not found (`Cargoが見つかりません`) | Run `cargo --version`. Install Rust/Cargo, or check PATH if already installed; reopen your terminal and VS Code after changing PATH |
+| Cargo cannot start (`Cargoを起動できません`) | Check the OS error shown, Cargo's execution permissions, and the executable file |
 | `nagic.exe` is not found | Add the extracted folder to PATH and reopen your terminal |
 | `runtime/Cargo.toml` is missing under `NAGI_ROOT` | Set `NAGI_ROOT` to the extracted folder containing `runtime/`, or unset it to use automatic discovery |
 | VS Code reports `spawn nagic.exe ENOENT` or a missing compiler | The VSIX does not include the compiler. Install Nagi and restart VS Code, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set `nagi.compilerPath` to its executable |
 | The C compiler or linker is not found | Check your Windows C++ build tools or Linux C compiler |
 | Tabs or indentation errors | Use four spaces consistently |
 | A check succeeds but a build fails | Start with the Nagi or Low filename and line in the terminal; the following Rust diagnostic gives further details |
+| `Build failed` / `Rust backend rejected program` | Read the diagnostics above it. Source errors point to Nagi/Low lines; dependency downloads or build tools can also cause a failure |
 | A port is already in use | Stop the earlier server before restarting |
 | Rebuilding a running exe fails on Windows | Stop the executable and rebuild |
 | A server does not exit | `serve` keeps waiting for requests; press Ctrl+C in its terminal |

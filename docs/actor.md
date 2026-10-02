@@ -1,9 +1,9 @@
-# actor
+# actorの試験
 
-ランタイムにはbounded mailboxとoneshot返信を持つcounter actorがあります。counterのmutable stateは一つのactor taskのみが更新します。Highの`actor`宣言構文と任意のstate/methodの生成は未実装です。
+actorは、メッセージを受け取りながら、自分の状態を更新する処理です。Nagiにはカウンターを使った検証用の実装があります。利用者が任意のactorを定義する構文は、まだありません。
 
-`examples/actor.nagi`はforwarder actor → counter actor → forwarder → callerの通信を実行します。二つのactorはchannelだけでデータを渡し、counterのstateを共有しません。senderをすべてdropした後にactor taskをjoinします。
+[actor.nagi](../examples/actor.nagi)では、中継役とカウンター役がメッセージで通信します。カウンターの値を変更するのはカウンター役だけです。メールボックスは64件までで、満杯になったら送信側が空きを待ちます。
 
-一件ずつreplyをawaitするRPC方式は、schedulerを往復する回数が多くなります。ランタイムのpipelined方式は32件を送ってから各replyを確認します。返信を捨てるfire-and-forgetとの比較ではありません。
+試験には、1件ずつ返信を待つ方法と、32件送ってから返信を確認する方法があります。どちらも返信を受け取り、終了時にはactorの終了を待ちます。
 
-mailboxの容量は64です。送信側は満杯ならawaitし、無制限にqueueを伸ばしません。障害時のmessage再配送、永続mailbox、複数machineへのactor配置は未実装です。
+この実装は汎用のactor APIではありません。メッセージの永続保存、障害後の再配送、複数のマシンへの配置には未対応です。

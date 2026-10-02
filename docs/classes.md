@@ -1,17 +1,31 @@
-# classと値のレイアウト
+# classでデータをまとめる
 
-classは型定義です。classという表記自体がheap allocationを要求しません。
+名前や座標など、関連する値をひとまとめにするには`class`を使います。フィールドごとに名前と型を決め、値を作るときはすべてのフィールドを指定します。
 
-```python
+```nagi
 class Point:
     x: f64
     y: f64
+
+def distance_squared(point: Point) -> f64:
+    return point.x * point.x + point.y * point.y
+
+def main():
+    point = Point(x=3.0, y=4.0)
+    print(point.x)
+    print(distance_squared(point))
 ```
 
-primitiveのみを含むclassはRustのCopy値型へ生成します。`List[Point]`はVec<Point>であり、Pointを個別のheap objectにしません。`examples/values.nagi`では二つのPointを走査し、合計10と型サイズを表示します。
+このコードを`point.nagi`に保存し、`nagic run point.nagi`で実行すると、`3`と`25`を表示します。`point.x`でフィールドを読みます。値を処理する関数はclassの外に定義します。
 
-StringやListを含むclassも本体は値ですが、フィールドの所有データにallocationがあります。この区別を保つことで、layoutとコピーのコストを考えやすくします。
+## 値を渡すとき
 
-0.1ではfieldと名前付き生成のみです。method、interface、trait、継承は未実装です。compositionとfree functionを使用します。借用fieldは寿命パラメータの仕様が未確定なので拒否します。
+数値など、コピーできる値だけを含むclassは、そのまま複数回使えます。上の`Point`もその一つです。`List[Point]`の要素を`for`で読むこともできます。
 
-生成したlayoutは同じRustビルド内でHigh/Lowに共通ですが、Rustの通常struct layoutです。C ABIで安定したlayoutを宣言したものではありません。
+文字列や配列を含むclassは、関数へ渡すと所有権が移ります。渡したあとも使いたい場合は、[所有権](ownership.md)を確認してください。
+
+## 対応している範囲
+
+現在はフィールドの定義、名前付き引数による生成、フィールドの読み取りに対応しています。メソッド、継承、フィールドへの代入は未対応です。`view`をフィールドに保存することもできません。
+
+classはRustの構造体へ変換されます。数値だけのclassを配列に入れても、要素ごとに別の領域を確保する必要はありません。文字列や配列のフィールドには、そのデータを保存する領域が必要です。Cとの連携に使える固定のメモリ配置は定義していません。

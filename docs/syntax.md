@@ -1,6 +1,6 @@
 # 文法の早見表
 
-[目次](README.md) · 初めて書くなら：[入門ガイド](language-guide.md) · 関数を調べる：[よく使う関数](builtins.md)
+[目次](README.md) · 初めて書くなら：[入門ガイド](language-guide.md) · 関数を調べる：[組み込み関数](builtins.md)
 
 このページはHigh（`.nagi`）の書式を引くための資料です。短い例は関数内に書く断片も含みます。各例をまとめて動かすには[入門の完成コード](../examples/tutorial/basics.nagi)を使ってください。
 

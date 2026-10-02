@@ -2,11 +2,11 @@
 
 [目次](README.md) → 準備と最初の実行 → [コードを書きながら学ぶ](language-guide.md)
 
-Nagiのコンパイラを用意して、1ファイルのプログラムを動かします。インストール後は、作業用のフォルダーでコマンドを実行できます。WindowsではPowerShell、LinuxやmacOSでは端末アプリを使います。
+Nagiをインストールし、短いプログラムを動かします。WindowsはPowerShell、Linux・macOSは端末アプリでコマンドを実行してください。
 
 ## 1. コンパイラを用意する
 
-Nagiのアプリをビルドするには[Rust / Cargo](https://www.rust-lang.org/tools/install)とCのビルド環境が必要です。Cargoは依存パッケージの取得とビルドを行います。同梱SQLiteのCコードもビルドするため、Rustだけでは足りません。
+インストーラーはビルド済みのNagiを取得します。自分のアプリを`nagic build`や`nagic run`でビルドするときは、別途[Rust / Cargo](https://www.rust-lang.org/tools/install)とCのビルド環境が必要です。導入済みなら、その環境を使えます。同梱SQLiteのCコードもアプリのビルド時にコンパイルします。
 
 WindowsではRustのMSVC toolchainとVisual Studio Build ToolsのC++環境を使います。LinuxではCコンパイラを用意してください。WSL2もLinuxの手順です。macOSでは`xcode-select --install`でCommand Line Toolsを用意します。macOS版はmacOS 15のCIで検証します。
 
@@ -30,6 +30,75 @@ nagic --help
 ```
 
 版の表示は`nagic 0.1.6`です。`nagic -V`と`nagic version`でも確認できます。版とヘルプの表示にはRustやプロジェクト設定は必要ありません。
+
+## 2. 自分で1ファイル書く
+
+作業用のフォルダーに`hello.nagi`を作り、次のコードを保存してください。
+
+```nagi
+def main():
+    print("こんにちは、Nagi!")
+    count = 3
+    print(count * 2)
+```
+
+`def main():`が入口です。関数の中は空白4つで字下げします。`print`は1つの値を改行付きで表示します。
+
+```powershell
+nagic run hello.nagi
+```
+
+```text
+こんにちは、Nagi!
+6
+```
+
+`count = 3`の整数は`i64`型です。コードは`.nagi`ファイルへ保存します。
+
+ファイル名に空白がある場合は、`nagic run "hello world.nagi"`のようにパスを引用符で囲んでください。
+
+## 3. 検査とビルドを使い分ける
+
+| コマンド | 何をするか | 使う場面 |
+|---|---|---|
+| `check hello.nagi` | Nagiの構文・型・所有権を検査 | 保存したコードの間違いを調べる |
+| `lower hello.nagi` | 検査してLowを出力 | 変換後のコードを読む |
+| `build hello.nagi` | Rust側の検査を含め、実行ファイルを生成 | 実行せずにビルドする |
+| `run hello.nagi` | ビルドして実行 | 書いたプログラムを試す |
+
+`check`と`lower`は現在どちらもHighの生成Lowを保存します。`check`が成功しても、Rust側の型・借用などの検査で`build`が失敗する場合があります。
+
+ビルド時のエラーは、対応する元のNagi・Lowファイル名、文や定義の行番号、その行のコードを先に表示します。import先や`@replace`の手書きLowも対象です。続く`Rust backend details`には生成Rust側の詳しい診断を残します。手書きRustや、元の位置を特定できないエラーはRustの診断を表示します。
+
+```powershell
+nagic check hello.nagi
+nagic build hello.nagi
+.\native-target\release\nagi-hello.exe
+```
+
+標準の出力先は次のとおりです。
+
+| ファイル | 内容 |
+|---|---|
+| `build/hello/generated.low` | Highから変換したLow |
+| `build/hello/src/main.rs` | 生成したRust（build / run時） |
+| `build/hello/Cargo.toml` | 生成したRustプロジェクト（build / run時） |
+| `native-target/release/nagi-hello.exe` | Windowsの実行ファイル |
+| `native-target/release/nagi-hello` | Linux・macOSの実行ファイル |
+
+`build/<ソースのファイル名から拡張子を除いた名前>/`に出力します。別の場所に生成する場合は`--out build/my-hello`を付けます。実行ファイルの出力先は`NAGI_NATIVE_TARGET_DIR`で変更できます。
+
+コンパイルには配布された`runtime/`も必要です。`nagic.exe`だけを別の場所にコピーした場合は、環境変数`NAGI_ROOT`に`runtime/`のある展開フォルダーを指定してください。生成したアプリexeの配布例は[タスク管理デモ](../test-nagi-code/web-demo/README.md)にあります。
+
+アプリが複数ファイルになったら、[nagi.tomlとプロジェクト](projects.md)で入口やRust依存をまとめられます。設定のあるフォルダーで`nagic run`と実行でき、VS Codeも同じ入口を使います。
+
+## 4. VS Codeで書く
+
+[Nagi拡張のインストール手順](../editors/vscode-nagi/README.md)に従ってVSIXをインストールし、作業用のフォルダーを開きます。
+
+`.nagi`を保存すると型検査が走り、エラーがProblemsに表示されます。右上の実行ボタン、またはコマンドパレットのNagiコマンドから実行・ビルドできます。変数名のホバーで型を確認でき、`value.`を入力するとclassのフィールドが候補に出ます。F12では関数・class・import先・ローカル変数の定義へ移動できます。一度保存したファイルの未保存の編集も対象です。[VS Codeで型と補完を使う](editor.md)で試してください。
+
+## 更新と他の導入方法
 
 ### 更新する
 
@@ -76,84 +145,18 @@ cargo build --release --locked -p nagic
 
 この場合のコンパイラは`target/release/nagic`（Windowsでは`nagic.exe`）です。`target/release`をPATHに追加するか、以降の`nagic`をその実行ファイルのパスに置き換えてください。
 
-## 2. 自分で1ファイル書く
-
-作業用のフォルダーに`hello.nagi`を作り、次の完全なコードを保存してください。
-
-```nagi
-def main():
-    print("こんにちは、Nagi!")
-    count = 3
-    print(count * 2)
-```
-
-`def main():`が入口です。関数の中は空白4つで字下げします。`print`は1つの値を改行付きで表示します。
-
-```powershell
-nagic run hello.nagi
-```
-
-```text
-こんにちは、Nagi!
-6
-```
-
-`count = 3`の整数は`i64`になります。Pythonとして実行するコードではありません。ファイルの拡張子は`.nagi`にしてください。
-
-ファイル名に空白がある場合は、`nagic run "hello world.nagi"`のようにパスを引用符で囲んでください。
-
-## 3. 検査とビルドを使い分ける
-
-| コマンド | 何をするか | 使う場面 |
-|---|---|---|
-| `check hello.nagi` | Nagiの構文・型・所有権を検査 | 保存したコードの間違いを調べる |
-| `lower hello.nagi` | 検査してLowを出力 | 変換後のコードを読む |
-| `build hello.nagi` | Rust側の検査を含め、実行ファイルを生成 | 実行せずにビルドする |
-| `run hello.nagi` | ビルドして実行 | 書いたプログラムを試す |
-
-`check`と`lower`は現在どちらもHighの生成Lowを保存します。`check`が成功しても、Rust側の型・借用などの検査で`build`が失敗する場合があります。
-
-ビルド時のエラーは、対応する元のNagi・Lowファイル名、文や定義の行番号、その行のコードを先に表示します。import先や`@replace`の手書きLowも対象です。続く`Rust backend details`には生成Rust側の詳しい診断を残します。手書きRustや、元の位置を特定できないエラーはRustの診断を表示します。
-
-```powershell
-nagic check hello.nagi
-nagic build hello.nagi
-.\native-target\release\nagi-hello.exe
-```
-
-標準の出力先は次のとおりです。
-
-| ファイル | 内容 |
-|---|---|
-| `build/hello/generated.low` | Highから変換したLow |
-| `build/hello/src/main.rs` | 生成したRust（build / run時） |
-| `build/hello/Cargo.toml` | 生成したRustプロジェクト（build / run時） |
-| `native-target/release/nagi-hello.exe` | Windowsの実行ファイル |
-| `native-target/release/nagi-hello` | Linuxの実行ファイル |
-
-`build/<ソースのファイル名から拡張子を除いた名前>/`に出力します。別の場所に生成する場合は`--out build/my-hello`を付けます。実行ファイルの出力先は`NAGI_NATIVE_TARGET_DIR`で変更できます。
-
-コンパイルには配布された`runtime/`も必要です。`nagic.exe`だけを別の場所にコピーした場合は、環境変数`NAGI_ROOT`に`runtime/`のある展開フォルダーを指定してください。生成したアプリexeの配布例は[タスク管理デモ](../test-nagi-code/web-demo/README.md)にあります。
-
-アプリが複数ファイルになったら、[nagi.tomlとプロジェクト](projects.md)で入口やRust依存をまとめられます。設定のあるフォルダーで`nagic run`と実行でき、VS Codeも同じ入口を使います。
-
-## 4. VS Codeで書く
-
-[Nagi拡張のインストール手順](../editors/vscode-nagi/README.md)に従ってVSIXをインストールし、作業用のフォルダーを開きます。
-
-`.nagi`を保存すると型検査が走り、エラーがProblemsに表示されます。右上の実行ボタン、またはコマンドパレットのNagiコマンドから実行・ビルドできます。変数名のホバーで型を確認でき、`value.`を入力するとclassのフィールドが候補に出ます。F12では関数・class・import先・ローカル変数の定義へ移動できます。一度保存したファイルの未保存の編集も対象です。[VS Codeで型と補完を使う](editor.md)で試してください。
-
 ## 困ったとき
 
 | 症状 | 確認すること |
 |---|---|
-| `cargo`が見つからない | Rust / CargoがPATHにあるか。インストール後にターミナルを開き直したか |
+| `Cargoが見つかりません` | `cargo --version`で確認する。Rust / Cargoが導入済みならPATHを確認し、ターミナルとVS Codeを開き直す |
+| `Cargoを起動できません` | 表示されたOSのエラーを確認する。Cargoの実行権限やファイルの状態に問題がないか |
 | Cコンパイラやlinkerが見つからない | WindowsのC++ビルド環境、LinuxのCコンパイラがあるか |
 | `nagic.exe`が見つからない | 配布フォルダーをPATHに追加し、ターミナルを開き直したか |
 | `NAGI_ROOT`の`runtime/Cargo.toml`が見つからない | `NAGI_ROOT`には`runtime/`のある展開フォルダーを指定する。通常の配布では設定を解除して自動探索を使う |
 | VS Codeで`spawn nagic.exe ENOENT`やコンパイラ未検出の警告が出る | VSIXにはコンパイラを含まない。Nagi本体をインストールし、VS Codeを再起動したあと「Nagi: 型検査」を実行する。別の場所にある場合は`nagi.compilerPath`にその実行ファイルを指定する |
 | タブや字下げのエラー | インデントを空白4つに統一する |
-| `Rust backend rejected program` | 直前に表示されたNagi・Lowのファイル名と行を確認する。詳しい理由は続くRustの診断にある |
+| `Build failed` / `Rust backend rejected program` | 上の診断で原因を確認する。コードのエラーならNagi・Lowのファイル名と行を調べる。依存の取得失敗やビルド環境の問題なら、その診断に従う |
 | Windowsでexeを更新できない | そのアプリが実行中なら停止してから再ビルドする |
 | サーバーが終了しない | `serve`はリクエストを待ち続ける。ターミナルのCtrl+Cで終了する |
 

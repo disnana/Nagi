@@ -1,7 +1,7 @@
-# Queues and workers
+# Queue and worker experiments
 
-The runtime test uses an ingress queue with capacity 64 and at most eight workers. Failures retry after 1/2 ms backoff and count as dead letters after the retry limit. The producer and every worker are joined before exit.
+A queue passes accepted jobs to workers. Nagi's experimental implementation uses a queue of up to 64 jobs and at most eight workers.
 
-In `examples/queue.nagi`, four of 40 jobs fail permanently and 36 complete. The test runs real timers, channels, and workers rather than mock calls to an external queue.
+In [queue.nagi](../../examples/queue.nagi), 36 of 40 jobs complete and four still fail after retries. Retries wait one and then two milliseconds. Jobs that reach the retry limit are counted as failed. Shutdown waits for both the producer and the workers.
 
-High queue declarations, arbitrary handlers, durable retries, stored dead-letter contents, per-job timeouts, and recovery after restart are not implemented. Retries can repeat side effects. A future API must specify idempotency and delivery guarantees such as at-least-once.
+Submitting arbitrary user work, persisting jobs and retries, and recovering them after a process restart are not supported. Retries can execute the same work more than once. A general-purpose API still needs rules for handling duplicate execution.

@@ -1,9 +1,11 @@
-# FFIとABIの方針
+# 他の言語との連携
 
-0.1にはLowのFFI構文はありません。SQLiteへのFFIは既存rusqlite/libsqlite3-sysが担当します。ユーザーのLowから任意C関数を呼ぶ経路は未実装です。
+現在はRustの関数をNagiから呼べます。`@rust`と`extern def`で関数を宣言し、RustのファイルやCargoの依存をビルドに含めます。書き方は[importとRust連携](modules-and-rust.md)を参照してください。
 
-High/Lowの同じprimitiveとclassは同じRust型へ生成します。同一ビルド内の呼び出しでserializationは不要です。ただし、Rust struct layout、String、Vec、ResultをそのままC ABIへ出す方針ではありません。
+HighとLowの同じ型は、同じRust型へ変換します。同じビルド内の関数呼び出しでは、値をJSONなどへ変換し直す必要はありません。
 
-将来のC ABIでは、固定幅primitive、pointer+lengthのslice、固定layout record、tag+payloadのerror表現、明示的allocator/deallocatorを定義します。所有権を受け渡すboundaryには、解放者とライブラリ寿命を指定する必要があります。
+## Cとの連携
 
-Rustは現在、`@rust`と`extern def/fn`で同じ生成crate内の関数を呼べます。`--rust`で通常のRust moduleを、`--rust-dep`でCargo依存を指定します。詳細は [modules-and-rust.md](modules-and-rust.md) を参照してください。これはC ABIを経由しない接続です。Python extension等に安定したABIを提供する前には、borrowed buffer、async task、errorの寿命とlayoutを確定する必要があります。
+NagiやLowから任意のC関数を直接呼ぶ構文は未対応です。組み込みSQLiteでは、Rustの`rusqlite`と`libsqlite3-sys`がCとの接続を担当しています。
+
+Cに公開するための固定の型配置や、メモリの確保・解放を受け渡すABIも未定義です。Nagiのclassや文字列を、そのままCの値として扱うことはできません。

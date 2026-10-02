@@ -144,7 +144,7 @@ fn high_build_points_to_nagi_and_keeps_rust_notes_and_failure_status() {
     assert!(prefix.contains("main.nagi:5"), "{text}");
     assert!(!prefix.contains("src/main.rs:"), "{text}");
     assert!(text.contains(".as_str()"), "{text}");
-    assert!(text.contains("Rust backend rejected program"), "{text}");
+    assert!(text.contains("Build failed."), "{text}");
 }
 
 #[test]

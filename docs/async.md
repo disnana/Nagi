@@ -1,8 +1,20 @@
 # asyncとscope
 
-async関数はネイティブFutureへ生成します。async呼び出しを捨てず、awaitするかscope内でspawnします。
+タイマーやDBなどの処理を待つ関数は`async def`で定義し、`await`で結果を待ちます。待っている間は、ほかの非同期処理を進められます。
 
-```python
+```nagi
+async def main() -> Result[unit, Error]:
+    await sleep(10)
+    return ok(print("待ち終わりました"))
+```
+
+`sleep`の引数はミリ秒です。上のコードは待ち終わってからメッセージを表示します。失敗する可能性のある処理では、`try await db_open(...)`のように結果のエラーも扱います。
+
+## 複数の処理を始める
+
+`async with scope`の中で`spawn`すると、子の処理を始められます。scopeを出るときに、すべての子の終了を待ちます。
+
+```nagi
 async def main() -> Result[unit, Error]:
     async with scope:
         spawn sleep(10)
@@ -10,8 +22,6 @@ async def main() -> Result[unit, Error]:
     return ok(print("完了"))
 ```
 
-scopeの正常出口では全子taskをjoinします。Resultエラー時には残りをcancelし、破棄完了をawaitします。子taskのpanicもJoinErrorで検出して残りをcancelします。0.1のspawnはunitまたはResult[unit,Error]のasync関数に限定しています。
+子が`Result`のエラーを返したりpanicしたりすると、残りをキャンセルして終了を待ちます。`spawn`できるのは、`unit`か`Result[unit, Error]`を返す非同期処理です。scope内の`return`と、viewを子へ渡すことは未対応です。
 
-scope内のreturnは拒否します。親Futureそのものが外側からdropされる場合や、scope本体がpanicする場合はJoinSetのDropがabortを要求します。その場で全子taskの終了をawaitする保証はなく、協調的キャンセルが実行されるまで時間がかかります。
-
-borrowed viewはspawnへ渡せません。必要なデータを所有化してmoveします。任意の借用taskを安全にspawnする仕様は今後の課題です。
+親の処理そのものが破棄された場合や、scope本体がpanicした場合には、子へ停止を要求します。その場で全員の終了を待つ保証はありません。CPU処理の停止については[並行処理](concurrency.md)を参照してください。
