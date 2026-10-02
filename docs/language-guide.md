@@ -2,7 +2,7 @@
 
 [目次](README.md) · 前：[準備と最初の実行](getting-started.md) · 調べる：[文法の早見表](syntax.md)
 
-アプリを書くHigh（`.nagi`）を、変数 → 関数 → 配列 → class → 失敗の扱いの順に学びます。コマンドはリポジトリのルートで実行します。Linux / WSL2では`.\target\release\nagic.exe`を`./target/release/nagic`に置き換えてください。
+アプリを書くHigh（`.nagi`）を、変数 → 関数 → 配列 → class → 失敗の扱いの順に学びます。[準備と最初の実行](getting-started.md)でNagiをインストールし、自分の作業フォルダーにコードを保存してください。Windows・Linux・macOSで同じ`nagic`コマンドを使います。
 
 ## 1. 値と型
 
@@ -38,7 +38,7 @@ def main():
 
 配列は`[1, 2, 3]`、型注釈は`List[i64]`です。`append(values, 4)`で末尾に追加します。`class`は名前付きフィールドをまとめる型です。
 
-次は完全なコードです。[basics.nagi](../examples/tutorial/basics.nagi)にも同じコードがあります。
+次の完全なコードを`basics.nagi`として保存してください。[サンプル](../examples/tutorial/basics.nagi)にも同じコードがあります。
 
 ```nagi
 class Point:
@@ -75,7 +75,7 @@ def main():
 ```
 
 ```powershell
-.\target\release\nagic.exe run examples/tutorial/basics.nagi
+nagic run basics.nagi
 ```
 
 プログラムの出力は順に`10`、`7`、`OK`、`0`、`1`、`2`、`2`です。
@@ -131,7 +131,7 @@ def main():
 
 `try 処理`は、成功した値を取り出し、失敗したらその場で呼び出し元へ失敗を返します。そのため、`try`を書く関数自身も`Result`を返す必要があります。
 
-次は入力した整数を2倍にする完全なコードです。[input.nagi](../examples/tutorial/input.nagi)にもあります。
+次は入力した整数を2倍にする完全なコードです。`input.nagi`として保存してください。[サンプル](../examples/tutorial/input.nagi)にもあります。
 
 ```nagi
 def double_nonnegative(text: view[str]) -> Result[i64, Error]:
@@ -149,7 +149,7 @@ def main() -> Result[unit, Error]:
 ```
 
 ```powershell
-.\target\release\nagic.exe run examples/tutorial/input.nagi
+nagic run input.nagi
 ```
 
 `21`を入力してEnterを押すと、`42`と`完了`を表示します。`abc`は数値の変換に失敗し、`-1`は自分で書いたエラーになります。どちらも`main`まで伝わり、プログラムは失敗で終了します。
@@ -190,7 +190,7 @@ def main():
 ```
 
 ```powershell
-.\target\release\nagic.exe run examples/tutorial/imports.nagi
+nagic run imports.nagi
 ```
 
 [完成ファイル](../examples/tutorial/imports.nagi)を実行すると`42`です。importのパスは、実行したターミナルではなく**importを書いたファイルの場所**を基準にします。読み込まれる`math.nagi`には`main`は不要です。

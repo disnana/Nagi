@@ -10,8 +10,9 @@ from pathlib import Path
 from zipfile import ZipFile
 
 
-def verify(archive: Path, version: str, platform: str) -> None:
+def verify(archive: Path, version: str, platform: str, target: Path | None = None) -> None:
     archive = archive.resolve()
+    target = target.resolve() if target is not None else None
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     assert archive.with_name(archive.name + ".sha256").read_text().strip() == f"{digest}  {archive.name}"
     stem = f"nagi-{version}-{platform}"
@@ -30,6 +31,8 @@ def verify(archive: Path, version: str, platform: str) -> None:
         environment = dict(os.environ)
         environment.pop("NAGI_ROOT", None)
         environment.pop("NAGI_NATIVE_TARGET_DIR", None)
+        if target is not None:
+            environment["NAGI_NATIVE_TARGET_DIR"] = str(target)
         for flag in ("--version", "-V", "version", "--help"):
             result = subprocess.run([str(exe), flag], cwd=folder, env={**environment, "PATH": ""},
                                     check=True, capture_output=True, text=True, encoding="utf-8")
@@ -41,7 +44,10 @@ def verify(archive: Path, version: str, platform: str) -> None:
         project = folder / "outside project 凪"
         project.mkdir()
         (project / "nagi.toml").write_text("entry='main.nagi'\n", encoding="utf-8")
-        (project / "main.nagi").write_text('def main():\n    print("Hello, Nagi!")\n    print(2 + 2)\n', encoding="utf-8")
+        marker = folder.name
+        (project / "main.nagi").write_text(
+            'def main():\n    print("Hello, Nagi!")\n    print(2 + 2)\n'
+            f'    print({json.dumps(marker)})\n', encoding="utf-8")
         environment["PATH"] = str(root) + os.pathsep + environment["PATH"]
         # Windows resolves an executable using the parent's PATH. Update this
         # verification process too, so the bare command tests PATH on every OS.
@@ -50,7 +56,7 @@ def verify(archive: Path, version: str, platform: str) -> None:
         try:
             result = subprocess.run(["nagic", "run", "--project", str(project / "nagi.toml")],
                                     cwd=folder, env=environment, check=True, capture_output=True, text=True, encoding="utf-8")
-            assert result.stdout.splitlines()[-2:] == ["Hello, Nagi!", "4"], result.stdout
+            assert result.stdout.splitlines()[-3:] == ["Hello, Nagi!", "4", marker], result.stdout
             assert not (root / "native-target").exists(), "Build wrote into the installed distribution"
             print(f"Verified {version} {platform}: PATH, external project, version, help")
         finally:
@@ -62,5 +68,6 @@ if __name__ == "__main__":
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--platform", required=True)
+    parser.add_argument("--target", type=Path, help="Reuse native dependencies in this build directory")
     args = parser.parse_args()
-    verify(args.archive, args.version, args.platform)
+    verify(args.archive, args.version, args.platform, args.target)

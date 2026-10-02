@@ -36,13 +36,13 @@ The current `serve` API needs Db. This example opens an in-memory SQLite databas
 
 ## 2. Start and call it
 
-Make sure port 8094 is free and run from the repository root:
+Save the complete program above as `http.nagi` in your working folder. Make sure port 8094 is free and run from that folder:
 
 ```powershell
-.\target\release\nagic.exe run examples/tutorial/http.nagi
+nagic run http.nagi
 ```
 
-On Linux/WSL2, use `./target/release/nagic run examples/tutorial/http.nagi`. Open [http://127.0.0.1:8094/](http://127.0.0.1:8094/) in a browser to see “Hello, Nagi!”.
+The same command works on Windows, Linux, and macOS. Open [http://127.0.0.1:8094/](http://127.0.0.1:8094/) in a browser to see “Hello, Nagi!”.
 
 Call the API from another PowerShell terminal:
 

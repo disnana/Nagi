@@ -525,6 +525,7 @@ pub fn rust(p: &Program) -> Result<String, String> {
 }
 
 pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
+    crate::routes::validate(p)?;
     let names = crate::rust_names::RustNames::new(p);
     let mapped = names.program(p);
     let p = &mapped;
@@ -652,6 +653,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         out.push_str(".with_state(db); ::nagi_runtime::serve(router,port).await\n}\n");
         for (i, f) in routes.iter().enumerate() {
             out.origin(::std::option::Option::Some(f.line));
+            let (_, path) = crate::routes::attribute(f).unwrap();
             if !f.asynchronous || f.ret.0 != "Result" {
                 return ::std::result::Result::Err(format!(
                     "route {} must be async and return Result",
@@ -668,7 +670,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                         "::nagi_runtime::axum::extract::State({n}): ::nagi_runtime::axum::extract::State<::nagi_runtime::Db>"
                     ));
                     call.push(n.clone());
-                } else if n == "id" && t.0 == "i64" {
+                } else if n == "id" && t.0 == "i64" && crate::routes::has_capture(path) {
                     extracts.push("::nagi_runtime::axum::extract::Path(id): ::nagi_runtime::axum::extract::Path<i64>".into());
                     call.push(n.clone());
                 } else if t == &Type::generic("view", vec![Type::named("bytes")]) {
@@ -856,7 +858,9 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             .to_string_lossy()
             .chars()
             .map(|ch| {
-                if ch.is_whitespace() || ch == '_' || ch == '.' {
+                if ch == '_'
+                    || (ch != '-' && (!ch.is_alphanumeric() || !unicode_ident::is_xid_continue(ch)))
+                {
                     '-'
                 } else {
                     ch

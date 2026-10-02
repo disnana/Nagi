@@ -18,6 +18,8 @@
 
 ## インストール
 
+mainには次回配布予定の修正も含まれます。公開版との差分は[未リリースの変更](CHANGELOG.md)を参照してください。
+
 NagiアプリのビルドにはRust/CargoとCのビルド環境が必要です。準備は[最初の実行](docs/getting-started.md)を参照してください。
 
 Windows（PowerShell）:
