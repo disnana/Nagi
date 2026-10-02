@@ -1,0 +1,23 @@
+@rust("native::delayed_double")
+extern async def delayed_double(value: i64, milliseconds: i64) -> Result[i64, Error]
+
+async def main() -> Result[unit, Error]:
+    value = try await delayed_double(21, 10)
+    assert_true(value == 42)
+    print(value)
+
+    match await delayed_double(21, -1):
+        case Ok(_):
+            assert_true(False)
+        case Err(problem):
+            assert_true(error_kind(problem) == "invalid")
+            print("invalid delay -> invalid")
+
+    match await delayed_double(9223372036854775807, 0):
+        case Ok(_):
+            assert_true(False)
+        case Err(problem):
+            assert_true(error_kind(problem) == "invalid")
+            print("overflow -> invalid")
+
+    return ok(print("rust-async: OK"))

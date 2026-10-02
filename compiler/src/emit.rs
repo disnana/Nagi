@@ -327,7 +327,7 @@ fn re(e: &Expr) -> String {
                 "copy" => format!("({}).to_owned()", args[0]),
                 "share" => format!("::std::sync::Arc::new({})", args[0]),
                 "clone_shared" => format!("::std::sync::Arc::clone(&{})", args[0]),
-                "len" => format!("({}).len() as i64", string_or_value(&a[0])),
+                "len" => format!("(({}).len() as i64)", string_or_value(&a[0])),
                 "range" => format!("0i64..{}", args[0]),
                 "append" => format!("{}.push({})", args[0], args[1]),
                 "ok" => format!("::std::result::Result::Ok({})", args[0]),
@@ -396,7 +396,7 @@ fn re(e: &Expr) -> String {
                     "i32::try_from({}).map_err(|e| ::nagi_runtime::Error::invalid(e.to_string()))",
                     args[0]
                 ),
-                "size_of" => format!("::std::mem::size_of{}() as i64", g),
+                "size_of" => format!("(::std::mem::size_of{}() as i64)", g),
                 "bench_i64" | "bench_f64" | "bench_scalar" => {
                     format!("::nagi_runtime::{n}({}, {}, {})", string_arg(&a[0]), args[1], args[2])
                 }

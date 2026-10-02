@@ -7,7 +7,7 @@ The priority is to clarify the specification and strengthen safety while keeping
 3. Build on relative file imports and typed Rust integration to add named modules and aliases, general generics, traits, type annotations for passing and returning async functions, and a standard Map API.
 4. Lower arbitrary-state actor declarations, supervisor trees, and bounded queue declarations into the current runtime.
 5. Compare request arenas and borrowed classes, encoding during database stepping, buffer reuse, and streaming JSON.
-6. Implement PostgreSQL's binary protocol, general typed SQL bindings, schema validation, transactions, and cancellation.
+6. Define typed SQL parameters, rows, and transactions, then add PostgreSQL using an existing Rust driver. Verify cancellation and pool shutdown against a real database.
 7. Define Low layout, pointers, arenas, unsafe boundaries, and a C ABI; add sanitizers and coverage-guided fuzzing.
 8. Introduce a backend independent of Rust code generation. Use measurements to decide whether to replace the scheduler as well.
 
@@ -21,3 +21,5 @@ The priority is to clarify the specification and strengthen safety while keeping
 | 3 | The Low compiler compiles itself | Not started; needs bootstrap comparison and determinism tests |
 
 Practical use requires several stages of development. Passing prototype tests does not establish a finished production language/runtime or safety of every unsafe/FFI path. Accurate effort estimates depend on the specification and development team.
+
+See the [working examples](library-examples.md) and [library design proposal](library-design.md) for reusable foundations and Rust assets. The proposal develops dependency settings, namespaces, resources, and database contracts while retaining existing code.

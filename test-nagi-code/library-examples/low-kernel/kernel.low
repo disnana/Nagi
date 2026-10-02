@@ -1,0 +1,8 @@
+@replace generated::sum_squares
+fn sum_squares_kernel(values: view[i64]) -> i64 {
+    let total: i64 = 0;
+    for value in values {
+        total += value * value;
+    }
+    return total;
+}

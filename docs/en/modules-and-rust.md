@@ -84,3 +84,5 @@ Nagi's `check` validates the declared types, calls, ownership, and borrowing. It
 To reuse the same dependency resolution, retain the generated Cargo.lock and run `cargo build --locked --manifest-path build/app/Cargo.toml`. A normal `nagic build` runs `cargo build --release` on the generated project.
 
 This integration calls functions within the same Rust build. A stable C ABI and runtime DLL loading are unsupported.
+
+See [libraries and Rust assets](libraries.md) and [sample projects](library-examples.md) for shared code and callbacks passed from Nagi to Rust. Dependency path/features settings and namespaces are covered in the [design proposal](library-design.md).

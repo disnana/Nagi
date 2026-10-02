@@ -1,0 +1,36 @@
+# Both applications import this facade. Prices use integer minor currency units.
+class FoundationQuote:
+    label: str
+    unit_cents: i64
+    quantity: i64
+    discount_bps: i64
+    subtotal_cents: i64
+    discount_cents: i64
+    total_cents: i64
+
+@rust("native::engine::foundation_rust_quote")
+extern def foundation_rust_quote(label: view[str], unit_cents: i64, quantity: i64, discount_bps: i64) -> Result[FoundationQuote, Error]
+
+def foundation_nagi_quote(label: view[str], unit_cents: i64, quantity: i64, discount_bps: i64) -> Result[FoundationQuote, Error]:
+    subtotal = unit_cents * quantity
+    discount = subtotal * discount_bps / 10000
+    return ok(FoundationQuote(label=copy(label), unit_cents=unit_cents, quantity=quantity, discount_bps=discount_bps, subtotal_cents=subtotal, discount_cents=discount, total_cents=subtotal - discount))
+
+def foundation_select_engine(name: view[str]) -> Result[fn[view[str], i64, i64, i64, Result[FoundationQuote, Error]], Error]:
+    if name == view("nagi"):
+        return ok(foundation_nagi_quote)
+    if name == view("rust"):
+        return ok(foundation_rust_quote)
+    return error("NAGI_PRICING_ENGINE must be nagi or rust")
+
+def foundation_quote(calculate: fn[view[str], i64, i64, i64, Result[FoundationQuote, Error]], label: view[str], unit_cents: i64, quantity: i64, discount_bps: i64) -> Result[FoundationQuote, Error]:
+    label_bytes = len(label)
+    if label_bytes < 1 or label_bytes > 80:
+        return error("label must contain 1 to 80 UTF-8 bytes")
+    if unit_cents < 0 or unit_cents > 100000000:
+        return error("unit_cents must be between 0 and 100000000")
+    if quantity < 1 or quantity > 10000:
+        return error("quantity must be between 1 and 10000")
+    if discount_bps < 0 or discount_bps > 10000:
+        return error("discount_bps must be between 0 and 10000")
+    return calculate(label, unit_cents, quantity, discount_bps)
