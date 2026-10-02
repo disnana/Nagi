@@ -29,7 +29,11 @@ pub fn diagnostic(path: &Path, source: &str, message: &str) -> String {
         .and_then(|s| s.split(':').next())
         .and_then(|s| s.parse::<usize>().ok());
     if let Some(line) = line {
-        format!("error: {message}\n --> {}:{line}\n {line} | {}\n help: 型注釈、所有権、scope、明示copyを確認してください", path.display(), source.lines().nth(line.saturating_sub(1)).unwrap_or(""))
+        format!(
+            "error: {message}\n --> {}:{line}\n {line} | {}",
+            path.display(),
+            source.lines().nth(line.saturating_sub(1)).unwrap_or("")
+        )
     } else {
         format!("error: {message}\n --> {}", path.display())
     }
