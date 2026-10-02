@@ -9,6 +9,12 @@ impl Type {
     pub fn generic(s: &str, args: Vec<Type>) -> Self {
         Self(s.into(), args)
     }
+    pub fn is_future(&self) -> bool {
+        self.0 == "Future" && self.1.len() == 1
+    }
+    pub fn is_async_function(&self) -> bool {
+        self.0 == "fn" && self.1.last().is_some_and(Self::is_future)
+    }
     pub fn is_view(&self) -> bool {
         self.0 == "view"
     }
