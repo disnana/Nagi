@@ -10,10 +10,13 @@ struct BindingId {
 struct BorrowedPlace {
     binding: BindingId,
     fields: Vec<String>,
+    owner_loan: bool,
 }
 impl BorrowedPlace {
     fn overlaps(&self, other: &Self) -> bool {
-        self.binding == other.binding
+        self.owner_loan
+            && other.owner_loan
+            && self.binding == other.binding
             && (self.fields.starts_with(&other.fields) || other.fields.starts_with(&self.fields))
     }
 }
@@ -24,6 +27,8 @@ struct Var {
     moved: bool,
     moved_fields: HashSet<Vec<String>>,
     origins: HashSet<BorrowedPlace>,
+    // Each entry records references kept after another array element is copied.
+    content_origins: Vec<HashSet<BorrowedPlace>>,
     async_function: Option<String>,
 }
 struct Checker {
@@ -76,21 +81,81 @@ fn hashable(t: &Type) -> bool {
     }
 }
 
+fn definitely_unhashable(t: &Type, classes: Option<&HashMap<String, Class>>) -> bool {
+    match t.0.as_str() {
+        // Primitive names can resolve to a local class in generated Rust.
+        "f32" | "f64" => !classes.is_some_and(|classes| classes.contains_key(&t.0)),
+        "UUID" | "timestamp" | "Map" => true,
+        "view" | "List" | "Option" | "owned" | "shared" | "Result" => {
+            t.1.iter()
+                .any(|inner| definitely_unhashable(inner, classes))
+        }
+        // A Rust bridge can add Eq/Hash to a generated user record.
+        _ => false,
+    }
+}
+
+fn unowned(mut t: &Type) -> &Type {
+    // `owned[T]` emits T itself, so it has exactly the same trait contracts.
+    while t.0 == "owned" {
+        t = &t.1[0];
+    }
+    t
+}
+
+fn json_type_supported(t: &Type, decoding: bool, classes: &HashMap<String, Class>) -> bool {
+    if t.is_future() {
+        return false;
+    }
+    if t.0 == "fn" && !t.1.is_empty() || matches!(t.0.as_str(), "Error" | "Db" | "Html") {
+        return false;
+    }
+    if decoding && t.0 == "view" {
+        // Serde deserializes borrowed strings/bytes, but no other slice types.
+        return t.inner().0 == "str"
+            || (t.inner().0 == "bytes" || unowned(&t.1[0]) == &Type::named("u8"))
+                && !classes.contains_key("u8");
+    }
+    if decoding && t.0 == "Map" && definitely_unhashable(&t.1[0], Some(classes)) {
+        return false;
+    }
+    t.1.iter()
+        .all(|inner| json_type_supported(inner, decoding, classes))
+}
+
+fn json_encode_supported(expr: &Expr, classes: &HashMap<String, Class>) -> bool {
+    if json_type_supported(expr.ty.as_ref().unwrap(), false, classes) {
+        return true;
+    }
+    // A record constructor names the local struct directly. Container
+    // constructors infer that struct too, while a typed parameter/return
+    // uses rust_type and may instead name an unsupported runtime type.
+    match &expr.kind {
+        E::Record(_, _) => true,
+        E::List(values) => values
+            .iter()
+            .all(|value| json_encode_supported(value, classes)),
+        E::Call(name, _, args)
+            if expr.resolution == Some(NameResolution::Builtin)
+                && matches!(
+                    name.as_str(),
+                    "some" | "share" | "clone_shared" | "view" | "copy"
+                ) =>
+        {
+            json_encode_supported(&args[0], classes)
+        }
+        E::Index(values, _) => json_encode_supported(values, classes),
+        _ => false,
+    }
+}
+
 fn class_field(t: &Type, line: usize) -> Result<(), String> {
     // Every generated class derives serialization. These foreign types cannot
     // acquire the missing implementations from a user's Rust bridge.
     if t.0 == "fn" && !t.1.is_empty() || matches!(t.0.as_str(), "Error" | "Db" | "Html") {
         return Err(error(line, format!("{t}はclassのフィールドに保存できません。関数の引数やローカル変数で使用してください")));
     }
-    fn unhashable(t: &Type) -> bool {
-        match t.0.as_str() {
-            "f32" | "f64" | "UUID" | "timestamp" | "Map" => true,
-            "List" | "Option" | "owned" | "shared" | "Result" => t.1.iter().any(unhashable),
-            // User records may implement Eq/Hash in a Rust bridge.
-            _ => false,
-        }
-    }
-    if t.0 == "Map" && unhashable(&t.1[0]) {
+    if t.0 == "Map" && definitely_unhashable(&t.1[0], None) {
         return Err(error(line, format!("classのMapフィールドのキーに{}は使えません。一致比較とハッシュに対応する型が必要です", t.1[0])));
     }
     for inner in &t.1 {
@@ -284,6 +349,9 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
                 HashSet::from([BorrowedPlace {
                     binding,
                     fields: vec![],
+                    // Parameter contents borrow outside the function. They are
+                    // valid return origins without borrowing the parameter Vec.
+                    owner_loan: false,
                 }])
             } else {
                 HashSet::new()
@@ -296,6 +364,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
                         ty: t.clone(),
                         moved: false,
                         moved_fields: HashSet::new(),
+                        content_origins: vec![origins.clone(); Checker::content_depth(t)],
                         origins,
                         async_function: None,
                     },
@@ -458,17 +527,41 @@ impl Checker {
         }
     }
     fn origin(&self, e: &Expr) -> HashSet<BorrowedPlace> {
+        self.origin_at(e, 0)
+    }
+    fn content_depth(t: &Type) -> usize {
+        if !t.contains_view() {
+            return 0;
+        }
+        if matches!(t.0.as_str(), "List" | "view") && t.inner().contains_view() {
+            1 + Self::content_depth(&t.inner())
+        } else {
+            t.1.iter().map(Self::content_depth).max().unwrap_or(0)
+        }
+    }
+    fn content_origins(&self, e: &Expr, ty: &Type, offset: usize) -> Vec<HashSet<BorrowedPlace>> {
+        (1..=Self::content_depth(ty))
+            .map(|depth| self.origin_at(e, depth + offset))
+            .collect()
+    }
+    fn origin_at(&self, e: &Expr, depth: usize) -> HashSet<BorrowedPlace> {
         match &e.kind {
             E::Name(n) => self
                 .vars
                 .get(n)
                 .map(|v| {
-                    if v.ty.contains_view() {
+                    if depth > 0 {
+                        v.content_origins
+                            .get(depth - 1)
+                            .cloned()
+                            .unwrap_or_default()
+                    } else if v.ty.contains_view() {
                         v.origins.clone()
                     } else {
                         HashSet::from([BorrowedPlace {
                             binding: v.binding,
                             fields: vec![],
+                            owner_loan: true,
                         }])
                     }
                 })
@@ -481,30 +574,97 @@ impl Checker {
                     place
                 })
                 .collect(),
-            E::Call(n, _, args)
-                if n == "view" && !self.functions.contains_key(n) && !self.vars.contains_key(n) =>
-            {
+            E::Call(n, _, args) if n == "view" && e.resolution == Some(NameResolution::Builtin) => {
+                if depth > 0 {
+                    // Indexing a view copies its element, which does not retain
+                    // the outer container loan. Nested elements can still borrow.
+                    return self.origin_at(&args[0], depth);
+                }
                 let mut origins = self.origin(&args[0]);
                 if let Some((name, fields)) = Self::place(&args[0]) {
                     if let Some(var) = self.vars.get(name) {
                         origins.insert(BorrowedPlace {
                             binding: var.binding,
                             fields,
+                            owner_loan: true,
                         });
                     }
                 }
                 origins
+            }
+            E::Call(n, _, args)
+                if n == "json_decode"
+                    && e.resolution == Some(NameResolution::Builtin)
+                    && e.ty.as_ref().is_some_and(Type::contains_view) =>
+            {
+                // Deserialized views borrow the input, including owned str/bytes.
+                // Direct string literals are emitted as static input and have no place.
+                self.origin(&args[0])
+            }
+            E::Call(n, _, args)
+                if e.resolution == Some(NameResolution::Builtin)
+                    && e.ty.as_ref().is_some_and(Type::contains_view)
+                    && matches!(
+                        n.as_str(),
+                        "copy" | "slice" | "ok" | "some" | "share" | "clone_shared"
+                    ) =>
+            {
+                self.origin_at(&args[0], if n == "copy" { depth.max(1) } else { depth })
             }
             E::Call(_, _, args) if e.ty.as_ref().is_some_and(Type::contains_view) => args
                 .iter()
                 .filter(|arg| arg.ty.as_ref().is_some_and(Type::contains_view))
                 .flat_map(|arg| self.origin(arg))
                 .collect(),
-            E::List(values) if e.ty.as_ref().is_some_and(Type::contains_view) => {
-                values.iter().flat_map(|value| self.origin(value)).collect()
-            }
-            E::Try(e) | E::Await(e) => self.origin(e),
+            E::List(values) if e.ty.as_ref().is_some_and(Type::contains_view) => values
+                .iter()
+                .flat_map(|value| self.origin_at(value, depth.saturating_sub(1)))
+                .collect(),
+            E::Try(e) | E::Await(e) => self.origin_at(e, depth),
+            E::Index(e, _) => self.origin_at(e, depth + 1),
             _ => HashSet::new(),
+        }
+    }
+    fn borrows_temporary(e: &Expr) -> bool {
+        Self::borrows_temporary_at(e, 0)
+    }
+    fn borrows_temporary_at(e: &Expr, depth: usize) -> bool {
+        if !e.ty.as_ref().is_some_and(Type::contains_view) {
+            return false;
+        }
+        match &e.kind {
+            E::Call(n, _, args) if e.resolution == Some(NameResolution::Builtin) => {
+                match n.as_str() {
+                    "view" => {
+                        if depth == 0 {
+                            Self::place(&args[0]).is_none()
+                        } else {
+                            Self::borrows_temporary_at(&args[0], depth)
+                        }
+                    }
+                    "json_decode" => {
+                        let input = &args[0];
+                        if input.ty.as_ref().is_some_and(Type::is_view) {
+                            Self::borrows_temporary(input)
+                        } else {
+                            // string_arg emits literals directly, rather than a temporary String.
+                            !matches!(input.kind, E::Str(_)) && Self::place(input).is_none()
+                        }
+                    }
+                    "copy" => Self::borrows_temporary_at(&args[0], depth.max(1)),
+                    "slice" | "ok" | "some" | "share" | "clone_shared" => {
+                        Self::borrows_temporary_at(&args[0], depth)
+                    }
+                    _ => args.iter().any(Self::borrows_temporary),
+                }
+            }
+            E::Call(_, _, args) => args.iter().any(Self::borrows_temporary),
+            E::List(args) => args
+                .iter()
+                .any(|arg| Self::borrows_temporary_at(arg, depth.saturating_sub(1))),
+            E::Try(e) | E::Await(e) | E::Field(e, _) => Self::borrows_temporary_at(e, depth),
+            E::Index(e, _) => Self::borrows_temporary_at(e, depth + 1),
+            _ => false,
         }
     }
     fn borrowed_place(&self, place: &BorrowedPlace) -> bool {
@@ -524,6 +684,7 @@ impl Checker {
             self.borrowed_place(&BorrowedPlace {
                 binding: v.binding,
                 fields: vec![],
+                owner_loan: true,
             })
         })
     }
@@ -585,6 +746,7 @@ impl Checker {
         if self.borrowed_place(&BorrowedPlace {
             binding: v.binding,
             fields: fields.clone(),
+            owner_loan: true,
         }) {
             return Err(error(
                 e.line,
@@ -615,6 +777,9 @@ impl Checker {
                 x.moved |= v.moved;
                 x.moved_fields.extend(v.moved_fields);
                 x.origins.extend(v.origins);
+                for (contents, origins) in x.content_origins.iter_mut().zip(v.content_origins) {
+                    contents.extend(origins);
+                }
             }
         }
     }
@@ -634,13 +799,19 @@ impl Checker {
                 .iter()
                 .flat_map(|path| path[name].origins.iter().cloned())
                 .collect();
+            for (depth, contents) in var.content_origins.iter_mut().enumerate() {
+                *contents = paths
+                    .iter()
+                    .flat_map(|path| path[name].content_origins[depth].iter().cloned())
+                    .collect();
+            }
         }
     }
     fn loop_body(
         &mut self,
         body: &mut [Stmt],
         mut condition: Option<&mut Expr>,
-        binding: Option<(&str, Type, BindingId, HashSet<BorrowedPlace>)>,
+        binding: Option<(&str, Var)>,
     ) -> Result<(), String> {
         // Recheck the parsed body, not its annotated first pass: locals must be
         // declared anew on each iteration. Only outer moves cross the backedge.
@@ -669,18 +840,8 @@ impl Checker {
                 // A while condition is also evaluated on its exit path. A for
                 // iterator was evaluated once before entering this helper.
                 let exit = self.vars.clone();
-                if let Some((name, ty, binding, origins)) = &binding {
-                    self.vars.insert(
-                        (*name).to_owned(),
-                        Var {
-                            binding: *binding,
-                            ty: ty.clone(),
-                            moved: false,
-                            moved_fields: HashSet::new(),
-                            origins: origins.clone(),
-                            async_function: None,
-                        },
-                    );
+                if let Some((name, binding)) = &binding {
+                    self.vars.insert((*name).to_owned(), binding.clone());
                 }
                 if first {
                     self.block(body)?;
@@ -701,7 +862,7 @@ impl Checker {
                 self.vars = exit;
                 return Ok(());
             }
-            if let Some((name, _, _, _)) = &binding {
+            if let Some((name, _)) = &binding {
                 after.remove(*name);
             }
             self.vars = header.clone();
@@ -787,10 +948,14 @@ impl Checker {
                     ));
                 }
                 let origin = if ty.contains_view() {
+                    if Self::borrows_temporary(value) {
+                        return Err(error(s.line, "一時的な所有値からのviewは保存できません。所有値を変数へ保存してからviewを作るか、同じ式でcopyしてください"));
+                    }
                     self.origin(value)
                 } else {
                     HashSet::new()
                 };
+                let content_origins = self.content_origins(value, &ty, 0);
                 self.consume(value)?;
                 *declare = old.is_none();
                 *annotation = Some(ty.clone());
@@ -806,6 +971,7 @@ impl Checker {
                         moved: false,
                         moved_fields: HashSet::new(),
                         origins: origin,
+                        content_origins,
                         async_function,
                     },
                 );
@@ -822,10 +988,11 @@ impl Checker {
                     let ty = self.expr(e, Some(&ret))?;
                     if ty.contains_view() {
                         let origin = self.origin(e);
-                        if origin.is_empty()
-                            || origin
-                                .iter()
-                                .any(|place| !self.parameter_views.contains(&place.binding))
+                        if Self::borrows_temporary(e)
+                            || origin.is_empty()
+                            || origin.iter().any(|place| {
+                                place.owner_loan || !self.parameter_views.contains(&place.binding)
+                            })
                         {
                             return Err(error(s.line,"request/local-scoped view escapes its lifetime。長生きさせる値にはcopy()を使用してください"));
                         }
@@ -884,6 +1051,7 @@ impl Checker {
                     return Err(error(s.line, "matchにはOkとErrの両方のcaseが必要です"));
                 }
                 let origin = self.origin(value);
+                let content_origins = self.content_origins(value, &ty, 0);
                 self.consume(value)?;
                 let before = self.vars.clone();
                 let mut moves = vec![];
@@ -910,6 +1078,11 @@ impl Checker {
                                 } else {
                                     HashSet::new()
                                 },
+                                content_origins: content_origins
+                                    .iter()
+                                    .take(Self::content_depth(&payload))
+                                    .cloned()
+                                    .collect(),
                                 ty: payload,
                                 moved: false,
                                 moved_fields: HashSet::new(),
@@ -941,6 +1114,8 @@ impl Checker {
                 }
                 s.binding_type = Some(elem.clone());
                 let origins = self.origin(e);
+                let element_origins = self.origin_at(e, 1);
+                let content_origins = self.content_origins(e, &elem, 1);
                 let mut loans = origins.clone();
                 if t.0 == "List" {
                     if let Some((name, fields)) = Self::place(e) {
@@ -948,6 +1123,7 @@ impl Checker {
                             loans.insert(BorrowedPlace {
                                 binding: var.binding,
                                 fields,
+                                owner_loan: true,
                             });
                         }
                     }
@@ -958,15 +1134,21 @@ impl Checker {
                     None,
                     Some((
                         n,
-                        elem.clone(),
-                        BindingId {
-                            line: s.line,
-                            token: s.binding_span.unwrap_or_default().start,
-                        },
-                        if elem.contains_view() {
-                            origins
-                        } else {
-                            HashSet::new()
+                        Var {
+                            binding: BindingId {
+                                line: s.line,
+                                token: s.binding_span.unwrap_or_default().start,
+                            },
+                            origins: if elem.contains_view() {
+                                element_origins
+                            } else {
+                                HashSet::new()
+                            },
+                            ty: elem,
+                            moved: false,
+                            moved_fields: HashSet::new(),
+                            content_origins,
+                            async_function: None,
                         },
                     )),
                 );
@@ -1320,6 +1502,21 @@ impl Checker {
         if generic && ts.len() != 1 || !generic && !ts.is_empty() {
             return Err(error(line, "型引数の数が一致しません"));
         }
+        if matches!(n, "db_all" | "db_query" | "db_insert" | "db_update") {
+            let row = unowned(&ts[0]);
+            if !row.1.is_empty()
+                || matches!(
+                    row.0.as_str(),
+                    "str" | "bytes" | "unit" | "Error" | "Db" | "Html" | "UUID" | "timestamp"
+                )
+                || !self.classes.contains_key(&row.0)
+            {
+                return Err(error(line, format!("{n}の型引数 {} は行に使用できません。classを指定してください（FromRowは生成コードまたはRust連携で実装します）", ts[0])));
+            }
+        }
+        if n == "json_decode" && !json_type_supported(&ts[0], true, &self.classes) {
+            return Err(error(line, format!("json_decodeの型引数 {} はJSONの読み取りに対応していません（Deserializeが必要です）", ts[0])));
+        }
         let mut types = vec![];
         for (i, a) in args.iter_mut().enumerate() {
             let hint = match n {
@@ -1483,7 +1680,12 @@ impl Checker {
                 }
                 Ok(result(ts[0].clone()))
             }
-            "json_encode" => Ok(result(Type::named("str"))),
+            "json_encode" => {
+                if !json_encode_supported(&args[0], &self.classes) {
+                    return Err(error(line, format!("json_encodeに{}は渡せません。JSONの書き出しに対応する型を指定してください（Serializeが必要です）", types[0])));
+                }
+                Ok(result(Type::named("str")))
+            }
             "ok" => {
                 let exp = expected
                     .filter(|t| t.0 == "Result")

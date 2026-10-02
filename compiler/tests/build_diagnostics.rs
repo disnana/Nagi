@@ -57,11 +57,19 @@ impl Drop for Fixture {
 
 const HIGH_MOVE: &str = "def take(text: str):\n    print(text)\n\ndef main():\n    name = \"凪\"\n    for number in range(2):\n        take(name)\n";
 const LOW_MOVE: &str = "fn take(text: str) -> unit { print(text); }\n\nfn main() -> unit {\n    let name: str = \"凪\";\n    for number in range(2) {\n        take(name);\n    }\n}\n";
-// Temporary-view lifetimes still need Rust's final verification. Keep backend
-// diagnostic mapping coverage after iterator borrows become Nagi checker errors.
-const HIGH_BORROW: &str =
-    "def main():\n    values = [1, 2]\n    for value in values:\n        borrowed = view(\"Nagi\")\n        print(copy(borrowed))\n";
-const LOW_BORROW: &str = "fn main() -> unit {\n    let values: List[i64] = [1, 2];\n    for value in values {\n        let borrowed: view[str] = view(\"Nagi\");\n        print(copy(borrowed));\n    }\n}\n";
+// Nagi checks the extern declaration; Rust verifies its adapter implementation.
+// This intentional mismatch keeps backend source mapping covered after stored
+// temporary views become Nagi checker errors.
+const HIGH_BACKEND: &str =
+    "def main():\n    print(value())\n@rust(\"native::wrong\")\nextern def value() -> i64\n";
+const LOW_BACKEND: &str = "fn main() -> unit {\n    print(value());\n}\n@rust(\"native::wrong\")\nextern fn value() -> i64;\n";
+
+fn wrong_adapter(f: &Fixture) {
+    f.write(
+        "bridge.rs",
+        "pub fn wrong() -> String { \"mismatch\".to_owned() }\n",
+    );
+}
 
 fn stderr(output: &Output) -> String {
     String::from_utf8(output.stderr.clone()).unwrap()
@@ -194,21 +202,18 @@ fn mapped_prefix(text: &str) -> &str {
 #[test]
 fn high_build_points_to_nagi_and_keeps_rust_notes_and_failure_status() {
     let f = Fixture::new();
-    f.write("main.nagi", HIGH_BORROW);
+    f.write("main.nagi", HIGH_BACKEND);
+    wrong_adapter(&f);
     assert!(f.cli(&["check", "main.nagi"]).status.success());
-    let output = f.cli(&["build", "main.nagi"]);
+    let output = f.cli(&["build", "main.nagi", "--rust", "bridge.rs"]);
     assert!(!output.status.success());
     let text = stderr(&output);
     let prefix = mapped_prefix(&text);
-    assert!(prefix.contains("error[E0716]"), "{text}");
+    assert!(prefix.contains("error[E0308]"), "{text}");
     assert!(prefix.contains("main.nagi:4"), "{text}");
-    assert!(
-        prefix.contains("4 |         borrowed = view(\"Nagi\")"),
-        "{text}"
-    );
-    assert!(prefix.contains("main.nagi:5"), "{text}");
+    assert!(prefix.contains("4 | extern def value() -> i64"), "{text}");
     assert!(!prefix.contains("src/main.rs:"), "{text}");
-    assert!(text.contains(".as_str()"), "{text}");
+    assert!(text.contains("native::wrong()"), "{text}");
     assert!(text.contains("Build failed."), "{text}");
 }
 
@@ -221,34 +226,33 @@ fn imported_high_uses_the_dependency_path_and_local_line() {
     );
     f.write(
         "lib/move.nagi",
-        &HIGH_BORROW.replace("def main():", "def repeat():"),
+        &HIGH_BACKEND.replace("def main():", "def repeat():"),
     );
     f.write(
         "main.nagi",
         "import \"good.nagi\"\nimport \"lib/move.nagi\"\ndef main():\n    repeat()\n",
     );
-    let output = f.cli(&["build", "main.nagi"]);
+    wrong_adapter(&f);
+    let output = f.cli(&["build", "main.nagi", "--rust", "bridge.rs"]);
     assert!(!output.status.success());
     let text = stderr(&output);
     let prefix = mapped_prefix(&text);
     assert!(prefix.contains("move.nagi:4"), "{text}");
-    assert!(
-        prefix.contains("4 |         borrowed = view(\"Nagi\")"),
-        "{text}"
-    );
+    assert!(prefix.contains("4 | extern def value() -> i64"), "{text}");
     assert!(!prefix.contains("main.nagi:"), "{text}");
 }
 
 #[test]
 fn standalone_low_uses_the_original_low_lines() {
     let f = Fixture::new();
-    f.write("main.low", LOW_BORROW);
-    let output = f.cli(&["build", "main.low"]);
+    f.write("main.low", LOW_BACKEND);
+    wrong_adapter(&f);
+    let output = f.cli(&["build", "main.low", "--rust", "bridge.rs"]);
     assert!(!output.status.success());
     let text = stderr(&output);
-    assert!(mapped_prefix(&text).contains("main.low:4"), "{text}");
+    assert!(mapped_prefix(&text).contains("main.low:5"), "{text}");
     assert!(
-        mapped_prefix(&text).contains("4 |         let borrowed: view[str] = view(\"Nagi\");"),
+        mapped_prefix(&text).contains("5 | extern fn value() -> i64;"),
         "{text}"
     );
 }
@@ -258,37 +262,43 @@ fn imported_low_uses_its_own_file_instead_of_the_entry_file() {
     let f = Fixture::new();
     f.write(
         "lib/move.low",
-        &LOW_BORROW.replace("fn main()", "fn repeat()"),
+        &LOW_BACKEND.replace("fn main()", "fn repeat()"),
     );
     f.write(
         "main.low",
         "import \"lib/move.low\";\nfn main() -> unit { repeat(); }\n",
     );
-    let output = f.cli(&["build", "main.low"]);
+    wrong_adapter(&f);
+    let output = f.cli(&["build", "main.low", "--rust", "bridge.rs"]);
     assert!(!output.status.success());
     let text = stderr(&output);
-    assert!(mapped_prefix(&text).contains("move.low:4"), "{text}");
+    assert!(mapped_prefix(&text).contains("move.low:5"), "{text}");
     assert!(!mapped_prefix(&text).contains("main.low:"), "{text}");
 }
 
 #[test]
-fn replacement_body_errors_point_to_the_handwritten_low_file() {
+fn replacement_adapter_errors_point_to_the_handwritten_low_file() {
     let f = Fixture::new();
     f.write(
         "main.nagi",
-        "def repeat():\n    print(1)\ndef main():\n    repeat()\n",
+        "@rust(\"native::wrong\")\nextern def repeat() -> i64\ndef main():\n    print(repeat())\n",
     );
     f.write(
         "native/replace.low",
-        &format!(
-            "@replace generated::repeat\n{}",
-            LOW_BORROW.replace("fn main()", "fn replace_body()")
-        ),
+        "@replace generated::repeat\nextern fn replace_body() -> i64;\n",
     );
-    let output = f.cli(&["build", "main.nagi", "--native", "native/replace.low"]);
+    wrong_adapter(&f);
+    let output = f.cli(&[
+        "build",
+        "main.nagi",
+        "--native",
+        "native/replace.low",
+        "--rust",
+        "bridge.rs",
+    ]);
     assert!(!output.status.success());
     let text = stderr(&output);
-    assert!(mapped_prefix(&text).contains("replace.low:5"), "{text}");
+    assert!(mapped_prefix(&text).contains("replace.low:2"), "{text}");
     assert!(!mapped_prefix(&text).contains("main.nagi:"), "{text}");
 }
 

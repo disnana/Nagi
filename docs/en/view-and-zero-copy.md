@@ -21,6 +21,10 @@ Save this as `view.nagi` and run `nagic run view.nagi`. It prints `Nagi`, `Nagi`
 
 To store a view, first put the original value in a variable, as above. Moving or changing the original value is restricted while it is borrowed. See [Ownership](ownership.md) for examples.
 
+`saved = view("Nagi")` fails because it stores a borrow of a temporary string. An immediate call such as `print(view("Nagi"))` is valid because it finishes using the borrow within that call.
+
+Copying a list requires its elements to implement Rust's `Clone`. Generated classes receive Clone only when they are Copy classes. To copy a list of classes that own strings, for example, provide a Clone implementation in a Rust adapter. This implementation is verified by `build`.
+
 ## Returning a view
 
 A function can return its input view or part of it.

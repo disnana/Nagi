@@ -26,6 +26,8 @@ async def main() -> Result[unit, Error]:
 
 `db_insert[User]`の`[User]`は返したい型です。`RETURNING`の列名と型をclassに合わせます。値は`?1`などへbindし、SQL文字列へ連結しないでください。
 
+行を返す関数の型引数にはclassを指定します。`db_all[i64]`や`db_query[str]`は使えず、`check`でエラーになります。1列だけ読む場合も、その列を持つclassを定義してください。
+
 | 操作 | 書き方 | await後の戻り値 |
 |---|---|---|
 | テーブル作成など | `db_exec(db, sql)` | `Result[i64, Error]` |

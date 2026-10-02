@@ -34,7 +34,7 @@ code --install-extension Disnana.nagi-lang
 code --install-extension build/distribution/nagi-language-0.1.8.vsix
 ```
 
-色付け、スニペット、インデント補助はコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。[準備と最初の実行](https://disnana.github.io/Nagi/docs/getting-started/)の手順でインストールしてください。拡張はリポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
+色付け、スニペット、インデント補助はコンパイラなしで利用できます。次の拡張リリースでは、キーワード・型の補完と組み込み関数の補完・ホバー・引数ヒントも利用できます。型検査や実行には`nagic`が必要です。[準備と最初の実行](https://disnana.github.io/Nagi/docs/getting-started/)の手順でインストールしてください。拡張はリポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
 
 VSIXにはコンパイラ本体を含めていません。`spawn nagic.exe ENOENT`などのメッセージは、コンパイラが見つからないことを示します。インストール後にVS Codeを再起動し、「Nagi: 型検査」を実行してください。別の場所にあるコンパイラを使う場合は`nagi.compilerPath`で指定します。コンパイラの起動失敗やタイムアウトは警告とNagiの出力に表示し、ソースの型エラーとして赤線を付けません。
 
@@ -94,6 +94,8 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 
 ## ホバー・補完・引数ヒント
 
+次の拡張リリースでは、新規の未保存ファイル、コンパイラなし、未信頼のワークスペースでも、キーワード・型と組み込み関数の入力補助を使えます。書きかけの構文でも組み込み関数の説明を表示します。コンパイラで解析できない場合、ファイル内の同じ名前の関数や変数やimportと衝突しうる組み込み情報は控えます。プロジェクトの宣言、ローカル変数の型、フィールド候補、F12にはコンパイラとワークスペースの信頼が必要です。
+
 最新版の`nagic`と拡張0.1.8を使います。関数名にマウスを置くと引数・戻り値・asyncの宣言が表示され、class名ではフィールド一覧を確認できます。`Result[Item?, Error]`や`view[str]`などの型も宣言どおりに表示します。[コードを使った操作例](../../docs/editor.md)もあります。
 
 変数名にマウスを置くと、コンパイラが確認できた型を表示します。たとえば`count = 3`は`count: i64`、classを返す関数から作った`item`は`item: Item`です。関数の引数、`for`の要素、Resultの`case Ok(value)`と`case Err(problem)`の束縛名にも対応します。宣言と使用箇所を扱い、caseやifなどのブロックを出た名前には型を表示しません。
@@ -114,4 +116,4 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 
 リポジトリのルートでコンパイラをビルドし、`node --test editors/vscode-nagi/test/*.test.js`を実行します。Nodeテストには文字列処理だけのテストと、実際の`nagic symbols`を使うテストがあります。
 
-VS Code上の確認は別に行います。Extension Development Hostに`--extensionDevelopmentPath`でこのフォルダー、`--extensionTestsPath`で`test/host.js`、ワークスペースとしてリポジトリのルートを指定します。診断・F12・ホバー・補完・引数ヒント・プロジェクトの実行と、実際の入力操作を確認します。入力補助だけをコンパイラなしで確認する場合は`test/indentation-host.js`を指定します。結果は`build/vscode-typing-result.json`に残します。
+VS Code上の確認は別に行います。Extension Development Hostに`--extensionDevelopmentPath`でこのフォルダー、`--extensionTestsPath`で`test/host.js`、ワークスペースとしてリポジトリのルートを指定します。診断・F12・ホバー・補完・引数ヒント・プロジェクトの実行と、実際の入力操作を確認します。インデントだけをコンパイラなしで確認する場合は`test/indentation-host.js`、静的な補完・ホバー・引数ヒントは`test/static-assistance-host.js`を指定します。結果はそれぞれ`build/vscode-typing-result.json`と`build/vscode-static-assistance-result.json`に残します。
