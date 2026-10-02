@@ -1125,14 +1125,19 @@ impl Checker {
             }
             E::List(a) => {
                 let exp = expected.filter(|t| t.0 == "List").map(Type::inner);
+                let mut values = a.iter_mut();
                 let elem = if let Some(exp) = exp {
                     exp
-                } else if let Some(x) = a.first_mut() {
-                    self.expr(x, None)?
+                } else if let Some(first) = values.next() {
+                    // Inferring from the first element must not check its
+                    // moves twice when checking the remaining elements.
+                    let elem = self.expr(first, None)?;
+                    self.consume(first)?;
+                    elem
                 } else {
                     return Err(error(line, "空配列には型注釈が必要です"));
                 };
-                for x in a {
+                for x in values {
                     let t = self.expr(x, Some(&elem))?;
                     self.demand(&t, &elem, line)?;
                     self.consume(x)?;
@@ -1185,6 +1190,7 @@ impl Checker {
                     return Err(error(line, "try対象はResultです"));
                 }
                 self.demand(&t.1[1], &self.ret.1[1], line)?;
+                self.consume(x)?;
                 t.inner()
             }
             E::Call(n, ts, args) => {

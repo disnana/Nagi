@@ -304,6 +304,32 @@ fn repeated_moves_fail_in_check_and_build_before_invoking_rust() {
 }
 
 #[test]
+fn try_result_reuse_reports_source_lines_before_invoking_cargo() {
+    for (file, source, line) in [
+        ("main.nagi", "def main() -> Result[unit, Error]:\n    outcome = ok(\"Nagi\")\n    first = try outcome\n    second = try outcome\n    return ok(print(second))\n", 4),
+        ("main.nagi", "def main() -> Result[unit, Error]:\n    outcome = ok(42)\n    first = try outcome\n    match outcome:\n        case Ok(number):\n            print(number)\n        case Err(_):\n            print(0)\n    return ok(print(first))\n", 4),
+        ("main.nagi", "def main() -> Result[unit, Error]:\n    outcome = ok(\"Nagi\")\n    for number in range(2):\n        value = try outcome\n        print(value)\n    return ok(print(\"done\"))\n", 4),
+        ("main.low", "fn main() -> Result[unit, Error] {\n    let outcome: Result[str, Error] = ok(\"Nagi\");\n    let first: str = try outcome;\n    let second: str = try outcome;\n    return ok(print(second));\n}\n", 4),
+    ] {
+        let fixture = Fixture::new();
+        fixture.write(file, source);
+        for action in ["check", "build", "run"] {
+            let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+                .args([action, file])
+                .current_dir(&fixture.0)
+                .env("PATH", "")
+                .env("NAGI_ROOT", fixture.0.join("missing-runtime"))
+                .output().unwrap();
+            let text = stderr(&output);
+            assert!(!output.status.success(), "{file}: {text}");
+            assert!(text.contains("outcome はmove後") && text.contains(&format!("{file}:{line}")), "{text}");
+            assert!(!text.contains("Rust backend") && !text.contains("Cargo"), "{text}");
+            assert!(!fixture.0.join("build/main/src/main.rs").exists());
+        }
+    }
+}
+
+#[test]
 fn repeated_moves_keep_imported_and_replacement_source_locations() {
     for (file, source, line) in [
         (

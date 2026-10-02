@@ -130,6 +130,24 @@ fn user_functions_with_builtin_names_keep_their_call_targets() {
 }
 
 #[test]
+fn user_and_local_functions_named_serve_compile_without_http_runtime() {
+    for source in [
+        "def serve(value: i64, port: i64) -> i64:\n    return value + port\ndef answer() -> i64:\n    return serve(40, 2)\n",
+        "def add(value: i64, port: i64) -> i64:\n    return value + port\ndef answer() -> i64:\n    serve = add\n    return serve(40, 2)\n",
+    ] {
+        let mut high = parser::parse(source, true).unwrap();
+        check::check(&mut high).unwrap();
+        let mut low = parser::parse(&emit::low(&high), false).unwrap();
+        check::check(&mut low).unwrap();
+        for program in [&high, &low] {
+            let mut code = emit::rust(program).unwrap();
+            code.push_str("\n#[test] fn calls_serve() { assert_eq!(answer(), 42); }\n");
+            compile_and_run(code);
+        }
+    }
+}
+
+#[test]
 fn rust_keywords_and_generated_helper_names_remain_valid_nagi_names() {
     let source = "def type(self: i64, crate: i64, super: i64, Self: i64, __nagi_ident_0: i64) -> i64:\n    loop: i64 = self + crate + super + Self + __nagi_ident_0\n    return loop\ndef __nagi_main() -> i64:\n    return type(1, 2, 3, 4, 5)\ndef answer() -> i64:\n    return __nagi_main()\ndef main():\n    assert_true(answer() == 15)\n";
     let mut high = parser::parse(source, true).unwrap();

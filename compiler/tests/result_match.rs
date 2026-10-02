@@ -81,3 +81,57 @@ fn error_helpers_preserve_types_and_ownership() {
             .contains("expected Error")
     );
 }
+
+#[test]
+fn try_consumes_stored_results_before_a_second_try_or_match() {
+    for source in [
+        "def main() -> Result[unit, Error]:\n    outcome = ok(\"Nagi\")\n    first = try outcome\n    second = try outcome\n    return ok(print(second))\n",
+        "def main() -> Result[unit, Error]:\n    outcome = ok(42)\n    first = try outcome\n    match outcome:\n        case Ok(number):\n            print(number)\n        case Err(problem):\n            print(error_message(problem))\n    return ok(print(first))\n",
+        "fn main() -> Result[unit, Error] {\n    let outcome: Result[str, Error] = ok(\"Nagi\");\n    let first: str = try outcome;\n    let second: str = try outcome;\n    return ok(print(second));\n}\n",
+    ] {
+        let mut program = parser::parse(source, source.starts_with("def")).unwrap();
+        let error = check::check(&mut program).unwrap_err();
+        assert!(error.starts_with("line 4:") && error.contains("outcome はmove後"), "{error}");
+    }
+}
+
+#[test]
+fn try_consumption_is_checked_on_loop_backedges_and_while_conditions() {
+    for source in [
+        "def repeat(outcome: Result[str, Error]) -> Result[unit, Error]:\n    for number in range(2):\n        name = try outcome\n        print(name)\n    return ok(print(\"done\"))\n",
+        "def repeat(outcome: Result[bool, Error]) -> Result[unit, Error]:\n    while try outcome:\n        print(1)\n    return ok(print(\"done\"))\n",
+    ] {
+        let error = checked(source).unwrap_err();
+        assert!(error.contains("outcome はmove後") && error.contains("次の周回"), "{error}");
+    }
+}
+
+#[test]
+fn try_consumes_only_the_selected_result_field() {
+    let source = "class Envelope:\n    result: Result[str, str]\n    count: i64\ndef read(envelope: Envelope) -> Result[i64, str]:\n    value = try envelope.result\n    print(value)\n    return ok(envelope.count)\n";
+    let high = checked(source).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let invalid = source.replace(
+        "    print(value)",
+        "    again = try envelope.result\n    print(value)",
+    );
+    assert!(checked(&invalid)
+        .unwrap_err()
+        .contains("envelope.result はmove後"));
+}
+
+#[test]
+fn try_payloads_keep_copy_reuse_reinitialization_and_borrow_origins() {
+    for source in [
+        "def main() -> Result[unit, Error]:\n    outcome = ok(42)\n    number = try outcome\n    print(number)\n    return ok(print(number))\n",
+        "def main() -> Result[unit, Error]:\n    outcome = ok(\"first\")\n    for number in range(2):\n        name = try outcome\n        print(name)\n        outcome = ok(\"next\")\n    return ok(print(try outcome))\n",
+        "def main() -> Result[unit, Error]:\n    text = \"Nagi\"\n    outcome = slice(view(text), 0, 2)\n    part = try outcome\n    return ok(print(part))\n",
+    ] {
+        let high = checked(source).unwrap();
+        let mut low = parser::parse(&emit::low(&high), false).unwrap();
+        check::check(&mut low).unwrap();
+    }
+    let invalid = "def main() -> Result[unit, Error]:\n    text = \"Nagi\"\n    outcome = slice(view(text), 0, 2)\n    part = try outcome\n    text = \"changed\"\n    return ok(print(part))\n";
+    assert!(checked(invalid).unwrap_err().contains("参照中"));
+}

@@ -524,6 +524,36 @@ pub fn rust(p: &Program) -> Result<String, String> {
     ::std::result::Result::Ok(rust_with_lines(p)?.text)
 }
 
+fn calls_builtin(statements: &[Stmt], builtin: &str) -> bool {
+    fn expr(e: &Expr, builtin: &str) -> bool {
+        match &e.kind {
+            E::Call(name, _, args) => {
+                (name == builtin && e.resolution == Some(NameResolution::Builtin))
+                    || args.iter().any(|e| expr(e, builtin))
+            }
+            E::Record(_, fields) => fields.iter().any(|(_, e)| expr(e, builtin)),
+            E::List(values) => values.iter().any(|e| expr(e, builtin)),
+            E::Binary(a, _, b) | E::Index(a, b) => expr(a, builtin) || expr(b, builtin),
+            E::Unary(_, e) | E::Field(e, _) | E::Await(e) | E::Try(e) => expr(e, builtin),
+            E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null | E::Name(_) => false,
+        }
+    }
+    statements.iter().any(|s| match &s.kind {
+        S::Assign { value, .. } | S::Expr(value) | S::Spawn(value) => expr(value, builtin),
+        S::Return(value) => value.as_ref().is_some_and(|e| expr(e, builtin)),
+        S::If(condition, a, b) => {
+            expr(condition, builtin) || calls_builtin(a, builtin) || calls_builtin(b, builtin)
+        }
+        S::Match(value, arms) => {
+            expr(value, builtin) || arms.iter().any(|arm| calls_builtin(&arm.body, builtin))
+        }
+        S::While(condition, body) | S::For(_, condition, body) => {
+            expr(condition, builtin) || calls_builtin(body, builtin)
+        }
+        S::Scope(body) => calls_builtin(body, builtin),
+    })
+}
+
 pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
     crate::routes::validate(p)?;
     let names = crate::rust_names::RustNames::new(p);
@@ -627,7 +657,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 .any(|(a, _)| ["get", "post", "put", "delete"].contains(&a.as_str()))
         })
         .collect();
-    if !routes.is_empty() {
+    if !routes.is_empty() || p.functions.iter().any(|f| calls_builtin(&f.body, "serve")) {
         out.push_str("async fn __nagi_serve(db: ::nagi_runtime::Db,port:i64) -> Result<(),::nagi_runtime::Error> {\nlet router= ::nagi_runtime::axum::Router::new()\n");
         let mut paths = std::collections::BTreeMap::<String, Vec<(String, usize)>>::new();
         for (i, f) in routes.iter().enumerate() {
