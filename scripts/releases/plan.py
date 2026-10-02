@@ -41,6 +41,9 @@ def plan(base: str, head: str) -> dict[str, str]:
     changed = git("diff", "--name-only", base, head).splitlines()
     packaging_changed = any(p in (".github/workflows/ci.yml", "scripts/install.sh", "scripts/install.ps1")
                             or p.startswith("scripts/releases/") for p in changed)
+    extension_changed = any(p.startswith("editors/vscode-nagi/")
+                            and not p.startswith("editors/vscode-nagi/test/")
+                            and p != "editors/vscode-nagi/README.md" for p in changed)
     result = {"sha": head}
     for component, value in current.items():
         new = version_tuple(value)
@@ -50,7 +53,8 @@ def plan(base: str, head: str) -> dict[str, str]:
             raise ValueError(f"{component} version must increase: {previous[component]} → {value}")
         result[f"{component}_version"] = value
         result[f"release_{component}"] = str(release).lower()
-        result[f"package_{component}"] = str(release or packaging_changed).lower()
+        package = release or packaging_changed or (component == "vscode" and extension_changed)
+        result[f"package_{component}"] = str(package).lower()
     return result
 
 
