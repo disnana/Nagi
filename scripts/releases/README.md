@@ -25,7 +25,7 @@ PRをmainへマージすると、push前後のコミット全体を比較しま�
 4. SHA-256を作り、Actionsの成果物へ保存する。
 5. Linuxの検証と対象の配布物の検証がすべて成功したmainのバージョン更新時だけ、検証したコミットに新しいタグを作り、draft releaseへファイルをアップロードする。内容を読み直してSHA-256を照合した後、正式版として公開する。
 
-PRでもバージョンを更新した対象の配布物を検査します。リリーススクリプトやCI定義を変更した場合は、バージョンを変えていない配布物も検査用に生成します。この検査だけではGitHub Releasesへ公開しません。
+PRでもバージョンを更新した対象の配布物を検査します。リリーススクリプト・インストーラー・CI定義を変更した場合は、バージョンを変えていない配布物も検査用に生成します。この検査だけではGitHub Releasesへ公開しません。
 
 公開用ジョブだけが`contents: write`を持ち、GitHub Actionsの組み込みtokenを使います。追加の公開tokenやMarketplaceアカウントは不要です。GitHub Pagesの自動公開は別の`Nagi website`ワークフローです。
 
@@ -41,7 +41,13 @@ Nagiのアーカイブには、**検証したコミットのGit管理下にあ�
 
 アーカイブ全体を展開し、展開フォルダーをPATHに追加します。`runtime/`との位置を保てば`NAGI_ROOT`は通常不要です。NagiアプリのビルドにはRust/CargoとCのビルド環境が必要です。Linux版はUbuntu runnerと同等のglibc環境、macOS版はmacOS 15を想定します。0.1.5以前の配布物では実行ファイルは`target/release/`にあります。
 
-[`install.ps1`](../install.ps1)と[`install.sh`](../install.sh)は指定版とそのSHA-256を取得します。WindowsはユーザーのPATHに追加し、Linux/macOSは`~/.local/bin/nagic`とbash/zshのPATH設定を用意します。PATHの永続変更を省く場合は`-NoPath`または`--no-path`を使います。Rust、C環境、VSIXは別途インストールします。
+[`install.ps1`](../install.ps1)と[`install.sh`](../install.sh)は、指定を省くとGitHubのLatestに指定されたNagiの公開版とSHA-256を取得します。公開処理はNagiだけをLatestに指定し、VSIXでは変更しません。インストーラーも転送先が`nagi-vX.Y.Z`でなければ停止します。版を指定する場合は`-Version X.Y.Z`／`--version X.Y.Z`です。READMEのコマンドはmainのインストーラーを使い、再実行で更新できます。
+
+Windowsは`%LOCALAPPDATA%\Nagi\versions\current`のjunctionを固定のPATH入口にします。実行ファイルは`nagic.exe`なので、エディターから直接起動できます。既存の版ごとのPATH登録を整理し、Linux/macOSは`~/.local/bin/nagic`のリンクを切り替えます。切り替え後の起動検証に失敗したら元へ戻します。同時に2つのインストーラーを実行することはできません。
+
+更新が成功してから、同じ保存先の旧版を公開アーカイブと照合し、ファイル・ディレクトリの構成と内容が一致するものだけ削除します。使う1版だけ残し、バックアップ版は常設しません。0.1.6の旧インストーラーからの移行にも同じ照合を使います。照合用のダウンロード失敗、追加・変更・使用中のファイルなどで削除できない場合は、更新自体は成功とし、残した場所を表示します。別の場所の手動展開物は触りません。
+
+PATHの永続変更を省く場合は`-NoPath`または`--no-path`を使います。保存先を変えた場合は更新時も同じ引数を渡してください。更新前にはビルドを止め、旧版の絶対パスをVS Codeへ指定していた場合は`nagic`へ変更します。Rust、C環境、VSIXは別途インストールします。
 
 VSIXにはコンパイラを含みません。VS Codeの「VSIXからのインストール」で入れ、`nagic`を別にビルドするかNagiの配布物を用意します。[拡張の設定](../../editors/vscode-nagi/README.md)を参照してください。
 

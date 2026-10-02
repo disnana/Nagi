@@ -198,6 +198,12 @@ jobs:
           RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
         shell: pwsh
         run: ./scripts/releases/test_install.ps1 -Archive "build/distribution/nagi-$env:RELEASE_VERSION-windows-x86_64.zip" -Version $env:RELEASE_VERSION -TestUserPath
+      - name: Verify Windows PowerShell 5.1 installation and upgrades
+        if: matrix.platform == 'windows-x86_64'
+        env:
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
+        shell: powershell
+        run: ./scripts/releases/test_install.ps1 -Archive "build/distribution/nagi-$env:RELEASE_VERSION-windows-x86_64.zip" -Version $env:RELEASE_VERSION -TestUserPath
       - name: Verify the shell installer
         if: matrix.platform != 'windows-x86_64'
         run: python -m unittest discover -s scripts/releases -p 'test_install.py'

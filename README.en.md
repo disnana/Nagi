@@ -25,16 +25,18 @@ Building Nagi applications needs Rust/Cargo and a C build environment. See [setu
 Windows (PowerShell):
 
 ```powershell
-& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/nagi-v0.1.6/scripts/install.ps1')))
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1')))
 ```
 
 Linux / macOS (bash):
 
 ```bash
-(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/nagi-v0.1.6/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
 ```
 
-These commands download Nagi 0.1.6, verify SHA-256, install it for your user, and add it to PATH. Linux/macOS add a PATH line to bash/zsh configuration. Install Rust and the VS Code extension separately. Restart VS Code after installation.
+These commands download the latest published Nagi release, verify SHA-256, install it for your user, and add it to PATH. **Run the same command to update.** The installer comes from main; the compiler comes from a published GitHub Release. Install Rust and the VS Code extension separately.
+
+Stop any Nagi builds before updating and restart VS Code afterward. After a successful update, unchanged older distributions are removed so only the selected version remains. Modified, added, busy, or unverifiable files are preserved, and the installer reports their location. A failed update preserves the previous command. See [updating and selecting a version](docs/en/getting-started.md#update).
 
 ```bash
 nagic --version

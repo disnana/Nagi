@@ -77,6 +77,16 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertEqual(result["release_nagi"], "false")
         self.assertEqual(result["release_vscode"], "false")
 
+    def test_installer_only_changes_run_platform_checks_without_releasing(self):
+        for file in ("scripts/install.sh", "scripts/install.ps1"):
+            with self.subTest(file=file):
+                base = plan.git("rev-parse", "HEAD").strip()
+                self.change(file, "# Installer update")
+                result = plan.plan(base, self.commit())
+                self.assertEqual(result["package_nagi"], "true")
+                self.assertEqual(result["release_nagi"], "false")
+                self.assertEqual(result["release_vscode"], "false")
+
     def test_downgrade_or_nonformal_version_is_rejected(self):
         self.change("editors/vscode-nagi/package.json", '{"version":"0.1.4"}\n')
         with self.assertRaisesRegex(ValueError, "must increase"):

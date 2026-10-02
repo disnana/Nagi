@@ -39,7 +39,8 @@ def plan(base: str, head: str) -> dict[str, str]:
     base = git("rev-parse", "--verify", f"{base}^{{commit}}").strip()
     previous = versions(base)
     changed = git("diff", "--name-only", base, head).splitlines()
-    packaging_changed = any(p == ".github/workflows/ci.yml" or p.startswith("scripts/releases/") for p in changed)
+    packaging_changed = any(p in (".github/workflows/ci.yml", "scripts/install.sh", "scripts/install.ps1")
+                            or p.startswith("scripts/releases/") for p in changed)
     result = {"sha": head}
     for component, value in current.items():
         new = version_tuple(value)

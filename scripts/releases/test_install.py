@@ -4,7 +4,6 @@ import io
 import json
 import os
 import platform
-import re
 import shutil
 import subprocess
 import tarfile
@@ -17,14 +16,6 @@ ROOT = Path(__file__).resolve().parents[2]
 VERSION = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
 
 
-class InstallerVersionTests(unittest.TestCase):
-    def test_defaults_install_the_current_compiler_release(self):
-        bash = (ROOT / "scripts/install.sh").read_text()
-        powershell = (ROOT / "scripts/install.ps1").read_text()
-        self.assertEqual(re.search(r"(?m)^version=(\d+\.\d+\.\d+)$", bash)[1], VERSION)
-        self.assertEqual(re.search(r"\[string\]\$Version = '(\d+\.\d+\.\d+)'", powershell)[1], VERSION)
-
-
 @unittest.skipIf(os.name == "nt", "PowerShell installer has a separate Windows test")
 class ShellInstallTests(unittest.TestCase):
     def setUp(self):
@@ -34,6 +25,8 @@ class ShellInstallTests(unittest.TestCase):
         architecture = "arm64" if platform.machine() in ("arm64", "aarch64") else "x86_64"
         self.platform = f"{system}-{architecture}"
         self.stem = f"nagi-{VERSION}-{self.platform}"
+        major, minor, patch = map(int, VERSION.split("."))
+        self.next_version = f"{major}.{minor}.{patch + 1}"
         self.assets = self.root / "assets"
         self.assets.mkdir()
         self.tools = self.root / "tools"
@@ -42,41 +35,47 @@ class ShellInstallTests(unittest.TestCase):
         curl.write_text('''#!/bin/sh
 output=''
 url=''
+head=0
 while [ "$#" -gt 0 ]; do
     case "$1" in
         -o) output=$2; shift 2 ;;
+        --head) head=1; shift ;;
         https://*) url=$1; shift ;;
         *) shift ;;
     esac
 done
+if [ "$head" = 1 ]; then printf '%s' "$NAGI_TEST_LATEST_URL"; exit 0; fi
 /bin/cp "$NAGI_TEST_ASSETS/${url##*/}" "$output"
 ''')
         curl.chmod(0o755)
         self.environment = {**os.environ, "PATH": str(self.tools) + os.pathsep + os.environ["PATH"],
-                            "NAGI_TEST_ASSETS": str(self.assets), "NAGI_INSTALL_MARKER": str(self.root / "executed")}
+                            "NAGI_TEST_ASSETS": str(self.assets), "NAGI_INSTALL_MARKER": str(self.root / "executed"),
+                            "NAGI_TEST_LATEST_URL": f"https://github.com/disnana/Nagi/releases/tag/nagi-v{VERSION}"}
         self.bundle()
 
     def tearDown(self):
         self.temporary.cleanup()
 
-    def bundle(self, *, corrupt=False, unsafe=None, metadata_platform=None):
-        archive = self.assets / (self.stem + ".tar.gz")
-        metadata = {"version": VERSION, "platform": metadata_platform or self.platform, "commit": "a" * 40}
-        files = {"nagic": f'#!/bin/sh\ntouch "$NAGI_INSTALL_MARKER"\necho "nagic {VERSION}"\n'.encode(),
+    def bundle(self, *, version=VERSION, corrupt=False, unsafe=None, metadata_platform=None, activation_failure=False):
+        stem = f"nagi-{version}-{self.platform}"
+        archive = self.assets / (stem + ".tar.gz")
+        metadata = {"version": version, "platform": metadata_platform or self.platform, "commit": "a" * 40}
+        activation = 'case "$0" in */.install.*) ;; *) exit 73 ;; esac\n' if activation_failure else ''
+        files = {"nagic": f'#!/bin/sh\n{activation}touch "$NAGI_INSTALL_MARKER"\necho "nagic {version}"\n'.encode(),
                  "runtime/Cargo.toml": b"runtime fixture", "runtime/src/lib.rs": b"runtime fixture",
                  "release.json": (json.dumps(metadata, indent=2) + "\n").encode(),
                  "README.txt": b"installation notes", "LICENSE": b"license fixture"}
         with tarfile.open(archive, "w:gz") as output:
             for name, content in files.items():
-                entry = tarfile.TarInfo(f"{self.stem}/{name}")
+                entry = tarfile.TarInfo(f"{stem}/{name}")
                 entry.size = len(content)
                 entry.mode = 0o755 if name == "nagic" else 0o644
                 output.addfile(entry, io.BytesIO(content))
             if unsafe == "traversal":
-                entry = tarfile.TarInfo(f"{self.stem}/../escaped")
+                entry = tarfile.TarInfo(f"{stem}/../escaped")
                 output.addfile(entry, io.BytesIO(b""))
             elif unsafe == "link":
-                entry = tarfile.TarInfo(f"{self.stem}/runtime/link")
+                entry = tarfile.TarInfo(f"{stem}/runtime/link")
                 entry.type = tarfile.SYMTYPE
                 entry.linkname = "../../../escaped"
                 output.addfile(entry)
@@ -150,6 +149,116 @@ done
         result = self.install("--no-path")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse((self.root / "profile").exists())
+
+    def activate_next_release(self, **options):
+        self.bundle(version=self.next_version, **options)
+        self.environment["NAGI_TEST_LATEST_URL"] = f"https://github.com/disnana/Nagi/releases/tag/nagi-v{self.next_version}"
+        return self.install()
+
+    def assert_active(self, version):
+        command = self.root / "bin/nagic"
+        self.assertEqual(command.resolve(), self.root / "versions" / f"nagi-{version}-{self.platform}" / "nagic")
+        output = subprocess.check_output([str(command), "--version"], env=self.environment, text=True)
+        self.assertEqual(output.strip(), f"nagic {version}")
+
+    def test_upgrade_repeat_and_explicit_downgrade_keep_only_the_selected_version(self):
+        self.assertEqual(self.install("--version", VERSION).returncode, 0)
+        result = self.activate_next_release()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_active(self.next_version)
+        self.assertFalse((self.root / "versions" / self.stem).exists())
+        self.assertEqual(self.install().returncode, 0)
+        self.assertEqual((self.root / "profile").read_text().count("# Nagi installer"), 1)
+        result = self.install("--version", VERSION)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_active(VERSION)
+        self.assertEqual([p.name for p in (self.root / "versions").iterdir()], [self.stem])
+
+    def test_original_install_without_receipts_migrates(self):
+        versions = self.root / "versions"
+        versions.mkdir()
+        with tarfile.open(self.assets / (self.stem + ".tar.gz")) as archive:
+            archive.extractall(versions, filter="data")
+        (self.root / "bin").mkdir()
+        (self.root / "bin/nagic").symlink_to(versions / self.stem / "nagic")
+        result = self.activate_next_release()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((versions / self.stem).exists())
+        self.assert_active(self.next_version)
+
+    def check_old_tree_is_preserved(self, change):
+        self.assertEqual(self.install().returncode, 0)
+        old = self.root / "versions" / self.stem
+        change(old)
+        result = self.activate_next_release()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Kept changed or unverifiable", result.stderr)
+        self.assertTrue((old / "runtime/src/lib.rs").exists())
+        self.assert_active(self.next_version)
+        return old
+
+    def test_modified_runtime_is_kept(self):
+        old = self.check_old_tree_is_preserved(lambda p: (p / "runtime/src/lib.rs").write_text("user changes"))
+        self.assertEqual((old / "runtime/src/lib.rs").read_text(), "user changes")
+
+    def test_added_file_is_kept(self):
+        old = self.check_old_tree_is_preserved(lambda p: (p / "notes.txt").write_text("user notes"))
+        self.assertEqual((old / "notes.txt").read_text(), "user notes")
+
+    def test_added_empty_directory_is_kept(self):
+        old = self.check_old_tree_is_preserved(lambda p: (p / "my-project").mkdir())
+        self.assertTrue((old / "my-project").is_dir())
+
+    def test_added_symlink_never_follows_or_removes_the_target(self):
+        outside = self.root / "outside"
+        outside.write_text("keep")
+        old = self.check_old_tree_is_preserved(lambda p: (p / "outside-link").symlink_to(outside))
+        self.assertTrue((old / "outside-link").is_symlink())
+        self.assertEqual(outside.read_text(), "keep")
+
+    def test_unavailable_old_archive_does_not_prevent_upgrade_or_delete_old_files(self):
+        self.assertEqual(self.install().returncode, 0)
+        (self.assets / (self.stem + ".tar.gz")).unlink()
+        result = self.activate_next_release()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.root / "versions" / self.stem).exists())
+        self.assert_active(self.next_version)
+
+    def test_failed_download_or_activation_preserves_current_command_and_profile(self):
+        for failure in ("corrupt", "activation_failure"):
+            with self.subTest(failure=failure):
+                self.assertEqual(self.install("--version", VERSION).returncode, 0)
+                profile = (self.root / "profile").read_bytes()
+                result = self.activate_next_release(**{failure: True})
+                self.assertNotEqual(result.returncode, 0)
+                self.assert_active(VERSION)
+                self.assertEqual((self.root / "profile").read_bytes(), profile)
+
+    def test_profile_failure_rolls_back_the_active_command(self):
+        self.assertEqual(self.install().returncode, 0)
+        (self.root / "profile").unlink()
+        (self.root / "profile").mkdir()
+        result = self.activate_next_release()
+        self.assertNotEqual(result.returncode, 0)
+        self.assert_active(VERSION)
+        self.assertTrue((self.root / "profile").is_dir())
+
+    def test_latest_cannot_resolve_to_vsix_prerelease_or_another_repository(self):
+        for url in ("https://github.com/disnana/Nagi/releases/tag/vscode-v0.1.8",
+                    "https://github.com/disnana/Nagi/releases/tag/nagi-v1.0.0-beta",
+                    "https://example.com/releases/tag/nagi-v1.0.0"):
+            with self.subTest(url=url):
+                self.environment["NAGI_TEST_LATEST_URL"] = url
+                self.assertNotEqual(self.install().returncode, 0)
+                self.assertFalse((self.root / "executed").exists())
+
+    def test_concurrent_installer_is_rejected_without_changing_the_active_version(self):
+        self.assertEqual(self.install().returncode, 0)
+        (self.root / "versions/.install-lock").mkdir()
+        result = self.activate_next_release()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Another installer", result.stderr)
+        self.assert_active(VERSION)
 
 
 if __name__ == "__main__":
