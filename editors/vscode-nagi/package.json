@@ -1,58 +1,205 @@
 {
-  "name": "nagi-language",
-  "displayName": "Nagi Language",
+  "name": "nagi-lang",
+  "displayName": "Nagi for VS Code",
   "description": "Nagi High/Lowの型検査、定義ジャンプ、型表示、補完とビルド・実行",
   "version": "0.1.8",
   "publisher": "Disnana",
   "license": "MIT",
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Programming Languages", "Snippets"],
-  "main": "./src/extension.js",
-  "activationEvents": ["onLanguage:nagi", "onLanguage:nagi-low"],
-  "extensionKind": ["workspace"],
-  "capabilities": {
-    "untrustedWorkspaces": { "supported": "limited", "description": "色付けとスニペットは利用できます。コンパイラの実行にはワークスペースの信頼が必要です。" },
-    "virtualWorkspaces": { "supported": false }
+  "engines": {
+    "vscode": "^1.85.0"
   },
-  "scripts": { "test": "node --test test/*.test.js", "package": "python scripts/package_vsix.py" },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "main": "./src/extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/disnana/Nagi.git"
+  },
+  "activationEvents": [
+    "onLanguage:nagi",
+    "onLanguage:nagi-low"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "色付けとスニペットは利用できます。コンパイラの実行にはワークスペースの信頼が必要です。"
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "package": "python scripts/package_vsix.py"
+  },
   "contributes": {
     "taskDefinitions": [
-      { "type": "nagi", "required": ["command", "file"], "properties": {
-        "command": { "type": "string", "enum": ["check", "lower", "build", "run"] },
-        "file": { "type": "string" }
-      } }
+      {
+        "type": "nagi",
+        "required": [
+          "command",
+          "file"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "check",
+              "lower",
+              "build",
+              "run"
+            ]
+          },
+          "file": {
+            "type": "string"
+          }
+        }
+      }
     ],
     "languages": [
-      { "id": "nagi", "aliases": ["Nagi", "nagi"], "extensions": [".nagi"], "configuration": "./language-configuration.json" },
-      { "id": "nagi-low", "aliases": ["Nagi Low"], "extensions": [".low"], "configuration": "./low-configuration.json" }
+      {
+        "id": "nagi",
+        "aliases": [
+          "Nagi",
+          "nagi"
+        ],
+        "extensions": [
+          ".nagi"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "nagi-low",
+        "aliases": [
+          "Nagi Low"
+        ],
+        "extensions": [
+          ".low"
+        ],
+        "configuration": "./low-configuration.json"
+      }
     ],
     "grammars": [
-      { "language": "nagi", "scopeName": "source.nagi", "path": "./syntaxes/nagi.tmLanguage.json" },
-      { "language": "nagi-low", "scopeName": "source.nagi.low", "path": "./syntaxes/low.tmLanguage.json" }
+      {
+        "language": "nagi",
+        "scopeName": "source.nagi",
+        "path": "./syntaxes/nagi.tmLanguage.json"
+      },
+      {
+        "language": "nagi-low",
+        "scopeName": "source.nagi.low",
+        "path": "./syntaxes/low.tmLanguage.json"
+      }
     ],
     "snippets": [
-      { "language": "nagi", "path": "./snippets/high.json" },
-      { "language": "nagi-low", "path": "./snippets/low.json" }
+      {
+        "language": "nagi",
+        "path": "./snippets/high.json"
+      },
+      {
+        "language": "nagi-low",
+        "path": "./snippets/low.json"
+      }
     ],
     "commands": [
-      { "command": "nagi.check", "title": "Nagi: 型検査" },
-      { "command": "nagi.lower", "title": "Nagi: Lowへ変換" },
-      { "command": "nagi.build", "title": "Nagi: ビルド" },
-      { "command": "nagi.run", "title": "Nagi: 実行", "icon": "$(play)" },
-      { "command": "nagi.showOutput", "title": "Nagi: ログを表示" }
+      {
+        "command": "nagi.check",
+        "title": "Nagi: 型検査"
+      },
+      {
+        "command": "nagi.lower",
+        "title": "Nagi: Lowへ変換"
+      },
+      {
+        "command": "nagi.build",
+        "title": "Nagi: ビルド"
+      },
+      {
+        "command": "nagi.run",
+        "title": "Nagi: 実行",
+        "icon": "$(play)"
+      },
+      {
+        "command": "nagi.showOutput",
+        "title": "Nagi: ログを表示"
+      }
     ],
-    "menus": { "editor/title": [{ "command": "nagi.run", "when": "resourceLangId == nagi || resourceLangId == nagi-low", "group": "navigation" }] },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "nagi.run",
+          "when": "resourceLangId == nagi || resourceLangId == nagi-low",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "Nagi",
       "properties": {
-        "nagi.compilerPath": { "type": "string", "default": "", "scope": "resource", "description": "nagicの実行ファイル。空欄ならNagiリポジトリのtarget/release・target/debug、次にPATHを探します。相対パスはワークスペース基準です。", "restricted": true },
-        "nagi.checkOnSave": { "type": "boolean", "default": true, "scope": "resource", "description": "保存時にnagic checkを実行します。" },
-        "nagi.rustFile": { "type": "string", "default": "", "scope": "resource", "description": "--rustに渡すRustブリッジファイル。相対パスはワークスペース基準です。", "restricted": true },
-        "nagi.rustDependencies": { "type": "array", "items": { "type": "string" }, "default": [], "scope": "resource", "description": "--rust-depに渡すNAME=VERSIONの一覧。", "restricted": true },
-        "nagi.nativeFiles": { "type": "array", "items": { "type": "string" }, "default": [], "scope": "resource", "description": "--nativeに渡す手書きLowファイル。相対パスはワークスペース基準です。", "restricted": true },
-        "nagi.checkTimeoutMs": { "type": "integer", "minimum": 1000, "maximum": 120000, "default": 15000, "scope": "resource", "description": "型検査の制限時間（ミリ秒）" }
+        "nagi.compilerPath": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "nagicの実行ファイル。空欄ならNagiリポジトリのtarget/release・target/debug、次にPATHを探します。相対パスはワークスペース基準です。",
+          "restricted": true
+        },
+        "nagi.checkOnSave": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "保存時にnagic checkを実行します。"
+        },
+        "nagi.rustFile": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "--rustに渡すRustブリッジファイル。相対パスはワークスペース基準です。",
+          "restricted": true
+        },
+        "nagi.rustDependencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "description": "--rust-depに渡すNAME=VERSIONの一覧。",
+          "restricted": true
+        },
+        "nagi.nativeFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "description": "--nativeに渡す手書きLowファイル。相対パスはワークスペース基準です。",
+          "restricted": true
+        },
+        "nagi.checkTimeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 120000,
+          "default": 15000,
+          "scope": "resource",
+          "description": "型検査の制限時間（ミリ秒）"
+        }
       }
     },
-    "configurationDefaults": { "[nagi]": { "editor.insertSpaces": true, "editor.tabSize": 4 }, "[nagi-low]": { "editor.insertSpaces": true, "editor.tabSize": 4 } }
+    "configurationDefaults": {
+      "[nagi]": {
+        "editor.insertSpaces": true,
+        "editor.tabSize": 4
+      },
+      "[nagi-low]": {
+        "editor.insertSpaces": true,
+        "editor.tabSize": 4
+      }
+    }
   }
 }
