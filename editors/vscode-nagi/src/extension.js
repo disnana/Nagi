@@ -18,6 +18,7 @@ function activate(context) {
   let epoch = 0;
   let symbolsEpoch = 0;
   const isNagi = d => d && ['nagi', 'nagi-low'].includes(d.languageId) && d.uri.scheme === 'file';
+  const assistanceSelector = ['file', 'untitled'].flatMap(scheme => ['nagi', 'nagi-low'].map(language => ({ language, scheme })));
   function publishDiagnostics() {
     diagnostics.clear();
     const grouped = new Map();
@@ -234,14 +235,15 @@ function activate(context) {
     if (item.description) text.appendText(item.description);
     if (item.location) text.appendText(`\n${path.basename(compiler.normalizeFile(item.location.file, '.'))}:${item.location.line}`);
     if (snapshot?.saved && !item.builtin) text.appendText('\n書きかけの構文を解析できないため、保存済みの宣言を表示しています。');
+    if (item.builtin && (!snapshot || snapshot.saved)) text.appendText('\n組み込み関数');
     return text;
   }
 
   async function provideHover(document, position, token) {
     const version = document.version;
     const snapshot = await querySymbols(document, token);
-    if (!snapshot || token.isCancellationRequested || document.isClosed || document.version !== version) return;
-    const found = features.hoverAt(snapshot.index, document.getText(), document.offsetAt(position), { file: document.uri.fsPath, saved: snapshot.saved });
+    if (token.isCancellationRequested || document.isClosed || document.version !== version) return;
+    const found = features.hoverAt(snapshot?.index, document.getText(), document.offsetAt(position), { file: document.uri.fsPath, saved: snapshot?.saved });
     if (!found) return;
     return new vscode.Hover(documentation(found.item, snapshot), new vscode.Range(document.positionAt(found.start), document.positionAt(found.end)));
   }
@@ -250,7 +252,7 @@ function activate(context) {
     const version = document.version;
     const member = features.memberContext(document.getText(), document.offsetAt(position));
     const snapshot = await querySymbols(document, token, member);
-    if (token.isCancellationRequested || !vscode.workspace.isTrusted || document.isClosed || document.version !== version) return [];
+    if (token.isCancellationRequested || document.isClosed || document.version !== version) return [];
     const text = document.getText();
     const offset = document.offsetAt(position);
     const word = features.wordAt(text, offset);
@@ -268,12 +270,12 @@ function activate(context) {
 
   async function provideSignatureHelp(document, position, token) {
     const version = document.version;
-    const call = features.activeCall(document.getText(), document.offsetAt(position));
-    if (!call) return;
+    if (!features.activeCall(document.getText(), document.offsetAt(position))) return;
     const snapshot = await querySymbols(document, token);
-    if (!snapshot || token.isCancellationRequested || document.isClosed || document.version !== version) return;
-    const item = features.declarations(snapshot.index).get(call.name);
-    if (!item) return;
+    if (token.isCancellationRequested || document.isClosed || document.version !== version) return;
+    const found = features.signatureAt(snapshot?.index, document.getText(), document.offsetAt(position), { file: document.uri.fsPath, saved: snapshot?.saved });
+    if (!found) return;
+    const { item } = found;
     const parameters = item.kind === 'class' ? item.fields || [] : item.parameters || [];
     const label = item.kind === 'class' ? `${item.name}(${parameters.map(p => `${p.name}: ${p.type}`).join(', ')}) -> ${item.name}` : item.signature;
     const signature = new vscode.SignatureInformation(label, documentation(item, snapshot));
@@ -284,7 +286,7 @@ function activate(context) {
     const help = new vscode.SignatureHelp();
     help.signatures = [signature];
     help.activeSignature = 0;
-    help.activeParameter = Math.min(call.argument, Math.max(0, parameters.length - 1));
+    help.activeParameter = Math.min(found.argument, Math.max(0, parameters.length - 1));
     return help;
   }
 
@@ -297,9 +299,9 @@ function activate(context) {
       },
     }, '\n', ':', ')', ']', '}'),
     vscode.languages.registerDefinitionProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideDefinition }),
-    vscode.languages.registerHoverProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideHover }),
-    vscode.languages.registerCompletionItemProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideCompletionItems }, '.'),
-    vscode.languages.registerSignatureHelpProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideSignatureHelp }, '(', ','),
+    vscode.languages.registerHoverProvider(assistanceSelector, { provideHover }),
+    vscode.languages.registerCompletionItemProvider(assistanceSelector, { provideCompletionItems }, '.'),
+    vscode.languages.registerSignatureHelpProvider(assistanceSelector, { provideSignatureHelp }, '(', ','),
     { dispose() { for (const job of pending.values()) job.child?.kill(); pending.clear(); for (const child of navigation) child.kill(); navigation.clear(); } },
     vscode.workspace.onDidOpenTextDocument(d => { if (optionsForAuto(d)) check(d); }),
     vscode.workspace.onDidSaveTextDocument(d => {

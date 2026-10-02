@@ -1,4 +1,5 @@
 'use strict';
+const keywords = ['return', 'if', 'else', 'while', 'for', 'match', 'case', 'async', 'await', 'try', 'scope', 'spawn', 'import', 'extern', 'in', 'with', 'and', 'or', 'not', 'True', 'False', 'None', 'true', 'false', 'null'];
 const { normalizeFile } = require('./compiler');
 
 // These signatures describe the supported builtins, rather than inferred overloads.
@@ -53,7 +54,8 @@ function context(text, offset) {
   for (let i = 0; i < text.length; i++) {
     if (i === offset) { allowed = !quote && !comment; inComment = comment; }
     const c = text[i];
-    if (c === '\n') { comment = false; masked += '\n'; continue; }
+    // Nagi strings end at the physical line, including an unfinished literal.
+    if (c === '\n') { quote = undefined; escaped = false; comment = false; masked += '\n'; continue; }
     if (comment) { masked += ' '; continue; }
     if (quote) {
       masked += ' ';
@@ -80,6 +82,28 @@ function declarations(index) {
     if (typeof item.name === 'string' && typeof item.signature === 'string' && item.signature && !result.has(item.name)) result.set(item.name, item);
   }
   for (const item of builtins) if (!result.has(item.name)) result.set(item.name, item);
+  return result;
+}
+
+// When the current source cannot be checked, do not guess which same-name
+// bindings or imported definitions refer to a builtin. This is deliberately
+// conservative across scopes; only compiler snapshots can resolve occurrences.
+function assistanceDeclarations(index, text, source = {}) {
+  const result = declarations(index);
+  if (index && !source.saved) return result;
+  const code = context(text, text.length).masked;
+  const imported = /\bimport\b/.test(code);
+  const bindings = new Set();
+  const patterns = [
+    /\b(?:def|fn|class|record)\s+([A-Za-z_]\w*)/g,
+    /\blet\s+([A-Za-z_]\w*)/g,
+    /\b([A-Za-z_]\w*)\s*:(?!:)/g,
+    /\b([A-Za-z_]\w*)\s*(?:=(?!=)|[+*\/%-]=)/g,
+    /\bfor\s+([A-Za-z_]\w*)/g,
+    /\bcase\s+(?:Ok|Err)\s*\(\s*([A-Za-z_]\w*)/g,
+  ];
+  for (const pattern of patterns) for (const match of code.matchAll(pattern)) bindings.add(match[1]);
+  for (const [name, item] of result) if (item.builtin && (imported || bindings.has(name))) result.delete(name);
   return result;
 }
 
@@ -113,6 +137,25 @@ function sourceOffsets(text) {
     if (text[end - 1] === '\r') end--;
     return column - 1 <= end - start ? start + column - 1 : undefined;
   };
+}
+
+function localAt(index, text, word, source) {
+  if (!source.file || source.saved) return undefined;
+  const offsetAt = sourceOffsets(text);
+  return (index?.locals || []).find(item => item.name === word.name && typeof item.type === 'string' &&
+    fileMatches(item.location?.file, source.file) && offsetAt(item.location.line, item.location.column) === word.start &&
+    item.location.length === word.end - word.start);
+}
+
+function shadowedAt(index, text, word, source, item) {
+  if (!source.file || source.saved) return false;
+  const offsetAt = sourceOffsets(text);
+  const reference = (index?.references || []).find(ref => fileMatches(ref.location?.file, source.file) &&
+    offsetAt(ref.location.line, ref.location.column) === word.start && ref.location.length === word.end - word.start);
+  // Lexical references survive type errors even when the compiler has no local
+  // type to show. Never replace that binding with a global/builtin signature.
+  return !!reference && (!item.location || !fileMatches(reference.target?.file, item.location.file) ||
+    reference.target.line !== item.location.line || reference.target.column !== item.location.column);
 }
 
 // Only the member being edited is masked. The compiler determines the receiver's
@@ -149,15 +192,10 @@ function hoverAt(index, text, offset, source = {}) {
   if (!state.allowed) return undefined;
   const word = wordAt(state.masked, offset);
   if (!word.name || memberContext(text, offset)) return undefined;
-  if (source.file && !source.saved) {
-    const offsetAt = sourceOffsets(text);
-    const local = (index?.locals || []).find(item => item.name === word.name && typeof item.type === 'string' &&
-      fileMatches(item.location?.file, source.file) && offsetAt(item.location.line, item.location.column) === word.start &&
-      item.location.length === word.end - word.start);
-    if (local) return { item: { ...local, kind: 'variable', signature: `${local.name}: ${local.type}` }, start: word.start, end: word.end };
-  }
-  const item = declarations(index).get(word.name);
-  if (!item) return undefined;
+  const local = localAt(index, text, word, source);
+  if (local) return { item: { ...local, kind: 'variable', signature: `${local.name}: ${local.type}` }, start: word.start, end: word.end };
+  const item = assistanceDeclarations(index, text, source).get(word.name);
+  if (!item || shadowedAt(index, text, word, source, item)) return undefined;
   const before = state.masked.slice(0, word.start);
   const after = state.masked.slice(word.end);
   const declaration = /\b(?:def|fn|class|record)\s*$/.test(before);
@@ -173,9 +211,9 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
   const member = memberContext(text, offset);
   if (member) return fieldCandidates(index, text, member, source);
   const before = state.masked.slice(0, word.start);
-  const all = [...declarations(index).values()];
+  const all = [...assistanceDeclarations(index, text, source).values()];
   if (inTypeContext(before)) return [...all.filter(x => x.kind === 'class'), ...types.map(name => ({ name, kind: 'type', signature: name }))];
-  return [...all, ...(low ? ['fn', 'let', 'return', 'if', 'else', 'while', 'for', 'match', 'case', 'async', 'await', 'try'] : ['def', 'class', 'return', 'if', 'else', 'while', 'for', 'match', 'case', 'async', 'await', 'try']).map(name => ({ name, kind: 'keyword', signature: name }))];
+  return [...all, ...[...(low ? ['fn', 'record', 'let'] : ['def', 'class']), ...keywords].map(name => ({ name, kind: 'keyword', signature: name }))];
 }
 
 function insertion(item, following) {
@@ -189,7 +227,7 @@ function insertion(item, following) {
   return `${item.name}${generic}(${args.map((arg, i) => `${item.kind === 'class' ? arg.name + '=' : ''}\$\{${i + 1 + types.length}:${arg.name}\}`).join(', ')})`;
 }
 
-function activeCall(text, offset) {
+function callContext(text, offset) {
   const state = context(text, offset);
   // Signature help can stay visible inside a string argument.
   if (state.inComment) return undefined;
@@ -207,7 +245,7 @@ function activeCall(text, offset) {
         prefix = prefix.slice(0, j + 1).trimEnd();
       }
       const match = prefix.match(/([A-Za-z_]\w*)$/);
-      if (match && prefix[prefix.length - match[1].length - 1] !== '.') return { name: match[1], argument };
+      if (match && prefix[prefix.length - match[1].length - 1] !== '.') return { name: match[1], argument, start: prefix.length - match[1].length };
     } else if (c === ']') brackets++;
     else if (c === '[') brackets--;
     else if (c === '}') braces++;
@@ -217,4 +255,18 @@ function activeCall(text, offset) {
   return undefined;
 }
 
-module.exports = { context, wordAt, declarations, hoverAt, completionCandidates, insertion, activeCall, memberContext };
+function activeCall(text, offset) {
+  const call = callContext(text, offset);
+  return call && { name: call.name, argument: call.argument };
+}
+
+function signatureAt(index, text, offset, source = {}) {
+  const call = callContext(text, offset);
+  if (!call || localAt(index, text, { ...call, end: call.start + call.name.length }, source)) return undefined;
+  const item = assistanceDeclarations(index, text, source).get(call.name);
+  if (!item || !['function', 'class'].includes(item.kind) ||
+      shadowedAt(index, text, { ...call, end: call.start + call.name.length }, source, item)) return undefined;
+  return { item, argument: call.argument };
+}
+
+module.exports = { context, wordAt, declarations, hoverAt, completionCandidates, insertion, activeCall, signatureAt, memberContext };

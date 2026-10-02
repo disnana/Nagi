@@ -78,7 +78,36 @@ def main():
             show(payload)
         case Err(problem):
             print("decode failed")
+    text = "\\\"Nagi\\\""
+    borrowed = json_decode[view[str]](text)
+    match borrowed:
+        case Ok(value):
+            print(value)
+            print(text)
+        case Err(problem):
+            print("borrowed decode failed")
+    print(view("temporary"))
 ''', encoding="utf-8")
+        invalid = folder / "invalid project 凪"
+        invalid.mkdir()
+        invalid_sources = {
+            "temporary.nagi": ('def main():\n    saved = view("text")\n    print(saved)\n', 2),
+            "json.nagi": ('def main():\n    result = json_decode[Error]("{}")\n', 2),
+            "rows.nagi": ('async def rows(db: Db):\n    result = await db_all[i64](db, "select 1")\n', 2),
+            "borrow.nagi": ('def main() -> Result[unit, Error]:\n    text = "\\\"Nagi\\\""\n    saved = try json_decode[view[str]](text)\n    text = "other"\n    return ok(print(saved))\n', 4),
+        }
+        # Invalid Nagi programs must fail before looking for Cargo or runtime.
+        for filename, (source, line) in invalid_sources.items():
+            path = invalid / filename
+            path.write_text(source, encoding="utf-8")
+            for command in ("check", "build"):
+                result = subprocess.run([str(exe), command, str(path)], cwd=folder,
+                                        env={**environment, "PATH": "", "NAGI_ROOT": str(folder / "missing runtime")},
+                                        capture_output=True, text=True, encoding="utf-8")
+                assert result.returncode != 0, (filename, command, result.stdout)
+                assert f"{filename}:{line}" in result.stderr, result.stderr
+                assert "Rust backend" not in result.stderr and "Cargo" not in result.stderr, result.stderr
+                assert not (folder / "build" / path.stem / "src" / "main.rs").exists()
         environment["PATH"] = str(root) + os.pathsep + environment["PATH"]
         # Windows resolves an executable using the parent's PATH. Update this
         # verification process too, so the bare command tests PATH on every OS.
@@ -91,9 +120,9 @@ def main():
             assert not (root / "native-target").exists(), "Build wrote into the installed distribution"
             result = subprocess.run(["nagic", "run", str(records / "records.nagi")],
                                     cwd=folder, env=environment, check=True, capture_output=True, text=True, encoding="utf-8")
-            assert result.stdout.splitlines()[-3:] == ["42", '{"value":42}', '{"value":42}'], result.stdout
+            assert result.stdout.splitlines()[-6:] == ["42", '{"value":42}', '{"value":42}', "Nagi", '"Nagi"', "temporary"], result.stdout
             assert not (root / "native-target").exists(), "Record build wrote into the installed distribution"
-            print(f"Verified {version} {platform}: PATH, external projects, version, help, function aliases, shared JSON round trip")
+            print(f"Verified {version} {platform}: PATH, external projects, version, help, function aliases, shared/borrowed JSON, early Nagi diagnostics")
         finally:
             os.environ["PATH"] = previous_path
 

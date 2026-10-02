@@ -37,7 +37,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "色付け、スニペット、インデント補助は利用できます。コンパイラの実行にはワークスペースの信頼が必要です。"
+      "description": "色付け、スニペット、インデント、キーワード・型の補完、組み込み関数の説明は利用できます。コンパイラの実行にはワークスペースの信頼が必要です。"
     },
     "virtualWorkspaces": {
       "supported": false

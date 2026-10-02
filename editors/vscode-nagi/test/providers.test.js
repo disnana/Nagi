@@ -1,0 +1,144 @@
+'use strict';
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const vm = require('node:vm');
+const realCompiler = require('../src/compiler');
+
+// Exercise the registered providers, including compiler/trust guards, without
+// starting an editor or compiling a native application.
+function host(t, trusted = true, code = 1) {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'nagi-provider-'));
+  t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
+  const disposable = () => ({ dispose() {} });
+  const providers = {}, selectors = {}, commands = new Map(), diagnostics = new Map();
+  const calls = [];
+  const uri = (file, scheme = 'file') => ({ scheme, fsPath: file, toString: () => `${scheme}:${file}` });
+  class Position { constructor(line, character) { this.line = line; this.character = character; } }
+  class Range {
+    constructor(a, b, c, d) { this.start = typeof a === 'number' ? new Position(a, b) : a; this.end = typeof a === 'number' ? new Position(c, d) : b; }
+    isEqual(other) { return this.start.line === other.start.line && this.start.character === other.start.character && this.end.line === other.end.line && this.end.character === other.end.character; }
+  }
+  class MarkdownString {
+    constructor() { this.value = ''; }
+    appendCodeblock(text) { this.value += text + '\n'; }
+    appendText(text) { this.value += text; }
+  }
+  const collection = { clear() { diagnostics.clear(); }, set(resource, items) { diagnostics.set(resource.toString(), items); }, dispose() {} };
+  const vscode = {
+    workspace: {
+      isTrusted: trusted, textDocuments: [],
+      getWorkspaceFolder: () => ({ uri: uri(folder) }),
+      getConfiguration: () => ({ get: (_, fallback) => fallback }),
+      onDidOpenTextDocument: disposable, onDidSaveTextDocument: disposable,
+      onDidChangeTextDocument: disposable, onDidCloseTextDocument: disposable,
+      onDidGrantWorkspaceTrust: disposable, onDidChangeConfiguration: disposable,
+      createFileSystemWatcher: () => ({ dispose() {}, onDidCreate: disposable, onDidChange: disposable, onDidDelete: disposable }),
+    },
+    window: { createOutputChannel: () => ({ appendLine() {}, show() {}, dispose() {} }),
+      showWarningMessage: async () => undefined, setStatusBarMessage() {} },
+    languages: { createDiagnosticCollection: () => collection, registerOnTypeFormattingEditProvider: disposable },
+    commands: { registerCommand(name, fn) { commands.set(name, fn); return disposable(); } },
+    Range, MarkdownString, Uri: { file: file => uri(file) },
+    DiagnosticSeverity: { Error: 0 }, CompletionItemKind: { Function: 1, Class: 2, Field: 3, TypeParameter: 4, Keyword: 5 },
+    Diagnostic: class { constructor(range, message) { this.range = range; this.message = message; } },
+    Hover: class { constructor(contents, range) { this.contents = contents; this.range = range; } },
+    CompletionItem: class { constructor(label, kind) { this.label = label; this.kind = kind; } },
+    SnippetString: class { constructor(value) { this.value = value; } },
+    SignatureInformation: class { constructor(label, documentation) { this.label = label; this.documentation = documentation; } },
+    ParameterInformation: class { constructor(label) { this.label = label; } }, SignatureHelp: class {},
+  };
+  for (const kind of ['Definition', 'Hover', 'CompletionItem', 'SignatureHelp']) {
+    vscode.languages[`register${kind}Provider`] = (selector, provider) => {
+      providers[kind] = provider; selectors[kind] = selector; return disposable();
+    };
+  }
+  const compiler = { ...realCompiler, runCheck(executable, args, cwd, timeout, callback) {
+    assert.equal(vscode.workspace.isTrusted, true, 'compiler must never execute in an untrusted workspace');
+    calls.push({ executable, args });
+    queueMicrotask(() => callback({ error: Object.assign(new Error('checker failed'), { code }), output: 'error: line 2: expected i32\n' }));
+    return { kill() {} };
+  } };
+  const module = { exports: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/extension.js'), 'utf8'), {
+    module, Buffer, require(name) { if (name === 'vscode') return vscode; if (name === './compiler') return compiler; return require(name.startsWith('./') ? path.join(__dirname, '../src', name) : name); },
+  }, { filename: 'extension.js' });
+  const context = { subscriptions: [] };
+  module.exports.activate(context);
+  t.after(() => context.subscriptions.forEach(item => item.dispose()));
+  function document(text, scheme = 'file', languageId = 'nagi') {
+    const file = path.join(folder, languageId === 'nagi-low' ? 'main.low' : 'main.nagi');
+    if (scheme === 'file') fs.writeFileSync(file, text);
+    const doc = { uri: uri(file, scheme), languageId, version: 1, isDirty: false, isClosed: false,
+      getText: () => text, save: async () => true,
+      positionAt(offset) { const before = text.slice(0, offset).split('\n'); return new Position(before.length - 1, before.at(-1).length); },
+      offsetAt(position) { const lines = text.split('\n'); return lines.slice(0, position.line).reduce((sum, line) => sum + line.length + 1, 0) + position.character; },
+    };
+    vscode.window.activeTextEditor = { document: doc };
+    vscode.workspace.textDocuments.push(doc);
+    return doc;
+  }
+  const token = { isCancellationRequested: false, onCancellationRequested: disposable };
+  return { providers, selectors, commands, diagnostics, calls, document, token };
+}
+
+test('failed symbols queries still supply static builtin help without erasing source diagnostics', async t => {
+  const h = host(t);
+  const doc = h.document('def main():\n    print(');
+  await h.commands.get('nagi.check')();
+  const errors = h.diagnostics.get(doc.uri.toString());
+  assert.equal(errors.length, 1);
+  const hover = await h.providers.Hover.provideHover(doc, doc.positionAt(doc.getText().indexOf('print') + 2), h.token);
+  assert.match(hover.contents.value, /def print\(value\) -> unit/);
+  assert.match(hover.contents.value, /組み込み関数/);
+  const signature = await h.providers.SignatureHelp.provideSignatureHelp(doc, doc.positionAt(doc.getText().length), h.token);
+  assert.match(signature.signatures[0].label, /def print/);
+  assert.equal(h.diagnostics.get(doc.uri.toString()), errors, 'assistance does not publish or clear diagnostics');
+  assert.equal((await h.providers.Definition.provideDefinition(doc, doc.positionAt(0), h.token)).length, 0);
+});
+
+test('missing compiler keeps prefix completion, hover and signatures available', async t => {
+  const h = host(t, true, 'ENOENT');
+  const doc = h.document('print(');
+  assert.ok(await h.providers.Hover.provideHover(doc, doc.positionAt(2), h.token));
+  assert.ok(await h.providers.SignatureHelp.provideSignatureHelp(doc, doc.positionAt(6), h.token));
+  const prefix = h.document('pri');
+  const items = await h.providers.CompletionItem.provideCompletionItems(prefix, prefix.positionAt(3), h.token);
+  assert.ok(items.some(x => x.label === 'print'));
+  assert.ok(items.some(x => x.label === 'scope'));
+  assert.equal(h.diagnostics.size, 0);
+});
+
+test('untrusted and untitled assistance executes no compiler and retains High/Low selectors', async t => {
+  for (const trusted of [true, false]) {
+    const h = host(t, trusted);
+    for (const languageId of ['nagi', 'nagi-low']) {
+      const doc = h.document('print(', 'untitled', languageId);
+      assert.ok(await h.providers.Hover.provideHover(doc, doc.positionAt(2), h.token));
+      assert.ok(await h.providers.SignatureHelp.provideSignatureHelp(doc, doc.positionAt(6), h.token));
+      const items = await h.providers.CompletionItem.provideCompletionItems(doc, doc.positionAt(6), h.token);
+      assert.ok(items.some(x => x.label === (languageId === 'nagi' ? 'class' : 'record')));
+      assert.ok(items.some(x => x.label === 'spawn'));
+      for (const kind of ['Hover', 'CompletionItem', 'SignatureHelp']) assert.ok(h.selectors[kind].some(x => x.language === languageId && x.scheme === 'untitled'));
+    }
+    if (!trusted) {
+      const doc = h.document('print(');
+      assert.ok(await h.providers.Hover.provideHover(doc, doc.positionAt(2), h.token));
+      await h.commands.get('nagi.check')();
+    }
+    assert.equal(h.calls.length, 0);
+  }
+});
+
+test('cancelled, closed and changed documents cannot receive static fallback from failed queries', async t => {
+  const h = host(t);
+  for (const mutate of [doc => { doc.version++; }, doc => { doc.isClosed = true; }, () => { h.token.isCancellationRequested = true; }]) {
+    h.token.isCancellationRequested = false;
+    const doc = h.document('print(');
+    const pending = h.providers.Hover.provideHover(doc, doc.positionAt(2), h.token);
+    mutate(doc);
+    assert.equal(await pending, undefined);
+  }
+});

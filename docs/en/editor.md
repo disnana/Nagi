@@ -80,7 +80,9 @@ Reassigned names navigate to their first binding. A for binding reusing an outer
 
 ## When editor information is unavailable
 
-Previously saved Nagi/Low files are analyzed in memory with their unsaved edits, including open imports and native Low. Queries do not save or build sources. Save new files and nagi.toml first.
+Previously saved Nagi/Low files are analyzed in memory with their unsaved edits, including open imports and native Low. Queries do not save or build sources. Save new files and nagi.toml to use project information.
+
+The next extension release also offers keyword/type completion and built-in completion, hover, and argument hints in new unsaved files, without a compiler, and in untrusted workspaces. When the source cannot be analyzed, unresolved imports or same-name bindings in the file suppress built-in information that could refer to another definition. Local types, field candidates, and F12 require the compiler.
 
 | State | Information shown or action |
 |---|---|
@@ -89,6 +91,6 @@ Previously saved Nagi/Low files are analyzed in memory with their unsaved edits,
 | Undefined types/names, moved values, or names outside scope | No guessed types; check Problems |
 | Local types, field completion, or local F12 unavailable | Update both compiler and extension |
 | Helper functions missing | Check imports from [nagi.toml](projects.md)'s entry |
-| All queries unavailable | Check workspace trust, nagi.compilerPath, and the Nagi Output channel |
+| Project declarations, local types, or F12 unavailable | Check workspace trust, nagi.compilerPath, and the Nagi Output channel |
 
 Unsaved edits clear old Problems diagnostics. Save or run **Nagi: 型検査** (Type Check) to update them. Seeing a type in a hover or completion does not mean the whole program passed checking.

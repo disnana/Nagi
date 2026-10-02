@@ -26,6 +26,8 @@ Use `db_open("app.sqlite")` to persist data. Relative database paths use the pro
 
 `[User]` specifies the return type. Match `RETURNING` column names and types to the class. Bind values to placeholders such as `?1`; do not concatenate them into SQL.
 
+Use a class as the type argument of a function that returns rows. `db_all[i64]` and `db_query[str]` are rejected by `check`. Define a class with that field even when you read only one column.
+
 | Operation | Form | Return type after await |
 |---|---|---|
 | Create a table, etc. | `db_exec(db, sql)` | `Result[i64, Error]` |
