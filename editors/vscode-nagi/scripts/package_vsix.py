@@ -8,7 +8,7 @@ BASE = Path(__file__).resolve().parents[1]
 ROOT = BASE.parents[1]
 package = json.loads((BASE / "package.json").read_text(encoding="utf-8"))
 version = package["version"]
-identifier = f'{package["publisher"]}.{package["name"]}'
+identifier = package["name"]
 manifest = f'''<?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
   <Metadata>

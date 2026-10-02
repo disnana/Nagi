@@ -10,7 +10,8 @@ async function run() {
   fs.mkdirSync(folder, { recursive: true });
   const file = path.join(folder, 'example.nagi');
   fs.writeFileSync(file, 'def main():\n    x: i32 = "wrong"\n');
-  const extension = vscode.extensions.getExtension('nagi-local.nagi-language');
+  const packageManifest = require('../package.json');
+  const extension = vscode.extensions.getExtension(`${packageManifest.publisher}.${packageManifest.name}`);
   assert.ok(extension, 'development extension is registered');
   await extension.activate();
   const cpu = await vscode.workspace.openTextDocument(path.join(root, 'examples/cpu.nagi'));
