@@ -29,9 +29,10 @@ Write applications in `.nagi` files and run them with `nagic run file.nagi`. See
 |---|---|
 | Read and write JSON | [JSON](json.md) |
 | Split code into files or call Rust | [Imports and Rust](modules-and-rust.md) |
+| Share your own libraries or use Rust crates | [Libraries and Rust assets](libraries.md) |
 | Save an entry file and build settings | [nagi.toml](projects.md) |
 | Wait for async work or start child operations | [Async and scopes](async.md), [concurrency](concurrency.md) |
-| Read working applications | [Task management demo](web-demo.md), [Result API example](result-api.md) |
+| Read working applications | [Sample projects](library-examples.md) |
 
 Runnable introductory examples are in [examples/tutorial/](../../examples/tutorial/). Function and syntax references also contain code fragments rather than complete programs.
 

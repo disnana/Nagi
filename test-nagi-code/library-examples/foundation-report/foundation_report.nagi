@@ -1,0 +1,44 @@
+import "../shared/foundation.nagi"
+
+class FoundationRequest:
+    id: i64
+    unit_cents: i64
+    quantity: i64
+    discount_bps: i64
+
+class FoundationInput:
+    lines: List[FoundationRequest]
+
+class FoundationReportLine:
+    id: i64
+    quote: FoundationQuote
+
+class FoundationRejected:
+    id: i64
+    reason: str
+
+class FoundationReport:
+    quotes: List[FoundationReportLine]
+    rejected: List[FoundationRejected]
+    total_cents: i64
+
+def main() -> Result[unit, Error]:
+    engine_name = env("NAGI_PRICING_ENGINE", "rust")
+    calculate = try foundation_select_engine(view(engine_name))
+    input_text = include_text("report-input.json")
+    batch = try json_decode[FoundationInput](view(input_text))
+    if len(batch.lines) > 1000:
+        return error("report must contain at most 1000 lines")
+    quotes: List[FoundationReportLine] = []
+    rejected: List[FoundationRejected] = []
+    total_cents: i64 = 0
+    for request in batch.lines:
+        match foundation_quote(calculate, view("Batch line"), request.unit_cents, request.quantity, request.discount_bps):
+            case Ok(quote):
+                total_cents = total_cents + quote.total_cents
+                append(quotes, FoundationReportLine(id=request.id, quote=quote))
+            case Err(problem):
+                append(rejected, FoundationRejected(id=request.id, reason=error_message(problem)))
+    report = FoundationReport(quotes=quotes, rejected=rejected, total_cents=total_cents)
+    encoded = try json_encode(report)
+    return ok(print(encoded))

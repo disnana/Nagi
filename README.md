@@ -109,6 +109,8 @@ Pythonコードとして実行する構文ではありません。`nagic`でビ�
 
 High/Lowは同じcompiler crate内の別経路です。独立crateへの分割とstdライブラリのモジュール化は今後の作業です。
 
+[ライブラリとRust連携の6プロジェクト](docs/library-examples.md)では、同じ共通コードを使うCLI・JSONレポート、serde_json、Tokio、独自HTTP基盤、Lowの差し替えを試せます。[自作基盤の構成](docs/libraries.md)と[今後の設計案](docs/library-design.md)も公開しています。
+
 ## 検証を再現する
 
 ```bash

@@ -25,9 +25,9 @@ HERE = Path(__file__).resolve().parent
 GROUPS = [
     ("入門", [("getting-started", "準備と最初の実行"), ("language-guide", "コードを書きながら学ぶ"), ("editor", "エディターの操作例")]),
     ("言語リファレンス", [("syntax", "文法の早見表"), ("builtins", "組み込み関数"), ("types", "型と推論"), ("classes", "class"), ("ownership", "所有権"), ("view-and-zero-copy", "viewとコピー"), ("error-handling", "エラー処理")]),
-    ("アプリを作る", [("http", "HTTPとHTML"), ("json", "JSON"), ("database", "SQLite"), ("modules-and-rust", "importとRust連携"), ("projects", "プロジェクト設定"), ("async", "asyncとscope"), ("concurrency", "並行処理")]),
-    ("サンプル", [("web-demo", "タスク管理デモ"), ("result-api", "Result APIサンプル")]),
-    ("設計と開発", [("introduction", "Nagiについて"), ("low-language", "HighとLow"), ("memory-model", "メモリの扱い"), ("compiler-internals", "コンパイラの構成"), ("actor", "actorの試験"), ("supervisor", "workerの再起動試験"), ("queue", "キューの試験"), ("ffi", "他の言語との連携"), ("performance", "性能の読み方"), ("measurements", "測定結果"), ("http-capacity", "通信の負荷試験"), ("roadmap", "今後の開発"), ("vscode-extension", "VS Code拡張の設定")]),
+    ("アプリを作る", [("http", "HTTPとHTML"), ("json", "JSON"), ("database", "SQLite"), ("modules-and-rust", "importとRust連携"), ("libraries", "自作ライブラリとRustの資産"), ("projects", "プロジェクト設定"), ("async", "asyncとscope"), ("concurrency", "並行処理")]),
+    ("サンプル", [("library-examples", "サンプルプロジェクト一覧"), ("web-demo", "タスク管理デモ"), ("result-api", "Result APIサンプル")]),
+    ("設計と開発", [("library-design", "ライブラリとRust連携の設計案"), ("introduction", "Nagiについて"), ("low-language", "HighとLow"), ("memory-model", "メモリの扱い"), ("compiler-internals", "コンパイラの構成"), ("actor", "actorの試験"), ("supervisor", "workerの再起動試験"), ("queue", "キューの試験"), ("ffi", "他の言語との連携"), ("performance", "性能の読み方"), ("measurements", "測定結果"), ("http-capacity", "通信の負荷試験"), ("roadmap", "今後の開発"), ("vscode-extension", "VS Code拡張の設定")]),
 ]
 SOURCES = {ROOT / "docs/README.md": "docs/"}
 EXTRA = {
@@ -43,9 +43,9 @@ for _, entries in GROUPS:
 ENGLISH_GROUPS = [
     ("First steps", [("getting-started", "Setup and first run"), ("language-guide", "Learn by writing code"), ("editor", "Editor walkthrough")]),
     ("Language reference", [("syntax", "Syntax reference"), ("builtins", "Built-in functions"), ("types", "Types and inference"), ("classes", "Classes"), ("ownership", "Ownership"), ("view-and-zero-copy", "Views and copying"), ("error-handling", "Error handling")]),
-    ("Build an application", [("http", "HTTP and HTML"), ("json", "JSON"), ("database", "SQLite"), ("modules-and-rust", "Imports and Rust"), ("projects", "Project configuration"), ("async", "Async and scopes"), ("concurrency", "Concurrency")]),
-    ("Examples", [("web-demo", "Task management demo"), ("result-api", "Result API example")]),
-    ("Design and development", [("introduction", "About Nagi"), ("low-language", "High and Low"), ("memory-model", "Memory handling"), ("compiler-internals", "Compiler internals"), ("actor", "Actor experiments"), ("supervisor", "Worker restart experiments"), ("queue", "Queue experiments"), ("ffi", "Language interfaces"), ("performance", "Reading benchmarks"), ("measurements", "Measurements"), ("http-capacity", "HTTP load tests"), ("roadmap", "Roadmap"), ("vscode-extension", "VS Code extension settings")]),
+    ("Build an application", [("http", "HTTP and HTML"), ("json", "JSON"), ("database", "SQLite"), ("modules-and-rust", "Imports and Rust"), ("libraries", "Libraries and Rust assets"), ("projects", "Project configuration"), ("async", "Async and scopes"), ("concurrency", "Concurrency")]),
+    ("Examples", [("library-examples", "Sample projects"), ("web-demo", "Task management demo"), ("result-api", "Result API example")]),
+    ("Design and development", [("library-design", "Library design proposal"), ("introduction", "About Nagi"), ("low-language", "High and Low"), ("memory-model", "Memory handling"), ("compiler-internals", "Compiler internals"), ("actor", "Actor experiments"), ("supervisor", "Worker restart experiments"), ("queue", "Queue experiments"), ("ffi", "Language interfaces"), ("performance", "Reading benchmarks"), ("measurements", "Measurements"), ("http-capacity", "HTTP load tests"), ("roadmap", "Roadmap"), ("vscode-extension", "VS Code extension settings")]),
 ]
 ENGLISH_SOURCES = {ROOT / "docs/en/README.md": "docs/"}
 for _, entries in ENGLISH_GROUPS:

@@ -1,0 +1,13 @@
+def sum_squares(values: view[i64]) -> i64:
+    total = 0
+    for value in values:
+        total += value * value
+    return total
+
+def main():
+    samples: List[i64] = [1, 2, 3, 4]
+    result = sum_squares(view(samples))
+    assert_true(result == 30)
+    assert_true(sum_squares(view([0, -2, 3])) == 13)
+    print(result)
+    print(len(samples))

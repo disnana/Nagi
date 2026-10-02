@@ -1,0 +1,4 @@
+entry = "foundation_report.nagi"
+
+[rust]
+file = "native.rs"

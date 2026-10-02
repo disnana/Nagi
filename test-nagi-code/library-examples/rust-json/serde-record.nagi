@@ -1,0 +1,34 @@
+class JsonRecord:
+    label: str
+    count: i64
+
+@rust("native::parse_record")
+extern def parse_record(text: view[str]) -> Result[JsonRecord, Error]
+
+def main() -> Result[unit, Error]:
+    text = "{\"label\":\"Nagi\",\"count\":2}"
+    record = try parse_record(view(text))
+    again = try parse_record(view(text))
+    assert_true(record.label == again.label)
+    assert_true(record.count == 2 and again.count == 2)
+    print(record.label)
+    print(record.count)
+    print(text)
+
+    malformed = "{"
+    match parse_record(view(malformed)):
+        case Ok(_):
+            assert_true(False)
+        case Err(problem):
+            assert_true(error_kind(problem) == "invalid")
+            print("malformed -> invalid")
+
+    wrong_type = "{\"label\":\"Nagi\",\"count\":\"two\"}"
+    match parse_record(view(wrong_type)):
+        case Ok(_):
+            assert_true(False)
+        case Err(problem):
+            assert_true(error_kind(problem) == "invalid")
+            print("wrong type -> invalid")
+
+    return ok(print("rust-json: OK"))
