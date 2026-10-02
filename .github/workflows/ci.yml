@@ -211,6 +211,37 @@ jobs:
             build/distribution/nagi-*.sha256
           if-no-files-found: error
 
+  ready:
+    name: Ready to merge
+    if: github.event_name == 'pull_request' && always()
+    needs: [linux, release-plan, vscode-package, nagi-package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require checks and planned packages to succeed
+        env:
+          NAGI_CI_NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python - <<'PY'
+          import json, os
+          needs = json.loads(os.environ['NAGI_CI_NEEDS'])
+          errors = []
+          for job in ('linux', 'release-plan'):
+              if needs[job]['result'] != 'success':
+                  errors.append(f'{job}: {needs[job]["result"]}')
+          plan = needs['release-plan']['outputs']
+          for component, job in (('vscode', 'vscode-package'), ('nagi', 'nagi-package')):
+              planned = plan.get(f'package_{component}')
+              if planned not in ('true', 'false'):
+                  errors.append(f'{job}: missing or invalid package plan')
+                  continue
+              expected = 'success' if planned == 'true' else 'skipped'
+              if needs[job]['result'] != expected:
+                  errors.append(f'{job}: {needs[job]["result"]}, expected {expected}')
+          if errors:
+              raise SystemExit('\n'.join(errors))
+          print('Required checks and planned packages passed.')
+          PY
+
   publish-release:
     needs: [linux, release-plan, vscode-package, nagi-package]
     if: >-
