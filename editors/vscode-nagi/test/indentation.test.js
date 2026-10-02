@@ -4,13 +4,18 @@ const test = require('node:test');
 const { edits } = require('../src/indentation');
 const spaces = { tabSize: 4, insertSpaces: true };
 
-function format(source, trigger = '\n', options = spaces, language = 'nagi') {
+function cursor(source, replacement = '') {
   const offset = source.indexOf('|');
-  assert.ok(offset >= 0);
+  assert.ok(offset >= 0, 'fixture needs a cursor marker');
+  assert.equal(source.lastIndexOf('|'), offset, 'fixture needs exactly one cursor marker');
+  return { offset, text: source.slice(0, offset) + replacement + source.slice(offset + 1) };
+}
+
+function format(source, trigger = '\n', options = spaces, language = 'nagi') {
+  const { offset, text } = cursor(source);
   const before = source.slice(0, offset);
   const line = before.split('\n').length - 1;
   const character = before.slice(before.lastIndexOf('\n') + 1).length;
-  const text = source.slice(0, offset) + source.slice(offset + 1);
   const lines = text.split('\n');
   for (const edit of edits(text, line, character, trigger, options, language)) {
     lines[edit.line] = edit.text + lines[edit.line].slice(edit.length);
@@ -72,10 +77,10 @@ test('multiline calls, lists and nested delimiters indent and align closing line
 test('strings, escapes and comments never create fake blocks or brackets', () => {
   assert.equal(format('if ready # this is not a header:\n    |'), 'if ready # this is not a header:\n');
   for (const text of ['    print("match x: [")\n|', '    print("escaped \\" [")\n|', '    print("😀 凪 # ( :")\n|']) {
-    assert.equal(format(text), text.replace('|', '    '));
+    assert.equal(format(text), cursor(text, '    ').text);
   }
   for (const text of ['if ready:\n    # else:|', 'match result:\n    print("case Ok(x):|', '    print("[ ]|', '    # )|']) {
-    assert.equal(format(text, text.includes(')|') ? ')' : ':'), text.replace('|', ''));
+    assert.equal(format(text, text.includes(')|') ? ')' : ':'), cursor(text).text);
   }
   assert.equal(format('    print(\n        "hello")|', ')'), '    print(\n        "hello")');
   assert.equal(format('    values = [\n        "hello"]|', ']'), '    values = [\n        "hello"]');
