@@ -1,0 +1,4 @@
+entry = "foundation_cli.nagi"
+
+[rust]
+file = "native.rs"

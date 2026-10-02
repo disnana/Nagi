@@ -1,0 +1,7 @@
+entry = "tokio-timer.nagi"
+
+[rust]
+file = "native.rs"
+
+[rust.dependencies]
+tokio = "1.48"

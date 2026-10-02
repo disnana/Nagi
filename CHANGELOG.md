@@ -24,4 +24,8 @@
 - Use the installed `nagic` command throughout the introductory language and HTTP guides.
 - Cache native dependencies during distribution verification and check HTTP route parameters on all four target platforms.
 
+- Consume the Result operand of `try` during ownership checking. Check the first inferred list element once so moving constructors and function calls remain valid.
+- Build HTTP servers with no user routes when the builtin `serve` is called. Keep ordinary and locally aliased functions named `serve` independent of HTTP runtime generation.
+- Complete the VS Code catalog for all existing builtins and their generic arguments. Preserve type arguments and call parentheses already present when accepting completion, and offer fn/Option type annotations.
+
 Published versions and downloads are listed in [GitHub Releases](https://github.com/disnana/Nagi/releases).

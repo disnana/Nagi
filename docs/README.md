@@ -29,9 +29,10 @@ Nagiの入門ガイドとリファレンスです。書き方や関数の仕様�
 |---|---|
 | JSONを読み書きする | [JSON](json.md) |
 | 複数ファイルに分ける、Rustを呼ぶ | [importとRust連携](modules-and-rust.md) |
+| 自作の共通コードやRustのcrateを使う | [ライブラリとRustの資産](libraries.md) |
 | 入口やビルド設定を保存する | [nagi.toml](projects.md) |
 | 非同期処理を待つ、複数の処理を始める | [asyncとscope](async.md)、[並行処理](concurrency.md) |
-| 動くアプリを読む | [タスク管理デモ](../test-nagi-code/web-demo/README.md)、[Result APIサンプル](../test-nagi-code/result-api/README.md) |
+| 動くアプリを読む | [サンプルプロジェクト一覧](library-examples.md) |
 
 入門の実行例は[examples/tutorial/](../examples/tutorial/)にあります。関数や書式の説明には、コードの一部分だけを示した例もあります。
 

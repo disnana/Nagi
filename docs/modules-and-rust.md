@@ -84,3 +84,5 @@ Nagiの`check`は、宣言した型と呼び出し、所有権、借用を検査
 生成したCargo.lockを保持して`cargo build --locked --manifest-path build/app/Cargo.toml`を実行すると、同じ依存の解決を再利用できます。通常の`nagic build`は生成したプロジェクトへの`cargo build --release`を実行します。
 
 この連携は同じRustビルド内で関数を呼び出します。安定したC ABIや、実行時にDLLを読み込む機能は未対応です。
+
+共通コードを複数アプリで使う例、Rust側へNagiの関数を渡す例は[ライブラリとRustの資産](libraries.md)と[サンプル一覧](library-examples.md)にあります。依存のpath・features指定や名前空間は、[設計案](library-design.md)として整理しています。

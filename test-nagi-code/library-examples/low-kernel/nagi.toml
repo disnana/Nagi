@@ -1,0 +1,2 @@
+entry = "low_kernel.nagi"
+native = ["kernel.low"]

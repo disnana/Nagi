@@ -1,5 +1,9 @@
 # Nagiのサンプル
 
+## 自作ライブラリとRustの資産
+
+[library-examples/](library-examples/)に、共通の料金計算を使うCLIとJSONレポート、serde_json、Tokio、独自HTTP基盤、Lowの差し替えの6プロジェクトがあります。[一覧と起動手順](../docs/library-examples.md)、[English](library-examples/README.en.md)を参照してください。
+
 ## 成功と失敗を分ける小さなAPI
 
 [result-api/README.md](result-api/README.md) は、数値変換とSQLiteの1件取得から始めるサンプルです。Resultの`match`で、入力不正・対象なし・DB失敗・代替データへの回復を書き分けます。Pythonのsmokeは自分で起動したサーバーへHTTPリクエストを送り、応答だけを照合します。

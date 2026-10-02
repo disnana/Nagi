@@ -1,0 +1,21 @@
+import "../shared/foundation.nagi"
+
+def main() -> Result[unit, Error]:
+    engine_name = env("NAGI_PRICING_ENGINE", "nagi")
+    calculate = try foundation_select_engine(view(engine_name))
+    print("Label:")
+    label = try read_line()
+    print("Unit price in cents:")
+    unit_text = try read_line()
+    unit_cents = try parse_i64(view(unit_text))
+    print("Quantity:")
+    quantity_text = try read_line()
+    quantity = try parse_i64(view(quantity_text))
+    print("Discount in basis points (1000 = 10%):")
+    discount_text = try read_line()
+    discount_bps = try parse_i64(view(discount_text))
+    quote = try foundation_quote(calculate, view(label), unit_cents, quantity, discount_bps)
+    encoded = try json_encode(quote)
+    print(encoded)
+    print("Original label is still available:")
+    return ok(print(label))

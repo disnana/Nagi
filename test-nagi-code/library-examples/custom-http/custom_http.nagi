@@ -1,0 +1,12 @@
+# The HTTP backend lives in Rust. This callback stays ordinary synchronous Nagi.
+@rust("native::run_server")
+extern async def run_server(render: fn[i64, str], port: i64) -> Result[unit, Error]
+
+def render_greeting(id: i64) -> str:
+    if id == 7:
+        return "Hello, Nagi!"
+    return "Hello from the Nagi callback!"
+
+async def main() -> Result[unit, Error]:
+    port = try parse_i64(env("NAGI_SAMPLE_PORT", "8088"))
+    return await run_server(render_greeting, port)

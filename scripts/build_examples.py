@@ -41,4 +41,6 @@ def main():
     (ROOT/'benchmarks/results').mkdir(parents=True,exist_ok=True)
     (ROOT/'benchmarks/results/examples.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2))
     print(json.dumps({'samples':len(rows),'builds':'passed','native_preserved':True}))
+    verified = run([sys.executable, ROOT/'scripts/verify_library_examples.py', '--compiler', nagic])
+    print(verified.stdout, end='')
 if __name__=='__main__':main()

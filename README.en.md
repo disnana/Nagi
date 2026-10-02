@@ -109,6 +109,8 @@ For applications with multiple files, [nagi.toml](docs/en/projects.md) stores th
 
 High and Low take separate paths within the same compiler crate. Splitting them into independent crates and organizing the standard library into modules are future work.
 
+[Six library and Rust integration projects](docs/en/library-examples.md) demonstrate shared CLI/report logic, serde_json, Tokio, a custom HTTP foundation, and Low replacements. See [library structure](docs/en/libraries.md) and the [design proposal](docs/en/library-design.md).
+
 ## Reproduce the checks
 
 ```bash

@@ -1,0 +1,46 @@
+use nagic::{check, emit, parser};
+
+fn checked(source: &str) -> Result<nagic::ast::Program, String> {
+    let mut program = parser::parse(source, true)?;
+    check::check(&mut program)?;
+    Ok(program)
+}
+
+#[test]
+fn inferred_list_first_elements_can_move_owned_inputs_once() {
+    for source in [
+        "def identity(value: str) -> str:\n    return value\ndef main():\n    text = \"Nagi\"\n    values = [identity(text)]\n    print(len(values))\n",
+        "class User:\n    name: str\ndef main():\n    text = \"Nagi\"\n    values = [User(name=text)]\n    print(len(values))\n",
+        "def main():\n    text = \"Nagi\"\n    values = [some(text)]\n    print(len(values))\n",
+        "def identity(value: str) -> str:\n    return value\ndef main():\n    text = \"Nagi\"\n    values = [[identity(text)]]\n    print(len(values))\n",
+        "def main() -> Result[unit, Error]:\n    outcome = ok(\"Nagi\")\n    values = [try outcome]\n    return ok(print(len(values)))\n",
+        "async def start() -> Result[unit, Error]:\n    db = try await db_open(\":memory:\")\n    results = [await serve(db, -1)]\n    return ok(print(len(results)))\n",
+    ] {
+        let high = checked(source).unwrap_or_else(|error| panic!("{source}\n{error}"));
+        let mut low = parser::parse(&emit::low(&high), false).unwrap();
+        check::check(&mut low).unwrap();
+    }
+}
+
+#[test]
+fn inferred_lists_still_reject_second_moves_and_mixed_element_types() {
+    for source in [
+        "def identity(value: str) -> str:\n    return value\ndef main():\n    text = \"Nagi\"\n    values = [identity(text), identity(text)]\n",
+        "def main():\n    text = \"Nagi\"\n    values = [some(text), some(text)]\n",
+    ] {
+        assert!(checked(source).unwrap_err().contains("text はmove後"));
+    }
+    assert!(checked("def main():\n    values = [1, \"Nagi\"]\n")
+        .unwrap_err()
+        .contains("expected i64"));
+}
+
+#[test]
+fn explicit_list_element_types_still_contextualize_the_first_literal() {
+    let high = checked("def main():\n    values: List[i8] = [1, 127]\n    other: List[i8] = []\n    append(other, values[0])\n").unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    assert!(checked("def main():\n    values: List[i8] = [128]\n")
+        .unwrap_err()
+        .contains("i8 の範囲"));
+}
