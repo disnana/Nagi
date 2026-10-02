@@ -12,17 +12,17 @@ On Windows, use the Rust MSVC toolchain and Visual Studio C++ Build Tools. Linux
 
 ### Use the installer
 
-These commands download Nagi 0.1.6 from GitHub, verify SHA-256, and install it for your user. Windows adds the installation to User PATH. Linux/macOS add a PATH line to bash/zsh configuration. No administrator access is needed. Install Rust, C build tools, and the VS Code extension separately.
+These commands download the latest published Nagi release from GitHub, verify SHA-256, and install it for your user. Windows adds the installation to User PATH. Linux/macOS add a PATH line to bash/zsh configuration. No administrator access is needed. Install Rust, C build tools, and the VS Code extension separately.
 
 ```powershell
-& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/nagi-v0.1.6/scripts/install.ps1')))
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1')))
 ```
 
 ```bash
-(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/nagi-v0.1.6/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Windows installs under `%LOCALAPPDATA%\Nagi\versions`; Linux/macOS use `~/.local/share/nagi`, with the command in `~/.local/bin/nagic`. Restart VS Code after installing so it picks up the new PATH.
+Windows installs under `%LOCALAPPDATA%\Nagi\versions` and puts its `current` subdirectory on PATH. Linux/macOS use `~/.local/share/nagi`, with the command in `~/.local/bin/nagic`. These command locations stay the same across updates. Restart VS Code after installing so it picks up the new PATH.
 
 ```text
 nagic --version
@@ -30,6 +30,26 @@ nagic --help
 ```
 
 The version output is `nagic 0.1.6`. You can also use `nagic -V` or `nagic version`. Version and help work without Rust or project configuration.
+
+### Update
+
+Run the installation command above again. It checks the latest published release, downloads and verifies it, then switches the command. It installs neither unreleased main builds nor the VSIX. Repeating an install of the same version does not add another copy.
+
+Stop Nagi builds before updating. After the new command starts successfully, the installer compares older distributions with their published archives and removes unchanged copies. Only the selected version remains; no rollback copy is kept permanently. Added or modified files are preserved. Older copies that cannot be verified or removed, including files locked by Windows, are also kept and their folder is reported. A failed update preserves the previous command and PATH.
+
+Old URLs such as `nagi-v0.1.6/scripts/install.ps1` are pinned to 0.1.6. Use this page's `main/scripts/install.ps1` to update. On Windows, version-specific PATH entries from the original installer are replaced with the fixed `current` entry. If VS Code's `nagi.compilerPath` points to an old version's absolute path, change it to `nagic` and restart VS Code.
+
+To select a specific version, including an earlier release, use the commands below. The same one-version retention policy applies.
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.6
+```
+
+```bash
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.6) && export PATH="$HOME/.local/bin:$PATH"
+```
+
+If you used custom locations, pass the same `-InstallDir` (PowerShell) or `--prefix` and `--bin-dir` (bash) when updating. `-NoPath` / `--no-path` leave persistent PATH settings unchanged; register the fixed command location yourself in that case. Manually extracted distributions elsewhere are not removed.
 
 ### Extract the archive yourself
 

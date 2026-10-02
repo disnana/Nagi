@@ -25,16 +25,18 @@ NagiアプリのビルドにはRust/CargoとCのビルド環境が必要です�
 Windows（PowerShell）:
 
 ```powershell
-& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/nagi-v0.1.6/scripts/install.ps1')))
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1')))
 ```
 
 Linux / macOS（bash）:
 
 ```bash
-(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/nagi-v0.1.6/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Nagi 0.1.6を取得し、SHA-256を確認してユーザー用の場所へ展開し、PATHに登録します。Linux/macOSではbash/zshの設定にPATHの1行を追記します。RustやVS Code拡張は別途用意します。VS Codeはインストール後に再起動してください。
+最新の公開版を取得し、SHA-256を確認してユーザー用の場所へ展開し、PATHに登録します。**更新も同じコマンドです。** インストーラーはmainから読みますが、コンパイラはGitHub Releasesの正式な配布物を使います。RustやVS Code拡張は別途用意します。
+
+更新前に実行中のNagiのビルドを止め、更新後はVS Codeを再起動してください。更新が成功したら、配布時の内容と一致する旧版を削除し、使用する1版だけ残します。追加・変更されたファイルは保護します。照合不能や使用中などで削除できない旧版も残し、その場所を表示します。失敗時は元のコマンドを維持します。[版の指定と更新の詳細](docs/getting-started.md#更新する)も参照してください。
 
 ```bash
 nagic --version
