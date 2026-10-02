@@ -26,6 +26,12 @@ $committed = $false
 $pathChanged = $false
 $createdDestination = $false
 
+function Write-InstallStatus([string]$Message, [ConsoleColor]$Color) {
+    if (-not $env:NO_COLOR -and $env:TERM -ne 'dumb' -and -not [Console]::IsOutputRedirected) {
+        Write-Host $Message -ForegroundColor $Color
+    } else { Write-Host $Message }
+}
+
 function Get-Distribution([string]$Release, [string]$Folder) {
     $name = "nagi-$Release-windows-x86_64"
     $asset = "$name.zip"
@@ -167,10 +173,17 @@ try {
             Write-Host "Removed old version: $($old.FullName)"
         } catch { Write-Warning "Kept old installation: $($old.FullName) ($($_.Exception.Message))" }
     }
-    Write-Host "nagic $Version"
-    Write-Host "Installed: $destination"
-    Write-Host "Command: $(Join-Path $current 'nagic.exe')"
-    Write-Host 'Building applications requires Rust/Cargo and Visual Studio C++ Build Tools. Restart VS Code to refresh PATH.'
+    Write-Host ''
+    Write-InstallStatus "[OK] Installed Nagi $Version (prebuilt compiler)." Green
+    Write-Host "     Location: $destination"
+    Write-Host "     Command: $(Join-Path $current 'nagic.exe')"
+    Write-Host ''
+    Write-InstallStatus '[NEXT] Try in this terminal: nagic --version' Cyan
+    if (-not $NoPath) { Write-Host '       Restart VS Code to refresh its PATH.' }
+    Write-Host ''
+    Write-Host '[INFO] To build your own Nagi apps with nagic build/run:'
+    Write-Host '       Rust/Cargo and Visual Studio C++ Build Tools are required.'
+    Write-Host '       Use your existing installation if these tools are already installed.'
     if ($env:NAGI_ROOT) { Write-Warning 'NAGI_ROOT is set; remove it to use the installed runtime automatically.' }
 } finally {
     if (-not $committed -and $activated) {

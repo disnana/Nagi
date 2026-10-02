@@ -6,6 +6,13 @@ prefix="$HOME/.local/share/nagi"
 bin_dir="$HOME/.local/bin"
 no_path=0
 profile=''
+status() {
+    local color=$1 message=$2
+    if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ] && [ -z "${NO_COLOR:-}" ]; then
+        printf '\033[%sm%s\033[0m\n' "$color" "$message"
+    else printf '%s\n' "$message"
+    fi
+}
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --version) version=${2:?Missing version}; shift 2 ;;
@@ -203,8 +210,15 @@ for old in "$prefix"/nagi-*; do
     else printf 'Kept changed or unverifiable old installation: %s\n' "$old" >&2
     fi
 done
-"$link" --version
-printf '%s\n' "Installed: $destination"
-printf '%s\n' "For this terminal: export PATH=$quoted:\"\$PATH\""
-printf '%s\n' 'Building applications requires Rust/Cargo and a C build environment. Restart VS Code to refresh PATH.'
+printf '\n'
+status 32 "[OK] Installed Nagi $version (prebuilt compiler)."
+printf '     Location: %s\n     Command: %s\n' "$destination" "$link"
+printf '\n'
+status 36 '[NEXT] In this terminal, run:'
+printf '       export PATH=%s:"$PATH"\n       nagic --version\n' "$quoted"
+if [ "$no_path" -eq 0 ]; then printf '%s\n' '       Restart VS Code to refresh its PATH.'; fi
+printf '\n'
+printf '%s\n' '[INFO] To build your own Nagi apps with nagic build/run:'
+printf '%s\n' '       Rust/Cargo and a C build environment are required.'
+printf '%s\n' '       Use your existing installation if these tools are already installed.'
 if [ -n "${NAGI_ROOT:-}" ]; then printf '%s\n' 'NAGI_ROOT is set; unset it to use the installed runtime automatically.'; fi
