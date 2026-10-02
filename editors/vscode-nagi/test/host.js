@@ -198,6 +198,7 @@ async function run() {
   assert.match(await hovers(lowEntry, 1, 27), /fn twice\(x: i64\) -> i64/, 'Low hover displays its declaration');
   await checkInferredTypes(folder, hovers, completions);
   await checkLocalNavigation(folder, definitions);
+  await require('./indentation-host').run();
   console.log('PASS: VS Code Host diagnostics/run/F12, local and unsaved definitions, declaration and inferred hovers, field completion, unsaved imports, fallback, signatures, UTF-16, High/Low');
 }
 
