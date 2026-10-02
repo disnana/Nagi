@@ -17,7 +17,13 @@ Development tools for Nagi High (`.nagi`) and Low (`.low`). Command labels and s
 
 ## Installation
 
-The extension ID is `Disnana.nagi-language`. If you installed `nagi-local.nagi-language`, disable or uninstall it before installing this extension.
+Search for "Nagi for VS Code" in VS Code's Extensions view, or install it from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang). From a terminal, run:
+
+```bash
+code --install-extension Disnana.nagi-lang
+```
+
+The extension ID is `Disnana.nagi-lang`. If you installed `nagi-local.nagi-language` or `Disnana.nagi-language`, disable or uninstall it first.
 
 Formal VSIX downloads are published on [GitHub Releases](https://github.com/disnana/Nagi/releases) as nagi-language-VERSION.vsix. Updating the extension version on main publishes a release after CI succeeds.
 
@@ -27,9 +33,9 @@ From the repository root, run `python editors/vscode-nagi/scripts/package_vsix.p
 code --install-extension build/distribution/nagi-language-0.1.8.vsix
 ```
 
-Highlighting and snippets work without a compiler. Checks and execution require nagic. Open the Nagi repository and run `cargo build --release --locked -p nagic` at its root. Discovery checks the repository's release build, then debug build, then PATH.
+Highlighting and snippets work without a compiler. Checks and execution require `nagic`. Install it using [Setup and first run](https://disnana.github.io/Nagi/en/docs/getting-started/). The extension checks the repository's release build, then debug build, then PATH.
 
-The VSIX does not include the compiler. `spawn nagic.exe ENOENT` means it could not be found. Build it, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set nagi.compilerPath. Startup failures and timeouts appear as warnings and in Nagi Output, without source-error squiggles.
+The VSIX does not include the compiler. `spawn nagic.exe ENOENT` means it could not be found. Install the compiler, restart VS Code, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set nagi.compilerPath. Startup failures and timeouts appear as warnings and in Nagi Output, without source-error squiggles.
 
 ## Settings
 
