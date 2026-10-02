@@ -3,6 +3,7 @@
 Development tools for Nagi High (`.nagi`) and Low (`.low`). Command labels and some extension messages are currently Japanese.
 
 - Syntax highlighting, comments, bracket/quote handling, and four-space indentation
+- Indentation on Enter, else/case alignment, and closing delimiters in multiline expressions
 - Snippets for classes, functions, HTTP, borrowing, and Low replacements
 - nagic check on opening/saving files, with diagnostics in Problems
 - Command Palette actions for checking, lowering, building, and running
@@ -33,9 +34,26 @@ From the repository root, run `python editors/vscode-nagi/scripts/package_vsix.p
 code --install-extension build/distribution/nagi-language-0.1.8.vsix
 ```
 
-Highlighting and snippets work without a compiler. Checks and execution require `nagic`. Install it using [Setup and first run](https://disnana.github.io/Nagi/en/docs/getting-started/). The extension checks the repository's release build, then debug build, then PATH.
+Highlighting, snippets, and indentation support work without a compiler. Checks and execution require `nagic`. Install it using [Setup and first run](https://disnana.github.io/Nagi/en/docs/getting-started/). The extension checks the repository's release build, then debug build, then PATH.
 
 The VSIX does not include the compiler. `spawn nagic.exe ENOENT` means it could not be found. Install the compiler, restart VS Code, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set nagi.compilerPath. Startup failures and timeouts appear as warnings and in Nagi Output, without source-error squiggles.
+
+## Indentation while typing
+
+These improvements are planned for the next extension release. To try them earlier, build a VSIX from main.
+
+Press Enter after a block header such as `def main():`, `async def`, `if`, `match`, or `case` to indent one level. Typing the final colon of `else:` or `case ...:` aligns the line with its enclosing `if` or `match`.
+
+Enter inside parentheses or square brackets indents one level. A closing delimiter at the start of a line aligns with the line containing its opening delimiter. Low also handles braces. Characters inside strings and comments do not affect indentation. This works in new untitled files and untrusted workspaces without running the compiler.
+
+The default is four spaces. The indentation width and tabs/spaces choice follow the editor's settings in the status bar. Disable **Editor: Format On Type** to stop this adjustment, or disable it for Nagi alone:
+
+```json
+{
+  "[nagi]": { "editor.formatOnType": false },
+  "[nagi-low]": { "editor.formatOnType": false }
+}
+```
 
 ## Settings
 
