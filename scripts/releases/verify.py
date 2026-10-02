@@ -48,6 +48,37 @@ def verify(archive: Path, version: str, platform: str, target: Path | None = Non
         (project / "main.nagi").write_text(
             'def main():\n    print("Hello, Nagi!")\n    print(2 + 2)\n'
             f'    print({json.dumps(marker)})\n', encoding="utf-8")
+        records = folder / "record project 凪"
+        records.mkdir()
+        (records / "records.nagi").write_text('''class Future:
+    value: i64
+class Payload:
+    value: shared[i64]
+def first() -> Future:
+    return Future(value=1)
+def second() -> Future:
+    return Future(value=42)
+def show(payload: Payload):
+    encoded = json_encode(payload)
+    match encoded:
+        case Ok(text):
+            print(text)
+        case Err(problem):
+            print("encode failed")
+def main():
+    second()
+    selected = first
+    selected = second
+    print(selected().value)
+    show(Payload(value=share(42)))
+    input = "{\\"value\\":42}"
+    decoded = json_decode[Payload](view(input))
+    match decoded:
+        case Ok(payload):
+            show(payload)
+        case Err(problem):
+            print("decode failed")
+''', encoding="utf-8")
         environment["PATH"] = str(root) + os.pathsep + environment["PATH"]
         # Windows resolves an executable using the parent's PATH. Update this
         # verification process too, so the bare command tests PATH on every OS.
@@ -58,7 +89,11 @@ def verify(archive: Path, version: str, platform: str, target: Path | None = Non
                                     cwd=folder, env=environment, check=True, capture_output=True, text=True, encoding="utf-8")
             assert result.stdout.splitlines()[-3:] == ["Hello, Nagi!", "4", marker], result.stdout
             assert not (root / "native-target").exists(), "Build wrote into the installed distribution"
-            print(f"Verified {version} {platform}: PATH, external project, version, help")
+            result = subprocess.run(["nagic", "run", str(records / "records.nagi")],
+                                    cwd=folder, env=environment, check=True, capture_output=True, text=True, encoding="utf-8")
+            assert result.stdout.splitlines()[-3:] == ["42", '{"value":42}', '{"value":42}'], result.stdout
+            assert not (root / "native-target").exists(), "Record build wrote into the installed distribution"
+            print(f"Verified {version} {platform}: PATH, external projects, version, help, function aliases, shared JSON round trip")
         finally:
             os.environ["PATH"] = previous_path
 

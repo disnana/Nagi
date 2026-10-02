@@ -24,6 +24,7 @@ struct Var {
     moved: bool,
     moved_fields: HashSet<Vec<String>>,
     origins: HashSet<BorrowedPlace>,
+    async_function: Option<String>,
 }
 struct Checker {
     classes: HashMap<String, Class>,
@@ -73,6 +74,29 @@ fn hashable(t: &Type) -> bool {
         "Result" => t.1.iter().all(hashable),
         _ => false,
     }
+}
+
+fn class_field(t: &Type, line: usize) -> Result<(), String> {
+    // Every generated class derives serialization. These foreign types cannot
+    // acquire the missing implementations from a user's Rust bridge.
+    if t.0 == "fn" && !t.1.is_empty() || matches!(t.0.as_str(), "Error" | "Db" | "Html") {
+        return Err(error(line, format!("{t}はclassのフィールドに保存できません。関数の引数やローカル変数で使用してください")));
+    }
+    fn unhashable(t: &Type) -> bool {
+        match t.0.as_str() {
+            "f32" | "f64" | "UUID" | "timestamp" | "Map" => true,
+            "List" | "Option" | "owned" | "shared" | "Result" => t.1.iter().any(unhashable),
+            // User records may implement Eq/Hash in a Rust bridge.
+            _ => false,
+        }
+    }
+    if t.0 == "Map" && unhashable(&t.1[0]) {
+        return Err(error(line, format!("classのMapフィールドのキーに{}は使えません。一致比較とハッシュに対応する型が必要です", t.1[0])));
+    }
+    for inner in &t.1 {
+        class_field(inner, line)?;
+    }
+    Ok(())
 }
 
 fn recursive_layout(
@@ -210,6 +234,12 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
                 "再帰する値型レイアウト。List等の間接格納が必要です",
             ));
         }
+        for (index, (_, t)) in class.fields.iter().enumerate() {
+            class_field(
+                t,
+                class.field_lines.get(index).copied().unwrap_or(class.line),
+            )?;
+        }
     }
     for f in &p.functions {
         if !symbols.insert(f.name.clone()) {
@@ -267,6 +297,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
                         moved: false,
                         moved_fields: HashSet::new(),
                         origins,
+                        async_function: None,
                     },
                 )
                 .is_some()
@@ -319,21 +350,18 @@ fn returns(ss: &[Stmt]) -> bool {
 impl Checker {
     fn emittable(&self, t: &Type, line: usize, local: bool) -> Result<(), String> {
         fn contains_future(t: &Type) -> bool {
-            t.0 == "Future" && t.1.len() == 1 || t.1.iter().any(contains_future)
+            t.is_future() || t.1.iter().any(contains_future)
         }
         // Direct local async aliases use Rust inference rather than a named
         // Future type. Their nested signature types still need to be emitted.
         let supported_alias = local
-            && t.0 == "fn"
-            && t.1
-                .last()
-                .is_some_and(|ret| ret.0 == "Future" && ret.1.len() == 1)
+            && t.is_async_function()
             && t.1[..t.1.len() - 1].iter().all(|arg| !contains_future(arg))
             && !contains_future(&t.1.last().unwrap().inner());
         if contains_future(t) && !supported_alias {
             return Err(error(
                 line,
-                if t.0 == "Future" {
+                if t.is_future() {
                     "非同期処理の戻り値は変数へ保存できません。呼び出し時にawaitしてください"
                 } else {
                     "async関数を引数・戻り値・コンテナーの型として指定することは未対応です。ローカル変数への代入とawait呼び出しは使えます"
@@ -362,7 +390,7 @@ impl Checker {
     fn valid(&self, t: &Type, line: usize) -> Result<(), String> {
         if t.0 == "fn" && !t.1.is_empty() {
             for parameter in &t.1 {
-                if parameter.0 == "Future" && parameter.1.len() == 1 {
+                if parameter.is_future() {
                     self.valid(&parameter.inner(), line)?;
                 } else {
                     self.valid(parameter, line)?;
@@ -650,6 +678,7 @@ impl Checker {
                             moved: false,
                             moved_fields: HashSet::new(),
                             origins: origins.clone(),
+                            async_function: None,
                         },
                     );
                 }
@@ -734,6 +763,23 @@ impl Checker {
                     self.valid(a, s.line)?;
                 }
                 self.emittable(&ty, s.line, true)?;
+                let async_function = if ty.is_async_function() {
+                    match (&value.kind, value.resolution) {
+                        (E::Name(n), Some(NameResolution::Function)) => Some(n.clone()),
+                        (E::Name(n), Some(NameResolution::Local)) => {
+                            self.vars[n].async_function.clone()
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                if old
+                    .as_ref()
+                    .is_some_and(|v| v.ty.is_async_function() && v.async_function != async_function)
+                {
+                    return Err(error(s.line, "async関数を入れた変数には、別のasync関数を再代入できません。別の変数を使うか、呼び出しを分岐してください"));
+                }
                 if !old.as_ref().is_some_and(|v| v.ty.is_view()) && self.borrowed(name) {
                     return Err(error(
                         s.line,
@@ -760,6 +806,7 @@ impl Checker {
                         moved: false,
                         moved_fields: HashSet::new(),
                         origins: origin,
+                        async_function,
                     },
                 );
             }
@@ -792,7 +839,7 @@ impl Checker {
             }
             S::Expr(e) => {
                 let t = self.expr(e, None)?;
-                if t.0 == "Future" {
+                if t.is_future() {
                     return Err(error(
                         s.line,
                         "async呼び出しはawaitまたはscope内のspawnで実行してください",
@@ -866,6 +913,7 @@ impl Checker {
                                 ty: payload,
                                 moved: false,
                                 moved_fields: HashSet::new(),
+                                async_function: None,
                             },
                         );
                     }
@@ -1171,7 +1219,7 @@ impl Checker {
                     return Err(error(line, "awaitはasync関数内で使用してください"));
                 }
                 let t = self.expr(x, None)?;
-                if t.0 != "Future" {
+                if !t.is_future() {
                     return Err(error(line, "await対象はasync呼び出しです"));
                 }
                 t.inner()

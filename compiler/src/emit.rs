@@ -428,11 +428,7 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
             } => out.push_str(&format!(
                 "{}{name}{} = {};\n",
                 if *declare { "let mut " } else { "" },
-                if *declare
-                    && !annotation.as_ref().is_some_and(
-                        |t| t.0 == "fn" && t.1.last().is_some_and(|ret| ret.0 == "Future")
-                    )
-                {
+                if *declare && !annotation.as_ref().is_some_and(Type::is_async_function) {
                     format!(": {}", local_type(annotation.as_ref().unwrap()))
                 } else {
                     String::new()

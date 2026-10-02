@@ -41,6 +41,8 @@ Nagiのアーカイブには、**検証したコミットのGit管理下にあ�
 
 配布物は直下の`nagic`または`nagic.exe`、ビルドに必要な`runtime/`、`LICENSE`、短い日英の`README.txt`、`release.json`です。ランタイムのCargo manifestは開発用workspaceから独立させ、配布と同じ版を明記します。コンパイラのソース、開発用テスト、測定ログ、サイト・Docsのソースは含めません。
 
+展開後の検査では、リポジトリ外のプロジェクトからPATH経由で実行します。Helloのほか、Futureという名前のclassを返す同期関数の差し替えと、sharedフィールドを持つclassのJSON変換・読み戻しを確認します。
+
 アーカイブ全体を展開し、展開フォルダーをPATHに追加します。`runtime/`との位置を保てば`NAGI_ROOT`は通常不要です。NagiアプリのビルドにはRust/CargoとCのビルド環境が必要です。Linux版はUbuntu runnerと同等のglibc環境、macOS版はmacOS 15を想定します。0.1.5以前の配布物では実行ファイルは`target/release/`にあります。
 
 [`install.ps1`](../install.ps1)と[`install.sh`](../install.sh)は、指定を省くとGitHubのLatestに指定されたNagiの公開版とSHA-256を取得します。公開処理はNagiだけをLatestに指定し、VSIXでは変更しません。インストーラーも転送先が`nagi-vX.Y.Z`でなければ停止します。版を指定する場合は`-Version X.Y.Z`／`--version X.Y.Z`です。READMEのコマンドはmainのインストーラーを使い、再実行で更新できます。

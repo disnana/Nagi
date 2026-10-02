@@ -40,3 +40,5 @@ async def main():
 ```
 
 This assignment stores the function itself. Storing a call result with `pending = answer(41)` is unsupported; await the call directly. See [types and inference](types.md#pass-a-function-as-a-value) for supported function signatures.
+
+You cannot reassign a different async function to that variable. Use a separate variable or call each function in a branch. Reassigning the same function, and replacing a synchronous function, are supported.

@@ -128,6 +128,30 @@ fn invalid_operators_in_imports_report_nagi_lines_before_rust_or_cargo() {
 }
 
 #[test]
+fn unsupported_class_fields_and_async_reassignments_fail_before_backend_generation() {
+    for (source, line, message) in [
+        ("class Payload:\n    callback: fn[i64]\n", 2, "classのフィールドに保存できません"),
+        ("class Lookup:\n    values: Map[f64, i64]\n", 2, "classのMapフィールドのキー"),
+        ("async def first() -> i64:\n    return 1\nasync def second() -> i64:\n    return 42\nasync def invalid():\n    selected = first\n    selected = second\n", 7, "別のasync関数を再代入できません"),
+    ] {
+        let f = Fixture::new();
+        f.write("main.nagi", "import \"helpers.nagi\"\ndef main():\n    print(42)\n");
+        f.write("helpers.nagi", source);
+        for command in ["check", "build", "run"] {
+            let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+                .args([command, "main.nagi"])
+                .current_dir(&f.0)
+                .env("PATH", "")
+                .env("NAGI_ROOT", f.0.join("missing-runtime"))
+                .output().unwrap();
+            let error = stderr(&output);
+            assert!(!output.status.success() && error.contains(message) && error.contains(&format!("helpers.nagi:{line}")), "{error}");
+            assert!(!f.0.join("build/main/src/main.rs").exists());
+        }
+    }
+}
+
+#[test]
 fn iterator_mutation_fails_in_check_and_build_before_backend_generation() {
     for (name, text) in [
         ("main.nagi", "def main():\n    values = [1, 2]\n    for item in values:\n        append(values, item)\n"),
