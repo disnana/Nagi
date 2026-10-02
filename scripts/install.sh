@@ -98,7 +98,7 @@ if [ "$no_path" -eq 0 ]; then
     done
 fi
 "$link" --version
-echo "Installed: $destination"
-echo "For this terminal: export PATH=$(printf '%q' "$bin_dir"):\"\$PATH\""
-echo 'Building applications requires Rust/Cargo and a C build environment. Restart VS Code to refresh PATH.'
-if [ -n "${NAGI_ROOT:-}" ]; then echo 'NAGI_ROOT is set; unset it to use the installed runtime automatically.'; fi
+printf '%s\n' "Installed: $destination"
+printf '%s\n' "For this terminal: export PATH=$(printf '%q' "$bin_dir"):\"\$PATH\""
+printf '%s\n' 'Building applications requires Rust/Cargo and a C build environment. Restart VS Code to refresh PATH.'
+if [ -n "${NAGI_ROOT:-}" ]; then printf '%s\n' 'NAGI_ROOT is set; unset it to use the installed runtime automatically.'; fi
