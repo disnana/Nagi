@@ -1201,8 +1201,29 @@ impl Checker {
             |t: &Type| t.0 == "str" || t == &Type::generic("view", vec![Type::named("str")]);
         match n {
             "print" | "write" => {
-                if !types[0].is_copy() && types[0].0 != "str" {
-                    return Err(error(line, "print/writeはprimitiveまたはstrを取ります"));
+                if !is_string(&types[0])
+                    && !matches!(
+                        types[0].0.as_str(),
+                        "i8" | "i16"
+                            | "i32"
+                            | "i64"
+                            | "u8"
+                            | "u16"
+                            | "u32"
+                            | "u64"
+                            | "f32"
+                            | "f64"
+                            | "bool"
+                            | "UUID"
+                    )
+                {
+                    return Err(error(
+                        line,
+                        format!(
+                            "{n}に{}は渡せません。数値・bool・str・view[str]・UUIDを指定してください",
+                            types[0]
+                        ),
+                    ));
                 }
                 Ok(Type::named("unit"))
             }
