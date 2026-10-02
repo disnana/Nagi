@@ -228,3 +228,41 @@ fn returning_a_function_value_does_not_borrow_local_data() {
     code.push_str("\n#[test] fn returned_function() { assert_eq!(answer(), 2); }\n");
     compile_and_run(code);
 }
+
+#[test]
+fn output_compiles_for_numbers_booleans_and_borrowed_strings() {
+    let source = r#"def output(text: str):
+    a: i8 = -1
+    b: i16 = -2
+    c: i32 = -3
+    d: i64 = -4
+    e: u8 = 1
+    f: u16 = 2
+    g: u32 = 3
+    h: u64 = 4
+    i: f32 = 1.5
+    j: f64 = 2.5
+    print(a)
+    print(b)
+    print(c)
+    print(d)
+    print(e)
+    print(f)
+    print(g)
+    print(h)
+    print(i)
+    print(j)
+    print(True)
+    write(False)
+    print(text)
+    write(view(text))
+    print(text)
+"#;
+    let mut high = parser::parse(source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let mut code = emit::rust(&low).unwrap();
+    code.push_str("\n#[test] fn generated_output() { output(String::from(\"凪\")); }\n");
+    compile_and_run(code);
+}

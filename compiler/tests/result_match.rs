@@ -33,7 +33,7 @@ fn match_requires_result_and_exactly_one_of_each_arm() {
 fn bindings_have_payload_types_and_do_not_escape_or_shadow() {
     for (source, message) in [
         ("def main():\n    match parse_i64(\"1\"):\n        case Ok(value):\n            x: str = value\n        case Err(_):\n            print(0)\n", "expected str"),
-        ("def main():\n    match parse_i64(\"1\"):\n        case Ok(_):\n            print(1)\n        case Err(problem):\n            print(problem)\n", "primitive"),
+        ("def main():\n    match parse_i64(\"1\"):\n        case Ok(_):\n            print(1)\n        case Err(problem):\n            print(problem)\n", "printにErrorは渡せません"),
         ("def main():\n    match parse_i64(\"1\"):\n        case Ok(value):\n            print(value)\n        case Err(_):\n            print(0)\n    print(value)\n", "未定義"),
         ("def main():\n    value = 1\n    match parse_i64(\"1\"):\n        case Ok(value):\n            print(value)\n        case Err(_):\n            print(0)\n", "外側"),
     ] { assert!(checked(source).unwrap_err().contains(message), "{source}"); }

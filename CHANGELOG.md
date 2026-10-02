@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reject non-printable values in `print` and `write` during type checking, including `unit`, function values, byte/list views, and timestamps. Keep numeric, boolean, string, borrowed string, and UUID output supported.
+
 - Use the Marketplace publisher `Disnana` and the extension name as the VSIX manifest identity. The extension ID is `Disnana.nagi-language`. Verify the identity and build a VSIX artifact for extension changes without publishing unchanged versions.
 
 - Separate installer success, next steps, and app build prerequisites. Use terminal colors where available and keep plain-text labels when colors are disabled.
