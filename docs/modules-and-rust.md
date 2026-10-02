@@ -1,52 +1,86 @@
 # ファイルのimportとRust連携
 
-入口・Rustファイル・crate依存を保存する場合は[nagi.tomlとプロジェクト](projects.md)を使ってください。CLIとVS Codeで同じ設定を利用できます。
+別のNagiファイルは`import "ファイル名"`で読み込みます。Rustの関数を使う場合は、Nagiで引数・戻り値の型を宣言し、ビルド時にRustファイルを指定します。
 
 ## Nagiファイルを分割する
 
-```python
-import "models.nagi"
-import "validation.nagi"
+同じディレクトリに次の2つのファイルを作ります。`models.nagi`にはclassを書きます。
+
+```nagi
+class Item:
+    name: str
+    count: i64
 ```
 
-パスはimportを書くソースファイルのディレクトリを基準にします。Highは`.nagi`、Lowは`.low`をimportできます。Lowでは文末に`;`を置けます。依存を先に読み、同じファイルは1回だけ読み込みます。循環import、見つからないファイル、言語の混在、名前の重複はエラーです。全ファイルは現在ひとつの名前空間に入り、名前付きmodule・alias・選択import・公開範囲はまだありません。
+`app.nagi`で読み込みます。
 
-最大128ファイル、深さ64、合計8 MBです。各ファイルのparser上限は従来どおり2 MBです。型検査やLow統合の診断は元のimport先ファイルと行に戻します。Rust backendの診断も、対応する文・定義の行が分かる場合は元のNagi・Lowを先に表示します。元の位置が不明な診断や手書きRustは、Rustの表示を使います。厳密な列位置の対応は未実装です。
+```nagi
+import "models.nagi"
 
-`include_text("index.html") -> str`はソースに隣接するUTF-8ファイルをコンパイル時に埋め込みます。パスは文字列リテラルで指定します。配布先でそのファイルを読み直す操作ではありません。
+def main():
+    item = Item(name="Nagi", count=42)
+    print(item.name)
+    print(item.count)
+```
+
+```sh
+nagic run app.nagi
+```
+
+`Nagi`と`42`が表示されます。パスはimportを書いたファイルのディレクトリを基準にします。Highは`.nagi`、Lowは`.low`を読み込めます。Lowではimportの末尾に`;`を置けます。
+
+同じファイルは1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在、名前の重複はエラーです。読み込んだ定義は同じ名前空間に入ります。`import sqlite`のような名前付きモジュールや、`as`・`from`・公開範囲の指定は未対応です。
+
+### 読み込みの上限とエラー位置
+
+最大128ファイル、深さ64、合計8 MB、1ファイル2 MBです。型検査とLow統合のエラーは、元のファイル名と行番号を表示します。生成されたRustでのエラーも対応するNagi・Lowの行を先に表示します。対応する行が分からない場合や手書きRustのエラーは、Rustの位置を表示します。列位置の対応は未実装です。
+
+### テキストファイルを埋め込む
+
+`include_text("index.html")`は、ソースに隣接するUTF-8ファイルをビルド時に読み込み、`str`として埋め込みます。パスは文字列リテラルで指定してください。配布したアプリを実行するときには、元のファイルは不要です。
 
 ## Rustの関数を呼ぶ
 
-Nagiに型付きの外部関数を宣言します。Highの`extern def`には本体や末尾の`:`を付けません。
+次を`app.nagi`に保存します。`@rust`は呼び出すRustの関数を指定し、`extern def`はその引数・戻り値の型を宣言します。宣言に本体や末尾の`:`は付けません。
 
-```python
-@rust("native::crc32")
-extern def crc32(text: view[str]) -> i64
+```nagi
+@rust("native::text_bytes")
+extern def text_bytes(text: view[str]) -> i64
 
-@rust("native::pretty_json")
-extern def pretty_json(text: view[str]) -> Result[str, Error]
+def main():
+    text = "Nagi"
+    print(text_bytes(view(text)))
+    print(text)
 ```
 
-Lowでは`extern fn ...;`です。`extern async def` / `extern async fn`はRustのasync関数を呼びます。呼び出し側では通常のasync関数と同様にawaitします。Rustのパスは`native::`から始まる識別子列です。externの戻り値のviewや、externへのHTTP属性は現時点では受け付けません。
-
-Rust側には通常の関数を書きます。
+同じディレクトリの`native.rs`にRustの関数を書きます。
 
 ```rust
-pub fn pretty_json(text: &str) -> Result<String, nagi_runtime::Error> {
-    let value: serde_json::Value = serde_json::from_str(text)
-        .map_err(|e| nagi_runtime::Error::invalid(e.to_string()))?;
-    serde_json::to_string_pretty(&value)
-        .map_err(|e| nagi_runtime::Error::invalid(e.to_string()))
+pub fn text_bytes(text: &str) -> i64 {
+    text.len() as i64
 }
 ```
 
-```powershell
-.\target\release\nagic.exe run test-nagi-code/rust-bridge/bridge.nagi `
-  --rust test-nagi-code/rust-bridge/native.rs --rust-dep serde_json=1.0
+```sh
+nagic run app.nagi --rust native.rs
 ```
 
-`--rust`は1つのRustファイルを`native` moduleとして組み込み、`--rust-dep NAME=VERSION`はCargo依存を追加します。追加依存はCargoによって解決され、通常は初回ビルドにネットワークが必要です。生成Cargo.lockを保持して`cargo build --locked --manifest-path build/bridge/Cargo.toml`で同じ解決を再利用できます。CLIは生成したcrateへの`cargo build --release`を呼びます。
+`4`と`Nagi`が表示されます。文字列は`view[str]`で借りているので、呼び出し後も使えます。`--rust`はRustファイルを`native`というモジュールとして組み込みます。関数は`pub`で公開し、宣言した型に合わせてください。たとえばNagiの`str`はRustの`String`、`view[str]`は`&str`です。
 
-Nagiは引数・戻り値・move/viewの宣言を検査し、Rust側の実装と型の一致はビルド時にrustcが検査します。`nagic check`だけではRustの本体やcrateのAPIは検査しません。Rust側では標準ライブラリ、crate、通常のRust moduleや`unsafe`実装を利用できます。Nagiの値型をRust側で使う場合は生成crateの`super::型名`を参照します。
+Lowでは`extern fn ...;`と書きます。Rustのasync関数には`extern async def`（Lowでは`extern async fn`）を使い、呼び出し側でawaitします。Rustの関数のパスは`native::`から始まる識別子の列です。extern関数は、viewを返す宣言やHTTP属性には対応していません。
 
-これは同じRustビルド内での呼び出しで、安定したC ABIや実行時のDLL読み込みではありません。Rust固有の型を直接Nagiへ露出する機能や、Nagi自身で生pointer・unsafe構文を扱う機能は未実装です。まずRustのアダプターでprimitive・str・List・class・Resultへ変換してください。
+### Rustのcrateを使う
+
+Cargoの依存は`--rust-dep NAME=VERSION`で追加します。たとえばserde_jsonを使うアダプターでは、次のように指定します。
+
+```sh
+nagic run app.nagi --rust native.rs --rust-dep serde_json=1.0
+```
+
+初回はCargoが依存を取得するため、通常はネットワーク接続が必要です。crateを使う完全な例は[リポジトリのRust連携サンプル](../test-nagi-code/rust-bridge/)にあります。入口・Rustファイル・依存を毎回指定せずに使う場合は、[nagi.tomlとプロジェクト](projects.md)に保存してください。CLIとVS Codeで同じ設定を使えます。
+
+Nagiの`check`は、宣言した型と呼び出し、所有権、借用を検査します。Rustの本体やcrateのAPIは検査しません。宣言とRustの実装が一致するかどうかは`build`で検査します。Rust固有の型を使う場合は、Rust側で数値・str・List・class・Resultなどへ変換してから渡してください。Rust側から生成したNagiのclassを参照する場合は、`super::型名`を使います。
+
+生成したCargo.lockを保持して`cargo build --locked --manifest-path build/app/Cargo.toml`を実行すると、同じ依存の解決を再利用できます。通常の`nagic build`は生成したプロジェクトへの`cargo build --release`を実行します。
+
+この連携は同じRustビルド内で関数を呼び出します。安定したC ABIや、実行時にDLLを読み込む機能は未対応です。

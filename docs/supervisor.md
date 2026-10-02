@@ -1,9 +1,9 @@
-# Supervisorと障害
+# workerの再起動試験
 
-ランタイムでone_for_one型のworker再起動を実験しています。子taskをpanicさせ、JoinErrorを検出し、そのworkerだけを再作成します。別のworkerが継続することも確認します。
+処理中のworkerがpanicしたとき、そのworkerだけを再起動する試験があります。ほかのworkerが処理を続けられることも確認します。
 
-restart回数には1秒のwindowで上限を付けます。crash loopが上限を越えると再起動を停止します。検出から新しい子taskが最初に実行される時刻までをrestart latencyとして記録します。backoffは1 msです。
+[supervisor.nagi](../examples/supervisor.nagi)は、意図的に3回panicを起こします。実行中にpanicのログが出るのは、この試験の動作です。通常の終了時には、残りのworkerへ停止を要求してから終了を待ちます。
 
-`examples/supervisor.nagi`は意図的なpanicを3回発生させます。stderrにpanicログが出るのは試験の一部です。normal shutdownでは独立workerもabort後にjoinします。
+再起動前には1ミリ秒待ちます。1秒間の再起動回数に上限を設け、失敗し続けるworkerの再起動を止めます。
 
-Highのsupervisor tree宣言、任意のchild factory、one_for_all/rest_for_one、HTTP requestの再配送は未実装です。request lossはこのworker試験では測っていません。Rust panicを処理できても、SIGSEGV、abort、OSによるプロセス停止まで同一process内で隔離できるわけではありません。
+利用者がworkerの構成や再起動方針を定義するAPIは未対応です。処理中のHTTPリクエストを再配送する機能もありません。panicの処理で、OSによるプロセス停止やメモリ破壊から回復できるわけではありません。

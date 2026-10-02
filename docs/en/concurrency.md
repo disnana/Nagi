@@ -1,8 +1,8 @@
-# Concurrency and scheduling
+# Concurrency
 
-Nagi uses Tokio's M:N executor. It does not yet have its own scheduler. HTTP, timers, and channels wait asynchronously; SQLite work goes to a dedicated native thread. CPU work uses offloading with a concurrency limit of four.
+Nagi's async work runs on Tokio. While an HTTP request or timer is waiting, other work can proceed. Start with [Async and scopes](async.md) for the syntax.
 
-Ordinary mutable state is not implicitly shared between tasks. The basic tools are moving owned values, immutable shared values, bounded channels, and state held inside actors. The Rust backend makes the final Send checks.
+SQLite runs on a dedicated thread. CPU-heavy work also runs separately so it does not occupy an async worker for a long time.
 
 ```nagi
 async def main() -> Result[unit, Error]:
@@ -11,6 +11,12 @@ async def main() -> Result[unit, Error]:
     return ok(print("Done"))
 ```
 
-CPU offloading helps keep the event loop responsive. However, cancelling a caller cannot stop a `spawn_blocking` operation that has already started. Long CPU kernels still need cooperative cancellation and budgets.
+`cpu_sum` demonstrates offloading CPU work. At most four such operations run at once. An API for submitting arbitrary user functions is not implemented.
 
-The large-task test confirms that every task has been polled and holds completion behind a gate. It records RSS while all tasks are waiting, then releases the gate, joins them, and checks that none remain unfinished. A task count alone does not establish simultaneous waiting. Connection-count tests are separate.
+## Passing data
+
+Mutable values are not automatically shared between tasks. Move ownership when passing a value, or use `shared` for read-only sharing. Borrowed views cannot be passed to another task.
+
+Cancelling the caller does not stop CPU work that has already started. Long-running work needs to check for a stop request itself.
+
+Task counts and HTTP connection counts measure different things. See [Measurements](measurements.md) and [HTTP load tests](http-capacity.md) for results, including waiting time and memory use.

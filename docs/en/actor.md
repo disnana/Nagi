@@ -1,9 +1,9 @@
-# Actors
+# Actor experiments
 
-The runtime includes a counter actor with a bounded mailbox and oneshot replies. Only its actor task updates the counter's mutable state. High does not yet have an `actor` declaration or support generating arbitrary actor state and methods.
+An actor receives messages and updates its own state. Nagi has an experimental counter actor. There is no syntax for defining arbitrary user actors yet.
 
-`examples/actor.nagi` runs a forwarder actor → counter actor → forwarder → caller exchange. The actors communicate through channels without sharing counter state. After all senders are dropped, their tasks are joined.
+[actor.nagi](../../examples/actor.nagi) sends messages between a forwarding actor and a counter actor. Only the counter actor changes its state. Its mailbox holds 64 messages; senders wait when it is full.
 
-Awaiting one reply at a time makes frequent trips through the scheduler. The runtime's pipelined version sends 32 messages before checking their replies. This comparison retains replies; it does not compare against fire-and-forget delivery.
+The test compares waiting for each reply with sending 32 messages before reading their replies. Both receive replies and wait for the actors to finish at shutdown.
 
-The mailbox holds 64 messages. Senders await space when it is full. Message redelivery after failure, persistent mailboxes, and actor placement across machines are not implemented.
+This is not a general-purpose actor API. Persistent messages, redelivery after failure, and distribution across machines are not supported.

@@ -38,10 +38,10 @@ def main():
     print(number_or("oops", -1))
 ```
 
-Run it from the repository root:
+Save it as `result.nagi` and run it from that folder:
 
 ```powershell
-.\target\release\nagic.exe run examples/tutorial/result.nagi
+nagic run result.nagi
 ```
 
 Output: `21`, `invalid`, `-1`. Patterns begin with uppercase `Ok` and `Err`; constructors use lowercase `ok(...)` and `error(...)`.

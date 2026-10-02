@@ -1,6 +1,18 @@
 # Async functions and scopes
 
-Async functions generate native futures. Await an async call or spawn it inside a scope rather than discarding it.
+Use `async def` for functions that wait for timers, database operations, or other async work. Use `await` to wait for the result. Other async work can run during that wait.
+
+```nagi
+async def main() -> Result[unit, Error]:
+    await sleep(10)
+    return ok(print("Finished waiting"))
+```
+
+`sleep` takes milliseconds. This program prints after the wait. For an operation that can fail, use `try await db_open(...)` to handle its Result as well.
+
+## Starting multiple operations
+
+Inside `async with scope`, `spawn` starts child work. Leaving the scope waits for every child to finish.
 
 ```nagi
 async def main() -> Result[unit, Error]:
@@ -10,8 +22,6 @@ async def main() -> Result[unit, Error]:
     return ok(print("Done"))
 ```
 
-A normal scope exit joins every child task. A Result error cancels the remaining tasks and awaits their cleanup. A child panic is detected through JoinError and also cancels the remaining tasks. In 0.1, `spawn` accepts only async functions returning `unit` or `Result[unit, Error]`.
+If a child returns a Result error or panics, the scope cancels the remaining children and waits for them. Spawned work must return `unit` or `Result[unit, Error]`. Returning from inside a scope and passing a view to a child are not supported.
 
-Returning from inside a scope is rejected. If the parent future is dropped externally, or the scope body panics, JoinSet's Drop requests an abort. It cannot await every child's termination at that point; cooperative cancellation may take time.
-
-Borrowed views cannot be passed to spawned tasks. Move owned data instead. Safely spawning tasks with arbitrary borrows remains future work.
+If the parent operation itself is dropped, or the scope body panics, cancellation is requested without a guarantee that every child has already stopped. See [Concurrency](concurrency.md) for CPU work and cancellation.

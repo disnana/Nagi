@@ -1,12 +1,12 @@
 # SQLite
 
-[目次](README.md) · 前：[HTTPとHTML](http.md) · 関数の引数：[よく使う関数](builtins.md)
+[目次](README.md) · 前：[HTTPとHTML](http.md) · 関数の引数：[組み込み関数](builtins.md)
 
 ## 最初の読み書き
 
 保存する型をclassで定義し、`db_open`でDBを開き、`db_exec`でテーブルを作ります。DBの操作は非同期で、失敗し得るため`try await`を使います。
 
-次は完全なコードです。メモリ内に1件追加して読み、`Nagi`と表示します。
+次のコードを`database.nagi`として保存し、`nagic run database.nagi`で実行します。メモリ内のDBへ1件追加し、保存した名前を表示します。
 
 ```nagi
 class User:
@@ -39,7 +39,7 @@ async def main() -> Result[unit, Error]:
 
 ## APIから読む
 
-SQLを文字列で渡し、paramはnative型のままbindします。値をSQLへ連結しません。`User`等のclassからFromRowを生成し、rowのprimitive/String fieldを直接読みます。tuple、dict、ORM objectは作りません。
+SQLの値は引数として渡します。文字列を連結してSQLを組み立てる必要はありません。読み込んだ行は、指定したclassのフィールドへ入ります。
 
 次は上のUser型を使ったhandlerの断片です。
 
@@ -52,10 +52,10 @@ classの`List`を`for`で走査する場合、現在はCopy classのみ対応し
 
 ## 実装と制約
 
-SQLite connectionは専用threadが所有します。HTTP executorからは容量64のjob channelとoneshot replyで呼び出します。closure/jobとreplyのallocationは残ります。queryをasyncと書けてもSQLite内部がasync I/Oになるわけではありません。
+SQLiteへの操作は専用のスレッドで順に実行します。待ち行列は64件までです。Nagi側は非同期に結果を待ちますが、SQLiteそのものの読み書きはそのスレッドで行います。
 
-prepared statementはcacheします。列名を一度だけ列番号へ解決し、各rowは番号で取得します。16列以内の番号配列はinlineで保持し、毎queryの小さなVec allocationを避けます。TEXT/BLOBを返す場合はSQLite rowの寿命を越えるため所有化します。
+SQLの準備結果と列名の解決結果を再利用します。文字列やバイト列を返すときは、行の処理が終わったあとも保持できるよう、所有する値を作ります。
 
-汎用の可変長typed param、transaction API、DB pool、schemaのコンパイル時検査は未実装です。列名・SQL・列値の型の不整合は実行時Resultになります。
+任意個数のSQL引数、トランザクション専用API、接続プール、ビルド時のスキーマ検査は未対応です。SQLや列の名前・型に問題がある場合は、実行時にResultのエラーになります。
 
-SQL literalはworkerへstatic参照で渡せます。動的SQLは所有Stringを作ります。HTTP timeoutでcallerがキャンセルされても、既に受け付けたDB jobが完了・commitする場合があります。cancel＝rollbackではありません。PostgreSQL binary protocolは設計段階です。
+HTTPの待機期限が切れても、すでに受け付けたDB操作が完了し、書き込みが保存される場合があります。呼び出し元のキャンセルで、書き込みが取り消される保証はありません。

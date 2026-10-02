@@ -4,7 +4,7 @@
 
 1. Resultのmatchを足場に、nullableのmatch、checked/wrapping算術、文字列長、source span、変数shadowing、borrow originを確定する。
 2. High checkerのpartial move・分岐・loop・escape解析を強化し、Rust backendへの依存点を縮める。
-3. 相対ファイルのimportと型付きRust連携を足場に、名前付きmodule・alias、汎用generic、trait、function/async function typeとMapの標準APIを実装する。
+3. 相対ファイルのimportと型付きRust連携を足場に、名前付きmodule・alias、汎用generic、trait、async関数を受け渡す型注釈とMapの標準APIを実装する。
 4. 任意stateのactor宣言、Supervisor tree、bounded queue宣言を現在のランタイムへlowerする。
 5. request arenaとborrowed class、DBでstep中にencodeする経路、buffer再利用、streaming JSONを比較測定する。
 6. PostgreSQL binary protocol、汎用typed SQL binding、schema validation、transactionとキャンセルを実装する。

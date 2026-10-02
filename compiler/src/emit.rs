@@ -899,7 +899,13 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         .env("CARGO_TARGET_DIR", &target)
         .stdout(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("cargo/rustcがPATHに必要です: {e}"))?;
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                format!("Cargoが見つかりません。Rust/Cargoを導入するか、導入済みならPATHを確認してください。\n確認: cargo --version\nPATHを変更した場合はターミナルとVS Codeを開き直してください。\n{e}")
+            } else {
+                format!("Cargoを起動できません: {e}\nCargoの実行権限やファイルの状態を確認してください。")
+            }
+        })?;
     let stdout = child.stdout.take().unwrap();
     for line in BufReader::new(stdout).lines() {
         let line = match line {
@@ -918,7 +924,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     }
     let status = child.wait().map_err(|e| e.to_string())?;
     if !status.success() {
-        return Err("Rust backend rejected program。詳細は上の診断を参照してください".into());
+        return Err("Build failed. Check the diagnostics above for code, dependency, or build environment errors.".into());
     }
     let binary = target
         .join("release")

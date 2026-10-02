@@ -1,13 +1,42 @@
 # 性能の読み方
 
-数値は [../PERFORMANCE.md](../PERFORMANCE.md) と `benchmarks/results/`にあります。CPUは100,000要素のkernel全体をns/opで測り、ns/itemも出します。1件のprimitive演算の単独latencyを直接測った値ではありません。
+結果は[測定結果](../PERFORMANCE.md)と`benchmarks/results/`にあります。測定条件は次のとおりです。
 
-同じmachine、release opt-level=3、LTO無効、warmup、7反復のmedianを使用します。データ作成はCPU kernelの時間から外し、入力とchecksumを同一にします。Rust、Nagi、CPythonを別々に実行します。
+## CPU処理
 
-HTTPはwrkを使い、全serverを1論理CPUへ固定します。bodyとresponseを一致させ、64 keep-alive接続、2 load-generator thread、3反復を測ります。p50/p95/p99/max、socket/status error、server CPU/RSS/context switchも保存します。closed-loop試験なのでoverload時のopen-loop latencyを評価したものではありません。
+100,000要素を処理する関数全体を測ります。入力を作る時間は含めません。
 
-追加の[通信の負荷試験](http-capacity.md)では、送信ペースを指定して負荷を増やし、長時間の通信も測っています。指定したレートと実際に送れたレートを分け、応答時間、メモリ、接続数、終了後の回復を記録します。測定環境やクライアントの制約もあるため、観測した処理量をNagi全体の固定の上限とは扱いません。
+| 表記 | 意味 |
+|---|---|
+| ns/op | 関数を1回実行する時間。単位はナノ秒 |
+| ns/item | 1要素あたりの時間。関数全体の時間から計算する |
 
-allocation counterはRust GlobalAllocへの要求を呼び出しthread内で数えます。reallocはallocationにも含め、要求byte数の累計を示します。SQLite内部C allocatorや別threadのallocationは数えません。RSSとallocated bytesは別の指標です。counterは無効時もTLSの分岐を行うので測定コードの影響があります。
+1つの足し算などを単独で測った値ではありません。Rust、Nagi、CPythonは同じマシンで別々に実行し、入力と結果のチェックサムを合わせます。
 
-静的cost reportは発生箇所を示します。ループ回数、runtime内部、optimizerによる削除を含めた動的回数ではありません。hardware cache miss、branch miss、instruction count、allocator fragmentationの精密測定は未実施です。
+RustとNagiはreleaseビルド（opt-level=3、LTOなし）です。事前に実行してから7回測定し、中央値を使います。
+
+## HTTP
+
+wrkを使い、各サーバーを1つの論理CPUに固定します。リクエストの本文とレスポンスを揃え、64個のkeep-alive接続、負荷を送る2スレッド、3回の測定を使います。
+
+| 指標 | 意味 |
+|---|---|
+| p50 / p95 / p99 | 応答時間の分布。p95なら95%の応答がこの時間以内 |
+| max | 観測した最長の応答時間 |
+| socket / status error | 接続の失敗 / 想定外のHTTPステータス |
+| CPU / RSS | サーバーのCPU使用量 / メモリ常駐量 |
+| context switch | OSが実行中の処理を切り替えた回数 |
+
+この試験は応答が返ると次を送る方式（closed-loop）です。応答に関係なく送信を続ける方式（open-loop）で、過負荷時の待ち時間を測った値ではありません。
+
+追加の[通信の負荷試験](http-capacity.md)では、送信ペースを指定して負荷を増やし、長時間の通信も測っています。指定レートと実際の送信レートを分け、応答時間、メモリ、接続数、負荷が止まったあとの回復を記録します。観測した処理量は測定環境とクライアントにも左右されるため、Nagi全体の固定の上限ではありません。
+
+## メモリ確保とレポート
+
+allocation counterは、呼び出したスレッドでRustのGlobalAllocへ要求したメモリ確保を数えます。領域を取り直すreallocも1回に数え、要求したバイト数を累計します。SQLite内部のCによる確保や、別スレッドの確保は含みません。
+
+累計の確保量と、同時点でメモリに常駐している量（RSS）は異なります。counterは無効時にもスレッド内の値を確認する処理があるため、測定コード自体も実行時間へ影響します。
+
+静的cost reportは、確保などが発生するコードの場所を示します。実行時の回数は数えません。ループ、ランタイム内の処理、最適化で削除された処理まで含めた回数には、実行時の測定が必要です。
+
+CPUのcache miss・branch miss・命令数、allocatorのメモリ断片化の精密測定は未実施です。

@@ -18,13 +18,26 @@ impl Fixture {
         Command::new(env!("CARGO_BIN_EXE_nagic"))
             .args(args)
             .current_dir(&self.0)
-            .env("PATH", "")
+            .env("PATH", &self.0)
             .env("NAGI_ROOT", self.0.join("missing-runtime"))
             .output()
             .unwrap()
     }
     fn unchanged(&self) {
         assert_eq!(fs::read_dir(&self.0).unwrap().count(), 1);
+    }
+    fn program() -> Self {
+        let f = Self::new();
+        fs::remove_file(f.0.join("nagi.toml")).unwrap();
+        fs::write(f.0.join("main.nagi"), "def main():\n    print(42)\n").unwrap();
+        let runtime = f.0.join("missing-runtime/runtime");
+        fs::create_dir_all(&runtime).unwrap();
+        fs::write(
+            runtime.join("Cargo.toml"),
+            "[package]\nname='nagi-runtime'\nversion='0.1.0'\nedition='2021'\n",
+        )
+        .unwrap();
+        f
     }
 }
 impl Drop for Fixture {
@@ -90,4 +103,75 @@ fn version_rejects_unexpected_arguments() {
         .unwrap()
         .contains("version takes no additional arguments"));
     fixture.unchanged();
+}
+
+#[test]
+fn check_needs_no_cargo_and_build_reports_the_missing_tool() {
+    let f = Fixture::program();
+    let check = f.run(&["check", "main.nagi"]);
+    assert!(check.status.success(), "{check:?}");
+    for command in ["build", "run"] {
+        let output = f.run(&[command, "main.nagi"]);
+        assert!(!output.status.success());
+        let error = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            error.contains("Cargoが見つかりません") && error.contains("cargo --version"),
+            "{error}"
+        );
+        assert!(!error.contains("Rust backend rejected program"), "{error}");
+        assert!(!String::from_utf8(output.stdout)
+            .unwrap()
+            .contains("native:"));
+    }
+}
+
+#[test]
+fn an_unusable_cargo_is_not_reported_as_a_missing_rust_installation() {
+    let f = Fixture::program();
+    let cargo = f.0.join(format!("cargo{}", std::env::consts::EXE_SUFFIX));
+    fs::write(&cargo, "not an executable").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&cargo, fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    // The isolated PATH selects the fixture on Unix and Windows.
+    let output = f.run(&["build", "main.nagi"]);
+    assert!(!output.status.success());
+    let error = String::from_utf8(output.stderr).unwrap();
+    assert!(error.contains("Cargoを起動できません"), "{error}");
+    assert!(
+        !error.contains("Cargoが見つかりません") && !error.contains("Rust/Cargoを導入"),
+        "{error}"
+    );
+}
+
+#[test]
+fn cargo_failure_preserves_the_cause_without_blaming_the_nagi_program() {
+    let f = Fixture::program();
+    let source = f.0.join("fake_cargo.rs");
+    fs::write(
+        &source,
+        "fn main() { eprintln!(\"test dependency download failure\"); std::process::exit(37); }\n",
+    )
+    .unwrap();
+    let cargo = f.0.join(format!("cargo{}", std::env::consts::EXE_SUFFIX));
+    let compiled = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
+        .arg(&source)
+        .arg("-o")
+        .arg(&cargo)
+        .output()
+        .unwrap();
+    assert!(compiled.status.success(), "{compiled:?}");
+    let output = f.run(&["run", "main.nagi"]);
+    assert!(!output.status.success());
+    let error = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        error.contains("test dependency download failure") && error.contains("Build failed."),
+        "{error}"
+    );
+    assert!(!error.contains("Rust backend rejected program"), "{error}");
+    assert!(!String::from_utf8(output.stdout)
+        .unwrap()
+        .contains("native:"));
 }
