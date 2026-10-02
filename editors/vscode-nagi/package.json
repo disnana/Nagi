@@ -3,7 +3,7 @@
   "displayName": "Nagi Language",
   "description": "Nagi High/Lowの型検査、定義ジャンプ、型表示、補完とビルド・実行",
   "version": "0.1.8",
-  "publisher": "nagi-local",
+  "publisher": "Disnana",
   "license": "MIT",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Programming Languages", "Snippets"],

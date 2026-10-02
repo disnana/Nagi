@@ -17,6 +17,8 @@ Development tools for Nagi High (`.nagi`) and Low (`.low`). Command labels and s
 
 ## Installation
 
+The extension ID is `Disnana.nagi-language`. If you installed `nagi-local.nagi-language`, disable or uninstall it before installing this extension.
+
 Formal VSIX downloads are published on [GitHub Releases](https://github.com/disnana/Nagi/releases) as nagi-language-VERSION.vsix. Updating the extension version on main publishes a release after CI succeeds.
 
 From the repository root, run `python editors/vscode-nagi/scripts/package_vsix.py` to create `build/distribution/nagi-language-0.1.8.vsix`. Select it using **Extensions: Install from VSIX**, or run:

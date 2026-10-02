@@ -17,6 +17,8 @@ Nagi High (`.nagi`) とLow (`.low`)の開発補助です。
 
 ## インストール
 
+拡張のIDは`Disnana.nagi-language`です。以前の`nagi-local.nagi-language`を入れている場合は、先に無効化するかアンインストールしてから、この拡張をインストールしてください。
+
 正式版のVSIXは[GitHub Releases](https://github.com/disnana/Nagi/releases)に掲載します。ファイル名は`nagi-language-バージョン.vsix`です。mainで拡張のバージョンを上げたとき、CI成功後に自動公開します。
 
 リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、`build/distribution/nagi-language-0.1.8.vsix` ができます。VS Codeの「拡張機能: VSIXからのインストール」で選択するか、次のコマンドを実行してください。
