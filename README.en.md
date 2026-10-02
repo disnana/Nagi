@@ -18,6 +18,8 @@ Downloads are published on [GitHub Releases](https://github.com/disnana/Nagi/rel
 
 ## Install
 
+The main branch also includes changes planned for the next release. See [unreleased changes](CHANGELOG.md) for differences from the published version.
+
 Building Nagi applications needs Rust/Cargo and a C build environment. See [setup](docs/en/getting-started.md) for prerequisites.
 
 Windows (PowerShell):

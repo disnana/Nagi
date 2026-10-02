@@ -3,6 +3,7 @@ import json,os,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 TARGET=Path(os.environ.get('CARGO_TARGET_DIR',ROOT/'target')).resolve()
+NATIVE_TARGET=Path(os.environ.get('NAGI_NATIVE_TARGET_DIR',ROOT/'native-target')).resolve()
 EXE='.exe' if os.name=='nt' else ''
 def run(args):
     r = subprocess.run([str(x) for x in args],cwd=ROOT,text=True,capture_output=True)
@@ -24,13 +25,13 @@ def main():
         r=build(args)
         row={'sample':name,'build':'passed'}
         if name not in ['cpu','crud']:
-            r=run([ROOT/'native-target/release'/('nagi-'+name.replace('_','-')+EXE)])
+            r=run([NATIVE_TARGET/'release'/('nagi-'+name.replace('_','-')+EXE)])
             stderr = r.stderr.replace(str(ROOT) + os.sep, '').replace(ROOT.as_posix() + '/', '')
             row.update(stdout=r.stdout,stderr=stderr,run='passed')
             if name in ['low_call','override']:assert r.stdout.strip()=='42'
         rows.append(row)
     r=build([nagic,'build',ROOT/'examples/hello.low','--out',ROOT/'build/hello_low'])
-    r=run([ROOT/'native-target/release'/('nagi-hello'+EXE)])
+    r=run([NATIVE_TARGET/'release'/('nagi-hello'+EXE)])
     assert r.stdout.strip()=='4'
     rows.append({'sample':'hello.low','build':'passed','run':'passed','stdout':r.stdout})
     # 同じHighを再生成しても、手書き置換のbytesは変化しない。

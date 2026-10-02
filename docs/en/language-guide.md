@@ -2,7 +2,7 @@
 
 [Contents](README.md) · Previous: [Setup and first run](getting-started.md) · Reference: [Syntax](syntax.md)
 
-Learn High (`.nagi`), the application language, in this order: variables → functions → lists → classes → failures. Run commands from the repository root. On Linux/WSL2, replace `.\target\release\nagic.exe` with `./target/release/nagic`.
+Learn High (`.nagi`), the application language, in this order: variables → functions → lists → classes → failures. Follow [Setup and first run](getting-started.md), then save the code in your own working folder. The same `nagic` command works on Windows, Linux, and macOS.
 
 ## 1. Values and types
 
@@ -38,7 +38,7 @@ Save and run this complete program to print `42`. Parameters use `name: type`; r
 
 A list literal is `[1, 2, 3]`, and its type annotation is `List[i64]`. `append(values, 4)` adds an element. A class groups named fields into a type.
 
-This complete program is also in [basics.nagi](../../examples/tutorial/basics.nagi):
+Save this complete program as `basics.nagi`. It is also available as a [sample](../../examples/tutorial/basics.nagi):
 
 ```nagi
 class Point:
@@ -75,7 +75,7 @@ def main():
 ```
 
 ```powershell
-.\target\release\nagic.exe run examples/tutorial/basics.nagi
+nagic run basics.nagi
 ```
 
 Output, in order: `10`, `7`, `OK`, `0`, `1`, `2`, `2`.
@@ -131,7 +131,7 @@ Built-ins such as `print` and `len` read their input and do not move a string me
 
 `try operation` extracts the success value, or immediately returns the failure to the caller. The function using `try` must itself return Result.
 
-This complete example doubles a nonnegative integer. [input.nagi](../../examples/tutorial/input.nagi) contains the same logic with Japanese prompts.
+Save this complete example as `input.nagi`. It doubles a nonnegative integer. The [sample](../../examples/tutorial/input.nagi) contains the same logic with Japanese prompts.
 
 ```nagi
 def double_nonnegative(text: view[str]) -> Result[i64, Error]:
@@ -149,7 +149,7 @@ def main() -> Result[unit, Error]:
 ```
 
 ```powershell
-.\target\release\nagic.exe run examples/tutorial/input.nagi
+nagic run input.nagi
 ```
 
 Enter `21` and press Enter to print `42`, followed by the completion message. `abc` fails number conversion; `-1` triggers the error you wrote. Both propagate to `main` and exit with failure.
@@ -190,7 +190,7 @@ def main():
 ```
 
 ```powershell
-.\target\release\nagic.exe run examples/tutorial/imports.nagi
+nagic run imports.nagi
 ```
 
 The [complete example](../../examples/tutorial/imports.nagi) prints `42`. Import paths are relative to **the file containing the import**, not your terminal's working directory. Imported `math.nagi` does not need a `main`.

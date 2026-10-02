@@ -624,6 +624,11 @@ fn source_names_with_spaces_and_dots_build_and_run() {
         "凪.nagi",
         "résumé.nagi",
         "hello_world.nagi",
+        "hello (copy).nagi",
+        "hello+world.nagi",
+        "hello🦀.nagi",
+        "hello².nagi",
+        "re\u{301}sume\u{301}.nagi",
     ] {
         let f = Fixture::new();
         f.write(name, "def main():\n    print(42)\n");
@@ -642,4 +647,44 @@ fn source_names_with_spaces_and_dots_build_and_run() {
         String::from_utf8(output.stdout).unwrap().lines().last(),
         Some("42")
     );
+}
+
+#[test]
+fn invalid_entrypoints_are_rejected_before_cargo_with_source_locations() {
+    let cases = [
+        ("def main(value: i64):\n    print(value)\n", "fn main(value: i64) -> unit { print(value); }\n", "mainは引数"),
+        ("@get(\"/x\")\ndef handler() -> Result[i64, Error]:\n    return ok(1)\n", "@get(\"/x\")\nfn handler() -> Result[i64, Error] { return ok(1); }\n", "HTTP handler"),
+        ("@get(\"/x\")\nasync def handler() -> i64:\n    return 1\n", "@get(\"/x\")\nasync fn handler() -> i64 { return 1; }\n", "HTTP handler"),
+        ("@get(\"/x\")\nasync def handler(values: List[i64]) -> Result[i64, Error]:\n    return ok(1)\n", "@get(\"/x\")\nasync fn handler(values: List[i64]) -> Result[i64, Error] { return ok(1); }\n", "HTTPの引数"),
+        ("@post(\"/x\")\nasync def handler(a: view[bytes], b: view[bytes]) -> Result[i64, Error]:\n    return ok(1)\n", "@post(\"/x\")\nasync fn handler(a: view[bytes], b: view[bytes]) -> Result[i64, Error] { return ok(1); }\n", "bodyを受け取る引数は1つ"),
+        ("@get(\"x\")\nasync def handler() -> Result[i64, Error]:\n    return ok(1)\n", "@get(\"x\")\nasync fn handler() -> Result[i64, Error] { return ok(1); }\n", "pathは /"),
+        ("@get(\"/x\")\nasync def first() -> Result[i64, Error]:\n    return ok(1)\n@get(\"/x\")\nasync def second() -> Result[i64, Error]:\n    return ok(2)\n", "@get(\"/x\")\nasync fn first() -> Result[i64, Error] { return ok(1); }\n@get(\"/x\")\nasync fn second() -> Result[i64, Error] { return ok(2); }\n", "HTTPの定義が重複"),
+    ];
+    for (high, low, message) in cases {
+        for (name, source) in [("handlers.nagi", high), ("handlers.low", low)] {
+            let f = Fixture::new();
+            f.write(name, source);
+            let entry = if name.ends_with(".low") {
+                "main.low"
+            } else {
+                "main.nagi"
+            };
+            f.write(entry, &format!("import \"{name}\";\n"));
+            for command in ["check", "build"] {
+                let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+                    .current_dir(&f.0)
+                    .args([command, entry])
+                    .env("PATH", "")
+                    .env_remove("NAGI_ROOT")
+                    .output()
+                    .unwrap();
+                let error = stderr(&output);
+                assert!(!output.status.success(), "{command} {name}: {source}");
+                assert!(error.contains(message), "{command} {name}: {error}");
+                assert!(error.contains(&format!("{name}:")), "{error}");
+                assert!(!error.contains("cargo/rustc"), "{error}");
+                assert!(!f.0.join("build/main/Cargo.toml").exists());
+            }
+        }
+    }
 }

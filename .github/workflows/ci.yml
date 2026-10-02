@@ -44,6 +44,7 @@ jobs:
       - run: python scripts/build_examples.py
       - run: pip install -r tests/requirements.txt
       - run: python tests/http_integration.py
+      - run: python tests/route_integration.py
       - run: ./target/release/examples/fuzz-smoke
 
   release-plan:
@@ -138,6 +139,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
+            native-target
           key: nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**') }}
           restore-keys: |
             nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
@@ -186,8 +188,10 @@ jobs:
           from verify import verify
           version, platform = os.environ['RELEASE_VERSION'], os.environ['RELEASE_PLATFORM']
           suffix = '.zip' if os.name == 'nt' else '.tar.gz'
-          verify(Path('build/distribution') / f'nagi-{version}-{platform}{suffix}', version, platform)
+          verify(Path('build/distribution') / f'nagi-{version}-{platform}{suffix}', version, platform, Path('native-target'))
           PY
+      - name: Check HTTP route parameters on the target platform
+        run: python tests/route_integration.py
       - name: Verify the PowerShell installer and User PATH
         if: matrix.platform == 'windows-x86_64'
         env:

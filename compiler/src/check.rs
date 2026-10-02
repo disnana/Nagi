@@ -243,6 +243,9 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
             return Err(error(f.line, "すべての経路で戻り値を返してください"));
         }
     }
+    if !editor {
+        crate::routes::validate(p)?;
+    }
     Ok(())
 }
 fn returns(ss: &[Stmt]) -> bool {

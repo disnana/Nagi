@@ -6,7 +6,7 @@ Nagiでは、`@get`などを付けたasync関数がHTTPの入口になります�
 
 ## 1. サーバーを書く
 
-次は完全なコードです。[examples/tutorial/http.nagi](../examples/tutorial/http.nagi)にもあります。
+次の完全なコードを、作業フォルダーに`http.nagi`として保存してください。[サンプル](../examples/tutorial/http.nagi)にもあります。
 
 ```nagi
 class Greeting:
@@ -36,13 +36,13 @@ async def main() -> Result[unit, Error]:
 
 ## 2. 起動して呼び出す
 
-8094番ポートを空けて、リポジトリのルートから実行します。
+8094番ポートを空けて、保存したフォルダーで実行します。
 
 ```powershell
-.\target\release\nagic.exe run examples/tutorial/http.nagi
+nagic run http.nagi
 ```
 
-Linux / WSL2では`./target/release/nagic run examples/tutorial/http.nagi`です。ブラウザーで[http://127.0.0.1:8094/](http://127.0.0.1:8094/)を開くと「Hello, Nagi!」を表示します。
+Windows・Linux・macOSで同じコマンドです。ブラウザーで[http://127.0.0.1:8094/](http://127.0.0.1:8094/)を開くと「Hello, Nagi!」を表示します。
 
 別のPowerShellでJSON APIを呼びます。
 
