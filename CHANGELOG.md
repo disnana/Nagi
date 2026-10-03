@@ -6,7 +6,7 @@
 - Decode nullable SQLite columns for every already-supported scalar row type, including bool, floats and bytes.
 - Preserve nested Option types in generated Low and avoid redundant Rust enum field-pattern warnings.
 - Keep HTTP response send deadlines active during graceful shutdown and finish healthy in-flight requests.
-- Insert bare declaration names in quoted from-import completion, and add Result Ok/Err pattern assistance in VS Code.
+- Insert bare declaration names in quoted from-import completion, add Result Ok/Err pattern assistance, and resolve file aliases consistently for completion and definition lookup in VS Code.
 - Add stock-report, device-settings and reservation-worker projects, with native behavior checks for both High and independently loaded Low in CI. Skip Rust checks for sample README translations alone.
 - Reject comparison operands that move a value while its left-hand operand still borrows it, including aggregate fields and indexed values. Keep scalar comparisons and independent fields valid.
 - Allow loop variables to be reassigned in generated Rust, matching Nagi's type checking.
