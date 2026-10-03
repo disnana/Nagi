@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Preserve checked numeric types in generated Rust, including integer literals printed or compared without an assignment.
+- Restore parser nesting depth after speculative indexing, retain parentheses around try/await field and index receivers, and reject unsupported class type arguments instead of discarding them.
+- Preserve string bytes, including control characters, through High-to-Low and Rust generation.
+- Diagnose routes colliding with builtin GET endpoints or equivalent capture paths before the HTTP router is constructed.
+- Count only changes made by the current db_exec SQL batch, including trigger changes, rather than returning a previous statement's count.
+- Insert class names in VS Code type annotations without constructor arguments, and retain hover types for local function values.
+
 ## Nagi 0.1.7 / VS Code 0.1.9
 
 - Distinguish a normal class named Future from an async result. Keep synchronous function aliases replaceable when they return that class, and diagnose unsupported changes between different async function aliases before Rust generation.

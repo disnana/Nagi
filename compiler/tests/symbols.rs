@@ -600,6 +600,112 @@ fn local_types(index: &serde_json::Value, line: u64, name: &str) -> Vec<String> 
 }
 
 #[test]
+fn local_function_value_uses_have_hover_types_without_replacing_global_signatures() {
+    for (file, template, keyword) in [
+        (
+            "main.nagi",
+            "def first(value: NUMBER) -> NUMBER:\n    return value\n\
+             def selected() -> NUMBER:\n    return 0\n\
+             def apply(callback: fn[NUMBER, NUMBER], value: NUMBER) -> NUMBER:\n    return callback(value)\n\
+             def pass_back(callback: fn[NUMBER, NUMBER]) -> fn[NUMBER, NUMBER]:\n    return callback\n\
+             async def later(value: NUMBER) -> NUMBER:\n    return value\n\
+             async def work() -> NUMBER:\n    pending = later\n    again = pending\n    return await again(7)\n\
+             def main():\n    selected: fn[NUMBER, NUMBER] = first\n    copy = selected\n    print(apply(copy, 7))\n    selected = pass_back(selected)\n    print(first(1))\n",
+            "def",
+        ),
+        (
+            "main.low",
+            "fn first(value: NUMBER) -> NUMBER { return value; }\n\
+             fn selected() -> NUMBER { return 0; }\n\
+             fn apply(callback: fn[NUMBER, NUMBER], value: NUMBER) -> NUMBER { return callback(value); }\n\
+             fn pass_back(callback: fn[NUMBER, NUMBER]) -> fn[NUMBER, NUMBER] { return callback; }\n\
+             async fn later(value: NUMBER) -> NUMBER { return value; }\n\
+             async fn work() -> NUMBER { let pending = later; let again = pending; return await again(7); }\n\
+             fn main() { let selected: fn[NUMBER, NUMBER] = first; let copy = selected; print(apply(copy, 7)); selected = pass_back(selected); print(first(1)); }\n",
+            "fn",
+        ),
+    ] {
+        let f = Fixture::new();
+        f.write("nagi.toml", &format!("entry = '{file}'\n"));
+        let saved = template.replace("NUMBER", "i64");
+        let unsaved = template.replace("NUMBER", "i32");
+        f.write(file, &saved);
+        let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .args(["symbols", file, "--no-project"])
+            .current_dir(&f.0)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let regular = serde_json::from_slice(&output.stdout).unwrap();
+        let overlay = f.symbols(serde_json::json!([{ "file": file, "text": unsaved }]));
+        for (index, text, number) in [(&regular, &saved, "i64"), (&overlay, &unsaved, "i32")] {
+            let function_type = format!("fn[{number}, {number}]");
+            for (needle, delta) in [
+                ("return callback;", 7),
+                ("copy = selected", 7),
+                ("apply(copy, 7)", 6),
+                ("pass_back(selected)", 10),
+            ] {
+                let needle = if file.ends_with("nagi") && needle == "return callback;" {
+                    "return callback\n"
+                } else {
+                    needle
+                };
+                let reference = reference_at(index, file, text, needle, delta).unwrap();
+                let types = index["locals"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|local| local["location"] == reference["location"])
+                    .map(|local| local["type"].as_str().unwrap())
+                    .collect::<Vec<_>>();
+                assert_eq!(types, [function_type.as_str()], "{file}: {needle}");
+            }
+            let reference = reference_at(index, file, text, "again = pending", 8).unwrap();
+            assert!(index["locals"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|local| local["location"] == reference["location"]
+                    && local["type"] == format!("fn[{number}, Future[{number}]]")));
+            for (needle, delta) in [("= first", 2), ("first(1)", 0)] {
+                let reference = reference_at(index, file, text, needle, delta).unwrap();
+                assert!(!index["locals"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|local| local["location"] == reference["location"]));
+                assert_target(
+                    index,
+                    file,
+                    text,
+                    needle,
+                    delta,
+                    &format!("{keyword} first"),
+                    keyword.len() + 1,
+                );
+            }
+            let first = index["definitions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|definition| definition["name"] == "first")
+                .unwrap();
+            assert_eq!(
+                first["signature"],
+                format!("{keyword} first(value: {number}) -> {number}")
+            );
+        }
+        assert_eq!(fs::read_to_string(f.0.join(file)).unwrap(), saved);
+        assert!(!f.0.join("build").exists());
+    }
+}
+
+#[test]
 fn inferred_locals_parameters_and_loop_bindings_obey_exact_scopes() {
     let f = Fixture::new();
     let source = "def first(value: i32) -> i32:\n    return value\ndef second(value: bool) -> bool:\n    return value\ndef main():\n    count = first(7); flag = True; print(count); print(flag)\n    count += 1\n    if flag:\n        inside = 3\n        print(inside)\n    else:\n        print(count)\n    print(inside)\n    for count in [True]:\n        print(count)\n    print(count)\n    unknown = missing()\n    print(unknown)\n    print(count)\n";

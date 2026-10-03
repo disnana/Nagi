@@ -8,17 +8,38 @@ use std::{
 };
 
 fn quote(s: &str) -> String {
-    serde_json::to_string(s).unwrap()
+    format!("{s:?}")
+}
+fn low_quote(s: &str) -> String {
+    let mut out = String::from("\"");
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ => out.push(ch),
+        }
+    }
+    out.push('"');
+    out
 }
 pub fn low(p: &Program) -> String {
     low_with_lines(p).text
 }
 
 pub fn low_with_lines(p: &Program) -> Generated {
+    fn receiver(e: &Expr) -> String {
+        match &e.kind {
+            E::Unary(_, _) | E::Await(_) | E::Try(_) => format!("({})", expr(e)),
+            _ => expr(e),
+        }
+    }
     fn expr(e: &Expr) -> String {
         match &e.kind {
             E::Int(s) | E::Float(s) | E::Name(s) => s.clone(),
-            E::Str(s) => quote(s),
+            E::Str(s) => low_quote(s),
             E::Bool(b) => b.to_string(),
             E::Null => "None".into(),
             E::Binary(a, o, b) => format!("({} {o} {})", expr(a), expr(b)),
@@ -45,8 +66,8 @@ pub fn low_with_lines(p: &Program) -> Generated {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            E::Field(x, n) => format!("{}.{n}", expr(x)),
-            E::Index(x, i) => format!("{}[{}]", expr(x), expr(i)),
+            E::Field(x, n) => format!("{}.{n}", receiver(x)),
+            E::Index(x, i) => format!("{}[{}]", receiver(x), expr(i)),
             E::List(a) => format!("[{}]", a.iter().map(expr).collect::<Vec<_>>().join(", ")),
             E::Await(x) => format!("await {}", expr(x)),
             E::Try(x) => format!("try {}", expr(x)),
@@ -135,7 +156,7 @@ pub fn low_with_lines(p: &Program) -> Generated {
         Generated::new("# Nagi Low 0.1 / generated. 手書き変更はnative/で@replaceしてください。\n");
     for (file, line) in &p.imports {
         out.origin(Some(*line));
-        out.push_str(&format!("import {};\n", quote(file)));
+        out.push_str(&format!("import {};\n", low_quote(file)));
     }
     for c in &p.classes {
         out.origin(Some(c.line));
@@ -153,7 +174,7 @@ pub fn low_with_lines(p: &Program) -> Generated {
             if a == "replace" {
                 out.push_str(&format!("@replace {v}\n"));
             } else {
-                out.push_str(&format!("@{a}({})\n", quote(v)));
+                out.push_str(&format!("@{a}({})\n", low_quote(v)));
             }
         }
         out.push_str(&format!(
@@ -250,7 +271,22 @@ fn string_arg(e: &Expr) -> String {
 }
 fn re(e: &Expr) -> String {
     match &e.kind {
-        E::Int(s) | E::Float(s) => s.clone(),
+        E::Int(s) | E::Float(s) => {
+            // Formatting and container operations do not always give Rust a
+            // numeric type context. Preserve the type selected by the checker
+            // instead of allowing Rust's default i32/f64 inference to replace it.
+            match e.ty.as_ref() {
+                Some(t)
+                    if matches!(
+                        t.0.as_str(),
+                        "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64"
+                    ) =>
+                {
+                    format!("{s}{}", t.0)
+                }
+                _ => s.clone(),
+            }
+        }
         E::Name(s) => {
             if e.resolution == ::std::option::Option::Some(NameResolution::Function) {
                 format!("crate::{s}")

@@ -350,7 +350,7 @@ impl Types<'_, '_> {
     fn expr(&mut self, e: &Expr) {
         if let Some(ty) = &e.ty {
             if let E::Name(name) = &e.kind {
-                if ty.0 != "fn" {
+                if ty.0 != "fn" || e.resolution == Some(NameResolution::Local) {
                     self.binding(e.line, e.span, name, ty);
                 }
             }

@@ -37,6 +37,8 @@ Use a class as the type argument of a function that returns rows. `db_all[i64]` 
 | Update | `db_update[User](db, sql, id, name, age)` | `Result[User, Error]` |
 | Delete, etc. | `db_write(db, sql, id)` | `Result[i64, Error]` |
 
+`db_exec` counts changes from the entire SQL batch in that call. Table creation or SELECT alone returns 0. Changes from multiple statements are added together, including changes from triggers and foreign-key actions counted by SQLite.
+
 Bind argument shapes are currently fixed: query/write take one i64, all takes none, insert takes str/i32, and update takes i64/str/i32. Columns do not have to be named name/age; tables with matching argument types also work.
 
 ## Read from an API

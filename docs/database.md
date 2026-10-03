@@ -37,6 +37,8 @@ async def main() -> Result[unit, Error]:
 | 更新 | `db_update[User](db, sql, id, name, age)` | `Result[User, Error]` |
 | 削除など | `db_write(db, sql, id)` | `Result[i64, Error]` |
 
+`db_exec`の行数は、その呼び出しで実行したSQL全体の変更件数です。テーブル作成やSELECTだけなら0を返します。複数の文の変更を合計し、トリガーや外部キー制約による変更もSQLiteの集計に従って含めます。
+
 現時点ではbind引数の形が固定です。query / writeはi64が1つ、allはなし、insertはstrとi32、updateはi64・str・i32です。name / ageという列名は必須ではなく、同じ引数型を持つ別のテーブルにも使えます。
 
 ## APIから読む

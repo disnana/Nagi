@@ -1,5 +1,5 @@
 use crate::ast::{Function, Program, Type};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub(crate) fn attribute(function: &Function) -> Option<(&str, &str)> {
     function
@@ -25,6 +25,7 @@ pub(crate) fn has_capture(path: &str) -> bool {
 
 pub(crate) fn validate(program: &Program) -> Result<(), String> {
     let mut registered = HashSet::new();
+    let mut patterns = HashMap::new();
     for function in &program.functions {
         let error = |message: String| format!("line {}: {message}", function.line);
         if function.name == "main" && !function.params.is_empty() {
@@ -45,6 +46,16 @@ pub(crate) fn validate(program: &Program) -> Result<(), String> {
         }
         if !path.starts_with('/') {
             return Err(error("HTTPのpathは / で始めてください".into()));
+        }
+        if method == "get" && ["/health", "/stream", "/ws"].contains(&path) {
+            return Err(error(format!("GET {path}は組み込みHTTP endpointです")));
+        }
+        if let Some(previous) = patterns.insert(path_pattern(path), path) {
+            if previous != path {
+                return Err(error(format!(
+                    "HTTPのpathが競合しています: {previous} と {path}（capture名を揃えてください）"
+                )));
+            }
         }
         if !registered.insert((method, path)) {
             return Err(error(format!(
@@ -69,4 +80,30 @@ pub(crate) fn validate(program: &Program) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn path_pattern(path: &str) -> String {
+    let mut pattern = String::new();
+    let mut chars = path.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '{' {
+            pattern.push(ch);
+        } else if chars.peek() == Some(&'{') {
+            pattern.push_str("{{");
+            chars.next();
+        } else {
+            let wildcard = chars.peek() == Some(&'*');
+            while let Some(ch) = chars.next() {
+                if ch == '}' {
+                    if chars.peek() == Some(&'}') {
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+            }
+            pattern.push_str(if wildcard { "{*}" } else { "{}" });
+        }
+    }
+    pattern
 }

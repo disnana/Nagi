@@ -253,11 +253,16 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
   if (member) return fieldCandidates(index, text, member, source);
   const before = state.masked.slice(0, word.start);
   const all = [...assistanceDeclarations(index, text, source).values()];
-  if (inTypeContext(before)) return [...all.filter(x => x.kind === 'class'), ...types.map(name => ({ name, kind: 'type', signature: name }))];
+  if (inTypeContext(before)) {
+    const classes = all.filter(x => x.kind === 'class');
+    const classNames = new Set(classes.map(item => item.name));
+    return [...classes.map(item => ({ ...item, typeOnly: true })), ...types.filter(name => !classNames.has(name)).map(name => ({ name, kind: 'type', signature: name }))];
+  }
   return [...all, ...[...(low ? ['fn', 'record', 'let'] : ['def', 'class']), ...keywords].map(name => ({ name, kind: 'keyword', signature: name }))];
 }
 
 function insertion(item, following) {
+  if (item.typeOnly) return item.name;
   if (item.kind === 'type') {
     return /^\s*\[/.test(following) ? item.name : typeInsertions[item.name] || item.name;
   }
