@@ -1,28 +1,30 @@
 # Setup and your first run
 
-[Contents](README.md) → Setup and first run → [Learn by writing code](language-guide.md)
+[Contents](README.md) · Next: [Learn by writing code](language-guide.md)
 
-Prepare the Nagi compiler and run a single-file program. After installation, run commands from your own working folder. Use PowerShell on Windows, or a terminal on Linux/macOS.
+Install Nagi and run Hello World.
 
 ## 1. Install the compiler
 
-The installer downloads a prebuilt Nagi compiler. Building your own apps with `nagic build` or `nagic run` also requires [Rust / Cargo](https://www.rust-lang.org/tools/install) and a C build environment. Use your existing tools if installed. The bundled SQLite C code is compiled when building your app.
-
-On Windows, use the Rust MSVC toolchain and Visual Studio C++ Build Tools. Linux needs a C compiler; WSL2 follows the Linux steps. On macOS, run `xcode-select --install` for Command Line Tools. macOS distributions are verified on macOS 15 in CI.
+Install a prebuilt Nagi compiler. Building your own apps with `nagic build` or `nagic run` also requires [Rust / Cargo](https://www.rust-lang.org/tools/install) and C build tools.
 
 ### Use the installer
 
-These commands download the latest published Nagi release from GitHub, verify SHA-256, and install it for your user. Windows adds the installation to User PATH. Linux/macOS add a PATH line to bash/zsh configuration. No administrator access is needed. Install Rust, C build tools, and the VS Code extension separately.
+Run the command for your OS. It downloads the latest published release and verifies SHA-256 before installing. No administrator access is needed.
+
+#### Windows (PowerShell)
 
 ```powershell
 & ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1')))
 ```
 
+#### Linux and macOS (bash)
+
 ```bash
 (set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Windows installs under `%LOCALAPPDATA%\Nagi\versions` and puts its `current` subdirectory on PATH. Linux/macOS use `~/.local/share/nagi`, with the command in `~/.local/bin/nagic`. These command locations stay the same across updates. Restart VS Code after installing so it picks up the new PATH.
+Check the installation in the same terminal. Restart VS Code so it picks up the new PATH.
 
 ```text
 nagic --version
@@ -31,9 +33,19 @@ nagic --help
 
 The version output is `nagic 0.1.7`. You can also use `nagic -V` or `nagic version`. Version and help work without Rust or project configuration.
 
+### Tools for building applications
+
+Along with Rust / Cargo, use the tools below. Your existing installation is fine.
+
+- **Windows:** Rust's MSVC toolchain and Visual Studio C++ Build Tools.
+- **Linux and WSL2:** a C compiler.
+- **macOS:** Command Line Tools, installed with `xcode-select --install`.
+
+The installer does not include build tools or the VS Code extension. The bundled SQLite C code is compiled when building your app. macOS distributions are verified on macOS 15 in CI.
+
 ## 2. Write your own file
 
-Create `hello.nagi` in the repository root and save this complete program:
+Create `hello.nagi` in your own working folder and save this program:
 
 ```nagi
 def main():
@@ -101,6 +113,8 @@ Install the [Nagi extension](vscode-extension.md), then open your project folder
 ### Update
 
 Run the installation command above again. It checks the latest published release, downloads and verifies it, then switches the command. It installs neither unreleased main builds nor the VSIX. Repeating an install of the same version does not add another copy.
+
+Windows installs under `%LOCALAPPDATA%\Nagi\versions` and puts its `current` subdirectory on PATH. Linux/macOS use `~/.local/share/nagi`, with the command in `~/.local/bin/nagic`; the installer also adds PATH to bash/zsh configuration. These command locations stay the same across updates.
 
 Stop Nagi builds before updating. After the new command starts successfully, the installer compares older distributions with their published archives and removes unchanged copies. Only the selected version remains; no rollback copy is kept permanently. Added or modified files are preserved. Older copies that cannot be verified or removed, including files locked by Windows, are also kept and their folder is reported. A failed update preserves the previous command and PATH.
 

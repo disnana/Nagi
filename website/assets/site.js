@@ -1,4 +1,28 @@
 'use strict';
+const navs = [...document.querySelectorAll('.docs-nav')];
+if (navs.length) {
+  const groupsKey = `nagi:docs-nav:${navs[0].querySelector('.docs-nav-title').getAttribute('href')}:groups`;
+  let groups = {};
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(groupsKey));
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) groups = saved;
+  } catch { /* Native disclosure buttons also work without browser storage. */ }
+  const menus = navs.flatMap(nav => [...nav.querySelectorAll('[data-nav-group]')]);
+  for (const menu of menus) {
+    const name = menu.dataset.navGroup;
+    if (typeof groups[name] === 'boolean') {
+      menu.open = groups[name];
+    }
+    menu.addEventListener('toggle', () => {
+      groups[name] = menu.open;
+      for (const other of menus) {
+        if (other !== menu && other.dataset.navGroup === name && other.open !== menu.open) other.open = menu.open;
+      }
+      try { sessionStorage.setItem(groupsKey, JSON.stringify(groups)); } catch { /* Keep links usable. */ }
+    });
+  }
+}
+
 const sidebar = document.querySelector('.docs-layout > .docs-nav');
 if (sidebar) {
   const key = `nagi:docs-nav:${sidebar.querySelector('.docs-nav-title').getAttribute('href')}`;

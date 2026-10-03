@@ -1,28 +1,30 @@
 # 準備と最初の実行
 
-[目次](README.md) → 準備と最初の実行 → [コードを書きながら学ぶ](language-guide.md)
+[目次](README.md) · 次：[コードを書きながら学ぶ](language-guide.md)
 
-Nagiをインストールし、短いプログラムを動かします。WindowsはPowerShell、Linux・macOSは端末アプリでコマンドを実行してください。
+Nagiをインストールして、Hello Worldを動かします。
 
 ## 1. コンパイラを用意する
 
-インストーラーはビルド済みのNagiを取得します。自分のアプリを`nagic build`や`nagic run`でビルドするときは、別途[Rust / Cargo](https://www.rust-lang.org/tools/install)とCのビルド環境が必要です。導入済みなら、その環境を使えます。同梱SQLiteのCコードもアプリのビルド時にコンパイルします。
-
-WindowsではRustのMSVC toolchainとVisual Studio Build ToolsのC++環境を使います。LinuxではCコンパイラを用意してください。WSL2もLinuxの手順です。macOSでは`xcode-select --install`でCommand Line Toolsを用意します。macOS版はmacOS 15のCIで検証します。
+ビルド済みのNagiをインストールします。自分のアプリを`nagic build`や`nagic run`でビルドするには、[Rust / Cargo](https://www.rust-lang.org/tools/install)とCのビルド環境も必要です。
 
 ### インストーラーを使う
 
-最新の公開版をGitHubから取得し、SHA-256を確認して、ユーザー用の場所にインストールします。WindowsはユーザーのPATHへ追加し、Linux/macOSはbash/zshの設定へPATHの1行を追記します。管理者権限は使いません。RustやCのビルド環境、VS Code拡張は別途用意してください。
+自分のOSのコマンドを実行してください。最新の公開版を取得し、SHA-256を確認してインストールします。管理者権限は不要です。
+
+#### Windows（PowerShell）
 
 ```powershell
 & ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1')))
 ```
 
+#### Linux・macOS（bash）
+
 ```bash
 (set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Windowsの保存先は`%LOCALAPPDATA%\Nagi\versions`で、PATHに登録する入口はその下の`current`です。Linux/macOSの保存先は`~/.local/share/nagi`、コマンドは`~/.local/bin/nagic`です。更新時も入口の場所は変わりません。VS Codeを開いている場合は、インストール後に再起動してください。
+インストール後、同じターミナルで確認できます。VS Codeは再起動してください。
 
 ```text
 nagic --version
@@ -30,6 +32,16 @@ nagic --help
 ```
 
 版の表示は`nagic 0.1.7`です。`nagic -V`と`nagic version`でも確認できます。版とヘルプの表示にはRustやプロジェクト設定は必要ありません。
+
+### アプリのビルドに必要なもの
+
+Rust / Cargoに加えて、次のビルド環境を使います。導入済みならそのまま使えます。
+
+- **Windows**：RustのMSVC toolchain、Visual Studio Build ToolsのC++環境。
+- **Linux・WSL2**：Cコンパイラ。
+- **macOS**：`xcode-select --install`でCommand Line Toolsを導入。
+
+ビルド環境とVS Code拡張はインストーラーに含まれません。同梱SQLiteのCコードもアプリのビルド時にコンパイルします。macOS版はmacOS 15のCIで検証します。
 
 ## 2. 自分で1ファイル書く
 
@@ -103,6 +115,8 @@ nagic build hello.nagi
 ### 更新する
 
 上のインストールコマンドを再実行します。実行した時点の最新公開版を確認し、ダウンロード・検証してからコマンドを切り替えます。mainの未リリース版やVSIXはインストールしません。既に最新版なら、同じ版を増やしません。
+
+Windowsの保存先は`%LOCALAPPDATA%\Nagi\versions`で、PATHに追加する入口はその下の`current`です。Linux/macOSの保存先は`~/.local/share/nagi`、コマンドは`~/.local/bin/nagic`です。bash/zshの設定にもPATHを追記します。更新時も入口は変わりません。
 
 更新前にNagiのビルドを止めてください。切り替え後の起動確認に成功したら、旧版を配布時のアーカイブと照合して削除します。使用する1版だけ残し、ロールバック用の旧版は常設しません。追加・変更されたファイルは保護します。配布物の照合不能やWindowsで使用中のファイルなどで削除できない旧版も残し、フォルダーを表示します。更新に失敗した場合は、元のコマンドとPATHを維持します。
 

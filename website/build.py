@@ -193,12 +193,14 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
     def navigation(current, locale):
         language_base = base + ("en/" if locale == "en" else "")
         sections = [f'<a class="docs-nav-title" href="{language_base}docs/">Nagi Docs</a>']
-        for title, entries in (ENGLISH_GROUPS if locale == "en" else GROUPS):
+        for index, (title, entries) in enumerate(ENGLISH_GROUPS if locale == "en" else GROUPS):
             links = []
+            current_group = any(current == f"docs/{slug}/" for slug, _ in entries)
             for slug, label in entries:
                 active = ' aria-current="page"' if current == f"docs/{slug}/" else ""
                 links.append(f'<li><a href="{language_base}docs/{slug}/"{active}>{label}</a></li>')
-            sections.append(f'<section><h2>{title}</h2><ul>{"".join(links)}</ul></section>')
+            opened = " open" if index == 0 or current_group else ""
+            sections.append(f'<details class="docs-nav-group" data-nav-group="{entries[0][0]}"{opened}><summary>{title}</summary><ul>{"".join(links)}</ul></details>')
         return f'<nav class="docs-nav" aria-label="{LABELS[locale]["docs_contents"]}">' + "".join(sections) + "</nav>"
 
     def document(source, route, locale):
@@ -209,6 +211,19 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
         md.renderer.rules["fence"] = lambda tokens, index, options, env: code_block(tokens[index].content, tokens[index].info.split()[0] if tokens[index].info else "text", locale)
         md.renderer.rules["table_open"] = lambda *args: f'<div class="table-scroll" tabindex="0" role="region" aria-label="{labels["table_aria"]}"><table>\n'
         md.renderer.rules["table_close"] = lambda *args: '</table></div>\n'
+
+        def table_cell_open(tokens, index, options, env):
+            token = tokens[index]
+            alignment = token.attrGet("style")
+            for value in ("left", "center", "right"):
+                if alignment == f"text-align:{value}":
+                    token.attrs.pop("style")
+                    token.attrJoin("class", f"align-{value}")
+                    break
+            return md.renderer.renderToken(tokens, index, options, env)
+
+        md.renderer.rules["th_open"] = table_cell_open
+        md.renderer.rules["td_open"] = table_cell_open
 
         def link_open(tokens, index, options, env):
             token = tokens[index]
@@ -268,6 +283,11 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
             raise ValueError(f"Expected one page title: {source.relative_to(ROOT)}")
         body = md.renderer.render(tokens, md.options, {})
         outline = "".join(f'<li><a href="#{quote(slug)}">{html.escape(title)}</a></li>' for slug, title in headings)
+        if headings:
+            page_menu = f'<details class="mobile-page-nav"><summary>{labels["page_contents"]}</summary><nav aria-label="{labels["page_contents"]}"><ul>{outline}</ul></nav></details>'
+            first_section = re.search(r'<h2\b', body)
+            if first_section:
+                body = body[:first_section.start()] + page_menu + body[first_section.start():]
         sidebar = navigation(route, locale)
         relative = quote(source.relative_to(ROOT).as_posix())
         meta = f'<div class="doc-meta"><span>{labels["docs_version"]}</span><a href="{repo}/blob/{quote(ref, safe="")}/{relative}">{labels["source_label"]}</a></div>'
