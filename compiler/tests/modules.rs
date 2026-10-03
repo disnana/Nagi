@@ -345,15 +345,26 @@ fn aliases_keep_original_source_diagnostics_and_embedded_asset_paths() {
         generated.contains("\"orders.Order SavedOrder generated::orders::score unchanged\""),
         "string literals must retain user text: {generated}"
     );
-    assert!(
-        generated.contains(
-            &fs::canonicalize(f.0.join("lib/text.txt"))
-                .unwrap()
-                .display()
-                .to_string()
-        ),
-        "{generated}"
-    );
+    let roundtrip = nagic::parser::parse(&generated, false).unwrap();
+    let embedded_path = roundtrip
+        .functions
+        .iter()
+        .flat_map(|function| &function.body)
+        .find_map(|statement| match &statement.kind {
+            nagic::ast::S::Return(Some(nagic::ast::Expr {
+                kind: nagic::ast::E::Call(name, _, args),
+                ..
+            })) if name == "include_text" => match &args[0].kind {
+                nagic::ast::E::Str(path) => Some(path.as_str()),
+                _ => None,
+            },
+            _ => None,
+        });
+    let expected_path = fs::canonicalize(f.0.join("lib/text.txt"))
+        .unwrap()
+        .display()
+        .to_string();
+    assert_eq!(embedded_path, Some(expected_path.as_str()), "{generated}");
     f.write("roundtrip.low", &generated);
     f.checked("roundtrip.low");
     f.write("lib/read.nagi", "def read() -> str:\n    return 1\n");
