@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## VS Code 0.1.11
+
+- Publish the extension to Visual Studio Marketplace as 0.1.11. There are no functionality changes from 0.1.10.
+
 ## Nagi 0.1.8 / VS Code 0.1.10
 
 - Add static `map types`, `map modules`, and `map calls` through a shared Graph IR, with Mermaid, D2, JSON, and standalone HTML renderers, focused views, and optional D2 SVG/PNG export.
