@@ -9,12 +9,12 @@ const realCompiler = require('../src/compiler');
 
 // Exercise the registered providers, including compiler/trust guards, without
 // starting an editor or compiling a native application.
-function host(t, trusted = true, code = 1, symbols) {
+function host(t, trusted = true, code = 1, symbols, controls = {}) {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'nagi-provider-'));
   t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
   const disposable = () => ({ dispose() {} });
   const providers = {}, selectors = {}, events = {}, commands = new Map(), diagnostics = new Map();
-  const calls = [];
+  const calls = [], tasks = [], taskDiagnostics = new Map();
   const uri = (file, scheme = 'file') => ({ scheme, fsPath: file, toString: () => `${scheme}:${file}` });
   class Position { constructor(line, character) { this.line = line; this.character = character; } }
   class Range {
@@ -26,22 +26,31 @@ function host(t, trusted = true, code = 1, symbols) {
     appendCodeblock(text) { this.value += text + '\n'; }
     appendText(text) { this.value += text; }
   }
-  const collection = { clear() { diagnostics.clear(); }, set(resource, items) { diagnostics.set(resource.toString(), items); }, dispose() {} };
+  function collection(owner) {
+    const items = owner === 'nagi-task' ? taskDiagnostics : diagnostics;
+    return { clear() { items.clear(); }, set(resource, value) { items.set(resource.toString(), value); },
+      delete(resource) { items.delete(resource.toString()); }, dispose() {} };
+  }
   const vscode = {
     workspace: {
       isTrusted: trusted, textDocuments: [],
       getWorkspaceFolder: () => ({ uri: uri(folder) }),
-      getConfiguration: () => ({ get: (_, fallback) => fallback }),
-      onDidOpenTextDocument: disposable, onDidSaveTextDocument(fn) { events.save = fn; return disposable(); },
-      onDidChangeTextDocument(fn) { events.change = fn; return disposable(); }, onDidCloseTextDocument: disposable,
+      getConfiguration: () => ({ get: (name, fallback) => name === 'checkOnSave' ? controls.checkOnSave ?? fallback : fallback }),
+      onDidOpenTextDocument(fn) { events.open = fn; return disposable(); }, onDidSaveTextDocument(fn) { events.save = fn; return disposable(); },
+      onDidChangeTextDocument(fn) { events.change = fn; return disposable(); }, onDidCloseTextDocument(fn) { events.close = fn; return disposable(); },
       onDidGrantWorkspaceTrust: disposable, onDidChangeConfiguration: disposable,
       registerTextDocumentContentProvider(scheme, provider) { providers[scheme] = provider; return disposable(); },
       createFileSystemWatcher: () => ({ dispose() {}, onDidCreate: disposable, onDidChange: disposable, onDidDelete: disposable }),
     },
     window: { createOutputChannel: () => ({ appendLine() {}, show() {}, dispose() {} }),
       showWarningMessage: async () => undefined, setStatusBarMessage() {} },
-    languages: { createDiagnosticCollection: () => collection, registerOnTypeFormattingEditProvider: disposable },
+    languages: { createDiagnosticCollection: collection, getDiagnostics: () => [...diagnostics, ...taskDiagnostics].map(([resource, items]) => [uri(resource.slice(5)), items]), registerOnTypeFormattingEditProvider: disposable },
     commands: { registerCommand(name, fn) { commands.set(name, fn); return disposable(); } },
+    tasks: { async executeTask(task) { if (controls.failTask) throw new Error('task launch failed'); tasks.push(task); return { task }; },
+      onDidEndTask(fn) { events.taskEnd = fn; return disposable(); } },
+    Task: class { constructor(definition, scope, name, source, execution) { Object.assign(this, { definition, scope, name, source, execution }); } },
+    ProcessExecution: class { constructor(executable, args, options) { Object.assign(this, { executable, args, options }); } },
+    TaskScope: { Workspace: 1 }, TaskRevealKind: { Always: 1 }, TaskPanelKind: { Dedicated: 2 },
     Range, MarkdownString, Uri: { file: file => uri(file), parse: text => {
       const [scheme, pathname] = text.split(':');
       return { ...uri(pathname, scheme), path: pathname, authority: '', query: '', fragment: '' };
@@ -61,9 +70,11 @@ function host(t, trusted = true, code = 1, symbols) {
       providers[kind] = provider; selectors[kind] = selector; return disposable();
     };
   }
-  const compiler = { ...realCompiler, runCheck(executable, args, cwd, timeout, callback) {
+  const compiler = { ...realCompiler, runCheck(executable, args, cwd, timeout, callback, maxBuffer, input) {
     assert.equal(vscode.workspace.isTrusted, true, 'compiler must never execute in an untrusted workspace');
-    calls.push({ executable, args });
+    const call = { executable, args, cwd, callback, input, killed: false };
+    calls.push(call);
+    if (controls.defer) return { kill() { call.killed = true; } };
     queueMicrotask(() => callback(symbols && args[0] === 'symbols'
       ? { error: null, output: JSON.stringify(symbols(cwd)) }
       : { error: Object.assign(new Error('checker failed'), { code }), output: 'error: line 2: expected i32\n' }));
@@ -76,8 +87,8 @@ function host(t, trusted = true, code = 1, symbols) {
   const context = { subscriptions: [] };
   module.exports.activate(context);
   t.after(() => context.subscriptions.forEach(item => item.dispose()));
-  function document(text, scheme = 'file', languageId = 'nagi') {
-    const file = path.join(folder, languageId === 'nagi-low' ? 'main.low' : 'main.nagi');
+  function document(text, scheme = 'file', languageId = 'nagi', filename) {
+    const file = path.join(folder, filename || (languageId === 'nagi-low' ? 'main.low' : 'main.nagi'));
     if (scheme === 'file') fs.writeFileSync(file, text);
     const doc = { uri: uri(file, scheme), languageId, version: 1, isDirty: false, isClosed: false,
       getText: () => text, save: async () => true,
@@ -89,8 +100,197 @@ function host(t, trusted = true, code = 1, symbols) {
     return doc;
   }
   const token = { isCancellationRequested: false, onCancellationRequested: disposable };
-  return { providers, selectors, events, commands, diagnostics, calls, document, token };
+  return { providers, selectors, events, commands, diagnostics, taskDiagnostics, calls, tasks, document, token, vscode, folder };
 }
+
+test('unsaved canonical import diagnostics use the open alias and UTF-16 source range', async t => {
+  const h = host(t, true, 1, undefined, { defer: true, checkOnSave: false });
+  const main = h.document('import "alias.nagi"\ndef main():\n    print(1)\n');
+  const actual = path.join(h.folder, 'actual.nagi');
+  fs.writeFileSync(actual, 'def helper():\n    print(1)\n');
+  const dirty = '# 日本語 😀\n\n\n\n\ndef helper():\n    print("😀"); missing()\n';
+  const dep = h.document(dirty, 'file', 'nagi', 'alias.nagi');
+  fs.unlinkSync(dep.uri.fsPath); fs.symlinkSync(actual, dep.uri.fsPath, 'file'); dep.isDirty = true;
+  h.vscode.window.activeTextEditor = { document: main };
+  const pending = h.commands.get('nagi.check')();
+  h.calls[0].callback({ error: Object.assign(new Error('source error'), { code: 1 }), output: `error: line 7: unknown function\n --> ${actual}:7\n` });
+  await pending;
+  const [error] = h.diagnostics.get(dep.uri.toString());
+  assert.equal(error.range.start.line, 6);
+  assert.equal(error.range.end.character, dirty.split('\n')[6].length, 'range uses UTF-16 characters from the overlay');
+  assert.equal(h.diagnostics.has(`file:${actual}`), false, 'Problems does not open a second saved copy');
+});
+
+test('closing a checked import overlay refreshes its owners and keeps unrelated errors', async t => {
+  const h = host(t, true, 1, undefined, { defer: true, checkOnSave: false });
+  const main = h.document('def main():\n    print(1)\n');
+  const dep = h.document('def helper():\n    missing()\n', 'file', 'nagi', 'helper.nagi'); dep.isDirty = true;
+  const other = h.document('def other():\n    missing()\n', 'file', 'nagi', 'other.nagi');
+  h.vscode.window.activeTextEditor = { document: main };
+  const first = h.commands.get('nagi.check')();
+  h.calls[0].callback({ error: Object.assign(new Error('source error'), { code: 1 }), output: `error: line 2: imported error\n --> ${dep.uri.fsPath}:2\n` }); await first;
+  h.vscode.window.activeTextEditor = { document: other };
+  const second = h.commands.get('nagi.check')();
+  const otherFailure = { error: Object.assign(new Error('source error'), { code: 1 }), output: `error: line 2: separate error\n --> ${other.uri.fsPath}:2\n` };
+  h.calls[1].callback(otherFailure); await second;
+  dep.isClosed = true; h.vscode.workspace.textDocuments = h.vscode.workspace.textDocuments.filter(d => d !== dep); h.events.close(dep);
+  assert.equal(h.diagnostics.has(dep.uri.toString()), false, 'discarded overlay diagnostic is removed');
+  assert.equal(h.diagnostics.get(other.uri.toString())[0].message, 'line 2: separate error', 'separate marker remains during owner refresh');
+  const refreshedMain = h.calls.slice(2).find(c => c.args.includes(main.uri.fsPath));
+  const refreshedOther = h.calls.slice(2).find(c => c.args.includes(other.uri.fsPath));
+  assert.equal(refreshedMain.input, undefined, 'closed overlay is not sent again');
+  refreshedMain.callback({ error: null, output: 'check OK' }); refreshedOther.callback(otherFailure);
+  await Promise.resolve();
+  assert.equal(h.diagnostics.has(dep.uri.toString()), false);
+  assert.equal(h.diagnostics.get(other.uri.toString())[0].message, 'line 2: separate error');
+});
+
+test('closing an in-flight import overlay rejects its stale result', async t => {
+  const h = host(t, true, 1, undefined, { defer: true, checkOnSave: false });
+  const main = h.document('def main():\n    print(1)\n');
+  const dep = h.document('def helper():\n    missing()\n', 'file', 'nagi', 'helper.nagi'); dep.isDirty = true;
+  h.vscode.window.activeTextEditor = { document: main };
+  const first = h.commands.get('nagi.check')();
+  const old = h.calls[0];
+  dep.isClosed = true; h.vscode.workspace.textDocuments = h.vscode.workspace.textDocuments.filter(d => d !== dep); h.events.close(dep);
+  assert.equal(old.killed, true);
+  old.callback({ error: Object.assign(new Error('source error'), { code: 1 }), output: `error: line 2: stale error\n --> ${dep.uri.fsPath}:2\n` }); await first;
+  assert.equal(h.diagnostics.size, 0);
+  assert.equal(h.calls.length, 2, 'owner check restarts without the discarded import');
+  h.calls[1].callback({ error: null, output: 'check OK' });
+  await Promise.resolve(); assert.equal(h.diagnostics.size, 0);
+});
+
+test('lower build and run tasks use the registered source diagnostic matcher', async t => {
+  const h = host(t, true, 1, undefined, { checkOnSave: false });
+  h.document('def main():\n    print(1)\n');
+  for (const name of ['lower', 'build', 'run']) await h.commands.get(`nagi.${name}`)();
+  assert.deepEqual(h.tasks.map(task => Array.from(task.problemMatchers)), [['$nagi'], ['$nagi'], ['$nagi']]);
+});
+
+test('tasks suppress only the matching automatic scope and checks resume when the task ends', async t => {
+  const h = host(t, true, 1, undefined, { defer: true, checkOnSave: true });
+  const main = h.document('def main():\n    missing()\n');
+  const other = h.document('def other():\n    missing()\n', 'file', 'nagi', 'other.nagi');
+  const fail = file => ({ error: Object.assign(new Error('source error'), { code: 1 }), output: `error: line 2: unknown function\n --> ${file}:2\n` });
+  h.vscode.window.activeTextEditor = { document: main }; const first = h.commands.get('nagi.check')(); h.calls[0].callback(fail(main.uri.fsPath)); await first;
+  h.vscode.window.activeTextEditor = { document: other }; const second = h.commands.get('nagi.check')(); h.calls[1].callback(fail(other.uri.fsPath)); await second;
+  h.vscode.window.activeTextEditor = { document: main };
+  const saveTriggered = h.commands.get('nagi.check')(); const stale = h.calls[2];
+  const execution = await h.commands.get('nagi.build')();
+  assert.equal(stale.killed, true, 'save-triggered pending check is cancelled');
+  stale.callback(fail(main.uri.fsPath)); await saveTriggered;
+  assert.equal(h.diagnostics.has(main.uri.toString()), false);
+  assert.equal(h.diagnostics.get(other.uri.toString()).length, 1, 'unrelated source diagnostic stays visible');
+  h.events.open(main); assert.equal(h.calls.length, 3, 'matching automatic check is suppressed during task execution');
+  h.events.taskEnd({ execution });
+  const resumed = h.commands.get('nagi.check')(); assert.equal(h.calls.length, 4);
+  h.calls[3].callback({ error: null, output: 'check OK' }); await resumed;
+  assert.equal(h.diagnostics.get(other.uri.toString()).length, 1);
+});
+
+test('task launch failure releases live check suppression', async t => {
+  const h = host(t, true, 1, undefined, { defer: true, checkOnSave: false, failTask: true });
+  h.document('def main():\n    print(1)\n');
+  await assert.rejects(h.commands.get('nagi.build')(), /task launch failed/);
+  const resumed = h.commands.get('nagi.check')(); assert.equal(h.calls.length, 1);
+  h.calls[0].callback({ error: null, output: 'check OK' }); await resumed;
+});
+
+test('project task clears checks from its helper while preserving another project', async t => {
+  const h = host(t, true, 1, undefined, { defer: true, checkOnSave: true });
+  for (const name of ['app', 'other']) { fs.mkdirSync(path.join(h.folder, name)); fs.writeFileSync(path.join(h.folder, name, 'nagi.toml'), "entry = 'main.nagi'\n"); }
+  const entry = h.document('def main():\n    print(1)\n', 'file', 'nagi', 'app/main.nagi');
+  const helper = h.document('def helper():\n    missing()\n', 'file', 'nagi', 'app/helper.nagi');
+  const other = h.document('def main():\n    missing()\n', 'file', 'nagi', 'other/main.nagi');
+  const fail = file => ({ error: Object.assign(new Error('source error'), { code: 1 }), output: `error: line 2: unknown function\n --> ${file}:2\n` });
+  h.vscode.window.activeTextEditor = { document: helper }; const first = h.commands.get('nagi.check')(); h.calls[0].callback(fail(helper.uri.fsPath)); await first;
+  h.vscode.window.activeTextEditor = { document: other }; const second = h.commands.get('nagi.check')(); h.calls[1].callback(fail(other.uri.fsPath)); await second;
+  h.vscode.window.activeTextEditor = { document: entry }; const execution = await h.commands.get('nagi.lower')();
+  assert.equal(h.diagnostics.has(helper.uri.toString()), false);
+  assert.equal(h.diagnostics.get(other.uri.toString()).length, 1);
+  h.vscode.window.activeTextEditor = { document: helper }; h.events.open(helper); assert.equal(h.calls.length, 2);
+  h.events.taskEnd({ execution });
+  const resumed = h.commands.get('nagi.check')(); assert.equal(h.calls.length, 3);
+  h.calls[2].callback(fail(helper.uri.fsPath)); await resumed;
+  assert.equal(h.diagnostics.get(helper.uri.toString()).length, 1);
+});
+
+test('a long task permits checks of new source without reacting to other project edits', async t => {
+  const h = host(t, true, 1, undefined, { defer: true, checkOnSave: true });
+  for (const name of ['app', 'other']) { fs.mkdirSync(path.join(h.folder, name)); fs.writeFileSync(path.join(h.folder, name, 'nagi.toml'), "entry = 'main.nagi'\n"); }
+  const main = h.document('def main():\n    print(1)\n', 'file', 'nagi', 'app/main.nagi');
+  const other = h.document('def main():\n    print(2)\n', 'file', 'nagi', 'other/main.nagi');
+  h.vscode.window.activeTextEditor = { document: main }; const execution = await h.commands.get('nagi.run')();
+  other.version++; other.isDirty = true; h.events.change({ document: other });
+  h.events.open(main); assert.equal(h.calls.length, 0, 'another project cannot lift same-source automatic suppression');
+  main.version++; main.isDirty = true; h.events.change({ document: main });
+  const edited = h.commands.get('nagi.check')(); assert.equal(h.calls.length, 1, 'new source can be checked while the app keeps running');
+  h.calls[0].callback({ error: null, output: 'check OK' }); await edited;
+  h.events.taskEnd({ execution });
+});
+
+test('failed task diagnostics are replaced by checks and removed by source edits', async t => {
+  const h = host(t, true, 1, undefined, { defer: true, checkOnSave: true });
+  const main = h.document('def main():\n    missing()\n');
+  const other = h.document('def other():\n    missing()\n', 'file', 'nagi', 'other.nagi');
+  const execution = await h.commands.get('nagi.build')();
+  h.events.taskEnd({ execution });
+  const marker = new h.vscode.Diagnostic(new h.vscode.Range(1, 0, 1, 1), 'line 2: unknown function');
+  marker.source = 'nagic';
+  h.taskDiagnostics.set(main.uri.toString(), [marker]);
+  h.taskDiagnostics.set(other.uri.toString(), [marker]);
+  const count = doc => (h.taskDiagnostics.get(doc.uri.toString()) || []).length + (h.diagnostics.get(doc.uri.toString()) || []).length;
+  assert.equal(count(main), 1);
+  h.vscode.window.activeTextEditor = { document: main };
+  const checked = h.commands.get('nagi.check')();
+  h.calls[0].callback({ error: Object.assign(new Error('source error'), { code: 1 }), output: `error: line 2: unknown function\n --> ${main.uri.fsPath}:2\n` }); await checked;
+  assert.equal(count(main), 1, 'live check replaces the previous task error');
+  assert.equal(count(other), 1, 'another file keeps its task error');
+  // A successful frontend check does not invalidate a backend-only task error.
+  h.taskDiagnostics.set(main.uri.toString(), [marker]);
+  const success = h.commands.get('nagi.check')(); h.calls[1].callback({ error: null, output: 'check OK' }); await success;
+  assert.equal(count(main), 1);
+  main.version++; main.isDirty = true; h.events.change({ document: main });
+  h.events.save(main); h.calls[2].callback({ error: null, output: 'check OK' }); await Promise.resolve();
+  assert.equal(count(main), 0, 'editing and checking the fixed source clears the old task marker');
+  assert.equal(count(other), 1);
+});
+
+test('manual checks inspect dirty imports outside the running task project', async t => {
+  const h = host(t, true, 1, undefined, { defer: true, checkOnSave: false });
+  for (const name of ['app', 'shared']) fs.mkdirSync(path.join(h.folder, name));
+  fs.writeFileSync(path.join(h.folder, 'app', 'nagi.toml'), "entry = 'main.nagi'\n");
+  const main = h.document('import "../shared/helper.nagi" as shared\ndef main():\n    print(shared.answer())\n', 'file', 'nagi', 'app/main.nagi');
+  const helper = h.document('def answer() -> i32:\n    return "wrong"\n', 'file', 'nagi', 'shared/helper.nagi');
+  h.vscode.window.activeTextEditor = { document: main };
+  const execution = await h.commands.get('nagi.run')();
+  helper.version++; helper.isDirty = true; h.events.change({ document: helper });
+  const checked = h.commands.get('nagi.check')();
+  assert.equal(h.calls.length, 1, 'explicit checks always run while the task remains active');
+  assert.equal(JSON.parse(h.calls[0].input).files[0].file, helper.uri.fsPath);
+  h.calls[0].callback({ error: Object.assign(new Error('source error'), { code: 1 }), output: `error: line 2: expected i32\n --> ${helper.uri.fsPath}:2\n` }); await checked;
+  assert.equal(h.diagnostics.get(helper.uri.toString())[0].range.start.line, 1);
+  assert.equal(h.tasks.length, 1);
+  h.events.taskEnd({ execution });
+});
+
+test('editing and closing imported aliases remove only their canonical task markers', t => {
+  const h = host(t, true, 1, undefined, { checkOnSave: false });
+  const actual = h.document('def helper():\n    print(1)\n', 'file', 'nagi', 'actual.nagi');
+  const alias = h.document(actual.getText(), 'file', 'nagi', 'alias.nagi');
+  fs.unlinkSync(alias.uri.fsPath); fs.symlinkSync(actual.uri.fsPath, alias.uri.fsPath, 'file');
+  const other = h.document('def other():\n    print(1)\n', 'file', 'nagi', 'other.nagi');
+  const marker = new h.vscode.Diagnostic(new h.vscode.Range(1, 0, 1, 1), 'backend error');
+  marker.source = 'nagic';
+  h.taskDiagnostics.set(actual.uri.toString(), [marker]); h.taskDiagnostics.set(other.uri.toString(), [marker]);
+  alias.version++; h.events.change({ document: alias });
+  assert.equal(h.taskDiagnostics.has(actual.uri.toString()), false);
+  assert.equal(h.taskDiagnostics.get(other.uri.toString()).length, 1);
+  h.taskDiagnostics.set(actual.uri.toString(), [marker]); alias.isClosed = true; h.events.close(alias);
+  assert.equal(h.taskDiagnostics.has(actual.uri.toString()), false);
+  assert.equal(h.taskDiagnostics.get(other.uri.toString()).length, 1);
+});
 
 test('typing invalidates snapshots without launching save-only checks per keystroke', async t => {
   const h = host(t);

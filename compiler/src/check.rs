@@ -1678,6 +1678,72 @@ impl Checker {
             .expect("borrowed value belongs to an expression")
             .extend(origins);
     }
+    fn comparison_origins(&self, e: &Expr) -> HashSet<BorrowedPlace> {
+        match &e.kind {
+            E::Name(name) => self
+                .vars
+                .get(name)
+                .map(|var| {
+                    HashSet::from([BorrowedPlace {
+                        binding: var.binding,
+                        fields: vec![],
+                        owner_loan: true,
+                        static_origin: false,
+                    }])
+                })
+                .unwrap_or_default(),
+            E::Field(parent, field) => {
+                if e.resolution == Some(NameResolution::ResourceField) {
+                    let resource = parent
+                        .ty
+                        .as_ref()
+                        .and_then(|ty| self.resource(&self.field_owner(ty).0));
+                    if resource
+                        .and_then(|resource| crate::stdlib::field(resource, field))
+                        .is_some_and(|info| !info.owned)
+                    {
+                        // Native getters return a value or reference rather
+                        // than exposing a place in the resource.
+                        return HashSet::new();
+                    }
+                }
+                self.comparison_origins(parent)
+                    .into_iter()
+                    .map(|mut place| {
+                        place.fields.push(field.clone());
+                        place
+                    })
+                    .collect()
+            }
+            E::Index(parent, _) => {
+                let mut origins = self.comparison_origins(parent);
+                // A trait comparison borrows the indexed container even when
+                // its Copy element contains no views. A slice-producing call
+                // can also retain a loan on the original container.
+                origins.extend(self.origin(parent));
+                origins
+            }
+            _ => HashSet::new(),
+        }
+    }
+    fn hold_comparison(&mut self, e: &Expr, ty: &Type) {
+        self.hold_value(e, false);
+        let ty = unowned(ty);
+        let scalar = matches!(
+            ty.0.as_str(),
+            "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" | "bool"
+        ) && !self.classes.contains_key(&ty.0);
+        if scalar || ty.0 == "fn" && !ty.1.is_empty() {
+            return;
+        }
+        // Rust materializes scalar operands, but PartialEq/PartialOrd borrow
+        // aggregate places even when their values implement Copy.
+        let origins = self.comparison_origins(e);
+        self.expression_loans
+            .last_mut()
+            .expect("comparison belongs to an expression")
+            .extend(origins);
+    }
     fn borrowed(&self, n: &str) -> bool {
         self.vars.get(n).is_some_and(|v| {
             self.borrowed_place(&BorrowedPlace {
@@ -2378,7 +2444,7 @@ impl Checker {
         expected: Option<&Type>,
         projection: bool,
     ) -> Result<Type, String> {
-        let retains_values = matches!(e.kind, E::Call(_, _, _) | E::List(_));
+        let retains_values = matches!(e.kind, E::Call(_, _, _) | E::List(_) | E::Binary(_, _, _));
         if retains_values {
             self.expression_loans.push(HashSet::new());
         }
@@ -2525,8 +2591,11 @@ impl Checker {
             }
             E::Binary(a, op, b) => {
                 let left = self.expr(a, expected.filter(|t| t.0 != "bool"))?;
-                let right = self.expr(b, Some(&left))?;
                 let comparison = matches!(op.as_str(), "==" | "!=" | "<" | ">" | "<=" | ">=");
+                if comparison {
+                    self.hold_comparison(a, &left);
+                }
+                let right = self.expr(b, Some(&left))?;
                 let borrowed_pair = comparison
                     && ((left.0 == "view"
                         && matches!(left.inner().0.as_str(), "str" | "bytes")

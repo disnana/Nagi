@@ -11,12 +11,16 @@ const stdlib = require('./stdlib');
 function activate(context) {
   const output = vscode.window.createOutputChannel('Nagi');
   const diagnostics = vscode.languages.createDiagnosticCollection('nagi');
+  const taskDiagnostics = vscode.languages.createDiagnosticCollection('nagi-task');
   const pending = new Map();
   const results = new Map();
   const navigation = new Set();
   const symbolCache = new Map();
   const notifiedFailures = new Set();
   const standardSources = new Map();
+  const taskScopes = new Map();
+  const runningTasks = new Map();
+  const endedTasks = new WeakSet();
   const standardSourceChanges = new vscode.EventEmitter();
   let epoch = 0;
   let symbolsEpoch = 0;
@@ -34,6 +38,19 @@ function activate(context) {
     for (const group of grouped.values()) diagnostics.set(group.uri, group.items);
   }
 
+  function clearTaskFile(uri) {
+    if (uri.scheme !== 'file') return;
+    const root = path.dirname(uri.fsPath);
+    const key = compiler.fileKey(uri.fsPath, root);
+    const targets = new Map([[uri.toString(), uri]]);
+    // Task markers may use a canonical path while the editor displays an alias.
+    for (const [resource, items] of vscode.languages.getDiagnostics()) {
+      if (resource.scheme === 'file' && items.some(item => item.source === 'nagic') &&
+          compiler.fileKey(resource.fsPath, root) === key) targets.set(resource.toString(), resource);
+    }
+    for (const resource of targets.values()) taskDiagnostics.delete(resource);
+  }
+
   function options(document) {
     const workspace = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath;
     const root = compiler.findRoot(document.uri.fsPath, workspace);
@@ -47,6 +64,46 @@ function activate(context) {
     const { root, workspace, config, project } = options;
     return compiler.argumentsFor(name, document.uri.fsPath, config.get('nativeFiles', []), root, workspace,
       config.get('rustFile', ''), config.get('rustDependencies', []), project);
+  }
+
+  function checkScope(document, settings) {
+    return `${settings.project ? 'project' : 'source'}:${compiler.fileKey(settings.project || document.uri.fsPath, settings.root)}`;
+  }
+
+  function taskSnapshot(document, settings) {
+    const scope = checkScope(document, settings);
+    const projectKey = settings.project && compiler.fileKey(settings.project, settings.root);
+    const directory = path.dirname(document.uri.fsPath);
+    const includes = d => {
+      if (d.uri.scheme !== 'file' || !isNagi(d) && d.uri.fsPath !== settings.project) return false;
+      const project = compiler.findProject(d.uri.fsPath);
+      if (projectKey) return project && compiler.fileKey(project, settings.root) === projectKey;
+      const relative = path.relative(directory, d.uri.fsPath);
+      return !project && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+    };
+    const versions = new Map(vscode.workspace.textDocuments.filter(includes).map(d => [d, d.version]));
+    const configuration = JSON.stringify([settings.executable, argsFor('check', document, settings), settings.config.get('checkTimeoutMs', 15000)]);
+    return { scope, includes, versions, configuration };
+  }
+
+  function unchangedTask(snapshot, document, settings) {
+    const configuration = JSON.stringify([settings.executable, argsFor('check', document, settings), settings.config.get('checkTimeoutMs', 15000)]);
+    return configuration === snapshot.configuration && [...snapshot.versions].every(([d, version]) => !d.isClosed && d.version === version) &&
+      !vscode.workspace.textDocuments.some(d => d.isDirty && snapshot.includes(d) && !snapshot.versions.has(d));
+  }
+
+  function releaseTaskScope(snapshot) {
+    const active = taskScopes.get(snapshot.scope);
+    active?.delete(snapshot);
+    if (!active?.size) taskScopes.delete(snapshot.scope);
+  }
+
+  function clearLiveScope(scope) {
+    for (const [owner, job] of pending) {
+      if (job.scope === scope) { pending.delete(owner); job.child?.kill(); }
+    }
+    for (const [owner, result] of results) if (result.scope === scope) results.delete(owner);
+    publishDiagnostics();
   }
 
   function projectDirty(project) {
@@ -88,7 +145,7 @@ function activate(context) {
   }
 
   function overlays() {
-    return vscode.workspace.textDocuments.filter(d => isNagi(d) && d.isDirty && fs.existsSync(d.uri.fsPath))
+    return vscode.workspace.textDocuments.filter(d => isNagi(d) && !d.isClosed && d.isDirty && fs.existsSync(d.uri.fsPath))
       .map(d => ({ file: d.uri.fsPath, text: d.getText() }));
   }
 
@@ -98,13 +155,16 @@ function activate(context) {
     const key = document.uri.toString();
     const settings = options(document);
     const { root, config, executable, project } = settings;
+    const scope = checkScope(document, settings);
+    if (!manual && [...(taskScopes.get(scope) || [])].some(snapshot => unchangedTask(snapshot, document, settings))) return Promise.resolve();
     if (vscode.workspace.textDocuments.some(d => d.isDirty && d.uri.fsPath === project)) return Promise.resolve();
     const files = overlays();
     const input = files.length ? JSON.stringify({ files }) : undefined;
     if (input && Buffer.byteLength(input) > 16 * 1000 * 1000) return Promise.resolve();
     const version = document.version;
     const startEpoch = epoch;
-    const job = {};
+    const overlayKeys = files.map(file => compiler.fileKey(file.file, root));
+    const job = { overlayKeys, root, scope };
     pending.set(key, job);
     return new Promise(resolve => {
       job.child = compiler.runCheck(executable,
@@ -135,9 +195,13 @@ function activate(context) {
           } else {
             const text = result.output || result.error.message;
             const parsed = compiler.parseDiagnostics(text, project || document.uri.fsPath)[0];
-            const target = vscode.Uri.file(compiler.normalizeFile(parsed.file, root));
+            const targetKey = compiler.fileKey(parsed.file, root);
+            const overlay = files.find(file => compiler.fileKey(file.file, root) === targetKey);
+            const sourceDocument = vscode.workspace.textDocuments.find(d => isNagi(d) && !d.isClosed &&
+              compiler.fileKey(d.uri.fsPath, root) === targetKey && (!overlay || d.uri.fsPath === overlay.file));
+            const target = sourceDocument?.uri || vscode.Uri.file(compiler.normalizeFile(parsed.file, root));
             let sourceLines;
-            try { sourceLines = (files.find(file => compiler.normalizeFile(file.file, root) === target.fsPath)?.text ?? fs.readFileSync(target.fsPath, 'utf8')).split(/\r?\n/); } catch { sourceLines = ['']; }
+            try { sourceLines = (overlay?.text ?? sourceDocument?.getText() ?? fs.readFileSync(target.fsPath, 'utf8')).split(/\r?\n/); } catch { sourceLines = ['']; }
             const line = Math.min(parsed.line, sourceLines.length - 1);
             const textLine = sourceLines[line];
             const start = textLine.search(/\S/);
@@ -145,7 +209,8 @@ function activate(context) {
               line, Math.max(Math.max(0, start) + 1, textLine.length)),
               parsed.message, vscode.DiagnosticSeverity.Error);
             item.source = 'nagic';
-            results.set(key, { uri: target, item });
+            clearTaskFile(target);
+            results.set(key, { uri: target, item, overlayKeys, root, scope });
             if (manual) output.show(true);
           }
           publishDiagnostics();
@@ -172,8 +237,21 @@ function activate(context) {
       `Nagi ${name}: ${project ? path.basename(root) : path.basename(document.uri.fsPath)}`, 'Nagi',
       new vscode.ProcessExecution(executable,
         argsFor(name, document, settings), { cwd: root }));
+    task.problemMatchers = ['$nagi'];
     task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Dedicated };
-    return vscode.tasks.executeTask(task);
+    const snapshot = taskSnapshot(document, settings);
+    const scope = snapshot.scope;
+    if (!taskScopes.has(scope)) taskScopes.set(scope, new Set());
+    taskScopes.get(scope).add(snapshot);
+    clearLiveScope(scope);
+    let handedOff = false;
+    try {
+      const execution = await vscode.tasks.executeTask(task);
+      if (!endedTasks.has(execution)) { runningTasks.set(execution, snapshot); handedOff = true; }
+      return execution;
+    } finally {
+      if (!handedOff) releaseTaskScope(snapshot);
+    }
   }
 
   async function provideDefinition(document, position, token) {
@@ -312,7 +390,7 @@ function activate(context) {
     return help;
   }
 
-  context.subscriptions.push(output, diagnostics, standardSourceChanges,
+  context.subscriptions.push(output, diagnostics, taskDiagnostics, standardSourceChanges,
     vscode.workspace.registerTextDocumentContentProvider('nagi-stdlib', {
       onDidChange: standardSourceChanges.event,
       provideTextDocumentContent(uri) { return standardSources.get(stdlib.sourceFile(uri)) || ''; },
@@ -334,16 +412,42 @@ function activate(context) {
       if (isNagi(d) || compiler.findProject(d.uri.fsPath)) { invalidate(); recheckOpen(); }
     }),
     vscode.workspace.onDidChangeTextDocument(e => {
-      if (isNagi(e.document) || compiler.findProject(e.document.uri.fsPath)) invalidate();
+      if (isNagi(e.document) || compiler.findProject(e.document.uri.fsPath)) { clearTaskFile(e.document.uri); invalidate(); }
     }),
     vscode.workspace.onDidCloseTextDocument(d => {
+      if (isNagi(d)) clearTaskFile(d.uri);
       cancel(d);
       if (isNagi(d) || d.uri.scheme === 'file' && compiler.findProject(d.uri.fsPath)) invalidateSymbols();
+      const refresh = new Set();
+      if (d.uri.scheme === 'file') {
+        for (const [owner, job] of pending) {
+          if (job.overlayKeys?.includes(compiler.fileKey(d.uri.fsPath, job.root))) {
+            pending.delete(owner);
+            job.child?.kill();
+            refresh.add(owner);
+          }
+        }
+        for (const [owner, result] of results) {
+          const closedKey = compiler.fileKey(d.uri.fsPath, result.root);
+          if (result.overlayKeys?.includes(closedKey)) {
+            refresh.add(owner);
+            if (compiler.fileKey(result.uri.fsPath, result.root) === closedKey) results.delete(owner);
+          }
+        }
+      }
       results.delete(d.uri.toString());
       publishDiagnostics();
+      for (const document of vscode.workspace.textDocuments) {
+        if (!document.isClosed && isNagi(document) && refresh.has(document.uri.toString())) check(document);
+      }
     }),
     vscode.workspace.onDidGrantWorkspaceTrust(() => { for (const d of vscode.workspace.textDocuments) if (optionsForAuto(d)) check(d); }),
     vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('nagi')) { invalidate(); recheckOpen(); } }),
+    vscode.tasks.onDidEndTask(event => {
+      const snapshot = runningTasks.get(event.execution);
+      if (snapshot) { runningTasks.delete(event.execution); releaseTaskScope(snapshot); }
+      else if (event.execution.task.definition.type === 'nagi') endedTasks.add(event.execution);
+    }),
     vscode.commands.registerCommand('nagi.showOutput', () => output.show(true)));
   for (const name of ['check', 'lower', 'build', 'run']) {
     context.subscriptions.push(vscode.commands.registerCommand(`nagi.${name}`, () => command(name)));

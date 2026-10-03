@@ -73,6 +73,61 @@ fn compile_and_run(code: String) {
 }
 
 #[test]
+fn for_bindings_can_be_reassigned_without_changing_the_iterator_or_outer_binding() {
+    let source = r#"def ranges() -> i64:
+    total = 0
+    for number in range(3):
+        number += 1
+        total += number
+    return total
+
+def lists() -> i64:
+    values = [1, 2, 3]
+    total = 0
+    for number in values:
+        number *= 2
+        total += number
+    return total + values[0]
+
+def slices(values: view[i64]) -> i64:
+    total = 0
+    for number in values:
+        number += 2
+        total += number
+    return total
+
+def nested() -> i64:
+    number = 100
+    total = 0
+    for number in range(2):
+        number += 10
+        for number in range(2):
+            number += 1
+            total += number
+        total += number
+    return total + number
+"#;
+    let mut high = parser::parse(source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+    let mut code = emit::rust(&low).unwrap();
+    code.push_str(
+        r#"
+#[test] fn generated_loop_values() {
+    assert_eq!(ranges(), 6);
+    assert_eq!(lists(), 13);
+    let values = [1, 2, 3];
+    assert_eq!(slices(&values), 12);
+    assert_eq!(values, [1, 2, 3]);
+    assert_eq!(nested(), 127);
+}
+"#,
+    );
+    compile_and_run(code);
+}
+
+#[test]
 fn result_match_compiles_and_runs_owned_and_borrowed_payloads() {
     let source = r#"def choose(r: Result[i64, i64]) -> i64:
     match r:

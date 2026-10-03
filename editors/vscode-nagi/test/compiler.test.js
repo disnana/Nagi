@@ -33,6 +33,33 @@ test('Rust arguments remain separate and long Windows paths normalize', () => {
   if (process.platform === 'win32') assert.equal(compiler.normalizeFile('\\\\?\\C:\\project\\a.nagi', root), 'C:\\project\\a.nagi');
 });
 
+test('diagnostic file identities resolve symlinks and Windows path spelling', t => {
+  const folder = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'nagi-diagnostic-identity-'));
+  t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
+  const file = path.join(folder, 'actual.nagi');
+  const link = path.join(folder, 'alias.nagi');
+  fs.writeFileSync(file, 'def main():\n    print(1)\n');
+  fs.symlinkSync(file, link, 'file');
+  assert.equal(compiler.fileKey(link, folder), compiler.fileKey(file, folder));
+  assert.equal(compiler.fileKey('\\\\?\\C:\\Project\\MAIN.nagi', 'C:\\Project', 'win32'),
+    compiler.fileKey('c:\\project\\main.nagi', 'C:\\Project', 'win32'));
+  assert.equal(compiler.fileKey('\\\\?\\UNC\\Server\\Share\\Main.low', 'C:\\Project', 'win32'),
+    compiler.fileKey('\\\\server\\share\\main.low', 'C:\\Project', 'win32'));
+});
+
+test('task matcher accepts Nagi frontend and mapped backend positions only', () => {
+  const matcher = require('../package.json').contributes.problemMatchers.find(item => item.name === 'nagi');
+  assert.equal(matcher.fileLocation, 'absolute');
+  const [message, location] = matcher.pattern.map(pattern => new RegExp(pattern.regexp));
+  assert.deepEqual(message.exec('error[E0308]: mismatched types').slice(1), ['error', 'E0308', 'mismatched types']);
+  assert.deepEqual(message.exec('warning: unused value').slice(1), ['warning', undefined, 'unused value']);
+  assert.ok(message.test('error: line 2: expected i32'));
+  assert.deepEqual(location.exec(' --> C:\\my project\\main.nagi:7').slice(1), ['C:\\my project\\main.nagi', '7']);
+  assert.ok(location.test(' --> /tmp/native math.low:12'));
+  assert.equal(location.test(' --> /tmp/build/src/main.rs:7:16'), false);
+  assert.equal(location.test(' --> C:\\my project\\bridge.rs:8:2'), false);
+});
+
 test('files and native paths are individual arguments with isolated check output', () => {
   const root = path.resolve('example root');
   const file = path.join(root, 'hello world.nagi');

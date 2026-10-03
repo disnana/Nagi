@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Reject comparison operands that move a value while its left-hand operand still borrows it, including aggregate fields and indexed values. Keep scalar comparisons and independent fields valid.
+- Allow loop variables to be reassigned in generated Rust, matching Nagi's type checking.
+- Show Nagi locations for Rust backend cause notes and readable names for imported declarations. Keep native Rust diagnostics and suggestions available, and prevent Cargo progress from corrupting diagnostic lines.
+- Show mapped build and run failures in VS Code Problems without duplicating unchanged-source checks. Refresh diagnostics when unsaved imported files close, and preserve source locations across symlinks and Windows path casing.
+
 ## VS Code 0.1.11
 
 - Publish the extension to Visual Studio Marketplace as 0.1.11. There are no functionality changes from 0.1.10.
