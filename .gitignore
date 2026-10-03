@@ -5,3 +5,4 @@ build/
 __pycache__/
 target/release/
 .idea/
+local-only/
