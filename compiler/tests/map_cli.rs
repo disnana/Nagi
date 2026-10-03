@@ -360,7 +360,12 @@ fn map_preparse_keeps_existing_project_overrides_and_output_path_precedence() {
     assert_eq!(input.source, f.0.join("standalone.low"));
     assert_eq!(
         input.native,
-        [f.0.join("project/base.low"), f.0.join("extra.low")]
+        [
+            fs::canonicalize(f.0.join("project"))
+                .unwrap()
+                .join("base.low"),
+            f.0.join("extra.low"),
+        ]
     );
     assert_eq!(
         input.rust_file,
