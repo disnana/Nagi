@@ -115,8 +115,10 @@ impl Db {
     pub async fn exec(&self, sql: impl Into<Sql>) -> Result<i64, Error> {
         let sql = sql.into();
         self.call(move |c| {
+            let before = c.total_changes();
             c.execute_batch(sql.as_str())?;
-            Ok(c.changes() as i64)
+            i64::try_from(c.total_changes() - before)
+                .map_err(|_| Error::internal("affected row count exceeds i64"))
         })
         .await
     }
@@ -240,6 +242,40 @@ mod tests {
                 age: r.get(ix[2])?,
             })
         }
+    }
+    #[tokio::test]
+    async fn exec_counts_only_changes_in_the_current_batch() {
+        let d = Db::open(":memory:").await.unwrap();
+        assert_eq!(d.exec("CREATE TABLE items(id INTEGER)").await.unwrap(), 0);
+        assert_eq!(
+            d.exec("INSERT INTO items VALUES (1), (2), (3)")
+                .await
+                .unwrap(),
+            3
+        );
+        assert_eq!(d.exec("CREATE TABLE other(id INTEGER)").await.unwrap(), 0);
+        assert_eq!(d.exec("SELECT * FROM items").await.unwrap(), 0);
+        assert_eq!(
+            d.exec("UPDATE items SET id = 4 WHERE id = 999")
+                .await
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            d.exec("UPDATE items SET id = id + 1; DELETE FROM items WHERE id = 2")
+                .await
+                .unwrap(),
+            4
+        );
+        assert_eq!(d.exec("SELECT * FROM items").await.unwrap(), 0);
+    }
+    #[tokio::test]
+    async fn exec_counts_trigger_changes_and_preserves_sql_errors() {
+        let d = Db::open(":memory:").await.unwrap();
+        d.exec("CREATE TABLE items(id INTEGER); CREATE TABLE audit(id INTEGER); CREATE TRIGGER log_insert AFTER INSERT ON items BEGIN INSERT INTO audit VALUES (NEW.id); END;").await.unwrap();
+        assert_eq!(d.exec("INSERT INTO items VALUES (1)").await.unwrap(), 2);
+        assert!(d.exec("INSERT INTO missing VALUES (1)").await.is_err());
+        assert_eq!(d.exec("SELECT * FROM audit").await.unwrap(), 0);
     }
     #[tokio::test]
     async fn crud_and_parameterization() {

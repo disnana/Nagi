@@ -101,6 +101,8 @@ High attributes generate Axum routing. Implemented features include HTTP/1.1, ke
 
 Standard test endpoints include `/health`, a five-chunk `/stream`, and the `/ws` echo WebSocket. Middleware limits request processing to two seconds and body/WebSocket messages to 1 MiB. Database and internal errors become statuses such as 500 without exposing details in responses.
 
+Those three GET routes are reserved for the builtin server; `check` rejects user handlers with the same GET route. Paths differing only in capture names, such as `/items/{id}` and `/items/{key}`, also conflict. Use the same capture names even when GET and POST use separate handlers.
+
 HTTP waits expire after ten seconds by default. This covers silence after accept, incomplete headers, and the interval from a completed response until the next complete request headers. Sending a few bytes does not extend the deadline. Expired connections close; clients should reconnect when needed. This wait does not apply to active responses, streams, or upgraded WebSocket sessions.
 
 To change it, set `NAGI_HTTP_REQUEST_WAIT_SECONDS` to a positive integer before starting the server. For example, use `$env:NAGI_HTTP_REQUEST_WAIT_SECONDS = "30"` in PowerShell or `export NAGI_HTTP_REQUEST_WAIT_SECONDS=30` in bash. Headers and unused keep-alive share this deadline. There is no fixed limit of 128 concurrent connections.

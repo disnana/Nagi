@@ -101,6 +101,8 @@ Highの属性からAxumのroutingを生成します。HTTP/1.1、keep-alive、pa
 
 標準の試験用endpointは`/health`、5chunkの`/stream`、echo WebSocketの`/ws`です。middlewareでrequest処理を2秒に制限し、bodyとWebSocket messageの上限を1 MiBにしています。DBや内部エラーは500などに変換し、詳細をresponseへ出しません。
 
+この3つのGETは組み込み用です。同じGETを定義すると`check`でエラーになります。capture名だけ違うpath（`/items/{id}`と`/items/{key}`など）も競合するため、GETとPOSTを分ける場合もcapture名を揃えてください。
+
 HTTPの待機期限は既定で10秒です。接続直後の無通信、途中のヘッダー、応答後から次のヘッダーが完成するまでが対象です。少量ずつ送信しても期限は延びません。期限を過ぎた接続は閉じられるため、クライアントは必要に応じて再接続してください。処理中の応答、ストリーム、アップグレード後のWebSocketには、この待機期限を適用しません。
 
 変更する場合は、起動前に環境変数`NAGI_HTTP_REQUEST_WAIT_SECONDS`へ正の整数を指定します。例えばPowerShellでは`$env:NAGI_HTTP_REQUEST_WAIT_SECONDS = "30"`、bashでは`export NAGI_HTTP_REQUEST_WAIT_SECONDS=30`です。ヘッダーと未使用keep-aliveの期限は共通です。同時接続数を128に固定する制限はありません。

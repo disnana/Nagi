@@ -520,6 +520,7 @@ impl Parser {
             }
             // 型引数は呼び出し直前に限定。a[i]とf[T](x)は後続の ( で区別する。
             let saved = self.pos;
+            let saved_depth = self.depth;
             let mut generics = vec![];
             if matches!(e.kind, E::Name(_)) && self.eat("[") {
                 let attempt = (|| {
@@ -534,6 +535,7 @@ impl Parser {
                 })();
                 if attempt.is_err() || !matches!(&self.t().kind,K::Sym(s)if s=="(") {
                     self.pos = saved;
+                    self.depth = saved_depth;
                     generics.clear();
                 }
             }
@@ -567,6 +569,9 @@ impl Parser {
                 }
                 if !args.is_empty() && !fields.is_empty() {
                     return Err(self.err("位置引数とclassフィールドは混在できません"));
+                }
+                if !fields.is_empty() && !generics.is_empty() {
+                    return Err(self.err("classの型引数は未対応です"));
                 }
                 e = Expr {
                     line,

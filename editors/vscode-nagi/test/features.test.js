@@ -30,15 +30,42 @@ test('completion works on incomplete prefixes and inserts positional calls or na
 });
 
 test('type positions offer classes and type constructors rather than value calls', () => {
-  for (const text of ['    value: It', 'def find() -> Res', 'def find(id: i64, data: view[', 'def find() -> Result[\n    It', 'json_decode[\n    It']) {
-    const items = f.completionCandidates(index, text, text.length);
+  for (const [text, isLow] of [
+    ['    value: It', false],
+    ['def find(item: It', false],
+    ['def find() -> Res', false],
+    ['def find(id: i64, data: view[', false],
+    ['def find() -> Result[\n    It', false],
+    ['json_decode[\n    It', false],
+    ['let value: It', true],
+    ['fn find(item: It', true],
+    ['fn find() -> It', true],
+    ['fn find() -> Result[It', true],
+  ]) {
+    const items = f.completionCandidates(index, text, text.length, isLow);
     assert.ok(items.some(x => x.name === 'Item'));
+    const item = items.find(x => x.name === 'Item');
+    for (const following of ['', '(', '[']) assert.equal(f.insertion(item, following), 'Item', text);
     assert.ok(items.some(x => x.name === 'Result'));
     assert.ok(!items.some(x => x.name === 'read_item'));
   }
   const low = f.completionCandidates(index, 'f', 1, true);
   assert.ok(low.some(x => x.name === 'fn'));
   assert.ok(!low.some(x => x.name === 'def'));
+});
+
+test('a class named Future completes as its declared type rather than a generic builtin', () => {
+  const future = { name: 'Future', kind: 'class', fields: [{ name: 'id', type: 'i64' }], signature: 'class Future\n    id: i64' };
+  const classes = { definitions: [...index.definitions, future] };
+  for (const [text, low] of [['def find(value: Fu', false], ['fn find() -> Fu', true]]) {
+    const items = f.completionCandidates(classes, text, text.length, low).filter(item => item.name === 'Future');
+    assert.equal(items.length, 1);
+    assert.equal(f.insertion(items[0], ''), 'Future');
+    assert.equal(items[0].signature, future.signature);
+    assert.equal(future.typeOnly, undefined, 'context does not change the declaration index');
+  }
+  const value = f.completionCandidates(classes, '    Fu', 6).find(item => item.name === 'Future');
+  assert.equal(f.insertion(value, ''), 'Future(id=${1:id})');
 });
 
 test('signature argument tracking ignores nested calls, strings, arrays and generic arguments', () => {
