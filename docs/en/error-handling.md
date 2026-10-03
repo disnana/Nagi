@@ -2,11 +2,11 @@
 
 [Contents](README.md) · [Syntax](syntax.md) · [Functions](builtins.md)
 
-`Result[T, Error]` returns either a success value `T` or a failure `Error`. Use `try` to propagate failure to the caller; use `match` to recover locally or return a different response.
+`Result[T, E]` returns either a success value `T` or a failure value `E`. Use the built-in `Error` or your own class or enum for `E`. Use `try` to return failures to the caller, or `match` to handle them locally.
 
 ## Propagate failure to the caller
 
-This function extracts a success value with `try` and returns the original Error on failure. A function using `try` must also return Result.
+`try` extracts the success value or returns the failure. The called function and your function must use the same error type `E`.
 
 ```nagi
 def read_id(text: view[str]) -> Result[i64, Error]:
@@ -16,11 +16,11 @@ def read_id(text: view[str]) -> Result[i64, Error]:
     return ok(id)
 ```
 
-For async operations, write `value = try await operation(...)`.
+For async operations, write `value = try await operation(...)`. The value of `try` is `T`; to return a Result, write `return ok(try operation(...))`. Convert a different error type explicitly in a `match`'s `Err` case.
 
 ## Separate success and failure
 
-This complete program is in [result.nagi](../../examples/tutorial/result.nagi). Because it recovers to a default, the function returns an ordinary `i64`.
+Recovering to a default lets the function return an ordinary `i64`. This complete program is in [result.nagi](../../examples/tutorial/result.nagi).
 
 ```nagi
 def number_or(text: str, fallback: i64) -> i64:
@@ -52,7 +52,35 @@ Output: `21`, `invalid`, `-1`. Patterns begin with uppercase `Ok` and `Err`; con
 - Matching consumes the Result, moving owned payloads such as strings. The origin of a borrowed payload remains checked as borrowed within the case.
 - When both cases return, the function is checked as returning a value on every path.
 
-Current matching is a statement over Result. Match expressions, nullable `Some`/`None`, guards, and nested patterns are not supported. [Low](low-language.md) supports the same branches.
+Matching is a statement over Result or enums. Match expressions, nullable `Some`/`None`, guards, nested patterns, and `case _` are unsupported. [Low](low-language.md) supports the same branches.
+
+## Define your own error type
+
+An enum groups failure kinds and the data each kind needs.
+
+```nagi
+enum QuantityError:
+    InvalidNumber
+    OutOfRange(minimum: i64)
+
+def positive(value: i64) -> Result[i64, QuantityError]:
+    if value < 1:
+        return fail(QuantityError.OutOfRange(minimum=1))
+    return ok(value)
+
+def fallback(problem: QuantityError) -> i64:
+    match problem:
+        case QuantityError.InvalidNumber:
+            return 0
+        case QuantityError.OutOfRange(minimum):
+            return minimum
+```
+
+Construct a unit variant with `QuantityError.InvalidNumber`. For payload variants, use positional arguments such as `QuantityError.OutOfRange(1)` or named arguments. Match every variant exactly once. Bind payloads in field order, using `_` for unused values. Unknown variants, invalid arguments, and missing or duplicate cases fail `check`.
+
+A class can also be the failure value in `Result[T, MyError]`. For example, a `StorageError` class can have a `cause: Error` field; `fail(StorageError(cause=problem))` preserves the original cause. Error classes and enums do not need JSON or database conversions. JSON conversion of enums or classes containing built-in Error is unsupported.
+
+The [typed-error CLI example](../../test-nagi-code/library-examples/typed-errors/README.en.md) covers explicit conversion from built-in Error, propagation with the same error type, and enum matching.
 
 ## Inspect, construct, and return Errors
 
@@ -65,9 +93,9 @@ Current matching is a statement over Result. Match expressions, nullable `Some`/
 | `error_message(problem)` | Returns an owned copy of the message |
 | `return fail(problem)` | Moves Error, preserving its original kind and message |
 
-The success type of constructors and `fail` comes from the return or variable context. Without context it is `Result[unit, Error]`. Since inspection does not consume Error, you can call `fail(problem)` afterward. Messages can contain internal information such as database details.
+The success type comes from the return or variable context. `fail(problem)` moves a built-in Error, class, or enum failure value. Without context its type is `Result[unit, E]`. `error_kind` and `error_message` apply only to built-in Error and do not consume it. Messages can contain internal information such as database details.
 
-HTTP translates kinds as follows:
+Current standard HTTP handlers return `Result[..., Error]`; returning a custom error directly is unsupported. Built-in Error kinds map as follows:
 
 | Kind | HTTP status |
 |---|---|
@@ -84,6 +112,6 @@ Try the [Result API example](result-api.md) for invalid input, missing data, dat
 
 The checker rejects directly discarded Results and futures that are not awaited. Checking that an assigned Result is handled on every path remains incomplete.
 
-JSON, database, and input failures differ from panics. Scopes detect child task panics; supervisors can restart panicking workers. These mechanisms do not recover from memory corruption or process aborts.
+Result failures differ from panics. Scopes detect child task panics. `supervisor_demo` is a test API for restarting a fixed worker; a Supervisor for arbitrary actors is not implemented. These mechanisms do not recover from memory corruption or process aborts.
 
 Diagnostics show the filename, line, relevant source text, and reason. Build errors with an identifiable origin first show the Nagi or Low statement or definition line, followed by the full generated Rust diagnostic. Rust edit suggestions apply to Rust; do not apply them directly to Nagi. Handwritten Rust and unmapped diagnostics retain Rust's output. Precise columns and mappings for every Rust diagnostic are not implemented. Definition navigation also uses original columns.

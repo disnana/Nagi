@@ -2,11 +2,11 @@
 
 [目次](README.md) · [文法](syntax.md) · [関数一覧](builtins.md)
 
-`Result[T, Error]`は成功値`T`か失敗`Error`を返します。失敗を呼び出し元へ伝えるときは`try`、その場で回復したり別の応答にしたりするときは`match`を使います。
+`Result[T, E]`は成功値`T`か失敗値`E`を返します。`E`には組み込みの`Error`や、自分で定義したclass・enumを使えます。失敗を呼び出し元へ返すには`try`、その場で処理するには`match`を使います。
 
 ## 失敗を呼び出し元へ返す
 
-次は関数の例です。`try`で成功値を取り出し、失敗ならそのErrorをそのまま返します。`try`を書く関数自身もResultを返す必要があります。
+`try`は成功値を取り出し、失敗ならその値を返します。呼び出し先と自分の戻り値は、同じエラー型`E`である必要があります。
 
 ```nagi
 def read_id(text: view[str]) -> Result[i64, Error]:
@@ -16,11 +16,11 @@ def read_id(text: view[str]) -> Result[i64, Error]:
     return ok(id)
 ```
 
-非同期の処理では`value = try await operation(...)`と書きます。
+非同期では`value = try await operation(...)`です。`try`の結果は`T`なので、Resultとして返すなら`return ok(try operation(...))`と書きます。異なる`E`への変換は`match`の`Err`で明示します。
 
 ## 成功と失敗を分ける
 
-次のコードは、そのまま保存して実行できます。[result.nagi](../examples/tutorial/result.nagi)にもあります。失敗したら既定値に回復するため、この関数の戻り値は通常の`i64`にできます。
+失敗から既定値へ回復すれば、通常の`i64`を返せます。[result.nagi](../examples/tutorial/result.nagi)は次の完全な例です。
 
 ```nagi
 def number_or(text: str, fallback: i64) -> i64:
@@ -52,7 +52,35 @@ nagic run result.nagi
 - matchは対象のResultを消費する。所有文字列などのpayloadもmoveされる。借用payloadの元データはcase内でも借用中として検査する。
 - 両方のcaseがreturnすれば、関数の全経路で値を返すものとして検査する。
 
-現在のmatchはResultを対象とする文です。値を返すmatch式、nullableの`Some` / `None`、ガード、入れ子のパターンは未対応です。[Low](low-language.md)でも同じ分岐を使えます。
+matchはResultとenumを対象とする文です。match式、nullableの`Some` / `None`、ガード、入れ子のパターン、`case _`は未対応です。[Low](low-language.md)でも同じ分岐を使えます。
+
+## 独自のエラー型
+
+enumは失敗の種類と、それぞれに必要な情報をまとめます。
+
+```nagi
+enum QuantityError:
+    InvalidNumber
+    OutOfRange(minimum: i64)
+
+def positive(value: i64) -> Result[i64, QuantityError]:
+    if value < 1:
+        return fail(QuantityError.OutOfRange(minimum=1))
+    return ok(value)
+
+def fallback(problem: QuantityError) -> i64:
+    match problem:
+        case QuantityError.InvalidNumber:
+            return 0
+        case QuantityError.OutOfRange(minimum):
+            return minimum
+```
+
+値だけの種類は`QuantityError.InvalidNumber`、情報を持つ種類は`QuantityError.OutOfRange(1)`または名前付き引数で作ります。caseには全種類を1回ずつ書きます。payloadは位置順に受け取り、不要な値は`_`にします。未知の種類、不正な引数、caseの不足・重複は`check`で拒否します。
+
+classも`Result[T, MyError]`の失敗値に使えます。たとえば`class StorageError:`のフィールドに`cause: Error`を持たせ、`fail(StorageError(cause=problem))`で元の原因を保存できます。class・enumのエラー型にJSONやDBの変換は要求しません。組み込みErrorを含むclassやenumのJSON変換は未対応です。
+
+[独自エラーのCLIサンプル](../test-nagi-code/library-examples/typed-errors/README.md)は、組み込みErrorからの変換、同じエラー型の`try`、enumの分岐を試せます。
 
 ## Errorを調べる・作る・返し直す
 
@@ -65,9 +93,9 @@ nagic run result.nagi
 | `error_message(problem)` | messageのコピーを所有文字列で取得する |
 | `return fail(problem)` | 元のkindとmessageを保ち、Errorをmoveして返す |
 
-Errorを作る関数と`fail`の成功型は、戻り先や変数の型から決まります。型の文脈がなければ`Result[unit, Error]`です。`error_kind`と`error_message`はErrorを消費しないため、そのあとで`fail(problem)`を使えます。messageにはDBなどの内部情報が含まれる場合があります。
+成功型は戻り値や変数の型から決まります。`fail(problem)`は組み込みErrorだけでなく、class・enumの失敗値もmoveします。型の文脈がなければ`Result[unit, E]`です。`error_kind`と`error_message`は組み込みError専用で、元の値を消費しません。messageにはDBなどの内部情報が含まれる場合があります。
 
-HTTPではErrorの種類を次のように変換します。
+現在の標準HTTPハンドラーは`Result[..., Error]`を返します。独自エラーを直接返すAPIは未対応です。組み込みErrorの変換は次のとおりです。
 
 | kind | HTTPステータス |
 |---|---|
@@ -84,6 +112,6 @@ DB・内部エラーの500応答は`{"error":"internal error"}`で、詳細は�
 
 直接捨てたResult、awaitしていないFutureは型検査で拒否します。代入したResultを全経路で必ず処理する検査は未完成です。
 
-JSON・DB・入力検査の失敗とpanicは別です。scopeでは子taskのpanicを検出し、Supervisorではworkerのpanicを再起動対象にします。メモリ破壊・process abortの回復機構ではありません。
+Resultの失敗とpanicは別です。scopeは子taskのpanicを検出し、`supervisor_demo`は固定のworkerを再起動する検証用APIです。任意のactorを管理するSupervisorや、メモリ破壊・process abortの回復機構は未実装です。
 
 診断はファイル名、行、該当ソース、理由を表示します。ビルド時も、元の位置を特定できるエラーはNagi・Lowの文や定義の行を先に表示し、生成Rustの詳しい診断を続けます。Rustの修正候補はRust向けなので、そのままNagiへ適用しないでください。手書きRustや位置を特定できない診断はRust側の表示を使います。厳密な列位置や全Rust診断の対応は未実装です。VS Codeの定義ジャンプは元ソースの列位置も扱います。

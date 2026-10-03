@@ -311,6 +311,47 @@ impl Parser {
                     field_lines,
                     line,
                 });
+            } else if self.eat("enum") {
+                if !attrs.is_empty() {
+                    return Err(self.err("enumに属性は付けられません"));
+                }
+                let name = self.name()?;
+                self.begin()?;
+                let mut variants = vec![];
+                while !self.ended() {
+                    let line = self.t().line;
+                    let start = self.pos;
+                    let name = self.name()?;
+                    let name_span = self.span(start);
+                    let mut fields = vec![];
+                    let mut field_lines = vec![];
+                    if self.eat("(") {
+                        loop {
+                            field_lines.push(self.t().line);
+                            let field = self.name()?;
+                            self.expect(":")?;
+                            fields.push((field, self.ty()?));
+                            if self.eat(")") {
+                                break;
+                            }
+                            self.expect(",")?;
+                        }
+                    }
+                    self.end_stmt()?;
+                    variants.push(EnumVariant {
+                        name,
+                        fields,
+                        field_lines,
+                        line,
+                        name_span,
+                    });
+                }
+                self.close()?;
+                p.enums.push(Enum {
+                    name,
+                    variants,
+                    line,
+                });
             } else {
                 let external = self.eat("extern");
                 let asynchronous = self.eat("async");
@@ -413,25 +454,41 @@ impl Parser {
             while !self.ended() {
                 let line = self.t().line;
                 self.expect("case")?;
-                let ok = if self.eat("Ok") {
-                    true
-                } else if self.eat("Err") {
-                    false
-                } else {
-                    return Err(self.err("ResultのcaseにはOkまたはErrが必要です"));
-                };
-                self.expect("(")?;
                 let start = self.pos;
-                let binding = self.name()?;
-                let binding_span = self.span(start);
-                self.expect(")")?;
+                let name = self.qualified_name()?;
+                let span = self.span(start);
+                let pattern = if name == "Ok" || name == "Err" {
+                    self.expect("(")?;
+                    let binding = self.pattern_binding()?;
+                    self.expect(")")?;
+                    MatchPattern::Result {
+                        ok: name == "Ok",
+                        binding,
+                    }
+                } else {
+                    if !name.contains('.') {
+                        return Err(self.err("caseにはOk、Err、またはenumの種類名が必要です"));
+                    }
+                    let mut bindings = vec![];
+                    if self.eat("(") {
+                        loop {
+                            bindings.push(self.pattern_binding()?);
+                            if self.eat(")") {
+                                break;
+                            }
+                            self.expect(",")?;
+                        }
+                    }
+                    MatchPattern::Enum {
+                        name,
+                        bindings,
+                        span,
+                    }
+                };
                 arms.push(MatchArm {
-                    ok,
-                    binding: (binding != "_").then_some(binding),
+                    pattern,
                     body: self.block()?,
                     line,
-                    binding_span,
-                    binding_type: None,
                 });
                 self.skip();
             }
@@ -516,6 +573,15 @@ impl Parser {
             line,
             binding_span,
             binding_type: None,
+        })
+    }
+    fn pattern_binding(&mut self) -> Result<PatternBinding, String> {
+        let start = self.pos;
+        let name = self.name()?;
+        Ok(PatternBinding {
+            name: (name != "_").then_some(name),
+            span: self.span(start),
+            ty: None,
         })
     }
     // Pratt parser。演算子の優先順位を一か所に集め、曖昧な構文を避ける。

@@ -5,7 +5,7 @@ const f = require('../src/features');
 const index = { definitions: [] };
 
 test('keyword completion covers existing syntax in High and Low without leaking into types or members', () => {
-  const shared = ['scope', 'spawn', 'import', 'extern', 'in', 'with', 'and', 'or', 'not', 'True', 'False', 'None', 'true', 'false', 'null'];
+  const shared = ['enum', 'scope', 'spawn', 'import', 'extern', 'in', 'with', 'and', 'or', 'not', 'True', 'False', 'None', 'true', 'false', 'null'];
   for (const low of [false, true]) {
     const names = f.completionCandidates(undefined, 'sco', 3, low).filter(x => x.kind === 'keyword').map(x => x.name);
     for (const name of [...shared, ...(low ? ['fn', 'record', 'let'] : ['def', 'class'])]) assert.ok(names.includes(name), name);
@@ -27,9 +27,9 @@ test('static builtin help works with incomplete syntax without an index', () => 
 
 test('static builtin fallback avoids declarations, parameters and local bindings that shadow the name', () => {
   for (const binding of [
-    'def print(value: str):', 'extern async def print()', 'fn print(value: str) {', 'class print:', 'record print {',
+    'def print(value: str):', 'extern async def print()', 'fn print(value: str) {', 'class print:', 'record print {', 'enum print:',
     'def other(print: fn(i64) -> unit):', 'print = custom', 'let print: i64 = 1;', 'let print', 'print += 1',
-    'for print in items:', 'for print', 'case Ok(print):', 'case Err(print):',
+    'for print in items:', 'for print', 'case Ok(print):', 'case Err(print):', 'case AuthError.Detailed(code, print):',
   ]) {
     const text = binding + '\n    print(';
     assert.equal(f.hoverAt(undefined, text, text.lastIndexOf('print') + 2), undefined, binding);

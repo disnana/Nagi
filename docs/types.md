@@ -11,10 +11,10 @@
 | `f32` / `f64` | 小数を扱う浮動小数点数 | コピーできる |
 | `bool` | `True` / `False` | 分岐・ループの条件に使う |
 | `str` / `bytes` | UTF-8文字列 / バイト列 | 所有値。自作関数へ渡すとmoveする |
-| `List[T]` / `[T]` | 同じ型の要素を持つ配列 | 所有値。forでの走査は基本型とCopy classに対応 |
+| `List[T]` / `[T]` | 同じ型の要素を持つ配列 | 所有値。forでの走査は基本型とCopy class・enumに対応 |
 | `view[str]` / `view[bytes]` / `view[T]` | 文字列・バイト列・配列を借りて読む | 元データの所有者が必要。読むだけで元の値は変更できない |
 | `T?` / `Option[T]` | 値がある、または`None` | `None`には型の文脈が必要 |
-| `Result[T, Error]` | 成功値またはエラー | `try`で伝播、`match`で`Ok` / `Err`を処理する |
+| `Result[T, E]` | 成功値またはエラー | `E`はError・独自class・enum。`try`で伝播、`match`で処理する |
 | `shared[T]` | 複数の場所で共有する所有値 | `share`で作り、`clone_shared`で共有参照を増やす |
 | `UUID` / `timestamp` | UUID / 時刻の値 | UUIDの文字列変換には`uuid_parse` / `uuid_format`を使う |
 | `fn[引数の型..., 戻り値の型]` | 関数を値として渡す | 同期関数の引数・戻り値に使える。最後の型が戻り値 |
@@ -29,6 +29,18 @@ VS Code拡張では、変数名にマウスを置くと推論された型を確�
 nullableは`missing: i64? = None`、値がある場合は`present: i64? = some(42)`です。`T?`は`Option[T]`の短い表記ですが、現在はmatchや汎用unwrap APIはありません。空配列は`values: List[i64] = []`と型を指定してください。
 
 関数の引数・戻り値・借用の書き方は[文法](syntax.md)、コピーとmoveの規則は[所有権](ownership.md)、各関数の対応する型は[組み込み関数](builtins.md)を参照してください。
+
+## enumで種類を分ける
+
+```nagi
+enum Choice:
+    Cancelled
+    Selected(id: i64)
+```
+
+`Choice.Cancelled`か`Choice.Selected(id=42)`を作り、`match`で全種類を処理します。情報を持つ種類は位置引数でも作れます。全payloadがコピー可能ならenumもコピーできます。str・Error・Listなどを含む場合はmoveします。
+
+classと同じく、ファイルをimportして使えます。enumの型引数・メソッド・JSON変換は未対応です。[エラー処理](error-handling.md#独自のエラー型)にResultと組み合わせる例があります。
 
 ## 関数を値として渡す
 
@@ -64,7 +76,7 @@ async関数を配列やclassへ保存することも未対応です。非同期�
 
 ## Rustでの表現
 
-数値とboolはRustの同じ型、`str`は`String`、`bytes`と`List`は`Vec`、`shared`は`Arc`へ変換します。`view`は参照、nullableは`Option`、成功・失敗は`Result`です。詳しくは[メモリの扱い](memory-model.md)を参照してください。
+数値とboolはRustの同じ型、`str`は`String`、`bytes`と`List`は`Vec`、`shared`は`Arc`へ変換します。`view`は参照、nullableは`Option`、成功・失敗は`Result`、enumはRustのenumです。詳しくは[メモリの扱い](memory-model.md)を参照してください。
 
 ## 符号付き整数の最小値
 

@@ -28,9 +28,20 @@ struct Definition {
     signature: String,
     parameters: Vec<Member>,
     fields: Vec<Member>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    variants: Vec<Variant>,
     #[serde(skip_serializing_if = "Option::is_none")]
     return_type: Option<String>,
     asynchronous: bool,
+}
+#[derive(Clone, Serialize)]
+struct Variant {
+    name: String,
+    kind: &'static str,
+    location: Location,
+    signature: String,
+    parameters: Vec<Member>,
+    return_type: String,
 }
 #[derive(Clone, Serialize)]
 struct Member {
@@ -306,13 +317,14 @@ impl Bindings<'_, '_> {
                     let before = self.vars.clone();
                     for arm in arms {
                         self.vars = before.clone();
-                        if let Some(name) = &arm.binding {
-                            if self.vars.contains_key(name) {
-                                // Nagi forbids a case binding with an outer name.
-                                // Do not guess which declaration an invalid arm means.
-                                self.vars.remove(name);
-                            } else {
-                                self.binding(arm.line, arm.binding_span, name);
+                        for binding in arm.pattern.bindings() {
+                            if let Some(name) = &binding.name {
+                                if self.vars.contains_key(name) {
+                                    // Invalid shadowing does not imply a declaration.
+                                    self.vars.remove(name);
+                                } else {
+                                    self.binding(arm.line, binding.span, name);
+                                }
                             }
                         }
                         self.block(&arm.body);
@@ -447,8 +459,10 @@ impl Types<'_, '_> {
                 S::Match(value, arms) => {
                     self.expr(value);
                     for arm in arms {
-                        if let (Some(name), Some(ty)) = (&arm.binding, &arm.binding_type) {
-                            self.binding(arm.line, arm.binding_span, name, ty);
+                        for binding in arm.pattern.bindings() {
+                            if let (Some(name), Some(ty)) = (&binding.name, &binding.ty) {
+                                self.binding(arm.line, binding.span, name, ty);
+                            }
                         }
                         self.block(&arm.body);
                     }
@@ -494,6 +508,31 @@ fn display_type(ty: &Type, file: &str, metadata: &ModuleMetadata) -> String {
             .map(|t| display_type(t, file, metadata))
             .collect::<Vec<_>>()
             .join(", ")
+    )
+}
+
+fn variant_signature(parent: &str, name: &str, parameters: &[Member]) -> String {
+    if parameters.is_empty() {
+        return format!("{parent}.{name}");
+    }
+    format!(
+        "{parent}.{name}({})",
+        parameters
+            .iter()
+            .map(|p| format!("{}: {}", p.name, p.ty))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+fn enum_signature(name: &str, variants: &[Variant]) -> String {
+    format!(
+        "enum {name}\n{}",
+        variants
+            .iter()
+            .map(|v| format!("    {}", v.signature))
+            .collect::<Vec<_>>()
+            .join("\n")
     )
 }
 
@@ -560,11 +599,13 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
     let mut definitions = vec![];
     let mut targets = HashMap::new();
     let mut symbols = HashMap::new();
+    let mut variant_targets = HashMap::new();
     for p in programs {
         for (name, kind, line, keyword) in p
             .classes
             .iter()
             .map(|c| (&c.name, "class", c.line, "class"))
+            .chain(p.enums.iter().map(|e| (&e.name, "enum", e.line, "enum")))
             .chain(
                 p.functions
                     .iter()
@@ -585,7 +626,11 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
                 continue;
             };
             let local = line - file.start + 1;
-            let low_keyword = if keyword == "def" { "fn" } else { "record" };
+            let low_keyword = match keyword {
+                "def" => "fn",
+                "class" => "record",
+                _ => keyword,
+            };
             let Some(pair) = file.tokens.windows(2).find(|pair| {
                 pair[0].line == local
                     && matches!(&pair[0].kind, K::Id(n) if n == keyword || n == low_keyword)
@@ -610,6 +655,7 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
                 signature: String::new(),
                 parameters: vec![],
                 fields: vec![],
+                variants: vec![],
                 return_type: None,
                 asynchronous: false,
             };
@@ -650,6 +696,34 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
                         .join(", "),
                     definition.return_type.as_deref().unwrap()
                 );
+            } else if kind == "enum" {
+                let enumeration = p
+                    .enums
+                    .iter()
+                    .find(|e| e.name == *name && e.line == line)
+                    .unwrap();
+                for variant in &enumeration.variants {
+                    let Some(location) =
+                        name_location(&files, variant.line, variant.name_span, &variant.name)
+                    else {
+                        continue;
+                    };
+                    if let Some(info) = info {
+                        variant_targets
+                            .insert((info.id.clone(), variant.name.clone()), location.clone());
+                    }
+                    let parameters = members(&variant.fields);
+                    let signature = variant_signature(display_name, &variant.name, &parameters);
+                    definition.variants.push(Variant {
+                        name: variant.name.clone(),
+                        kind: "enum_member",
+                        location,
+                        signature,
+                        parameters,
+                        return_type: display_name.into(),
+                    });
+                }
+                definition.signature = enum_signature(display_name, &definition.variants);
             } else {
                 let class = p
                     .classes
@@ -692,6 +766,26 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
                     alias.return_type = Some(display_type(&function.ret, file, &metadata));
                     break;
                 }
+                if let Some(enumeration) = program.enums.iter().find(|e| &e.name == symbol) {
+                    for variant in &mut alias.variants {
+                        if let Some(source) =
+                            enumeration.variants.iter().find(|v| v.name == variant.name)
+                        {
+                            variant.parameters = source
+                                .fields
+                                .iter()
+                                .map(|(name, ty)| Member {
+                                    name: name.clone(),
+                                    ty: display_type(ty, file, &metadata),
+                                })
+                                .collect();
+                        }
+                        variant.signature =
+                            variant_signature(name, &variant.name, &variant.parameters);
+                        variant.return_type = name.into();
+                    }
+                    break;
+                }
                 if let Some(class) = program.classes.iter().find(|c| &c.name == symbol) {
                     alias.fields = class
                         .fields
@@ -705,7 +799,9 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
                 }
             }
         }
-        alias.signature = if alias.kind == "class" {
+        alias.signature = if alias.kind == "enum" {
+            enum_signature(&alias.name, &alias.variants)
+        } else if alias.kind == "class" {
             format!(
                 "class {}\n{}",
                 alias.name,
@@ -804,9 +900,36 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
         };
         let locations =
             reference_locations(&files, reference.line, reference.span, &reference.spelling);
+        let variant = reference.spelling.rsplit_once('.').and_then(|(parent, name)| {
+            if reference.target.kind != DefKind::Enum {
+                return None;
+            }
+            let canonical = metadata.definition_id(&reference.target).is_some_and(|d| d.symbol == parent);
+            let parts = parent.split('.').collect::<Vec<_>>();
+            let scoped = match parts.as_slice() {
+                [name] => metadata.binding(&reference.module, name).is_some_and(|b| {
+                    matches!(&b.target, BindingTarget::Definition(id) if id == &reference.target)
+                }),
+                [alias, name] => metadata.binding(&reference.module, alias).is_some_and(|b| {
+                    matches!(&b.target, BindingTarget::Module(id) if id == &reference.target.module && *name == reference.target.name)
+                }),
+                _ => false,
+            };
+            if canonical || scoped {
+                variant_targets.get(&(reference.target.clone(), name.to_owned()))
+            } else {
+                None
+            }
+        });
         if let Some(location) = locations.last() {
             references.push(Reference {
                 location: location.clone(),
+                target: variant.unwrap_or(target).clone(),
+            });
+        }
+        if variant.is_some() && locations.len() >= 2 {
+            references.push(Reference {
+                location: locations[locations.len() - 2].clone(),
                 target: target.clone(),
             });
         }
@@ -856,6 +979,12 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
             location: definition.location.clone(),
             target: definition.location.clone(),
         });
+        for variant in &definition.variants {
+            references.push(Reference {
+                location: variant.location.clone(),
+                target: variant.location.clone(),
+            });
+        }
     }
     let mut bindings = Bindings {
         files: &files,
@@ -882,6 +1011,7 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
     for (i, p) in programs.iter().enumerate() {
         let dest = if i == 0 { &mut primary } else { &mut native };
         dest.classes.extend(p.classes.clone());
+        dest.enums.extend(p.enums.clone());
         dest.functions.extend(p.functions.clone());
         dest.modules.merge_native(p.modules.clone())?;
     }

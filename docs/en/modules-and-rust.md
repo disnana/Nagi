@@ -1,6 +1,6 @@
 # File imports and Rust integration
 
-Load another Nagi file with a quoted relative path. Use `import "filename" as name` to give it a module name, or `from "filename" import definition` to select a function or class. To call Rust, declare the function's parameter and return types in Nagi and supply a Rust file when building.
+Load another Nagi file with a quoted relative path. Use `import "filename" as name` to give it a module name, or `from "filename" import definition` to select a function, class, or enum. To call Rust, declare the function's parameter and return types in Nagi and supply a Rust file when building.
 
 The module and from-alias features below require a compiler built from this repository's current source.
 
@@ -59,7 +59,7 @@ def main():
 
 `orders.Order` and `SavedOrder` are the same type. You can also call `orders.score(order)` directly. Qualified names work in type arguments, field types, and nullable types, such as `List[orders.Order]` and `orders.Order?`. An `Order` defined in another file is a different type; passing one where the other is required is a type error.
 
-A module name exposes functions and classes defined in that file. Imported names are not automatically re-exported. The alias is optional in `from "orders.nagi" import Order`. Each from statement selects one definition; use separate statements for several definitions. `from` and `as` are contextual import keywords and can still be function or variable names. A local with the same name as a module follows the existing local-variable rules. Class method calls remain unsupported.
+A module name exposes functions, classes, and enums defined in that file. Imported names are not automatically re-exported. The alias is optional in `from "orders.nagi" import Order`. Each from statement selects one definition; use separate statements for several definitions. `from` and `as` are contextual import keywords and can still be function or variable names. A local with the same name as a module follows the existing local-variable rules. Class method calls remain unsupported.
 
 Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted standard-module imports such as `import sqlite` and visibility declarations are unsupported.
 

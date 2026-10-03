@@ -1,6 +1,6 @@
 # ファイルのimportとRust連携
 
-別のNagiファイルは引用符付きの相対パスで読み込みます。`import "ファイル名" as 名前`でmodule名を付けるか、`from "ファイル名" import 定義名`で関数・classを選べます。Rustの関数を使う場合は、Nagiで引数・戻り値の型を宣言し、ビルド時にRustファイルを指定します。
+別のNagiファイルは引用符付きの相対パスで読み込みます。`import "ファイル名" as 名前`でmodule名を付けるか、`from "ファイル名" import 定義名`で関数・class・enumを選べます。Rustの関数を使う場合は、Nagiで引数・戻り値の型を宣言し、ビルド時にRustファイルを指定します。
 
 以下のmodule名・fromの別名は、このリポジトリの最新ソースからビルドしたコンパイラで利用できます。
 
@@ -59,7 +59,7 @@ def main():
 
 `orders.Order`と`SavedOrder`は同じ型です。`orders.score(order)`で直接呼び出すこともできます。型引数・フィールド型・nullableでも`List[orders.Order]`や`orders.Order?`を使えます。別ファイルで定義した同名の`Order`は別の型になり、混ぜて渡すと型エラーになります。
 
-module名で見えるのは、そのファイル自身が定義した関数とclassです。importした名前は自動で再公開しません。`from "orders.nagi" import Order`のように別名を省略することもできます。1つのfrom文で選ぶ定義は1つです。複数の定義は文を分けて読み込みます。`from`と`as`はimportの文脈だけで解釈し、関数や変数の名前にも使えます。関数内でmodule名と同じローカル名を使った場合は、現在のローカル変数の規則に従います。classのmethod呼び出しには対応していません。
+module名で見えるのは、そのファイル自身が定義した関数・class・enumです。importした名前は自動で再公開しません。`from "orders.nagi" import Order`のように別名を省略することもできます。1つのfrom文で選ぶ定義は1つです。複数の定義は文を分けて読み込みます。`from`と`as`はimportの文脈だけで解釈し、関数や変数の名前にも使えます。関数内でmodule名と同じローカル名を使った場合は、現在のローカル変数の規則に従います。classのmethod呼び出しには対応していません。
 
 同じ実ファイルは、複数のmodule名・fromの別名・従来のimportを使っても1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在はエラーです。存在しない定義のfrom importや、同じ場所で異なる定義を同じ名前にするimportは、そのimport文でエラーになります。`import sqlite`のように引用符なしで標準moduleを読み込む構文と、公開範囲の指定は未対応です。
 

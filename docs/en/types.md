@@ -11,10 +11,10 @@ Annotate variables with `count: i32 = 10`, parameters with `count: i32`, and ret
 | `f32` / `f64` | Floating-point numbers | Copyable |
 | `bool` | `True` / `False` | Used in branch and loop conditions |
 | `str` / `bytes` | UTF-8 strings / byte sequences | Owned; passing to a user-defined function moves the value |
-| `List[T]` / `[T]` | Lists of elements of the same type | Owned; for iteration supports primitive elements and Copy classes |
+| `List[T]` / `[T]` | Lists of elements of the same type | Owned; for iteration supports primitive elements and Copy classes/enums |
 | `view[str]` / `view[bytes]` / `view[T]` | Read borrowed strings, byte sequences, or lists | Requires an owner for the source data; read-only |
 | `T?` / `Option[T]` | A value or `None` | `None` requires type context |
-| `Result[T, Error]` | A success value or an error | Propagate with `try`, or handle `Ok` / `Err` with `match` |
+| `Result[T, E]` | A success value or an error | `E` can be Error, a class, or an enum; propagate with `try` or handle with `match` |
 | `shared[T]` | An owned value shared across multiple places | Create with `share`; duplicate its shared reference with `clone_shared` |
 | `UUID` / `timestamp` | UUID / time values | Use `uuid_parse` / `uuid_format` for UUID text conversion |
 | `fn[parameter types..., return type]` | Pass a function as a value | Supported in synchronous function signatures; the last type is the return type |
@@ -29,6 +29,18 @@ In the VS Code extension, hovering a variable shows its inferred type, such as `
 Write `missing: i64? = None` for an absent nullable value and `present: i64? = some(42)` for a present value. `T?` abbreviates `Option[T]`; matching and a general unwrap API are not yet available. Annotate empty lists, for example `values: List[i64] = []`.
 
 See [syntax](syntax.md) for parameter, return, and borrow annotations; [ownership](ownership.md) for copy and move rules; and [built-in functions](builtins.md) for accepted argument types.
+
+## Distinguish variants with an enum
+
+```nagi
+enum Choice:
+    Cancelled
+    Selected(id: i64)
+```
+
+Construct `Choice.Cancelled` or `Choice.Selected(id=42)`, then handle every variant with `match`. Payload variants also accept positional arguments. An enum is copyable when every payload field is copyable; fields such as str, Error, or List make it move instead.
+
+Import an enum from a file like a class. Enum type parameters, methods, and JSON conversion are unsupported. See [error handling](error-handling.md#define-your-own-error-type) for an example with Result.
 
 ## Pass a function as a value
 
@@ -64,7 +76,7 @@ Storing async functions in lists or classes is also unsupported. You cannot stor
 
 ## Rust representation
 
-Numbers and bool map to the same Rust types. `str` maps to `String`, `bytes` and `List` to `Vec`, and `shared` to `Arc`. Views map to references, nullable values to `Option`, and success/failure to `Result`. See [memory handling](memory-model.md).
+Numbers and bool map to the same Rust types. `str` maps to `String`, `bytes` and `List` to `Vec`, and `shared` to `Arc`. Views map to references, nullable values to `Option`, success/failure to `Result`, and enums to Rust enums. See [memory handling](memory-model.md).
 
 ## Minimum signed integers
 

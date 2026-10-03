@@ -24,8 +24,8 @@ fn match_requires_result_and_exactly_one_of_each_arm() {
         ("def main():\n    match 1:\n        case Ok(value):\n            print(value)\n        case Err(_):\n            print(0)\n", "対象はResult"),
         ("def main():\n    match parse_i64(\"1\"):\n        case Ok(value):\n            print(value)\n", "両方"),
         ("def main():\n    match parse_i64(\"1\"):\n        case Ok(value):\n            print(value)\n        case Ok(other):\n            print(other)\n        case Err(_):\n            print(0)\n", "重複"),
-        ("def main():\n    match parse_i64(\"1\"):\n        case Some(value):\n            print(value)\n", "OkまたはErr"),
-        ("def main():\n    match parse_i64(\"1\"):\n        case _:\n            print(0)\n", "OkまたはErr"),
+        ("def main():\n    match parse_i64(\"1\"):\n        case Some(value):\n            print(value)\n", "caseにはOk、Err"),
+        ("def main():\n    match parse_i64(\"1\"):\n        case _:\n            print(0)\n", "caseにはOk、Err"),
     ] { assert!(checked(source).unwrap_err().contains(message), "{source}"); }
 }
 
@@ -72,9 +72,11 @@ fn nested_match_async_and_complete_return_paths_are_checked() {
 #[test]
 fn error_helpers_preserve_types_and_ownership() {
     checked("def recover(r: Result[str, Error]) -> Result[str, Error]:\n    match r:\n        case Ok(value):\n            return ok(value)\n        case Err(problem):\n            print(error_kind(problem))\n            print(error_message(problem))\n            return fail(problem)\ndef missing() -> Result[i64, Error]:\n    return not_found(\"missing\")\ndef failed() -> Result[i64, Error]:\n    return internal_error(\"failed\")\n").unwrap();
-    assert!(checked("def main():\n    r = fail(1)\n")
-        .unwrap_err()
-        .contains("expected Error"));
+    assert!(
+        checked("def main():\n    r: Result[unit, Error] = fail(1)\n")
+            .unwrap_err()
+            .contains("expected Error")
+    );
     assert!(
         checked("def bad() -> Result[i64, i64]:\n    return not_found(\"missing\")\n")
             .unwrap_err()

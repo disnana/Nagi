@@ -47,7 +47,7 @@ Highのrootで`import "orders.nagi" as orders`と読み込んだ関数には、`
 
 ## Lowの文法
 
-相対ファイルのimportはHighと共通で、`import "orders.low" as orders;`や`from "orders.low" import Order as SavedOrder;`と書けます。module名が公開するのは、そのファイル自身が定義した関数とrecordです。
+相対ファイルのimportはHighと共通で、`import "orders.low" as orders;`や`from "orders.low" import Order as SavedOrder;`と書けます。module名が公開するのは、そのファイル自身が定義した関数・record・enumです。
 
 型、所有権、借用、Resultの扱いはHighと共通です。次はResultを処理する関数の例です。
 
@@ -62,4 +62,19 @@ fn number_or(text: view[str], fallback: i64) -> i64 {
 
 `Ok`と`Err`の両方が必要です。詳しくは[エラー処理](error-handling.md)を参照してください。
 
-現在のLowは、型付きの変数、view、class（Lowではrecord）、関数、分岐、ループ、async、scopeに対応しています。生ポインター、メモリ配置の指定、手動の確保・解放、SIMD命令、unsafe構文、C ABIは未対応です。Rustの関数を呼ぶ方法は[ファイルのimportとRust連携](modules-and-rust.md)にあります。
+enumもHighと同じ種類とpayloadを持ち、すべての種類をmatchします。
+
+```low
+enum Choice {
+    Cancelled;
+    Selected(id: i64);
+}
+fn selected_or_zero(choice: Choice) -> i64 {
+    match choice {
+        case Choice.Cancelled { return 0; }
+        case Choice.Selected(id) { return id; }
+    }
+}
+```
+
+現在のLowは、型付きの変数、view、class（Lowではrecord）、enum、関数、分岐、ループ、async、scopeに対応しています。生ポインター、メモリ配置の指定、手動の確保・解放、SIMD命令、unsafe構文、C ABIは未対応です。Rustの関数を呼ぶ方法は[ファイルのimportとRust連携](modules-and-rust.md)にあります。

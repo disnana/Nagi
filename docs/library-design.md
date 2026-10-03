@@ -49,7 +49,7 @@ from "domain/orders.nagi" import score
 
 `orders.Order` と `SavedOrder` は同じ定義を指し、別ファイルの同名classは別の型です。同じ実ファイルを複数の別名で読んでも定義は1つです。moduleと定義のIDを、型検査、High→Low、Rust出力、エディターで使います。型引数やフィールド型も同じ名前解決に従います。
 
-module名で公開するのは、そのファイル自身に定義した関数・classです。importした名前は自動で再公開しません。from文は1文で1つの定義を選び、別名は省略できます。存在しない定義や同じ場所での名前の衝突はimport文でエラーになります。`from`・`as`はimport文だけのキーワードです。既存の平坦importは依存先まで見える名前空間を保ち、組み込み関数も従来どおり使えます。
+module名で公開するのは、そのファイル自身に定義した関数・class・enumです。importした名前は自動で再公開しません。from文は1文で1つの定義を選び、別名は省略できます。存在しない定義や同じ場所での名前の衝突はimport文でエラーになります。`from`・`as`はimport文だけのキーワードです。既存の平坦importは依存先まで見える名前空間を保ち、組み込み関数も従来どおり使えます。
 
 rootのmodule名にある関数のLow差し替えは`@replace generated::orders::score`、Rustのアダプターからのclass参照は`super::orders::Order`や`super::SavedOrder`です。従来の`@replace generated::score`と`super::Item`も保ちます。JSONのfield名やSQLの列名は変えません。詳細は[importとRust連携](modules-and-rust.md)を参照してください。
 

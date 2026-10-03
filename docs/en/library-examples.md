@@ -2,7 +2,7 @@
 
 Try command-line applications, reusable libraries, Rust integration, HTTP, and Low replacements. Each project includes `nagi.toml` and instructions.
 
-## Seven examples for libraries and foundations
+## Eight examples for libraries and foundations
 
 | Project | What it demonstrates |
 | --- | --- |
@@ -13,6 +13,7 @@ Try command-line applications, reusable libraries, Rust integration, HTTP, and L
 | [Custom HTTP foundation](../../test-nagi-code/library-examples/custom-http/README.en.md) | Pass a Nagi function to Axum/Tokio and serve HTTP without opening a database |
 | [Low calculation kernel](../../test-nagi-code/library-examples/low-kernel/README.en.md) | Replace a High implementation with Low while keeping the application's calls |
 | [Modules and aliases](../../test-nagi-code/library-examples/module-imports/README.en.md) | Distinguish same-named classes and use one type through a module name and a from alias |
+| [CLI with custom errors](../../test-nagi-code/library-examples/typed-errors/README.en.md) | Distinguish failures with an enum, preserve their causes, and choose display messages |
 
 See [libraries and Rust assets](libraries.md) for the structure. Both pricing applications need `shared/`; obtain the [whole sample directory](../../test-nagi-code/library-examples/).
 
@@ -45,12 +46,12 @@ Each README explains its inputs, outputs, and limits. Passing these examples doe
 
 ## Verify the examples during development
 
-With Python 3 and a built `nagic`, verify the seven projects' checks, native builds, output, and HTTP responses:
+With Python 3 and a built `nagic`, verify the eight projects' checks, native builds, output, and HTTP responses:
 
 ```sh
 python scripts/verify_library_examples.py --compiler /path/to/nagic
 ```
 
-The script compares both pricing implementations, checks module and type aliases, malformed JSON, and async errors, compares High/Low results, and verifies HTTP 400/404 responses, the body limit, and shutdown. It builds projects sequentially and shares the dependency cache.
+The script compares both pricing implementations, checks module and type aliases, custom errors, malformed JSON, and async errors, compares High/Low results, and verifies HTTP 400/404 responses, the body limit, and shutdown. It builds projects sequentially and shares the dependency cache.
 
 On Unix it checks a clean exit after SIGINT. On Windows it terminates the process and checks that the listener closes; check console Ctrl+C manually using the HTTP sample's instructions.

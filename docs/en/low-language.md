@@ -47,7 +47,7 @@ Commands regenerate `generated.low`. Save changes in `native.low` to keep them. 
 
 ## Low syntax
 
-Relative-file imports follow the same rules as High: `import "orders.low" as orders;` or `from "orders.low" import Order as SavedOrder;`. A module name exposes functions and records defined in that file.
+Relative-file imports follow the same rules as High: `import "orders.low" as orders;` or `from "orders.low" import Order as SavedOrder;`. A module name exposes functions, records, and enums defined in that file.
 
 Types, ownership, borrowing, and Result handling follow the same rules as High. This function handles a Result:
 
@@ -62,4 +62,19 @@ fn number_or(text: view[str], fallback: i64) -> i64 {
 
 Both `Ok` and `Err` cases are required. See [error handling](error-handling.md).
 
-Low currently supports typed variables, views, classes (called records in Low), functions, branches, loops, async functions, and scopes. Raw pointers, memory layout declarations, manual allocation and freeing, SIMD instructions, unsafe syntax, and a C ABI are unsupported. See [file imports and Rust integration](modules-and-rust.md) to call Rust functions.
+Enums have the same variants and payloads as High. Match every variant:
+
+```low
+enum Choice {
+    Cancelled;
+    Selected(id: i64);
+}
+fn selected_or_zero(choice: Choice) -> i64 {
+    match choice {
+        case Choice.Cancelled { return 0; }
+        case Choice.Selected(id) { return id; }
+    }
+}
+```
+
+Low currently supports typed variables, views, classes (called records in Low), enums, functions, branches, loops, async functions, and scopes. Raw pointers, memory layout declarations, manual allocation and freeing, SIMD instructions, unsafe syntax, and a C ABI are unsupported. See [file imports and Rust integration](modules-and-rust.md) to call Rust functions.

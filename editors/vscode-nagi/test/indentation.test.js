@@ -24,7 +24,7 @@ function format(source, trigger = '\n', options = spaces, language = 'nagi') {
 }
 
 test('High block headers indent one level, including main, async, match and case', () => {
-  for (const header of ['def main():', 'async def main() -> Result[unit, Error]:', 'class Item:', 'if ready:', 'else:', 'for n in range(3):', 'while ready:', 'match value:', 'case Ok(value):', 'scope:', 'async with scope:']) {
+  for (const header of ['def main():', 'async def main() -> Result[unit, Error]:', 'class Item:', 'enum AuthError:', 'if ready:', 'else:', 'for n in range(3):', 'while ready:', 'match value:', 'case Ok(value):', 'case AuthError.WeakPassword(message):', 'scope:', 'async with scope:']) {
     assert.equal(format('    ' + header + '\n|'), '    ' + header + '\n        ');
   }
   assert.equal(format('def main(): # 😀 凪\r\n|'), 'def main(): # 😀 凪\r\n    ');
@@ -104,4 +104,5 @@ test('indentation respects two spaces, tabs, CRLF and Low brace blocks', () => {
   assert.equal(format('fn main() {\n|\n}', '\n', spaces, 'nagi-low'), 'fn main() {\n    \n}');
   assert.equal(format('fn main() {\n    print(\n|\n    )\n}', '\n', spaces, 'nagi-low'), 'fn main() {\n    print(\n        \n    )\n}');
   assert.equal(format('fn main() {\n    print(42);\n    }|', '}', spaces, 'nagi-low'), 'fn main() {\n    print(42);\n}');
+  assert.equal(format('enum AuthError {\n|\n}', '\n', spaces, 'nagi-low'), 'enum AuthError {\n    \n}');
 });

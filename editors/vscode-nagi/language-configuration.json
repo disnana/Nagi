@@ -7,5 +7,5 @@
     { "open": "'", "close": "'", "notIn": ["string", "comment"] }
   ],
   "surroundingPairs": [["(", ")"], ["[", "]"], ["\"", "\""], ["'", "'"]],
-  "indentationRules": { "increaseIndentPattern": "^\\s*(?:(?:async\\s+)?def|class|if|else|while|for|match|case|scope|async\\s+with)\\b.*:\\s*(?:#.*)?$" }
+  "indentationRules": { "increaseIndentPattern": "^\\s*(?:(?:async\\s+)?def|class|enum|if|else|while|for|match|case|scope|async\\s+with)\\b.*:\\s*(?:#.*)?$" }
 }

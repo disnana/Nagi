@@ -26,7 +26,7 @@ The scope checks child results after its body finishes. If a child returns a Res
 
 Arguments are evaluated at the `spawn` statement, and the resulting values are passed to the child. With `spawn work(copy(part))`, the child receives an owned copy, so the parent can keep using the original data. Copying a list does not make it safe to pass if its elements still contain views.
 
-A function using a scope returns `Result[T, Error]`. A custom error class needs a Rust adapter implementing `From<nagi_runtime::Error>`. The build checks that child failures can be converted to that class.
+A function using a scope returns Result. A custom error class or enum requires an explicit Rust adapter implementing `From<nagi_runtime::Error>`. The build checks that child failures can be converted to that type. Spawned children still use Error as their error type.
 
 If the parent operation itself is dropped, or the scope body panics, cancellation is requested without a guarantee that every child has already stopped. See [Concurrency](concurrency.md) for CPU work and cancellation.
 

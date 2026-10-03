@@ -1,4 +1,5 @@
 pub mod ast;
+mod capabilities;
 pub mod check;
 pub mod diagnostics;
 pub mod emit;

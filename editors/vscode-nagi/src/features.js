@@ -1,5 +1,5 @@
 'use strict';
-const keywords = ['return', 'if', 'else', 'while', 'for', 'match', 'case', 'async', 'await', 'try', 'scope', 'spawn', 'import', 'from', 'as', 'extern', 'in', 'with', 'and', 'or', 'not', 'True', 'False', 'None', 'true', 'false', 'null'];
+const keywords = ['enum', 'return', 'if', 'else', 'while', 'for', 'match', 'case', 'async', 'await', 'try', 'scope', 'spawn', 'import', 'from', 'as', 'extern', 'in', 'with', 'and', 'or', 'not', 'True', 'False', 'None', 'true', 'false', 'null'];
 const { normalizeFile } = require('./compiler');
 
 // These signatures describe the supported builtins, rather than inferred overloads.
@@ -18,11 +18,11 @@ const builtinRows = [
   ['i32', 'value: i64', 'Result[i32, Error]', 'i64を範囲検査してi32へ縮小します。'],
   ['uuid_parse', 'text: str | view[str]', 'Result[UUID, Error]', '文字列からUUIDを読みます。'],
   ['uuid_format', 'value: UUID', 'str', 'UUIDを文字列に変換します。'],
-  ['ok', 'value: T', 'Result[T, Error]', '成功値を返します。'],
+  ['ok', 'value: T', 'Result[T, E]', '成功値を返します。エラー型は文脈から決まります。'],
   ['error', 'message: str', 'Result[T, Error]', '入力エラーを作ります。HTTPでは400です。'],
   ['not_found', 'message: str', 'Result[T, Error]', '対象なしを返します。HTTPでは404です。'],
   ['internal_error', 'message: str', 'Result[T, Error]', '内部エラーを返します。HTTPでは詳細を伏せた500です。'],
-  ['fail', 'problem: Error', 'Result[T, Error]', 'Errorをmoveして種類を保ったまま返します。'],
+  ['fail', 'problem: E', 'Result[T, E]', '独自class・enumを含むエラー値をmoveして返します。'],
   ['error_kind', 'problem: Error', 'str', 'Errorを消費せず、種類の名前を返します。'],
   ['error_message', 'problem: Error', 'str', 'Errorを消費せず、messageをコピーします。'],
   ['some', 'value: T', 'T?', 'nullableの値ありを作ります。'],
@@ -79,7 +79,7 @@ const builtins = builtinRows.map(([name, args, result, description, asynchronous
 }));
 const types = ['i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64', 'bool', 'str', 'bytes', 'unit', 'Error', 'Db', 'Html', 'UUID', 'timestamp', 'List', 'Result', 'view', 'shared', 'Option', 'fn'];
 const typeInsertions = {
-  List: 'List[${1:T}]', Result: 'Result[${1:T}, Error]', view: 'view[${1:str}]', shared: 'shared[${1:T}]',
+  List: 'List[${1:T}]', Result: 'Result[${1:T}, ${2:Error}]', view: 'view[${1:str}]', shared: 'shared[${1:T}]',
   Option: 'Option[${1:T}]', fn: 'fn[${1:i64}, ${2:i64}]',
 };
 
@@ -137,7 +137,7 @@ function assistanceDeclarations(index, text, source = {}) {
   const imported = /\bimport\b/.test(code);
   const bindings = new Set();
   const patterns = [
-    /\b(?:def|fn|class|record)\s+([A-Za-z_]\w*)/g,
+    /\b(?:def|fn|class|record|enum)\s+([A-Za-z_]\w*)/g,
     /\blet\s+([A-Za-z_]\w*)/g,
     /\b([A-Za-z_]\w*)\s*:(?!:)/g,
     /\b([A-Za-z_]\w*)\s*(?:=(?!=)|[+*\/%-]=)/g,
@@ -145,6 +145,9 @@ function assistanceDeclarations(index, text, source = {}) {
     /\bcase\s+(?:Ok|Err)\s*\(\s*([A-Za-z_]\w*)/g,
   ];
   for (const pattern of patterns) for (const match of code.matchAll(pattern)) bindings.add(match[1]);
+  for (const match of code.matchAll(/\bcase\s+(?:[A-Za-z_]\w*\s*\.\s*)*[A-Za-z_]\w*\s*\(([^)]*)\)/g)) {
+    for (const name of match[1].split(',')) if (/^[A-Za-z_]\w*$/.test(name.trim())) bindings.add(name.trim());
+  }
   for (const [name, item] of result) if (item.builtin && (imported || bindings.has(name))) result.delete(name);
   return result;
 }
@@ -233,17 +236,25 @@ function fieldCandidates(index, text, member, source) {
     .map(f => ({ name: f.name, kind: 'field', signature: `${f.name}: ${f.type}`, type: f.type }));
 }
 
-function moduleMember(index, text, member, source) {
-  if (!source.file || source.saved || !Array.isArray(index?.bindings)) return undefined;
+function namespaceMember(index, text, member, source) {
+  if (!source.file || source.saved) return undefined;
   const code = context(text, text.length).masked;
-  const receiver = /\b([A-Za-z_]\w*)$/.exec(code.slice(0, member.receiverEnd));
+  const receiver = /\b([A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*)$/.exec(code.slice(0, member.receiverEnd));
   if (!receiver || /\.\s*$/.test(code.slice(0, receiver.index))) return undefined;
-  const binding = index.bindings.find(item => item.kind === 'module' && item.name === receiver[1] && fileMatches(item.file, source.file));
-  if (!binding) return undefined;
-  const word = { name: receiver[1], start: receiver.index, end: receiver.index + receiver[1].length };
-  // The compiler's lexical reference/type wins when a value shadows an alias.
-  if (localAt(index, text, word, source) || shadowedAt(index, text, word, source, { location: binding.location })) return undefined;
-  return binding;
+  const names = receiver[1].split(/\s*\.\s*/);
+  let item = declarations(index, source).get(names[0]);
+  if (!item || !['module', 'enum'].includes(item.kind)) return undefined;
+  const word = { name: names[0], start: receiver.index, end: receiver.index + names[0].length };
+  // Enum values and lexical aliases are not type namespaces.
+  if (localAt(index, text, word, source) || shadowedAt(index, text, word, source, item)) return undefined;
+  for (const name of names.slice(1)) {
+    const members = item.kind === 'module' ? item.members : item.kind === 'enum' ? item.variants : undefined;
+    item = members?.find(member => member.name === name);
+    if (!item) return undefined;
+  }
+  if (item.kind === 'module') return { item, members: item.members || [] };
+  if (item.kind === 'enum') return { item, members: item.variants || [] };
+  return undefined;
 }
 
 function resolvedDeclaration(index, text, word, source) {
@@ -252,7 +263,8 @@ function resolvedDeclaration(index, text, word, source) {
   const reference = (index?.references || []).find(ref => fileMatches(ref.location?.file, source.file) &&
     offsetAt(ref.location.line, ref.location.column) === word.start && ref.location.length === word.end - word.start);
   if (!reference) return undefined;
-  return (index.definitions || []).find(item => fileMatches(item.location?.file, reference.target?.file) &&
+  const definitions = (index.definitions || []).flatMap(item => [item, ...(item.variants || [])]);
+  return definitions.find(item => fileMatches(item.location?.file, reference.target?.file) &&
     item.location.line === reference.target.line && item.location.column === reference.target.column);
 }
 
@@ -263,21 +275,23 @@ function hoverAt(index, text, offset, source = {}) {
   if (!word.name) return undefined;
   const member = memberContext(text, offset);
   if (member) {
-    const binding = moduleMember(index, text, member, source);
-    const item = binding?.members?.find(item => item.name === word.name);
+    const namespace = namespaceMember(index, text, member, source);
+    const item = namespace?.members.find(item => item.name === word.name);
     if (!item) return undefined;
     return { item, start: word.start, end: word.end };
   }
   const local = localAt(index, text, word, source);
   if (local) return { item: { ...local, kind: 'variable', signature: `${local.name}: ${local.type}` }, start: word.start, end: word.end };
-  const item = assistanceDeclarations(index, text, source).get(word.name) || resolvedDeclaration(index, text, word, source);
+  const resolved = resolvedDeclaration(index, text, word, source);
+  const item = resolved?.kind === 'enum_member' ? resolved : assistanceDeclarations(index, text, source).get(word.name) || resolved;
   if (!item || shadowedAt(index, text, word, source, item)) return undefined;
   const before = state.masked.slice(0, word.start);
   const after = state.masked.slice(word.end);
-  const declaration = /\b(?:def|fn|class|record)\s*$/.test(before);
+  const declaration = /\b(?:def|fn|class|record|enum)\s*$/.test(before);
   const call = /^\s*\(/.test(after) || /^\s*\[[\w\[\], ?]+\]\s*\(/.test(after);
-  if (!declaration && !call && !(item.kind === 'class' && inTypeContext(before)) &&
-      !(['function', 'class'].includes(item.kind) && resolvedDeclaration(index, text, word, source)) && item.kind !== 'module') return undefined;
+  if (!declaration && !call && !(['class', 'enum'].includes(item.kind) && inTypeContext(before)) &&
+      !(['function', 'class', 'enum', 'enum_member'].includes(item.kind) && resolved) &&
+      item.kind !== 'module' && !(item.kind === 'enum' && /^\s*\./.test(after))) return undefined;
   return { item, start: word.start, end: word.end };
 }
 
@@ -287,20 +301,20 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
   const word = wordAt(state.masked, offset);
   const member = memberContext(text, offset);
   if (member) {
-    const binding = moduleMember(index, text, member, source);
-    if (binding) {
-      const members = binding.members || [];
+    const namespace = namespaceMember(index, text, member, source);
+    if (namespace) {
+      const members = namespace.members;
       return inTypeContext(state.masked.slice(0, member.dot))
-        ? members.filter(item => item.kind === 'class').map(item => ({ ...item, typeOnly: true })) : members;
+        ? members.filter(item => ['class', 'enum'].includes(item.kind)).map(item => ({ ...item, typeOnly: true })) : members;
     }
     return fieldCandidates(index, text, member, source);
   }
   const before = state.masked.slice(0, word.start);
   const all = [...assistanceDeclarations(index, text, source).values()];
   if (inTypeContext(before)) {
-    const classes = all.filter(x => x.kind === 'class');
-    const classNames = new Set(classes.map(item => item.name));
-    return [...classes.map(item => ({ ...item, typeOnly: true })), ...types.filter(name => !classNames.has(name)).map(name => ({ name, kind: 'type', signature: name }))];
+    const userTypes = all.filter(x => ['class', 'enum'].includes(x.kind));
+    const userTypeNames = new Set(userTypes.map(item => item.name));
+    return [...userTypes.map(item => ({ ...item, typeOnly: true })), ...types.filter(name => !userTypeNames.has(name)).map(name => ({ name, kind: 'type', signature: name }))];
   }
   return [...all, ...[...(low ? ['fn', 'record', 'let'] : ['def', 'class']), ...keywords].map(name => ({ name, kind: 'keyword', signature: name }))];
 }
@@ -310,8 +324,9 @@ function insertion(item, following) {
   if (item.kind === 'type') {
     return /^\s*\[/.test(following) ? item.name : typeInsertions[item.name] || item.name;
   }
-  if (!['function', 'class'].includes(item.kind)) return item.name;
+  if (!['function', 'class', 'enum_member'].includes(item.kind)) return item.name;
   const args = item.kind === 'class' ? item.fields || [] : item.parameters || [];
+  if (item.kind === 'enum_member' && !args.length) return item.name;
   const types = item.typeParameters || [];
   if (types.length && /^\s*\[/.test(following)) return item.name;
   const generic = types.length ? `[${types.map((name, i) => `\$\{${i + 1}:${name}\}`).join(', ')}]` : '';
@@ -336,11 +351,11 @@ function callContext(text, offset) {
         for (; j >= 0 && depth; j--) { if (prefix[j] === ']') depth++; else if (prefix[j] === '[') depth--; }
         prefix = prefix.slice(0, j + 1).trimEnd();
       }
-      const match = prefix.match(/([A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)?)$/);
-      if (match && prefix[prefix.length - match[1].length - 1] !== '.') {
+      const match = prefix.match(/\b([A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*)$/);
+      if (match && !/\.\s*$/.test(prefix.slice(0, match.index))) {
         const start = prefix.length - match[1].length;
         const parts = match[1].split(/\s*\.\s*/);
-        return { name: parts.at(-1), qualifier: parts.length > 1 ? parts[0] : undefined,
+        return { name: parts.at(-1), qualifier: parts.length > 1 ? parts.slice(0, -1).join('.') : undefined,
           argument, start: start + match[1].length - parts.at(-1).length };
       }
     } else if (c === ']') brackets++;
@@ -364,11 +379,12 @@ function signatureAt(index, text, offset, source = {}) {
   let item;
   if (call.qualifier) {
     const member = memberContext(text, call.start);
-    const binding = member && moduleMember(index, text, member, source);
-    item = binding?.members?.find(item => item.name === call.name);
+    const namespace = member && namespaceMember(index, text, member, source);
+    item = namespace?.members.find(item => item.name === call.name);
   } else item = assistanceDeclarations(index, text, source).get(call.name) ||
     resolvedDeclaration(index, text, { ...call, end: call.start + call.name.length }, source);
-  if (!item || !['function', 'class'].includes(item.kind) ||
+  if (!item || !['function', 'class', 'enum_member'].includes(item.kind) ||
+      item.kind === 'enum_member' && !item.parameters?.length ||
       shadowedAt(index, text, { ...call, end: call.start + call.name.length }, source, item)) return undefined;
   return { item: call.qualifier ? { ...item, callName: `${call.qualifier}.${call.name}` } : item, argument: call.argument };
 }
