@@ -7,7 +7,30 @@ concurrency:
   group: checks-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      full_checks: ${{ steps.changes.outputs.full_checks }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check change detection and merge gating
+        run: python -m unittest discover -s scripts/ci -p 'test_*.py'
+      - name: Compare the complete push or PR
+        id: changes
+        env:
+          CHECK_EVENT: ${{ github.event_name }}
+          CHECK_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CHECK_HEAD: ${{ github.sha }}
+        run: python scripts/ci/changes.py --event "$CHECK_EVENT" --base "$CHECK_BASE" --head "$CHECK_HEAD" --output "$GITHUB_OUTPUT"
+
   linux:
+    needs: changes
+    if: needs.changes.outputs.full_checks == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -230,33 +253,17 @@ jobs:
   ready:
     name: Ready to merge
     if: github.event_name == 'pull_request' && always()
-    needs: [linux, release-plan, vscode-package, nagi-package]
+    needs: [changes, linux, release-plan, vscode-package, nagi-package]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Require checks and planned packages to succeed
         env:
           NAGI_CI_NEEDS: ${{ toJSON(needs) }}
-        run: |
-          python - <<'PY'
-          import json, os
-          needs = json.loads(os.environ['NAGI_CI_NEEDS'])
-          errors = []
-          for job in ('linux', 'release-plan'):
-              if needs[job]['result'] != 'success':
-                  errors.append(f'{job}: {needs[job]["result"]}')
-          plan = needs['release-plan']['outputs']
-          for component, job in (('vscode', 'vscode-package'), ('nagi', 'nagi-package')):
-              planned = plan.get(f'package_{component}')
-              if planned not in ('true', 'false'):
-                  errors.append(f'{job}: missing or invalid package plan')
-                  continue
-              expected = 'success' if planned == 'true' else 'skipped'
-              if needs[job]['result'] != expected:
-                  errors.append(f'{job}: {needs[job]["result"]}, expected {expected}')
-          if errors:
-              raise SystemExit('\n'.join(errors))
-          print('Required checks and planned packages passed.')
-          PY
+        run: python scripts/ci/gate.py
 
   publish-release:
     needs: [linux, release-plan, vscode-package, nagi-package]
