@@ -1,0 +1,32 @@
+import std.http.server as http
+
+class User:
+    id: i64
+    name: str
+    age: i32
+
+class CreateUser:
+    name: str
+    age: i32
+
+class State:
+    ready: bool
+
+async def health(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, view("ok")))
+
+async def small(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+    user = User(id=1, name="alice", age=18)
+    return http.json[User](http.Status.OK, user)
+
+async def echo(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+    user = try json_decode[CreateUser](request.body)
+    return http.json[CreateUser](http.Status.OK, user)
+
+async def main() -> Result[unit, Error]:
+    server = http.app_default[State](State(ready=True))
+    server = try http.route(server, http.Method.GET, view("/health"), health)
+    server = try http.route(server, http.Method.GET, view("/small"), small)
+    server = try http.route(server, http.Method.POST, view("/echo"), echo)
+    port = try parse_i64(env("NAGI_SAMPLE_PORT", "8086"))
+    return await http.serve(server, port, http.default_options())

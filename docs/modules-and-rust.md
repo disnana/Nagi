@@ -59,9 +59,9 @@ def main():
 
 `orders.Order`と`SavedOrder`は同じ型です。`orders.score(order)`で直接呼び出すこともできます。型引数・フィールド型・nullableでも`List[orders.Order]`や`orders.Order?`を使えます。別ファイルで定義した同名の`Order`は別の型になり、混ぜて渡すと型エラーになります。
 
-module名で見えるのは、そのファイル自身が定義した関数・class・enumです。importした名前は自動で再公開しません。`from "orders.nagi" import Order`のように別名を省略することもできます。1つのfrom文で選ぶ定義は1つです。複数の定義は文を分けて読み込みます。`from`と`as`はimportの文脈だけで解釈し、関数や変数の名前にも使えます。関数内でmodule名と同じローカル名を使った場合は、現在のローカル変数の規則に従います。classのmethod呼び出しには対応していません。
+module名で見えるのは、そのファイル自身が定義した関数・class・enumです。importした名前は自動で再公開しません。`from "orders.nagi" import Order`のように別名を省略することもできます。複数の定義は`from "orders.nagi" import Order as SavedOrder, score`のように`,`で選べます。末尾の余分な`,`は付けません。`from`と`as`はimportの文脈だけで解釈し、関数や変数の名前にも使えます。関数内でmodule名と同じローカル名を使った場合は、現在のローカル変数の規則に従います。classのmethod呼び出しには対応していません。
 
-同じ実ファイルは、複数のmodule名・fromの別名・従来のimportを使っても1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在はエラーです。存在しない定義のfrom importや、同じ場所で異なる定義を同じ名前にするimportは、そのimport文でエラーになります。`import sqlite`のように引用符なしで標準moduleを読み込む構文と、公開範囲の指定は未対応です。
+同じ実ファイルは、複数のmodule名・fromの別名・従来のimportを使っても1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在はエラーです。存在しない定義のfrom importや、同じ場所で異なる定義を同じ名前にするimportは、そのimport文でエラーになります。引用符なしのimportは登録済みの`std.http.server`を対象にします。一般packageの探索と公開範囲の指定は未対応です。
 
 ### LowとRustで同じ定義を使う
 
@@ -78,6 +78,21 @@ Rustのアダプターからは、rootで読み込んだmoduleのclassを`super:
 ### テキストファイルを埋め込む
 
 `include_text("index.html")`は、ソースに隣接するUTF-8ファイルをビルド時に読み込み、`str`として埋め込みます。パスは文字列リテラルで指定してください。配布したアプリを実行するときには、元のファイルは不要です。
+
+## 標準HTTP libraryを読み込む
+
+```nagi
+import std.http.server as http
+from std.http.server import Request, Response, Status as Code
+
+def main():
+    response = http.text(Code.OK, "Hello, Nagi!")
+    print(response.status.value)
+```
+
+標準moduleはコンパイラと一緒に提供する登録済みのlibraryです。カレントディレクトリの同名ファイルやエディターのbufferで差し替えません。module importには`as`を付け、`from`では必要な定義だけを選べます。importするだけでlistenerやworkerは起動しません。生成Lowにも標準定義のIDを残し、標準型のaliasは同じnative型を指します。
+
+`Request`などのresource型は[型の資料](types.md#標準httpのresource型)を参照してください。`App[State, E]`はAppごとにstateとエラー変換を持ち、Dbなしでも使えます。`route`は名前付きasync handlerまたはそのローカルaliasを受け取り、`route_mapped`はroute専用の変換を指定します。一般のasync関数値を引数やclassへ保存する制約は変わりません。型と所有権は`check`で、handler futureの`Send + 'static`と共有Stateの`Send + Sync`はRust buildで検査します。起動・応答・headersの操作は[HTTP](http.md)にあります。
 
 ## Rustの関数を呼ぶ
 
@@ -119,7 +134,7 @@ nagic run app.nagi --rust native.rs --rust-dep serde_json=1.0
 
 初回はCargoが依存を取得するため、通常はネットワーク接続が必要です。ローカルcrateの`path`、`features`、依存名とpackage名を分ける`package`指定には、`nagi.toml`の依存tableを使います。[ローカルRustライブラリのサンプル](../test-nagi-code/rust-library/README.md)は、独立したcrateをアダプターから呼び、Rustの構造体・エラーをNagiのclass・Errorへ変換します。crateを使う完全な例は[リポジトリのRust連携サンプル](../test-nagi-code/rust-bridge/)にあります。入口・Rustファイル・依存を毎回指定せずに使う場合は、[nagi.tomlとプロジェクト](projects.md)に保存してください。CLIとVS Codeで同じ設定を使えます。
 
-Nagiの`check`は、宣言した型と呼び出し、所有権、借用を検査します。`check`・`lower`・`symbols`はCargoを呼ばず、依存を取得しません。Rustの本体やcrateのAPIは検査しません。宣言とRustの実装が一致するかどうかは`build`で検査します。Rust固有の型を使う場合は、Rust側で数値・str・List・class・Resultなどへ変換してから渡してください。Rust側から生成したNagiのclassを参照する場合は、rootのimportに合わせて`super::型名`や`super::module名::型名`を使います。
+Nagiの`check`は、宣言した型と呼び出し、所有権、借用を検査します。`check`・`lower`・`symbols`はCargoを呼ばず、依存を取得しません。Rustの本体やcrateのAPIは検査しません。宣言とRustの実装が一致するかどうかは`build`で検査します。登録済みHTTP resourceは対応するnative型を使えます。それ以外のRust固有の型は、Rust側で数値・str・List・class・Resultなどへ変換してから渡してください。Rust側から生成したNagiのclassを参照する場合は、rootのimportに合わせて`super::型名`や`super::module名::型名`を使います。
 
 生成したCargo.lockを保持して`cargo build --locked --manifest-path build/app/Cargo.toml`を実行すると、同じ依存の解決を再利用できます。通常の`nagic build`は生成したプロジェクトへの`cargo build --release`を実行し、既存のlockを保持します。`nagic build --locked`は未対応です。lockはローカルcrateのソース内容を固定しません。
 

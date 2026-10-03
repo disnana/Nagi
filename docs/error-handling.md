@@ -52,7 +52,7 @@ nagic run result.nagi
 - matchは対象のResultを消費する。所有文字列などのpayloadもmoveされる。借用payloadの元データはcase内でも借用中として検査する。
 - 両方のcaseがreturnすれば、関数の全経路で値を返すものとして検査する。
 
-matchはResultとenumを対象とする文です。match式、nullableの`Some` / `None`、ガード、入れ子のパターン、`case _`は未対応です。[Low](low-language.md)でも同じ分岐を使えます。
+matchはResult・Option・enumを対象とする文です。Optionは`case Some(value):`と`case None:`の両方を書きます。match式、ガード、入れ子のパターン、`case _`は未対応です。[Low](low-language.md)でも同じ分岐を使えます。
 
 ## 独自のエラー型
 

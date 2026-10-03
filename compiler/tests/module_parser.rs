@@ -195,7 +195,7 @@ fn malformed_imports_and_qualified_constructs_keep_parser_errors() {
             "from \"orders.nagi\" Order",
             "from \"orders.nagi\" import",
             "from \"orders.nagi\" import Order as",
-            "from \"orders.nagi\" import Order, save",
+            "from \"orders.nagi\" import Order,",
             "from \"orders.nagi\" import *",
         ] {
             assert!(

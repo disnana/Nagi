@@ -11,6 +11,7 @@ CLI、自作ライブラリ、Rust連携、HTTP、Lowの差し替えを試せま
 | [RustでJSONを読む](../test-nagi-code/library-examples/rust-json/README.md) | serde_jsonを使い、NagiのclassとResultへ変換する |
 | [Rustの非同期処理](../test-nagi-code/library-examples/rust-async/README.md) | TokioのtimerをNagiからawaitする |
 | [自作HTTP基盤](../test-nagi-code/library-examples/custom-http/README.md) | Axum/TokioへNagiの関数を渡し、DBなしでHTTP応答を作る |
+| [標準HTTPと認証](../test-nagi-code/library-examples/http-auth/README.md) | Nagiだけでヘッダー・401・route別エラー・型付き共有状態を扱う |
 | [Low計算カーネル](../test-nagi-code/library-examples/low-kernel/README.md) | Highの呼び出しを変えずに、Lowの実装へ置き換える |
 | [moduleと別名](../test-nagi-code/library-examples/module-imports/README.md) | 同名classを区別し、module名とfromの別名で同じ型を使う |
 | [独自エラーのCLI](../test-nagi-code/library-examples/typed-errors/README.md) | enumで失敗を分け、元の原因を保持しながら表示文を選ぶ |

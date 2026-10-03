@@ -71,10 +71,14 @@ impl Sources {
         let offset = self.text.lines().count();
         shift(&mut other.program, offset);
         for definition in &mut other.program.modules.definitions {
-            definition.line += offset;
+            if !crate::stdlib::is_registered_module(&definition.id.module) {
+                definition.line += offset;
+            }
         }
         for binding in &mut other.program.modules.bindings {
-            binding.line += offset;
+            if !crate::stdlib::is_registered_module(&binding.module) {
+                binding.line += offset;
+            }
         }
         for reference in &mut other.program.modules.references {
             reference.line += offset;
@@ -272,6 +276,7 @@ pub fn load_with_overlays(
                 .iter()
                 .map(|(path, line)| ModuleImport {
                     path: path.clone(),
+                    source: ImportSource::File,
                     line: *line,
                     span: Span::default(),
                     kind: ImportKind::Flat,
@@ -282,6 +287,17 @@ pub fn load_with_overlays(
         };
         let mut resolved_imports = vec![];
         for import in imports {
+            if import.source == ImportSource::Standard {
+                let module = crate::stdlib::module(&import.path).ok_or_else(|| {
+                    diagnostic(
+                        &path,
+                        &source,
+                        &format!("line {}: 未定義のstd module: {}", import.line, import.path),
+                    )
+                })?;
+                resolved_imports.push((import, module));
+                continue;
+            }
             let file = &import.path;
             let line = &import.line;
             let dependency = Path::new(file);

@@ -148,6 +148,12 @@ pub fn low_with_lines(p: &Program) -> Generated {
                                 if *ok { "Ok" } else { "Err" },
                                 binding.name.as_deref().unwrap_or("_")
                             ),
+                            MatchPattern::Option { binding } => match binding {
+                                Some(binding) => {
+                                    format!("Some({})", binding.name.as_deref().unwrap_or("_"))
+                                }
+                                None => "None".into(),
+                            },
                             MatchPattern::Enum { name, bindings, .. } => {
                                 if bindings.is_empty() {
                                     name.clone()
@@ -201,18 +207,22 @@ pub fn low_with_lines(p: &Program) -> Generated {
     } else {
         for import in &p.module_imports {
             out.origin(Some(import.line));
+            let path = match import.source {
+                ImportSource::File => low_quote(&import.path),
+                ImportSource::Standard => import.path.clone(),
+            };
             match &import.kind {
                 ImportKind::Flat => {
-                    out.push_str(&format!("import {};\n", low_quote(&import.path)));
+                    out.push_str(&format!("import {path};\n"));
                 }
                 ImportKind::Module { alias, .. } => {
-                    out.push_str(&format!("import {} as {alias};\n", low_quote(&import.path)));
+                    out.push_str(&format!("import {path} as {alias};\n"));
                 }
                 ImportKind::Names(names) => {
                     for name in names {
                         out.push_str(&format!(
                             "from {} import {}{};\n",
-                            low_quote(&import.path),
+                            path,
                             name.name,
                             if name.name == name.alias {
                                 String::new()
@@ -298,12 +308,14 @@ pub fn rust_type(t: &Type) -> String {
         &RustTypes {
             raw_classes: &[],
             enums: &[],
+            modules: &ModuleMetadata::default(),
         },
     )
 }
 struct RustTypes<'a> {
     raw_classes: &'a [Class],
     enums: &'a [Enum],
+    modules: &'a ModuleMetadata,
 }
 
 impl RustTypes<'_> {
@@ -331,7 +343,50 @@ fn rust_enum_path(path: &str) -> String {
     format!("{enumeration}::{variant}")
 }
 
+fn registered_resource(symbol: &str, modules: &ModuleMetadata) -> Option<crate::stdlib::Resource> {
+    let resource = crate::stdlib::resource(symbol)?;
+    let definition = modules.definition(symbol)?;
+    (definition.id == crate::stdlib::resource_id(resource)).then_some(resource)
+}
+
+fn registered_rust_path(symbol: &str, modules: &ModuleMetadata) -> Option<&'static str> {
+    if let Some(resource) = registered_resource(symbol, modules) {
+        Some(crate::stdlib::resource_info(resource).rust_path)
+    } else {
+        let operation = crate::stdlib::operation(symbol)?;
+        let definition = modules.definition(symbol)?;
+        (definition.id == crate::stdlib::function_id(operation))
+            .then_some(crate::stdlib::operation_info(operation).rust_path)
+    }
+}
+
+fn resource_type(mut ty: &Type, types: &RustTypes<'_>) -> Option<crate::stdlib::Resource> {
+    while matches!(ty.0.as_str(), "owned" | "shared" | "view") {
+        ty = &ty.1[0];
+    }
+    registered_resource(&ty.0, types.modules)
+}
+
+fn native_resource_view(ty: &Type, types: &RustTypes<'_>) -> Option<crate::stdlib::Resource> {
+    let element = crate::stdlib::native_view_element(ty)?;
+    registered_resource(&element.0, types.modules)
+}
+
 fn rust_type_at(t: &Type, depth: usize, types: &RustTypes<'_>) -> String {
+    if let Some(resource) = registered_resource(&t.0, types.modules) {
+        let path = crate::stdlib::resource_info(resource).rust_path;
+        return if t.1.is_empty() {
+            path.into()
+        } else {
+            format!(
+                "{path}<{}>",
+                t.1.iter()
+                    .map(|arg| rust_type_at(arg, depth + 1, types))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+    }
     match t.0.as_str() {
         "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" | "bool" => {
             if types.raw_classes.iter().any(|class| class.name == t.0) {
@@ -370,6 +425,9 @@ fn rust_type_at(t: &Type, depth: usize, types: &RustTypes<'_>) -> String {
         }
         "view" => {
             let a = t.inner();
+            if native_resource_view(t, types).is_some() {
+                return format!("&'a {}", rust_type_at(&a, depth + 1, types));
+            }
             match a.0.as_str() {
                 "str" => "&'a ::std::primitive::str".into(),
                 "bytes" => "&'a [::std::primitive::u8]".into(),
@@ -412,6 +470,17 @@ fn string_arg(e: &Expr, types: &RustTypes<'_>) -> String {
         format!("&({})", re(e, types))
     }
 }
+
+fn reference_arg(e: &Expr, types: &RustTypes<'_>) -> String {
+    if let E::Str(value) = &e.kind {
+        quote(value)
+    } else if e.ty.as_ref().is_some_and(Type::is_view) {
+        re(e, types)
+    } else {
+        format!("&({})", re(e, types))
+    }
+}
+
 fn re(e: &Expr, types: &RustTypes<'_>) -> String {
     match &e.kind {
         E::Int(s) | E::Float(s) => {
@@ -431,7 +500,11 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
             }
         }
         E::Name(s) => {
-            if e.resolution == ::std::option::Option::Some(NameResolution::Function) {
+            if e.resolution == Some(NameResolution::Standard) {
+                registered_rust_path(s, types.modules)
+                    .expect("checked standard definition")
+                    .into()
+            } else if e.resolution == ::std::option::Option::Some(NameResolution::Function) {
                 format!("crate::{s}")
             } else {
                 s.clone()
@@ -440,19 +513,96 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
         E::Str(s) => format!("::std::string::String::from({})", quote(s)),
         E::Bool(b) => b.to_string(),
         E::Null => "::std::option::Option::None".into(),
-        E::Binary(a, o, b) => format!(
-            "({} {} {})",
-            re(a, types),
-            match o.as_str() {
-                "and" => "&&",
-                "or" => "||",
-                _ => o,
-            },
-            re(b, types)
-        ),
+        E::Binary(a, o, b) => {
+            let comparison = matches!(o.as_str(), "==" | "!=" | "<" | ">" | "<=" | ">=");
+            let borrowed_content = |value: &Expr| {
+                let mut ty = value.ty.as_ref()?;
+                while ty.0 == "owned" {
+                    ty = ty.1.first()?;
+                }
+                let borrowed = ty.is_view();
+                if borrowed {
+                    ty = ty.1.first()?;
+                }
+                match ty.0.as_str() {
+                    "str" => Some(("str", borrowed)),
+                    "bytes" => Some(("bytes", borrowed)),
+                    _ => None,
+                }
+            };
+            let content = if comparison {
+                borrowed_content(a)
+                    .zip(borrowed_content(b))
+                    .filter(|((left, _), (right, _))| left == right)
+                    .map(|((content, _), _)| content)
+            } else {
+                None
+            };
+            let operand = |value: &Expr| {
+                if let Some(content) = content {
+                    if let E::Str(literal) = &value.kind {
+                        return quote(literal);
+                    }
+                    if borrowed_content(value).is_some_and(|(_, borrowed)| !borrowed) {
+                        return format!(
+                            "({}).{}()",
+                            re(value, types),
+                            if content == "str" {
+                                "as_str"
+                            } else {
+                                "as_slice"
+                            }
+                        );
+                    }
+                }
+                if matches!(o.as_str(), "==" | "!=") {
+                    if let E::Str(literal) = &value.kind {
+                        return quote(literal);
+                    }
+                }
+                re(value, types)
+            };
+            format!(
+                "({} {} {})",
+                operand(a),
+                match o.as_str() {
+                    "and" => "&&",
+                    "or" => "||",
+                    _ => o,
+                },
+                operand(b)
+            )
+        }
         E::Unary(o, x) => format!("{}({})", if o == "not" { "!" } else { o }, re(x, types)),
         E::Field(x, n) if e.resolution == Some(NameResolution::Enum) => {
             format!("{}::{n}", re(x, types))
+        }
+        E::Field(x, n) if e.resolution == Some(NameResolution::ResourceConstant) => {
+            let E::Name(owner) = &x.kind else {
+                unreachable!("checked resource constant owner")
+            };
+            let resource =
+                registered_resource(owner, types.modules).expect("checked resource constant type");
+            let constant = crate::stdlib::constant(resource, n).expect("checked resource constant");
+            format!(
+                "{}::{}",
+                crate::stdlib::resource_info(resource).rust_path,
+                constant.native_name
+            )
+        }
+        E::Field(x, n) if e.resolution == Some(NameResolution::ResourceField) => {
+            let resource = resource_type(
+                x.ty.as_ref().expect("checked resource receiver type"),
+                types,
+            )
+            .expect("checked resource field owner");
+            let field = crate::stdlib::field(resource, n).expect("checked resource field");
+            format!(
+                "({}).{}{}",
+                re(x, types),
+                field.accessor,
+                if field.owned { "" } else { "()" }
+            )
         }
         E::Field(x, n) => format!("({}).{n}", re(x, types)),
         E::Index(x, i) => format!(
@@ -488,6 +638,38 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
         E::Await(x) => format!("({}).await", re(x, types)),
         E::Try(x) => format!("({})?", re(x, types)),
         E::Call(n, ts, a) => {
+            if e.resolution == Some(NameResolution::Standard) {
+                let operation = crate::stdlib::operation(n).expect("checked standard operation");
+                let info = crate::stdlib::operation_info(operation);
+                let arguments = a
+                    .iter()
+                    .zip(info.parameters)
+                    .map(|(argument, passing)| match passing {
+                        crate::stdlib::Passing::Reference => reference_arg(argument, types),
+                        crate::stdlib::Passing::Borrow => format!("&({})", re(argument, types)),
+                        crate::stdlib::Passing::Move
+                        | crate::stdlib::Passing::Handler
+                        | crate::stdlib::Passing::Mapper => re(argument, types),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let generic = if ts.is_empty()
+                    || matches!(
+                        operation,
+                        crate::stdlib::Operation::Route | crate::stdlib::Operation::RouteMapped
+                    ) {
+                    String::new()
+                } else {
+                    format!(
+                        "::<{}>",
+                        ts.iter()
+                            .map(|ty| local_type(ty, types))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
+                return format!("{}{generic}({arguments})", info.rust_path);
+            }
             let args = a.iter().map(|e| re(e, types)).collect::<Vec<_>>();
             let join = args.join(", ");
             match e.resolution {
@@ -535,16 +717,26 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 "html" => format!("::nagi_runtime::axum::response::Html({})", args[0]),
                 "include_text" => format!("include_str!({}).to_owned()", string_arg(&a[0], types)),
                 "assert_true" => format!("assert!({})", args[0]),
-                "view" => format!(
-                    "({}).{}()",
-                    args[0],
-                    if a[0].ty.as_ref().is_some_and(|t| t.0 == "str") {
-                        "as_str"
-                    } else {
-                        "as_slice"
+                "view" => {
+                    if e.resolution == Some(NameResolution::Builtin) {
+                        if let E::Str(value) = &a[0].kind {
+                            return quote(value);
+                        }
                     }
-                ),
-                "copy" => format!("({}).to_owned()", args[0]),
+                    if e.ty.as_ref().and_then(|ty| native_resource_view(ty, types)).is_some() {
+                        format!("&({})", args[0])
+                    } else {
+                        format!("({}).{}()", args[0], if a[0].ty.as_ref().is_some_and(|t| t.0 == "str") { "as_str" } else { "as_slice" })
+                    }
+                }
+                "copy" => {
+                    if a[0].ty.as_ref().and_then(|ty| native_resource_view(ty, types))
+                        == Some(crate::stdlib::Resource::Status) {
+                        format!("*({})", args[0])
+                    } else {
+                        format!("({}).to_owned()", args[0])
+                    }
+                }
                 "share" => format!("::std::sync::Arc::new({})", args[0]),
                 "clone_shared" => format!("::std::sync::Arc::clone(&{})", args[0]),
                 "len" => format!("(({}).len() as ::std::primitive::i64)", string_or_value(&a[0], types)),
@@ -702,6 +894,12 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
                             },
                             binding(value)
                         ),
+                        MatchPattern::Option { binding: value } => match value {
+                            Some(value) => {
+                                format!("::std::option::Option::Some({})", binding(value))
+                            }
+                            None => "::std::option::Option::None".into(),
+                        },
                         MatchPattern::Enum { name, bindings, .. } => {
                             let path = rust_enum_path(name);
                             if bindings.is_empty() {
@@ -814,8 +1012,12 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             &[]
         },
         enums: &p.enums,
+        modules: &p.modules,
     };
     fn copy_type(t: &Type, p: &Program, depth: usize) -> bool {
+        if let Some(resource) = registered_resource(&t.0, &p.modules) {
+            return crate::stdlib::resource_info(resource).copy;
+        }
         if depth > 64 || matches!(t.0.as_str(), "str" | "bytes" | "Error" | "Db" | "Html") {
             false
         } else if let Some(enumeration) = p.enums.iter().find(|definition| definition.name == t.0) {
@@ -1065,10 +1267,13 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 };
                 let alias = names.source_name(&binding.name);
                 let symbol = names.definition(definition);
+                let path = registered_rust_path(&definition.symbol, &p.modules)
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| format!("crate::{symbol}"));
                 // The executable entry point owns Rust's root `main` name.
                 if alias != symbol && !(alias == "main" && id.kind == DefKind::Function) {
                     out.push_str(&format!(
-                        "#[allow(unused_imports)]\npub use crate::{symbol} as {alias};\n"
+                        "#[allow(unused_imports)]\npub use {path} as {alias};\n"
                     ));
                 }
             }
@@ -1078,8 +1283,11 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 for definition in p.modules.exports(module) {
                     let symbol = names.definition(definition);
                     let export = names.source_name(&definition.id.name);
+                    let path = registered_rust_path(&definition.symbol, &p.modules)
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| format!("crate::{symbol}"));
                     out.push_str(&format!(
-                        "    #[allow(unused_imports)]\n    pub use crate::{symbol} as {export};\n"
+                        "    #[allow(unused_imports)]\n    pub use {path} as {export};\n"
                     ));
                 }
                 out.push_str("}\n");

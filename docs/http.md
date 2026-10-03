@@ -1,110 +1,58 @@
-# HTTPとHTML
+# HTTP
 
-[目次](README.md) · 前：[入門ガイド](language-guide.md) · 次：[SQLite](database.md)
+`std.http.server`でHTTPサーバーを作れます。DBは不要です。リクエストを受け取るasync関数と、共有する状態を渡します。
 
-Nagiでは、`@get`などを付けたasync関数がHTTPの入口になります。classを返すとJSON応答、`Html`を返すとHTML応答です。まずデータを保存しない小さなサーバーから動かします。
+## 最小のサーバー
 
-## 1. サーバーを書く
-
-次の完全なコードを、作業フォルダーに`http.nagi`として保存してください。[サンプル](../examples/tutorial/http.nagi)にもあります。
+次を`server.nagi`に保存します。
 
 ```nagi
-class Greeting:
-    id: i64
-    name: str
+import std.http.server as http
 
-@get("/")
-async def home() -> Result[Html, Error]:
-    return ok(html("<!doctype html><html lang=\"ja\"><meta charset=\"utf-8\"><title>Nagi</title><h1>Hello, Nagi!</h1><a href=\"/greet/1\">JSONを見る</a></html>"))
+class State:
+    greeting: str
 
-@get("/greet/{id}")
-async def greet(id: i64) -> Result[Greeting, Error]:
-    if id < 1:
-        return error("id must be positive")
-    return ok(Greeting(id=id, name="Nagi"))
-
-@post("/echo")
-async def echo(req: Greeting) -> Result[Greeting, Error]:
-    return ok(req)
+async def hello(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, view(state.greeting)))
 
 async def main() -> Result[unit, Error]:
-    db = try await db_open(":memory:")
-    return await serve(db, 8094)
+    app = http.app_default[State](State(greeting="Hello, Nagi!"))
+    app = try http.route(app, http.Method.GET, "/", hello)
+    return await http.serve(app, 8080, http.default_options())
 ```
 
-`serve`の現在のAPIには`Db`が必要です。この例ではメモリ内SQLiteを開きますが、テーブルの作成や書き込みはしていません。`serve`はサーバーを起動し、リクエストを待ち続けます。
-
-## 2. 起動して呼び出す
-
-8094番ポートを空けて、保存したフォルダーで実行します。
-
-```powershell
-nagic run http.nagi
+```sh
+nagic run server.nagi
 ```
 
-Windows・Linux・macOSで同じコマンドです。ブラウザーで[http://127.0.0.1:8094/](http://127.0.0.1:8094/)を開くと「Hello, Nagi!」を表示します。
+[http://127.0.0.1:8080/](http://127.0.0.1:8080/)を開くと`Hello, Nagi!`が返ります。Ctrl+Cで停止します。
 
-別のPowerShellでJSON APIを呼びます。
+## リクエストと応答
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:8094/greet/7
-Invoke-RestMethod http://127.0.0.1:8094/echo -Method Post -ContentType 'application/json' -Body '{"id":2,"name":"sample"}'
-```
-
-Linux / WSL2では次のコマンドです。
-
-```bash
-curl http://127.0.0.1:8094/greet/7
-curl -H 'Content-Type: application/json' -d '{"id":2,"name":"sample"}' http://127.0.0.1:8094/echo
-```
-
-GETの応答は`{"id":7,"name":"Nagi"}`、POSTは送った`{"id":2,"name":"sample"}`です。`/greet/0`は400のJSONエラーになります。終了は起動したターミナルのCtrl+Cです。
-
-## 3. 引数と応答を決める
-
-| 書き方 | HTTPでの意味 |
+| 操作 | 書き方 |
 |---|---|
-| `@get("/greet/{id}")`と引数`id: i64` | URLの`{id}`を整数として読む |
-| 引数`req: Greeting` | requestのJSON bodyをclassへ読む |
-| 引数`db: Db` | serveに渡したDBをhandlerへ供給する |
-| pathにないprimitive引数 | query parameterから読む。例は[crud.nagi](../examples/crud.nagi)の`/query` |
-| 引数`body: view[bytes]` | request bodyを借用byte列として読む |
-| `Result[Greeting, Error]`と`ok(...)` | 成功時にJSON応答 |
-| `Result[Greeting?, Error]`と`ok(None)` | 対象なしを404にする |
-| `Result[Html, Error]`と`ok(html(...))` | 成功時に`text/html`応答 |
-| `error("理由")` | 入力エラーとして400のJSON応答 |
-| `not_found("理由")` | 対象なしとして404のJSON応答 |
-| `internal_error("理由")` | 詳細を伏せた500のJSON応答 |
-| `fail(problem)` | Errorの種類を保った応答。DBエラーなら500 |
+| GETか調べる | `request.is_get` または `request.method == http.Method.GET` |
+| パスを読む | `request.path` |
+| bodyを借りる | `request.body` |
+| ヘッダーを読む | `http.header_text(view(request), "Authorization")` |
+| 文字列を返す | `http.text(http.Status.OK, "hello")` |
+| HTMLを返す | `http.html(http.Status.OK, "<h1>Hello</h1>")` |
+| JSONを返す | `http.json[User](http.Status.CREATED, user)` |
+| bodyのない応答 | `http.empty(http.Status.NO_CONTENT)` |
 
-HTTP handlerは`async def`で定義し、`Result[..., Error]`を返します。属性には`@get`、`@post`、`@put`、`@delete`があります。JSONのfield欠落、型の違い、不明fieldなどは入力エラーです。
+ヘッダーは存在しないこともあるため、`Result[Option[view[str]], Error]`を返します。`match`の`Ok`／`Err`と`Some`／`None`で分岐します。POSTも`http.Method.POST`で登録できます。
 
-`match await operation(...)`で失敗を分け、既定値を返して回復することもできます。[Result APIサンプル](../test-nagi-code/result-api/README.md)では、入力不正の400、対象なしの404、DB失敗の500、代替データを返す200を実HTTPで確認できます。
+## エラー処理を変える
 
-## 4. HTMLを別ファイルにする
+`http.app[State, AuthError](state, auth_error)`で、独自のエラー型から応答へ変換する関数を指定できます。`http.route_mapped`を使うと、そのrouteだけ別の変換関数を使います。正常な応答は変換しません。
 
-HTMLが長くなったら、`.nagi`と同じディレクトリに`index.html`を置き、handlerの本体を次のようにします。
+[認証サンプル](../test-nagi-code/library-examples/http-auth/README.md)には、Authorizationの読み取り、401とWWW-Authenticate、routeごとの403、型付き状態を含む実行例があります。
 
-```nagi
-@get("/")
-async def home() -> Result[Html, Error]:
-    return ok(html(include_text("index.html")))
-```
+## 次に読む
 
-`include_text`はコンパイル時にHTMLを実行ファイルへ埋め込みます。HTMLを変更したら再ビルドしてください。配布先にはHTMLファイルを置く必要がありません。
+- [HTTP APIリファレンス](http-server.md)：Status、ヘッダー、route、制限の設定
+- [標準HTTPの測定結果](http-stdlib-performance.md)：応答速度、メモリ、連続負荷
+- [JSON](json.md)：bodyをclassへ変換する
+- [既存のHTTP属性](http-legacy.md)：`@get`／`@post`と`serve(Db, port)`を使うコード
 
-画面のJavaScriptから`fetch("/api/tasks")`のように同じサーバーを呼べます。追加・編集・削除とSQLiteを組み合わせた完成例は[タスク管理デモ](../test-nagi-code/web-demo/README.md)です。
-
-## 現在のサーバーの範囲
-
-Highの属性からAxumのroutingを生成します。HTTP/1.1、keep-alive、path parameter、型付きquery parameter、request body、JSON responseを実装しています。
-
-標準の試験用endpointは`/health`、5chunkの`/stream`、echo WebSocketの`/ws`です。middlewareでrequest処理を2秒に制限し、bodyとWebSocket messageの上限を1 MiBにしています。DBや内部エラーは500などに変換し、詳細をresponseへ出しません。
-
-この3つのGETは組み込み用です。同じGETを定義すると`check`でエラーになります。capture名だけ違うpath（`/items/{id}`と`/items/{key}`など）も競合するため、GETとPOSTを分ける場合もcapture名を揃えてください。
-
-HTTPの待機期限は既定で10秒です。接続直後の無通信、途中のヘッダー、応答後から次のヘッダーが完成するまでが対象です。少量ずつ送信しても期限は延びません。期限を過ぎた接続は閉じられるため、クライアントは必要に応じて再接続してください。処理中の応答、ストリーム、アップグレード後のWebSocketには、この待機期限を適用しません。
-
-変更する場合は、起動前に環境変数`NAGI_HTTP_REQUEST_WAIT_SECONDS`へ正の整数を指定します。例えばPowerShellでは`$env:NAGI_HTTP_REQUEST_WAIT_SECONDS = "30"`、bashでは`export NAGI_HTTP_REQUEST_WAIT_SECONDS=30`です。ヘッダーと未使用keep-aliveの期限は共通です。同時接続数を128に固定する制限はありません。
-
-現在はloopback専用です。HTTP/2、TLS、認証、任意middlewareのHigh宣言、deploymentの仕組みは未実装です。大きいclassのJSON streamingや汎用のHigh streaming構文もありません。JSON responseはclassをVec<u8>へencodeしてBodyへ渡します。
+現在の標準サーバーはloopbackのHTTP/1.1に対応します。TLSや外部公開にはリバースプロキシを使います。ストリーミング、WebSocket、HTTP/2の公開APIはこのmoduleにはありません。

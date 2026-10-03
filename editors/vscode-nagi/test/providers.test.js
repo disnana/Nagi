@@ -35,14 +35,20 @@ function host(t, trusted = true, code = 1, symbols) {
       onDidOpenTextDocument: disposable, onDidSaveTextDocument(fn) { events.save = fn; return disposable(); },
       onDidChangeTextDocument(fn) { events.change = fn; return disposable(); }, onDidCloseTextDocument: disposable,
       onDidGrantWorkspaceTrust: disposable, onDidChangeConfiguration: disposable,
+      registerTextDocumentContentProvider(scheme, provider) { providers[scheme] = provider; return disposable(); },
       createFileSystemWatcher: () => ({ dispose() {}, onDidCreate: disposable, onDidChange: disposable, onDidDelete: disposable }),
     },
     window: { createOutputChannel: () => ({ appendLine() {}, show() {}, dispose() {} }),
       showWarningMessage: async () => undefined, setStatusBarMessage() {} },
     languages: { createDiagnosticCollection: () => collection, registerOnTypeFormattingEditProvider: disposable },
     commands: { registerCommand(name, fn) { commands.set(name, fn); return disposable(); } },
-    Range, MarkdownString, Uri: { file: file => uri(file) },
-    DiagnosticSeverity: { Error: 0 }, CompletionItemKind: { Function: 1, Class: 2, Field: 3, TypeParameter: 4, Keyword: 5, Enum: 6, EnumMember: 7, Module: 8 },
+    Range, MarkdownString, Uri: { file: file => uri(file), parse: text => {
+      const [scheme, pathname] = text.split(':');
+      return { ...uri(pathname, scheme), path: pathname, authority: '', query: '', fragment: '' };
+    } },
+    Location: class { constructor(uri, range) { this.uri = uri; this.range = range; } },
+    EventEmitter: class { constructor() { this.event = () => disposable(); } fire() {} dispose() {} },
+    DiagnosticSeverity: { Error: 0 }, CompletionItemKind: { Function: 1, Class: 2, Field: 3, TypeParameter: 4, Keyword: 5, Enum: 6, EnumMember: 7, Module: 8, Constant: 9 },
     Diagnostic: class { constructor(range, message) { this.range = range; this.message = message; } },
     Hover: class { constructor(contents, range) { this.contents = contents; this.range = range; } },
     CompletionItem: class { constructor(label, kind) { this.label = label; this.kind = kind; } },
@@ -183,4 +189,23 @@ test('registered providers render enum/member kinds and payload signature parame
   const signature = await h.providers.SignatureHelp.provideSignatureHelp(doc, doc.positionAt(doc.getText().length), h.token);
   assert.equal(signature.signatures[0].label, 'AuthError.Invalid(message: str)');
   assert.equal(signature.signatures[0].parameters[0].label, 'message: str');
+});
+
+test('standard F12 targets open compiler registry text through a read-only virtual document', async t => {
+  const text = 'http.text(Code.OK, view("hello"))';
+  const source = 'stdlib:std.http.server';
+  const h = host(t, true, 1, folder => {
+    const location = { file: source, line: 2, column: 5, length: 4 };
+    return { format: 'nagi-symbols-v1', definitions: [], bindings: [], files: [],
+      standard_sources: [{ file: source, text: '# Standard HTTP\ndef text(status: Status, body: view[str]) -> Response\n' }],
+      references: [{ location: { file: path.join(folder, 'main.nagi'), line: 1, column: 6, length: 4 }, target: location }],
+      expressions: [], locals: [] };
+  });
+  const doc = h.document(text);
+  const targets = await h.providers.Definition.provideDefinition(doc, doc.positionAt(7), h.token);
+  assert.equal(targets[0].uri.scheme, 'nagi-stdlib');
+  assert.equal(targets[0].uri.path, '/std/http/server.nagi');
+  assert.equal(targets[0].range.start.line, 1);
+  assert.match(h.providers['nagi-stdlib'].provideTextDocumentContent(targets[0].uri), /def text/);
+  assert.equal(h.providers['nagi-stdlib'].provideTextDocumentContent({ scheme: 'nagi-stdlib', path: '/std/../private.nagi' }), '');
 });

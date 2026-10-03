@@ -39,6 +39,8 @@ EXTRA = {
 for _, entries in GROUPS:
     for slug, _ in entries:
         SOURCES[EXTRA.get(slug, ROOT / f"docs/{slug}.md")] = f"docs/{slug}/"
+for slug in ("http-server", "http-legacy", "http-stdlib-performance"):
+    SOURCES[ROOT / f"docs/{slug}.md"] = f"docs/{slug}/"
 
 ENGLISH_GROUPS = [
     ("First steps", [("getting-started", "Setup and first run"), ("language-guide", "Learn by writing code"), ("editor", "Editor walkthrough")]),
@@ -51,6 +53,8 @@ ENGLISH_SOURCES = {ROOT / "docs/en/README.md": "docs/"}
 for _, entries in ENGLISH_GROUPS:
     for slug, _ in entries:
         ENGLISH_SOURCES[ROOT / f"docs/en/{slug}.md"] = f"docs/{slug}/"
+for slug in ("http-server", "http-legacy", "http-stdlib-performance"):
+    ENGLISH_SOURCES[ROOT / f"docs/en/{slug}.md"] = f"docs/{slug}/"
 if set(SOURCES.values()) != set(ENGLISH_SOURCES.values()):
     raise ValueError("Japanese and English Docs must contain the same pages")
 

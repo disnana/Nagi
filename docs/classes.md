@@ -28,7 +28,7 @@ def main():
 
 現在はフィールドの定義、名前付き引数による生成、フィールドの読み取りに対応しています。メソッド、継承、フィールドへの代入は未対応です。`view`をフィールドに保存することもできません。
 
-Errorやenumはフィールドに保存できます。Errorの原因を保持する独自エラーclassにも使えます。Error・enumや、それらを含むclassはJSONへ変換できません。関数型、Db、Htmlのフィールドは未対応で、Listやnullableの中に入れた場合も同じです。Mapのキーにはf32 / f64 / UUID / timestampなど、ハッシュに未対応の型を使えません。
+Errorやenumはフィールドに保存できます。Errorの原因を保持する独自エラーclassにも使えます。Dbや保存可能な標準resourceも状態のフィールドにできますが、Error・enum・resourceを含むclassはJSONへ変換できません。関数型とHtmlのフィールドは未対応で、Listやnullableの中でも同じです。Mapのキーにはf32 / f64 / UUID / timestampなど、ハッシュに未対応の型を使えません。
 
 `shared[T]`のフィールドは、TがJSON対応なら変換できます。JSONにはTの値を書き込み、読み込むと新しい共有値を作ります。元の値が参照を共有していた関係は、JSONには保存しません。
 

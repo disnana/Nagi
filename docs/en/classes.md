@@ -28,7 +28,7 @@ Passing a class containing strings or lists to a function moves its ownership. S
 
 You can define fields, construct values with named arguments, and read fields. Methods, inheritance, field assignment, and storing a `view` in a field are not supported.
 
-Fields can contain Error or enums, including an Error cause in a custom error class. Error, enums, and classes containing them cannot be converted to JSON. Function types, Db, and Html are unsupported in fields, including inside lists or nullable types. Map fields cannot use keys such as f32, f64, UUID, or timestamp that lack hashing support.
+Fields can contain Error or enums, including an Error cause in a custom error class. Db and storable standard resources can also be state fields. Classes containing Error, enums, or resources cannot be converted to JSON. Function types and Html are unsupported in fields, including inside lists or nullable types. Map fields cannot use keys such as f32, f64, UUID, or timestamp that lack hashing support.
 
 A `shared[T]` field can be converted to JSON when T supports JSON. JSON contains the value of T; decoding creates a new shared value. It does not preserve which values originally shared the same reference.
 

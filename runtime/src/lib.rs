@@ -5,6 +5,7 @@ pub use serde_json;
 mod concurrent;
 mod database;
 mod http;
+pub mod http_server;
 pub mod metrics;
 use axum::{
     body::Body,

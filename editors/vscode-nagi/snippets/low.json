@@ -3,5 +3,6 @@
   "Record": { "prefix": "record", "body": ["record ${1:Point} {", "    x: f64;", "    y: f64;", "}", "$0"], "description": "Lowの値型record" },
   "Enum": { "prefix": "enum", "body": ["enum ${1:AuthError} {", "    ${2:InvalidCredentials};", "    ${3:WeakPassword}(${4:message}: ${5:str});", "}", "$0"], "description": "Lowのenum" },
   "Replace": { "prefix": "replace", "body": ["@replace generated::${1:name}", "fn ${1:name}(${2:x: i64}) -> ${3:i64} {", "    ${0:return x;}", "}"], "description": "生成関数を手書きLowで置換" },
-  "Result match": {"prefix": "match", "body": ["match ${1:result} {", "    case Ok(${2:value}) {", "        ${3:print(value);}", "    }", "    case Err(${4:problem}) {", "        ${0:print(error_kind(problem));}", "    }", "}"], "description": "Resultの成功・失敗を分岐"}
+  "Result match": {"prefix": "match", "body": ["match ${1:result} {", "    case Ok(${2:value}) {", "        ${3:print(value);}", "    }", "    case Err(${4:problem}) {", "        ${0:print(error_kind(problem));}", "    }", "}"], "description": "Resultの成功・失敗を分岐"},
+  "Nullable match": {"prefix": "match-option", "body": ["match ${1:optional} {", "    case Some(${2:value}) {", "        ${3:print(value);}", "    }", "    case None {", "        ${0:print(\"missing\");}", "    }", "}"], "description": "nullableの値あり・値なしを分岐"}
 }

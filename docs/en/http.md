@@ -1,110 +1,58 @@
-# HTTP and HTML
+# HTTP
 
-[Contents](README.md) · Previous: [Language guide](language-guide.md) · Next: [SQLite](database.md)
+Use `std.http.server` to build an HTTP server. No database is required. Register an async handler and the state it shares with other requests.
 
-Async functions with attributes such as `@get` become HTTP handlers. Returning a class produces JSON; returning `Html` produces HTML. Start with a small server that does not store data.
+## A minimal server
 
-## 1. Write a server
-
-This complete program follows [examples/tutorial/http.nagi](../../examples/tutorial/http.nagi), with the embedded HTML translated into English.
+Save this as `server.nagi`:
 
 ```nagi
-class Greeting:
-    id: i64
-    name: str
+import std.http.server as http
 
-@get("/")
-async def home() -> Result[Html, Error]:
-    return ok(html("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Nagi</title><h1>Hello, Nagi!</h1><a href=\"/greet/1\">View JSON</a></html>"))
+class State:
+    greeting: str
 
-@get("/greet/{id}")
-async def greet(id: i64) -> Result[Greeting, Error]:
-    if id < 1:
-        return error("id must be positive")
-    return ok(Greeting(id=id, name="Nagi"))
-
-@post("/echo")
-async def echo(req: Greeting) -> Result[Greeting, Error]:
-    return ok(req)
+async def hello(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, view(state.greeting)))
 
 async def main() -> Result[unit, Error]:
-    db = try await db_open(":memory:")
-    return await serve(db, 8094)
+    app = http.app_default[State](State(greeting="Hello, Nagi!"))
+    app = try http.route(app, http.Method.GET, "/", hello)
+    return await http.serve(app, 8080, http.default_options())
 ```
 
-The current `serve` API needs Db. This example opens an in-memory SQLite database without creating tables or writing data. `serve` starts the server and keeps waiting for requests.
-
-## 2. Start and call it
-
-Save the complete program above as `http.nagi` in your working folder. Make sure port 8094 is free and run from that folder:
-
-```powershell
-nagic run http.nagi
+```sh
+nagic run server.nagi
 ```
 
-The same command works on Windows, Linux, and macOS. Open [http://127.0.0.1:8094/](http://127.0.0.1:8094/) in a browser to see “Hello, Nagi!”.
+Open [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to see `Hello, Nagi!`. Press Ctrl+C to stop.
 
-Call the API from another PowerShell terminal:
+## Requests and responses
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:8094/greet/7
-Invoke-RestMethod http://127.0.0.1:8094/echo -Method Post -ContentType 'application/json' -Body '{"id":2,"name":"sample"}'
-```
-
-On Linux/WSL2:
-
-```bash
-curl http://127.0.0.1:8094/greet/7
-curl -H 'Content-Type: application/json' -d '{"id":2,"name":"sample"}' http://127.0.0.1:8094/echo
-```
-
-GET returns `{"id":7,"name":"Nagi"}`; POST echoes `{"id":2,"name":"sample"}`. `/greet/0` returns a 400 JSON error. Press Ctrl+C in the server terminal to stop it.
-
-## 3. Define arguments and responses
-
-| Form | HTTP meaning |
+| Operation | Expression |
 |---|---|
-| `@get("/greet/{id}")` with `id: i64` | Reads `{id}` as an integer |
-| `req: Greeting` | Reads request JSON into a class |
-| `db: Db` | Supplies the database passed to serve |
-| Primitive argument not present in the path | Reads a query parameter; see `/query` in [crud.nagi](../../examples/crud.nagi) |
-| `body: view[bytes]` | Borrows request body bytes |
-| `Result[Greeting, Error]` and `ok(...)` | JSON on success |
-| `Result[Greeting?, Error]` and `ok(None)` | 404 for an absent value |
-| `Result[Html, Error]` and `ok(html(...))` | `text/html` on success |
-| `error("reason")` | 400 JSON input error |
-| `not_found("reason")` | 404 JSON missing-target error |
-| `internal_error("reason")` | 500 JSON error with details withheld |
-| `fail(problem)` | Response preserving Error kind; database errors become 500 |
+| Check for GET | `request.is_get` or `request.method == http.Method.GET` |
+| Read the path | `request.path` |
+| Borrow the body | `request.body` |
+| Read a header | `http.header_text(view(request), "Authorization")` |
+| Return text | `http.text(http.Status.OK, "hello")` |
+| Return HTML | `http.html(http.Status.OK, "<h1>Hello</h1>")` |
+| Return JSON | `http.json[User](http.Status.CREATED, user)` |
+| Return no body | `http.empty(http.Status.NO_CONTENT)` |
 
-Handlers use `async def` and return `Result[..., Error]`. Attributes include `@get`, `@post`, `@put`, and `@delete`. Missing JSON fields, wrong types, and unknown fields are input errors.
+A header may be absent, so the getter returns `Result[Option[view[str]], Error]`. Use `match` with `Ok`/`Err`, then `Some`/`None`. Register POST routes with `http.Method.POST`.
 
-Use `match await operation(...)` to handle failure or return a default. The [Result API example](result-api.md) demonstrates 400 for invalid input, 404 for absent data, 500 for database failure, and recovery with a 200 response over real HTTP.
+## Customize error responses
 
-## 4. Move HTML into a separate file
+`http.app[State, AuthError](state, auth_error)` sets a function that converts your error type into a response. `http.route_mapped` overrides that function for one route. Successful responses bypass the error mapper.
 
-For longer HTML, put `index.html` beside the `.nagi` file and use:
+The [authentication example](../../test-nagi-code/library-examples/http-auth/README.en.md) includes Authorization headers, 401 with WWW-Authenticate, a route-specific 403, and typed shared state.
 
-```nagi
-@get("/")
-async def home() -> Result[Html, Error]:
-    return ok(html(include_text("index.html")))
-```
+## Further reference
 
-`include_text` embeds HTML in the executable at compile time. Rebuild after editing it. The distributed application does not need a separate HTML file.
+- [HTTP API reference](http-server.md): Status, headers, routes, and limits
+- [Standard HTTP measurements](http-stdlib-performance.md): latency, memory, and continuous load
+- [JSON](json.md): decoding a body into a class
+- [Existing HTTP attributes](http-legacy.md): code using `@get`/`@post` and `serve(Db, port)`
 
-Browser JavaScript can call the same server with `fetch("/api/tasks")`. The [task management demo](web-demo.md) combines add/edit/delete operations with SQLite.
-
-## Current server scope
-
-High attributes generate Axum routing. Implemented features include HTTP/1.1, keep-alive, path parameters, typed query parameters, request bodies, and JSON responses.
-
-Standard test endpoints include `/health`, a five-chunk `/stream`, and the `/ws` echo WebSocket. Middleware limits request processing to two seconds and body/WebSocket messages to 1 MiB. Database and internal errors become statuses such as 500 without exposing details in responses.
-
-Those three GET routes are reserved for the builtin server; `check` rejects user handlers with the same GET route. Paths differing only in capture names, such as `/items/{id}` and `/items/{key}`, also conflict. Use the same capture names even when GET and POST use separate handlers.
-
-HTTP waits expire after ten seconds by default. This covers silence after accept, incomplete headers, and the interval from a completed response until the next complete request headers. Sending a few bytes does not extend the deadline. Expired connections close; clients should reconnect when needed. This wait does not apply to active responses, streams, or upgraded WebSocket sessions.
-
-To change it, set `NAGI_HTTP_REQUEST_WAIT_SECONDS` to a positive integer before starting the server. For example, use `$env:NAGI_HTTP_REQUEST_WAIT_SECONDS = "30"` in PowerShell or `export NAGI_HTTP_REQUEST_WAIT_SECONDS=30` in bash. Headers and unused keep-alive share this deadline. There is no fixed limit of 128 concurrent connections.
-
-The server currently binds to loopback only. HTTP/2, TLS, authentication, arbitrary middleware declarations in High, and deployment mechanisms are not implemented. Large-class JSON streaming and general High streaming syntax are also absent. JSON responses encode classes into `Vec<u8>` and pass it to Body.
+The standard server currently serves HTTP/1.1 on loopback. Use a reverse proxy for TLS and external access. This module does not expose streaming, WebSocket, or HTTP/2 APIs.

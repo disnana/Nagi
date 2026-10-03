@@ -1,4 +1,4 @@
-"""Build and exercise the eight library projects, including a real HTTP server."""
+"""Build and exercise the library projects, including real HTTP servers."""
 from __future__ import annotations
 
 import argparse
@@ -43,23 +43,23 @@ def run(args, *, cwd=ROOT, env=None, input=None, timeout=180):
     return result.stdout
 
 
-def response(port, path="/health", body=None):
+def response(port, path="/health", body=None, headers=None):
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
     try:
-        connection.request("GET", path, body=body)
+        connection.request("GET", path, body=body, headers=headers or {})
         result = connection.getresponse()
         return result.status, result.read(), dict(result.getheaders())
     finally:
         connection.close()
 
 
-def wait_for_health(port, process):
+def wait_for_health(port, process, expected=b"ok\n"):
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError(f"HTTP sample exited early: {process.returncode}")
         try:
-            if response(port)[:2] == (200, b"ok\n"):
+            if response(port)[:2] == (200, expected):
                 return
         except OSError:
             pass
@@ -151,6 +151,42 @@ def response_after_stop(port):
     return False
 
 
+def check_http_auth(executable, env, output):
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    # This is an ephemeral test fixture, not a credential for a deployed app.
+    authorization = "Bearer library-example-fixture"
+    server_env = dict(env, NAGI_SAMPLE_PORT=str(port), NAGI_DEMO_AUTHORIZATION=authorization)
+    with (output / "http-auth.log").open("w", encoding="utf-8") as log:
+        process = subprocess.Popen([str(executable)], cwd=PROJECTS / "http-auth",
+                                   env=server_env, stdin=subprocess.DEVNULL, stdout=log, stderr=log)
+        try:
+            wait_for_health(port, process, b"ok")
+            status, body, headers = response(port, "/me")
+            assert (status, body) == (401, b"authentication required")
+            assert {name.lower(): value for name, value in headers.items()}["www-authenticate"] == "Bearer"
+            assert response(port, "/me", headers={"Authorization": "Bearer incorrect"})[:2] == (401, b"invalid credentials")
+            assert response(port, "/me", headers={"Authorization": authorization})[:2] == (200, b"Hello, Nagi!")
+            assert response(port, "/restricted")[:2] == (403, b"access denied")
+        finally:
+            if process.poll() is None:
+                if os.name == "nt":
+                    process.terminate()
+                else:
+                    process.send_signal(signal.SIGINT)
+            try:
+                code = process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+                raise RuntimeError("HTTP auth sample did not stop")
+            if os.name != "nt":
+                assert code == 0, f"HTTP auth shutdown failed: {code}"
+    assert response_after_stop(port), "HTTP auth listener remains after shutdown"
+    return "terminated" if os.name == "nt" else "graceful"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", default=str(
@@ -221,6 +257,12 @@ def main():
     rows.append({"project": "custom-http", "check_build_run": "passed", "shutdown": shutdown})
     (output / "results.json").write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
     print(f"Passed: custom-http ({shutdown} shutdown)", flush=True)
+
+    executable = build("http-auth", "main")
+    shutdown = check_http_auth(executable, env, output)
+    rows.append({"project": "http-auth", "check_build_run": "passed", "shutdown": shutdown})
+    (output / "results.json").write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
+    print(f"Passed: http-auth ({shutdown} shutdown)", flush=True)
     print(json.dumps({"projects": len(rows), "status": "passed"}), flush=True)
 
 

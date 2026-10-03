@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add `std.http.server`: DB-free apps, native Method/Status, request headers, typed shared state, async handlers, and app/route error mapping. Bound headers, bodies, admission, response sending, and shutdown.
+- Support registered standard-module imports, comma-separated from imports, and exhaustive Option matching with Some/None. Preserve resource identity and borrowed lifetimes through saved Low.
+- Extend VS Code completion, hover, signature help, and read-only definition navigation to standard resources, constants, and operations.
 - Preserve checked numeric types in generated Rust, including integer literals printed or compared without an assignment.
 - Restore parser nesting depth after speculative indexing, retain parentheses around try/await field and index receivers, and reject unsupported class type arguments instead of discarding them.
 - Preserve string bytes, including control characters, through High-to-Low and Rust generation.

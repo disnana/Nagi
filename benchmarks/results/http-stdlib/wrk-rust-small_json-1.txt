@@ -1,0 +1,14 @@
+Running 5s test @ http://127.0.0.1:8086/small
+  2 threads and 64 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   513.85us  144.61us   3.37ms   83.85%
+    Req/Sec    62.84k     9.71k   86.45k    64.00%
+  Latency Distribution
+     50%  506.00us
+     75%  572.00us
+     90%  638.00us
+     99%    0.92ms
+  624283 requests in 5.02s, 83.35MB read
+Requests/sec: 124481.16
+Transfer/sec:     16.62MB
+RESULT {"requests":624283,"duration_us":5015080,"requests_s":124481.165,"p50_us":506.000,"p95_us":734.000,"p99_us":916.000,"max_us":3374,"connect_errors":0,"read_errors":0,"write_errors":0,"timeouts":0,"status_errors":0}

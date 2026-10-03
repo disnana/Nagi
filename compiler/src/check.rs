@@ -11,10 +11,13 @@ struct BorrowedPlace {
     binding: BindingId,
     fields: Vec<String>,
     owner_loan: bool,
+    static_origin: bool,
 }
 impl BorrowedPlace {
     fn overlaps(&self, other: &Self) -> bool {
-        self.owner_loan
+        !self.static_origin
+            && !other.static_origin
+            && self.owner_loan
             && other.owner_loan
             && self.binding == other.binding
             && (self.fields.starts_with(&other.fields) || other.fields.starts_with(&self.fields))
@@ -35,6 +38,7 @@ struct Checker {
     classes: HashMap<String, Class>,
     enums: HashMap<String, Enum>,
     functions: HashMap<String, Function>,
+    registered: HashSet<String>,
     vars: HashMap<String, Var>,
     ret: Type,
     asynchronous: bool,
@@ -169,11 +173,16 @@ fn json_encode_supported(
 fn class_field(t: &Type, line: usize) -> Result<(), String> {
     // Resource and callback storage needs a separate ownership design. Runtime
     // Error causes are owned values; their records omit serialization derives.
-    if t.0 == "fn" && !t.1.is_empty() || matches!(t.0.as_str(), "Db" | "Html") {
+    if t.0 == "fn" && !t.1.is_empty() || matches!(t.0.as_str(), "Html") {
         return Err(error(line, format!("{t}はclassのフィールドに保存できません。関数の引数やローカル変数で使用してください")));
     }
     if t.0 == "Map" && definitely_unhashable(&t.1[0], None) {
         return Err(error(line, format!("classのMapフィールドのキーに{}は使えません。一致比較とハッシュに対応する型が必要です", t.1[0])));
+    }
+    if crate::stdlib::resource(&t.0)
+        .is_some_and(|resource| !crate::stdlib::resource_info(resource).storage)
+    {
+        return Err(error(line, format!("{t}は所有fieldへ保存できません")));
     }
     for inner in &t.1 {
         class_field(inner, line)?;
@@ -288,10 +297,24 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         return Err("importはnagicのファイル読み込み経路で解決してください".into());
     }
     crate::modules::decode_low_types(p)?;
+    if p.modules
+        .modules
+        .iter()
+        .any(|module| crate::stdlib::is_registered_module(&module.id))
+    {
+        crate::modules::validate(p)?;
+    }
     let mut c = Checker {
         classes: HashMap::new(),
         enums: HashMap::new(),
         functions: HashMap::new(),
+        registered: p
+            .modules
+            .definitions
+            .iter()
+            .filter(|definition| crate::stdlib::definition(&definition.id))
+            .map(|definition| definition.symbol.clone())
+            .collect(),
         vars: HashMap::new(),
         ret: Type::named("unit"),
         asynchronous: false,
@@ -477,6 +500,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
                     // Parameter contents borrow outside the function. They are
                     // valid return origins without borrowing the parameter Vec.
                     owner_loan: false,
+                    static_origin: false,
                 }])
             } else {
                 HashSet::new()
@@ -542,6 +566,266 @@ fn returns(ss: &[Stmt]) -> bool {
     })
 }
 impl Checker {
+    fn resource(&self, name: &str) -> Option<crate::stdlib::Resource> {
+        self.registered
+            .contains(name)
+            .then(|| crate::stdlib::resource(name))
+            .flatten()
+    }
+    fn native_resource_view(&self, ty: &Type) -> Option<crate::stdlib::Resource> {
+        crate::stdlib::native_view_element(ty).and_then(|element| self.resource(&element.0))
+    }
+    fn field_owner<'a>(&self, mut ty: &'a Type) -> &'a Type {
+        while ty.0 == "owned" || ty.0 == "shared" || self.native_resource_view(ty).is_some() {
+            ty = &ty.1[0];
+        }
+        ty
+    }
+    fn reference(&self, got: &Type, wanted: &Type, line: usize) -> Result<(), String> {
+        if got == wanted || wanted.0 == "view" && got == &wanted.inner() {
+            Ok(())
+        } else {
+            self.demand(got, wanted, line)
+        }
+    }
+    fn mapper(&self, ty: &Type, error_type: &Type, line: usize) -> Result<(), String> {
+        let response = crate::stdlib::resource_type(crate::stdlib::Resource::Response, vec![]);
+        let expected = Type::generic("fn", vec![error_type.clone(), response]);
+        self.demand(ty, &expected, line)?;
+        if error_type.contains_view() {
+            return Err(error(line, "HTTP mapperのエラー値にviewは保持できません"));
+        }
+        Ok(())
+    }
+    fn handler_error(&self, handler: &Expr, state: &Type, line: usize) -> Result<Type, String> {
+        let named = match (&handler.kind, handler.resolution) {
+            (E::Name(name), Some(NameResolution::Function)) => {
+                self.functions.get(name).is_some_and(|f| f.asynchronous)
+            }
+            (E::Name(name), Some(NameResolution::Local)) => self
+                .vars
+                .get(name)
+                .is_some_and(|v| v.async_function.is_some()),
+            _ => false,
+        };
+        if !named {
+            return Err(error(
+                line,
+                "HTTP handlerは名前付きasync関数またはそのローカルaliasを指定してください",
+            ));
+        }
+        let ty = handler.ty.as_ref().expect("checked callback");
+        if ty.0 != "fn" || ty.1.len() != 3 || !ty.1[2].is_future() {
+            return Err(error(
+                line,
+                "HTTP handlerはasync (Request, shared[State])->Result[Response,E]が必要です",
+            ));
+        }
+        self.demand(
+            &ty.1[0],
+            &crate::stdlib::resource_type(crate::stdlib::Resource::Request, vec![]),
+            line,
+        )?;
+        self.demand(
+            &ty.1[1],
+            &Type::generic("shared", vec![state.clone()]),
+            line,
+        )?;
+        let output = ty.1[2].inner();
+        if output.0 != "Result" || output.1.len() != 2 {
+            return Err(error(
+                line,
+                "HTTP handlerはResult[Response,E]を返してください",
+            ));
+        }
+        self.demand(
+            &output.1[0],
+            &crate::stdlib::resource_type(crate::stdlib::Resource::Response, vec![]),
+            line,
+        )?;
+        if ty.1[0].contains_view() || ty.1[1].contains_view() || output.contains_view() {
+            return Err(error(
+                line,
+                "HTTP handlerの引数・戻り値にviewを保持できません",
+            ));
+        }
+        Ok(output.1[1].clone())
+    }
+    fn standard(
+        &mut self,
+        operation: crate::stdlib::Operation,
+        types: &[Type],
+        args: &mut [Expr],
+        line: usize,
+    ) -> Result<Type, String> {
+        use crate::stdlib::{Operation as O, Passing, Resource as R};
+        let info = crate::stdlib::operation_info(operation);
+        if args.len() != info.arity {
+            return Err(error(
+                line,
+                format!("{}の引数は{}個です", info.name, info.arity),
+            ));
+        }
+        if !types.is_empty() && types.len() != info.generic_arity
+            || info.generic_arity == 0 && !types.is_empty()
+        {
+            return Err(error(
+                line,
+                format!("{}の型引数は{}個です", info.name, info.generic_arity),
+            ));
+        }
+        for ty in types {
+            self.valid(ty, line)?;
+            self.emittable(ty, line, false)?;
+        }
+        let resource = |kind| crate::stdlib::resource_type(kind, vec![]);
+        let view = |ty| Type::generic("view", vec![ty]);
+        let mut hints: Vec<Option<Type>> = vec![None; args.len()];
+        match operation {
+            O::Status => hints[0] = Some(Type::named("i64")),
+            O::Method => hints[0] = Some(view(Type::named("str"))),
+            O::MethodName => hints[0] = Some(view(resource(R::Method))),
+            O::Empty => hints[0] = Some(resource(R::Status)),
+            O::Text | O::Html | O::Bytes => {
+                hints[0] = Some(resource(R::Status));
+                hints[1] = Some(view(Type::named(if operation == O::Bytes {
+                    "bytes"
+                } else {
+                    "str"
+                })));
+            }
+            O::Json => {
+                hints[0] = Some(resource(R::Status));
+                hints[1] = types.first().cloned();
+            }
+            O::AppendHeader | O::AppendHeaderText => {
+                hints[0] = Some(resource(R::Response));
+                hints[1] = Some(view(Type::named("str")));
+                hints[2] = Some(view(Type::named(if operation == O::AppendHeaderText {
+                    "str"
+                } else {
+                    "bytes"
+                })));
+            }
+            O::Header | O::HeaderText | O::Headers => {
+                hints[0] = Some(view(resource(R::Request)));
+                hints[1] = Some(view(Type::named("str")));
+            }
+            O::DefaultOptions => {}
+            O::Options => {
+                hints.fill(Some(Type::named("i64")));
+            }
+            O::Capacity | O::HeaderTimeout | O::HeaderLimits | O::SendTimeout => {
+                hints.fill(Some(Type::named("i64")));
+                hints[0] = Some(resource(R::Options));
+            }
+            O::App => {
+                if types.len() == 2 {
+                    hints[0] = Some(types[0].clone());
+                    hints[1] = Some(Type::generic(
+                        "fn",
+                        vec![types[1].clone(), resource(R::Response)],
+                    ));
+                }
+            }
+            O::AppDefault => hints[0] = types.first().cloned(),
+            O::Route | O::RouteMapped => {
+                hints[1] = Some(resource(R::Method));
+                hints[2] = Some(view(Type::named("str")));
+            }
+            O::Serve => {
+                hints[1] = Some(Type::named("i64"));
+                hints[2] = Some(resource(R::Options));
+            }
+        }
+        let mut arguments = vec![];
+        for (index, arg) in args.iter_mut().enumerate() {
+            let ty = self.expr(arg, hints[index].as_ref())?;
+            if let Some(wanted) = &hints[index] {
+                if info.parameters[index] == Passing::Reference {
+                    self.reference(&ty, wanted, arg.line)?;
+                } else {
+                    self.demand(&ty, wanted, arg.line)?;
+                }
+            }
+            if info.parameters[index] == Passing::Reference {
+                self.available(arg, false)?;
+            }
+            if info.parameters[index] == Passing::Move {
+                self.consume(arg)?;
+            }
+            arguments.push(ty);
+        }
+        let output = match operation {
+            O::Status => result(resource(R::Status)),
+            O::Method => result(resource(R::Method)),
+            O::MethodName => view(Type::named("str")),
+            O::Empty | O::Text | O::Html | O::Bytes => resource(R::Response),
+            O::Json => {
+                if !json_encode_supported(&args[1], &self.classes, &self.enums) {
+                    return Err(error(
+                        line,
+                        "HTTP JSON builderの値はSerializeに対応していません",
+                    ));
+                }
+                result(resource(R::Response))
+            }
+            O::AppendHeader | O::AppendHeaderText => result(resource(R::Response)),
+            O::Header | O::HeaderText => result(Type::generic(
+                "Option",
+                vec![view(Type::named(if operation == O::HeaderText {
+                    "str"
+                } else {
+                    "bytes"
+                }))],
+            )),
+            O::Headers => result(Type::generic("List", vec![view(Type::named("bytes"))])),
+            O::DefaultOptions => resource(R::Options),
+            O::Options | O::Capacity | O::HeaderTimeout | O::HeaderLimits | O::SendTimeout => {
+                result(resource(R::Options))
+            }
+            O::App | O::AppDefault => {
+                let state = &arguments[0];
+                if state.contains_view() {
+                    return Err(error(line, "Appのstateにはviewを保存できません"));
+                }
+                let failure = if operation == O::AppDefault {
+                    Type::named("Error")
+                } else {
+                    let mapper = &arguments[1];
+                    if mapper.0 != "fn" || mapper.1.len() != 2 {
+                        return Err(error(line, "Appのmapperは同期fn[E,Response]が必要です"));
+                    }
+                    let failure = mapper.1[0].clone();
+                    self.mapper(mapper, &failure, line)?;
+                    failure
+                };
+                if let Some(expected) = types.get(1) {
+                    self.demand(&failure, expected, line)?;
+                }
+                crate::stdlib::resource_type(R::App, vec![state.clone(), failure])
+            }
+            O::Route | O::RouteMapped | O::Serve => {
+                let app = &arguments[0];
+                if self.resource(&app.0) != Some(R::App) || app.1.len() != 2 {
+                    return Err(error(line, "HTTP登録・起動にはApp[State,E]が必要です"));
+                }
+                if operation == O::Serve {
+                    future(result(Type::named("unit")))
+                } else {
+                    let failure = self.handler_error(&args[3], &app.1[0], line)?;
+                    if operation == O::Route {
+                        self.demand(&failure, &app.1[1], line)?;
+                    } else {
+                        self.mapper(&arguments[4], &failure, line)?;
+                    }
+                    result(app.clone())
+                }
+            }
+        };
+        Ok(output)
+    }
+
     fn enum_variant(
         &self,
         name: &str,
@@ -622,6 +906,7 @@ impl Checker {
             t: &Type,
             classes: &HashMap<String, Class>,
             enums: &HashMap<String, Enum>,
+            registered: &HashSet<String>,
             depth: usize,
         ) -> bool {
             if depth > 64 {
@@ -632,26 +917,31 @@ impl Checker {
             if matches!(t.0.as_str(), "str" | "bytes" | "Error" | "Db" | "Html") {
                 return false;
             }
+            if registered.contains(&t.0) {
+                if let Some(resource) = crate::stdlib::resource(&t.0) {
+                    return crate::stdlib::resource_info(resource).copy;
+                }
+            }
             if t.1.is_empty() && enums.contains_key(&t.0) {
                 enums[&t.0].variants.iter().all(|variant| {
                     variant
                         .fields
                         .iter()
-                        .all(|(_, ty)| visit(ty, classes, enums, depth + 1))
+                        .all(|(_, ty)| visit(ty, classes, enums, registered, depth + 1))
                 })
             } else if t.is_copy() {
                 true
-            } else if t.0 == "Option" {
-                visit(&t.inner(), classes, enums, depth + 1)
+            } else if matches!(t.0.as_str(), "Option" | "owned") {
+                visit(&t.inner(), classes, enums, registered, depth + 1)
             } else if let Some(c) = classes.get(&t.0) {
                 c.fields
                     .iter()
-                    .all(|(_, t)| visit(t, classes, enums, depth + 1))
+                    .all(|(_, t)| visit(t, classes, enums, registered, depth + 1))
             } else {
                 false
             }
         }
-        visit(t, &self.classes, &self.enums, 0)
+        visit(t, &self.classes, &self.enums, &self.registered, 0)
     }
     fn valid(&self, t: &Type, line: usize) -> Result<(), String> {
         if let Some(alias) = t.0.strip_prefix(crate::modules::NAMESPACE_PREFIX) {
@@ -659,6 +949,19 @@ impl Checker {
                 line,
                 format!("module名 {alias} は型として使えません。module内のclassを指定してください"),
             ));
+        }
+        if let Some(resource) = self.resource(&t.0) {
+            let arity = crate::stdlib::resource_info(resource).arity;
+            if t.1.len() != arity {
+                return Err(error(line, format!("{t}の型引数は{arity}個です")));
+            }
+            if resource == crate::stdlib::Resource::App && t.1.iter().any(Type::contains_view) {
+                return Err(error(line, "Appのstate/error型引数にviewを保持できません"));
+            }
+            for argument in &t.1 {
+                self.valid(argument, line)?;
+            }
+            return Ok(());
         }
         if t.0 == "fn" && !t.1.is_empty() {
             for parameter in &t.1 {
@@ -766,10 +1069,56 @@ impl Checker {
                             binding: v.binding,
                             fields: vec![],
                             owner_loan: true,
+                            static_origin: false,
                         }])
                     }
                 })
                 .unwrap_or_default(),
+            E::Field(_, _) if e.resolution == Some(NameResolution::ResourceConstant) => {
+                // Registered Method/Status constants are native promotable
+                // values; borrowing them does not borrow a local owner.
+                HashSet::from([BorrowedPlace {
+                    binding: BindingId { line: 0, token: 0 },
+                    fields: vec![],
+                    owner_loan: false,
+                    static_origin: true,
+                }])
+            }
+            E::Field(parent, field) if e.resolution == Some(NameResolution::ResourceField) => {
+                let Some(ty) = parent.ty.as_ref() else {
+                    return HashSet::new();
+                };
+                let Some(resource) = self.resource(&self.field_owner(ty).0) else {
+                    return HashSet::new();
+                };
+                let Some(info) = crate::stdlib::field(resource, field) else {
+                    return HashSet::new();
+                };
+                if info.static_borrow {
+                    HashSet::from([BorrowedPlace {
+                        binding: BindingId { line: 0, token: 0 },
+                        fields: vec![],
+                        owner_loan: false,
+                        static_origin: true,
+                    }])
+                } else if info.whole_owner {
+                    self.origin(parent)
+                } else {
+                    self.origin(parent)
+                        .into_iter()
+                        .map(|mut place| {
+                            place.fields.push(field.clone());
+                            place
+                        })
+                        .collect()
+                }
+            }
+            E::Call(name, _, args) if e.resolution == Some(NameResolution::Standard) => {
+                crate::stdlib::operation(name)
+                    .and_then(|op| crate::stdlib::operation_info(op).borrow_owner)
+                    .map(|owner| self.origin(&args[owner]))
+                    .unwrap_or_default()
+            }
             E::Field(parent, field) => self
                 .origin(parent)
                 .into_iter()
@@ -787,11 +1136,16 @@ impl Checker {
                 let mut origins = self.origin(&args[0]);
                 if let Some((name, fields)) = Self::place(&args[0]) {
                     if let Some(var) = self.vars.get(name) {
-                        origins.insert(BorrowedPlace {
-                            binding: var.binding,
-                            fields,
-                            owner_loan: true,
-                        });
+                        // A field of a borrowed resource lives with the caller's
+                        // resource, rather than the local reference binding.
+                        if self.native_resource_view(&var.ty).is_none() {
+                            origins.insert(BorrowedPlace {
+                                binding: var.binding,
+                                fields,
+                                owner_loan: true,
+                                static_origin: false,
+                            });
+                        }
                     }
                 }
                 origins
@@ -862,10 +1216,45 @@ impl Checker {
                     _ => args.iter().any(Self::borrows_temporary),
                 }
             }
+            E::Call(name, _, args) if e.resolution == Some(NameResolution::Standard) => {
+                crate::stdlib::operation(name)
+                    .and_then(|op| crate::stdlib::operation_info(op).borrow_owner)
+                    .is_some_and(|owner| {
+                        let arg = &args[owner];
+                        if arg.ty.as_ref().is_some_and(Type::is_view) {
+                            Self::borrows_temporary(arg)
+                        } else {
+                            Self::place(arg).is_none()
+                        }
+                    })
+            }
             E::Call(_, _, args) => args.iter().any(Self::borrows_temporary),
             E::List(args) => args
                 .iter()
                 .any(|arg| Self::borrows_temporary_at(arg, depth.saturating_sub(1))),
+            E::Field(parent, field) if e.resolution == Some(NameResolution::ResourceField) => {
+                let resource = parent
+                    .ty
+                    .as_ref()
+                    .map(|ty| {
+                        let mut ty = ty;
+                        while matches!(ty.0.as_str(), "owned" | "shared" | "view")
+                            && !ty.1.is_empty()
+                        {
+                            ty = &ty.1[0];
+                        }
+                        ty
+                    })
+                    .and_then(|ty| crate::stdlib::resource(&ty.0));
+                resource
+                    .and_then(|resource| crate::stdlib::field(resource, field))
+                    .is_some_and(|info| {
+                        !info.static_borrow
+                            && (Self::borrows_temporary(parent)
+                                || !parent.ty.as_ref().is_some_and(Type::is_view)
+                                    && Self::place(parent).is_none())
+                    })
+            }
             E::Try(e) | E::Await(e) | E::Field(e, _) => Self::borrows_temporary_at(e, depth),
             E::Index(e, _) => Self::borrows_temporary_at(e, depth + 1),
             _ => false,
@@ -889,6 +1278,7 @@ impl Checker {
                 binding: v.binding,
                 fields: vec![],
                 owner_loan: true,
+                static_origin: false,
             })
         })
     }
@@ -947,10 +1337,27 @@ impl Checker {
         if self.copy_type(e.ty.as_ref().unwrap_or(&v.ty)) {
             return Ok(());
         }
+        fn borrowed_base(checker: &Checker, expr: &Expr) -> bool {
+            if let E::Field(parent, _) = &expr.kind {
+                let borrowed = parent.ty.as_ref().is_some_and(|ty| {
+                    ty.0 == "shared" || checker.native_resource_view(ty).is_some()
+                });
+                borrowed || borrowed_base(checker, parent)
+            } else {
+                false
+            }
+        }
+        if !fields.is_empty() && borrowed_base(self, e) {
+            return Err(error(
+                e.line,
+                "sharedまたは借用resourceの非Copy fieldはmoveできません。viewで借用してください",
+            ));
+        }
         if self.borrowed_place(&BorrowedPlace {
             binding: v.binding,
             fields: fields.clone(),
             owner_loan: true,
+            static_origin: false,
         }) {
             return Err(error(
                 e.line,
@@ -1195,7 +1602,9 @@ impl Checker {
                         if Self::borrows_temporary(e)
                             || origin.is_empty()
                             || origin.iter().any(|place| {
-                                place.owner_loan || !self.parameter_views.contains(&place.binding)
+                                !place.static_origin
+                                    && (place.owner_loan
+                                        || !self.parameter_views.contains(&place.binding))
                             })
                         {
                             return Err(error(s.line,"request/local-scoped view escapes its lifetime。長生きさせる値にはcopy()を使用してください"));
@@ -1244,8 +1653,9 @@ impl Checker {
                 let ty = self.expr(value, None)?;
                 let enumeration = self.enums.get(&ty.0).cloned();
                 let is_result = ty.0 == "Result" && ty.1.len() == 2;
-                if !is_result && enumeration.is_none() {
-                    return Err(error(s.line, "matchの対象はResultまたはenumです"));
+                let is_option = ty.0 == "Option" && ty.1.len() == 1;
+                if !is_result && !is_option && enumeration.is_none() {
+                    return Err(error(s.line, "matchの対象はResult、Optionまたはenumです"));
                 }
                 let mut seen = HashSet::new();
                 for arm in arms.iter_mut() {
@@ -1253,6 +1663,14 @@ impl Checker {
                         MatchPattern::Result { ok, .. } if is_result => (
                             if *ok { "Ok" } else { "Err" }.to_owned(),
                             vec![ty.1[usize::from(!*ok)].clone()],
+                        ),
+                        MatchPattern::Option { binding } if is_option => (
+                            if binding.is_some() { "Some" } else { "None" }.to_owned(),
+                            if binding.is_some() {
+                                vec![ty.inner()]
+                            } else {
+                                vec![]
+                            },
                         ),
                         MatchPattern::Enum { name, bindings, .. } if enumeration.is_some() => {
                             let Some((owner, variant)) = self.enum_variant(name, arm.line)? else {
@@ -1273,7 +1691,18 @@ impl Checker {
                                 variant.fields.into_iter().map(|(_, ty)| ty).collect(),
                             )
                         }
-                        _ => return Err(error(arm.line, "matchの対象とcaseの型が一致しません")),
+                        _ => {
+                            return Err(error(
+                                arm.line,
+                                if is_result {
+                                    "ResultのcaseにはOk、Errを指定してください"
+                                } else if is_option {
+                                    "OptionのcaseにはSome、Noneを指定してください"
+                                } else {
+                                    "matchの対象とcaseの型が一致しません"
+                                },
+                            ))
+                        }
                     };
                     if !seen.insert(key) {
                         return Err(error(arm.line, "matchのcaseが重複しています"));
@@ -1299,10 +1728,33 @@ impl Checker {
                         ));
                     }
                 } else if seen.len() != 2 {
-                    return Err(error(s.line, "matchにはOkとErrの両方のcaseが必要です"));
+                    return Err(error(
+                        s.line,
+                        if is_option {
+                            "matchにはSomeとNoneの両方のcaseが必要です"
+                        } else {
+                            "matchにはOkとErrの両方のcaseが必要です"
+                        },
+                    ));
                 }
-                let origin = self.origin(value);
-                let content_origins = self.content_origins(value, &ty, 0);
+                let temporary_owner =
+                    (ty.contains_view() && Self::borrows_temporary(value)).then(|| BorrowedPlace {
+                        binding: BindingId {
+                            line: s.line,
+                            token: value.span.start,
+                        },
+                        fields: vec![],
+                        owner_loan: true,
+                        static_origin: false,
+                    });
+                let mut origin = self.origin(value);
+                let mut content_origins = self.content_origins(value, &ty, 0);
+                if let Some(owner) = &temporary_owner {
+                    origin.insert(owner.clone());
+                    for contents in &mut content_origins {
+                        contents.insert(owner.clone());
+                    }
+                }
                 self.consume(value)?;
                 let before = self.vars.clone();
                 let mut moves = vec![];
@@ -1355,6 +1807,21 @@ impl Checker {
                         }
                     }
                     if !returns(&arm.body) {
+                        if let Some(owner) = &temporary_owner {
+                            let escaped = before.keys().any(|name| {
+                                after.get(name).is_some_and(|var| {
+                                    !var.moved
+                                        && (var.origins.contains(owner)
+                                            || var
+                                                .content_origins
+                                                .iter()
+                                                .any(|contents| contents.contains(owner)))
+                                })
+                            });
+                            if escaped {
+                                return Err(error(arm.line, "一時的な所有値のviewをmatchの外へ持ち出せません。case内でcopyしてください"));
+                            }
+                        }
                         moves.push(after);
                     }
                 }
@@ -1363,6 +1830,12 @@ impl Checker {
             }
             S::For(n, e, b) => {
                 let t = self.expr(e, None)?;
+                if self.native_resource_view(&t).is_some() {
+                    return Err(error(
+                        s.line,
+                        "resourceのviewは配列ではないためforで反復できません",
+                    ));
+                }
                 let elem = match t.0.as_str() {
                     "Range" => Type::named("i64"),
                     "List" | "view" => t.inner(),
@@ -1383,6 +1856,7 @@ impl Checker {
                                 binding: var.binding,
                                 fields,
                                 owner_loan: true,
+                                static_origin: false,
                             });
                         }
                     }
@@ -1492,6 +1966,21 @@ impl Checker {
             ));
         }
         e.resolution = None;
+        if let E::Field(base, member) = &e.kind {
+            if let E::Name(owner) = &base.kind {
+                if !self.vars.contains_key(owner) {
+                    if let Some(resource) = self.resource(owner) {
+                        if crate::stdlib::constant(resource, member).is_none() {
+                            return Err(error(line, format!("{owner}に定数{member}はありません")));
+                        }
+                        let ty = crate::stdlib::resource_type(resource, vec![]);
+                        e.resolution = Some(NameResolution::ResourceConstant);
+                        e.ty = Some(ty.clone());
+                        return Ok(ty);
+                    }
+                }
+            }
+        }
         if let E::Field(base, variant) = &e.kind {
             if let E::Name(owner) = &base.kind {
                 if !self.vars.contains_key(owner) && self.enums.contains_key(owner) {
@@ -1595,7 +2084,17 @@ impl Checker {
             E::Binary(a, op, b) => {
                 let left = self.expr(a, expected.filter(|t| t.0 != "bool"))?;
                 let right = self.expr(b, Some(&left))?;
-                self.demand(&right, &left, line)?;
+                let comparison = matches!(op.as_str(), "==" | "!=" | "<" | ">" | "<=" | ">=");
+                let borrowed_pair = comparison
+                    && ((left.0 == "view"
+                        && matches!(left.inner().0.as_str(), "str" | "bytes")
+                        && left.inner() == right)
+                        || (right.0 == "view"
+                            && matches!(right.inner().0.as_str(), "str" | "bytes")
+                            && right.inner() == left));
+                if !borrowed_pair {
+                    self.demand(&right, &left, line)?;
+                }
                 match op.as_str() {
                     "and" | "or" => {
                         self.demand(&left, &Type::named("bool"), line)?;
@@ -1603,7 +2102,18 @@ impl Checker {
                     }
                     "==" | "!=" | "<" | ">" | "<=" | ">=" => {
                         let ordered = !matches!(op.as_str(), "==" | "!=");
-                        if (!left.is_copy() && left.0 != "str") || !comparable(&left, ordered) {
+                        if (!self.copy_type(&left)
+                            && left.0 != "str"
+                            && !borrowed_pair
+                            && !self.resource(&left.0).is_some_and(|resource| {
+                                crate::stdlib::resource_info(resource).equality
+                            }))
+                            || !(comparable(&left, ordered)
+                                || !ordered
+                                    && self.resource(&left.0).is_some_and(|resource| {
+                                        crate::stdlib::resource_info(resource).equality
+                                    }))
+                        {
                             return Err(error(
                                 line,
                                 format!("{left}は{op}による比較に対応していません"),
@@ -1627,14 +2137,31 @@ impl Checker {
                 // The parent is only a field base. Check the complete path so
                 // moving one field does not prevent access to its siblings.
                 let t = self.expr_mode(x, None, true)?;
-                self.classes
-                    .get(&t.0)
-                    .and_then(|c| c.fields.iter().find(|(k, _)| k == n))
-                    .map(|f| f.1.clone())
-                    .ok_or_else(|| error(line, format!("{t} にフィールド {n} はありません")))?
+                let owner = self.field_owner(&t);
+                if let Some(resource) = self.resource(&owner.0) {
+                    let field = crate::stdlib::field(resource, n)
+                        .ok_or_else(|| error(line, format!("{t}にfield {n}はありません")))?;
+                    if field.whole_owner {
+                        self.available(x, false)?;
+                    }
+                    e.resolution = Some(NameResolution::ResourceField);
+                    field.ty
+                } else {
+                    self.classes
+                        .get(&owner.0)
+                        .and_then(|c| c.fields.iter().find(|(k, _)| k == n))
+                        .map(|f| f.1.clone())
+                        .ok_or_else(|| error(line, format!("{t} にフィールド {n} はありません")))?
+                }
             }
             E::Index(x, i) => {
                 let t = self.expr(x, None)?;
+                if self.native_resource_view(&t).is_some() {
+                    return Err(error(
+                        line,
+                        "resourceのviewは配列ではないためindex取得できません",
+                    ));
+                }
                 let ix = self.expr(i, Some(&Type::named("i64")))?;
                 self.demand(&ix, &Type::named("i64"), line)?;
                 if t.0 == "List" || t.0 == "view" {
@@ -1759,6 +2286,17 @@ impl Checker {
                 t.inner()
             }
             E::Call(n, ts, args) => {
+                if !self.vars.contains_key(n)
+                    && !self.functions.contains_key(n)
+                    && self.registered.contains(n)
+                {
+                    if let Some(operation) = crate::stdlib::operation(n) {
+                        let ty = self.standard(operation, ts, args, line)?;
+                        e.resolution = Some(NameResolution::Standard);
+                        e.ty = Some(ty.clone());
+                        return Ok(ty);
+                    }
+                }
                 for t in ts.iter() {
                     self.valid(t, line)?;
                 }
@@ -1931,7 +2469,14 @@ impl Checker {
                 if t.0 == "str" || t.0 == "bytes" {
                     Ok(Type::generic("view", vec![t.clone()]))
                 } else if t.0 == "List" {
-                    Ok(Type::generic("view", vec![t.inner()]))
+                    let element = t.inner();
+                    if self.resource(&unowned(&element).0).is_some() {
+                        return Err(error(line, "List[resource]のviewは未対応です。Listを直接index取得または反復してください"));
+                    }
+                    Ok(Type::generic("view", vec![element]))
+                } else if self.resource(&unowned(t).0).is_some() {
+                    self.available(&args[0], false)?;
+                    Ok(Type::generic("view", vec![t.clone()]))
                 } else {
                     Err(error(line, "viewにはstr/bytes/Listの所有値が必要です"))
                 }
@@ -1941,6 +2486,15 @@ impl Checker {
                     return Err(error(line, "copyの対象はviewです"));
                 }
                 let t = types[0].inner();
+                if let Some(resource) = self.native_resource_view(&types[0]) {
+                    if !crate::stdlib::resource_info(resource).copy {
+                        return Err(error(
+                            line,
+                            "非Copy resourceのcopyは未対応です。viewで借用してください",
+                        ));
+                    }
+                    return Ok(t);
+                }
                 Ok(if t.0 == "str" || t.0 == "bytes" {
                     t
                 } else {
@@ -1948,6 +2502,12 @@ impl Checker {
                 })
             }
             "share" => {
+                if self
+                    .resource(&types[0].0)
+                    .is_some_and(|resource| !crate::stdlib::resource_info(resource).shared)
+                {
+                    return Err(error(line, "このresourceはsharedへ変換できません"));
+                }
                 self.consume(&args[0])?;
                 Ok(Type::generic("shared", vec![types[0].clone()]))
             }
@@ -1958,6 +2518,12 @@ impl Checker {
                 Ok(types[0].clone())
             }
             "len" => {
+                if self.native_resource_view(&types[0]).is_some() {
+                    return Err(error(
+                        line,
+                        "resourceのviewは配列ではないためlenで長さを取得できません",
+                    ));
+                }
                 if !["str", "bytes", "List", "view"].contains(&types[0].0.as_str()) {
                     return Err(error(line, "len対象が不正です"));
                 }
@@ -2106,6 +2672,12 @@ impl Checker {
             "supervisor_demo" => Ok(future(result(Type::named("i64")))),
             "clock_ns" | "size_of" => Ok(Type::named("i64")),
             "slice" => {
+                if self.native_resource_view(&types[0]).is_some() {
+                    return Err(error(
+                        line,
+                        "resourceのviewは配列ではないためsliceを取得できません",
+                    ));
+                }
                 if !types[0].is_view() {
                     return Err(error(line, "sliceはviewを取ります"));
                 }
@@ -2129,6 +2701,22 @@ impl Checker {
                     return Err(error(line, "append対象は変数名です"));
                 }
                 self.consume(&args[1])?;
+                if types[1].contains_view() {
+                    let origin = self.origin(&args[1]);
+                    let contents = self.content_origins(&args[1], &types[1], 0);
+                    let E::Name(name) = &args[0].kind else {
+                        unreachable!("checked append target")
+                    };
+                    let target = self.vars.get_mut(name).expect("checked list binding");
+                    target.origins.extend(origin.iter().cloned());
+                    if let Some(element_origins) = target.content_origins.first_mut() {
+                        element_origins.extend(origin);
+                    }
+                    for (target, source) in target.content_origins.iter_mut().skip(1).zip(contents)
+                    {
+                        target.extend(source);
+                    }
+                }
                 Ok(Type::named("unit"))
             }
             "bench_i64" | "bench_f64" | "bench_scalar" => {

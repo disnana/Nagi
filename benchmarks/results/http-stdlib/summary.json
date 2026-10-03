@@ -1,0 +1,101 @@
+[
+  {
+    "implementation": "nagi",
+    "case": "plaintext",
+    "requests_s": 126272.726,
+    "p50_us": 476.0,
+    "p95_us": 785.0,
+    "p99_us": 1040.0,
+    "cpu_seconds": 4.99,
+    "rss_kib": 3248,
+    "errors": 0
+  },
+  {
+    "implementation": "rust",
+    "case": "plaintext",
+    "requests_s": 121338.307,
+    "p50_us": 513.0,
+    "p95_us": 762.0,
+    "p99_us": 1705.0,
+    "cpu_seconds": 5.01,
+    "rss_kib": 3120,
+    "errors": 0
+  },
+  {
+    "implementation": "legacy_axum",
+    "case": "plaintext",
+    "requests_s": 105518.375,
+    "p50_us": 609.0,
+    "p95_us": 823.0,
+    "p99_us": 1174.0,
+    "cpu_seconds": 5.1,
+    "rss_kib": 3384,
+    "errors": 0
+  },
+  {
+    "implementation": "nagi",
+    "case": "small_json",
+    "requests_s": 119400.609,
+    "p50_us": 515.0,
+    "p95_us": 747.0,
+    "p99_us": 1279.0,
+    "cpu_seconds": 5.1,
+    "rss_kib": 3336,
+    "errors": 0
+  },
+  {
+    "implementation": "rust",
+    "case": "small_json",
+    "requests_s": 116818.048,
+    "p50_us": 519.0,
+    "p95_us": 776.0,
+    "p99_us": 1053.0,
+    "cpu_seconds": 5.0,
+    "rss_kib": 3368,
+    "errors": 0
+  },
+  {
+    "implementation": "legacy_axum",
+    "case": "small_json",
+    "requests_s": 110225.046,
+    "p50_us": 564.0,
+    "p95_us": 827.0,
+    "p99_us": 1253.0,
+    "cpu_seconds": 5.01,
+    "rss_kib": 3484,
+    "errors": 0
+  },
+  {
+    "implementation": "nagi",
+    "case": "post_4k",
+    "requests_s": 59278.625,
+    "p50_us": 1042.0,
+    "p95_us": 1417.0,
+    "p99_us": 2521.0,
+    "cpu_seconds": 5.01,
+    "rss_kib": 3504,
+    "errors": 0
+  },
+  {
+    "implementation": "rust",
+    "case": "post_4k",
+    "requests_s": 66489.067,
+    "p50_us": 921.0,
+    "p95_us": 1261.0,
+    "p99_us": 1716.0,
+    "cpu_seconds": 5.01,
+    "rss_kib": 3504,
+    "errors": 0
+  },
+  {
+    "implementation": "legacy_axum",
+    "case": "post_4k",
+    "requests_s": 59490.654,
+    "p50_us": 1098.0,
+    "p95_us": 1450.0,
+    "p99_us": 1708.0,
+    "cpu_seconds": 5.01,
+    "rss_kib": 3728,
+    "errors": 0
+  }
+]

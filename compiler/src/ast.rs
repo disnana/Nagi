@@ -89,6 +89,9 @@ pub enum NameResolution {
     Local,
     Module,
     Enum,
+    Standard,
+    ResourceConstant,
+    ResourceField,
 }
 /// Half-open token range in the original source file. Import loading shifts
 /// diagnostic lines, but keeps these ranges local to each file.
@@ -145,6 +148,9 @@ pub enum MatchPattern {
         ok: bool,
         binding: PatternBinding,
     },
+    Option {
+        binding: Option<PatternBinding>,
+    },
     Enum {
         name: String,
         bindings: Vec<PatternBinding>,
@@ -155,12 +161,14 @@ impl MatchPattern {
     pub fn bindings(&self) -> &[PatternBinding] {
         match self {
             Self::Result { binding, .. } => std::slice::from_ref(binding),
+            Self::Option { binding } => binding.as_slice(),
             Self::Enum { bindings, .. } => bindings,
         }
     }
     pub fn bindings_mut(&mut self) -> &mut [PatternBinding] {
         match self {
             Self::Result { binding, .. } => std::slice::from_mut(binding),
+            Self::Option { binding } => binding.as_mut_slice(),
             Self::Enum { bindings, .. } => bindings,
         }
     }
@@ -224,9 +232,16 @@ pub struct Program {
 #[derive(Clone, Debug)]
 pub struct ModuleImport {
     pub path: String,
+    pub source: ImportSource,
     pub line: usize,
     pub span: Span,
     pub kind: ImportKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ImportSource {
+    File,
+    Standard,
 }
 
 #[derive(Clone, Debug)]
@@ -244,7 +259,7 @@ pub struct ImportName {
     pub alias_span: Span,
 }
 
-/// Module identity is the canonical source file, retained in generated Low.
+/// A canonical source file or compiler-registered standard ID, retained in Low.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ModuleId(pub String);
 
@@ -253,6 +268,7 @@ pub enum DefKind {
     Class,
     Enum,
     Function,
+    Resource,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

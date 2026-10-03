@@ -7,7 +7,7 @@ This reference describes High (`.nagi`). Some short examples are fragments for a
 ## Files and indentation
 
 - Save as UTF-8 with a `.nagi` extension.
-- Put `import`/`from` statements, classes, functions, async functions, and external Rust declarations at the top level. Executable statements go inside functions.
+- Put `import`/`from` statements, classes, enums, functions, async functions, and external Rust declarations at the top level. Executable statements go inside functions.
 - Introduce a block with `:` and indent with spaces. Four spaces are recommended; tabs are forbidden.
 - Comments start with `#`. Identifiers use ASCII letters, digits, and `_`, and cannot begin with a digit. Unicode strings and comments are supported.
 - Expressions inside `()` and `[]` can span lines. Trailing commas are not supported.
@@ -97,6 +97,7 @@ Negation, `-value`, accepts signed integers (i8/i16/i32/i64) and floating-point 
 | UUID or timestamp | Supported | Unsupported |
 | view[str] or view[bytes] | Supported | Supported |
 | view[T] | When T supports equality | When T supports ordering |
+| Method or Status | Supported; Method comparison borrows | Unsupported; compare Status numbers through `.value` |
 | Classes or owned Lists | Unsupported | Unsupported |
 
 A borrowed list of classes, such as `view[Point]`, cannot be compared directly either. Compare the fields you need. List views compare their elements.
@@ -151,7 +152,9 @@ match parse_i64("42"):
         print(error_kind(problem))
 ```
 
-Use `_` for unused payloads. Matching consumes Result; names exist only in their case and cannot reuse outer variable names. E in `Result[T, E]` can be a custom class or enum. Match every enum variant with cases such as `case Choice.Cancelled:` and `case Choice.Selected(id):`. See [enum definitions](types.md#distinguish-variants-with-an-enum) and [error handling](error-handling.md).
+Match Option with both `case Some(value):` and `case None:`. Use `Some(_)` to discard the value.
+
+Use `_` for unused payloads. Matching consumes its owned subject; names exist only in their case and cannot reuse outer variable names. E in `Result[T, E]` can be a custom class or enum. Match every enum variant with cases such as `case Choice.Cancelled:` and `case Choice.Selected(id):`. See [enum definitions](types.md#distinguish-variants-with-an-enum) and [error handling](error-handling.md).
 
 Spawn child tasks inside a scope, as in this complete program:
 
@@ -171,7 +174,9 @@ Leaving a scope waits for its children. Returning inside it, passing views to an
 |---|---|---|
 | Load a file | `import "models.nagi"` | [Imports](modules-and-rust.md); one shared namespace |
 | Name a module | `import "orders.nagi" as orders` | Use that file's own definitions through `orders.Order` or `orders.score(...)` |
-| Select a definition | `from "orders.nagi" import Order as SavedOrder` | One definition per statement; `as SavedOrder` is optional |
+| Select a definition | `from "orders.nagi" import Order as SavedOrder` | Select several definitions with commas; each `as name` is optional |
+| Import standard HTTP | `import std.http.server as http` | Use `http.Request` and `http.Status.OK`; `as` is required |
+| Select standard types | `from std.http.server import Request, Response, Status as Code` | [Standard imports](modules-and-rust.md#import-the-standard-http-library) |
 | Define a GET handler | `@get("/users/{id}")` before a function | [HTTP](http.md); post/put/delete also available |
 | Return HTML | `return ok(html("<h1>Hello</h1>"))` | Return type `Result[Html, Error]` |
 | Embed text | `include_text("index.html")` | Relative to source; embedded at compile time |
@@ -191,6 +196,6 @@ Leaving a scope waits for its children. Returning inside it, passing views to an
 | Dictionaries, tuples, comprehensions, lambdas | Unsupported; use classes, lists, ordinary functions, and loops |
 | `str(42)` or arbitrary casts | No general conversion; use forms such as `print(42)` directly |
 
-Nullable values support None/some(value), but not matching or a general unwrap API. Having type notation does not imply a complete operations API.
+Construct nullable values with `None` / `some(value)` and extract them with `case Some(value):` / `case None:`. There is no general unwrap API.
 
 Release integer arithmetic follows the Rust backend's fixed-width behavior; overflow in operations such as addition wraps. Debug Rust builds may panic. A consistent language specification for checked/wrapping arithmetic is future work. See [Low](low-language.md) for its syntax/replacements and the [roadmap](roadmap.md) for plans.

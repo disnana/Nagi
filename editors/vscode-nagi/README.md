@@ -109,6 +109,10 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 
 `AuthError.`や`errors.AuthError.`では、enumの種類を補完します。情報を持つ`WeakPassword(message: str)`には位置引数を挿入し、情報を持たない`InvalidCredentials`には括弧を付けません。ホバーとF12は種類の宣言を示します。enumを持つ変数に、その種類をフィールドとして補完することはありません。
 
+`import std.http.server as http`にも対応します。`http.`では標準の型と関数、`http.Status.`・`http.Method.`では定数を補完します。`from`で付けた別名も使えます。`request.`では`path`・`body`・`is_get`などの読み取り専用プロパティを表示します。標準の型・関数・定数やプロパティのF12は、コンパイラが提供する読み取り専用のリファレンスを開きます。
+
+nullableの`match`では`Some(value)`と`None`を補完し、`match-option`で両方の分岐を挿入できます。
+
 名前を書きかけるかCtrl+Spaceを押すと、入口からimportされた関数・class・enum、手書きLowの関数、代表的な組み込み関数の候補が出ます。関数を選ぶと位置引数の入力欄、classを選ぶと`Item(id=..., name=...)`の名前付き引数が入り、Tabで次の欄へ進めます。型注釈・戻り値の位置ではclass・enum・型・`Result` / `List` / `view`などを候補にします。
 
 `(`や`,`を入力すると引数ヒントが出て、入力中の引数が選ばれます。既に`(`がある名前の補完では括弧を重複挿入しません。asyncとResultの宣言を見て、呼び出しに`await`、`try`、`match`が必要かを判断してください。

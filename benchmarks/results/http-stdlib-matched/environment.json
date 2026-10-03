@@ -1,0 +1,33 @@
+{
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "available_cpus": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "server_cpu": 0,
+  "client_cpus": [
+    3,
+    4
+  ],
+  "server_workers": 1,
+  "client_threads": 2,
+  "connections": 64,
+  "duration_seconds": 5,
+  "repeats": 3,
+  "clock_ticks_per_second": 100,
+  "method": "local closed-loop wrk; separate CPU affinity on a shared host",
+  "nagi_rust_options": "identical std.http.server defaults, no DB",
+  "legacy_options": "existing Axum baseline; not identical admission/deadline policy",
+  "binaries_sha256": {
+    "nagi": "d0e3f07de6455f41261d57c6fd8467b74f97a74909a893bedb55f9c4402b5dd7",
+    "rust": "6d5fa3ba23500032df8b30a5107e622f986e6e755c8271d0549be22b6bacf7d4",
+    "legacy_axum": "10976cbe996eceb52b26f619b7e6bee32af0973fb7bd698edb21738498427ad7"
+  },
+  "matching_dependency_lock": true,
+  "cgroup_cpu_max": "400000 100000",
+  "cgroup_memory_max": "17179869184",
+  "cpu_model": "AMD EPYC 9V74 80-Core Processor"
+}
