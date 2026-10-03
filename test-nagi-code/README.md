@@ -2,7 +2,9 @@
 
 ## 自作ライブラリとRustの資産
 
-[library-examples/](library-examples/)に、共通の料金計算を使うCLIとJSONレポート、serde_json、Tokio、独自HTTP基盤、Lowの差し替えの6プロジェクトがあります。[一覧と起動手順](../docs/library-examples.md)、[English](library-examples/README.en.md)を参照してください。
+[library-examples/](library-examples/)に、共通の料金計算を使うCLIとJSONレポート、Rust連携、標準HTTP、Supervisor、Lowの差し替えなど10プロジェクトがあります。[一覧と起動手順](../docs/library-examples.md)、[English](library-examples/README.en.md)を参照してください。
+
+[application-examples/](application-examples/)には、在庫JSON集計・SQLiteの機器設定API・予約workerがあります。各プロジェクトの`smoke.py`で動作を確認できます。最新ソースのコンパイラで`python scripts/verify_application_examples.py --compiler /path/to/nagic`を実行すると、Highと生成Lowの両方をまとめて検証します。
 
 ## 成功と失敗を分ける小さなAPI
 

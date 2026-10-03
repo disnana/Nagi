@@ -41,6 +41,9 @@ Selecting just a source file skips its neighboring `nagi.toml`. Use `--project` 
 | [Task management](web-demo.md) | Browser UI, JSON API, and SQLite persistence |
 | [Result API](result-api.md) | Invalid input, missing data, DB failures, and recovery |
 | [Inventory](../../test-nagi-code/README.md#在庫管理api) | Typed JSON input, CRUD, and aggregation |
+| [Stock JSON report](../../test-nagi-code/application-examples/stock-report/README.en.md) | Read typed JSON from stdin and validate it with custom errors |
+| [Device settings API](../../test-nagi-code/application-examples/device-settings/README.en.md) | Read SQLite NULL, boolean, float and BLOB columns; retain settings across restarts |
+| [Reservation worker](../../test-nagi-code/application-examples/seat-reservations/README.en.md) | Handle duplicate bookings and capacity errors; restart one actor independently |
 | [Rust bridge](../../test-nagi-code/rust-bridge/) | CRC-32, serde_json, and async Rust functions |
 | [Fractal](../../test-nagi-code/README.md#exe単体で見られるフラクタル) | Console output and distribution as an executable |
 
@@ -48,12 +51,15 @@ Each README explains its inputs, outputs, and limits. Passing these examples doe
 
 ## Verify the examples during development
 
-With Python 3 and a `nagic` built from the latest source, verify the projects' checks, native builds, output, and HTTP responses:
+With Python 3.12 or later and a `nagic` built from the latest source, verify the projects' checks, native builds, output, and HTTP responses:
 
 ```sh
 python scripts/verify_library_examples.py --compiler /path/to/nagic
+python scripts/verify_application_examples.py --compiler /path/to/nagic
 ```
 
 The script compares both pricing implementations, checks module and type aliases, custom errors, malformed JSON, and async errors, compares High/Low results, and verifies HTTP 400/404 responses, the body limit, and shutdown. The Supervisor sample also checks updates, state retained after business errors, a 204 shutdown response, and 503 after shutdown. It builds projects sequentially and shares the dependency cache.
 
 On Unix it checks a clean exit after SIGINT. On Windows it terminates the process and checks that the listener closes; check console Ctrl+C manually using the HTTP sample's instructions.
+
+`verify_application_examples.py` requires a `nagic` built from the latest source. It builds and runs the stock report, device settings and reservation projects from High, then checks and builds their saved Low in separate processes and repeats the same behavior checks. It verifies boundary and invalid inputs, SQLite NULL values and persistence across restarts, and actor business errors and restarts. Build warnings fail verification. Results and logs are written to `build/application-example-verification/`. CI runs it through `build_examples.py`.

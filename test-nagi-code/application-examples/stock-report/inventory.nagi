@@ -1,0 +1,60 @@
+class StockLine:
+    product_id: i64
+    on_hand: i64
+    reserved: i64
+
+class Batch:
+    warehouse: str
+    items: List[StockLine]
+
+class Report:
+    warehouse: str
+    products: i64
+    available: i64
+    reserved: i64
+
+enum InventoryError:
+    InvalidJson(cause: Error)
+    TooManyProducts
+    InvalidWarehouse
+    InvalidProduct(index: i64)
+    InvalidCount(index: i64)
+
+def summarize(text: view[str]) -> Result[Report, InventoryError]:
+    batch = try parse(text)
+    if len(view(batch.warehouse)) < 1 or len(view(batch.warehouse)) > 80:
+        return fail(InventoryError.InvalidWarehouse)
+    if len(view(batch.items)) > 10000:
+        return fail(InventoryError.TooManyProducts)
+    products = 0
+    available = 0
+    reserved = 0
+    for index in range(len(view(batch.items))):
+        if batch.items[index].product_id < 1:
+            return fail(InventoryError.InvalidProduct(products))
+        if batch.items[index].on_hand < 0 or batch.items[index].on_hand > 1000000 or batch.items[index].reserved < 0 or batch.items[index].reserved > batch.items[index].on_hand:
+            return fail(InventoryError.InvalidCount(products))
+        products += 1
+        available += batch.items[index].on_hand - batch.items[index].reserved
+        reserved += batch.items[index].reserved
+    return ok(Report(warehouse=copy(view(batch.warehouse)), products=products, available=available, reserved=reserved))
+
+def parse(text: view[str]) -> Result[Batch, InventoryError]:
+    match json_decode[Batch](text):
+        case Ok(batch):
+            return ok(batch)
+        case Err(cause):
+            return fail(InventoryError.InvalidJson(cause))
+
+def message(problem: InventoryError) -> str:
+    match problem:
+        case InventoryError.InvalidJson(_):
+            return "input must contain a warehouse name and an items array with product_id, on_hand and reserved"
+        case InventoryError.InvalidWarehouse:
+            return "warehouse must contain 1 to 80 UTF-8 bytes"
+        case InventoryError.TooManyProducts:
+            return "input contains more than 10000 products"
+        case InventoryError.InvalidProduct(_):
+            return "product_id must be positive"
+        case InventoryError.InvalidCount(_):
+            return "counts must satisfy 0 <= reserved <= on_hand <= 1000000"

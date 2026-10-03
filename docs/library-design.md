@@ -1,6 +1,6 @@
 # ライブラリとRust連携の設計案
 
-このページは、現在の再利用方法と追加機能の設計案をまとめたものです。ファイルのmoduleと標準の`std.http.server`を使えます。汎用DB API、利用者が定義するresource、ランタイム機能の選択は未実装の案です。
+このページは、現在の再利用方法と追加機能の設計案をまとめたものです。ファイルのmoduleと標準の`std.http.server`・`std.actor`を使えます。汎用DB API、利用者が定義するresource、ランタイム機能の選択は未実装の案です。
 
 [目次](README.md) · 現在使える機能: [importとRust連携](modules-and-rust.md)、[nagi.toml](projects.md)
 
@@ -10,11 +10,12 @@ Nagiで書いた型・検証・計算を複数のアプリで共有し、通信�
 
 | 部分 | 現在 | 提案する追加 |
 | --- | --- | --- |
-| import | 相対ファイル、`as`・複数名の`from`、`std.http.server` | 標準moduleの追加、公開範囲の指定 |
+| import | 相対ファイル、`as`・複数名の`from`、`std.http.server`・`std.actor` | 標準moduleの追加、公開範囲の指定 |
+| 標準resource | HTTPのApp・Request・Response、Actor・Supervisor等 | 利用者による独自resourceの定義・登録 |
 | Rust連携 | sync／asyncのexternと型付きの引数・戻り値 | 接続やclientを表す不透明な型 |
 | Rustファイル | `rust.file` で1つのnative moduleを指定。共有crateは依存tableで指定 | — |
 | Cargo依存 | version文字列、またはversion・path・features・default-features・packageのtable | — |
-| ランタイム | HTTP、JSON、SQLite等を常に依存に含む | 必要な機能に合わせた依存とコード生成 |
+| ランタイム | HTTP、actor、JSON、SQLite等の機能を持ち、依存は常に含む | 必要な機能に合わせた依存とコード生成 |
 | DB | SQLiteと固定したbind引数 | 型付きの任意個の引数、行読み取り、transaction |
 
 現在のexternはRustのAPIを自動でimportする機能ではありません。Rust固有の型は、既知の数値・str・class・List・Result等へ変換します。Nagiの `check` は宣言と呼び出しを検査し、Rust実装との一致は `build` で確認します。externからviewを返すことは未対応です。
@@ -23,7 +24,7 @@ Nagiで書いた型・検証・計算を複数のアプリで共有し、通信�
 
 共有するNagiファイルにデータ型・検証・計算を置き、入口で入出力を組み合わせます。Rustのアダプターは外部ライブラリの型をNagiのデータ型へ変換します。独立したRust crateは自身の型を使い、生成アプリのclassへの変換はアダプターに置きます。
 
-現在の7つの例は、この分け方を試すものです。
+現在の10個のサンプルは、共有処理、標準module、Rust連携の使い方を示します。
 
 | プロジェクト | 再利用と連携の例 |
 | --- | --- |
@@ -32,8 +33,11 @@ Nagiで書いた型・検証・計算を複数のアプリで共有し、通信�
 | [rust-json](../test-nagi-code/library-examples/rust-json/README.md) | serde_jsonの結果をNagiのclassへ変換する |
 | [rust-async](../test-nagi-code/library-examples/rust-async/README.md) | Nagiの実行環境でRustのTokioタイマーをawaitする |
 | [custom-http](../test-nagi-code/library-examples/custom-http/README.md) | RustのAxum／TokioサーバーへNagiの同期callbackを渡す |
+| [http-auth](../test-nagi-code/library-examples/http-auth/README.md) | 標準HTTPでヘッダー、401、route別エラー、型付き共有状態を扱う |
+| [supervised-service](../test-nagi-code/library-examples/supervised-service/README.md) | actorで状態を順番に更新し、業務エラーや停止をHTTP応答へ変換する |
 | [low-kernel](../test-nagi-code/library-examples/low-kernel/README.md) | アプリの処理から手書きLowの計算を呼ぶ |
 | [module-imports](../test-nagi-code/library-examples/module-imports/README.md) | 同名classをmoduleで区別し、同じclassをfromの別名で使う |
+| [typed-errors](../test-nagi-code/library-examples/typed-errors/README.md) | enumで失敗を分け、元の原因を保持して表示文を選ぶ |
 
 `rust.file` が1つでも、Rustの `mod` や `#[path]` で実装を分割できます。custom-httpは組み込みのserveやDbを使いません。HTTPの制限・停止処理はそのRust側で管理し、組み込みHTTPの設定が自動適用されるとは扱いません。
 
@@ -53,7 +57,7 @@ module名で公開するのは、そのファイル自身に定義した関数�
 
 rootのmodule名にある関数のLow差し替えは`@replace generated::orders::score`、Rustのアダプターからのclass参照は`super::orders::Order`や`super::SavedOrder`です。従来の`@replace generated::score`と`super::Item`も保ちます。JSONのfield名やSQLの列名は変えません。詳細は[importとRust連携](modules-and-rust.md)を参照してください。
 
-標準moduleは`import std.http.server as http`で読み込みます。resource・操作・定数はコンパイラが登録したものに限定し、ローカルの同名ファイルには解決しません。`std.json`や`std.sqlite`への分離は今後の案です。
+標準moduleは`import std.http.server as http`や`import std.actor as actor`で読み込みます。HTTPの使い方は[HTTPサーバー](http.md)、ActorとSupervisorは[Actorリファレンス](actor-reference.md)を参照してください。resource・操作・定数はコンパイラが登録したものに限定し、ローカルの同名ファイルには解決しません。`std.json`や`std.sqlite`への分離は今後の案です。
 
 ## Cargoの依存設定
 
@@ -85,7 +89,7 @@ DB不要のHTTPは[std.http.server](http.md)を使います。既存の`serve(db
 
 ## 不透明な型と非同期処理
 
-clientや接続プールをNagiへ公開するには、型名とRust型の対応、操作、所有権の登録が必要です。現在のclassはデータ用であり、このresource型の代わりにはしません。
+App・Actor・Supervisor等の標準resourceはコンパイラに登録済みです。利用者が同様のresourceを定義・登録する仕組みは未対応です。clientや接続プールをNagiへ公開するには、型名とRust型の対応、操作、所有権の登録が必要です。現在のclassはデータ用であり、このresource型の代わりにはしません。
 
 | 契約 | 必要な扱い |
 | --- | --- |
@@ -118,7 +122,7 @@ SQLiteの `?1`、PostgreSQLの `$1`、i64に対応するBIGINTやidentity等の�
 1. 現在の例で共有処理とadapterの境界を確認し、Nagiの検査とRust buildを両方通す。
 2. 実装済みの依存tableとlockの維持を土台に、ランタイム機能の選択とderive生成を整える。
 3. 実装済みのmoduleと定義のIDを、追加するresourceやproviderの型にも引き継ぐ。
-4. 組み込みHTTP起動をDBから分け、DBなしではworkerもSQLite依存も不要にする。
+4. 標準HTTPのDBなし起動を保ち、DBを使わないアプリからSQLite依存を外す。
 5. resourceの所有・借用・キャンセルと汎用DB契約をSQLiteで検証する。
 6. PostgreSQLで同じ契約、TLS・pool・timeout・停止を実DB検証し、保存先を変えても同じ業務処理を使う例を作る。
 

@@ -50,7 +50,8 @@ class ChangeTests(unittest.TestCase):
                      "website/CNAME", ".github/workflows/pages.yml",
                      "website/assets/site.js", "website/assets/site.css", "website/assets/plot.svg",
                      "website/assets/img/photo.png", "website/templates/page.html",
-                     "editors/vscode-nagi/README.md", "test-nagi-code/web-demo/README.md"):
+                     "editors/vscode-nagi/README.md", "test-nagi-code/web-demo/README.md",
+                     "test-nagi-code/application-examples/stock-report/README.en.md"):
             with self.subTest(path=path):
                 base = self.run_git("rev-parse", "HEAD")
                 self.write(path, "presentation update\n")
@@ -64,6 +65,9 @@ class ChangeTests(unittest.TestCase):
                      "scripts/releases/README.md", "scripts/ci/changes.py", "tests/http_integration.py",
                      "tests/requirements.txt", "editors/vscode-nagi/src/features.js",
                      "editors/vscode-nagi/README.en.md", "test-nagi-code/cpu.nagi",
+                     "test-nagi-code/application-examples/stock-report/main.nagi",
+                     "test-nagi-code/application-examples/stock-report/smoke.py",
+                     "test-nagi-code/application-examples/stock-report/nagi.toml",
                      "website/examples/double.nagi", "website/assets/helper.rs",
                      "website/templates/helper.py", "website/new-config.toml", "new-feature/README.md"):
             with self.subTest(path=path):

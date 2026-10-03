@@ -1,6 +1,6 @@
 # Library and Rust integration design
 
-This page describes current reuse options and proposed extensions. File modules and `std.http.server` are available. A general database API, user-defined resources, and runtime feature selection remain proposals.
+This page describes current reuse options and proposed extensions. File modules, `std.http.server`, and `std.actor` are available. A general database API, user-defined resources, and runtime feature selection remain proposals.
 
 [Contents](README.md) · Available features: [imports and Rust integration](modules-and-rust.md), [nagi.toml](projects.md)
 
@@ -10,11 +10,12 @@ The aim is to share Nagi types, validation, and calculations between application
 
 | Area | Available today | Proposed addition |
 | --- | --- | --- |
-| Imports | Relative files, `as`, multiple-name `from`, and `std.http.server` | More standard modules and visibility declarations |
+| Imports | Relative files, `as`, multiple-name `from`, `std.http.server`, and `std.actor` | More standard modules and visibility declarations |
+| Standard resources | HTTP App/Request/Response, Actor/Supervisor, and related types | User-defined resources and their registration |
 | Rust integration | Sync/async extern functions with typed arguments and results | Opaque types representing connections and clients |
 | Rust files | One native module selected with `rust.file`; shared crates selected through dependency tables | — |
 | Cargo dependencies | Version strings or tables with version, path, features, default-features, and package | — |
-| Runtime | HTTP, JSON, SQLite, and other dependencies always included | Dependencies and generated code selected by use |
+| Runtime | HTTP, actors, JSON, SQLite, and other features, with their dependencies always included | Dependencies and generated code selected by use |
 | Database | SQLite with fixed bind argument shapes | Arbitrary typed arguments, row decoding, and transactions |
 
 Extern declarations do not automatically import Rust APIs. Rust-specific types must be converted to supported numbers, strings, classes, lists, or results. Nagi's `check` checks declarations and calls; `build` checks them against Rust implementations. Extern functions cannot currently return views.
@@ -23,7 +24,7 @@ Extern declarations do not automatically import Rust APIs. Rust-specific types m
 
 Keep data types, validation, and calculations in shared Nagi files. Application entry points combine inputs and outputs. Rust adapters convert library types to Nagi data types. An independent Rust crate uses its own types, with conversions to generated application classes kept in the adapter.
 
-The seven current examples explore this structure.
+The ten current examples show shared logic, standard modules, and Rust integration.
 
 | Project | Reuse and integration |
 | --- | --- |
@@ -32,8 +33,11 @@ The seven current examples explore this structure.
 | [rust-json](../../test-nagi-code/library-examples/rust-json/README.en.md) | Converts serde_json results to a Nagi class |
 | [rust-async](../../test-nagi-code/library-examples/rust-async/README.en.md) | Awaits a Rust Tokio timer on Nagi's runtime |
 | [custom-http](../../test-nagi-code/library-examples/custom-http/README.en.md) | Passes a synchronous Nagi callback to a Rust Axum/Tokio server |
+| [http-auth](../../test-nagi-code/library-examples/http-auth/README.en.md) | Uses standard HTTP for headers, 401, route-specific errors, and typed shared state |
+| [supervised-service](../../test-nagi-code/library-examples/supervised-service/README.en.md) | Updates actor state in order and maps business errors or shutdown to HTTP responses |
 | [low-kernel](../../test-nagi-code/library-examples/low-kernel/README.en.md) | Calls handwritten Low calculations from application logic |
 | [module-imports](../../test-nagi-code/library-examples/module-imports/README.en.md) | Distinguishes same-named classes through modules and uses a from alias for the same class |
+| [typed-errors](../../test-nagi-code/library-examples/typed-errors/README.en.md) | Distinguishes failures with an enum, preserves their causes, and chooses display messages |
 
 One `rust.file` can include multiple Rust files through `mod` or `#[path]`. custom-http does not use the built-in serve or Db. Its Rust code manages HTTP limits and shutdown; built-in HTTP settings do not apply automatically.
 
@@ -53,7 +57,7 @@ A module name exposes that file's own functions, classes, and enums without auto
 
 Use `@replace generated::orders::score` to replace a function reached through a root module name. Rust adapters refer to its classes as `super::orders::Order` or `super::SavedOrder`. Traditional `@replace generated::score` and `super::Item` remain available. JSON field names and SQL column names stay unchanged. See [imports and Rust integration](modules-and-rust.md).
 
-Use `import std.http.server as http` for the standard HTTP module. Resources, operations, and constants resolve through the compiler's registry, never local lookalike files. Separate `std.json` and `std.sqlite` modules remain proposals.
+Use `import std.http.server as http` or `import std.actor as actor` for standard modules. See [HTTP servers](http.md) and the [Actor reference](actor-reference.md) for their APIs. Resources, operations, and constants resolve through the compiler's registry, never local lookalike files. Separate `std.json` and `std.sqlite` modules remain proposals.
 
 ## Cargo dependency settings
 
@@ -85,7 +89,7 @@ Use [std.http.server](http.md) for HTTP without a database. Existing `serve(db, 
 
 ## Opaque types and asynchronous work
 
-Exposing a client or connection pool requires registered Nagi/Rust type mappings, operations, and ownership rules. Current classes represent data and do not serve as these resource types.
+Standard resources such as App, Actor, and Supervisor are registered by the compiler. User-defined resource types and registration are not supported yet. Exposing a client or connection pool requires registered Nagi/Rust type mappings, operations, and ownership rules. Current classes represent data and do not serve as these resource types.
 
 | Contract | Required behavior |
 | --- | --- |
@@ -118,7 +122,7 @@ Keep SQLite's `?1`, PostgreSQL's `$1`, BIGINT for i64, identity columns, and oth
 1. Validate the shared logic and adapter boundaries with current examples, using both Nagi checking and Rust builds.
 2. Build runtime selection and conditional derives on the implemented dependency tables and lock preservation.
 3. Extend the implemented module and definition identities to new resource and provider types.
-4. Separate built-in HTTP startup from databases, removing both workers and SQLite dependencies when unused.
+4. Keep standard HTTP startup independent of databases and remove SQLite dependencies from applications that do not use a database.
 5. Validate resource ownership, borrowing, cancellation, and general database contracts with SQLite.
 6. Test the same contracts, TLS, pooling, timeouts, and shutdown against PostgreSQL; demonstrate unchanged business rules with different storage providers.
 

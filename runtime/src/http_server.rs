@@ -850,6 +850,7 @@ where
                 tasks.spawn(async move {
                     let _permit = permit;
                     tokio::pin!(connection);
+                    let mut stopping = false;
                     loop {
                         let deadline = *sent.borrow_and_update();
                         let expires = async {
@@ -857,7 +858,10 @@ where
                         };
                         tokio::select! {
                             biased;
-                            _ = stopped.changed() => { connection.as_mut().graceful_shutdown(); let _ = connection.await; break; }
+                            _ = stopped.changed(), if !stopping => {
+                                stopping = true;
+                                connection.as_mut().graceful_shutdown();
+                            }
                             _ = &mut connection => break,
                             _ = sent.changed() => {}
                             _ = expires => break,

@@ -28,6 +28,8 @@ Use `db_open("app.sqlite")` to persist data. Relative database paths use the pro
 
 Use a class as the type argument of a function that returns rows. `db_all[i64]` and `db_query[str]` are rejected by `check`. Define a class with that field even when you read only one column.
 
+Generated row readers support `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `f32`, `f64`, `bool`, `str` and `bytes` fields. Use `T?` for a column that accepts SQL NULL. Nullable boolean, float and bytes fields require the latest source. See the [settings API example](../../test-nagi-code/application-examples/device-settings/README.en.md).
+
 | Operation | Form | Return type after await |
 |---|---|---|
 | Create a table, etc. | `db_exec(db, sql)` | `Result[i64, Error]` |
@@ -58,7 +60,7 @@ For iteration over class lists, only Copy classes are currently supported. User 
 
 A dedicated thread runs SQLite operations in order. Its queue holds up to 64 jobs. Nagi waits for the result asynchronously, while SQLite reads and writes on that thread.
 
-Prepared statements and resolved column names are reused. Returned strings and byte sequences are owned so they remain valid after processing the SQLite row.
+Prepared statements are cached. Column names are resolved on each call; `db_all` reuses those column indices for every row in that result. Returned strings and byte sequences are owned so they remain valid after processing the SQLite row.
 
 General variable-length typed parameters, transaction APIs, database pools, and compile-time schema checking are not implemented. Column names, SQL, and column type mismatches produce runtime Result errors.
 

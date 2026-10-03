@@ -45,4 +45,6 @@ def main():
     print(json.dumps({'samples':len(rows),'builds':'passed','native_preserved':True}))
     verified = run([sys.executable, ROOT/'scripts/verify_library_examples.py', '--compiler', nagic])
     print(verified.stdout, end='')
+    verified = run([sys.executable, ROOT/'scripts/verify_application_examples.py', '--compiler', nagic])
+    print(verified.stdout, end='')
 if __name__=='__main__':main()

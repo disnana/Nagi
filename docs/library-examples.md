@@ -41,6 +41,9 @@ nagic run --project test-nagi-code/library-examples/rust-json
 | [タスク管理](../test-nagi-code/web-demo/README.md) | ブラウザー画面、JSON API、SQLiteへの保存 |
 | [Result API](../test-nagi-code/result-api/README.md) | 入力不正、対象なし、DB失敗、代替データへの回復 |
 | [在庫管理](../test-nagi-code/README.md#在庫管理api) | 型付きJSON入力、DBのCRUD、集計 |
+| [在庫JSONの集計](../test-nagi-code/application-examples/stock-report/README.md) | stdinから型付きJSONを読み、独自エラーで入力を検証する |
+| [機器設定API](../test-nagi-code/application-examples/device-settings/README.md) | SQLiteのNULL・bool・浮動小数点・BLOBを読み、再起動後も設定を保持する |
+| [予約worker](../test-nagi-code/application-examples/seat-reservations/README.md) | 重複予約・残席不足を扱い、一方のactorだけを再起動する |
 | [Rust連携](../test-nagi-code/rust-bridge/) | CRC-32、serde_json、非同期Rust関数の呼び出し |
 | [フラクタル](../test-nagi-code/README.md#exe単体で見られるフラクタル) | コンソール表示とexe配布 |
 
@@ -48,12 +51,15 @@ nagic run --project test-nagi-code/library-examples/rust-json
 
 ## 開発時にまとめて確認する
 
-Python 3と最新ソースからビルドした`nagic`があれば、各プロジェクトのcheck・build・実行結果と、HTTP応答をまとめて確認できます。
+Python 3.12以降と最新ソースからビルドした`nagic`があれば、各プロジェクトのcheck・build・実行結果と、HTTP応答をまとめて確認できます。
 
 ```sh
 python scripts/verify_library_examples.py --compiler /path/to/nagic
+python scripts/verify_application_examples.py --compiler /path/to/nagic
 ```
 
 料金計算の両実装の一致、moduleと型の別名、独自エラー、JSONの不正入力、非同期処理のエラー、HighとLowの結果の一致、HTTPの400・404・body上限・停止を確認します。Supervisorの例では更新と業務エラー後の状態保持、204の停止応答、停止後の503も確認します。ビルドは1つずつ行い、依存のキャッシュを共有します。
 
 UnixではSIGINTによる正常終了、Windowsではプロセスを終了してlistenerが閉じることを確認します。WindowsのCtrl+Cによる終了は、HTTPサンプルの手順で手動確認してください。
+
+`verify_application_examples.py`は最新ソースの`nagic`を使います。在庫集計・機器設定・予約workerをHighからbuildして実行し、生成されたLowも別のプロセスでcheck・buildして同じ検証を行います。入力の境界値と不正入力、SQLiteのNULLと再起動後の保存、actorの業務エラーと再起動を確認します。ビルドの警告も失敗として扱い、結果とログを`build/application-example-verification/`に残します。CIでは`build_examples.py`から実行します。

@@ -47,6 +47,8 @@ Run additional checks for the affected component. Python scripts use Python 3.12
 
 Documentation-only changes do not require the full Rust test suite. Check links, matching translations, and any runnable examples you changed. The [CI workflow](.github/workflows/ci.yml) contains the automated checks.
 
+Use `python scripts/verify_application_examples.py --compiler /path/to/nagic` to exercise practical examples. With a compiler built from the latest source, it independently checks and builds three apps from High and saved Low, then verifies input handling, HTTP, database persistence and actor behavior. Reduce discovered bugs to small regression cases and include valid controls that should remain accepted.
+
 ## Using AI tools
 
 AI tools are allowed. The person submitting a contribution remains fully responsible for its accuracy, verification, security, and the right to contribute it. This includes code, documentation, issues, PRs, and review comments. AI use does not excuse errors or missing verification.

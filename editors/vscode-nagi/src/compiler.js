@@ -92,14 +92,21 @@ function runCheck(executable, args, cwd, timeout, callback, maxBuffer = 1024 * 1
 
 function definitionAt(index, file, line, character, root) {
   if (index.format !== 'nagi-symbols-v1' || !Array.isArray(index.references)) throw new Error('Unsupported nagic symbols format');
-  const key = name => { const normalized = normalizeFile(name, root); return process.platform === 'win32' ? normalized.toLowerCase() : normalized; };
+  const keys = new Map();
+  const key = name => {
+    if (name.startsWith('stdlib:')) return name;
+    const normalized = normalizeFile(name, root);
+    if (!keys.has(normalized)) keys.set(normalized, fileKey(normalized, root));
+    return keys.get(normalized);
+  };
+  const sourceKey = key(file);
   const valid = location => location && typeof location.file === 'string' &&
     Number.isInteger(location.line) && location.line > 0 && Number.isInteger(location.column) && location.column > 0 &&
     Number.isInteger(location.length) && location.length >= 0;
   for (const reference of index.references) {
     if (!valid(reference.location) || !valid(reference.target)) throw new Error('Invalid nagic symbol location');
     const location = reference.location;
-    if (key(location.file) === key(file) && location.line === line + 1 &&
+    if (key(location.file) === sourceKey && location.line === line + 1 &&
         character >= location.column - 1 && character < location.column - 1 + location.length) return reference.target;
   }
   return undefined;
