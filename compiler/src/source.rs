@@ -92,7 +92,7 @@ impl Sources {
         self.bytes += other.bytes;
         other.program
     }
-    pub fn diagnostic(&self, message: &str) -> String {
+    pub(crate) fn readable_message(&self, message: &str) -> String {
         // Replace complete diagnostic identifiers in one pass. Inserted user
         // spellings are never interpreted as another compiler-generated name.
         let mut readable = String::new();
@@ -120,6 +120,11 @@ impl Sources {
                 start += ch.len_utf8();
             }
         }
+        readable
+    }
+
+    pub fn diagnostic(&self, message: &str) -> String {
+        let readable = self.readable_message(message);
         let message = readable.as_str();
         let line = message
             .strip_prefix("line ")

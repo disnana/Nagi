@@ -551,7 +551,7 @@ fn lowering_restores_nested_statement_expression_arm_and_field_lines() {
         ("pub value: ::std::primitive::i64", 2),
         ("while false", 7),
         ("total = 1", 8),
-        ("for number", 10),
+        ("for mut number", 10),
         ("total = number", 11),
         ("Ok(mut value)", 13),
         ("return value", 14),
@@ -787,5 +787,204 @@ fn invalid_entrypoints_are_rejected_before_cargo_with_source_locations() {
                 assert!(!f.0.join("build/main/Cargo.toml").exists());
             }
         }
+    }
+}
+
+#[test]
+fn child_notes_keep_module_locations_and_readable_definition_names() {
+    let f = Fixture::new();
+    f.write("lib/helper.nagi", "def value() -> i64:\n    return 1\n");
+    f.write(
+        "main.nagi",
+        "import \"lib/helper.nagi\" as helper\ndef main():\n    print(helper.value())\n",
+    );
+    let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
+    check::check(&mut loaded.program).unwrap();
+    let rust = emit::rust_with_lines(&loaded.program).unwrap();
+    let line = |fragment: &str| {
+        rust.text
+            .lines()
+            .position(|s| s.contains(fragment))
+            .unwrap()
+            + 1
+    };
+    let symbol = &loaded
+        .program
+        .modules
+        .definitions
+        .iter()
+        .find(|definition| definition.id.name == "value")
+        .unwrap()
+        .symbol;
+    let file = f.0.join("build/src/main.rs");
+    let raw =
+        format!("original Rust `{symbol}`\nhelp: borrow in Rust\nnote: replacement in Rust\n");
+    let mut value = message(&file, "src/main.rs", line("println!"), &raw);
+    value["message"]["message"] = json!(format!("cannot use `{symbol}`"));
+    value["message"]["spans"][0]["label"] = json!(format!("call to `{symbol}`"));
+    let cause = json!({
+        "file_name": "src/main.rs", "line_start": line("return 1"),
+        "is_primary": true, "label": format!("await inside `{symbol}`")
+    });
+    value["message"]["children"] = json!([
+        {"level": "note", "message": format!("cause in `{symbol}`"),
+         "spans": [cause.clone(), cause],
+         "children": [{"level": "note", "message": "declared here",
+             "spans": [{"file_name": "src/main.rs", "line_start": line(&format!("pub fn {symbol}")),
+                 "is_primary": true, "label": "declaration"}]}]},
+        {"level": "note", "message": "native-only cause",
+         "spans": [{"file_name": f.0.join("bridge.rs"), "line_start": 2,
+             "is_primary": true, "label": "native body"}]},
+        {"level": "help", "message": "borrow in Rust",
+         "spans": [{"file_name": "src/main.rs", "line_start": line("println!"),
+             "is_primary": true, "label": "borrow suggestion", "suggested_replacement": "&"}]},
+        {"level": "note", "message": "replacement in Rust",
+         "spans": [{"file_name": "src/main.rs", "line_start": line("println!"),
+             "is_primary": true, "label": "replacement suggestion", "suggested_replacement": "&"}]}
+    ]);
+    let text = diagnostics::cargo_message(&value.to_string(), &rust, &file, &loaded).unwrap();
+    let prefix = mapped_prefix(&text);
+    assert!(prefix.contains("main.nagi:3"), "{text}");
+    assert!(
+        prefix.contains("helper.nagi:2") && prefix.contains("2 |     return 1"),
+        "{text}"
+    );
+    assert!(
+        prefix.contains("helper.nagi:1") && prefix.contains("note: declared here"),
+        "{text}"
+    );
+    assert_eq!(prefix.matches("helper.nagi:2").count(), 1, "{text}");
+    assert!(
+        prefix.contains("helper.nagi::value") && prefix.contains("note: cause in"),
+        "{text}"
+    );
+    assert!(!prefix.contains(symbol), "{text}");
+    assert!(!prefix.contains("native-only cause"), "{text}");
+    assert!(
+        !prefix.contains("borrow in Rust") && !prefix.contains("replacement in Rust"),
+        "{text}"
+    );
+    assert!(text.ends_with(&raw), "{text}");
+}
+
+#[test]
+fn child_notes_cannot_relabel_an_unmapped_primary_or_dependency() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(1)\n");
+    let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
+    check::check(&mut loaded.program).unwrap();
+    let rust = emit::rust_with_lines(&loaded.program).unwrap();
+    let line = rust
+        .text
+        .lines()
+        .position(|s| s.contains("println!"))
+        .unwrap()
+        + 1;
+    let file = f.0.join("build/src/main.rs");
+    let raw = "original native/dependency/synthetic diagnostic\n";
+    let mut synthetic = message(&file, "src/main.rs", 1, raw);
+    let mut native = message(&file, f.0.join("bridge.rs").to_str().unwrap(), line, raw);
+    let mut dependency = message(&file, "src/main.rs", line, raw);
+    dependency["target"]["src_path"] = json!(f.0.join("dependency/src/main.rs"));
+    for value in [&mut synthetic, &mut native, &mut dependency] {
+        value["message"]["children"] = json!([{"level": "note", "message": "generated secondary context",
+            "spans": [{"file_name": "src/main.rs", "line_start": line,
+                "is_primary": true, "label": "generated context"}]}]);
+        assert_eq!(
+            diagnostics::cargo_message(&value.to_string(), &rust, &file, &loaded).unwrap(),
+            raw
+        );
+    }
+}
+
+#[test]
+fn imported_async_ffi_send_failure_maps_the_cause_note_in_high_and_saved_low() {
+    let f = Fixture::new();
+    // Preserve the registered HTTP handler's real Send bound without pulling
+    // Axum/Tokio into this focused source-mapping fixture.
+    f.write("runtime/src/lib.rs", r#"
+#[derive(Debug)]
+pub struct Error;
+pub mod http_server {
+    use std::{future::Future, marker::PhantomData, sync::Arc};
+    pub struct Request;
+    pub struct Response;
+    #[derive(Clone, Copy)]
+    pub struct Status;
+    impl Status { pub const OK: Self = Self; pub const BAD_REQUEST: Self = Self; }
+    pub struct Method;
+    impl Method { pub const GET: Self = Self; }
+    pub struct App<S, E>(PhantomData<(S, E)>);
+    pub fn empty(_: Status) -> Response { Response }
+    pub fn app<S, E>(_: S, _: fn(E) -> Response) -> App<S, E> { App(PhantomData) }
+    pub fn route<S, E, H, F>(app: App<S, E>, _: Method, _: &str, _: H) -> Result<App<S, E>, super::Error>
+    where S: Send + Sync + 'static, E: Send + 'static,
+          H: Fn(Request, Arc<S>) -> F + Send + Sync + 'static,
+          F: Future<Output = Result<Response, E>> + Send + 'static { Ok(app) }
+}
+"#);
+    f.write("main.nagi", "from std.http.server import Response, Status, Method, app, empty, route\nimport \"lib/handler.nagi\" as handlers\n\ndef error_response(problem: i64) -> Response:\n    return empty(Status.BAD_REQUEST)\n\ndef main():\n    current = app[i64, i64](0, error_response)\n    registered = route(current, Method.GET, \"/\", handlers.handle)\n");
+    f.write("lib/handler.nagi", "from std.http.server import Request, Response, Status, empty\n\n@rust(\"native::non_send\")\nextern async def suspend() -> unit\n\nasync def handle(request: Request, state: shared[i64]) -> Result[Response, i64]:\n    await suspend()\n    return ok(empty(Status.OK))\n");
+    f.write(
+        "bridge.rs",
+        r#"
+use std::{future::Future, pin::Pin, rc::Rc, task::{Context, Poll}};
+pub struct NonSendFuture(Rc<u8>);
+impl Future for NonSendFuture {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> { Poll::Ready(()) }
+}
+pub fn non_send() -> NonSendFuture { NonSendFuture(Rc::new(1)) }
+"#,
+    );
+    let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
+    check::check(&mut loaded.program).unwrap();
+    let low = emit::low(&loaded.program);
+    let declaration_line = low
+        .lines()
+        .position(|s| s.contains("extern async fn"))
+        .unwrap()
+        + 1;
+    f.write("saved.low", &low);
+    for file in ["main.nagi", "saved.low"] {
+        assert!(f.cli(&["check", file]).status.success());
+        let output = f.cli(&["build", file, "--rust", "bridge.rs"]);
+        assert!(!output.status.success());
+        let text = stderr(&output);
+        let prefix = mapped_prefix(&text);
+        assert!(
+            prefix.contains("future cannot be sent between threads safely"),
+            "{text}"
+        );
+        assert!(
+            prefix.contains("note: future is not `Send` as it awaits another future"),
+            "{text}"
+        );
+        if file.ends_with(".nagi") {
+            assert!(
+                prefix.contains("main.nagi:9") && prefix.contains("handler.nagi:4"),
+                "{text}"
+            );
+            assert!(
+                prefix.contains("4 | extern async def suspend() -> unit"),
+                "{text}"
+            );
+            assert!(!prefix.contains("__nagi_def_"), "{text}");
+        } else {
+            assert!(
+                prefix.contains(&format!("saved.low:{declaration_line}")),
+                "{text}"
+            );
+        }
+        assert!(prefix.contains("handler.nagi::handle"), "{text}");
+        assert!(
+            !prefix.contains("runtime/src/lib.rs") && !prefix.contains("required by a bound"),
+            "{text}"
+        );
+        assert!(
+            text.contains("required by a bound in `route`") && text.contains("src/main.rs:"),
+            "{text}"
+        );
+        assert!(text.contains("Build failed."), "{text}");
     }
 }

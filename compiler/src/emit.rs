@@ -932,7 +932,7 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
                 } else {
                     format!("({}).iter().copied()", re(e, types))
                 };
-                out.push_str(&format!("for {v} in {iterator} {{\n"));
+                out.push_str(&format!("for mut {v} in {iterator} {{\n"));
                 rb(b, out, n + 1, types);
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
@@ -1858,6 +1858,8 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         ])
         .arg(out.join("Cargo.toml"))
         .env("CARGO_TARGET_DIR", &target)
+        // In-place progress can overwrite mapped diagnostics on the same terminal.
+        .env("CARGO_TERM_PROGRESS_WHEN", "never")
         .stdout(Stdio::piped())
         .spawn()
         .map_err(|e| {

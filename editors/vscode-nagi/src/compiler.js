@@ -49,10 +49,16 @@ function argumentsFor(command, file, nativeFiles, root, workspace, rustFile = ''
   return args;
 }
 
-function normalizeFile(file, root) {
+function normalizeFile(file, root, platform = process.platform) {
   if (file.startsWith('\\\\?\\UNC\\')) file = '\\\\' + file.slice(8);
   else if (file.startsWith('\\\\?\\')) file = file.slice(4);
-  return path.resolve(root, file);
+  return (platform === 'win32' ? path.win32 : path).resolve(root, file);
+}
+
+function fileKey(file, root, platform = process.platform) {
+  let normalized = normalizeFile(file, root, platform);
+  try { normalized = normalizeFile(fs.realpathSync.native(normalized), root, platform); } catch {}
+  return platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
 function parseDiagnostics(output, fallbackFile) {
@@ -99,4 +105,4 @@ function definitionAt(index, file, line, character, root) {
   return undefined;
 }
 
-module.exports = { findRoot, findProject, compilerPath, argumentsFor, parseDiagnostics, processFailure, normalizeFile, runCheck, definitionAt };
+module.exports = { findRoot, findProject, compilerPath, argumentsFor, parseDiagnostics, processFailure, normalizeFile, fileKey, runCheck, definitionAt };

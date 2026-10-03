@@ -116,6 +116,35 @@ fn original(diagnostic: &Value) -> String {
     text
 }
 
+fn mapped_spans<'a>(
+    diagnostic: &'a Value,
+    generated: &Generated,
+    file: &Path,
+    sources: &Sources,
+) -> Vec<(usize, &'a Value)> {
+    let mut mapped: Vec<_> = diagnostic["spans"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|span| {
+            let origin = span_origin(span, generated, file)?;
+            sources.location(origin)?;
+            Some((origin, span))
+        })
+        .collect();
+    mapped.sort_by_key(|(_, span)| span["is_primary"].as_bool() != Some(true));
+    mapped
+}
+
+fn child_diagnostics<'a>(diagnostic: &'a Value, out: &mut Vec<&'a Value>) {
+    if let Some(children) = diagnostic["children"].as_array() {
+        for child in children {
+            out.push(child);
+            child_diagnostics(child, out);
+        }
+    }
+}
+
 /// Cargo's progress remains on stderr. Artifacts stay quiet, and diagnostics
 /// from dependencies or native Rust retain rustc's complete rendered output.
 pub fn cargo_message(
@@ -141,24 +170,13 @@ pub fn cargo_message(
     {
         return Some(fallback);
     }
-    let Some(spans) = diagnostic["spans"].as_array() else {
-        return Some(fallback);
-    };
-    let mut mapped: Vec<_> = spans
-        .iter()
-        .filter_map(|span| {
-            let origin = span_origin(span, generated, file)?;
-            sources.location(origin)?;
-            Some((origin, span))
-        })
-        .collect();
+    let mapped = mapped_spans(diagnostic, generated, file, sources);
     if !mapped
         .iter()
         .any(|(_, span)| span["is_primary"].as_bool() == Some(true))
     {
         return Some(fallback);
     }
-    mapped.sort_by_key(|(_, span)| span["is_primary"].as_bool() != Some(true));
     let code = diagnostic["code"]["code"]
         .as_str()
         .map(|code| format!("[{code}]"))
@@ -166,25 +184,50 @@ pub fn cargo_message(
     let mut out = format!(
         "{}{code}: {}\n",
         diagnostic["level"].as_str().unwrap_or("error"),
-        diagnostic["message"].as_str().unwrap_or("Rust diagnostic")
+        sources.readable_message(diagnostic["message"].as_str().unwrap_or("Rust diagnostic"))
     );
     let mut seen = std::collections::HashSet::new();
-    for (origin, span) in mapped {
-        let label = span["label"].as_str().unwrap_or("");
-        if !seen.insert((origin, label)) {
+    let mut locations = |mapped: Vec<(usize, &Value)>, out: &mut String| {
+        for (origin, span) in mapped {
+            let label = span["label"].as_str().unwrap_or("");
+            if !seen.insert((origin, label.to_owned())) {
+                continue;
+            }
+            let location = sources.location(origin).unwrap();
+            out.push_str(&format!(
+                " --> {}:{}\n {} | {}\n",
+                location.path.display(),
+                location.line,
+                location.line,
+                location.text
+            ));
+            if !label.is_empty() {
+                out.push_str(&format!("  = {}\n", sources.readable_message(label)));
+            }
+        }
+    };
+    locations(mapped, &mut out);
+    let mut children = Vec::new();
+    child_diagnostics(diagnostic, &mut children);
+    for child in children {
+        // Only cause notes gain Nagi coordinates. Rust help and replacement
+        // suggestions remain in the unchanged rendered details below.
+        if child["level"].as_str() != Some("note") {
             continue;
         }
-        let location = sources.location(origin).unwrap();
-        out.push_str(&format!(
-            " --> {}:{}\n {} | {}\n",
-            location.path.display(),
-            location.line,
-            location.line,
-            location.text
-        ));
-        if !label.is_empty() {
-            out.push_str(&format!("  = {label}\n"));
+        let mapped = mapped_spans(child, generated, file, sources)
+            .into_iter()
+            .filter(|(_, span)| span["suggested_replacement"].is_null())
+            .collect::<Vec<_>>();
+        if mapped.is_empty() {
+            continue;
         }
+        out.push_str(&format!(
+            " {}: {}\n",
+            child["level"].as_str().unwrap_or("note"),
+            sources.readable_message(child["message"].as_str().unwrap_or("Rust note"))
+        ));
+        locations(mapped, &mut out);
     }
     // Keep rustc's notes and suggestions in Rust coordinates. Replacements
     // such as '&' or '.clone()' cannot safely be applied to Nagi source.

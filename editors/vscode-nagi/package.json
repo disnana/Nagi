@@ -48,6 +48,28 @@
     "package": "python scripts/package_vsix.py"
   },
   "contributes": {
+    "problemMatchers": [
+      {
+        "name": "nagi",
+        "label": "Nagi compiler",
+        "owner": "nagi-task",
+        "source": "nagic",
+        "fileLocation": "absolute",
+        "pattern": [
+          {
+            "regexp": "^(error|warning)(?:\\[([A-Z][0-9]+)\\])?:\\s*(.+)$",
+            "severity": 1,
+            "code": 2,
+            "message": 3
+          },
+          {
+            "regexp": "^\\s*-->\\s+(.+\\.(?:nagi|low)):(\\d+)\\s*$",
+            "file": 1,
+            "line": 2
+          }
+        ]
+      }
+    ],
     "taskDefinitions": [
       {
         "type": "nagi",
