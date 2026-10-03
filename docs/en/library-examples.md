@@ -1,6 +1,6 @@
 # Sample projects
 
-Try command-line applications, reusable libraries, Rust integration, HTTP, Supervisors, and Low replacements. Each project includes `nagi.toml` and instructions. Standard HTTP and `std.actor` examples need the latest unreleased source.
+Try command-line applications, reusable libraries, Rust integration, HTTP, Supervisors, and Low replacements. Each project includes `nagi.toml` and instructions. Standard HTTP and `std.actor` examples require Nagi 0.1.8 or later.
 
 ## Examples for libraries and foundations
 

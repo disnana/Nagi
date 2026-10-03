@@ -6,13 +6,13 @@ Nagiは、読みやすいコードでアプリを書き、実行ファイルと�
 
 ## アプリを書く
 
-通常はHighと呼ぶ`.nagi`ファイルを使います。変数、関数、配列、classに加え、HTTP、JSON、SQLiteを使ったアプリを作れます。[最初の実行](getting-started.md)から始め、[HTTPの例](http.md)や[タスク管理デモ](../test-nagi-code/web-demo/README.md)を試してください。
+通常はHighと呼ぶ`.nagi`ファイルを使います。HighはPythonのように、書く人による癖が出にくく、自然に読みやすいコードになることを目指しています。変数、関数、配列、classに加え、HTTP、JSON、SQLiteを使ったアプリを作れます。[最初の実行](getting-started.md)から始め、[HTTPの例](http.md)や[タスク管理デモ](../test-nagi-code/web-demo/README.md)を試してください。
 
 読むだけのデータは`view`で借り、処理の失敗は`Result`で返します。所有するデータをコピーしたい場合は、`copy`で明示します。Pythonに似た書式ですが、Pythonのライブラリを読み込む機能はありません。
 
 ## 処理を調整する
 
-生成されたコードを調べたり、関数を差し替えたりするにはLowを使います。Lowは型を明記し、波括弧でブロックを書く形式です。詳しくは[HighとLow](low-language.md)を参照してください。
+生成されたコードを調べたり、関数を差し替えたりするにはLowを使います。Lowは型を明記し、波括弧でブロックを書く形式です。必要な最適化や独自の基盤はLowやRustで実装できます。詳しくは[HighとLow](low-language.md)と[Rust連携](modules-and-rust.md)を参照してください。
 
 ## 開発状況
 

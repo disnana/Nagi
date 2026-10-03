@@ -29,19 +29,19 @@ code --install-extension Disnana.nagi-lang
 
 正式版のVSIXは[GitHub Releases](https://github.com/disnana/Nagi/releases)に掲載します。ファイル名は`nagi-language-バージョン.vsix`です。mainで拡張のバージョンを上げたとき、CI成功後に自動公開します。
 
-リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、`build/distribution/nagi-language-0.1.9.vsix` ができます。VS Codeの「拡張機能: VSIXからのインストール」で選択するか、次のコマンドを実行してください。
+リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、`build/distribution/nagi-language-0.1.10.vsix` ができます。VS Codeの「拡張機能: VSIXからのインストール」で選択するか、次のコマンドを実行してください。
 
 ```powershell
-code --install-extension build/distribution/nagi-language-0.1.9.vsix
+code --install-extension build/distribution/nagi-language-0.1.10.vsix
 ```
 
-拡張0.1.9では、色付け、スニペット、インデント補助、キーワード・型の補完と組み込み関数の補完・ホバー・引数ヒントをコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。[準備と最初の実行](https://nagi.disnana.com/docs/getting-started/)の手順でインストールしてください。拡張はリポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
+拡張0.1.10では、色付け、スニペット、インデント補助、キーワード・型の補完と組み込み関数の補完・ホバー・引数ヒントをコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。[準備と最初の実行](https://nagi.disnana.com/docs/getting-started/)の手順でインストールしてください。拡張はリポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
 
 VSIXにはコンパイラ本体を含めていません。`spawn nagic.exe ENOENT`などのメッセージは、コンパイラが見つからないことを示します。インストール後にVS Codeを再起動し、「Nagi: 型検査」を実行してください。別の場所にあるコンパイラを使う場合は`nagi.compilerPath`で指定します。コンパイラの起動失敗やタイムアウトは警告とNagiの出力に表示し、ソースの型エラーとして赤線を付けません。
 
 ## 入力時のインデント
 
-以下の入力補助は拡張0.1.9で利用できます。
+以下の入力補助は拡張0.1.10で利用できます。
 
 `def main():`や`async def`、`enum`、`if`、`match`、`case`などのブロックの後でEnterを押すと、1段字下げします。`else:`や`case ...:`の最後のコロンを入力すると、対応する`if`や`match`の位置に揃えます。
 
@@ -97,9 +97,9 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 
 ## ホバー・補完・引数ヒント
 
-拡張0.1.9では、新規の未保存ファイル、コンパイラなし、未信頼のワークスペースでも、キーワード・型と組み込み関数の入力補助を使えます。書きかけの構文でも組み込み関数の説明を表示します。コンパイラで解析できない場合、ファイル内の同じ名前の関数や変数やimportと衝突しうる組み込み情報は控えます。プロジェクトの宣言、ローカル変数の型、フィールド候補、F12にはコンパイラとワークスペースの信頼が必要です。
+拡張0.1.10では、新規の未保存ファイル、コンパイラなし、未信頼のワークスペースでも、キーワード・型と組み込み関数の入力補助を使えます。書きかけの構文でも組み込み関数の説明を表示します。コンパイラで解析できない場合、ファイル内の同じ名前の関数や変数やimportと衝突しうる組み込み情報は控えます。プロジェクトの宣言、ローカル変数の型、フィールド候補、F12にはコンパイラとワークスペースの信頼が必要です。
 
-最新版の`nagic`と拡張0.1.9を使います。関数名にマウスを置くと引数・戻り値・asyncの宣言が表示され、class名ではフィールド一覧を確認できます。`Result[Item?, Error]`や`view[str]`などの型も宣言どおりに表示します。[コードを使った操作例](https://nagi.disnana.com/docs/editor/)もあります。
+最新版の`nagic`と拡張0.1.10を使います。関数名にマウスを置くと引数・戻り値・asyncの宣言が表示され、class名ではフィールド一覧を確認できます。`Result[Item?, Error]`や`view[str]`などの型も宣言どおりに表示します。[コードを使った操作例](https://nagi.disnana.com/docs/editor/)もあります。
 
 変数名にマウスを置くと、コンパイラが確認できた型を表示します。たとえば`count = 3`は`count: i64`、classを返す関数から作った`item`は`item: Item`です。関数の引数、`for`の要素、Resultの`case Ok(value)`と`case Err(problem)`の束縛名にも対応します。宣言と使用箇所を扱い、caseやifなどのブロックを出た名前には型を表示しません。
 

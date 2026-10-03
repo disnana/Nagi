@@ -1,6 +1,6 @@
 # Actors
 
-An actor handles one message at a time and updates its own state. With `std.actor`, ordinary async functions define initialization and message handling. This API is intended for the next release and is absent from the published version.
+An actor handles one message at a time and updates its own state. Available from Nagi 0.1.8, `std.actor` uses ordinary async functions to define initialization and message handling.
 
 ```nagi
 import std.actor as actor

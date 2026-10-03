@@ -1,6 +1,6 @@
 # サンプルプロジェクト
 
-CLI、自作ライブラリ、Rust連携、HTTP、Supervisor、Lowの差し替えを試せます。各プロジェクトに`nagi.toml`と起動手順があります。標準HTTPと`std.actor`の例は、未リリースの最新ソースで動かします。
+CLI、自作ライブラリ、Rust連携、HTTP、Supervisor、Lowの差し替えを試せます。各プロジェクトに`nagi.toml`と起動手順があります。標準HTTPと`std.actor`の例にはNagi 0.1.8以降が必要です。
 
 ## ライブラリと基盤を作る例
 

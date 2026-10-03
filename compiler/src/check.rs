@@ -46,6 +46,7 @@ struct Checker {
     editor: bool,
     parameter_views: HashSet<BindingId>,
     iterators: Vec<HashSet<BorrowedPlace>>,
+    expression_loans: Vec<HashSet<BorrowedPlace>>,
 }
 fn error(line: usize, s: impl AsRef<str>) -> String {
     format!("line {line}: {}", s.as_ref())
@@ -329,6 +330,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         editor,
         parameter_views: HashSet::new(),
         iterators: vec![],
+        expression_loans: vec![],
     };
     let mut symbols = HashSet::new();
     for class in &p.classes {
@@ -487,6 +489,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         c.vars.clear();
         c.parameter_views.clear();
         c.iterators.clear();
+        c.expression_loans.clear();
         c.ret = f.ret.clone();
         c.asynchronous = f.asynchronous;
         c.scope = 0;
@@ -765,6 +768,10 @@ impl Checker {
             if info.parameters[index] == Passing::Move {
                 self.consume(arg)?;
             }
+            self.hold_value(
+                arg,
+                matches!(info.parameters[index], Passing::Reference | Passing::Borrow),
+            );
             arguments.push(ty);
         }
         let output = match operation {
@@ -1024,6 +1031,10 @@ impl Checker {
             if info.parameters[index] == Passing::Move {
                 self.consume(arg)?;
             }
+            self.hold_value(
+                arg,
+                matches!(info.parameters[index], Passing::Reference | Passing::Borrow),
+            );
             arguments.push(got);
         }
         let output = match operation {
@@ -1627,6 +1638,9 @@ impl Checker {
         }
     }
     fn borrowed_place(&self, place: &BorrowedPlace) -> bool {
+        self.borrowed_place_at(place, self.expression_loans.len())
+    }
+    fn borrowed_place_at(&self, place: &BorrowedPlace, expression_count: usize) -> bool {
         self.vars.values().any(|v| {
             v.binding != place.binding
                 && !v.moved
@@ -1637,6 +1651,32 @@ impl Checker {
             .iter()
             .flatten()
             .any(|loan| loan.overlaps(place))
+            || self.expression_loans[..expression_count]
+                .iter()
+                .flatten()
+                .any(|loan| loan.overlaps(place))
+    }
+    fn hold_value(&mut self, e: &Expr, implicit_borrow: bool) {
+        if !implicit_borrow && !e.ty.as_ref().is_some_and(Type::contains_view) {
+            return;
+        }
+        let mut origins = self.origin(e);
+        if implicit_borrow && !e.ty.as_ref().is_some_and(Type::is_view) {
+            if let Some((name, fields)) = Self::place(e) {
+                if let Some(var) = self.vars.get(name) {
+                    origins.insert(BorrowedPlace {
+                        binding: var.binding,
+                        fields,
+                        owner_loan: true,
+                        static_origin: false,
+                    });
+                }
+            }
+        }
+        self.expression_loans
+            .last_mut()
+            .expect("borrowed value belongs to an expression")
+            .extend(origins);
     }
     fn borrowed(&self, n: &str) -> bool {
         self.vars.get(n).is_some_and(|v| {
@@ -1727,9 +1767,18 @@ impl Checker {
         }) {
             return Err(error(
                 e.line,
-                format!(
-                    "{name} はviewまたはループから参照されています。借用を終了するかcopyしてください"
-                ),
+                if self.expression_loans.iter().flatten().any(|loan| {
+                    loan.overlaps(&BorrowedPlace {
+                        binding: v.binding,
+                        fields: fields.clone(),
+                        owner_loan: true,
+                        static_origin: false,
+                    })
+                }) {
+                    format!("{name} は同じ式で先に参照されています。copyを使うか、別の所有値を渡してください")
+                } else {
+                    format!("{name} はviewまたはループから参照されています。借用を終了するかcopyしてください")
+                },
             ));
         }
         let v = self.vars.get_mut(name).unwrap();
@@ -1997,6 +2046,7 @@ impl Checker {
                         "Resultを無視できません。tryで伝播するか変数へ受けてください",
                     ));
                 }
+                self.consume(e)?;
             }
             S::If(c, a, b) => {
                 let t = self.expr(c, Some(&Type::named("bool")))?;
@@ -2328,6 +2378,22 @@ impl Checker {
         expected: Option<&Type>,
         projection: bool,
     ) -> Result<Type, String> {
+        let retains_values = matches!(e.kind, E::Call(_, _, _) | E::List(_));
+        if retains_values {
+            self.expression_loans.push(HashSet::new());
+        }
+        let checked = self.expr_scoped(e, expected, projection);
+        if retains_values {
+            self.expression_loans.pop();
+        }
+        checked
+    }
+    fn expr_scoped(
+        &mut self,
+        e: &mut Expr,
+        expected: Option<&Type>,
+        projection: bool,
+    ) -> Result<Type, String> {
         let line = e.line;
         if e.resolution == Some(NameResolution::Module) {
             let alias = match &e.kind {
@@ -2569,6 +2635,7 @@ impl Checker {
                     // moves twice when checking the remaining elements.
                     let elem = self.expr(first, None)?;
                     self.consume(first)?;
+                    self.hold_value(first, false);
                     elem
                 } else {
                     return Err(error(line, "空配列には型注釈が必要です"));
@@ -2577,6 +2644,7 @@ impl Checker {
                     let t = self.expr(x, Some(&elem))?;
                     self.demand(&t, &elem, line)?;
                     self.consume(x)?;
+                    self.hold_value(x, false);
                 }
                 Type::generic("List", vec![elem])
             }
@@ -2711,6 +2779,7 @@ impl Checker {
                         let got = self.expr(arg, Some(t))?;
                         self.demand(&got, t, line)?;
                         self.consume(arg)?;
+                        self.hold_value(arg, false);
                     }
                     ret
                 } else {
@@ -2783,7 +2852,34 @@ impl Checker {
                 "db_update" if i == 4 => Some(Type::named("i32")),
                 _ => None,
             };
-            types.push(self.expr(a, hint.as_ref())?);
+            let ty = self.expr(a, hint.as_ref())?;
+            // DB SQL is copied into Sql::Owned before later arguments are
+            // evaluated; env finishes its key lookup before the fallback.
+            // Their input views do not remain borrowed for the enclosing call.
+            let materialized = n == "env"
+                || i == 1
+                    && matches!(
+                        n,
+                        "db_exec" | "db_all" | "db_query" | "db_insert" | "db_update" | "db_write"
+                    );
+            if !materialized {
+                let implicit_borrow = i == 0
+                    && matches!(
+                        n,
+                        "append"
+                            | "db_exec"
+                            | "db_all"
+                            | "db_query"
+                            | "db_insert"
+                            | "db_update"
+                            | "db_write"
+                            | "bench_i64"
+                            | "bench_f64"
+                            | "bench_scalar"
+                    );
+                self.hold_value(a, implicit_borrow);
+            }
+            types.push(ty);
         }
         let require = |idx: usize, t: Type| {
             if types[idx] == t {
@@ -3067,7 +3163,17 @@ impl Checker {
                 }
                 require(1, types[0].inner())?;
                 if let E::Name(n) = &args[0].kind {
-                    if self.borrowed(n) {
+                    self.available(&args[0], false)?;
+                    let receiver = BorrowedPlace {
+                        binding: self.vars[n].binding,
+                        fields: vec![],
+                        owner_loan: true,
+                        static_origin: false,
+                    };
+                    // Vec::push reserves its mutable receiver before evaluating
+                    // the element. Shared reads used to compute that element
+                    // may finish first; outer calls and stored views still loan it.
+                    if self.borrowed_place_at(&receiver, self.expression_loans.len() - 1) {
                         return Err(error(
                             line,
                             "viewまたはループから参照中のListを変更できません",

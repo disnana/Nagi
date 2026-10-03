@@ -47,6 +47,7 @@ class ChangeTests(unittest.TestCase):
                      "SECURITY.md", "SECURITY.en.md", "PERFORMANCE.md", "CHANGELOG.md",
                      "docs/http.md", "docs/en/http.md", "docs/guide/setup.md",
                      "website/README.md", "website/build.py", "website/requirements.txt",
+                     "website/CNAME", ".github/workflows/pages.yml",
                      "website/assets/site.js", "website/assets/site.css", "website/assets/plot.svg",
                      "website/assets/img/photo.png", "website/templates/page.html",
                      "editors/vscode-nagi/README.md", "test-nagi-code/web-demo/README.md"):
@@ -58,7 +59,7 @@ class ChangeTests(unittest.TestCase):
     def test_code_config_dependencies_and_unknown_paths_run_full_checks(self):
         for path in ("compiler/src/lib.rs", "runtime/src/lib.rs", "Cargo.toml", "Cargo.lock",
                      "compiler/README.md", "runtime/README.md", "LICENSE", ".gitignore",
-                     ".github/workflows/ci.yml", ".github/workflows/pages.yml",
+                     ".github/workflows/ci.yml", ".github/workflows/unknown.yml",
                      "scripts/install.sh", "scripts/install.ps1", "scripts/releases/plan.py",
                      "scripts/releases/README.md", "scripts/ci/changes.py", "tests/http_integration.py",
                      "tests/requirements.txt", "editors/vscode-nagi/src/features.js",
@@ -74,6 +75,24 @@ class ChangeTests(unittest.TestCase):
         self.write("docs/start.md", "# New docs\n")
         self.write("runtime/src/lib.rs", "// changed runtime\n")
         self.assertEqual(self.full(self.commit()), "true")
+
+    def test_pages_and_domain_only_complete_ranges_skip_full_checks(self):
+        self.write(".github/workflows/pages.yml", "# Pages presentation update\n")
+        self.commit()
+        self.write("website/CNAME", "docs.example.invalid\n")
+        head = self.commit()
+        for event in ("push", "pull_request"):
+            with self.subTest(event=event):
+                self.assertEqual(self.full(head, event=event), "false")
+
+    def test_pages_and_domain_cannot_hide_check_workflows_or_detection_changes(self):
+        for path in (".github/workflows/ci.yml", ".github/workflows/unknown.yml", "scripts/ci/changes.py"):
+            with self.subTest(path=path):
+                base = self.run_git("rev-parse", "HEAD")
+                self.write(".github/workflows/pages.yml", f"# Pages update alongside {path}\n")
+                self.write("website/CNAME", f"# Domain update alongside {path}\n")
+                self.write(path, "# Changed code-check input\n")
+                self.assertEqual(self.full(self.commit(), base), "true")
 
     def test_earlier_code_commit_is_not_hidden_by_last_docs_commit(self):
         self.write("compiler/src/lib.rs", "// changed compiler\n")

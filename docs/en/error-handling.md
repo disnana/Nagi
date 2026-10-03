@@ -95,7 +95,7 @@ The [typed-error CLI example](../../test-nagi-code/library-examples/typed-errors
 
 The success type comes from the return or variable context. `fail(problem)` moves a built-in Error, class, or enum failure value. Without context its type is `Result[unit, E]`. `error_kind` and `error_message` apply only to built-in Error and do not consume it. Messages can contain internal information such as database details.
 
-Traditional HTTP handlers such as `@get` return `Result[..., Error]`. The unreleased [`std.http.server`](http.md) accepts a custom error type `E`, with an App or route mapper converting it to Response. Built-in Error kinds in traditional handlers map as follows:
+Traditional HTTP handlers such as `@get` return `Result[..., Error]`. Available from Nagi 0.1.8, [`std.http.server`](http.md) accepts a custom error type `E`, with an App or route mapper converting it to Response. Built-in Error kinds in traditional handlers map as follows:
 
 | Kind | HTTP status |
 |---|---|
@@ -112,7 +112,7 @@ Try the [Result API example](result-api.md) for invalid input, missing data, dat
 
 The checker rejects directly discarded Results and futures that are not awaited. Checking that an assigned Result is handled on every path remains incomplete.
 
-Result failures differ from panics. Scopes detect child task panics. In the unreleased [`std.actor`](actor.md), a business error `E` inside `Turn` keeps the next state and becomes the reply. A handler's own Error or panic invokes the Supervisor's restart policy. `call` returns `Result[Result[R, E], CallError]`, separating business errors from not-ready, stopped, timeout, and other call failures. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) also maps them to HTTP responses.
+Result failures differ from panics. Scopes detect child task panics. In [`std.actor`](actor.md), available from Nagi 0.1.8, a business error `E` inside `Turn` keeps the next state and becomes the reply. A handler's own Error or panic invokes the Supervisor's restart policy. `call` returns `Result[Result[R, E], CallError]`, separating business errors from not-ready, stopped, timeout, and other call failures. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) also maps them to HTTP responses.
 
 The older `supervisor_demo` remains a fixed-worker restart test API. Neither mechanism recovers from memory corruption or process aborts.
 

@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 from package import PLATFORMS, archive_name
 from plan import version_tuple
+from notes import release_notes, tag_commit
 
 
 class GitHub:
@@ -51,9 +52,15 @@ class GitHub:
         return self.write_api("PATCH", f"releases/{release_id}", data={
             "draft": False, "make_latest": "true" if latest else "false"})
 
+    def generate_notes(self, tag: str, sha: str, previous_tag: str):
+        return self.write_api("POST", "releases/generate-notes", data={
+            "tag_name": tag, "target_commitish": sha, "previous_tag_name": previous_tag})
+
+    def update_notes(self, release_id: int, notes: str):
+        return self.write_api("PATCH", f"releases/{release_id}", data={"body": notes})
+
     def create_tag(self, tag: str, sha: str) -> None:
-        subprocess.run(["gh", "api", "--method", "POST", f"repos/{self.repository}/git/refs",
-                        "-f", f"ref=refs/tags/{tag}", "-f", f"sha={sha}"], check=True)
+        self.write_api("POST", "git/refs", data={"ref": f"refs/tags/{tag}", "sha": sha})
 
     def content(self, asset) -> bytes:
         return subprocess.check_output(["gh", "api", "-H", "Accept: application/octet-stream",
@@ -64,20 +71,6 @@ class GitHub:
         if digest and digest.startswith("sha256:"):
             return digest.removeprefix("sha256:")
         return hashlib.sha256(self.content(asset)).hexdigest()
-
-
-def tag_commit(client, tag: str) -> str | None:
-    ref = client.api(f"git/ref/tags/{tag}")
-    if not ref:
-        return None
-    obj = ref["object"]
-    for _ in range(10):
-        if obj["type"] == "commit":
-            return obj["sha"]
-        if obj["type"] != "tag":
-            break
-        obj = client.api(f"git/tags/{obj['sha']}")["object"]
-    raise ValueError(f"Release tag does not resolve to a commit: {tag}")
 
 
 def release_for_tag(client, tag: str):
@@ -137,15 +130,32 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
                 raise ValueError(f"Published release checksum is invalid: {filename}")
         print(f"Already published and verified; keeping existing assets: {tag} ({sha})")
         return
+    # Validate draft assets before changing its notes. Missing source/history or
+    # note generation failures must precede tag creation and every release write.
+    if release:
+        remote = {asset["name"]: asset for asset in release["assets"]}
+        for path in assets:
+            if path.name in remote and client.digest(remote[path.name]) != hashlib.sha256(path.read_bytes()).hexdigest():
+                raise ValueError(f"Existing asset differs; it will not be overwritten: {path.name}")
+    notes = release_notes(client, component, version, sha, notes)
     if not existing_commit:
         client.create_tag(tag, sha)
     if not release:
-        notes += f"\nBuilt from commit {sha} after Nagi checks succeeded. SHA-256 files accompany every download.\n"
         # Use the creation response immediately. Draft listings can lag behind
         # creation, so neither uploads nor publication should look up its tag.
         release = client.create_release(tag, sha, title, notes)
         if not release or release.get("tag_name") != tag or not release.get("draft") or not release.get("id"):
             raise RuntimeError(f"Create release did not return the expected draft: {tag}")
+    elif release.get("body") != notes:
+        current = client.api(f"releases/{release['id']}")
+        if not current or current.get("id") != release["id"] or current.get("tag_name") != tag or current.get("draft") is not True:
+            raise RuntimeError(f"Release is no longer the expected draft for note update: {tag}")
+        updated = client.update_notes(release["id"], notes)
+        if not updated or updated.get("id") != release["id"] or updated.get("tag_name") != tag or updated.get("draft") is not True:
+            raise RuntimeError(f"Note update did not return the expected draft: {tag}")
+        release = client.api(f"releases/{updated['id']}")
+        if not release or release.get("id") != updated["id"] or release.get("tag_name") != tag or release.get("body") != notes or release.get("draft") is not True:
+            raise RuntimeError(f"Draft note readback verification failed: {tag}")
     if tag_commit(client, tag) != sha:
         raise ValueError(f"Release tag changed unexpectedly: {tag}")
     remote = {asset["name"]: asset for asset in release["assets"]}
@@ -158,9 +168,14 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
         else:
             client.upload_asset(release["id"], path)
     # Read back all uploaded files before making the draft public.
-    release = client.api(f"releases/{release['id']}")
+    release_id = release["id"]
+    release = client.api(f"releases/{release_id}")
     if release is None:
         raise RuntimeError(f"Release disappeared before upload verification: {tag}")
+    if release.get("body") != notes:
+        raise RuntimeError(f"Release note readback verification failed: {tag}")
+    if release.get("id") != release_id or release.get("tag_name") != tag:
+        raise RuntimeError(f"Release readback identity changed unexpectedly: {tag}")
     remote = {asset["name"]: asset for asset in release["assets"]}
     for path in assets:
         if path.name not in remote or client.digest(remote[path.name]) != hashlib.sha256(path.read_bytes()).hexdigest():

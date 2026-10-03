@@ -8,6 +8,7 @@ use std::{
 
 pub const USAGE: &str = "Usage:
   nagic <check|lower|build|run|symbols> [SOURCE] [OPTIONS]
+  nagic map [types|modules|calls] [SOURCE] [OPTIONS]
   nagic version
 
 Commands:
@@ -16,6 +17,7 @@ Commands:
   build    Build a native executable
   run      Build and run a program
   symbols  Print type and definition information as JSON
+  map      Map checked source types, modules, or calls (default: types)
   version  Print the compiler version
 
 Options:
@@ -27,8 +29,19 @@ Options:
   --out DIR               Select the generated-source directory
   --cost-report           Write an allocation/copy cost report
   --editor-input          Read editor buffers from stdin (check/symbols)
+  --format FORMAT         Map output: mermaid (default), d2, json, html, svg, png
+  --module NAME           Select a map module
+  --focus NAME            Focus a map definition
+  --depth N               Limit relationships from the focused definition
+  --output FILE           Write the map to FILE instead of stdout
+  --layout elk|dagre|tala  SVG/PNG layout (default: elk; requires local D2)
   -h, --help              Show this help
-  -V, --version           Print the compiler version";
+  -V, --version           Print the compiler version
+
+Map notes:
+  SVG/PNG require --output with a matching .svg/.png extension and local D2.
+  Available layouts depend on the installed D2 version.
+  architecture, dataflow, trace, cost, and --serve are not implemented.";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -109,6 +122,197 @@ pub struct Options {
     pub editor_input: bool,
     /// Set only when a project is selected. Plain SOURCE commands keep their cwd.
     pub project_root: Option<PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MapView {
+    Types,
+    Modules,
+    Calls,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MapFormat {
+    Mermaid,
+    D2,
+    Json,
+    Html,
+    Svg,
+    Png,
+}
+
+impl MapFormat {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Mermaid => "mermaid",
+            Self::D2 => "d2",
+            Self::Json => "json",
+            Self::Html => "html",
+            Self::Svg => "svg",
+            Self::Png => "png",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MapLayout {
+    Elk,
+    Dagre,
+    Tala,
+}
+
+impl MapLayout {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Elk => "elk",
+            Self::Dagre => "dagre",
+            Self::Tala => "tala",
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct MapOptions {
+    pub view: MapView,
+    pub format: MapFormat,
+    pub module: Option<String>,
+    pub focus: Option<String>,
+    pub depth: Option<usize>,
+    pub output: Option<PathBuf>,
+    pub layout: MapLayout,
+}
+
+/// Remove only map-specific arguments, then reuse the existing source/project
+/// resolver. Adapter and native paths retain the same precedence as check.
+pub fn resolve_map(args: &[String], cwd: &Path) -> Result<(Options, MapOptions), String> {
+    if args.first().map(String::as_str) != Some("map") {
+        return Err("resolve_map requires the map command".into());
+    }
+    let mut view = MapView::Types;
+    let mut i = 1;
+    match args.get(i).map(String::as_str) {
+        Some("types") => i += 1,
+        Some("modules") => {
+            view = MapView::Modules;
+            i += 1;
+        }
+        Some("calls") => {
+            view = MapView::Calls;
+            i += 1;
+        }
+        Some(name @ ("architecture" | "trace" | "dataflow" | "cost")) => {
+            return Err(format!(
+                "map {name} is not implemented; supported views: types, modules, calls"
+            ));
+        }
+        _ => {}
+    }
+    let mut input = vec!["check".to_owned()];
+    let mut format = None;
+    let mut module = None;
+    let mut focus = None;
+    let mut depth = None;
+    let mut output = None;
+    let mut layout = None;
+    while i < args.len() {
+        let option = args[i].as_str();
+        match option {
+            "--format" | "--module" | "--focus" | "--depth" | "--output" | "--layout" => {
+                i += 1;
+                let value = args
+                    .get(i)
+                    .filter(|value| !value.starts_with("--") && !value.is_empty())
+                    .ok_or_else(|| format!("{option} requires a value"))?;
+                let duplicate = match option {
+                    "--format" => {
+                        let parsed = match value.as_str() {
+                            "mermaid" => MapFormat::Mermaid,
+                            "d2" => MapFormat::D2,
+                            "json" => MapFormat::Json,
+                            "html" => MapFormat::Html,
+                            "svg" => MapFormat::Svg,
+                            "png" => MapFormat::Png,
+                            _ => return Err(format!("unsupported map format: {value}; use mermaid, d2, json, html, svg, or png")),
+                        };
+                        format.replace(parsed).is_some()
+                    }
+                    "--module" => module.replace(value.clone()).is_some(),
+                    "--focus" => focus.replace(value.clone()).is_some(),
+                    "--depth" => {
+                        let parsed = value
+                            .parse::<usize>()
+                            .map_err(|_| "--depth requires a nonnegative integer".to_owned())?;
+                        depth.replace(parsed).is_some()
+                    }
+                    "--output" => output.replace(cwd.join(value)).is_some(),
+                    _ => {
+                        let parsed = match value.as_str() {
+                            "elk" => MapLayout::Elk,
+                            "dagre" => MapLayout::Dagre,
+                            "tala" => MapLayout::Tala,
+                            _ => {
+                                return Err(format!(
+                                    "unsupported map layout: {value}; use elk, dagre, or tala"
+                                ))
+                            }
+                        };
+                        layout.replace(parsed).is_some()
+                    }
+                };
+                if duplicate {
+                    return Err(format!("{option} may be specified only once"));
+                }
+            }
+            "--project" | "--native" | "--rust" | "--rust-dep" => {
+                // Keep values intact even when a path happens to match a map
+                // option or view name. resolve validates these shared options.
+                input.push(args[i].clone());
+                i += 1;
+                input.push(
+                    args.get(i)
+                        .filter(|value| !value.starts_with("--") && !value.is_empty())
+                        .ok_or_else(|| format!("{option} requires a value"))?
+                        .clone(),
+                );
+            }
+            "--out" => return Err(
+                "map uses --output FILE; --out selects generated code for check/lower/build/run"
+                    .into(),
+            ),
+            "--cost-report" => return Err(
+                "map does not produce a cost report; use --cost-report with check/lower/build/run"
+                    .into(),
+            ),
+            "--editor-input" => {
+                return Err("--editor-input is supported only by check/symbols".into())
+            }
+            "--serve" => return Err("map --serve is not implemented".into()),
+            _ => input.push(args[i].clone()),
+        }
+        i += 1;
+    }
+    let format = format.unwrap_or(MapFormat::Mermaid);
+    let image = matches!(format, MapFormat::Svg | MapFormat::Png);
+    if image && output.is_none() {
+        return Err("map --format svg/png requires --output FILE".into());
+    }
+    if layout.is_some() && !image {
+        return Err("--layout is supported only with --format svg/png".into());
+    }
+    let mut options = resolve(&input, cwd)?;
+    options.command = "map".into();
+    Ok((
+        options,
+        MapOptions {
+            view,
+            format,
+            module,
+            focus,
+            depth,
+            output,
+            layout: layout.unwrap_or(MapLayout::Elk),
+        },
+    ))
 }
 
 pub fn discover(start: &Path) -> Option<PathBuf> {

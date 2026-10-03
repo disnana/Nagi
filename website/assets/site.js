@@ -1,7 +1,8 @@
 'use strict';
 const navs = [...document.querySelectorAll('.docs-nav')];
 if (navs.length) {
-  const groupsKey = `nagi:docs-nav:${navs[0].querySelector('.docs-nav-title').getAttribute('href')}:groups`;
+  const navigationKey = `nagi:docs-nav:${navs[0].querySelector('.docs-nav-title').getAttribute('href')}`;
+  const groupsKey = `${navigationKey}:groups`;
   let groups = {};
   try {
     const saved = JSON.parse(sessionStorage.getItem(groupsKey));
@@ -10,7 +11,9 @@ if (navs.length) {
   const menus = navs.flatMap(nav => [...nav.querySelectorAll('[data-nav-group]')]);
   for (const menu of menus) {
     const name = menu.dataset.navGroup;
-    if (typeof groups[name] === 'boolean') {
+    if (menu.querySelector('[aria-current="page"]')) {
+      menu.open = true;
+    } else if (typeof groups[name] === 'boolean') {
       menu.open = groups[name];
     }
     menu.querySelector('summary').addEventListener('click', () => {
@@ -22,6 +25,26 @@ if (navs.length) {
       for (const other of menus) {
         if (other !== menu && other.dataset.navGroup === name && other.open !== menu.open) other.open = menu.open;
       }
+    });
+  }
+  const topics = navs.flatMap(nav => [...nav.querySelectorAll('[data-nav-topic]')]);
+  for (const topic of topics) {
+    topic.open = Boolean(topic.querySelector('[aria-current="page"]'));
+    topic.addEventListener('toggle', () => {
+      for (const other of topics) {
+        if (other !== topic && other.dataset.navTopic === topic.dataset.navTopic && other.open !== topic.open) other.open = topic.open;
+      }
+    });
+  }
+  const mobileMenu = document.querySelector('.mobile-doc-nav');
+  if (mobileMenu) {
+    const mobileKey = `${navigationKey}:mobile`;
+    try {
+      const saved = sessionStorage.getItem(mobileKey);
+      if (saved === 'true' || saved === 'false') mobileMenu.open = saved === 'true';
+    } catch { /* The menu remains usable without browser storage. */ }
+    mobileMenu.querySelector('summary').addEventListener('click', () => {
+      try { sessionStorage.setItem(mobileKey, String(!mobileMenu.open)); } catch { /* Keep links usable. */ }
     });
   }
 }
@@ -39,9 +62,20 @@ if (sidebar) {
     if (!sidebar.clientHeight) return;
     if (position !== null) {
       sidebar.scrollTop = position;
+      const current = sidebar.querySelector('[aria-current="page"]');
+      if (!current || current.closest('details:not([open])') || !current.getClientRects().length) return;
+      const item = current.getBoundingClientRect();
+      const bounds = sidebar.getBoundingClientRect();
+      if (item.top < bounds.top) {
+        sidebar.scrollTop += item.top - bounds.top;
+        position = sidebar.scrollTop;
+      } else if (item.bottom > bounds.bottom) {
+        sidebar.scrollTop += item.bottom - bounds.bottom;
+        position = sidebar.scrollTop;
+      }
     } else {
       const current = sidebar.querySelector('[aria-current="page"]');
-      if (!current) return;
+      if (!current || current.closest('details:not([open])') || !current.getClientRects().length) return;
       const item = current.getBoundingClientRect();
       const bounds = sidebar.getBoundingClientRect();
       if (item.top < bounds.top || item.bottom > bounds.bottom) {

@@ -2,7 +2,7 @@
 
 Load another Nagi file with a quoted relative path. Use `import "filename" as name` to give it a module name, or `from "filename" import definition` to select a function, class, or enum. To call Rust, declare the function's parameter and return types in Nagi and supply a Rust file when building.
 
-The module and from-alias features below require a compiler built from this repository's current source.
+The module and from-alias features below are available from Nagi 0.1.8.
 
 ## Split Nagi code into files
 
@@ -81,7 +81,7 @@ The limits are 128 files, depth 64, 8 MB total, and 2 MB per file. Type-checking
 
 ## Import the standard HTTP library
 
-`std.http.server` and `std.actor` are APIs intended for the next release. Use a compiler built from the latest source.
+`std.http.server` and `std.actor` are standard libraries available from Nagi 0.1.8.
 
 ```nagi
 import std.http.server as http

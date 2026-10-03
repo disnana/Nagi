@@ -1,4 +1,4 @@
-# Nagi 0.1.7 — a working prototype of a two-level backend language
+# Nagi 0.1.8 — a working prototype of a two-level backend language
 
 [日本語](README.md)
 
@@ -18,7 +18,7 @@ Downloads are published on [GitHub Releases](https://github.com/disnana/Nagi/rel
 
 ## Install
 
-The main branch also includes changes planned for the next release. See [unreleased changes](CHANGELOG.md) for differences from the published version.
+The main branch also includes changes planned for the next release. See [change log](CHANGELOG.md) for differences from the published version.
 
 Building Nagi applications needs Rust/Cargo and a C build environment. See [setup](docs/en/getting-started.md) for prerequisites.
 
@@ -81,6 +81,17 @@ This resembles Python, but it is Nagi code. Build it with `nagic`.
 
 For applications with multiple files, [nagi.toml](docs/en/projects.md) stores the entry file, Rust dependencies, and handwritten Low files. For example, `./target/release/nagic run --project test-nagi-code/rust-bridge` runs the Rust integration sample. The [VS Code extension](docs/en/vscode-extension.md) uses the same settings to check, build, and run the entry file while you edit other files in the project.
 
+## Map code structure
+
+`nagic map` inspects types, modules, and function calls, and exports Mermaid, D2, JSON, or standalone HTML. SVG and PNG export uses D2 when it is available on PATH.
+
+```bash
+nagic map types --project examples/code-map --format d2
+nagic map calls --project examples/code-map --format html --output calls.html
+```
+
+See [Code maps](docs/en/code-map.md) for filtering and rendering.
+
 ## High and Low
 
 ```bash
@@ -140,11 +151,11 @@ Implemented features include primitive types, value classes, enums, contiguous a
 
 Result matching lets you handle success and failure, recover with defaults, and return errors while preserving their kind. See [error handling](docs/en/error-handling.md) and the [HTTP Result API example](docs/en/result-api.md).
 
-The [VS Code extension 0.1.9](docs/en/vscode-extension.md) provides F12 navigation to functions, classes, imported files, and local bindings; type hovers; class field completion; and signature help. It also handles unsaved edits to files saved at least once. The [editor walkthrough](docs/en/editor.md) shows how to use these features.
+The [VS Code extension 0.1.10](docs/en/vscode-extension.md) provides F12 navigation to functions, classes, imported files, and local bindings; type hovers; class field completion; and signature help. It also handles unsaved edits to files saved at least once. The [editor walkthrough](docs/en/editor.md) shows how to use these features.
 
-The next release's [standard HTTP module](docs/en/http.md) supports database-free apps, headers, Method/Status, custom state, and error mapping. Standard-module imports and Option Some/None matching are also available in source builds. See [unreleased changes](CHANGELOG.md) for differences from the published version.
+Available from Nagi 0.1.8, the [standard HTTP module](docs/en/http.md) supports database-free apps, headers, Method/Status, custom state, and error mapping. Standard-module imports and Option Some/None matching are also supported. See [change log](CHANGELOG.md) for differences from the published version.
 
-The unreleased [`std.actor`](docs/en/actor.md) uses ordinary async functions for arbitrary owned state, typed messages and replies, restart policies, observation, and shutdown. See its [API](docs/en/actor-reference.md) and [sample](test-nagi-code/library-examples/supervised-service/README.en.md). It runs natively within one process; a BEAM-style VM, hot code replacement, and distributed actors are unsupported.
+Available from Nagi 0.1.8, [`std.actor`](docs/en/actor.md) uses ordinary async functions for arbitrary owned state, typed messages and replies, restart policies, observation, and shutdown. See its [API](docs/en/actor-reference.md) and [sample](test-nagi-code/library-examples/supervised-service/README.en.md). It runs natively within one process; a BEAM-style VM, hot code replacement, and distributed actors are unsupported.
 
 Dedicated actor declarations, user-defined generic functions and traits, package imports, general pattern matching, PostgreSQL, compile-time SQL validation, High request arenas, Low raw pointers/unsafe/C ABI, a custom scheduler, and self-hosting are not implemented. Rust integration uses calls within the same build, without a stable external ABI. Operations for `Map` and `owned` are incomplete.
 

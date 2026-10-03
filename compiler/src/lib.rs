@@ -3,6 +3,7 @@ mod capabilities;
 pub mod check;
 pub mod diagnostics;
 pub mod emit;
+pub mod graph;
 mod installation;
 pub mod lexer;
 pub mod modules;
