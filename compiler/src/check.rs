@@ -1564,33 +1564,37 @@ impl Checker {
         Self::borrows_temporary_at(e, 0)
     }
     fn borrows_temporary_at(e: &Expr, depth: usize) -> bool {
+        Self::borrows_temporary_in(e, depth, false)
+    }
+    fn borrows_temporary_in(e: &Expr, depth: usize, literal_views_static: bool) -> bool {
         if !e.ty.as_ref().is_some_and(Type::contains_view) {
             return false;
         }
+        let visit =
+            |value: &Expr, depth| Self::borrows_temporary_in(value, depth, literal_views_static);
         match &e.kind {
             E::Call(n, _, args) if e.resolution == Some(NameResolution::Builtin) => {
                 match n.as_str() {
                     "view" => {
                         if depth == 0 {
                             Self::place(&args[0]).is_none()
+                                && !(literal_views_static && matches!(args[0].kind, E::Str(_)))
                         } else {
-                            Self::borrows_temporary_at(&args[0], depth)
+                            visit(&args[0], depth)
                         }
                     }
                     "json_decode" => {
                         let input = &args[0];
                         if input.ty.as_ref().is_some_and(Type::is_view) {
-                            Self::borrows_temporary(input)
+                            visit(input, 0)
                         } else {
                             // string_arg emits literals directly, rather than a temporary String.
                             !matches!(input.kind, E::Str(_)) && Self::place(input).is_none()
                         }
                     }
-                    "copy" => Self::borrows_temporary_at(&args[0], depth.max(1)),
-                    "slice" | "ok" | "some" | "share" | "clone_shared" => {
-                        Self::borrows_temporary_at(&args[0], depth)
-                    }
-                    _ => args.iter().any(Self::borrows_temporary),
+                    "copy" => visit(&args[0], depth.max(1)),
+                    "slice" | "ok" | "some" | "share" | "clone_shared" => visit(&args[0], depth),
+                    _ => args.iter().any(|arg| visit(arg, 0)),
                 }
             }
             E::Call(name, _, args) if e.resolution == Some(NameResolution::Standard) => {
@@ -1599,16 +1603,14 @@ impl Checker {
                     .is_some_and(|owner| {
                         let arg = &args[owner];
                         if arg.ty.as_ref().is_some_and(Type::is_view) {
-                            Self::borrows_temporary(arg)
+                            visit(arg, 0)
                         } else {
                             Self::place(arg).is_none()
                         }
                     })
             }
-            E::Call(_, _, args) => args.iter().any(Self::borrows_temporary),
-            E::List(args) => args
-                .iter()
-                .any(|arg| Self::borrows_temporary_at(arg, depth.saturating_sub(1))),
+            E::Call(_, _, args) => args.iter().any(|arg| visit(arg, 0)),
+            E::List(args) => args.iter().any(|arg| visit(arg, depth.saturating_sub(1))),
             E::Field(parent, field) if e.resolution == Some(NameResolution::ResourceField) => {
                 let resource = parent
                     .ty
@@ -1627,13 +1629,13 @@ impl Checker {
                     .and_then(|resource| crate::stdlib::field(resource, field))
                     .is_some_and(|info| {
                         !info.static_borrow
-                            && (Self::borrows_temporary(parent)
+                            && (visit(parent, 0)
                                 || !parent.ty.as_ref().is_some_and(Type::is_view)
                                     && Self::place(parent).is_none())
                     })
             }
-            E::Try(e) | E::Await(e) | E::Field(e, _) => Self::borrows_temporary_at(e, depth),
-            E::Index(e, _) => Self::borrows_temporary_at(e, depth + 1),
+            E::Try(e) | E::Await(e) | E::Field(e, _) => visit(e, depth),
+            E::Index(e, _) => visit(e, depth + 1),
             _ => false,
         }
     }
@@ -1863,6 +1865,42 @@ impl Checker {
         checked?;
         Ok(after)
     }
+    fn scope_origins(
+        before: &HashMap<String, Var>,
+        after: &HashMap<String, Var>,
+        line: usize,
+    ) -> Result<(), String> {
+        // An existing alias can keep an outer binding alive even when a loop
+        // counter shadows its name. Only newly introduced origins may escape.
+        let owners: HashSet<_> = before
+            .values()
+            .flat_map(|var| {
+                std::iter::once(var.binding).chain(
+                    var.origins
+                        .iter()
+                        .chain(var.content_origins.iter().flatten())
+                        .map(|origin| origin.binding),
+                )
+            })
+            .collect();
+        for (name, var) in after {
+            if !before.contains_key(name) || var.moved {
+                continue;
+            }
+            if var
+                .origins
+                .iter()
+                .chain(var.content_origins.iter().flatten())
+                .any(|origin| !origin.static_origin && !owners.contains(&origin.binding))
+            {
+                return Err(error(
+                    line,
+                    format!("{name} のviewは内側のscopeの所有値を参照しています。scopeの外へ保存する値にはcopyを使用してください"),
+                ));
+            }
+        }
+        Ok(())
+    }
     fn merge_moves(&mut self, after: HashMap<String, Var>) {
         for (n, v) in after {
             if let Some(x) = self.vars.get_mut(&n) {
@@ -1904,6 +1942,7 @@ impl Checker {
         body: &mut [Stmt],
         mut condition: Option<&mut Expr>,
         binding: Option<(&str, Var)>,
+        line: usize,
     ) -> Result<(), String> {
         // Recheck the parsed body, not its annotated first pass: locals must be
         // declared anew on each iteration. Only outer moves cross the backedge.
@@ -1957,6 +1996,7 @@ impl Checker {
             if let Some((name, _)) = &binding {
                 after.remove(*name);
             }
+            Self::scope_origins(&header, &after, line)?;
             self.vars = header.clone();
             self.merge_moves(after);
             let next = self.vars.clone();
@@ -2121,15 +2161,17 @@ impl Checker {
                 let bm = self.child(b)?;
                 let mut paths = vec![];
                 if !returns(a) {
+                    Self::scope_origins(&self.vars, &am, s.line)?;
                     paths.push(am);
                 }
                 if !returns(b) {
+                    Self::scope_origins(&self.vars, &bm, s.line)?;
                     paths.push(bm);
                 }
                 self.join_moves(&paths);
             }
             S::While(c, b) => {
-                self.loop_body(b, Some(c), None)?;
+                self.loop_body(b, Some(c), None, s.line)?;
             }
             S::Match(value, arms) => {
                 let ty = self.expr(value, None)?;
@@ -2304,6 +2346,7 @@ impl Checker {
                                 return Err(error(arm.line, "一時的な所有値のviewをmatchの外へ持ち出せません。case内でcopyしてください"));
                             }
                         }
+                        Self::scope_origins(&before, &after, arm.line)?;
                         moves.push(after);
                     }
                 }
@@ -2328,8 +2371,40 @@ impl Checker {
                 }
                 s.binding_type = Some(elem.clone());
                 let origins = self.origin(e);
-                let element_origins = self.origin_at(e, 1);
-                let content_origins = self.content_origins(e, &elem, 1);
+                let mut element_origins = self.origin_at(e, 1);
+                let mut content_origins = self.content_origins(e, &elem, 1);
+                if elem.contains_view() {
+                    for (depth, origins) in std::iter::once(&mut element_origins)
+                        .chain(content_origins.iter_mut())
+                        .enumerate()
+                    {
+                        let temporary = Self::borrows_temporary_in(e, depth + 1, true);
+                        let static_literal = origins.is_empty()
+                            && !temporary
+                            && Self::borrows_temporary_at(e, depth + 1);
+                        if !temporary && !static_literal {
+                            continue;
+                        }
+                        // Iterator temporaries live through the body, but not
+                        // through aliases retained after the loop. Copied
+                        // elements do not retain an outer container's loan.
+                        // Literal string views emit static references instead.
+                        let owner = BorrowedPlace {
+                            binding: if static_literal {
+                                BindingId { line: 0, token: 0 }
+                            } else {
+                                BindingId {
+                                    line: s.line,
+                                    token: e.span.start,
+                                }
+                            },
+                            fields: vec![],
+                            owner_loan: !static_literal,
+                            static_origin: static_literal,
+                        };
+                        origins.insert(owner);
+                    }
+                }
                 let mut loans = origins.clone();
                 if t.0 == "List" {
                     if let Some((name, fields)) = Self::place(e) {
@@ -2366,6 +2441,7 @@ impl Checker {
                             async_function: None,
                         },
                     )),
+                    s.line,
                 );
                 self.iterators.pop();
                 checked?;
@@ -2394,7 +2470,9 @@ impl Checker {
                 self.scope += 1;
                 let m = self.child(b);
                 self.scope -= 1;
-                self.merge_moves(m?);
+                let m = m?;
+                Self::scope_origins(&self.vars, &m, s.line)?;
+                self.merge_moves(m);
             }
             S::Spawn(e) => {
                 if self.scope == 0 {
@@ -2444,7 +2522,10 @@ impl Checker {
         expected: Option<&Type>,
         projection: bool,
     ) -> Result<Type, String> {
-        let retains_values = matches!(e.kind, E::Call(_, _, _) | E::List(_) | E::Binary(_, _, _));
+        let retains_values = matches!(
+            e.kind,
+            E::Call(_, _, _) | E::List(_) | E::Binary(_, _, _) | E::Index(_, _)
+        );
         if retains_values {
             self.expression_loans.push(HashSet::new());
         }
@@ -2673,6 +2754,7 @@ impl Checker {
                         "resourceのviewは配列ではないためindex取得できません",
                     ));
                 }
+                self.hold_value(x, true);
                 let ix = self.expr(i, Some(&Type::named("i64")))?;
                 self.demand(&ix, &Type::named("i64"), line)?;
                 if t.0 == "List" || t.0 == "view" {

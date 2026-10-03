@@ -901,6 +901,56 @@ async fn connection_capacity_and_shutdown_deadline_leave_no_handler_tasks() {
 }
 
 #[tokio::test]
+async fn graceful_shutdown_finishes_an_in_flight_handler_and_response() {
+    let (state, started, released, dropped) = gate();
+    let app = route(app_default(state), Method::GET, "/", wait).unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (stop, stopping) = oneshot::channel();
+    let (observed, shutdown_observed) = oneshot::channel();
+    let task = tokio::spawn(serve_listener(
+        listener,
+        app,
+        options(1024, 1000, 1000, 1200).unwrap(),
+        async {
+            stopping.await.unwrap();
+            observed.send(()).unwrap();
+        },
+    ));
+    let mut server = Server {
+        address,
+        stopped: Some(stop),
+        task,
+    };
+    let mut socket = server.connect().await;
+    send(&mut socket, b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;
+    tokio::time::timeout(Duration::from_secs(2), started.notified())
+        .await
+        .unwrap();
+
+    server.stopped.take().unwrap().send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(2), shutdown_observed)
+        .await
+        .unwrap()
+        .unwrap();
+    // The current-thread runtime observes this acknowledgement after the
+    // server has stopped accepting and notified its connection tasks.
+    assert!(TcpStream::connect(address).await.is_err());
+    assert_eq!(dropped.load(Ordering::SeqCst), 0);
+    released.notify_one();
+    let result = response(&mut socket, false).await;
+    assert_eq!(result.status, 200);
+    assert_eq!(result.body, b"released");
+    assert!(closed(&mut socket).await.is_empty());
+    tokio::time::timeout(Duration::from_secs(2), &mut server.task)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(dropped.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
 async fn header_idle_deadline_is_independent_of_send_deadline_after_flush() {
     let server = Server::new(
         route(app_default("ok".to_owned()), Method::GET, "/", hello).unwrap(),
@@ -942,4 +992,53 @@ async fn stalled_response_send_expires_and_releases_connection_permit() {
     assert_eq!(response(&mut next, false).await.status, 200);
     drop(blocked);
     server.stop().await;
+}
+
+#[tokio::test]
+async fn graceful_shutdown_preserves_stalled_response_send_deadline() {
+    const BODY_LENGTH: usize = 16 * 1024 * 1024;
+    async fn large(_: Request, _: Arc<()>) -> Result<Response, Error> {
+        Ok(bytes(Status::OK, &vec![b'x'; BODY_LENGTH]))
+    }
+    let app = route(app_default(()), Method::GET, "/", large).unwrap();
+    let mut server = Server::new(
+        app,
+        send_timeout(options(1024, 1000, 1000, 1200).unwrap(), 150).unwrap(),
+    )
+    .await;
+    let mut blocked = server.connect().await;
+    send(&mut blocked, b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;
+
+    // Receiving the headers proves that the response and its send deadline are
+    // active. Keep the much larger body unread so socket backpressure remains.
+    tokio::time::timeout(Duration::from_secs(2), async {
+        let mut line = String::new();
+        blocked.read_line(&mut line).await.unwrap();
+        assert!(line.starts_with("HTTP/1.1 200 "));
+        let mut length = None;
+        loop {
+            line.clear();
+            assert_ne!(blocked.read_line(&mut line).await.unwrap(), 0);
+            if line == "\r\n" {
+                break;
+            }
+            let (name, value) = line.split_once(':').unwrap();
+            if name.eq_ignore_ascii_case("content-length") {
+                length = Some(value.trim().parse::<usize>().unwrap());
+            }
+        }
+        assert_eq!(length, Some(BODY_LENGTH));
+    })
+    .await
+    .unwrap();
+
+    server.stopped.take().unwrap().send(()).unwrap();
+    // Allow scheduling jitter around the 150ms send deadline, but distinguish
+    // it from falling back to the entire 1200ms server shutdown deadline.
+    tokio::time::timeout(Duration::from_millis(600), &mut server.task)
+        .await
+        .expect("graceful shutdown lost the stalled response send deadline")
+        .unwrap()
+        .unwrap();
+    assert!(closed(&mut blocked).await.len() < BODY_LENGTH);
 }

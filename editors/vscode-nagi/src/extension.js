@@ -334,7 +334,7 @@ function activate(context) {
     if (item.description) text.appendText(item.description);
     if (item.location) text.appendText(`\n${stdlib.sourceUri(item.location.file) ? item.location.file.slice('stdlib:'.length) : path.basename(compiler.normalizeFile(item.location.file, '.'))}:${item.location.line}`);
     if (snapshot?.saved && !item.builtin) text.appendText('\n書きかけの構文を解析できないため、保存済みの宣言を表示しています。');
-    if (item.builtin && (!snapshot || snapshot.saved)) text.appendText(item.kind === 'pattern' ? '\nnullableの分岐' : '\n組み込み関数');
+    if (item.builtin && (!snapshot || snapshot.saved)) text.appendText(item.kind === 'pattern' ? '\nmatchの分岐' : '\n組み込み関数');
     return text;
   }
 

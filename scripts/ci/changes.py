@@ -29,7 +29,7 @@ def is_docs_path(path: str) -> bool:
         return True
     if path.startswith("docs/") and value.suffix == ".md":
         return True
-    if path.startswith("test-nagi-code/") and value.name == "README.md":
+    if path.startswith("test-nagi-code/") and value.name in ("README.md", "README.en.md"):
         return True
     if path.startswith("website/templates/") and value.suffix == ".html":
         return True

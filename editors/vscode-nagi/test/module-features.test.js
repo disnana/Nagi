@@ -78,3 +78,39 @@ test('imported class and module binding tokens keep their resolved hover', () =>
   const namespace = { ...index, bindings: [binding], references: [{ location: binding.location, target: binding.target }] };
   assert.equal(features.hoverAt(namespace, moduleText, start + 1, source).item.kind, 'module');
 });
+
+test('quoted from imports insert names only and preserve aliases and comma-separated lists', () => {
+  const enumeration = { name: 'Issue', kind: 'enum', location: { ...target, line: 6 }, signature: 'enum Issue', variants: [] };
+  for (const low of [false, true]) {
+    for (const [prefix, expected] of [
+      ['Or', ['Order']], ['ma', ['make']], ['Is', ['Issue']],
+      ['Order as SavedOrder, ', ['make', 'Issue']], ['Order, ma', ['make']], ['Order as Sav', []],
+    ]) {
+      const text = `from "orders.nagi" import ${prefix}`;
+      const quoted = text.indexOf('"orders.nagi"');
+      const imports = { ...index, definitions: [...index.definitions, enumeration], references: [{
+        location: { file, line: 1, column: quoted + 1, length: '"orders.nagi"'.length },
+        target: { file: target.file, line: 1, column: 1, length: 0 },
+      }] };
+      const items = features.completionCandidates(imports, text, text.length, low, source);
+      assert.deepEqual(items.map(item => item.name), expected, text);
+      for (const item of items) {
+        assert.equal(item.importOnly, true);
+        assert.equal(features.insertion(item, ''), item.name, 'imports never instantiate types or call functions');
+      }
+    }
+  }
+  assert.equal(features.insertion(order, ''), 'Order(value=${1:value})', 'expression constructors are unchanged');
+  assert.equal(features.insertion(make, ''), 'make(${1:value})');
+});
+
+test('unresolved and changed fallback import targets never offer expression completions', () => {
+  for (const text of ['from "missing.nagi" import Or', 'from "orders.nagi" import Or']) {
+    assert.deepEqual(features.completionCandidates(index, text, text.length, false, source), []);
+  }
+  const text = 'from "orders.nagi" import Or';
+  const imported = { ...index, references: [{ location: { file, line: 1, column: 6, length: 13 }, target: { file: target.file, line: 1, column: 1, length: 0 } }] };
+  assert.deepEqual(features.completionCandidates(imported, text, text.length, false, { ...source, saved: true }).map(item => item.name), ['Order']);
+  const changed = text.replace('orders.nagi', 'absent.nagi');
+  assert.deepEqual(features.completionCandidates(imported, changed, changed.length, false, { ...source, saved: true }), []);
+});

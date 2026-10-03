@@ -1,6 +1,12 @@
 'use strict';
 const keywords = ['enum', 'return', 'if', 'else', 'while', 'for', 'match', 'case', 'async', 'await', 'try', 'scope', 'spawn', 'import', 'from', 'as', 'extern', 'in', 'with', 'and', 'or', 'not', 'True', 'False', 'None', 'true', 'false', 'null'];
-const { normalizeFile } = require('./compiler');
+const path = require('node:path');
+const { normalizeFile, fileKey } = require('./compiler');
+const pathKeys = Symbol('pathKeys');
+
+// A request may see several spellings of the same file. Keep identities only
+// for this request so a changed symlink is resolved again on the next one.
+function requestSource(source) { return { ...source, [pathKeys]: new Map() }; }
 
 // These signatures describe the supported builtins, rather than inferred overloads.
 const builtinRows = [
@@ -82,7 +88,11 @@ const typeInsertions = {
   List: 'List[${1:T}]', Result: 'Result[${1:T}, ${2:Error}]', view: 'view[${1:str}]', shared: 'shared[${1:T}]',
   Option: 'Option[${1:T}]', fn: 'fn[${1:i64}, ${2:i64}]',
 };
-const optionPatterns = [
+const matchPatterns = [
+  { name: 'Ok', kind: 'pattern', signature: 'case Ok(value)', parameters: [{ name: 'value', type: 'T' }],
+    description: 'Resultの成功に一致し、値を束縛します。', builtin: true },
+  { name: 'Err', kind: 'pattern', signature: 'case Err(problem)', parameters: [{ name: 'problem', type: 'E' }],
+    description: 'Resultの失敗に一致し、エラーを束縛します。', builtin: true },
   { name: 'Some', kind: 'pattern', signature: 'case Some(value)', parameters: [{ name: 'value', type: 'T' }],
     description: 'nullableの値ありに一致し、値を束縛します。', builtin: true },
   { name: 'None', kind: 'pattern', signature: 'case None', parameters: [],
@@ -121,9 +131,10 @@ function wordAt(text, offset) {
 }
 
 function declarations(index, source = {}) {
+  if (!source[pathKeys]) source = requestSource(source);
   const result = new Map();
   const scoped = Array.isArray(index?.bindings) && source.file;
-  const items = scoped ? index.bindings.filter(binding => fileMatches(binding.file, source.file))
+  const items = scoped ? index.bindings.filter(binding => fileMatches(binding.file, source.file, source))
     .map(binding => binding.kind === 'module' ? { ...binding, signature: binding.signature || `module ${binding.name}` } : binding.definition)
     : index?.definitions || [];
   for (const item of items) {
@@ -175,11 +186,19 @@ function genericNames(index, source) {
     .filter(item => item.typeParameters?.length).map(item => item.name));
 }
 
-function fileMatches(a, b) {
+function fileMatches(a, b, source) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const key = file => {
+  if (a.startsWith('stdlib:') || b.startsWith('stdlib:')) return a === b;
+  const normalized = file => {
     const name = normalizeFile(file, '.');
     return process.platform === 'win32' ? name.toLowerCase() : name;
+  };
+  if (normalized(a) === normalized(b)) return true;
+  const key = file => {
+    const name = normalized(file), keys = source?.[pathKeys];
+    if (!keys) return fileKey(file, '.');
+    if (!keys.has(name)) keys.set(name, fileKey(file, '.'));
+    return keys.get(name);
   };
   return key(a) === key(b);
 }
@@ -203,18 +222,18 @@ function localAt(index, text, word, source) {
   if (!source.file || source.saved) return undefined;
   const offsetAt = sourceOffsets(text);
   return (index?.locals || []).find(item => item.name === word.name && typeof item.type === 'string' &&
-    fileMatches(item.location?.file, source.file) && offsetAt(item.location.line, item.location.column) === word.start &&
+    fileMatches(item.location?.file, source.file, source) && offsetAt(item.location.line, item.location.column) === word.start &&
     item.location.length === word.end - word.start);
 }
 
 function shadowedAt(index, text, word, source, item) {
   if (!source.file || source.saved) return false;
   const offsetAt = sourceOffsets(text);
-  const reference = (index?.references || []).find(ref => fileMatches(ref.location?.file, source.file) &&
+  const reference = (index?.references || []).find(ref => fileMatches(ref.location?.file, source.file, source) &&
     offsetAt(ref.location.line, ref.location.column) === word.start && ref.location.length === word.end - word.start);
   // Lexical references survive type errors even when the compiler has no local
   // type to show. Never replace that binding with a global/builtin signature.
-  const matches = location => location && fileMatches(reference?.target?.file, location.file) &&
+  const matches = location => location && fileMatches(reference?.target?.file, location.file, source) &&
     reference.target.line === location.line && reference.target.column === location.column;
   return !!reference && !matches(item.location) && !(item.kind === 'module' && matches(item.target));
 }
@@ -237,7 +256,7 @@ function memberContext(text, offset) {
 function fieldCandidates(index, text, member, source) {
   if (!source.file || source.saved) return [];
   const offsetAt = sourceOffsets(text);
-  const candidates = (index?.expressions || []).filter(e => fileMatches(e.location?.file, source.file) &&
+  const candidates = (index?.expressions || []).filter(e => fileMatches(e.location?.file, source.file, source) &&
     offsetAt(e.end_line, e.end_column) === member.receiverEnd);
   // A trailing dot binds to the innermost postfix expression: `try fetch().`
   // accesses the Result, while `(try fetch()).` accesses its payload.
@@ -274,21 +293,22 @@ function namespaceMember(index, text, member, source) {
 function resolvedDeclaration(index, text, word, source) {
   if (!source.file || source.saved) return undefined;
   const offsetAt = sourceOffsets(text);
-  const reference = (index?.references || []).find(ref => fileMatches(ref.location?.file, source.file) &&
+  const reference = (index?.references || []).find(ref => fileMatches(ref.location?.file, source.file, source) &&
     offsetAt(ref.location.line, ref.location.column) === word.start && ref.location.length === word.end - word.start);
   if (!reference) return undefined;
   const definitions = (index.definitions || []).flatMap(item => [item, ...(item.variants || []), ...(item.constants || [])]);
-  return definitions.find(item => fileMatches(item.location?.file, reference.target?.file) &&
+  return definitions.find(item => fileMatches(item.location?.file, reference.target?.file, source) &&
     item.location.line === reference.target.line && item.location.column === reference.target.column);
 }
 
 function hoverAt(index, text, offset, source = {}) {
+  source = requestSource(source);
   const state = context(text, offset);
   if (!state.allowed) return undefined;
   const word = wordAt(state.masked, offset);
   if (!word.name) return undefined;
   if (/\bcase\s*$/.test(state.masked.slice(0, word.start))) {
-    const item = optionPatterns.find(item => item.name === word.name);
+    const item = matchPatterns.find(item => item.name === word.name);
     if (item) return { item, start: word.start, end: word.end };
   }
   const member = memberContext(text, offset);
@@ -315,6 +335,7 @@ function hoverAt(index, text, offset, source = {}) {
 }
 
 function completionCandidates(index, text, offset, low = false, source = {}) {
+  source = requestSource(source);
   const state = context(text, offset);
   if (!state.allowed) return [];
   const word = wordAt(state.masked, offset);
@@ -340,6 +361,25 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
     return (module?.members || []).filter(item => typeof item.name === 'string' && !imported.has(item.name) && item.name.startsWith(last[1] || ''))
       .map(item => ({ ...item, importOnly: true }));
   }
+  const quotedImport = /^\s*from\s+("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s+import\s+([^;]*)$/.exec(text.slice(lineStart, offset));
+  if (quotedImport) {
+    const parts = quotedImport[2].split(',');
+    const last = /^\s*([A-Za-z_]\w*)?\s*$/.exec(parts.pop());
+    if (!last) return [];
+    const literal = quotedImport[1];
+    const start = lineStart + quotedImport[0].indexOf(literal);
+    const offsetAt = sourceOffsets(text);
+    const reference = (index?.references || []).find(ref => fileMatches(ref.location?.file, source.file, source) &&
+      offsetAt(ref.location.line, ref.location.column) === start && ref.location.length === literal.length &&
+      ref.target?.line === 1 && ref.target.column === 1 && ref.target.length === 0);
+    if (!reference) return [];
+    // A fallback snapshot may describe a different path at the same position.
+    if (source.saved && (literal.includes('\\') || fileKey(literal.slice(1, -1), path.dirname(source.file)) !== fileKey(reference.target.file, '.'))) return [];
+    const imported = new Set(parts.map(part => /^\s*([A-Za-z_]\w*)/.exec(part)?.[1]));
+    return (index?.definitions || []).filter(item => fileMatches(item.location?.file, reference.target.file, source) &&
+      typeof item.name === 'string' && !imported.has(item.name) && item.name.startsWith(last[1] || ''))
+      .map(item => ({ ...item, importOnly: true }));
+  }
   const member = memberContext(text, offset);
   if (member) {
     const namespace = namespaceMember(index, text, member, source);
@@ -352,7 +392,7 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
   }
   const before = state.masked.slice(0, word.start);
   const all = [...assistanceDeclarations(index, text, source).values()];
-  if (/\bcase\s*$/.test(before)) return [...optionPatterns, ...all.filter(item => ['enum', 'module'].includes(item.kind))];
+  if (/\bcase\s*$/.test(before)) return [...matchPatterns, ...all.filter(item => ['enum', 'module'].includes(item.kind))];
   if (inTypeContext(before, genericNames(index, source))) {
     const userTypes = all.filter(x => ['class', 'enum', 'resource'].includes(x.kind));
     const userTypeNames = new Set(userTypes.map(item => item.name));
@@ -422,10 +462,11 @@ function activeCall(text, offset, qualified = false) {
 }
 
 function signatureAt(index, text, offset, source = {}) {
+  source = requestSource(source);
   const call = callContext(text, offset);
   if (!call || localAt(index, text, { ...call, end: call.start + call.name.length }, source)) return undefined;
   if (!call.qualifier && /\bcase\s*$/.test(context(text, offset).masked.slice(0, call.start))) {
-    const item = optionPatterns.find(item => item.name === call.name && item.parameters.length);
+    const item = matchPatterns.find(item => item.name === call.name && item.parameters.length);
     if (item) return { item, argument: call.argument };
   }
   let item;
