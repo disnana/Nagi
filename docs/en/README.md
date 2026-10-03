@@ -1,16 +1,14 @@
 # Nagi Docs
 
-Nagi's guides and reference documentation. To look up syntax or function behavior, use the [language reference](#language-reference) below.
+Start with [installation](getting-started.md). To look up code, open the [syntax reference](syntax.md) or [built-in functions](builtins.md).
 
 ## First steps
-
-If you are new to Nagi, start here:
 
 1. [Setup and first run](getting-started.md): install Nagi and run Hello World.
 2. [Learn by writing code](language-guide.md): variables, functions, lists, and error handling.
 3. [HTTP and HTML](http.md): build an API, then store data with [SQLite](database.md).
 
-Write applications in `.nagi` files and run them with `nagic run file.nagi`. See the [VS Code guide](editor.md) for editor support.
+See the [VS Code guide](editor.md) for editor support.
 
 ## Language reference
 
@@ -19,9 +17,9 @@ Write applications in `.nagi` files and run them with `nagic run file.nagi`. See
 | Syntax, operators, and function definitions | [Syntax reference](syntax.md) |
 | Built-in function arguments, return values, and limits | [Built-in functions](builtins.md) |
 | Types and annotations | [Types and inference](types.md) |
-| Grouping related data | [Classes](classes.md) |
+| Named data fields | [Classes](classes.md) |
 | Passing, borrowing, and copying values | [Ownership](ownership.md), [views](view-and-zero-copy.md) |
-| Returning failures and handling success or failure | [Error handling](error-handling.md) |
+| Returning and handling failures | [Error handling](error-handling.md) |
 
 ## Build applications
 
@@ -35,12 +33,12 @@ Write applications in `.nagi` files and run them with `nagic run file.nagi`. See
 | Wait for async work or start child operations | [Async and scopes](async.md), [concurrency](concurrency.md) |
 | Read working applications | [Sample projects](library-examples.md) |
 
-Runnable introductory examples are in [examples/tutorial/](../../examples/tutorial/). Function and syntax references also contain code fragments rather than complete programs.
+Runnable examples are in [examples/tutorial/](../../examples/tutorial/). References also include code fragments.
 
 ## Implementation and development
 
-See [About Nagi](introduction.md), [Low](low-language.md), [memory handling](memory-model.md), [compiler internals](compiler-internals.md), [language interfaces](ffi.md), and the [roadmap](roadmap.md).
+[About Nagi](introduction.md) · [Low](low-language.md) · [Memory](memory-model.md) · [Compiler](compiler-internals.md) · [Language interfaces](ffi.md) · [Roadmap](roadmap.md)
 
 [Actors](actor.md), [worker restarts](supervisor.md), and [queues](queue.md) are experimental implementations. For performance, read the [measurement methods](performance.md), [results](measurements.md), and [HTTP load tests](http-capacity.md).
 
-These Docs describe the current 0.1 series. Each page identifies unsupported features.
+These pages cover Nagi 0.1. Unsupported features are listed on each page.
