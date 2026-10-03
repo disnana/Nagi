@@ -34,6 +34,8 @@ def main():
     r=run([NATIVE_TARGET/'release'/('nagi-hello'+EXE)])
     assert r.stdout.strip()=='4'
     rows.append({'sample':'hello.low','build':'passed','run':'passed','stdout':r.stdout})
+    verified = run([sys.executable, ROOT/'scripts/verify_rust_library.py', '--compiler', nagic])
+    print(verified.stdout, end='')
     # 同じHighを再生成しても、手書き置換のbytesは変化しない。
     native=ROOT/'examples/native/override.low';before=native.read_bytes()
     build([nagic,'build',ROOT/'examples/override.nagi','--native',native,'--out',ROOT/'build/override'])

@@ -29,7 +29,7 @@ nagic --version
 nagic --help
 ```
 
-The version output is `nagic 0.1.6`. You can also use `nagic -V` or `nagic version`. Version and help work without Rust or project configuration.
+The version output is `nagic 0.1.7`. You can also use `nagic -V` or `nagic version`. Version and help work without Rust or project configuration.
 
 ## 2. Write your own file
 
@@ -109,11 +109,11 @@ Old URLs such as `nagi-v0.1.6/scripts/install.ps1` are pinned to 0.1.6. Use this
 To select a specific version, including an earlier release, use the commands below. The same one-version retention policy applies.
 
 ```powershell
-& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.6
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.7
 ```
 
 ```bash
-(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.6) && export PATH="$HOME/.local/bin:$PATH"
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.7) && export PATH="$HOME/.local/bin:$PATH"
 ```
 
 If you used custom locations, pass the same `-InstallDir` (PowerShell) or `--prefix` and `--bin-dir` (bash) when updating. `-NoPath` / `--no-path` leave persistent PATH settings unchanged; register the fixed command location yourself in that case. Manually extracted distributions elsewhere are not removed.
@@ -124,10 +124,10 @@ Download the file for your OS from [GitHub Releases](https://github.com/disnana/
 
 | Your system | File to download |
 |---|---|
-| Windows x64 | `nagi-0.1.6-windows-x86_64.zip` |
-| Linux x86_64 | `nagi-0.1.6-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `nagi-0.1.6-macos-arm64.tar.gz` |
-| macOS Intel | `nagi-0.1.6-macos-x86_64.tar.gz` |
+| Windows x64 | `nagi-0.1.7-windows-x86_64.zip` |
+| Linux x86_64 | `nagi-0.1.7-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `nagi-0.1.7-macos-arm64.tar.gz` |
+| macOS Intel | `nagi-0.1.7-macos-x86_64.tar.gz` |
 
 Extract the whole archive and keep `runtime/` beside `nagic` or `nagic.exe`. Add **the extracted folder itself** to PATH to run `nagic` from any directory. `NAGI_ROOT` is normally unnecessary. GitHub's “Source code” downloads do not contain a prebuilt compiler.
 

@@ -67,9 +67,39 @@ serde_json = "1.0"
 | `entry` | 必須。実行・検査の入口となる`.nagi`または`.low` |
 | `native` | 任意。統合する手書きLowファイルの配列 |
 | `rust.file` | 任意。`native` moduleとして組み込むRustファイル1つ |
-| `rust.dependencies` | 任意。crate名とCargoのversion指定の対応 |
+| `rust.dependencies` | 任意。依存名とCargoのversion文字列またはtableの対応 |
 
-ファイルの相対パスはすべて`nagi.toml`基準です。`entry`以外は省略できます。存在しない設定名、型の違い、空のパス、依存の重複はエラーになります。Rust依存はversion文字列のみで、Cargoの`path`・`git`・`features`指定はまだ扱いません。Rustの型や実装との一致は`build`または`run`で検査します。
+ファイルの相対パスはすべて`nagi.toml`基準です。`entry`以外は省略できます。存在しない設定名、型の違い、空のパス、依存の重複はエラーになります。従来のversion文字列はそのまま使えます。Rustの型や実装との一致は`build`または`run`で検査します。
+
+### ローカルcrateとfeatureを指定する
+
+依存ごとにtableも使えます。次は[ローカルRustライブラリのサンプル](../test-nagi-code/rust-library/README.md)の設定です。
+
+```toml
+entry = "library-pricing.nagi"
+
+[rust]
+file = "native.rs"
+
+[rust.dependencies]
+pricing = { version = "0.1", path = "engine", package = "nagi-pricing-engine", features = ["volume-discount"], default-features = false }
+```
+
+| tableの項目 | 内容 |
+|---|---|
+| `version` | Cargoのversion指定。`path`と併記した場合もCargoがversionの一致を検査する |
+| `path` | ローカルcrateのディレクトリ。`nagi.toml`の場所を基準に解決する |
+| `package` | 実際のCargo package名。上の例ではRustから`pricing::`で参照する |
+| `features` | 有効にするfeature名の配列。空の配列も指定できる |
+| `default-features` | その依存宣言で既定featureを有効にするか。省略時はCargoの既定値`true` |
+
+`version`か`path`の少なくとも一方が必要です。`git`・`registry`・`workspace`・`target`別依存・`dev`/`build`依存・`optional`は未対応です。
+
+`path`は生成先やターミナルの場所にかかわらず、設定ファイル基準です。`check`・`lower`・`symbols`はCargoを呼ばず、依存を取得せず、依存crateの存在確認も行いません。Rust crateをまだ用意していなくてもNagi側を検査できます。実際のpath、crateのAPI、依存解決は`build`/`run`でCargoが検査します。
+
+Cargoは同じpackageへの依存経路でfeatureを統合します。`default-features = false`を指定しても、別の経路が求める既定featureまで無効にはなりません。
+
+再ビルドでは生成先の既存`Cargo.lock`を保持します。lockは解決したversionを記録しますが、ローカルcrateのソースは固定しません。固定した解決でビルドする場合は、サンプルのディレクトリで`cargo build --release --locked --manifest-path build/library-pricing/Cargo.toml`を使えます。`nagic build --locked`は未対応です。
 
 動く例は [Rust連携サンプル](../test-nagi-code/rust-bridge/nagi.toml)です。リポジトリのルートから：
 
@@ -88,10 +118,12 @@ CRC32、JSON整形、asyncのRust関数を呼びます。[タスク管理サイ�
 | `--project DIR` / `--project FILE` | その設定を使う |
 | `SOURCE --project DIR` | 設定を読み、入口だけSOURCEに変更。SOURCEはターミナルの作業フォルダー基準 |
 | `--rust FILE` | 設定の`rust.file`を上書き |
-| `--rust-dep NAME=VERSION` | 同じ名前の依存versionを上書き。別の名前なら追加 |
+| `--rust-dep NAME=VERSION` | 同じ名前の依存全体をversion文字列に置換。別の名前なら追加 |
 | `--native FILE.low` | 設定の`native`に追加 |
 | `--out DIR` | 生成Low・Rust・Cargo.tomlの出力先を変更 |
 | `--no-project` | 自動探索を使わない。SOURCEの指定が必要 |
+
+`--rust-dep`で同名のtableを置換すると、元の`path`・`package`・`features`・`default-features`は残りません。CLIではversion文字列だけを指定できます。
 
 引数内の相対パスはターミナルの作業フォルダー基準です。SOURCE・`--project`・`--rust`・`--out`・同名の`--rust-dep`の重複はエラーです。`--project`と`--no-project`は同時に使えません。
 
@@ -103,7 +135,7 @@ CRC32、JSON整形、asyncのRust関数を呼びます。[タスク管理サイ�
 
 `nagi.toml`を保存すると開いているNagiファイルを再検査します。プロジェクト内に未保存のファイルがある間は自動検査を待ち、手動コマンドではそのプロジェクトの編集中ファイルを保存してから処理します。入口からimportされていないNagiファイルは、そのプロジェクトの検査対象に入りません。
 
-コンパイラの場所だけはVS Codeの`nagi.compilerPath`かPATHで指定します。従来の`nagi.rustFile`・`nagi.rustDependencies`・`nagi.nativeFiles`もコマンド引数として使え、上の優先順位に従います。アプリごとの設定には`nagi.toml`を使うと、VS Codeとターミナルで同じ条件を再現できます。
+コンパイラの場所だけはVS Codeの`nagi.compilerPath`かPATHで指定します。従来の`nagi.rustFile`・`nagi.rustDependencies`・`nagi.nativeFiles`もコマンド引数として使え、上の優先順位に従います。`nagi.rustDependencies`の値はversion文字列だけです。依存tableは`nagi.toml`に書きます。アプリごとの設定には`nagi.toml`を使うと、VS Codeとターミナルで同じ条件を再現できます。
 
 拡張0.1.5以降と最新版の`nagic`では、F12でプロジェクト内の関数・class・import先・ローカル変数の定義へ移動できます。引数・for・caseの名前も対象です。入口から読み込まれるHigh・Lowを扱い、開いているソースの未保存の変更もメモリ上で読みます。構文やimportを読めない場合は、保存済みの古い位置へ移動しません。新規ファイルと`nagi.toml`の変更は保存してから使います。
 

@@ -29,7 +29,7 @@ nagic --version
 nagic --help
 ```
 
-版の表示は`nagic 0.1.6`です。`nagic -V`と`nagic version`でも確認できます。版とヘルプの表示にはRustやプロジェクト設定は必要ありません。
+版の表示は`nagic 0.1.7`です。`nagic -V`と`nagic version`でも確認できます。版とヘルプの表示にはRustやプロジェクト設定は必要ありません。
 
 ## 2. 自分で1ファイル書く
 
@@ -111,11 +111,11 @@ nagic build hello.nagi
 版を指定して入れる例です。過去の版を指定して戻す場合も、使う1版だけ残す方針は同じです。
 
 ```powershell
-& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.6
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.7
 ```
 
 ```bash
-(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.6) && export PATH="$HOME/.local/bin:$PATH"
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.7) && export PATH="$HOME/.local/bin:$PATH"
 ```
 
 保存先を変更していた場合は、再実行時も同じ`-InstallDir`（PowerShell）または`--prefix`と`--bin-dir`（bash）を指定します。`-NoPath`／`--no-path`はPATHの永続設定を変更しません。その場合は固定の入口を自分でPATHへ登録してください。別の場所へ手動展開した配布物は自動削除の対象外です。
@@ -126,10 +126,10 @@ nagic build hello.nagi
 
 | 使う環境 | ダウンロードするファイル |
 |---|---|
-| Windows x64 | `nagi-0.1.6-windows-x86_64.zip` |
-| Linux x86_64 | `nagi-0.1.6-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `nagi-0.1.6-macos-arm64.tar.gz` |
-| macOS Intel | `nagi-0.1.6-macos-x86_64.tar.gz` |
+| Windows x64 | `nagi-0.1.7-windows-x86_64.zip` |
+| Linux x86_64 | `nagi-0.1.7-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `nagi-0.1.7-macos-arm64.tar.gz` |
+| macOS Intel | `nagi-0.1.7-macos-x86_64.tar.gz` |
 
 アーカイブ全体を展開し、`nagic`または`nagic.exe`と`runtime/`の位置を保ってください。**展開フォルダーそのもの**をPATHに追加すると、任意の場所で`nagic`を使えます。`NAGI_ROOT`は通常不要です。GitHubの「Source code」はコンパイラ入りの配布物ではありません。
 

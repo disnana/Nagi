@@ -1,0 +1,12 @@
+[package]
+name = "nagi-pricing-engine"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[features]
+default = ["service-fee"]
+service-fee = []
+volume-discount = []

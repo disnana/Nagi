@@ -1159,6 +1159,22 @@ impl Checker {
                 if !self.asynchronous || self.ret.0 != "Result" {
                     return Err(error(s.line, "scopeはasync Result関数内で使用してください"));
                 }
+                let mut failure = &self.ret.1[1];
+                while failure.0 == "owned" {
+                    failure = &failure.1[0];
+                }
+                // Scope joins return a runtime Error. Local records may supply
+                // From<Error> in their Rust adapter; foreign types cannot.
+                if failure.0 != "Error"
+                    && (!failure.1.is_empty()
+                        || matches!(
+                            failure.0.as_str(),
+                            "str" | "bytes" | "unit" | "Db" | "Html" | "UUID" | "timestamp"
+                        )
+                        || !self.classes.contains_key(&failure.0))
+                {
+                    return Err(error(s.line, format!("scopeの失敗はErrorです。戻り値のエラー型 {failure} へ変換できません。ErrorまたはRust連携でFrom<Error>を実装したclassを使用してください")));
+                }
                 self.scope += 1;
                 let m = self.child(b);
                 self.scope -= 1;
@@ -1178,21 +1194,11 @@ impl Checker {
                         "0.1のspawnはasync unitまたはResult[unit,Error]を取ります",
                     ));
                 }
-                fn names(e: &Expr, out: &mut Vec<String>) {
-                    match &e.kind {
-                        E::Name(n) => out.push(n.clone()),
-                        E::Call(_, _, a) | E::List(a) => {
-                            for e in a {
-                                names(e, out)
-                            }
+                if let E::Call(_, _, args) = &e.kind {
+                    for arg in args {
+                        if !arg.ty.as_ref().is_some_and(Type::contains_view) {
+                            continue;
                         }
-                        _ => {}
-                    }
-                }
-                let mut ns = vec![];
-                names(e, &mut ns);
-                for n in ns {
-                    if self.vars.get(&n).is_some_and(|v| v.ty.contains_view()) {
                         return Err(error(
                             s.line,
                             "viewを別taskへ渡せません。copyを使用してください",

@@ -67,9 +67,39 @@ serde_json = "1.0"
 | `entry` | Required `.nagi` or `.low` entry file for execution/checking |
 | `native` | Optional array of handwritten Low files to integrate |
 | `rust.file` | Optional Rust file included as the native module |
-| `rust.dependencies` | Optional map of crate names to Cargo version strings |
+| `rust.dependencies` | Optional map of dependency names to Cargo version strings or tables |
 
-All file paths are relative to nagi.toml. Only entry is required. Unknown settings, wrong value types, empty paths, and duplicate dependencies are errors. Rust dependencies currently accept version strings only, without Cargo path/git/features settings. Matching Rust types and implementations is checked by build/run.
+All file paths are relative to nagi.toml. Only entry is required. Unknown settings, wrong value types, empty paths, and duplicate dependencies are errors. Existing version strings remain supported. Matching Rust types and implementations is checked by build/run.
+
+### Select local crates and features
+
+Each dependency can also use a table. This is the configuration of the [local Rust library example](../../test-nagi-code/rust-library/README.en.md):
+
+```toml
+entry = "library-pricing.nagi"
+
+[rust]
+file = "native.rs"
+
+[rust.dependencies]
+pricing = { version = "0.1", path = "engine", package = "nagi-pricing-engine", features = ["volume-discount"], default-features = false }
+```
+
+| Table field | Meaning |
+|---|---|
+| `version` | Cargo version requirement; Cargo also checks it when combined with `path` |
+| `path` | Local crate directory, resolved relative to nagi.toml |
+| `package` | Actual Cargo package name; Rust refers to the example dependency as `pricing::` |
+| `features` | Array of features to enable; an empty array is allowed |
+| `default-features` | Whether this declaration enables default features; omission uses Cargo's default of `true` |
+
+At least one of `version` or `path` is required. `git`, `registry`, `workspace`, target-specific dependencies, dev/build dependencies, and `optional` are unsupported.
+
+Paths remain relative to the configuration file regardless of the generated directory or terminal location. `check`, `lower`, and `symbols` do not invoke Cargo, fetch dependencies, or require the dependency crate to exist. You can check the Nagi code before obtaining the Rust crate. Cargo checks the actual path, crate APIs, and dependency resolution during `build`/`run`.
+
+Cargo combines features requested through dependency paths to the same package. Setting `default-features = false` does not disable default features requested through another path.
+
+Rebuilding retains the existing generated `Cargo.lock`. The lock records resolved versions; it does not pin local crate source contents. To build with a fixed resolution, run `cargo build --release --locked --manifest-path build/library-pricing/Cargo.toml` from the example directory. `nagic build --locked` is unsupported.
 
 Try the [Rust integration example](../../test-nagi-code/rust-bridge/nagi.toml) from the repository root:
 
@@ -88,10 +118,12 @@ An explicit source alone, such as `nagic run main.nagi`, processes that file ind
 | `--project DIR` / `--project FILE` | Uses that configuration |
 | `SOURCE --project DIR` | Uses the config but replaces its entry with SOURCE, relative to the terminal |
 | `--rust FILE` | Overrides rust.file |
-| `--rust-dep NAME=VERSION` | Overrides the same dependency name or adds a new one |
+| `--rust-dep NAME=VERSION` | Replaces the entire same-name dependency with a version string, or adds a new one |
 | `--native FILE.low` | Adds to native |
 | `--out DIR` | Changes the generated Low/Rust/Cargo.toml location |
 | `--no-project` | Disables automatic search; requires SOURCE |
+
+Replacing a same-name table with `--rust-dep` removes its `path`, `package`, `features`, and `default-features`. The CLI accepts version strings only.
 
 Command-line relative paths use the terminal's working directory. Duplicate SOURCE, project, rust, out, or same-name rust-dep arguments are errors. project and no-project cannot be combined.
 
@@ -103,7 +135,7 @@ Since [extension](vscode-extension.md) 0.1.1, the nearest nagi.toml is found by 
 
 Saving nagi.toml rechecks open Nagi files. Automatic checks wait while project sources are unsaved; manual commands save edited sources in that project first. Files not imported from entry are outside the project's check scope.
 
-Configure the compiler location through `nagi.compilerPath` or PATH. Existing nagi.rustFile, nagi.rustDependencies, and nagi.nativeFiles settings are passed as command-line arguments using the precedence above. Project-specific nagi.toml settings keep the terminal and VS Code consistent.
+Configure the compiler location through `nagi.compilerPath` or PATH. Existing nagi.rustFile, nagi.rustDependencies, and nagi.nativeFiles settings are passed as command-line arguments using the precedence above. Values in `nagi.rustDependencies` are version strings only; write dependency tables in `nagi.toml`. Project-specific nagi.toml settings keep the terminal and VS Code consistent.
 
 Extension 0.1.5 and later, with the latest nagic, support F12 for project functions, classes, imports, local variables, arguments, for names, and case names. Queries read High/Low loaded from entry, including open unsaved edits in memory. If syntax or imports cannot be read, F12 does not navigate to stale saved positions. Save new files and nagi.toml edits first.
 

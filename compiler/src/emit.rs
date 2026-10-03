@@ -497,7 +497,7 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
             S::Spawn(e) => {
                 let returns_result = e.ty.as_ref().is_some_and(|t| t.inner().0 == "Result");
                 out.push_str(&format!(
-                    "__scope.spawn(async move {{ {}.await{} }});\n",
+                    "{{ let __nagi_spawn_future = {}; __scope.spawn(async move {{ __nagi_spawn_future.await{} }}); }}\n",
                     re(e),
                     if returns_result {
                         ""
@@ -508,7 +508,7 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
             }
             S::Scope(b) => {
                 out.push_str("{\n");
-                out.push_str(&format!("{pad}    let mut __scope = ::nagi_runtime::Scope::new();\n{pad}    let __scope_result: Result<(), ::nagi_runtime::Error> = async {{\n"));
+                out.push_str(&format!("{pad}    let mut __scope = ::nagi_runtime::Scope::new();\n{pad}    let __scope_result: Result<(), _> = async {{\n"));
                 rb(b, out, n + 2);
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}        ::std::result::Result::Ok(())\n{pad}    }}.await;\n{pad}    if let ::std::result::Result::Err(e) = __scope_result {{ __scope.cancel().await; return ::std::result::Result::Err(e); }}\n{pad}    __scope.join().await?;\n{pad}}}\n"));
@@ -769,6 +769,66 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
     ::std::result::Result::Ok(out)
 }
 
+fn cargo_manifest(
+    name: &str,
+    runtime: PathBuf,
+    mut dependencies: std::collections::BTreeMap<String, crate::project::RustDependency>,
+) -> Result<String, String> {
+    #[derive(serde::Serialize)]
+    struct Package<'a> {
+        name: &'a str,
+        version: &'static str,
+        edition: &'static str,
+    }
+    #[derive(serde::Serialize)]
+    struct Release {
+        #[serde(rename = "opt-level")]
+        opt_level: u8,
+        lto: bool,
+        #[serde(rename = "codegen-units")]
+        codegen_units: u8,
+        panic: &'static str,
+    }
+    #[derive(serde::Serialize)]
+    struct Profile {
+        release: Release,
+    }
+    #[derive(serde::Serialize)]
+    struct Manifest<'a> {
+        package: Package<'a>,
+        workspace: toml::Table,
+        dependencies: std::collections::BTreeMap<String, crate::project::RustDependency>,
+        profile: Profile,
+    }
+    dependencies.insert(
+        "nagi-runtime".into(),
+        crate::project::RustDependency::Detailed(crate::project::RustDependencyTable {
+            path: Some(runtime),
+            ..Default::default()
+        }),
+    );
+    toml::to_string(&Manifest {
+        package: Package {
+            name,
+            version: "0.1.0",
+            edition: "2021",
+        },
+        workspace: toml::Table::new(),
+        dependencies,
+        profile: Profile {
+            release: Release {
+                opt_level: 3,
+                lto: false,
+                codegen_units: 1,
+                panic: "unwind",
+            },
+        },
+    })
+    .map_err(|error| {
+        format!("Cargo.tomlの生成に失敗しました。パスにはUTF-8文字列が必要です: {error}")
+    })
+}
+
 pub fn cli(args: Vec<String>) -> Result<(), String> {
     if args
         .first()
@@ -894,16 +954,14 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             })
             .collect::<String>()
     );
-    let manifest=format!("[package]\nname={}\nversion=\"0.1.0\"\nedition=\"2021\"\n[workspace]\n[dependencies]\nnagi-runtime={{path={}}}\n[profile.release]\nopt-level=3\nlto=false\ncodegen-units=1\npanic=\"unwind\"\n",quote(&package),quote(&relative_path(&root.join("runtime"),&fs::canonicalize(&out).map_err(|e|e.to_string())?).display().to_string()));
-    let dependencies = rust_deps
-        .iter()
-        .map(|(name, version)| format!("{} = {}\n", quote(name), quote(version)))
-        .collect::<String>();
-    let manifest = manifest.replacen(
-        "[profile.release]",
-        &format!("{dependencies}[profile.release]"),
-        1,
-    );
+    let manifest = cargo_manifest(
+        &package,
+        relative_path(
+            &root.join("runtime"),
+            &fs::canonicalize(&out).map_err(|e| e.to_string())?,
+        ),
+        rust_deps,
+    )?;
     fs::write(out.join("Cargo.toml"), manifest).map_err(|e| e.to_string())?;
     let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
         .map(|p| cwd.join(p))

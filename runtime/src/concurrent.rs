@@ -10,8 +10,15 @@ use std::{
 };
 use tokio::{
     sync::{mpsc, oneshot},
-    task::{JoinHandle, JoinSet},
+    task::{AbortHandle, JoinHandle, JoinSet},
 };
+
+struct AbortOnDrop(AbortHandle);
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
 
 pub struct Scope {
     tasks: JoinSet<Result<(), Error>>,
@@ -167,6 +174,9 @@ pub async fn supervision_test(
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
     });
+    // Keep cancellation ownership even while awaiting startup or a child result.
+    // Drop only requests abort; normal exits below still abort and join explicitly.
+    let _other_guard = AbortOnDrop(other.abort_handle());
     let mut history = VecDeque::new();
     let mut restarts = 0;
     let mut latencies = vec![];
@@ -182,6 +192,7 @@ pub async fn supervision_test(
                 panic!("intentional supervised worker crash {attempt}");
             }
         });
+        let _child_guard = AbortOnDrop(child.abort_handle());
         let ready = ready_rx
             .await
             .map_err(|_| Error::internal("child did not start"))?;
@@ -463,6 +474,50 @@ mod tests {
         let s = supervision_test(100, 2).await.unwrap();
         assert_eq!(s.restarts, 2);
         assert!(s.stopped_by_intensity);
+    }
+    fn assert_supervisor_drop_cancels_tasks(after_worker_start: bool) {
+        use std::future::{poll_fn, Future};
+        use std::task::Poll;
+
+        // A separate runtime makes its live-task count independent of other tests.
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let metrics = runtime.metrics();
+        runtime.block_on(async {
+            let mut parent = Box::pin(supervision_test(usize::MAX, usize::MAX));
+            poll_fn(|cx| {
+                assert!(parent.as_mut().poll(cx).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+            // Both children have been registered; neither has been polled yet.
+            assert_eq!(metrics.num_alive_tasks(), 2);
+            if after_worker_start {
+                tokio::task::yield_now().await;
+                poll_fn(|cx| {
+                    assert!(parent.as_mut().poll(cx).is_pending());
+                    Poll::Ready(())
+                })
+                .await;
+                assert!(metrics.num_alive_tasks() > 0);
+            }
+            drop(parent);
+            // Drop requests cancellation; the runtime still has to poll cleanup.
+            for _ in 0..16 {
+                tokio::task::yield_now().await;
+            }
+            assert_eq!(metrics.num_alive_tasks(), 0);
+        });
+    }
+    #[test]
+    fn supervisor_drop_while_waiting_for_worker_start() {
+        assert_supervisor_drop_cancels_tasks(false);
+    }
+    #[test]
+    fn supervisor_drop_after_worker_start() {
+        assert_supervisor_drop_cancels_tasks(true);
     }
     #[tokio::test]
     async fn queue_retries_and_dead_letter() {

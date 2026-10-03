@@ -6,6 +6,7 @@ import os
 import subprocess
 import tarfile
 import tempfile
+import tomllib
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -125,6 +126,60 @@ def main():
             print(f"Verified {version} {platform}: PATH, external projects, version, help, function aliases, shared/borrowed JSON, early Nagi diagnostics")
         finally:
             os.environ["PATH"] = previous_path
+        verify_local_dependency(exe, folder, environment)
+
+
+def verify_local_dependency(exe: Path, folder: Path, environment: dict) -> None:
+    library = folder / "shared rules 凪"
+    (library / "src").mkdir(parents=True)
+    (library / "Cargo.toml").write_text('''[package]
+name = "release-rules"
+version = "0.1.0"
+edition = "2021"
+[workspace]
+[features]
+default = ["fee"]
+fee = []
+bonus = []
+''', encoding="utf-8")
+    (library / "src/lib.rs").write_text('''pub fn answer() -> i64 {
+    let mut answer = 40;
+    #[cfg(feature = "bonus")]
+    { answer += 2; }
+    #[cfg(feature = "fee")]
+    { answer -= 5; }
+    answer
+}
+''', encoding="utf-8")
+    project = folder / "local dependency project 凪"
+    project.mkdir()
+    manifest = project / "nagi.toml"
+    manifest.write_text('''entry = "main.nagi"
+[rust]
+file = "native.rs"
+[rust.dependencies]
+rules = { version = "0.1", path = "../shared rules 凪", package = "release-rules", features = ["bonus"], default-features = false }
+''', encoding="utf-8")
+    (project / "native.rs").write_text("pub fn answer() -> i64 { rules::answer() }\n", encoding="utf-8")
+    (project / "main.nagi").write_text('''@rust("native::answer")
+extern def answer() -> i64
+def main():
+    print(answer())
+''', encoding="utf-8")
+    # Project inspection must not need Cargo, including a new path dependency.
+    subprocess.run([str(exe), "check", "--project", str(manifest)], cwd=folder,
+                   env={**environment, "PATH": ""}, check=True, capture_output=True,
+                   text=True, encoding="utf-8")
+    output = folder / "relocated output 凪"
+    result = subprocess.run([str(exe), "run", "--project", str(manifest), "--out", str(output)],
+                            cwd=folder, env=environment, check=True, capture_output=True,
+                            text=True, encoding="utf-8")
+    assert result.stdout.splitlines()[-1:] == ["42"], result.stdout
+    dependency = tomllib.loads((output / "Cargo.toml").read_text(encoding="utf-8"))["dependencies"]["rules"]
+    assert Path(dependency["path"]).samefile(library), dependency
+    assert dependency["package"] == "release-rules" and dependency["version"] == "0.1", dependency
+    assert dependency["features"] == ["bonus"] and dependency["default-features"] is False, dependency
+    print("Verified local Rust dependency: manifest-relative path, package alias, features, default-features, separate cwd/output")
 
 
 if __name__ == "__main__":
