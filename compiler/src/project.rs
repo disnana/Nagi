@@ -26,7 +26,7 @@ Options:
   --rust-dep NAME=VERSION  Add a Rust dependency
   --out DIR               Select the generated-source directory
   --cost-report           Write an allocation/copy cost report
-  --editor-input          Read editor buffers from stdin (symbols only)
+  --editor-input          Read editor buffers from stdin (check/symbols)
   -h, --help              Show this help
   -V, --version           Print the compiler version";
 
@@ -105,7 +105,7 @@ pub struct Options {
     pub rust_dependencies: BTreeMap<String, RustDependency>,
     pub out: PathBuf,
     pub cost: bool,
-    /// Read editor buffers from stdin only for the read-only symbols command.
+    /// Read editor buffers from stdin for symbols or an in-memory check.
     pub editor_input: bool,
     /// Set only when a project is selected. Plain SOURCE commands keep their cwd.
     pub project_root: Option<PathBuf>,
@@ -275,8 +275,8 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
             "--no-project" => no_project = true,
             "--cost-report" => cost = true,
             "--editor-input" => {
-                if command != "symbols" || editor_input {
-                    return Err("--editor-inputはsymbolsに1回だけ指定できます".into());
+                if !matches!(command.as_str(), "symbols" | "check") || editor_input {
+                    return Err("--editor-inputはcheck/symbolsに1回だけ指定できます".into());
                 }
                 editor_input = true;
             }

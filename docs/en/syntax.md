@@ -7,7 +7,7 @@ This reference describes High (`.nagi`). Some short examples are fragments for a
 ## Files and indentation
 
 - Save as UTF-8 with a `.nagi` extension.
-- Put imports, classes, functions, async functions, and external Rust declarations at the top level. Executable statements go inside functions.
+- Put `import`/`from` statements, classes, functions, async functions, and external Rust declarations at the top level. Executable statements go inside functions.
 - Introduce a block with `:` and indent with spaces. Four spaces are recommended; tabs are forbidden.
 - Comments start with `#`. Identifiers use ASCII letters, digits, and `_`, and cannot begin with a digit. Unicode strings and comments are supported.
 - Expressions inside `()` and `[]` can span lines. Trailing commas are not supported.
@@ -170,10 +170,14 @@ Leaving a scope waits for its children. Returning inside it, passing views to an
 | Purpose | Form | Details |
 |---|---|---|
 | Load a file | `import "models.nagi"` | [Imports](modules-and-rust.md); one shared namespace |
+| Name a module | `import "orders.nagi" as orders` | Use that file's own definitions through `orders.Order` or `orders.score(...)` |
+| Select a definition | `from "orders.nagi" import Order as SavedOrder` | One definition per statement; `as SavedOrder` is optional |
 | Define a GET handler | `@get("/users/{id}")` before a function | [HTTP](http.md); post/put/delete also available |
 | Return HTML | `return ok(html("<h1>Hello</h1>"))` | Return type `Result[Html, Error]` |
 | Embed text | `include_text("index.html")` | Relative to source; embedded at compile time |
 | Declare a Rust function | `@rust("native::crc32")`, then `extern def crc32(text: view[str]) -> i64` | [Rust integration](modules-and-rust.md); no body or trailing colon |
+
+`orders.Order` and `SavedOrder` are the same type. Same-named classes from different files are different types. `from` and `as` are contextual import keywords and remain available as ordinary identifiers.
 
 ## Differences from Python
 
@@ -183,7 +187,7 @@ Leaving a scope waits for its children. Returning inside it, passing views to an
 | `print(a, b)` | `print(a)` and `print(b)` separately |
 | `items.append(x)` | `append(items, x)` |
 | `try: ... except:` | `try expression` propagates failure; match branches on Result |
-| `from models import User` | `import "models.nagi"` |
+| `from models import User` | `from "models.nagi" import User`; quote the relative file path |
 | Dictionaries, tuples, comprehensions, lambdas | Unsupported; use classes, lists, ordinary functions, and loops |
 | `str(42)` or arbitrary casts | No general conversion; use forms such as `print(42)` directly |
 

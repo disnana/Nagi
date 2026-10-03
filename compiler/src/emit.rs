@@ -25,11 +25,31 @@ fn low_quote(s: &str) -> String {
     out.push('"');
     out
 }
+// Low carries resolved definition symbols. Type's user-facing Display may
+// shorten those symbols for diagnostics, so emission must render the stored
+// structural name directly.
+fn low_type(t: &Type) -> String {
+    if t.0 == "Option" {
+        return format!("{}?", low_type(&t.inner()));
+    }
+    if t.1.is_empty() {
+        t.0.clone()
+    } else {
+        format!(
+            "{}[{}]",
+            t.0,
+            t.1.iter().map(low_type).collect::<Vec<_>>().join(", ")
+        )
+    }
+}
 pub fn low(p: &Program) -> String {
     low_with_lines(p).text
 }
 
 pub fn low_with_lines(p: &Program) -> Generated {
+    let mut transport = crate::modules::prepare_low_types(p);
+    crate::modules::synchronize(&mut transport);
+    let p = &transport;
     fn receiver(e: &Expr) -> String {
         match &e.kind {
             E::Unary(_, _) | E::Await(_) | E::Try(_) => format!("({})", expr(e)),
@@ -51,10 +71,7 @@ pub fn low_with_lines(p: &Program) -> Generated {
                 } else {
                     format!(
                         "[{}]",
-                        t.iter()
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>()
-                            .join(", ")
+                        t.iter().map(low_type).collect::<Vec<_>>().join(", ")
                     )
                 },
                 a.iter().map(expr).collect::<Vec<_>>().join(", ")
@@ -88,7 +105,7 @@ pub fn low_with_lines(p: &Program) -> Generated {
                     "{}{name}{} = {};\n",
                     if *declare { "let " } else { "" },
                     if *declare {
-                        format!(": {}", annotation.as_ref().unwrap())
+                        format!(": {}", low_type(annotation.as_ref().unwrap()))
                     } else {
                         String::new()
                     },
@@ -154,16 +171,49 @@ pub fn low_with_lines(p: &Program) -> Generated {
     }
     let mut out =
         Generated::new("# Nagi Low 0.1 / generated. 手書き変更はnative/で@replaceしてください。\n");
-    for (file, line) in &p.imports {
-        out.origin(Some(*line));
-        out.push_str(&format!("import {};\n", low_quote(file)));
+    if p.modules.root.is_some() {
+        out.push_str("# nagi-modules-v1 ");
+        out.push_str(&serde_json::to_string(&p.modules).expect("module metadata is serializable"));
+        out.push('\n');
+    }
+    if p.module_imports.is_empty() {
+        for (file, line) in &p.imports {
+            out.origin(Some(*line));
+            out.push_str(&format!("import {};\n", low_quote(file)));
+        }
+    } else {
+        for import in &p.module_imports {
+            out.origin(Some(import.line));
+            match &import.kind {
+                ImportKind::Flat => {
+                    out.push_str(&format!("import {};\n", low_quote(&import.path)));
+                }
+                ImportKind::Module { alias, .. } => {
+                    out.push_str(&format!("import {} as {alias};\n", low_quote(&import.path)));
+                }
+                ImportKind::Names(names) => {
+                    for name in names {
+                        out.push_str(&format!(
+                            "from {} import {}{};\n",
+                            low_quote(&import.path),
+                            name.name,
+                            if name.name == name.alias {
+                                String::new()
+                            } else {
+                                format!(" as {}", name.alias)
+                            }
+                        ));
+                    }
+                }
+            }
+        }
     }
     for c in &p.classes {
         out.origin(Some(c.line));
         out.push_str(&format!("record {} {{\n", c.name));
         for (i, (n, t)) in c.fields.iter().enumerate() {
             out.origin(Some(c.field_lines.get(i).copied().unwrap_or(c.line)));
-            out.push_str(&format!("    {n}: {t};\n"));
+            out.push_str(&format!("    {n}: {};\n", low_type(t)));
         }
         out.origin(Some(c.line));
         out.push_str("}\n\n");
@@ -184,10 +234,10 @@ pub fn low_with_lines(p: &Program) -> Generated {
             f.name,
             f.params
                 .iter()
-                .map(|(n, t)| format!("{n}: {t}"))
+                .map(|(n, t)| format!("{n}: {}", low_type(t)))
                 .collect::<Vec<_>>()
                 .join(", "),
-            f.ret,
+            low_type(&f.ret),
             if f.external { ";" } else { " {" }
         ));
         if !f.external {
@@ -199,12 +249,29 @@ pub fn low_with_lines(p: &Program) -> Generated {
     out
 }
 pub fn rust_type(t: &Type) -> String {
-    rust_type_at(t, 0)
+    rust_type_at(t, 0, &RustTypes { raw_classes: &[] })
 }
-fn rust_type_at(t: &Type, depth: usize) -> String {
+struct RustTypes<'a> {
+    raw_classes: &'a [Class],
+}
+
+impl RustTypes<'_> {
+    fn ty(&self, t: &Type) -> String {
+        rust_type_at(t, 0, self)
+    }
+}
+
+fn rust_type_at(t: &Type, depth: usize, types: &RustTypes<'_>) -> String {
     match t.0.as_str() {
+        "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" | "bool" => {
+            if types.raw_classes.iter().any(|class| class.name == t.0) {
+                t.0.clone()
+            } else {
+                format!("::std::primitive::{}", t.0)
+            }
+        }
         "str" => "::std::string::String".into(),
-        "bytes" => "::std::vec::Vec<u8>".into(),
+        "bytes" => "::std::vec::Vec<::std::primitive::u8>".into(),
         "unit" => "()".into(),
         "Error" => "::nagi_runtime::Error".into(),
         "Html" => "::nagi_runtime::axum::response::Html<::std::string::String>".into(),
@@ -216,10 +283,10 @@ fn rust_type_at(t: &Type, depth: usize) -> String {
                 "fn({}) -> {}",
                 t.1[..t.1.len() - 1]
                     .iter()
-                    .map(|arg| rust_type_at(arg, depth + 1))
+                    .map(|arg| rust_type_at(arg, depth + 1, types))
                     .collect::<Vec<_>>()
                     .join(", "),
-                rust_type_at(t.1.last().unwrap(), depth + 1)
+                rust_type_at(t.1.last().unwrap(), depth + 1, types)
             );
             if t.1.iter().any(Type::contains_view) {
                 let lifetime = format!("'nagi_fn_{depth}");
@@ -234,42 +301,48 @@ fn rust_type_at(t: &Type, depth: usize) -> String {
         "view" => {
             let a = t.inner();
             match a.0.as_str() {
-                "str" => "&'a str".into(),
-                "bytes" => "&'a [u8]".into(),
-                _ => format!("&'a [{}]", rust_type_at(&a, depth + 1)),
+                "str" => "&'a ::std::primitive::str".into(),
+                "bytes" => "&'a [::std::primitive::u8]".into(),
+                _ => format!("&'a [{}]", rust_type_at(&a, depth + 1, types)),
             }
         }
-        "owned" => rust_type_at(&t.inner(), depth + 1),
-        "shared" => format!("::std::sync::Arc<{}>", rust_type_at(&t.inner(), depth + 1)),
-        "List" => format!("::std::vec::Vec<{}>", rust_type_at(&t.inner(), depth + 1)),
+        "owned" => rust_type_at(&t.inner(), depth + 1, types),
+        "shared" => format!(
+            "::std::sync::Arc<{}>",
+            rust_type_at(&t.inner(), depth + 1, types)
+        ),
+        "List" => format!(
+            "::std::vec::Vec<{}>",
+            rust_type_at(&t.inner(), depth + 1, types)
+        ),
         "Map" => format!(
             "::std::collections::HashMap<{}, {}>",
-            rust_type_at(&t.1[0], depth + 1),
-            rust_type_at(&t.1[1], depth + 1)
+            rust_type_at(&t.1[0], depth + 1, types),
+            rust_type_at(&t.1[1], depth + 1, types)
         ),
         "Option" | "Result" => format!(
             "::std::{}::{}<{}>",
             if t.0 == "Option" { "option" } else { "result" },
             t.0,
             t.1.iter()
-                .map(|arg| rust_type_at(arg, depth + 1))
+                .map(|arg| rust_type_at(arg, depth + 1, types))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
         _ => t.0.clone(),
     }
 }
-fn local_type(t: &Type) -> String {
-    rust_type(t).replace("&'a ", "&")
+fn local_type(t: &Type, types: &RustTypes<'_>) -> String {
+    types.ty(t).replace("&'a ", "&")
 }
-fn string_arg(e: &Expr) -> String {
+fn string_arg(e: &Expr, types: &RustTypes<'_>) -> String {
     if let E::Str(s) = &e.kind {
         quote(s)
     } else {
-        format!("&({})", re(e))
+        format!("&({})", re(e, types))
     }
 }
-fn re(e: &Expr) -> String {
+fn re(e: &Expr, types: &RustTypes<'_>) -> String {
     match &e.kind {
         E::Int(s) | E::Float(s) => {
             // Formatting and container operations do not always give Rust a
@@ -299,33 +372,39 @@ fn re(e: &Expr) -> String {
         E::Null => "::std::option::Option::None".into(),
         E::Binary(a, o, b) => format!(
             "({} {} {})",
-            re(a),
+            re(a, types),
             match o.as_str() {
                 "and" => "&&",
                 "or" => "||",
                 _ => o,
             },
-            re(b)
+            re(b, types)
         ),
-        E::Unary(o, x) => format!("{}({})", if o == "not" { "!" } else { o }, re(x)),
-        E::Field(x, n) => format!("({}).{n}", re(x)),
+        E::Unary(o, x) => format!("{}({})", if o == "not" { "!" } else { o }, re(x, types)),
+        E::Field(x, n) => format!("({}).{n}", re(x, types)),
         E::Index(x, i) => format!(
-            "({})[usize::try_from({}).expect(\"negative index\")]",
-            re(x),
-            re(i)
+            "({})[::std::primitive::usize::try_from({}).expect(\"negative index\")]",
+            re(x, types),
+            re(i, types)
         ),
-        E::List(a) => format!("vec![{}]", a.iter().map(re).collect::<Vec<_>>().join(", ")),
-        E::Record(n, a) => format!(
-            "{n} {{ {} }}",
+        E::List(a) => format!(
+            "vec![{}]",
             a.iter()
-                .map(|(n, e)| format!("{n}: {}", re(e)))
+                .map(|e| re(e, types))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        E::Await(x) => format!("({}).await", re(x)),
-        E::Try(x) => format!("({})?", re(x)),
+        E::Record(n, a) => format!(
+            "{n} {{ {} }}",
+            a.iter()
+                .map(|(n, e)| format!("{n}: {}", re(e, types)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        E::Await(x) => format!("({}).await", re(x, types)),
+        E::Try(x) => format!("({})?", re(x, types)),
         E::Call(n, ts, a) => {
-            let args = a.iter().map(re).collect::<Vec<_>>();
+            let args = a.iter().map(|e| re(e, types)).collect::<Vec<_>>();
             let join = args.join(", ");
             match e.resolution {
                 ::std::option::Option::Some(NameResolution::Function) => {
@@ -341,15 +420,18 @@ fn re(e: &Expr) -> String {
             } else {
                 format!(
                     "::<{}>",
-                    ts.iter().map(local_type).collect::<Vec<_>>().join(", ")
+                    ts.iter()
+                        .map(|t| local_type(t, types))
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )
             };
             match n.as_str() {
-                "print" => format!("println!(\"{{}}\", {})", string_or_value(&a[0])),
-                "write" => format!("print!(\"{{}}\", {})", string_or_value(&a[0])),
+                "print" => format!("println!(\"{{}}\", {})", string_or_value(&a[0], types)),
+                "write" => format!("print!(\"{{}}\", {})", string_or_value(&a[0], types)),
                 "read_line" => "::nagi_runtime::read_line()".into(),
                 "html" => format!("::nagi_runtime::axum::response::Html({})", args[0]),
-                "include_text" => format!("include_str!({}).to_owned()", string_arg(&a[0])),
+                "include_text" => format!("include_str!({}).to_owned()", string_arg(&a[0], types)),
                 "assert_true" => format!("assert!({})", args[0]),
                 "view" => format!(
                     "({}).{}()",
@@ -363,7 +445,7 @@ fn re(e: &Expr) -> String {
                 "copy" => format!("({}).to_owned()", args[0]),
                 "share" => format!("::std::sync::Arc::new({})", args[0]),
                 "clone_shared" => format!("::std::sync::Arc::clone(&{})", args[0]),
-                "len" => format!("(({}).len() as i64)", string_or_value(&a[0])),
+                "len" => format!("(({}).len() as ::std::primitive::i64)", string_or_value(&a[0], types)),
                 "range" => format!("0i64..{}", args[0]),
                 "append" => format!("{}.push({})", args[0], args[1]),
                 "ok" => format!("::std::result::Result::Ok({})", args[0]),
@@ -380,11 +462,11 @@ fn re(e: &Expr) -> String {
                 "serve" => format!("__nagi_serve({}, {})", args[0], args[1]),
                 "env" => format!(
                     "::std::env::var({}).unwrap_or_else(|_|({}).to_owned())",
-                    string_arg(&a[0]),
-                    string_arg(&a[1])
+                    string_arg(&a[0], types),
+                    string_arg(&a[1], types)
                 ),
                 "sleep" => format!("::nagi_runtime::sleep({})", args[0]),
-                "db_open" => format!("::nagi_runtime::Db::open({})", string_arg(&a[0])),
+                "db_open" => format!("::nagi_runtime::Db::open({})", string_arg(&a[0], types)),
                 "db_exec" | "db_all" | "db_query" | "db_write" | "db_insert" | "db_update" => {
                     format!(
                         "{}.{}{}({})",
@@ -394,7 +476,7 @@ fn re(e: &Expr) -> String {
                         std::iter::once(if let E::Str(s) = &a[1].kind {
                             format!("::nagi_runtime::Sql::Static({})", quote(s))
                         } else {
-                            format!("::nagi_runtime::Sql::Owned(({}).to_owned())", string_arg(&a[1]))
+                            format!("::nagi_runtime::Sql::Owned(({}).to_owned())", string_arg(&a[1], types))
                         })
                         .chain(args.iter().skip(2).cloned())
                         .collect::<Vec<_>>()
@@ -405,16 +487,16 @@ fn re(e: &Expr) -> String {
                     let input = if a[0].ty.as_ref().is_some_and(|t| {
                         t.0 == "str" || t == &Type::generic("view", vec![Type::named("str")])
                     }) {
-                        format!("({}).as_bytes()", string_arg(&a[0]))
+                        format!("({}).as_bytes()", string_arg(&a[0], types))
                     } else {
                         format!("&({})", args[0])
                     };
                     format!("::nagi_runtime::decode{g}({input})")
                 }
                 "json_encode" => format!("::nagi_runtime::encode(&{})", args[0]),
-                "parse_i64" => format!("::nagi_runtime::parse_i64({})", string_arg(&a[0])),
-                "parse_f64" => format!("::nagi_runtime::parse_f64({})", string_arg(&a[0])),
-                "uuid_parse" => format!("::nagi_runtime::Uuid::parse({})", string_arg(&a[0])),
+                "parse_i64" => format!("::nagi_runtime::parse_i64({})", string_arg(&a[0], types)),
+                "parse_f64" => format!("::nagi_runtime::parse_f64({})", string_arg(&a[0], types)),
+                "uuid_parse" => format!("::nagi_runtime::Uuid::parse({})", string_arg(&a[0], types)),
                 "uuid_format" => format!("{}.to_string()", args[0]),
                 "slice" => format!(
                     "::nagi_runtime::{}({}, {}, {})",
@@ -427,14 +509,14 @@ fn re(e: &Expr) -> String {
                     args[1],
                     args[2]
                 ),
-                "i64" => format!("i64::from({})", args[0]),
+                "i64" => format!("::std::primitive::i64::from({})", args[0]),
                 "i32" => format!(
-                    "i32::try_from({}).map_err(|e| ::nagi_runtime::Error::invalid(e.to_string()))",
+                    "::std::primitive::i32::try_from({}).map_err(|e| ::nagi_runtime::Error::invalid(e.to_string()))",
                     args[0]
                 ),
-                "size_of" => format!("(::std::mem::size_of{}() as i64)", g),
+                "size_of" => format!("(::std::mem::size_of{}() as ::std::primitive::i64)", g),
                 "bench_i64" | "bench_f64" | "bench_scalar" => {
-                    format!("::nagi_runtime::{n}({}, {}, {})", string_arg(&a[0]), args[1], args[2])
+                    format!("::nagi_runtime::{n}({}, {}, {})", string_arg(&a[0], types), args[1], args[2])
                 }
                 "clock_ns" | "make_ints" | "actor_demo" | "actor_pair_demo" | "supervisor_demo"
                 | "queue_demo" | "task_demo" | "cpu_sum" => format!("::nagi_runtime::{n}({join})"),
@@ -443,14 +525,14 @@ fn re(e: &Expr) -> String {
         }
     }
 }
-fn string_or_value(e: &Expr) -> String {
+fn string_or_value(e: &Expr, types: &RustTypes<'_>) -> String {
     if matches!(e.kind, E::Str(_)) {
-        string_arg(e)
+        string_arg(e, types)
     } else {
-        re(e)
+        re(e, types)
     }
 }
-fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
+fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
     let pad = "    ".repeat(n);
     for s in ss {
         out.origin(::std::option::Option::Some(s.line));
@@ -465,38 +547,40 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
                 "{}{name}{} = {};\n",
                 if *declare { "let mut " } else { "" },
                 if *declare && !annotation.as_ref().is_some_and(Type::is_async_function) {
-                    format!(": {}", local_type(annotation.as_ref().unwrap()))
+                    format!(": {}", local_type(annotation.as_ref().unwrap(), types))
                 } else {
                     String::new()
                 },
-                re(value)
+                re(value, types)
             )),
             S::Return(e) => out.push_str(&format!(
                 "return {};\n",
-                e.as_ref().map(re).unwrap_or_else(|| "()".into())
+                e.as_ref()
+                    .map(|e| re(e, types))
+                    .unwrap_or_else(|| "()".into())
             )),
-            S::Expr(e) => out.push_str(&format!("{};\n", re(e))),
+            S::Expr(e) => out.push_str(&format!("{};\n", re(e, types))),
             S::If(c, a, b) => {
-                out.push_str(&format!("if {} {{\n", re(c)));
-                rb(a, out, n + 1);
+                out.push_str(&format!("if {} {{\n", re(c, types)));
+                rb(a, out, n + 1, types);
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}"));
                 if !b.is_empty() {
                     out.push_str(" else {\n");
-                    rb(b, out, n + 1);
+                    rb(b, out, n + 1, types);
                     out.origin(::std::option::Option::Some(s.line));
                     out.push_str(&format!("{pad}}}"));
                 }
                 out.push('\n');
             }
             S::While(c, b) => {
-                out.push_str(&format!("while {} {{\n", re(c)));
-                rb(b, out, n + 1);
+                out.push_str(&format!("while {} {{\n", re(c, types)));
+                rb(b, out, n + 1, types);
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
             S::Match(value, arms) => {
-                out.push_str(&format!("match {} {{\n", re(value)));
+                out.push_str(&format!("match {} {{\n", re(value, types)));
                 for arm in arms {
                     out.origin(::std::option::Option::Some(arm.line));
                     let binding = arm
@@ -512,7 +596,7 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
                             "::std::result::Result::Err"
                         }
                     ));
-                    rb(&arm.body, out, n + 2);
+                    rb(&arm.body, out, n + 2, types);
                     out.origin(::std::option::Option::Some(arm.line));
                     out.push_str(&format!("{pad}    }},\n"));
                 }
@@ -521,12 +605,12 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
             }
             S::For(v, e, b) => {
                 let iterator = if e.ty.as_ref().is_some_and(|t| t.0 == "Range") {
-                    re(e)
+                    re(e, types)
                 } else {
-                    format!("({}).iter().copied()", re(e))
+                    format!("({}).iter().copied()", re(e, types))
                 };
                 out.push_str(&format!("for {v} in {iterator} {{\n"));
-                rb(b, out, n + 1);
+                rb(b, out, n + 1, types);
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
@@ -534,7 +618,7 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
                 let returns_result = e.ty.as_ref().is_some_and(|t| t.inner().0 == "Result");
                 out.push_str(&format!(
                     "{{ let __nagi_spawn_future = {}; __scope.spawn(async move {{ __nagi_spawn_future.await{} }}); }}\n",
-                    re(e),
+                    re(e, types),
                     if returns_result {
                         ""
                     } else {
@@ -544,8 +628,8 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize) {
             }
             S::Scope(b) => {
                 out.push_str("{\n");
-                out.push_str(&format!("{pad}    let mut __scope = ::nagi_runtime::Scope::new();\n{pad}    let __scope_result: Result<(), _> = async {{\n"));
-                rb(b, out, n + 2);
+                out.push_str(&format!("{pad}    let mut __scope = ::nagi_runtime::Scope::new();\n{pad}    let __scope_result: ::std::result::Result<(), _> = async {{\n"));
+                rb(b, out, n + 2, types);
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}        ::std::result::Result::Ok(())\n{pad}    }}.await;\n{pad}    if let ::std::result::Result::Err(e) = __scope_result {{ __scope.cancel().await; return ::std::result::Result::Err(e); }}\n{pad}    __scope.join().await?;\n{pad}}}\n"));
             }
@@ -591,6 +675,16 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
     let names = crate::rust_names::RustNames::new(p);
     let mapped = names.program(p);
     let p = &mapped;
+    // Direct parser/check callers have no module identities. Preserve their
+    // legacy primitive-named records; resolved files use canonical class
+    // symbols and keep intrinsic types independent of public adapter aliases.
+    let types = RustTypes {
+        raw_classes: if p.modules.root.is_none() {
+            &p.classes
+        } else {
+            &[]
+        },
+    };
     fn copy_type(t: &Type, p: &Program, depth: usize) -> bool {
         if depth > 64 {
             false
@@ -620,7 +714,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                     quote(names.original(n))
                 ));
             }
-            out.push_str(&format!("    pub {n}: {},\n", rust_type(t)));
+            out.push_str(&format!("    pub {n}: {},\n", types.ty(t)));
         }
         out.origin(::std::option::Option::Some(c.line));
         out.push_str("}\n");
@@ -633,7 +727,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         });
         if db_compatible {
             out.origin(::std::option::Option::None);
-            out.push_str(&format!("impl ::nagi_runtime::FromRow for {} {{\n fn columns() -> &'static [&'static str] {{ &[{}] }}\n fn read(row: &::nagi_runtime::rusqlite::Row<'_>, ix: &[usize]) -> ::nagi_runtime::rusqlite::Result<Self> {{ ::std::result::Result::Ok(Self {{\n",c.name,c.fields.iter().map(|(n,_)|quote(names.original(n))).collect::<Vec<_>>().join(",")));
+            out.push_str(&format!("impl ::nagi_runtime::FromRow for {} {{\n fn columns() -> &'static [&'static ::std::primitive::str] {{ &[{}] }}\n fn read(row: &::nagi_runtime::rusqlite::Row<'_>, ix: &[::std::primitive::usize]) -> ::nagi_runtime::rusqlite::Result<Self> {{ ::std::result::Result::Ok(Self {{\n",c.name,c.fields.iter().map(|(n,_)|quote(names.original(n))).collect::<Vec<_>>().join(",")));
             for (i, (n, _)) in c.fields.iter().enumerate() {
                 out.push_str(&format!("{n}: row.get(ix[{i}])?,\n"));
             }
@@ -657,10 +751,10 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             if f.asynchronous { "async " } else { "" },
             f.params
                 .iter()
-                .map(|(n, t)| format!("mut {n}: {}", rust_type(t)))
+                .map(|(n, t)| format!("mut {n}: {}", types.ty(t)))
                 .collect::<Vec<_>>()
                 .join(", "),
-            rust_type(&f.ret)
+            types.ty(&f.ret)
         ));
         if f.external {
             let target = &f.attrs.iter().find(|(a, _)| a == "rust").unwrap().1;
@@ -674,12 +768,44 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 if f.asynchronous { ".await" } else { "" }
             ));
         } else {
-            rb(&f.body, &mut out, 1);
+            rb(&f.body, &mut out, 1, &types);
         }
         out.origin(::std::option::Option::Some(f.line));
         out.push_str("}\n");
     }
     out.origin(::std::option::Option::None);
+    // Public adapter names are aliases of the unique generated item, not new
+    // wrapper types. Only a module's own definitions are exposed through an
+    // `as` import; its imported names are not implicitly reexported.
+    for binding in p.modules.root_bindings() {
+        match &binding.target {
+            BindingTarget::Definition(id) => {
+                let Some(definition) = p.modules.definition_id(id) else {
+                    continue;
+                };
+                let alias = names.source_name(&binding.name);
+                let symbol = names.definition(definition);
+                // The executable entry point owns Rust's root `main` name.
+                if alias != symbol && !(alias == "main" && id.kind == DefKind::Function) {
+                    out.push_str(&format!(
+                        "#[allow(unused_imports)]\npub use crate::{symbol} as {alias};\n"
+                    ));
+                }
+            }
+            BindingTarget::Module(module) => {
+                let alias = names.source_name(&binding.name);
+                out.push_str(&format!("#[allow(non_snake_case)]\npub mod {alias} {{\n"));
+                for definition in p.modules.exports(module) {
+                    let symbol = names.definition(definition);
+                    let export = names.source_name(&definition.id.name);
+                    out.push_str(&format!(
+                        "    #[allow(unused_imports)]\n    pub use crate::{symbol} as {export};\n"
+                    ));
+                }
+                out.push_str("}\n");
+            }
+        }
+    }
     let routes: Vec<_> = p
         .functions
         .iter()
@@ -690,7 +816,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         })
         .collect();
     if !routes.is_empty() || p.functions.iter().any(|f| calls_builtin(&f.body, "serve")) {
-        out.push_str("async fn __nagi_serve(db: ::nagi_runtime::Db,port:i64) -> Result<(),::nagi_runtime::Error> {\nlet router= ::nagi_runtime::axum::Router::new()\n");
+        out.push_str("async fn __nagi_serve(db: ::nagi_runtime::Db,port: ::std::primitive::i64) -> ::std::result::Result<(),::nagi_runtime::Error> {\nlet router= ::nagi_runtime::axum::Router::new()\n");
         let mut paths = std::collections::BTreeMap::<String, Vec<(String, usize)>>::new();
         for (i, f) in routes.iter().enumerate() {
             let (a, path) = f
@@ -733,7 +859,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                     ));
                     call.push(n.clone());
                 } else if n == "id" && t.0 == "i64" && crate::routes::has_capture(path) {
-                    extracts.push("::nagi_runtime::axum::extract::Path(id): ::nagi_runtime::axum::extract::Path<i64>".into());
+                    extracts.push("::nagi_runtime::axum::extract::Path(id): ::nagi_runtime::axum::extract::Path<::std::primitive::i64>".into());
                     call.push(n.clone());
                 } else if t == &Type::generic("view", vec![Type::named("bytes")]) {
                     extracts.push(format!("{n}: ::nagi_runtime::axum::body::Bytes"));
@@ -742,7 +868,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                     extracts.push(format!(
                         "__body_{parameter_index}: ::nagi_runtime::axum::body::Bytes"
                     ));
-                    pre.push_str(&format!("let {n}: {} = match ::nagi_runtime::decode(&__body_{parameter_index}) {{::std::result::Result::Ok(x)=>x,::std::result::Result::Err(e)=>return ::nagi_runtime::error_response(e)}};\n",rust_type(t)));
+                    pre.push_str(&format!("let {n}: {} = match ::nagi_runtime::decode(&__body_{parameter_index}) {{::std::result::Result::Ok(x)=>x,::std::result::Result::Err(e)=>return ::nagi_runtime::error_response(e)}};\n",types.ty(t)));
                     call.push(n.clone());
                 } else if ["str", "i64", "i32", "u64", "bool", "f64"].contains(&t.0.as_str()) {
                     query_fields.push((n.clone(), t.clone()));
@@ -755,7 +881,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 }
             }
             if !query_fields.is_empty() {
-                out.push_str(&format!("#[derive(::nagi_runtime::serde::Deserialize)]\n#[serde(crate=\"::nagi_runtime::serde\")]\nstruct __NagiQuery{i} {{ {} }}\n",query_fields.iter().map(|(n,t)|format!("#[serde(rename = {})] {n}: {}",quote(names.original(n)),rust_type(t))).collect::<Vec<_>>().join(",")));
+                out.push_str(&format!("#[derive(::nagi_runtime::serde::Deserialize)]\n#[serde(crate=\"::nagi_runtime::serde\")]\nstruct __NagiQuery{i} {{ {} }}\n",query_fields.iter().map(|(n,t)|format!("#[serde(rename = {})] {n}: {}",quote(names.original(n)),types.ty(t))).collect::<Vec<_>>().join(",")));
                 extracts.push(format!(
                     "::nagi_runtime::axum::extract::Query(__query): ::nagi_runtime::axum::extract::Query<__NagiQuery{i}>"
                 ));
@@ -793,7 +919,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         };
         if f.ret.0 == "Result" {
             out.push_str(&format!(
-                "if let ::std::result::Result::Err(e) = {call} {{ eprintln!(\"{{}}\",e); std::process::exit(1); }}\n"
+                "if let ::std::result::Result::Err(e) = {call} {{ eprintln!(\"{{}}\",e); ::std::process::exit(1); }}\n"
             ));
         } else {
             out.push_str(&format!("{call};\n"));
@@ -911,10 +1037,23 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let mut all = Program::default();
     for n in native {
         let native_sources = crate::source::load_with_overlays(&n, false, &overlays)?;
-        let np = sources.append(native_sources);
-        all.classes.extend(np.classes);
-        all.functions.extend(np.functions);
+        let mut np = sources.append(native_sources);
+        crate::modules::prepare_native_fragment(&mut np, &p);
+        for class in np.classes {
+            if !all.classes.iter().any(|old| old.name == class.name) {
+                all.classes.push(class);
+            }
+        }
+        for function in np.functions {
+            if !all.functions.iter().any(|old| old.name == function.name) {
+                all.functions.push(function);
+            }
+        }
+        all.modules
+            .merge_native(np.modules)
+            .map_err(|e| sources.diagnostic(&e))?;
     }
+    crate::modules::rebind_native(&mut p, &mut all).map_err(|e| sources.diagnostic(&e))?;
     if cmd == "symbols" {
         println!("{}", crate::symbols::index(&sources, &[&p, &all])?);
         return Ok(());
@@ -923,20 +1062,42 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let mut resolution = p.clone();
     let nc = p.classes.len();
     let nf = p.functions.len();
-    resolution.classes.extend(all.classes.clone());
-    resolution.functions.extend(
-        all.functions
+    let mut native_resolution = all.clone();
+    native_resolution
+        .functions
+        .retain(|f| !f.attrs.iter().any(|(a, _)| a == "replace"));
+    crate::modules::synchronize(&mut native_resolution);
+    for class in &native_resolution.classes {
+        if !resolution.classes.iter().any(|old| old.name == class.name) {
+            resolution.classes.push(class.clone());
+        }
+    }
+    for function in &native_resolution.functions {
+        if !resolution
+            .functions
             .iter()
-            .filter(|f| !f.attrs.iter().any(|(a, _)| a == "replace"))
-            .cloned(),
-    );
+            .any(|old| old.name == function.name)
+        {
+            resolution.functions.push(function.clone());
+        }
+    }
+    resolution
+        .modules
+        .merge(native_resolution.modules)
+        .map_err(|e| sources.diagnostic(&e))?;
+    crate::modules::synchronize(&mut resolution);
     crate::check::check(&mut resolution).map_err(|e| sources.diagnostic(&e))?;
     p.classes = resolution.classes[..nc].to_vec();
     p.functions = resolution.functions[..nf].to_vec();
-    fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    let write_output = !(options.editor_input && cmd == "check");
+    if write_output {
+        fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    }
     if high {
         let low_source = low_with_lines(&p);
-        fs::write(out.join("generated.low"), &low_source.text).map_err(|e| e.to_string())?;
+        if write_output {
+            fs::write(out.join("generated.low"), &low_source.text).map_err(|e| e.to_string())?;
+        }
         // 生成Lowの文字列を独立parserに通す。High ASTをcodegenへ直接渡さない。
         p = crate::parser::parse(&low_source.text, false)?;
         low_source.restore_lines(&mut p)?;
@@ -944,11 +1105,13 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     crate::check::integrate(&mut p, all).map_err(|e| sources.diagnostic(&e))?;
     if cost {
         let report = cost_report(&p);
-        fs::write(
-            out.join("cost-report.json"),
-            serde_json::to_string_pretty(&report).unwrap(),
-        )
-        .map_err(|e| e.to_string())?;
+        if write_output {
+            fs::write(
+                out.join("cost-report.json"),
+                serde_json::to_string_pretty(&report).unwrap(),
+            )
+            .map_err(|e| e.to_string())?;
+        }
         println!("{}", serde_json::to_string_pretty(&report).unwrap());
     }
     if cmd == "check" || cmd == "lower" {
@@ -1098,7 +1261,27 @@ pub fn cost_report(p: &Program) -> serde_json::Value {
     for f in &p.functions {
         let mut a = vec![];
         stmts(&f.body, &mut a);
-        fs.insert(f.name.clone(),serde_json::json!({"static_sites":a,"primitive_boxing":0,"warning":"sites are not dynamic allocation counts; runtime and loop multiplicity excluded"}));
+        let name = if let Some(definition) = p.modules.definition(&f.name) {
+            let direct = p
+                .modules
+                .root_bindings()
+                .filter(|binding| {
+                    binding.target == BindingTarget::Definition(definition.id.clone())
+                })
+                .min_by_key(|binding| binding.name != definition.id.name);
+            if let Some(binding) = direct {
+                binding.name.clone()
+            } else if let Some(binding) = p.modules.root_bindings().find(|binding| {
+                binding.target == BindingTarget::Module(definition.id.module.clone())
+            }) {
+                format!("{}.{}", binding.name, definition.id.name)
+            } else {
+                format!("{}::{}", definition.id.module.0, definition.id.name)
+            }
+        } else {
+            f.name.clone()
+        };
+        fs.insert(name,serde_json::json!({"static_sites":a,"primitive_boxing":0,"warning":"sites are not dynamic allocation counts; runtime and loop multiplicity excluded"}));
     }
     serde_json::json!({"format":"nagi-cost-sites-v1","functions":fs})
 }

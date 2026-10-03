@@ -5,13 +5,46 @@ pub fn parse(src: &str, high: bool) -> Result<Program, String> {
     if src.len() > 2_000_000 {
         return Err("source limit: 2 MB".into());
     }
-    Parser {
+    let mut modules = ModuleMetadata::default();
+    if !high {
+        let mut has_header = false;
+        for (line, text) in src.lines().enumerate() {
+            let text = text.trim_start();
+            if text == "# nagi-modules-v1" {
+                return Err(format!(
+                    "line {}: invalid module metadata: missing JSON",
+                    line + 1
+                ));
+            }
+            if let Some(json) = text.strip_prefix("# nagi-modules-v1 ") {
+                if has_header {
+                    return Err(format!(
+                        "line {}: module metadata header is duplicated",
+                        line + 1
+                    ));
+                }
+                modules = serde_json::from_str(json).map_err(|error| {
+                    format!("line {}: invalid module metadata: {error}", line + 1)
+                })?;
+                if modules.is_empty() {
+                    return Err(format!(
+                        "line {}: invalid module metadata: empty header",
+                        line + 1
+                    ));
+                }
+                has_header = true;
+            }
+        }
+    }
+    let mut program = Parser {
         ts: lex(src, high)?,
         pos: 0,
         high,
         depth: 0,
     }
-    .program()
+    .program()?;
+    program.modules = modules;
+    Ok(program)
 }
 struct Parser {
     ts: Vec<Token>,
@@ -60,6 +93,32 @@ impl Parser {
             Err(self.err("識別子が必要です"))
         }
     }
+    fn qualified_name(&mut self) -> Result<String, String> {
+        let mut name = self.name()?;
+        while self.eat(".") {
+            name.push('.');
+            name.push_str(&self.name()?);
+        }
+        Ok(name)
+    }
+    fn callee_name(expr: &Expr) -> Option<String> {
+        let mut receiver = expr;
+        let mut members = vec![];
+        loop {
+            match &receiver.kind {
+                E::Name(name) => {
+                    members.push(name.as_str());
+                    members.reverse();
+                    return Some(members.join("."));
+                }
+                E::Field(base, member) => {
+                    members.push(member.as_str());
+                    receiver = base;
+                }
+                _ => return None,
+            }
+        }
+    }
     fn skip(&mut self) {
         while matches!(self.t().kind, K::Newline) || self.eat(";") {
             if matches!(self.t().kind, K::Newline) {
@@ -94,7 +153,7 @@ impl Parser {
             self.expect("]")?;
             Type::generic("List", vec![a])
         } else {
-            let n = self.name()?;
+            let n = self.qualified_name()?;
             let mut a = vec![];
             if self.eat("[") {
                 loop {
@@ -155,17 +214,54 @@ impl Parser {
         let mut attrs = vec![];
         self.skip();
         while !matches!(self.t().kind, K::Eof) {
-            if self.eat("import") {
+            let import_start = self.pos;
+            let from = self.eat("from");
+            if from || self.eat("import") {
                 if !attrs.is_empty() {
                     return Err(self.err("importに属性は付けられません"));
                 }
-                let line = self.t().line;
+                let line = self.ts[import_start].line;
                 let K::Str(file) = self.t().kind.clone() else {
                     return Err(self.err("importには相対ファイルパスの文字列が必要です"));
                 };
                 self.pos += 1;
+                let kind = if from {
+                    self.expect("import")?;
+                    let start = self.pos;
+                    let name = self.name()?;
+                    let name_span = self.span(start);
+                    let (alias, alias_span) = if self.eat("as") {
+                        let start = self.pos;
+                        let alias = self.name()?;
+                        (alias, self.span(start))
+                    } else {
+                        (name.clone(), name_span)
+                    };
+                    ImportKind::Names(vec![ImportName {
+                        name,
+                        alias,
+                        name_span,
+                        alias_span,
+                    }])
+                } else if self.eat("as") {
+                    let start = self.pos;
+                    let alias = self.name()?;
+                    ImportKind::Module {
+                        alias,
+                        alias_span: self.span(start),
+                    }
+                } else {
+                    p.imports.push((file.clone(), line));
+                    ImportKind::Flat
+                };
+                let span = self.span(import_start);
                 self.end_stmt()?;
-                p.imports.push((file, line));
+                p.module_imports.push(ModuleImport {
+                    path: file,
+                    line,
+                    span,
+                    kind,
+                });
                 continue;
             }
             if self.eat("@") {
@@ -522,7 +618,7 @@ impl Parser {
             let saved = self.pos;
             let saved_depth = self.depth;
             let mut generics = vec![];
-            if matches!(e.kind, E::Name(_)) && self.eat("[") {
+            if Self::callee_name(&e).is_some() && self.eat("[") {
                 let attempt = (|| {
                     loop {
                         generics.push(self.ty()?);
@@ -540,11 +636,7 @@ impl Parser {
                 }
             }
             if self.eat("(") {
-                let n = if let E::Name(n) = e.kind {
-                    n
-                } else {
-                    return Err(self.err("呼び出し先は関数名です"));
-                };
+                let n = Self::callee_name(&e).ok_or_else(|| self.err("呼び出し先は関数名です"))?;
                 let mut args = vec![];
                 let mut fields = vec![];
                 if !self.eat(")") {

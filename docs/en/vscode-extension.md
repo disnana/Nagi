@@ -5,7 +5,7 @@ Development tools for Nagi High (`.nagi`) and Low (`.low`). Command labels and s
 - Syntax highlighting, comments, bracket/quote handling, and four-space indentation
 - Indentation on Enter, else/case alignment, and closing delimiters in multiline expressions
 - Snippets for classes, functions, HTTP, borrowing, and Low replacements
-- nagic check on opening/saving files, with diagnostics in Problems
+- nagic check on opening/editing/saving files, with diagnostics in Problems
 - Command Palette actions for checking, lowering, building, and running
 - A run button at the top right of the editor
 - Project checking/execution using nagi.toml entry, Rust dependencies, and native Low
@@ -13,6 +13,7 @@ Development tools for Nagi High (`.nagi`) and Low (`.low`). Command labels and s
 - Hovers for parameters, return types, async status, and class fields
 - Type hovers for arguments, local variables, and case bindings
 - Class field completion after value.
+- Module definition completion after an import alias, with qualified hovers, parameter hints, and F12
 - Completion for project functions/classes/types and common built-ins
 - Parameter hints and named arguments for class construction
 
@@ -70,11 +71,11 @@ The default is four spaces. The indentation width and tabs/spaces choice follow 
 
 Outside Windows, the executable is nagic. Relative compilerPath/nativeFiles/rustFile paths use the workspace folder. Check-generated Low goes to project/source-specific build/vscode-nagi folders, separate from ordinary build output.
 
-Automatic checks wait for saved code. Editing clears stale diagnostics; saving rechecks. Manual commands save edited files first. Untrusted workspaces do not run the compiler. Diagnostic locations currently follow the compiler's line-based output.
+Automatic checks read unsaved edits to previously saved files. Editing clears stale diagnostics and starts a new check. Manual Type Check also reads the buffers without saving or building; lower, build, and run save edited project files first. Save new files and nagi.toml before using them. Untrusted workspaces do not run the compiler. Diagnostic locations currently follow the compiler's line-based output.
 
 ## Projects
 
-Use [nagi.toml](projects.md) for entry, Rust dependencies, and native Low. The extension finds the nearest manifest above the open file and passes it with --project. Even with a helper open, entry is checked/run. Automatic checks wait for unsaved project sources; manual commands save that project's files. Saving, creating, or deleting configuration also refreshes checks.
+Use [nagi.toml](projects.md) for entry, Rust dependencies, and native Low. The extension finds the nearest manifest above the open file and passes it with --project. Even with a helper open, entry is checked/run. Checks read unsaved project sources in memory; lower, build, and run save that project's files. Save nagi.toml edits first. Saving, creating, or deleting configuration also refreshes checks.
 
 Open test-nagi-code/rust-bridge/bridge.nagi to use its existing settings. Earlier nagi.rustFile and related settings become command arguments, following the CLI's override/addition rules. nagic check does not inspect Rust implementations; builds verify matching types. Imported errors appear in their own files' Problems.
 
@@ -83,6 +84,8 @@ Without a manifest, the open file is processed independently. Project support re
 ## Go to Definition
 
 Press F12 on a function call, class annotation/construction, or variable name. On `import "models.nagi"`, it opens the file's beginning. High and Low are supported, covering files loaded from the project entry and native Low.
+
+For `import "orders.nagi" as orders`, F12 on the member in `orders.total(...)` or `orders.Order` reaches its original declaration. A from alias such as `SavedOrder` reaches that same class declaration. Open unsaved edits in the imported file are included.
 
 For example, read_item in test-nagi-code/result-api/server.nagi navigates to storage.nagi; Item navigates to models.nagi. Locations come from nagic symbols. Navigation remains available with type errors when syntax/imports can be read.
 
@@ -101,6 +104,8 @@ Use the latest nagic and extension 0.1.9. Function hovers show parameters, retur
 Variable hovers show confirmed types: count = 3 gives count: i64, and item from a class-returning call gives item: Item. Arguments, for elements, and Ok/Err bindings are supported at declarations and uses. Names outside their blocks do not receive those types.
 
 Typing item. offers Item fields with types such as name: str; selecting inserts only the field name. Completion after item.na replaces the partial name. Calls, nested fields, and Copy-class list elements are supported. Result[Item, Error] and Item? are not implicitly Item. Extract Result through its Ok case or `(try fetch()).`.
+
+Typing `orders.` offers the functions and classes defined in the file imported as `orders`. Qualified calls and from aliases show hovers and parameter hints for the resolved definition. If a local shadows the module name, completion uses that local's type and scope. Imported names are not automatically re-exported as module members.
 
 Partial names or Ctrl+Space offer imported functions/classes, native Low functions, and common built-ins. Functions insert positional placeholders; classes insert named fields such as Item(id=..., name=...). Tab moves between placeholders. Type/return positions offer classes, types, Result, List, and view.
 

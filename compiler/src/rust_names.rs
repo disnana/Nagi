@@ -4,6 +4,7 @@ use std::collections::{BTreeSet, HashMap};
 
 pub(crate) struct RustNames {
     escaped: HashMap<String, String>,
+    symbols: BTreeSet<String>,
 }
 
 fn keyword(name: &str) -> bool {
@@ -62,13 +63,36 @@ fn keyword(name: &str) -> bool {
 
 impl RustNames {
     pub(crate) fn new(program: &Program) -> Self {
+        let symbols: BTreeSet<_> = program
+            .modules
+            .definitions
+            .iter()
+            .map(|definition| definition.symbol.clone())
+            .collect();
         let mut names = BTreeSet::new();
         visit(&mut program.clone(), &mut |name| {
             names.insert(name.clone());
         });
+        // Adapter exports use source spelling, even though the checked AST
+        // stores a definition's unique symbol. Allocate escapes once so native
+        // types, aliases, fields, and parameter names agree.
+        let mut source_names = BTreeSet::new();
+        for definition in &program.modules.definitions {
+            source_names.insert(definition.id.name.clone());
+            names.insert(definition.id.name.clone());
+        }
+        for binding in &program.modules.bindings {
+            source_names.insert(binding.name.clone());
+            names.insert(binding.name.clone());
+        }
         let mut escaped = HashMap::new();
         let mut serial = 0;
         for name in names.clone() {
+            // Source spelling can equal another definition's internal symbol.
+            // Escape that public alias, while leaving the actual symbol intact.
+            if symbols.contains(&name) && !source_names.contains(&name) {
+                continue;
+            }
             let replacement = if name.starts_with("__")
                 || matches!(
                     name.as_str(),
@@ -88,17 +112,32 @@ impl RustNames {
             };
             escaped.insert(name, replacement);
         }
-        Self { escaped }
+        Self { escaped, symbols }
     }
 
     pub(crate) fn program(&self, program: &Program) -> Program {
         let mut result = program.clone();
         visit(&mut result, &mut |name| {
+            if self.symbols.contains(name) {
+                return;
+            }
             if let Some(escaped) = self.escaped.get(name) {
                 *name = escaped.clone();
             }
         });
         result
+    }
+
+    pub(crate) fn source_name<'a>(&'a self, name: &'a str) -> &'a str {
+        self.escaped.get(name).map(String::as_str).unwrap_or(name)
+    }
+
+    pub(crate) fn definition<'a>(&'a self, definition: &'a DefinitionInfo) -> &'a str {
+        if definition.id.kind == DefKind::Function && definition.symbol == "main" {
+            "__nagi_main"
+        } else {
+            &definition.symbol
+        }
     }
 
     pub(crate) fn original<'a>(&'a self, escaped: &'a str) -> &'a str {

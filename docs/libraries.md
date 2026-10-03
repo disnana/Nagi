@@ -15,7 +15,7 @@ library-examples/
 
 `import "../shared/foundation.nagi"`のように相対パスで共通ファイルを読み込みます。Rustの入口は各アプリの`nagi.toml`に指定し、そのRustファイルから共通モジュールを読み込みます。サンプルはディレクトリ一式で使ってください。
 
-現在のimportはファイルの定義を同じ名前空間へ読み込みます。公開範囲やaliasはないので、共通関数には名前が衝突しにくい名前を付けます。Cargoのcrateとしての配布や、Nagiのパッケージ管理とは別の仕組みです。
+この従来のimportは定義を同じ名前空間へ読み込みます。`import "../shared/foundation.nagi" as foundation`でmodule名を付けると、`foundation.関数名`でそのファイル自身の定義を使えます。from文でclassや関数に別名を付けることもできます。[moduleの例](../test-nagi-code/library-examples/module-imports/README.md)は、別ファイルの同名classを区別します。Cargoのcrateとしての配布や、Nagiのパッケージ管理とは別の仕組みです。
 
 ## Rustライブラリとの境界を小さくする
 
@@ -45,8 +45,7 @@ HTTPの受付と停止はRustのAxum/Tokio、応答を作る関数はNagiが担�
 
 以下は設計対象であり、現在使える設定・文法ではありません。
 
-- Rust依存の`path`・`features`・`default-features`を指定し、手元のcrateや必要な機能だけを組み込む。
-- Nagiの名前付きmodule・`as`・`from`・公開範囲を定義し、ライブラリ同士の名前の衝突を防ぐ。
+- 引用符なしの標準moduleや公開範囲の指定を定義する。相対ファイルの`as`・`from`は既に使える。
 - HTTP・DBを用途に応じて選べる標準ライブラリに分け、使わない依存をビルドから外す。
 - 自作の接続・clientなどを扱う型について、所有権・共有・終了・asyncの取消しの規則を決める。
 - DBを一般化する際は、PostgreSQLへの接続だけでなく、型付きのSQL引数・行の読込・transactionを設計する。
