@@ -1,0 +1,22 @@
+class SavedConfig:
+    site: str
+    enabled: bool
+    retries: i64
+
+@rust("native::read_config_text")
+extern def read_config_text(path: view[str]) -> Result[str, Error]
+
+@rust("native::write_new_config")
+extern def write_new_config(path: view[str], content: view[str]) -> Result[unit, Error]
+
+def main() -> Result[unit, Error]:
+    path = env("NAGI_SAMPLE_FILE", "configuration.json")
+    original = SavedConfig(site="東京", enabled=True, retries=3)
+    encoded = try json_encode(original)
+    try write_new_config(view(path), view(encoded))
+    text = try read_config_text(view(path))
+    loaded = try json_decode[SavedConfig](view(text))
+    assert_true(loaded.site == "東京" and loaded.enabled and loaded.retries == 3)
+    print(try json_encode(loaded))
+    print(path)
+    return ok(print("file-json: OK"))

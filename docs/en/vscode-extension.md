@@ -29,10 +29,11 @@ The extension ID is `Disnana.nagi-lang`. If you installed `nagi-local.nagi-langu
 
 Formal VSIX downloads are published on [GitHub Releases](https://github.com/disnana/Nagi/releases) as nagi-language-VERSION.vsix. Updating the extension version on main publishes a release after CI succeeds.
 
-From the repository root, run `python editors/vscode-nagi/scripts/package_vsix.py` to create `build/distribution/nagi-language-0.1.10.vsix`. Select it using **Extensions: Install from VSIX**, or run:
+From the repository root, run `python editors/vscode-nagi/scripts/package_vsix.py`. It prints the path of the created VSIX. Select that file using **Extensions: Install from VSIX**, or build and install it from PowerShell:
 
 ```powershell
-code --install-extension build/distribution/nagi-language-0.1.10.vsix
+$vsix = python editors/vscode-nagi/scripts/package_vsix.py
+code --install-extension "$vsix"
 ```
 
 Extension 0.1.10 provides highlighting, snippets, indentation support, keyword/type completion, and built-in completion, hover, and argument hints without a compiler. Checks and execution require `nagic`. Install it using [Setup and first run](https://nagi.disnana.com/en/docs/getting-started/). The extension checks the repository's release build, then debug build, then PATH.

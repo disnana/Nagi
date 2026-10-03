@@ -29,10 +29,11 @@ code --install-extension Disnana.nagi-lang
 
 正式版のVSIXは[GitHub Releases](https://github.com/disnana/Nagi/releases)に掲載します。ファイル名は`nagi-language-バージョン.vsix`です。mainで拡張のバージョンを上げたとき、CI成功後に自動公開します。
 
-リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、`build/distribution/nagi-language-0.1.10.vsix` ができます。VS Codeの「拡張機能: VSIXからのインストール」で選択するか、次のコマンドを実行してください。
+リポジトリのルートで `python editors/vscode-nagi/scripts/package_vsix.py` を実行すると、作成したVSIXのパスが表示されます。VS Codeの「拡張機能: VSIXからのインストール」でそのファイルを選ぶか、PowerShellで作成からインストールまで実行してください。
 
 ```powershell
-code --install-extension build/distribution/nagi-language-0.1.10.vsix
+$vsix = python editors/vscode-nagi/scripts/package_vsix.py
+code --install-extension "$vsix"
 ```
 
 拡張0.1.10では、色付け、スニペット、インデント補助、キーワード・型の補完と組み込み関数の補完・ホバー・引数ヒントをコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。[準備と最初の実行](https://nagi.disnana.com/docs/getting-started/)の手順でインストールしてください。拡張はリポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。

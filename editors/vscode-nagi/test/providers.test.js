@@ -77,7 +77,7 @@ function host(t, trusted = true, code = 1, symbols, controls = {}) {
     if (controls.defer) return { kill() { call.killed = true; } };
     queueMicrotask(() => callback(symbols && args[0] === 'symbols'
       ? { error: null, output: JSON.stringify(symbols(cwd)) }
-      : { error: Object.assign(new Error('checker failed'), { code }), output: 'error: line 2: expected i32\n' }));
+      : { error: Object.assign(new Error('checker failed'), { code }), output: controls.checkOutput?.(cwd) || 'error: line 2: expected i32\n' }));
     return { kill() {} };
   } };
   const module = { exports: {} };
@@ -304,6 +304,77 @@ test('typing invalidates snapshots without launching save-only checks per keystr
   await Promise.resolve();
   assert.equal(h.calls.length, 1);
   assert.equal(h.calls[0].args[0], 'check');
+});
+
+function separateProjects(h) {
+  for (const name of ['app', 'other']) {
+    fs.mkdirSync(path.join(h.folder, name));
+    fs.writeFileSync(path.join(h.folder, name, 'nagi.toml'), "entry = 'main.nagi'\n");
+  }
+  return ['app', 'other'].map(name => h.document('def main():\n    print(1)\n', 'file', 'nagi', `${name}/main.nagi`));
+}
+const fileIndex = cwd => ({ format: 'nagi-symbols-v1', definitions: [], files: [path.join(cwd, 'main.nagi')] });
+const projectError = cwd => `error: line 2: expected i32\n --> ${path.join(cwd, 'main.nagi')}:2\n`;
+async function loadDependencyIndex(h, document) {
+  return h.providers.Hover.provideHover(document, document.positionAt(document.getText().indexOf('print') + 2), h.token);
+}
+
+test('known unrelated diagnostics survive repeated edits while unknown and project inputs stay conservative', async t => {
+  const h = host(t, true, 1, fileIndex, { checkOnSave: false, checkOutput: projectError });
+  const [app, other] = separateProjects(h);
+  h.vscode.window.activeTextEditor = { document: other };
+  await h.commands.get('nagi.check')();
+  app.version++; app.isDirty = true; h.events.change({ document: app });
+  assert.equal(h.diagnostics.has(other.uri.toString()), false, 'unknown dependency closures remain conservative');
+  app.isDirty = false;
+  await h.commands.get('nagi.check')();
+  await loadDependencyIndex(h, other);
+  const calls = h.calls.length;
+  for (let i = 0; i < 3; i++) {
+    app.version++; app.isDirty = true; h.events.change({ document: app });
+    assert.equal(h.diagnostics.get(other.uri.toString()).length, 1, 'a known independent project keeps its error');
+  }
+  assert.equal(h.calls.length, calls, 'dependency preservation starts no additional compiler processes');
+  const manifest = h.document("entry = 'main.nagi'\n", 'file', 'toml', 'app/nagi.toml');
+  manifest.version++; manifest.isDirty = true; h.events.change({ document: manifest });
+  assert.equal(h.diagnostics.size, 0, 'manifest edits invalidate all dependency proofs');
+});
+
+test('known unrelated pending checks finish during edits and same-scope changes reject stale callbacks', async t => {
+  const h = host(t, true, 1, fileIndex, { checkOnSave: false, defer: true });
+  const [app, other] = separateProjects(h);
+  const hover = loadDependencyIndex(h, other);
+  h.calls[0].callback({ error: null, output: JSON.stringify(fileIndex(path.dirname(other.uri.fsPath))) });
+  await hover;
+  h.vscode.window.activeTextEditor = { document: other };
+  const pending = h.commands.get('nagi.check')(), call = h.calls[1];
+  for (let i = 0; i < 3; i++) { app.version++; app.isDirty = true; h.events.change({ document: app }); }
+  assert.equal(call.killed, false, 'typing in another project cannot starve a known independent check');
+  call.callback({ error: Object.assign(new Error('source error'), { code: 1 }), output: `error: line 2: other error\n --> ${other.uri.fsPath}:2\n` });
+  await pending;
+  assert.equal(h.diagnostics.get(other.uri.toString())[0].message, 'line 2: other error');
+  const next = h.commands.get('nagi.check')(), stale = h.calls[2];
+  other.version++; other.isDirty = true; h.events.change({ document: other });
+  assert.equal(stale.killed, true);
+  stale.callback({ error: Object.assign(new Error('source error'), { code: 1 }), output: `error: line 2: stale error\n --> ${other.uri.fsPath}:2\n` });
+  await next;
+  assert.equal(h.diagnostics.size, 0, 'the edited source cannot receive the old result');
+});
+
+test('shared imports and stale dependency snapshots still invalidate diagnosed projects', async t => {
+  let shared;
+  const h = host(t, true, 1, cwd => ({ ...fileIndex(cwd), files: [path.join(cwd, 'main.nagi'), shared.uri.fsPath] }), { checkOnSave: false, checkOutput: projectError });
+  const [app, other] = separateProjects(h);
+  shared = h.document('def helper():\n    print(1)\n', 'file', 'nagi', 'shared.nagi');
+  h.vscode.window.activeTextEditor = { document: other };
+  await h.commands.get('nagi.check')(); await loadDependencyIndex(h, other);
+  shared.version++; shared.isDirty = true; h.events.change({ document: shared });
+  assert.equal(h.diagnostics.size, 0, 'a cross-project dependency is not independent');
+  shared.isDirty = false;
+  await h.commands.get('nagi.check')(); await loadDependencyIndex(h, other);
+  fs.appendFileSync(shared.uri.fsPath, '# changed on disk\n');
+  app.version++; app.isDirty = true; h.events.change({ document: app });
+  assert.equal(h.diagnostics.size, 0, 'stale filesystem stamps cannot prove independence');
 });
 
 test('failed symbols queries still supply static builtin help without erasing source diagnostics', async t => {

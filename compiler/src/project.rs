@@ -122,6 +122,7 @@ pub struct Options {
     pub editor_input: bool,
     /// Set only when a project is selected. Plain SOURCE commands keep their cwd.
     pub project_root: Option<PathBuf>,
+    pub(crate) manifest_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -506,10 +507,12 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     };
 
     let mut project_root = None;
+    let mut manifest_path = None;
     let mut rust_dependencies = BTreeMap::new();
     if let Some(manifest) = manifest {
         let manifest = fs::canonicalize(&manifest).map_err(|e| manifest_error(&manifest, 1, e))?;
         let config = read_manifest(&manifest)?;
+        manifest_path = Some(manifest.clone());
         let root = manifest.parent().unwrap().to_path_buf();
         if source.is_none() {
             source = Some(root.join(config.entry));
@@ -560,5 +563,6 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         cost,
         editor_input,
         project_root,
+        manifest_path,
     })
 }
