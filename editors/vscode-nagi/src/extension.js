@@ -84,22 +84,30 @@ function activate(context) {
     job?.child?.kill();
   }
 
+  function overlays() {
+    return vscode.workspace.textDocuments.filter(d => isNagi(d) && d.isDirty && fs.existsSync(d.uri.fsPath))
+      .map(d => ({ file: d.uri.fsPath, text: d.getText() }));
+  }
+
   function check(document, manual = false) {
-    if (!isNagi(document) || !vscode.workspace.isTrusted || document.isDirty) return Promise.resolve();
+    if (!isNagi(document) || !vscode.workspace.isTrusted) return Promise.resolve();
     cancel(document);
     const key = document.uri.toString();
     const settings = options(document);
     const { root, config, executable, project } = settings;
-    if (projectDirty(project)) return Promise.resolve();
+    if (vscode.workspace.textDocuments.some(d => d.isDirty && d.uri.fsPath === project)) return Promise.resolve();
+    const files = overlays();
+    const input = files.length ? JSON.stringify({ files }) : undefined;
+    if (input && Buffer.byteLength(input) > 16 * 1000 * 1000) return Promise.resolve();
     const version = document.version;
     const startEpoch = epoch;
     const job = {};
     pending.set(key, job);
     return new Promise(resolve => {
       job.child = compiler.runCheck(executable,
-        argsFor('check', document, settings),
+        [...argsFor('check', document, settings), ...(input ? ['--editor-input'] : [])],
         root, config.get('checkTimeoutMs', 15000), result => {
-          if (pending.get(key) !== job || document.isClosed || document.version !== version || document.isDirty || startEpoch !== epoch) return resolve();
+          if (pending.get(key) !== job || document.isClosed || document.version !== version || startEpoch !== epoch) return resolve();
           pending.delete(key);
           output.appendLine(`[check] ${document.uri.fsPath}\n${result.output || result.error?.message || ''}`);
           const failure = compiler.processFailure(result.error);
@@ -126,7 +134,7 @@ function activate(context) {
             const parsed = compiler.parseDiagnostics(text, project || document.uri.fsPath)[0];
             const target = vscode.Uri.file(compiler.normalizeFile(parsed.file, root));
             let sourceLines;
-            try { sourceLines = fs.readFileSync(target.fsPath, 'utf8').split(/\r?\n/); } catch { sourceLines = ['']; }
+            try { sourceLines = (files.find(file => compiler.normalizeFile(file.file, root) === target.fsPath)?.text ?? fs.readFileSync(target.fsPath, 'utf8')).split(/\r?\n/); } catch { sourceLines = ['']; }
             const line = Math.min(parsed.line, sourceLines.length - 1);
             const textLine = sourceLines[line];
             const start = textLine.search(/\S/);
@@ -139,7 +147,7 @@ function activate(context) {
           }
           publishDiagnostics();
           resolve();
-        });
+        }, 1024 * 1024, input);
     });
   }
 
@@ -150,11 +158,11 @@ function activate(context) {
     }
     const document = vscode.window.activeTextEditor?.document;
     if (!isNagi(document)) return vscode.window.showInformationMessage('.nagi または .low ファイルを開いてください。');
+    if (name === 'check') return check(document, true);
     if (!await document.save()) return;
     const settings = options(document);
     // Imported files and the manifest must be saved before a project-wide command.
     if (projectDirty(settings.project) && !await saveProject(settings.project)) return;
-    if (name === 'check') return check(document, true);
     const { root, executable, project } = settings;
     const task = new vscode.Task({ type: 'nagi', command: name, file: document.uri.fsPath },
       vscode.workspace.getWorkspaceFolder(document.uri) || vscode.TaskScope.Workspace,
@@ -257,7 +265,7 @@ function activate(context) {
     const offset = document.offsetAt(position);
     const word = features.wordAt(text, offset);
     return features.completionCandidates(snapshot?.index, text, offset, document.languageId === 'nagi-low', { file: document.uri.fsPath, saved: snapshot?.saved }).map(item => {
-      const kind = { function: vscode.CompletionItemKind.Function, class: vscode.CompletionItemKind.Class, field: vscode.CompletionItemKind.Field, type: vscode.CompletionItemKind.TypeParameter, keyword: vscode.CompletionItemKind.Keyword }[item.kind];
+      const kind = { function: vscode.CompletionItemKind.Function, class: vscode.CompletionItemKind.Class, field: vscode.CompletionItemKind.Field, module: vscode.CompletionItemKind.Module, type: vscode.CompletionItemKind.TypeParameter, keyword: vscode.CompletionItemKind.Keyword }[item.kind];
       const completion = new vscode.CompletionItem(item.name, kind);
       completion.detail = item.signature + (snapshot?.saved && !item.builtin ? ' （保存済み）' : '');
       completion.documentation = documentation(item, snapshot);
@@ -270,14 +278,15 @@ function activate(context) {
 
   async function provideSignatureHelp(document, position, token) {
     const version = document.version;
-    if (!features.activeCall(document.getText(), document.offsetAt(position))) return;
+    if (!features.activeCall(document.getText(), document.offsetAt(position), true)) return;
     const snapshot = await querySymbols(document, token);
     if (token.isCancellationRequested || document.isClosed || document.version !== version) return;
     const found = features.signatureAt(snapshot?.index, document.getText(), document.offsetAt(position), { file: document.uri.fsPath, saved: snapshot?.saved });
     if (!found) return;
     const { item } = found;
     const parameters = item.kind === 'class' ? item.fields || [] : item.parameters || [];
-    const label = item.kind === 'class' ? `${item.name}(${parameters.map(p => `${p.name}: ${p.type}`).join(', ')}) -> ${item.name}` : item.signature;
+    const constructor = item.callName || item.name;
+    const label = item.kind === 'class' ? `${constructor}(${parameters.map(p => `${p.name}: ${p.type}`).join(', ')}) -> ${constructor}` : item.signature;
     const signature = new vscode.SignatureInformation(label, documentation(item, snapshot));
     signature.parameters = parameters.map(p => {
       const typed = `${p.name}: ${p.type}`;

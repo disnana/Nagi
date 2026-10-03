@@ -6,7 +6,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     io::Read,
     path::{Path, PathBuf},
 };
@@ -18,8 +18,10 @@ struct Location {
     column: usize,
     length: usize,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct Definition {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<DefId>,
     name: String,
     kind: &'static str,
     location: Location,
@@ -30,7 +32,7 @@ struct Definition {
     return_type: Option<String>,
     asynchronous: bool,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct Member {
     name: String,
     #[serde(rename = "type")]
@@ -104,6 +106,7 @@ struct Reference {
 
 struct File<'a> {
     path: &'a Path,
+    module: ModuleId,
     lines: Vec<&'a str>,
     start: usize,
     tokens: Vec<Token>,
@@ -120,34 +123,6 @@ impl File<'_> {
                 .count(),
             _ => 0,
         }
-    }
-    fn follows_call(&self, index: usize) -> bool {
-        let Some(token) = self.tokens.get(index + 1) else {
-            return false;
-        };
-        if matches!(&token.kind, K::Sym(s) if s == "(") {
-            return true;
-        }
-        if !matches!(&token.kind, K::Sym(s) if s == "[") {
-            return false;
-        }
-        let mut depth = 0usize;
-        for (i, token) in self.tokens.iter().enumerate().skip(index + 1) {
-            match &token.kind {
-                K::Sym(s) if s == "[" => depth += 1,
-                K::Sym(s) if s == "]" => {
-                    depth -= 1;
-                    if depth == 0 {
-                        return self
-                            .tokens
-                            .get(i + 1)
-                            .is_some_and(|t| matches!(&t.kind, K::Sym(s) if s == "("));
-                    }
-                }
-                _ => {}
-            }
-        }
-        false
     }
     fn string_length(&self, token: &Token) -> usize {
         let mut chars = self.lines[token.line - 1].chars().skip(token.col - 1);
@@ -193,6 +168,25 @@ fn name_location(files: &[File<'_>], line: usize, span: Span, name: &str) -> Opt
     Some(file.location(token, name.encode_utf16().count()))
 }
 
+// Local identifiers may be renamed to avoid generated global symbols. Their
+// parser span still identifies exactly one original source token.
+fn local_location(files: &[File<'_>], line: usize, span: Span) -> Option<(String, Location)> {
+    if span.end != span.start + 1 {
+        return None;
+    }
+    let file = files
+        .iter()
+        .find(|f| line >= f.start && line < f.start + f.lines.len().max(1))?;
+    let token = file.tokens.get(span.start)?;
+    let K::Id(name) = &token.kind else {
+        return None;
+    };
+    Some((
+        name.clone(),
+        file.location(token, name.encode_utf16().count()),
+    ))
+}
+
 // Resolve lexical bindings independently of type/ownership checking. Navigation
 // remains useful on a moved value or a binding whose initializer has a type error.
 struct Bindings<'a, 'b> {
@@ -203,7 +197,7 @@ struct Bindings<'a, 'b> {
 }
 impl Bindings<'_, '_> {
     fn binding(&mut self, line: usize, span: Span, name: &str) {
-        if let Some(location) = name_location(self.files, line, span, name) {
+        if let Some((_, location)) = local_location(self.files, line, span) {
             self.vars.insert(name.into(), location.clone());
             self.references.push(Reference {
                 target: location.clone(),
@@ -213,7 +207,21 @@ impl Bindings<'_, '_> {
     }
     fn reference(&mut self, line: usize, span: Span, name: &str) {
         if let (Some(location), Some(target)) = (
-            name_location(self.files, line, span, name),
+            if self.vars.contains_key(name) {
+                // A call's span includes its arguments; the callee remains the
+                // first token, even when its resolved local name was renamed.
+                local_location(
+                    self.files,
+                    line,
+                    Span {
+                        start: span.start,
+                        end: span.start + 1,
+                    },
+                )
+                .map(|(_, l)| l)
+            } else {
+                name_location(self.files, line, span, name)
+            },
             self.vars.get(name).or_else(|| self.functions.get(name)),
         ) {
             self.references.push(Reference {
@@ -328,6 +336,7 @@ impl Bindings<'_, '_> {
 struct Types<'a, 'b> {
     files: &'a [File<'b>],
     classes: &'a [Class],
+    metadata: &'a ModuleMetadata,
     locals: Vec<Local>,
     expressions: Vec<TypedExpression>,
 }
@@ -337,13 +346,18 @@ impl Types<'_, '_> {
             .iter()
             .find(|f| line >= f.start && line < f.start + f.lines.len().max(1))
     }
-    fn binding(&mut self, line: usize, span: Span, name: &str, ty: &Type) {
-        let Some(location) = name_location(self.files, line, span, name) else {
+    fn binding(&mut self, line: usize, span: Span, _name: &str, ty: &Type) {
+        let Some((original, location)) = local_location(self.files, line, span) else {
             return;
         };
+        let namespace = self
+            .file(line)
+            .map(|f| f.module.0.as_str())
+            .unwrap_or(&location.file);
+        let display = display_type(ty, namespace, self.metadata);
         self.locals.push(Local {
-            name: name.into(),
-            ty: ty.to_string(),
+            name: original,
+            ty: display,
             location,
         });
     }
@@ -373,16 +387,17 @@ impl Types<'_, '_> {
                                 .iter()
                                 .map(|(name, ty)| Member {
                                     name: name.clone(),
-                                    ty: ty.to_string(),
+                                    ty: display_type(ty, &file.module.0, self.metadata),
                                 })
                                 .collect()
                         })
                         .unwrap_or_default();
+                    let display = display_type(ty, &file.module.0, self.metadata);
                     self.expressions.push(TypedExpression {
                         location,
                         end_line: end.line,
                         end_column: end.column + end.length,
-                        ty: ty.to_string(),
+                        ty: display,
                         fields,
                     });
                 }
@@ -444,20 +459,107 @@ impl Types<'_, '_> {
     }
 }
 
+// Render types through the source file's namespace while retaining canonical
+// class identity for inference and field lookup.
+fn display_type(ty: &Type, file: &str, metadata: &ModuleMetadata) -> String {
+    let definition = metadata.definitions.iter().find(|d| d.symbol == ty.0);
+    let name = definition
+        .map(|d| {
+            let direct = metadata.bindings.iter().find(|b| {
+                b.module.0 == file
+                    && matches!(&b.target, BindingTarget::Definition(id) if id == &d.id)
+            });
+            if let Some(binding) = direct {
+                return binding.name.clone();
+            }
+            let module = metadata.bindings.iter().find(|b| {
+                b.module.0 == file
+                    && matches!(&b.target, BindingTarget::Module(id) if id == &d.id.module)
+            });
+            module
+                .map(|b| format!("{}.{}", b.name, d.id.name))
+                .unwrap_or_else(|| d.id.name.clone())
+        })
+        .unwrap_or_else(|| ty.0.clone());
+    if ty.0 == "Option" && ty.1.len() == 1 {
+        return format!("{}?", display_type(&ty.inner(), file, metadata));
+    }
+    if ty.1.is_empty() {
+        return name;
+    }
+    format!(
+        "{}[{}]",
+        name,
+        ty.1.iter()
+            .map(|t| display_type(t, file, metadata))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+fn reference_locations(
+    files: &[File<'_>],
+    line: usize,
+    span: Span,
+    spelling: &str,
+) -> Vec<Location> {
+    let Some(file) = files
+        .iter()
+        .find(|f| line >= f.start && line < f.start + f.lines.len().max(1))
+    else {
+        return vec![];
+    };
+    let Some(tokens) = file.tokens.get(span.start..span.end) else {
+        return vec![];
+    };
+    let parts = spelling.split('.').collect::<Vec<_>>();
+    let width = parts.len() * 2 - 1;
+    if parts.is_empty() || width > tokens.len() {
+        return vec![];
+    }
+    let Some(path) = tokens.windows(width).find(|tokens| {
+        parts.iter().enumerate().all(|(i, part)| {
+            matches!(&tokens[i * 2].kind, K::Id(name) if name == part)
+                && (i == 0 || matches!(&tokens[i * 2 - 1].kind, K::Sym(dot) if dot == "."))
+        })
+    }) else {
+        return vec![];
+    };
+    parts
+        .iter()
+        .enumerate()
+        .map(|(i, part)| file.location(&path[i * 2], part.encode_utf16().count()))
+        .collect()
+}
+
 pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Value, String> {
+    let module_files = sources.module_files().collect::<HashMap<_, _>>();
     let files = sources
         .files()
         .map(|(path, text, start)| {
             Ok(File {
                 path,
+                module: module_files
+                    .iter()
+                    .find(|(_, file)| **file == path)
+                    .map(|(module, _)| (*module).clone())
+                    .unwrap_or_else(|| ModuleId(path.display().to_string())),
                 lines: text.lines().collect(),
                 start,
                 tokens: lex(text, path.extension().is_none_or(|x| x != "low"))?,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
+    let mut metadata = ModuleMetadata::default();
+    for p in programs {
+        metadata.modules.extend(p.modules.modules.clone());
+        metadata.definitions.extend(p.modules.definitions.clone());
+        metadata.bindings.extend(p.modules.bindings.clone());
+        metadata.references.extend(p.modules.references.clone());
+    }
     let mut definitions = vec![];
-    let mut targets = BTreeMap::new();
+    let mut targets = HashMap::new();
+    let mut symbols = HashMap::new();
     for p in programs {
         for (name, kind, line, keyword) in p
             .classes
@@ -469,6 +571,13 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
                     .map(|f| (&f.name, "function", f.line, "def")),
             )
         {
+            let info = metadata
+                .definitions
+                .iter()
+                .find(|d| d.symbol == *name && d.line == line)
+                .or_else(|| metadata.definitions.iter().find(|d| d.symbol == *name));
+            let display_name = info.map(|d| d.id.name.as_str()).unwrap_or(name);
+            let canonical_name = info.map(|d| crate::modules::symbol(&d.id));
             let Some(file) = files
                 .iter()
                 .find(|f| line >= f.start && line < f.start + f.lines.len().max(1))
@@ -480,17 +589,22 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
             let Some(pair) = file.tokens.windows(2).find(|pair| {
                 pair[0].line == local
                     && matches!(&pair[0].kind, K::Id(n) if n == keyword || n == low_keyword)
-                    && matches!(&pair[1].kind, K::Id(n) if n == name)
+                    && matches!(&pair[1].kind, K::Id(n) if n == display_name || n == name || canonical_name.as_ref() == Some(n))
             }) else {
                 continue;
             };
-            let location = file.location(&pair[1], name.len());
-            // A Low replacement navigates to the High declaration when both are present.
-            targets
+            let location = file.location(&pair[1], file.token_length(&pair[1]));
+            symbols
                 .entry(name.clone())
                 .or_insert_with(|| location.clone());
-            definitions.push(Definition {
-                name: name.clone(),
+            if let Some(info) = info {
+                targets
+                    .entry(info.id.clone())
+                    .or_insert_with(|| location.clone());
+            }
+            let mut definition = Definition {
+                id: info.map(|d| d.id.clone()),
+                name: display_name.into(),
                 kind,
                 location,
                 signature: String::new(),
@@ -498,14 +612,13 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
                 fields: vec![],
                 return_type: None,
                 asynchronous: false,
-            });
-            let definition = definitions.last_mut().unwrap();
+            };
             let members = |items: &[(String, Type)]| {
                 items
                     .iter()
                     .map(|(name, ty)| Member {
                         name: name.clone(),
-                        ty: ty.to_string(),
+                        ty: display_type(ty, &file.module.0, &metadata),
                     })
                     .collect::<Vec<_>>()
             };
@@ -516,7 +629,8 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
                     .find(|f| f.name == *name && f.line == line)
                     .unwrap();
                 definition.parameters = members(&function.params);
-                definition.return_type = Some(function.ret.to_string());
+                definition.return_type =
+                    Some(display_type(&function.ret, &file.module.0, &metadata));
                 definition.asynchronous = function.asynchronous;
                 definition.signature = format!(
                     "{}{}{} {}({}) -> {}",
@@ -527,14 +641,14 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
                     } else {
                         "def"
                     },
-                    name,
-                    function
-                        .params
+                    display_name,
+                    definition
+                        .parameters
                         .iter()
-                        .map(|(n, t)| format!("{n}: {t}"))
+                        .map(|m| format!("{}: {}", m.name, m.ty))
                         .collect::<Vec<_>>()
                         .join(", "),
-                    function.ret
+                    definition.return_type.as_deref().unwrap()
                 );
             } else {
                 let class = p
@@ -544,114 +658,186 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
                     .unwrap();
                 definition.fields = members(&class.fields);
                 definition.signature = format!(
-                    "class {name}\n{}",
-                    class
+                    "class {display_name}\n{}",
+                    definition
                         .fields
                         .iter()
-                        .map(|(n, t)| format!("    {n}: {t}"))
+                        .map(|m| format!("    {}: {}", m.name, m.ty))
                         .collect::<Vec<_>>()
                         .join("\n")
                 );
             }
+            definitions.push(definition);
         }
     }
-    let mut calls = BTreeSet::new();
-    fn expr(e: &Expr, calls: &mut BTreeSet<(usize, String)>) {
-        match &e.kind {
-            E::Call(name, _, args) => {
-                calls.insert((e.line, name.clone()));
-                for a in args {
-                    expr(a, calls);
+    let render_alias = |definition: &Definition, name: &str, file: &str| {
+        let mut alias = definition.clone();
+        alias.name = name.into();
+        let symbol = definition
+            .id
+            .as_ref()
+            .and_then(|id| metadata.definitions.iter().find(|d| &d.id == id))
+            .map(|d| &d.symbol);
+        if let Some(symbol) = symbol {
+            for program in programs {
+                if let Some(function) = program.functions.iter().find(|f| &f.name == symbol) {
+                    alias.parameters = function
+                        .params
+                        .iter()
+                        .map(|(name, ty)| Member {
+                            name: name.clone(),
+                            ty: display_type(ty, file, &metadata),
+                        })
+                        .collect();
+                    alias.return_type = Some(display_type(&function.ret, file, &metadata));
+                    break;
                 }
-            }
-            E::Record(name, fields) => {
-                calls.insert((e.line, name.clone()));
-                for (_, a) in fields {
-                    expr(a, calls);
+                if let Some(class) = program.classes.iter().find(|c| &c.name == symbol) {
+                    alias.fields = class
+                        .fields
+                        .iter()
+                        .map(|(name, ty)| Member {
+                            name: name.clone(),
+                            ty: display_type(ty, file, &metadata),
+                        })
+                        .collect();
+                    break;
                 }
-            }
-            E::Binary(a, _, b) | E::Index(a, b) => {
-                expr(a, calls);
-                expr(b, calls);
-            }
-            E::Unary(_, a) | E::Try(a) | E::Await(a) | E::Field(a, _) => expr(a, calls),
-            E::List(args) => {
-                for a in args {
-                    expr(a, calls);
-                }
-            }
-            _ => {}
-        }
-    }
-    fn block(ss: &[Stmt], calls: &mut BTreeSet<(usize, String)>) {
-        for s in ss {
-            match &s.kind {
-                S::Assign { value, .. }
-                | S::Return(Some(value))
-                | S::Expr(value)
-                | S::Spawn(value) => expr(value, calls),
-                S::If(value, a, b) => {
-                    expr(value, calls);
-                    block(a, calls);
-                    block(b, calls);
-                }
-                S::While(value, body) | S::For(_, value, body) => {
-                    expr(value, calls);
-                    block(body, calls);
-                }
-                S::Match(value, arms) => {
-                    expr(value, calls);
-                    for arm in arms {
-                        block(&arm.body, calls);
-                    }
-                }
-                S::Scope(body) => block(body, calls),
-                S::Return(None) => {}
             }
         }
-    }
-    for p in programs {
-        for f in &p.functions {
-            block(&f.body, &mut calls);
-        }
-    }
+        alias.signature = if alias.kind == "class" {
+            format!(
+                "class {}\n{}",
+                alias.name,
+                alias
+                    .fields
+                    .iter()
+                    .map(|m| format!("    {}: {}", m.name, m.ty))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        } else {
+            format!(
+                "{}def {}({}) -> {}",
+                if alias.asynchronous { "async " } else { "" },
+                alias.name,
+                alias
+                    .parameters
+                    .iter()
+                    .map(|m| format!("{}: {}", m.name, m.ty))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                alias.return_type.as_deref().unwrap_or("unit")
+            )
+        };
+        alias
+    };
     let mut references = vec![];
-    let classes: BTreeSet<_> = definitions
-        .iter()
-        .filter(|d| d.kind == "class")
-        .map(|d| d.name.as_str())
-        .collect();
+    let mut namespace_bindings = vec![];
+    for binding in &metadata.bindings {
+        let location = name_location(&files, binding.line, binding.span, &binding.name);
+        let scope_file = module_files
+            .get(&binding.module)
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| binding.module.0.clone());
+        match &binding.target {
+            BindingTarget::Definition(id) => {
+                let Some(definition) = definitions.iter().find(|d| d.id.as_ref() == Some(id))
+                else {
+                    continue;
+                };
+                let Some(target) = targets.get(id) else {
+                    continue;
+                };
+                if let Some(location) = &location {
+                    references.push(Reference {
+                        location: location.clone(),
+                        target: target.clone(),
+                    });
+                }
+                let alias = render_alias(definition, &binding.name, &binding.module.0);
+                namespace_bindings.push(
+                    serde_json::json!({"file":scope_file,"name":binding.name,"kind":alias.kind,
+                    "location":location,"target":target,"definition_id":id,"definition":alias}),
+                );
+            }
+            BindingTarget::Module(id) => {
+                let path = metadata
+                    .modules
+                    .iter()
+                    .find(|m| &m.id == id)
+                    .map(|m| m.path.clone())
+                    .unwrap_or_else(|| id.0.clone());
+                let target = Location {
+                    file: path.clone(),
+                    line: 1,
+                    column: 1,
+                    length: 0,
+                };
+                if let Some(location) = &location {
+                    references.push(Reference {
+                        location: location.clone(),
+                        target: target.clone(),
+                    });
+                }
+                let members = definitions
+                    .iter()
+                    .filter(|d| d.id.as_ref().is_some_and(|d| &d.module == id))
+                    .map(|d| {
+                        let mut member = render_alias(
+                            d,
+                            &format!("{}.{}", binding.name, d.name),
+                            &binding.module.0,
+                        );
+                        member.name = d.name.clone();
+                        member
+                    })
+                    .collect::<Vec<_>>();
+                namespace_bindings.push(serde_json::json!({"file":scope_file,"name":binding.name,"kind":"module",
+                    "location":location,"target":target,"members":members,"signature":format!("module {}",binding.name)}));
+            }
+        }
+    }
+    for reference in &metadata.references {
+        let Some(target) = targets.get(&reference.target) else {
+            continue;
+        };
+        let locations =
+            reference_locations(&files, reference.line, reference.span, &reference.spelling);
+        if let Some(location) = locations.last() {
+            references.push(Reference {
+                location: location.clone(),
+                target: target.clone(),
+            });
+        }
+        if locations.len() > 1 {
+            let root = reference.spelling.split('.').next().unwrap();
+            if let Some(binding) = metadata.bindings.iter().find(|b| {
+                b.module == reference.module
+                    && b.name == root
+                    && matches!(b.target, BindingTarget::Module(_))
+            }) {
+                if let (Some(location), Some(target)) = (
+                    locations.first(),
+                    name_location(&files, binding.line, binding.span, &binding.name),
+                ) {
+                    references.push(Reference {
+                        location: location.clone(),
+                        target,
+                    });
+                }
+            }
+        }
+    }
+    // Import strings navigate to the loaded canonical file, including `from`.
     for file in &files {
-        let mut reading_type = false;
-        let mut type_depth = 0usize;
         for (i, token) in file.tokens.iter().enumerate() {
-            match &token.kind {
-                K::Sym(s) if s == ":" || s == "->" => reading_type = true,
-                K::Sym(s) if s == "[" && reading_type => type_depth += 1,
-                K::Sym(s) if s == "]" && type_depth > 0 => type_depth -= 1,
-                K::Sym(s) if s == "," && type_depth > 0 => {}
-                K::Sym(_) | K::Newline | K::Indent | K::Dedent if type_depth == 0 => {
-                    reading_type = false
-                }
-                _ => {}
-            }
-            if let K::Id(name) = &token.kind {
-                let call = file.follows_call(i);
-                if (call && calls.contains(&(file.start + token.line - 1, name.clone())))
-                    || (reading_type && classes.contains(name.as_str()))
-                {
-                    if let Some(target) = targets.get(name) {
-                        references.push(Reference {
-                            location: file.location(token, name.len()),
-                            target: target.clone(),
-                        });
-                    }
-                }
-            }
             if let K::Str(import) = &token.kind {
-                if i > 0 && matches!(&file.tokens[i - 1].kind, K::Id(n) if n == "import") {
-                    let target = file.path.parent().unwrap().join(import);
-                    let target = std::fs::canonicalize(target).map_err(|e| e.to_string())?;
+                if i > 0
+                    && matches!(&file.tokens[i-1].kind, K::Id(n) if n == "import" || n == "from")
+                {
+                    let target = std::fs::canonicalize(file.path.parent().unwrap().join(import))
+                        .map_err(|e| e.to_string())?;
                     references.push(Reference {
                         location: file.location(token, file.string_length(token)),
                         target: Location {
@@ -665,20 +851,16 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
             }
         }
     }
-    for def in &definitions {
+    for definition in &definitions {
         references.push(Reference {
-            location: def.location.clone(),
-            target: def.location.clone(),
+            location: definition.location.clone(),
+            target: definition.location.clone(),
         });
     }
     let mut bindings = Bindings {
         files: &files,
         vars: HashMap::new(),
-        functions: targets
-            .iter()
-            .filter(|(name, _)| !classes.contains(name.as_str()))
-            .map(|(name, target)| (name.clone(), target.clone()))
-            .collect(),
+        functions: symbols,
         references: vec![],
     };
     for p in programs {
@@ -686,14 +868,13 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
             bindings.function(f);
         }
     }
-    let resolved: HashSet<_> = bindings
+    let resolved = bindings
         .references
         .iter()
-        .map(|reference| &reference.location)
-        .collect();
-    references.retain(|reference| !resolved.contains(&reference.location));
+        .map(|r| &r.location)
+        .collect::<HashSet<_>>();
+    references.retain(|r| !resolved.contains(&r.location));
     references.extend(bindings.references);
-    // Compound assignments contain a synthetic read of their left-hand name.
     let mut seen = HashSet::new();
     references.retain(|r| seen.insert((r.location.clone(), r.target.clone())));
     let mut primary = Program::default();
@@ -702,6 +883,7 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
         let dest = if i == 0 { &mut primary } else { &mut native };
         dest.classes.extend(p.classes.clone());
         dest.functions.extend(p.functions.clone());
+        dest.modules.merge_native(p.modules.clone())?;
     }
     let typed = crate::check::editor_types(&primary, &native);
     let mut types = Types {
@@ -710,6 +892,7 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
             .as_ref()
             .map(|p| p.classes.as_slice())
             .unwrap_or_default(),
+        metadata: &metadata,
         locals: vec![],
         expressions: vec![],
     };
@@ -722,6 +905,8 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
         }
     }
     Ok(
-        serde_json::json!({ "format": "nagi-symbols-v1", "definitions": definitions, "references": references, "locals": types.locals, "expressions": types.expressions, "files": files.iter().map(|f| f.path.display().to_string()).collect::<Vec<_>>() }),
+        serde_json::json!({"format":"nagi-symbols-v1","definitions":definitions,"bindings":namespace_bindings,
+        "references":references,"locals":types.locals,"expressions":types.expressions,
+        "files":files.iter().map(|f|f.path.display().to_string()).collect::<Vec<_>>()}),
     )
 }

@@ -78,6 +78,12 @@ Try F12 on these local names:
 
 Reassigned names navigate to their first binding. A for binding reusing an outer name targets the loop binding inside the loop and the original afterward. New if/while/scope/case bindings apply only in their blocks. Navigation can work after moves or initializer type errors if a binding is identifiable. F12 for class field names and built-ins is not supported.
 
+### Try module candidates and definitions
+
+Open `module_imports.nagi` from the [module example](../../test-nagi-code/library-examples/module-imports/README.en.md). Press Ctrl+Space after `orders.` to see `Order` and `total`, defined in `orders.nagi` itself. After `current.`, the candidates are class fields such as `amount`. The compiler's name resolution and type information distinguish module definitions from class fields.
+
+Hover and parameter hints on `orders.total` show its function declaration; hovering `SavedOrder` shows the original class's fields. Press F12 on `total` in `orders.total` or the from alias `SavedOrder` to reach the original definition in `orders.nagi`. Open and edit `orders.nagi` without saving to query the edited buffer. If a local shadows a module name, assistance follows that scope's resolution.
+
 ## When editor information is unavailable
 
 Previously saved Nagi/Low files are analyzed in memory with their unsaved edits, including open imports and native Low. Queries do not save or build sources. Save new files and nagi.toml to use project information.
@@ -93,4 +99,4 @@ Extension 0.1.9 also offers keyword/type completion and built-in completion, hov
 | Helper functions missing | Check imports from [nagi.toml](projects.md)'s entry |
 | Project declarations, local types, or F12 unavailable | Check workspace trust, nagi.compilerPath, and the Nagi Output channel |
 
-Unsaved edits clear old Problems diagnostics. Save or run **Nagi: 型検査** (Type Check) to update them. Seeing a type in a hover or completion does not mean the whole program passed checking.
+Edits clear old Problems diagnostics and, with automatic checks enabled, recheck the current buffers. **Nagi: 型検査** (Type Check) also reads unsaved edits to previously saved files without saving or building. Save new files and `nagi.toml` first. Lower, build, and run save project files before executing. Seeing a type in a hover or completion does not mean the whole program passed checking.

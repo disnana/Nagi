@@ -39,11 +39,15 @@ nagic run app.nagi --native native.low
 
 The result is now `42`. High still calls `score(7)`, but the body that runs comes from Low's `optimized_score`. `@replace generated::score` specifies the function to replace.
 
+For a function imported at the High root with `import "orders.nagi" as orders`, use `@replace generated::orders::score`. A from function alias can be selected with `@replace generated::alias`. Type annotations such as `orders.Order` and from class aliases resolve to the same definition IDs. See [imports and Rust integration](modules-and-rust.md).
+
 The replacement must match the original function's parameter count and types, return type, and async status. A missing target or multiple replacements of the same function is an error. Replacements affect whole functions.
 
 Commands regenerate `generated.low`. Save changes in `native.low` to keep them. `--native` can also add ordinary Low functions that High can call. See [project configuration](projects.md#add-rust-and-handwritten-low) to save these options.
 
 ## Low syntax
+
+Relative-file imports follow the same rules as High: `import "orders.low" as orders;` or `from "orders.low" import Order as SavedOrder;`. A module name exposes functions and records defined in that file.
 
 Types, ownership, borrowing, and Result handling follow the same rules as High. This function handles a Result:
 

@@ -1,4 +1,4 @@
-"""Build and exercise the six library projects, including a real HTTP server."""
+"""Build and exercise the seven library projects, including a real HTTP server."""
 from __future__ import annotations
 
 import argparse
@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROJECTS = ROOT / "test-nagi-code/library-examples"
 EXE = ".exe" if os.name == "nt" else ""
 OUTPUTS = {
+    "module-imports": ("module_imports", "42\n42\n7\n"),
     "low-kernel": ("low_kernel", "30\n4\n"),
     "rust-json": (
         "serde-record",

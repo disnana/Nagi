@@ -191,7 +191,7 @@ jobs:
           PY
       - run: cargo build --release --locked -p nagic
       - name: Check CLI, installation, ownership, and diagnostics on the target platform
-        run: cargo test --locked -p nagic --test cli --test installation --test loop_ownership --test build_diagnostics --test rust_dependencies --test expression_contracts --test frontend_contracts --test literal_contracts --test http_route_conflicts --test symbols
+        run: cargo test --locked -p nagic --test cli --test installation --test loop_ownership --test build_diagnostics --test rust_dependencies --test expression_contracts --test frontend_contracts --test literal_contracts --test http_route_conflicts --test symbols --test modules --test module_parser --test module_emission --test module_symbols
       - name: Check editor behavior on the target platform
         shell: bash
         run: node --test editors/vscode-nagi/test/*.test.js

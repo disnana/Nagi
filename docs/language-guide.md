@@ -195,7 +195,7 @@ nagic run imports.nagi
 
 [完成ファイル](../examples/tutorial/imports.nagi)を実行すると`42`です。importのパスは、実行したターミナルではなく**importを書いたファイルの場所**を基準にします。読み込まれる`math.nagi`には`main`は不要です。
 
-現在は全ファイルが1つの名前空間に入ります。`math.add(...)`やaliasではなく`add(...)`で呼び、関数名・class名の重複はエラーです。Rustライブラリを使う場合は[importとRust連携](modules-and-rust.md)へ進んでください。
+この書き方では同じ名前空間へ読み込むため、`add(...)`で呼びます。`import "math.nagi" as math`に変えると`math.add(...)`で呼べます。classや関数だけを選ぶfrom文も使えます。同名の定義を区別する方法やRustライブラリとの連携は[importとRust連携](modules-and-rust.md)を参照してください。
 
 ## 7. asyncとAPIへ進む
 

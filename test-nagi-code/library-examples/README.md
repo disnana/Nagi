@@ -1,6 +1,6 @@
 # ライブラリとRust連携のサンプル
 
-6つの小さなプロジェクトで、Nagiの共通コード、Rustのcrate、独自のHTTP基盤、Lowの差し替えを試します。
+7つの小さなプロジェクトで、Nagiの共通コード、moduleと別名、Rustのcrate、独自のHTTP基盤、Lowの差し替えを試します。
 
 [一覧と起動手順](../../docs/library-examples.md) · [共通コードの構成](../../docs/libraries.md) · [English](README.en.md)
 

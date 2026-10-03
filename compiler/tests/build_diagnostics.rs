@@ -548,7 +548,7 @@ fn lowering_restores_nested_statement_expression_arm_and_field_lines() {
     check::check(&mut restored).unwrap();
     let rust = emit::rust_with_lines(&restored).unwrap();
     for (fragment, local) in [
-        ("pub value: i64", 2),
+        ("pub value: ::std::primitive::i64", 2),
         ("while false", 7),
         ("total = 1", 8),
         ("for number", 10),

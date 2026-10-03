@@ -15,7 +15,7 @@ library-examples/
 
 Import the shared file with a relative path such as `import "../shared/foundation.nagi"`. Each application's `nagi.toml` selects a Rust entry file, which loads the shared Rust module. Keep the sample directory structure together.
 
-Current imports load definitions into one namespace. There is no visibility or alias syntax, so shared functions should use names that avoid collisions. This file-based reuse is separate from publishing a Cargo crate or using a Nagi package manager.
+This traditional import loads definitions into one namespace. Use `import "../shared/foundation.nagi" as foundation` to call the file's own functions as `foundation.function_name`. A from statement can also alias a class or function. The [module example](../../test-nagi-code/library-examples/module-imports/README.en.md) distinguishes same-named classes from different files. This file-based reuse is separate from publishing a Cargo crate or using a Nagi package manager.
 
 ## Keep the Rust boundary small
 
@@ -45,8 +45,7 @@ Moving code to Low does not guarantee a speedup. Check that results match, then 
 
 The following items need design work; they are not available configuration or syntax:
 
-- Rust dependency `path`, `features`, and `default-features` settings, for local crates and explicit feature selection.
-- Named Nagi modules, `as`, `from`, and visibility, to prevent collisions between libraries.
+- Unquoted standard modules and visibility declarations. Relative-file `as` and `from` imports are already available.
 - Optional HTTP and DB standard libraries, to omit unused build dependencies.
 - Ownership, sharing, shutdown, and async cancellation rules for custom connections and clients.
 - Typed SQL arguments, row decoding, and transactions as part of general database support, alongside PostgreSQL connections.

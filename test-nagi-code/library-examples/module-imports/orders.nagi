@@ -1,0 +1,5 @@
+class Order:
+    amount: i64
+
+def total(order: Order) -> i64:
+    return order.amount

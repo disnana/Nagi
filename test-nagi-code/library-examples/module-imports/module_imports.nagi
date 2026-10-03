@@ -1,0 +1,14 @@
+import "orders.nagi" as orders
+from "orders.nagi" import Order as SavedOrder
+import "archive.nagi" as archive
+
+def saved_total(order: SavedOrder) -> i64:
+    return orders.total(order)
+
+def main():
+    current: SavedOrder = orders.Order(amount=42)
+    print(saved_total(current))
+    total = orders.total
+    print(total(current))
+    older = archive.Order(amount=7)
+    print(archive.total(older))

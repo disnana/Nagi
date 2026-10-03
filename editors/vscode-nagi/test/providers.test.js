@@ -13,7 +13,7 @@ function host(t, trusted = true, code = 1) {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'nagi-provider-'));
   t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
   const disposable = () => ({ dispose() {} });
-  const providers = {}, selectors = {}, commands = new Map(), diagnostics = new Map();
+  const providers = {}, selectors = {}, events = {}, commands = new Map(), diagnostics = new Map();
   const calls = [];
   const uri = (file, scheme = 'file') => ({ scheme, fsPath: file, toString: () => `${scheme}:${file}` });
   class Position { constructor(line, character) { this.line = line; this.character = character; } }
@@ -32,8 +32,8 @@ function host(t, trusted = true, code = 1) {
       isTrusted: trusted, textDocuments: [],
       getWorkspaceFolder: () => ({ uri: uri(folder) }),
       getConfiguration: () => ({ get: (_, fallback) => fallback }),
-      onDidOpenTextDocument: disposable, onDidSaveTextDocument: disposable,
-      onDidChangeTextDocument: disposable, onDidCloseTextDocument: disposable,
+      onDidOpenTextDocument: disposable, onDidSaveTextDocument(fn) { events.save = fn; return disposable(); },
+      onDidChangeTextDocument(fn) { events.change = fn; return disposable(); }, onDidCloseTextDocument: disposable,
       onDidGrantWorkspaceTrust: disposable, onDidChangeConfiguration: disposable,
       createFileSystemWatcher: () => ({ dispose() {}, onDidCreate: disposable, onDidChange: disposable, onDidDelete: disposable }),
     },
@@ -81,8 +81,22 @@ function host(t, trusted = true, code = 1) {
     return doc;
   }
   const token = { isCancellationRequested: false, onCancellationRequested: disposable };
-  return { providers, selectors, commands, diagnostics, calls, document, token };
+  return { providers, selectors, events, commands, diagnostics, calls, document, token };
 }
+
+test('typing invalidates snapshots without launching save-only checks per keystroke', async t => {
+  const h = host(t);
+  const doc = h.document('def main():\n    print(7)\n');
+  for (let i = 0; i < 20; i++) {
+    doc.version++; doc.isDirty = true; h.events.change({ document: doc });
+  }
+  await Promise.resolve();
+  assert.equal(h.calls.length, 0);
+  h.events.save(doc);
+  await Promise.resolve();
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.calls[0].args[0], 'check');
+});
 
 test('failed symbols queries still supply static builtin help without erasing source diagnostics', async t => {
   const h = host(t);
