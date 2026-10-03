@@ -1,0 +1,22 @@
+class DeviceSettings:
+    id: i64
+    enabled: bool?
+    gain: f64?
+    label: str?
+    calibration: bytes?
+
+@get("/devices/{id}")
+async def find_device(db: Db, id: i64) -> Result[DeviceSettings?, Error]:
+    return await db_query[DeviceSettings](db, "SELECT id, enabled, gain, label, calibration FROM devices WHERE id = ?1", id)
+
+@get("/devices")
+async def devices(db: Db) -> Result[List[DeviceSettings], Error]:
+    return await db_all[DeviceSettings](db, "SELECT id, enabled, gain, label, calibration FROM devices ORDER BY id")
+
+async def main() -> Result[unit, Error]:
+    path = env("NAGI_SAMPLE_DB", "settings.sqlite")
+    db = try await db_open(path)
+    try await db_exec(db, "CREATE TABLE IF NOT EXISTS devices(id INTEGER PRIMARY KEY, enabled INTEGER, gain REAL, label TEXT, calibration BLOB)")
+    try await db_exec(db, "INSERT OR IGNORE INTO devices VALUES (1, 1, 1.25, NULL, X'0001FF'), (2, NULL, NULL, 'front-door', NULL), (3, 0, 0.5, 'side-door', X'')")
+    port = try parse_i64(env("NAGI_SAMPLE_PORT", "8091"))
+    return await serve(db, port)

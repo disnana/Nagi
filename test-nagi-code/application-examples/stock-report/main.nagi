@@ -1,0 +1,10 @@
+import "inventory.nagi" as inventory
+
+def main() -> Result[unit, Error]:
+    text = try read_line()
+    match inventory.summarize(view(text)):
+        case Ok(report):
+            encoded = try json_encode(report)
+            return ok(print(encoded))
+        case Err(problem):
+            return error(inventory.message(problem))

@@ -135,3 +135,23 @@ test('typed failure help exposes an error value without requiring builtin Error'
   const types = features.completionCandidates(undefined, 'value: Res', 10);
   assert.equal(features.insertion(types.find(item => item.name === 'Result'), ''), 'Result[${1:T}, ${2:Error}]');
 });
+
+test('Result patterns have completion hover and argument help only after case', () => {
+  for (const low of [false, true]) {
+    const text = '    case ';
+    const items = features.completionCandidates(undefined, text, text.length, low);
+    for (const [name, argument] of [['Ok', 'value'], ['Err', 'problem']]) {
+      const item = items.find(item => item.name === name);
+      assert.equal(item.kind, 'pattern');
+      assert.equal(features.insertion(item, ''), `${name}(\${1:${argument}})`);
+      assert.equal(features.insertion(item, '('), name);
+      const pattern = `case ${name}(`;
+      assert.equal(features.signatureAt(undefined, pattern, pattern.length).item.parameters[0].name, argument);
+      assert.equal(features.hoverAt(undefined, pattern, 6).item.signature, `case ${name}(${argument})`);
+      assert.equal(features.signatureAt(undefined, `${name}(`, name.length + 1), undefined);
+      assert.ok(!features.completionCandidates(undefined, '', 0, low).some(item => item.name === name));
+    }
+  }
+  const custom = { name: 'Ok', kind: 'function', signature: 'def Ok(value: i64) -> i64', parameters: [{ name: 'value', type: 'i64' }] };
+  assert.equal(features.signatureAt({ definitions: [custom] }, 'Ok(', 3).item.signature, custom.signature, 'ordinary same-name functions keep their help');
+});

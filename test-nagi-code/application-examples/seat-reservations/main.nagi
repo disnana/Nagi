@@ -1,0 +1,142 @@
+import std.actor as actor
+
+class Context:
+    capacity: i64
+
+class Booking:
+    reference: i64
+    seats: i64
+
+class ReservationState:
+    remaining: i64
+    bookings: List[Booking]
+
+enum Request:
+    Reserve(reference: i64, seats: i64)
+    Availability
+    RestartForTest
+
+enum BookingError:
+    InvalidReference
+    InvalidQuantity
+    DuplicateReference(reference: i64)
+    SoldOut(remaining: i64)
+
+async def create(context: shared[Context]) -> Result[ReservationState, Error]:
+    return ok(ReservationState(remaining=context.capacity, bookings=[]))
+
+async def handle(state: ReservationState, request: Request) -> Result[actor.Turn[ReservationState, i64, BookingError], Error]:
+    match request:
+        case Request.Availability:
+            remaining = state.remaining
+            return ok(actor.turn[ReservationState, i64, BookingError](state, ok(remaining)))
+        case Request.RestartForTest:
+            return error("controlled restart; this sample stores bookings only in memory")
+        case Request.Reserve(reference, seats):
+            if reference < 1:
+                return ok(actor.turn[ReservationState, i64, BookingError](state, fail(BookingError.InvalidReference)))
+            if seats < 1:
+                return ok(actor.turn[ReservationState, i64, BookingError](state, fail(BookingError.InvalidQuantity)))
+            for index in range(len(view(state.bookings))):
+                if state.bookings[index].reference == reference:
+                    return ok(actor.turn[ReservationState, i64, BookingError](state, fail(BookingError.DuplicateReference(reference))))
+            if seats > state.remaining:
+                remaining = state.remaining
+                return ok(actor.turn[ReservationState, i64, BookingError](state, fail(BookingError.SoldOut(remaining))))
+            remaining = state.remaining - seats
+            bookings = state.bookings
+            append(bookings, Booking(reference=reference, seats=seats))
+            next = ReservationState(remaining=remaining, bookings=bookings)
+            return ok(actor.turn[ReservationState, i64, BookingError](next, ok(remaining)))
+
+async def monitor(group: actor.Supervisor[Context]) -> Result[unit, Error]:
+    return await actor.run(group)
+
+async def call(worker: view[actor.Actor[Request, i64, BookingError]], request: Request) -> Result[Result[i64, BookingError], Error]:
+    match await actor.call(worker, request, 1000, 1000):
+        case Ok(reply):
+            return ok(reply)
+        case Err(_):
+            return error("reservation worker unavailable")
+
+async def value(worker: view[actor.Actor[Request, i64, BookingError]], request: Request) -> Result[i64, Error]:
+    match try await call(worker, request):
+        case Ok(remaining):
+            return ok(remaining)
+        case Err(_):
+            return error("unexpected booking rejection")
+
+async def exercise(first: actor.Actor[Request, i64, BookingError], second: actor.Actor[Request, i64, BookingError], control: actor.Control) -> Result[unit, Error]:
+    match await actor.ready(view(first), 1000):
+        case Ok(_):
+            assert_true(True)
+        case Err(_):
+            try await actor.shutdown(view(control))
+            return error("morning reservation worker did not start")
+    match await actor.ready(view(second), 1000):
+        case Ok(_):
+            assert_true(True)
+        case Err(_):
+            try await actor.shutdown(view(control))
+            return error("evening reservation worker did not start")
+    assert_true(try await value(view(first), Request.Reserve(101, 3)) == 7)
+    match try await call(view(first), Request.Reserve(101, 1)):
+        case Ok(_):
+            assert_true(False)
+        case Err(problem):
+            match problem:
+                case BookingError.DuplicateReference(reference):
+                    assert_true(reference == 101)
+                case BookingError.InvalidReference:
+                    assert_true(False)
+                case BookingError.InvalidQuantity:
+                    assert_true(False)
+                case BookingError.SoldOut(_):
+                    assert_true(False)
+    match try await call(view(first), Request.Reserve(102, 8)):
+        case Ok(_):
+            assert_true(False)
+        case Err(problem):
+            match problem:
+                case BookingError.SoldOut(remaining):
+                    assert_true(remaining == 7)
+                case BookingError.InvalidReference:
+                    assert_true(False)
+                case BookingError.InvalidQuantity:
+                    assert_true(False)
+                case BookingError.DuplicateReference(_):
+                    assert_true(False)
+    assert_true(try await value(view(first), Request.Availability) == 7)
+    assert_true(try await value(view(second), Request.Reserve(201, 2)) == 8)
+    match await actor.call(view(first), Request.RestartForTest, 1000, 1000):
+        case Ok(_):
+            assert_true(False)
+        case Err(problem):
+            assert_true(problem.kind == actor.CallKind.REPLY_LOST)
+    restarted = False
+    for attempt in range(200):
+        if not restarted:
+            match await actor.call(view(first), Request.Availability, 0, 100):
+                case Ok(reply):
+                    match reply:
+                        case Ok(remaining):
+                            assert_true(remaining == 10)
+                            restarted = True
+                        case Err(_):
+                            assert_true(False)
+                case Err(_):
+                    await sleep(5)
+    assert_true(restarted)
+    assert_true(try await value(view(second), Request.Availability) == 8)
+    try await actor.shutdown(view(control))
+    return ok(print("reservations: validated duplicates, capacity, restart and sibling isolation"))
+
+async def main() -> Result[unit, Error]:
+    group = actor.supervisor[Context](Context(capacity=10), actor.default_options())
+    first = try actor.register[ReservationState, Request, i64, BookingError](view(group), "morning", create, handle, actor.default_actor_options())
+    second = try actor.register[ReservationState, Request, i64, BookingError](view(group), "evening", create, handle, actor.default_actor_options())
+    control = actor.control(view(group))
+    async with scope:
+        spawn monitor(group)
+        spawn exercise(first, second, control)
+    return ok(assert_true(True))

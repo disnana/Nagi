@@ -29,7 +29,7 @@ fn low_quote(s: &str) -> String {
 // shorten those symbols for diagnostics, so emission must render the stored
 // structural name directly.
 fn low_type(t: &Type) -> String {
-    if t.0 == "Option" {
+    if t.0 == "Option" && t.inner().0 != "Option" {
         return format!("{}?", low_type(&t.inner()));
     }
     if t.1.is_empty() {
@@ -908,10 +908,13 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
                                         .fields
                                         .iter()
                                         .zip(bindings)
-                                        .map(|((field, _), value)| format!(
-                                            "{field}: {}",
-                                            binding(value)
-                                        ))
+                                        .map(|((field, _), value)| {
+                                            if value.name.as_deref() == Some(field.as_str()) {
+                                                binding(value)
+                                            } else {
+                                                format!("{field}: {}", binding(value))
+                                            }
+                                        })
                                         .collect::<Vec<_>>()
                                         .join(", ")
                                 )
@@ -1138,11 +1141,17 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             out.push_str(".finish()\n    }\n}\n");
         }
         let db_compatible = c.fields.iter().all(|(_, t)| {
+            let scalar = if t.0 == "Option" {
+                t.1.first().unwrap_or(t)
+            } else {
+                t
+            };
             [
                 "i8", "i16", "i32", "i64", "u8", "u16", "u32", "f32", "f64", "bool", "str", "bytes",
             ]
-            .contains(&t.0.as_str())
-                || t.0 == "Option" && ["i64", "i32", "str"].contains(&t.inner().0.as_str())
+            .contains(&scalar.0.as_str())
+                && (matches!(scalar.0.as_str(), "str" | "bytes")
+                    || !types.raw_classes.iter().any(|class| class.name == scalar.0))
         });
         if db_compatible {
             out.origin(::std::option::Option::None);
