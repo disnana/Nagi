@@ -369,7 +369,11 @@ fn aliases_keep_original_source_diagnostics_and_embedded_asset_paths() {
     f.checked("roundtrip.low");
     f.write("lib/read.nagi", "def read() -> str:\n    return 1\n");
     let error = f.error("main.nagi");
-    assert!(error.contains("lib/read.nagi:2"), "{error}");
+    let expected_source = fs::canonicalize(f.0.join("lib/read.nagi")).unwrap();
+    assert!(
+        error.contains(&format!("{}:2", expected_source.display())),
+        "{error}"
+    );
     assert!(error.contains("return 1"), "{error}");
 }
 
