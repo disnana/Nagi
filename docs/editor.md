@@ -78,6 +78,12 @@ classを返す関数の`make().`、入れ子の`container.item.`、Copy classの
 
 再代入した名前は最初の定義へ戻ります。forで外側と同じ名前を使うと、ループ内ではforの名前へ、ループ後では元の定義へ戻ります。if・while・scope・caseの中で新しく作った名前は、そのブロック内だけが対象です。move後の使用や初期化の型エラーがあっても、束縛先を特定できる名前には移動できます。classのフィールド名や組み込み関数へのF12は未対応です。
 
+### moduleの候補と定義を試す
+
+[moduleのサンプル](../test-nagi-code/library-examples/module-imports/README.md)の`module_imports.nagi`を開きます。`orders.`でCtrl+Spaceを押すと、`orders.nagi`自身が定義した`Order`と`total`を候補にします。`current.`ではclassのフィールド`amount`を候補にします。moduleの定義とclassのフィールドは、同じ名前解決と型情報から区別します。
+
+`orders.total`のホバー・引数ヒントはその関数の宣言を表示し、`SavedOrder`のホバーは元のclassのフィールドを表示します。`orders.total`の`total`や、fromの別名`SavedOrder`でF12を押すと、`orders.nagi`の元の定義へ移動します。`orders.nagi`を開いて未保存のまま編集しても、問い合わせはそのバッファを使います。ローカル変数がmodule名を隠した場合も、そのスコープの解決結果に従います。
+
 ## 編集中の情報が出ないとき
 
 一度保存した`.nagi`と`.low`は、未保存の編集をメモリ上で解析します。開いているimport先や手書きLowの編集も反映します。エディターの問い合わせでソースを保存したり、ビルドしたりはしません。プロジェクトの情報を使うには、新しいファイルと`nagi.toml`を保存してください。
@@ -93,4 +99,4 @@ classを返す関数の`make().`、入れ子の`container.item.`、Copy classの
 | 補助ファイルの関数が見つからない | [nagi.toml](projects.md)のentryからimportされているか確認する |
 | プロジェクトの宣言・ローカル型・F12が使えない | ワークスペースの信頼、`nagi.compilerPath`、Outputの「Nagi」を確認する |
 
-未保存の編集では、古いProblemsの診断を消します。診断を更新するには保存するか「Nagi: 型検査」を実行してください。ホバーや補完で型が見えていても、プログラム全体の型検査が成功したとは限りません。
+編集すると古いProblemsの診断を消し、自動検査が有効なら現在のバッファで再検査します。「Nagi: 型検査」も、保存済みファイルの未保存の編集を読み、保存やビルドをせずに検査します。新しいファイルと`nagi.toml`は先に保存してください。lower・build・runは実行前にプロジェクトのファイルを保存します。ホバーや補完で型が見えていても、プログラム全体の型検査が成功したとは限りません。

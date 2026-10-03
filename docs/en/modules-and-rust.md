@@ -1,6 +1,8 @@
 # File imports and Rust integration
 
-Load another Nagi file with `import "filename"`. To call Rust, declare the function's parameter and return types in Nagi and supply a Rust file when building.
+Load another Nagi file with a quoted relative path. Use `import "filename" as name` to give it a module name, or `from "filename" import definition` to select a function or class. To call Rust, declare the function's parameter and return types in Nagi and supply a Rust file when building.
+
+The module and from-alias features below require a compiler built from this repository's current source.
 
 ## Split Nagi code into files
 
@@ -29,7 +31,45 @@ nagic run app.nagi
 
 The program prints `Nagi` and `42`. Paths are relative to the file containing the import. High imports `.nagi`; Low imports `.low`. Low allows a semicolon after an import.
 
-Each file is loaded once. Import cycles, missing files, mixed High/Low files, and duplicate names are errors. Imported definitions enter the same namespace. Named modules such as `import sqlite`, `as`, `from`, and visibility declarations are unsupported.
+This traditional import loads definitions from the file and its dependencies into the same namespace. Built-in functions remain available as before.
+
+### Module names and definition aliases
+
+Put these definitions in `orders.nagi`:
+
+```nagi
+class Order:
+    amount: i64
+
+def score(order: Order) -> i64:
+    return order.amount
+```
+
+Use a module name and a class alias in `app.nagi`:
+
+```nagi
+import "orders.nagi" as orders
+from "orders.nagi" import Order as SavedOrder
+
+def main():
+    order: SavedOrder = orders.Order(amount=42)
+    score = orders.score
+    print(score(order))
+```
+
+`orders.Order` and `SavedOrder` are the same type. You can also call `orders.score(order)` directly. Qualified names work in type arguments, field types, and nullable types, such as `List[orders.Order]` and `orders.Order?`. An `Order` defined in another file is a different type; passing one where the other is required is a type error.
+
+A module name exposes functions and classes defined in that file. Imported names are not automatically re-exported. The alias is optional in `from "orders.nagi" import Order`. Each from statement selects one definition; use separate statements for several definitions. `from` and `as` are contextual import keywords and can still be function or variable names. A local with the same name as a module follows the existing local-variable rules. Class method calls remain unsupported.
+
+Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted standard-module imports such as `import sqlite` and visibility declarations are unsupported.
+
+### Use the same definition in Low and Rust
+
+Low also accepts `import "orders.low" as orders;` and `from "orders.low" import Order as SavedOrder;`. Generated Low retains module and definition IDs, so reparsing it or integrating handwritten Low preserves type identity.
+
+To replace a function reached through the root module name `orders`, use `@replace generated::orders::score` in handwritten Low. Traditional `@replace generated::score` remains supported. Parameter, return-type, and async requirements follow the existing [Low replacement rules](low-language.md).
+
+Rust adapters refer to a class from a root module import as `super::orders::Order`, or through its from alias as `super::SavedOrder`. Both paths refer to the same generated type. Traditional flat imports still expose paths such as `super::Item`. Internal generated names avoid collisions while JSON field names and SQL column names stay unchanged. The [module example](../../test-nagi-code/library-examples/module-imports/README.en.md) demonstrates same-named classes and function aliases.
 
 ### Import limits and error locations
 
@@ -79,10 +119,10 @@ nagic run app.nagi --rust native.rs --rust-dep serde_json=1.0
 
 Cargo normally needs network access to download dependencies on the first build. Use a dependency table in `nagi.toml` to set a local crate `path`, select `features`, or use `package` to give a dependency a different name. The [local Rust library example](../../test-nagi-code/rust-library/README.en.md) calls an independent crate through an adapter that converts Rust structs/errors into a Nagi class/Error. See the [repository's Rust integration example](../../test-nagi-code/rust-bridge/) for a complete example using a crate. Save your entry file, Rust file, and dependencies in [nagi.toml](projects.md) to reuse them in the CLI and VS Code.
 
-Nagi's `check` validates the declared types, calls, ownership, and borrowing. `check`, `lower`, and `symbols` do not invoke Cargo or fetch dependencies. It does not inspect Rust bodies or crate APIs. A `build` checks that the Rust implementation matches its declaration. Adapt Rust-specific types to numbers, str, List, classes, or Result before passing them to Nagi. Refer to a generated Nagi class from Rust as `super::TypeName`.
+Nagi's `check` validates the declared types, calls, ownership, and borrowing. `check`, `lower`, and `symbols` do not invoke Cargo or fetch dependencies. It does not inspect Rust bodies or crate APIs. A `build` checks that the Rust implementation matches its declaration. Adapt Rust-specific types to numbers, str, List, classes, or Result before passing them to Nagi. Refer to a generated Nagi class through the root import, using `super::TypeName` or `super::module_name::TypeName`.
 
 To reuse the same dependency resolution, retain the generated Cargo.lock and run `cargo build --locked --manifest-path build/app/Cargo.toml`. A normal `nagic build` runs `cargo build --release` on the generated project and retains its existing lock. `nagic build --locked` is unsupported. The lock does not pin local crate source contents.
 
 This integration calls functions within the same Rust build. A stable C ABI and runtime DLL loading are unsupported.
 
-See [libraries and Rust assets](libraries.md) and [sample projects](library-examples.md) for shared code and callbacks passed from Nagi to Rust. Dependency path/features settings and namespaces are covered in the [design proposal](library-design.md).
+See [libraries and Rust assets](libraries.md) and [sample projects](library-examples.md) for shared code and callbacks passed from Nagi to Rust. The [library design](library-design.md) describes current support and proposed resource types and runtime selection.

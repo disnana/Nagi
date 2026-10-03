@@ -1,6 +1,6 @@
 # ライブラリとRust連携の設計案
 
-このページは、現在の再利用方法と追加機能の設計案をまとめたものです。moduleの名前空間、不透明なresource型、汎用DB APIはまだ実装されていません。未実装の構文案は、現在の実行例とは区別してください。
+このページは、現在の再利用方法と追加機能の設計案をまとめたものです。引用符付きの相対ファイルにはmoduleの名前空間を使えます。不透明なresource型、汎用DB API、ランタイム機能の選択は未実装の案です。
 
 [目次](README.md) · 現在使える機能: [importとRust連携](modules-and-rust.md)、[nagi.toml](projects.md)
 
@@ -10,7 +10,7 @@ Nagiで書いた型・検証・計算を複数のアプリで共有し、通信�
 
 | 部分 | 現在 | 提案する追加 |
 | --- | --- | --- |
-| import | 相対ファイルを同じ名前空間に読み込む | module、`from`、`as`、別moduleの同名定義 |
+| import | 相対ファイルの平坦import、`as`・`from`、別moduleの同名定義 | 引用符なしの標準module、公開範囲の指定 |
 | Rust連携 | sync／asyncのexternと型付きの引数・戻り値 | 接続やclientを表す不透明な型 |
 | Rustファイル | `rust.file` で1つのnative moduleを指定。共有crateは依存tableで指定 | — |
 | Cargo依存 | version文字列、またはversion・path・features・default-features・packageのtable | — |
@@ -23,7 +23,7 @@ Nagiで書いた型・検証・計算を複数のアプリで共有し、通信�
 
 共有するNagiファイルにデータ型・検証・計算を置き、入口で入出力を組み合わせます。Rustのアダプターは外部ライブラリの型をNagiのデータ型へ変換します。独立したRust crateは自身の型を使い、生成アプリのclassへの変換はアダプターに置きます。
 
-現在の6つの例は、この分け方を既存APIで試すものです。
+現在の7つの例は、この分け方を試すものです。
 
 | プロジェクト | 再利用と連携の例 |
 | --- | --- |
@@ -33,24 +33,27 @@ Nagiで書いた型・検証・計算を複数のアプリで共有し、通信�
 | [rust-async](../test-nagi-code/library-examples/rust-async/README.md) | Nagiの実行環境でRustのTokioタイマーをawaitする |
 | [custom-http](../test-nagi-code/library-examples/custom-http/README.md) | RustのAxum／TokioサーバーへNagiの同期callbackを渡す |
 | [low-kernel](../test-nagi-code/library-examples/low-kernel/README.md) | アプリの処理から手書きLowの計算を呼ぶ |
+| [module-imports](../test-nagi-code/library-examples/module-imports/README.md) | 同名classをmoduleで区別し、同じclassをfromの別名で使う |
 
 `rust.file` が1つでも、Rustの `mod` や `#[path]` で実装を分割できます。custom-httpは組み込みのserveやDbを使いません。HTTPの制限・停止処理はそのRust側で管理し、組み込みHTTPの設定が自動適用されるとは扱いません。
 
 ## moduleと名前解決
 
-次は未実装の構文案です。
+引用符付きの相対ファイルを、module名や定義の別名で読み込めます。HighとLowの両方で使え、Lowでは末尾に`;`を置けます。
 
 ```nagi
-import json
-import sqlite as storage
-from json import decode as decode_json
 import "domain/orders.nagi" as orders
 from "domain/orders.nagi" import Order as SavedOrder
+from "domain/orders.nagi" import score
 ```
 
-`orders.Order` と `SavedOrder` は同じ定義を指し、別ファイルの同名classは別の型です。moduleと定義にIDを持たせ、型検査、High→Low、Rust出力、エディターが同じ解決結果を使います。別名を文字列置換して実装しません。
+`orders.Order` と `SavedOrder` は同じ定義を指し、別ファイルの同名classは別の型です。同じ実ファイルを複数の別名で読んでも定義は1つです。moduleと定義のIDを、型検査、High→Low、Rust出力、エディターで使います。型引数やフィールド型も同じ名前解決に従います。
 
-標準moduleは同梱の定義、引用符付きimportは相対ファイルを指します。importだけでDB接続や通信は始めません。初版はそのファイルに定義した関数・classを公開し、importした名前を自動で再公開しません。既存の平らなimportと組み込み関数は互換入口として保ちます。
+module名で公開するのは、そのファイル自身に定義した関数・classです。importした名前は自動で再公開しません。from文は1文で1つの定義を選び、別名は省略できます。存在しない定義や同じ場所での名前の衝突はimport文でエラーになります。`from`・`as`はimport文だけのキーワードです。既存の平坦importは依存先まで見える名前空間を保ち、組み込み関数も従来どおり使えます。
+
+rootのmodule名にある関数のLow差し替えは`@replace generated::orders::score`、Rustのアダプターからのclass参照は`super::orders::Order`や`super::SavedOrder`です。従来の`@replace generated::score`と`super::Item`も保ちます。JSONのfield名やSQLの列名は変えません。詳細は[importとRust連携](modules-and-rust.md)を参照してください。
+
+`import json`や`import sqlite as storage`のような引用符なしの標準moduleは、今後の案です。現在のimport構文では読み込めません。
 
 ## Cargoの依存設定
 
@@ -114,7 +117,7 @@ SQLiteの `?1`、PostgreSQLの `$1`、i64に対応するBIGINTやidentity等の�
 
 1. 現在の例で共有処理とadapterの境界を確認し、Nagiの検査とRust buildを両方通す。
 2. 実装済みの依存tableとlockの維持を土台に、ランタイム機能の選択とderive生成を整える。
-3. module、from/as、High→Low、エディターを同じ名前解決へ揃える。
+3. 実装済みのmoduleと定義のIDを、追加するresourceやproviderの型にも引き継ぐ。
 4. 組み込みHTTP起動をDBから分け、DBなしではworkerもSQLite依存も不要にする。
 5. resourceの所有・借用・キャンセルと汎用DB契約をSQLiteで検証する。
 6. PostgreSQLで同じ契約、TLS・pool・timeout・停止を実DB検証し、保存先を変えても同じ業務処理を使う例を作る。

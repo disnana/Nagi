@@ -1,6 +1,6 @@
 # Library and Rust integration examples
 
-Six small projects demonstrate shared Nagi code, Rust crates, a custom HTTP foundation, and Low replacements.
+Seven small projects demonstrate shared Nagi code, modules and aliases, Rust crates, a custom HTTP foundation, and Low replacements.
 
 [Projects and run instructions](../../docs/en/library-examples.md) · [Shared code structure](../../docs/en/libraries.md) · [日本語](README.md)
 

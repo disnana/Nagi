@@ -195,7 +195,7 @@ nagic run imports.nagi
 
 The [complete example](../../examples/tutorial/imports.nagi) prints `42`. Import paths are relative to **the file containing the import**, not your terminal's working directory. Imported `math.nagi` does not need a `main`.
 
-All files currently share one namespace. Call `add(...)`, rather than `math.add(...)` or an alias. Duplicate function/class names are errors. For Rust libraries, continue to [imports and Rust integration](modules-and-rust.md).
+This form loads one namespace, so call `add(...)`. Change the import to `import "math.nagi" as math` to call `math.add(...)`. A from statement can select a class or function. See [imports and Rust integration](modules-and-rust.md) to distinguish same-named definitions or use Rust libraries.
 
 ## 7. Move on to async and APIs
 

@@ -1,6 +1,6 @@
 # Library and Rust integration design
 
-This page describes current reuse options and proposed extensions. Module namespaces, opaque resource types, and a general database API are not implemented. Unimplemented syntax proposals are separate from the examples that run today.
+This page describes current reuse options and proposed extensions. Quoted relative files support module namespaces. Opaque resource types, a general database API, and runtime feature selection remain proposals.
 
 [Contents](README.md) · Available features: [imports and Rust integration](modules-and-rust.md), [nagi.toml](projects.md)
 
@@ -10,7 +10,7 @@ The aim is to share Nagi types, validation, and calculations between application
 
 | Area | Available today | Proposed addition |
 | --- | --- | --- |
-| Imports | Relative files loaded into one namespace | Modules, `from`, `as`, and separate definitions with the same name |
+| Imports | Relative-file flat imports, `as`/`from`, and same-named definitions in different modules | Unquoted standard modules and visibility declarations |
 | Rust integration | Sync/async extern functions with typed arguments and results | Opaque types representing connections and clients |
 | Rust files | One native module selected with `rust.file`; shared crates selected through dependency tables | — |
 | Cargo dependencies | Version strings or tables with version, path, features, default-features, and package | — |
@@ -23,7 +23,7 @@ Extern declarations do not automatically import Rust APIs. Rust-specific types m
 
 Keep data types, validation, and calculations in shared Nagi files. Application entry points combine inputs and outputs. Rust adapters convert library types to Nagi data types. An independent Rust crate uses its own types, with conversions to generated application classes kept in the adapter.
 
-The six current examples explore this structure using existing APIs.
+The seven current examples explore this structure.
 
 | Project | Reuse and integration |
 | --- | --- |
@@ -33,24 +33,27 @@ The six current examples explore this structure using existing APIs.
 | [rust-async](../../test-nagi-code/library-examples/rust-async/README.en.md) | Awaits a Rust Tokio timer on Nagi's runtime |
 | [custom-http](../../test-nagi-code/library-examples/custom-http/README.en.md) | Passes a synchronous Nagi callback to a Rust Axum/Tokio server |
 | [low-kernel](../../test-nagi-code/library-examples/low-kernel/README.en.md) | Calls handwritten Low calculations from application logic |
+| [module-imports](../../test-nagi-code/library-examples/module-imports/README.en.md) | Distinguishes same-named classes through modules and uses a from alias for the same class |
 
 One `rust.file` can include multiple Rust files through `mod` or `#[path]`. custom-http does not use the built-in serve or Db. Its Rust code manages HTTP limits and shutdown; built-in HTTP settings do not apply automatically.
 
 ## Modules and name resolution
 
-The following syntax is proposed and is not implemented.
+Quoted relative files can be loaded through module names and definition aliases in both High and Low. Low allows a trailing semicolon.
 
 ```nagi
-import json
-import sqlite as storage
-from json import decode as decode_json
 import "domain/orders.nagi" as orders
 from "domain/orders.nagi" import Order as SavedOrder
+from "domain/orders.nagi" import score
 ```
 
-`orders.Order` and `SavedOrder` refer to the same definition. Classes with the same name in different files remain different types. Module and definition IDs must be shared by type checking, High-to-Low conversion, Rust generation, and editor tools. Aliases must not be implemented as text replacement.
+`orders.Order` and `SavedOrder` refer to the same definition. Classes with the same name in different files remain different types. Reading the same real file through several aliases still loads one definition. Type checking, High-to-Low conversion, Rust generation, and editor tools use module and definition IDs. Type arguments and field types follow the same name resolution.
 
-Standard modules refer to bundled definitions; quoted imports refer to relative files. Importing does not open a database or start networking. Initially, a module exposes functions and classes defined in that file without automatically re-exporting imported names. Existing flat imports and built-ins remain compatibility entry points.
+A module name exposes that file's own functions and classes without automatically re-exporting imported names. Each from statement selects one definition, with an optional alias. Missing definitions and conflicting names in one scope report errors at the import. `from` and `as` are contextual import keywords. Existing flat imports retain visibility through dependencies, and built-ins remain available as before.
+
+Use `@replace generated::orders::score` to replace a function reached through a root module name. Rust adapters refer to its classes as `super::orders::Order` or `super::SavedOrder`. Traditional `@replace generated::score` and `super::Item` remain available. JSON field names and SQL column names stay unchanged. See [imports and Rust integration](modules-and-rust.md).
+
+Unquoted standard modules such as `import json` and `import sqlite as storage` remain proposals and cannot be loaded with the current import syntax.
 
 ## Cargo dependency settings
 
@@ -114,7 +117,7 @@ Keep SQLite's `?1`, PostgreSQL's `$1`, BIGINT for i64, identity columns, and oth
 
 1. Validate the shared logic and adapter boundaries with current examples, using both Nagi checking and Rust builds.
 2. Build runtime selection and conditional derives on the implemented dependency tables and lock preservation.
-3. Use one name-resolution system for modules, from/as, High-to-Low conversion, and editors.
+3. Extend the implemented module and definition identities to new resource and provider types.
 4. Separate built-in HTTP startup from databases, removing both workers and SQLite dependencies when unused.
 5. Validate resource ownership, borrowing, cancellation, and general database contracts with SQLite.
 6. Test the same contracts, TLS, pooling, timeouts, and shutdown against PostgreSQL; demonstrate unchanged business rules with different storage providers.

@@ -220,6 +220,8 @@ pub fn check(p: &mut Program) -> Result<(), String> {
 /// cannot introduce bindings or change the environment used by later statements.
 pub(crate) fn editor_types(primary: &Program, native: &Program) -> Option<Program> {
     let mut p = primary.clone();
+    let mut native = native.clone();
+    crate::modules::rebind_native(&mut p, &mut native).ok()?;
     p.classes.extend(native.classes.clone());
     p.functions.extend(
         native
@@ -228,6 +230,13 @@ pub(crate) fn editor_types(primary: &Program, native: &Program) -> Option<Progra
             .filter(|f| !f.attrs.iter().any(|(a, _)| a == "replace"))
             .cloned(),
     );
+    let mut visible_native = native.clone();
+    visible_native
+        .functions
+        .retain(|f| !f.attrs.iter().any(|(a, _)| a == "replace"));
+    crate::modules::synchronize(&mut visible_native);
+    p.modules.merge_native(visible_native.modules).ok()?;
+    crate::modules::synchronize(&mut p);
     check_mode(&mut p, true).ok()?;
     let replacement_lines: HashSet<_> = native
         .functions
@@ -250,9 +259,10 @@ pub(crate) fn editor_types(primary: &Program, native: &Program) -> Option<Progra
 }
 
 fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
-    if !p.imports.is_empty() {
+    if !p.imports.is_empty() || !p.module_imports.is_empty() {
         return Err("importはnagicのファイル読み込み経路で解決してください".into());
     }
+    crate::modules::decode_low_types(p)?;
     let mut c = Checker {
         classes: HashMap::new(),
         functions: HashMap::new(),
@@ -457,6 +467,12 @@ impl Checker {
         visit(t, &self.classes, 0)
     }
     fn valid(&self, t: &Type, line: usize) -> Result<(), String> {
+        if let Some(alias) = t.0.strip_prefix(crate::modules::NAMESPACE_PREFIX) {
+            return Err(error(
+                line,
+                format!("module名 {alias} は型として使えません。module内のclassを指定してください"),
+            ));
+        }
         if t.0 == "fn" && !t.1.is_empty() {
             for parameter in &t.1 {
                 if parameter.is_future() {
@@ -1219,6 +1235,18 @@ impl Checker {
         projection: bool,
     ) -> Result<Type, String> {
         let line = e.line;
+        if e.resolution == Some(NameResolution::Module) {
+            let alias = match &e.kind {
+                E::Name(name) | E::Call(name, _, _) | E::Record(name, _) => name.as_str(),
+                _ => "",
+            };
+            return Err(error(
+                line,
+                format!(
+                    "module名 {alias} は値や関数として使えません。module内の定義を指定してください"
+                ),
+            ));
+        }
         e.resolution = None;
         let t = match &mut e.kind {
             E::Int(s) => {
@@ -1805,44 +1833,91 @@ pub fn integrate(p: &mut Program, native: Program) -> Result<(), String> {
 }
 
 fn integrate_mode(p: &mut Program, mut native: Program, editor: bool) -> Result<(), String> {
+    crate::modules::rebind_native(p, &mut native)?;
+    let mut replaced = HashSet::new();
+    // Resolve all replacement targets before changing the definitions. Aliases
+    // of one function must not permit it to be replaced twice.
+    let mut replacements = Vec::new();
+    for f in &native.functions {
+        let Some((_, target)) = f.attrs.iter().find(|(a, _)| a == "replace") else {
+            continue;
+        };
+        let path = target
+            .strip_prefix("generated::")
+            .ok_or_else(|| error(f.line, "@replace generated::name が必要です"))?;
+        let target_def = p.modules.resolve_root_path(path);
+        let name = target_def
+            .map(|d| d.symbol.clone())
+            .unwrap_or_else(|| path.to_owned());
+        if !replaced.insert(name.clone()) {
+            return Err(error(f.line, "同じ関数を複数回replaceできません"));
+        }
+        let old = p
+            .functions
+            .iter()
+            .find(|x| x.name == name)
+            .ok_or_else(|| error(f.line, "replace対象が存在しません"))?;
+        if old.params.iter().map(|x| &x.1).collect::<Vec<_>>()
+            != f.params.iter().map(|x| &x.1).collect::<Vec<_>>()
+            || old.ret != f.ret
+            || old.asynchronous != f.asynchronous
+        {
+            return Err(error(
+                f.line,
+                "replaceの引数・戻り値・async指定が一致しません",
+            ));
+        }
+        replacements.push((
+            f.name.clone(),
+            name,
+            old.attrs.clone(),
+            native.modules.definition(&f.name).map(|d| d.id.clone()),
+            target_def.map(|d| d.id.clone()),
+        ));
+    }
+    for (old, new, _, old_id, new_id) in &replacements {
+        crate::modules::remap_definition(p, old, new);
+        crate::modules::remap_definition(&mut native, old, new);
+        if let (Some(old_id), Some(new_id)) = (old_id, new_id) {
+            for metadata in [&mut p.modules, &mut native.modules] {
+                metadata.definitions.retain(|d| &d.id != old_id);
+                // Replacement declarations are private to their Low fragment.
+                // Their calls still refer to the shared generated definition.
+                metadata
+                    .bindings
+                    .retain(|b| b.target != BindingTarget::Definition(old_id.clone()));
+                for reference in &mut metadata.references {
+                    if &reference.target == old_id {
+                        reference.target = new_id.clone();
+                    }
+                }
+            }
+        }
+    }
     for c in native.classes.drain(..) {
         if p.classes.iter().any(|x| x.name == c.name) {
             return Err(error(c.line, "nativeとgeneratedでclassが重複しています"));
         }
         p.classes.push(c);
     }
-    let mut replaced = HashSet::new();
     for mut f in native.functions.drain(..) {
-        if let Some((_, target)) = f.attrs.iter().find(|(a, _)| a == "replace") {
-            let n = target
-                .strip_prefix("generated::")
-                .ok_or_else(|| error(f.line, "@replace generated::name が必要です"))?
-                .to_string();
-            if !replaced.insert(n.clone()) {
-                return Err(error(f.line, "同じ関数を複数回replaceできません"));
-            }
+        if f.attrs.iter().any(|(a, _)| a == "replace") {
+            let (_, _, attrs, _, _) = replacements
+                .iter()
+                .find(|(_, new, _, _, _)| new == &f.name)
+                .ok_or_else(|| error(f.line, "replace対象が存在しません"))?;
             let pos = p
                 .functions
                 .iter()
-                .position(|x| x.name == n)
+                .position(|x| x.name == f.name)
                 .ok_or_else(|| error(f.line, "replace対象が存在しません"))?;
-            let old = &p.functions[pos];
-            if old.params.iter().map(|x| &x.1).collect::<Vec<_>>()
-                != f.params.iter().map(|x| &x.1).collect::<Vec<_>>()
-                || old.ret != f.ret
-                || old.asynchronous != f.asynchronous
-            {
-                return Err(error(
-                    f.line,
-                    "replaceの引数・戻り値・async指定が一致しません",
-                ));
-            }
-            f.name = n;
-            f.attrs = old.attrs.clone();
+            f.attrs = attrs.clone();
             p.functions[pos] = f;
         } else {
             p.functions.push(f);
         }
     }
+    p.modules.merge_native(native.modules)?;
+    crate::modules::synchronize(p);
     check_mode(p, editor)
 }

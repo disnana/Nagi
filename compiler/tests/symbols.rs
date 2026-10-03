@@ -583,10 +583,12 @@ fn editor_input_rejects_invalid_schema_alias_duplicates_and_other_commands() {
             "{data}"
         );
     }
-    for cmd in ["check", "build", "run", "lower"] {
+    for cmd in ["build", "run", "lower"] {
         let args = [cmd, "a.nagi", "--editor-input"].map(str::to_owned);
         assert!(nagic::project::resolve(&args, &f.0).is_err());
     }
+    let args = ["check", "a.nagi", "--editor-input"].map(str::to_owned);
+    assert!(nagic::project::resolve(&args, &f.0).unwrap().editor_input);
 }
 
 fn local_types(index: &serde_json::Value, line: u64, name: &str) -> Vec<String> {

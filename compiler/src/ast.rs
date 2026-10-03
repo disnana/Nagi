@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -57,7 +58,7 @@ impl fmt::Display for Type {
         if self.0 == "Option" {
             return write!(f, "{}?", self.inner());
         }
-        write!(f, "{}", self.0)?;
+        write!(f, "{}", crate::modules::display_symbol(&self.0))?;
         if !self.1.is_empty() {
             write!(
                 f,
@@ -86,10 +87,12 @@ pub enum NameResolution {
     Builtin,
     Function,
     Local,
+    Module,
 }
 /// Half-open token range in the original source file. Import loading shifts
 /// diagnostic lines, but keeps these ranges local to each file.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
@@ -167,6 +170,106 @@ pub struct Class {
 #[derive(Clone, Debug, Default)]
 pub struct Program {
     pub imports: Vec<(String, usize)>,
+    pub module_imports: Vec<ModuleImport>,
+    pub modules: ModuleMetadata,
     pub classes: Vec<Class>,
     pub functions: Vec<Function>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ModuleImport {
+    pub path: String,
+    pub line: usize,
+    pub span: Span,
+    pub kind: ImportKind,
+}
+
+#[derive(Clone, Debug)]
+pub enum ImportKind {
+    Flat,
+    Module { alias: String, alias_span: Span },
+    Names(Vec<ImportName>),
+}
+
+#[derive(Clone, Debug)]
+pub struct ImportName {
+    pub name: String,
+    pub alias: String,
+    pub name_span: Span,
+    pub alias_span: Span,
+}
+
+/// Module identity is the canonical source file, retained in generated Low.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ModuleId(pub String);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum DefKind {
+    Class,
+    Function,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DefId {
+    pub module: ModuleId,
+    pub kind: DefKind,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModuleInfo {
+    pub id: ModuleId,
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DefinitionInfo {
+    pub id: DefId,
+    pub symbol: String,
+    pub line: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BindingTarget {
+    Definition(DefId),
+    Module(ModuleId),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModuleBinding {
+    pub module: ModuleId,
+    pub name: String,
+    pub target: BindingTarget,
+    /// Own definitions and legacy flat imports may be exposed by a flat load.
+    #[serde(default)]
+    pub public: bool,
+    pub line: usize,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModuleReference {
+    pub module: ModuleId,
+    pub line: usize,
+    pub span: Span,
+    pub target: DefId,
+    pub spelling: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ModuleMetadata {
+    /// Generated Low's explicit intrinsic type namespace. Resolved ASTs clear it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub builtin_types: Option<String>,
+    pub root: Option<ModuleId>,
+    pub modules: Vec<ModuleInfo>,
+    pub definitions: Vec<DefinitionInfo>,
+    pub bindings: Vec<ModuleBinding>,
+    pub references: Vec<ModuleReference>,
 }

@@ -5,7 +5,7 @@ Nagi High (`.nagi`) とLow (`.low`)の開発補助です。
 - 構文の色付け、コメント、括弧・引用符、4空白のインデント
 - 改行時の字下げ、`else`・`case`の位置調整、複数行の括弧の位置合わせ
 - class・関数・HTTP・借用・Low置換のスニペット
-- ファイルを開いた時と保存時の`nagic check`、Problemsへの診断表示
+- ファイルを開いた時・編集時・保存時の`nagic check`、Problemsへの診断表示
 - コマンドパレットの型検査、Low変換、ビルド、実行
 - エディター右上の実行ボタン
 - `nagi.toml`の入口・Rust依存・Low設定を使ったプロジェクトの検査と実行
@@ -13,6 +13,7 @@ Nagi High (`.nagi`) とLow (`.low`)の開発補助です。
 - ホバーで関数の引数・戻り値、async、classのフィールドを表示
 - 引数・ローカル変数・caseの束縛名の型をホバーで表示
 - `value.`の入力時に、そのclassのフィールドを補完
+- importのmodule名から定義を補完し、修飾した名前のホバー・引数ヒント・F12に対応
 - プロジェクト内の関数・class・型と、代表的な組み込み関数の補完
 - 呼び出し時の引数ヒント、class生成時の名前付き引数の挿入
 
@@ -70,11 +71,11 @@ VSIXにはコンパイラ本体を含めていません。`spawn nagic.exe ENOEN
 
 Windows以外の実行ファイルは`nagic`です。`compilerPath`・`nativeFiles`・`rustFile`の相対パスはワークスペースのフォルダーを基準にします。型検査の生成Lowは、プロジェクトまたはソース別の`build/vscode-nagi/`に出力し、通常のビルド出力と分離します。
 
-未保存の編集中コードは自動検査しません。編集中は古い診断を消し、保存後に再検査します。手動コマンドは編集中のファイルを保存してから実行します。未信頼のワークスペースではコンパイラを実行しません。診断位置は現在のコンパイラに合わせて行単位です。
+自動検査は、一度保存したファイルの未保存の編集を読みます。編集時に古い診断を消して、現在のバッファで再検査します。「Nagi: 型検査」も保存やビルドをせずに検査します。lower・build・runは、実行前にプロジェクトのファイルを保存します。新規ファイルと`nagi.toml`は先に保存してください。未信頼のワークスペースではコンパイラを実行しません。診断位置は現在のコンパイラに合わせて行単位です。
 
 ## プロジェクト
 
-入口・Rust依存・手書きLowの設定は[nagi.toml](https://disnana.github.io/Nagi/docs/projects/)にまとめられます。開いているファイルから親へ最も近い`nagi.toml`を選び、コンパイラに`--project`として渡します。補助ファイルを開いていても、`entry`から検査・実行します。プロジェクト内の編集中ファイルがある間は自動検査を待ち、手動コマンドではそのプロジェクト内のファイルを保存します。設定の保存・作成・削除でも検査を更新します。
+入口・Rust依存・手書きLowの設定は[nagi.toml](https://disnana.github.io/Nagi/docs/projects/)にまとめられます。開いているファイルから親へ最も近い`nagi.toml`を選び、コンパイラに`--project`として渡します。補助ファイルを開いていても、`entry`から検査・実行します。型検査は未保存のソースをメモリ上で読み、lower・build・runはプロジェクトのファイルを保存します。`nagi.toml`の編集は先に保存してください。設定の保存・作成・削除でも検査を更新します。
 
 Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけで設定を使えます。`nagi.rustFile`などの従来の設定はコマンド引数として追加し、設定ファイルに対して上書き・追加するルールはCLIと共通です。`nagic check`はRust側の実装を検査せず、実装との型の一致はビルドで検査します。import先の型エラーはそのファイルのProblemsに表示します。
 
@@ -83,6 +84,8 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 ## 定義へ移動
 
 関数の呼び出し・classの型注釈や生成箇所、変数名にカーソルを置いてF12を押します。`import "models.nagi"`の文字列では、そのファイルの先頭へ移動します。High・Low両方に対応し、プロジェクトの入口から読み込まれたファイルや手書きLowの定義を対象にします。
+
+`import "orders.nagi" as orders`では、`orders.total(...)`や`orders.Order`の定義名から元の宣言へ移動します。fromの別名`SavedOrder`も、元のclassへ移動します。開いているimport先の未保存の編集も反映します。
 
 たとえば`test-nagi-code/result-api/server.nagi`の`read_item`から`storage.nagi`へ、`Item`から`models.nagi`へ移動できます。ソースの場所はコンパイラの`symbols`コマンドから取得します。型エラーがあるコードでも構文とimportが読み込めれば使えます。
 
@@ -101,6 +104,8 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 変数名にマウスを置くと、コンパイラが確認できた型を表示します。たとえば`count = 3`は`count: i64`、classを返す関数から作った`item`は`item: Item`です。関数の引数、`for`の要素、Resultの`case Ok(value)`と`case Err(problem)`の束縛名にも対応します。宣言と使用箇所を扱い、caseやifなどのブロックを出た名前には型を表示しません。
 
 `item.`を入力すると、`Item`のフィールドが候補に出ます。候補には`name: str`のように型も表示し、選ぶとフィールド名だけを挿入します。`item.na`からの補完では入力途中の名前を置き換えます。classを返す呼び出し、入れ子のフィールド、Copy classの配列要素も対象です。`Result[Item, Error]`や`Item?`を自動でItemとして扱うことはありません。Resultは`match`のOk側や`(try fetch()).`で中の値を取り出してください。
+
+`orders.`では、そのmodule自身が定義した関数とclassを候補にします。修飾した呼び出しやfromの別名のホバー・引数ヒントも、解決した定義を使います。ローカル変数がmodule名を隠した場合は、その変数の型とスコープに従います。importした名前をmoduleのメンバーとして自動で再公開しません。
 
 名前を書きかけるかCtrl+Spaceを押すと、入口からimportされた関数・class、手書きLowの関数、代表的な組み込み関数の候補が出ます。関数を選ぶと位置引数の入力欄、classを選ぶと`Item(id=..., name=...)`の名前付き引数が入り、Tabで次の欄へ進めます。型注釈・戻り値の位置ではclass・型・`Result` / `List` / `view`などを候補にします。
 

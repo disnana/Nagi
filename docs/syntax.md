@@ -7,7 +7,7 @@
 ## ファイルと字下げ
 
 - UTF-8で保存し、拡張子を`.nagi`にする。
-- トップレベルには`import`、`class`、`def`、`async def`、Rustの外部関数宣言を書く。実行する文は関数内に書く。
+- トップレベルには`import`・`from`、`class`、`def`、`async def`、Rustの外部関数宣言を書く。実行する文は関数内に書く。
 - ブロックの前に`:`を付け、空白で字下げする。空白4つを推奨する。タブは禁止。
 - コメントは`#`。識別子は英字・数字・`_`で、数字からは始めない。日本語の文字列・コメントは使える。
 - `()`や`[]`の中は複数行に分けられる。引数や要素の末尾の余分な`,`は未対応。
@@ -170,10 +170,14 @@ scopeを出るときに子taskを待ちます。scope内の`return`、viewを別
 | 用途 | 書き方 | 詳細 |
 |---|---|---|
 | ファイルを読み込む | `import "models.nagi"` | [import](modules-and-rust.md)。同じ名前空間に読み込む |
+| module名を付ける | `import "orders.nagi" as orders` | `orders.Order`や`orders.score(...)`で、そのファイル自身の定義を使う |
+| 定義を選ぶ | `from "orders.nagi" import Order as SavedOrder` | 1文で1定義を読み込む。`as SavedOrder`は省略できる |
 | GET handlerを定義する | 関数の前に`@get("/users/{id}")` | [HTTP](http.md)。`@post`、`@put`、`@delete`もある |
 | HTMLを返す | `return ok(html("<h1>Hello</h1>"))` | 戻り値は`Result[Html, Error]` |
 | テキストを埋め込む | `include_text("index.html")` | ソースの場所を基準に、コンパイル時に埋め込む |
 | Rust関数を宣言する | `@rust("native::crc32")`の次行に`extern def crc32(text: view[str]) -> i64` | [Rust連携](modules-and-rust.md)。本体・末尾の`:`は不要 |
+
+`orders.Order`と`SavedOrder`は同じ型です。別ファイルの同名classは別の型として扱います。`from`・`as`はimport文だけのキーワードで、既存の識別子としても使えます。
 
 ## Pythonに似ていても違うところ
 
@@ -183,7 +187,7 @@ scopeを出るときに子taskを待ちます。scope内の`return`、viewを別
 | `print(a, b)` | 1引数ずつ`print(a)`、`print(b)` |
 | `items.append(x)` | `append(items, x)` |
 | `try: ... except:` | `try 式`で失敗を伝える、または`match`でResultを分岐する |
-| `from models import User` | `import "models.nagi"` |
+| `from models import User` | `from "models.nagi" import User`。ファイルの相対パスを引用符で囲む |
 | 辞書、tuple、内包表記、lambda | 未対応。class、配列、通常の関数・ループを使う |
 | `str(42)`、任意型へのcast | 汎用変換は未対応。直接`print(42)`などを使う |
 

@@ -4,6 +4,7 @@ pub mod diagnostics;
 pub mod emit;
 mod installation;
 pub mod lexer;
+pub mod modules;
 pub mod parser;
 pub mod project;
 mod routes;
