@@ -149,6 +149,14 @@ impl RustNames {
 }
 
 fn visit(program: &mut Program, name: &mut impl FnMut(&mut String)) {
+    fn enum_path(path: &mut String, name: &mut impl FnMut(&mut String)) {
+        let (enumeration, variant) = path.rsplit_once('.').expect("checked enum path");
+        let mut enumeration = enumeration.to_owned();
+        let mut variant = variant.to_owned();
+        name(&mut enumeration);
+        name(&mut variant);
+        *path = format!("{enumeration}.{variant}");
+    }
     fn ty(t: &mut Type, name: &mut impl FnMut(&mut String)) {
         if t.0 != "fn" || t.1.is_empty() {
             name(&mut t.0);
@@ -170,7 +178,9 @@ fn visit(program: &mut Program, name: &mut impl FnMut(&mut String)) {
                 }
             }
             E::Call(n, ts, args) => {
-                if e.resolution != Some(NameResolution::Builtin) {
+                if e.resolution == Some(NameResolution::Enum) {
+                    enum_path(n, name);
+                } else if e.resolution != Some(NameResolution::Builtin) {
                     if n == "main" && e.resolution == Some(NameResolution::Function) {
                         *n = "__nagi_main".into();
                     } else {
@@ -185,7 +195,11 @@ fn visit(program: &mut Program, name: &mut impl FnMut(&mut String)) {
                 }
             }
             E::Record(n, fields) => {
-                name(n);
+                if e.resolution == Some(NameResolution::Enum) {
+                    enum_path(n, name);
+                } else {
+                    name(n);
+                }
                 for (n, value) in fields {
                     name(n);
                     expr(value, name);
@@ -244,11 +258,16 @@ fn visit(program: &mut Program, name: &mut impl FnMut(&mut String)) {
                 S::Match(value, arms) => {
                     expr(value, name);
                     for arm in arms {
-                        if let Some(n) = &mut arm.binding {
-                            name(n);
+                        if let MatchPattern::Enum { name: path, .. } = &mut arm.pattern {
+                            enum_path(path, name);
                         }
-                        if let Some(t) = &mut arm.binding_type {
-                            ty(t, name);
+                        for binding in arm.pattern.bindings_mut() {
+                            if let Some(n) = &mut binding.name {
+                                name(n);
+                            }
+                            if let Some(t) = &mut binding.ty {
+                                ty(t, name);
+                            }
                         }
                         block(&mut arm.body, name);
                     }
@@ -263,6 +282,16 @@ fn visit(program: &mut Program, name: &mut impl FnMut(&mut String)) {
         for (n, t) in &mut class.fields {
             name(n);
             ty(t, name);
+        }
+    }
+    for enumeration in &mut program.enums {
+        name(&mut enumeration.name);
+        for variant in &mut enumeration.variants {
+            name(&mut variant.name);
+            for (field, t) in &mut variant.fields {
+                name(field);
+                ty(t, name);
+            }
         }
     }
     for function in &mut program.functions {

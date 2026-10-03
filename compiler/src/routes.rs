@@ -26,6 +26,16 @@ pub(crate) fn has_capture(path: &str) -> bool {
 pub(crate) fn validate(program: &Program) -> Result<(), String> {
     let mut registered = HashSet::new();
     let mut patterns = HashMap::new();
+    let classes = program
+        .classes
+        .iter()
+        .map(|class| (class.name.clone(), class.clone()))
+        .collect();
+    let enums = program
+        .enums
+        .iter()
+        .map(|enumeration| (enumeration.name.clone(), enumeration.clone()))
+        .collect();
     for function in &program.functions {
         let error = |message: String| format!("line {}: {message}", function.line);
         if function.name == "main" && !function.params.is_empty() {
@@ -47,6 +57,14 @@ pub(crate) fn validate(program: &Program) -> Result<(), String> {
         if !path.starts_with('/') {
             return Err(error("HTTPのpathは / で始めてください".into()));
         }
+        let success = &function.ret.1[0];
+        if success != &Type::named("Html")
+            && !crate::capabilities::serde_type(success, &classes, &enums)
+        {
+            return Err(error(format!(
+                "HTTPの応答 {success} はJSONへ変換できません。公開するデータを別のclassへ変換してください"
+            )));
+        }
         if method == "get" && ["/health", "/stream", "/ws"].contains(&path) {
             return Err(error(format!("GET {path}は組み込みHTTP endpointです")));
         }
@@ -65,6 +83,12 @@ pub(crate) fn validate(program: &Program) -> Result<(), String> {
         }
         let mut bodies = 0;
         for (name, ty) in &function.params {
+            if classes.contains_key(&ty.0) && !crate::capabilities::serde_type(ty, &classes, &enums)
+            {
+                return Err(error(format!(
+                    "HTTPのbody引数 {name}: {ty} はJSONから読み込めません"
+                )));
+            }
             if ty == &Type::generic("view", vec![Type::named("bytes")])
                 || program.classes.iter().any(|class| class.name == ty.0)
             {

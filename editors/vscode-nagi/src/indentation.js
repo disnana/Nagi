@@ -1,7 +1,7 @@
 'use strict';
 const { context } = require('./features');
 
-const header = /^(?:(?:async\s+)?def\b|class\b|if\b|else\b|while\b|for\b|match\b|case\b|scope\b|async\s+with\b)[\s\S]*:\s*$/;
+const header = /^(?:(?:async\s+)?def\b|class\b|enum\b|if\b|else\b|while\b|for\b|match\b|case\b|scope\b|async\s+with\b)[\s\S]*:\s*$/;
 const pairs = { ')': '(', ']': '[', '}': '{' };
 
 function width(space, size) {

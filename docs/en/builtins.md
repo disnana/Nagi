@@ -39,20 +39,20 @@ Slice positions are i64. For str/bytes they are byte offsets; for List they are 
 | `parse_f64(text)` | str / view[str] | `Result[f64, Error]` | Parses str/view[str] as a float |
 | `i64(value)` | i8 / i16 / i32 / u8 / u16 / u32 | `i64` | Lossless widening of i8/i16/i32/u8/u16/u32 |
 | `i32(value)` | i64 | `Result[i32, Error]` | Range-checks and narrows i64; `try i32(value)` |
-| `ok(value)` | T | `Result[T, Error]` | Returns success; `return ok(value)` |
+| `ok(value)` | T | Contextual `Result[T, E]` | Returns success; E defaults to Error without context |
 | `error("reason")` | str | Contextual `Result[T, Error]` | Invalid input; HTTP 400 |
 | `not_found("reason")` | str | Contextual `Result[T, Error]` | Missing target; HTTP 404 |
 | `internal_error("reason")` | str | Contextual `Result[T, Error]` | Internal failure; HTTP 500 with details withheld |
-| `fail(problem)` | Error | Contextual `Result[T, Error]` | Moves an Error while preserving its kind and message |
+| `fail(problem)` | Error, custom class, or enum | Contextual `Result[T, E]` | Moves and returns the failure value E |
 | `error_kind(problem)` | Error | `str` | Borrows Error to obtain its kind, such as `invalid` or `database` |
 | `error_message(problem)` | Error | `str` | Borrows Error and copies its message |
 | `some(value)` | T | `T?` | Constructs a present nullable value; absent is `None` |
 | `uuid_parse(text)` | str / view[str] | `Result[UUID, Error]` | Parses a UUID from text |
 | `uuid_format(value)` | UUID | `str` | Formats a UUID as text |
 
-`try` is syntax, not a function. Inside a Result-returning function, it extracts success or returns failure to the caller. Handle a result locally with `match` and `case Ok(value)`/`case Err(problem)`.
+`try` is syntax. Inside a function returning Result with the same error type E, it extracts T or returns failure to the caller. Handle a result locally with `match` and `case Ok(value)`/`case Err(problem)`.
 
-Error constructors take an owned message string; `fail` consumes Error. `error_kind` and `error_message` do not consume it. The success type comes from the surrounding Result type, such as a return annotation; without type context it is `Result[unit, Error]`. See [error handling](error-handling.md).
+The success type T comes from the surrounding Result type. Without context, `fail(problem)` returns `Result[unit, E]`. `error`, `not_found`, and `internal_error` create built-in Error values and take owned message strings. `error_kind` and `error_message` apply only to built-in Error and do not consume it. See [custom errors](error-handling.md#define-your-own-error-type).
 
 ## JSON and HTML
 

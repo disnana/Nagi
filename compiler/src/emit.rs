@@ -142,11 +142,28 @@ pub fn low_with_lines(p: &Program) -> Generated {
                     out.push_str(&format!("match {} {{\n", expr(value)));
                     for arm in arms {
                         out.origin(Some(arm.line));
-                        out.push_str(&format!(
-                            "{pad}    case {}({}) {{\n",
-                            if arm.ok { "Ok" } else { "Err" },
-                            arm.binding.as_deref().unwrap_or("_")
-                        ));
+                        let pattern = match &arm.pattern {
+                            MatchPattern::Result { ok, binding } => format!(
+                                "{}({})",
+                                if *ok { "Ok" } else { "Err" },
+                                binding.name.as_deref().unwrap_or("_")
+                            ),
+                            MatchPattern::Enum { name, bindings, .. } => {
+                                if bindings.is_empty() {
+                                    name.clone()
+                                } else {
+                                    format!(
+                                        "{name}({})",
+                                        bindings
+                                            .iter()
+                                            .map(|binding| binding.name.as_deref().unwrap_or("_"))
+                                            .collect::<Vec<_>>()
+                                            .join(", ")
+                                    )
+                                }
+                            }
+                        };
+                        out.push_str(&format!("{pad}    case {pattern} {{\n"));
                         block(&arm.body, n + 2, out);
                         out.origin(Some(arm.line));
                         out.push_str(&format!("{pad}    }}\n"));
@@ -218,6 +235,32 @@ pub fn low_with_lines(p: &Program) -> Generated {
         out.origin(Some(c.line));
         out.push_str("}\n\n");
     }
+    for enumeration in &p.enums {
+        out.origin(Some(enumeration.line));
+        out.push_str(&format!("enum {} {{\n", enumeration.name));
+        for variant in &enumeration.variants {
+            out.origin(Some(variant.line));
+            out.push_str(&format!(
+                "    {}{};\n",
+                variant.name,
+                if variant.fields.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "({})",
+                        variant
+                            .fields
+                            .iter()
+                            .map(|(name, ty)| format!("{name}: {}", low_type(ty)))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                }
+            ));
+        }
+        out.origin(Some(enumeration.line));
+        out.push_str("}\n\n");
+    }
     for f in &p.functions {
         out.origin(Some(f.line));
         for (a, v) in &f.attrs {
@@ -249,16 +292,43 @@ pub fn low_with_lines(p: &Program) -> Generated {
     out
 }
 pub fn rust_type(t: &Type) -> String {
-    rust_type_at(t, 0, &RustTypes { raw_classes: &[] })
+    rust_type_at(
+        t,
+        0,
+        &RustTypes {
+            raw_classes: &[],
+            enums: &[],
+        },
+    )
 }
 struct RustTypes<'a> {
     raw_classes: &'a [Class],
+    enums: &'a [Enum],
 }
 
 impl RustTypes<'_> {
     fn ty(&self, t: &Type) -> String {
         rust_type_at(t, 0, self)
     }
+
+    fn variant(&self, path: &str) -> &EnumVariant {
+        let (enumeration, variant) = path.rsplit_once('.').expect("checked enum path");
+        self.enums
+            .iter()
+            .find(|definition| definition.name == enumeration)
+            .and_then(|definition| {
+                definition
+                    .variants
+                    .iter()
+                    .find(|field| field.name == variant)
+            })
+            .expect("checked enum variant")
+    }
+}
+
+fn rust_enum_path(path: &str) -> String {
+    let (enumeration, variant) = path.rsplit_once('.').expect("checked enum path");
+    format!("{enumeration}::{variant}")
 }
 
 fn rust_type_at(t: &Type, depth: usize, types: &RustTypes<'_>) -> String {
@@ -381,6 +451,9 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
             re(b, types)
         ),
         E::Unary(o, x) => format!("{}({})", if o == "not" { "!" } else { o }, re(x, types)),
+        E::Field(x, n) if e.resolution == Some(NameResolution::Enum) => {
+            format!("{}::{n}", re(x, types))
+        }
         E::Field(x, n) => format!("({}).{n}", re(x, types)),
         E::Index(x, i) => format!(
             "({})[::std::primitive::usize::try_from({}).expect(\"negative index\")]",
@@ -394,19 +467,48 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        E::Record(n, a) => format!(
-            "{n} {{ {} }}",
-            a.iter()
-                .map(|(n, e)| format!("{n}: {}", re(e, types)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
+        E::Record(n, a) => {
+            let path = if e.resolution == Some(NameResolution::Enum) {
+                rust_enum_path(n)
+            } else {
+                n.clone()
+            };
+            if e.resolution == Some(NameResolution::Enum) && a.is_empty() {
+                path
+            } else {
+                format!(
+                    "{path} {{ {} }}",
+                    a.iter()
+                        .map(|(n, e)| format!("{n}: {}", re(e, types)))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        }
         E::Await(x) => format!("({}).await", re(x, types)),
         E::Try(x) => format!("({})?", re(x, types)),
         E::Call(n, ts, a) => {
             let args = a.iter().map(|e| re(e, types)).collect::<Vec<_>>();
             let join = args.join(", ");
             match e.resolution {
+                Some(NameResolution::Enum) => {
+                    let path = rust_enum_path(n);
+                    let variant = types.variant(n);
+                    return if variant.fields.is_empty() {
+                        path
+                    } else {
+                        format!(
+                            "{path} {{ {} }}",
+                            variant
+                                .fields
+                                .iter()
+                                .zip(&args)
+                                .map(|((field, _), arg)| format!("{field}: {arg}"))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    };
+                }
                 ::std::option::Option::Some(NameResolution::Function) => {
                     return format!("crate::{n}({join})")
                 }
@@ -583,19 +685,46 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
                 out.push_str(&format!("match {} {{\n", re(value, types)));
                 for arm in arms {
                     out.origin(::std::option::Option::Some(arm.line));
-                    let binding = arm
-                        .binding
-                        .as_ref()
-                        .map(|s| format!("mut {s}"))
-                        .unwrap_or_else(|| "_".into());
-                    out.push_str(&format!(
-                        "{pad}    {}({binding}) => {{\n",
-                        if arm.ok {
-                            "::std::result::Result::Ok"
-                        } else {
-                            "::std::result::Result::Err"
+                    let binding = |binding: &PatternBinding| {
+                        binding
+                            .name
+                            .as_ref()
+                            .map(|name| format!("mut {name}"))
+                            .unwrap_or_else(|| "_".into())
+                    };
+                    let pattern = match &arm.pattern {
+                        MatchPattern::Result { ok, binding: value } => format!(
+                            "{}({})",
+                            if *ok {
+                                "::std::result::Result::Ok"
+                            } else {
+                                "::std::result::Result::Err"
+                            },
+                            binding(value)
+                        ),
+                        MatchPattern::Enum { name, bindings, .. } => {
+                            let path = rust_enum_path(name);
+                            if bindings.is_empty() {
+                                path
+                            } else {
+                                format!(
+                                    "{path} {{ {} }}",
+                                    types
+                                        .variant(name)
+                                        .fields
+                                        .iter()
+                                        .zip(bindings)
+                                        .map(|((field, _), value)| format!(
+                                            "{field}: {}",
+                                            binding(value)
+                                        ))
+                                        .collect::<Vec<_>>()
+                                        .join(", ")
+                                )
+                            }
                         }
-                    ));
+                    };
+                    out.push_str(&format!("{pad}    {pattern} => {{\n"));
                     rb(&arm.body, out, n + 2, types);
                     out.origin(::std::option::Option::Some(arm.line));
                     out.push_str(&format!("{pad}    }},\n"));
@@ -684,10 +813,18 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         } else {
             &[]
         },
+        enums: &p.enums,
     };
     fn copy_type(t: &Type, p: &Program, depth: usize) -> bool {
-        if depth > 64 {
+        if depth > 64 || matches!(t.0.as_str(), "str" | "bytes" | "Error" | "Db" | "Html") {
             false
+        } else if let Some(enumeration) = p.enums.iter().find(|definition| definition.name == t.0) {
+            enumeration.variants.iter().all(|variant| {
+                variant
+                    .fields
+                    .iter()
+                    .all(|(_, ty)| copy_type(ty, p, depth + 1))
+            })
         } else if t.is_copy() {
             true
         } else if t.0 == "Option" {
@@ -700,15 +837,54 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
     }
     let mut out =
         Generated::new("#![allow(unused_mut, unused_parens, unused_variables, dead_code)]\n");
+    let classes = p
+        .classes
+        .iter()
+        .map(|class| (class.name.clone(), class.clone()))
+        .collect();
+    let enums = p
+        .enums
+        .iter()
+        .map(|enumeration| (enumeration.name.clone(), enumeration.clone()))
+        .collect();
     for c in &p.classes {
         out.origin(::std::option::Option::Some(c.line));
         let copy = c.fields.iter().all(|(_, t)| copy_type(t, p, 0));
-        out.push_str(&format!("#[allow(non_camel_case_types, non_snake_case)]\n#[derive(Debug, ::nagi_runtime::serde::Serialize, ::nagi_runtime::serde::Deserialize{} )]\n#[serde(crate = \"::nagi_runtime::serde\", deny_unknown_fields)]\npub struct {} {{\n",if copy{", Clone, Copy"}else{""},c.name));
+        let serde = c
+            .fields
+            .iter()
+            .all(|(_, ty)| crate::capabilities::serde_type(ty, &classes, &enums));
+        let readable_debug = p.modules.definition(&c.name).is_some()
+            || names.original(&c.name) != c.name
+            || c.fields
+                .iter()
+                .any(|(field, _)| names.original(field) != field);
+        let mut derives = Vec::new();
+        if !readable_debug {
+            derives.push("Debug");
+        }
+        if serde {
+            derives.extend([
+                "::nagi_runtime::serde::Serialize",
+                "::nagi_runtime::serde::Deserialize",
+            ]);
+        }
+        if copy {
+            derives.extend(["Clone", "Copy"]);
+        }
+        out.push_str("#[allow(non_camel_case_types, non_snake_case)]\n");
+        if !derives.is_empty() {
+            out.push_str(&format!("#[derive({})]\n", derives.join(", ")));
+        }
+        if serde {
+            out.push_str("#[serde(crate = \"::nagi_runtime::serde\", deny_unknown_fields)]\n");
+        }
+        out.push_str(&format!("pub struct {} {{\n", c.name));
         for (i, (n, t)) in c.fields.iter().enumerate() {
             out.origin(::std::option::Option::Some(
                 c.field_lines.get(i).copied().unwrap_or(c.line),
             ));
-            if names.original(n) != n {
+            if serde && names.original(n) != n {
                 out.push_str(&format!(
                     "    #[serde(rename = {})]\n",
                     quote(names.original(n))
@@ -718,6 +894,26 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         }
         out.origin(::std::option::Option::Some(c.line));
         out.push_str("}\n");
+        if readable_debug {
+            out.origin(None);
+            let label = p
+                .modules
+                .definition(&c.name)
+                .map(|definition| definition.id.name.as_str())
+                .unwrap_or_else(|| names.original(&c.name));
+            out.push_str(&format!(
+                "impl ::std::fmt::Debug for {} {{\n    fn fmt(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {{\n        formatter.debug_struct({})",
+                c.name,
+                quote(label)
+            ));
+            for (field, _) in &c.fields {
+                out.push_str(&format!(
+                    ".field({}, &self.{field})",
+                    quote(names.original(field))
+                ));
+            }
+            out.push_str(".finish()\n    }\n}\n");
+        }
         let db_compatible = c.fields.iter().all(|(_, t)| {
             [
                 "i8", "i16", "i32", "i64", "u8", "u16", "u32", "f32", "f64", "bool", "str", "bytes",
@@ -732,6 +928,90 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 out.push_str(&format!("{n}: row.get(ix[{i}])?,\n"));
             }
             out.push_str("}) }\n}\n");
+        }
+    }
+    for enumeration in &p.enums {
+        out.origin(Some(enumeration.line));
+        let copy = enumeration
+            .variants
+            .iter()
+            .all(|variant| variant.fields.iter().all(|(_, ty)| copy_type(ty, p, 0)));
+        let readable_debug = enumeration.variants.iter().any(|variant| {
+            names.original(&variant.name) != variant.name
+                || variant
+                    .fields
+                    .iter()
+                    .any(|(field, _)| names.original(field) != field)
+        });
+        let mut derives = Vec::new();
+        if !readable_debug {
+            derives.push("Debug");
+        }
+        if copy {
+            derives.extend(["Clone", "Copy"]);
+        }
+        out.push_str("#[allow(non_camel_case_types, non_snake_case)]\n");
+        if !derives.is_empty() {
+            out.push_str(&format!("#[derive({})]\n", derives.join(", ")));
+        }
+        out.push_str(&format!("pub enum {} {{\n", enumeration.name));
+        for variant in &enumeration.variants {
+            out.origin(Some(variant.line));
+            out.push_str(&format!("    {}", variant.name));
+            if !variant.fields.is_empty() {
+                out.push_str(" {\n");
+                for (index, (field, ty)) in variant.fields.iter().enumerate() {
+                    out.origin(Some(
+                        variant
+                            .field_lines
+                            .get(index)
+                            .copied()
+                            .unwrap_or(variant.line),
+                    ));
+                    out.push_str(&format!("        {field}: {},\n", types.ty(ty)));
+                }
+                out.origin(Some(variant.line));
+                out.push_str("    }");
+            }
+            out.push_str(",\n");
+        }
+        out.origin(Some(enumeration.line));
+        out.push_str("}\n");
+        if readable_debug {
+            out.origin(None);
+            out.push_str(&format!(
+                "impl ::std::fmt::Debug for {} {{\n    fn fmt(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {{\n        match self {{\n",
+                enumeration.name
+            ));
+            for variant in &enumeration.variants {
+                let label = quote(names.original(&variant.name));
+                if variant.fields.is_empty() {
+                    out.push_str(&format!(
+                        "            Self::{} => formatter.write_str({label}),\n",
+                        variant.name
+                    ));
+                } else {
+                    out.push_str(&format!(
+                        "            Self::{} {{ {} }} => formatter.debug_struct({label})",
+                        variant.name,
+                        variant
+                            .fields
+                            .iter()
+                            .enumerate()
+                            .map(|(index, (field, _))| format!("{field}: __nagi_debug_{index}"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                    for (index, (field, _)) in variant.fields.iter().enumerate() {
+                        out.push_str(&format!(
+                            ".field({}, __nagi_debug_{index})",
+                            quote(names.original(field))
+                        ));
+                    }
+                    out.push_str(".finish(),\n");
+                }
+            }
+            out.push_str("        }\n    }\n}\n");
         }
     }
     for f in &p.functions {
@@ -918,8 +1198,18 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             "__nagi_main()"
         };
         if f.ret.0 == "Result" {
+            let mut error_type = &f.ret.1[1];
+            while error_type.0 == "owned" {
+                error_type = &error_type.1[0];
+            }
+            let display = if error_type.0 == "Error" {
+                "{}"
+            } else {
+                "{:?}"
+            };
             out.push_str(&format!(
-                "if let ::std::result::Result::Err(e) = {call} {{ eprintln!(\"{{}}\",e); ::std::process::exit(1); }}\n"
+                "if let ::std::result::Result::Err(e) = {call} {{ eprintln!({},e); ::std::process::exit(1); }}\n",
+                quote(display)
             ));
         } else {
             out.push_str(&format!("{call};\n"));
@@ -1044,6 +1334,11 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                 all.classes.push(class);
             }
         }
+        for enumeration in np.enums {
+            if !all.enums.iter().any(|old| old.name == enumeration.name) {
+                all.enums.push(enumeration);
+            }
+        }
         for function in np.functions {
             if !all.functions.iter().any(|old| old.name == function.name) {
                 all.functions.push(function);
@@ -1061,6 +1356,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     // 手書きLowの通常関数はHighの名前解決にも使う。置換本体はLowの統合時に検査する。
     let mut resolution = p.clone();
     let nc = p.classes.len();
+    let ne = p.enums.len();
     let nf = p.functions.len();
     let mut native_resolution = all.clone();
     native_resolution
@@ -1070,6 +1366,15 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     for class in &native_resolution.classes {
         if !resolution.classes.iter().any(|old| old.name == class.name) {
             resolution.classes.push(class.clone());
+        }
+    }
+    for enumeration in &native_resolution.enums {
+        if !resolution
+            .enums
+            .iter()
+            .any(|old| old.name == enumeration.name)
+        {
+            resolution.enums.push(enumeration.clone());
         }
     }
     for function in &native_resolution.functions {
@@ -1088,6 +1393,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     crate::modules::synchronize(&mut resolution);
     crate::check::check(&mut resolution).map_err(|e| sources.diagnostic(&e))?;
     p.classes = resolution.classes[..nc].to_vec();
+    p.enums = resolution.enums[..ne].to_vec();
     p.functions = resolution.functions[..nf].to_vec();
     let write_output = !(options.editor_input && cmd == "check");
     if write_output {

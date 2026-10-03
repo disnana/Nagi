@@ -28,9 +28,9 @@ Passing a class containing strings or lists to a function moves its ownership. S
 
 You can define fields, construct values with named arguments, and read fields. Methods, inheritance, field assignment, and storing a `view` in a field are not supported.
 
-Function types, Db, Html, and Error cannot be stored in fields either, including inside lists or nullable types. Map fields cannot use keys such as f32, f64, UUID, or timestamp that lack hashing support.
+Fields can contain Error or enums, including an Error cause in a custom error class. Error, enums, and classes containing them cannot be converted to JSON. Function types, Db, and Html are unsupported in fields, including inside lists or nullable types. Map fields cannot use keys such as f32, f64, UUID, or timestamp that lack hashing support.
 
-A `shared[T]` field can be converted to JSON. JSON contains the value of T; decoding creates a new shared value. It does not preserve which values originally shared the same reference.
+A `shared[T]` field can be converted to JSON when T supports JSON. JSON contains the value of T; decoding creates a new shared value. It does not preserve which values originally shared the same reference.
 
 Classes compile to Rust structs. A list of numeric classes does not need a separate allocation for every element. String and list fields still need storage for their data. Nagi does not define a fixed memory layout for a C interface.
 

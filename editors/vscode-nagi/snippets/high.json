@@ -1,6 +1,7 @@
 {
   "Function": { "prefix": "def", "body": ["def ${1:name}(${2:value: i64}) -> ${3:i64}:", "    ${0:return value}"], "description": "型付き関数" },
   "Class": { "prefix": "class", "body": ["class ${1:Item}:", "    ${2:id}: ${3:i64}", "    ${0:name: str}"], "description": "値型class" },
+  "Enum": { "prefix": "enum", "body": ["enum ${1:AuthError}:", "    ${2:InvalidCredentials}", "    ${3:WeakPassword}(${4:message}: ${5:str})", "$0"], "description": "種類ごとに情報を持つenum" },
   "Main": { "prefix": "main", "body": ["def main():", "    print(\"${0:Hello, Nagi!}\")"], "description": "エントリーポイント" },
   "Async main": { "prefix": "amain", "body": ["async def main() -> Result[unit, Error]:", "    ${0:db = try await db_open(\":memory:\")}", "    return await serve(db, 8090)"], "description": "非同期のmain" },
   "GET handler": { "prefix": "get", "body": ["@get(\"${1:/items/{id}}\")", "async def ${2:get_item}(db: Db, id: i64) -> Result[${3:Item}?, Error]:", "    return await db_query[${3:Item}](db, \"${0:SELECT id, name FROM items WHERE id = ?1}\", id)"], "description": "HTTP GETとSQLite query" },

@@ -187,8 +187,10 @@ impl Sources {
                     S::While(_, body) | S::Scope(body) => block(files, names, body),
                     S::Match(_, arms) => {
                         for arm in arms {
-                            if let Some(name) = &arm.binding {
-                                binding(files, names, arm.line, arm.binding_span, name);
+                            for item in arm.pattern.bindings() {
+                                if let Some(name) = &item.name {
+                                    binding(files, names, arm.line, item.span, name);
+                                }
                             }
                             block(files, names, &arm.body);
                         }
@@ -429,6 +431,15 @@ pub fn map_lines(program: &mut Program, map: impl Fn(usize) -> usize) {
         class.line = map(class.line);
         for line in &mut class.field_lines {
             *line = map(*line);
+        }
+    }
+    for enumeration in &mut program.enums {
+        enumeration.line = map(enumeration.line);
+        for variant in &mut enumeration.variants {
+            variant.line = map(variant.line);
+            for line in &mut variant.field_lines {
+                *line = map(*line);
+            }
         }
     }
     for function in &mut program.functions {

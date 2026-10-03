@@ -87,8 +87,8 @@ class NagiLexer(RegexLexer):
     tokens = {"root": [
         (r"\s+", Text), (r"#.*$", Comment.Single),
         (r'(?:"(?:\\.|[^"\\])*"|\x27(?:\\.|[^\x27\\])*\x27)', String),
-        (r"\b(def|fn|class|record)(\s+)([A-Za-z_]\w*)", bygroups(Keyword, Text, Name.Function)),
-        (r"\b(async|await|try|return|if|else|while|for|in|match|case|let|import|scope|with|spawn|extern)\b", Keyword),
+        (r"\b(def|fn|class|record|enum)(\s+)([A-Za-z_]\w*)", bygroups(Keyword, Text, Name.Function)),
+        (r"\b(async|await|try|return|if|else|while|for|in|match|case|let|import|from|as|scope|with|spawn|extern)\b", Keyword),
         (r"\b(True|False|true|false|None|null)\b", Keyword.Constant),
         (r"\b(i\d+|u\d+|f\d+|bool|str|bytes|unit|List|Result|Error|Db|Html|view|shared)\b", Keyword.Type),
         (r"\b(print|len|range|ok|error|some|copy|parse_i64)\b", Name.Builtin),

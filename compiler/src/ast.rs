@@ -88,6 +88,7 @@ pub enum NameResolution {
     Function,
     Local,
     Module,
+    Enum,
 }
 /// Half-open token range in the original source file. Import loading shifts
 /// diagnostic lines, but keeps these ranges local to each file.
@@ -134,12 +135,41 @@ pub enum S {
 }
 #[derive(Clone, Debug)]
 pub struct MatchArm {
-    pub ok: bool,
-    pub binding: Option<String>,
+    pub pattern: MatchPattern,
     pub body: Vec<Stmt>,
     pub line: usize,
-    pub binding_span: Span,
-    pub binding_type: Option<Type>,
+}
+#[derive(Clone, Debug)]
+pub enum MatchPattern {
+    Result {
+        ok: bool,
+        binding: PatternBinding,
+    },
+    Enum {
+        name: String,
+        bindings: Vec<PatternBinding>,
+        span: Span,
+    },
+}
+impl MatchPattern {
+    pub fn bindings(&self) -> &[PatternBinding] {
+        match self {
+            Self::Result { binding, .. } => std::slice::from_ref(binding),
+            Self::Enum { bindings, .. } => bindings,
+        }
+    }
+    pub fn bindings_mut(&mut self) -> &mut [PatternBinding] {
+        match self {
+            Self::Result { binding, .. } => std::slice::from_mut(binding),
+            Self::Enum { bindings, .. } => bindings,
+        }
+    }
+}
+#[derive(Clone, Debug)]
+pub struct PatternBinding {
+    pub name: Option<String>,
+    pub span: Span,
+    pub ty: Option<Type>,
 }
 #[derive(Clone, Debug)]
 pub struct Stmt {
@@ -167,12 +197,27 @@ pub struct Class {
     pub field_lines: Vec<usize>,
     pub line: usize,
 }
+#[derive(Clone, Debug)]
+pub struct Enum {
+    pub name: String,
+    pub variants: Vec<EnumVariant>,
+    pub line: usize,
+}
+#[derive(Clone, Debug)]
+pub struct EnumVariant {
+    pub name: String,
+    pub fields: Vec<(String, Type)>,
+    pub field_lines: Vec<usize>,
+    pub line: usize,
+    pub name_span: Span,
+}
 #[derive(Clone, Debug, Default)]
 pub struct Program {
     pub imports: Vec<(String, usize)>,
     pub module_imports: Vec<ModuleImport>,
     pub modules: ModuleMetadata,
     pub classes: Vec<Class>,
+    pub enums: Vec<Enum>,
     pub functions: Vec<Function>,
 }
 
@@ -206,6 +251,7 @@ pub struct ModuleId(pub String);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DefKind {
     Class,
+    Enum,
     Function,
 }
 

@@ -1,0 +1,14 @@
+import "validation.nagi" as validation
+from "validation.nagi" import QuantityError as InputError
+
+def show(result: Result[i64, InputError]):
+    match result:
+        case Ok(quantity):
+            print(quantity)
+        case Err(problem):
+            print(validation.message(problem))
+
+def main():
+    show(validation.doubled(view("21")))
+    show(validation.doubled(view("0")))
+    show(validation.doubled(view("oops")))

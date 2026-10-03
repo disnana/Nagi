@@ -1,0 +1,23 @@
+enum QuantityError:
+    NotNumber(cause: Error)
+    OutOfRange(minimum: i64, maximum: i64)
+
+def parse_quantity(text: view[str]) -> Result[i64, QuantityError]:
+    match parse_i64(text):
+        case Ok(quantity):
+            if quantity < 1 or quantity > 1000000:
+                return fail(QuantityError.OutOfRange(minimum=1, maximum=1000000))
+            return ok(quantity)
+        case Err(cause):
+            return fail(QuantityError.NotNumber(cause=cause))
+
+def doubled(text: view[str]) -> Result[i64, QuantityError]:
+    quantity = try parse_quantity(text)
+    return ok(quantity * 2)
+
+def message(problem: QuantityError) -> str:
+    match problem:
+        case QuantityError.NotNumber(_):
+            return "quantity must be a number"
+        case QuantityError.OutOfRange(_, _):
+            return "quantity must be between 1 and 1000000"

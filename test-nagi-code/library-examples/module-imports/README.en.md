@@ -20,6 +20,6 @@ The output is:
 
 `saved_total` accepts `SavedOrder`, the same type as the argument to `orders.total`. `total = orders.total` uses a module function as a value. `archive.Order` is a different type, so changing the call to `saved_total(older)` produces a type error. Matching fields do not make classes from different files interchangeable.
 
-These classes contain only numbers, so the same value can be passed twice. Classes containing strings or lists follow the existing move rules. A module name exposes functions and classes defined in that file; imported names are not automatically re-exported.
+These classes contain only numbers, so the same value can be passed twice. Classes containing strings or lists follow the existing move rules. A module name exposes functions, classes, and enums defined in that file; imported names are not automatically re-exported.
 
 [日本語](README.md) · [Imports and Rust integration](../../../docs/en/modules-and-rust.md)

@@ -49,7 +49,7 @@ from "domain/orders.nagi" import score
 
 `orders.Order` and `SavedOrder` refer to the same definition. Classes with the same name in different files remain different types. Reading the same real file through several aliases still loads one definition. Type checking, High-to-Low conversion, Rust generation, and editor tools use module and definition IDs. Type arguments and field types follow the same name resolution.
 
-A module name exposes that file's own functions and classes without automatically re-exporting imported names. Each from statement selects one definition, with an optional alias. Missing definitions and conflicting names in one scope report errors at the import. `from` and `as` are contextual import keywords. Existing flat imports retain visibility through dependencies, and built-ins remain available as before.
+A module name exposes that file's own functions, classes, and enums without automatically re-exporting imported names. Each from statement selects one definition, with an optional alias. Missing definitions and conflicting names in one scope report errors at the import. `from` and `as` are contextual import keywords. Existing flat imports retain visibility through dependencies, and built-ins remain available as before.
 
 Use `@replace generated::orders::score` to replace a function reached through a root module name. Rust adapters refer to its classes as `super::orders::Order` or `super::SavedOrder`. Traditional `@replace generated::score` and `super::Item` remain available. JSON field names and SQL column names stay unchanged. See [imports and Rust integration](modules-and-rust.md).
 

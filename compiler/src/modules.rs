@@ -67,7 +67,11 @@ pub fn symbol(id: &DefId) -> String {
     format!(
         "{PREFIX}{}_{}_{}",
         hex(&id.module.0),
-        if id.kind == DefKind::Class { "c" } else { "f" },
+        match id.kind {
+            DefKind::Class => "c",
+            DefKind::Enum => "e",
+            DefKind::Function => "f",
+        },
         hex(&id.name)
     )
 }
@@ -83,7 +87,7 @@ pub fn display_symbol(name: &str) -> String {
     else {
         return name.to_owned();
     };
-    if !matches!(kind, "c" | "f") {
+    if !matches!(kind, "c" | "e" | "f") {
         return name.to_owned();
     }
     match (unhex(module), unhex(def)) {
@@ -156,8 +160,10 @@ fn visit_types(program: &mut Program, visitor: &mut impl FnMut(&mut Type)) {
                 S::Match(value, arms) => {
                     expression(value, visitor);
                     for arm in arms {
-                        if let Some(ty) = &mut arm.binding_type {
-                            visitor(ty);
+                        for binding in arm.pattern.bindings_mut() {
+                            if let Some(ty) = &mut binding.ty {
+                                visitor(ty);
+                            }
                         }
                         statements(&mut arm.body, visitor);
                     }
@@ -169,6 +175,13 @@ fn visit_types(program: &mut Program, visitor: &mut impl FnMut(&mut Type)) {
     for class in &mut program.classes {
         for (_, ty) in &mut class.fields {
             visitor(ty);
+        }
+    }
+    for enumeration in &mut program.enums {
+        for variant in &mut enumeration.variants {
+            for (_, ty) in &mut variant.fields {
+                visitor(ty);
+            }
         }
     }
     for function in &mut program.functions {
@@ -499,6 +512,7 @@ pub fn validate(program: &Program) -> Result<(), String> {
         .classes
         .iter()
         .map(|c| (&c.name, DefKind::Class))
+        .chain(program.enums.iter().map(|e| (&e.name, DefKind::Enum)))
         .chain(
             program
                 .functions
@@ -562,6 +576,7 @@ fn own_span(unit: &ModuleUnit, name: &str, kind: DefKind, line: usize) -> Span {
                     .is_some_and(|previous| {
                         matches!(&previous.kind, K::Id(keyword) if match kind {
                             DefKind::Class => keyword == "class" || keyword == "record",
+                            DefKind::Enum => keyword == "enum",
                             DefKind::Function => keyword == "def" || keyword == "fn",
                         })
                     })
@@ -628,6 +643,12 @@ pub(crate) fn resolve(mut units: Vec<ModuleUnit>, root: ModuleId) -> Result<Prog
             .classes
             .iter()
             .map(|c| (&c.name, DefKind::Class, c.line))
+            .chain(
+                unit.program
+                    .enums
+                    .iter()
+                    .map(|e| (&e.name, DefKind::Enum, e.line)),
+            )
             .chain(
                 unit.program
                     .functions
@@ -800,6 +821,7 @@ pub(crate) fn resolve(mut units: Vec<ModuleUnit>, root: ModuleId) -> Result<Prog
         out.modules.references.extend(resolver.references);
         crate::source::resolve_assets(&mut unit.program, Path::new(&unit.id.0))?;
         out.classes.append(&mut unit.program.classes);
+        out.enums.append(&mut unit.program.enums);
         out.functions.append(&mut unit.program.functions);
     }
     metadata.references.append(&mut out.modules.references);
@@ -817,19 +839,26 @@ pub fn remap_definition(program: &mut Program, old: &str, new: &str) {
             ty(arg, old, new);
         }
     }
+    fn name(n: &mut String, old: &str, new: &str) {
+        if n == old {
+            *n = new.to_owned();
+        } else if let Some(suffix) = n.strip_prefix(old).and_then(|rest| rest.strip_prefix('.')) {
+            *n = format!("{new}.{suffix}");
+        }
+    }
     fn expr(e: &mut Expr, locals: &HashSet<String>, old: &str, new: &str) {
         if let Some(t) = &mut e.ty {
             ty(t, old, new);
         }
         match &mut e.kind {
             E::Name(n) => {
-                if n == old && !locals.contains(n) {
-                    *n = new.to_owned();
+                if !locals.contains(n) {
+                    name(n, old, new);
                 }
             }
             E::Call(n, ts, args) => {
-                if n == old && !locals.contains(n) {
-                    *n = new.to_owned();
+                if !locals.contains(n) {
+                    name(n, old, new);
                 }
                 for t in ts {
                     ty(t, old, new);
@@ -839,9 +868,7 @@ pub fn remap_definition(program: &mut Program, old: &str, new: &str) {
                 }
             }
             E::Record(n, fields) => {
-                if n == old {
-                    *n = new.to_owned();
-                }
+                name(n, old, new);
                 for (_, e) in fields {
                     expr(e, locals, old, new);
                 }
@@ -897,12 +924,17 @@ pub fn remap_definition(program: &mut Program, old: &str, new: &str) {
                 S::Match(e, arms) => {
                     expr(e, locals, old, new);
                     for arm in arms {
-                        if let Some(t) = &mut arm.binding_type {
-                            ty(t, old, new);
+                        if let MatchPattern::Enum { name: path, .. } = &mut arm.pattern {
+                            name(path, old, new);
                         }
                         let mut child = locals.clone();
-                        if let Some(n) = &arm.binding {
-                            child.insert(n.clone());
+                        for binding in arm.pattern.bindings_mut() {
+                            if let Some(t) = &mut binding.ty {
+                                ty(t, old, new);
+                            }
+                            if let Some(n) = &binding.name {
+                                child.insert(n.clone());
+                            }
                         }
                         block(&mut arm.body, &mut child, old, new);
                     }
@@ -917,6 +949,16 @@ pub fn remap_definition(program: &mut Program, old: &str, new: &str) {
         }
         for (_, t) in &mut c.fields {
             ty(t, old, new);
+        }
+    }
+    for enumeration in &mut program.enums {
+        if enumeration.name == old {
+            enumeration.name = new.to_owned();
+        }
+        for variant in &mut enumeration.variants {
+            for (_, t) in &mut variant.fields {
+                ty(t, old, new);
+            }
         }
     }
     for f in &mut program.functions {
@@ -958,15 +1000,27 @@ fn rebase_loaded(program: &mut Program, tokens: &[Token], offset: usize) {
     for (i, token) in tokens.iter().enumerate() {
         if let K::Id(name) = &token.kind {
             if let Some(def) = program.modules.definition(name) {
+                let variant = if def.id.kind == DefKind::Enum
+                    && matches!(tokens.get(i + 1).map(|t| &t.kind), Some(K::Sym(dot)) if dot == ".")
+                {
+                    tokens.get(i + 2).and_then(|t| match &t.kind {
+                        K::Id(variant) => Some(variant.as_str()),
+                        _ => None,
+                    })
+                } else {
+                    None
+                };
                 program.modules.references.push(ModuleReference {
                     module: def.id.module.clone(),
                     line: token.line + offset,
                     span: Span {
                         start: i,
-                        end: i + 1,
+                        end: i + if variant.is_some() { 3 } else { 1 },
                     },
                     target: def.id.clone(),
-                    spelling: name.clone(),
+                    spelling: variant
+                        .map(|v| format!("{name}.{v}"))
+                        .unwrap_or_else(|| name.clone()),
                 });
             }
         }
@@ -980,6 +1034,12 @@ pub fn synchronize(program: &mut Program) {
         .classes
         .iter()
         .map(|c| (c.name.clone(), (DefKind::Class, c.line)))
+        .chain(
+            program
+                .enums
+                .iter()
+                .map(|e| (e.name.clone(), (DefKind::Enum, e.line))),
+        )
         .chain(
             program
                 .functions
@@ -1206,7 +1266,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<(), String> {
         // Named fields identify a record constructor, whose class lookup has
         // always been independent from same-spelled local values.
-        if kind != Some(DefKind::Class) {
+        if !matches!(kind, Some(DefKind::Class | DefKind::Enum)) {
             if let Some(local) = self.locals.get(name) {
                 *name = local.clone();
                 return Ok(());
@@ -1265,7 +1325,7 @@ impl<'a> Resolver<'a> {
             }
             let line = self.tokens[first].line + self.offset;
             if let Some(target) = self.target(&name, line)? {
-                if target.kind == DefKind::Class {
+                if matches!(target.kind, DefKind::Class | DefKind::Enum) {
                     self.reference(
                         name,
                         target,
@@ -1409,6 +1469,45 @@ impl<'a> Resolver<'a> {
         self.used.insert(name.clone());
         self.locals.insert(original, name.clone());
     }
+    fn resolve_variant_name(
+        &mut self,
+        name: &mut String,
+        line: usize,
+        span: Span,
+        value_scope: bool,
+    ) -> Result<bool, String> {
+        let Some((parent, variant)) = name.rsplit_once('.') else {
+            return Ok(false);
+        };
+        if value_scope
+            && self
+                .locals
+                .contains_key(parent.split('.').next().unwrap_or(parent))
+        {
+            return Ok(false);
+        }
+        let target = if !self.raw {
+            self.metadata.definition(parent).map(|d| d.id.clone())
+        } else {
+            None
+        };
+        let target = match target {
+            Some(target) => Some(target),
+            None => self.target(parent, line)?,
+        };
+        let Some(target) = target.filter(|target| target.kind == DefKind::Enum) else {
+            return Ok(false);
+        };
+        let spelling = name.clone();
+        let symbol = &self
+            .metadata
+            .definition_id(&target)
+            .expect("binding target validated")
+            .symbol;
+        *name = format!("{symbol}.{variant}");
+        self.reference(spelling, target, line, span);
+        Ok(true)
+    }
     fn expr(&mut self, expr: &mut Expr) -> Result<(), String> {
         if let Some(ty) = &mut expr.ty {
             self.ty(ty, expr.line)?;
@@ -1426,6 +1525,37 @@ impl<'a> Resolver<'a> {
                     .is_some_and(|b| matches!(b.target, BindingTarget::Module(_)))
         }) {
             expr.resolution = Some(NameResolution::Module);
+        }
+        // Enum variants share their parent's definition identity. Resolve a
+        // qualified type path without granting access to another file's aliases.
+        fn path(expr: &Expr) -> Option<String> {
+            match &expr.kind {
+                E::Name(name) => Some(name.clone()),
+                E::Field(base, member) => Some(format!("{}.{member}", path(base)?)),
+                _ => None,
+            }
+        }
+        if matches!(expr.kind, E::Field(_, _)) {
+            if let Some(mut name) = path(expr) {
+                if self.resolve_variant_name(&mut name, expr.line, expr.span, true)? {
+                    let (parent, variant) = name.rsplit_once('.').expect("qualified variant");
+                    let parent_span = Span {
+                        start: expr.span.start,
+                        end: expr.span.end.saturating_sub(2),
+                    };
+                    expr.kind = E::Field(
+                        Box::new(Expr {
+                            kind: E::Name(parent.to_owned()),
+                            line: expr.line,
+                            ty: None,
+                            resolution: None,
+                            span: parent_span,
+                        }),
+                        variant.to_owned(),
+                    );
+                    return Ok(());
+                }
+            }
         }
         // Field syntax becomes a definition only if its root resolves to a
         // module binding; local record fields retain their original structure.
@@ -1447,7 +1577,9 @@ impl<'a> Resolver<'a> {
         match &mut expr.kind {
             E::Name(name) => self.resolve_name(name, expr.line, expr.span, None)?,
             E::Call(name, types, args) => {
-                self.resolve_name(name, expr.line, expr.span, Some(DefKind::Function))?;
+                if !self.resolve_variant_name(name, expr.line, expr.span, true)? {
+                    self.resolve_name(name, expr.line, expr.span, Some(DefKind::Function))?;
+                }
                 if !types.is_empty() {
                     if let Some(start) = (expr.span.start..expr.span.end.min(self.tokens.len()))
                         .find(|i| matches!(&self.tokens[*i].kind, K::Sym(s) if s == "["))
@@ -1478,7 +1610,9 @@ impl<'a> Resolver<'a> {
                 }
             }
             E::Record(name, fields) => {
-                self.resolve_name(name, expr.line, expr.span, Some(DefKind::Class))?;
+                if !self.resolve_variant_name(name, expr.line, expr.span, false)? {
+                    self.resolve_name(name, expr.line, expr.span, Some(DefKind::Class))?;
+                }
                 for (_, field) in fields {
                     self.expr(field)?;
                 }
@@ -1544,11 +1678,16 @@ impl<'a> Resolver<'a> {
                     self.expr(value)?;
                     for arm in arms {
                         let before = self.locals.clone();
-                        if let Some(name) = &mut arm.binding {
-                            self.bind(name);
+                        if let MatchPattern::Enum { name, span, .. } = &mut arm.pattern {
+                            self.resolve_variant_name(name, arm.line, *span, false)?;
                         }
-                        if let Some(ty) = &mut arm.binding_type {
-                            self.ty(ty, arm.line)?;
+                        for binding in arm.pattern.bindings_mut() {
+                            if let Some(name) = &mut binding.name {
+                                self.bind(name);
+                            }
+                            if let Some(ty) = &mut binding.ty {
+                                self.ty(ty, arm.line)?;
+                            }
                         }
                         let result = self.block(&mut arm.body);
                         self.locals = before;
@@ -1581,6 +1720,30 @@ impl<'a> Resolver<'a> {
                 .find(|d| intern && d.id.kind == DefKind::Class && d.id.name == class.name)
             {
                 class.name = def.symbol.clone();
+            }
+        }
+        for enumeration in &mut program.enums {
+            if !intern {
+                self.module = self
+                    .metadata
+                    .definition(&enumeration.name)
+                    .map(|definition| &definition.id.module)
+                    .unwrap_or(initial_module);
+            }
+            for variant in &mut enumeration.variants {
+                for (i, (_, ty)) in variant.fields.iter_mut().enumerate() {
+                    self.ty(
+                        ty,
+                        variant.field_lines.get(i).copied().unwrap_or(variant.line),
+                    )?;
+                }
+            }
+            if let Some(def) = self
+                .metadata
+                .exports(self.module)
+                .find(|d| intern && d.id.kind == DefKind::Enum && d.id.name == enumeration.name)
+            {
+                enumeration.name = def.symbol.clone();
             }
         }
         for function in &mut program.functions {

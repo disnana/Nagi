@@ -135,7 +135,7 @@ classは全フィールドを名前付きで指定します。フィールド・
 | `return ok(42)` | 成功を返す |
 | `return error("理由")` | 失敗を返す |
 | `return not_found("理由")` | 対象なしを返す。HTTPでは404 |
-| `return fail(problem)` | 元のErrorをそのまま返す |
+| `return fail(problem)` | Error・独自class・enumの失敗値を返す |
 | `value = try parse_i64("42")` | 値を取り出す。失敗なら呼び出し元へ返す |
 | `async def work():` | 非同期関数を定義する |
 | `await sleep(10)` | 非同期処理を待つ。単位はミリ秒 |
@@ -151,7 +151,7 @@ match parse_i64("42"):
         print(error_kind(problem))
 ```
 
-使わないpayloadは`_`にします。matchはResultを消費し、payloadの名前はcase内だけで使えます。外側の変数と同じ名前は使えません。完全な実行例と制限は[エラー処理](error-handling.md)にあります。
+使わないpayloadは`_`にします。matchはResultを消費し、payloadの名前はcase内だけで使えます。外側の変数と同じ名前は使えません。`Result[T, E]`のEには独自class・enumも使えます。enumは`case Choice.Cancelled:`や`case Choice.Selected(id):`で全種類を処理します。[型の定義](types.md#enumで種類を分ける)と[エラー処理](error-handling.md)を参照してください。
 
 子taskは次の完全なコードのようにscope内でspawnします。
 

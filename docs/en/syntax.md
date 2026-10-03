@@ -135,7 +135,7 @@ Passing owned strings/lists to user-defined functions moves them. For read-only 
 | `return ok(42)` | Returns success |
 | `return error("reason")` | Returns failure |
 | `return not_found("reason")` | Missing target; HTTP 404 |
-| `return fail(problem)` | Returns the original Error |
+| `return fail(problem)` | Returns an Error, custom class, or enum failure value |
 | `value = try parse_i64("42")` | Extracts a value or returns failure to the caller |
 | `async def work():` | Defines an async function |
 | `await sleep(10)` | Waits for 10 milliseconds |
@@ -151,7 +151,7 @@ match parse_i64("42"):
         print(error_kind(problem))
 ```
 
-Use `_` for unused payloads. Matching consumes Result; names exist only in their case and cannot reuse outer variable names. See [error handling](error-handling.md) for complete examples and limits.
+Use `_` for unused payloads. Matching consumes Result; names exist only in their case and cannot reuse outer variable names. E in `Result[T, E]` can be a custom class or enum. Match every enum variant with cases such as `case Choice.Cancelled:` and `case Choice.Selected(id):`. See [enum definitions](types.md#distinguish-variants-with-an-enum) and [error handling](error-handling.md).
 
 Spawn child tasks inside a scope, as in this complete program:
 

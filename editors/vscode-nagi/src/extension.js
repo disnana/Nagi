@@ -265,7 +265,7 @@ function activate(context) {
     const offset = document.offsetAt(position);
     const word = features.wordAt(text, offset);
     return features.completionCandidates(snapshot?.index, text, offset, document.languageId === 'nagi-low', { file: document.uri.fsPath, saved: snapshot?.saved }).map(item => {
-      const kind = { function: vscode.CompletionItemKind.Function, class: vscode.CompletionItemKind.Class, field: vscode.CompletionItemKind.Field, module: vscode.CompletionItemKind.Module, type: vscode.CompletionItemKind.TypeParameter, keyword: vscode.CompletionItemKind.Keyword }[item.kind];
+      const kind = { function: vscode.CompletionItemKind.Function, class: vscode.CompletionItemKind.Class, enum: vscode.CompletionItemKind.Enum, enum_member: vscode.CompletionItemKind.EnumMember, field: vscode.CompletionItemKind.Field, module: vscode.CompletionItemKind.Module, type: vscode.CompletionItemKind.TypeParameter, keyword: vscode.CompletionItemKind.Keyword }[item.kind];
       const completion = new vscode.CompletionItem(item.name, kind);
       completion.detail = item.signature + (snapshot?.saved && !item.builtin ? ' （保存済み）' : '');
       completion.documentation = documentation(item, snapshot);

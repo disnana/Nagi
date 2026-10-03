@@ -33,6 +33,7 @@ struct Var {
 }
 struct Checker {
     classes: HashMap<String, Class>,
+    enums: HashMap<String, Enum>,
     functions: HashMap<String, Function>,
     vars: HashMap<String, Var>,
     ret: Type,
@@ -103,7 +104,12 @@ fn unowned(mut t: &Type) -> &Type {
     t
 }
 
-fn json_type_supported(t: &Type, decoding: bool, classes: &HashMap<String, Class>) -> bool {
+fn json_type_supported(
+    t: &Type,
+    decoding: bool,
+    classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
+) -> bool {
     if t.is_future() {
         return false;
     }
@@ -119,22 +125,33 @@ fn json_type_supported(t: &Type, decoding: bool, classes: &HashMap<String, Class
     if decoding && t.0 == "Map" && definitely_unhashable(&t.1[0], Some(classes)) {
         return false;
     }
-    t.1.iter()
-        .all(|inner| json_type_supported(inner, decoding, classes))
+    crate::capabilities::serde_type(t, classes, enums)
+        && t.1
+            .iter()
+            .all(|inner| json_type_supported(inner, decoding, classes, enums))
 }
 
-fn json_encode_supported(expr: &Expr, classes: &HashMap<String, Class>) -> bool {
-    if json_type_supported(expr.ty.as_ref().unwrap(), false, classes) {
+fn json_encode_supported(
+    expr: &Expr,
+    classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
+) -> bool {
+    if json_type_supported(expr.ty.as_ref().unwrap(), false, classes, enums) {
         return true;
     }
     // A record constructor names the local struct directly. Container
     // constructors infer that struct too, while a typed parameter/return
     // uses rust_type and may instead name an unsupported runtime type.
     match &expr.kind {
-        E::Record(_, _) => true,
+        E::Record(name, _) => classes.get(name).is_some_and(|class| {
+            class
+                .fields
+                .iter()
+                .all(|(_, ty)| crate::capabilities::serde_type(ty, classes, enums))
+        }),
         E::List(values) => values
             .iter()
-            .all(|value| json_encode_supported(value, classes)),
+            .all(|value| json_encode_supported(value, classes, enums)),
         E::Call(name, _, args)
             if expr.resolution == Some(NameResolution::Builtin)
                 && matches!(
@@ -142,17 +159,17 @@ fn json_encode_supported(expr: &Expr, classes: &HashMap<String, Class>) -> bool 
                     "some" | "share" | "clone_shared" | "view" | "copy"
                 ) =>
         {
-            json_encode_supported(&args[0], classes)
+            json_encode_supported(&args[0], classes, enums)
         }
-        E::Index(values, _) => json_encode_supported(values, classes),
+        E::Index(values, _) => json_encode_supported(values, classes, enums),
         _ => false,
     }
 }
 
 fn class_field(t: &Type, line: usize) -> Result<(), String> {
-    // Every generated class derives serialization. These foreign types cannot
-    // acquire the missing implementations from a user's Rust bridge.
-    if t.0 == "fn" && !t.1.is_empty() || matches!(t.0.as_str(), "Error" | "Db" | "Html") {
+    // Resource and callback storage needs a separate ownership design. Runtime
+    // Error causes are owned values; their records omit serialization derives.
+    if t.0 == "fn" && !t.1.is_empty() || matches!(t.0.as_str(), "Db" | "Html") {
         return Err(error(line, format!("{t}はclassのフィールドに保存できません。関数の引数やローカル変数で使用してください")));
     }
     if t.0 == "Map" && definitely_unhashable(&t.1[0], None) {
@@ -167,34 +184,41 @@ fn class_field(t: &Type, line: usize) -> Result<(), String> {
 fn recursive_layout(
     t: &Type,
     classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
     visiting: &mut HashSet<String>,
     checked: &mut HashSet<String>,
 ) -> bool {
-    if t.1.is_empty() {
-        if let Some(class) = classes.get(&t.0) {
-            if checked.contains(&t.0) {
-                return false;
-            }
-            if !visiting.insert(t.0.clone()) {
-                return true;
-            }
-            let cyclic = class
-                .fields
-                .iter()
-                .any(|(_, field)| recursive_layout(field, classes, visiting, checked));
-            visiting.remove(&t.0);
-            if !cyclic {
-                checked.insert(t.0.clone());
-            }
-            return cyclic;
+    if t.1.is_empty() && (classes.contains_key(&t.0) || enums.contains_key(&t.0)) {
+        if checked.contains(&t.0) {
+            return false;
         }
+        if !visiting.insert(t.0.clone()) {
+            return true;
+        }
+        let fields: Vec<_> = if let Some(class) = classes.get(&t.0) {
+            class.fields.iter().map(|(_, ty)| ty).collect()
+        } else {
+            enums[&t.0]
+                .variants
+                .iter()
+                .flat_map(|variant| variant.fields.iter().map(|(_, ty)| ty))
+                .collect()
+        };
+        let cyclic = fields
+            .into_iter()
+            .any(|field| recursive_layout(field, classes, enums, visiting, checked));
+        visiting.remove(&t.0);
+        if !cyclic {
+            checked.insert(t.0.clone());
+        }
+        return cyclic;
     }
     // These wrappers contain their values inline. Vec, Arc, HashMap and
     // function pointers have fixed layouts independent of their contents.
     matches!(t.0.as_str(), "Option" | "Result" | "owned")
         && t.1
             .iter()
-            .any(|inner| recursive_layout(inner, classes, visiting, checked))
+            .any(|inner| recursive_layout(inner, classes, enums, visiting, checked))
 }
 
 fn negative_boundary_type(expr: &Expr, expected: Option<&Type>) -> Option<Type> {
@@ -223,6 +247,7 @@ pub(crate) fn editor_types(primary: &Program, native: &Program) -> Option<Progra
     let mut native = native.clone();
     crate::modules::rebind_native(&mut p, &mut native).ok()?;
     p.classes.extend(native.classes.clone());
+    p.enums.extend(native.enums.clone());
     p.functions.extend(
         native
             .functions
@@ -265,6 +290,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
     crate::modules::decode_low_types(p)?;
     let mut c = Checker {
         classes: HashMap::new(),
+        enums: HashMap::new(),
         functions: HashMap::new(),
         vars: HashMap::new(),
         ret: Type::named("unit"),
@@ -280,6 +306,48 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
             return Err(error(class.line, "型の重複定義"));
         }
         c.classes.insert(class.name.clone(), class.clone());
+    }
+    for enumeration in &p.enums {
+        if p.modules.root.is_none()
+            && matches!(
+                enumeration.name.as_str(),
+                "i8" | "i16"
+                    | "i32"
+                    | "i64"
+                    | "u8"
+                    | "u16"
+                    | "u32"
+                    | "u64"
+                    | "f32"
+                    | "f64"
+                    | "bool"
+                    | "str"
+                    | "bytes"
+                    | "unit"
+                    | "Error"
+                    | "Db"
+                    | "Html"
+                    | "UUID"
+                    | "timestamp"
+                    | "List"
+                    | "view"
+                    | "owned"
+                    | "shared"
+                    | "Option"
+                    | "Map"
+                    | "Result"
+                    | "Future"
+                    | "fn"
+                    | "Range"
+            )
+        {
+            return Err(error(enumeration.line, format!("enum {} は組み込み型と同名のため、ファイルのmodule名前解決が必要です。source::loadまたはnagicのファイル読み込み経路を使用してください", enumeration.name)));
+        }
+        if !symbols.insert(enumeration.name.clone()) {
+            return Err(error(enumeration.line, "型の重複定義"));
+        }
+        c.enums
+            .insert(enumeration.name.clone(), enumeration.clone());
     }
     let mut checked_layouts = HashSet::new();
     for class in &p.classes {
@@ -301,6 +369,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         if recursive_layout(
             &Type::named(&class.name),
             &c.classes,
+            &c.enums,
             &mut HashSet::new(),
             &mut checked_layouts,
         ) {
@@ -314,6 +383,52 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
                 t,
                 class.field_lines.get(index).copied().unwrap_or(class.line),
             )?;
+        }
+    }
+    for enumeration in &p.enums {
+        if enumeration.variants.is_empty() {
+            return Err(error(
+                enumeration.line,
+                "enumには1つ以上のvariantが必要です",
+            ));
+        }
+        let mut variants = HashSet::new();
+        for variant in &enumeration.variants {
+            if !variants.insert(&variant.name) {
+                return Err(error(variant.line, "enumのvariantが重複しています"));
+            }
+            let mut fields = HashSet::new();
+            for (index, (name, ty)) in variant.fields.iter().enumerate() {
+                let line = variant
+                    .field_lines
+                    .get(index)
+                    .copied()
+                    .unwrap_or(variant.line);
+                c.valid(ty, line)?;
+                c.emittable(ty, line, false)?;
+                if !fields.insert(name) {
+                    return Err(error(line, "enumのpayloadフィールドが重複しています"));
+                }
+                if ty.contains_view() {
+                    return Err(error(
+                        line,
+                        "enumのpayloadにviewは保存できません。copyして所有値を渡してください",
+                    ));
+                }
+                class_field(ty, line)?;
+            }
+        }
+        if recursive_layout(
+            &Type::named(&enumeration.name),
+            &c.classes,
+            &c.enums,
+            &mut HashSet::new(),
+            &mut checked_layouts,
+        ) {
+            return Err(error(
+                enumeration.line,
+                "再帰する値型レイアウト。List等の間接格納が必要です",
+            ));
         }
     }
     for f in &p.functions {
@@ -422,11 +537,64 @@ fn returns(ss: &[Stmt]) -> bool {
     ss.iter().any(|s| match &s.kind {
         S::Return(_) => true,
         S::If(_, a, b) => returns(a) && returns(b),
-        S::Match(_, arms) => arms.len() == 2 && arms.iter().all(|arm| returns(&arm.body)),
+        S::Match(_, arms) => !arms.is_empty() && arms.iter().all(|arm| returns(&arm.body)),
         _ => false,
     })
 }
 impl Checker {
+    fn enum_variant(
+        &self,
+        name: &str,
+        line: usize,
+    ) -> Result<Option<(String, EnumVariant)>, String> {
+        let Some((owner, variant)) = name.rsplit_once('.') else {
+            return Ok(None);
+        };
+        let Some(enumeration) = self.enums.get(owner) else {
+            return Ok(None);
+        };
+        let variant = enumeration
+            .variants
+            .iter()
+            .find(|item| item.name == variant)
+            .cloned()
+            .ok_or_else(|| {
+                error(
+                    line,
+                    format!("{}にvariant {variant} はありません", Type::named(owner)),
+                )
+            })?;
+        Ok(Some((owner.to_owned(), variant)))
+    }
+    fn enum_call(
+        &mut self,
+        name: &str,
+        types: &[Type],
+        args: &mut [Expr],
+        line: usize,
+    ) -> Result<Option<Type>, String> {
+        if name
+            .rsplit_once('.')
+            .is_some_and(|(owner, _)| self.vars.contains_key(owner))
+        {
+            return Ok(None);
+        }
+        let Some((owner, variant)) = self.enum_variant(name, line)? else {
+            return Ok(None);
+        };
+        if !types.is_empty() {
+            return Err(error(line, "enumのvariantには型引数を指定できません"));
+        }
+        if args.len() != variant.fields.len() {
+            return Err(error(line, "enumのvariantのpayload数が一致しません"));
+        }
+        for (arg, (_, expected)) in args.iter_mut().zip(&variant.fields) {
+            let got = self.expr(arg, Some(expected))?;
+            self.demand(&got, expected, arg.line)?;
+            self.consume(arg)?;
+        }
+        Ok(Some(Type::named(&owner)))
+    }
     fn emittable(&self, t: &Type, line: usize, local: bool) -> Result<(), String> {
         fn contains_future(t: &Type) -> bool {
             t.is_future() || t.1.iter().any(contains_future)
@@ -450,21 +618,40 @@ impl Checker {
         Ok(())
     }
     fn copy_type(&self, t: &Type) -> bool {
-        fn visit(t: &Type, classes: &HashMap<String, Class>, depth: usize) -> bool {
+        fn visit(
+            t: &Type,
+            classes: &HashMap<String, Class>,
+            enums: &HashMap<String, Enum>,
+            depth: usize,
+        ) -> bool {
             if depth > 64 {
                 return false;
             }
-            if t.is_copy() {
+            // These raw heads emit their intrinsic owned representation even
+            // when a direct-AST caller also declares a same-spelled record.
+            if matches!(t.0.as_str(), "str" | "bytes" | "Error" | "Db" | "Html") {
+                return false;
+            }
+            if t.1.is_empty() && enums.contains_key(&t.0) {
+                enums[&t.0].variants.iter().all(|variant| {
+                    variant
+                        .fields
+                        .iter()
+                        .all(|(_, ty)| visit(ty, classes, enums, depth + 1))
+                })
+            } else if t.is_copy() {
                 true
             } else if t.0 == "Option" {
-                visit(&t.inner(), classes, depth + 1)
+                visit(&t.inner(), classes, enums, depth + 1)
             } else if let Some(c) = classes.get(&t.0) {
-                c.fields.iter().all(|(_, t)| visit(t, classes, depth + 1))
+                c.fields
+                    .iter()
+                    .all(|(_, t)| visit(t, classes, enums, depth + 1))
             } else {
                 false
             }
         }
-        visit(t, &self.classes, 0)
+        visit(t, &self.classes, &self.enums, 0)
     }
     fn valid(&self, t: &Type, line: usize) -> Result<(), String> {
         if let Some(alias) = t.0.strip_prefix(crate::modules::NAMESPACE_PREFIX) {
@@ -504,6 +691,7 @@ impl Checker {
             ));
         }
         if self.classes.contains_key(&t.0)
+            || self.enums.contains_key(&t.0)
             || [
                 "i8",
                 "i16",
@@ -1054,16 +1242,63 @@ impl Checker {
             }
             S::Match(value, arms) => {
                 let ty = self.expr(value, None)?;
-                if ty.0 != "Result" {
-                    return Err(error(s.line, "matchの対象はResultです"));
+                let enumeration = self.enums.get(&ty.0).cloned();
+                let is_result = ty.0 == "Result" && ty.1.len() == 2;
+                if !is_result && enumeration.is_none() {
+                    return Err(error(s.line, "matchの対象はResultまたはenumです"));
                 }
                 let mut seen = HashSet::new();
-                for arm in arms.iter() {
-                    if !seen.insert(arm.ok) {
-                        return Err(error(arm.line, "Ok / Errのcaseが重複しています"));
+                for arm in arms.iter_mut() {
+                    let (key, payloads) = match &arm.pattern {
+                        MatchPattern::Result { ok, .. } if is_result => (
+                            if *ok { "Ok" } else { "Err" }.to_owned(),
+                            vec![ty.1[usize::from(!*ok)].clone()],
+                        ),
+                        MatchPattern::Enum { name, bindings, .. } if enumeration.is_some() => {
+                            let Some((owner, variant)) = self.enum_variant(name, arm.line)? else {
+                                return Err(error(
+                                    arm.line,
+                                    format!("未定義のenum variant: {name}"),
+                                ));
+                            };
+                            self.demand(&Type::named(&owner), &ty, arm.line)?;
+                            if variant.fields.len() != bindings.len() {
+                                return Err(error(
+                                    arm.line,
+                                    "enum variantのpayload数とcaseの変数数が一致しません",
+                                ));
+                            }
+                            (
+                                variant.name,
+                                variant.fields.into_iter().map(|(_, ty)| ty).collect(),
+                            )
+                        }
+                        _ => return Err(error(arm.line, "matchの対象とcaseの型が一致しません")),
+                    };
+                    if !seen.insert(key) {
+                        return Err(error(arm.line, "matchのcaseが重複しています"));
+                    }
+                    for (binding, payload) in arm.pattern.bindings_mut().iter_mut().zip(payloads) {
+                        binding.ty = Some(payload);
                     }
                 }
-                if seen.len() != 2 {
+                if let Some(enumeration) = &enumeration {
+                    let missing: Vec<_> = enumeration
+                        .variants
+                        .iter()
+                        .filter(|variant| !seen.contains(&variant.name))
+                        .map(|variant| variant.name.clone())
+                        .collect();
+                    if !missing.is_empty() {
+                        return Err(error(
+                            s.line,
+                            format!(
+                                "enumのmatchが網羅されていません。caseが必要です: {}",
+                                missing.join(", ")
+                            ),
+                        ));
+                    }
+                } else if seen.len() != 2 {
                     return Err(error(s.line, "matchにはOkとErrの両方のcaseが必要です"));
                 }
                 let origin = self.origin(value);
@@ -1073,21 +1308,27 @@ impl Checker {
                 let mut moves = vec![];
                 for arm in arms {
                     self.vars = before.clone();
-                    if let Some(name) = &arm.binding {
+                    for binding in arm.pattern.bindings() {
+                        let Some(name) = &binding.name else {
+                            continue;
+                        };
                         if self.vars.contains_key(name) {
                             return Err(error(
                                 arm.line,
                                 "caseの変数名は外側の変数と重複できません",
                             ));
                         }
-                        let payload = ty.1[usize::from(!arm.ok)].clone();
-                        arm.binding_type = Some(payload.clone());
+                        let payload = binding
+                            .ty
+                            .as_ref()
+                            .expect("validated pattern payload")
+                            .clone();
                         self.vars.insert(
                             name.clone(),
                             Var {
                                 binding: BindingId {
                                     line: arm.line,
-                                    token: arm.binding_span.start,
+                                    token: binding.span.start,
                                 },
                                 origins: if payload.contains_view() {
                                     origin.clone()
@@ -1108,8 +1349,10 @@ impl Checker {
                     }
                     self.block(&mut arm.body)?;
                     let mut after = self.vars.clone();
-                    if let Some(name) = &arm.binding {
-                        after.remove(name);
+                    for binding in arm.pattern.bindings() {
+                        if let Some(name) = &binding.name {
+                            after.remove(name);
+                        }
                     }
                     if !returns(&arm.body) {
                         moves.push(after);
@@ -1179,7 +1422,7 @@ impl Checker {
                 while failure.0 == "owned" {
                     failure = &failure.1[0];
                 }
-                // Scope joins return a runtime Error. Local records may supply
+                // Scope joins return a runtime Error. Local types may supply
                 // From<Error> in their Rust adapter; foreign types cannot.
                 if failure.0 != "Error"
                     && (!failure.1.is_empty()
@@ -1187,9 +1430,10 @@ impl Checker {
                             failure.0.as_str(),
                             "str" | "bytes" | "unit" | "Db" | "Html" | "UUID" | "timestamp"
                         )
-                        || !self.classes.contains_key(&failure.0))
+                        || !self.classes.contains_key(&failure.0)
+                            && !self.enums.contains_key(&failure.0))
                 {
-                    return Err(error(s.line, format!("scopeの失敗はErrorです。戻り値のエラー型 {failure} へ変換できません。ErrorまたはRust連携でFrom<Error>を実装したclassを使用してください")));
+                    return Err(error(s.line, format!("scopeの失敗はErrorです。戻り値のエラー型 {failure} へ変換できません。ErrorまたはRust連携でFrom<Error>を実装したclassまたはenumを使用してください")));
                 }
                 self.scope += 1;
                 let m = self.child(b);
@@ -1248,6 +1492,22 @@ impl Checker {
             ));
         }
         e.resolution = None;
+        if let E::Field(base, variant) = &e.kind {
+            if let E::Name(owner) = &base.kind {
+                if !self.vars.contains_key(owner) && self.enums.contains_key(owner) {
+                    let (_, definition) = self
+                        .enum_variant(&format!("{owner}.{variant}"), line)?
+                        .expect("known enum owner");
+                    if !definition.fields.is_empty() {
+                        return Err(error(line, "enumのvariantのpayloadを指定してください"));
+                    }
+                    let ty = Type::named(owner);
+                    e.resolution = Some(NameResolution::Enum);
+                    e.ty = Some(ty.clone());
+                    return Ok(ty);
+                }
+            }
+        }
         let t = match &mut e.kind {
             E::Int(s) => {
                 let ty = expected
@@ -1379,7 +1639,16 @@ impl Checker {
                 self.demand(&ix, &Type::named("i64"), line)?;
                 if t.0 == "List" || t.0 == "view" {
                     let a = t.inner();
-                    if !self.copy_type(&a) {
+                    // A metadata-free record named Error/Db/Html can be built
+                    // directly even though its typed head emits the intrinsic
+                    // runtime type. Preserve known literal-record provenance,
+                    // without making runtime values or cause fields Copy.
+                    let literal_records_copy = self.classes.get(&a.0).is_some_and(|class| {
+                        class.fields.iter().all(|(_, ty)| self.copy_type(ty))
+                            && matches!(&x.kind, E::List(values) if !values.is_empty()
+                                && values.iter().all(|value| matches!(&value.kind, E::Record(name, _) if name == &a.0)))
+                    });
+                    if !self.copy_type(&a) && !literal_records_copy {
                         return Err(error(line, "非Copy要素のindex取得は0.1では未対応です"));
                     }
                     a
@@ -1409,6 +1678,35 @@ impl Checker {
                 Type::generic("List", vec![elem])
             }
             E::Record(n, fields) => {
+                if let Some((owner, variant)) = self.enum_variant(n, line)? {
+                    if variant.fields.len() != fields.len() {
+                        return Err(error(
+                            line,
+                            "enumのvariantの全payloadフィールドを指定してください",
+                        ));
+                    }
+                    let mut seen = HashSet::new();
+                    for (name, value) in fields {
+                        if !seen.insert(name.clone()) {
+                            return Err(error(line, "enumのpayloadフィールドが重複しています"));
+                        }
+                        let expected = variant
+                            .fields
+                            .iter()
+                            .find(|(field, _)| field == name)
+                            .map(|(_, ty)| ty)
+                            .ok_or_else(|| {
+                                error(line, "enumのvariantに不明なpayloadフィールドがあります")
+                            })?;
+                        let got = self.expr(value, Some(expected))?;
+                        self.demand(&got, expected, value.line)?;
+                        self.consume(value)?;
+                    }
+                    e.resolution = Some(NameResolution::Enum);
+                    let ty = Type::named(&owner);
+                    e.ty = Some(ty.clone());
+                    return Ok(ty);
+                }
                 let class = self
                     .classes
                     .get(n)
@@ -1449,7 +1747,10 @@ impl Checker {
                 if self.ret.0 != "Result" {
                     return Err(error(line, "tryで伝播する関数の戻り値はResultが必要です"));
                 }
-                let t = self.expr(x, None)?;
+                let hint = expected.map(|success| {
+                    Type::generic("Result", vec![success.clone(), self.ret.1[1].clone()])
+                });
+                let t = self.expr(x, hint.as_ref())?;
                 if t.0 != "Result" {
                     return Err(error(line, "try対象はResultです"));
                 }
@@ -1460,6 +1761,11 @@ impl Checker {
             E::Call(n, ts, args) => {
                 for t in ts.iter() {
                     self.valid(t, line)?;
+                }
+                if let Some(ty) = self.enum_call(n, ts, args, line)? {
+                    e.resolution = Some(NameResolution::Enum);
+                    e.ty = Some(ty.clone());
+                    return Ok(ty);
                 }
                 let signature = if let Some(v) = self.vars.get(n) {
                     if v.ty.0 != "fn" {
@@ -1548,7 +1854,7 @@ impl Checker {
                 return Err(error(line, format!("{n}の型引数 {} は行に使用できません。classを指定してください（FromRowは生成コードまたはRust連携で実装します）", ts[0])));
             }
         }
-        if n == "json_decode" && !json_type_supported(&ts[0], true, &self.classes) {
+        if n == "json_decode" && !json_type_supported(&ts[0], true, &self.classes, &self.enums) {
             return Err(error(line, format!("json_decodeの型引数 {} はJSONの読み取りに対応していません（Deserializeが必要です）", ts[0])));
         }
         let mut types = vec![];
@@ -1556,6 +1862,9 @@ impl Checker {
             let hint = match n {
                 "ok" => expected.filter(|t| t.0 == "Result").map(Type::inner),
                 "some" => expected.filter(|t| t.0 == "Option").map(Type::inner),
+                "fail" => expected
+                    .filter(|t| t.0 == "Result" && t.1.len() == 2)
+                    .map(|t| t.1[1].clone()),
                 "db_insert" if i == 3 => Some(Type::named("i32")),
                 "db_update" if i == 4 => Some(Type::named("i32")),
                 _ => None,
@@ -1715,7 +2024,7 @@ impl Checker {
                 Ok(result(ts[0].clone()))
             }
             "json_encode" => {
-                if !json_encode_supported(&args[0], &self.classes) {
+                if !json_encode_supported(&args[0], &self.classes, &self.enums) {
                     return Err(error(line, format!("json_encodeに{}は渡せません。JSONの書き出しに対応する型を指定してください（Serializeが必要です）", types[0])));
                 }
                 Ok(result(Type::named("str")))
@@ -1733,8 +2042,19 @@ impl Checker {
                 self.consume(&args[0])?;
                 Ok(Type::generic("Option", vec![types[0].clone()]))
             }
-            "error" | "not_found" | "internal_error" | "fail" => {
-                require(0, Type::named(if n == "fail" { "Error" } else { "str" }))?;
+            "fail" => {
+                let ret = expected
+                    .filter(|ty| ty.0 == "Result" && ty.1.len() == 2)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        Type::generic("Result", vec![Type::named("unit"), types[0].clone()])
+                    });
+                self.demand(&types[0], &ret.1[1], line)?;
+                self.consume(&args[0])?;
+                Ok(ret)
+            }
+            "error" | "not_found" | "internal_error" => {
+                require(0, Type::named("str"))?;
                 let ret = expected
                     .filter(|t| t.0 == "Result")
                     .cloned()
@@ -1899,6 +2219,15 @@ fn integrate_mode(p: &mut Program, mut native: Program, editor: bool) -> Result<
             return Err(error(c.line, "nativeとgeneratedでclassが重複しています"));
         }
         p.classes.push(c);
+    }
+    for enumeration in native.enums.drain(..) {
+        if p.enums.iter().any(|old| old.name == enumeration.name) {
+            return Err(error(
+                enumeration.line,
+                "nativeとgeneratedでenumが重複しています",
+            ));
+        }
+        p.enums.push(enumeration);
     }
     for mut f in native.functions.drain(..) {
         if f.attrs.iter().any(|(a, _)| a == "replace") {

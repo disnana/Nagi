@@ -9,7 +9,7 @@ const realCompiler = require('../src/compiler');
 
 // Exercise the registered providers, including compiler/trust guards, without
 // starting an editor or compiling a native application.
-function host(t, trusted = true, code = 1) {
+function host(t, trusted = true, code = 1, symbols) {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'nagi-provider-'));
   t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
   const disposable = () => ({ dispose() {} });
@@ -42,7 +42,7 @@ function host(t, trusted = true, code = 1) {
     languages: { createDiagnosticCollection: () => collection, registerOnTypeFormattingEditProvider: disposable },
     commands: { registerCommand(name, fn) { commands.set(name, fn); return disposable(); } },
     Range, MarkdownString, Uri: { file: file => uri(file) },
-    DiagnosticSeverity: { Error: 0 }, CompletionItemKind: { Function: 1, Class: 2, Field: 3, TypeParameter: 4, Keyword: 5 },
+    DiagnosticSeverity: { Error: 0 }, CompletionItemKind: { Function: 1, Class: 2, Field: 3, TypeParameter: 4, Keyword: 5, Enum: 6, EnumMember: 7, Module: 8 },
     Diagnostic: class { constructor(range, message) { this.range = range; this.message = message; } },
     Hover: class { constructor(contents, range) { this.contents = contents; this.range = range; } },
     CompletionItem: class { constructor(label, kind) { this.label = label; this.kind = kind; } },
@@ -58,7 +58,9 @@ function host(t, trusted = true, code = 1) {
   const compiler = { ...realCompiler, runCheck(executable, args, cwd, timeout, callback) {
     assert.equal(vscode.workspace.isTrusted, true, 'compiler must never execute in an untrusted workspace');
     calls.push({ executable, args });
-    queueMicrotask(() => callback({ error: Object.assign(new Error('checker failed'), { code }), output: 'error: line 2: expected i32\n' }));
+    queueMicrotask(() => callback(symbols && args[0] === 'symbols'
+      ? { error: null, output: JSON.stringify(symbols(cwd)) }
+      : { error: Object.assign(new Error('checker failed'), { code }), output: 'error: line 2: expected i32\n' }));
     return { kill() {} };
   } };
   const module = { exports: {} };
@@ -155,4 +157,30 @@ test('cancelled, closed and changed documents cannot receive static fallback fro
     mutate(doc);
     assert.equal(await pending, undefined);
   }
+});
+
+test('registered providers render enum/member kinds and payload signature parameters', async t => {
+  const h = host(t, true, 1, folder => {
+    const enumeration = { name: 'AuthError', kind: 'enum', signature: 'enum AuthError\n    Missing\n    Invalid(message: str)', variants: [
+      { name: 'Missing', kind: 'enum_member', signature: 'AuthError.Missing', parameters: [], return_type: 'AuthError' },
+      { name: 'Invalid', kind: 'enum_member', signature: 'AuthError.Invalid(message: str)', parameters: [{ name: 'message', type: 'str' }], return_type: 'AuthError' },
+    ] };
+    return { format: 'nagi-symbols-v1', definitions: [enumeration], bindings: [{ file: path.join(folder, 'main.nagi'), name: 'AuthError', kind: 'enum', definition: enumeration }], references: [], files: [], locals: [], expressions: [] };
+  });
+  const type = h.document('value: AuthError');
+  const types = await h.providers.CompletionItem.provideCompletionItems(type, type.positionAt(type.getText().length), h.token);
+  const enumeration = types.find(item => item.label === 'AuthError');
+  assert.equal(enumeration.kind, 6);
+  assert.equal(enumeration.insertText.value, 'AuthError');
+  const doc = h.document('AuthError.Invalid(');
+  const offset = doc.getText().indexOf('Invalid') + 2;
+  const variants = await h.providers.CompletionItem.provideCompletionItems(doc, doc.positionAt(offset), h.token);
+  assert.equal(variants.find(item => item.label === 'Missing').kind, 7);
+  assert.equal(variants.find(item => item.label === 'Missing').insertText.value, 'Missing');
+  assert.equal(variants.find(item => item.label === 'Invalid').insertText.value, 'Invalid', 'existing call parenthesis is preserved');
+  const hover = await h.providers.Hover.provideHover(doc, doc.positionAt(offset), h.token);
+  assert.match(hover.contents.value, /AuthError.Invalid\(message: str\)/);
+  const signature = await h.providers.SignatureHelp.provideSignatureHelp(doc, doc.positionAt(doc.getText().length), h.token);
+  assert.equal(signature.signatures[0].label, 'AuthError.Invalid(message: str)');
+  assert.equal(signature.signatures[0].parameters[0].label, 'message: str');
 });

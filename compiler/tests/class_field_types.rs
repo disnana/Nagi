@@ -1,16 +1,13 @@
 use nagic::{check, emit, parser};
 
 #[test]
-fn fields_that_cannot_derive_serialization_fail_at_the_field_line() {
+fn unsupported_resource_and_function_fields_fail_at_the_field_line() {
     for ty in [
         "fn[i64, i64]",
         "List[fn[i64]]",
         "Option[fn[i64]]",
-        "Error",
         "Db",
         "Html",
-        "List[Error]",
-        "Result[i64, Error]",
         "shared[Html]",
     ] {
         for (source, high) in [

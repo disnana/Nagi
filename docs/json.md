@@ -20,7 +20,7 @@ def main() -> Result[unit, Error]:
 
 ## 型と借用
 
-classのほか、数値・bool・str・Listなど、JSONに対応する型を指定できます。関数、Error、Db、Htmlは読み書きの対象にできません。これらをListやResultの中に入れた場合も、`check`でエラーになります。
+classのほか、数値・bool・str・Listなど、JSONに対応する型を指定できます。関数、Error、enum、Db、Htmlは読み書きの対象にできません。これらをclassやList、Resultの中に入れた場合も、`check`でエラーになります。
 
 `json_decode[view[str]](text)`はJSONの文字列を入力から借ります。結果を保存する場合は、入力も変数に保存し、借りている間は変更・移動しないでください。独立した文字列が必要なら`json_decode[str](text)`を使います。
 
