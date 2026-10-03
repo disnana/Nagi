@@ -2,11 +2,11 @@
 
 [Contents](README.md) · [Setup](getting-started.md) · [Extension installation and settings](vscode-extension.md)
 
-Install Nagi extension 0.1.8 and the latest nagic, then open the Nagi repository in VS Code. This walkthrough uses working code to try type hovers, field completion, and definition navigation. Both High and Low are supported.
+Install Nagi extension 0.1.9 and the latest nagic, then open the Nagi repository in VS Code. This walkthrough uses working code to try type hovers, field completion, and definition navigation. Both High and Low are supported.
 
 ## Indentation support
 
-The next extension release adds indentation after headers such as `def main():`, else/case alignment, and closing delimiter alignment in multiline expressions. Build a VSIX from main to try it earlier.
+Extension 0.1.9 supports indentation after headers such as `def main():`, else/case alignment, and closing delimiter alignment in multiline expressions.
 
 Typing the final colon of `else:` or `case ...:` aligns it with its enclosing `if` or `match`. The default is four spaces; the editor's indentation settings are respected. This runs without the compiler, including in new untitled files. See [indentation while typing](vscode-extension.md#indentation-while-typing) for behavior and settings.
 
@@ -82,7 +82,7 @@ Reassigned names navigate to their first binding. A for binding reusing an outer
 
 Previously saved Nagi/Low files are analyzed in memory with their unsaved edits, including open imports and native Low. Queries do not save or build sources. Save new files and nagi.toml to use project information.
 
-The next extension release also offers keyword/type completion and built-in completion, hover, and argument hints in new unsaved files, without a compiler, and in untrusted workspaces. When the source cannot be analyzed, unresolved imports or same-name bindings in the file suppress built-in information that could refer to another definition. Local types, field candidates, and F12 require the compiler.
+Extension 0.1.9 also offers keyword/type completion and built-in completion, hover, and argument hints in new unsaved files, without a compiler, and in untrusted workspaces. When the source cannot be analyzed, unresolved imports or same-name bindings in the file suppress built-in information that could refer to another definition. Local types, field candidates, and F12 require the compiler and a trusted workspace.
 
 | State | Information shown or action |
 |---|---|

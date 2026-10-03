@@ -22,7 +22,11 @@ async def main() -> Result[unit, Error]:
     return ok(print("完了"))
 ```
 
-子が`Result`のエラーを返したりpanicしたりすると、残りをキャンセルして終了を待ちます。`spawn`できるのは、`unit`か`Result[unit, Error]`を返す非同期処理です。scope内の`return`と、viewを子へ渡すことは未対応です。
+scope本体が終わると、子の結果を確認します。子が`Result`のエラーを返したりpanicしたりすると、残りをキャンセルして終了を待ちます。scope本体の実行中に子の失敗で割り込む動作はありません。`spawn`できるのは、`unit`か`Result[unit, Error]`を返す非同期処理です。scope内の`return`と、viewを子へ渡すことは未対応です。
+
+引数は`spawn`を書いた場所で評価し、できた値を子へ渡します。`spawn work(copy(part))`のようにviewから所有値を作ると、元のデータを親でも使い続けられます。配列をコピーしても中身にviewが残る場合は、子へ渡せません。
+
+scopeを使う関数は`Result[T, Error]`を返します。独自のエラーclassを使う場合は、Rust連携で`From<nagi_runtime::Error>`を実装してください。子の失敗をそのclassへ変換できることはビルド時に確認します。
 
 親の処理そのものが破棄された場合や、scope本体がpanicした場合には、子へ停止を要求します。その場で全員の終了を待つ保証はありません。CPU処理の停止については[並行処理](concurrency.md)を参照してください。
 

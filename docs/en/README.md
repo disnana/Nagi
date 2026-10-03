@@ -31,6 +31,7 @@ Write applications in `.nagi` files and run them with `nagic run file.nagi`. See
 | Split code into files or call Rust | [Imports and Rust](modules-and-rust.md) |
 | Share your own libraries or use Rust crates | [Libraries and Rust assets](libraries.md) |
 | Save an entry file and build settings | [nagi.toml](projects.md) |
+| Use your own Rust crate from an application | [Local library example](../../test-nagi-code/rust-library/README.en.md) |
 | Wait for async work or start child operations | [Async and scopes](async.md), [concurrency](concurrency.md) |
 | Read working applications | [Sample projects](library-examples.md) |
 

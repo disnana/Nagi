@@ -1,0 +1,33 @@
+class Quote:
+    product: str
+    subtotal_cents: i64
+    discount_cents: i64
+    fee_cents: i64
+    total_cents: i64
+
+@rust("native::quote")
+extern def quote(product: view[str], unit_price_cents: i64, quantity: i64) -> Result[Quote, Error]
+
+def main() -> Result[unit, Error]:
+    product = "Workshop notebook"
+    order = try quote(view(product), 250, 12)
+    assert_true(order.product == product)
+    assert_true(order.subtotal_cents == 3000)
+    assert_true(order.discount_cents == 300)
+    assert_true(order.fee_cents == 0)
+    assert_true(order.total_cents == 2700)
+    print(product)
+    print("Subtotal cents:")
+    print(order.subtotal_cents)
+    print("Discount cents:")
+    print(order.discount_cents)
+    print("Service fee cents:")
+    print(order.fee_cents)
+    print("Total cents:")
+    print(order.total_cents)
+    match quote(view(product), 250, 0):
+        case Ok(_):
+            return error("zero quantity unexpectedly accepted")
+        case Err(reason):
+            print(error_message(reason))
+    return ok(print("Local Rust library verified."))

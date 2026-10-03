@@ -1,4 +1,4 @@
-# Nagi 0.1.6 — a working prototype of a two-level backend language
+# Nagi 0.1.7 — a working prototype of a two-level backend language
 
 [日本語](README.md)
 
@@ -140,7 +140,7 @@ Implemented features include primitive types, value classes, contiguous arrays, 
 
 Result matching lets you handle success and failure, recover with defaults, and return errors while preserving their kind. See [error handling](docs/en/error-handling.md) and the [HTTP Result API example](docs/en/result-api.md).
 
-The [VS Code extension 0.1.8](docs/en/vscode-extension.md) provides F12 navigation to functions, classes, imported files, and local bindings; type hovers; class field completion; and signature help. It also handles unsaved edits to files saved at least once. The [editor walkthrough](docs/en/editor.md) shows how to use these features.
+The [VS Code extension 0.1.9](docs/en/vscode-extension.md) provides F12 navigation to functions, classes, imported files, and local bindings; type hovers; class field completion; and signature help. It also handles unsaved edits to files saved at least once. The [editor walkthrough](docs/en/editor.md) shows how to use these features.
 
 Dedicated actor declarations, generic functions, traits, named modules and aliases, nullable and general pattern matching, PostgreSQL, compile-time SQL validation, High request arenas, Low raw pointers/unsafe/C ABI, a custom scheduler, and self-hosting are not implemented. Rust integration uses calls within the same build, without a stable external ABI. `Map` and `owned` are design proposals, not complete standard APIs.
 

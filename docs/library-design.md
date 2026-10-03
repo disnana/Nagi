@@ -1,6 +1,6 @@
 # ライブラリとRust連携の設計案
 
-このページは提案です。moduleの名前空間、詳細なCargo依存設定、不透明なresource型、汎用DB APIはまだ実装されていません。以下の構文案は、現在の実行例とは区別してください。
+このページは、現在の再利用方法と追加機能の設計案をまとめたものです。moduleの名前空間、不透明なresource型、汎用DB APIはまだ実装されていません。未実装の構文案は、現在の実行例とは区別してください。
 
 [目次](README.md) · 現在使える機能: [importとRust連携](modules-and-rust.md)、[nagi.toml](projects.md)
 
@@ -12,8 +12,8 @@ Nagiで書いた型・検証・計算を複数のアプリで共有し、通信�
 | --- | --- | --- |
 | import | 相対ファイルを同じ名前空間に読み込む | module、`from`、`as`、別moduleの同名定義 |
 | Rust連携 | sync／asyncのexternと型付きの引数・戻り値 | 接続やclientを表す不透明な型 |
-| Rustファイル | `rust.file` で1つのnative moduleを指定 | 既存形式を保ち、共有crateも指定できる依存設定 |
-| Cargo依存 | crate名とversion文字列 | path・features・default-features・package |
+| Rustファイル | `rust.file` で1つのnative moduleを指定。共有crateは依存tableで指定 | — |
+| Cargo依存 | version文字列、またはversion・path・features・default-features・packageのtable | — |
 | ランタイム | HTTP、JSON、SQLite等を常に依存に含む | 必要な機能に合わせた依存とコード生成 |
 | DB | SQLiteと固定したbind引数 | 型付きの任意個の引数、行読み取り、transaction |
 
@@ -54,7 +54,7 @@ from "domain/orders.nagi" import Order as SavedOrder
 
 ## Cargoの依存設定
 
-次のtable形式は提案です。現在は `serde_json = "1.0"` のようなversion文字列だけを受け付けます。
+version文字列と次のtable形式に対応しています。設定の詳細と実行例は[nagi.toml](projects.md)を参照してください。
 
 ```toml
 [rust]
@@ -66,9 +66,11 @@ foundation = { package = "my-foundation", path = "../my-foundation" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 ```
 
-文字列形式を保ち、table形式にversion・path・features・default-features・packageを追加します。pathはnagi.toml基準で解決し、生成先を変えても同じcrateを参照します。依存解決はCargoに任せます。CLIのversion指定とtable設定の上書き規則も明示します。
+pathはnagi.toml基準で解決し、生成先を変えても同じcrateを参照します。`check`・`lower`・`symbols`はCargoを呼ばず、依存crateの存在を要求しません。実際のpath・version・Rust APIは`build`/`run`でCargoが検査します。
 
-Cargoのfeaturesは依存経路ごとに合成されます。直接依存でdefault-featuresを無効にしても、別の経路が有効にした機能までは外れません。実際の依存ツリーで確認します。versionは許容範囲、Cargo.lockは解決した版なので、生成lockの保管と `--locked` ビルドを整理します。現在のnagic buildは `--locked` を付けません。
+CLIの`--rust-dep NAME=VERSION`は、同名のtable全体をversion文字列に置換します。元のpath・package・features・default-featuresは残りません。
+
+Cargoのfeaturesは依存経路ごとに合成されます。直接依存でdefault-featuresを無効にしても、別の経路が有効にした機能までは外れません。生成先の既存Cargo.lockは再ビルド時も保持します。lockは解決した版を記録しますが、path依存のソース内容は固定しません。`nagic build --locked`は未対応です。固定した解決でのビルドは、生成したCargo.tomlに対してCargoの`--locked`を指定します。
 
 ## ランタイムを機能ごとに選ぶ
 
@@ -111,7 +113,7 @@ SQLiteの `?1`、PostgreSQLの `$1`、i64に対応するBIGINTやidentity等の�
 ## 実装する順序
 
 1. 現在の例で共有処理とadapterの境界を確認し、Nagiの検査とRust buildを両方通す。
-2. 詳細な依存設定、ランタイム機能の選択、derive生成、lockの保管を整える。
+2. 実装済みの依存tableとlockの維持を土台に、ランタイム機能の選択とderive生成を整える。
 3. module、from/as、High→Low、エディターを同じ名前解決へ揃える。
 4. 組み込みHTTP起動をDBから分け、DBなしではworkerもSQLite依存も不要にする。
 5. resourceの所有・借用・キャンセルと汎用DB契約をSQLiteで検証する。

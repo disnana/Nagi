@@ -102,7 +102,10 @@ fn nearest_project_uses_manifest_relative_paths_from_any_subdirectory() {
     assert_eq!(options.source, root.join("src/main.nagi"));
     assert_eq!(options.native, [root.join("native/math.low")]);
     assert_eq!(options.rust_file, Some(root.join("bridge.rs")));
-    assert_eq!(options.rust_dependencies["serde_json"], "1.0");
+    assert_eq!(
+        options.rust_dependencies["serde_json"],
+        project::RustDependency::Version("1.0".into())
+    );
     assert_eq!(options.out, root.join("build/main"));
     assert_eq!(options.project_root, Some(root));
     f.write("src/nagi.toml", "entry = 'nested.low'\n");
@@ -139,7 +142,10 @@ fn cli_overrides_scalars_and_dependency_versions_and_adds_native_files() {
         .unwrap();
     assert_eq!(options.source, f.0.join("override.nagi"));
     assert_eq!(options.rust_file, Some(root.join("other.rs")));
-    assert_eq!(options.rust_dependencies["serde_json"], "1.0.151");
+    assert_eq!(
+        options.rust_dependencies["serde_json"],
+        project::RustDependency::Version("1.0.151".into())
+    );
     assert_eq!(
         options.native,
         [root.join("base.low"), f.0.join("extra.low")]

@@ -77,11 +77,11 @@ Add Cargo dependencies with `--rust-dep NAME=VERSION`. For an adapter using serd
 nagic run app.nagi --rust native.rs --rust-dep serde_json=1.0
 ```
 
-Cargo normally needs network access to download dependencies on the first build. See the [repository's Rust integration example](../../test-nagi-code/rust-bridge/) for a complete example using a crate. Save your entry file, Rust file, and dependencies in [nagi.toml](projects.md) to reuse them in the CLI and VS Code.
+Cargo normally needs network access to download dependencies on the first build. Use a dependency table in `nagi.toml` to set a local crate `path`, select `features`, or use `package` to give a dependency a different name. The [local Rust library example](../../test-nagi-code/rust-library/README.en.md) calls an independent crate through an adapter that converts Rust structs/errors into a Nagi class/Error. See the [repository's Rust integration example](../../test-nagi-code/rust-bridge/) for a complete example using a crate. Save your entry file, Rust file, and dependencies in [nagi.toml](projects.md) to reuse them in the CLI and VS Code.
 
-Nagi's `check` validates the declared types, calls, ownership, and borrowing. It does not inspect Rust bodies or crate APIs. A `build` checks that the Rust implementation matches its declaration. Adapt Rust-specific types to numbers, str, List, classes, or Result before passing them to Nagi. Refer to a generated Nagi class from Rust as `super::TypeName`.
+Nagi's `check` validates the declared types, calls, ownership, and borrowing. `check`, `lower`, and `symbols` do not invoke Cargo or fetch dependencies. It does not inspect Rust bodies or crate APIs. A `build` checks that the Rust implementation matches its declaration. Adapt Rust-specific types to numbers, str, List, classes, or Result before passing them to Nagi. Refer to a generated Nagi class from Rust as `super::TypeName`.
 
-To reuse the same dependency resolution, retain the generated Cargo.lock and run `cargo build --locked --manifest-path build/app/Cargo.toml`. A normal `nagic build` runs `cargo build --release` on the generated project.
+To reuse the same dependency resolution, retain the generated Cargo.lock and run `cargo build --locked --manifest-path build/app/Cargo.toml`. A normal `nagic build` runs `cargo build --release` on the generated project and retains its existing lock. `nagic build --locked` is unsupported. The lock does not pin local crate source contents.
 
 This integration calls functions within the same Rust build. A stable C ABI and runtime DLL loading are unsupported.
 

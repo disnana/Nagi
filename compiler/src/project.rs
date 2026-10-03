@@ -1,5 +1,5 @@
 //! Project configuration and CLI precedence, shared by every compiler command.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fs,
@@ -45,7 +45,55 @@ struct Manifest {
 struct Rust {
     file: Option<String>,
     #[serde(default)]
-    dependencies: BTreeMap<String, String>,
+    dependencies: BTreeMap<String, RustDependency>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum RustDependency {
+    Version(String),
+    Detailed(RustDependencyTable),
+}
+
+impl<'de> Deserialize<'de> for RustDependency {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct DependencyVisitor;
+        impl<'de> serde::de::Visitor<'de> for DependencyVisitor {
+            type Value = RustDependency;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a version string or Rust dependency table")
+            }
+            fn visit_str<E: serde::de::Error>(self, version: &str) -> Result<Self::Value, E> {
+                Ok(RustDependency::Version(version.to_owned()))
+            }
+            fn visit_string<E: serde::de::Error>(self, version: String) -> Result<Self::Value, E> {
+                Ok(RustDependency::Version(version))
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                map: A,
+            ) -> Result<Self::Value, A::Error> {
+                RustDependencyTable::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+                    .map(RustDependency::Detailed)
+            }
+        }
+        deserializer.deserialize_any(DependencyVisitor)
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RustDependencyTable {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub features: Vec<String>,
+    #[serde(rename = "default-features", skip_serializing_if = "Option::is_none")]
+    pub default_features: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package: Option<String>,
 }
 
 #[derive(Debug)]
@@ -54,7 +102,7 @@ pub struct Options {
     pub source: PathBuf,
     pub native: Vec<PathBuf>,
     pub rust_file: Option<PathBuf>,
-    pub rust_dependencies: BTreeMap<String, String>,
+    pub rust_dependencies: BTreeMap<String, RustDependency>,
     pub out: PathBuf,
     pub cost: bool,
     /// Read editor buffers from stdin only for the read-only symbols command.
@@ -70,23 +118,52 @@ pub fn discover(start: &Path) -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
-fn dependency(name: &str, version: &str) -> Result<(), String> {
+fn dependency_name(name: &str) -> Result<(), String> {
     if name.replace('_', "-") == "nagi-runtime"
         || name.is_empty()
-        || version.trim().is_empty()
         || !name.chars().enumerate().all(|(i, c)| {
             c == '_' || c.is_ascii_alphabetic() || i > 0 && (c.is_ascii_digit() || c == '-')
         })
     {
-        return Err(format!("Rust依存の名前・versionが不正です: {name}"));
+        return Err(format!("Rust依存の名前が不正または予約名です: {name}"));
     }
     Ok(())
 }
 
-fn validate_dependencies(deps: &BTreeMap<String, String>) -> Result<(), String> {
+fn dependency(name: &str, dependency: &RustDependency) -> Result<(), String> {
+    dependency_name(name)?;
+    let (version, path, features, package) = match dependency {
+        RustDependency::Version(version) => (Some(version), None, &[][..], None),
+        RustDependency::Detailed(table) => (
+            table.version.as_ref(),
+            table.path.as_ref(),
+            table.features.as_slice(),
+            table.package.as_ref(),
+        ),
+    };
+    if version.is_none() && path.is_none() {
+        return Err(format!("Rust依存 {name} にはversionまたはpathが必要です"));
+    }
+    if version.is_some_and(|version| version.trim().is_empty())
+        || path.is_some_and(|path| {
+            path.as_os_str().is_empty() || path.to_str().is_some_and(|path| path.trim().is_empty())
+        })
+        || features.iter().any(|feature| feature.trim().is_empty())
+    {
+        return Err(format!(
+            "Rust依存 {name} のversion/path/featuresには空でない値を指定してください"
+        ));
+    }
+    if let Some(package) = package {
+        dependency_name(package).map_err(|error| format!("Rust依存 {name} のpackage: {error}"))?;
+    }
+    Ok(())
+}
+
+fn validate_dependencies(deps: &BTreeMap<String, RustDependency>) -> Result<(), String> {
     let mut names = std::collections::BTreeSet::new();
-    for (name, version) in deps {
-        dependency(name, version)?;
+    for (name, config) in deps {
+        dependency(name, config)?;
         if !names.insert(name.replace('-', "_")) {
             return Err(format!(
                 "Rust依存の名前が重複しています (- と _ は同じ名前です): {name}"
@@ -187,11 +264,9 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
                         let (name, version) = value
                             .split_once('=')
                             .ok_or("--rust-dep requires NAME=VERSION")?;
-                        dependency(name, version)?;
-                        if dependencies
-                            .insert(name.to_owned(), version.to_owned())
-                            .is_some()
-                        {
+                        let config = RustDependency::Version(version.to_owned());
+                        dependency(name, &config)?;
+                        if dependencies.insert(name.to_owned(), config).is_some() {
                             return Err(format!("Rust依存が重複しています: {name}"));
                         }
                     }
@@ -247,6 +322,17 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     }
     rust_dependencies.extend(dependencies);
     validate_dependencies(&rust_dependencies)?;
+    // Resolve only dependencies that remain after complete CLI replacement.
+    // Local crates need not exist until Cargo builds the generated manifest.
+    if let Some(root) = &project_root {
+        for dependency in rust_dependencies.values_mut() {
+            if let RustDependency::Detailed(table) = dependency {
+                if let Some(path) = &mut table.path {
+                    *path = root.join(&*path);
+                }
+            }
+        }
+    }
     let source = source.ok_or(
         "SOURCEまたはnagi.tomlが必要です。nagic run --project DIRでプロジェクトを選べます",
     )?;

@@ -1,6 +1,6 @@
 # Library and Rust integration design
 
-This page is a proposal. Module namespaces, detailed Cargo dependency settings, opaque resource types, and a general database API are not implemented. The proposed syntax below is separate from the examples that run today.
+This page describes current reuse options and proposed extensions. Module namespaces, opaque resource types, and a general database API are not implemented. Unimplemented syntax proposals are separate from the examples that run today.
 
 [Contents](README.md) · Available features: [imports and Rust integration](modules-and-rust.md), [nagi.toml](projects.md)
 
@@ -12,8 +12,8 @@ The aim is to share Nagi types, validation, and calculations between application
 | --- | --- | --- |
 | Imports | Relative files loaded into one namespace | Modules, `from`, `as`, and separate definitions with the same name |
 | Rust integration | Sync/async extern functions with typed arguments and results | Opaque types representing connections and clients |
-| Rust files | One native module selected with `rust.file` | Compatible settings that also support shared crates |
-| Cargo dependencies | Crate names and version strings | path, features, default-features, and package |
+| Rust files | One native module selected with `rust.file`; shared crates selected through dependency tables | — |
+| Cargo dependencies | Version strings or tables with version, path, features, default-features, and package | — |
 | Runtime | HTTP, JSON, SQLite, and other dependencies always included | Dependencies and generated code selected by use |
 | Database | SQLite with fixed bind argument shapes | Arbitrary typed arguments, row decoding, and transactions |
 
@@ -54,7 +54,7 @@ Standard modules refer to bundled definitions; quoted imports refer to relative 
 
 ## Cargo dependency settings
 
-The table values below are proposed. Today, dependency values must be version strings such as `serde_json = "1.0"`.
+Version strings and the following table values are supported. See [nagi.toml](projects.md) for configuration details and a runnable example.
 
 ```toml
 [rust]
@@ -66,9 +66,11 @@ foundation = { package = "my-foundation", path = "../my-foundation" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 ```
 
-Keep string values and add tables accepting version, path, features, default-features, and package. Resolve paths relative to nagi.toml so changing the generated output directory does not change the referenced crate. Cargo resolves dependencies. Define how CLI version settings override table entries.
+Paths resolve relative to nagi.toml, so changing the generated directory does not change the referenced crate. `check`, `lower`, and `symbols` do not invoke Cargo or require dependency crates to exist. Cargo checks the actual paths, versions, and Rust APIs during `build`/`run`.
 
-Cargo combines features enabled through different dependency paths. Disabling default features on one direct dependency does not disable features enabled elsewhere. Check the actual dependency tree. Versions specify allowed ranges; Cargo.lock records resolved versions. Preserve generated locks and support locked builds. Current nagic build does not pass `--locked`.
+CLI `--rust-dep NAME=VERSION` replaces an entire same-name table with a version string. Its original path, package, features, and default-features do not remain.
+
+Cargo combines features enabled through different dependency paths. Disabling default features on one direct dependency does not disable features enabled elsewhere. Rebuilding preserves the existing generated Cargo.lock. It records resolved versions but does not pin path dependency source contents. `nagic build --locked` is unsupported; use Cargo's `--locked` on the generated Cargo.toml to build with a fixed resolution.
 
 ## Selecting runtime features
 
@@ -111,7 +113,7 @@ Keep SQLite's `?1`, PostgreSQL's `$1`, BIGINT for i64, identity columns, and oth
 ## Implementation order
 
 1. Validate the shared logic and adapter boundaries with current examples, using both Nagi checking and Rust builds.
-2. Add detailed dependency settings, runtime selection, conditional derives, and lock preservation.
+2. Build runtime selection and conditional derives on the implemented dependency tables and lock preservation.
 3. Use one name-resolution system for modules, from/as, High-to-Low conversion, and editors.
 4. Separate built-in HTTP startup from databases, removing both workers and SQLite dependencies when unused.
 5. Validate resource ownership, borrowing, cancellation, and general database contracts with SQLite.

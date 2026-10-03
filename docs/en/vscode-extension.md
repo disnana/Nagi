@@ -28,19 +28,19 @@ The extension ID is `Disnana.nagi-lang`. If you installed `nagi-local.nagi-langu
 
 Formal VSIX downloads are published on [GitHub Releases](https://github.com/disnana/Nagi/releases) as nagi-language-VERSION.vsix. Updating the extension version on main publishes a release after CI succeeds.
 
-From the repository root, run `python editors/vscode-nagi/scripts/package_vsix.py` to create `build/distribution/nagi-language-0.1.8.vsix`. Select it using **Extensions: Install from VSIX**, or run:
+From the repository root, run `python editors/vscode-nagi/scripts/package_vsix.py` to create `build/distribution/nagi-language-0.1.9.vsix`. Select it using **Extensions: Install from VSIX**, or run:
 
 ```powershell
-code --install-extension build/distribution/nagi-language-0.1.8.vsix
+code --install-extension build/distribution/nagi-language-0.1.9.vsix
 ```
 
-Highlighting, snippets, and indentation support work without a compiler. Checks and execution require `nagic`. Install it using [Setup and first run](https://disnana.github.io/Nagi/en/docs/getting-started/). The extension checks the repository's release build, then debug build, then PATH.
+Extension 0.1.9 provides highlighting, snippets, indentation support, keyword/type completion, and built-in completion, hover, and argument hints without a compiler. Checks and execution require `nagic`. Install it using [Setup and first run](https://disnana.github.io/Nagi/en/docs/getting-started/). The extension checks the repository's release build, then debug build, then PATH.
 
 The VSIX does not include the compiler. `spawn nagic.exe ENOENT` means it could not be found. Install the compiler, restart VS Code, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set nagi.compilerPath. Startup failures and timeouts appear as warnings and in Nagi Output, without source-error squiggles.
 
 ## Indentation while typing
 
-These improvements are planned for the next extension release. To try them earlier, build a VSIX from main.
+These typing adjustments are available in extension 0.1.9.
 
 Press Enter after a block header such as `def main():`, `async def`, `if`, `match`, or `case` to indent one level. Typing the final colon of `else:` or `case ...:` aligns the line with its enclosing `if` or `match`.
 
@@ -94,7 +94,9 @@ Name references resolve separately from type checks, so identifiable bindings ca
 
 ## Hovers, completion, and parameter hints
 
-Use the latest nagic and extension 0.1.8. Function hovers show parameters, returns, and async status; class hovers list fields. Types such as Result[Item?, Error] and view[str] retain their declared forms. See the [walkthrough](editor.md).
+Extension 0.1.9 offers keyword/type completion and built-in completion, hover, and argument hints in new unsaved files, without a compiler, and in untrusted workspaces. Built-in descriptions remain available in incomplete syntax. When the compiler cannot analyze the source, same-name functions, variables, or imports suppress built-in information that could refer to another definition. Project declarations, local variable types, field candidates, and F12 require the compiler and a trusted workspace.
+
+Use the latest nagic and extension 0.1.9. Function hovers show parameters, returns, and async status; class hovers list fields. Types such as Result[Item?, Error] and view[str] retain their declared forms. See the [walkthrough](editor.md).
 
 Variable hovers show confirmed types: count = 3 gives count: i64, and item from a class-returning call gives item: Item. Arguments, for elements, and Ok/Err bindings are supported at declarations and uses. Names outside their blocks do not receive those types.
 

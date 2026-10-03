@@ -22,7 +22,11 @@ async def main() -> Result[unit, Error]:
     return ok(print("Done"))
 ```
 
-If a child returns a Result error or panics, the scope cancels the remaining children and waits for them. Spawned work must return `unit` or `Result[unit, Error]`. Returning from inside a scope and passing a view to a child are not supported.
+The scope checks child results after its body finishes. If a child returns a Result error or panics, it cancels the remaining children and waits for them. A child failure does not interrupt the body while it runs. Spawned work must return `unit` or `Result[unit, Error]`. Returning from inside a scope and passing a view to a child are not supported.
+
+Arguments are evaluated at the `spawn` statement, and the resulting values are passed to the child. With `spawn work(copy(part))`, the child receives an owned copy, so the parent can keep using the original data. Copying a list does not make it safe to pass if its elements still contain views.
+
+A function using a scope returns `Result[T, Error]`. A custom error class needs a Rust adapter implementing `From<nagi_runtime::Error>`. The build checks that child failures can be converted to that class.
 
 If the parent operation itself is dropped, or the scope body panics, cancellation is requested without a guarantee that every child has already stopped. See [Concurrency](concurrency.md) for CPU work and cancellation.
 

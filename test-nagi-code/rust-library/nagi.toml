@@ -1,0 +1,7 @@
+entry = "library-pricing.nagi"
+
+[rust]
+file = "native.rs"
+
+[rust.dependencies]
+pricing = { version = "0.1", path = "engine", package = "nagi-pricing-engine", features = ["volume-discount"], default-features = false }
