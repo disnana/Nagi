@@ -8,5 +8,6 @@
   "POST handler": { "prefix": "post", "body": ["@post(\"${1:/items}\")", "async def ${2:create_item}(db: Db, req: ${3:CreateItem}) -> Result[${4:Item}, Error]:", "    return await db_insert[${4}](db, \"${0:INSERT INTO items(name, age) VALUES (?1, ?2) RETURNING id, name, age}\", req.name, req.age)"], "description": "HTTP POST" },
   "Loop": { "prefix": "for", "body": ["for ${1:i} in range(${2:10}):", "    ${0:print(i)}"], "description": "整数のループ" },
   "Borrowed array": { "prefix": "vsum", "body": ["def ${1:sum_values}(values: view[i64]) -> i64:", "    total = 0", "    for value in values:", "        total += value", "    return total", "$0"], "description": "配列を借用して集計" },
-  "Result match": {"prefix": "match", "body": ["match ${1:result}:", "    case Ok(${2:value}):", "        ${3:print(value)}", "    case Err(${4:problem}):", "        ${0:print(error_kind(problem))}"], "description": "Resultの成功・失敗を分岐"}
+  "Result match": {"prefix": "match", "body": ["match ${1:result}:", "    case Ok(${2:value}):", "        ${3:print(value)}", "    case Err(${4:problem}):", "        ${0:print(error_kind(problem))}"], "description": "Resultの成功・失敗を分岐"},
+  "Nullable match": {"prefix": "match-option", "body": ["match ${1:optional}:", "    case Some(${2:value}):", "        ${3:print(value)}", "    case None:", "        ${0:print(\"missing\")}"], "description": "nullableの値あり・値なしを分岐"}
 }

@@ -32,6 +32,9 @@ pub(crate) fn serde_type(
         ) {
             return ty.1.is_empty();
         }
+        if !classes.contains_key(&ty.0) && crate::stdlib::resource(&ty.0).is_some() {
+            return false;
+        }
         if enums.contains_key(&ty.0) {
             return false;
         }

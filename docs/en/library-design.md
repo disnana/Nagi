@@ -1,6 +1,6 @@
 # Library and Rust integration design
 
-This page describes current reuse options and proposed extensions. Quoted relative files support module namespaces. Opaque resource types, a general database API, and runtime feature selection remain proposals.
+This page describes current reuse options and proposed extensions. File modules and `std.http.server` are available. A general database API, user-defined resources, and runtime feature selection remain proposals.
 
 [Contents](README.md) · Available features: [imports and Rust integration](modules-and-rust.md), [nagi.toml](projects.md)
 
@@ -10,7 +10,7 @@ The aim is to share Nagi types, validation, and calculations between application
 
 | Area | Available today | Proposed addition |
 | --- | --- | --- |
-| Imports | Relative-file flat imports, `as`/`from`, and same-named definitions in different modules | Unquoted standard modules and visibility declarations |
+| Imports | Relative files, `as`, multiple-name `from`, and `std.http.server` | More standard modules and visibility declarations |
 | Rust integration | Sync/async extern functions with typed arguments and results | Opaque types representing connections and clients |
 | Rust files | One native module selected with `rust.file`; shared crates selected through dependency tables | — |
 | Cargo dependencies | Version strings or tables with version, path, features, default-features, and package | — |
@@ -49,11 +49,11 @@ from "domain/orders.nagi" import score
 
 `orders.Order` and `SavedOrder` refer to the same definition. Classes with the same name in different files remain different types. Reading the same real file through several aliases still loads one definition. Type checking, High-to-Low conversion, Rust generation, and editor tools use module and definition IDs. Type arguments and field types follow the same name resolution.
 
-A module name exposes that file's own functions, classes, and enums without automatically re-exporting imported names. Each from statement selects one definition, with an optional alias. Missing definitions and conflicting names in one scope report errors at the import. `from` and `as` are contextual import keywords. Existing flat imports retain visibility through dependencies, and built-ins remain available as before.
+A module name exposes that file's own functions, classes, and enums without automatically re-exporting imported names. A from statement can select multiple definitions separated by commas, each with an optional alias. Missing definitions and conflicting names report errors at the import. `from` and `as` are contextual import keywords. Existing flat imports and built-ins remain available.
 
 Use `@replace generated::orders::score` to replace a function reached through a root module name. Rust adapters refer to its classes as `super::orders::Order` or `super::SavedOrder`. Traditional `@replace generated::score` and `super::Item` remain available. JSON field names and SQL column names stay unchanged. See [imports and Rust integration](modules-and-rust.md).
 
-Unquoted standard modules such as `import json` and `import sqlite as storage` remain proposals and cannot be loaded with the current import syntax.
+Use `import std.http.server as http` for the standard HTTP module. Resources, operations, and constants resolve through the compiler's registry, never local lookalike files. Separate `std.json` and `std.sqlite` modules remain proposals.
 
 ## Cargo dependency settings
 
@@ -81,7 +81,7 @@ Split the runtime into core, async, json, http, sqlite, and postgres features. C
 
 Serde and row implementations, exported types, and error conversions also need conditional generation. Making dependencies optional is only part of the work. Preserve compatibility settings for Rust integration and let new adapters declare runtime requirements. A dependency's feature does not automatically enable a feature with the same name in the generated application.
 
-For built-in HTTP, add `serve(port)` while retaining `serve(db, port)`. Reject the one-argument form if any registered route requires Db. This is separate from existing custom servers such as custom-http.
+Use [std.http.server](http.md) for HTTP without a database. Existing `serve(db, port)` remains available. Separating Cargo runtime dependencies by feature is still pending.
 
 ## Opaque types and asynchronous work
 

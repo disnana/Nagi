@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const compiler = require('./compiler');
 const features = require('./features');
 const indentation = require('./indentation');
+const stdlib = require('./stdlib');
 
 function activate(context) {
   const output = vscode.window.createOutputChannel('Nagi');
@@ -15,6 +16,8 @@ function activate(context) {
   const navigation = new Set();
   const symbolCache = new Map();
   const notifiedFailures = new Set();
+  const standardSources = new Map();
+  const standardSourceChanges = new vscode.EventEmitter();
   let epoch = 0;
   let symbolsEpoch = 0;
   const isNagi = d => d && ['nagi', 'nagi-low'].includes(d.languageId) && d.uri.scheme === 'file';
@@ -185,7 +188,10 @@ function activate(context) {
       const target = compiler.definitionAt(snapshot.index, document.uri.fsPath, position.line, position.character, root);
       if (!target) return [];
       const range = new vscode.Range(target.line - 1, target.column - 1, target.line - 1, target.column - 1 + target.length);
-      return [new vscode.Location(vscode.Uri.file(compiler.normalizeFile(target.file, root)), range)];
+      const standard = stdlib.sourceUri(target.file);
+      if (target.file.startsWith('stdlib:') && (!standard || !standardSources.has(target.file))) return [];
+      const uri = standard ? vscode.Uri.parse(standard) : vscode.Uri.file(compiler.normalizeFile(target.file, root));
+      return [new vscode.Location(uri, range)];
     } catch (error) { output.appendLine(`[symbols] ${error.message}`); return []; }
   }
 
@@ -218,6 +224,13 @@ function activate(context) {
             try {
               const index = JSON.parse(result.output);
               if (index.format !== 'nagi-symbols-v1' || !Array.isArray(index.definitions)) throw new Error('Unsupported symbols format');
+              for (const source of stdlib.sources(index)) {
+                if (standardSources.get(source.file) !== source.text) {
+                  standardSources.set(source.file, source.text);
+                  standardSourceChanges.fire(vscode.Uri.parse(stdlib.sourceUri(source.file)));
+                }
+              }
+              while (standardSources.size > 128) standardSources.delete(standardSources.keys().next().value);
               resolve({ index, saved: !editorInput && files.length > 0 });
             } catch (error) { output.appendLine(`[symbols] ${error.message}`); resolve(); }
           }, 16 * 1024 * 1024, editorInput ? input : undefined);
@@ -229,7 +242,7 @@ function activate(context) {
       let value = await run(files.length > 0);
       if (!value && files.length > 0 && startEpoch === symbolsEpoch && !token.isCancellationRequested) value = await run(false);
       if (value) {
-        const paths = [...(value.index.files || []).map(file => compiler.normalizeFile(file, settings.root)), settings.project, settings.executable].filter(Boolean);
+        const paths = [...(value.index.files || []).filter(file => !stdlib.sourceUri(file)).map(file => compiler.normalizeFile(file, settings.root)), settings.project, settings.executable].filter(Boolean);
         symbolCache.set(key, { value, created: Date.now(), stamps: paths.map(file => [file, stamp(file)]) });
         if (symbolCache.size > 16) symbolCache.delete(symbolCache.keys().next().value);
       }
@@ -241,9 +254,9 @@ function activate(context) {
     const text = new vscode.MarkdownString();
     text.appendCodeblock(item.signature, 'nagi');
     if (item.description) text.appendText(item.description);
-    if (item.location) text.appendText(`\n${path.basename(compiler.normalizeFile(item.location.file, '.'))}:${item.location.line}`);
+    if (item.location) text.appendText(`\n${stdlib.sourceUri(item.location.file) ? item.location.file.slice('stdlib:'.length) : path.basename(compiler.normalizeFile(item.location.file, '.'))}:${item.location.line}`);
     if (snapshot?.saved && !item.builtin) text.appendText('\n書きかけの構文を解析できないため、保存済みの宣言を表示しています。');
-    if (item.builtin && (!snapshot || snapshot.saved)) text.appendText('\n組み込み関数');
+    if (item.builtin && (!snapshot || snapshot.saved)) text.appendText(item.kind === 'pattern' ? '\nnullableの分岐' : '\n組み込み関数');
     return text;
   }
 
@@ -265,12 +278,12 @@ function activate(context) {
     const offset = document.offsetAt(position);
     const word = features.wordAt(text, offset);
     return features.completionCandidates(snapshot?.index, text, offset, document.languageId === 'nagi-low', { file: document.uri.fsPath, saved: snapshot?.saved }).map(item => {
-      const kind = { function: vscode.CompletionItemKind.Function, class: vscode.CompletionItemKind.Class, enum: vscode.CompletionItemKind.Enum, enum_member: vscode.CompletionItemKind.EnumMember, field: vscode.CompletionItemKind.Field, module: vscode.CompletionItemKind.Module, type: vscode.CompletionItemKind.TypeParameter, keyword: vscode.CompletionItemKind.Keyword }[item.kind];
+      const kind = { function: vscode.CompletionItemKind.Function, pattern: vscode.CompletionItemKind.Keyword, class: vscode.CompletionItemKind.Class, resource: vscode.CompletionItemKind.Class, constant: vscode.CompletionItemKind.Constant, enum: vscode.CompletionItemKind.Enum, enum_member: vscode.CompletionItemKind.EnumMember, field: vscode.CompletionItemKind.Field, module: vscode.CompletionItemKind.Module, type: vscode.CompletionItemKind.TypeParameter, keyword: vscode.CompletionItemKind.Keyword }[item.kind];
       const completion = new vscode.CompletionItem(item.name, kind);
       completion.detail = item.signature + (snapshot?.saved && !item.builtin ? ' （保存済み）' : '');
       completion.documentation = documentation(item, snapshot);
       completion.insertText = new vscode.SnippetString(features.insertion(item, text.slice(word.end)));
-      completion.range = new vscode.Range(document.positionAt(word.start), document.positionAt(word.end));
+      completion.range = new vscode.Range(document.positionAt(item.replaceStart ?? word.start), document.positionAt(item.replaceEnd ?? word.end));
       completion.sortText = `${item.builtin ? '1' : item.kind === 'keyword' ? '2' : '0'}${item.name}`;
       return completion;
     });
@@ -299,7 +312,11 @@ function activate(context) {
     return help;
   }
 
-  context.subscriptions.push(output, diagnostics,
+  context.subscriptions.push(output, diagnostics, standardSourceChanges,
+    vscode.workspace.registerTextDocumentContentProvider('nagi-stdlib', {
+      onDidChange: standardSourceChanges.event,
+      provideTextDocumentContent(uri) { return standardSources.get(stdlib.sourceFile(uri)) || ''; },
+    }),
     vscode.languages.registerOnTypeFormattingEditProvider([{ language: 'nagi' }, { language: 'nagi-low' }], {
       provideOnTypeFormattingEdits(document, position, ch, options, token) {
         if (token.isCancellationRequested) return [];

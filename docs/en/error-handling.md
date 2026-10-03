@@ -52,7 +52,7 @@ Output: `21`, `invalid`, `-1`. Patterns begin with uppercase `Ok` and `Err`; con
 - Matching consumes the Result, moving owned payloads such as strings. The origin of a borrowed payload remains checked as borrowed within the case.
 - When both cases return, the function is checked as returning a value on every path.
 
-Matching is a statement over Result or enums. Match expressions, nullable `Some`/`None`, guards, nested patterns, and `case _` are unsupported. [Low](low-language.md) supports the same branches.
+Matching is a statement over Result, Option, or enums. For Option, write both `case Some(value):` and `case None:`. Match expressions, guards, nested patterns, and `case _` are unsupported. [Low](low-language.md) supports the same branches.
 
 ## Define your own error type
 

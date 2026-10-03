@@ -47,6 +47,11 @@ impl Drop for Inner {
 pub struct Db {
     inner: Arc<Inner>,
 }
+impl std::fmt::Debug for Db {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Db").finish_non_exhaustive()
+    }
+}
 impl Db {
     pub fn live_workers() -> usize {
         LIVE_WORKERS.load(Ordering::SeqCst)

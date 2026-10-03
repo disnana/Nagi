@@ -71,6 +71,7 @@ pub fn symbol(id: &DefId) -> String {
             DefKind::Class => "c",
             DefKind::Enum => "e",
             DefKind::Function => "f",
+            DefKind::Resource => "r",
         },
         hex(&id.name)
     )
@@ -87,7 +88,7 @@ pub fn display_symbol(name: &str) -> String {
     else {
         return name.to_owned();
     };
-    if !matches!(kind, "c" | "e" | "f") {
+    if !matches!(kind, "c" | "e" | "f" | "r") {
         return name.to_owned();
     }
     match (unhex(module), unhex(def)) {
@@ -379,7 +380,7 @@ impl ModuleMetadata {
     }
 }
 
-/// An already parsed source file. Imports point to canonical files, not aliases.
+/// A parsed source file. Imports point to canonical files or registered IDs.
 pub(crate) struct ModuleUnit {
     pub id: ModuleId,
     pub program: Program,
@@ -449,7 +450,11 @@ pub fn validate(program: &Program) -> Result<(), String> {
     if m.is_empty() {
         return Ok(());
     }
-    if m.modules.len() > 128
+    if m.modules
+        .iter()
+        .filter(|module| !crate::stdlib::is_registered_module(&module.id))
+        .count()
+        > 128
         || m.definitions.len() > 100_000
         || m.bindings.len() > 100_000
         || m.references.len() > 500_000
@@ -471,7 +476,7 @@ pub fn validate(program: &Program) -> Result<(), String> {
     }
     let mut modules = HashSet::new();
     for module in &m.modules {
-        if !canonical_identity(&module.id.0)
+        if !(canonical_identity(&module.id.0) || crate::stdlib::is_registered_module(&module.id))
             || module.path != module.id.0
             || !modules.insert(module.id.clone())
         {
@@ -481,7 +486,7 @@ pub fn validate(program: &Program) -> Result<(), String> {
     let root = m
         .root
         .as_ref()
-        .filter(|id| modules.contains(*id))
+        .filter(|id| modules.contains(*id) && !crate::stdlib::is_registered_module(id))
         .ok_or("module metadataのrootが不正です")?;
     let mut ids = HashSet::new();
     let mut symbols = HashSet::new();
@@ -494,7 +499,13 @@ pub fn validate(program: &Program) -> Result<(), String> {
         {
             return Err("module metadataの定義IDが不正または重複しています".into());
         }
+        if crate::stdlib::is_registered_module(&def.id.module)
+            && !crate::stdlib::definition(&def.id)
+        {
+            return Err("module metadataに未登録のstd定義があります".into());
+        }
         let main = def.id.kind == DefKind::Function
+            && !crate::stdlib::is_registered_module(&def.id.module)
             && m.binding(root, "main")
                 .is_some_and(|b| b.target == BindingTarget::Definition(def.id.clone()));
         if def.symbol
@@ -520,12 +531,30 @@ pub fn validate(program: &Program) -> Result<(), String> {
                 .map(|f| (&f.name, DefKind::Function)),
         )
     {
-        if !ast_symbols.insert(name) || !m.definition(name).is_some_and(|d| d.id.kind == kind) {
+        if !ast_symbols.insert(name)
+            || !m.definition(name).is_some_and(|d| {
+                d.id.kind == kind && !crate::stdlib::is_registered_module(&d.id.module)
+            })
+        {
             return Err("module metadataと実際の定義が一致しません".into());
         }
     }
-    if ast_symbols.len() != m.definitions.len() {
+    if ast_symbols.len()
+        != m.definitions
+            .iter()
+            .filter(|d| !crate::stdlib::is_registered_module(&d.id.module))
+            .count()
+    {
         return Err("module metadataに実際の定義がないIDがあります".into());
+    }
+    for module in &m.modules {
+        if crate::stdlib::is_registered_module(&module.id)
+            && crate::stdlib::definitions(&module.id)
+                .iter()
+                .any(|def| m.definition_id(&def.id).is_none())
+        {
+            return Err("module metadataのstd定義がregistryと一致しません".into());
+        }
     }
     let mut bindings = HashSet::new();
     for binding in &m.bindings {
@@ -541,6 +570,13 @@ pub fn validate(program: &Program) -> Result<(), String> {
             || !bindings.insert((&binding.module, &binding.name))
         {
             return Err("module metadataのbindingが不正または重複しています".into());
+        }
+        if crate::stdlib::is_registered_module(&binding.module)
+            && !matches!(&binding.target, BindingTarget::Definition(id)
+                if id.module == binding.module && id.name == binding.name
+                    && crate::stdlib::definition(id) && binding.public)
+        {
+            return Err("module metadataのstd bindingがregistryと一致しません".into());
         }
     }
     for def in &m.definitions {
@@ -578,6 +614,7 @@ fn own_span(unit: &ModuleUnit, name: &str, kind: DefKind, line: usize) -> Span {
                             DefKind::Class => keyword == "class" || keyword == "record",
                             DefKind::Enum => keyword == "enum",
                             DefKind::Function => keyword == "def" || keyword == "fn",
+                            DefKind::Resource => false,
                         })
                     })
         })
@@ -609,6 +646,33 @@ fn insert_binding(metadata: &mut ModuleMetadata, binding: ModuleBinding) -> Resu
     }
     metadata.bindings.push(binding);
     Ok(())
+}
+
+fn register_standard_module(metadata: &mut ModuleMetadata, id: &ModuleId) -> Result<(), String> {
+    if !crate::stdlib::is_registered_module(id) {
+        return Err("未登録のstd moduleです".into());
+    }
+    let definitions = crate::stdlib::definitions(id);
+    let bindings = definitions
+        .iter()
+        .map(|definition| ModuleBinding {
+            module: id.clone(),
+            name: definition.id.name.clone(),
+            target: BindingTarget::Definition(definition.id.clone()),
+            public: true,
+            line: definition.line,
+            span: Span::default(),
+        })
+        .collect();
+    metadata.merge(ModuleMetadata {
+        modules: vec![ModuleInfo {
+            id: id.clone(),
+            path: id.0.clone(),
+        }],
+        definitions,
+        bindings,
+        ..Default::default()
+    })
 }
 
 /// Resolve each file against its own namespace before assembling a checked AST.
@@ -682,6 +746,13 @@ pub(crate) fn resolve(mut units: Vec<ModuleUnit>, root: ModuleId) -> Result<Prog
                 line,
                 span: own_span(unit, name, kind, line),
             });
+        }
+    }
+    for unit in &units {
+        for (import, id) in &unit.imports {
+            if import.source == ImportSource::Standard {
+                register_standard_module(&mut metadata, id)?;
+            }
         }
     }
     // Dependencies precede importing files. Flat imports retain their transitive
@@ -791,7 +862,7 @@ pub(crate) fn resolve(mut units: Vec<ModuleUnit>, root: ModuleId) -> Result<Prog
     if let Some(BindingTarget::Definition(id)) = metadata.binding(&root, "main").map(|b| &b.target)
     {
         let id = id.clone();
-        if id.kind == DefKind::Function {
+        if id.kind == DefKind::Function && !crate::stdlib::is_registered_module(&id.module) {
             if let Some(def) = metadata.definitions.iter_mut().find(|d| d.id == id) {
                 let old = def.symbol.clone();
                 def.symbol = "main".into();
@@ -1000,7 +1071,7 @@ fn rebase_loaded(program: &mut Program, tokens: &[Token], offset: usize) {
     for (i, token) in tokens.iter().enumerate() {
         if let K::Id(name) = &token.kind {
             if let Some(def) = program.modules.definition(name) {
-                let variant = if def.id.kind == DefKind::Enum
+                let variant = if matches!(def.id.kind, DefKind::Enum | DefKind::Resource)
                     && matches!(tokens.get(i + 1).map(|t| &t.kind), Some(K::Sym(dot)) if dot == ".")
                 {
                     tokens.get(i + 2).and_then(|t| match &t.kind {
@@ -1011,7 +1082,11 @@ fn rebase_loaded(program: &mut Program, tokens: &[Token], offset: usize) {
                     None
                 };
                 program.modules.references.push(ModuleReference {
-                    module: def.id.module.clone(),
+                    module: if crate::stdlib::is_registered_module(&def.id.module) {
+                        program.modules.root.clone().expect("validated root")
+                    } else {
+                        def.id.module.clone()
+                    },
                     line: token.line + offset,
                     span: Span {
                         start: i,
@@ -1048,6 +1123,15 @@ pub fn synchronize(program: &mut Program) {
         )
         .collect();
     program.modules.definitions.retain_mut(|def| {
+        if crate::stdlib::definition(&def.id) && def.symbol == symbol(&def.id) {
+            if let Some(registered) = crate::stdlib::definitions(&def.id.module)
+                .into_iter()
+                .find(|registered| registered.id == def.id)
+            {
+                def.line = registered.line;
+            }
+            return true;
+        }
         if let Some((kind, line)) = ast.get(&def.symbol) {
             if *kind == def.id.kind {
                 def.line = *line;
@@ -1189,6 +1273,15 @@ impl<'a> Resolver<'a> {
         }
     }
     fn target(&self, name: &str, line: usize) -> Result<Option<DefId>, String> {
+        if self.raw
+            && crate::stdlib::contains_symbol(name)
+            && self.metadata.definition(name).is_none()
+        {
+            return Err(format!(
+                "line {line}: このファイルから参照できないstd定義です: {}",
+                display_symbol(name)
+            ));
+        }
         if !self.raw && self.metadata.definition(name).is_some() {
             return Ok(None);
         }
@@ -1325,7 +1418,10 @@ impl<'a> Resolver<'a> {
             }
             let line = self.tokens[first].line + self.offset;
             if let Some(target) = self.target(&name, line)? {
-                if matches!(target.kind, DefKind::Class | DefKind::Enum) {
+                if matches!(
+                    target.kind,
+                    DefKind::Class | DefKind::Enum | DefKind::Resource
+                ) {
                     self.reference(
                         name,
                         target,
@@ -1353,6 +1449,9 @@ impl<'a> Resolver<'a> {
                     .metadata
                     .definitions
                     .iter()
+                    .filter(|definition| {
+                        !crate::stdlib::is_registered_module(&definition.id.module)
+                    })
                     .filter(|definition| definition.line <= line)
                     .max_by_key(|definition| definition.line)
                 {
@@ -1479,6 +1578,11 @@ impl<'a> Resolver<'a> {
         let Some((parent, variant)) = name.rsplit_once('.') else {
             return Ok(false);
         };
+        if parent.split('.').count() > 2 {
+            // A field on a qualified constant is resolved after its receiver.
+            // The module prefix alone does not make every later field a name.
+            return Ok(false);
+        }
         if value_scope
             && self
                 .locals
@@ -1495,7 +1599,9 @@ impl<'a> Resolver<'a> {
             Some(target) => Some(target),
             None => self.target(parent, line)?,
         };
-        let Some(target) = target.filter(|target| target.kind == DefKind::Enum) else {
+        let Some(target) =
+            target.filter(|target| matches!(target.kind, DefKind::Enum | DefKind::Resource))
+        else {
             return Ok(false);
         };
         let spelling = name.clone();

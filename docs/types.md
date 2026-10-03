@@ -13,7 +13,7 @@
 | `str` / `bytes` | UTF-8文字列 / バイト列 | 所有値。自作関数へ渡すとmoveする |
 | `List[T]` / `[T]` | 同じ型の要素を持つ配列 | 所有値。forでの走査は基本型とCopy class・enumに対応 |
 | `view[str]` / `view[bytes]` / `view[T]` | 文字列・バイト列・配列を借りて読む | 元データの所有者が必要。読むだけで元の値は変更できない |
-| `T?` / `Option[T]` | 値がある、または`None` | `None`には型の文脈が必要 |
+| `T?` / `Option[T]` | 値がある、または`None` | `None`には型の文脈が必要。`Some` / `None`のmatchで取り出す |
 | `Result[T, E]` | 成功値またはエラー | `E`はError・独自class・enum。`try`で伝播、`match`で処理する |
 | `shared[T]` | 複数の場所で共有する所有値 | `share`で作り、`clone_shared`で共有参照を増やす |
 | `UUID` / `timestamp` | UUID / 時刻の値 | UUIDの文字列変換には`uuid_parse` / `uuid_format`を使う |
@@ -26,7 +26,17 @@
 
 VS Code拡張では、変数名にマウスを置くと推論された型を確認できます。たとえば`count`は`count: i64`です。関数の引数やcaseの束縛名も対象です。[エディターの操作例](editor.md)で試せます。
 
-nullableは`missing: i64? = None`、値がある場合は`present: i64? = some(42)`です。`T?`は`Option[T]`の短い表記ですが、現在はmatchや汎用unwrap APIはありません。空配列は`values: List[i64] = []`と型を指定してください。
+nullableは`missing: i64? = None`、値がある場合は`present: i64? = some(42)`です。`T?`は`Option[T]`の短い表記です。値を取り出すには両方のcaseを書きます。
+
+```nagi
+match present:
+    case Some(value):
+        print(value)
+    case None:
+        print("値なし")
+```
+
+使わない値は`Some(_)`にします。汎用unwrap APIはありません。空配列は`values: List[i64] = []`と型を指定してください。
 
 関数の引数・戻り値・借用の書き方は[文法](syntax.md)、コピーとmoveの規則は[所有権](ownership.md)、各関数の対応する型は[組み込み関数](builtins.md)を参照してください。
 
@@ -41,6 +51,16 @@ enum Choice:
 `Choice.Cancelled`か`Choice.Selected(id=42)`を作り、`match`で全種類を処理します。情報を持つ種類は位置引数でも作れます。全payloadがコピー可能ならenumもコピーできます。str・Error・Listなどを含む場合はmoveします。
 
 classと同じく、ファイルをimportして使えます。enumの型引数・メソッド・JSON変換は未対応です。[エラー処理](error-handling.md#独自のエラー型)にResultと組み合わせる例があります。
+
+## 標準HTTPのresource型
+
+`std.http.server`から`Request`、`Response`、`Method`、`Status`、`Options`、`App[State, E]`をimportできます。通常のclassと異なり、これらはlibraryが作るnative値です。名前付きfieldで直接構築したり、JSONへ変換したりはできません。コピーできるのは`Status`だけです。`Method`の一致比較は借用し、Requestのmethodを取り出す代入はmoveします。
+
+`view[Request]`など、登録済みHTTP resourceのviewは値そのものへの参照です。通常の`view[Point]`は引き続きPointの配列のsliceで、Point1個への参照ではありません。Requestのbody・path・headerのviewは所有元を借り、所有元より長く保存できません。
+
+resourceのviewには`len`・`slice`・index取得・`for`を使えません。`List[Status]`は直接index取得や反復ができますが、resourceのListからviewを作る操作は未対応です。
+
+AppのhandlerはRequestをmoveで受け取り、stateは`shared[State]`で読みます。共有stateのCopy fieldは読み出せますが、strなどの非Copy fieldはmoveできません。`view(state.label)`で借用してください。StateのfieldにはDbを含められますが、DbやHTTP resourceを含むclassはJSON変換に対応しません。AppのState・E型引数にはviewを保持できません。詳しくは[HTTP](http.md)と[標準import](modules-and-rust.md#標準http-libraryを読み込む)を参照してください。
 
 ## 関数を値として渡す
 
@@ -66,7 +86,7 @@ nagic run app.nagi
 
 結果は`42`です。`chosen = add_one`のようにローカル変数の型を省略しても推論されます。関数を返す場合は、たとえば`def choose() -> fn[i64]:`と宣言します。
 
-async関数も`selected = answer`のように代入して、async関数内で`await selected(...)`と呼べます。async関数を受け取る引数や返す関数の型注釈にはまだ対応していません。ラムダ式や、周囲のローカル変数を取り込むクロージャも未対応です。
+async関数も`selected = answer`のように代入して、async関数内で`await selected(...)`と呼べます。HTTPの`route` / `route_mapped`はこの名前付きasync関数やローカルaliasを登録できます。一般のasync関数を受け取る引数や返す関数の型注釈にはまだ対応していません。ラムダ式や、周囲のローカル変数を取り込むクロージャも未対応です。
 
 async関数を配列やclassへ保存することも未対応です。非同期処理を呼び出した戻り値をいったん変数へ保存する形式も使えません。`pending = sleep(10)`ではなく、`await sleep(10)`と呼び出してください。
 

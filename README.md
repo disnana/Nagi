@@ -144,7 +144,9 @@ Resultの`match`で成功・失敗を分け、既定値に回復したり、Erro
 
 [VS Code拡張0.1.9](editors/vscode-nagi/README.md)では、関数・class・import先・ローカル変数へのF12、宣言とローカル変数の型ホバー、classのフィールド補完、呼び出し時の引数ヒントを利用できます。一度保存したファイルの未保存の編集にも対応します。[操作例](docs/editor.md)で、型の表示や`value.`からの補完、定義への移動を試せます。
 
-相対ファイルのimportにはmodule名とfromの別名を使えます。専用のactor宣言、汎用generic関数、trait、引用符なしの標準moduleやパッケージのimport、nullableや一般的なパターンのmatch、PostgreSQL、SQLのコンパイル時検証、Highのrequest arena、Lowの生pointer/unsafe/C ABI、独自scheduler、self-hostingは未実装です。Rust連携は同じビルド内の呼び出しで、安定した外部ABIではありません。`Map`と`owned`は表現方針の段階で、完全な標準APIを提供していません。
+次のリリースに向けた[標準HTTP module](docs/http.md)では、DBなしのApp、ヘッダー、Method／Status、独自の状態とエラー処理を使えます。標準moduleのimportとOptionのSome／None分岐にも対応します。公開済み版との差は[未リリースの変更](CHANGELOG.md)を参照してください。
+
+専用のactor宣言、利用者が定義するgeneric関数やtrait、パッケージのimport、一般的なパターンのmatch、PostgreSQL、SQLのコンパイル時検証、Highのrequest arena、Lowの生pointer/unsafe/C ABI、独自scheduler、self-hostingは未実装です。Rust連携は同じビルド内の呼び出しで、安定した外部ABIではありません。`Map`と`owned`の操作APIも揃っていません。
 
 CPUの速さは、型付きネイティブ演算・boxingの回避・LLVMのループ最適化で説明できます。ランタイムはTokio/Axum/Serde/rusqliteに依存します。これらを置き換える独自ランタイムの性能を証明したものではありません。
 

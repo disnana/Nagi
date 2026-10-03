@@ -221,28 +221,43 @@ impl Parser {
                     return Err(self.err("importに属性は付けられません"));
                 }
                 let line = self.ts[import_start].line;
-                let K::Str(file) = self.t().kind.clone() else {
-                    return Err(self.err("importには相対ファイルパスの文字列が必要です"));
+                let (path, source) = if let K::Str(file) = self.t().kind.clone() {
+                    self.pos += 1;
+                    (file, ImportSource::File)
+                } else {
+                    let name = self.qualified_name()?;
+                    if !name.starts_with("std.") {
+                        return Err(
+                            self.err("importには相対ファイルパスの文字列かstd module名が必要です")
+                        );
+                    }
+                    (name, ImportSource::Standard)
                 };
-                self.pos += 1;
                 let kind = if from {
                     self.expect("import")?;
-                    let start = self.pos;
-                    let name = self.name()?;
-                    let name_span = self.span(start);
-                    let (alias, alias_span) = if self.eat("as") {
+                    let mut names = vec![];
+                    loop {
                         let start = self.pos;
-                        let alias = self.name()?;
-                        (alias, self.span(start))
-                    } else {
-                        (name.clone(), name_span)
-                    };
-                    ImportKind::Names(vec![ImportName {
-                        name,
-                        alias,
-                        name_span,
-                        alias_span,
-                    }])
+                        let name = self.name()?;
+                        let name_span = self.span(start);
+                        let (alias, alias_span) = if self.eat("as") {
+                            let start = self.pos;
+                            let alias = self.name()?;
+                            (alias, self.span(start))
+                        } else {
+                            (name.clone(), name_span)
+                        };
+                        names.push(ImportName {
+                            name,
+                            alias,
+                            name_span,
+                            alias_span,
+                        });
+                        if !self.eat(",") {
+                            break;
+                        }
+                    }
+                    ImportKind::Names(names)
                 } else if self.eat("as") {
                     let start = self.pos;
                     let alias = self.name()?;
@@ -250,14 +265,17 @@ impl Parser {
                         alias,
                         alias_span: self.span(start),
                     }
-                } else {
-                    p.imports.push((file.clone(), line));
+                } else if source == ImportSource::File {
+                    p.imports.push((path.clone(), line));
                     ImportKind::Flat
+                } else {
+                    return Err(self.err("std moduleのimportにはasの名前が必要です"));
                 };
                 let span = self.span(import_start);
                 self.end_stmt()?;
                 p.module_imports.push(ModuleImport {
-                    path: file,
+                    path,
+                    source,
                     line,
                     span,
                     kind,
@@ -465,9 +483,20 @@ impl Parser {
                         ok: name == "Ok",
                         binding,
                     }
+                } else if name == "Some" {
+                    self.expect("(")?;
+                    let binding = self.pattern_binding()?;
+                    self.expect(")")?;
+                    MatchPattern::Option {
+                        binding: Some(binding),
+                    }
+                } else if name == "None" {
+                    MatchPattern::Option { binding: None }
                 } else {
                     if !name.contains('.') {
-                        return Err(self.err("caseにはOk、Err、またはenumの種類名が必要です"));
+                        return Err(
+                            self.err("caseにはOk、Err、Some、None、またはenumの種類名が必要です")
+                        );
                     }
                     let mut bindings = vec![];
                     if self.eat("(") {

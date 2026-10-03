@@ -13,7 +13,7 @@ Annotate variables with `count: i32 = 10`, parameters with `count: i32`, and ret
 | `str` / `bytes` | UTF-8 strings / byte sequences | Owned; passing to a user-defined function moves the value |
 | `List[T]` / `[T]` | Lists of elements of the same type | Owned; for iteration supports primitive elements and Copy classes/enums |
 | `view[str]` / `view[bytes]` / `view[T]` | Read borrowed strings, byte sequences, or lists | Requires an owner for the source data; read-only |
-| `T?` / `Option[T]` | A value or `None` | `None` requires type context |
+| `T?` / `Option[T]` | A value or `None` | `None` requires type context; extract with a Some/None match |
 | `Result[T, E]` | A success value or an error | `E` can be Error, a class, or an enum; propagate with `try` or handle with `match` |
 | `shared[T]` | An owned value shared across multiple places | Create with `share`; duplicate its shared reference with `clone_shared` |
 | `UUID` / `timestamp` | UUID / time values | Use `uuid_parse` / `uuid_format` for UUID text conversion |
@@ -26,7 +26,17 @@ Floating-point literals are also checked against the `f32` or `f64` type determi
 
 In the VS Code extension, hovering a variable shows its inferred type, such as `count: i64`. This also covers arguments and case bindings. Try the [editor walkthrough](editor.md).
 
-Write `missing: i64? = None` for an absent nullable value and `present: i64? = some(42)` for a present value. `T?` abbreviates `Option[T]`; matching and a general unwrap API are not yet available. Annotate empty lists, for example `values: List[i64] = []`.
+Write `missing: i64? = None` for an absent nullable value and `present: i64? = some(42)` for a present value. `T?` abbreviates `Option[T]`. Write both cases to extract the value:
+
+```nagi
+match present:
+    case Some(value):
+        print(value)
+    case None:
+        print("No value")
+```
+
+Use `Some(_)` to discard a value. There is no general unwrap API. Annotate empty lists, for example `values: List[i64] = []`.
 
 See [syntax](syntax.md) for parameter, return, and borrow annotations; [ownership](ownership.md) for copy and move rules; and [built-in functions](builtins.md) for accepted argument types.
 
@@ -41,6 +51,16 @@ enum Choice:
 Construct `Choice.Cancelled` or `Choice.Selected(id=42)`, then handle every variant with `match`. Payload variants also accept positional arguments. An enum is copyable when every payload field is copyable; fields such as str, Error, or List make it move instead.
 
 Import an enum from a file like a class. Enum type parameters, methods, and JSON conversion are unsupported. See [error handling](error-handling.md#define-your-own-error-type) for an example with Result.
+
+## Standard HTTP resource types
+
+Import `Request`, `Response`, `Method`, `Status`, `Options`, and `App[State, E]` from `std.http.server`. These are native values created by the library, rather than ordinary classes. They cannot be constructed with named fields or converted to JSON. Only `Status` is Copy. Comparing Methods borrows them; assigning a Request's method to another variable moves that field.
+
+A view of a registered HTTP resource, such as `view[Request]`, refers to the value itself. An ordinary `view[Point]` still means a slice of Points, rather than a reference to one Point. Views of a Request's body, path, or headers borrow their owner and cannot outlive it.
+
+Resource views do not support `len`, `slice`, indexing, or `for`. You can index or iterate a `List[Status]` directly, but creating a view from a List of resources is currently unsupported.
+
+An App handler receives Request by move and reads state through `shared[State]`. Copy fields can be read, but non-Copy fields such as str cannot be moved out of shared state. Borrow them with `view(state.label)`. State fields may contain Db; classes containing Db or HTTP resources do not support JSON conversion. App's State and E type arguments cannot retain views. See [HTTP](http.md) and [standard imports](modules-and-rust.md#import-the-standard-http-library).
 
 ## Pass a function as a value
 
@@ -66,7 +86,7 @@ nagic run app.nagi
 
 The result is `42`. Local types can also be inferred: `chosen = add_one`. A function that returns another function can declare a return type such as `def choose() -> fn[i64]:`.
 
-You can also assign an async function with `selected = answer`, then call `await selected(...)` inside an async function. Type annotations for parameters receiving async functions, or functions returning them, are not yet supported. Lambdas and closures that capture surrounding local variables are also unsupported.
+You can also assign an async function with `selected = answer`, then call `await selected(...)` inside an async function. HTTP `route` and `route_mapped` can register these named async functions or local aliases. General type annotations for parameters receiving async functions, or functions returning them, are not yet supported. Lambdas and closures that capture surrounding local variables are also unsupported.
 
 Storing async functions in lists or classes is also unsupported. You cannot store the unawaited result of async work in a variable. Write `await sleep(10)` rather than `pending = sleep(10)`.
 

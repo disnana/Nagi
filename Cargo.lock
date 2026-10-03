@@ -464,6 +464,7 @@ dependencies = [
  "futures-util",
  "hyper",
  "hyper-util",
+ "matchit",
  "rusqlite",
  "serde",
  "serde_json",

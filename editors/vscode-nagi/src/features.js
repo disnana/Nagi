@@ -82,6 +82,12 @@ const typeInsertions = {
   List: 'List[${1:T}]', Result: 'Result[${1:T}, ${2:Error}]', view: 'view[${1:str}]', shared: 'shared[${1:T}]',
   Option: 'Option[${1:T}]', fn: 'fn[${1:i64}, ${2:i64}]',
 };
+const optionPatterns = [
+  { name: 'Some', kind: 'pattern', signature: 'case Some(value)', parameters: [{ name: 'value', type: 'T' }],
+    description: 'nullableの値ありに一致し、値を束縛します。', builtin: true },
+  { name: 'None', kind: 'pattern', signature: 'case None', parameters: [],
+    description: 'nullableの値なしに一致します。', builtin: true },
+];
 
 // Preserve UTF-16 offsets while masking strings/comments, including unfinished strings.
 function context(text, offset) {
@@ -152,15 +158,21 @@ function assistanceDeclarations(index, text, source = {}) {
   return result;
 }
 
-function inTypeContext(before) {
+function inTypeContext(before, genericNames = new Set()) {
   const line = before.slice(before.lastIndexOf('\n') + 1);
   if (/(?:->|\b[A-Za-z_]\w*\s*:)\s*[\w.\[\], ?]*$/.test(line)) return true;
   const brackets = [];
   for (let i = 0; i < before.length; i++) { if (before[i] === '[') brackets.push(i); else if (before[i] === ']') brackets.pop(); }
   return brackets.some(i => {
     const name = /\b([A-Za-z_]\w*)\s*$/.exec(before.slice(0, i))?.[1];
-    return genericBuiltins.has(name) || Object.hasOwn(typeInsertions, name);
+    return genericBuiltins.has(name) || Object.hasOwn(typeInsertions, name) || genericNames.has(name);
   });
+}
+
+function genericNames(index, source) {
+  const items = [...declarations(index, source).values()];
+  return new Set(items.flatMap(item => [item, ...(item.members || [])])
+    .filter(item => item.typeParameters?.length).map(item => item.name));
 }
 
 function fileMatches(a, b) {
@@ -233,7 +245,8 @@ function fieldCandidates(index, text, member, source) {
     (offsetAt(a.location.line, a.location.column) ?? -1));
   const receiver = candidates[0];
   return (receiver?.fields || []).filter(f => typeof f.name === 'string' && typeof f.type === 'string')
-    .map(f => ({ name: f.name, kind: 'field', signature: `${f.name}: ${f.type}`, type: f.type }));
+    .map(f => ({ name: f.name, kind: 'field', signature: `${f.name}: ${f.type}${f.readonly ? ' (read-only)' : ''}`, type: f.type,
+      ...(f.readonly ? { readonly: true } : {}), ...(f.description ? { description: f.description } : {}) }));
 }
 
 function namespaceMember(index, text, member, source) {
@@ -243,17 +256,18 @@ function namespaceMember(index, text, member, source) {
   if (!receiver || /\.\s*$/.test(code.slice(0, receiver.index))) return undefined;
   const names = receiver[1].split(/\s*\.\s*/);
   let item = declarations(index, source).get(names[0]);
-  if (!item || !['module', 'enum'].includes(item.kind)) return undefined;
+  if (!item || !['module', 'enum', 'resource'].includes(item.kind)) return undefined;
   const word = { name: names[0], start: receiver.index, end: receiver.index + names[0].length };
   // Enum values and lexical aliases are not type namespaces.
   if (localAt(index, text, word, source) || shadowedAt(index, text, word, source, item)) return undefined;
   for (const name of names.slice(1)) {
-    const members = item.kind === 'module' ? item.members : item.kind === 'enum' ? item.variants : undefined;
+    const members = item.kind === 'module' ? item.members : item.kind === 'enum' ? item.variants : item.kind === 'resource' ? item.constants : undefined;
     item = members?.find(member => member.name === name);
     if (!item) return undefined;
   }
   if (item.kind === 'module') return { item, members: item.members || [] };
   if (item.kind === 'enum') return { item, members: item.variants || [] };
+  if (item.kind === 'resource') return { item, members: item.constants || [] };
   return undefined;
 }
 
@@ -263,7 +277,7 @@ function resolvedDeclaration(index, text, word, source) {
   const reference = (index?.references || []).find(ref => fileMatches(ref.location?.file, source.file) &&
     offsetAt(ref.location.line, ref.location.column) === word.start && ref.location.length === word.end - word.start);
   if (!reference) return undefined;
-  const definitions = (index.definitions || []).flatMap(item => [item, ...(item.variants || [])]);
+  const definitions = (index.definitions || []).flatMap(item => [item, ...(item.variants || []), ...(item.constants || [])]);
   return definitions.find(item => fileMatches(item.location?.file, reference.target?.file) &&
     item.location.line === reference.target.line && item.location.column === reference.target.column);
 }
@@ -273,25 +287,30 @@ function hoverAt(index, text, offset, source = {}) {
   if (!state.allowed) return undefined;
   const word = wordAt(state.masked, offset);
   if (!word.name) return undefined;
+  if (/\bcase\s*$/.test(state.masked.slice(0, word.start))) {
+    const item = optionPatterns.find(item => item.name === word.name);
+    if (item) return { item, start: word.start, end: word.end };
+  }
   const member = memberContext(text, offset);
   if (member) {
     const namespace = namespaceMember(index, text, member, source);
-    const item = namespace?.members.find(item => item.name === word.name);
+    const item = namespace?.members.find(item => item.name === word.name) ||
+      fieldCandidates(index, text, member, source).find(item => item.name === word.name);
     if (!item) return undefined;
     return { item, start: word.start, end: word.end };
   }
   const local = localAt(index, text, word, source);
   if (local) return { item: { ...local, kind: 'variable', signature: `${local.name}: ${local.type}` }, start: word.start, end: word.end };
   const resolved = resolvedDeclaration(index, text, word, source);
-  const item = resolved?.kind === 'enum_member' ? resolved : assistanceDeclarations(index, text, source).get(word.name) || resolved;
+  const item = ['enum_member', 'constant'].includes(resolved?.kind) ? resolved : assistanceDeclarations(index, text, source).get(word.name) || resolved;
   if (!item || shadowedAt(index, text, word, source, item)) return undefined;
   const before = state.masked.slice(0, word.start);
   const after = state.masked.slice(word.end);
   const declaration = /\b(?:def|fn|class|record|enum)\s*$/.test(before);
   const call = /^\s*\(/.test(after) || /^\s*\[[\w\[\], ?]+\]\s*\(/.test(after);
-  if (!declaration && !call && !(['class', 'enum'].includes(item.kind) && inTypeContext(before)) &&
-      !(['function', 'class', 'enum', 'enum_member'].includes(item.kind) && resolved) &&
-      item.kind !== 'module' && !(item.kind === 'enum' && /^\s*\./.test(after))) return undefined;
+  if (!declaration && !call && !(['class', 'enum', 'resource'].includes(item.kind) && inTypeContext(before, genericNames(index, source))) &&
+      !(['function', 'class', 'enum', 'enum_member', 'resource', 'constant'].includes(item.kind) && resolved) &&
+      item.kind !== 'module' && !(['enum', 'resource'].includes(item.kind) && /^\s*\./.test(after))) return undefined;
   return { item, start: word.start, end: word.end };
 }
 
@@ -299,20 +318,43 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
   const state = context(text, offset);
   if (!state.allowed) return [];
   const word = wordAt(state.masked, offset);
+  const beforeCursor = state.masked.slice(0, offset);
+  const lineStart = beforeCursor.lastIndexOf('\n') + 1;
+  const line = beforeCursor.slice(lineStart);
+  const importPath = /^\s*(?:import|from)\s+([A-Za-z_][\w.]*)?$/.exec(line);
+  if (importPath && !/["']/.test(text.slice(lineStart, offset)) && Array.isArray(index?.standard_modules)) {
+    const prefix = importPath[1] || '';
+    const start = offset - prefix.length;
+    let end = offset;
+    while (end < text.length && /[\w.]/.test(text[end])) end++;
+    return index.standard_modules.filter(item => typeof item.name === 'string' && item.name.startsWith(prefix))
+      .map(item => ({ name: item.name, kind: 'module', signature: `module ${item.name}`, replaceStart: start, replaceEnd: end }));
+  }
+  const fromImport = /^\s*from\s+(std(?:\.[a-z][a-z0-9_]*)+)\s+import\s+([^;]*)$/.exec(line);
+  if (fromImport && Array.isArray(index?.standard_modules)) {
+    const module = index.standard_modules.find(item => item.name === fromImport[1]);
+    const parts = fromImport[2].split(',');
+    const last = /^\s*([A-Za-z_]\w*)?\s*$/.exec(parts.pop());
+    if (!last) return [];
+    const imported = new Set(parts.map(part => /^\s*([A-Za-z_]\w*)/.exec(part)?.[1]));
+    return (module?.members || []).filter(item => typeof item.name === 'string' && !imported.has(item.name) && item.name.startsWith(last[1] || ''))
+      .map(item => ({ ...item, importOnly: true }));
+  }
   const member = memberContext(text, offset);
   if (member) {
     const namespace = namespaceMember(index, text, member, source);
     if (namespace) {
       const members = namespace.members;
-      return inTypeContext(state.masked.slice(0, member.dot))
-        ? members.filter(item => ['class', 'enum'].includes(item.kind)).map(item => ({ ...item, typeOnly: true })) : members;
+      return inTypeContext(state.masked.slice(0, member.dot), genericNames(index, source))
+        ? members.filter(item => ['class', 'enum', 'resource'].includes(item.kind)).map(item => ({ ...item, typeOnly: true })) : members;
     }
     return fieldCandidates(index, text, member, source);
   }
   const before = state.masked.slice(0, word.start);
   const all = [...assistanceDeclarations(index, text, source).values()];
-  if (inTypeContext(before)) {
-    const userTypes = all.filter(x => ['class', 'enum'].includes(x.kind));
+  if (/\bcase\s*$/.test(before)) return [...optionPatterns, ...all.filter(item => ['enum', 'module'].includes(item.kind))];
+  if (inTypeContext(before, genericNames(index, source))) {
+    const userTypes = all.filter(x => ['class', 'enum', 'resource'].includes(x.kind));
     const userTypeNames = new Set(userTypes.map(item => item.name));
     return [...userTypes.map(item => ({ ...item, typeOnly: true })), ...types.filter(name => !userTypeNames.has(name)).map(name => ({ name, kind: 'type', signature: name }))];
   }
@@ -320,13 +362,19 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
 }
 
 function insertion(item, following) {
+  if (item.importOnly) return item.name;
+  if (item.kind === 'resource') {
+    const parameters = item.typeParameters || [];
+    return !parameters.length || /^\s*\[/.test(following) ? item.name :
+      `${item.name}[${parameters.map((name, i) => `\$\{${i + 1}:${name}\}`).join(', ')}]`;
+  }
   if (item.typeOnly) return item.name;
   if (item.kind === 'type') {
     return /^\s*\[/.test(following) ? item.name : typeInsertions[item.name] || item.name;
   }
-  if (!['function', 'class', 'enum_member'].includes(item.kind)) return item.name;
+  if (!['function', 'class', 'enum_member', 'pattern'].includes(item.kind)) return item.name;
   const args = item.kind === 'class' ? item.fields || [] : item.parameters || [];
-  if (item.kind === 'enum_member' && !args.length) return item.name;
+  if (['enum_member', 'pattern'].includes(item.kind) && !args.length) return item.name;
   const types = item.typeParameters || [];
   if (types.length && /^\s*\[/.test(following)) return item.name;
   const generic = types.length ? `[${types.map((name, i) => `\$\{${i + 1}:${name}\}`).join(', ')}]` : '';
@@ -376,6 +424,10 @@ function activeCall(text, offset, qualified = false) {
 function signatureAt(index, text, offset, source = {}) {
   const call = callContext(text, offset);
   if (!call || localAt(index, text, { ...call, end: call.start + call.name.length }, source)) return undefined;
+  if (!call.qualifier && /\bcase\s*$/.test(context(text, offset).masked.slice(0, call.start))) {
+    const item = optionPatterns.find(item => item.name === call.name && item.parameters.length);
+    if (item) return { item, argument: call.argument };
+  }
   let item;
   if (call.qualifier) {
     const member = memberContext(text, call.start);

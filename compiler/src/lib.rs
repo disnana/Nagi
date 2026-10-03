@@ -11,6 +11,7 @@ pub mod project;
 mod routes;
 mod rust_names;
 pub mod source;
+pub mod stdlib;
 pub mod symbols;
 #[cfg(test)]
 mod tests;

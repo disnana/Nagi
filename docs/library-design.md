@@ -1,6 +1,6 @@
 # ライブラリとRust連携の設計案
 
-このページは、現在の再利用方法と追加機能の設計案をまとめたものです。引用符付きの相対ファイルにはmoduleの名前空間を使えます。不透明なresource型、汎用DB API、ランタイム機能の選択は未実装の案です。
+このページは、現在の再利用方法と追加機能の設計案をまとめたものです。ファイルのmoduleと標準の`std.http.server`を使えます。汎用DB API、利用者が定義するresource、ランタイム機能の選択は未実装の案です。
 
 [目次](README.md) · 現在使える機能: [importとRust連携](modules-and-rust.md)、[nagi.toml](projects.md)
 
@@ -10,7 +10,7 @@ Nagiで書いた型・検証・計算を複数のアプリで共有し、通信�
 
 | 部分 | 現在 | 提案する追加 |
 | --- | --- | --- |
-| import | 相対ファイルの平坦import、`as`・`from`、別moduleの同名定義 | 引用符なしの標準module、公開範囲の指定 |
+| import | 相対ファイル、`as`・複数名の`from`、`std.http.server` | 標準moduleの追加、公開範囲の指定 |
 | Rust連携 | sync／asyncのexternと型付きの引数・戻り値 | 接続やclientを表す不透明な型 |
 | Rustファイル | `rust.file` で1つのnative moduleを指定。共有crateは依存tableで指定 | — |
 | Cargo依存 | version文字列、またはversion・path・features・default-features・packageのtable | — |
@@ -49,11 +49,11 @@ from "domain/orders.nagi" import score
 
 `orders.Order` と `SavedOrder` は同じ定義を指し、別ファイルの同名classは別の型です。同じ実ファイルを複数の別名で読んでも定義は1つです。moduleと定義のIDを、型検査、High→Low、Rust出力、エディターで使います。型引数やフィールド型も同じ名前解決に従います。
 
-module名で公開するのは、そのファイル自身に定義した関数・class・enumです。importした名前は自動で再公開しません。from文は1文で1つの定義を選び、別名は省略できます。存在しない定義や同じ場所での名前の衝突はimport文でエラーになります。`from`・`as`はimport文だけのキーワードです。既存の平坦importは依存先まで見える名前空間を保ち、組み込み関数も従来どおり使えます。
+module名で公開するのは、そのファイル自身に定義した関数・class・enumです。importした名前は自動で再公開しません。from文はコンマで複数の定義を選べ、それぞれに`as`を付けられます。存在しない定義や名前の衝突はimport文でエラーになります。`from`・`as`はimport文だけのキーワードです。既存の平坦importと組み込み関数も使えます。
 
 rootのmodule名にある関数のLow差し替えは`@replace generated::orders::score`、Rustのアダプターからのclass参照は`super::orders::Order`や`super::SavedOrder`です。従来の`@replace generated::score`と`super::Item`も保ちます。JSONのfield名やSQLの列名は変えません。詳細は[importとRust連携](modules-and-rust.md)を参照してください。
 
-`import json`や`import sqlite as storage`のような引用符なしの標準moduleは、今後の案です。現在のimport構文では読み込めません。
+標準moduleは`import std.http.server as http`で読み込みます。resource・操作・定数はコンパイラが登録したものに限定し、ローカルの同名ファイルには解決しません。`std.json`や`std.sqlite`への分離は今後の案です。
 
 ## Cargoの依存設定
 
@@ -81,7 +81,7 @@ core・async・json・http・sqlite・postgresに分ける案です。出力す�
 
 classへのSerde／行読み取りの生成、公開型、エラー変換も切り替える必要があります。Cargoのoptional化だけでは終わりません。Rust連携には互換設定を保ち、新しいアダプターは必要なランタイム機能を明示できる形にします。依存crateのfeatureは生成アプリの同名featureへ自動では伝わりません。
 
-組み込みHTTPには `serve(port)` を追加し、既存の `serve(db, port)` を保つ案です。登録routeにDb引数があれば引数1個のserveをエラーにします。これはcustom-httpのような現在の独自サーバーとは別の変更です。
+DB不要のHTTPは[std.http.server](http.md)を使います。既存の`serve(db, port)`も使えます。ランタイムのCargo依存を機能ごとに分離する作業はまだ残っています。
 
 ## 不透明な型と非同期処理
 

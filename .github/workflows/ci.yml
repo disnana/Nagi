@@ -68,6 +68,7 @@ jobs:
       - run: pip install -r tests/requirements.txt
       - run: python tests/http_integration.py
       - run: python tests/route_integration.py
+      - run: python tests/http_stdlib_integration.py
       - run: ./target/release/examples/fuzz-smoke
 
   release-plan:
@@ -191,7 +192,7 @@ jobs:
           PY
       - run: cargo build --release --locked -p nagic
       - name: Check CLI, installation, ownership, and diagnostics on the target platform
-        run: cargo test --locked -p nagic --test cli --test installation --test loop_ownership --test build_diagnostics --test rust_dependencies --test expression_contracts --test frontend_contracts --test literal_contracts --test http_route_conflicts --test symbols --test modules --test module_parser --test module_emission --test module_symbols --test enum_parser --test enum_modules --test enum_emission --test typed_errors --test error_routes --test class_field_types
+        run: cargo test --locked -p nagic --test cli --test installation --test loop_ownership --test build_diagnostics --test rust_dependencies --test expression_contracts --test frontend_contracts --test literal_contracts --test http_route_conflicts --test symbols --test modules --test module_parser --test module_emission --test module_symbols --test enum_parser --test enum_modules --test enum_emission --test typed_errors --test error_routes --test class_field_types --test stdlib_imports --test option_match --test http_stdlib --test http_codegen
       - name: Check editor behavior on the target platform
         shell: bash
         run: node --test editors/vscode-nagi/test/*.test.js

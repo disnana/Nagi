@@ -7,7 +7,7 @@
 ## ファイルと字下げ
 
 - UTF-8で保存し、拡張子を`.nagi`にする。
-- トップレベルには`import`・`from`、`class`、`def`、`async def`、Rustの外部関数宣言を書く。実行する文は関数内に書く。
+- トップレベルには`import`・`from`、`class`、`enum`、`def`、`async def`、Rustの外部関数宣言を書く。実行する文は関数内に書く。
 - ブロックの前に`:`を付け、空白で字下げする。空白4つを推奨する。タブは禁止。
 - コメントは`#`。識別子は英字・数字・`_`で、数字からは始めない。日本語の文字列・コメントは使える。
 - `()`や`[]`の中は複数行に分けられる。引数や要素の末尾の余分な`,`は未対応。
@@ -97,6 +97,7 @@ while count < 3:
 | UUID・timestamp | 対応 | 未対応 |
 | view[str]・view[bytes] | 対応 | 対応 |
 | view[T] | 要素Tが一致比較に対応する場合 | 要素Tが大小比較に対応する場合 |
+| Method・Status | 対応。Methodは借用して比較する | 未対応。Statusの数値は`.value`で比較する |
 | class・所有するList | 未対応 | 未対応 |
 
 classの配列を借りた`view[Point]`も、そのまま比較できません。必要なフィールドを取り出して比較してください。配列のviewは、要素ごとの比較になります。
@@ -151,7 +152,9 @@ match parse_i64("42"):
         print(error_kind(problem))
 ```
 
-使わないpayloadは`_`にします。matchはResultを消費し、payloadの名前はcase内だけで使えます。外側の変数と同じ名前は使えません。`Result[T, E]`のEには独自class・enumも使えます。enumは`case Choice.Cancelled:`や`case Choice.Selected(id):`で全種類を処理します。[型の定義](types.md#enumで種類を分ける)と[エラー処理](error-handling.md)を参照してください。
+Optionも`case Some(value):`と`case None:`の両方を書いて処理します。`Some(_)`で値を捨てられます。
+
+使わないpayloadは`_`にします。matchは対象の所有値を消費し、payloadの名前はcase内だけで使えます。外側の変数と同じ名前は使えません。`Result[T, E]`のEには独自class・enumも使えます。enumは`case Choice.Cancelled:`や`case Choice.Selected(id):`で全種類を処理します。[型の定義](types.md#enumで種類を分ける)と[エラー処理](error-handling.md)を参照してください。
 
 子taskは次の完全なコードのようにscope内でspawnします。
 
@@ -171,7 +174,9 @@ scopeを出るときに子taskを待ちます。scope内の`return`、viewを別
 |---|---|---|
 | ファイルを読み込む | `import "models.nagi"` | [import](modules-and-rust.md)。同じ名前空間に読み込む |
 | module名を付ける | `import "orders.nagi" as orders` | `orders.Order`や`orders.score(...)`で、そのファイル自身の定義を使う |
-| 定義を選ぶ | `from "orders.nagi" import Order as SavedOrder` | 1文で1定義を読み込む。`as SavedOrder`は省略できる |
+| 定義を選ぶ | `from "orders.nagi" import Order as SavedOrder` | `,`で複数の定義を選べる。各`as 名前`は省略できる |
+| 標準HTTPを読み込む | `import std.http.server as http` | `http.Request`や`http.Status.OK`を使う。`as`は必須 |
+| 標準型を選ぶ | `from std.http.server import Request, Response, Status as Code` | [標準import](modules-and-rust.md#標準http-libraryを読み込む) |
 | GET handlerを定義する | 関数の前に`@get("/users/{id}")` | [HTTP](http.md)。`@post`、`@put`、`@delete`もある |
 | HTMLを返す | `return ok(html("<h1>Hello</h1>"))` | 戻り値は`Result[Html, Error]` |
 | テキストを埋め込む | `include_text("index.html")` | ソースの場所を基準に、コンパイル時に埋め込む |
@@ -191,6 +196,6 @@ scopeを出るときに子taskを待ちます。scope内の`return`、viewを別
 | 辞書、tuple、内包表記、lambda | 未対応。class、配列、通常の関数・ループを使う |
 | `str(42)`、任意型へのcast | 汎用変換は未対応。直接`print(42)`などを使う |
 
-nullableには`None` / `some(value)`がありますが、nullableを対象とする`match`や汎用のunwrap APIはありません。型を持つことと、完全な操作APIがあることは分けて考えてください。
+nullableは`None` / `some(value)`で作り、`case Some(value):` / `case None:`のmatchで取り出します。汎用unwrap APIはありません。
 
 整数のrelease演算はRust backendの固定幅演算に従い、加算などのoverflowはwrapします。debug Rust側ではpanicする場合があります。checked / wrapping演算を言語として統一することは今後の課題です。Lowの構文・差し替えは[Low](low-language.md)、実装予定は[roadmap](roadmap.md)にあります。
