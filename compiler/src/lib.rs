@@ -7,6 +7,7 @@ pub mod graph;
 mod installation;
 pub mod lexer;
 pub mod modules;
+mod output;
 pub mod parser;
 pub mod project;
 mod routes;

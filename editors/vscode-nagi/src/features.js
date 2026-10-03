@@ -144,27 +144,44 @@ function declarations(index, source = {}) {
   return result;
 }
 
-// When the current source cannot be checked, do not guess which same-name
-// bindings or imported definitions refer to a builtin. This is deliberately
-// conservative across scopes; only compiler snapshots can resolve occurrences.
-function assistanceDeclarations(index, text, source = {}) {
-  const result = declarations(index, source);
-  if (index && !source.saved) return result;
-  const code = context(text, text.length).masked;
-  const imported = /\bimport\b/.test(code);
+// These names are only hints for conservative fallback insertion, not a list
+// of variables known to be visible at the cursor.
+function previousWord(code, end) {
+  while (end > 0 && /\s/.test(code[end - 1])) end--;
+  let start = end;
+  while (start > 0 && /[A-Za-z0-9_]/.test(code[start - 1])) start--;
+  return code.slice(start, end);
+}
+
+function lexicalBindings(code, includeDeclarations = true) {
   const bindings = new Set();
   const patterns = [
-    /\b(?:def|fn|class|record|enum)\s+([A-Za-z_]\w*)/g,
+    ...(includeDeclarations ? [/\b(?:def|fn|class|record|enum)\s+([A-Za-z_]\w*)/g] : []),
     /\blet\s+([A-Za-z_]\w*)/g,
     /\b([A-Za-z_]\w*)\s*:(?!:)/g,
     /\b([A-Za-z_]\w*)\s*(?:=(?!=)|[+*\/%-]=)/g,
     /\bfor\s+([A-Za-z_]\w*)/g,
     /\bcase\s+(?:Ok|Err)\s*\(\s*([A-Za-z_]\w*)/g,
   ];
-  for (const pattern of patterns) for (const match of code.matchAll(pattern)) bindings.add(match[1]);
+  for (const pattern of patterns) for (const match of code.matchAll(pattern)) {
+    if (!includeDeclarations && ['def', 'fn', 'class', 'record', 'enum'].includes(previousWord(code, match.index))) continue;
+    bindings.add(match[1]);
+  }
   for (const match of code.matchAll(/\bcase\s+(?:[A-Za-z_]\w*\s*\.\s*)*[A-Za-z_]\w*\s*\(([^)]*)\)/g)) {
     for (const name of match[1].split(',')) if (/^[A-Za-z_]\w*$/.test(name.trim())) bindings.add(name.trim());
   }
+  return bindings;
+}
+
+// When the current source cannot be checked, do not guess which same-name
+// bindings or imported definitions refer to a builtin. Only compiler snapshots
+// can resolve occurrences.
+function assistanceDeclarations(index, text, source = {}, masked) {
+  const result = declarations(index, source);
+  if (index && !source.saved) return result;
+  const code = masked ?? context(text, text.length).masked;
+  const imported = /\bimport\b/.test(code);
+  const bindings = lexicalBindings(code);
   for (const [name, item] of result) if (item.builtin && (imported || bindings.has(name))) result.delete(name);
   return result;
 }
@@ -391,18 +408,32 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
     return fieldCandidates(index, text, member, source);
   }
   const before = state.masked.slice(0, word.start);
-  const all = [...assistanceDeclarations(index, text, source).values()];
+  const all = [...assistanceDeclarations(index, text, source, state.masked).values()];
   if (/\bcase\s*$/.test(before)) return [...matchPatterns, ...all.filter(item => ['enum', 'module'].includes(item.kind))];
   if (inTypeContext(before, genericNames(index, source))) {
     const userTypes = all.filter(x => ['class', 'enum', 'resource'].includes(x.kind));
     const userTypeNames = new Set(userTypes.map(item => item.name));
     return [...userTypes.map(item => ({ ...item, typeOnly: true })), ...types.filter(name => !userTypeNames.has(name)).map(name => ({ name, kind: 'type', signature: name }))];
   }
-  return [...all, ...[...(low ? ['fn', 'record', 'let'] : ['def', 'class']), ...keywords].map(name => ({ name, kind: 'keyword', signature: name }))];
+  const local = localAt(index, text, word, source);
+  const resolved = resolvedDeclaration(index, text, word, source);
+  const bindings = lexicalBindings(state.masked, false);
+  const values = all.map(item => {
+    if (item.name === word.name) {
+      if (local) return { ...local, kind: 'variable', signature: `${local.name}: ${local.type}` };
+      if (shadowedAt(index, text, word, source, item)) return { name: item.name, kind: 'variable', signature: item.name };
+      if (resolved) return item;
+    }
+    // An incomplete occurrence cannot prove which same-name binding is in
+    // scope. Keep the global name, but do not insert a call or type arguments.
+    return bindings.has(item.name) ? { ...item, nameOnly: true } : item;
+  });
+  if (local && !values.some(item => item.name === local.name)) values.unshift({ ...local, kind: 'variable', signature: `${local.name}: ${local.type}` });
+  return [...values, ...[...(low ? ['fn', 'record', 'let'] : ['def', 'class']), ...keywords].map(name => ({ name, kind: 'keyword', signature: name }))];
 }
 
 function insertion(item, following) {
-  if (item.importOnly) return item.name;
+  if (item.importOnly || item.nameOnly) return item.name;
   if (item.kind === 'resource') {
     const parameters = item.typeParameters || [];
     return !parameters.length || /^\s*\[/.test(following) ? item.name :
