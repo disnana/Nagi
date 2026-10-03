@@ -34,6 +34,7 @@ See the [VS Code guide](editor.md) for editor support.
 | Wait for async work or start child operations | [Async and scopes](async.md), [concurrency](concurrency.md) |
 | Send messages to stateful tasks and manage restart and shutdown | [Actors](actor.md), [Supervisors](supervisor.md), [API reference](actor-reference.md) |
 | Read working applications | [Sample projects](library-examples.md) |
+| Diagram types, modules, and calls | [Code maps](code-map.md) |
 
 Runnable examples are in [examples/tutorial/](../../examples/tutorial/). References also include code fragments.
 
@@ -41,6 +42,6 @@ Runnable examples are in [examples/tutorial/](../../examples/tutorial/). Referen
 
 [About Nagi](introduction.md) · [Low](low-language.md) · [Memory](memory-model.md) · [Compiler](compiler-internals.md) · [Language interfaces](ffi.md) · [Roadmap](roadmap.md)
 
-`std.actor` is a standard library intended for the next release. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) covers registration, calls, and shutdown. The older actor/Supervisor built-ins and [queues](queue.md) remain test APIs. For performance, read the [measurement methods](performance.md), [results](measurements.md), and [HTTP load tests](http-capacity.md).
+`std.actor` is a standard library available from Nagi 0.1.8. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) covers registration, calls, and shutdown. The older actor/Supervisor built-ins and [queues](queue.md) remain test APIs. For performance, read the [measurement methods](performance.md), [results](measurements.md), and [HTTP load tests](http-capacity.md).
 
-These pages cover the current source and Nagi 0.1. See [unreleased changes](../../CHANGELOG.md) for differences from the published version. Unsupported features are listed on each page.
+These pages cover the current source and Nagi 0.1. See the [change log](../../CHANGELOG.md) for changes by version. Unsupported features are listed on each page.

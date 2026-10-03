@@ -1,10 +1,10 @@
 # ライブラリとRust連携のサンプル
 
-7つの小さなプロジェクトで、Nagiの共通コード、moduleと別名、Rustのcrate、独自のHTTP基盤、Lowの差し替えを試します。
+10の小さなプロジェクトで、Nagiの共通コード、moduleと別名、Rustのcrate、独自のHTTP基盤、Lowの差し替えを試します。
 
 [一覧と起動手順](../../docs/library-examples.md) · [共通コードの構成](../../docs/libraries.md) · [English](README.en.md)
 
-リポジトリのルートから実行します。Rust/CargoとNagiアプリをビルドできる環境が必要です。
+リポジトリのルートから実行します。Nagi 0.1.8以降、Rust/Cargoとアプリをビルドできる環境が必要です。
 
 ```sh
 nagic run --project test-nagi-code/library-examples/rust-json

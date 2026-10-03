@@ -1,6 +1,6 @@
 # actorの測定
 
-未リリースの`std.actor`を使い、Supervisorに登録したactorへ一件ずつ送り、返信を待つ測定です。生成Nagiと同じ処理のRustを一つの実行ファイルに入れ、同じruntime・async呼び出しwrapper・依存・release設定で比較しました。
+`std.actor`の公開前に、Supervisorに登録したactorへ一件ずつ送り、返信を待つ経路を測定しました。生成Nagiと同じ処理のRustを一つの実行ファイルに入れ、同じruntime・async呼び出しwrapper・依存・release設定で比較しています。測定したソースと条件は生ログに記録しています。
 
 ## 呼び出しと返信
 

@@ -1,0 +1,31 @@
+direction: right
+g0: "main.nagi" {
+  direction: right
+  style.fill: "#FAFAFA"
+  style.stroke: "#CBD5E1"
+  n0: "main\nHigh function" {
+    shape: rectangle
+    style.fill: "#F0FDF4"
+    style.stroke: "#16A34A"
+    style.border-radius: 6
+  }
+}
+g1: "service.nagi" {
+  direction: right
+  style.fill: "#FAFAFA"
+  style.stroke: "#CBD5E1"
+  n1: "author_name\nHigh function" {
+    shape: rectangle
+    style.fill: "#F0FDF4"
+    style.stroke: "#16A34A"
+    style.border-radius: 6
+  }
+  n2: "make_post\nHigh function" {
+    shape: rectangle
+    style.fill: "#F0FDF4"
+    style.stroke: "#16A34A"
+    style.border-radius: 6
+  }
+}
+g0.n0 -> g1.n1: "calls"
+g0.n0 -> g1.n2: "calls"

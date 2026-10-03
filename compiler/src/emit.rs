@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::diagnostics::Generated;
 use std::{
     fs,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -1045,7 +1045,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             })
         } else if t.is_copy() {
             true
-        } else if t.0 == "Option" {
+        } else if matches!(t.0.as_str(), "Option" | "owned") {
             copy_type(&t.inner(), p, depth + 1)
         } else if let ::std::option::Option::Some(c) = p.classes.iter().find(|c| c.name == t.0) {
             c.fields.iter().all(|(_, t)| copy_type(t, p, depth + 1))
@@ -1592,7 +1592,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         args.first().map(String::as_str),
         Some("help" | "--help" | "-h")
     ) || args.first().is_some_and(|command| {
-        ["check", "lower", "build", "run", "symbols"].contains(&command.as_str())
+        ["check", "lower", "build", "run", "symbols", "map"].contains(&command.as_str())
             && args[1..].iter().any(|arg| arg == "--help" || arg == "-h")
     });
     if help {
@@ -1604,7 +1604,29 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         return Ok(());
     }
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let options = crate::project::resolve(&args, &cwd)?;
+    let (options, map_options) = if args.first().map(String::as_str) == Some("map") {
+        let (options, map) = crate::project::resolve_map(&args, &cwd)?;
+        (options, Some(map))
+    } else {
+        (crate::project::resolve(&args, &cwd)?, None)
+    };
+    let map_manifest = if map_options.is_some() {
+        options.project_root.as_ref().map(|root| {
+            args.iter()
+                .position(|arg| arg == "--project")
+                .map(|index| cwd.join(&args[index + 1]))
+                .map(|selected| {
+                    if selected.is_dir() {
+                        selected.join("nagi.toml")
+                    } else {
+                        selected
+                    }
+                })
+                .unwrap_or_else(|| root.join("nagi.toml"))
+        })
+    } else {
+        None
+    };
     let cmd = options.command.as_str();
     let path = options.source;
     let high = path.extension().is_none_or(|x| x != "low");
@@ -1691,7 +1713,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     p.classes = resolution.classes[..nc].to_vec();
     p.enums = resolution.enums[..ne].to_vec();
     p.functions = resolution.functions[..nf].to_vec();
-    let write_output = !(options.editor_input && cmd == "check");
+    let write_output = map_options.is_none() && !(options.editor_input && cmd == "check");
     if write_output {
         fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     }
@@ -1705,6 +1727,60 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         low_source.restore_lines(&mut p)?;
     }
     crate::check::integrate(&mut p, all).map_err(|e| sources.diagnostic(&e))?;
+    if let Some(map) = map_options {
+        let graph = match map.view {
+            crate::project::MapView::Types => crate::graph::types(&p, &sources),
+            crate::project::MapView::Modules => crate::graph::modules(&p, &sources),
+            crate::project::MapView::Calls => crate::graph::calls(&p, &sources),
+        };
+        let module = map
+            .module
+            .as_deref()
+            .map(|name| crate::graph::resolve_module_filter(&p, &sources, name))
+            .transpose()?;
+        let graph = graph.filtered(&crate::graph::Filter {
+            module,
+            focus: map.focus.clone(),
+            depth: map.depth,
+        })?;
+        if let Some(output) = &map.output {
+            protect_map_output(
+                output,
+                &sources,
+                rust_file.as_deref(),
+                map_manifest.as_deref(),
+            )?;
+        }
+        use crate::project::MapFormat;
+        let mut text = match map.format {
+            MapFormat::Mermaid => crate::graph::render::mermaid(&graph),
+            MapFormat::D2 => crate::graph::render::d2(&graph),
+            MapFormat::Json => serde_json::to_string_pretty(&graph)
+                .map_err(|error| format!("Cannot serialize map: {error}"))?,
+            MapFormat::Html => crate::graph::html::html(&graph),
+            MapFormat::Svg | MapFormat::Png => {
+                return crate::graph::render::image(
+                    &graph,
+                    map.output.as_deref().expect("validated image output"),
+                    map.format.as_str(),
+                    map.layout.as_str(),
+                );
+            }
+        };
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        if let Some(output) = &map.output {
+            fs::write(output, text)
+                .map_err(|error| format!("Cannot write map {}: {error}", output.display()))?;
+        } else {
+            std::io::stdout()
+                .lock()
+                .write_all(text.as_bytes())
+                .map_err(|error| format!("Cannot write map to stdout: {error}"))?;
+        }
+        return Ok(());
+    }
     if cost {
         let report = cost_report(&p);
         if write_output {
@@ -1823,6 +1899,38 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         let status = process.status().map_err(|e| e.to_string())?;
         if !status.success() {
             return Err(format!("program exited: {status}"));
+        }
+    }
+    Ok(())
+}
+
+fn protect_map_output(
+    output: &Path,
+    sources: &crate::source::Sources,
+    rust_file: Option<&Path>,
+    manifest: Option<&Path>,
+) -> Result<(), String> {
+    let existing = match fs::canonicalize(output) {
+        Ok(path) => path,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(format!(
+                "Cannot access map output {}: {error}",
+                output.display()
+            ));
+        }
+    };
+    for input in sources
+        .files()
+        .map(|(path, _, _)| path)
+        .chain(rust_file)
+        .chain(manifest)
+    {
+        if fs::canonicalize(input).is_ok_and(|path| path == existing) {
+            return Err(format!(
+                "Map output cannot overwrite input file: {}",
+                input.display()
+            ));
         }
     }
     Ok(())

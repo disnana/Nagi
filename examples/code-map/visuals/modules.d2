@@ -1,0 +1,30 @@
+direction: right
+g0: "High sources" {
+  direction: right
+  style.fill: "#FAFAFA"
+  style.stroke: "#CBD5E1"
+  n0: "High: main.nagi" {
+    shape: rectangle
+    style.fill: "#F1F5F9"
+    style.stroke: "#64748B"
+    style.border-radius: 6
+  }
+  n1: "High: models.nagi" {
+    shape: rectangle
+    style.fill: "#F1F5F9"
+    style.stroke: "#64748B"
+    style.border-radius: 6
+  }
+  n2: "High: service.nagi" {
+    shape: rectangle
+    style.fill: "#F1F5F9"
+    style.stroke: "#64748B"
+    style.border-radius: 6
+  }
+}
+g0.n0 -> g0.n1: "depends on: namespace import"
+g0.n0 -> g0.n1: "uses"
+g0.n0 -> g0.n2: "depends on: from import"
+g0.n0 -> g0.n2: "uses"
+g0.n2 -> g0.n1: "depends on: namespace import"
+g0.n2 -> g0.n1: "uses"

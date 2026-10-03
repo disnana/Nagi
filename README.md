@@ -1,4 +1,4 @@
-# Nagi 0.1.7 — バックエンド向け二層言語の実行可能な試作
+# Nagi 0.1.8 — バックエンド向け二層言語の実行可能な試作
 
 [English](README.en.md)
 
@@ -18,7 +18,7 @@
 
 ## インストール
 
-mainには次回配布予定の修正も含まれます。公開版との差分は[未リリースの変更](CHANGELOG.md)を参照してください。
+mainには次回配布予定の修正も含まれます。公開版との差分は[変更履歴](CHANGELOG.md)を参照してください。
 
 NagiアプリのビルドにはRust/CargoとCのビルド環境が必要です。準備は[最初の実行](docs/getting-started.md)を参照してください。
 
@@ -81,6 +81,17 @@ Pythonコードとして実行する構文ではありません。`nagic`でビ�
 
 複数ファイルのアプリは[nagi.toml](docs/projects.md)に入口・Rust依存・手書きLowの設定を保存できます。たとえば `./target/release/nagic run --project test-nagi-code/rust-bridge` でRust連携サンプルを動かせます。[VS Code拡張](editors/vscode-nagi/README.md)も同じ設定を使い、補助ファイルから入口の検査・ビルド・実行を行います。
 
+## コード構造を図にする
+
+`nagic map`で型・モジュール・関数呼び出しを調べ、Mermaid、D2、JSON、単一HTMLへ出力できます。D2がPATHにあればSVG・PNGも生成します。
+
+```bash
+nagic map types --project examples/code-map --format d2
+nagic map calls --project examples/code-map --format html --output calls.html
+```
+
+絞り込みと描画方法は[コードマップ](docs/code-map.md)を参照してください。
+
 ## HighとLow
 
 ```bash
@@ -142,11 +153,11 @@ primitive、値型class、enum、連続配列、nullable、独自エラー型の
 
 Resultの`match`で成功・失敗を分け、既定値に回復したり、Errorの種類を保って返したりできます。[書き方](docs/error-handling.md)と[実HTTPで試すAPIサンプル](test-nagi-code/result-api/README.md)があります。
 
-[VS Code拡張0.1.9](editors/vscode-nagi/README.md)では、関数・class・import先・ローカル変数へのF12、宣言とローカル変数の型ホバー、classのフィールド補完、呼び出し時の引数ヒントを利用できます。一度保存したファイルの未保存の編集にも対応します。[操作例](docs/editor.md)で、型の表示や`value.`からの補完、定義への移動を試せます。
+[VS Code拡張0.1.10](editors/vscode-nagi/README.md)では、関数・class・import先・ローカル変数へのF12、宣言とローカル変数の型ホバー、classのフィールド補完、呼び出し時の引数ヒントを利用できます。一度保存したファイルの未保存の編集にも対応します。[操作例](docs/editor.md)で、型の表示や`value.`からの補完、定義への移動を試せます。
 
-次のリリースに向けた[標準HTTP module](docs/http.md)では、DBなしのApp、ヘッダー、Method／Status、独自の状態とエラー処理を使えます。標準moduleのimportとOptionのSome／None分岐にも対応します。公開済み版との差は[未リリースの変更](CHANGELOG.md)を参照してください。
+Nagi 0.1.8から使える[標準HTTP module](docs/http.md)では、DBなしのApp、ヘッダー、Method／Status、独自の状態とエラー処理を使えます。標準moduleのimportとOptionのSome／None分岐にも対応します。公開済み版との差は[変更履歴](CHANGELOG.md)を参照してください。
 
-同じく未リリースの[`std.actor`](docs/actor.md)では、通常のasync関数で任意の所有状態を扱い、型付きメッセージ・返信、再起動方針、監視、停止を使えます。[API](docs/actor-reference.md)と[サンプル](test-nagi-code/library-examples/supervised-service/README.md)を用意しています。同じプロセス内のnative実装で、BEAMのようなVM、無停止のコード差し替え、分散actorは未対応です。
+Nagi 0.1.8から使える[`std.actor`](docs/actor.md)では、通常のasync関数で任意の所有状態を扱い、型付きメッセージ・返信、再起動方針、監視、停止を使えます。[API](docs/actor-reference.md)と[サンプル](test-nagi-code/library-examples/supervised-service/README.md)を用意しています。同じプロセス内のnative実装で、BEAMのようなVM、無停止のコード差し替え、分散actorは未対応です。
 
 専用のactor宣言、利用者が定義するgeneric関数やtrait、パッケージのimport、一般的なパターンのmatch、PostgreSQL、SQLのコンパイル時検証、Highのrequest arena、Lowの生pointer/unsafe/C ABI、独自scheduler、self-hostingは未実装です。Rust連携は同じビルド内の呼び出しで、安定した外部ABIではありません。`Map`と`owned`の操作APIも揃っていません。
 

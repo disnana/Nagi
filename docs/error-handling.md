@@ -95,7 +95,7 @@ classも`Result[T, MyError]`の失敗値に使えます。たとえば`class Sto
 
 成功型は戻り値や変数の型から決まります。`fail(problem)`は組み込みErrorだけでなく、class・enumの失敗値もmoveします。型の文脈がなければ`Result[unit, E]`です。`error_kind`と`error_message`は組み込みError専用で、元の値を消費しません。messageにはDBなどの内部情報が含まれる場合があります。
 
-従来の`@get`などのHTTPハンドラーは`Result[..., Error]`を返します。未リリースの[`std.http.server`](http.md)では独自のエラー型`E`を使い、AppまたはrouteのmapperでResponseへ変換します。従来のハンドラーでの組み込みErrorの変換は次のとおりです。
+従来の`@get`などのHTTPハンドラーは`Result[..., Error]`を返します。Nagi 0.1.8から使える[`std.http.server`](http.md)では独自のエラー型`E`を使い、AppまたはrouteのmapperでResponseへ変換します。従来のハンドラーでの組み込みErrorの変換は次のとおりです。
 
 | kind | HTTPステータス |
 |---|---|
@@ -112,7 +112,7 @@ DB・内部エラーの500応答は`{"error":"internal error"}`で、詳細は�
 
 直接捨てたResult、awaitしていないFutureは型検査で拒否します。代入したResultを全経路で必ず処理する検査は未完成です。
 
-Resultの失敗とpanicは別です。scopeは子taskのpanicを検出します。未リリースの[`std.actor`](actor.md)では、`Turn`内の業務エラー`E`は次の状態を保存して返信し、handler自身のErrorやpanicにはSupervisorの再起動方針を適用します。`call`は`Result[Result[R, E], CallError]`を返すため、業務エラーと未起動・停止・タイムアウトなどを分けて扱います。[サンプル](../test-nagi-code/library-examples/supervised-service/README.md)でHTTP応答への変換も試せます。
+Resultの失敗とpanicは別です。scopeは子taskのpanicを検出します。Nagi 0.1.8から使える[`std.actor`](actor.md)では、`Turn`内の業務エラー`E`は次の状態を保存して返信し、handler自身のErrorやpanicにはSupervisorの再起動方針を適用します。`call`は`Result[Result[R, E], CallError]`を返すため、業務エラーと未起動・停止・タイムアウトなどを分けて扱います。[サンプル](../test-nagi-code/library-examples/supervised-service/README.md)でHTTP応答への変換も試せます。
 
 旧`supervisor_demo`は固定workerの再起動を試す検証用APIです。どちらもメモリ破壊やprocess abortを回復する機構ではありません。
 

@@ -1,0 +1,7 @@
+class User:
+    id: i64
+    name: str
+
+class Post:
+    id: i64
+    author: shared[User]

@@ -175,7 +175,7 @@ class FakeGitHub:
     def __init__(self, sha=None, draft=None, latest=None):
         self.sha = sha
         self.release = None if draft is None else {
-            "id": 1, "tag_name": "vscode-v0.1.6", "draft": draft, "assets": []}
+            "id": 1, "tag_name": "vscode-v0.1.6", "draft": draft, "assets": [], "body": "fixture notes"}
         self.calls = []
         self.api_calls = []
         self.files = {}
@@ -204,7 +204,7 @@ class FakeGitHub:
 
     def create_release(self, tag, sha, title, notes):
         self.calls.append(("create", tag, sha, title, notes))
-        self.release = {"id": 1, "tag_name": tag, "draft": True, "assets": []}
+        self.release = {"id": 1, "tag_name": tag, "draft": True, "assets": [], "body": notes}
         return self.release
 
     def upload_asset(self, release_id, file):
@@ -232,6 +232,9 @@ class FakeGitHub:
 
 class PublicationTests(unittest.TestCase):
     def setUp(self):
+        note_builder = patch.object(publish, "release_notes", return_value="fixture notes")
+        note_builder.start()
+        self.addCleanup(note_builder.stop)
         self.temporary = tempfile.TemporaryDirectory()
         self.directory = Path(self.temporary.name)
         self.filename = "nagi-language-0.1.6.vsix"

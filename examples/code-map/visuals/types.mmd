@@ -1,0 +1,22 @@
+%%{init: {"securityLevel":"strict","flowchart":{"htmlLabels":true}}}%%
+flowchart LR
+  subgraph g0["models.nagi"]
+    n0["Post<br/>id: i64<br/>author: shared[User]"]
+    n1["User<br/>id: i64<br/>name: str"]
+  end
+  subgraph g1["service.nagi"]
+    n2["author_name<br/>High function<br/>(post: Post) -&gt; str"]
+    n3["make_post<br/>High function<br/>(author: shared[User]) -&gt; Post"]
+  end
+  n0 -->|"shares: author: shared[User] (shared)"| n1
+  n2 -->|"owns: parameter post: Post"| n0
+  n3 -->|"returns: return: Post"| n0
+  n3 -->|"shares: parameter author: shared[User] (shared)"| n1
+  classDef module fill:#F1F5F9,stroke:#64748B,color:#0F172A;
+  classDef type fill:#EFF6FF,stroke:#3B82F6,color:#172554;
+  classDef definition fill:#F0FDF4,stroke:#16A34A,color:#14532D;
+  classDef ffi fill:#FFF7ED,stroke:#EA580C,color:#7C2D12;
+  class n0 type;
+  class n1 type;
+  class n2 definition;
+  class n3 definition;

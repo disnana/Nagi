@@ -2,7 +2,7 @@
 
 別のNagiファイルは引用符付きの相対パスで読み込みます。`import "ファイル名" as 名前`でmodule名を付けるか、`from "ファイル名" import 定義名`で関数・class・enumを選べます。Rustの関数を使う場合は、Nagiで引数・戻り値の型を宣言し、ビルド時にRustファイルを指定します。
 
-以下のmodule名・fromの別名は、このリポジトリの最新ソースからビルドしたコンパイラで利用できます。
+以下のmodule名・fromの別名は、Nagi 0.1.8から利用できます。
 
 ## Nagiファイルを分割する
 
@@ -81,7 +81,7 @@ Rustのアダプターからは、rootで読み込んだmoduleのclassを`super:
 
 ## 標準HTTP libraryを読み込む
 
-`std.http.server`と`std.actor`は次のリリースに向けたAPIです。利用には最新ソースからビルドしたコンパイラが必要です。
+`std.http.server`と`std.actor`はNagi 0.1.8から使える標準ライブラリです。
 
 ```nagi
 import std.http.server as http

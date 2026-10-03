@@ -1,0 +1,20 @@
+%%{init: {"securityLevel":"strict","flowchart":{"htmlLabels":true}}}%%
+flowchart LR
+  subgraph g0["High sources"]
+    n0["High: main.nagi"]
+    n1["High: models.nagi"]
+    n2["High: service.nagi"]
+  end
+  n0 -->|"depends on: namespace import"| n1
+  n0 -->|"uses"| n1
+  n0 -->|"depends on: from import"| n2
+  n0 -->|"uses"| n2
+  n2 -->|"depends on: namespace import"| n1
+  n2 -->|"uses"| n1
+  classDef module fill:#F1F5F9,stroke:#64748B,color:#0F172A;
+  classDef type fill:#EFF6FF,stroke:#3B82F6,color:#172554;
+  classDef definition fill:#F0FDF4,stroke:#16A34A,color:#14532D;
+  classDef ffi fill:#FFF7ED,stroke:#EA580C,color:#7C2D12;
+  class n0 module;
+  class n1 module;
+  class n2 module;

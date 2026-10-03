@@ -13,7 +13,10 @@ ROOT_DOCS = {
     "README.md", "README.en.md", "CHANGELOG.md", "PERFORMANCE.md",
     "CONTRIBUTING.md", "CONTRIBUTING.en.md", "SECURITY.md", "SECURITY.en.md",
 }
-SITE_FILES = {"website/README.md", "website/build.py", "website/requirements.txt"}
+SITE_FILES = {
+    "website/README.md", "website/build.py", "website/requirements.txt",
+    "website/CNAME", ".github/workflows/pages.yml",
+}
 ASSET_SUFFIXES = {".css", ".js", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2"}
 
 

@@ -1,6 +1,6 @@
 # Actor measurements
 
-This measures the unreleased `std.actor`: send one message to a supervised actor, wait for its reply, then repeat. Generated Nagi and equivalent Rust run in one executable with the same runtime, async call wrappers, dependencies, and release profile.
+Before the release of `std.actor`, we measured sending one message to a supervised actor, waiting for its reply, and repeating. Generated Nagi and equivalent Rust ran in one executable with the same runtime, async call wrappers, dependencies, and release profile. The raw logs record the measured source and conditions.
 
 ## Calls and replies
 

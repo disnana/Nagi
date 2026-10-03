@@ -55,9 +55,9 @@ def site_defaults(repository: str) -> tuple[str, str]:
 GROUPS = [
     ("入門", [("getting-started", "準備と最初の実行"), ("language-guide", "コードを書きながら学ぶ"), ("editor", "エディターの操作例")]),
     ("言語リファレンス", [("syntax", "文法の早見表"), ("builtins", "組み込み関数"), ("types", "型と推論"), ("classes", "class"), ("ownership", "所有権"), ("view-and-zero-copy", "viewとコピー"), ("error-handling", "エラー処理")]),
-    ("アプリを作る", [("http", "HTTPとHTML"), ("json", "JSON"), ("database", "SQLite"), ("modules-and-rust", "importとRust連携"), ("libraries", "自作ライブラリとRustの資産"), ("projects", "プロジェクト設定"), ("async", "asyncとscope"), ("concurrency", "並行処理")]),
+    ("アプリを作る", [("http", "使い方"), ("http-server", "APIリファレンス"), ("http-stdlib-performance", "性能測定"), ("http-legacy", "旧API"), ("json", "JSON"), ("database", "SQLite"), ("modules-and-rust", "importとRust連携"), ("libraries", "自作ライブラリとRustの資産"), ("projects", "プロジェクト設定"), ("async", "asyncとscope"), ("concurrency", "並行処理"), ("actor", "actorの書き方"), ("supervisor", "再起動と停止"), ("actor-reference", "APIリファレンス"), ("actor-performance", "性能測定")]),
     ("サンプル", [("library-examples", "サンプルプロジェクト一覧"), ("web-demo", "タスク管理デモ"), ("result-api", "Result APIサンプル")]),
-    ("設計と開発", [("library-design", "ライブラリとRust連携の設計案"), ("introduction", "Nagiについて"), ("low-language", "HighとLow"), ("memory-model", "メモリの扱い"), ("compiler-internals", "コンパイラの構成"), ("actor", "actor"), ("supervisor", "Supervisor"), ("queue", "キューの試験"), ("ffi", "他の言語との連携"), ("performance", "性能の読み方"), ("measurements", "測定結果"), ("http-capacity", "通信の負荷試験"), ("roadmap", "今後の開発"), ("vscode-extension", "VS Code拡張の設定")]),
+    ("設計と開発", [("library-design", "ライブラリとRust連携の設計案"), ("introduction", "Nagiについて"), ("low-language", "HighとLow"), ("memory-model", "メモリの扱い"), ("compiler-internals", "コンパイラの構成"), ("code-map", "コードを図にする"), ("queue", "キューの試験"), ("ffi", "他の言語との連携"), ("performance", "性能の読み方"), ("measurements", "測定結果"), ("http-capacity", "通信の負荷試験"), ("roadmap", "今後の開発"), ("vscode-extension", "VS Code拡張の設定")]),
 ]
 SOURCES = {ROOT / "docs/README.md": "docs/"}
 EXTRA = {
@@ -69,24 +69,29 @@ EXTRA = {
 for _, entries in GROUPS:
     for slug, _ in entries:
         SOURCES[EXTRA.get(slug, ROOT / f"docs/{slug}.md")] = f"docs/{slug}/"
-for slug in ("http-server", "http-legacy", "http-stdlib-performance", "actor-reference", "actor-performance"):
-    SOURCES[ROOT / f"docs/{slug}.md"] = f"docs/{slug}/"
 
 ENGLISH_GROUPS = [
     ("First steps", [("getting-started", "Setup and first run"), ("language-guide", "Learn by writing code"), ("editor", "Editor walkthrough")]),
     ("Language reference", [("syntax", "Syntax reference"), ("builtins", "Built-in functions"), ("types", "Types and inference"), ("classes", "Classes"), ("ownership", "Ownership"), ("view-and-zero-copy", "Views and copying"), ("error-handling", "Error handling")]),
-    ("Build an application", [("http", "HTTP and HTML"), ("json", "JSON"), ("database", "SQLite"), ("modules-and-rust", "Imports and Rust"), ("libraries", "Libraries and Rust assets"), ("projects", "Project configuration"), ("async", "Async and scopes"), ("concurrency", "Concurrency")]),
+    ("Build an application", [("http", "Guide"), ("http-server", "API reference"), ("http-stdlib-performance", "Measurements"), ("http-legacy", "Legacy API"), ("json", "JSON"), ("database", "SQLite"), ("modules-and-rust", "Imports and Rust"), ("libraries", "Libraries and Rust assets"), ("projects", "Project configuration"), ("async", "Async and scopes"), ("concurrency", "Concurrency"), ("actor", "Writing actors"), ("supervisor", "Restart and shutdown"), ("actor-reference", "API reference"), ("actor-performance", "Measurements")]),
     ("Examples", [("library-examples", "Sample projects"), ("web-demo", "Task management demo"), ("result-api", "Result API example")]),
-    ("Design and development", [("library-design", "Library design proposal"), ("introduction", "About Nagi"), ("low-language", "High and Low"), ("memory-model", "Memory handling"), ("compiler-internals", "Compiler internals"), ("actor", "Actors"), ("supervisor", "Supervisor"), ("queue", "Queue experiments"), ("ffi", "Language interfaces"), ("performance", "Reading benchmarks"), ("measurements", "Measurements"), ("http-capacity", "HTTP load tests"), ("roadmap", "Roadmap"), ("vscode-extension", "VS Code extension settings")]),
+    ("Design and development", [("library-design", "Library design proposal"), ("introduction", "About Nagi"), ("low-language", "High and Low"), ("memory-model", "Memory handling"), ("compiler-internals", "Compiler internals"), ("code-map", "Code maps"), ("queue", "Queue experiments"), ("ffi", "Language interfaces"), ("performance", "Reading benchmarks"), ("measurements", "Measurements"), ("http-capacity", "HTTP load tests"), ("roadmap", "Roadmap"), ("vscode-extension", "VS Code extension settings")]),
 ]
 ENGLISH_SOURCES = {ROOT / "docs/en/README.md": "docs/"}
 for _, entries in ENGLISH_GROUPS:
     for slug, _ in entries:
         ENGLISH_SOURCES[ROOT / f"docs/en/{slug}.md"] = f"docs/{slug}/"
-for slug in ("http-server", "http-legacy", "http-stdlib-performance", "actor-reference", "actor-performance"):
-    ENGLISH_SOURCES[ROOT / f"docs/en/{slug}.md"] = f"docs/{slug}/"
 if set(SOURCES.values()) != set(ENGLISH_SOURCES.values()):
     raise ValueError("Japanese and English Docs must contain the same pages")
+
+NAV_TOPICS = {
+    "http": ("http", "http-server", "http-stdlib-performance", "http-legacy"),
+    "actor": ("actor", "supervisor", "actor-reference", "actor-performance"),
+}
+NAV_TOPIC_LABELS = {
+    "ja": {"http": "HTTP", "actor": "actorとSupervisor"},
+    "en": {"http": "HTTP", "actor": "Actors and Supervisors"},
+}
 
 LABELS = {
     "ja": dict(skip_label="本文へ移動", home_label="Nagi ホーム", menu_label="サイトのメニュー",
@@ -229,13 +234,28 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
 
     def navigation(current, locale):
         language_base = base + ("en/" if locale == "en" else "")
-        sections = [f'<a class="docs-nav-title" href="{language_base}docs/">Nagi Docs</a>']
+        title_active = ' aria-current="page"' if current == "docs/" else ""
+        sections = [f'<a class="docs-nav-title" href="{language_base}docs/"{title_active}>Nagi Docs</a>']
+        topic_pages = {slug for entries in NAV_TOPICS.values() for slug in entries}
+
+        def link(slug, label):
+            active = ' aria-current="page"' if current == f"docs/{slug}/" else ""
+            return f'<li><a href="{language_base}docs/{slug}/"{active}>{label}</a></li>'
+
         for index, (title, entries) in enumerate(ENGLISH_GROUPS if locale == "en" else GROUPS):
             links = []
+            page_labels = dict(entries)
             current_group = any(current == f"docs/{slug}/" for slug, _ in entries)
             for slug, label in entries:
-                active = ' aria-current="page"' if current == f"docs/{slug}/" else ""
-                links.append(f'<li><a href="{language_base}docs/{slug}/"{active}>{label}</a></li>')
+                if slug in NAV_TOPICS:
+                    pages = NAV_TOPICS[slug]
+                    topic_label = NAV_TOPIC_LABELS[locale][slug]
+                    topic_aria = f"{topic_label}の関連ページ" if locale == "ja" else f"{topic_label} pages"
+                    topic_open = " open" if any(current == f"docs/{page}/" for page in pages) else ""
+                    topic_links = "".join(link(page, page_labels[page]) for page in pages)
+                    links.append(f'<li><details class="docs-nav-topic" data-nav-topic="{slug}" aria-label="{html.escape(topic_aria, quote=True)}"{topic_open}><summary>{topic_label}</summary><ul>{topic_links}</ul></details></li>')
+                elif slug not in topic_pages:
+                    links.append(link(slug, label))
             opened = " open" if index == 0 or current_group else ""
             sections.append(f'<details class="docs-nav-group" data-nav-group="{entries[0][0]}"{opened}><summary>{title}</summary><ul>{"".join(links)}</ul></details>')
         return f'<nav class="docs-nav" aria-label="{LABELS[locale]["docs_contents"]}">' + "".join(sections) + "</nav>"

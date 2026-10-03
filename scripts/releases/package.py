@@ -43,13 +43,13 @@ def readme(version: str, executable: str) -> bytes:
 runtime/を含むフォルダー構成を保って使います。NAGI_ROOTは通常不要です。
 アプリのビルドにはRust/CargoとCのビルド環境が必要です。
 使い方: {executable} run --project /path/to/nagi.toml
-Docs: https://disnana.github.io/Nagi/
+Docs: https://nagi.disnana.com/
 
 Add this folder to PATH and run {executable} --version.
 Keep runtime/ beside the compiler. NAGI_ROOT is normally unnecessary.
 Building applications requires Rust/Cargo and a C build environment.
 Usage: {executable} run --project /path/to/nagi.toml
-Docs: https://disnana.github.io/Nagi/en/
+Docs: https://nagi.disnana.com/en/
 Source: https://github.com/disnana/Nagi
 """.encode()
 

@@ -1,0 +1,7 @@
+import "models.nagi" as model
+from "service.nagi" import make_post, author_name
+
+def main():
+    user = model.User(id=1, name="Nagi")
+    post = make_post(share(user))
+    print(author_name(post))

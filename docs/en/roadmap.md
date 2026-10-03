@@ -2,7 +2,7 @@
 
 The priority is to clarify the specification and strengthen safety while keeping the current working paths usable.
 
-The latest source implements module aliases, custom class/enum errors, Result/Option/enum matching, `std.http.server`, and `std.actor` with arbitrary owned state. The new standard libraries are unreleased. See [actors](actor.md) and [Supervisors](supervisor.md) for their current scope.
+Nagi 0.1.8 implements module aliases, custom class/enum errors, Result/Option/enum matching, `std.http.server`, and `std.actor` with arbitrary owned state. See [actors](actor.md) and [Supervisors](supervisor.md) for their current scope.
 
 1. Build on Result, Option, and enum matching to settle checked/wrapping arithmetic, string length, source spans, variable shadowing, and borrow origins.
 2. Strengthen partial-move, branch, loop, and escape analysis in the High checker, reducing reliance on the Rust backend.

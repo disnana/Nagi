@@ -1,0 +1,18 @@
+%%{init: {"securityLevel":"strict","flowchart":{"htmlLabels":true}}}%%
+flowchart LR
+  subgraph g0["main.nagi"]
+    n0["main<br/>High function"]
+  end
+  subgraph g1["service.nagi"]
+    n1["author_name<br/>High function"]
+    n2["make_post<br/>High function"]
+  end
+  n0 -->|"calls"| n1
+  n0 -->|"calls"| n2
+  classDef module fill:#F1F5F9,stroke:#64748B,color:#0F172A;
+  classDef type fill:#EFF6FF,stroke:#3B82F6,color:#172554;
+  classDef definition fill:#F0FDF4,stroke:#16A34A,color:#14532D;
+  classDef ffi fill:#FFF7ED,stroke:#EA580C,color:#7C2D12;
+  class n0 definition;
+  class n1 definition;
+  class n2 definition;

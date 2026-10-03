@@ -2,7 +2,7 @@
 
 優先順位は、現在の動く経路を維持しながら、仕様と安全性を段階的に固めることです。
 
-最新ソースでは、moduleの別名、独自エラーのclass・enum、Result／Option／enumのmatch、`std.http.server`、任意の所有状態を扱う`std.actor`を実装しています。新しい標準ライブラリは未リリースです。[actor](actor.md)と[Supervisor](supervisor.md)に現在の範囲を記載しています。
+Nagi 0.1.8では、moduleの別名、独自エラーのclass・enum、Result／Option／enumのmatch、`std.http.server`、任意の所有状態を扱う`std.actor`を実装しています。[actor](actor.md)と[Supervisor](supervisor.md)に現在の範囲を記載しています。
 
 1. Result・Option・enumのmatchを足場に、checked/wrapping算術、文字列長、source span、変数shadowing、borrow originを確定する。
 2. High checkerのpartial move・分岐・loop・escape解析を強化し、Rust backendへの依存点を縮める。
