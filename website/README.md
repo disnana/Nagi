@@ -2,7 +2,7 @@
 
 紹介ページと日本語・英語Docsを、GitHub Pagesで配信できる静的HTMLにします。サーバー側の処理や外部フォント、アクセス解析は使いません。紹介ページには名前の由来、動くコード例、現在の実装範囲を載せています。
 
-日本語のDocs本文は`docs/`などの既存Markdown、英語版は`docs/en/`を読みます。日本語は`/Nagi/`、英語は`/Nagi/en/`です。各ページの言語指定とmetadataを設定し、右上の言語リンクで対応するページへ切り替えます。生成時にサイト内のリンクへ変換し、リンク先・見出し・CSS・JavaScriptの存在を確認します。ソースコードやサンプルのフォルダーへのリンクはGitHubへ移動します。
+日本語のDocs本文は`docs/`などの既存Markdown、英語版は`docs/en/`を読みます。公開サイトは`https://nagi.disnana.com/`、英語版は`/en/`です。各ページの言語指定とmetadataを設定し、右上の言語リンクで対応するページへ切り替えます。生成時にサイト内のリンクへ変換し、リンク先・見出し・CSS・JavaScriptの存在を確認します。ソースコードやサンプルのフォルダーへのリンクはGitHubへ移動します。
 
 ## 手元で確認する
 
@@ -25,7 +25,9 @@ Windowsでは、venv内のPythonを`build\website-venv\Scripts\python.exe`に置
 build/website-venv/bin/python website/build.py
 ```
 
-標準のURLは`https://disnana.github.io/Nagi/`です。別のリポジトリで使う場合は、`--base-path /リポジトリ名/`、`--site-url https://所有者.github.io`、`--repository https://github.com/所有者/リポジトリ名`で変えられます。ユーザーサイトの`所有者.github.io`リポジトリなら`--base-path /`にします。
+公式リポジトリでは`website/CNAME`のドメインを使い、サイトの起点を`/`にします。生成物にも`CNAME`を含めます。Pagesワークフローと手元のビルドは同じ設定を使います。
+
+forkでは公式の`CNAME`を使わず、`--repository https://github.com/所有者/リポジトリ名`から通常のGitHub Pages URLと`/リポジトリ名/`を選びます。`所有者.github.io`リポジトリなら起点は`/`です。`--base-path`と`--site-url`を明示すると設定を上書きできます。公式リポジトリをproject Pages用に生成する場合は、`--base-path /Nagi/ --site-url https://disnana.github.io`を指定します。
 
 ## GitHub Pagesを公開する
 

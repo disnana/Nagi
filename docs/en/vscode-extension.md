@@ -35,7 +35,7 @@ From the repository root, run `python editors/vscode-nagi/scripts/package_vsix.p
 code --install-extension build/distribution/nagi-language-0.1.9.vsix
 ```
 
-Extension 0.1.9 provides highlighting, snippets, indentation support, keyword/type completion, and built-in completion, hover, and argument hints without a compiler. Checks and execution require `nagic`. Install it using [Setup and first run](https://disnana.github.io/Nagi/en/docs/getting-started/). The extension checks the repository's release build, then debug build, then PATH.
+Extension 0.1.9 provides highlighting, snippets, indentation support, keyword/type completion, and built-in completion, hover, and argument hints without a compiler. Checks and execution require `nagic`. Install it using [Setup and first run](https://nagi.disnana.com/en/docs/getting-started/). The extension checks the repository's release build, then debug build, then PATH.
 
 The VSIX does not include the compiler. `spawn nagic.exe ENOENT` means it could not be found. Install the compiler, restart VS Code, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set nagi.compilerPath. Startup failures and timeouts appear as warnings and in Nagi Output, without source-error squiggles.
 

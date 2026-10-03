@@ -12,7 +12,7 @@ The name comes from the Japanese word *nagi* (凪), meaning calm seas. It reflec
 
 Start with **[Docs](docs/en/README.md) → [Setup and first run](docs/en/getting-started.md) → [Learn by writing code](docs/en/language-guide.md)**. Use the [syntax reference](docs/en/syntax.md) to look up notation, the [built-in functions](docs/en/builtins.md) to check arguments, and [HTTP and HTML](docs/en/http.md) to build a site or API. Complete introductory programs are in [examples/tutorial/](examples/tutorial/).
 
-The introduction and all Docs are available on the [English website](https://disnana.github.io/Nagi/en/) and the [Japanese website](https://disnana.github.io/Nagi/). See the [site source and Pages deployment guide](website/README.md) (Japanese).
+The introduction and all Docs are available on the [English website](https://nagi.disnana.com/en/) and the [Japanese website](https://nagi.disnana.com/). See the [site source and Pages deployment guide](website/README.md) (Japanese).
 
 Downloads are published on [GitHub Releases](https://github.com/disnana/Nagi/releases). Increasing the Nagi or VS Code extension version on `main` publishes that component after CI succeeds. The [release guide](scripts/releases/README.md) (Japanese) describes the conditions and artifacts.
 

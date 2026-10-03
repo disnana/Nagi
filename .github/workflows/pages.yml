@@ -27,17 +27,9 @@ jobs:
       - run: python -m pip install -r website/requirements.txt
       - name: Build and check links
         env:
-          SITE_REPOSITORY_NAME: ${{ github.event.repository.name }}
-          SITE_OWNER: ${{ github.repository_owner }}
           SITE_REPOSITORY: ${{ github.repository }}
         run: |
-          SITE_BASE_PATH="/$SITE_REPOSITORY_NAME/"
-          if [ "${SITE_REPOSITORY_NAME,,}" = "${SITE_OWNER,,}.github.io" ]; then
-            SITE_BASE_PATH="/"
-          fi
           python website/build.py \
-          --base-path "$SITE_BASE_PATH" \
-          --site-url "https://${SITE_OWNER,,}.github.io" \
           --repository "https://github.com/$SITE_REPOSITORY"
       - uses: actions/upload-pages-artifact@v3
         with:
