@@ -13,7 +13,7 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECTS = ROOT / "test-nagi-code/application-examples"
-NAMES = ("stock-report", "device-settings", "seat-reservations")
+NAMES = ("stock-report", "device-settings", "seat-reservations", "file-json")
 EXE = ".exe" if os.name == "nt" else ""
 
 
