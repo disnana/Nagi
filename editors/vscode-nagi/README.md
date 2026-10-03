@@ -113,6 +113,8 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 
 nullableの`match`では`Some(value)`と`None`を補完し、`match-option`で両方の分岐を挿入できます。
 
+`std.actor`の`Actor[M, R, E]`・`Turn[S, R, E]`や、呼び出しエラー・イベントの定数とプロパティも同じ操作で扱えます。HTTPとactorの`Options`は、それぞれのimport先を参照します。
+
 名前を書きかけるかCtrl+Spaceを押すと、入口からimportされた関数・class・enum、手書きLowの関数、代表的な組み込み関数の候補が出ます。関数を選ぶと位置引数の入力欄、classを選ぶと`Item(id=..., name=...)`の名前付き引数が入り、Tabで次の欄へ進めます。型注釈・戻り値の位置ではclass・enum・型・`Result` / `List` / `view`などを候補にします。
 
 `(`や`,`を入力すると引数ヒントが出て、入力中の引数が選ばれます。既に`(`がある名前の補完では括弧を重複挿入しません。asyncとResultの宣言を見て、呼び出しに`await`、`try`、`match`が必要かを判断してください。

@@ -653,11 +653,7 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                let generic = if ts.is_empty()
-                    || matches!(
-                        operation,
-                        crate::stdlib::Operation::Route | crate::stdlib::Operation::RouteMapped
-                    ) {
+                let generic = if ts.is_empty() || !info.emit_type_arguments {
                     String::new()
                 } else {
                     format!(
@@ -731,7 +727,7 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 }
                 "copy" => {
                     if a[0].ty.as_ref().and_then(|ty| native_resource_view(ty, types))
-                        == Some(crate::stdlib::Resource::Status) {
+                        .is_some_and(|resource| crate::stdlib::resource_info(resource).copy) {
                         format!("*({})", args[0])
                     } else {
                         format!("({}).to_owned()", args[0])
@@ -997,6 +993,26 @@ fn calls_builtin(statements: &[Stmt], builtin: &str) -> bool {
     })
 }
 
+fn charge_impl_start(out: &mut Generated, name: &str, inline_only: bool) {
+    out.push_str(&format!(
+        "impl ::nagi_runtime::actor::ChargeOwned for {name} {{\n    const INLINE_ONLY: ::std::primitive::bool = {inline_only};\n    fn owned_heap_bytes(&self, walk: &mut ::nagi_runtime::actor::ChargeWalk) -> ::std::result::Result<::std::primitive::usize, ::nagi_runtime::actor::ChargeError> {{\n"
+    ));
+}
+
+fn charge_fields(out: &mut Generated, fields: impl Iterator<Item = String>, indent: &str) {
+    out.push_str(&format!(
+        "{indent}let mut __nagi_charge_heap: ::std::primitive::usize = 0;\n"
+    ));
+    for (index, field) in fields.enumerate() {
+        out.push_str(&format!(
+            "{indent}let __nagi_charge_field_{index} = walk.visit({field})?;\n{indent}__nagi_charge_heap = walk.add(__nagi_charge_heap, __nagi_charge_field_{index})?;\n"
+        ));
+    }
+    out.push_str(&format!(
+        "{indent}::std::result::Result::Ok(__nagi_charge_heap)\n"
+    ));
+}
+
 pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
     crate::routes::validate(p)?;
     let names = crate::rust_names::RustNames::new(p);
@@ -1049,6 +1065,11 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         .iter()
         .map(|enumeration| (enumeration.name.clone(), enumeration.clone()))
         .collect();
+    let actor_support = p.modules.definitions.iter().any(|definition| {
+        definition.id.module.0
+            == crate::stdlib::module_info(crate::stdlib::StandardModule::Actor).id
+            && crate::stdlib::definition(&definition.id)
+    });
     for c in &p.classes {
         out.origin(::std::option::Option::Some(c.line));
         let copy = c.fields.iter().all(|(_, t)| copy_type(t, p, 0));
@@ -1131,6 +1152,23 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             }
             out.push_str("}) }\n}\n");
         }
+        if actor_support
+            && crate::capabilities::charge_type_supported(&Type::named(&c.name), &classes, &enums)
+                .is_ok()
+        {
+            out.origin(None);
+            charge_impl_start(
+                &mut out,
+                &c.name,
+                crate::capabilities::charge_inline_only(&Type::named(&c.name), &classes, &enums),
+            );
+            charge_fields(
+                &mut out,
+                c.fields.iter().map(|(field, _)| format!("&self.{field}")),
+                "        ",
+            );
+            out.push_str("    }\n}\n");
+        }
     }
     for enumeration in &p.enums {
         out.origin(Some(enumeration.line));
@@ -1211,6 +1249,56 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                         ));
                     }
                     out.push_str(".finish(),\n");
+                }
+            }
+            out.push_str("        }\n    }\n}\n");
+        }
+        if actor_support
+            && crate::capabilities::charge_type_supported(
+                &Type::named(&enumeration.name),
+                &classes,
+                &enums,
+            )
+            .is_ok()
+        {
+            out.origin(None);
+            charge_impl_start(
+                &mut out,
+                &enumeration.name,
+                crate::capabilities::charge_inline_only(
+                    &Type::named(&enumeration.name),
+                    &classes,
+                    &enums,
+                ),
+            );
+            out.push_str("        match self {\n");
+            for variant in &enumeration.variants {
+                if variant.fields.is_empty() {
+                    out.push_str(&format!(
+                        "            Self::{} => ::std::result::Result::Ok(0),\n",
+                        variant.name
+                    ));
+                } else {
+                    out.push_str(&format!(
+                        "            Self::{} {{ {} }} => {{\n",
+                        variant.name,
+                        variant
+                            .fields
+                            .iter()
+                            .enumerate()
+                            .map(|(index, (field, _))| format!(
+                                "{field}: __nagi_charge_value_{index}"
+                            ))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                    charge_fields(
+                        &mut out,
+                        (0..variant.fields.len())
+                            .map(|index| format!("__nagi_charge_value_{index}")),
+                        "                ",
+                    );
+                    out.push_str("            },\n");
                 }
             }
             out.push_str("        }\n    }\n}\n");

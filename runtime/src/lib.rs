@@ -2,6 +2,7 @@ pub use axum;
 pub use rusqlite;
 pub use serde;
 pub use serde_json;
+pub mod actor;
 mod concurrent;
 mod database;
 mod http;

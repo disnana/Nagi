@@ -127,6 +127,26 @@ def main():
         finally:
             os.environ["PATH"] = previous_path
         verify_local_dependency(exe, folder, environment)
+        verify_actor(exe, folder, environment)
+
+
+def verify_actor(exe: Path, folder: Path, environment: dict) -> None:
+    source = folder / "supervised distribution.nagi"
+    source.write_text('''import std.actor as actor
+class Context:
+    value: i64
+async def child(context: shared[Context]) -> Result[unit, Error]:
+    return ok(print(context.value))
+async def main() -> Result[unit, Error]:
+    group = actor.supervisor[Context](Context(value=42), actor.default_options())
+    try actor.task(view(group), "print", child, actor.RestartPolicy.TEMPORARY)
+    return await actor.run(group)
+''', encoding="utf-8")
+    result = subprocess.run([str(exe), "run", str(source)], cwd=folder,
+                            env=environment, check=True, capture_output=True,
+                            text=True, encoding="utf-8")
+    assert result.stdout.splitlines()[-1:] == ["42"], result.stdout
+    print("Verified standard actor library: extracted runtime, typed context, task, tracked cleanup")
 
 
 def verify_local_dependency(exe: Path, folder: Path, environment: dict) -> None:

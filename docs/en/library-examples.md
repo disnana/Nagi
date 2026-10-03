@@ -1,8 +1,8 @@
 # Sample projects
 
-Try command-line applications, reusable libraries, Rust integration, HTTP, and Low replacements. Each project includes `nagi.toml` and instructions.
+Try command-line applications, reusable libraries, Rust integration, HTTP, Supervisors, and Low replacements. Each project includes `nagi.toml` and instructions. Standard HTTP and `std.actor` examples need the latest unreleased source.
 
-## Eight examples for libraries and foundations
+## Examples for libraries and foundations
 
 | Project | What it demonstrates |
 | --- | --- |
@@ -12,6 +12,7 @@ Try command-line applications, reusable libraries, Rust integration, HTTP, and L
 | [Rust async operation](../../test-nagi-code/library-examples/rust-async/README.en.md) | Await a Tokio timer from Nagi |
 | [Custom HTTP foundation](../../test-nagi-code/library-examples/custom-http/README.en.md) | Pass a Nagi function to Axum/Tokio and serve HTTP without opening a database |
 | [Standard HTTP and authentication](../../test-nagi-code/library-examples/http-auth/README.en.md) | Handle headers, 401, route-specific errors, and typed shared state in Nagi |
+| [Supervisor and HTTP](../../test-nagi-code/library-examples/supervised-service/README.en.md) | Update actor state in order; map business errors and shutdown to HTTP responses |
 | [Low calculation kernel](../../test-nagi-code/library-examples/low-kernel/README.en.md) | Replace a High implementation with Low while keeping the application's calls |
 | [Modules and aliases](../../test-nagi-code/library-examples/module-imports/README.en.md) | Distinguish same-named classes and use one type through a module name and a from alias |
 | [CLI with custom errors](../../test-nagi-code/library-examples/typed-errors/README.en.md) | Distinguish failures with an enum, preserve their causes, and choose display messages |
@@ -47,12 +48,12 @@ Each README explains its inputs, outputs, and limits. Passing these examples doe
 
 ## Verify the examples during development
 
-With Python 3 and a built `nagic`, verify the eight projects' checks, native builds, output, and HTTP responses:
+With Python 3 and a `nagic` built from the latest source, verify the projects' checks, native builds, output, and HTTP responses:
 
 ```sh
 python scripts/verify_library_examples.py --compiler /path/to/nagic
 ```
 
-The script compares both pricing implementations, checks module and type aliases, custom errors, malformed JSON, and async errors, compares High/Low results, and verifies HTTP 400/404 responses, the body limit, and shutdown. It builds projects sequentially and shares the dependency cache.
+The script compares both pricing implementations, checks module and type aliases, custom errors, malformed JSON, and async errors, compares High/Low results, and verifies HTTP 400/404 responses, the body limit, and shutdown. The Supervisor sample also checks updates, state retained after business errors, a 204 shutdown response, and 503 after shutdown. It builds projects sequentially and shares the dependency cache.
 
 On Unix it checks a clean exit after SIGINT. On Windows it terminates the process and checks that the listener closes; check console Ctrl+C manually using the HTTP sample's instructions.

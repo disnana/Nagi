@@ -1,9 +1,39 @@
-# actorの試験
+# actor
 
-actorは、メッセージを受け取りながら、自分の状態を更新する処理です。Nagiにはカウンターを使った検証用の実装があります。利用者が任意のactorを定義する構文は、まだありません。
+actorは、メッセージを一件ずつ処理しながら、自分の状態を更新する処理です。`std.actor`では通常のasync関数で初期状態とハンドラーを定義します。次のリリースに向けたAPIで、公開済み版には含まれません。
 
-[actor.nagi](../examples/actor.nagi)では、中継役とカウンター役がメッセージで通信します。カウンターの値を変更するのはカウンター役だけです。メールボックスは64件までで、満杯になったら送信側が空きを待ちます。
+```nagi
+import std.actor as actor
 
-試験には、1件ずつ返信を待つ方法と、32件送ってから返信を確認する方法があります。どちらも返信を受け取り、終了時にはactorの終了を待ちます。
+class Counter:
+    total: i64
 
-この実装は汎用のactor APIではありません。メッセージの永続保存、障害後の再配送、複数のマシンへの配置には未対応です。
+async def add(state: Counter, amount: i64) -> Result[actor.Turn[Counter, i64, Error], Error]:
+    total = state.total + amount
+    next_state = Counter(total=total)
+    return ok(actor.turn[Counter, i64, Error](next_state, ok(total)))
+```
+
+`Turn`は次の状態と返信をまとめた値です。状態を毎回コピーする必要はありません。登録・起動・呼び出し・停止までのコードは、[実行できるサンプル](../test-nagi-code/library-examples/supervised-service/README.md)にあります。
+
+## 失敗を分ける
+
+| 返す場所 | 意味 |
+| --- | --- |
+| `Turn`の返信が`Err(E)` | 想定した失敗。次の状態を保存し、処理を続ける |
+| ハンドラー自身が`Err(Error)` | actorの失敗。Supervisorが再起動方針を適用する |
+| `call`の外側が`Err(CallError)` | 未起動、満杯、停止、返信のタイムアウトなど。`CallError.kind`で区別する |
+
+返信には独自のclassやenumを使えます。`call`の型は`Result[Result[R, E], CallError]`です。業務上のエラーと、呼び出しのエラーを別々に扱います。
+
+## 容量とタイムアウト
+
+既定では一つのactorにつき、処理中を含む64件と、受け入れた入力の容量1MiBまでです。数値だけのListは要素を巡回せずに容量を確認します。文字列や入れ子の値はバッファ容量も数えます。状態や呼び出し側の待機中の値は別なので、プロセス全体のメモリ上限ではありません。
+
+`call`の待ち時間は、受け入れ前の`mailbox_ms`と受け入れ後の`reply_ms`に分かれます。返信が時間切れになっても、受け入れ済みの更新は続く場合があります。二重更新を防ぐキーや結果確認を用意してから再試行してください。
+
+最初のAPIでは、メッセージ・返信にMap、view、shared、容量を数えられないnative resourceは使えません。共通データとactorの状態には、所有権の条件を満たすDbなども使えます。
+
+[Supervisorの再起動と停止](supervisor.md) · [APIリファレンス](actor-reference.md) · [性能測定](actor-performance.md)
+
+旧[actor.nagi](../examples/actor.nagi)は固定カウンターの試験です。汎用APIの性能とは分けて扱います。

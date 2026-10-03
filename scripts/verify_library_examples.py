@@ -43,10 +43,10 @@ def run(args, *, cwd=ROOT, env=None, input=None, timeout=180):
     return result.stdout
 
 
-def response(port, path="/health", body=None, headers=None):
+def response(port, path="/health", body=None, headers=None, *, method="GET"):
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
     try:
-        connection.request("GET", path, body=body, headers=headers or {})
+        connection.request(method, path, body=body, headers=headers or {})
         result = connection.getresponse()
         return result.status, result.read(), dict(result.getheaders())
     finally:
@@ -187,11 +187,66 @@ def check_http_auth(executable, env, output):
     return "terminated" if os.name == "nt" else "graceful"
 
 
+def check_supervised_service(executable, env, output):
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    server_env = dict(env, NAGI_SAMPLE_PORT=str(port))
+    with (output / "supervised-service.log").open("w", encoding="utf-8") as log:
+        process = subprocess.Popen(
+            [str(executable)], cwd=PROJECTS / "supervised-service", env=server_env,
+            stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+        )
+        try:
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if process.poll() is not None:
+                    raise RuntimeError(f"Supervised service exited early: {process.returncode}")
+                try:
+                    if response(port, "/counter")[:2] == (200, b"0"):
+                        break
+                except OSError:
+                    pass
+                time.sleep(0.05)
+            else:
+                raise RuntimeError("Supervised service did not become ready")
+            assert response(port, "/counter", "5", method="POST")[:2] == (200, b"5")
+            assert response(port, "/counter", "-1", method="POST")[:2] == (
+                409, b"increment must be 1..1000 and total at most 1000000",
+            )
+            for body in ["not JSON", '"5"', "1.5"]:
+                assert response(port, "/counter", body, method="POST")[:2] == (
+                    400, b"send a JSON integer",
+                )
+            assert response(port, "/counter")[:2] == (200, b"5")
+            assert response(port, "/counter", "2", method="POST")[:2] == (200, b"7")
+            assert response(port, "/shutdown", method="POST")[:2] == (204, b"")
+            assert response(port, "/counter")[:2] == (503, b"counter unavailable")
+        finally:
+            if process.poll() is None:
+                if os.name == "nt":
+                    process.terminate()
+                else:
+                    process.send_signal(signal.SIGINT)
+            try:
+                code = process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+                raise RuntimeError("Supervised service did not stop")
+            if os.name != "nt":
+                assert code == 0, f"Supervised service shutdown failed: {code}"
+    assert response_after_stop(port), "Supervised service listener remains after shutdown"
+    return "terminated" if os.name == "nt" else "graceful"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", default=str(
         Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target")) / "release" / ("nagic" + EXE)
     ))
+    parser.add_argument("--only", choices=["supervised-service"],
+                        help="Run the HTTP/actor integration project only")
     args = parser.parse_args()
     compiler = Path(shutil.which(args.compiler) or args.compiler).resolve()
     target = Path(os.environ.get("NAGI_NATIVE_TARGET_DIR", ROOT / "native-target")).resolve()
@@ -207,6 +262,14 @@ def main():
         result = run([compiler, "build", "--project", project], env=env)
         (output / (name + "-build.log")).write_text(result, encoding="utf-8")
         return target / "release" / ("nagi-" + entry.replace("_", "-") + EXE)
+
+    if args.only:
+        executable = build("supervised-service", "main")
+        shutdown = check_supervised_service(executable, env, output)
+        rows.append({"project": "supervised-service", "check_build_run": "passed", "shutdown": shutdown})
+        (output / "supervised-service-results.json").write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps({"projects": len(rows), "status": "passed", "shutdown": shutdown}), flush=True)
+        return
 
     for name, (entry, expected) in OUTPUTS.items():
         executable = build(name, entry)
@@ -263,6 +326,12 @@ def main():
     rows.append({"project": "http-auth", "check_build_run": "passed", "shutdown": shutdown})
     (output / "results.json").write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
     print(f"Passed: http-auth ({shutdown} shutdown)", flush=True)
+
+    executable = build("supervised-service", "main")
+    shutdown = check_supervised_service(executable, env, output)
+    rows.append({"project": "supervised-service", "check_build_run": "passed", "shutdown": shutdown})
+    (output / "results.json").write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
+    print(f"Passed: supervised-service ({shutdown} shutdown)", flush=True)
     print(json.dumps({"projects": len(rows), "status": "passed"}), flush=True)
 
 

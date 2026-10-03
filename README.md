@@ -107,9 +107,9 @@ Pythonコードとして実行する構文ではありません。`nagic`でビ�
 | `docs/` | 言語仕様、設計理由、実装範囲、継続開発の指針 |
 | `scripts/` | ビルド・実通信・負荷・結果生成の再現スクリプト |
 
-High/Lowは同じcompiler crate内の別経路です。独立crateへの分割とstdライブラリのモジュール化は今後の作業です。
+High/Lowは同じcompiler crate内の別経路です。`std.http.server`と`std.actor`は登録済みの標準ライブラリとして提供します。独立crateへの分割は今後の作業です。
 
-[ライブラリとRust連携の6プロジェクト](docs/library-examples.md)では、同じ共通コードを使うCLI・JSONレポート、serde_json、Tokio、独自HTTP基盤、Lowの差し替えを試せます。[自作基盤の構成](docs/libraries.md)と[今後の設計案](docs/library-design.md)も公開しています。
+[ライブラリとRust連携のサンプル](docs/library-examples.md)では、同じ共通コードを使うCLI・JSONレポート、serde_json、Tokio、HTTP、Supervisor、Lowの差し替えを試せます。[自作基盤の構成](docs/libraries.md)と[今後の設計案](docs/library-design.md)も公開しています。
 
 ## 検証を再現する
 
@@ -138,13 +138,15 @@ python3 scripts/summarize_results.py
 
 ## 現在の範囲
 
-primitive、値型class、連続配列、nullable、Result、関数、分岐、ループ、async/await、scope、HTTPの基本、HTML応答、JSON、SQLite、手書きLow呼び出しと置換、相対ファイルのimport、型付きRust関数の呼び出しを実装しています。actor・Supervisor・queueは実ランタイムとHighから呼ぶ試験用標準関数を提供します。ファイル分割とRustのcrate利用は [docs/modules-and-rust.md](docs/modules-and-rust.md)、画面付きデモは [test-nagi-code/web-demo/README.md](test-nagi-code/web-demo/README.md) を参照してください。
+primitive、値型class、enum、連続配列、nullable、独自エラー型のResult、関数、分岐、ループ、async/await、scope、HTTPの基本、HTML応答、JSON、SQLite、手書きLow呼び出しと置換、相対ファイルのimport、型付きRust関数の呼び出しを実装しています。旧actor・Supervisor・queueの組み込み関数は検証用APIです。ファイル分割とRustのcrate利用は [docs/modules-and-rust.md](docs/modules-and-rust.md)、画面付きデモは [test-nagi-code/web-demo/README.md](test-nagi-code/web-demo/README.md) を参照してください。
 
 Resultの`match`で成功・失敗を分け、既定値に回復したり、Errorの種類を保って返したりできます。[書き方](docs/error-handling.md)と[実HTTPで試すAPIサンプル](test-nagi-code/result-api/README.md)があります。
 
 [VS Code拡張0.1.9](editors/vscode-nagi/README.md)では、関数・class・import先・ローカル変数へのF12、宣言とローカル変数の型ホバー、classのフィールド補完、呼び出し時の引数ヒントを利用できます。一度保存したファイルの未保存の編集にも対応します。[操作例](docs/editor.md)で、型の表示や`value.`からの補完、定義への移動を試せます。
 
 次のリリースに向けた[標準HTTP module](docs/http.md)では、DBなしのApp、ヘッダー、Method／Status、独自の状態とエラー処理を使えます。標準moduleのimportとOptionのSome／None分岐にも対応します。公開済み版との差は[未リリースの変更](CHANGELOG.md)を参照してください。
+
+同じく未リリースの[`std.actor`](docs/actor.md)では、通常のasync関数で任意の所有状態を扱い、型付きメッセージ・返信、再起動方針、監視、停止を使えます。[API](docs/actor-reference.md)と[サンプル](test-nagi-code/library-examples/supervised-service/README.md)を用意しています。同じプロセス内のnative実装で、BEAMのようなVM、無停止のコード差し替え、分散actorは未対応です。
 
 専用のactor宣言、利用者が定義するgeneric関数やtrait、パッケージのimport、一般的なパターンのmatch、PostgreSQL、SQLのコンパイル時検証、Highのrequest arena、Lowの生pointer/unsafe/C ABI、独自scheduler、self-hostingは未実装です。Rust連携は同じビルド内の呼び出しで、安定した外部ABIではありません。`Map`と`owned`の操作APIも揃っていません。
 

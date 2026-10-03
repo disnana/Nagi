@@ -32,6 +32,7 @@
 | 入口やビルド設定を保存する | [nagi.toml](projects.md) |
 | 自分のRust crateをアプリから使う | [ローカルライブラリのサンプル](../test-nagi-code/rust-library/README.md) |
 | 非同期処理を待つ、複数の処理を始める | [asyncとscope](async.md)、[並行処理](concurrency.md) |
+| 状態を持つ処理へメッセージを送り、再起動・停止を管理する | [actor](actor.md)、[Supervisor](supervisor.md)、[APIリファレンス](actor-reference.md) |
 | 動くアプリを読む | [サンプルプロジェクト一覧](library-examples.md) |
 
 動かせる入門例は[examples/tutorial/](../examples/tutorial/)にあります。リファレンスにはコードの断片も載せています。
@@ -40,6 +41,6 @@
 
 [Nagiについて](introduction.md) · [Low](low-language.md) · [メモリ](memory-model.md) · [コンパイラ](compiler-internals.md) · [他の言語との連携](ffi.md) · [開発予定](roadmap.md)
 
-[actor](actor.md)、[workerの再起動](supervisor.md)、[キュー](queue.md)は検証用の実装です。性能を調べる場合は、[測定方法](performance.md)、[測定結果](../PERFORMANCE.md)、[通信の負荷試験](http-capacity.md)を確認してください。
+`std.actor`は次のリリースに向けた標準ライブラリです。[サンプル](../test-nagi-code/library-examples/supervised-service/README.md)で登録・呼び出し・停止を試せます。旧actor／Supervisorの組み込み関数と[キュー](queue.md)は検証用APIです。性能を調べる場合は、[測定方法](performance.md)、[測定結果](../PERFORMANCE.md)、[通信の負荷試験](http-capacity.md)を確認してください。
 
-現在の0.1系が対象です。未対応の機能は各ページに記載しています。
+現在のソースと0.1系が対象です。公開済み版との差は[未リリースの変更](../CHANGELOG.md)、未対応の機能は各ページに記載しています。
