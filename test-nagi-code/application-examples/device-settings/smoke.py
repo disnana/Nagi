@@ -1,5 +1,6 @@
 """Verify SQLite rows over HTTP, then reopen the same database."""
 
+from contextlib import closing
 import http.client
 import json
 import os
@@ -96,11 +97,12 @@ def verify(executable: Path, env: dict, output: Path) -> dict:
                     released.settimeout(1)
                     assert released.connect_ex(("127.0.0.1", port)) != 0, "listener remained open"
             if run_number == 1:
-                with sqlite3.connect(database) as connection:
-                    connection.execute(
-                        "UPDATE devices SET enabled=?, gain=?, label=?, calibration=? WHERE id=?",
-                        (False, 2.5, "東京", bytes([255, 0, 128]), 1),
-                    )
+                with closing(sqlite3.connect(database)) as connection:
+                    with connection:
+                        connection.execute(
+                            "UPDATE devices SET enabled=?, gain=?, label=?, calibration=? WHERE id=?",
+                            (False, 2.5, "東京", bytes([255, 0, 128]), 1),
+                        )
         (output / "results.json").write_text(
             json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8",
         )
