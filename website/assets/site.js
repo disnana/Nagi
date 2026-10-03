@@ -13,12 +13,15 @@ if (navs.length) {
     if (typeof groups[name] === 'boolean') {
       menu.open = groups[name];
     }
+    menu.querySelector('summary').addEventListener('click', () => {
+      // Native summary buttons toggle after their click handlers run.
+      groups[name] = !menu.open;
+      try { sessionStorage.setItem(groupsKey, JSON.stringify(groups)); } catch { /* Keep links usable. */ }
+    });
     menu.addEventListener('toggle', () => {
-      groups[name] = menu.open;
       for (const other of menus) {
         if (other !== menu && other.dataset.navGroup === name && other.open !== menu.open) other.open = menu.open;
       }
-      try { sessionStorage.setItem(groupsKey, JSON.stringify(groups)); } catch { /* Keep links usable. */ }
     });
   }
 }
