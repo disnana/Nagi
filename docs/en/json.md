@@ -26,10 +26,14 @@ Besides classes, you can use JSON-compatible numbers, bool, str, List, and other
 
 Borrowed decoding requires a string that can refer directly to the input. JSON escapes such as `\n` or `\uXXXX` require expansion, so borrowed decoding returns an error for them. Decode these strings as `str` instead.
 
+`bytes` reads and writes an integer array such as `[97,98,99]`. In contrast, `json_decode[view[bytes]]` borrows UTF-8 bytes from an unescaped JSON string such as `"abc"` and cannot read an integer array. `json_encode` also writes borrowed bytes as an integer array; use `bytes` to read and write the same representation.
+
 ## Input validation
 
 Missing required fields, extra fields, incorrect types, out-of-range numbers, and invalid UTF-8 return errors. For example, an `age: i32` field cannot accept a string or an integer outside its range.
 
 JSON is read directly into the requested type. String fields own their data and allocate storage during decoding. Borrowed class fields and settings for default values are not supported.
+
+Currently, `json_encode` writes NaN and positive or negative infinity as `null` rather than returning an error, including values inside Lists and classes. That `null` cannot be decoded as `f64`; an encoded non-finite `f64?` value decodes as `None`.
 
 See [HTTP and HTML](http.md) for JSON requests and responses.
