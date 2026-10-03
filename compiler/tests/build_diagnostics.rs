@@ -978,11 +978,13 @@ pub fn non_send() -> NonSendFuture { NonSendFuture(Rc::new(1)) }
         }
         assert!(prefix.contains("handler.nagi::handle"), "{text}");
         assert!(
-            !prefix.contains("runtime/src/lib.rs") && !prefix.contains("required by a bound"),
+            !prefix.replace('\\', "/").contains("runtime/src/lib.rs")
+                && !prefix.contains("required by a bound"),
             "{text}"
         );
         assert!(
-            text.contains("required by a bound in `route`") && text.contains("src/main.rs:"),
+            text.contains("required by a bound in `route`")
+                && text.replace('\\', "/").contains("src/main.rs:"),
             "{text}"
         );
         assert!(text.contains("Build failed."), "{text}");
