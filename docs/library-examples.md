@@ -1,8 +1,8 @@
 # サンプルプロジェクト
 
-CLI、自作ライブラリ、Rust連携、HTTP、Lowの差し替えを試せます。各プロジェクトに`nagi.toml`と起動手順があります。
+CLI、自作ライブラリ、Rust連携、HTTP、Supervisor、Lowの差し替えを試せます。各プロジェクトに`nagi.toml`と起動手順があります。標準HTTPと`std.actor`の例は、未リリースの最新ソースで動かします。
 
-## ライブラリと基盤を作る8つの例
+## ライブラリと基盤を作る例
 
 | プロジェクト | 試せること |
 | --- | --- |
@@ -12,6 +12,7 @@ CLI、自作ライブラリ、Rust連携、HTTP、Lowの差し替えを試せま
 | [Rustの非同期処理](../test-nagi-code/library-examples/rust-async/README.md) | TokioのtimerをNagiからawaitする |
 | [自作HTTP基盤](../test-nagi-code/library-examples/custom-http/README.md) | Axum/TokioへNagiの関数を渡し、DBなしでHTTP応答を作る |
 | [標準HTTPと認証](../test-nagi-code/library-examples/http-auth/README.md) | Nagiだけでヘッダー・401・route別エラー・型付き共有状態を扱う |
+| [SupervisorとHTTP](../test-nagi-code/library-examples/supervised-service/README.md) | actorが状態を順番に更新する。業務エラーと停止をHTTP応答へ変換する |
 | [Low計算カーネル](../test-nagi-code/library-examples/low-kernel/README.md) | Highの呼び出しを変えずに、Lowの実装へ置き換える |
 | [moduleと別名](../test-nagi-code/library-examples/module-imports/README.md) | 同名classを区別し、module名とfromの別名で同じ型を使う |
 | [独自エラーのCLI](../test-nagi-code/library-examples/typed-errors/README.md) | enumで失敗を分け、元の原因を保持しながら表示文を選ぶ |
@@ -47,12 +48,12 @@ nagic run --project test-nagi-code/library-examples/rust-json
 
 ## 開発時にまとめて確認する
 
-Python 3とビルド済みの`nagic`があれば、8プロジェクトのcheck・build・実行結果と、HTTP応答をまとめて確認できます。
+Python 3と最新ソースからビルドした`nagic`があれば、各プロジェクトのcheck・build・実行結果と、HTTP応答をまとめて確認できます。
 
 ```sh
 python scripts/verify_library_examples.py --compiler /path/to/nagic
 ```
 
-料金計算の両実装の一致、moduleと型の別名、独自エラー、JSONの不正入力、非同期処理のエラー、HighとLowの結果の一致、HTTPの400・404・body上限・停止を確認します。ビルドは1つずつ行い、依存のキャッシュを共有します。
+料金計算の両実装の一致、moduleと型の別名、独自エラー、JSONの不正入力、非同期処理のエラー、HighとLowの結果の一致、HTTPの400・404・body上限・停止を確認します。Supervisorの例では更新と業務エラー後の状態保持、204の停止応答、停止後の503も確認します。ビルドは1つずつ行い、依存のキャッシュを共有します。
 
 UnixではSIGINTによる正常終了、Windowsではプロセスを終了してlistenerが閉じることを確認します。WindowsのCtrl+Cによる終了は、HTTPサンプルの手順で手動確認してください。

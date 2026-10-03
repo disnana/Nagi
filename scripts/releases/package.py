@@ -32,7 +32,7 @@ def runtime_manifest(text: str, workspace: dict) -> bytes:
 
 def included(name: str) -> bool:
     return name == "LICENSE" or name == "runtime/Cargo.toml" or (
-        name.startswith("runtime/src/") and not name.endswith("/tests.rs")
+        name.startswith("runtime/src/") and not name.endswith(("/tests.rs", "_tests.rs"))
     )
 
 

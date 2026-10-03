@@ -125,6 +125,7 @@ class ReleasePlanTests(unittest.TestCase):
         self.change("runtime/Cargo.toml", '[package]\nname="nagi-runtime"\nversion.workspace=true\nedition.workspace=true\nlicense.workspace=true\n[dev-dependencies]\nunused="1"\n')
         self.change("runtime/src/lib.rs", "// committed runtime\n")
         self.change("runtime/src/http/tests.rs", "// development test\n")
+        self.change("runtime/src/actor/lifecycle_adversarial_tests.rs", "// development lifecycle tests\n")
         self.change("runtime/examples/bench.rs", "// development benchmark\n")
         self.change("LICENSE", "MIT license fixture\n")
         self.change("compiler/Cargo.toml", '[package]\nname="nagic"\n')

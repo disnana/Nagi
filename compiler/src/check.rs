@@ -224,6 +224,13 @@ fn recursive_layout(
     }
     // These wrappers contain their values inline. Vec, Arc, HashMap and
     // function pointers have fixed layouts independent of their contents.
+    if let Some(resource) = crate::stdlib::resource(&t.0) {
+        return crate::stdlib::resource_info(resource)
+            .inline_type_arguments
+            .iter()
+            .filter_map(|index| t.1.get(*index))
+            .any(|inner| recursive_layout(inner, classes, enums, visiting, checked));
+    }
     matches!(t.0.as_str(), "Option" | "Result" | "owned")
         && t.1
             .iter()
@@ -660,6 +667,9 @@ impl Checker {
     ) -> Result<Type, String> {
         use crate::stdlib::{Operation as O, Passing, Resource as R};
         let info = crate::stdlib::operation_info(operation);
+        if info.module == crate::stdlib::StandardModule::Actor {
+            return self.actor_standard(operation, types, args, line);
+        }
         if args.len() != info.arity {
             return Err(error(
                 line,
@@ -737,6 +747,7 @@ impl Checker {
                 hints[1] = Some(Type::named("i64"));
                 hints[2] = Some(resource(R::Options));
             }
+            _ => unreachable!("actor operation is checked separately"),
         }
         let mut arguments = vec![];
         for (index, arg) in args.iter_mut().enumerate() {
@@ -822,10 +833,339 @@ impl Checker {
                     result(app.clone())
                 }
             }
+            _ => unreachable!("actor operation is checked separately"),
         };
         Ok(output)
     }
 
+    fn actor_resource_argument(
+        &self,
+        got: &Type,
+        wanted: crate::stdlib::Resource,
+        line: usize,
+    ) -> Result<Type, String> {
+        let inner = if got.is_view() {
+            if self.native_resource_view(got) != Some(wanted) {
+                return Err(error(
+                    line,
+                    format!(
+                        "{}のresource参照が必要です",
+                        crate::stdlib::resource_info(wanted).name
+                    ),
+                ));
+            }
+            got.inner()
+        } else {
+            got.clone()
+        };
+        let resource = unowned(&inner);
+        if self.resource(&resource.0) != Some(wanted) {
+            return Err(error(
+                line,
+                format!(
+                    "{}が必要です: got {got}",
+                    crate::stdlib::resource_info(wanted).name
+                ),
+            ));
+        }
+        self.valid(resource, line)?;
+        Ok(resource.clone())
+    }
+    fn named_async_signature(
+        &self,
+        callback: &Expr,
+        line: usize,
+        role: &str,
+    ) -> Result<Vec<Type>, String> {
+        let named = match (&callback.kind, callback.resolution) {
+            (E::Name(name), Some(NameResolution::Function)) => self
+                .functions
+                .get(name)
+                .is_some_and(|function| function.asynchronous),
+            (E::Name(name), Some(NameResolution::Local)) => self
+                .vars
+                .get(name)
+                .is_some_and(|var| var.async_function.is_some()),
+            _ => false,
+        };
+        if !named {
+            return Err(error(
+                line,
+                format!("{role}は名前付きasync関数またはそのローカルaliasが必要です"),
+            ));
+        }
+        let signature = callback.ty.as_ref().expect("checked callback");
+        if signature.0 != "fn" || signature.1.is_empty() || !signature.1.last().unwrap().is_future()
+        {
+            return Err(error(line, format!("{role}のasync署名が不正です")));
+        }
+        Ok(signature.1.clone())
+    }
+    fn actor_outer_result(
+        &self,
+        signature: &[Type],
+        line: usize,
+        role: &str,
+    ) -> Result<Type, String> {
+        let output = signature.last().expect("async callback return").inner();
+        if output.0 != "Result" || output.1.len() != 2 {
+            return Err(error(
+                line,
+                format!("{role}はResult[T,Error]を返してください"),
+            ));
+        }
+        self.demand(&output.1[1], &Type::named("Error"), line)?;
+        Ok(output.1[0].clone())
+    }
+    fn actor_payload(&self, ty: &Type, line: usize, role: &str) -> Result<(), String> {
+        crate::capabilities::charge_type_supported(ty, &self.classes, &self.enums).map_err(
+            |reason| {
+                error(
+                    line,
+                    format!("{role}はChargeOwnedに対応していません: {reason}"),
+                )
+            },
+        )
+    }
+    fn actor_standard(
+        &mut self,
+        operation: crate::stdlib::Operation,
+        types: &[Type],
+        args: &mut [Expr],
+        line: usize,
+    ) -> Result<Type, String> {
+        use crate::stdlib::{Operation as O, Passing, Resource as R};
+        let info = crate::stdlib::operation_info(operation);
+        if args.len() != info.arity {
+            return Err(error(
+                line,
+                format!("{}の引数は{}個です", info.name, info.arity),
+            ));
+        }
+        if !types.is_empty() && types.len() != info.generic_arity
+            || info.generic_arity == 0 && !types.is_empty()
+        {
+            return Err(error(
+                line,
+                format!("{}の型引数は{}個です", info.name, info.generic_arity),
+            ));
+        }
+        for ty in types {
+            self.valid(ty, line)?;
+            self.emittable(ty, line, false)?;
+        }
+        let resource = |kind| crate::stdlib::resource_type(kind, vec![]);
+        let view = |ty| Type::generic("view", vec![ty]);
+        let mut arguments = Vec::new();
+        for (index, arg) in args.iter_mut().enumerate() {
+            let hint = match operation {
+                O::ActorOptions => Some(Type::named("i64")),
+                O::ActorActorOptions => Some(if index == 4 {
+                    resource(R::RestartPolicy)
+                } else {
+                    Type::named("i64")
+                }),
+                O::ActorRestartDelay => Some(if index == 0 {
+                    resource(R::SupervisorOptions)
+                } else {
+                    Type::named("i64")
+                }),
+                O::ActorSupervisor => {
+                    if index == 0 {
+                        types.first().cloned()
+                    } else {
+                        Some(resource(R::SupervisorOptions))
+                    }
+                }
+                O::ActorRegister => match index {
+                    1 => Some(view(Type::named("str"))),
+                    4 => Some(resource(R::ActorOptions)),
+                    _ => None,
+                },
+                O::ActorTask => match index {
+                    1 => Some(view(Type::named("str"))),
+                    3 => Some(resource(R::RestartPolicy)),
+                    _ => None,
+                },
+                O::ActorTurn => {
+                    if types.len() == 3 {
+                        Some(if index == 0 {
+                            types[0].clone()
+                        } else {
+                            Type::generic("Result", vec![types[1].clone(), types[2].clone()])
+                        })
+                    } else {
+                        None
+                    }
+                }
+                O::ActorReady => (index == 1).then(|| Type::named("i64")),
+                O::ActorCall => match index {
+                    1 => Some(
+                        self.actor_resource_argument(&arguments[0], R::Actor, line)?
+                            .1[0]
+                            .clone(),
+                    ),
+                    2 | 3 => Some(Type::named("i64")),
+                    _ => None,
+                },
+                _ => None,
+            };
+            let got = self.expr(arg, hint.as_ref())?;
+            if let Some(wanted) = &hint {
+                if info.parameters[index] == Passing::Reference {
+                    self.reference(&got, wanted, arg.line)?;
+                } else {
+                    self.demand(&got, wanted, arg.line)?;
+                }
+            }
+            if info.parameters[index] == Passing::Reference {
+                self.available(arg, false)?;
+            }
+            if info.parameters[index] == Passing::Move {
+                self.consume(arg)?;
+            }
+            arguments.push(got);
+        }
+        let output = match operation {
+            O::ActorDefaultOptions => resource(R::SupervisorOptions),
+            O::ActorOptions | O::ActorRestartDelay => result(resource(R::SupervisorOptions)),
+            O::ActorDefaultActorOptions => resource(R::ActorOptions),
+            O::ActorActorOptions => result(resource(R::ActorOptions)),
+            O::ActorSupervisor => {
+                let context = arguments[0].clone();
+                if context.contains_view() {
+                    return Err(error(line, "Supervisorのcontextにはviewを保存できません"));
+                }
+                crate::stdlib::resource_type(R::Supervisor, vec![context])
+            }
+            O::ActorControl => {
+                self.actor_resource_argument(&arguments[0], R::Supervisor, line)?;
+                resource(R::Control)
+            }
+            O::ActorCloneControl | O::ActorShutdown | O::ActorNextEvent => {
+                self.actor_resource_argument(&arguments[0], R::Control, line)?;
+                match operation {
+                    O::ActorCloneControl => resource(R::Control),
+                    O::ActorShutdown => future(result(Type::named("unit"))),
+                    _ => future(result(Type::generic("Option", vec![resource(R::Event)]))),
+                }
+            }
+            O::ActorRegister | O::ActorTask => {
+                let group = self.actor_resource_argument(&arguments[0], R::Supervisor, line)?;
+                let factory = self.named_async_signature(&args[2], line, "actor factory")?;
+                if factory.len() != 2 {
+                    return Err(error(line, "actor factoryの引数はshared[Context]1個です"));
+                }
+                self.demand(
+                    &factory[0],
+                    &Type::generic("shared", vec![group.1[0].clone()]),
+                    line,
+                )?;
+                let state = self.actor_outer_result(&factory, line, "actor factory")?;
+                if operation == O::ActorTask {
+                    self.demand(&state, &Type::named("unit"), line)?;
+                    result(Type::named("unit"))
+                } else {
+                    let handler = self.named_async_signature(&args[3], line, "actor handler")?;
+                    if handler.len() != 3 {
+                        return Err(error(line, "actor handlerの引数はStateとMessageの2個です"));
+                    }
+                    self.demand(&handler[0], &state, line)?;
+                    let turn = self.actor_outer_result(&handler, line, "actor handler")?;
+                    if self.resource(&turn.0) != Some(R::Turn) || turn.1.len() != 3 {
+                        return Err(error(
+                            line,
+                            "actor handlerはResult[Turn[State,Reply,E],Error]を返してください",
+                        ));
+                    }
+                    self.demand(&turn.1[0], &state, line)?;
+                    let message = handler[1].clone();
+                    let reply = turn.1[1].clone();
+                    let failure = turn.1[2].clone();
+                    for (role, ty) in [
+                        ("actor Message", &message),
+                        ("actor Reply", &reply),
+                        ("actor E", &failure),
+                    ] {
+                        self.actor_payload(ty, line, role)?;
+                    }
+                    if state.contains_view() {
+                        return Err(error(line, "actor Stateにはviewを保持できません"));
+                    }
+                    if !types.is_empty() {
+                        for (got, wanted) in
+                            [&state, &message, &reply, &failure].into_iter().zip(types)
+                        {
+                            self.demand(got, wanted, line)?;
+                        }
+                    }
+                    result(crate::stdlib::resource_type(
+                        R::Actor,
+                        vec![message, reply, failure],
+                    ))
+                }
+            }
+            O::ActorTurn => {
+                let reply = &arguments[1];
+                if reply.0 != "Result" || reply.1.len() != 2 {
+                    return Err(error(line, "turnのreplyにはResult[R,E]が必要です"));
+                }
+                if arguments[0].contains_view() {
+                    return Err(error(line, "TurnのStateにはviewを保持できません"));
+                }
+                self.actor_payload(&reply.1[0], line, "Turn Reply")?;
+                self.actor_payload(&reply.1[1], line, "Turn E")?;
+                crate::stdlib::resource_type(
+                    R::Turn,
+                    vec![arguments[0].clone(), reply.1[0].clone(), reply.1[1].clone()],
+                )
+            }
+            O::ActorCloneActor | O::ActorReady | O::ActorCall => {
+                let actor = self.actor_resource_argument(&arguments[0], R::Actor, line)?;
+                if !types.is_empty() {
+                    for (got, wanted) in actor.1.iter().zip(types) {
+                        self.demand(got, wanted, line)?;
+                    }
+                }
+                match operation {
+                    O::ActorCloneActor => actor,
+                    O::ActorReady => future(Type::generic(
+                        "Result",
+                        vec![Type::named("unit"), resource(R::CallError)],
+                    )),
+                    _ => {
+                        self.demand(&arguments[1], &actor.1[0], line)?;
+                        future(Type::generic(
+                            "Result",
+                            vec![
+                                Type::generic(
+                                    "Result",
+                                    vec![actor.1[1].clone(), actor.1[2].clone()],
+                                ),
+                                resource(R::CallError),
+                            ],
+                        ))
+                    }
+                }
+            }
+            O::ActorRun => {
+                if arguments[0].is_view() {
+                    return Err(error(line, "runはSupervisorの所有値をmoveで取ります"));
+                }
+                let group = self.actor_resource_argument(&arguments[0], R::Supervisor, line)?;
+                if let Some(wanted) = types.first() {
+                    self.demand(&group.1[0], wanted, line)?;
+                }
+                future(result(Type::named("unit")))
+            }
+            O::ActorYieldNow => future(Type::named("unit")),
+            _ => unreachable!("HTTP operation is checked separately"),
+        };
+        if self.resource(&output.0).is_some() {
+            self.valid(&output, line)?;
+        }
+        Ok(output)
+    }
     fn enum_variant(
         &self,
         name: &str,
@@ -958,8 +1298,34 @@ impl Checker {
             if resource == crate::stdlib::Resource::App && t.1.iter().any(Type::contains_view) {
                 return Err(error(line, "Appのstate/error型引数にviewを保持できません"));
             }
+            if matches!(
+                resource,
+                crate::stdlib::Resource::Supervisor
+                    | crate::stdlib::Resource::Actor
+                    | crate::stdlib::Resource::Turn
+            ) && t.1.iter().any(Type::contains_view)
+            {
+                return Err(error(
+                    line,
+                    format!(
+                        "{}の型引数にviewを保持できません",
+                        crate::stdlib::resource_info(resource).name
+                    ),
+                ));
+            }
             for argument in &t.1 {
                 self.valid(argument, line)?;
+            }
+            if resource == crate::stdlib::Resource::Actor {
+                for (role, argument) in ["Actor Message", "Actor Reply", "Actor E"]
+                    .into_iter()
+                    .zip(&t.1)
+                {
+                    self.actor_payload(argument, line, role)?;
+                }
+            } else if resource == crate::stdlib::Resource::Turn {
+                self.actor_payload(&t.1[1], line, "Turn Reply")?;
+                self.actor_payload(&t.1[2], line, "Turn E")?;
             }
             return Ok(());
         }
@@ -1928,9 +2294,19 @@ impl Checker {
                         "0.1のspawnはasync unitまたはResult[unit,Error]を取ります",
                     ));
                 }
-                if let E::Call(_, _, args) = &e.kind {
-                    for arg in args {
-                        if !arg.ty.as_ref().is_some_and(Type::contains_view) {
+                if let E::Call(name, _, args) = &e.kind {
+                    let passing = (e.resolution == Some(NameResolution::Standard))
+                        .then(|| crate::stdlib::operation(name))
+                        .flatten()
+                        .map(|operation| crate::stdlib::operation_info(operation).parameters);
+                    for (index, arg) in args.iter().enumerate() {
+                        let native_borrow = passing.is_some_and(|parameters| {
+                            matches!(
+                                parameters[index],
+                                crate::stdlib::Passing::Reference | crate::stdlib::Passing::Borrow
+                            )
+                        });
+                        if !arg.ty.as_ref().is_some_and(Type::contains_view) && !native_borrow {
                             continue;
                         }
                         return Err(error(

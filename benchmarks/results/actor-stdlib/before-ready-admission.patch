@@ -1,0 +1,165 @@
+--- a/runtime/src/actor.rs
++++ b/runtime/src/actor.rs
+@@ -20,7 +20,7 @@
+     time::Duration,
+ };
+ use tokio::{
+-    sync::{broadcast, mpsc, oneshot, watch, OwnedSemaphorePermit, Semaphore, TryAcquireError},
++    sync::{broadcast, mpsc, oneshot, watch, OwnedSemaphorePermit, Semaphore},
+     time::{timeout, timeout_at, Instant},
+ };
+ 
+@@ -864,7 +864,7 @@
+         &self,
+         deadline: Option<Instant>,
+     ) -> Result<mpsc::Sender<Envelope<M, R, E>>, CallError> {
+-        let mut receiver: Option<watch::Receiver<ActorState<M, R, E>>> = None;
++        let mut receiver = self.hub.ready.subscribe();
+         loop {
+             if self.hub.group.stop.load(Ordering::Acquire) {
+                 return Err(self.refusal());
+@@ -875,10 +875,7 @@
+                     "actor admission deadline exceeded",
+                 ));
+             }
+-            let status = match &receiver {
+-                Some(receiver) => receiver.borrow().clone(),
+-                None => self.hub.ready.borrow().clone(),
+-            };
++            let status = receiver.borrow().clone();
+             match status {
+                 ActorState::Ready(sender) if !sender.is_closed() => return Ok(sender),
+                 ActorState::Stopped => return Err(self.refusal()),
+@@ -897,16 +894,9 @@
+             let Some(deadline) = deadline else {
+                 return Err(self.refusal());
+             };
+-            if let Some(receiver) = receiver.as_mut() {
+-                self.admission_wait(deadline, receiver.changed(), None)
+-                    .await?
+-                    .map_err(|_| self.refusal())?;
+-            } else {
+-                // Subscribe only when waiting is necessary, then recheck the
+-                // current state before awaiting. A transition between the
+-                // initial borrow and subscribe must never become a missed wake.
+-                receiver = Some(self.hub.ready.subscribe());
+-            }
++            self.admission_wait(deadline, receiver.changed(), None)
++                .await?
++                .map_err(|_| self.refusal())?;
+         }
+     }
+ }
+@@ -969,70 +959,53 @@
+         }
+     })? as u32;
+     let sender = actor.sender(deadline).await?;
+-    // Tokio assigns released permits to existing waiters before making them
+-    // available to try_acquire. Immediate admission therefore keeps that
+-    // fairness while avoiding waiter/timer setup when capacity is free.
+-    let count = match Arc::clone(&actor.hub.count).try_acquire_owned() {
+-        Ok(permit) => permit,
+-        Err(TryAcquireError::Closed) => return Err(actor.refusal()),
+-        Err(TryAcquireError::NoPermits) => match deadline {
+-            None => {
+-                return Err(CallError::new(
+-                    CallKind::MAILBOX_FULL,
+-                    "actor mailbox count limit reached",
+-                ))
+-            }
+-            Some(deadline) => actor
+-                .admission_wait(
+-                    deadline,
+-                    Arc::clone(&actor.hub.count).acquire_owned(),
+-                    Some(&sender),
+-                )
+-                .await?
+-                .map_err(|_| actor.refusal())?,
+-        },
++    let count = match deadline {
++        None => Arc::clone(&actor.hub.count)
++            .try_acquire_owned()
++            .map_err(|_| {
++                CallError::new(CallKind::MAILBOX_FULL, "actor mailbox count limit reached")
++            })?,
++        Some(deadline) => actor
++            .admission_wait(
++                deadline,
++                Arc::clone(&actor.hub.count).acquire_owned(),
++                Some(&sender),
++            )
++            .await?
++            .map_err(|_| actor.refusal())?,
+     };
+-    let byte_permit = match Arc::clone(&actor.hub.bytes).try_acquire_many_owned(bytes) {
+-        Ok(permit) => permit,
+-        Err(TryAcquireError::Closed) => return Err(actor.refusal()),
+-        Err(TryAcquireError::NoPermits) => match deadline {
+-            None => {
+-                return Err(CallError::new(
+-                    CallKind::MAILBOX_FULL,
+-                    "actor mailbox byte limit reached",
+-                ))
+-            }
+-            Some(deadline) => actor
+-                .admission_wait(
+-                    deadline,
+-                    Arc::clone(&actor.hub.bytes).acquire_many_owned(bytes),
+-                    Some(&sender),
+-                )
+-                .await?
+-                .map_err(|_| actor.refusal())?,
+-        },
++    let byte_permit = match deadline {
++        None => Arc::clone(&actor.hub.bytes)
++            .try_acquire_many_owned(bytes)
++            .map_err(|_| {
++                CallError::new(CallKind::MAILBOX_FULL, "actor mailbox byte limit reached")
++            })?,
++        Some(deadline) => actor
++            .admission_wait(
++                deadline,
++                Arc::clone(&actor.hub.bytes).acquire_many_owned(bytes),
++                Some(&sender),
++            )
++            .await?
++            .map_err(|_| actor.refusal())?,
+     };
+     if actor.hub.group.stop.load(Ordering::Acquire) || sender.is_closed() {
+         return Err(actor.refusal());
+     }
+-    let reservation = match sender.try_reserve_owned() {
+-        Ok(reservation) => reservation,
+-        Err(mpsc::error::TrySendError::Closed(_)) => return Err(actor.refusal()),
+-        Err(mpsc::error::TrySendError::Full(sender)) => match deadline {
+-            None => {
+-                return Err(CallError::new(
+-                    CallKind::MAILBOX_FULL,
+-                    "actor mailbox queue limit reached",
+-                ))
+-            }
+-            Some(deadline) => {
+-                let for_wait = sender.clone();
+-                actor
+-                    .admission_wait(deadline, sender.reserve_owned(), Some(&for_wait))
+-                    .await?
+-                    .map_err(|_| actor.refusal())?
+-            }
+-        },
++    let reservation = match deadline {
++        None => sender.try_reserve_owned().map_err(|error| match error {
++            mpsc::error::TrySendError::Closed(_) => actor.refusal(),
++            mpsc::error::TrySendError::Full(_) => {
++                CallError::new(CallKind::MAILBOX_FULL, "actor mailbox queue limit reached")
++            }
++        })?,
++        Some(deadline) => {
++            let for_wait = sender.clone();
++            actor
++                .admission_wait(deadline, sender.reserve_owned(), Some(&for_wait))
++                .await?
++                .map_err(|_| actor.refusal())?
++        }
+     };
+     if actor.hub.group.stop.load(Ordering::Acquire) {
+         return Err(actor.refusal());

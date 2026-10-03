@@ -2,10 +2,12 @@
 
 The priority is to clarify the specification and strengthen safety while keeping the current working paths usable.
 
-1. Build on Result matching to settle nullable matching, checked/wrapping arithmetic, string length, source spans, variable shadowing, and borrow origins.
+The latest source implements module aliases, custom class/enum errors, Result/Option/enum matching, `std.http.server`, and `std.actor` with arbitrary owned state. The new standard libraries are unreleased. See [actors](actor.md) and [Supervisors](supervisor.md) for their current scope.
+
+1. Build on Result, Option, and enum matching to settle checked/wrapping arithmetic, string length, source spans, variable shadowing, and borrow origins.
 2. Strengthen partial-move, branch, loop, and escape analysis in the High checker, reducing reliance on the Rust backend.
-3. Build on relative-file modules and aliases and typed Rust integration to add unquoted standard modules, general generics, traits, type annotations for passing and returning async functions, and a standard Map API.
-4. Lower arbitrary-state actor declarations, supervisor trees, and bounded queue declarations into the current runtime.
+3. Build on registered standard modules and typed Rust integration to add user-defined generics and traits, general type annotations for passing and returning async functions, and a standard Map API.
+4. Verify `std.actor` capacity, cancellation, and restart behavior, and define Supervisor trees and independent bounded queues. A VM, hot code replacement, and distributed actors are outside the current implementation.
 5. Compare request arenas and borrowed classes, encoding during database stepping, buffer reuse, and streaming JSON.
 6. Define typed SQL parameters, rows, and transactions, then add PostgreSQL using an existing Rust driver. Verify cancellation and pool shutdown against a real database.
 7. Define Low layout, pointers, arenas, unsafe boundaries, and a C ABI; add sanitizers and coverage-guided fuzzing.

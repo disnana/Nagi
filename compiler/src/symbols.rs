@@ -462,7 +462,7 @@ impl Types<'_, '_> {
                                 self.references.push(Reference {
                                     location,
                                     target: Location {
-                                        file: crate::stdlib::MODULE_ID.into(),
+                                        file: crate::stdlib::resource_module(resource).0,
                                         line,
                                         column: 5,
                                         length: name.len(),
@@ -616,7 +616,7 @@ fn standard_fields(
 
 // Registry signatures describe generics and callback shapes that are not user
 // function declarations. Render their type tokens through the importing scope.
-fn standard_type(text: &str, file: &str, metadata: &ModuleMetadata) -> String {
+fn standard_type(text: &str, module: &ModuleId, file: &str, metadata: &ModuleMetadata) -> String {
     let mut output = String::new();
     let mut offset = 0;
     while offset < text.len() {
@@ -631,10 +631,7 @@ fn standard_type(text: &str, file: &str, metadata: &ModuleMetadata) -> String {
                 offset += 1;
             }
             let word = &text[start..offset];
-            let resource = crate::stdlib::RESOURCES
-                .iter()
-                .copied()
-                .find(|r| crate::stdlib::resource_info(*r).name == word);
+            let resource = crate::stdlib::resource_named(module, word);
             if let Some(resource) = resource {
                 output.push_str(&display_type(
                     &crate::stdlib::resource_type(resource, vec![]),
@@ -690,7 +687,7 @@ fn standard_definition(
         name: name.into(),
         kind: "function",
         location: Location {
-            file: crate::stdlib::MODULE_ID.into(),
+            file: info.id.module.0.clone(),
             line: info.line,
             column: if info.id.kind == DefKind::Resource {
                 10
@@ -711,9 +708,11 @@ fn standard_definition(
     if let Some(resource) = crate::stdlib::resource(&info.symbol) {
         let resource_info = crate::stdlib::resource_info(resource);
         definition.kind = "resource";
-        if resource_info.arity == 2 {
-            definition.type_parameters = vec!["S".into(), "E".into()];
-        }
+        definition.type_parameters = resource_info
+            .type_parameters
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect();
         definition.fields = standard_fields(resource, file, metadata);
         definition.constants = crate::stdlib::constants(resource)
             .iter()
@@ -721,7 +720,7 @@ fn standard_definition(
                 name: constant.name.into(),
                 kind: "constant",
                 location: Location {
-                    file: crate::stdlib::MODULE_ID.into(),
+                    file: info.id.module.0.clone(),
                     line: crate::stdlib::member_line(resource, constant.name).unwrap(),
                     column: 5,
                     length: constant.name.len(),
@@ -733,10 +732,10 @@ fn standard_definition(
             .collect();
         definition.signature = format!(
             "resource {name}{}{}",
-            if resource_info.arity == 2 {
-                "[S, E]"
+            if definition.type_parameters.is_empty() {
+                String::new()
             } else {
-                ""
+                format!("[{}]", definition.type_parameters.join(", "))
             },
             definition
                 .fields
@@ -749,26 +748,30 @@ fn standard_definition(
         let signature = operation_info.signature;
         let open = signature.find('(').unwrap();
         let close = signature.rfind(") -> ").unwrap();
-        let generics = &signature[..open];
-        definition.type_parameters = generics
-            .trim_start_matches('[')
-            .trim_end_matches(']')
-            .split(',')
-            .map(str::trim)
-            .filter(|name| !name.is_empty())
-            .map(str::to_owned)
+        definition.type_parameters = operation_info
+            .type_parameters
+            .iter()
+            .map(|name| (*name).to_owned())
             .collect();
         definition.parameters = standard_parameters(&signature[open + 1..close])
             .into_iter()
             .map(|(name, ty)| Member {
                 name: name.into(),
-                ty: standard_type(ty, file, metadata),
+                ty: standard_type(ty, &info.id.module, file, metadata),
                 readonly: false,
             })
             .collect();
-        definition.return_type = Some(standard_type(&signature[close + 5..], file, metadata));
-        definition.asynchronous = operation == crate::stdlib::Operation::Serve;
-        definition.signature = format!("def {name}{}", standard_type(signature, file, metadata));
+        definition.return_type = Some(standard_type(
+            &signature[close + 5..],
+            &info.id.module,
+            file,
+            metadata,
+        ));
+        definition.asynchronous = operation_info.asynchronous;
+        definition.signature = format!(
+            "def {name}{}",
+            standard_type(signature, &info.id.module, file, metadata)
+        );
     }
     Some(definition)
 }
@@ -838,16 +841,21 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
     let mut symbols = HashMap::new();
     let mut variant_targets = HashMap::new();
     let mut standard_sources = vec![];
-    if metadata
+    let mut indexed_standard_modules = HashSet::new();
+    for module in metadata
         .modules
         .iter()
-        .any(|module| crate::stdlib::is_registered_module(&module.id))
+        .filter(|module| crate::stdlib::is_registered_module(&module.id))
     {
-        standard_sources.push(serde_json::json!({"file":crate::stdlib::MODULE_ID,"text":crate::stdlib::declaration_source()}));
-        for info in crate::stdlib::definitions(&ModuleId(crate::stdlib::MODULE_ID.into())) {
+        if !indexed_standard_modules.insert(module.id.clone()) {
+            continue;
+        }
+        standard_sources.push(
+            serde_json::json!({"file":module.id.0,"text":crate::stdlib::module_source(&module.id)}),
+        );
+        for info in crate::stdlib::definitions(&module.id) {
             let definition =
-                standard_definition(&info, &info.id.name, crate::stdlib::MODULE_ID, &metadata)
-                    .unwrap();
+                standard_definition(&info, &info.id.name, &module.id.0, &metadata).unwrap();
             symbols.insert(info.symbol.clone(), definition.location.clone());
             targets.insert(info.id.clone(), definition.location.clone());
             for constant in &definition.constants {
@@ -1230,23 +1238,20 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
     for file in &files {
         for (i, token) in file.tokens.iter().enumerate() {
             if matches!(&token.kind, K::Id(name) if name == "import" || name == "from") {
-                let parts = crate::stdlib::MODULE_NAME.split('.').collect::<Vec<_>>();
-                let width = parts.len() * 2 - 1;
-                if let Some(path) = file.tokens.get(i + 1..i + 1 + width) {
-                    if parts.iter().enumerate().all(|(index, name)| {
-                        matches!(&path[index * 2].kind, K::Id(part) if part == name)
-                            && (index == 0
-                                || matches!(&path[index * 2 - 1].kind, K::Sym(dot) if dot == "."))
-                    }) {
-                        references.push(Reference {
-                            location: file.location(&path[0], crate::stdlib::MODULE_NAME.len()),
-                            target: Location {
-                                file: crate::stdlib::MODULE_ID.into(),
-                                line: 1,
-                                column: 1,
-                                length: 0,
-                            },
-                        });
+                for &module in crate::stdlib::MODULES {
+                    let info = crate::stdlib::module_info(module);
+                    let parts = info.name.split('.').collect::<Vec<_>>();
+                    let width = parts.len() * 2 - 1;
+                    if let Some(path) = file.tokens.get(i + 1..i + 1 + width) {
+                        if parts.iter().enumerate().all(|(index, name)| {
+                            matches!(&path[index * 2].kind, K::Id(part) if part == name)
+                                && (index == 0 || matches!(&path[index * 2 - 1].kind, K::Sym(dot) if dot == "."))
+                        }) {
+                            references.push(Reference {
+                                location: file.location(&path[0], info.name.len()),
+                                target: Location { file: info.id.into(), line: 1, column: 1, length: 0 },
+                            });
+                        }
                     }
                 }
             }
@@ -1337,16 +1342,23 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
         }
     }
     references.extend(types.references);
-    let standard_members = crate::stdlib::definitions(&ModuleId(crate::stdlib::MODULE_ID.into()))
+    let standard_modules = crate::stdlib::MODULES
         .iter()
-        .filter_map(|info| {
-            standard_definition(info, &info.id.name, crate::stdlib::MODULE_ID, &metadata)
+        .map(|module| {
+            let descriptor = crate::stdlib::module_info(*module);
+            let members = crate::stdlib::definitions(&ModuleId(descriptor.id.into()))
+                .iter()
+                .filter_map(|info| {
+                    standard_definition(info, &info.id.name, descriptor.id, &metadata)
+                })
+                .collect::<Vec<_>>();
+            serde_json::json!({"name":descriptor.name,"id":descriptor.id,"members":members})
         })
         .collect::<Vec<_>>();
     Ok(
         serde_json::json!({"format":"nagi-symbols-v1","definitions":definitions,"bindings":namespace_bindings,
         "references":references,"locals":types.locals,"expressions":types.expressions,
         "files":files.iter().map(|f|f.path.display().to_string()).collect::<Vec<_>>(),"standard_sources":standard_sources,
-        "standard_modules":[{"name":crate::stdlib::MODULE_NAME,"id":crate::stdlib::MODULE_ID,"members":standard_members}]}),
+        "standard_modules":standard_modules}),
     )
 }

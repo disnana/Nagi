@@ -107,9 +107,9 @@ For applications with multiple files, [nagi.toml](docs/en/projects.md) stores th
 | `docs/` | Language documentation, design rationale, implementation scope, and development plans |
 | `scripts/` | Scripts to reproduce builds, HTTP checks, load tests, and reports |
 
-High and Low take separate paths within the same compiler crate. Splitting them into independent crates and organizing the standard library into modules are future work.
+High and Low take separate paths within the same compiler crate. `std.http.server` and `std.actor` are registered standard libraries. Splitting the compiler into independent crates remains future work.
 
-[Six library and Rust integration projects](docs/en/library-examples.md) demonstrate shared CLI/report logic, serde_json, Tokio, a custom HTTP foundation, and Low replacements. See [library structure](docs/en/libraries.md) and the [design proposal](docs/en/library-design.md).
+[Library and Rust integration samples](docs/en/library-examples.md) demonstrate shared CLI/report logic, serde_json, Tokio, HTTP, Supervisors, and Low replacements. See [library structure](docs/en/libraries.md) and the [design proposal](docs/en/library-design.md).
 
 ## Reproduce the checks
 
@@ -136,13 +136,15 @@ Servers bind to loopback. Keep ports 8080–8083 available for the tests. Set `N
 
 ## Current scope
 
-Implemented features include primitive types, value classes, contiguous arrays, nullable values, Result, functions, branches, loops, async/await, scopes, basic HTTP, HTML responses, JSON, SQLite, handwritten Low calls and replacements, relative file imports, and typed Rust function calls. Actors, supervisors, and queues have runtime implementations and experimental High built-ins. See [imports and Rust](docs/en/modules-and-rust.md) and the [web demo](docs/en/web-demo.md).
+Implemented features include primitive types, value classes, enums, contiguous arrays, nullable values, Results with custom errors, functions, branches, loops, async/await, scopes, basic HTTP, HTML responses, JSON, SQLite, handwritten Low calls and replacements, relative file imports, and typed Rust function calls. The older actor, Supervisor, and queue built-ins remain test APIs. See [imports and Rust](docs/en/modules-and-rust.md) and the [web demo](docs/en/web-demo.md).
 
 Result matching lets you handle success and failure, recover with defaults, and return errors while preserving their kind. See [error handling](docs/en/error-handling.md) and the [HTTP Result API example](docs/en/result-api.md).
 
 The [VS Code extension 0.1.9](docs/en/vscode-extension.md) provides F12 navigation to functions, classes, imported files, and local bindings; type hovers; class field completion; and signature help. It also handles unsaved edits to files saved at least once. The [editor walkthrough](docs/en/editor.md) shows how to use these features.
 
 The next release's [standard HTTP module](docs/en/http.md) supports database-free apps, headers, Method/Status, custom state, and error mapping. Standard-module imports and Option Some/None matching are also available in source builds. See [unreleased changes](CHANGELOG.md) for differences from the published version.
+
+The unreleased [`std.actor`](docs/en/actor.md) uses ordinary async functions for arbitrary owned state, typed messages and replies, restart policies, observation, and shutdown. See its [API](docs/en/actor-reference.md) and [sample](test-nagi-code/library-examples/supervised-service/README.en.md). It runs natively within one process; a BEAM-style VM, hot code replacement, and distributed actors are unsupported.
 
 Dedicated actor declarations, user-defined generic functions and traits, package imports, general pattern matching, PostgreSQL, compile-time SQL validation, High request arenas, Low raw pointers/unsafe/C ABI, a custom scheduler, and self-hosting are not implemented. Rust integration uses calls within the same build, without a stable external ABI. Operations for `Map` and `owned` are incomplete.
 
