@@ -22,6 +22,36 @@ from pygments.util import ClassNotFound
 
 ROOT = Path(__file__).resolve().parents[1]
 HERE = Path(__file__).resolve().parent
+DEFAULT_REPOSITORY = "https://github.com/disnana/Nagi"
+
+
+def custom_domain(repository: str) -> str | None:
+    # A fork must not inherit the upstream domain from its copy of CNAME.
+    if repository.rstrip("/").lower() != DEFAULT_REPOSITORY.lower():
+        return None
+    cname = HERE / "CNAME"
+    if not cname.is_file():
+        return None
+    domain = cname.read_text(encoding="utf-8").strip().lower()
+    label = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+    if len(domain) > 253 or not re.fullmatch(rf"{label}(?:\.{label})+", domain):
+        raise ValueError("website/CNAME must contain one DNS hostname")
+    return domain
+
+
+def site_defaults(repository: str) -> tuple[str, str]:
+    domain = custom_domain(repository)
+    if domain:
+        return "/", f"https://{domain}"
+    parsed = urlsplit(repository)
+    parts = parsed.path.strip("/").split("/")
+    if parsed.hostname == "github.com" and len(parts) == 2:
+        owner, name = parts
+        base = "/" if name.lower() == f"{owner.lower()}.github.io" else f"/{name}/"
+        return base, f"https://{owner.lower()}.github.io"
+    return "/Nagi/", "https://disnana.github.io"
+
+
 GROUPS = [
     ("入門", [("getting-started", "準備と最初の実行"), ("language-guide", "コードを書きながら学ぶ"), ("editor", "エディターの操作例")]),
     ("言語リファレンス", [("syntax", "文法の早見表"), ("builtins", "組み込み関数"), ("types", "型と推論"), ("classes", "class"), ("ownership", "所有権"), ("view-and-zero-copy", "viewとコピー"), ("error-handling", "エラー処理")]),
@@ -168,9 +198,12 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
     output = output.resolve()
     if output == ROOT / "build" or not output.is_relative_to(ROOT / "build"):
         raise ValueError("Output must be a subdirectory of build/")
+    domain = custom_domain(repo)
     if output.exists():
         shutil.rmtree(output)
     output.mkdir(parents=True)
+    if domain and origin == f"https://{domain}" and base == "/":
+        (output / "CNAME").write_text(domain + "\n", encoding="utf-8")
     shutil.copytree(HERE / "assets", output / "assets")
     css = HtmlFormatter(style=CodeStyle).get_style_defs(".highlight")
     (output / "assets/highlight.css").write_text(css, encoding="utf-8")
@@ -328,11 +361,14 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=ROOT / "build/website")
-    parser.add_argument("--base-path", default="/Nagi/")
-    parser.add_argument("--site-url", default="https://disnana.github.io")
-    parser.add_argument("--repository", default="https://github.com/disnana/Nagi")
+    parser.add_argument("--base-path")
+    parser.add_argument("--site-url")
+    parser.add_argument("--repository", default=DEFAULT_REPOSITORY)
     parser.add_argument("--ref", default="main")
     args = parser.parse_args()
+    default_base, default_origin = site_defaults(args.repository)
+    args.base_path = default_base if args.base_path is None else args.base_path
+    args.site_url = default_origin if args.site_url is None else args.site_url
     base = "/" + args.base_path.strip("/") + "/" if args.base_path.strip("/") else "/"
     if re.search(r"[^A-Za-z0-9_./-]", base) or any(p in {".", ".."} for p in base.split("/")):
         parser.error("base-path must be a URL path without . or .. segments")

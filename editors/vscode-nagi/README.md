@@ -35,7 +35,7 @@ code --install-extension Disnana.nagi-lang
 code --install-extension build/distribution/nagi-language-0.1.9.vsix
 ```
 
-拡張0.1.9では、色付け、スニペット、インデント補助、キーワード・型の補完と組み込み関数の補完・ホバー・引数ヒントをコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。[準備と最初の実行](https://disnana.github.io/Nagi/docs/getting-started/)の手順でインストールしてください。拡張はリポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
+拡張0.1.9では、色付け、スニペット、インデント補助、キーワード・型の補完と組み込み関数の補完・ホバー・引数ヒントをコンパイラなしで利用できます。型検査や実行には`nagic`が必要です。[準備と最初の実行](https://nagi.disnana.com/docs/getting-started/)の手順でインストールしてください。拡張はリポジトリのrelease・debugビルド、次にPATHからコンパイラを探します。
 
 VSIXにはコンパイラ本体を含めていません。`spawn nagic.exe ENOENT`などのメッセージは、コンパイラが見つからないことを示します。インストール後にVS Codeを再起動し、「Nagi: 型検査」を実行してください。別の場所にあるコンパイラを使う場合は`nagi.compilerPath`で指定します。コンパイラの起動失敗やタイムアウトは警告とNagiの出力に表示し、ソースの型エラーとして赤線を付けません。
 
@@ -75,7 +75,7 @@ Windows以外の実行ファイルは`nagic`です。`compilerPath`・`nativeFil
 
 ## プロジェクト
 
-入口・Rust依存・手書きLowの設定は[nagi.toml](https://disnana.github.io/Nagi/docs/projects/)にまとめられます。開いているファイルから親へ最も近い`nagi.toml`を選び、コンパイラに`--project`として渡します。補助ファイルを開いていても、`entry`から検査・実行します。型検査は未保存のソースをメモリ上で読み、lower・build・runはプロジェクトのファイルを保存します。`nagi.toml`の編集は先に保存してください。設定の保存・作成・削除でも検査を更新します。
+入口・Rust依存・手書きLowの設定は[nagi.toml](https://nagi.disnana.com/docs/projects/)にまとめられます。開いているファイルから親へ最も近い`nagi.toml`を選び、コンパイラに`--project`として渡します。補助ファイルを開いていても、`entry`から検査・実行します。型検査は未保存のソースをメモリ上で読み、lower・build・runはプロジェクトのファイルを保存します。`nagi.toml`の編集は先に保存してください。設定の保存・作成・削除でも検査を更新します。
 
 Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけで設定を使えます。`nagi.rustFile`などの従来の設定はコマンド引数として追加し、設定ファイルに対して上書き・追加するルールはCLIと共通です。`nagic check`はRust側の実装を検査せず、実装との型の一致はビルドで検査します。import先の型エラーはそのファイルのProblemsに表示します。
 
@@ -99,7 +99,7 @@ Rust連携サンプルは`test-nagi-code/rust-bridge/bridge.nagi`を開くだけ
 
 拡張0.1.9では、新規の未保存ファイル、コンパイラなし、未信頼のワークスペースでも、キーワード・型と組み込み関数の入力補助を使えます。書きかけの構文でも組み込み関数の説明を表示します。コンパイラで解析できない場合、ファイル内の同じ名前の関数や変数やimportと衝突しうる組み込み情報は控えます。プロジェクトの宣言、ローカル変数の型、フィールド候補、F12にはコンパイラとワークスペースの信頼が必要です。
 
-最新版の`nagic`と拡張0.1.9を使います。関数名にマウスを置くと引数・戻り値・asyncの宣言が表示され、class名ではフィールド一覧を確認できます。`Result[Item?, Error]`や`view[str]`などの型も宣言どおりに表示します。[コードを使った操作例](https://disnana.github.io/Nagi/docs/editor/)もあります。
+最新版の`nagic`と拡張0.1.9を使います。関数名にマウスを置くと引数・戻り値・asyncの宣言が表示され、class名ではフィールド一覧を確認できます。`Result[Item?, Error]`や`view[str]`などの型も宣言どおりに表示します。[コードを使った操作例](https://nagi.disnana.com/docs/editor/)もあります。
 
 変数名にマウスを置くと、コンパイラが確認できた型を表示します。たとえば`count = 3`は`count: i64`、classを返す関数から作った`item`は`item: Item`です。関数の引数、`for`の要素、Resultの`case Ok(value)`と`case Err(problem)`の束縛名にも対応します。宣言と使用箇所を扱い、caseやifなどのブロックを出た名前には型を表示しません。
 
