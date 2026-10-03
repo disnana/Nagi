@@ -296,7 +296,8 @@ fn generated_toml_round_trips_quotes_backslashes_and_newlines_without_extra_tabl
     );
 }
 
-#[cfg(unix)]
+// macOS filesystems reject the non-UTF-8 name before the compiler can inspect it.
+#[cfg(all(unix, not(target_os = "macos")))]
 #[test]
 fn non_utf8_project_paths_check_but_cannot_generate_lossy_dependency_paths() {
     use std::{ffi::OsString, os::unix::ffi::OsStringExt};
