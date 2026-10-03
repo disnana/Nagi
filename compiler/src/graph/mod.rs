@@ -2,11 +2,12 @@
 //! Display syntax and layout belong to renderers, never to this schema.
 
 use crate::{
-    ast::{DefId, DefKind, DefinitionInfo, ModuleId},
+    ast::{DefId, DefKind, DefinitionInfo, ModuleId, Program},
     source::Sources,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::path::Component;
 
 pub mod calls;
 pub mod html;
@@ -341,6 +342,92 @@ pub fn definition_id(id: &DefId) -> String {
 pub fn module_id(id: &ModuleId) -> String {
     format!("module:{}", id.0)
 }
+
+/// Build labels from the complete loaded module set before selecting a view.
+/// Only presentation changes: standard and retained logical IDs stay intact.
+pub(super) fn module_labels(program: &Program, sources: &Sources) -> BTreeMap<String, String> {
+    #[derive(Default)]
+    struct Suffixes {
+        count: usize,
+        children: BTreeMap<String, Suffixes>,
+    }
+    let physical: BTreeMap<_, _> = sources
+        .module_files()
+        .map(|(id, path)| (id.0.as_str(), path))
+        .collect();
+    let modules: BTreeMap<_, _> = program
+        .modules
+        .modules
+        .iter()
+        .map(|module| (module.id.0.as_str(), &module.id))
+        .collect();
+    let mut path_counts = BTreeMap::new();
+    for (id, module) in &modules {
+        if !crate::stdlib::is_registered_module(module) {
+            if let Some(path) = physical.get(id) {
+                *path_counts.entry(*path).or_insert(0usize) += 1;
+            }
+        }
+    }
+    let mut labels = BTreeMap::new();
+    let mut paths = Vec::new();
+    let mut suffixes = Suffixes::default();
+    for (id, module) in modules {
+        if crate::stdlib::is_registered_module(module) {
+            labels.insert(id.to_owned(), id.trim_start_matches("stdlib:").to_owned());
+            continue;
+        }
+        let Some(path) = physical.get(id) else {
+            labels.insert(id.to_owned(), id.to_owned());
+            continue;
+        };
+        // Two logical identities sharing one physical snapshot cannot be
+        // distinguished by path suffixes. Retain their authoritative names.
+        if path_counts.get(path).copied().unwrap_or(0) > 1 {
+            labels.insert(id.to_owned(), id.to_owned());
+            continue;
+        }
+        let parts: Vec<_> = path
+            .components()
+            .filter_map(|component| match component {
+                Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
+                _ => None,
+            })
+            .collect();
+        let mut suffix = &mut suffixes;
+        for part in parts.iter().rev() {
+            suffix = suffix.children.entry(part.clone()).or_default();
+            suffix.count += 1;
+        }
+        paths.push((id, *path, parts));
+    }
+    let fixed: BTreeSet<_> = labels.values().cloned().collect();
+    for (id, path, parts) in paths {
+        let mut suffix = &suffixes;
+        let mut label = None;
+        for (depth, part) in parts.iter().rev().enumerate() {
+            suffix = &suffix.children[part];
+            if suffix.count == 1 {
+                let candidate = parts[parts.len() - depth - 1..].join("/");
+                if !fixed.contains(&candidate) {
+                    label = Some(candidate);
+                    break;
+                }
+            }
+        }
+        let label = label.unwrap_or_else(|| {
+            let full = path.display().to_string();
+            if fixed.contains(&full) {
+                id.to_owned()
+            } else {
+                full
+            }
+        });
+        labels.insert(id.to_owned(), label);
+    }
+    labels
+}
+
 pub fn source_location(sources: &Sources, line: usize) -> Option<SourceLocation> {
     sources.location(line).map(|location| SourceLocation {
         file: location.path.display().to_string(),

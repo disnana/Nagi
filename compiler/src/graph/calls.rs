@@ -1,19 +1,18 @@
 use super::{
-    definition_id, definition_node, source_location, Edge, EdgeKind, Graph, Group, Node, NodeKind,
+    definition_id, definition_node, module_labels, source_location, Edge, EdgeKind, Graph, Group,
+    Node, NodeKind,
 };
 use crate::{
     ast::{DefKind, DefinitionInfo, Expr, Function, NameResolution, Program, Stmt, E, S},
     source::Sources,
 };
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::Path,
-};
+use std::collections::{BTreeMap, HashMap};
 
 /// Only the checker's direct named targets become call edges. Function values
 /// and aliases do not retain a stable target ID, so they remain warnings.
 pub fn calls(program: &Program, sources: &Sources) -> Graph {
     let mut graph = Graph::new();
+    let labels = module_labels(program, sources);
     let definitions: HashMap<_, _> = program
         .modules
         .definitions
@@ -154,15 +153,7 @@ pub fn calls(program: &Program, sources: &Sources) -> Graph {
     for (module, nodes) in groups {
         graph.add_group(Group {
             id: format!("module:{}", module),
-            label: module
-                .strip_prefix("stdlib:")
-                .unwrap_or_else(|| {
-                    Path::new(&module)
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or(&module)
-                })
-                .into(),
+            label: labels.get(&module).cloned().unwrap_or(module),
             nodes,
         });
     }

@@ -1,4 +1,6 @@
-use super::{module_id, Edge, EdgeKind, Graph, Group, Node, NodeKind, SourceLocation};
+use super::{
+    module_id, module_labels, Edge, EdgeKind, Graph, Group, Node, NodeKind, SourceLocation,
+};
 use crate::{
     ast::{
         BindingTarget, DefinitionInfo, ImportKind, ImportSource, ModuleId, NameResolution, Program,
@@ -14,6 +16,7 @@ use std::{
 /// Dependencies use retained identities, never display names or file stems.
 pub fn modules(program: &Program, sources: &Sources) -> Graph {
     let mut graph = Graph::new();
+    let labels = module_labels(program, sources);
     let definitions: HashMap<_, _> = program
         .modules
         .definitions
@@ -47,17 +50,10 @@ pub fn modules(program: &Program, sources: &Sources) -> Graph {
         } else {
             ("Retained logical modules", "Logical: ")
         };
-        let label = if standard {
-            module.id.0.trim_start_matches("stdlib:").to_owned()
-        } else {
-            let name = path
-                .map(PathBuf::as_path)
-                .unwrap_or_else(|| Path::new(&module.path))
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(|| module.id.0.clone());
-            format!("{prefix}{name}")
-        };
+        let label = format!(
+            "{prefix}{}",
+            labels.get(&module.id.0).unwrap_or(&module.id.0)
+        );
         let id = module_id(&module.id);
         groups.entry(group).or_default().push(id.clone());
         graph.add_node(Node {

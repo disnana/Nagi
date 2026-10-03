@@ -1,9 +1,11 @@
-use super::{definition_node, source_location, Edge, EdgeKind, Graph, Group, Node, NodeKind};
+use super::{
+    definition_node, module_labels, source_location, Edge, EdgeKind, Graph, Group, Node, NodeKind,
+};
 use crate::{
     ast::{DefKind, DefinitionInfo, Program, Type},
     source::Sources,
 };
-use std::{collections::BTreeMap, path::Path};
+use std::collections::BTreeMap;
 
 const DISPLAY_FIELDS: usize = 8;
 
@@ -168,19 +170,14 @@ impl<'a> Index<'a> {
     }
 }
 
-fn add_definition(graph: &mut Graph, node: Node) {
+fn add_definition(graph: &mut Graph, node: Node, labels: &BTreeMap<String, String>) {
     if let Some(module) = &node.module {
         graph.add_group(Group {
             id: format!("module:{module}"),
-            label: module
-                .strip_prefix("stdlib:")
-                .unwrap_or_else(|| {
-                    Path::new(module)
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or(module)
-                })
-                .into(),
+            label: labels
+                .get(module)
+                .cloned()
+                .unwrap_or_else(|| module.clone()),
             nodes: vec![node.id.clone()],
         });
     }
@@ -197,6 +194,7 @@ fn signatures(lines: impl Iterator<Item = String>, count: usize) -> Vec<String> 
 
 /// Declared type relationships only; no runtime/dataflow or instance inference.
 pub fn types(program: &Program, sources: &Sources) -> Graph {
+    let labels = module_labels(program, sources);
     let index = Index::new(program, sources);
     let mut graph = Graph::new();
     graph.warnings.push("Type relationships describe declarations; runtime instances and data flow are not inferred.".into());
@@ -214,7 +212,7 @@ pub fn types(program: &Program, sources: &Sources) -> Graph {
             class.fields.len(),
         ));
         node.label = lines.join("\n");
-        add_definition(&mut graph, node.clone());
+        add_definition(&mut graph, node.clone(), &labels);
         for (name, ty) in &class.fields {
             index.dependencies(&mut graph, &node.id, name, ty, false);
         }
@@ -242,7 +240,7 @@ pub fn types(program: &Program, sources: &Sources) -> Graph {
             enumeration.variants.len(),
         ));
         node.label = lines.join("\n");
-        add_definition(&mut graph, node.clone());
+        add_definition(&mut graph, node.clone(), &labels);
         for variant in &enumeration.variants {
             for (name, ty) in &variant.fields {
                 index.dependencies(
@@ -286,7 +284,7 @@ pub fn types(program: &Program, sources: &Sources) -> Graph {
                 .join(", "),
             index.display(&function.ret)
         );
-        add_definition(&mut graph, node.clone());
+        add_definition(&mut graph, node.clone(), &labels);
         for (name, ty) in &function.params {
             index.dependencies(
                 &mut graph,

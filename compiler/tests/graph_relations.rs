@@ -1,7 +1,7 @@
 use nagic::{
     ast::{DefId, DefKind, ModuleId},
     check, emit,
-    graph::{self, EdgeKind, Graph, Node, NodeKind},
+    graph::{self, EdgeKind, Filter, Graph, Node, NodeKind},
     parser, source,
 };
 use std::{
@@ -101,8 +101,8 @@ fn module_edges_use_exact_identities_and_recover_empty_flat_imports() {
     let facade = graph::module_id(&f.module("facade.nagi"));
     let hidden = graph::module_id(&f.module("hidden.nagi"));
     assert_ne!(left, right);
-    assert_eq!(node(&graph, &left).label, "High: orders.nagi");
-    assert_eq!(node(&graph, &right).label, "High: orders.nagi");
+    assert_eq!(node(&graph, &left).label, "High: left/orders.nagi");
+    assert_eq!(node(&graph, &right).label, "High: right/orders.nagi");
     assert!(edge(&graph, &root, &left, EdgeKind::DependsOn));
     assert!(edge(&graph, &root, &right, EdgeKind::DependsOn));
     assert!(edge(&graph, &root, &empty, EdgeKind::DependsOn));
@@ -424,7 +424,10 @@ fn saved_low_keeps_definition_ids_without_mapping_foreign_modules_to_its_file() 
         .file
         .ends_with("saved.low"));
     assert!(node(&modules, &library).source.is_none());
-    assert!(node(&modules, &library).label.starts_with("Logical: "));
+    assert_eq!(
+        node(&modules, &library).label,
+        format!("Logical: {}", f.module("library.nagi").0)
+    );
     assert!(edge(&modules, &root, &library, EdgeKind::DependsOn));
     assert!(edge(&modules, &root, &library, EdgeKind::Uses));
     assert_eq!(
@@ -441,6 +444,81 @@ fn saved_low_keeps_definition_ids_without_mapping_foreign_modules_to_its_file() 
     );
     no_dangling(&saved_calls);
     no_dangling(&modules);
+}
+
+#[test]
+fn all_views_use_shortest_unique_physical_suffixes_before_filtering() {
+    let f = Fixture::new();
+    let files = [
+        ("auth/models.nagi", "auth/models.nagi"),
+        ("billing/models.nagi", "billing/models.nagi"),
+        ("west/service/models.nagi", "west/service/models.nagi"),
+        ("east/service/models.nagi", "east/service/models.nagi"),
+        ("unique.nagi", "unique.nagi"),
+        ("support/quiet.nagi", "support/quiet.nagi"),
+    ];
+    let mut main = String::from("import std.actor as actor\nimport std.http.server as http\n");
+    for (index, (file, _)) in files.iter().enumerate() {
+        f.write(file, "class Model:\n    value: i64\ndef read(model: Model) -> i64:\n    return model.value\n");
+        main.push_str(&format!("import \"{file}\" as module_{index}\n"));
+    }
+    // This module has no nodes in types/calls, but still disambiguates quiet.
+    f.write("empty/quiet.nagi", "# No definitions.\n");
+    main.push_str("import \"empty/quiet.nagi\"\ndef main():\n    print(module_0.read(module_0.Model(value=1)))\n");
+    f.write("main.nagi", &main);
+    let sources = f.load("main.nagi");
+    let modules = graph::modules(&sources.program, &sources);
+    let types = graph::types(&sources.program, &sources);
+    let calls = graph::calls(&sources.program, &sources);
+    for (file, label) in files {
+        let module = f.module(file);
+        let id = graph::module_id(&module);
+        assert_eq!(node(&modules, &id).label, format!("High: {label}"));
+        assert_eq!(
+            node(&modules, &id).module.as_deref(),
+            Some(module.0.as_str())
+        );
+        for graph in [&types, &calls] {
+            assert_eq!(
+                graph
+                    .groups
+                    .iter()
+                    .find(|group| group.id == id)
+                    .unwrap()
+                    .label,
+                label
+            );
+            let filtered = graph
+                .filtered(&Filter {
+                    module: Some(module.0.clone()),
+                    ..Default::default()
+                })
+                .unwrap();
+            assert_eq!(
+                filtered
+                    .groups
+                    .iter()
+                    .find(|group| group.id == id)
+                    .unwrap()
+                    .label,
+                label
+            );
+        }
+        let filtered = modules
+            .filtered(&Filter {
+                module: Some(module.0),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(node(&filtered, &id).label, format!("High: {label}"));
+    }
+    for name in ["std.actor", "std.http.server"] {
+        let id = graph::module_id(&nagic::stdlib::module(name).unwrap());
+        assert_eq!(node(&modules, &id).label, name);
+    }
+    no_dangling(&modules);
+    no_dangling(&types);
+    no_dangling(&calls);
 }
 
 #[test]
