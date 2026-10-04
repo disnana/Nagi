@@ -27,7 +27,7 @@ nagic run --project test-nagi-code/low-examples/order-quote
 
 ローカル変数は`let subtotal = 0;`のように型を省略しています。recordのフィールドと関数の引数・戻り値には型を書きます。`view(text)`や`view(order.customer)`は文字列を読むための借用です。`Order`は`calculate`へ移し、計算後にその`customer`フィールドを出力用`Quote`へ移します。LowでもHighと同じ型・所有権検査を受けます。
 
-この例の明細recordは整数フィールドだけで作り、`for line in order.items`で走査します。現在は文字列などの非Copyフィールドを持つrecordのindex取得とfor、record全体のviewは未対応です。
+この例の明細recordは整数フィールドだけで作り、`for line in order.items`で値をコピーして走査します。文字列などの非Copyフィールドを持つrecordも、forで読み取り専用に借用できます。非Copy要素のindex取得と、record全体のviewはまだ未対応です。
 
 `smoke.py`は実行ファイルに23ケースを渡し、JSONの値・整数型・終了コードを検査します。正常値、日本語、割引の境界と端数、上限値、空配列、不正なJSONや型を含みます。このディレクトリで実行します。
 

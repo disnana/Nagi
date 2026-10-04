@@ -82,7 +82,7 @@ Output, in order: `10`, `7`, `OK`, `0`, `1`, `2`, `2`.
 
 - Construct a Point with all fields named: `Point(x=..., y=...)`. Positional `Point(3.0, 4.0)` is not supported.
 - Read fields with `point.x`. Classes do not yet have methods or inheritance.
-- `for value in values` reads elements in order. Currently this supports primitives such as integers, floats, and bool, and classes containing only Copy fields. Copy types can be copied without moving ownership. Iteration over `List[str]` is not supported.
+- `for value in values` reads elements in order. Copy elements, such as numbers, are copied; strings and classes containing them are borrowed for reading. The source list cannot change during the borrow. See [ownership](ownership.md) for examples.
 - `range(3)` gives `0, 1, 2`. It takes one argument and excludes the end.
 - `while` repeats while its condition is `True`. `break`/`continue` are not supported.
 - Combine conditions with `and`/`or`/`not`. There is no `elif`; put another `if` inside `else` when needed.

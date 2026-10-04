@@ -33,6 +33,7 @@ struct Var {
     // Each entry records references kept after another array element is copied.
     content_origins: Vec<HashSet<BorrowedPlace>>,
     async_function: Option<String>,
+    borrowed_element: bool,
 }
 struct Checker {
     classes: HashMap<String, Class>,
@@ -526,6 +527,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
                         content_origins: vec![origins.clone(); Checker::content_depth(t)],
                         origins,
                         async_function: None,
+                        borrowed_element: false,
                     },
                 )
                 .is_some()
@@ -673,6 +675,9 @@ impl Checker {
         if info.module == crate::stdlib::StandardModule::Actor {
             return self.actor_standard(operation, types, args, line);
         }
+        if info.module == crate::stdlib::StandardModule::Result {
+            return self.result_standard(types, args, line);
+        }
         if args.len() != info.arity {
             return Err(error(
                 line,
@@ -724,6 +729,7 @@ impl Checker {
                 hints[0] = Some(view(resource(R::Request)));
                 hints[1] = Some(view(Type::named("str")));
             }
+            O::IsJsonContentType => hints[0] = Some(view(resource(R::Request))),
             O::DefaultOptions => {}
             O::Options => {
                 hints.fill(Some(Type::named("i64")));
@@ -798,6 +804,7 @@ impl Checker {
                 }))],
             )),
             O::Headers => result(Type::generic("List", vec![view(Type::named("bytes"))])),
+            O::IsJsonContentType => result(Type::named("bool")),
             O::DefaultOptions => resource(R::Options),
             O::Options | O::Capacity | O::HeaderTimeout | O::HeaderLimits | O::SendTimeout => {
                 result(resource(R::Options))
@@ -842,6 +849,56 @@ impl Checker {
             }
             _ => unreachable!("actor operation is checked separately"),
         };
+        Ok(output)
+    }
+
+    fn result_standard(
+        &mut self,
+        types: &[Type],
+        args: &mut [Expr],
+        line: usize,
+    ) -> Result<Type, String> {
+        if args.len() != 2 {
+            return Err(error(line, "map_errorの引数はResultと同期mapperの2個です"));
+        }
+        if !types.is_empty() {
+            return Err(error(
+                line,
+                "map_errorの型はResultとmapperから推論します。型引数は指定できません",
+            ));
+        }
+        let value = self.expr(&mut args[0], None)?;
+        if value.0 != "Result" || value.1.len() != 2 {
+            return Err(error(args[0].line, "map_errorの第1引数はResult[T,E]です"));
+        }
+        self.consume(&args[0])?;
+        self.hold_value(&args[0], false);
+        let mapper = self.expr(&mut args[1], None)?;
+        if !matches!(args[1].kind, E::Name(_))
+            || !matches!(
+                args[1].resolution,
+                Some(NameResolution::Function | NameResolution::Local)
+            )
+            || mapper.0 != "fn"
+            || mapper.1.len() != 2
+            || mapper.1[1].is_future()
+        {
+            return Err(error(
+                args[1].line,
+                "map_errorのmapperは名前付き同期fn[E,F]またはそのローカルaliasが必要です",
+            ));
+        }
+        self.demand(&mapper.1[0], &value.1[1], args[1].line)?;
+        self.emittable(&mapper, args[1].line, false)?;
+        if mapper.1[1].contains_view() {
+            return Err(error(
+                args[1].line,
+                "map_errorの変換後のエラーにviewは保持できません",
+            ));
+        }
+        self.consume(&args[1])?;
+        let output = Type::generic("Result", vec![value.1[0].clone(), mapper.1[1].clone()]);
+        self.valid(&output, line)?;
         Ok(output)
     }
 
@@ -989,7 +1046,7 @@ impl Checker {
                     4 => Some(resource(R::ActorOptions)),
                     _ => None,
                 },
-                O::ActorTask => match index {
+                O::ActorTask | O::ActorTaskWithReady => match index {
                     1 => Some(view(Type::named("str"))),
                     3 => Some(resource(R::RestartPolicy)),
                     _ => None,
@@ -1005,7 +1062,9 @@ impl Checker {
                         None
                     }
                 }
-                O::ActorReady => (index == 1).then(|| Type::named("i64")),
+                O::ActorReady | O::ActorNextEventTimeout => {
+                    (index == 1).then(|| Type::named("i64"))
+                }
                 O::ActorCall => match index {
                     1 => Some(
                         self.actor_resource_argument(&arguments[0], R::Actor, line)?
@@ -1053,19 +1112,44 @@ impl Checker {
                 self.actor_resource_argument(&arguments[0], R::Supervisor, line)?;
                 resource(R::Control)
             }
-            O::ActorCloneControl | O::ActorShutdown | O::ActorNextEvent => {
+            O::ActorCloneControl
+            | O::ActorShutdown
+            | O::ActorNextEvent
+            | O::ActorNextEventTimeout => {
                 self.actor_resource_argument(&arguments[0], R::Control, line)?;
                 match operation {
                     O::ActorCloneControl => resource(R::Control),
                     O::ActorShutdown => future(result(Type::named("unit"))),
+                    O::ActorNextEventTimeout => future(Type::generic(
+                        "Result",
+                        vec![
+                            Type::generic("Option", vec![resource(R::Event)]),
+                            resource(R::WaitError),
+                        ],
+                    )),
                     _ => future(result(Type::generic("Option", vec![resource(R::Event)]))),
                 }
             }
-            O::ActorRegister | O::ActorTask => {
+            O::ActorMarkReady => {
+                self.actor_resource_argument(&arguments[0], R::TaskReady, line)?;
+                result(Type::named("unit"))
+            }
+            O::ActorRegister | O::ActorTask | O::ActorTaskWithReady => {
                 let group = self.actor_resource_argument(&arguments[0], R::Supervisor, line)?;
                 let factory = self.named_async_signature(&args[2], line, "actor factory")?;
-                if factory.len() != 2 {
-                    return Err(error(line, "actor factoryの引数はshared[Context]1個です"));
+                let with_ready = operation == O::ActorTaskWithReady;
+                if factory.len() != if with_ready { 3 } else { 2 } {
+                    return Err(error(
+                        line,
+                        if with_ready {
+                            "task_with_readyのfactory引数はshared[Context]とTaskReadyです"
+                        } else {
+                            "actor factoryの引数はshared[Context]1個です"
+                        },
+                    ));
+                }
+                if with_ready {
+                    self.demand(&factory[1], &resource(R::TaskReady), line)?;
                 }
                 self.demand(
                     &factory[0],
@@ -1073,7 +1157,7 @@ impl Checker {
                     line,
                 )?;
                 let state = self.actor_outer_result(&factory, line, "actor factory")?;
-                if operation == O::ActorTask {
+                if matches!(operation, O::ActorTask | O::ActorTaskWithReady) {
                     self.demand(&state, &Type::named("unit"), line)?;
                     result(Type::named("unit"))
                 } else {
@@ -1439,7 +1523,7 @@ impl Checker {
                             .get(depth - 1)
                             .cloned()
                             .unwrap_or_default()
-                    } else if v.ty.contains_view() {
+                    } else if v.ty.contains_view() || v.borrowed_element {
                         v.origins.clone()
                     } else {
                         HashSet::from([BorrowedPlace {
@@ -1491,6 +1575,12 @@ impl Checker {
                 }
             }
             E::Call(name, _, args) if e.resolution == Some(NameResolution::Standard) => {
+                if crate::stdlib::operation(name) == Some(crate::stdlib::Operation::ResultMapError)
+                {
+                    // Mapping the failure leaves the success payload and all
+                    // nested view origins unchanged, without borrowing Result.
+                    return self.origin_at(&args[0], depth);
+                }
                 crate::stdlib::operation(name)
                     .and_then(|op| crate::stdlib::operation_info(op).borrow_owner)
                     .map(|owner| self.origin(&args[owner]))
@@ -1598,6 +1688,10 @@ impl Checker {
                 }
             }
             E::Call(name, _, args) if e.resolution == Some(NameResolution::Standard) => {
+                if crate::stdlib::operation(name) == Some(crate::stdlib::Operation::ResultMapError)
+                {
+                    return visit(&args[0], depth);
+                }
                 crate::stdlib::operation(name)
                     .and_then(|op| crate::stdlib::operation_info(op).borrow_owner)
                     .is_some_and(|owner| {
@@ -1646,7 +1740,7 @@ impl Checker {
         self.vars.values().any(|v| {
             v.binding != place.binding
                 && !v.moved
-                && v.ty.contains_view()
+                && (v.ty.contains_view() || v.borrowed_element)
                 && v.origins.iter().any(|loan| loan.overlaps(place))
         }) || self
             .iterators
@@ -1810,6 +1904,9 @@ impl Checker {
         };
         if self.copy_type(e.ty.as_ref().unwrap_or(&v.ty)) {
             return Ok(());
+        }
+        if v.borrowed_element {
+            return Err(error(e.line, format!("{name} はList要素の読み取り専用借用です。所有値として渡す文字列・配列はcopy(view(...))で明示的に複製してください")));
         }
         fn borrowed_base(checker: &Checker, expr: &Expr) -> bool {
             if let E::Field(parent, _) = &expr.kind {
@@ -2044,6 +2141,12 @@ impl Checker {
                 declare,
             } => {
                 let old = self.vars.get(name).cloned();
+                if old.as_ref().is_some_and(|v| v.borrowed_element) {
+                    return Err(error(
+                        s.line,
+                        "List要素の読み取り専用借用には再代入できません",
+                    ));
+                }
                 if old.is_some() && *declare {
                     return Err(error(s.line, "同じscope内でletを重複できません"));
                 }
@@ -2105,6 +2208,7 @@ impl Checker {
                         origins: origin,
                         content_origins,
                         async_function,
+                        borrowed_element: false,
                     },
                 );
             }
@@ -2320,6 +2424,7 @@ impl Checker {
                                 moved: false,
                                 moved_fields: HashSet::new(),
                                 async_function: None,
+                                borrowed_element: false,
                             },
                         );
                     }
@@ -2366,10 +2471,9 @@ impl Checker {
                     "List" | "view" => t.inner(),
                     _ => return Err(error(s.line, "forにはrangeまたは連続配列が必要です")),
                 };
-                if !self.copy_type(&elem) {
-                    return Err(error(s.line, "非Copy要素のfor反復は0.1では未対応です"));
-                }
+                let borrowed_element = !self.copy_type(&elem);
                 s.binding_type = Some(elem.clone());
+                s.binding_borrowed = borrowed_element;
                 let origins = self.origin(e);
                 let mut element_origins = self.origin_at(e, 1);
                 let mut content_origins = self.content_origins(e, &elem, 1);
@@ -2418,6 +2522,20 @@ impl Checker {
                         }
                     }
                 }
+                if borrowed_element {
+                    // A borrowed element always pins its container, even when
+                    // an ending body releases the iterator's next-step loan.
+                    element_origins.extend(loans.iter().cloned());
+                    element_origins.insert(BorrowedPlace {
+                        binding: BindingId {
+                            line: s.line,
+                            token: s.binding_span.unwrap_or_default().start,
+                        },
+                        fields: vec![],
+                        owner_loan: true,
+                        static_origin: false,
+                    });
+                }
                 self.iterators.push(loans);
                 let checked = self.loop_body(
                     b,
@@ -2429,7 +2547,7 @@ impl Checker {
                                 line: s.line,
                                 token: s.binding_span.unwrap_or_default().start,
                             },
-                            origins: if elem.contains_view() {
+                            origins: if elem.contains_view() || borrowed_element {
                                 element_origins
                             } else {
                                 HashSet::new()
@@ -2439,6 +2557,7 @@ impl Checker {
                             moved_fields: HashSet::new(),
                             content_origins,
                             async_function: None,
+                            borrowed_element,
                         },
                     )),
                     s.line,
@@ -2636,7 +2755,11 @@ impl Checker {
                 .ok_or_else(|| error(line, "Noneにはnullableの型注釈が必要です"))?,
             E::Name(n) => {
                 if let Some(v) = self.vars.get(n) {
-                    e.resolution = Some(NameResolution::Local);
+                    e.resolution = Some(if v.borrowed_element {
+                        NameResolution::BorrowedLocal
+                    } else {
+                        NameResolution::Local
+                    });
                     v.ty.clone()
                 } else if let Some(f) = self.functions.get(n) {
                     e.resolution = Some(NameResolution::Function);
@@ -3314,6 +3437,12 @@ impl Checker {
                 }
                 require(1, types[0].inner())?;
                 if let E::Name(n) = &args[0].kind {
+                    if self.vars[n].borrowed_element {
+                        return Err(error(
+                            line,
+                            "List要素の読み取り専用借用はappendで変更できません",
+                        ));
+                    }
                     self.available(&args[0], false)?;
                     let receiver = BorrowedPlace {
                         binding: self.vars[n].binding,

@@ -11,7 +11,7 @@ Annotate variables with `count: i32 = 10`, parameters with `count: i32`, and ret
 | `f32` / `f64` | Floating-point numbers | Copyable |
 | `bool` | `True` / `False` | Used in branch and loop conditions |
 | `str` / `bytes` | UTF-8 strings / byte sequences | Owned; passing to a user-defined function moves the value |
-| `List[T]` / `[T]` | Lists of elements of the same type | Owned; for iteration supports primitive elements and Copy classes/enums |
+| `List[T]` / `[T]` | Lists of elements of the same type | Owned; for copies Copy elements and borrows non-Copy elements for reading |
 | `view[str]` / `view[bytes]` / `view[T]` | Read borrowed strings, byte sequences, or lists | Requires an owner for the source data; read-only |
 | `T?` / `Option[T]` | A value or `None` | `None` requires type context; extract with a Some/None match |
 | `Result[T, E]` | A success value or an error | `E` can be Error, a class, or an enum; propagate with `try` or handle with `match` |

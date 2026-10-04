@@ -14,13 +14,14 @@ impl Drop for ConnectorGuard {
     }
 }
 
-pub async fn connector() -> Result<(), nagi_runtime::Error> {
+pub async fn connector(signal: nagi_runtime::actor::TaskReady) -> Result<(), nagi_runtime::Error> {
     let attempt = STARTS.fetch_add(1, Ordering::SeqCst) + 1;
     ACTIVE.fetch_add(1, Ordering::SeqCst);
     let _guard = ConnectorGuard;
     if attempt == 1 {
         panic!("supervised-worker: controlled connector panic");
     }
+    nagi_runtime::actor::mark_ready(&signal)?;
     // Cancellation drops the future and its guard; no extra Tokio runtime.
     std::future::pending::<Result<(), nagi_runtime::Error>>().await
 }

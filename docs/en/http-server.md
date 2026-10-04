@@ -38,9 +38,12 @@ Paths, queries, bodies, and headers borrow the Request's data. You cannot move t
 | `header(view(request), name)` | `Result[Option[view[bytes]], Error]` |
 | `header_text(view(request), name)` | `Result[Option[view[str]], Error]` |
 | `headers(view(request), name)` | `Result[List[view[bytes]], Error]` |
+| `is_json_content_type(view(request))` | `Result[bool, Error]` |
 | `method_name(view(request.method))` | `view[str]` |
 
 Header names are case-insensitive. Single-header getters reject duplicates; `headers` returns all values. `header_text` validates UTF-8.
+
+`is_json_content_type` matches `application/json` case-insensitively, allowing surrounding spaces or tabs and parameters such as `charset=utf-8`. Missing or different media types return `False`; duplicate headers or malformed syntax return `Err`. `application/problem+json` is a different media type. Parameters are validated, but `charset` does not select an encoding: JSON bodies are decoded as UTF-8. The check borrows the header, copies no body data, and allocates nothing on success.
 
 ## Response
 
@@ -73,6 +76,8 @@ return await http.serve(app, 8080, http.default_options())
 - GET routes automatically accept HEAD unless an explicit HEAD route takes precedence. A different method on an existing path returns 405 with Allow.
 
 Mappers handle application failures. The server handles malformed HTTP, limits, and deadlines. Avoid exposing database error details or credentials in responses.
+
+When an error response needs a request ID, retain the validated ID in the handler and move it into a custom error only on failure. The [quote API example](../../test-nagi-code/application-examples/quote-api/README.en.md) passes its ID to a shared mapper this way.
 
 ## Limits and shutdown
 

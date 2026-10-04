@@ -58,7 +58,7 @@ function host(t, trusted = true, code = 1, symbols, controls = {}) {
     FoldingRange: class { constructor(start, end) { Object.assign(this, { start, end }); } },
     Location: class { constructor(uri, range) { this.uri = uri; this.range = range; } },
     EventEmitter: class { constructor() { this.event = () => disposable(); } fire() {} dispose() {} },
-    DiagnosticSeverity: { Error: 0 }, CompletionItemKind: { Function: 1, Class: 2, Field: 3, TypeParameter: 4, Keyword: 5, Enum: 6, EnumMember: 7, Module: 8, Constant: 9 },
+    DiagnosticSeverity: { Error: 0 }, CompletionItemKind: { Function: 1, Class: 2, Field: 3, TypeParameter: 4, Keyword: 5, Enum: 6, EnumMember: 7, Module: 8, Constant: 9, Variable: 10 },
     Diagnostic: class { constructor(range, message) { this.range = range; this.message = message; } },
     Hover: class { constructor(contents, range) { this.contents = contents; this.range = range; } },
     CompletionItem: class { constructor(label, kind) { this.label = label; this.kind = kind; } },
@@ -403,6 +403,27 @@ test('missing compiler keeps prefix completion, hover and signatures available',
   assert.ok(items.some(x => x.label === 'print'));
   assert.ok(items.some(x => x.label === 'scope'));
   assert.equal(h.diagnostics.size, 0);
+});
+
+test('borrowed local providers annotate hover and detail while keeping variable kind and insertion', async t => {
+  const text = 'print(item)';
+  const h = host(t, true, 1, folder => ({ format: 'nagi-symbols-v1', definitions: [], bindings: [], references: [], files: [], expressions: [],
+    locals: ['main.nagi', 'main.low'].map(name => ({ name: 'item', type: 'Entry', borrowed: true, readonly: true,
+      location: { file: path.join(folder, name), line: 1, column: 7, length: 4 } })),
+  }));
+  for (const language of ['nagi', 'nagi-low']) {
+    const doc = h.document(text, 'file', language);
+    const hover = await h.providers.Hover.provideHover(doc, doc.positionAt(8), h.token);
+    const expected = `item: Entry (read-only borrow)\n\nmain.${language === 'nagi-low' ? 'low' : 'nagi'}:1`;
+    assert.equal(hover.contents.value, expected);
+    assert.equal(hover.contents.language, language);
+    const items = await h.providers.CompletionItem.provideCompletionItems(doc, doc.positionAt(8), h.token);
+    const item = items.find(item => item.label === 'item');
+    assert.equal(item.detail, 'item: Entry (read-only borrow)');
+    assert.equal(item.documentation.value, expected);
+    assert.equal(item.kind, h.vscode.CompletionItemKind.Variable);
+    assert.equal(item.insertText.value, 'item');
+  }
 });
 
 test('untrusted and untitled assistance executes no compiler and retains High/Low selectors', async t => {

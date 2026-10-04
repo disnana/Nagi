@@ -6,18 +6,25 @@ pub const MODULE_NAME: &str = "std.http.server";
 pub const MODULE_ID: &str = "stdlib:std.http.server";
 pub const ACTOR_MODULE_NAME: &str = "std.actor";
 pub const ACTOR_MODULE_ID: &str = "stdlib:std.actor";
+pub const RESULT_MODULE_NAME: &str = "std.result";
+pub const RESULT_MODULE_ID: &str = "stdlib:std.result";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StandardModule {
     HttpServer,
     Actor,
+    Result,
 }
 pub struct StandardModuleInfo {
     pub name: &'static str,
     pub id: &'static str,
     pub rust_namespace: &'static str,
 }
-pub const MODULES: &[StandardModule] = &[StandardModule::HttpServer, StandardModule::Actor];
+pub const MODULES: &[StandardModule] = &[
+    StandardModule::HttpServer,
+    StandardModule::Actor,
+    StandardModule::Result,
+];
 pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
     match module {
         StandardModule::HttpServer => &StandardModuleInfo {
@@ -29,6 +36,11 @@ pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
             name: ACTOR_MODULE_NAME,
             id: ACTOR_MODULE_ID,
             rust_namespace: "::nagi_runtime::actor",
+        },
+        StandardModule::Result => &StandardModuleInfo {
+            name: RESULT_MODULE_NAME,
+            id: RESULT_MODULE_ID,
+            rust_namespace: "::nagi_runtime::result",
         },
     }
 }
@@ -52,6 +64,9 @@ pub enum Resource {
     EventKind,
     CallError,
     Event,
+    TaskReady,
+    WaitKind,
+    WaitError,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Operation {
@@ -68,6 +83,7 @@ pub enum Operation {
     Header,
     HeaderText,
     Headers,
+    IsJsonContentType,
     DefaultOptions,
     Options,
     Capacity,
@@ -96,7 +112,11 @@ pub enum Operation {
     ActorRun,
     ActorShutdown,
     ActorNextEvent,
+    ActorNextEventTimeout,
+    ActorTaskWithReady,
+    ActorMarkReady,
     ActorYieldNow,
+    ResultMapError,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Passing {
@@ -166,6 +186,9 @@ pub const RESOURCES: &[Resource] = &[
     Resource::EventKind,
     Resource::CallError,
     Resource::Event,
+    Resource::TaskReady,
+    Resource::WaitKind,
+    Resource::WaitError,
 ];
 pub const OPERATIONS: &[Operation] = &[
     Operation::Status,
@@ -181,6 +204,7 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::Header,
     Operation::HeaderText,
     Operation::Headers,
+    Operation::IsJsonContentType,
     Operation::DefaultOptions,
     Operation::Options,
     Operation::Capacity,
@@ -209,7 +233,11 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::ActorRun,
     Operation::ActorShutdown,
     Operation::ActorNextEvent,
+    Operation::ActorNextEventTimeout,
+    Operation::ActorTaskWithReady,
+    Operation::ActorMarkReady,
     Operation::ActorYieldNow,
+    Operation::ResultMapError,
 ];
 
 pub fn module(name: &str) -> Option<ModuleId> {
@@ -308,6 +336,45 @@ pub fn resource_info(resource: Resource) -> &'static ResourceInfo {
             type_parameters: &["C"],
             inline_type_arguments: &[],
             rust_path: "::nagi_runtime::actor::Supervisor",
+            copy: false,
+            equality: false,
+            storage: true,
+            shared: false,
+            debug: true,
+        },
+        Resource::WaitKind => &ResourceInfo {
+            module: StandardModule::Actor,
+            name: "WaitKind",
+            arity: 0,
+            type_parameters: &[],
+            inline_type_arguments: &[],
+            rust_path: "::nagi_runtime::actor::WaitKind",
+            copy: true,
+            equality: true,
+            storage: true,
+            shared: true,
+            debug: true,
+        },
+        Resource::WaitError => &ResourceInfo {
+            module: StandardModule::Actor,
+            name: "WaitError",
+            arity: 0,
+            type_parameters: &[],
+            inline_type_arguments: &[],
+            rust_path: "::nagi_runtime::actor::WaitError",
+            copy: false,
+            equality: false,
+            storage: true,
+            shared: true,
+            debug: true,
+        },
+        Resource::TaskReady => &ResourceInfo {
+            module: StandardModule::Actor,
+            name: "TaskReady",
+            arity: 0,
+            type_parameters: &[],
+            inline_type_arguments: &[],
+            rust_path: "::nagi_runtime::actor::TaskReady",
             copy: false,
             equality: false,
             storage: true,
@@ -461,6 +528,7 @@ pub fn operation_info(operation: Operation) -> &'static OperationInfo {
  Operation::Header => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "header", rust_path: "::nagi_runtime::http_server::header", arity: 2, generic_arity: 0, parameters: &[Passing::Reference, Passing::Reference], borrow_owner: Some(0), signature: "(request: view[Request], name: view[str]) -> Result[Option[view[bytes]], Error]" },
  Operation::HeaderText => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "header_text", rust_path: "::nagi_runtime::http_server::header_text", arity: 2, generic_arity: 0, parameters: &[Passing::Reference, Passing::Reference], borrow_owner: Some(0), signature: "(request: view[Request], name: view[str]) -> Result[Option[view[str]], Error]" },
  Operation::Headers => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "headers", rust_path: "::nagi_runtime::http_server::headers", arity: 2, generic_arity: 0, parameters: &[Passing::Reference, Passing::Reference], borrow_owner: Some(0), signature: "(request: view[Request], name: view[str]) -> Result[List[view[bytes]], Error]" },
+ Operation::IsJsonContentType => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "is_json_content_type", rust_path: "::nagi_runtime::http_server::is_json_content_type", arity: 1, generic_arity: 0, parameters: &[Passing::Reference], borrow_owner: None, signature: "(request: view[Request]) -> Result[bool, Error]" },
  Operation::DefaultOptions => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "default_options", rust_path: "::nagi_runtime::http_server::default_options", arity: 0, generic_arity: 0, parameters: &[], borrow_owner: None, signature: "() -> Options" },
  Operation::Options => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "options", rust_path: "::nagi_runtime::http_server::options", arity: 4, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Move, Passing::Move], borrow_owner: None, signature: "(body_bytes: i64, body_ms: i64, handler_ms: i64, shutdown_ms: i64) -> Result[Options, Error]" },
  Operation::Capacity => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "capacity", rust_path: "::nagi_runtime::http_server::capacity", arity: 3, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Move], borrow_owner: None, signature: "(options: Options, connections: i64, requests: i64) -> Result[Options, Error]" },
@@ -482,6 +550,9 @@ pub fn operation_info(operation: Operation) -> &'static OperationInfo {
         Operation::ActorCloneControl => &OperationInfo { module: StandardModule::Actor, name: "clone_control", rust_path: "::nagi_runtime::actor::clone_control", arity: 1, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: true, parameters: &[Passing::Reference], borrow_owner: None, signature: "(control: view[Control]) -> Control" },
         Operation::ActorRegister => &OperationInfo { module: StandardModule::Actor, name: "register", rust_path: "::nagi_runtime::actor::register", arity: 5, generic_arity: 4, type_parameters: &["S", "M", "R", "E"], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Reference, Passing::Reference, Passing::Handler, Passing::Handler, Passing::Move], borrow_owner: None, signature: "[S, M, R, E](group: view[Supervisor[C]], name: view[str], factory: fn[shared[C], Future[Result[S, Error]]], handler: fn[S, M, Future[Result[Turn[S, R, E], Error]]], options: ActorOptions) -> Result[Actor[M, R, E], Error]" },
         Operation::ActorTask => &OperationInfo { module: StandardModule::Actor, name: "task", rust_path: "::nagi_runtime::actor::task", arity: 4, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Reference, Passing::Reference, Passing::Handler, Passing::Move], borrow_owner: None, signature: "(group: view[Supervisor[C]], name: view[str], factory: fn[shared[C], Future[Result[unit, Error]]], policy: RestartPolicy) -> Result[unit, Error]" },
+        Operation::ActorTaskWithReady => &OperationInfo { module: StandardModule::Actor, name: "task_with_ready", rust_path: "::nagi_runtime::actor::task_with_ready", arity: 4, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Reference, Passing::Reference, Passing::Handler, Passing::Move], borrow_owner: None, signature: "(group: view[Supervisor[C]], name: view[str], factory: fn[shared[C], TaskReady, Future[Result[unit, Error]]], policy: RestartPolicy) -> Result[unit, Error]" },
+        Operation::ActorMarkReady => &OperationInfo { module: StandardModule::Actor, name: "mark_ready", rust_path: "::nagi_runtime::actor::mark_ready", arity: 1, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Reference], borrow_owner: None, signature: "(signal: view[TaskReady]) -> Result[unit, Error]" },
+        Operation::ActorNextEventTimeout => &OperationInfo { module: StandardModule::Actor, name: "next_event_timeout", rust_path: "::nagi_runtime::actor::next_event_timeout", arity: 2, generic_arity: 0, type_parameters: &[], asynchronous: true, emit_type_arguments: false, parameters: &[Passing::Reference, Passing::Move], borrow_owner: None, signature: "(control: view[Control], timeout_ms: i64) -> Future[Result[Option[Event], WaitError]]" },
         Operation::ActorTurn => &OperationInfo { module: StandardModule::Actor, name: "turn", rust_path: "::nagi_runtime::actor::turn", arity: 2, generic_arity: 3, type_parameters: &["S", "R", "E"], asynchronous: false, emit_type_arguments: true, parameters: &[Passing::Move, Passing::Move], borrow_owner: None, signature: "[S, R, E](state: S, reply: Result[R, E]) -> Turn[S, R, E]" },
         Operation::ActorCloneActor => &OperationInfo { module: StandardModule::Actor, name: "clone_actor", rust_path: "::nagi_runtime::actor::clone_actor", arity: 1, generic_arity: 3, type_parameters: &["M", "R", "E"], asynchronous: false, emit_type_arguments: true, parameters: &[Passing::Reference], borrow_owner: None, signature: "[M, R, E](actor: view[Actor[M, R, E]]) -> Actor[M, R, E]" },
         Operation::ActorReady => &OperationInfo { module: StandardModule::Actor, name: "ready", rust_path: "::nagi_runtime::actor::ready", arity: 2, generic_arity: 3, type_parameters: &["M", "R", "E"], asynchronous: true, emit_type_arguments: true, parameters: &[Passing::Reference, Passing::Move], borrow_owner: None, signature: "[M, R, E](actor: view[Actor[M, R, E]], timeout_ms: i64) -> Future[Result[unit, CallError]]" },
@@ -490,6 +561,7 @@ pub fn operation_info(operation: Operation) -> &'static OperationInfo {
         Operation::ActorShutdown => &OperationInfo { module: StandardModule::Actor, name: "shutdown", rust_path: "::nagi_runtime::actor::shutdown", arity: 1, generic_arity: 0, type_parameters: &[], asynchronous: true, emit_type_arguments: true, parameters: &[Passing::Reference], borrow_owner: None, signature: "(control: view[Control]) -> Future[Result[unit, Error]]" },
         Operation::ActorNextEvent => &OperationInfo { module: StandardModule::Actor, name: "next_event", rust_path: "::nagi_runtime::actor::next_event", arity: 1, generic_arity: 0, type_parameters: &[], asynchronous: true, emit_type_arguments: true, parameters: &[Passing::Reference], borrow_owner: None, signature: "(control: view[Control]) -> Future[Result[Option[Event], Error]]" },
         Operation::ActorYieldNow => &OperationInfo { module: StandardModule::Actor, name: "yield_now", rust_path: "::nagi_runtime::actor::yield_now", arity: 0, generic_arity: 0, type_parameters: &[], asynchronous: true, emit_type_arguments: true, parameters: &[], borrow_owner: None, signature: "() -> Future[unit]" },
+        Operation::ResultMapError => &OperationInfo { module: StandardModule::Result, name: "map_error", rust_path: "::nagi_runtime::result::map_error", arity: 2, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Move, Passing::Mapper], borrow_owner: None, signature: "(value: Result[T, E], mapper: fn[E, F]) -> Result[T, F]" },
 }
 }
 pub fn resource_id(resource: Resource) -> DefId {
@@ -897,7 +969,21 @@ const CALL_KIND_CONSTANTS: &[ConstantInfo] = &[
         native_name: "REPLY_TIMEOUT",
     },
 ];
+const WAIT_KIND_CONSTANTS: &[ConstantInfo] = &[
+    ConstantInfo {
+        name: "TIMEOUT",
+        native_name: "TIMEOUT",
+    },
+    ConstantInfo {
+        name: "INVALID_TIMEOUT",
+        native_name: "INVALID_TIMEOUT",
+    },
+];
 const EVENT_KIND_CONSTANTS: &[ConstantInfo] = &[
+    ConstantInfo {
+        name: "READY",
+        native_name: "READY",
+    },
     ConstantInfo {
         name: "STARTING",
         native_name: "STARTING",
@@ -941,6 +1027,7 @@ pub fn constants(resource: Resource) -> &'static [ConstantInfo] {
         Resource::Status => STATUS_CONSTANTS,
         Resource::RestartPolicy => RESTART_POLICY_CONSTANTS,
         Resource::CallKind => CALL_KIND_CONSTANTS,
+        Resource::WaitKind => WAIT_KIND_CONSTANTS,
         Resource::EventKind => EVENT_KIND_CONSTANTS,
         _ => &[],
     }
@@ -1004,6 +1091,16 @@ pub fn field(resource: Resource, name: &str) -> Option<FieldInfo> {
             (Type::named("bool"), false, true, false, "is_connect")
         }
         (Resource::Request, "is_trace") => (Type::named("bool"), false, true, false, "is_trace"),
+        (Resource::WaitError, "kind") => (
+            resource_type(Resource::WaitKind, vec![]),
+            false,
+            true,
+            false,
+            "kind",
+        ),
+        (Resource::WaitError, "message") => {
+            (view(Type::named("str")), false, true, false, "message")
+        }
         (Resource::CallError, "kind") => (
             resource_type(Resource::CallKind, vec![]),
             false,
@@ -1057,7 +1154,7 @@ pub fn fields(resource: Resource) -> Vec<(&'static str, FieldInfo)> {
             "is_trace",
         ],
         Resource::Response => &["status", "body"],
-        Resource::CallError => &["kind", "message"],
+        Resource::CallError | Resource::WaitError => &["kind", "message"],
         Resource::Event => &[
             "child_id",
             "child_name",

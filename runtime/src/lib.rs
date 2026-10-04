@@ -8,6 +8,7 @@ mod database;
 mod http;
 pub mod http_server;
 pub mod metrics;
+pub mod result;
 use axum::{
     body::Body,
     http::{header, HeaderValue, StatusCode},

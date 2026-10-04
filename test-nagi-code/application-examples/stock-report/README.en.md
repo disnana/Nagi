@@ -22,4 +22,18 @@ Product IDs must be positive integers. Each record supports 0–1,000,000 units,
 
 Invalid input writes a reason to stderr and exits with code 1. `InventoryError` distinguishes JSON decoding failures from validation failures; the CLI entry point converts these into readable messages.
 
+`std.result` converts the Error from JSON decoding. A successful `Batch` passes through; only a failure calls `invalid_json`.
+
+```nagi
+import std.result as result
+
+def invalid_json(cause: Error) -> InventoryError:
+    return InventoryError.InvalidJson(cause)
+
+def parse(text: view[str]) -> Result[Batch, InventoryError]:
+    return result.map_error(json_decode[Batch](text), invalid_json)
+```
+
+The report calculation still uses `batch = try parse(text)`. See the [error-handling reference](../../../docs/en/error-handling.md) for the helper's contract.
+
 `smoke.py` sends valid data, boundary values, empty inventories, Japanese text, malformed JSON, and incorrect field types to the executable. It checks the JSON values and exit codes. See the [parent README](../README.en.md) for the shared verification command.

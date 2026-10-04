@@ -81,6 +81,25 @@ def main():
     append(values, 3)
 ```
 
+数値などのCopy要素は、ループ変数へ値をコピーします。文字列を持つclassなど、非Copy要素は読み取り専用で借用します。反復のために文字列やclassを複製しません。
+
+```nagi
+class User:
+    name: str
+    score: i64
+
+def main():
+    users = [User(name="Nagi", score=10)]
+    for user in users:
+        print(user.name)
+        print(user.score)
+        name = copy(view(user.name))
+        print(name)
+    append(users, User(name="凪", score=20))
+```
+
+借用した要素は再代入できず、要素全体や非Copyフィールドを所有値として関数へ渡したり、返したりできません。文字列や配列を手元に残す場合は、上の例のようにフィールドを明示的にcopyします。ループ内で作ったフィールドのviewをループの外へ保存することもできません。非Copy enum・nullable・Resultのpayloadを`match`で取り出す借用は、まだ未対応です。
+
 フィールドの借用は場所ごとに追跡します。例えば`view(data.values)`が生きていても、別の`data.name`を取り出せます。`data`全体や`data.values`の移動はできません。
 
 viewが借りているデータの移動・再代入・appendも制限します。借用はコードのブロックをもとに追跡します。Rustほど細かく、借用を使い終わった位置を判定するわけではありません。

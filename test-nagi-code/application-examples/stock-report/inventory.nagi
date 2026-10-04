@@ -1,3 +1,5 @@
+import std.result as result
+
 class StockLine:
     product_id: i64
     on_hand: i64
@@ -40,11 +42,10 @@ def summarize(text: view[str]) -> Result[Report, InventoryError]:
     return ok(Report(warehouse=copy(view(batch.warehouse)), products=products, available=available, reserved=reserved))
 
 def parse(text: view[str]) -> Result[Batch, InventoryError]:
-    match json_decode[Batch](text):
-        case Ok(batch):
-            return ok(batch)
-        case Err(cause):
-            return fail(InventoryError.InvalidJson(cause))
+    return result.map_error(json_decode[Batch](text), invalid_json)
+
+def invalid_json(cause: Error) -> InventoryError:
+    return InventoryError.InvalidJson(cause)
 
 def message(problem: InventoryError) -> str:
     match problem:

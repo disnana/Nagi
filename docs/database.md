@@ -54,7 +54,7 @@ async def get_user(db: Db, id: i64) -> Result[User?, Error]:
     return await db_query[User](db, "SELECT id, name, age FROM users WHERE id = ?1", id)
 ```
 
-classの`List`を`for`で走査する場合、現在はCopy classのみ対応します。上のUserは所有strを持つため、そのまま`for user in users`とは書けません。HTTP handlerで`return await db_all[User](...)`と返してJSON配列にすることはできます。完成例は[CRUD API](../examples/crud.nagi)や[タスク管理](../test-nagi-code/web-demo/tasks.nagi)を参照してください。
+`db_all[User]`で得た配列は、`for user in users`で読み取り専用に走査できます。Userが持つ文字列を反復のためにコピーしません。借用の制約は[所有権](ownership.md)を参照してください。HTTP handlerで`return await db_all[User](...)`と返してJSON配列にすることはできます。完成例は[CRUD API](../examples/crud.nagi)や[タスク管理](../test-nagi-code/web-demo/tasks.nagi)を参照してください。
 
 ## 実装と制約
 

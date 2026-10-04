@@ -22,4 +22,18 @@ nagic run --project test-nagi-code/application-examples/stock-report/nagi.toml
 
 不正な入力は標準エラーに理由を表示し、終了コード1を返します。`InventoryError`でJSONの読み取り失敗と業務上の検証失敗を区別し、CLIの入口で表示用のメッセージへ変換します。
 
+JSONのErrorは`std.result`で変換します。成功した`Batch`はそのまま返し、失敗したときだけ`invalid_json`を呼びます。
+
+```nagi
+import std.result as result
+
+def invalid_json(cause: Error) -> InventoryError:
+    return InventoryError.InvalidJson(cause)
+
+def parse(text: view[str]) -> Result[Batch, InventoryError]:
+    return result.map_error(json_decode[Batch](text), invalid_json)
+```
+
+集計側は引き続き`batch = try parse(text)`と書きます。詳細は[エラー処理リファレンス](../../../docs/error-handling.md)を参照してください。
+
 `smoke.py`は実行ファイルに正常値、上限値、空配列、日本語、不正なJSONや型を渡し、JSONの値と終了コードを確認します。共通の検証コマンドは[上のREADME](../README.md)を参照してください。

@@ -81,6 +81,25 @@ def main():
     append(values, 3)
 ```
 
+Copy elements, such as numbers, are copied into the loop variable. Non-Copy elements, such as classes containing strings, are borrowed for reading. Iteration does not clone their strings or records.
+
+```nagi
+class User:
+    name: str
+    score: i64
+
+def main():
+    users = [User(name="Nagi", score=10)]
+    for user in users:
+        print(user.name)
+        print(user.score)
+        name = copy(view(user.name))
+        print(name)
+    append(users, User(name="凪", score=20))
+```
+
+A borrowed element cannot be reassigned. You cannot pass or return the whole element, or a non-Copy field, as an owned value. To keep a string or array, copy the field explicitly as shown above. A field view created inside the loop cannot be stored outside it. Borrowing a non-Copy enum, nullable, or Result payload through `match` is not yet supported.
+
 Borrowing one field leaves separate fields available. For example, while `view(data.values)` is in use, you can still take `data.name`. You cannot move all of `data` or its `values` field.
 
 While a view borrows data, moving, reassigning, or appending to that data is restricted. The checker tracks borrows by code blocks; it does not determine the end of a borrow as precisely as Rust.

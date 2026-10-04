@@ -26,6 +26,12 @@ Tokio cancellation is cooperative. Non-yielding computation, blocking native cal
 
 `next_event` reports startup, failure, restart, and shutdown. The default event capacity is 256, with diagnostics limited to 1024 UTF-8 bytes. A slow observer receives `EventKind.LAGGED` and a lost-event count. It does not block child work.
 
+Use `next_event_timeout(view(control), 5000)` when monitoring needs a deadline. `Err(WaitError)` distinguishes `WaitKind.TIMEOUT` from `INVALID_TIMEOUT`; `Ok(None)` only means stream closure. Each call includes cursor-lock waiting, and canceled waits leave queued events available. The deadline must be 1..4,294,967,295 ms and fit the platform clock.
+
+A task's `STARTED` is published before its factory body runs. For connection establishment or other initialization, register with `task_with_ready` and call `mark_ready(view(signal))` after setup. Observers then receive `EventKind.READY` with the child name and generation. Repeated or stale notifications are rejected. Actors keep their existing `ready` API.
+
+[The worker sample](../../test-nagi-code/application-examples/supervised-worker/README.en.md) checks explicit task readiness, panic recovery, event deadlines, and shutdown.
+
 This is a native implementation within one process. A VM, hot code replacement, distributed actors, persistent mailboxes, and dynamic child registration/removal are not implemented.
 
 [Writing actors](actor.md) · [API reference](actor-reference.md) · [Measurements](actor-performance.md) · [Runnable example](../../test-nagi-code/library-examples/supervised-service/README.en.md)

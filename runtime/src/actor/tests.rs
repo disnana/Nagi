@@ -392,3 +392,263 @@ async fn lifecycle_events_are_ordered_bounded_and_keep_utf8_truncation_metadata(
     while next_event(&first).await.unwrap().is_some() {}
     while next_event(&second).await.unwrap().is_some() {}
 }
+
+#[tokio::test]
+async fn event_deadlines_include_lock_contention_and_preserve_the_cursor() {
+    let group = supervisor((), default_options());
+    let events = control(&group);
+    for milliseconds in [i64::MIN, -1, 0, i64::from(u32::MAX) + 1, i64::MAX] {
+        let error = next_event_timeout(&events, milliseconds).await.unwrap_err();
+        assert_eq!(error.kind(), WaitKind::INVALID_TIMEOUT);
+        assert!(!error.message().is_empty());
+    }
+    assert_eq!(
+        next_event_timeout(&events, 1).await.unwrap_err().kind(),
+        WaitKind::TIMEOUT,
+    );
+    let held_cursor = events.events.lock().await;
+    group
+        .group
+        .publish(Event::new(1, "retained", 1, EventKind::STARTED, ""));
+    let error = timeout(Duration::from_secs(1), next_event_timeout(&events, 1))
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error.kind(), WaitKind::TIMEOUT);
+    drop(held_cursor);
+    let retained = next_event_timeout(&events, 1000).await.unwrap().unwrap();
+    assert_eq!(retained.child_name(), "retained");
+    drop(group);
+    while next_event_timeout(&events, 1000).await.unwrap().is_some() {}
+    assert!(next_event_timeout(&events, i64::from(u32::MAX))
+        .await
+        .unwrap()
+        .is_none());
+}
+
+#[tokio::test]
+async fn canceled_event_wait_does_not_consume_a_concurrently_published_event() {
+    let group = supervisor((), default_options());
+    let events = control(&group);
+    for generation in 1..=64 {
+        let mut waiting = Box::pin(next_event_timeout(&events, 1000));
+        assert!(futures_util::poll!(waiting.as_mut()).is_pending());
+        // Publish after recv registered its waker, cancel before its next poll.
+        group
+            .group
+            .publish(Event::new(1, "worker", generation, EventKind::READY, ""));
+        drop(waiting);
+        let event = next_event_timeout(&events, 1000).await.unwrap().unwrap();
+        assert_eq!(event.generation(), generation);
+        assert_eq!(event.kind(), EventKind::READY);
+    }
+}
+
+#[tokio::test]
+async fn task_readiness_follows_initialization_once_without_changing_started() {
+    struct Startup {
+        initialize: Notify,
+        duplicate_rejected: AtomicUsize,
+    }
+    let context = Startup {
+        initialize: Notify::new(),
+        duplicate_rejected: AtomicUsize::new(0),
+    };
+    let group = supervisor(context, default_options());
+    let shared = Arc::clone(group.context.as_ref().unwrap());
+    task_with_ready(
+        &group,
+        "connector",
+        |context, signal| async move {
+            context.initialize.notified().await;
+            mark_ready(&signal)?;
+            if mark_ready(&signal).is_err() {
+                context.duplicate_rejected.store(1, Ordering::Release);
+            }
+            std::future::pending::<Result<(), Error>>().await
+        },
+        RestartPolicy::TRANSIENT,
+    )
+    .unwrap();
+    let events = control(&group);
+    let monitor = tokio::spawn(run(group));
+    assert_eq!(
+        next_event_timeout(&events, 1000)
+            .await
+            .unwrap()
+            .unwrap()
+            .kind(),
+        EventKind::STARTING
+    );
+    assert_eq!(
+        next_event_timeout(&events, 1000)
+            .await
+            .unwrap()
+            .unwrap()
+            .kind(),
+        EventKind::STARTED
+    );
+    assert_eq!(
+        next_event_timeout(&events, 1).await.unwrap_err().kind(),
+        WaitKind::TIMEOUT
+    );
+    shared.initialize.notify_one();
+    let ready = next_event_timeout(&events, 1000).await.unwrap().unwrap();
+    assert_eq!(ready.kind(), EventKind::READY);
+    assert_eq!(ready.child_name(), "connector");
+    assert_eq!(ready.generation(), 1);
+    while shared.duplicate_rejected.load(Ordering::Acquire) == 0 {
+        tokio::task::yield_now().await;
+    }
+    drop(shared);
+    shutdown(&events).await.unwrap();
+    monitor.await.unwrap().unwrap();
+    let mut duplicate = false;
+    while let Some(event) = next_event_timeout(&events, 1000).await.unwrap() {
+        duplicate |= event.kind() == EventKind::READY;
+    }
+    assert!(!duplicate, "one readiness notification per generation");
+}
+
+#[tokio::test]
+async fn escaped_readiness_tokens_reject_old_generations_and_do_not_retain_the_group() {
+    let group = supervisor((), default_options());
+    let weak_group = Arc::downgrade(&group.group);
+    let (tokens, mut received) = mpsc::unbounded_channel();
+    let attempts = Arc::new(AtomicUsize::new(0));
+    task_with_ready(
+        &group,
+        "restart",
+        move |_, signal| {
+            let tokens = tokens.clone();
+            let attempts = Arc::clone(&attempts);
+            async move {
+                tokens.send(signal).unwrap();
+                if attempts.fetch_add(1, Ordering::AcqRel) == 0 {
+                    return Err(Error::internal("restart before readiness"));
+                }
+                std::future::pending::<Result<(), Error>>().await
+            }
+        },
+        RestartPolicy::TRANSIENT,
+    )
+    .unwrap();
+    let events = control(&group);
+    let monitor = tokio::spawn(run(group));
+    let stale = timeout(Duration::from_secs(1), received.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let current = timeout(Duration::from_secs(1), received.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(mark_ready(&stale).is_err());
+    mark_ready(&current).unwrap();
+    let mut ready_generations = Vec::new();
+    loop {
+        let event = next_event_timeout(&events, 1000).await.unwrap().unwrap();
+        if event.kind() == EventKind::READY {
+            ready_generations.push(event.generation());
+            break;
+        }
+    }
+    assert_eq!(ready_generations, [2]);
+    shutdown(&events).await.unwrap();
+    monitor.await.unwrap().unwrap();
+    assert!(mark_ready(&current).is_err());
+    drop(events);
+    assert!(
+        weak_group.upgrade().is_none(),
+        "escaped tokens must hold only Weak<Group>"
+    );
+    assert!(mark_ready(&stale).is_err());
+    assert!(mark_ready(&current).is_err());
+}
+
+#[tokio::test]
+async fn stopped_tasks_cannot_publish_readiness_and_legacy_tasks_never_publish_it() {
+    let group = supervisor((), default_options());
+    let (tokens, mut received) = mpsc::unbounded_channel();
+    task_with_ready(
+        &group,
+        "not-ready",
+        move |_, signal| {
+            let tokens = tokens.clone();
+            async move {
+                tokens.send(signal).unwrap();
+                std::future::pending::<Result<(), Error>>().await
+            }
+        },
+        RestartPolicy::TEMPORARY,
+    )
+    .unwrap();
+    task(
+        &group,
+        "legacy",
+        |_| async { std::future::pending::<Result<(), Error>>().await },
+        RestartPolicy::TEMPORARY,
+    )
+    .unwrap();
+    let events = control(&group);
+    let monitor = tokio::spawn(run(group));
+    let signal = timeout(Duration::from_secs(1), received.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    events.request_stop();
+    assert!(mark_ready(&signal).is_err());
+    shutdown(&events).await.unwrap();
+    monitor.await.unwrap().unwrap();
+    while let Some(event) = next_event_timeout(&events, 1000).await.unwrap() {
+        assert_ne!(event.kind(), EventKind::READY);
+    }
+}
+
+#[tokio::test]
+async fn normally_finished_task_tokens_are_invalid_while_the_supervisor_stays_running() {
+    let group = supervisor((), default_options());
+    let (tokens, mut received) = mpsc::unbounded_channel();
+    task_with_ready(
+        &group,
+        "finished",
+        move |_, signal| {
+            let tokens = tokens.clone();
+            async move {
+                tokens.send(signal).unwrap();
+                Ok(())
+            }
+        },
+        RestartPolicy::TEMPORARY,
+    )
+    .unwrap();
+    task(
+        &group,
+        "resident",
+        |_| async { std::future::pending::<Result<(), Error>>().await },
+        RestartPolicy::TEMPORARY,
+    )
+    .unwrap();
+    let events = control(&group);
+    let monitor = tokio::spawn(run(group));
+    let signal = timeout(Duration::from_secs(1), received.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    loop {
+        let event = next_event_timeout(&events, 1000).await.unwrap().unwrap();
+        if event.child_name() == "finished" && event.kind() == EventKind::STOPPED {
+            break;
+        }
+    }
+    assert!(!events.group.stop.load(Ordering::Acquire));
+    assert!(
+        mark_ready(&signal).is_err(),
+        "normal completion must invalidate an escaped token"
+    );
+    shutdown(&events).await.unwrap();
+    monitor.await.unwrap().unwrap();
+    while let Some(event) = next_event_timeout(&events, 1000).await.unwrap() {
+        assert_ne!(event.kind(), EventKind::READY);
+    }
+}

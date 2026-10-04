@@ -500,7 +500,9 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
             }
         }
         E::Name(s) => {
-            if e.resolution == Some(NameResolution::Standard) {
+            if e.resolution == Some(NameResolution::BorrowedLocal) {
+                format!("(*{s})")
+            } else if e.resolution == Some(NameResolution::Standard) {
                 registered_rust_path(s, types.modules)
                     .expect("checked standard definition")
                     .into()
@@ -934,6 +936,8 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
             S::For(v, e, b) => {
                 let iterator = if e.ty.as_ref().is_some_and(|t| t.0 == "Range") {
                     re(e, types)
+                } else if s.binding_borrowed {
+                    format!("({}).iter()", re(e, types))
                 } else {
                     format!("({}).iter().copied()", re(e, types))
                 };

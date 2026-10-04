@@ -38,9 +38,12 @@ Statusは数値を保持するコピー可能な値です。文字列への変�
 | `header(view(request), name)` | `Result[Option[view[bytes]], Error]` |
 | `header_text(view(request), name)` | `Result[Option[view[str]], Error]` |
 | `headers(view(request), name)` | `Result[List[view[bytes]], Error]` |
+| `is_json_content_type(view(request))` | `Result[bool, Error]` |
 | `method_name(view(request.method))` | `view[str]` |
 
 ヘッダー名は大文字・小文字を区別しません。単一取得で同名ヘッダーが複数ある場合はエラーです。`headers`はすべて返します。`header_text`はUTF-8を検証します。
+
+`is_json_content_type`は`application/json`を大文字・小文字を区別せずに判定し、前後の空白・タブと`charset=utf-8`などのparameterを受け付けます。欠落や別のmedia typeは`False`、重複ヘッダーや不正な構文は`Err`です。`application/problem+json`は別のmedia typeです。parameterは構文だけを検証し、`charset`で文字コードを切り替えません。JSON本文はUTF-8で読みます。この判定はヘッダーを借り、本文をコピーせず、成功時にメモリを確保しません。
 
 ## Response
 
@@ -73,6 +76,8 @@ return await http.serve(app, 8080, http.default_options())
 - 登録済みGETにHEADを自動で対応させます。HEADの明示登録を優先します。既存パスでmethodが違う場合は405とAllowを返します。
 
 mapperはアプリのエラーを処理します。不正なHTTP、制限超過、タイムアウトはサーバー側で処理します。データベースのエラー詳細や認証情報は応答へ直接出さないでください。
+
+エラー応答にリクエストIDなどが必要なら、handlerで検証した値を保持し、失敗時に独自エラー型へmoveできます。[見積APIの例](../test-nagi-code/application-examples/quote-api/README.md)では、この方法で共通mapperへIDを渡しています。
 
 ## 制限と停止
 
