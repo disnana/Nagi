@@ -29,6 +29,8 @@ Options:
   --out DIR               Select the generated-source directory
   --cost-report           Write an allocation/copy cost report
   --editor-input          Read editor buffers from stdin (check/symbols)
+  --sql-schema FILE       Check literal SQL against an offline DDL snapshot (check)
+  --sql-dialect sqlite    Required with --sql-schema; SQLite only
   --format FORMAT         Map output: mermaid (default), d2, json, html, svg, png
   --module NAME           Select a map module
   --focus NAME            Focus a map definition
@@ -120,6 +122,7 @@ pub struct Options {
     pub cost: bool,
     /// Read editor buffers from stdin for symbols or an in-memory check.
     pub editor_input: bool,
+    pub sql_schema: Option<PathBuf>,
     /// Set only when a project is selected. Plain SOURCE commands keep their cwd.
     pub project_root: Option<PathBuf>,
     pub(crate) manifest_path: Option<PathBuf>,
@@ -301,6 +304,9 @@ pub fn resolve_map(args: &[String], cwd: &Path) -> Result<(Options, MapOptions),
         return Err("--layout is supported only with --format svg/png".into());
     }
     let mut options = resolve(&input, cwd)?;
+    if options.sql_schema.is_some() {
+        return Err("SQL options are supported only by check".into());
+    }
     options.command = "map".into();
     Ok((
         options,
@@ -438,11 +444,14 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let mut out = None;
     let mut cost = false;
     let mut editor_input = false;
+    let mut sql_schema = None;
+    let mut sql_dialect = None;
     let mut i = 1;
     while i < args.len() {
         let option = &args[i];
         match option.as_str() {
-            "--project" | "--native" | "--rust" | "--rust-dep" | "--out" => {
+            "--project" | "--native" | "--rust" | "--rust-dep" | "--out" | "--sql-schema"
+            | "--sql-dialect" => {
                 i += 1;
                 let value = args
                     .get(i)
@@ -463,6 +472,16 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
                     "--out" => {
                         if out.replace(cwd.join(value)).is_some() {
                             return Err("--outは1つ指定してください".into());
+                        }
+                    }
+                    "--sql-schema" => {
+                        if sql_schema.replace(cwd.join(value)).is_some() {
+                            return Err("--sql-schema must be specified once".into());
+                        }
+                    }
+                    "--sql-dialect" => {
+                        if sql_dialect.replace(value.clone()).is_some() {
+                            return Err("--sql-dialect must be specified once".into());
                         }
                     }
                     _ => {
@@ -495,6 +514,20 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         i += 1;
     }
     validate_dependencies(&dependencies)?;
+    if sql_schema.is_some() || sql_dialect.is_some() {
+        if command != "check" || editor_input {
+            return Err("SQL options are supported only by check without --editor-input".into());
+        }
+        if sql_schema.is_none() || sql_dialect.is_none() {
+            return Err("--sql-schema and --sql-dialect sqlite must be specified together".into());
+        }
+        if sql_dialect.as_deref() != Some("sqlite") {
+            return Err("unsupported SQL dialect; use --sql-dialect sqlite".into());
+        }
+        if !cfg!(feature = "sql-check") {
+            return Err("This compiler was built without the sql-check feature; use an official compiler or rebuild with --features sql-check".into());
+        }
+    }
     if no_project && project.is_some() {
         return Err("--projectと--no-projectは同時に指定できません".into());
     }
@@ -562,6 +595,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         out,
         cost,
         editor_input,
+        sql_schema,
         project_root,
         manifest_path,
     })

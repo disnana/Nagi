@@ -63,6 +63,8 @@ Lowを維持するには、二つの構文、テキストへの変換と再解�
 
 根拠: [parser](compiler/src/parser.rs)、[loweringと再検査](compiler/src/emit.rs)、[差し替えの統合](compiler/src/check.rs)、[High／Lowの境界テスト](compiler/tests/ownership_boundaries.rs)、[保存Lowのmodule識別のテスト](compiler/tests/stdlib_imports.rs)。例と制限は[HighとLow](docs/low-language.md)を参照してください。
 
+現在のcalls図はLowの差し替え本体と内部の直接呼び出しを追い、Rust本体はextern境界まで表示します（[テスト](compiler/tests/graph_relations.rs)）。一方、Highの呼び出しからの定義ジャンプはHighの宣言へ留まり、Lowの置換先へ自動で移動するわけではありません（[テスト](compiler/tests/symbols.rs)）。Rust側のツールも含めた調査のしやすさは、別に評価が必要です。
+
 ### Lowで改善したい作業
 
 低水準機能の拡張を保留することと、Lowの価値を育てないことは別です。現在の機能を使い、次の用途を検証します。効果を確認した結果や、新機能の採用・日程の約束ではありません。
@@ -78,11 +80,11 @@ Highの別実装、ASTの表示、Rustアダプターも比較対象にします
 
 既存ライブラリを使っても、Nagi側の責任は残ります。どの型を公開するか、引数をmoveするか借りるか、どの失敗をResultへ返すか、取消とcloseで何が終わるかを決める必要があります。Rustの型を単に隠しても、扱いやすいNagi APIになるとは限りません。
 
-現在の標準HTTPは型付きrequest・response・共有state・async handlerを提供します。SQLiteはclassへの行変換を提供しますが、bindは固定形で、SQL文字列や列名を通常の`check`で検査しません。pool・transaction・PostgreSQLの標準APIもありません。新しいDB資源とアダプターの契約は[ライブラリ設計案](docs/library-design.md)で検討します。
+現在の標準HTTPは型付きrequest・response・共有state・async handlerを提供します。SQLiteはclassへの行変換を提供しますが、bindは固定形で、SQL文字列や列名を通常の`check`で検査しません。mainには、schemaを明示して名前・必要な返却列・bind数を確認する[SQLの事前検査](docs/sql-check.md)があります。値の型・NULL可否は検査せず、公開0.1.9には未収録です。pool・transaction・PostgreSQLの標準APIもありません。新しいDB資源とアダプターの契約は[ライブラリ設計案](docs/library-design.md)で検討します。
 
 Axum／Towerを採用するかは、同じAPI、接続容量、期限、本文上限、panic応答、停止条件で比べてから判断します。AxumもHyperを使うため、Router／middlewareの比較とlistenerの変更を分けます。既存の異なる条件のベンチマークを、採用の根拠にはしません。
 
-根拠: [依存](runtime/Cargo.toml)、[標準HTTP](runtime/src/http_server.rs)、[旧HTTP](runtime/src/http.rs)、[SQLite](runtime/src/database.rs)、[HTTPの実通信テスト](tests/http_stdlib_integration.py)。
+根拠: [依存](runtime/Cargo.toml)、[標準HTTP](runtime/src/http_server.rs)、[旧HTTP](runtime/src/http.rs)、[SQLite](runtime/src/database.rs)、[SQL検査](compiler/src/sql_check/mod.rs)と[テスト](compiler/tests/sql_check.rs)、[HTTPの実通信テスト](tests/http_stdlib_integration.py)。
 
 ## 失敗と並行処理の境界
 

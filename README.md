@@ -90,9 +90,11 @@ Lowの互換性を保ちながら、当面はHighとRust連携を優先します
 |---|---|
 | 型付きの値、class・enum、List、nullable、Result、move・view・shared | 利用者が定義するgeneric・trait、Mapの標準操作は未対応。ownedの扱いは未完成 |
 | HTTP、ヘッダー、応答status、独自エラー、共有状態 | 標準サーバーはloopbackのHTTP/1。TLS・WebSocket・streamingの公開APIはない |
-| JSON、SQLite | SQLは実行時検査。bind引数は固定形。標準PostgreSQL・pool・transaction APIはない |
+| JSON、SQLite、schemaを指定したSQLの事前検査 | 事前検査は明示指定。値の型・NULL・動的SQLは実行時検査。bindは固定形。標準PostgreSQL・pool・transaction APIはない |
 | async・scope、typed actor・Supervisor | Tokio上の同一プロセス。独自VM、無停止更新、分散actorはない |
 | ファイルのimport、標準module、Rust連携、Lowの関数差し替え | 任意のRust型をそのまま使う機能や、安定した外部ABIはない |
+
+SQLiteの文字列SQLは、schemaを明示した[事前検査](docs/sql-check.md)で名前・必要な返却列・bind数を確認できます。値の型・NULL可否や配備先schemaの一致は保証しません。公開版への収録状況は[CHANGELOG](CHANGELOG.md)を参照してください。
 
 各APIの条件は[リファレンス](docs/README.md)で確認してください。Nagiの検査とrustcの役割は[所有権](docs/ownership.md)、実装基盤の分担は[紹介](docs/introduction.md#コンパイラと既存ライブラリ)に記載しています。
 

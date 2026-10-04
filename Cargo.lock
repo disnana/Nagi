@@ -475,6 +475,7 @@ dependencies = [
 name = "nagic"
 version = "0.1.9"
 dependencies = [
+ "rusqlite",
  "serde",
  "serde_json",
  "toml",

@@ -63,6 +63,8 @@ For now, we retain compatibility and existing uses while prioritizing High and R
 
 Evidence: the [parser](compiler/src/parser.rs), [lowering and rechecking](compiler/src/emit.rs), [replacement integration](compiler/src/check.rs), [High/Low boundary tests](compiler/tests/ownership_boundaries.rs), and [saved-Low module identity tests](compiler/tests/stdlib_imports.rs). See [High and Low](docs/en/low-language.md) for examples and limits.
 
+Current call maps follow Low replacement bodies and their direct internal calls, while Rust bodies stop at the extern boundary ([tests](compiler/tests/graph_relations.rs)). Definition navigation from a High call still points to its High declaration, rather than automatically following the Low replacement ([tests](compiler/tests/symbols.rs)). Ease of investigation, including Rust-side tools, still needs separate evaluation.
+
 ### Work Low could improve
 
 Pausing systems-language extensions does not mean abandoning Low's value. The following uses should be evaluated with current features. These are not measured benefits or promises to adopt new features on a schedule.
@@ -78,11 +80,11 @@ Standard HTTP uses Hyper for transport; legacy HTTP uses Axum. Async execution u
 
 Using existing libraries leaves design responsibilities in Nagi: which types to expose, when arguments move or borrow, which failures become Result, and what cancellation or close actually completes. Hiding Rust types alone does not produce an easy-to-use Nagi API.
 
-Standard HTTP exposes typed requests, responses, shared state, and async handlers. SQLite converts rows into classes, but bind arguments have fixed shapes, and ordinary `check` does not validate SQL strings or column names. Standard pool, transaction, and PostgreSQL APIs are absent. New DB resources and adapter contracts are discussed in the [library design proposal](docs/en/library-design.md).
+Standard HTTP exposes typed requests, responses, shared state, and async handlers. SQLite converts rows into classes, but bind arguments have fixed shapes, and ordinary `check` does not validate SQL strings or column names. Main includes explicit [SQL/schema checks](docs/en/sql-check.md) for names, required result columns, and bind counts. These checks do not validate value types or NULL behavior and are absent from published 0.1.9. Standard pool, transaction, and PostgreSQL APIs are absent. New DB resources and adapter contracts are discussed in the [library design proposal](docs/en/library-design.md).
 
 Axum/Tower adoption requires comparison with the same API, connection capacity, deadlines, body limits, panic responses, and shutdown conditions. Since Axum also uses Hyper, Router/middleware evaluation and listener changes should be separate. Existing benchmarks with different conditions do not establish an adoption decision.
 
-Evidence: [dependencies](runtime/Cargo.toml), [standard HTTP](runtime/src/http_server.rs), [legacy HTTP](runtime/src/http.rs), [SQLite](runtime/src/database.rs), and [HTTP integration tests](tests/http_stdlib_integration.py).
+Evidence: [dependencies](runtime/Cargo.toml), [standard HTTP](runtime/src/http_server.rs), [legacy HTTP](runtime/src/http.rs), [SQLite](runtime/src/database.rs), [SQL checking](compiler/src/sql_check/mod.rs) and its [tests](compiler/tests/sql_check.rs), and [HTTP integration tests](tests/http_stdlib_integration.py).
 
 ## Failures and concurrency boundaries
 

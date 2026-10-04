@@ -31,6 +31,7 @@
 |---|---|
 | DBなしのHTTP、ヘッダー、応答status | [HTTP](http.md)、[APIリファレンス](http-server.md) |
 | JSONを読み書きする | [JSON](json.md) |
+| SQLiteのSQLをschemaと照合する | [SQLの事前検査](sql-check.md) |
 | 複数ファイルに分ける、Rustを呼ぶ | [importとRust連携](modules-and-rust.md) |
 | 自作の共通コードやRustのcrateを使う | [ライブラリとRustの資産](libraries.md) |
 | 入口やビルド設定を保存する | [nagi.toml](projects.md) |

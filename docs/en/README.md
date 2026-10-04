@@ -31,6 +31,7 @@ See the [VS Code guide](editor.md) for editor support. See [JetBrains installati
 |---|---|
 | HTTP without a database, headers, and response statuses | [HTTP](http.md), [API reference](http-server.md) |
 | Read and write JSON | [JSON](json.md) |
+| Check SQLite SQL against a schema | [SQL preflight checks](sql-check.md) |
 | Split code into files or call Rust | [Imports and Rust](modules-and-rust.md) |
 | Share your own libraries or use Rust crates | [Libraries and Rust assets](libraries.md) |
 | Save an entry file and build settings | [nagi.toml](projects.md) |

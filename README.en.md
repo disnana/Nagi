@@ -90,9 +90,11 @@ Development will prioritize High and Rust integration while preserving Low compa
 |---|---|
 | Typed values, classes, enums, Lists, nullable values, Results, moves, views, and shared values | User-defined generics/traits and standard Map operations are unsupported; owned handling is incomplete |
 | HTTP, headers, response statuses, custom errors, and shared state | The standard server uses loopback HTTP/1. It has no public TLS, WebSocket, or streaming API |
-| JSON and SQLite | SQL is checked at runtime. Bind argument shapes are fixed. No standard PostgreSQL, pool, or transaction API |
+| JSON, SQLite, and explicit SQL/schema checks | Preflight checks are opt-in. Value types, NULL, and dynamic SQL are checked at runtime. Bind shapes are fixed. No standard PostgreSQL, pool, or transaction API |
 | Async/scopes, typed actors, and Supervisors | Tokio tasks within one process; no custom VM, hot code replacement, or distributed actors |
 | File imports, standard modules, Rust integration, and Low replacements | No direct use of arbitrary Rust types or stable external ABI |
+
+SQLite SQL literals support explicit [schema checks](docs/en/sql-check.md) for names, required result columns, and bind counts. Value types, NULL behavior, and consistency with the deployed schema are not guaranteed. Check the [CHANGELOG](CHANGELOG.md) for inclusion in published releases.
 
 Check the [reference](docs/en/README.md) for individual API conditions. [Ownership](docs/en/ownership.md) explains Nagi's and rustc's checks; the [introduction](docs/en/introduction.md#compiler-and-existing-libraries) describes the implementation foundations.
 

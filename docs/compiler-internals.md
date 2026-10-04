@@ -12,23 +12,27 @@
 | codegen | Rustと、対応する型のSerde/FromRow/HTTP wrapperへ生成 |
 | backend | rustc/Cargoでネイティブを生成。借用・Sendも検査 |
 
-Nagi自身が構文解析、型検査、Rustコード生成を担当し、Cargo/rustcが依存のビルド、最終的な借用・trait検査、機械語生成を担当します。独自の機械語backendやVMはありません。
+コンパイラはRustで実装しています。Nagi自身が構文解析、型検査、Rustコード生成を担当し、Cargo/rustcが依存のビルド、最終的な借用・trait検査、機械語生成を担当します。独自の機械語backendやVMはありません。
 
 HighとLowは共通の手書きparserとProgram ASTを使い、字下げと波括弧の読み方を切り替えます。通常のHighの処理経路はHighを検査し、Lowテキストへ出力して再解析し、手書きLowと統合して再検査します。Lowは別のメモリモデルを持つ層ではありません。
 
-Lowには型注釈・制御構造と、module・定義のIDを残します。型推論の結果や名前解決、move・借用の検査状態を証明として持ち越すわけではなく、再解析後に再構築します。moduleのJSON metadataは別名や型の識別に使います。
+Lowには型注釈・制御構造と、module・定義のIDを残します。型推論の結果や名前解決、move・借用の検査状態を証明として持ち越すわけではなく、再解析後に再構築します。moduleのJSON metadataは別名や型の識別に使います。Serde JSONは診断・cost report・エディター向けのsymbol情報にも使います。
 
 ASTは式・引数・束縛名の元ソースのtoken範囲を持ちます。`symbols`は通常のcheckerと同じ規則で確認できた型を、元ファイルのUTF-16位置とともに返します。編集補助では失敗した文の変数環境を戻して次の文を解析しますが、通常の`check`は最初のエラーで失敗します。型エラーのあるコードから補完情報が得られても、ビルド可能になったことを意味しません。
 
 定義ジャンプ用のローカル名は、型・所有権の検査とは別にASTをたどって解決します。引数・最初の代入・for・caseの束縛位置を持ち、再代入では同じ位置を保ちます。子ブロックの名前は外へ漏らさず、forの同名束縛はループ後に元へ戻します。使用位置と定義位置は既存の`references`へ出力します。move後や型の不明な初期化でも、名前の束縛先を特定できれば移動できます。VS Codeは未保存バッファも渡しますが、保存済み情報へフォールバックした場合にはF12でその位置を使いません。
 
-codegenのscopeはTokioのJoinSet wrapperにします。classはRustのstructへ生成し、対応するフィールド型の場合にJSONやDB用の実装を付けます。現在のCommon IRはSSAでも独自optimizerでもありません。最適化はRust backendに依存します。
+codegenのscopeはTokioのJoinSet wrapperにします。classはRustのstructへ生成し、対応するフィールド型の場合にJSONやDB用の実装を付けます。Lowはコンパイル時の共通表現で、実行時VMではありません。現在のCommon IRはSSAでも独自optimizerでもありません。最適化はRust backendに依存します。
 
 同じコンパイル処理の中では、loweringとcodegenが生成行と元の文・定義・フィールドの行の対応を保持します。ビルドではCargoのJSON診断を読み、対応するNagi・Lowのファイルと行を先に表示します。Rustの補足や修正候補は生成Rustの座標のまま残し、手書きRustや位置の不明な診断は書き換えません。
 
+保存する`generated.low`は、手書きLowを統合する前のHighから生成した内容です。差し替え後に実行するプログラム全体のdumpではありません。統合後の関数の関係は`map`、最終生成物はRustで確認します。
+
 保存した`generated.low`を別のコマンドで読み直すと、診断位置はLowの行になります。moduleのIDは残りますが、元のHighへのsource mapを保存する機能はありません。
 
-`check`はNagiの規則を検査します。生成Rustの借用・trait検査を代替しないため、成功後に`build`が失敗する場合があります。詳しくは[所有権](ownership.md#借用と検査の範囲)を参照してください。
+`check`はCargoを起動せず、Nagiの規則とソース位置に基づいて診断します。生成Rustの借用・trait検査を代替しないため、成功後に`build`が失敗する場合があります。Rust側の借用・Send条件、手書きRustの本体、crateのAPIはビルドで検査します。詳しくは[所有権](ownership.md#借用と検査の範囲)を参照してください。
+
+[SQLの事前検査](sql-check.md)は、`check`にschemaと方言を指定した場合だけ有効です。通常の`check`はSQLの内容とschemaを照合しません。検査対象のqueryは実行せず、生成RustとアプリのDB処理も変えません。
 
 ソースは1ファイル2 MBまでで、式・型・ブロックの入れ子にも上限があります。構文の変異試験と不正な入力の試験を行います。coverage-guided fuzz、incremental parsing、式の厳密な列位置や全Rust診断を扱うsource mapは未対応です。引用符なしの登録済み標準moduleは[利用できます](modules-and-rust.md)。
 

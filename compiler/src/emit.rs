@@ -1157,11 +1157,19 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             out.push_str(".finish()\n    }\n}\n");
         }
         let db_compatible = c.fields.iter().all(|(_, t)| {
-            let scalar = if t.0 == "Option" {
-                t.1.first().unwrap_or(t)
-            } else {
-                t
-            };
+            // owned[T] emits T itself, including when it wraps a nullable
+            // field or its scalar payload. Keep eligibility aligned with
+            // that native representation without admitting nested Option.
+            let mut scalar = t;
+            while scalar.0 == "owned" {
+                scalar = &scalar.1[0];
+            }
+            if scalar.0 == "Option" {
+                scalar = &scalar.1[0];
+            }
+            while scalar.0 == "owned" {
+                scalar = &scalar.1[0];
+            }
             [
                 "i8", "i16", "i32", "i64", "u8", "u16", "u32", "f32", "f64", "bool", "str", "bytes",
             ]
@@ -1607,6 +1615,9 @@ fn cargo_manifest(
 }
 
 pub fn cli(args: Vec<String>) -> Result<(), String> {
+    if crate::sql_check::worker(&args)? {
+        return Ok(());
+    }
     if args
         .first()
         .is_some_and(|arg| matches!(arg.as_str(), "version" | "--version" | "-V"))
@@ -1655,6 +1666,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let cost = options.cost;
     let rust_file = options.rust_file;
     let rust_deps = options.rust_dependencies;
+    let sql_schema = options.sql_schema;
     let mut all = Program::default();
     for n in native {
         let native_sources = crate::source::load_with_overlays(&n, false, &overlays)?;
@@ -1732,6 +1744,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         .map(|(path, _, _)| path.to_path_buf())
         .chain(rust_file.iter().cloned())
         .chain(project_manifest.iter().cloned())
+        .chain(sql_schema.iter().cloned())
         .chain(crate::output::assets(&resolution))
         .chain(crate::output::assets(&all))
         .collect();
@@ -1765,6 +1778,9 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         low_source.restore_lines(&mut p)?;
     }
     crate::check::integrate(&mut p, all).map_err(|e| sources.diagnostic(&e))?;
+    if let Some(schema) = sql_schema {
+        crate::sql_check::check(&p, &sources, &schema)?;
+    }
     if let Some(map) = map_options {
         let mut graph = match map.view {
             crate::project::MapView::Types => crate::graph::types(&p, &sources),
