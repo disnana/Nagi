@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vscode = require('vscode');
 
-const report = path.resolve(__dirname, '../../../build/vscode-typing-result.json');
+const report = process.env.NAGI_EDITOR_HOST_RESULT || path.resolve(__dirname, '../../../build/vscode-typing-result.json');
 const cases = [];
 function save(status, error) {
   fs.mkdirSync(path.dirname(report), { recursive: true });
@@ -73,6 +73,9 @@ async function run() {
   await typing('fn main() {\n    print(\n        42,\n        ', ')', 'fn main() {\n    print(\n        42,\n    )', 'nagi-low');
   await typing('fn main() {\n    print(42);\n    ', '}', 'fn main() {\n    print(42);\n}', 'nagi-low');
   await typing('fn main() ', '{\n', 'fn main() {\n    \n}', 'nagi-low');
+  await typing('# braces {', '\n', '# braces {\n', 'nagi-low');
+  await typing('fn main() {\n    # braces {', '\n', 'fn main() {\n    # braces {\n    ', 'nagi-low');
+  await typing('fn main() { # comment }', '\n', 'fn main() { # comment }\n    ', 'nagi-low');
   const config = vscode.workspace.getConfiguration('editor', { languageId: 'nagi' });
   const oldFormatOnType = config.inspect('formatOnType').globalLanguageValue;
   try {

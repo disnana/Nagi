@@ -357,7 +357,21 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
   if (!state.allowed) return [];
   const word = wordAt(state.masked, offset);
   const beforeCursor = state.masked.slice(0, offset);
-  const lineStart = beforeCursor.lastIndexOf('\n') + 1;
+  let lineStart = beforeCursor.lastIndexOf('\n') + 1;
+  // Low permits another top-level import after a declaration or semicolon on
+  // the same line. Delimiters inside strings/comments are already masked.
+  if (low) {
+    const delimiters = [];
+    const pairs = { ')': '(', ']': '[', '}': '{' };
+    for (let i = lineStart; i < offset; i++) {
+      const c = beforeCursor[i];
+      if ('([{'.includes(c)) delimiters.push(c);
+      else if (pairs[c]) {
+        if (delimiters.at(-1) === pairs[c]) delimiters.pop();
+        if (c === '}' && !delimiters.length) lineStart = i + 1;
+      } else if (c === ';' && !delimiters.length) lineStart = i + 1;
+    }
+  }
   const line = beforeCursor.slice(lineStart);
   const importPath = /^\s*(?:import|from)\s+([A-Za-z_][\w.]*)?$/.exec(line);
   if (importPath && !/["']/.test(text.slice(lineStart, offset)) && Array.isArray(index?.standard_modules)) {

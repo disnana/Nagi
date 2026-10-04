@@ -1,0 +1,199 @@
+import std.actor as actor
+
+@rust("native::connector")
+extern async def connector() -> Result[unit, Error]
+
+@rust("native::connector_starts")
+extern def connector_starts() -> i64
+
+@rust("native::connector_active")
+extern def connector_active() -> i64
+
+@rust("native::connector_cleanups")
+extern def connector_cleanups() -> i64
+
+class Context:
+    initial: i64
+
+class WorkerState:
+    completed: i64
+
+enum Job:
+    Process(units: i64)
+    Read
+    FailWorker
+
+enum JobError:
+    InvalidUnits
+
+class Totals:
+    packing: i64
+    audit: i64
+
+class Report:
+    packing_total: i64
+    audit_total: i64
+    packing_starts: i64
+    audit_starts: i64
+    connector_starts: i64
+    failed_events: i64
+    panicked_events: i64
+    restarts: i64
+    stopped_children: i64
+    shutdown_events: i64
+    connector_active: i64
+    connector_cleanups: i64
+
+async def create_worker(context: shared[Context]) -> Result[WorkerState, Error]:
+    return ok(WorkerState(completed=context.initial))
+
+async def process_job(state: WorkerState, job: Job) -> Result[actor.Turn[WorkerState, i64, JobError], Error]:
+    match job:
+        case Job.Process(units):
+            if units < 1 or units > 100:
+                return ok(actor.turn[WorkerState, i64, JobError](state, fail(JobError.InvalidUnits)))
+            completed = state.completed + units
+            return ok(actor.turn[WorkerState, i64, JobError](WorkerState(completed=completed), ok(completed)))
+        case Job.Read:
+            completed = state.completed
+            return ok(actor.turn[WorkerState, i64, JobError](state, ok(completed)))
+        case Job.FailWorker:
+            return error("controlled packing worker failure")
+
+async def run_connector(context: shared[Context]) -> Result[unit, Error]:
+    return await connector()
+
+async def monitor(group: actor.Supervisor[Context]) -> Result[unit, Error]:
+    return await actor.run(group)
+
+async def request(worker: view[actor.Actor[Job, i64, JobError]], job: Job) -> Result[i64, Error]:
+    match await actor.call(worker, job, 5000, 5000):
+        case Ok(reply):
+            match reply:
+                case Ok(value):
+                    return ok(value)
+                case Err(_):
+                    return error("unexpected job rejection")
+        case Err(_):
+            return error("worker unavailable")
+
+async def wait_started(control: view[actor.Control], name: view[str], generation: i64) -> Result[unit, Error]:
+    started = False
+    while not started:
+        match try await actor.next_event(control):
+            case Some(event):
+                if event.child_name == name and event.kind == actor.EventKind.STARTED and event.generation == generation:
+                    started = True
+            case None:
+                return error("supervisor stopped before the expected generation")
+    return ok(assert_true(started))
+
+async def exercise(packing: view[actor.Actor[Job, i64, JobError]], audit: view[actor.Actor[Job, i64, JobError]], control: view[actor.Control]) -> Result[Totals, Error]:
+    match await actor.ready(packing, 5000):
+        case Ok(_):
+            assert_true(True)
+        case Err(_):
+            return error("packing worker did not start")
+    match await actor.ready(audit, 5000):
+        case Ok(_):
+            assert_true(True)
+        case Err(_):
+            return error("audit worker did not start")
+    assert_true(try await request(packing, Job.Process(5)) == 5)
+    assert_true(try await request(audit, Job.Process(7)) == 7)
+    match await actor.call(packing, Job.Process(-1), 5000, 5000):
+        case Ok(reply):
+            match reply:
+                case Ok(_):
+                    return error("invalid job was accepted")
+                case Err(problem):
+                    match problem:
+                        case JobError.InvalidUnits:
+                            print("job rejected: packing total stays 5")
+        case Err(_):
+            return error("business error was lost")
+    assert_true(try await request(packing, Job.Read) == 5)
+    match await actor.call(packing, Job.FailWorker, 5000, 5000):
+        case Ok(_):
+            return error("worker failure returned a reply")
+        case Err(problem):
+            assert_true(problem.kind == actor.CallKind.REPLY_LOST)
+    assert_true(try await request(audit, Job.Process(2)) == 9)
+    packing_name = "packing"
+    try await wait_started(control, view(packing_name), 2)
+    assert_true(try await request(packing, Job.Read) == 0)
+    print("packing restarted: total reset to 0; audit continued at 9")
+    # A task STARTED event precedes its factory body. Wait for native readiness.
+    while connector_starts() != 2 or connector_active() != 1:
+        await actor.yield_now()
+    assert_true(connector_cleanups() == 1)
+    packing_total = try await request(packing, Job.Process(4))
+    audit_total = try await request(audit, Job.Read)
+    assert_true(packing_total == 4 and audit_total == 9)
+    print("connector panic recovered: generation 2 is active")
+    return ok(Totals(packing=packing_total, audit=audit_total))
+
+async def finish(packing: actor.Actor[Job, i64, JobError], audit: actor.Actor[Job, i64, JobError], control: actor.Control, events: actor.Control) -> Result[unit, Error]:
+    outcome = await exercise(view(packing), view(audit), view(control))
+    # Keep cleanup explicit even if exercise returns an Error.
+    try await actor.shutdown(view(control))
+    totals = try outcome
+    assert_true(connector_active() == 0)
+    assert_true(connector_cleanups() == 2)
+    match await actor.call(view(packing), Job.Read, 0, 5000):
+        case Ok(_):
+            return error("stopped worker accepted a job")
+        case Err(problem):
+            assert_true(problem.kind == actor.CallKind.STOPPED)
+    packing_starts = 0
+    audit_starts = 0
+    connector_started = 0
+    failed = 0
+    panicked = 0
+    restarts = 0
+    stopped = 0
+    shutdown = 0
+    reading = True
+    while reading:
+        match try await actor.next_event(view(events)):
+            case Some(event):
+                if event.kind == actor.EventKind.STARTED:
+                    if event.child_name == "packing":
+                        packing_starts = packing_starts + 1
+                    if event.child_name == "audit":
+                        audit_starts = audit_starts + 1
+                    if event.child_name == "connector":
+                        connector_started = connector_started + 1
+                if event.kind == actor.EventKind.FAILED:
+                    failed = failed + 1
+                if event.kind == actor.EventKind.PANICKED:
+                    panicked = panicked + 1
+                if event.kind == actor.EventKind.RESTART_SCHEDULED:
+                    restarts = restarts + 1
+                if event.kind == actor.EventKind.STOPPED:
+                    stopped = stopped + 1
+                if event.kind == actor.EventKind.SHUTDOWN:
+                    shutdown = shutdown + 1
+                assert_true(event.kind != actor.EventKind.LAGGED)
+                assert_true(event.kind != actor.EventKind.INTENSITY_EXCEEDED)
+            case None:
+                reading = False
+    assert_true(packing_starts == 2 and audit_starts == 1)
+    assert_true(connector_started == 2 and connector_starts() == 2)
+    assert_true(failed == 1 and panicked == 1 and restarts == 2)
+    assert_true(stopped == 3 and shutdown == 1)
+    report = Report(packing_total=totals.packing, audit_total=totals.audit, packing_starts=packing_starts, audit_starts=audit_starts, connector_starts=connector_started, failed_events=failed, panicked_events=panicked, restarts=restarts, stopped_children=stopped, shutdown_events=shutdown, connector_active=connector_active(), connector_cleanups=connector_cleanups())
+    encoded = try json_encode(report)
+    return ok(print(encoded))
+
+async def main() -> Result[unit, Error]:
+    group = actor.supervisor[Context](Context(initial=0), actor.default_options())
+    packing = try actor.register[WorkerState, Job, i64, JobError](view(group), "packing", create_worker, process_job, actor.default_actor_options())
+    audit = try actor.register[WorkerState, Job, i64, JobError](view(group), "audit", create_worker, process_job, actor.default_actor_options())
+    try actor.task(view(group), "connector", run_connector, actor.RestartPolicy.TRANSIENT)
+    control = actor.control(view(group))
+    events = actor.clone_control(view(control))
+    async with scope:
+        spawn monitor(group)
+        spawn finish(packing, audit, control, events)
+    return ok(assert_true(True))

@@ -1,0 +1,160 @@
+import std.http.server as http
+
+class Config:
+    currency: str
+    unit_price_minor: i64
+    shipping_minor: i64
+    free_shipping_quantity: i64
+    maximum_quantity: i64
+
+class QuoteInput:
+    sku: str
+    quantity: i64
+
+class Quote:
+    sku: str
+    quantity: i64
+    currency: str
+    unit_price_minor: i64
+    subtotal_minor: i64
+    shipping_minor: i64
+    total_minor: i64
+
+class Health:
+    status: str
+    currency: str
+    maximum_quantity: i64
+
+enum QuoteError:
+    InvalidRequestId
+    InvalidHeader
+    UnsupportedMediaType
+    InvalidJson
+    InvalidQuantity
+    UnknownSku
+    Internal
+
+class ApiFailure:
+    problem: QuoteError
+    request_id: str
+
+class ErrorBody:
+    code: str
+    message: str
+
+def with_request_id(response: http.Response, request_id: view[str]) -> Result[http.Response, Error]:
+    if len(request_id) == 0:
+        return ok(response)
+    return http.append_header_text(response, "X-Request-ID", request_id)
+
+def error_response(status: http.Status, code: str, message: str, request_id: view[str]) -> http.Response:
+    payload = ErrorBody(code=code, message=message)
+    match http.json[ErrorBody](status, payload):
+        case Ok(response):
+            match with_request_id(response, request_id):
+                case Ok(output):
+                    return output
+                case Err(_):
+                    return http.empty(http.Status.INTERNAL_SERVER_ERROR)
+        case Err(_):
+            return http.empty(http.Status.INTERNAL_SERVER_ERROR)
+
+def api_failure(failure: ApiFailure) -> http.Response:
+    match failure.problem:
+        case QuoteError.InvalidRequestId:
+            return error_response(http.Status.BAD_REQUEST, "invalid_request_id", "X-Request-ID must contain one UUID", view(failure.request_id))
+        case QuoteError.InvalidHeader:
+            return error_response(http.Status.BAD_REQUEST, "invalid_header", "Content-Type must contain one text value", view(failure.request_id))
+        case QuoteError.UnsupportedMediaType:
+            return error_response(http.Status.UNSUPPORTED_MEDIA_TYPE, "unsupported_media_type", "Content-Type must be application/json", view(failure.request_id))
+        case QuoteError.InvalidJson:
+            return error_response(http.Status.BAD_REQUEST, "invalid_json", "Expected exactly sku:string and quantity:integer", view(failure.request_id))
+        case QuoteError.InvalidQuantity:
+            return error_response(http.Status.UNPROCESSABLE_CONTENT, "invalid_quantity", "Quantity is outside the configured range", view(failure.request_id))
+        case QuoteError.UnknownSku:
+            return error_response(http.Status.UNPROCESSABLE_CONTENT, "unknown_sku", "Only NOTEBOOK is available", view(failure.request_id))
+        case QuoteError.Internal:
+            return error_response(http.Status.INTERNAL_SERVER_ERROR, "internal_error", "Unable to create response", view(failure.request_id))
+
+def health_failure(problem: Error) -> http.Response:
+    return error_response(http.Status.INTERNAL_SERVER_ERROR, "internal_error", "Unable to create response", view(""))
+
+def read_request_id(request: view[http.Request]) -> Result[str, ApiFailure]:
+    match http.header_text(request, "X-Request-ID"):
+        case Ok(header):
+            match header:
+                case Some(value):
+                    match uuid_parse(value):
+                        case Ok(identifier):
+                            return ok(uuid_format(identifier))
+                        case Err(_):
+                            return fail(ApiFailure(problem=QuoteError.InvalidRequestId, request_id=""))
+                case None:
+                    return ok("")
+        case Err(_):
+            return fail(ApiFailure(problem=QuoteError.InvalidRequestId, request_id=""))
+
+def require_json(request: view[http.Request], request_id: view[str]) -> Result[unit, ApiFailure]:
+    match http.header_text(request, "Content-Type"):
+        case Ok(header):
+            match header:
+                case Some(value):
+                    if value == "application/json":
+                        return ok(assert_true(True))
+                    return fail(ApiFailure(problem=QuoteError.UnsupportedMediaType, request_id=copy(request_id)))
+                case None:
+                    return fail(ApiFailure(problem=QuoteError.UnsupportedMediaType, request_id=copy(request_id)))
+        case Err(_):
+            return fail(ApiFailure(problem=QuoteError.InvalidHeader, request_id=copy(request_id)))
+
+def read_input(body: view[bytes], request_id: view[str]) -> Result[QuoteInput, ApiFailure]:
+    match json_decode[QuoteInput](body):
+        case Ok(input):
+            return ok(input)
+        case Err(_):
+            return fail(ApiFailure(problem=QuoteError.InvalidJson, request_id=copy(request_id)))
+
+def calculate(input: QuoteInput, config: shared[Config]) -> Result[Quote, QuoteError]:
+    if input.quantity < 1 or input.quantity > config.maximum_quantity:
+        return fail(QuoteError.InvalidQuantity)
+    if view(input.sku) != "NOTEBOOK":
+        return fail(QuoteError.UnknownSku)
+    subtotal = input.quantity * config.unit_price_minor
+    shipping = config.shipping_minor
+    if input.quantity >= config.free_shipping_quantity:
+        shipping = 0
+    return ok(Quote(sku=input.sku, quantity=input.quantity, currency=copy(view(config.currency)), unit_price_minor=config.unit_price_minor, subtotal_minor=subtotal, shipping_minor=shipping, total_minor=subtotal + shipping))
+
+async def quote(request: http.Request, config: shared[Config]) -> Result[http.Response, ApiFailure]:
+    request_id = try read_request_id(view(request))
+    try require_json(view(request), view(request_id))
+    input = try read_input(request.body, view(request_id))
+    match calculate(input, config):
+        case Ok(value):
+            match http.json[Quote](http.Status.OK, value):
+                case Ok(response):
+                    match with_request_id(response, view(request_id)):
+                        case Ok(output):
+                            return ok(output)
+                        case Err(_):
+                            return fail(ApiFailure(problem=QuoteError.Internal, request_id=request_id))
+                case Err(_):
+                    return fail(ApiFailure(problem=QuoteError.Internal, request_id=request_id))
+        case Err(problem):
+            return fail(ApiFailure(problem=problem, request_id=request_id))
+
+async def health(request: http.Request, config: shared[Config]) -> Result[http.Response, Error]:
+    value = Health(status="ok", currency=copy(view(config.currency)), maximum_quantity=config.maximum_quantity)
+    return http.json[Health](http.Status.OK, value)
+
+async def main() -> Result[unit, Error]:
+    maximum = try parse_i64(env("NAGI_SAMPLE_MAX_QUANTITY", "1000"))
+    if maximum < 1 or maximum > 1000:
+        return error("NAGI_SAMPLE_MAX_QUANTITY must be between 1 and 1000")
+    config = Config(currency="USD", unit_price_minor=1250, shipping_minor=500, free_shipping_quantity=5, maximum_quantity=maximum)
+    app = http.app[Config, ApiFailure](config, api_failure)
+    app = try http.route(app, http.Method.POST, "/quotes", quote)
+    app = try http.route_mapped(app, http.Method.GET, "/health", health, health_failure)
+    port = try parse_i64(env("NAGI_SAMPLE_PORT", "8092"))
+    limits = try http.options(4096, 5000, 2000, 1000)
+    return await http.serve(app, port, limits)

@@ -106,3 +106,14 @@ test('indentation respects two spaces, tabs, CRLF and Low brace blocks', () => {
   assert.equal(format('fn main() {\n    print(42);\n    }|', '}', spaces, 'nagi-low'), 'fn main() {\n    print(42);\n}');
   assert.equal(format('enum AuthError {\n|\n}', '\n', spaces, 'nagi-low'), 'enum AuthError {\n    \n}');
 });
+
+test('Low native indentation rules ignore braces in comments and escaped strings', () => {
+  const rules = require('../low-configuration.json').indentationRules;
+  const increase = new RegExp(rules.increaseIndentPattern);
+  for (const line of ['fn main() {', 'record Point { # } is a comment', 'case Ok(value) {', '} else {', 'fn main() { if true {', 'fn main() { print("}");', 'fn main() { print(\'escaped \\\' }\');']) {
+    assert.equal(increase.test(line), true, line);
+  }
+  for (const line of ['# braces {', '    # nested {', 'let text = "{";', "let text = '{';", 'let text = "escaped \\\" {";', 'fn main() {} # {', 'print(1); # {']) {
+    assert.equal(increase.test(line), false, line);
+  }
+});

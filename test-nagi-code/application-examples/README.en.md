@@ -5,21 +5,27 @@
 | Project | Contents |
 | --- | --- |
 | [Stock report CLI](stock-report/README.en.md) | JSON input including Japanese text, validation, custom errors and aggregation |
-| [JSON configuration file](file-json/README.en.md) | Save and read UTF-8 through Rust's standard library, preserving existing files |
 | [SQLite settings API](device-settings/README.en.md) | NULL, boolean, float and BLOB columns, HTTP responses and persistence across restarts |
 | [Reservation workers](seat-reservations/README.en.md) | Business errors, supervised restarts and independent actor state |
+| [JSON configuration file](file-json/README.en.md) | Typed JSON, Rust file operations and protection of existing files |
+| [Quote API](quote-api/README.en.md) | HTTP without a database, shared configuration, custom errors and route-specific error mapping |
+| [Supervised workers](supervised-worker/README.en.md) | Actor restarts, recovery from a task panic, shutdown and cleanup |
 
-Run each folder with its `nagi.toml`. The settings API requires Nagi built from the latest source. See [setup](../../docs/en/getting-started.md) for Rust/Cargo and your OS's build tools.
+To start with handwritten Low, use the [order quote CLI](../low-examples/order-quote/README.en.md). It combines Low-to-Low imports, typed JSON, input validation and integer price calculations.
+
+Run each folder with its `nagi.toml`, using Nagi built from the latest source. See [setup](../../docs/en/getting-started.md) for Rust/Cargo and your OS's build tools.
 
 ```sh
 nagic run --project test-nagi-code/application-examples/stock-report
 ```
 
-From the repository root, check and build all four apps independently from High and saved Low, then repeat the same input, file, HTTP and actor checks for each. Python 3.12 or later is required.
+From the repository root, check and build High apps independently from their original source and saved generated Low, then repeat the same input, file, HTTP and actor checks for each. The order quote CLI is checked directly from handwritten Low. Python 3.12 or later is required.
 
 ```sh
 python scripts/verify_application_examples.py --compiler /path/to/nagic
 python scripts/verify_application_examples.py --compiler /path/to/nagic --only device-settings
+python scripts/verify_application_examples.py --compiler /path/to/nagic --only supervised-worker
+python scripts/verify_application_examples.py --compiler /path/to/nagic --only order-quote
 ```
 
-Results, build logs and execution logs are written to `build/application-example-verification/`. SQLite verification uses a temporary database rather than existing application data.
+Results, build logs and execution logs are written to `build/application-example-verification/`. Database and file checks use temporary storage. Quote API checks start and stop a server on localhost. The supervised worker prints an intentional panic diagnostic to stderr, verifies recovery and cleanup, and exits with code 0.

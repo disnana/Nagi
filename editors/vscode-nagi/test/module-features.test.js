@@ -114,3 +114,15 @@ test('unresolved and changed fallback import targets never offer expression comp
   const changed = text.replace('orders.nagi', 'absent.nagi');
   assert.deepEqual(features.completionCandidates(imported, changed, changed.length, false, { ...source, saved: true }), []);
 });
+
+test('Low quoted imports after a same-line declaration or semicolon retain name-only insertion', () => {
+  for (const prefix of ['fn helper() {} ', 'import "other.low" as other; ', 'fn helper() { print("};"); } ']) {
+    const text = prefix + 'from "orders.nagi" import ma';
+    const start = text.indexOf('"orders.nagi"');
+    const imported = { ...index, references: [{ location: { file, line: 1, column: start + 1, length: 13 },
+      target: { file: target.file, line: 1, column: 1, length: 0 } }] };
+    const items = features.completionCandidates(imported, text, text.length, true, source);
+    assert.deepEqual(items.map(item => item.name), ['make'], prefix);
+    assert.equal(features.insertion(items[0], ''), 'make');
+  }
+});

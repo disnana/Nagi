@@ -8,6 +8,11 @@
 - Keep cross-module edges inside the HTML map viewport and label group counts accurately.
 - Complete shadowed local names without inserting constructor or call arguments in VS Code. Keep diagnostics and pending checks for unrelated projects when a matching dependency snapshot is available.
 - Add a UTF-8 file and typed JSON project to High/Low application verification. Use the generated VSIX path in installation instructions instead of a fixed version filename.
+- Accept multiline calls, constructors, lists, indexing, and function types in handwritten Low while preserving statement boundaries and source diagnostics.
+- Improve Low editing with brace-based folding, language-specific declaration help, import completion, and entry-point/import snippets.
+- Add runnable order-quote CLI, typed HTTP quote API, and supervised-worker projects with Japanese/English instructions and native smoke checks. Exercise direct Low projects as well as High and independently loaded Low in application verification.
+- Clarify the unsupported non-Copy List iteration diagnostic without rejecting supported Copy records.
+
 - Reject index expressions that move their borrowed container, and views saved outside the scope of their owner. Preserve immediate reads, copies, outer owners, static views and returning paths.
 - Decode nullable SQLite columns for every already-supported scalar row type, including bool, floats and bytes.
 - Preserve nested Option types in generated Low and avoid redundant Rust enum field-pattern warnings.

@@ -6,5 +6,5 @@
     { "open": "\"", "close": "\"", "notIn": ["string", "comment"] },
     { "open": "'", "close": "'", "notIn": ["string", "comment"] }
   ],
-  "indentationRules": { "increaseIndentPattern": "\\{[^}]*$", "decreaseIndentPattern": "^\\s*\\}" }
+  "indentationRules": { "increaseIndentPattern": "^(?:[^\"'#]|\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*')*\\{(?:[^\"'#}]|\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*')*(?:#.*)?$", "decreaseIndentPattern": "^\\s*\\}" }
 }

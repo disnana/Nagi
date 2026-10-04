@@ -2367,7 +2367,7 @@ impl Checker {
                     _ => return Err(error(s.line, "forにはrangeまたは連続配列が必要です")),
                 };
                 if !self.copy_type(&elem) {
-                    return Err(error(s.line, "0.1のfor要素はprimitiveに限定されています"));
+                    return Err(error(s.line, "非Copy要素のfor反復は0.1では未対応です"));
                 }
                 s.binding_type = Some(elem.clone());
                 let origins = self.origin(e);

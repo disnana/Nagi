@@ -131,22 +131,22 @@ pub fn lex(src: &str, high: bool) -> Result<Vec<Token>, String> {
                 } else {
                     return Err(format!("line {line}:{col}: 未対応の文字 {c:?}"));
                 };
-                if high {
-                    if s == "(" || s == "[" {
-                        depth += 1;
-                    }
-                    if s == ")" || s == "]" {
-                        depth -= 1;
-                    }
-                    if depth < 0 {
-                        return Err(format!("line {line}:{col}: 対応する開き括弧がありません"));
-                    }
+                // Parentheses and brackets continue expressions in both
+                // syntaxes. Braces still delimit Low statement blocks.
+                if s == "(" || s == "[" {
+                    depth += 1;
+                }
+                if s == ")" || s == "]" {
+                    depth -= 1;
+                }
+                if depth < 0 {
+                    return Err(format!("line {line}:{col}: 対応する開き括弧がありません"));
                 }
                 K::Sym(s)
             };
             out.push(Token { kind, line, col });
         }
-        if !high || depth == 0 {
+        if depth == 0 {
             out.push(Token {
                 kind: K::Newline,
                 line,
@@ -154,7 +154,7 @@ pub fn lex(src: &str, high: bool) -> Result<Vec<Token>, String> {
             });
         }
     }
-    if high && depth != 0 {
+    if depth != 0 {
         return Err("EOF: 括弧が閉じていません".into());
     }
     while indents.len() > 1 {

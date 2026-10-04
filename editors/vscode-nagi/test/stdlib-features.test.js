@@ -111,3 +111,19 @@ test('standard import completion uses the compiler catalog and replaces the full
   assert.equal(features.insertion(operation, ''), 'text');
   assert.ok(!features.completionCandidates(index, 'import "models.nagi" ', 21, false, source).some(item => item.name === 'std.http.server'));
 });
+
+test('Low standard imports can follow another declaration or import on the same line', () => {
+  for (const prefix of ['fn helper() {} ', 'import "models.low" as models; ']) {
+    const text = prefix + 'import std.http.';
+    const [item] = features.completionCandidates(index, text, text.length, true, source);
+    assert.equal(item.name, 'std.http.server');
+    assert.equal(item.replaceStart, prefix.length + 'import '.length);
+    assert.equal(item.replaceEnd, text.length);
+    const names = prefix + 'from std.http.server import te';
+    const [operation] = features.completionCandidates(index, names, names.length, true, source);
+    assert.equal(operation.name, 'text');
+    assert.equal(features.insertion(operation, ''), 'text');
+  }
+  const nested = 'fn main() { print(1); import std.http.';
+  assert.deepEqual(features.completionCandidates(index, nested, nested.length, true, source), []);
+});

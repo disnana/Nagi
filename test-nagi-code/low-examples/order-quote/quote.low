@@ -1,0 +1,112 @@
+record Line {
+    product_id: i64;
+    quantity: i64;
+    unit_price_cents: i64;
+}
+
+record Order {
+    customer: str;
+    items: List[Line];
+}
+
+record Quote {
+    customer: str;
+    lines: i64;
+    units: i64;
+    subtotal_cents: i64;
+    discount_cents: i64;
+    total_cents: i64;
+}
+
+enum QuoteError {
+    InvalidJson(cause: Error);
+    InvalidCustomer;
+    InvalidLineCount;
+    InvalidProduct;
+    InvalidQuantity;
+    InvalidPrice;
+}
+
+fn summarize(text: view[str]) -> Result[Quote, QuoteError] {
+    let order = try parse(text);
+    return calculate(order);
+}
+
+fn parse(text: view[str]) -> Result[Order, QuoteError] {
+    match json_decode[Order](text) {
+        case Ok(order) {
+            return ok(order);
+        }
+        case Err(cause) {
+            return fail(QuoteError.InvalidJson(cause));
+        }
+    }
+}
+
+fn calculate(order: Order) -> Result[Quote, QuoteError] {
+    let customer_bytes = len(view(order.customer));
+    if customer_bytes < 1 or customer_bytes > 80 {
+        return fail(QuoteError.InvalidCustomer);
+    }
+    let lines = len(view(order.items));
+    if lines < 1 or lines > 1000 {
+        return fail(QuoteError.InvalidLineCount);
+    }
+
+    let units = 0;
+    let subtotal = 0;
+    for line in order.items {
+        let line_total = try price(line.product_id, line.quantity, line.unit_price_cents);
+        units += line.quantity;
+        subtotal += line_total;
+    }
+
+    let discount = 0;
+    if subtotal >= 10000 {
+        discount = subtotal / 20;
+    }
+    return ok(Quote(
+        customer=order.customer,
+        lines=lines,
+        units=units,
+        subtotal_cents=subtotal,
+        discount_cents=discount,
+        total_cents=subtotal - discount
+    ));
+}
+
+fn price(product_id: i64, quantity: i64, unit_price_cents: i64) -> Result[i64, QuoteError] {
+    if product_id < 1 {
+        return fail(QuoteError.InvalidProduct);
+    }
+    if quantity < 1 or quantity > 1000 {
+        return fail(QuoteError.InvalidQuantity);
+    }
+    if unit_price_cents < 0 or unit_price_cents > 1000000 {
+        return fail(QuoteError.InvalidPrice);
+    }
+    return ok(quantity * unit_price_cents);
+}
+
+fn message(problem: QuoteError) -> str {
+    match problem {
+        case QuoteError.InvalidJson(_) {
+            return "input must contain customer and items with product_id, quantity and unit_price_cents";
+        }
+        case QuoteError.InvalidCustomer {
+            return "customer must contain 1 to 80 UTF-8 bytes";
+        }
+        case QuoteError.InvalidLineCount {
+            return "items must contain 1 to 1000 lines";
+        }
+        case QuoteError.InvalidProduct {
+            return "product_id must be positive";
+        }
+        case QuoteError.InvalidQuantity {
+            return "quantity must be between 1 and 1000";
+        }
+        case QuoteError.InvalidPrice {
+            return "unit_price_cents must be between 0 and 1000000";
+        }
+    }
+}

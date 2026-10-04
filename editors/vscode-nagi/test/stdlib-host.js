@@ -8,7 +8,7 @@ const { fixtures } = require('./stdlib-fixtures');
 
 module.exports.run = async () => {
   const root = path.resolve(__dirname, '../../..');
-  const folder = path.join(root, 'build', 'vscode-stdlib-host');
+  const folder = process.env.NAGI_EDITOR_HOST_FIXTURES || path.join(root, 'build', 'vscode-stdlib-host');
   fs.mkdirSync(folder, { recursive: true });
   const extension = vscode.extensions.getExtension('Disnana.nagi-lang');
   assert.ok(extension);
@@ -40,7 +40,7 @@ module.exports.run = async () => {
     cases++;
     const call = text.indexOf('http.text') + 'http.'.length;
     const signature = await vscode.commands.executeCommand('vscode.executeSignatureHelpProvider', doc.uri, doc.positionAt(call + 'text('.length));
-    assert.match(signature.signatures[0].label, /def http.text\(status: Code, body: view\[str\]\) -> http.Response/);
+    assert.equal(signature.signatures[0].label, `${suffix === 'low' ? 'fn' : 'def'} http.text(status: Code, body: view[str]) -> http.Response`);
     assert.equal(signature.signatures[0].parameters[1].label, 'body: view[str]');
     cases++;
     const typeOffset = text.indexOf('http.Response') + 'http.'.length;

@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const compiler = require('./compiler');
 const features = require('./features');
 const indentation = require('./indentation');
+const folding = require('./folding');
 const stdlib = require('./stdlib');
 
 function activate(context) {
@@ -375,9 +376,26 @@ function activate(context) {
     })();
   }
 
-  function documentation(item, snapshot) {
+  function displayItem(item, language) {
+    if (language !== 'nagi-low') return item;
+    let signature = item.signature.replace(/^((?:(?:extern|async)\s+)*)def\b/, '$1fn');
+    if (['class', 'enum'].includes(item.kind) && /^(?:class|record|enum)\s/.test(signature) && !signature.includes('{')) {
+      const [head, ...members] = signature.split('\n');
+      const rows = members.filter(line => line.trim()).map(line => {
+        // Compiler variant signatures use expression names such as
+        // models.Fault.Invalid; enum declaration rows use only Invalid.
+        if (item.kind === 'enum') line = line.replace(/^(\s*)(?:[A-Za-z_]\w*\.)+([A-Za-z_]\w*)/, '$1$2');
+        return line.trimEnd() + ';';
+      });
+      signature = `${head.replace(/^class\b/, 'record')} {\n${rows.join('\n')}\n}`;
+    }
+    return { ...item, signature, ...(item.description ? { description: item.description.replace(/\bclass\b/g, 'record') } : {}) };
+  }
+
+  function documentation(item, snapshot, language) {
+    item = displayItem(item, language);
     const text = new vscode.MarkdownString();
-    text.appendCodeblock(item.signature, 'nagi');
+    text.appendCodeblock(item.signature, language);
     if (item.description) text.appendText(item.description);
     if (item.location) text.appendText(`\n${stdlib.sourceUri(item.location.file) ? item.location.file.slice('stdlib:'.length) : path.basename(compiler.normalizeFile(item.location.file, '.'))}:${item.location.line}`);
     if (snapshot?.saved && !item.builtin) text.appendText('\n書きかけの構文を解析できないため、保存済みの宣言を表示しています。');
@@ -391,7 +409,7 @@ function activate(context) {
     if (token.isCancellationRequested || document.isClosed || document.version !== version) return;
     const found = features.hoverAt(snapshot?.index, document.getText(), document.offsetAt(position), { file: document.uri.fsPath, saved: snapshot?.saved });
     if (!found) return;
-    return new vscode.Hover(documentation(found.item, snapshot), new vscode.Range(document.positionAt(found.start), document.positionAt(found.end)));
+    return new vscode.Hover(documentation(found.item, snapshot, document.languageId), new vscode.Range(document.positionAt(found.start), document.positionAt(found.end)));
   }
 
   async function provideCompletionItems(document, position, token) {
@@ -405,8 +423,8 @@ function activate(context) {
     return features.completionCandidates(snapshot?.index, text, offset, document.languageId === 'nagi-low', { file: document.uri.fsPath, saved: snapshot?.saved }).map(item => {
       const kind = { function: vscode.CompletionItemKind.Function, variable: vscode.CompletionItemKind.Variable, pattern: vscode.CompletionItemKind.Keyword, class: vscode.CompletionItemKind.Class, resource: vscode.CompletionItemKind.Class, constant: vscode.CompletionItemKind.Constant, enum: vscode.CompletionItemKind.Enum, enum_member: vscode.CompletionItemKind.EnumMember, field: vscode.CompletionItemKind.Field, module: vscode.CompletionItemKind.Module, type: vscode.CompletionItemKind.TypeParameter, keyword: vscode.CompletionItemKind.Keyword }[item.kind];
       const completion = new vscode.CompletionItem(item.name, kind);
-      completion.detail = item.signature + (snapshot?.saved && !item.builtin ? ' （保存済み）' : '');
-      completion.documentation = documentation(item, snapshot);
+      completion.detail = displayItem(item, document.languageId).signature + (snapshot?.saved && !item.builtin ? ' （保存済み）' : '');
+      completion.documentation = documentation(item, snapshot, document.languageId);
       completion.insertText = new vscode.SnippetString(features.insertion(item, text.slice(word.end)));
       completion.range = new vscode.Range(document.positionAt(item.replaceStart ?? word.start), document.positionAt(item.replaceEnd ?? word.end));
       completion.sortText = `${item.builtin ? '1' : item.kind === 'keyword' ? '2' : '0'}${item.name}`;
@@ -421,11 +439,11 @@ function activate(context) {
     if (token.isCancellationRequested || document.isClosed || document.version !== version) return;
     const found = features.signatureAt(snapshot?.index, document.getText(), document.offsetAt(position), { file: document.uri.fsPath, saved: snapshot?.saved });
     if (!found) return;
-    const { item } = found;
+    const item = displayItem(found.item, document.languageId);
     const parameters = item.kind === 'class' ? item.fields || [] : item.parameters || [];
     const constructor = item.callName || item.name;
     const label = item.kind === 'class' ? `${constructor}(${parameters.map(p => `${p.name}: ${p.type}`).join(', ')}) -> ${constructor}` : item.signature;
-    const signature = new vscode.SignatureInformation(label, documentation(item, snapshot));
+    const signature = new vscode.SignatureInformation(label, documentation(item, snapshot, document.languageId));
     signature.parameters = parameters.map(p => {
       const typed = `${p.name}: ${p.type}`;
       return new vscode.ParameterInformation(label.includes(typed) ? typed : p.name);
@@ -449,6 +467,11 @@ function activate(context) {
           .map(edit => vscode.TextEdit.replace(new vscode.Range(edit.line, 0, edit.line, edit.length), edit.text));
       },
     }, '\n', ':', ')', ']', '}'),
+    vscode.languages.registerFoldingRangeProvider([{ language: 'nagi-low' }], {
+      provideFoldingRanges(document, _context, token) {
+        return token.isCancellationRequested ? [] : folding.ranges(document.getText()).map(range => new vscode.FoldingRange(range.start, range.end));
+      },
+    }),
     vscode.languages.registerDefinitionProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideDefinition }),
     vscode.languages.registerHoverProvider(assistanceSelector, { provideHover }),
     vscode.languages.registerCompletionItemProvider(assistanceSelector, { provideCompletionItems }, '.'),
