@@ -11,11 +11,13 @@ import std.actor as actor
 | 型 | 内容 |
 | --- | --- |
 | `Supervisor[C]` | 共通データCと子の構成を所有する |
+| `TaskReady` | taskの一世代だけで使う準備完了通知 |
 | `Control` | 停止とイベント監視のハンドル |
 | `Actor[M, R, E]` | メッセージM、返信R、業務エラーEを持つactorのハンドル |
 | `Turn[S, R, E]` | 次の状態Sと`Result[R, E]` |
 | `Options` / `ActorOptions` | グループ / actorの設定 |
 | `RestartPolicy` / `CallKind` / `EventKind` | 比較できる定数型 |
+| `WaitError` / `WaitKind` | イベント待ちの失敗。`TIMEOUT`、`INVALID_TIMEOUT` |
 | `CallError` / `Event` | 呼び出しの失敗 / ライフサイクルイベント |
 
 Cは初期化関数へ`shared[C]`として渡します。Sはactorだけが所有します。M・R・Eは容量を数えられる所有された値が必要です。class・enum・List・Option・Resultを使えますが、Map・view・shared・opaque resourceは含められません。
@@ -29,13 +31,18 @@ Cは初期化関数へ`shared[C]`として渡します。Sはactorだけが所�
 | `clone_control(view(control))` | 独立したイベント読み取り位置を持つ`Control` |
 | `register[S, M, R, E](view(group), name, factory, handler, options)` | `Result[Actor[M, R, E], Error]` |
 | `task(view(group), name, factory, policy)` | `Result[unit, Error]` |
+| `task_with_ready(view(group), name, factory, policy)` | `Result[unit, Error]` |
+| `mark_ready(view(signal))` | `Result[unit, Error]` |
 | `turn[S, R, E](next_state, reply)` | `Turn[S, R, E]` |
 | `await run(group)` | `Result[unit, Error]`。groupを消費する |
 | `await shutdown(view(control))` | `Result[unit, Error]` |
 | `await next_event(view(control))` | `Result[Option[Event], Error]` |
+| `await next_event_timeout(view(control), timeout_ms)` | `Result[Option[Event], WaitError]` |
 | `await yield_now()` | `unit` |
 
 factoryとhandlerは名前付きasync関数です。actorのfactoryは`shared[C] -> Result[S, Error]`、handlerは`(S, M) -> Result[Turn[S, R, E], Error]`。taskのfactoryは`shared[C] -> Result[unit, Error]`です。登録名は重複しない1..128 UTF-8 bytesにします。
+
+`task_with_ready`のfactoryは`(shared[C], TaskReady) -> Result[unit, Error]`です。初期化後に`mark_ready`を呼ぶと、その世代の`READY`を一度だけ発行します。重複、終了・キャンセル・再起動済みの世代、停止中の通知は`Error`になります。通知用tokenはSupervisorや共通データの寿命を延ばしません。既存`task`の引数と`STARTED`の意味は変わりません。
 
 ## 呼び出し
 
@@ -63,6 +70,8 @@ readyの0msは現在の状態だけを確認します。callのmailboxは0msな�
 
 ## イベント
 
-`Event.kind`は`STARTING`、`STARTED`、`FAILED`、`PANICKED`、`RESTART_SCHEDULED`、`STOPPED`、`INTENSITY_EXCEEDED`、`SHUTDOWN`、`LAGGED`です。
+`Event.kind`は`STARTING`、`STARTED`、`READY`、`FAILED`、`PANICKED`、`RESTART_SCHEDULED`、`STOPPED`、`INTENSITY_EXCEEDED`、`SHUTDOWN`、`LAGGED`です。
 
 `.child_id`、`.generation`、`.lost_events`はi64、`.truncated`はbool、`.child_name`と`.message`は`view[str]`です。読み取り位置はControlごとに独立します。同じControlでの読み取りは直列化され、終了後は残ったイベントを読み切ってNoneになります。
+
+`next_event_timeout`はControlの読み取りロック待ちも期限に含めます。期限は1..4,294,967,295msで、時計が表現できる値にします。0・負値・上限超過は`WaitKind.INVALID_TIMEOUT`、期限切れは`WaitKind.TIMEOUT`、`Ok(None)`は列の終了です。タイムアウトやキャンセルでイベントを消費したり、グループを停止したりしません。`WaitError.message`は`view[str]`です。期限は協調的に扱われ、blockingなnative処理を強制中断しません。

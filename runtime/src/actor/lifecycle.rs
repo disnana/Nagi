@@ -181,6 +181,46 @@ impl Group {
         ));
     }
 
+    pub fn generation(&self, index: usize) -> i64 {
+        self.ledger.lock().unwrap().slots[index].generation
+    }
+
+    pub fn task_ready(
+        &self,
+        index: usize,
+        generation: i64,
+        status: &super::AtomicU8,
+    ) -> Result<(), Error> {
+        let ledger = self.ledger.lock().unwrap();
+        let slot = &ledger.slots[index];
+        if self.stop.load(Ordering::Acquire)
+            || ledger.phase != Phase::Running
+            || slot.generation != generation
+            || status
+                .compare_exchange(
+                    super::READY_PENDING,
+                    super::READY_NOTIFIED,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                )
+                .is_err()
+        {
+            return Err(Error::invalid(
+                "task readiness is duplicate, stopped or stale",
+            ));
+        }
+        // Hold the generation check through publication so a restart cannot
+        // label an old token's notification with a newer generation.
+        self.publish(Event::new(
+            index as i64 + 1,
+            &slot.name,
+            generation,
+            EventKind::READY,
+            "",
+        ));
+        Ok(())
+    }
+
     pub fn register(&self, name: &str, policy: RestartPolicy) -> Result<usize, Error> {
         let mut ledger = self.ledger.lock().unwrap();
         if self.started.load(Ordering::Acquire) || self.stop.load(Ordering::Acquire) {

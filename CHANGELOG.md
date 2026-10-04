@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Borrow non-Copy List elements for read-only `for` loops, with ownership and lifetime checks and borrowed-variable hints in VS Code. Keep Copy iteration unchanged.
+- Add explicit task readiness and typed, bounded Supervisor event waits. Reject duplicate, stale and inactive readiness signals.
+- Add borrowed JSON Content-Type validation and keep request IDs in HTTP handler wrappers without intermediate copies.
+- Add imported `std.result.map_error` for explicit, typed error conversion through synchronous functions. Preserve `try` error identity and borrowed success values.
+
 - Preflight generated and map outputs against source files, embedded assets, Rust adapters and project manifests, including hard-link aliases. Reject overlapping generated files before writing.
 - Preserve release wrapping and debug overflow checks for constant integer arithmetic. Keep native Rust adapter diagnostics unchanged.
 - Treat local callbacks named `include_text` as ordinary calls, and report the actual Clone requirement when copying a list view.

@@ -11,11 +11,13 @@ import std.actor as actor
 | Type | Purpose |
 | --- | --- |
 | `Supervisor[C]` | Owns shared initialization data C and child registrations |
+| `TaskReady` | A one-use readiness token for one task generation |
 | `Control` | Shutdown and event observation handle |
 | `Actor[M, R, E]` | Handle with message M, reply R, and business error E |
 | `Turn[S, R, E]` | Next state S and `Result[R, E]` |
 | `Options` / `ActorOptions` | Group / actor configuration |
 | `RestartPolicy` / `CallKind` / `EventKind` | Comparable constant types |
+| `WaitError` / `WaitKind` | Event wait failures: `TIMEOUT`, `INVALID_TIMEOUT` |
 | `CallError` / `Event` | Call failure / lifecycle event |
 
 Factories receive C as `shared[C]`. Each actor owns S. M, R, and E must be owned values with allocation accounting. Classes, enums, Lists, Option, and Result are supported; Map, views, shared graphs, and opaque resources are excluded.
@@ -29,13 +31,18 @@ Factories receive C as `shared[C]`. Each actor owns S. M, R, and E must be owned
 | `clone_control(view(control))` | `Control` with an independent event cursor |
 | `register[S, M, R, E](view(group), name, factory, handler, options)` | `Result[Actor[M, R, E], Error]` |
 | `task(view(group), name, factory, policy)` | `Result[unit, Error]` |
+| `task_with_ready(view(group), name, factory, policy)` | `Result[unit, Error]` |
+| `mark_ready(view(signal))` | `Result[unit, Error]` |
 | `turn[S, R, E](next_state, reply)` | `Turn[S, R, E]` |
 | `await run(group)` | `Result[unit, Error]`; consumes group |
 | `await shutdown(view(control))` | `Result[unit, Error]` |
 | `await next_event(view(control))` | `Result[Option[Event], Error]` |
+| `await next_event_timeout(view(control), timeout_ms)` | `Result[Option[Event], WaitError]` |
 | `await yield_now()` | `unit` |
 
 Factories and handlers are named async functions. Actor factories have shape `shared[C] -> Result[S, Error]`; handlers have `(S, M) -> Result[Turn[S, R, E], Error]`. Task factories have `shared[C] -> Result[unit, Error]`. Child names must be unique and contain 1..128 UTF-8 bytes.
+
+`task_with_ready` factories take `(shared[C], TaskReady)` and return `Result[unit, Error]`. Call `mark_ready` after initialization. It emits `READY` once for that generation. Duplicate notifications and tokens from finished, canceled, restarted, or stopping tasks return `Error`. A token does not keep its Supervisor or context alive. Existing `task` factories and `STARTED` events are unchanged.
 
 ## Calls
 
@@ -63,6 +70,8 @@ Capacity includes accepted work in progress. An oversized reply returns `REPLY_T
 
 ## Events
 
-`Event.kind` is `STARTING`, `STARTED`, `FAILED`, `PANICKED`, `RESTART_SCHEDULED`, `STOPPED`, `INTENSITY_EXCEEDED`, `SHUTDOWN`, or `LAGGED`.
+`Event.kind` is `STARTING`, `STARTED`, `READY`, `FAILED`, `PANICKED`, `RESTART_SCHEDULED`, `STOPPED`, `INTENSITY_EXCEEDED`, `SHUTDOWN`, or `LAGGED`.
 
 `.child_id`, `.generation`, and `.lost_events` are i64; `.truncated` is bool; `.child_name` and `.message` are `view[str]`. Each Control has its own cursor. Reads on one Control are serialized. After shutdown, buffered events are drained before None is returned.
+
+`next_event_timeout` includes contention for the Control cursor. A valid timeout is 1..4,294,967,295 ms and must fit the platform clock; zero, negative, or larger values return `WaitKind.INVALID_TIMEOUT`. Expiry returns `WaitKind.TIMEOUT`; `Ok(None)` means the stream has ended. Timeout or cancellation does not consume an event or stop the group. `WaitError.message` is `view[str]`. These deadlines are cooperative and cannot preempt blocking native work.

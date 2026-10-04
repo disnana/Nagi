@@ -11,7 +11,7 @@
 | `f32` / `f64` | 小数を扱う浮動小数点数 | コピーできる |
 | `bool` | `True` / `False` | 分岐・ループの条件に使う |
 | `str` / `bytes` | UTF-8文字列 / バイト列 | 所有値。自作関数へ渡すとmoveする |
-| `List[T]` / `[T]` | 同じ型の要素を持つ配列 | 所有値。forでの走査は基本型とCopy class・enumに対応 |
+| `List[T]` / `[T]` | 同じ型の要素を持つ配列 | 所有値。forはCopy要素をコピーし、非Copy要素を読み取り専用で借りる |
 | `view[str]` / `view[bytes]` / `view[T]` | 文字列・バイト列・配列を借りて読む | 元データの所有者が必要。読むだけで元の値は変更できない |
 | `T?` / `Option[T]` | 値がある、または`None` | `None`には型の文脈が必要。`Some` / `None`のmatchで取り出す |
 | `Result[T, E]` | 成功値またはエラー | `E`はError・独自class・enum。`try`で伝播、`match`で処理する |

@@ -27,7 +27,7 @@ The records in `quote.low` define the JSON structure. `QuoteError` distinguishes
 
 Local variables omit type annotations, as in `let subtotal = 0;`. Record fields, function parameters, and return values declare their types. `view(text)` and `view(order.customer)` borrow strings for reading. The `Order` moves into `calculate`, which later moves its `customer` field into the output `Quote`. Low uses the same type and ownership checks as High.
 
-The line record contains only integer fields, and the example iterates with `for line in order.items`. Indexing or iterating over records with non-Copy fields such as strings, and views of whole records, are currently unsupported.
+The line record contains only integer fields, so `for line in order.items` copies each value. Records with non-Copy fields such as strings can also be iterated through read-only borrows. Indexing non-Copy elements and views of whole records are not yet supported.
 
 `smoke.py` sends 23 cases to the executable and checks JSON values, integer types, and exit codes. It covers valid data, Japanese text, discount boundaries and rounding, maximum values, empty arrays, malformed JSON, and incorrect types. Run it from this directory.
 

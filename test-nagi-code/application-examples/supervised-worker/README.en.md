@@ -1,6 +1,6 @@
 # Manage independent workers with a Supervisor
 
-This CLI runs small packing jobs and an audit counter in separate actors, with a resident connector supervised through `actor.task`. It executes a fixed scenario, checks the results, and shuts down. It needs no network, database, or interactive input.
+This CLI runs small packing jobs and an audit counter in separate actors, with a resident connector supervised through `actor.task_with_ready`. It executes a fixed scenario, checks the results, and shuts down. It needs no network, database, or interactive input.
 
 Run from this directory. Rust/Cargo is required.
 
@@ -36,7 +36,7 @@ The JSON includes `packing_total: 4`, `audit_total: 9`, `failed_events: 1`, `pan
 | Invalid quantity | `Ok(Turn(state, Err(JobError)))` | Business rejection: save the state and continue processing |
 | Packing worker failure | Handler `Err(Error)`, `FAILED`, `REPLY_LOST` | Actor failure: restart under the TRANSIENT policy |
 | Connector panic | Task `PANICKED` | No ordinary business reply: start a fresh task under TRANSIENT |
-| Call after shutdown | `Err(CallError.STOPPED)` | Do not accept the job |
+| Call after shutdown | `Err(CallError)` with `CallKind.STOPPED` | Do not accept the job |
 
 Neither state nor queued jobs are persisted. A restart does not save, roll back, or replay work. A production job processor needs state recovery in its factory and job IDs with durable result checks to avoid duplicate execution.
 
@@ -46,16 +46,14 @@ Neither state nor queued jobs are persisted. A restart does not save, roll back,
 
 `shared[Context]` means shared ownership, rather than providing a mutable shared counter in Nagi. The small Rust adapter owns the mutable instrumentation needed for a single injected panic and Drop observations. These are adapter operations rather than implemented Nagi language features.
 
-Both Control handles are created before `run`. `clone_control` independently subscribes from its creation time; it does not copy earlier event history. One cursor waits for the packing restart, while the other aggregates the full lifecycle. No fixed sleep determines success. Actor readiness and calls have five-second deadlines. [smoke.py](smoke.py) enforces a 15-second deadline for the whole process, including event waits.
+All Control handles are created before `run`. `clone_control` independently subscribes from its creation time; it does not copy earlier event history. Separate cursors wait for the packing restart and connector READY event; another aggregates the full lifecycle. No fixed sleep determines success. Actor readiness, calls, and each event wait have five-second deadlines. `WaitKind.TIMEOUT` is distinct from a closed event stream. [smoke.py](smoke.py) enforces a 15-second deadline for the whole process, including event waits.
 
 `finish` saves the exercise result and awaits `shutdown` before returning it, attempting explicit cleanup even when the exercise returns `Error`. Successful shutdown and scope completion confirm cleanup of supervised children and shared context. This is a native implementation within one process. A VM, live code replacement, distribution, and persistent mailboxes are not implemented.
 
-## Feature ideas from this sample
+## Readiness and next steps
 
-These are proposals; the sample and standard API do not implement them.
+`STARTED` reports task startup; it does not imply completed initialization. The connector calls `mark_ready` after creating its cleanup guard, so generation 2 emits one `READY`. Nagi waits for that event through `next_event_timeout`; it no longer polls the native counters to determine readiness. The counters still verify cleanup.
 
-- Explicit readiness for tasks. A task's `STARTED` event precedes execution of its factory body, so this sample checks separate instrumentation for actual readiness. Waiting for connection establishment would help real connectors.
-- A deadline for `next_event`. It currently waits for an event or stream closure, so smoke uses a process deadline. An API deadline would also help monitoring within a service.
-- A practical example combining job IDs, durable results, and factory recovery. Resetting memory state alone cannot provide duplicate prevention or durable completion checks.
+A useful next sample would combine job IDs, durable results, and factory recovery. Resetting memory state alone cannot provide duplicate prevention or durable completion checks.
 
 [Actor guide](../../../docs/en/actor.md) · [Supervisor](../../../docs/en/supervisor.md) · [日本語](README.md)

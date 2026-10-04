@@ -35,12 +35,12 @@ curl -H 'Content-Type: application/json' \
 | `POST /quotes` | 200。見積JSON |
 | 不正なJSON、必須フィールドの欠落、余分なフィールド、型の違い | 400、`invalid_json` |
 | 不正な、重複した、UTF-8ではない`X-Request-ID` | 400、`invalid_request_id` |
-| 重複した、UTF-8ではない`Content-Type` | 400、`invalid_header` |
+| 重複した、構文が不正な`Content-Type` | 400、`invalid_header` |
 | `Content-Type`の欠落、または`application/json`以外 | 415、`unsupported_media_type` |
 | 数量が範囲外 | 422、`invalid_quantity` |
 | SKUが`NOTEBOOK`以外 | 422、`unknown_sku` |
 
-`Content-Type`はこのサンプルでは値が正確に`application/json`である必要があります。`application/json; charset=utf-8`も415になります。JSONは`sku: str`と`quantity: i64`の2フィールドだけを受け付け、数量の数値文字列や小数は受け付けません。両方の業務入力が不正なら、数量の検証を先に行います。
+`http.is_json_content_type`で`Content-Type`を判定します。大文字・小文字、前後の空白・タブ、`application/json; charset=utf-8`などのparameterに対応します。parameterは文字コードを切り替えず、本文はUTF-8で読みます。JSONは`sku: str`と`quantity: i64`の2フィールドだけを受け付け、数量の数値文字列や小数は受け付けません。両方の業務入力が不正なら、数量の検証を先に行います。
 
 アプリが返す入力・業務エラーの本文は次の形です。JSONの内部エラー詳細を応答へ出しません。
 
@@ -52,7 +52,7 @@ curl -H 'Content-Type: application/json' \
 
 存在しないrouteは404、`GET /quotes`など登録されていないmethodは405と`Allow: POST`、4096バイトを超える本文は413です。これらのサーバー側の応答はアプリのmapperを通らないため、上記のJSON形式やリクエストIDのechoを保証しません。応答の生成自体が失敗した場合は500を返し、最後のfallbackには本文がありません。
 
-`calculate`は独自の`Result[Quote, QuoteError]`を返します。HTTP handlerはエラーとリクエストIDを`ApiFailure`へまとめ、AppのmapperでHTTP応答に変換します。`/health`は組み込み`Error`を使い、`route_mapped`で別のmapperを登録しています。
+`calculate`は独自の`Result[Quote, QuoteError]`を返します。`std.result.map_error`はJSONやHTTP処理の`Error`を`QuoteError`へ変換します。handlerはリクエストIDを保持し、`quote_response`の失敗時にIDを`ApiFailure`へmoveして、AppのmapperでHTTP応答に変換します。処理の各段階でIDをコピーする必要はありません。`/health`は組み込み`Error`を使い、`route_mapped`で別のmapperを登録しています。
 
 `smoke.py`はHighと保存したLowの両方で使える検証関数です。正常な見積、送料無料の境界、型付きJSONの拒否、ヘッダーとUUID、共有設定の変更、サーバー側の制限、停止後のポート解放をlocalhostで確認します。共通の検証コマンドは[上のREADME](../README.md)を参照してください。
 

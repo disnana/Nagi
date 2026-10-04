@@ -1,6 +1,6 @@
 # Supervisorでworkerを分けて管理する
 
-小さな梱包ジョブと監査カウンターを別のactorで処理し、常駐connectorを`actor.task`で監督するCLIです。起動すると決まったジョブと故障を一度ずつ実行し、検証して停止します。ネットワークやDB、入力操作は不要です。
+小さな梱包ジョブと監査カウンターを別のactorで処理し、常駐connectorを`actor.task_with_ready`で監督するCLIです。起動すると決まったジョブと故障を一度ずつ実行し、検証して停止します。ネットワークやDB、入力操作は不要です。
 
 このディレクトリで実行します。Rust/Cargoが必要です。
 
@@ -36,7 +36,7 @@ JSONの主な値は`packing_total: 4`、`audit_total: 9`、`failed_events: 1`、
 | 件数が範囲外 | `Ok(Turn(state, Err(JobError)))` | 業務上の拒否。状態を保存し、workerを続ける |
 | 梱包workerの故障 | handlerの`Err(Error)`、`FAILED`、`REPLY_LOST` | actor自体の失敗。TRANSIENT方針で再起動する |
 | connectorのpanic | taskの`PANICKED` | 正常な業務返信ではない。TRANSIENT方針で新しいtaskを起動する |
-| 停止後の呼び出し | `Err(CallError.STOPPED)` | 処理を受け付けない |
+| 停止後の呼び出し | `Err(CallError)`、kindは`CallKind.STOPPED` | 処理を受け付けない |
 
 状態や未処理ジョブは永続化していません。再起動は保存・ロールバック・再送ではありません。実業務で使う場合は、factoryで永続状態を復元し、ジョブIDと結果確認で重複実行を防ぐ構成が必要です。
 
@@ -46,16 +46,14 @@ JSONの主な値は`packing_total: 4`、`audit_total: 9`、`failed_events: 1`、
 
 `shared[Context]`は共有所有を表し、Nagiで変更可能な共有カウンターを提供するものではありません。一度だけのpanicとDropの観測に必要な可変状態は、この小さなRust adapterへ置いています。これをNagiの実装済み機能としては扱いません。
 
-すべてのControlは`run`の前に作ります。`clone_control`は作成時点から独立にイベントを読み、過去の読み取り位置を複製しません。業務検証のControlと、最終集計のControlを分けることで、再起動を待つ際に消費したイベントも集計できます。固定sleepを成功判定には使いません。actorの起動・呼び出しは5秒の期限があり、イベント待ちを含めたプロセス全体は[smoke.py](smoke.py)が15秒で停止します。
+すべてのControlは`run`の前に作ります。`clone_control`は作成時点から独立にイベントを読み、過去の読み取り位置を複製しません。梱包の再起動、connectorのREADY、最終集計にはそれぞれ独立したControlを使い、先に読んだイベントを失わず集計できます。固定sleepを成功判定には使いません。actorの起動・呼び出しと各イベント待ちには5秒の期限があり、`WaitKind.TIMEOUT`を列の終了と区別します。イベント待ちを含めたプロセス全体は[smoke.py](smoke.py)が15秒で停止します。
 
 `finish`は業務検証の結果を保存してから`shutdown`を待ちます。検証が`Error`を返しても停止を試みます。成功した`shutdown`とscope終了で、監督下の子と共有データの後片付け完了を確認します。これは同一プロセスのnative実装です。VM、無停止のコード差し替え、分散配置、永続mailboxは未対応です。
 
-## サンプルから見えた機能案
+## 準備完了と次の実用例
 
-以下は提案で、このサンプルや標準APIには追加していません。
+`STARTED`はtaskの起動を示し、初期化の完了を保証しません。connectorは後片付け用guardを作ってから`mark_ready`を呼び、第2世代の`READY`を一度だけ発行します。Nagiは`next_event_timeout`でそのイベントを待ちます。稼働判定のためにnativeカウンターを繰り返し調べる必要はなくなり、カウンターは後片付けの検証に使います。
 
-- task用の明示的なready通知。taskの`STARTED`はfactory本体が実行される前に届くため、この例では別の計測値で稼働を確認しています。接続確立などの準備完了を監督側から待てると、実際のconnectorに使いやすくなります。
-- `next_event`の期限付き待ち。現在はイベントが来るか列が閉じるまで待つため、smoke側のプロセス期限を使います。サービス内の監視でも期限を扱えるAPIが候補です。
-- ジョブID、永続結果、factoryによる復元を組み合わせる実用例。メモリ状態の再初期化だけでは配送の重複や完了確認を扱えないため、次のサンプルとして有用です。
+次の実用例として、ジョブID、永続結果、factoryによる復元を組み合わせる構成が候補です。メモリ状態の再初期化だけでは、重複実行の防止や永続的な完了確認を扱えません。
 
 [actorの書き方](../../../docs/actor.md) · [Supervisor](../../../docs/supervisor.md) · [English](README.en.md)

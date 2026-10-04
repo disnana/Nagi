@@ -1,4 +1,5 @@
 import std.http.server as http
+import std.result as result
 
 class Config:
     currency: str
@@ -64,7 +65,7 @@ def api_failure(failure: ApiFailure) -> http.Response:
         case QuoteError.InvalidRequestId:
             return error_response(http.Status.BAD_REQUEST, "invalid_request_id", "X-Request-ID must contain one UUID", view(failure.request_id))
         case QuoteError.InvalidHeader:
-            return error_response(http.Status.BAD_REQUEST, "invalid_header", "Content-Type must contain one text value", view(failure.request_id))
+            return error_response(http.Status.BAD_REQUEST, "invalid_header", "Content-Type must contain one valid media type", view(failure.request_id))
         case QuoteError.UnsupportedMediaType:
             return error_response(http.Status.UNSUPPORTED_MEDIA_TYPE, "unsupported_media_type", "Content-Type must be application/json", view(failure.request_id))
         case QuoteError.InvalidJson:
@@ -94,25 +95,23 @@ def read_request_id(request: view[http.Request]) -> Result[str, ApiFailure]:
         case Err(_):
             return fail(ApiFailure(problem=QuoteError.InvalidRequestId, request_id=""))
 
-def require_json(request: view[http.Request], request_id: view[str]) -> Result[unit, ApiFailure]:
-    match http.header_text(request, "Content-Type"):
-        case Ok(header):
-            match header:
-                case Some(value):
-                    if value == "application/json":
-                        return ok(assert_true(True))
-                    return fail(ApiFailure(problem=QuoteError.UnsupportedMediaType, request_id=copy(request_id)))
-                case None:
-                    return fail(ApiFailure(problem=QuoteError.UnsupportedMediaType, request_id=copy(request_id)))
-        case Err(_):
-            return fail(ApiFailure(problem=QuoteError.InvalidHeader, request_id=copy(request_id)))
+def invalid_header(cause: Error) -> QuoteError:
+    return QuoteError.InvalidHeader
 
-def read_input(body: view[bytes], request_id: view[str]) -> Result[QuoteInput, ApiFailure]:
-    match json_decode[QuoteInput](body):
-        case Ok(input):
-            return ok(input)
-        case Err(_):
-            return fail(ApiFailure(problem=QuoteError.InvalidJson, request_id=copy(request_id)))
+def invalid_json(cause: Error) -> QuoteError:
+    return QuoteError.InvalidJson
+
+def response_error(cause: Error) -> QuoteError:
+    return QuoteError.Internal
+
+def require_json(request: view[http.Request]) -> Result[unit, QuoteError]:
+    matches = try result.map_error(http.is_json_content_type(request), invalid_header)
+    if matches:
+        return ok(assert_true(True))
+    return fail(QuoteError.UnsupportedMediaType)
+
+def read_input(body: view[bytes]) -> Result[QuoteInput, QuoteError]:
+    return result.map_error(json_decode[QuoteInput](body), invalid_json)
 
 def calculate(input: QuoteInput, config: shared[Config]) -> Result[Quote, QuoteError]:
     if input.quantity < 1 or input.quantity > config.maximum_quantity:
@@ -125,19 +124,19 @@ def calculate(input: QuoteInput, config: shared[Config]) -> Result[Quote, QuoteE
         shipping = 0
     return ok(Quote(sku=input.sku, quantity=input.quantity, currency=copy(view(config.currency)), unit_price_minor=config.unit_price_minor, subtotal_minor=subtotal, shipping_minor=shipping, total_minor=subtotal + shipping))
 
+def quote_response(request: http.Request, config: shared[Config]) -> Result[http.Response, QuoteError]:
+    try require_json(view(request))
+    input = try read_input(request.body)
+    value = try calculate(input, config)
+    return result.map_error(http.json[Quote](http.Status.OK, value), response_error)
+
 async def quote(request: http.Request, config: shared[Config]) -> Result[http.Response, ApiFailure]:
     request_id = try read_request_id(view(request))
-    try require_json(view(request), view(request_id))
-    input = try read_input(request.body, view(request_id))
-    match calculate(input, config):
-        case Ok(value):
-            match http.json[Quote](http.Status.OK, value):
-                case Ok(response):
-                    match with_request_id(response, view(request_id)):
-                        case Ok(output):
-                            return ok(output)
-                        case Err(_):
-                            return fail(ApiFailure(problem=QuoteError.Internal, request_id=request_id))
+    match quote_response(request, config):
+        case Ok(response):
+            match with_request_id(response, view(request_id)):
+                case Ok(output):
+                    return ok(output)
                 case Err(_):
                     return fail(ApiFailure(problem=QuoteError.Internal, request_id=request_id))
         case Err(problem):

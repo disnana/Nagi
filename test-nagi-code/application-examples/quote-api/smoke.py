@@ -74,7 +74,7 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
 
             errors = {
                 "invalid_request_id": {"code": "invalid_request_id", "message": "X-Request-ID must contain one UUID"},
-                "invalid_header": {"code": "invalid_header", "message": "Content-Type must contain one text value"},
+                "invalid_header": {"code": "invalid_header", "message": "Content-Type must contain one valid media type"},
                 "unsupported_media_type": {"code": "unsupported_media_type", "message": "Content-Type must be application/json"},
                 "invalid_json": {"code": "invalid_json", "message": "Expected exactly sku:string and quantity:integer"},
                 "invalid_quantity": {"code": "invalid_quantity", "message": "Quantity is outside the configured range"},
@@ -131,12 +131,36 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
                         check(name, "POST", "/quotes", 400, body=body, headers=json_headers,
                               expected=errors["invalid_json"], request_id=REQUEST_ID)
                     for name, content_type in (("missing-content-type", None), ("text-content-type", "text/plain"),
-                                               ("parameterized-content-type", "application/json; charset=utf-8")):
+                                               ("suffix-content-type", "application/problem+json")):
                         headers = (("X-Request-ID", REQUEST_ID),)
                         if content_type is not None:
                             headers += (("Content-Type", content_type),)
                         check(name, "POST", "/quotes", 415, body=valid, headers=headers,
                               expected=errors["unsupported_media_type"], request_id=REQUEST_ID)
+                    for name, content_type in (
+                        ("parameterized-content-type", "application/json; charset=utf-8"),
+                        ("case-insensitive-content-type", "Application/JSON"),
+                        ("whitespace-content-type", " \tapplication/json\t ; charset=\"UTF-8\" \t"),
+                        ("quoted-parameter-content-type", 'application/json; profile="a;b=\\\"c"'),
+                        ("charset-does-not-select-decoder", "application/json; charset=iso-8859-1"),
+                    ):
+                        check(name, "POST", "/quotes", 200, body=valid,
+                              headers=(("X-Request-ID", REQUEST_ID), ("Content-Type", content_type)),
+                              expected=expected_quote(1), request_id=REQUEST_ID)
+                    for name, content_type in (
+                        ("comma-content-type", "application/json, text/plain"),
+                        ("missing-subtype-content-type", "application/"),
+                        ("invalid-parameter-content-type", "application/json; charset="),
+                        ("unclosed-parameter-content-type", 'application/json; charset="utf-8'),
+                    ):
+                        check(name, "POST", "/quotes", 400, body=valid,
+                              headers=(("X-Request-ID", REQUEST_ID), ("Content-Type", content_type)),
+                              expected=errors["invalid_header"], request_id=REQUEST_ID)
+                    check("charset-still-requires-utf8-json", "POST", "/quotes", 400,
+                          body=b'{"sku":"\xff","quantity":1}',
+                          headers=(("X-Request-ID", REQUEST_ID),
+                                   ("Content-Type", "application/json; charset=iso-8859-1")),
+                          expected=errors["invalid_json"], request_id=REQUEST_ID)
                     check("duplicate-content-type", "POST", "/quotes", 400, body=valid,
                           headers=json_headers + (("Content-Type", "application/json"),),
                           expected=errors["invalid_header"], request_id=REQUEST_ID)

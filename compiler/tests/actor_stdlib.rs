@@ -526,3 +526,95 @@ fn lifecycle_text_views_follow_their_native_owner_and_cannot_serialize() {
     f.rejected("import std.actor as actor\ndef bad(value: view[actor.RestartPolicy]) -> i64:\n    return len(value)\n");
     f.rejected("import std.actor as actor\ndef bad(kind: actor.CallKind) -> bool:\n    match kind:\n        case actor.CallKind.STOPPED:\n            return True\n");
 }
+
+const READY_TASK: &str = r#"import std.actor as actor
+class Context:
+    active: bool
+async def factory(context: shared[Context], signal: actor.TaskReady) -> Result[unit, Error]:
+    await actor.yield_now()
+    try actor.mark_ready(view(signal))
+    match actor.mark_ready(view(signal)):
+        case Ok(_):
+            return error("duplicate readiness was accepted")
+        case Err(_):
+            assert_true(True)
+    while context.active:
+        await actor.yield_now()
+    return ok(assert_true(True))
+async def monitor(group: actor.Supervisor[Context]) -> Result[unit, Error]:
+    return await actor.run(group)
+async def exercise(control: actor.Control) -> Result[unit, Error]:
+    reached = False
+    while not reached:
+        match await actor.next_event_timeout(view(control), 5000):
+            case Ok(next):
+                match next:
+                    case Some(event):
+                        if event.kind == actor.EventKind.READY:
+                            assert_true(event.child_name == "connector" and event.generation == 1)
+                            reached = True
+                    case None:
+                        return error("event stream closed before readiness")
+            case Err(problem):
+                assert_true(problem.kind == actor.WaitKind.TIMEOUT)
+                return error("readiness deadline exceeded")
+    try await actor.shutdown(view(control))
+    return ok(print("task readiness and event deadlines preserved"))
+async def main() -> Result[unit, Error]:
+    group = actor.supervisor[Context](Context(active=True), actor.default_options())
+    creator = factory
+    try actor.task_with_ready(view(group), "connector", creator, actor.RestartPolicy.TEMPORARY)
+    control = actor.control(view(group))
+    match await actor.next_event_timeout(view(control), 0):
+        case Ok(_):
+            return error("invalid deadline was accepted")
+        case Err(problem):
+            assert_true(problem.kind == actor.WaitKind.INVALID_TIMEOUT)
+            assert_true(len(problem.message) > 0)
+    match await actor.next_event_timeout(view(control), 1):
+        case Ok(_):
+            return error("unstarted supervisor produced an event")
+        case Err(problem):
+            assert_true(problem.kind == actor.WaitKind.TIMEOUT)
+    async with scope:
+        spawn monitor(group)
+        spawn exercise(control)
+    return ok(assert_true(True))
+"#;
+
+#[test]
+fn explicit_task_readiness_and_typed_event_deadlines_execute_from_high_and_low() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", READY_TASK);
+    fixture.roundtrip();
+    fixture.run_both("task readiness and event deadlines preserved");
+}
+
+#[test]
+fn readiness_factory_and_wait_error_contracts_are_checked_before_native_build() {
+    let fixture = Fixture::new();
+    for changed in [
+        READY_TASK.replace("async def factory(", "def factory("),
+        READY_TASK.replace(
+            "context: shared[Context], signal: actor.TaskReady",
+            "context: shared[Context]",
+        ),
+        READY_TASK.replace("signal: actor.TaskReady", "signal: view[actor.TaskReady]"),
+        READY_TASK.replace("context: shared[Context]", "context: Context"),
+        READY_TASK.replace(
+            "actor.mark_ready(view(signal))",
+            "actor.mark_ready(view(context))",
+        ),
+        READY_TASK.replace(
+            "actor.next_event_timeout(view(control), 1)",
+            "actor.next_event_timeout(view(control), False)",
+        ),
+        READY_TASK.replace(
+            "problem.kind == actor.WaitKind.TIMEOUT",
+            "problem.kind == actor.CallKind.REPLY_TIMEOUT",
+        ),
+    ] {
+        fixture.rejected(&changed);
+    }
+    fixture.rejected("import std.actor as actor\nasync def wrong(control: view[actor.Control]) -> Result[Option[actor.Event], Error]:\n    return await actor.next_event_timeout(control, 1000)\n");
+}

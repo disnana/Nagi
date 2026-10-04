@@ -16,7 +16,10 @@ use std::{
     fmt,
     future::{poll_fn, Future},
     mem::size_of,
-    sync::{atomic::Ordering, Arc, Mutex},
+    sync::{
+        atomic::{AtomicU8, Ordering},
+        Arc, Mutex, Weak,
+    },
     time::Duration,
 };
 use tokio::{
@@ -61,6 +64,27 @@ impl EventKind {
     pub const INTENSITY_EXCEEDED: Self = Self(6);
     pub const SHUTDOWN: Self = Self(7);
     pub const LAGGED: Self = Self(8);
+    pub const READY: Self = Self(9);
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WaitKind(u8);
+impl WaitKind {
+    pub const TIMEOUT: Self = Self(0);
+    pub const INVALID_TIMEOUT: Self = Self(1);
+}
+#[derive(Debug)]
+pub struct WaitError {
+    kind: WaitKind,
+    message: &'static str,
+}
+impl WaitError {
+    pub fn kind(&self) -> WaitKind {
+        self.kind
+    }
+    pub fn message(&self) -> &str {
+        self.message
+    }
 }
 
 pub struct CallError {
@@ -376,6 +400,9 @@ pub async fn shutdown(control: &Control) -> Result<(), Error> {
     }
 }
 pub async fn next_event(control: &Control) -> Result<Option<Event>, Error> {
+    Ok(receive_event(control).await)
+}
+async fn receive_event(control: &Control) -> Option<Event> {
     let mut events = control.events.lock().await;
     let result = loop {
         let changed = control.group.changed.notified();
@@ -400,14 +427,119 @@ pub async fn next_event(control: &Control) -> Result<Option<Event>, Error> {
         }
     };
     match result {
-        Ok(event) => Ok(Some((*event).clone())),
-        Err(broadcast::error::RecvError::Closed) => Ok(None),
+        Ok(event) => Some((*event).clone()),
+        Err(broadcast::error::RecvError::Closed) => None,
         Err(broadcast::error::RecvError::Lagged(lost)) => {
             let mut event = Event::new(0, "", 0, EventKind::LAGGED, "");
             event.lost_events = lost.min(i64::MAX as u64) as i64;
-            Ok(Some(event))
+            Some(event)
         }
     }
+}
+
+/// Wait at most a positive number of milliseconds, including receiver-lock
+/// contention. A timeout does not consume an event or stop the supervisor.
+/// Like other Tokio deadlines, this cannot preempt blocking native work.
+pub async fn next_event_timeout(
+    control: &Control,
+    timeout_ms: i64,
+) -> Result<Option<Event>, WaitError> {
+    let invalid = || WaitError {
+        kind: WaitKind::INVALID_TIMEOUT,
+        message: "event timeout must be 1..4294967295 ms with a representable deadline",
+    };
+    let milliseconds = u32::try_from(timeout_ms).map_err(|_| invalid())?;
+    if milliseconds == 0 {
+        return Err(invalid());
+    }
+    let duration = Duration::from_millis(u64::from(milliseconds));
+    let deadline = Instant::now().checked_add(duration).ok_or_else(invalid)?;
+    timeout_at(deadline, receive_event(control))
+        .await
+        .map_err(|_| WaitError {
+            kind: WaitKind::TIMEOUT,
+            message: "supervisor event wait deadline exceeded",
+        })
+}
+
+// Pending -> notified -> inactive. The guard invalidates escaped native
+// tokens when their factory finishes or is canceled; the token itself retains
+// neither the group nor its user context.
+const READY_PENDING: u8 = 0;
+const READY_NOTIFIED: u8 = 1;
+const READY_INACTIVE: u8 = 2;
+struct ReadyState {
+    group: Weak<Group>,
+    index: usize,
+    generation: i64,
+    status: AtomicU8,
+}
+pub struct TaskReady {
+    state: Arc<ReadyState>,
+}
+impl fmt::Debug for TaskReady {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TaskReady")
+            .field("generation", &self.state.generation)
+            .finish_non_exhaustive()
+    }
+}
+struct ReadyGuard(Arc<ReadyState>);
+impl Drop for ReadyGuard {
+    fn drop(&mut self) {
+        self.0.status.store(READY_INACTIVE, Ordering::Release);
+    }
+}
+
+/// Publish READY once for this task generation, after application-defined
+/// initialization. Duplicate, stopped and no-longer-active tokens are invalid.
+pub fn mark_ready(signal: &TaskReady) -> Result<(), Error> {
+    let group = signal
+        .state
+        .group
+        .upgrade()
+        .ok_or_else(|| Error::invalid("task generation is no longer active"))?;
+    group.task_ready(
+        signal.state.index,
+        signal.state.generation,
+        &signal.state.status,
+    )
+}
+
+pub fn task_with_ready<C, F, Fut>(
+    supervisor: &Supervisor<C>,
+    name: &str,
+    factory: F,
+    policy: RestartPolicy,
+) -> Result<(), Error>
+where
+    C: Send + Sync + 'static,
+    F: Fn(Arc<C>, TaskReady) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<(), Error>> + Send + 'static,
+{
+    let factory = Arc::new(factory);
+    let mut specs = supervisor.specs.lock().unwrap();
+    let index = supervisor.group.register(name, policy)?;
+    debug_assert_eq!(index, specs.len());
+    specs.push(Arc::new(move |context, group, index| {
+        let factory = Arc::clone(&factory);
+        Box::pin(async move {
+            if group.stop.load(Ordering::Acquire) {
+                return Ok(());
+            }
+            let state = Arc::new(ReadyState {
+                group: Arc::downgrade(&group),
+                index,
+                generation: group.generation(index),
+                status: AtomicU8::new(READY_PENDING),
+            });
+            let _ready = ReadyGuard(Arc::clone(&state));
+            group.child_event(index, EventKind::STARTED, "");
+            factory(context, TaskReady { state }).await
+        })
+    }));
+    Ok(())
 }
 
 pub fn task<C, F, Fut>(

@@ -35,10 +35,11 @@ for (const [suffix, text] of fixtures) {
     assert.ok(standard);
     assert.equal(index.standard_modules[0].name, 'std.http.server');
     assert.ok(index.standard_modules[0].members.some(item => item.name === 'append_header_text'));
+    assert.ok(index.standard_modules[0].members.some(item => item.name === 'is_json_content_type'));
     assert.ok(!index.files.includes(virtual), 'standard library is not a writable project file');
     assert.deepEqual(index.definitions.filter(item => item.kind === 'resource').map(item => item.name), ['Request', 'Response', 'Method', 'Status', 'Options', 'App']);
     assert.ok(!index.definitions.some(item => item.name === 'UNAUTHORIZED'));
-    for (const spelling of ['std.http.server', 'Code.UNAUTHORIZED', 'http.text']) {
+    for (const spelling of ['std.http.server', 'Code.UNAUTHORIZED', 'http.text', 'http.is_json_content_type']) {
       const start = text.indexOf(spelling) + (spelling === 'std.http.server' ? 2 : spelling.lastIndexOf('.') + 1);
       const target = targetAt(index, text, file, start + 1, folder);
       assert.equal(target.file, virtual, spelling);
@@ -48,6 +49,15 @@ for (const [suffix, text] of fixtures) {
     assert.equal(features.hoverAt(index, text, status + 2, source).item.signature, 'Code.UNAUTHORIZED: Code');
     const call = text.indexOf('http.text') + 'http.'.length;
     assert.match(features.signatureAt(index, text, call + 'text('.length, source).item.signature, /def http.text\(status: Code, body: view\[str\]\) -> http.Response/);
+    const jsonCall = text.indexOf('http.is_json_content_type') + 'http.'.length;
+    assert.match(features.hoverAt(index, text, jsonCall + 2, source).item.signature,
+      /def http.is_json_content_type\(request: view\[Incoming\]\) -> Result\[bool, Error\]/);
+    assert.match(features.signatureAt(index, text, jsonCall + 'is_json_content_type('.length, source).item.signature,
+      /def http.is_json_content_type\(request: view\[Incoming\]\) -> Result\[bool, Error\]/);
+    const jsonCompletion = features.completionCandidates(index, text, jsonCall + 2, suffix === 'low', source)
+      .find(item => item.name === 'is_json_content_type');
+    assert.equal(jsonCompletion.kind, 'function');
+    assert.equal(features.insertion(jsonCompletion, ''), 'is_json_content_type(${1:request})');
     const typeStart = text.indexOf('http.Response') + 'http.'.length;
     const types = features.completionCandidates(index, text, typeStart + 2, suffix === 'low', source);
     assert.equal(types.find(item => item.name === 'Request').kind, 'resource');

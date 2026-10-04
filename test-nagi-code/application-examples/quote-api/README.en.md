@@ -35,12 +35,12 @@ Amounts are integers in USD cents. A NOTEBOOK costs 1250, shipping costs 500, an
 | `POST /quotes` | 200; quote JSON |
 | Invalid JSON, missing fields, extra fields or incorrect types | 400, `invalid_json` |
 | Invalid, duplicate or non-UTF-8 `X-Request-ID` | 400, `invalid_request_id` |
-| Duplicate or non-UTF-8 `Content-Type` | 400, `invalid_header` |
+| Duplicate or malformed `Content-Type` | 400, `invalid_header` |
 | Missing `Content-Type` or a value other than `application/json` | 415, `unsupported_media_type` |
 | Quantity outside the configured range | 422, `invalid_quantity` |
 | SKU other than `NOTEBOOK` | 422, `unknown_sku` |
 
-This sample requires the exact `Content-Type` value `application/json`. It returns 415 for `application/json; charset=utf-8` too. JSON must contain exactly `sku: str` and `quantity: i64`; numeric strings and fractional quantities are rejected. If both business inputs are invalid, quantity validation runs first.
+The sample uses `http.is_json_content_type`. It accepts case variations, surrounding spaces or tabs, and parameters such as `application/json; charset=utf-8`. Parameters do not select a decoder; the body must be UTF-8. JSON must contain exactly `sku: str` and `quantity: i64`; numeric strings and fractional quantities are rejected. If both business inputs are invalid, quantity validation runs first.
 
 Application input and business errors use this body shape. JSON decoding details are not exposed in responses.
 
@@ -52,7 +52,7 @@ Application input and business errors use this body shape. JSON decoding details
 
 Unknown routes return 404. Unregistered methods such as `GET /quotes` return 405 with `Allow: POST`. Bodies larger than 4096 bytes return 413. These server responses bypass the application mapper, so they do not guarantee the JSON error shape or request ID echo described above. Response construction failures return 500; the final fallback has no body.
 
-`calculate` returns a custom `Result[Quote, QuoteError]`. The HTTP handler combines an error and the request ID into `ApiFailure`, which the App mapper converts into a response. `/health` uses the built-in `Error` and a separate mapper registered with `route_mapped`.
+`calculate` returns a custom `Result[Quote, QuoteError]`. `std.result.map_error` converts JSON and HTTP errors into `QuoteError`. The handler retains the request ID while `quote_response` runs. On failure it moves the ID into `ApiFailure`, which the App mapper converts into a response; each processing stage does not need its own ID copy. `/health` uses the built-in `Error` and a separate mapper registered with `route_mapped`.
 
 `smoke.py` exposes the same verification function for High and saved Low. It checks quotes, the free shipping boundary, typed JSON rejection, headers and UUIDs, shared configuration, server limits and listener release on localhost. See the [parent README](../README.en.md) for the shared verification command.
 

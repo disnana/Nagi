@@ -46,7 +46,7 @@ fn explicit_list_element_types_still_contextualize_the_first_literal() {
 }
 
 #[test]
-fn record_list_iteration_reports_the_copy_requirement() {
+fn record_list_iteration_accepts_copy_values_and_readonly_noncopy_borrows() {
     let high = checked("class Item:\n    amount: i64\n    quantity: i64\ndef main():\n    items = [Item(amount=20, quantity=2)]\n    for item in items:\n        print(item.amount * item.quantity)\n").unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
@@ -56,8 +56,6 @@ fn record_list_iteration_reports_the_copy_requirement() {
         (false, "record Item { amount: i64; label: str; }\nfn main() {\n    let items = [Item(amount=20, label=\"Nagi\")];\n    for item in items { print(item.amount); }\n}\n"),
     ] {
         let mut program = parser::parse(source, high).unwrap();
-        let error = check::check(&mut program).unwrap_err();
-        assert!(error.contains("非Copy要素のfor反復"), "{error}");
-        assert!(!error.contains("primitiveに限定"), "{error}");
+        check::check(&mut program).unwrap();
     }
 }
