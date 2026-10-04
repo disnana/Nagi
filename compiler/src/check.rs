@@ -1672,11 +1672,31 @@ impl Checker {
             {
                 self.origin_at(&args[0], if n == "copy" { depth.max(1) } else { depth })
             }
-            E::Call(_, _, args) if e.ty.as_ref().is_some_and(Type::contains_view) => args
-                .iter()
-                .filter(|arg| arg.ty.as_ref().is_some_and(Type::contains_view))
-                .flat_map(|arg| self.origin(arg))
-                .collect(),
+            E::Call(name, _, args) if e.ty.as_ref().is_some_and(Type::contains_view) => {
+                let static_return = match e.resolution {
+                    Some(NameResolution::Local) => self
+                        .vars
+                        .get(name)
+                        .is_some_and(|var| var.ty.function_view_return_is_static()),
+                    Some(NameResolution::Function) => self.functions.get(name).is_some_and(|f| {
+                        f.ret.contains_view() && !f.params.iter().any(|(_, ty)| ty.contains_view())
+                    }),
+                    _ => false,
+                };
+                if static_return {
+                    HashSet::from([BorrowedPlace {
+                        binding: BindingId { line: 0, token: 0 },
+                        fields: vec![],
+                        owner_loan: false,
+                        static_origin: true,
+                    }])
+                } else {
+                    args.iter()
+                        .filter(|arg| arg.ty.as_ref().is_some_and(Type::contains_view))
+                        .flat_map(|arg| self.origin(arg))
+                        .collect()
+                }
+            }
             E::List(values) if e.ty.as_ref().is_some_and(Type::contains_view) => values
                 .iter()
                 .flat_map(|value| self.origin_at(value, depth.saturating_sub(1)))
