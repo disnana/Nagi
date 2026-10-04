@@ -2,13 +2,15 @@
 
 初めて使うなら[インストール](getting-started.md)、書き方を調べるなら[文法](syntax.md)・[組み込み関数](builtins.md)へ。
 
+このDocsはmainの内容です。[Changelog](../CHANGELOG.md)の`Unreleased`にある機能は、配布前のためソースからのビルドが必要です。
+
 ## 初めて使う
 
 1. [準備と最初の実行](getting-started.md)でインストールし、Hello Worldを動かす。
 2. [コードを書きながら学ぶ](language-guide.md)で変数・関数・配列・エラー処理を覚える。
 3. [HTTPとHTML](http.md)でAPIを作り、[SQLite](database.md)でデータを保存する。
 
-[VS Codeの使い方](editor.md)も確認できます。
+[VS Codeの使い方](editor.md)と[JetBrains版の導入方法](../editors/jetbrains-nagi/README.md)も確認できます。
 
 ## 言語リファレンス
 

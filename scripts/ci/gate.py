@@ -18,6 +18,14 @@ def errors(needs: dict) -> list[str]:
         actual = needs.get("linux", {}).get("result", "missing")
         if actual != expected:
             failures.append(f"linux: {actual}, expected {expected}")
+    jetbrains = needs.get("changes", {}).get("outputs", {}).get("jetbrains_checks")
+    if jetbrains not in ("true", "false"):
+        failures.append("jetbrains: missing or invalid check plan")
+    else:
+        expected = "success" if jetbrains == "true" else "skipped"
+        actual = needs.get("jetbrains", {}).get("result", "missing")
+        if actual != expected:
+            failures.append(f"jetbrains: {actual}, expected {expected}")
     plan = needs.get("release-plan", {}).get("outputs", {})
     for component, job in (("vscode", "vscode-package"), ("nagi", "nagi-package")):
         planned = plan.get(f"package_{component}")

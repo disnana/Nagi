@@ -1,0 +1,73 @@
+name: Nagi JetBrains plugin
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'editors/jetbrains-nagi/**'
+      - '.github/workflows/jetbrains.yml'
+      - '.github/workflows/ci.yml'
+      - 'scripts/ci/changes.py'
+      - 'scripts/ci/gate.py'
+      - 'scripts/ci/test_checks.py'
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jetbrains-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: JetBrains (${{ matrix.product }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - product: IntelliJ IDEA
+            platformType: IC
+            platformVersion: '2025.1.1'
+            minimumPlatformVersion: '2024.3.7'
+          - product: PyCharm
+            platformType: PC
+            platformVersion: '2025.1.1'
+            minimumPlatformVersion: '2024.3.6'
+    defaults:
+      run:
+        working-directory: editors/jetbrains-nagi
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - name: Test, package, and verify the selected IDE
+        run: >-
+          ./gradlew --no-daemon --stacktrace test buildPlugin verifyPlugin
+          -PplatformType=${{ matrix.platformType }}
+          -PplatformVersion=${{ matrix.platformVersion }}
+          -PminimumPlatformVersion=${{ matrix.minimumPlatformVersion }}
+      - name: Upload the verified plugin
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nagi-jetbrains-${{ matrix.platformType }}
+          path: editors/jetbrains-nagi/build/distributions/*.zip
+          if-no-files-found: error
+      - name: Upload test and compatibility reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nagi-jetbrains-reports-${{ matrix.platformType }}
+          path: |
+            editors/jetbrains-nagi/build/reports/tests/
+            editors/jetbrains-nagi/build/test-results/
+            editors/jetbrains-nagi/build/reports/pluginVerifier/
+          if-no-files-found: warn

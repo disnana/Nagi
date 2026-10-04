@@ -1,6 +1,8 @@
 """Exercise complete Git ranges and the required-check result contract."""
 import copy
+import fnmatch
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -42,6 +44,9 @@ class ChangeTests(unittest.TestCase):
     def full(self, head=None, base=None, event="pull_request"):
         return changes.classify(event, base or self.first, head or self.run_git("rev-parse", "HEAD"))["full_checks"]
 
+    def jetbrains(self, head=None, base=None, event="pull_request"):
+        return changes.classify(event, base or self.first, head or self.run_git("rev-parse", "HEAD"))["jetbrains_checks"]
+
     def test_docs_and_site_files_skip_full_checks(self):
         for path in ("README.md", "README.en.md", "CONTRIBUTING.md", "CONTRIBUTING.en.md",
                      "SECURITY.md", "SECURITY.en.md", "PERFORMANCE.md", "CHANGELOG.md",
@@ -78,6 +83,98 @@ class ChangeTests(unittest.TestCase):
     def test_mixed_docs_and_code_run_full_checks(self):
         self.write("docs/start.md", "# New docs\n")
         self.write("runtime/src/lib.rs", "// changed runtime\n")
+        self.assertEqual(self.full(self.commit()), "true")
+
+    def test_jetbrains_plugin_only_ranges_use_the_independent_checks(self):
+        for path in ("editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiLexer.java",
+                     "editors/jetbrains-nagi/src/test/java/com/disnana/nagi/NagiEditorTest.java",
+                     "editors/jetbrains-nagi/src/main/resources/META-INF/plugin.xml",
+                     "editors/jetbrains-nagi/build.gradle.kts", "editors/jetbrains-nagi/gradle.properties",
+                     "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.jar",
+                     "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.properties",
+                     "editors/jetbrains-nagi/gradlew", "editors/jetbrains-nagi/gradlew.bat",
+                     "editors/jetbrains-nagi/README.md", "editors/jetbrains-nagi/README.en.md",
+                     ".github/workflows/jetbrains.yml"):
+            with self.subTest(path=path):
+                base = self.run_git("rev-parse", "HEAD")
+                self.write(path, "plugin update\n")
+                head = self.commit()
+                for event in ("push", "pull_request"):
+                    self.assertEqual(self.full(head, base, event), "false")
+                    self.assertEqual(self.jetbrains(head, base, event), "true")
+
+    def test_jetbrains_and_docs_can_share_a_complete_range(self):
+        self.write("editors/jetbrains-nagi/build.gradle.kts", "// plugin build change\n")
+        self.commit()
+        self.write("README.md", "# Plugin setup\n")
+        self.write("docs/editors.md", "# Editor support\n")
+        head = self.commit()
+        for event in ("push", "pull_request"):
+            self.assertEqual(self.full(head, event=event), "false")
+            self.assertEqual(self.jetbrains(head, event=event), "true")
+
+    def test_jetbrains_control_plane_changes_require_both_checks(self):
+        for path in (".github/workflows/ci.yml", "scripts/ci/changes.py", "scripts/ci/gate.py",
+                     "scripts/ci/test_checks.py"):
+            with self.subTest(path=path):
+                base = self.run_git("rev-parse", "HEAD")
+                self.write(path, "CI control-plane change\n")
+                head = self.commit()
+                for event in ("push", "pull_request"):
+                    self.assertEqual(self.full(head, base, event), "true")
+                    self.assertEqual(self.jetbrains(head, base, event), "true")
+
+    def test_confirmed_docs_core_and_other_editor_ranges_skip_jetbrains(self):
+        for path in ("README.md", "docs/start.md", "website/assets/site.js",
+                     "compiler/src/lib.rs", "runtime/src/lib.rs", "Cargo.toml", "Cargo.lock",
+                     "editors/vscode-nagi/src/features.js", "editors/jetbrains-nagi-old/build.gradle.kts"):
+            with self.subTest(path=path):
+                base = self.run_git("rev-parse", "HEAD")
+                self.write(path, "unrelated update\n")
+                head = self.commit()
+                for event in ("push", "pull_request"):
+                    self.assertEqual(self.jetbrains(head, base, event), "false")
+
+    def test_plugin_and_core_changes_require_both_checks(self):
+        self.write("editors/jetbrains-nagi/build.gradle.kts", "// plugin update\n")
+        self.commit()
+        self.write("runtime/src/lib.rs", "// runtime update\n")
+        head = self.commit()
+        self.assertEqual(self.full(head), "true")
+        self.assertEqual(self.jetbrains(head), "true")
+
+    def test_jetbrains_cannot_hide_code_shared_detection_or_other_editors(self):
+        for path in ("compiler/src/lib.rs", "runtime/src/lib.rs", "Cargo.toml", "Cargo.lock",
+                     ".github/workflows/ci.yml", "scripts/ci/changes.py", "scripts/ci/test_checks.py",
+                     "editors/vscode-nagi/src/features.js", "editors/jetbrains-other/build.gradle.kts",
+                     "editors/jetbrains-nagi-old/build.gradle.kts", ".github/workflows/jetbrains.yaml"):
+            with self.subTest(path=path):
+                base = self.run_git("rev-parse", "HEAD")
+                self.write("editors/jetbrains-nagi/build.gradle.kts", f"// plugin update alongside {path}\n")
+                self.write(path, "changed check input\n")
+                self.assertEqual(self.full(self.commit(), base), "true")
+
+    def test_jetbrains_deletion_is_checked_by_its_workflow(self):
+        self.write("editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiLexer.java", "// plugin code\n")
+        base = self.commit()
+        (self.root / "editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiLexer.java").unlink()
+        head = self.commit()
+        self.assertEqual(self.full(head, base), "false")
+        self.assertEqual(self.jetbrains(head, base), "true")
+
+    def test_renames_across_the_jetbrains_boundary_run_full_checks(self):
+        self.write("editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiLexer.java", "// source code\n")
+        base = self.commit()
+        self.run_git("mv", "editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiLexer.java", "compiler/src/editor.rs")
+        self.assertEqual(self.full(self.commit(), base), "true")
+        base = self.run_git("rev-parse", "HEAD")
+        self.run_git("mv", "compiler/src/editor.rs", "editors/jetbrains-nagi/NagiLexer.java")
+        self.assertEqual(self.full(self.commit(), base), "true")
+
+    def test_an_earlier_rust_change_is_not_hidden_by_the_last_plugin_commit(self):
+        self.write("runtime/src/lib.rs", "// runtime changed\n")
+        self.commit()
+        self.write("editors/jetbrains-nagi/build.gradle.kts", "// later plugin change\n")
         self.assertEqual(self.full(self.commit()), "true")
 
     def test_pages_and_domain_only_complete_ranges_skip_full_checks(self):
@@ -147,16 +244,21 @@ class ChangeTests(unittest.TestCase):
 
     def test_empty_comparison_runs_full_checks(self):
         self.assertEqual(self.full(), "true")
+        self.assertEqual(self.jetbrains(), "true")
 
     def test_new_branches_and_invalid_commit_ranges_run_full_checks(self):
         self.write("docs/start.md", "# Docs\n")
         head = self.commit()
         for base in ("", "0" * 40, "invalid", "-HEAD", "a" * 40, "../docs", "a" * 64):
             with self.subTest(base=base):
-                self.assertEqual(changes.classify("push", base, head)["full_checks"], "true")
+                plan = changes.classify("push", base, head)
+                self.assertEqual(plan["full_checks"], "true")
+                self.assertEqual(plan["jetbrains_checks"], "true")
         for value in ("", "0" * 40, "invalid", "--help", "a" * 40):
             with self.subTest(head=value):
-                self.assertEqual(changes.classify("push", self.first, value)["full_checks"], "true")
+                plan = changes.classify("push", self.first, value)
+                self.assertEqual(plan["full_checks"], "true")
+                self.assertEqual(plan["jetbrains_checks"], "true")
 
     def test_manual_scheduled_and_unknown_events_run_full_checks(self):
         self.write("docs/start.md", "# Docs\n")
@@ -164,11 +266,14 @@ class ChangeTests(unittest.TestCase):
         for event in ("workflow_dispatch", "schedule", "pull_request_target", "unexpected"):
             with self.subTest(event=event):
                 self.assertEqual(self.full(head, event=event), "true")
+                self.assertEqual(self.jetbrains(head, event=event), "true")
 
     def test_force_push_with_unrelated_history_runs_full_checks(self):
         self.run_git("checkout", "-q", "--orphan", "replacement")
         self.write("docs/start.md", "# New branch history\n")
-        self.assertEqual(self.full(self.commit(), event="push"), "true")
+        head = self.commit()
+        self.assertEqual(self.full(head, event="push"), "true")
+        self.assertEqual(self.jetbrains(head, event="push"), "true")
 
     def test_nul_paths_preserve_newlines_and_unicode(self):
         self.write("docs/with\nnewline.md", "# Docs\n")
@@ -181,7 +286,9 @@ class ChangeTests(unittest.TestCase):
     def test_undecodable_git_path_runs_full_checks(self):
         with open(os.fsencode(self.root / "docs") + b"/invalid-\xff.md", "wb") as file:
             file.write(b"Docs\n")
-        self.assertEqual(self.full(self.commit()), "true")
+        head = self.commit()
+        self.assertEqual(self.full(head), "true")
+        self.assertEqual(self.jetbrains(head), "true")
 
     def test_malformed_path_inputs_are_not_normalized_into_docs(self):
         for path in ("", "/docs/start.md", "docs//start.md", "docs/../compiler.rs",
@@ -189,21 +296,58 @@ class ChangeTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertFalse(changes.is_docs_path(path))
 
+    def test_malformed_paths_and_siblings_are_not_jetbrains_paths(self):
+        for path in ("", "/editors/jetbrains-nagi/build.gradle.kts",
+                     "editors//jetbrains-nagi/build.gradle.kts", "editors/jetbrains-nagi/../Cargo.toml",
+                     "editors/jetbrains-nagi/./build.gradle.kts", "editors\\jetbrains-nagi\\build.gradle.kts",
+                     "editors/jetbrains-nagi/build.gradle.kts\0compiler/src/lib.rs",
+                     "editors/jetbrains-nagi", "editors/jetbrains-nagi-old/build.gradle.kts",
+                     ".github/workflows/jetbrains.yaml", "scripts/ci/changes.py"):
+            with self.subTest(path=path):
+                self.assertFalse(changes.is_jetbrains_path(path))
+
     def test_incomplete_git_output_runs_full_checks(self):
         head = "a" * 40
         with patch.object(changes, "git", side_effect=[self.first.encode(), head.encode(), b"", b"docs/start.md"]):
-            self.assertEqual(self.full(head), "true")
+            plan = changes.classify("pull_request", self.first, head)
+            self.assertEqual(plan["full_checks"], "true")
+            self.assertEqual(plan["jetbrains_checks"], "true")
 
     def test_git_failure_runs_full_checks(self):
         with patch.object(changes, "git", side_effect=OSError("git unavailable")):
-            self.assertEqual(self.full("a" * 40), "true")
+            plan = changes.classify("pull_request", self.first, "a" * 40)
+            self.assertEqual(plan["full_checks"], "true")
+            self.assertEqual(plan["jetbrains_checks"], "true")
+
+    def test_malformed_git_paths_cannot_disable_either_check_plan(self):
+        head = "a" * 40
+        for path in ("", "docs//start.md", "editors/jetbrains-nagi/../Cargo.toml"):
+            with self.subTest(path=path):
+                raw = path.encode() + b"\0"
+                with patch.object(changes, "git", side_effect=[self.first.encode(), head.encode(), b"", raw]):
+                    plan = changes.classify("pull_request", self.first, head)
+                self.assertEqual(plan["full_checks"], "true")
+                self.assertEqual(plan["jetbrains_checks"], "true")
+
+    def test_cli_exports_both_check_plans_without_overwriting_other_outputs(self):
+        self.write("editors/jetbrains-nagi/build.gradle.kts", "// plugin update\n")
+        head = self.commit()
+        output = self.root / "github-output"
+        output.write_text("existing=value\n", encoding="utf-8")
+        arguments = ["changes.py", "--event", "pull_request", "--base", self.first,
+                     "--head", head, "--output", str(output)]
+        with patch("sys.argv", arguments), patch("builtins.print"):
+            changes.main()
+        self.assertEqual(output.read_text(encoding="utf-8"),
+                         "existing=value\nfull_checks=false\njetbrains_checks=true\n")
 
 
 class GateTests(unittest.TestCase):
-    def needs(self, full="true", package_nagi="false", package_vscode="false"):
+    def needs(self, full="true", package_nagi="false", package_vscode="false", jetbrains="false"):
         return {
-            "changes": {"result": "success", "outputs": {"full_checks": full}},
+            "changes": {"result": "success", "outputs": {"full_checks": full, "jetbrains_checks": jetbrains}},
             "linux": {"result": "success" if full == "true" else "skipped"},
+            "jetbrains": {"result": "success" if jetbrains == "true" else "skipped"},
             "release-plan": {"result": "success", "outputs": {"package_nagi": package_nagi, "package_vscode": package_vscode}},
             "nagi-package": {"result": "success" if package_nagi == "true" else "skipped"},
             "vscode-package": {"result": "success" if package_vscode == "true" else "skipped"},
@@ -213,8 +357,9 @@ class GateTests(unittest.TestCase):
         for full in ("true", "false"):
             for nagi in ("true", "false"):
                 for vscode in ("true", "false"):
-                    with self.subTest(full=full, nagi=nagi, vscode=vscode):
-                        self.assertEqual(gate.errors(self.needs(full, nagi, vscode)), [])
+                    for jetbrains in ("true", "false"):
+                        with self.subTest(full=full, nagi=nagi, vscode=vscode, jetbrains=jetbrains):
+                            self.assertEqual(gate.errors(self.needs(full, nagi, vscode, jetbrains)), [])
 
     def test_failed_or_canceled_detection_cannot_make_checks_optional(self):
         for result in ("failure", "cancelled", "skipped", ""):
@@ -241,6 +386,27 @@ class GateTests(unittest.TestCase):
         needs = self.needs()
         needs["linux"]["result"] = "skipped"
         self.assertTrue(gate.errors(needs))
+
+    def test_plugin_only_failures_cannot_pass_the_existing_merge_gate(self):
+        for result in ("failure", "cancelled", "skipped", ""):
+            with self.subTest(result=result):
+                needs = self.needs(full="false", jetbrains="true")
+                needs["jetbrains"]["result"] = result
+                self.assertEqual(gate.errors(needs), [f"jetbrains: {result}, expected success"])
+
+    def test_missing_or_malformed_jetbrains_plan_is_rejected(self):
+        for value in (None, "", "False", "TRUE", True, False):
+            with self.subTest(value=value):
+                needs = self.needs("false")
+                needs["changes"]["outputs"]["jetbrains_checks"] = value
+                self.assertEqual(gate.errors(needs), ["jetbrains: missing or invalid check plan"])
+
+    def test_unplanned_plugin_checks_must_be_skipped(self):
+        for result in ("failure", "cancelled", "success", ""):
+            with self.subTest(result=result):
+                needs = self.needs("false")
+                needs["jetbrains"]["result"] = result
+                self.assertEqual(gate.errors(needs), [f"jetbrains: {result}, expected skipped"])
 
     def test_release_plan_must_succeed(self):
         needs = self.needs("false")
@@ -281,6 +447,52 @@ class GateTests(unittest.TestCase):
                 needs = copy.deepcopy(valid)
                 del needs[job]["outputs"]
                 self.assertTrue(gate.errors(needs))
+
+
+class JetBrainsWorkflowTests(unittest.TestCase):
+    def test_paths_skipped_by_rust_have_main_and_reusable_plugin_checks(self):
+        workflow = Path(__file__).resolve().parents[2] / ".github/workflows/jetbrains.yml"
+        text = workflow.read_text(encoding="utf-8")
+        plugin_paths = (
+            "editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiLexer.java",
+            "editors/jetbrains-nagi/src/test/java/com/disnana/nagi/NagiEditorTest.java",
+            "editors/jetbrains-nagi/build.gradle.kts",
+            "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.jar",
+            ".github/workflows/jetbrains.yml",
+        )
+        watched_paths = (*plugin_paths, *sorted(changes.JETBRAINS_CHECK_INPUTS))
+        for path in plugin_paths:
+            self.assertTrue(changes.is_jetbrains_path(path), path)
+        block = re.search(r"^  push:\n((?: {4}[^\n]*\n|\n)+)", text, re.MULTILINE)
+        self.assertIsNotNone(block, "Missing main push trigger")
+        patterns = re.findall(r"^\s+- ['\"]([^'\"]+)['\"]\s*$", block.group(1), re.MULTILINE)
+        for path in watched_paths:
+            self.assertTrue(changes.requires_jetbrains(path), path)
+            self.assertTrue(any(fnmatch.fnmatchcase(path, pattern) for pattern in patterns),
+                            f"main push does not check {path}")
+        self.assertIn("    branches: [main]\n", text)
+        self.assertIn("  workflow_dispatch:\n", text)
+        self.assertIn("  workflow_call:\n", text)
+        self.assertNotIn("  pull_request:\n", text)
+
+    def test_existing_pr_merge_gate_waits_for_the_reusable_plugin_workflow(self):
+        workflow = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
+        text = workflow.read_text(encoding="utf-8")
+        self.assertIn("on: [push, pull_request, workflow_dispatch]\n", text)
+        self.assertIn("      jetbrains_checks: ${{ steps.changes.outputs.jetbrains_checks }}\n", text)
+        job = re.search(r"^  jetbrains:\n((?: {4}[^\n]*\n|\n)+)", text, re.MULTILINE)
+        self.assertIsNotNone(job)
+        self.assertIn("    needs: changes\n", job.group(1))
+        self.assertIn("github.event_name != 'push'", job.group(1))
+        self.assertIn("needs.changes.outputs.jetbrains_checks == 'true'", job.group(1))
+        self.assertIn("    uses: ./.github/workflows/jetbrains.yml\n", job.group(1))
+        ready = re.search(r"^  ready:\n((?: {4,}[^\n]*\n|\n)+)", text, re.MULTILINE)
+        self.assertIsNotNone(ready)
+        dependencies = re.search(r"^    needs: \[([^\]]+)\]$", ready.group(1), re.MULTILINE)
+        self.assertIsNotNone(dependencies)
+        self.assertIn("jetbrains", [name.strip() for name in dependencies.group(1).split(",")])
+        self.assertIn("    if: github.event_name == 'pull_request' && always()\n", ready.group(1))
+        self.assertIn("        run: python scripts/ci/gate.py\n", ready.group(1))
 
 
 if __name__ == "__main__":

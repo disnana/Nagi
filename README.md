@@ -38,6 +38,8 @@ Linux / macOS（bash）:
 
 VS Code拡張は[Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)からインストールできます。設定と使い方は[拡張の案内](editors/vscode-nagi/README.md)を参照してください。
 
+IntelliJ IDEA・PyCharm向けの初期プラグインもあります。High／Lowの色付け、インデント補助、型検査・実行に対応します。[ビルドとインストール](editors/jetbrains-nagi/README.md)を参照してください。
+
 更新前に実行中のNagiのビルドを止め、更新後はVS Codeを再起動してください。更新が成功したら、配布時の内容と一致する旧版を削除し、使用する1版だけ残します。追加・変更されたファイルは保護します。照合不能や使用中などで削除できない旧版も残し、その場所を表示します。失敗時は元のコマンドを維持します。[版の指定と更新の詳細](docs/getting-started.md#更新する)も参照してください。
 
 ```bash
@@ -112,6 +114,7 @@ nagic map calls --project examples/code-map --format html --output calls.html
 | `examples/` | High、Low、手書き置換の実行サンプル |
 | `test-nagi-code/` | タスク管理サイト、在庫API、Resultの回復処理、Rust連携のサンプル |
 | `editors/vscode-nagi/` | VS Codeの色付け・診断・F12・型ホバー・補完・引数ヒント・check/build/run拡張 |
+| `editors/jetbrains-nagi/` | IntelliJ IDEA・PyCharm向けの色付け・インデント・折りたたみ・check/run拡張 |
 | `tests/` | 実HTTP通信の統合テスト |
 | `fuzz/` | seed固定のparser/JSON mutation試験 |
 | `benchmarks/` | 比較実装、wrkスクリプト、生ログ |
