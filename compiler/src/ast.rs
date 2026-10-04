@@ -27,6 +27,13 @@ impl Type {
         }
         self.is_view() || self.1.iter().any(Self::contains_view)
     }
+    /// A capture-free function's output views need either a borrowing input
+    /// or a static origin. Nested function signatures bind their own views.
+    pub fn function_view_return_is_static(&self) -> bool {
+        self.0 == "fn"
+            && self.1.last().is_some_and(Self::contains_view)
+            && !self.1[..self.1.len() - 1].iter().any(Self::contains_view)
+    }
     pub fn is_copy(&self) -> bool {
         matches!(
             self.0.as_str(),

@@ -86,7 +86,25 @@ nagic run app.nagi
 
 結果は`42`です。`chosen = add_one`のようにローカル変数の型を省略しても推論されます。関数を返す場合は、たとえば`def choose() -> fn[i64]:`と宣言します。
 
-現在、`fn[view[str]]`は`check`を通りますが、Rustのビルドで失敗します。静的な文字列を返す関数でも、変数へ保存したり別の関数へ渡したりすると同じ問題が起きます。借用元となる引数がない関数型の寿命は、まだ仕様を決めていません。
+`fn[view[str], view[str]]`のように借用を保持する引数がある場合、戻り値のviewは、引数で借りたデータが有効な間だけ使えます。借用を保持する引数がない`fn[view[str]]`や`fn[i64, view[str]]`では、プログラム終了まで有効なデータだけを借用で返せます。`List[view[str]]`や`Option[view[str]]`など、戻り値の中にviewがある場合も同じ規則です。
+
+たとえば、HTTPステータスの`phrase`は静的な文字列です。次のコードは`OK`を出力します。
+
+```nagi
+import std.http.server as http
+
+def phrase() -> view[str]:
+    return http.Status.OK.phrase
+
+def apply(factory: fn[view[str]]) -> view[str]:
+    return factory()
+
+def main():
+    chosen = phrase
+    print(apply(chosen))
+```
+
+関数が所有する文字列のviewは返せません。静的なviewは、ローカル変数へ保存して返すこともできます。上の例では静的な文字列を借りて返すため、戻り値を渡すときに文字列を複製しません。
 
 async関数も`selected = answer`のように代入して、async関数内で`await selected(...)`と呼べます。HTTPの`route` / `route_mapped`はこの名前付きasync関数やローカルaliasを登録できます。一般のasync関数を受け取る引数や返す関数の型注釈にはまだ対応していません。ラムダ式や、周囲のローカル変数を取り込むクロージャも未対応です。
 

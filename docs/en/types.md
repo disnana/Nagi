@@ -86,7 +86,25 @@ nagic run app.nagi
 
 The result is `42`. Local types can also be inferred: `chosen = add_one`. A function that returns another function can declare a return type such as `def choose() -> fn[i64]:`.
 
-Currently, `fn[view[str]]` passes `check` but fails during the Rust build. This also happens when a function returning a static string is stored in a variable or passed to another function. The lifetime rule for function types with no borrowing input is still undecided.
+When a function type has an input holding a view, such as `fn[view[str], view[str]]`, a returned view can be used only while the borrowed input remains valid. With no borrowing input, `fn[view[str]]` and `fn[i64, view[str]]` can only return views of data valid until the program exits. The same rule applies to views inside return types such as `List[view[str]]` and `Option[view[str]]`.
+
+For example, an HTTP status's `phrase` is a static string. This code prints `OK`:
+
+```nagi
+import std.http.server as http
+
+def phrase() -> view[str]:
+    return http.Status.OK.phrase
+
+def apply(factory: fn[view[str]]) -> view[str]:
+    return factory()
+
+def main():
+    chosen = phrase
+    print(apply(chosen))
+```
+
+A function cannot return a view of a string it owns. A static view can be stored in a local variable and returned. The example borrows a static string, so returning it does not copy the string.
 
 You can also assign an async function with `selected = answer`, then call `await selected(...)` inside an async function. HTTP `route` and `route_mapped` can register these named async functions or local aliases. General type annotations for parameters receiving async functions, or functions returning them, are not yet supported. Lambdas and closures that capture surrounding local variables are also unsupported.
 
