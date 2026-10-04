@@ -1,6 +1,6 @@
 # Supervisors
 
-A Supervisor in `std.actor` manages startup, failure, restart, and shutdown of registered actors and async tasks. Other children continue working while one child restarts.
+A Supervisor in `std.actor` manages startup, failure, restart, and shutdown of actors and async tasks registered in the same process. Its current restart strategy is one-for-one: only the failed child restarts, while other children keep working.
 
 ## Restart policy
 
@@ -31,7 +31,9 @@ Passing a Supervisor to `run` seals registration. A `Control` handle requests sh
 
 Once a [scope](async.md) body finishes and joins its children, an Error from a spawned `run` cancels the scope's remaining children and waits for them to stop. This includes an HTTP server spawned in the same scope. For example, failure of the last `TEMPORARY` worker can lead to HTTP shutdown. Return business rejections separately from worker failures.
 
-Successful `shutdown` means children and shared context cleanup have finished. If its deadline expires, it returns an incomplete-cleanup Error and retains ownership records. HTTP or native work holding the shared context must release it before cleanup can finish. When Rust integration uses another Tokio runtime, keep the runtime where `run` started alive through cleanup.
+Successful `shutdown` means children and shared context cleanup have finished. An Error can mean either a retained child failure returned after cleanup, or an expired deadline with cleanup incomplete. The current API does not expose these as a separate completion type; an Error alone does not prove cleanup is unfinished.
+
+After the deadline expires, ownership records remain available to track termination. HTTP or native work holding shared context must release it before cleanup can finish. If releasing that reference depends on Supervisor completion, both can wait for each other; callers must design ownership and shutdown order accordingly. When Rust integration uses another Tokio runtime, keep the runtime where `run` started alive through cleanup.
 
 Tokio cancellation is cooperative. Non-yielding computation, blocking native calls, and blocking Drop cannot be forcibly interrupted. Split long computations with `await actor.yield_now()`, or use a separate process whose termination you can manage. External blocking jobs started without retaining this context are outside the group's completion guarantee.
 
@@ -45,8 +47,10 @@ A task's `STARTED` is published before its factory body runs. For connection est
 
 [The worker sample](../../test-nagi-code/application-examples/supervised-worker/README.en.md) checks explicit task readiness, panic recovery, event deadlines, and shutdown.
 
-This is a native implementation within one process. A VM, hot code replacement, distributed actors, persistent mailboxes, and dynamic child registration/removal are not implemented.
+This native implementation uses Tokio and does not provide the same process isolation or VM fault model as BEAM. A VM, hot code replacement, distributed actors, persistent mailboxes, dynamic child registration/removal, and one-for-all/rest-for-one restart strategies are not implemented.
 
 [Writing actors](actor.md) · [API reference](actor-reference.md) · [Measurements](actor-performance.md) · [Runnable example](../../test-nagi-code/library-examples/supervised-service/README.en.md)
 
 The older [supervisor.nagi](../../examples/supervisor.nagi) tests restarting fixed workers.
+
+See the [Supervisor runtime](../../runtime/src/actor.rs), [lifecycle management](../../runtime/src/actor/lifecycle.rs), [restart tests](../../runtime/src/actor/tests.rs), and [shutdown and cleanup tests](../../runtime/src/actor/lifecycle_adversarial_tests.rs). They cover business errors, child failures, deadlines, and cleanup under specific conditions.

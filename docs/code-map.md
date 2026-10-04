@@ -35,7 +35,7 @@ nagic map calls --project examples/code-map --module service
 
 MermaidとD2のテキスト出力には、追加ツールは不要です。D2の図はモジュールごとにまとめ、依存や呼び出しの方向を表示します。
 
-SVG・PNGには、PATHに[D2](https://d2lang.com/)が必要です。出力ファイルには形式に合う拡張子を付けます。レイアウトは既定のELKに加え、使用中のD2が対応していればDagre・TALAを指定できます。
+SVG・PNGには、PATHに[D2](https://d2lang.com/)が必要です。出力ファイルには形式に合う拡張子を付けます。既定のレイアウトはELKです。Dagre・TALAも指定できますが、実際の描画はインストールしたD2とそのレイアウトエンジンに依存します。
 
 ```sh
 nagic map types --project examples/code-map --format svg --output types.svg
@@ -46,4 +46,4 @@ nagic map modules --project examples/code-map --format png --output modules.png 
 
 内部では、検査済みのコードを共通のGraph IRへ変換してから描画します。`--format json`はschema version、ノード、意味付きの辺、グループ、ソース位置を出力します。Rendererの変更は型検査や実行コードに影響しません。
 
-動的に差し替わる関数、Rust関数の内部、HTTPの実行時フロー、Actorの実行時構成は確定できません。未解決の呼び出しは警告で示します。`trace`、Graph IRを使う`cost`、D2でのアーキテクチャ図やローカルWebサーバーは今後の範囲です。既存の`--cost-report`は現在の形式で利用できます。
+関数引数として登録するcallbackやローカル関数値の呼び出しは、現在は辺として表示しません。Rust関数の内部、HTTPの実行時フロー、Actorの実行時構成も解析しません。未解決の関係は警告で示します。警告は入力全体のもので、focusやmoduleで絞っても残ります。`trace`、Graph IRを使う`cost`、D2でのアーキテクチャ図やローカルWebサーバーは今後の範囲です。既存の`--cost-report`は現在の形式で利用できます。

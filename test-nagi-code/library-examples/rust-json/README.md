@@ -4,6 +4,8 @@
 
 Rustの`serde_json`でJSONを読み、Nagiで宣言した`JsonRecord`を返す小さなプロジェクトです。Nagiからは`extern def`を通して呼び出し、Rust側では生成された型を`super::JsonRecord`として使います。ライブラリ固有の型をNagiの公開APIへ追加せず、アダプターの中に実装を置けます。
 
+型付きJSONの読み書きは、標準の`json_decode`／`json_encode`でも書けます。この例の目的はRust crateの関数をNagiの型へ橋渡しすることです。
+
 入力は`view[str]`で借りるので、同じ文字列を2回解析し、その後も表示できます。返されたレコードの文字列フィールドはデータを所有します。不正なJSONとフィールドの型違いは`Result`の失敗になり、Nagiの`match`で処理します。
 
 ## 実行する

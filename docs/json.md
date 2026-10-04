@@ -1,6 +1,6 @@
 # JSONを読み書きする
 
-JSONを読むときは、受け取りたいデータをclassで定義します。`json_decode[User](text)`でJSONから`User`を作り、`json_encode(user)`でJSONの文字列に戻せます。
+NagiはJSONとNagiの型の対応を検査し、読み書きはSerde／serde_jsonで行います。JSONを読むときは、受け取りたいデータをclassで定義します。`json_decode[User](text)`でJSONから`User`を作り、`json_encode(user)`でJSONの文字列に戻せます。
 
 ```nagi
 class User:
@@ -37,3 +37,5 @@ JSONは指定した型へ直接読み込みます。文字列のフィールド�
 現在、`json_encode`はNaN・正負の無限大をエラーにせず、`null`として出力します。Listやclassの中でも同じです。`null`は`f64`へ読み戻せず、非有限値が入った`f64?`は読み戻すと`None`に変わります。
 
 HTTPでJSONを受け取ったり返したりする例は、[HTTPとHTML](http.md)にあります。
+
+実装は[JSON runtime](../runtime/src/lib.rs)と[classの変換生成](../compiler/src/emit.rs)にあります。[型のテスト](../compiler/tests/builtin_type_contracts.rs)では対応する型と借用の制限、[runtimeのテスト](../runtime/src/lib.rs)では不正入力とフィールドの検査を確認しています。

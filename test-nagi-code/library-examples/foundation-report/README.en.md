@@ -1,6 +1,6 @@
-# A batch JSON report using a shared foundation
+# JSON report with shared pricing
 
-Calculate several rows and print successful quotes, rejected rows, and the total in one JSON object. This application uses the same [Nagi facade and Rust module](../shared/README.en.md) as the [interactive CLI](../foundation-cli/README.en.md). The CLI stops on a failed quote; this report uses `match` to collect each failure and continue with the next row.
+Calculate several rows and print successful quotes, rejected rows, and the total in one JSON object. This application uses the same [Nagi module and Rust functions](../shared/README.en.md) as the [interactive CLI](../foundation-cli/README.en.md). The CLI stops on a failed quote; this report uses `match` to collect each failure and continue with the next row.
 
 Run from the repository root:
 

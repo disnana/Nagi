@@ -2,7 +2,7 @@
 
 This CLI runs small packing jobs and an audit counter in separate actors, with a resident connector supervised through `actor.task_with_ready`. It executes a fixed scenario, checks the results, and shuts down. It needs no network, database, or interactive input.
 
-Run from this directory. Nagi 0.1.9 or later and Rust/Cargo are required.
+Run from this directory. Nagi 0.1.9 and Rust/Cargo are required.
 
 ```sh
 nagic check
@@ -48,12 +48,10 @@ Neither state nor queued jobs are persisted. A restart does not save, roll back,
 
 All Control handles are created before `run`. `clone_control` independently subscribes from its creation time; it does not copy earlier event history. Separate cursors wait for the packing restart and connector READY event; another aggregates the full lifecycle. No fixed sleep determines success. Actor readiness, calls, and each event wait have five-second deadlines. `WaitKind.TIMEOUT` is distinct from a closed event stream. [smoke.py](smoke.py) enforces a 15-second deadline for the whole process, including event waits.
 
-`finish` saves the exercise result and awaits `shutdown` before returning it, attempting explicit cleanup even when the exercise returns `Error`. Successful shutdown and scope completion confirm cleanup of supervised children and shared context. This is a native implementation within one process. A VM, live code replacement, distribution, and persistent mailboxes are not implemented.
+`finish` saves the exercise result and awaits `shutdown` before returning it, attempting explicit cleanup even when the exercise returns `Error`. Successful shutdown and scope completion confirm cleanup of supervised children and shared context. The runtime supervises Tokio tasks within one process. A VM, live code replacement, distribution, and persistent mailboxes are not implemented.
 
 ## Readiness and next steps
 
 `STARTED` reports task startup; it does not imply completed initialization. The connector calls `mark_ready` after creating its cleanup guard, so generation 2 emits one `READY`. Nagi waits for that event through `next_event_timeout`; it no longer polls the native counters to determine readiness. The counters still verify cleanup.
-
-A useful next sample would combine job IDs, durable results, and factory recovery. Resetting memory state alone cannot provide duplicate prevention or durable completion checks.
 
 [Actor guide](../../../docs/en/actor.md) · [Supervisor](../../../docs/en/supervisor.md) · [日本語](README.md)

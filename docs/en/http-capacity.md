@@ -2,6 +2,8 @@
 
 We measured throughput, latency, memory, and connection recovery using Nagi's HTTP sample. The initial tests ran on October 1, 2026, using Nagi 0.1.2 at commit [`c602abb`](https://github.com/disnana/Nagi/commit/c602abb349641cf1d5a274e2221e33d29a0acea4). The implementation with a request-wait deadline is compared separately in the [follow-up tests](#follow-up-tests-with-the-wait-deadline).
 
+These tests use the legacy decorator-based routes and `serve`. Connection limits and deadlines differ from `std.http.server`. See [standard HTTP measurements](http-stdlib-performance.md) and the current [HTTP guide](http.md) for that API.
+
 The endpoint that receives a 4 KiB string and returns JSON handled 15,000 requests per second for 30 minutes. All 27,000,270 requests returned HTTP 200. However, connection counts and memory increased, and file descriptors remained after the load stopped. Throughput alone does not establish stability.
 
 All traffic stayed on the same machine. These results do not establish internet throughput, DDoS resistance, or stability over 24 hours or longer.
@@ -176,7 +178,7 @@ For the throughput comparisons and smaller lifecycle test, the server used one l
 
 In 0.1.6, JSON success and error responses use a static `Content-Type` value. Comparing small JSON, 4KiB JSON, and 400/404/503 response construction in one process shows one fewer allocation and 16 fewer allocated bytes per response. Status, headers, and body bytes match. Network operations and body consumption are outside this allocation measurement.
 
-Both versions keep the current ten-second connection wait deadline. Five alternating baseline/candidate pairs per endpoint use 128 client connections for ten seconds, one server CPU with `NAGI_THREADS=1`, and two separate load-generator CPUs.
+Both versions keep the legacy ten-second connection wait deadline. Five alternating baseline/candidate pairs per endpoint use 128 client connections for ten seconds, one server CPU with `NAGI_THREADS=1`, and two separate load-generator CPUs.
 
 | Operation | Baseline responses/s | Candidate responses/s | Change in medians | p99 (before → after) | Errors |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -188,11 +190,11 @@ Paired differences varied in both directions, including the unchanged `/health` 
 
 ## Connection management and DoS protection
 
-The current [`serve`](../../runtime/src/lib.rs) has a 1 MiB HTTP body limit and a 2-second handler timeout. It binds only to `127.0.0.1` by default. These controls do not bound every connection's lifetime or the traffic reaching a public deployment.
+The legacy [`serve`](../../runtime/src/lib.rs) has a 1 MiB HTTP body limit and a 2-second handler timeout. It binds only to `127.0.0.1` by default. These controls do not bound every connection's lifetime or the traffic reaching a public deployment.
 
-The implementation adds no fixed connection cap. Silent connections and incomplete header sends now have a deadline.
+The legacy follow-up implementation adds no fixed connection cap. Silent connections and incomplete header sends have a deadline.
 
-The initial measurements at `c602abb` predate connection deadlines. The server now uses a shared ten-second deadline for initial silence, incomplete headers, and the wait from a completed response until the next complete headers. Keeping Hyper unmodified means unused keep-alive does not have a separate 60-second deadline. The deadline is configurable through an environment variable and excludes active responses, streams, and upgraded WebSockets. See [HTTP](http.md) for configuration.
+The initial measurements at `c602abb` predate connection deadlines. The modified legacy server uses a shared ten-second deadline for initial silence, incomplete headers, and the wait from a completed response until the next complete headers. Keeping Hyper unmodified means unused keep-alive does not have a separate 60-second deadline. The deadline is configurable through an environment variable and excludes active responses, streams, and upgraded WebSockets. See [HTTP](http.md) for configuration.
 
 | Proposed control | Intended effect | Decision still needed |
 | --- | --- | --- |

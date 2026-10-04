@@ -1,131 +1,90 @@
 # Library and Rust integration design
 
-This page describes current reuse options and proposed extensions. File modules, `std.http.server`, and `std.actor` are available. A general database API, user-defined resources, and runtime feature selection remain proposals.
+Common operations will use typed Nagi APIs backed by existing Rust libraries. Advanced operations and custom foundations will use Rust integration. This serves both developers writing applications without knowing Rust and developers combining Rust libraries.
 
-[Contents](README.md) · Available features: [imports and Rust integration](modules-and-rust.md), [nagi.toml](projects.md)
-
-The aim is to share Nagi types, validation, and calculations between applications while using existing Rust libraries for networking and storage. CLI tools, HTTP servers, and batch jobs should be able to use the same business rules.
+This page includes unimplemented proposals. For current usage, see [imports and Rust](modules-and-rust.md), [nagi.toml](projects.md), and the [sample projects](library-examples.md).
 
 ## Available features and missing pieces
 
-| Area | Available today | Proposed addition |
-| --- | --- | --- |
-| Imports | Relative files, `as`, multiple-name `from`, `std.http.server`, and `std.actor` | More standard modules and visibility declarations |
-| Standard resources | HTTP App/Request/Response, Actor/Supervisor, and related types | User-defined resources and their registration |
-| Rust integration | Sync/async extern functions with typed arguments and results | Opaque types representing connections and clients |
-| Rust files | One native module selected with `rust.file`; shared crates selected through dependency tables | — |
-| Cargo dependencies | Version strings or tables with version, path, features, default-features, and package | — |
-| Runtime | HTTP, actors, JSON, SQLite, and other features, with their dependencies always included | Dependencies and generated code selected by use |
-| Database | SQLite with fixed bind argument shapes | Arbitrary typed arguments, row decoding, and transactions |
+| Area | Available today | Unsupported or undecided |
+|---|---|---|
+| Imports | Relative files, `as`, multiple-name `from`, registered standard modules | Package management and visibility declarations |
+| Standard APIs | `std.http.server`, `std.actor` | Separate JSON and database modules |
+| Standard resources | App, Request, Response, Actor, Supervisor, and related types | User-defined resource registration |
+| Rust integration | Sync/async extern functions, typed arguments/results, handwritten adapters | Direct use of arbitrary Rust types/traits and a stable external ABI |
+| Cargo dependencies | Version, path, features, default-features, package | Generation that excludes unused runtime dependencies |
+| Database | SQLite, fixed bind shapes, conversion of rows into classes | PostgreSQL, general parameters, pools, and transaction APIs |
 
-Extern declarations do not automatically import Rust APIs. Rust-specific types must be converted to supported numbers, strings, classes, lists, or results. Nagi's `check` checks declarations and calls; `build` checks them against Rust implementations. Extern functions cannot currently return views.
+`check` checks extern declarations and Nagi calls. `build` checks them against Rust implementations and crates. Extern functions cannot return views.
 
 ## Shared logic and adapters
 
-Keep data types, validation, and calculations in shared Nagi files. Application entry points combine inputs and outputs. Rust adapters convert library types to Nagi data types. An independent Rust crate uses its own types, with conversions to generated application classes kept in the adapter.
+Put types, validation, and calculations in Nagi modules and use them from CLI, HTTP, or other entry points. Rust adapters convert external types into Nagi-supported types. An independent Rust crate uses its own types; the adapter converts them to generated application classes.
 
-The ten current examples show shared logic, standard modules, and Rust integration.
-
-| Project | Reuse and integration |
-| --- | --- |
-| [foundation-cli](../../test-nagi-code/library-examples/foundation-cli/README.en.md) | Uses shared `foundation.nagi` and Rust `pricing.rs` from a CLI |
-| [foundation-report](../../test-nagi-code/library-examples/foundation-report/README.en.md) | Uses the same validation and calculations for a JSON report |
-| [rust-json](../../test-nagi-code/library-examples/rust-json/README.en.md) | Converts serde_json results to a Nagi class |
-| [rust-async](../../test-nagi-code/library-examples/rust-async/README.en.md) | Awaits a Rust Tokio timer on Nagi's runtime |
-| [custom-http](../../test-nagi-code/library-examples/custom-http/README.en.md) | Passes a synchronous Nagi callback to a Rust Axum/Tokio server |
-| [http-auth](../../test-nagi-code/library-examples/http-auth/README.en.md) | Uses standard HTTP for headers, 401, route-specific errors, and typed shared state |
-| [supervised-service](../../test-nagi-code/library-examples/supervised-service/README.en.md) | Updates actor state in order and maps business errors or shutdown to HTTP responses |
-| [low-kernel](../../test-nagi-code/library-examples/low-kernel/README.en.md) | Calls handwritten Low calculations from application logic |
-| [module-imports](../../test-nagi-code/library-examples/module-imports/README.en.md) | Distinguishes same-named classes through modules and uses a from alias for the same class |
-| [typed-errors](../../test-nagi-code/library-examples/typed-errors/README.en.md) | Distinguishes failures with an enum, preserves their causes, and chooses display messages |
-
-One `rust.file` can include multiple Rust files through `mod` or `#[path]`. custom-http does not use the built-in serve or Db. Its Rust code manages HTTP limits and shutdown; built-in HTTP settings do not apply automatically.
+The [HTTP authentication example](../../test-nagi-code/library-examples/http-auth/README.en.md) uses standard APIs for headers and business errors. [custom-http](../../test-nagi-code/library-examples/custom-http/README.en.md) calls synchronous Nagi callbacks from a Rust Axum server. Its Rust code owns capacities, deadlines, and shutdown; standard HTTP settings do not apply automatically.
 
 ## Modules and name resolution
 
-Quoted relative files can be loaded through module names and definition aliases in both High and Low. Low allows a trailing semicolon.
+Aliases of the same module refer to the same definitions; same-named classes in different modules are distinct types. Type checks, High/Low, Rust generation, and editors use these identities. Imported names are not automatically re-exported.
 
-```nagi
-import "domain/orders.nagi" as orders
-from "domain/orders.nagi" import Order as SavedOrder
-from "domain/orders.nagi" import score
-```
-
-`orders.Order` and `SavedOrder` refer to the same definition. Classes with the same name in different files remain different types. Reading the same real file through several aliases still loads one definition. Type checking, High-to-Low conversion, Rust generation, and editor tools use module and definition IDs. Type arguments and field types follow the same name resolution.
-
-A module name exposes that file's own functions, classes, and enums without automatically re-exporting imported names. A from statement can select multiple definitions separated by commas, each with an optional alias. Missing definitions and conflicting names report errors at the import. `from` and `as` are contextual import keywords. Existing flat imports and built-ins remain available.
-
-Use `@replace generated::orders::score` to replace a function reached through a root module name. Rust adapters refer to its classes as `super::orders::Order` or `super::SavedOrder`. Traditional `@replace generated::score` and `super::Item` remain available. JSON field names and SQL column names stay unchanged. See [imports and Rust integration](modules-and-rust.md).
-
-Use `import std.http.server as http` or `import std.actor as actor` for standard modules. See [HTTP servers](http.md) and the [Actor reference](actor-reference.md) for their APIs. Resources, operations, and constants resolve through the compiler's registry, never local lookalike files. Separate `std.json` and `std.sqlite` modules remain proposals.
+Types and operations in `std.http.server` and `std.actor` are registered by the compiler. Standard module names do not resolve to local lookalike files. Adding an ordinary library should not require adding language keywords.
 
 ## Cargo dependency settings
 
-Version strings and the following table values are supported. See [nagi.toml](projects.md) for configuration details and a runnable example.
+See [nagi.toml](projects.md) for supported settings. Paths resolve relative to the manifest, so changing the generated directory preserves the referenced crate. `check`, `lower`, and `symbols` do not invoke Cargo.
 
-```toml
-[rust]
-file = "adapters/native.rs"
-
-[rust.dependencies]
-serde_json = "1.0"
-foundation = { package = "my-foundation", path = "../my-foundation" }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-```
-
-Paths resolve relative to nagi.toml, so changing the generated directory does not change the referenced crate. `check`, `lower`, and `symbols` do not invoke Cargo or require dependency crates to exist. Cargo checks the actual paths, versions, and Rust APIs during `build`/`run`.
-
-CLI `--rust-dep NAME=VERSION` replaces an entire same-name table with a version string. Its original path, package, features, and default-features do not remain.
-
-Cargo combines features enabled through different dependency paths. Disabling default features on one direct dependency does not disable features enabled elsewhere. Rebuilding preserves the existing generated Cargo.lock. It records resolved versions but does not pin path dependency source contents. `nagic build --locked` is unsupported; use Cargo's `--locked` on the generated Cargo.toml to build with a fixed resolution.
+Cargo combines features across dependency paths. Rebuilding preserves the generated Cargo.lock, but it does not pin path dependency source contents. `nagic build --locked` is unsupported.
 
 ## Selecting runtime features
 
-Split the runtime into core, async, json, http, sqlite, and postgres features. Collect requirements from emitted functions, types, and resolved built-ins. While all functions are emitted, inspecting only direct calls from the entry point is insufficient to remove dependencies.
+**Unimplemented proposal.** Separate HTTP, JSON, SQLite, and other dependencies according to application needs. Standard HTTP applications without a database currently still include the runtime's SQLite dependency.
 
-Serde and row implementations, exported types, and error conversions also need conditional generation. Making dependencies optional is only part of the work. Preserve compatibility settings for Rust integration and let new adapters declare runtime requirements. A dependency's feature does not automatically enable a feature with the same name in the generated application.
-
-Use [std.http.server](http.md) for HTTP without a database. Existing `serve(db, port)` remains available. Separating Cargo runtime dependencies by feature is still pending.
+Serde and row conversions, exported types, and error conversion generation also need conditional support. While all functions are emitted, dependencies cannot be removed by inspecting only direct calls from the entry point. Existing Rust adapter compatibility also needs checking.
 
 ## Opaque types and asynchronous work
 
-Standard resources such as App, Actor, and Supervisor are registered by the compiler. User-defined resource types and registration are not supported yet. Exposing a client or connection pool requires registered Nagi/Rust type mappings, operations, and ownership rules. Current classes represent data and do not serve as these resource types.
+**Proposed contracts for additional resource types.** Current classes represent data; they do not substitute for native clients or connections.
 
-| Contract | Required behavior |
-| --- | --- |
-| Ownership and sharing | Move by default; no Copy. Explicitly permit sharing or cloning where supported |
-| Borrowing | Separate read access from exclusive operations; keep the owner alive across await |
-| Identity and conversion | Distinguish same-named types from different providers; do not add JSON/row derives automatically |
-| Threads | Send permits transfer between threads; Sync permits shared references. Neither is universal |
-| Cleanup | Define close, commit, rollback, and the remaining work on drop |
+| Contract | Questions to resolve |
+|---|---|
+| Identity | Map Nagi types to Rust types; distinguish same-named types from different providers |
+| Ownership and sharing | Move by default; explicitly permit borrowing, cloning, and sharing by type |
+| Borrowing | Keep owners alive across await; distinguish read-only views from exclusive operations |
+| Threads | rustc validates native Send/Sync and traits; do not grant them universally |
+| Cleanup | Define explicit async close and who owns work that remains after drop |
 
-Ordinary Drop cannot await. Provide explicit operations for required asynchronous cleanup. Dropping a future can cancel the caller without undoing work on another worker or a database write already sent. Define cleanup, retries, and duplicate-write handling for each operation.
+Drop cannot await. Dropping a future stops the caller waiting without necessarily canceling accepted database work or external sends. Evaluate general traits and new variadic syntax only after establishing whether this boundary requires them.
 
 ## Requirements for a general database API
 
-Current db_insert takes str/i32; db_update takes i64/str/i32. Retain them for compatibility, without describing them as an API for arbitrary tables and conditions.
+**Separate drivers with common conventions; new APIs are unimplemented.** SQLite and PostgreSQL will use separate modules and resource types, preserving SQL dialect, type, and transaction differences. Module names remain undecided.
 
 | Area | Contract to define first |
-| --- | --- |
-| Parameters | Any number of typed values, typed NULLs, and ownership for str/bytes/views |
-| Operations | execute, one, and all; Option for absence; the same rules for queries without binds |
-| Rows | Match original field names and handle column order, NULLs, integer ranges, and type errors |
-| Transactions | Pin one connection; consume on commit/rollback; reject use after completion and concurrent operations |
-| Errors | Distinguish connection, waiting, SQL, decoding, and absence |
+|---|---|
+| Parameters | Arbitrary typed values, typed NULLs, and ownership for str, bytes, and views |
+| Rows | Field names, column order, NULLs, integer ranges, and decoding errors |
+| Operations and errors | execute/one/all shapes, absence, connection/wait/SQL/decoding failures |
+| Transactions | Hold one connection; consume the caller's handle on commit/rollback; assign cleanup ownership after cancellation |
+| Pools | Closure state shared by clones, stopping new acquisitions, and waiting for operations and cleanup |
 
-Typed variadic arguments are the first option to evaluate. The backend also checks SQL and schema compatibility; dynamic SQL is not guaranteed correct at compile time. Exclusive transaction borrowing needs rules beyond the current read-only view.
+Serializing transaction operations inside a library differs from rejecting concurrent use in Nagi's `check`. The latter requires additional checking over future lifetimes. The extent of static guarantees remains undecided.
 
-Keep SQLite's `?1`, PostgreSQL's `$1`, BIGINT for i64, identity columns, and other dialect differences in the storage layer. Do not translate SQL automatically or send BEGIN/COMMIT through separate pool calls. General PostgreSQL support requires parameter, row, and transaction contracts plus real database tests.
+An unconfirmed commit outcome does not imply rollback or safe retry. Evaluate driver-side distinctions between unsent work, explicit database rejection, and response loss after sending.
+
+Do not translate SQL automatically or send BEGIN/COMMIT through different pooled connections. Static SQL/schema checks and runtime checks of actual types/NULLs are separate. Ordinary `check` does not validate SQL. Main supports explicit [SQLite checks](sql-check.md), which do not guarantee actual value types or NULL behavior. Published 0.1.9 does not include this feature.
+
+## Comparing HTTP foundations
+
+Evaluate Axum/Tower first against the current standard HTTP implementation. **Adoption is undecided and the comparison has not been run.** Axum also uses Hyper: compare routing and middleware within the same connection management, then evaluate listener and shutdown changes separately.
+
+Match public APIs, admission capacity, body/header limits, deadlines, panic responses, and shutdown. Evaluate throughput, latency, CPU, memory, overload recovery, and maintenance costs. Existing [measurements](http-stdlib-performance.md) are not results of this adoption comparison.
+
+An outgoing HTTP client is also unimplemented. Reuse of reqwest or similar libraries is under consideration; response status versus transport errors, receive limits, deadlines, and resource cleanup need contracts first.
 
 ## Implementation order
 
-1. Validate the shared logic and adapter boundaries with current examples, using both Nagi checking and Rust builds.
-2. Build runtime selection and conditional derives on the implemented dependency tables and lock preservation.
-3. Extend the implemented module and definition identities to new resource and provider types.
-4. Keep standard HTTP startup independent of databases and remove SQLite dependencies from applications that do not use a database.
-5. Validate resource ownership, borrowing, cancellation, and general database contracts with SQLite.
-6. Test the same contracts, TLS, pooling, timeouts, and shutdown against PostgreSQL; demonstrate unchanged business rules with different storage providers.
+Address existing type/ownership consistency, native resource contracts, SQLite validation, and PostgreSQL support in that order. Treat HTTP foundation comparison as a separate evaluation and check public API compatibility.
 
-Retain old imports, built-ins, and Rust integration so applications can migrate incrementally. At each stage, check existing examples, High/Low, editors, and supported operating systems. Measure dependency reductions through Cargo features, build times, and output size.
+Preserve existing imports, built-ins, Rust integration, and Low compatibility. Check existing examples and editors. Measure dependency reductions through Cargo features, build times, and output size.
 
-References: [Cargo dependency settings](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html), [feature unification](https://doc.rust-lang.org/cargo/reference/features.html), [Cargo.lock](https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html), [Rust modules](https://doc.rust-lang.org/book/ch07-02-defining-modules-to-control-scope-and-privacy.html), [Send](https://doc.rust-lang.org/std/marker/trait.Send.html)/[Sync](https://doc.rust-lang.org/std/marker/trait.Sync.html), [Future](https://doc.rust-lang.org/std/future/trait.Future.html), [Drop](https://doc.rust-lang.org/std/ops/trait.Drop.html), [Tokio cancellation](https://tokio.rs/tokio/tutorial/select).
+References: [Cargo dependencies](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html), [features](https://doc.rust-lang.org/cargo/reference/features.html), [Send](https://doc.rust-lang.org/std/marker/trait.Send.html)/[Sync](https://doc.rust-lang.org/std/marker/trait.Sync.html), [Drop](https://doc.rust-lang.org/std/ops/trait.Drop.html), [Axum](https://docs.rs/axum/0.8.9/axum/), [Tower](https://docs.rs/tower/latest/tower/).

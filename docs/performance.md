@@ -1,6 +1,6 @@
 # 性能の読み方
 
-結果は[測定結果](../PERFORMANCE.md)と`benchmarks/results/`にあります。測定条件は次のとおりです。
+このページは[2026年9月30日の測定](../PERFORMANCE.md)の読み方を説明します。生ログは`benchmarks/results/`にあります。標準APIの別測定は[HTTP](http-stdlib-performance.md)と[actor](actor-performance.md)を参照してください。対象実装・条件が異なる測定の数値は、そのまま比較できません。
 
 ## CPU処理
 

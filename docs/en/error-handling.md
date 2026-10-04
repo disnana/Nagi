@@ -133,10 +133,16 @@ Try the [Result API example](result-api.md) for invalid input, missing data, dat
 
 ## Checks and panics
 
-The checker rejects directly discarded Results and futures that are not awaited. Checking that an assigned Result is handled on every path remains incomplete.
+The checker rejects a bare `Result` discarded as an expression and async calls that are not awaited. Exhaustive checking for unhandled failures is incomplete, including unused assigned Results and discarded `owned[Result[...]]` values. A successful `check` does not prove that every error is handled.
 
-Result failures differ from panics. Scopes detect child task panics. In [`std.actor`](actor.md), available from Nagi 0.1.8, a business error `E` inside `Turn` keeps the next state and becomes the reply. A handler's own Error or panic invokes the Supervisor's restart policy. `call` returns `Result[Result[R, E], CallError]`, separating business errors from not-ready, stopped, timeout, and other call failures. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) also maps them to HTTP responses.
+Result failures differ from panics. Operations such as out-of-bounds array access or integer division by zero can panic rather than return Result. There is no general exception syntax equivalent to Python's `raise`/`except`.
+
+On main, HTTP servers convert unwinding handler panics before the response starts into a generic 500 and close the connection. Published 0.1.9 does not include this fix. A 500 does not roll back database or shared state changes. See the [HTTP reference](http-server.md#app-and-routes) for the recovery limits.
+
+Scopes check child results after the scope body finishes and detect panics at that point. In [`std.actor`](actor.md), available from Nagi 0.1.8, a business error `E` inside `Turn` keeps the next state and becomes the reply. A handler's own Error or panic invokes the Supervisor's restart policy. `call` returns `Result[Result[R, E], CallError]`, separating business errors from not-ready, stopped, timeout, and other call failures. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) also maps them to HTTP responses.
 
 The older `supervisor_demo` remains a fixed-worker restart test API. Neither mechanism recovers from memory corruption or process aborts.
 
 Diagnostics show the filename, line, relevant source text, and reason. Build errors with an identifiable origin first show the Nagi or Low statement or definition line, followed by the full generated Rust diagnostic. Rust edit suggestions apply to Rust; do not apply them directly to Nagi. Handwritten Rust and unmapped diagnostics retain Rust's output. Precise columns and mappings for every Rust diagnostic are not implemented. Definition navigation also uses original columns.
+
+See [Result matching](../../compiler/tests/result_match.rs), [custom error types](../../compiler/tests/typed_errors.rs), [map_error](../../compiler/tests/result_stdlib.rs), [scopes](../../runtime/src/concurrent.rs), and [actors](../../runtime/src/actor/tests.rs) for implementation and tests.

@@ -1,6 +1,6 @@
 # Actors
 
-An actor handles one message at a time and updates its own state. Available from Nagi 0.1.8, `std.actor` uses ordinary async functions to define initialization and message handling.
+An actor handles one message at a time and updates its own state. Available from Nagi 0.1.8, `std.actor` uses async functions for initialization and message handling. Nagi provides message, state, and reply types; Tokio provides execution and notification.
 
 ```nagi
 import std.actor as actor
@@ -32,8 +32,10 @@ An actor defaults to 64 accepted messages, including work in progress, and a 1Mi
 
 `call` has a `mailbox_ms` admission deadline and a `reply_ms` deadline after acceptance. An accepted update may continue after its reply times out. Use idempotency keys or query the outcome before retrying a write.
 
-The initial API excludes Map, views, shared graphs, and native resources without allocation accounting from message and reply types. Shared initialization data and actor state may contain Db and other resources when their ownership requirements are met.
+Message and reply types cannot contain Map, views, shared values, or native resources. Initialization data and actor state can contain resources such as Db when ownership and Rust `Send`/`Sync` requirements are met. A public API for registering arbitrary Rust resource types in Nagi is not implemented.
 
 [Supervisor restart and shutdown](supervisor.md) · [API reference](actor-reference.md) · [Measurements](actor-performance.md)
 
 The older [actor.nagi](../../examples/actor.nagi) tests a fixed counter. Its measurements are separate from this generic API.
+
+See the [actor runtime](../../runtime/src/actor.rs), [compiler tests](../../compiler/tests/actor_stdlib.rs), and [runtime tests](../../runtime/src/actor/tests.rs) for type checking, state, restart, and capacity behavior.

@@ -2,8 +2,8 @@
   <section class="hero" aria-labelledby="hero-title">
     <div class="hero-copy">
       <p class="eyebrow">A programming language in development</p>
-      <h1 id="hero-title">Readable code.<br>Native programs.</h1>
-      <p class="hero-description">Nagi puts readable code and efficient execution at the center of its design. You can try it with a small program or a Web API that reads and stores data.</p>
+      <h1 id="hero-title">Readable code<br>for backends.</h1>
+      <p class="hero-description">Nagi is a language in development for writing backends with Python-style syntax. Its goal is to let you write HTTP, JSON, and database code without knowing Rust, with Rust available for extensions.</p>
       <div class="hero-actions"><a class="button" href="{{base}}docs/getting-started/">Run your first program</a><a class="text-link" href="{{base}}docs/language-guide/">Learn the language</a></div>
       <p class="hero-note">Nagi is currently a 0.1 prototype. <a href="#status">See its development status</a></p>
     </div>
@@ -11,24 +11,24 @@
       <div class="example-label"><span>double.nagi</span><span>Double a number</span></div>
       {{example}}
       <div class="example-result"><span>Program output</span><samp>42</samp></div>
-      <p class="example-caption"><code>double</code> is a function that doubles a number. Calling it from <code>main</code> with 21 prints 42.</p>
+      <p class="example-caption">Calling <code>double(21)</code> from <code>main</code> prints 42.</p>
     </div>
   </section>
 
   <section class="principles section" aria-labelledby="principles-title">
-    <div class="section-heading"><p class="eyebrow">The ideas behind Nagi</p><h2 id="principles-title">Easy to follow,<br>as you write and read.</h2></div>
+    <div class="section-heading"><p class="eyebrow">How code becomes a program</p><h2 id="principles-title">Write in High.<br>Build through Rust.</h2></div>
     <div class="principle-list">
-      <article><h3>Write directly.</h3><p>Indentation groups your code. The compiler works out variable types wherever the values provide enough information.</p><a href="{{base}}docs/language-guide/">Language basics</a></article>
-      <article><h3>Check before running.</h3><p>Nagi checks types and how you use data after passing it to another function. Operations that can fail return a result you can handle as success or failure.</p><a href="{{base}}docs/error-handling/">Handling failures</a></article>
-      <article><h3>Read what it generates.</h3><p>Nagi translates your code into Low, then Rust, to build a native executable. When you need to, you can read the Low code and replace individual functions.</p><a href="{{base}}docs/low-language/">High and Low</a></article>
+      <article><h3>Code with types</h3><p>High uses indentation to group code. You declare parameter and return types; variable types are inferred from their values.</p><a href="{{base}}docs/language-guide/">Language basics</a></article>
+      <article><h3>Handle failures with Result</h3><p>Database operations return a Result: success or an error. You can define your own error types and handle each case.</p><a href="{{base}}docs/error-handling/">Error handling</a></article>
+      <article><h3>Use Rust libraries</h3><p>Nagi generates Rust code and uses Rust/Cargo to build a native executable. Rust crates are called through handwritten Rust adapters and extern declarations.</p><a href="{{base}}docs/modules-and-rust/">Imports and Rust integration</a></article>
     </div>
   </section>
 
   <section class="use-cases section" aria-labelledby="use-cases-title">
-    <div class="section-heading"><p class="eyebrow">What you can try today</p><h2 id="use-cases-title">Start small.<br>See what happens.</h2></div>
+    <div class="section-heading"><p class="eyebrow">Runnable examples</p><h2 id="use-cases-title">From one file<br>to a Web API.</h2></div>
     <div class="use-case-list">
-      <article><h3>Start with one file</h3><p>Begin by printing text and numbers, then move on to functions, lists, and structured data. Working examples help you learn one step at a time.</p><a class="text-link" href="{{base}}docs/getting-started/">Setup and your first run</a></article>
-      <article><h3>Web APIs and stored data</h3><p>The examples receive JSON over HTTP, read it into typed data, store it in SQLite, and return a response.</p><a class="text-link" href="{{base}}docs/http/">Introduction to HTTP and HTML</a></article>
+      <article><h3>Start with one file</h3><p>Try printing text and numbers, writing functions, using lists, and defining data with classes.</p><a class="text-link" href="{{base}}docs/getting-started/">Setup and your first run</a></article>
+      <article><h3>Web APIs and stored data</h3><p>Try APIs using HTTP, JSON, and SQLite, or examples of actor message handling and Supervisor restarts.</p><a class="text-link" href="{{base}}docs/library-examples/">Sample projects</a></article>
     </div>
     <p class="editor-note">In VS Code, you can inspect variable types, complete fields, and jump to definitions. <a href="{{base}}docs/editor/">Try the editor features</a></p>
   </section>
@@ -36,11 +36,11 @@
   <section class="name-section section" id="name" aria-labelledby="name-title">
     <div class="section-heading"><p class="eyebrow">Where the name comes from</p><h2 id="name-title">Nagi is Japanese for a calm sea.</h2></div>
     <blockquote><p>Even when the inside is working intensely,<br>the surface stays as calm as a quiet sea.</p></blockquote>
-    <p>The name comes from the Japanese word 凪 (nagi): a lull in the wind and a calm sea. It expresses an idea behind the language: even when much is happening underneath, the code you work with should feel calm and clear.</p>
+    <p>凪 (nagi) means a lull in the wind and a calm sea. The name expresses a wish for code that feels calm and clear to the person writing it.</p>
   </section>
 
   <section class="status-section section" id="status" aria-labelledby="status-title">
-    <div><p class="eyebrow">Development status</p><h2 id="status-title">Taking shape, step by step.</h2><p>Nagi is a 0.1 prototype. Its syntax and features are still being developed and may change. The Docs distinguish working features from those that have yet to be implemented.</p><p>Archives are available for Windows x64, Linux x86_64, macOS Apple Silicon, and macOS Intel. CI checks builds and execution on each platform. You need Rust/Cargo and a C build environment to try Nagi.</p></div>
+    <div><p class="eyebrow">Development status</p><h2 id="status-title">Currently a 0.1 prototype.</h2><p>The syntax and standard APIs may change. See <a href="{{base}}docs/introduction/">purpose and current implementation</a>.</p><p>Low uses braces with the same type and ownership rules as High, and supports function replacement. Pointer operations and unsafe blocks are not supported. <a href="{{base}}docs/low-language/">About High and Low</a></p><p>Archives are available for Windows x64, Linux x86_64, macOS Apple Silicon, and macOS Intel. The <code>nagic build/run</code> commands require Rust/Cargo and your OS's build tools.</p></div>
     <nav class="status-links" aria-label="Development information"><a href="{{base}}docs/introduction/">Goals and implementation scope</a><a href="{{base}}docs/roadmap/">Development roadmap</a><a href="{{base}}docs/performance/">Reading the benchmarks</a><a href="{{repo}}">View the source</a></nav>
   </section>
 </main>

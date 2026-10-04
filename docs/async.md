@@ -1,6 +1,6 @@
 # asyncとscope
 
-タイマーやDBなどの処理を待つ関数は`async def`で定義し、`await`で結果を待ちます。待っている間は、ほかの非同期処理を進められます。
+タイマーやDBなどの処理を待つ関数は`async def`で定義し、`await`で結果を待ちます。NagiはこれをRustのFutureへ変換し、Tokio上で実行します。待っている間は、ほかの非同期処理を進められます。同期のCPU処理を自動で別スレッドへ移す機能ではありません。
 
 ```nagi
 async def main() -> Result[unit, Error]:
@@ -46,3 +46,5 @@ async def main():
 これは関数そのものの代入です。`pending = answer(41)`のように呼び出した戻り値を保存する形式は未対応です。呼び出しとawaitを合わせて書いてください。関数を引数や戻り値として受け渡す型の範囲は[型と推論](types.md#関数を値として渡す)にあります。
 
 async関数を入れた変数に、別のasync関数を再代入することはできません。別の変数を使うか、ifの各分岐で呼び出してください。同じ関数を入れ直すことや、同期関数を入れた変数の差し替えはできます。
+
+実装は[scopeのruntime](../runtime/src/concurrent.rs)と[コード生成](../compiler/src/emit.rs)にあります。[scopeのテスト](../compiler/tests/scoped_tasks.rs)と[async関数値のテスト](../compiler/tests/async_value_types.rs)が対応する入力と拒否する入力を示します。

@@ -4,7 +4,7 @@
 
 ## 最初の読み書き
 
-保存する型をclassで定義し、`db_open`でDBを開き、`db_exec`でテーブルを作ります。DBの操作は非同期で、失敗し得るため`try await`を使います。
+標準DB APIはSQLite用です。保存する型をclassで定義し、`db_open`でDBを開き、`db_exec`でテーブルを作ります。失敗し得る非同期操作なので、`try await`で結果を扱います。PostgreSQLなど、別のDBには現在Rust連携が必要です。
 
 次のコードを`database.nagi`として保存し、`nagic run database.nagi`で実行します。メモリ内のDBへ1件追加し、保存した名前を表示します。
 
@@ -30,7 +30,7 @@ async def main() -> Result[unit, Error]:
 
 標準の行読み取りは、`i8`・`i16`・`i32`・`i64`・`u8`・`u16`・`u32`・`f32`・`f64`・`bool`・`str`・`bytes`のフィールドに対応します。各型を`T?`にするとSQLのNULLを受け取れます。boolやfloat、bytesのnullable対応はNagi 0.1.9以降です。[設定APIの例](../test-nagi-code/application-examples/device-settings/README.md)で確認できます。
 
-これらの型を`owned[...]`で包んだフィールドも、行の読み取り実装を自動生成します。`owned[str]`や`owned[i64?]`に手書きの`FromRow`は不要です。以前の回避策として追加していた場合は、重複する実装を削除してください。対応外のフィールドは、Rust側の読み取り実装や型変換を使います。
+mainでは、これらの型を`owned[...]`で包んだフィールドにも行の読み取り実装を自動生成します。公開0.1.9には未収録です。`owned[str]`や`owned[i64?]`に手書きの`FromRow`は不要です。以前の回避策として追加していた場合は、重複する実装を削除してください。対応外のフィールドは、Rust側の読み取り実装や型変換を使います。
 
 | 操作 | 書き方 | await後の戻り値 |
 |---|---|---|
@@ -60,10 +60,18 @@ async def get_user(db: Db, id: i64) -> Result[User?, Error]:
 
 ## 実装と制約
 
-SQLiteへの操作は専用のスレッドで順に実行します。待ち行列は64件までです。Nagi側は非同期に結果を待ちますが、SQLiteそのものの読み書きはそのスレッドで行います。
+Nagiは型付き呼び出しとclassへの行変換を提供し、SQLの実行・保存・制約の検査はrusqliteとSQLiteが担います。SQLiteはruntimeに同梱されます。
+
+開いたDbごとに専用スレッドで操作を順に実行します。待ち行列は64件までで、満杯なら送信側が待ちます。Nagi側は結果を非同期に待ちますが、SQLiteの読み書き自体は同期処理です。Dbの最後の所有者が解放される際はworkerの終了を待つため、即時に戻る保証はありません。
 
 SQLの準備結果をキャッシュします。列名は呼び出しごとに解決し、`db_all`では同じ結果の各行にその列位置を使います。文字列やバイト列を返すときは、行の処理が終わったあとも保持できるよう、所有する値を作ります。
 
-任意個数のSQL引数、トランザクション専用API、接続プールは未対応です。通常の`check`はSQLとschemaを検査しません。[SQLの事前検査](sql-check.md)を明示的に指定すると、SQLiteの文字列リテラルの名前・必要な返却列・bind数を確認できます。動的SQLや列の値の型に問題がある場合は、実行時にResultのエラーになります。
+通常の`check`はNagiの引数型と、行を返す型がclassであることを検査します。SQL文字列の構文、schema、列名、bind数、SQLのNULLとclassの対応は検査しません。
+
+mainでは、[SQLの事前検査](sql-check.md)を明示的に指定すると、SQLiteの文字列リテラルの構文・名前・必要な返却列・bind数を確認できます。公開0.1.9には未収録です。動的SQL、`db_exec`、実データの型・NULL・値の範囲は対象外で、対応するフィールド型では実行時のResultで扱います。未対応の行フィールドなど、Rustの変換要件を満たさない型はbuildで失敗する場合もあります。
+
+任意個数のSQL引数、トランザクション専用API、接続プール、PostgreSQLは未対応です。SQLでBEGIN／COMMITを書いても、複数の呼び出しの間を専有するAPIではないため、共有Dbの他の操作が間へ入る可能性があります。
 
 HTTPの待機期限が切れても、すでに受け付けたDB操作が完了し、書き込みが保存される場合があります。呼び出し元のキャンセルで、書き込みが取り消される保証はありません。
+
+実装は[DB runtime](../runtime/src/database.rs)と[classの行変換生成](../compiler/src/emit.rs)、確認用のコードは[CRUDサンプル](../examples/crud.nagi)と[DBのテスト](../runtime/src/database.rs)にあります。SQLite／PostgreSQLの別型と共通操作規則は[設計案](library-design.md)で、ここに記載した現行APIとは別です。

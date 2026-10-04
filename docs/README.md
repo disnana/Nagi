@@ -2,7 +2,9 @@
 
 初めて使うなら[インストール](getting-started.md)、書き方を調べるなら[文法](syntax.md)・[組み込み関数](builtins.md)へ。
 
-このDocsはmainの内容です。[Changelog](../CHANGELOG.md)の`Unreleased`にある機能は、配布前のためソースからのビルドが必要です。
+このDocsはリポジトリのソースに対応し、公式サイトは通常mainから生成します。[Changelog](../CHANGELOG.md)の`Unreleased`にある変更は、公開配布版にはまだ含まれません。
+
+目的と現在の範囲は[Nagiについて](introduction.md)へ。以下のリファレンスは実装済みAPIの使い方と制限を示します。未実装の案は[設計](library-design.md)・[開発予定](roadmap.md)に分けています。
 
 ## 初めて使う
 
@@ -29,6 +31,7 @@
 |---|---|
 | DBなしのHTTP、ヘッダー、応答status | [HTTP](http.md)、[APIリファレンス](http-server.md) |
 | JSONを読み書きする | [JSON](json.md) |
+| SQLiteのSQLをschemaと照合する | [SQLの事前検査](sql-check.md) |
 | 複数ファイルに分ける、Rustを呼ぶ | [importとRust連携](modules-and-rust.md) |
 | 自作の共通コードやRustのcrateを使う | [ライブラリとRustの資産](libraries.md) |
 | 入口やビルド設定を保存する | [nagi.toml](projects.md) |
@@ -42,7 +45,7 @@
 
 ## 仕組みと開発状況
 
-[Nagiについて](introduction.md) · [Low](low-language.md) · [メモリ](memory-model.md) · [コンパイラ](compiler-internals.md) · [他の言語との連携](ffi.md) · [開発予定](roadmap.md)
+[Nagiについて](introduction.md) · [設計判断](../DESIGN.md) · [Low](low-language.md) · [メモリ](memory-model.md) · [コンパイラ](compiler-internals.md) · [他の言語との連携](ffi.md) · [開発予定](roadmap.md)
 
 `std.actor`はNagi 0.1.8から使える標準ライブラリです。[サンプル](../test-nagi-code/library-examples/supervised-service/README.md)で登録・呼び出し・停止を試せます。旧actor／Supervisorの組み込み関数と[キュー](queue.md)は検証用APIです。性能を調べる場合は、[測定方法](performance.md)、[測定結果](../PERFORMANCE.md)、[通信の負荷試験](http-capacity.md)を確認してください。
 

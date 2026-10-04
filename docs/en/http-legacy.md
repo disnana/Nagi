@@ -1,6 +1,6 @@
 # Existing HTTP attributes
 
-Reference for HTTP attributes such as `@get` and `serve(Db, port)`. For a new server without a database, see [HTTP](http.md).
+Reference for the existing API using attributes such as `@get` and `serve(Db, port)`. For new servers, prefer [`std.http.server`](http.md): it does not require a database and lets you specify shared state and error mapping.
 
 
 [Contents](README.md) · Previous: [Language guide](language-guide.md) · Next: [SQLite](database.md)
@@ -100,7 +100,7 @@ Browser JavaScript can call the same server with `fetch("/api/tasks")`. The [tas
 
 ## Current server scope
 
-High attributes generate Axum routing. Implemented features include HTTP/1.1, keep-alive, path parameters, typed query parameters, request bodies, and JSON responses.
+High attributes generate an Axum Router and argument extraction. Axum handles routing, Tokio and Hyper handle async transport, and Serde converts JSON. The API supports HTTP/1.1, keep-alive, path parameters, typed query parameters, request bodies, and JSON responses.
 
 Standard test endpoints include `/health`, a five-chunk `/stream`, and the `/ws` echo WebSocket. Middleware limits request processing to two seconds and body/WebSocket messages to 1 MiB. Database and internal errors become statuses such as 500 without exposing details in responses.
 
@@ -111,3 +111,7 @@ HTTP waits expire after ten seconds by default. This covers silence after accept
 To change it, set `NAGI_HTTP_REQUEST_WAIT_SECONDS` to a positive integer before starting the server. For example, use `$env:NAGI_HTTP_REQUEST_WAIT_SECONDS = "30"` in PowerShell or `export NAGI_HTTP_REQUEST_WAIT_SECONDS=30` in bash. Headers and unused keep-alive share this deadline. There is no fixed limit of 128 concurrent connections.
 
 The server currently binds to loopback only. HTTP/2, TLS, authentication, arbitrary middleware declarations in High, and deployment mechanisms are not implemented. Large-class JSON streaming and general High streaming syntax are also absent. JSON responses encode classes into `Vec<u8>` and pass it to Body.
+
+Main includes a fix that converts handler panics before the response starts into 500 responses; published 0.1.9 does not include it. This does not roll back database or state updates, or recover from process aborts and failures during response transmission. See [Error handling](error-handling.md#checks-and-panics) for its scope.
+
+The implementation is in [HTTP attribute code generation](../../compiler/src/emit.rs), the [legacy runtime API](../../runtime/src/lib.rs), and [HTTP connection management](../../runtime/src/http.rs).

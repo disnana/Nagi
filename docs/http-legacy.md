@@ -1,6 +1,6 @@
 # 既存のHTTP属性
 
-`@get`などのHTTP属性と`serve(Db, port)`のリファレンスです。新しくDB不要のサーバーを作る場合は[HTTP](http.md)を参照してください。
+`@get`などのHTTP属性と`serve(Db, port)`を使う既存APIのリファレンスです。新しいサーバーには、DBを必要とせず状態とエラー処理を指定できる[`std.http.server`](http.md)を推奨します。
 
 
 [目次](README.md) · 前：[入門ガイド](language-guide.md) · 次：[SQLite](database.md)
@@ -100,7 +100,7 @@ async def home() -> Result[Html, Error]:
 
 ## 現在のサーバーの範囲
 
-Highの属性からAxumのroutingを生成します。HTTP/1.1、keep-alive、path parameter、型付きquery parameter、request body、JSON responseを実装しています。
+Highの属性からAxum Routerと引数の取り出し処理を生成します。Axumがrouting、TokioとHyperが非同期通信、SerdeがJSON変換を担います。HTTP/1.1、keep-alive、path parameter、型付きquery parameter、request body、JSON responseを使えます。
 
 標準の試験用endpointは`/health`、5chunkの`/stream`、echo WebSocketの`/ws`です。middlewareでrequest処理を2秒に制限し、bodyとWebSocket messageの上限を1 MiBにしています。DBや内部エラーは500などに変換し、詳細をresponseへ出しません。
 
@@ -111,3 +111,7 @@ HTTPの待機期限は既定で10秒です。接続直後の無通信、途中�
 変更する場合は、起動前に環境変数`NAGI_HTTP_REQUEST_WAIT_SECONDS`へ正の整数を指定します。例えばPowerShellでは`$env:NAGI_HTTP_REQUEST_WAIT_SECONDS = "30"`、bashでは`export NAGI_HTTP_REQUEST_WAIT_SECONDS=30`です。ヘッダーと未使用keep-aliveの期限は共通です。同時接続数を128に固定する制限はありません。
 
 現在はloopback専用です。HTTP/2、TLS、認証、任意middlewareのHigh宣言、deploymentの仕組みは未実装です。大きいclassのJSON streamingや汎用のHigh streaming構文もありません。JSON responseはclassをVec<u8>へencodeしてBodyへ渡します。
+
+応答開始前のhandlerのpanicを500へ変換する修正はmainにありますが、公開0.1.9には入っていません。DBや状態の更新を巻き戻さず、プロセスのabortや応答送信中の障害は回復しません。詳しい範囲は[エラー処理](error-handling.md#検査とpanicの範囲)を参照してください。
+
+実装は[HTTP属性のコード生成](../compiler/src/emit.rs)、[従来のruntime API](../runtime/src/lib.rs)、[HTTP接続管理](../runtime/src/http.rs)にあります。

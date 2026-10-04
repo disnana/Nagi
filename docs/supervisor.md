@@ -1,6 +1,6 @@
 # Supervisor
 
-`std.actor`のSupervisorは、登録したactorやasync処理の起動・異常終了・再起動・停止を管理します。一つの子が再起動している間も、ほかの子は処理を続けます。
+`std.actor`のSupervisorは、同じプロセス内に登録したactorやasync処理の起動・異常終了・再起動・停止を管理します。現在の再起動方式は、失敗した子だけを起動し直すone-for-oneです。ほかの子は処理を続けます。
 
 ## 再起動方針
 
@@ -31,7 +31,9 @@
 
 [scope](async.md)本体が終わって子の終了を待つ段階で、spawnした`run`がErrorを返すと、同じscopeの残りの子をキャンセルして終了を待ちます。HTTPサーバーも同じscopeでspawnしていれば、その対象です。たとえば最後の`TEMPORARY` workerの失敗は、HTTPの終了につながります。業務上の拒否とworkerの故障を分けて返してください。
 
-`shutdown`が成功するのは、子と共通データの後片付けが済んだ後です。期限内に終わらなければ未完了のErrorを返し、終了を追跡する記録を保持します。HTTPやnative処理が共通データを保持している場合も、その参照が解放されるまで後片付けは完了しません。Rust連携で別のTokio runtimeを使う場合は、`run`を開始したruntimeを後片付けまで維持します。
+`shutdown`の成功は、子と共通データの後片付け完了を表します。Errorには、後片付け完了後に返す記録済みの子の失敗と、期限切れによる未完了の両方があります。現行APIでは専用の完了状態型に分かれていないため、Errorだけを見て「必ず未完了」と判断しないでください。
+
+期限内に終わらない場合は終了を追跡する記録を保持します。HTTPやnative処理が共通データを保持している間は、後片付けは完了しません。その解放がSupervisorの終了待ちに依存すると、互いに待つ構成になります。利用者側でも参照と停止の順序を設計する必要があります。Rust連携で別のTokio runtimeを使う場合は、`run`を開始したruntimeを後片付けまで維持します。
 
 Tokioの停止は協調的です。yieldしないCPU処理、blockingなnative呼び出し、重いDropは強制中断できません。長い計算は分割して`await actor.yield_now()`を挟むか、終了を管理できる別プロセスで実行してください。共通データを持たずに始まった外部のblocking jobなどは、このグループの終了保証に含まれません。
 
@@ -45,8 +47,10 @@ taskの`STARTED`はfactory本体の実行前に届きます。接続確立など
 
 [workerのサンプル](../test-nagi-code/application-examples/supervised-worker/README.md)で準備完了通知、panicからの再起動、期限付き監視、停止を確認できます。
 
-これは同じプロセス内のnative実装です。VM、無停止のコード差し替え、分散配置、永続mailbox、実行中の子の追加・削除は未対応です。
+Tokioを使うnative実装で、BEAMの隔離されたprocessやVMと同じ障害耐性はありません。VM、無停止のコード差し替え、分散配置、永続mailbox、実行中の子の追加・削除、one-for-all／rest-for-oneは未対応です。
 
 [actorの書き方](actor.md) · [APIリファレンス](actor-reference.md) · [性能測定](actor-performance.md) · [実行できるサンプル](../test-nagi-code/library-examples/supervised-service/README.md)
 
 旧[supervisor.nagi](../examples/supervisor.nagi)は固定workerの再起動試験です。
+
+実装は[Supervisor runtime](../runtime/src/actor.rs)と[ライフサイクル管理](../runtime/src/actor/lifecycle.rs)にあります。[再起動のテスト](../runtime/src/actor/tests.rs)と[停止・解放のテスト](../runtime/src/actor/lifecycle_adversarial_tests.rs)が、業務エラー、子の失敗、待機期限、後片付けの各条件を確認します。

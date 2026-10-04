@@ -1,6 +1,6 @@
 # JSON configuration file
 
-Create typed JSON in Nagi, save it as UTF-8, and read it back. A short Rust adapter uses `std::fs` for file operations; Nagi defines and checks the configuration. No additional Rust crate is required.
+Create typed JSON in Nagi, save it as UTF-8, and read it back. A short Rust adapter uses `std::fs` for file operations; Nagi defines and checks the configuration. The file operation uses Rust's `create_new`, which is not currently exposed by the Nagi standard API. No additional Rust crate is required.
 
 Run from the repository root. Use `--project` so the compiler includes the Rust file specified in `nagi.toml`.
 

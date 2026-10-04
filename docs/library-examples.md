@@ -47,11 +47,11 @@ nagic run --project test-nagi-code/library-examples/rust-json
 | [Rust連携](../test-nagi-code/rust-bridge/) | CRC-32、serde_json、非同期Rust関数の呼び出し |
 | [フラクタル](../test-nagi-code/README.md#exe単体で見られるフラクタル) | コンソール表示とexe配布 |
 
-各READMEには、その例の入力、出力、制約を記載しています。これらの成功を、全Rust crateへの対応や本番用のHTTP・DB基盤が完成した証拠とは扱いません。
+各READMEで入力、出力、制約を確認できます。Rust連携の例が扱うのは記載したAPIと型です。
 
 ## 開発時にまとめて確認する
 
-Python 3.12以降とNagi 0.1.9以降があれば、各プロジェクトのcheck・build・実行結果と、HTTP応答をまとめて確認できます。開発中の変更を検証する場合は、そのソースから作った`nagic`を指定してください。
+Python 3.12以降で、各プロジェクトのcheck・build・実行結果とHTTP応答を検証できます。リポジトリのサンプルと同じソースから作った`nagic`を指定してください。
 
 ```sh
 python scripts/verify_library_examples.py --compiler /path/to/nagic

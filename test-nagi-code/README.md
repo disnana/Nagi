@@ -1,138 +1,117 @@
 # Nagiのサンプル
 
+[English](README.en.md)
+
+CLI、HTTP API、SQLite、actor、Rust連携の例です。Nagiで書く処理と、Rustに任せる処理を各READMEで説明しています。本番用のひな形ではなく、入力・出力と制限を確認するためのサンプルです。
+
+リポジトリ一式を取得し、そのルートで実行してください。Nagi 0.1.9とRust/Cargo、OSごとのビルド環境が必要です。[セットアップ](../docs/getting-started.md)を参照してください。`main`からビルドしたコンパイラには、公開版と同じ版番号でも未リリースの修正が含まれる場合があります。
+
 ## 自作ライブラリとRustの資産
 
-[library-examples/](library-examples/)に、共通の料金計算を使うCLIとJSONレポート、Rust連携、標準HTTP、Supervisor、Lowの差し替えなど10プロジェクトがあります。[一覧と起動手順](../docs/library-examples.md)、[English](library-examples/README.en.md)を参照してください。
+| サンプル | 内容 |
+| --- | --- |
+| [ライブラリとRust連携](library-examples/README.md) | 共有料金計算、module、独自エラー、標準HTTP、自作Axum基盤など10プロジェクト |
+| [アプリケーション](application-examples/README.md) | JSON集計、SQLite API、DBなしの見積API、ファイル保存、監督付きworker |
+| [手書きLowの注文見積もり](low-examples/order-quote/README.md) | 波括弧構文、Low同士のimport、入力検証 |
+| [ローカルRust crate](rust-library/README.md) | `path`依存とCargo feature、Nagiの型への変換 |
+| [Rustの橋渡し](rust-bridge/) | CRC-32、serde_json、非同期Rust関数 |
+| [コードマップ](../examples/code-map/README.md) | 型・module・呼び出しの関係を図にする |
 
-[application-examples/](application-examples/)には、JSON集計、SQLite API、DBなしの見積API、ファイル保存、Supervisorによるactor・taskの再起動と停止の例があります。[手書きLowの注文見積もりCLI](low-examples/order-quote/README.md)では、Low同士のimportと入力検証を試せます。
-
-Nagi 0.1.9以降で`python scripts/verify_application_examples.py --compiler /path/to/nagic`を実行すると、Highと保存した生成Low、手書きLowを実際にビルドして検証します。起動手順と個別の検証コマンドは[サンプル一覧](application-examples/README.md)を参照してください。
+共通の検証手順は[アプリ一覧](application-examples/README.md)と[ライブラリ一覧](../docs/library-examples.md#開発時にまとめて確認する)にあります。
 
 ## 成功と失敗を分ける小さなAPI
 
-[result-api/README.md](result-api/README.md) は、数値変換とSQLiteの1件取得から始めるサンプルです。Resultの`match`で、入力不正・対象なし・DB失敗・代替データへの回復を書き分けます。Pythonのsmokeは自分で起動したサーバーへHTTPリクエストを送り、応答だけを照合します。
+[Result API](result-api/README.md)は、数値変換とSQLiteの1件取得を使い、入力不正・対象なし・DB失敗・代替データを`match`で書き分けます。
 
 ## 画面付きのタスク管理
 
-[web-demo/README.md](web-demo/README.md) に起動・exe配布・API確認の手順があります。ブラウザーでタスクを追加・編集・完了・削除でき、画面とAPIの両方をNagiサーバーが提供します。HTMLはexeへ埋め込みます。
+[Nagi Tasks](web-demo/README.md)は、ブラウザーからタスクを追加・編集・完了・削除する例です。NagiがAPIと入力検証を担当し、ランタイムがHTTPとSQLiteを扱います。画面のHTML/CSS/JavaScriptは実行ファイルへ埋め込みます。
 
 ## Rustライブラリを使う
 
-`rust-bridge/bridge.nagi` は別ファイルの宣言をimportし、Rustで書いたCRC-32と`serde_json`を呼び出します。
-
-```powershell
-.\target\release\nagic.exe run --project test-nagi-code/rust-bridge
-```
-
-[../docs/modules-and-rust.md](../docs/modules-and-rust.md) にファイル分割と型付きRust連携の仕様をまとめています。VS Code拡張は [../editors/vscode-nagi/README.md](../editors/vscode-nagi/README.md) を参照してください。
+Rust側の関数とcrateをNagiから呼ぶ方法は、[Rust連携のサンプル](rust-library/README.md)と[importとRust連携](../docs/modules-and-rust.md)を参照してください。手書きLowを挟む必要はありません。
 
 ## 在庫管理API
 
-`inventory.nagi` は商品名と在庫数をSQLiteに保存するサンプルです。型付きのJSON入力、`view`による借用、`Result`と`try`による失敗の伝播、非同期DB操作、SQL集計をまとめて使います。既存の `hello.nagi` は小さな入門サンプルとして残しています。
+[inventory.nagi](inventory.nagi)は商品名と在庫数をSQLiteへ保存します。NagiでJSONの型・入力検証・ルート・エラー処理を定義し、SQLの実行はランタイムへ任せます。SQL文字列の列名やDBスキーマは、通常の`check`では検査しません。
 
-## 動かす
+### 動かす
 
-リポジトリのルートで実行します。Rust/CargoとSQLiteをビルドできるCコンパイラが必要です。
+```sh
+nagic run test-nagi-code/inventory.nagi
+```
+
+既定ではport 8090とメモリDBを使います。保存する場合は、存在するディレクトリ内のSQLiteファイルを指定します。
 
 ```powershell
-cargo build --release --locked
-.\target\release\nagic.exe check test-nagi-code/inventory.nagi
-# この設定を省略すると、終了時に消えるメモリDBを使います。
-$env:NAGI_DB = "build/inventory-demo.sqlite"
+$env:NAGI_DB = "inventory-demo.sqlite"
 $env:NAGI_PORT = "8090"
-.\target\release\nagic.exe run test-nagi-code/inventory.nagi --cost-report
+nagic run test-nagi-code/inventory.nagi
 ```
 
-Linux / WSLでは次のように実行できます。
-
-```bash
-cargo build --release --locked
-NAGI_DB=build/inventory-demo.sqlite NAGI_PORT=8090 \
-  ./target/release/nagic run test-nagi-code/inventory.nagi --cost-report
+```sh
+NAGI_DB=inventory-demo.sqlite NAGI_PORT=8090 nagic run test-nagi-code/inventory.nagi
 ```
 
-DBの親ディレクトリは事前に存在する必要があります。上記では `nagic` が作る `build/` を使います。`--cost-report` は静的なコスト箇所のレポートであり、実行時の割り当て回数や性能測定ではありません。生成されたLowは `build/inventory/generated.low` に出力されます。
+`--cost-report`を付けると静的なコスト箇所を表示します。実行時の割り当て回数や速度を測る機能ではありません。
 
-別のターミナルから呼び出します。以下はbashの例です。
-
-```bash
-curl -s http://127.0.0.1:8090/health
-curl -s -H 'Content-Type: application/json' \
-  -d '{"name":"ノート","quantity":12}' http://127.0.0.1:8090/items
-curl -s http://127.0.0.1:8090/items/1
-curl -s -X PUT -H 'Content-Type: application/json' \
-  -d '{"name":"ノート","quantity":0}' http://127.0.0.1:8090/items/1
-curl -s http://127.0.0.1:8090/inventory/summary
-curl -s -X DELETE http://127.0.0.1:8090/items/1
-```
-
-PowerShellならJSONをUTF-8のbyte列にして送信できます。
-
-```powershell
-$body = [System.Text.Encoding]::UTF8.GetBytes('{"name":"ノート","quantity":12}')
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8090/items `
-  -ContentType 'application/json; charset=utf-8' -Body $body
-Invoke-RestMethod http://127.0.0.1:8090/inventory/summary
-```
-
-## APIの振る舞い
+### APIの振る舞い
 
 | メソッド・パス | 結果 |
-|---|---|
+| --- | --- |
 | `GET /items` | 最新100件をIDの降順で返す |
 | `GET /items/{id}` | 1件取得。存在しなければ404 |
-| `POST /items` | `name`、`quantity`から登録。200と登録した商品を返す |
+| `POST /items` | 名前と在庫数を登録。200と登録した商品を返す |
 | `PUT /items/{id}` | 名前と在庫数を両方置換。存在しなければ404 |
-| `DELETE /items/{id}` | `{ "id": 1, "deleted": true }`。再削除は200で`false` |
+| `DELETE /items/{id}` | IDと`deleted`を返す。再削除も200で`false` |
 | `GET /inventory/summary` | 全件の商品数、在庫数合計、在庫ゼロの商品数 |
 
-商品は `{ "id": 1, "name": "ノート", "quantity": 12 }`、集計は `{ "item_count": 1, "total_quantity": 12, "out_of_stock": 0 }` の形です。
+bashでは次のように登録できます。Windowsで`curl`がPowerShellのaliasになっている場合は`curl.exe`を使ってください。
 
-名前はUTF-8で1〜120 byte、在庫数は0〜1,000,000の整数、IDは正の整数です。日本語の「あ」は3 byteなので40文字まで入ります。名前の前後の空白は除去しません。空白だけの名前や同じ名前の重複登録も許可します。
+```sh
+curl -H 'Content-Type: application/json' \
+  -d '{"name":"ノート","quantity":12}' http://127.0.0.1:8090/items
+curl http://127.0.0.1:8090/inventory/summary
+```
 
-不正なJSON、余分なフィールド、型違い、範囲外の値は400です。アプリとDBの両方で値の制約を持ち、SQLの値はすべてbindします。DB・内部エラーは詳細を伏せた500として返します。空のDBの集計はすべて0になります。
+### 実HTTPで確認する
 
-## 実HTTPで確認する
-
-Python 3の標準ライブラリだけで動きます。テストは起動済みサーバーへHTTPリクエストを送り、ステータスとJSONを照合します。まず、空のメモリDBでサーバーを起動します。
+保存用のサーバーを停止し、空のメモリDBで起動し直します。PowerShellでは次を実行してください。
 
 ```powershell
 $env:NAGI_DB = ":memory:"
-$env:NAGI_PORT = "8090"
-.\target\release\nagic.exe run test-nagi-code/inventory.nagi
+nagic run test-nagi-code/inventory.nagi
 ```
 
-Linux / WSLなら `NAGI_DB=:memory: NAGI_PORT=8090 ./target/release/nagic run test-nagi-code/inventory.nagi` で起動します。別のターミナルでテストを実行してください。
+bashでは`NAGI_DB=:memory: nagic run test-nagi-code/inventory.nagi`で起動します。別のターミナルで検証します。
 
-```powershell
+```sh
 python test-nagi-code/smoke_inventory.py --base-url http://127.0.0.1:8090
 ```
 
-登録・取得・更新・削除、UTF-8の境界値、不正入力、SQLのbind、集計、最新100件の一覧を確認します。Python側ではサーバーの起動・停止・再起動やファイル操作を行いません。テストで登録したデータはサーバーに残るため、再実行する場合はメモリDBのサーバーを起動し直してください。
+Python 3の標準ライブラリだけで、登録・取得・更新・削除、UTF-8の境界値、不正入力、bind、集計、一覧を確認します。サーバーの起動・停止やDBファイルの操作は行いません。テストデータが残るため、再実行時はメモリDBのサーバーを起動し直してください。
 
-## 現行の言語仕様に合わせた範囲
+### 現行の言語仕様に合わせた範囲
 
-DBのinsert/updateは現在`str`と`i32`の2値を渡す形式なので、その形式で表現できる在庫モデルにしています。DBテーブルは既存のサンプルと衝突しにくい `sample_inventory_items` です。
+名前はUTF-8で1〜120バイト、在庫数は0〜1,000,000、IDは正の整数です。空白の除去や重複名の拒否はしません。JSONの余分なフィールド・型違い・範囲外は400、DB・内部エラーは詳細を伏せた500です。SQLの値はbindし、テーブルにも値の制約を付けています。
 
-一覧のページ送り、認証、名前検索、部分更新、スキーマ移行は含みません。更新は最後の書き込みが優先されます。ランタイムはloopbackで待ち受け、リクエスト処理の制限は2秒、bodyの上限は1 MiBです。タイムアウトしても受け付け済みのDB処理は完了する場合があります。
+現在のinsert/updateは`str`と`i32`を渡す固定の形式です。ページ送り、認証、名前検索、部分更新、スキーマ移行は含めていません。更新は最後の書き込みが優先されます。loopbackで待ち受け、handler期限は2秒、本文上限は1 MiBです。タイムアウトしても受け付け済みのDB操作は完了する場合があります。
 
 ## exe単体で見られるフラクタル
 
-`fractal.nagi` はマンデルブロ集合とジュリア集合をコンソールに描くデモです。関数、条件分岐、ループ、固定幅の整数と浮動小数点数、標準入出力を使います。ブラウザーやサーバーの起動、外部データは不要です。
+[fractal.nagi](fractal.nagi)はマンデルブロ集合とジュリア集合をコンソールへ描きます。数値計算、ループ、標準入出力の例で、サーバーやDBは使いません。
 
-Windows x64向けの配布用exeを作るには、リポジトリのルートで次を実行します。
+```sh
+nagic run test-nagi-code/fractal.nagi
+```
+
+`1`でマンデルブロ集合、`2`でジュリア集合、`q`または空のEnterで終了します。コンソール幅は80文字以上にしてください。
+
+Windows x64の配布用exeは、リポジトリのルートで次のように作れます。
 
 ```powershell
 .\test-nagi-code\build_fractal_exe.ps1
-# Cargoの依存がキャッシュ済みなら -Offline も指定できます。
-```
-
-配布するファイルは `build/distribution/nagi-fractal.exe` です。ビルドにはRust/CargoとMSVCのCビルド環境が必要ですが、配布先ではRust/Cargo・Nagi・Pythonのインストールは不要です。VC++ランタイムを静的リンクします。
-
-exeを起動すると図形が出ます。`1`でマンデルブロ集合、`2`でジュリア集合を表示し、`q`または空のEnterで終了します。`@`は80回の反復で発散しなかった点、薄い文字ほど早く発散した点です。コンソール幅は80文字以上にしてください。入力が不正ならメニューを再表示します。
-
-```powershell
 .\build\distribution\nagi-fractal.exe
 ```
 
-ソースから通常の方法で試す場合は `.\target\release\nagic.exe run test-nagi-code/fractal.nagi` でも動きます。
+ビルドにはRust/CargoとMSVCのCビルド環境が必要です。VC++ランタイムを静的リンクするため、配布先ではRust/Cargo・Nagi・Pythonは不要です。依存を取得済みなら`-Offline`も指定できます。

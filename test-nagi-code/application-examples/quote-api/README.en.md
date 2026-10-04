@@ -4,7 +4,7 @@
 
 This quote API uses `std.http.server` without a database. It decodes request JSON into `QuoteInput`, validates the quantity and product, and returns a `Quote`. The App owns a typed `Config`; each handler reads it through `shared[Config]`.
 
-Start it from the repository root. You need Nagi 0.1.9 or later and a working Rust/Cargo build environment.
+Start it from the repository root. You need Nagi 0.1.9 and a working Rust/Cargo build environment.
 
 ```sh
 nagic run --project test-nagi-code/application-examples/quote-api
@@ -50,7 +50,11 @@ Application input and business errors use this body shape. JSON decoding details
 
 `X-Request-ID` is optional. When supplied, it must be one UUID. The API returns its canonical value with successful quotes and application errors. It does not generate IDs. Invalid IDs are not echoed. `/health` does not process this header.
 
-Unknown routes return 404. Unregistered methods such as `GET /quotes` return 405 with `Allow: POST`. Bodies larger than 4096 bytes return 413. These server responses bypass the application mapper, so they do not guarantee the JSON error shape or request ID echo described above. Response construction failures return 500; the final fallback has no body.
+Unknown routes return 404. Unregistered methods such as `GET /quotes` return 405 with `Allow: POST`.
+
+The HTTP receiver limits bodies to 4096 bytes. An oversized body is rejected with 413 and `Connection: close`, without calling the handler. The server closes without draining the remaining body, which can cause a TCP reset. Receipt of the 413 is not guaranteed for every OS, client, or upload pattern.
+
+These server responses bypass the application mapper, so they do not guarantee the JSON error shape or request ID echo described above. Response construction failures return 500; the final fallback has no body.
 
 `calculate` returns a custom `Result[Quote, QuoteError]`. `std.result.map_error` converts JSON and HTTP errors into `QuoteError`. The handler retains the request ID while `quote_response` runs. On failure it moves the ID into `ApiFailure`, which the App mapper converts into a response; each processing stage does not need its own ID copy. `/health` uses the built-in `Error` and a separate mapper registered with `route_mapped`.
 

@@ -1,131 +1,90 @@
 # ライブラリとRust連携の設計案
 
-このページは、現在の再利用方法と追加機能の設計案をまとめたものです。ファイルのmoduleと標準の`std.http.server`・`std.actor`を使えます。汎用DB API、利用者が定義するresource、ランタイム機能の選択は未実装の案です。
+よく使う処理はNagiの型付きAPIで提供し、既存のRustライブラリを内部で使います。高度な処理や独自の基盤はRust連携で扱う方針です。Rustを知らずにアプリを書く人と、Rustの資産を組み合わせる人の両方を対象にします。
 
-[目次](README.md) · 現在使える機能: [importとRust連携](modules-and-rust.md)、[nagi.toml](projects.md)
-
-Nagiで書いた型・検証・計算を複数のアプリで共有し、通信や保存には既存のRustライブラリを組み合わせる構成を目指します。CLI、HTTP、バッチ処理ごとに業務規則を書き直す必要を減らします。
+このページには未実装の案を含みます。現在の使い方は[importとRust連携](modules-and-rust.md)・[nagi.toml](projects.md)、動く例は[サンプル一覧](library-examples.md)を参照してください。
 
 ## 現在の対応と不足している部分
 
-| 部分 | 現在 | 提案する追加 |
-| --- | --- | --- |
-| import | 相対ファイル、`as`・複数名の`from`、`std.http.server`・`std.actor` | 標準moduleの追加、公開範囲の指定 |
-| 標準resource | HTTPのApp・Request・Response、Actor・Supervisor等 | 利用者による独自resourceの定義・登録 |
-| Rust連携 | sync／asyncのexternと型付きの引数・戻り値 | 接続やclientを表す不透明な型 |
-| Rustファイル | `rust.file` で1つのnative moduleを指定。共有crateは依存tableで指定 | — |
-| Cargo依存 | version文字列、またはversion・path・features・default-features・packageのtable | — |
-| ランタイム | HTTP、actor、JSON、SQLite等の機能を持ち、依存は常に含む | 必要な機能に合わせた依存とコード生成 |
-| DB | SQLiteと固定したbind引数 | 型付きの任意個の引数、行読み取り、transaction |
+| 部分 | 現在使えるもの | 未実装・未確定 |
+|---|---|---|
+| import | 相対ファイル、`as`、複数名の`from`、登録済み標準module | package管理、公開範囲の指定 |
+| 標準API | `std.http.server`、`std.actor` | JSON・DB等のmodule分離 |
+| 標準resource | App・Request・Response・Actor・Supervisor等 | 利用者が定義するresourceの登録 |
+| Rust連携 | sync／asyncのextern、型付きの引数・戻り値、手書きadapter | 任意のRust型・traitの直接利用、安定した外部ABI |
+| Cargo依存 | version・path・features・default-features・package | ランタイム依存を使用機能だけに絞る生成 |
+| DB | SQLite、固定形のbind、classへの行変換 | PostgreSQL、汎用引数、pool・transaction API |
 
-現在のexternはRustのAPIを自動でimportする機能ではありません。Rust固有の型は、既知の数値・str・class・List・Result等へ変換します。Nagiの `check` は宣言と呼び出しを検査し、Rust実装との一致は `build` で確認します。externからviewを返すことは未対応です。
+`check`はexternの宣言とNagi側の呼び出しを検査します。Rustの実装やcrateとの一致は`build`で確認します。externからviewを返す機能はありません。
 
 ## 共有する処理とアダプター
 
-共有するNagiファイルにデータ型・検証・計算を置き、入口で入出力を組み合わせます。Rustのアダプターは外部ライブラリの型をNagiのデータ型へ変換します。独立したRust crateは自身の型を使い、生成アプリのclassへの変換はアダプターに置きます。
+型・検証・計算はNagiのmoduleへ置き、CLIやHTTPなどの入口から使います。Rustのadapterは、外部ライブラリの型をNagiの対応する型へ変換します。独立したRust crateにはそのcrateの型を使い、生成アプリのclassへの変換をadapterに置きます。
 
-現在の10個のサンプルは、共有処理、標準module、Rust連携の使い方を示します。
-
-| プロジェクト | 再利用と連携の例 |
-| --- | --- |
-| [foundation-cli](../test-nagi-code/library-examples/foundation-cli/README.md) | 共有の `foundation.nagi` とRustの `pricing.rs` をCLIから使う |
-| [foundation-report](../test-nagi-code/library-examples/foundation-report/README.md) | 同じ検証・計算をJSONレポートに使う |
-| [rust-json](../test-nagi-code/library-examples/rust-json/README.md) | serde_jsonの結果をNagiのclassへ変換する |
-| [rust-async](../test-nagi-code/library-examples/rust-async/README.md) | Nagiの実行環境でRustのTokioタイマーをawaitする |
-| [custom-http](../test-nagi-code/library-examples/custom-http/README.md) | RustのAxum／TokioサーバーへNagiの同期callbackを渡す |
-| [http-auth](../test-nagi-code/library-examples/http-auth/README.md) | 標準HTTPでヘッダー、401、route別エラー、型付き共有状態を扱う |
-| [supervised-service](../test-nagi-code/library-examples/supervised-service/README.md) | actorで状態を順番に更新し、業務エラーや停止をHTTP応答へ変換する |
-| [low-kernel](../test-nagi-code/library-examples/low-kernel/README.md) | アプリの処理から手書きLowの計算を呼ぶ |
-| [module-imports](../test-nagi-code/library-examples/module-imports/README.md) | 同名classをmoduleで区別し、同じclassをfromの別名で使う |
-| [typed-errors](../test-nagi-code/library-examples/typed-errors/README.md) | enumで失敗を分け、元の原因を保持して表示文を選ぶ |
-
-`rust.file` が1つでも、Rustの `mod` や `#[path]` で実装を分割できます。custom-httpは組み込みのserveやDbを使いません。HTTPの制限・停止処理はそのRust側で管理し、組み込みHTTPの設定が自動適用されるとは扱いません。
+現在の例では、[HTTP認証](../test-nagi-code/library-examples/http-auth/README.md)は標準APIだけでヘッダーや業務エラーを扱い、[custom-http](../test-nagi-code/library-examples/custom-http/README.md)はRustのAxumサーバーから同期Nagi callbackを呼びます。後者の容量・期限・停止はRust側の責任です。標準HTTPの設定が自動適用されるとは扱いません。
 
 ## moduleと名前解決
 
-引用符付きの相対ファイルを、module名や定義の別名で読み込めます。HighとLowの両方で使え、Lowでは末尾に`;`を置けます。
+同じmoduleを別名で読み込んでも同じ定義を参照し、別moduleの同名classは別の型です。IDは型検査・High/Low・Rust生成・エディターで使います。importした名前の自動再公開はありません。
 
-```nagi
-import "domain/orders.nagi" as orders
-from "domain/orders.nagi" import Order as SavedOrder
-from "domain/orders.nagi" import score
-```
-
-`orders.Order` と `SavedOrder` は同じ定義を指し、別ファイルの同名classは別の型です。同じ実ファイルを複数の別名で読んでも定義は1つです。moduleと定義のIDを、型検査、High→Low、Rust出力、エディターで使います。型引数やフィールド型も同じ名前解決に従います。
-
-module名で公開するのは、そのファイル自身に定義した関数・class・enumです。importした名前は自動で再公開しません。from文はコンマで複数の定義を選べ、それぞれに`as`を付けられます。存在しない定義や名前の衝突はimport文でエラーになります。`from`・`as`はimport文だけのキーワードです。既存の平坦importと組み込み関数も使えます。
-
-rootのmodule名にある関数のLow差し替えは`@replace generated::orders::score`、Rustのアダプターからのclass参照は`super::orders::Order`や`super::SavedOrder`です。従来の`@replace generated::score`と`super::Item`も保ちます。JSONのfield名やSQLの列名は変えません。詳細は[importとRust連携](modules-and-rust.md)を参照してください。
-
-標準moduleは`import std.http.server as http`や`import std.actor as actor`で読み込みます。HTTPの使い方は[HTTPサーバー](http.md)、ActorとSupervisorは[Actorリファレンス](actor-reference.md)を参照してください。resource・操作・定数はコンパイラが登録したものに限定し、ローカルの同名ファイルには解決しません。`std.json`や`std.sqlite`への分離は今後の案です。
+`std.http.server`・`std.actor`の型と操作はコンパイラに登録されています。標準module名がローカルの同名ファイルへ解決されることはありません。通常のライブラリを追加するたびに言語のキーワードを増やす方針にはしません。
 
 ## Cargoの依存設定
 
-version文字列と次のtable形式に対応しています。設定の詳細と実行例は[nagi.toml](projects.md)を参照してください。
+既存の設定は[nagi.toml](projects.md)を参照してください。pathはmanifest基準で解決し、生成先を変えても同じcrateを参照します。`check`・`lower`・`symbols`はCargoを呼びません。
 
-```toml
-[rust]
-file = "adapters/native.rs"
-
-[rust.dependencies]
-serde_json = "1.0"
-foundation = { package = "my-foundation", path = "../my-foundation" }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-```
-
-pathはnagi.toml基準で解決し、生成先を変えても同じcrateを参照します。`check`・`lower`・`symbols`はCargoを呼ばず、依存crateの存在を要求しません。実際のpath・version・Rust APIは`build`/`run`でCargoが検査します。
-
-CLIの`--rust-dep NAME=VERSION`は、同名のtable全体をversion文字列に置換します。元のpath・package・features・default-featuresは残りません。
-
-Cargoのfeaturesは依存経路ごとに合成されます。直接依存でdefault-featuresを無効にしても、別の経路が有効にした機能までは外れません。生成先の既存Cargo.lockは再ビルド時も保持します。lockは解決した版を記録しますが、path依存のソース内容は固定しません。`nagic build --locked`は未対応です。固定した解決でのビルドは、生成したCargo.tomlに対してCargoの`--locked`を指定します。
+Cargoは依存経路ごとにfeaturesを合成します。生成先の既存Cargo.lockは保持しますが、path依存のソース内容は固定しません。`nagic build --locked`は未対応です。
 
 ## ランタイムを機能ごとに選ぶ
 
-core・async・json・http・sqlite・postgresに分ける案です。出力する関数・型・組み込みの解決結果から必要な機能を集めます。全関数を出力する段階では、入口から直接呼ぶものだけを見て依存を外しません。
+**未実装の案です。** HTTP・JSON・SQLite等の依存を、アプリに必要な機能へ分けます。現在はDBを使わない標準HTTPアプリでも、ランタイムのSQLite依存を含みます。
 
-classへのSerde／行読み取りの生成、公開型、エラー変換も切り替える必要があります。Cargoのoptional化だけでは終わりません。Rust連携には互換設定を保ち、新しいアダプターは必要なランタイム機能を明示できる形にします。依存crateのfeatureは生成アプリの同名featureへ自動では伝わりません。
-
-DB不要のHTTPは[std.http.server](http.md)を使います。既存の`serve(db, port)`も使えます。ランタイムのCargo依存を機能ごとに分離する作業はまだ残っています。
+Serde・行変換・公開型・エラー変換の生成も切り替える必要があります。全関数を出力する段階では、入口から直接呼ぶ関数だけを見て依存を外せません。既存Rust adapterとの互換性も確認します。
 
 ## 不透明な型と非同期処理
 
-App・Actor・Supervisor等の標準resourceはコンパイラに登録済みです。利用者が同様のresourceを定義・登録する仕組みは未対応です。clientや接続プールをNagiへ公開するには、型名とRust型の対応、操作、所有権の登録が必要です。現在のclassはデータ用であり、このresource型の代わりにはしません。
+**追加する資源型の契約案です。** 現在のclassはデータ用で、native clientや接続そのものを保持する型の代わりにはしません。
 
-| 契約 | 必要な扱い |
-| --- | --- |
-| 所有・共有 | 原則move。Copyにせず、共有・cloneを許す型だけ明示する |
-| 借用 | 読み取りと排他的な操作を分け、await中もownerを保つ |
-| 型と変換 | 別providerの同名型を区別し、JSON／DB用deriveを自動追加しない |
-| スレッド | Sendはスレッド間の移動、Syncは参照の共有を許す。両方を無条件に要求・付与しない |
-| 終了 | close・commit・rollbackとdrop時の残り処理を定義する |
+| 決める契約 | 検討する内容 |
+|---|---|
+| 型の識別 | Nagiの型とRust型の対応。同名でも提供元が違えば区別する |
+| 所有・共有 | moveを基本に、borrow・clone・共有を型ごとに明示する |
+| 借用 | ownerをawait中も保持する。read-only viewと排他的操作を混同しない |
+| スレッド | RustのSend／Sync・traitはrustcで検証する。無条件に付与しない |
+| 終了 | 明示的な非同期closeと、drop後に残る処理の責任を決める |
 
-通常のDropではawaitできません。必要な非同期終了処理は明示的に用意します。futureのdropで呼び出し側をキャンセルしても、別workerや既に送ったDB書き込みが取り消される保証はありません。終了・再試行・二重書き込みへの対応は操作ごとに決めます。
+Dropではawaitできません。futureの破棄で呼出側が待つのをやめても、受理済みのDB処理や外部への送信が取り消される保証はありません。一般的なtraitや新しい可変長引数の文法は、この境界に必要かを確認してから検討します。
 
 ## 汎用DB APIの前提
 
-現在のdb_insertはstrとi32、db_updateはi64・str・i32を取ります。互換用に残し、任意のテーブルや条件に対応したAPIとしては説明しません。
+**別driver・共通の使い方にする方針です。新APIは未実装です。** SQLiteとPostgreSQLは別module・別資源型とし、SQL方言・型・transactionの違いを保持します。module名は未決です。
 
-| 部分 | 先に定義する契約 |
-| --- | --- |
-| 引数 | 任意個の型付き値、NULLの型、str／bytes／viewの所有権 |
-| 操作 | execute／one／all。対象なしはOption、bindなしも同じ規則で扱う |
-| 行 | 元のfield名で列を対応付け、列順・NULL・整数範囲・型違いを扱う |
-| transaction | 1接続を保持し、commit／rollbackで消費する。終了後の使用と同時操作を禁止する |
-| エラー | 接続・待機・SQL・decode・対象なしを区別する |
+| 部分 | 先に決める契約 |
+|---|---|
+| 引数 | 任意個の型付き値、型付きNULL、str・bytes・viewの保持規則 |
+| 行 | field名・列順・NULL・整数範囲・decode失敗 |
+| 操作・エラー | execute・one・all等の形、対象なし、接続・待機・SQL・decode失敗 |
+| transaction | 一接続を専有する。commit／rollbackで呼出側のhandleを消費し、取消後のcleanup責任を決める |
+| pool | cloneを含む閉鎖状態、新規取得の停止、実行中の操作とcleanupを何まで待つか |
 
-型付きの可変長引数を第1候補とします。SQLとschemaの一致はbackendでも検査し、動的SQLまでコンパイル時に保証しません。transactionの排他的借用には現在のread-only viewとは異なる扱いが必要です。
+transaction内の操作をlibrary側で直列化することと、並行利用をNagiの`check`で禁止することは別です。後者にはfutureの寿命まで追う追加の検査が必要です。どこまで静的に保証するかは未決です。
 
-SQLiteの `?1`、PostgreSQLの `$1`、i64に対応するBIGINTやidentity等の違いは保存層で扱います。SQLは自動翻訳せず、poolの別々の呼び出しでBEGIN／COMMITを送るtransactionも作りません。一般利用向けPostgreSQL対応は、引数・行・transactionの契約と実DB試験が揃ってから案内します。
+commitの結果を確認できない場合は、rollback済みや再実行可能とは扱いません。未送信、DBによる拒否、送信後の応答喪失をdriver側で区別する契約を検討します。
+
+SQLは自動翻訳せず、poolの別接続へBEGIN／COMMITを送る方式も使いません。SQL/schemaの静的検査と実データの型・NULL検査は分けます。通常の`check`はSQLを検査しません。mainでは明示的な[SQLiteの事前検査](sql-check.md)を使えますが、実データの型・NULLの保証は含みません。公開0.1.9には未収録です。
+
+## HTTP基盤の比較
+
+Axum／Towerを第一候補に、現行の標準HTTPと比較します。**採用は未決で、比較は未実施です。** AxumもHyperを使うため、同じ接続管理の内側でRouter／middlewareを比較し、listener・停止処理の変更は別に評価します。
+
+公開API、受付容量、本文・header制限、期限、panic応答、停止条件を揃えます。処理量・遅延・CPU・メモリ、過負荷からの回復と保守負担を確認して判断します。既存の[測定](http-stdlib-performance.md)を、この採用比較の結果とは扱いません。
+
+送信HTTP clientも未実装です。reqwest等の再利用を検討しますが、応答statusと通信失敗、受信上限、期限、資源の終了を先に決める必要があります。
 
 ## 実装する順序
 
-1. 現在の例で共有処理とadapterの境界を確認し、Nagiの検査とRust buildを両方通す。
-2. 実装済みの依存tableとlockの維持を土台に、ランタイム機能の選択とderive生成を整える。
-3. 実装済みのmoduleと定義のIDを、追加するresourceやproviderの型にも引き継ぐ。
-4. 標準HTTPのDBなし起動を保ち、DBを使わないアプリからSQLite依存を外す。
-5. resourceの所有・借用・キャンセルと汎用DB契約をSQLiteで検証する。
-6. PostgreSQLで同じ契約、TLS・pool・timeout・停止を実DB検証し、保存先を変えても同じ業務処理を使う例を作る。
+既存の型・所有権の整合性、native資源の契約、SQLiteでの検証、PostgreSQL対応の順に進めます。HTTP基盤の比較は別の評価として扱い、APIを維持できるか確認します。
 
-旧import・組み込み・Rust連携を保ち、採用した部分から移行できるようにします。各段階で既存例、High／Low、エディター、対象OSを確認します。依存削減はCargoのfeatures、ビルド時間、出力容量で測ります。
+旧import・組み込み・Rust連携・Lowの互換性を保ち、既存例とエディターで確認します。依存を減らす効果は、Cargo features・ビルド時間・出力容量で測ります。
 
-参考: [Cargo依存指定](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)、[featuresと合成](https://doc.rust-lang.org/cargo/reference/features.html)、[Cargo.lock](https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html)、[Rust module](https://doc.rust-lang.org/book/ch07-02-defining-modules-to-control-scope-and-privacy.html)、[Send](https://doc.rust-lang.org/std/marker/trait.Send.html)／[Sync](https://doc.rust-lang.org/std/marker/trait.Sync.html)、[Future](https://doc.rust-lang.org/std/future/trait.Future.html)、[Drop](https://doc.rust-lang.org/std/ops/trait.Drop.html)、[Tokioのキャンセル](https://tokio.rs/tokio/tutorial/select)。
+参考: [Cargo依存指定](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)、[features](https://doc.rust-lang.org/cargo/reference/features.html)、[Send](https://doc.rust-lang.org/std/marker/trait.Send.html)／[Sync](https://doc.rust-lang.org/std/marker/trait.Sync.html)、[Drop](https://doc.rust-lang.org/std/ops/trait.Drop.html)、[Axum](https://docs.rs/axum/0.8.9/axum/)、[Tower](https://docs.rs/tower/latest/tower/)。

@@ -133,10 +133,16 @@ DB・内部エラーの500応答は`{"error":"internal error"}`で、詳細は�
 
 ## 検査とpanicの範囲
 
-直接捨てたResult、awaitしていないFutureは型検査で拒否します。代入したResultを全経路で必ず処理する検査は未完成です。
+裸の`Result`を式として直接捨てる場合と、awaitしていない非同期呼び出しは型検査で拒否します。代入後の未使用や`owned[Result[...]]`の破棄を含め、失敗値を必ず処理させる検査は未完成です。`check`成功だけで、すべてのエラーを扱ったとは判断できません。
 
-Resultの失敗とpanicは別です。scopeは子taskのpanicを検出します。Nagi 0.1.8から使える[`std.actor`](actor.md)では、`Turn`内の業務エラー`E`は次の状態を保存して返信し、handler自身のErrorやpanicにはSupervisorの再起動方針を適用します。`call`は`Result[Result[R, E], CallError]`を返すため、業務エラーと未起動・停止・タイムアウトなどを分けて扱います。[サンプル](../test-nagi-code/library-examples/supervised-service/README.md)でHTTP応答への変換も試せます。
+Resultの失敗とpanicは別です。配列の範囲外アクセスや整数のゼロ除算などは、Resultではなくpanicになることがあります。Pythonの`raise`／`except`に相当する汎用の例外構文はありません。
+
+mainのHTTPサーバーは、応答開始前のhandlerでunwindするpanicを詳細のない500へ変換して接続を閉じます。公開0.1.9には未収録です。HTTP応答へ変換できても、DBや共有状態の変更は巻き戻しません。回復できる範囲の詳細は[HTTPリファレンス](http-server.md#appとroute)を参照してください。
+
+scopeは本体終了後に子taskの結果を確認し、その際にpanicを検出します。Nagi 0.1.8から使える[`std.actor`](actor.md)では、`Turn`内の業務エラー`E`は次の状態を保存して返信し、handler自身のErrorやpanicにはSupervisorの再起動方針を適用します。`call`は`Result[Result[R, E], CallError]`を返すため、業務エラーと未起動・停止・タイムアウトなどを分けて扱います。[サンプル](../test-nagi-code/library-examples/supervised-service/README.md)でHTTP応答への変換も試せます。
 
 旧`supervisor_demo`は固定workerの再起動を試す検証用APIです。どちらもメモリ破壊やprocess abortを回復する機構ではありません。
 
 診断はファイル名、行、該当ソース、理由を表示します。ビルド時も、元の位置を特定できるエラーはNagi・Lowの文や定義の行を先に表示し、生成Rustの詳しい診断を続けます。Rustの修正候補はRust向けなので、そのままNagiへ適用しないでください。手書きRustや位置を特定できない診断はRust側の表示を使います。厳密な列位置や全Rust診断の対応は未実装です。VS Codeの定義ジャンプは元ソースの列位置も扱います。
+
+実装とテストは[Resultの型検査・match](../compiler/tests/result_match.rs)、[独自エラー型](../compiler/tests/typed_errors.rs)、[map_error](../compiler/tests/result_stdlib.rs)、[scope](../runtime/src/concurrent.rs)、[actor](../runtime/src/actor/tests.rs)を参照してください。

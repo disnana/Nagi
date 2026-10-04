@@ -1,6 +1,6 @@
 # Configure applications with nagi.toml
 
-For multiple-file applications, save the entry file and Rust integration arguments in `nagi.toml`. The CLI and VS Code use the same configuration.
+`nagi.toml` configures the entry file, Rust dependencies, and native Low. The CLI, VS Code, and JetBrains plugin use it.
 
 ## A minimal project
 
@@ -33,12 +33,6 @@ nagic run
 ```
 
 `check` checks types; `run` builds and runs. `lower` and `build` use the same settings. Omitting the source argument searches from the current directory upward for the nearest nagi.toml. This also works from subfolders such as `my-app/src`.
-
-For editors, `nagic symbols --project my-app` returns JSON on stdout with references and definition locations for loaded functions, classes, and local names. It does not build or write generated files. If syntax and imports can be read, definition positions remain available even with type errors.
-
-The JSON includes function parameters, return types, async status, and class fields. Confirmed variable types are in `locals`; expression types, ranges, and matching fields are in `expressions`. Positions use one-based lines and UTF-16 columns in the original files. Uncertain types are omitted. This is editor information and does not establish a successful check.
-
-`symbols --editor-input` accepts `{"files":[{"file":"main.nagi","text":"..."}]}` on stdin to supply edits to existing Nagi/Low files. Relative paths use the terminal's working directory. Sources are replaced in memory without writing to disk. This option is symbols-only; configuration files still use saved contents.
 
 To select a project from elsewhere:
 
@@ -129,16 +123,24 @@ Command-line relative paths use the terminal's working directory. Duplicate SOUR
 
 Project-generated code goes to `build/<entry filename without extension>/`, and executables to `build/native-target/release/`. For `main.nagi`, the executable is `nagi-main.exe` on Windows or `nagi-main` on Linux. Separate build folders allow applications to reuse the same entry filename.
 
-Set `NAGI_NATIVE_TARGET_DIR` to share dependency builds across applications. Only with this override, executable names include an identifier for the source and generated output directory, such as `nagi-main-0123456789abcdef.exe`. The `native:` line that `build` and `run` print to stderr gives the actual path. Avoid compiling concurrently into the same generated output directory.
+Set `NAGI_NATIVE_TARGET_DIR` to share dependency builds across applications. On main, only with this override, executable names include an identifier for the source and generated output directory, such as `nagi-main-0123456789abcdef.exe`. This collision fix is not included in the published 0.1.9 compiler. The `native:` line that `build` and `run` print to stderr gives the actual path. Concurrent compilation into the same generated output directory is not supported.
 
 ## Use with VS Code
 
 Since [extension](vscode-extension.md) 0.1.1, the nearest nagi.toml is found by searching upward from an open Nagi/Low file. Checks, lowering, builds, and runs use entry even when a helper is open. Imported errors appear in their original files.
 
-Saving nagi.toml rechecks open Nagi files. Automatic checks wait while project sources are unsaved; manual commands save edited sources in that project first. Files not imported from entry are outside the project's check scope.
+Automatic checks run on opening and saving files, reading unsaved edits to previously saved sources in memory. Checks wait while `nagi.toml` is unsaved; saving it rechecks open Nagi files. Manual type checks do not save sources. Lower, build, and run save edited files first. Files not imported from `entry` are outside the project's check scope.
 
 Configure the compiler location through `nagi.compilerPath` or PATH. Existing nagi.rustFile, nagi.rustDependencies, and nagi.nativeFiles settings are passed as command-line arguments using the precedence above. Values in `nagi.rustDependencies` are version strings only; write dependency tables in `nagi.toml`. Project-specific nagi.toml settings keep the terminal and VS Code consistent.
 
 Extension 0.1.5 and later, with the latest nagic, support F12 for project functions, classes, imports, local variables, arguments, for names, and case names. Queries read High/Low loaded from entry, including open unsaved edits in memory. If syntax or imports cannot be read, F12 does not navigate to stale saved positions. Save new files and nagi.toml edits first.
 
 Declaration/local type hovers, function/class/type/field completion, and argument hints also read unsaved edits to previously saved files, including imports and native Low. Unparseable edits fall back to declarations marked “保存済み” (saved), without local types or field candidates. See the [walkthrough](editor.md) and [extension settings](vscode-extension.md).
+
+## symbols for editor integrations
+
+`nagic symbols --project my-app` returns JSON on stdout with references and definition locations for loaded functions, classes, and local names. It does not build or write generated files. If syntax and imports can be read, definition positions remain available even with type errors.
+
+The JSON includes function parameters, return types, async status, and class fields. Confirmed variable types are in `locals`; expression types, ranges, and matching fields are in `expressions`. Positions use one-based lines and UTF-16 columns in the original files. Uncertain types are omitted. This is editor information and does not establish a successful check.
+
+`symbols --editor-input` accepts `{"files":[{"file":"main.nagi","text":"..."}]}` on stdin to supply edits to existing Nagi/Low files. Relative paths use the terminal's working directory. Sources are replaced in memory without writing to disk. The option is available for `symbols` and `check`; configuration files use saved contents. `check --editor-input` does not write generated files.

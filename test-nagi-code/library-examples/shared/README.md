@@ -1,6 +1,6 @@
-# 2つのアプリで共有する料金計算の基盤
+# 2つのアプリで使う料金計算
 
-[対話CLI](../foundation-cli/README.md)と[JSONレポート](../foundation-report/README.md)が、同じNagiの窓口と同じRustの計算コードを使います。計算関数を引数として渡すため、呼び出し側の検証やデータ形式を保ったまま、Nagi実装とRust実装を選べます。
+[対話CLI](../foundation-cli/README.md)と[JSONレポート](../foundation-report/README.md)が、同じNagi moduleとRustの計算コードを使います。計算関数を引数として渡すため、呼び出し側の検証やデータ形式を保ったまま、Nagi実装とRust実装を選べます。
 
 | ファイル | 役割 |
 | --- | --- |
@@ -36,13 +36,13 @@
 extern def custom_quote(label: view[str], unit_cents: i64, quantity: i64, discount_bps: i64) -> Result[FoundationQuote, Error]
 ```
 
-`main`内の呼び出しは、たとえば`quote = try foundation_quote(custom_quote, view(label), 999, 3, 1250)`です。Rust側の対応する型は`&str`、`i64`、`Result<crate::FoundationQuote, nagi_runtime::Error>`です。戻すclassは値を所有し、借用した入力の参照を保存しません。計算関数はアプリが信頼する実装で、窓口は独自実装が返した金額を再計算しません。
+`main`内の呼び出しは、たとえば`quote = try foundation_quote(custom_quote, view(label), 999, 3, 1250)`です。Rust側の対応する型は`&str`、`i64`、`Result<crate::FoundationQuote, nagi_runtime::Error>`です。戻すclassは値を所有し、借用した入力の参照を保存しません。計算関数はアプリが信頼する実装で、共有関数は独自実装が返した金額を再計算しません。
 
 ## 現在できる共有の範囲
 
-この例はソースの再利用で、公開・配布されたNagiパッケージやCargo crateではありません。importした定義は同じ名前空間に入り、別名や可視性指定はありません。そのため公開する名前に`foundation_`／`Foundation`を付けています。
+この例ではソースファイルを共有し、各アプリへコンパイルします。Nagiパッケージの取得・公開機能は使いません。この例の文字列importは定義を同じ名前空間へ読み込むため、名前に`foundation_`／`Foundation`を付けています。module名や`from`の別名で区別する書き方は[別のサンプル](../module-imports/README.md)にあります。
 
-`rust.file`は1つのアダプターを指定し、複数のRustファイルはその下の通常のRust moduleとして組み込みます。既存crateのversion指定はできますが、`nagi.toml`の依存にCargoのpath・git・features指定はまだ書けません。Rust実装と宣言が合うかは`build`／`run`で確認します。安定したC ABIや実行時DLL読み込みの例でもありません。
+`rust.file`は1つのアダプターを指定し、複数のRustファイルはその下の通常のRust moduleとして組み込みます。依存にはversion文字列、または`path`・`package`・`features`・`default-features`を含むtableを指定できます。`git`依存は未対応です。[ローカルRust crateの例](../../rust-library/README.md)に設定があります。Rust実装と宣言が合うかは`build`／`run`で確認します。安定したC ABIや実行時DLL読み込みの例でもありません。
 
 アプリはDBを開かず、HTTPも起動しません。標準ランタイムのビルド依存は通常どおり含まれるため、ビルドにはRust/Cargoと対応するCビルド環境が必要です。共有ソースを変えたら、利用する両方のアプリを再ビルドしてください。
 

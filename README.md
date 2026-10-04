@@ -1,26 +1,22 @@
-# Nagi 0.1.9 — バックエンド向け二層言語の実行可能な試作
+# Nagi 0.1.9 — 開発中のバックエンド向け言語
 
 [English](README.en.md)
 
-読みやすいHighを、編集できるLowへ変換し、ネイティブ実行ファイルにする実験です。HTTP body → 型付きclass → SQLite → class → JSONの経路が実際に動きます。性能の根拠は [PERFORMANCE.md](PERFORMANCE.md) と生の測定ログです。
+Nagiは、Python風の読みやすい構文でバックエンドを記述するためのプログラミング言語です。HTTP・JSON・DBなどの一般的な処理を、Rustの知識がなくても書けることを目指しています。必要に応じて、Rustのライブラリと手書きのアダプターで連携できます。
 
-この版は仕様の完成版ではありません。コンパイラとランタイムの足場を動かし、所有権・view・生成コードの差し替え・実行コストを検証するためのプロトタイプです。
+現在はNagiからRustコードを生成し、Rust/Cargoでネイティブ実行ファイルを作ります。仕様と標準APIは開発中です。型・所有権・失敗・並行処理の扱いを実例で検証しており、`check`に成功してもRust側の検査でビルドに失敗する場合があります。
 
 名前は日本語の「凪」に由来します。「内部は激しく動いていても、表面は凪のように穏やか」という考えを込めています。
 
 ## 書き方を読む
 
-**[ドキュメントの目次](docs/README.md) → [準備と最初の実行](docs/getting-started.md) → [コードを書きながら学ぶ](docs/language-guide.md)** の順で進められます。書式を引くには[文法の早見表](docs/syntax.md)、引数を調べるには[組み込み関数](docs/builtins.md)、サイトやAPIを作るには[HTTPの入門](docs/http.md)を参照してください。動く入門例は[examples/tutorial/](examples/tutorial/)にあります。CLI、HTTP、SQLite、Supervisorを試す[7つのアプリ](test-nagi-code/application-examples/README.md)も用意しています。
+[準備と最初の実行](docs/getting-started.md) → [入門ガイド](docs/language-guide.md) → [HTTP](docs/http.md)の順で始められます。書式やAPIを引くには[リファレンスの目次](docs/README.md)、実例を読むには[サンプル一覧](docs/library-examples.md)へ。
 
-紹介と日英の全Docsは[公開サイト](https://nagi.disnana.com/)で読めます。[English](https://nagi.disnana.com/en/)もあります。ソースとPagesの自動公開手順は[`website/`](website/README.md)にあります。
-
-配布物は[GitHub Releases](https://github.com/disnana/Nagi/releases)に掲載します。mainでNagiまたはVS Code拡張のバージョンを上げると、CI成功後にその配布物を正式リリースします。[運用手順](scripts/releases/README.md)に条件と成果物をまとめています。
+紹介と日英のDocsは[公式サイト](https://nagi.disnana.com/)で読めます。[目的と実装の範囲](docs/introduction.md)、[設計判断とその理由](DESIGN.md)、[今後の優先順位](docs/roadmap.md)も記載しています。
 
 ## インストール
 
-mainには次回配布予定の修正も含まれます。公開版との差分は[変更履歴](CHANGELOG.md)を参照してください。
-
-NagiアプリのビルドにはRust/CargoとCのビルド環境が必要です。準備は[最初の実行](docs/getting-started.md)を参照してください。
+NagiアプリのビルドにはRust/CargoとCのビルド環境が必要です。[OSごとの準備](docs/getting-started.md)を確認してください。コンパイラのインストールはビルド済みの配布物を取得します。
 
 Windows（PowerShell）:
 
@@ -34,142 +30,101 @@ Linux / macOS（bash）:
 (set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
 ```
 
-最新の公開版を取得し、SHA-256を確認してユーザー用の場所へ展開し、PATHに登録します。**更新も同じコマンドです。** インストーラーはmainから読みますが、コンパイラはGitHub Releasesの正式な配布物を使います。RustやVS Code拡張は別途用意します。
+最新の[GitHub Release](https://github.com/disnana/Nagi/releases)を取得し、SHA-256を確認してPATHに登録します。更新も同じコマンドです。[版の指定・旧版の整理](docs/getting-started.md#更新する)は導入ガイドに記載しています。自分で展開する場合はアーカイブ全体を展開し、`runtime/`を含むフォルダーをPATHに追加してください。
 
-VS Code拡張は[Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)からインストールできます。設定と使い方は[拡張の案内](editors/vscode-nagi/README.md)を参照してください。
-
-IntelliJ IDEA・PyCharm向けの初期プラグインもあります。High／Lowの色付け、インデント補助、型検査・実行に対応します。[ビルドとインストール](editors/jetbrains-nagi/README.md)を参照してください。
-
-更新前に実行中のNagiのビルドを止め、更新後はVS Codeを再起動してください。更新が成功したら、配布時の内容と一致する旧版を削除し、使用する1版だけ残します。追加・変更されたファイルは保護します。照合不能や使用中などで削除できない旧版も残し、その場所を表示します。失敗時は元のコマンドを維持します。[版の指定と更新の詳細](docs/getting-started.md#更新する)も参照してください。
-
-```bash
+```sh
 nagic --version
 nagic --help
 ```
 
-自分で展開する場合は、[GitHub Releases](https://github.com/disnana/Nagi/releases)のOS別アーカイブ全体を展開し、展開フォルダーをPATHに追加します。`runtime/`を同じ場所に保てば、`NAGI_ROOT`の設定は不要です。
+[VS Code拡張](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)と[IntelliJ IDEA・PyCharm向けプラグイン](editors/jetbrains-nagi/README.md)もあります。操作は[エディターの案内](docs/editor.md)を参照してください。
+
+インストーラーはmainから、コンパイラは公開Releaseから取得します。このリポジトリと公式サイトには未配布の変更も含まれます。公開版との差分は[CHANGELOGのUnreleased](CHANGELOG.md#unreleased)で確認できます。
 
 ## 最初に動かす
 
-以下はソースからコンパイラとサンプルをビルドする手順です。インストール済みのコンパイラでは`nagic run <ファイル>`を使います。
+次を`server.nagi`に保存します。DBなしのHTTPサーバーです。
 
-```bash
-cargo build --release --locked
-./target/release/nagic run examples/hello.nagi
-./target/release/nagic run examples/values.nagi
-./target/release/nagic run examples/crud.nagi --cost-report
+```nagi
+import std.http.server as http
+
+class State:
+    greeting: str
+
+async def hello(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, view(state.greeting)))
+
+async def main() -> Result[unit, Error]:
+    app = http.app_default[State](State(greeting="Hello, Nagi!"))
+    app = try http.route(app, http.Method.GET, "/", hello)
+    return await http.serve(app, 8080, http.default_options())
 ```
 
-別のターミナルでAPIを呼び出します。
-
-```bash
-curl http://127.0.0.1:8080/health
-curl -H 'Content-Type: application/json' -d '{"name":"alice","age":18}' http://127.0.0.1:8080/users
-curl http://127.0.0.1:8080/users/1
+```sh
+nagic run server.nagi
 ```
 
-```python
-class User:
-    id: i64
-    name: str
-    age: i32
+[http://127.0.0.1:8080/](http://127.0.0.1:8080/)を開くと`Hello, Nagi!`が返ります。Ctrl+Cで停止します。ソースからコンパイラを作る場合は、`cargo build --release --locked`の後に`./target/release/nagic`を使います。
 
-@get("/users/{id}")
-async def get_user(db: Db, id: i64) -> Result[User?, Error]:
-    return await db_query[User](db, "SELECT id, name, age FROM users WHERE id = ?1", id)
-```
-
-Pythonコードとして実行する構文ではありません。`nagic`でビルドしてください。
-
-複数ファイルのアプリは[nagi.toml](docs/projects.md)に入口・Rust依存・手書きLowの設定を保存できます。たとえば `./target/release/nagic run --project test-nagi-code/rust-bridge` でRust連携サンプルを動かせます。[VS Code拡張](editors/vscode-nagi/README.md)も同じ設定を使い、補助ファイルから入口の検査・ビルド・実行を行います。
+ヘッダー、JSON、独自エラー、共有状態の使い方は[HTTP](docs/http.md)と[認証サンプル](test-nagi-code/library-examples/http-auth/README.md)へ。
 
 ## コード構造を図にする
 
-`nagic map`で型・モジュール・関数呼び出しを調べ、Mermaid、D2、JSON、単一HTMLへ出力できます。D2がPATHにあればSVG・PNGも生成します。
+`nagic map`で型・モジュール・関数呼び出しを調べ、Mermaid、D2、JSON、単一HTMLへ出力できます。
 
-```bash
-nagic map types --project examples/code-map --format d2
+```sh
 nagic map calls --project examples/code-map --format html --output calls.html
 ```
 
-絞り込みと描画方法は[コードマップ](docs/code-map.md)を参照してください。
+SVG・PNGには別途D2が必要です。絞り込み、推論できない関係、描画方法は[コードマップ](docs/code-map.md)を参照してください。
 
 ## HighとLow
 
-```bash
-./target/release/nagic lower examples/override.nagi
-./target/release/nagic run examples/override.nagi --native examples/native/override.low
-./target/release/nagic run examples/low_call.nagi --native examples/native/math.low
-./target/release/nagic run examples/hello.low
-```
+通常は字下げで書くHigh（`.nagi`）を使います。Low（`.low`）は同じ型・所有権の規則を使う波括弧の構文で、生成コードの確認や関数の差し替えに使えます。生ポインター、unsafe、配置指定、C ABIは未対応です。
 
-`build/<name>/generated.low`は読み返せるLowソースです。Lowは独立して解析・型検査します。生成物への変更を残す場合は手書きLowへ関数を移し、`@replace generated::関数名`で指定します。再生成は手書きファイルを変更しません。
+Lowの互換性を保ちながら、当面はHighとRust連携を優先します。使い方は[HighとLow](docs/low-language.md)、Rustの資産を呼ぶ方法は[Rust連携](docs/modules-and-rust.md)へ。
+
+## 現在の範囲
+
+| このソースで使えるもの | 主な制限 |
+|---|---|
+| 型付きの値、class・enum、List、nullable、Result、move・view・shared | 利用者が定義するgeneric・trait、Mapの標準操作は未対応。ownedの扱いは未完成 |
+| HTTP、ヘッダー、応答status、独自エラー、共有状態 | 標準サーバーはloopbackのHTTP/1。TLS・WebSocket・streamingの公開APIはない |
+| JSON、SQLite、schemaを指定したSQLの事前検査 | 事前検査は明示指定。値の型・NULL・動的SQLは実行時検査。bindは固定形。標準PostgreSQL・pool・transaction APIはない |
+| async・scope、typed actor・Supervisor | Tokio上の同一プロセス。独自VM、無停止更新、分散actorはない |
+| ファイルのimport、標準module、Rust連携、Lowの関数差し替え | 任意のRust型をそのまま使う機能や、安定した外部ABIはない |
+
+SQLiteの文字列SQLは、schemaを明示した[事前検査](docs/sql-check.md)で名前・必要な返却列・bind数を確認できます。値の型・NULL可否や配備先schemaの一致は保証しません。公開版への収録状況は[CHANGELOG](CHANGELOG.md)を参照してください。
+
+各APIの条件は[リファレンス](docs/README.md)で確認してください。Nagiの検査とrustcの役割は[所有権](docs/ownership.md)、実装基盤の分担は[紹介](docs/introduction.md#コンパイラと既存ライブラリ)に記載しています。
+
+性能値は[測定条件と生ログ](PERFORMANCE.md)の範囲に限ります。Rust＋Axumより高速・成熟しているとする結論はありません。
 
 ## 構成
 
 | 場所 | 内容 |
 |---|---|
-| `compiler/` | Rust製lexer、High/Low parser、型・move・view検査、Low統合、Rust codegen、CLI |
-| `runtime/` | HTTP、JSON、SQLite専用worker、scope、actor、Supervisor、queue、計測 |
-| `examples/` | High、Low、手書き置換の実行サンプル |
-| `test-nagi-code/` | タスク管理サイト、在庫API、Resultの回復処理、Rust連携のサンプル |
-| `editors/vscode-nagi/` | VS Codeの色付け・診断・F12・型ホバー・補完・引数ヒント・check/build/run拡張 |
-| `editors/jetbrains-nagi/` | IntelliJ IDEA・PyCharm向けの色付け・インデント・折りたたみ・check/run拡張 |
-| `tests/` | 実HTTP通信の統合テスト |
-| `fuzz/` | seed固定のparser/JSON mutation試験 |
-| `benchmarks/` | 比較実装、wrkスクリプト、生ログ |
-| `docs/` | 言語仕様、設計理由、実装範囲、継続開発の指針 |
-| `scripts/` | ビルド・実通信・負荷・結果生成の再現スクリプト |
-
-High/Lowは同じcompiler crate内の別経路です。`std.http.server`と`std.actor`は登録済みの標準ライブラリとして提供します。独立crateへの分割は今後の作業です。
-
-[ライブラリとRust連携のサンプル](docs/library-examples.md)では、同じ共通コードを使うCLI・JSONレポート、serde_json、Tokio、HTTP、Supervisor、Lowの差し替えを試せます。[自作基盤の構成](docs/libraries.md)と[今後の設計案](docs/library-design.md)も公開しています。
+| `compiler/` | lexer、High/Low parser、型・move・view検査、Rust生成、CLI |
+| `runtime/` | HTTP、JSON、SQLite worker、scope、actor、Supervisor |
+| `examples/`・`test-nagi-code/` | 入門例、アプリ、Rust連携、Low差し替えの例 |
+| `editors/` | VS Code・JetBrains向けプラグイン |
+| `docs/`・`website/` | 日英リファレンス、設計案、公式サイト |
+| `tests/`・`scripts/`・`benchmarks/` | 検証、配布、測定と生ログ |
 
 ## 検証を再現する
 
-```bash
-cargo test --locked
+コンパイラとランタイムの基本確認:
+
+```sh
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
+cargo test --locked
 cargo build --release --examples --bins --locked
 python3 scripts/build_examples.py
-python3 -m pip install -r tests/requirements.txt
-python3 tests/http_integration.py
-./target/release/examples/fuzz-smoke
-./native-target/release/nagi-cpu
-./target/release/examples/microbench
-./target/release/examples/concurrency_bench
-python3 benchmarks/python_cpu.py
-node benchmarks/node_cpu.js
-python3 tests/connections.py
-python3 scripts/http_bench.py --wrk /absolute/path/to/wrk --soak 120
-python3 scripts/summarize_results.py
 ```
 
-サーバーはloopbackへbindします。試験時に8080/8081/8082/8083を空けてください。DBを永続化する場合は`NAGI_DB=users.sqlite`を指定します。HTTP executorのworker数は`NAGI_THREADS`、標準は4です。比較試験では全サーバーを1論理CPUに固定します。
+変更ごとの追加確認は[CONTRIBUTING](CONTRIBUTING.md#手元で確認する)、HTTP・性能測定は[検証方法](docs/performance.md)、サイトは[ビルドとリンク検査](website/README.md#手元で確認する)を参照してください。
 
-接続数の限界、長時間の負荷、負荷が止まった後の回復は[通信の負荷試験](docs/http-capacity.md)で確認できます。
+## 貢献・ライセンス
 
-## 現在の範囲
-
-primitive、値型class、enum、連続配列、nullable、独自エラー型のResult、関数、分岐、ループ、async/await、scope、HTTPの基本、HTML応答、JSON、SQLite、手書きLow呼び出しと置換、相対ファイルのimport、型付きRust関数の呼び出しを実装しています。旧actor・Supervisor・queueの組み込み関数は検証用APIです。ファイル分割とRustのcrate利用は [docs/modules-and-rust.md](docs/modules-and-rust.md)、画面付きデモは [test-nagi-code/web-demo/README.md](test-nagi-code/web-demo/README.md) を参照してください。
-
-Resultの`match`で成功・失敗を分け、既定値に回復したり、Errorの種類を保って返したりできます。[書き方](docs/error-handling.md)と[実HTTPで試すAPIサンプル](test-nagi-code/result-api/README.md)があります。
-
-[VS Code拡張0.1.12](editors/vscode-nagi/README.md)では、関数・class・import先・ローカル変数へのF12、宣言とローカル変数の型ホバー、classのフィールド補完、呼び出し時の引数ヒントを利用できます。一度保存したファイルの未保存の編集にも対応します。[操作例](docs/editor.md)で、型の表示や`value.`からの補完、定義への移動を試せます。
-
-Nagi 0.1.8から使える[標準HTTP module](docs/http.md)では、DBなしのApp、ヘッダー、Method／Status、独自の状態とエラー処理を使えます。標準moduleのimportとOptionのSome／None分岐にも対応します。公開済み版との差は[変更履歴](CHANGELOG.md)を参照してください。
-
-Nagi 0.1.8から使える[`std.actor`](docs/actor.md)では、通常のasync関数で任意の所有状態を扱い、型付きメッセージ・返信、再起動方針、監視、停止を使えます。[API](docs/actor-reference.md)と[サンプル](test-nagi-code/library-examples/supervised-service/README.md)を用意しています。同じプロセス内のnative実装で、BEAMのようなVM、無停止のコード差し替え、分散actorは未対応です。
-
-SQLiteの文字列SQLは、schemaを指定した[事前検査](docs/sql-check.md)で名前・必要な返却列・bind数を確認できます。値の型・NULL可否や配備先schemaの一致は、実行時にも確認が必要です。
-
-専用のactor宣言、利用者が定義するgeneric関数やtrait、パッケージのimport、一般的なパターンのmatch、PostgreSQL、Highのrequest arena、Lowの生pointer/unsafe/C ABI、独自scheduler、self-hostingは未実装です。Rust連携は同じビルド内の呼び出しで、安定した外部ABIではありません。`Map`と`owned`の操作APIも揃っていません。
-
-CPUの速さは、型付きネイティブ演算・boxingの回避・LLVMのループ最適化で説明できます。ランタイムはTokio/Axum/Serde/rusqliteに依存します。これらを置き換える独自ランタイムの性能を証明したものではありません。
-
-詳細は [docs/introduction.md](docs/introduction.md)、[docs/roadmap.md](docs/roadmap.md)、[PERFORMANCE.md](PERFORMANCE.md) を参照してください。
-
-## 貢献とライセンス
-
-不具合の報告、コードの修正、Docsや翻訳の改善を受け付けます。手順とAI利用の方針は[貢献ガイド](CONTRIBUTING.md)、脆弱性の報告方法は[セキュリティ方針](SECURITY.md)にあります。Nagiは[MITライセンス](LICENSE)で公開しています。
+不具合の報告、修正、Docsや翻訳の改善を受け付けます。[貢献ガイド](CONTRIBUTING.md)に変更の相談、検証、AI利用の方針を記載しています。脆弱性は[セキュリティ方針](SECURITY.md)の非公開報告先へ。ライセンスは[MIT](LICENSE)です。

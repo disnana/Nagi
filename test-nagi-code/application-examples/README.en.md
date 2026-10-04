@@ -13,13 +13,13 @@
 
 To start with handwritten Low, use the [order quote CLI](../low-examples/order-quote/README.en.md). It combines Low-to-Low imports, typed JSON, input validation and integer price calculations.
 
-Use Nagi 0.1.9 or later. Download or clone the repository, then run each folder with its `nagi.toml` from the repository root. See [setup](../../docs/en/getting-started.md) for Rust/Cargo and your OS's build tools.
+Use Nagi 0.1.9. Download or clone the repository, then run each folder with its `nagi.toml` from the repository root. See [setup](../../docs/en/getting-started.md) for Rust/Cargo and your OS's build tools.
 
 ```sh
 nagic run --project test-nagi-code/application-examples/stock-report
 ```
 
-From the repository root, check and build High apps independently from their original source and saved generated Low, then repeat the same input, file, HTTP and actor checks for each. The order quote CLI is checked directly from handwritten Low. Python 3.12 or later is required.
+The script covers seven projects: six High applications checked and built both from source and from saved generated Low, plus the order quote CLI built from handwritten Low. These thirteen verification runs compare input, file, HTTP, and actor behavior. Run from the repository root with Python 3.12 or later.
 
 ```sh
 python scripts/verify_application_examples.py --compiler /path/to/nagic
@@ -28,4 +28,4 @@ python scripts/verify_application_examples.py --compiler /path/to/nagic --only s
 python scripts/verify_application_examples.py --compiler /path/to/nagic --only order-quote
 ```
 
-Results, build logs and execution logs are written to `build/application-example-verification/`. Database and file checks use temporary storage. Quote API checks start and stop a server on localhost. The supervised worker prints an intentional panic diagnostic to stderr, verifies recovery and cleanup, and exits with code 0.
+Build warnings count as failures. Results, build logs and execution logs are written to `build/application-example-verification/`. Database and file checks use temporary storage. Quote API checks start and stop a server on localhost. The supervised worker prints an intentional panic diagnostic to stderr, verifies recovery and cleanup, and exits with code 0.

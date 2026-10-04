@@ -1,6 +1,8 @@
 # actorの測定
 
-`std.actor`の公開前に、Supervisorに登録したactorへ一件ずつ送り、返信を待つ経路を測定しました。生成Nagiと同じ処理のRustを一つの実行ファイルに入れ、同じruntime・async呼び出しwrapper・依存・release設定で比較しています。測定したソースと条件は生ログに記録しています。
+`std.actor`の公開前に、Supervisorに登録したactorへ一件ずつ送り、返信を待つ経路を測定しました。生成Nagiと同じ処理のRustを一つの実行ファイルに入れ、同じruntime・async呼び出しwrapper・依存・release設定で比較しています。測定したソースと条件は生ログに記録しています。現在の型付きAPIは[`std.actor`](actor-reference.md)を参照してください。
+
+Rust側も同じSupervisorを使います。この測定で分かるのは、指定した経路での生成コードと手書きRustの差です。Supervisor自体の追加コストや、別の並行実行基盤の優劣は測っていません。
 
 ## 呼び出しと返信
 
@@ -33,7 +35,7 @@ AMD EPYC 9V74の共有ホストで、Tokioのcurrent_threadをCPU 0へ固定し�
 
 ## 再現する
 
-最新ソースでrelease compilerをビルドした後、リポジトリのルートで実行します。probeはofflineでビルドするため、依存を先に取得してください。`--cpu`は利用可能なCPUに合わせてください。
+以下は現在のソースを測る手順です。記録済みの結果と同じ実装を再現する場合は、生ログに記載されたソースのhashも確認してください。release compilerをビルドした後、リポジトリのルートで実行します。probeはofflineでビルドするため、依存を先に取得してください。`--cpu`は利用可能なCPUに合わせてください。
 
 ```sh
 python scripts/actor_probe.py --nagic target/release/nagic --cpu 0 --iterations 100000 --rounds 7 --allocation-iterations 10000 --idle-ms 5000 --mailbox-ms 0 --output build/actor-probe-0.jsonl

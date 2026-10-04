@@ -4,7 +4,7 @@
 
 ## First reads and writes
 
-Define the stored type with a class, open a database with `db_open`, and create a table with `db_exec`. Database operations are async and can fail, so use `try await`.
+The standard database API supports SQLite. Define the stored type with a class, open a database with `db_open`, and create a table with `db_exec`. Handle these fallible async operations with `try await`. Other databases, including PostgreSQL, currently require Rust integration.
 
 Save the following code as `database.nagi` and run `nagic run database.nagi`. It inserts one row in memory and prints `Nagi`, then `Saved`.
 
@@ -30,7 +30,7 @@ Use a class as the type argument of a function that returns rows. `db_all[i64]` 
 
 Generated row readers support `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `f32`, `f64`, `bool`, `str` and `bytes` fields. Use `T?` for a column that accepts SQL NULL. Nullable boolean, float and bytes fields are supported from Nagi 0.1.9. See the [settings API example](../../test-nagi-code/application-examples/device-settings/README.en.md).
 
-Row readers are also generated for these types wrapped in `owned[...]`. Fields such as `owned[str]` and `owned[i64?]` need no handwritten `FromRow`; remove any earlier workaround implementation that would now duplicate the generated one. For unsupported fields, use a Rust row reader or type conversion.
+On main, row readers are also generated for these types wrapped in `owned[...]`. Published 0.1.9 does not include this support. Fields such as `owned[str]` and `owned[i64?]` need no handwritten `FromRow`; remove any earlier workaround implementation that would now duplicate the generated one. For unsupported fields, use a Rust row reader or type conversion.
 
 | Operation | Form | Return type after await |
 |---|---|---|
@@ -60,10 +60,18 @@ Iterate over the result of `db_all[User]` with `for user in users` to borrow eac
 
 ## Implementation and limits
 
-A dedicated thread runs SQLite operations in order. Its queue holds up to 64 jobs. Nagi waits for the result asynchronously, while SQLite reads and writes on that thread.
+Nagi provides typed calls and class row conversion. rusqlite and SQLite execute SQL, store data, and enforce database constraints. SQLite is bundled with the runtime.
+
+Each opened Db runs operations in order on a dedicated thread. Its queue holds up to 64 waiting jobs; senders wait when it is full. Nagi waits asynchronously for results, but SQLite reads and writes are synchronous. Releasing the last Db owner waits for the worker to exit, so destruction is not guaranteed to return immediately.
 
 Prepared statements are cached. Column names are resolved on each call; `db_all` reuses those column indices for every row in that result. Returned strings and byte sequences are owned so they remain valid after processing the SQLite row.
 
-General variable-length typed parameters, transaction APIs, and database pools are not implemented. Ordinary `check` does not validate SQL or its schema. Explicit [SQL checks](sql-check.md) validate names, required result columns, and bind counts for SQLite string literals. Dynamic SQL and column value type mismatches still produce runtime Result errors.
+Ordinary `check` validates Nagi argument types and requires a class for returned rows. It does not check SQL syntax, schema, column names, bind counts, or the correspondence between SQL NULL and class fields.
+
+On main, explicit [SQL checks](sql-check.md) validate SQLite string literals for syntax, names, required result columns, and bind counts. Published 0.1.9 does not include this feature. Dynamic SQL, `db_exec`, and actual value types, NULLs, and ranges remain outside this check; supported field types handle these at runtime through Result. Unsupported row fields or other unmet Rust conversion requirements may instead fail at build time.
+
+General variable-length typed parameters, transaction APIs, connection pools, and PostgreSQL are not implemented. Writing BEGIN/COMMIT in SQL does not reserve the connection across multiple calls: other operations using the shared Db can run between them.
 
 A database job already accepted may complete and commit even after its HTTP caller times out. Cancelling the caller does not guarantee that a write is rolled back.
+
+See the [DB runtime](../../runtime/src/database.rs), [generated class row conversion](../../compiler/src/emit.rs), [CRUD example](../../examples/crud.nagi), and [DB tests](../../runtime/src/database.rs) for the implementation and checks. Separate SQLite/PostgreSQL types with common operation rules are a [design proposal](library-design.md), distinct from the API above.

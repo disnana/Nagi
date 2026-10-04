@@ -2,7 +2,7 @@
 
 [Contents](README.md) · Previous: [Setup and first run](getting-started.md) · Reference: [Syntax](syntax.md)
 
-Learn High (`.nagi`), the application language, in this order: variables → functions → lists → classes → failures. Follow [Setup and first run](getting-started.md), then save the code in your own working folder. The same `nagic` command works on Windows, Linux, and macOS.
+High (`.nagi`) uses indentation for blocks. This guide covers values, functions, lists, and failures with short examples. [Install Nagi](getting-started.md), then run `nagic run filename.nagi` in your working folder.
 
 ## 1. Values and types
 
@@ -119,7 +119,7 @@ def main():
     print(name)
 ```
 
-Output: `4`, `4`, `Nagi`, `Nagi`. `copy(view(name))` creates a separate owned string. Request copies explicitly when you need them.
+Output: `4`, `4`, `Nagi`, `Nagi`. `copy(view(name))` creates a separate owned string. The copy has its own storage.
 
 Built-ins such as `print` and `len` read their input and do not move a string merely because you pass it. Functions do not all handle arguments in the same way.
 
@@ -167,7 +167,7 @@ def number_or(text: view[str], fallback: i64) -> i64:
             return fallback
 ```
 
-Write one `Ok` case and one `Err` case. Each bound name is available only in its case; use `_` for an unused value. Patterns other than Result are not supported. See [error handling](error-handling.md) for a runnable example and Error inspection.
+For Result, write both `Ok` and `Err` cases. Each bound name is available only in its case; use `_` for an unused value. `match` also supports nullable `Some`/`None` and user-defined enums. See [error handling](error-handling.md) and [types](types.md).
 
 ## 6. Split code into files
 

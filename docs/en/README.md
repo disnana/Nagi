@@ -2,7 +2,9 @@
 
 Start with [installation](getting-started.md). To look up code, open the [syntax reference](syntax.md) or [built-in functions](builtins.md).
 
-These Docs describe main. Features listed under `Unreleased` in the [Changelog](../../CHANGELOG.md) require a compiler built from source until the next release.
+These Docs describe the repository source; the official site is normally built from main. Changes under `Unreleased` in the [Changelog](../../CHANGELOG.md) are not yet included in published distributions.
+
+See [About Nagi](introduction.md) for its purpose and current scope. The references below describe implemented APIs and their limits. Unimplemented proposals are kept in [design](library-design.md) and the [roadmap](roadmap.md).
 
 ## First steps
 
@@ -29,6 +31,7 @@ See the [VS Code guide](editor.md) for editor support. See [JetBrains installati
 |---|---|
 | HTTP without a database, headers, and response statuses | [HTTP](http.md), [API reference](http-server.md) |
 | Read and write JSON | [JSON](json.md) |
+| Check SQLite SQL against a schema | [SQL preflight checks](sql-check.md) |
 | Split code into files or call Rust | [Imports and Rust](modules-and-rust.md) |
 | Share your own libraries or use Rust crates | [Libraries and Rust assets](libraries.md) |
 | Save an entry file and build settings | [nagi.toml](projects.md) |
@@ -42,7 +45,7 @@ Runnable examples are in [examples/tutorial/](../../examples/tutorial/). Referen
 
 ## Implementation and development
 
-[About Nagi](introduction.md) · [Low](low-language.md) · [Memory](memory-model.md) · [Compiler](compiler-internals.md) · [Language interfaces](ffi.md) · [Roadmap](roadmap.md)
+[About Nagi](introduction.md) · [Design decisions](../../DESIGN.en.md) · [Low](low-language.md) · [Memory](memory-model.md) · [Compiler](compiler-internals.md) · [Language interfaces](ffi.md) · [Roadmap](roadmap.md)
 
 `std.actor` is a standard library available from Nagi 0.1.8. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) covers registration, calls, and shutdown. The older actor/Supervisor built-ins and [queues](queue.md) remain test APIs. For performance, read the [measurement methods](performance.md), [results](measurements.md), and [HTTP load tests](http-capacity.md).
 

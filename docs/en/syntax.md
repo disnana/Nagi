@@ -2,7 +2,7 @@
 
 [Contents](README.md) · First program: [Language guide](language-guide.md) · [Built-in functions](builtins.md)
 
-This reference describes High (`.nagi`). Some short examples are fragments for a function body. Use the [complete introductory program](../../examples/tutorial/basics.nagi) to run several features together.
+This reference describes High (`.nagi`): indented application code with typed functions and values. Some short examples are fragments for a function body. Use the [complete introductory program](../../examples/tutorial/basics.nagi) to run several features together.
 
 ## Files and indentation
 
@@ -34,7 +34,7 @@ def main():
 | `count = 11` | Reassignment with the same type |
 | `count += 1` / `-= 1` / `*= 2` | Compound assignment; `/=` and `%=` unsupported |
 
-String escapes are `\n`, `\r`, `\t`, `\"`, `\'`, and `\\`. There are no f-strings, interpolation, or triple-quoted strings. See [types](types.md).
+String escapes are `\n`, `\r`, `\t`, `\"`, `\'`, and `\\`. String concatenation with `+`, f-strings, interpolation, and triple-quoted strings are unsupported. See [types](types.md).
 
 ## Functions and return
 

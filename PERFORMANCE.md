@@ -1,8 +1,10 @@
 # Nagi 0.1 性能・検証報告
 
-この版は、Rust製コンパイラと実ランタイムを持つ、二層バックエンド言語の試作です。Highから編集可能なLowテキストを生成し、それを再解析・検査してRust経由でネイティブへコンパイルします。HTTP body → 型付きclass → SQLite → class → JSONのCRUD経路、Lowの通常関数呼び出し・関数置換、async/scope、actor間通信、worker再起動が実際に動きます。
+2026年9月30日の実装を対象にした測定記録です。機能一覧、テスト件数、今後の案は測定当時の内容です。現在の仕様は[Docs](docs/README.md)を参照してください。
 
-汎用言語、本番用独自runtime、BEAM相当の障害隔離は未完成です。actor・Supervisor・queueは実ランタイムを呼ぶ標準試験関数で、Highの汎用宣言構文はまだありません。以下の数値は、記載した測定環境で採取したログに基づきます。サンプル名は公開用に匿名化し、測定時と同じASCIIのバイト長を維持しています。測定値は変更していません。
+測定対象は、Rust製コンパイラとランタイムを持つNagiの試作です。Highから編集可能なLowテキストを生成し、それを再解析・検査してRust経由でネイティブへコンパイルします。HTTP body → 型付きclass → SQLite → class → JSONのCRUD経路、Lowの通常関数呼び出し・関数置換、async/scope、actor間通信、worker再起動が実際に動きます。
+
+測定当時のactor・Supervisor・queueは、ランタイムを呼ぶ試験関数を使いました。現在は型付きの[`std.actor`](docs/actor.md) APIがありますが、この報告のactor測定はそのAPIの測定ではありません。BEAM相当の障害隔離は提供していません。以下の数値は、記載した測定環境で採取したログに基づきます。サンプル名は公開用に匿名化し、測定時と同じASCIIのバイト長を維持しています。測定値は変更していません。
 
 ## 測定環境と再現条件
 
@@ -248,11 +250,11 @@ High checkerの成功だけでsoundnessを保証していません。safe Rust�
 
 有効だった方向は、native primitive＋連続配列、直接typed JSON、DB列番号の一回解決、不要な小Vecの除去、actor pipelineです。JSON借用やreserveはallocation削減と速度向上を分けて評価すべき結果でした。HTTPはhandler/runtime/serialization/schedulingを含むため、CPU kernelの倍率から予測できません。
 
-次の実装は、算術・borrow仕様の確定、module/generic、任意state actorのlowering、typed DB paramの一般化、request arenaとbuffer再利用の実測の順が妥当です。完成に必要な工数を今回の試作速度だけから推定しません。Low self-hostはString/Map/module/allocator APIとbootstrap一致試験をそろえた後の段階です。
+測定当時の次の実装案は、算術・borrow仕様の確定、module/generic、任意state actorのlowering、typed DB paramの一般化、request arenaとbuffer再利用の実測の順が妥当です。完成に必要な工数を今回の試作速度だけから推定しません。Low self-hostも当時の構想で、String/Map/module/allocator APIとbootstrap一致試験をそろえた後の段階と考えていました。
 
 ## 再実行と生ログ
 
-ビルド・機能試験はREADMEの手順を使用します。数値の再測定時は同時にビルドや別のCPU benchmarkを走らせず、CPU affinityを環境に合わせて変更してください。
+以下のコマンドは測定に使った処理です。最新ソースで再実行した結果を、当時と同じ実装の再測定とは扱いません。現在のビルド・機能試験はREADMEの手順を使用します。数値の再測定時は同時にビルドや別のCPU benchmarkを走らせず、CPU affinityを環境に合わせて変更してください。
 
 ```bash
 taskset -c 0 ./native-target/release/nagi-cpu > benchmarks/results/cpu-nagi.jsonl
@@ -267,4 +269,4 @@ python3 scripts/summarize_results.py
 
 results/にはCPU・JSON・SQLite・allocation・concurrencyのJSONL、wrk各試行のtext、HTTP集約JSON、1秒resource sample、障害stderr、環境情報、checksum検証を同梱します。wrkのソース全体は同梱せず、commitとLua scriptを記録しています。Linux専用のtaskset/proc計測部分は他OSでは置き換えが必要です。CI定義は同梱していますが、remote CI上では今回実行していません。
 
-設計・未実装の詳細はdocs/の22ページ、再現用ソースはcompiler/runtime/examples/tests/benchmarks/scripts/にあります。
+測定時の設計資料はdocs/の22ページ、測定用ソースはcompiler/runtime/examples/tests/benchmarks/scripts/にあります。現在のDocsやコンパイラには、その後の変更が含まれます。

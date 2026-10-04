@@ -1,6 +1,6 @@
 # Group data with classes
 
-Use a `class` to group related values, such as coordinates or a user's name and age. Declare each field's name and type, then provide every field when constructing a value.
+A `class` is a value type with named fields. Use it to group related values, such as coordinates or a user's name and age. Declare each field's name and type, then provide every field when constructing a value.
 
 ```nagi
 class Point:

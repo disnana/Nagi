@@ -2,7 +2,7 @@
 
 小さな梱包ジョブと監査カウンターを別のactorで処理し、常駐connectorを`actor.task_with_ready`で監督するCLIです。起動すると決まったジョブと故障を一度ずつ実行し、検証して停止します。ネットワークやDB、入力操作は不要です。
 
-このディレクトリで実行します。Nagi 0.1.9以降とRust/Cargoが必要です。
+このディレクトリで実行します。Nagi 0.1.9とRust/Cargoが必要です。
 
 ```sh
 nagic check
@@ -48,12 +48,10 @@ JSONの主な値は`packing_total: 4`、`audit_total: 9`、`failed_events: 1`、
 
 すべてのControlは`run`の前に作ります。`clone_control`は作成時点から独立にイベントを読み、過去の読み取り位置を複製しません。梱包の再起動、connectorのREADY、最終集計にはそれぞれ独立したControlを使い、先に読んだイベントを失わず集計できます。固定sleepを成功判定には使いません。actorの起動・呼び出しと各イベント待ちには5秒の期限があり、`WaitKind.TIMEOUT`を列の終了と区別します。イベント待ちを含めたプロセス全体は[smoke.py](smoke.py)が15秒で停止します。
 
-`finish`は業務検証の結果を保存してから`shutdown`を待ちます。検証が`Error`を返しても停止を試みます。成功した`shutdown`とscope終了で、監督下の子と共有データの後片付け完了を確認します。これは同一プロセスのnative実装です。VM、無停止のコード差し替え、分散配置、永続mailboxは未対応です。
+`finish`は業務検証の結果を保存してから`shutdown`を待ちます。検証が`Error`を返しても停止を試みます。成功した`shutdown`とscope終了で、監督下の子と共有データの後片付け完了を確認します。これは同一プロセス内のTokio taskを監督する実装です。VM、無停止のコード差し替え、分散配置、永続mailboxは未対応です。
 
 ## 準備完了と次の実用例
 
 `STARTED`はtaskの起動を示し、初期化の完了を保証しません。connectorは後片付け用guardを作ってから`mark_ready`を呼び、第2世代の`READY`を一度だけ発行します。Nagiは`next_event_timeout`でそのイベントを待ちます。稼働判定のためにnativeカウンターを繰り返し調べる必要はなくなり、カウンターは後片付けの検証に使います。
-
-次の実用例として、ジョブID、永続結果、factoryによる復元を組み合わせる構成が候補です。メモリ状態の再初期化だけでは、重複実行の防止や永続的な完了確認を扱えません。
 
 [actorの書き方](../../../docs/actor.md) · [Supervisor](../../../docs/supervisor.md) · [English](README.en.md)

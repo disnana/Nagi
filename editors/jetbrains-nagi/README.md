@@ -2,7 +2,9 @@
 
 [English](README.en.md)
 
-IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは別途インストールしてください。
+IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
+
+プラグインの版は0.1.0です。このREADMEはmainのソースを説明します。`main`の左の実行ボタンは初期ZIPには含まれないため、最新のActions成果物を使ってください。
 
 ## できること
 
@@ -13,7 +15,7 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは�
 - `def main()`・`async def main()`・Lowの`fn main()`の左にある▶からも実行できます。
 - コンパイラ出力のファイル位置をクリックしてソースへ移動。
 
-全体の自動整形、型に基づく補完、定義への移動、入力中の自動検査は今後の対応です。型検査はNagiコンパイラが行います。
+全体の自動整形、型に基づく補完、定義への移動、自動型検査は未対応です。型検査は手動でNagiコンパイラを呼び出します。
 
 ## インストール
 
@@ -50,7 +52,7 @@ PyCharm用SDKでも同じコードを検証できます。
 
 手元のIDEをSDKに使う場合は`-PlocalPlatformPath=/path/to/ide`を指定します。`runIde`は開発用の別環境でIDEを起動します。
 
-テストには字句解析・折りたたみ・インデント・CLI引数・診断位置の検証と、IntelliJ Platformの実エディターfixtureを使ったファイル種別・改行・コメント・括弧補完・保存失敗の検証があります。実プロセスを使った起動中止の検証も含みます。`NAGI_TEST_COMPILER`にインストール済み`nagic`のパスを設定すると、High・Low・プロジェクトの実型検査も確認します。未設定なら、この追加smokeだけをスキップします。
+テストには字句解析・折りたたみ・インデント・CLI引数・診断位置の検証と、IntelliJ Platformの実エディターfixtureを使ったファイル種別・改行・コメント・括弧補完・保存失敗の検証があります。実プロセスを使った起動中止の検証も含みます。`NAGI_TEST_COMPILER`にインストール済み`nagic`のパスを設定すると、High・Low・プロジェクトの実型検査も確認します。未設定なら、この実コンパイラ連携テストをスキップします。現在のJetBrains CIはこの環境変数を設定していません。
 
 主対象はIDEA・PyCharmの2025.1.1、最低対象APIはbuild 243です。CIでは両製品の2025.1.1 SDKでテスト・ZIP生成を行い、同じZIPを2025.1.1と最低対象SDK（IDEA 2024.3.7／PyCharm 2024.3.6）でPlugin Verifierにかけます。IDE全体の画面操作とは別の検証です。
 

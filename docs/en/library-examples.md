@@ -47,11 +47,11 @@ Selecting just a source file skips its neighboring `nagi.toml`. Use `--project` 
 | [Rust bridge](../../test-nagi-code/rust-bridge/) | CRC-32, serde_json, and async Rust functions |
 | [Fractal](../../test-nagi-code/README.md#exe単体で見られるフラクタル) | Console output and distribution as an executable |
 
-Each README explains its inputs, outputs, and limits. Passing these examples does not establish support for every Rust crate or a complete production HTTP/database foundation.
+Each README explains its inputs, outputs, and limits. Rust integration examples cover the APIs and types listed there.
 
 ## Verify the examples during development
 
-With Python 3.12 or later and Nagi 0.1.9 or later, verify the projects' checks, native builds, output, and HTTP responses. To check changes under development, use a `nagic` built from that source:
+With Python 3.12 or later, verify checks, native builds, output, and HTTP responses. Use a `nagic` built from the same source revision as the repository examples:
 
 ```sh
 python scripts/verify_library_examples.py --compiler /path/to/nagic

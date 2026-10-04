@@ -1,6 +1,6 @@
 # Reading the benchmarks
 
-Results are in [Measurements](measurements.md) and `benchmarks/results/`. The test conditions are listed below.
+This page explains the [September 30, 2026 measurements](measurements.md). Raw logs are in `benchmarks/results/`. Separate standard-API tests cover [HTTP](http-stdlib-performance.md) and [actors](actor-performance.md). Numbers from different implementations and test conditions are not directly comparable.
 
 ## CPU work
 

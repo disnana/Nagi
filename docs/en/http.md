@@ -1,6 +1,6 @@
 # HTTP
 
-Use `std.http.server` to build an HTTP server. No database is required. Register an async handler and the state it shares with other requests.
+Use `std.http.server` to build an HTTP server without a database. Define async handlers, shared state, and error responses in Nagi.
 
 ## A minimal server
 
@@ -55,4 +55,6 @@ The [authentication example](../../test-nagi-code/library-examples/http-auth/REA
 - [JSON](json.md): decoding a body into a class
 - [Existing HTTP attributes](http-legacy.md): code using `@get`/`@post` and `serve(Db, port)`
 
-The standard server currently serves HTTP/1.1 on loopback. Use a reverse proxy for TLS and external access. This module does not expose streaming, WebSocket, or HTTP/2 APIs.
+The standard server currently serves HTTP/1.1 on loopback. Use a reverse proxy for TLS and external access. Peer IP access, streaming, WebSocket, and HTTP/2 APIs are not implemented. A standard HTTP client for calling external APIs is also not implemented.
+
+Internally, Hyper handles HTTP transport and Tokio runs async work. Nagi provides route registration, typed state, responses, limits, and error mapping. Replacing this implementation with Axum/Tower is under evaluation; neither replacement nor a performance improvement has been established.

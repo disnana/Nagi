@@ -1,27 +1,28 @@
 # 継続開発
 
-優先順位は、現在の動く経路を維持しながら、仕様と安全性を段階的に固めることです。
+当面の目標は、読みやすいHighで一般的なバックエンドを書ける範囲を広げ、型・所有権・失敗・資源の終了を一貫して扱えるようにすることです。Rust経由のネイティブ生成と既存ライブラリを基盤にします。
 
-Nagi 0.1.8では、moduleの別名、独自エラーのclass・enum、Result／Option／enumのmatch、`std.http.server`、任意の所有状態を扱う`std.actor`を実装しています。[actor](actor.md)と[Supervisor](supervisor.md)に現在の範囲を記載しています。
+このページは開発方針です。以下の課題が解決済みであることや、リリース日を示すものではありません。現在使えるAPIは[リファレンス](README.md)、版ごとの変更は[CHANGELOG](../CHANGELOG.md)を参照してください。
 
-1. Result・Option・enumのmatchを足場に、checked/wrapping算術、文字列長、source span、変数shadowing、borrow originを確定する。
-2. High checkerのpartial move・分岐・loop・escape解析を強化し、Rust backendへの依存点を縮める。
-3. 登録済み標準moduleと型付きRust連携を足場に、利用者が定義するgeneric・trait、async関数を受け渡す一般の型注釈とMapの標準APIを整える。
-4. `std.actor`の容量・キャンセル・再起動を検証し、Supervisor treeや独立したbounded queueの契約を固める。VM、無停止のコード差し替え、分散actorは現在の実装範囲に含まれない。
-5. request arenaとborrowed class、DBでstep中にencodeする経路、buffer再利用、streaming JSONを比較測定する。
-6. 型付きSQL引数・行・transactionの共通契約を固め、既存Rust driverを使ってPostgreSQLへ対応する。キャンセルとpoolの終了を実DBで確認する。
-7. Lowのlayout・pointer・arena・unsafe境界・C ABIを定義し、sanitizer/coverage-guided fuzzを整える。
-8. Rust codegenから独立backendを導入する。schedulerを置き換える判断も測定で行う。
+## 優先する課題
+
+1. **既存の言語規則を揃える。** `owned`・`view`・move、分岐やloopの検査、算術の失敗、source mappingを整理する。`check`成功後のRustビルド失敗を再現例で追い、Nagi側で診断すべきものとRustへ任せる検査を区別する。
+2. **Rust資源との境界を決める。** 不透明な型の識別、借用、共有、非同期終了、取消後の仕事を定義する。一般的なtraitや新構文は、具体的なAPIで必要性を確認してから検討する。
+3. **標準ライブラリを整理する。** HTTP・JSON・DB等のAPIをmoduleとして提供し、不要なランタイム依存を分離する。生成するSerde・行変換・公開型にも対応が必要で、Cargoのoptional化だけでは終わらない。
+4. **DBを汎用化する。** SQLiteとPostgreSQLは別module・別資源型とし、引数・行・エラーの規則を揃える。transaction・poolを検討し、実DBで取消と終了を確認する。mainの[明示SQL/schema検査](sql-check.md)はSQLiteの名前・返却列・bind数が対象で、値の型・NULLや他DBの検査は未対応。
+5. **HTTP基盤を比較する。** Axum／Towerを第一候補として、現行実装と同じAPI、制限、障害、停止条件で評価する。通常負荷・過負荷・長時間の性能と保守負担を確認して採否を決める。置き換えは未決。
+6. **実例と文書で境界を確かめる。** Nagi・Rust双方の検査、公開版とmainの差、実測条件を示す。診断や書きやすさも、同じ課題を解く実例で評価する。
+
+詳細は[ライブラリとRust連携の設計案](library-design.md)へ。API名と資源の終了契約には未確定の部分があります。
+
+## Lowの範囲
+
+既存のLowコード、波括弧構文、生成物の確認、関数差し替えは維持します。当面はHighとRust連携を優先し、Lowのpointer・layout・unsafe・C ABI・SIMDを独立した低水準言語として拡張する計画は進めません。
+
+この制限と現在の使い方は[HighとLow](low-language.md)に記載しています。
 
 ## self-hosting
 
-| Stage | 内容 | 状況 |
-|---|---|---|
-| 0 | RustでLow compiler | 小さい言語subsetを実装 |
-| 1 | RustでHigh compiler | Lowへの変換を実装 |
-| 2 | LowでLow compilerを書き直す | 未着手。String/Map/module/allocator APIの拡張が必要 |
-| 3 | Low compilerが自身をコンパイル | 未着手。bootstrap比較とdeterminism試験が必要 |
+独自バックエンド、self-hosting、独自VM・scheduler、無停止更新、分散actorは未着手です。今後採用するかも未決です。
 
-実用化には複数の開発段階が必要です。この試作のテストが通ったことは、本番用言語・runtimeの完成や、全unsafe/FFI経路の安全性を意味しません。工数の正確な見積もりは仕様と担当体制が決まってから行います。
-
-自作基盤とRust資産の再利用については、[動くサンプル](library-examples.md)と[具体的な設計案](library-design.md)を用意しています。依存設定、名前空間、resourceとDBの契約を、既存コードを保ちながら段階的に整える案です。
+Rust以外のバックエンドでも同じ意味を保つには、型・所有権・解放・失敗・非同期処理・runtime接続の契約と実装が必要です。Lowを使ってコンパイラを書き直すことを、現在の開発段階の必須条件にはしません。

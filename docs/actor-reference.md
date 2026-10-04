@@ -20,7 +20,7 @@ import std.actor as actor
 | `WaitError` / `WaitKind` | イベント待ちの失敗。`TIMEOUT`、`INVALID_TIMEOUT` |
 | `CallError` / `Event` | 呼び出しの失敗 / ライフサイクルイベント |
 
-Cは初期化関数へ`shared[C]`として渡します。Sはactorだけが所有します。M・R・Eは容量を数えられる所有された値が必要です。class・enum・List・Option・Resultを使えますが、Map・view・shared・opaque resourceは含められません。
+Cは初期化関数へ`shared[C]`として渡します。Sはactorだけが所有します。M・R・Eは容量を数えられる所有された値が必要です。class・enum・List・Option・Resultを使えますが、Map・view・shared・opaque resourceは含められません。Rust側ではCに`Send + Sync`、Sに`Send`などの条件があり、buildで最終検証します。
 
 ## 登録と実行
 
@@ -35,7 +35,7 @@ Cは初期化関数へ`shared[C]`として渡します。Sはactorだけが所�
 | `mark_ready(view(signal))` | `Result[unit, Error]` |
 | `turn[S, R, E](next_state, reply)` | `Turn[S, R, E]` |
 | `await run(group)` | `Result[unit, Error]`。groupを消費する |
-| `await shutdown(view(control))` | `Result[unit, Error]` |
+| `await shutdown(view(control))` | `Result[unit, Error]`。成功は後片付け完了、Errorは子の失敗または未完了など |
 | `await next_event(view(control))` | `Result[Option[Event], Error]` |
 | `await next_event_timeout(view(control), timeout_ms)` | `Result[Option[Event], WaitError]` |
 | `await yield_now()` | `unit` |
@@ -75,3 +75,5 @@ readyの0msは現在の状態だけを確認します。callのmailboxは0msな�
 `.child_id`、`.generation`、`.lost_events`はi64、`.truncated`はbool、`.child_name`と`.message`は`view[str]`です。読み取り位置はControlごとに独立します。同じControlでの読み取りは直列化され、終了後は残ったイベントを読み切ってNoneになります。
 
 `next_event_timeout`はControlの読み取りロック待ちも期限に含めます。期限は1..4,294,967,295msで、時計が表現できる値にします。0・負値・上限超過は`WaitKind.INVALID_TIMEOUT`、期限切れは`WaitKind.TIMEOUT`、`Ok(None)`は列の終了です。タイムアウトやキャンセルでイベントを消費したり、グループを停止したりしません。`WaitError.message`は`view[str]`です。期限は協調的に扱われ、blockingなnative処理を強制中断しません。
+
+各関数の実装は[actor runtime](../runtime/src/actor.rs)にあります。停止結果と後片付けの違いは[Supervisor](supervisor.md#所有と停止)を参照してください。

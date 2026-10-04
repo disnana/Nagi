@@ -38,7 +38,7 @@ Invoke-RestMethod 'http://127.0.0.1:8097/api/fallback'
 | `/api/items/0` | 400。IDは正の整数が必要 |
 | `/api/items/1000001` | 404。`not_found`で範囲外を返す |
 | `/api/fallback` | 200。DB失敗を捕まえて代替データを返す |
-| `/api/db-error` | 500。DB失敗のkindを保って返す |
+| `/api/db-error` | 500。DBエラーの種類を保持し、HTTP側で内部エラー応答に変換 |
 | `/api/internal-error` | 500。内部エラーを作って返す |
 
 `storage.nagi`の`read_optional`は、**存在しない`optional_items`テーブルを意図的に読みます**。これで実際のSQLiteエラーを起こし、同じ失敗を「代替データで回復する」「失敗として返す」の2通りで扱います。500の応答は`{"error":"internal error"}`で、SQLや内部の理由は応答へ出しません。サーバーのログにはエラーの種類や詳細が出ます。
@@ -60,6 +60,6 @@ python test-nagi-code/result-api/smoke_api.py --base-url http://127.0.0.1:8097
 - [models.nagi](models.nagi)：JSONとDBのデータ型。
 - [nagi.toml](nagi.toml)：CLI・VS Codeで共通の入口設定。
 
-[VS Code拡張0.1.2](../../editors/vscode-nagi/README.md)と最新版の`nagic`を使えば、`read_item`や`Item`にF12で移動できます。importの文字列からファイルも開けます。プロジェクト内の編集中ファイルを保存してから使ってください。
+[VS Code拡張](../../editors/vscode-nagi/README.md)と対応する`nagic`を使えば、`read_item`や`Item`にF12で移動できます。importの文字列からファイルも開けます。プロジェクト内の編集中ファイルを保存してから使ってください。
 
-文法と制限は[Resultのエラー処理](../../docs/error-handling.md)にあります。nullableの値を取り出すmatchはまだありません。この例では`Item?`をHTTPへ返し、値がない場合の404への変換をルート側に任せています。
+文法と制限は[Resultのエラー処理](../../docs/error-handling.md)にあります。nullableには`Some`／`None`のmatchを使えます。この例では`Item?`をHTTPへ返し、`None`の404への変換をルート側に任せています。

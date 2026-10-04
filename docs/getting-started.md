@@ -2,7 +2,7 @@
 
 [目次](README.md) · 次：[コードを書きながら学ぶ](language-guide.md)
 
-Nagiをインストールして、Hello Worldを動かします。
+Nagiの公開版をインストールし、High（`.nagi`）でHello Worldを動かします。
 
 ## 1. コンパイラを用意する
 
@@ -82,7 +82,7 @@ nagic run hello.nagi
 
 `check`と`lower`は現在どちらもHighの生成Lowを保存します。`check`が成功しても、Rust側の型・借用などの検査で`build`が失敗する場合があります。
 
-ビルド時のエラーは、対応する元のNagi・Lowファイル名、文や定義の行番号、その行のコードを先に表示します。import先や`@replace`の手書きLowも対象です。続く`Rust backend details`には生成Rust側の詳しい診断を残します。手書きRustや、元の位置を特定できないエラーはRustの診断を表示します。
+ビルド時のエラーには、対応を特定できる場合は元のNagi・Lowのファイル名と行を表示します。続く`Rust backend details`でRust側の詳細を確認できます。手書きRustや元の位置を特定できないエラーは、Rustの診断を表示します。
 
 ```powershell
 nagic check hello.nagi
@@ -122,7 +122,7 @@ Windowsの保存先は`%LOCALAPPDATA%\Nagi\versions`で、PATHに追加する入
 
 更新前にNagiのビルドを止めてください。切り替え後の起動確認に成功したら、旧版を配布時のアーカイブと照合して削除します。使用する1版だけ残し、ロールバック用の旧版は常設しません。追加・変更されたファイルは保護します。配布物の照合不能やWindowsで使用中のファイルなどで削除できない旧版も残し、フォルダーを表示します。更新に失敗した場合は、元のコマンドとPATHを維持します。
 
-以前の`nagi-v0.1.6/scripts/install.ps1`などのURLは0.1.6固定です。更新にはこのページの`main/scripts/install.ps1`を使ってください。Windowsの旧インストーラーが登録した版ごとのPATHも、固定の`current`へ整理します。VS Codeの`nagi.compilerPath`に旧版の絶対パスを設定している場合は`nagic`へ変更し、VS Codeを再起動してください。
+以前の`nagi-v0.1.6/scripts/install.ps1`などのURLは0.1.6固定です。更新にはこのページの`main/scripts/install.ps1`を使ってください。Windowsの旧インストーラーが登録した版ごとのPATHも、固定の`current`へ整理します。VS Codeの`nagi.compilerPath`に旧版の絶対パスを指定している場合は、空欄に戻して自動探索するか、新しい実行ファイルの絶対パスを指定し、VS Codeを再起動してください。
 
 版を指定して入れる例です。過去の版を指定して戻す場合も、使う1版だけ残す方針は同じです。
 

@@ -2,7 +2,7 @@
 
 [Contents](README.md) · [Setup](getting-started.md) · [Extension installation and settings](vscode-extension.md)
 
-Install Nagi extension 0.1.12 and nagic 0.1.9 or later, then open the Nagi repository in VS Code. This walkthrough uses working code to try type hovers, field completion, and definition navigation. Both High and Low are supported.
+Use Nagi extension 0.1.12 and `nagic` 0.1.9 to try type hovers, field completion, and definition navigation. Open the repository in VS Code, or save the example below in your own folder.
 
 ## Indentation support
 
@@ -99,4 +99,4 @@ Extension 0.1.12 also offers keyword/type completion and built-in completion, ho
 | Helper functions missing | Check imports from [nagi.toml](projects.md)'s entry |
 | Project declarations, local types, or F12 unavailable | Check workspace trust, nagi.compilerPath, and the Nagi Output channel |
 
-Edits clear old Problems diagnostics and, with automatic checks enabled, recheck the current buffers. **Nagi: 型検査** (Type Check) also reads unsaved edits to previously saved files without saving or building. Save new files and `nagi.toml` first. Lower, build, and run save project files before executing. Seeing a type in a hover or completion does not mean the whole program passed checking.
+Edits clear stale Problems diagnostics. Automatic checks run on opening and saving files, not on every keystroke. **Nagi: 型検査** (Type Check) also reads unsaved edits to previously saved files without saving or building. Save new files and `nagi.toml` first. Lower, build, and run save project files before executing. Seeing a type in a hover or completion does not mean the whole program passed checking.

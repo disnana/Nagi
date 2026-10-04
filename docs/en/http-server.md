@@ -31,7 +31,7 @@ Standard 2xx–5xx constants are available. `.phrase` borrows static text and is
 | `body` | `view[bytes]` |
 | `is_get`, `is_post`, etc. | `bool` |
 
-Paths, queries, bodies, and headers borrow the Request's data. You cannot move the Request while those views remain in use. Routes accept templates such as `"/users/{id}"`; a typed capture extraction API is not available yet.
+Paths, queries, bodies, and headers borrow the Request's data. You cannot move the Request while those views remain in use. Routes accept templates such as `"/users/{id}"`; typed capture extraction and peer IP access are not available. The body is collected up to the configured limit before the handler runs; it is not a receive stream.
 
 | Function | Return type |
 |---|---|
@@ -56,7 +56,7 @@ Header names are case-insensitive. Single-header getters reject duplicates; `hea
 | `append_header(response, name, value: view[bytes])` | `Result[Response, Error]` |
 | `append_header_text(response, name, value: view[str])` | `Result[Response, Error]` |
 
-`text`, `html`, and `bytes` create an owned response body from borrowed input. `json` borrows its value, so it does not move the original. String literals can be passed directly to view parameters; borrow variables with `view(value)`.
+`text`, `html`, and `bytes` copy borrowed input into a body owned by the Response. `json` borrows its value, so it does not move the original. String literals can be passed directly to view parameters; borrow variables with `view(value)`.
 
 Header append consumes and returns the response. It preserves duplicate Set-Cookie values and rejects invalid names, line breaks, and explicit Content-Length/Transfer-Encoding. HEAD omits the body while retaining its GET-equivalent length. 204, 205, and 304 omit the body. Successful CONNECT tunnels are unsupported: the server returns 501 and closes the connection.
 
@@ -71,13 +71,13 @@ return await http.serve(app, 8080, http.default_options())
 
 - `app[S, E](state, mapper)` owns the state and uses `fn(E) -> Response` as its default error mapper.
 - `app_default[S](state)` uses the default mapper for `Error`.
-- A handler has the signature `async def handle(request: Request, state: shared[S]) -> Result[Response, E]`. The state itself is not copied per request.
+- A handler has the signature `async def handle(request: Request, state: shared[S]) -> Result[Response, E]`. The state itself is not copied per request. Rust requires bounds such as `Send + Sync` on state and `Send` on the handler future; build performs the final validation.
 - `route_mapped` accepts a handler with its own error type and a matching mapper.
 - GET routes automatically accept HEAD unless an explicit HEAD route takes precedence. A different method on an existing path returns 405 with Allow.
 
 Mappers handle application failures. The server handles malformed HTTP, limits, and deadlines. Avoid exposing database error details or credentials in responses.
 
-On main, an unwinding panic in a handler or mapper before the response starts returns a generic 500 and closes that connection; published 0.1.9 does not include this fix. This does not roll back shared state or database updates. Return ordinary failures through Result. Recovery is not guaranteed for `panic=abort`, process termination, a second panic during unwinding, custom Rust cleanup, or streaming after the response starts.
+On main, an unwinding panic in a handler or mapper before the response starts returns a generic 500 and closes that connection. Published 0.1.9 does not include this fix. Catching a panic does not roll back shared state or database updates. Return ordinary failures through Result. Recovery is not guaranteed for `panic=abort`, process termination such as OOM, a second panic during unwinding, custom Rust cleanup, or failures after the response starts.
 
 When an error response needs a request ID, retain the validated ID in the handler and move it into a custom error only on failure. The [quote API example](../../test-nagi-code/application-examples/quote-api/README.en.md) passes its ID to a shared mapper this way.
 
@@ -96,6 +96,8 @@ When an error response needs a request ID, retain the validated ID in the handle
 
 Every setter returns `Result[Options, Error]`. Connection and request limits control admission, not thread counts. Ctrl+C stops admission and waits for active connections. The server aborts and joins remaining connection tasks after the shutdown deadline. Already running blocking work cannot be forcibly stopped.
 
+An oversized body is rejected with 413 and `Connection: close`, without calling the handler. The server does not drain the remaining body. Closing with unread data can cause a TCP reset; receipt of the 413 is not guaranteed for every OS, client, or upload pattern.
+
 Example:
 
 ```nagi
@@ -104,3 +106,9 @@ limits = try http.capacity(limits, 2048, 512)
 limits = try http.header_limits(limits, 32768, 100)
 return await http.serve(app, 8080, limits)
 ```
+
+## Implementation
+
+The API is implemented in the [standard module registry](../../compiler/src/stdlib.rs) and [HTTP runtime](../../runtime/src/http_server.rs). Hyper handles HTTP/1 transport, Tokio manages async work and connection tasks, matchit matches paths, and Serde converts JSON. The implementation uses Axum HTTP types, but its routes do not run through Axum Router.
+
+[HTTP runtime tests](../../runtime/src/http_server/tests.rs) use real sockets to check responses, limits, deadlines, and connection closure. [Rust integration](modules-and-rust.md) can provide a custom server, but these limits and failure handling do not apply to it automatically.
