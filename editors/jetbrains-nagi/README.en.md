@@ -37,20 +37,20 @@ cd editors/jetbrains-nagi
 ./gradlew test buildPlugin
 ```
 
-On Windows, use `gradlew.bat`. The wrapper pins Gradle 8.13, IntelliJ Platform Gradle Plugin 2.3.0, and IntelliJ IDEA Community 2024.3.7 as the default SDK. The first build downloads the SDK and dependencies.
+On Windows, use `gradlew.bat`. The wrapper pins Gradle 8.13, IntelliJ Platform Gradle Plugin 2.3.0, and IntelliJ IDEA Community 2025.1.1 as the default SDK. The first build downloads the SDK and dependencies.
 
 The same code can be checked against the PyCharm SDK:
 
 ```sh
-./gradlew -PplatformType=PC -PplatformVersion=2024.3.6 test buildPlugin
+./gradlew -PplatformType=PC -PplatformVersion=2025.1.1 test buildPlugin
 ```
 
 Use `-PlocalPlatformPath=/path/to/ide` to build against a local IDE. `runIde` starts an isolated development IDE.
 
 Tests cover scanning, folding, indentation, CLI argument boundaries, diagnostic locations, and real IntelliJ Platform editor fixtures for file types, Enter, comments, paired brackets, and save failures. A real process also tests cancellation during startup. Set `NAGI_TEST_COMPILER` to an installed `nagic` executable to check High, Low, and project commands with the compiler; only this extra smoke is skipped when unset.
 
-Editor fixtures and distribution ZIP generation have been checked against the IntelliJ IDEA Community 2024.3.7 SDK. Complete IDE interaction, Plugin Verifier compatibility checks, and PyCharm verification are separate checks. CI uses complete IDEA and PyCharm SDKs for tests, ZIP generation, and compatibility verification.
+The primary targets are IDEA and PyCharm 2025.1.1, with build 243 as the minimum API. CI tests and packages against both products' 2025.1.1 SDKs, then verifies the same ZIP against 2025.1.1 and the minimum SDK (IDEA 2024.3.7 or PyCharm 2024.3.6). These checks are separate from interacting with the complete IDE.
 
-Run `./gradlew test buildPlugin verifyPlugin` to perform the same checks as CI. `verifyPlugin` checks compatibility with the selected IDE's APIs.
+Run `./gradlew test buildPlugin verifyPlugin` for compatibility checks. Add `-PminimumPlatformVersion=2024.3.7` for IDEA, or `-PplatformType=PC -PminimumPlatformVersion=2024.3.6` for PyCharm, to check the minimum target too. With `-PlocalPlatformPath`, only that local SDK is verified.
 
 Official references: [Plugin SDK](https://plugins.jetbrains.com/docs/intellij/developing-plugins.html), [Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html). Licensed under [MIT](LICENSE).

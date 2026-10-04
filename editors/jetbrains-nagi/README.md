@@ -37,20 +37,20 @@ cd editors/jetbrains-nagi
 ./gradlew test buildPlugin
 ```
 
-Windowsでは`gradlew.bat`を使います。Gradle Wrapperは8.13、IntelliJ Platform Gradle Pluginは2.3.0、既定のSDKはIntelliJ IDEA Community 2024.3.7です。初回はSDKと依存関係を取得します。
+Windowsでは`gradlew.bat`を使います。Gradle Wrapperは8.13、IntelliJ Platform Gradle Pluginは2.3.0、既定のSDKはIntelliJ IDEA Community 2025.1.1です。初回はSDKと依存関係を取得します。
 
 PyCharm用SDKでも同じコードを検証できます。
 
 ```sh
-./gradlew -PplatformType=PC -PplatformVersion=2024.3.6 test buildPlugin
+./gradlew -PplatformType=PC -PplatformVersion=2025.1.1 test buildPlugin
 ```
 
 手元のIDEをSDKに使う場合は`-PlocalPlatformPath=/path/to/ide`を指定します。`runIde`は開発用の別環境でIDEを起動します。
 
 テストには字句解析・折りたたみ・インデント・CLI引数・診断位置の検証と、IntelliJ Platformの実エディターfixtureを使ったファイル種別・改行・コメント・括弧補完・保存失敗の検証があります。実プロセスを使った起動中止の検証も含みます。`NAGI_TEST_COMPILER`にインストール済み`nagic`のパスを設定すると、High・Low・プロジェクトの実型検査も確認します。未設定なら、この追加smokeだけをスキップします。
 
-IntelliJ IDEA Community 2024.3.7のSDKでエディターfixtureと配布ZIPの生成を確認しています。IDE全体の画面操作、Plugin Verifierによる互換性確認、PyCharmの動作確認は別の検証です。CIではIDEA・PyCharmの完全なSDKを使ってテスト・ZIP生成・互換性確認を行います。
+主対象はIDEA・PyCharmの2025.1.1、最低対象APIはbuild 243です。CIでは両製品の2025.1.1 SDKでテスト・ZIP生成を行い、同じZIPを2025.1.1と最低対象SDK（IDEA 2024.3.7／PyCharm 2024.3.6）でPlugin Verifierにかけます。IDE全体の画面操作とは別の検証です。
 
-CIと同じ検証を行うには`./gradlew test buildPlugin verifyPlugin`を実行します。`verifyPlugin`は対象IDEのAPIとの互換性を確認します。
+通常の互換性確認は`./gradlew test buildPlugin verifyPlugin`を実行します。最低対象も確認するには、IDEAでは`-PminimumPlatformVersion=2024.3.7`、PyCharmでは`-PplatformType=PC -PminimumPlatformVersion=2024.3.6`を追加します。`-PlocalPlatformPath`を指定した場合は、そのローカルSDKだけを検証します。
 
 公式資料: [Plugin SDK](https://plugins.jetbrains.com/docs/intellij/developing-plugins.html)、[Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html)。ライセンスは[MIT](LICENSE)です。

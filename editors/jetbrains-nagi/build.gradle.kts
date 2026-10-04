@@ -19,7 +19,7 @@ dependencies {
         if (localPath != null) local(localPath)
         else create(
             providers.gradleProperty("platformType").getOrElse("IC"),
-            providers.gradleProperty("platformVersion").getOrElse("2024.3.7"),
+            providers.gradleProperty("platformVersion").getOrElse("2025.1.1"),
             useInstaller = false,
         )
         testFramework(TestFrameworkType.Platform)
@@ -43,11 +43,13 @@ intellijPlatform {
         ides {
             val localPath = providers.gradleProperty("localPlatformPath").orNull
             if (localPath != null) local(localPath)
-            else ide(
-                providers.gradleProperty("platformType").getOrElse("IC"),
-                providers.gradleProperty("platformVersion").getOrElse("2024.3.7"),
-                useInstaller = false,
-            )
+            else {
+                val type = providers.gradleProperty("platformType").getOrElse("IC")
+                val version = providers.gradleProperty("platformVersion").getOrElse("2025.1.1")
+                ide(type, version, useInstaller = false)
+                val minimum = providers.gradleProperty("minimumPlatformVersion").orNull
+                if (minimum != null && minimum != version) ide(type, minimum, useInstaller = false)
+            }
         }
     }
 }

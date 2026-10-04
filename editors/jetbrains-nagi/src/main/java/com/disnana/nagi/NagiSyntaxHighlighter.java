@@ -32,9 +32,9 @@ public final class NagiSyntaxHighlighter extends SyntaxHighlighterBase {
                 case BAD -> HighlighterColors.BAD_CHARACTER;
                 default -> null;
             };
-            return color == null ? EMPTY : pack(color);
+            return color == null ? TextAttributesKey.EMPTY_ARRAY : pack(color);
         }
-        return EMPTY;
+        return TextAttributesKey.EMPTY_ARRAY;
     }
     public static class Factory extends SyntaxHighlighterFactory {
         @Override public @NotNull SyntaxHighlighter getSyntaxHighlighter(Project project, VirtualFile file) {

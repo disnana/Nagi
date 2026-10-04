@@ -31,10 +31,12 @@ jobs:
         include:
           - product: IntelliJ IDEA
             platformType: IC
-            platformVersion: '2024.3.7'
+            platformVersion: '2025.1.1'
+            minimumPlatformVersion: '2024.3.7'
           - product: PyCharm
             platformType: PC
-            platformVersion: '2024.3.6'
+            platformVersion: '2025.1.1'
+            minimumPlatformVersion: '2024.3.6'
     defaults:
       run:
         working-directory: editors/jetbrains-nagi
@@ -52,6 +54,7 @@ jobs:
           ./gradlew --no-daemon --stacktrace test buildPlugin verifyPlugin
           -PplatformType=${{ matrix.platformType }}
           -PplatformVersion=${{ matrix.platformVersion }}
+          -PminimumPlatformVersion=${{ matrix.minimumPlatformVersion }}
       - name: Upload the verified plugin
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
