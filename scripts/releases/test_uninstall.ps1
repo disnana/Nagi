@@ -158,8 +158,10 @@ try {
     $before = Get-TreeState $preview.Directory
     $previewPath = $env:Path
     $previewUserPath = [NagiUninstallTestEnvironment]::UserPath
+    $previewDownloads = $fixture.Downloads
     Invoke-Uninstall $preview.Directory -WhatIf -FixturePath
     Assert ($lastUninstallWarnings.Count -eq 0) '-WhatIf failed to verify the pristine release'
+    Assert ($fixture.Downloads -eq $previewDownloads + 2) '-WhatIf did not download both pristine verification assets'
     Assert ((Get-TreeState $preview.Directory) -ceq $before) '-WhatIf changed the installation tree'
     Assert ($env:Path -ceq $previewPath) '-WhatIf changed process PATH'
     Assert ([NagiUninstallTestEnvironment]::UserPath -ceq $previewUserPath -and [NagiUninstallTestEnvironment]::Writes -eq 0) '-WhatIf changed User PATH'

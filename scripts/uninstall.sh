@@ -145,7 +145,7 @@ if [ "$no_path" -eq 0 ]; then
             printf 'Kept non-plain shell profile: %s\n' "$file" >&2; continue
         fi
         file="${profile_parent%/}/$(basename "$file")"
-        grep -Fqx "$line" "$file" || continue
+        LC_ALL=C grep -a -Fqx "$line" "$file" || continue
         cp "$file" "$work/profile.$i"
         LC_ALL=C tr -d '\000' < "$work/profile.$i" > "$work/profile-text.$i"
         if ! cmp -s "$work/profile.$i" "$work/profile-text.$i"; then

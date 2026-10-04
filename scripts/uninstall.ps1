@@ -47,7 +47,11 @@ function Get-Distribution([string]$Release, [string]$Folder) {
                 $kind -notin @(0, 0x8000, 0x4000)) { throw 'Unsafe archive entry' }
         }
     } finally { $zip.Dispose() }
-    Expand-Archive -LiteralPath $archive -DestinationPath $Folder -WhatIf:$false -Confirm:$false
+    # Expand-Archive forwards the presence of -Confirm to its internal commands,
+    # even for -Confirm:$false. Suppress prompts in this helper's scope instead;
+    # temporary verification must also run during an uninstall preview.
+    $ConfirmPreference = 'None'
+    Expand-Archive -LiteralPath $archive -DestinationPath $Folder -WhatIf:$false
     $root = Join-Path $Folder $name
     foreach ($file in @('runtime\Cargo.toml', 'runtime\src\lib.rs', 'release.json', 'nagic.exe', 'LICENSE', 'README.txt')) {
         if (-not (Test-Path -LiteralPath (Join-Path $root $file) -PathType Leaf)) { throw 'Incomplete distribution' }
