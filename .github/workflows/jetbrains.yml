@@ -10,6 +10,10 @@ on:
       - 'scripts/ci/changes.py'
       - 'scripts/ci/gate.py'
       - 'scripts/ci/test_checks.py'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'compiler/**'
+      - 'runtime/**'
   workflow_call:
   workflow_dispatch:
 
@@ -49,7 +53,24 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        id: rust
+      - name: Cache the compiler for integration checks
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: nagi-jetbrains-compiler-${{ runner.os }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'compiler/**', 'runtime/**') }}
+          restore-keys: |
+            nagi-jetbrains-compiler-${{ runner.os }}-${{ steps.rust.outputs.cachekey }}-
+      - name: Build the current compiler for integration checks
+        working-directory: .
+        run: cargo build --locked -p nagic
       - name: Test, package, and verify the selected IDE
+        env:
+          NAGI_TEST_COMPILER: ${{ github.workspace }}/target/debug/nagic
         run: >-
           ./gradlew --no-daemon --stacktrace test buildPlugin verifyPlugin
           -PplatformType=${{ matrix.platformType }}

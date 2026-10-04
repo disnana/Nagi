@@ -71,7 +71,7 @@ transaction内の操作をlibrary側で直列化することと、並行利用�
 
 commitの結果を確認できない場合は、rollback済みや再実行可能とは扱いません。未送信、DBによる拒否、送信後の応答喪失をdriver側で区別する契約を検討します。
 
-SQLは自動翻訳せず、poolの別接続へBEGIN／COMMITを送る方式も使いません。SQL/schemaの静的検査と実データの型・NULL検査は分けます。通常の`check`はSQLを検査しません。mainでは明示的な[SQLiteの事前検査](sql-check.md)を使えますが、実データの型・NULLの保証は含みません。公開0.1.9には未収録です。
+SQLは自動翻訳せず、poolの別接続へBEGIN／COMMITを送る方式も使いません。SQL/schemaの静的検査と実データの型・NULL検査は分けます。通常の`check`はSQLを検査しません。Nagi 0.1.10以降では明示的な[SQLiteの事前検査](sql-check.md)を使えますが、実データの型・NULLの保証は含みません。
 
 ## HTTP基盤の比較
 

@@ -137,6 +137,8 @@ The result is `4`, followed by `Nagi`. The function borrows the string through `
 
 Low uses `extern fn ...;`. To call a Rust async function, use `extern async def` (`extern async fn` in Low) and await it at the call site. Rust function paths are sequences of identifiers beginning with `native::`. External functions cannot declare a view return type or carry HTTP attributes.
 
+The [Axum quote API](../../test-nagi-code/application-examples/axum-service/README.en.md) keeps HTTP routing and JSON extraction in Rust and typed business validation in Nagi. Its Rust adapter awaits a named Nagi async function that returns `Result`; that function also awaits a Rust async operation. The adapter calls the known generated function directly. Arbitrary async callback values cannot be passed through extern parameters.
+
 ### Use a Rust crate
 
 Add Cargo dependencies with `--rust-dep NAME=VERSION`. For an adapter using serde_json, pass:
@@ -145,7 +147,7 @@ Add Cargo dependencies with `--rust-dep NAME=VERSION`. For an adapter using serd
 nagic run app.nagi --rust native.rs --rust-dep serde_json=1.0
 ```
 
-Cargo normally needs network access to download dependencies on the first build. Use a dependency table in `nagi.toml` to set a local crate `path`, select `features`, or use `package` to give a dependency a different name. The [local Rust library example](../../test-nagi-code/rust-library/README.en.md) calls an independent crate through an adapter that converts Rust structs/errors into a Nagi class/Error. See the [repository's Rust integration example](../../test-nagi-code/rust-bridge/) for a complete example using a crate. Save your entry file, Rust file, and dependencies in [nagi.toml](projects.md) to reuse them in the CLI and VS Code.
+Cargo normally needs network access to download dependencies on the first build. Use a dependency table in `nagi.toml` to set a local crate `path`, select `features`, or use `package` to give a dependency a different name. The [local Rust library example](../../test-nagi-code/rust-library/README.en.md) calls an independent crate through an adapter that converts Rust structs/errors into a Nagi class/Error. References to generated Nagi names stay in the adapter, so the independent crate can keep its own types and API. See the [repository's Rust integration example](../../test-nagi-code/rust-bridge/) for a complete example using a crate. Save your entry file, Rust file, and dependencies in [nagi.toml](projects.md) to reuse them in the CLI and VS Code.
 
 Nagi's `check` validates the declared types, calls, ownership, and borrowing. `check`, `lower`, and `symbols` do not invoke Cargo or fetch dependencies. It does not inspect Rust bodies or crate APIs. A `build` checks that the Rust implementation matches its declaration. Registered standard resources use their corresponding native types. Adapt other Rust-specific types to numbers, str, List, classes, or Result before passing them to Nagi. Refer to a generated Nagi class through the root import, using `super::TypeName` or `super::module_name::TypeName`.
 

@@ -798,7 +798,13 @@ where
     // an unwind does not roll back application state or repair poisoned locks.
     let future = AssertUnwindSafe(async { (route.handler)(request, Arc::clone(&app.state)).await })
         .catch_unwind();
+    let handler_started = tokio::time::Instant::now();
     let response = match tokio::time::timeout(options.handler_deadline, future).await {
+        // Tokio polls the operation before its timer. A non-yielding poll can
+        // return Ready after the deadline; do not accept that late response.
+        Ok(Ok(_)) if handler_started.elapsed() >= options.handler_deadline => {
+            transport(Status::GATEWAY_TIMEOUT, head, false)
+        }
         // A successful CONNECT changes the connection into a byte tunnel.
         // This resource API has no tunnel operation or upgrade owner.
         Ok(Ok(response)) if connect && response.status.is_success() => {

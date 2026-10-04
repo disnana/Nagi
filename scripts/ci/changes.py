@@ -12,6 +12,7 @@ COMMIT = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 ROOT_DOCS = {
     "README.md", "README.en.md", "CHANGELOG.md", "PERFORMANCE.md",
     "CONTRIBUTING.md", "CONTRIBUTING.en.md", "SECURITY.md", "SECURITY.en.md",
+    "DESIGN.md", "DESIGN.en.md",
 }
 SITE_FILES = {
     "website/README.md", "website/build.py", "website/requirements.txt",
@@ -20,8 +21,9 @@ SITE_FILES = {
 ASSET_SUFFIXES = {".css", ".js", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2"}
 JETBRAINS_CHECK_INPUTS = {
     ".github/workflows/ci.yml", "scripts/ci/changes.py", "scripts/ci/gate.py",
-    "scripts/ci/test_checks.py",
+    "scripts/ci/test_checks.py", "Cargo.toml", "Cargo.lock",
 }
+JETBRAINS_CHECK_PREFIXES = ("compiler/", "runtime/")
 
 
 def valid_path(path: str) -> bool:
@@ -38,6 +40,8 @@ def is_docs_path(path: str) -> bool:
     if path in ROOT_DOCS or path in SITE_FILES or path == "editors/vscode-nagi/README.md":
         return True
     if path.startswith("docs/") and value.suffix == ".md":
+        return True
+    if path.startswith("ai/") and value.suffix == ".md":
         return True
     if path.startswith("test-nagi-code/") and value.name in ("README.md", "README.en.md"):
         return True
@@ -56,8 +60,12 @@ def is_jetbrains_path(path: str) -> bool:
 
 
 def requires_jetbrains(path: str) -> bool:
-    # CI control-plane changes exercise both the caller and its merge gate.
-    return is_jetbrains_path(path) or path in JETBRAINS_CHECK_INPUTS
+    # Workflow, build, and compiler inputs exercise its integration gate.
+    return valid_path(path) and (
+        is_jetbrains_path(path)
+        or path in JETBRAINS_CHECK_INPUTS
+        or any(path.startswith(prefix) for prefix in JETBRAINS_CHECK_PREFIXES)
+    )
 
 
 def git(*args: str) -> bytes:

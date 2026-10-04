@@ -70,7 +70,7 @@ GitHubのVSIX公開とMarketplace公開は別です。現在のCIはMarketplace�
 Marketplaceにも公開する場合は、CIで検証したVSIXを使います。`editors/vscode-nagi`で、公開権限のある既存の認証を使い、次を実行してください。
 
 ```powershell
-vsce publish --packagePath ../../build/distribution/nagi-language-0.1.12.vsix
+vsce publish --packagePath ../../build/distribution/nagi-language-0.1.13.vsix
 ```
 
 ActionsまたはGitHub Releasesから取得した場合は、そのVSIXの保存先を指定します。`vsce publish patch`は版番号を追加で上げるため、ここでは使いません。

@@ -2,11 +2,11 @@
 
 [Contents](README.md) · [Setup](getting-started.md) · [Extension installation and settings](vscode-extension.md)
 
-Use Nagi extension 0.1.12 and `nagic` 0.1.9 to try type hovers, field completion, and definition navigation. Open the repository in VS Code, or save the example below in your own folder.
+Use Nagi extension 0.1.13 and `nagic` 0.1.10 to try type hovers, field completion, and definition navigation. Open the repository in VS Code, or save the example below in your own folder.
 
 ## Indentation support
 
-Extension 0.1.12 supports indentation after headers such as `def main():`, else/case alignment, and closing delimiter alignment in multiline expressions.
+Extension 0.1.12 and later support indentation after headers such as `def main():`, else/case alignment, and closing delimiter alignment in multiline expressions.
 
 Typing the final colon of `else:` or `case ...:` aligns it with its enclosing `if` or `match`. The default is four spaces; the editor's indentation settings are respected. This runs without the compiler, including in new untitled files. See [indentation while typing](vscode-extension.md#indentation-while-typing) for behavior and settings.
 
@@ -88,7 +88,7 @@ Hover and parameter hints on `orders.total` show its function declaration; hover
 
 Previously saved Nagi/Low files are analyzed in memory with their unsaved edits, including open imports and native Low. Queries do not save or build sources. Save new files and nagi.toml to use project information.
 
-Extension 0.1.12 also offers keyword/type completion and built-in completion, hover, and argument hints in new unsaved files, without a compiler, and in untrusted workspaces. When the source cannot be analyzed, unresolved imports or same-name bindings in the file suppress built-in information that could refer to another definition. Local types, field candidates, and F12 require the compiler and a trusted workspace.
+Extension 0.1.12 and later also offer keyword/type completion and built-in completion, hover, and argument hints in new unsaved files, without a compiler, and in untrusted workspaces. When the source cannot be analyzed, unresolved imports or same-name bindings in the file suppress built-in information that could refer to another definition. Local types, field candidates, and F12 require the compiler and a trusted workspace.
 
 | State | Information shown or action |
 |---|---|

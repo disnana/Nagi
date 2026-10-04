@@ -3,7 +3,7 @@
     <div class="hero-copy">
       <p class="eyebrow">開発中のプログラミング言語</p>
       <h1 id="hero-title">読みやすく書く、<br>バックエンド。</h1>
-      <p class="hero-description">Nagi（ナギ）は、Python風の構文でバックエンドを書くための開発中の言語です。HTTP・JSON・DBを使う処理をRustの知識なしで書き、必要なときはRustで拡張できることを目指しています。</p>
+      <p class="hero-description">Nagi（ナギ）は、Python風の構文と型付きのコードでバックエンドを書くための開発中の言語です。HTTP・JSON・SQLiteには標準APIを使い、必要に応じて小さなRustアダプターで既存ライブラリを組み合わせられます。</p>
       <div class="hero-actions"><a class="button" href="{{base}}docs/getting-started/">まずは動かしてみる</a><a class="text-link" href="{{base}}docs/language-guide/">書き方を読む</a></div>
       <p class="hero-note">現在は0.1の試作段階です。<a href="#status">開発状況を見る</a></p>
     </div>
@@ -20,7 +20,7 @@
     <div class="principle-list">
       <article><h3>型のあるコード</h3><p>Highは字下げで処理のまとまりを表す構文です。引数と戻り値に型を書き、変数の型は値から推論します。</p><a href="{{base}}docs/language-guide/">基本の書き方</a></article>
       <article><h3>失敗をResultで扱う</h3><p>DB操作などはResultで成功かエラーを返します。独自のエラー型を作り、処理を分けられます。</p><a href="{{base}}docs/error-handling/">エラー処理</a></article>
-      <article><h3>Rustの資産を使う</h3><p>Rustコードを生成し、Rust/Cargoで実行ファイルを作ります。Rustのcrateは手書きのRustアダプターとextern宣言で呼び出せます。</p><a href="{{base}}docs/modules-and-rust/">importとRust連携</a></article>
+      <article><h3>Rustの資産を使う</h3><p>Rustコードを生成し、Rust/Cargoで実行ファイルを作ります。手書きのRustアダプターで、既存のcrateをNagiの型やextern宣言につなぎます。</p><a href="{{base}}docs/modules-and-rust/">importとRust連携</a></article>
     </div>
   </section>
 

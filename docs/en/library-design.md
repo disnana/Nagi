@@ -71,7 +71,7 @@ Serializing transaction operations inside a library differs from rejecting concu
 
 An unconfirmed commit outcome does not imply rollback or safe retry. Evaluate driver-side distinctions between unsent work, explicit database rejection, and response loss after sending.
 
-Do not translate SQL automatically or send BEGIN/COMMIT through different pooled connections. Static SQL/schema checks and runtime checks of actual types/NULLs are separate. Ordinary `check` does not validate SQL. Main supports explicit [SQLite checks](sql-check.md), which do not guarantee actual value types or NULL behavior. Published 0.1.9 does not include this feature.
+Do not translate SQL automatically or send BEGIN/COMMIT through different pooled connections. Static SQL/schema checks and runtime checks of actual types/NULLs are separate. Ordinary `check` does not validate SQL. Nagi 0.1.10 supports explicit [SQLite checks](sql-check.md), which do not guarantee actual value types or NULL behavior.
 
 ## Comparing HTTP foundations
 

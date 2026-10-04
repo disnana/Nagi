@@ -30,7 +30,7 @@ Use a class as the type argument of a function that returns rows. `db_all[i64]` 
 
 Generated row readers support `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `f32`, `f64`, `bool`, `str` and `bytes` fields. Use `T?` for a column that accepts SQL NULL. Nullable boolean, float and bytes fields are supported from Nagi 0.1.9. See the [settings API example](../../test-nagi-code/application-examples/device-settings/README.en.md).
 
-On main, row readers are also generated for these types wrapped in `owned[...]`. Published 0.1.9 does not include this support. Fields such as `owned[str]` and `owned[i64?]` need no handwritten `FromRow`; remove any earlier workaround implementation that would now duplicate the generated one. For unsupported fields, use a Rust row reader or type conversion.
+Nagi 0.1.10 also generates row readers for these types wrapped in `owned[...]`. Fields such as `owned[str]` and `owned[i64?]` need no handwritten `FromRow`; remove any earlier workaround implementation that would now duplicate the generated one. For unsupported fields, use a Rust row reader or type conversion.
 
 | Operation | Form | Return type after await |
 |---|---|---|
@@ -68,7 +68,7 @@ Prepared statements are cached. Column names are resolved on each call; `db_all`
 
 Ordinary `check` validates Nagi argument types and requires a class for returned rows. It does not check SQL syntax, schema, column names, bind counts, or the correspondence between SQL NULL and class fields.
 
-On main, explicit [SQL checks](sql-check.md) validate SQLite string literals for syntax, names, required result columns, and bind counts. Published 0.1.9 does not include this feature. Dynamic SQL, `db_exec`, and actual value types, NULLs, and ranges remain outside this check; supported field types handle these at runtime through Result. Unsupported row fields or other unmet Rust conversion requirements may instead fail at build time.
+Nagi 0.1.10 supports explicit [SQL checks](sql-check.md) that validate SQLite string literals for syntax, names, required result columns, and bind counts. Dynamic SQL, `db_exec`, and actual value types, NULLs, and ranges remain outside this check; supported field types handle these at runtime through Result. Unsupported row fields or other unmet Rust conversion requirements may instead fail at build time.
 
 General variable-length typed parameters, transaction APIs, connection pools, and PostgreSQL are not implemented. Writing BEGIN/COMMIT in SQL does not reserve the connection across multiple calls: other operations using the shared Db can run between them.
 

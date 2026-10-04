@@ -77,7 +77,7 @@ return await http.serve(app, 8080, http.default_options())
 
 mapperはアプリのエラーを処理します。不正なHTTP、制限超過、タイムアウトはサーバー側で処理します。データベースのエラー詳細や認証情報は応答へ直接出さないでください。
 
-mainでは、応答開始前のhandlerやmapperでunwindするpanicが起きた場合、詳細を含まない500を返し、その接続を閉じます。公開0.1.9にはこの修正が入っていません。これはpanicの検出であり、共有状態やDBの更新を巻き戻す仕組みではありません。通常の失敗はResultで返してください。`panic=abort`、OOMなどによるプロセス終了、unwind中の二重panic、独自Rustの解放処理、応答開始後の障害は回復を保証しません。
+Nagi 0.1.10以降では、応答開始前のhandlerやmapperでunwindするpanicが起きた場合、詳細を含まない500を返し、その接続を閉じます。これはpanicの検出であり、共有状態やDBの更新を巻き戻す仕組みではありません。通常の失敗はResultで返してください。`panic=abort`、OOMなどによるプロセス終了、unwind中の二重panic、独自Rustの解放処理、応答開始後の障害は回復を保証しません。
 
 エラー応答にリクエストIDなどが必要なら、handlerで検証した値を保持し、失敗時に独自エラー型へmoveできます。[見積APIの例](../test-nagi-code/application-examples/quote-api/README.md)では、この方法で共通mapperへIDを渡しています。
 
@@ -95,6 +95,8 @@ mainでは、応答開始前のhandlerやmapperでunwindするpanicが起きた�
 | ヘッダーバッファ／件数 | 32 KiB／100件 | `header_limits(options, bytes, count)` |
 
 変更する関数はすべて`Result[Options, Error]`を返します。接続数と同時リクエスト数は受け付けの上限で、スレッド数ではありません。Ctrl+Cでは新しい接続を止め、処理中の接続を待ちます。停止期限後には接続taskを中止して回収します。実行開始済みのblocking処理は強制停止できません。
+
+Nagi 0.1.10以降では、handlerの応答生成が正常に完了した時点で期限を過ぎていれば、504を返します。同期処理を期限時刻に強制停止する機能ではありません。処理が制御を戻すまで応答は遅れ、すでに行った状態変更も巻き戻しません。
 
 本文上限を超えると、handlerを呼ばずに413と`Connection: close`で拒否します。残りの本文を最後まで読み捨てる実装ではありません。未読本文を残した切断ではTCP resetが起こり得るため、すべてのOS・client・送信条件で413を受信できることは保証していません。
 

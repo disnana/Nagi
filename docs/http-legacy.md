@@ -112,6 +112,6 @@ HTTPの待機期限は既定で10秒です。接続直後の無通信、途中�
 
 現在はloopback専用です。HTTP/2、TLS、認証、任意middlewareのHigh宣言、deploymentの仕組みは未実装です。大きいclassのJSON streamingや汎用のHigh streaming構文もありません。JSON responseはclassをVec<u8>へencodeしてBodyへ渡します。
 
-応答開始前のhandlerのpanicを500へ変換する修正はmainにありますが、公開0.1.9には入っていません。DBや状態の更新を巻き戻さず、プロセスのabortや応答送信中の障害は回復しません。詳しい範囲は[エラー処理](error-handling.md#検査とpanicの範囲)を参照してください。
+Nagi 0.1.10以降では、応答開始前のhandlerのpanicを500へ変換します。DBや状態の更新を巻き戻さず、プロセスのabortや応答送信中の障害は回復しません。詳しい範囲は[エラー処理](error-handling.md#検査とpanicの範囲)を参照してください。
 
 実装は[HTTP属性のコード生成](../compiler/src/emit.rs)、[従来のruntime API](../runtime/src/lib.rs)、[HTTP接続管理](../runtime/src/http.rs)にあります。

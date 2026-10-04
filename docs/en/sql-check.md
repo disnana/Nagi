@@ -1,6 +1,6 @@
 # SQL checks
 
-Supply a schema to `check` to validate names, result columns, and bind counts in SQLite SQL strings before execution. Ordinary `check`, `build`, and `run` do not enable this automatically. This is a development feature for the next release; see the [Changelog](../../CHANGELOG.md) for differences from published releases.
+Supply a schema to `check` to validate names, result columns, and bind counts in SQLite SQL strings before execution. Ordinary `check`, `build`, and `run` do not enable this automatically. This feature is supported in Nagi 0.1.10; see the [Changelog](../../CHANGELOG.md) for versioned changes.
 
 ## Usage
 

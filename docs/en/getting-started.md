@@ -31,7 +31,7 @@ nagic --version
 nagic --help
 ```
 
-The version output is `nagic 0.1.9`. You can also use `nagic -V` or `nagic version`. Version and help work without Rust or project configuration.
+For Nagi 0.1.10, the version output is `nagic 0.1.10`. You can also use `nagic -V` or `nagic version`. Version and help work without Rust or project configuration.
 
 ### Tools for building applications
 
@@ -122,28 +122,46 @@ Stop Nagi builds before updating. After the new command starts successfully, the
 
 Old URLs such as `nagi-v0.1.6/scripts/install.ps1` are pinned to 0.1.6. Use this page's `main/scripts/install.ps1` to update. On Windows, version-specific PATH entries from the original installer are replaced with the fixed `current` entry. If VS Code's `nagi.compilerPath` points to an old version, clear it to enable automatic discovery or set the new executable's absolute path, then restart VS Code.
 
-To select a specific version, including an earlier release, use the commands below. The same one-version retention policy applies.
+To select a specific version, use the commands below once that version is published. These examples use 0.1.10. The same one-version retention policy applies.
 
 ```powershell
-& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.9
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.10
 ```
 
 ```bash
-(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.9) && export PATH="$HOME/.local/bin:$PATH"
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.10) && export PATH="$HOME/.local/bin:$PATH"
 ```
 
 If you used custom locations, pass the same `-InstallDir` (PowerShell) or `--prefix` and `--bin-dir` (bash) when updating. `-NoPath` / `--no-path` leave persistent PATH settings unchanged; register the fixed command location yourself in that case. Manually extracted distributions elsewhere are not removed.
 
+### Uninstall
+
+Remove the Nagi distributions installed by the installer, the command link, and the PATH settings added by the installer. On Windows, run:
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/uninstall.ps1')))
+```
+
+On Linux and macOS, run:
+
+```bash
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/uninstall.sh | bash)
+```
+
+To preview removals, append `-WhatIf` to the PowerShell command, or replace `bash` with `bash -s -- --dry-run` in the bash command. If you used custom locations, pass the same `-InstallDir` or `--prefix` and `--bin-dir` as during installation. Also pass the same `--profile` if you specified a custom shell profile. `-NoPath` / `--no-path` skip persistent PATH cleanup.
+
+Distributions are compared with their published archives before removal. Directories with added or modified files, and distributions that cannot be verified, remain intact; their locations are reported. Your projects and existing Rust/Cargo, C build tools, and VS Code extension are preserved. Restart your terminal and VS Code afterward.
+
 ### Extract the archive yourself
 
-Download the file for your OS from [GitHub Releases](https://github.com/disnana/Nagi/releases).
+Download the file for your OS from [GitHub Releases](https://github.com/disnana/Nagi/releases). The names below use 0.1.10; select the assets listed for your chosen published version.
 
 | Your system | File to download |
 |---|---|
-| Windows x64 | `nagi-0.1.9-windows-x86_64.zip` |
-| Linux x86_64 | `nagi-0.1.9-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `nagi-0.1.9-macos-arm64.tar.gz` |
-| macOS Intel | `nagi-0.1.9-macos-x86_64.tar.gz` |
+| Windows x64 | `nagi-0.1.10-windows-x86_64.zip` |
+| Linux x86_64 | `nagi-0.1.10-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `nagi-0.1.10-macos-arm64.tar.gz` |
+| macOS Intel | `nagi-0.1.10-macos-x86_64.tar.gz` |
 
 Extract the whole archive and keep `runtime/` beside `nagic` or `nagic.exe`. Add **the extracted folder itself** to PATH to run `nagic` from any directory. `NAGI_ROOT` is normally unnecessary. GitHub's “Source code” downloads do not contain a prebuilt compiler.
 

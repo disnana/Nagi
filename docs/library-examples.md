@@ -10,7 +10,7 @@ CLI、自作ライブラリ、Rust連携、HTTP、Supervisor、Lowの差し替�
 | [JSONレポート](../test-nagi-code/library-examples/foundation-report/README.md) | CLIと同じライブラリを使う。一部の入力が不正でも、成功した行を集計する |
 | [RustでJSONを読む](../test-nagi-code/library-examples/rust-json/README.md) | serde_jsonを使い、NagiのclassとResultへ変換する |
 | [Rustの非同期処理](../test-nagi-code/library-examples/rust-async/README.md) | TokioのtimerをNagiからawaitする |
-| [自作HTTP基盤](../test-nagi-code/library-examples/custom-http/README.md) | Axum/TokioへNagiの関数を渡し、DBなしでHTTP応答を作る |
+| [自作HTTP基盤](../test-nagi-code/library-examples/custom-http/README.md) | Axum/TokioへNagiの同期関数を渡し、DBなしでHTTP応答を作る |
 | [標準HTTPと認証](../test-nagi-code/library-examples/http-auth/README.md) | Nagiだけでヘッダー・401・route別エラー・型付き共有状態を扱う |
 | [SupervisorとHTTP](../test-nagi-code/library-examples/supervised-service/README.md) | actorが状態を順番に更新する。業務エラーと停止をHTTP応答へ変換する |
 | [Low計算カーネル](../test-nagi-code/library-examples/low-kernel/README.md) | Highの呼び出しを変えずに、Lowの実装へ置き換える |
@@ -44,6 +44,7 @@ nagic run --project test-nagi-code/library-examples/rust-json
 | [在庫JSONの集計](../test-nagi-code/application-examples/stock-report/README.md) | stdinから型付きJSONを読み、独自エラーで入力を検証する |
 | [機器設定API](../test-nagi-code/application-examples/device-settings/README.md) | SQLiteのNULL・bool・浮動小数点・BLOBを読み、再起動後も設定を保持する |
 | [予約worker](../test-nagi-code/application-examples/seat-reservations/README.md) | 重複予約・残席不足を扱い、一方のactorだけを再起動する |
+| [Axumの見積API](../test-nagi-code/application-examples/axum-service/README.md) | Rust/AxumでHTTPを受け、Nagiの名前付きasync関数から計算結果をResultで受け取る |
 | [Rust連携](../test-nagi-code/rust-bridge/) | CRC-32、serde_json、非同期Rust関数の呼び出し |
 | [フラクタル](../test-nagi-code/README.md#exe単体で見られるフラクタル) | コンソール表示とexe配布 |
 
@@ -62,4 +63,4 @@ python scripts/verify_application_examples.py --compiler /path/to/nagic
 
 UnixではSIGINTによる正常終了、Windowsではプロセスを終了してlistenerが閉じることを確認します。WindowsのCtrl+Cによる終了は、HTTPサンプルの手順で手動確認してください。
 
-`verify_application_examples.py`は[7つのアプリ](../test-nagi-code/application-examples/README.md)を検証します。6つのHighアプリは元のソースと保存した生成Lowから別々にcheck・buildし、手書きLowの注文見積もりCLIは直接検証します。入力の境界値、ファイルの保護、SQLiteの保存、HTTPのヘッダーとエラー、Supervisorの再起動・準備完了・停止を計13回の実行で確認します。ビルドの警告も失敗として扱い、結果とログを`build/application-example-verification/`に残します。CIでは`build_examples.py`から実行します。
+`verify_application_examples.py`は[一覧のアプリ](../test-nagi-code/application-examples/README.md)を検証します。Highアプリは元のソースと保存した生成Lowから別々にcheck・buildし、手書きLowの注文見積もりCLIは直接検証します。入力の境界値、ファイルの保護、SQLiteの保存、HTTPのヘッダーとエラー、Supervisorの再起動・準備完了・停止を確認します。ビルドの警告も失敗として扱い、結果とログを`build/application-example-verification/`に残します。CIでは`build_examples.py`から実行します。

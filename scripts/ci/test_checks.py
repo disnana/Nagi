@@ -50,6 +50,8 @@ class ChangeTests(unittest.TestCase):
     def test_docs_and_site_files_skip_full_checks(self):
         for path in ("README.md", "README.en.md", "CONTRIBUTING.md", "CONTRIBUTING.en.md",
                      "SECURITY.md", "SECURITY.en.md", "PERFORMANCE.md", "CHANGELOG.md",
+                     "DESIGN.md", "DESIGN.en.md", "ai/README.md", "ai/language.md",
+                     "ai/skills/nagi-development/SKILL.md",
                      "docs/http.md", "docs/en/http.md", "docs/guide/setup.md",
                      "website/README.md", "website/build.py", "website/requirements.txt",
                      "website/CNAME", ".github/workflows/pages.yml",
@@ -66,10 +68,12 @@ class ChangeTests(unittest.TestCase):
         for path in ("compiler/src/lib.rs", "runtime/src/lib.rs", "Cargo.toml", "Cargo.lock",
                      "compiler/README.md", "runtime/README.md", "LICENSE", ".gitignore",
                      ".github/workflows/ci.yml", ".github/workflows/unknown.yml",
-                     "scripts/install.sh", "scripts/install.ps1", "scripts/releases/plan.py",
+                     "scripts/install.sh", "scripts/install.ps1", "scripts/uninstall.sh",
+                     "scripts/uninstall.ps1", "scripts/releases/plan.py",
                      "scripts/releases/README.md", "scripts/ci/changes.py", "tests/http_integration.py",
                      "tests/requirements.txt", "editors/vscode-nagi/src/features.js",
                      "editors/vscode-nagi/README.en.md", "test-nagi-code/cpu.nagi",
+                     "ai/assistant.py", "ai/README.txt",
                      "test-nagi-code/application-examples/stock-report/main.nagi",
                      "test-nagi-code/application-examples/stock-report/smoke.py",
                      "test-nagi-code/application-examples/stock-report/nagi.toml",
@@ -113,9 +117,10 @@ class ChangeTests(unittest.TestCase):
             self.assertEqual(self.full(head, event=event), "false")
             self.assertEqual(self.jetbrains(head, event=event), "true")
 
-    def test_jetbrains_control_plane_changes_require_both_checks(self):
+    def test_jetbrains_workflow_and_compiler_check_inputs_require_both_checks(self):
         for path in (".github/workflows/ci.yml", "scripts/ci/changes.py", "scripts/ci/gate.py",
-                     "scripts/ci/test_checks.py"):
+                     "scripts/ci/test_checks.py", "Cargo.toml", "Cargo.lock",
+                     "compiler/src/lib.rs", "runtime/src/lib.rs"):
             with self.subTest(path=path):
                 base = self.run_git("rev-parse", "HEAD")
                 self.write(path, "CI control-plane change\n")
@@ -124,9 +129,8 @@ class ChangeTests(unittest.TestCase):
                     self.assertEqual(self.full(head, base, event), "true")
                     self.assertEqual(self.jetbrains(head, base, event), "true")
 
-    def test_confirmed_docs_core_and_other_editor_ranges_skip_jetbrains(self):
+    def test_docs_and_other_editors_skip_jetbrains(self):
         for path in ("README.md", "docs/start.md", "website/assets/site.js",
-                     "compiler/src/lib.rs", "runtime/src/lib.rs", "Cargo.toml", "Cargo.lock",
                      "editors/vscode-nagi/src/features.js", "editors/jetbrains-nagi-old/build.gradle.kts"):
             with self.subTest(path=path):
                 base = self.run_git("rev-parse", "HEAD")
@@ -306,6 +310,12 @@ class ChangeTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertFalse(changes.is_jetbrains_path(path))
 
+    def test_malformed_compiler_inputs_do_not_require_jetbrains_checks(self):
+        for path in ("compiler//src/lib.rs", "compiler/../Cargo.toml", "compiler\\src\\lib.rs",
+                     "runtime/./src/lib.rs", "runtime/src/lib.rs\0Cargo.toml"):
+            with self.subTest(path=path):
+                self.assertFalse(changes.requires_jetbrains(path))
+
     def test_incomplete_git_output_runs_full_checks(self):
         head = "a" * 40
         with patch.object(changes, "git", side_effect=[self.first.encode(), head.encode(), b"", b"docs/start.md"]):
@@ -460,7 +470,8 @@ class JetBrainsWorkflowTests(unittest.TestCase):
             "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.jar",
             ".github/workflows/jetbrains.yml",
         )
-        watched_paths = (*plugin_paths, *sorted(changes.JETBRAINS_CHECK_INPUTS))
+        watched_paths = (*plugin_paths, *sorted(changes.JETBRAINS_CHECK_INPUTS),
+                         "compiler/src/lib.rs", "runtime/src/lib.rs")
         for path in plugin_paths:
             self.assertTrue(changes.is_jetbrains_path(path), path)
         block = re.search(r"^  push:\n((?: {4}[^\n]*\n|\n)+)", text, re.MULTILINE)

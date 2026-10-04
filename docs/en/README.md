@@ -2,7 +2,7 @@
 
 Start with [installation](getting-started.md). To look up code, open the [syntax reference](syntax.md) or [built-in functions](builtins.md).
 
-These Docs describe the repository source; the official site is normally built from main. Changes under `Unreleased` in the [Changelog](../../CHANGELOG.md) are not yet included in published distributions.
+These Docs describe the repository source; code examples use Nagi 0.1.10 and VS Code extension 0.1.13. The official site is normally built from main and can include unreleased changes. See the [Changelog](../../CHANGELOG.md) for versioned changes and work under `Unreleased`.
 
 See [About Nagi](introduction.md) for its purpose and current scope. The references below describe implemented APIs and their limits. Unimplemented proposals are kept in [design](library-design.md) and the [roadmap](roadmap.md).
 

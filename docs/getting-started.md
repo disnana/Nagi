@@ -31,7 +31,7 @@ nagic --version
 nagic --help
 ```
 
-版の表示は`nagic 0.1.9`です。`nagic -V`と`nagic version`でも確認できます。版とヘルプの表示にはRustやプロジェクト設定は必要ありません。
+0.1.10の版表示は`nagic 0.1.10`です。`nagic -V`と`nagic version`でも確認できます。版とヘルプの表示にはRustやプロジェクト設定は必要ありません。
 
 ### アプリのビルドに必要なもの
 
@@ -124,28 +124,46 @@ Windowsの保存先は`%LOCALAPPDATA%\Nagi\versions`で、PATHに追加する入
 
 以前の`nagi-v0.1.6/scripts/install.ps1`などのURLは0.1.6固定です。更新にはこのページの`main/scripts/install.ps1`を使ってください。Windowsの旧インストーラーが登録した版ごとのPATHも、固定の`current`へ整理します。VS Codeの`nagi.compilerPath`に旧版の絶対パスを指定している場合は、空欄に戻して自動探索するか、新しい実行ファイルの絶対パスを指定し、VS Codeを再起動してください。
 
-版を指定して入れる例です。過去の版を指定して戻す場合も、使う1版だけ残す方針は同じです。
+版を指定する場合は、その版の公開後に次のコマンドを使います。ここでは0.1.10を指定しています。過去の版を指定して戻す場合も、使う1版だけ残す方針は同じです。
 
 ```powershell
-& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.9
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.10
 ```
 
 ```bash
-(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.9) && export PATH="$HOME/.local/bin:$PATH"
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.10) && export PATH="$HOME/.local/bin:$PATH"
 ```
 
 保存先を変更していた場合は、再実行時も同じ`-InstallDir`（PowerShell）または`--prefix`と`--bin-dir`（bash）を指定します。`-NoPath`／`--no-path`はPATHの永続設定を変更しません。その場合は固定の入口を自分でPATHへ登録してください。別の場所へ手動展開した配布物は自動削除の対象外です。
 
+### アンインストールする
+
+インストーラーで導入したNagi本体、コマンドの入口、インストーラーが追加したPATH設定を削除します。Windowsでは次を実行します。
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/uninstall.ps1')))
+```
+
+Linux・macOSでは次を実行します。
+
+```bash
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/uninstall.sh | bash)
+```
+
+削除予定だけ確認するには、PowerShellのコマンド末尾に`-WhatIf`を付けるか、bashのコマンドの`bash`を`bash -s -- --dry-run`に変更します。保存先を変更した場合は、インストール時と同じ`-InstallDir`または`--prefix`・`--bin-dir`を指定してください。独自のシェル設定ファイルを指定していた場合は、同じ`--profile`も渡します。`-NoPath`／`--no-path`はPATHの永続設定の削除を省きます。
+
+配布物は公開アーカイブと照合してから削除します。追加・変更のある配布物や照合できない配布物はフォルダーごと残し、場所を表示します。自分のプロジェクト、Rust/Cargo、Cのビルド環境、VS Code拡張は残ります。完了後はターミナルとVS Codeを再起動してください。
+
 ### 自分で展開する
 
-[GitHub Releases](https://github.com/disnana/Nagi/releases)から、使うOSのファイルを取得します。
+[GitHub Releases](https://github.com/disnana/Nagi/releases)から、使うOSのファイルを取得します。以下は0.1.10のファイル名の例です。取得する版の公開済みAssetsを選んでください。
 
 | 使う環境 | ダウンロードするファイル |
 |---|---|
-| Windows x64 | `nagi-0.1.9-windows-x86_64.zip` |
-| Linux x86_64 | `nagi-0.1.9-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `nagi-0.1.9-macos-arm64.tar.gz` |
-| macOS Intel | `nagi-0.1.9-macos-x86_64.tar.gz` |
+| Windows x64 | `nagi-0.1.10-windows-x86_64.zip` |
+| Linux x86_64 | `nagi-0.1.10-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `nagi-0.1.10-macos-arm64.tar.gz` |
+| macOS Intel | `nagi-0.1.10-macos-x86_64.tar.gz` |
 
 アーカイブ全体を展開し、`nagic`または`nagic.exe`と`runtime/`の位置を保ってください。**展開フォルダーそのもの**をPATHに追加すると、任意の場所で`nagic`を使えます。`NAGI_ROOT`は通常不要です。GitHubの「Source code」はコンパイラ入りの配布物ではありません。
 

@@ -1,6 +1,7 @@
 use crate::ast::*;
 use crate::diagnostics::Generated;
 use std::{
+    collections::{BTreeMap, BTreeSet},
     fs,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
@@ -840,7 +841,88 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
 fn string_or_value(e: &Expr, types: &RustTypes<'_>) -> String {
     static_string(e, types).unwrap_or_else(|| re(e, types))
 }
-fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
+// Match the checker's returns() criterion: a loop or try can still continue.
+fn returning_block(ss: &[Stmt]) -> bool {
+    ss.iter().any(|s| match &s.kind {
+        S::Return(_) => true,
+        S::If(_, a, b) => returning_block(a) && returning_block(b),
+        S::Match(_, arms) => !arms.is_empty() && arms.iter().all(|arm| returning_block(&arm.body)),
+        _ => false,
+    })
+}
+
+fn assigned_outer_views(
+    ss: &[Stmt],
+    bindings: &BTreeMap<String, Type>,
+    assigned: &mut BTreeSet<String>,
+) {
+    for s in ss {
+        match &s.kind {
+            S::Assign { name, declare, .. } if !declare && bindings.contains_key(name) => {
+                assigned.insert(name.clone());
+            }
+            S::If(_, a, b) => {
+                assigned_outer_views(a, bindings, assigned);
+                assigned_outer_views(b, bindings, assigned);
+            }
+            S::While(_, body) | S::Scope(body) => {
+                assigned_outer_views(body, bindings, assigned);
+            }
+            S::For(name, _, body) => {
+                let mut outer = bindings.clone();
+                outer.remove(name);
+                assigned_outer_views(body, &outer, assigned);
+            }
+            S::Match(_, arms) => {
+                for arm in arms {
+                    let mut outer = bindings.clone();
+                    for binding in arm.pattern.bindings() {
+                        if let Some(name) = &binding.name {
+                            outer.remove(name);
+                        }
+                    }
+                    assigned_outer_views(&arm.body, &outer, assigned);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn rb_child(
+    ss: &[Stmt],
+    out: &mut Generated,
+    n: usize,
+    types: &RustTypes<'_>,
+    bindings: &BTreeMap<String, Type>,
+) {
+    if returning_block(ss) {
+        let mut assigned = BTreeSet::new();
+        assigned_outer_views(ss, bindings, &mut assigned);
+        // A returning path cannot update bindings on a continuing outer path.
+        // Give reassigned immutable references their own inferred lifetimes.
+        // Direct views are Copy references. Moving an owning container here
+        // could read an already-moved value or alter its destruction order.
+        for name in assigned {
+            out.origin(None);
+            out.push_str(&format!(
+                "{}let mut {name}: {} = {name};\n",
+                "    ".repeat(n),
+                local_type(&bindings[&name], types)
+            ));
+        }
+    }
+    rb(ss, out, n, types, bindings);
+}
+
+fn rb(
+    ss: &[Stmt],
+    out: &mut Generated,
+    n: usize,
+    types: &RustTypes<'_>,
+    outer_bindings: &BTreeMap<String, Type>,
+) {
+    let mut bindings = outer_bindings.clone();
     let pad = "    ".repeat(n);
     for s in ss {
         out.origin(::std::option::Option::Some(s.line));
@@ -851,16 +933,21 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
                 annotation,
                 value,
                 declare,
-            } => out.push_str(&format!(
-                "{}{name}{} = {};\n",
-                if *declare { "let mut " } else { "" },
-                if *declare && !annotation.as_ref().is_some_and(Type::is_async_function) {
-                    format!(": {}", local_type(annotation.as_ref().unwrap(), types))
-                } else {
-                    String::new()
-                },
-                re(value, types)
-            )),
+            } => {
+                out.push_str(&format!(
+                    "{}{name}{} = {};\n",
+                    if *declare { "let mut " } else { "" },
+                    if *declare && !annotation.as_ref().is_some_and(Type::is_async_function) {
+                        format!(": {}", local_type(annotation.as_ref().unwrap(), types))
+                    } else {
+                        String::new()
+                    },
+                    re(value, types)
+                ));
+                if let Some(ty) = annotation.as_ref().filter(|ty| ty.is_view()) {
+                    bindings.insert(name.clone(), ty.clone());
+                }
+            }
             S::Return(e) => out.push_str(&format!(
                 "return {};\n",
                 e.as_ref()
@@ -870,12 +957,12 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
             S::Expr(e) => out.push_str(&format!("{};\n", re(e, types))),
             S::If(c, a, b) => {
                 out.push_str(&format!("if {} {{\n", re(c, types)));
-                rb(a, out, n + 1, types);
+                rb_child(a, out, n + 1, types, &bindings);
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}"));
                 if !b.is_empty() {
                     out.push_str(" else {\n");
-                    rb(b, out, n + 1, types);
+                    rb_child(b, out, n + 1, types, &bindings);
                     out.origin(::std::option::Option::Some(s.line));
                     out.push_str(&format!("{pad}}}"));
                 }
@@ -883,7 +970,7 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
             }
             S::While(c, b) => {
                 out.push_str(&format!("while {} {{\n", re(c, types)));
-                rb(b, out, n + 1, types);
+                rb_child(b, out, n + 1, types, &bindings);
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
@@ -940,7 +1027,16 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
                         }
                     };
                     out.push_str(&format!("{pad}    {pattern} => {{\n"));
-                    rb(&arm.body, out, n + 2, types);
+                    let mut arm_bindings = bindings.clone();
+                    for binding in arm.pattern.bindings() {
+                        if let Some(name) = &binding.name {
+                            arm_bindings.remove(name);
+                            if let Some(ty) = binding.ty.as_ref().filter(|ty| ty.is_view()) {
+                                arm_bindings.insert(name.clone(), ty.clone());
+                            }
+                        }
+                    }
+                    rb_child(&arm.body, out, n + 2, types, &arm_bindings);
                     out.origin(::std::option::Option::Some(arm.line));
                     out.push_str(&format!("{pad}    }},\n"));
                 }
@@ -956,7 +1052,12 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
                     format!("({}).iter().copied()", re(e, types))
                 };
                 out.push_str(&format!("for mut {v} in {iterator} {{\n"));
-                rb(b, out, n + 1, types);
+                let mut loop_bindings = bindings.clone();
+                loop_bindings.remove(v);
+                if let Some(ty) = s.binding_type.as_ref().filter(|ty| ty.is_view()) {
+                    loop_bindings.insert(v.clone(), ty.clone());
+                }
+                rb_child(b, out, n + 1, types, &loop_bindings);
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
@@ -975,7 +1076,7 @@ fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
             S::Scope(b) => {
                 out.push_str("{\n");
                 out.push_str(&format!("{pad}    let mut __scope = ::nagi_runtime::Scope::new();\n{pad}    let __scope_result: ::std::result::Result<(), _> = async {{\n"));
-                rb(b, out, n + 2, types);
+                rb(b, out, n + 2, types, &bindings);
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}        ::std::result::Result::Ok(())\n{pad}    }}.await;\n{pad}    if let ::std::result::Result::Err(e) = __scope_result {{ __scope.cancel().await; return ::std::result::Result::Err(e); }}\n{pad}    __scope.join().await?;\n{pad}}}\n"));
             }
@@ -1375,7 +1476,35 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 if f.asynchronous { ".await" } else { "" }
             ));
         } else {
-            rb(&f.body, &mut out, 1, &types);
+            // The public signature retains the caller's borrow lifetime, but
+            // parameter bindings can be reassigned just like other locals.
+            // Elide their local lifetimes so shorter, non-escaping views do
+            // not have to live for the signature's entire 'a.
+            // When this moves an owning view-containing parameter, move the
+            // other non-Copy parameters in declaration order too. Their local
+            // drop order then remains the same as the original parameter
+            // drop order. These are ownership moves, with no payload clones
+            // or heap allocations.
+            let needs_ordered_rebinding = f
+                .params
+                .iter()
+                .any(|(_, ty)| ty.contains_view() && !copy_type(ty, p, 0));
+            out.origin(None);
+            for (name, ty) in &f.params {
+                if ty.contains_view() || needs_ordered_rebinding && !copy_type(ty, p, 0) {
+                    out.push_str(&format!(
+                        "    let mut {name}: {} = {name};\n",
+                        local_type(ty, &types)
+                    ));
+                }
+            }
+            let bindings = f
+                .params
+                .iter()
+                .filter(|(_, ty)| ty.is_view())
+                .cloned()
+                .collect();
+            rb(&f.body, &mut out, 1, &types, &bindings);
         }
         out.origin(::std::option::Option::Some(f.line));
         out.push_str("}\n");

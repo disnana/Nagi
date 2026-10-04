@@ -209,16 +209,18 @@ jobs:
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
       - run: cargo build --release --locked -p nagic
       - name: Check CLI, installation, ownership, and diagnostics on the target platform
-        run: cargo test --locked -p nagic --lib --test cli --test installation --test codegen --test loop_ownership --test ownership_calls --test ownership_boundaries --test comparison_ownership --test owned_copy_codegen --test build_diagnostics --test rust_dependencies --test expression_contracts --test frontend_contracts --test literal_contracts --test http_route_conflicts --test symbols --test modules --test module_parser --test module_emission --test module_symbols --test enum_parser --test enum_modules --test enum_emission --test enum_patterns --test nullable_database --test nullable_roundtrip --test owned_database --test borrow_free_returns --test sql_check --test typed_errors --test error_routes --test class_field_types --test stdlib_imports --test option_match --test http_stdlib --test http_codegen --test actor_stdlib --test actor_codegen --test graph_types --test graph_relations --test graph_render --test graph_html --test map_cli --test low_multiline --test list_ownership_inference --test list_borrow_iteration --test result_stdlib
+        run: cargo test --locked -p nagic --lib --test cli --test installation --test codegen --test loop_ownership --test ownership_calls --test ownership_boundaries --test comparison_ownership --test owned_copy_codegen --test build_diagnostics --test rust_dependencies --test expression_contracts --test frontend_contracts --test literal_contracts --test http_route_conflicts --test symbols --test modules --test module_parser --test module_emission --test module_symbols --test enum_parser --test enum_modules --test enum_emission --test enum_patterns --test nullable_database --test nullable_roundtrip --test owned_database --test borrow_free_returns --test static_callback_views --test view_iteration --test view_parameter_rebinding --test sql_check --test typed_errors --test error_routes --test class_field_types --test stdlib_imports --test option_match --test http_stdlib --test http_codegen --test actor_stdlib --test actor_codegen --test graph_types --test graph_relations --test graph_render --test graph_html --test map_cli --test low_multiline --test list_ownership_inference --test list_borrow_iteration --test result_stdlib
       - name: Check editor behavior on the target platform
         shell: bash
         run: node --test editors/vscode-nagi/test/*.test.js scripts/test_graph_html_viewport.mjs
       - name: Check generated output protection and native expression behavior
-        run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test copy_capabilities --test asset_calls --test shared_target
+        run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test view_branch_rebinding --test copy_capabilities --test asset_calls --test shared_target
       - name: Check oversized HTTP bodies and connection recovery on the target platform
         run: cargo test --locked -p nagi-runtime oversized_body_ -- --test-threads=1
       - name: Check HTTP panic recovery on the target platform
         run: cargo test --locked -p nagi-runtime panic_ -- --test-threads=1
+      - name: Check HTTP handler deadlines on the target platform
+        run: cargo test --locked -p nagi-runtime handler_timeout_ -- --test-threads=1
       - name: Check demo packaging with Windows PowerShell
         if: runner.os == 'Windows'
         shell: powershell
@@ -285,9 +287,20 @@ jobs:
           RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
         shell: powershell
         run: ./scripts/releases/test_install.ps1 -Archive "build/distribution/nagi-$env:RELEASE_VERSION-windows-x86_64.zip" -Version $env:RELEASE_VERSION -TestUserPath
+      - name: Verify uninstallation with PowerShell 7
+        if: matrix.platform == 'windows-x86_64'
+        shell: pwsh
+        run: ./scripts/releases/test_uninstall.ps1
+      - name: Verify uninstallation with Windows PowerShell 5.1
+        if: matrix.platform == 'windows-x86_64'
+        shell: powershell
+        run: ./scripts/releases/test_uninstall.ps1
       - name: Verify the shell installer
         if: matrix.platform != 'windows-x86_64'
         run: python -m unittest discover -s scripts/releases -p 'test_install.py'
+      - name: Verify the shell uninstaller
+        if: matrix.platform != 'windows-x86_64'
+        run: python -m unittest discover -s scripts/releases -p 'test_uninstall.py'
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.platform }}
