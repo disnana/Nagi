@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Reject bare expressions that discard a Result wrapped in `owned`, including nested ownership wrappers. Preserve explicit bindings and existing `try`/`match` restrictions for wrapped values.
 - Add opt-in offline SQLite checks with `check --sql-schema FILE --sql-dialect sqlite`. Validate literal query names, required row columns, and bind counts in a bounded worker; keep dynamic SQL and value/NULL checks at runtime.
 - Generate SQLite row decoding for supported scalar fields wrapped in `owned`, including nullable fields. Remove manual `FromRow` workarounds for these fields to avoid duplicate implementations.
 - Accept direct borrow-free return values such as `None`, empty lists, and owned error results in view-containing return types. Preserve checks on local views, aliases, and opaque function results.

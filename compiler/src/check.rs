@@ -2286,10 +2286,14 @@ impl Checker {
                         "async呼び出しはawaitまたはscope内のspawnで実行してください",
                     ));
                 }
-                if t.0 == "Result" {
+                if unowned(&t).0 == "Result" {
                     return Err(error(
                         s.line,
-                        "Resultを無視できません。tryで伝播するか変数へ受けてください",
+                        if t.0 == "owned" {
+                            "Resultを無視できません。ownedで包んだ値は変数へ受けてください"
+                        } else {
+                            "Resultを無視できません。tryで伝播するか変数へ受けてください"
+                        },
                     ));
                 }
                 self.consume(e)?;
