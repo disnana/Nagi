@@ -4,7 +4,7 @@
 
 ## First reads and writes
 
-Define the stored type with a class, open a database with `db_open`, and create a table with `db_exec`. Database operations are async and can fail, so use `try await`.
+The standard database API supports SQLite. Define the stored type with a class, open a database with `db_open`, and create a table with `db_exec`. Handle these fallible async operations with `try await`. Other databases, including PostgreSQL, currently require Rust integration.
 
 Save the following code as `database.nagi` and run `nagic run database.nagi`. It inserts one row in memory and prints `Nagi`, then `Saved`.
 
@@ -58,10 +58,16 @@ Iterate over the result of `db_all[User]` with `for user in users` to borrow eac
 
 ## Implementation and limits
 
-A dedicated thread runs SQLite operations in order. Its queue holds up to 64 jobs. Nagi waits for the result asynchronously, while SQLite reads and writes on that thread.
+Nagi provides typed calls and class row conversion. rusqlite and SQLite execute SQL, store data, and enforce database constraints. SQLite is bundled with the runtime.
+
+Each opened Db runs operations in order on a dedicated thread. Its queue holds up to 64 waiting jobs; senders wait when it is full. Nagi waits asynchronously for results, but SQLite reads and writes are synchronous. Releasing the last Db owner waits for the worker to exit, so destruction is not guaranteed to return immediately.
 
 Prepared statements are cached. Column names are resolved on each call; `db_all` reuses those column indices for every row in that result. Returned strings and byte sequences are owned so they remain valid after processing the SQLite row.
 
-General variable-length typed parameters, transaction APIs, database pools, and compile-time schema checking are not implemented. Column names, SQL, and column type mismatches produce runtime Result errors.
+`check` validates Nagi argument types and requires a class for returned rows. It does not check SQL syntax, schema, column names, bind counts, or the correspondence between SQL NULL and class fields. With supported field types, column names and value type or range mismatches return runtime Result errors. Unsupported row fields or other unmet Rust conversion requirements may instead fail at build time.
+
+General variable-length typed parameters, transaction APIs, connection pools, PostgreSQL, and static SQL checking against a supplied schema are not implemented on current main. Writing BEGIN/COMMIT in SQL does not reserve the connection across multiple calls: other operations using the shared Db can run between them.
 
 A database job already accepted may complete and commit even after its HTTP caller times out. Cancelling the caller does not guarantee that a write is rolled back.
+
+See the [DB runtime](../../runtime/src/database.rs), [generated class row conversion](../../compiler/src/emit.rs), [CRUD example](../../examples/crud.nagi), and [DB tests](../../runtime/src/database.rs) for the implementation and checks. Separate SQLite/PostgreSQL types with common operation rules are a [design proposal](library-design.md), distinct from the API above.

@@ -1,6 +1,6 @@
 # RustでHTTPの基盤を用意する
 
-既存のRust連携を使い、Axum 0.8とTokio 1.48でHTTPサーバーを組むプロジェクトです。Rustがlistener、route、リクエストの扱いを担当し、通常の同期Nagi関数が挨拶を選びます。組み込みの`serve`、`Db`、SQLite関数は呼び出しません。
+既存のRust連携を使い、Axum 0.8とTokioでHTTPサーバーを組むプロジェクトです。Rustがlistener、route、リクエストの扱いを担当し、通常の同期Nagi関数が挨拶を選びます。組み込みの`serve`、`Db`、SQLite関数は呼び出しません。標準の非同期HTTP handlerをNagiだけで書く例は[http-auth](../http-auth/README.md)にあります。この例では、自作Rustサーバーへ同期のNagi関数を渡す方法を扱います。
 
 このディレクトリで実行してください。`nagic`コマンドとRust/Cargoが必要です。初回のビルドではCargoが依存をダウンロードする場合があります。
 
@@ -84,6 +84,6 @@ python -c "import sys; sys.stdout.write('x' * 65537)" | curl -i -X GET --data-bi
 
 橋渡しの`fn[i64, str]`はRustの`fn(i64) -> String`になります。`extern async def run_server(...) -> Result[unit, Error]`は`Result<(), nagi_runtime::Error>`を返すRustの非同期関数になります。生成するアプリは、実行と橋渡しのError型に`nagi-runtime`を使います。
 
-Nagi側の挨拶の方針を残し、Rustのrouterを差し替えたり、別のRust基盤を追加したりできます。crateはmanifestの`[rust.dependencies]`で指定します。この例が渡すのは通常の同期関数pointerです。非同期callback、変数をcaptureするclosure、コンパイラの新しいAPI、独自のHTTP parserは使いません。
+Nagi側の挨拶の方針を残し、Rustのrouterを差し替えたり、別のRust基盤を追加したりできます。crateはmanifestの`[rust.dependencies]`で指定します。この例が渡すのは通常の同期関数pointerです。非同期callbackや変数をcaptureするclosureは渡せません。
 
 [English](README.en.md) · [Rust連携](../../../docs/modules-and-rust.md)

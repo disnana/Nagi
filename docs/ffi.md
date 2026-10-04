@@ -1,8 +1,10 @@
 # 他の言語との連携
 
-現在はRustの関数をNagiから呼べます。`@rust`と`extern def`で関数を宣言し、RustのファイルやCargoの依存をビルドに含めます。書き方は[importとRust連携](modules-and-rust.md)を参照してください。
+現在はRustの関数をNagiから呼べます。Highで`@rust`と`extern def`を宣言し、RustのファイルやCargoの依存をビルドに含めます。手書きLowは不要です。書き方は[importとRust連携](modules-and-rust.md)を参照してください。
 
 HighとLowの同じ型は、同じRust型へ変換します。同じビルド内の関数呼び出しでは、値をJSONなどへ変換し直す必要はありません。
+
+この連携は同じRustビルド内の呼び出しであり、固定ABIや動的libraryの読込みではありません。Rust側の型の一致は`build`で検査します。Rustアダプターのunsafe操作や外部資源の後始末を、Nagiの`check`で保証することはできません。
 
 ## Cとの連携
 

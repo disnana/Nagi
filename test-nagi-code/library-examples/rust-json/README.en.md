@@ -4,6 +4,8 @@
 
 This small project parses JSON with Rust's `serde_json` and returns a `JsonRecord` declared in Nagi. Nagi calls an `extern def`; the Rust adapter refers to the generated record as `super::JsonRecord`. Library-specific implementation details stay in the adapter without extending Nagi's public API.
 
+Typed JSON can also be read and written through the standard `json_decode` / `json_encode` functions. This example demonstrates adapting a Rust crate to Nagi types.
+
 The adapter borrows `view[str]`, so the program parses the same input twice and prints it afterward. The returned record owns its string field. Malformed JSON and a field with the wrong type become Result failures handled with Nagi's `match`.
 
 ## Run

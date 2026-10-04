@@ -1,6 +1,6 @@
 # 自作ライブラリとRustの資産を使う
 
-Nagiでアプリの処理を書き、共通の関数を別ファイルにまとめたり、Rustのライブラリを呼んだりできます。HTTPやDBをすべて組み込み関数で実装する必要はありません。
+Nagiでアプリの処理を書き、共通の関数を別ファイルにまとめたり、Rustのライブラリを呼んだりできます。よく使う処理はNagiのAPIで提供し、高度な処理はRustアダプターで拡張する方針です。以下では、現在使えるファイルimportとRust連携を説明します。
 
 ## 共通の処理を複数のアプリで使う
 
@@ -25,7 +25,7 @@ Rustのcrateを使うときは、Rust側にNagiから呼ぶ関数を用意しま
 
 [JSON読込](../test-nagi-code/library-examples/rust-json/README.md)では、`serde_json`がNagiのclassに対応するJSONを読みます。入力の文字列は借り、形式が合わない場合はResultの失敗を返します。[非同期処理](../test-nagi-code/library-examples/rust-async/README.md)では、TokioのtimerをNagiからawaitします。
 
-Nagiの`check`が検査するのは宣言と呼び出しです。Rustの関数との型の一致は`build`で検査します。Rustの任意の型、trait、genericをそのままNagiから使う仕組みではありません。Rust側のblocking処理や独自の共有状態は、そのライブラリ側で管理します。
+Nagiの`check`が検査するのは宣言と呼び出しです。Rustの関数との型の一致は`build`で検査します。Rustの任意の型、trait、genericをそのままNagiから使う仕組みではありません。利用者がopaque resource型を登録する仕組みも未対応です。Rust側のblocking処理や独自の共有状態は、そのライブラリ側で管理します。
 
 ## アプリの処理をRust側から呼ぶ
 
@@ -45,9 +45,9 @@ HTTPの受付と停止はRustのAxum/Tokio、応答を作る関数はNagiが担�
 
 以下は設計対象であり、現在使える設定・文法ではありません。
 
-- 引用符なしの標準moduleや公開範囲の指定を定義する。相対ファイルの`as`・`from`は既に使える。
+- 自作ライブラリのpackage探索と公開範囲の指定。相対ファイルの`as`・`from`と、登録済み標準moduleの引用符なしimportは既に使える。
 - HTTP・DBを用途に応じて選べる標準ライブラリに分け、使わない依存をビルドから外す。
 - 自作の接続・clientなどを扱う型について、所有権・共有・終了・asyncの取消しの規則を決める。
-- DBを一般化する際は、PostgreSQLへの接続だけでなく、型付きのSQL引数・行の読込・transactionを設計する。
+- SQLiteとPostgreSQLを別module・別接続型で提供し、型付きのSQL引数・行の読込・エラー処理の規則を揃える。SQL方言やtransactionの違いは隠さない。
 
 既存のファイルimport・extern・SQLiteの呼び出しを使うコードを保ちながら、これらの設計を確認して進めます。[具体的な設計案](library-design.md)と[サンプル一覧](library-examples.md)があります。

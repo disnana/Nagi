@@ -1,6 +1,6 @@
-# An interactive quote CLI using a shared foundation
+# Quote CLI with shared pricing
 
-Enter a label, unit price, quantity, and discount to print one quote as JSON. This application shares a [Nagi facade and Rust module](../shared/README.en.md) with the [batch report](../foundation-report/README.en.md). It needs no database or server.
+Enter a label, unit price, quantity, and discount to print one quote as JSON. This application shares a [Nagi module and Rust functions](../shared/README.en.md) with the [batch report](../foundation-report/README.en.md). It needs no database or server.
 
 From the repository root, use an installed `nagic`:
 

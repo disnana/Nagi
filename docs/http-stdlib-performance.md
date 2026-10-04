@@ -2,6 +2,8 @@
 
 `std.http.server`の負荷試験です。Nagiと、同じ処理を直接Rustで書いたサーバーを比較しました。測定日は2026年10月3日です。
 
+Rust側も同じ`nagi-runtime::http_server`を使います。生成コードと手書きhandlerの違いを確認する比較であり、Axum RouterとHyperを同じ条件で比較したものではありません。測定スクリプトに含まれる旧Axumサーバーは受付・期限の方針が異なります。標準APIの内部にAxum／Towerを採用するか判断するための、同じAPI・制限・障害条件での比較は未実施です。
+
 ## 応答速度
 
 64接続で負荷をかけた結果です。各処理を5秒ずつ3回測り、表には3回の中央値を載せています。
@@ -52,4 +54,4 @@ python scripts/http_stdlib_bench.py --wrk /path/to/wrk --build-matching-rust
 
 `nagic build`はreleaseでアプリを生成します。targetの場所を変更している場合は`CARGO_TARGET_DIR`と`NAGI_NATIVE_TARGET_DIR`も指定してください。[再測定の生データ](../benchmarks/results/http-stdlib-matched/)には各回の応答時間・CPU・RSS・バイナリのSHA-256を保存しています。
 
-接続の上限を超えた場合や低速送信への挙動は、[通信の負荷試験](http-capacity.md)も参照してください。旧HTTP APIの測定と、今回の標準HTTPの測定は分けて掲載しています。
+[通信の負荷試験](http-capacity.md)には旧HTTP APIの飽和・低速送信・接続回収の記録があります。標準HTTPと制限や実装が異なるため、その結果を標準HTTPの保証には使いません。現在の制限と設定は[HTTP](http.md)を参照してください。

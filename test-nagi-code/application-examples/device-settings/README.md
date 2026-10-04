@@ -2,7 +2,7 @@
 
 SQLiteの設定を型付きclassとして読み、JSONで返します。NULL、bool、f64、文字列、BLOBを含む3件のデータを起動時に用意します。既存の行は上書きしません。
 
-Nagi 0.1.9以降を使い、リポジトリのルートで起動してください。0.1.8の配布版は、この例の`bool?`、`f64?`、`bytes?`をSQLiteの行として読み取れません。
+Nagi 0.1.9を使い、リポジトリのルートで起動してください。0.1.8の配布版は、この例の`bool?`、`f64?`、`bytes?`をSQLiteの行として読み取れません。
 
 ```sh
 nagic run --project test-nagi-code/application-examples/device-settings/nagi.toml

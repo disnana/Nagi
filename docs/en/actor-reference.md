@@ -20,7 +20,7 @@ import std.actor as actor
 | `WaitError` / `WaitKind` | Event wait failures: `TIMEOUT`, `INVALID_TIMEOUT` |
 | `CallError` / `Event` | Call failure / lifecycle event |
 
-Factories receive C as `shared[C]`. Each actor owns S. M, R, and E must be owned values with allocation accounting. Classes, enums, Lists, Option, and Result are supported; Map, views, shared graphs, and opaque resources are excluded.
+Factories receive C as `shared[C]`. Each actor owns S. M, R, and E must be owned values with allocation accounting. Classes, enums, Lists, Option, and Result are supported; Map, views, shared graphs, and opaque resources are excluded. Rust requires bounds such as `Send + Sync` on C and `Send` on S; build performs the final validation.
 
 ## Registration and execution
 
@@ -35,7 +35,7 @@ Factories receive C as `shared[C]`. Each actor owns S. M, R, and E must be owned
 | `mark_ready(view(signal))` | `Result[unit, Error]` |
 | `turn[S, R, E](next_state, reply)` | `Turn[S, R, E]` |
 | `await run(group)` | `Result[unit, Error]`; consumes group |
-| `await shutdown(view(control))` | `Result[unit, Error]` |
+| `await shutdown(view(control))` | `Result[unit, Error]`; success means cleanup completed, Error can mean a child failure or incomplete cleanup |
 | `await next_event(view(control))` | `Result[Option[Event], Error]` |
 | `await next_event_timeout(view(control), timeout_ms)` | `Result[Option[Event], WaitError]` |
 | `await yield_now()` | `unit` |
@@ -75,3 +75,5 @@ Capacity includes accepted work in progress. An oversized reply returns `REPLY_T
 `.child_id`, `.generation`, and `.lost_events` are i64; `.truncated` is bool; `.child_name` and `.message` are `view[str]`. Each Control has its own cursor. Reads on one Control are serialized. After shutdown, buffered events are drained before None is returned.
 
 `next_event_timeout` includes contention for the Control cursor. A valid timeout is 1..4,294,967,295 ms and must fit the platform clock; zero, negative, or larger values return `WaitKind.INVALID_TIMEOUT`. Expiry returns `WaitKind.TIMEOUT`; `Ok(None)` means the stream has ended. Timeout or cancellation does not consume an event or stop the group. `WaitError.message` is `view[str]`. These deadlines are cooperative and cannot preempt blocking native work.
+
+See the [actor runtime](../../runtime/src/actor.rs) for these functions. [Supervisor ownership and shutdown](supervisor.md#ownership-and-shutdown) explains the distinction between failure results and cleanup completion.

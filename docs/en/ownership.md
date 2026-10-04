@@ -104,6 +104,8 @@ Borrowing one field leaves separate fields available. For example, while `view(d
 
 While a view borrows data, moving, reassigning, or appending to that data is restricted. The checker tracks borrows by code blocks; it does not determine the end of a borrow as precisely as Rust.
 
-Nagi's checker cannot yet decide every case involving partial field moves, complex branches, or borrows. Generated Rust is also checked for borrowing, and a program becomes an executable only after both checks pass. A successful `check` can therefore still be followed by a failed `build`.
+Nagi's checker provides move and borrow diagnostics at Nagi source locations. It does not replace the checker for generated Rust. Cases such as reassigning views through complex branches can pass `check` and then fail Rust's borrow checks. Nagi can also conservatively reject code that Rust would accept.
+
+Matching Rust adapter signatures, the `Clone` required by `copy`, `Send` for async work, and `Sync` for shared state are also ultimately checked by `build`. Wrapping T in `shared[T]` does not itself make T suitable for concurrent use. Both Nagi and Rust checks must pass to produce an executable.
 
 To keep an independent owned copy of the original data, write `copy(view(data))`.

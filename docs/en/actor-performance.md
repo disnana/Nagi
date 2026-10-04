@@ -1,6 +1,8 @@
 # Actor measurements
 
-Before the release of `std.actor`, we measured sending one message to a supervised actor, waiting for its reply, and repeating. Generated Nagi and equivalent Rust ran in one executable with the same runtime, async call wrappers, dependencies, and release profile. The raw logs record the measured source and conditions.
+Before the release of `std.actor`, we measured sending one message to a supervised actor, waiting for its reply, and repeating. Generated Nagi and equivalent Rust ran in one executable with the same runtime, async call wrappers, dependencies, and release profile. The raw logs record the measured source and conditions. See [`std.actor`](actor-reference.md) for the current typed API.
+
+The Rust baseline uses the same Supervisor. These tests measure the difference between generated code and handwritten Rust on the selected path. They do not isolate the Supervisor's overhead or compare competing concurrency runtimes.
 
 ## Calls and replies
 
@@ -33,7 +35,7 @@ A controlled handler failure recovered to a generation 2 reply in about 11ms, in
 
 ## Reproduce
 
-Build a release compiler from the latest source, then run from the repository root. The probe builds offline, so fetch dependencies first. Choose an allowed CPU for `--cpu`.
+The commands below measure the current source. To reproduce the recorded implementation, also check the source hashes in the raw logs. Build a release compiler, then run from the repository root. The probe builds offline, so fetch dependencies first. Choose an allowed CPU for `--cpu`.
 
 ```sh
 python scripts/actor_probe.py --nagic target/release/nagic --cpu 0 --iterations 100000 --rounds 7 --allocation-iterations 10000 --idle-ms 5000 --mailbox-ms 0 --output build/actor-probe-0.jsonl

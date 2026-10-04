@@ -4,7 +4,7 @@
 
 `std.http.server`を使う、DBを必要としない見積APIです。リクエストのJSONを`QuoteInput`へ読み、数量と商品を検証して`Quote`を返します。型付きの`Config`はAppが所有し、各handlerは`shared[Config]`で参照します。
 
-リポジトリのルートで起動します。Nagi 0.1.9以降と、Rust/Cargoのビルド環境が必要です。
+リポジトリのルートで起動します。Nagi 0.1.9と、Rust/Cargoのビルド環境が必要です。
 
 ```sh
 nagic run --project test-nagi-code/application-examples/quote-api
@@ -50,7 +50,11 @@ curl -H 'Content-Type: application/json' \
 
 `X-Request-ID`は任意です。指定すると単一のUUIDとして検証し、正規化した値を見積の成功・アプリのエラー応答へ返します。サーバー側でIDを生成する機能ではありません。不正なIDはechoしません。`/health`ではこのヘッダーを処理しません。
 
-存在しないrouteは404、`GET /quotes`など登録されていないmethodは405と`Allow: POST`、4096バイトを超える本文は413です。これらのサーバー側の応答はアプリのmapperを通らないため、上記のJSON形式やリクエストIDのechoを保証しません。応答の生成自体が失敗した場合は500を返し、最後のfallbackには本文がありません。
+存在しないrouteは404、`GET /quotes`など登録されていないmethodは405と`Allow: POST`です。
+
+HTTP受信時の本文上限は4096バイトです。超過時はhandlerを呼ばず、413と`Connection: close`で拒否します。残りの本文を読み捨てずに閉じるため、TCP resetが起こり得ます。すべてのOS・client・送信条件で413を受信できることは保証していません。
+
+これらのサーバー側の応答はアプリのmapperを通らないため、上記のJSON形式やリクエストIDのechoを保証しません。応答の生成自体が失敗した場合は500を返し、最後のfallbackには本文がありません。
 
 `calculate`は独自の`Result[Quote, QuoteError]`を返します。`std.result.map_error`はJSONやHTTP処理の`Error`を`QuoteError`へ変換します。handlerはリクエストIDを保持し、`quote_response`の失敗時にIDを`ApiFailure`へmoveして、AppのmapperでHTTP応答に変換します。処理の各段階でIDをコピーする必要はありません。`/health`は組み込み`Error`を使い、`route_mapped`で別のmapperを登録しています。
 

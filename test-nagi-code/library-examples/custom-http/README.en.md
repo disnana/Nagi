@@ -1,6 +1,6 @@
 # Supply your own HTTP backend in Rust
 
-This project uses Axum 0.8 and Tokio 1.48 through Nagi's existing Rust bridge. Rust owns the listener, routes and request policy; an ordinary synchronous Nagi function chooses the greeting. The application does not call the built-in `serve`, `Db` or SQLite functions.
+This project uses Axum 0.8 and Tokio through Nagi's existing Rust bridge. Rust owns the listener, routes and request policy; an ordinary synchronous Nagi function chooses the greeting. The application does not call the built-in `serve`, `Db` or SQLite functions. For standard async HTTP handlers written entirely in Nagi, see [http-auth](../http-auth/README.en.md). This example instead passes a synchronous Nagi function to a custom Rust server.
 
 Run these commands from this directory. You need the `nagic` command and Rust/Cargo. Cargo may download dependencies on the first build.
 
@@ -84,6 +84,6 @@ Nagi's built-in HTTP protection and `NAGI_HTTP_REQUEST_WAIT_SECONDS` do not auto
 
 The bridge declaration `fn[i64, str]` becomes Rust's `fn(i64) -> String`. `extern async def run_server(...) -> Result[unit, Error]` becomes an async Rust function returning `Result<(), nagi_runtime::Error>`. The generated application still uses `nagi-runtime` for execution and the bridge's Error type.
 
-You can replace the Rust router or add another Rust-backed service while keeping Nagi's greeting policy. Use the manifest's `[rust.dependencies]` table for crates. This example passes a plain synchronous function pointer; it does not require an async callback, a capturing closure, new compiler APIs or a custom HTTP parser.
+You can replace the Rust router or add another Rust-backed service while keeping Nagi's greeting policy. Use the manifest's `[rust.dependencies]` table for crates. This example passes a plain synchronous function pointer. The bridge used here cannot accept an async callback or a capturing closure.
 
 [日本語](README.md) · [Rust integration](../../../docs/en/modules-and-rust.md)

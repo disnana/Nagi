@@ -1,8 +1,8 @@
 # High and Low
 
-High uses indentation in `.nagi` files. Low uses braces and semicolons in `.low` files. High is the layer for everyday application development; Low lets you inspect generated code and replace selected function implementations with handwritten code. If you prefer braces, you can also write and run an entire application in Low.
+High uses indentation in `.nagi` files. Low uses braces and semicolons in `.low` files. Use High for everyday application code. Low lets you save and inspect generated code or replace selected function implementations. If you prefer braces, you can also write and run an entire application in Low.
 
-Types, ownership, borrowing, and Result handling follow the same rules as High.
+Types, ownership, borrowing, and Result handling follow the same rules as High. Moving code to Low alone does not make it faster or bypass Rust's borrow checker. Expanding Low into an independent systems language is outside the current development scope.
 
 ## Write and run a standalone Low program
 
@@ -50,6 +50,8 @@ nagic lower app.nagi
 ```
 
 The program prints `14`. `lower` checks types and ownership, then writes Low to `build/app/generated.low`. Low declares functions with `fn` and encloses blocks in `{ }`. Generated variable declarations include `let` and their inferred types.
+
+Loading Low checks its types and ownership again. Saved Low retains module identity, but does not save diagnostic mappings back to the original High. See [compiler internals](compiler-internals.md).
 
 ## Replace a function with handwritten Low
 

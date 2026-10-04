@@ -1,27 +1,28 @@
-# Development roadmap
+# Continued development
 
-The priority is to clarify the specification and strengthen safety while keeping the current working paths usable.
+The immediate goal is to expand the range of common backends that can be written in readable High, with consistent rules for types, ownership, failures, and resource cleanup. Rust native code generation and existing libraries remain the foundation.
 
-Nagi 0.1.8 implements module aliases, custom class/enum errors, Result/Option/enum matching, `std.http.server`, and `std.actor` with arbitrary owned state. See [actors](actor.md) and [Supervisors](supervisor.md) for their current scope.
+This page describes priorities, not completed work or release dates. See the [reference](README.md) for current APIs and [CHANGELOG](../../CHANGELOG.md) for changes by version.
 
-1. Build on Result, Option, and enum matching to settle checked/wrapping arithmetic, string length, source spans, variable shadowing, and borrow origins.
-2. Strengthen partial-move, branch, loop, and escape analysis in the High checker, reducing reliance on the Rust backend.
-3. Build on registered standard modules and typed Rust integration to add user-defined generics and traits, general type annotations for passing and returning async functions, and a standard Map API.
-4. Verify `std.actor` capacity, cancellation, and restart behavior, and define Supervisor trees and independent bounded queues. A VM, hot code replacement, and distributed actors are outside the current implementation.
-5. Compare request arenas and borrowed classes, encoding during database stepping, buffer reuse, and streaming JSON.
-6. Define typed SQL parameters, rows, and transactions, then add PostgreSQL using an existing Rust driver. Verify cancellation and pool shutdown against a real database.
-7. Define Low layout, pointers, arenas, unsafe boundaries, and a C ABI; add sanitizers and coverage-guided fuzzing.
-8. Introduce a backend independent of Rust code generation. Use measurements to decide whether to replace the scheduler as well.
+## Priorities
 
-## Self-hosting
+1. **Make existing language rules consistent.** Review `owned`, `view`, moves, branch and loop checks, arithmetic failures, and source mapping. Track check-success/build-failure cases with reproductions and distinguish Nagi diagnostics from checks delegated to Rust.
+2. **Define native resource boundaries.** Specify opaque type identity, borrowing, sharing, asynchronous cleanup, and work that remains after cancellation. Evaluate general traits and new syntax only when concrete APIs establish a need.
+3. **Organize the standard library.** Provide HTTP, JSON, and database APIs through modules and separate unused runtime dependencies. Generated Serde and row conversions and exported types also need support; making Cargo dependencies optional is insufficient.
+4. **Generalize database access.** Use separate modules and resource types for SQLite and PostgreSQL while aligning parameter, row, and error rules. Evaluate transactions, pools, and SQL/schema checks; test cancellation and cleanup against real databases.
+5. **Compare HTTP foundations.** Evaluate Axum/Tower first against the current implementation with matching APIs, limits, failures, and shutdown conditions. Compare normal load, overload, sustained operation, and maintenance costs before deciding on adoption. Replacement is undecided.
+6. **Validate boundaries through examples and documentation.** Show Nagi and Rust checks, main/release differences, and measurement conditions. Evaluate diagnostics and usability through implementations of the same tasks.
 
-| Stage | Work | Status |
-|---|---|---|
-| 0 | Low compiler in Rust | Small language subset implemented |
-| 1 | High compiler in Rust | Translation to Low implemented |
-| 2 | Rewrite the Low compiler in Low | Not started; needs String/Map/module/allocator API extensions |
-| 3 | The Low compiler compiles itself | Not started; needs bootstrap comparison and determinism tests |
+See the [library and Rust integration proposal](library-design.md). API names and some resource cleanup contracts remain undecided.
 
-Practical use requires several stages of development. Passing prototype tests does not establish a finished production language/runtime or safety of every unsafe/FFI path. Accurate effort estimates depend on the specification and development team.
+## Low scope
 
-See the [working examples](library-examples.md) and [library design proposal](library-design.md) for reusable foundations and Rust assets. The proposal develops dependency settings, namespaces, resources, and database contracts while retaining existing code.
+Preserve existing Low code, brace syntax, inspection of generated output, and function replacement. Prioritize High and Rust integration. Plans to expand Low into an independent systems language with pointers, layout, unsafe syntax, C ABI, and SIMD are paused.
+
+See [High and Low](low-language.md) for these limits and current usage.
+
+## self-hosting
+
+An independent backend, self-hosting, a custom VM or scheduler, hot code replacement, and distributed actors have not been started. Whether to pursue them remains undecided.
+
+Preserving semantics with another backend requires contracts and implementations for types, ownership, cleanup, failures, asynchronous work, and runtime integration. Rewriting the compiler in Low is not a requirement for the current development stage.

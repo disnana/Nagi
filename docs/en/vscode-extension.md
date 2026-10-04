@@ -1,53 +1,37 @@
-# Nagi Language for VS Code
+# Nagi for VS Code
 
-Development tools for Nagi High (`.nagi`) and Low (`.low`). Command labels and some extension messages are currently Japanese.
+Edit, check, and run Nagi High (`.nagi`) and Low (`.low`). Command labels and some messages are currently Japanese.
 
-- Syntax highlighting, comments, bracket/quote handling, and four-space indentation
-- Indentation on Enter, else/case alignment, and closing delimiters in multiline expressions
-- Brace-based folding in Low, with `fn` and `record` in hovers and parameter hints
-- Snippets for classes, functions, HTTP, borrowing, and Low replacements
-- nagic check on opening/saving files, with diagnostics in Problems
-- Command Palette actions for checking, lowering, building, and running
-- A run button at the top right of the editor
-- Project checking/execution using nagi.toml entry, Rust dependencies, and native Low
-- F12/Go to Definition for functions, classes, imports, and local names
-- Hovers for parameters, return types, async status, and class fields
-- Type hovers for arguments, local variables, and case bindings
-- Class field completion after value.
-- Module definition completion after an import alias, with qualified hovers, parameter hints, and F12
-- Completion for project functions/classes/types and common built-ins
-- Parameter hints and named arguments for class construction
+The published version is 0.1.12. This page describes the main branch. Post-release fixes to execution preparation and standard API source display will be included in the next VSIX.
+
+| Feature | Compiler required |
+| --- | --- |
+| Highlighting, snippets, bracket completion, indentation, Low folding | No |
+| Keyword, type, and built-in completion, hover, and parameter hints | No |
+| Project type hovers, field completion, and definition navigation | Yes |
+| Checking, lowering, building, and running | Yes |
 
 ## Installation
 
-Search for "Nagi for VS Code" in VS Code's Extensions view, or install it from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang). From a terminal, run:
+Install from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang).
 
-```bash
+```sh
 code --install-extension Disnana.nagi-lang
 ```
 
-The extension ID is `Disnana.nagi-lang`. If you installed `nagi-local.nagi-language` or `Disnana.nagi-language`, disable or uninstall it first.
+Disable or remove the old `nagi-local.nagi-language` or `Disnana.nagi-language` extensions. You can also install `nagi-language-VERSION.vsix` from [GitHub Releases](https://github.com/disnana/Nagi/releases) using **Extensions: Install from VSIX**.
 
-Formal VSIX downloads are published on [GitHub Releases](https://github.com/disnana/Nagi/releases) as nagi-language-VERSION.vsix. Updating the extension version on main publishes a release after CI succeeds.
+The extension does not include the compiler. [Install Nagi](getting-started.md), then restart VS Code. Type checking needs `nagic`; building and running also need Rust/Cargo and your OS build tools.
 
-From the repository root, run `python editors/vscode-nagi/scripts/package_vsix.py`. It prints the path of the created VSIX. Select that file using **Extensions: Install from VSIX**, or build and install it from PowerShell:
-
-```powershell
-$vsix = python editors/vscode-nagi/scripts/package_vsix.py
-code --install-extension "$vsix"
-```
-
-Highlighting, snippets, indentation support, keyword/type completion, and built-in completion, hover, and argument hints work without a compiler. Checks and execution require `nagic`. Install it using [Setup and first run](https://nagi.disnana.com/en/docs/getting-started/). The extension checks the repository's release build, then debug build, then PATH.
-
-The VSIX does not include the compiler. `spawn nagic.exe ENOENT` means it could not be found. Install the compiler, restart VS Code, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set nagi.compilerPath. Startup failures and timeouts appear as warnings and in Nagi Output, without source-error squiggles.
+`nagi.compilerPath` takes precedence. When empty, the extension looks for repository builds in `target/release`, then `target/debug`, then PATH. `spawn nagic.exe ENOENT` means the executable was not found. Check the setting and **Nagi** in Output. Startup failures are not displayed as source type errors.
 
 ## Indentation while typing
 
-Press Enter after a block header such as `def main():`, `async def`, `if`, `match`, or `case` to indent one level. Typing the final colon of `else:` or `case ...:` aligns the line with its enclosing `if` or `match`.
+Enter after `def main():`, `async def`, `if`, `match`, or `case` indents one level. Typing the final colon of `else:` or `case ...:` aligns it with the corresponding block.
 
-Enter inside parentheses or square brackets indents one level. A closing delimiter at the start of a line aligns with the line containing its opening delimiter. Low also handles braces. Characters inside strings and comments do not affect indentation. This works in new untitled files and untrusted workspaces without running the compiler.
+Newlines inside brackets and closing delimiters are also adjusted. Low includes braces. Delimiters in strings and comments are ignored. The default is four spaces; width and tabs/spaces follow the editor settings.
 
-The default is four spaces. The indentation width and tabs/spaces choice follow the editor's settings in the status bar. Disable **Editor: Format On Type** to stop this adjustment, or disable it for Nagi alone:
+Disable these adjustments with:
 
 ```json
 {
@@ -56,75 +40,75 @@ The default is four spaces. The indentation width and tabs/spaces choice follow 
 }
 ```
 
+Whole-file formatting is not supported.
+
 ## Handwritten Low
 
-In `.low` files, hovers, completion details and parameter hints use `fn`, `record` and braced `enum` declarations. Brace-delimited blocks fold regardless of indentation. Use the `main`, `import`, `from` and `import-std` snippets for an entry point and imports. Import completion also works after a declaration or semicolon on the same line.
+Low is an alternative brace-based syntax. In `.low` files, hovers and completion use `fn` and `record`, and brace-delimited blocks can be folded.
 
-Open the [order quote CLI](https://github.com/disnana/Nagi/tree/main/test-nagi-code/low-examples/order-quote) to try Low-to-Low imports, records, enums and input validation. The extension adjusts indentation while typing; whole-file formatting is not supported.
+Try Low imports, records, and enums in the [order quote CLI](https://github.com/disnana/Nagi/tree/main/test-nagi-code/low-examples/order-quote). For replacing a High function, see [High and Low](low-language.md).
 
 ## Settings
 
+Enable automatic compiler discovery with:
+
 ```json
 {
-  "nagi.compilerPath": "target/release/nagic.exe",
+  "nagi.compilerPath": "",
   "nagi.checkOnSave": true,
-  "nagi.nativeFiles": [],
-  "nagi.rustFile": "",
-  "nagi.rustDependencies": [],
   "nagi.checkTimeoutMs": 15000
 }
 ```
 
-Outside Windows, the executable is nagic. Relative compilerPath/nativeFiles/rustFile paths use the workspace folder. Check-generated Low goes to project/source-specific build/vscode-nagi folders, separate from ordinary build output.
+Relative `compilerPath` values resolve from the workspace folder. `nagi.nativeFiles`, `nagi.rustFile`, and `nagi.rustDependencies` can add CLI arguments. Use `nagi.toml` below for application settings.
 
-Automatic checks run when files open or are saved. Editing clears stale diagnostics without checking on every keystroke. Manual Type Check reads unsaved edits to previously saved files without saving or building; lower, build, and run save edited project files first. Save new files and nagi.toml before using them. Untrusted workspaces do not run the compiler. Diagnostic locations currently follow the compiler's line-based output.
+Automatic checks run on opening and saving a file. Editing clears stale diagnostics without checking on every keystroke. **Nagi: 型検査** (Type Check) reads unsaved edits to previously saved files without saving or building. Save new files and `nagi.toml` first.
+
+Untrusted workspaces do not run the compiler. Highlighting, indentation, and built-in assistance remain available.
 
 ## Projects
 
-Use [nagi.toml](projects.md) for entry, Rust dependencies, and native Low. The extension finds the nearest manifest above the open file and passes it with --project. Even with a helper open, entry is checked/run. Checks read unsaved project sources in memory; lower, build, and run save that project's files. Save nagi.toml edits first. Saving, creating, or deleting configuration also refreshes checks.
+Set the entry file, Rust dependencies, and native Low in [nagi.toml](projects.md). The extension searches upward from the open file for the nearest manifest. Even from a helper file, it checks and runs `entry`. Without a manifest, it processes the open file alone.
 
-Open test-nagi-code/rust-bridge/bridge.nagi to use its existing settings. Earlier nagi.rustFile and related settings become command arguments, following the CLI's override/addition rules. nagic check does not inspect Rust implementations; builds verify matching types. Imported errors appear in their own files' Problems.
+Use the top-right run button or **Nagi: 実行** (Run) in the Command Palette. Lower, build, and run first save edited project files and loaded imports. On main, preparation is canceled if saving fails or sources or settings change during preparation.
 
-Without a manifest, the open file is processed independently. Project support requires the latest compiler from this repository.
+Diagnostics appear in Problems, compiler output in **Nagi** under Output, and build/run output in the terminal. Read Rust and dependency diagnostics in the terminal. A successful Nagi check does not mean Rust's checks will succeed.
 
 ## Go to Definition
 
-Press F12 on a function call, class annotation/construction, or variable name. On `import "models.nagi"`, it opens the file's beginning. High and Low are supported, covering files loaded from the project entry and native Low.
+F12 navigates to functions, classes, enums, enum variants, local bindings, and imports. Qualified module names and from aliases are supported. Reassigned variables navigate to their first binding.
 
-For `import "orders.nagi" as orders`, F12 on the member in `orders.total(...)` or `orders.Order` reaches its original declaration. A from alias such as `SavedOrder` reaches that same class declaration. Open unsaved edits in the imported file are included.
+Queries read unsaved edits to previously saved High/Low files and open imports. If unreadable syntax or imports force a fallback to saved declarations, navigation to stale positions is disabled.
 
-For example, read_item in test-nagi-code/result-api/server.nagi navigates to storage.nagi; Item navigates to models.nagi. Locations come from nagic symbols. Navigation remains available with type errors when syntax/imports can be read.
-
-Since 0.1.5, this also covers arguments, assigned variables, for elements, and case bindings. Reassignment targets the first binding. For bindings reusing an outer name, navigation uses the loop definition inside and restores the outer definition afterward. New if/while/scope/case names apply within their blocks.
-
-Files saved at least once support unsaved edits. Open imports and native Low are read in memory, so navigation uses edited positions. Save new files and nagi.toml first. When parsing falls back to saved information, stale position navigation is suppressed. Query results are also discarded if sources/settings change during the request.
-
-Name references resolve separately from type checks, so identifiable bindings can still be found after moves or initializer type errors. Undefined/out-of-scope names do not navigate. Class fields, built-ins, and Rust implementation navigation are unsupported. Calls to replaced Low functions prefer the High declaration; Low locals navigate within Low.
+Standard API names open a read-only reference supplied by the compiler. Class fields, ordinary built-ins, and Rust implementations do not support definition navigation.
 
 ## Hovers, completion, and parameter hints
 
-Keyword/type completion and built-in completion, hover, and argument hints work in new unsaved files, without a compiler, and in untrusted workspaces. Built-in descriptions remain available in incomplete syntax. When the compiler cannot analyze the source, same-name functions, variables, or imports suppress built-in information that could refer to another definition. Project declarations, local variable types, field candidates, and F12 require the compiler and a trusted workspace.
+| Input or action | Result |
+| --- | --- |
+| Hover a variable | Its compiler-confirmed type |
+| `item.` | Class fields and their types |
+| `orders.` | Definitions declared by the imported module |
+| `AuthError.` | Enum variants |
+| `http.Status.` or `http.Method.` | Standard HTTP constants |
+| Complete a function or class | Argument placeholders; named fields for classes |
+| Type `(` or `,` | Parameter hints |
 
-Use the latest nagic and extension. Function hovers show parameters, returns, and async status; class hovers list fields. Types such as Result[Item?, Error] and view[str] retain their declared forms. See the [walkthrough](editor.md).
+Types, functions, and constants from `std.http.server` and `std.actor` are supported. Identically named types are distinguished by their imports. Extract nullable values with `Some`/`None`, and Results with `Ok`/`Err`.
 
-Variable hovers show confirmed types: count = 3 gives count: i64, and item from a class-returning call gives item: Item. Arguments, for elements, and Ok/Err bindings are supported at declarations and uses. Names outside their blocks do not receive those types.
+Unknown types and moved values do not receive guessed field candidates. Unparseable edits fall back to declarations marked “保存済み” (saved), without local types, fields, or F12. Completion is suppressed in comments and strings. See the [walkthrough](editor.md).
 
-Typing item. offers Item fields with types such as name: str; selecting inserts only the field name. Completion after item.na replaces the partial name. Calls, nested fields, and Copy-class list elements are supported. Result[Item, Error] and Item? are not implicitly Item. Extract Result through its Ok case or `(try fetch()).`.
-
-Typing `orders.` offers the functions and classes defined in the file imported as `orders`. Qualified calls and from aliases show hovers and parameter hints for the resolved definition. If a local shadows the module name, completion uses that local's type and scope. Imported names are not automatically re-exported as module members.
-
-Partial names or Ctrl+Space offer imported functions/classes, native Low functions, and common built-ins. Functions insert positional placeholders; classes insert named fields such as Item(id=..., name=...). Tab moves between placeholders. Type/return positions offer classes, types, Result, List, and view.
-
-Typing ( or , shows parameter hints and selects the current argument. Completion avoids inserting duplicate parentheses. Use the displayed async/Result declaration to decide whether await, try, or match is needed.
-
-Unsaved contents of previously saved Nagi/Low files and open imports/native Low are read in memory. Declarations remain available with type errors when syntax/imports are readable. Local types and fields appear only where established; uncertain, moved, or out-of-scope values get no guesses. Queries neither save nor build. Save nagi.toml edits first.
-
-Unparseable fragments such as add(1, fall back to saved project declarations, marked “保存済み” (saved). Local types and fields are suppressed in that state. Names in comments/strings get no completion or hovers.
-
-Local types and field completion were added in 0.1.4; local/unsaved definition navigation in 0.1.5. Update old compilers because they lack the new symbol information. Find References, rename, debugging, and Rust implementation analysis are not supported.
+Find References, rename, debugging, and Rust implementation analysis are not supported.
 
 ## Development
 
-Build the compiler at the repository root and run `node --test editors/vscode-nagi/test/*.test.js`. The suite includes text-processing tests and tests using the actual nagic symbols command.
+Build the compiler at the repository root, then run:
 
-VS Code testing is separate. Launch an Extension Development Host with this extension folder as --extensionDevelopmentPath, test/host.js as --extensionTestsPath, and the repository root as workspace. It activates the real extension and verifies diagnostics, F12, hovers, completion, hints, and project execution. Passing Node tests alone does not verify behavior inside VS Code.
+```sh
+node --test editors/vscode-nagi/test/*.test.js
+python editors/vscode-nagi/scripts/package_vsix.py
+```
+
+Node tests cover assistance logic and `nagic symbols` integration. Test VS Code behavior separately in an Extension Development Host: set `--extensionDevelopmentPath` to the extension folder, `--extensionTestsPath` to `test/host.js`, and the workspace to the repository root.
+
+Use `test/indentation-host.js` for indentation or `test/static-assistance-host.js` for compiler-free assistance. Passing Node tests in ordinary CI alone does not verify input and display behavior inside VS Code.

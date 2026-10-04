@@ -2,8 +2,8 @@
   <section class="hero" aria-labelledby="hero-title">
     <div class="hero-copy">
       <p class="eyebrow">開発中のプログラミング言語</p>
-      <h1 id="hero-title">読みやすいコードを、<br>実行ファイルに。</h1>
-      <p class="hero-description">Nagi（ナギ）は、コードの読みやすさと実行時の効率を大切にしている言語です。小さなプログラムから、データを読み書きするWeb APIまで試せます。</p>
+      <h1 id="hero-title">読みやすく書く、<br>バックエンド。</h1>
+      <p class="hero-description">Nagi（ナギ）は、Python風の構文でバックエンドを書くための開発中の言語です。HTTP・JSON・DBを使う処理をRustの知識なしで書き、必要なときはRustで拡張できることを目指しています。</p>
       <div class="hero-actions"><a class="button" href="{{base}}docs/getting-started/">まずは動かしてみる</a><a class="text-link" href="{{base}}docs/language-guide/">書き方を読む</a></div>
       <p class="hero-note">現在は0.1の試作段階です。<a href="#status">開発状況を見る</a></p>
     </div>
@@ -11,24 +11,24 @@
       <div class="example-label"><span>double.nagi</span><span>数を2倍にする</span></div>
       {{example}}
       <div class="example-result"><span>このコードの出力</span><samp>42</samp></div>
-      <p class="example-caption"><code>double</code>は数を2倍にする関数。<code>main</code>から21を渡して呼び出すと、42を表示します。</p>
+      <p class="example-caption"><code>main</code>から<code>double(21)</code>を呼び出し、42を表示します。</p>
     </div>
   </section>
 
   <section class="principles section" aria-labelledby="principles-title">
-    <div class="section-heading"><p class="eyebrow">Nagiの考え方</p><h2 id="principles-title">書くときも、読むときも、<br class="mobile-break">見通しよく。</h2></div>
+    <div class="section-heading"><p class="eyebrow">コードと実行の仕組み</p><h2 id="principles-title">Highで書き、<br class="mobile-break">Rustで実行ファイルに。</h2></div>
     <div class="principle-list">
-      <article><h3>書き方は、素直に。</h3><p>字下げで処理のまとまりを表します。変数の型は、値から分かるところをコンパイラが調べます。</p><a href="{{base}}docs/language-guide/">基本の書き方</a></article>
-      <article><h3>動かす前に、確かめる。</h3><p>値の型や、データを渡したあとの使い方を検査します。失敗する処理は、成功と失敗に分けて扱えます。</p><a href="{{base}}docs/error-handling/">失敗の扱い方</a></article>
-      <article><h3>変換した先も、読める。</h3><p>NagiはコードをLow、Rustへ変換して実行ファイルにします。必要になったらLowを読み、関数を差し替えられます。</p><a href="{{base}}docs/low-language/">HighとLowについて</a></article>
+      <article><h3>型のあるコード</h3><p>Highは字下げで処理のまとまりを表す構文です。引数と戻り値に型を書き、変数の型は値から推論します。</p><a href="{{base}}docs/language-guide/">基本の書き方</a></article>
+      <article><h3>失敗をResultで扱う</h3><p>DB操作などはResultで成功かエラーを返します。独自のエラー型を作り、処理を分けられます。</p><a href="{{base}}docs/error-handling/">エラー処理</a></article>
+      <article><h3>Rustの資産を使う</h3><p>Rustコードを生成し、Rust/Cargoで実行ファイルを作ります。Rustのcrateは手書きのRustアダプターとextern宣言で呼び出せます。</p><a href="{{base}}docs/modules-and-rust/">importとRust連携</a></article>
     </div>
   </section>
 
   <section class="use-cases section" aria-labelledby="use-cases-title">
-    <div class="section-heading"><p class="eyebrow">いま試せること</p><h2 id="use-cases-title">小さく書いて、<br class="mobile-break">動きを確かめる。</h2></div>
+    <div class="section-heading"><p class="eyebrow">動くサンプル</p><h2 id="use-cases-title">最初の1ファイルから、<br class="mobile-break">Web APIまで。</h2></div>
     <div class="use-case-list">
-      <article><h3>まずは1ファイルから</h3><p>文字や数字を表示するところから、関数、配列、データのまとまりへ。動くサンプルを使って順番に学べます。</p><a class="text-link" href="{{base}}docs/getting-started/">準備と最初の実行</a></article>
-      <article><h3>Web APIとデータ保存</h3><p>HTTPで受け取ったJSONを型のあるデータとして扱い、SQLiteへ保存して、結果を返すサンプルがあります。</p><a class="text-link" href="{{base}}docs/http/">HTTPとHTMLの入門</a></article>
+      <article><h3>まずは1ファイルから</h3><p>文字や数字の表示、関数、配列、classを使ったデータの扱いを試せます。</p><a class="text-link" href="{{base}}docs/getting-started/">準備と最初の実行</a></article>
+      <article><h3>Web APIとデータ保存</h3><p>HTTP・JSON・SQLiteを使うAPIや、actorのメッセージ処理とSupervisorの再起動を試せます。</p><a class="text-link" href="{{base}}docs/library-examples/">サンプルプロジェクト一覧</a></article>
     </div>
     <p class="editor-note">VS Codeでは、変数の型の表示、フィールド補完、定義への移動を使えます。<a href="{{base}}docs/editor/">エディターで試す</a></p>
   </section>
@@ -36,11 +36,11 @@
   <section class="name-section section" id="name" aria-labelledby="name-title">
     <div class="section-heading"><p class="eyebrow">名前の由来</p><h2 id="name-title">Nagiは、日本語の「凪」。</h2></div>
     <blockquote><p>内部は激しく動いていても、<br>表面は凪のように穏やか。</p></blockquote>
-    <p>この考え方を、Nagiという名前に込めています。内部で多くの処理が動いていても、書く人が触れるコードは穏やかで、見通しがよいものにしたい。その思いを軸に開発しています。</p>
+    <p>書く人が触れるコードは穏やかで、見通しがよいものにしたい。その考えを名前に込めています。</p>
   </section>
 
   <section class="status-section section" id="status" aria-labelledby="status-title">
-    <div><p class="eyebrow">開発状況</p><h2 id="status-title">少しずつ、形にしています。</h2><p>Nagiは0.1の試作段階です。文法や機能は開発中で、今後変わることがあります。Docsには、現在使える機能と未実装の機能を分けて記載しています。</p><p>Windows x64、Linux x86_64、macOS Apple Silicon、macOS Intel用の配布物を用意し、CIでビルド・実行を検証します。試すにはRust/CargoとCのビルド環境が必要です。</p></div>
+    <div><p class="eyebrow">開発状況</p><h2 id="status-title">現在は0.1の試作段階です。</h2><p>文法と標準APIは今後変わることがあります。<a href="{{base}}docs/introduction/">目的と現在の実装範囲</a>を確認してください。</p><p>LowはHighと同じ型・所有権規則を使う波括弧構文で、関数差し替えにも使えます。ポインター操作やunsafeは未対応です。<a href="{{base}}docs/low-language/">HighとLowについて</a></p><p>Windows x64、Linux x86_64、macOS Apple Silicon、macOS Intel用の配布物があります。<code>nagic build/run</code>にはRust/CargoとOSに応じたビルドツールが必要です。</p></div>
     <nav class="status-links" aria-label="開発の資料"><a href="{{base}}docs/introduction/">目的と実装範囲</a><a href="{{base}}docs/roadmap/">今後の開発</a><a href="{{base}}docs/performance/">性能の読み方</a><a href="{{repo}}">ソースコードを見る</a></nav>
   </section>
 </main>

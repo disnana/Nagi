@@ -1,6 +1,6 @@
 # actor
 
-actorは、メッセージを一件ずつ処理しながら、自分の状態を更新する処理です。Nagi 0.1.8から使える`std.actor`では、通常のasync関数で初期状態とハンドラーを定義します。
+actorは、メッセージを一件ずつ処理し、自分の状態を更新します。Nagi 0.1.8から使える`std.actor`では、初期化とhandlerをasync関数で定義します。メッセージ・状態・返信の型をNagiで指定し、実行と通知にはTokioを使います。
 
 ```nagi
 import std.actor as actor
@@ -32,8 +32,10 @@ async def add(state: Counter, amount: i64) -> Result[actor.Turn[Counter, i64, Er
 
 `call`の待ち時間は、受け入れ前の`mailbox_ms`と受け入れ後の`reply_ms`に分かれます。返信が時間切れになっても、受け入れ済みの更新は続く場合があります。二重更新を防ぐキーや結果確認を用意してから再試行してください。
 
-最初のAPIでは、メッセージ・返信にMap、view、shared、容量を数えられないnative resourceは使えません。共通データとactorの状態には、所有権の条件を満たすDbなども使えます。
+メッセージ・返信にはMap、view、shared、native resourceを使えません。共通データとactorの状態には、必要な所有権とRustの`Send`／`Sync`条件を満たすDbなども使えます。任意のRust資源型をNagiへ登録する公開APIは未実装です。
 
 [Supervisorの再起動と停止](supervisor.md) · [APIリファレンス](actor-reference.md) · [性能測定](actor-performance.md)
 
 旧[actor.nagi](../examples/actor.nagi)は固定カウンターの試験です。汎用APIの性能とは分けて扱います。
+
+実装は[actor runtime](../runtime/src/actor.rs)、型と呼び出しの検査は[compilerのテスト](../compiler/tests/actor_stdlib.rs)、状態・再起動・容量の確認は[runtimeのテスト](../runtime/src/actor/tests.rs)にあります。

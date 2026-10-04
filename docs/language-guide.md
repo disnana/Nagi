@@ -2,7 +2,7 @@
 
 [目次](README.md) · 前：[準備と最初の実行](getting-started.md) · 調べる：[文法の早見表](syntax.md)
 
-変数、関数、配列から順に、短いコードを動かして学びます。[Nagiをインストール](getting-started.md)したら、作業用のフォルダーを作ってください。コードは`.nagi`ファイルへ保存し、`nagic run`で実行します。
+High（`.nagi`）は字下げで書く構文です。このページでは変数、関数、配列、失敗の扱いを短いコードで試します。[Nagiをインストール](getting-started.md)し、作業用のフォルダーで`nagic run ファイル名.nagi`を実行してください。
 
 ## 1. 値と型
 
@@ -119,7 +119,7 @@ def main():
     print(name)
 ```
 
-出力は`4`、`4`、`Nagi`、`Nagi`です。`copy(view(name))`は別の所有文字列を作ります。コピーが必要なときだけ明示してください。
+出力は`4`、`4`、`Nagi`、`Nagi`です。`copy(view(name))`は別の所有文字列を作ります。元の文字列とは別の領域を使います。
 
 `print`や`len`は入力を読み取る組み込み関数なので、それらに渡しただけでは文字列をmoveしません。すべての関数が同じ受け渡し方をするわけではありません。
 
@@ -167,7 +167,7 @@ def number_or(text: view[str], fallback: i64) -> i64:
             return fallback
 ```
 
-`Ok`と`Err`を1回ずつ書きます。括弧内の名前はそのcase内で使い、不要な値は`_`にします。`Result`以外のパターンは未対応です。実行できる完成コードとErrorの調べ方は[エラー処理](error-handling.md)にあります。
+Resultでは`Ok`と`Err`の両方を書きます。括弧内の名前はそのcase内で使い、不要な値は`_`にします。`match`はnullableの`Some`／`None`と独自enumにも対応します。詳しくは[エラー処理](error-handling.md)と[型](types.md)を参照してください。
 
 ## 6. ファイルを分ける
 

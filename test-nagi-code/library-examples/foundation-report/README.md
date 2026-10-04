@@ -1,6 +1,6 @@
-# 共有基盤を使う一括JSONレポート
+# 共有料金計算を使うJSONレポート
 
-複数行の料金を計算し、成功した見積・拒否した行・合計を1つのJSONにします。[対話CLI](../foundation-cli/README.md)と同じ[Nagiの窓口とRust module](../shared/README.md)を使います。CLIが1件の失敗で終了するのに対し、このアプリは`match`で各行の失敗を回収し、次の行を処理します。
+複数行の料金を計算し、成功した見積・拒否した行・合計を1つのJSONにします。[対話CLI](../foundation-cli/README.md)と同じ[Nagi moduleとRust関数](../shared/README.md)を使います。CLIが1件の失敗で終了するのに対し、このアプリは`match`で各行の失敗を回収し、次の行を処理します。
 
 リポジトリのルートで実行します。
 

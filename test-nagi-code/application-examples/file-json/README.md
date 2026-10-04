@@ -1,6 +1,6 @@
 # JSON設定ファイル
 
-Nagiで型付きJSONを作り、UTF-8ファイルへ保存して読み直します。ファイル操作はRustの`std::fs`を使う短いアダプターに任せ、型とJSONの検証はNagiで書いています。追加のRust crateは使いません。
+Nagiで型付きJSONを作り、UTF-8ファイルへ保存して読み直します。ファイル操作はRustの`std::fs`を使う短いアダプターに任せ、型とJSONの検証はNagiで書いています。この例のファイル操作には、現在の標準APIにないRustの`create_new`を使います。追加のRust crateは使いません。
 
 リポジトリのルートで実行します。`nagi.toml`にRustファイルを指定しているため、`--project`を付けてください。
 

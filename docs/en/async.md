@@ -1,6 +1,6 @@
 # Async functions and scopes
 
-Use `async def` for functions that wait for timers, database operations, or other async work. Use `await` to wait for the result. Other async work can run during that wait.
+Use `async def` for functions that wait for timers, database operations, or other async work. Use `await` to wait for the result. Nagi generates Rust futures and runs them on Tokio, allowing other async work to proceed while waiting. Synchronous CPU work is not automatically moved to another thread.
 
 ```nagi
 async def main() -> Result[unit, Error]:
@@ -46,3 +46,5 @@ async def main():
 This assignment stores the function itself. Storing a call result with `pending = answer(41)` is unsupported; await the call directly. See [types and inference](types.md#pass-a-function-as-a-value) for supported function signatures.
 
 You cannot reassign a different async function to that variable. Use a separate variable or call each function in a branch. Reassigning the same function, and replacing a synchronous function, are supported.
+
+See the [scope runtime](../../runtime/src/concurrent.rs) and [code generation](../../compiler/src/emit.rs) for the implementation. [Scope tests](../../compiler/tests/scoped_tasks.rs) and [async function value tests](../../compiler/tests/async_value_types.rs) cover accepted and rejected inputs.

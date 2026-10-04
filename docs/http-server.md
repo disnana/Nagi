@@ -31,7 +31,7 @@ Statusは数値を保持するコピー可能な値です。文字列への変�
 | `body` | `view[bytes]` |
 | `is_get`、`is_post`など | `bool` |
 
-`path`、`query`、`body`とヘッダーはRequest内のデータを借ります。参照を使用中にRequestをmoveできません。path登録は`"/users/{id}"`のような形にも対応します。captureの型付き取り出しAPIはまだありません。
+`path`、`query`、`body`とヘッダーはRequest内のデータを借ります。参照を使用中にRequestをmoveできません。path登録は`"/users/{id}"`のような形にも対応します。captureの型付き取り出しAPIと接続元IPの取得APIはありません。本文は上限まで読み込んでからhandlerへ渡すため、受信ストリームではありません。
 
 | 関数 | 戻り値 |
 |---|---|
@@ -56,7 +56,7 @@ Statusは数値を保持するコピー可能な値です。文字列への変�
 | `append_header(response, name, value: view[bytes])` | `Result[Response, Error]` |
 | `append_header_text(response, name, value: view[str])` | `Result[Response, Error]` |
 
-`text`、`html`、`bytes`は借りた入力から送信するbodyを作ります。`json`は値を借用してJSONを作るため、元の値をmoveしません。文字列リテラルはview引数へ直接渡せます。変数から借りる場合は`view(value)`を使います。
+`text`、`html`、`bytes`は借りた入力をコピーして、Responseが所有するbodyを作ります。`json`は値を借用してJSONを作るため、元の値をmoveしません。文字列リテラルはview引数へ直接渡せます。変数から借りる場合は`view(value)`を使います。
 
 ヘッダー追加は応答を受け取り、新しい応答を返します。Set-Cookieなどの重複を保持し、不正な名前・改行・Content-Length／Transfer-Encodingの指定は拒否します。HEADではbodyを送らず、GET相当の長さを保持します。204・205・304ではbodyを送信しません。成功CONNECTのtunnelは未対応で、501で接続を閉じます。
 
@@ -71,13 +71,13 @@ return await http.serve(app, 8080, http.default_options())
 
 - `app[S, E](state, mapper)`は状態を所有し、`fn(E) -> Response`を既定のエラー処理にします。
 - `app_default[S](state)`は`Error`用の既定処理を使います。
-- handlerは`async def handle(request: Request, state: shared[S]) -> Result[Response, E]`です。状態そのものはリクエストごとにコピーしません。
+- handlerは`async def handle(request: Request, state: shared[S]) -> Result[Response, E]`です。状態そのものはリクエストごとにコピーしません。Rust側では状態に`Send + Sync`、handlerのFutureに`Send`などが必要で、最終的な適合はbuildで検証します。
 - `route_mapped`はhandlerの独自エラー型と、それに合うmapperを指定できます。
 - 登録済みGETにHEADを自動で対応させます。HEADの明示登録を優先します。既存パスでmethodが違う場合は405とAllowを返します。
 
 mapperはアプリのエラーを処理します。不正なHTTP、制限超過、タイムアウトはサーバー側で処理します。データベースのエラー詳細や認証情報は応答へ直接出さないでください。
 
-mainでは、応答開始前のhandlerやmapperで巻き戻し可能なpanicが起きた場合、詳細を含まない500を返し、その接続を閉じます（公開0.1.9は未対応）。共有状態やDBへの途中の更新は巻き戻しません。通常の失敗は引き続きResultで返してください。`panic=abort`、プロセス終了、巻き戻し中の二重panic、独自Rustの解放処理や応答開始後のストリーミングは、回復を保証できません。
+mainでは、応答開始前のhandlerやmapperでunwindするpanicが起きた場合、詳細を含まない500を返し、その接続を閉じます。公開0.1.9にはこの修正が入っていません。これはpanicの検出であり、共有状態やDBの更新を巻き戻す仕組みではありません。通常の失敗はResultで返してください。`panic=abort`、OOMなどによるプロセス終了、unwind中の二重panic、独自Rustの解放処理、応答開始後の障害は回復を保証しません。
 
 エラー応答にリクエストIDなどが必要なら、handlerで検証した値を保持し、失敗時に独自エラー型へmoveできます。[見積APIの例](../test-nagi-code/application-examples/quote-api/README.md)では、この方法で共通mapperへIDを渡しています。
 
@@ -96,6 +96,8 @@ mainでは、応答開始前のhandlerやmapperで巻き戻し可能なpanicが�
 
 変更する関数はすべて`Result[Options, Error]`を返します。接続数と同時リクエスト数は受け付けの上限で、スレッド数ではありません。Ctrl+Cでは新しい接続を止め、処理中の接続を待ちます。停止期限後には接続taskを中止して回収します。実行開始済みのblocking処理は強制停止できません。
 
+本文上限を超えると、handlerを呼ばずに413と`Connection: close`で拒否します。残りの本文を最後まで読み捨てる実装ではありません。未読本文を残した切断ではTCP resetが起こり得るため、すべてのOS・client・送信条件で413を受信できることは保証していません。
+
 設定例：
 
 ```nagi
@@ -104,3 +106,9 @@ limits = try http.capacity(limits, 2048, 512)
 limits = try http.header_limits(limits, 32768, 100)
 return await http.serve(app, 8080, limits)
 ```
+
+## 実装の対応
+
+NagiのAPIは[標準moduleの登録](../compiler/src/stdlib.rs)と[HTTP runtime](../runtime/src/http_server.rs)で実装しています。通信はHyperのHTTP/1、実行と接続taskの管理はTokio、pathの照合はmatchit、JSON変換はSerdeです。AxumのHTTP型も使いますが、このAPIのroute処理はAxum Routerではありません。
+
+[HTTP runtimeのテスト](../runtime/src/http_server/tests.rs)には、実際のsocketを使う応答、制限、タイムアウト、接続終了の確認があります。[Rust連携](modules-and-rust.md)では独自のサーバーを作れますが、同じ制限や障害処理が自動で付くわけではありません。

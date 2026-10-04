@@ -98,14 +98,14 @@ LABELS = {
                start_label="はじめる", status_label="Nagi 0.1 · 開発中", footer_label="フッター",
                other_language="en", other_label="English", switch_label="Read this page in English",
                docs_contents="Docsの目次", page_contents="このページの目次", on_page="このページ",
-               source_label="このページのソース", docs_version="Nagi 0.1のドキュメント",
+               source_label="このページのソース", docs_version="Nagi 0.1 · 開発中のDocs",
                copy_label="コピー", copy_aria="このコードをコピー", code_aria="コード",
                table_aria="表（横にスクロールできます）"),
     "en": dict(skip_label="Skip to content", home_label="Nagi home", menu_label="Site navigation",
                start_label="Get started", status_label="Nagi 0.1 · In development", footer_label="Footer",
                other_language="ja", other_label="日本語", switch_label="このページを日本語で読む",
                docs_contents="Docs contents", page_contents="On this page", on_page="On this page",
-               source_label="Page source", docs_version="Nagi 0.1 documentation",
+               source_label="Page source", docs_version="Nagi 0.1 · Development docs",
                copy_label="Copy", copy_aria="Copy this code", code_aria="Code",
                table_aria="Table (scroll horizontally)"),
 }
@@ -349,7 +349,7 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
         relative = quote(source.relative_to(ROOT).as_posix())
         meta = f'<div class="doc-meta"><span>{labels["docs_version"]}</span><a href="{repo}/blob/{quote(ref, safe="")}/{relative}">{labels["source_label"]}</a></div>'
         layout = f'<div class="docs-shell"><div class="docs-layout">{sidebar}<div class="docs-content"><details class="mobile-doc-nav"><summary>{labels["docs_contents"]}</summary>{sidebar}</details><main id="main" class="docs-main">{body}{meta}</main></div><nav class="outline" aria-label="{labels["page_contents"]}"><p>{labels["on_page"]}</p><ul>{outline}</ul></nav></div></div>'
-        description = f"Nagi 0.1 documentation: {titles[0]}." if locale == "en" else f"Nagiの日本語ドキュメント。{titles[0]}について説明します。"
+        description = f"Nagi development documentation: {titles[0]}." if locale == "en" else f"開発中のNagiの日本語ドキュメント。{titles[0]}について説明します。"
         page(route, f"{titles[0]} | Nagi Docs", description, layout, locale, "docs-page")
 
     for locale, sources in (("ja", SOURCES), ("en", ENGLISH_SOURCES)):
@@ -363,8 +363,8 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
         home_source = HERE / ("templates/home.en.html" if english else "templates/home.html")
         home = home_source.read_text(encoding="utf-8").replace("{{example}}", code_block(example, "nagi", locale))
         home = home.replace("{{base}}", language_base).replace("{{repo}}", html.escape(repo, quote=True))
-        title = "Nagi — Readable code. Native programs." if english else "Nagi — 読みやすいコードを、実行ファイルに。"
-        description = "Nagi is a programming language in development that values readable code and efficient execution. Start with the introduction, then follow the guides and Docs." if english else "Nagiは、コードの読みやすさと実行時の効率を大切にしている開発中のプログラミング言語です。日本語と英語の入門ガイドとDocsを用意しています。"
+        title = "Nagi — Readable code for backends." if english else "Nagi — 読みやすく書く、バックエンド。"
+        description = "Nagi is a language in development for writing backends with Python-style syntax. It generates Rust code to build native executables and uses Rust libraries through adapters." if english else "Nagiは、Python風の構文でバックエンドを書くための開発中の言語です。Rustコードを生成して実行ファイルを作り、アダプターを通してRustのライブラリを使えます。"
         page("", title, description, home, locale)
         missing_title = "Page not found" if english else "ページが見つかりません"
         missing_body = "The link may have changed, or the URL may be incorrect." if english else "リンク先が変わったか、URLが間違っているようです。"

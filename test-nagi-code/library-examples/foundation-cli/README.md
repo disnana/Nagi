@@ -1,6 +1,6 @@
-# 共有基盤を使う対話型見積CLI
+# 共有料金計算を使う見積CLI
 
-ラベル・単価・数量・割引率を入力すると、1件の見積をJSONで表示します。[共通のNagi窓口とRust module](../shared/README.md)を、[一括レポート](../foundation-report/README.md)と共有します。DBやサーバーを用意する必要はありません。
+ラベル・単価・数量・割引率を入力すると、1件の見積をJSONで表示します。[共通のNagi moduleとRust関数](../shared/README.md)を、[一括レポート](../foundation-report/README.md)と共有します。DBやサーバーを用意する必要はありません。
 
 リポジトリのルートで、インストール済みの`nagic`を使います。
 
@@ -26,7 +26,7 @@ $env:NAGI_PRICING_ENGINE = "rust"
 
 `NAGI_PRICING_ENGINE=nagi`と`rust`は同じ金額・丸め規則を使います。それ以外の名前はエラーです。整数として読めない入力や数量0などは`Result`の失敗を`try`で伝播し、非ゼロで終了します。入力条件と自分のRust関数を差し込む方法は[共有APIの説明](../shared/README.md)を参照してください。
 
-`nagi.toml`は`foundation_cli.nagi`と薄い`native.rs`を指定します。Rust moduleは`../shared/bridge.rs`から組み込み、既存の`@rust("native::engine::foundation_rust_quote")`を呼びます。依存crateの追加はありません。両方の実装を同じアプリに含め、選ぶ関数を切り替えるサンプルです。
+`nagi.toml`は`foundation_cli.nagi`とRustアダプターの`native.rs`を指定します。Rust moduleは`../shared/bridge.rs`から組み込み、既存の`@rust("native::engine::foundation_rust_quote")`を呼びます。依存crateの追加はありません。両方の実装を同じアプリに含め、選ぶ関数を切り替えるサンプルです。
 
 生成ソースはこのフォルダーの`build/foundation_cli/`、通常の実行ファイルは`build/native-target/release/nagi-foundation-cli`です。Windowsでは`.exe`が付き、`NAGI_NATIVE_TARGET_DIR`を設定した場合は出力先が変わります。ビルドにはRust/CargoとCビルド環境が必要です。
 

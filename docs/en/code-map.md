@@ -35,7 +35,7 @@ nagic map calls --project examples/code-map --module service
 
 Mermaid and D2 text exports need no additional tools. D2 groups nodes by module and shows the direction of dependencies and calls.
 
-SVG and PNG require [D2](https://d2lang.com/) on PATH. Use the matching output extension. ELK is the default layout; Dagre and TALA are available when supported by your installed D2.
+SVG and PNG require [D2](https://d2lang.com/) on PATH. Use the matching output extension. ELK is the default layout. Dagre and TALA can also be selected; rendering depends on your installed D2 and its layout engines.
 
 ```sh
 nagic map types --project examples/code-map --format svg --output types.svg
@@ -46,4 +46,4 @@ nagic map modules --project examples/code-map --format png --output modules.png 
 
 Checked code becomes a shared Graph IR before rendering. `--format json` exports the schema version, nodes, semantic edges, groups, and source locations. Renderers do not change type checking or generated executable code.
 
-Dynamic function replacement, Rust function internals, runtime HTTP flow, and runtime Actor configuration cannot be determined by this analysis. Unresolved calls produce warnings. `trace`, Graph IR-based `cost`, architecture maps, and a local web server remain future work. The existing `--cost-report` retains its current format.
+Callback registration through function arguments and calls through local function values do not currently produce edges. Rust function internals, runtime HTTP flow, and runtime Actor configuration are not analyzed either. Unresolved relationships produce warnings. Warnings describe the whole input and remain when focus or module filters reduce the graph. `trace`, Graph IR-based `cost`, architecture maps, and a local web server remain future work. The existing `--cost-report` retains its current format.

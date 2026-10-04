@@ -2,6 +2,8 @@
 
 This test compares `std.http.server` in Nagi with an equivalent server written directly in Rust. Measurements were taken on October 3, 2026.
 
+The Rust baseline also uses `nagi-runtime::http_server`. This compares generated code and handwritten handlers; it is not a matched comparison between Axum Router and Hyper. The legacy Axum server included in the measurement script uses different admission and deadline policies. A comparison with matched API, limits, and fault behavior to evaluate adopting Axum/Tower behind the standard API has not been performed.
+
 ## Response speed
 
 Each endpoint ran for five seconds with 64 connections, repeated three times. The table reports the median of those three runs.
@@ -52,4 +54,4 @@ python scripts/http_stdlib_bench.py --wrk /path/to/wrk --build-matching-rust
 
 `nagic build` generates a release application. Set `CARGO_TARGET_DIR` and `NAGI_NATIVE_TARGET_DIR` if using custom target locations. The [matched raw results](../../benchmarks/results/http-stdlib-matched/) retain each run's latency, CPU, RSS, and binary SHA-256.
 
-See [HTTP load tests](http-capacity.md) for overload and slow-client behavior. Measurements of the legacy HTTP API are reported separately from this standard HTTP test.
+The [HTTP load tests](http-capacity.md) record saturation, slow clients, and connection recovery for the legacy API. Its limits and implementation differ, so those results do not establish guarantees for standard HTTP. See the [HTTP guide](http.md) for current limits and configuration.

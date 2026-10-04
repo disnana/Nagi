@@ -24,6 +24,6 @@ nagic run low_kernel.nagi --no-project
 
 Both versions return the same result. The function borrows the list, so the application can still call `len(samples)` afterward.
 
-This example demonstrates replacement. It does not claim a measured speedup: the Low implementation performs the same calculation. Fixed-width integer overflow needs a separate policy for large inputs.
+Low uses the same type and ownership checker and ultimately generates Rust. This example demonstrates function replacement. It does not claim a measured speedup: the Low implementation performs the same calculation. Fixed-width integer overflow needs a separate policy for large inputs.
 
 [日本語](README.md) · [High and Low](../../../docs/en/low-language.md)

@@ -1,6 +1,6 @@
-# A pricing foundation shared by two applications
+# Pricing code shared by two applications
 
-The [interactive CLI](../foundation-cli/README.en.md) and [JSON report](../foundation-report/README.en.md) use the same Nagi facade and Rust calculation code. The calculation function is an argument, so callers can choose a Nagi or Rust implementation while keeping input validation and data types in one place.
+The [interactive CLI](../foundation-cli/README.en.md) and [JSON report](../foundation-report/README.en.md) use the same Nagi module and Rust calculation code. The calculation function is an argument, so callers can choose a Nagi or Rust implementation while keeping input validation and data types in one place.
 
 | File | Purpose |
 | --- | --- |
@@ -36,13 +36,13 @@ Declare another function with the same inputs and return type using `@rust` and 
 extern def custom_quote(label: view[str], unit_cents: i64, quantity: i64, discount_bps: i64) -> Result[FoundationQuote, Error]
 ```
 
-For example, call `quote = try foundation_quote(custom_quote, view(label), 999, 3, 1250)` inside `main`. The corresponding Rust types are `&str`, `i64`, and `Result<crate::FoundationQuote, nagi_runtime::Error>`. The returned class owns its fields and stores no references into borrowed input. Calculation functions are trusted application code; the facade does not recompute amounts returned by a custom implementation.
+For example, call `quote = try foundation_quote(custom_quote, view(label), 999, 3, 1250)` inside `main`. The corresponding Rust types are `&str`, `i64`, and `Result<crate::FoundationQuote, nagi_runtime::Error>`. The returned class owns its fields and stores no references into borrowed input. Calculation functions are trusted application code; the shared function does not recompute amounts returned by a custom implementation.
 
 ## What this reuse provides today
 
-This is source reuse, without a published Nagi package or Cargo crate. Imported definitions share one namespace; aliases and visibility declarations are unsupported. Public names therefore use the `foundation_` or `Foundation` prefix.
+This example shares source files compiled into each application; it does not use a Nagi package download or publishing system. Its string imports place definitions in one namespace, so names use the `foundation_` or `Foundation` prefix. The [module example](../module-imports/README.en.md) shows module names and `from` aliases instead.
 
-`rust.file` names one adapter. Other Rust files are ordinary modules beneath it. Cargo dependencies can specify version strings, but `nagi.toml` currently cannot specify path, git, or features dependencies. `build` and `run` check whether Rust implementations match their Nagi declarations. Stable C ABI and runtime DLL loading are unsupported.
+`rust.file` names one adapter. Other Rust files are ordinary modules beneath it. Dependencies accept version strings or tables with `path`, `package`, `features`, and `default-features`. Git dependencies are unsupported. See the [local Rust crate example](../../rust-library/README.en.md) for configuration. `build` and `run` check whether Rust implementations match their Nagi declarations. Stable C ABI and runtime DLL loading are unsupported.
 
 The applications open no database and start no HTTP server. Building still includes the standard runtime dependencies and needs Rust/Cargo plus a compatible C build environment. Rebuild both applications when shared source changes.
 

@@ -92,7 +92,9 @@ Storing async functions in lists or classes is also unsupported. You cannot stor
 
 ## Unsupported type operations
 
-`Map[K, V]` and `owned[T]` have type notation but incomplete operation APIs. User-defined generic functions and traits are unsupported.
+`Map[K, V]` is accepted as type notation, but has no dedicated APIs for construction, lookup, or updates. User-defined generic functions and traits are unsupported.
+
+`owned[T]` is an unfinished type form. It generates Rust's `T`, but Nagi's checker distinguishes it from `T`. Operations such as `try`, `view`, and discarded-Result detection do not consistently treat the two alike. Use `str` directly for owned strings and `List[T]` for owned lists. See [error handling](error-handling.md) for the limits of Result checking.
 
 ## Rust representation
 

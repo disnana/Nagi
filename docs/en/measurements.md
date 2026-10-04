@@ -1,10 +1,10 @@
 # Nagi 0.1 performance and verification report
 
-This version is a prototype language with a two-layer backend, a Rust compiler, and a working runtime. High generates editable Low text, which is parsed and checked again before compilation to native code through Rust. Working paths include HTTP body → typed class → SQLite → class → JSON CRUD, ordinary Low calls and replacements, async/scopes, actor communication, and worker restarts.
+The measured implementation was a Nagi prototype with a Rust compiler and runtime. High generates editable Low text, which is parsed and checked again before compilation to native code through Rust. Working paths include HTTP body → typed class → SQLite → class → JSON CRUD, ordinary Low calls and replacements, async/scopes, actor communication, and worker restarts.
 
-A general-purpose language, a production custom runtime, and BEAM-level fault isolation remain incomplete. Actors, supervisors, and queues are standard test functions calling the real runtime; general High declarations are not implemented. The numbers below come from logs in the stated environment. Public example names were anonymized while preserving their original ASCII byte lengths. Measurement values were not changed.
+The actor, supervisor, and queue tests used runtime test functions at that time. The current language has a typed [`std.actor`](actor.md) API, but those actor measurements did not measure that API. Nagi does not provide BEAM-level fault isolation. The numbers below come from logs in the stated environment. Public example names were anonymized while preserving their original ASCII byte lengths. Measurement values were not changed.
 
-This is the English version of the September 30, 2026 report. Its test counts and implementation status describe that measurement snapshot. The [Japanese source](https://github.com/disnana/Nagi/blob/main/PERFORMANCE.md) is available on GitHub.
+This is the English version of the September 30, 2026 report. Its feature lists, test counts, and proposed next steps describe that measurement snapshot. See the current [Docs](README.md) for the language as it exists today. The [Japanese source](https://github.com/disnana/Nagi/blob/main/PERFORMANCE.md) is available on GitHub.
 
 ## Environment and reproduction conditions
 
@@ -250,11 +250,11 @@ A successful High check alone does not guarantee soundness. Safe Rust is generat
 
 Effective directions included native primitives with contiguous arrays, direct typed JSON, once-per-query column resolution, removal of small unnecessary Vecs, and actor pipelines. Borrowed JSON and reserve results show why allocation reductions must be assessed separately from speed. HTTP includes handlers/runtime/serialization/scheduling and cannot be predicted from CPU-kernel speed ratios.
 
-Next priorities are arithmetic/borrow rules, modules/generics, arbitrary-state actor lowering, general typed database parameters, and measured request arenas/buffer reuse. Prototype development speed does not establish the effort needed to finish the language. Low self-hosting comes after String/Map/module/allocator APIs and bootstrap-equivalence tests.
+The proposed next steps at the time were arithmetic/borrow rules, modules/generics, arbitrary-state actor lowering, general typed database parameters, and measured request arenas/buffer reuse. Prototype development speed does not establish the effort needed to finish the language. Low self-hosting was also a proposal at the time, to follow String/Map/module/allocator APIs and bootstrap-equivalence tests.
 
 ## Rerunning and raw logs
 
-Use the repository README for builds and functional tests. During performance measurements, avoid concurrent builds or other CPU benchmarks and adjust CPU affinity to your environment.
+The commands below describe the measured workloads. Running them with the latest source does not repeat the same implementation measured here. Use the repository README for current builds and functional tests. During performance measurements, avoid concurrent builds or other CPU benchmarks and adjust CPU affinity to your environment.
 
 ```bash
 taskset -c 0 ./native-target/release/nagi-cpu > benchmarks/results/cpu-nagi.jsonl

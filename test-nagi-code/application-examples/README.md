@@ -13,13 +13,13 @@
 
 手書きLowから始める場合は、[注文見積もりCLI](../low-examples/order-quote/README.md)を使ってください。Low同士のimport、型付きJSON、入力検証と整数の価格計算を試せます。
 
-Nagi 0.1.9以降で動かせます。サンプルはリポジトリ一式を取得し、そのルートで各フォルダの`nagi.toml`を指定して実行してください。Rust/CargoとOSごとのビルド環境は[セットアップ](../../docs/getting-started.md)で確認できます。
+Nagi 0.1.9を使います。サンプルはリポジトリ一式を取得し、そのルートで各フォルダの`nagi.toml`を指定して実行してください。Rust/CargoとOSごとのビルド環境は[セットアップ](../../docs/getting-started.md)で確認できます。
 
 ```sh
 nagic run --project test-nagi-code/application-examples/stock-report
 ```
 
-リポジトリのルートで次を実行すると、Highのアプリは元のソースと保存した生成Lowから別々にcheck・buildし、同じ入力・ファイル・HTTP・actorの検証を行います。注文見積もりCLIは手書きLowを直接検証します。Python 3.12以降が必要です。
+検証スクリプトは7プロジェクトを扱います。6つのHighアプリは元のソースと保存した生成Lowから別々にcheck・buildし、注文見積もりCLIは手書きLowから検証します。計13回の検証で同じ入力・ファイル・HTTP・actorの動作を照合します。Python 3.12以降を使い、リポジトリのルートで実行してください。
 
 ```sh
 python scripts/verify_application_examples.py --compiler /path/to/nagic
@@ -28,4 +28,4 @@ python scripts/verify_application_examples.py --compiler /path/to/nagic --only s
 python scripts/verify_application_examples.py --compiler /path/to/nagic --only order-quote
 ```
 
-結果・ビルドログ・実行ログは`build/application-example-verification/`に残ります。DBとファイルの検証には一時的な保存先を使います。見積APIの検証はlocalhostでサーバーを起動・停止します。監督付きworkerでは意図的なpanicの診断がstderrに出ますが、回復と後片付けを検証して終了コード0で終わります。
+ビルドの警告も失敗として扱います。結果・ビルドログ・実行ログは`build/application-example-verification/`に残ります。DBとファイルの検証には一時的な保存先を使います。見積APIの検証はlocalhostでサーバーを起動・停止します。監督付きworkerでは意図的なpanicの診断がstderrに出ますが、回復と後片付けを検証して終了コード0で終わります。

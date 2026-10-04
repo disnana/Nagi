@@ -1,6 +1,6 @@
 # Build libraries and use the Rust ecosystem
 
-You can write application logic in Nagi, share functions across files, and call Rust libraries. Applications can use their own HTTP or database adapters alongside Nagi's built-ins.
+You can write application logic in Nagi, share functions across files, and call Rust libraries. The direction is to expose common operations through Nagi APIs and use Rust adapters for advanced features. This page describes file imports and Rust integration that are available today.
 
 ## Share a foundation between applications
 
@@ -25,7 +25,7 @@ To use a Rust crate, provide Rust functions that Nagi can call. Convert crate-sp
 
 The [JSON reader](../../test-nagi-code/library-examples/rust-json/README.en.md) uses `serde_json` to read a Nagi class from borrowed text and returns failures through Result. The [async example](../../test-nagi-code/library-examples/rust-async/README.en.md) awaits a Tokio timer from Nagi.
 
-Nagi's `check` validates declarations and calls. A `build` checks that the Rust implementation matches those declarations. Arbitrary Rust types, traits, and generics are not exposed directly to Nagi. The library author manages blocking operations and custom shared state on the Rust side.
+Nagi's `check` validates declarations and calls. A `build` checks that the Rust implementation matches those declarations. Arbitrary Rust types, traits, and generics are not exposed directly to Nagi, and users cannot register their own opaque resource types. The library author manages blocking operations and custom shared state on the Rust side.
 
 ## Pass application logic to a Rust foundation
 
@@ -45,9 +45,9 @@ Moving code to Low does not guarantee a speedup. Check that results match, then 
 
 The following items need design work; they are not available configuration or syntax:
 
-- Unquoted standard modules and visibility declarations. Relative-file `as` and `from` imports are already available.
+- Package discovery and visibility declarations for user libraries. Relative-file `as` and `from` imports, and unquoted imports of registered standard modules, are already available.
 - Optional HTTP and DB standard libraries, to omit unused build dependencies.
 - Ownership, sharing, shutdown, and async cancellation rules for custom connections and clients.
-- Typed SQL arguments, row decoding, and transactions as part of general database support, alongside PostgreSQL connections.
+- Separate modules and connection types for SQLite and PostgreSQL, with consistent rules for typed SQL arguments, row decoding, and errors. SQL dialect and transaction differences remain explicit.
 
 These changes should preserve existing file imports, extern declarations, and SQLite calls. Read the [design proposal](library-design.md) or browse the [sample projects](library-examples.md) for programs that work with current features.

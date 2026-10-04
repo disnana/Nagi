@@ -4,7 +4,7 @@
 
 ## 最初の読み書き
 
-保存する型をclassで定義し、`db_open`でDBを開き、`db_exec`でテーブルを作ります。DBの操作は非同期で、失敗し得るため`try await`を使います。
+標準DB APIはSQLite用です。保存する型をclassで定義し、`db_open`でDBを開き、`db_exec`でテーブルを作ります。失敗し得る非同期操作なので、`try await`で結果を扱います。PostgreSQLなど、別のDBには現在Rust連携が必要です。
 
 次のコードを`database.nagi`として保存し、`nagic run database.nagi`で実行します。メモリ内のDBへ1件追加し、保存した名前を表示します。
 
@@ -58,10 +58,16 @@ async def get_user(db: Db, id: i64) -> Result[User?, Error]:
 
 ## 実装と制約
 
-SQLiteへの操作は専用のスレッドで順に実行します。待ち行列は64件までです。Nagi側は非同期に結果を待ちますが、SQLiteそのものの読み書きはそのスレッドで行います。
+Nagiは型付き呼び出しとclassへの行変換を提供し、SQLの実行・保存・制約の検査はrusqliteとSQLiteが担います。SQLiteはruntimeに同梱されます。
+
+開いたDbごとに専用スレッドで操作を順に実行します。待ち行列は64件までで、満杯なら送信側が待ちます。Nagi側は結果を非同期に待ちますが、SQLiteの読み書き自体は同期処理です。Dbの最後の所有者が解放される際はworkerの終了を待つため、即時に戻る保証はありません。
 
 SQLの準備結果をキャッシュします。列名は呼び出しごとに解決し、`db_all`では同じ結果の各行にその列位置を使います。文字列やバイト列を返すときは、行の処理が終わったあとも保持できるよう、所有する値を作ります。
 
-任意個数のSQL引数、トランザクション専用API、接続プール、ビルド時のスキーマ検査は未対応です。SQLや列の名前・型に問題がある場合は、実行時にResultのエラーになります。
+`check`はNagiの引数型と、行を返す型がclassであることを検査します。SQL文字列の構文、schema、列名、bind数、SQLのNULLとclassの対応は検査しません。対応するフィールド型では、列名・値の型・範囲の違いは実行時のResultで返ります。未対応の行フィールドなど、Rustの変換要件を満たさない型はbuildで失敗する場合もあります。
+
+任意個数のSQL引数、トランザクション専用API、接続プール、PostgreSQL、スキーマ指定による静的SQL検査は現在のmainでは未対応です。SQLでBEGIN／COMMITを書いても、複数の呼び出しの間を専有するAPIではないため、共有Dbの他の操作が間へ入る可能性があります。
 
 HTTPの待機期限が切れても、すでに受け付けたDB操作が完了し、書き込みが保存される場合があります。呼び出し元のキャンセルで、書き込みが取り消される保証はありません。
+
+実装は[DB runtime](../runtime/src/database.rs)と[classの行変換生成](../compiler/src/emit.rs)、確認用のコードは[CRUDサンプル](../examples/crud.nagi)と[DBのテスト](../runtime/src/database.rs)にあります。SQLite／PostgreSQLの別型と共通操作規則は[設計案](library-design.md)で、ここに記載した現行APIとは別です。

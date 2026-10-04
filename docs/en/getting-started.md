@@ -2,7 +2,7 @@
 
 [Contents](README.md) · Next: [Learn by writing code](language-guide.md)
 
-Install Nagi and run Hello World.
+Install a published Nagi compiler and run Hello World in High (`.nagi`).
 
 ## 1. Install the compiler
 
@@ -82,7 +82,7 @@ If the filename contains spaces, quote the path, as in `nagic run "hello world.n
 
 Currently, both `check` and `lower` save the Low generated from High. A successful `check` can still be followed by a failed `build` if Rust's type or borrow checks reject the generated program.
 
-Build errors first show the original Nagi or Low filename, the line of the corresponding statement or definition, and its source text. This includes imports and handwritten Low used with `@replace`. The following `Rust backend details` preserves the full diagnostic for the generated Rust. Errors in handwritten Rust, or errors without an identifiable source location, retain Rust's diagnostics.
+When a source location can be identified, build errors show the corresponding Nagi or Low filename and line. The following `Rust backend details` provides the Rust diagnostic. Errors in handwritten Rust, or errors without an identifiable source location, use Rust's diagnostics.
 
 ```powershell
 nagic check hello.nagi
@@ -120,7 +120,7 @@ Windows installs under `%LOCALAPPDATA%\Nagi\versions` and puts its `current` sub
 
 Stop Nagi builds before updating. After the new command starts successfully, the installer compares older distributions with their published archives and removes unchanged copies. Only the selected version remains; no rollback copy is kept permanently. Added or modified files are preserved. Older copies that cannot be verified or removed, including files locked by Windows, are also kept and their folder is reported. A failed update preserves the previous command and PATH.
 
-Old URLs such as `nagi-v0.1.6/scripts/install.ps1` are pinned to 0.1.6. Use this page's `main/scripts/install.ps1` to update. On Windows, version-specific PATH entries from the original installer are replaced with the fixed `current` entry. If VS Code's `nagi.compilerPath` points to an old version's absolute path, change it to `nagic` and restart VS Code.
+Old URLs such as `nagi-v0.1.6/scripts/install.ps1` are pinned to 0.1.6. Use this page's `main/scripts/install.ps1` to update. On Windows, version-specific PATH entries from the original installer are replaced with the fixed `current` entry. If VS Code's `nagi.compilerPath` points to an old version, clear it to enable automatic discovery or set the new executable's absolute path, then restart VS Code.
 
 To select a specific version, including an earlier release, use the commands below. The same one-version retention policy applies.
 

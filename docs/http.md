@@ -1,6 +1,6 @@
 # HTTP
 
-`std.http.server`でHTTPサーバーを作れます。DBは不要です。リクエストを受け取るasync関数と、共有する状態を渡します。
+`std.http.server`でHTTPサーバーを作れます。DBは不要です。asyncのhandler、共有する状態、失敗時の応答をNagiで定義します。
 
 ## 最小のサーバー
 
@@ -55,4 +55,6 @@ nagic run server.nagi
 - [JSON](json.md)：bodyをclassへ変換する
 - [既存のHTTP属性](http-legacy.md)：`@get`／`@post`と`serve(Db, port)`を使うコード
 
-現在の標準サーバーはloopbackのHTTP/1.1に対応します。TLSや外部公開にはリバースプロキシを使います。ストリーミング、WebSocket、HTTP/2の公開APIはこのmoduleにはありません。
+現在の標準サーバーはloopbackのHTTP/1.1に対応します。TLSや外部公開にはリバースプロキシを使います。接続元IPの取得、ストリーミング、WebSocket、HTTP/2の公開APIはありません。外部APIへリクエストを送る標準HTTP clientも未実装です。
+
+内部ではHyperがHTTP通信、Tokioが非同期実行を担います。Nagiはroute登録、型付き状態、Response、制限とエラー処理のAPIを提供します。Axum／Towerへの変更は比較検討中で、現行サーバーの置き換えや性能改善が決まったわけではありません。

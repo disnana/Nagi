@@ -1,6 +1,6 @@
 # Read and write JSON
 
-Define a class for the data you want to read. `json_decode[User](text)` turns JSON into a `User`; `json_encode(user)` turns it back into a JSON string.
+Nagi checks the mapping between JSON and Nagi types; Serde/serde_json perform the conversion. Define a class for the data you want to read. `json_decode[User](text)` turns JSON into a `User`; `json_encode(user)` turns it back into a JSON string.
 
 ```nagi
 class User:
@@ -37,3 +37,5 @@ JSON is read directly into the requested type. String fields own their data and 
 Currently, `json_encode` writes NaN and positive or negative infinity as `null` rather than returning an error, including values inside Lists and classes. That `null` cannot be decoded as `f64`; an encoded non-finite `f64?` value decodes as `None`.
 
 See [HTTP and HTML](http.md) for JSON requests and responses.
+
+The implementation is in the [JSON runtime](../../runtime/src/lib.rs) and [generated class conversions](../../compiler/src/emit.rs). [Type contract tests](../../compiler/tests/builtin_type_contracts.rs) check accepted types and borrowing restrictions; the [runtime tests](../../runtime/src/lib.rs) check invalid input and field validation.

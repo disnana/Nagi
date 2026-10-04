@@ -1,6 +1,6 @@
 # Nagi Tasks — ブラウザーから使う小さなタスク管理
 
-HTML/CSS/JavaScriptを埋め込み、NagiのJSON APIとSQLiteで動くサンプルです。追加・編集・完了・削除、絞り込み、全件の集計を備えています。外部のWebライブラリやCDNは使いません。
+HTML/CSS/JavaScriptを埋め込み、NagiのJSON APIとSQLiteで動くサンプルです。追加・編集・完了・削除、絞り込み、全件の集計を備えています。ブラウザー側のUIライブラリやCDNは使いません。HTTPとDBの処理はNagiランタイム内のRustライブラリを使います。
 
 ## 起動
 
