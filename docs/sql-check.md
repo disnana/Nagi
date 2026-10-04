@@ -1,6 +1,6 @@
 # SQLの事前検査
 
-`check`にschemaを指定すると、SQLiteのSQL文字列の名前・返却列・bind数を実行前に検査できます。通常の`check`や`build`・`run`では自動で有効になりません。この機能は次期版向けの追加機能です。公開済み版との差は[変更履歴](../CHANGELOG.md)を参照してください。
+Nagi 0.1.10以降では、`check`にschemaを指定すると、SQLiteのSQL文字列の名前・返却列・bind数を実行前に検査できます。通常の`check`や`build`・`run`では自動で有効になりません。版ごとの変更は[変更履歴](../CHANGELOG.md)を参照してください。
 
 ## 使い方
 

@@ -1,6 +1,6 @@
 # Nagiについて
 
-Nagiは、Python風の読みやすい構文でバックエンドを書くための、開発中のプログラミング言語です。HTTP・JSON・DBなどの一般的な処理をRustの知識なしで書き、必要なところではRustのライブラリを使って拡張できることを目指しています。
+Nagiは、Python風の構文と型付きのコードでバックエンドを書くための、開発中のプログラミング言語です。HTTP・JSON・SQLiteには標準APIを使い、それ以外の処理には小さなRustアダプターを通じて既存ライブラリを組み合わせられます。
 
 名前は日本語の「凪」に由来します。「内部は激しく動いていても、表面は凪のように穏やか」という思いを込めています。
 
@@ -10,7 +10,7 @@ Nagiは、Python風の読みやすい構文でバックエンドを書くため�
 
 HTTPのルート・ヘッダー・応答、型付きJSON、SQLite、async、actor・Supervisorを使えます。move・view・copyでデータの受け渡しを表し、失敗は`Result`で返します。Pythonのライブラリを読み込む機能はありません。
 
-[最初の実行](getting-started.md)から始め、[HTTP](http.md)や[サンプルプロジェクト](library-examples.md)を試してください。
+[最初の実行](getting-started.md)から始め、[HTTP](http.md)や[サンプルプロジェクト](library-examples.md)を試してください。[Axumの見積API](../test-nagi-code/application-examples/axum-service/README.md)では、RustのHTTP基盤からNagiの型付きasync関数を呼び、業務処理の結果を`Result`で返します。
 
 ## 処理を調整する
 
@@ -26,7 +26,7 @@ Lowには生ポインター、unsafe、メモリ配置の指定、C ABIはあり
 
 Nagiのlexer・parser・型検査・Rust生成は独自の実装です。現在はRustコードを出力し、rustcが最終検査、最適化、機械語生成を行います。生成した実行ファイルにRust/Cargoのインストールは不要です。
 
-HTTP輸送、非同期実行、JSON、SQLiteの基盤にはHyper・Tokio・Serde・rusqliteなどを使います。Nagi側が提供するのは、その上の型付きAPIと、Nagiのコードに対する検査・診断です。[コンパイラの構成](compiler-internals.md)に分担を記載しています。
+HTTP輸送、非同期実行、JSON、SQLiteの基盤にはHyper・Tokio・Serde・rusqliteなどを使います。Nagi側が提供するのは、その上の型付きAPIと、Nagiのコードに対する検査・診断です。標準HTTPは現在Hyperを使い、Axumへの置き換えは未決定です。[コンパイラの構成](compiler-internals.md)に分担を記載しています。
 
 Rust経由の生成を当面の基盤とします。独自バックエンド、VM、self-hostingは実装済みの機能でも、次回リリースの約束でもありません。選択の理由、Lowの維持費用、保留事項は[設計判断](../DESIGN.md)にまとめています。
 

@@ -2,7 +2,7 @@
 
 Edit, check, and run Nagi High (`.nagi`) and Low (`.low`). Command labels and some messages are currently Japanese.
 
-The published version is 0.1.12. This page describes the main branch. Post-release fixes to execution preparation and standard API source display will be included in the next VSIX.
+This page describes extension 0.1.13, which includes fixes to execution preparation and standard API source display. See the [Changelog](../../CHANGELOG.md) for versioned changes.
 
 | Feature | Compiler required |
 | --- | --- |
@@ -70,7 +70,7 @@ Untrusted workspaces do not run the compiler. Highlighting, indentation, and bui
 
 Set the entry file, Rust dependencies, and native Low in [nagi.toml](projects.md). The extension searches upward from the open file for the nearest manifest. Even from a helper file, it checks and runs `entry`. Without a manifest, it processes the open file alone.
 
-Use the top-right run button or **Nagi: 実行** (Run) in the Command Palette. Lower, build, and run first save edited project files and loaded imports. On main, preparation is canceled if saving fails or sources or settings change during preparation.
+Use the top-right run button or **Nagi: 実行** (Run) in the Command Palette. Lower, build, and run first save edited project files and loaded imports. In extension 0.1.13, preparation is canceled if saving fails or sources or settings change during preparation.
 
 Diagnostics appear in Problems, compiler output in **Nagi** under Output, and build/run output in the terminal. Read Rust and dependency diagnostics in the terminal. A successful Nagi check does not mean Rust's checks will succeed.
 

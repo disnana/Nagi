@@ -110,6 +110,20 @@ fn unowned(mut t: &Type) -> &Type {
     t
 }
 
+fn sequence_element(t: &Type) -> Option<Type> {
+    match t.0.as_str() {
+        "List" => Some(t.inner()),
+        "view" => match t.inner().0.as_str() {
+            // Match rust_type's exact view special cases. For example,
+            // view[owned[str]] is a slice of Strings, rather than &str.
+            "str" => None,
+            "bytes" => Some(Type::named("u8")),
+            _ => Some(t.inner()),
+        },
+        _ => None,
+    }
+}
+
 fn json_type_supported(
     t: &Type,
     decoding: bool,
@@ -252,6 +266,16 @@ fn negative_boundary_type(expr: &Expr, expected: Option<&Type>) -> Option<Type> 
         _ => return None,
     };
     (value.parse::<u128>().ok() == Some(magnitude)).then_some(ty)
+}
+
+fn explicit_integer_zero(expr: &Expr) -> bool {
+    match &expr.kind {
+        E::Int(value) => value.parse::<u128>().ok() == Some(0),
+        // Parentheses are removed by the parser. Only recognize literal zero
+        // and its negation, without evaluating expressions or following names.
+        E::Unary(op, value) if op == "-" => explicit_integer_zero(value),
+        _ => false,
+    }
 }
 
 pub fn check(p: &mut Program) -> Result<(), String> {
@@ -2532,7 +2556,9 @@ impl Checker {
                 }
                 let elem = match t.0.as_str() {
                     "Range" => Type::named("i64"),
-                    "List" | "view" => t.inner(),
+                    "List" | "view" => sequence_element(&t).ok_or_else(|| {
+                        error(s.line, "view[str]の文字列反復は未対応です。forにはrangeまたは連続配列が必要です")
+                    })?,
                     _ => return Err(error(s.line, "forにはrangeまたは連続配列が必要です")),
                 };
                 let borrowed_element = !self.copy_type(&elem);
@@ -2908,6 +2934,18 @@ impl Checker {
                         {
                             return Err(error(line, "演算にはnative数値型が必要です"));
                         }
+                        if matches!(op.as_str(), "/" | "%")
+                            && matches!(
+                                left.0.as_str(),
+                                "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
+                            )
+                            && explicit_integer_zero(b)
+                        {
+                            return Err(error(
+                                b.line,
+                                format!("整数の{op}の除数に0は指定できません。ゼロ以外の値を指定してください"),
+                            ));
+                        }
                         left
                     }
                 }
@@ -2944,8 +2982,7 @@ impl Checker {
                 self.hold_value(x, true);
                 let ix = self.expr(i, Some(&Type::named("i64")))?;
                 self.demand(&ix, &Type::named("i64"), line)?;
-                if t.0 == "List" || t.0 == "view" {
-                    let a = t.inner();
+                if let Some(a) = sequence_element(&t) {
                     // A metadata-free record named Error/Db/Html can be built
                     // directly even though its typed head emits the intrinsic
                     // runtime type. Preserve known literal-record provenance,

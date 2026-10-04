@@ -1173,6 +1173,85 @@ async fn handler_timeout_cancels_future_and_releases_request_capacity() {
     server.stop().await;
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn handler_timeout_rejects_a_ready_response_after_blocking_poll() {
+    async fn slow(_: Request, _: Arc<()>) -> Result<Response, Error> {
+        // A timer cannot preempt this poll. Once it returns, the server must
+        // still reject a response completed after the handler deadline.
+        std::thread::sleep(Duration::from_millis(80));
+        Ok(text(Status::OK, "late"))
+    }
+    async fn fast(_: Request, _: Arc<()>) -> Result<Response, Error> {
+        Ok(text(Status::OK, "fast"))
+    }
+    let app = route(app_default(()), Method::GET, "/slow", slow).unwrap();
+    let app = route(app, Method::GET, "/fast", fast).unwrap();
+    let server = Server::new(
+        app,
+        capacity(options(1024, 1000, 10, 1000).unwrap(), 1, 1).unwrap(),
+    )
+    .await;
+    let mut socket = server.connect().await;
+    send(
+        &mut socket,
+        b"GET /slow HTTP/1.1\r\nHost: localhost\r\n\r\n",
+    )
+    .await;
+    assert_eq!(response(&mut socket, false).await.status, 504);
+    send(
+        &mut socket,
+        b"GET /fast HTTP/1.1\r\nHost: localhost\r\n\r\n",
+    )
+    .await;
+    let result = response(&mut socket, false).await;
+    assert_eq!(result.status, 200);
+    assert_eq!(result.body, b"fast");
+    server.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn handler_panic_after_deadline_returns_500_and_releases_admission() {
+    async fn late_panic(_: Request, _: Arc<()>) -> Result<Response, Error> {
+        // This poll cannot be preempted. If it unwinds after the deadline,
+        // preserve the panic boundary (500 and close), rather than the 504
+        // used for a response that completed too late.
+        std::thread::sleep(Duration::from_millis(80));
+        panic!("private late handler failure");
+    }
+    async fn healthy(_: Request, _: Arc<()>) -> Result<Response, Error> {
+        Ok(text(Status::OK, "healthy"))
+    }
+    let app = route(app_default(()), Method::GET, "/panic", late_panic).unwrap();
+    let app = route(app, Method::GET, "/healthy", healthy).unwrap();
+    let server = Server::new(
+        app,
+        capacity(options(1024, 1000, 10, 1000).unwrap(), 1, 1).unwrap(),
+    )
+    .await;
+    let mut socket = server.connect().await;
+    send(
+        &mut socket,
+        b"GET /panic HTTP/1.1\r\nHost: localhost\r\n\r\n",
+    )
+    .await;
+    let failed = response(&mut socket, false).await;
+    assert_eq!(failed.status, 500);
+    assert_eq!(failed.all("connection"), ["close"]);
+    assert_eq!(failed.body, b"Internal Server Error");
+    assert!(closed(&mut socket).await.is_empty());
+
+    let mut socket = server.connect().await;
+    send(
+        &mut socket,
+        b"GET /healthy HTTP/1.1\r\nHost: localhost\r\n\r\n",
+    )
+    .await;
+    let healthy = response(&mut socket, false).await;
+    assert_eq!(healthy.status, 200);
+    assert_eq!(healthy.body, b"healthy");
+    server.stop().await;
+}
+
 #[tokio::test]
 async fn connection_capacity_and_shutdown_deadline_leave_no_handler_tasks() {
     let (state, started, _, cancelled) = gate();

@@ -1,0 +1,25 @@
+class QuoteInput:
+    quantity: i64
+
+class Quote:
+    quantity: i64
+    total_minor: i64
+
+enum QuoteError:
+    InvalidQuantity
+
+@rust("native::pause")
+extern async def pause() -> unit
+
+@rust("native::run_server")
+extern async def run_server(port: i64) -> Result[unit, Error]
+
+async def calculate(input: QuoteInput) -> Result[Quote, QuoteError]:
+    if input.quantity < 1 or input.quantity > 100:
+        return fail(QuoteError.InvalidQuantity)
+    await pause()
+    return ok(Quote(quantity=input.quantity, total_minor=input.quantity * 1250))
+
+async def main() -> Result[unit, Error]:
+    port = try parse_i64(env("NAGI_SAMPLE_PORT", "8097"))
+    return await run_server(port)

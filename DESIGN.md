@@ -2,7 +2,9 @@
 
 [English](DESIGN.en.md)
 
-Nagiは、一般的なバックエンドを読みやすいHighで書き、必要なところでRustの資産を使える言語を目指します。HTTP・JSON・DBを使うアプリで、手書きRustを要求する範囲を減らし、失敗の理由をNagiのコードから理解できることが目標です。
+Nagiは、読みやすいHighで型付きの処理を書き、Rustの既存ライブラリや自作コードを組み合わせる言語を目指します。主な対象はバックエンドです。よく使うHTTP・JSON・DB操作にはNagi APIを用意し、それを越える機能はRustアダプターでつなぎます。
+
+連携の手間を減らすことと、失敗の理由をNagiのコードから理解できることを重視します。任意のRust APIをそのまま使えることや、Rustの知識が一切要らないことを、現在の機能として約束するものではありません。
 
 この文書には、現在のmainにある実装と、採用・保留した設計方針をまとめています。使い方は[リファレンス](docs/README.md)、今後の順序は[roadmap](docs/roadmap.md)、公開版の変更は[CHANGELOG](CHANGELOG.md)で確認できます。
 
@@ -21,6 +23,7 @@ Python風の構文を使いますが、Pythonと同じ動作をする言語で�
 | アプリの主な書き方 | Highを中心にする | 字下げ構文、型・所有権の検査を実装済み |
 | 一般的な処理 | 既存ライブラリを使うNagi APIで提供する | HTTP・JSON・SQLite等で実装済み。APIの不足は残る |
 | 高度な処理 | Rustアダプターとexternで接続する | sync／async連携を実装済み。任意のRust型は直接使えない |
+| Rust資産との共存 | アプリの処理をHighで書き、既存framework・driver・独自基盤を組み合わせる | Axumとの双方向async連携をサンプルで検証。一般のasync callback型は未対応 |
 | Low | 既存互換性、波括弧構文、生成内容の確認、関数差し替えに範囲を絞る | 実装済み。独立した低水準言語への拡張は当面進めない |
 | 実行ファイルの生成 | 現在のRust backendを使う | Rust/Cargoによるネイティブ生成を実装済み |
 | DBの拡張 | SQLiteとPostgreSQLの型を分け、操作・行・エラーの規則を揃える | 新APIは未実装。module名・資源契約は未決 |
@@ -48,6 +51,26 @@ Nagi checkerを持つ理由は、`nagic check`やエディターで、Nagiの位
 二つのcheckerを持つ以上、その差を把握して保つ費用は避けられません。Nagiの規則を増やすときは、High・Lowの検査結果だけでなく、生成Rustが受理されるかも確認します。独自backendへ進む場合も、今の意味論やランタイムを自動的に引き継げるわけではありません。
 
 根拠: [コンパイル経路](compiler/src/emit.rs)、[所有権境界のテスト](compiler/tests/ownership_boundaries.rs)、[ビルド診断のテスト](compiler/tests/build_diagnostics.rs)、[Rust依存設定のテスト](compiler/tests/rust_dependencies.rs)。検査の範囲は[所有権](docs/ownership.md#借用と検査の範囲)を参照してください。
+
+## Rust資産との接続を中心にする
+
+ライブラリを使うアプリ作者と、Rustアダプターを作る作者の両方を支えます。一般的な操作には標準APIを用意し、独自の資産には小さなアダプターを作って再利用できる形を目指します。Rustの型・traitをすべてHighへ公開することや、各crateを専用の標準APIで包むことは、現在決めた方針ではありません。
+
+| 担当 | 内容 |
+|---|---|
+| Nagi | アプリのclass・enum、検証・計算、Result、asyncの呼び出し、Nagi上の診断 |
+| Rustアダプター | 対応する型とエラーの変換、ライブラリ固有の設定、生成されたNagi関数との接続 |
+| Rustライブラリ | HTTPの輸送・middleware、DB driver・pool、暗号、OS連携などの実装 |
+
+現在は`nagi.toml`でCargo依存とRustファイルを指定し、`@rust`を付けた`extern`宣言から呼び出します。Rust側から、生成された特定のNagi関数を名前で呼び、async関数をawaitすることもできます。同じCargoビルド内のソース連携で、安定した外部ABIではありません。
+
+[Axum見積API](test-nagi-code/application-examples/axum-service/README.md)では、Rustがroute・JSON入力・応答statusを担当し、Nagiが型付きの数量検証と価格計算を担当します。RustからNagiのasync関数を呼び、NagiもRustのasync処理をawaitします。この経路は固定した関数名と生成型に依存します。任意のasync関数値をexternの引数として渡す機能とは別です。
+
+Rust側で作ったHTTPサーバーには、そのアダプターの制限・停止・panic処理が適用されます。Nagi標準HTTPの設定は自動では適用されません。コピーやserialization、エラー変換もアダプターの実装次第です。
+
+次に確認するのは、宣言とRust実装の不一致を診断から追えるか、同じアダプターを別のアプリで再利用できるか、資源の所有・共有・終了をどちらが担当するかです。不透明な資源型、汎用async callback、宣言の自動生成は未実装の候補で、具体的な用途と契約を決めてから扱います。
+
+根拠: [Rust依存の読み込み](compiler/src/project.rs)、[externの検査](compiler/src/check.rs)、[Rust生成](compiler/src/emit.rs)、[Rust依存の回帰テスト](compiler/tests/rust_dependencies.rs)、[アプリの検証](scripts/verify_application_examples.py)。手順と対応型は[Rust連携](docs/modules-and-rust.md)を参照してください。
 
 ## Lowは必要か
 
@@ -80,7 +103,7 @@ Highの別実装、ASTの表示、Rustアダプターも比較対象にします
 
 既存ライブラリを使っても、Nagi側の責任は残ります。どの型を公開するか、引数をmoveするか借りるか、どの失敗をResultへ返すか、取消とcloseで何が終わるかを決める必要があります。Rustの型を単に隠しても、扱いやすいNagi APIになるとは限りません。
 
-現在の標準HTTPは型付きrequest・response・共有state・async handlerを提供します。SQLiteはclassへの行変換を提供しますが、bindは固定形で、SQL文字列や列名を通常の`check`で検査しません。mainには、schemaを明示して名前・必要な返却列・bind数を確認する[SQLの事前検査](docs/sql-check.md)があります。値の型・NULL可否は検査せず、公開0.1.9には未収録です。pool・transaction・PostgreSQLの標準APIもありません。新しいDB資源とアダプターの契約は[ライブラリ設計案](docs/library-design.md)で検討します。
+現在の標準HTTPは型付きrequest・response・共有state・async handlerを提供します。SQLiteはclassへの行変換を提供しますが、bindは固定形で、SQL文字列や列名を通常の`check`で検査しません。Nagi 0.1.10以降では、schemaを明示して名前・必要な返却列・bind数を確認する[SQLの事前検査](docs/sql-check.md)を使えます。値の型・NULL可否は検査しません。pool・transaction・PostgreSQLの標準APIもありません。新しいDB資源とアダプターの契約は[ライブラリ設計案](docs/library-design.md)で検討します。
 
 Axum／Towerを採用するかは、同じAPI、接続容量、期限、本文上限、panic応答、停止条件で比べてから判断します。AxumもHyperを使うため、Router／middlewareの比較とlistenerの変更を分けます。既存の異なる条件のベンチマークを、採用の根拠にはしません。
 

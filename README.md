@@ -1,8 +1,8 @@
-# Nagi 0.1.9 — 開発中のバックエンド向け言語
+# Nagi 0.1.10 — 開発中のバックエンド向け言語
 
 [English](README.en.md)
 
-Nagiは、Python風の読みやすい構文でバックエンドを記述するためのプログラミング言語です。HTTP・JSON・DBなどの一般的な処理を、Rustの知識がなくても書けることを目指しています。必要に応じて、Rustのライブラリと手書きのアダプターで連携できます。
+Nagiは、Python風のHighで型付きの処理を書き、Rustのライブラリや自作コードを組み合わせるプログラミング言語です。主な対象はバックエンドです。よく使うHTTP・JSON・DB操作にはNagi APIを用意し、高度な処理はRustアダプターでつなぐ方針です。
 
 現在はNagiからRustコードを生成し、Rust/Cargoでネイティブ実行ファイルを作ります。仕様と標準APIは開発中です。型・所有権・失敗・並行処理の扱いを実例で検証しており、`check`に成功してもRust側の検査でビルドに失敗する場合があります。
 
@@ -13,6 +13,8 @@ Nagiは、Python風の読みやすい構文でバックエンドを記述する�
 [準備と最初の実行](docs/getting-started.md) → [入門ガイド](docs/language-guide.md) → [HTTP](docs/http.md)の順で始められます。書式やAPIを引くには[リファレンスの目次](docs/README.md)、実例を読むには[サンプル一覧](docs/library-examples.md)へ。
 
 紹介と日英のDocsは[公式サイト](https://nagi.disnana.com/)で読めます。[目的と実装の範囲](docs/introduction.md)、[設計判断とその理由](DESIGN.md)、[今後の優先順位](docs/roadmap.md)も記載しています。
+
+AIコーディング向けのDocsと開発skillは、人間向けの`docs/`とは分けて[ai/](ai/README.md)に置いています。
 
 ## インストール
 
@@ -39,7 +41,25 @@ nagic --help
 
 [VS Code拡張](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)と[IntelliJ IDEA・PyCharm向けプラグイン](editors/jetbrains-nagi/README.md)もあります。操作は[エディターの案内](docs/editor.md)を参照してください。
 
-インストーラーはmainから、コンパイラは公開Releaseから取得します。このリポジトリと公式サイトには未配布の変更も含まれます。公開版との差分は[CHANGELOGのUnreleased](CHANGELOG.md#unreleased)で確認できます。
+インストーラーはmainから、コンパイラは公開Releaseから取得します。このREADMEのコード例はNagi 0.1.10用です。インストールした版は`nagic --version`で、版ごとの変更と未リリースの変更は[CHANGELOG](CHANGELOG.md)で確認できます。
+
+### アンインストール
+
+Windows（PowerShell）:
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/uninstall.ps1')))
+```
+
+Linux / macOS（bash）:
+
+```bash
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/uninstall.sh | bash)
+```
+
+削除予定を確認するにはPowerShellのコマンド末尾に`-WhatIf`を付けるか、bash側を`bash -s -- --dry-run`にします。独自の導入先を使った場合は、インストール時と同じ`-InstallDir`または`--prefix`・`--bin-dir`を指定し、独自のプロファイルには同じ`--profile`を指定してください。
+
+変更済み・検証できない配布物は残します。プロジェクト、Rust/Cargo、VS Code拡張は変更しません。詳細は[導入ガイド](docs/getting-started.md#アンインストールする)へ。
 
 ## 最初に動かす
 
@@ -67,6 +87,8 @@ nagic run server.nagi
 [http://127.0.0.1:8080/](http://127.0.0.1:8080/)を開くと`Hello, Nagi!`が返ります。Ctrl+Cで停止します。ソースからコンパイラを作る場合は、`cargo build --release --locked`の後に`./target/release/nagic`を使います。
 
 ヘッダー、JSON、独自エラー、共有状態の使い方は[HTTP](docs/http.md)と[認証サンプル](test-nagi-code/library-examples/http-auth/README.md)へ。
+
+HTTPの基盤をRust側に置くこともできます。[Axum見積API](test-nagi-code/application-examples/axum-service/README.md)では、AxumがrouteとJSON入力を担当し、Nagiのasync関数が型付きの検証と価格計算を行います。手書きRustとの分担と制約は[設計方針](DESIGN.md#rust資産との接続を中心にする)にまとめています。
 
 ## コード構造を図にする
 

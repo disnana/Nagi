@@ -2,7 +2,9 @@
 
 [日本語](DESIGN.md)
 
-Nagi aims to let developers write ordinary backends in readable High code and use Rust assets where needed. For applications using HTTP, JSON, and databases, the goal is to reduce the need for handwritten Rust and make failures understandable from Nagi code.
+Nagi aims to let developers write typed logic in readable High code and combine it with existing Rust libraries or custom code. Backends are its main focus. Common HTTP, JSON, and database operations should have Nagi APIs; features beyond those connect through Rust adapters.
+
+Priorities are reducing integration work and making failures understandable from Nagi code. Direct access to arbitrary Rust APIs, or needing no Rust knowledge at all, is not a claim about current capabilities.
 
 This document covers implementations on main and the design directions adopted or left open. See the [reference](docs/en/README.md) for usage, the [roadmap](docs/en/roadmap.md) for priorities, and [CHANGELOG](CHANGELOG.md) for changes in published releases.
 
@@ -21,6 +23,7 @@ The name comes from the Japanese word 凪, meaning calm. The idea is that the su
 | Primary application syntax | Put High first | Indentation syntax and type/ownership checks are implemented |
 | Common operations | Provide Nagi APIs using existing libraries | Implemented for HTTP, JSON, SQLite, and other operations; API gaps remain |
 | Advanced operations | Connect through Rust adapters and extern | Sync/async integration exists; arbitrary Rust types are not directly usable |
+| Coexistence with Rust assets | Write application logic in High and combine it with existing frameworks, drivers, and custom infrastructure | Bidirectional async integration with Axum is verified in a sample; general async function types are unsupported |
 | Low | Limit its scope to compatibility, brace syntax, generated-code inspection, and function replacement | Implemented; expansion into an independent systems language is paused |
 | Executable generation | Keep the current Rust backend | Native generation through Rust/Cargo is implemented |
 | DB expansion | Separate SQLite and PostgreSQL types; align operation, row, and error conventions | New APIs are unimplemented; module names and resource contracts are undecided |
@@ -48,6 +51,26 @@ The Nagi checker exists to report Nagi rules at Nagi source locations in `nagic 
 Maintaining two checkers requires tracking their differences. Changes to Nagi rules must be checked against generated Rust as well as High/Low checker results. A future independent backend would not automatically inherit the current semantics or runtime.
 
 Evidence: the [compilation pipeline](compiler/src/emit.rs), [ownership-boundary tests](compiler/tests/ownership_boundaries.rs), [build-diagnostic tests](compiler/tests/build_diagnostics.rs), and [Rust dependency tests](compiler/tests/rust_dependencies.rs). See [ownership](docs/en/ownership.md#borrowing-and-the-limits-of-checking) for checking limits.
+
+## Make Rust integration a central goal
+
+Support both application authors using libraries and authors building Rust adapters. Common operations should have standard APIs; custom assets should connect through small, reusable adapters. Exposing every Rust type and trait in High, or wrapping every crate in a dedicated standard API, is not an adopted plan.
+
+| Responsibility | Contents |
+|---|---|
+| Nagi | Application classes/enums, validation and calculation, Result, async calls, and Nagi diagnostics |
+| Rust adapter | Supported type and error conversions, library-specific configuration, and connections to generated Nagi functions |
+| Rust libraries | HTTP transport and middleware, DB drivers and pools, cryptography, and OS integration |
+
+Today, `nagi.toml` specifies Cargo dependencies and a Rust file, while `extern` declarations with `@rust` call its functions. Rust can also call a particular generated Nagi function by name and await it. This is source integration within one Cargo build, without a stable external ABI.
+
+The [Axum quote API](test-nagi-code/application-examples/axum-service/README.en.md) puts routing, JSON extraction, and response statuses in Rust; Nagi validates typed quantities and calculates prices. Rust calls a Nagi async function, which also awaits a Rust async operation. This depends on known function names and generated types. It is separate from passing arbitrary async function values through extern parameters.
+
+A server built in Rust follows that adapter's limits, shutdown, and panic handling. Nagi's standard HTTP settings do not apply automatically. Copies, serialization, and error conversions also depend on the adapter.
+
+Next, assess whether diagnostics explain declaration/implementation mismatches, whether an adapter can be reused by another application, and who owns, shares, and closes resources. Opaque resource types, general async callbacks, and generated declarations remain unimplemented candidates requiring concrete uses and contracts.
+
+Evidence: [Rust dependency loading](compiler/src/project.rs), [extern checking](compiler/src/check.rs), [Rust generation](compiler/src/emit.rs), [dependency regressions](compiler/tests/rust_dependencies.rs), and [application verification](scripts/verify_application_examples.py). See [Rust integration](docs/en/modules-and-rust.md) for usage and supported types.
 
 ## Is Low necessary?
 
@@ -80,7 +103,7 @@ Standard HTTP uses Hyper for transport; legacy HTTP uses Axum. Async execution u
 
 Using existing libraries leaves design responsibilities in Nagi: which types to expose, when arguments move or borrow, which failures become Result, and what cancellation or close actually completes. Hiding Rust types alone does not produce an easy-to-use Nagi API.
 
-Standard HTTP exposes typed requests, responses, shared state, and async handlers. SQLite converts rows into classes, but bind arguments have fixed shapes, and ordinary `check` does not validate SQL strings or column names. Main includes explicit [SQL/schema checks](docs/en/sql-check.md) for names, required result columns, and bind counts. These checks do not validate value types or NULL behavior and are absent from published 0.1.9. Standard pool, transaction, and PostgreSQL APIs are absent. New DB resources and adapter contracts are discussed in the [library design proposal](docs/en/library-design.md).
+Standard HTTP exposes typed requests, responses, shared state, and async handlers. SQLite converts rows into classes, but bind arguments have fixed shapes, and ordinary `check` does not validate SQL strings or column names. Nagi 0.1.10 supports explicit [SQL/schema checks](docs/en/sql-check.md) for names, required result columns, and bind counts. These checks do not validate value types or NULL behavior. Standard pool, transaction, and PostgreSQL APIs are absent. New DB resources and adapter contracts are discussed in the [library design proposal](docs/en/library-design.md).
 
 Axum/Tower adoption requires comparison with the same API, connection capacity, deadlines, body limits, panic responses, and shutdown conditions. Since Axum also uses Hyper, Router/middleware evaluation and listener changes should be separate. Existing benchmarks with different conditions do not establish an adoption decision.
 

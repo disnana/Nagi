@@ -39,7 +39,8 @@ def plan(base: str, head: str) -> dict[str, str]:
     base = git("rev-parse", "--verify", f"{base}^{{commit}}").strip()
     previous = versions(base)
     changed = git("diff", "--name-only", base, head).splitlines()
-    packaging_changed = any(p in (".github/workflows/ci.yml", "scripts/install.sh", "scripts/install.ps1")
+    packaging_changed = any(p in (".github/workflows/ci.yml", "scripts/install.sh", "scripts/install.ps1",
+                                  "scripts/uninstall.sh", "scripts/uninstall.ps1")
                             or p.startswith("scripts/releases/") for p in changed)
     extension_changed = any(p.startswith("editors/vscode-nagi/")
                             and not p.startswith("editors/vscode-nagi/test/")

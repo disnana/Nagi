@@ -123,7 +123,7 @@ Command-line relative paths use the terminal's working directory. Duplicate SOUR
 
 Project-generated code goes to `build/<entry filename without extension>/`, and executables to `build/native-target/release/`. For `main.nagi`, the executable is `nagi-main.exe` on Windows or `nagi-main` on Linux. Separate build folders allow applications to reuse the same entry filename.
 
-Set `NAGI_NATIVE_TARGET_DIR` to share dependency builds across applications. On main, only with this override, executable names include an identifier for the source and generated output directory, such as `nagi-main-0123456789abcdef.exe`. This collision fix is not included in the published 0.1.9 compiler. The `native:` line that `build` and `run` print to stderr gives the actual path. Concurrent compilation into the same generated output directory is not supported.
+Set `NAGI_NATIVE_TARGET_DIR` to share dependency builds across applications. In Nagi 0.1.10, only with this override, executable names include an identifier for the source and generated output directory, such as `nagi-main-0123456789abcdef.exe`. The `native:` line that `build` and `run` print to stderr gives the actual path. Concurrent compilation into the same generated output directory is not supported.
 
 ## Use with VS Code
 

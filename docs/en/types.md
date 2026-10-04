@@ -40,6 +40,10 @@ Use `Some(_)` to discard a value. There is no general unwrap API. Annotate empty
 
 See [syntax](syntax.md) for parameter, return, and borrow annotations; [ownership](ownership.md) for copy and move rules; and [built-in functions](builtins.md) for accepted argument types.
 
+In Nagi 0.1.10, `view[bytes]` iteration and indexing yield `u8` values. Character iteration and integer indexing of `view[str]` are unsupported. Use `slice` to borrow part of a string with checked UTF-8 byte boundaries.
+
+Nagi 0.1.10 supports rebinding a view parameter to local data and adding local views to lists that hold views. These views cannot outlive their local owners or be returned as borrowed input data. Complex borrows across branches can still pass check and fail the Rust build.
+
 ## Distinguish variants with an enum
 
 ```nagi

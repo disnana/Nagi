@@ -2,7 +2,7 @@
 
 Nagiの`.nagi`（High）と`.low`（Low）を編集・検査・実行する拡張です。[English](https://nagi.disnana.com/en/docs/vscode-extension/)
 
-公開版は0.1.12です。このREADMEはmainのソースを説明します。公開後に加わった実行前の変更確認や標準APIの定義表示の修正は、次のVSIXに含まれます。
+このREADMEは拡張0.1.13を説明します。実行前の変更確認と標準APIの定義表示の修正を含みます。版ごとの変更は[CHANGELOG](../../CHANGELOG.md)で確認できます。
 
 | 機能 | コンパイラ |
 | --- | --- |

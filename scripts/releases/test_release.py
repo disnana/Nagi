@@ -103,11 +103,12 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertEqual(result["release_nagi"], "false")
         self.assertEqual(result["release_vscode"], "false")
 
-    def test_installer_only_changes_run_platform_checks_without_releasing(self):
-        for file in ("scripts/install.sh", "scripts/install.ps1"):
+    def test_installer_and_uninstaller_only_changes_run_checks_without_releasing(self):
+        for file in ("scripts/install.sh", "scripts/install.ps1",
+                     "scripts/uninstall.sh", "scripts/uninstall.ps1"):
             with self.subTest(file=file):
                 base = plan.git("rev-parse", "HEAD").strip()
-                self.change(file, "# Installer update")
+                self.change(file, "# Installer or uninstaller update")
                 result = plan.plan(base, self.commit())
                 self.assertEqual(result["package_nagi"], "true")
                 self.assertEqual(result["release_nagi"], "false")

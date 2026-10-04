@@ -77,7 +77,7 @@ return await http.serve(app, 8080, http.default_options())
 
 Mappers handle application failures. The server handles malformed HTTP, limits, and deadlines. Avoid exposing database error details or credentials in responses.
 
-On main, an unwinding panic in a handler or mapper before the response starts returns a generic 500 and closes that connection. Published 0.1.9 does not include this fix. Catching a panic does not roll back shared state or database updates. Return ordinary failures through Result. Recovery is not guaranteed for `panic=abort`, process termination such as OOM, a second panic during unwinding, custom Rust cleanup, or failures after the response starts.
+In Nagi 0.1.10, an unwinding panic in a handler or mapper before the response starts returns a generic 500 and closes that connection. Catching a panic does not roll back shared state or database updates. Return ordinary failures through Result. Recovery is not guaranteed for `panic=abort`, process termination such as OOM, a second panic during unwinding, custom Rust cleanup, or failures after the response starts.
 
 When an error response needs a request ID, retain the validated ID in the handler and move it into a custom error only on failure. The [quote API example](../../test-nagi-code/application-examples/quote-api/README.en.md) passes its ID to a shared mapper this way.
 
@@ -95,6 +95,8 @@ When an error response needs a request ID, retain the validated ID in the handle
 | Header buffer / count | 32 KiB / 100 | `header_limits(options, bytes, count)` |
 
 Every setter returns `Result[Options, Error]`. Connection and request limits control admission, not thread counts. Ctrl+C stops admission and waits for active connections. The server aborts and joins remaining connection tasks after the shutdown deadline. Already running blocking work cannot be forcibly stopped.
+
+In Nagi 0.1.10, a handler that completes normally after its deadline returns 504, including when it did not yield. The deadline cannot forcibly stop synchronous work: the response waits for control to return, and completed state changes are not rolled back.
 
 An oversized body is rejected with 413 and `Connection: close`, without calling the handler. The server does not drain the remaining body. Closing with unread data can cause a TCP reset; receipt of the 413 is not guaranteed for every OS, client, or upload pattern.
 

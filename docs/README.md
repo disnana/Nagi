@@ -2,7 +2,7 @@
 
 初めて使うなら[インストール](getting-started.md)、書き方を調べるなら[文法](syntax.md)・[組み込み関数](builtins.md)へ。
 
-このDocsはリポジトリのソースに対応し、公式サイトは通常mainから生成します。[Changelog](../CHANGELOG.md)の`Unreleased`にある変更は、公開配布版にはまだ含まれません。
+このDocsのコード例はNagi 0.1.10とVS Code拡張0.1.13を基準にしています。公式サイトは通常mainから生成するため、未リリースの変更も含まれます。版ごとの変更と`Unreleased`の内容は[Changelog](../CHANGELOG.md)で確認できます。
 
 目的と現在の範囲は[Nagiについて](introduction.md)へ。以下のリファレンスは実装済みAPIの使い方と制限を示します。未実装の案は[設計](library-design.md)・[開発予定](roadmap.md)に分けています。
 

@@ -135,9 +135,11 @@ Try the [Result API example](result-api.md) for invalid input, missing data, dat
 
 The checker rejects a `Result` discarded as an expression, including values with outer `owned` wrappers. It also rejects async calls that are not awaited. However, it does not detect unused Results assigned to variables, and `try` and `match` do not support `owned[Result[...]]`. A successful `check` does not prove that every error is handled.
 
-Result failures differ from panics. Operations such as out-of-bounds array access or integer division by zero can panic rather than return Result. There is no general exception syntax equivalent to Python's `raise`/`except`.
+Result failures differ from panics. Out-of-bounds array access and integer `/` or `%` whose divisor becomes zero at runtime panic rather than return Result. There is no general exception syntax equivalent to Python's `raise`/`except`.
 
-On main, HTTP servers convert unwinding handler panics before the response starts into a generic 500 and close the connection. Published 0.1.9 does not include this fix. A 500 does not roll back database or shared state changes. See the [HTTP reference](http-server.md#app-and-routes) for the recovery limits.
+For integers, `check` rejects `/` or `%` with an explicit zero divisor in both High and Low. This includes parenthesized zero and `-0` for signed integers; ordinary type checks run first. The checker does not evaluate variable values or constant expressions such as `1 - 1`, or analyze the overflow from dividing a signed integer's minimum value by `-1`. Those cases can pass `check` and still fail the Rust build.
+
+In Nagi 0.1.10, HTTP servers convert unwinding handler panics before the response starts into a generic 500 and close the connection. A 500 does not roll back database or shared state changes. See the [HTTP reference](http-server.md#app-and-routes) for the recovery limits.
 
 Scopes check child results after the scope body finishes and detect panics at that point. In [`std.actor`](actor.md), available from Nagi 0.1.8, a business error `E` inside `Turn` keeps the next state and becomes the reply. A handler's own Error or panic invokes the Supervisor's restart policy. `call` returns `Result[Result[R, E], CallError]`, separating business errors from not-ready, stopped, timeout, and other call failures. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) also maps them to HTTP responses.
 
@@ -145,4 +147,4 @@ The older `supervisor_demo` remains a fixed-worker restart test API. Neither mec
 
 Diagnostics show the filename, line, relevant source text, and reason. Build errors with an identifiable origin first show the Nagi or Low statement or definition line, followed by the full generated Rust diagnostic. Rust edit suggestions apply to Rust; do not apply them directly to Nagi. Handwritten Rust and unmapped diagnostics retain Rust's output. Precise columns and mappings for every Rust diagnostic are not implemented. Definition navigation also uses original columns.
 
-See [Result matching](../../compiler/tests/result_match.rs), [custom error types](../../compiler/tests/typed_errors.rs), [map_error](../../compiler/tests/result_stdlib.rs), [scopes](../../runtime/src/concurrent.rs), and [actors](../../runtime/src/actor/tests.rs) for implementation and tests.
+See [Result matching](../../compiler/tests/result_match.rs), [custom error types](../../compiler/tests/typed_errors.rs), [map_error](../../compiler/tests/result_stdlib.rs), [integer zero-division checks](../../compiler/tests/integer_zero_division.rs), [scopes](../../runtime/src/concurrent.rs), and [actors](../../runtime/src/actor/tests.rs) for implementation and tests.

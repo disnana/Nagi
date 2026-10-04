@@ -10,7 +10,7 @@ Try command-line applications, reusable libraries, Rust integration, HTTP, Super
 | [JSON report](../../test-nagi-code/library-examples/foundation-report/README.en.md) | Reuse the CLI's library and aggregate valid rows while handling invalid ones |
 | [Read JSON with Rust](../../test-nagi-code/library-examples/rust-json/README.en.md) | Use serde_json and convert results to a Nagi class and Result |
 | [Rust async operation](../../test-nagi-code/library-examples/rust-async/README.en.md) | Await a Tokio timer from Nagi |
-| [Custom HTTP foundation](../../test-nagi-code/library-examples/custom-http/README.en.md) | Pass a Nagi function to Axum/Tokio and serve HTTP without opening a database |
+| [Custom HTTP foundation](../../test-nagi-code/library-examples/custom-http/README.en.md) | Pass a synchronous Nagi function to Axum/Tokio and serve HTTP without opening a database |
 | [Standard HTTP and authentication](../../test-nagi-code/library-examples/http-auth/README.en.md) | Handle headers, 401, route-specific errors, and typed shared state in Nagi |
 | [Supervisor and HTTP](../../test-nagi-code/library-examples/supervised-service/README.en.md) | Update actor state in order; map business errors and shutdown to HTTP responses |
 | [Low calculation kernel](../../test-nagi-code/library-examples/low-kernel/README.en.md) | Replace a High implementation with Low while keeping the application's calls |
@@ -44,6 +44,7 @@ Selecting just a source file skips its neighboring `nagi.toml`. Use `--project` 
 | [Stock JSON report](../../test-nagi-code/application-examples/stock-report/README.en.md) | Read typed JSON from stdin and validate it with custom errors |
 | [Device settings API](../../test-nagi-code/application-examples/device-settings/README.en.md) | Read SQLite NULL, boolean, float and BLOB columns; retain settings across restarts |
 | [Reservation worker](../../test-nagi-code/application-examples/seat-reservations/README.en.md) | Handle duplicate bookings and capacity errors; restart one actor independently |
+| [Axum quote API](../../test-nagi-code/application-examples/axum-service/README.en.md) | Serve HTTP with Rust/Axum; await a named Nagi async calculation returning Result |
 | [Rust bridge](../../test-nagi-code/rust-bridge/) | CRC-32, serde_json, and async Rust functions |
 | [Fractal](../../test-nagi-code/README.md#exe単体で見られるフラクタル) | Console output and distribution as an executable |
 
@@ -62,4 +63,4 @@ The script compares both pricing implementations, checks module and type aliases
 
 On Unix it checks a clean exit after SIGINT. On Windows it terminates the process and checks that the listener closes; check console Ctrl+C manually using the HTTP sample's instructions.
 
-`verify_application_examples.py` checks [seven apps](../../test-nagi-code/application-examples/README.en.md). It independently checks and builds six High apps from the original source and saved generated Low, and checks the handwritten Low order quote CLI directly. Its 13 runs cover input boundaries, existing-file protection, SQLite persistence, HTTP headers and errors, and Supervisor restarts, readiness and shutdown. Build warnings fail verification. Results and logs are written to `build/application-example-verification/`. CI runs it through `build_examples.py`.
+`verify_application_examples.py` checks the [applications](../../test-nagi-code/application-examples/README.en.md). It independently checks and builds High applications from the original source and saved generated Low, and checks the handwritten Low order quote CLI directly. It checks input boundaries, existing-file protection, SQLite persistence, HTTP headers and errors, and Supervisor restarts, readiness and shutdown. Build warnings fail verification. Results and logs are written to `build/application-example-verification/`. CI runs it through `build_examples.py`.

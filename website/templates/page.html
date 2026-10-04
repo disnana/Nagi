@@ -11,6 +11,7 @@
   <link rel="alternate" hreflang="en" href="{{english_url}}">
   <link rel="alternate" hreflang="x-default" href="{{japanese_url}}">
   <link rel="icon" type="image/svg+xml" href="{{base}}assets/favicon.svg">
+  <script src="{{base}}assets/theme.js"></script>
   <link rel="stylesheet" href="{{base}}assets/site.css">
   <link rel="stylesheet" href="{{base}}assets/highlight.css">
   <script src="{{base}}assets/site.js" defer></script>
@@ -25,6 +26,14 @@
         <a href="{{language_base}}docs/">Docs</a>
         <a href="{{repo}}">GitHub</a>
         <a class="language-link" href="{{other_route}}" lang="{{other_language}}" hreflang="{{other_language}}" aria-label="{{switch_label}}">{{other_label}}</a>
+        <label class="theme-control" hidden>
+          <span class="sr-only">{{theme_label}}</span>
+          <select id="theme-select">
+            <option value="system">{{theme_system}}</option>
+            <option value="light">{{theme_light}}</option>
+            <option value="dark">{{theme_dark}}</option>
+          </select>
+        </label>
       </nav>
     </div>
   </header>

@@ -1,6 +1,6 @@
 # About Nagi
 
-Nagi is a programming language in development for writing backends with Python-like syntax. It aims to support common HTTP, JSON, and database operations without requiring knowledge of Rust, while letting applications use Rust libraries where needed.
+Nagi is a programming language in development for writing backends in readable, typed High code with Python-like syntax. Its standard APIs cover HTTP, JSON, and SQLite; small handwritten Rust adapters connect more specialized work to existing Rust libraries.
 
 The name comes from the Japanese word *nagi* (凪), meaning calm seas: the surface can remain calm while the internals are busy.
 
@@ -10,7 +10,7 @@ Applications normally use High, in `.nagi` files. Indentation defines blocks; ty
 
 Available features include HTTP routes, headers and responses, typed JSON, SQLite, async, actors, and Supervisors. Moves, views, and copies describe data passing; `Result` represents failures. Python library imports are unsupported.
 
-Start with [setup](getting-started.md), then try [HTTP](http.md) or the [sample projects](library-examples.md).
+Start with [setup](getting-started.md), then try [HTTP](http.md) or the [sample projects](library-examples.md). The [Axum quote API](../../test-nagi-code/application-examples/axum-service/README.en.md) combines a Rust HTTP layer with Nagi types, async business logic, and `Result`.
 
 ## Adjust an implementation
 
@@ -26,7 +26,7 @@ Low has no raw pointers, unsafe syntax, memory layout declarations, or C ABI. De
 
 Nagi has its own lexer, parser, type checker, and Rust generator. It currently emits Rust; rustc performs final checks, optimization, and machine-code generation. Generated executables do not require Rust/Cargo to be installed.
 
-HTTP transport, asynchronous execution, JSON, and SQLite use libraries including Hyper, Tokio, Serde, and rusqlite. Nagi provides typed APIs over these foundations and checks and diagnostics for Nagi source. See [compiler internals](compiler-internals.md) for the division of responsibilities.
+HTTP transport, asynchronous execution, JSON, and SQLite use libraries including Hyper, Tokio, Serde, and rusqlite. Nagi provides typed APIs over these foundations and checks and diagnostics for Nagi source. The standard HTTP server currently uses Hyper; whether to replace it with Axum remains undecided. See [compiler internals](compiler-internals.md) for the division of responsibilities.
 
 Rust code generation remains the backend for now. An independent backend, VM, and self-hosting are neither implemented features nor promises for the next release. See [design decisions](../../DESIGN.en.md) for the rationale, Low's maintenance costs, and open questions.
 

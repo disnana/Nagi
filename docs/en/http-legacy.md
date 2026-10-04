@@ -112,6 +112,6 @@ To change it, set `NAGI_HTTP_REQUEST_WAIT_SECONDS` to a positive integer before 
 
 The server currently binds to loopback only. HTTP/2, TLS, authentication, arbitrary middleware declarations in High, and deployment mechanisms are not implemented. Large-class JSON streaming and general High streaming syntax are also absent. JSON responses encode classes into `Vec<u8>` and pass it to Body.
 
-Main includes a fix that converts handler panics before the response starts into 500 responses; published 0.1.9 does not include it. This does not roll back database or state updates, or recover from process aborts and failures during response transmission. See [Error handling](error-handling.md#checks-and-panics) for its scope.
+Nagi 0.1.10 converts handler panics before the response starts into 500 responses. This does not roll back database or state updates, or recover from process aborts and failures during response transmission. See [Error handling](error-handling.md#checks-and-panics) for its scope.
 
 The implementation is in [HTTP attribute code generation](../../compiler/src/emit.rs), the [legacy runtime API](../../runtime/src/lib.rs), and [HTTP connection management](../../runtime/src/http.rs).

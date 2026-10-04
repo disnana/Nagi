@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## Nagi 0.1.10
+
+- Infer local lifetimes for view-containing function parameters so checked, non-escaping reassignments and list appends compile through High and saved Low. Preserve public signatures, return-origin checks, Rust adapter wrappers, and owning-parameter destruction order.
+- Give direct views reassigned in returning branches separate local lifetimes. Preserve updates on continuing paths, loop and match bindings, and rejection of escaping local views.
+- Check byte-view iteration and indexing as `u8`, matching the generated Rust slice. Reject string-view iteration before Rust generation; preserve ordinary and owned-element slices.
+- Reject explicit integer division and remainder by literal zero during `check`, with diagnostics at the original source line. Leave runtime-dependent division and floating-point arithmetic unchanged.
+- Return HTTP 504 when a handler finishes successfully after its deadline, including synchronous work that does not yield. This does not interrupt synchronous work or roll back application state.
+- Add a database-free byte-inspector HTTP example and verify binary inputs, nullable JSON output, and route behavior through High and saved Low.
+- Add an Axum quote API with Rust HTTP transport and Nagi async business logic. Verify typed JSON inputs, custom Result errors, invalid configuration, and shutdown through High and saved Low.
+- Make Rust-library integration a central design goal in DESIGN, README, and the Japanese/English Docs. Document current adapter boundaries and remaining limitations.
+- Add separate coding-agent guides and a reusable development skill under `ai/`, with compiler-checked examples and instructions for validating Rust adapters.
+- Add Bash and PowerShell uninstallers with preview modes. Remove verified, unchanged distributions and managed command/PATH entries; preserve modified or unverifiable files.
+- Add system, light, and dark appearance settings to the Japanese/English site. Align the header, Docs navigation, and footer across desktop and mobile layouts.
+- Run JetBrains integration tests with the current compiler in CI, alongside IntelliJ IDEA and PyCharm plugin compatibility checks.
 - Give view-returning function values with no borrowing input a static output lifetime. Preserve input-bound callbacks, nested function lifetime scopes, and static origins through calls in High and Low.
 - Diagnose non-Copy field moves through shared values and borrowed resources before Rust generation, including outer `owned` wrappers and temporary call results. Preserve Copy reads, explicit copies, and moves from ordinary owned records.
 - Reject bare expressions that discard a Result wrapped in `owned`, including nested ownership wrappers. Preserve explicit bindings and existing `try`/`match` restrictions for wrapped values.
@@ -10,12 +24,16 @@
 - Accept direct borrow-free return values such as `None`, empty lists, and owned error results in view-containing return types. Preserve checks on local views, aliases, and opaque function results.
 - Add an initial IntelliJ IDEA/PyCharm plugin for High/Low highlighting, indentation, folding, and explicit check/run commands. Verify IDEA and PyCharm 2025.1.1, with compatibility checks for the supported 2024.3 builds.
 - Add gutter Run buttons for top-level High and Low entry points in the JetBrains plugin, preserving project selection, saving, and trust checks.
-- Stop VS Code tasks when project inputs or settings change during saving, and keep standard-library definition views separate for different compiler contents.
 - Preserve failing exit codes for owned Result entry points and avoid string allocations when reading `error_kind` without taking ownership.
 - Give applications distinct executable names when explicitly sharing a native build cache. Keep default names and shared dependency caching unchanged.
 - Recover installer updates after a read-only shell profile rejects PATH registration, and reject PATH entries containing colons before changing the installation.
 - Add cross-platform TCP regressions for oversized HTTP bodies, incomplete uploads, and connection capacity recovery. Clarify Supervisor reply errors, worker failures, and scope cancellation in both Docs languages.
 - Return a generic 500 and close the connection when an HTTP handler unwinds with a panic, including standard HTTP error mappers and the compatibility router. Preserve ordinary Result handling and request deadlines; this does not roll back application state.
+
+## VS Code 0.1.13
+
+- Stop tasks when project inputs or settings change during saving.
+- Keep standard-library definition views separate for different compiler contents, including updates that retain the same version string.
 
 ## Nagi 0.1.9
 

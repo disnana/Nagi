@@ -100,14 +100,16 @@ LABELS = {
                docs_contents="Docsの目次", page_contents="このページの目次", on_page="このページ",
                source_label="このページのソース", docs_version="Nagi 0.1 · 開発中のDocs",
                copy_label="コピー", copy_aria="このコードをコピー", code_aria="コード",
-               table_aria="表（横にスクロールできます）"),
+               table_aria="表（横にスクロールできます）", theme_label="外観",
+               theme_system="システム", theme_light="ライト", theme_dark="ダーク"),
     "en": dict(skip_label="Skip to content", home_label="Nagi home", menu_label="Site navigation",
                start_label="Get started", status_label="Nagi 0.1 · In development", footer_label="Footer",
                other_language="ja", other_label="日本語", switch_label="このページを日本語で読む",
                docs_contents="Docs contents", page_contents="On this page", on_page="On this page",
                source_label="Page source", docs_version="Nagi 0.1 · Development docs",
                copy_label="Copy", copy_aria="Copy this code", code_aria="Code",
-               table_aria="Table (scroll horizontally)"),
+               table_aria="Table (scroll horizontally)", theme_label="Appearance",
+               theme_system="System", theme_light="Light", theme_dark="Dark"),
 }
 
 
@@ -211,6 +213,14 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
         (output / "CNAME").write_text(domain + "\n", encoding="utf-8")
     shutil.copytree(HERE / "assets", output / "assets")
     css = HtmlFormatter(style=CodeStyle).get_style_defs(".highlight")
+    code_colors = {
+        "#f5f8fa": "--soft", "#1d2937": "--ink", "#526176": "--muted",
+        "#196233": "--code-keyword", "#82351f": "--code-type",
+        "#213f85": "--code-function", "#315a86": "--code-string",
+        "#246e4d": "--code-number", "#9b2828": "--code-error",
+        "#000000": "--ink", "#ffffc0": "--code-selection", "#ffffcc": "--code-selection",
+    }
+    css = re.sub(r"#[0-9a-fA-F]{6}", lambda match: f"var({code_colors[match.group().lower()]})", css)
     (output / "assets/highlight.css").write_text(css, encoding="utf-8")
     template = (HERE / "templates/page.html").read_text(encoding="utf-8")
 

@@ -137,6 +137,8 @@ nagic run app.nagi --rust native.rs
 
 Lowでは`extern fn ...;`と書きます。Rustのasync関数には`extern async def`（Lowでは`extern async fn`）を使い、呼び出し側でawaitします。Rustの関数のパスは`native::`から始まる識別子の列です。extern関数は、viewを返す宣言やHTTP属性には対応していません。
 
+[Axumの見積API](../test-nagi-code/application-examples/axum-service/README.md)は、HTTPのルーティングとJSONの読み取りをRustに、型付きの検証と計算をNagiに置く例です。Rustアダプターから名前を指定してNagiのasync関数をawaitし、`Result`を受け取ります。そのNagi関数からもRustのasync処理をawaitします。これは生成された特定の関数を直接呼ぶ方法で、任意のasync関数値をextern引数で渡す機能ではありません。
+
 ### Rustのcrateを使う
 
 Cargoの依存は`--rust-dep NAME=VERSION`で追加します。たとえばserde_jsonを使うアダプターでは、次のように指定します。
@@ -145,7 +147,7 @@ Cargoの依存は`--rust-dep NAME=VERSION`で追加します。たとえばserde
 nagic run app.nagi --rust native.rs --rust-dep serde_json=1.0
 ```
 
-初回はCargoが依存を取得するため、通常はネットワーク接続が必要です。ローカルcrateの`path`、`features`、依存名とpackage名を分ける`package`指定には、`nagi.toml`の依存tableを使います。[ローカルRustライブラリのサンプル](../test-nagi-code/rust-library/README.md)は、独立したcrateをアダプターから呼び、Rustの構造体・エラーをNagiのclass・Errorへ変換します。crateを使う完全な例は[リポジトリのRust連携サンプル](../test-nagi-code/rust-bridge/)にあります。入口・Rustファイル・依存を毎回指定せずに使う場合は、[nagi.tomlとプロジェクト](projects.md)に保存してください。CLIとVS Codeで同じ設定を使えます。
+初回はCargoが依存を取得するため、通常はネットワーク接続が必要です。ローカルcrateの`path`、`features`、依存名とpackage名を分ける`package`指定には、`nagi.toml`の依存tableを使います。[ローカルRustライブラリのサンプル](../test-nagi-code/rust-library/README.md)は、独立したcrateをアダプターから呼び、Rustの構造体・エラーをNagiのclass・Errorへ変換します。生成されたNagiの名前への参照はアダプターにまとめ、独立したcrateにはそのcrate自身の型とAPIを残します。crateを使う完全な例は[リポジトリのRust連携サンプル](../test-nagi-code/rust-bridge/)にあります。入口・Rustファイル・依存を毎回指定せずに使う場合は、[nagi.tomlとプロジェクト](projects.md)に保存してください。CLIとVS Codeで同じ設定を使えます。
 
 Nagiの`check`は、宣言した型と呼び出し、所有権、借用を検査します。`check`・`lower`・`symbols`はCargoを呼ばず、依存を取得しません。Rustの本体やcrateのAPIは検査しません。宣言とRustの実装が一致するかどうかは`build`で検査します。登録済み標準resourceは対応するnative型を使えます。それ以外のRust固有の型は、Rust側で数値・str・List・class・Resultなどへ変換してから渡してください。Rust側から生成したNagiのclassを参照する場合は、rootのimportに合わせて`super::型名`や`super::module名::型名`を使います。
 

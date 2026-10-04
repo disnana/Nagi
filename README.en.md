@@ -1,8 +1,8 @@
-# Nagi 0.1.9 — a backend language in development
+# Nagi 0.1.10 — a backend language in development
 
 [日本語](README.md)
 
-Nagi is a programming language for writing backends with Python-like syntax. It aims to let developers write common HTTP, JSON, and database operations without knowing Rust. When needed, handwritten Rust adapters connect applications to Rust libraries.
+Nagi is a programming language for writing typed logic in Python-like High code and combining it with Rust libraries or custom code. Backends are its main focus. Common HTTP, JSON, and database operations should have Nagi APIs; advanced integrations connect through Rust adapters.
 
 Nagi currently generates Rust code, which Rust/Cargo compiles into native executables. The language specification and standard APIs are still in development. Types, ownership, failures, and concurrency are being tested through working applications; passing `check` does not guarantee that the Rust build will succeed.
 
@@ -13,6 +13,8 @@ The name comes from the Japanese word *nagi* (凪), meaning calm seas: the surfa
 Start with [setup](docs/en/getting-started.md), the [language guide](docs/en/language-guide.md), and [HTTP](docs/en/http.md). Use the [reference index](docs/en/README.md) to look up syntax and APIs, or read the [sample projects](docs/en/library-examples.md).
 
 The [official website](https://nagi.disnana.com/en/) includes the introduction and English Docs. See [purpose and current scope](docs/en/introduction.md), [design decisions and rationale](DESIGN.en.md), and the [development priorities](docs/en/roadmap.md).
+
+AI coding docs and the development skill live in [ai/](ai/README.md), separately from the human guides in `docs/`.
 
 ## Install
 
@@ -39,7 +41,25 @@ nagic --help
 
 A [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang) and an [IntelliJ IDEA/PyCharm plugin](editors/jetbrains-nagi/README.en.md) are available. See the [editor guide](docs/en/editor.md).
 
-The installer comes from main; the compiler comes from a published Release. This repository and the official site also contain unreleased changes. See [Unreleased in CHANGELOG](CHANGELOG.md#unreleased) for differences from the published version.
+The installer comes from main; the compiler comes from a published Release. The examples here use Nagi 0.1.10. Check your installed compiler with `nagic --version`, and see [CHANGELOG](CHANGELOG.md) for versioned changes and unreleased work.
+
+### Uninstall
+
+Windows (PowerShell):
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/uninstall.ps1')))
+```
+
+Linux / macOS (bash):
+
+```bash
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/uninstall.sh | bash)
+```
+
+To preview removals, append `-WhatIf` to the PowerShell command or replace `bash` with `bash -s -- --dry-run`. For a custom installation, pass the same `-InstallDir` or `--prefix`/`--bin-dir` values used to install, and the same `--profile` if you chose a custom shell profile.
+
+Modified or unverifiable distributions are retained. Projects, Rust/Cargo, and the VS Code extension remain unchanged. See the [setup guide](docs/en/getting-started.md#uninstall) for details.
 
 ## Run an example
 
@@ -67,6 +87,8 @@ nagic run server.nagi
 Open [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to receive `Hello, Nagi!`. Stop it with Ctrl+C. To build the compiler from source, run `cargo build --release --locked`, then use `./target/release/nagic`.
 
 See [HTTP](docs/en/http.md) and the [authentication example](test-nagi-code/library-examples/http-auth/README.en.md) for headers, JSON, custom errors, and shared state.
+
+HTTP infrastructure can also live in Rust. The [Axum quote API](test-nagi-code/application-examples/axum-service/README.en.md) uses Axum for routing and JSON extraction, then calls a Nagi async function for typed validation and pricing. See the [design direction](DESIGN.en.md#make-rust-integration-a-central-goal) for responsibilities and limits.
 
 ## Map code structure
 
