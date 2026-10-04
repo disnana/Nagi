@@ -30,7 +30,11 @@ Create a branch from the latest `main` and target `main`. Keep each PR focused o
 
 Explain the problem, the resulting behavior, and the checks you ran with their results. State any checks you did not run and limitations that remain. For a bug fix, add a regression test where appropriate that fails before the fix and passes afterward. Performance claims need measurement conditions and raw results.
 
-Keep documentation and examples consistent with the implementation and update matching Japanese and English pages. Distinguish changes on main from published features; put examples of unimplemented APIs on design pages. Run changed executable examples to verify them. During review, explain your changes in your own words and discuss the code and content respectfully.
+Keep documentation and examples consistent with the implementation and update matching Japanese and English pages. Distinguish changes on main from published features; put examples of unimplemented APIs on design pages. Run changed executable examples to verify them.
+
+Lead with the operation and its result. Describe limitations through the conditions that trigger them and the resulting behavior. Omit repeated cautions and unsupported promotional claims.
+
+During review, explain your changes in your own words and discuss the code and content respectfully.
 
 ## Check your work
 

@@ -133,7 +133,7 @@ Try the [Result API example](result-api.md) for invalid input, missing data, dat
 
 ## Checks and panics
 
-The checker rejects a bare `Result` discarded as an expression and async calls that are not awaited. Exhaustive checking for unhandled failures is incomplete, including unused assigned Results and discarded `owned[Result[...]]` values. A successful `check` does not prove that every error is handled.
+The checker rejects a `Result` discarded as an expression, including values with outer `owned` wrappers. It also rejects async calls that are not awaited. However, it does not detect unused Results assigned to variables, and `try` and `match` do not support `owned[Result[...]]`. A successful `check` does not prove that every error is handled.
 
 Result failures differ from panics. Operations such as out-of-bounds array access or integer division by zero can panic rather than return Result. There is no general exception syntax equivalent to Python's `raise`/`except`.
 

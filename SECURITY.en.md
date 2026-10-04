@@ -18,7 +18,9 @@ Report information disclosure, unintended execution, data corruption, or denial 
 
 ## Assumptions and current limits
 
-Nagi is in development in the 0.1 series. `nagic build/run` and Rust integration do not sandbox arbitrary programs. Handle untrusted source, `nagi.toml`, and Rust dependencies in an isolated environment without secrets or important files. VS Code checks workspace trust; JetBrains checks project trust before invoking the compiler. These checks do not sandbox the program.
+Nagi is in development in the 0.1 series. `nagic build/run` and Rust integration do not isolate the code they run. Test untrusted source, `nagi.toml`, and Rust dependencies in an isolated environment without secrets or important files.
+
+VS Code checks workspace trust and JetBrains checks project trust before starting the compiler. The resulting program runs with the same permissions as an ordinary application.
 
 The HTTP server binds to `127.0.0.1` by default. It now has deadlines for header/keep-alive waiting, body reception, and handlers, plus body limits. Standard `std.http.server` also exposes connection/request capacities and send/shutdown deadlines. Its settings and limits differ from legacy `serve(Db, port)`. See [standard HTTP limits](docs/en/http-server.md) and the [legacy API load tests](docs/en/http-capacity.md).
 
