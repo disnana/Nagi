@@ -38,6 +38,8 @@ These commands download the latest published Nagi release, verify SHA-256, insta
 
 Install the VS Code extension from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang). See the [extension guide](docs/en/vscode-extension.md) for settings and usage.
 
+An initial plugin for IntelliJ IDEA and PyCharm provides High/Low highlighting, indentation assistance, checking and execution. See [building and installing it](editors/jetbrains-nagi/README.en.md).
+
 Stop any Nagi builds before updating and restart VS Code afterward. After a successful update, unchanged older distributions are removed so only the selected version remains. Modified or added files are preserved. The installer reports older copies it cannot verify or remove, including files locked by Windows. A failed update preserves the previous command. See [updating and selecting a version](docs/en/getting-started.md#update).
 
 ```bash
@@ -112,6 +114,7 @@ See [Code maps](docs/en/code-map.md) for filtering and rendering.
 | `examples/` | High, Low, and handwritten replacement examples |
 | `test-nagi-code/` | Task management, inventory API, Result recovery, and Rust integration samples |
 | `editors/vscode-nagi/` | VS Code highlighting, diagnostics, definitions, type hovers, completion, signature help, and check/build/run commands |
+| `editors/jetbrains-nagi/` | IntelliJ IDEA/PyCharm highlighting, indentation, folding, and check/run commands |
 | `tests/` | HTTP integration tests |
 | `fuzz/` | Parser/JSON mutation checks with fixed seeds |
 | `benchmarks/` | Comparison implementations, wrk scripts, and raw logs |

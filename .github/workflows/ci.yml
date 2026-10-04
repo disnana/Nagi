@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       full_checks: ${{ steps.changes.outputs.full_checks }}
+      jetbrains_checks: ${{ steps.changes.outputs.jetbrains_checks }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,6 +28,12 @@ jobs:
           CHECK_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           CHECK_HEAD: ${{ github.sha }}
         run: python scripts/ci/changes.py --event "$CHECK_EVENT" --base "$CHECK_BASE" --head "$CHECK_HEAD" --output "$GITHUB_OUTPUT"
+
+  jetbrains:
+    needs: changes
+    # main pushes use the dedicated workflow; PRs share the merge gate below.
+    if: github.event_name != 'push' && needs.changes.outputs.jetbrains_checks == 'true'
+    uses: ./.github/workflows/jetbrains.yml
 
   linux:
     needs: changes
@@ -266,7 +273,7 @@ jobs:
   ready:
     name: Ready to merge
     if: github.event_name == 'pull_request' && always()
-    needs: [changes, linux, release-plan, vscode-package, nagi-package]
+    needs: [changes, linux, jetbrains, release-plan, vscode-package, nagi-package]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -10,6 +10,7 @@
 - Add a UTF-8 file and typed JSON project to High/Low application verification. Use the generated VSIX path in installation instructions instead of a fixed version filename.
 - Accept multiline calls, constructors, lists, indexing, and function types in handwritten Low while preserving statement boundaries and source diagnostics.
 - Improve Low editing with brace-based folding, language-specific declaration help, import completion, and entry-point/import snippets.
+- Add an initial IntelliJ IDEA/PyCharm plugin for High/Low highlighting, indentation, folding, and explicit check/run commands.
 - Add runnable order-quote CLI, typed HTTP quote API, and supervised-worker projects with Japanese/English instructions and native smoke checks. Exercise direct Low projects as well as High and independently loaded Low in application verification.
 - Clarify the unsupported non-Copy List iteration diagnostic without rejecting supported Copy records.
 

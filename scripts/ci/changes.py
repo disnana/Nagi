@@ -1,4 +1,4 @@
-"""Run the full checks unless a complete Git range contains only Docs/site files."""
+"""Run full checks unless the complete range changes Docs/site or the independent JetBrains plugin."""
 from __future__ import annotations
 
 import argparse
@@ -18,11 +18,21 @@ SITE_FILES = {
     "website/CNAME", ".github/workflows/pages.yml",
 }
 ASSET_SUFFIXES = {".css", ".js", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2"}
+JETBRAINS_CHECK_INPUTS = {
+    ".github/workflows/ci.yml", "scripts/ci/changes.py", "scripts/ci/gate.py",
+    "scripts/ci/test_checks.py",
+}
+
+
+def valid_path(path: str) -> bool:
+    # Git paths are POSIX paths; reject malformed input rather than normalizing it.
+    return bool(path) and "\\" not in path and "\0" not in path and all(
+        part not in ("", ".", "..") for part in path.split("/")
+    )
 
 
 def is_docs_path(path: str) -> bool:
-    # Git paths are POSIX paths; reject malformed input rather than normalizing it.
-    if not path or "\\" in path or "\0" in path or any(part in ("", ".", "..") for part in path.split("/")):
+    if not valid_path(path):
         return False
     value = PurePosixPath(path)
     if path in ROOT_DOCS or path in SITE_FILES or path == "editors/vscode-nagi/README.md":
@@ -36,12 +46,29 @@ def is_docs_path(path: str) -> bool:
     return path.startswith("website/assets/") and value.suffix in ASSET_SUFFIXES
 
 
+def is_jetbrains_path(path: str) -> bool:
+    # The independent workflow checks this plugin. Do not include sibling
+    # editors, the shared classifier, or the compiler's own CI workflow.
+    return valid_path(path) and (
+        path.startswith("editors/jetbrains-nagi/")
+        or path == ".github/workflows/jetbrains.yml"
+    )
+
+
+def requires_jetbrains(path: str) -> bool:
+    # CI control-plane changes exercise both the caller and its merge gate.
+    return is_jetbrains_path(path) or path in JETBRAINS_CHECK_INPUTS
+
+
 def git(*args: str) -> bytes:
     return subprocess.check_output(["git", *args], cwd=ROOT, stderr=subprocess.PIPE)
 
 
 def classify(event: str, base: str, head: str) -> dict[str, str]:
-    result = {"full_checks": "true", "reason": "No complete Docs-only comparison."}
+    result = {
+        "full_checks": "true", "jetbrains_checks": "true",
+        "reason": "No complete Docs/plugin-only comparison.",
+    }
     if event not in ("push", "pull_request"):
         result["reason"] = "Manual, scheduled, or unrecognized event."
         return result
@@ -61,9 +88,16 @@ def classify(event: str, base: str, head: str) -> dict[str, str]:
         paths = raw[:-1].decode("utf-8").split("\0")
     except (OSError, subprocess.SubprocessError, UnicodeError):
         return result
-    if all(is_docs_path(path) for path in paths):
+    if any(not valid_path(path) for path in paths):
+        return result
+    result["jetbrains_checks"] = str(any(requires_jetbrains(path) for path in paths)).lower()
+    if all(is_docs_path(path) or is_jetbrains_path(path) for path in paths):
         result["full_checks"] = "false"
-        result["reason"] = "The complete range changes only Docs/site presentation."
+        result["reason"] = (
+            "The complete range changes only the independently checked JetBrains plugin and/or Docs/site presentation."
+            if any(is_jetbrains_path(path) for path in paths)
+            else "The complete range changes only Docs/site presentation."
+        )
     else:
         result["reason"] = "Code, configuration, build inputs, or an unrecognized path changed."
     return result
@@ -79,6 +113,7 @@ def main() -> None:
     result = classify(args.event, args.base, args.head)
     with args.output.open("a", encoding="utf-8") as output:
         output.write(f"full_checks={result['full_checks']}\n")
+        output.write(f"jetbrains_checks={result['jetbrains_checks']}\n")
     print(json.dumps(result, indent=2))
 
 

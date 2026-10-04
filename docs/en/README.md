@@ -2,13 +2,15 @@
 
 Start with [installation](getting-started.md). To look up code, open the [syntax reference](syntax.md) or [built-in functions](builtins.md).
 
+These Docs describe main. Features listed under `Unreleased` in the [Changelog](../../CHANGELOG.md) require a compiler built from source until the next release.
+
 ## First steps
 
 1. [Setup and first run](getting-started.md): install Nagi and run Hello World.
 2. [Learn by writing code](language-guide.md): variables, functions, lists, and error handling.
 3. [HTTP and HTML](http.md): build an API, then store data with [SQLite](database.md).
 
-See the [VS Code guide](editor.md) for editor support.
+See the [VS Code guide](editor.md) for editor support. See [JetBrains installation](../../editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm.
 
 ## Language reference
 
