@@ -1,4 +1,4 @@
-use crate::ast::*;
+use crate::ast::{block_returns as returning_block, *};
 use crate::diagnostics::Generated;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -841,16 +841,6 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
 fn string_or_value(e: &Expr, types: &RustTypes<'_>) -> String {
     static_string(e, types).unwrap_or_else(|| re(e, types))
 }
-// Match the checker's returns() criterion: a loop or try can still continue.
-fn returning_block(ss: &[Stmt]) -> bool {
-    ss.iter().any(|s| match &s.kind {
-        S::Return(_) => true,
-        S::If(_, a, b) => returning_block(a) && returning_block(b),
-        S::Match(_, arms) => !arms.is_empty() && arms.iter().all(|arm| returning_block(&arm.body)),
-        _ => false,
-    })
-}
-
 fn assigned_outer_views(
     ss: &[Stmt],
     bindings: &BTreeMap<String, Type>,
@@ -924,6 +914,7 @@ fn rb(
 ) {
     let mut bindings = outer_bindings.clone();
     let pad = "    ".repeat(n);
+    let terminal = returning_block(ss);
     for s in ss {
         out.origin(::std::option::Option::Some(s.line));
         out.push_str(&pad);
@@ -934,10 +925,21 @@ fn rb(
                 value,
                 declare,
             } => {
+                // A block that returns has no outgoing binding updates.
+                // Give each top-level immutable view assignment its own
+                // inferred lifetime, rather than unifying an earlier local
+                // borrow with a later returned input view. Direct views are
+                // Copy references and have no destructor. Continuing child
+                // blocks still mutate their parent's binding, so branch and
+                // loop updates remain visible. Owning containers must retain
+                // assignment and destruction semantics.
+                let rebind = terminal && annotation.as_ref().is_some_and(Type::is_view);
                 out.push_str(&format!(
                     "{}{name}{} = {};\n",
-                    if *declare { "let mut " } else { "" },
-                    if *declare && !annotation.as_ref().is_some_and(Type::is_async_function) {
+                    if *declare || rebind { "let mut " } else { "" },
+                    if (*declare || rebind)
+                        && !annotation.as_ref().is_some_and(Type::is_async_function)
+                    {
                         format!(": {}", local_type(annotation.as_ref().unwrap(), types))
                     } else {
                         String::new()

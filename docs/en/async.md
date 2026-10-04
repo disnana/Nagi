@@ -47,4 +47,4 @@ This assignment stores the function itself. Storing a call result with `pending 
 
 You cannot reassign a different async function to that variable. Use a separate variable or call each function in a branch. Reassigning the same function, and replacing a synchronous function, are supported.
 
-See the [scope runtime](../../runtime/src/concurrent.rs) and [code generation](../../compiler/src/emit.rs) for the implementation. [Scope tests](../../compiler/tests/scoped_tasks.rs) and [async function value tests](../../compiler/tests/async_value_types.rs) cover accepted and rejected inputs.
+See the [scope runtime](../../runtime/src/concurrent.rs) and [code generation](../../compiler/src/emit.rs) for the implementation. [Scope tests](../../compiler/tests/scoped_tasks.rs) and [async function value tests](../../compiler/tests/async_value_types.rs) cover accepted and rejected inputs. The [real-runtime tests](../../compiler/tests/scope_runtime_contract.rs) cover child errors, child panics, and a body `try` failure through High, saved Low, and handwritten Low, checking body continuation and completed child destruction.

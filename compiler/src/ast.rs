@@ -196,6 +196,18 @@ pub struct Stmt {
     pub binding_type: Option<Type>,
     pub binding_borrowed: bool,
 }
+
+/// Shared by ownership checking and Rust emission. A loop or scope can
+/// continue; only explicit returns and exhaustive returning branches qualify.
+pub(crate) fn block_returns(statements: &[Stmt]) -> bool {
+    statements.iter().any(|statement| match &statement.kind {
+        S::Return(_) => true,
+        S::If(_, a, b) => block_returns(a) && block_returns(b),
+        S::Match(_, arms) => !arms.is_empty() && arms.iter().all(|arm| block_returns(&arm.body)),
+        _ => false,
+    })
+}
+
 #[derive(Clone, Debug)]
 pub struct Function {
     pub name: String,

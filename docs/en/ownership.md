@@ -106,7 +106,9 @@ While a view borrows data, moving, reassigning, or appending to that data is res
 
 A view-containing return type can accept a directly constructed value with no borrow, such as `return None`, `return []`, or `return ok(None)`. Returning a local of a view-containing type still requires a tracked borrowing origin, even if it currently holds an empty value.
 
-Nagi's checker provides move and borrow diagnostics at Nagi source locations. It does not replace the checker for generated Rust. Cases such as reassigning views through complex branches can pass `check` and then fail Rust's borrow checks. Nagi can also conservatively reject code that Rust would accept.
+At the top level of a block that ends in `return`, a view can temporarily borrow local data, then be restored to an input view and returned. Generated Rust gives each assignment its own inferred borrow lifetime. Updates used after a branch or by later loop iterations remain mutations; this adds no owned-value copies. The [execution tests](../../compiler/tests/view_branch_rebinding.rs) cover High, saved Low, and handwritten Low. See the [Changelog](../../CHANGELOG.md) for release availability.
+
+Nagi's checker provides move and borrow diagnostics at Nagi source locations. It does not replace the checker for generated Rust. Reassigning and then returning an owning container that holds views, such as `List[view[str]]`, can still pass `check` and fail Rust's borrow checks. Nagi can also conservatively reject code that Rust would accept.
 
 Matching Rust adapter signatures, the `Clone` required by `copy`, `Send` for async work, and `Sync` for shared state are also ultimately checked by `build`. Wrapping T in `shared[T]` does not itself make T suitable for concurrent use. Both Nagi and Rust checks must pass to produce an executable.
 
