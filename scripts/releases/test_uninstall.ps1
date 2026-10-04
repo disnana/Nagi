@@ -21,6 +21,7 @@ using System;
 public static class NagiUninstallTestEnvironment {
     public static string UserPath;
     public static int Writes;
+    public static void ResetUserPathToNull() { UserPath = null; }
     public static string GetEnvironmentVariable(string name, EnvironmentVariableTarget target) {
         if (name != "Path" || target != EnvironmentVariableTarget.User)
             throw new InvalidOperationException("Unexpected environment read in uninstaller test");
@@ -345,7 +346,10 @@ try {
         $nullPathDirectory = Join-Path $temporary "null-path-$kind"
         if ($kind -eq 'empty') { New-Item -ItemType Directory -Path $nullPathDirectory | Out-Null }
         $env:Path = 'keep-entry'
-        [NagiUninstallTestEnvironment]::UserPath = $null
+        # PowerShell converts $null to String.Empty when assigning to a typed
+        # C# string field. Reset from C# so this fixture models an absent PATH.
+        [NagiUninstallTestEnvironment]::ResetUserPathToNull()
+        Assert ($null -eq [NagiUninstallTestEnvironment]::UserPath) 'Fixture did not clear User PATH to null'
         [NagiUninstallTestEnvironment]::Writes = 0
         Invoke-Uninstall $nullPathDirectory -FixturePath
         Assert ($null -eq [NagiUninstallTestEnvironment]::UserPath -and [NagiUninstallTestEnvironment]::Writes -eq 0) "Absent User PATH was rewritten for $kind root"
