@@ -1622,6 +1622,11 @@ impl<'a> Resolver<'a> {
             E::Name(name) | E::Call(name, _, _) | E::Record(name, _) => Some(name),
             _ => None,
         };
+        // Asset resolution runs before type checking. Preserve this known
+        // value binding so a callback named include_text is not read as a file.
+        if matches!(&expr.kind, E::Call(name, _, _) if self.locals.contains_key(name)) {
+            expr.resolution = Some(NameResolution::Local);
+        }
         if bare.is_some_and(|name| {
             !self.locals.contains_key(name)
                 && (self.raw || self.metadata.definition(name).is_none())

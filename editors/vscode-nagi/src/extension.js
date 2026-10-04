@@ -66,6 +66,31 @@ function activate(context) {
       config.get('rustFile', ''), config.get('rustDependencies', []), project);
   }
 
+  function symbolKey(executable, args, input) {
+    return JSON.stringify([executable, args, crypto.createHash('sha256').update(input).digest('hex')]);
+  }
+
+  function stamp(file) {
+    try { const s = fs.statSync(file); return `${s.mtimeMs}:${s.size}`; } catch { return ''; }
+  }
+
+  function dependencySnapshot(owner, stampFor, keyFor) {
+    let snapshot = owner.dependencies;
+    if (!snapshot) {
+      const cached = symbolCache.get(owner.symbolsKey);
+      if (!cached || cached.value.saved || cached.scope !== owner.scope || !Array.isArray(cached.value.index.files) ||
+          cached.value.index.files.some(file => typeof file !== 'string')) return;
+      const files = cached.value.index.files.filter(file => !stdlib.sourceUri(file));
+      if (!files.length) return;
+      snapshot = { files, stamps: cached.stamps };
+    }
+    const ownerKey = keyFor(owner.ownerFile, owner.root);
+    if (!snapshot.stamps.every(([file, time]) => stampFor(file) === time) ||
+        !snapshot.files.some(file => keyFor(file, owner.root) === ownerKey)) return;
+    owner.dependencies = snapshot;
+    return snapshot;
+  }
+
   function checkScope(document, settings) {
     return `${settings.project ? 'project' : 'source'}:${compiler.fileKey(settings.project || document.uri.fsPath, settings.root)}`;
   }
@@ -125,11 +150,34 @@ function activate(context) {
     symbolCache.clear();
   }
 
-  function invalidate() {
+  function invalidate(document) {
     epoch++;
-    for (const d of vscode.workspace.textDocuments) cancel(d);
-    results.clear();
-    diagnostics.clear();
+    // Several owners can share the same checked dependency graph. Resolve each
+    // path only once for this event, without retaining filesystem identities.
+    const stamps = new Map(), keys = new Map();
+    const stampFor = file => {
+      if (!stamps.has(file)) stamps.set(file, stamp(file));
+      return stamps.get(file);
+    };
+    const keyFor = (file, root) => {
+      const normalized = compiler.normalizeFile(file, root);
+      if (!keys.has(normalized)) keys.set(normalized, compiler.fileKey(normalized, root));
+      return keys.get(normalized);
+    };
+    const changed = isNagi(document) ? {
+      key: keyFor(document.uri.fsPath, '.'), scope: checkScope(document, options(document)),
+    } : undefined;
+    const unrelated = owner => {
+      if (!changed || owner.scope === changed.scope) return false;
+      const dependencies = dependencySnapshot(owner, stampFor, keyFor);
+      return dependencies && !dependencies.files.some(file => keyFor(file, owner.root) === changed.key);
+    };
+    for (const [key, job] of pending) {
+      if (unrelated(job)) job.epoch = epoch;
+      else { pending.delete(key); job.child?.kill(); }
+    }
+    for (const [key, result] of results) if (!unrelated(result)) results.delete(key);
+    publishDiagnostics();
     invalidateSymbols();
   }
 
@@ -162,15 +210,15 @@ function activate(context) {
     const input = files.length ? JSON.stringify({ files }) : undefined;
     if (input && Buffer.byteLength(input) > 16 * 1000 * 1000) return Promise.resolve();
     const version = document.version;
-    const startEpoch = epoch;
     const overlayKeys = files.map(file => compiler.fileKey(file.file, root));
-    const job = { overlayKeys, root, scope };
+    const job = { overlayKeys, root, scope, epoch, ownerFile: document.uri.fsPath,
+      symbolsKey: symbolKey(executable, argsFor('symbols', document, settings), JSON.stringify({ files })) };
     pending.set(key, job);
     return new Promise(resolve => {
       job.child = compiler.runCheck(executable,
         [...argsFor('check', document, settings), ...(input ? ['--editor-input'] : [])],
         root, config.get('checkTimeoutMs', 15000), result => {
-          if (pending.get(key) !== job || document.isClosed || document.version !== version || startEpoch !== epoch) return resolve();
+          if (pending.get(key) !== job || document.isClosed || document.version !== version || job.epoch !== epoch) return resolve();
           pending.delete(key);
           output.appendLine(`[check] ${document.uri.fsPath}\n${result.output || result.error?.message || ''}`);
           const failure = compiler.processFailure(result.error);
@@ -210,7 +258,7 @@ function activate(context) {
               parsed.message, vscode.DiagnosticSeverity.Error);
             item.source = 'nagic';
             clearTaskFile(target);
-            results.set(key, { uri: target, item, overlayKeys, root, scope });
+            results.set(key, { ...job, child: undefined, uri: target, item });
             if (manual) output.show(true);
           }
           publishDiagnostics();
@@ -284,9 +332,8 @@ function activate(context) {
     const input = JSON.stringify({ files });
     if (Buffer.byteLength(input) > 16 * 1000 * 1000) return Promise.resolve();
     const args = argsFor('symbols', document, settings);
-    const key = JSON.stringify([settings.executable, args, crypto.createHash('sha256').update(input).digest('hex')]);
+    const key = symbolKey(settings.executable, args, input);
     const cached = symbolCache.get(key);
-    const stamp = file => { try { const s = fs.statSync(file); return `${s.mtimeMs}:${s.size}`; } catch { return ''; } };
     if (cached && Date.now() - cached.created < 2000 && cached.stamps.every(([file, time]) => stamp(file) === time)) return Promise.resolve(cached.value);
     const startEpoch = symbolsEpoch;
     const version = document.version;
@@ -321,7 +368,7 @@ function activate(context) {
       if (!value && files.length > 0 && startEpoch === symbolsEpoch && !token.isCancellationRequested) value = await run(false);
       if (value) {
         const paths = [...(value.index.files || []).filter(file => !stdlib.sourceUri(file)).map(file => compiler.normalizeFile(file, settings.root)), settings.project, settings.executable].filter(Boolean);
-        symbolCache.set(key, { value, created: Date.now(), stamps: paths.map(file => [file, stamp(file)]) });
+        symbolCache.set(key, { value, scope: checkScope(document, settings), created: Date.now(), stamps: paths.map(file => [file, stamp(file)]) });
         if (symbolCache.size > 16) symbolCache.delete(symbolCache.keys().next().value);
       }
       return value;
@@ -356,7 +403,7 @@ function activate(context) {
     const offset = document.offsetAt(position);
     const word = features.wordAt(text, offset);
     return features.completionCandidates(snapshot?.index, text, offset, document.languageId === 'nagi-low', { file: document.uri.fsPath, saved: snapshot?.saved }).map(item => {
-      const kind = { function: vscode.CompletionItemKind.Function, pattern: vscode.CompletionItemKind.Keyword, class: vscode.CompletionItemKind.Class, resource: vscode.CompletionItemKind.Class, constant: vscode.CompletionItemKind.Constant, enum: vscode.CompletionItemKind.Enum, enum_member: vscode.CompletionItemKind.EnumMember, field: vscode.CompletionItemKind.Field, module: vscode.CompletionItemKind.Module, type: vscode.CompletionItemKind.TypeParameter, keyword: vscode.CompletionItemKind.Keyword }[item.kind];
+      const kind = { function: vscode.CompletionItemKind.Function, variable: vscode.CompletionItemKind.Variable, pattern: vscode.CompletionItemKind.Keyword, class: vscode.CompletionItemKind.Class, resource: vscode.CompletionItemKind.Class, constant: vscode.CompletionItemKind.Constant, enum: vscode.CompletionItemKind.Enum, enum_member: vscode.CompletionItemKind.EnumMember, field: vscode.CompletionItemKind.Field, module: vscode.CompletionItemKind.Module, type: vscode.CompletionItemKind.TypeParameter, keyword: vscode.CompletionItemKind.Keyword }[item.kind];
       const completion = new vscode.CompletionItem(item.name, kind);
       completion.detail = item.signature + (snapshot?.saved && !item.builtin ? ' （保存済み）' : '');
       completion.documentation = documentation(item, snapshot);
@@ -409,10 +456,10 @@ function activate(context) {
     { dispose() { for (const job of pending.values()) job.child?.kill(); pending.clear(); for (const child of navigation) child.kill(); navigation.clear(); } },
     vscode.workspace.onDidOpenTextDocument(d => { if (optionsForAuto(d)) check(d); }),
     vscode.workspace.onDidSaveTextDocument(d => {
-      if (isNagi(d) || compiler.findProject(d.uri.fsPath)) { invalidate(); recheckOpen(); }
+      if (isNagi(d) || compiler.findProject(d.uri.fsPath)) { invalidate(d); recheckOpen(); }
     }),
     vscode.workspace.onDidChangeTextDocument(e => {
-      if (isNagi(e.document) || compiler.findProject(e.document.uri.fsPath)) { clearTaskFile(e.document.uri); invalidate(); }
+      if (isNagi(e.document) || compiler.findProject(e.document.uri.fsPath)) { clearTaskFile(e.document.uri); invalidate(e.document); }
     }),
     vscode.workspace.onDidCloseTextDocument(d => {
       if (isNagi(d)) clearTaskFile(d.uri);
