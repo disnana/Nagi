@@ -210,7 +210,28 @@ jobs:
         shell: bash
         run: node --test editors/vscode-nagi/test/*.test.js scripts/test_graph_html_viewport.mjs
       - name: Check generated output protection and native expression behavior
-        run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test copy_capabilities --test asset_calls
+        run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test copy_capabilities --test asset_calls --test shared_target
+      - name: Check oversized HTTP bodies and connection recovery on the target platform
+        run: cargo test --locked -p nagi-runtime oversized_body_ -- --test-threads=1
+      - name: Check HTTP panic recovery on the target platform
+        run: cargo test --locked -p nagi-runtime panic_ -- --test-threads=1
+      - name: Check demo packaging with Windows PowerShell
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          ./scripts/build_windows_demo.ps1 -Source examples/hello.nagi -Offline
+          $output = & ./build/distribution/nagi-hello.exe
+          if ($LASTEXITCODE -ne 0 -or $output -notcontains 'Hello, Nagi!') { throw 'Packaged Hello failed.' }
+      - name: Check demo packaging with PowerShell 7
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./scripts/build_windows_demo.ps1 -Source examples/hello.nagi -Offline
+          $output = & ./build/distribution/nagi-hello.exe
+          if ($LASTEXITCODE -ne 0 -or $output -notcontains 'Hello, Nagi!') { throw 'Packaged Hello failed.' }
+          ./test-nagi-code/build_fractal_exe.ps1 -Offline
+          $output = 'q' | & ./build/distribution/nagi-fractal.exe
+          if ($LASTEXITCODE -ne 0 -or -not ($output -match 'Goodbye!')) { throw 'Packaged fractal failed.' }
       - name: Package tracked source and the compiler
         env:
           RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
@@ -236,6 +257,8 @@ jobs:
           PY
       - name: Check HTTP route parameters on the target platform
         run: python tests/route_integration.py
+      - name: Check standard HTTP High and saved Low on the target platform
+        run: python tests/http_stdlib_integration.py
       - name: Check scoped task captures on the target platform
         run: cargo test --locked -p nagic --test scoped_tasks
       - name: Check actor lifecycle and supervisor cancellation on the target platform

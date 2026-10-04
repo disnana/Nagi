@@ -11,18 +11,20 @@ import time
 from pathlib import Path
 
 from http_capacity import ROOT, proc, recovery, save, server_for, tcp_states
+from native_artifacts import native_executable
 
 HEALTH = b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n"
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, default=ROOT / "native-target/release/nagi-crud")
+    parser.add_argument("--binary", type=Path)
     parser.add_argument("--out", type=Path, default=ROOT / "build/connection-lifecycle")
     parser.add_argument("--seconds", type=int, default=120)
     parser.add_argument("--count", type=int, default=100)
     parser.add_argument("--server-cpus", default="0")
     args = parser.parse_args()
+    args.binary = args.binary or native_executable(ROOT / "build/crud", fallback_name="nagi-crud")
     if not 1 <= args.count <= 200 or args.seconds < 1:
         parser.error("Use 1..200 connections per group and a positive observation period")
     if not {int(cpu) for cpu in args.server_cpus.split(",")} <= os.sched_getaffinity(0):

@@ -19,8 +19,10 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.DumbAware;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.SystemInfo;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -35,14 +37,13 @@ public abstract class NagiCompilerAction extends AnAction implements DumbAware {
     @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
     @Override public void update(@NotNull AnActionEvent event) {
         var file = event.getData(CommonDataKeys.VIRTUAL_FILE);
-        boolean source = file != null && file.isInLocalFileSystem() && !file.isDirectory()
-                && ("nagi".equals(file.getExtension()) || "low".equals(file.getExtension()));
-        event.getPresentation().setEnabledAndVisible(source && event.getProject() != null);
+        event.getPresentation().setEnabledAndVisible(isSourceFile(file) && event.getProject() != null);
     }
     @Override public void actionPerformed(@NotNull AnActionEvent event) {
-        var project = event.getProject();
-        var file = event.getData(CommonDataKeys.VIRTUAL_FILE);
-        if (project == null || file == null || file.isDirectory()) return;
+        execute(event.getProject(), event.getData(CommonDataKeys.VIRTUAL_FILE));
+    }
+    final void execute(Project project, VirtualFile file) {
+        if (project == null || project.isDisposed() || !isSourceFile(file)) return;
         if (!TrustedProjects.isTrusted(project)) {
             Messages.showWarningDialog(project, "Trust this project before executing the Nagi compiler.", "Nagi");
             return;
@@ -101,6 +102,10 @@ public abstract class NagiCompilerAction extends AnAction implements DumbAware {
         } catch (java.nio.file.InvalidPathException exception) {
             Messages.showErrorDialog(project, "Invalid Nagi compiler path.\n\n" + exception.getMessage(), "Nagi");
         }
+    }
+    static boolean isSourceFile(VirtualFile file) {
+        return file != null && file.isValid() && file.isInLocalFileSystem() && !file.isDirectory()
+                && ("nagi".equals(file.getExtension()) || "low".equals(file.getExtension()));
     }
     static boolean saveInputs() {
         var documents = FileDocumentManager.getInstance();

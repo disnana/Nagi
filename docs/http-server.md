@@ -77,6 +77,8 @@ return await http.serve(app, 8080, http.default_options())
 
 mapperはアプリのエラーを処理します。不正なHTTP、制限超過、タイムアウトはサーバー側で処理します。データベースのエラー詳細や認証情報は応答へ直接出さないでください。
 
+mainでは、応答開始前のhandlerやmapperで巻き戻し可能なpanicが起きた場合、詳細を含まない500を返し、その接続を閉じます（公開0.1.9は未対応）。共有状態やDBへの途中の更新は巻き戻しません。通常の失敗は引き続きResultで返してください。`panic=abort`、プロセス終了、巻き戻し中の二重panic、独自Rustの解放処理や応答開始後のストリーミングは、回復を保証できません。
+
 エラー応答にリクエストIDなどが必要なら、handlerで検証した値を保持し、失敗時に独自エラー型へmoveできます。[見積APIの例](../test-nagi-code/application-examples/quote-api/README.md)では、この方法で共通mapperへIDを渡しています。
 
 ## 制限と停止

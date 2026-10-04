@@ -77,6 +77,8 @@ return await http.serve(app, 8080, http.default_options())
 
 Mappers handle application failures. The server handles malformed HTTP, limits, and deadlines. Avoid exposing database error details or credentials in responses.
 
+On main, an unwinding panic in a handler or mapper before the response starts returns a generic 500 and closes that connection; published 0.1.9 does not include this fix. This does not roll back shared state or database updates. Return ordinary failures through Result. Recovery is not guaranteed for `panic=abort`, process termination, a second panic during unwinding, custom Rust cleanup, or streaming after the response starts.
+
 When an error response needs a request ID, retain the validated ID in the handler and move it into a custom error only on failure. The [quote API example](../../test-nagi-code/application-examples/quote-api/README.en.md) passes its ID to a shared mapper this way.
 
 ## Limits and shutdown

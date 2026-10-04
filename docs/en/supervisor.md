@@ -10,13 +10,26 @@ A Supervisor in `std.actor` manages startup, failure, restart, and shutdown of r
 | `RestartPolicy.TRANSIENT` | Child Error or panic; the actor default |
 | `RestartPolicy.PERMANENT` | Error, panic, or normal completion |
 
+A failure's effect depends on where the handler returns it.
+
+| Handler return value | Effect |
+| --- | --- |
+| `Ok(Turn(state, Err(AuthError)))` | A business rejection, such as failed authentication. Saves the next state supplied to Turn without restarting |
+| `Err(Error)` | Failure of the worker itself; applies the restart policy |
+
+The caller's HTTP mapper chooses a status such as 401 for failed authentication. An `Err(AuthError)` reply does not set an HTTP status by itself.
+
 A restart calls the factory again to create fresh state. In-flight and queued messages are not redelivered. If state needs recovery, load it from a database or another source in the factory.
 
 The default delay is 10ms, with at most five restarts per ten seconds across the Supervisor. Exceeding the limit stops siblings and makes `run` return Error. Explicit shutdown or parent cancellation does not trigger restart.
 
+A failed `TEMPORARY` child stops and its failure is retained. Other children keep running. When no running child or scheduled restart remains, the Supervisor ends; after cleanup, `run` returns the retained Error.
+
 ## Ownership and shutdown
 
 Passing a Supervisor to `run` seals registration. A `Control` handle requests shutdown and observes events. Dropping Control does not stop an owned Supervisor. Dropping the Supervisor or its running `run` future requests child cancellation.
+
+Once a [scope](async.md) body finishes and joins its children, an Error from a spawned `run` cancels the scope's remaining children and waits for them to stop. This includes an HTTP server spawned in the same scope. For example, failure of the last `TEMPORARY` worker can lead to HTTP shutdown. Return business rejections separately from worker failures.
 
 Successful `shutdown` means children and shared context cleanup have finished. If its deadline expires, it returns an incomplete-cleanup Error and retains ownership records. HTTP or native work holding the shared context must release it before cleanup can finish. When Rust integration uses another Tokio runtime, keep the runtime where `run` started alive through cleanup.
 

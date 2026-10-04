@@ -463,17 +463,31 @@ fn rust_type_at(t: &Type, depth: usize, types: &RustTypes<'_>) -> String {
 fn local_type(t: &Type, types: &RustTypes<'_>) -> String {
     types.ty(t).replace("&'a ", "&")
 }
-fn string_arg(e: &Expr, types: &RustTypes<'_>) -> String {
-    if let E::Str(s) = &e.kind {
-        quote(s)
-    } else {
-        format!("&({})", re(e, types))
+// These borrowed reads need no temporary String. error_kind returns a
+// static label, so later arguments may still move its Error without extending
+// a borrow. Owned assignments/returns continue to use re() and make a String.
+fn static_string(e: &Expr, types: &RustTypes<'_>) -> Option<String> {
+    match &e.kind {
+        E::Str(value) => Some(quote(value)),
+        E::Call(name, _, args)
+            if name == "error_kind" && e.resolution == Some(NameResolution::Builtin) =>
+        {
+            Some(format!(
+                "::nagi_runtime::error_kind(&({}))",
+                re(&args[0], types)
+            ))
+        }
+        _ => None,
     }
 }
 
+fn string_arg(e: &Expr, types: &RustTypes<'_>) -> String {
+    static_string(e, types).unwrap_or_else(|| format!("&({})", re(e, types)))
+}
+
 fn reference_arg(e: &Expr, types: &RustTypes<'_>) -> String {
-    if let E::Str(value) = &e.kind {
-        quote(value)
+    if let Some(borrowed) = static_string(e, types) {
+        borrowed
     } else if e.ty.as_ref().is_some_and(Type::is_view) {
         re(e, types)
     } else {
@@ -542,8 +556,8 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
             };
             let operand = |value: &Expr| {
                 if let Some(content) = content {
-                    if let E::Str(literal) = &value.kind {
-                        return quote(literal);
+                    if let Some(borrowed) = static_string(value, types) {
+                        return borrowed;
                     }
                     if borrowed_content(value).is_some_and(|(_, borrowed)| !borrowed) {
                         return format!(
@@ -717,8 +731,8 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 "assert_true" => format!("assert!({})", args[0]),
                 "view" => {
                     if e.resolution == Some(NameResolution::Builtin) {
-                        if let E::Str(value) = &a[0].kind {
-                            return quote(value);
+                        if let Some(borrowed) = static_string(&a[0], types) {
+                            return borrowed;
                         }
                     }
                     if e.ty.as_ref().and_then(|ty| native_resource_view(ty, types)).is_some() {
@@ -820,11 +834,7 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
     }
 }
 fn string_or_value(e: &Expr, types: &RustTypes<'_>) -> String {
-    if matches!(e.kind, E::Str(_)) {
-        string_arg(e, types)
-    } else {
-        re(e, types)
-    }
+    static_string(e, types).unwrap_or_else(|| re(e, types))
 }
 fn rb(ss: &[Stmt], out: &mut Generated, n: usize, types: &RustTypes<'_>) {
     let pad = "    ".repeat(n);
@@ -1508,8 +1518,12 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         } else {
             "__nagi_main()"
         };
-        if f.ret.0 == "Result" {
-            let mut error_type = &f.ret.1[1];
+        let mut return_type = &f.ret;
+        while return_type.0 == "owned" {
+            return_type = &return_type.1[0];
+        }
+        if return_type.0 == "Result" {
+            let mut error_type = &return_type.1[1];
             while error_type.0 == "owned" {
                 error_type = &error_type.1[0];
             }
@@ -1852,7 +1866,9 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     }
     fs::write(out.join("src/main.rs"), &generated_rust.text).map_err(|e| e.to_string())?;
     let generated_file = fs::canonicalize(out.join("src/main.rs")).map_err(|e| e.to_string())?;
-    let package = format!(
+    let native_target = std::env::var_os("NAGI_NATIVE_TARGET_DIR");
+    let generated_directory = fs::canonicalize(&out).map_err(|e| e.to_string())?;
+    let mut package = format!(
         "nagi-{}",
         path.file_stem()
             .unwrap()
@@ -1869,24 +1885,32 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             })
             .collect::<String>()
     );
+    if native_target.is_some() {
+        use std::hash::{Hash, Hasher};
+        // Cargo's target lock ends before `run` launches the resulting binary.
+        // Distinct generated applications must not overwrite each other when
+        // callers explicitly share their native dependency cache.
+        let mut identity = std::collections::hash_map::DefaultHasher::new();
+        (
+            fs::canonicalize(&path).map_err(|e| e.to_string())?,
+            &generated_directory,
+        )
+            .hash(&mut identity);
+        package.push_str(&format!("-{:016x}", identity.finish()));
+    }
     let manifest = cargo_manifest(
         &package,
-        relative_path(
-            &root.join("runtime"),
-            &fs::canonicalize(&out).map_err(|e| e.to_string())?,
-        ),
+        relative_path(&root.join("runtime"), &generated_directory),
         rust_deps,
     )?;
     fs::write(out.join("Cargo.toml"), manifest).map_err(|e| e.to_string())?;
-    let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
-        .map(|p| cwd.join(p))
-        .unwrap_or_else(|| {
-            options
-                .project_root
-                .as_ref()
-                .map(|p| p.join("build/native-target"))
-                .unwrap_or_else(|| cwd.join("native-target"))
-        });
+    let target = native_target.map(|p| cwd.join(p)).unwrap_or_else(|| {
+        options
+            .project_root
+            .as_ref()
+            .map(|p| p.join("build/native-target"))
+            .unwrap_or_else(|| cwd.join("native-target"))
+    });
     let mut child = Command::new("cargo")
         .args([
             "build",

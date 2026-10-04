@@ -10,6 +10,7 @@ Nagi support for IntelliJ IDEA and PyCharm. Install the Nagi compiler separately
 - Line comments, matching and paired brackets, and block folding.
 - Indentation on Enter: High definitions such as `def main():` and `case`, Low braces, and multiline parenthesized expressions.
 - **Nagi: Check** and **Nagi: Run**. The nearest `nagi.toml` selects a project; otherwise the selected source file is used.
+- A run button beside top-level `def main()`, `async def main()`, and Low `fn main()` declarations.
 - Click compiler source locations in the Run console to open the file.
 
 Whole-file formatting, semantic completion, go to definition, and automatic checks while typing are planned. Type checking uses the Nagi compiler.
@@ -23,6 +24,8 @@ Select `nagi-jetbrains-*.zip` in **Settings → Plugins → ⚙ → Install Plug
 Set the compiler executable in **Settings → Languages & Frameworks → Nagi**. An empty value uses `nagic` from `PATH`. Relative paths resolve from the IDE project root.
 
 Open a Nagi file and choose **Nagi: Check** or **Nagi: Run** in its context menu or the Tools menu. These actions save open files before execution. The compiler does not run in untrusted projects.
+
+The button beside `main` invokes the same **Nagi: Run** action. It does not use the Python or other run configuration selected in the top toolbar. When a nearby `nagi.toml` exists, it runs that project's entry point.
 
 Output appears in the Run window. Check has a 30-second timeout, configurable from 1 to 300 seconds. Run has no timeout, so servers can keep running; use Stop in the Run window to end the process. Generated files are stored under `nagi` in the IDE system directory.
 

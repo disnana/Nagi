@@ -7,6 +7,9 @@ use tokio::{
     sync::{oneshot, Notify},
 };
 
+#[path = "panic_tests.rs"]
+mod panic_tests;
+
 struct Server {
     address: std::net::SocketAddr,
     stopped: Option<oneshot::Sender<()>>,
@@ -912,6 +915,175 @@ async fn actual_chunk_sizes_and_absolute_body_deadlines_are_bounded() {
     assert_eq!(response(&mut socket, false).await.status, 408);
     assert!(began.elapsed() < Duration::from_millis(250));
     assert!(closed(&mut socket).await.is_empty());
+    server.stop().await;
+}
+
+struct OversizedBodyState {
+    calls: Arc<AtomicUsize>,
+}
+
+async fn oversized_body_server() -> (Server, Arc<AtomicUsize>) {
+    async fn counted(_: Request, state: Arc<OversizedBodyState>) -> Result<Response, Error> {
+        state.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(text(Status::OK, "accepted"))
+    }
+    let calls = Arc::new(AtomicUsize::new(0));
+    let state = OversizedBodyState {
+        calls: Arc::clone(&calls),
+    };
+    let app = route(app_default(state), Method::POST, "/", counted).unwrap();
+    let app = route(app, Method::GET, "/", counted).unwrap();
+    let server = Server::new(
+        app,
+        capacity(options(4096, 200, 1000, 1000).unwrap(), 1, 1).unwrap(),
+    )
+    .await;
+    (server, calls)
+}
+
+async fn oversized_body_assert_response(socket: &mut BufReader<TcpStream>, expected: u16) {
+    let result = response(socket, false).await;
+    assert_eq!(result.status, expected);
+    assert_eq!(result.all("connection"), ["close"]);
+    assert_eq!(
+        result.body,
+        if expected == 413 {
+            b"Payload Too Large".as_slice()
+        } else {
+            b"Request Timeout".as_slice()
+        }
+    );
+    // A TCP reset after the complete 413 message still closes the connection.
+    // It must not conceal a reset while reading its status, headers or body.
+    let mut rest = Vec::new();
+    let closing = tokio::time::timeout(Duration::from_secs(3), socket.read_to_end(&mut rest))
+        .await
+        .expect("rejected upload connection did not close");
+    match closing {
+        Ok(_) => {}
+        Err(error) if expected == 413 && error.kind() == std::io::ErrorKind::ConnectionReset => {}
+        Err(error) => panic!("reading rejected upload closure: {error}"),
+    }
+    assert!(rest.is_empty(), "rejected upload produced another response");
+}
+
+async fn oversized_body_assert_capacity_released(server: &Server, calls: &AtomicUsize) {
+    let mut socket = server.connect().await;
+    send(
+        &mut socket,
+        b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+    )
+    .await;
+    assert_eq!(response(&mut socket, false).await.status, 200);
+    assert!(closed(&mut socket).await.is_empty());
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+// Run these real TCP regressions on all supported operating systems. An
+// in-memory Body cannot expose the reset caused by closing an unread socket.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn oversized_body_content_length_delivers_413_without_calling_handler() {
+    for split_headers in [false, true] {
+        let (server, calls) = oversized_body_server().await;
+        let mut socket = server.connect().await;
+        let headers = b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5120\r\n\r\n";
+        let body = vec![b'x'; 5120];
+        if split_headers {
+            send(&mut socket, headers).await;
+            // A concurrent server may reject the declared length before this
+            // second write. Still inspect its complete final response.
+            let _ = socket.get_mut().write_all(&body).await;
+        } else {
+            let mut request = headers.to_vec();
+            request.extend_from_slice(&body);
+            send(&mut socket, &request).await;
+        }
+        oversized_body_assert_response(&mut socket, 413).await;
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        oversized_body_assert_capacity_released(&server, &calls).await;
+        server.stop().await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn oversized_body_declared_length_rejects_headers_and_incomplete_upload_promptly() {
+    for body in [b"".as_slice(), b"unfinished"] {
+        let (server, calls) = oversized_body_server().await;
+        let mut socket = server.connect().await;
+        let mut request =
+            b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5120\r\n\r\n".to_vec();
+        request.extend_from_slice(body);
+        let began = Instant::now();
+        send(&mut socket, &request).await;
+        oversized_body_assert_response(&mut socket, 413).await;
+        assert!(began.elapsed() < Duration::from_secs(1));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        oversized_body_assert_capacity_released(&server, &calls).await;
+        server.stop().await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn oversized_body_chunked_delivers_413_with_or_without_final_chunk() {
+    for complete in [false, true] {
+        let (server, calls) = oversized_body_server().await;
+        let mut socket = server.connect().await;
+        let mut request =
+            b"POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n1400\r\n"
+                .to_vec();
+        request.extend_from_slice(&vec![b'x'; 5120]);
+        if complete {
+            request.extend_from_slice(b"\r\n0\r\n\r\n");
+        }
+        let began = Instant::now();
+        send(&mut socket, &request).await;
+        oversized_body_assert_response(&mut socket, 413).await;
+        assert!(began.elapsed() < Duration::from_secs(1));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        oversized_body_assert_capacity_released(&server, &calls).await;
+        server.stop().await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn oversized_body_rejects_keep_alive_upload_and_never_dispatches_pipeline() {
+    let (server, calls) = oversized_body_server().await;
+    let mut socket = server.connect().await;
+    send(&mut socket, b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;
+    assert_eq!(response(&mut socket, false).await.status, 200);
+    calls.store(0, Ordering::SeqCst);
+    let mut request =
+        b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5120\r\n\r\n".to_vec();
+    request.extend_from_slice(&vec![b'x'; 5120]);
+    request.extend_from_slice(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    send(&mut socket, &request).await;
+    oversized_body_assert_response(&mut socket, 413).await;
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    oversized_body_assert_capacity_released(&server, &calls).await;
+    server.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn oversized_body_boundary_accepts_4096_and_incomplete_upload_keeps_body_deadline() {
+    let (server, calls) = oversized_body_server().await;
+    let mut socket = server.connect().await;
+    let mut request =
+        b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 4096\r\n\r\n".to_vec();
+    request.extend_from_slice(&vec![b'x'; 4096]);
+    send(&mut socket, &request).await;
+    assert_eq!(response(&mut socket, false).await.status, 200);
+    calls.store(0, Ordering::SeqCst);
+    let began = Instant::now();
+    send(
+        &mut socket,
+        b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 4096\r\n\r\nx",
+    )
+    .await;
+    oversized_body_assert_response(&mut socket, 408).await;
+    assert!(began.elapsed() >= Duration::from_millis(150));
+    assert!(began.elapsed() < Duration::from_secs(1));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    oversized_body_assert_capacity_released(&server, &calls).await;
     server.stop().await;
 }
 

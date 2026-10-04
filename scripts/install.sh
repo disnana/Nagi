@@ -24,6 +24,14 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 [[ "$version" == latest || "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Version must be latest or X.Y.Z' >&2; exit 1; }
+validate_bin_dir() {
+    if [ "$no_path" -eq 0 ] && [[ "$1" == *:* ]]; then
+        printf 'Cannot add bin directory to PATH: %s\n' "$1" >&2
+        printf "%s\n" "PATH uses ':' as a separator. Choose --bin-dir without ':' or use --no-path and run nagic by its full path." >&2
+        return 1
+    fi
+}
+validate_bin_dir "$bin_dir"
 case "$(uname -s)/$(uname -m)" in
     Linux/x86_64) platform=linux-x86_64 ;;
     Darwin/arm64) platform=macos-arm64 ;;
@@ -61,7 +69,12 @@ cleanup() {
         fi
         for ((i=0; i<${#changed_profiles[@]}; i++)); do
             file=${changed_profiles[$i]}
-            if [ -f "$work/profile.$i" ]; then cat "$work/profile.$i" > "$file"
+            if [ -f "$work/profile.$i" ]; then
+                # A failed append can leave a read-only profile unchanged.
+                # Do not rewrite it or let a restore failure strand the lock.
+                if ! cmp -s "$work/profile.$i" "$file"; then
+                    cat "$work/profile.$i" > "$file" || printf 'Could not restore shell profile: %s\n' "$file" >&2
+                fi
             else rm -f "$file"
             fi
         done
@@ -153,6 +166,7 @@ else
 fi
 mkdir -p "$bin_dir"
 bin_dir=$(cd "$bin_dir" && pwd -P)
+validate_bin_dir "$bin_dir"
 link="$bin_dir/nagic"
 if [ -e "$link" ] || [ -L "$link" ]; then
     [ -L "$link" ] || { echo "Existing command not overwritten: $link" >&2; exit 1; }
@@ -215,7 +229,12 @@ status 32 "[OK] Installed Nagi $version (prebuilt compiler)."
 printf '     Location: %s\n     Command: %s\n' "$destination" "$link"
 printf '\n'
 status 36 '[NEXT] In this terminal, run:'
-printf '       export PATH=%s:"$PATH"\n       nagic --version\n' "$quoted"
+if [[ "$bin_dir" == *:* ]]; then
+    quoted_link=${link//\'/\'\\\'\'}
+    printf "       '%s' --version\n" "$quoted_link"
+else
+    printf '       export PATH=%s:"$PATH"\n       nagic --version\n' "$quoted"
+fi
 if [ "$no_path" -eq 0 ]; then printf '%s\n' '       Restart VS Code to refresh its PATH.'; fi
 printf '\n'
 printf '%s\n' '[INFO] To build your own Nagi apps with nagic build/run:'

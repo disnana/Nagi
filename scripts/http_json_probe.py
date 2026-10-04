@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -31,7 +32,11 @@ def main():
 
     generated = ROOT / "build/http_stdlib"
     project = ROOT / "build/http_json_probe"
-    original_name = 'name = "nagi-http-stdlib"'
+    manifest = generated / "Cargo.toml"
+    if not manifest.is_file():
+        parser.error(f"missing {manifest}; build benchmarks/http_stdlib.nagi first")
+    package = tomllib.loads(manifest.read_text())["package"]["name"]
+    original_name = f'name = "{package}"'
     probe_name = 'name = "nagi-http-json-probe"'
     files = {}
     for filename in ("Cargo.toml", "Cargo.lock"):
@@ -55,7 +60,7 @@ def main():
     (project / "src/main.rs").write_text(source)
     # Both generated projects are siblings, so copied relative runtime paths
     # resolve identically. Reuse the native cache selected by the compiler.
-    native = Path(os.environ.get("NAGI_NATIVE_TARGET_DIR", ROOT / "build/native-target")).resolve()
+    native = Path(os.environ.get("NAGI_NATIVE_TARGET_DIR", ROOT / "native-target")).resolve()
     environment = dict(os.environ, CARGO_TARGET_DIR=str(native))
     if args.iterations is not None:
         environment["JSON_PROBE_ITERATIONS"] = str(args.iterations)

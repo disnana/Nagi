@@ -15,11 +15,12 @@ import time
 from pathlib import Path
 
 from http_capacity import ROOT, cgroup, proc, recovery, save, server_for, stop
+from native_artifacts import native_executable
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, default=ROOT / "native-target/release/nagi-crud")
+    parser.add_argument("--binary", type=Path)
     parser.add_argument("--wrk", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=ROOT / "build/http-saturation")
     parser.add_argument("--duration", type=int, default=8)
@@ -27,6 +28,7 @@ def main():
     parser.add_argument("--client-cpus", default="2,3")
     parser.add_argument("--connections", default="128,512,2048")
     args = parser.parse_args()
+    args.binary = args.binary or native_executable(ROOT / "build/crud", fallback_name="nagi-crud")
     counts = [int(value) for value in args.connections.split(",")]
     if not counts or any(count < 2 or count > 4096 for count in counts) or args.duration < 1:
         parser.error("Use 2..4096 connections and a positive duration")

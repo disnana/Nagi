@@ -97,10 +97,11 @@ fn native_database_debug_hides_connection_details_inside_shared_state() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let binary = fixture.0.join(target).join("release").join(format!(
-        "nagi-database-state{}",
-        std::env::consts::EXE_SUFFIX
-    ));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    let binary = stderr
+        .lines()
+        .find_map(|line| line.strip_prefix("native: "))
+        .expect("the build must report its native artifact");
     let output = Command::new(binary)
         .current_dir(&fixture.0)
         .output()

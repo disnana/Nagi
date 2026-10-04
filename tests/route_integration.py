@@ -42,7 +42,7 @@ async def main() -> Result[unit, Error]:
 ''', encoding="utf-8")
         environment = {**os.environ, "NAGI_NATIVE_TARGET_DIR": str(target)}
         environment.pop("NAGI_ROOT", None)
-        build = subprocess.run([str(compiler), "build", str(source)], cwd=folder,
+        build = subprocess.run([str(compiler), "build", str(source), "--no-project", "--out", str(folder / "build")], cwd=folder,
                                env=environment, capture_output=True, text=True, encoding="utf-8")
         if build.returncode:
             raise AssertionError(build.stderr)
@@ -50,7 +50,12 @@ async def main() -> Result[unit, Error]:
             available.bind(("127.0.0.1", 0))
             environment["NAGI_TEST_PORT"] = str(available.getsockname()[1])
         base = "http://127.0.0.1:" + environment["NAGI_TEST_PORT"]
-        executable = target / "release" / ("nagi-routes.exe" if os.name == "nt" else "nagi-routes")
+        native = [line.removeprefix("native: ").strip()
+                  for line in (build.stdout + "\n" + build.stderr).splitlines()
+                  if line.startswith("native: ")]
+        assert len(native) == 1, build.stdout + build.stderr
+        executable = Path(native[0])
+        assert executable.is_file(), (build.stdout, build.stderr, executable)
         with (folder / "server.log").open("w+") as log:
             server = subprocess.Popen([str(executable)], cwd=folder, env=environment,
                                       stdout=log, stderr=log)

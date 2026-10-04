@@ -10,6 +10,7 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは�
 - 行コメント、括弧の対応・補完、ブロックの折りたたみ。
 - 改行時のインデント補助。Highは`def main():`や`case`、Lowは`{`、両方で括弧内の改行に対応します。
 - **Nagi: Check**で型検査、**Nagi: Run**で実行。近くに`nagi.toml`があればプロジェクトとして扱います。
+- `def main()`・`async def main()`・Lowの`fn main()`の左にある▶からも実行できます。
 - コンパイラ出力のファイル位置をクリックしてソースへ移動。
 
 全体の自動整形、型に基づく補完、定義への移動、入力中の自動検査は今後の対応です。型検査はNagiコンパイラが行います。
@@ -23,6 +24,8 @@ GitHubの **Actions → Nagi checks**（PR）または **Nagi JetBrains plugin**
 **Settings → Languages & Frameworks → Nagi** でコンパイラのパスを設定できます。空欄なら`PATH`の`nagic`を使います。相対パスはIDEプロジェクトのルートから解決します。
 
 Nagiファイルを開き、右クリックまたはToolsメニューから **Nagi: Check** / **Nagi: Run** を選びます。実行前に開いているファイルを保存します。信頼していないプロジェクトではコンパイラを起動しません。
+
+`main`の左の▶は同じ **Nagi: Run** を起動します。IDE上部で選ばれているPythonなどの実行設定は使いません。近くに`nagi.toml`がある場合は、そのプロジェクトのentryを実行します。
 
 出力はRunウィンドウに表示します。型検査の制限時間は既定で30秒、設定で1〜300秒に変更できます。サーバーなどのRunには時間制限を設けず、RunウィンドウのStopで終了します。生成物はIDEのsystemディレクトリ内の`nagi`に置きます。
 

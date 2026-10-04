@@ -75,6 +75,21 @@ function activate(context) {
     try { const s = fs.statSync(file); return `${s.mtimeMs}:${s.size}`; } catch { return ''; }
   }
 
+  function standardSourceSnapshot(index, known) {
+    const uris = Object.create(null);
+    for (const source of stdlib.sources(index)) {
+      const uri = known?.[source.file] || vscode.Uri.parse(stdlib.sourceUri(source.file,
+        crypto.createHash('sha256').update(source.text).digest('hex'))).toString();
+      uris[source.file] = uri;
+      if (!standardSources.has(uri)) {
+        standardSources.set(uri, source.text);
+        standardSourceChanges.fire(vscode.Uri.parse(uri));
+      }
+    }
+    while (standardSources.size > 128) standardSources.delete(standardSources.keys().next().value);
+    return uris;
+  }
+
   function dependencySnapshot(owner, stampFor, keyFor) {
     let snapshot = owner.dependencies;
     if (!snapshot) {
@@ -137,9 +152,12 @@ function activate(context) {
       compiler.findProject(d.uri.fsPath) === project);
   }
 
-  async function saveProject(project) {
+  async function saveProject(project, versions) {
     for (const d of vscode.workspace.textDocuments) {
-      if (d.isDirty && d.uri.scheme === 'file' && compiler.findProject(d.uri.fsPath) === project && !await d.save()) return false;
+      if (d.isDirty && d.uri.scheme === 'file' && compiler.findProject(d.uri.fsPath) === project) {
+        if (!await d.save()) return false;
+        versions.set(d, d.version);
+      }
     }
     return true;
   }
@@ -320,10 +338,32 @@ function activate(context) {
     if (!isNagi(document)) return vscode.window.showInformationMessage('.nagi または .low ファイルを開いてください。');
     if (name === 'check') return check(document, true);
     if (!await document.save()) return;
+    const version = document.version;
     const settings = options(document);
+    const commandSettings = value => JSON.stringify([value.root, value.workspace, value.project,
+      value.executable, argsFor(name, document, value)]);
+    const preparedSettings = commandSettings(settings);
+    const projectInputs = new Map(vscode.workspace.textDocuments.filter(d => settings.project &&
+      d.uri.scheme === 'file' && compiler.findProject(d.uri.fsPath) === settings.project).map(d => [d, d.version]));
     // Imported files and the manifest must be saved before a project-wide command.
-    if (projectDirty(settings.project) && !await saveProject(settings.project)) return;
+    if (projectDirty(settings.project) && !await saveProject(settings.project, projectInputs)) return;
     if (!await saveImportedInputs(document, settings)) return;
+    if (!vscode.workspace.isTrusted) {
+      vscode.window.showWarningMessage('Nagiのコンパイラ実行にはワークスペースの信頼が必要です。');
+      return;
+    }
+    if (document.isClosed || document.isDirty || document.version !== version) {
+      vscode.window.showWarningMessage('Nagi: 実行前の確認中にコードが変更されたため、中止しました。保存して再実行してください。');
+      return;
+    }
+    if (projectDirty(settings.project) || [...projectInputs].some(([d, savedVersion]) => d.isDirty || d.version !== savedVersion)) {
+      vscode.window.showWarningMessage('Nagi: 実行前の確認中にプロジェクトのファイルが変更されたため、中止しました。保存して再実行してください。');
+      return;
+    }
+    if (commandSettings(options(document)) !== preparedSettings) {
+      vscode.window.showWarningMessage('Nagi: 実行前の確認中にプロジェクトまたはコンパイラ設定が変更されたため、中止しました。再実行してください。');
+      return;
+    }
     const { root, executable, project } = settings;
     const task = new vscode.Task({ type: 'nagi', command: name, file: document.uri.fsPath },
       vscode.workspace.getWorkspaceFolder(document.uri) || vscode.TaskScope.Workspace,
@@ -359,8 +399,8 @@ function activate(context) {
       const target = compiler.definitionAt(snapshot.index, document.uri.fsPath, position.line, position.character, root);
       if (!target) return [];
       const range = new vscode.Range(target.line - 1, target.column - 1, target.line - 1, target.column - 1 + target.length);
-      const standard = stdlib.sourceUri(target.file);
-      if (target.file.startsWith('stdlib:') && (!standard || !standardSources.has(target.file))) return [];
+      const standard = snapshot.sourceUris?.[target.file];
+      if (target.file.startsWith('stdlib:') && (!standard || !standardSources.has(standard))) return [];
       const uri = standard ? vscode.Uri.parse(standard) : vscode.Uri.file(compiler.normalizeFile(target.file, root));
       return [new vscode.Location(uri, range)];
     } catch (error) { output.appendLine(`[symbols] ${error.message}`); return []; }
@@ -379,7 +419,10 @@ function activate(context) {
     const args = argsFor('symbols', document, settings);
     const key = symbolKey(settings.executable, args, input);
     const cached = symbolCache.get(key);
-    if (cached && Date.now() - cached.created < 2000 && cached.stamps.every(([file, time]) => stamp(file) === time)) return Promise.resolve(cached.value);
+    if (cached && Date.now() - cached.created < 2000 && cached.stamps.every(([file, time]) => stamp(file) === time)) {
+      cached.value.sourceUris = standardSourceSnapshot(cached.value.index, cached.value.sourceUris);
+      return Promise.resolve(cached.value);
+    }
     const startEpoch = symbolsEpoch;
     const version = document.version;
     function run(editorInput) {
@@ -394,14 +437,7 @@ function activate(context) {
             try {
               const index = JSON.parse(result.output);
               if (index.format !== 'nagi-symbols-v1' || !Array.isArray(index.definitions)) throw new Error('Unsupported symbols format');
-              for (const source of stdlib.sources(index)) {
-                if (standardSources.get(source.file) !== source.text) {
-                  standardSources.set(source.file, source.text);
-                  standardSourceChanges.fire(vscode.Uri.parse(stdlib.sourceUri(source.file)));
-                }
-              }
-              while (standardSources.size > 128) standardSources.delete(standardSources.keys().next().value);
-              resolve({ index, saved: !editorInput && files.length > 0 });
+              resolve({ index, saved: !editorInput && files.length > 0, sourceUris: standardSourceSnapshot(index) });
             } catch (error) { output.appendLine(`[symbols] ${error.message}`); resolve(); }
           }, 16 * 1024 * 1024, editorInput ? input : undefined);
         cancellation = token.onCancellationRequested(() => child.kill());
@@ -502,7 +538,7 @@ function activate(context) {
   context.subscriptions.push(output, diagnostics, taskDiagnostics, standardSourceChanges,
     vscode.workspace.registerTextDocumentContentProvider('nagi-stdlib', {
       onDidChange: standardSourceChanges.event,
-      provideTextDocumentContent(uri) { return standardSources.get(stdlib.sourceFile(uri)) || ''; },
+      provideTextDocumentContent(uri) { return stdlib.sourceFile(uri) ? standardSources.get(uri.toString()) || '' : ''; },
     }),
     vscode.languages.registerOnTypeFormattingEditProvider([{ language: 'nagi' }, { language: 'nagi-low' }], {
       provideOnTypeFormattingEdits(document, position, ch, options, token) {

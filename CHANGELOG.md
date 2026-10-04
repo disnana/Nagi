@@ -3,6 +3,13 @@
 ## Unreleased
 
 - Add an initial IntelliJ IDEA/PyCharm plugin for High/Low highlighting, indentation, folding, and explicit check/run commands. Verify IDEA and PyCharm 2025.1.1, with compatibility checks for the supported 2024.3 builds.
+- Add gutter Run buttons for top-level High and Low entry points in the JetBrains plugin, preserving project selection, saving, and trust checks.
+- Stop VS Code tasks when project inputs or settings change during saving, and keep standard-library definition views separate for different compiler contents.
+- Preserve failing exit codes for owned Result entry points and avoid string allocations when reading `error_kind` without taking ownership.
+- Give applications distinct executable names when explicitly sharing a native build cache. Keep default names and shared dependency caching unchanged.
+- Recover installer updates after a read-only shell profile rejects PATH registration, and reject PATH entries containing colons before changing the installation.
+- Add cross-platform TCP regressions for oversized HTTP bodies, incomplete uploads, and connection capacity recovery. Clarify Supervisor reply errors, worker failures, and scope cancellation in both Docs languages.
+- Return a generic 500 and close the connection when an HTTP handler unwinds with a panic, including standard HTTP error mappers and the compatibility router. Preserve ordinary Result handling and request deadlines; this does not roll back application state.
 
 ## Nagi 0.1.9
 

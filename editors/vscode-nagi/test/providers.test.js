@@ -52,8 +52,11 @@ function host(t, trusted = true, code = 1, symbols, controls = {}) {
     ProcessExecution: class { constructor(executable, args, options) { Object.assign(this, { executable, args, options }); } },
     TaskScope: { Workspace: 1 }, TaskRevealKind: { Always: 1 }, TaskPanelKind: { Dedicated: 2 },
     Range, MarkdownString, Uri: { file: file => uri(file), parse: text => {
-      const [scheme, pathname] = text.split(':');
-      return { ...uri(pathname, scheme), path: pathname, authority: '', query: '', fragment: '' };
+      const [scheme, rest] = text.split(':');
+      const [pathname, encodedQuery = ''] = rest.split('?');
+      const query = decodeURIComponent(encodedQuery);
+      return { ...uri(pathname, scheme), path: pathname, authority: '', query, fragment: '',
+        toString: () => `${scheme}:${pathname}${query ? '?' + encodeURIComponent(query) : ''}` };
     } },
     FoldingRange: class { constructor(start, end) { Object.assign(this, { start, end }); } },
     Location: class { constructor(uri, range) { this.uri = uri; this.range = range; } },
@@ -281,6 +284,90 @@ test('task execution stops if the entry buffer changes while an import is saved'
   h.vscode.window.activeTextEditor = { document: main };
   await h.commands.get('nagi.run')();
   assert.equal(h.tasks.length, 0);
+});
+
+test('task execution stops if the entry changes while its own project helper is saved', async t => {
+  const h = host(t, true, 0, undefined, { checkOnSave: false });
+  fs.writeFileSync(path.join(h.folder, 'nagi.toml'), "entry = 'main.nagi'\n");
+  const main = h.document('import "helper.nagi"\ndef main():\n    print(answer())\n');
+  const helper = h.document('def answer() -> i64:\n    return 42\n', 'file', 'nagi', 'helper.nagi');
+  helper.isDirty = true;
+  helper.save = async () => { helper.isDirty = false; main.version++; main.isDirty = true; return true; };
+  h.vscode.window.activeTextEditor = { document: main };
+  await h.commands.get('nagi.run')();
+  assert.equal(h.tasks.length, 0, 'a project save must not launch the older entry from disk');
+  assert.equal(h.calls.length, 0, 'guarding the saved entry adds no symbol process');
+});
+
+test('task execution stops if its source closes during project saving', async t => {
+  const h = host(t, true, 0, undefined, { checkOnSave: false });
+  fs.writeFileSync(path.join(h.folder, 'nagi.toml'), "entry = 'main.nagi'\n");
+  const main = h.document('def main():\n    print(1)\n');
+  const helper = h.document('def helper():\n    print(42)\n', 'file', 'nagi', 'helper.nagi');
+  helper.isDirty = true;
+  helper.save = async () => { helper.isDirty = false; main.isClosed = true; return true; };
+  h.vscode.window.activeTextEditor = { document: main };
+  await h.commands.get('nagi.build')();
+  assert.equal(h.tasks.length, 0);
+});
+
+for (const dirty of [true, false]) {
+  test(`task execution stops if a later project save changes the ${dirty ? 'dirty' : 'already-saved'} manifest`, async t => {
+    const h = host(t, true, 0, undefined, { checkOnSave: false });
+    const manifest = h.document("entry = 'main.nagi'\n", 'file', 'toml', 'nagi.toml');
+    const main = h.document('def main():\n    print(1)\n');
+    const native = h.document('pub fn native() {}\n', 'file', 'rust', 'native.rs');
+    manifest.isDirty = true;
+    manifest.save = async () => { manifest.isDirty = false; return true; };
+    native.isDirty = true;
+    native.save = async () => { native.isDirty = false; manifest.version++; manifest.isDirty = dirty; return true; };
+    h.vscode.window.activeTextEditor = { document: main };
+    await h.commands.get('nagi.build')();
+    assert.equal(h.tasks.length, 0, 'the prepared project graph no longer matches its manifest');
+    assert.equal(h.calls.length, 0);
+  });
+}
+
+test('task execution stops if an already-saved Rust input changes during a later project save', async t => {
+  const h = host(t, true, 0, undefined, { checkOnSave: false });
+  fs.writeFileSync(path.join(h.folder, 'nagi.toml'), "entry = 'main.nagi'\n[rust]\nfile = 'native.rs'\n");
+  const main = h.document('def main():\n    print(1)\n');
+  const native = h.document('pub fn native() {}\n', 'file', 'rust', 'native.rs');
+  const helper = h.document('def helper():\n    print(42)\n', 'file', 'nagi', 'helper.nagi');
+  native.isDirty = true;
+  native.save = async () => { native.isDirty = false; return true; };
+  helper.isDirty = true;
+  helper.save = async () => { helper.isDirty = false; native.version++; return true; };
+  h.vscode.window.activeTextEditor = { document: main };
+  await h.commands.get('nagi.build')();
+  assert.equal(h.tasks.length, 0);
+});
+
+test('task execution stops if workspace trust changes during project saving', async t => {
+  const h = host(t, true, 0, undefined, { checkOnSave: false });
+  fs.writeFileSync(path.join(h.folder, 'nagi.toml'), "entry = 'main.nagi'\n");
+  const main = h.document('def main():\n    print(1)\n');
+  const helper = h.document('def helper():\n    print(42)\n', 'file', 'nagi', 'helper.nagi');
+  helper.isDirty = true;
+  helper.save = async () => { helper.isDirty = false; h.vscode.workspace.isTrusted = false; return true; };
+  h.vscode.window.activeTextEditor = { document: main };
+  await h.commands.get('nagi.run')();
+  assert.equal(h.tasks.length, 0);
+  assert.equal(h.calls.length, 0);
+});
+
+test('task execution stops if the nearest project changes while an import is saved', async t => {
+  let helper;
+  const h = host(t, true, 0, cwd => ({ format: 'nagi-symbols-v1', definitions: [], files: [
+    path.join(cwd, 'main.nagi'), helper.uri.fsPath,
+  ] }), { checkOnSave: false });
+  const main = h.document('import "helper.nagi"\ndef main():\n    print(answer())\n');
+  helper = h.document('def answer() -> i64:\n    return 42\n', 'file', 'nagi', 'helper.nagi');
+  helper.isDirty = true;
+  helper.save = async () => { helper.isDirty = false; fs.writeFileSync(path.join(h.folder, 'nagi.toml'), "entry = 'different.nagi'\n"); return true; };
+  h.vscode.window.activeTextEditor = { document: main };
+  await h.commands.get('nagi.lower')();
+  assert.equal(h.tasks.length, 0, 'the settings resolved before saving no longer describe the project');
 });
 
 test('tasks suppress only the matching automatic scope and checks resume when the task ends', async t => {
@@ -697,4 +784,35 @@ test('standard F12 targets open compiler registry text through a read-only virtu
   assert.equal(targets[0].range.start.line, 1);
   assert.match(h.providers['nagi-stdlib'].provideTextDocumentContent(targets[0].uri), /def text/);
   assert.equal(h.providers['nagi-stdlib'].provideTextDocumentContent({ scheme: 'nagi-stdlib', path: '/std/../private.nagi' }), '');
+});
+
+test('standard F12 keeps each project compiler registry text when another compiler is queried', async t => {
+  const source = name => `# ${name} compiler registry\nextern def text()\n`;
+  const h = host(t, true, 0, cwd => ({ format: 'nagi-symbols-v1', definitions: [], files: [path.join(cwd, 'main.nagi')],
+    references: [{ location: { file: path.join(cwd, 'main.nagi'), line: 2, column: 1, length: 5 },
+      target: { file: 'stdlib:std.actor', line: 2, column: 1, length: 4 } }],
+    // Two registries exceed the retained source-cache capacity while both
+    // compiler snapshots still fit in the symbol cache.
+    standard_sources: [{ file: 'stdlib:std.actor', text: source(path.basename(cwd)) },
+      ...Array.from({ length: 80 }, (_, i) => ({ file: `stdlib:std.cache.module${i}`, text: source(path.basename(cwd)) }))],
+  }), { checkOnSave: false });
+  const documents = [];
+  for (const name of ['first', 'second']) {
+    fs.mkdirSync(path.join(h.folder, name));
+    fs.writeFileSync(path.join(h.folder, name, 'nagi.toml'), "entry = 'main.nagi'\n");
+    documents.push(h.document('import std.actor as actor\nactor\n', 'file', 'nagi', `${name}/main.nagi`));
+  }
+  h.vscode.workspace.getConfiguration = (_name, resource) => ({ get(name, fallback) {
+    if (name === 'compilerPath') return path.join(h.folder, resource.fsPath.includes('first') ? 'first-compiler' : 'second-compiler');
+    if (name === 'checkOnSave') return false;
+    return fallback;
+  } });
+  const [first] = await h.providers.Definition.provideDefinition(documents[0], { line: 1, character: 2 }, h.token);
+  assert.equal(h.providers['nagi-stdlib'].provideTextDocumentContent(first.uri), source('first'));
+  const [second] = await h.providers.Definition.provideDefinition(documents[1], { line: 1, character: 2 }, h.token);
+  assert.equal(h.providers['nagi-stdlib'].provideTextDocumentContent(second.uri), source('second'));
+  const [cached] = await h.providers.Definition.provideDefinition(documents[0], { line: 1, character: 2 }, h.token);
+  assert.equal(h.calls.length, 2, 'returning to the first project uses the existing symbol cache');
+  assert.equal(h.providers['nagi-stdlib'].provideTextDocumentContent(cached.uri), source('first'));
+  assert.equal(h.providers['nagi-stdlib'].provideTextDocumentContent(first.uri), source('first'), 'already-open registry documents remain stable');
 });

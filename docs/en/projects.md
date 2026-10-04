@@ -127,7 +127,9 @@ Replacing a same-name table with `--rust-dep` removes its `path`, `package`, `fe
 
 Command-line relative paths use the terminal's working directory. Duplicate SOURCE, project, rust, out, or same-name rust-dep arguments are errors. project and no-project cannot be combined.
 
-Project-generated code goes to `build/<entry filename without extension>/`, and executables to `build/native-target/release/`. For main.nagi, the executable is nagi-main.exe on Windows or nagi-main on Linux. Separate build folders allow applications to reuse the same entry filename. `NAGI_NATIVE_TARGET_DIR` overrides the executable build directory.
+Project-generated code goes to `build/<entry filename without extension>/`, and executables to `build/native-target/release/`. For `main.nagi`, the executable is `nagi-main.exe` on Windows or `nagi-main` on Linux. Separate build folders allow applications to reuse the same entry filename.
+
+Set `NAGI_NATIVE_TARGET_DIR` to share dependency builds across applications. Only with this override, executable names include an identifier for the source and generated output directory, such as `nagi-main-0123456789abcdef.exe`. The `native:` line that `build` and `run` print to stderr gives the actual path. Avoid compiling concurrently into the same generated output directory.
 
 ## Use with VS Code
 

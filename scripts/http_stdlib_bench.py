@@ -16,6 +16,7 @@ import signal
 import statistics
 import subprocess
 import time
+import tomllib
 import urllib.request
 
 from http_bench import snapshot
@@ -38,12 +39,15 @@ def main():
     if args.duration < 1 or args.repeats < 1 or args.soak < 0:
         parser.error("duration/repeats must be positive; soak must be nonnegative")
     target = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
-    native = Path(os.environ.get("NAGI_NATIVE_TARGET_DIR", ROOT / "build/native-target"))
+    native = Path(os.environ.get("NAGI_NATIVE_TARGET_DIR", ROOT / "native-target"))
+    generated = ROOT / "build/http_stdlib"
+    if not (generated / "Cargo.toml").is_file():
+        parser.error("build benchmarks/http_stdlib.nagi into build/http_stdlib first")
+    package = tomllib.loads((generated / "Cargo.toml").read_text())["package"]["name"]
+    original_name = f'name = "{package}"'
     if args.build_matching_rust:
-        generated = ROOT / "build/http_stdlib"
         comparison = ROOT / "build/http_stdlib_rust"
         (comparison / "src").mkdir(parents=True, exist_ok=True)
-        original_name = 'name = "nagi-http-stdlib"'
         comparison_name = 'name = "nagi-http-rust-baseline"'
         for filename in ("Cargo.toml", "Cargo.lock"):
             text = (generated / filename).read_text()
@@ -55,7 +59,7 @@ def main():
                         str(comparison / "Cargo.toml")], env=dict(os.environ, CARGO_TARGET_DIR=str(native)), check=True)
     rust_binary = args.rust_binary or native / "release/nagi-http-rust-baseline"
     binaries = {
-        "nagi": (native / "release/nagi-http-stdlib", 8086),
+        "nagi": (native / "release" / package, 8086),
         "rust": (rust_binary, 8086),
         "legacy_axum": (target / "release/examples/axum_baseline", 8082),
     }
@@ -88,7 +92,7 @@ def main():
     comparison_lock = ROOT / "build/http_stdlib_rust/Cargo.lock"
     generated_lock = ROOT / "build/http_stdlib/Cargo.lock"
     if comparison_lock.is_file() and generated_lock.is_file():
-        same = (comparison_lock.read_text().replace('name = "nagi-http-rust-baseline"', 'name = "nagi-http-stdlib"')
+        same = (comparison_lock.read_text().replace('name = "nagi-http-rust-baseline"', original_name)
                 == generated_lock.read_text())
         environment["matching_dependency_lock"] = same
         if args.build_matching_rust and not same:

@@ -151,6 +151,39 @@ if [ "$head" = 1 ]; then printf '%s' "$NAGI_TEST_LATEST_URL"; exit 0; fi
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse((self.root / "profile").exists())
 
+    def test_path_separator_in_bin_directory_preserves_the_previous_install(self):
+        self.assertEqual(self.install().returncode, 0)
+        profile = (self.root / "profile").read_bytes()
+        self.bundle(version=self.next_version)
+        directory = self.root / "bin:stage"
+        alias = self.root / "plain-bin"
+        for candidate in (directory, alias):
+            if candidate == alias:
+                directory.mkdir()
+                alias.symlink_to(directory, target_is_directory=True)
+            with self.subTest(directory=candidate.name):
+                result = self.install("--version", self.next_version, "--bin-dir", str(candidate))
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("PATH uses ':' as a separator", result.stderr)
+                self.assertEqual((self.root / "profile").read_bytes(), profile)
+                self.assert_active(VERSION)
+                self.assertFalse((self.root / "versions/.install-lock").exists())
+                self.assertFalse((self.root / "versions" / f"nagi-{self.next_version}-{self.platform}").exists())
+                self.assertFalse((directory / "nagic").exists())
+
+    def test_no_path_with_a_separator_prints_a_working_absolute_command(self):
+        directory = self.root / "bin:stage"
+        result = self.install("--bin-dir", str(directory), "--no-path")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.root / "profile").exists())
+        self.assertNotIn("export PATH=", result.stdout)
+        lines = result.stdout.splitlines()
+        command = lines[lines.index("[NEXT] In this terminal, run:") + 1].strip()
+        result = subprocess.run(["bash", "--noprofile", "--norc", "-c", command],
+                                env=self.environment, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), f"nagic {VERSION}")
+
     def activate_next_release(self, **options):
         self.bundle(version=self.next_version, **options)
         self.environment["NAGI_TEST_LATEST_URL"] = f"https://github.com/disnana/Nagi/releases/tag/nagi-v{self.next_version}"
@@ -244,6 +277,27 @@ if [ "$head" = 1 ]; then printf '%s' "$NAGI_TEST_LATEST_URL"; exit 0; fi
         self.assertNotEqual(result.returncode, 0)
         self.assert_active(VERSION)
         self.assertTrue((self.root / "profile").is_dir())
+
+    def test_readonly_profile_failure_removes_lock_and_allows_a_later_update(self):
+        self.assertEqual(self.install().returncode, 0)
+        profile = self.root / "profile"
+        original = "# protected user configuration\n"
+        profile.write_text(original)
+        profile.chmod(0o444)
+        try:
+            if os.access(profile, os.W_OK):
+                self.skipTest("This user can write read-only files")
+            result = self.activate_next_release()
+        finally:
+            profile.chmod(0o644)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(profile.read_text(), original)
+        self.assert_active(VERSION)
+        self.assertFalse((self.root / "versions/.install-lock").exists())
+        self.assertFalse((self.root / "versions" / f"nagi-{self.next_version}-{self.platform}").exists())
+        result = self.install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_active(self.next_version)
 
     def test_latest_cannot_resolve_to_vsix_prerelease_or_another_repository(self):
         for url in ("https://github.com/disnana/Nagi/releases/tag/vscode-v0.1.8",

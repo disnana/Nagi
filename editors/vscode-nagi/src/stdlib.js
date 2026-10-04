@@ -4,14 +4,16 @@
 const prefix = 'stdlib:';
 const validModule = name => /^std(?:\.[a-z][a-z0-9_]*)+$/.test(name);
 
-function sourceUri(file) {
+function sourceUri(file, revision) {
   if (typeof file !== 'string' || !file.startsWith(prefix)) return undefined;
+  if (revision !== undefined && !/^[a-f0-9]{64}$/.test(revision)) return undefined;
   const name = file.slice(prefix.length);
-  return validModule(name) ? `nagi-stdlib:/${name.replaceAll('.', '/')}.nagi` : undefined;
+  return validModule(name) ? `nagi-stdlib:/${name.replaceAll('.', '/')}.nagi${revision ? `?source=${revision}` : ''}` : undefined;
 }
 
 function sourceFile(uri) {
-  if (!uri || uri.scheme !== 'nagi-stdlib' || uri.authority || uri.query || uri.fragment) return undefined;
+  if (!uri || uri.scheme !== 'nagi-stdlib' || uri.authority || uri.fragment ||
+      uri.query && !/^source=[a-f0-9]{64}$/.test(uri.query)) return undefined;
   const match = /^\/(std(?:\/[a-z][a-z0-9_]*)+)\.nagi$/.exec(uri.path);
   return match ? prefix + match[1].replaceAll('/', '.') : undefined;
 }

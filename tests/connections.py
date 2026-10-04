@@ -1,14 +1,16 @@
 """1,000/10,000本の実TCP接続を保持し、閉じた後のserver FDを確認する。"""
-import asyncio,json,os,signal,subprocess,time,resource
+import asyncio,json,os,signal,subprocess,sys,time,resource
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT/'scripts'))
+from native_artifacts import native_executable
 def stats(pid):
     s={}
     for line in Path(f'/proc/{pid}/status').read_text().splitlines():
         if line.startswith(('VmRSS:','VmHWM:')):s[line.split(':')[0]]=int(line.split()[1])
     s['fds']=len(list(Path(f'/proc/{pid}/fd').iterdir()));return s
 async def main():
-    p=subprocess.Popen([ROOT/'native-target/release/nagi-crud'],env=dict(os.environ,NAGI_THREADS='1'),stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
+    p=subprocess.Popen([native_executable(ROOT/'build/crud', fallback_name='nagi-crud')],env=dict(os.environ,NAGI_THREADS='1'),stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
     rows=[]
     try:
         for _ in range(100):

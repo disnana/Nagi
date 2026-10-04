@@ -22,6 +22,8 @@
         <lang.braceMatcher language="NagiLow" implementationClass="com.disnana.nagi.NagiBraceMatcher$Low"/>
         <lang.foldingBuilder language="Nagi" implementationClass="com.disnana.nagi.NagiFoldingBuilder"/>
         <lang.foldingBuilder language="NagiLow" implementationClass="com.disnana.nagi.NagiFoldingBuilder"/>
+        <codeInsight.lineMarkerProvider language="Nagi" implementationClass="com.disnana.nagi.NagiRunLineMarker"/>
+        <codeInsight.lineMarkerProvider language="NagiLow" implementationClass="com.disnana.nagi.NagiRunLineMarker"/>
         <applicationConfigurable parentId="language" id="nagi.settings" displayName="Nagi"
                                  instance="com.disnana.nagi.NagiConfigurable"/>
         <applicationService serviceImplementation="com.disnana.nagi.NagiSettings"/>

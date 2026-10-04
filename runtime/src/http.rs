@@ -1,12 +1,22 @@
 use crate::Error;
-use axum::Router;
-use hyper::server::conn::http1;
+use axum::{
+    body::Body,
+    http::{header, HeaderValue, Method, StatusCode},
+    response::Response,
+    Router,
+};
+use futures_util::FutureExt;
+use hyper::{
+    server::conn::http1,
+    service::{service_fn, Service},
+};
 use hyper_util::{
     rt::{TokioIo, TokioTimer},
     service::TowerToHyperService,
 };
 use std::{
     future::Future,
+    panic::{catch_unwind, AssertUnwindSafe},
     time::{Duration, Instant},
 };
 use tokio::net::TcpListener;
@@ -37,6 +47,28 @@ pub(crate) fn request_wait_timeout() -> Result<Duration, Error> {
             "{WAIT_SECONDS} must be a positive integer"
         ))),
     }
+}
+
+fn panic_response(head: bool) -> Response {
+    let mut response = Response::new(if head {
+        Body::empty()
+    } else {
+        Body::from("Internal Server Error")
+    });
+    *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/plain; charset=utf-8"),
+    );
+    response
+        .headers_mut()
+        .insert(header::CONNECTION, HeaderValue::from_static("close"));
+    if head {
+        response
+            .headers_mut()
+            .insert(header::CONTENT_LENGTH, HeaderValue::from_static("21"));
+    }
+    response
 }
 
 /// A deadline for complete request headers, including the idle interval after
@@ -72,11 +104,27 @@ pub(crate) async fn serve(
                 continue;
             }
         };
+        let service = TowerToHyperService::new(router.clone());
+        let service = service_fn(move |request: hyper::Request<hyper::body::Incoming>| {
+            let head = request.method() == Method::HEAD;
+            // The adapter returns an owned future. Keep this boundary on the
+            // stack without an extra middleware box or per-request clone.
+            let future = catch_unwind(AssertUnwindSafe(|| service.call(request)));
+            async move {
+                let result = match future {
+                    Ok(future) => AssertUnwindSafe(future).catch_unwind().await,
+                    Err(panic) => Err(panic),
+                };
+                match result {
+                    Ok(response) => response,
+                    // An unwind before response headers becomes a generic 500;
+                    // application state is not rolled back by catching it.
+                    Err(_) => Ok(panic_response(head)),
+                }
+            }
+        });
         let connection = builder
-            .serve_connection(
-                TokioIo::new(stream),
-                TowerToHyperService::new(router.clone()),
-            )
+            .serve_connection(TokioIo::new(stream), service)
             .with_upgrades();
         let mut stopped = shutdown.subscribe();
         tokio::spawn(async move {
@@ -104,3 +152,6 @@ pub(crate) async fn serve(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod panic_tests;
