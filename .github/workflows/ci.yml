@@ -213,6 +213,8 @@ jobs:
         run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test copy_capabilities --test asset_calls --test shared_target
       - name: Check oversized HTTP bodies and connection recovery on the target platform
         run: cargo test --locked -p nagi-runtime oversized_body_ -- --test-threads=1
+      - name: Check HTTP panic recovery on the target platform
+        run: cargo test --locked -p nagi-runtime panic_ -- --test-threads=1
       - name: Check demo packaging with Windows PowerShell
         if: runner.os == 'Windows'
         shell: powershell

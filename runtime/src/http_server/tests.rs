@@ -7,6 +7,9 @@ use tokio::{
     sync::{oneshot, Notify},
 };
 
+#[path = "panic_tests.rs"]
+mod panic_tests;
+
 struct Server {
     address: std::net::SocketAddr,
     stopped: Option<oneshot::Sender<()>>,
@@ -950,7 +953,18 @@ async fn oversized_body_assert_response(socket: &mut BufReader<TcpStream>, expec
             b"Request Timeout".as_slice()
         }
     );
-    assert!(closed(socket).await.is_empty());
+    // A TCP reset after the complete 413 message still closes the connection.
+    // It must not conceal a reset while reading its status, headers or body.
+    let mut rest = Vec::new();
+    let closing = tokio::time::timeout(Duration::from_secs(3), socket.read_to_end(&mut rest))
+        .await
+        .expect("rejected upload connection did not close");
+    match closing {
+        Ok(_) => {}
+        Err(error) if expected == 413 && error.kind() == std::io::ErrorKind::ConnectionReset => {}
+        Err(error) => panic!("reading rejected upload closure: {error}"),
+    }
+    assert!(rest.is_empty(), "rejected upload produced another response");
 }
 
 async fn oversized_body_assert_capacity_released(server: &Server, calls: &AtomicUsize) {

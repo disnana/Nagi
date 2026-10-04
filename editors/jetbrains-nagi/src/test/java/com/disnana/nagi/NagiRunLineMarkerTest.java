@@ -1,7 +1,6 @@
 package com.disnana.nagi;
 
 import com.intellij.codeInsight.daemon.LineMarkerProviders;
-import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
@@ -64,10 +63,10 @@ public class NagiRunLineMarkerTest extends BasePlatformTestCase {
         assertNotNull(marker);
         assertNotNull(marker.getNavigationHandler());
         configureSource("other.py", "print('different run configuration')\n");
-        var context = NagiRunLineMarker.runContext(marker.getElement().getContainingFile());
-        assertSame(main.getVirtualFile(), CommonDataKeys.VIRTUAL_FILE.getData(context));
-        assertSame(getProject(), CommonDataKeys.PROJECT.getData(context));
-        assertSame(main, CommonDataKeys.PSI_FILE.getData(context));
+        var target = marker.getElement().getContainingFile();
+        assertSame(main.getVirtualFile(), target.getVirtualFile());
+        assertSame(getProject(), target.getProject());
+        assertSame(main, target);
     }
     public void testEntryPointCacheIsInvalidatedWhenDeclarationChanges() {
         configureSource("main.nagi", "def main():\n    print(1)\n");
@@ -95,10 +94,8 @@ public class NagiRunLineMarkerTest extends BasePlatformTestCase {
         var name = preview.findElementAt(preview.getText().indexOf("main"));
         assertNotNull(name);
         assertNull(new NagiRunLineMarker().getLineMarkerInfo(name));
-        var action = new NagiCompilerAction.Run();
-        var event = com.intellij.openapi.actionSystem.AnActionEvent.createFromAnAction(action, null,
-                com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN, NagiRunLineMarker.runContext(preview));
-        action.actionPerformed(event); // Must return before trust dialogs, saves, or process startup.
+        new NagiCompilerAction.Run().execute(preview.getProject(), preview.getVirtualFile());
+        // Must return before trust dialogs, saves, or process startup.
     }
     public void testHighGutterClickInvokesTheCompilerWithItsSavedFile() throws Exception { invokeRun(false, false); }
     public void testLowGutterClickInvokesTheCompilerWithItsSavedFile() throws Exception { invokeRun(true, false); }

@@ -19,6 +19,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.DumbAware;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -39,8 +40,9 @@ public abstract class NagiCompilerAction extends AnAction implements DumbAware {
         event.getPresentation().setEnabledAndVisible(isSourceFile(file) && event.getProject() != null);
     }
     @Override public void actionPerformed(@NotNull AnActionEvent event) {
-        var project = event.getProject();
-        var file = event.getData(CommonDataKeys.VIRTUAL_FILE);
+        execute(event.getProject(), event.getData(CommonDataKeys.VIRTUAL_FILE));
+    }
+    final void execute(Project project, VirtualFile file) {
         if (project == null || project.isDisposed() || !isSourceFile(file)) return;
         if (!TrustedProjects.isTrusted(project)) {
             Messages.showWarningDialog(project, "Trust this project before executing the Nagi compiler.", "Nagi");

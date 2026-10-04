@@ -4,6 +4,7 @@ use axum::{
     body::Bytes,
     http::{header as names, HeaderMap, HeaderName, HeaderValue, StatusCode, Uri},
 };
+use futures_util::FutureExt;
 use hyper::{server::conn::http1, service::service_fn};
 use hyper_util::rt::{TokioIo, TokioTimer};
 use serde::Serialize;
@@ -13,6 +14,7 @@ use std::{
     fmt,
     future::Future,
     marker::PhantomData,
+    panic::AssertUnwindSafe,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -791,18 +793,19 @@ where
         headers: parts.headers,
         body,
     };
-    let response = match tokio::time::timeout(
-        options.handler_deadline,
-        (route.handler)(request, Arc::clone(&app.state)),
-    )
-    .await
-    {
+    // The constructor is synchronous for Rust hosts; both it and subsequent
+    // handler/error-mapper polling form one request failure boundary. Catching
+    // an unwind does not roll back application state or repair poisoned locks.
+    let future = AssertUnwindSafe(async { (route.handler)(request, Arc::clone(&app.state)).await })
+        .catch_unwind();
+    let response = match tokio::time::timeout(options.handler_deadline, future).await {
         // A successful CONNECT changes the connection into a byte tunnel.
         // This resource API has no tunnel operation or upgrade owner.
-        Ok(response) if connect && response.status.is_success() => {
+        Ok(Ok(response)) if connect && response.status.is_success() => {
             transport(Status::NOT_IMPLEMENTED, head, true)
         }
-        Ok(response) => response.into_http(head),
+        Ok(Ok(response)) => response.into_http(head),
+        Ok(Err(_)) => transport(Status::INTERNAL_SERVER_ERROR, head, true),
         Err(_) => transport(Status::GATEWAY_TIMEOUT, head, false),
     };
     Ok(response)
