@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Give view-returning function values with no borrowing input a static output lifetime. Preserve input-bound callbacks, nested function lifetime scopes, and static origins through calls in High and Low.
 - Diagnose non-Copy field moves through shared values and borrowed resources before Rust generation, including outer `owned` wrappers and temporary call results. Preserve Copy reads, explicit copies, and moves from ordinary owned records.
 - Reject bare expressions that discard a Result wrapped in `owned`, including nested ownership wrappers. Preserve explicit bindings and existing `try`/`match` restrictions for wrapped values.
 - Add opt-in offline SQLite checks with `check --sql-schema FILE --sql-dialect sqlite`. Validate literal query names, required row columns, and bind counts in a bounded worker; keep dynamic SQL and value/NULL checks at runtime.

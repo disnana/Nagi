@@ -413,12 +413,16 @@ fn rust_type_at(t: &Type, depth: usize, types: &RustTypes<'_>) -> String {
                     .join(", "),
                 rust_type_at(t.1.last().unwrap(), depth + 1, types)
             );
-            if t.1.iter().any(Type::contains_view) {
+            // Nested function types bind their own views during recursion.
+            // Only this function's inputs can bind its remaining view lifetimes.
+            if t.1[..t.1.len() - 1].iter().any(Type::contains_view) {
                 let lifetime = format!("'nagi_fn_{depth}");
                 format!(
                     "for<{lifetime}> {}",
                     signature.replace("&'a ", &format!("&{lifetime} "))
                 )
+            } else if t.function_view_return_is_static() {
+                signature.replace("&'a ", "&'static ")
             } else {
                 signature
             }
