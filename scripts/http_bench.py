@@ -1,6 +1,7 @@
 """Native wrk、同一payload、1 server worker、CPUをserver/clientに分離する。"""
 import argparse,json,os,random,signal,subprocess,time,urllib.request,statistics
 from pathlib import Path
+from native_artifacts import native_executable
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'benchmarks/results'
 OUT.mkdir(exist_ok=True,parents=True)
@@ -21,7 +22,7 @@ def main():
     ap=argparse.ArgumentParser();ap.add_argument('--wrk',type=Path,required=True);ap.add_argument('--soak',type=int,default=120);ap.add_argument('--duration',type=int,default=3);a=ap.parse_args()
     target=Path(os.environ.get('CARGO_TARGET_DIR',ROOT/'target'));available=sorted(os.sched_getaffinity(0));server_core=available[0];client_cores=available[-2:]
     env=dict(os.environ,NAGI_THREADS='1',NAGI_DB=':memory:')
-    configurations={'nagi':([ROOT/'native-target/release/nagi-crud'],8080),'axum':([target/'release/examples/axum_baseline'],8082),'node':(['node',ROOT/'benchmarks/node_server.js'],8081),'aiohttp':(['python3',ROOT/'benchmarks/python_server.py'],8083)}
+    configurations={'nagi':([native_executable(ROOT/'build/crud', fallback_name='nagi-crud')],8080),'axum':([target/'release/examples/axum_baseline'],8082),'node':(['node',ROOT/'benchmarks/node_server.js'],8081),'aiohttp':(['python3',ROOT/'benchmarks/python_server.py'],8083)}
     rows=[]
     def load(port,case,duration):
         args=['taskset','-c',','.join(map(str,client_cores)),str(a.wrk),'-t2','-c64','-d'+str(duration)+'s','--latency','-s',str(ROOT/'benchmarks/http.lua'),'http://127.0.0.1:'+str(port)+case[1],'--']+case[2]

@@ -42,6 +42,26 @@ async def invalid_framing(request: http.Request, state: shared[State]) -> Result
     output = http.empty(http.Status.OK)
     return http.append_header_text(output, "Content-Length", "123")
 
+async def panic_index(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+    match request.query:
+        case Some(value):
+            index = try parse_i64(value)
+            values = [7]
+            await sleep(1)
+            print(values[index])
+            return ok(http.text(http.Status.OK, "unreachable"))
+        case None:
+            return error("missing index")
+
+async def panic_divide(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+    match request.query:
+        case Some(value):
+            divisor = try parse_i64(value)
+            print(10 / divisor)
+            return ok(http.text(http.Status.OK, "unreachable"))
+        case None:
+            return error("missing divisor")
+
 async def no_content(request: http.Request, state: shared[State]) -> Result[http.Response, AuthError]:
     return ok(http.text(http.Status.NO_CONTENT, "must not be sent"))
 
@@ -149,6 +169,8 @@ async def main() -> Result[unit, Error]:
     app = try http.route_mapped(app, http.Method.GET, "/text-headers", text_headers, operation_error)
     app = try http.route_mapped(app, http.Method.GET, "/invalid-header", invalid_header, operation_error)
     app = try http.route_mapped(app, http.Method.GET, "/invalid-framing", invalid_framing, operation_error)
+    app = try http.route_mapped(app, http.Method.GET, "/panic-index", panic_index, operation_error)
+    app = try http.route_mapped(app, http.Method.GET, "/panic-divide", panic_divide, operation_error)
     app = try http.route(app, http.Method.GET, "/no-content", no_content)
     app = try http.route(app, http.Method.GET, "/reset-content", reset_content)
     app = try http.route(app, http.Method.GET, "/not-modified", not_modified)
@@ -203,6 +225,38 @@ def invalid_utf8_header(port: int):
         response = http.client.HTTPResponse(connection)
         response.begin()
         return response.status, response.read()
+
+
+def panic_response(port: int, method: str, path: str):
+    # Read the complete HTTP message before asserting that the failed
+    # request's connection closes. A server-side panic must not produce EOF
+    # in place of the status, headers or promised response body.
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as connection:
+        connection.sendall(f"{method} {path} HTTP/1.1\r\nHost: localhost\r\n\r\n".encode())
+        deadline = time.monotonic() + 5
+        wire = bytearray()
+        while True:
+            remaining = deadline - time.monotonic()
+            assert remaining > 0, "panicked request connection remained open"
+            connection.settimeout(remaining)
+            chunk = connection.recv(4096)
+            if not chunk:
+                break
+            wire.extend(chunk)
+            assert len(wire) <= 65536, "unexpectedly large panic response"
+        header_block, separator, body = bytes(wire).partition(b"\r\n\r\n")
+        assert separator, (method, path, "incomplete HTTP response", bytes(wire))
+        lines = header_block.split(b"\r\n")
+        status = int(lines[0].split()[1])
+        headers = {}
+        for line in lines[1:]:
+            name, value = line.split(b":", 1)
+            headers[name.decode().lower()] = value.strip().decode()
+        assert status == 500, (method, path, status, body)
+        assert body == (b"" if method == "HEAD" else b"Internal Server Error"), (method, path, body)
+        assert headers.get("connection") == "close", headers
+        assert headers.get("content-length") == str(len(b"Internal Server Error")), headers
+        assert "transfer-encoding" not in headers, headers
 
 
 def wait_for_server(port: int, process: subprocess.Popen, log: Path):
@@ -273,6 +327,13 @@ def check_server(executable: Path, folder: Path, environment: dict[str, str], so
             headers = expect(first, "GET", "/invalid-header", 500, b"operation failed")
             assert all(name.lower() != "x-injected" for name, _ in headers)
             expect(first, "GET", "/invalid-framing", 500, b"operation failed")
+            for path in ["/panic-index?1", "/panic-divide?0"]:
+                for method in ["GET", "HEAD"]:
+                    panic_response(first, method, path)
+                    checked += 1
+                    expect(first, "GET", "/health", 200, b"ok")
+            # An ordinary Result error still uses the route mapper.
+            expect(first, "GET", "/panic-index?invalid", 500, b"operation failed")
             for path, status in [("/no-content", 204), ("/reset-content", 205), ("/not-modified", 304)]:
                 headers = expect(first, "GET", path, status, b"")
                 values = {name.lower(): value for name, value in headers}
@@ -337,7 +398,11 @@ def verify(compiler: Path, target: Path) -> None:
             result = subprocess.run([str(compiler), "build", str(input_file), "--no-project", "--out", str(folder / "build")],
                                     cwd=folder, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=180)
             assert result.returncode == 0, result.stdout + result.stderr
-            executable = target / "release" / ("nagi-http-app.exe" if os.name == "nt" else "nagi-http-app")
+            native = [line.removeprefix("native: ").strip()
+                      for line in (result.stdout + "\n" + result.stderr).splitlines()
+                      if line.startswith("native: ")]
+            assert len(native) == 1, result.stdout + result.stderr
+            executable = Path(native[0])
             assert executable.is_file(), (result.stdout, executable)
             total += check_server(executable, folder, environment, input_file.suffix[1:])
         print(f"Standard HTTP Nagi integration: {total} passed (High and independent Low)")

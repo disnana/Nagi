@@ -257,6 +257,8 @@ jobs:
           PY
       - name: Check HTTP route parameters on the target platform
         run: python tests/route_integration.py
+      - name: Check standard HTTP High and saved Low on the target platform
+        run: python tests/http_stdlib_integration.py
       - name: Check scoped task captures on the target platform
         run: cargo test --locked -p nagic --test scoped_tasks
       - name: Check actor lifecycle and supervisor cancellation on the target platform

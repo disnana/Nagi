@@ -19,6 +19,7 @@ import tomllib
 import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
+from native_artifacts import native_executable
 
 ROOT = Path(__file__).resolve().parents[1]
 URL = "http://127.0.0.1:8080"
@@ -294,7 +295,7 @@ def environment(args) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, default=ROOT / "native-target/release/nagi-crud")
+    parser.add_argument("--binary", type=Path)
     parser.add_argument("--vegeta", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=ROOT / "build/http-capacity")
     parser.add_argument("--phase", choices=["limits", "soak", "all"], default="all")
@@ -311,6 +312,7 @@ def main() -> None:
     parser.add_argument("--client-cpus", default="2,3")
     parser.add_argument("--memory-ceiling", type=int, default=12 * 1024 ** 3)
     args = parser.parse_args()
+    args.binary = args.binary or native_executable(ROOT / "build/crud", fallback_name="nagi-crud")
     if min(args.duration, args.repeats, args.soak_seconds, args.soak_rate, args.max_workers,
            args.recovery_seconds) < 1 or args.max_connections < 0:
         parser.error("Durations, repeats, rates, and worker count must be positive")

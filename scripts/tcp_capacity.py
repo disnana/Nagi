@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from native_artifacts import native_executable
 
 from http_capacity import ROOT, proc, recovery, save, server_for, stop, tcp_states
 
@@ -109,7 +110,7 @@ def messages(children: list[subprocess.Popen], server: subprocess.Popen, timeout
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, default=ROOT / "native-target/release/nagi-crud")
+    parser.add_argument("--binary", type=Path)
     parser.add_argument("--out", type=Path, default=ROOT / "build/tcp-capacity")
     parser.add_argument("--counts", default="1000,10000,15000,16000,16400,18000")
     parser.add_argument("--server-cpus", default="0")
@@ -122,6 +123,7 @@ def main() -> None:
             parser.error("Each client must use 1..10000 connections and a loopback source address")
         asyncio.run(client(args.client_count, args.source_ip))
         return
+    args.binary = args.binary or native_executable(ROOT / "build/crud", fallback_name="nagi-crud")
     args.binary, args.out = args.binary.resolve(), args.out.resolve()
     counts = [int(value) for value in args.counts.split(",")]
     if any(value < 2 or value > 20000 for value in counts):

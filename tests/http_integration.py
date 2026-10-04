@@ -1,12 +1,14 @@
 """実ソケット経由のCRUD、validation、keep-alive、stream、WS、timeout。"""
-import asyncio,json,os,signal,subprocess,time
+import asyncio,json,os,signal,subprocess,sys,time
 from pathlib import Path
 import aiohttp
 import websockets
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT/'scripts'))
+from native_artifacts import native_executable
 async def main():
     target=Path(os.environ.get('NAGI_NATIVE_TARGET_DIR',ROOT/'native-target'))
-    process=subprocess.Popen([target/'release'/('nagi-crud'+('.exe' if os.name=='nt' else ''))],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+    process=subprocess.Popen([native_executable(ROOT/'build/crud', target)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
     tests=[]
     def check(name,cond):
         assert cond,name
