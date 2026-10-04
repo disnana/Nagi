@@ -16,6 +16,7 @@ import platform
 import re
 import subprocess
 import time
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 NAGI_SOURCE = """import std.actor as actor
@@ -113,7 +114,7 @@ def main():
         return
     native = Path(os.environ.get("NAGI_NATIVE_TARGET_DIR", ROOT / "build/native-target")).resolve()
     environment = dict(os.environ, CARGO_TARGET_DIR=str(native), NAGI_NATIVE_TARGET_DIR=str(native), CARGO_NET_OFFLINE="true")
-    original, replacement = 'name = "nagi-actor-generated"', 'name = "nagi-actor-probe"'
+    replacement = 'name = "nagi-actor-probe"'
     inputs = {"runtime_source_sha256": runtime_sha256(),
               "nagi_input_sha256": sha256(source_dir / "actor_generated.nagi"),
               "probe_input_sha256": sha256(ROOT / "benchmarks/actor_probe.rs")}
@@ -122,6 +123,7 @@ def main():
         parser.error("runtime or probe inputs changed; rebuild without --skip-build")
     if not args.skip_build:
         subprocess.run([str(args.nagic.resolve()), "build", "--project", str(source_dir), "--out", str(generated)], cwd=ROOT, env=environment, check=True)
+        original = 'name = ' + json.dumps(tomllib.loads((generated / "Cargo.toml").read_text())["package"]["name"])
         (project / "src").mkdir(parents=True, exist_ok=True)
         for filename in ("Cargo.toml", "Cargo.lock"):
             text = (generated / filename).read_text()
@@ -136,6 +138,7 @@ def main():
         (project / "src/main.rs").write_text(source + "\n" + (ROOT / "benchmarks/actor_probe.rs").read_text())
         subprocess.run([os.environ.get("CARGO", "cargo"), "build", "--release", "--locked", "--offline", "--manifest-path", str(project / "Cargo.toml")], cwd=ROOT, env=environment, check=True)
         signature.write_text(json.dumps(inputs, indent=2) + "\n")
+    original = 'name = ' + json.dumps(tomllib.loads((generated / "Cargo.toml").read_text())["package"]["name"])
     for filename in ("Cargo.toml", "Cargo.lock"):
         text = (generated / filename).read_text()
         if text.count(original) != 1 or text.replace(original, replacement, 1) != (project / filename).read_text():

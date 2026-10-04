@@ -33,14 +33,21 @@ OUTPUTS = {
 }
 
 
-def run(args, *, cwd=ROOT, env=None, input=None, timeout=180):
+def run(args, *, cwd=ROOT, env=None, input=None, timeout=180, diagnostics=False):
     result = subprocess.run(
         [str(arg) for arg in args], cwd=cwd, env=env, input=input,
         text=True, capture_output=True, timeout=timeout,
     )
     if result.returncode:
         raise RuntimeError(f"Command failed: {args}\n{result.stdout}{result.stderr}")
-    return result.stdout
+    return result.stdout + result.stderr if diagnostics else result.stdout
+
+
+def native_executable(output):
+    for line in output.splitlines():
+        if line.startswith("native: "):
+            return Path(line.removeprefix("native: "))
+    raise RuntimeError("Compiler did not report a native executable")
 
 
 def response(port, path="/health", body=None, headers=None, *, method="GET"):
@@ -259,9 +266,9 @@ def main():
     def build(name, entry):
         project = PROJECTS / name
         run([compiler, "check", "--project", project], env=env)
-        result = run([compiler, "build", "--project", project], env=env)
+        result = run([compiler, "build", "--project", project], env=env, diagnostics=True)
         (output / (name + "-build.log")).write_text(result, encoding="utf-8")
-        return target / "release" / ("nagi-" + entry.replace("_", "-") + EXE)
+        return native_executable(result)
 
     if args.only:
         executable = build("supervised-service", "main")
@@ -277,8 +284,8 @@ def main():
         assert actual == expected, (name, actual)
         if name == "low-kernel":
             source = PROJECTS / name / (entry + ".nagi")
-            run([compiler, "build", source, "--no-project"], env=env)
-            assert run([executable], env=env, timeout=10) == actual
+            result = run([compiler, "build", source, "--no-project"], env=env, diagnostics=True)
+            assert run([native_executable(result)], env=env, timeout=10) == actual
         rows.append({"project": name, "check_build_run": "passed"})
         print(f"Passed: {name}", flush=True)
 

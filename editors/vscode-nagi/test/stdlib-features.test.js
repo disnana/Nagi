@@ -78,6 +78,19 @@ test('virtual source identifiers cannot navigate to project paths or URLs', () =
     [{ file: virtual, text: 'resource Status' }]);
 });
 
+test('virtual registry revisions keep module paths and accept only a source hash', () => {
+  const revision = 'a'.repeat(64);
+  assert.equal(stdlib.sourceUri(virtual, revision), `nagi-stdlib:/std/http/server.nagi?source=${revision}`);
+  assert.equal(stdlib.sourceFile({ scheme: 'nagi-stdlib', path: '/std/http/server.nagi', query: `source=${revision}` }), virtual);
+  for (const query of ['source=../secret', 'source=https://example.com', 'source=' + 'A'.repeat(64),
+    `source=${revision}&path=../secret`, 'file=/tmp/private']) {
+    assert.equal(stdlib.sourceFile({ scheme: 'nagi-stdlib', path: '/std/http/server.nagi', query }), undefined);
+  }
+  for (const value of ['', '../secret', 'https://example.com', 'A'.repeat(64)]) {
+    assert.equal(stdlib.sourceUri(virtual, value), undefined);
+  }
+});
+
 test('Some and None are pattern assistance, not general value constructors', () => {
   for (const code of ['    case So', '    case No']) {
     const candidates = features.completionCandidates(undefined, code, code.length);

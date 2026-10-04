@@ -61,7 +61,7 @@ def main():
 
 A module name exposes functions, classes, and enums defined in that file. Imported names are not automatically re-exported. The alias is optional in `from "orders.nagi" import Order`. Select several definitions with commas, for example `from "orders.nagi" import Order as SavedOrder, score`. Do not add a trailing comma. `from` and `as` are contextual import keywords and can still be function or variable names. A local with the same name as a module follows the existing local-variable rules. Class method calls remain unsupported.
 
-Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted imports select the registered `std.http.server` and `std.actor` modules. General package discovery and visibility declarations are unsupported.
+Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted imports select the registered `std.http.server`, `std.actor`, and `std.result` modules. General package discovery and visibility declarations are unsupported.
 
 ### Use the same definition in Low and Rust
 

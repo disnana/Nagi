@@ -599,3 +599,71 @@ def main():
     );
     f.run_high_and_saved_low("builtin spelled enum identity preserved");
 }
+
+#[test]
+fn entry_result_errors_keep_exit_status_through_owned_wrappers_and_async_saved_low() {
+    let _guard = NATIVE_RUN.lock().unwrap();
+    let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap()
+                .join("native-target")
+        });
+    for return_type in [
+        "Result[unit, Error]",
+        "owned[Result[unit, Error]]",
+        "owned[owned[Result[unit, Error]]]",
+    ] {
+        for asynchronous in [false, true] {
+            for fails in [false, true] {
+                let fixture = Fixture::new();
+                let modifier = if asynchronous { "async " } else { "" };
+                let await_call = if asynchronous { "await " } else { "" };
+                fixture.write("main.nagi", &format!("@rust(\"native::outcome\")\nextern {modifier}def outcome() -> {return_type}\n{modifier}def main() -> {return_type}:\n    return {await_call}outcome()\n"));
+                let value = if fails {
+                    "Err(nagi_runtime::Error::invalid(\"entry failure\"))"
+                } else {
+                    "Ok(())"
+                };
+                fixture.write("native.rs", &format!("pub {modifier}fn outcome() -> Result<(), nagi_runtime::Error> {{ {value} }}\n"));
+                fixture.roundtrip("main.nagi");
+                for source in ["main.nagi", "saved.low"] {
+                    let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+                        .current_dir(&fixture.0)
+                        .args([
+                            "run",
+                            source,
+                            "--no-project",
+                            "--rust",
+                            "native.rs",
+                            "--out",
+                            "build",
+                        ])
+                        .env("NAGI_NATIVE_TARGET_DIR", &target)
+                        .env("CARGO_NET_OFFLINE", "true")
+                        .output()
+                        .unwrap();
+                    let diagnostic = String::from_utf8(output.stderr).unwrap();
+                    assert!(
+                        output.stdout.is_empty(),
+                        "{source}: {}",
+                        String::from_utf8_lossy(&output.stdout)
+                    );
+                    assert_eq!(
+                        output.status.code(),
+                        Some(if fails { 1 } else { 0 }),
+                        "{source}, {return_type}, async={asynchronous}: {diagnostic}"
+                    );
+                    assert_eq!(
+                        diagnostic.contains("Invalid: entry failure"),
+                        fails,
+                        "{diagnostic}"
+                    );
+                    assert!(!diagnostic.contains("unused `Result`"), "{diagnostic}");
+                }
+            }
+        }
+    }
+}

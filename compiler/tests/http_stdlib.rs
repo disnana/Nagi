@@ -11,8 +11,7 @@ use std::{
 };
 
 static FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
-// Every fixture is built as nagi-main in the shared native cache. Cargo's lock
-// does not cover the later launch of that executable.
+// Keep native integration workloads bounded while fixtures share a Cargo cache.
 static NATIVE_RUN: Mutex<()> = Mutex::new(());
 
 struct Fixture(PathBuf);

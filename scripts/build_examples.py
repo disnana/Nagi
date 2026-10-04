@@ -1,5 +1,5 @@
 """一つのtargetに依存crateを共有し、全サンプルを実際にbuild/runする。"""
-import json,os,subprocess,sys
+import json,os,subprocess,sys,tomllib
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 TARGET=Path(os.environ.get('CARGO_TARGET_DIR',ROOT/'target')).resolve()
@@ -15,6 +15,10 @@ def build(args):
     if 'unused import' in r.stderr:
         raise RuntimeError(r.stderr)
     return r
+def executable(generated):
+    with (generated/'Cargo.toml').open('rb') as manifest:
+        package=tomllib.load(manifest)['package']['name']
+    return NATIVE_TARGET/'release'/(package+EXE)
 def main():
     rows=[]
     nagic=TARGET/'release'/('nagic'+EXE)
@@ -25,13 +29,13 @@ def main():
         r=build(args)
         row={'sample':name,'build':'passed'}
         if name not in ['cpu','crud']:
-            r=run([NATIVE_TARGET/'release'/('nagi-'+name.replace('_','-')+EXE)])
+            r=run([executable(ROOT/'build'/name)])
             stderr = r.stderr.replace(str(ROOT) + os.sep, '').replace(ROOT.as_posix() + '/', '')
             row.update(stdout=r.stdout,stderr=stderr,run='passed')
             if name in ['low_call','override']:assert r.stdout.strip()=='42'
         rows.append(row)
     r=build([nagic,'build',ROOT/'examples/hello.low','--out',ROOT/'build/hello_low'])
-    r=run([NATIVE_TARGET/'release'/('nagi-hello'+EXE)])
+    r=run([executable(ROOT/'build/hello_low')])
     assert r.stdout.strip()=='4'
     rows.append({'sample':'hello.low','build':'passed','run':'passed','stdout':r.stdout})
     verified = run([sys.executable, ROOT/'scripts/verify_rust_library.py', '--compiler', nagic])

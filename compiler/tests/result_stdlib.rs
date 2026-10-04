@@ -3,10 +3,14 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
 };
 
 static ID: AtomicU64 = AtomicU64::new(0);
+static NATIVE_RUN: Mutex<()> = Mutex::new(());
 
 struct Fixture(PathBuf);
 
@@ -76,6 +80,11 @@ impl Fixture {
     }
 
     fn run_both(&self, expected: &str) {
+        self.run_both_with_args(expected, &[]);
+    }
+
+    fn run_both_with_args(&self, expected: &str, extra: &[&str]) {
+        let _guard = NATIVE_RUN.lock().unwrap();
         let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
@@ -88,6 +97,7 @@ impl Fixture {
             let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
                 .current_dir(&self.0)
                 .args(["run", name, "--no-project", "--out", "build"])
+                .args(extra)
                 .env("NAGI_NATIVE_TARGET_DIR", &target)
                 .env("CARGO_NET_OFFLINE", "true")
                 .output()
@@ -209,4 +219,65 @@ fn try_keeps_exact_error_identity_and_map_error_does_not_reserve_local_names() {
     fixture.rejected(&format!("{PREFIX}import \"other.nagi\" as other\ndef bad() -> Result[i64, Problem]:\n    value = try result.map_error(parse_i64(\"bad\"), other.convert)\n    return ok(value)\n"), "型が一致しません");
     fixture.write("main.nagi", "import std.result as result\ndef map_error(value: i64) -> i64:\n    return value + 1\ndef plain(value: i64) -> i64:\n    return map_error(value)\ndef local(value: i64) -> i64:\n    map_error = plain\n    return map_error(value)\n");
     fixture.roundtrip();
+}
+
+#[test]
+fn static_error_labels_avoid_read_allocations_but_keep_owned_results_and_shadowing() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "main.nagi",
+        r#"@rust("native::probe")
+extern def probe(reads: fn[Error, unit], copied: fn[Error, unit], owned: fn[Error, str])
+@rust("native::consume")
+extern def consume(label: str)
+def read(label: view[str]):
+    assert_true(len(label) == 7)
+def reads(cause: Error):
+    for number in range(128):
+        assert_true(error_kind(cause) == "invalid")
+        assert_true(error_kind(cause) != "missing")
+        assert_true("invalid" == error_kind(cause))
+        assert_true(len(error_kind(cause)) == 7)
+        assert_true(len(view(error_kind(cause))) == 7)
+        read(view(error_kind(cause)))
+    print(error_kind(cause))
+def copied(cause: Error):
+    consume(copy(view(error_kind(cause))))
+def owned(cause: Error) -> str:
+    label = error_kind(cause)
+    consume(copy(view(label)))
+    return label
+def main():
+    probe(reads, copied, owned)
+"#,
+    );
+    fixture.write(
+        "native.rs",
+        r#"use nagi_runtime::{Error, metrics::measure};
+pub fn probe(reads: fn(Error), copied: fn(Error), owned: fn(Error) -> String) {
+    println!("warm");
+    let cause = Error::invalid("test");
+    let (_, allocations) = measure(|| reads(cause));
+    println!("{}", allocations.allocations);
+    assert_eq!(allocations.allocations, 0);
+    assert_eq!(allocations.reallocations, 0);
+    let cause = Error::invalid("test");
+    let (_, allocations) = measure(|| copied(cause));
+    println!("{}", allocations.allocations);
+    assert_eq!(allocations.allocations, 1);
+    assert_eq!(allocations.reallocations, 0);
+    consume(owned(Error::invalid("test")));
+}
+#[inline(never)]
+pub fn consume(label: String) {
+    assert_eq!(std::hint::black_box(label).as_str(), "invalid");
+}
+"#,
+    );
+    fixture.roundtrip();
+    fixture.run_both_with_args("warm\ninvalid\n0\n1", &["--rust", "native.rs"]);
+
+    fixture.write("main.nagi", "def error_kind(value: i64) -> str:\n    return \"custom\"\ndef main():\n    assert_true(error_kind(1) == \"custom\")\n    assert_true(len(error_kind(1)) == 6)\n    print(error_kind(1))\n");
+    fixture.roundtrip();
+    fixture.run_both("custom");
 }

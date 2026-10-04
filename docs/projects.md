@@ -127,7 +127,9 @@ CRC32、JSON整形、asyncのRust関数を呼びます。[タスク管理サイ�
 
 引数内の相対パスはターミナルの作業フォルダー基準です。SOURCE・`--project`・`--rust`・`--out`・同名の`--rust-dep`の重複はエラーです。`--project`と`--no-project`は同時に使えません。
 
-プロジェクトの生成コードは`build/<入口のファイル名>/`、exeは`build/native-target/release/`に出力します。たとえば`main.nagi`なら`nagi-main.exe`（Linuxでは`nagi-main`）です。プロジェクトごとにビルド先を分けるため、別のアプリも`main.nagi`という名前を使えます。`NAGI_NATIVE_TARGET_DIR`でexeのビルド先を変更できます。
+プロジェクトの生成コードは`build/<入口のファイル名>/`、exeは`build/native-target/release/`に出力します。たとえば`main.nagi`なら`nagi-main.exe`（Linuxでは`nagi-main`）です。プロジェクトごとにビルド先を分けるため、別のアプリも`main.nagi`という名前を使えます。
+
+`NAGI_NATIVE_TARGET_DIR`を指定すると、依存ライブラリのビルドを複数のアプリで共有できます。この場合だけ、実行ファイル名にソースと生成先を区別する識別子を付けます（例：`nagi-main-0123456789abcdef.exe`）。実際のパスは`build`／`run`が標準エラーへ出す`native:`行で確認できます。同じ生成先へ同時にコンパイルすることは避けてください。
 
 ## VS Codeで使う
 
