@@ -175,3 +175,24 @@ fn cargo_failure_preserves_the_cause_without_blaming_the_nagi_program() {
         .unwrap()
         .contains("native:"));
 }
+
+#[test]
+fn check_and_lower_put_status_on_stderr_and_keep_cost_report_machine_readable() {
+    let fixture = Fixture::program();
+    for command in ["check", "lower"] {
+        let output = fixture.run(&[command, "main.nagi"]);
+        assert!(output.status.success(), "{output:?}");
+        assert!(output.stdout.is_empty(), "{output:?}");
+        assert!(String::from_utf8_lossy(&output.stderr).starts_with("checked "));
+
+        let output = fixture.run(&[command, "main.nagi", "--cost-report"]);
+        assert!(output.status.success(), "{output:?}");
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let saved: serde_json::Value = serde_json::from_slice(
+            &fs::read(fixture.0.join("build/main/cost-report.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(report, saved);
+        assert!(String::from_utf8_lossy(&output.stderr).starts_with("checked "));
+    }
+}

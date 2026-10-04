@@ -51,7 +51,7 @@ nagic run --project test-nagi-code/library-examples/rust-json
 
 ## 開発時にまとめて確認する
 
-Python 3.12以降と最新ソースからビルドした`nagic`があれば、各プロジェクトのcheck・build・実行結果と、HTTP応答をまとめて確認できます。
+Python 3.12以降とNagi 0.1.9以降があれば、各プロジェクトのcheck・build・実行結果と、HTTP応答をまとめて確認できます。開発中の変更を検証する場合は、そのソースから作った`nagic`を指定してください。
 
 ```sh
 python scripts/verify_library_examples.py --compiler /path/to/nagic
@@ -62,4 +62,4 @@ python scripts/verify_application_examples.py --compiler /path/to/nagic
 
 UnixではSIGINTによる正常終了、Windowsではプロセスを終了してlistenerが閉じることを確認します。WindowsのCtrl+Cによる終了は、HTTPサンプルの手順で手動確認してください。
 
-`verify_application_examples.py`は最新ソースの`nagic`を使います。在庫集計・機器設定・予約workerをHighからbuildして実行し、生成されたLowも別のプロセスでcheck・buildして同じ検証を行います。入力の境界値と不正入力、SQLiteのNULLと再起動後の保存、actorの業務エラーと再起動を確認します。ビルドの警告も失敗として扱い、結果とログを`build/application-example-verification/`に残します。CIでは`build_examples.py`から実行します。
+`verify_application_examples.py`は[7つのアプリ](../test-nagi-code/application-examples/README.md)を検証します。6つのHighアプリは元のソースと保存した生成Lowから別々にcheck・buildし、手書きLowの注文見積もりCLIは直接検証します。入力の境界値、ファイルの保護、SQLiteの保存、HTTPのヘッダーとエラー、Supervisorの再起動・準備完了・停止を計13回の実行で確認します。ビルドの警告も失敗として扱い、結果とログを`build/application-example-verification/`に残します。CIでは`build_examples.py`から実行します。

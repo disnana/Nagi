@@ -480,7 +480,7 @@ def main():
     assert!(output.status.success(), "{}", stderr(&output));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(
-        stdout.lines().skip(1).collect::<Vec<_>>(),
+        stdout.lines().collect::<Vec<_>>(),
         [
             "start", "first", "next", "zero", "once", "match", "again", "again", "local", "local",
             "view", "view", "view"
@@ -523,10 +523,13 @@ fn a_successful_run_stays_quiet_and_passes_through_program_output() {
     let output = f.cli(&["run", "main.nagi"]);
     assert!(output.status.success(), "{}", stderr(&output));
     let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.starts_with("native: "), "{stdout}");
-    assert!(stdout.ends_with("凪\n"), "{stdout}");
+    assert_eq!(stdout.replace("\r\n", "\n"), "凪\n");
     assert!(!stdout.contains("compiler-artifact"), "{stdout}");
     let text = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        text.lines().any(|line| line.starts_with("native: ")),
+        "{text}"
+    );
     assert!(!text.contains("warning:"), "{text}");
     assert!(!text.contains("Rust backend details"), "{text}");
 }
@@ -988,5 +991,51 @@ pub fn non_send() -> NonSendFuture { NonSendFuture(Rc::new(1)) }
             "{text}"
         );
         assert!(text.contains("Build failed."), "{text}");
+    }
+}
+
+#[test]
+fn run_preserves_json_stdout_with_and_without_a_cost_report_in_high_and_saved_low() {
+    let fixture = Fixture::new();
+    let high = r#"def main():
+    print("{\"value\":42,\"label\":\"凪\"}")
+"#;
+    fixture.write("main.nagi", high);
+    let mut program = parser::parse(high, true).unwrap();
+    check::check(&mut program).unwrap();
+    fixture.write("saved.low", &emit::low(&program));
+
+    for source in ["main.nagi", "saved.low"] {
+        let build = fixture.cli(&["build", source, "--out", "output"]);
+        assert!(build.status.success(), "{}", stderr(&build));
+        assert!(build.stdout.is_empty(), "{build:?}");
+        assert!(stderr(&build)
+            .lines()
+            .any(|line| line.starts_with("native: ")));
+
+        for cost_report in [false, true] {
+            let mut args = vec!["run", source, "--out", "output"];
+            if cost_report {
+                args.push("--cost-report");
+            }
+            let output = fixture.cli(&args);
+            assert!(output.status.success(), "{}", stderr(&output));
+            let data: Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert_eq!(data, json!({"value": 42, "label": "凪"}));
+            let diagnostic = stderr(&output);
+            let launcher = diagnostic
+                .lines()
+                .find(|line| line.starts_with("native: "))
+                .unwrap();
+            assert!(Path::new(launcher.strip_prefix("native: ").unwrap()).is_file());
+            if cost_report {
+                let report: Value = serde_json::from_slice(
+                    &fs::read(fixture.0.join("output/cost-report.json")).unwrap(),
+                )
+                .unwrap();
+                let printed = serde_json::to_string_pretty(&report).unwrap();
+                assert!(diagnostic.contains(&printed), "{diagnostic}");
+            }
+        }
     }
 }

@@ -106,8 +106,12 @@ impl Fixture {
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
-            let stdout = String::from_utf8(output.stdout).unwrap();
-            let (launcher, actual) = stdout.split_once('\n').unwrap();
+            let stderr = String::from_utf8(output.stderr).unwrap();
+            let launcher = stderr
+                .lines()
+                .find(|line| line.starts_with("native: "))
+                .unwrap();
+            let actual = String::from_utf8(output.stdout).unwrap();
             let executable = launcher
                 .trim_end_matches('\r')
                 .strip_prefix("native: ")

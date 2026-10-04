@@ -51,7 +51,7 @@ Each README explains its inputs, outputs, and limits. Passing these examples doe
 
 ## Verify the examples during development
 
-With Python 3.12 or later and a `nagic` built from the latest source, verify the projects' checks, native builds, output, and HTTP responses:
+With Python 3.12 or later and Nagi 0.1.9 or later, verify the projects' checks, native builds, output, and HTTP responses. To check changes under development, use a `nagic` built from that source:
 
 ```sh
 python scripts/verify_library_examples.py --compiler /path/to/nagic
@@ -62,4 +62,4 @@ The script compares both pricing implementations, checks module and type aliases
 
 On Unix it checks a clean exit after SIGINT. On Windows it terminates the process and checks that the listener closes; check console Ctrl+C manually using the HTTP sample's instructions.
 
-`verify_application_examples.py` requires a `nagic` built from the latest source. It builds and runs the stock report, device settings and reservation projects from High, then checks and builds their saved Low in separate processes and repeats the same behavior checks. It verifies boundary and invalid inputs, SQLite NULL values and persistence across restarts, and actor business errors and restarts. Build warnings fail verification. Results and logs are written to `build/application-example-verification/`. CI runs it through `build_examples.py`.
+`verify_application_examples.py` checks [seven apps](../../test-nagi-code/application-examples/README.en.md). It independently checks and builds six High apps from the original source and saved generated Low, and checks the handwritten Low order quote CLI directly. Its 13 runs cover input boundaries, existing-file protection, SQLite persistence, HTTP headers and errors, and Supervisor restarts, readiness and shutdown. Build warnings fail verification. Results and logs are written to `build/application-example-verification/`. CI runs it through `build_examples.py`.

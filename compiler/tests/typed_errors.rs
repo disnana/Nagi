@@ -94,14 +94,16 @@ impl Fixture {
                 .env("CARGO_NET_OFFLINE", "true")
                 .output()
                 .unwrap();
-            let stdout = successful(output);
-            let (launcher, application) = stdout
-                .split_once('\n')
-                .expect("run must report the native executable before application output");
+            let stderr = String::from_utf8(output.stderr.clone()).unwrap();
+            let launcher = stderr
+                .lines()
+                .find(|line| line.starts_with("native: "))
+                .expect("run must report the native executable on stderr");
+            let application = successful(output);
             let binary = launcher
                 .trim_end_matches('\r')
                 .strip_prefix("native: ")
-                .expect("the first line must identify the launched native executable");
+                .expect("the status line must identify the launched native executable");
             let binary = Path::new(binary);
             assert!(
                 binary.is_file(),

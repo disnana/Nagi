@@ -2,33 +2,37 @@
 
 ## Unreleased
 
-- Borrow non-Copy List elements for read-only `for` loops, with ownership and lifetime checks and borrowed-variable hints in VS Code. Keep Copy iteration unchanged.
-- Add explicit task readiness and typed, bounded Supervisor event waits. Reject duplicate, stale and inactive readiness signals.
-- Add borrowed JSON Content-Type validation and keep request IDs in HTTP handler wrappers without intermediate copies.
-- Add imported `std.result.map_error` for explicit, typed error conversion through synchronous functions. Preserve `try` error identity and borrowed success values.
+- Add an initial IntelliJ IDEA/PyCharm plugin for High/Low highlighting, indentation, folding, and explicit check/run commands. Verify IDEA and PyCharm 2025.1.1, with compatibility checks for the supported 2024.3 builds.
 
-- Preflight generated and map outputs against source files, embedded assets, Rust adapters and project manifests, including hard-link aliases. Reject overlapping generated files before writing.
-- Preserve release wrapping and debug overflow checks for constant integer arithmetic. Keep native Rust adapter diagnostics unchanged.
-- Treat local callbacks named `include_text` as ordinary calls, and report the actual Clone requirement when copying a list view.
+## Nagi 0.1.9
+
+- Allow read-only `for` loops over non-Copy List elements, with ownership and lifetime checks. Keep Copy iteration unchanged.
+- Add `std.result.map_error` for explicit, typed error conversion through synchronous functions. Preserve `try` error identity and borrowed success values.
+- Add explicit task readiness and typed, bounded Supervisor event waits. Reject duplicate, stale, and inactive readiness signals.
+- Add borrowed JSON Content-Type validation. The quote API sample retains request IDs in its handler wrapper without intermediate copies.
+- Accept multiline calls, constructors, lists, indexing, and function types in handwritten Low, preserving statement boundaries and source diagnostics.
+- Reject overlapping generated output before writing, including aliases to source files, embedded assets, Rust adapters, and manifests.
+- Catch additional moves that conflict with borrows in indexing, comparisons, and stored views. Keep supported immediate reads, independent fields, copies, and loop reassignment valid.
+- Decode nullable SQLite columns for supported scalar row types, including bool, floats, and bytes. Preserve nested Option types through saved Low.
+- Keep HTTP response send deadlines active during graceful shutdown while healthy in-flight requests finish.
+- Map Rust backend cause notes to Nagi source locations and show readable imported names. Preserve native Rust diagnostics and suggestions.
+- Preserve release wrapping and debug overflow checks for constant integer arithmetic. Treat local callbacks named `include_text` as ordinary calls and report the actual Clone requirement for copied list views.
 - Keep cross-module edges inside the HTML map viewport and label group counts accurately.
-- Complete shadowed local names without inserting constructor or call arguments in VS Code. Keep diagnostics and pending checks for unrelated projects when a matching dependency snapshot is available.
-- Add a UTF-8 file and typed JSON project to High/Low application verification. Use the generated VSIX path in installation instructions instead of a fixed version filename.
-- Accept multiline calls, constructors, lists, indexing, and function types in handwritten Low while preserving statement boundaries and source diagnostics.
-- Improve Low editing with brace-based folding, language-specific declaration help, import completion, and entry-point/import snippets.
-- Add an initial IntelliJ IDEA/PyCharm plugin for High/Low highlighting, indentation, folding, and explicit check/run commands.
-- Add runnable order-quote CLI, typed HTTP quote API, and supervised-worker projects with Japanese/English instructions and native smoke checks. Exercise direct Low projects as well as High and independently loaded Low in application verification.
-- Clarify the unsupported non-Copy List iteration diagnostic without rejecting supported Copy records.
+- Add runnable stock-report, device-settings, seat-reservations, file-json, quote-api, supervised-worker, and handwritten Low order-quote projects. Verify their native behavior through High, saved Low, and direct Low.
+- Send compiler progress to stderr and keep `nagic run` stdout for application output, including when cost reporting is enabled.
+- Make distribution archives reproducible for identical inputs so a resumed draft release can reuse verified assets.
 
-- Reject index expressions that move their borrowed container, and views saved outside the scope of their owner. Preserve immediate reads, copies, outer owners, static views and returning paths.
-- Decode nullable SQLite columns for every already-supported scalar row type, including bool, floats and bytes.
-- Preserve nested Option types in generated Low and avoid redundant Rust enum field-pattern warnings.
-- Keep HTTP response send deadlines active during graceful shutdown and finish healthy in-flight requests.
-- Insert bare declaration names in quoted from-import completion, add Result Ok/Err pattern assistance, and resolve file aliases consistently for completion and definition lookup in VS Code.
-- Add stock-report, device-settings and reservation-worker projects, with native behavior checks for both High and independently loaded Low in CI. Skip Rust checks for sample README translations alone.
-- Reject comparison operands that move a value while its left-hand operand still borrows it, including aggregate fields and indexed values. Keep scalar comparisons and independent fields valid.
-- Allow loop variables to be reassigned in generated Rust, matching Nagi's type checking.
-- Show Nagi locations for Rust backend cause notes and readable names for imported declarations. Keep native Rust diagnostics and suggestions available, and prevent Cargo progress from corrupting diagnostic lines.
-- Show mapped build and run failures in VS Code Problems without duplicating unchanged-source checks. Refresh diagnostics when unsaved imported files close, and preserve source locations across symlinks and Windows path casing.
+## VS Code 0.1.12
+
+- Save reachable dirty imports before Lower, Build, and Run, including imports outside the project. Stop when saving fails, aliases conflict, or the entry changes while inputs are being saved.
+- Show mapped build and run failures in Problems without duplicating unchanged-source checks. Refresh imported-file diagnostics across closed buffers, symlinks, and Windows path casing.
+- Keep diagnostics and pending checks for unrelated projects when their dependency snapshots remain valid.
+- Complete shadowed local names without inserting constructor or call arguments. Show read-only borrow hints for borrowed loop variables.
+- Insert bare declaration names in quoted from-import completion, add Result Ok/Err pattern assistance, and resolve file aliases consistently for completion and definition lookup.
+- Add completion, hover, signatures, and definition coverage for the new Result, HTTP, and Supervisor operations.
+- Improve Low editing with brace-based folding, language-specific declaration help, import completion, and entry-point/import snippets.
+- Scaffold async entry points without requiring a database, and add a database-free HTTP App snippet. Check the High snippets with the Nagi compiler.
+- Make VSIX packaging reproducible and keep installation commands independent of a fixed version filename.
 
 ## VS Code 0.1.11
 

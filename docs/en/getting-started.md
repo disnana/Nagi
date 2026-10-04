@@ -31,7 +31,7 @@ nagic --version
 nagic --help
 ```
 
-The version output is `nagic 0.1.8`. You can also use `nagic -V` or `nagic version`. Version and help work without Rust or project configuration.
+The version output is `nagic 0.1.9`. You can also use `nagic -V` or `nagic version`. Version and help work without Rust or project configuration.
 
 ### Tools for building applications
 
@@ -78,6 +78,8 @@ If the filename contains spaces, quote the path, as in `nagic run "hello world.n
 | `build hello.nagi` | Generates an executable, including Rust backend checks | Build without running |
 | `run hello.nagi` | Builds and runs | Try your program |
 
+`run` leaves stdout for your application. Compiler progress and diagnostics go to stderr, so you can pipe a CLI's JSON output directly to another program.
+
 Currently, both `check` and `lower` save the Low generated from High. A successful `check` can still be followed by a failed `build` if Rust's type or borrow checks reject the generated program.
 
 Build errors first show the original Nagi or Low filename, the line of the corresponding statement or definition, and its source text. This includes imports and handwritten Low used with `@replace`. The following `Rust backend details` preserves the full diagnostic for the generated Rust. Errors in handwritten Rust, or errors without an identifiable source location, retain Rust's diagnostics.
@@ -123,11 +125,11 @@ Old URLs such as `nagi-v0.1.6/scripts/install.ps1` are pinned to 0.1.6. Use this
 To select a specific version, including an earlier release, use the commands below. The same one-version retention policy applies.
 
 ```powershell
-& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.8
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.9
 ```
 
 ```bash
-(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.8) && export PATH="$HOME/.local/bin:$PATH"
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.9) && export PATH="$HOME/.local/bin:$PATH"
 ```
 
 If you used custom locations, pass the same `-InstallDir` (PowerShell) or `--prefix` and `--bin-dir` (bash) when updating. `-NoPath` / `--no-path` leave persistent PATH settings unchanged; register the fixed command location yourself in that case. Manually extracted distributions elsewhere are not removed.
@@ -138,10 +140,10 @@ Download the file for your OS from [GitHub Releases](https://github.com/disnana/
 
 | Your system | File to download |
 |---|---|
-| Windows x64 | `nagi-0.1.8-windows-x86_64.zip` |
-| Linux x86_64 | `nagi-0.1.8-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `nagi-0.1.8-macos-arm64.tar.gz` |
-| macOS Intel | `nagi-0.1.8-macos-x86_64.tar.gz` |
+| Windows x64 | `nagi-0.1.9-windows-x86_64.zip` |
+| Linux x86_64 | `nagi-0.1.9-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `nagi-0.1.9-macos-arm64.tar.gz` |
+| macOS Intel | `nagi-0.1.9-macos-x86_64.tar.gz` |
 
 Extract the whole archive and keep `runtime/` beside `nagic` or `nagic.exe`. Add **the extracted folder itself** to PATH to run `nagic` from any directory. `NAGI_ROOT` is normally unnecessary. GitHub's “Source code” downloads do not contain a prebuilt compiler.
 

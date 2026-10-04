@@ -2,7 +2,7 @@
 
 This CLI runs small packing jobs and an audit counter in separate actors, with a resident connector supervised through `actor.task_with_ready`. It executes a fixed scenario, checks the results, and shuts down. It needs no network, database, or interactive input.
 
-Run from this directory. Rust/Cargo is required.
+Run from this directory. Nagi 0.1.9 or later and Rust/Cargo are required.
 
 ```sh
 nagic check

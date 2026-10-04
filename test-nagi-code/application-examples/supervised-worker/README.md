@@ -2,7 +2,7 @@
 
 小さな梱包ジョブと監査カウンターを別のactorで処理し、常駐connectorを`actor.task_with_ready`で監督するCLIです。起動すると決まったジョブと故障を一度ずつ実行し、検証して停止します。ネットワークやDB、入力操作は不要です。
 
-このディレクトリで実行します。Rust/Cargoが必要です。
+このディレクトリで実行します。Nagi 0.1.9以降とRust/Cargoが必要です。
 
 ```sh
 nagic check

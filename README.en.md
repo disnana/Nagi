@@ -1,4 +1,4 @@
-# Nagi 0.1.8 — a working prototype of a two-level backend language
+# Nagi 0.1.9 — a working prototype of a two-level backend language
 
 [日本語](README.md)
 
@@ -10,7 +10,7 @@ The name comes from the Japanese word *nagi* (凪), meaning calm seas. It reflec
 
 ## Learn the language
 
-Start with **[Docs](docs/en/README.md) → [Setup and first run](docs/en/getting-started.md) → [Learn by writing code](docs/en/language-guide.md)**. Use the [syntax reference](docs/en/syntax.md) to look up notation, the [built-in functions](docs/en/builtins.md) to check arguments, and [HTTP and HTML](docs/en/http.md) to build a site or API. Complete introductory programs are in [examples/tutorial/](examples/tutorial/).
+Start with **[Docs](docs/en/README.md) → [Setup and first run](docs/en/getting-started.md) → [Learn by writing code](docs/en/language-guide.md)**. Use the [syntax reference](docs/en/syntax.md) to look up notation, the [built-in functions](docs/en/builtins.md) to check arguments, and [HTTP and HTML](docs/en/http.md) to build a site or API. Complete introductory programs are in [examples/tutorial/](examples/tutorial/). [Seven application examples](test-nagi-code/application-examples/README.en.md) cover CLI tools, HTTP, SQLite, and Supervisors.
 
 The introduction and all Docs are available on the [English website](https://nagi.disnana.com/en/) and the [Japanese website](https://nagi.disnana.com/). See the [site source and Pages deployment guide](website/README.md) (Japanese).
 
@@ -154,7 +154,7 @@ Implemented features include primitive types, value classes, enums, contiguous a
 
 Result matching lets you handle success and failure, recover with defaults, and return errors while preserving their kind. See [error handling](docs/en/error-handling.md) and the [HTTP Result API example](docs/en/result-api.md).
 
-The [VS Code extension 0.1.10](docs/en/vscode-extension.md) provides F12 navigation to functions, classes, imported files, and local bindings; type hovers; class field completion; and signature help. It also handles unsaved edits to files saved at least once. The [editor walkthrough](docs/en/editor.md) shows how to use these features.
+The [VS Code extension 0.1.12](docs/en/vscode-extension.md) provides F12 navigation to functions, classes, imported files, and local bindings; type hovers; class field completion; and signature help. It also handles unsaved edits to files saved at least once. The [editor walkthrough](docs/en/editor.md) shows how to use these features.
 
 Available from Nagi 0.1.8, the [standard HTTP module](docs/en/http.md) supports database-free apps, headers, Method/Status, custom state, and error mapping. Standard-module imports and Option Some/None matching are also supported. See [change log](CHANGELOG.md) for differences from the published version.
 

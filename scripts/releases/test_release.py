@@ -156,6 +156,31 @@ class ReleasePlanTests(unittest.TestCase):
                 checksum = archive.with_name(archive.name + ".sha256").read_text().strip()
                 self.assertEqual(checksum, f"{hashlib.sha256(archive.read_bytes()).hexdigest()}  {archive.name}")
 
+    def test_same_inputs_keep_identical_archives_across_clocks_and_directories(self):
+        self.change("runtime/Cargo.toml", '[package]\nname="nagi-runtime"\nversion.workspace=true\nedition.workspace=true\nlicense.workspace=true\n')
+        self.change("runtime/src/lib.rs", "// committed runtime\n")
+        self.change("LICENSE", "MIT license fixture\n")
+        commit = self.commit()
+        binary = self.root / "compiler-test"
+        binary.write_bytes(b"prebuilt compiler fixture")
+        with patch.object(package, "ROOT", self.root):
+            for platform in package.PLATFORMS:
+                with self.subTest(platform=platform):
+                    with patch("gzip.time.time", return_value=1700000000):
+                        first = package.package(binary, "0.1.0", platform, self.root / "first", commit)
+                        expected = first.read_bytes()
+                    with patch("gzip.time.time", return_value=1800000000):
+                        second = package.package(binary, "0.1.0", platform, self.root / "second", commit)
+                    self.assertEqual(second.read_bytes(), expected)
+                    self.assertEqual(second.with_name(second.name + ".sha256").read_bytes(),
+                                     first.with_name(first.name + ".sha256").read_bytes())
+                    if platform == "windows-x86_64":
+                        with ZipFile(second) as archive:
+                            self.assertTrue(all(entry.date_time == (1980, 1, 1, 0, 0, 0)
+                                                for entry in archive.infolist()))
+                            compiler = archive.getinfo("nagi-0.1.0-windows-x86_64/nagic.exe")
+                            self.assertEqual((compiler.external_attr >> 16) & 0o777, 0o755)
+
     def check_source(self, names, read, commit, platform):
         self.assertFalse(any(name.endswith("private-note.txt") or "/.git/" in name for name in names))
         prefix = f"nagi-0.1.0-{platform}/"

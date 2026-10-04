@@ -292,6 +292,8 @@ jobs:
       needs.linux.result == 'success' && needs.release-plan.result == 'success' &&
       (needs.vscode-package.result == 'success' || needs.vscode-package.result == 'skipped') &&
       (needs.nagi-package.result == 'success' || needs.nagi-package.result == 'skipped') &&
+      (needs.release-plan.outputs.release_vscode != 'true' || needs.vscode-package.result == 'success') &&
+      (needs.release-plan.outputs.release_nagi != 'true' || needs.nagi-package.result == 'success') &&
       (needs.release-plan.outputs.release_vscode == 'true' || needs.release-plan.outputs.release_nagi == 'true')
     runs-on: ubuntu-latest
     permissions:

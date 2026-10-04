@@ -28,7 +28,7 @@ Use `db_open("app.sqlite")` to persist data. Relative database paths use the pro
 
 Use a class as the type argument of a function that returns rows. `db_all[i64]` and `db_query[str]` are rejected by `check`. Define a class with that field even when you read only one column.
 
-Generated row readers support `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `f32`, `f64`, `bool`, `str` and `bytes` fields. Use `T?` for a column that accepts SQL NULL. Nullable boolean, float and bytes fields require the latest source. See the [settings API example](../../test-nagi-code/application-examples/device-settings/README.en.md).
+Generated row readers support `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `f32`, `f64`, `bool`, `str` and `bytes` fields. Use `T?` for a column that accepts SQL NULL. Nullable boolean, float and bytes fields are supported from Nagi 0.1.9. See the [settings API example](../../test-nagi-code/application-examples/device-settings/README.en.md).
 
 | Operation | Form | Return type after await |
 |---|---|---|

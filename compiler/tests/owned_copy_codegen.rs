@@ -86,9 +86,9 @@ fn owned_scalar_fields_copy_in_native_high_and_independent_low() {
             String::from_utf8_lossy(&output.stderr)
         );
         let stdout = String::from_utf8(output.stdout).unwrap();
-        let (launcher, application) = stdout.split_once('\n').unwrap();
-        assert!(launcher.trim_end_matches('\r').starts_with("native: "));
-        assert_eq!(application.replace("\r\n", "\n").trim(), "82\n84\n86");
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(stderr.lines().any(|line| line.starts_with("native: ")));
+        assert_eq!(stdout.replace("\r\n", "\n").trim(), "82\n84\n86");
     }
 }
 
