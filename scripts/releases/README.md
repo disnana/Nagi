@@ -63,6 +63,18 @@ PATHの永続変更を省く場合は`-NoPath`または`--no-path`を使いま�
 
 VSIXにはコンパイラを含みません。VS Codeの「VSIXからのインストール」で入れ、`nagic`を別にビルドするかNagiの配布物を用意します。[拡張の設定](../../editors/vscode-nagi/README.md)を参照してください。
 
+## Visual Studio Marketplace
+
+GitHubのVSIX公開とMarketplace公開は別です。現在のCIはMarketplaceへ送信しません。
+
+Marketplaceにも公開する場合は、CIで検証したVSIXを使います。`editors/vscode-nagi`で、公開権限のある既存の認証を使い、次を実行してください。
+
+```powershell
+vsce publish --packagePath ../../build/distribution/nagi-language-0.1.12.vsix
+```
+
+ActionsまたはGitHub Releasesから取得した場合は、そのVSIXの保存先を指定します。`vsce publish patch`は版番号を追加で上げるため、ここでは使いません。
+
 ## 再実行と失敗時
 
 失敗した場合はActionsで原因を確認し、**Re-run failed jobs**を使います。これなら成功したビルドの同じ成果物を再利用します。draftに同じ内容のファイルがある場合は保持し、足りないファイルだけを追加します。異なる内容の既存ファイルは上書きしません。

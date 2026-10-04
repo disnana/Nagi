@@ -6,7 +6,7 @@
 
 [application-examples/](application-examples/)には、JSON集計、SQLite API、DBなしの見積API、ファイル保存、Supervisorによるactor・taskの再起動と停止の例があります。[手書きLowの注文見積もりCLI](low-examples/order-quote/README.md)では、Low同士のimportと入力検証を試せます。
 
-最新ソースのコンパイラで`python scripts/verify_application_examples.py --compiler /path/to/nagic`を実行すると、Highと保存した生成Low、手書きLowを実際にビルドして検証します。起動手順と個別の検証コマンドは[サンプル一覧](application-examples/README.md)を参照してください。
+Nagi 0.1.9以降で`python scripts/verify_application_examples.py --compiler /path/to/nagic`を実行すると、Highと保存した生成Low、手書きLowを実際にビルドして検証します。起動手順と個別の検証コマンドは[サンプル一覧](application-examples/README.md)を参照してください。
 
 ## 成功と失敗を分ける小さなAPI
 

@@ -144,6 +144,49 @@ function activate(context) {
     return true;
   }
 
+  async function saveImportedInputs(document, settings) {
+    const dirtySources = () => vscode.workspace.textDocuments.filter(d =>
+      d !== document && isNagi(d) && !d.isClosed && d.isDirty);
+    const limit = dirtySources().length + 1;
+    if (limit === 1) return true;
+    const code = document.getText();
+    if (!settings.project && !settings.config.get('nativeFiles', []).length &&
+        !/\b(?:import|from)\b/.test(features.context(code, code.length).masked)) return true;
+    const version = document.version;
+    const unchanged = () => !document.isClosed && !document.isDirty && document.version === version;
+    const cancellation = new vscode.CancellationTokenSource();
+    const failed = () => {
+      vscode.window.showWarningMessage('Nagi: import先の変更を保存できませんでした。未保存のファイルと型検査の結果を確認して、再実行してください。');
+      return false;
+    };
+    try {
+      for (let attempt = 0; attempt < limit; attempt++) {
+        if (!unchanged()) return failed();
+        if (!dirtySources().length) return true;
+        const snapshot = await querySymbols(document, cancellation.token);
+        if (!unchanged() || !snapshot || !Array.isArray(snapshot.index.files) ||
+            snapshot.index.files.some(file => typeof file !== 'string')) return failed();
+        const files = new Set(snapshot.index.files.filter(file => !stdlib.sourceUri(file))
+          .map(file => compiler.fileKey(file, settings.root)));
+        const imports = dirtySources().filter(d => files.has(compiler.fileKey(d.uri.fsPath, settings.root)));
+        if (!imports.length) return true;
+        const versions = new Map(imports.map(d => [d, d.version]));
+        const aliases = new Map();
+        for (const d of imports) {
+          const key = compiler.fileKey(d.uri.fsPath, settings.root);
+          if (aliases.has(key) && aliases.get(key) !== d.getText()) return failed();
+          aliases.set(key, d.getText());
+        }
+        for (const d of imports) {
+          if (d.isClosed || d.version !== versions.get(d) || !await d.save() || d.isDirty || !unchanged()) return failed();
+        }
+        // A saved import may itself import another dirty buffer. Resolve the
+        // new graph before launching a command against files on disk.
+      }
+      return failed();
+    } finally { cancellation.dispose(); }
+  }
+
   function invalidateSymbols() {
     symbolsEpoch++;
     for (const child of navigation) child.kill();
@@ -280,6 +323,7 @@ function activate(context) {
     const settings = options(document);
     // Imported files and the manifest must be saved before a project-wide command.
     if (projectDirty(settings.project) && !await saveProject(settings.project)) return;
+    if (!await saveImportedInputs(document, settings)) return;
     const { root, executable, project } = settings;
     const task = new vscode.Task({ type: 'nagi', command: name, file: document.uri.fsPath },
       vscode.workspace.getWorkspaceFolder(document.uri) || vscode.TaskScope.Workspace,

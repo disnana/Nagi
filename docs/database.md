@@ -28,7 +28,7 @@ async def main() -> Result[unit, Error]:
 
 行を返す関数の型引数にはclassを指定します。`db_all[i64]`や`db_query[str]`は使えず、`check`でエラーになります。1列だけ読む場合も、その列を持つclassを定義してください。
 
-標準の行読み取りは、`i8`・`i16`・`i32`・`i64`・`u8`・`u16`・`u32`・`f32`・`f64`・`bool`・`str`・`bytes`のフィールドに対応します。各型を`T?`にするとSQLのNULLを受け取れます。boolやfloat、bytesのnullable対応には最新ソースが必要です。[設定APIの例](../test-nagi-code/application-examples/device-settings/README.md)で確認できます。
+標準の行読み取りは、`i8`・`i16`・`i32`・`i64`・`u8`・`u16`・`u32`・`f32`・`f64`・`bool`・`str`・`bytes`のフィールドに対応します。各型を`T?`にするとSQLのNULLを受け取れます。boolやfloat、bytesのnullable対応はNagi 0.1.9以降です。[設定APIの例](../test-nagi-code/application-examples/device-settings/README.md)で確認できます。
 
 | 操作 | 書き方 | await後の戻り値 |
 |---|---|---|

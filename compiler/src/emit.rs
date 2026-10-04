@@ -1821,10 +1821,17 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             )
             .map_err(|e| e.to_string())?;
         }
-        println!("{}", serde_json::to_string_pretty(&report).unwrap());
+        let report = serde_json::to_string_pretty(&report).unwrap();
+        if cmd == "run" {
+            // Application output must stay pipeable, including when a cost
+            // report is requested. The report file is available separately.
+            eprintln!("{report}");
+        } else {
+            println!("{report}");
+        }
     }
     if cmd == "check" || cmd == "lower" {
-        println!("checked {}", path.display());
+        eprintln!("checked {}", path.display());
         return Ok(());
     }
     if cmd != "build" && cmd != "run" {
@@ -1923,7 +1930,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let binary = target
         .join("release")
         .join(format!("{package}{}", std::env::consts::EXE_SUFFIX));
-    println!("native: {}", binary.display());
+    eprintln!("native: {}", binary.display());
     if cmd == "run" {
         let mut process = Command::new(binary);
         if let Some(root) = options.project_root {

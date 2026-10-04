@@ -119,8 +119,12 @@ impl Fixture {
                 .env("CARGO_NET_OFFLINE", "true")
                 .output()
                 .unwrap();
-            let stdout = successful(output);
-            let (launcher, application) = stdout.split_once('\n').unwrap();
+            let stderr = String::from_utf8(output.stderr.clone()).unwrap();
+            let launcher = stderr
+                .lines()
+                .find(|line| line.starts_with("native: "))
+                .unwrap();
+            let application = successful(output);
             let executable = launcher
                 .trim_end_matches('\r')
                 .strip_prefix("native: ")

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import io
 import json
@@ -16,6 +17,15 @@ from plan import ROOT, version_tuple
 
 
 PLATFORMS = ("linux-x86_64", "windows-x86_64", "macos-arm64", "macos-x86_64")
+
+
+def zip_entry(name: str, data: bytes, mode: int = 0o644) -> tuple[ZipInfo, bytes]:
+    # ZIP's epoch avoids checkout times and makes interrupted releases retryable.
+    info = ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+    info.compress_type = ZIP_DEFLATED
+    info.create_system = 3
+    info.external_attr = (0o100000 | mode) << 16
+    return info, data
 
 
 def runtime_manifest(text: str, workspace: dict) -> bytes:
@@ -87,20 +97,21 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
                     if not included(member.name):
                         continue
                     if member.isfile():
-                        info = ZipInfo(f"{stem}/{member.name}")
-                        info.compress_type = ZIP_DEFLATED
-                        info.external_attr = (0o100000 | member.mode) << 16
                         data = sources.extractfile(member).read()
                         if member.name == "runtime/Cargo.toml":
                             data = runtime_manifest(data.decode(), workspace)
-                        archive.writestr(info, data)
+                        archive.writestr(*zip_entry(f"{stem}/{member.name}", data, member.mode))
                     elif not member.isdir():
                         raise ValueError(f"Unsupported tracked source entry: {member.name}")
-                archive.writestr(binary_path, binary_data)
-                archive.writestr(f"{stem}/release.json", provenance)
-                archive.writestr(f"{stem}/README.txt", readme(version, executable))
+                archive.writestr(*zip_entry(binary_path, binary_data, 0o755))
+                archive.writestr(*zip_entry(f"{stem}/release.json", provenance))
+                archive.writestr(*zip_entry(f"{stem}/README.txt", readme(version, executable)))
         else:
-            with tarfile.open(destination, "w:gz") as archive:
+            # Suppress the gzip filename and clock; tar source metadata comes
+            # from git archive at the immutable release commit.
+            with destination.open("wb") as file, gzip.GzipFile(
+                fileobj=file, filename="", mode="wb", mtime=0
+            ) as compressed, tarfile.open(fileobj=compressed, mode="w:") as archive:
                 for member in sources.getmembers():
                     if member.isdir():
                         continue

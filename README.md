@@ -1,4 +1,4 @@
-# Nagi 0.1.8 — バックエンド向け二層言語の実行可能な試作
+# Nagi 0.1.9 — バックエンド向け二層言語の実行可能な試作
 
 [English](README.en.md)
 
@@ -10,7 +10,7 @@
 
 ## 書き方を読む
 
-**[ドキュメントの目次](docs/README.md) → [準備と最初の実行](docs/getting-started.md) → [コードを書きながら学ぶ](docs/language-guide.md)** の順で進められます。書式を引くには[文法の早見表](docs/syntax.md)、引数を調べるには[組み込み関数](docs/builtins.md)、サイトやAPIを作るには[HTTPの入門](docs/http.md)を参照してください。動く入門例は[examples/tutorial/](examples/tutorial/)にあります。
+**[ドキュメントの目次](docs/README.md) → [準備と最初の実行](docs/getting-started.md) → [コードを書きながら学ぶ](docs/language-guide.md)** の順で進められます。書式を引くには[文法の早見表](docs/syntax.md)、引数を調べるには[組み込み関数](docs/builtins.md)、サイトやAPIを作るには[HTTPの入門](docs/http.md)を参照してください。動く入門例は[examples/tutorial/](examples/tutorial/)にあります。CLI、HTTP、SQLite、Supervisorを試す[7つのアプリ](test-nagi-code/application-examples/README.md)も用意しています。
 
 紹介と日英の全Docsは[公開サイト](https://nagi.disnana.com/)で読めます。[English](https://nagi.disnana.com/en/)もあります。ソースとPagesの自動公開手順は[`website/`](website/README.md)にあります。
 
@@ -156,7 +156,7 @@ primitive、値型class、enum、連続配列、nullable、独自エラー型の
 
 Resultの`match`で成功・失敗を分け、既定値に回復したり、Errorの種類を保って返したりできます。[書き方](docs/error-handling.md)と[実HTTPで試すAPIサンプル](test-nagi-code/result-api/README.md)があります。
 
-[VS Code拡張0.1.10](editors/vscode-nagi/README.md)では、関数・class・import先・ローカル変数へのF12、宣言とローカル変数の型ホバー、classのフィールド補完、呼び出し時の引数ヒントを利用できます。一度保存したファイルの未保存の編集にも対応します。[操作例](docs/editor.md)で、型の表示や`value.`からの補完、定義への移動を試せます。
+[VS Code拡張0.1.12](editors/vscode-nagi/README.md)では、関数・class・import先・ローカル変数へのF12、宣言とローカル変数の型ホバー、classのフィールド補完、呼び出し時の引数ヒントを利用できます。一度保存したファイルの未保存の編集にも対応します。[操作例](docs/editor.md)で、型の表示や`value.`からの補完、定義への移動を試せます。
 
 Nagi 0.1.8から使える[標準HTTP module](docs/http.md)では、DBなしのApp、ヘッダー、Method／Status、独自の状態とエラー処理を使えます。標準moduleのimportとOptionのSome／None分岐にも対応します。公開済み版との差は[変更履歴](CHANGELOG.md)を参照してください。
 

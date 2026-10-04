@@ -123,8 +123,12 @@ fn generated_nominal_charges_execute_against_native_capacity_and_walk_limits() {
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
-        let stdout = String::from_utf8(output.stdout).unwrap();
-        let (launcher, application) = stdout.split_once('\n').unwrap();
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        let launcher = stderr
+            .lines()
+            .find(|line| line.starts_with("native: "))
+            .unwrap();
+        let application = String::from_utf8(output.stdout).unwrap();
         let executable = launcher
             .trim_end_matches('\r')
             .strip_prefix("native: ")

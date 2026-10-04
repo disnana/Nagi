@@ -4,7 +4,7 @@
 
 `std.http.server`を使う、DBを必要としない見積APIです。リクエストのJSONを`QuoteInput`へ読み、数量と商品を検証して`Quote`を返します。型付きの`Config`はAppが所有し、各handlerは`shared[Config]`で参照します。
 
-リポジトリのルートで起動します。最新ソースからビルドしたNagiと、Rust/Cargoのビルド環境が必要です。
+リポジトリのルートで起動します。Nagi 0.1.9以降と、Rust/Cargoのビルド環境が必要です。
 
 ```sh
 nagic run --project test-nagi-code/application-examples/quote-api

@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 from xml.sax.saxutils import escape
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
 
 BASE = Path(__file__).resolve().parents[1]
 ROOT = BASE.parents[1]
@@ -43,10 +43,21 @@ destination.parent.mkdir(parents=True, exist_ok=True)
 files = [BASE / name for name in ("package.json", "README.md", "language-configuration.json", "low-configuration.json")]
 for directory in ("src", "syntaxes", "snippets"):
     files.extend(sorted((BASE / directory).glob("*")))
+
+
+def write_entry(archive, name, data):
+    # Exclude checkout mtimes and packaging time from release checksums.
+    entry = ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+    entry.compress_type = ZIP_DEFLATED
+    entry.create_system = 3
+    entry.external_attr = 0o100644 << 16
+    archive.writestr(entry, data)
+
+
 with ZipFile(destination, "w", ZIP_DEFLATED) as archive:
-    archive.writestr("extension.vsixmanifest", manifest)
-    archive.writestr("[Content_Types].xml", content_types)
-    archive.writestr("extension/LICENSE.txt", (ROOT / "LICENSE").read_bytes())
+    write_entry(archive, "extension.vsixmanifest", manifest)
+    write_entry(archive, "[Content_Types].xml", content_types)
+    write_entry(archive, "extension/LICENSE.txt", (ROOT / "LICENSE").read_bytes())
     for file in files:
-        archive.write(file, "extension/" + file.relative_to(BASE).as_posix())
+        write_entry(archive, "extension/" + file.relative_to(BASE).as_posix(), file.read_bytes())
 print(destination)

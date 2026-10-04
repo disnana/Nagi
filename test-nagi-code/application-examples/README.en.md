@@ -13,7 +13,7 @@
 
 To start with handwritten Low, use the [order quote CLI](../low-examples/order-quote/README.en.md). It combines Low-to-Low imports, typed JSON, input validation and integer price calculations.
 
-Run each folder with its `nagi.toml`, using Nagi built from the latest source. See [setup](../../docs/en/getting-started.md) for Rust/Cargo and your OS's build tools.
+Use Nagi 0.1.9 or later. Download or clone the repository, then run each folder with its `nagi.toml` from the repository root. See [setup](../../docs/en/getting-started.md) for Rust/Cargo and your OS's build tools.
 
 ```sh
 nagic run --project test-nagi-code/application-examples/stock-report

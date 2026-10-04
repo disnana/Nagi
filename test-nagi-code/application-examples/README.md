@@ -13,7 +13,7 @@
 
 手書きLowから始める場合は、[注文見積もりCLI](../low-examples/order-quote/README.md)を使ってください。Low同士のimport、型付きJSON、入力検証と整数の価格計算を試せます。
 
-各フォルダの`nagi.toml`を指定して実行できます。最新ソースからビルドしたNagiを使ってください。Rust/CargoとOSごとのビルド環境は[セットアップ](../../docs/getting-started.md)で確認できます。
+Nagi 0.1.9以降で動かせます。サンプルはリポジトリ一式を取得し、そのルートで各フォルダの`nagi.toml`を指定して実行してください。Rust/CargoとOSごとのビルド環境は[セットアップ](../../docs/getting-started.md)で確認できます。
 
 ```sh
 nagic run --project test-nagi-code/application-examples/stock-report

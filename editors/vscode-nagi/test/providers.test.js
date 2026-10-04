@@ -58,6 +58,7 @@ function host(t, trusted = true, code = 1, symbols, controls = {}) {
     FoldingRange: class { constructor(start, end) { Object.assign(this, { start, end }); } },
     Location: class { constructor(uri, range) { this.uri = uri; this.range = range; } },
     EventEmitter: class { constructor() { this.event = () => disposable(); } fire() {} dispose() {} },
+    CancellationTokenSource: class { constructor() { this.token = { isCancellationRequested: false, onCancellationRequested: disposable }; } dispose() {} },
     DiagnosticSeverity: { Error: 0 }, CompletionItemKind: { Function: 1, Class: 2, Field: 3, TypeParameter: 4, Keyword: 5, Enum: 6, EnumMember: 7, Module: 8, Constant: 9, Variable: 10 },
     Diagnostic: class { constructor(range, message) { this.range = range; this.message = message; } },
     Hover: class { constructor(contents, range) { this.contents = contents; this.range = range; } },
@@ -167,6 +168,119 @@ test('lower build and run tasks use the registered source diagnostic matcher', a
   h.document('def main():\n    print(1)\n');
   for (const name of ['lower', 'build', 'run']) await h.commands.get(`nagi.${name}`)();
   assert.deepEqual(h.tasks.map(task => Array.from(task.problemMatchers)), [['$nagi'], ['$nagi'], ['$nagi']]);
+});
+
+for (const project of [false, true]) {
+  test(`${project ? 'project' : 'standalone'} tasks save imported changes and leave unrelated dirty buffers untouched`, async t => {
+    let dependency;
+    const h = host(t, true, 0, cwd => ({ format: 'nagi-symbols-v1', definitions: [], files: [
+      path.join(cwd, 'main.nagi'), dependency.uri.fsPath,
+    ] }), { checkOnSave: false });
+    if (project) fs.writeFileSync(path.join(h.folder, 'nagi.toml'), "entry = 'main.nagi'\n");
+    fs.mkdirSync(path.join(h.folder, 'shared'));
+    const main = h.document('import "shared/helper.nagi" as helper\ndef main():\n    print(helper.answer())\n');
+    dependency = h.document('def answer() -> i64:\n    return 42\n', 'file', 'nagi', 'shared/helper.nagi');
+    if (project) fs.writeFileSync(path.join(h.folder, 'shared', 'nagi.toml'), "entry = 'helper.nagi'\n");
+    fs.writeFileSync(dependency.uri.fsPath, 'def answer() -> i64:\n    return 7\n');
+    dependency.isDirty = true;
+    let saved = 0;
+    dependency.save = async () => { saved++; fs.writeFileSync(dependency.uri.fsPath, dependency.getText()); dependency.isDirty = false; return true; };
+    const unrelated = h.document('def other():\n    print(99)\n', 'file', 'nagi', 'shared/other.nagi');
+    unrelated.isDirty = true;
+    unrelated.save = async () => { assert.fail('unrelated buffer must remain unsaved'); };
+    h.vscode.window.activeTextEditor = { document: main };
+    for (const name of ['lower', 'build', 'run']) await h.commands.get(`nagi.${name}`)();
+    assert.equal(saved, 1);
+    assert.match(fs.readFileSync(dependency.uri.fsPath, 'utf8'), /return 42/);
+    assert.equal(unrelated.isDirty, true);
+    assert.equal(h.tasks.length, 3);
+  });
+}
+
+test('task execution stops when an imported buffer cannot be saved', async t => {
+  let dependency;
+  const h = host(t, true, 0, cwd => ({ format: 'nagi-symbols-v1', definitions: [], files: [
+    path.join(cwd, 'main.nagi'), dependency.uri.fsPath,
+  ] }), { checkOnSave: false });
+  const main = h.document('import "helper.nagi"\ndef main():\n    print(answer())\n');
+  dependency = h.document('def answer() -> i64:\n    return 42\n', 'file', 'nagi', 'helper.nagi');
+  dependency.isDirty = true; dependency.save = async () => false;
+  h.vscode.window.activeTextEditor = { document: main };
+  await h.commands.get('nagi.run')();
+  assert.equal(h.tasks.length, 0);
+});
+
+test('task execution stops when dirty imports cannot be resolved', async t => {
+  const h = host(t, true, 1, undefined, { checkOnSave: false });
+  const main = h.document('import "helper.nagi"\ndef main():\n    print(answer())\n');
+  const dependency = h.document('def answer() -> i64:\n    return 42\n', 'file', 'nagi', 'helper.nagi');
+  dependency.isDirty = true;
+  dependency.save = async () => { assert.fail('unresolved imports must not be saved'); };
+  h.vscode.window.activeTextEditor = { document: main };
+  await h.commands.get('nagi.run')();
+  assert.equal(h.tasks.length, 0);
+});
+
+test('saving an imported file refreshes its changed imports before launching the task', async t => {
+  let dependency, added;
+  const h = host(t, true, 0, cwd => ({ format: 'nagi-symbols-v1', definitions: [], files: [
+    path.join(cwd, 'main.nagi'), dependency.uri.fsPath, ...(!dependency.isDirty ? [added.uri.fsPath] : []),
+  ] }), { checkOnSave: false });
+  const main = h.document('import "helper.nagi"\ndef main():\n    print(answer())\n');
+  dependency = h.document('import "added.nagi" as added\ndef answer() -> i64:\n    return added.value()\n', 'file', 'nagi', 'helper.nagi');
+  added = h.document('def value() -> i64:\n    return 42\n', 'file', 'nagi', 'added.nagi');
+  const saved = [];
+  for (const d of [dependency, added]) {
+    d.isDirty = true;
+    d.save = async () => { saved.push(path.basename(d.uri.fsPath)); d.isDirty = false; h.events.save(d); return true; };
+  }
+  h.vscode.window.activeTextEditor = { document: main };
+  await h.commands.get('nagi.run')();
+  assert.deepEqual(saved, ['helper.nagi', 'added.nagi']);
+  assert.equal(h.tasks.length, 1);
+});
+
+test('conflicting imported aliases are not saved over one another', async t => {
+  let dependency;
+  const h = host(t, true, 0, cwd => ({ format: 'nagi-symbols-v1', definitions: [], files: [
+    path.join(cwd, 'main.nagi'), dependency.uri.fsPath,
+  ] }), { checkOnSave: false });
+  const main = h.document('import "helper.nagi"\ndef main():\n    print(answer())\n');
+  dependency = h.document('def answer() -> i64:\n    return 42\n', 'file', 'nagi', 'helper.nagi');
+  const alias = h.document('def answer() -> i64:\n    return 99\n', 'file', 'nagi', 'alias.nagi');
+  fs.unlinkSync(alias.uri.fsPath); fs.symlinkSync(dependency.uri.fsPath, alias.uri.fsPath, 'file');
+  for (const d of [dependency, alias]) {
+    d.isDirty = true;
+    d.save = async () => { assert.fail('conflicting buffers must stay untouched'); };
+  }
+  h.vscode.window.activeTextEditor = { document: main };
+  await h.commands.get('nagi.run')();
+  assert.equal(h.tasks.length, 0);
+});
+
+test('standalone source without imports launches normally despite unrelated dirty buffers', async t => {
+  const h = host(t, true, 1, undefined, { checkOnSave: false });
+  const main = h.document('def main():\n    missing()\n    # import is only a comment\n');
+  const unrelated = h.document('def other():\n    print(99)\n', 'file', 'nagi', 'other.nagi');
+  unrelated.isDirty = true;
+  h.vscode.window.activeTextEditor = { document: main };
+  await h.commands.get('nagi.build')();
+  assert.equal(h.calls.length, 0, 'no symbol lookup is needed to launch the compiler');
+  assert.equal(h.tasks.length, 1, 'the normal task supplies its mapped source diagnostic');
+});
+
+test('task execution stops if the entry buffer changes while an import is saved', async t => {
+  let dependency;
+  const h = host(t, true, 0, cwd => ({ format: 'nagi-symbols-v1', definitions: [], files: [
+    path.join(cwd, 'main.nagi'), dependency.uri.fsPath,
+  ] }), { checkOnSave: false });
+  const main = h.document('import "helper.nagi"\ndef main():\n    print(answer())\n');
+  dependency = h.document('def answer() -> i64:\n    return 42\n', 'file', 'nagi', 'helper.nagi');
+  dependency.isDirty = true;
+  dependency.save = async () => { dependency.isDirty = false; main.version++; main.isDirty = true; return true; };
+  h.vscode.window.activeTextEditor = { document: main };
+  await h.commands.get('nagi.run')();
+  assert.equal(h.tasks.length, 0);
 });
 
 test('tasks suppress only the matching automatic scope and checks resume when the task ends', async t => {

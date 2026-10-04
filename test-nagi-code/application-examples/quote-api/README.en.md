@@ -4,7 +4,7 @@
 
 This quote API uses `std.http.server` without a database. It decodes request JSON into `QuoteInput`, validates the quantity and product, and returns a `Quote`. The App owns a typed `Config`; each handler reads it through `shared[Config]`.
 
-Start it from the repository root. You need Nagi built from the latest source and a working Rust/Cargo build environment.
+Start it from the repository root. You need Nagi 0.1.9 or later and a working Rust/Cargo build environment.
 
 ```sh
 nagic run --project test-nagi-code/application-examples/quote-api
