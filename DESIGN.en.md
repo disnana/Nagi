@@ -4,7 +4,7 @@
 
 Nagi aims to let developers write ordinary backends in readable High code and use Rust assets where needed. For applications using HTTP, JSON, and databases, the goal is to reduce the need for handwritten Rust and make failures understandable from Nagi code.
 
-This document records the choices behind that goal and the questions still open. Usage belongs in the [reference](docs/en/README.md); priorities belong in the [roadmap](docs/en/roadmap.md). An adopted direction and an implemented feature are different things. This document describes the repository source, not the feature set of a published Release.
+This document covers implementations on main and the design directions adopted or left open. See the [reference](docs/en/README.md) for usage, the [roadmap](docs/en/roadmap.md) for priorities, and [CHANGELOG](CHANGELOG.md) for changes in published releases.
 
 ## The development we target
 
@@ -67,7 +67,7 @@ Current call maps follow Low replacement bodies and their direct internal calls,
 
 ### Work Low could improve
 
-Pausing systems-language extensions does not mean abandoning Low's value. The following uses should be evaluated with current features. These are not measured benefits or promises to adopt new features on a schedule.
+We will test whether Low's current features reduce the effort of investigating or implementing code in the following uses.
 
 - **Understand generated code.** Inspect inferred types, resolved definitions, and explicit view/copy operations in Low; test whether this makes causes easier to follow than reading High or generated Rust alone. Low does not display every ownership move or internal copy.
 - **Compare implementations while preserving High.** Replace a function with the same signature and compare outputs, generated Rust, and performance. Evaluate whether separating changes makes experiments easier to reproduce. Low alone does not guarantee faster code or equivalent behavior.

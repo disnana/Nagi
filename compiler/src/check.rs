@@ -1932,6 +1932,26 @@ impl Checker {
     }
     fn consume(&mut self, e: &Expr) -> Result<(), String> {
         self.available(e, false)?;
+        fn borrowed_base(checker: &Checker, expr: &Expr) -> bool {
+            if let E::Field(parent, _) = &expr.kind {
+                let borrowed = parent.ty.as_ref().is_some_and(|ty| {
+                    let ty = unowned(ty);
+                    ty.0 == "shared" || checker.native_resource_view(ty).is_some()
+                });
+                borrowed || borrowed_base(checker, parent)
+            } else {
+                false
+            }
+        }
+        // Field access can borrow through an owned wrapper or a temporary
+        // returned by a call. Neither creates permission to move out of Arc
+        // or a native resource reference.
+        if borrowed_base(self, e) && !e.ty.as_ref().is_some_and(|ty| self.copy_type(ty)) {
+            return Err(error(
+                e.line,
+                "sharedまたは借用resourceの非Copy fieldはmoveできません。viewで借用してください",
+            ));
+        }
         let Some((name, fields)) = Self::place(e) else {
             return Ok(());
         };
@@ -1943,22 +1963,6 @@ impl Checker {
         }
         if v.borrowed_element {
             return Err(error(e.line, format!("{name} はList要素の読み取り専用借用です。所有値として渡す文字列・配列はcopy(view(...))で明示的に複製してください")));
-        }
-        fn borrowed_base(checker: &Checker, expr: &Expr) -> bool {
-            if let E::Field(parent, _) = &expr.kind {
-                let borrowed = parent.ty.as_ref().is_some_and(|ty| {
-                    ty.0 == "shared" || checker.native_resource_view(ty).is_some()
-                });
-                borrowed || borrowed_base(checker, parent)
-            } else {
-                false
-            }
-        }
-        if !fields.is_empty() && borrowed_base(self, e) {
-            return Err(error(
-                e.line,
-                "sharedまたは借用resourceの非Copy fieldはmoveできません。viewで借用してください",
-            ));
         }
         if self.borrowed_place(&BorrowedPlace {
             binding: v.binding,

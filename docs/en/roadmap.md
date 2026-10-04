@@ -2,7 +2,7 @@
 
 The immediate goal is to expand the range of common backends that can be written in readable High, with consistent rules for types, ownership, failures, and resource cleanup. Rust native code generation and existing libraries remain the foundation.
 
-This page describes priorities, not completed work or release dates. See the [reference](README.md) for current APIs and [CHANGELOG](../../CHANGELOG.md) for changes by version.
+This page describes the priorities for future development. Release dates remain undecided. See the [reference](README.md) for current APIs and [CHANGELOG](../../CHANGELOG.md) for changes by version.
 
 ## Priorities
 

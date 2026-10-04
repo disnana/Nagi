@@ -86,6 +86,8 @@ nagic run app.nagi
 
 The result is `42`. Local types can also be inferred: `chosen = add_one`. A function that returns another function can declare a return type such as `def choose() -> fn[i64]:`.
 
+Currently, `fn[view[str]]` passes `check` but fails during the Rust build. This also happens when a function returning a static string is stored in a variable or passed to another function. The lifetime rule for function types with no borrowing input is still undecided.
+
 You can also assign an async function with `selected = answer`, then call `await selected(...)` inside an async function. HTTP `route` and `route_mapped` can register these named async functions or local aliases. General type annotations for parameters receiving async functions, or functions returning them, are not yet supported. Lambdas and closures that capture surrounding local variables are also unsupported.
 
 Storing async functions in lists or classes is also unsupported. You cannot store the unawaited result of async work in a variable. Write `await sleep(10)` rather than `pending = sleep(10)`.
@@ -94,7 +96,7 @@ Storing async functions in lists or classes is also unsupported. You cannot stor
 
 `Map[K, V]` is accepted as type notation, but has no dedicated APIs for construction, lookup, or updates. User-defined generic functions and traits are unsupported.
 
-`owned[T]` is an unfinished type form. It generates Rust's `T`, but Nagi's checker distinguishes it from `T`. Operations such as `try`, `view`, and discarded-Result detection do not consistently treat the two alike. Use `str` directly for owned strings and `List[T]` for owned lists. See [error handling](error-handling.md) for the limits of Result checking.
+`owned[T]` is an unfinished type form. It generates Rust's `T`, but Nagi's checker distinguishes it from `T`. Operations such as `try` and `view` do not consistently treat the two alike. Use `str` directly for owned strings and `List[T]` for owned lists. See [error handling](error-handling.md) for the limits of Result checking.
 
 ## Rust representation
 
