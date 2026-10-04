@@ -104,6 +104,8 @@ Borrowing one field leaves separate fields available. For example, while `view(d
 
 While a view borrows data, moving, reassigning, or appending to that data is restricted. The checker tracks borrows by code blocks; it does not determine the end of a borrow as precisely as Rust.
 
+A view-containing return type can accept a directly constructed value with no borrow, such as `return None`, `return []`, or `return ok(None)`. Returning a local of a view-containing type still requires a tracked borrowing origin, even if it currently holds an empty value.
+
 Nagi's checker cannot yet decide every case involving partial field moves, complex branches, or borrows. Generated Rust is also checked for borrowing, and a program becomes an executable only after both checks pass. A successful `check` can therefore still be followed by a failed `build`.
 
 To keep an independent owned copy of the original data, write `copy(view(data))`.

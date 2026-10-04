@@ -160,7 +160,9 @@ Available from Nagi 0.1.8, the [standard HTTP module](docs/en/http.md) supports 
 
 Available from Nagi 0.1.8, [`std.actor`](docs/en/actor.md) uses ordinary async functions for arbitrary owned state, typed messages and replies, restart policies, observation, and shutdown. See its [API](docs/en/actor-reference.md) and [sample](test-nagi-code/library-examples/supervised-service/README.en.md). It runs natively within one process; a BEAM-style VM, hot code replacement, and distributed actors are unsupported.
 
-Dedicated actor declarations, user-defined generic functions and traits, package imports, general pattern matching, PostgreSQL, compile-time SQL validation, High request arenas, Low raw pointers/unsafe/C ABI, a custom scheduler, and self-hosting are not implemented. Rust integration uses calls within the same build, without a stable external ABI. Operations for `Map` and `owned` are incomplete.
+SQLite SQL literals support explicit [schema checks](docs/en/sql-check.md) for names, required result columns, and bind counts. Value types, NULL behavior, and consistency with the deployed schema still need runtime validation.
+
+Dedicated actor declarations, user-defined generic functions and traits, package imports, general pattern matching, PostgreSQL, High request arenas, Low raw pointers/unsafe/C ABI, a custom scheduler, and self-hosting are not implemented. Rust integration uses calls within the same build, without a stable external ABI. Operations for `Map` and `owned` are incomplete.
 
 CPU performance comes from typed native operations, avoiding boxing, and LLVM loop optimizations. The runtime uses Tokio, Axum, Serde, and rusqlite; those libraries handle the runtime work covered by the benchmarks.
 

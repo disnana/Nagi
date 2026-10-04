@@ -162,7 +162,9 @@ Nagi 0.1.8から使える[標準HTTP module](docs/http.md)では、DBなしのAp
 
 Nagi 0.1.8から使える[`std.actor`](docs/actor.md)では、通常のasync関数で任意の所有状態を扱い、型付きメッセージ・返信、再起動方針、監視、停止を使えます。[API](docs/actor-reference.md)と[サンプル](test-nagi-code/library-examples/supervised-service/README.md)を用意しています。同じプロセス内のnative実装で、BEAMのようなVM、無停止のコード差し替え、分散actorは未対応です。
 
-専用のactor宣言、利用者が定義するgeneric関数やtrait、パッケージのimport、一般的なパターンのmatch、PostgreSQL、SQLのコンパイル時検証、Highのrequest arena、Lowの生pointer/unsafe/C ABI、独自scheduler、self-hostingは未実装です。Rust連携は同じビルド内の呼び出しで、安定した外部ABIではありません。`Map`と`owned`の操作APIも揃っていません。
+SQLiteの文字列SQLは、schemaを指定した[事前検査](docs/sql-check.md)で名前・必要な返却列・bind数を確認できます。値の型・NULL可否や配備先schemaの一致は、実行時にも確認が必要です。
+
+専用のactor宣言、利用者が定義するgeneric関数やtrait、パッケージのimport、一般的なパターンのmatch、PostgreSQL、Highのrequest arena、Lowの生pointer/unsafe/C ABI、独自scheduler、self-hostingは未実装です。Rust連携は同じビルド内の呼び出しで、安定した外部ABIではありません。`Map`と`owned`の操作APIも揃っていません。
 
 CPUの速さは、型付きネイティブ演算・boxingの回避・LLVMのループ最適化で説明できます。ランタイムはTokio/Axum/Serde/rusqliteに依存します。これらを置き換える独自ランタイムの性能を証明したものではありません。
 

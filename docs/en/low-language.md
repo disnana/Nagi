@@ -2,7 +2,7 @@
 
 High uses indentation in `.nagi` files. Low uses braces and semicolons in `.low` files. High is the layer for everyday application development; Low lets you inspect generated code and replace selected function implementations with handwritten code. If you prefer braces, you can also write and run an entire application in Low.
 
-Types, ownership, borrowing, and Result handling follow the same rules as High.
+Types, ownership, borrowing, and Result handling follow the same rules and checks as High. High can [call Rust functions directly](modules-and-rust.md), so Rust integration does not require handwritten Low.
 
 ## Write and run a standalone Low program
 
