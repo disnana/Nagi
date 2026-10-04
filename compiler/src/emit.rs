@@ -729,6 +729,8 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                     if a[0].ty.as_ref().and_then(|ty| native_resource_view(ty, types))
                         .is_some_and(|resource| crate::stdlib::resource_info(resource).copy) {
                         format!("*({})", args[0])
+                    } else if e.ty.as_ref().is_some_and(|ty| ty.0 == "List") {
+                        format!("({}).to_vec()", args[0])
                     } else {
                         format!("({}).to_owned()", args[0])
                     }
@@ -1326,7 +1328,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             ""
         };
         out.push_str(&format!(
-            "#[allow(non_snake_case)]\npub {}fn {name}{lifetime}({}) -> {} {{\n",
+            "#[allow(non_snake_case, arithmetic_overflow)]\npub {}fn {name}{lifetime}({}) -> {} {{\n",
             if f.asynchronous { "async " } else { "" },
             f.params
                 .iter()
@@ -1619,23 +1621,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     } else {
         (crate::project::resolve(&args, &cwd)?, None)
     };
-    let map_manifest = if map_options.is_some() {
-        options.project_root.as_ref().map(|root| {
-            args.iter()
-                .position(|arg| arg == "--project")
-                .map(|index| cwd.join(&args[index + 1]))
-                .map(|selected| {
-                    if selected.is_dir() {
-                        selected.join("nagi.toml")
-                    } else {
-                        selected
-                    }
-                })
-                .unwrap_or_else(|| root.join("nagi.toml"))
-        })
-    } else {
-        None
-    };
+    let project_manifest = options.manifest_path;
     let cmd = options.command.as_str();
     let path = options.source;
     let high = path.extension().is_none_or(|x| x != "low");
@@ -1723,7 +1709,32 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     p.enums = resolution.enums[..ne].to_vec();
     p.functions = resolution.functions[..nf].to_vec();
     let write_output = map_options.is_none() && !(options.editor_input && cmd == "check");
+    let mut inputs: Vec<_> = sources
+        .files()
+        .map(|(path, _, _)| path.to_path_buf())
+        .chain(rust_file.iter().cloned())
+        .chain(project_manifest.iter().cloned())
+        .chain(crate::output::assets(&resolution))
+        .chain(crate::output::assets(&all))
+        .collect();
+    inputs.sort();
+    inputs.dedup();
     if write_output {
+        let mut outputs = Vec::new();
+        if high {
+            outputs.push(out.join("generated.low"));
+        }
+        if cost {
+            outputs.push(out.join("cost-report.json"));
+        }
+        if matches!(cmd, "build" | "run") {
+            outputs.extend([
+                out.join("src/main.rs"),
+                out.join("Cargo.toml"),
+                out.join("Cargo.lock"),
+            ]);
+        }
+        crate::output::protect(&outputs, &inputs, "Generated")?;
         fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     }
     if high {
@@ -1737,28 +1748,35 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     }
     crate::check::integrate(&mut p, all).map_err(|e| sources.diagnostic(&e))?;
     if let Some(map) = map_options {
-        let graph = match map.view {
+        let mut graph = match map.view {
             crate::project::MapView::Types => crate::graph::types(&p, &sources),
             crate::project::MapView::Modules => crate::graph::modules(&p, &sources),
             crate::project::MapView::Calls => crate::graph::calls(&p, &sources),
         };
-        let module = map
+        let mut module = map
             .module
             .as_deref()
             .map(|name| crate::graph::resolve_module_filter(&p, &sources, name))
             .transpose()?;
+        // A loaded module can have no definitions in the selected view.
+        if module.as_ref().is_some_and(|id| {
+            !graph
+                .nodes
+                .iter()
+                .any(|node| node.module.as_ref() == Some(id))
+        }) {
+            graph.nodes.clear();
+            graph.edges.clear();
+            graph.groups.clear();
+            module = None;
+        }
         let graph = graph.filtered(&crate::graph::Filter {
             module,
             focus: map.focus.clone(),
             depth: map.depth,
         })?;
         if let Some(output) = &map.output {
-            protect_map_output(
-                output,
-                &sources,
-                rust_file.as_deref(),
-                map_manifest.as_deref(),
-            )?;
+            crate::output::protect(std::slice::from_ref(output), &inputs, "Map")?;
         }
         use crate::project::MapFormat;
         let mut text = match map.format {
@@ -1915,37 +1933,6 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     Ok(())
 }
 
-fn protect_map_output(
-    output: &Path,
-    sources: &crate::source::Sources,
-    rust_file: Option<&Path>,
-    manifest: Option<&Path>,
-) -> Result<(), String> {
-    let existing = match fs::canonicalize(output) {
-        Ok(path) => path,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => {
-            return Err(format!(
-                "Cannot access map output {}: {error}",
-                output.display()
-            ));
-        }
-    };
-    for input in sources
-        .files()
-        .map(|(path, _, _)| path)
-        .chain(rust_file)
-        .chain(manifest)
-    {
-        if fs::canonicalize(input).is_ok_and(|path| path == existing) {
-            return Err(format!(
-                "Map output cannot overwrite input file: {}",
-                input.display()
-            ));
-        }
-    }
-    Ok(())
-}
 pub fn cost_report(p: &Program) -> serde_json::Value {
     fn walk(e: &Expr, a: &mut Vec<serde_json::Value>) {
         match &e.kind{

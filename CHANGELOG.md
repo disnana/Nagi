@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preflight generated and map outputs against source files, embedded assets, Rust adapters and project manifests, including hard-link aliases. Reject overlapping generated files before writing.
+- Preserve release wrapping and debug overflow checks for constant integer arithmetic. Keep native Rust adapter diagnostics unchanged.
+- Treat local callbacks named `include_text` as ordinary calls, and report the actual Clone requirement when copying a list view.
+- Keep cross-module edges inside the HTML map viewport and label group counts accurately.
+- Complete shadowed local names without inserting constructor or call arguments in VS Code. Keep diagnostics and pending checks for unrelated projects when a matching dependency snapshot is available.
+- Add a UTF-8 file and typed JSON project to High/Low application verification. Use the generated VSIX path in installation instructions instead of a fixed version filename.
 - Reject index expressions that move their borrowed container, and views saved outside the scope of their owner. Preserve immediate reads, copies, outer owners, static views and returning paths.
 - Decode nullable SQLite columns for every already-supported scalar row type, including bool, floats and bytes.
 - Preserve nested Option types in generated Low and avoid redundant Rust enum field-pattern warnings.

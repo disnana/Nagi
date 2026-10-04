@@ -475,7 +475,7 @@ pub fn resolve_assets(program: &mut Program, source: &Path) -> Result<(), String
             E::Call(name, _, args) => {
                 if name == "include_text"
                     && args.len() == 1
-                    && e.resolution != Some(NameResolution::Module)
+                    && matches!(e.resolution, None | Some(NameResolution::Builtin))
                 {
                     if let E::Str(file) = &mut args[0].kind {
                         let path = source.parent().unwrap_or(Path::new(".")).join(&*file);
