@@ -6,3 +6,5 @@ __pycache__/
 target/release/
 .idea/
 local-only/
+examples/native-target/release/
+examples/native-target/
