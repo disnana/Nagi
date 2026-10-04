@@ -13,6 +13,7 @@ pub mod project;
 mod routes;
 mod rust_names;
 pub mod source;
+mod sql_check;
 pub mod stdlib;
 pub mod symbols;
 #[cfg(test)]

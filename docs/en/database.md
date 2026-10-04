@@ -30,6 +30,8 @@ Use a class as the type argument of a function that returns rows. `db_all[i64]` 
 
 Generated row readers support `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `f32`, `f64`, `bool`, `str` and `bytes` fields. Use `T?` for a column that accepts SQL NULL. Nullable boolean, float and bytes fields are supported from Nagi 0.1.9. See the [settings API example](../../test-nagi-code/application-examples/device-settings/README.en.md).
 
+Row readers are also generated for these types wrapped in `owned[...]`. Fields such as `owned[str]` and `owned[i64?]` need no handwritten `FromRow`; remove any earlier workaround implementation that would now duplicate the generated one. For unsupported fields, use a Rust row reader or type conversion.
+
 | Operation | Form | Return type after await |
 |---|---|---|
 | Create a table, etc. | `db_exec(db, sql)` | `Result[i64, Error]` |
@@ -62,6 +64,6 @@ A dedicated thread runs SQLite operations in order. Its queue holds up to 64 job
 
 Prepared statements are cached. Column names are resolved on each call; `db_all` reuses those column indices for every row in that result. Returned strings and byte sequences are owned so they remain valid after processing the SQLite row.
 
-General variable-length typed parameters, transaction APIs, database pools, and compile-time schema checking are not implemented. Column names, SQL, and column type mismatches produce runtime Result errors.
+General variable-length typed parameters, transaction APIs, and database pools are not implemented. Ordinary `check` does not validate SQL or its schema. Explicit [SQL checks](sql-check.md) validate names, required result columns, and bind counts for SQLite string literals. Dynamic SQL and column value type mismatches still produce runtime Result errors.
 
 A database job already accepted may complete and commit even after its HTTP caller times out. Cancelling the caller does not guarantee that a write is rolled back.

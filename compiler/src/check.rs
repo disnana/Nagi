@@ -1497,6 +1497,42 @@ impl Checker {
     fn origin(&self, e: &Expr) -> HashSet<BorrowedPlace> {
         self.origin_at(e, 0)
     }
+    fn views_absent(&self, e: &Expr) -> bool {
+        if !e.ty.as_ref().is_some_and(Type::contains_view) {
+            return true;
+        }
+        match &e.kind {
+            E::Null => true,
+            E::List(values) => values.iter().all(|value| self.views_absent(value)),
+            E::Call(name, _, args) if e.resolution == Some(NameResolution::Builtin) => {
+                match name.as_str() {
+                    "ok" | "some" | "fail" | "error" | "not_found" | "internal_error" | "share"
+                    | "clone_shared" => self.views_absent(&args[0]),
+                    "copy" => {
+                        // Copying a slice drops its container loan. Prove its
+                        // contents empty only for a view of a proven value.
+                        matches!(&args[0].kind, E::Call(name, _, values)
+                            if name == "view"
+                                && args[0].resolution == Some(NameResolution::Builtin)
+                                && self.views_absent(&values[0]))
+                    }
+                    _ => false,
+                }
+            }
+            E::Try(value) => self.views_absent(value),
+            E::Call(name, _, args)
+                if e.resolution == Some(NameResolution::Standard)
+                    && crate::stdlib::operation(name)
+                        == Some(crate::stdlib::Operation::ResultMapError) =>
+            {
+                self.views_absent(&args[0])
+            }
+            // Do not infer absence from view-containing locals: Rust unifies
+            // a binding's lifetime type across aliases and all assignments,
+            // including terminating branches. Calls are likewise opaque.
+            _ => false,
+        }
+    }
     fn content_depth(t: &Type) -> usize {
         if !t.contains_view() {
             return 0;
@@ -2225,7 +2261,7 @@ impl Checker {
                     if ty.contains_view() {
                         let origin = self.origin(e);
                         if Self::borrows_temporary(e)
-                            || origin.is_empty()
+                            || origin.is_empty() && !self.views_absent(e)
                             || origin.iter().any(|place| {
                                 !place.static_origin
                                     && (place.owner_loan

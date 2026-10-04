@@ -109,6 +109,7 @@ def main():
                 assert f"{filename}:{line}" in result.stderr, result.stderr
                 assert "Rust backend" not in result.stderr and "Cargo" not in result.stderr, result.stderr
                 assert not (folder / "build" / path.stem / "src" / "main.rs").exists()
+        verify_sql(exe, folder, environment)
         environment["PATH"] = str(root) + os.pathsep + environment["PATH"]
         # Windows resolves an executable using the parent's PATH. Update this
         # verification process too, so the bare command tests PATH on every OS.
@@ -128,6 +129,42 @@ def main():
             os.environ["PATH"] = previous_path
         verify_local_dependency(exe, folder, environment)
         verify_actor(exe, folder, environment)
+
+
+def verify_sql(exe: Path, folder: Path, environment: dict) -> None:
+    project = folder / "SQL check project 凪"
+    project.mkdir()
+    schema = project / "schema.sql"
+    schema.write_text("CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT NOT NULL);\n", encoding="utf-8")
+    isolated = {**environment, "PATH": "", "NAGI_ROOT": str(folder / "missing runtime")}
+    cases = {
+        "good": ("SELECT name, id FROM users WHERE id = ?1", None),
+        "column": ("SELECT id, naem AS name FROM users WHERE id = ?1", "naem"),
+        "bind": ("SELECT id, name FROM users WHERE id = ?1 OR id = ?2", "bind"),
+    }
+    for name, (sql, expected) in cases.items():
+        source = project / f"{name}.nagi"
+        source.write_text(
+            "class User:\n    id: i64\n    name: str\n"
+            "async def find(db: Db, id: i64) -> Result[User?, Error]:\n"
+            f"    return await db_query[User](db, {json.dumps(sql)}, id)\n", encoding="utf-8")
+        command = [str(exe), "check", str(source), "--no-project", "--out", str(project / name)]
+        ordinary = subprocess.run(command, cwd=folder, env=isolated, capture_output=True,
+                                  text=True, encoding="utf-8", timeout=15)
+        assert ordinary.returncode == 0, ordinary.stderr
+        result = subprocess.run(command + ["--sql-schema", str(schema.relative_to(folder)),
+                                           "--sql-dialect", "sqlite"],
+                                cwd=folder, env=isolated, capture_output=True,
+                                text=True, encoding="utf-8", timeout=15)
+        if expected is None:
+            assert result.returncode == 0, result.stderr
+            assert "SQL checked 1 literal queries" in result.stderr, result.stderr
+        else:
+            assert result.returncode != 0, f"SQL {name} error was accepted: {result.stderr}"
+            assert f"{source.name}:5" in result.stderr and expected in result.stderr, result.stderr
+        assert "Cargo" not in result.stderr and "Rust backend" not in result.stderr, result.stderr
+        assert not (project / name / "src/main.rs").exists(), "SQL check generated native Rust"
+    print("Verified SQL engine: extracted compiler, offline schema, bad columns/binds, Nagi locations, no Cargo/runtime")
 
 
 def verify_actor(exe: Path, folder: Path, environment: dict) -> None:
