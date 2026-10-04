@@ -44,3 +44,18 @@ fn explicit_list_element_types_still_contextualize_the_first_literal() {
         .unwrap_err()
         .contains("i8 の範囲"));
 }
+
+#[test]
+fn record_list_iteration_accepts_copy_values_and_readonly_noncopy_borrows() {
+    let high = checked("class Item:\n    amount: i64\n    quantity: i64\ndef main():\n    items = [Item(amount=20, quantity=2)]\n    for item in items:\n        print(item.amount * item.quantity)\n").unwrap();
+    let mut low = parser::parse(&emit::low(&high), false).unwrap();
+    check::check(&mut low).unwrap();
+
+    for (high, source) in [
+        (true, "class Item:\n    amount: i64\n    label: str\ndef main():\n    items = [Item(amount=20, label=\"Nagi\")]\n    for item in items:\n        print(item.amount)\n"),
+        (false, "record Item { amount: i64; label: str; }\nfn main() {\n    let items = [Item(amount=20, label=\"Nagi\")];\n    for item in items { print(item.amount); }\n}\n"),
+    ] {
+        let mut program = parser::parse(source, high).unwrap();
+        check::check(&mut program).unwrap();
+    }
+}

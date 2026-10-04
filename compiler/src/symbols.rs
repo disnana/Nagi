@@ -65,6 +65,10 @@ struct Local {
     #[serde(rename = "type")]
     ty: String,
     location: Location,
+    #[serde(skip_serializing_if = "is_false")]
+    readonly: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    borrowed: bool,
 }
 
 #[derive(Serialize)]
@@ -75,6 +79,8 @@ struct TypedExpression {
     #[serde(rename = "type")]
     ty: String,
     fields: Vec<Member>,
+    #[serde(skip_serializing_if = "is_false")]
+    borrowed: bool,
 }
 
 pub fn read_overlays(input: impl Read, cwd: &Path) -> Result<HashMap<PathBuf, String>, String> {
@@ -368,7 +374,7 @@ impl Types<'_, '_> {
             .iter()
             .find(|f| line >= f.start && line < f.start + f.lines.len().max(1))
     }
-    fn binding(&mut self, line: usize, span: Span, _name: &str, ty: &Type) {
+    fn binding(&mut self, line: usize, span: Span, _name: &str, ty: &Type, borrowed: bool) {
         let Some((original, location)) = local_location(self.files, line, span) else {
             return;
         };
@@ -381,13 +387,21 @@ impl Types<'_, '_> {
             name: original,
             ty: display,
             location,
+            readonly: borrowed,
+            borrowed,
         });
     }
     fn expr(&mut self, e: &Expr) {
         if let Some(ty) = &e.ty {
             if let E::Name(name) = &e.kind {
                 if ty.0 != "fn" || e.resolution == Some(NameResolution::Local) {
-                    self.binding(e.line, e.span, name, ty);
+                    self.binding(
+                        e.line,
+                        e.span,
+                        name,
+                        ty,
+                        e.resolution == Some(NameResolution::BorrowedLocal),
+                    );
                 }
             }
             if let Some(file) = self.file(e.line) {
@@ -405,7 +419,12 @@ impl Types<'_, '_> {
                     } else {
                         ty
                     };
-                    let shared_receiver = ty.0 == "shared";
+                    fn borrowed_receiver(expr: &Expr) -> bool {
+                        expr.resolution == Some(NameResolution::BorrowedLocal)
+                            || matches!(&expr.kind, E::Field(parent, _) if borrowed_receiver(parent))
+                    }
+                    let borrowed = borrowed_receiver(e);
+                    let shared_receiver = ty.0 == "shared" || borrowed;
                     let mut fields = self
                         .classes
                         .iter()
@@ -436,6 +455,7 @@ impl Types<'_, '_> {
                         end_column: end.column + end.length,
                         ty: display,
                         fields,
+                        borrowed,
                     });
                 }
             }
@@ -497,7 +517,7 @@ impl Types<'_, '_> {
         for s in ss {
             if let (Some(span), Some(ty)) = (s.binding_span, &s.binding_type) {
                 if let S::Assign { name, .. } | S::For(name, _, _) = &s.kind {
-                    self.binding(s.line, span, name, ty);
+                    self.binding(s.line, span, name, ty, s.binding_borrowed);
                 }
             }
             match &s.kind {
@@ -520,7 +540,7 @@ impl Types<'_, '_> {
                     for arm in arms {
                         for binding in arm.pattern.bindings() {
                             if let (Some(name), Some(ty)) = (&binding.name, &binding.ty) {
-                                self.binding(arm.line, binding.span, name, ty);
+                                self.binding(arm.line, binding.span, name, ty, false);
                             }
                         }
                         self.block(&arm.body);
@@ -1336,7 +1356,7 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
     if let Some(p) = &typed {
         for f in &p.functions {
             for ((name, ty), span) in f.params.iter().zip(&f.parameter_spans) {
-                types.binding(f.line, *span, name, ty);
+                types.binding(f.line, *span, name, ty, false);
             }
             types.block(&f.body);
         }

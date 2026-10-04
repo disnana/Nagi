@@ -1,4 +1,4 @@
-"""Check, build and exercise application projects through High and saved Low."""
+"""Exercise High projects with saved Low, and projects written directly in Low."""
 from __future__ import annotations
 
 import argparse
@@ -13,7 +13,8 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECTS = ROOT / "test-nagi-code/application-examples"
-NAMES = ("stock-report", "device-settings", "seat-reservations", "file-json")
+NAMES = ("stock-report", "device-settings", "seat-reservations", "file-json", "quote-api", "supervised-worker", "order-quote")
+LOW_PROJECTS = {"order-quote": ROOT / "test-nagi-code/low-examples/order-quote"}
 EXE = ".exe" if os.name == "nt" else ""
 
 
@@ -70,15 +71,16 @@ def main():
     env = dict(os.environ, NAGI_ROOT=str(ROOT), NAGI_NATIVE_TARGET_DIR=str(target))
     rows = []
     for name in (args.only,) if args.only else NAMES:
-        project = PROJECTS / name
+        project = LOW_PROJECTS.get(name, PROJECTS / name)
         verify = verifier(project)
         generated = output / name
         generated.mkdir(parents=True, exist_ok=True)
-        # Read saved Low in a separate CLI process, retaining the same project
-        # adapters and dependencies. Build/run each mode before sharing a target.
-        for mode in ("high", "low"):
+        # Low sources are checked and built directly; lower does not regenerate
+        # a Low input. High sources also run from independently loaded saved Low.
+        modes = ("low",) if name in LOW_PROJECTS else ("high", "low")
+        for mode in modes:
             directory = generated / mode
-            source = [] if mode == "high" else [generated / "high/generated.low"]
+            source = [] if mode == "high" or name in LOW_PROJECTS else [generated / "high/generated.low"]
             options = [*source, "--project", project, "--out", directory]
             run([compiler, "check", *options], env, generated / f"{mode}-check.log")
             run([compiler, "build", *options], env, generated / f"{mode}-build.log")
@@ -92,7 +94,7 @@ def main():
                 json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
             )
             print(f"Passed: {name} ({mode})", flush=True)
-    print(json.dumps({"projects": len(rows) // 2, "runs": len(rows), "status": "passed"}), flush=True)
+    print(json.dumps({"projects": len({row["project"] for row in rows}), "runs": len(rows), "status": "passed"}), flush=True)
 
 
 if __name__ == "__main__":

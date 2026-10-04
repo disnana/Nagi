@@ -184,6 +184,12 @@ async def handler(request: Input, state: shared[State]) -> Result[Output, Failur
     assert_true(request.method == http.Method.GET)
     assert_true(request.is_get)
     return ok(http.text(Code.OK, view(state.label)))
+def json_request(request: view[Input]) -> Result[bool, Error]:
+    return http.is_json_content_type(request)
+def json_then_store(request: Input) -> Result[StoredRequest, Error]:
+    matches = try http.is_json_content_type(view(request))
+    print(matches)
+    return ok(StoredRequest(input=request))
 async def independent_error(request: Input, state: shared[State]) -> Result[Output, str]:
     return fail("private error")
 async def main() -> Result[unit, Error]:
@@ -517,6 +523,18 @@ fn resource_references_do_not_acquire_legacy_slice_operations() {
         ("import std.http.server as http\ndef bad(value: view[owned[http.Method]]) -> Result[view[owned[http.Method]], Error]:\n    return slice(value, 0, 1)\n", 3),
     ] {
         f.rejected(text, line);
+    }
+}
+
+#[test]
+fn json_content_type_requires_a_request_and_has_no_generic_arguments() {
+    let f = Fixture::new();
+    for source in [
+        "import std.http.server as http\ndef bad() -> Result[bool, Error]:\n    return http.is_json_content_type(42)\n",
+        "import std.http.server as http\ndef bad(request: http.Request) -> Result[bool, Error]:\n    return http.is_json_content_type[i64](view(request))\n",
+        "import std.http.server as http\ndef bad(request: http.Request) -> Result[bool, Error]:\n    return http.is_json_content_type(view(request), \"application/json\")\n",
+    ] {
+        f.rejected(source, 3);
     }
 }
 

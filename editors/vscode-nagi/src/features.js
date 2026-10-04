@@ -318,6 +318,10 @@ function resolvedDeclaration(index, text, word, source) {
     item.location.line === reference.target.line && item.location.column === reference.target.column);
 }
 
+function localItem(local) {
+  return { ...local, kind: 'variable', signature: `${local.name}: ${local.type}${local.borrowed === true ? ' (read-only borrow)' : ''}` };
+}
+
 function hoverAt(index, text, offset, source = {}) {
   source = requestSource(source);
   const state = context(text, offset);
@@ -337,7 +341,7 @@ function hoverAt(index, text, offset, source = {}) {
     return { item, start: word.start, end: word.end };
   }
   const local = localAt(index, text, word, source);
-  if (local) return { item: { ...local, kind: 'variable', signature: `${local.name}: ${local.type}` }, start: word.start, end: word.end };
+  if (local) return { item: localItem(local), start: word.start, end: word.end };
   const resolved = resolvedDeclaration(index, text, word, source);
   const item = ['enum_member', 'constant'].includes(resolved?.kind) ? resolved : assistanceDeclarations(index, text, source).get(word.name) || resolved;
   if (!item || shadowedAt(index, text, word, source, item)) return undefined;
@@ -357,7 +361,21 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
   if (!state.allowed) return [];
   const word = wordAt(state.masked, offset);
   const beforeCursor = state.masked.slice(0, offset);
-  const lineStart = beforeCursor.lastIndexOf('\n') + 1;
+  let lineStart = beforeCursor.lastIndexOf('\n') + 1;
+  // Low permits another top-level import after a declaration or semicolon on
+  // the same line. Delimiters inside strings/comments are already masked.
+  if (low) {
+    const delimiters = [];
+    const pairs = { ')': '(', ']': '[', '}': '{' };
+    for (let i = lineStart; i < offset; i++) {
+      const c = beforeCursor[i];
+      if ('([{'.includes(c)) delimiters.push(c);
+      else if (pairs[c]) {
+        if (delimiters.at(-1) === pairs[c]) delimiters.pop();
+        if (c === '}' && !delimiters.length) lineStart = i + 1;
+      } else if (c === ';' && !delimiters.length) lineStart = i + 1;
+    }
+  }
   const line = beforeCursor.slice(lineStart);
   const importPath = /^\s*(?:import|from)\s+([A-Za-z_][\w.]*)?$/.exec(line);
   if (importPath && !/["']/.test(text.slice(lineStart, offset)) && Array.isArray(index?.standard_modules)) {
@@ -420,7 +438,7 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
   const bindings = lexicalBindings(state.masked, false);
   const values = all.map(item => {
     if (item.name === word.name) {
-      if (local) return { ...local, kind: 'variable', signature: `${local.name}: ${local.type}` };
+      if (local) return localItem(local);
       if (shadowedAt(index, text, word, source, item)) return { name: item.name, kind: 'variable', signature: item.name };
       if (resolved) return item;
     }
@@ -428,7 +446,7 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
     // scope. Keep the global name, but do not insert a call or type arguments.
     return bindings.has(item.name) ? { ...item, nameOnly: true } : item;
   });
-  if (local && !values.some(item => item.name === local.name)) values.unshift({ ...local, kind: 'variable', signature: `${local.name}: ${local.type}` });
+  if (local && !values.some(item => item.name === local.name)) values.unshift(localItem(local));
   return [...values, ...[...(low ? ['fn', 'record', 'let'] : ['def', 'class']), ...keywords].map(name => ({ name, kind: 'keyword', signature: name }))];
 }
 

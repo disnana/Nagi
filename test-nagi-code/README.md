@@ -4,7 +4,9 @@
 
 [library-examples/](library-examples/)に、共通の料金計算を使うCLIとJSONレポート、Rust連携、標準HTTP、Supervisor、Lowの差し替えなど10プロジェクトがあります。[一覧と起動手順](../docs/library-examples.md)、[English](library-examples/README.en.md)を参照してください。
 
-[application-examples/](application-examples/)には、在庫JSON集計・SQLiteの機器設定API・予約workerがあります。各プロジェクトの`smoke.py`で動作を確認できます。最新ソースのコンパイラで`python scripts/verify_application_examples.py --compiler /path/to/nagic`を実行すると、Highと生成Lowの両方をまとめて検証します。
+[application-examples/](application-examples/)には、JSON集計、SQLite API、DBなしの見積API、ファイル保存、Supervisorによるactor・taskの再起動と停止の例があります。[手書きLowの注文見積もりCLI](low-examples/order-quote/README.md)では、Low同士のimportと入力検証を試せます。
+
+最新ソースのコンパイラで`python scripts/verify_application_examples.py --compiler /path/to/nagic`を実行すると、Highと保存した生成Low、手書きLowを実際にビルドして検証します。起動手順と個別の検証コマンドは[サンプル一覧](application-examples/README.md)を参照してください。
 
 ## 成功と失敗を分ける小さなAPI
 

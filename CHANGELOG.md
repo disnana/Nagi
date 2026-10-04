@@ -2,12 +2,22 @@
 
 ## Unreleased
 
+- Borrow non-Copy List elements for read-only `for` loops, with ownership and lifetime checks and borrowed-variable hints in VS Code. Keep Copy iteration unchanged.
+- Add explicit task readiness and typed, bounded Supervisor event waits. Reject duplicate, stale and inactive readiness signals.
+- Add borrowed JSON Content-Type validation and keep request IDs in HTTP handler wrappers without intermediate copies.
+- Add imported `std.result.map_error` for explicit, typed error conversion through synchronous functions. Preserve `try` error identity and borrowed success values.
+
 - Preflight generated and map outputs against source files, embedded assets, Rust adapters and project manifests, including hard-link aliases. Reject overlapping generated files before writing.
 - Preserve release wrapping and debug overflow checks for constant integer arithmetic. Keep native Rust adapter diagnostics unchanged.
 - Treat local callbacks named `include_text` as ordinary calls, and report the actual Clone requirement when copying a list view.
 - Keep cross-module edges inside the HTML map viewport and label group counts accurately.
 - Complete shadowed local names without inserting constructor or call arguments in VS Code. Keep diagnostics and pending checks for unrelated projects when a matching dependency snapshot is available.
 - Add a UTF-8 file and typed JSON project to High/Low application verification. Use the generated VSIX path in installation instructions instead of a fixed version filename.
+- Accept multiline calls, constructors, lists, indexing, and function types in handwritten Low while preserving statement boundaries and source diagnostics.
+- Improve Low editing with brace-based folding, language-specific declaration help, import completion, and entry-point/import snippets.
+- Add runnable order-quote CLI, typed HTTP quote API, and supervised-worker projects with Japanese/English instructions and native smoke checks. Exercise direct Low projects as well as High and independently loaded Low in application verification.
+- Clarify the unsupported non-Copy List iteration diagnostic without rejecting supported Copy records.
+
 - Reject index expressions that move their borrowed container, and views saved outside the scope of their owner. Preserve immediate reads, copies, outer owners, static views and returning paths.
 - Decode nullable SQLite columns for every already-supported scalar row type, including bool, floats and bytes.
 - Preserve nested Option types in generated Low and avoid redundant Rust enum field-pattern warnings.

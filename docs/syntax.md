@@ -72,7 +72,7 @@ while count < 3:
     count += 1
 ```
 
-条件は`bool`です。`range(n)`は`0`以上`n`未満で、引数は1つです。配列やviewの`for`走査はprimitiveとCopy classの要素に対応します。`elif`、`break`、`continue`、`pass`はありません。
+条件は`bool`です。`range(n)`は`0`以上`n`未満で、引数は1つです。配列やviewの`for`は、Copy要素を値で読み、非Copy要素を読み取り専用で借ります。[所有権](ownership.md)で制約を確認できます。`elif`、`break`、`continue`、`pass`はありません。
 
 ## 演算子
 

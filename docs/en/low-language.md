@@ -1,6 +1,36 @@
 # High and Low
 
-High uses indentation in `.nagi` files. Low uses braces and semicolons in `.low` files. Both are Nagi languages. Write ordinary code in High and use Low when you want to replace a function's implementation.
+High uses indentation in `.nagi` files. Low uses braces and semicolons in `.low` files. High is the layer for everyday application development; Low lets you inspect generated code and replace selected function implementations with handwritten code. If you prefer braces, you can also write and run an entire application in Low.
+
+Types, ownership, borrowing, and Result handling follow the same rules as High.
+
+## Write and run a standalone Low program
+
+After [setting up the compiler and build environment](getting-started.md), save this as `app.low` in your working folder:
+
+```low
+fn total(price: i64, quantity: i64) -> i64 {
+    return price * quantity;
+}
+
+fn main() -> unit {
+    let amount = total(120, 3);
+    print(amount);
+}
+```
+
+```sh
+nagic check app.low
+nagic run app.low
+```
+
+`check` checks types and ownership; `run` builds and executes the program. The result is `360`. No High file or `--native` option is needed.
+
+Low declares functions with `fn`, encloses blocks in `{ }`, and separates statements with `;`. The type of `amount` is inferred from the call's result. You can also write it explicitly as `let amount: i64 = total(120, 3);`. Low uses `record` for the declaration called `class` in High.
+
+To split a Low program across files, use relative imports such as `import "orders.low" as orders;`. Ordinary file imports load only `.nagi` files from High and `.low` files from Low. To connect High and Low, use the `--native` additions and replacements described below.
+
+Try the [order quote CLI](../../test-nagi-code/low-examples/order-quote/README.en.md) for an application with multiple Low files, records, and Result handling.
 
 ## Convert High to Low
 
@@ -47,9 +77,9 @@ Commands regenerate `generated.low`. Save changes in `native.low` to keep them. 
 
 ## Low syntax
 
-Relative-file imports follow the same rules as High: `import "orders.low" as orders;` or `from "orders.low" import Order as SavedOrder;`. A module name exposes functions, records, and enums defined in that file.
+Use `import "orders.low" as orders;` or `from "orders.low" import Order as SavedOrder;` for relative-file imports. A module name exposes functions, records, and enums defined in that file.
 
-Types, ownership, borrowing, and Result handling follow the same rules as High. This function handles a Result:
+This function handles a Result:
 
 ```low
 fn number_or(text: view[str], fallback: i64) -> i64 {

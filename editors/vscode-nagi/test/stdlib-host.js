@@ -8,7 +8,7 @@ const { fixtures } = require('./stdlib-fixtures');
 
 module.exports.run = async () => {
   const root = path.resolve(__dirname, '../../..');
-  const folder = path.join(root, 'build', 'vscode-stdlib-host');
+  const folder = process.env.NAGI_EDITOR_HOST_FIXTURES || path.join(root, 'build', 'vscode-stdlib-host');
   fs.mkdirSync(folder, { recursive: true });
   const extension = vscode.extensions.getExtension('Disnana.nagi-lang');
   assert.ok(extension);
@@ -40,8 +40,24 @@ module.exports.run = async () => {
     cases++;
     const call = text.indexOf('http.text') + 'http.'.length;
     const signature = await vscode.commands.executeCommand('vscode.executeSignatureHelpProvider', doc.uri, doc.positionAt(call + 'text('.length));
-    assert.match(signature.signatures[0].label, /def http.text\(status: Code, body: view\[str\]\) -> http.Response/);
+    assert.equal(signature.signatures[0].label, `${suffix === 'low' ? 'fn' : 'def'} http.text(status: Code, body: view[str]) -> http.Response`);
     assert.equal(signature.signatures[0].parameters[1].label, 'body: view[str]');
+    cases++;
+    const jsonCall = text.indexOf('http.is_json_content_type') + 'http.'.length;
+    const jsonMembers = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', doc.uri, doc.positionAt(jsonCall + 2));
+    const jsonItem = jsonMembers.items.find(item => item.label === 'is_json_content_type');
+    assert.equal(jsonItem.kind, vscode.CompletionItemKind.Function);
+    assert.equal(jsonItem.insertText.value, 'is_json_content_type', 'an existing call keeps its argument list');
+    const jsonHover = await vscode.commands.executeCommand('vscode.executeHoverProvider', doc.uri, doc.positionAt(jsonCall + 2));
+    assert.match(hoverText(jsonHover), /is_json_content_type\(request: view\[Incoming\]\) -> Result\[bool, Error\]/);
+    const jsonSignature = await vscode.commands.executeCommand('vscode.executeSignatureHelpProvider', doc.uri,
+      doc.positionAt(jsonCall + 'is_json_content_type('.length));
+    assert.equal(jsonSignature.signatures[0].label,
+      `${suffix === 'low' ? 'fn' : 'def'} http.is_json_content_type(request: view[Incoming]) -> Result[bool, Error]`);
+    const jsonDefinition = await vscode.commands.executeCommand('vscode.executeDefinitionProvider', doc.uri, doc.positionAt(jsonCall + 2));
+    assert.equal(jsonDefinition[0].uri.scheme, 'nagi-stdlib');
+    const jsonSource = await vscode.workspace.openTextDocument(jsonDefinition[0].uri);
+    assert.match(jsonSource.lineAt(jsonDefinition[0].range.start.line).text, /is_json_content_type/);
     cases++;
     const typeOffset = text.indexOf('http.Response') + 'http.'.length;
     const types = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', doc.uri, doc.positionAt(typeOffset + 2));

@@ -244,6 +244,130 @@ fn header_access_preserves_duplicates_and_checks_single_value_and_utf8() {
 }
 
 #[test]
+fn json_content_type_matches_tokens_and_validates_every_parameter() {
+    let mut request = basic_request();
+    assert!(!is_json_content_type(&request).unwrap());
+    for value in [
+        "application/json",
+        "APPLICATION/JSON",
+        " \tapplication/json\t ",
+        "application/json; charset=utf-8",
+        "Application/Json \t; Charset=\"UTF-8\"; profile=\"a;b=\\\"c\"",
+        "application/json; charset=iso-8859-1",
+        "application/json;;; ; charset=utf-8;",
+        "application/json; empty=\"\"",
+    ] {
+        request.headers.insert(
+            names::CONTENT_TYPE,
+            HeaderValue::from_bytes(value.as_bytes()).unwrap(),
+        );
+        assert!(is_json_content_type(&request).unwrap(), "{value:?}");
+    }
+    for value in [
+        "text/plain",
+        "application/problem+json",
+        "application/jsonp",
+        "application/json-seq; charset=utf-8",
+    ] {
+        request.headers.insert(
+            names::CONTENT_TYPE,
+            HeaderValue::from_bytes(value.as_bytes()).unwrap(),
+        );
+        assert!(!is_json_content_type(&request).unwrap(), "{value:?}");
+    }
+    for value in [
+        "",
+        "application",
+        "/json",
+        "application/",
+        "application /json",
+        "application/ json",
+        "application/json, text/plain",
+        "application/json trailing",
+        "application/json; charset",
+        "application/json; charset=",
+        "application/json; charset =utf-8",
+        "application/json; charset= utf-8",
+        "application/json; charset=\"unfinished",
+        "application/json; charset=\"escaped\\",
+        "application/json; charset=\"utf-8\"tail",
+        "text/plain; bad=",
+    ] {
+        request.headers.insert(
+            names::CONTENT_TYPE,
+            HeaderValue::from_bytes(value.as_bytes()).unwrap(),
+        );
+        assert!(
+            matches!(
+                is_json_content_type(&request).unwrap_err().kind,
+                ErrorKind::Invalid
+            ),
+            "{value:?}"
+        );
+    }
+    request.headers.insert(
+        names::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    request.headers.append(
+        names::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    assert!(is_json_content_type(&request).is_err());
+}
+
+#[test]
+fn media_type_parser_rejects_controls_but_accepts_quoted_http_octets() {
+    for value in [
+        b"application/json\r\n".as_slice(),
+        b"application/json; p=\"\x00\"",
+        b"application/json; p=\"\x7f\"",
+        b"application/json; p=\"\\\x00\"",
+        b"application/json; p=\"\\\x7f\"",
+        b"application/json; p=\xff",
+        b"application/\xff",
+    ] {
+        assert!(media_type(value).is_none(), "{value:?}");
+    }
+    for value in [
+        b"application/json; p=\"\xff\"".as_slice(),
+        b"application/json; p=\"\\\xff\"",
+        b"application/json; p=\"\t\"",
+    ] {
+        assert!(media_type(value).is_some(), "{value:?}");
+    }
+}
+
+#[test]
+fn successful_json_content_type_checks_allocate_nothing_and_preserve_body() {
+    let mut request = basic_request();
+    request.headers.insert(
+        names::CONTENT_TYPE,
+        HeaderValue::from_static("Application/JSON; charset=\"UTF-8\"; profile=\"a;b\""),
+    );
+    let body_pointer = request.body().as_ptr();
+    let (_, allocations) = crate::metrics::measure(|| {
+        for _ in 0..512 {
+            assert!(is_json_content_type(&request).unwrap());
+            assert_eq!(request.body().as_ptr(), body_pointer);
+        }
+    });
+    assert_eq!(allocations.allocations, 0);
+    assert_eq!(allocations.reallocations, 0);
+    request
+        .headers
+        .insert(names::CONTENT_TYPE, HeaderValue::from_static("text/plain"));
+    let (_, allocations) = crate::metrics::measure(|| {
+        for _ in 0..512 {
+            assert!(!is_json_content_type(&request).unwrap());
+        }
+    });
+    assert_eq!(allocations.allocations, 0);
+    assert_eq!(allocations.reallocations, 0);
+    assert_eq!(request.body(), b"body");
+}
+
+#[test]
 fn standard_custom_mixed_case_and_long_borrowed_header_lookups_allocate_nothing() {
     let mut request = basic_request();
     request

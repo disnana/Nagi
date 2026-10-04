@@ -1,6 +1,36 @@
 # HighとLow
 
-Highは字下げでブロックを書く`.nagi`、Lowは波括弧と`;`で書く`.low`です。どちらもNagiの言語です。普段はHighで書き、関数の実装を差し替えたいときにLowを使えます。
+Highは字下げでブロックを書く`.nagi`、Lowは波括弧と`;`で書く`.low`です。Highは普段のアプリ開発に使う層、Lowは生成コードを確認し、必要な関数の実装を手書きで差し替えるための層です。波括弧で書きたい場合は、Lowだけでアプリを書いて実行することもできます。
+
+型、所有権、借用、Resultの扱いはHighと共通です。
+
+## Lowだけで書いて実行する
+
+コンパイラとビルド環境を[準備](getting-started.md)したら、作業用のフォルダーで次を`app.low`に保存します。
+
+```low
+fn total(price: i64, quantity: i64) -> i64 {
+    return price * quantity;
+}
+
+fn main() -> unit {
+    let amount = total(120, 3);
+    print(amount);
+}
+```
+
+```sh
+nagic check app.low
+nagic run app.low
+```
+
+`check`は型と所有権を検査し、`run`はビルドして実行します。実行結果は`360`です。Highファイルや`--native`の指定は必要ありません。
+
+Lowでは`fn`で関数を宣言し、ブロックを`{ }`で囲み、文を`;`で区切ります。`amount`の型は呼び出し結果から推論されます。`let amount: i64 = total(120, 3);`のように型を明記することもできます。Highの`class`に相当する宣言は、Lowでは`record`です。
+
+Lowを複数のファイルに分ける場合は、`import "orders.low" as orders;`のように相対パスで読み込みます。通常のファイルimportは、Highからは`.nagi`、Lowからは`.low`だけを読み込めます。HighとLowをつなぐ場合は、後述の`--native`による追加・差し替えを使います。
+
+[注文の見積もりCLI](../test-nagi-code/low-examples/order-quote/README.md)では、Lowのファイル分割、record、Resultを使うアプリを試せます。
 
 ## HighをLowへ変換する
 
@@ -47,9 +77,9 @@ Highのrootで`import "orders.nagi" as orders`と読み込んだ関数には、`
 
 ## Lowの文法
 
-相対ファイルのimportはHighと共通で、`import "orders.low" as orders;`や`from "orders.low" import Order as SavedOrder;`と書けます。module名が公開するのは、そのファイル自身が定義した関数・record・enumです。
+相対ファイルのimportには、`import "orders.low" as orders;`や`from "orders.low" import Order as SavedOrder;`を使えます。module名が公開するのは、そのファイル自身が定義した関数・record・enumです。
 
-型、所有権、借用、Resultの扱いはHighと共通です。次はResultを処理する関数の例です。
+次はResultを処理する関数の例です。
 
 ```low
 fn number_or(text: view[str], fallback: i64) -> i64 {

@@ -5,7 +5,7 @@ const path = require('node:path');
 const vscode = require('vscode');
 
 const root = path.resolve(__dirname, '../../..');
-const report = path.join(root, 'build/vscode-static-assistance-result.json');
+const report = process.env.NAGI_EDITOR_HOST_RESULT || path.join(root, 'build/vscode-static-assistance-result.json');
 const cases = [];
 function save(status, error) {
   fs.mkdirSync(path.dirname(report), { recursive: true });
@@ -36,10 +36,11 @@ async function run() {
   async function close() { await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor'); }
 
   for (const language of ['nagi', 'nagi-low']) {
+    const functionKeyword = language === 'nagi-low' ? 'fn' : 'def';
     const doc = await untitled('env("😀", ', language);
-    assert.match(await hover(doc, 1), /def env\(name: str, fallback: str\) -> str/);
+    assert.ok((await hover(doc, 1)).includes(`${functionKeyword} env(name: str, fallback: str) -> str`));
     const hint = await signature(doc);
-    assert.match(hint.signatures[0].label, /def env/);
+    assert.ok(hint.signatures[0].label.startsWith(`${functionKeyword} env`));
     assert.equal(hint.activeParameter, 1);
     cases.push(`${language}: untitled builtin hover/signature with UTF-16 string argument`);
     await close();
@@ -76,7 +77,7 @@ async function run() {
   cases.push('unfinished line string recovers for the following CRLF line');
   await close();
 
-  const folder = path.join(root, 'build/vscode-static-fixtures');
+  const folder = process.env.NAGI_EDITOR_HOST_FIXTURES || path.join(root, 'build/vscode-static-fixtures');
   fs.mkdirSync(folder, { recursive: true });
   const file = path.join(folder, `missing-compiler-${process.pid}.nagi`);
   fs.writeFileSync(file, 'def main():\n    env(');

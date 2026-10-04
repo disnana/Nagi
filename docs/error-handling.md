@@ -16,7 +16,7 @@ def read_id(text: view[str]) -> Result[i64, Error]:
     return ok(id)
 ```
 
-非同期では`value = try await operation(...)`です。`try`の結果は`T`なので、Resultとして返すなら`return ok(try operation(...))`と書きます。異なる`E`への変換は`match`の`Err`で明示します。
+非同期では`value = try await operation(...)`です。`try`の結果は`T`なので、Resultとして返すなら`return ok(try operation(...))`と書きます。異なるエラー型へは`match`か、後述の`std.result.map_error`で変換します。
 
 ## 成功と失敗を分ける
 
@@ -81,6 +81,29 @@ def fallback(problem: QuantityError) -> i64:
 classも`Result[T, MyError]`の失敗値に使えます。たとえば`class StorageError:`のフィールドに`cause: Error`を持たせ、`fail(StorageError(cause=problem))`で元の原因を保存できます。class・enumのエラー型にJSONやDBの変換は要求しません。組み込みErrorを含むclassやenumのJSON変換は未対応です。
 
 [独自エラーのCLIサンプル](../test-nagi-code/library-examples/typed-errors/README.md)は、組み込みErrorからの変換、同じエラー型の`try`、enumの分岐を試せます。
+
+## エラー型を変換する
+
+`std.result`の`map_error`は、成功値を保ったままエラーを変換します。
+
+```nagi
+import std.result as result
+
+enum InputError:
+    InvalidNumber(cause: Error)
+
+def invalid_number(cause: Error) -> InputError:
+    return InputError.InvalidNumber(cause)
+
+def read_number(text: view[str]) -> Result[i64, InputError]:
+    return result.map_error(parse_i64(text), invalid_number)
+```
+
+`map_error`は`Result[T, E]`と同期関数`fn[E, F]`を受け取り、`Result[T, F]`を返します。型引数は推論されます。名前付き関数か、その同期関数を代入したローカル変数を渡してください。変換関数は`Ok`では呼ばず、`Err`で1回だけ呼びます。
+
+入力のResultを消費し、成功値・失敗値をmoveします。`map_error`自身はcloneやメモリ確保を行いませんが、変換関数の処理によってはメモリを確保します。成功型`T`の借用は元データの生存期間を保って扱います。現在、変換後のエラー型`F`に`view`を含めることはできません。
+
+`try`が自動で別のエラー型へ変換するわけではありません。変換後のResultを`try`する関数も、同じエラー型`F`を返す必要があります。[在庫集計CLI](../test-nagi-code/application-examples/stock-report/README.md)ではJSONのErrorを`InventoryError`へ変換しています。
 
 ## Errorを調べる・作る・返し直す
 

@@ -87,6 +87,8 @@ pub enum NameResolution {
     Builtin,
     Function,
     Local,
+    /// A loop-local reference to a non-Copy element. This is not a source type.
+    BorrowedLocal,
     Module,
     Enum,
     Standard,
@@ -185,6 +187,7 @@ pub struct Stmt {
     pub line: usize,
     pub binding_span: Option<Span>,
     pub binding_type: Option<Type>,
+    pub binding_borrowed: bool,
 }
 #[derive(Clone, Debug)]
 pub struct Function {

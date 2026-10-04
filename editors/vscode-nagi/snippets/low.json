@@ -1,4 +1,8 @@
 {
+  "Main": { "prefix": "main", "body": ["fn main() -> unit {", "    ${0:print(\"Hello, Nagi!\");}", "}"], "description": "Lowプログラムの入口" },
+  "File import": { "prefix": "import", "body": ["import \"${1:helpers.low}\" as ${2:helpers};", "$0"], "description": "相対パスのLowファイルをmodule名で読み込む" },
+  "From import": { "prefix": "from", "body": ["from \"${1:helpers.low}\" import ${2:helper} as ${3:local_helper};", "$0"], "description": "Lowファイルから宣言を選び、別名で読み込む" },
+  "Standard import": { "prefix": "import-std", "body": ["import ${1:std.http.server} as ${2:http};", "$0"], "description": "登録済み標準moduleを読み込む" },
   "Function": { "prefix": "fn", "body": ["fn ${1:name}(${2:x: i64}) -> ${3:i64} {", "    ${0:return x;}", "}"], "description": "Low関数" },
   "Record": { "prefix": "record", "body": ["record ${1:Point} {", "    x: f64;", "    y: f64;", "}", "$0"], "description": "Lowの値型record" },
   "Enum": { "prefix": "enum", "body": ["enum ${1:AuthError} {", "    ${2:InvalidCredentials};", "    ${3:WeakPassword}(${4:message}: ${5:str});", "}", "$0"], "description": "Lowのenum" },

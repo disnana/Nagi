@@ -1,0 +1,14 @@
+import "quote.low" as quote;
+
+fn main() -> Result[unit, Error] {
+    let text = try read_line();
+    match quote.summarize(view(text)) {
+        case Ok(summary) {
+            let encoded = try json_encode(summary);
+            return ok(print(encoded));
+        }
+        case Err(problem) {
+            return error(quote.message(problem));
+        }
+    }
+}

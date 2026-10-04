@@ -4,8 +4,9 @@ Development tools for Nagi High (`.nagi`) and Low (`.low`). Command labels and s
 
 - Syntax highlighting, comments, bracket/quote handling, and four-space indentation
 - Indentation on Enter, else/case alignment, and closing delimiters in multiline expressions
+- Brace-based folding in Low, with `fn` and `record` in hovers and parameter hints
 - Snippets for classes, functions, HTTP, borrowing, and Low replacements
-- nagic check on opening/editing/saving files, with diagnostics in Problems
+- nagic check on opening/saving files, with diagnostics in Problems
 - Command Palette actions for checking, lowering, building, and running
 - A run button at the top right of the editor
 - Project checking/execution using nagi.toml entry, Rust dependencies, and native Low
@@ -36,13 +37,11 @@ $vsix = python editors/vscode-nagi/scripts/package_vsix.py
 code --install-extension "$vsix"
 ```
 
-Extension 0.1.10 provides highlighting, snippets, indentation support, keyword/type completion, and built-in completion, hover, and argument hints without a compiler. Checks and execution require `nagic`. Install it using [Setup and first run](https://nagi.disnana.com/en/docs/getting-started/). The extension checks the repository's release build, then debug build, then PATH.
+Highlighting, snippets, indentation support, keyword/type completion, and built-in completion, hover, and argument hints work without a compiler. Checks and execution require `nagic`. Install it using [Setup and first run](https://nagi.disnana.com/en/docs/getting-started/). The extension checks the repository's release build, then debug build, then PATH.
 
 The VSIX does not include the compiler. `spawn nagic.exe ENOENT` means it could not be found. Install the compiler, restart VS Code, then run **Nagi: 型検査** (Type Check). For a compiler elsewhere, set nagi.compilerPath. Startup failures and timeouts appear as warnings and in Nagi Output, without source-error squiggles.
 
 ## Indentation while typing
-
-These typing adjustments are available in extension 0.1.10.
 
 Press Enter after a block header such as `def main():`, `async def`, `if`, `match`, or `case` to indent one level. Typing the final colon of `else:` or `case ...:` aligns the line with its enclosing `if` or `match`.
 
@@ -56,6 +55,12 @@ The default is four spaces. The indentation width and tabs/spaces choice follow 
   "[nagi-low]": { "editor.formatOnType": false }
 }
 ```
+
+## Handwritten Low
+
+In `.low` files, hovers, completion details and parameter hints use `fn`, `record` and braced `enum` declarations. Brace-delimited blocks fold regardless of indentation. Use the `main`, `import`, `from` and `import-std` snippets for an entry point and imports. Import completion also works after a declaration or semicolon on the same line.
+
+Open the [order quote CLI](https://github.com/disnana/Nagi/tree/main/test-nagi-code/low-examples/order-quote) to try Low-to-Low imports, records, enums and input validation. The extension adjusts indentation while typing; whole-file formatting is not supported.
 
 ## Settings
 
@@ -72,7 +77,7 @@ The default is four spaces. The indentation width and tabs/spaces choice follow 
 
 Outside Windows, the executable is nagic. Relative compilerPath/nativeFiles/rustFile paths use the workspace folder. Check-generated Low goes to project/source-specific build/vscode-nagi folders, separate from ordinary build output.
 
-Automatic checks read unsaved edits to previously saved files. Editing clears stale diagnostics and starts a new check. Manual Type Check also reads the buffers without saving or building; lower, build, and run save edited project files first. Save new files and nagi.toml before using them. Untrusted workspaces do not run the compiler. Diagnostic locations currently follow the compiler's line-based output.
+Automatic checks run when files open or are saved. Editing clears stale diagnostics without checking on every keystroke. Manual Type Check reads unsaved edits to previously saved files without saving or building; lower, build, and run save edited project files first. Save new files and nagi.toml before using them. Untrusted workspaces do not run the compiler. Diagnostic locations currently follow the compiler's line-based output.
 
 ## Projects
 
@@ -98,9 +103,9 @@ Name references resolve separately from type checks, so identifiable bindings ca
 
 ## Hovers, completion, and parameter hints
 
-Extension 0.1.10 offers keyword/type completion and built-in completion, hover, and argument hints in new unsaved files, without a compiler, and in untrusted workspaces. Built-in descriptions remain available in incomplete syntax. When the compiler cannot analyze the source, same-name functions, variables, or imports suppress built-in information that could refer to another definition. Project declarations, local variable types, field candidates, and F12 require the compiler and a trusted workspace.
+Keyword/type completion and built-in completion, hover, and argument hints work in new unsaved files, without a compiler, and in untrusted workspaces. Built-in descriptions remain available in incomplete syntax. When the compiler cannot analyze the source, same-name functions, variables, or imports suppress built-in information that could refer to another definition. Project declarations, local variable types, field candidates, and F12 require the compiler and a trusted workspace.
 
-Use the latest nagic and extension 0.1.10. Function hovers show parameters, returns, and async status; class hovers list fields. Types such as Result[Item?, Error] and view[str] retain their declared forms. See the [walkthrough](editor.md).
+Use the latest nagic and extension. Function hovers show parameters, returns, and async status; class hovers list fields. Types such as Result[Item?, Error] and view[str] retain their declared forms. See the [walkthrough](editor.md).
 
 Variable hovers show confirmed types: count = 3 gives count: i64, and item from a class-returning call gives item: Item. Arguments, for elements, and Ok/Err bindings are supported at declarations and uses. Names outside their blocks do not receive those types.
 

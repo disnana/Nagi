@@ -54,7 +54,7 @@ async def get_user(db: Db, id: i64) -> Result[User?, Error]:
     return await db_query[User](db, "SELECT id, name, age FROM users WHERE id = ?1", id)
 ```
 
-For iteration over class lists, only Copy classes are currently supported. User owns a str, so `for user in users` is not supported. An HTTP handler can still return `await db_all[User](...)` as a JSON array. See the [CRUD API](../../examples/crud.nagi) and [task management source](../../test-nagi-code/web-demo/tasks.nagi).
+Iterate over the result of `db_all[User]` with `for user in users` to borrow each row for reading, without cloning its strings. See [ownership](ownership.md) for the borrow restrictions. An HTTP handler can still return `await db_all[User](...)` as a JSON array. See the [CRUD API](../../examples/crud.nagi) and [task management source](../../test-nagi-code/web-demo/tasks.nagi).
 
 ## Implementation and limits
 

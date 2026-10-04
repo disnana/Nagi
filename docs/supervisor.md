@@ -26,6 +26,12 @@ Tokioの停止は協調的です。yieldしないCPU処理、blockingなnative�
 
 `next_event`で起動、失敗、再起動、停止を受け取れます。イベントは既定256件、診断文は最大1024 UTF-8 bytesです。読み手が遅れた場合は`EventKind.LAGGED`と失われた件数が届きます。監視の遅れで子の処理を止めません。
 
+監視を無期限に待たせたくない場合は`next_event_timeout(view(control), 5000)`を使います。`Err(WaitError)`のkindで`TIMEOUT`と`INVALID_TIMEOUT`を区別できます。`Ok(None)`は列の終了だけを表します。読み取りロック待ちも期限に含まれ、キャンセル後も未読イベントを受け取れます。期限は1..4,294,967,295msかつ時計が表現できる値にします。
+
+taskの`STARTED`はfactory本体の実行前に届きます。接続確立などの準備完了を待つ場合は`task_with_ready`で登録し、初期化後に`mark_ready(view(signal))`を呼びます。監視側へ子の名前と世代番号付きの`EventKind.READY`が届きます。重複や古い世代の通知は受け付けません。actorの起動確認は既存の`ready`を使います。
+
+[workerのサンプル](../test-nagi-code/application-examples/supervised-worker/README.md)で準備完了通知、panicからの再起動、期限付き監視、停止を確認できます。
+
 これは同じプロセス内のnative実装です。VM、無停止のコード差し替え、分散配置、永続mailbox、実行中の子の追加・削除は未対応です。
 
 [actorの書き方](actor.md) · [APIリファレンス](actor-reference.md) · [性能測定](actor-performance.md) · [実行できるサンプル](../test-nagi-code/library-examples/supervised-service/README.md)

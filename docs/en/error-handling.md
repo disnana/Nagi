@@ -16,7 +16,7 @@ def read_id(text: view[str]) -> Result[i64, Error]:
     return ok(id)
 ```
 
-For async operations, write `value = try await operation(...)`. The value of `try` is `T`; to return a Result, write `return ok(try operation(...))`. Convert a different error type explicitly in a `match`'s `Err` case.
+For async operations, write `value = try await operation(...)`. The value of `try` is `T`; to return a Result, write `return ok(try operation(...))`. Convert a different error type with `match` or `std.result.map_error`, described below.
 
 ## Separate success and failure
 
@@ -81,6 +81,29 @@ Construct a unit variant with `QuantityError.InvalidNumber`. For payload variant
 A class can also be the failure value in `Result[T, MyError]`. For example, a `StorageError` class can have a `cause: Error` field; `fail(StorageError(cause=problem))` preserves the original cause. Error classes and enums do not need JSON or database conversions. JSON conversion of enums or classes containing built-in Error is unsupported.
 
 The [typed-error CLI example](../../test-nagi-code/library-examples/typed-errors/README.en.md) covers explicit conversion from built-in Error, propagation with the same error type, and enum matching.
+
+## Convert an error type
+
+`map_error` from `std.result` converts an error while preserving the success value.
+
+```nagi
+import std.result as result
+
+enum InputError:
+    InvalidNumber(cause: Error)
+
+def invalid_number(cause: Error) -> InputError:
+    return InputError.InvalidNumber(cause)
+
+def read_number(text: view[str]) -> Result[i64, InputError]:
+    return result.map_error(parse_i64(text), invalid_number)
+```
+
+`map_error` takes a `Result[T, E]` and a synchronous function `fn[E, F]`, returning `Result[T, F]`. Type arguments are inferred. Pass a named function or a local variable holding that synchronous function. The mapper is not called for `Ok`; it is called exactly once for `Err`.
+
+It consumes the input Result, moving its success or failure value. `map_error` itself does not clone or allocate, though the mapper may allocate. Borrowed success values in `T` retain their original lifetime checks. An output error type `F` containing `view` is currently unsupported.
+
+`try` does not automatically convert error types. A function using `try` on the converted Result must return the same error type `F`. The [stock report CLI](../../test-nagi-code/application-examples/stock-report/README.en.md) converts the Error from JSON decoding into `InventoryError` this way.
 
 ## Inspect, construct, and return Errors
 

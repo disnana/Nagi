@@ -23,7 +23,7 @@ function host(t, trusted = true, code = 1, symbols, controls = {}) {
   }
   class MarkdownString {
     constructor() { this.value = ''; }
-    appendCodeblock(text) { this.value += text + '\n'; }
+    appendCodeblock(text, language) { this.value += text + '\n'; this.language = language; }
     appendText(text) { this.value += text; }
   }
   function collection(owner) {
@@ -55,9 +55,10 @@ function host(t, trusted = true, code = 1, symbols, controls = {}) {
       const [scheme, pathname] = text.split(':');
       return { ...uri(pathname, scheme), path: pathname, authority: '', query: '', fragment: '' };
     } },
+    FoldingRange: class { constructor(start, end) { Object.assign(this, { start, end }); } },
     Location: class { constructor(uri, range) { this.uri = uri; this.range = range; } },
     EventEmitter: class { constructor() { this.event = () => disposable(); } fire() {} dispose() {} },
-    DiagnosticSeverity: { Error: 0 }, CompletionItemKind: { Function: 1, Class: 2, Field: 3, TypeParameter: 4, Keyword: 5, Enum: 6, EnumMember: 7, Module: 8, Constant: 9 },
+    DiagnosticSeverity: { Error: 0 }, CompletionItemKind: { Function: 1, Class: 2, Field: 3, TypeParameter: 4, Keyword: 5, Enum: 6, EnumMember: 7, Module: 8, Constant: 9, Variable: 10 },
     Diagnostic: class { constructor(range, message) { this.range = range; this.message = message; } },
     Hover: class { constructor(contents, range) { this.contents = contents; this.range = range; } },
     CompletionItem: class { constructor(label, kind) { this.label = label; this.kind = kind; } },
@@ -65,7 +66,7 @@ function host(t, trusted = true, code = 1, symbols, controls = {}) {
     SignatureInformation: class { constructor(label, documentation) { this.label = label; this.documentation = documentation; } },
     ParameterInformation: class { constructor(label) { this.label = label; } }, SignatureHelp: class {},
   };
-  for (const kind of ['Definition', 'Hover', 'CompletionItem', 'SignatureHelp']) {
+  for (const kind of ['Definition', 'Hover', 'CompletionItem', 'SignatureHelp', 'FoldingRange']) {
     vscode.languages[`register${kind}Provider`] = (selector, provider) => {
       providers[kind] = provider; selectors[kind] = selector; return disposable();
     };
@@ -404,6 +405,27 @@ test('missing compiler keeps prefix completion, hover and signatures available',
   assert.equal(h.diagnostics.size, 0);
 });
 
+test('borrowed local providers annotate hover and detail while keeping variable kind and insertion', async t => {
+  const text = 'print(item)';
+  const h = host(t, true, 1, folder => ({ format: 'nagi-symbols-v1', definitions: [], bindings: [], references: [], files: [], expressions: [],
+    locals: ['main.nagi', 'main.low'].map(name => ({ name: 'item', type: 'Entry', borrowed: true, readonly: true,
+      location: { file: path.join(folder, name), line: 1, column: 7, length: 4 } })),
+  }));
+  for (const language of ['nagi', 'nagi-low']) {
+    const doc = h.document(text, 'file', language);
+    const hover = await h.providers.Hover.provideHover(doc, doc.positionAt(8), h.token);
+    const expected = `item: Entry (read-only borrow)\n\nmain.${language === 'nagi-low' ? 'low' : 'nagi'}:1`;
+    assert.equal(hover.contents.value, expected);
+    assert.equal(hover.contents.language, language);
+    const items = await h.providers.CompletionItem.provideCompletionItems(doc, doc.positionAt(8), h.token);
+    const item = items.find(item => item.label === 'item');
+    assert.equal(item.detail, 'item: Entry (read-only borrow)');
+    assert.equal(item.documentation.value, expected);
+    assert.equal(item.kind, h.vscode.CompletionItemKind.Variable);
+    assert.equal(item.insertText.value, 'item');
+  }
+});
+
 test('untrusted and untitled assistance executes no compiler and retains High/Low selectors', async t => {
   for (const trusted of [true, false]) {
     const h = host(t, trusted);
@@ -423,6 +445,88 @@ test('untrusted and untitled assistance executes no compiler and retains High/Lo
     }
     assert.equal(h.calls.length, 0);
   }
+});
+
+test('Low builtin help uses fn and record in hover, completion and signatures without a compiler', async t => {
+  const h = host(t, false);
+  for (const language of ['nagi', 'nagi-low']) {
+    const doc = h.document('fail(', 'untitled', language);
+    const keyword = language === 'nagi-low' ? 'fn' : 'def';
+    const typeKeyword = language === 'nagi-low' ? 'record' : 'class';
+    const hover = await h.providers.Hover.provideHover(doc, doc.positionAt(2), h.token);
+    assert.ok(hover.contents.value.startsWith(`${keyword} fail(problem: E) -> Result[T, E]`));
+    assert.ok(hover.contents.value.includes(`独自${typeKeyword}・enum`));
+    assert.equal(hover.contents.language, language);
+    const help = await h.providers.SignatureHelp.provideSignatureHelp(doc, doc.positionAt(5), h.token);
+    assert.ok(help.signatures[0].label.startsWith(`${keyword} fail`));
+    const items = await h.providers.CompletionItem.provideCompletionItems(doc, doc.positionAt(5), h.token);
+    const fail = items.find(item => item.label === 'fail');
+    assert.ok(fail.detail.startsWith(`${keyword} fail`));
+    assert.equal(fail.insertText.value, 'fail(${1:problem})');
+  }
+  assert.equal(h.calls.length, 0);
+  assert.equal(h.diagnostics.size, 0);
+});
+
+test('Low declaration and standard-operation help displays braces while retaining compiler kinds and call shapes', async t => {
+  const h = host(t, true, 1, folder => {
+    const item = { name: 'Item', kind: 'class', signature: 'class Item\n    value: i64', fields: [{ name: 'value', type: 'i64' }] };
+    const fault = { name: 'Fault', kind: 'enum', signature: 'enum Fault\n    Fault.Missing\n    Fault.Invalid(message: str)', variants: [] };
+    const make = { name: 'make', kind: 'function', signature: 'async def make(value: i64) -> Result[Item, Error]', parameters: [{ name: 'value', type: 'i64' }], return_type: 'Result[Item, Error]', asynchronous: true };
+    return { format: 'nagi-symbols-v1', definitions: [item, fault, make], bindings: [{ file: path.join(folder, 'main.low'), name: 'models', kind: 'module', members: [item, fault, make] }], references: [], files: [], locals: [], expressions: [] };
+  });
+  const doc = h.document('models.make(', 'file', 'nagi-low');
+  const hover = await h.providers.Hover.provideHover(doc, doc.positionAt(9), h.token);
+  assert.match(hover.contents.value, /^async fn make\(value: i64\)/);
+  const help = await h.providers.SignatureHelp.provideSignatureHelp(doc, doc.positionAt(12), h.token);
+  assert.match(help.signatures[0].label, /^async fn make/);
+  assert.equal(help.signatures[0].parameters[0].label, 'value: i64');
+  const prefix = h.document('models.', 'file', 'nagi-low');
+  const items = await h.providers.CompletionItem.provideCompletionItems(prefix, prefix.positionAt(7), h.token);
+  const item = items.find(item => item.label === 'Item');
+  assert.equal(item.detail, 'record Item {\n    value: i64;\n}');
+  assert.equal(item.kind, h.vscode.CompletionItemKind.Class);
+  assert.equal(item.insertText.value, 'Item(value=${1:value})');
+  assert.equal(items.find(item => item.label === 'Fault').detail, 'enum Fault {\n    Missing;\n    Invalid(message: str);\n}');
+  assert.ok(items.find(item => item.label === 'make').detail.startsWith('async fn make'));
+});
+
+test('Low enum declaration help removes namespace prefixes only from variant names', async t => {
+  const raw = 'enum models.Fault\n    models.Fault.Missing\n    models.Fault.Invalid(problem: models.Error)';
+  const expected = 'enum models.Fault {\n    Missing;\n    Invalid(problem: models.Error);\n}';
+  const h = host(t, true, 1, folder => {
+    const fault = { name: 'Fault', kind: 'enum', signature: raw, variants: [
+      { name: 'Missing', kind: 'enum_member', signature: 'models.Fault.Missing', parameters: [] },
+      { name: 'Invalid', kind: 'enum_member', signature: 'models.Fault.Invalid(problem: models.Error)', parameters: [{ name: 'problem', type: 'models.Error' }] },
+    ] };
+    return { format: 'nagi-symbols-v1', definitions: [fault], bindings: ['main.low', 'main.nagi'].map(name => ({
+      file: path.join(folder, name), name: 'models', kind: 'module', members: [fault],
+    })), references: [], files: [], locals: [], expressions: [] };
+  });
+  for (const language of ['nagi-low', 'nagi']) {
+    const doc = h.document('models.Fault', 'file', language);
+    const hover = await h.providers.Hover.provideHover(doc, doc.positionAt(9), h.token);
+    assert.ok(hover.contents.value.startsWith(language === 'nagi-low' ? expected : raw));
+    const prefix = h.document('models.', 'file', language);
+    const items = await h.providers.CompletionItem.provideCompletionItems(prefix, prefix.positionAt(7), h.token);
+    const item = items.find(item => item.label === 'Fault');
+    assert.equal(item.detail, language === 'nagi-low' ? expected : raw);
+    assert.equal(item.kind, h.vscode.CompletionItemKind.Enum);
+    const call = h.document('models.Fault.Invalid(', 'file', language);
+    const help = await h.providers.SignatureHelp.provideSignatureHelp(call, call.positionAt(call.getText().length), h.token);
+    assert.equal(help.signatures[0].label, 'models.Fault.Invalid(problem: models.Error)');
+    assert.equal(help.signatures[0].parameters[0].label, 'problem: models.Error');
+  }
+});
+
+test('Low folding is available without trust or a compiler and honors cancellation', t => {
+  const h = host(t, false);
+  const doc = h.document('fn main() {\nprint(42);\n}', 'untitled', 'nagi-low');
+  assert.deepEqual(Array.from(h.selectors.FoldingRange, item => item.language), ['nagi-low']);
+  assert.deepEqual(Array.from(h.providers.FoldingRange.provideFoldingRanges(doc, {}, h.token), item => [item.start, item.end]), [[0, 1]]);
+  h.token.isCancellationRequested = true;
+  assert.equal(h.providers.FoldingRange.provideFoldingRanges(doc, {}, h.token).length, 0);
+  assert.equal(h.calls.length, 0);
 });
 
 test('cancelled, closed and changed documents cannot receive static fallback from failed queries', async t => {

@@ -236,6 +236,91 @@ pub fn header_text<'a>(request: &'a Request, name: &str) -> Result<Option<&'a st
         .transpose()
 }
 
+/// Check one Content-Type value without allocating or copying the request body.
+/// Parameters are validated but do not select a JSON encoding: JSON bodies are
+/// decoded as UTF-8. Structured suffix types such as application/problem+json
+/// are distinct media types and do not match application/json here.
+pub fn is_json_content_type(request: &Request) -> Result<bool, Error> {
+    let Some(value) = header(request, "content-type")? else {
+        return Ok(false);
+    };
+    let (kind, subtype) =
+        media_type(value).ok_or_else(|| Error::invalid("malformed HTTP Content-Type"))?;
+    Ok(kind.eq_ignore_ascii_case(b"application") && subtype.eq_ignore_ascii_case(b"json"))
+}
+
+fn media_type(value: &[u8]) -> Option<(&[u8], &[u8])> {
+    fn ows(value: &[u8], position: &mut usize) {
+        while value
+            .get(*position)
+            .is_some_and(|byte| matches!(byte, b' ' | b'\t'))
+        {
+            *position += 1;
+        }
+    }
+    fn token<'a>(value: &'a [u8], position: &mut usize) -> Option<&'a [u8]> {
+        let start = *position;
+        while value.get(*position).is_some_and(|byte| {
+            matches!(byte, b'0'..=b'9' | b'A'..=b'Z' | b'a'..=b'z' |
+            b'!' | b'#' | b'$' | b'%' | b'&' | b'\'' | b'*' | b'+' | b'-' |
+            b'.' | b'^' | b'_' | b'`' | b'|' | b'~')
+        }) {
+            *position += 1;
+        }
+        (*position != start).then(|| &value[start..*position])
+    }
+    let mut position = 0;
+    ows(value, &mut position);
+    let kind = token(value, &mut position)?;
+    if value.get(position) != Some(&b'/') {
+        return None;
+    }
+    position += 1;
+    let subtype = token(value, &mut position)?;
+    loop {
+        ows(value, &mut position);
+        if position == value.len() {
+            return Some((kind, subtype));
+        }
+        if value.get(position) != Some(&b';') {
+            return None;
+        }
+        position += 1;
+        ows(value, &mut position);
+        // RFC 9110 parameters permit empty semicolon-separated entries.
+        if position == value.len() || value.get(position) == Some(&b';') {
+            continue;
+        }
+        token(value, &mut position)?;
+        if value.get(position) != Some(&b'=') {
+            return None;
+        }
+        position += 1;
+        if value.get(position) != Some(&b'"') {
+            token(value, &mut position)?;
+            continue;
+        }
+        position += 1;
+        loop {
+            match *value.get(position)? {
+                b'"' => {
+                    position += 1;
+                    break;
+                }
+                b'\\' => {
+                    position += 1;
+                    if !matches!(*value.get(position)?, b'\t' | b' '..=b'~' | 128..=255) {
+                        return None;
+                    }
+                }
+                b'\t' | b' ' | b'!' | b'#'..=b'[' | b']'..=b'~' | 128..=255 => {}
+                _ => return None,
+            }
+            position += 1;
+        }
+    }
+}
+
 pub struct Response {
     status: Status,
     headers: HeaderMap,

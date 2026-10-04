@@ -72,7 +72,7 @@ while count < 3:
     count += 1
 ```
 
-Conditions require bool. `range(n)` takes one argument and runs from zero up to but excluding n. List/view iteration supports primitives and Copy classes. `elif`, `break`, `continue`, and `pass` are unavailable.
+Conditions require bool. `range(n)` takes one argument and runs from zero up to but excluding n. List/view iteration copies Copy elements and borrows non-Copy elements for reading. See [ownership](ownership.md) for the restrictions. `elif`, `break`, `continue`, and `pass` are unavailable.
 
 ## Operators
 
