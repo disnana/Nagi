@@ -69,3 +69,11 @@ Phase 1のacceptanceを満たした。G-SEALEDはこのbranchで実装・CI検�
 Phase 1のCI成功後、`fix/build-generation-isolation`へ分けて着手した。基点は#78のhead `08199bf`。#78の差分を保持し、Phase 2のPRは依存を明記して分ける。最終反映先はmainだが、こちらではマージしない。
 
 [ADR 007](adr/007-build-generations.md)へ、常設canonical out lock、app IDとgeneration、孤児Cargoを含むbin分離、成功時latest、互換projection/lock/cache、維持する負例と測定を実装前に記録した。G-GENERATIONは実装前で、現在の保証へはまだ移さない。
+
+### 先行回帰の初回観測
+
+Rust実装を変更する前に、実Cargoのgeneration回帰13件は2成功・11失敗、成功artifactを選ぶPython helperの回帰5件は1成功・4失敗だった。同一outの後続Cargoの侵入、writing checkの先行完了、孤児Cargoが可変projectionを読むこと、固定cache exeの上書きを観測した。metadata関連の負例は、成功metadataが存在しない旧実装で失敗した。これらを「新実装が検証済み」とは扱わない。
+
+Solによる独立レビューで、marker不在の時間待ちだけではlockを証明できないこと、process期限・孤児Cargo成功・最新metadata置換失敗・snapshot内容のoracle不足を指摘した。OS lockの競合と待機通知を正のbarrierにし、失敗テストを補強してからtests-only commitへ残す。Windowsの既存latestを削除共有なしで開く負例は、temp作成失敗とは分ける。
+
+旧CLIのexeをcopyしてhashを記録し、専用の空cacheで小さなstd-only appを15回build/runした。空runtimeを使い依存frameworkの時間を除いた測定で、空cache1回は198.003ms、同じ内容7回の中央値は77.528ms、変更あり7回は73.913msだった。変更後も同じ条件で比較する。runtime throughputやallocationの測定とは扱わない。
