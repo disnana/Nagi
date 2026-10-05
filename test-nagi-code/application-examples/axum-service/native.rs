@@ -1,11 +1,18 @@
 use axum::{
-    extract::{DefaultBodyLimit, Json},
-    http::StatusCode,
+    body::{to_bytes, Bytes},
+    extract::{rejection::MissingJsonContentType, DefaultBodyLimit, FromRequest, Json, Request},
+    http::{
+        header::{CONNECTION, CONTENT_TYPE},
+        HeaderValue, StatusCode,
+    },
     response::{IntoResponse, Response},
     routing::{get, post},
     Router,
 };
-use std::{net::Ipv4Addr, time::Duration};
+use std::{future::Future, net::Ipv4Addr, time::Duration};
+
+const MAX_BODY_BYTES: usize = 4096;
+const MISSING_CONTENT_TYPE_READ_TIMEOUT: Duration = Duration::from_secs(1);
 
 // This timer demonstrates Nagi awaiting a Rust async operation. It does not
 // simulate a database or enforce a request deadline.
@@ -13,7 +20,35 @@ pub async fn pause() {
     tokio::time::sleep(Duration::from_millis(1)).await;
 }
 
-async fn quote(Json(input): Json<super::QuoteInput>) -> Response {
+async fn missing_content_type_response<F>(read_body: F) -> Response
+where
+    F: Future<Output = Result<Bytes, axum::Error>>,
+{
+    // Wait for this finite rejected body before returning the original Axum
+    // rejection. This is a sample policy, not a deadline for valid JSON requests.
+    let eof = matches!(
+        tokio::time::timeout(MISSING_CONTENT_TYPE_READ_TIMEOUT, read_body).await,
+        Ok(Ok(_))
+    );
+    let mut response = MissingJsonContentType::default().into_response();
+    if !eof {
+        // Limit/error/timeout retain 415 priority. An unread body can still make
+        // Hyper close the socket, so this header does not promise delivery.
+        response
+            .headers_mut()
+            .insert(CONNECTION, HeaderValue::from_static("close"));
+    }
+    response
+}
+
+async fn quote(request: Request) -> Response {
+    if !request.headers().contains_key(CONTENT_TYPE) {
+        return missing_content_type_response(to_bytes(request.into_body(), MAX_BODY_BYTES)).await;
+    }
+    let Json(input) = match Json::<super::QuoteInput>::from_request(request, &()).await {
+        Ok(input) => input,
+        Err(rejection) => return rejection.into_response(),
+    };
     // The adapter calls one known generated function by name, then awaits it.
     // It is not a generic async callback passed through Nagi extern.
     match super::calculate(input).await {
@@ -37,7 +72,7 @@ pub async fn run_server(port: i64) -> Result<(), nagi_runtime::Error> {
     let router = Router::new()
         .route("/health", get(|| async { "ok\n" }))
         .route("/quotes", post(quote))
-        .layer(DefaultBodyLimit::max(4096));
+        .layer(DefaultBodyLimit::max(MAX_BODY_BYTES));
     let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, port))
         .await
         .map_err(|error| nagi_runtime::Error::internal(error.to_string()))?;
@@ -250,8 +285,8 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn present_content_type_retains_json_and_business_responses() {
-        // Direct handler calls exercise extraction/business status. The real
-        // router smoke covers its DefaultBodyLimit and HTTP transport separately.
+        // Direct handler calls exercise extraction/business status, without
+        // applying the router DefaultBodyLimit. That needs separate HTTP coverage.
         for (body, status) in [
             ("{\"quantity\":1}", StatusCode::OK),
             ("{\"quantity\":0}", StatusCode::UNPROCESSABLE_ENTITY),
@@ -276,5 +311,18 @@ mod tests {
             .body(Body::from("{\"quantity\":1}"))
             .unwrap();
         assert_original_415(quote(unsupported).await, false).await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn missing_content_type_handler_applies_the_read_limit_and_original_rejection() {
+        for (bytes, closes) in [
+            (Vec::new(), false),
+            (b"{\"quantity\":1}".to_vec(), false),
+            (vec![b'x'; 4096], false),
+            (vec![b'x'; 4097], true),
+        ] {
+            let request = Request::builder().body(Body::from(bytes)).unwrap();
+            assert_original_415(quote(request).await, closes).await;
+        }
     }
 }
