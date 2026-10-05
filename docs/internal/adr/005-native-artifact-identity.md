@@ -2,6 +2,8 @@
 
 状態: 採用。#76のCI失敗から判明したP1を修正する。言語の構文・型・実行時意味論は変えない。
 
+後続の[ADR 007](007-build-generations.md)は、ここで決めたapp/package identityを維持し、実行ファイルの世代・場所と同一outの競合処理を更新する。本書の固定cache exeと同一out未対応という記述は#76時点の境界であり、Phase 2完了後の制約とは区別する。
+
 ## 問題
 
 Cargoのtarget directoryは依存ビルドを共有する場所であり、生成したアプリごとの専用ディレクトリではない。`NAGI_NATIVE_TARGET_DIR`を指定しなくても、単独ファイルは作業フォルダーの`native-target`、プロジェクトは`build/native-target`を共有する。
