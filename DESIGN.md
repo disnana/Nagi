@@ -2,11 +2,11 @@
 
 [English](DESIGN.en.md)
 
-Nagiは、読みやすいHighで型付きの処理を書き、Rustの既存ライブラリや自作コードを組み合わせる言語を目指します。主な対象はバックエンドです。よく使うHTTP・JSON・DB操作にはNagi APIを用意し、それを越える機能はRustアダプターでつなぎます。
+Nagiは、Rustの性能とライブラリを使い、HTTP・認証・認可・validation・DB・データ処理の境界を簡潔に書く言語を目指します。主な処理は読みやすいHighで書き、ライブラリ固有の設定や高度な機能にはRustアダプターを使います。RustやGoの置換、独自HTTP・DB基盤の再実装は目標にしません。
 
 連携の手間を減らすことと、失敗の理由をNagiのコードから理解できることを重視します。任意のRust APIをそのまま使えることや、Rustの知識が一切要らないことを、現在の機能として約束するものではありません。
 
-この文書には、現在のmainにある実装と、採用・保留した設計方針をまとめています。使い方は[リファレンス](docs/README.md)、今後の順序は[roadmap](docs/roadmap.md)、公開版の変更は[CHANGELOG](CHANGELOG.md)で確認できます。
+この文書には、現在の実装と、採用・保留した設計方針をまとめています。次フェーズの変更は未リリースで、PR #74とは別に検証します。使い方は[リファレンス](docs/README.md)、今後の順序は[roadmap](docs/roadmap.md)、公開版の変更は[CHANGELOG](CHANGELOG.md)で確認できます。
 
 ## 対象にする開発
 
@@ -74,7 +74,17 @@ Nagi checkerを持つ理由は、`nagic check`やエディターで、Nagiの位
 
 Rust側で作ったHTTPサーバーには、そのアダプターの制限・停止・panic処理が適用されます。Nagi標準HTTPの設定は自動では適用されません。コピーやserialization、エラー変換もアダプターの実装次第です。
 
-次に確認するのは、宣言とRust実装の不一致を診断から追えるか、同じアダプターを別のアプリで再利用できるか、資源の所有・共有・終了をどちらが担当するかです。不透明な資源型、汎用async callback、宣言の自動生成は未実装の候補で、具体的な用途と契約を決めてから扱います。
+生成Rustの型不一致は、対応するNagiファイル・文の行に戻します。`build/run --rust-diagnostics`では生成Rustの詳細も表示できます。式の厳密な列位置や任意のRust診断への対応は未実装です。手書きRust・依存crateのエラーはRust位置のまま示します。
+
+同じアダプターを別のアプリで再利用できるか、資源の所有・共有・終了をどちらが担当するかは、引き続き検証します。利用者が定義する不透明な資源型、汎用async callback、宣言の自動生成は未実装です。
+
+### 認証・認可の最小実験
+
+未リリースの`std.auth`は、認証済みの`Principal`と権限型・対象に結び付いた`Grant[P]`を扱います。通常のclassは入力やclaimsを表す型として使えますが、構築やJSON復元ができるため、認証成功の証明にはしません。proofはNagiから構築・JSON復元・copy・shared化できず、保護APIへmoveして渡します。
+
+credentialの検証はRustライブラリ、独自の認可や業務ルールはNagiにも置けます。サンプルではAxumのRustアダプターが名前付きNagi async policyを呼び、成功時だけGrantを発行します。JWSの検証はこのverifierを差し替える用途です。サンプルの固定credentialを本番の認証方式とは扱いません。
+
+checkが保証するのは、宣言された保護APIへ必要な権限型のproofを渡し、move後に再利用しないことです。署名・期限・policyの正しさ、全routeへの認証設定、任意RustやSQLによる迂回、responseへの機密情報流出は証明しません。Rust issuerとNagi policyの内容はアプリ側の信頼境界です。詳細は[ADR 001](docs/internal/adr/001-backend-boundaries.md)に記します。
 
 根拠: [Rust依存の読み込み](compiler/src/project.rs)、[externの検査](compiler/src/check.rs)、[Rust生成](compiler/src/emit.rs)、[Rust依存の回帰テスト](compiler/tests/rust_dependencies.rs)、[アプリの検証](scripts/verify_application_examples.py)。手順と対応型は[Rust連携](docs/modules-and-rust.md)を参照してください。
 

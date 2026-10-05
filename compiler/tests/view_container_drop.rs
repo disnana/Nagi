@@ -740,6 +740,40 @@ async fn caller_only_reference(part: &str, panic_now: bool, error_now: bool) -> 
     Ok(parts)
 }
 
+// Match the generated function's local-to-caller borrow history and original
+// cleanup anchors. Use the same async extern wrapper, not native::pause directly.
+// These are measurement oracles; exact Future sizes are toolchain-dependent.
+async fn same_history_reference(part: &str, panic_now: bool, error_now: bool) -> Result<Vec<&str>, i64> {
+    let before = native::marker(320);
+    let local = part.to_owned();
+    let mut previous = Some(vec![local.as_str()]);
+    let next;
+    let after = native::marker(330);
+    next = Some(vec![part]);
+    previous = None;
+    drop(previous);
+    pause().await;
+    if panic_now { native::crash(); }
+    if error_now { native::fail_step()?; }
+    Ok(next.expect("initialized"))
+}
+
+// Change only the await bridge, keeping the same slots and cleanup anchors.
+async fn same_history_native_pause(part: &str, panic_now: bool, error_now: bool) -> Result<Vec<&str>, i64> {
+    let before = native::marker(320);
+    let local = part.to_owned();
+    let mut previous = Some(vec![local.as_str()]);
+    let next;
+    let after = native::marker(330);
+    next = Some(vec![part]);
+    previous = None;
+    drop(previous);
+    native::pause().await;
+    if panic_now { native::crash(); }
+    if error_now { native::fail_step()?; }
+    Ok(next.expect("initialized"))
+}
+
 fn poll_once<F: ::std::future::Future>(future: ::std::pin::Pin<&mut F>) -> ::std::task::Poll<F::Output> {
     let mut context = ::std::task::Context::from_waker(::std::task::Waker::noop());
     future.poll(&mut context)
@@ -751,6 +785,10 @@ fn replacement_observes_rhs_then_old_free_and_scope_drop_order() {
     let generated_size = ::std::mem::size_of_val(&async_replacement(source.as_str(), false, false));
     let reference_size = ::std::mem::size_of_val(&caller_only_reference(source.as_str(), false, false));
     println!("future-bytes: generated={generated_size} caller-only-reference={reference_size}");
+    let same_history_size = ::std::mem::size_of_val(&same_history_reference(source.as_str(), false, false));
+    println!("future-layout: same-history-same-bridge={same_history_size} same-history-native-pause={} native-pause={} extern-wrapper={}",
+        ::std::mem::size_of_val(&same_history_native_pause(source.as_str(), false, false)),
+        ::std::mem::size_of_val(&native::pause()), ::std::mem::size_of_val(&pause()));
 
     reset_events();
     let returned = replace_and_return(vec![source.as_str()]);

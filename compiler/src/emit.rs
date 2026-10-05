@@ -1914,15 +1914,24 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             while error_type.0 == "owned" {
                 error_type = &error_type.1[0];
             }
-            let display = if error_type.0 == "Error" {
-                "{}"
+            if crate::capabilities::debug_supported(error_type, &classes, &enums) {
+                let display = if error_type.0 == "Error" {
+                    "{}"
+                } else {
+                    "{:?}"
+                };
+                out.push_str(&format!(
+                    "if let ::std::result::Result::Err(e) = {call} {{ eprintln!({},e); ::std::process::exit(1); }}\n",
+                    quote(display)
+                ));
             } else {
-                "{:?}"
-            };
-            out.push_str(&format!(
-                "if let ::std::result::Result::Err(e) = {call} {{ eprintln!({},e); ::std::process::exit(1); }}\n",
-                quote(display)
-            ));
+                // Opaque errors still fail the process. Do not invent a Debug
+                // bound or expose a proof payload just to print that failure.
+                out.push_str(&format!(
+                    "if let ::std::result::Result::Err(_e) = {call} {{ eprintln!({}); ::std::process::exit(1); }}\n",
+                    quote("NagiのmainがErrを返しました")
+                ));
+            }
         } else {
             out.push_str(&format!("{call};\n"));
         }

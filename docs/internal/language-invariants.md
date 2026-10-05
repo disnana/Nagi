@@ -46,7 +46,21 @@ buildには外部環境が必要なため「check成功ならどんな環境で�
 | panic | 範囲外アクセスなどの異常。Resultへの普遍的な自動変換はない。catchできる境界でunwindだけを捕捉する。abort、OOM、プロセス障害は別 | HTTP panic tests、scope/actor tests |
 | infrastructure error | Cargo/rustcの不在、依存・link・ファイル・権限・targetの失敗。Nagiの型エラー、業務Err、ICEと分けて報告する | `installation.rs`, `rust_dependencies.rs`, `build_diagnostics.rs` |
 
-整数の除数をliteralの0と書いた場合はcheckで拒否する。実行時にしか分からない整数ゼロ除算はpanicとなる。floating-pointには整数のこの規則を適用しない。`integer_zero_division.rs`で区別する。定数式の除数（例: `1 / (1 - 1)`）は現状checkが通り、Rustのunconditional_panic診断でbuildが失敗する。これは未解決のP1であり、委譲したcrate/trait検査には含めない。詳細と次の判断は[安定化レビュー](stability-review.md)に残す。
+整数の除数をliteralの0と書いた場合はcheckで拒否する。型検査後の共通`constant_eval`は、8整数幅の副作用なし式と小さいscalar binding factsを扱い、compound/alias zeroとsigned MIN/-1・MIN%-1も拒否する。到達不能な枝も検査する。型・名前の誤りは追加の定数診断より優先する。
+
+`+/-/*`とMINの単項否定のoverflowは従来どおりdebug panic/release wrap。このprofile依存の値は定数として伝播しない。関数、extern、field/index、任意の代数簡約は評価しない。loopが書くbindingは条件の評価前からUnknownにし、同じKnownを保つ継続枝だけをjoinする。Unknownを「安全に実行できる」という意味に使わない。実行時にしか分からない整数ゼロ除算はpanicとなり、floating-pointには整数の禁止規則を適用しない。
+
+根拠: `compiler/src/constant_eval.rs`, `compiler/tests/constant_validation.rs`, `integer_zero_division.rs`, `integer_arithmetic.rs`。[ADR 002](adr/002-constant-validation.md)に診断拡張の互換性と不採用案を記す。codegenは定数foldを再実装せず、signed MIN leafの印字だけを正規化する。
+
+## 認証・認可の最小境界
+
+未リリースの実験。`std.auth.Principal`と`Grant[P]`は登録済みopaque resourceで、通常classの構築・JSON復元とは分ける。`P`は解決済みclass/enumのnominal IDで、型引数を持たない。proofはnonCopy/nonClone/nonSerdeで、nested wrapperからもcopy/shared化できない。class/enum fieldへの格納も拒否する。localの所有Option/Resultによる移動とasyncへのowned delegationは許す。
+
+保護externの署名がGrant[P]を要求する場合、その権限型の値を渡し、move後に再利用しないことをcheckする。保護adapterは消費したGrantのresource IDで処理し、別のbare IDへ権限を付け替えない。署名を実際に守ること、verifierとNagi/Rust policyの正しさ、expiry/revocation/DB競合への対応はtrusted adapterとアプリの責任である。
+
+全routeの保護、任意SQLのtenant制約、DTO流出、任意Rustの迂回はこの型モデルでは証明しない。普通のclassは入力・claims・errorとして有効だが、存在だけでは認証の根拠にならない。JWSの暗号処理を独自に実装せず、既存Rust verifierを接続する。初回の固定credentialデモはJWS verifierを実装していない。
+
+根拠: `runtime/src/auth.rs`, `compiler/src/stdlib.rs`, `capabilities.rs`, `compiler/tests/auth_boundaries.rs`。[ADR 001](adr/001-backend-boundaries.md)に実験の範囲と信頼境界を記す。
 
 ## async・runtime
 

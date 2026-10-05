@@ -63,6 +63,8 @@ module名で見えるのは、そのファイル自身が定義した関数・cl
 
 同じ実ファイルは、複数のmodule名・fromの別名・従来のimportを使っても1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在はエラーです。存在しない定義のfrom importや、同じ場所で異なる定義を同じ名前にするimportは、そのimport文でエラーになります。引用符なしのimportは登録済みの`std.http.server`、`std.actor`、`std.result`を対象にします。一般packageの探索と公開範囲の指定は未対応です。
 
+未リリースの`std.auth`では、認証済みの`Principal`と消費型の`Grant[P]`を試しています。Rustの検証処理とNagiの独自policyをつなぐ例は[認証・認可サンプル](../test-nagi-code/application-examples/auth-boundary/README.md)にあります。固定credentialの実験で、JWS検証や全routeの認可チェックを提供するものではありません。
+
 ### LowとRustで同じ定義を使う
 
 Lowでも`import "orders.low" as orders;`と`from "orders.low" import Order as SavedOrder;`を使えます。Highから生成したLowにはmoduleと定義のIDを残すため、再parseや手書きLowとの統合でも型の区別を保ちます。
@@ -154,5 +156,7 @@ Nagiの`check`は、宣言した型と呼び出し、所有権、借用を検査
 生成したCargo.lockを保持して`cargo build --locked --manifest-path build/app/Cargo.toml`を実行すると、同じ依存の解決を再利用できます。通常の`nagic build`は生成したプロジェクトへの`cargo build --release`を実行し、既存のlockを保持します。`nagic build --locked`は未対応です。lockはローカルcrateのソース内容を固定しません。
 
 この連携は同じRustビルド内で関数を呼び出します。安定したC ABIや、実行時にDLLを読み込む機能は未対応です。
+
+Rustの型不一致は、対応するNagi宣言や文のファイル・行に表示します。生成Rustの詳細が必要な場合は`nagic build app.nagi --rust-diagnostics`を使います。手書きRustや依存crateの診断はRust位置のまま残ります。unsafe、panic、trait、暗号やpolicyの正しさはexternの型宣言だけでは検査できません。
 
 共通コードを複数アプリで使う例、Rust側へNagiの関数を渡す例は[ライブラリとRustの資産](libraries.md)と[サンプル一覧](library-examples.md)にあります。現在の対応と、resource・ランタイム選択などの追加案は[ライブラリの設計](library-design.md)に整理しています。

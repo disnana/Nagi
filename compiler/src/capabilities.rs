@@ -1,6 +1,85 @@
 use crate::ast::{Class, Enum, Type};
 use std::collections::{HashMap, HashSet};
 
+// A function pointer's signature and a native phantom marker are not stored
+// payloads. Nominal fields form a finite graph; use an iterative walk so a deep
+// DTO chain is neither stack overflow nor an invented auth-proof finding.
+fn payload_any(
+    ty: &Type,
+    classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
+    native_payloads: bool,
+    predicate: impl Fn(crate::stdlib::Resource) -> bool,
+) -> bool {
+    let mut pending = vec![ty];
+    let mut visited = HashSet::new();
+    while let Some(current) = pending.pop() {
+        if current.0 == "fn" {
+            continue;
+        }
+        if let Some(resource) = crate::stdlib::resource(&current.0) {
+            if predicate(resource) {
+                return true;
+            }
+            if native_payloads {
+                for index in crate::stdlib::resource_info(resource)
+                    .inline_type_arguments
+                    .iter()
+                    .chain(crate::stdlib::shared_type_arguments(resource))
+                {
+                    if let Some(inner) = current.1.get(*index) {
+                        pending.push(inner);
+                    }
+                }
+            }
+            continue;
+        }
+        pending.extend(&current.1);
+        if !visited.insert(current.0.as_str()) {
+            continue;
+        }
+        if let Some(class) = classes.get(&current.0) {
+            pending.extend(class.fields.iter().map(|(_, field)| field));
+        } else if let Some(enumeration) = enums.get(&current.0) {
+            pending.extend(
+                enumeration
+                    .variants
+                    .iter()
+                    .flat_map(|variant| variant.fields.iter().map(|(_, field)| field)),
+            );
+        }
+    }
+    false
+}
+
+/// Auth proofs may move through owned wrappers, but not be cloned via Arc.
+/// Follow physical payloads using canonical symbols, rather than type mentions.
+pub(crate) fn contains_auth_proof(
+    ty: &Type,
+    classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
+) -> bool {
+    payload_any(ty, classes, enums, true, |resource| {
+        matches!(
+            resource,
+            crate::stdlib::Resource::Principal | crate::stdlib::Resource::Grant
+        )
+    })
+}
+
+/// Registered native types decide their own Debug contract. Their custom
+/// formatter need not format phantom/indirect type parameters. Owned wrappers
+/// and generated class/enum fields, however, do require their payload's Debug.
+pub(crate) fn debug_supported(
+    ty: &Type,
+    classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
+) -> bool {
+    !payload_any(ty, classes, enums, false, |resource| {
+        !crate::stdlib::resource_info(resource).debug
+    })
+}
+
 /// Payloads must have a completely known owned representation. State and
 /// context capabilities are separate from actor message/reply accounting.
 pub(crate) fn charge_type_supported(

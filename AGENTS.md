@@ -23,6 +23,7 @@
 - サポート範囲のNagiをcheckerが受理した後、生成RustがNagiで検出可能な型・move・lifetime問題で拒否されるのはP1。rustcへの委譲は手書きRust、crate API/traits、最終Send/Sync/Clone、link/target/依存環境など。委譲を生成ミスの説明に使わない。
 - HighとLowの型・所有権意味論を揃える。通常High CLIは生成Lowを再parse/checkする。保存LowとHigh source mapの寿命を混同しない。
 - move/borrowの意味をemitterの名前リストで再実装しない。checked factsと私有生成planを使う。公開型、source origin、binding ID、synthetic slot IDを分ける。
+- capability検査では関数署名・phantom markerと実payloadを区別する。標準API内部のArc state/contextも共有境界である。
 - clone、allocation、Drop、評価順、Future frame、取消への影響を確認する。RustのDrop/borrow/Futureを使い、独自runtimeの寿命管理を安易に追加しない。
 - Resultの業務Err、panic、取消、compile error、infra errorを区別する。panic捕捉はrollbackではない。取消は受理済みDB操作や外部副作用を戻さない。
 
@@ -48,6 +49,7 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked -p nagic --test conformance
 cargo test --locked -p nagic --test view_flow_completion --test view_container_drop
 cargo test --locked -p nagic --test scope_runtime_contract --test sql_check
+cargo test --locked -p nagic --test constant_validation --test auth_boundaries
 cargo run --locked -p nagic --example fuzz-smoke
 python scripts/verify_application_examples.py
 ```

@@ -12,16 +12,17 @@
 | [監督付きworker](supervised-worker/README.md) | actorの再起動、taskのpanic回復、停止と後片付け |
 | [バイト列API](byte-inspector/README.md) | 本文を借りて読む、u8の反復・index、nullableとJSON応答 |
 | [Axum見積API](axum-service/README.md) | RustのHTTP層からNagiのasync業務処理を呼び、Resultを応答へ変換 |
+| [認証・認可の型境界](auth-boundary/README.md) | Rustの認証、Nagiの独自policy、消費型の許可証を使うDB操作。未リリースの実験 |
 
 手書きLowから始める場合は、[注文見積もりCLI](../low-examples/order-quote/README.md)を使ってください。Low同士のimport、型付きJSON、入力検証と整数の価格計算を試せます。
 
-バイト列APIにはNagi 0.1.10以降が必要で、Axum見積APIは0.1.10で検証しています。ほかの例はNagi 0.1.9でも動きます。サンプルはリポジトリ一式を取得し、そのルートで各フォルダの`nagi.toml`を指定して実行してください。Rust/CargoとOSごとのビルド環境は[セットアップ](../../docs/getting-started.md)で確認できます。
+バイト列APIにはNagi 0.1.10以降が必要で、Axum見積APIは0.1.10で検証しています。認証・認可の例は未リリースの実験で、その他の既存例はNagi 0.1.9でも動きます。サンプルはリポジトリ一式を取得し、そのルートで各フォルダの`nagi.toml`を指定して実行してください。Rust/CargoとOSごとのビルド環境は[セットアップ](../../docs/getting-started.md)で確認できます。
 
 ```sh
 nagic run --project test-nagi-code/application-examples/stock-report
 ```
 
-検証スクリプトは9プロジェクトを扱います。8つのHighアプリは元のソースと保存した生成Lowから別々にcheck・buildし、注文見積もりCLIは手書きLowから検証します。計17回の検証で同じ入力・ファイル・HTTP・actorの動作を照合します。Python 3.12以降を使い、リポジトリのルートで実行してください。
+検証スクリプトは10プロジェクトを扱います。9つのHighアプリは元のソースと保存した生成Lowから別々にcheck・buildし、注文見積もりCLIは手書きLowから検証します。計19回の検証で同じ入力・ファイル・HTTP・actorの動作を照合します。認証・認可の例には、このブランチのコンパイラが必要です。Python 3.12以降を使い、リポジトリのルートで実行してください。
 
 ```sh
 python scripts/verify_application_examples.py --compiler /path/to/nagic

@@ -63,6 +63,8 @@ A module name exposes functions, classes, and enums defined in that file. Import
 
 Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted imports select the registered `std.http.server`, `std.actor`, and `std.result` modules. General package discovery and visibility declarations are unsupported.
 
+The unreleased `std.auth` experiment provides an authenticated `Principal` and a consumed `Grant[P]`. The [authentication and authorization example](../../test-nagi-code/application-examples/auth-boundary/README.en.md) connects Rust verification with a custom Nagi policy. It uses fixed credentials; it does not implement JWS verification or check authorization across every route.
+
 ### Use the same definition in Low and Rust
 
 Low also accepts `import "orders.low" as orders;` and `from "orders.low" import Order as SavedOrder;`. Generated Low retains module and definition IDs, so reparsing it or integrating handwritten Low preserves type identity.
@@ -154,5 +156,7 @@ Nagi's `check` validates the declared types, calls, ownership, and borrowing. `c
 To reuse the same dependency resolution, retain the generated Cargo.lock and run `cargo build --locked --manifest-path build/app/Cargo.toml`. A normal `nagic build` runs `cargo build --release` on the generated project and retains its existing lock. `nagic build --locked` is unsupported. The lock does not pin local crate source contents.
 
 This integration calls functions within the same Rust build. A stable C ABI and runtime DLL loading are unsupported.
+
+Mapped Rust type errors show the corresponding Nagi declaration or statement file and line. Use `nagic build app.nagi --rust-diagnostics` for generated Rust details. Handwritten Rust and dependency diagnostics retain their Rust locations. An extern type declaration cannot prove correctness of unsafe code, panic behavior, traits, cryptography, or authorization policy.
 
 See [libraries and Rust assets](libraries.md) and [sample projects](library-examples.md) for shared code and callbacks passed from Nagi to Rust. The [library design](library-design.md) describes current support and proposed resource types and runtime selection.

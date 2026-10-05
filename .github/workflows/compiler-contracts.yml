@@ -42,7 +42,7 @@ jobs:
       - name: Explore bounded programs through the Rust backend
         run: cargo test --locked -p nagic --test conformance
       - name: Check ownership storage and cancellation regressions
-        run: cargo test --locked -p nagic --test view_flow_completion --test view_flow_foundation --test view_container_drop --test scope_runtime_contract
+        run: cargo test --locked -p nagic --test view_flow_completion --test view_flow_foundation --test view_container_drop --test scope_runtime_contract --test constant_validation --test auth_boundaries
       - name: Explore mutations and accepted pipeline stages
         run: cargo run --locked -p nagic --example fuzz-smoke
       - name: Preserve compiler failure reproductions
