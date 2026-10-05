@@ -137,7 +137,9 @@ The checker rejects a `Result` discarded as an expression, including values with
 
 Result failures differ from panics. Out-of-bounds array access and integer `/` or `%` whose divisor becomes zero at runtime panic rather than return Result. There is no general exception syntax equivalent to Python's `raise`/`except`.
 
-For integers, `check` rejects `/` or `%` with an explicit zero divisor in both High and Low. This includes parenthesized zero and `-0` for signed integers; ordinary type checks run first. The checker does not evaluate variable values or constant expressions such as `1 - 1`, or analyze the overflow from dividing a signed integer's minimum value by `-1`. Those cases can pass `check` and still fail the Rust build.
+For integers, `check` rejects `/` or `%` with an explicit zero divisor in both High and Low. The unreleased constant validation also rejects `1 / (1 - 1)` and zero values established by scalar bindings within the same function. Division or remainder of a signed integer's minimum by `-1` is also rejected. New constant diagnostics run after successful name and type checking.
+
+Constant failures in unreachable branches are checked too, so previously buildable dead branches can now be rejected. Overflow from `+`, `-`, and `*` still panics in debug builds and wraps in release. Profile-dependent values, calls, extern functions, fields, and indexing are not propagated as known constants. This does not detect every runtime zero divisor.
 
 In Nagi 0.1.10, HTTP servers convert unwinding handler panics before the response starts into a generic 500 and close the connection. A 500 does not roll back database or shared state changes. See the [HTTP reference](http-server.md#app-and-routes) for the recovery limits.
 
@@ -145,6 +147,6 @@ Scopes check child results after the scope body finishes and detect panics at th
 
 The older `supervisor_demo` remains a fixed-worker restart test API. Neither mechanism recovers from memory corruption or process aborts.
 
-Diagnostics show the filename, line, relevant source text, and reason. Build errors with an identifiable origin first show the Nagi or Low statement or definition line, followed by the full generated Rust diagnostic. Rust edit suggestions apply to Rust; do not apply them directly to Nagi. Handwritten Rust and unmapped diagnostics retain Rust's output. Precise columns and mappings for every Rust diagnostic are not implemented. Definition navigation also uses original columns.
+Diagnostics show the filename, line, relevant source text, and reason. Mapped build errors show the Nagi or Low statement or definition line and related notes. Use `build/run --rust-diagnostics` for generated Rust details. Rust suggestions apply to Rust. Handwritten Rust and unmapped diagnostics remain visible at their Rust locations. Precise columns and mappings for every Rust diagnostic are not implemented. Definition navigation also uses original columns.
 
 See [Result matching](../../compiler/tests/result_match.rs), [custom error types](../../compiler/tests/typed_errors.rs), [map_error](../../compiler/tests/result_stdlib.rs), [integer zero-division checks](../../compiler/tests/integer_zero_division.rs), [scopes](../../runtime/src/concurrent.rs), and [actors](../../runtime/src/actor/tests.rs) for implementation and tests.

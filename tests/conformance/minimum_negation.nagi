@@ -1,0 +1,5 @@
+def minimum() -> i64:
+    return -9223372036854775808
+
+def negate_minimum() -> i64:
+    return -(-9223372036854775808)

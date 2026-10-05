@@ -373,16 +373,6 @@ fn negative_boundary_type(expr: &Expr, expected: Option<&Type>) -> Option<Type> 
     (value.parse::<u128>().ok() == Some(magnitude)).then_some(ty)
 }
 
-fn explicit_integer_zero(expr: &Expr) -> bool {
-    match &expr.kind {
-        E::Int(value) => value.parse::<u128>().ok() == Some(0),
-        // Parentheses are removed by the parser. Only recognize literal zero
-        // and its negation, without evaluating expressions or following names.
-        E::Unary(op, value) if op == "-" => explicit_integer_zero(value),
-        _ => false,
-    }
-}
-
 pub fn check(p: &mut Program) -> Result<(), String> {
     check_mode(p, false)
 }
@@ -707,6 +697,11 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         }
     }
     if !editor {
+        for function in &p.functions {
+            if !function.external {
+                crate::constant_eval::validate(function)?;
+            }
+        }
         crate::routes::validate(p)?;
     }
     Ok(())
@@ -3311,12 +3306,8 @@ impl Checker {
                                 left.0.as_str(),
                                 "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
                             )
-                            && explicit_integer_zero(b)
                         {
-                            return Err(error(
-                                b.line,
-                                format!("整数の{op}の除数に0は指定できません。ゼロ以外の値を指定してください"),
-                            ));
+                            crate::constant_eval::validate_literal_divisor(b, op)?;
                         }
                         left
                     }

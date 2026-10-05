@@ -1,0 +1,2 @@
+def calculate() -> i64:
+    return 1 / (1 - 1)

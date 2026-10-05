@@ -636,7 +636,13 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 operand(b)
             )
         }
-        E::Unary(o, x) => format!("{}({})", if o == "not" { "!" } else { o }, re(x, types)),
+        E::Unary(o, x) => {
+            if let Some(ty) = crate::constant_eval::signed_minimum(e) {
+                format!("(::std::primitive::{}::MIN)", ty.0)
+            } else {
+                format!("{}({})", if o == "not" { "!" } else { o }, re(x, types))
+            }
+        }
         E::Field(x, n) if e.resolution == Some(NameResolution::Enum) => {
             format!("{}::{n}", re(x, types))
         }

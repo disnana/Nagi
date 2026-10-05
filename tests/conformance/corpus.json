@@ -277,5 +277,68 @@
     "oracle": "",
     "diagnostic": "request/local-scoped view escapes its lifetime",
     "line": 4
+  },
+  {
+    "name": "compound_zero",
+    "source": "compound_zero.nagi",
+    "high": true,
+    "expected": "reject:high-check",
+    "oracle": "",
+    "diagnostic": "E_CONST_ZERO_DIVISOR",
+    "line": 2
+  },
+  {
+    "name": "compound_zero_low",
+    "source": "compound_zero_low.low",
+    "high": false,
+    "expected": "reject:low-check",
+    "oracle": "",
+    "diagnostic": "E_CONST_ZERO_DIVISOR",
+    "line": 2
+  },
+  {
+    "name": "alias_zero",
+    "source": "alias_zero.nagi",
+    "high": true,
+    "expected": "reject:high-check",
+    "oracle": "",
+    "diagnostic": "E_CONST_ZERO_DIVISOR",
+    "line": 3
+  },
+  {
+    "name": "signed_remainder_overflow",
+    "source": "signed_remainder_overflow.nagi",
+    "high": true,
+    "expected": "reject:high-check",
+    "oracle": "",
+    "diagnostic": "E_CONST_SIGNED_DIV_OVERFLOW",
+    "line": 2
+  },
+  {
+    "name": "dead_compound_zero",
+    "source": "dead_compound_zero.nagi",
+    "high": true,
+    "expected": "reject:high-check",
+    "oracle": "",
+    "diagnostic": "E_CONST_ZERO_DIVISOR",
+    "line": 2
+  },
+  {
+    "name": "minimum_negation",
+    "source": "minimum_negation.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(minimum(), i64::MIN); if cfg!(debug_assertions) { assert!(std::panic::catch_unwind(negate_minimum).is_err()); } else { assert_eq!(negate_minimum(), i64::MIN); }",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "profile_overflow",
+    "source": "profile_overflow.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "if cfg!(debug_assertions) { assert!(std::panic::catch_unwind(overflow).is_err()); } else { assert_eq!(overflow(), u8::MAX.wrapping_add(1)); }",
+    "diagnostic": "",
+    "line": 0
   }
 ]
