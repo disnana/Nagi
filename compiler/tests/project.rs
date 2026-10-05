@@ -7,6 +7,20 @@ use std::{
 
 static FIXTURE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+#[test]
+fn rust_diagnostic_details_are_an_explicit_build_or_run_option() {
+    let root = Path::new(".");
+    for command in ["build", "run"] {
+        let args = [command, "main.nagi", "--rust-diagnostics"].map(str::to_owned);
+        assert!(project::resolve(&args, root).is_ok(), "{command}");
+    }
+    for command in ["check", "lower", "symbols"] {
+        let args = [command, "main.nagi", "--rust-diagnostics"].map(str::to_owned);
+        let error = project::resolve(&args, root).unwrap_err();
+        assert!(error.contains("build/run"), "{error}");
+    }
+}
+
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {

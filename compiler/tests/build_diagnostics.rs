@@ -76,6 +76,43 @@ fn stderr(output: &Output) -> String {
 }
 
 #[test]
+fn cli_maps_adapter_mismatch_without_repeating_generated_rust_by_default() {
+    for (name, source, declaration) in
+        [("main.nagi", HIGH_BACKEND, 4), ("main.low", LOW_BACKEND, 5)]
+    {
+        let f = Fixture::new();
+        f.write(name, source);
+        wrong_adapter(&f);
+        let normal = f.cli(&["build", name, "--rust", "bridge.rs"]);
+        assert!(!normal.status.success());
+        let normal = stderr(&normal);
+        assert!(normal.contains("error[E0308]"), "{normal}");
+        assert!(
+            normal.contains(&format!("{name}:{declaration}")),
+            "{normal}"
+        );
+        assert!(
+            !normal.contains("Rust backend details (generated code)"),
+            "{normal}"
+        );
+        assert!(!normal.contains("src/main.rs:"), "{normal}");
+        assert!(normal.contains("--rust-diagnostics"), "{normal}");
+        let details = f.cli(&["build", name, "--rust", "bridge.rs", "--rust-diagnostics"]);
+        assert!(!details.status.success());
+        let details = stderr(&details);
+        assert!(
+            details.contains(&format!("{name}:{declaration}")),
+            "{details}"
+        );
+        assert!(
+            details.contains("Rust backend details (generated code)"),
+            "{details}"
+        );
+        assert!(details.contains("src/main.rs:"), "{details}");
+    }
+}
+
+#[test]
 fn overflowing_f32_is_rejected_at_the_source_before_backend_build() {
     for (name, source) in [
         ("main.nagi", "def main():\n    value: f32 = 400000000000000000000000000000000000000.0\n"),
@@ -205,7 +242,13 @@ fn high_build_points_to_nagi_and_keeps_rust_notes_and_failure_status() {
     f.write("main.nagi", HIGH_BACKEND);
     wrong_adapter(&f);
     assert!(f.cli(&["check", "main.nagi"]).status.success());
-    let output = f.cli(&["build", "main.nagi", "--rust", "bridge.rs"]);
+    let output = f.cli(&[
+        "build",
+        "main.nagi",
+        "--rust",
+        "bridge.rs",
+        "--rust-diagnostics",
+    ]);
     assert!(!output.status.success());
     let text = stderr(&output);
     let prefix = mapped_prefix(&text);
@@ -333,7 +376,7 @@ fn extern_argument_and_sync_async_mismatches_fail_at_the_declaration_in_high_and
                 stderr(&checked)
             );
 
-            let output = f.cli(&["build", file, "--rust", "bridge.rs"]);
+            let output = f.cli(&["build", file, "--rust", "bridge.rs", "--rust-diagnostics"]);
             assert!(
                 !output.status.success(),
                 "case {case_index} ({source_form}) unexpectedly built"
@@ -1055,7 +1098,7 @@ pub fn non_send() -> NonSendFuture { NonSendFuture(Rc::new(1)) }
     f.write("saved.low", &low);
     for file in ["main.nagi", "saved.low"] {
         assert!(f.cli(&["check", file]).status.success());
-        let output = f.cli(&["build", file, "--rust", "bridge.rs"]);
+        let output = f.cli(&["build", file, "--rust", "bridge.rs", "--rust-diagnostics"]);
         assert!(!output.status.success());
         let text = stderr(&output);
         let prefix = mapped_prefix(&text);

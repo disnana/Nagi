@@ -153,6 +153,18 @@ pub fn cargo_message(
     file: &Path,
     sources: &Sources,
 ) -> Option<String> {
+    cargo_message_with_details(line, generated, file, sources, true)
+}
+
+/// Compact mapped output for the CLI; unmapped Rust diagnostics stay intact.
+/// The legacy public renderer above retains its detailed output.
+pub fn cargo_message_with_details(
+    line: &str,
+    generated: &Generated,
+    file: &Path,
+    sources: &Sources,
+    details: bool,
+) -> Option<String> {
     let value: Value = match serde_json::from_str(line) {
         Ok(value) => value,
         Err(_) => return Some(format!("{line}\n")),
@@ -231,7 +243,13 @@ pub fn cargo_message(
     }
     // Keep rustc's notes and suggestions in Rust coordinates. Replacements
     // such as '&' or '.clone()' cannot safely be applied to Nagi source.
-    out.push_str(" note: Rust backend details (generated code):\n");
-    out.push_str(&fallback);
+    if details {
+        out.push_str(" note: Rust backend details (generated code):\n");
+        out.push_str(&fallback);
+    } else {
+        // Help edits use Rust coordinates and syntax. Keep the complete
+        // diagnostic available instead of pretending they are Nagi edits.
+        out.push_str(" note: use --rust-diagnostics for generated Rust notes and suggestions\n");
+    }
     Some(out)
 }

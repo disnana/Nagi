@@ -2336,9 +2336,13 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                 return Err(format!("Cargoの診断を読み取れません: {e}"));
             }
         };
-        if let Some(message) =
-            crate::diagnostics::cargo_message(&line, &generated_rust, &generated_file, &sources)
-        {
+        if let Some(message) = crate::diagnostics::cargo_message_with_details(
+            &line,
+            &generated_rust,
+            &generated_file,
+            &sources,
+            options.rust_diagnostics,
+        ) {
             eprint!("{message}");
         }
     }

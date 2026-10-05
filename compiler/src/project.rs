@@ -28,6 +28,7 @@ Options:
   --rust-dep NAME=VERSION  Add a Rust dependency
   --out DIR               Select the generated-source directory
   --cost-report           Write an allocation/copy cost report
+  --rust-diagnostics      Include generated Rust diagnostic details (build/run)
   --editor-input          Read editor buffers from stdin (check/symbols)
   --sql-schema FILE       Check literal SQL against an offline DDL snapshot (check)
   --sql-dialect sqlite    Required with --sql-schema; SQLite only
@@ -120,6 +121,8 @@ pub struct Options {
     pub rust_dependencies: BTreeMap<String, RustDependency>,
     pub out: PathBuf,
     pub cost: bool,
+    /// Include raw generated Rust details after a mapped Nagi diagnostic.
+    pub rust_diagnostics: bool,
     /// Read editor buffers from stdin for symbols or an in-memory check.
     pub editor_input: bool,
     pub sql_schema: Option<PathBuf>,
@@ -443,6 +446,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let mut dependencies = BTreeMap::new();
     let mut out = None;
     let mut cost = false;
+    let mut rust_diagnostics = false;
     let mut editor_input = false;
     let mut sql_schema = None;
     let mut sql_dialect = None;
@@ -498,6 +502,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
             }
             "--no-project" => no_project = true,
             "--cost-report" => cost = true,
+            "--rust-diagnostics" => rust_diagnostics = true,
             "--editor-input" => {
                 if !matches!(command.as_str(), "symbols" | "check") || editor_input {
                     return Err("--editor-inputはcheck/symbolsに1回だけ指定できます".into());
@@ -514,6 +519,9 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         i += 1;
     }
     validate_dependencies(&dependencies)?;
+    if rust_diagnostics && !matches!(command.as_str(), "build" | "run") {
+        return Err("--rust-diagnostics is supported only by build/run".into());
+    }
     if sql_schema.is_some() || sql_dialect.is_some() {
         if command != "check" || editor_input {
             return Err("SQL options are supported only by check without --editor-input".into());
@@ -594,6 +602,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         rust_dependencies,
         out,
         cost,
+        rust_diagnostics,
         editor_input,
         sql_schema,
         project_root,
