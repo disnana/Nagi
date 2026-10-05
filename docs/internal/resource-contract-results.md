@@ -32,6 +32,14 @@ Solが登録期待と生成testを実装し、別のSolがfreeze差分を独立�
 
 ## CI・残課題
 
-先行test-onlyの4 OS CIはまだ未確認。成功前にResourceContractの集約を実装しない。#79未マージの間はstacked PRで依存を明記し、最終反映先はmainとする。こちらではmerge・版更新・releaseを行わない。
+先行test-onlyは[PR #80](https://github.com/disnana/Nagi/pull/80)に保存した。初回head `ca9362e5`の[checks run 37338704930](https://github.com/disnana/Nagi/actions/runs/37338704930)で、macOS Apple Siliconの既存shared-target testが失敗した。新inventory・golden・HTTP nativeは同jobで成功しているが、job全体の成功とは数えない。4 OSの完了を確認するまでResourceContractの集約を実装しない。
+
+失敗は、もう一方のtest成功直後にCargoがcurrent directoryを見失ったもの。同時刻で2つのFixtureを作る小さい回帰では、旧factoryが同じdirectoryを借用し、一方のDropが他方のsentinelを消すことを再現した。P2のtest資源所有権の欠陥は確定。CIの個々の時刻衝突までtraceした証拠はないため、その失敗との因果は整合する候補として残す。
+
+fixtureへprocess内AtomicU64の識別子とexclusive create_dirを追加した。承認済みの内部test pathの修正で、既存2件の言語・世代・cache・実行assertはすべて維持した。同tick回帰と旧2件の3成功、targeted clippy/rustfmt成功を確認。skip、retry、test全体の直列化は追加していない。上記820件の全suiteはこのfixture修正前の結果で、修正後の4 OS CIは再確認待ち。
+
+PID/時刻を使う他21 fileも読み取りで確認した。atomicを持たないものは11 fileだが、prefix・単発実行・exclusive作成等の条件が異なるため、すべて同じ欠陥とは断定しない。integer_arithmetic、integer_zero_division、conformanceのfactoryはP2候補として、同tick注入の再現と共通allocatorの適用を次の監査対象にする。未再現の候補を成功や修正済みには数えない。今回の資源集約前に広範なtest rewriteは行わない。
+
+#79未マージの間はstacked PRで依存を明記し、最終反映先はmainとする。こちらではmerge・版更新・releaseを行わない。
 
 [Copy深さの差](copy-boundary-investigation.md)は別のP2として記録した。今回のinventory集約で受理・deriveを変えたり、差を正常goldenへ固定したりしない。Pool/Tx/lifecycle・新しい保証は未実装。既存Rustへのtrait/Send/Sync/link/依存環境の委譲も維持する。

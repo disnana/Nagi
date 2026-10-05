@@ -123,3 +123,5 @@ goldenは実resolverへ固定logical identityを渡すcfg(test) fixtureを使い
 Copy深さ63/64/65を4種類のleafで検査した。checkerが2回使用を拒否し、生成型はCopyになる差を確認した。owned/Optionの深さ65では、手書きadapterのCopy要求だけがE0277になり、同じNagiを要求なしの別adapterでbuildすると成功した。今回の有限probeではNagiだけのaccepted-invalid、unsoundnessは確認していない。P2の二重判定として[調査](copy-boundary-investigation.md)へ原因・matrix・再現生成器・判断案を残し、正常golden・skip・allowlistへ固定しない。
 
 先行test-onlyをfreezeした。新規13件、対象125件、全suiteは91 suite・820成功。fmt/clippy、Python CI 52/release 90、site 90ページ、38 corpus/16harnessの登録確認も成功。別のSolが全文golden・独立期待・旧assert・production不変をレビューした。詳細と初回oracle/capture失敗の区別は[結果](resource-contract-results.md)に記録する。4 OS CIの成功前に集約実装を開始しない。
+
+#80の初回CIはmacOS ARMの既存shared-target fixtureで失敗した。同tickのdirectory共有・他方Dropによる削除を独立した小さい回帰で再現し、atomic識別子とexclusive作成へ修正した。旧2件のassertは維持し、新回帰を含む3件成功、fmt/clippy成功。CIとの因果の確度と同系統の未再現候補は[結果](resource-contract-results.md)に残す。修正後CIの完了前には集約へ進まない。

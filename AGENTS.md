@@ -48,6 +48,8 @@ Stop対象のtest期待は、公開言語意味論・CLI/API利用者契約・Hi
 
 対応する既存harnessを使い、同じassertだけのテストを増やさない。拒否をacceptへ変える、assert削除、seed除外、失敗をskipへ変えることで検査を通さない。設計上必要な期待変更は理由とbefore/afterを示す。
 
+並列testの一時directoryは、PIDと時刻だけで一意と判断しない。同じclock tickでも別の所有者へ分かれ、exclusive作成に成功したdirectoryだけをDropで削除する。fixtureの衝突をglobal test直列化や成功までの再実行で隠さず、同tickの回帰で確認する。
+
 ## 実行コマンド
 
 ```sh
