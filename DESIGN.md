@@ -157,7 +157,7 @@ Phase 1のCheckedProgramはPR #78でmainへ入り、公開版には未反映で�
 
 Phase 2の開発差分では、アプリIDと成功世代を分けます。同じ生成先のwriterはOS lockで直列化し、世代固有のCargo binをbuildしてからexeをコピーします。成功時だけlatestを更新し、旧exeは上書き・削除・killしません。依存キャッシュは共有し、runの前にlockを解放します。生成Low・Rust・manifest・読み取り済みsourceと行対応を世代に保存しますが、外部Rustや依存source全体の原子的snapshot、任意processの隔離、電源断後の耐久性は対象外です。実装は[世代の公開処理](compiler/src/generation.rs)、検証は[実Cargo回帰](compiler/tests/build_generations.rs)、判断は[ADR 007](docs/internal/adr/007-build-generations.md)を参照してください。
 
-Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainと公開版には未反映です。Phase 3の先行テストも4 OSで成功しました。開発差分では、登録資源の型引数の役割とcapabilityの根拠を私有descriptorへ集め、公開ResourceInfoはその一部を参照します。型引数の範囲・重複・欠落を登録時に検査し、用途別の判定と既存APIを保ちます。資源のlifecycle保証はまだ追加しません。[ADR 008](docs/internal/adr/008-resource-contracts.md)に構造と検証の順序を記録しました。集約後の検証は進行中で、Pool／Transactionは未実装です。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)で、検証済みの範囲、mainと公開版への反映状況、予定を区別します。
+Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しました。公開版には未反映です。Phase 3の先行テストも4 OSで成功しました。開発差分では、登録資源の型引数の役割とcapabilityの根拠を私有descriptorへ集め、公開ResourceInfoはその一部を参照します。型引数の範囲・重複・欠落を登録時に検査し、用途別の判定と既存APIを保ちます。資源のlifecycle保証はまだ追加しません。[ADR 008](docs/internal/adr/008-resource-contracts.md)に構造と検証の順序を記録しました。集約後の検証は進行中で、Pool／Transactionは未実装です。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)で、検証済みの範囲、mainと公開版への反映状況、予定を区別します。
 
 SQLite Pool／Transactionは[APIと終了policyの具体案](docs/internal/sqlite-pool-proposal.md)を用意しました。SQLiteの解析・bind・transactionはrusqliteへ任せ、Nagi側は公開する所有契約とworkerの完了・再利用を扱う案です。汎用引数を用意し、旧Dbの固定bindやSQL制約は変えません。新API・policy・依存featureは未承認で、実装はまだありません。
 

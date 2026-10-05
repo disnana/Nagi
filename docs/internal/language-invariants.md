@@ -102,3 +102,5 @@ PostgreSQL、一般的な可変長bind、poolは未実装。Rustアダプター�
 | cleanup / shutdown | request permit、handler Future、connection taskを期限とshutdownで解放する。graceful shutdownの完了とdeadline超過によるabortを分ける | `http_server/tests.rs::graceful_shutdown_*`, `connection_capacity_and_shutdown_deadline_leave_no_handler_tasks` |
 
 標準HTTPはHyper上の実装であり、既存Rust/Axumルーター用の経路もある。Axum全面移行、TLS、WebSocket、peer/proxy信頼APIは今回の契約ではない。
+
+`axum-service`サンプルは別のRust adapter契約を持つ。[ADR 009](adr/009-axum-rejected-body.md)で承認した欠落Content-Typeの4096バイト・1秒読取は、この例だけに適用する。415の選択を全transportでの受信保証とせず、標準HTTPや他のRust adapterへ暗黙に適用しない。実装・検査の状況は進捗に記録する。

@@ -41,6 +41,10 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 
 ## 後続Phaseで具体化する項目
 
+### Q-003: AxumサンプルのContent-Type欠落時の受信policy
+
+状態: 2026-10-06に案Aを承認済み。[ADR 009](adr/009-axum-rejected-body.md)に固定した。欠落時だけ4096 data bytes・読取開始から1秒のcooperative期限、415優先、未完ならcloseとする。正常Json処理と元client testは維持する。新policy値のStop条件に従って確認したもので、本文待機を標準HTTP全体へ広げる承認ではない。修正後CIの完了は別に確認する。
+
 ### Q-002: SQLite Pool／Txの初版APIと終了policy
 
 状態: 未採用。Phase 3の集約後acceptanceを満たした後、実装前に判断する。具体的な署名・所有契約・値・失敗policyは[レビュー案](sqlite-pool-proposal.md)、採用候補と不採用案・native APIの根拠は[調査](sqlite-pool-research.md)にある。

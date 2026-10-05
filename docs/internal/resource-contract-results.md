@@ -75,3 +75,15 @@ Docs生成の最初の試行は、scriptの出力制限に反する`/tmp`指定�
 - 独立Solレビューとroot照合: 旧22 ResourceInfo値、公開shape、operation/identity/accessor/constants、目的別判定順、fixture/golden期待の維持を確認。今回の差分に新P0/P1/P2は見つからなかった。既知Copy差や他のfixture候補が解消したとはしない。
 
 SQL engine無効検査の初回は存在しないtest targetを指定してCargoが拒否した。conformance/fuzzの成功と区別し、CIと同じbuild＋cli/sql_check commandで確認し直し、buildと8件が成功した。4 OSの集約後CIは別に確認する。
+
+### 集約後CI: WindowsのAxumサンプルで停止
+
+head `0b2a5a5805481b716d789061114e003adf68704d`、tree `41c766800d379f552d59d3fc6c3b333e3efd0f11`の[checks run 37347188897](https://github.com/disnana/Nagi/actions/runs/37347188897)は失敗した。Linux全検査とLinux/macOS 2種類の配布検証、VSIX、IntelliJ IDEA、PyCharmは成功。[website run 37347187618](https://github.com/disnana/Nagi/actions/runs/37347187618)も成功した。4 OSの実ログで新しいprivate unit 8件の成功を確認したが、Windows job全体とmerge gateは失敗している。publish-releaseはskip。Phase 3のacceptanceは未達で、#80はdraft、Phase 4は未実装のままとする。
+
+Windowsの失敗は`axum-service`の保存Low実行で、Content-Typeのない13バイトPOSTに対する415を読む前の`WinError 10053`。同jobのHigh実行は成功した。元のrequest、415期待、本文検査を残し、retry・skip・一括送信への置換は行っていない。
+
+一次コードでは、AxumのJson extractorがContent-Typeの不適合を本文読取より先に拒否し、Hyperが未読本文を一度pollして残っていればreadを閉じる経路を確認した。Pythonの通常requestはheaderとbodyを別々にsendする。既存High/Low executableを使ったLinuxの固定各24観測では、本文をまだ送らなくても415とEOFまで届いた。Windowsの10053自体は再現しておらず、その直接原因を確定した証拠ではない。
+
+これは資源descriptorの値・生成byte一致を破った証拠ではないが、CI失敗を無関係として除外もしない。通常の合法requestを一括送信へ変えるだけでは元の配送条件を失うため採用しない。sample adapterの期限付き本文読取は新policyになるので、上限・期限・415の優先・close条件を具体化して判断する。本体runtimeやAxum/Hyperの第三者sourceは変更しない。
+
+生ログ・job/step結果・8件の実行行・source hash・Linux観測は作業環境の`/workspace/test-tools/compiler-rust-boundary-plan/phase3-production-ci-failure-proof.json`と`axum-early-rejection-*`へ保存した。調査と修正後CIの成功を混同しない。

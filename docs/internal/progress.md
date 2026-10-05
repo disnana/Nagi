@@ -135,3 +135,9 @@ Copy深さ63/64/65を4種類のleafで検査した。checkerが2回使用を拒�
 private unitは正例2・負例6を追加。対象205件、全91 suite・829件、fmt/clippy、2 seedで各256生成case＋38固定corpus、10,000 mutation/128 native、SQL engineなし8件が成功した。独立レビューとrootも旧値・公開shape・生成bytesの維持を確認した。前後各64回のcheck/lower測定は全成功・Low bytes一致で、中央値には増減がある。条件と生データは[測定](../../benchmarks/results/resource-contracts-2026-10-05/README.md)へ保存した。詳細と初回コマンド失敗は[結果](resource-contract-results.md)に区別する。
 
 集約後の4 OS CIは、このcommit時点では確認前。確認前にPhase 4実装へ進まない。mainへのmerge・版更新・releaseも行っていない。[Pool／Txの具体案](sqlite-pool-proposal.md)と[根拠・代替案](sqlite-pool-research.md)は未採用の資料で、新API/policy/hooksの判断を[Q-002](open-questions.md#q-002-sqlite-pooltxの初版apiと終了policy)に残した。
+
+### 集約後CIの失敗と次の判断
+
+head `0b2a5a5`のchecks run `37347188897`で、Windowsの既存Axum sampleが保存Lowの415受信前に接続abortとなり、merge gateも失敗した。他の3 OS配布、Linux全検査、VSIX、両JetBrains製品、websiteは成功した。資源contractのprivate unit 8件は4 OSとも成功したが、Phase 3完了とは数えない。#80はdraftのまま。[結果](resource-contract-results.md#集約後ci-windowsのaxumサンプルで停止)へ失敗と一次コード・Linux観測の範囲を記録した。
+
+元の通常clientと415期待は維持する。一括sendへ置換してCIの条件を狭める案は採用しない。Axum sampleだけに期限付き本文読取を加える場合は、新policy値・待機・close条件の判断が必要。具体案を作り、承認前には適用しない。Pool／Txは既存Rust pool/workerの再利用も読み取り比較しているが、Phase 4実装は開始していない。mainへのmerge・版更新・releaseも行っていない。
