@@ -1562,6 +1562,7 @@ pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
 
 fn cargo_manifest(
     name: &str,
+    bin_name: &str,
     runtime: PathBuf,
     mut dependencies: std::collections::BTreeMap<String, crate::project::RustDependency>,
 ) -> Result<String, String> {
@@ -1570,6 +1571,12 @@ fn cargo_manifest(
         name: &'a str,
         version: &'static str,
         edition: &'static str,
+        autobins: bool,
+    }
+    #[derive(serde::Serialize)]
+    struct Bin<'a> {
+        name: &'a str,
+        path: &'static str,
     }
     #[derive(serde::Serialize)]
     struct Release {
@@ -1587,6 +1594,7 @@ fn cargo_manifest(
     #[derive(serde::Serialize)]
     struct Manifest<'a> {
         package: Package<'a>,
+        bin: Vec<Bin<'a>>,
         workspace: toml::Table,
         dependencies: std::collections::BTreeMap<String, crate::project::RustDependency>,
         profile: Profile,
@@ -1603,7 +1611,12 @@ fn cargo_manifest(
             name,
             version: "0.1.0",
             edition: "2021",
+            autobins: false,
         },
+        bin: vec![Bin {
+            name: bin_name,
+            path: "src/main.rs",
+        }],
         workspace: toml::Table::new(),
         dependencies,
         profile: Profile {
@@ -1756,8 +1769,8 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         .collect();
     inputs.sort();
     inputs.dedup();
-    if write_output {
-        let mut outputs = Vec::new();
+    let mut outputs = Vec::new();
+    let output_lock = if write_output {
         if high {
             outputs.push(out.join("generated.low"));
         }
@@ -1771,23 +1784,57 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                 out.join("Cargo.lock"),
             ]);
         }
+        if !outputs.is_empty() {
+            if let Ok(directory) = fs::canonicalize(&out) {
+                outputs.push(crate::generation::latest_path(&path, &directory)?);
+            }
+        }
         crate::output::protect(&outputs, &inputs, "Generated")?;
-        fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-    }
+        if outputs.is_empty() {
+            fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+            None
+        } else {
+            let lock = crate::generation::OutputLock::acquire(&out)?;
+            if !outputs.is_empty() {
+                let latest = crate::generation::latest_path(&path, &lock.directory)?;
+                if !outputs.contains(&latest) {
+                    outputs.push(latest);
+                }
+            }
+            crate::output::protect(&outputs, &inputs, "Generated")?;
+            Some(lock)
+        }
+    } else {
+        None
+    };
+    let partial_projection = |error: String| {
+        if write_output && !outputs.is_empty() && !error.contains("projection may be partial") {
+            format!("{error}\nCompatibility projection may be partial; prior latest unchanged.")
+        } else {
+            error
+        }
+    };
+    let mut low_snapshot = None;
     if high {
         let low_source = low_with_lines(&p);
         if write_output {
-            fs::write(out.join("generated.low"), &low_source.text).map_err(|e| e.to_string())?;
+            fs::write(out.join("generated.low"), &low_source.text)
+                .map_err(|e| partial_projection(e.to_string()))?;
         }
         // 生成Lowの文字列を独立parserに通す。High ASTをcodegenへ直接渡さない。
-        p = crate::parser::parse(&low_source.text, false)?;
-        low_source.restore_lines(&mut p)?;
+        p = crate::parser::parse(&low_source.text, false).map_err(partial_projection)?;
+        low_source
+            .restore_lines(&mut p)
+            .map_err(partial_projection)?;
+        if matches!(cmd, "build" | "run") {
+            low_snapshot = Some(low_source.text);
+        }
     }
     let checked = crate::check::finalize(p, all, sources.provenance())
-        .map_err(|e| crate::diagnostics::finalize_message(&e, &sources))?;
+        .map_err(|e| partial_projection(crate::diagnostics::finalize_message(&e, &sources)))?;
     let p = checked.program();
     if let Some(schema) = sql_schema {
-        crate::sql_check::check(p, &sources, &schema)?;
+        crate::sql_check::check(p, &sources, &schema).map_err(partial_projection)?;
     }
     if let Some(map) = map_options {
         let mut graph = match map.view {
@@ -1875,6 +1922,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     if cmd != "build" && cmd != "run" {
         return Err(format!("unknown command: {cmd}"));
     }
+    let binary = (|| -> Result<PathBuf, String> {
     let root = crate::installation::root()?;
     fs::create_dir_all(out.join("src")).map_err(|e| e.to_string())?;
     if p.functions.iter().any(|f| f.external) && rust_file.is_none() {
@@ -1889,46 +1937,41 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         ));
     }
     fs::write(out.join("src/main.rs"), &generated_rust.text).map_err(|e| e.to_string())?;
-    let generated_file = fs::canonicalize(out.join("src/main.rs")).map_err(|e| e.to_string())?;
-    let native_target = std::env::var_os("NAGI_NATIVE_TARGET_DIR");
-    let generated_directory = fs::canonicalize(&out).map_err(|e| e.to_string())?;
-    let mut package = format!(
-        "nagi-{}",
-        path.file_stem()
-            .unwrap()
-            .to_string_lossy()
-            .chars()
-            .map(|ch| {
-                if ch == '_'
-                    || (ch != '-' && (!ch.is_alphanumeric() || !unicode_ident::is_xid_continue(ch)))
-                {
-                    '-'
-                } else {
-                    ch
-                }
-            })
-            .collect::<String>()
-    );
-    {
-        use std::hash::{Hash, Hasher};
-        // Cargo's target lock ends before `run` launches the resulting binary.
-        // Default and overridden native targets both share a dependency cache.
-        // Give distinct source/output pairs distinct application binaries;
-        // concurrent generation into the same output directory is unsupported.
-        let mut identity = std::collections::hash_map::DefaultHasher::new();
-        (
-            fs::canonicalize(&path).map_err(|e| e.to_string())?,
-            &generated_directory,
-        )
-            .hash(&mut identity);
-        package.push_str(&format!("-{:016x}", identity.finish()));
-    }
+    let generated_directory = &output_lock
+        .as_ref()
+        .expect("build owns output lock")
+        .directory;
+    let package = crate::generation::application_name(&path, generated_directory)?;
+    let generation = crate::generation::BuildGeneration::create(generated_directory, &package)?;
+    let compatibility_manifest = cargo_manifest(
+        &package,
+        &generation.bin,
+        relative_path(&root.join("runtime"), generated_directory),
+        rust_deps.clone(),
+    )?;
+    fs::write(out.join("Cargo.toml"), &compatibility_manifest).map_err(|e| e.to_string())?;
+    generation.write("src/main.rs", generated_rust.text.as_bytes())?;
     let manifest = cargo_manifest(
         &package,
-        relative_path(&root.join("runtime"), &generated_directory),
+        &generation.bin,
+        relative_path(&root.join("runtime"), &generation.staging),
         rust_deps,
     )?;
-    fs::write(out.join("Cargo.toml"), manifest).map_err(|e| e.to_string())?;
+    generation.write("Cargo.toml", manifest.as_bytes())?;
+    let canonical_source = fs::canonicalize(&path).map_err(|e| e.to_string())?;
+    let low_snapshot = low_snapshot
+        .as_deref()
+        .or_else(|| {
+            sources
+                .files()
+                .find(|(file, _, _)| *file == canonical_source)
+                .map(|(_, text, _)| text)
+        })
+        .ok_or("Cannot find read source for generation snapshot")?;
+    generation.snapshot(&sources, &generated_rust, low_snapshot)?;
+    let generated_file =
+        fs::canonicalize(generation.staging.join("src/main.rs")).map_err(|e| e.to_string())?;
+    let native_target = std::env::var_os("NAGI_NATIVE_TARGET_DIR");
     let target = native_target.map(|p| cwd.join(p)).unwrap_or_else(|| {
         options
             .project_root
@@ -1943,7 +1986,8 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             "--message-format=json",
             "--manifest-path",
         ])
-        .arg(out.join("Cargo.toml"))
+        .arg(generation.staging.join("Cargo.toml"))
+        .arg("--bin").arg(&generation.bin)
         .env("CARGO_TARGET_DIR", &target)
         // In-place progress can overwrite mapped diagnostics on the same terminal.
         .env("CARGO_TERM_PROGRESS_WHEN", "never")
@@ -1980,9 +2024,15 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     if !status.success() {
         return Err("Build failed. Check the diagnostics above for code, dependency, or build environment errors.".into());
     }
-    let binary = target
-        .join("release")
-        .join(format!("{package}{}", std::env::consts::EXE_SUFFIX));
+    let cached_binary = target.join("release").join(format!(
+        "{}{}",
+        generation.bin,
+        std::env::consts::EXE_SUFFIX
+    ));
+    generation.finish(&cached_binary, generated_directory, high, &inputs, &compatibility_manifest)
+    })().map_err(partial_projection)?;
+    // Retain this chosen success path; never re-read latest after unlocking.
+    drop(output_lock);
     eprintln!("native: {}", binary.display());
     if cmd == "run" {
         let mut process = Command::new(binary);

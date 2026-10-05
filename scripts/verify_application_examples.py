@@ -9,7 +9,7 @@ from pathlib import Path
 import shutil
 import signal
 import subprocess
-import tomllib
+from native_artifacts import native_executable
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECTS = ROOT / "test-nagi-code/application-examples"
@@ -84,10 +84,9 @@ def main():
             options = [*source, "--project", project, "--out", directory]
             run([compiler, "check", *options], env, generated / f"{mode}-check.log")
             run([compiler, "build", *options], env, generated / f"{mode}-build.log")
-            with (directory / "Cargo.toml").open("rb") as manifest:
-                package = tomllib.load(manifest)["package"]["name"]
-            executable = directory / (package + EXE)
-            shutil.copy2(target / "release" / (package + EXE), executable)
+            published = native_executable(directory, target)
+            executable = directory / published.name
+            shutil.copy2(published, executable)
             facts = verify(executable, env, directory)
             rows.append({"project": name, "source": mode, "status": "passed", **facts})
             (output / "results.json").write_text(

@@ -1,0 +1,152 @@
+[
+  {
+    "label": "before",
+    "mode": "cold_cache",
+    "sample": 0
+  },
+  {
+    "label": "after",
+    "mode": "cold_cache",
+    "sample": 0
+  },
+  {
+    "label": "after",
+    "mode": "warm_unchanged",
+    "sample": 0
+  },
+  {
+    "label": "before",
+    "mode": "warm_unchanged",
+    "sample": 0
+  },
+  {
+    "label": "before",
+    "mode": "warm_unchanged",
+    "sample": 1
+  },
+  {
+    "label": "after",
+    "mode": "warm_unchanged",
+    "sample": 1
+  },
+  {
+    "label": "after",
+    "mode": "warm_unchanged",
+    "sample": 2
+  },
+  {
+    "label": "before",
+    "mode": "warm_unchanged",
+    "sample": 2
+  },
+  {
+    "label": "before",
+    "mode": "warm_unchanged",
+    "sample": 3
+  },
+  {
+    "label": "after",
+    "mode": "warm_unchanged",
+    "sample": 3
+  },
+  {
+    "label": "after",
+    "mode": "warm_unchanged",
+    "sample": 4
+  },
+  {
+    "label": "before",
+    "mode": "warm_unchanged",
+    "sample": 4
+  },
+  {
+    "label": "before",
+    "mode": "warm_unchanged",
+    "sample": 5
+  },
+  {
+    "label": "after",
+    "mode": "warm_unchanged",
+    "sample": 5
+  },
+  {
+    "label": "after",
+    "mode": "warm_unchanged",
+    "sample": 6
+  },
+  {
+    "label": "before",
+    "mode": "warm_unchanged",
+    "sample": 6
+  },
+  {
+    "label": "before",
+    "mode": "warm_changed",
+    "sample": 0
+  },
+  {
+    "label": "after",
+    "mode": "warm_changed",
+    "sample": 0
+  },
+  {
+    "label": "after",
+    "mode": "warm_changed",
+    "sample": 1
+  },
+  {
+    "label": "before",
+    "mode": "warm_changed",
+    "sample": 1
+  },
+  {
+    "label": "before",
+    "mode": "warm_changed",
+    "sample": 2
+  },
+  {
+    "label": "after",
+    "mode": "warm_changed",
+    "sample": 2
+  },
+  {
+    "label": "after",
+    "mode": "warm_changed",
+    "sample": 3
+  },
+  {
+    "label": "before",
+    "mode": "warm_changed",
+    "sample": 3
+  },
+  {
+    "label": "before",
+    "mode": "warm_changed",
+    "sample": 4
+  },
+  {
+    "label": "after",
+    "mode": "warm_changed",
+    "sample": 4
+  },
+  {
+    "label": "after",
+    "mode": "warm_changed",
+    "sample": 5
+  },
+  {
+    "label": "before",
+    "mode": "warm_changed",
+    "sample": 5
+  },
+  {
+    "label": "before",
+    "mode": "warm_changed",
+    "sample": 6
+  },
+  {
+    "label": "after",
+    "mode": "warm_changed",
+    "sample": 6
+  }
+]

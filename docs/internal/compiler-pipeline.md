@@ -15,6 +15,10 @@ Low source → parse → module解決 → 最終factory → CheckedProgram → R
 
 Low textは保存用dumpだけではなく、通常High buildが通る内部境界でもある。`generated.low`はnative統合前のHigh部分であり、最終的に実行するプログラム全体ではない。
 
+Phase 2のbuild/runでは、初回checkとinput保護の後、canonical outのOS lock内でこの生成経路を通す。stable app IDの新しいstagingでCargoを起動し、世代固有binのexeをコピーする。`BuildGeneration::finish(self, …)`がlock継承・公開・互換出力・latest置換の順序を固定する。runはlockを解放してから、そのbuildが選んだpathを起動する。High check/lowerの書込みも同じlockを使うが、非書込みeditor checkやLow checkは待たせない。
+
+stagingと公開先は同じ親・深さに置き、相対runtime参照を保つ。世代に保存するsource/provenanceは実際に読んだtextと既存行対応であり、保存Lowから失われたHigh位置を再構築するものではない。可変の互換出力は直接Cargoや調査のために残す。失敗時に互換出力の一部が更新されても、以前の成功latestとexeは維持する。[ADR 007](adr/007-build-generations.md)に観測範囲と保証しない条件を記す。
+
 nativeの通常関数はHighの初回名前解決・検査にも使う。`@replace`の本体を含む最終プログラムの統合・検査はLow再解析後に行う。
 
 Phase 1の差分では、Rust生成の入力を`CheckedProgram`に限定した。factoryがASTを所有し、checked factsと生成用の決定を確定する。optionalな型を持つ共通Program全体をTyped IRへ変更したわけではない。opt-in SQL検査は封印されたcanonical ASTを読み、CLIのRust生成前に行う。

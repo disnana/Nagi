@@ -214,5 +214,26 @@
       "--test",
       "auth_boundaries"
     ]
+  },
+  {
+    "name": "build_generation_publication_and_orphan_cargo",
+    "contract": "app identityを維持して成功世代を分離し、同一outのwriter、孤児Cargo、失敗publish、旧snapshotと実行ファイルを検査する",
+    "files": [
+      "compiler/tests/build_generations.rs"
+    ],
+    "test_names": [
+      "rebuild_publishes_new_generation_and_preserves_old_executable_and_snapshot",
+      "orphan_cargo_uses_an_immutable_snapshot_and_cannot_replace_next_generation",
+      "user_low_snapshot_comes_from_this_input_instead_of_a_stale_high_projection"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "build_generations"
+    ]
   }
 ]

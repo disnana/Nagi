@@ -348,16 +348,23 @@ fn actual_run_uses_rust_dependencies_and_a_stable_project_working_directory() {
             .find_map(|line| line.strip_prefix("native: "))
             .expect("run must report the generated executable"),
     );
-    assert_eq!(
-        fs::canonicalize(binary.parent().unwrap()).unwrap(),
-        fs::canonicalize(f.0.join("build/native-target/release")).unwrap()
-    );
-    let filename = binary.file_name().unwrap().to_str().unwrap();
-    let identity = filename
-        .strip_prefix("nagi-project-smoke-")
+    // ADR 007 changes only the internal artifact path expectation: the cache
+    // stays project-relative, while native reports the copied success generation.
+    let cache = f.0.join("build/native-target/release");
+    assert!(cache.join(binary.file_name().unwrap()).is_file());
+    let manifest: toml::Value =
+        toml::from_str(&fs::read_to_string(f.0.join("build/project-smoke/Cargo.toml")).unwrap())
+            .unwrap();
+    let package = manifest["package"]["name"].as_str().unwrap();
+    assert!(fs::canonicalize(&binary).unwrap().starts_with(
+        fs::canonicalize(
+            f.0.join("build/project-smoke/.nagi/apps")
+                .join(package)
+                .join("generations")
+        )
         .unwrap()
-        .strip_suffix(std::env::consts::EXE_SUFFIX)
-        .unwrap();
+    ));
+    let identity = package.strip_prefix("nagi-project-smoke-").unwrap();
     assert_eq!(identity.len(), 16);
     assert!(identity.bytes().all(|b| b.is_ascii_hexdigit()));
     assert!(binary.is_file());

@@ -42,6 +42,7 @@ Stop対象のtest期待は、公開言語意味論・CLI/API利用者契約・Hi
 | HTTP | success、handler Result、handler/mapper panic、timeout、malformed/過大本文、shutdownとcapacity解放。実socketテストを使う。応答開始後やnon-yielding処理の制限を残す |
 | DB / SQL | opt-in/staticとruntimeを分ける。列名/必要返却列/bind、動的SQL、NULL/値型、schema不一致、worker終了。transaction/cancellationの保証を勝手に追加しない |
 | actor / supervisor | admission、reply Errとworker Err/panicの違い、timeout、再起動条件、最後のworker、所有者Drop/shutdown、context/task/permit解放 |
+| build / publish / cache | 既定・明示cache、app ID同一/相違、同じoutのOS lockと待機barrier、旧exeのbytesと実行、親終了後のCargo、公開後のmanifest参照、input/output identity保護、Cargo/投影/latest置換失敗。run前のlock解放と失敗時の旧latest保持を確認。常設lockをunlinkしない |
 | 文書のみ | リンク、日英、実装・版・サンプルとの整合。Rust全suiteは文書だけの変更では通常不要 |
 
 対応する既存harnessを使い、同じassertだけのテストを増やさない。拒否をacceptへ変える、assert削除、seed除外、失敗をskipへ変えることで検査を通さない。設計上必要な期待変更は理由とbefore/afterを示す。

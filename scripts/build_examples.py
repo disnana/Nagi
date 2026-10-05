@@ -1,5 +1,6 @@
 """一つのtargetに依存crateを共有し、全サンプルを実際にbuild/runする。"""
-import json,os,subprocess,sys,tomllib
+import json,os,subprocess,sys
+from native_artifacts import native_executable
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 TARGET=Path(os.environ.get('CARGO_TARGET_DIR',ROOT/'target')).resolve()
@@ -16,9 +17,7 @@ def build(args):
         raise RuntimeError(r.stderr)
     return r
 def executable(generated):
-    with (generated/'Cargo.toml').open('rb') as manifest:
-        package=tomllib.load(manifest)['package']['name']
-    return NATIVE_TARGET/'release'/(package+EXE)
+    return native_executable(generated, NATIVE_TARGET)
 def main():
     rows=[]
     nagic=TARGET/'release'/('nagic'+EXE)

@@ -5,6 +5,7 @@ pub mod checked;
 mod constant_eval;
 pub mod diagnostics;
 pub mod emit;
+mod generation;
 pub mod graph;
 mod installation;
 pub mod lexer;

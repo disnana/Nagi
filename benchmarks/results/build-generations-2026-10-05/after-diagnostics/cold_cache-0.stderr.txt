@@ -1,0 +1,5 @@
+     Locking 1 package to latest compatible version
+   Compiling nagi-runtime v0.1.0 (/tmp/nagi-generation-benchmark-after-20261005/runtime)
+   Compiling nagi-main-ad9135ab5eb5aa80 v0.1.0 (/tmp/nagi-generation-benchmark-after-20261005/generated/.nagi/apps/nagi-main-ad9135ab5eb5aa80/generations/.staging-g-1177b4-18dba6c843a26e39-0)
+    Finished `release` profile [optimized] target(s) in 0.14s
+native: /tmp/nagi-generation-benchmark-after-20261005/generated/.nagi/apps/nagi-main-ad9135ab5eb5aa80/generations/g-1177b4-18dba6c843a26e39-0/nagi-ad9135ab5eb5aa80-g-1177b4-18dba6c843a26e39-0

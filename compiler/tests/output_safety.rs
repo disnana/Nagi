@@ -239,15 +239,19 @@ fn repeated_checks_and_build_preparation_keep_existing_generated_outputs_usable(
         let error = String::from_utf8(output.stderr).unwrap();
         assert!(error.contains("Cargoが見つかりません"), "{error}");
         assert_eq!(f.snapshot(&inputs), before);
-        let current = f.snapshot(&[
-            "output/generated.low",
-            "output/src/main.rs",
-            "output/Cargo.toml",
-        ]);
-        if let Some(previous) = &generated {
-            assert_eq!(&current, previous);
+        let current = f.snapshot(&["output/generated.low", "output/src/main.rs"]);
+        let mut manifest: toml::Value =
+            toml::from_str(&fs::read_to_string(f.0.join("output/Cargo.toml")).unwrap()).unwrap();
+        let bin = manifest["bin"][0]["name"].as_str().unwrap().to_string();
+        // Q-001 / ADR007: each attempt gets a unique internal bin. Preserve
+        // exact Low/Rust/input bytes and compare every other manifest key.
+        manifest["bin"][0]["name"] = toml::Value::String("generation-bin".into());
+        if let Some((previous, previous_manifest, previous_bin)) = &generated {
+            assert!(&current == previous);
+            assert_eq!(&manifest, previous_manifest);
+            assert_ne!(&bin, previous_bin);
         }
-        generated = Some(current);
+        generated = Some((current, manifest, bin));
     }
 }
 

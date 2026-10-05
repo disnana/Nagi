@@ -1,0 +1,3 @@
+   Compiling nagi-main-e7edba0004b91ac8 v0.1.0 (/tmp/nagi-generation-benchmark-before-repeat-20261005/generated)
+    Finished `release` profile [optimized] target(s) in 0.07s
+native: /tmp/nagi-generation-benchmark-before-repeat-20261005/native-target/release/nagi-main-e7edba0004b91ac8

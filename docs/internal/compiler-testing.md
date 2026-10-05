@@ -16,6 +16,8 @@ Nagi 0.1 betaの既知不具合再発を小さな再現sourceと段階別oracle�
 | Runtime | 値・byte列・Drop・panic unwind | compiler/tests/literal_contracts.rs, view_container_drop.rs |
 | Integration | 実Cargo/extern/socket/SQLiteとNagi位置 | compiler/tests/shared_field_moves.rs, static_callback_views.rs, sql_check.rs; runtime/src/http/panic_tests.rs |
 | Build artifact identity | 同じcacheの別アプリを取り違えない。Cargo終了後に別buildを挟む決定的barrier、既定・明示共有、等価source/outと別out | compiler/tests/shared_target.rs, project.rs; [ADR 005](adr/005-native-artifact-identity.md) |
+| Build generations | 同一outのOS lock・待機通知、旧exe継続、成功snapshot/latest、Cargo/投影/置換失敗、孤児Cargo、各世代を読むreader。Windowsのrename失敗を別に観測 | compiler/tests/build_generations.rs; [ADR 007](adr/007-build-generations.md) |
+| Artifact consumers | metadata不正・消失・未公開世代でcacheへ逃げず、成功artifactを選ぶ。旧世代方式より前の成果物だけlegacy fallbackを維持 | scripts/test_native_artifacts.py |
 | Adversarial | overflow/zero division、loop backedge、panic/取消 | compiler/tests/integer_zero_division.rs, scope_runtime_contract.rs; runtime/src/actor/lifecycle_adversarial_tests.rs |
 | Fuzz | 任意text mutationのparse/check panic、check後Low/emit | fuzz/smoke.rs, compiler/tests/support/conformance.rs |
 | Property / 限定differential | bounded生成と独立host oracle、High/保存Low二経路 | compiler/tests/support/conformance.rs, compiler/tests/conformance.rs |
@@ -87,7 +89,7 @@ PRとpushでは既存`Nagi checks`の変更検出を使う。compiler/runtime/te
 
 ## Cargo / HTTP / SQLとの接続
 
-`tests/conformance/harnesses.json` に既存の実test名とcommandを登録する。`verify_compiler_contracts.py` は登録先source/testが存在することを検査し、`--run-linked` で11harnessを順番に実行する。HTTP panicは実request、500/sanitized body、HEAD body、server継続性まで検査する既存runtime harnessが責任を持つ。SQL missing-columnは実SQLite schemaのopt-in checkとHigh/保存Lowのquery行を既存SQL harnessで検査する。HTTP生成は既存Cargo build/実行harnessへ接続する。conformance corpusへの文字列記録だけではこれらの性質を保証しない。
+`tests/conformance/harnesses.json` に実test名とcommandを登録する。`verify_compiler_contracts.py` は登録先source/testが存在することを検査し、`--run-linked` で12harnessを順番に実行する。HTTP panicは実request、500/sanitized body、HEAD body、server継続性まで検査する既存runtime harnessが責任を持つ。SQL missing-columnは実SQLite schemaのopt-in checkとHigh/保存Lowのquery行を既存SQL harnessで検査する。HTTP生成と成功build世代は実Cargo build/実行harnessへ接続する。conformance corpusへの文字列記録だけではこれらの性質を保証しない。
 
 ## 一次資料と採否
 

@@ -91,12 +91,12 @@ fn successful(output: &Output, expected: &str) -> PathBuf {
 }
 
 #[test]
-fn explicitly_shared_targets_keep_application_binaries_distinct_and_names_stable() {
+fn explicitly_shared_targets_keep_application_identity_stable_and_generations_distinct() {
     shared_targets_keep_application_binaries_distinct_and_names_stable(true);
 }
 
 #[test]
-fn default_shared_targets_keep_application_binaries_distinct_and_names_stable() {
+fn default_shared_targets_keep_application_identity_stable_and_generations_distinct() {
     shared_targets_keep_application_binaries_distinct_and_names_stable(false);
 }
 
@@ -191,13 +191,22 @@ fn main() {
     let first_binary = successful(&first, "first");
     let second_binary = successful(&second, "second");
     assert_ne!(first_binary, second_binary);
-    assert_eq!(first_binary.parent(), second_binary.parent());
-    for binary in [&first_binary, &second_binary] {
-        let name = binary.file_stem().unwrap().to_str().unwrap();
-        let suffix = name.strip_prefix("nagi-same-").unwrap();
+    // Q-001 / ADR 007: cache location is stable, successful exe paths are not.
+    // Preserve different-app separation and the canonical 16-hex package identity.
+    let first_package = package(&fixture.0.join("first/generated"));
+    let second_package = package(&fixture.0.join("second/generated"));
+    assert_ne!(first_package, second_package);
+    for package in [&first_package, &second_package] {
+        let suffix = package.strip_prefix("nagi-same-").unwrap();
         assert_eq!(suffix.len(), 16);
         assert!(suffix.bytes().all(|ch| ch.is_ascii_hexdigit()));
     }
+    let cache = fixture.0.join("native-target/release");
+    for binary in [&first_binary, &second_binary] {
+        assert!(cache.join(binary.file_name().unwrap()).is_file());
+        assert!(!binary.starts_with(fs::canonicalize(&cache).unwrap()));
+    }
+    let first_bytes = fs::read(&first_binary).unwrap();
 
     // Equivalent spelling of the same source/output keeps the cache identity.
     let equivalent = fixture
@@ -209,12 +218,22 @@ fn main() {
         .current_dir(fixture.0.join("first/.."))
         .output()
         .unwrap();
-    assert_eq!(successful(&equivalent, "first"), first_binary);
+    let equivalent_binary = successful(&equivalent, "first");
+    assert_ne!(equivalent_binary, first_binary);
+    assert_eq!(package(&fixture.0.join("first/generated")), first_package);
+    assert_eq!(fs::read(&first_binary).unwrap(), first_bytes);
+    let old = Command::new(&first_binary).output().unwrap();
+    assert!(old.status.success());
+    assert_eq!(String::from_utf8_lossy(&old.stdout).trim(), "first");
     let alternate = fixture
         .cli("first/same.nagi", "first/other-generated", shared)
         .output()
         .unwrap();
     assert_ne!(successful(&alternate, "first"), first_binary);
+    assert_ne!(
+        package(&fixture.0.join("first/other-generated")),
+        first_package
+    );
 
     // Default caches also separate application identities. Selecting the same
     // cache with an explicit override must not change the application's name.
@@ -223,15 +242,30 @@ fn main() {
         .output()
         .unwrap();
     let default_binary = successful(&default, "first");
+    let default_package = package(&fixture.0.join("first/default-generated"));
+    let default_bytes = fs::read(&default_binary).unwrap();
     let explicit = fixture
         .cli("first/same.nagi", "first/default-generated", true)
         .output()
         .unwrap();
-    assert_eq!(successful(&explicit, "first"), default_binary);
+    let explicit_binary = successful(&explicit, "first");
+    assert_ne!(explicit_binary, default_binary);
+    assert_eq!(
+        package(&fixture.0.join("first/default-generated")),
+        default_package
+    );
+    assert_eq!(fs::read(&default_binary).unwrap(), default_bytes);
     assert_ne!(default_binary, first_binary);
-    assert_eq!(default_binary.parent(), first_binary.parent());
-    let name = default_binary.file_stem().unwrap().to_str().unwrap();
-    let suffix = name.strip_prefix("nagi-same-").unwrap();
+    assert_ne!(default_package, first_package);
+    assert!(cache.join(default_binary.file_name().unwrap()).is_file());
+    assert!(cache.join(explicit_binary.file_name().unwrap()).is_file());
+    let suffix = default_package.strip_prefix("nagi-same-").unwrap();
     assert_eq!(suffix.len(), 16);
     assert!(suffix.bytes().all(|ch| ch.is_ascii_hexdigit()));
+}
+
+fn package(out: &std::path::Path) -> String {
+    let manifest: toml::Value =
+        toml::from_str(&fs::read_to_string(out.join("Cargo.toml")).unwrap()).unwrap();
+    manifest["package"]["name"].as_str().unwrap().to_string()
 }

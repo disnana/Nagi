@@ -1,6 +1,6 @@
 # Phase 1: 封印された生成入力の検証
 
-2026-10-05。基点は#77を反映したmain `ded4c44cd3ebf984b382995322cefc769b4a6cb3`。以下は開発branchの結果であり、公開版の保証ではない。4 OS・JetBrains CIは未確認。
+2026-10-05。基点は#77を反映したmain `ded4c44cd3ebf984b382995322cefc769b4a6cb3`。#78のhead `08199bf`で4 OS・editor CIまで確認した。その後ユーザーが#78をmain `0107f37f0de6026533a4d67f52c6545054b71584`へマージし、headとのtree一致を確認した。Phase 1はmain反映済みだが、正式releaseは未実施。
 
 ## 原因と変更
 
@@ -59,6 +59,8 @@ CheckedProgramはNagi checkerの受理状態であり、Rust本体・crate API�
 
 最初のPR #78のCIでは、compiler変更でLinux/JetBrainsは起動したが、4 OSの`nagi-package`はskipされた。既存release planが版更新と配布設定の変更だけを配布検証の条件にしていたためで、4 OS成功とは数えない。
 
-compiler/runtime/Cargo入力の変更もNagiの配布検証を起動するよう、release planへ条件と回帰テストを追加する。公開の条件は引き続き版更新であり、検証用packagingを正式releaseとして公開しない。Docs-onlyではこの条件を使わない。
+compiler/runtime/Cargo入力の変更もNagiの配布検証を起動するよう、release planへ条件と回帰テストを追加した。修正前に10失敗、修正後はrelease/publication 33とchange detection/gate 51が成功。公開の条件は引き続き版更新であり、検証用packagingを正式releaseとして公開しない。Docs-onlyではこの条件を使わない。
 
-Phase 2は、このPhaseのacceptanceとCI成功を確認した後に着手する。mainへのmerge、版更新、releaseは行わない。
+更新head `08199bf`の[checks run 37308375211](https://github.com/disnana/Nagi/actions/runs/37308375211)で、4 OS配布・Linux・VSIX package・IntelliJ IDEA・PyCharm・merge gateが成功した。[website run 37308374524](https://github.com/disnana/Nagi/actions/runs/37308374524)も成功。publish-releaseはskipで、正式releaseは行っていない。
+
+Phase 1のacceptanceとCI成功、ユーザーによるmain反映を確認した。エージェントはmerge・版更新・releaseを行っていない。Phase 2は別branchで実装・ローカル検証済み、main未反映・4 OS CI待ち。[Phase 2結果](build-generations-results.md)を参照。

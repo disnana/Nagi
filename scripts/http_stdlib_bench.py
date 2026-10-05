@@ -20,6 +20,7 @@ import tomllib
 import urllib.request
 
 from http_bench import snapshot
+from native_artifacts import native_executable, comparison_files
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -48,18 +49,14 @@ def main():
     if args.build_matching_rust:
         comparison = ROOT / "build/http_stdlib_rust"
         (comparison / "src").mkdir(parents=True, exist_ok=True)
-        comparison_name = 'name = "nagi-http-rust-baseline"'
-        for filename in ("Cargo.toml", "Cargo.lock"):
-            text = (generated / filename).read_text()
-            if text.count(original_name) != 1:
-                raise RuntimeError(f"unexpected generated {filename}: build benchmarks/http_stdlib.nagi first")
-            (comparison / filename).write_text(text.replace(original_name, comparison_name, 1))
+        for filename, text in comparison_files(generated, "nagi-http-rust-baseline").items():
+            (comparison / filename).write_text(text)
         (comparison / "src/main.rs").write_text((ROOT / "runtime/examples/http_stdlib_baseline.rs").read_text())
         subprocess.run(["cargo", "build", "--release", "--locked", "--manifest-path",
                         str(comparison / "Cargo.toml")], env=dict(os.environ, CARGO_TARGET_DIR=str(native)), check=True)
     rust_binary = args.rust_binary or native / "release/nagi-http-rust-baseline"
     binaries = {
-        "nagi": (native / "release" / package, 8086),
+        "nagi": (native_executable(generated, native), 8086),
         "rust": (rust_binary, 8086),
         "legacy_axum": (target / "release/examples/axum_baseline", 8082),
     }
