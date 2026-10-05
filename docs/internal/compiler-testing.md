@@ -89,7 +89,9 @@ PRとpushでは既存`Nagi checks`の変更検出を使う。compiler/runtime/te
 
 ## Cargo / HTTP / SQLとの接続
 
-`tests/conformance/harnesses.json` に実test名とcommandを登録する。`verify_compiler_contracts.py` は登録先source/testが存在することを検査し、`--run-linked` で12harnessを順番に実行する。HTTP panicは実request、500/sanitized body、HEAD body、server継続性まで検査する既存runtime harnessが責任を持つ。SQL missing-columnは実SQLite schemaのopt-in checkとHigh/保存Lowのquery行を既存SQL harnessで検査する。HTTP生成と成功build世代は実Cargo build/実行harnessへ接続する。conformance corpusへの文字列記録だけではこれらの性質を保証しない。
+`tests/conformance/harnesses.json` に実test名とcommandを登録する。`verify_compiler_contracts.py` は登録先source/testが存在することを検査し、`--run-linked` で16harnessを順番に実行する。HTTP panicは実request、500/sanitized body、HEAD body、server継続性まで検査する既存runtime harnessが責任を持つ。SQL missing-columnは実SQLite schemaのopt-in checkとHigh/保存Lowのquery行を既存SQL harnessで検査する。HTTP生成と成功build世代は実Cargo build/実行harnessへ接続する。conformance corpusへの文字列記録だけではこれらの性質を保証しない。
+
+Phase 3では、登録資源の独立inventory、用途別capability、4例のLow/Rust全文goldenも接続した。固定logical ModuleIdのgoldenはresolver・生成の決定性を検査し、実fileのsource mapは既存統合testへ任せる。HTTPの追加native例は借用JSONとnamed mapperの登録構築を実行するもので、mapper本体を呼んだ証拠とはしない。4 OSの明示Cargo一覧にはinventoryと既存shared-field native回帰を追加し、既存HTTP/Actor/auth/copy検査も維持する。
 
 ## 一次資料と採否
 

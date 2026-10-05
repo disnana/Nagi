@@ -66,6 +66,8 @@ class ChangeTests(unittest.TestCase):
 
     def test_code_config_dependencies_and_unknown_paths_run_full_checks(self):
         for path in ("compiler/src/lib.rs", "runtime/src/lib.rs", "Cargo.toml", "Cargo.lock",
+                     "compiler/tests/resource_contract_characterization.rs",
+                     "compiler/tests/fixtures/resource-contract/http.low",
                      "compiler/README.md", "runtime/README.md", "LICENSE", ".gitignore",
                      ".github/workflows/ci.yml", ".github/workflows/unknown.yml",
                      "scripts/install.sh", "scripts/install.ps1", "scripts/uninstall.sh",
@@ -350,6 +352,28 @@ class ChangeTests(unittest.TestCase):
             changes.main()
         self.assertEqual(output.read_text(encoding="utf-8"),
                          "existing=value\nfull_checks=false\njetbrains_checks=true\n")
+
+
+class ResourceCharacterizationWorkflowTests(unittest.TestCase):
+    def test_four_platform_job_runs_registry_and_native_resource_oracles(self):
+        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
+        self.assertIsNotNone(package, "four-platform package job missing")
+        commands = re.findall(r"(?m)^\s+run: (cargo test [^\n]+)$", package.group())
+        tokens = [command.split() for command in commands]
+        self.assertTrue(any("--lib" in command for command in tokens))
+        targets = {
+            command[index + 1]
+            for command in tokens
+            for index, token in enumerate(command[:-1])
+            if token == "--test"
+        }
+        required = {
+            "resource_contract_characterization", "stdlib_imports", "class_field_types",
+            "http_codegen", "http_stdlib", "actor_codegen", "actor_stdlib",
+            "auth_boundaries", "copy_capabilities", "owned_copy_codegen", "shared_field_moves",
+        }
+        self.assertFalse(required - targets, f"missing four-platform resource oracles: {sorted(required - targets)}")
 
 
 class GateTests(unittest.TestCase):

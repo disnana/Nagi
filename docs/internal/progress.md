@@ -118,4 +118,8 @@ branch `refactor/resource-contract-foundation`、基点は#79のhead `27c8bf4`�
 
 2つのSolレビューで、Passing inventoryがtype_parametersを読んでいた誤り、Requestのis_* fieldの省略、Borrow/Mapperのgolden coverage不足を訂正した。全22resource・47operation・32fieldをコードへ照合した。新targetの4 OS明示一覧への追加、harness登録と実行の区別、runtimeが必要なclassをstandalone rustc corpusへ入れない条件も先行案へ反映した。
 
-goldenは実resolverへ固定logical identityを渡すcfg(test) fixtureを使い、metadata・alias・deriveを削らず比較する案を採用する。既存物理fileのHigh/保存Low一致・native・診断位置は維持する。Copy深さ63/64/65の差はまだ実行していないP2候補で、正常goldenへ固定しない。先行test-only commitのCI成功後にだけ集約へ進む。
+goldenは実resolverへ固定logical identityを渡すcfg(test) fixtureを使い、metadata・alias・deriveを削らず比較する案を採用する。既存物理fileのHigh/保存Low一致・native・診断位置は維持する。先行test-only commitのCI成功後にだけ集約へ進む。
+
+Copy深さ63/64/65を4種類のleafで検査した。checkerが2回使用を拒否し、生成型はCopyになる差を確認した。owned/Optionの深さ65では、手書きadapterのCopy要求だけがE0277になり、同じNagiを要求なしの別adapterでbuildすると成功した。今回の有限probeではNagiだけのaccepted-invalid、unsoundnessは確認していない。P2の二重判定として[調査](copy-boundary-investigation.md)へ原因・matrix・再現生成器・判断案を残し、正常golden・skip・allowlistへ固定しない。
+
+先行test-onlyをfreezeした。新規13件、対象125件、全suiteは91 suite・820成功。fmt/clippy、Python CI 52/release 90、site 90ページ、38 corpus/16harnessの登録確認も成功。別のSolが全文golden・独立期待・旧assert・production不変をレビューした。詳細と初回oracle/capture失敗の区別は[結果](resource-contract-results.md)に記録する。4 OS CIの成功前に集約実装を開始しない。

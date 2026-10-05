@@ -1,0 +1,3 @@
+*.nagi text eol=lf
+*.low text eol=lf
+*.rs text eol=lf

@@ -1,0 +1,26 @@
+# Nagi Low 0.1 / generated. 手書き変更はnative/で@replaceしてください。
+# nagi-modules-v1 {"root":"/nagi-golden/data-derives/main.nagi","modules":[{"id":"/nagi-golden/data-derives/main.nagi","path":"/nagi-golden/data-derives/main.nagi"}],"definitions":[{"id":{"module":"/nagi-golden/data-derives/main.nagi","kind":"Class","name":"Inline"},"symbol":"__nagi_def_2f6e6167692d676f6c64656e2f646174612d646572697665732f6d61696e2e6e616769_c_496e6c696e65","line":1},{"id":{"module":"/nagi-golden/data-derives/main.nagi","kind":"Class","name":"Owned"},"symbol":"__nagi_def_2f6e6167692d676f6c64656e2f646174612d646572697665732f6d61696e2e6e616769_c_4f776e6564","line":3},{"id":{"module":"/nagi-golden/data-derives/main.nagi","kind":"Class","name":"Private"},"symbol":"__nagi_def_2f6e6167692d676f6c64656e2f646174612d646572697665732f6d61696e2e6e616769_c_50726976617465","line":6},{"id":{"module":"/nagi-golden/data-derives/main.nagi","kind":"Enum","name":"CopyChoice"},"symbol":"__nagi_def_2f6e6167692d676f6c64656e2f646174612d646572697665732f6d61696e2e6e616769_e_436f707943686f696365","line":9},{"id":{"module":"/nagi-golden/data-derives/main.nagi","kind":"Enum","name":"PrivateChoice"},"symbol":"__nagi_def_2f6e6167692d676f6c64656e2f646174612d646572697665732f6d61696e2e6e616769_e_5072697661746543686f696365","line":12}],"bindings":[{"module":"/nagi-golden/data-derives/main.nagi","name":"Inline","target":{"Definition":{"module":"/nagi-golden/data-derives/main.nagi","kind":"Class","name":"Inline"}},"public":true,"line":1,"span":{"start":1,"end":2}},{"module":"/nagi-golden/data-derives/main.nagi","name":"Owned","target":{"Definition":{"module":"/nagi-golden/data-derives/main.nagi","kind":"Class","name":"Owned"}},"public":true,"line":3,"span":{"start":14,"end":15}},{"module":"/nagi-golden/data-derives/main.nagi","name":"Private","target":{"Definition":{"module":"/nagi-golden/data-derives/main.nagi","kind":"Class","name":"Private"}},"public":true,"line":6,"span":{"start":31,"end":32}},{"module":"/nagi-golden/data-derives/main.nagi","name":"CopyChoice","target":{"Definition":{"module":"/nagi-golden/data-derives/main.nagi","kind":"Enum","name":"CopyChoice"}},"public":true,"line":9,"span":{"start":45,"end":46}},{"module":"/nagi-golden/data-derives/main.nagi","name":"PrivateChoice","target":{"Definition":{"module":"/nagi-golden/data-derives/main.nagi","kind":"Enum","name":"PrivateChoice"}},"public":true,"line":12,"span":{"start":66,"end":67}}],"references":[{"module":"/nagi-golden/data-derives/main.nagi","line":5,"span":{"start":26,"end":27},"target":{"module":"/nagi-golden/data-derives/main.nagi","kind":"Class","name":"Inline"},"spelling":"Inline"}]}
+record __nagi_def_2f6e6167692d676f6c64656e2f646174612d646572697665732f6d61696e2e6e616769_c_496e6c696e65 {
+    value: owned[i64];
+}
+
+record __nagi_def_2f6e6167692d676f6c64656e2f646174612d646572697665732f6d61696e2e6e616769_c_4f776e6564 {
+    label: str;
+    values: List[__nagi_def_2f6e6167692d676f6c64656e2f646174612d646572697665732f6d61696e2e6e616769_c_496e6c696e65];
+}
+
+record __nagi_def_2f6e6167692d676f6c64656e2f646174612d646572697665732f6d61696e2e6e616769_c_50726976617465 {
+    cause: Error;
+    database: Db;
+}
+
+enum __nagi_def_2f6e6167692d676f6c64656e2f646174612d646572697665732f6d61696e2e6e616769_e_436f707943686f696365 {
+    Empty;
+    Number(value: owned[i64]?);
+}
+
+enum __nagi_def_2f6e6167692d676f6c64656e2f646174612d646572697665732f6d61696e2e6e616769_e_5072697661746543686f696365 {
+    Text(value: str);
+    Caused(value: Error);
+}
+

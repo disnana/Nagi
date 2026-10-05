@@ -1,0 +1,29 @@
+import std.http.server as http
+class State:
+    expected: str
+def allowed(request: view[http.Request], state: shared[State]) -> Result[bool, Error]:
+    assert_true(request.method == http.Method.GET)
+    assert_true(request.path == "/probe")
+    assert_true(request.path < "/z")
+    assert_true("/a" < request.path)
+    assert_true(request.path <= state.expected)
+    assert_true(state.expected >= request.path)
+    assert_true(request.body <= request.body)
+    assert_true(len(request.body) == 0)
+    status = copy(view(http.Status.OK))
+    assert_true(status.value == 200)
+    match try http.header_text(request, view("Authorization")):
+        case Some(value):
+            return ok(value == view(state.expected))
+        case None:
+            return ok(False)
+async def handler(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+    accepted = try allowed(view(request), state)
+    if accepted:
+        return ok(http.empty(http.Status.OK))
+    else:
+        return ok(http.empty(http.Status.UNAUTHORIZED))
+def register(state: State) -> Result[http.App[State, Error], Error]:
+    app = http.app_default[State](state)
+    app = try http.route(app, http.Method.GET, view("/probe"), handler)
+    return ok(app)

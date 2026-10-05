@@ -1,3 +1,4 @@
+mod resource_contract_goldens;
 mod checked_emission {
     pub fn seal(program: &crate::ast::Program) -> crate::checked::CheckedProgram {
         crate::check::finalize(

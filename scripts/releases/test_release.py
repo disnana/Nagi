@@ -51,6 +51,8 @@ class ReleasePlanTests(unittest.TestCase):
     def test_compiler_runtime_and_cargo_changes_validate_only_nagi_without_releasing(self):
         files = (
             "compiler/src/check.rs", "compiler/src/emit.rs", "compiler/tests/codegen.rs",
+            "compiler/tests/resource_contract_characterization.rs",
+            "compiler/tests/fixtures/resource-contract/http.low",
             "compiler/Cargo.toml", "runtime/src/lib.rs", "runtime/src/http/tests.rs",
             "runtime/Cargo.toml", "Cargo.toml", "Cargo.lock",
         )
