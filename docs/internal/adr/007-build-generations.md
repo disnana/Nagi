@@ -12,6 +12,8 @@
 
 常設lock fileはread/write・非truncateで開き、`std::fs::File::lock`を使う。unlinkしない。再入・複製handle・独自の複数lockは持ち込まない。lock失敗を無視しない。生成→Cargo→publish→latest更新まで保持し、runの起動前に解放する。同じoutのcheck/lower/cost書込みもこの境界を使う。symbols、map、非書込みeditor checkは対象外。
 
+同じhandleで先に`try_lock`する。成功時はそのlockを保持し、重ねて`lock`しない。競合時だけ標準エラーへ`waiting for output lock: <path>`を出し、`lock`で待機する。別のlockや独自のpolling待機は追加しない。待機中であることを利用者へ示すとともに、回帰テストはこの通知をbarrierとして使う。一定時間markerが現れないことだけを、直列化の成功根拠にしない。
+
 package/app IDは維持し、generationは毎回新しく作る。generation namespaceはappごとに分ける。同じ親内の新しいstagingへ生成Low/Rust/manifest、読み取り済みsource/provenance、引き継いだCargo.lockを保存する。通常outの互換ファイルは引き続き作り、Cargo不在時にもmanifestを調べられる現在の用途を残す。runtimeへの相対pathは、それぞれのmanifest所在から計算する。
 
 generation manifestはstable package名、`autobins=false`、世代固有の`[[bin]]`を持つ。Cargoもそのbinを指定してbuildする。親nagicが終了してCargoだけ残る場合でも、孤児Cargoが次世代のcache上のexeを上書きできないようにする。packageまで世代名へ変える方式は採らない。Cargo.lockのpackage identityと依存cacheを保つためである。
@@ -29,6 +31,8 @@ Cargo成功後、exeをコピーし、stagingを新しい公開generationへrena
 Q-001に従い、「再buildで同じexe path」という内部期待を「同じapp ID、異なる成功generation」へ更新する。stdout、別app分離、project cwd、input保護、lock継承、旧exeのbytes・動作は維持する。
 
 先に、動作中旧exeと新build、同じoutの同一/別app・等価path、既定/明示cache、writing check/lower/cost、孤児Cargo、Cargo失敗、projection失敗、latest置換失敗、完全なmetadataの並行読込みを観測する。barrierと期限を使い、単にsleep後の偶然の順番を成功根拠にしない。実装後は全suite、4 OS/package/editor、conformance/fuzz、旧版とのcold/warm build比較を行う。
+
+競合テストは、先行Cargoの停止barrier、別handleの`try_lock`が競合を返すこと、後続writerの待機通知、解放後の終了・stdout・snapshotを分けて観測する。入力保護の再検査は待機通知を受けてからprojectionをinputへのhard linkに変え、解放後の拒否とinput保持を確認する。補助wrapperとCargoにも期限・kill/waitを設ける。native holdと孤児wrapperの終了条件を混同しない。
 
 ## 一次資料と採否
 
