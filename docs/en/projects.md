@@ -121,11 +121,15 @@ Replacing a same-name table with `--rust-dep` removes its `path`, `package`, `fe
 
 Command-line relative paths use the terminal's working directory. Duplicate SOURCE, project, rust, out, or same-name rust-dep arguments are errors. project and no-project cannot be combined.
 
-Project-generated code goes to `build/<entry filename without extension>/`, and executables to `build/native-target/release/`. The `native:` line that `build` and `run` print to stderr gives the actual path.
+Generated Low, Rust, and Cargo.toml go to `build/<entry filename without extension>/`. The build cache remains in `build/native-target/`. The `native:` line that `build` and `run` print to stderr gives the executable's actual path.
 
-Starting with the next unreleased version, default executable names also include an identifier for the source and generated output directory. For `main.nagi`, an example is `nagi-main-0123456789abcdef.exe` on Windows, without `.exe` on Linux and macOS. Nagi 0.1.10 added the identifier only with `NAGI_NATIVE_TARGET_DIR`; concurrent builds can also collide in the default cache, so both paths now follow the same rule. Scripts that used a fixed filename should use the reported `native:` path.
+The next unreleased version stores an executable for each build under the generated directory's `.nagi/`. The same entry source and output directory keep their application ID, while rebuilding changes the executable path. Builds do not overwrite, delete, or stop an older executable. A failed build does not run its new executable and leaves the previous successful metadata in place.
 
-Set `NAGI_NATIVE_TARGET_DIR` to share dependency builds across applications. Applications can reuse the same entry filename, but need separate generated output directories. Concurrent compilation into the same generated output directory is not supported. The identifier is not a stable name across compiler versions; choose a distribution name when packaging if needed.
+Writes to the same generated directory are serialized by an OS lock. Contention prints `waiting for output lock:` and waits until generation, Cargo, and successful publication finish. The application runs after releasing the lock. Writing `check`, `lower`, and cost reports use the same lock; an editor check that writes no files does not need it.
+
+`NAGI_NATIVE_TARGET_DIR` shares dependency builds across applications. The default cache also distinguishes applications. Nagi 0.1.10 added identifiers only with this environment variable; both paths now follow the same rule. Scripts that looked up binaries using the cache or Cargo package name should use `native:`. Identifiers and internal paths are not fixed across compiler versions. Choose distribution filenames when copying executables.
+
+The ordinary generated Low, Rust, and Cargo.toml remain available for inspection and direct Cargo use. A failed build may update these files; they are separate from the successful generation record. This does not freeze concurrent edits to handwritten Rust or path dependencies.
 
 ## Use with VS Code
 

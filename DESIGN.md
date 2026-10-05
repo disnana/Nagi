@@ -153,7 +153,11 @@ Nagiを使う価値は、同じAPI・DB処理・失敗条件のアプリで、�
 
 コンパイラとRustの境界は、[段階計画](docs/internal/compiler-rust-boundary-plan.md)で整理しています。最終check済みの情報を封印して生成へ渡すCheckedProgram、ビルド世代の分離、資源契約の集約、Pool／Transactionの順に検証します。High→Lowテキスト→再解析とRust backendは維持します。
 
-Phase 1のCheckedProgramは開発branchに実装済みで、公開版には未反映です。生成側で型や借用を再推論せず、封印時に確定したplanを使います。実装は[最終factory](compiler/src/check/checked.rs)、検証は[封印境界のテスト](compiler/src/check/checked_tests.rs)と[ADR 006](docs/internal/adr/006-sealed-codegen-input.md)を参照してください。後続Phaseは未実装です。世代別ビルドはアプリIDを保ち、成功世代ごとに実行ファイルを分ける方針です。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)に、確認済みの範囲と予定を分けて記録します。
+Phase 1のCheckedProgramはPR #78でmainへ入り、公開版には未反映です。生成側で型や借用を再推論せず、封印時に確定したplanを使います。実装は[最終factory](compiler/src/check/checked.rs)、検証は[封印境界のテスト](compiler/src/check/checked_tests.rs)と[ADR 006](docs/internal/adr/006-sealed-codegen-input.md)を参照してください。
+
+Phase 2の開発差分では、アプリIDと成功世代を分けます。同じ生成先のwriterはOS lockで直列化し、世代固有のCargo binをbuildしてからexeをコピーします。成功時だけlatestを更新し、旧exeは上書き・削除・killしません。依存キャッシュは共有し、runの前にlockを解放します。生成Low・Rust・manifest・読み取り済みsourceと行対応を世代に保存しますが、外部Rustや依存source全体の原子的snapshot、任意processの隔離、電源断後の耐久性は対象外です。実装は[世代の公開処理](compiler/src/generation.rs)、検証は[実Cargo回帰](compiler/tests/build_generations.rs)、判断は[ADR 007](docs/internal/adr/007-build-generations.md)を参照してください。
+
+Phase 3以降は未実装です。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)に、検証済みの範囲、mainと公開版への反映状況、予定を分けて記録します。
 
 意味論、公開API、High／Low／Rustの分担を変える場合は、変更の理由、代替案、互換性、検証結果をこの文書へ反映します。詳細なAPI説明や測定ログは対応する文書に置きます。
 

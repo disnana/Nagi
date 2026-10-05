@@ -1,0 +1,3 @@
+   Compiling nagi-main-3afb55261f75171e v0.1.0 (/tmp/nagi-generation-benchmark-paired-20261005/comparison/generated/.nagi/apps/nagi-main-3afb55261f75171e/generations/.staging-g-1183dd-18dba7493c57ab0d-0)
+    Finished `release` profile [optimized] target(s) in 0.07s
+native: /tmp/nagi-generation-benchmark-paired-20261005/comparison/generated/.nagi/apps/nagi-main-3afb55261f75171e/generations/g-1183dd-18dba7493c57ab0d-0/nagi-3afb55261f75171e-g-1183dd-18dba7493c57ab0d-0

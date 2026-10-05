@@ -1,6 +1,6 @@
 # コンパイラとRust境界の段階計画
 
-状態: PR0は#77でmainへ反映済み。Q-001は2026-10-05に承認済み。Phase 1は#78のhead `08199bf`で4 OS・editor CIまで成功し、mainへの反映は未実施。Phase 2は[ADR 007](adr/007-build-generations.md)と先行回帰から進める。Phase 3以降は未実装。[進捗](progress.md)を参照。
+状態: PR0は#77でmainへ反映済み。Q-001は2026-10-05に承認済み。Phase 1は#78のhead `08199bf`で4 OS・editor CIまで成功し、その後ユーザーがmain `0107f37`へマージした。tree一致を確認済みで、エージェントはマージ操作を行っていない。Phase 2は[ADR 007](adr/007-build-generations.md)に基づきbranchで実装・ローカル検証済み、main未反映・4 OS CI待ち。Phase 2のPRはmain向けとする。Phase 3以降は未実装。[進捗](progress.md)を参照。
 
 基点はmain `8f6cc6cf7d7c08811736325263618cbea19314b8`。PR #76のhead `13b59aa`とtreeは同じであり、#74・#76のchecked facts、Low互換性、Rust backendを維持する。本計画は2026-10-05の依頼に基づく。実装済みの保証と、後続Phaseで追加する予定の保証を分ける。
 
@@ -58,8 +58,8 @@ Phase 1で最終境界だけを変える。
 | G-RUST・現在 | 外部API、trait、最終Send/Sync/Clone、native本体、target/link、最終borrow/memory safety | rustc / Cargo build | Nagiが選んだ正しい型・所有形態とRust adapter署名 | `rust_dependencies`, `build_diagnostics`, real native tests。extern実装不一致はdelegated error。Nagi保証済みの生成ミスはcompiler defectへ戻す |
 | G-LIFECYCLE・現在 | Nagiが選ぶ評価順・cleanup anchorを保持。Future dropは既完了/受理済み副作用のrollback完了を保証しない | Nagi compilerのlowering + Rust Drop/Future | checked cleanup/error出口、通常Rustの所有構造 | `view_container_drop`, `scope_runtime_contract`, runtime adversarial tests。選択した構造の誤生成はcompiler defect、任意destructorの正しさは保証外 |
 | G-ARTIFACT・現在 | 別canonical source/outのアプリを既定/明示の共通targetへ置いても、互いのexeを上書きしない。同一appの世代隔離はまだ保証しない | Nagi compiler / build CLI | canonical app identityとpackage/executable名 | `shared_target`, `project`。別アプリの取り違えはcompiler defect。短いhashは権限・暗号学的隔離ではない |
-| G-SEALED・Phase 1 branch実装、CI成功 | Rust codegenの入力は最終統合・check済みで、外部から可変化できない | Nagi checker / finalizer | ProgramをmoveしたCheckedProgramと確定plan・provenance | API compile-fail、facts completeness、決定性、既存High/Low/native conformance。[ADR 006](adr/006-sealed-codegen-input.md)。欠落factsはICE候補。main/公開版には未反映 |
-| G-GENERATION・Phase 2予定・Q-001承認済み | 実行するgenerationを他buildで上書きせず、成功generationのみpublish。dependency cacheは共有 | Nagi compiler / build CLI、OS advisory lock | app/generation identity、成功artifact metadata、生成Rust provenance | 並行build、失敗publish、Windows実行中exe。取り違えはcompiler defect、OS/file/lock失敗はinfra error |
+| G-SEALED・現在・Phase 1 main反映、CI成功 | Rust codegenの入力は最終統合・check済みで、外部から可変化できない | Nagi checker / finalizer | ProgramをmoveしたCheckedProgramと確定plan・provenance | API compile-fail、facts completeness、決定性、既存High/Low/native conformance。[ADR 006](adr/006-sealed-codegen-input.md)。欠落factsはICE候補。#78でmain反映済み、正式releaseは未実施 |
+| G-GENERATION・Phase 2 branch実装・CI待ち・Q-001承認済み | 実行するgenerationを他buildで上書きせず、成功generationのみpublish。dependency cacheは共有 | Nagi compiler / build CLI、OS advisory lock | app/generation identity、成功artifact metadata、生成Rust provenance | 並行build、失敗publish、Windows実行中exe。取り違えはcompiler defect、OS/file/lock失敗はinfra error。ローカル検証済み、main未反映・4 OS CI待ち |
 | G-TX・Phase 4予定 | Transactionはaffine、nonCopy/nonshared、永続格納・task transfer禁止。commit/rollbackがconsumeしResultで完了を観測 | Nagi checker / ResourceContract・transfer検査。native完了はDB adapter | Tx capability、nested payload/transfer決定、明示終端操作 | normal/Err/unwind/cancellation、nested Option/Result、spawn拒否。Nagi保証の抜けはcompiler defect。応答未受信のCOMMITは結果不明になり得る |
 | G-POOL・Phase 4予定 | Txが接続を専有し、cleanup成功を確認する前に再利用しない。rollback失敗接続を再利用しない | Nagi DB worker/adapter。checkerがDB完了を静的証明するとはしない | leaseとcleanup状態を保つnative APIへの確定呼出し | acquire/begin応答喪失、取消、cleanup失敗、close/worker終了とpermit解放。native Drop実行だけをrollback成功の証拠にしない |
 | G-AUTH-SCOPE・Phase 5以降の方向 | Grantが実際のScope値を保持し、保護操作は別bare resource IDを取らない | Nagi checkerの型/所有規則 + trusted Rust issuer/adapter | permission/scope identityとGrantの所有形態 | 未実装。期限・失効・全routeの認可漏れ・request regionを型で保証しない |

@@ -1,0 +1,7 @@
+{
+  "head": "7d867cb59fb4466038122730dea07248edf342a8",
+  "executable": "/tmp/nagi-container-flow-target/debug/nagic",
+  "copy": "/workspace/test-tools/compiler-rust-boundary-plan/nagic-phase1-baseline",
+  "sha256": "51f5070264d3e2e905720f0626ffa3ec7c2eace18daf16d55af78a195abbfac6",
+  "source_modified": []
+}

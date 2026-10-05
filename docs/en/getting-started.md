@@ -89,7 +89,7 @@ nagic check hello.nagi
 nagic build hello.nagi
 ```
 
-Run the path shown in the `native:` line. For example, if it ends in `nagi-hello-0123456789abcdef.exe`, invoke that path with PowerShell's `&` operator. To build and run together, use `nagic run hello.nagi`.
+Run the path shown in the `native:` line using PowerShell's `&` operator. To build and run together, use `nagic run hello.nagi`.
 
 Default output locations:
 
@@ -98,10 +98,10 @@ Default output locations:
 | `build/hello/generated.low` | Low translated from High |
 | `build/hello/src/main.rs` | Generated Rust during build/run |
 | `build/hello/Cargo.toml` | Generated Rust project during build/run |
-| `native-target/release/nagi-hello-<identifier>.exe` | Windows executable (next unreleased version) |
-| `native-target/release/nagi-hello-<identifier>` | Linux/macOS executable (next unreleased version) |
+| `build/hello/.nagi/` | Executables and generated snapshots for successful builds (next unreleased version) |
+| `native-target/` | Shared build cache |
 
-Generated files go to `build/<source filename without its extension>/`. Use `--out build/my-hello` to choose another location. Set `NAGI_NATIVE_TARGET_DIR` to change the executable build location. See [executable naming and shared caches](projects.md) for the naming change.
+Generated files go to `build/<source filename without its extension>/`. Use `--out build/my-hello` to choose another location. `NAGI_NATIVE_TARGET_DIR` changes the build cache location. Rebuilding changes the executable path; use the reported `native:` path. See [build generations and shared caches](projects.md).
 
 Compilation also needs the bundled `runtime/`. If you copy `nagic.exe` elsewhere on its own, set `NAGI_ROOT` to the extracted folder containing `runtime/`. The [task management demo](web-demo.md) shows how to distribute a generated application executable.
 

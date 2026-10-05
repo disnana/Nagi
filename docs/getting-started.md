@@ -89,7 +89,7 @@ nagic check hello.nagi
 nagic build hello.nagi
 ```
 
-`build`が表示した`native:`行のパスで実行できます。たとえば`native: ...\nagi-hello-0123456789abcdef.exe`なら、そのパスをPowerShellの`&`で実行します。単に試す場合は`nagic run hello.nagi`でビルドと実行をまとめられます。
+`build`が表示した`native:`行のパスをPowerShellの`&`で実行できます。単に試す場合は`nagic run hello.nagi`でビルドと実行をまとめられます。
 
 標準の出力先は次のとおりです。
 
@@ -98,10 +98,10 @@ nagic build hello.nagi
 | `build/hello/generated.low` | Highから変換したLow |
 | `build/hello/src/main.rs` | 生成したRust（build / run時） |
 | `build/hello/Cargo.toml` | 生成したRustプロジェクト（build / run時） |
-| `native-target/release/nagi-hello-<識別子>.exe` | Windowsの実行ファイル（次の未リリース版） |
-| `native-target/release/nagi-hello-<識別子>` | Linux・macOSの実行ファイル（次の未リリース版） |
+| `build/hello/.nagi/` | 成功したビルドごとの実行ファイル・生成物（次の未リリース版） |
+| `native-target/` | 共有するビルド用キャッシュ |
 
-`build/<ソースのファイル名から拡張子を除いた名前>/`に出力します。別の場所に生成する場合は`--out build/my-hello`を付けます。実行ファイルの出力先は`NAGI_NATIVE_TARGET_DIR`で変更できます。[実行ファイル名の変更と共有キャッシュ](projects.md)も参照してください。
+`build/<ソースのファイル名から拡張子を除いた名前>/`に出力します。別の場所に生成する場合は`--out build/my-hello`を付けます。`NAGI_NATIVE_TARGET_DIR`はビルド用キャッシュの場所を変更します。再ビルド後の実行ファイルは別のパスになるため、`native:`で確認します。[ビルド世代と共有キャッシュ](projects.md)も参照してください。
 
 コンパイルには配布された`runtime/`も必要です。`nagic.exe`だけを別の場所にコピーした場合は、環境変数`NAGI_ROOT`に`runtime/`のある展開フォルダーを指定してください。生成したアプリexeの配布例は[タスク管理デモ](../test-nagi-code/web-demo/README.md)にあります。
 

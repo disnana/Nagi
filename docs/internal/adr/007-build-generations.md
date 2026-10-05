@@ -1,6 +1,6 @@
 # ADR 007: ビルドのアプリIDと成功世代を分ける
 
-状態: Phase 2の採用設計。Q-001の承認範囲で進める。実装前の記録であり、検証結果は[進捗](../progress.md)へ追記する。
+状態: Phase 2の採用設計。Q-001の承認範囲で進める。実装前に固定した設計とレビューによる補足を記録し、検証結果は[進捗](../progress.md)へ追記する。
 
 ## 問題
 
@@ -16,11 +16,17 @@
 
 package/app IDは維持し、generationは毎回新しく作る。generation namespaceはappごとに分ける。同じ親内の新しいstagingへ生成Low/Rust/manifest、読み取り済みsource/provenance、引き継いだCargo.lockを保存する。通常outの互換ファイルは引き続き作り、Cargo不在時にもmanifestを調べられる現在の用途を残す。runtimeへの相対pathは、それぞれのmanifest所在から計算する。
 
-generation manifestはstable package名、`autobins=false`、世代固有の`[[bin]]`を持つ。Cargoもそのbinを指定してbuildする。親nagicが終了してCargoだけ残る場合でも、孤児Cargoが次世代のcache上のexeを上書きできないようにする。packageまで世代名へ変える方式は採らない。Cargo.lockのpackage identityと依存cacheを保つためである。
+generation manifestはstable package名、`autobins=false`、世代固有の`[[bin]]`を持つ。bin名はapp IDの16桁hashとgenerationから作り、長いsource stemを繰り返さない。Cargoもそのbinを指定してbuildする。親nagicが終了してCargoだけ残る場合でも、孤児Cargoが次世代のcache上のexeを上書きできないようにする。packageまで世代名へ変える方式は採らない。Cargo.lockのpackage identityと依存cacheを保つためである。
 
 Cargo成功後、exeをコピーし、stagingを新しい公開generationへrenameする。可変cache/projectionとのhard linkは使わない。互換出力の更新が済んでから、同じfilesystem内の新しいmetadata fileを閉じ、renameでlatestを置き換える。先に旧latestを消す処理は入れない。旧成功世代は上書き・削除・killしない。
 
+内部layoutは`out/.nagi/apps/{app_id}/`にまとめる。`generations/.staging-{generation}/`から`generations/{generation}/`へ同じ親・深さのまま公開し、`.latest-{generation}.tmp`から`latest.json`へ置き換える。公開時にmanifestの相対参照が変わらないことを検査する。metadataは`schema_version=1`、app/generation IDとexe/manifest/Low/Rust/sources/provenance/Cargo.lockのnamespace相対pathを保持する。sourcesは読み取り済みtext、元path、module ID、入力の由来を保存し、provenanceは生成Rustの行と既存の元位置・module・置換対象を保存する。pathは表示用の文字列に加え、`path_os`へUnixのbyte列またはWindowsのUTF-16列を保存する。既存の非UTF-8 cwdを扱うためであり、module IDの表現は変更しない。未対応のcolumnを補完しない。このlayoutを版間で固定した公開APIにはしない。
+
+初回とlock取得後の保護では、互換出力とlatestを同じ出力集合として検査する。入力との一致だけでなく、互換出力が旧latestと同じfile identityを持つ場合も拒否する。別々に検査すると、互換出力の書込みで旧成功metadataを破壊してしまう。
+
 失敗時は旧latestを維持し、新世代をrunしない。互換ファイルが途中まで更新された場合はその事実を診断し、全ファイルが旧版へ戻ったとは説明しない。runはlock内で確定した成功世代のpathを保持し、解放後にlatestを再読込みして起動対象を変えない。`native:`は実際の公開exeを示す。scriptsもcache上のpackage名からの推測をやめ、成功metadataまたは`native:`を使う。
+
+script helperのlegacy cache lookupは、generation namespaceがない旧出力に限って維持する。namespaceがあるのにlatestがない、不正、または参照exeがない場合は失敗とする。初回build失敗を古いcache exeの成功へ読み替えない。
 
 ## 固定しない範囲
 

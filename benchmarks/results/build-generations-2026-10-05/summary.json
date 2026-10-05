@@ -1,0 +1,196 @@
+{
+  "fixture": "std-only app; empty local nagi-runtime; initially empty isolated Cargo targets",
+  "pairs": [
+    {
+      "label": "initial",
+      "before": "before.json",
+      "after": "after.json",
+      "rows": [
+        {
+          "mode": "cold_cache",
+          "before": {
+            "samples": 1,
+            "min_ms": 198.002853,
+            "median_ms": 198.002853,
+            "max_ms": 198.002853
+          },
+          "after": {
+            "samples": 1,
+            "min_ms": 162.372302,
+            "median_ms": 162.372302,
+            "max_ms": 162.372302
+          },
+          "median_delta_ms": -35.630551
+        },
+        {
+          "mode": "warm_unchanged",
+          "before": {
+            "samples": 7,
+            "min_ms": 69.405186,
+            "median_ms": 77.528139,
+            "max_ms": 92.963713
+          },
+          "after": {
+            "samples": 7,
+            "min_ms": 81.87494,
+            "median_ms": 91.920092,
+            "max_ms": 112.232635
+          },
+          "median_delta_ms": 14.391953
+        },
+        {
+          "mode": "warm_changed",
+          "before": {
+            "samples": 7,
+            "min_ms": 69.320845,
+            "median_ms": 73.913467,
+            "max_ms": 77.121001
+          },
+          "after": {
+            "samples": 7,
+            "min_ms": 83.963392,
+            "median_ms": 92.236708,
+            "max_ms": 122.563101
+          },
+          "median_delta_ms": 18.323240999999996
+        }
+      ],
+      "input_rust_and_stdout_equal": true,
+      "binary_bytes_before": [
+        458032
+      ],
+      "binary_bytes_after": [
+        458152
+      ]
+    },
+    {
+      "label": "repeat",
+      "before": "before-repeat.json",
+      "after": "after-repeat.json",
+      "rows": [
+        {
+          "mode": "cold_cache",
+          "before": {
+            "samples": 1,
+            "min_ms": 135.034363,
+            "median_ms": 135.034363,
+            "max_ms": 135.034363
+          },
+          "after": {
+            "samples": 1,
+            "min_ms": 153.691158,
+            "median_ms": 153.691158,
+            "max_ms": 153.691158
+          },
+          "median_delta_ms": 18.65679499999999
+        },
+        {
+          "mode": "warm_unchanged",
+          "before": {
+            "samples": 7,
+            "min_ms": 73.856465,
+            "median_ms": 78.370909,
+            "max_ms": 92.175944
+          },
+          "after": {
+            "samples": 7,
+            "min_ms": 85.367718,
+            "median_ms": 110.12379,
+            "max_ms": 138.52852
+          },
+          "median_delta_ms": 31.752881000000002
+        },
+        {
+          "mode": "warm_changed",
+          "before": {
+            "samples": 7,
+            "min_ms": 73.371844,
+            "median_ms": 78.717791,
+            "max_ms": 82.873277
+          },
+          "after": {
+            "samples": 7,
+            "min_ms": 73.286482,
+            "median_ms": 82.842874,
+            "max_ms": 123.208047
+          },
+          "median_delta_ms": 4.125082999999989
+        }
+      ],
+      "input_rust_and_stdout_equal": true,
+      "binary_bytes_before": [
+        458032
+      ],
+      "binary_bytes_after": [
+        458152
+      ]
+    },
+    {
+      "label": "alternating",
+      "before": "paired-before.json",
+      "after": "paired-after.json",
+      "rows": [
+        {
+          "mode": "cold_cache",
+          "before": {
+            "samples": 1,
+            "min_ms": 272.159736,
+            "median_ms": 272.159736,
+            "max_ms": 272.159736
+          },
+          "after": {
+            "samples": 1,
+            "min_ms": 155.130672,
+            "median_ms": 155.130672,
+            "max_ms": 155.130672
+          },
+          "median_delta_ms": -117.029064
+        },
+        {
+          "mode": "warm_unchanged",
+          "before": {
+            "samples": 7,
+            "min_ms": 76.918771,
+            "median_ms": 81.918366,
+            "max_ms": 84.743275
+          },
+          "after": {
+            "samples": 7,
+            "min_ms": 76.417022,
+            "median_ms": 80.582427,
+            "max_ms": 93.806431
+          },
+          "median_delta_ms": -1.3359390000000104
+        },
+        {
+          "mode": "warm_changed",
+          "before": {
+            "samples": 7,
+            "min_ms": 79.32753,
+            "median_ms": 89.769659,
+            "max_ms": 103.480641
+          },
+          "after": {
+            "samples": 7,
+            "min_ms": 80.611631,
+            "median_ms": 87.756453,
+            "max_ms": 101.575736
+          },
+          "median_delta_ms": -2.013206000000011
+        }
+      ],
+      "input_rust_and_stdout_equal": true,
+      "binary_bytes_before": [
+        458032
+      ],
+      "binary_bytes_after": [
+        458152
+      ]
+    }
+  ],
+  "limitations": [
+    "Shared Linux host; no runtime throughput, latency, allocation, RSS or Future measurements.",
+    "Cold cache means empty native Cargo target, not cold OS caches.",
+    "Timing order and host load vary; these samples do not establish a speedup or a causal overhead bound."
+  ]
+}
