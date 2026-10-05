@@ -102,4 +102,6 @@ freeze時の独立レビューではowned 12ファイルのhash一致を確認�
 
 旧・新CLIで合計90 build/runを測定し、生成Rustは45 pairすべてbyte一致した。[測定summary](../../benchmarks/results/build-generations-2026-10-05/summary.json)では初回・repeatのwarm中央値が増え、交互測定はほぼ同程度だった。速度不変・高速化・因果的なoverhead上限は保証しない。binaryはこのfixtureで120 bytes増えた。以前のFuture frame +32 bytesは未解決で、今回の測定では再検査していない。
 
-Windowsを含む4 OS CIは未実行。Phase 2のacceptanceはCI待ちを維持し、Phase 3のcharacterization/refactorは未実装。mainへのmerge、版更新、releaseは行っていない。
+Windowsを含む4 OS CIは未完了。Phase 2のacceptanceは再確認待ちを維持し、Phase 3のcharacterization/refactorは未実装。Phase 2のmainへのmerge、版更新、releaseは行っていない。
+
+PR #79をmain向けに作成した。初回CIではmacOS Apple Siliconのgeneration 22件が成功したが、非UTF-8名のfixture作成がNagi起動前にAPFSのOS92で失敗した。Linuxの元の回帰を維持して対象OSを修正し、共通の日本語pathでsource/provenanceの生OS unitsを検査するassertを追加した。[結果](build-generations-results.md#初回ciでのfixture修正)に理由を記録した。4 OS CIの再確認までacceptance待ちを維持する。

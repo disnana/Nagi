@@ -1,6 +1,6 @@
 # Phase 2: build generation isolationの検証
 
-2026-10-05。branch `fix/build-generation-isolation`、作業基点はPhase 1のPR #78 head `08199bf`。その後ユーザーが#78をmain `0107f37f0de6026533a4d67f52c6545054b71584`へマージし、headとのtree一致を確認した。Phase 2のPRはmain向けで、Phase 2の差分はmain未反映。以下は未リリースの開発branchにおけるローカル結果。Windowsを含む4 OS CIは未実行で、Phase 2のacceptanceはCI待ちである。
+2026-10-05。branch `fix/build-generation-isolation`、作業基点はPhase 1のPR #78 head `08199bf`。その後ユーザーが#78をmain `0107f37f0de6026533a4d67f52c6545054b71584`へマージし、headとのtree一致を確認した。Phase 2はmain向けPR #79に分離し、その差分はmain未反映。以下は未リリースbranchのローカル結果と初回CIの記録。Windowsを含む4 OS CIは未完了で、Phase 2のacceptanceは再確認待ちである。
 
 ## 契約と変更
 
@@ -43,6 +43,12 @@ rootが各実行のexit 0を確認した。ログは実行workspaceの`/workspac
 初回の全suiteでは`typed_errors`の`binary.parent == cache/release`という旧内部assertが1件失敗し、共有mutexのpoisonで後続7件も失敗した。Q-001に従い、成功metadataのnamespaceと対応するcache exe bytesの一致を検査するassertへ更新した。対象15件と全suite807件を再実行し成功した。stdoutや診断の期待を緩めた修正ではない。
 
 Node初回のchild spawn `EPERM`は`phase2-editor-tests.log`に残した。同じテストを必要なpermissionで再実行し、`phase2-editor-tests-after.log`で201成功を確認した。metadata schemaの修正前後は`phase2-metadata-schema-before.log`・`phase2-metadata-schema-after.log`に残した。失敗を成功・ignoreへ置き換えていない。
+
+### 初回CIでのfixture修正
+
+PR #79のhead `b5b121a`、[run 37326219488](https://github.com/disnana/Nagi/actions/runs/37326219488)では、macOS Apple Siliconのgeneration 22件が成功し、1件はNagiを起動する前に失敗した。非UTF-8名`entry-0xff`のディレクトリをAPFSがOS error 92（Illegal byte sequence）で拒否したためである。`cfg(unix)`で全Unix filesystemへ広げたテストの前提を修正した。
+
+Linuxの元の非UTF-8 cwd回帰と全assertは維持し、対象をLinuxへ限定した。共通の日本語pathの回帰には、canonical pathのUnix byte列／Windows UTF-16列がsource snapshotと対応するprovenance行へ正確に残るassertを追加した。runtime skipやNagi failureのallowlistは追加していない。macOSの任意filesystemで非UTF-8名を扱えることや、Windowsの不正surrogateへの対応を、このテストから保証しない。変更はtestのみで、production sourceのfreezeは維持する。
 
 ## build測定
 

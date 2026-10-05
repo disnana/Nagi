@@ -286,6 +286,26 @@ fn assert_inside(child: &Path, parent: &Path) {
         parent.display()
     );
 }
+fn assert_os_path(record: &serde_json::Value, path: &Path) {
+    #[cfg(unix)]
+    let expected = {
+        use std::os::unix::ffi::OsStrExt;
+        serde_json::json!({"encoding":"unix_bytes","units":path.as_os_str().as_bytes()})
+    };
+    #[cfg(windows)]
+    let expected = {
+        use std::os::windows::ffi::OsStrExt;
+        let units: Vec<u16> = path.as_os_str().encode_wide().collect();
+        serde_json::json!({"encoding":"windows_utf16","units":units})
+    };
+    #[cfg(not(any(unix, windows)))]
+    let expected =
+        serde_json::json!({"encoding":"encoded_bytes","units":path.as_os_str().as_encoded_bytes()});
+    assert_eq!(
+        record, &expected,
+        "snapshot must preserve the exact OS path"
+    );
+}
 fn validate_latest(f: &Fixture, out: &str, native: &Path) -> serde_json::Value {
     let (_, m) = f.latest(out);
     assert_eq!(m["schema_version"], 1);
@@ -357,6 +377,7 @@ fn rebuild_publishes_new_generation_and_preserves_old_executable_and_snapshot() 
         .unwrap();
     assert_eq!(source["text"], fs::read_to_string(&canonical).unwrap());
     assert_eq!(source["kind"], "generated_low");
+    assert_os_path(&source["path_os"], &canonical);
     assert!(
         source["module"].is_string(),
         "loaded source retains its nominal ModuleId"
@@ -367,6 +388,9 @@ fn rebuild_publishes_new_generation_and_preserves_old_executable_and_snapshot() 
     .unwrap();
     assert_eq!(provenance["schema_version"], 1);
     for line in provenance["rust_lines"].as_array().unwrap() {
+        if line["path"].as_str() == canonical.to_str() {
+            assert_os_path(&line["path_os"], &canonical);
+        }
         assert!(
             line.get("module").is_some(),
             "synthetic/unknown origins use explicit null module"
@@ -580,7 +604,10 @@ fn lock_is_permanent_and_input_protection_is_rechecked_after_waiting() {
     assert!(f.0.join("out/.nagi-write.lock").is_file());
 }
 
-#[cfg(unix)]
+// This fixture needs a filesystem that accepts invalid UTF-8 names. macOS APFS
+// rejects its directory creation with EILSEQ before nagic can be invoked.
+// All platforms still verify their raw OS path units in the Unicode fixture.
+#[cfg(target_os = "linux")]
 #[test]
 fn source_snapshot_retains_raw_non_utf8_canonical_path_without_rejecting_old_accepted_input() {
     use std::os::unix::ffi::{OsStrExt, OsStringExt};
