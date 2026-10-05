@@ -60,4 +60,12 @@ Q-001はユーザーがAを承認した。app identity維持、generation別のs
 
 [PR #78](https://github.com/disnana/Nagi/pull/78)をmain向けに作成した。最初のCIではcompiler変更によるLinux/JetBrainsが起動したが、4 OS配布検証がskipされた。release planが版更新と配布設定だけを条件にしていたためで、成功とは数えない。compiler/runtime/Cargo入力にもNagi配布検証を適用する回帰と条件を追加する。版が変わらないときに公開しない規則は維持する。
 
-CIの4 OS・JetBrainsは未確認。Phase 2以降の実装、mainへのmerge、版更新、releaseには進んでいない。
+更新head `08199bf2758b7c09688a05a80527566dc2a03e6c`の[checks run 37308375211](https://github.com/disnana/Nagi/actions/runs/37308375211)が成功した。Linux全suite、Windows x64、Linux x64、macOS Intel/Apple Silicon、VSIX package、IntelliJ IDEA、PyCharm、merge gateを読み戻した。[website run 37308374524](https://github.com/disnana/Nagi/actions/runs/37308374524)も成功。publish-releaseはskipで、公開したとは報告しない。
+
+Phase 1のacceptanceを満たした。G-SEALEDはこのbranchで実装・CI検証済みで、main/公開版には未反映。Rustへの委譲やruntime意味論は維持した。mainへのmerge、版更新、releaseは行っていない。
+
+## Phase 2: build generation isolation
+
+Phase 1のCI成功後、`fix/build-generation-isolation`へ分けて着手した。基点は#78のhead `08199bf`。#78の差分を保持し、Phase 2のPRは依存を明記して分ける。最終反映先はmainだが、こちらではマージしない。
+
+[ADR 007](adr/007-build-generations.md)へ、常設canonical out lock、app IDとgeneration、孤児Cargoを含むbin分離、成功時latest、互換projection/lock/cache、維持する負例と測定を実装前に記録した。G-GENERATIONは実装前で、現在の保証へはまだ移さない。
