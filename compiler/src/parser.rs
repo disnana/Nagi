@@ -603,6 +603,7 @@ impl Parser {
             binding_span,
             binding_type: None,
             binding_borrowed: false,
+            flow: None,
         })
     }
     fn pattern_binding(&mut self) -> Result<PatternBinding, String> {

@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-- Give sequential direct-view assignments in return-terminated blocks separate inferred lifetimes. Compile and execute restored input views and earlier nested returns through High, saved Low, and handwritten Low; preserve continuing branch and loop updates. Owning view containers remain a separate limitation.
+- Lower synchronous view-containing List restorations through a private checked-flow plan. Follow return expressions and assignment dependencies through aliases, Result/Option wrapping, calls, indexing, and nested Lists; join continuing `if` and `match` paths. Keep checked types, declaration cleanup positions, and RHS-before-replacement evaluation. Verify values, buffer and element cleanup, error propagation, and panic through High, saved Low, and handwritten Low. Async, loops involving a candidate List, scopes, and reassignment of Result/Option storage remain limitations.
+- Add private checker metadata to the compiler AST. External Rust code can no longer construct `ast::Stmt` with a struct literal; obtain statements through the parser.
+
+- Give sequential direct-view assignments in return-terminated blocks separate inferred lifetimes. Compile and execute restored input views and earlier nested returns through High, saved Low, and handwritten Low; preserve continuing branch and loop updates. Other owning view-container cases remain limitations.
 - Verify Rust extern argument and sync/async mismatches with source-mapped build diagnostics through High, saved Low, and handwritten Low.
 - Exercise generated scope code against the real runtime for child errors, child panics, body error propagation, and completed sibling cancellation through all three source forms.
 

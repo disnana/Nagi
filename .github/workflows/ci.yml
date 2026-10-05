@@ -214,7 +214,7 @@ jobs:
         shell: bash
         run: node --test editors/vscode-nagi/test/*.test.js scripts/test_graph_html_viewport.mjs
       - name: Check generated output protection and native expression behavior
-        run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test view_branch_rebinding --test scope_runtime_contract --test copy_capabilities --test asset_calls --test shared_target
+        run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test scope_runtime_contract --test copy_capabilities --test asset_calls --test shared_target
       - name: Check oversized HTTP bodies and connection recovery on the target platform
         run: cargo test --locked -p nagi-runtime oversized_body_ -- --test-threads=1
       - name: Check HTTP panic recovery on the target platform

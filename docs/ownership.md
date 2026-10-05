@@ -108,7 +108,11 @@ viewを含む戻り値でも、`return None`や`return []`、`return ok(None)`�
 
 `return`で終わるブロックの直下では、viewを一時的にローカル値へ切り替え、その後で引数のviewに戻して返せます。生成Rustでは、各代入を別の借用として扱います。分岐後や次のループで使う値の更新は維持し、所有値のコピーは追加しません。[実行テスト](../compiler/tests/view_branch_rebinding.rs)でHigh・保存Low・手書きLowを確認しています。修正の収録状況は[CHANGELOG](../CHANGELOG.md)を参照してください。
 
-Nagiの検査は、Nagiのソース位置でmoveや借用の診断を返すためのものです。生成Rustの検査を代替するものではありません。`List[view[str]]`など、viewを含む所有コンテナーを再代入してから返すコードでは、`check`が成功しても生成Rustの借用検査に失敗する場合があります。また、`check`がRust側なら有効なコードを保守的に拒否する場合もあります。
+同期関数では、借用を含むListを一時的にローカル値へ切り替え、引数の借用へ戻して返せます。別の変数へのmove、`return ok(parts)`・`return some(parts)`、入れ子のList、`if`／`match`の分岐も対象です。生成時に代入前後の値を分け、右辺の評価後に古い配列を解放します。正常終了、エラー伝播、panic時の破棄位置も元のコードに合わせます。[返却と分岐の実行テスト](../compiler/tests/view_flow_foundation.rs)と[確保・解放のテスト](../compiler/tests/view_container_drop.rs)でHigh・保存Low・手書きLowを確認しています。収録版は[CHANGELOG](../CHANGELOG.md)に記載します。
+
+配列に関わるループ、async、scopeには、まだ生成上の制限があります。ResultやOption自体を再代入して返す場合も未対応です。Listを復元して`ok(parts)`で返す処理とは異なり、`result = ok([view(local)])`の後で`result = ok([input])`とする処理は、`check`成功後にRustの借用検査で失敗する場合があります。短い借用を持つ値と返す値を別の変数にすると、この寿命の結びつきを避けられます。
+
+Nagiの検査は、Nagiのソース位置でmoveや借用の診断を返すためのものです。生成Rustの検査を代替するものではありません。また、`check`がRust側なら有効なコードを保守的に拒否する場合もあります。
 
 Rustアダプターとの型の一致、`copy`に必要な`Clone`、非同期処理の`Send`・共有状態の`Sync`も最終的には`build`で検査します。`shared[T]`で包むだけでTが並行処理に適した型になるわけではありません。実行ファイルを作るにはNagiとRustの両方の検査を通す必要があります。
 

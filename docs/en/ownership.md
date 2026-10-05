@@ -108,7 +108,11 @@ A view-containing return type can accept a directly constructed value with no bo
 
 At the top level of a block that ends in `return`, a view can temporarily borrow local data, then be restored to an input view and returned. Generated Rust gives each assignment its own inferred borrow lifetime. Updates used after a branch or by later loop iterations remain mutations; this adds no owned-value copies. The [execution tests](../../compiler/tests/view_branch_rebinding.rs) cover High, saved Low, and handwritten Low. See the [Changelog](../../CHANGELOG.md) for release availability.
 
-Nagi's checker provides move and borrow diagnostics at Nagi source locations. It does not replace the checker for generated Rust. Reassigning and then returning an owning container that holds views, such as `List[view[str]]`, can still pass `check` and fail Rust's borrow checks. Nagi can also conservatively reject code that Rust would accept.
+Synchronous functions can temporarily put local views in a List, restore input views, and return it. Moves through aliases, `return ok(parts)`, `return some(parts)`, nested Lists, and `if`/`match` branches are supported. Generation separates values across assignments, evaluates the RHS before releasing the replaced vector, and preserves source cleanup positions on normal exit, error propagation, and panic. The [return and branch tests](../../compiler/tests/view_flow_foundation.rs) and [allocation/cleanup tests](../../compiler/tests/view_container_drop.rs) cover High, saved Low, and handwritten Low. See the [Changelog](../../CHANGELOG.md) for release availability.
+
+Loops involving the List, async functions, and scopes still have lowering gaps. Reassigning a Result or Option itself is also unsupported by this lowering. Restoring a List and returning `ok(parts)` is supported; assigning `result = ok([view(local)])` followed by `result = ok([input])` can still pass `check` and fail Rust borrowing. Keep short-lived views and values being returned in separate bindings to avoid tying their lifetimes to one storage location.
+
+Nagi's checker provides move and borrow diagnostics at Nagi source locations. It does not replace the checker for generated Rust. Nagi can also conservatively reject code that Rust would accept.
 
 Matching Rust adapter signatures, the `Clone` required by `copy`, `Send` for async work, and `Sync` for shared state are also ultimately checked by `build`. Wrapping T in `shared[T]` does not itself make T suitable for concurrent use. Both Nagi and Rust checks must pass to produce an executable.
 
