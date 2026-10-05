@@ -1,0 +1,104 @@
+[
+  {
+    "file": "tests/conformance/i64_boundaries.nagi",
+    "bytes": 153,
+    "sha256": "4b6dde80abbed4e3a53fefbdb1d41698364972905a4e7a8369d18524c47788b7",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/cast_precedence.nagi",
+    "bytes": 224,
+    "sha256": "df881da02874154deceaeb6896af22af308a3e60d3b71a316d69ffbfe19a7fb1",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/loop_rebinding.nagi",
+    "bytes": 126,
+    "sha256": "4b3b32e4da53d814451bcf5d889d46bc2b28f26f73f15ea8d38d9c239152ada0",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/view_restore.nagi",
+    "bytes": 125,
+    "sha256": "757c9983d5952cf40df080a165add8bf22f392c77d022b48bffa81c9334750d6",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/index_lookahead.nagi",
+    "bytes": 2311,
+    "sha256": "6056168da30ce2d4616f9638b04e36f9136721a93b52cdc748d5676d18a1b09a",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/try_index_receiver.nagi",
+    "bytes": 130,
+    "sha256": "19646bb69347765741dd42a807ea8110e56c8eeaa714381ab72f2aedef574790",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/string_bytes.nagi",
+    "bytes": 133,
+    "sha256": "71bbd36869c1307f637d2776b7c0a66bffabdd8e503ac0e87fa44a21ab69cd61",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/view_restore_low.low",
+    "bytes": 155,
+    "sha256": "d169f3a77bdffacf1f315c4c3105e966931aac3ef8dd226b0aed1974023c60b2",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/nested_result.nagi",
+    "bytes": 315,
+    "sha256": "a9dfc61ffe3166ef9fbe1485ecf68e2a7f5e9947246fa61163e37f3c0307bab9",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/owned_result_return.nagi",
+    "bytes": 125,
+    "sha256": "8c2b308f61391e2f97006ce6ef7b7fda9d7f93b93a664dfd0c22ca9dcacb663a",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/static_absent_callback.nagi",
+    "bytes": 193,
+    "sha256": "5e05e00cc273e3f8119b758ff93f863049f9923f7303a466e4f8c17e43802702",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/direct_view_read.nagi",
+    "bytes": 153,
+    "sha256": "2e2d200fba8d953378875a0b4e8a82790810a5e0fa023257f9b0f64daea84504",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/direct_view_read_low.low",
+    "bytes": 185,
+    "sha256": "b61786e66b094ce0d6ba5ad8d94f63681165b3fe30312820b0df2c121ad376f9",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/container_restore.nagi",
+    "bytes": 134,
+    "sha256": "1196182be6d0bd31c5ccbd7230285590f59757845f522ae18449574b926a8cf8",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/container_restore_low.low",
+    "bytes": 170,
+    "sha256": "2227cb908170adbe74ba07e750f39c59da86dbad519f97a67bb667c73e842171",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/minimum_negation.nagi",
+    "bytes": 119,
+    "sha256": "ff5339f91f27c870bf58349a353d46a09e75c278bc7891b478e1d43bedad0ce9",
+    "baseline_byte_equal": true
+  },
+  {
+    "file": "tests/conformance/profile_overflow.nagi",
+    "bytes": 41,
+    "sha256": "53396961cc09ea668cdde691e4126bc560ea3efbd71a35d368f24b626c0d8f60",
+    "baseline_byte_equal": true
+  }
+]

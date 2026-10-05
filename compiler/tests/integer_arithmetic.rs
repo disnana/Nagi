@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -67,8 +69,11 @@ fn constant_integer_arithmetic_preserves_release_wrapping_and_debug_panics() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let high_rust = emit::rust(&high).unwrap();
-    assert_eq!(high_rust, emit::rust(&low).unwrap());
+    let high_rust = emit::rust(&checked_emission::seal(&high)).unwrap();
+    assert_eq!(
+        high_rust,
+        emit::rust(&checked_emission::seal(&low)).unwrap()
+    );
     let f = Fixture::new();
     for release in [true, false] {
         let assertions = if release {
@@ -92,7 +97,7 @@ fn constant_integer_arithmetic_preserves_release_wrapping_and_debug_panics() {
 fn native_adapter_constant_overflow_keeps_rust_diagnostics() {
     let mut high = parser::parse(SOURCE, true).unwrap();
     check::check(&mut high).unwrap();
-    let rust = emit::rust(&high).unwrap();
+    let rust = emit::rust(&checked_emission::seal(&high)).unwrap();
     let f = Fixture::new();
     fs::write(
         f.0.join("adapter.rs"),

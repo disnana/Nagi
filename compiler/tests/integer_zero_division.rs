@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{ast::Program, check, emit, parser};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -202,7 +204,7 @@ fn dynamic_zero_nonzero_and_float_controls_compile_and_run_in_both_profiles() {
     let f = Fixture::new();
     for (index, mut program) in forms(&high, &low).into_iter().enumerate() {
         check::check(&mut program).unwrap();
-        let rust = emit::rust(&program).unwrap();
+        let rust = emit::rust(&checked_emission::seal(&program)).unwrap();
         assert!(!rust.contains("allow(unconditional_panic)"));
         f.write(
             "generated.rs",

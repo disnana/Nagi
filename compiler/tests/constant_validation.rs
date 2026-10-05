@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{ast::Program, check, emit, parser};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -257,7 +259,7 @@ fn minimum_negation_and_integer_oracle_build_and_run_in_both_profiles() {
     let mut saved = parser::parse(&emit::low(&program), false).unwrap();
     check::check(&mut saved).unwrap();
     for (form, program) in [program, saved].iter().enumerate() {
-        let rust = emit::rust(program).unwrap();
+        let rust = emit::rust(&checked_emission::seal(program)).unwrap();
         assert!(!rust.contains("allow(unconditional_panic)"));
         fs::write(
             fixture.0.join("generated.rs"),

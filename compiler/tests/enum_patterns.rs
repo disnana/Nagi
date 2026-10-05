@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -50,8 +52,11 @@ fn mutable_enum_patterns_preserve_names_and_compile_without_shorthand_warnings()
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let high_rust = emit::rust(&high).unwrap();
-    assert_eq!(high_rust, emit::rust(&low).unwrap());
+    let high_rust = emit::rust(&checked_emission::seal(&high)).unwrap();
+    assert_eq!(
+        high_rust,
+        emit::rust(&checked_emission::seal(&low)).unwrap()
+    );
 
     let fixture = Fixture(std::env::temp_dir().join(format!(
         "nagi enum patterns {} {}",

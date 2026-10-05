@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{ast::Program, check, emit, parser, source};
 use std::{
     fs,
@@ -78,8 +80,8 @@ def register(state: State) -> Result[http.App[State, Error], Error]:
 fn borrowed_http_inspection_and_async_registration_add_no_owned_adapter_work() {
     let (_fixture, program) = Fixture::checked(AUTH);
     let saved = independent_low(&program);
-    let high_rust = emit::rust(&program).unwrap();
-    let low_rust = emit::rust(&saved).unwrap();
+    let high_rust = emit::rust(&checked_emission::seal(&program)).unwrap();
+    let low_rust = emit::rust(&checked_emission::seal(&saved)).unwrap();
     assert_eq!(high_rust, low_rust, "saved Low changed adapter work");
 
     for operation in [
@@ -116,7 +118,7 @@ fn literal_view_optimization_does_not_change_a_shadowing_owned_function() {
     );
     let function = &program.modules.resolve_root_path("view").unwrap().symbol;
     for checked in [&program, &independent_low(&program)] {
-        let rust = emit::rust(checked).unwrap();
+        let rust = emit::rust(&checked_emission::seal(checked)).unwrap();
         assert!(rust.contains(&format!(
             "crate::{function}(::std::string::String::from(\"owned argument\"))"
         )));

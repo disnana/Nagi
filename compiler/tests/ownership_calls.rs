@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser, source};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -11,7 +13,7 @@ fn accepts(text: &str) {
     let high = checked(text, true).unwrap_or_else(|error| panic!("{text}\n{error}"));
     let low = emit::low(&high);
     let independent = checked(&low, false).unwrap_or_else(|error| panic!("{low}\n{error}"));
-    emit::rust(&independent).unwrap();
+    emit::rust(&checked_emission::seal(&independent)).unwrap();
 }
 
 fn rejects(text: &str, high: bool, line: usize, reason: &str) {

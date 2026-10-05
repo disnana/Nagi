@@ -93,8 +93,24 @@ pub fn pipeline(case: &Case) -> Result<(String, String), Box<Failure>> {
     let low_text = step(case, "low-pretty", || Ok(emit::low(&program)))?;
     let mut low = step(case, "low-reparse", || parser::parse(&low_text, false))?;
     step(case, "low-recheck", || check::check(&mut low))?;
-    let direct = step(case, "rust-emit-direct", || emit::rust(&program))?;
-    let saved = step(case, "rust-emit-saved-low", || emit::rust(&low))?;
+    let direct_checked = step(case, "direct-finalize", || {
+        check::finalize(
+            program,
+            nagic::ast::Program::default(),
+            nagic::source::SourceProvenance::user_low_unmapped(),
+        )
+        .map_err(|error| format!("[{:?}] {error}", error.kind()))
+    })?;
+    let saved_checked = step(case, "saved-low-finalize", || {
+        check::finalize(
+            low,
+            nagic::ast::Program::default(),
+            nagic::source::SourceProvenance::user_low_unmapped(),
+        )
+        .map_err(|error| format!("[{:?}] {error}", error.kind()))
+    })?;
+    let direct = step(case, "rust-emit-direct", || emit::rust(&direct_checked))?;
+    let saved = step(case, "rust-emit-saved-low", || emit::rust(&saved_checked))?;
     Ok((direct, saved))
 }
 

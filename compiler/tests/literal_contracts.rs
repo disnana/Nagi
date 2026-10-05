@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{ast::E, check, emit, parser};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -26,7 +28,7 @@ fn strings_preserve_control_characters_through_high_low_and_rust() {
             panic!("expected string return");
         };
         assert!(matches!(&expr.kind, E::Str(value) if value == expected));
-        let mut rust = emit::rust(&program).unwrap();
+        let mut rust = emit::rust(&checked_emission::seal(&program)).unwrap();
         rust.push_str(&format!(
             "\n#[test] fn exact_bytes() {{ assert_eq!(text().as_bytes(), {expected:?}.as_bytes()); }}\n"
         ));

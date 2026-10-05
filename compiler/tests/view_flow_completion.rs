@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{
     fs,
@@ -31,7 +33,7 @@ async def ordinary() -> Result[unit, Error]:
     );
     let saved = checked(&emit::low(&high), false);
     for program in [high, saved] {
-        let rust = emit::rust(&program).unwrap();
+        let rust = emit::rust(&checked_emission::seal(&program)).unwrap();
         let restore = rust
             .split("pub async fn restore<")
             .nth(1)
@@ -88,7 +90,7 @@ fn owned_storage_loops_and_async_compile_and_run_in_all_source_forms() {
     )));
     fs::create_dir_all(&fixture.0).unwrap();
     for (name, program) in [("high", high), ("saved", saved), ("hand", hand)] {
-        let rust = emit::rust(&program).unwrap();
+        let rust = emit::rust(&checked_emission::seal(&program)).unwrap();
         assert!(!rust.contains("unsafe"));
         assert!(!rust.contains(".clone()"));
         for function in [

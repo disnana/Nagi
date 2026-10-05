@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{ast::S, check, emit, parser, source};
 use std::{
     fs,
@@ -101,7 +103,7 @@ fn byte_views_use_u8_and_preserve_nested_views_and_owned_element_slices() {
     for (name, program) in [("high", &high), ("saved-low", &low)] {
         let rust = folder.join(format!("{name}.rs"));
         let binary = folder.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        fs::write(&rust, format!("{}\n#[test] fn values() {{\nlet bytes = [0_u8, 128, 255];\nassert_eq!(sum_bytes(&bytes), 383);\nassert_eq!(first_byte(&bytes), 0);\nassert_eq!(zero_copies(&bytes), 0);\nassert_eq!(bytes, [0, 128, 255]);\nassert_eq!(sum_chunks(&[&bytes[..1], &bytes[1..]]), 383);\nassert_eq!(count_wrapped_strings(&[\"凪\".into(), \"hello\".into()]), 2);\nassert_eq!(count_wrapped_bytes(&[vec![1, 2], vec![3]]), 2);\nassert_eq!(sum_list(vec![1, 2, 3]), 6);\n}}\n", emit::rust(program).unwrap())).unwrap();
+        fs::write(&rust, format!("{}\n#[test] fn values() {{\nlet bytes = [0_u8, 128, 255];\nassert_eq!(sum_bytes(&bytes), 383);\nassert_eq!(first_byte(&bytes), 0);\nassert_eq!(zero_copies(&bytes), 0);\nassert_eq!(bytes, [0, 128, 255]);\nassert_eq!(sum_chunks(&[&bytes[..1], &bytes[1..]]), 383);\nassert_eq!(count_wrapped_strings(&[\"凪\".into(), \"hello\".into()]), 2);\nassert_eq!(count_wrapped_bytes(&[vec![1, 2], vec![3]]), 2);\nassert_eq!(sum_list(vec![1, 2, 3]), 6);\n}}\n", emit::rust(&checked_emission::seal(program)).unwrap())).unwrap();
         let output = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
             .args(["--edition=2021", "--test"])
             .arg(&rust)

@@ -10,6 +10,9 @@ pub struct Generated {
     lines: Vec<Option<usize>>,
     origin: Option<usize>,
     line_open: bool,
+    provenance: Option<crate::source::SourceProvenance>,
+    lineage: Option<crate::source::SourceOrigin>,
+    lineages: Vec<Option<crate::source::SourceOrigin>>,
 }
 
 impl Generated {
@@ -27,6 +30,7 @@ impl Generated {
         for part in text.split_inclusive('\n') {
             if !self.line_open {
                 self.lines.push(self.origin);
+                self.lineages.push(self.lineage.clone());
             }
             self.line_open = !part.ends_with('\n');
         }
@@ -35,6 +39,34 @@ impl Generated {
 
     pub(crate) fn push(&mut self, c: char) {
         self.push_str(c.encode_utf8(&mut [0; 4]));
+    }
+
+    pub(crate) fn attach_provenance(&mut self, provenance: crate::source::SourceProvenance) {
+        self.provenance = Some(provenance);
+    }
+
+    pub(crate) fn function_lineage(&mut self, origin: Option<crate::source::SourceOrigin>) {
+        self.lineage = origin;
+    }
+
+    /// Original statement position and emission lineage. Unmapped glue is
+    /// synthetic; it never acquires the position of a nearby source line.
+    pub fn line_provenance(&self, line: usize) -> crate::source::SourceOrigin {
+        let Some(global) = self.line_origin(line) else {
+            return crate::source::SourceProvenance::synthetic();
+        };
+        let Some(provenance) = &self.provenance else {
+            return crate::source::SourceProvenance::synthetic();
+        };
+        let mut origin = provenance.origin(global);
+        if let Some(Some(lineage)) = line
+            .checked_sub(1)
+            .and_then(|index| self.lineages.get(index))
+        {
+            origin.kind = lineage.kind;
+            origin.replacement_target = lineage.replacement_target.clone();
+        }
+        origin
     }
 
     pub fn line_origin(&self, line: usize) -> Option<usize> {
@@ -145,6 +177,22 @@ fn child_diagnostics<'a>(diagnostic: &'a Value, out: &mut Vec<&'a Value>) {
     }
 }
 
+/// Preserve structured final-check classification while retaining the source
+/// diagnostic. Backend error codes and mapped positions alone prove no cause.
+pub fn finalize_message(error: &crate::checked::FinalizeError, sources: &Sources) -> String {
+    let mut text = sources.diagnostic(&error.to_string());
+    match error.kind() {
+        crate::checked::FailureKind::UserError => {}
+        crate::checked::FailureKind::CompilerDefect => {
+            text.push_str("\n = compiler defect / ICE candidate at final check")
+        }
+        crate::checked::FailureKind::Unclassified => text.push_str(
+            "\n = unclassified final-check failure; source lineage does not establish its cause",
+        ),
+    }
+    text
+}
+
 /// Cargo's progress remains on stderr. Artifacts stay quiet, and diagnostics
 /// from dependencies or native Rust retain rustc's complete rendered output.
 pub fn cargo_message(
@@ -215,6 +263,26 @@ pub fn cargo_message_with_details(
             ));
             if !label.is_empty() {
                 out.push_str(&format!("  = {}\n", sources.readable_message(label)));
+            }
+            if generated.provenance.is_some() {
+                if let Some(line) = span["line_start"]
+                    .as_u64()
+                    .and_then(|n| usize::try_from(n).ok())
+                {
+                    let lineage = generated.line_provenance(line);
+                    let label = match lineage.kind {
+                        crate::source::LoweringKind::GeneratedLow => "generated Low",
+                        crate::source::LoweringKind::UserLow => "user Low",
+                        crate::source::LoweringKind::NativeLow => "native Low",
+                        crate::source::LoweringKind::Replacement => "native @replace",
+                        crate::source::LoweringKind::Synthetic => "synthetic",
+                        crate::source::LoweringKind::Unknown => "unknown",
+                    };
+                    out.push_str(&format!("  = emission origin: {label}\n"));
+                    if let Some(target) = lineage.replacement_target {
+                        out.push_str(&format!("  = replacement target: {}\n", target.name));
+                    }
+                }
             }
         }
     };

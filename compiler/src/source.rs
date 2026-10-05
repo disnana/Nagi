@@ -10,6 +10,7 @@ struct SourceFile {
     start: usize,
     lines: usize,
     tokens: Vec<crate::lexer::Token>,
+    lowering: LoweringKind,
 }
 #[derive(Default)]
 pub struct Sources {
@@ -18,6 +19,106 @@ pub struct Sources {
     files: Vec<SourceFile>,
     bytes: usize,
     identifiers: HashMap<String, String>,
+}
+
+/// Emission lineage is separate from the original source location.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoweringKind {
+    GeneratedLow,
+    UserLow,
+    NativeLow,
+    Replacement,
+    Synthetic,
+    Unknown,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceOrigin {
+    pub path: Option<PathBuf>,
+    pub module: Option<ModuleId>,
+    pub line: Option<usize>,
+    pub kind: LoweringKind,
+    pub replacement_target: Option<DefId>,
+}
+#[derive(Clone, Debug)]
+struct ProvenanceRange {
+    path: PathBuf,
+    module: ModuleId,
+    start: usize,
+    lines: usize,
+    kind: LoweringKind,
+}
+/// A statement-line source map; it does not claim High expression columns.
+#[derive(Clone, Debug)]
+pub struct SourceProvenance {
+    ranges: Vec<ProvenanceRange>,
+    unmapped_user_low: bool,
+    replacements: std::collections::BTreeMap<(usize, String), Option<DefId>>,
+}
+impl SourceProvenance {
+    /// An in-memory Low unit has no physical file. Do not invent one.
+    pub fn user_low_unmapped() -> Self {
+        Self {
+            ranges: Vec::new(),
+            unmapped_user_low: true,
+            replacements: std::collections::BTreeMap::new(),
+        }
+    }
+    pub fn origin(&self, line: usize) -> SourceOrigin {
+        let range = self
+            .ranges
+            .iter()
+            .find(|r| line >= r.start && line < r.start + r.lines);
+        SourceOrigin {
+            path: range.map(|r| r.path.clone()),
+            module: range.map(|r| r.module.clone()),
+            line: (line > 0).then(|| range.map_or(line, |r| line - r.start + 1)),
+            kind: range.map_or(
+                if self.unmapped_user_low && line > 0 {
+                    LoweringKind::UserLow
+                } else {
+                    LoweringKind::Unknown
+                },
+                |r| r.kind,
+            ),
+            replacement_target: None,
+        }
+    }
+    pub fn synthetic() -> SourceOrigin {
+        SourceOrigin {
+            path: None,
+            module: None,
+            line: None,
+            kind: LoweringKind::Synthetic,
+            replacement_target: None,
+        }
+    }
+    pub(crate) fn function_origin(&self, function: &Function) -> SourceOrigin {
+        let mut origin = self.origin(function.line);
+        if let Some(target) = self
+            .replacements
+            .get(&(function.line, function.name.clone()))
+        {
+            origin.kind = LoweringKind::Replacement;
+            origin.replacement_target = target.clone();
+        }
+        origin
+    }
+    pub(crate) fn mark_replacements(&mut self, primary: &Program, native: &Program) {
+        for function in &native.functions {
+            let Some((_, target)) = function.attrs.iter().find(|(a, _)| a == "replace") else {
+                continue;
+            };
+            let Some(path) = target.strip_prefix("generated::") else {
+                continue;
+            };
+            let target = primary.modules.resolve_root_path(path);
+            let symbol = target.map_or(path, |d| d.symbol.as_str());
+            self.replacements.insert(
+                (function.line, symbol.to_owned()),
+                target.map(|d| d.id.clone()),
+            );
+        }
+    }
 }
 
 pub struct Location<'a> {
@@ -43,6 +144,24 @@ pub fn diagnostic(path: &Path, source: &str, message: &str) -> String {
 }
 
 impl Sources {
+    pub fn provenance(&self) -> SourceProvenance {
+        SourceProvenance {
+            ranges: self
+                .files
+                .iter()
+                .map(|f| ProvenanceRange {
+                    path: f.path.clone(),
+                    module: f.module.clone(),
+                    start: f.start,
+                    lines: f.lines,
+                    kind: f.lowering,
+                })
+                .collect(),
+            unmapped_user_low: false,
+            replacements: std::collections::BTreeMap::new(),
+        }
+    }
+
     pub fn location(&self, line: usize) -> Option<Location<'_>> {
         let file = self
             .files
@@ -84,6 +203,7 @@ impl Sources {
             reference.line += offset;
         }
         for file in &mut other.files {
+            file.lowering = LoweringKind::NativeLow;
             file.start += offset;
         }
         self.files.extend(other.files);
@@ -367,6 +487,11 @@ pub fn load_with_overlays(
             start: offset + 1,
             source,
             tokens: units.last().expect("source unit pushed").tokens.clone(),
+            lowering: if high {
+                LoweringKind::GeneratedLow
+            } else {
+                LoweringKind::UserLow
+            },
         });
         stack.remove(&path);
         seen.insert(path);

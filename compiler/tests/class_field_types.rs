@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{
     fs,
@@ -42,7 +44,7 @@ fn owned_database_fields_are_private_state_and_keep_high_low_emission_valid() {
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
     for program in [high, low] {
-        let rust = emit::rust(&program).unwrap();
+        let rust = emit::rust(&checked_emission::seal(&program)).unwrap();
         assert!(rust.contains("::nagi_runtime::Db"), "{rust}");
         assert!(
             !rust.contains("Serialize") && !rust.contains("Deserialize"),

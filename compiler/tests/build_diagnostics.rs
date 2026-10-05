@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, diagnostics, emit, parser, source};
 use serde_json::{json, Value};
 use std::{
@@ -705,7 +707,7 @@ fn lowering_restores_nested_statement_expression_arm_and_field_lines() {
     let mut restored = parser::parse(&low.text, false).unwrap();
     low.restore_lines(&mut restored).unwrap();
     check::check(&mut restored).unwrap();
-    let rust = emit::rust_with_lines(&restored).unwrap();
+    let rust = emit::rust_with_lines(&checked_emission::seal(&restored)).unwrap();
     for (fragment, local) in [
         ("pub value: ::std::primitive::i64", 2),
         ("while false", 7),
@@ -754,7 +756,7 @@ fn existing_path_aliases_match_only_the_generated_file() {
     f.write("main.nagi", "def main():\n    print(1)\n");
     let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
     check::check(&mut loaded.program).unwrap();
-    let rust = emit::rust_with_lines(&loaded.program).unwrap();
+    let rust = emit::rust_with_lines(&checked_emission::seal(&loaded.program)).unwrap();
     let line = rust
         .text
         .lines()
@@ -789,7 +791,7 @@ fn windows_paths_and_canonical_prefixes_match_only_the_generated_target() {
     f.write("main.nagi", "def main():\n    print(1)\n");
     let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
     check::check(&mut loaded.program).unwrap();
-    let rust = emit::rust_with_lines(&loaded.program).unwrap();
+    let rust = emit::rust_with_lines(&checked_emission::seal(&loaded.program)).unwrap();
     let line = rust
         .text
         .lines()
@@ -815,7 +817,7 @@ fn dependency_synthetic_and_incomplete_diagnostics_fall_back_without_guessing() 
     f.write("main.nagi", "def main():\n    print(1)\n");
     let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
     check::check(&mut loaded.program).unwrap();
-    let rust = emit::rust_with_lines(&loaded.program).unwrap();
+    let rust = emit::rust_with_lines(&checked_emission::seal(&loaded.program)).unwrap();
     let file = f.0.join("build/src/main.rs");
     let fallback = "original warning and suggestions\n";
     let mut dependency = message(&file, "src/main.rs", 2, fallback);
@@ -850,7 +852,7 @@ fn unix_backslashes_do_not_turn_a_dependency_path_into_the_generated_file() {
     f.write("main.nagi", "def main():\n    print(1)\n");
     let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
     check::check(&mut loaded.program).unwrap();
-    let rust = emit::rust_with_lines(&loaded.program).unwrap();
+    let rust = emit::rust_with_lines(&checked_emission::seal(&loaded.program)).unwrap();
     let line = rust
         .text
         .lines()
@@ -959,7 +961,7 @@ fn child_notes_keep_module_locations_and_readable_definition_names() {
     );
     let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
     check::check(&mut loaded.program).unwrap();
-    let rust = emit::rust_with_lines(&loaded.program).unwrap();
+    let rust = emit::rust_with_lines(&checked_emission::seal(&loaded.program)).unwrap();
     let line = |fragment: &str| {
         rust.text
             .lines()
@@ -1032,7 +1034,7 @@ fn child_notes_cannot_relabel_an_unmapped_primary_or_dependency() {
     f.write("main.nagi", "def main():\n    print(1)\n");
     let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
     check::check(&mut loaded.program).unwrap();
-    let rust = emit::rust_with_lines(&loaded.program).unwrap();
+    let rust = emit::rust_with_lines(&checked_emission::seal(&loaded.program)).unwrap();
     let line = rust
         .text
         .lines()

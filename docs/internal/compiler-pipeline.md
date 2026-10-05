@@ -7,21 +7,24 @@
 ```text
 High source → parse → module解決 → check
   → 型付きLow textと行対応表 → Low parse → 行位置を復元
-  → native Low / @replaceを統合 → 再check → Rust生成 → Cargo/rustc
+  → 最終factoryでnative Low / @replaceを統合・check
+  → CheckedProgram / 私有生成plan → Rust生成 → Cargo/rustc
 
-Low source → parse → module解決 → native統合・check → Rust生成
+Low source → parse → module解決 → 最終factory → CheckedProgram → Rust生成
 ```
 
 Low textは保存用dumpだけではなく、通常High buildが通る内部境界でもある。`generated.low`はnative統合前のHigh部分であり、最終的に実行するプログラム全体ではない。
 
 nativeの通常関数はHighの初回名前解決・検査にも使う。`@replace`の本体を含む最終プログラムの統合・検査はLow再解析後に行う。
 
+Phase 1の差分では、Rust生成の入力を`CheckedProgram`に限定した。factoryがASTを所有し、checked factsと生成用の決定を確定する。optionalな型を持つ共通Program全体をTyped IRへ変更したわけではない。opt-in SQL検査は封印されたcanonical ASTを読み、CLIのRust生成前に行う。
+
 | 情報 | High→Low text→Low AST | Low check→Rust |
 |---|---|---|
 | 型 | 推論済みの注釈を出力。式ごとのchecked型や検査の証明は持ち越さず再検査 | checked型を生成に使い、公開型と私有storage型を分ける |
-| ownership / lifetime | 証明をserializeしない。originとmove状態をcheckerが再構築 | 選択したbodyのflow/use factsを生成planへ渡す。Rustが最終borrow/dropを検査 |
+| ownership / lifetime | 証明をserializeしない。originとmove状態をcheckerが再構築 | 最終factoryが選択したbody・flow/use factsとstorage/cleanupの決定を封印する。Rustが最終borrow/dropを検査 |
 | module identity | module/定義ID metadataと別名を保持 | 解決済みIDからRust名を生成。表記名だけで標準builtin扱いしない |
-| source | 同じコンパイル中は生成Lowの行から元の文・定義の行へ復元 | 生成Rustの行対応を保持。合成glueは対応なしと区別 |
+| source | 同じコンパイル中は生成Lowの行から元の文・定義の行へ復元 | 元位置とGenerated/User/Native/@replace/Syntheticの由来を分離。置換対象のdefinitionを保持し、同じLow行の複数関数も区別 |
 | 保存・再読込 | 保存Lowを独立コマンドで読むと位置はLow。High source mapは保存しない | Rust primary spanに対応がある時だけNagiのファイル・行を先に示す |
 
 `Program`はHigh/Low共通ASTだが、すべての状態で型が揃う専用Typed IRではない。`Expr.ty`などはoptionalで、名前解決とcheckerの状態にも依存する。「Common IR」と呼ぶだけではbackend前提の保証にならない。
@@ -60,7 +63,7 @@ nativeの通常関数はHighの初回名前解決・検査にも使う。`@repla
 
 ## 次の移行を決める条件
 
-まずconformance corpusでHigh/Low/backendの差、parse/check時間、factsのメモリ量を測る。text往復が繰り返しP1不具合の原因となる、または意味のある費用になる場合に、共通のCheckedProgramを提案する。
+最終codegen境界を封印する判断は[ADR 006](adr/006-sealed-codegen-input.md)で採用した。全面Typed IRは別の判断であり、High/Low/backendの差、parse/check時間、facts保持量を測って決める。封印だけをtext往復の費用・情報消失の解決とはしない。
 
 移行するなら、(1) AST/check結果の境界を定義、(2) module/@replaceの統合を同じ境界に固定、(3) source identityを維持、(4)旧text経路と新経路を同じcorpusで比較、(5)保存・手書きLowを独立に維持、の順とする。互換性を確認する前に旧経路を消さない。
 

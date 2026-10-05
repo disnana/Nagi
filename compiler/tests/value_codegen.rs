@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -54,7 +56,7 @@ fn try_result_consumption_preserves_payloads_reinitialization_and_errors() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str(
         r#"
 #[test] fn generated_try_results() {
@@ -77,7 +79,7 @@ fn inferred_lists_compile_with_a_moving_first_call_or_wrapper() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str(
         r#"
 #[test] fn generated_inferred_lists() {

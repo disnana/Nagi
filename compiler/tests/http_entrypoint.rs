@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -29,7 +31,7 @@ fn zero_route_entrypoint_follows_builtin_calls_in_nested_high_and_low() {
         );
         let low = checked(&emit::low(&high), false);
         for program in [&high, &low] {
-            let rust = emit::rust(program).unwrap();
+            let rust = emit::rust(&checked_emission::seal(program)).unwrap();
             assert!(rust.contains("async fn __nagi_serve("), "{body}");
             assert!(!rust.contains("async fn __route_"), "{body}");
         }
@@ -47,7 +49,7 @@ fn shadowed_serve_calls_and_non_http_programs_do_not_emit_http_glue() {
         let high = checked(source, true);
         let low = checked(&emit::low(&high), false);
         for program in [&high, &low] {
-            let rust = emit::rust(program).unwrap();
+            let rust = emit::rust(&checked_emission::seal(program)).unwrap();
             assert!(!rust.contains("async fn __nagi_serve("), "{source}");
             assert!(!rust.contains("::nagi_runtime"), "{source}");
         }
@@ -60,7 +62,7 @@ fn routes_without_a_serve_call_still_emit_http_glue() {
         "@get(\"/answer\")\nasync def answer() -> Result[i64, Error]:\n    return ok(42)\n",
         true,
     );
-    let rust = emit::rust(&program).unwrap();
+    let rust = emit::rust(&checked_emission::seal(&program)).unwrap();
     assert!(rust.contains("async fn __nagi_serve("));
     assert!(rust.contains("async fn __route_0("));
 }

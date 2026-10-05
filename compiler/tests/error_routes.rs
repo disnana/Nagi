@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 
 #[test]
@@ -37,7 +39,7 @@ fn existing_data_and_html_http_routes_keep_their_representations() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let rust = emit::rust(&low).unwrap();
+    let rust = emit::rust(&checked_emission::seal(&low)).unwrap();
     assert!(rust.contains("serde::Serialize"));
     assert!(rust.contains("__route_"));
 }

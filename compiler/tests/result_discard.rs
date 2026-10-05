@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{
     fs,
@@ -44,7 +46,10 @@ fn stored_passed_and_returned_owned_values_remain_accepted() {
     .unwrap();
     let low = emit::low(&high);
     let reparsed = checked(&low, false).unwrap_or_else(|error| panic!("{low}\n{error}"));
-    assert_eq!(emit::rust(&high).unwrap(), emit::rust(&reparsed).unwrap());
+    assert_eq!(
+        emit::rust(&checked_emission::seal(&high)).unwrap(),
+        emit::rust(&checked_emission::seal(&reparsed)).unwrap()
+    );
 }
 
 #[test]

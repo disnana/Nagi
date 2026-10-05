@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser, source};
 use std::{
     fs,
@@ -164,8 +166,8 @@ fn completed_copy_operands_disjoint_fields_and_temporary_views_remain_valid() {
     let high = checked(text, true).unwrap();
     let low = emit::low(&high);
     let low = checked(&low, false).unwrap();
-    let rust = emit::rust(&high).unwrap();
-    assert_eq!(rust, emit::rust(&low).unwrap());
+    let rust = emit::rust(&checked_emission::seal(&high)).unwrap();
+    assert_eq!(rust, emit::rust(&checked_emission::seal(&low)).unwrap());
 
     let fixture = Fixture::new();
     let source = fixture.0.join("main.rs");

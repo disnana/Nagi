@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{
     fs,
@@ -26,7 +28,11 @@ impl Fixture {
         let binary = self
             .0
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        fs::write(&source, emit::rust(program).unwrap() + ASSERTIONS).unwrap();
+        fs::write(
+            &source,
+            emit::rust(&checked_emission::seal(program)).unwrap() + ASSERTIONS,
+        )
+        .unwrap();
         let output = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
             .args(["--edition=2021", "--test"])
             .arg(&source)
@@ -87,7 +93,7 @@ fn branch_copies_are_synthetic_and_preserve_public_and_callback_lifetimes() {
     generated_low.restore_lines(&mut saved_low).unwrap();
     check::check(&mut saved_low).unwrap();
     for program in [&high, &saved_low] {
-        let generated = emit::rust_with_lines(program).unwrap();
+        let generated = emit::rust_with_lines(&checked_emission::seal(program)).unwrap();
         assert!(generated.text.contains(
             "pub fn mapped<'a>(mut flag: ::std::primitive::bool, mut part: &'a ::std::primitive::str"
         ));
@@ -130,7 +136,7 @@ fn branch_copies_are_synthetic_and_preserve_public_and_callback_lifetimes() {
         "def callback_slice(flag: bool, callbacks: view[fn[view[str], view[str]]]) -> i64:\n    alias = callbacks\n    if flag:\n        replacements = [identity]\n        alias = view(replacements)\n        return len(alias)\n    return len(alias)\ndef identity(part: view[str]) -> view[str]:\n    return part\n",
         true,
     );
-    let generated = emit::rust(&program).unwrap();
+    let generated = emit::rust(&checked_emission::seal(&program)).unwrap();
     assert!(generated.contains(
         "mut callbacks: &'a [for<'nagi_fn_1> fn(&'nagi_fn_1 ::std::primitive::str) -> &'nagi_fn_1 ::std::primitive::str]"
     ));
@@ -151,7 +157,7 @@ fn terminating_parent_blocks_respect_loop_and_pattern_binding_names() {
         false,
     );
     for program in [&high, &saved_low, &handwritten_low] {
-        let generated = emit::rust(program).unwrap();
+        let generated = emit::rust(&checked_emission::seal(program)).unwrap();
         assert!(!generated.contains("let mut alias: &::std::primitive::str = alias;"));
     }
 

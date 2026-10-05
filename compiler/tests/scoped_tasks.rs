@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -11,7 +13,7 @@ fn roundtrip(source: &str) -> String {
     let high = checked(source).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    emit::rust(&low).unwrap()
+    emit::rust(&checked_emission::seal(&low)).unwrap()
 }
 
 #[test]

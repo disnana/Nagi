@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser, source};
 use std::{
     fs,
@@ -46,8 +48,8 @@ fn accepts_native(text: &str) {
     let high = checked(text, true).unwrap_or_else(|error| panic!("{text}\n{error}"));
     let low_text = emit::low(&high);
     let low = checked(&low_text, false).unwrap_or_else(|error| panic!("{low_text}\n{error}"));
-    let rust = emit::rust(&low).unwrap();
-    assert_eq!(rust, emit::rust(&high).unwrap());
+    let rust = emit::rust(&checked_emission::seal(&low)).unwrap();
+    assert_eq!(rust, emit::rust(&checked_emission::seal(&high)).unwrap());
     let fixture = Fixture::new();
     let source = fixture.0.join("main.rs");
     fs::write(&source, rust).unwrap();

@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{fs, process::Command};
 static ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -17,7 +19,11 @@ fn accepts(source: &str) {
         ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     fs::create_dir_all(&root).unwrap();
-    fs::write(root.join("main.rs"), emit::rust(&low).unwrap()).unwrap();
+    fs::write(
+        root.join("main.rs"),
+        emit::rust(&checked_emission::seal(&low)).unwrap(),
+    )
+    .unwrap();
     let result = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
         .args(["--edition=2021", "--crate-type=lib", "--emit=metadata"])
         .arg(root.join("main.rs"))

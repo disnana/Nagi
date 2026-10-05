@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{
     fs,
@@ -26,7 +28,7 @@ impl Fixture {
         fs::write(&adapter, NATIVE_ADAPTER).unwrap();
         let rust = format!(
             "{}\n{}\n#[path = {}]\nmod native;\n{}",
-            emit::rust(program).unwrap(),
+            emit::rust(&checked_emission::seal(program)).unwrap(),
             RUNTIME,
             serde_json::to_string(&adapter.file_name().unwrap().to_string_lossy()).unwrap(),
             ASSERTIONS

@@ -1,4 +1,8 @@
-use crate::ast::{block_returns as returning_block, *};
+use crate::ast::*;
+use crate::checked::{
+    BlockPlan, CheckedProgram, CompareRead, CopyRead, EmissionPlan, ExpressionKey, ExpressionPlan,
+    FunctionPlan, IteratorRead, MainError, RouteInput, RouteOutput, StaticRead, ViewRead,
+};
 use crate::diagnostics::Generated;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -303,24 +307,12 @@ pub fn low_with_lines(p: &Program) -> Generated {
     out
 }
 pub fn rust_type(t: &Type) -> String {
-    rust_type_at(
-        t,
-        0,
-        &RustTypes {
-            raw_classes: &[],
-            enums: &[],
-            modules: &ModuleMetadata::default(),
-            storage_slots: &BTreeSet::new(),
-            expression_uses: &BTreeMap::new(),
-            function_error: None,
-            error_exit: ErrorExit::Function,
-        },
-    )
+    crate::check::checked::unmapped_rust_type(t)
 }
 struct RustTypes<'a> {
-    raw_classes: &'a [Class],
     enums: &'a [Enum],
-    modules: &'a ModuleMetadata,
+    plan: Option<&'a EmissionPlan>,
+    function: Option<&'a FunctionPlan>,
     storage_slots: &'a BTreeSet<String>,
     expression_uses: &'a BTreeMap<ExprUseId, ExprUseMode>,
     function_error: Option<&'a Type>,
@@ -352,8 +344,17 @@ fn try_result(value: String, types: &RustTypes<'_>) -> String {
 }
 
 impl RustTypes<'_> {
+    fn expression(&self, e: &Expr) -> &ExpressionPlan {
+        &self.function.expect("sealed function plan").expressions[&ExpressionKey::of(e)]
+    }
+
     fn ty(&self, t: &Type) -> String {
-        rust_type_at(t, 0, self)
+        self.plan
+            .expect("sealed type plan")
+            .rust_types
+            .get(t)
+            .expect("sealed Rust type")
+            .clone()
     }
 
     fn variant(&self, path: &str) -> &EnumVariant {
@@ -376,127 +377,6 @@ fn rust_enum_path(path: &str) -> String {
     format!("{enumeration}::{variant}")
 }
 
-fn registered_resource(symbol: &str, modules: &ModuleMetadata) -> Option<crate::stdlib::Resource> {
-    let resource = crate::stdlib::resource(symbol)?;
-    let definition = modules.definition(symbol)?;
-    (definition.id == crate::stdlib::resource_id(resource)).then_some(resource)
-}
-
-fn registered_rust_path(symbol: &str, modules: &ModuleMetadata) -> Option<&'static str> {
-    if let Some(resource) = registered_resource(symbol, modules) {
-        Some(crate::stdlib::resource_info(resource).rust_path)
-    } else {
-        let operation = crate::stdlib::operation(symbol)?;
-        let definition = modules.definition(symbol)?;
-        (definition.id == crate::stdlib::function_id(operation))
-            .then_some(crate::stdlib::operation_info(operation).rust_path)
-    }
-}
-
-fn resource_type(mut ty: &Type, types: &RustTypes<'_>) -> Option<crate::stdlib::Resource> {
-    while matches!(ty.0.as_str(), "owned" | "shared" | "view") {
-        ty = &ty.1[0];
-    }
-    registered_resource(&ty.0, types.modules)
-}
-
-fn native_resource_view(ty: &Type, types: &RustTypes<'_>) -> Option<crate::stdlib::Resource> {
-    let element = crate::stdlib::native_view_element(ty)?;
-    registered_resource(&element.0, types.modules)
-}
-
-fn rust_type_at(t: &Type, depth: usize, types: &RustTypes<'_>) -> String {
-    if let Some(resource) = registered_resource(&t.0, types.modules) {
-        let path = crate::stdlib::resource_info(resource).rust_path;
-        return if t.1.is_empty() {
-            path.into()
-        } else {
-            format!(
-                "{path}<{}>",
-                t.1.iter()
-                    .map(|arg| rust_type_at(arg, depth + 1, types))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
-    }
-    match t.0.as_str() {
-        "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" | "bool" => {
-            if types.raw_classes.iter().any(|class| class.name == t.0) {
-                t.0.clone()
-            } else {
-                format!("::std::primitive::{}", t.0)
-            }
-        }
-        "str" => "::std::string::String".into(),
-        "bytes" => "::std::vec::Vec<::std::primitive::u8>".into(),
-        "unit" => "()".into(),
-        "Error" => "::nagi_runtime::Error".into(),
-        "Html" => "::nagi_runtime::axum::response::Html<::std::string::String>".into(),
-        "Db" => "::nagi_runtime::Db".into(),
-        "UUID" => "::nagi_runtime::Uuid".into(),
-        "timestamp" => "::nagi_runtime::Timestamp".into(),
-        "fn" if !t.1.is_empty() => {
-            let signature = format!(
-                "fn({}) -> {}",
-                t.1[..t.1.len() - 1]
-                    .iter()
-                    .map(|arg| rust_type_at(arg, depth + 1, types))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                rust_type_at(t.1.last().unwrap(), depth + 1, types)
-            );
-            // Nested function types bind their own views during recursion.
-            // Only this function's inputs can bind its remaining view lifetimes.
-            if t.1[..t.1.len() - 1].iter().any(Type::contains_view) {
-                let lifetime = format!("'nagi_fn_{depth}");
-                format!(
-                    "for<{lifetime}> {}",
-                    signature.replace("&'a ", &format!("&{lifetime} "))
-                )
-            } else if t.function_view_return_is_static() {
-                signature.replace("&'a ", "&'static ")
-            } else {
-                signature
-            }
-        }
-        "view" => {
-            let a = t.inner();
-            if native_resource_view(t, types).is_some() {
-                return format!("&'a {}", rust_type_at(&a, depth + 1, types));
-            }
-            match a.0.as_str() {
-                "str" => "&'a ::std::primitive::str".into(),
-                "bytes" => "&'a [::std::primitive::u8]".into(),
-                _ => format!("&'a [{}]", rust_type_at(&a, depth + 1, types)),
-            }
-        }
-        "owned" => rust_type_at(&t.inner(), depth + 1, types),
-        "shared" => format!(
-            "::std::sync::Arc<{}>",
-            rust_type_at(&t.inner(), depth + 1, types)
-        ),
-        "List" => format!(
-            "::std::vec::Vec<{}>",
-            rust_type_at(&t.inner(), depth + 1, types)
-        ),
-        "Map" => format!(
-            "::std::collections::HashMap<{}, {}>",
-            rust_type_at(&t.1[0], depth + 1, types),
-            rust_type_at(&t.1[1], depth + 1, types)
-        ),
-        "Option" | "Result" => format!(
-            "::std::{}::{}<{}>",
-            if t.0 == "Option" { "option" } else { "result" },
-            t.0,
-            t.1.iter()
-                .map(|arg| rust_type_at(arg, depth + 1, types))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        _ => t.0.clone(),
-    }
-}
 fn local_type(t: &Type, types: &RustTypes<'_>) -> String {
     types.ty(t).replace("&'a ", "&")
 }
@@ -504,17 +384,23 @@ fn local_type(t: &Type, types: &RustTypes<'_>) -> String {
 // static label, so later arguments may still move its Error without extending
 // a borrow. Owned assignments/returns continue to use re() and make a String.
 fn static_string(e: &Expr, types: &RustTypes<'_>) -> Option<String> {
-    match &e.kind {
-        E::Str(value) => Some(quote(value)),
-        E::Call(name, _, args)
-            if name == "error_kind" && e.resolution == Some(NameResolution::Builtin) =>
-        {
+    match types.expression(e).static_read {
+        StaticRead::Literal => {
+            let E::Str(value) = &e.kind else {
+                unreachable!("sealed literal")
+            };
+            Some(quote(value))
+        }
+        StaticRead::ErrorKind => {
+            let E::Call(_, _, args) = &e.kind else {
+                unreachable!("sealed call")
+            };
             Some(format!(
                 "::nagi_runtime::error_kind(&({}))",
                 re(&args[0], types)
             ))
         }
-        _ => None,
+        StaticRead::None => None,
     }
 }
 
@@ -525,7 +411,7 @@ fn string_arg(e: &Expr, types: &RustTypes<'_>) -> String {
 fn reference_arg(e: &Expr, types: &RustTypes<'_>) -> String {
     if let Some(borrowed) = static_string(e, types) {
         borrowed
-    } else if e.ty.as_ref().is_some_and(Type::is_view) {
+    } else if types.expression(e).reference_is_view {
         re(e, types)
     } else {
         format!("&({})", re(e, types))
@@ -538,17 +424,11 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
             // Formatting and container operations do not always give Rust a
             // numeric type context. Preserve the type selected by the checker
             // instead of allowing Rust's default i32/f64 inference to replace it.
-            match e.ty.as_ref() {
-                Some(t)
-                    if matches!(
-                        t.0.as_str(),
-                        "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64"
-                    ) =>
-                {
-                    format!("{s}{}", t.0)
-                }
-                _ => s.clone(),
-            }
+            types
+                .expression(e)
+                .numeric_suffix
+                .as_ref()
+                .map_or_else(|| s.clone(), |suffix| format!("{s}{suffix}"))
         }
         E::Name(s) => {
             if types.storage_slots.contains(s) {
@@ -561,13 +441,18 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                         format!("(*{s}.as_mut().expect(\"checked view binding\"))")
                     }
                 }
-            } else if e.resolution == Some(NameResolution::BorrowedLocal) {
+            } else if types.expression(e).argument_resolution == Some(NameResolution::BorrowedLocal)
+            {
                 format!("(*{s})")
-            } else if e.resolution == Some(NameResolution::Standard) {
-                registered_rust_path(s, types.modules)
-                    .expect("checked standard definition")
-                    .into()
-            } else if e.resolution == ::std::option::Option::Some(NameResolution::Function) {
+            } else if types.expression(e).argument_resolution == Some(NameResolution::Standard) {
+                types
+                    .expression(e)
+                    .symbol_path
+                    .clone()
+                    .expect("sealed standard path")
+            } else if types.expression(e).argument_resolution
+                == ::std::option::Option::Some(NameResolution::Function)
+            {
                 format!("crate::{s}")
             } else {
                 s.clone()
@@ -577,100 +462,64 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
         E::Bool(b) => b.to_string(),
         E::Null => "::std::option::Option::None".into(),
         E::Binary(a, o, b) => {
-            let comparison = matches!(o.as_str(), "==" | "!=" | "<" | ">" | "<=" | ">=");
-            let borrowed_content = |value: &Expr| {
-                let mut ty = value.ty.as_ref()?;
-                while ty.0 == "owned" {
-                    ty = ty.1.first()?;
-                }
-                let borrowed = ty.is_view();
-                if borrowed {
-                    ty = ty.1.first()?;
-                }
-                match ty.0.as_str() {
-                    "str" => Some(("str", borrowed)),
-                    "bytes" => Some(("bytes", borrowed)),
-                    _ => None,
-                }
-            };
-            let content = if comparison {
-                borrowed_content(a)
-                    .zip(borrowed_content(b))
-                    .filter(|((left, _), (right, _))| left == right)
-                    .map(|((content, _), _)| content)
-            } else {
-                None
-            };
-            let operand = |value: &Expr| {
-                if let Some(content) = content {
-                    if let Some(borrowed) = static_string(value, types) {
-                        return borrowed;
-                    }
-                    if borrowed_content(value).is_some_and(|(_, borrowed)| !borrowed) {
-                        return format!(
-                            "({}).{}()",
-                            re(value, types),
-                            if content == "str" {
-                                "as_str"
-                            } else {
-                                "as_slice"
-                            }
-                        );
-                    }
-                }
-                if matches!(o.as_str(), "==" | "!=") {
-                    if let E::Str(literal) = &value.kind {
-                        return quote(literal);
-                    }
-                }
-                re(value, types)
+            let (left, right) = types
+                .expression(e)
+                .comparison
+                .expect("sealed comparison plan");
+            let operand = |value: &Expr, read: CompareRead| match read {
+                CompareRead::Static => static_string(value, types).expect("sealed static operand"),
+                CompareRead::Str => format!("({}).as_str()", re(value, types)),
+                CompareRead::Slice => format!("({}).as_slice()", re(value, types)),
+                CompareRead::Value => re(value, types),
             };
             format!(
                 "({} {} {})",
-                operand(a),
+                operand(a, left),
                 match o.as_str() {
                     "and" => "&&",
                     "or" => "||",
                     _ => o,
                 },
-                operand(b)
+                operand(b, right)
             )
         }
         E::Unary(o, x) => {
-            if let Some(ty) = crate::constant_eval::signed_minimum(e) {
-                format!("(::std::primitive::{}::MIN)", ty.0)
+            if let Some(ty) = &types.expression(e).minimum {
+                format!("(::std::primitive::{ty}::MIN)")
             } else {
                 format!("{}({})", if o == "not" { "!" } else { o }, re(x, types))
             }
         }
-        E::Field(x, n) if e.resolution == Some(NameResolution::Enum) => {
-            format!("{}::{n}", re(x, types))
+        E::Field(x, n) if types.expression(e).argument_resolution == Some(NameResolution::Enum) => {
+            types
+                .expression(e)
+                .symbol_path
+                .clone()
+                .expect("sealed enum path")
         }
-        E::Field(x, n) if e.resolution == Some(NameResolution::ResourceConstant) => {
-            let E::Name(owner) = &x.kind else {
-                unreachable!("checked resource constant owner")
-            };
-            let resource =
-                registered_resource(owner, types.modules).expect("checked resource constant type");
-            let constant = crate::stdlib::constant(resource, n).expect("checked resource constant");
-            format!(
-                "{}::{}",
-                crate::stdlib::resource_info(resource).rust_path,
-                constant.native_name
-            )
+        E::Field(x, n)
+            if types.expression(e).argument_resolution
+                == Some(NameResolution::ResourceConstant) =>
+        {
+            types
+                .expression(e)
+                .symbol_path
+                .clone()
+                .expect("sealed constant path")
         }
-        E::Field(x, n) if e.resolution == Some(NameResolution::ResourceField) => {
-            let resource = resource_type(
-                x.ty.as_ref().expect("checked resource receiver type"),
-                types,
-            )
-            .expect("checked resource field owner");
-            let field = crate::stdlib::field(resource, n).expect("checked resource field");
+        E::Field(x, n)
+            if types.expression(e).argument_resolution == Some(NameResolution::ResourceField) =>
+        {
+            let (accessor, owned) = types
+                .expression(e)
+                .field
+                .as_ref()
+                .expect("sealed field accessor");
             format!(
                 "({}).{}{}",
                 re(x, types),
-                field.accessor,
-                if field.owned { "" } else { "()" }
+                accessor,
+                if *owned { "" } else { "()" }
             )
         }
         E::Field(x, n) => format!("({}).{n}", re(x, types)),
@@ -687,12 +536,13 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 .join(", ")
         ),
         E::Record(n, a) => {
-            let path = if e.resolution == Some(NameResolution::Enum) {
+            let path = if types.expression(e).argument_resolution == Some(NameResolution::Enum) {
                 rust_enum_path(n)
             } else {
                 n.clone()
             };
-            if e.resolution == Some(NameResolution::Enum) && a.is_empty() {
+            if types.expression(e).argument_resolution == Some(NameResolution::Enum) && a.is_empty()
+            {
                 path
             } else {
                 format!(
@@ -707,12 +557,15 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
         E::Await(x) => format!("({}).await", re(x, types)),
         E::Try(x) => try_result(re(x, types), types),
         E::Call(n, ts, a) => {
-            if e.resolution == Some(NameResolution::Standard) {
-                let operation = crate::stdlib::operation(n).expect("checked standard operation");
-                let info = crate::stdlib::operation_info(operation);
+            if types.expression(e).argument_resolution == Some(NameResolution::Standard) {
+                let (path, parameters, emit_type_arguments) = types
+                    .expression(e)
+                    .operation
+                    .as_ref()
+                    .expect("sealed operation");
                 let arguments = a
                     .iter()
-                    .zip(info.parameters)
+                    .zip(parameters)
                     .map(|(argument, passing)| match passing {
                         crate::stdlib::Passing::Reference => reference_arg(argument, types),
                         crate::stdlib::Passing::Borrow => {
@@ -724,7 +577,7 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                let generic = if ts.is_empty() || !info.emit_type_arguments {
+                let generic = if ts.is_empty() || !*emit_type_arguments {
                     String::new()
                 } else {
                     format!(
@@ -735,11 +588,11 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                             .join(", ")
                     )
                 };
-                return format!("{}{generic}({arguments})", info.rust_path);
+                return format!("{}{generic}({arguments})", path);
             }
             let args = a.iter().map(|e| re(e, types)).collect::<Vec<_>>();
             let join = args.join(", ");
-            match e.resolution {
+            match types.expression(e).argument_resolution {
                 Some(NameResolution::Enum) => {
                     let path = rust_enum_path(n);
                     let variant = types.variant(n);
@@ -785,27 +638,22 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 "include_text" => format!("include_str!({}).to_owned()", string_arg(&a[0], types)),
                 "assert_true" => format!("assert!({})", args[0]),
                 "view" => {
-                    if e.resolution == Some(NameResolution::Builtin) {
+                    if types.expression(e).argument_resolution == Some(NameResolution::Builtin) {
                         if let Some(borrowed) = static_string(&a[0], types) {
                             return borrowed;
                         }
                     }
-                    if e.ty.as_ref().and_then(|ty| native_resource_view(ty, types)).is_some() {
-                        format!("&({})", args[0])
-                    } else {
-                        format!("({}).{}()", args[0], if a[0].ty.as_ref().is_some_and(|t| t.0 == "str") { "as_str" } else { "as_slice" })
+                    match types.expression(e).view {
+                        ViewRead::Native => format!("&({})", args[0]),
+                        ViewRead::Str => format!("({}).as_str()", args[0]),
+                        ViewRead::Slice => format!("({}).as_slice()", args[0]),
                     }
                 }
-                "copy" => {
-                    if a[0].ty.as_ref().and_then(|ty| native_resource_view(ty, types))
-                        .is_some_and(|resource| crate::stdlib::resource_info(resource).copy) {
-                        format!("*({})", args[0])
-                    } else if e.ty.as_ref().is_some_and(|ty| ty.0 == "List") {
-                        format!("({}).to_vec()", args[0])
-                    } else {
-                        format!("({}).to_owned()", args[0])
-                    }
-                }
+                "copy" => match types.expression(e).copy {
+                    CopyRead::Native => format!("*({})", args[0]),
+                    CopyRead::List => format!("({}).to_vec()", args[0]),
+                    CopyRead::Owned => format!("({}).to_owned()", args[0]),
+                },
                 "share" => format!("::std::sync::Arc::new({})", args[0]),
                 "clone_shared" => format!("::std::sync::Arc::clone(&{})", args[0]),
                 "len" => format!("(({}).len() as ::std::primitive::i64)", string_or_value(&a[0], types)),
@@ -850,7 +698,8 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                         args[0],
                         n.trim_start_matches("db_"),
                         g,
-                        std::iter::once(if let E::Str(s) = &a[1].kind {
+                        std::iter::once(if types.expression(e).sql_static {
+                            let E::Str(s) = &a[1].kind else { unreachable!("sealed static SQL") };
                             format!("::nagi_runtime::Sql::Static({})", quote(s))
                         } else {
                             format!("::nagi_runtime::Sql::Owned(({}).to_owned())", string_arg(&a[1], types))
@@ -861,9 +710,7 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                     )
                 }
                 "json_decode" => {
-                    let input = if a[0].ty.as_ref().is_some_and(|t| {
-                        t.0 == "str" || t == &Type::generic("view", vec![Type::named("str")])
-                    }) {
+                    let input = if types.expression(e).json_string {
                         format!("({}).as_bytes()", string_arg(&a[0], types))
                     } else {
                         format!("&({})", args[0])
@@ -877,7 +724,7 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 "uuid_format" => format!("{}.to_string()", args[0]),
                 "slice" => format!(
                     "::nagi_runtime::{}({}, {}, {})",
-                    if a[0].ty.as_ref().is_some_and(|t| t.inner().0 == "str") {
+                    if types.expression(e).slice_string {
                         "slice_str"
                     } else {
                         "slice"
@@ -905,44 +752,6 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
 fn string_or_value(e: &Expr, types: &RustTypes<'_>) -> String {
     static_string(e, types).unwrap_or_else(|| re(e, types))
 }
-fn assigned_outer_views(
-    ss: &[Stmt],
-    bindings: &BTreeMap<String, Type>,
-    assigned: &mut BTreeSet<String>,
-) {
-    for s in ss {
-        match &s.kind {
-            S::Assign { name, declare, .. } if !declare && bindings.contains_key(name) => {
-                assigned.insert(name.clone());
-            }
-            S::If(_, a, b) => {
-                assigned_outer_views(a, bindings, assigned);
-                assigned_outer_views(b, bindings, assigned);
-            }
-            S::While(_, body) | S::Scope(body) => {
-                assigned_outer_views(body, bindings, assigned);
-            }
-            S::For(name, _, body) => {
-                let mut outer = bindings.clone();
-                outer.remove(name);
-                assigned_outer_views(body, &outer, assigned);
-            }
-            S::Match(_, arms) => {
-                for arm in arms {
-                    let mut outer = bindings.clone();
-                    for binding in arm.pattern.bindings() {
-                        if let Some(name) = &binding.name {
-                            outer.remove(name);
-                        }
-                    }
-                    assigned_outer_views(&arm.body, &outer, assigned);
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
 fn flow_actions(
     actions: &[crate::view_flow::Action],
     out: &mut Generated,
@@ -977,26 +786,18 @@ fn rb_child(
     out: &mut Generated,
     n: usize,
     types: &RustTypes<'_>,
-    bindings: &BTreeMap<String, Type>,
+    plan: &BlockPlan,
     flow: Option<&crate::view_flow::Block>,
 ) {
-    if returning_block(ss) {
-        let mut assigned = BTreeSet::new();
-        assigned_outer_views(ss, bindings, &mut assigned);
-        // A returning path cannot update bindings on a continuing outer path.
-        // Give reassigned immutable references their own inferred lifetimes.
-        // Direct views are Copy references. Moving an owning container here
-        // could read an already-moved value or alter its destruction order.
-        for name in assigned {
-            out.origin(None);
-            out.push_str(&format!(
-                "{}let mut {name}: {} = {name};\n",
-                "    ".repeat(n),
-                local_type(&bindings[&name], types)
-            ));
-        }
+    for (name, ty) in &plan.shadow {
+        out.origin(None);
+        out.push_str(&format!(
+            "{}let mut {name}: {} = {name};\n",
+            "    ".repeat(n),
+            local_type(ty, types)
+        ));
     }
-    rb(ss, out, n, types, bindings, flow);
+    rb(ss, out, n, types, plan, flow);
 }
 
 fn rb(
@@ -1004,16 +805,15 @@ fn rb(
     out: &mut Generated,
     n: usize,
     types: &RustTypes<'_>,
-    outer_bindings: &BTreeMap<String, Type>,
+    plan: &BlockPlan,
     flow: Option<&crate::view_flow::Block>,
 ) {
-    let mut bindings = outer_bindings.clone();
     if let Some(flow) = flow {
         flow_actions(&flow.entry, out, n, types);
     }
     let pad = "    ".repeat(n);
-    let terminal = flow.map_or_else(|| returning_block(ss), |block| block.terminal);
     for (index, original) in ss.iter().enumerate() {
+        let decision = &plan.statements[index];
         let node = flow.map(|block| &block.statements[index]);
         let s = node.map_or(original, |node| &node.stmt);
         if let Some(node) = node {
@@ -1062,15 +862,13 @@ fn rb(
                         );
                     }
                 } else {
-                    let rebind = terminal && annotation.as_ref().is_some_and(Type::is_view);
+                    let rebind = decision.rebind;
                     let storage = types.storage_slots.contains(name);
                     let value = re(value, types);
                     out.push_str(&format!(
                         "{}{name}{} = {};\n",
                         if *declare || rebind { "let mut " } else { "" },
-                        if (*declare || rebind)
-                            && !annotation.as_ref().is_some_and(Type::is_async_function)
-                        {
+                        if decision.annotate {
                             let ty = local_type(annotation.as_ref().unwrap(), types);
                             format!(
                                 ": {}",
@@ -1090,9 +888,6 @@ fn rb(
                         }
                     ));
                 }
-                if let Some(ty) = annotation.as_ref().filter(|ty| ty.is_view()) {
-                    bindings.insert(name.clone(), ty.clone());
-                }
             }
             S::Return(e) => out.push_str(&format!(
                 "return {};\n",
@@ -1108,7 +903,7 @@ fn rb(
                     out,
                     n + 1,
                     types,
-                    &bindings,
+                    &decision.children[0],
                     node.map(|node| &node.children[0]),
                 );
                 out.origin(::std::option::Option::Some(s.line));
@@ -1120,7 +915,7 @@ fn rb(
                         out,
                         n + 1,
                         types,
-                        &bindings,
+                        &decision.children[1],
                         node.map(|node| &node.children[1]),
                     );
                     out.origin(::std::option::Option::Some(s.line));
@@ -1143,7 +938,7 @@ fn rb(
                     out,
                     n + 1,
                     types,
-                    &bindings,
+                    &decision.children[0],
                     node.map(|node| &node.children[0]),
                 );
                 out.origin(::std::option::Option::Some(s.line));
@@ -1202,21 +997,12 @@ fn rb(
                         }
                     };
                     out.push_str(&format!("{pad}    {pattern} => {{\n"));
-                    let mut arm_bindings = bindings.clone();
-                    for binding in arm.pattern.bindings() {
-                        if let Some(name) = &binding.name {
-                            arm_bindings.remove(name);
-                            if let Some(ty) = binding.ty.as_ref().filter(|ty| ty.is_view()) {
-                                arm_bindings.insert(name.clone(), ty.clone());
-                            }
-                        }
-                    }
                     rb_child(
                         &arm.body,
                         out,
                         n + 2,
                         types,
-                        &arm_bindings,
+                        &decision.children[index],
                         node.map(|node| &node.children[index]),
                     );
                     out.origin(::std::option::Option::Some(arm.line));
@@ -1226,32 +1012,25 @@ fn rb(
                 out.push_str(&format!("{pad}}}\n"));
             }
             S::For(v, e, b) => {
-                let iterator = if e.ty.as_ref().is_some_and(|t| t.0 == "Range") {
-                    re(e, types)
-                } else if s.binding_borrowed {
-                    format!("({}).iter()", re(e, types))
-                } else {
-                    format!("({}).iter().copied()", re(e, types))
+                let iterator = match decision.iterator.expect("sealed iterator") {
+                    IteratorRead::Range => re(e, types),
+                    IteratorRead::Borrowed => format!("({}).iter()", re(e, types)),
+                    IteratorRead::Copied => format!("({}).iter().copied()", re(e, types)),
                 };
                 out.push_str(&format!("for mut {v} in {iterator} {{\n"));
-                let mut loop_bindings = bindings.clone();
-                loop_bindings.remove(v);
-                if let Some(ty) = s.binding_type.as_ref().filter(|ty| ty.is_view()) {
-                    loop_bindings.insert(v.clone(), ty.clone());
-                }
                 rb_child(
                     b,
                     out,
                     n + 1,
                     types,
-                    &loop_bindings,
+                    &decision.children[0],
                     node.map(|node| &node.children[0]),
                 );
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
             S::Spawn(e) => {
-                let returns_result = e.ty.as_ref().is_some_and(|t| t.inner().0 == "Result");
+                let returns_result = decision.spawn_result;
                 out.push_str(&format!(
                     "{{ let __nagi_spawn_future = {}; __scope.spawn(async move {{ __nagi_spawn_future.await{} }}); }}\n",
                     re(e, types),
@@ -1287,7 +1066,7 @@ fn rb(
                     out,
                     n + 2,
                     &body_types,
-                    &bindings,
+                    &decision.children[0],
                     node.map(|node| &node.children[0]),
                 );
                 out.origin(::std::option::Option::Some(s.line));
@@ -1302,38 +1081,14 @@ fn rb(
         flow_actions(&block.tail, out, n, types);
     }
 }
-pub fn rust(p: &Program) -> Result<String, String> {
+/// Rust generation accepts only a sealed, finally checked program.
+///
+/// ```compile_fail,E0308
+/// let unchecked = nagic::ast::Program::default();
+/// let _ = nagic::emit::rust(&unchecked);
+/// ```
+pub fn rust(p: &CheckedProgram) -> Result<String, String> {
     ::std::result::Result::Ok(rust_with_lines(p)?.text)
-}
-
-fn calls_builtin(statements: &[Stmt], builtin: &str) -> bool {
-    fn expr(e: &Expr, builtin: &str) -> bool {
-        match &e.kind {
-            E::Call(name, _, args) => {
-                (name == builtin && e.resolution == Some(NameResolution::Builtin))
-                    || args.iter().any(|e| expr(e, builtin))
-            }
-            E::Record(_, fields) => fields.iter().any(|(_, e)| expr(e, builtin)),
-            E::List(values) => values.iter().any(|e| expr(e, builtin)),
-            E::Binary(a, _, b) | E::Index(a, b) => expr(a, builtin) || expr(b, builtin),
-            E::Unary(_, e) | E::Field(e, _) | E::Await(e) | E::Try(e) => expr(e, builtin),
-            E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null | E::Name(_) => false,
-        }
-    }
-    statements.iter().any(|s| match &s.kind {
-        S::Assign { value, .. } | S::Expr(value) | S::Spawn(value) => expr(value, builtin),
-        S::Return(value) => value.as_ref().is_some_and(|e| expr(e, builtin)),
-        S::If(condition, a, b) => {
-            expr(condition, builtin) || calls_builtin(a, builtin) || calls_builtin(b, builtin)
-        }
-        S::Match(value, arms) => {
-            expr(value, builtin) || arms.iter().any(|arm| calls_builtin(&arm.body, builtin))
-        }
-        S::While(condition, body) | S::For(_, condition, body) => {
-            expr(condition, builtin) || calls_builtin(body, builtin)
-        }
-        S::Scope(body) => calls_builtin(body, builtin),
-    })
 }
 
 fn charge_impl_start(out: &mut Generated, name: &str, inline_only: bool) {
@@ -1356,79 +1111,30 @@ fn charge_fields(out: &mut Generated, fields: impl Iterator<Item = String>, inde
     ));
 }
 
-pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
-    crate::routes::validate(p)?;
-    let names = crate::rust_names::RustNames::new(p);
-    let mapped = names.program(p);
-    let p = &mapped;
+pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
+    checked.validate_for_emission()?;
+    let plan = &checked.emission;
+    let names = &plan.names;
+    let p = &plan.program;
     // Direct parser/check callers have no module identities. Preserve their
     // legacy primitive-named records; resolved files use canonical class
     // symbols and keep intrinsic types independent of public adapter aliases.
     let types = RustTypes {
-        raw_classes: if p.modules.root.is_none() {
-            &p.classes
-        } else {
-            &[]
-        },
         enums: &p.enums,
-        modules: &p.modules,
+        plan: Some(plan),
+        function: None,
         storage_slots: &BTreeSet::new(),
         expression_uses: &BTreeMap::new(),
         function_error: None,
         error_exit: ErrorExit::Function,
     };
-    fn copy_type(t: &Type, p: &Program, depth: usize) -> bool {
-        if let Some(resource) = registered_resource(&t.0, &p.modules) {
-            return crate::stdlib::resource_info(resource).copy;
-        }
-        if depth > 64 || matches!(t.0.as_str(), "str" | "bytes" | "Error" | "Db" | "Html") {
-            false
-        } else if let Some(enumeration) = p.enums.iter().find(|definition| definition.name == t.0) {
-            enumeration.variants.iter().all(|variant| {
-                variant
-                    .fields
-                    .iter()
-                    .all(|(_, ty)| copy_type(ty, p, depth + 1))
-            })
-        } else if t.is_copy() {
-            true
-        } else if matches!(t.0.as_str(), "Option" | "owned") {
-            copy_type(&t.inner(), p, depth + 1)
-        } else if let ::std::option::Option::Some(c) = p.classes.iter().find(|c| c.name == t.0) {
-            c.fields.iter().all(|(_, t)| copy_type(t, p, depth + 1))
-        } else {
-            false
-        }
-    }
     let mut out =
         Generated::new("#![allow(unused_mut, unused_parens, unused_variables, dead_code)]\n");
-    let classes = p
-        .classes
-        .iter()
-        .map(|class| (class.name.clone(), class.clone()))
-        .collect();
-    let enums = p
-        .enums
-        .iter()
-        .map(|enumeration| (enumeration.name.clone(), enumeration.clone()))
-        .collect();
-    let actor_support = p.modules.definitions.iter().any(|definition| {
-        definition.id.module.0
-            == crate::stdlib::module_info(crate::stdlib::StandardModule::Actor).id
-            && crate::stdlib::definition(&definition.id)
-    });
-    for c in &p.classes {
-        out.origin(::std::option::Option::Some(c.line));
-        let copy = c.fields.iter().all(|(_, t)| copy_type(t, p, 0));
-        let serde = c
-            .fields
-            .iter()
-            .all(|(_, ty)| crate::capabilities::serde_type(ty, &classes, &enums));
-        let readable_debug = p.modules.definition(&c.name).is_some()
-            || names.original(&c.name) != c.name
-            || c.fields
-                .iter()
-                .any(|(field, _)| names.original(field) != field);
+    out.attach_provenance(checked.provenance().clone());
+    for (index, c) in p.classes.iter().enumerate() {
+        out.origin(Some(c.line));
+        let item = &plan.classes[index];
+        let (copy, serde, readable_debug) = (item.copy, item.serde, item.readable_debug);
         let mut derives = Vec::new();
         if !readable_debug {
             derives.push("Debug");
@@ -1484,28 +1190,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             }
             out.push_str(".finish()\n    }\n}\n");
         }
-        let db_compatible = c.fields.iter().all(|(_, t)| {
-            // owned[T] emits T itself, including when it wraps a nullable
-            // field or its scalar payload. Keep eligibility aligned with
-            // that native representation without admitting nested Option.
-            let mut scalar = t;
-            while scalar.0 == "owned" {
-                scalar = &scalar.1[0];
-            }
-            if scalar.0 == "Option" {
-                scalar = &scalar.1[0];
-            }
-            while scalar.0 == "owned" {
-                scalar = &scalar.1[0];
-            }
-            [
-                "i8", "i16", "i32", "i64", "u8", "u16", "u32", "f32", "f64", "bool", "str", "bytes",
-            ]
-            .contains(&scalar.0.as_str())
-                && (matches!(scalar.0.as_str(), "str" | "bytes")
-                    || !types.raw_classes.iter().any(|class| class.name == scalar.0))
-        });
-        if db_compatible {
+        if item.from_row {
             out.origin(::std::option::Option::None);
             out.push_str(&format!("impl ::nagi_runtime::FromRow for {} {{\n fn columns() -> &'static [&'static ::std::primitive::str] {{ &[{}] }}\n fn read(row: &::nagi_runtime::rusqlite::Row<'_>, ix: &[::std::primitive::usize]) -> ::nagi_runtime::rusqlite::Result<Self> {{ ::std::result::Result::Ok(Self {{\n",c.name,c.fields.iter().map(|(n,_)|quote(names.original(n))).collect::<Vec<_>>().join(",")));
             for (i, (n, _)) in c.fields.iter().enumerate() {
@@ -1513,16 +1198,9 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             }
             out.push_str("}) }\n}\n");
         }
-        if actor_support
-            && crate::capabilities::charge_type_supported(&Type::named(&c.name), &classes, &enums)
-                .is_ok()
-        {
+        if let Some(inline) = item.charge {
             out.origin(None);
-            charge_impl_start(
-                &mut out,
-                &c.name,
-                crate::capabilities::charge_inline_only(&Type::named(&c.name), &classes, &enums),
-            );
+            charge_impl_start(&mut out, &c.name, inline);
             charge_fields(
                 &mut out,
                 c.fields.iter().map(|(field, _)| format!("&self.{field}")),
@@ -1531,19 +1209,10 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             out.push_str("    }\n}\n");
         }
     }
-    for enumeration in &p.enums {
+    for (index, enumeration) in p.enums.iter().enumerate() {
         out.origin(Some(enumeration.line));
-        let copy = enumeration
-            .variants
-            .iter()
-            .all(|variant| variant.fields.iter().all(|(_, ty)| copy_type(ty, p, 0)));
-        let readable_debug = enumeration.variants.iter().any(|variant| {
-            names.original(&variant.name) != variant.name
-                || variant
-                    .fields
-                    .iter()
-                    .any(|(field, _)| names.original(field) != field)
-        });
+        let item = &plan.enums[index];
+        let (copy, readable_debug) = (item.copy, item.readable_debug);
         let mut derives = Vec::new();
         if !readable_debug {
             derives.push("Debug");
@@ -1614,24 +1283,9 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             }
             out.push_str("        }\n    }\n}\n");
         }
-        if actor_support
-            && crate::capabilities::charge_type_supported(
-                &Type::named(&enumeration.name),
-                &classes,
-                &enums,
-            )
-            .is_ok()
-        {
+        if let Some(inline) = item.charge {
             out.origin(None);
-            charge_impl_start(
-                &mut out,
-                &enumeration.name,
-                crate::capabilities::charge_inline_only(
-                    &Type::named(&enumeration.name),
-                    &classes,
-                    &enums,
-                ),
-            );
+            charge_impl_start(&mut out, &enumeration.name, inline);
             out.push_str("        match self {\n");
             for variant in &enumeration.variants {
                 if variant.fields.is_empty() {
@@ -1665,18 +1319,16 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             out.push_str("        }\n    }\n}\n");
         }
     }
-    for f in &p.functions {
+    for (index, f) in p.functions.iter().enumerate() {
+        let function = &plan.functions[index];
+        out.function_lineage(Some(function.origin.clone()));
         out.origin(::std::option::Option::Some(f.line));
         let name = if f.name == "main" {
             "__nagi_main"
         } else {
             &f.name
         };
-        let lifetime = if f.params.iter().any(|(_, t)| t.contains_view()) || f.ret.contains_view() {
-            "<'a>"
-        } else {
-            ""
-        };
+        let lifetime = if function.lifetime { "<'a>" } else { "" };
         out.push_str(&format!(
             "#[allow(non_snake_case, arithmetic_overflow)]\npub {}fn {name}{lifetime}({}) -> {} {{\n",
             if f.asynchronous { "async " } else { "" },
@@ -1699,9 +1351,10 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 if f.asynchronous { ".await" } else { "" }
             ));
         } else {
-            let flow = crate::view_flow::plan(f)?;
+            let flow = &function.flow;
             let types = RustTypes {
-                function_error: (f.ret.0 == "Result").then(|| &f.ret.1[1]),
+                function: Some(function),
+                function_error: function.error_type.as_ref(),
                 storage_slots: flow
                     .as_ref()
                     .map_or(types.storage_slots, |flow| &flow.storage_slots),
@@ -1719,10 +1372,6 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             // drop order then remains the same as the original parameter
             // drop order. These are ownership moves, with no payload clones
             // or heap allocations.
-            let needs_ordered_rebinding = f
-                .params
-                .iter()
-                .any(|(_, ty)| ty.contains_view() && !copy_type(ty, p, 0));
             out.origin(None);
             for (name, ty) in &f.params {
                 if let Some(actions) = flow
@@ -1730,25 +1379,19 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                     .and_then(|flow| flow.parameter_actions.get(name))
                 {
                     flow_actions(actions, &mut out, 1, &types);
-                } else if ty.contains_view() || needs_ordered_rebinding && !copy_type(ty, p, 0) {
+                } else if function.rebind_parameters.contains(name) {
                     out.push_str(&format!(
                         "    let mut {name}: {} = {name};\n",
                         local_type(ty, &types)
                     ));
                 }
             }
-            let bindings = f
-                .params
-                .iter()
-                .filter(|(_, ty)| ty.is_view())
-                .cloned()
-                .collect();
             rb(
                 &f.body,
                 &mut out,
                 1,
                 &types,
-                &bindings,
+                &function.body,
                 flow.as_ref().map(|flow| &flow.body),
             );
         }
@@ -1756,6 +1399,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         out.push_str("}\n");
     }
     out.origin(::std::option::Option::None);
+    out.function_lineage(None);
     // Public adapter names are aliases of the unique generated item, not new
     // wrapper types. Only a module's own definitions are exposed through an
     // `as` import; its imported names are not implicitly reexported.
@@ -1767,8 +1411,10 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 };
                 let alias = names.source_name(&binding.name);
                 let symbol = names.definition(definition);
-                let path = registered_rust_path(&definition.symbol, &p.modules)
-                    .map(str::to_owned)
+                let path = plan
+                    .native_paths
+                    .get(&definition.symbol)
+                    .cloned()
                     .unwrap_or_else(|| format!("crate::{symbol}"));
                 // The executable entry point owns Rust's root `main` name.
                 if alias != symbol && !(alias == "main" && id.kind == DefKind::Function) {
@@ -1783,8 +1429,10 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 for definition in p.modules.exports(module) {
                     let symbol = names.definition(definition);
                     let export = names.source_name(&definition.id.name);
-                    let path = registered_rust_path(&definition.symbol, &p.modules)
-                        .map(str::to_owned)
+                    let path = plan
+                        .native_paths
+                        .get(&definition.symbol)
+                        .cloned()
                         .unwrap_or_else(|| format!("crate::{symbol}"));
                     out.push_str(&format!(
                         "    #[allow(unused_imports)]\n    pub use {path} as {export};\n"
@@ -1794,25 +1442,15 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             }
         }
     }
-    let routes: Vec<_> = p
-        .functions
-        .iter()
-        .filter(|f| {
-            f.attrs
-                .iter()
-                .any(|(a, _)| ["get", "post", "put", "delete"].contains(&a.as_str()))
-        })
-        .collect();
-    if !routes.is_empty() || p.functions.iter().any(|f| calls_builtin(&f.body, "serve")) {
+    let routes = &plan.routes;
+    if plan.needs_server {
         out.push_str("async fn __nagi_serve(db: ::nagi_runtime::Db,port: ::std::primitive::i64) -> ::std::result::Result<(),::nagi_runtime::Error> {\nlet router= ::nagi_runtime::axum::Router::new()\n");
         let mut paths = std::collections::BTreeMap::<String, Vec<(String, usize)>>::new();
-        for (i, f) in routes.iter().enumerate() {
-            let (a, path) = f
-                .attrs
-                .iter()
-                .find(|(a, _)| ["get", "post", "put", "delete"].contains(&a.as_str()))
-                .unwrap();
-            paths.entry(path.clone()).or_default().push((a.clone(), i));
+        for (i, route) in routes.iter().enumerate() {
+            paths
+                .entry(route.path.clone())
+                .or_default()
+                .push((route.method.clone(), i));
         }
         for (path, methods) in paths {
             let mut it = methods.iter();
@@ -1827,38 +1465,33 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             out.push_str(")\n");
         }
         out.push_str(".with_state(db); ::nagi_runtime::serve(router,port).await\n}\n");
-        for (i, f) in routes.iter().enumerate() {
+        for (i, route) in routes.iter().enumerate() {
+            let f = &p.functions[route.function];
+            out.function_lineage(Some(plan.functions[route.function].origin.clone()));
             out.origin(::std::option::Option::Some(f.line));
-            let (_, path) = crate::routes::attribute(f).unwrap();
-            if !f.asynchronous || f.ret.0 != "Result" {
-                return ::std::result::Result::Err(format!(
-                    "route {} must be async and return Result",
-                    f.name
-                ));
-            }
             let mut extracts = vec![];
             let mut call = vec![];
             let mut pre = String::new();
             let mut query_fields = vec![];
             for (parameter_index, (n, t)) in f.params.iter().enumerate() {
-                if t.0 == "Db" {
+                if route.inputs[parameter_index] == RouteInput::State {
                     extracts.push(format!(
                         "::nagi_runtime::axum::extract::State({n}): ::nagi_runtime::axum::extract::State<::nagi_runtime::Db>"
                     ));
                     call.push(n.clone());
-                } else if n == "id" && t.0 == "i64" && crate::routes::has_capture(path) {
+                } else if route.inputs[parameter_index] == RouteInput::Capture {
                     extracts.push("::nagi_runtime::axum::extract::Path(id): ::nagi_runtime::axum::extract::Path<::std::primitive::i64>".into());
                     call.push(n.clone());
-                } else if t == &Type::generic("view", vec![Type::named("bytes")]) {
+                } else if route.inputs[parameter_index] == RouteInput::Bytes {
                     extracts.push(format!("{n}: ::nagi_runtime::axum::body::Bytes"));
                     call.push(format!("&{n}"));
-                } else if p.classes.iter().any(|c| c.name == t.0) {
+                } else if route.inputs[parameter_index] == RouteInput::Body {
                     extracts.push(format!(
                         "__body_{parameter_index}: ::nagi_runtime::axum::body::Bytes"
                     ));
                     pre.push_str(&format!("let {n}: {} = match ::nagi_runtime::decode(&__body_{parameter_index}) {{::std::result::Result::Ok(x)=>x,::std::result::Result::Err(e)=>return ::nagi_runtime::error_response(e)}};\n",types.ty(t)));
                     call.push(n.clone());
-                } else if ["str", "i64", "i32", "u64", "bool", "f64"].contains(&t.0.as_str()) {
+                } else if route.inputs[parameter_index] == RouteInput::Query {
                     query_fields.push((n.clone(), t.clone()));
                     pre.push_str(&format!("let {n}=__query.{n};\n"));
                     call.push(n.clone());
@@ -1877,9 +1510,9 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             // Body extractorはAxumの規則に従い最後。引数の順序は元の関数を維持する。
             extracts.sort_by_key(|s| s.contains("body::Bytes"));
             let invocation = format!("crate::{}({}).await", f.name, call.join(", "));
-            let response = if f.ret.inner().0 == "Html" {
+            let response = if route.output == RouteOutput::Html {
                 format!("match {invocation} {{ ::std::result::Result::Ok(v)=>::nagi_runtime::axum::response::IntoResponse::into_response(v),::std::result::Result::Err(e)=>::nagi_runtime::error_response(e) }}")
-            } else if f.ret.inner().0 == "Option" {
+            } else if route.output == RouteOutput::Optional {
                 format!("match {invocation} {{ ::std::result::Result::Ok(::std::option::Option::Some(v))=>::nagi_runtime::response(::std::result::Result::Ok(v)), ::std::result::Result::Ok(::std::option::Option::None)=>::nagi_runtime::error_response(::nagi_runtime::Error::not_found()),::std::result::Result::Err(e)=>::nagi_runtime::error_response(e) }}")
             } else {
                 format!("::nagi_runtime::response({invocation})")
@@ -1891,6 +1524,7 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         }
     }
     out.origin(::std::option::Option::None);
+    out.function_lineage(None);
     if let ::std::option::Option::Some(f) = p.functions.iter().find(|f| f.name == "main") {
         if !f.params.is_empty() {
             return ::std::result::Result::Err("mainは引数を取りません".into());
@@ -1905,32 +1539,16 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         } else {
             "__nagi_main()"
         };
-        let mut return_type = &f.ret;
-        while return_type.0 == "owned" {
-            return_type = &return_type.1[0];
-        }
-        if return_type.0 == "Result" {
-            let mut error_type = &return_type.1[1];
-            while error_type.0 == "owned" {
-                error_type = &error_type.1[0];
-            }
-            if crate::capabilities::debug_supported(error_type, &classes, &enums) {
-                let display = if error_type.0 == "Error" {
+        if plan.main_error != MainError::None {
+            if plan.main_error != MainError::Opaque {
+                let display = if plan.main_error == MainError::Display {
                     "{}"
                 } else {
                     "{:?}"
                 };
-                out.push_str(&format!(
-                    "if let ::std::result::Result::Err(e) = {call} {{ eprintln!({},e); ::std::process::exit(1); }}\n",
-                    quote(display)
-                ));
+                out.push_str(&format!("if let ::std::result::Result::Err(e) = {call} {{ eprintln!({},e); ::std::process::exit(1); }}\n", quote(display)));
             } else {
-                // Opaque errors still fail the process. Do not invent a Debug
-                // bound or expose a proof payload just to print that failure.
-                out.push_str(&format!(
-                    "if let ::std::result::Result::Err(_e) = {call} {{ eprintln!({}); ::std::process::exit(1); }}\n",
-                    quote("NagiのmainがErrを返しました")
-                ));
+                out.push_str(&format!("if let ::std::result::Result::Err(_e) = {call} {{ eprintln!({}); ::std::process::exit(1); }}\n", quote("NagiのmainがErrを返しました")));
             }
         } else {
             out.push_str(&format!("{call};\n"));
@@ -2165,20 +1783,22 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         p = crate::parser::parse(&low_source.text, false)?;
         low_source.restore_lines(&mut p)?;
     }
-    crate::check::integrate(&mut p, all).map_err(|e| sources.diagnostic(&e))?;
+    let checked = crate::check::finalize(p, all, sources.provenance())
+        .map_err(|e| crate::diagnostics::finalize_message(&e, &sources))?;
+    let p = checked.program();
     if let Some(schema) = sql_schema {
-        crate::sql_check::check(&p, &sources, &schema)?;
+        crate::sql_check::check(p, &sources, &schema)?;
     }
     if let Some(map) = map_options {
         let mut graph = match map.view {
-            crate::project::MapView::Types => crate::graph::types(&p, &sources),
-            crate::project::MapView::Modules => crate::graph::modules(&p, &sources),
-            crate::project::MapView::Calls => crate::graph::calls(&p, &sources),
+            crate::project::MapView::Types => crate::graph::types(p, &sources),
+            crate::project::MapView::Modules => crate::graph::modules(p, &sources),
+            crate::project::MapView::Calls => crate::graph::calls(p, &sources),
         };
         let mut module = map
             .module
             .as_deref()
-            .map(|name| crate::graph::resolve_module_filter(&p, &sources, name))
+            .map(|name| crate::graph::resolve_module_filter(p, &sources, name))
             .transpose()?;
         // A loaded module can have no definitions in the selected view.
         if module.as_ref().is_some_and(|id| {
@@ -2231,7 +1851,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         return Ok(());
     }
     if cost {
-        let report = cost_report(&p);
+        let report = cost_report(p);
         if write_output {
             fs::write(
                 out.join("cost-report.json"),
@@ -2260,7 +1880,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     if p.functions.iter().any(|f| f.external) && rust_file.is_none() {
         return Err("extern関数のビルドには--rust FILE.rsが必要です".into());
     }
-    let mut generated_rust = rust_with_lines(&p)?;
+    let mut generated_rust = rust_with_lines(&checked)?;
     if let Some(file) = &rust_file {
         generated_rust.origin(None);
         generated_rust.push_str(&format!(

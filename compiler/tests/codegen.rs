@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -23,7 +25,7 @@ fn nested_views_compile_and_copy_strings_bytes_and_lists() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     // These functions only use std, so the emitted code needs no runtime crate.
     code.push_str(
         "\n#[test] fn generated_values() {\n\
@@ -111,7 +113,7 @@ def nested() -> i64:
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str(
         r#"
 #[test] fn generated_loop_values() {
@@ -155,7 +157,7 @@ def borrowed(r: Result[view[str], i64]) -> str:
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str(
         r#"
 #[test] fn generated_matches() {
@@ -179,7 +181,7 @@ fn user_functions_with_builtin_names_keep_their_call_targets() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str("\n#[test] fn calls_user_functions() { assert_eq!(answer(), 100); }\n");
     compile_and_run(code);
 }
@@ -195,7 +197,7 @@ fn user_and_local_functions_named_serve_compile_without_http_runtime() {
         let mut low = parser::parse(&emit::low(&high), false).unwrap();
         check::check(&mut low).unwrap();
         for program in [&high, &low] {
-            let mut code = emit::rust(program).unwrap();
+            let mut code = emit::rust(&checked_emission::seal(program)).unwrap();
             code.push_str("\n#[test] fn calls_serve() { assert_eq!(answer(), 42); }\n");
             compile_and_run(code);
         }
@@ -209,7 +211,7 @@ fn rust_keywords_and_generated_helper_names_remain_valid_nagi_names() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str("\n#[test] fn calls_escaped_names() { assert_eq!(answer(), 15); main(); }\n");
     compile_and_run(code);
 }
@@ -221,7 +223,7 @@ fn local_function_values_shadow_builtins_and_functions() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str("\n#[test] fn local_calls() { assert_eq!(answer(), 198); }\n");
     compile_and_run(code);
     let mut invalid = parser::parse("def main():\n    len = 1\n    len([1, 2])\n", true).unwrap();
@@ -237,7 +239,7 @@ fn builtin_option_and_result_constructors_do_not_call_user_functions() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str("\n#[test] fn intrinsic_constructors() { assert_eq!(option_value(), Some(42)); assert_eq!(result_value(), Ok(42)); }\n");
     // The test's expected values also use fully qualified Rust constructors.
     code = code
@@ -259,7 +261,7 @@ fn async_function_values_keep_their_future_return_type() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str(r#"
 #[test] fn async_alias() {
     let future = answer();
@@ -285,7 +287,7 @@ fn function_values_preserve_the_shared_view_lifetime() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str("\n#[test] fn borrowed_alias() { assert_eq!(answer(), 2); }\n");
     compile_and_run(code);
 }
@@ -297,7 +299,7 @@ fn returning_a_function_value_does_not_borrow_local_data() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str("\n#[test] fn returned_function() { assert_eq!(answer(), 2); }\n");
     compile_and_run(code);
 }
@@ -335,7 +337,7 @@ fn output_compiles_for_numbers_booleans_and_borrowed_strings() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str("\n#[test] fn generated_output() { output(String::from(\"凪\")); }\n");
     compile_and_run(code);
 }
@@ -366,7 +368,7 @@ fn numeric_negation_and_nested_view_comparisons_compile_and_run() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str(
         r#"
 #[test] fn generated_operators() {
@@ -397,7 +399,7 @@ fn explicit_local_async_function_annotations_compile_and_run() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str(r#"
 #[test] fn explicit_async_alias() {
     let mut future = std::pin::pin!(answer());
@@ -415,7 +417,7 @@ fn reassignment_of_the_same_async_function_through_aliases_compiles_and_runs() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut code = emit::rust(&low).unwrap();
+    let mut code = emit::rust(&checked_emission::seal(&low)).unwrap();
     code.push_str(r#"
 #[test] fn alias_calls() {
     let mut future = std::pin::pin!(answer());

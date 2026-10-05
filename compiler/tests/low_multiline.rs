@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{ast::S, check, emit, lexer, parser, source};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -133,7 +135,7 @@ fn multiline_quote_matches_high_and_runs_as_native_low() {
     let executable = fixture
         .0
         .join(if cfg!(windows) { "quote.exe" } else { "quote" });
-    let mut rust = emit::rust(&low).unwrap();
+    let mut rust = emit::rust(&checked_emission::seal(&low)).unwrap();
     rust.push_str("\n#[test] fn calculates_quote() { assert_eq!(answer(), 42); }\n");
     fs::write(&generated, rust).unwrap();
     let output = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
