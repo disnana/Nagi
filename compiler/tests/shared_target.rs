@@ -85,7 +85,9 @@ fn successful(output: &Output, expected: &str) -> PathBuf {
         .expect("native artifact path must be reported");
     let path = PathBuf::from(path);
     assert!(path.is_file(), "{}", path.display());
-    path
+    // macOS may spell the same temporary directory as /var or /private/var.
+    // Compare artifact identity rather than the diagnostic's path spelling.
+    fs::canonicalize(path).unwrap()
 }
 
 #[test]

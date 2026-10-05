@@ -107,6 +107,10 @@ PR/pushのRust変更では既存Linux全suiteとfuzz smokeを使い、4 OS対象
 
 このフェーズのローカル結果はLinuxのみ。#74の4 OS成功を新差分の成功として転用しない。#76の最初のCIではLinuxとmacOSのAuth実行結果が空になり、既定キャッシュの上書きを発見した。ローカルの明示共有設定で成功した結果を、既定経路の保証へ広げてはいけない。修正後もWindows/macOSを含む新CIで確認する必要がある。
 
+実行ファイル修正後のCIでは、Windowsの生成Rust診断の`\\`区切りと、macOSの一時ディレクトリの`/var`・`/private/var`をテストが別物と扱った。診断の行・detail有無は維持して区切りを揃え、実行ファイルとproject targetはcanonical pathで比較する。アプリのstdout、別binary、同target、source行のassertは削らない。これらはP2のテスト移植性の問題で、生成Rustやruntimeを変更しない。
+
+この表記対応後、Linuxでbuild diagnostics 30・project 12・shared target 2の44 tests、fmt、全target clippyが成功した。Windows/macOSの成否は再CIで確認する。独立レビューでもnegative・元位置・barrier・binary区別の検査を維持していることを確認した。
+
 #74へ積まず、別Draft PR #76として分離した。作成時は#74のbranchがbaseだったが、ユーザーの#74マージを確認してmainへ変更した。定数・診断・Auth・CI由来の成果物修正をcommitで分ける。Authは標準APIの安定化前の実験と明記する。Copilot reviewは実行できず、成功レビューとして数えない。
 
 ## 残す問題と次の3項目

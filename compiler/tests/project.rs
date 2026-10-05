@@ -349,8 +349,8 @@ fn actual_run_uses_rust_dependencies_and_a_stable_project_working_directory() {
             .expect("run must report the generated executable"),
     );
     assert_eq!(
-        binary.parent().unwrap(),
-        f.0.join("build/native-target/release")
+        fs::canonicalize(binary.parent().unwrap()).unwrap(),
+        fs::canonicalize(f.0.join("build/native-target/release")).unwrap()
     );
     let filename = binary.file_name().unwrap().to_str().unwrap();
     let identity = filename

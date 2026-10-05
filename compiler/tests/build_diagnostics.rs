@@ -95,7 +95,10 @@ fn cli_maps_adapter_mismatch_without_repeating_generated_rust_by_default() {
             !normal.contains("Rust backend details (generated code)"),
             "{normal}"
         );
-        assert!(!normal.contains("src/main.rs:"), "{normal}");
+        assert!(
+            !normal.replace('\\', "/").contains("src/main.rs:"),
+            "{normal}"
+        );
         assert!(normal.contains("--rust-diagnostics"), "{normal}");
         let details = f.cli(&["build", name, "--rust", "bridge.rs", "--rust-diagnostics"]);
         assert!(!details.status.success());
@@ -108,7 +111,10 @@ fn cli_maps_adapter_mismatch_without_repeating_generated_rust_by_default() {
             details.contains("Rust backend details (generated code)"),
             "{details}"
         );
-        assert!(details.contains("src/main.rs:"), "{details}");
+        assert!(
+            details.replace('\\', "/").contains("src/main.rs:"),
+            "{details}"
+        );
     }
 }
 
@@ -255,7 +261,10 @@ fn high_build_points_to_nagi_and_keeps_rust_notes_and_failure_status() {
     assert!(prefix.contains("error[E0308]"), "{text}");
     assert!(prefix.contains("main.nagi:4"), "{text}");
     assert!(prefix.contains("4 | extern def value() -> i64"), "{text}");
-    assert!(!prefix.contains("src/main.rs:"), "{text}");
+    assert!(
+        !prefix.replace('\\', "/").contains("src/main.rs:"),
+        "{text}"
+    );
     assert!(text.contains("native::wrong()"), "{text}");
     assert!(text.contains("Build failed."), "{text}");
 }
