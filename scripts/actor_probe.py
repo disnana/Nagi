@@ -16,7 +16,8 @@ import platform
 import re
 import subprocess
 import time
-import tomllib
+
+from native_artifacts import comparison_files
 
 ROOT = Path(__file__).resolve().parents[1]
 NAGI_SOURCE = """import std.actor as actor
@@ -114,7 +115,6 @@ def main():
         return
     native = Path(os.environ.get("NAGI_NATIVE_TARGET_DIR", ROOT / "build/native-target")).resolve()
     environment = dict(os.environ, CARGO_TARGET_DIR=str(native), NAGI_NATIVE_TARGET_DIR=str(native), CARGO_NET_OFFLINE="true")
-    replacement = 'name = "nagi-actor-probe"'
     inputs = {"runtime_source_sha256": runtime_sha256(),
               "nagi_input_sha256": sha256(source_dir / "actor_generated.nagi"),
               "probe_input_sha256": sha256(ROOT / "benchmarks/actor_probe.rs")}
@@ -123,13 +123,9 @@ def main():
         parser.error("runtime or probe inputs changed; rebuild without --skip-build")
     if not args.skip_build:
         subprocess.run([str(args.nagic.resolve()), "build", "--project", str(source_dir), "--out", str(generated)], cwd=ROOT, env=environment, check=True)
-        original = 'name = ' + json.dumps(tomllib.loads((generated / "Cargo.toml").read_text())["package"]["name"])
         (project / "src").mkdir(parents=True, exist_ok=True)
-        for filename in ("Cargo.toml", "Cargo.lock"):
-            text = (generated / filename).read_text()
-            if text.count(original) != 1:
-                parser.error(f"unexpected generated package in {filename}")
-            (project / filename).write_text(text.replace(original, replacement, 1))
+        for filename, text in comparison_files(generated, "nagi-actor-probe").items():
+            (project / filename).write_text(text)
         source = (generated / "src/main.rs").read_text()
         entry = r"(?m)^fn main\(\)"
         if len(re.findall(entry, source)) != 1:
@@ -138,17 +134,15 @@ def main():
         (project / "src/main.rs").write_text(source + "\n" + (ROOT / "benchmarks/actor_probe.rs").read_text())
         subprocess.run([os.environ.get("CARGO", "cargo"), "build", "--release", "--locked", "--offline", "--manifest-path", str(project / "Cargo.toml")], cwd=ROOT, env=environment, check=True)
         signature.write_text(json.dumps(inputs, indent=2) + "\n")
-    original = 'name = ' + json.dumps(tomllib.loads((generated / "Cargo.toml").read_text())["package"]["name"])
-    for filename in ("Cargo.toml", "Cargo.lock"):
-        text = (generated / filename).read_text()
-        if text.count(original) != 1 or text.replace(original, replacement, 1) != (project / filename).read_text():
-            parser.error(f"probe {filename} must match generated project except root package name")
+    for filename, expected in comparison_files(generated, "nagi-actor-probe").items():
+        if expected != (project / filename).read_text():
+            parser.error(f"probe {filename} must match generated project except root package/bin name")
     binary = native / "release" / ("nagi-actor-probe" + (".exe" if os.name == "nt" else ""))
     evidence = {"phase":"environment", **inputs, "platform":platform.platform(), "cpu_affinity":[args.cpu] if args.cpu is not None else sorted(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None,
                 "generated_manifest_sha256":sha256(generated / "Cargo.toml"), "generated_lock_sha256":sha256(generated / "Cargo.lock"),
                 "probe_manifest_sha256":sha256(project / "Cargo.toml"), "probe_lock_sha256":sha256(project / "Cargo.lock"),
                 "generated_source_sha256":sha256(generated / "src/main.rs"), "probe_source_sha256":sha256(project / "src/main.rs"), "binary_sha256":sha256(binary),
-                "manifest_lock_difference":"root package renamed once; all dependencies and release profile copied"}
+                "manifest_lock_difference":"root package/bin renamed; all dependencies and release profile copied"}
     options = {"preexec_fn":lambda: os.sched_setaffinity(0, {args.cpu})} if args.cpu is not None else {}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w") as output:

@@ -110,7 +110,34 @@ impl Fixture {
                 "reported executable must exist: {launcher}"
             );
             let expected_target = self.0.join(&target).join("release");
-            assert_eq!(binary.parent(), Some(expected_target.as_path()));
+            // Q-001 / ADR 007: the cache remains shared, but the launched
+            // executable is a copied successful generation, not the cache file.
+            let manifest: toml::Value =
+                toml::from_str(&fs::read_to_string(self.0.join("build/Cargo.toml")).unwrap())
+                    .unwrap();
+            let app_id = manifest["package"]["name"].as_str().unwrap();
+            let app = self.0.join("build/.nagi/apps").join(app_id);
+            let latest: serde_json::Value =
+                serde_json::from_slice(&fs::read(app.join("latest.json")).unwrap()).unwrap();
+            assert_eq!(latest["app_id"], app_id);
+            assert_eq!(latest["schema_version"], 1);
+            assert_eq!(
+                fs::canonicalize(binary).unwrap(),
+                fs::canonicalize(app.join(latest["executable"].as_str().unwrap())).unwrap()
+            );
+            assert_eq!(
+                fs::canonicalize(binary.parent().unwrap()).unwrap(),
+                fs::canonicalize(
+                    app.join("generations")
+                        .join(latest["generation"].as_str().unwrap())
+                )
+                .unwrap()
+            );
+            let cached = expected_target.join(binary.file_name().unwrap());
+            assert!(
+                fs::read(binary).unwrap() == fs::read(cached).unwrap(),
+                "the published executable must match its compiled cache artifact"
+            );
             assert_eq!(application.trim(), expected, "{source}");
         }
     }

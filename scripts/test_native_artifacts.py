@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from native_artifacts import native_executable
+from native_artifacts import native_executable, comparison_files
 
 
 class NativeArtifactsTest(unittest.TestCase):
@@ -54,11 +54,37 @@ class NativeArtifactsTest(unittest.TestCase):
         with self.assertRaises((ValueError, RuntimeError)):
             native_executable(self.generated, self.target)
 
+    def test_schema_version_requires_an_integer_and_metadata_requires_an_object(self):
+        self.publish()
+        latest_path = self.app / "latest.json"
+        valid = json.loads(latest_path.read_text(encoding="utf-8"))
+        for version in (True, 1.0, "1", None):
+            with self.subTest(version=version):
+                latest_path.write_text(json.dumps(dict(valid, schema_version=version)), encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    native_executable(self.generated, self.target)
+        for metadata in ([], None, "invalid"):
+            with self.subTest(metadata=metadata):
+                latest_path.write_text(json.dumps(metadata), encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    native_executable(self.generated, self.target)
+
     def test_missing_published_binary_does_not_select_an_unrelated_cached_executable(self):
         exe = self.publish()
         exe.unlink()
         with self.assertRaises((FileNotFoundError, RuntimeError)):
             native_executable(self.generated, self.target)
+
+    def test_corrupt_generation_or_absolute_executable_is_rejected(self):
+        exe = self.publish()
+        for generation, executable in [("../../..", str(exe.resolve())), ("../outside", "../outside/application.exe"), ("g-one", str(exe.resolve()))]:
+            with self.subTest(generation=generation, executable=executable):
+                (self.app / "latest.json").write_text(json.dumps({
+                    "schema_version": 1, "app_id": "nagi-main-0123456789abcdef",
+                    "generation": generation, "executable": executable,
+                }), encoding="utf-8")
+                with self.assertRaises((ValueError, RuntimeError)):
+                    native_executable(self.generated, self.target)
 
     def test_new_namespace_without_success_does_not_use_legacy_cache(self):
         self.app.mkdir(parents=True)
@@ -69,6 +95,24 @@ class NativeArtifactsTest(unittest.TestCase):
         with self.assertRaises((FileNotFoundError, RuntimeError)):
             native_executable(self.generated, self.target)
         self.assertEqual(cached.read_bytes(), b"caller-owned unrelated cache executable")
+
+    def test_comparison_manifest_renames_the_bin_and_preserves_dependency_profile(self):
+        manifest = self.generated / "Cargo.toml"
+        manifest.write_text(manifest.read_text() + "autobins=false\n[[bin]]\nname='nagi-main-0123456789abcdef-g-one'\npath='src/main.rs'\n[dependencies]\nfixture='1.0'\n[profile.release]\nopt-level=3\n", encoding="utf-8")
+        # Generated manifests use the standard TOML serializer's double quotes.
+        import tomllib
+        text = manifest.read_text().replace("'", '\"').replace("name=", "name = ")
+        manifest.write_text(text, encoding="utf-8")
+        (self.generated / "Cargo.lock").write_text('version=4\n[[package]]\nname = "nagi-main-0123456789abcdef"\nversion="0.1.0"\n', encoding="utf-8")
+        files = comparison_files(self.generated, "probe")
+        original = tomllib.loads(text)
+        result = tomllib.loads(files["Cargo.toml"])
+        self.assertEqual(result["package"]["name"], "probe")
+        self.assertEqual(result["bin"][0]["name"], "probe")
+        result["package"]["name"] = original["package"]["name"]
+        result["bin"][0]["name"] = original["bin"][0]["name"]
+        self.assertEqual(result, original)
+        self.assertEqual(tomllib.loads(files["Cargo.lock"])["package"][0]["name"], "probe")
 
     def test_existing_legacy_generated_project_retains_explicit_fallback(self):
         # Compatibility for pre-Phase2 build folders without success metadata.

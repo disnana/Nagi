@@ -580,6 +580,186 @@ fn lock_is_permanent_and_input_protection_is_rechecked_after_waiting() {
     assert!(f.0.join("out/.nagi-write.lock").is_file());
 }
 
+#[cfg(unix)]
+#[test]
+fn source_snapshot_retains_raw_non_utf8_canonical_path_without_rejecting_old_accepted_input() {
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    let f = Fixture::new();
+    let entry =
+        f.0.join(std::ffi::OsString::from_vec(b"entry-\xff".to_vec()));
+    fs::create_dir(&entry).unwrap();
+    fs::write(entry.join("main.nagi"), "def main():\n    print(42)\n").unwrap();
+    let out = f.0.join("out");
+    let mut command = f.cli("run", "main.nagi", out.to_str().unwrap());
+    command.current_dir(&entry);
+    let output = bounded_output(command);
+    let native = native(&output);
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+    let metadata = validate_latest(&f, "out", &native);
+    let snapshot: serde_json::Value = serde_json::from_slice(
+        &fs::read(f.app("out").join(metadata["sources"].as_str().unwrap())).unwrap(),
+    )
+    .unwrap();
+    let file = &snapshot["files"][0];
+    assert_eq!(file["path_os"]["encoding"], "unix_bytes");
+    let raw: Vec<u8> = file["path_os"]["units"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|unit| u8::try_from(unit.as_u64().unwrap()).unwrap())
+        .collect();
+    assert_eq!(
+        raw,
+        fs::canonicalize(entry.join("main.nagi"))
+            .unwrap()
+            .as_os_str()
+            .as_bytes()
+    );
+}
+
+#[test]
+fn latest_metadata_used_as_an_input_cannot_be_overwritten_by_rebuild() {
+    let f = Fixture::new();
+    let old = f.build();
+    let (before, _) = f.latest("out");
+    let package = package(&f.0.join("out"));
+    f.write(
+        "main.nagi",
+        &format!(
+            "def main():\n    print(include_text(\"out/.nagi/apps/{package}/latest.json\"))\n"
+        ),
+    );
+    let output = bounded_output(f.cli("build", "main.nagi", "out"));
+    assert!(!output.status.success(), "metadata input must be protected");
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cannot overwrite input file"));
+    assert_eq!(f.latest("out").0, before);
+    assert_eq!(run(&old), "old");
+}
+
+#[test]
+fn nonwriting_low_check_and_lower_do_not_wait_for_the_output_writer_lock() {
+    let f = Fixture::new();
+    f.write("main.low", "fn main() { print(42); }\n");
+    fs::create_dir_all(f.0.join("out")).unwrap();
+    let lock = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(f.0.join("out/.nagi-write.lock"))
+        .unwrap();
+    lock.lock().unwrap();
+    for verb in ["check", "lower"] {
+        let output = bounded_output(f.cli(verb, "main.low", "out"));
+        success(&output);
+        assert!(output.stdout.is_empty());
+        assert!(!String::from_utf8_lossy(&output.stderr).contains("waiting for output lock:"));
+        assert!(!f.0.join("out/generated.low").exists());
+    }
+}
+
+#[test]
+fn published_manifest_runtime_reference_resolves_from_the_published_location() {
+    let f = Fixture::new();
+    let native = f.build();
+    let metadata = validate_latest(&f, "out", &native);
+    let manifest_path = f.app("out").join(metadata["manifest"].as_str().unwrap());
+    let manifest: toml::Value =
+        toml::from_str(&fs::read_to_string(&manifest_path).unwrap()).unwrap();
+    let runtime = manifest["dependencies"]["nagi-runtime"]["path"]
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        fs::canonicalize(manifest_path.parent().unwrap().join(runtime)).unwrap(),
+        fs::canonicalize(f.0.join("runtime")).unwrap()
+    );
+}
+
+#[test]
+fn compatibility_outputs_cannot_alias_previous_latest_metadata() {
+    for name in ["generated.low", "src/main.rs", "Cargo.toml"] {
+        let f = Fixture::new();
+        let old = f.build();
+        let app = f.app("out");
+        let latest = app.join("latest.json");
+        let before = fs::read(&latest).unwrap();
+        let output = f.0.join("out").join(name);
+        fs::remove_file(&output).unwrap();
+        fs::hard_link(&latest, &output).unwrap();
+        f.source("main.nagi", "new");
+        let result = bounded_output(f.cli("build", "main.nagi", "out"));
+        assert!(
+            !result.status.success(),
+            "{name} alias must be refused before writes"
+        );
+        assert!(String::from_utf8_lossy(&result.stderr).contains("output files must be distinct"));
+        assert!(
+            fs::read(&latest).unwrap() == before,
+            "old latest bytes must survive {name}"
+        );
+        assert_eq!(run(&old), "old");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn long_basename_accepted_by_the_previous_cache_scheme_uses_a_short_generation_bin() {
+    let f = Fixture::new();
+    let source = format!("{}.nagi", "x".repeat(200));
+    f.source(&source, "long basename");
+    let native = native(&bounded_output(f.cli("build", &source, "out")));
+    let metadata = validate_latest(&f, "out", &native);
+    assert_eq!(run(&native), "long basename");
+    assert_eq!(
+        metadata["app_id"].as_str().unwrap(),
+        package(&f.0.join("out"))
+    );
+    assert!(
+        native.file_name().unwrap().len() < 100,
+        "bin identity need not repeat the full source stem"
+    );
+}
+
+fn writing_command_cannot_alias_latest(verb: &str, name: &str, cost: bool) {
+    let f = Fixture::new();
+    let old = f.build();
+    let latest = f.app("out").join("latest.json");
+    let before = fs::read(&latest).unwrap();
+    let target = f.0.join("out").join(name);
+    if target.exists() {
+        fs::remove_file(&target).unwrap();
+    }
+    fs::hard_link(&latest, target).unwrap();
+    f.source("main.nagi", "new");
+    let mut command = f.cli(verb, "main.nagi", "out");
+    if cost {
+        command.arg("--cost-report");
+    }
+    let output = bounded_output(command);
+    assert!(
+        !output.status.success(),
+        "{verb}/{name} must not replace success metadata"
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("output files must be distinct"));
+    assert!(fs::read(&latest).unwrap() == before);
+    assert_eq!(run(&old), "old");
+}
+#[test]
+fn writing_high_check_cannot_alias_previous_latest() {
+    writing_command_cannot_alias_latest("check", "generated.low", false);
+}
+#[test]
+fn writing_high_lower_cannot_alias_previous_latest() {
+    writing_command_cannot_alias_latest("lower", "generated.low", false);
+}
+#[test]
+fn writing_cost_report_cannot_alias_previous_latest() {
+    for verb in ["check", "lower"] {
+        writing_command_cannot_alias_latest(verb, "cost-report.json", true);
+    }
+}
+
 #[test]
 fn invalid_input_does_not_create_output_or_its_lock() {
     for source in ["def main(:\n", "def main():\n    print(undefined)\n"] {
@@ -979,9 +1159,10 @@ fn main() {
             let path = out.join("src/main.rs"); fs::remove_file(&path).unwrap(); fs::create_dir(path).unwrap();
         }
         if mode == "latest-fault" {
-            // Fixed internal schema: staging/generation live under app namespace.
+            // ADR007: staging and published generation share the generations parent.
+            // This keeps relative runtime paths valid after publication.
             // The generation name is the staging directory name without .staging-.
-            let staging = manifest.parent().unwrap(); let app = staging.parent().unwrap();
+            let staging = manifest.parent().unwrap(); let app = staging.parent().unwrap().parent().unwrap();
             let generation = staging.file_name().unwrap().to_str().unwrap().strip_prefix(".staging-").unwrap();
             fs::create_dir(app.join(format!(".latest-{generation}.tmp"))).unwrap();
         }

@@ -10,7 +10,8 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import tomllib
+
+from native_artifacts import comparison_files
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,18 +36,7 @@ def main():
     manifest = generated / "Cargo.toml"
     if not manifest.is_file():
         parser.error(f"missing {manifest}; build benchmarks/http_stdlib.nagi first")
-    package = tomllib.loads(manifest.read_text())["package"]["name"]
-    original_name = f'name = "{package}"'
-    probe_name = 'name = "nagi-http-json-probe"'
-    files = {}
-    for filename in ("Cargo.toml", "Cargo.lock"):
-        path = generated / filename
-        if not path.is_file():
-            parser.error(f"missing {path}; build benchmarks/http_stdlib.nagi first")
-        text = path.read_text()
-        if text.count(original_name) != 1:
-            parser.error(f"unexpected package in generated {filename}")
-        files[filename] = text.replace(original_name, probe_name, 1)
+    files = comparison_files(generated, "nagi-http-json-probe")
     source = (generated / "src/main.rs").read_text()
     entry = r"(?m)^fn main\(\)"
     if len(re.findall(entry, source)) != 1:
