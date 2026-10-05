@@ -81,6 +81,7 @@ jobs:
       - run: node --test scripts/test_graph_html_viewport.mjs
       - run: python -m unittest discover -s scripts/releases -p 'test_*.py'
       - run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
+      - run: python -m unittest discover -s scripts -p 'test_application_native_tests.py'
       - run: python scripts/build_examples.py
       - run: pip install -r tests/requirements.txt
       - run: python tests/http_integration.py
@@ -231,6 +232,8 @@ jobs:
         run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
       - name: Check successful application artifact selection
         run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
+      - name: Check Axum native test execution and result validation
+        run: python -m unittest discover -s scripts -p 'test_application_native_tests.py'
       - name: Check oversized HTTP bodies and connection recovery on the target platform
         run: cargo test --locked -p nagi-runtime oversized_body_ -- --test-threads=1
       - name: Check HTTP panic recovery on the target platform

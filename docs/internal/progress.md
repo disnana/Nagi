@@ -141,3 +141,9 @@ private unitは正例2・負例6を追加。対象205件、全91 suite・829件�
 head `0b2a5a5`のchecks run `37347188897`で、Windowsの既存Axum sampleが保存Lowの415受信前に接続abortとなり、merge gateも失敗した。他の3 OS配布、Linux全検査、VSIX、両JetBrains製品、websiteは成功した。資源contractのprivate unit 8件は4 OSとも成功したが、Phase 3完了とは数えない。#80はdraftのまま。[結果](resource-contract-results.md#集約後ci-windowsのaxumサンプルで停止)へ失敗と一次コード・Linux観測の範囲を記録した。
 
 元の通常clientと415期待は維持する。一括sendへ置換してCIの条件を狭める案は採用しない。Axum sampleだけに期限付き本文読取を加える場合は、新policy値・待機・close条件の判断が必要。具体案を作り、承認前には適用しない。Pool／Txは既存Rust pool/workerの再利用も読み取り比較しているが、Phase 4実装は開始していない。mainへのmerge・版更新・releaseも行っていない。
+
+### #79のmain反映とAxum修正の承認
+
+2026-10-06。ユーザーが#79をmainへマージした。main `2f2c93def942e3133eaffbca0ecb596292f95d47`のtree `286b3c0080bc7ce562ab5fdb0612989dd43eb60e`は成功head `27c8bf4`と一致し、そのheadを親に含む。エージェントはmerge操作を行っていない。
+
+同日、ユーザーが[ADR 009](adr/009-axum-rejected-body.md)の案Aを承認した。設計・invariant・Q003をcommitしてから先行回帰へ進む。本文読取期限はこのAxum sampleのContent-Type欠落だけに適用し、正常JSONと元client testは維持する。生成世代のmanifest/binからnative unitを実行し、0件やignoreを成功と数えない。修正後CI成功と#80のmain反映は未確認で、Phase 4のQ002も未承認。
