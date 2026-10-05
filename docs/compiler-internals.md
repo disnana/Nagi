@@ -32,6 +32,8 @@ codegenのscopeはTokioのJoinSet wrapperにします。classはRustのstructへ
 
 `check`はCargoを起動せず、Nagiの規則とソース位置に基づいて診断します。生成Rustの借用・trait検査を代替しないため、成功後に`build`が失敗する場合があります。Rust側の借用・Send条件、手書きRustの本体、crateのAPIはビルドで検査します。詳しくは[所有権](ownership.md#借用と検査の範囲)を参照してください。
 
+ただし、対応するNagiコードを受理してから、Nagiで分かる型・move・lifetimeの問題で生成Rustが拒否されるのはコンパイラの不具合です。Rustアダプターやtrait、依存・link環境の検査とは区別します。回帰例と小さい生成プログラムをHigh・保存Low・Rustへ通し、この不一致を探します。
+
 [SQLの事前検査](sql-check.md)は、`check`にschemaと方言を指定した場合だけ有効です。通常の`check`はSQLの内容とschemaを照合しません。検査対象のqueryは実行せず、生成RustとアプリのDB処理も変えません。
 
 ソースは1ファイル2 MBまでで、式・型・ブロックの入れ子にも上限があります。構文の変異試験と不正な入力の試験を行います。coverage-guided fuzz、incremental parsing、式の厳密な列位置や全Rust診断を扱うsource mapは未対応です。引用符なしの登録済み標準moduleは[利用できます](modules-and-rust.md)。

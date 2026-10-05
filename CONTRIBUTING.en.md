@@ -1,5 +1,7 @@
 # Contributing to Nagi
 
+Compiler and runtime changes follow the [language contracts](docs/internal/language-invariants.md) and [compiler test guide](docs/internal/compiler-testing.md). Repository development agents should read the root [AGENTS.md](AGENTS.md); `ai/` is for writing applications in Nagi. The internal guides are currently in Japanese.
+
 [日本語](CONTRIBUTING.md)
 
 Bug reports, code fixes, documentation, and translations are welcome. Issues and PRs may be written in Japanese or English. See the [Docs](docs/en/README.md) for the language and implementation scope, and the [roadmap](docs/en/roadmap.md) for planned work.

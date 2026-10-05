@@ -147,6 +147,8 @@ python3 scripts/build_examples.py
 
 See [CONTRIBUTING](CONTRIBUTING.en.md#check-your-work) for component-specific checks, [verification methods](docs/en/performance.md) for HTTP and benchmarks, and the [site build instructions](website/README.md#手元で確認する) (Japanese) for the website.
 
+The [compiler test guide](docs/internal/compiler-testing.md) covers contracts, regression cases, and generated tests through High, Low, and Rust. Repository development agents should read [AGENTS.md](AGENTS.md). These internal guides are currently in Japanese.
+
 ## Contributing and license
 
 Bug reports, fixes, documentation, and translations are welcome. The [contribution guide](CONTRIBUTING.en.md) covers proposals, verification, and AI use. Report vulnerabilities privately using the [security policy](SECURITY.en.md). Nagi uses the [MIT license](LICENSE).

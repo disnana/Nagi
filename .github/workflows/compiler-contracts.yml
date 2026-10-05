@@ -1,0 +1,54 @@
+name: Compiler contract exploration
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: compiler-contract-exploration-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  expanded:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: ['305419896', '3735928559']
+    env:
+      NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
+      NAGI_CONFORMANCE_CASES: '256'
+      NAGI_CONFORMANCE_SEED: ${{ matrix.seed }}
+      NAGI_FUZZ_MUTATIONS: '10000'
+      NAGI_FUZZ_CASES: '128'
+      NAGI_FUZZ_SEED: ${{ matrix.seed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: nagi-contracts-v1-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'compiler/**', 'tests/conformance/**', 'fuzz/**') }}
+          restore-keys: nagi-contracts-v1-${{ runner.os }}-
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate corpus registration
+        run: python scripts/verify_compiler_contracts.py
+      - name: Explore bounded programs through the Rust backend
+        run: cargo test --locked -p nagic --test conformance
+      - name: Check ownership storage and cancellation regressions
+        run: cargo test --locked -p nagic --test view_flow_completion --test view_flow_foundation --test view_container_drop --test scope_runtime_contract
+      - name: Explore mutations and accepted pipeline stages
+        run: cargo run --locked -p nagic --example fuzz-smoke
+      - name: Preserve compiler failure reproductions
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiler-failures-${{ matrix.seed }}
+          path: build/compiler-failures/
+          if-no-files-found: ignore

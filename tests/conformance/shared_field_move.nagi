@@ -1,0 +1,4 @@
+class Item:
+    text: str
+def bad(value: shared[Item]) -> str:
+    return value.text

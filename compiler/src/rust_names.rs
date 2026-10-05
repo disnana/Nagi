@@ -230,6 +230,11 @@ fn visit(program: &mut Program, name: &mut impl FnMut(&mut String)) {
                     .iter_mut()
                     .chain(&mut flow.after)
                     .chain(flow.branch_entry.iter_mut().flatten())
+                    .chain(
+                        flow.loop_entry
+                            .iter_mut()
+                            .flat_map(|entry| entry.header.iter_mut().chain(&mut entry.body)),
+                    )
                 {
                     name(&mut binding.name);
                     ty(&mut binding.ty, name);

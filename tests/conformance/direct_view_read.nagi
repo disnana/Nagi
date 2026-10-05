@@ -1,0 +1,6 @@
+def read(text: view[str]) -> i64:
+    return len(text)
+def evaluate() -> i64:
+    owner = "Nagi日本語"
+    alias = view(owner)
+    return read(alias)

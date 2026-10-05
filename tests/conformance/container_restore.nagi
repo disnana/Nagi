@@ -1,0 +1,5 @@
+def restore(part: view[str]) -> List[view[str]]:
+    local = copy(part)
+    parts = [view(local)]
+    parts = [part]
+    return parts

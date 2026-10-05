@@ -147,6 +147,8 @@ python3 scripts/build_examples.py
 
 変更ごとの追加確認は[CONTRIBUTING](CONTRIBUTING.md#手元で確認する)、HTTP・性能測定は[検証方法](docs/performance.md)、サイトは[ビルドとリンク検査](website/README.md#手元で確認する)を参照してください。
 
+処理系の契約と、High・Low・生成Rustを通す回帰・生成テストは[compiler testing](docs/internal/compiler-testing.md)にまとめています。リポジトリを開発するAI向けの指示は[AGENTS.md](AGENTS.md)です。
+
 ## 貢献・ライセンス
 
 不具合の報告、修正、Docsや翻訳の改善を受け付けます。[貢献ガイド](CONTRIBUTING.md)に変更の相談、検証、AI利用の方針を記載しています。脆弱性は[セキュリティ方針](SECURITY.md)の非公開報告先へ。ライセンスは[MIT](LICENSE)です。

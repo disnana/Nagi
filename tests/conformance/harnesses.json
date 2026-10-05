@@ -1,0 +1,177 @@
+[
+  {
+    "name": "HTTP_handler_panic_isolation",
+    "contract": "handler/extractor/response/error-mapper panicはpayloadを公開せずHTTP 500、HEADは空body、serverは次のrequestを処理する",
+    "files": [
+      "runtime/src/http/panic_tests.rs",
+      "runtime/src/http_server/panic_tests.rs"
+    ],
+    "test_names": [
+      "handler_extractor_and_response_panics_return_sanitized_500_for_get_and_head",
+      "http_handler_out_of_bounds_returns_500_and_server_keeps_serving",
+      "http_handler_panic_head_response_has_no_body"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagi-runtime",
+      "panic_tests"
+    ]
+  },
+  {
+    "name": "SQL_missing_columns_and_query_locations",
+    "contract": "literal queryのunknown/missing return columnsをschema opt-in checkで拒否し、Highおよび保存Lowのquery行を指す",
+    "files": [
+      "compiler/tests/sql_check.rs"
+    ],
+    "test_names": [
+      "schema_check_is_opt_in_and_reports_bad_columns_in_high_and_saved_low",
+      "missing_return_columns_and_wrong_bind_count_use_query_source_lines"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "sql_check"
+    ]
+  },
+  {
+    "name": "HTTP_generated_Cargo_build_and_runtime_error",
+    "contract": "zero-route High/Low programを実Cargo buildし、起動時runtime errorを確認する",
+    "files": [
+      "compiler/tests/http_entrypoint.rs"
+    ],
+    "test_names": [
+      "zero_route_servers_build_and_return_runtime_errors_in_high_and_low"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "http_entrypoint"
+    ]
+  },
+  {
+    "name": "view_drop_order_and_panic",
+    "contract": "view owner復元のallocation/drop orderとpanic unwindをnative adapterで検査する",
+    "files": [
+      "compiler/tests/view_container_drop.rs"
+    ],
+    "test_names": [
+      "local_view_container_replacement_preserves_allocations_and_drop_order"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "view_container_drop"
+    ]
+  },
+  {
+    "name": "shared_field_valid_native_pair",
+    "contract": "shared親の非Copy field move拒否と明示copy/Arc moveのHigh/Low実行",
+    "files": [
+      "compiler/tests/shared_field_moves.rs"
+    ],
+    "test_names": [
+      "valid_arc_moves_copy_fields_and_explicit_copies_run_in_high_and_independent_low"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "shared_field_moves"
+    ]
+  },
+  {
+    "name": "static_return_and_function_value_native_pair",
+    "contract": "static callbackの実extern戻り値と独立lifetime、High/保存Lowの観測結果",
+    "files": [
+      "compiler/tests/static_callback_views.rs"
+    ],
+    "test_names": [
+      "static_callbacks_keep_their_origins_and_independent_lifetime_scopes_in_high_and_low"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "static_callback_views"
+    ]
+  },
+  {
+    "name": "owned_result_extern_discard",
+    "contract": "ownedで包んだResultのdiscardをCargo/Rust/backendへ進む前に元位置で拒否",
+    "files": [
+      "compiler/tests/result_discard.rs"
+    ],
+    "test_names": [
+      "extern_failures_are_rejected_before_backend_or_execution_in_both_syntaxes"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "result_discard"
+    ]
+  },
+  {
+    "name": "scope_lexical_borrows_and_error_cleanup",
+    "contract": "Scope内local viewをawait越しに一時利用・復元するHigh/保存Low/手書きLowを実Cargoでbuildし、body/join Err・panic・親取消と子の停止を検査する",
+    "files": [
+      "compiler/tests/scope_runtime_contract.rs"
+    ],
+    "test_names": [
+      "generated_scope_failure_and_cancellation_contract_runs_with_the_real_runtime"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "scope_runtime_contract"
+    ]
+  },
+  {
+    "name": "owning_view_storage_pipeline",
+    "contract": "List/Result/Optionとbranch/loop/asyncのHigh/保存Low/手書きLowを実Rustへ通し、局所view escape拒否を維持する",
+    "files": [
+      "compiler/tests/view_flow_completion.rs"
+    ],
+    "test_names": [
+      "owned_storage_loops_and_async_compile_and_run_in_all_source_forms",
+      "completion_keeps_local_and_iterator_owner_escape_rejections"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "view_flow_completion"
+    ]
+  }
+]

@@ -50,6 +50,12 @@ The Nagi checker exists to report Nagi rules at Nagi source locations in `nagic 
 
 Maintaining two checkers requires tracking their differences. Changes to Nagi rules must be checked against generated Rust as well as High/Low checker results. A future independent backend would not automatically inherit the current semantics or runtime.
 
+If supported Nagi code is accepted but compiler-generated Rust is rejected for a type, move, or lifetime problem Nagi could detect, that is a compiler bug. Checks delegated to Rust for crate APIs, traits, handwritten bodies, and the build environment are separate. The internal [language contracts](docs/internal/language-invariants.md), [pipeline comparison](docs/internal/compiler-pipeline.md), and [test guide](docs/internal/compiler-testing.md) describe this boundary; these guides are currently in Japanese.
+
+For returned Lists, Results, and Options containing views, a private storage plan separates the current borrow origin from the source cleanup position. It uses the checker's move/borrow and control-flow facts, the final checked loop body, and ordinary Rust `Option<T>` storage. Public types stay unchanged. Async functions use the same plan; scopes keep local borrowing in the same generated coroutine rather than an extra async boundary.
+
+Rust still handles borrowing, move-related drop flags, unwinding, and Future destruction. Nagi must preserve RHS evaluation, replacement cleanup, and source cleanup positions. The [generation tests](compiler/tests/view_flow_completion.rs), [resource tests](compiler/tests/view_container_drop.rs), and [real scope tests](compiler/tests/scope_runtime_contract.rs) cover these contracts. No payload copies are added, but storage and Future size can increase. This does not solve every borrow pattern or arbitrary resource type.
+
 Evidence: the [compilation pipeline](compiler/src/emit.rs), [ownership-boundary tests](compiler/tests/ownership_boundaries.rs), [build-diagnostic tests](compiler/tests/build_diagnostics.rs), and [Rust dependency tests](compiler/tests/rust_dependencies.rs). See [ownership](docs/en/ownership.md#borrowing-and-the-limits-of-checking) for checking limits.
 
 ## Make Rust integration a central goal

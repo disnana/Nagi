@@ -84,6 +84,8 @@ impl Fixture {
     fn run_bounded(&self, binary: &Path, source: &str) -> Output {
         let mut child = Command::new(binary)
             .current_dir(&self.0)
+            .env_remove("NAGI_SCOPE_MISSING_TEST_VALUE")
+            .env("NAGI_SCOPE_PRESENT_TEST_VALUE", "present")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -157,6 +159,14 @@ extern async def contract_panic_child() -> Result[unit, Error]
 extern async def contract_held_sibling() -> unit
 @rust("native::body_error")
 extern async def contract_body_error() -> Result[i64, Error]
+@rust("native::pending_operation")
+extern async def contract_pending_operation()
+@rust("native::body_panic")
+extern def contract_body_panic()
+@rust("native::verify_view_scope_drop")
+extern async def contract_verify_view_scope_drop()
+@rust("native::pause_once")
+extern async def contract_pause_once()
 
 async def error_child_scope() -> Result[unit, Error]:
     contract_reset()
@@ -220,10 +230,114 @@ async def verify_body_error() -> Result[unit, Error]:
     assert_true(contract_sibling_started() and contract_sibling_dropped())
     return ok(assert_true(True))
 
+async def scope_view_restore(part: view[str], error_path: i64) -> Result[List[view[str]], Error]:
+    contract_reset()
+    local = copy(part)
+    parts = [part]
+    async with scope:
+        parts = [view(local)]
+        parts = [part]
+        for number in range(3):
+            inner = "iteration-local"
+            parts = [view(inner)]
+            parts = [part]
+        if error_path > 0:
+            spawn contract_held_sibling()
+            await contract_wait_sibling_started()
+            async with scope:
+                if error_path == 1:
+                    value = try await contract_body_error()
+                else:
+                    if error_path == 3:
+                        await contract_pending_operation()
+                    else:
+                        if error_path == 4:
+                            contract_body_panic()
+                        else:
+                            spawn contract_error_child()
+                            contract_begin_failure_wait()
+                            await contract_wait_failure_ready()
+    return ok(parts)
+
+async def verify_scope_views() -> Result[unit, Error]:
+    owner = "caller-owned"
+    restored = try await scope_view_restore(view(owner), 0)
+    assert_true(restored[0] == "caller-owned")
+    for error_path in [1, 2]:
+        match await scope_view_restore(view(owner), error_path):
+            case Ok(_):
+                return error("scope view restoration lost nested error")
+            case Err(problem):
+                if error_path == 1:
+                    assert_true(error_message(problem) == "controlled body Error")
+                else:
+                    assert_true(error_message(problem) == "controlled child Error")
+        assert_true(contract_sibling_started() and contract_sibling_dropped())
+    return ok(assert_true(True))
+
+async def inspect_scope_views() -> Result[i64, Error]:
+    parts: List[view[str]] = []
+    length = 0
+    async with scope:
+        inner = "inside"
+        parts = [view(inner)]
+        await contract_pause_once()
+        length = len(parts[0])
+        parts = []
+    return ok(length + len(parts))
+
+def fallback_error() -> Result[str, Error]:
+    contract_mark_body_completed()
+    return error("controlled fallback Error")
+
+async def fallback_value() -> Result[str, Error]:
+    await contract_pause_once()
+    contract_mark_body_completed()
+    return ok("fallback")
+
+def fallback_without_scope() -> Result[str, Error]:
+    return ok(env("NAGI_SCOPE_MISSING_TEST_VALUE", try fallback_error()))
+
+async def scope_fallback(mode: i64) -> Result[str, Error]:
+    contract_reset()
+    value = "initial"
+    async with scope:
+        if mode == 0:
+            value = env("NAGI_SCOPE_PRESENT_TEST_VALUE", try fallback_error())
+        else:
+            if mode == 1:
+                value = env("NAGI_SCOPE_MISSING_TEST_VALUE", try fallback_error())
+            else:
+                value = env("NAGI_SCOPE_MISSING_TEST_VALUE", try await fallback_value())
+    return ok(value)
+
+async def verify_scope_fallback() -> Result[unit, Error]:
+    present = try await scope_fallback(0)
+    assert_true(present == "present" and not contract_body_completed())
+    fallback = try await scope_fallback(2)
+    assert_true(fallback == "fallback" and contract_body_completed())
+    match await scope_fallback(1):
+        case Ok(_):
+            return error("scope lost fallback Error")
+        case Err(problem):
+            assert_true(error_message(problem) == "controlled fallback Error")
+    assert_true(contract_body_completed())
+    match fallback_without_scope():
+        case Ok(_):
+            return error("function lost fallback Error")
+        case Err(problem):
+            assert_true(error_message(problem) == "controlled fallback Error")
+    return ok(assert_true(True))
+
 async def main() -> Result[unit, Error]:
     try await verify_error_child()
     try await verify_panic_child()
     try await verify_body_error()
+    try await verify_scope_views()
+    await contract_verify_view_scope_drop()
+    length = try await inspect_scope_views()
+    assert_true(length == 6)
+    try await verify_scope_fallback()
     return ok(print("scope runtime contract preserved"))
 "#;
 
@@ -254,6 +368,14 @@ extern async fn contract_panic_child() -> Result[unit, Error];
 extern async fn contract_held_sibling() -> unit;
 @rust("native::body_error")
 extern async fn contract_body_error() -> Result[i64, Error];
+@rust("native::pending_operation")
+extern async fn contract_pending_operation() -> unit;
+@rust("native::body_panic")
+extern fn contract_body_panic() -> unit;
+@rust("native::verify_view_scope_drop")
+extern async fn contract_verify_view_scope_drop() -> unit;
+@rust("native::pause_once")
+extern async fn contract_pause_once() -> unit;
 
 async fn error_child_scope() -> Result[unit, Error] {
     contract_reset();
@@ -323,10 +445,123 @@ async fn verify_body_error() -> Result[unit, Error] {
     return ok(assert_true(true));
 }
 
+async fn scope_view_restore(part: view[str], error_path: i64) -> Result[List[view[str]], Error] {
+    contract_reset();
+    let local: str = copy(part);
+    let parts: List[view[str]] = [part];
+    scope {
+        parts = [view(local)];
+        parts = [part];
+        for number in range(3) {
+            let inner: str = "iteration-local";
+            parts = [view(inner)];
+            parts = [part];
+        }
+        if error_path > 0 {
+            spawn contract_held_sibling();
+            await contract_wait_sibling_started();
+            scope {
+                if error_path == 1 {
+                    let value: i64 = try await contract_body_error();
+                } else {
+                    if error_path == 3 {
+                        await contract_pending_operation();
+                    } else {
+                        if error_path == 4 {
+                            contract_body_panic();
+                        } else {
+                            spawn contract_error_child();
+                            contract_begin_failure_wait();
+                            await contract_wait_failure_ready();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return ok(parts);
+}
+async fn verify_scope_views() -> Result[unit, Error] {
+    let owner: str = "caller-owned";
+    let restored: List[view[str]] = try await scope_view_restore(view(owner), 0);
+    assert_true(restored[0] == "caller-owned");
+    for error_path in [1, 2] {
+        match await scope_view_restore(view(owner), error_path) {
+            case Ok(_) { return error("scope view restoration lost nested error"); }
+            case Err(problem) {
+                if error_path == 1 { assert_true(error_message(problem) == "controlled body Error"); }
+                else { assert_true(error_message(problem) == "controlled child Error"); }
+            }
+        }
+        assert_true(contract_sibling_started() and contract_sibling_dropped());
+    }
+    return ok(assert_true(true));
+}
+async fn inspect_scope_views() -> Result[i64, Error] {
+    let parts: List[view[str]] = [];
+    let length: i64 = 0;
+    scope {
+        let inner: str = "inside";
+        parts = [view(inner)];
+        await contract_pause_once();
+        length = len(parts[0]);
+        parts = [];
+    }
+    return ok(length + len(parts));
+}
+fn fallback_error() -> Result[str, Error] {
+    contract_mark_body_completed();
+    return error("controlled fallback Error");
+}
+async fn fallback_value() -> Result[str, Error] {
+    await contract_pause_once();
+    contract_mark_body_completed();
+    return ok("fallback");
+}
+fn fallback_without_scope() -> Result[str, Error] {
+    return ok(env("NAGI_SCOPE_MISSING_TEST_VALUE", try fallback_error()));
+}
+async fn scope_fallback(mode: i64) -> Result[str, Error] {
+    contract_reset();
+    let value: str = "initial";
+    scope {
+        if mode == 0 {
+            value = env("NAGI_SCOPE_PRESENT_TEST_VALUE", try fallback_error());
+        } else {
+            if mode == 1 {
+                value = env("NAGI_SCOPE_MISSING_TEST_VALUE", try fallback_error());
+            } else {
+                value = env("NAGI_SCOPE_MISSING_TEST_VALUE", try await fallback_value());
+            }
+        }
+    }
+    return ok(value);
+}
+async fn verify_scope_fallback() -> Result[unit, Error] {
+    let present: str = try await scope_fallback(0);
+    assert_true(present == "present" and not contract_body_completed());
+    let fallback: str = try await scope_fallback(2);
+    assert_true(fallback == "fallback" and contract_body_completed());
+    match await scope_fallback(1) {
+        case Ok(_) { return error("scope lost fallback Error"); }
+        case Err(problem) { assert_true(error_message(problem) == "controlled fallback Error"); }
+    }
+    assert_true(contract_body_completed());
+    match fallback_without_scope() {
+        case Ok(_) { return error("function lost fallback Error"); }
+        case Err(problem) { assert_true(error_message(problem) == "controlled fallback Error"); }
+    }
+    return ok(assert_true(true));
+}
 async fn main() -> Result[unit, Error] {
     try await verify_error_child();
     try await verify_panic_child();
     try await verify_body_error();
+    try await verify_scope_views();
+    await contract_verify_view_scope_drop();
+    let length: i64 = try await inspect_scope_views();
+    assert_true(length == 6);
+    try await verify_scope_fallback();
     return ok(print("scope runtime contract preserved"));
 }
 "#;
@@ -450,6 +685,55 @@ pub async fn held_sibling() {
 
 pub async fn body_error() -> Result<i64, Error> {
     Err(Error::invalid("controlled body Error"))
+}
+
+pub async fn pending_operation() {
+    pending::<()>().await;
+}
+
+pub async fn pause_once() {
+    let mut suspended = false;
+    std::future::poll_fn(|context| {
+        if suspended {
+            Poll::Ready(())
+        } else {
+            suspended = true;
+            context.waker().wake_by_ref();
+            Poll::Pending
+        }
+    }).await;
+}
+
+pub fn body_panic() {
+    panic!("controlled view scope body panic");
+}
+
+pub async fn verify_view_scope_drop() {
+    let owner = String::from("caller-owned");
+    for mode in [3, 4] {
+        let mut future = Box::pin(super::scope_view_restore(owner.as_str(), mode));
+        let mut started = Box::pin(FlagWait(&SIBLING_STARTED));
+        std::future::poll_fn(|context| {
+            let polled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                future.as_mut().poll(context)
+            }));
+            if mode == 4 {
+                match polled {
+                    Err(_) => Poll::Ready(()),
+                    Ok(Poll::Pending) => Poll::Pending,
+                    Ok(Poll::Ready(_)) => panic!("body panic was hidden"),
+                }
+            } else {
+                assert!(matches!(polled, Ok(Poll::Pending)), "scope did not suspend");
+                started.as_mut().poll(context)
+            }
+        }).await;
+        // Parent cancellation and body unwind request abort on Scope Drop;
+        // completion is observed separately, as promised by the runtime API.
+        drop(future);
+        FlagWait(&SIBLING_DROPPED).await;
+        assert!(SIBLING_STARTED.load(Ordering::Acquire));
+    }
 }
 "#;
 

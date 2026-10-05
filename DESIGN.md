@@ -50,9 +50,11 @@ Nagi checkerを持つ理由は、`nagic check`やエディターで、Nagiの位
 
 二つのcheckerを持つ以上、その差を把握して保つ費用は避けられません。Nagiの規則を増やすときは、High・Lowの検査結果だけでなく、生成Rustが受理されるかも確認します。独自backendへ進む場合も、今の意味論やランタイムを自動的に引き継げるわけではありません。
 
-借用を含む配列では、現在の値の借用元と、配列そのものを片付ける位置を分けて扱う必要があります。一時的な借用を捨ててから引数の借用へ戻しても、単一のRust変数へそのまま代入すると寿命が結びつき、ビルドに失敗することがあります。同期関数の生成計画は、checkerが記録した値の置換・内容の借用元の変更・move・分岐の出口を区別し、元の宣言位置に格納先を置きます。追跡するListは返却式と代入の依存関係から選び、別名への移動やResultで包んだ返却も同じ経路として扱います。配列の型にはcheckerの型情報を使い、入れ子でも格納先の扱いは変えません。`if`と`match`は、処理が続く分岐の値だけを合流します。内容の借用元が変わる操作では配列を別の格納先へ移し、バッファは複製しません。右辺の評価、上書き時の解放、エラー伝播・panic時の破棄順序は[返却と分岐のテスト](compiler/tests/view_flow_foundation.rs)と[資源の観測](compiler/tests/view_container_drop.rs)で確認します。
+サポートするNagiコードを受理した後、Nagiで検出可能だった型・move・lifetime問題で生成Rustが拒否されるのはコンパイラの不具合です。Rustへ委譲するcrateのAPI・trait・手書きRust・ビルド環境の検査とは区別します。[言語契約](docs/internal/language-invariants.md)、[生成経路の比較](docs/internal/compiler-pipeline.md)、[テスト基盤](docs/internal/compiler-testing.md)に責任範囲と確認方法をまとめています。
 
-この生成計画は借用全体の解決ではありません。async、ループ、任意の資源型へ広げる際は、同じ値・制御フロー・終了処理のモデルで説明できるか、生成量と実行時の費用が増えすぎないかを先に確認します。Rustには参照の検査、move後の破棄判定、unwind時の後始末を任せますが、Nagiの意味を保ったコードへ変換する責任はコンパイラに残ります。
+借用を含む値では、現在の借用元と、値を片付ける位置を分けて扱います。返却につながるList・Result・Optionの生成計画は、checkerが記録したmove・borrow・置換・分岐の出口を使い、元の宣言位置に格納先を置きます。公開型を変えず、私有の`Option<T>`で古い格納先を退役させます。ループには固定点まで検査したbodyと条件を使います。asyncにも同じ計画を使い、scope内の借用を別の生成asyncへ持ち出さないようにします。
+
+これは新しい実行時の所有権管理ではありません。Rustへ参照の検査、move後の破棄判定、unwindとFuture取消時の後始末を任せます。Nagi側は、右辺の評価順、置換時の破棄、元のcleanup位置を保つ責任を持ちます。[生成経路](compiler/tests/view_flow_completion.rs)、[資源の観測](compiler/tests/view_container_drop.rs)、[実scopeの検証](compiler/tests/scope_runtime_contract.rs)で確認します。payloadのコピーは追加しませんが、格納先やFutureの大きさが増える場合があります。任意の資源型や全borrow経路を解決したという意味ではありません。
 
 根拠: [コンパイル経路](compiler/src/emit.rs)、[所有権境界のテスト](compiler/tests/ownership_boundaries.rs)、[ビルド診断のテスト](compiler/tests/build_diagnostics.rs)、[Rust依存設定のテスト](compiler/tests/rust_dependencies.rs)。検査の範囲は[所有権](docs/ownership.md#借用と検査の範囲)を参照してください。
 

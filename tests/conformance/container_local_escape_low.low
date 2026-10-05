@@ -1,0 +1,5 @@
+fn escape(part: view[str]) -> List[view[str]] {
+    let local: str = copy(part);
+    let parts: List[view[str]] = [view(local)];
+    return parts;
+}

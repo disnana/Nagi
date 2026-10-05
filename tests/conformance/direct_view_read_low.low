@@ -1,0 +1,8 @@
+fn read(text: view[str]) -> i64 {
+    return len(text);
+}
+fn evaluate() -> i64 {
+    let owner: str = "Nagi日本語";
+    let alias: view[str] = view(owner);
+    return read(alias);
+}

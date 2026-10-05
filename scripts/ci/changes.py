@@ -13,6 +13,7 @@ ROOT_DOCS = {
     "README.md", "README.en.md", "CHANGELOG.md", "PERFORMANCE.md",
     "CONTRIBUTING.md", "CONTRIBUTING.en.md", "SECURITY.md", "SECURITY.en.md",
     "DESIGN.md", "DESIGN.en.md",
+    "AGENTS.md",
 }
 SITE_FILES = {
     "website/README.md", "website/build.py", "website/requirements.txt",

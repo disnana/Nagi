@@ -1,0 +1,281 @@
+[
+  {
+    "name": "i64_boundaries",
+    "source": "i64_boundaries.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(minimum(), i64::MIN); assert_eq!(maximum(), i64::MAX); assert_eq!(large(), 2147483649i64);",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "cast_precedence",
+    "source": "cast_precedence.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert!(evaluate(\"あNagi\", 8)); assert!(!evaluate(\"あNagi\", 7)); assert_eq!(negative(\"あNagi\"), -7); assert_eq!(numeric(&[1,2,3]), 38);",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "loop_rebinding",
+    "source": "loop_rebinding.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(evaluate(), 6);",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "view_restore",
+    "source": "view_restore.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(identity(\"Nagi\"), \"Nagi\");",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "temporary_view",
+    "source": "temporary_view.nagi",
+    "high": true,
+    "expected": "reject:high-check",
+    "oracle": "",
+    "diagnostic": "一時的な所有値",
+    "line": 2
+  },
+  {
+    "name": "temporary_view_low",
+    "source": "temporary_view_low.low",
+    "high": false,
+    "expected": "reject:low-check",
+    "oracle": "",
+    "diagnostic": "一時的な所有値",
+    "line": 2
+  },
+  {
+    "name": "unsigned_negation",
+    "source": "unsigned_negation.nagi",
+    "high": true,
+    "expected": "reject:high-check",
+    "oracle": "",
+    "diagnostic": "u64は符号反転できません",
+    "line": 2
+  },
+  {
+    "name": "unsigned_negation_low",
+    "source": "unsigned_negation_low.low",
+    "high": false,
+    "expected": "reject:low-check",
+    "oracle": "",
+    "diagnostic": "u64は符号反転できません",
+    "line": 2
+  },
+  {
+    "name": "record_type_arguments",
+    "source": "record_type_arguments.nagi",
+    "high": true,
+    "expected": "reject:high-parse",
+    "oracle": "",
+    "diagnostic": "classの型引数は未対応です",
+    "line": 4
+  },
+  {
+    "name": "record_type_arguments_low",
+    "source": "record_type_arguments_low.low",
+    "high": false,
+    "expected": "reject:low-parse",
+    "oracle": "",
+    "diagnostic": "classの型引数は未対応です",
+    "line": 2
+  },
+  {
+    "name": "index_lookahead",
+    "source": "index_lookahead.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(evaluate(), 560);",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "try_index_receiver",
+    "source": "try_index_receiver.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(evaluate(), Ok(7));",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "string_bytes",
+    "source": "string_bytes.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(text().as_bytes(), \"start\\0\\u{8}\\u{c}\\u{1b}\\u{85}\\u{2028}日本語😀\\n\\r\\t\\\"\\\\end\".as_bytes()); assert_eq!(path_text(), \"crate::root \\\"quoted\\\"\");",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "view_restore_low",
+    "source": "view_restore_low.low",
+    "high": false,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(identity(\"Nagi\"), \"Nagi\");",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "nested_result",
+    "source": "nested_result.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(select(Ok(Ok(String::from(\"あNagi\")))), 7); assert_eq!(select(Ok(Err(19))), 19); assert_eq!(select(Err(23)), 23);",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "shared_field_move",
+    "source": "shared_field_move.nagi",
+    "high": true,
+    "expected": "reject:high-check",
+    "oracle": "",
+    "diagnostic": "sharedまたは借用resourceの非Copy fieldはmoveできません",
+    "line": 4
+  },
+  {
+    "name": "shared_field_move_low",
+    "source": "shared_field_move_low.low",
+    "high": false,
+    "expected": "reject:low-check",
+    "oracle": "",
+    "diagnostic": "sharedまたは借用resourceの非Copy fieldはmoveできません",
+    "line": 3
+  },
+  {
+    "name": "owned_result_discard",
+    "source": "owned_result_discard.nagi",
+    "high": true,
+    "expected": "reject:high-check",
+    "oracle": "",
+    "diagnostic": "Resultを無視できません",
+    "line": 2
+  },
+  {
+    "name": "owned_result_discard_low",
+    "source": "owned_result_discard_low.low",
+    "high": false,
+    "expected": "reject:low-check",
+    "oracle": "",
+    "diagnostic": "Resultを無視できません",
+    "line": 2
+  },
+  {
+    "name": "owned_result_return",
+    "source": "owned_result_return.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(pass_result(Ok(7)), Ok(7)); assert_eq!(pass_result(Err(9)), Err(9));",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "static_absent_callback",
+    "source": "static_absent_callback.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert!(choose()().is_none()); assert!(relay(absent).is_none());",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "static_local_escape",
+    "source": "static_local_escape.nagi",
+    "high": true,
+    "expected": "reject:high-check",
+    "oracle": "",
+    "diagnostic": "view escapes",
+    "line": 2
+  },
+  {
+    "name": "static_local_escape_low",
+    "source": "static_local_escape_low.low",
+    "high": false,
+    "expected": "reject:low-check",
+    "oracle": "",
+    "diagnostic": "view escapes",
+    "line": 2
+  },
+  {
+    "name": "direct_view_read",
+    "source": "direct_view_read.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(read(\"Nagi日本語\"), 13); assert_eq!(evaluate(), 13);",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "direct_view_read_low",
+    "source": "direct_view_read_low.low",
+    "high": false,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(read(\"Nagi日本語\"), 13); assert_eq!(evaluate(), 13);",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "borrowed_owner_move",
+    "source": "borrowed_owner_move.nagi",
+    "high": true,
+    "expected": "reject:high-check",
+    "oracle": "",
+    "diagnostic": "owner はviewまたはループから参照されています。借用を終了するかcopyしてください",
+    "line": 6
+  },
+  {
+    "name": "borrowed_owner_move_low",
+    "source": "borrowed_owner_move_low.low",
+    "high": false,
+    "expected": "reject:low-check",
+    "oracle": "",
+    "diagnostic": "owner はviewまたはループから参照されています。借用を終了するかcopyしてください",
+    "line": 7
+  },
+  {
+    "name": "container_restore",
+    "source": "container_restore.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(restore(\"Nagi日本語\"), vec![\"Nagi日本語\"]);",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "container_restore_low",
+    "source": "container_restore_low.low",
+    "high": false,
+    "expected": "run-pass",
+    "oracle": "assert_eq!(restore(\"Nagi日本語\"), vec![\"Nagi日本語\"]);",
+    "diagnostic": "",
+    "line": 0
+  },
+  {
+    "name": "container_local_escape",
+    "source": "container_local_escape.nagi",
+    "high": true,
+    "expected": "reject:high-check",
+    "oracle": "",
+    "diagnostic": "request/local-scoped view escapes its lifetime",
+    "line": 4
+  },
+  {
+    "name": "container_local_escape_low",
+    "source": "container_local_escape_low.low",
+    "high": false,
+    "expected": "reject:low-check",
+    "oracle": "",
+    "diagnostic": "request/local-scoped view escapes its lifetime",
+    "line": 4
+  }
+]

@@ -1,0 +1,4 @@
+record Item { text: str; }
+fn bad(value: shared[Item]) -> str {
+    return value.text;
+}

@@ -2,6 +2,8 @@
 
 This directory contains agent documentation and a reusable development skill. Human tutorials remain in [`docs/`](../docs/README.md). Start here when generating, changing, or reviewing a Nagi application.
 
+For changes to the Nagi compiler, runtime, editors, or repository itself, read the root [AGENTS.md](../AGENTS.md) instead. These application guides do not define compiler invariants.
+
 Nagi is useful for typed application logic with concise, indented High code (`.nagi`), existing Rust libraries behind small adapters, and handwritten Low (`.low`) where needed. High lowers to Low, then Rust builds the executable. This guide describes the repository's **0.1.10** compiler; the VS Code extension has its own **0.1.13** version. Check the actual compiler before relying on these features. Repository versions do not establish that a release has been published.
 
 ## Load only what the task needs
