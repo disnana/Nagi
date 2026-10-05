@@ -48,7 +48,7 @@ nagic check build/main/generated.low --project . --out build/from-low
 nagic build build/main/generated.low --project . --out build/from-low
 ```
 
-For a different entry stem, use its generated directory. Distinct output directories keep generated sources separate. For parallel builds sharing a native target, also set `NAGI_NATIVE_TARGET_DIR` to enable output-specific package names; read the emitted `native:` path. Retain the generated Cargo.lock. For a locked Rust resolution after generation, run `cargo build --release --locked --manifest-path build/main/Cargo.toml`; `nagic build --locked` is unsupported.
+For a different entry stem, use its generated directory. Distinct output directories keep generated sources separate. The next unreleased compiler uses source/output-specific executable names for both default and explicit caches; read the emitted `native:` path. Set `NAGI_NATIVE_TARGET_DIR` to choose a shared dependency cache, not to enable naming protection. Concurrent compilation into the same generated output directory remains unsupported. Retain the generated Cargo.lock. For a locked Rust resolution after generation, run `cargo build --release --locked --manifest-path build/main/Cargo.toml`; `nagic build --locked` is unsupported.
 
 Exercise the concrete changed behavior: a successful input, a relevant rejected input, and affected state/file/HTTP behavior. Prefer an existing project smoke script to a duplicate test. In this repository, for example:
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Distinguish native executable names by canonical source and generated directory in default build caches as well as explicitly shared caches. Default filenames now include an identifier; use the emitted `native:` path. Preserve dependency cache sharing and project working directories.
 - Add a common typed constant validator for compound/alias zero divisors and signed MIN division/remainder across eight integer widths. Preserve debug/release overflow behavior; unreachable constant failures are rejected as documented. Print signed MIN leaves without generating out-of-range Rust literals.
 - Add experimental `std.auth.Principal` and nominal `Grant[P]` proof boundaries with no Nagi construction, JSON decoding, copying, or sharing. Demonstrate custom Nagi authorization through a trusted Rust/Axum adapter; the example uses fixed credentials and does not implement JWS verification or general authorization analysis.
 - Keep mapped Rust errors concise by default; `build/run --rust-diagnostics` retains generated Rust details. Native, dependency, and unmapped errors stay visible. Extend the conformance corpus to 38 sources and bounded generation to 13 grammars, including function values, multiple borrow sources, and pure async Result/Option.

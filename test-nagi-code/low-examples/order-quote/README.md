@@ -33,9 +33,9 @@ nagic run --project test-nagi-code/low-examples/order-quote
 
 ```sh
 nagic build
-python3 smoke.py --executable build/native-target/release/nagi-main
+python3 smoke.py --executable "/path/to/executable"
 ```
 
-Windowsでは実行ファイル名に`.exe`を付けてください。`NAGI_NATIVE_TARGET_DIR`でビルド先を指定した場合は、その場所の実行ファイルを渡します。
+`/path/to/executable`を、ビルドの`native:`行に表示された実際のパスへ置き換えてください。次の未リリース版では既定の実行ファイル名にも識別子が付きます。Windowsでは`.exe`まで含めたパスを渡します。`NAGI_NATIVE_TARGET_DIR`でビルド先を変更した場合も同じです。
 
 [English](README.en.md) · [HighとLow](../../../docs/low-language.md) · [JSON](../../../docs/json.md)

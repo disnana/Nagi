@@ -59,7 +59,7 @@ nagic build my-app/build/main/generated.low --project my-app --out my-app/build/
 
 Omitting SOURCE searches upward for `nagi.toml`. An explicit source such as `nagic check my-app/main.nagi` does **not** load nearby project configuration. Use `--project` whenever the application depends on a Rust adapter, Cargo dependencies, or native Low. Paths passed on the command line are relative to the current terminal directory; paths inside `nagi.toml` are relative to that file.
 
-Do not edit generated Low/Rust to repair High source. Inspect `generated.low`, generated `src/main.rs`, and backend diagnostics to identify the source or adapter change. Distinct `--out` directories separate generated sources. For parallel native builds sharing a target, also set [`NAGI_NATIVE_TARGET_DIR`](../docs/en/projects.md): it enables output-specific package names so applications with the same entry stem do not share a binary name. Read the emitted `native:` path under that override.
+Do not edit generated Low/Rust to repair High source. Inspect `generated.low`, generated `src/main.rs`, and backend diagnostics to identify the source or adapter change. Distinct `--out` directories separate generated sources. The next unreleased compiler uses source/output-specific executable names in default caches as well as explicitly shared caches. Read the emitted `native:` path instead of constructing a filename from the entry stem. [`NAGI_NATIVE_TARGET_DIR`](../docs/en/projects.md) selects a shared dependency cache; it is not needed to enable distinct executable names. Concurrent compilation into the same generated output directory remains unsupported.
 
 ## Reuse tested applications and assets
 

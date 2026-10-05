@@ -341,13 +341,26 @@ fn actual_run_uses_rust_dependencies_and_a_stable_project_working_directory() {
         fs::canonicalize(&f.0).unwrap()
     );
     assert!(!f.0.join("src/cwd.json").exists());
-    assert!(f
-        .0
-        .join(format!(
-            "build/native-target/release/nagi-project-smoke{}",
-            std::env::consts::EXE_SUFFIX
-        ))
-        .is_file());
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    let binary = PathBuf::from(
+        stderr
+            .lines()
+            .find_map(|line| line.strip_prefix("native: "))
+            .expect("run must report the generated executable"),
+    );
+    assert_eq!(
+        binary.parent().unwrap(),
+        f.0.join("build/native-target/release")
+    );
+    let filename = binary.file_name().unwrap().to_str().unwrap();
+    let identity = filename
+        .strip_prefix("nagi-project-smoke-")
+        .unwrap()
+        .strip_suffix(std::env::consts::EXE_SUFFIX)
+        .unwrap();
+    assert_eq!(identity.len(), 16);
+    assert!(identity.bytes().all(|b| b.is_ascii_hexdigit()));
+    assert!(binary.is_file());
     // A relative target override is resolved before run switches to the project cwd.
     let result = Command::new(env!("CARGO_BIN_EXE_nagic"))
         .current_dir(f.0.join("src"))

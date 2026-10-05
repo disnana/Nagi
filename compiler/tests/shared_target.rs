@@ -1,6 +1,6 @@
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Child, Command, Output, Stdio},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -35,11 +35,11 @@ impl Fixture {
         fs::write(path, text).unwrap();
     }
 
-    fn cli(&self, project: &str, output: &str, shared: bool) -> Command {
+    fn cli(&self, source: &str, output: &str, shared: bool) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_nagic"));
         command
-            .current_dir(self.0.join(project))
-            .args(["run", "same.nagi", "--no-project", "--out", output])
+            .current_dir(&self.0)
+            .args(["run", source, "--no-project", "--out", output])
             .env("NAGI_ROOT", &self.0)
             .env("CARGO_NET_OFFLINE", "true")
             .env_remove("NAGI_NATIVE_TARGET_DIR");
@@ -90,6 +90,15 @@ fn successful(output: &Output, expected: &str) -> PathBuf {
 
 #[test]
 fn explicitly_shared_targets_keep_application_binaries_distinct_and_names_stable() {
+    shared_targets_keep_application_binaries_distinct_and_names_stable(true);
+}
+
+#[test]
+fn default_shared_targets_keep_application_binaries_distinct_and_names_stable() {
+    shared_targets_keep_application_binaries_distinct_and_names_stable(false);
+}
+
+fn shared_targets_keep_application_binaries_distinct_and_names_stable(shared: bool) {
     let fixture = Fixture::new();
     for project in ["first", "second"] {
         fixture.write(
@@ -140,7 +149,7 @@ fn main() {
     let mut first = Running(
         Some(
             fixture
-                .cli("first", "generated", true)
+                .cli("first/same.nagi", "first/generated", shared)
                 .env("PATH", path)
                 .env("NAGI_TEST_REAL_CARGO", env!("CARGO"))
                 .env("NAGI_TEST_HOLD", "1")
@@ -169,7 +178,12 @@ fn main() {
         );
         thread::sleep(Duration::from_millis(10));
     }
-    let second = fixture.cli("second", "generated", true).output().unwrap();
+    // With no override both commands share the same cwd/native-target. Distinct
+    // sources and generated directories must still select distinct binaries.
+    let second = fixture
+        .cli("second/same.nagi", "second/generated", shared)
+        .output()
+        .unwrap();
     fs::write(signals.join("release"), "").unwrap();
     let first = first.output();
     let first_binary = successful(&first, "first");
@@ -185,24 +199,37 @@ fn main() {
 
     // Equivalent spelling of the same source/output keeps the cache identity.
     let equivalent = fixture
-        .cli("first", "generated/../generated", true)
-        .current_dir(fixture.0.join("first/../first"))
+        .cli(
+            "first/../first/same.nagi",
+            "first/generated/../generated",
+            shared,
+        )
+        .current_dir(fixture.0.join("first/.."))
         .output()
         .unwrap();
     assert_eq!(successful(&equivalent, "first"), first_binary);
     let alternate = fixture
-        .cli("first", "other-generated", true)
+        .cli("first/same.nagi", "first/other-generated", shared)
         .output()
         .unwrap();
     assert_ne!(successful(&alternate, "first"), first_binary);
 
-    // The opt-in cache override is the only case that adds an identifier.
+    // Default caches also separate application identities. Selecting the same
+    // cache with an explicit override must not change the application's name.
     let default = fixture
-        .cli("first", "default-generated", false)
+        .cli("first/same.nagi", "first/default-generated", false)
         .output()
         .unwrap();
-    assert_eq!(
-        successful(&default, "first").file_name().unwrap(),
-        Path::new(&format!("nagi-same{}", std::env::consts::EXE_SUFFIX)).as_os_str()
-    );
+    let default_binary = successful(&default, "first");
+    let explicit = fixture
+        .cli("first/same.nagi", "first/default-generated", true)
+        .output()
+        .unwrap();
+    assert_eq!(successful(&explicit, "first"), default_binary);
+    assert_ne!(default_binary, first_binary);
+    assert_eq!(default_binary.parent(), first_binary.parent());
+    let name = default_binary.file_stem().unwrap().to_str().unwrap();
+    let suffix = name.strip_prefix("nagi-same-").unwrap();
+    assert_eq!(suffix.len(), 16);
+    assert!(suffix.bytes().all(|ch| ch.is_ascii_hexdigit()));
 }

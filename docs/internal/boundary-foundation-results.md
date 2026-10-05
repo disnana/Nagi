@@ -1,6 +1,6 @@
 # #74を土台にしたバックエンド境界の検証
 
-2026-10-05、Linux x86_64、Rust 1.98.1。基点は未マージの[#74](https://github.com/disnana/Nagi/pull/74)、head `6d5b9eec4f0101fd501cb527e8772b1fbcfcd514`。#74の変更、Low互換性、Rust backendを維持し、別ブランチで作業した。版番号、main、#74は更新していない。
+2026-10-05、Linux x86_64、Rust 1.98.1。作業開始時の基点は未マージの[#74](https://github.com/disnana/Nagi/pull/74)、head `6d5b9eec4f0101fd501cb527e8772b1fbcfcd514`。その変更、Low互換性、Rust backendを維持し、別ブランチで作業した。その後ユーザーが#74をmainへマージした（`04d30b5`、treeは#74 headと一致）。追加分のDraft [#76](https://github.com/disnana/Nagi/pull/76)はmain向けへ変更済み。#76のマージや版番号更新は行わない。
 
 ## 判断と参考資料
 
@@ -9,6 +9,8 @@
 Rust Referenceからprofile依存overflowと常時失敗の区別、Cargoから構造化診断、Axumから同じRouterでの処理比較、Serdeから所有DTOとborrowed decodeの区別を採用した。OWASPからresource単位の判定とDB操作時の再確認を取り入れた。rustcのMIR定数伝播、任意crateの自動解析、独自暗号・HTTP輸送・DB driverは実装しない。
 
 採用判断は[ADR 001](adr/001-backend-boundaries.md)、[002](adr/002-constant-validation.md)、[003](adr/003-diagnostic-boundary.md)、[004](adr/004-checked-boundaries.md)。専用HIR/CheckedProgramへの全面移行は保留し、#74のchecked operand・origin・cleanup planを残した。型・所有権checkerはまだ大きいwalkerであり、表に段階を書いたことを実装の分離完了とはしない。
+
+CI後に追加した[ADR 005](adr/005-native-artifact-identity.md)は、共通Cargoキャッシュとアプリの実行ファイル名の契約を定める。環境変数の有無ではなく、既定キャッシュにも同じ識別規則を適用する。
 
 ## 共通原因と修正
 
@@ -20,6 +22,7 @@ Rust Referenceからprofile依存overflowと常時失敗の区別、Cargoから�
 | P1・新実験内 | 明示`share`だけの検査ではApp/Supervisorの内部Arcへproofを格納できる | native registryに共有payloadの位置を置き、署名・constructor両方を共通の型検査へ通す |
 | P2 | function signatureやnative phantom型を実payloadと混同する。深さ上限を超えるDTOもproofと誤判定する | nominal field graphを反復走査し、registryの実payloadだけを辿る。関数署名とphantomを共有値・field payloadとして数えない |
 | P2 | 元Nagiの診断の後に生成Rust本文を重ね、原因を追いにくい | mapped primaryと関連causeを通常表示。`--rust-diagnostics`で詳細を表示し、unmapped/native/依存errorはrawを保つ |
+| P1・CIで発見 | 既定native cacheでは同じstemの別生成projectが同じexeを上書きし、Cargo終了後のrunが別アプリを実行し得る | 既存のcanonical(source,out) identityを既定・明示cacheで共通にする。Cargo終了後に別buildを挟むbarrier回帰で、修正前の取り違えと修正後の分離を確認 |
 
 新しいP0は今回の対象と検査では確認していない。リポジトリ全体の安全性証明や独立したsecurity scanを行ったという意味ではない。AuthのP1は今回作った実験のレビューで発見した契約違反であり、既存公開版に同じAPIがあったという報告ではない。
 
@@ -56,7 +59,7 @@ High/Lowの生成行から元のNagiファイル・文の行へ戻す。import�
 
 | 検査 | このフェーズの結果・範囲 |
 |---|---|
-| 全suite | `cargo test --locked`成功、登録762 tests（doctest含む）、ignored 0。子processのstdoutを再集計して件数を増やさない |
+| 初回全suite | `cargo test --locked`成功、登録762 tests（doctest含む）、ignored 0。明示的なnative targetを指定しており、既定経路の競合は見逃した。子processのstdoutを再集計して件数を増やさない |
 | 静的品質 | fmt、全target clippy `-D warnings`、変更workflowのactionlint成功 |
 | 定数 | 新規10 test関数。8幅、profile、type優先、binding/branch/loop、Unicode import位置、check/build前拒否とHigh/Low/native |
 | Auth | 新規9 compiler test関数、2 runtime test、5 Rust compile-fail doctest。missing/fake/wrong-permission/reuse/JSON/共有・phantom・nonDebug mainを検査 |
@@ -67,6 +70,9 @@ High/Lowの生成行から元のNagiファイル・文の行へ戻す。import�
 | CI補助 | Python CI scripts 51 tests成功、corpus/harness登録確認成功 |
 | VS Code | 最新compilerをPATHへ指定してNode 196 tests成功。最初の未設定実行はcompilerを利用する11 fileが失敗し、環境を直して再実行した。実IDE UI・JetBrainsはこのフェーズで未実行 |
 | 文書 | 日英公開ページ90ページをbuildし、ローカルlink・anchor・asset確認成功。変更Markdownの相対リンクも確認 |
+| CI後の回帰 | 明示共有と既定共有を同一cwd・別source/outで実行。修正前はfirstがsecondを実行して1 pass/1 fail、修正後は2 pass。環境変数を除いて既定経路を強制する |
+| 修正後の関連検査 | `NAGI_NATIVE_TARGET_DIR`を除き、Auth 9・project 12・shared target 2、計23 tests成功。VS CodeとHTML viewportは計201 tests成功。最初の制限付きNode実行は同期child spawnがEPERMになり、実行環境の権限を揃えて再確認した |
+| 修正後の全suite | `NAGI_NATIVE_TARGET_DIR`を除いて`cargo test --locked`成功、登録763 tests、ignored 0。fmt、全target clippy `-D warnings`、Docs 90ページと変更Markdownの相対リンク確認も成功 |
 
 詳細commandと保存/縮小の上限は[compiler-testing](compiler-testing.md)。Proptestを導入する代わりに、既存のbounded generator・独立oracle・budget付き縮小を拡張した。coverage-guided fuzz、全CFG/Scope/任意asyncのランダム生成ではない。Scope・取消・panicは専用実runtime regressionで検査する。
 
@@ -99,9 +105,9 @@ qps中央値はNagi 62.7k／Rust 64.1k、p99中央値325／354µs、RSS snapshot
 
 PR/pushのRust変更では既存Linux全suiteとfuzz smokeを使い、4 OS対象のnative contract suiteにもconstant/Authを追加した。Docsだけの変更はRust全suiteを起動しない。週次/手動workflowは2 seed、各256生成、10,000 mutation、128 nativeと重要回帰を実行する。失敗は縮小結果とstageをartifactへ残す。
 
-このフェーズのローカル結果はLinuxのみ。#74の4 OS成功を新差分の成功として転用しない。今回のWindows/macOSは新PRのCIで確認する必要がある。
+このフェーズのローカル結果はLinuxのみ。#74の4 OS成功を新差分の成功として転用しない。#76の最初のCIではLinuxとmacOSのAuth実行結果が空になり、既定キャッシュの上書きを発見した。ローカルの明示共有設定で成功した結果を、既定経路の保証へ広げてはいけない。修正後もWindows/macOSを含む新CIで確認する必要がある。
 
-#74へ積むより、派生ブランチの別draft PRを推奨する。baseは`fix/compiler-contract-stability`、最終反映先はmain。定数・診断・Authのcommitを分け、Authは標準APIの安定化前の実験と明記する。#74のmerge判断とこの差分の採否を分離し、どちらも自動でmainへmergeしない。
+#74へ積まず、別Draft PR #76として分離した。作成時は#74のbranchがbaseだったが、ユーザーの#74マージを確認してmainへ変更した。定数・診断・Auth・CI由来の成果物修正をcommitで分ける。Authは標準APIの安定化前の実験と明記する。Copilot reviewは実行できず、成功レビューとして数えない。
 
 ## 残す問題と次の3項目
 

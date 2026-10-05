@@ -26,6 +26,7 @@
 - capability検査では関数署名・phantom markerと実payloadを区別する。標準API内部のArc state/contextも共有境界である。
 - clone、allocation、Drop、評価順、Future frame、取消への影響を確認する。RustのDrop/borrow/Futureを使い、独自runtimeの寿命管理を安易に追加しない。
 - Resultの業務Err、panic、取消、compile error、infra errorを区別する。panic捕捉はrollbackではない。取消は受理済みDB操作や外部副作用を戻さない。
+- 生成先とCargoキャッシュは別の境界。同じtarget内の別アプリの実行ファイルを上書きしない。ビルド経路の変更では既定・明示キャッシュの両方を検査し、テストだけのcwd隔離で利用者の競合を隠さない。
 
 ## 変更ごとの検査
 

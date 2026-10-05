@@ -82,13 +82,14 @@ nagic run hello.nagi
 
 `check`と`lower`は現在どちらもHighの生成Lowを保存します。`check`が成功しても、Rust側の型・借用などの検査で`build`が失敗する場合があります。
 
-ビルド時のエラーには、対応を特定できる場合は元のNagi・Lowのファイル名と行を表示します。続く`Rust backend details`でRust側の詳細を確認できます。手書きRustや元の位置を特定できないエラーは、Rustの診断を表示します。
+ビルド時のエラーには、対応を特定できる場合は元のNagi・Lowのファイル名と行を表示します。次の未リリース版では、生成Rustの詳細を`--rust-diagnostics`で表示します。手書きRustや元の位置を特定できないエラーは、通常表示にもRustの診断を残します。
 
 ```powershell
 nagic check hello.nagi
 nagic build hello.nagi
-.\native-target\release\nagi-hello.exe
 ```
+
+`build`が表示した`native:`行のパスで実行できます。たとえば`native: ...\nagi-hello-0123456789abcdef.exe`なら、そのパスをPowerShellの`&`で実行します。単に試す場合は`nagic run hello.nagi`でビルドと実行をまとめられます。
 
 標準の出力先は次のとおりです。
 
@@ -97,10 +98,10 @@ nagic build hello.nagi
 | `build/hello/generated.low` | Highから変換したLow |
 | `build/hello/src/main.rs` | 生成したRust（build / run時） |
 | `build/hello/Cargo.toml` | 生成したRustプロジェクト（build / run時） |
-| `native-target/release/nagi-hello.exe` | Windowsの実行ファイル |
-| `native-target/release/nagi-hello` | Linux・macOSの実行ファイル |
+| `native-target/release/nagi-hello-<識別子>.exe` | Windowsの実行ファイル（次の未リリース版） |
+| `native-target/release/nagi-hello-<識別子>` | Linux・macOSの実行ファイル（次の未リリース版） |
 
-`build/<ソースのファイル名から拡張子を除いた名前>/`に出力します。別の場所に生成する場合は`--out build/my-hello`を付けます。実行ファイルの出力先は`NAGI_NATIVE_TARGET_DIR`で変更できます。
+`build/<ソースのファイル名から拡張子を除いた名前>/`に出力します。別の場所に生成する場合は`--out build/my-hello`を付けます。実行ファイルの出力先は`NAGI_NATIVE_TARGET_DIR`で変更できます。[実行ファイル名の変更と共有キャッシュ](projects.md)も参照してください。
 
 コンパイルには配布された`runtime/`も必要です。`nagic.exe`だけを別の場所にコピーした場合は、環境変数`NAGI_ROOT`に`runtime/`のある展開フォルダーを指定してください。生成したアプリexeの配布例は[タスク管理デモ](../test-nagi-code/web-demo/README.md)にあります。
 

@@ -14,6 +14,7 @@ Nagi 0.1 betaの既知不具合再発を小さな再現sourceと段階別oracle�
 | Backend | emit成功後の実rustc/Cargo build | compiler/tests/codegen.rs, http_entrypoint.rs, conformance.rs |
 | Runtime | 値・byte列・Drop・panic unwind | compiler/tests/literal_contracts.rs, view_container_drop.rs |
 | Integration | 実Cargo/extern/socket/SQLiteとNagi位置 | compiler/tests/shared_field_moves.rs, static_callback_views.rs, sql_check.rs; runtime/src/http/panic_tests.rs |
+| Build artifact identity | 同じcacheの別アプリを取り違えない。Cargo終了後に別buildを挟む決定的barrier、既定・明示共有、等価source/outと別out | compiler/tests/shared_target.rs, project.rs; [ADR 005](adr/005-native-artifact-identity.md) |
 | Adversarial | overflow/zero division、loop backedge、panic/取消 | compiler/tests/integer_zero_division.rs, scope_runtime_contract.rs; runtime/src/actor/lifecycle_adversarial_tests.rs |
 | Fuzz | 任意text mutationのparse/check panic、check後Low/emit | fuzz/smoke.rs, compiler/tests/support/conformance.rs |
 | Property / 限定differential | bounded生成と独立host oracle、High/保存Low二経路 | compiler/tests/support/conformance.rs, compiler/tests/conformance.rs |

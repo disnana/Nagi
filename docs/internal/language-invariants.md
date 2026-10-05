@@ -14,6 +14,7 @@
 | Rustへ委譲 | 手書きRustの本体、外部crateのAPIとtrait実装、最終的なClone/Send/Sync、依存取得・link・target設定をbuildで確かめる。この委譲をNagi自身の型生成ミスの免責に使わない | `rust_dependencies.rs`, `build_diagnostics.rs`, `copy_capabilities.rs`, `scoped_tasks.rs` |
 | High/Low | 同じ名前解決・型・所有権規則を使う。Lowに別のメモリモデルはない。保存Lowを再解析して受理でき、対応するプログラムの観測結果が一致することを検査する | `parser.rs`, `check.rs`, `modules.rs`; `ownership_boundaries.rs`, `stdlib_imports.rs`, conformance |
 | 診断 | Nagiで分かる誤りはNagi位置へ返す。生成Rustのprimary診断は対応がある時だけ元ファイル・行を示す。Rustの列・補足spanを推測してNagi位置に変換しない | `source.rs`, `diagnostics.rs`; `build_diagnostics.rs`, `symbols.rs` |
+| ビルド成果物 | 別の入口ソース・生成先のアプリを共通targetへ置いても、片方の実行ファイルをもう片方で上書きしない。既定・明示キャッシュの両方で識別子を付ける。同じ生成先への同時コンパイルは未対応 | `emit.rs`; `shared_target.rs`, `project.rs`; [ADR 005](adr/005-native-artifact-identity.md) |
 
 buildには外部環境が必要なため「check成功ならどんな環境でもbuild成功」とは保証しない。未対応のNagi構文・型の組合せは早い段階で明示的に拒否する。現時点では全受理プログラムのbackend conformanceを証明できておらず、未知の不一致は残り得る。
 
