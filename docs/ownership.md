@@ -108,7 +108,11 @@ viewを含む戻り値でも、`return None`や`return []`、`return ok(None)`�
 
 `return`で終わるブロックの直下では、viewを一時的にローカル値へ切り替え、その後で引数のviewに戻して返せます。生成Rustでは、各代入を別の借用として扱います。分岐後や次のループで使う値の更新は維持し、所有値のコピーは追加しません。[実行テスト](../compiler/tests/view_branch_rebinding.rs)でHigh・保存Low・手書きLowを確認しています。修正の収録状況は[CHANGELOG](../CHANGELOG.md)を参照してください。
 
-Nagiの検査は、Nagiのソース位置でmoveや借用の診断を返すためのものです。生成Rustの検査を代替するものではありません。`List[view[str]]`など、viewを含む所有コンテナーを再代入してから返すコードでは、`check`が成功しても生成Rustの借用検査に失敗する場合があります。また、`check`がRust側なら有効なコードを保守的に拒否する場合もあります。
+同期関数の`List[view[str]]`にも、一時的にローカルの文字列を借り、引数の借用へ戻して変数を返す生成処理があります。直線的な代入と`if`／`else`を対象に、代入前後の値を分けてRustへ渡します。右辺の評価を先に行い、上書きされた配列のバッファはその場で解放します。正常終了とpanic時の破棄順序も、元の宣言位置に合わせます。[値の実行テスト](../compiler/tests/view_container_rebinding.rs)と[確保・解放のテスト](../compiler/tests/view_container_drop.rs)でHigh・保存Low・手書きLowを確認します。修正の収録状況は[CHANGELOG](../CHANGELOG.md)を参照してください。
+
+対象は、復元した変数をそのまま`return`する場合です。別の変数へmoveしてから返す流れは、この修正の対象に含みません。また、async関数、`for`／`while`・`match`・`scope`を含む関数、Resultや入れ子のコンテナーには適用しません。例えば`Result[List[view[str]], Error]`を返す同様の再代入は、まだ`check`成功後にRustの借用検査で失敗する場合があります。短い借用を持つ配列と、返す配列を別の変数にすると、同じ格納先へ寿命が結びつく問題を避けられます。
+
+Nagiの検査は、Nagiのソース位置でmoveや借用の診断を返すためのものです。生成Rustの検査を代替するものではありません。また、`check`がRust側なら有効なコードを保守的に拒否する場合もあります。
 
 Rustアダプターとの型の一致、`copy`に必要な`Clone`、非同期処理の`Send`・共有状態の`Sync`も最終的には`build`で検査します。`shared[T]`で包むだけでTが並行処理に適した型になるわけではありません。実行ファイルを作るにはNagiとRustの両方の検査を通す必要があります。
 

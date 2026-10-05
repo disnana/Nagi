@@ -1,11 +1,5 @@
 use crate::ast::{block_returns as returns, *};
 use std::collections::{HashMap, HashSet};
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct BindingId {
-    line: usize,
-    token: usize,
-}
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct BorrowedPlace {
     binding: BindingId,
@@ -45,6 +39,9 @@ struct Checker {
     asynchronous: bool,
     scope: usize,
     editor: bool,
+    collect_view_flow: bool,
+    view_flow_names: HashSet<String>,
+    view_content_mutations: Vec<FlowContentMutation>,
     parameter_views: HashSet<BindingId>,
     iterators: Vec<HashSet<BorrowedPlace>>,
     expression_loans: Vec<HashSet<BorrowedPlace>>,
@@ -60,6 +57,47 @@ fn future(t: Type) -> Type {
 }
 fn matches_type(a: &Type, b: &Type) -> bool {
     a == b
+}
+
+fn reset_flow(statements: &mut [Stmt]) {
+    for statement in statements {
+        statement.flow = None;
+        match &mut statement.kind {
+            S::If(_, then_body, else_body) => {
+                reset_flow(then_body);
+                reset_flow(else_body);
+            }
+            S::Match(_, arms) => {
+                for arm in arms {
+                    reset_flow(&mut arm.body);
+                }
+            }
+            S::While(_, body) | S::For(_, _, body) | S::Scope(body) => reset_flow(body),
+            S::Assign { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => {}
+        }
+    }
+}
+
+fn should_collect_view_flow(editor: bool, asynchronous: bool, ret: &Type, body: &[Stmt]) -> bool {
+    !editor && !asynchronous && ret.is_view_string_list() && supports_view_flow(body)
+}
+
+fn direct_view_return_names(body: &[Stmt], names: &mut HashSet<String>) {
+    for statement in body {
+        match &statement.kind {
+            S::Return(Some(Expr {
+                kind: E::Name(name),
+                ..
+            })) => {
+                names.insert(name.clone());
+            }
+            S::If(_, then_body, else_body) => {
+                direct_view_return_names(then_body, names);
+                direct_view_return_names(else_body, names);
+            }
+            _ => {}
+        }
+    }
 }
 
 // Generated records do not implement comparison or hashing. Borrowed slices
@@ -326,6 +364,9 @@ pub(crate) fn editor_types(primary: &Program, native: &Program) -> Option<Progra
 }
 
 fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
+    for function in &mut p.functions {
+        reset_flow(&mut function.body);
+    }
     if !p.imports.is_empty() || !p.module_imports.is_empty() {
         return Err("importはnagicのファイル読み込み経路で解決してください".into());
     }
@@ -353,6 +394,9 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         asynchronous: false,
         scope: 0,
         editor,
+        collect_view_flow: false,
+        view_flow_names: HashSet::new(),
+        view_content_mutations: Vec::new(),
         parameter_views: HashSet::new(),
         iterators: vec![],
         expression_loans: vec![],
@@ -518,6 +562,12 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         c.ret = f.ret.clone();
         c.asynchronous = f.asynchronous;
         c.scope = 0;
+        c.collect_view_flow = should_collect_view_flow(editor, f.asynchronous, &f.ret, &f.body);
+        c.view_flow_names.clear();
+        if c.collect_view_flow {
+            direct_view_return_names(&f.body, &mut c.view_flow_names);
+            c.collect_view_flow = !c.view_flow_names.is_empty();
+        }
         c.valid(&f.ret, f.line)?;
         c.emittable(&f.ret, f.line, false)?;
         for (index, (n, t)) in f.params.iter().enumerate() {
@@ -594,6 +644,99 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
     Ok(())
 }
 impl Checker {
+    fn extend_content_origins(
+        &mut self,
+        name: &str,
+        origin: HashSet<BorrowedPlace>,
+        contents: Vec<HashSet<BorrowedPlace>>,
+    ) {
+        let target = self.vars.get_mut(name).expect("checked list binding");
+        if self.collect_view_flow
+            && self.view_flow_names.contains(name)
+            && target.ty.is_view_string_list()
+        {
+            let mut added_origins: Vec<_> = origin
+                .iter()
+                .filter(|origin| {
+                    !target
+                        .content_origins
+                        .first()
+                        .is_some_and(|previous| previous.contains(origin))
+                })
+                .map(|origin| FlowOrigin {
+                    binding: origin.binding,
+                    fields: origin.fields.clone(),
+                    owner_loan: origin.owner_loan,
+                    static_origin: origin.static_origin,
+                })
+                .collect();
+            added_origins.sort_by(|a, b| {
+                (a.binding, &a.fields, a.owner_loan, a.static_origin).cmp(&(
+                    b.binding,
+                    &b.fields,
+                    b.owner_loan,
+                    b.static_origin,
+                ))
+            });
+            if !added_origins.is_empty() {
+                self.view_content_mutations.push(FlowContentMutation {
+                    binding: target.binding,
+                    name: name.to_owned(),
+                    added_origins,
+                });
+            }
+        }
+        target.origins.extend(origin.iter().cloned());
+        if let Some(element_origins) = target.content_origins.first_mut() {
+            element_origins.extend(origin);
+        }
+        for (target, source) in target.content_origins.iter_mut().skip(1).zip(contents) {
+            target.extend(source);
+        }
+    }
+
+    fn view_list_snapshot(&self) -> Vec<ViewListBindingSnapshot> {
+        let mut snapshot: Vec<_> = self
+            .view_flow_names
+            .iter()
+            .filter_map(|name| {
+                self.vars
+                    .get(name)
+                    .filter(|var| var.ty.is_view_string_list())
+                    .map(|var| (name, var))
+            })
+            .map(|(name, var)| {
+                let mut origins: Vec<_> = var
+                    .content_origins
+                    .iter()
+                    .flatten()
+                    .map(|origin| FlowOrigin {
+                        binding: origin.binding,
+                        fields: origin.fields.clone(),
+                        owner_loan: origin.owner_loan,
+                        static_origin: origin.static_origin,
+                    })
+                    .collect();
+                origins.sort_by(|a, b| {
+                    (a.binding, &a.fields, a.owner_loan, a.static_origin).cmp(&(
+                        b.binding,
+                        &b.fields,
+                        b.owner_loan,
+                        b.static_origin,
+                    ))
+                });
+                ViewListBindingSnapshot {
+                    name: name.clone(),
+                    binding: var.binding,
+                    moved: var.moved,
+                    origins,
+                }
+            })
+            .collect();
+        snapshot.sort_by_key(|binding| binding.binding);
+        snapshot
+    }
+
     fn resource(&self, name: &str) -> Option<crate::stdlib::Resource> {
         self.registered
             .contains(name)
@@ -2209,6 +2352,32 @@ impl Checker {
         Ok(())
     }
     fn statement(&mut self, s: &mut Stmt) -> Result<(), String> {
+        let before = self.collect_view_flow.then(|| self.view_list_snapshot());
+        // A child statement has its own expression effects. Preserve the
+        // parent's condition effects while checking either branch.
+        let parent_mutations = std::mem::take(&mut self.view_content_mutations);
+        let mut assignment = None;
+        let mut condition_after = None;
+        let checked = self.statement_inner(s, &mut assignment, &mut condition_after);
+        let content_mutations =
+            std::mem::replace(&mut self.view_content_mutations, parent_mutations);
+        if let (Ok(()), Some(before)) = (&checked, before) {
+            s.flow = Some(StmtFlowFacts {
+                before,
+                after: self.view_list_snapshot(),
+                condition_after,
+                content_mutations,
+                assignment,
+            });
+        }
+        checked
+    }
+    fn statement_inner(
+        &mut self,
+        s: &mut Stmt,
+        assignment: &mut Option<FlowAssignment>,
+        condition_after: &mut Option<Vec<ViewListBindingSnapshot>>,
+    ) -> Result<(), String> {
         match &mut s.kind {
             S::Assign {
                 name,
@@ -2268,16 +2437,27 @@ impl Checker {
                 };
                 let content_origins = self.content_origins(value, &ty, 0);
                 self.consume(value)?;
+                let target_binding = old.as_ref().map(|v| v.binding).unwrap_or(BindingId {
+                    line: s.line,
+                    token: s.binding_span.unwrap_or_default().start,
+                });
+                let rhs_consumed_target = old.as_ref().is_some_and(|previous| {
+                    !previous.moved
+                        && self.vars.get(name).is_some_and(|current| {
+                            current.binding == previous.binding && current.moved
+                        })
+                });
+                *assignment = Some(FlowAssignment {
+                    target: target_binding,
+                    rhs_consumed_target,
+                });
                 *declare = old.is_none();
                 *annotation = Some(ty.clone());
                 s.binding_type = Some(ty.clone());
                 self.vars.insert(
                     name.clone(),
                     Var {
-                        binding: old.as_ref().map(|v| v.binding).unwrap_or(BindingId {
-                            line: s.line,
-                            token: s.binding_span.unwrap_or_default().start,
-                        }),
+                        binding: target_binding,
                         ty,
                         moved: false,
                         moved_fields: HashSet::new(),
@@ -2341,6 +2521,7 @@ impl Checker {
             S::If(c, a, b) => {
                 let t = self.expr(c, Some(&Type::named("bool")))?;
                 self.demand(&t, &Type::named("bool"), s.line)?;
+                *condition_after = self.collect_view_flow.then(|| self.view_list_snapshot());
                 let am = self.child(a)?;
                 let bm = self.child(b)?;
                 let mut paths = vec![];
@@ -3562,15 +3743,7 @@ impl Checker {
                     let E::Name(name) = &args[0].kind else {
                         unreachable!("checked append target")
                     };
-                    let target = self.vars.get_mut(name).expect("checked list binding");
-                    target.origins.extend(origin.iter().cloned());
-                    if let Some(element_origins) = target.content_origins.first_mut() {
-                        element_origins.extend(origin);
-                    }
-                    for (target, source) in target.content_origins.iter_mut().skip(1).zip(contents)
-                    {
-                        target.extend(source);
-                    }
+                    self.extend_content_origins(name, origin, contents);
                 }
                 Ok(Type::named("unit"))
             }
@@ -3692,4 +3865,281 @@ fn integrate_mode(p: &mut Program, mut native: Program, editor: bool) -> Result<
     p.modules.merge_native(native.modules)?;
     crate::modules::synchronize(p);
     check_mode(p, editor)
+}
+
+#[cfg(test)]
+mod flow_metadata_tests {
+    use super::*;
+
+    const RESTORE: &str = r#"def restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
+    alias = [parts[0]]
+    alias = alias
+    if flag:
+        local = "temporary"
+        alias = [view(local)]
+        alias = [parts[0]]
+        return alias
+    return alias
+"#;
+
+    fn snapshot<'a>(
+        facts: &'a StmtFlowFacts,
+        edge: bool,
+        name: &str,
+    ) -> &'a ViewListBindingSnapshot {
+        let bindings = if edge { &facts.after } else { &facts.before };
+        bindings
+            .iter()
+            .find(|binding| binding.name == name)
+            .unwrap_or_else(|| panic!("missing {name} in {bindings:?}"))
+    }
+
+    fn assert_restore_facts(program: &Program) -> BindingId {
+        let function = program
+            .functions
+            .iter()
+            .find(|function| function.name == "restore")
+            .unwrap();
+        let first = function.body[0].flow.as_ref().unwrap();
+        let alias_binding = first.assignment.unwrap().target;
+        assert_eq!(snapshot(first, true, "alias").binding, alias_binding);
+
+        let self_assignment = function.body[1].flow.as_ref().unwrap();
+        let self_assignment_facts = self_assignment.assignment.unwrap();
+        assert_eq!(self_assignment_facts.target, alias_binding);
+        assert!(self_assignment_facts.rhs_consumed_target);
+        assert!(!snapshot(self_assignment, false, "alias").moved);
+        assert!(!snapshot(self_assignment, true, "alias").moved);
+
+        let S::If(_, then_body, _) = &function.body[2].kind else {
+            panic!("expected the restoration branch")
+        };
+        let local_assignment = then_body[1].flow.as_ref().unwrap();
+        assert_eq!(local_assignment.assignment.unwrap().target, alias_binding);
+        assert!(snapshot(local_assignment, true, "alias")
+            .origins
+            .iter()
+            .any(|origin| origin.owner_loan && !origin.static_origin));
+
+        let restore_assignment = then_body[2].flow.as_ref().unwrap();
+        assert_eq!(restore_assignment.assignment.unwrap().target, alias_binding);
+        let restored = snapshot(restore_assignment, true, "alias");
+        assert!(restored
+            .origins
+            .iter()
+            .any(|origin| !origin.owner_loan && !origin.static_origin));
+        assert_eq!(restored.binding, alias_binding);
+
+        let returned = then_body[3].flow.as_ref().unwrap();
+        assert_eq!(snapshot(returned, false, "alias").binding, alias_binding);
+        alias_binding
+    }
+
+    fn all_flow_none(statements: &[Stmt]) -> bool {
+        statements.iter().all(|statement| {
+            statement.flow.is_none()
+                && match &statement.kind {
+                    S::If(_, then_body, else_body) => {
+                        all_flow_none(then_body) && all_flow_none(else_body)
+                    }
+                    S::Match(_, arms) => arms.iter().all(|arm| all_flow_none(&arm.body)),
+                    S::While(_, body) | S::For(_, _, body) | S::Scope(body) => all_flow_none(body),
+                    S::Assign { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => true,
+                }
+        })
+    }
+
+    #[test]
+    fn flow_facts_recompute_for_high_saved_low_and_self_consumption() {
+        let mut high = crate::parser::parse(RESTORE, true).unwrap();
+        check(&mut high).unwrap();
+        let high_binding = assert_restore_facts(&high);
+
+        // Checked facts are compiler-only and do not survive Low serialization.
+        let low_text = crate::emit::low(&high);
+        let mut low = crate::parser::parse(&low_text, false).unwrap();
+        assert!(low
+            .functions
+            .iter()
+            .all(|function| all_flow_none(&function.body)));
+        check(&mut low).unwrap();
+        assert_restore_facts(&low);
+
+        // Rechecking replaces stale snapshots while retaining source binding IDs.
+        high.functions[0].body[1]
+            .flow
+            .as_mut()
+            .unwrap()
+            .before
+            .clear();
+        check(&mut high).unwrap();
+        assert_eq!(assert_restore_facts(&high), high_binding);
+    }
+
+    #[test]
+    fn flow_collection_is_gated_to_sync_list_functions_without_unsupported_control_flow() {
+        let source = r#"def ordinary() -> i64:
+    return 1
+async def asynchronous(parts: List[view[str]]) -> List[view[str]]:
+    alias = parts
+    return alias
+def looped(flag: bool, part: view[str]) -> List[view[str]]:
+    alias = [part]
+    while flag:
+        alias = [part]
+    return alias
+def matched(value: Option[view[str]]) -> List[view[str]]:
+    match value:
+        case Some(part):
+            return [part]
+        case None:
+            return []
+async def scoped() -> Result[unit, Error]:
+    async with scope:
+        print(1)
+    return ok(print(0))
+"#;
+        let mut program = crate::parser::parse(source, true).unwrap();
+        check(&mut program).unwrap();
+
+        for function in &program.functions {
+            assert!(
+                all_flow_none(&function.body),
+                "{} had flow facts",
+                function.name
+            );
+        }
+
+        let view_list = Type::generic(
+            "List",
+            vec![Type::generic("view", vec![Type::named("str")])],
+        );
+        let scalar = Type::named("i64");
+        assert!(!should_collect_view_flow(false, false, &scalar, &[]));
+        assert!(!should_collect_view_flow(false, true, &view_list, &[]));
+        for name in ["looped", "matched", "scoped"] {
+            let function = program
+                .functions
+                .iter()
+                .find(|function| function.name == name)
+                .unwrap();
+            assert!(!supports_view_flow(&function.body));
+            assert!(!should_collect_view_flow(
+                false,
+                function.asynchronous,
+                &function.ret,
+                &function.body
+            ));
+        }
+    }
+
+    #[test]
+    fn flow_snapshots_only_keep_direct_return_bindings() {
+        let mut body = String::new();
+        for index in 0..128 {
+            body.push_str(&format!("    value{index}: List[view[str]] = []\n"));
+        }
+        let source = format!(
+            "def literal() -> List[view[str]]:\n{body}    return []\n\n\
+             def named(part: view[str]) -> List[view[str]]:\n{body}    value127 = [part]\n    return value127\n"
+        );
+        let mut program = crate::parser::parse(&source, true).unwrap();
+        check(&mut program).unwrap();
+        assert!(all_flow_none(&program.functions[0].body));
+        let named = &program.functions[1];
+        assert!(crate::view_flow::plan(named).is_none());
+        for statement in &named.body {
+            let flow = statement.flow.as_ref().unwrap();
+            assert!(flow.before.len() <= 1);
+            assert!(flow.after.len() <= 1);
+            assert!(flow
+                .before
+                .iter()
+                .chain(&flow.after)
+                .all(|binding| binding.name == "value127"));
+        }
+    }
+
+    #[test]
+    fn content_mutation_events_survive_rhs_replacement_and_stay_in_their_statement() {
+        let source = r#"def make(ignored: unit, part: view[str]) -> List[view[str]]:
+    return [part]
+def consume(ignored: unit, parts: List[view[str]]) -> bool:
+    return len(parts) > 0
+def rhs(flag: bool, part: view[str]) -> List[view[str]]:
+    parts = [part]
+    if flag:
+        local = "RHS temporary"
+        parts = make(append(parts, view(local)), part)
+    return parts
+def condition(flag: bool, part: view[str]) -> List[view[str]]:
+    local = "condition temporary"
+    parts = [part]
+    if flag and consume(append(parts, view(local)), parts):
+        selected = True
+    parts = [part]
+    return parts
+"#;
+        fn assert_events(program: &Program) {
+            let rhs = program
+                .functions
+                .iter()
+                .find(|function| function.name == "rhs")
+                .unwrap();
+            let branch = &rhs.body[1];
+            assert!(branch.flow.as_ref().unwrap().content_mutations.is_empty());
+            let S::If(_, then_body, _) = &branch.kind else {
+                panic!("expected branch")
+            };
+            let replacement = then_body[1].flow.as_ref().unwrap();
+            assert_eq!(replacement.content_mutations.len(), 1);
+            let mutation = &replacement.content_mutations[0];
+            assert_eq!(mutation.binding, replacement.assignment.unwrap().target);
+            assert!(mutation
+                .added_origins
+                .iter()
+                .any(|origin| origin.owner_loan));
+            assert!(snapshot(replacement, true, "parts")
+                .origins
+                .iter()
+                .all(|origin| !origin.owner_loan));
+            assert!(crate::view_flow::plan(rhs).is_some());
+
+            let condition = program
+                .functions
+                .iter()
+                .find(|function| function.name == "condition")
+                .unwrap();
+            let branch = &condition.body[2];
+            let facts = branch.flow.as_ref().unwrap();
+            assert_eq!(facts.content_mutations.len(), 1);
+            assert!(
+                facts
+                    .condition_after
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .find(|binding| binding.name == "parts")
+                    .unwrap()
+                    .moved
+            );
+            let S::If(_, then_body, _) = &branch.kind else {
+                panic!("expected branch")
+            };
+            assert!(then_body[0]
+                .flow
+                .as_ref()
+                .unwrap()
+                .content_mutations
+                .is_empty());
+        }
+        let mut high = crate::parser::parse(source, true).unwrap();
+        check(&mut high).unwrap();
+        assert_events(&high);
+        check(&mut high).unwrap();
+        assert_events(&high);
+        let mut low = crate::parser::parse(&crate::emit::low(&high), false).unwrap();
+        check(&mut low).unwrap();
+        assert_events(&low);
+    }
 }
