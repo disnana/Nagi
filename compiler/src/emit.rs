@@ -1302,6 +1302,12 @@ fn rb(
         flow_actions(&block.tail, out, n, types);
     }
 }
+/// Rust generation accepts only a sealed, finally checked program.
+///
+/// ```compile_fail,E0308
+/// let unchecked = nagic::ast::Program::default();
+/// let _ = nagic::emit::rust(&unchecked);
+/// ```
 pub fn rust(p: &Program) -> Result<String, String> {
     ::std::result::Result::Ok(rust_with_lines(p)?.text)
 }
