@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser, source};
 use std::{
     fs,
@@ -107,7 +109,7 @@ fn owned_string_and_list_fields_remain_moves() {
             let mut low = parser::parse(&emit::low(&high), false).unwrap();
             check::check(&mut low).unwrap();
             for program in [&high, &low] {
-                let rust = emit::rust(program).unwrap();
+                let rust = emit::rust(&checked_emission::seal(program)).unwrap();
                 assert!(!rust.contains("Clone, Copy"), "{inner}: {rust}");
             }
             let twice = format!("{once}    consume(item)\n");

@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{
     fs,
@@ -26,7 +28,11 @@ impl Fixture {
         let binary = self
             .0
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        fs::write(&source, emit::rust(program).unwrap() + ASSERTIONS).unwrap();
+        fs::write(
+            &source,
+            emit::rust(&checked_emission::seal(program)).unwrap() + ASSERTIONS,
+        )
+        .unwrap();
         let output = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
             .args(["--edition=2021", "--test"])
             .arg(&source)
@@ -92,7 +98,7 @@ fn local_container_escape_stays_rejected_in_high_and_low() {
 #[test]
 fn move_phi_and_mutation_fixtures_use_the_container_flow_plan() {
     for (source, high) in [(HIGH, true), (LOW, false)] {
-        let rust = emit::rust(&checked(source, high)).unwrap();
+        let rust = emit::rust(&checked_emission::seal(&checked(source, high))).unwrap();
         for name in [
             "nested_terminal",
             "continuing_phi",
@@ -124,7 +130,7 @@ fn move_phi_and_mutation_fixtures_use_the_container_flow_plan() {
 #[test]
 fn restore_rhs_keeps_its_source_line_and_generated_slots_are_synthetic() {
     let program = checked(HIGH, true);
-    let generated = emit::rust_with_lines(&program).unwrap();
+    let generated = emit::rust_with_lines(&checked_emission::seal(&program)).unwrap();
     let mut in_restore = false;
     let mut synthetic_container_declarations = 0;
     let mut saw_original_saved = 0;

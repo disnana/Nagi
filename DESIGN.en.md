@@ -151,7 +151,9 @@ Evidence and examples: [symbols](compiler/tests/symbols.rs), [code maps](compile
 
 ## When to update this document
 
-The [compiler/Rust boundary plan](docs/internal/compiler-rust-boundary-plan.md) stages a sealed CheckedProgram, isolated build generations, shared resource contracts, and Pool/Transaction validation. It retains the High-to-Low text round-trip and the Rust backend. These new boundaries are not implemented yet; work proceeds from Phase 1. Build generations retain the application identity and use a separate executable for each successful generation. The [decision record](docs/internal/open-questions.md) distinguishes current guarantees from planned ones.
+The [compiler/Rust boundary plan](docs/internal/compiler-rust-boundary-plan.md) stages a sealed CheckedProgram, isolated build generations, shared resource contracts, and Pool/Transaction validation. It retains the High-to-Low text round-trip and the Rust backend.
+
+Phase 1's CheckedProgram is implemented on the development branch and has not shipped. Code generation uses plans fixed during sealing rather than inferring types or borrows again. See the [final factory](compiler/src/check/checked.rs), [boundary tests](compiler/src/check/checked_tests.rs), and [ADR 006](docs/internal/adr/006-sealed-codegen-input.md). Later phases are unimplemented. Build generations retain the application identity and use a separate executable for each successful generation. The [decision record](docs/internal/open-questions.md) and [progress](docs/internal/progress.md) separate verified coverage from planned work.
 
 Changes to semantics, public APIs, or the High/Low/Rust division should update the rationale, alternatives, compatibility, and verification results here. Detailed API descriptions and measurement logs belong in their corresponding documents.
 

@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{
     fs,
@@ -32,7 +34,7 @@ fn return_observers_and_match_edges_compile_and_run_in_all_source_forms() {
     )));
     fs::create_dir_all(&fixture.0).unwrap();
     for (name, program) in [("high", high), ("saved", saved), ("hand", hand)] {
-        let rust = emit::rust(&program).unwrap();
+        let rust = emit::rust(&checked_emission::seal(&program)).unwrap();
         for function in [
             "alias_return",
             "result_return",

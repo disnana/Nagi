@@ -1,6 +1,7 @@
 pub mod ast;
 mod capabilities;
 pub mod check;
+pub mod checked;
 mod constant_eval;
 pub mod diagnostics;
 pub mod emit;

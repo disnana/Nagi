@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser, source};
 use std::{
     fs,
@@ -105,8 +107,8 @@ fn owned_scalars_decode_sqlite_rows_in_high_and_independent_saved_low() {
     let mut independent = parser::parse(&low, false).unwrap();
     check::check(&mut independent).unwrap();
     assert_eq!(
-        emit::rust(&high.program).unwrap(),
-        emit::rust(&independent).unwrap()
+        emit::rust(&checked_emission::seal(&high.program)).unwrap(),
+        emit::rust(&checked_emission::seal(&independent)).unwrap()
     );
     fixture.write("saved.low", &low);
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
@@ -150,7 +152,7 @@ fn owned_wrappers_preserve_unsupported_fields_and_manual_row_eligibility() {
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
     for program in [&high, &low] {
-        let rust = emit::rust(program).unwrap();
+        let rust = emit::rust(&checked_emission::seal(program)).unwrap();
         for name in [
             "Wide", "Nested", "Sequence", "Nominal", "Resource", "Shared", "Shadowed",
         ] {

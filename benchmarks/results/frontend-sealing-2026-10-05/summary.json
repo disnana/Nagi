@@ -1,0 +1,57 @@
+{
+  "metric": "microseconds per complete frontend pipeline, per sample elapsed / 100",
+  "samples_per_width": 5,
+  "iterations_per_sample": 100,
+  "warmup_iterations_per_width": 10,
+  "widths": [
+    {
+      "width": 1,
+      "source_bytes": 496,
+      "low_bytes": 713,
+      "rust_bytes": 2536,
+      "before_median_us": 3179.8,
+      "after_median_us": 2337.67,
+      "before_min_us": 3022.11,
+      "before_max_us": 3352.41,
+      "after_min_us": 2117.76,
+      "after_max_us": 2492.78
+    },
+    {
+      "width": 16,
+      "source_bytes": 7528,
+      "low_bytes": 9620,
+      "rust_bytes": 31303,
+      "before_median_us": 42848.28,
+      "after_median_us": 25304.5,
+      "before_min_us": 39074.15,
+      "before_max_us": 45134.08,
+      "after_min_us": 20329.87,
+      "after_max_us": 28825.3
+    },
+    {
+      "width": 64,
+      "source_bytes": 30088,
+      "low_bytes": 38180,
+      "rust_bytes": 123953,
+      "before_median_us": 174978.72,
+      "after_median_us": 79691.32,
+      "before_min_us": 152129.51,
+      "before_max_us": 185851.4,
+      "after_min_us": 75116.04,
+      "after_max_us": 86215.25
+    }
+  ],
+  "process_resources": {
+    "before": {
+      "max_rss_kib": 10144,
+      "user_seconds": 106.086757,
+      "system_seconds": 0.08598399999999999
+    },
+    "after": {
+      "max_rss_kib": 12656,
+      "user_seconds": 53.236108,
+      "system_seconds": 0.055029999999999996
+    },
+    "boundary": "whole process over all widths, output setup, warmups and timed batches; max RSS is not allocation count"
+  }
+}

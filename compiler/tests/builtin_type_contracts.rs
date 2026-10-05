@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 
 fn checked(source: &str) -> nagic::ast::Program {
@@ -147,7 +149,7 @@ fn database_rows_keep_generated_and_manual_bridge_implementations() {
             let high = checked(&database_source(builtin, ty));
             let mut low = parser::parse(&emit::low(&high), false).unwrap();
             check::check(&mut low).unwrap();
-            let rust = emit::rust(&low).unwrap();
+            let rust = emit::rust(&checked_emission::seal(&low)).unwrap();
             assert!(rust.contains("impl ::nagi_runtime::FromRow for Row"));
             assert!(!rust.contains("impl ::nagi_runtime::FromRow for Manual"));
         }
@@ -166,7 +168,7 @@ fn same_named_classes_keep_the_emitted_json_and_database_contracts() {
         let high = checked(&source);
         let mut low = parser::parse(&emit::low(&high), false).unwrap();
         check::check(&mut low).unwrap();
-        let rust = emit::rust(&low).unwrap();
+        let rust = emit::rust(&checked_emission::seal(&low)).unwrap();
         assert!(rust.contains(&format!("::nagi_runtime::encode(&{name} {{")));
     }
     // These names are fully qualified/aliased by rust_type; their local
@@ -197,7 +199,7 @@ fn same_named_classes_keep_the_emitted_json_and_database_contracts() {
     for name in ["i64", "f64"] {
         let source = format!("class {name}:\n    value: bool\nasync def read(db: Db) -> Result[List[{name}], Error]:\n    return await db_all[{name}](db, \"rows\")\n");
         let high = checked(&source);
-        let rust = emit::rust(&high).unwrap();
+        let rust = emit::rust(&checked_emission::seal(&high)).unwrap();
         assert!(rust.contains(&format!("impl ::nagi_runtime::FromRow for {name}")));
         assert!(rust.contains(&format!("all::<{name}>")));
     }

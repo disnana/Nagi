@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, modules, parser, source, stdlib, symbols};
 use std::{
     fs,
@@ -144,7 +146,7 @@ fn inferred_mapping_keeps_enum_class_aliases_and_borrowed_success_through_saved_
         .definitions
         .iter()
         .any(|definition| definition.id == stdlib::function_id(stdlib::Operation::ResultMapError)));
-    let rust = emit::rust(&saved.program).unwrap();
+    let rust = emit::rust(&checked_emission::seal(&saved.program)).unwrap();
     assert!(
         rust.contains("::nagi_runtime::result::map_error("),
         "{rust}"

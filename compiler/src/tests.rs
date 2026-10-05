@@ -1,3 +1,13 @@
+mod checked_emission {
+    pub fn seal(program: &crate::ast::Program) -> crate::checked::CheckedProgram {
+        crate::check::finalize(
+            program.clone(),
+            crate::ast::Program::default(),
+            crate::source::SourceProvenance::user_low_unmapped(),
+        )
+        .unwrap_or_else(|error| panic!("fixture finalization failed: {error}"))
+    }
+}
 use crate::{check, emit, parser};
 fn high(s: &str) -> Result<crate::ast::Program, String> {
     let mut p = parser::parse(s, true)?;
@@ -14,7 +24,9 @@ fn rust_extern_interface_and_low_roundtrip() {
     let mut low = parser::parse(&emit::low(&p), false).unwrap();
     check::check(&mut low).unwrap();
     assert!(low.functions[0].external);
-    assert!(emit::rust(&low).unwrap().contains("native::copy_text(s)"));
+    assert!(emit::rust(&checked_emission::seal(&low))
+        .unwrap()
+        .contains("native::copy_text(s)"));
     assert!(high("extern def missing() -> i64\n").is_err());
     assert!(high("@rust(\"native::f(); panic!()\")\nextern def bad() -> i64\n").is_err());
     assert!(
@@ -26,7 +38,7 @@ fn rust_extern_interface_and_low_roundtrip() {
 #[test]
 fn html_route_is_not_encoded_as_json() {
     let p = high("@get(\"/\")\nasync def home() -> Result[Html, Error]:\n    return ok(html(\"<h1>Hello</h1>\"))\n").unwrap();
-    let code = emit::rust(&p).unwrap();
+    let code = emit::rust(&checked_emission::seal(&p)).unwrap();
     assert!(code.contains("IntoResponse::into_response(v)"));
     assert!(high("def main():\n    html(123)\n").is_err());
     assert!(
@@ -38,7 +50,7 @@ fn console_io_roundtrip() {
     let p = high("def main() -> Result[unit, Error]:\n    write(\"prompt: \")\n    text = try read_line()\n    return ok(print(text))\n").unwrap();
     let mut low = parser::parse(&emit::low(&p), false).unwrap();
     check::check(&mut low).unwrap();
-    let rust = emit::rust(&low).unwrap();
+    let rust = emit::rust(&checked_emission::seal(&low)).unwrap();
     assert!(rust.contains("::nagi_runtime::read_line()"));
     assert!(high("def main():\n    read_line()\n").is_err());
     assert!(high("def main():\n    x = read_line(1)\n").is_err());
@@ -305,7 +317,7 @@ fn signed_minimum_literals_compile_and_run_after_lowering() {
     std::fs::create_dir_all(&folder).unwrap();
     let source = folder.join("main.rs");
     let binary = folder.join(format!("minimum{}", std::env::consts::EXE_SUFFIX));
-    std::fs::write(&source, emit::rust(&low).unwrap()).unwrap();
+    std::fs::write(&source, emit::rust(&checked_emission::seal(&low)).unwrap()).unwrap();
     let build = std::process::Command::new("rustc")
         .arg("--edition=2021")
         .arg(&source)

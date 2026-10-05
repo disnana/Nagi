@@ -1,0 +1,3 @@
+{"width":1,"source_bytes":496,"low_bytes":713,"rust_bytes":2536,"microseconds":[3124.78, 3022.11, 3179.8, 3189.89, 3352.41]}
+{"width":16,"source_bytes":7528,"low_bytes":9620,"rust_bytes":31303,"microseconds":[44644.44, 39074.15, 40233.43, 45134.08, 42848.28]}
+{"width":64,"source_bytes":30088,"low_bytes":38180,"rust_bytes":123953,"microseconds":[174978.72, 185851.4, 178404.22, 159669.37, 152129.51]}

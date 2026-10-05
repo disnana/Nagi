@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, source};
 use std::{
     fs,
@@ -32,7 +34,7 @@ impl Fixture {
         let binary = self
             .0
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        fs::write(&rust, emit::rust(program).unwrap()).unwrap();
+        fs::write(&rust, emit::rust(&checked_emission::seal(program)).unwrap()).unwrap();
         let compiled = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
             .args(["--edition=2021", "-D", "warnings"])
             .arg(&rust)

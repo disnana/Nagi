@@ -1,0 +1,503 @@
+{
+  "method": "filename-set equality and direct byte comparison; SHA-256 retained for readback",
+  "frontend": {
+    "before_directory": "/workspace/test-tools/compiler-rust-boundary-plan/baseline-repeat-output",
+    "after_directory": "/workspace/test-tools/compiler-rust-boundary-plan/after-output",
+    "files": [
+      {
+        "file": "1.low",
+        "before_bytes": 713,
+        "after_bytes": 713,
+        "before_sha256": "5858b3d72f8d49c939682695eddc4853b6624eb79b9849fda56e9c64f9974964",
+        "after_sha256": "5858b3d72f8d49c939682695eddc4853b6624eb79b9849fda56e9c64f9974964",
+        "byte_equal": true
+      },
+      {
+        "file": "1.nagi",
+        "before_bytes": 496,
+        "after_bytes": 496,
+        "before_sha256": "cfc3af3a6649929a49914e576e8838159290dde279c0dea7fb548149d3d4d6ac",
+        "after_sha256": "cfc3af3a6649929a49914e576e8838159290dde279c0dea7fb548149d3d4d6ac",
+        "byte_equal": true
+      },
+      {
+        "file": "1.rs",
+        "before_bytes": 2536,
+        "after_bytes": 2536,
+        "before_sha256": "41031b0ff61d8a2cef7f141ead73e7f09be3d527435d9ed24fa2fc775fd63329",
+        "after_sha256": "41031b0ff61d8a2cef7f141ead73e7f09be3d527435d9ed24fa2fc775fd63329",
+        "byte_equal": true
+      },
+      {
+        "file": "16.low",
+        "before_bytes": 9620,
+        "after_bytes": 9620,
+        "before_sha256": "dce3780c976bb8ac7fce29f080fe99f6369602abd746bf427f4b2aa8c6336bb1",
+        "after_sha256": "dce3780c976bb8ac7fce29f080fe99f6369602abd746bf427f4b2aa8c6336bb1",
+        "byte_equal": true
+      },
+      {
+        "file": "16.nagi",
+        "before_bytes": 7528,
+        "after_bytes": 7528,
+        "before_sha256": "e03d9d9ad4c59d4c79b87176df53b0c23bb6909639f09e64bb79c5b02f0443d2",
+        "after_sha256": "e03d9d9ad4c59d4c79b87176df53b0c23bb6909639f09e64bb79c5b02f0443d2",
+        "byte_equal": true
+      },
+      {
+        "file": "16.rs",
+        "before_bytes": 31303,
+        "after_bytes": 31303,
+        "before_sha256": "1ba3d31c2495af671f619f2cfc0a336e481dc3acd400dfbb52258b12ea92ca48",
+        "after_sha256": "1ba3d31c2495af671f619f2cfc0a336e481dc3acd400dfbb52258b12ea92ca48",
+        "byte_equal": true
+      },
+      {
+        "file": "64.low",
+        "before_bytes": 38180,
+        "after_bytes": 38180,
+        "before_sha256": "ff4dec032bf8d079a20e114538f7c32f926128fa61e17c377c20025670443c35",
+        "after_sha256": "ff4dec032bf8d079a20e114538f7c32f926128fa61e17c377c20025670443c35",
+        "byte_equal": true
+      },
+      {
+        "file": "64.nagi",
+        "before_bytes": 30088,
+        "after_bytes": 30088,
+        "before_sha256": "70eb23f7f2eb48dc551f26e06389b4aaaa004f411500a33ffc16991a45c63d68",
+        "after_sha256": "70eb23f7f2eb48dc551f26e06389b4aaaa004f411500a33ffc16991a45c63d68",
+        "byte_equal": true
+      },
+      {
+        "file": "64.rs",
+        "before_bytes": 123953,
+        "after_bytes": 123953,
+        "before_sha256": "59a61b54be3bd14332e6a535c2875c06a3edd028b582f456c6511aca0c1f2ae7",
+        "after_sha256": "59a61b54be3bd14332e6a535c2875c06a3edd028b582f456c6511aca0c1f2ae7",
+        "byte_equal": true
+      }
+    ],
+    "all_byte_equal": true
+  },
+  "positive_corpus": {
+    "before_directory": "/workspace/test-tools/compiler-rust-boundary-plan/corpus-before-output",
+    "after_directory": "/workspace/test-tools/compiler-rust-boundary-plan/corpus-after-output",
+    "fixture_count": 17,
+    "files_per_fixture": [
+      ".low",
+      ".direct.rs",
+      ".saved.rs"
+    ],
+    "files": [
+      {
+        "file": "cast_precedence.nagi.direct.rs",
+        "before_bytes": 925,
+        "after_bytes": 925,
+        "before_sha256": "c8f2f89e795e9860d2ae308095f64fc432416b136e18a1b9549398bb66211ad5",
+        "after_sha256": "c8f2f89e795e9860d2ae308095f64fc432416b136e18a1b9549398bb66211ad5",
+        "byte_equal": true
+      },
+      {
+        "file": "cast_precedence.nagi.low",
+        "before_bytes": 329,
+        "after_bytes": 329,
+        "before_sha256": "833d8abbc98d3260f1456aba81d74fbb2b2681e6e5ec03f9bca5198f8535e4de",
+        "after_sha256": "833d8abbc98d3260f1456aba81d74fbb2b2681e6e5ec03f9bca5198f8535e4de",
+        "byte_equal": true
+      },
+      {
+        "file": "cast_precedence.nagi.saved.rs",
+        "before_bytes": 925,
+        "after_bytes": 925,
+        "before_sha256": "c8f2f89e795e9860d2ae308095f64fc432416b136e18a1b9549398bb66211ad5",
+        "after_sha256": "c8f2f89e795e9860d2ae308095f64fc432416b136e18a1b9549398bb66211ad5",
+        "byte_equal": true
+      },
+      {
+        "file": "container_restore.nagi.direct.rs",
+        "before_bytes": 905,
+        "after_bytes": 905,
+        "before_sha256": "ed20349ad2d03225c9806a0ea46b58dbbdf54f58b280ce749979878db9cff79d",
+        "after_sha256": "ed20349ad2d03225c9806a0ea46b58dbbdf54f58b280ce749979878db9cff79d",
+        "byte_equal": true
+      },
+      {
+        "file": "container_restore.nagi.low",
+        "before_bytes": 257,
+        "after_bytes": 257,
+        "before_sha256": "118e5e69b4ff9639c16185050ed27d5bd3b6051e348e5f3cef986da7e3a4f5f6",
+        "after_sha256": "118e5e69b4ff9639c16185050ed27d5bd3b6051e348e5f3cef986da7e3a4f5f6",
+        "byte_equal": true
+      },
+      {
+        "file": "container_restore.nagi.saved.rs",
+        "before_bytes": 905,
+        "after_bytes": 905,
+        "before_sha256": "75c7dccb682e5aad520cc3e9599588c97d4566a8da4ca0cddffc025f2c200aa8",
+        "after_sha256": "75c7dccb682e5aad520cc3e9599588c97d4566a8da4ca0cddffc025f2c200aa8",
+        "byte_equal": true
+      },
+      {
+        "file": "container_restore_low.low.direct.rs",
+        "before_bytes": 905,
+        "after_bytes": 905,
+        "before_sha256": "079619ee1fe654c8f9ab92825b4d46cf50e2355a054bc7578e534af4b605aacd",
+        "after_sha256": "079619ee1fe654c8f9ab92825b4d46cf50e2355a054bc7578e534af4b605aacd",
+        "byte_equal": true
+      },
+      {
+        "file": "container_restore_low.low.low",
+        "before_bytes": 257,
+        "after_bytes": 257,
+        "before_sha256": "118e5e69b4ff9639c16185050ed27d5bd3b6051e348e5f3cef986da7e3a4f5f6",
+        "after_sha256": "118e5e69b4ff9639c16185050ed27d5bd3b6051e348e5f3cef986da7e3a4f5f6",
+        "byte_equal": true
+      },
+      {
+        "file": "container_restore_low.low.saved.rs",
+        "before_bytes": 905,
+        "after_bytes": 905,
+        "before_sha256": "75c7dccb682e5aad520cc3e9599588c97d4566a8da4ca0cddffc025f2c200aa8",
+        "after_sha256": "75c7dccb682e5aad520cc3e9599588c97d4566a8da4ca0cddffc025f2c200aa8",
+        "byte_equal": true
+      },
+      {
+        "file": "direct_view_read.nagi.direct.rs",
+        "before_bytes": 583,
+        "after_bytes": 583,
+        "before_sha256": "7a07360ac9dc863073e3bd96755f043acd1dca54754369e3388fd30b1775b0c4",
+        "after_sha256": "7a07360ac9dc863073e3bd96755f043acd1dca54754369e3388fd30b1775b0c4",
+        "byte_equal": true
+      },
+      {
+        "file": "direct_view_read.nagi.low",
+        "before_bytes": 273,
+        "after_bytes": 273,
+        "before_sha256": "847efccb54bb0c1e295ce3fa0ea759c261b0655277a774889945d1b4f50106e0",
+        "after_sha256": "847efccb54bb0c1e295ce3fa0ea759c261b0655277a774889945d1b4f50106e0",
+        "byte_equal": true
+      },
+      {
+        "file": "direct_view_read.nagi.saved.rs",
+        "before_bytes": 583,
+        "after_bytes": 583,
+        "before_sha256": "7a07360ac9dc863073e3bd96755f043acd1dca54754369e3388fd30b1775b0c4",
+        "after_sha256": "7a07360ac9dc863073e3bd96755f043acd1dca54754369e3388fd30b1775b0c4",
+        "byte_equal": true
+      },
+      {
+        "file": "direct_view_read_low.low.direct.rs",
+        "before_bytes": 583,
+        "after_bytes": 583,
+        "before_sha256": "7a07360ac9dc863073e3bd96755f043acd1dca54754369e3388fd30b1775b0c4",
+        "after_sha256": "7a07360ac9dc863073e3bd96755f043acd1dca54754369e3388fd30b1775b0c4",
+        "byte_equal": true
+      },
+      {
+        "file": "direct_view_read_low.low.low",
+        "before_bytes": 273,
+        "after_bytes": 273,
+        "before_sha256": "847efccb54bb0c1e295ce3fa0ea759c261b0655277a774889945d1b4f50106e0",
+        "after_sha256": "847efccb54bb0c1e295ce3fa0ea759c261b0655277a774889945d1b4f50106e0",
+        "byte_equal": true
+      },
+      {
+        "file": "direct_view_read_low.low.saved.rs",
+        "before_bytes": 583,
+        "after_bytes": 583,
+        "before_sha256": "7a07360ac9dc863073e3bd96755f043acd1dca54754369e3388fd30b1775b0c4",
+        "after_sha256": "7a07360ac9dc863073e3bd96755f043acd1dca54754369e3388fd30b1775b0c4",
+        "byte_equal": true
+      },
+      {
+        "file": "i64_boundaries.nagi.direct.rs",
+        "before_bytes": 464,
+        "after_bytes": 464,
+        "before_sha256": "0bc91d6169064e5e457b5437f52d0bab46f7d3f3541178d5465a9a17a205aed6",
+        "after_sha256": "0bc91d6169064e5e457b5437f52d0bab46f7d3f3541178d5465a9a17a205aed6",
+        "byte_equal": true
+      },
+      {
+        "file": "i64_boundaries.nagi.low",
+        "before_bytes": 254,
+        "after_bytes": 254,
+        "before_sha256": "b381c88878b81292891c15c28786ff66bcddcc8dd7b24e1ef3a51c54a77e42b1",
+        "after_sha256": "b381c88878b81292891c15c28786ff66bcddcc8dd7b24e1ef3a51c54a77e42b1",
+        "byte_equal": true
+      },
+      {
+        "file": "i64_boundaries.nagi.saved.rs",
+        "before_bytes": 464,
+        "after_bytes": 464,
+        "before_sha256": "0bc91d6169064e5e457b5437f52d0bab46f7d3f3541178d5465a9a17a205aed6",
+        "after_sha256": "0bc91d6169064e5e457b5437f52d0bab46f7d3f3541178d5465a9a17a205aed6",
+        "byte_equal": true
+      },
+      {
+        "file": "index_lookahead.nagi.direct.rs",
+        "before_bytes": 14072,
+        "after_bytes": 14072,
+        "before_sha256": "2a40d47bb4feeb26be3d2d63338a0d5f1416d8f9db60323e6a80dc20e8b81f6b",
+        "after_sha256": "2a40d47bb4feeb26be3d2d63338a0d5f1416d8f9db60323e6a80dc20e8b81f6b",
+        "byte_equal": true
+      },
+      {
+        "file": "index_lookahead.nagi.low",
+        "before_bytes": 3227,
+        "after_bytes": 3227,
+        "before_sha256": "53574f64d8f1cc98d04d4e842eb1d52d4052f4a3ce34f08f5bda2b5b7c5065be",
+        "after_sha256": "53574f64d8f1cc98d04d4e842eb1d52d4052f4a3ce34f08f5bda2b5b7c5065be",
+        "byte_equal": true
+      },
+      {
+        "file": "index_lookahead.nagi.saved.rs",
+        "before_bytes": 14072,
+        "after_bytes": 14072,
+        "before_sha256": "2a40d47bb4feeb26be3d2d63338a0d5f1416d8f9db60323e6a80dc20e8b81f6b",
+        "after_sha256": "2a40d47bb4feeb26be3d2d63338a0d5f1416d8f9db60323e6a80dc20e8b81f6b",
+        "byte_equal": true
+      },
+      {
+        "file": "loop_rebinding.nagi.direct.rs",
+        "before_bytes": 348,
+        "after_bytes": 348,
+        "before_sha256": "a4e7319983738dcea4c08ca48d92e3039e3774cb36e0f2133fdfa4a0c0cf3e8e",
+        "after_sha256": "a4e7319983738dcea4c08ca48d92e3039e3774cb36e0f2133fdfa4a0c0cf3e8e",
+        "byte_equal": true
+      },
+      {
+        "file": "loop_rebinding.nagi.low",
+        "before_bytes": 254,
+        "after_bytes": 254,
+        "before_sha256": "38b7096bdf3b21befc51aadfa75bf848c2e163532109e7ffae08b4c660dbdb54",
+        "after_sha256": "38b7096bdf3b21befc51aadfa75bf848c2e163532109e7ffae08b4c660dbdb54",
+        "byte_equal": true
+      },
+      {
+        "file": "loop_rebinding.nagi.saved.rs",
+        "before_bytes": 348,
+        "after_bytes": 348,
+        "before_sha256": "a4e7319983738dcea4c08ca48d92e3039e3774cb36e0f2133fdfa4a0c0cf3e8e",
+        "after_sha256": "a4e7319983738dcea4c08ca48d92e3039e3774cb36e0f2133fdfa4a0c0cf3e8e",
+        "byte_equal": true
+      },
+      {
+        "file": "minimum_negation.nagi.direct.rs",
+        "before_bytes": 355,
+        "after_bytes": 355,
+        "before_sha256": "267d7410bc9ef4424a58fa374b033e72c1f381abb25e710e86b189985cbbf006",
+        "after_sha256": "267d7410bc9ef4424a58fa374b033e72c1f381abb25e710e86b189985cbbf006",
+        "byte_equal": true
+      },
+      {
+        "file": "minimum_negation.nagi.low",
+        "before_bytes": 213,
+        "after_bytes": 213,
+        "before_sha256": "8383f0e06261f7e2758b02c564e16012bf5b727d0f3e7065d49eb3b9d79d359a",
+        "after_sha256": "8383f0e06261f7e2758b02c564e16012bf5b727d0f3e7065d49eb3b9d79d359a",
+        "byte_equal": true
+      },
+      {
+        "file": "minimum_negation.nagi.saved.rs",
+        "before_bytes": 355,
+        "after_bytes": 355,
+        "before_sha256": "267d7410bc9ef4424a58fa374b033e72c1f381abb25e710e86b189985cbbf006",
+        "after_sha256": "267d7410bc9ef4424a58fa374b033e72c1f381abb25e710e86b189985cbbf006",
+        "byte_equal": true
+      },
+      {
+        "file": "nested_result.nagi.direct.rs",
+        "before_bytes": 776,
+        "after_bytes": 776,
+        "before_sha256": "472df5a6832e8762e0705de4cb271496f2c9003355cfff58a78ad6c1e511730c",
+        "after_sha256": "472df5a6832e8762e0705de4cb271496f2c9003355cfff58a78ad6c1e511730c",
+        "byte_equal": true
+      },
+      {
+        "file": "nested_result.nagi.low",
+        "before_bytes": 489,
+        "after_bytes": 489,
+        "before_sha256": "852472093adca08877d8ebcffadde54422e097b5c81aba5aa55101e47c115623",
+        "after_sha256": "852472093adca08877d8ebcffadde54422e097b5c81aba5aa55101e47c115623",
+        "byte_equal": true
+      },
+      {
+        "file": "nested_result.nagi.saved.rs",
+        "before_bytes": 776,
+        "after_bytes": 776,
+        "before_sha256": "472df5a6832e8762e0705de4cb271496f2c9003355cfff58a78ad6c1e511730c",
+        "after_sha256": "472df5a6832e8762e0705de4cb271496f2c9003355cfff58a78ad6c1e511730c",
+        "byte_equal": true
+      },
+      {
+        "file": "owned_result_return.nagi.direct.rs",
+        "before_bytes": 413,
+        "after_bytes": 413,
+        "before_sha256": "754490ef17594b9ba9bcb398fc40b5a60dbdf1f41f509fe92b57575ca530122e",
+        "after_sha256": "754490ef17594b9ba9bcb398fc40b5a60dbdf1f41f509fe92b57575ca530122e",
+        "byte_equal": true
+      },
+      {
+        "file": "owned_result_return.nagi.low",
+        "before_bytes": 252,
+        "after_bytes": 252,
+        "before_sha256": "50975443ba9f7a1469aabed9f0ccdc6101073e80366b2f56dd66937ffc623c12",
+        "after_sha256": "50975443ba9f7a1469aabed9f0ccdc6101073e80366b2f56dd66937ffc623c12",
+        "byte_equal": true
+      },
+      {
+        "file": "owned_result_return.nagi.saved.rs",
+        "before_bytes": 413,
+        "after_bytes": 413,
+        "before_sha256": "754490ef17594b9ba9bcb398fc40b5a60dbdf1f41f509fe92b57575ca530122e",
+        "after_sha256": "754490ef17594b9ba9bcb398fc40b5a60dbdf1f41f509fe92b57575ca530122e",
+        "byte_equal": true
+      },
+      {
+        "file": "profile_overflow.nagi.direct.rs",
+        "before_bytes": 197,
+        "after_bytes": 197,
+        "before_sha256": "ed58a92d157659e698fd6e2d703a82b2d94873d09959b0b1f4c71b708aa999e5",
+        "after_sha256": "ed58a92d157659e698fd6e2d703a82b2d94873d09959b0b1f4c71b708aa999e5",
+        "byte_equal": true
+      },
+      {
+        "file": "profile_overflow.nagi.low",
+        "before_bytes": 133,
+        "after_bytes": 133,
+        "before_sha256": "e345ba301344eeebdec867c0a902338855ae4fad9e56d737cc149409aff071ae",
+        "after_sha256": "e345ba301344eeebdec867c0a902338855ae4fad9e56d737cc149409aff071ae",
+        "byte_equal": true
+      },
+      {
+        "file": "profile_overflow.nagi.saved.rs",
+        "before_bytes": 197,
+        "after_bytes": 197,
+        "before_sha256": "ed58a92d157659e698fd6e2d703a82b2d94873d09959b0b1f4c71b708aa999e5",
+        "after_sha256": "ed58a92d157659e698fd6e2d703a82b2d94873d09959b0b1f4c71b708aa999e5",
+        "byte_equal": true
+      },
+      {
+        "file": "static_absent_callback.nagi.direct.rs",
+        "before_bytes": 615,
+        "after_bytes": 615,
+        "before_sha256": "e15b5ec0e28db522224b4a9bf250391a872a55668763f450885eb9bc52177569",
+        "after_sha256": "e15b5ec0e28db522224b4a9bf250391a872a55668763f450885eb9bc52177569",
+        "byte_equal": true
+      },
+      {
+        "file": "static_absent_callback.nagi.low",
+        "before_bytes": 263,
+        "after_bytes": 263,
+        "before_sha256": "a42854a06248f564b28bb4b517a8800845ed01e821a00ce2ef14a94cb900aff2",
+        "after_sha256": "a42854a06248f564b28bb4b517a8800845ed01e821a00ce2ef14a94cb900aff2",
+        "byte_equal": true
+      },
+      {
+        "file": "static_absent_callback.nagi.saved.rs",
+        "before_bytes": 615,
+        "after_bytes": 615,
+        "before_sha256": "e15b5ec0e28db522224b4a9bf250391a872a55668763f450885eb9bc52177569",
+        "after_sha256": "e15b5ec0e28db522224b4a9bf250391a872a55668763f450885eb9bc52177569",
+        "byte_equal": true
+      },
+      {
+        "file": "string_bytes.nagi.direct.rs",
+        "before_bytes": 435,
+        "after_bytes": 435,
+        "before_sha256": "a9f11588e3a563d2b23e05b2cf4dc329adabb22ec5d2b94aa5bde2151864769e",
+        "after_sha256": "a9f11588e3a563d2b23e05b2cf4dc329adabb22ec5d2b94aa5bde2151864769e",
+        "byte_equal": true
+      },
+      {
+        "file": "string_bytes.nagi.low",
+        "before_bytes": 227,
+        "after_bytes": 227,
+        "before_sha256": "745a0584fc73b4f2604490a01a6fa6fce22ebb103fc06076f42cc7e1a30d65cb",
+        "after_sha256": "745a0584fc73b4f2604490a01a6fa6fce22ebb103fc06076f42cc7e1a30d65cb",
+        "byte_equal": true
+      },
+      {
+        "file": "string_bytes.nagi.saved.rs",
+        "before_bytes": 435,
+        "after_bytes": 435,
+        "before_sha256": "a9f11588e3a563d2b23e05b2cf4dc329adabb22ec5d2b94aa5bde2151864769e",
+        "after_sha256": "a9f11588e3a563d2b23e05b2cf4dc329adabb22ec5d2b94aa5bde2151864769e",
+        "byte_equal": true
+      },
+      {
+        "file": "try_index_receiver.nagi.direct.rs",
+        "before_bytes": 550,
+        "after_bytes": 550,
+        "before_sha256": "318a047f9a5117faffc1815136d1066cea089e697ef6eb3d0e3099eb98b41a79",
+        "after_sha256": "318a047f9a5117faffc1815136d1066cea089e697ef6eb3d0e3099eb98b41a79",
+        "byte_equal": true
+      },
+      {
+        "file": "try_index_receiver.nagi.low",
+        "before_bytes": 224,
+        "after_bytes": 224,
+        "before_sha256": "77c0682226cbecb84d22f7230ab40035f6070e83bd036c4771e3dd84143f29d3",
+        "after_sha256": "77c0682226cbecb84d22f7230ab40035f6070e83bd036c4771e3dd84143f29d3",
+        "byte_equal": true
+      },
+      {
+        "file": "try_index_receiver.nagi.saved.rs",
+        "before_bytes": 550,
+        "after_bytes": 550,
+        "before_sha256": "318a047f9a5117faffc1815136d1066cea089e697ef6eb3d0e3099eb98b41a79",
+        "after_sha256": "318a047f9a5117faffc1815136d1066cea089e697ef6eb3d0e3099eb98b41a79",
+        "byte_equal": true
+      },
+      {
+        "file": "view_restore.nagi.direct.rs",
+        "before_bytes": 456,
+        "after_bytes": 456,
+        "before_sha256": "72a0fe1c7a872ddb5dd24914dd8efe424de906637493a3ad380f448d80203e6d",
+        "after_sha256": "72a0fe1c7a872ddb5dd24914dd8efe424de906637493a3ad380f448d80203e6d",
+        "byte_equal": true
+      },
+      {
+        "file": "view_restore.nagi.low",
+        "before_bytes": 242,
+        "after_bytes": 242,
+        "before_sha256": "928e1e4bf36772de50861a51f8559005ab1901a784da26499236e82559fab1ed",
+        "after_sha256": "928e1e4bf36772de50861a51f8559005ab1901a784da26499236e82559fab1ed",
+        "byte_equal": true
+      },
+      {
+        "file": "view_restore.nagi.saved.rs",
+        "before_bytes": 456,
+        "after_bytes": 456,
+        "before_sha256": "72a0fe1c7a872ddb5dd24914dd8efe424de906637493a3ad380f448d80203e6d",
+        "after_sha256": "72a0fe1c7a872ddb5dd24914dd8efe424de906637493a3ad380f448d80203e6d",
+        "byte_equal": true
+      },
+      {
+        "file": "view_restore_low.low.direct.rs",
+        "before_bytes": 456,
+        "after_bytes": 456,
+        "before_sha256": "72a0fe1c7a872ddb5dd24914dd8efe424de906637493a3ad380f448d80203e6d",
+        "after_sha256": "72a0fe1c7a872ddb5dd24914dd8efe424de906637493a3ad380f448d80203e6d",
+        "byte_equal": true
+      },
+      {
+        "file": "view_restore_low.low.low",
+        "before_bytes": 242,
+        "after_bytes": 242,
+        "before_sha256": "928e1e4bf36772de50861a51f8559005ab1901a784da26499236e82559fab1ed",
+        "after_sha256": "928e1e4bf36772de50861a51f8559005ab1901a784da26499236e82559fab1ed",
+        "byte_equal": true
+      },
+      {
+        "file": "view_restore_low.low.saved.rs",
+        "before_bytes": 456,
+        "after_bytes": 456,
+        "before_sha256": "72a0fe1c7a872ddb5dd24914dd8efe424de906637493a3ad380f448d80203e6d",
+        "after_sha256": "72a0fe1c7a872ddb5dd24914dd8efe424de906637493a3ad380f448d80203e6d",
+        "byte_equal": true
+      }
+    ],
+    "all_byte_equal": true
+  }
+}

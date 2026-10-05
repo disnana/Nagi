@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{ast::Program, check, emit, source};
 use std::{
     fs,
@@ -250,8 +252,11 @@ fn aliases_option_result_and_async_delegation_preserve_proof_identity() {
     let text = format!("{DECLARATIONS}from std.auth import Principal as Identity, Grant as Permit\nasync def delegate(value: Permit[Read]) -> i64:\n    await sleep(1)\n    return read(value)\nasync def main():\n    p: Identity = principal(42)\n    g: Option[Permit[Read]] = some(grant(view(p), 9))\n    match g:\n        case Some(proof):\n            print(await delegate(proof))\n        case None:\n            print(0)\n");
     let high = fixture.checked(&text, true).unwrap();
     let low = fixture.checked(&emit::low(&high), false).unwrap();
-    assert_eq!(emit::rust(&high).unwrap(), emit::rust(&low).unwrap());
-    let rust = emit::rust(&high).unwrap();
+    assert_eq!(
+        emit::rust(&checked_emission::seal(&high)).unwrap(),
+        emit::rust(&checked_emission::seal(&low)).unwrap()
+    );
+    let rust = emit::rust(&checked_emission::seal(&high)).unwrap();
     assert!(rust.contains("::nagi_runtime::auth::Grant<"), "{rust}");
     assert!(!rust.contains("pub struct Principal"), "{rust}");
 }
@@ -261,7 +266,7 @@ fn handwritten_low_and_owned_local_containers_keep_nominal_marker_identity() {
     let fixture = Fixture::new();
     let low = "import std.auth as auth;\nenum Read { Permission; }\n@rust(\"native::principal\")\nextern fn principal(subject: i64) -> auth.Principal;\n@rust(\"native::grant\")\nextern fn grant(principal: view[auth.Principal], resource: i64) -> auth.Grant[Read];\nfn main() -> unit { let p: auth.Principal = principal(1); let grants: List[auth.Grant[Read]] = [grant(view(p), 9)]; print(len(grants)); }\n";
     let checked = fixture.checked(low, false).unwrap();
-    assert!(emit::rust(&checked)
+    assert!(emit::rust(&checked_emission::seal(&checked))
         .unwrap()
         .contains("::nagi_runtime::auth::Grant<"));
     for name in ["reader.nagi", "writer.nagi"] {

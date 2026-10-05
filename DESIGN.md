@@ -151,7 +151,9 @@ Nagiを使う価値は、同じAPI・DB処理・失敗条件のアプリで、�
 
 ## この文書を更新する条件
 
-コンパイラとRustの境界は、[段階計画](docs/internal/compiler-rust-boundary-plan.md)で整理しています。最終check済みの情報を封印して生成へ渡すCheckedProgram、ビルド世代の分離、資源契約の集約、Pool／Transactionの順に検証する計画です。High→Lowテキスト→再解析とRust backendは維持します。これらの新しい境界はまだ実装しておらず、Phase 1から順に進めます。世代別ビルドはアプリIDを保ち、成功世代ごとに実行ファイルを分ける方針です。[判断記録](docs/internal/open-questions.md)とともに、現在の保証と追加予定の保証を分けて記録します。
+コンパイラとRustの境界は、[段階計画](docs/internal/compiler-rust-boundary-plan.md)で整理しています。最終check済みの情報を封印して生成へ渡すCheckedProgram、ビルド世代の分離、資源契約の集約、Pool／Transactionの順に検証します。High→Lowテキスト→再解析とRust backendは維持します。
+
+Phase 1のCheckedProgramは開発branchに実装済みで、公開版には未反映です。生成側で型や借用を再推論せず、封印時に確定したplanを使います。実装は[最終factory](compiler/src/check/checked.rs)、検証は[封印境界のテスト](compiler/src/check/checked_tests.rs)と[ADR 006](docs/internal/adr/006-sealed-codegen-input.md)を参照してください。後続Phaseは未実装です。世代別ビルドはアプリIDを保ち、成功世代ごとに実行ファイルを分ける方針です。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)に、確認済みの範囲と予定を分けて記録します。
 
 意味論、公開API、High／Low／Rustの分担を変える場合は、変更の理由、代替案、互換性、検証結果をこの文書へ反映します。詳細なAPI説明や測定ログは対応する文書に置きます。
 

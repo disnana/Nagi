@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser, source};
 use std::{
     fs,
@@ -92,8 +94,8 @@ fn nullable_scalars_read_sqlite_null_and_non_null_rows_in_high_and_saved_low() {
     let mut independent = parser::parse(&low, false).unwrap();
     check::check(&mut independent).unwrap();
     assert_eq!(
-        emit::rust(&loaded.program).unwrap(),
-        emit::rust(&independent).unwrap()
+        emit::rust(&checked_emission::seal(&loaded.program)).unwrap(),
+        emit::rust(&checked_emission::seal(&independent)).unwrap()
     );
     f.write("saved.low", &low);
 
@@ -151,7 +153,7 @@ fn unsupported_nullable_payloads_keep_manual_from_row_eligibility() {
     let mut independent = parser::parse(&low, false).unwrap();
     check::check(&mut independent).unwrap();
     for program in [&loaded.program, &independent] {
-        let rust = emit::rust(program).unwrap();
+        let rust = emit::rust(&checked_emission::seal(program)).unwrap();
         for name in ["Nested", "Sequence", "Wide", "Nominal"] {
             let definition = program
                 .modules
@@ -183,7 +185,7 @@ fn raw_numeric_and_bool_field_shadows_keep_manual_row_implementations() {
         let mut low = parser::parse(&emit::low(&high), false).unwrap();
         check::check(&mut low).unwrap();
         for program in [&high, &low] {
-            let rust = emit::rust(program).unwrap();
+            let rust = emit::rust(&checked_emission::seal(program)).unwrap();
             for row in ["Required", "Nullable"] {
                 assert!(
                     !rust.contains(&format!("impl ::nagi_runtime::FromRow for {row}")),
@@ -203,7 +205,7 @@ fn raw_numeric_and_bool_field_shadows_keep_manual_row_implementations() {
     )
     .unwrap();
     check::check(&mut program).unwrap();
-    let rust = emit::rust(&program).unwrap();
+    let rust = emit::rust(&checked_emission::seal(&program)).unwrap();
     for row in ["Text", "Binary"] {
         assert!(rust.contains(&format!("impl ::nagi_runtime::FromRow for {row}")));
     }
@@ -220,8 +222,8 @@ fn raw_nullable_classes_can_supply_a_native_sqlite_row_bridge() {
     check::check(&mut high).unwrap();
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let rust = emit::rust(&high).unwrap();
-    assert_eq!(rust, emit::rust(&low).unwrap());
+    let rust = emit::rust(&checked_emission::seal(&high)).unwrap();
+    assert_eq!(rust, emit::rust(&checked_emission::seal(&low)).unwrap());
     let rust = rust.strip_suffix("fn main() {}\n").unwrap();
     let bridge = r#"
 impl nagi_runtime::FromRow for Row {

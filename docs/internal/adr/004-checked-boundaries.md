@@ -1,6 +1,6 @@
 # ADR 004: checkを分ける境界と移行順
 
-状態: 責任分担を採用。専用HIR/CheckedProgramへの全面移行は保留。
+状態: 責任分担を採用。専用HIRへの全面移行は保留。最終checkと生成の間のCheckedProgramは[ADR 006](006-sealed-codegen-input.md)で採用。
 
 ## 現在
 

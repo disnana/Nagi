@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 
 fn checked(source: &str) -> Result<nagic::ast::Program, String> {
@@ -13,7 +15,7 @@ fn high_low_roundtrip_and_both_arms_return_values() {
     assert!(low.contains("case Err(problem)"));
     let mut parsed = parser::parse(&low, false).unwrap();
     check::check(&mut parsed).unwrap();
-    let rust = emit::rust(&parsed).unwrap();
+    let rust = emit::rust(&checked_emission::seal(&parsed)).unwrap();
     assert!(rust.contains("Err(mut problem) =>"));
     assert!(rust.contains("Ok(mut value) =>"));
 }

@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser, source};
 use std::{
     fs,
@@ -57,8 +59,11 @@ fn actor_charge_generation_survives_low_without_clones_reflection_or_serde_requi
     let high = f.checked(DATA);
     let mut low = parser::parse(&emit::low(&high), false).unwrap();
     check::check(&mut low).unwrap();
-    let high_rust = emit::rust(&high).unwrap();
-    assert_eq!(high_rust, emit::rust(&low).unwrap());
+    let high_rust = emit::rust(&checked_emission::seal(&high)).unwrap();
+    assert_eq!(
+        high_rust,
+        emit::rust(&checked_emission::seal(&low)).unwrap()
+    );
     assert!(
         high_rust.contains("ChargeOwned") && high_rust.contains("INLINE_ONLY"),
         "{high_rust}"
@@ -82,7 +87,9 @@ fn actor_charge_generation_survives_low_without_clones_reflection_or_serde_requi
         "import std.http.server as http",
     ));
     assert!(
-        !emit::rust(&http_only).unwrap().contains("ChargeOwned"),
+        !emit::rust(&checked_emission::seal(&http_only))
+            .unwrap()
+            .contains("ChargeOwned"),
         "HTTP-only code acquired actor charging work"
     );
 }

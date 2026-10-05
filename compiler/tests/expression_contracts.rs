@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -27,7 +29,11 @@ fn compile_and_run(source: &str) -> String {
     let executable = fixture
         .0
         .join(format!("generated{}", std::env::consts::EXE_SUFFIX));
-    fs::write(&generated, emit::rust(&low).unwrap()).unwrap();
+    fs::write(
+        &generated,
+        emit::rust(&checked_emission::seal(&low)).unwrap(),
+    )
+    .unwrap();
     let output = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
         .args(["--edition=2021", "-D", "unused-imports"])
         .arg(&generated)

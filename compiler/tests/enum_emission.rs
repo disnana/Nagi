@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser, source};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -105,7 +107,7 @@ fn native_enum_constructors_patterns_and_result_propagation_roundtrip() {
     let program = checked_low(
         "enum Failure:\n    Empty\n    Invalid(message: str)\n    Number(value: i64, enabled: bool)\ndef success() -> Result[i64, Failure]:\n    return ok(42)\ndef number(value: i64) -> Result[i64, Failure]:\n    return fail(Failure.Number(enabled=True, value=value))\ndef forward(value: i64) -> Result[i64, Failure]:\n    return ok(try number(value))\ndef describe(error: Failure) -> i64:\n    match error:\n        case Failure.Empty:\n            return 0\n        case Failure.Invalid(message):\n            return len(view(message))\n        case Failure.Number(value, _):\n            return value\ndef payload() -> Failure:\n    return Failure.Invalid(\"bad\")\ndef empty() -> Failure:\n    return Failure.Empty\n",
     );
-    let mut rust = emit::rust(&program).unwrap();
+    let mut rust = emit::rust(&checked_emission::seal(&program)).unwrap();
     assert!(rust.contains("pub enum Failure"));
     assert!(rust.contains("::std::result::Result::Err(Failure::Number"));
     assert!(!rust.contains("Box::"));
@@ -158,7 +160,7 @@ fn module_enum_aliases_preserve_identity_and_escape_variant_fields() {
             .id,
         identity
     );
-    let mut rust = emit::rust(&saved.program).unwrap();
+    let mut rust = emit::rust(&checked_emission::seal(&saved.program)).unwrap();
     assert!(rust.contains("r#type"));
     rust.push_str(
         "\n#[test] fn aliases_name_one_native_enum() {\n    let value: Option::Choice = make(7);\n    let same: SavedChoice = value;\n    assert_eq!(format!(\"{:?}\", &same), \"type { self: 7 }\");\n    assert_eq!(describe(same), 7);\n    assert_eq!(describe(Option::Choice::Message { text: String::from(\"abc\") }), 3);\n    assert_eq!(describe(SavedChoice::Empty), 0);\n}\n",
@@ -176,7 +178,7 @@ fn error_cause_records_move_payloads_without_serde_or_clone_requirements() {
     check::check(&mut loaded.program).unwrap();
     let mut program = parser::parse(&emit::low(&loaded.program), false).unwrap();
     check::check(&mut program).unwrap();
-    let mut rust = emit::rust(&program).unwrap();
+    let mut rust = emit::rust(&checked_emission::seal(&program)).unwrap();
     assert!(!rust.contains("serde"));
     assert!(!rust.contains("Clone"));
     assert!(!rust.contains(".clone()"));
@@ -191,7 +193,7 @@ fn data_records_keep_serde_while_enum_fields_remain_private() {
     let program = checked_low(
         "enum Failure:\n    Empty\nclass Data:\n    type: i64\nclass Private:\n    failure: Failure\n",
     );
-    let rust = emit::rust(&program).unwrap();
+    let rust = emit::rust(&checked_emission::seal(&program)).unwrap();
     let data = rust.split("pub struct Data").next().unwrap();
     assert!(data.contains("serde::Serialize"));
     assert!(rust.contains("#[serde(rename = \"type\")]"));
@@ -212,7 +214,7 @@ fn custom_main_errors_need_only_debug_and_copy_enums_reuse_values() {
     let program = checked_low(
         "enum Code:\n    Ready\n    Number(value: i64)\ndef value(code: Code) -> i64:\n    match code:\n        case Code.Ready:\n            return 0\n        case Code.Number(number):\n            return number\ndef twice(code: Code) -> i64:\n    return value(code) + value(code)\ndef main() -> Result[unit, Code]:\n    return fail(Code.Ready)\n",
     );
-    let mut rust = emit::rust(&program).unwrap();
+    let mut rust = emit::rust(&checked_emission::seal(&program)).unwrap();
     assert!(rust.contains("#[derive(Debug, Clone, Copy)]"));
     assert!(rust.contains("eprintln!(\"{:?}\",e)"));
     rust.push_str(

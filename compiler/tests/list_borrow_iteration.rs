@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{ast::*, check, emit, parser, source, symbols};
 use std::{
     fs,
@@ -26,7 +28,10 @@ impl Fixture {
         let binary = self
             .0
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        let rust = format!("{}\n{assertions}", emit::rust(program).unwrap());
+        let rust = format!(
+            "{}\n{assertions}",
+            emit::rust(&checked_emission::seal(program)).unwrap()
+        );
         fs::write(&path, rust).unwrap();
         let output = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
             .args(["--edition=2021", "--test", "-O"])
@@ -178,7 +183,7 @@ fn noncopy_iteration_is_native_and_survives_saved_low() {
     let low = checked(&emit::low(&high), false);
     let fixture = Fixture::new();
     for (name, program) in [("high", &high), ("saved-low", &low)] {
-        let rust = emit::rust(program).unwrap();
+        let rust = emit::rust(&checked_emission::seal(program)).unwrap();
         assert!(!rust.contains(".iter().cloned()"));
         fixture.native(name, program, NATIVE_ASSERTIONS);
     }

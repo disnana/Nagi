@@ -10,6 +10,7 @@
 |---|---|---|
 | parse | 対応する構文・型の形・入力上限を満たす入力をASTへ変換する。parse成功は型や所有権の受理ではない。不正入力は診断で失敗し、panicで終わらないことを目標にする | `compiler/src/lexer.rs`, `parser.rs`; `compiler/tests/frontend_contracts.rs`, `literal_contracts.rs` |
 | check | 名前、Nagi型、move、view origin、Result、制御構造を検査する。通常のcheckはCargoを起動しない。エディターのエラー回復ASTはcheck成功の証拠ではない | `check.rs`, `modules.rs`; `ownership_boundaries.rs`, `typed_errors.rs`, `symbols.rs` |
+| check→codegenの封印 | 最終Low/native統合・checkと生成plan確定を通したCheckedProgramだけをRust生成へ渡す。外部構築・可変化・未検査Programの生成を許さない。必須型・名前・operand・storage factsの欠落を再check/defaultで修復しない | `check/checked.rs`, `emit.rs`; API compile-fail、`check/checked_tests.rs`、conformanceのfinalize stages。Phase 1の変更 |
 | check→build | サポートするNagi機能の受理後、Nagi側で検出可能な型・所有権・寿命の問題で**コンパイラ生成Rust**が拒否されるのは不具合。rustcの拒否を「追加の安全確認」として隠さない | `emit.rs`, `view_flow.rs`; conformance、`view_flow_foundation.rs`, `view_flow_completion.rs` |
 | Rustへ委譲 | 手書きRustの本体、外部crateのAPIとtrait実装、最終的なClone/Send/Sync、依存取得・link・target設定をbuildで確かめる。この委譲をNagi自身の型生成ミスの免責に使わない | `rust_dependencies.rs`, `build_diagnostics.rs`, `copy_capabilities.rs`, `scoped_tasks.rs` |
 | High/Low | 同じ名前解決・型・所有権規則を使う。Lowに別のメモリモデルはない。保存Lowを再解析して受理でき、対応するプログラムの観測結果が一致することを検査する | `parser.rs`, `check.rs`, `modules.rs`; `ownership_boundaries.rs`, `stdlib_imports.rs`, conformance |

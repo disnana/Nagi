@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser, source};
 use std::{
     fs,
@@ -32,7 +34,7 @@ impl Fixture {
         // without involving Cargo or the runtime's dependency graph.
         let rust = format!(
             "{}\n#[path = {}]\nmod native;\n",
-            emit::rust(program).unwrap(),
+            emit::rust(&checked_emission::seal(program)).unwrap(),
             serde_json::to_string(&adapter.to_string_lossy()).unwrap()
         );
         let source = self.0.join(format!("{name}.rs"));

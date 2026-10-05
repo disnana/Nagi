@@ -1,3 +1,5 @@
+pub(crate) mod checked;
+
 use crate::ast::{block_returns as returns, *};
 use std::collections::{HashMap, HashSet};
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -4031,6 +4033,21 @@ impl Checker {
     }
 }
 
+/// Consume the final Low AST and native fragment, perform final integration,
+/// and seal all decisions required by Rust generation.
+pub fn finalize(
+    mut primary: Program,
+    native: Program,
+    mut provenance: crate::source::SourceProvenance,
+) -> Result<crate::checked::CheckedProgram, crate::checked::FinalizeError> {
+    let mixed =
+        !native.functions.is_empty() || !native.classes.is_empty() || !native.enums.is_empty();
+    provenance.mark_replacements(&primary, &native);
+    integrate_mode(&mut primary, native, false)
+        .map_err(|error| checked::FinalizeError::checked(error, &provenance, mixed))?;
+    checked::CheckedProgram::seal(primary, provenance)
+}
+
 pub fn integrate(p: &mut Program, native: Program) -> Result<(), String> {
     integrate_mode(p, native, false)
 }
@@ -4261,7 +4278,12 @@ mod flow_metadata_tests {
             body[5].flow.as_ref().unwrap().expression_uses[0].mode,
             ExprUseMode::Move
         );
-        crate::emit::rust(&program).unwrap();
+        let checked = checked::CheckedProgram::seal(
+            program.clone(),
+            crate::source::SourceProvenance::user_low_unmapped(),
+        )
+        .unwrap();
+        crate::emit::rust(&checked).unwrap();
         let mut wrong_binding = program.functions[0].body[5]
             .flow
             .as_ref()
@@ -4274,9 +4296,14 @@ mod flow_metadata_tests {
             .unwrap()
             .expression_uses
             .clear();
-        assert!(crate::emit::rust(&program)
-            .unwrap_err()
-            .contains("internal owning-view lowering"));
+        assert!(checked::CheckedProgram::seal(
+            program.clone(),
+            crate::source::SourceProvenance::user_low_unmapped()
+        )
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("internal owning-view lowering"));
         wrong_binding.binding.token += 1;
         program.functions[0].body[5]
             .flow
@@ -4284,9 +4311,14 @@ mod flow_metadata_tests {
             .unwrap()
             .expression_uses
             .push(wrong_binding);
-        assert!(crate::emit::rust(&program)
-            .unwrap_err()
-            .contains("internal owning-view lowering"));
+        assert!(checked::CheckedProgram::seal(
+            program.clone(),
+            crate::source::SourceProvenance::user_low_unmapped()
+        )
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("internal owning-view lowering"));
     }
 
     #[test]

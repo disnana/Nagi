@@ -10,6 +10,7 @@ Nagi 0.1 betaの既知不具合再発を小さな再現sourceと段階別oracle�
 | Compile-pass | checker受理後に実Rust compile成功 | compiler/tests/conformance.rs, compiler/tests/copy_capabilities.rs |
 | Compile-fail | 指定stageで拒否、panicを成功扱いしない | tests/conformance/*negation*, *temporary_view*, *shared_field_move*, *owned_result_discard* |
 | Diagnostic | 期待診断意味と元source line | compiler/tests/build_diagnostics.rs, compiler/tests/sql_check.rs, conformance.rs |
+| Sealed API / facts | 未検査Programの生成・外部構築・可変化を拒否。check後の必須facts欠落と封印済みplan欠落を再checkせず検知 | compiler/src/emit.rs / check/checked.rsのcompile-fail、check/checked_tests.rs |
 | High-Low | 保存Lowと手書きLowの受理・観測同値 | compiler/tests/frontend_contracts.rs, view_flow_completion.rs, conformance.rs |
 | Backend | emit成功後の実rustc/Cargo build | compiler/tests/codegen.rs, http_entrypoint.rs, conformance.rs |
 | Runtime | 値・byte列・Drop・panic unwind | compiler/tests/literal_contracts.rs, view_container_drop.rs |
@@ -62,7 +63,7 @@ seedを保存し、失敗したcase indexを含む件数以上で同じcommand�
 
 ## Oracleと段階境界
 
-`tests/conformance/corpus.json` はsource path、High/Low、compile-pass/run-pass/reject:stage、期待診断substring、期待line、native assertionを指定する。negativeは対象の初期parse/checkで拒否することに加え、診断意味とsource行も必須。panicや異なる段階での拒否をcompile-fail成功としない。正例はHigh parse/check → Low pretty → Low parse/check → High/Low各Rust生成 → rustc → 必要なnative実行まで全て必須で、後段拒否は保存して失敗する。
+`tests/conformance/corpus.json` はsource path、High/Low、compile-pass/run-pass/reject:stage、期待診断substring、期待line、native assertionを指定する。negativeは対象の初期parse/checkで拒否することに加え、診断意味とsource行も必須。panicや異なる段階での拒否をcompile-fail成功としない。正例はHigh parse/check → Low pretty → Low parse/check → High/Low各finalize・封印 → Rust生成 → rustc → 必要なnative実行まで全て必須で、後段拒否は保存して失敗する。finalize失敗の分類もartifactへ記録する。
 
 生成は13種のaccepted bounded grammarを順番に使用し、seedで値を変える。i64算術/比較/list index/lenだけでなく、view copyと条件rebind、loop内local ownerから復元、List[view[str]] move/reinit、nested Result match、関数値、複数borrow sourceを持つResult/Option、最初のpollで完了する純async関数を含む。overflow、zero division、無限loopを作らない範囲を生成する。整数演算の期待値は独立host Rust計算、文字列長は明示byte数。High/Low両結果をこの期待値へ照合する。High/Lowは共通frontend/backendを使うので独立compiler間のdifferential testではなく、限定的なmetamorphic/観測同値検査である。純粋な生成にはsystem/environment依存や未対応owned[T]を混ぜない。
 

@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser, source};
 use std::{
     fs,
@@ -24,7 +26,7 @@ impl Fixture {
         fs::write(&adapter, DROP_ADAPTER).unwrap();
         let rust = format!(
             "{}\n#[path = {}]\nmod native;\n{}",
-            emit::rust(program).unwrap(),
+            emit::rust(&checked_emission::seal(program)).unwrap(),
             serde_json::to_string(&adapter.to_string_lossy()).unwrap(),
             DROP_ORDER_ASSERTIONS
         );
@@ -76,7 +78,11 @@ fn local_parameter_updates_compile_and_run_in_high_and_saved_low() {
         let binary = fixture
             .0
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        fs::write(&file, emit::rust(&program).unwrap() + ASSERTIONS).unwrap();
+        fs::write(
+            &file,
+            emit::rust(&checked_emission::seal(&program)).unwrap() + ASSERTIONS,
+        )
+        .unwrap();
         let output = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
             .args(["--edition=2021", "--test"])
             .arg(&file)
@@ -159,7 +165,7 @@ fn local_borrows_still_cannot_escape_through_reassigned_parameters() {
 #[test]
 fn rebinding_is_synthetic_and_does_not_change_signatures_or_extern_wrappers() {
     let program = checked("def read(part: view[str], callback: fn[i64, i64], value: i64) -> i64:\n    print(part)\n    return callback(value)\n", true);
-    let generated = emit::rust_with_lines(&program).unwrap();
+    let generated = emit::rust_with_lines(&checked_emission::seal(&program)).unwrap();
     assert!(generated
         .text
         .contains("pub fn read<'a>(mut part: &'a ::std::primitive::str"));
@@ -184,7 +190,7 @@ fn rebinding_is_synthetic_and_does_not_change_signatures_or_extern_wrappers() {
         "@rust(\"native::read\")\nextern def read(part: view[str]) -> i64\n",
         true,
     );
-    let external = emit::rust(&external).unwrap();
+    let external = emit::rust(&checked_emission::seal(&external)).unwrap();
     assert!(external.contains("native::read(part)"));
     assert!(!external.contains("let mut part:"));
 }
@@ -201,7 +207,7 @@ fn owning_parameters_keep_their_drop_order_when_a_view_container_is_rebound() {
         ("saved-low", &saved_low),
         ("handwritten-low", &handwritten_low),
     ] {
-        let generated = emit::rust_with_lines(program).unwrap();
+        let generated = emit::rust_with_lines(&checked_emission::seal(program)).unwrap();
         assert!(generated.text.contains(
             "pub fn observe<'a>(mut before: Guard, mut first: ::std::result::Result<&'a ::std::primitive::str, Guard>, mut second: Guard, mut after: Guard) -> () {"
         ));

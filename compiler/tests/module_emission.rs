@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser, source};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -91,7 +93,7 @@ fn independent_low_parser_preserves_module_ids_and_native_function_aliases() {
         assert!(costs.contains_key(name), "{report}");
     }
     assert!(costs.keys().all(|name| !name.contains("__nagi_def_")));
-    let mut rust = emit::rust(&low).unwrap();
+    let mut rust = emit::rust(&checked_emission::seal(&low)).unwrap();
     rust.push_str(
         "\nmod native {\n    pub fn verify() {\n        assert_eq!(super::orders::score(1), 2);\n        assert_eq!(super::SavedScore(3), 4);\n        assert_eq!(super::other::score(1), 101);\n        assert_eq!(super::orders::main(), 41);\n        assert_eq!(super::helper_main(), 41);\n        assert_eq!(super::orders::len(1), 1001);\n        assert_eq!(super::orders::r#type(4), 5);\n    }\n}\n#[test] fn adapter_uses_aliases_of_the_same_function() { native::verify(); assert_eq!(answer(), 125); main(); }\n",
     );
@@ -118,7 +120,7 @@ fn qualified_nested_types_emit_internal_names_through_low() {
     );
     assert_eq!(loaded.program.functions[0].ret, low.functions[0].ret);
     assert_eq!(loaded.program.classes[2].fields, low.classes[2].fields);
-    let rust = emit::rust(&low).unwrap();
+    let rust = emit::rust(&checked_emission::seal(&low)).unwrap();
     assert!(rust.contains("pub mod orders {"));
     assert!(rust.contains(" as SavedOrder;"));
 }
@@ -191,7 +193,7 @@ fn source_locals_that_match_generated_symbols_keep_distinct_values() {
     check::check(&mut loaded.program).unwrap();
     let mut low = parser::parse(&emit::low(&loaded.program), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut rust = emit::rust(&low).unwrap();
+    let mut rust = emit::rust(&checked_emission::seal(&low)).unwrap();
     rust.push_str("\n#[test] fn preserved_local_values() { assert_eq!(compute(2, 3), 233); assert_eq!(compute(4, 5), 453); main(); }\n");
     fixture.compile_and_run(&rust);
 }
@@ -215,7 +217,7 @@ fn source_function_names_that_match_foreign_symbols_keep_distinct_call_targets()
     check::check(&mut loaded.program).unwrap();
     let mut low = parser::parse(&emit::low(&loaded.program), false).unwrap();
     check::check(&mut low).unwrap();
-    let mut rust = emit::rust(&low).unwrap();
+    let mut rust = emit::rust(&checked_emission::seal(&low)).unwrap();
     rust.push_str(
         "\n#[test] fn distinct_global_call_targets() { assert_eq!(answer(), 43); main(); }\n",
     );
@@ -284,7 +286,7 @@ fn inferred_builtin_types_survive_module_aliases_low_transport_and_rust_emission
                 .collect::<Vec<_>>(),
             original_ids
         );
-        let mut rust = emit::rust(&saved.program).unwrap();
+        let mut rust = emit::rust(&checked_emission::seal(&saved.program)).unwrap();
         rust.push_str(&format!("\n#[test] fn intrinsic_values_and_public_module_alias() {{ assert_eq!({alias}::score(), 3); assert_eq!({alias}::byte_length(vec![0, 128, 255]), 3); assert_eq!({alias}::text_length(\"hello\"), 5); assert_eq!({alias}::from_bytes(&[0, 128, 255]), vec![0, 128, 255]); assert_eq!({alias}::first(&[7, 8]), 8); assert_eq!({alias}::cast(255), 255); main(); }}\n"));
         fixture.compile_and_run(&rust);
     }

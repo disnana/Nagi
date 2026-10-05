@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{fs, process::Command};
 
@@ -33,7 +35,7 @@ fn accepts(body: &str) {
     ));
     fs::create_dir_all(&root).unwrap();
     let file = root.join("generated.rs");
-    fs::write(&file, emit::rust(&low).unwrap()).unwrap();
+    fs::write(&file, emit::rust(&checked_emission::seal(&low)).unwrap()).unwrap();
     let result = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
         .args(["--edition=2021", "--crate-type=lib", "--emit=metadata"])
         .arg(&file)

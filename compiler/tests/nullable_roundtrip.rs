@@ -1,3 +1,5 @@
+#[path = "support/checked_emission.rs"]
+mod checked_emission;
 use nagic::{check, emit, parser};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -35,8 +37,8 @@ fn nested_options_keep_distinct_none_and_some_values_through_independent_low() {
     let mut low =
         parser::parse(&low_source, false).unwrap_or_else(|error| panic!("{error}\n{low_source}"));
     check::check(&mut low).unwrap();
-    let rust = emit::rust(&high).unwrap();
-    assert_eq!(rust, emit::rust(&low).unwrap());
+    let rust = emit::rust(&checked_emission::seal(&high)).unwrap();
+    assert_eq!(rust, emit::rust(&checked_emission::seal(&low)).unwrap());
 
     let fixture = Fixture(std::env::temp_dir().join(format!(
         "nagi nested options {} {}",
