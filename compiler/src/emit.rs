@@ -941,6 +941,9 @@ fn rb(
     flow: Option<&crate::view_flow::Block>,
 ) {
     let mut bindings = outer_bindings.clone();
+    if let Some(flow) = flow {
+        flow_actions(&flow.entry, out, n, types);
+    }
     let pad = "    ".repeat(n);
     let terminal = flow.map_or_else(|| returning_block(ss), |block| block.terminal);
     for (index, original) in ss.iter().enumerate() {
@@ -975,6 +978,14 @@ fn rb(
                         assignment.rhs_temp,
                         re(value, types)
                     ));
+                    // Install at the original cleanup anchor before dropping
+                    // the old value. Rust assignment also retains the new RHS
+                    // there when an old element's destructor unwinds.
+                    out.origin(None);
+                    out.push_str(&format!(
+                        "{pad}{} = {};\n",
+                        assignment.new_slot, assignment.rhs_temp
+                    ));
                     for old in &assignment.retire_slots {
                         flow_actions(
                             &[crate::view_flow::Action::Retire { slot: old.clone() }],
@@ -983,11 +994,6 @@ fn rb(
                             types,
                         );
                     }
-                    out.origin(None);
-                    out.push_str(&format!(
-                        "{pad}{} = {};\n",
-                        assignment.new_slot, assignment.rhs_temp
-                    ));
                 } else {
                     let rebind = terminal && annotation.as_ref().is_some_and(Type::is_view);
                     out.push_str(&format!(
@@ -1049,7 +1055,7 @@ fn rb(
             }
             S::Match(value, arms) => {
                 out.push_str(&format!("match {} {{\n", re(value, types)));
-                for arm in arms {
+                for (index, arm) in arms.iter().enumerate() {
                     out.origin(::std::option::Option::Some(arm.line));
                     let binding = |binding: &PatternBinding| {
                         binding
@@ -1109,7 +1115,14 @@ fn rb(
                             }
                         }
                     }
-                    rb_child(&arm.body, out, n + 2, types, &arm_bindings, None);
+                    rb_child(
+                        &arm.body,
+                        out,
+                        n + 2,
+                        types,
+                        &arm_bindings,
+                        node.map(|node| &node.children[index]),
+                    );
                     out.origin(::std::option::Option::Some(arm.line));
                     out.push_str(&format!("{pad}    }},\n"));
                 }

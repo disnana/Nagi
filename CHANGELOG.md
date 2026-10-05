@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Lower selected synchronous `List[view[str]]` restorations through a private checked-flow plan. Keep original declaration cleanup positions, RHS-before-replacement evaluation, and branch joins; verify values, buffer allocation/free, and normal/panic cleanup through High, saved Low, and handwritten Low. Async, loop/match/scope, Result, and nested-container paths remain limitations.
+- Lower synchronous view-containing List restorations through a private checked-flow plan. Follow return expressions and assignment dependencies through aliases, Result/Option wrapping, calls, indexing, and nested Lists; join continuing `if` and `match` paths. Keep checked types, declaration cleanup positions, and RHS-before-replacement evaluation. Verify values, buffer and element cleanup, error propagation, and panic through High, saved Low, and handwritten Low. Async, loops involving a candidate List, scopes, and reassignment of Result/Option storage remain limitations.
 - Add private checker metadata to the compiler AST. External Rust code can no longer construct `ast::Stmt` with a struct literal; obtain statements through the parser.
 
 - Give sequential direct-view assignments in return-terminated blocks separate inferred lifetimes. Compile and execute restored input views and earlier nested returns through High, saved Low, and handwritten Low; preserve continuing branch and loop updates. Other owning view-container cases remain limitations.

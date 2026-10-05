@@ -107,6 +107,8 @@ extern def consume(parts: List[view[str]]) -> bool
 extern def checkpoint()
 @rust("native::abort_mutation")
 extern def abort_mutation()
+@rust("native::fail_step")
+extern def fail_step() -> Result[unit, i64]
 
 def mutation_crash(value: view[str]) -> view[str]:
     abort_mutation()
@@ -176,6 +178,54 @@ def panic_during_mutation(parts: List[view[str]]) -> List[view[str]]:
     append(alias, mutation_crash(view(local)))
     alias = [parts[0]]
     return alias
+
+def alias_move_then_panic(part: view[str]) -> List[view[str]]:
+    before = marker(130)
+    local = copy(part)
+    capture(13)
+    parts = [view(local)]
+    after = marker(140)
+    capture(14)
+    parts = [part]
+    selected = parts
+    crash()
+    return selected
+
+def restored_list_then_error(part: view[str]) -> Result[List[view[str]], i64]:
+    before = marker(150)
+    local = copy(part)
+    capture(15)
+    parts = [view(local)]
+    after = marker(160)
+    capture(16)
+    parts = [part]
+    try fail_step()
+    return ok(parts)
+
+def pattern_list_then_panic(part: view[str], input: Result[List[view[str]], i64]) -> Result[List[view[str]], i64]:
+    before = marker(170)
+    match input:
+        case Ok(parts):
+            local = copy(part)
+            capture(17)
+            parts = [view(local)]
+            after = marker(180)
+            capture(18)
+            parts = [part]
+            crash()
+            return ok(parts)
+        case Err(code):
+            return fail(code)
+
+def list_with_owned_error_elements(part: view[str]) -> List[Result[view[str], Marker]]:
+    before = marker(190)
+    local = copy(part)
+    capture(19)
+    parts: List[Result[view[str], Marker]] = [ok(view(local)), fail(marker(200))]
+    after = marker(220)
+    capture(20)
+    parts = [ok(part), fail(marker(210))]
+    return parts
 "#;
 
 // This Low is written separately so the fixture checks the same return and
@@ -197,6 +247,8 @@ extern fn consume(parts: List[view[str]]) -> bool;
 extern fn checkpoint() -> unit;
 @rust("native::abort_mutation")
 extern fn abort_mutation() -> unit;
+@rust("native::fail_step")
+extern fn fail_step() -> Result[unit, i64];
 
 fn mutation_crash(value: view[str]) -> view[str] {
     abort_mutation();
@@ -274,6 +326,61 @@ fn panic_during_mutation(parts: List[view[str]]) -> List[view[str]] {
     alias = [parts[0]];
     return alias;
 }
+
+fn alias_move_then_panic(part: view[str]) -> List[view[str]] {
+    let before: Marker = marker(130);
+    let local: str = copy(part);
+    capture(13);
+    let parts: List[view[str]] = [view(local)];
+    let after: Marker = marker(140);
+    capture(14);
+    parts = [part];
+    let selected: List[view[str]] = parts;
+    crash();
+    return selected;
+}
+
+fn restored_list_then_error(part: view[str]) -> Result[List[view[str]], i64] {
+    let before: Marker = marker(150);
+    let local: str = copy(part);
+    capture(15);
+    let parts: List[view[str]] = [view(local)];
+    let after: Marker = marker(160);
+    capture(16);
+    parts = [part];
+    try fail_step();
+    return ok(parts);
+}
+
+fn pattern_list_then_panic(part: view[str], input: Result[List[view[str]], i64]) -> Result[List[view[str]], i64] {
+    let before: Marker = marker(170);
+    match input {
+        case Ok(parts) {
+            let local: str = copy(part);
+            capture(17);
+            parts = [view(local)];
+            let after: Marker = marker(180);
+            capture(18);
+            parts = [part];
+            crash();
+            return ok(parts);
+        }
+        case Err(code) {
+            return fail(code);
+        }
+    }
+}
+
+fn list_with_owned_error_elements(part: view[str]) -> List[Result[view[str], Marker]] {
+    let before: Marker = marker(190);
+    let local: str = copy(part);
+    capture(19);
+    let parts: List[Result[view[str], Marker]] = [ok(view(local)), fail(marker(200))];
+    let after: Marker = marker(220);
+    capture(20);
+    parts = [ok(part), fail(marker(210))];
+    return parts;
+}
 "#;
 
 const RUNTIME: &str = r#"
@@ -295,6 +402,7 @@ const MUTATION_PANIC: usize = 9_000;
 static EVENTS: [AtomicUsize; EVENT_CAPACITY] =
     [const { AtomicUsize::new(0) }; EVENT_CAPACITY];
 static EVENT_COUNT: AtomicUsize = AtomicUsize::new(0);
+static PANIC_MARKER_ID: AtomicUsize = AtomicUsize::new(0);
 static CAPTURE_VEC_ID: AtomicUsize = AtomicUsize::new(0);
 static TRACKED_POINTERS: [AtomicUsize; TRACK_CAPACITY] =
     [const { AtomicUsize::new(0) }; TRACK_CAPACITY];
@@ -326,6 +434,7 @@ fn reset_events() {
     assert_eq!(tracked_count(), 0, "a tracked view-container buffer escaped");
     EVENT_COUNT.store(0, Ordering::Relaxed);
     CAPTURE_VEC_ID.store(0, Ordering::Relaxed);
+    PANIC_MARKER_ID.store(0, Ordering::Relaxed);
 }
 
 fn assert_events(expected: &[usize], tracked: usize) {
@@ -445,9 +554,23 @@ pub fn abort_mutation() {
     panic!("intentional panic while evaluating append argument");
 }
 
+pub fn fail_step() -> Result<(), i64> {
+    assert_eq!(super::tracked_count(), 1, "error propagation starts after old-buffer cleanup");
+    super::record(super::CHECKPOINT);
+    Err(7)
+}
+
 impl Drop for super::Marker {
     fn drop(&mut self) {
         super::record(super::DROP_BASE + self.id as usize);
+        if super::PANIC_MARKER_ID
+            .compare_exchange(self.id as usize, 0,
+                              ::std::sync::atomic::Ordering::Relaxed,
+                              ::std::sync::atomic::Ordering::Relaxed)
+            .is_ok()
+        {
+            panic!("intentional panic while destroying a replaced element");
+        }
     }
 }
 "#;
@@ -567,6 +690,69 @@ fn replacement_observes_rhs_then_old_free_and_scope_drop_order() {
     assert_events(
         &[ALLOC_BASE + 11, MUTATION_PANIC, DROP_BASE + 120,
           FREE_BASE + 11, DROP_BASE + 110, CAUGHT],
+        0,
+    );
+
+    reset_events();
+    let result = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
+        alias_move_then_panic(source.as_str())
+    }));
+    assert!(result.is_err());
+    record(CAUGHT);
+    // Moving into a new source binding transfers its cleanup position too.
+    // `selected` is declared after the later Marker and must drop first.
+    assert_events(
+        &[ALLOC_BASE + 13, ALLOC_BASE + 14, FREE_BASE + 13, CRASH,
+          FREE_BASE + 14, DROP_BASE + 140, DROP_BASE + 130, CAUGHT],
+        0,
+    );
+
+    reset_events();
+    assert_eq!(restored_list_then_error(source.as_str()), Err(7));
+    assert_events(
+        &[ALLOC_BASE + 15, ALLOC_BASE + 16, FREE_BASE + 15, CHECKPOINT,
+          DROP_BASE + 160, FREE_BASE + 16, DROP_BASE + 150],
+        0,
+    );
+
+    reset_events();
+    let result = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
+        pattern_list_then_panic(source.as_str(), Ok(vec![source.as_str()]))
+    }));
+    assert!(result.is_err());
+    record(CAUGHT);
+    // A pattern-bound container has the pattern's cleanup anchor, before
+    // the Marker in the arm. Synthetic storage must not move that anchor.
+    assert_events(
+        &[ALLOC_BASE + 17, ALLOC_BASE + 18, FREE_BASE + 17, CRASH,
+          DROP_BASE + 180, FREE_BASE + 18, DROP_BASE + 170, CAUGHT],
+        0,
+    );
+
+    reset_events();
+    let returned = list_with_owned_error_elements(source.as_str());
+    assert!(matches!(&returned[0], Ok(value) if *value == "caller-owned"));
+    assert!(matches!(&returned[1], Err(value) if value.id == 210));
+    let expected = [ALLOC_BASE + 19, ALLOC_BASE + 20, DROP_BASE + 200,
+                    FREE_BASE + 19, DROP_BASE + 220, DROP_BASE + 190];
+    assert_events(&expected, 1);
+    drop(returned);
+    let mut expected = expected.to_vec();
+    expected.extend([DROP_BASE + 210, FREE_BASE + 20]);
+    assert_events(&expected, 0);
+
+    reset_events();
+    PANIC_MARKER_ID.store(200, Ordering::Relaxed);
+    let result = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
+        list_with_owned_error_elements(source.as_str())
+    }));
+    assert!(result.is_err());
+    record(CAUGHT);
+    // Rust assignment keeps the already evaluated replacement at the source
+    // binding's cleanup position even if destroying an old element panics.
+    assert_events(
+        &[ALLOC_BASE + 19, ALLOC_BASE + 20, DROP_BASE + 200, FREE_BASE + 19,
+          DROP_BASE + 220, DROP_BASE + 210, FREE_BASE + 20, DROP_BASE + 190, CAUGHT],
         0,
     );
 }

@@ -19,15 +19,8 @@ impl Type {
     pub fn is_view(&self) -> bool {
         self.0 == "view"
     }
-    pub(crate) fn is_view_string_list(&self) -> bool {
-        if self.0 != "List" || self.1.len() != 1 {
-            return false;
-        }
-        let element = &self.1[0];
-        element.0 == "view"
-            && element.1.len() == 1
-            && element.1[0].0 == "str"
-            && element.1[0].1.is_empty()
+    pub(crate) fn is_view_containing_list(&self) -> bool {
+        self.0 == "List" && self.1.len() == 1 && self.contains_view()
     }
     pub fn contains_view(&self) -> bool {
         // Plain function values capture no data. Their view parameters have
@@ -216,7 +209,7 @@ pub(crate) struct BindingId {
     pub token: usize,
 }
 
-/// One origin contributing to the contents of a checked List[view[str]].
+/// One origin contributing to a checked owning List containing views.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct FlowOrigin {
     pub binding: BindingId,
@@ -225,9 +218,10 @@ pub(crate) struct FlowOrigin {
     pub static_origin: bool,
 }
 
-/// Checker state for one exact List[view[str]] binding at a statement edge.
+/// Checker state for an owning List containing views at a statement edge.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ViewListBindingSnapshot {
+    pub ty: Type,
     pub name: String,
     pub binding: BindingId,
     pub moved: bool,
@@ -250,6 +244,15 @@ pub(crate) struct FlowContentMutation {
     pub binding: BindingId,
     pub name: String,
     pub added_origins: Vec<FlowOrigin>,
+    /// Value inputs observed at the checker's common content update point,
+    /// including updates that add no new borrow origin.
+    pub inputs: Vec<BindingId>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct FlowValueDependency {
+    pub target: BindingId,
+    pub inputs: Vec<BindingId>,
 }
 
 /// Statement-boundary checker facts used to plan owning-view lowering. These
@@ -258,22 +261,87 @@ pub(crate) struct FlowContentMutation {
 pub(crate) struct StmtFlowFacts {
     pub before: Vec<ViewListBindingSnapshot>,
     pub after: Vec<ViewListBindingSnapshot>,
-    pub condition_after: Option<Vec<ViewListBindingSnapshot>>,
+    /// State after evaluating the If condition or consuming the Match scrutinee.
+    pub branch_entry: Option<Vec<ViewListBindingSnapshot>>,
     pub content_mutations: Vec<FlowContentMutation>,
     pub assignment: Option<FlowAssignment>,
+    pub value_dependencies: Vec<FlowValueDependency>,
+    pub return_observers: Vec<BindingId>,
 }
 
-/// The initial owning-view flow pass handles straight-line statements and If
-/// joins. A control-flow form outside that subset disables metadata for the
+/// Owning-view metadata covers branches and loop regions. The planner handles
+/// only candidate-independent loops; Scope still disables metadata for the
 /// containing function until its checker state can be represented precisely.
 pub(crate) fn supports_view_flow(statements: &[Stmt]) -> bool {
     statements.iter().all(|statement| match &statement.kind {
         S::If(_, then_body, else_body) => {
             supports_view_flow(then_body) && supports_view_flow(else_body)
         }
-        S::Match(..) | S::While(..) | S::For(..) | S::Scope(..) => false,
+        S::Match(_, arms) => arms.iter().all(|arm| supports_view_flow(&arm.body)),
+        S::While(_, body) | S::For(_, _, body) => supports_view_flow(body),
+        S::Scope(..) => false,
         S::Assign { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => true,
     })
+}
+
+/// Syntactic names referenced by an expression, also usable before checking.
+/// BindingId snapshots decide which source binding a collected name denotes.
+pub(crate) fn expression_names(expr: &Expr, names: &mut std::collections::HashSet<String>) {
+    expression_names_inner(expr, names, false);
+}
+
+/// Follow checked values that can carry views. Scalar observations such as
+/// len(container) do not carry that container's borrowed lifetime onward.
+pub(crate) fn view_value_names(expr: &Expr, names: &mut std::collections::HashSet<String>) {
+    expression_names_inner(expr, names, true);
+}
+
+fn expression_names_inner(
+    expr: &Expr,
+    names: &mut std::collections::HashSet<String>,
+    value_only: bool,
+) {
+    if value_only && !expr.ty.as_ref().is_some_and(Type::contains_view) {
+        return;
+    }
+    match &expr.kind {
+        E::Name(name) => {
+            names.insert(name.clone());
+        }
+        E::Binary(a, _, b) | E::Index(a, b) => {
+            expression_names_inner(a, names, value_only);
+            expression_names_inner(b, names, value_only);
+        }
+        E::Unary(_, value) | E::Field(value, _) | E::Await(value) | E::Try(value) => {
+            expression_names_inner(value, names, value_only)
+        }
+        E::Call(name, _, values) => {
+            // Local call targets are values too; a global function name is not
+            // a local use. Before check, unresolved names are conservative.
+            if expr.resolution.is_none()
+                || matches!(
+                    expr.resolution,
+                    Some(NameResolution::Local | NameResolution::BorrowedLocal)
+                )
+            {
+                names.insert(name.clone());
+            }
+            for value in values {
+                expression_names_inner(value, names, value_only);
+            }
+        }
+        E::List(values) => {
+            for value in values {
+                expression_names_inner(value, names, value_only);
+            }
+        }
+        E::Record(_, fields) => {
+            for (_, value) in fields {
+                expression_names_inner(value, names, value_only);
+            }
+        }
+        E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null => {}
+    }
 }
 
 /// Shared by ownership checking and Rust emission. A loop or scope can

@@ -1,14 +1,17 @@
-//! Flow-sensitive lowering for the narrow owning-view return case.
+//! Flow-sensitive lowering for owning Lists containing borrowed views.
 //!
-//! A `Vec<&str>` assignment must drop its previous allocation at the
+//! A Vec assignment must drop its previous allocation at the
 //! assignment point, while Rust needs separate local lifetimes for a
 //! short-lived borrowed version and a later restored version. This planner
 //! gives each checked assignment a slot at the original binding's lexical
 //! position and joins continuing branches with move-only phi transfers.
+//! Return observers follow checked value dependencies and mutation inputs.
+//! Scalar observations do not carry a borrowed lifetime. Candidate-free
+//! loop regions stay opaque; backedge lowering is intentionally not modeled.
 
 use crate::ast::{
-    block_returns, BindingId, Expr, FlowOrigin, Function, NameResolution, Stmt, Type,
-    ViewListBindingSnapshot, E, S,
+    block_returns, expression_names, BindingId, Expr, FlowOrigin, Function, NameResolution, Stmt,
+    Type, ViewListBindingSnapshot, E, S,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -54,6 +57,7 @@ pub(crate) struct Node {
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Block {
+    pub entry: Vec<Action>,
     pub statements: Vec<Node>,
     pub tail: Vec<Action>,
     pub terminal: bool,
@@ -67,6 +71,7 @@ pub(crate) struct Plan {
 
 #[derive(Clone)]
 struct Candidate {
+    ty: Type,
     name: String,
     parameter: bool,
 }
@@ -74,8 +79,8 @@ struct Candidate {
 #[derive(Default)]
 struct CandidateFacts {
     name: Option<String>,
+    ty: Option<Type>,
     saw_short_owner: bool,
-    saw_safe_direct_return: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -132,13 +137,6 @@ struct Builder {
     next_temp: usize,
 }
 
-fn view_list_type() -> Type {
-    Type::generic(
-        "List",
-        vec![Type::generic("view", vec![Type::named("str")])],
-    )
-}
-
 fn transient_origin(origin: &FlowOrigin, parameter_views: &HashSet<BindingId>) -> bool {
     origin.owner_loan && !origin.static_origin && !parameter_views.contains(&origin.binding)
 }
@@ -156,9 +154,61 @@ fn snapshot_named<'a>(
     snapshots.iter().find(|snapshot| snapshot.name == name)
 }
 
+fn escaping_bindings(statements: &[Stmt]) -> HashSet<BindingId> {
+    fn visit(
+        statements: &[Stmt],
+        observed: &mut HashSet<BindingId>,
+        dependencies: &mut HashMap<BindingId, BTreeSet<BindingId>>,
+    ) {
+        for statement in statements {
+            if let Some(flow) = &statement.flow {
+                observed.extend(flow.return_observers.iter().copied());
+                for edge in &flow.value_dependencies {
+                    dependencies
+                        .entry(edge.target)
+                        .or_default()
+                        .extend(&edge.inputs);
+                }
+                for mutation in &flow.content_mutations {
+                    dependencies
+                        .entry(mutation.binding)
+                        .or_default()
+                        .extend(&mutation.inputs);
+                }
+            }
+            match &statement.kind {
+                S::If(_, a, b) => {
+                    visit(a, observed, dependencies);
+                    visit(b, observed, dependencies);
+                }
+                S::Match(_, arms) => {
+                    for arm in arms {
+                        visit(&arm.body, observed, dependencies);
+                    }
+                }
+                S::While(_, body) | S::For(_, _, body) | S::Scope(body) => {
+                    visit(body, observed, dependencies)
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut observed = HashSet::new();
+    let mut dependencies = HashMap::new();
+    visit(statements, &mut observed, &mut dependencies);
+    let mut pending: Vec<_> = observed.iter().copied().collect();
+    while let Some(binding) = pending.pop() {
+        for input in dependencies.remove(&binding).unwrap_or_default() {
+            if observed.insert(input) {
+                pending.push(input);
+            }
+        }
+    }
+    observed
+}
+
 fn collect_candidates(
     statements: &[Stmt],
-    function_ret: &Type,
     parameter_views: &HashSet<BindingId>,
     facts: &mut BTreeMap<BindingId, CandidateFacts>,
 ) {
@@ -169,10 +219,11 @@ fn collect_candidates(
         // Mutating operations such as append can introduce the same local
         // owner loan as an assignment. Candidate selection follows the checked
         // contents at every statement edge, not only assignment targets.
-        for snapshot in &flow.after {
+        for snapshot in flow.before.iter().chain(&flow.after) {
             if has_transient_origin(&snapshot.origins, parameter_views) {
                 let entry = facts.entry(snapshot.binding).or_default();
                 entry.name = Some(snapshot.name.clone());
+                entry.ty = Some(snapshot.ty.clone());
                 entry.saw_short_owner = true;
             }
         }
@@ -180,6 +231,11 @@ fn collect_candidates(
             if has_transient_origin(&mutation.added_origins, parameter_views) {
                 let entry = facts.entry(mutation.binding).or_default();
                 entry.name = Some(mutation.name.clone());
+                entry.ty = flow
+                    .before
+                    .iter()
+                    .find(|snapshot| snapshot.binding == mutation.binding)
+                    .map(|snapshot| snapshot.ty.clone());
                 entry.saw_short_owner = true;
             }
         }
@@ -193,37 +249,25 @@ fn collect_candidates(
                     {
                         let entry = facts.entry(assignment.target).or_default();
                         entry.name = Some(snapshot.name.clone());
+                        entry.ty = Some(snapshot.ty.clone());
                         entry.saw_short_owner |=
                             has_transient_origin(&snapshot.origins, parameter_views);
                     }
                 }
             }
-            S::Return(Some(expr)) if function_ret.is_view_string_list() => {
-                if let (E::Name(name), Some(NameResolution::Local)) = (&expr.kind, expr.resolution)
-                {
-                    if let Some(snapshot) = snapshot_named(&flow.before, name) {
-                        let entry = facts.entry(snapshot.binding).or_default();
-                        entry.name = Some(snapshot.name.clone());
-                        if !snapshot.moved
-                            && !has_transient_origin(&snapshot.origins, parameter_views)
-                        {
-                            entry.saw_safe_direct_return = true;
-                        }
-                    }
+            S::If(_, then_body, else_body) => {
+                collect_candidates(then_body, parameter_views, facts);
+                collect_candidates(else_body, parameter_views, facts);
+            }
+            S::Match(_, arms) => {
+                for arm in arms {
+                    collect_candidates(&arm.body, parameter_views, facts);
                 }
             }
-            S::If(_, then_body, else_body) => {
-                collect_candidates(then_body, function_ret, parameter_views, facts);
-                collect_candidates(else_body, function_ret, parameter_views, facts);
+            S::Return(None) | S::Return(Some(_)) | S::Expr(_) | S::Spawn(_) | S::Scope(..) => {}
+            S::While(_, body) | S::For(_, _, body) => {
+                collect_candidates(body, parameter_views, facts)
             }
-            S::Return(None)
-            | S::Return(Some(_))
-            | S::Expr(_)
-            | S::Spawn(_)
-            | S::Match(..)
-            | S::While(..)
-            | S::For(..)
-            | S::Scope(..) => {}
         }
     }
 }
@@ -245,14 +289,19 @@ fn find_declarations(statements: &[Stmt], declarations: &mut HashSet<BindingId>)
                 find_declarations(then_body, declarations);
                 find_declarations(else_body, declarations);
             }
-            S::Assign { .. }
-            | S::Return(_)
-            | S::Expr(_)
-            | S::Spawn(_)
-            | S::Match(..)
-            | S::While(..)
-            | S::For(..)
-            | S::Scope(..) => {}
+            S::Match(_, arms) => {
+                for arm in arms {
+                    for binding in arm.pattern.bindings() {
+                        declarations.insert(BindingId {
+                            line: arm.line,
+                            token: binding.span.start,
+                        });
+                    }
+                    find_declarations(&arm.body, declarations);
+                }
+            }
+            S::Assign { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) | S::Scope(..) => {}
+            S::While(_, body) | S::For(_, _, body) => find_declarations(body, declarations),
         }
     }
 }
@@ -372,57 +421,92 @@ impl Builder {
         visit(expr, names);
     }
 
-    fn merge_states(
+    fn join_states(
         &mut self,
-        binding: BindingId,
-        left: ValueState,
-        right: ValueState,
-        left_tail: &mut Vec<Action>,
-        right_tail: &mut Vec<Action>,
-    ) -> ValueState {
-        if left == right {
-            return left;
+        entry: &HashMap<BindingId, ValueState>,
+        visible: &[ViewListBindingSnapshot],
+        predecessors: &[(usize, HashMap<BindingId, ValueState>)],
+        children: &mut [Block],
+    ) -> HashMap<BindingId, ValueState> {
+        let mut result = HashMap::new();
+        if predecessors.is_empty() {
+            return result;
         }
-        let retained: BTreeSet<_> = left.retained().union(right.retained()).cloned().collect();
-        let both_active =
-            matches!(left, ValueState::Active { .. }) && matches!(right, ValueState::Active { .. });
-        if Self::state_slot(&left) == Self::state_slot(&right) {
-            return match Self::state_slot(&left) {
-                Some(slot) if both_active => ValueState::Active {
-                    slot: slot.to_owned(),
-                    retained,
-                },
-                Some(slot) => ValueState::MaybeMoved {
-                    slot: slot.to_owned(),
-                    retained,
-                },
-                None => ValueState::Moved { retained },
+        for snapshot in visible {
+            let binding = snapshot.binding;
+            if !self.candidates.contains_key(&binding) {
+                continue;
+            }
+            let values: Vec<_> = predecessors
+                .iter()
+                .filter_map(|(index, state)| {
+                    state
+                        .get(&binding)
+                        .or_else(|| entry.get(&binding))
+                        .cloned()
+                        .map(|value| (*index, value))
+                })
+                .collect();
+            let Some((_, first)) = values.first() else {
+                continue;
             };
-        }
-
-        let phi = self.fresh_slot(binding);
-        let transfer_edge = |state: ValueState, tail: &mut Vec<Action>| match state {
-            ValueState::Active { slot: from, .. } | ValueState::MaybeMoved { slot: from, .. } => {
-                tail.push(Action::Transfer {
-                    from,
-                    to: phi.clone(),
+            if values.iter().all(|(_, value)| value == first) {
+                result.insert(binding, first.clone());
+                continue;
+            }
+            let retained = values
+                .iter()
+                .flat_map(|(_, value)| value.retained().iter().cloned())
+                .collect();
+            let active = values
+                .iter()
+                .all(|(_, value)| matches!(value, ValueState::Active { .. }));
+            let slot = Self::state_slot(first);
+            if values
+                .iter()
+                .all(|(_, value)| Self::state_slot(value) == slot)
+            {
+                let joined = match slot {
+                    Some(slot) if active => ValueState::Active {
+                        slot: slot.to_owned(),
+                        retained,
+                    },
+                    Some(slot) => ValueState::MaybeMoved {
+                        slot: slot.to_owned(),
+                        retained,
+                    },
+                    None => ValueState::Moved { retained },
+                };
+                result.insert(binding, joined);
+                continue;
+            }
+            let phi = self.fresh_slot(binding);
+            for (index, value) in values {
+                children[index].tail.push(match value {
+                    ValueState::Active { slot: from, .. }
+                    | ValueState::MaybeMoved { slot: from, .. } => Action::Transfer {
+                        from,
+                        to: phi.clone(),
+                    },
+                    ValueState::Moved { .. } => Action::InitEmpty { slot: phi.clone() },
                 });
             }
-            ValueState::Moved { .. } => tail.push(Action::InitEmpty { slot: phi.clone() }),
-        };
-        transfer_edge(left.clone(), left_tail);
-        transfer_edge(right.clone(), right_tail);
-        if both_active {
-            ValueState::Active {
-                slot: phi,
-                retained,
-            }
-        } else {
-            ValueState::MaybeMoved {
-                slot: phi,
-                retained,
-            }
+            result.insert(
+                binding,
+                if active {
+                    ValueState::Active {
+                        slot: phi,
+                        retained,
+                    }
+                } else {
+                    ValueState::MaybeMoved {
+                        slot: phi,
+                        retained,
+                    }
+                },
+            );
         }
+        result
     }
 
     fn block(
@@ -431,6 +515,7 @@ impl Builder {
         mut state: HashMap<BindingId, ValueState>,
     ) -> Result<(Block, HashMap<BindingId, ValueState>), ()> {
         let mut planned = Block {
+            entry: Vec::new(),
             statements: Vec::with_capacity(statements.len()),
             tail: Vec::new(),
             terminal: block_returns(statements),
@@ -455,6 +540,7 @@ impl Builder {
             let mutated: BTreeSet<_> = facts
                 .content_mutations
                 .iter()
+                .filter(|mutation| !mutation.added_origins.is_empty())
                 .map(|mutation| mutation.binding)
                 .filter(|binding| self.candidates.contains_key(binding))
                 .collect();
@@ -526,76 +612,58 @@ impl Builder {
                     Self::rewrite_expr(condition, &names);
                     let branch_entry = self.condition_state(
                         &facts.before,
-                        facts.condition_after.as_deref().ok_or(())?,
+                        facts.branch_entry.as_deref().ok_or(())?,
                         &state,
                     );
                     let (then_plan, then_state) = self.block(then_body, branch_entry.clone())?;
                     let (else_plan, else_state) = self.block(else_body, branch_entry.clone())?;
-                    let then_continues = !then_plan.terminal;
-                    let else_continues = !else_plan.terminal;
                     node.children = vec![then_plan, else_plan];
-
-                    match (then_continues, else_continues) {
-                        (true, true) => {
-                            let visible: BTreeSet<_> = facts
-                                .after
-                                .iter()
-                                .map(|snapshot| snapshot.binding)
-                                .filter(|binding| self.candidates.contains_key(binding))
-                                .collect();
-                            let ids: Vec<_> = visible.iter().copied().collect();
-                            for binding in ids {
-                                let left = then_state
-                                    .get(&binding)
-                                    .cloned()
-                                    .or_else(|| branch_entry.get(&binding).cloned());
-                                let right = else_state
-                                    .get(&binding)
-                                    .cloned()
-                                    .or_else(|| branch_entry.get(&binding).cloned());
-                                let (Some(left), Some(right)) = (left, right) else {
-                                    continue;
-                                };
-                                let (left_children, right_children) = node.children.split_at_mut(1);
-                                let merged = self.merge_states(
-                                    binding,
-                                    left,
-                                    right,
-                                    &mut left_children[0].tail,
-                                    &mut right_children[0].tail,
-                                );
-                                state.insert(binding, merged);
-                            }
-                            state.retain(|binding, _| visible.contains(binding));
-                        }
-                        (true, false) => {
-                            state = then_state
-                                .into_iter()
-                                .filter(|(binding, _)| {
-                                    facts
-                                        .after
-                                        .iter()
-                                        .any(|snapshot| snapshot.binding == *binding)
-                                })
-                                .collect();
-                        }
-                        (false, true) => {
-                            state = else_state
-                                .into_iter()
-                                .filter(|(binding, _)| {
-                                    facts
-                                        .after
-                                        .iter()
-                                        .any(|snapshot| snapshot.binding == *binding)
-                                })
-                                .collect();
-                        }
-                        (false, false) => {
-                            state.clear();
-                        }
-                    }
+                    let predecessors = [(0, then_state), (1, else_state)]
+                        .into_iter()
+                        .filter(|(index, _)| !node.children[*index].terminal)
+                        .collect::<Vec<_>>();
+                    state = self.join_states(
+                        &branch_entry,
+                        &facts.after,
+                        &predecessors,
+                        &mut node.children,
+                    );
                 }
-                S::Match(..) | S::While(..) | S::For(..) | S::Scope(..) => return Err(()),
+                S::Match(value, arms) => {
+                    Self::rewrite_expr(value, &names);
+                    let branch_entry = self.condition_state(
+                        &facts.before,
+                        facts.branch_entry.as_deref().ok_or(())?,
+                        &state,
+                    );
+                    let mut predecessors = Vec::new();
+                    for (index, arm) in arms.iter().enumerate() {
+                        let mut arm_entry = branch_entry.clone();
+                        for binding in arm.pattern.bindings() {
+                            let id = BindingId {
+                                line: arm.line,
+                                token: binding.span.start,
+                            };
+                            if self.candidates.contains_key(&id) {
+                                let slot = self.fresh_slot(id);
+                                arm_entry.insert(id, ValueState::active(slot));
+                            }
+                        }
+                        let (child, child_state) = self.block(&arm.body, arm_entry)?;
+                        if !child.terminal {
+                            predecessors.push((index, child_state));
+                        }
+                        node.children.push(child);
+                    }
+                    state = self.join_states(
+                        &branch_entry,
+                        &facts.after,
+                        &predecessors,
+                        &mut node.children,
+                    );
+                }
+                S::While(..) | S::For(..) if self.independent_region(source) => {}
+                S::While(..) | S::For(..) | S::Scope(..) => return Err(()),
             }
 
             planned.statements.push(node);
@@ -604,14 +672,71 @@ impl Builder {
         Ok((planned, state))
     }
 
+    /// Preserve an opaque region only when it is completely independent of
+    /// the bindings being versioned. Inspect source uses, not snapshot equality:
+    /// reads and indexed borrows can leave ownership facts unchanged.
+    fn independent_region(&self, source: &Stmt) -> bool {
+        fn visit(statement: &Stmt, names: &mut HashSet<String>) {
+            match &statement.kind {
+                S::Assign { name, value, .. } => {
+                    names.insert(name.clone());
+                    expression_names(value, names);
+                }
+                S::Return(Some(expr)) | S::Expr(expr) | S::Spawn(expr) => {
+                    expression_names(expr, names)
+                }
+                S::If(expr, a, b) => {
+                    expression_names(expr, names);
+                    for statement in a.iter().chain(b) {
+                        visit(statement, names);
+                    }
+                }
+                S::Match(expr, arms) => {
+                    expression_names(expr, names);
+                    for arm in arms {
+                        for binding in arm.pattern.bindings() {
+                            if let Some(name) = &binding.name {
+                                names.insert(name.clone());
+                            }
+                        }
+                        for statement in &arm.body {
+                            visit(statement, names);
+                        }
+                    }
+                }
+                S::While(expr, body) | S::For(_, expr, body) => {
+                    expression_names(expr, names);
+                    for statement in body {
+                        visit(statement, names);
+                    }
+                }
+                S::Scope(body) => {
+                    for statement in body {
+                        visit(statement, names);
+                    }
+                }
+                S::Return(None) => {}
+            }
+            if let S::For(name, _, _) = &statement.kind {
+                names.insert(name.clone());
+            }
+        }
+        let mut names = HashSet::new();
+        visit(source, &mut names);
+        !self
+            .candidates
+            .values()
+            .any(|candidate| names.contains(&candidate.name))
+    }
+
     fn condition_state(
         &self,
         before: &[ViewListBindingSnapshot],
-        condition_after: &[ViewListBindingSnapshot],
+        branch_entry: &[ViewListBindingSnapshot],
         state: &HashMap<BindingId, ValueState>,
     ) -> HashMap<BindingId, ValueState> {
         let mut result = state.clone();
-        self.apply_after_facts(before, condition_after, &mut result);
+        self.apply_after_facts(before, branch_entry, &mut result);
         result
     }
 }
@@ -663,9 +788,50 @@ fn local_declarations(block: &mut Block, builder: &Builder) {
                         node.after.extend(slots.iter().skip(1).cloned().map(|name| {
                             Action::DeclareSlot {
                                 name,
-                                ty: view_list_type(),
+                                ty: builder.candidates[&binding].ty.clone(),
                             }
                         }));
+                    }
+                }
+            }
+        }
+        if let S::Match(_, arms) = &node.stmt.kind {
+            for (arm, child) in arms.iter().zip(&mut node.children) {
+                let bindings = arm.pattern.bindings();
+                let needs_anchors = bindings.iter().any(|binding| {
+                    builder.candidates.contains_key(&BindingId {
+                        line: arm.line,
+                        token: binding.span.start,
+                    })
+                });
+                if needs_anchors {
+                    for binding in bindings {
+                        let Some(name) = &binding.name else {
+                            continue;
+                        };
+                        let ty = binding.ty.as_ref().expect("checked pattern type");
+                        let id = BindingId {
+                            line: arm.line,
+                            token: binding.span.start,
+                        };
+                        if let Some(slots) = builder.slots.get(&id) {
+                            child.entry.push(Action::DeclareSlot {
+                                name: slots[0].clone(),
+                                ty: ty.clone(),
+                            });
+                            child.entry.push(Action::Transfer {
+                                from: name.clone(),
+                                to: slots[0].clone(),
+                            });
+                            child
+                                .entry
+                                .extend(slots.iter().skip(1).cloned().map(|name| {
+                                    Action::DeclareSlot {
+                                        name,
+                                        ty: ty.clone(),
+                                    }
+                                }));
+                        }
                     }
                 }
             }
@@ -677,7 +843,7 @@ fn local_declarations(block: &mut Block, builder: &Builder) {
 }
 
 pub(crate) fn plan(function: &Function) -> Option<Plan> {
-    if function.asynchronous || !function.ret.is_view_string_list() {
+    if function.asynchronous || !function.ret.contains_view() {
         return None;
     }
     if !crate::ast::supports_view_flow(&function.body) {
@@ -687,14 +853,15 @@ pub(crate) fn plan(function: &Function) -> Option<Plan> {
     let parameter_ids = parameter_bindings(function);
     let parameter_views = parameter_view_ids(function);
     let mut facts = BTreeMap::new();
-    collect_candidates(&function.body, &function.ret, &parameter_views, &mut facts);
+    collect_candidates(&function.body, &parameter_views, &mut facts);
     let mut declarations = HashSet::new();
     find_declarations(&function.body, &mut declarations);
 
+    let escaping = escaping_bindings(&function.body);
     let candidates: HashMap<_, _> = facts
         .into_iter()
         .filter_map(|(binding, fact)| {
-            if !fact.saw_short_owner || !fact.saw_safe_direct_return {
+            if !fact.saw_short_owner || !escaping.contains(&binding) {
                 return None;
             }
             let parameter = parameter_ids.contains_key(&binding);
@@ -704,6 +871,7 @@ pub(crate) fn plan(function: &Function) -> Option<Plan> {
             Some((
                 binding,
                 Candidate {
+                    ty: fact.ty?,
                     name: fact.name?,
                     parameter,
                 },
@@ -733,7 +901,7 @@ pub(crate) fn plan(function: &Function) -> Option<Plan> {
             .or_insert_with(Vec::new);
         actions.push(Action::DeclareSlot {
             name: slot.clone(),
-            ty: view_list_type(),
+            ty: builder.candidates[&binding].ty.clone(),
         });
         actions.push(Action::Transfer {
             from: name,
@@ -764,7 +932,7 @@ pub(crate) fn plan(function: &Function) -> Option<Plan> {
                 .cloned()
                 .map(|name| Action::DeclareSlot {
                     name,
-                    ty: view_list_type(),
+                    ty: builder.candidates[binding].ty.clone(),
                 }),
         );
     }

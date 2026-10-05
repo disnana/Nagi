@@ -229,9 +229,10 @@ fn visit(program: &mut Program, name: &mut impl FnMut(&mut String)) {
                     .before
                     .iter_mut()
                     .chain(&mut flow.after)
-                    .chain(flow.condition_after.iter_mut().flatten())
+                    .chain(flow.branch_entry.iter_mut().flatten())
                 {
                     name(&mut binding.name);
+                    ty(&mut binding.ty, name);
                     for origin in &mut binding.origins {
                         for field in &mut origin.fields {
                             name(field);
