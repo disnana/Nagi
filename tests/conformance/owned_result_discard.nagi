@@ -1,0 +1,2 @@
+def discard(value: owned[Result[i64, i64]]):
+    value

@@ -1,0 +1,4 @@
+fn main() -> unit {
+    let borrowed: view[str] = view("Nagi");
+    print(borrowed);
+}

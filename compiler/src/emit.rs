@@ -310,6 +310,10 @@ pub fn rust_type(t: &Type) -> String {
             raw_classes: &[],
             enums: &[],
             modules: &ModuleMetadata::default(),
+            storage_slots: &BTreeSet::new(),
+            expression_uses: &BTreeMap::new(),
+            function_error: None,
+            error_exit: ErrorExit::Function,
         },
     )
 }
@@ -317,6 +321,34 @@ struct RustTypes<'a> {
     raw_classes: &'a [Class],
     enums: &'a [Enum],
     modules: &'a ModuleMetadata,
+    storage_slots: &'a BTreeSet<String>,
+    expression_uses: &'a BTreeMap<ExprUseId, ExprUseMode>,
+    function_error: Option<&'a Type>,
+    error_exit: ErrorExit,
+}
+
+#[derive(Clone, Copy)]
+enum ErrorExit {
+    Function,
+    Scope(usize),
+}
+
+fn error_exit(error: &str, types: &RustTypes<'_>) -> String {
+    let error = format!("::std::result::Result::Err(::std::convert::From::from({error}))");
+    match types.error_exit {
+        ErrorExit::Function => format!("return {error}"),
+        ErrorExit::Scope(depth) => format!("break '__nagi_scope_body_{depth} {error}"),
+    }
+}
+
+fn try_result(value: String, types: &RustTypes<'_>) -> String {
+    match types.error_exit {
+        ErrorExit::Function => format!("({value})?"),
+        ErrorExit::Scope(_) => format!(
+            "match ({value}) {{ ::std::result::Result::Ok(__nagi_try_value) => __nagi_try_value, ::std::result::Result::Err(__nagi_try_error) => {} }}",
+            error_exit("__nagi_try_error", types)
+        ),
+    }
 }
 
 impl RustTypes<'_> {
@@ -519,7 +551,17 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
             }
         }
         E::Name(s) => {
-            if e.resolution == Some(NameResolution::BorrowedLocal) {
+            if types.storage_slots.contains(s) {
+                match types.expression_uses[&ExprUseId::of(e)] {
+                    ExprUseMode::Move => format!("{s}.expect(\"checked view binding\")"),
+                    ExprUseMode::Copy | ExprUseMode::Borrow => {
+                        format!("(*{s}.as_ref().expect(\"checked view binding\"))")
+                    }
+                    ExprUseMode::BorrowMut => {
+                        format!("(*{s}.as_mut().expect(\"checked view binding\"))")
+                    }
+                }
+            } else if e.resolution == Some(NameResolution::BorrowedLocal) {
                 format!("(*{s})")
             } else if e.resolution == Some(NameResolution::Standard) {
                 registered_rust_path(s, types.modules)
@@ -657,7 +699,7 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
             }
         }
         E::Await(x) => format!("({}).await", re(x, types)),
-        E::Try(x) => format!("({})?", re(x, types)),
+        E::Try(x) => try_result(re(x, types), types),
         E::Call(n, ts, a) => {
             if e.resolution == Some(NameResolution::Standard) {
                 let operation = crate::stdlib::operation(n).expect("checked standard operation");
@@ -667,7 +709,9 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                     .zip(info.parameters)
                     .map(|(argument, passing)| match passing {
                         crate::stdlib::Passing::Reference => reference_arg(argument, types),
-                        crate::stdlib::Passing::Borrow => format!("&({})", re(argument, types)),
+                        crate::stdlib::Passing::Borrow => {
+                            format!("&({})", re(argument, types))
+                        }
                         crate::stdlib::Passing::Move
                         | crate::stdlib::Passing::Handler
                         | crate::stdlib::Passing::Mapper => re(argument, types),
@@ -760,7 +804,18 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 "clone_shared" => format!("::std::sync::Arc::clone(&{})", args[0]),
                 "len" => format!("(({}).len() as ::std::primitive::i64)", string_or_value(&a[0], types)),
                 "range" => format!("0i64..{}", args[0]),
-                "append" => format!("{}.push({})", args[0], args[1]),
+                "append" => {
+                    if matches!(&a[0].kind, E::Name(name) if types.storage_slots.contains(name)) {
+                        // The checked receiver is a pure local place. Evaluate
+                        // its item before projecting optional storage, so a
+                        // shared read of the same container retains the source
+                        // Vec::push two-phase borrow behavior.
+                        debug_assert_eq!(types.expression_uses[&ExprUseId::of(&a[0])], ExprUseMode::BorrowMut);
+                        format!("{{ let __nagi_view_flow_item = {}; {}.push(__nagi_view_flow_item) }}", args[1], args[0])
+                    } else {
+                        format!("{}.push({})", args[0], args[1])
+                    }
+                }
                 "ok" => format!("::std::result::Result::Ok({})", args[0]),
                 "some" => format!("::std::option::Option::Some({})", args[0]),
                 "error" => format!("::std::result::Result::Err(::nagi_runtime::Error::invalid({}))", args[0]),
@@ -774,7 +829,10 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 "error_message" => format!("({}).message.clone()", args[0]),
                 "serve" => format!("__nagi_serve({}, {})", args[0], args[1]),
                 "env" => format!(
-                    "::std::env::var({}).unwrap_or_else(|_|({}).to_owned())",
+                    // Source try/await must stay in its lexical error/async
+                    // context. Match also keeps the fallback lazy and retains
+                    // the existing string copy only on the missing-key path.
+                    "match ::std::env::var({}) {{ ::std::result::Result::Ok(__nagi_env_value) => __nagi_env_value, ::std::result::Result::Err(_) => ({}).to_owned() }}",
                     string_arg(&a[0], types),
                     string_arg(&a[1], types)
                 ),
@@ -891,16 +949,19 @@ fn flow_actions(
     for action in actions {
         match action {
             Action::DeclareSlot { name, ty } => out.push_str(&format!(
-                "{pad}let mut {name}: {};\n",
+                "{pad}let mut {name}: ::std::option::Option<{}>;\n",
                 local_type(ty, types)
             )),
             Action::Retire { slot } => out.push_str(&format!(
-                "{pad}{slot} = ::std::vec::Vec::new();\n{pad}::std::mem::drop({slot});\n"
+                "{pad}{slot} = ::std::option::Option::None;\n{pad}::std::mem::drop({slot});\n"
             )),
             Action::InitEmpty { slot } => {
-                out.push_str(&format!("{pad}{slot} = ::std::vec::Vec::new();\n"));
+                out.push_str(&format!("{pad}{slot} = ::std::option::Option::None;\n"));
             }
             Action::Transfer { from, to } => out.push_str(&format!("{pad}{to} = {from};\n")),
+            Action::Install { from, to } => out.push_str(&format!(
+                "{pad}{to} = ::std::option::Option::Some({from});\n"
+            )),
         }
     }
 }
@@ -983,7 +1044,7 @@ fn rb(
                     // there when an old element's destructor unwinds.
                     out.origin(None);
                     out.push_str(&format!(
-                        "{pad}{} = {};\n",
+                        "{pad}{} = ::std::option::Option::Some({});\n",
                         assignment.new_slot, assignment.rhs_temp
                     ));
                     for old in &assignment.retire_slots {
@@ -996,17 +1057,31 @@ fn rb(
                     }
                 } else {
                     let rebind = terminal && annotation.as_ref().is_some_and(Type::is_view);
+                    let storage = types.storage_slots.contains(name);
+                    let value = re(value, types);
                     out.push_str(&format!(
                         "{}{name}{} = {};\n",
                         if *declare || rebind { "let mut " } else { "" },
                         if (*declare || rebind)
                             && !annotation.as_ref().is_some_and(Type::is_async_function)
                         {
-                            format!(": {}", local_type(annotation.as_ref().unwrap(), types))
+                            let ty = local_type(annotation.as_ref().unwrap(), types);
+                            format!(
+                                ": {}",
+                                if storage {
+                                    format!("::std::option::Option<{ty}>")
+                                } else {
+                                    ty
+                                }
+                            )
                         } else {
                             String::new()
                         },
-                        re(value, types)
+                        if storage {
+                            format!("::std::option::Option::Some({value})")
+                        } else {
+                            value
+                        }
                     ));
                 }
                 if let Some(ty) = annotation.as_ref().filter(|ty| ty.is_view()) {
@@ -1048,8 +1123,23 @@ fn rb(
                 out.push('\n');
             }
             S::While(c, b) => {
-                out.push_str(&format!("while {} {{\n", re(c, types)));
-                rb_child(b, out, n + 1, types, &bindings, None);
+                if let Some(node) = node {
+                    out.push_str("loop {\n");
+                    flow_actions(&node.condition_before, out, n + 1, types);
+                    out.push_str(&format!("{pad}    if !({}) {{\n", re(c, types)));
+                    flow_actions(&node.condition_exit, out, n + 2, types);
+                    out.push_str(&format!("{pad}        break;\n{pad}    }}\n"));
+                } else {
+                    out.push_str(&format!("while {} {{\n", re(c, types)));
+                }
+                rb_child(
+                    b,
+                    out,
+                    n + 1,
+                    types,
+                    &bindings,
+                    node.map(|node| &node.children[0]),
+                );
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
@@ -1143,7 +1233,14 @@ fn rb(
                 if let Some(ty) = s.binding_type.as_ref().filter(|ty| ty.is_view()) {
                     loop_bindings.insert(v.clone(), ty.clone());
                 }
-                rb_child(b, out, n + 1, types, &loop_bindings, None);
+                rb_child(
+                    b,
+                    out,
+                    n + 1,
+                    types,
+                    &loop_bindings,
+                    node.map(|node| &node.children[0]),
+                );
                 out.origin(::std::option::Option::Some(s.line));
                 out.push_str(&format!("{pad}}}\n"));
             }
@@ -1161,10 +1258,34 @@ fn rb(
             }
             S::Scope(b) => {
                 out.push_str("{\n");
-                out.push_str(&format!("{pad}    let mut __scope = ::nagi_runtime::Scope::new();\n{pad}    let __scope_result: ::std::result::Result<(), _> = async {{\n"));
-                rb(b, out, n + 2, types, &bindings, None);
+                // Scope is a lexical region of this coroutine. Introducing a
+                // nested async boundary would capture outer places before their
+                // source uses and prevent them from carrying body-local views.
+                // The label routes errors through cancel/join after body locals
+                // drop, while every outer value keeps its source cleanup anchor.
+                let depth = match types.error_exit {
+                    ErrorExit::Function => 1,
+                    ErrorExit::Scope(depth) => depth + 1,
+                };
+                let body_types = RustTypes {
+                    error_exit: ErrorExit::Scope(depth),
+                    ..*types
+                };
+                let failure = local_type(
+                    types.function_error.expect("checked scope Result function"),
+                    types,
+                );
+                out.push_str(&format!("{pad}    let mut __scope = ::nagi_runtime::Scope::new();\n{pad}    let __scope_result: ::std::result::Result<(), {failure}> = '__nagi_scope_body_{depth}: {{\n"));
+                rb(
+                    b,
+                    out,
+                    n + 2,
+                    &body_types,
+                    &bindings,
+                    node.map(|node| &node.children[0]),
+                );
                 out.origin(::std::option::Option::Some(s.line));
-                out.push_str(&format!("{pad}        ::std::result::Result::Ok(())\n{pad}    }}.await;\n{pad}    if let ::std::result::Result::Err(e) = __scope_result {{ __scope.cancel().await; return ::std::result::Result::Err(e); }}\n{pad}    __scope.join().await?;\n{pad}}}\n"));
+                out.push_str(&format!("{pad}        ::std::result::Result::Ok(())\n{pad}    }};\n{pad}    if let ::std::result::Result::Err(e) = __scope_result {{ __scope.cancel().await; {}; }}\n{pad}    {};\n{pad}}}\n", error_exit("e", types), try_result("__scope.join().await".into(), types)));
             }
         }
         if let Some(node) = node {
@@ -1245,6 +1366,10 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
         },
         enums: &p.enums,
         modules: &p.modules,
+        storage_slots: &BTreeSet::new(),
+        expression_uses: &BTreeMap::new(),
+        function_error: None,
+        error_exit: ErrorExit::Function,
     };
     fn copy_type(t: &Type, p: &Program, depth: usize) -> bool {
         if let Some(resource) = registered_resource(&t.0, &p.modules) {
@@ -1568,7 +1693,17 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
                 if f.asynchronous { ".await" } else { "" }
             ));
         } else {
-            let flow = crate::view_flow::plan(f);
+            let flow = crate::view_flow::plan(f)?;
+            let types = RustTypes {
+                function_error: (f.ret.0 == "Result").then(|| &f.ret.1[1]),
+                storage_slots: flow
+                    .as_ref()
+                    .map_or(types.storage_slots, |flow| &flow.storage_slots),
+                expression_uses: flow
+                    .as_ref()
+                    .map_or(types.expression_uses, |flow| &flow.expression_uses),
+                ..types
+            };
             // The public signature retains the caller's borrow lifetime, but
             // parameter bindings can be reassigned just like other locals.
             // Elide their local lifetimes so shorter, non-escaping views do

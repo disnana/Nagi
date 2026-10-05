@@ -1,0 +1,3 @@
+def main():
+    borrowed = view("Nagi")
+    print(borrowed)

@@ -1,0 +1,6 @@
+def evaluate() -> i64:
+    total = 0
+    for number in range(3):
+        number += 1
+        total += number
+    return total

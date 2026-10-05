@@ -1,0 +1,5 @@
+def identity(text: view[str]) -> view[str]:
+    local = copy(text)
+    alias = view(local)
+    alias = text
+    return alias

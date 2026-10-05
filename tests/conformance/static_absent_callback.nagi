@@ -1,0 +1,6 @@
+def absent() -> Option[view[str]]:
+    return None
+def choose() -> fn[Option[view[str]]]:
+    return absent
+def relay(factory: fn[Option[view[str]]]) -> Option[view[str]]:
+    return factory()

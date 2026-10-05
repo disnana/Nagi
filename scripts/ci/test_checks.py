@@ -50,7 +50,7 @@ class ChangeTests(unittest.TestCase):
     def test_docs_and_site_files_skip_full_checks(self):
         for path in ("README.md", "README.en.md", "CONTRIBUTING.md", "CONTRIBUTING.en.md",
                      "SECURITY.md", "SECURITY.en.md", "PERFORMANCE.md", "CHANGELOG.md",
-                     "DESIGN.md", "DESIGN.en.md", "ai/README.md", "ai/language.md",
+                     "DESIGN.md", "DESIGN.en.md", "AGENTS.md", "ai/README.md", "ai/language.md",
                      "ai/skills/nagi-development/SKILL.md",
                      "docs/http.md", "docs/en/http.md", "docs/guide/setup.md",
                      "website/README.md", "website/build.py", "website/requirements.txt",

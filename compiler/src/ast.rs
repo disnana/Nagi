@@ -209,7 +209,7 @@ pub(crate) struct BindingId {
     pub token: usize,
 }
 
-/// One origin contributing to a checked owning List containing views.
+/// One origin contributing to a checked owning value containing views.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct FlowOrigin {
     pub binding: BindingId,
@@ -218,7 +218,7 @@ pub(crate) struct FlowOrigin {
     pub static_origin: bool,
 }
 
-/// Checker state for an owning List containing views at a statement edge.
+/// Checker state for an owning value containing views at a statement edge.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ViewListBindingSnapshot {
     pub ty: Type,
@@ -255,6 +255,39 @@ pub(crate) struct FlowValueDependency {
     pub inputs: Vec<BindingId>,
 }
 
+/// Identity of a checked expression within this compilation. Diagnostic origin
+/// and generated storage identity remain separate from this token identity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(crate) struct ExprUseId {
+    pub line: usize,
+    pub start: usize,
+    pub end: usize,
+}
+impl ExprUseId {
+    pub fn of(expr: &Expr) -> Self {
+        Self {
+            line: expr.line,
+            start: expr.span.start,
+            end: expr.span.end,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ExprUseMode {
+    Move,
+    Copy,
+    Borrow,
+    BorrowMut,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct FlowExprUse {
+    pub expression: ExprUseId,
+    pub binding: BindingId,
+    pub mode: ExprUseMode,
+}
+
 /// Statement-boundary checker facts used to plan owning-view lowering. These
 /// are deliberately absent from Low serialization and are recomputed by check.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -263,23 +296,32 @@ pub(crate) struct StmtFlowFacts {
     pub after: Vec<ViewListBindingSnapshot>,
     /// State after evaluating the If condition or consuming the Match scrutinee.
     pub branch_entry: Option<Vec<ViewListBindingSnapshot>>,
+    /// Fixed-point loop header and state after evaluating its condition (or
+    /// installing the for binding). The checked body carries this same pass.
+    pub loop_entry: Option<FlowLoopEntry>,
     pub content_mutations: Vec<FlowContentMutation>,
     pub assignment: Option<FlowAssignment>,
     pub value_dependencies: Vec<FlowValueDependency>,
     pub return_observers: Vec<BindingId>,
+    /// Operand roles decided by the checker, rather than reconstructed from
+    /// builtin spelling or the generated Rust expression's context.
+    pub expression_uses: Vec<FlowExprUse>,
 }
 
-/// Owning-view metadata covers branches and loop regions. The planner handles
-/// only candidate-independent loops; Scope still disables metadata for the
-/// containing function until its checker state can be represented precisely.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct FlowLoopEntry {
+    pub header: Vec<ViewListBindingSnapshot>,
+    pub body: Vec<ViewListBindingSnapshot>,
+}
+
+/// All existing structured regions can carry private owning-view metadata.
 pub(crate) fn supports_view_flow(statements: &[Stmt]) -> bool {
     statements.iter().all(|statement| match &statement.kind {
         S::If(_, then_body, else_body) => {
             supports_view_flow(then_body) && supports_view_flow(else_body)
         }
         S::Match(_, arms) => arms.iter().all(|arm| supports_view_flow(&arm.body)),
-        S::While(_, body) | S::For(_, _, body) => supports_view_flow(body),
-        S::Scope(..) => false,
+        S::While(_, body) | S::For(_, _, body) | S::Scope(body) => supports_view_flow(body),
         S::Assign { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => true,
     })
 }

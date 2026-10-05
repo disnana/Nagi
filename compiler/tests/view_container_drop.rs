@@ -28,7 +28,7 @@ impl Fixture {
             "{}\n{}\n#[path = {}]\nmod native;\n{}",
             emit::rust(program).unwrap(),
             RUNTIME,
-            serde_json::to_string(&adapter.to_string_lossy()).unwrap(),
+            serde_json::to_string(&adapter.file_name().unwrap().to_string_lossy()).unwrap(),
             ASSERTIONS
         );
         let file = self.0.join(format!("{name}.rs"));
@@ -48,13 +48,20 @@ impl Fixture {
             "{name}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-        let output = Command::new(&binary).output().unwrap();
+        let output = Command::new(&binary).arg("--nocapture").output().unwrap();
         assert!(
             output.status.success(),
             "{name}: {}{}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
+        if let Some(directory) = std::env::var_os("NAGI_TEST_ARTIFACT_DIR") {
+            let directory = PathBuf::from(directory);
+            fs::create_dir_all(&directory).unwrap();
+            fs::copy(&file, directory.join(format!("{name}.rs"))).unwrap();
+            fs::copy(&adapter, directory.join(format!("{name}-native.rs"))).unwrap();
+            fs::write(directory.join(format!("{name}.stdout")), &output.stdout).unwrap();
+        }
     }
 }
 
@@ -109,6 +116,8 @@ extern def checkpoint()
 extern def abort_mutation()
 @rust("native::fail_step")
 extern def fail_step() -> Result[unit, i64]
+@rust("native::pause")
+extern async def pause()
 
 def mutation_crash(value: view[str]) -> view[str]:
     abort_mutation()
@@ -226,6 +235,70 @@ def list_with_owned_error_elements(part: view[str]) -> List[Result[view[str], Ma
     capture(20)
     parts = [ok(part), fail(marker(210))]
     return parts
+
+def result_error_replacement(part: view[str]) -> Result[List[view[str]], Marker]:
+    before = marker(260)
+    local = copy(part)
+    capture(41)
+    value: Result[List[view[str]], Marker] = ok([view(local)])
+    after = marker(270)
+    value = fail(marker(280))
+    value = fail(marker(290))
+    match value:
+        case Ok(_):
+            return ok([part])
+        case Err(problem):
+            return fail(problem)
+
+def option_replacement(part: view[str]) -> Option[List[view[str]]]:
+    before = marker(300)
+    local = copy(part)
+    capture(42)
+    value: Option[List[view[str]]] = some([view(local)])
+    after = marker(310)
+    value = None
+    capture(43)
+    value = some([part])
+    return value
+
+async def async_replacement(part: view[str], panic_now: bool, error_now: bool) -> Result[List[view[str]], i64]:
+    before = marker(320)
+    local = copy(part)
+    capture(44)
+    parts = [view(local)]
+    after = marker(330)
+    capture(45)
+    parts = [part]
+    await pause()
+    if panic_now:
+        crash()
+    if error_now:
+        try fail_step()
+    return ok(parts)
+
+async def async_before_replacement(part: view[str]) -> List[view[str]]:
+    before = marker(340)
+    local = copy(part)
+    capture(46)
+    parts = [view(local)]
+    after = marker(350)
+    await pause()
+    capture(47)
+    parts = [part]
+    return parts
+
+def loop_replacement(part: view[str], count: i64) -> List[view[str]]:
+    before = marker(360)
+    parts = [part]
+    for number in range(count):
+        local = copy(part)
+        capture(48)
+        parts = [view(local)]
+        within = marker(370)
+        capture(49)
+        parts = [part]
+    after = marker(380)
+    return parts
 "#;
 
 // This Low is written separately so the fixture checks the same return and
@@ -249,6 +322,8 @@ extern fn checkpoint() -> unit;
 extern fn abort_mutation() -> unit;
 @rust("native::fail_step")
 extern fn fail_step() -> Result[unit, i64];
+@rust("native::pause")
+extern async fn pause() -> unit;
 
 fn mutation_crash(value: view[str]) -> view[str] {
     abort_mutation();
@@ -381,6 +456,69 @@ fn list_with_owned_error_elements(part: view[str]) -> List[Result[view[str], Mar
     parts = [ok(part), fail(marker(210))];
     return parts;
 }
+
+fn result_error_replacement(part: view[str]) -> Result[List[view[str]], Marker] {
+    let before: Marker = marker(260);
+    let local: str = copy(part);
+    capture(41);
+    let value: Result[List[view[str]], Marker] = ok([view(local)]);
+    let after: Marker = marker(270);
+    value = fail(marker(280));
+    value = fail(marker(290));
+    match value {
+        case Ok(_) { return ok([part]); }
+        case Err(problem) { return fail(problem); }
+    }
+}
+fn option_replacement(part: view[str]) -> Option[List[view[str]]] {
+    let before: Marker = marker(300);
+    let local: str = copy(part);
+    capture(42);
+    let value: Option[List[view[str]]] = some([view(local)]);
+    let after: Marker = marker(310);
+    value = None;
+    capture(43);
+    value = some([part]);
+    return value;
+}
+async fn async_replacement(part: view[str], panic_now: bool, error_now: bool) -> Result[List[view[str]], i64] {
+    let before: Marker = marker(320);
+    let local: str = copy(part);
+    capture(44);
+    let parts: List[view[str]] = [view(local)];
+    let after: Marker = marker(330);
+    capture(45);
+    parts = [part];
+    await pause();
+    if panic_now { crash(); }
+    if error_now { try fail_step(); }
+    return ok(parts);
+}
+async fn async_before_replacement(part: view[str]) -> List[view[str]] {
+    let before: Marker = marker(340);
+    let local: str = copy(part);
+    capture(46);
+    let parts: List[view[str]] = [view(local)];
+    let after: Marker = marker(350);
+    await pause();
+    capture(47);
+    parts = [part];
+    return parts;
+}
+fn loop_replacement(part: view[str], count: i64) -> List[view[str]] {
+    let before: Marker = marker(360);
+    let parts: List[view[str]] = [part];
+    for number in range(count) {
+        let local: str = copy(part);
+        capture(48);
+        parts = [view(local)];
+        let within: Marker = marker(370);
+        capture(49);
+        parts = [part];
+    }
+    let after: Marker = marker(380);
+    return parts;
+}
 "#;
 
 const RUNTIME: &str = r#"
@@ -403,6 +541,8 @@ static EVENTS: [AtomicUsize; EVENT_CAPACITY] =
     [const { AtomicUsize::new(0) }; EVENT_CAPACITY];
 static EVENT_COUNT: AtomicUsize = AtomicUsize::new(0);
 static PANIC_MARKER_ID: AtomicUsize = AtomicUsize::new(0);
+static PAUSE_READY: ::std::sync::atomic::AtomicBool =
+    ::std::sync::atomic::AtomicBool::new(false);
 static CAPTURE_VEC_ID: AtomicUsize = AtomicUsize::new(0);
 static TRACKED_POINTERS: [AtomicUsize; TRACK_CAPACITY] =
     [const { AtomicUsize::new(0) }; TRACK_CAPACITY];
@@ -560,6 +700,16 @@ pub fn fail_step() -> Result<(), i64> {
     Err(7)
 }
 
+pub async fn pause() {
+    ::std::future::poll_fn(|_| {
+        if super::PAUSE_READY.load(::std::sync::atomic::Ordering::Relaxed) {
+            ::std::task::Poll::Ready(())
+        } else {
+            ::std::task::Poll::Pending
+        }
+    }).await
+}
+
 impl Drop for super::Marker {
     fn drop(&mut self) {
         super::record(super::DROP_BASE + self.id as usize);
@@ -576,9 +726,31 @@ impl Drop for super::Marker {
 "#;
 
 const ASSERTIONS: &str = r#"
+// Same public arguments, resources, allocation count, await and output as
+// async_replacement, with caller-only borrows that need no lifetime splitting.
+async fn caller_only_reference(part: &str, panic_now: bool, error_now: bool) -> Result<Vec<&str>, i64> {
+    let before = native::marker(320);
+    let local = part.to_owned();
+    let mut parts = vec![part];
+    let after = native::marker(330);
+    parts = vec![part];
+    native::pause().await;
+    if panic_now { native::crash(); }
+    if error_now { native::fail_step()?; }
+    Ok(parts)
+}
+
+fn poll_once<F: ::std::future::Future>(future: ::std::pin::Pin<&mut F>) -> ::std::task::Poll<F::Output> {
+    let mut context = ::std::task::Context::from_waker(::std::task::Waker::noop());
+    future.poll(&mut context)
+}
+
 #[test]
 fn replacement_observes_rhs_then_old_free_and_scope_drop_order() {
     let source = String::from("caller-owned");
+    let generated_size = ::std::mem::size_of_val(&async_replacement(source.as_str(), false, false));
+    let reference_size = ::std::mem::size_of_val(&caller_only_reference(source.as_str(), false, false));
+    println!("future-bytes: generated={generated_size} caller-only-reference={reference_size}");
 
     reset_events();
     let returned = replace_and_return(vec![source.as_str()]);
@@ -755,5 +927,123 @@ fn replacement_observes_rhs_then_old_free_and_scope_drop_order() {
           DROP_BASE + 220, DROP_BASE + 210, FREE_BASE + 20, DROP_BASE + 190, CAUGHT],
         0,
     );
+
+    reset_events();
+    let returned = result_error_replacement(source.as_str());
+    assert!(matches!(&returned, Err(value) if value.id == 290));
+    assert_events(&[ALLOC_BASE + 41, FREE_BASE + 41, DROP_BASE + 280,
+                    DROP_BASE + 270, DROP_BASE + 260], 0);
+    drop(returned);
+    assert_events(&[ALLOC_BASE + 41, FREE_BASE + 41, DROP_BASE + 280,
+                    DROP_BASE + 270, DROP_BASE + 260, DROP_BASE + 290], 0);
+
+    reset_events();
+    PANIC_MARKER_ID.store(280, Ordering::Relaxed);
+    let result = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
+        result_error_replacement(source.as_str())
+    }));
+    assert!(result.is_err());
+    record(CAUGHT);
+    assert_events(&[ALLOC_BASE + 41, FREE_BASE + 41, DROP_BASE + 280,
+                    DROP_BASE + 270, DROP_BASE + 290, DROP_BASE + 260, CAUGHT], 0);
+
+    reset_events();
+    let returned = option_replacement(source.as_str());
+    assert_eq!(returned.as_deref(), Some(&[source.as_str()][..]));
+    assert_events(&[ALLOC_BASE + 42, FREE_BASE + 42, ALLOC_BASE + 43,
+                    DROP_BASE + 310, DROP_BASE + 300], 1);
+    drop(returned);
+    assert_events(&[ALLOC_BASE + 42, FREE_BASE + 42, ALLOC_BASE + 43,
+                    DROP_BASE + 310, DROP_BASE + 300, FREE_BASE + 43], 0);
+
+    for count in [0, 1, 3, 10] {
+        reset_events();
+        let returned = loop_replacement(source.as_str(), count);
+        assert_eq!(returned, vec![source.as_str()]);
+        let mut expected = Vec::new();
+        for index in 0..count {
+            expected.push(ALLOC_BASE + 48);
+            if index != 0 { expected.push(FREE_BASE + 49); }
+            expected.extend([ALLOC_BASE + 49, FREE_BASE + 48, DROP_BASE + 370]);
+        }
+        expected.extend([DROP_BASE + 380, DROP_BASE + 360]);
+        assert_events(&expected, usize::from(count != 0));
+        drop(returned);
+        if count != 0 { expected.push(FREE_BASE + 49); }
+        assert_events(&expected, 0);
+    }
+
+    // A never-polled Future has not initialized any source-local resource.
+    reset_events();
+    drop(async_replacement(source.as_str(), false, false));
+    assert_events(&[], 0);
+
+    // Cancel before restoration: the local borrow and its owner must stay
+    // together in the suspended Future, then be destroyed in source order.
+    reset_events();
+    PAUSE_READY.store(false, Ordering::Relaxed);
+    let mut future = Box::pin(async_before_replacement(source.as_str()));
+    assert!(poll_once(future.as_mut()).is_pending());
+    assert_events(&[ALLOC_BASE + 46], 1);
+    drop(future);
+    assert_events(&[ALLOC_BASE + 46, DROP_BASE + 350, FREE_BASE + 46, DROP_BASE + 340], 0);
+
+    // Cancel after restoration. No executor sleeps or timing races are used.
+    reset_events();
+    PAUSE_READY.store(false, Ordering::Relaxed);
+    let mut future = Box::pin(async_replacement(source.as_str(), false, false));
+    assert!(poll_once(future.as_mut()).is_pending());
+    let initialized = [ALLOC_BASE + 44, ALLOC_BASE + 45, FREE_BASE + 44];
+    assert_events(&initialized, 1);
+    drop(future);
+    assert_events(&[ALLOC_BASE + 44, ALLOC_BASE + 45, FREE_BASE + 44,
+                    DROP_BASE + 330, FREE_BASE + 45, DROP_BASE + 320], 0);
+
+    reset_events();
+    PAUSE_READY.store(false, Ordering::Relaxed);
+    let mut future = Box::pin(async_replacement(source.as_str(), false, false));
+    assert!(poll_once(future.as_mut()).is_pending());
+    PAUSE_READY.store(true, Ordering::Relaxed);
+    let returned = match poll_once(future.as_mut()) {
+        ::std::task::Poll::Ready(Ok(value)) => value,
+        _ => panic!("resumed Future did not return its restored container"),
+    };
+    assert_eq!(returned, vec![source.as_str()]);
+    let expected = [ALLOC_BASE + 44, ALLOC_BASE + 45, FREE_BASE + 44,
+                    DROP_BASE + 330, DROP_BASE + 320];
+    assert_events(&expected, 1);
+    drop(future);
+    assert_events(&expected, 1);
+    drop(returned);
+    assert_events(&[ALLOC_BASE + 44, ALLOC_BASE + 45, FREE_BASE + 44,
+                    DROP_BASE + 330, DROP_BASE + 320, FREE_BASE + 45], 0);
+
+    reset_events();
+    PAUSE_READY.store(false, Ordering::Relaxed);
+    let mut future = Box::pin(async_replacement(source.as_str(), false, true));
+    assert!(poll_once(future.as_mut()).is_pending());
+    PAUSE_READY.store(true, Ordering::Relaxed);
+    assert!(matches!(poll_once(future.as_mut()), ::std::task::Poll::Ready(Err(7))));
+    let expected = [ALLOC_BASE + 44, ALLOC_BASE + 45, FREE_BASE + 44,
+                    CHECKPOINT, DROP_BASE + 330, FREE_BASE + 45, DROP_BASE + 320];
+    assert_events(&expected, 0);
+    drop(future);
+    assert_events(&expected, 0);
+
+    reset_events();
+    PAUSE_READY.store(false, Ordering::Relaxed);
+    let mut future = Box::pin(async_replacement(source.as_str(), true, false));
+    assert!(poll_once(future.as_mut()).is_pending());
+    PAUSE_READY.store(true, Ordering::Relaxed);
+    let caught = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
+        poll_once(future.as_mut())
+    }));
+    assert!(caught.is_err());
+    record(CAUGHT);
+    let expected = [ALLOC_BASE + 44, ALLOC_BASE + 45, FREE_BASE + 44,
+                    CRASH, DROP_BASE + 330, FREE_BASE + 45, DROP_BASE + 320, CAUGHT];
+    assert_events(&expected, 0);
+    drop(future);
+    assert_events(&expected, 0);
 }
 "#;

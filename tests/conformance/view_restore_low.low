@@ -1,0 +1,6 @@
+fn identity(text: view[str]) -> view[str] {
+    let local: str = copy(text);
+    let alias: view[str] = view(local);
+    alias = text;
+    return alias;
+}

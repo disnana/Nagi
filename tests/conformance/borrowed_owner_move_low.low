@@ -1,0 +1,9 @@
+fn consume(text: str) -> i64 {
+    return len(text);
+}
+fn evaluate() -> i64 {
+    let owner: str = "Nagi日本語";
+    let alias: view[str] = view(owner);
+    let result: i64 = consume(owner);
+    return len(alias) + result;
+}

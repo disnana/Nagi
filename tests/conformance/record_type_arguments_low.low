@@ -1,0 +1,2 @@
+record Point { x: i64; }
+fn main() { let point = Point[i64](x=7); }

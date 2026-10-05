@@ -1,0 +1,7 @@
+def consume(text: str) -> i64:
+    return len(text)
+def evaluate() -> i64:
+    owner = "Nagi日本語"
+    alias = view(owner)
+    result = consume(owner)
+    return len(alias) + result

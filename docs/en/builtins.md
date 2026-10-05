@@ -16,6 +16,8 @@ These functions need no imports. `T` stands for a supported type. User-defined g
 
 `read_line` displays pending output, then reads a line and removes its trailing newline. It retains other whitespace and returns an empty string at the end of input. It blocks while waiting for input, so use it in console applications.
 
+`env` evaluates its second argument only when the variable is unavailable. When a value exists, a function constructing the default is not called. See [Unreleased](../../CHANGELOG.md) for the generation fix for defaults containing `try` or `await`.
+
 ## Strings, lists, and borrowing
 
 | Call | Argument types, in order | Return type | Usage and notes |

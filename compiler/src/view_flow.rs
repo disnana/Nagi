@@ -1,17 +1,14 @@
-//! Flow-sensitive lowering for owning Lists containing borrowed views.
+//! Structured lowering for owning values that carry borrowed views.
 //!
-//! A Vec assignment must drop its previous allocation at the
-//! assignment point, while Rust needs separate local lifetimes for a
-//! short-lived borrowed version and a later restored version. This planner
-//! gives each checked assignment a slot at the original binding's lexical
-//! position and joins continuing branches with move-only phi transfers.
-//! Return observers follow checked value dependencies and mutation inputs.
-//! Scalar observations do not carry a borrowed lifetime. Candidate-free
-//! loop regions stay opaque; backedge lowering is intentionally not modeled.
+//! Each checked version has private optional storage at its original cleanup
+//! anchor, with an independent Rust lifetime. Ownership moves and borrowed
+//! places use checker-decided operand roles. Ordinary Rust assignment/drop
+//! handles conditional initialization, destruction, and unwinding. Structured
+//! branches and loop edges transfer storage without cloning its payload.
 
 use crate::ast::{
-    block_returns, expression_names, BindingId, Expr, FlowOrigin, Function, NameResolution, Stmt,
-    Type, ViewListBindingSnapshot, E, S,
+    block_returns, BindingId, Expr, ExprUseId, ExprUseMode, FlowExprUse, FlowOrigin, Function,
+    NameResolution, Stmt, Type, ViewListBindingSnapshot, E, S,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -22,7 +19,7 @@ pub(crate) enum Action {
         ty: Type,
     },
     /// Reset-and-drop is valid even when Rust's drop flag says the slot was
-    /// moved on the current path. `Vec::new` does not allocate a buffer.
+    /// moved on the current path. `None` requires no payload or allocation.
     Retire {
         slot: String,
     },
@@ -32,8 +29,13 @@ pub(crate) enum Action {
         from: String,
         to: String,
     },
+    /// Put an ordinary checked value into private optional storage.
+    Install {
+        from: String,
+        to: String,
+    },
     /// A branch moved the current value before a join. Initialize the phi with
-    /// an empty Vec so later transfers and retires have a definite slot.
+    /// absent storage so later transfers and retires have a definite slot.
     InitEmpty {
         slot: String,
     },
@@ -53,6 +55,8 @@ pub(crate) struct Node {
     pub after: Vec<Action>,
     pub children: Vec<Block>,
     pub assignment: Option<Assignment>,
+    pub condition_before: Vec<Action>,
+    pub condition_exit: Vec<Action>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -67,6 +71,8 @@ pub(crate) struct Block {
 pub(crate) struct Plan {
     pub body: Block,
     pub parameter_actions: BTreeMap<String, Vec<Action>>,
+    pub storage_slots: BTreeSet<String>,
+    pub expression_uses: BTreeMap<ExprUseId, ExprUseMode>,
 }
 
 #[derive(Clone)]
@@ -89,14 +95,14 @@ enum ValueState {
         slot: String,
         retained: BTreeSet<String>,
     },
-    /// The slot is initialized on every path, but may contain the empty Vec
+    /// The slot is initialized on every path, but may contain absent storage
     /// on paths where the source binding was moved.
     MaybeMoved {
         slot: String,
         retained: BTreeSet<String>,
     },
     /// Checker moves include short-circuit consumption. These slots can still
-    /// own a buffer on runtime paths that skipped the consuming expression.
+    /// own a value on runtime paths that skipped the consuming expression.
     Moved { retained: BTreeSet<String> },
 }
 
@@ -135,6 +141,13 @@ struct Builder {
     candidates: HashMap<BindingId, Candidate>,
     slots: BTreeMap<BindingId, Vec<String>>,
     next_temp: usize,
+}
+
+struct LoopPlan {
+    body: Block,
+    exit_state: HashMap<BindingId, ValueState>,
+    condition_before: Vec<Action>,
+    condition_exit: Vec<Action>,
 }
 
 fn transient_origin(origin: &FlowOrigin, parameter_views: &HashSet<BindingId>) -> bool {
@@ -264,8 +277,8 @@ fn collect_candidates(
                     collect_candidates(&arm.body, parameter_views, facts);
                 }
             }
-            S::Return(None) | S::Return(Some(_)) | S::Expr(_) | S::Spawn(_) | S::Scope(..) => {}
-            S::While(_, body) | S::For(_, _, body) => {
+            S::Return(None) | S::Return(Some(_)) | S::Expr(_) | S::Spawn(_) => {}
+            S::While(_, body) | S::For(_, _, body) | S::Scope(body) => {
                 collect_candidates(body, parameter_views, facts)
             }
         }
@@ -300,8 +313,15 @@ fn find_declarations(statements: &[Stmt], declarations: &mut HashSet<BindingId>)
                     find_declarations(&arm.body, declarations);
                 }
             }
-            S::Assign { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) | S::Scope(..) => {}
-            S::While(_, body) | S::For(_, _, body) => find_declarations(body, declarations),
+            S::For(_, _, body) => {
+                declarations.insert(BindingId {
+                    line: statement.line,
+                    token: statement.binding_span.unwrap_or_default().start,
+                });
+                find_declarations(body, declarations);
+            }
+            S::Assign { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => {}
+            S::While(_, body) | S::Scope(body) => find_declarations(body, declarations),
         }
     }
 }
@@ -530,10 +550,12 @@ impl Builder {
                 after: Vec::new(),
                 children: Vec::new(),
                 assignment: None,
+                condition_before: Vec::new(),
+                condition_exit: Vec::new(),
             };
 
-            // Mutating contents changes the lifetime carried by the Vec type
-            // without replacing its allocation. Move it to an independent
+            // Mutating contents changes the lifetime carried by the checked type
+            // without replacing its allocation. Move its storage to an independent
             // slot before evaluating the expression, at the same cleanup
             // anchor. This also preserves changes overwritten by an assignment
             // later in the same RHS. Branch statements own separate events.
@@ -543,6 +565,7 @@ impl Builder {
                 .filter(|mutation| !mutation.added_origins.is_empty())
                 .map(|mutation| mutation.binding)
                 .filter(|binding| self.candidates.contains_key(binding))
+                .filter(|_| !matches!(source.kind, S::While(..)))
                 .collect();
             for binding in mutated {
                 let old = state.get(&binding).cloned().ok_or(())?;
@@ -662,8 +685,43 @@ impl Builder {
                         &mut node.children,
                     );
                 }
-                S::While(..) | S::For(..) if self.independent_region(source) => {}
-                S::While(..) | S::For(..) | S::Scope(..) => return Err(()),
+                S::While(condition, body) => {
+                    let region =
+                        self.loop_block(source, condition, body, &mut node.before, state)?;
+                    node.children.push(region.body);
+                    node.condition_before = region.condition_before;
+                    node.condition_exit = region.condition_exit;
+                    state = region.exit_state;
+                }
+                S::For(_, iterator, body) => {
+                    self.apply_after_facts(
+                        &facts.before,
+                        &facts.loop_entry.as_ref().ok_or(())?.header,
+                        &mut state,
+                    );
+                    let mut unused = iterator.clone();
+                    let region =
+                        self.loop_block(source, &mut unused, body, &mut node.before, state)?;
+                    // Header moves precede evaluation of the Rust iterator.
+                    // Borrow its header place; consumed inputs instead keep
+                    // their preheader place until the iterator consumes it.
+                    let mut iterator_names = names.clone();
+                    iterator_names.extend(self.current_names(&facts.before, &region.exit_state));
+                    Self::rewrite_expr(iterator, &iterator_names);
+                    node.children.push(region.body);
+                    state = region.exit_state;
+                }
+                S::Scope(body) => {
+                    let entry = state.clone();
+                    let (child, child_state) = self.block(body, entry.clone())?;
+                    node.children.push(child);
+                    state = self.join_states(
+                        &entry,
+                        &facts.after,
+                        &[(0, child_state)],
+                        &mut node.children,
+                    );
+                }
             }
 
             planned.statements.push(node);
@@ -672,61 +730,216 @@ impl Builder {
         Ok((planned, state))
     }
 
-    /// Preserve an opaque region only when it is completely independent of
-    /// the bindings being versioned. Inspect source uses, not snapshot equality:
-    /// reads and indexed borrows can leave ownership facts unchanged.
-    fn independent_region(&self, source: &Stmt) -> bool {
-        fn visit(statement: &Stmt, names: &mut HashSet<String>) {
-            match &statement.kind {
-                S::Assign { name, value, .. } => {
-                    names.insert(name.clone());
-                    expression_names(value, names);
-                }
-                S::Return(Some(expr)) | S::Expr(expr) | S::Spawn(expr) => {
-                    expression_names(expr, names)
-                }
-                S::If(expr, a, b) => {
-                    expression_names(expr, names);
-                    for statement in a.iter().chain(b) {
-                        visit(statement, names);
-                    }
-                }
-                S::Match(expr, arms) => {
-                    expression_names(expr, names);
-                    for arm in arms {
-                        for binding in arm.pattern.bindings() {
-                            if let Some(name) = &binding.name {
-                                names.insert(name.clone());
-                            }
-                        }
-                        for statement in &arm.body {
-                            visit(statement, names);
-                        }
-                    }
-                }
-                S::While(expr, body) | S::For(_, expr, body) => {
-                    expression_names(expr, names);
-                    for statement in body {
-                        visit(statement, names);
-                    }
-                }
-                S::Scope(body) => {
-                    for statement in body {
-                        visit(statement, names);
-                    }
-                }
-                S::Return(None) => {}
+    fn loop_block(
+        &mut self,
+        source: &Stmt,
+        condition: &mut Expr,
+        body: &[Stmt],
+        before: &mut Vec<Action>,
+        state: HashMap<BindingId, ValueState>,
+    ) -> Result<LoopPlan, ()> {
+        let facts = source.flow.as_ref().ok_or(())?;
+        let loop_facts = facts.loop_entry.as_ref().ok_or(())?;
+        let outer: BTreeSet<_> = loop_facts
+            .header
+            .iter()
+            .map(|snapshot| snapshot.binding)
+            .filter(|binding| state.contains_key(binding))
+            .collect();
+        let mut header_state = state.clone();
+        let mut headers = BTreeMap::new();
+        let mut slot_start = BTreeMap::new();
+        for binding in &outer {
+            slot_start.insert(*binding, self.slots.get(binding).map_or(0, Vec::len));
+            let old = state.get(binding).ok_or(())?;
+            let header = self.fresh_slot(*binding);
+            before.push(match Self::state_slot(old) {
+                Some(from) => Action::Transfer {
+                    from: from.to_owned(),
+                    to: header.clone(),
+                },
+                None => Action::InitEmpty {
+                    slot: header.clone(),
+                },
+            });
+            headers.insert(*binding, header.clone());
+            header_state.insert(
+                *binding,
+                match old {
+                    ValueState::Active { retained, .. } => ValueState::Active {
+                        slot: header,
+                        retained: retained.clone(),
+                    },
+                    ValueState::MaybeMoved { retained, .. } => ValueState::MaybeMoved {
+                        slot: header,
+                        retained: retained.clone(),
+                    },
+                    ValueState::Moved { retained } => ValueState::Moved {
+                        retained: retained.clone(),
+                    },
+                },
+            );
+        }
+        let mut condition_before = Vec::new();
+        if matches!(source.kind, S::While(..)) {
+            let mutations: BTreeSet<_> = facts
+                .content_mutations
+                .iter()
+                .filter(|mutation| !mutation.added_origins.is_empty())
+                .map(|mutation| mutation.binding)
+                .filter(|binding| self.candidates.contains_key(binding))
+                .collect();
+            for binding in mutations {
+                let old = header_state.get(&binding).ok_or(())?.clone();
+                let from = Self::state_slot(&old).ok_or(())?.to_owned();
+                let slot = self.fresh_slot(binding);
+                condition_before.push(Action::Transfer {
+                    from,
+                    to: slot.clone(),
+                });
+                header_state.insert(
+                    binding,
+                    ValueState::Active {
+                        slot,
+                        retained: old.retained().clone(),
+                    },
+                );
             }
-            if let S::For(name, _, _) = &statement.kind {
-                names.insert(name.clone());
+            Self::rewrite_expr(
+                condition,
+                &self.current_names(&loop_facts.header, &header_state),
+            );
+        }
+        let mut entry = self.condition_state(&loop_facts.header, &loop_facts.body, &header_state);
+        let mut binding_actions = Vec::new();
+        if let S::For(name, _, _) = &source.kind {
+            let binding = BindingId {
+                line: source.line,
+                token: source.binding_span.unwrap_or_default().start,
+            };
+            if self.candidates.contains_key(&binding) {
+                let slot = self.fresh_slot(binding);
+                entry.insert(binding, ValueState::active(slot.clone()));
+                binding_actions.push(Action::DeclareSlot {
+                    name: slot.clone(),
+                    ty: self.candidates[&binding].ty.clone(),
+                });
+                binding_actions.push(Action::Install {
+                    from: name.clone(),
+                    to: slot.clone(),
+                });
             }
         }
-        let mut names = HashSet::new();
-        visit(source, &mut names);
-        !self
-            .candidates
-            .values()
-            .any(|candidate| names.contains(&candidate.name))
+        let (mut child, backedge) = self.block(body, entry.clone())?;
+        child.entry.extend(binding_actions);
+        for binding in &outer {
+            if child.terminal {
+                continue;
+            }
+            let value = backedge
+                .get(binding)
+                .or_else(|| entry.get(binding))
+                .ok_or(())?;
+            let header = &headers[binding];
+            if Self::state_slot(value) != Some(header.as_str()) {
+                child.tail.push(match Self::state_slot(value) {
+                    Some(from) => Action::Transfer {
+                        from: from.to_owned(),
+                        to: header.clone(),
+                    },
+                    None => Action::InitEmpty {
+                        slot: header.clone(),
+                    },
+                });
+            }
+        }
+        let mut exit_actions = Vec::new();
+        let mut exit_state = if matches!(source.kind, S::While(..)) {
+            entry
+        } else {
+            header_state
+        };
+        if matches!(source.kind, S::While(..)) {
+            for binding in &outer {
+                let value = exit_state.get(binding).ok_or(())?.clone();
+                if let Some(from) = Self::state_slot(&value) {
+                    let slot = self.fresh_slot(*binding);
+                    exit_actions.push(Action::Transfer {
+                        from: from.to_owned(),
+                        to: slot.clone(),
+                    });
+                    exit_state.insert(
+                        *binding,
+                        ValueState::Active {
+                            slot,
+                            retained: value.retained().clone(),
+                        },
+                    );
+                }
+            }
+        }
+        // A source statement is reused on every iteration. A conservatively
+        // moved value can remain in any earlier iteration's storage when a
+        // short-circuit consumer was skipped. Reassignment resets those places
+        // using Rust's ordinary drop flags, without a runtime loop-state model.
+        let reused: BTreeMap<_, _> = outer
+            .iter()
+            .map(|binding| {
+                (
+                    *binding,
+                    self.slots[binding][slot_start[binding]..].to_vec(),
+                )
+            })
+            .collect();
+        fn retire_reused(block: &mut Block, reused: &BTreeMap<BindingId, Vec<String>>) {
+            for node in &mut block.statements {
+                if let Some(assignment) = &mut node.assignment {
+                    if let Some(slots) = node
+                        .stmt
+                        .flow
+                        .as_ref()
+                        .and_then(|flow| flow.assignment)
+                        .and_then(|fact| reused.get(&fact.target))
+                    {
+                        assignment.retire_slots.extend(
+                            slots
+                                .iter()
+                                .filter(|slot| **slot != assignment.new_slot)
+                                .cloned(),
+                        );
+                        assignment.retire_slots.sort();
+                        assignment.retire_slots.dedup();
+                    }
+                }
+                for child in &mut node.children {
+                    retire_reused(child, reused);
+                }
+            }
+        }
+        retire_reused(&mut child, &reused);
+        for (binding, slots) in reused {
+            if let Some(value) = exit_state.get_mut(&binding) {
+                let current = Self::state_slot(value).map(str::to_owned);
+                match value {
+                    ValueState::Active { retained, .. }
+                    | ValueState::MaybeMoved { retained, .. }
+                    | ValueState::Moved { retained } => {
+                        retained.extend(
+                            slots
+                                .into_iter()
+                                .filter(|slot| Some(slot) != current.as_ref()),
+                        );
+                    }
+                }
+            }
+        }
+        self.apply_after_facts(&loop_facts.body, &facts.after, &mut exit_state);
+        Ok(LoopPlan {
+            body: child,
+            exit_state,
+            condition_before,
+            condition_exit: exit_actions,
+        })
     }
 
     fn condition_state(
@@ -819,7 +1032,7 @@ fn local_declarations(block: &mut Block, builder: &Builder) {
                                 name: slots[0].clone(),
                                 ty: ty.clone(),
                             });
-                            child.entry.push(Action::Transfer {
+                            child.entry.push(Action::Install {
                                 from: name.clone(),
                                 to: slots[0].clone(),
                             });
@@ -836,18 +1049,38 @@ fn local_declarations(block: &mut Block, builder: &Builder) {
                 }
             }
         }
+        if let S::For(..) = &node.stmt.kind {
+            let binding = BindingId {
+                line: node.stmt.line,
+                token: node.stmt.binding_span.unwrap_or_default().start,
+            };
+            if let Some(slots) = builder.slots.get(&binding) {
+                node.children[0]
+                    .entry
+                    .extend(
+                        slots
+                            .iter()
+                            .skip(1)
+                            .cloned()
+                            .map(|name| Action::DeclareSlot {
+                                name,
+                                ty: builder.candidates[&binding].ty.clone(),
+                            }),
+                    );
+            }
+        }
         for child in &mut node.children {
             local_declarations(child, builder);
         }
     }
 }
 
-pub(crate) fn plan(function: &Function) -> Option<Plan> {
-    if function.asynchronous || !function.ret.contains_view() {
-        return None;
+pub(crate) fn plan(function: &Function) -> Result<Option<Plan>, String> {
+    if !function.ret.contains_view() {
+        return Ok(None);
     }
     if !crate::ast::supports_view_flow(&function.body) {
-        return None;
+        return Ok(None);
     }
 
     let parameter_ids = parameter_bindings(function);
@@ -879,7 +1112,7 @@ pub(crate) fn plan(function: &Function) -> Option<Plan> {
         })
         .collect();
     if candidates.is_empty() {
-        return None;
+        return Ok(None);
     }
 
     let mut builder = Builder::new(candidates);
@@ -903,7 +1136,7 @@ pub(crate) fn plan(function: &Function) -> Option<Plan> {
             name: slot.clone(),
             ty: builder.candidates[&binding].ty.clone(),
         });
-        actions.push(Action::Transfer {
+        actions.push(Action::Install {
             from: name,
             to: slot.clone(),
         });
@@ -917,14 +1150,22 @@ pub(crate) fn plan(function: &Function) -> Option<Plan> {
         }
     }
 
-    let (mut body, _) = builder.block(&function.body, state).ok()?;
+    let internal_error = || {
+        format!(
+            "line {}: internal owning-view lowering error in {}: incomplete checked flow facts",
+            function.line, function.name
+        )
+    };
+    let (mut body, _) = builder
+        .block(&function.body, state)
+        .map_err(|()| internal_error())?;
     local_declarations(&mut body, &builder);
     for (binding, slots) in &builder.slots {
         if !builder.candidates[binding].parameter {
             continue;
         }
         let name = &builder.candidates[binding].name;
-        let actions = parameter_actions.get_mut(name)?;
+        let actions = parameter_actions.get_mut(name).ok_or_else(internal_error)?;
         actions.extend(
             slots
                 .iter()
@@ -937,8 +1178,105 @@ pub(crate) fn plan(function: &Function) -> Option<Plan> {
         );
     }
 
-    Some(Plan {
+    let storage_bindings: BTreeMap<_, _> = builder
+        .slots
+        .iter()
+        .flat_map(|(binding, slots)| slots.iter().map(|slot| (slot.clone(), *binding)))
+        .collect();
+    let storage_slots = storage_bindings.keys().cloned().collect();
+    let mut expression_uses = BTreeMap::new();
+    fn uses(statements: &[Stmt], result: &mut BTreeMap<ExprUseId, FlowExprUse>) {
+        for stmt in statements {
+            if let Some(flow) = &stmt.flow {
+                result.extend(
+                    flow.expression_uses
+                        .iter()
+                        .map(|use_| (use_.expression, use_.clone())),
+                );
+            }
+            match &stmt.kind {
+                S::If(_, a, b) => {
+                    uses(a, result);
+                    uses(b, result);
+                }
+                S::Match(_, arms) => {
+                    for arm in arms {
+                        uses(&arm.body, result);
+                    }
+                }
+                S::While(_, body) | S::For(_, _, body) | S::Scope(body) => uses(body, result),
+                _ => {}
+            }
+        }
+    }
+    uses(&function.body, &mut expression_uses);
+    fn validate_expr(
+        expr: &Expr,
+        storage: &BTreeMap<String, BindingId>,
+        uses: &BTreeMap<ExprUseId, FlowExprUse>,
+    ) -> Result<(), ()> {
+        match &expr.kind {
+            E::Name(name)
+                if storage.get(name).is_some_and(|binding| {
+                    uses.get(&ExprUseId::of(expr))
+                        .is_none_or(|use_| use_.binding != *binding)
+                }) =>
+            {
+                return Err(())
+            }
+            E::Binary(a, _, b) | E::Index(a, b) => {
+                validate_expr(a, storage, uses)?;
+                validate_expr(b, storage, uses)?;
+            }
+            E::Unary(_, value) | E::Field(value, _) | E::Await(value) | E::Try(value) => {
+                validate_expr(value, storage, uses)?
+            }
+            E::Call(_, _, values) | E::List(values) => {
+                for value in values {
+                    validate_expr(value, storage, uses)?;
+                }
+            }
+            E::Record(_, fields) => {
+                for (_, value) in fields {
+                    validate_expr(value, storage, uses)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+    fn validate(
+        block: &Block,
+        storage: &BTreeMap<String, BindingId>,
+        uses: &BTreeMap<ExprUseId, FlowExprUse>,
+    ) -> Result<(), ()> {
+        for node in &block.statements {
+            match &node.stmt.kind {
+                S::Assign { value, .. }
+                | S::Expr(value)
+                | S::Spawn(value)
+                | S::Return(Some(value))
+                | S::If(value, ..)
+                | S::Match(value, ..)
+                | S::While(value, ..)
+                | S::For(_, value, _) => validate_expr(value, storage, uses)?,
+                _ => {}
+            }
+            for child in &node.children {
+                validate(child, storage, uses)?;
+            }
+        }
+        Ok(())
+    }
+    validate(&body, &storage_bindings, &expression_uses).map_err(|()| internal_error())?;
+    let expression_uses = expression_uses
+        .into_iter()
+        .map(|(id, use_)| (id, use_.mode))
+        .collect();
+    Ok(Some(Plan {
         body,
         parameter_actions,
-    })
+        storage_slots,
+        expression_uses,
+    }))
 }

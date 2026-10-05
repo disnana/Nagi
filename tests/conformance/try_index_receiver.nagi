@@ -1,0 +1,4 @@
+def numbers() -> Result[List[i64], i64]:
+    return ok([7])
+def evaluate() -> Result[i64, i64]:
+    return ok((try numbers())[0])

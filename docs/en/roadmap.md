@@ -15,6 +15,8 @@ This page describes the priorities for future development. Release dates remain 
 
 See the [library and Rust integration proposal](library-design.md). API names and some resource cleanup contracts remain undecided.
 
+Compiler verification combines known pass/fail examples with bounded generated programs through High, saved Low, and Rust, plus mutation tests. Keep tested cases separate from unsupported combinations and preserve accepted-then-rejected cases as regressions.
+
 ## Low scope
 
 Preserve existing Low code, brace syntax, inspection of generated output, and function replacement. Prioritize High and Rust integration. Plans to expand Low into an independent systems language with pointers, layout, unsafe syntax, C ABI, and SIMD are paused.

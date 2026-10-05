@@ -1,0 +1,3 @@
+def pass_result(value: owned[owned[Result[i64, i64]]]) -> owned[owned[Result[i64, i64]]]:
+    saved = value
+    return saved

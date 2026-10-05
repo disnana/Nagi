@@ -1,0 +1,79 @@
+# Compiler conformance / regression / fuzz smoke
+
+Nagi 0.1 betaの既知不具合再発を小さな再現sourceと段階別oracleで防ぐ。仕様判断は explicit contracts > accepted decisions > DESIGN > reference > tests > code。現在のcheckerのacceptだけを正例の根拠にはしない。
+
+## 分類と実file
+
+| 分類 | 必須の観測 | 主な実file |
+| --- | --- | --- |
+| Unit | lexer/parser/checkerの局所契約 | compiler/src/tests.rs, compiler/tests/enum_parser.rs |
+| Compile-pass | checker受理後に実Rust compile成功 | compiler/tests/conformance.rs, compiler/tests/copy_capabilities.rs |
+| Compile-fail | 指定stageで拒否、panicを成功扱いしない | tests/conformance/*negation*, *temporary_view*, *shared_field_move*, *owned_result_discard* |
+| Diagnostic | 期待診断意味と元source line | compiler/tests/build_diagnostics.rs, compiler/tests/sql_check.rs, conformance.rs |
+| High-Low | 保存Lowと手書きLowの受理・観測同値 | compiler/tests/frontend_contracts.rs, view_flow_completion.rs, conformance.rs |
+| Backend | emit成功後の実rustc/Cargo build | compiler/tests/codegen.rs, http_entrypoint.rs, conformance.rs |
+| Runtime | 値・byte列・Drop・panic unwind | compiler/tests/literal_contracts.rs, view_container_drop.rs |
+| Integration | 実Cargo/extern/socket/SQLiteとNagi位置 | compiler/tests/shared_field_moves.rs, static_callback_views.rs, sql_check.rs; runtime/src/http/panic_tests.rs |
+| Adversarial | overflow/zero division、loop backedge、panic/取消 | compiler/tests/integer_zero_division.rs, scope_runtime_contract.rs; runtime/src/actor/lifecycle_adversarial_tests.rs |
+| Fuzz | 任意text mutationのparse/check panic、check後Low/emit | fuzz/smoke.rs, compiler/tests/support/conformance.rs |
+| Property / 限定differential | bounded生成と独立host oracle、High/保存Low二経路 | compiler/tests/support/conformance.rs, compiler/tests/conformance.rs |
+
+## 実行
+
+```sh
+python3 scripts/verify_compiler_contracts.py
+cargo test --locked -p nagic --test conformance
+cargo run --locked -p nagic --example fuzz-smoke
+# 登録検査だけではHTTP/SQL/Cargo統合の保証にならない。実harnessを順番に実行する:
+python3 scripts/verify_compiler_contracts.py --run-linked
+```
+
+通常CIのconformanceは外部corpus31件＋限定生成24件。正常経路では全正例のHigh直接生成Rustと保存Low経由Rustをmoduleで隔離し、1回の `rustc --test` とnative実行にまとめる。High function callの `crate::` rootはcase moduleへ移し、生成string literal内のbytesを保持する。これはstd-only corpus用の隔離で、extern adapter/HTTP/SQLは専用harnessを使う。runtime依存を小runnerでstubして保証にしない。
+
+`NAGI_CONFORMANCE_CASES` は1..2048（default 24）、`NAGI_CONFORMANCE_SEED` は1..u64::MAX（default 305419896）。`NAGI_FUZZ_MUTATIONS` は1..100000（default 1000）、`NAGI_FUZZ_CASES` は1..2048（default 16）、`NAGI_FUZZ_SEED` は1..u64::MAX（default 305419896）。不正なenv値は失敗とし、黙ってdefaultに戻さない。`RUSTC`でnative compilerを指定できる。
+
+scheduleの例:
+
+```sh
+NAGI_CONFORMANCE_CASES=256 NAGI_CONFORMANCE_SEED=305419896 cargo test --locked -p nagic --test conformance
+NAGI_CONFORMANCE_CASES=256 NAGI_CONFORMANCE_SEED=3735928559 cargo test --locked -p nagic --test conformance
+NAGI_FUZZ_MUTATIONS=10000 NAGI_FUZZ_CASES=128 NAGI_FUZZ_SEED=305419896 cargo run --locked -p nagic --example fuzz-smoke
+```
+
+seedを保存し、失敗したcase indexを含む件数以上で同じcommandを再実行する。`NAGI_FAILURE_DIR` をCI artifact uploadの対象directoryに指定する（未指定ならOS tempの `nagi-conformance-failures`）。PRとscheduleは同じrunnerとoracleを使い、case数とseedだけを変える。
+
+## Oracleと段階境界
+
+`tests/conformance/corpus.json` はsource path、High/Low、compile-pass/run-pass/reject:stage、期待診断substring、期待line、native assertionを指定する。negativeは対象の初期parse/checkで拒否することに加え、診断意味とsource行も必須。panicや異なる段階での拒否をcompile-fail成功としない。正例はHigh parse/check → Low pretty → Low parse/check → High/Low各Rust生成 → rustc → 必要なnative実行まで全て必須で、後段拒否は保存して失敗する。
+
+生成は10種のaccepted bounded grammarを順番に使用し、seedで値を変える。i64算術/比較/list index/lenだけでなく、view copyと条件rebind、loop内local ownerから復元、List[view[str]] move/reinit、nested Result matchを含む。overflow、zero division、無限loopを作らない範囲を生成する。整数演算の期待値は独立host Rust計算、文字列長は明示byte数。High/Low両結果をこの期待値へ照合する。High/Lowは共通frontend/backendを使うので独立compiler間のdifferential testではなく、限定的なmetamorphic/観測同値検査である。純粋な生成にはsystem/environment依存や未対応owned[T]を混ぜない。
+
+任意text mutationは初期parse/checkの通常拒否を許すがpanicを許さない。check成功後はLow再parse/checkとRust emit成功まで要求する。accepted件数とparse/check拒否件数を分けて報告する。任意mutationを大量rustcへ投げず、native段階は限定生成caseだけにする。以前同じsmokeに混ざっていたSerdeJSON mutationはNagi compilerの検証ではないので削除した。
+
+## 失敗の保存と縮小
+
+共通failure recordは `name/source/seed/stage/expected/diagnostic/high/oracle`。JSON、元source、`.min.source`、再計算したoracle付き`.min.case.json` を保存する。frontend panic/errorは現在stageを捕捉する。backend/runtime失敗は通常batchから最大32caseへ個別再現を探す。説明できなければname=batch、expected=rust-batch-run-passで実Rust batchを保存し、先頭negativeのsourceへ誤帰属しない。rustcは30秒、nativeは10秒のdeadlineでkill/reapし、出力はfileへ流してpipe詰まりを避ける。timeoutは個別再現/縮小を繰り返さない。
+
+縮小はUTF-8の境界を守るchunk削除で、同じstageとdiagnostic signatureの再現だけを採用する。frontendは行番号を除いた診断内容、rustcは最初のerror code、native oracleの等値assert失敗はそのassert種別を保持する。診断が別のsyntax errorに変わったcandidateは採用しない。negativeは対象の拒否構文/元行も保持し、その行を削ってvalid programへ変える縮小を認めない。frontendは96試行、backend/nativeは8試行の上限。runtime失敗の生成caseはa/b/cパラメータだけを縮め、独立host期待値を再計算する。固定corpusのruntime sourceは意味保存を保証できないため任意削除しない。これはbudget内の縮小で、数学的な最小sourceを保証しない。再現しなければ元sourceをそのまま残す。seedは固定する。oracleは生成パラメータを縮小した場合だけ独立計算で更新する。
+
+rustc段階の縮小は、oracleを除いた生成Rustだけでも元と同じerror codeで失敗する場合に限る。候補もoracleなしで検査し、テスト関数や期待値の参照先を削除したことで生じるE0425をコンパイラの反例にしない。oracle依存の失敗は元sourceを保持する。
+
+self-checkはraw/byte raw/normal string・nested comment・identifierを守ったbatch root移動、hanging childのdeadline/reap、縮小器が余計な関数を除去できること、High checker failureをparse failureに変えないこと、およびoracleのE0425を誤った最小sourceへ縮めないことを検査する。新たな反例は仕様/accepted decisionで期待挙動を確定してから外部corpusへ追加する。テストを弱めたりunexpected backend rejectionをallowlistに追加して通さない。
+
+## CIでの実行
+
+PRとpushでは既存`Nagi checks`の変更検出を使う。compiler/runtime/test/configを変えた場合、Linuxの`cargo test --locked`にcorpus・property・診断・実統合が含まれ、fuzz smokeも実行する。4配布target（Linux・Windows・macOS Intel／Apple Silicon）の検査にはconformance・view storage・Drop・scopeの実テストを含める。Docs/サイト/AGENTSだけの変更はRust全検査を起動しない。
+
+`Compiler contract exploration`は毎週月曜03:17 UTCと手動起動。2つの固定seedで256生成case、10,000 mutation、128 native case、重要なview/Drop回帰を実行する。各jobは30分まで。これは通常PRの必須gateを増やすworkflowではない。失敗時はPR/定期jobとも`build/compiler-failures/`をartifactへ保存する。
+
+## Cargo / HTTP / SQLとの接続
+
+`tests/conformance/harnesses.json` に既存の実test名とcommandを登録する。`verify_compiler_contracts.py` は登録先source/testが存在することを検査し、`--run-linked` で9harnessを順番に実行する。HTTP panicは実request、500/sanitized body、HEAD body、server継続性まで検査する既存runtime harnessが責任を持つ。SQL missing-columnは実SQLite schemaのopt-in checkとHigh/保存Lowのquery行を既存SQL harnessで検査する。HTTP生成は既存Cargo build/実行harnessへ接続する。conformance corpusへの文字列記録だけではこれらの性質を保証しない。
+
+## 一次資料と採否
+
+- [rustc test infra](https://rustc-dev-guide.rust-lang.org/tests/intro.html) / [UI tests](https://rustc-dev-guide.rust-lang.org/tests/ui.html): check/build/runの区別と期待診断/位置を採用。rustc専用compiletestの直接依存、環境差を含む全面stderr snapshotは採用しない。
+- [Rust Fuzz Book](https://rust-fuzz.github.io/book/cargo-fuzz.html) / [LLVM LibFuzzer](https://llvm.org/docs/LibFuzzer.html): 多様なcorpus、決定性、失敗保存/縮小を採用。現smokeはcoverage-guided fuzzではない。nightly/sanitizer/libfuzzer-sys導入は専用laneの検討として保留。
+- [Proptest](https://proptest-rs.github.io/proptest/intro.html) / [generation・shrinking・persistence](https://proptest-rs.github.io/proptest/proptest/getting-started.html): property検査は既知regressionを補完する。今回は10種の小さなgeneratorと既存stdで縮小/保存を実測し、新dependencyを加えず実装できた。strategyの組合せが増え構造的shrinkingが必要になった段階でproptest dev-dependencyを提案する。
+- [Csmith](https://embed.cs.utah.edu/csmith/): 未定義挙動を除く生成と独立oracleを採用。C言語generator自体は非採用。Nagiに独立compilerがないことを明記する。
+- [Crater](https://rustc-dev-guide.rust-lang.org/tests/crater.html): check/build/runのコスト分離を採用。小corpusの成功を全言語/全platform保証と解釈しない。

@@ -1,0 +1,10 @@
+def select(input: Result[Result[str, i64], i64]) -> i64:
+    match input:
+        case Ok(inner):
+            match inner:
+                case Ok(text):
+                    return len(view(text))
+                case Err(code):
+                    return code
+        case Err(problem):
+            return problem

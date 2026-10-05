@@ -42,6 +42,7 @@ struct Checker {
     collect_view_flow: bool,
     view_flow_names: HashSet<String>,
     view_content_mutations: Vec<FlowContentMutation>,
+    view_expression_uses: HashMap<ExprUseId, FlowExprUse>,
     parameter_views: HashSet<BindingId>,
     iterators: Vec<HashSet<BorrowedPlace>>,
     expression_loans: Vec<HashSet<BorrowedPlace>>,
@@ -78,8 +79,8 @@ fn reset_flow(statements: &mut [Stmt]) {
     }
 }
 
-fn should_collect_view_flow(editor: bool, asynchronous: bool, ret: &Type, body: &[Stmt]) -> bool {
-    !editor && !asynchronous && ret.contains_view() && supports_view_flow(body)
+fn should_collect_view_flow(editor: bool, _asynchronous: bool, ret: &Type, body: &[Stmt]) -> bool {
+    !editor && ret.contains_view() && supports_view_flow(body)
 }
 
 // Collect the names that can feed a return expression. This is only a
@@ -463,6 +464,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         collect_view_flow: false,
         view_flow_names: HashSet::new(),
         view_content_mutations: Vec::new(),
+        view_expression_uses: HashMap::new(),
         parameter_views: HashSet::new(),
         iterators: vec![],
         expression_loans: vec![],
@@ -710,6 +712,33 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
     Ok(())
 }
 impl Checker {
+    fn record_view_use(&mut self, expression: &Expr, mode: ExprUseMode) {
+        if !self.collect_view_flow {
+            return;
+        }
+        let E::Name(name) = &expression.kind else {
+            return;
+        };
+        if !self.view_flow_names.contains(name) {
+            return;
+        }
+        let Some(var) = self
+            .vars
+            .get(name)
+            .filter(|var| var.ty.contains_view() && !var.ty.is_view() && !var.borrowed_element)
+        else {
+            return;
+        };
+        let id = ExprUseId::of(expression);
+        self.view_expression_uses.insert(
+            id,
+            FlowExprUse {
+                expression: id,
+                binding: var.binding,
+                mode,
+            },
+        );
+    }
     fn view_value_bindings(&self, value: &Expr) -> Vec<BindingId> {
         if !self.collect_view_flow {
             return Vec::new();
@@ -793,13 +822,14 @@ impl Checker {
             .filter_map(|name| {
                 self.vars
                     .get(name)
-                    .filter(|var| var.ty.is_view_containing_list())
+                    .filter(|var| {
+                        var.ty.contains_view() && !var.ty.is_view() && !var.borrowed_element
+                    })
                     .map(|var| (name, var))
             })
             .map(|(name, var)| {
-                let mut origins: Vec<_> = var
-                    .content_origins
-                    .iter()
+                let mut origins: Vec<_> = std::iter::once(&var.origins)
+                    .chain(var.content_origins.iter())
                     .flatten()
                     .map(|origin| FlowOrigin {
                         binding: origin.binding,
@@ -816,6 +846,7 @@ impl Checker {
                         b.static_origin,
                     ))
                 });
+                origins.dedup();
                 ViewListBindingSnapshot {
                     ty: var.ty.clone(),
                     name: name.clone(),
@@ -2230,6 +2261,7 @@ impl Checker {
             return Ok(());
         };
         if self.copy_type(e.ty.as_ref().unwrap_or(&v.ty)) {
+            self.record_view_use(e, ExprUseMode::Copy);
             return Ok(());
         }
         if v.borrowed_element {
@@ -2263,6 +2295,7 @@ impl Checker {
         } else {
             v.moved_fields.insert(fields);
         }
+        self.record_view_use(e, ExprUseMode::Move);
         Ok(())
     }
     fn child(&mut self, ss: &mut [Stmt]) -> Result<HashMap<String, Var>, String> {
@@ -2351,6 +2384,7 @@ impl Checker {
         mut condition: Option<&mut Expr>,
         binding: Option<(&str, Var)>,
         line: usize,
+        flow: &mut Option<FlowLoopEntry>,
     ) -> Result<(), String> {
         // Recheck the parsed body, not its annotated first pass: locals must be
         // declared anew on each iteration. Only outer moves cross the backedge.
@@ -2358,21 +2392,22 @@ impl Checker {
         let condition_template = condition.as_deref().cloned();
         let mut header = self.vars.clone();
         let mut first = true;
+        let mutation_start = self.view_content_mutations.len();
         loop {
             self.vars = header.clone();
+            self.view_content_mutations.truncate(mutation_start);
+            let header_facts = self
+                .collect_view_flow
+                .then(|| self.view_list_snapshot(&self.view_flow_names));
             let editor = self.editor;
             if !first {
                 self.editor = false;
             }
             let checked = (|| {
                 if let Some(c) = condition.as_deref_mut() {
-                    let mut probe;
-                    let c = if first {
-                        c
-                    } else {
-                        probe = condition_template.clone().unwrap();
-                        &mut probe
-                    };
+                    if !first {
+                        *c = condition_template.clone().unwrap();
+                    }
                     let t = self.expr(c, Some(&Type::named("bool")))?;
                     self.demand(&t, &Type::named("bool"), c.line)?;
                 }
@@ -2382,10 +2417,16 @@ impl Checker {
                 if let Some((name, binding)) = &binding {
                     self.vars.insert((*name).to_owned(), binding.clone());
                 }
+                *flow = header_facts.clone().map(|header| FlowLoopEntry {
+                    header,
+                    body: self.view_list_snapshot(&self.view_flow_names),
+                });
                 if first {
                     self.block(body)?;
                 } else {
-                    self.block(&mut template.clone())?;
+                    let mut probe = template.clone();
+                    self.block(&mut probe)?;
+                    body.clone_from_slice(&probe);
                 }
                 Ok::<_, String>((exit, self.vars.clone()))
             })();
@@ -2445,17 +2486,30 @@ impl Checker {
     }
     fn statement(&mut self, s: &mut Stmt) -> Result<(), String> {
         let relevant = self.collect_view_flow.then(|| statement_view_names(s));
-        let before = relevant
-            .as_ref()
-            .map(|names| self.view_list_snapshot(names));
+        let before = relevant.as_ref().map(|names| {
+            self.view_list_snapshot(
+                if matches!(s.kind, S::While(..) | S::For(..) | S::Scope(..)) {
+                    &self.view_flow_names
+                } else {
+                    names
+                },
+            )
+        });
         // A child statement has its own expression effects. Preserve the
         // parent's condition effects while checking either branch.
         let parent_mutations = std::mem::take(&mut self.view_content_mutations);
+        let parent_uses = std::mem::take(&mut self.view_expression_uses);
         let mut assignment = None;
         let mut branch_entry = None;
-        let checked = self.statement_inner(s, &mut assignment, &mut branch_entry);
+        let mut loop_entry = None;
+        let checked = self.statement_inner(s, &mut assignment, &mut branch_entry, &mut loop_entry);
         let content_mutations =
             std::mem::replace(&mut self.view_content_mutations, parent_mutations);
+        let mut expression_uses: Vec<_> =
+            std::mem::replace(&mut self.view_expression_uses, parent_uses)
+                .into_values()
+                .collect();
+        expression_uses.sort_by_key(|use_| use_.expression);
         if let (Ok(()), Some(before)) = (&checked, before) {
             let mut value_dependencies = Vec::new();
             let mut return_observers = Vec::new();
@@ -2485,16 +2539,23 @@ impl Checker {
             }
             s.flow = Some(StmtFlowFacts {
                 before,
-                after: self.view_list_snapshot(if matches!(s.kind, S::If(..) | S::Match(..)) {
-                    &self.view_flow_names
-                } else {
-                    relevant.as_ref().unwrap()
-                }),
+                after: self.view_list_snapshot(
+                    if matches!(
+                        s.kind,
+                        S::If(..) | S::Match(..) | S::While(..) | S::For(..) | S::Scope(..)
+                    ) {
+                        &self.view_flow_names
+                    } else {
+                        relevant.as_ref().unwrap()
+                    },
+                ),
                 branch_entry,
+                loop_entry,
                 content_mutations,
                 assignment,
                 value_dependencies,
                 return_observers,
+                expression_uses,
             });
         }
         checked
@@ -2504,6 +2565,7 @@ impl Checker {
         s: &mut Stmt,
         assignment: &mut Option<FlowAssignment>,
         branch_entry: &mut Option<Vec<ViewListBindingSnapshot>>,
+        loop_entry: &mut Option<FlowLoopEntry>,
     ) -> Result<(), String> {
         match &mut s.kind {
             S::Assign {
@@ -2667,7 +2729,7 @@ impl Checker {
                 self.join_moves(&paths);
             }
             S::While(c, b) => {
-                self.loop_body(b, Some(c), None, s.line)?;
+                self.loop_body(b, Some(c), None, s.line, loop_entry)?;
             }
             S::Match(value, arms) => {
                 let ty = self.expr(value, None)?;
@@ -2960,6 +3022,7 @@ impl Checker {
                         },
                     )),
                     s.line,
+                    loop_entry,
                 );
                 self.iterators.pop();
                 checked?;
@@ -3474,6 +3537,9 @@ impl Checker {
         };
         self.available(e, projection)?;
         e.ty = Some(t.clone());
+        if matches!(e.kind, E::Name(..)) {
+            self.record_view_use(e, ExprUseMode::Borrow);
+        }
         Ok(t)
     }
     fn builtin(
@@ -3872,6 +3938,7 @@ impl Checker {
                 } else {
                     return Err(error(line, "append対象は変数名です"));
                 }
+                self.record_view_use(&args[0], ExprUseMode::BorrowMut);
                 self.consume(&args[1])?;
                 if types[1].contains_view() {
                     let origin = self.origin(&args[1]);
@@ -4114,7 +4181,53 @@ mod flow_metadata_tests {
     }
 
     #[test]
-    fn flow_collection_is_gated_to_sync_view_returns_without_scopes() {
+    fn checked_operand_roles_reach_codegen_and_missing_roles_fail() {
+        let source = "def restore(part: view[str]) -> List[view[str]]:\n    local = \"inner\"\n    parts = [view(local)]\n    length = len(parts)\n    append(parts, part)\n    parts = [part]\n    return parts\n";
+        let mut program = crate::parser::parse(source, true).unwrap();
+        check(&mut program).unwrap();
+        let body = &program.functions[0].body;
+        assert_eq!(
+            body[2].flow.as_ref().unwrap().expression_uses[0].mode,
+            ExprUseMode::Borrow
+        );
+        assert_eq!(
+            body[3].flow.as_ref().unwrap().expression_uses[0].mode,
+            ExprUseMode::BorrowMut
+        );
+        assert_eq!(
+            body[5].flow.as_ref().unwrap().expression_uses[0].mode,
+            ExprUseMode::Move
+        );
+        crate::emit::rust(&program).unwrap();
+        let mut wrong_binding = program.functions[0].body[5]
+            .flow
+            .as_ref()
+            .unwrap()
+            .expression_uses[0]
+            .clone();
+        program.functions[0].body[5]
+            .flow
+            .as_mut()
+            .unwrap()
+            .expression_uses
+            .clear();
+        assert!(crate::emit::rust(&program)
+            .unwrap_err()
+            .contains("internal owning-view lowering"));
+        wrong_binding.binding.token += 1;
+        program.functions[0].body[5]
+            .flow
+            .as_mut()
+            .unwrap()
+            .expression_uses
+            .push(wrong_binding);
+        assert!(crate::emit::rust(&program)
+            .unwrap_err()
+            .contains("internal owning-view lowering"));
+    }
+
+    #[test]
+    fn flow_collection_is_gated_to_view_return_dependencies() {
         let source = r#"def ordinary() -> i64:
     return 1
 async def asynchronous(parts: List[view[str]]) -> List[view[str]]:
@@ -4139,11 +4252,12 @@ async def scoped() -> Result[unit, Error]:
         let mut program = crate::parser::parse(source, true).unwrap();
         check(&mut program).unwrap();
 
-        for function in program
-            .functions
-            .iter()
-            .filter(|function| !matches!(function.name.as_str(), "matched" | "looped"))
-        {
+        for function in program.functions.iter().filter(|function| {
+            !matches!(
+                function.name.as_str(),
+                "matched" | "looped" | "asynchronous"
+            )
+        }) {
             assert!(
                 all_flow_none(&function.body),
                 "{} had flow facts",
@@ -4157,13 +4271,13 @@ async def scoped() -> Result[unit, Error]:
         );
         let scalar = Type::named("i64");
         assert!(!should_collect_view_flow(false, false, &scalar, &[]));
-        assert!(!should_collect_view_flow(false, true, &view_list, &[]));
+        assert!(should_collect_view_flow(false, true, &view_list, &[]));
         let function = program
             .functions
             .iter()
             .find(|function| function.name == "scoped")
             .unwrap();
-        assert!(!supports_view_flow(&function.body));
+        assert!(supports_view_flow(&function.body));
         assert!(!should_collect_view_flow(
             false,
             function.asynchronous,
@@ -4186,7 +4300,7 @@ async def scoped() -> Result[unit, Error]:
         check(&mut program).unwrap();
         assert!(all_flow_none(&program.functions[0].body));
         let named = &program.functions[1];
-        assert!(crate::view_flow::plan(named).is_none());
+        assert!(crate::view_flow::plan(named).unwrap().is_none());
         for statement in &named.body {
             let flow = statement.flow.as_ref().unwrap();
             assert!(flow.before.len() <= 1);
@@ -4223,12 +4337,12 @@ async def scoped() -> Result[unit, Error]:
                 })
                 .sum();
             assert!(snapshots <= 3 * count + 2);
-            assert!(crate::view_flow::plan(function).is_none());
+            assert!(crate::view_flow::plan(function).unwrap().is_none());
         }
     }
 
     #[test]
-    fn loop_regions_touching_candidates_fall_back_even_for_read_only_uses() {
+    fn loop_regions_preserve_candidate_reads_and_assignments() {
         for use_ in [
             "parts = [part]",
             "length = len(parts)",
@@ -4239,7 +4353,9 @@ async def scoped() -> Result[unit, Error]:
             let mut program = crate::parser::parse(&source, true).unwrap();
             check(&mut program).unwrap();
             assert!(
-                crate::view_flow::plan(&program.functions[0]).is_none(),
+                crate::view_flow::plan(&program.functions[0])
+                    .unwrap()
+                    .is_some(),
                 "{use_}"
             );
         }
@@ -4291,7 +4407,7 @@ def scalar_observation(part: view[str]) -> List[view[str]]:
                 function.body[5].flow.as_ref().unwrap().return_observers,
                 vec![parts]
             );
-            assert!(crate::view_flow::plan(function).is_some());
+            assert!(crate::view_flow::plan(function).unwrap().is_some());
 
             let observation = &program.functions[2];
             assert!(observation.body[4]
@@ -4301,6 +4417,7 @@ def scalar_observation(part: view[str]) -> List[view[str]]:
                 .value_dependencies
                 .is_empty());
             let plan = crate::view_flow::plan(observation)
+                .unwrap()
                 .expect("scalar inspection must not make item an escaping candidate");
             let S::Assign { name, .. } = &plan.body.statements[3].stmt.kind else {
                 panic!("expected the item declaration");
@@ -4360,7 +4477,7 @@ def condition(flag: bool, part: view[str]) -> List[view[str]]:
                 .origins
                 .iter()
                 .all(|origin| !origin.owner_loan));
-            assert!(crate::view_flow::plan(rhs).is_some());
+            assert!(crate::view_flow::plan(rhs).unwrap().is_some());
 
             let condition = program
                 .functions

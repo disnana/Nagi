@@ -32,6 +32,8 @@ When a saved `generated.low` is loaded by a separate command, diagnostics use Lo
 
 `check` reports diagnostics using Nagi's rules and source locations without invoking Cargo. It does not replace Rust's borrow and trait checks, so a successful check can still be followed by a failed build. Rust-side borrow and Send requirements, handwritten Rust bodies, and crate APIs are checked during the build. See [ownership](ownership.md#borrowing-and-the-limits-of-checking).
 
+However, rejection of compiler-generated Rust for a Nagi-detectable type, move, or lifetime problem in accepted, supported Nagi code is a compiler bug. This is separate from adapter, trait, dependency, or linker checks. Regression cases and bounded generated programs pass through High, saved Low, and Rust to search for these mismatches.
+
 [SQL checks](sql-check.md) are enabled only when `check` is given a schema and dialect. Ordinary `check` does not validate SQL contents against a schema. Inspected application queries are not executed; generated Rust and application database operations are unchanged.
 
 Each source file is limited to 2 MB. Expressions, types, and blocks also have nesting limits. Tests cover syntax mutations and invalid inputs. Coverage-guided fuzzing, incremental parsing, precise expression columns, and mappings for every Rust diagnostic are not supported. Unquoted imports of registered standard modules [are available](modules-and-rust.md).
