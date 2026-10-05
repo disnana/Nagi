@@ -2,13 +2,13 @@
 
 ## Q-001: 同じアプリの識別と実行ファイルの世代を分ける
 
-状態: 判断待ち。PR0で発見。コード・テスト期待は変更していない。
+状態: 2026-10-05にAを承認済み。PR0で発見。現時点のコード・テスト期待は変更していない。
 
 ### 問題
 
 新依頼のPhase 2は、成功generationをside-by-sideで保持し、実行中の旧binaryを上書きしないことを要求する。一方、既存テストは同じcanonical source/outを再buildした際、実行ファイルのcanonical pathが前回と同じであることを要求する。
 
-依頼のStop条件「既存テストの意味論上の期待値を変更しないと通らない」に該当するため、先に判断を求める。旧assertを削ったり、generationを単なるsymlinkで同じ実体へ向けて隔離したことにしたりしない。
+当初のStop条件「既存テストの意味論上の期待値を変更しないと通らない」に従って確認した。回答では、同一binary pathは内部実装上の契約であり、承認済みgeneration設計に合わせて変更可能と明示された。旧assertを削ったり、generationを単なるsymlinkで同じ実体へ向けて隔離したことにしたりしない。
 
 ### 根拠
 
@@ -31,13 +31,13 @@ Aでは実行ファイルpath/nameの既存期待が変わる。app identityの�
 
 現在のstdout・異なるappの分離・同一dependency cache・project cwdのassertは残す。追加するのは同一appの旧exe継続、別generation、並行build、failed buildでlatest不変、Windowsでの実行中exeと新buildである。
 
-同一pathのassertをapp ID同一＋generation path相違へ変えるのは、実装ミスを隠すtest weakeningではなく、新しいgeneration契約への移行である。ただし今回の明示Stop条件に従い、回答を受けるまで変更しない。
+同一pathのassertをapp ID同一＋generation path相違へ変えるのは、実装ミスを隠すtest weakeningではなく、承認済みgeneration契約への移行である。公開意味論・CLI/API利用者契約・High/Low互換性・Guarantee Register・security/lifecycleの期待変更は引き続きStop。内部生成先・file名・pathの期待は、理由を記録して更新できる。
 
 ### 推奨案
 
 Aを推奨する。旧app identityとcache共有を保ち、実際にrunするimmutable generationを明示できる。成功metadataはatomic更新し、run中の旧generationを上書き・削除・killしない。
 
-判断後は[計画書](compiler-rust-boundary-plan.md)のPhase 2互換性、ADR 005との差、新しいacceptanceを確定する。Phase 1から順に再開し、Phase 2を先に実装しない。
+[計画書](compiler-rust-boundary-plan.md)へ採用判断とworking rulesを反映した。app identity維持→世代別生成→build成功後のatomic latest更新を採用する。PR0更新CI成功後にPhase 1から順に再開し、Phase 2を先に実装しない。
 
 ## 後続Phaseで具体化する項目
 

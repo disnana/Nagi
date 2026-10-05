@@ -18,7 +18,9 @@
 
 - `python -m unittest discover -s scripts/ci -p 'test_*.py'`: 51成功。
 - website build: 既存website用venvで90ページを生成し、local links/anchors/assetsを検証した。通常Pythonにはmarkdown-itがなく失敗したため、既存venvを使用した。出力はbuilderが許可する`build/boundary-plan-site`へ置いた。
-- 変更7文書の相対リンク・anchorは171件を確認し、欠落なし。`git diff --check`も成功。PR CIは公開後に記録する。
+- 変更7文書の相対リンク・anchorは171件を確認し、欠落なし。`git diff --check`も成功。
+- [PR #77](https://github.com/disnana/Nagi/pull/77)の初回head `06c20ca`は[checks run 37300208409](https://github.com/disnana/Nagi/actions/runs/37300208409)・[website run 37300207891](https://github.com/disnana/Nagi/actions/runs/37300207891)が成功。PRのDocs-only比較でRust/native/editor/releaseはskip、change detection・release plan・merge gate・siteが成功。skipを新たなRust検証として数えない。
+- 新branchの初回pushは比較基点がなく、既存fail-safeによりLinux全suiteも起動した。PRの文書差分判定とは別で、これを新しいcompiler変更の検証と取り違えない。
 - compiler/runtime/依存の変更がないため、今回の文書確認をRust build・4 OS・runtimeの新しい保証に数えない。
 
 ### 新しい反例とGuarantee Registerへの影響
@@ -29,4 +31,6 @@ Guarantee Registerの「現在」は既存のownerを維持する。G-SEALED/G-G
 
 ### 未解決事項・次Phase
 
-Q-001の回答待ちで停止する。依頼の「既存テストの意味論上の期待値を変更しないと通らない」というStop条件による。回答・計画反映・PR0 CI成功後、Phase 1のfailing testsから再開する。Phase 2〜4を同時に実装しない。
+Q-001はユーザーがAを承認した。app identity維持、generation別のside-by-side生成、build成功後のatomic latest更新を採用する。旧generationはbuild時に上書き・削除・killしない。承認済み設計に伴う内部path等のtestは理由を記録して更新できる。公開意味論・利用者契約・High/Low・登録保証・security/lifecycleの期待変更は引き続きStop。
+
+計画とworking rulesへ反映済み。PR0の更新CI成功後、Phase 1のfailing testsから再開する。Phase 2〜4を同時に実装しない。

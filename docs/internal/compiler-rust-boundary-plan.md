@@ -1,6 +1,6 @@
 # コンパイラとRust境界の段階計画
 
-状態: PR0の設計案。Phase 1以降は未実装。Q-001の回答待ちで停止する。
+状態: PR0の設計を固定。Q-001は2026-10-05に承認済み。Phase 1以降は未実装で、PR0の更新CI成功後にPhase 1から進める。
 
 基点はmain `8f6cc6cf7d7c08811736325263618cbea19314b8`。PR #76のhead `13b59aa`とtreeは同じであり、#74・#76のchecked facts、Low互換性、Rust backendを維持する。本計画は2026-10-05の依頼に基づく。実装済みの保証と、後続Phaseで追加する予定の保証を分ける。
 
@@ -59,7 +59,7 @@ Phase 1で最終境界だけを変える。
 | G-LIFECYCLE・現在 | Nagiが選ぶ評価順・cleanup anchorを保持。Future dropは既完了/受理済み副作用のrollback完了を保証しない | Nagi compilerのlowering + Rust Drop/Future | checked cleanup/error出口、通常Rustの所有構造 | `view_container_drop`, `scope_runtime_contract`, runtime adversarial tests。選択した構造の誤生成はcompiler defect、任意destructorの正しさは保証外 |
 | G-ARTIFACT・現在 | 別canonical source/outのアプリを既定/明示の共通targetへ置いても、互いのexeを上書きしない。同一appの世代隔離はまだ保証しない | Nagi compiler / build CLI | canonical app identityとpackage/executable名 | `shared_target`, `project`。別アプリの取り違えはcompiler defect。短いhashは権限・暗号学的隔離ではない |
 | G-SEALED・Phase 1予定 | Rust codegenの入力は最終統合・check済みで、外部から可変化できない | Nagi checker / finalizer | ProgramをmoveしたCheckedProgramと確定plan・provenance | API compile-fail、facts completeness、決定性、既存High/Low/native conformance。欠落factsはICE候補 |
-| G-GENERATION・Phase 2予定・Q-001待ち | 実行するgenerationを他buildで上書きせず、成功generationのみpublish。dependency cacheは共有 | Nagi compiler / build CLI、OS advisory lock | app/generation identity、成功artifact metadata、生成Rust provenance | 並行build、失敗publish、Windows実行中exe。取り違えはcompiler defect、OS/file/lock失敗はinfra error |
+| G-GENERATION・Phase 2予定・Q-001承認済み | 実行するgenerationを他buildで上書きせず、成功generationのみpublish。dependency cacheは共有 | Nagi compiler / build CLI、OS advisory lock | app/generation identity、成功artifact metadata、生成Rust provenance | 並行build、失敗publish、Windows実行中exe。取り違えはcompiler defect、OS/file/lock失敗はinfra error |
 | G-TX・Phase 4予定 | Transactionはaffine、nonCopy/nonshared、永続格納・task transfer禁止。commit/rollbackがconsumeしResultで完了を観測 | Nagi checker / ResourceContract・transfer検査。native完了はDB adapter | Tx capability、nested payload/transfer決定、明示終端操作 | normal/Err/unwind/cancellation、nested Option/Result、spawn拒否。Nagi保証の抜けはcompiler defect。応答未受信のCOMMITは結果不明になり得る |
 | G-POOL・Phase 4予定 | Txが接続を専有し、cleanup成功を確認する前に再利用しない。rollback失敗接続を再利用しない | Nagi DB worker/adapter。checkerがDB完了を静的証明するとはしない | leaseとcleanup状態を保つnative APIへの確定呼出し | acquire/begin応答喪失、取消、cleanup失敗、close/worker終了とpermit解放。native Drop実行だけをrollback成功の証拠にしない |
 | G-AUTH-SCOPE・Phase 5以降の方向 | Grantが実際のScope値を保持し、保護操作は別bare resource IDを取らない | Nagi checkerの型/所有規則 + trusted Rust issuer/adapter | permission/scope identityとGrantの所有形態 | 未実装。期限・失効・全routeの認可漏れ・request regionを型で保証しない |
@@ -136,7 +136,7 @@ buildではgeneration内の生成・Cargo成功とartifact publish、互換出�
 
 固定するsnapshotはcompilerが生成するLow/Rust/manifest、読み取り済みの埋込み入力とsource/provenance、および引き継ぐlockである。外部path crate/runtime/native Rustの参照先を世代化するだけで全Rust module/includeを固定できたとはしない。外部依存・nativeの同時編集までを含むworkspace全体の原子的snapshotは対象外。その範囲を必要とする場合は別設計にする。成功後のbinaryはこれらの外部source編集で置き換わらない。
 
-実行ファイルは`native:`に実際の成功generationのpathを示す案を推奨する。ただし現テストは同一appの再buildで同一pathを要求しており、[Q-001](open-questions.md#q-001-同じアプリの識別と実行ファイルの世代を分ける)の判断前に実装しない。
+実行ファイルは`native:`に実際の成功generationのpathを示す。同一app再buildで同一pathを求める内部testは、[Q-001](open-questions.md#q-001-同じアプリの識別と実行ファイルの世代を分ける)の承認に基づき、app identity同一とgeneration相違を別々に検査する形へ変更する。旧generationをbuild時に上書き・削除・killしない。
 
 依存追加はしない。`std::fs::File::lock`はRust 1.89以降の候補で、監査環境はRust 1.98.1、CIはstable。MSRVを新たな公開契約として勝手に変更しない。lockとatomic publishの4 OS実証をPhase 2の条件にする。
 
@@ -181,7 +181,7 @@ Phase 4完了前には実装しない。`Grant<Permission, Scope>`の内部にSc
 
 ## テストと性能
 
-既存[compiler-testing](compiler-testing.md)のtaxonomyと[regression corpus](../../tests/conformance/)を使う。追加の失敗は再現→最小化→恒久回帰→修正の順に扱う。pass/failの対、拒否段階・source位置・primary/関連causeを残す。既存testの意味論期待を変える必要があればStopし、assert削除で通さない。
+既存[compiler-testing](compiler-testing.md)のtaxonomyと[regression corpus](../../tests/conformance/)を使う。追加の失敗は再現→最小化→恒久回帰→修正の順に扱う。pass/failの対、拒否段階・source位置・primary/関連causeを残す。公開意味論・利用者契約・High/Low互換性・Guarantee Register・security/lifecycleの期待を変える必要があればStopする。承認済み設計の内部file/path等は、before/afterと理由を記録して更新できる。assert削除で不具合を隠さない。
 
 High→初回check→Low→最終check→CheckedProgram→Rust→build/runを継続検証する。frontend mutationと狭い生成propertyを使い、後段Rust buildは限定したgrammar/corpusへ絞る。単なるseed保存で終わらず縮小ソース、失敗段階、toolchain/targetを保存する。
 
@@ -201,9 +201,9 @@ High/Low構文、@replace、保存Low、既存APIは維持する。内部Rust li
 
 ## 未決事項とStop
 
-実装前の未決事項は[open-questions](open-questions.md)へ集める。現時点のStopはQ-001。同一appのidentity維持と、同一binary path維持を既存testが同一視している。
+実装前の未決事項は[open-questions](open-questions.md)へ集める。Q-001は解決済み。app identityを維持し、generationごとにside-by-side生成し、build成功後にlatest metadataをatomic更新する。旧binary pathの同一性は公開仕様ではなく内部実装上の期待であり、承認済みgeneration設計に合わせて更新できる。
 
-次もStop条件として維持する: 計画外の公開意味論・syntax・High/Low破壊、Rustへのowner変更、security/Guarantee Registerの追加・縮小、性能目的の意味論変更、acceptanceやnormative ADRの衝突、意味論上のtest期待変更、分類不能なconformance失敗、unsafe、crate分割/想定外rewrite、依存追加/更新、新policy値の必要。
+次もStop条件として維持する: 計画外の公開意味論・syntax・High/Low破壊、Rustへのowner変更、security/Guarantee Registerの追加・縮小、性能目的の意味論変更、acceptanceやnormative ADRの衝突、公開意味論/利用者契約/High・Low互換性/登録保証/security・lifecycleに関わるtest期待変更、分類不能なconformance失敗、unsafe、crate分割/想定外rewrite、依存追加/更新、新policy値の必要。承認済み設計の内部生成先・file名・path等のtestは、根拠を記録した更新を認める。
 
 Stopでは問題・根拠・選択肢・互換性・推奨案を記録し、実装を先行させない。文書の陳腐化や既存Phaseの範囲外という説明だけを将来変更の禁止と誤読しないが、利用者契約・test期待を黙って変更しない。
 
@@ -215,7 +215,7 @@ Stopでは問題・根拠・選択肢・互換性・推奨案を記録し、実�
 | Programを包むだけでemitter再推論を残す | 不採用。APIだけが変わり、二重の意味論が残る |
 | finalizerでRust textを先に生成して保存するだけ | 不採用。checked facts/planの契約を文字列へ置き換え、checker→codegenの分離にならない |
 | Typed HIR/SSA全面rewrite、独自Rust checker | 不採用。費用と互換性リスクが大きく、今の問題に必要な証拠がない |
-| side-by-side generation + success metadata | Q-001の推奨案。旧exeを上書きせずrun中のlockも不要 |
+| side-by-side generation + success metadata | Q-001で採用。旧exeを上書きせずrun中のlockも不要 |
 | stable executableを更新しrun終了までlock | 不採用候補。長期サーバー中のbuildを止める。generation隔離の目的に合わない |
 | source-only content hashをbuild cache keyにする | 不採用。native/依存/features/target等を含まない |
 | 任意Rust resourceの安全Contractを自己申告で受理 | 不採用。現在の検査で安全と証明できない |

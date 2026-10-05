@@ -151,7 +151,7 @@ Nagiを使う価値は、同じAPI・DB処理・失敗条件のアプリで、�
 
 ## この文書を更新する条件
 
-コンパイラとRustの境界は、[段階計画](docs/internal/compiler-rust-boundary-plan.md)で整理しています。最終check済みの情報を封印して生成へ渡すCheckedProgram、ビルド世代の分離、資源契約の集約、Pool／Transactionの順に検証する計画です。High→Lowテキスト→再解析とRust backendは維持します。これらの新しい境界はまだ実装しておらず、[未決事項](docs/internal/open-questions.md)の判断後にPhase 1から進めます。現在提供している保証と、追加予定の保証は分けて記録します。
+コンパイラとRustの境界は、[段階計画](docs/internal/compiler-rust-boundary-plan.md)で整理しています。最終check済みの情報を封印して生成へ渡すCheckedProgram、ビルド世代の分離、資源契約の集約、Pool／Transactionの順に検証する計画です。High→Lowテキスト→再解析とRust backendは維持します。これらの新しい境界はまだ実装しておらず、Phase 1から順に進めます。世代別ビルドはアプリIDを保ち、成功世代ごとに実行ファイルを分ける方針です。[判断記録](docs/internal/open-questions.md)とともに、現在の保証と追加予定の保証を分けて記録します。
 
 意味論、公開API、High／Low／Rustの分担を変える場合は、変更の理由、代替案、互換性、検証結果をこの文書へ反映します。詳細なAPI説明や測定ログは対応する文書に置きます。
 

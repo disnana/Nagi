@@ -10,6 +10,8 @@
 
 コンパイラ/Rust境界の段階作業は[計画書](docs/internal/compiler-rust-boundary-plan.md)に従う。Guarantee Registerの現在と予定を区別し、前PhaseのacceptanceとCI成功前に次の実装へ進まない。[未決事項](docs/internal/open-questions.md)がStop扱いなら、契約・test期待を先に変更しない。結果と未確認範囲は[進捗](docs/internal/progress.md)へ記録する。
 
+Stop対象のtest期待は、公開言語意味論・CLI/API利用者契約・High/Low互換性・Guarantee Register・security/lifecycleの保証に関わるもの。承認済み設計に伴う内部生成先・file名・path等は、変更理由と維持する保証を記録して更新できる。内部assertの更新を口実に公開保証や失敗の観測を弱めない。
+
 ## 作業手順
 
 1. 対象の契約、関連実装、pass/failテスト、変更履歴を読む。parse成功、check成功、Rust build成功、実行成功を区別する。
