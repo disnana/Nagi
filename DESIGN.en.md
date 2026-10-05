@@ -151,6 +151,8 @@ Evidence and examples: [symbols](compiler/tests/symbols.rs), [code maps](compile
 
 ## When to update this document
 
+The [compiler/Rust boundary plan](docs/internal/compiler-rust-boundary-plan.md) stages a sealed CheckedProgram, isolated build generations, shared resource contracts, and Pool/Transaction validation. It retains the High-to-Low text round-trip and the Rust backend. These new boundaries are not implemented yet; Phase 1 starts after the [open question](docs/internal/open-questions.md) is resolved. Current guarantees and planned guarantees are recorded separately.
+
 Changes to semantics, public APIs, or the High/Low/Rust division should update the rationale, alternatives, compatibility, and verification results here. Detailed API descriptions and measurement logs belong in their corresponding documents.
 
 When a proposal becomes implemented, add implementation and test references. Do not expand test coverage into a language-wide guarantee or describe unmeasured effects as measured. Agreement in a discussion and verified behavior remain separate evidence.

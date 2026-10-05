@@ -1,6 +1,6 @@
 # #74を土台にしたバックエンド境界の検証
 
-2026-10-05、Linux x86_64、Rust 1.98.1。作業開始時の基点は未マージの[#74](https://github.com/disnana/Nagi/pull/74)、head `6d5b9eec4f0101fd501cb527e8772b1fbcfcd514`。その変更、Low互換性、Rust backendを維持し、別ブランチで作業した。その後ユーザーが#74をmainへマージした（`04d30b5`、treeは#74 headと一致）。追加分のDraft [#76](https://github.com/disnana/Nagi/pull/76)はmain向けへ変更済み。#76のマージや版番号更新は行わない。
+2026-10-05、Linux x86_64、Rust 1.98.1。作業開始時の基点は未マージの[#74](https://github.com/disnana/Nagi/pull/74)、head `6d5b9eec4f0101fd501cb527e8772b1fbcfcd514`。その変更、Low互換性、Rust backendを維持し、別ブランチで作業した。その後ユーザーが#74をmainへマージした（`04d30b5`、treeは#74 headと一致）。追加分の[#76](https://github.com/disnana/Nagi/pull/76)もユーザー側でmainへマージ済み（`8f6cc6c`、treeは#76 head `13b59aa`と一致）。以下は#76作業時の検証記録であり、次フェーズの検証結果ではない。
 
 ## 判断と参考資料
 
@@ -105,9 +105,11 @@ qps中央値はNagi 62.7k／Rust 64.1k、p99中央値325／354µs、RSS snapshot
 
 PR/pushのRust変更では既存Linux全suiteとfuzz smokeを使い、4 OS対象のnative contract suiteにもconstant/Authを追加した。Docsだけの変更はRust全suiteを起動しない。週次/手動workflowは2 seed、各256生成、10,000 mutation、128 nativeと重要回帰を実行する。失敗は縮小結果とstageをartifactへ残す。
 
-このフェーズのローカル結果はLinuxのみ。#74の4 OS成功を新差分の成功として転用しない。#76の最初のCIではLinuxとmacOSのAuth実行結果が空になり、既定キャッシュの上書きを発見した。ローカルの明示共有設定で成功した結果を、既定経路の保証へ広げてはいけない。修正後もWindows/macOSを含む新CIで確認する必要がある。
+このフェーズのローカル結果はLinuxのみ。#74の4 OS成功を新差分の成功として転用しない。#76の最初のCIではLinuxとmacOSのAuth実行結果が空になり、既定キャッシュの上書きを発見した。ローカルの明示共有設定で成功した結果を、既定経路の保証へ広げてはいけない。
 
 実行ファイル修正後のCIでは、Windowsの生成Rust診断の`\\`区切りと、macOSの一時ディレクトリの`/var`・`/private/var`をテストが別物と扱った。診断の行・detail有無は維持して区切りを揃え、実行ファイルとproject targetはcanonical pathで比較する。アプリのstdout、別binary、同target、source行のassertは削らない。これらはP2のテスト移植性の問題で、生成Rustやruntimeを変更しない。
+
+最終head `13b59aa`の[CI run 37291388126](https://github.com/disnana/Nagi/actions/runs/37291388126)は成功。Linux全suite、Windows x64・Linux x64・macOS Apple Silicon・macOS Intel、VSIX、IntelliJ IDEA・PyCharmの検査とmerge gateが完了した。[website run 37291387847](https://github.com/disnana/Nagi/actions/runs/37291387847)も成功。publish-releaseはskipであり、この結果をrelease公開確認として扱わない。実IDEでの手動UI操作や、全プログラムの正しさの証明ではない。
 
 この表記対応後、Linuxでbuild diagnostics 30・project 12・shared target 2の44 tests、fmt、全target clippyが成功した。Windows/macOSの成否は再CIで確認する。独立レビューでもnegative・元位置・barrier・binary区別の検査を維持していることを確認した。
 

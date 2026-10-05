@@ -8,6 +8,8 @@
 
 契約は[language-invariants.md](docs/internal/language-invariants.md)、内部経路は[compiler-pipeline.md](docs/internal/compiler-pipeline.md)、テスト分類・実行法は[compiler-testing.md](docs/internal/compiler-testing.md)。新しい依頼の明示的な条件はこれらより優先する。
 
+コンパイラ/Rust境界の段階作業は[計画書](docs/internal/compiler-rust-boundary-plan.md)に従う。Guarantee Registerの現在と予定を区別し、前PhaseのacceptanceとCI成功前に次の実装へ進まない。[未決事項](docs/internal/open-questions.md)がStop扱いなら、契約・test期待を先に変更しない。結果と未確認範囲は[進捗](docs/internal/progress.md)へ記録する。
+
 ## 作業手順
 
 1. 対象の契約、関連実装、pass/failテスト、変更履歴を読む。parse成功、check成功、Rust build成功、実行成功を区別する。
