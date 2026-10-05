@@ -147,3 +147,9 @@ head `0b2a5a5`のchecks run `37347188897`で、Windowsの既存Axum sampleが保
 2026-10-06。ユーザーが#79をmainへマージした。main `2f2c93def942e3133eaffbca0ecb596292f95d47`のtree `286b3c0080bc7ce562ab5fdb0612989dd43eb60e`は成功head `27c8bf4`と一致し、そのheadを親に含む。エージェントはmerge操作を行っていない。
 
 同日、ユーザーが[ADR 009](adr/009-axum-rejected-body.md)の案Aを承認した。設計・invariant・Q003をcommitしてから先行回帰へ進む。本文読取期限はこのAxum sampleのContent-Type欠落だけに適用し、正常JSONと元client testは維持する。生成世代のmanifest/binからnative unitを実行し、0件やignoreを成功と数えない。修正後CI成功と#80のmain反映は未確認で、Phase 4のQ002も未承認。
+
+### 承認Aの修正後ローカル確認
+
+ADR→実行配線→tests-only→sample実装の順にcommitした。独立レビューのP2検査穴をhandler直接回帰で補い、元HTTP caseを維持して分割送信・4097byte正常JSONの413を追加した。High/保存Low各native8、HTTP19、不正port3が成功した。Python helper5/artifact9/CI52、site90も成功。生成applicationのstrict clippyは元generated main.rsのneedless_return2件で失敗し、allow・生成patchで隠していない。本体strict clippy成功とは分ける。
+
+修正後4 OS CIは未確認。#80のbaseを#79のfeature branchからmainへ変更して、修正headのCIを確認する。#79の成功と、この修正の成功を混同しない。Pool/Txの内部は[既存Rust再利用比較](sqlite-pool-rust-reuse.md)を具体案へ反映し、自作pool/driverに確定していない。Phase 4のpublic API・hooks/依存・cleanup/close policyは未承認で、実装は開始しない。

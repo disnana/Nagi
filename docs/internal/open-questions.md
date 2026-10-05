@@ -54,7 +54,7 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 判断は3つに分ける。
 
 1. module/resource/API・Parameters・行型・NULL/placeholder・required optionsの範囲。
-2. runtimeのrusqlite `hooks`有効化と、新Txだけに適用する一文・transaction-control/PRAGMA等のSQL制約。
+2. runtimeのrusqlite `hooks`有効化と、新Txだけに適用する一文・transaction-control/PRAGMA等のSQL制約。[既存Rust wrapper](sqlite-pool-rust-reuse.md)の比較結果を反映し、追加crate/feature/版が必要なら別に明示する。hooks承認をwrapper依存承認と兼ねない。
 3. cleanup確認前の再利用禁止、退役時の新取得停止、commit outcomeとcleanup failureの分離、close後の取消/timeoutの扱い。
 
 新しいAPI・capability、SQL受理範囲、終了policy、依存featureの判断が必要なのでStop対象。計画書とユーザー依頼の条件による明示的な確認であり、危険を仮定した追加の承認手順ではない。safe prototype、Txのcapture追跡、cleanup保証は未実装・未検証。承認後もADRとfailing testsから進め、safe APIで成立しない場合は保証を下げず反例と代替案を示す。

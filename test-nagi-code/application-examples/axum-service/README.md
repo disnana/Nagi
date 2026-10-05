@@ -32,4 +32,8 @@ curl -H 'Content-Type: application/json' -d '{"quantity":2}' \
 
 このadapterではJSON本文上限4096バイトとCtrl+Cのgraceful shutdownを設定しています。Nagi標準HTTPの接続数・受信／handler／送信の期限・panicの500変換・停止期限は自動で付きません。認証、TLS、DB、panicからの回復も追加していません。非同期の待機を取り消しても、外部処理や状態更新が巻き戻る保証はありません。`pause`は非同期の往復を示すtimerで、DB操作ではありません。
 
+Content-Typeが欠落したPOSTでは、本文を4096バイト・読取開始から1秒の範囲で読んでから415を返します。上限超過や読取失敗、期限切れでも415を優先し、読み切れなければ接続を閉じます。未読本文や通信切断が残る場合、clientが415を受信できるとは限りません。この待機は拒否時だけの設定です。正常JSONや、存在する不正なContent-Typeには適用しません。期限はTokioのcooperative timeoutで、CPUを占有する処理の強制停止にはなりません。拒否時に本文bufferと待機が加わるため、費用が不変という保証もありません。
+
 `smoke.py`は実HTTPで正常な見積、数量の境界、JSON入力の拒否、エラー後の正常応答、不正なport設定、停止後のlistener解放を確認します。共通の実行方法は[サンプル一覧](../README.md)を参照してください。Linux・macOSの検証ではCtrl+Cによる正常終了を確認し、Windowsではテスト側がprocessを終了させます。
+
+共通runnerはHigh・保存Lowそれぞれの成功ビルド世代からnative unitも実行します。本文の分割送信と4097バイトのJSON拒否は実HTTP、期限・読取error・取消によるFuture破棄は制御Futureの回帰で確認します。任意のTCP分割やkeep-alive再利用をすべて検査したという意味ではありません。

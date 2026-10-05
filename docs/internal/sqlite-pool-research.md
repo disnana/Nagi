@@ -4,7 +4,7 @@
 
 ## 推奨する一案と承認が必要な範囲
 
-新SQLite Pool専用workerで、worker-localなrusqlite Transactionと外側のowned nonClone sessionを分離する。新TxのSQLは一文ずつ実SQLiteでprepareし、safe Authorizerで利用者SQLのtransaction-control／savepoint／connection設定変更を拒否する。明示consumeだけが終端を要求し、Dropはworkerへcleanup責任を残す。cleanup失敗・worker喪失では接続をretireし、Poolを新規取得停止へ移す。自動replacement・retry・interruptは初版に入れない。
+worker-localなrusqlite Transactionと外側のowned nonClone sessionを分離する候補。pool/dispatchは専用自作に確定せず、[既存Rust wrapper](sqlite-pool-rust-reuse.md)のcheckout・session・cleanup/close観測を同条件で比較する。新TxのSQLは一文ずつ実SQLiteでprepareし、safe Authorizerで利用者SQLのtransaction-control／savepoint／connection設定変更を拒否する。明示consumeだけが終端を要求し、Dropはworkerへcleanup責任を残す。cleanup失敗・worker喪失では接続をretireし、Poolを新規取得停止へ移す。自動replacement・retry・interruptは初版に入れない。
 
 **この案を実装する前には、少なくともAPI名・新エラー表現・各policyの明示指定・SQL受理範囲・runtimeの`hooks`追加について判断が必要。** 既存Dbの値やrusqlite defaultを新APIへ暗黙流用しない。依存feature追加は、依存追加なしでも既存Stop条件の対象として明示する。
 

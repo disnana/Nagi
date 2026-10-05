@@ -87,3 +87,17 @@ Windowsの失敗は`axum-service`の保存Low実行で、Content-Typeのない13
 これは資源descriptorの値・生成byte一致を破った証拠ではないが、CI失敗を無関係として除外もしない。通常の合法requestを一括送信へ変えるだけでは元の配送条件を失うため採用しない。sample adapterの期限付き本文読取は新policyになるので、上限・期限・415の優先・close条件を具体化して判断する。本体runtimeやAxum/Hyperの第三者sourceは変更しない。
 
 生ログ・job/step結果・8件の実行行・source hash・Linux観測は作業環境の`/workspace/test-tools/compiler-rust-boundary-plan/phase3-production-ci-failure-proof.json`と`axum-early-rejection-*`へ保存した。調査と修正後CIの成功を混同しない。
+
+### 承認済みAxum修正とローカル再検査
+
+2026-10-06。[ADR 009](adr/009-axum-rejected-body.md)のAをユーザーが承認した。検証時のローカルcommitは、設計`1bf0182`、実行配線`a77c5d3`、先行native回帰`27ce519`、sample実装`fb8545c`の順。公開時は同じtreeとこの順序を維持する。先行回帰の初回はhelper未定義6件と旧handler引数不一致2件でcompileに失敗した。これは新policyが未実装だった証拠で、Windows10053の決定的再現ではない。
+
+独立レビューではhelperの直接検査だけでは実handlerのmissing分岐・上限誤値を捕まえられないP2の検査穴を指摘した。元7件を維持して、実handlerへ欠落headerと0/13/4096/4097 bytesを渡す8件目を追加した。既存smokeがrouterの上限を検査していたというコメントも訂正し、正常JSONを4097バイトへpaddingした実HTTP413回帰を追加した。
+
+最終Linux検査はHigh・保存Low各native 8件、各22caseが成功。22caseの内訳はHTTP19・不正port設定3。計native16・HTTP38・不正設定6で、ignore/失敗なし。元request helperのASTと9箇所のcheck呼出し（loopを含む）は維持した。新しい分割送信は追加caseで、一括送信への置換ではない。生成世代のmanifestとbinからnative unitを実行し、0件・ignore・曖昧なsummary・Cargo失敗を成功と数えないPython回帰5件も追加した。
+
+default CLI build、native rustfmt、本体workspace strict clippy、Python helper5・artifact9・CI判定52、site90ページは成功した。本体compiler/runtime・生成golden・Nagi入口・manifestは変更していないため、既に成功した829件・生成探索/fuzzを新しいsample修正の再実行と数えない。修正headの4 OS CIで改めて確認する。
+
+生成されたapplicationへのstrict clippy試行は、既存generated main.rsのneedless_return 2件で失敗した。元生成内容をpatchせず、lint allowや別harnessで成功扱いにしていない。これはRust build失敗ではなく、生成コードのP3スタイル候補として残す。本体clippyの成功と区別する。sample正常経路のFuture size・allocation・throughputは測っておらず、費用不変を保証しない。#74由来のFuture +32 byteも未解決。
+
+修正後CIはこの記録時点では未確認。#80をmain向けに更新し、CI acceptance完了までdraftを維持する。mainへのmerge・版更新・releaseは実行しない。Phase 4は[既存Rust wrapperの比較](sqlite-pool-rust-reuse.md)までで、API/hooks/追加依存/終了policyは未採用・未実装。

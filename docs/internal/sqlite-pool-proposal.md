@@ -4,6 +4,8 @@
 
 第一候補は新module `std.db.sqlite`（canonical ID `stdlib:std.db.sqlite`）、runtime namespace `nagi_runtime::sqlite`。既存Db、db_*、FromRow、Sql、Error、標準HTTP/Actor Optionsを変更・削除しない。新APIへ固定id/name/age bindを継承しない。新言語syntax、reflection、ToParams derive、generic trait solverは導入しない。
 
+内部のpool/dispatchはまだ確定していない。[既存Rust wrapperの比較](sqlite-pool-rust-reuse.md)では、deadpoolのowned checkout、tokio-rusqliteの専用worker、r2d2の同期poolと、狭いsession adapterを候補に残した。専用workerという説明をpool algorithmの自作決定とは扱わない。cleanupとcloseの観測まで同じ条件でprototypeし、責任とコードを減らせる実装を選ぶ。追加wrapperの依存承認はruntime hooksの承認とは別で、どちらも未承認。
+
 ## 資源と値の候補
 
 | 名前 | 所有・capabilityの第一候補 |
