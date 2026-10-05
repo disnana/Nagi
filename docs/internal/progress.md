@@ -125,3 +125,13 @@ Copy深さ63/64/65を4種類のleafで検査した。checkerが2回使用を拒�
 先行test-onlyをfreezeした。新規13件、対象125件、全suiteは91 suite・820成功。fmt/clippy、Python CI 52/release 90、site 90ページ、38 corpus/16harnessの登録確認も成功。別のSolが全文golden・独立期待・旧assert・production不変をレビューした。詳細と初回oracle/capture失敗の区別は[結果](resource-contract-results.md)に記録する。4 OS CIの成功前に集約実装を開始しない。
 
 #80の初回CIはmacOS ARMの既存shared-target fixtureで失敗した。同tickのdirectory共有・他方Dropによる削除を独立した小さい回帰で再現し、atomic識別子とexclusive作成へ修正した。旧2件のassertは維持し、新回帰を含む3件成功、fmt/clippy成功。CIとの因果の確度と同系統の未再現候補は[結果](resource-contract-results.md)に残す。修正後CIの完了前には集約へ進まない。
+
+修正head `eb93873`の[checks run 37341673174](https://github.com/disnana/Nagi/actions/runs/37341673174)・attempt 1とwebsite run `37341672775`が成功した。Linux全suiteは91 suite・821成功。4 OSのログで新inventory/golden/用途別/fixture/native登録テストを確認し、両JetBrains製品、VSIX、merge gateも成功した。publish-releaseはskip。先行test-only acceptanceを満たしたため、同じ期待を保つprivate ResourceContractの集約へ進む。#79はmain未マージ、#80は依存を明記したdraftのままで、集約後のacceptanceとは分ける。
+
+### 集約実装とローカル検証
+
+登録資源22個をprivate named static Contractへ集約した。公開ResourceInfoは内包した既存値の参照、shared/native Serde queryも同じ根拠を使う。constでarity・範囲・重複・欠落を検査し、用途別判定順、Passing、旧の受理・拒否・全文goldenは維持した。productionはstdlib/capabilitiesの2fileだけで、checker/checked/emitter/runtime/依存は変更していない。
+
+private unitは正例2・負例6を追加。対象205件、全91 suite・829件、fmt/clippy、2 seedで各256生成case＋38固定corpus、10,000 mutation/128 native、SQL engineなし8件が成功した。独立レビューとrootも旧値・公開shape・生成bytesの維持を確認した。前後各64回のcheck/lower測定は全成功・Low bytes一致で、中央値には増減がある。条件と生データは[測定](../../benchmarks/results/resource-contracts-2026-10-05/README.md)へ保存した。詳細と初回コマンド失敗は[結果](resource-contract-results.md)に区別する。
+
+集約後の4 OS CIは、このcommit時点では確認前。確認前にPhase 4実装へ進まない。mainへのmerge・版更新・releaseも行っていない。[Pool／Txの具体案](sqlite-pool-proposal.md)と[根拠・代替案](sqlite-pool-research.md)は未採用の資料で、新API/policy/hooksの判断を[Q-002](open-questions.md#q-002-sqlite-pooltxの初版apiと終了policy)に残した。

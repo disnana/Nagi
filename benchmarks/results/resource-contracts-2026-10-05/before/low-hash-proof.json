@@ -1,0 +1,454 @@
+{
+  "rows_checked": 64,
+  "all_row_hashes_and_snapshot_bytes_match": true,
+  "checks": [
+    {
+      "ordinal": 0,
+      "fixture": "http-inspection",
+      "mode": "check",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 1,
+      "fixture": "http-inspection",
+      "mode": "lower",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 2,
+      "fixture": "http-borrow-mappers",
+      "mode": "check",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 3,
+      "fixture": "http-borrow-mappers",
+      "mode": "lower",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 4,
+      "fixture": "actor-data",
+      "mode": "check",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 5,
+      "fixture": "actor-data",
+      "mode": "lower",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 6,
+      "fixture": "data-derives",
+      "mode": "check",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 7,
+      "fixture": "data-derives",
+      "mode": "lower",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 8,
+      "fixture": "http-inspection",
+      "mode": "check",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 9,
+      "fixture": "http-inspection",
+      "mode": "lower",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 10,
+      "fixture": "http-borrow-mappers",
+      "mode": "check",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 11,
+      "fixture": "http-borrow-mappers",
+      "mode": "lower",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 12,
+      "fixture": "actor-data",
+      "mode": "check",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 13,
+      "fixture": "actor-data",
+      "mode": "lower",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 14,
+      "fixture": "data-derives",
+      "mode": "check",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 15,
+      "fixture": "data-derives",
+      "mode": "lower",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 16,
+      "fixture": "http-inspection",
+      "mode": "lower",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 17,
+      "fixture": "http-borrow-mappers",
+      "mode": "check",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 18,
+      "fixture": "http-borrow-mappers",
+      "mode": "lower",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 19,
+      "fixture": "actor-data",
+      "mode": "check",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 20,
+      "fixture": "actor-data",
+      "mode": "lower",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 21,
+      "fixture": "data-derives",
+      "mode": "check",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 22,
+      "fixture": "data-derives",
+      "mode": "lower",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 23,
+      "fixture": "http-inspection",
+      "mode": "check",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 24,
+      "fixture": "http-borrow-mappers",
+      "mode": "check",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 25,
+      "fixture": "http-borrow-mappers",
+      "mode": "lower",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 26,
+      "fixture": "actor-data",
+      "mode": "check",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 27,
+      "fixture": "actor-data",
+      "mode": "lower",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 28,
+      "fixture": "data-derives",
+      "mode": "check",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 29,
+      "fixture": "data-derives",
+      "mode": "lower",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 30,
+      "fixture": "http-inspection",
+      "mode": "check",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 31,
+      "fixture": "http-inspection",
+      "mode": "lower",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 32,
+      "fixture": "http-borrow-mappers",
+      "mode": "lower",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 33,
+      "fixture": "actor-data",
+      "mode": "check",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 34,
+      "fixture": "actor-data",
+      "mode": "lower",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 35,
+      "fixture": "data-derives",
+      "mode": "check",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 36,
+      "fixture": "data-derives",
+      "mode": "lower",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 37,
+      "fixture": "http-inspection",
+      "mode": "check",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 38,
+      "fixture": "http-inspection",
+      "mode": "lower",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 39,
+      "fixture": "http-borrow-mappers",
+      "mode": "check",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 40,
+      "fixture": "actor-data",
+      "mode": "check",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 41,
+      "fixture": "actor-data",
+      "mode": "lower",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 42,
+      "fixture": "data-derives",
+      "mode": "check",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 43,
+      "fixture": "data-derives",
+      "mode": "lower",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 44,
+      "fixture": "http-inspection",
+      "mode": "check",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 45,
+      "fixture": "http-inspection",
+      "mode": "lower",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 46,
+      "fixture": "http-borrow-mappers",
+      "mode": "check",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 47,
+      "fixture": "http-borrow-mappers",
+      "mode": "lower",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 48,
+      "fixture": "actor-data",
+      "mode": "lower",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 49,
+      "fixture": "data-derives",
+      "mode": "check",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 50,
+      "fixture": "data-derives",
+      "mode": "lower",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 51,
+      "fixture": "http-inspection",
+      "mode": "check",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 52,
+      "fixture": "http-inspection",
+      "mode": "lower",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 53,
+      "fixture": "http-borrow-mappers",
+      "mode": "check",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 54,
+      "fixture": "http-borrow-mappers",
+      "mode": "lower",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 55,
+      "fixture": "actor-data",
+      "mode": "check",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 56,
+      "fixture": "data-derives",
+      "mode": "check",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 57,
+      "fixture": "data-derives",
+      "mode": "lower",
+      "bytes": 6034,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    },
+    {
+      "ordinal": 58,
+      "fixture": "http-inspection",
+      "mode": "check",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 59,
+      "fixture": "http-inspection",
+      "mode": "lower",
+      "bytes": 28232,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "ordinal": 60,
+      "fixture": "http-borrow-mappers",
+      "mode": "check",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 61,
+      "fixture": "http-borrow-mappers",
+      "mode": "lower",
+      "bytes": 32732,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "ordinal": 62,
+      "fixture": "actor-data",
+      "mode": "check",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "ordinal": 63,
+      "fixture": "actor-data",
+      "mode": "lower",
+      "bytes": 19440,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    }
+  ]
+}

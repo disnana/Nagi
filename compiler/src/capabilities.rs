@@ -248,8 +248,10 @@ pub(crate) fn serde_type(
         ) {
             return ty.1.is_empty();
         }
-        if !classes.contains_key(&ty.0) && crate::stdlib::resource(&ty.0).is_some() {
-            return false;
+        if !classes.contains_key(&ty.0) {
+            if let Some(resource) = crate::stdlib::resource(&ty.0) {
+                return crate::stdlib::native_serde_supported(resource);
+            }
         }
         if enums.contains_key(&ty.0) {
             return false;
@@ -459,6 +461,20 @@ mod tests {
                 _ => [&[], &[], &[], &[], &[]],
             };
             let info = crate::stdlib::resource_info(resource);
+            use crate::stdlib::TypeArgumentRole as Role;
+            for (role, expected) in [
+                (Role::InlinePayload, inline),
+                (Role::SharedPayload, shared),
+                (Role::IndirectProtocol, indirect),
+                (Role::CallbackSignature, signature),
+                (Role::NominalPhantom, phantom),
+            ] {
+                assert_eq!(
+                    crate::stdlib::type_argument_positions(resource, role),
+                    expected,
+                    "{resource:?} {role:?}"
+                );
+            }
             assert_eq!(info.inline_type_arguments, inline, "{resource:?}");
             assert_eq!(
                 crate::stdlib::shared_type_arguments(resource),

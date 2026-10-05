@@ -1,6 +1,6 @@
 # コンパイラとRust境界の段階計画
 
-状態: PR0は#77でmainへ反映済み。Q-001は2026-10-05に承認済み。Phase 1は#78のhead `08199bf`で4 OS・editor CIまで成功し、その後ユーザーがmain `0107f37`へマージした。tree一致を確認済みで、エージェントはマージ操作を行っていない。Phase 2は[ADR 007](adr/007-build-generations.md)に基づき実装し、#79 head `27c8bf4`の4 OS・editor/package・Docs・merge gate CIが成功、main未反映。Phase 3は[ADR 008](adr/008-resource-contracts.md)と先行テストに着手する。集約実装とPhase 4以降は未実装。[進捗](progress.md)を参照。
+状態: PR0は#77でmainへ反映済み。Q-001は2026-10-05に承認済み。Phase 1は#78のhead `08199bf`で4 OS・editor CIまで成功し、その後ユーザーがmain `0107f37`へマージした。tree一致を確認済みで、エージェントはマージ操作を行っていない。Phase 2は[ADR 007](adr/007-build-generations.md)に基づき実装し、#79 head `27c8bf4`の4 OS・editor/package・Docs・merge gate CIが成功、main未反映。Phase 3は[ADR 008](adr/008-resource-contracts.md)と先行test-only head `eb93873`の4 OS CI成功を確認し、集約実装へ着手。集約後のacceptanceは確認中で、Phase 4以降は未実装。[進捗](progress.md)を参照。
 
 基点はmain `8f6cc6cf7d7c08811736325263618cbea19314b8`。PR #76のhead `13b59aa`とtreeは同じであり、#74・#76のchecked facts、Low互換性、Rust backendを維持する。本計画は2026-10-05の依頼に基づく。実装済みの保証と、後続Phaseで追加する予定の保証を分ける。
 

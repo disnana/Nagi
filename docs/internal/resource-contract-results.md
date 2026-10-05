@@ -1,6 +1,6 @@
 # 登録資源の契約: 先行テストの結果
 
-2026-10-05。Phase 2の成功head `27c8bf4`を基点にしたPhase 3。採用設計は[ADR 008](adr/008-resource-contracts.md)。このcommitはtest-onlyで、ResourceContractの本実装はまだ変更していない。CI成功後にだけ集約へ進む。
+2026-10-05。Phase 2の成功head `27c8bf4`を基点にしたPhase 3。採用設計は[ADR 008](adr/008-resource-contracts.md)。先行test-onlyのhead `eb93873`で4 OS CIが成功した。以下は集約前の観測であり、本実装の完了結果は分けて追記する。
 
 ## 独立した期待と生成例
 
@@ -36,10 +36,42 @@ Solが登録期待と生成testを実装し、別のSolがfreeze差分を独立�
 
 失敗は、もう一方のtest成功直後にCargoがcurrent directoryを見失ったもの。同時刻で2つのFixtureを作る小さい回帰では、旧factoryが同じdirectoryを借用し、一方のDropが他方のsentinelを消すことを再現した。P2のtest資源所有権の欠陥は確定。CIの個々の時刻衝突までtraceした証拠はないため、その失敗との因果は整合する候補として残す。
 
-fixtureへprocess内AtomicU64の識別子とexclusive create_dirを追加した。承認済みの内部test pathの修正で、既存2件の言語・世代・cache・実行assertはすべて維持した。同tick回帰と旧2件の3成功、targeted clippy/rustfmt成功を確認。skip、retry、test全体の直列化は追加していない。上記820件の全suiteはこのfixture修正前の結果で、修正後の4 OS CIは再確認待ち。
+fixtureへprocess内AtomicU64の識別子とexclusive create_dirを追加した。承認済みの内部test pathの修正で、既存2件の言語・世代・cache・実行assertはすべて維持した。同tick回帰と旧2件の3成功、targeted clippy/rustfmt成功を確認。skip、retry、test全体の直列化は追加していない。上記820件の全suiteはこのfixture修正前のローカル結果。修正後のLinux CIの全suiteは91 suite・821成功で、追加回帰1件を含む。
+
+### 先行test-onlyのCI acceptance
+
+head `eb93873a9a1f2583f2be09eff8028941a19399e9`、tree `fd09e4e9f71440bb37fbca84735f65bb994d8cef`の[checks run 37341673174](https://github.com/disnana/Nagi/actions/runs/37341673174)・attempt 1が成功した。Linux全検査、4 OSの配布・実application・インストール検証、VSIX、IntelliJ IDEA、PyCharm、merge gateを読み戻した。[website run 37341672775](https://github.com/disnana/Nagi/actions/runs/37341672775)も成功。publish-releaseはskipで、公開はしていない。
+
+4 OSそれぞれの完了ログで、inventory 4件、全文golden 4件、用途別3件、同tick fixture回帰、借用JSON・named mapper登録のnative回帰の実行成功を確認した。harnessの登録だけから成功を推測していない。先行テストのacceptanceを満たしたため、同じ期待を維持する集約実装へ進む。これは集約後のCI成功ではない。
 
 PID/時刻を使う他21 fileも読み取りで確認した。atomicを持たないものは11 fileだが、prefix・単発実行・exclusive作成等の条件が異なるため、すべて同じ欠陥とは断定しない。integer_arithmetic、integer_zero_division、conformanceのfactoryはP2候補として、同tick注入の再現と共通allocatorの適用を次の監査対象にする。未再現の候補を成功や修正済みには数えない。今回の資源集約前に広範なtest rewriteは行わない。
 
 #79未マージの間はstacked PRで依存を明記し、最終反映先はmainとする。こちらではmerge・版更新・releaseを行わない。
 
 [Copy深さの差](copy-boundary-investigation.md)は別のP2として記録した。今回のinventory集約で受理・deriveを変えたり、差を正常goldenへ固定したりしない。Pool/Tx/lifecycle・新しい保証は未実装。既存Rustへのtrait/Send/Sync/link/依存環境の委譲も維持する。
+
+## 集約実装
+
+production差分は`stdlib.rs`と`capabilities.rs`。22個のnamed static ResourceContractへ既存ResourceInfoを移し、公開queryはその参照を返す。shared payloadの旧queryとnative Serde拒否は同じdescriptorを使う。型引数の5種類のroleは登録sliceから導き、独立したrole配列や用途共通のwalkerは追加しない。
+
+各staticのconst constructorで、generic arity、全indexの範囲、各positionがちょうど1つのroleに属することを検査する。通常lookup時のregistry走査はしない。lifecycleはUnspecified、現資源のSerdeはfalseのまま。operation、checker、emitter、runtime、依存版・featureは変更していない。
+
+private unit testを8件追加した。旧queryが同じdescriptorを参照することと手書きrole期待の正例2件、欠落・同一slice内の重複・role間の重複・範囲外・arity 0へのrole・type parameter数不一致の負例6件。先行inventoryと全文goldenの期待値は変更していない。追加testも既存linked library harnessへ登録した。
+
+対象205件、fmt/all-target clippy、CLI buildは成功した。4goldenのLow/Rust全文、元のNagi/Low入力、public ResourceInfo shape、全22登録値、operation・accessor・constantの内容を維持した。checker/checked/ast/emitter/runtimeは変更していない。全suite、bounded生成探索、4 OS CIの完了は分けて追記する。この節だけでacceptance済みとはしない。
+
+### frontend測定
+
+同じphysical input/cwd/output pathで、4fixtureのcheck/lowerを各warmup 1＋測定7回実行した。前後計128起動が成功し、全反復と前後の未正規化Low bytesが一致した。[環境・生データ・比較](../../benchmarks/results/resource-contracts-2026-10-05/README.md)を保存した。中央値には増減があり、共有hostでのこの小さい観測から速度不変や高速化を保証しない。timerはprocess起動・frontend・CLI filesystem処理・pipe収集を含み、Cargo/runtime throughput/allocation/RSS/CPU/Future sizeは測っていない。
+
+Docs生成の最初の試行は、scriptの出力制限に反する`/tmp`指定を拒否された。productionを変えず、対応する`build/`内で再実行して90ページ・links/anchors/assets検査が成功した。初回失敗を正常な生成結果とは数えない。
+
+### 集約後のローカルacceptance
+
+- `cargo test --locked`: 91 suite・829成功、失敗・ignoreなし。先行test-only修正後821件にprivate unit 8件を追加した。
+- 対象205件、fmt/all-target clippy `-D warnings`、CLI build: 成功。
+- seed `305419896`と`3735928559`で各256生成case＋固定38corpus。両seedともconformanceの全5testが成功した。
+- fuzz smoke: 10,000 mutation、parse拒否7,149、check拒否1,910、受理後Low/emit成功941、panic 0、bounded native 128。coverage-guided fuzzや全受理プログラムの証明ではない。
+- 独立Solレビューとroot照合: 旧22 ResourceInfo値、公開shape、operation/identity/accessor/constants、目的別判定順、fixture/golden期待の維持を確認。今回の差分に新P0/P1/P2は見つからなかった。既知Copy差や他のfixture候補が解消したとはしない。
+
+SQL engine無効検査の初回は存在しないtest targetを指定してCargoが拒否した。conformance/fuzzの成功と区別し、CIと同じbuild＋cli/sql_check commandで確認し直し、buildと8件が成功した。4 OSの集約後CIは別に確認する。

@@ -302,9 +302,10 @@
   },
   {
     "name": "resource_payload_purpose_and_full_goldens",
-    "contract": "layout/共有payload/phantom/signature/protocol、native DebugとSerde/Charge/storageを用途別に検査する。固定logical identityのLow/Rust全文4goldenは物理file provenanceの証明と区別する",
+    "contract": "layout/共有payload/phantom/signature/protocol、native DebugとSerde/Charge/storageを用途別に検査する。descriptorの範囲・重複・欠落と旧projectionを検査する。固定logical identityのLow/Rust全文4goldenは物理file provenanceの証明と区別する",
     "files": [
       "compiler/src/capabilities.rs",
+      "compiler/src/stdlib.rs",
       "compiler/src/tests/resource_contract_goldens.rs"
     ],
     "test_names": [
@@ -314,7 +315,15 @@
       "http_inspection_golden",
       "http_borrow_and_mappers_golden",
       "actor_data_golden",
-      "data_derives_golden"
+      "data_derives_golden",
+      "registered_roles_match_the_independent_position_oracle",
+      "legacy_views_borrow_the_registered_descriptor",
+      "descriptor_rejects_missing_role",
+      "descriptor_rejects_duplicate_in_one_role",
+      "descriptor_rejects_overlapping_roles",
+      "descriptor_rejects_out_of_range_role",
+      "descriptor_rejects_roles_on_zero_arity",
+      "descriptor_rejects_arity_parameter_mismatch"
     ],
     "command": [
       "cargo",

@@ -262,296 +262,625 @@ pub fn module(name: &str) -> Option<ModuleId> {
 pub fn is_registered_module(id: &ModuleId) -> bool {
     MODULES.iter().any(|module| module_info(*module).id == id.0)
 }
-pub fn resource_info(resource: Resource) -> &'static ResourceInfo {
-    match resource {
-        Resource::Principal => &ResourceInfo {
-            module: StandardModule::Auth,
-            name: "Principal",
-            arity: 0,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::auth::Principal",
-            copy: false,
-            equality: false,
-            storage: false,
-            shared: false,
-            debug: false,
-        },
-        Resource::Grant => &ResourceInfo {
-            module: StandardModule::Auth,
-            name: "Grant",
-            arity: 1,
-            type_parameters: &["P"],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::auth::Grant",
-            copy: false,
-            equality: false,
-            storage: false,
-            shared: false,
-            debug: false,
-        },
-        Resource::Request => &ResourceInfo {
-            module: StandardModule::HttpServer,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            name: "Request",
-            arity: 0,
-            rust_path: "::nagi_runtime::http_server::Request",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::Response => &ResourceInfo {
-            module: StandardModule::HttpServer,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            name: "Response",
-            arity: 0,
-            rust_path: "::nagi_runtime::http_server::Response",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: false,
-            debug: true,
-        },
-        Resource::Method => &ResourceInfo {
-            module: StandardModule::HttpServer,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            name: "Method",
-            arity: 0,
-            rust_path: "::nagi_runtime::http_server::Method",
-            copy: false,
-            equality: true,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::Status => &ResourceInfo {
-            module: StandardModule::HttpServer,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            name: "Status",
-            arity: 0,
-            rust_path: "::nagi_runtime::http_server::Status",
-            copy: true,
-            equality: true,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::Options => &ResourceInfo {
-            module: StandardModule::HttpServer,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            name: "Options",
-            arity: 0,
-            rust_path: "::nagi_runtime::http_server::Options",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::App => &ResourceInfo {
-            module: StandardModule::HttpServer,
-            type_parameters: &["S", "E"],
-            inline_type_arguments: &[],
-            name: "App",
-            arity: 2,
-            rust_path: "::nagi_runtime::http_server::App",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: false,
-            debug: true,
-        },
-        Resource::Supervisor => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "Supervisor",
-            arity: 1,
-            type_parameters: &["C"],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::Supervisor",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: false,
-            debug: true,
-        },
-        Resource::WaitKind => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "WaitKind",
-            arity: 0,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::WaitKind",
-            copy: true,
-            equality: true,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::WaitError => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "WaitError",
-            arity: 0,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::WaitError",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::TaskReady => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "TaskReady",
-            arity: 0,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::TaskReady",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: false,
-            debug: true,
-        },
-        Resource::Control => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "Control",
-            arity: 0,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::Control",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::Actor => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "Actor",
-            arity: 3,
-            type_parameters: &["M", "R", "E"],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::Actor",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::Turn => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "Turn",
-            arity: 3,
-            type_parameters: &["S", "R", "E"],
-            inline_type_arguments: &[0, 1, 2],
-            rust_path: "::nagi_runtime::actor::Turn",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: false,
-            debug: true,
-        },
-        Resource::SupervisorOptions => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "Options",
-            arity: 0,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::Options",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::ActorOptions => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "ActorOptions",
-            arity: 0,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::ActorOptions",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::RestartPolicy => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "RestartPolicy",
-            arity: 0,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::RestartPolicy",
-            copy: true,
-            equality: true,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::CallKind => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "CallKind",
-            arity: 0,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::CallKind",
-            copy: true,
-            equality: true,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::EventKind => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "EventKind",
-            arity: 0,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::EventKind",
-            copy: true,
-            equality: true,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::CallError => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "CallError",
-            arity: 0,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::CallError",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
-        Resource::Event => &ResourceInfo {
-            module: StandardModule::Actor,
-            name: "Event",
-            arity: 0,
-            type_parameters: &[],
-            inline_type_arguments: &[],
-            rust_path: "::nagi_runtime::actor::Event",
-            copy: false,
-            equality: false,
-            storage: true,
-            shared: true,
-            debug: true,
-        },
+// Closed compiler-owned representation metadata. Public ResourceInfo remains
+// a projection of the same descriptor, including its legacy inline slice.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TypeArgumentRole {
+    InlinePayload,
+    SharedPayload,
+    IndirectProtocol,
+    CallbackSignature,
+    NominalPhantom,
+}
+
+#[derive(Clone, Copy)]
+enum ResourceLifecycle {
+    Unspecified,
+}
+
+struct ResourceContract {
+    info: ResourceInfo,
+    shared: &'static [usize],
+    indirect_protocol: &'static [usize],
+    callback_signature: &'static [usize],
+    nominal_phantom: &'static [usize],
+    serde: bool,
+    lifecycle: ResourceLifecycle,
+}
+
+impl ResourceContract {
+    const fn new(
+        info: ResourceInfo,
+        shared: &'static [usize],
+        indirect_protocol: &'static [usize],
+        callback_signature: &'static [usize],
+        nominal_phantom: &'static [usize],
+    ) -> Self {
+        let contract = Self {
+            info,
+            shared,
+            indirect_protocol,
+            callback_signature,
+            nominal_phantom,
+            // Current registered native representations do not promise Serde.
+            serde: false,
+            // No cancellation, cleanup, or task-transfer policy is activated.
+            lifecycle: ResourceLifecycle::Unspecified,
+        };
+        contract.validate();
+        contract
+    }
+
+    const fn positions(&self, role: TypeArgumentRole) -> &'static [usize] {
+        match role {
+            TypeArgumentRole::InlinePayload => self.info.inline_type_arguments,
+            TypeArgumentRole::SharedPayload => self.shared,
+            TypeArgumentRole::IndirectProtocol => self.indirect_protocol,
+            TypeArgumentRole::CallbackSignature => self.callback_signature,
+            TypeArgumentRole::NominalPhantom => self.nominal_phantom,
+        }
+    }
+
+    const fn occurrences(&self, role: TypeArgumentRole, position: usize) -> usize {
+        let positions = self.positions(role);
+        let mut index = 0;
+        let mut count = 0;
+        while index < positions.len() {
+            if positions[index] == position {
+                count += 1;
+            }
+            index += 1;
+        }
+        count
+    }
+
+    const fn role_at(&self, position: usize) -> Option<TypeArgumentRole> {
+        if position >= self.info.arity {
+            return None;
+        }
+        if self.occurrences(TypeArgumentRole::InlinePayload, position) != 0 {
+            Some(TypeArgumentRole::InlinePayload)
+        } else if self.occurrences(TypeArgumentRole::SharedPayload, position) != 0 {
+            Some(TypeArgumentRole::SharedPayload)
+        } else if self.occurrences(TypeArgumentRole::IndirectProtocol, position) != 0 {
+            Some(TypeArgumentRole::IndirectProtocol)
+        } else if self.occurrences(TypeArgumentRole::CallbackSignature, position) != 0 {
+            Some(TypeArgumentRole::CallbackSignature)
+        } else if self.occurrences(TypeArgumentRole::NominalPhantom, position) != 0 {
+            Some(TypeArgumentRole::NominalPhantom)
+        } else {
+            None
+        }
+    }
+
+    const fn validate_positions(&self, role: TypeArgumentRole) {
+        let positions = self.positions(role);
+        let mut index = 0;
+        while index < positions.len() {
+            assert!(
+                positions[index] < self.info.arity,
+                "resource role index out of range"
+            );
+            index += 1;
+        }
+    }
+
+    // Called in every static initializer, not as a per-lookup runtime scan.
+    const fn validate(&self) {
+        assert!(
+            self.info.arity == self.info.type_parameters.len(),
+            "resource generic arity mismatch"
+        );
+        self.validate_positions(TypeArgumentRole::InlinePayload);
+        self.validate_positions(TypeArgumentRole::SharedPayload);
+        self.validate_positions(TypeArgumentRole::IndirectProtocol);
+        self.validate_positions(TypeArgumentRole::CallbackSignature);
+        self.validate_positions(TypeArgumentRole::NominalPhantom);
+        let mut position = 0;
+        while position < self.info.arity {
+            let count = self.occurrences(TypeArgumentRole::InlinePayload, position)
+                + self.occurrences(TypeArgumentRole::SharedPayload, position)
+                + self.occurrences(TypeArgumentRole::IndirectProtocol, position)
+                + self.occurrences(TypeArgumentRole::CallbackSignature, position)
+                + self.occurrences(TypeArgumentRole::NominalPhantom, position);
+            assert!(
+                count == 1,
+                "resource generic position must have exactly one role"
+            );
+            assert!(
+                self.role_at(position).is_some(),
+                "resource generic position is unclassified"
+            );
+            position += 1;
+        }
+        match self.lifecycle {
+            ResourceLifecycle::Unspecified => {}
+        }
     }
 }
+
+static CONTRACT_PRINCIPAL: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Auth,
+        name: "Principal",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::auth::Principal",
+        copy: false,
+        equality: false,
+        storage: false,
+        shared: false,
+        debug: false,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_GRANT: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Auth,
+        name: "Grant",
+        arity: 1,
+        type_parameters: &["P"],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::auth::Grant",
+        copy: false,
+        equality: false,
+        storage: false,
+        shared: false,
+        debug: false,
+    },
+    &[],
+    &[],
+    &[],
+    &[0],
+);
+
+static CONTRACT_REQUEST: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::HttpServer,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        name: "Request",
+        arity: 0,
+        rust_path: "::nagi_runtime::http_server::Request",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_RESPONSE: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::HttpServer,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        name: "Response",
+        arity: 0,
+        rust_path: "::nagi_runtime::http_server::Response",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: false,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_METHOD: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::HttpServer,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        name: "Method",
+        arity: 0,
+        rust_path: "::nagi_runtime::http_server::Method",
+        copy: false,
+        equality: true,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_STATUS: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::HttpServer,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        name: "Status",
+        arity: 0,
+        rust_path: "::nagi_runtime::http_server::Status",
+        copy: true,
+        equality: true,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_OPTIONS: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::HttpServer,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        name: "Options",
+        arity: 0,
+        rust_path: "::nagi_runtime::http_server::Options",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_APP: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::HttpServer,
+        type_parameters: &["S", "E"],
+        inline_type_arguments: &[],
+        name: "App",
+        arity: 2,
+        rust_path: "::nagi_runtime::http_server::App",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: false,
+        debug: true,
+    },
+    &[0],
+    &[],
+    &[1],
+    &[],
+);
+
+static CONTRACT_SUPERVISOR: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "Supervisor",
+        arity: 1,
+        type_parameters: &["C"],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::Supervisor",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: false,
+        debug: true,
+    },
+    &[0],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_WAIT_KIND: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "WaitKind",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::WaitKind",
+        copy: true,
+        equality: true,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_WAIT_ERROR: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "WaitError",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::WaitError",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_TASK_READY: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "TaskReady",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::TaskReady",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: false,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_CONTROL: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "Control",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::Control",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_ACTOR: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "Actor",
+        arity: 3,
+        type_parameters: &["M", "R", "E"],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::Actor",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[0, 1, 2],
+    &[],
+    &[],
+);
+
+static CONTRACT_TURN: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "Turn",
+        arity: 3,
+        type_parameters: &["S", "R", "E"],
+        inline_type_arguments: &[0, 1, 2],
+        rust_path: "::nagi_runtime::actor::Turn",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: false,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_SUPERVISOR_OPTIONS: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "Options",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::Options",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_ACTOR_OPTIONS: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "ActorOptions",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::ActorOptions",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_RESTART_POLICY: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "RestartPolicy",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::RestartPolicy",
+        copy: true,
+        equality: true,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_CALL_KIND: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "CallKind",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::CallKind",
+        copy: true,
+        equality: true,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_EVENT_KIND: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "EventKind",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::EventKind",
+        copy: true,
+        equality: true,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_CALL_ERROR: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "CallError",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::CallError",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_EVENT: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Actor,
+        name: "Event",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::actor::Event",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+fn resource_contract(resource: Resource) -> &'static ResourceContract {
+    match resource {
+        Resource::Principal => &CONTRACT_PRINCIPAL,
+        Resource::Grant => &CONTRACT_GRANT,
+        Resource::Request => &CONTRACT_REQUEST,
+        Resource::Response => &CONTRACT_RESPONSE,
+        Resource::Method => &CONTRACT_METHOD,
+        Resource::Status => &CONTRACT_STATUS,
+        Resource::Options => &CONTRACT_OPTIONS,
+        Resource::App => &CONTRACT_APP,
+        Resource::Supervisor => &CONTRACT_SUPERVISOR,
+        Resource::WaitKind => &CONTRACT_WAIT_KIND,
+        Resource::WaitError => &CONTRACT_WAIT_ERROR,
+        Resource::TaskReady => &CONTRACT_TASK_READY,
+        Resource::Control => &CONTRACT_CONTROL,
+        Resource::Actor => &CONTRACT_ACTOR,
+        Resource::Turn => &CONTRACT_TURN,
+        Resource::SupervisorOptions => &CONTRACT_SUPERVISOR_OPTIONS,
+        Resource::ActorOptions => &CONTRACT_ACTOR_OPTIONS,
+        Resource::RestartPolicy => &CONTRACT_RESTART_POLICY,
+        Resource::CallKind => &CONTRACT_CALL_KIND,
+        Resource::EventKind => &CONTRACT_EVENT_KIND,
+        Resource::CallError => &CONTRACT_CALL_ERROR,
+        Resource::Event => &CONTRACT_EVENT,
+    }
+}
+
+pub fn resource_info(resource: Resource) -> &'static ResourceInfo {
+    &resource_contract(resource).info
+}
+
+pub(crate) fn type_argument_positions(
+    resource: Resource,
+    role: TypeArgumentRole,
+) -> &'static [usize] {
+    resource_contract(resource).positions(role)
+}
+
+pub(crate) fn native_serde_supported(resource: Resource) -> bool {
+    resource_contract(resource).serde
+}
+
 pub fn operation_info(operation: Operation) -> &'static OperationInfo {
     match operation {
  Operation::Status => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "status", rust_path: "::nagi_runtime::http_server::status", arity: 1, generic_arity: 0, parameters: &[Passing::Move], borrow_owner: None, signature: "(value: i64) -> Result[Status, Error]" },
@@ -668,10 +997,7 @@ pub fn contains_symbol(symbol: &str) -> bool {
 /// representation contract next to the native resource registry, not in each
 /// constructor's checker branch. Function/error signatures are not payloads.
 pub(crate) fn shared_type_arguments(resource: Resource) -> &'static [usize] {
-    match resource {
-        Resource::App | Resource::Supervisor => &[0],
-        _ => &[],
-    }
+    type_argument_positions(resource, TypeArgumentRole::SharedPayload)
 }
 
 const METHOD_CONSTANTS: &[ConstantInfo] = &[
@@ -1332,4 +1658,108 @@ pub fn member_line(resource: Resource, name: &str) -> Option<usize> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod resource_contract_tests {
+    use super::*;
+
+    fn info(
+        arity: usize,
+        parameters: &'static [&'static str],
+        inline: &'static [usize],
+    ) -> ResourceInfo {
+        ResourceInfo {
+            module: StandardModule::Auth,
+            name: "Test",
+            arity,
+            type_parameters: parameters,
+            inline_type_arguments: inline,
+            rust_path: "native::Test",
+            copy: false,
+            equality: false,
+            storage: false,
+            shared: false,
+            debug: false,
+        }
+    }
+
+    #[test]
+    fn registered_roles_match_the_independent_position_oracle() {
+        use TypeArgumentRole::*;
+        for &resource in RESOURCES {
+            let expected: &[TypeArgumentRole] = match resource {
+                Resource::App => &[SharedPayload, CallbackSignature],
+                Resource::Supervisor => &[SharedPayload],
+                Resource::Actor => &[IndirectProtocol, IndirectProtocol, IndirectProtocol],
+                Resource::Turn => &[InlinePayload, InlinePayload, InlinePayload],
+                Resource::Grant => &[NominalPhantom],
+                _ => &[],
+            };
+            let contract = resource_contract(resource);
+            assert_eq!(contract.info.arity, expected.len(), "{resource:?}");
+            for (position, &role) in expected.iter().enumerate() {
+                assert_eq!(
+                    contract.role_at(position),
+                    Some(role),
+                    "{resource:?}[{position}]"
+                );
+            }
+            assert_eq!(contract.role_at(expected.len()), None, "{resource:?}");
+            assert_eq!(contract.role_at(usize::MAX), None, "{resource:?}");
+            assert!(matches!(contract.lifecycle, ResourceLifecycle::Unspecified));
+        }
+    }
+
+    #[test]
+    fn legacy_views_borrow_the_registered_descriptor() {
+        for &resource in RESOURCES {
+            let contract = resource_contract(resource);
+            assert!(std::ptr::eq(resource_info(resource), &contract.info));
+            assert!(std::ptr::eq(
+                shared_type_arguments(resource),
+                contract.shared
+            ));
+            assert!(std::ptr::eq(
+                resource_info(resource).inline_type_arguments,
+                contract.positions(TypeArgumentRole::InlinePayload)
+            ));
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "resource generic position must have exactly one role")]
+    fn descriptor_rejects_missing_role() {
+        let _ = ResourceContract::new(info(1, &["T"], &[]), &[], &[], &[], &[]);
+    }
+
+    #[test]
+    #[should_panic(expected = "resource generic position must have exactly one role")]
+    fn descriptor_rejects_duplicate_in_one_role() {
+        let _ = ResourceContract::new(info(1, &["T"], &[0, 0]), &[], &[], &[], &[]);
+    }
+
+    #[test]
+    #[should_panic(expected = "resource generic position must have exactly one role")]
+    fn descriptor_rejects_overlapping_roles() {
+        let _ = ResourceContract::new(info(1, &["T"], &[0]), &[0], &[], &[], &[]);
+    }
+
+    #[test]
+    #[should_panic(expected = "resource role index out of range")]
+    fn descriptor_rejects_out_of_range_role() {
+        let _ = ResourceContract::new(info(1, &["T"], &[]), &[1], &[], &[], &[]);
+    }
+
+    #[test]
+    #[should_panic(expected = "resource role index out of range")]
+    fn descriptor_rejects_roles_on_zero_arity() {
+        let _ = ResourceContract::new(info(0, &[], &[]), &[], &[], &[], &[0]);
+    }
+
+    #[test]
+    #[should_panic(expected = "resource generic arity mismatch")]
+    fn descriptor_rejects_arity_parameter_mismatch() {
+        let _ = ResourceContract::new(info(2, &["T"], &[0, 1]), &[], &[], &[], &[]);
+    }
 }

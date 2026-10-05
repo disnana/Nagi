@@ -1,6 +1,6 @@
 # ADR 008: 登録資源の契約を一つの根拠へ集める
 
-状態: 承認済み段階計画のPhase 3。先行テストの設計を採用。集約実装はまだ変更していない。
+状態: 承認済み段階計画のPhase 3。先行test-only head `eb93873`の4 OS CI成功を確認して集約実装へ着手。集約後のacceptanceは[結果](../resource-contract-results.md)へ記録する。
 
 ## 問題
 
