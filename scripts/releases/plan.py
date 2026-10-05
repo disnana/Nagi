@@ -42,6 +42,10 @@ def plan(base: str, head: str) -> dict[str, str]:
     packaging_changed = any(p in (".github/workflows/ci.yml", "scripts/install.sh", "scripts/install.ps1",
                                   "scripts/uninstall.sh", "scripts/uninstall.ps1")
                             or p.startswith("scripts/releases/") for p in changed)
+    # Validate all four native distributions when their build/test inputs
+    # change. Packaging does not publish an unchanged component version.
+    nagi_changed = any(p in ("Cargo.toml", "Cargo.lock")
+                       or p.startswith(("compiler/", "runtime/")) for p in changed)
     extension_changed = any(p.startswith("editors/vscode-nagi/")
                             and not p.startswith("editors/vscode-nagi/test/")
                             and p != "editors/vscode-nagi/README.md" for p in changed)
@@ -54,7 +58,9 @@ def plan(base: str, head: str) -> dict[str, str]:
             raise ValueError(f"{component} version must increase: {previous[component]} → {value}")
         result[f"{component}_version"] = value
         result[f"release_{component}"] = str(release).lower()
-        package = release or packaging_changed or (component == "vscode" and extension_changed)
+        package = (release or packaging_changed
+                   or (component == "nagi" and nagi_changed)
+                   or (component == "vscode" and extension_changed))
         result[f"package_{component}"] = str(package).lower()
     return result
 

@@ -58,4 +58,6 @@ Q-001はユーザーがAを承認した。app identity維持、generation別のs
 
 最初のHTTP実行は通信制限によるloopback bind失敗、最初のeditor実行はcompilerのPATH未設定で失敗した。同じテストを必要な環境で再実行し、期待を弱めず成功した。詳細・発見した封印の穴・性能条件・保証の限界は[結果](checked-program-results.md)に記録する。
 
+[PR #78](https://github.com/disnana/Nagi/pull/78)をmain向けに作成した。最初のCIではcompiler変更によるLinux/JetBrainsが起動したが、4 OS配布検証がskipされた。release planが版更新と配布設定だけを条件にしていたためで、成功とは数えない。compiler/runtime/Cargo入力にもNagi配布検証を適用する回帰と条件を追加する。版が変わらないときに公開しない規則は維持する。
+
 CIの4 OS・JetBrainsは未確認。Phase 2以降の実装、mainへのmerge、版更新、releaseには進んでいない。

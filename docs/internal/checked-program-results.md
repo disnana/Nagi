@@ -55,4 +55,10 @@ CheckedProgramはNagi checkerの受理状態であり、Rust本体・crate API�
 | P2 | ASTにoptional factsが残り、最終factoryで欠落を検査する | 今回は封印境界まで。全面Typed IRやLow text撤去は別判断 |
 | P2 | capabilities/resource情報の重複 | Phase 3で現在のcharacterizationを先に固定してから共通化 |
 
+## CIの選択
+
+最初のPR #78のCIでは、compiler変更でLinux/JetBrainsは起動したが、4 OSの`nagi-package`はskipされた。既存release planが版更新と配布設定の変更だけを配布検証の条件にしていたためで、4 OS成功とは数えない。
+
+compiler/runtime/Cargo入力の変更もNagiの配布検証を起動するよう、release planへ条件と回帰テストを追加する。公開の条件は引き続き版更新であり、検証用packagingを正式releaseとして公開しない。Docs-onlyではこの条件を使わない。
+
 Phase 2は、このPhaseのacceptanceとCI成功を確認した後に着手する。mainへのmerge、版更新、releaseは行わない。
