@@ -105,3 +105,17 @@ freeze時の独立レビューではowned 12ファイルのhash一致を確認�
 Windowsを含む4 OS CIは未完了。Phase 2のacceptanceは再確認待ちを維持し、Phase 3のcharacterization/refactorは未実装。Phase 2のmainへのmerge、版更新、releaseは行っていない。
 
 PR #79をmain向けに作成した。初回CIではmacOS Apple Siliconのgeneration 22件が成功したが、非UTF-8名のfixture作成がNagi起動前にAPFSのOS92で失敗した。Linuxの元の回帰を維持して対象OSを修正し、共通の日本語pathでsource/provenanceの生OS unitsを検査するassertを追加した。[結果](build-generations-results.md#初回ciでのfixture修正)に理由を記録した。4 OS CIの再確認までacceptance待ちを維持する。
+
+### 修正後のacceptance
+
+head `27c8bf4`の[checks run 37330160221・attempt 2](https://github.com/disnana/Nagi/actions/runs/37330160221)と[website run 37330159710](https://github.com/disnana/Nagi/actions/runs/37330159710)が成功した。Linux全検査、4 OS配布・10 project/19 run、VSIX、IntelliJ IDEA、PyCharm、merge gateを読み戻した。generation回帰はLinux 23、Windows/macOS各22件。Windows latest置換失敗・回復も成功した。旧headイベントの重複で取消されたattempt 1を成功とは数えない。詳細は[結果](build-generations-results.md#修正後のci)へ追記した。
+
+Phase 2のacceptanceを満たし、#79をreview可能へ変更した。mainへのmerge・版更新・releaseは実行していない。次段階は#79の成功headを基点に進め、#79がmain未反映の間は依存と最終反映先mainを明記する。
+
+## Phase 3: 登録資源の契約と先行characterization
+
+branch `refactor/resource-contract-foundation`、基点は#79のhead `27c8bf4`。[ADR 008](adr/008-resource-contracts.md)に、公開ResourceInfoを内包する単一descriptor、分類集合から導くgeneric role、用途別legacy query、lifecycle不活性、維持する受理・拒否を記録した。集約実装はまだ変更していない。
+
+2つのSolレビューで、Passing inventoryがtype_parametersを読んでいた誤り、Requestのis_* fieldの省略、Borrow/Mapperのgolden coverage不足を訂正した。全22resource・47operation・32fieldをコードへ照合した。新targetの4 OS明示一覧への追加、harness登録と実行の区別、runtimeが必要なclassをstandalone rustc corpusへ入れない条件も先行案へ反映した。
+
+goldenは実resolverへ固定logical identityを渡すcfg(test) fixtureを使い、metadata・alias・deriveを削らず比較する案を採用する。既存物理fileのHigh/保存Low一致・native・診断位置は維持する。Copy深さ63/64/65の差はまだ実行していないP2候補で、正常goldenへ固定しない。先行test-only commitのCI成功後にだけ集約へ進む。

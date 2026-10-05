@@ -1,6 +1,6 @@
 # Phase 2: build generation isolationの検証
 
-2026-10-05。branch `fix/build-generation-isolation`、作業基点はPhase 1のPR #78 head `08199bf`。その後ユーザーが#78をmain `0107f37f0de6026533a4d67f52c6545054b71584`へマージし、headとのtree一致を確認した。Phase 2はmain向けPR #79に分離し、その差分はmain未反映。以下は未リリースbranchのローカル結果と初回CIの記録。Windowsを含む4 OS CIは未完了で、Phase 2のacceptanceは再確認待ちである。
+2026-10-05。branch `fix/build-generation-isolation`、作業基点はPhase 1のPR #78 head `08199bf`。その後ユーザーが#78をmain `0107f37f0de6026533a4d67f52c6545054b71584`へマージし、headとのtree一致を確認した。Phase 2はmain向けPR #79に分離し、その差分はmain未反映。以下は未リリースbranchのローカル結果とCIの記録。修正head `27c8bf4`の4 OS・editor/package・Docs・merge gateが成功し、Phase 2のacceptanceを満たした。
 
 ## 契約と変更
 
@@ -50,6 +50,14 @@ PR #79のhead `b5b121a`、[run 37326219488](https://github.com/disnana/Nagi/acti
 
 Linuxの元の非UTF-8 cwd回帰と全assertは維持し、対象をLinuxへ限定した。共通の日本語pathの回帰には、canonical pathのUnix byte列／Windows UTF-16列がsource snapshotと対応するprovenance行へ正確に残るassertを追加した。runtime skipやNagi failureのallowlistは追加していない。macOSの任意filesystemで非UTF-8名を扱えることや、Windowsの不正surrogateへの対応を、このテストから保証しない。変更はtestのみで、production sourceのfreezeは維持する。
 
+### 修正後のCI
+
+head `27c8bf4b01f7b3f2c88dcfd0a5688e9bfa36807d`の[checks run 37330160221・attempt 2](https://github.com/disnana/Nagi/actions/runs/37330160221)が成功した。Linux全検査、Windows x64、Linux x64、macOS Intel/Apple Silicon、VSIX package、IntelliJ IDEA、PyCharm、merge gateを読み戻した。[website run 37330159710](https://github.com/disnana/Nagi/actions/runs/37330159710)も成功。publish-releaseはskipで、公開はしていない。
+
+generation回帰はLinux 23、WindowsとmacOS各22件が成功した。Windowsの既存latest置換失敗・回復、共通の日本語pathの生units、4 OSそれぞれの10 application project/19 run、展開済み配布物、対象OSのinstaller/uninstallerも成功した。OS専用caseを他OSで実行したとは数えない。CIのmutation smokeは既定の1,000入力/16 bounded native caseで、ローカル拡大runの10,000/128とは区別する。
+
+branchの修正refが進んでもPR headとActionsが旧headのままだったため、PRをclose/reopenして同期した。再開イベントと旧headイベントの重複でattempt 1は取消となった。修正headを再実行したattempt 2の成功を根拠とし、取消や旧headの成功を修正の検証へ混ぜていない。jobの生logとhead/treeの読戻しは実行workspaceに保存した。
+
 ## build測定
 
 [全データとsummary](../../benchmarks/results/build-generations-2026-10-05/summary.json)を保存した。小さなstd-only appと空のlocal runtimeを使い、旧・新CLIで各15 build/runを3組、計90回観測した。生成Rustは45 pairすべてbyte一致し、入力とstdoutも各組で一致した。
@@ -74,9 +82,8 @@ warm中央値、単位ms。各欄は旧→新、各mode・CLIで7 sample。
 
 | 分類 | 残課題 | 次の行動 |
 |---|---|---|
-| acceptance待ち | Windowsの既存latest置換失敗・回復と4 OS/package/editor動作はこのhostでは未確認 | CI成功を確認してからPhase 2を完了し、Phase 3へ進む |
 | P2 | raw非UTF-8 argvが`std::env::args`でpanicする既存問題。旧CLIでも再現 | cwd互換性の修正とは分けて追跡 |
 | P3・設計のtradeoff | 成功世代と世代binが蓄積しdisk使用量が増える | 自動削除・killは追加しない。cleanup方針は別判断で、保持契約や公開policyと衝突する変更はStop |
 | P3・既存の性能観測 | Future frame +32 bytesの原因・影響が未解決 | 別の同条件測定で調査。今回解消したと扱わない |
 
-Phase 3のcharacterization/refactorは未実装。Phase 1のmain反映はユーザー操作であり、エージェントはmergeしていない。Phase 2のmainへのmerge、版更新、releaseは行っていない。
+Phase 2のacceptanceとCIを満たし、Phase 3の先行characterizationへ進む。集約実装はまだ変更していない。Phase 1のmain反映はユーザー操作であり、エージェントはmergeしていない。Phase 2のmainへのmerge、版更新、releaseは行っていない。

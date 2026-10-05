@@ -1,6 +1,6 @@
 # コンパイラとRust境界の段階計画
 
-状態: PR0は#77でmainへ反映済み。Q-001は2026-10-05に承認済み。Phase 1は#78のhead `08199bf`で4 OS・editor CIまで成功し、その後ユーザーがmain `0107f37`へマージした。tree一致を確認済みで、エージェントはマージ操作を行っていない。Phase 2は[ADR 007](adr/007-build-generations.md)に基づきbranchで実装・ローカル検証済み、main未反映・4 OS CI待ち。Phase 2のPRはmain向けとする。Phase 3以降は未実装。[進捗](progress.md)を参照。
+状態: PR0は#77でmainへ反映済み。Q-001は2026-10-05に承認済み。Phase 1は#78のhead `08199bf`で4 OS・editor CIまで成功し、その後ユーザーがmain `0107f37`へマージした。tree一致を確認済みで、エージェントはマージ操作を行っていない。Phase 2は[ADR 007](adr/007-build-generations.md)に基づき実装し、#79 head `27c8bf4`の4 OS・editor/package・Docs・merge gate CIが成功、main未反映。Phase 3は[ADR 008](adr/008-resource-contracts.md)と先行テストに着手する。集約実装とPhase 4以降は未実装。[進捗](progress.md)を参照。
 
 基点はmain `8f6cc6cf7d7c08811736325263618cbea19314b8`。PR #76のhead `13b59aa`とtreeは同じであり、#74・#76のchecked facts、Low互換性、Rust backendを維持する。本計画は2026-10-05の依頼に基づく。実装済みの保証と、後続Phaseで追加する予定の保証を分ける。
 
@@ -57,9 +57,9 @@ Phase 1で最終境界だけを変える。
 | G-AUTH・現在 | 宣言された保護APIへ正しいGrant[P]を渡し、偽造/copy/shared/禁止field storage/move後使用を拒否 | Nagi checker / check・capabilities | nominal permission identityと所有権・payloadの決定 | `auth_boundaries`、auth-boundary実HTTP。trusted issuer/policyの内容は保証外 |
 | G-RUST・現在 | 外部API、trait、最終Send/Sync/Clone、native本体、target/link、最終borrow/memory safety | rustc / Cargo build | Nagiが選んだ正しい型・所有形態とRust adapter署名 | `rust_dependencies`, `build_diagnostics`, real native tests。extern実装不一致はdelegated error。Nagi保証済みの生成ミスはcompiler defectへ戻す |
 | G-LIFECYCLE・現在 | Nagiが選ぶ評価順・cleanup anchorを保持。Future dropは既完了/受理済み副作用のrollback完了を保証しない | Nagi compilerのlowering + Rust Drop/Future | checked cleanup/error出口、通常Rustの所有構造 | `view_container_drop`, `scope_runtime_contract`, runtime adversarial tests。選択した構造の誤生成はcompiler defect、任意destructorの正しさは保証外 |
-| G-ARTIFACT・現在 | 別canonical source/outのアプリを既定/明示の共通targetへ置いても、互いのexeを上書きしない。同一appの世代隔離はまだ保証しない | Nagi compiler / build CLI | canonical app identityとpackage/executable名 | `shared_target`, `project`。別アプリの取り違えはcompiler defect。短いhashは権限・暗号学的隔離ではない |
+| G-ARTIFACT・現在 | 別canonical source/outのアプリを既定/明示の共通targetへ置いても、互いのexeを上書きしない。mainの既存保証はこの範囲で、追加の世代隔離はG-GENERATIONに記録する | Nagi compiler / build CLI | canonical app identityとpackage/executable名 | `shared_target`, `project`。別アプリの取り違えはcompiler defect。短いhashは権限・暗号学的隔離ではない |
 | G-SEALED・現在・Phase 1 main反映、CI成功 | Rust codegenの入力は最終統合・check済みで、外部から可変化できない | Nagi checker / finalizer | ProgramをmoveしたCheckedProgramと確定plan・provenance | API compile-fail、facts completeness、決定性、既存High/Low/native conformance。[ADR 006](adr/006-sealed-codegen-input.md)。欠落factsはICE候補。#78でmain反映済み、正式releaseは未実施 |
-| G-GENERATION・Phase 2 branch実装・CI待ち・Q-001承認済み | 実行するgenerationを他buildで上書きせず、成功generationのみpublish。dependency cacheは共有 | Nagi compiler / build CLI、OS advisory lock | app/generation identity、成功artifact metadata、生成Rust provenance | 並行build、失敗publish、Windows実行中exe。取り違えはcompiler defect、OS/file/lock失敗はinfra error。ローカル検証済み、main未反映・4 OS CI待ち |
+| G-GENERATION・Phase 2 branch実装・CI成功・Q-001承認済み | 実行するgenerationを他buildで上書きせず、成功generationのみpublish。dependency cacheは共有 | Nagi compiler / build CLI、OS advisory lock | app/generation identity、成功artifact metadata、生成Rust provenance | 並行build、失敗publish、Windows実行中exe。取り違えはcompiler defect、OS/file/lock失敗はinfra error。#79 head `27c8bf4`で4 OS・package/editor CI成功、main未反映 |
 | G-TX・Phase 4予定 | Transactionはaffine、nonCopy/nonshared、永続格納・task transfer禁止。commit/rollbackがconsumeしResultで完了を観測 | Nagi checker / ResourceContract・transfer検査。native完了はDB adapter | Tx capability、nested payload/transfer決定、明示終端操作 | normal/Err/unwind/cancellation、nested Option/Result、spawn拒否。Nagi保証の抜けはcompiler defect。応答未受信のCOMMITは結果不明になり得る |
 | G-POOL・Phase 4予定 | Txが接続を専有し、cleanup成功を確認する前に再利用しない。rollback失敗接続を再利用しない | Nagi DB worker/adapter。checkerがDB完了を静的証明するとはしない | leaseとcleanup状態を保つnative APIへの確定呼出し | acquire/begin応答喪失、取消、cleanup失敗、close/worker終了とpermit解放。native Drop実行だけをrollback成功の証拠にしない |
 | G-AUTH-SCOPE・Phase 5以降の方向 | Grantが実際のScope値を保持し、保護操作は別bare resource IDを取らない | Nagi checkerの型/所有規則 + trusted Rust issuer/adapter | permission/scope identityとGrantの所有形態 | 未実装。期限・失効・全routeの認可漏れ・request regionを型で保証しない |
@@ -111,6 +111,8 @@ Phase 3は最初に現在のpass/fail、generated derives/accessors/Passingのch
 `storage`の現判定はclass等の所有field格納であり、永続DB格納や一般的な資源lifetimeの証明ではない。この意味を変えない。enumの現在のSerde判定、function signature/phantomを実payloadと数えない条件、App/Supervisorの内部共有payloadも固定する。
 
 Phase 3のlifecycleは`Unspecified`等の不活性な状態にする。既存判定には影響させない。利用者が任意Rust型へ自由に安全契約を宣言する仕組みは追加しない。
+
+具体構造と先行テストは[ADR 008](adr/008-resource-contracts.md)に記録した。公開ResourceInfoを内包する単一descriptorから、用途別のlegacy queryとgeneric roleを導く。受理意味論・公開structのfield集合・native APIは変えない。
 
 ## Lifecycle / panic / cancellation
 
