@@ -19,6 +19,16 @@ impl Type {
     pub fn is_view(&self) -> bool {
         self.0 == "view"
     }
+    pub(crate) fn is_view_string_list(&self) -> bool {
+        if self.0 != "List" || self.1.len() != 1 {
+            return false;
+        }
+        let element = &self.1[0];
+        element.0 == "view"
+            && element.1.len() == 1
+            && element.1[0].0 == "str"
+            && element.1[0].1.is_empty()
+    }
     pub fn contains_view(&self) -> bool {
         // Plain function values capture no data. Their view parameters have
         // lifetimes bound by the function pointer, not by the value's scope.
@@ -195,6 +205,75 @@ pub struct Stmt {
     pub binding_span: Option<Span>,
     pub binding_type: Option<Type>,
     pub binding_borrowed: bool,
+    pub(crate) flow: Option<StmtFlowFacts>,
+}
+
+/// Stable identity of a source binding. Token offsets survive Rust-only name
+/// rewriting, while the line disambiguates tokens from imported source files.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(crate) struct BindingId {
+    pub line: usize,
+    pub token: usize,
+}
+
+/// One origin contributing to the contents of a checked List[view[str]].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct FlowOrigin {
+    pub binding: BindingId,
+    pub fields: Vec<String>,
+    pub owner_loan: bool,
+    pub static_origin: bool,
+}
+
+/// Checker state for one exact List[view[str]] binding at a statement edge.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ViewListBindingSnapshot {
+    pub name: String,
+    pub binding: BindingId,
+    pub moved: bool,
+    pub origins: Vec<FlowOrigin>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct FlowAssignment {
+    pub target: BindingId,
+    /// True when evaluating this assignment's RHS consumed the previous value
+    /// of the target binding before it was replaced.
+    pub rhs_consumed_target: bool,
+}
+
+/// A checked mutation of an existing container's content borrow origins.
+/// Unlike statement-edge snapshots, this survives replacement of the binding
+/// later in the same expression. It does not represent replacing the Vec value.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct FlowContentMutation {
+    pub binding: BindingId,
+    pub name: String,
+    pub added_origins: Vec<FlowOrigin>,
+}
+
+/// Statement-boundary checker facts used to plan owning-view lowering. These
+/// are deliberately absent from Low serialization and are recomputed by check.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct StmtFlowFacts {
+    pub before: Vec<ViewListBindingSnapshot>,
+    pub after: Vec<ViewListBindingSnapshot>,
+    pub condition_after: Option<Vec<ViewListBindingSnapshot>>,
+    pub content_mutations: Vec<FlowContentMutation>,
+    pub assignment: Option<FlowAssignment>,
+}
+
+/// The initial owning-view flow pass handles straight-line statements and If
+/// joins. A control-flow form outside that subset disables metadata for the
+/// containing function until its checker state can be represented precisely.
+pub(crate) fn supports_view_flow(statements: &[Stmt]) -> bool {
+    statements.iter().all(|statement| match &statement.kind {
+        S::If(_, then_body, else_body) => {
+            supports_view_flow(then_body) && supports_view_flow(else_body)
+        }
+        S::Match(..) | S::While(..) | S::For(..) | S::Scope(..) => false,
+        S::Assign { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => true,
+    })
 }
 
 /// Shared by ownership checking and Rust emission. A loop or scope can

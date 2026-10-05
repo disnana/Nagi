@@ -50,6 +50,10 @@ Nagi checkerを持つ理由は、`nagic check`やエディターで、Nagiの位
 
 二つのcheckerを持つ以上、その差を把握して保つ費用は避けられません。Nagiの規則を増やすときは、High・Lowの検査結果だけでなく、生成Rustが受理されるかも確認します。独自backendへ進む場合も、今の意味論やランタイムを自動的に引き継げるわけではありません。
 
+借用を含む配列では、現在の値の借用元と、配列そのものを片付ける位置を分けて扱う必要があります。一時的な借用を捨ててから引数の借用へ戻しても、単一のRust変数へそのまま代入すると寿命が結びつき、ビルドに失敗することがあります。同期の`List[view[str]]`に対する限定的な生成計画は、checkerが記録した値の置換・内容の借用元の変更・move・分岐の出口を区別し、元の宣言位置に格納先を置きます。内容の借用元が変わる操作では配列を別の格納先へ移し、バッファは複製しません。右辺の評価、上書き時の解放、panic時の破棄順序は[実行テスト](compiler/tests/view_container_rebinding.rs)と[資源の観測](compiler/tests/view_container_drop.rs)で確認します。
+
+この生成計画は借用全体の解決ではありません。async、ループ、任意の資源型へ広げる際は、同じ値・制御フロー・終了処理のモデルで説明できるか、生成量と実行時の費用が増えすぎないかを先に確認します。Rustには参照の検査、move後の破棄判定、unwind時の後始末を任せますが、Nagiの意味を保ったコードへ変換する責任はコンパイラに残ります。
+
 根拠: [コンパイル経路](compiler/src/emit.rs)、[所有権境界のテスト](compiler/tests/ownership_boundaries.rs)、[ビルド診断のテスト](compiler/tests/build_diagnostics.rs)、[Rust依存設定のテスト](compiler/tests/rust_dependencies.rs)。検査の範囲は[所有権](docs/ownership.md#借用と検査の範囲)を参照してください。
 
 ## Rust資産との接続を中心にする

@@ -224,6 +224,29 @@ fn visit(program: &mut Program, name: &mut impl FnMut(&mut String)) {
     }
     fn block(body: &mut [Stmt], name: &mut impl FnMut(&mut String)) {
         for stmt in body {
+            if let Some(flow) = &mut stmt.flow {
+                for binding in flow
+                    .before
+                    .iter_mut()
+                    .chain(&mut flow.after)
+                    .chain(flow.condition_after.iter_mut().flatten())
+                {
+                    name(&mut binding.name);
+                    for origin in &mut binding.origins {
+                        for field in &mut origin.fields {
+                            name(field);
+                        }
+                    }
+                }
+                for mutation in &mut flow.content_mutations {
+                    name(&mut mutation.name);
+                    for origin in &mut mutation.added_origins {
+                        for field in &mut origin.fields {
+                            name(field);
+                        }
+                    }
+                }
+            }
             if let Some(t) = &mut stmt.binding_type {
                 ty(t, name);
             }
