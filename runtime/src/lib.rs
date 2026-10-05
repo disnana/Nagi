@@ -3,6 +3,7 @@ pub use rusqlite;
 pub use serde;
 pub use serde_json;
 pub mod actor;
+pub mod auth;
 mod concurrent;
 mod database;
 mod http;

@@ -2,11 +2,11 @@
 
 [日本語](DESIGN.md)
 
-Nagi aims to let developers write typed logic in readable High code and combine it with existing Rust libraries or custom code. Backends are its main focus. Common HTTP, JSON, and database operations should have Nagi APIs; features beyond those connect through Rust adapters.
+Nagi aims to use Rust's performance and libraries while making HTTP, authentication, authorization, validation, database, and data-processing boundaries concise to write. Application logic belongs in readable High code; library-specific configuration and advanced features use Rust adapters. Replacing Rust or Go, or rebuilding HTTP and database infrastructure, is not the goal.
 
 Priorities are reducing integration work and making failures understandable from Nagi code. Direct access to arbitrary Rust APIs, or needing no Rust knowledge at all, is not a claim about current capabilities.
 
-This document covers implementations on main and the design directions adopted or left open. See the [reference](docs/en/README.md) for usage, the [roadmap](docs/en/roadmap.md) for priorities, and [CHANGELOG](CHANGELOG.md) for changes in published releases.
+This document covers the current implementation and design decisions adopted or left open. The next phase is unreleased and is validated separately from PR #74. See the [reference](docs/en/README.md) for usage, the [roadmap](docs/en/roadmap.md) for priorities, and [CHANGELOG](CHANGELOG.md) for changes in published releases.
 
 ## The development we target
 
@@ -74,7 +74,17 @@ The [Axum quote API](test-nagi-code/application-examples/axum-service/README.en.
 
 A server built in Rust follows that adapter's limits, shutdown, and panic handling. Nagi's standard HTTP settings do not apply automatically. Copies, serialization, and error conversions also depend on the adapter.
 
-Next, assess whether diagnostics explain declaration/implementation mismatches, whether an adapter can be reused by another application, and who owns, shares, and closes resources. Opaque resource types, general async callbacks, and generated declarations remain unimplemented candidates requiring concrete uses and contracts.
+Mapped Rust type errors report the corresponding Nagi file and statement line. `build/run --rust-diagnostics` also displays generated Rust details. Precise expression columns and coverage of arbitrary Rust diagnostics remain unsupported. Handwritten Rust and dependency errors retain their Rust locations.
+
+Adapter reuse across applications and ownership, sharing, and resource cleanup still need evaluation. User-defined opaque resource types, general async callbacks, and generated declarations remain unimplemented.
+
+### A minimal authentication and authorization experiment
+
+The unreleased `std.auth` module carries an authenticated `Principal` and a `Grant[P]` bound to a permission type and resource. Ordinary classes remain useful for inputs and claims, but construction and JSON decoding cannot establish successful verification. Nagi cannot construct, JSON-decode, copy, or share these proofs; protected APIs consume them by move.
+
+Rust libraries verify credentials; custom authorization and business rules can also live in Nagi. The example's Axum adapter calls a named Nagi async policy and issues a Grant only on success. A JWS verifier can replace the credential verifier. The example's fixed credentials are not a production authentication scheme.
+
+Check verifies that declared protected APIs receive the required proof type and that a moved proof is not reused. It does not prove signature, expiry, or policy correctness, authentication on every route, absence of Rust/SQL bypasses, or absence of confidential response data. The Rust issuer and Nagi policy remain application trust boundaries. See [ADR 001](docs/internal/adr/001-backend-boundaries.md).
 
 Evidence: [Rust dependency loading](compiler/src/project.rs), [extern checking](compiler/src/check.rs), [Rust generation](compiler/src/emit.rs), [dependency regressions](compiler/tests/rust_dependencies.rs), and [application verification](scripts/verify_application_examples.py). See [Rust integration](docs/en/modules-and-rust.md) for usage and supported types.
 

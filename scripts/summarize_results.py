@@ -277,7 +277,8 @@ High checkerの成功だけでsoundnessを保証していません。safe Rust�
 ビルド・機能試験はREADMEの手順を使用します。数値の再測定時は同時にビルドや別のCPU benchmarkを走らせず、CPU affinityを環境に合わせて変更してください。
 
 ```bash
-taskset -c 0 ./native-target/release/nagi-cpu > benchmarks/results/cpu-nagi.jsonl
+# NAGI_CPU_BINARYにはexamples/cpu.nagiのビルドがnative:行に表示したパスを指定
+taskset -c 0 "$NAGI_CPU_BINARY" > benchmarks/results/cpu-nagi.jsonl
 taskset -c 0 ./target/release/examples/microbench > benchmarks/results/micro-after.jsonl
 taskset -c 0 python3 benchmarks/python_cpu.py > benchmarks/results/cpu-python.jsonl
 taskset -c 0 node benchmarks/node_cpu.js > benchmarks/results/cpu-node.jsonl

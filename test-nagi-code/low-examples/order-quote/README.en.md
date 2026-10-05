@@ -33,9 +33,9 @@ The line record contains only integer fields, so `for line in order.items` copie
 
 ```sh
 nagic build
-python3 smoke.py --executable build/native-target/release/nagi-main
+python3 smoke.py --executable "/path/to/executable"
 ```
 
-On Windows, append `.exe` to the executable name. If you set `NAGI_NATIVE_TARGET_DIR`, pass the executable from that directory instead.
+Replace `/path/to/executable` with the actual path shown in the build's `native:` line. The next unreleased compiler also adds an identifier to default executable names. On Windows, include `.exe` in the path. This also works when `NAGI_NATIVE_TARGET_DIR` changes the build location.
 
 [日本語](README.md) · [High and Low](../../../docs/en/low-language.md) · [JSON](../../../docs/en/json.md)

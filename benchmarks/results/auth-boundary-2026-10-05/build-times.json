@@ -1,0 +1,23 @@
+{
+  "kind": "rebuild of identical generated project using existing Cargo dependency cache; first run may compile edited source; no target deletion; both policy modes reside in one binary",
+  "runs": [
+    {
+      "run": 0,
+      "wall_seconds": 5.03698888598592,
+      "child_user_seconds": 4.863929,
+      "child_sys_seconds": 0.190608
+    },
+    {
+      "run": 1,
+      "wall_seconds": 4.944459410995478,
+      "child_user_seconds": 4.821675,
+      "child_sys_seconds": 0.149934
+    },
+    {
+      "run": 2,
+      "wall_seconds": 5.000161711999681,
+      "child_user_seconds": 4.867005000000001,
+      "child_sys_seconds": 0.16376899999999994
+    }
+  ]
+}

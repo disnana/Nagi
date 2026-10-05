@@ -82,13 +82,14 @@ If the filename contains spaces, quote the path, as in `nagic run "hello world.n
 
 Currently, both `check` and `lower` save the Low generated from High. A successful `check` can still be followed by a failed `build` if Rust's type or borrow checks reject the generated program.
 
-When a source location can be identified, build errors show the corresponding Nagi or Low filename and line. The following `Rust backend details` provides the Rust diagnostic. Errors in handwritten Rust, or errors without an identifiable source location, use Rust's diagnostics.
+When a source location can be identified, build errors show the corresponding Nagi or Low filename and line. In the next unreleased version, use `--rust-diagnostics` to include generated Rust details. Errors in handwritten Rust, or errors without an identifiable source location, retain Rust's diagnostics in the normal output.
 
 ```powershell
 nagic check hello.nagi
 nagic build hello.nagi
-.\native-target\release\nagi-hello.exe
 ```
+
+Run the path shown in the `native:` line. For example, if it ends in `nagi-hello-0123456789abcdef.exe`, invoke that path with PowerShell's `&` operator. To build and run together, use `nagic run hello.nagi`.
 
 Default output locations:
 
@@ -97,10 +98,10 @@ Default output locations:
 | `build/hello/generated.low` | Low translated from High |
 | `build/hello/src/main.rs` | Generated Rust during build/run |
 | `build/hello/Cargo.toml` | Generated Rust project during build/run |
-| `native-target/release/nagi-hello.exe` | Windows executable |
-| `native-target/release/nagi-hello` | Linux executable |
+| `native-target/release/nagi-hello-<identifier>.exe` | Windows executable (next unreleased version) |
+| `native-target/release/nagi-hello-<identifier>` | Linux/macOS executable (next unreleased version) |
 
-Generated files go to `build/<source filename without its extension>/`. Use `--out build/my-hello` to choose another location. Set `NAGI_NATIVE_TARGET_DIR` to change the executable build location.
+Generated files go to `build/<source filename without its extension>/`. Use `--out build/my-hello` to choose another location. Set `NAGI_NATIVE_TARGET_DIR` to change the executable build location. See [executable naming and shared caches](projects.md) for the naming change.
 
 Compilation also needs the bundled `runtime/`. If you copy `nagic.exe` elsewhere on its own, set `NAGI_ROOT` to the extracted folder containing `runtime/`. The [task management demo](web-demo.md) shows how to distribute a generated application executable.
 

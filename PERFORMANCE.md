@@ -2,6 +2,8 @@
 
 2026年9月30日の実装を対象にした測定記録です。機能一覧、テスト件数、今後の案は測定当時の内容です。現在の仕様は[Docs](docs/README.md)を参照してください。
 
+2026年10月5日の未リリースAuth実験には、別の[手書きRust／Nagi生成Rust比較](benchmarks/results/auth-boundary-2026-10-05/README.md)があります。同じAxumアダプターでload/policyを切り替えた短期測定で、以下の旧測定や標準HTTPの基盤比較とは条件が異なります。
+
 測定対象は、Rust製コンパイラとランタイムを持つNagiの試作です。Highから編集可能なLowテキストを生成し、それを再解析・検査してRust経由でネイティブへコンパイルします。HTTP body → 型付きclass → SQLite → class → JSONのCRUD経路、Lowの通常関数呼び出し・関数置換、async/scope、actor間通信、worker再起動が実際に動きます。
 
 測定当時のactor・Supervisor・queueは、ランタイムを呼ぶ試験関数を使いました。現在は型付きの[`std.actor`](docs/actor.md) APIがありますが、この報告のactor測定はそのAPIの測定ではありません。BEAM相当の障害隔離は提供していません。以下の数値は、記載した測定環境で採取したログに基づきます。サンプル名は公開用に匿名化し、測定時と同じASCIIのバイト長を維持しています。測定値は変更していません。
@@ -257,7 +259,8 @@ High checkerの成功だけでsoundnessを保証していません。safe Rust�
 以下のコマンドは測定に使った処理です。最新ソースで再実行した結果を、当時と同じ実装の再測定とは扱いません。現在のビルド・機能試験はREADMEの手順を使用します。数値の再測定時は同時にビルドや別のCPU benchmarkを走らせず、CPU affinityを環境に合わせて変更してください。
 
 ```bash
-taskset -c 0 ./native-target/release/nagi-cpu > benchmarks/results/cpu-nagi.jsonl
+# NAGI_CPU_BINARYにはexamples/cpu.nagiのビルドがnative:行に表示したパスを指定
+taskset -c 0 "$NAGI_CPU_BINARY" > benchmarks/results/cpu-nagi.jsonl
 taskset -c 0 ./target/release/examples/microbench > benchmarks/results/micro-after.jsonl
 taskset -c 0 python3 benchmarks/python_cpu.py > benchmarks/results/cpu-python.jsonl
 taskset -c 0 node benchmarks/node_cpu.js > benchmarks/results/cpu-node.jsonl

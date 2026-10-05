@@ -257,7 +257,8 @@ The proposed next steps at the time were arithmetic/borrow rules, modules/generi
 The commands below describe the measured workloads. Running them with the latest source does not repeat the same implementation measured here. Use the repository README for current builds and functional tests. During performance measurements, avoid concurrent builds or other CPU benchmarks and adjust CPU affinity to your environment.
 
 ```bash
-taskset -c 0 ./native-target/release/nagi-cpu > benchmarks/results/cpu-nagi.jsonl
+# Set NAGI_CPU_BINARY to the native: path from building examples/cpu.nagi
+taskset -c 0 "$NAGI_CPU_BINARY" > benchmarks/results/cpu-nagi.jsonl
 taskset -c 0 ./target/release/examples/microbench > benchmarks/results/micro-after.jsonl
 taskset -c 0 python3 benchmarks/python_cpu.py > benchmarks/results/cpu-python.jsonl
 taskset -c 0 node benchmarks/node_cpu.js > benchmarks/results/cpu-node.jsonl

@@ -24,7 +24,7 @@ ASTは式・引数・束縛名の元ソースのtoken範囲を持ちます。`sy
 
 codegenのscopeはTokioのJoinSet wrapperにします。classはRustのstructへ生成し、対応するフィールド型の場合にJSONやDB用の実装を付けます。Lowはコンパイル時の共通表現で、実行時VMではありません。現在のCommon IRはSSAでも独自optimizerでもありません。最適化はRust backendに依存します。
 
-同じコンパイル処理の中では、loweringとcodegenが生成行と元の文・定義・フィールドの行の対応を保持します。ビルドではCargoのJSON診断を読み、対応するNagi・Lowのファイルと行を先に表示します。Rustの補足や修正候補は生成Rustの座標のまま残し、手書きRustや位置の不明な診断は書き換えません。
+同じコンパイル処理の中では、loweringとcodegenが生成行と元の文・定義・フィールドの行の対応を保持します。ビルドではCargoのJSON診断を読み、対応するNagi・Lowのファイルと行、対応できる関連noteを表示します。`nagic build app.nagi --rust-diagnostics`では生成Rustの本文・補足・修正候補も表示します。`run`でも使えます。手書きRustや位置の不明な診断は省略せず、Rustの位置のまま表示します。元の式の列やRustの修正候補をNagiへ推測変換する機能はありません。
 
 保存する`generated.low`は、手書きLowを統合する前のHighから生成した内容です。差し替え後に実行するプログラム全体のdumpではありません。統合後の関数の関係は`map`、最終生成物はRustで確認します。
 

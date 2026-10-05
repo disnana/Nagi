@@ -76,9 +76,11 @@ fn operand_and_earlier_type_errors_keep_priority_over_zero_divisor_errors() {
 }
 
 #[test]
-fn check_does_not_evaluate_aliases_constant_expressions_or_signed_overflow() {
-    let high = "def value() -> i64:\n    zero = 0\n    first = 1 / zero\n    second = 1 % (1 - 1)\n    third = -9223372036854775808 / -1\n    return first + second + third\n";
-    let low = "fn value() -> i64 {\n    let zero: i64 = 0;\n    let first: i64 = 1 / zero;\n    let second: i64 = 1 % (1 - 1);\n    let third: i64 = -9223372036854775808 / -1;\n    return first + second + third;\n}\n";
+fn dynamic_aliases_remain_runtime_operations() {
+    // Compound/constant-alias zero and MIN/-1 are now separate compile-fail
+    // contracts in constant_validation.rs; unknown input aliases stay dynamic.
+    let high = "def value(input: i64) -> i64:\n    divisor = input\n    first = 1 / divisor\n    second = 1 % divisor\n    return first + second\n";
+    let low = "fn value(input: i64) -> i64 {\n    let divisor: i64 = input;\n    let first: i64 = 1 / divisor;\n    let second: i64 = 1 % divisor;\n    return first + second;\n}\n";
     for mut program in forms(high, low) {
         check::check(&mut program).unwrap();
     }

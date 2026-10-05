@@ -12,16 +12,17 @@
 | [Supervised workers](supervised-worker/README.en.md) | Actor restarts, recovery from a task panic, shutdown and cleanup |
 | [Byte inspector API](byte-inspector/README.en.md) | Borrowed request bodies, u8 iteration and indexing, nullable values and JSON responses |
 | [Axum quote API](axum-service/README.en.md) | Rust HTTP calls Nagi async business logic and converts its Result to a response |
+| [Authentication and authorization boundaries](auth-boundary/README.en.md) | Rust authentication, custom Nagi policy, and a consumed grant for a protected DB operation. Unreleased experiment |
 
 To start with handwritten Low, use the [order quote CLI](../low-examples/order-quote/README.en.md). It combines Low-to-Low imports, typed JSON, input validation and integer price calculations.
 
-The byte inspector requires Nagi 0.1.10 or later; the Axum quote API is verified with 0.1.10. The other examples also run on Nagi 0.1.9. Download or clone the repository, then run each folder with its `nagi.toml` from the repository root. See [setup](../../docs/en/getting-started.md) for Rust/Cargo and your OS's build tools.
+The byte inspector requires Nagi 0.1.10 or later; the Axum quote API is verified with 0.1.10. The authentication example is an unreleased experiment. The other existing examples also run on Nagi 0.1.9. Download or clone the repository, then run each folder with its `nagi.toml` from the repository root. See [setup](../../docs/en/getting-started.md) for Rust/Cargo and your OS's build tools.
 
 ```sh
 nagic run --project test-nagi-code/application-examples/stock-report
 ```
 
-The script covers nine projects: eight High applications checked and built both from source and from saved generated Low, plus the order quote CLI built from handwritten Low. These seventeen verification runs compare input, file, HTTP, and actor behavior. Run from the repository root with Python 3.12 or later.
+The script covers ten projects: nine High applications checked and built both from source and from saved generated Low, plus the order quote CLI built from handwritten Low. These nineteen verification runs compare input, file, HTTP, and actor behavior. The authentication example requires the compiler from this branch. Run from the repository root with Python 3.12 or later.
 
 ```sh
 python scripts/verify_application_examples.py --compiler /path/to/nagic

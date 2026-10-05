@@ -1,0 +1,2 @@
+def calculate() -> bool:
+    return False and (1 / (1 - 1) == 0)

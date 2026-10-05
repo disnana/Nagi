@@ -1,0 +1,55 @@
+import std.auth as auth
+
+enum Read:
+    Permission
+
+enum AuthError:
+    MissingCredentials
+    InvalidCredentials
+    InvalidHeader
+    Denied
+    NotFound
+    Internal
+
+class DocumentAccess:
+    document_id: i64
+    owner_subject: i64
+    blocked: bool
+
+class Document:
+    id: i64
+    title: str
+
+@rust("native::principal_subject")
+extern def principal_subject(principal: view[auth.Principal]) -> i64
+
+@rust("native::policy_pause")
+extern async def policy_pause() -> unit
+
+@rust("native::authorize_read")
+extern async def authorize_read(principal: view[auth.Principal], document_id: i64) -> Result[auth.Grant[Read], AuthError]
+
+@rust("native::read_document")
+extern async def read_document(grant: auth.Grant[Read]) -> Result[Document, AuthError]
+
+@rust("native::run_server")
+extern async def run_server(port: i64) -> Result[unit, Error]
+
+# The adapter awaits this known named policy before issuing a sealed Grant.
+# The compiler checks its types; the policy author owns the permission logic.
+async def read_policy(principal: view[auth.Principal], access: DocumentAccess) -> Result[unit, AuthError]:
+    if principal_subject(principal) != access.owner_subject:
+        return fail(AuthError.Denied)
+    if access.blocked:
+        return fail(AuthError.Denied)
+    if access.document_id < 1 or access.document_id > 3:
+        return fail(AuthError.Denied)
+    return ok(await policy_pause())
+
+async def load_document(principal: auth.Principal, document_id: i64) -> Result[Document, AuthError]:
+    grant = try await authorize_read(view(principal), document_id)
+    return await read_document(grant)
+
+async def main() -> Result[unit, Error]:
+    port = try parse_i64(env("NAGI_SAMPLE_PORT", "8098"))
+    return await run_server(port)

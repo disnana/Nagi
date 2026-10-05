@@ -22,9 +22,14 @@
 | borrowed_owner_move / handwritten Low | viewが後続で生存する元ownerを自作consumeへmoveするfail。High6行/Low7行 | compiler/tests/ownership_calls.rs, view_origins.rs |
 | container_restore / handwritten Low | owned List[view]をlocal ownerから入力borrowへ復元して返すpass | compiler/tests/view_container_rebinding.rs, view_flow_foundation.rs |
 | container_local_escape / handwritten Low | local ownerのviewをListに保持して返すfail。両方4行 | compiler/tests/view_container_rebinding.rs, view_origins.rs |
+| compound_zero / handwritten Low / alias_zero / dead_compound_zero | 型付き定数式・binding・到達不能式の0除算をcheckerで拒否する | compiler/tests/constant_validation.rs |
+| signed_remainder_overflow | signed MIN%-1をprofile非依存の静的失敗として拒否する | compiler/tests/constant_validation.rs |
+| minimum_negation / profile_overflow | MIN leafを正しく印字し、debug panic/release wrapの既存意味を保つ | compiler/tests/constant_validation.rs |
 
 shared field明示copy/Arc move、実static str callback、extern owned Resultはruntime/adapterが必要なのでharnesses.jsonの実既存laneに接続する。std-onlyのstatic正例はNone/Optionのborrow-free returnとfunction valueに限定する。owned Result正例はNagi内でconstructorを追加せず、既存のpass/returnをRust側oracleから呼ぶ。
 
 正例はstd-only native oracleを持ち、High直接Rustと保存Low経由Rustの両方を同じ期待値で照合する。handwritten LowもHigh emitterの結果をコピーせず別sourceとして保存する。negativeは診断意味、stage、source lineの3つを要求する。新しい表現を「checkerが受けたから」という理由で正例へ追加しない。
 
 HTTP panicとSQL missing-columnは `harnesses.json` の実Cargo/HTTP/SQLite harnessが責任を持つ。登録確認だけでは保証しない。`python3 scripts/verify_compiler_contracts.py --run-linked` または同じ既存suiteの実行結果で検証する。
+
+現在は38 sourceと11 linked harnessを登録する。Authの構築・JSON・move・権限型・共有境界と、定数算術8幅・profile・診断順は、それぞれ`auth_boundaries`と`constant_validation`で実High/Low/nativeを検査する。std-only runnerへruntimeの代用品を入れて検証したことにはしない。

@@ -636,7 +636,13 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 operand(b)
             )
         }
-        E::Unary(o, x) => format!("{}({})", if o == "not" { "!" } else { o }, re(x, types)),
+        E::Unary(o, x) => {
+            if let Some(ty) = crate::constant_eval::signed_minimum(e) {
+                format!("(::std::primitive::{}::MIN)", ty.0)
+            } else {
+                format!("{}({})", if o == "not" { "!" } else { o }, re(x, types))
+            }
+        }
         E::Field(x, n) if e.resolution == Some(NameResolution::Enum) => {
             format!("{}::{n}", re(x, types))
         }
@@ -1908,15 +1914,24 @@ pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {
             while error_type.0 == "owned" {
                 error_type = &error_type.1[0];
             }
-            let display = if error_type.0 == "Error" {
-                "{}"
+            if crate::capabilities::debug_supported(error_type, &classes, &enums) {
+                let display = if error_type.0 == "Error" {
+                    "{}"
+                } else {
+                    "{:?}"
+                };
+                out.push_str(&format!(
+                    "if let ::std::result::Result::Err(e) = {call} {{ eprintln!({},e); ::std::process::exit(1); }}\n",
+                    quote(display)
+                ));
             } else {
-                "{:?}"
-            };
-            out.push_str(&format!(
-                "if let ::std::result::Result::Err(e) = {call} {{ eprintln!({},e); ::std::process::exit(1); }}\n",
-                quote(display)
-            ));
+                // Opaque errors still fail the process. Do not invent a Debug
+                // bound or expose a proof payload just to print that failure.
+                out.push_str(&format!(
+                    "if let ::std::result::Result::Err(_e) = {call} {{ eprintln!({}); ::std::process::exit(1); }}\n",
+                    quote("NagiのmainがErrを返しました")
+                ));
+            }
         } else {
             out.push_str(&format!("{call};\n"));
         }
@@ -2274,11 +2289,12 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             })
             .collect::<String>()
     );
-    if native_target.is_some() {
+    {
         use std::hash::{Hash, Hasher};
         // Cargo's target lock ends before `run` launches the resulting binary.
-        // Distinct generated applications must not overwrite each other when
-        // callers explicitly share their native dependency cache.
+        // Default and overridden native targets both share a dependency cache.
+        // Give distinct source/output pairs distinct application binaries;
+        // concurrent generation into the same output directory is unsupported.
         let mut identity = std::collections::hash_map::DefaultHasher::new();
         (
             fs::canonicalize(&path).map_err(|e| e.to_string())?,
@@ -2330,9 +2346,13 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                 return Err(format!("Cargoの診断を読み取れません: {e}"));
             }
         };
-        if let Some(message) =
-            crate::diagnostics::cargo_message(&line, &generated_rust, &generated_file, &sources)
-        {
+        if let Some(message) = crate::diagnostics::cargo_message_with_details(
+            &line,
+            &generated_rust,
+            &generated_file,
+            &sources,
+            options.rust_diagnostics,
+        ) {
             eprint!("{message}");
         }
     }

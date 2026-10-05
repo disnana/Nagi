@@ -300,10 +300,24 @@ fn class_field(t: &Type, line: usize) -> Result<(), String> {
     if t.0 == "Map" && definitely_unhashable(&t.1[0], None) {
         return Err(error(line, format!("classのMapフィールドのキーに{}は使えません。一致比較とハッシュに対応する型が必要です", t.1[0])));
     }
-    if crate::stdlib::resource(&t.0)
-        .is_some_and(|resource| !crate::stdlib::resource_info(resource).storage)
-    {
-        return Err(error(line, format!("{t}は所有fieldへ保存できません")));
+    if let Some(resource) = crate::stdlib::resource(&t.0) {
+        let info = crate::stdlib::resource_info(resource);
+        if !info.storage {
+            return Err(error(line, format!("{t}は所有fieldへ保存できません")));
+        }
+        // Native signatures and phantom markers are not stored values. Follow
+        // the same physical payload contract as layout/shared validation;
+        // each resource still decides whether its own value can be stored.
+        for index in info
+            .inline_type_arguments
+            .iter()
+            .chain(crate::stdlib::shared_type_arguments(resource))
+        {
+            if let Some(inner) = t.1.get(*index) {
+                class_field(inner, line)?;
+            }
+        }
+        return Ok(());
     }
     for inner in &t.1 {
         class_field(inner, line)?;
@@ -371,16 +385,6 @@ fn negative_boundary_type(expr: &Expr, expected: Option<&Type>) -> Option<Type> 
         _ => return None,
     };
     (value.parse::<u128>().ok() == Some(magnitude)).then_some(ty)
-}
-
-fn explicit_integer_zero(expr: &Expr) -> bool {
-    match &expr.kind {
-        E::Int(value) => value.parse::<u128>().ok() == Some(0),
-        // Parentheses are removed by the parser. Only recognize literal zero
-        // and its negation, without evaluating expressions or following names.
-        E::Unary(op, value) if op == "-" => explicit_integer_zero(value),
-        _ => false,
-    }
 }
 
 pub fn check(p: &mut Program) -> Result<(), String> {
@@ -707,6 +711,11 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         }
     }
     if !editor {
+        for function in &p.functions {
+            if !function.external {
+                crate::constant_eval::validate(function)?;
+            }
+        }
         crate::routes::validate(p)?;
     }
     Ok(())
@@ -1131,6 +1140,9 @@ impl Checker {
             }
             _ => unreachable!("actor operation is checked separately"),
         };
+        if self.resource(&output.0).is_some() {
+            self.valid(&output, line)?;
+        }
         Ok(output)
     }
 
@@ -1690,6 +1702,29 @@ impl Checker {
                     ),
                 ));
             }
+            if resource == crate::stdlib::Resource::Grant {
+                let marker = &t.1[0];
+                if !marker.1.is_empty()
+                    || !(self.classes.contains_key(&marker.0) || self.enums.contains_key(&marker.0))
+                {
+                    return Err(error(
+                        line,
+                        "Grantのpermission markerには型引数のないclass/enumを指定してください",
+                    ));
+                }
+            }
+            for index in crate::stdlib::shared_type_arguments(resource) {
+                if crate::capabilities::contains_auth_proof(
+                    &t.1[*index],
+                    &self.classes,
+                    &self.enums,
+                ) {
+                    return Err(error(
+                        line,
+                        "auth proofを内部のshared state/contextへ格納できません",
+                    ));
+                }
+            }
             for argument in &t.1 {
                 self.valid(argument, line)?;
             }
@@ -1722,6 +1757,14 @@ impl Checker {
             _ => None,
         };
         if let Some(n) = arity {
+            if t.0 == "shared"
+                && crate::capabilities::contains_auth_proof(t, &self.classes, &self.enums)
+            {
+                return Err(error(
+                    line,
+                    "auth proofをsharedへ格納できません（nested wrapperを含みます）",
+                ));
+            }
             if t.1.len() != n {
                 return Err(error(line, format!("{t} の型引数は{n}個です")));
             }
@@ -3311,12 +3354,8 @@ impl Checker {
                                 left.0.as_str(),
                                 "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
                             )
-                            && explicit_integer_zero(b)
                         {
-                            return Err(error(
-                                b.line,
-                                format!("整数の{op}の除数に0は指定できません。ゼロ以外の値を指定してください"),
-                            ));
+                            crate::constant_eval::validate_literal_divisor(b, op)?;
                         }
                         left
                     }
@@ -3396,6 +3435,12 @@ impl Checker {
                 Type::generic("List", vec![elem])
             }
             E::Record(n, fields) => {
+                if matches!(
+                    self.resource(n),
+                    Some(crate::stdlib::Resource::Principal | crate::stdlib::Resource::Grant)
+                ) {
+                    return Err(error(line, "auth proof resourceは構築できません。trusted Rust issuerを使用してください"));
+                }
                 if let Some((owner, variant)) = self.enum_variant(n, line)? {
                     if variant.fields.len() != fields.len() {
                         return Err(error(
@@ -3487,6 +3532,12 @@ impl Checker {
                         e.ty = Some(ty.clone());
                         return Ok(ty);
                     }
+                }
+                if matches!(
+                    self.resource(n),
+                    Some(crate::stdlib::Resource::Principal | crate::stdlib::Resource::Grant)
+                ) {
+                    return Err(error(line, "auth proof resourceは構築できません。trusted Rust issuerを使用してください"));
                 }
                 for t in ts.iter() {
                     self.valid(t, line)?;
@@ -3704,6 +3755,12 @@ impl Checker {
                 }
             }
             "copy" => {
+                if crate::capabilities::contains_auth_proof(&types[0], &self.classes, &self.enums) {
+                    return Err(error(
+                        line,
+                        "非Copy auth proofはcopyできません（nested wrapperを含みます）",
+                    ));
+                }
                 if !types[0].is_view() {
                     return Err(error(line, "copyの対象はviewです"));
                 }
@@ -3724,6 +3781,12 @@ impl Checker {
                 })
             }
             "share" => {
+                if crate::capabilities::contains_auth_proof(&types[0], &self.classes, &self.enums) {
+                    return Err(error(
+                        line,
+                        "auth proofをsharedへ変換できません（nested wrapperを含みます）",
+                    ));
+                }
                 if self
                     .resource(&types[0].0)
                     .is_some_and(|resource| !crate::stdlib::resource_info(resource).shared)

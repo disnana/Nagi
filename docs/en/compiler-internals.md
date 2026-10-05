@@ -24,7 +24,7 @@ Local names for definition navigation are resolved by walking the AST separately
 
 Scopes generate a wrapper around Tokio's JoinSet. Classes generate Rust structs, with JSON and database implementations when their field types support them. Low is a compile-time common representation, not a runtime VM. The common IR is currently neither SSA nor a separate optimizer. Optimization comes from the Rust backend.
 
-Within one compilation, lowering and code generation retain a mapping from generated lines to the original statement, definition, or field line. During a build, the compiler reads Cargo's JSON diagnostics and first shows the corresponding Nagi or Low file and line. Rust's notes and edit suggestions retain generated Rust coordinates. Handwritten Rust and unmapped diagnostics are not rewritten.
+Within one compilation, lowering and code generation retain a mapping from generated lines to the original statement, definition, or field line. Builds read Cargo's JSON diagnostics and show the corresponding Nagi or Low location and mapped related notes. `nagic build app.nagi --rust-diagnostics` also displays generated Rust text, notes, and suggestions. The option works with `run` too. Handwritten Rust and unmapped diagnostics remain visible at their Rust locations. Original expression columns and Rust edit suggestions are not guessed into Nagi coordinates.
 
 Saved `generated.low` comes from High before handwritten Low is integrated. It is not a dump of the entire program executed after replacement. Use `map` for integrated function relationships and generated Rust for the final output.
 

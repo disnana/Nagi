@@ -190,7 +190,7 @@ pub fn generated(seed: u64, count: usize) -> Vec<Case> {
     (0..count)
         .map(|index| {
             let input = GeneratedInput {
-                variant: index % 10,
+                variant: index % 13,
                 a: (next(&mut state) % 2001) as i64 - 1000,
                 b: (next(&mut state) % 2001) as i64 - 1000,
                 c: (next(&mut state) % 97 + 1) as i64,
@@ -211,16 +211,34 @@ fn generated_case(name: String, seed: u64, input: GeneratedInput) -> Case {
             6 => (format!("    text = \"Nagi日本語\"\n    other = \"abc\"\n    alias = view(text)\n    if {a} < {b}:\n        alias = view(other)\n    return len(alias) + {c}\n"), if a < b { 3+c } else { 13+c }),
             7 => (format!("    text = \"Nagi日本語\"\n    alias = view(text)\n    for index in range(3):\n        local = \"inner\"\n        alias = view(local)\n        alias = view(text)\n    return len(alias) + {a}\n"), 13+a),
             8 => (format!("    outer: Result[Result[i64, i64], i64] = ok(ok({a}))\n    match outer:\n        case Ok(inner):\n            match inner:\n                case Ok(value):\n                    return value + {b}\n                case Err(code):\n                    return code\n        case Err(problem):\n            return problem\n"), a+b),
-            _ => (format!("    text = \"Nagi日本語\"\n    values = [view(text)]\n    moved = values\n    values = [view(text)]\n    return len(moved[0]) + len(values[0]) + {a}\n"), 26+a),
+            9 => (format!("    text = \"Nagi日本語\"\n    values = [view(text)]\n    moved = values\n    values = [view(text)]\n    return len(moved[0]) + len(values[0]) + {a}\n"), 26+a),
+            10 => (format!("    text = \"Nagi日本語\"\n    reader = identity\n    alias = reader(view(text))\n    return len(alias) + {a}\n"), 13+a),
+            _ => (format!("    text = \"Nagi日本語\"\n    other = \"abc\"\n    chosen = choose(view(text), view(other), {a} < {b})\n    match chosen:\n        case Ok(optional):\n            match optional:\n                case Some(alias):\n                    return len(alias) + {c}\n                case None:\n                    return 0\n        case Err(problem):\n            return problem\n"), if a < b { 13+c } else { 3+c }),
         };
+    let helpers = match input.variant {
+        10 => "def identity(text: view[str]) -> view[str]:\n    return text\n",
+        11 => "def choose(left: view[str], right: view[str], first: bool) -> Result[Option[view[str]], i64]:\n    if first:\n        return ok(some(left))\n    return ok(some(right))\n",
+        12 => "async def choose(left: view[str], right: view[str], first: bool) -> Result[Option[view[str]], i64]:\n    if first:\n        return ok(some(left))\n    return ok(some(right))\n",
+        _ => "",
+    };
+    let (declaration, body, oracle) = if input.variant == 12 {
+        ("async def", body.replace("chosen = choose(", "chosen = await choose("),
+         format!("let mut future = ::std::pin::pin!(evaluate()); let mut context = ::std::task::Context::from_waker(::std::task::Waker::noop()); assert!(matches!(::std::future::Future::poll(future.as_mut(), &mut context), ::std::task::Poll::Ready(value) if value == {expected}i64));"))
+    } else {
+        (
+            "def",
+            body,
+            format!("assert_eq!(evaluate(), {expected}i64);"),
+        )
+    };
     Case {
         name,
-        source: format!("def evaluate() -> i64:\n{body}"),
+        source: format!("{helpers}{declaration} evaluate() -> i64:\n{body}"),
         high: true,
         expected: "run-pass".into(),
         diagnostic: String::new(),
         line: 0,
-        oracle: format!("assert_eq!(evaluate(), {expected}i64);"),
+        oracle,
         seed,
         generator: Some(input),
     }

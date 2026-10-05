@@ -28,6 +28,6 @@ $env:NAGI_PRICING_ENGINE = "rust"
 
 `nagi.toml`は`foundation_cli.nagi`とRustアダプターの`native.rs`を指定します。Rust moduleは`../shared/bridge.rs`から組み込み、既存の`@rust("native::engine::foundation_rust_quote")`を呼びます。依存crateの追加はありません。両方の実装を同じアプリに含め、選ぶ関数を切り替えるサンプルです。
 
-生成ソースはこのフォルダーの`build/foundation_cli/`、通常の実行ファイルは`build/native-target/release/nagi-foundation-cli`です。Windowsでは`.exe`が付き、`NAGI_NATIVE_TARGET_DIR`を設定した場合は出力先が変わります。ビルドにはRust/CargoとCビルド環境が必要です。
+生成ソースはこのフォルダーの`build/foundation_cli/`です。実行ファイルは`native:`行のパスで確認します。次の未リリース版では既定名にも識別子が付き、`build/native-target/release/nagi-foundation-cli-<識別子>`となります。Windowsでは`.exe`が付き、`NAGI_NATIVE_TARGET_DIR`を設定した場合は出力先が変わります。ビルドにはRust/CargoとCビルド環境が必要です。
 
 [English](README.en.md)

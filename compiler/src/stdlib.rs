@@ -8,12 +8,15 @@ pub const ACTOR_MODULE_NAME: &str = "std.actor";
 pub const ACTOR_MODULE_ID: &str = "stdlib:std.actor";
 pub const RESULT_MODULE_NAME: &str = "std.result";
 pub const RESULT_MODULE_ID: &str = "stdlib:std.result";
+pub const AUTH_MODULE_NAME: &str = "std.auth";
+pub const AUTH_MODULE_ID: &str = "stdlib:std.auth";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StandardModule {
     HttpServer,
     Actor,
     Result,
+    Auth,
 }
 pub struct StandardModuleInfo {
     pub name: &'static str,
@@ -24,6 +27,7 @@ pub const MODULES: &[StandardModule] = &[
     StandardModule::HttpServer,
     StandardModule::Actor,
     StandardModule::Result,
+    StandardModule::Auth,
 ];
 pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
     match module {
@@ -41,6 +45,11 @@ pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
             name: RESULT_MODULE_NAME,
             id: RESULT_MODULE_ID,
             rust_namespace: "::nagi_runtime::result",
+        },
+        StandardModule::Auth => &StandardModuleInfo {
+            name: AUTH_MODULE_NAME,
+            id: AUTH_MODULE_ID,
+            rust_namespace: "::nagi_runtime::auth",
         },
     }
 }
@@ -67,6 +76,8 @@ pub enum Resource {
     TaskReady,
     WaitKind,
     WaitError,
+    Principal,
+    Grant,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Operation {
@@ -189,6 +200,8 @@ pub const RESOURCES: &[Resource] = &[
     Resource::TaskReady,
     Resource::WaitKind,
     Resource::WaitError,
+    Resource::Principal,
+    Resource::Grant,
 ];
 pub const OPERATIONS: &[Operation] = &[
     Operation::Status,
@@ -251,6 +264,32 @@ pub fn is_registered_module(id: &ModuleId) -> bool {
 }
 pub fn resource_info(resource: Resource) -> &'static ResourceInfo {
     match resource {
+        Resource::Principal => &ResourceInfo {
+            module: StandardModule::Auth,
+            name: "Principal",
+            arity: 0,
+            type_parameters: &[],
+            inline_type_arguments: &[],
+            rust_path: "::nagi_runtime::auth::Principal",
+            copy: false,
+            equality: false,
+            storage: false,
+            shared: false,
+            debug: false,
+        },
+        Resource::Grant => &ResourceInfo {
+            module: StandardModule::Auth,
+            name: "Grant",
+            arity: 1,
+            type_parameters: &["P"],
+            inline_type_arguments: &[],
+            rust_path: "::nagi_runtime::auth::Grant",
+            copy: false,
+            equality: false,
+            storage: false,
+            shared: false,
+            debug: false,
+        },
         Resource::Request => &ResourceInfo {
             module: StandardModule::HttpServer,
             type_parameters: &[],
@@ -623,6 +662,16 @@ pub fn definition(id: &DefId) -> bool {
 }
 pub fn contains_symbol(symbol: &str) -> bool {
     resource(symbol).is_some() || operation(symbol).is_some()
+}
+
+/// Type parameters whose values are implicitly retained in an Arc. Keep this
+/// representation contract next to the native resource registry, not in each
+/// constructor's checker branch. Function/error signatures are not payloads.
+pub(crate) fn shared_type_arguments(resource: Resource) -> &'static [usize] {
+    match resource {
+        Resource::App | Resource::Supervisor => &[0],
+        _ => &[],
+    }
 }
 
 const METHOD_CONSTANTS: &[ConstantInfo] = &[

@@ -28,24 +28,24 @@ High→Low text→再checkは現状維持する。Low textは通常CLIの内部�
 | P1・修正 | planned mutable receiverの先行borrowによるE0502 | `append(parts, parts[0])`をitem評価→mutable projectionにし、RHS panicも確認 |
 | P1・修正 | Scopeの余計なasync境界によるE0521/E0381 | 全Scopeを同じlexical/error exitモデルへ統一。借用返却とscalar返却、await、nested error、親取消、body panicを実runtimeで検査 |
 | P1・修正 | env fallback内のtry/awaitが生成closureから出られない | lazy fallbackをmatchに生成。存在時の非評価、missing時のErr/awaitを同じ3 source formsで検査 |
-| P1・未解決 | `1 / (1 - 1)`等の定数式はcheck成功後にRustで拒否される | 下記の再現・必要な判断・次の行動を参照。crate/trait委譲ではない |
+| P1・次フェーズ修正 | `1 / (1 - 1)`等の定数式はcheck成功後にRustで拒否される | 共通typed constant検査と8幅のHigh/Low/nativeテストを追加。[ADR 002](adr/002-constant-validation.md)。#74本体の履歴は変更しない |
 | P2・修正 | backend縮小がoracle由来E0425へすり替わる | oracle無しの生成Rustでも同stage/error codeになる場合だけ縮小。自己テストを追加 |
 | P2・継続 | text再解析でchecked factsを失う、行のみのsource map、ASTにoptional型情報 | 現経路と制約を文書化。今回のprivate planは全面Typed IRではない |
 | P2・継続 | owning-view metadataにList由来の名前が残る | 私有名なので互換性問題ではない。次の関連変更で整理し、公開型変更と混ぜない |
 | P3・継続 | private storage/Future frameの費用、探索のcoverage拡大 | payload cloneで回避しない。以下の条件付き測定と定期探索を継続 |
 
-### 未解決P1: 定数算術
+### #74で残ったP1: 定数算術
 
 ```python
 def main():
     print(1 / (1 - 1))
 ```
 
-実CLIの`check`はexit 0、`build`はexit 1。Rustの`unconditional_panic`で拒否され、primary位置はNagiの2行目へ戻る。既存のliteral 0診断と、定数式・overflowの解析は別である。Rustのlintを無効化して成功にする修正は採らない。
+PR #74時点では実CLIの`check`はexit 0、`build`はexit 1。Rustの`unconditional_panic`で拒否され、primary位置はNagiの2行目へ戻る。既存のliteral 0診断と、定数式・overflowの解析は別である。Rustのlintを無効化して成功にする修正は採らない。
 
-今回ここを直していない理由: 現行の採用済み算術規則はliteralの0を対象とし、定数式・推論・各整数幅・overflowまでの診断優先順位が未確定。借用生成の修正へ別の定数評価モデルを混ぜず、P1として独立に追う。
+PR #74に混ぜなかった理由: 現行の採用済み算術規則はliteralの0を対象とし、定数式・推論・各整数幅・overflowまでの診断優先順位が未確定。借用生成の修正へ別の定数評価モデルを混ぜず、P1として独立に追う。
 
-次の行動: 副作用のない定数整数式について、型検査後の評価範囲、overflow/zeroの区分と位置、Rustとの受理差を先に定義する。8整数型×High/保存Low/手書きLowのpass/failを追加し、共通評価モデルで診断する。実行時のゼロ除算をpanicからResultへ変更する案とは分ける。
+次フェーズでは[ADR 002](adr/002-constant-validation.md)で評価範囲と互換性を定義し、failing testsを作ってから共通検査を実装した。実行時ゼロ除算をpanicからResultへ変更するものではない。
 
 ## 実装の変更
 

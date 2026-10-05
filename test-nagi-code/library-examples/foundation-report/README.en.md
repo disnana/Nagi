@@ -34,6 +34,6 @@ nagic run --project test-nagi-code/library-examples/foundation-report
 
 Input records contain numeric fields, so they can be copied during iteration. Output classes own their labels and are appended to explicitly typed Lists. The 1000-row limit and shared price bounds keep the total within i64. See the [shared API](../shared/README.en.md) for units, rounding, validation, and supplying a custom Rust implementation.
 
-`nagi.toml` selects `foundation_report.nagi` and `native.rs`. The Rust source is the same `../shared/bridge.rs` and `pricing.rs` used by the CLI. No database, HTTP server, or additional crates are used. Generated sources go to this folder's `build/foundation_report/`; the default executable is `build/native-target/release/nagi-foundation-report`, with `.exe` on Windows. `NAGI_NATIVE_TARGET_DIR` overrides its output directory. Building requires Rust/Cargo and a compatible C build environment.
+`nagi.toml` selects `foundation_report.nagi` and `native.rs`. The Rust source is the same `../shared/bridge.rs` and `pricing.rs` used by the CLI. No database, HTTP server, or additional crates are used. Generated sources go to this folder's `build/foundation_report/`. Read the executable path from the `native:` line. The next unreleased compiler also adds an identifier to default names: `build/native-target/release/nagi-foundation-report-<identifier>`, with `.exe` on Windows. `NAGI_NATIVE_TARGET_DIR` overrides its output directory. Building requires Rust/Cargo and a compatible C build environment.
 
 [日本語](README.md)

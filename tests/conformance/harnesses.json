@@ -173,5 +173,46 @@
       "--test",
       "view_flow_completion"
     ]
+  },
+  {
+    "name": "typed_constant_validation_profiles",
+    "contract": "8整数幅のcompound/alias zero・MIN除算を元行とcodeで拒否し、profile依存overflowとsigned MIN印字をHigh/Lowの実nativeで検査する",
+    "files": [
+      "compiler/tests/constant_validation.rs"
+    ],
+    "test_names": [
+      "compound_and_alias_zero_fail_after_type_check_in_all_widths_and_forms",
+      "signed_minimum_division_and_remainder_are_static_failures_in_every_width"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "constant_validation"
+    ]
+  },
+  {
+    "name": "typed_auth_proof_boundaries",
+    "contract": "missing/wrong/forged/copied/shared proofをHigh/Lowで拒否、nominal proof move・async delegation・nonDebug main Errを実runtimeで検査する",
+    "files": [
+      "compiler/tests/auth_boundaries.rs"
+    ],
+    "test_names": [
+      "missing_principal_grant_wrong_permission_and_reuse_are_rejected",
+      "proof_move_and_nominal_marker_build_and_run_against_real_runtime",
+      "opaque_main_errors_fail_without_a_debug_bound_or_proof_payload"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "auth_boundaries"
+    ]
   }
 ]

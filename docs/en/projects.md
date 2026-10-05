@@ -121,9 +121,11 @@ Replacing a same-name table with `--rust-dep` removes its `path`, `package`, `fe
 
 Command-line relative paths use the terminal's working directory. Duplicate SOURCE, project, rust, out, or same-name rust-dep arguments are errors. project and no-project cannot be combined.
 
-Project-generated code goes to `build/<entry filename without extension>/`, and executables to `build/native-target/release/`. For `main.nagi`, the executable is `nagi-main.exe` on Windows or `nagi-main` on Linux. Separate build folders allow applications to reuse the same entry filename.
+Project-generated code goes to `build/<entry filename without extension>/`, and executables to `build/native-target/release/`. The `native:` line that `build` and `run` print to stderr gives the actual path.
 
-Set `NAGI_NATIVE_TARGET_DIR` to share dependency builds across applications. In Nagi 0.1.10, only with this override, executable names include an identifier for the source and generated output directory, such as `nagi-main-0123456789abcdef.exe`. The `native:` line that `build` and `run` print to stderr gives the actual path. Concurrent compilation into the same generated output directory is not supported.
+Starting with the next unreleased version, default executable names also include an identifier for the source and generated output directory. For `main.nagi`, an example is `nagi-main-0123456789abcdef.exe` on Windows, without `.exe` on Linux and macOS. Nagi 0.1.10 added the identifier only with `NAGI_NATIVE_TARGET_DIR`; concurrent builds can also collide in the default cache, so both paths now follow the same rule. Scripts that used a fixed filename should use the reported `native:` path.
+
+Set `NAGI_NATIVE_TARGET_DIR` to share dependency builds across applications. Applications can reuse the same entry filename, but need separate generated output directories. Concurrent compilation into the same generated output directory is not supported. The identifier is not a stable name across compiler versions; choose a distribution name when packaging if needed.
 
 ## Use with VS Code
 
