@@ -37,6 +37,7 @@ Stop対象のtest期待は、公開言語意味論・CLI/API利用者契約・Hi
 | 変更 | 必要な観測 |
 |---|---|
 | ownership / lifetime / 型 | positiveとnegative、拒否段階と元位置、High check、保存Low check、関係する手書きLow、生成Rust build。分岐・loop・function value・nested Resultが関係するなら組合せも確認 |
+| resource metadata / capability | registryの独立した手書き期待と集合完全性、generic roleのindex範囲・重複・欠落、operation Passing/borrow_owner、field accessorを確認。用途別遍歴とnative Debug/Chargeを同一solverへ潰さない。未正規化High/保存Low一致、stable logical IDの全文golden、実Cargo/native・negative元位置を維持。新targetの4 OS実行を確認し、harness登録だけを実行成功と数えない。Phase 3はtest-only CI成功後に集約する |
 | storage / lowering | 値・評価順、RHS Err/panic、旧値Drop panic、正常/Err/unwindの破棄位置。asyncなら未poll・pending・再開・取消、scopeならjoin/兄弟取消。allocation/clone/Futureサイズを測り条件を報告 |
 | parser / diagnostics | 不正・上限入力、High/Low、文字/byte/UTF-16位置、元module位置。対応のないRust spanを推測変換しない |
 | HTTP | success、handler Result、handler/mapper panic、timeout、malformed/過大本文、shutdownとcapacity解放。実socketテストを使う。応答開始後やnon-yielding処理の制限を残す |
@@ -46,6 +47,8 @@ Stop対象のtest期待は、公開言語意味論・CLI/API利用者契約・Hi
 | 文書のみ | リンク、日英、実装・版・サンプルとの整合。Rust全suiteは文書だけの変更では通常不要 |
 
 対応する既存harnessを使い、同じassertだけのテストを増やさない。拒否をacceptへ変える、assert削除、seed除外、失敗をskipへ変えることで検査を通さない。設計上必要な期待変更は理由とbefore/afterを示す。
+
+並列testの一時directoryは、PIDと時刻だけで一意と判断しない。同じclock tickでも別の所有者へ分かれ、exclusive作成に成功したdirectoryだけをDropで削除する。fixtureの衝突をglobal test直列化や成功までの再実行で隠さず、同tickの回帰で確認する。
 
 ## 実行コマンド
 

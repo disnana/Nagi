@@ -37,21 +37,7 @@ impl Drop for Fixture {
     }
 }
 
-const DATA: &str = r#"import std.actor as actor
-class Inline:
-    value: i64
-class Owned:
-    label: str
-    values: List[Inline]
-class Node:
-    children: List[Node]
-class Caused:
-    cause: Error
-enum Packet:
-    Empty
-    Number(value: i64)
-    Data(value: Owned)
-"#;
+const DATA: &str = include_str!("fixtures/resource-contract/actor-data.nagi");
 
 #[test]
 fn actor_charge_generation_survives_low_without_clones_reflection_or_serde_requirements() {

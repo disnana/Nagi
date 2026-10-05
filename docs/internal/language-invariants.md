@@ -19,6 +19,8 @@
 
 buildには外部環境が必要なため「check成功ならどんな環境でもbuild成功」とは保証しない。未対応のNagi構文・型の組合せは早い段階で明示的に拒否する。現時点では全受理プログラムのbackend conformanceを証明できておらず、未知の不一致は残り得る。
 
+登録resourceのCopy/shared/field storage/Debugと型引数の保持関係は、[ADR 008](adr/008-resource-contracts.md)の単一根拠へ集約する。これはPhase 3の採用設計で、現受理意味論は変えない。inline/shared payload、Actorの間接protocol、callback署名、nominal phantomを区別し、全capabilityへ同じ遍歴を使わない。lifecycleは不活性のUnspecifiedに留め、Tx/Poolや任意Rustの安全契約を実装済みとしない。
+
 ## 所有権・借用
 
 | 項目 | 契約・制約 | 主な検査 |
@@ -100,3 +102,5 @@ PostgreSQL、一般的な可変長bind、poolは未実装。Rustアダプター�
 | cleanup / shutdown | request permit、handler Future、connection taskを期限とshutdownで解放する。graceful shutdownの完了とdeadline超過によるabortを分ける | `http_server/tests.rs::graceful_shutdown_*`, `connection_capacity_and_shutdown_deadline_leave_no_handler_tasks` |
 
 標準HTTPはHyper上の実装であり、既存Rust/Axumルーター用の経路もある。Axum全面移行、TLS、WebSocket、peer/proxy信頼APIは今回の契約ではない。
+
+`axum-service`サンプルは別のRust adapter契約を持つ。[ADR 009](adr/009-axum-rejected-body.md)で承認した欠落Content-Typeの4096バイト・1秒読取は、この例だけに適用する。415の選択を全transportでの受信保証とせず、標準HTTPや他のRust adapterへ暗黙に適用しない。実装・検査の状況は進捗に記録する。

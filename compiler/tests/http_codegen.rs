@@ -45,36 +45,7 @@ fn independent_low(program: &Program) -> Program {
 // It needs no owned string construction, state clone, or adapter allocation.
 // Response construction and the heterogeneous runtime route table have their
 // own measured costs; this checks that code generation adds none of those.
-const AUTH: &str = r#"import std.http.server as http
-class State:
-    expected: str
-def allowed(request: view[http.Request], state: shared[State]) -> Result[bool, Error]:
-    assert_true(request.method == http.Method.GET)
-    assert_true(request.path == "/probe")
-    assert_true(request.path < "/z")
-    assert_true("/a" < request.path)
-    assert_true(request.path <= state.expected)
-    assert_true(state.expected >= request.path)
-    assert_true(request.body <= request.body)
-    assert_true(len(request.body) == 0)
-    status = copy(view(http.Status.OK))
-    assert_true(status.value == 200)
-    match try http.header_text(request, view("Authorization")):
-        case Some(value):
-            return ok(value == view(state.expected))
-        case None:
-            return ok(False)
-async def handler(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
-    accepted = try allowed(view(request), state)
-    if accepted:
-        return ok(http.empty(http.Status.OK))
-    else:
-        return ok(http.empty(http.Status.UNAUTHORIZED))
-def register(state: State) -> Result[http.App[State, Error], Error]:
-    app = http.app_default[State](state)
-    app = try http.route(app, http.Method.GET, view("/probe"), handler)
-    return ok(app)
-"#;
+const AUTH: &str = include_str!("fixtures/resource-contract/http-inspection.nagi");
 
 #[test]
 fn borrowed_http_inspection_and_async_registration_add_no_owned_adapter_work() {
@@ -122,5 +93,103 @@ fn literal_view_optimization_does_not_change_a_shadowing_owned_function() {
         assert!(rust.contains(&format!(
             "crate::{function}(::std::string::String::from(\"owned argument\"))"
         )));
+    }
+}
+
+const BORROW_MAPPERS: &str = include_str!("fixtures/resource-contract/http-borrow-mappers.nagi");
+
+#[test]
+fn borrow_and_named_mappers_preserve_high_low_codegen() {
+    let (_fixture, program) = Fixture::checked(BORROW_MAPPERS);
+    let high_rust = emit::rust(&checked_emission::seal(&program)).unwrap();
+    let low_rust = emit::rust(&checked_emission::seal(&independent_low(&program))).unwrap();
+    assert_eq!(
+        high_rust, low_rust,
+        "saved Low changed Borrow/Mapper emission"
+    );
+    assert!(high_rust.contains("::nagi_runtime::http_server::json::<"));
+    assert!(
+        high_rust.contains(", &(value))"),
+        "json must borrow its owned DTO: {high_rust}"
+    );
+    for (operation, callback) in [("app::<", "map_builtin"), ("route_mapped(", "map_text")] {
+        let callback = &program.modules.resolve_root_path(callback).unwrap().symbol;
+        let line = high_rust
+            .lines()
+            .find(|line| line.contains(&format!("::nagi_runtime::http_server::{operation}")))
+            .unwrap();
+        assert!(
+            line.contains(&format!("crate::{callback}")),
+            "named mapper lost: {line}"
+        );
+    }
+}
+
+#[test]
+fn borrow_and_named_mapper_registration_execute_native_adapters() {
+    use std::process::Command;
+    // Execute json/Borrow and app/route_mapped registration, not mapper bodies
+    // or HTTP dispatch. Existing socket tests cover the runtime request path.
+    let source = format!("{BORROW_MAPPERS}\n@rust(\"native::probe\")\nextern def probe() -> Result[unit, Error]\ndef main() -> Result[unit, Error]:\n    return probe()\n");
+    let (fixture, program) = Fixture::checked(&source);
+    fs::write(fixture.0.join("saved.low"), emit::low(&program)).unwrap();
+    fs::write(
+        fixture.0.join("native.rs"),
+        r#"
+pub fn probe() -> Result<(), nagi_runtime::Error> {
+    let response = crate::encode(crate::Payload { label: String::from("seven") })?;
+    assert_eq!(response.status().value(), 200);
+    let _app = crate::setup(crate::State { seed: 1 })?;
+    println!("borrow and named mapper registration execute");
+    Ok(())
+}
+"#,
+    )
+    .unwrap();
+    let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap()
+                .join("native-target")
+        });
+    for input in ["main.nagi", "saved.low"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .current_dir(&fixture.0)
+            .args([
+                "run",
+                input,
+                "--rust",
+                "native.rs",
+                "--out",
+                "build",
+                "--no-project",
+            ])
+            .env("NAGI_NATIVE_TARGET_DIR", &target)
+            .env("CARGO_NET_OFFLINE", "true")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap().trim(),
+            "borrow and named mapper registration execute",
+            "{input}"
+        );
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        let native = stderr
+            .lines()
+            .find_map(|line| line.strip_prefix("native: "))
+            .unwrap()
+            .trim_end_matches('\r');
+        assert!(std::path::Path::new(native).is_file());
+        if input == "main.nagi" {
+            fs::remove_file(fixture.0.join(input)).unwrap();
+        }
     }
 }

@@ -89,7 +89,9 @@ PRとpushでは既存`Nagi checks`の変更検出を使う。compiler/runtime/te
 
 ## Cargo / HTTP / SQLとの接続
 
-`tests/conformance/harnesses.json` に実test名とcommandを登録する。`verify_compiler_contracts.py` は登録先source/testが存在することを検査し、`--run-linked` で12harnessを順番に実行する。HTTP panicは実request、500/sanitized body、HEAD body、server継続性まで検査する既存runtime harnessが責任を持つ。SQL missing-columnは実SQLite schemaのopt-in checkとHigh/保存Lowのquery行を既存SQL harnessで検査する。HTTP生成と成功build世代は実Cargo build/実行harnessへ接続する。conformance corpusへの文字列記録だけではこれらの性質を保証しない。
+`tests/conformance/harnesses.json` に実test名とcommandを登録する。`verify_compiler_contracts.py` は登録先source/testが存在することを検査し、`--run-linked` で16harnessを順番に実行する。HTTP panicは実request、500/sanitized body、HEAD body、server継続性まで検査する既存runtime harnessが責任を持つ。SQL missing-columnは実SQLite schemaのopt-in checkとHigh/保存Lowのquery行を既存SQL harnessで検査する。HTTP生成と成功build世代は実Cargo build/実行harnessへ接続する。conformance corpusへの文字列記録だけではこれらの性質を保証しない。
+
+Phase 3では、登録資源の独立inventory、用途別capability、4例のLow/Rust全文goldenも接続した。固定logical ModuleIdのgoldenはresolver・生成の決定性を検査し、実fileのsource mapは既存統合testへ任せる。HTTPの追加native例は借用JSONとnamed mapperの登録構築を実行するもので、mapper本体を呼んだ証拠とはしない。4 OSの明示Cargo一覧にはinventoryと既存shared-field native回帰を追加し、既存HTTP/Actor/auth/copy検査も維持する。
 
 ## 一次資料と採否
 
@@ -98,3 +100,9 @@ PRとpushでは既存`Nagi checks`の変更検出を使う。compiler/runtime/te
 - [Proptest](https://proptest-rs.github.io/proptest/intro.html) / [generation・shrinking・persistence](https://proptest-rs.github.io/proptest/proptest/getting-started.html): property検査は既知regressionを補完する。今回は13種の小さなgeneratorと既存stdで縮小/保存を実測し、新dependencyを加えず実装できた。strategyの組合せが増え構造的shrinkingが必要になった段階でproptest dev-dependencyを提案する。
 - [Csmith](https://embed.cs.utah.edu/csmith/): 未定義挙動を除く生成と独立oracleを採用。C言語generator自体は非採用。Nagiに独立compilerがないことを明記する。
 - [Crater](https://rustc-dev-guide.rust-lang.org/tests/crater.html): check/build/runのコスト分離を採用。小corpusの成功を全言語/全platform保証と解釈しない。
+
+## Axum連携サンプルのnative回帰
+
+[ADR 009](adr/009-axum-rejected-body.md)のContent-Type欠落時のpolicyは、sampleのnative unitと元clientの実HTTPで分けて検査する。共通application runnerは、成功世代のmanifest・唯一のbinを使ってHigh/保存Lowそれぞれの`native::tests::`を実行する。0件・ignore・Cargo失敗は成功にならない。`test_application_native_tests.py`の5回帰もLinuxと4 OSのCIへ接続した。
+
+制御read Futureのpoll/EOF・error・取消/Dropと、実Bodyの4096/4097、実handlerの分岐を確認する。実HTTPの19caseと不正port3caseは別に数える。分割送信と正常JSON4097byteの413を追加し、旧request/期待は維持する。全TCP分割・keep-alive・hard wall期限・clientへの必達を証明するtestではない。先行testのhelper未定義によるcompile失敗と、元Windowsの受信失敗を混同しない。

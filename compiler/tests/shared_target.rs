@@ -2,23 +2,36 @@ use std::{
     fs,
     path::PathBuf,
     process::{Child, Command, Output, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+
+static FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 
 struct Fixture(PathBuf);
 
 impl Fixture {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "nagi shared cache 凪 {} {}",
-            std::process::id(),
+        Self::new_at(
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+        )
+    }
+
+    // Inject repeated clock ticks without depending on host timer resolution.
+    fn new_at(timestamp: u128) -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "nagi shared cache 凪 {} {} {}",
+            std::process::id(),
+            timestamp,
+            FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
         ));
-        fs::create_dir_all(&path).unwrap();
+        // Clock resolution is not a uniqueness guarantee. Reserve this fixture's
+        // root exclusively; never borrow an existing directory that Drop can delete.
+        fs::create_dir(&path).unwrap();
         let fixture = Self(path);
         // These programs use only print, so real Cargo builds need no downloads.
         fixture.write(
@@ -88,6 +101,32 @@ fn successful(output: &Output, expected: &str) -> PathBuf {
     // macOS may spell the same temporary directory as /var or /private/var.
     // Compare artifact identity rather than the diagnostic's path spelling.
     fs::canonicalize(path).unwrap()
+}
+
+#[test]
+fn repeated_timestamps_keep_fixture_ownership_distinct() {
+    let first = Fixture::new_at(42);
+    let second = Fixture::new_at(42);
+    first.write("first-owner.txt", "first");
+    second.write("second-owner.txt", "second");
+    let first_path = first.0.clone();
+    let second_path = second.0.clone();
+    let same_directory = first_path == second_path;
+    drop(first);
+    let second_survived_first_drop = second_path.join("second-owner.txt").is_file();
+    // Observe both same-name allocation and cross-owner deletion before failing.
+    assert!(
+        !same_directory && second_survived_first_drop,
+        "same timestamp borrowed the same directory: {same_directory}; second sentinel survived first Drop: {second_survived_first_drop}; first={} second={}",
+        first_path.display(), second_path.display()
+    );
+    assert!(!first_path.exists());
+    assert_eq!(
+        fs::read_to_string(second_path.join("second-owner.txt")).unwrap(),
+        "second"
+    );
+    drop(second);
+    assert!(!second_path.exists());
 }
 
 #[test]

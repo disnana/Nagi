@@ -6,9 +6,11 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
+import tomllib
 from native_artifacts import native_executable
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,6 +58,30 @@ def verifier(project):
     return module.verify
 
 
+def verify_axum_native_tests(published, target, env, log):
+    # Use the successful generation, rather than a mutable compatibility manifest.
+    manifest = published.parent / "Cargo.toml"
+    with manifest.open("rb") as source:
+        bins = tomllib.load(source).get("bin", [])
+    if len(bins) != 1 or not isinstance(bins[0].get("name"), str):
+        raise ValueError(f"Expected one generated Axum executable: {manifest}")
+    run([
+        "cargo", "test", "--locked", "--release", "--manifest-path", manifest,
+        "--target-dir", target, "--bin", bins[0]["name"], "native::tests::",
+        "--", "--nocapture",
+    ], env, log)
+    summaries = re.findall(
+        r"test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored;",
+        log.read_text(encoding="utf-8"),
+    )
+    if len(summaries) != 1:
+        raise RuntimeError(f"Missing or ambiguous Axum native test result: {log}")
+    passed, failed, ignored = map(int, summaries[0])
+    if passed == 0 or failed != 0 or ignored != 0:
+        raise RuntimeError(f"Axum native tests did not all execute successfully: {log}")
+    return {"passed": passed, "failed": failed, "ignored": ignored}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", default=str(
@@ -87,7 +113,14 @@ def main():
             published = native_executable(directory, target)
             executable = directory / published.name
             shutil.copy2(published, executable)
+            native_tests = None
+            if name == "axum-service":
+                native_tests = verify_axum_native_tests(
+                    published, target, env, generated / f"{mode}-native-tests.log",
+                )
             facts = verify(executable, env, directory)
+            if native_tests is not None:
+                facts["native_tests"] = native_tests
             rows.append({"project": name, "source": mode, "status": "passed", **facts})
             (output / "results.json").write_text(
                 json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",

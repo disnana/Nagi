@@ -105,3 +105,51 @@ freeze時の独立レビューではowned 12ファイルのhash一致を確認�
 Windowsを含む4 OS CIは未完了。Phase 2のacceptanceは再確認待ちを維持し、Phase 3のcharacterization/refactorは未実装。Phase 2のmainへのmerge、版更新、releaseは行っていない。
 
 PR #79をmain向けに作成した。初回CIではmacOS Apple Siliconのgeneration 22件が成功したが、非UTF-8名のfixture作成がNagi起動前にAPFSのOS92で失敗した。Linuxの元の回帰を維持して対象OSを修正し、共通の日本語pathでsource/provenanceの生OS unitsを検査するassertを追加した。[結果](build-generations-results.md#初回ciでのfixture修正)に理由を記録した。4 OS CIの再確認までacceptance待ちを維持する。
+
+### 修正後のacceptance
+
+head `27c8bf4`の[checks run 37330160221・attempt 2](https://github.com/disnana/Nagi/actions/runs/37330160221)と[website run 37330159710](https://github.com/disnana/Nagi/actions/runs/37330159710)が成功した。Linux全検査、4 OS配布・10 project/19 run、VSIX、IntelliJ IDEA、PyCharm、merge gateを読み戻した。generation回帰はLinux 23、Windows/macOS各22件。Windows latest置換失敗・回復も成功した。旧headイベントの重複で取消されたattempt 1を成功とは数えない。詳細は[結果](build-generations-results.md#修正後のci)へ追記した。
+
+Phase 2のacceptanceを満たし、#79をreview可能へ変更した。mainへのmerge・版更新・releaseは実行していない。次段階は#79の成功headを基点に進め、#79がmain未反映の間は依存と最終反映先mainを明記する。
+
+## Phase 3: 登録資源の契約と先行characterization
+
+branch `refactor/resource-contract-foundation`、基点は#79のhead `27c8bf4`。[ADR 008](adr/008-resource-contracts.md)に、公開ResourceInfoを内包する単一descriptor、分類集合から導くgeneric role、用途別legacy query、lifecycle不活性、維持する受理・拒否を記録した。集約実装はまだ変更していない。
+
+2つのSolレビューで、Passing inventoryがtype_parametersを読んでいた誤り、Requestのis_* fieldの省略、Borrow/Mapperのgolden coverage不足を訂正した。全22resource・47operation・32fieldをコードへ照合した。新targetの4 OS明示一覧への追加、harness登録と実行の区別、runtimeが必要なclassをstandalone rustc corpusへ入れない条件も先行案へ反映した。
+
+goldenは実resolverへ固定logical identityを渡すcfg(test) fixtureを使い、metadata・alias・deriveを削らず比較する案を採用する。既存物理fileのHigh/保存Low一致・native・診断位置は維持する。先行test-only commitのCI成功後にだけ集約へ進む。
+
+Copy深さ63/64/65を4種類のleafで検査した。checkerが2回使用を拒否し、生成型はCopyになる差を確認した。owned/Optionの深さ65では、手書きadapterのCopy要求だけがE0277になり、同じNagiを要求なしの別adapterでbuildすると成功した。今回の有限probeではNagiだけのaccepted-invalid、unsoundnessは確認していない。P2の二重判定として[調査](copy-boundary-investigation.md)へ原因・matrix・再現生成器・判断案を残し、正常golden・skip・allowlistへ固定しない。
+
+先行test-onlyをfreezeした。新規13件、対象125件、全suiteは91 suite・820成功。fmt/clippy、Python CI 52/release 90、site 90ページ、38 corpus/16harnessの登録確認も成功。別のSolが全文golden・独立期待・旧assert・production不変をレビューした。詳細と初回oracle/capture失敗の区別は[結果](resource-contract-results.md)に記録する。4 OS CIの成功前に集約実装を開始しない。
+
+#80の初回CIはmacOS ARMの既存shared-target fixtureで失敗した。同tickのdirectory共有・他方Dropによる削除を独立した小さい回帰で再現し、atomic識別子とexclusive作成へ修正した。旧2件のassertは維持し、新回帰を含む3件成功、fmt/clippy成功。CIとの因果の確度と同系統の未再現候補は[結果](resource-contract-results.md)に残す。修正後CIの完了前には集約へ進まない。
+
+修正head `eb93873`の[checks run 37341673174](https://github.com/disnana/Nagi/actions/runs/37341673174)・attempt 1とwebsite run `37341672775`が成功した。Linux全suiteは91 suite・821成功。4 OSのログで新inventory/golden/用途別/fixture/native登録テストを確認し、両JetBrains製品、VSIX、merge gateも成功した。publish-releaseはskip。先行test-only acceptanceを満たしたため、同じ期待を保つprivate ResourceContractの集約へ進む。#79はmain未マージ、#80は依存を明記したdraftのままで、集約後のacceptanceとは分ける。
+
+### 集約実装とローカル検証
+
+登録資源22個をprivate named static Contractへ集約した。公開ResourceInfoは内包した既存値の参照、shared/native Serde queryも同じ根拠を使う。constでarity・範囲・重複・欠落を検査し、用途別判定順、Passing、旧の受理・拒否・全文goldenは維持した。productionはstdlib/capabilitiesの2fileだけで、checker/checked/emitter/runtime/依存は変更していない。
+
+private unitは正例2・負例6を追加。対象205件、全91 suite・829件、fmt/clippy、2 seedで各256生成case＋38固定corpus、10,000 mutation/128 native、SQL engineなし8件が成功した。独立レビューとrootも旧値・公開shape・生成bytesの維持を確認した。前後各64回のcheck/lower測定は全成功・Low bytes一致で、中央値には増減がある。条件と生データは[測定](../../benchmarks/results/resource-contracts-2026-10-05/README.md)へ保存した。詳細と初回コマンド失敗は[結果](resource-contract-results.md)に区別する。
+
+集約後の4 OS CIは、このcommit時点では確認前。確認前にPhase 4実装へ進まない。mainへのmerge・版更新・releaseも行っていない。[Pool／Txの具体案](sqlite-pool-proposal.md)と[根拠・代替案](sqlite-pool-research.md)は未採用の資料で、新API/policy/hooksの判断を[Q-002](open-questions.md#q-002-sqlite-pooltxの初版apiと終了policy)に残した。
+
+### 集約後CIの失敗と次の判断
+
+head `0b2a5a5`のchecks run `37347188897`で、Windowsの既存Axum sampleが保存Lowの415受信前に接続abortとなり、merge gateも失敗した。他の3 OS配布、Linux全検査、VSIX、両JetBrains製品、websiteは成功した。資源contractのprivate unit 8件は4 OSとも成功したが、Phase 3完了とは数えない。#80はdraftのまま。[結果](resource-contract-results.md#集約後ci-windowsのaxumサンプルで停止)へ失敗と一次コード・Linux観測の範囲を記録した。
+
+元の通常clientと415期待は維持する。一括sendへ置換してCIの条件を狭める案は採用しない。Axum sampleだけに期限付き本文読取を加える場合は、新policy値・待機・close条件の判断が必要。具体案を作り、承認前には適用しない。Pool／Txは既存Rust pool/workerの再利用も読み取り比較しているが、Phase 4実装は開始していない。mainへのmerge・版更新・releaseも行っていない。
+
+### #79のmain反映とAxum修正の承認
+
+2026-10-06。ユーザーが#79をmainへマージした。main `2f2c93def942e3133eaffbca0ecb596292f95d47`のtree `286b3c0080bc7ce562ab5fdb0612989dd43eb60e`は成功head `27c8bf4`と一致し、そのheadを親に含む。エージェントはmerge操作を行っていない。
+
+同日、ユーザーが[ADR 009](adr/009-axum-rejected-body.md)の案Aを承認した。設計・invariant・Q003をcommitしてから先行回帰へ進む。本文読取期限はこのAxum sampleのContent-Type欠落だけに適用し、正常JSONと元client testは維持する。生成世代のmanifest/binからnative unitを実行し、0件やignoreを成功と数えない。修正後CI成功と#80のmain反映は未確認で、Phase 4のQ002も未承認。
+
+### 承認Aの修正後ローカル確認
+
+ADR→実行配線→tests-only→sample実装の順にcommitした。独立レビューのP2検査穴をhandler直接回帰で補い、元HTTP caseを維持して分割送信・4097byte正常JSONの413を追加した。High/保存Low各native8、HTTP19、不正port3が成功した。Python helper5/artifact9/CI52、site90も成功。生成applicationのstrict clippyは元generated main.rsのneedless_return2件で失敗し、allow・生成patchで隠していない。本体strict clippy成功とは分ける。
+
+修正後4 OS CIは未確認。#80のbaseを#79のfeature branchからmainへ変更して、修正headのCIを確認する。#79の成功と、この修正の成功を混同しない。Pool/Txの内部は[既存Rust再利用比較](sqlite-pool-rust-reuse.md)を具体案へ反映し、自作pool/driverに確定していない。Phase 4のpublic API・hooks/依存・cleanup/close policyは未承認で、実装は開始しない。

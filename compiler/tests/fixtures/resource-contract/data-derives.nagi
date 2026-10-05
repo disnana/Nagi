@@ -1,0 +1,14 @@
+class Inline:
+    value: owned[i64]
+class Owned:
+    label: str
+    values: List[Inline]
+class Private:
+    cause: Error
+    database: Db
+enum CopyChoice:
+    Empty
+    Number(value: Option[owned[i64]])
+enum PrivateChoice:
+    Text(value: str)
+    Caused(value: Error)

@@ -248,8 +248,10 @@ pub(crate) fn serde_type(
         ) {
             return ty.1.is_empty();
         }
-        if !classes.contains_key(&ty.0) && crate::stdlib::resource(&ty.0).is_some() {
-            return false;
+        if !classes.contains_key(&ty.0) {
+            if let Some(resource) = crate::stdlib::resource(&ty.0) {
+                return crate::stdlib::native_serde_supported(resource);
+            }
         }
         if enums.contains_key(&ty.0) {
             return false;
@@ -437,5 +439,195 @@ mod tests {
             &classes,
             &enums
         ));
+    }
+    #[test]
+    fn native_payload_roles_are_purpose_specific() {
+        use crate::stdlib::{resource_type as native, Resource as R};
+        let classes = HashMap::new();
+        let enums = HashMap::new();
+        let principal = native(R::Principal, vec![]);
+        let grant = native(R::Grant, vec![Type::named("Read")]);
+        let option = |t| Type::generic("Option", vec![t]);
+        // Hand-written representation inventory. Only inline/shared are current
+        // traversal APIs; indirect/signature/phantom express why excluded slots
+        // must not silently be defaulted to absent runtime payload.
+        for &resource in crate::stdlib::RESOURCES {
+            let [inline, shared, indirect, signature, phantom]: [&[usize]; 5] = match resource {
+                R::App => [&[], &[0], &[], &[1], &[]],
+                R::Supervisor => [&[], &[0], &[], &[], &[]],
+                R::Actor => [&[], &[], &[0, 1, 2], &[], &[]],
+                R::Turn => [&[0, 1, 2], &[], &[], &[], &[]],
+                R::Grant => [&[], &[], &[], &[], &[0]],
+                _ => [&[], &[], &[], &[], &[]],
+            };
+            let info = crate::stdlib::resource_info(resource);
+            use crate::stdlib::TypeArgumentRole as Role;
+            for (role, expected) in [
+                (Role::InlinePayload, inline),
+                (Role::SharedPayload, shared),
+                (Role::IndirectProtocol, indirect),
+                (Role::CallbackSignature, signature),
+                (Role::NominalPhantom, phantom),
+            ] {
+                assert_eq!(
+                    crate::stdlib::type_argument_positions(resource, role),
+                    expected,
+                    "{resource:?} {role:?}"
+                );
+            }
+            assert_eq!(info.inline_type_arguments, inline, "{resource:?}");
+            assert_eq!(
+                crate::stdlib::shared_type_arguments(resource),
+                shared,
+                "{resource:?}"
+            );
+            let positions: Vec<_> = [inline, shared, indirect, signature, phantom]
+                .into_iter()
+                .flatten()
+                .copied()
+                .collect();
+            assert_eq!(
+                positions.len(),
+                info.arity,
+                "classification missing or duplicated: {resource:?}"
+            );
+            assert_eq!(
+                positions.into_iter().collect::<HashSet<_>>(),
+                (0..info.arity).collect(),
+                "classification out of range or duplicated: {resource:?}"
+            );
+        }
+        // Helper-level traversal observations, not claims that these generic
+        // types are accepted by actor_payload/Charge or nominal marker validation.
+        for (ty, expected) in [
+            (
+                native(R::App, vec![Type::named("i64"), principal.clone()]),
+                false,
+            ),
+            (
+                native(
+                    R::App,
+                    vec![option(principal.clone()), Type::named("Error")],
+                ),
+                true,
+            ),
+            (native(R::Supervisor, vec![option(grant.clone())]), true),
+            (
+                native(
+                    R::Turn,
+                    vec![principal.clone(), Type::named("i64"), Type::named("Error")],
+                ),
+                true,
+            ),
+            (
+                native(
+                    R::Actor,
+                    vec![principal.clone(), grant.clone(), Type::named("Error")],
+                ),
+                false,
+            ),
+            (
+                Type::generic("fn", vec![grant.clone(), Type::named("unit")]),
+                false,
+            ),
+            (Type::generic("List", vec![option(grant)]), true),
+        ] {
+            assert_eq!(
+                contains_auth_proof(&ty, &classes, &enums),
+                expected,
+                "{ty:?}"
+            );
+        }
+        // Actor's indirect protocol data is validated separately; it is not
+        // phantom merely because this particular walk doesn't traverse it.
+        assert!(charge_type_supported(&principal, &classes, &enums).is_err());
+    }
+
+    #[test]
+    fn native_debug_does_not_require_generic_payload_debug() {
+        use crate::stdlib::{resource_type as native, Resource as R};
+        let classes = HashMap::new();
+        let enums = HashMap::new();
+        let principal = native(R::Principal, vec![]);
+        for resource in [R::App, R::Supervisor, R::Actor, R::Turn] {
+            let args = vec![principal.clone(); crate::stdlib::resource_info(resource).arity];
+            assert!(debug_supported(&native(resource, args), &classes, &enums));
+        }
+        assert!(!debug_supported(&principal, &classes, &enums));
+        assert!(!debug_supported(
+            &Type::generic("Option", vec![principal.clone()]),
+            &classes,
+            &enums
+        ));
+        assert!(debug_supported(
+            &Type::generic("fn", vec![principal, Type::named("unit")]),
+            &classes,
+            &enums
+        ));
+    }
+
+    #[test]
+    fn serde_charge_and_owned_fields_are_distinct_capabilities() {
+        use crate::stdlib::{resource_type as native, Resource as R};
+        let classes = HashMap::from([
+            (
+                "Scalar".into(),
+                class(
+                    "Scalar",
+                    vec![Type::generic("owned", vec![Type::named("i64")])],
+                ),
+            ),
+            ("Text".into(), class("Text", vec![Type::named("str")])),
+            (
+                "Private".into(),
+                class("Private", vec![Type::named("Error")]),
+            ),
+            (
+                "Storage".into(),
+                class("Storage", vec![native(R::Status, vec![])]),
+            ),
+        ]);
+        let enums = HashMap::from([(
+            "Choice".into(),
+            Enum {
+                name: "Choice".into(),
+                line: 1,
+                variants: vec![crate::ast::EnumVariant {
+                    name: "Value".into(),
+                    fields: vec![("n".into(), Type::named("i64"))],
+                    field_lines: vec![1],
+                    line: 1,
+                    name_span: Default::default(),
+                }],
+            },
+        )]);
+        for (ty, serde, charge, inline) in [
+            (Type::named("Scalar"), true, true, true),
+            (Type::named("Text"), true, true, false),
+            (Type::named("Private"), false, true, false),
+            (Type::named("Storage"), false, false, false),
+            (Type::named("Choice"), false, true, true),
+            (Type::named("Db"), false, false, false),
+        ] {
+            assert_eq!(serde_type(&ty, &classes, &enums), serde, "{ty:?}");
+            assert_eq!(
+                charge_type_supported(&ty, &classes, &enums).is_ok(),
+                charge,
+                "{ty:?}"
+            );
+            assert_eq!(charge_inline_only(&ty, &classes, &enums), inline, "{ty:?}");
+        }
+        for &resource in crate::stdlib::RESOURCES {
+            // This observes capability helpers, not generic well-formedness.
+            let args = vec![Type::named("i64"); crate::stdlib::resource_info(resource).arity];
+            let ty = native(resource, args);
+            assert!(!serde_type(&ty, &classes, &enums), "{resource:?}");
+            assert!(
+                charge_type_supported(&ty, &classes, &enums).is_err(),
+                "{resource:?}"
+            );
+        }
+        // Resource storage=true allows a field; it does not promise Serde or Charge.
+        assert!(crate::stdlib::resource_info(R::Status).storage);
     }
 }

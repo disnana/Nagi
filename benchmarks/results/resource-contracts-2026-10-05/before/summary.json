@@ -1,0 +1,103 @@
+{
+  "label": "before",
+  "attempted_invocations": 64,
+  "expected_invocations": 64,
+  "successful_invocations": 64,
+  "errors": [],
+  "summaries": [
+    {
+      "fixture": "http-inspection",
+      "mode": "check",
+      "samples": 7,
+      "median_ms": 206.414379,
+      "min_ms": 194.840685,
+      "max_ms": 214.602713,
+      "mean_ms": 205.62166142857143
+    },
+    {
+      "fixture": "http-inspection",
+      "mode": "lower",
+      "samples": 7,
+      "median_ms": 214.473679,
+      "min_ms": 199.529035,
+      "max_ms": 224.767408,
+      "mean_ms": 212.53807514285714
+    },
+    {
+      "fixture": "http-borrow-mappers",
+      "mode": "check",
+      "samples": 7,
+      "median_ms": 200.456501,
+      "min_ms": 191.070518,
+      "max_ms": 222.648129,
+      "mean_ms": 203.41354357142856
+    },
+    {
+      "fixture": "http-borrow-mappers",
+      "mode": "lower",
+      "samples": 7,
+      "median_ms": 204.704037,
+      "min_ms": 197.472249,
+      "max_ms": 259.571541,
+      "mean_ms": 216.95143114285713
+    },
+    {
+      "fixture": "actor-data",
+      "mode": "check",
+      "samples": 7,
+      "median_ms": 140.220863,
+      "min_ms": 135.334072,
+      "max_ms": 152.657447,
+      "mean_ms": 142.78897671428572
+    },
+    {
+      "fixture": "actor-data",
+      "mode": "lower",
+      "samples": 7,
+      "median_ms": 142.271308,
+      "min_ms": 132.425842,
+      "max_ms": 158.913011,
+      "mean_ms": 143.57537714285715
+    },
+    {
+      "fixture": "data-derives",
+      "mode": "check",
+      "samples": 7,
+      "median_ms": 12.211217,
+      "min_ms": 10.294692,
+      "max_ms": 15.339738,
+      "mean_ms": 12.115777857142858
+    },
+    {
+      "fixture": "data-derives",
+      "mode": "lower",
+      "samples": 7,
+      "median_ms": 11.048997,
+      "min_ms": 9.860157,
+      "max_ms": 11.24048,
+      "mean_ms": 10.71682757142857
+    }
+  ],
+  "check_lower_equality": [
+    {
+      "fixture": "http-inspection",
+      "check_lower_low_bytes_equal": true,
+      "sha256": "1ea5e700e362a00f3f7c2a8bcd6f413053f1b80a9a054891f3ed80321ce07db6"
+    },
+    {
+      "fixture": "http-borrow-mappers",
+      "check_lower_low_bytes_equal": true,
+      "sha256": "5c15fb72b5ccd796d551b1e3516569993a35ee8b97a0d1130420b913a3d2d528"
+    },
+    {
+      "fixture": "actor-data",
+      "check_lower_low_bytes_equal": true,
+      "sha256": "9e0221825ea1468b0a4ac6c5d11d6df21766e30998b94df80c34a021d8fd9701"
+    },
+    {
+      "fixture": "data-derives",
+      "check_lower_low_bytes_equal": true,
+      "sha256": "14ac91dcc3afbc240fbb6bc6b9223586265c33d6a4b7f89f55c162b1f59dba07"
+    }
+  ]
+}

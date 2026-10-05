@@ -41,6 +41,26 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 
 ## 後続Phaseで具体化する項目
 
+### Q-003: AxumサンプルのContent-Type欠落時の受信policy
+
+状態: 2026-10-06に案Aを承認済み。[ADR 009](adr/009-axum-rejected-body.md)に固定した。欠落時だけ4096 data bytes・読取開始から1秒のcooperative期限、415優先、未完ならcloseとする。正常Json処理と元client testは維持する。新policy値のStop条件に従って確認したもので、本文待機を標準HTTP全体へ広げる承認ではない。修正後CIの完了は別に確認する。
+
+### Q-002: SQLite Pool／Txの初版APIと終了policy
+
+状態: 未採用。Phase 3の集約後acceptanceを満たした後、実装前に判断する。具体的な署名・所有契約・値・失敗policyは[レビュー案](sqlite-pool-proposal.md)、採用候補と不採用案・native APIの根拠は[調査](sqlite-pool-research.md)にある。
+
+推奨候補は`std.db.sqlite`、owned Parametersの型別builder、affine Tx、worker-localのsafe rusqlite Transaction。旧Dbは維持する。必要な容量・timeout・begin modeは明示指定し、数値defaultを追加しない。SQLを自作解析せず、SQLite prepare・Authorizer・結果metadataを使う。
+
+判断は3つに分ける。
+
+1. module/resource/API・Parameters・行型・NULL/placeholder・required optionsの範囲。
+2. runtimeのrusqlite `hooks`有効化と、新Txだけに適用する一文・transaction-control/PRAGMA等のSQL制約。[既存Rust wrapper](sqlite-pool-rust-reuse.md)の比較結果を反映し、追加crate/feature/版が必要なら別に明示する。hooks承認をwrapper依存承認と兼ねない。
+3. cleanup確認前の再利用禁止、退役時の新取得停止、commit outcomeとcleanup failureの分離、close後の取消/timeoutの扱い。
+
+新しいAPI・capability、SQL受理範囲、終了policy、依存featureの判断が必要なのでStop対象。計画書とユーザー依頼の条件による明示的な確認であり、危険を仮定した追加の承認手順ではない。safe prototype、Txのcapture追跡、cleanup保証は未実装・未検証。承認後もADRとfailing testsから進め、safe APIで成立しない場合は保証を下げず反例と代替案を示す。
+
+### その他の項目
+
 以下はまだ値・APIを決めていない。現時点の実装や追加保証とは扱わない。
 
 | 項目 | 判断する時点 | 条件 |

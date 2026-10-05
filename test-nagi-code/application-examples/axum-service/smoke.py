@@ -45,6 +45,25 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
             results.append({"case": name, "status": actual})
             return output
 
+        def check_split_missing_content_type():
+            # Retain the ordinary request() cases above. This extra request sends
+            # the finite body in two writes after the headers, without retries.
+            body = b'{"quantity":1}'
+            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+            try:
+                connection.putrequest("POST", "/quotes")
+                connection.putheader("Content-Length", str(len(body)))
+                connection.endheaders()
+                connection.send(body[:6])
+                connection.send(body[6:])
+                response = connection.getresponse()
+                output = response.read()
+                assert response.status == 415, (response.status, output)
+                assert output == b"Expected request with `Content-Type: application/json`", output
+                results.append({"case": "split-missing-content-type", "status": response.status})
+            finally:
+                connection.close()
+
         try:
             deadline = time.monotonic() + 10
             while True:
@@ -79,6 +98,11 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
                 check(name, "POST", "/quotes", 422, body)
             check("malformed-json", "POST", "/quotes", 400, b"{")
             check("missing-content-type", "POST", "/quotes", 415, b'{"quantity":1}', content_type=None)
+            check_split_missing_content_type()
+            # Valid JSON padded past the transport limit distinguishes the
+            # body limit from a JSON syntax or field rejection.
+            padded = b'{"quantity":1}' + b" " * (4097 - len(b'{"quantity":1}'))
+            check("json-body-limit", "POST", "/quotes", 413, padded)
             check("method-not-allowed", "GET", "/quotes", 405)
             check("missing-route", "GET", "/missing", 404)
             check("server-remains-usable", "POST", "/quotes", 200, b'{"quantity":2}',

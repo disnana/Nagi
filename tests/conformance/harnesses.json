@@ -203,7 +203,8 @@
     "test_names": [
       "missing_principal_grant_wrong_permission_and_reuse_are_rejected",
       "proof_move_and_nominal_marker_build_and_run_against_real_runtime",
-      "opaque_main_errors_fail_without_a_debug_bound_or_proof_payload"
+      "opaque_main_errors_fail_without_a_debug_bound_or_proof_payload",
+      "native_phantom_types_do_not_become_field_payloads"
     ],
     "command": [
       "cargo",
@@ -234,6 +235,103 @@
       "nagic",
       "--test",
       "build_generations"
+    ]
+  },
+  {
+    "name": "HTTP_resource_passing_and_saved_Low",
+    "contract": "実fileのHigh/独立LowでReference/Borrow/Handler/Mapperとrequest accessorsの生成を比較する。実CargoではJSONの借用とapp/routeへのnamed mapper登録構築を実行し、mapper本体の実行とは区別する",
+    "files": [
+      "compiler/tests/http_codegen.rs"
+    ],
+    "test_names": [
+      "borrowed_http_inspection_and_async_registration_add_no_owned_adapter_work",
+      "borrow_and_named_mappers_preserve_high_low_codegen",
+      "borrow_and_named_mapper_registration_execute_native_adapters"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "http_codegen"
+    ]
+  },
+  {
+    "name": "Actor_Charge_generation_and_native_bounds",
+    "contract": "High/独立LowのCharge生成と、実nativeの容量・walk上限を別々に確認する。全generic payloadの共有可能性を保証しない",
+    "files": [
+      "compiler/tests/actor_codegen.rs"
+    ],
+    "test_names": [
+      "actor_charge_generation_survives_low_without_clones_reflection_or_serde_requirements",
+      "generated_nominal_charges_execute_against_native_capacity_and_walk_limits"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "actor_codegen"
+    ]
+  },
+  {
+    "name": "registered_resource_independent_inventory",
+    "contract": "22resource/47operation/32field・定数の独立期待、集合完全性、公開ResourceInfo shape、Passing/borrow ownerを検査する",
+    "files": [
+      "compiler/tests/resource_contract_characterization.rs"
+    ],
+    "test_names": [
+      "registered_resources_match_the_independent_inventory",
+      "registered_operations_match_signatures_and_passing",
+      "registered_accessors_match_the_complete_inventory",
+      "registered_constants_match_the_complete_inventory"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "resource_contract_characterization"
+    ]
+  },
+  {
+    "name": "resource_payload_purpose_and_full_goldens",
+    "contract": "layout/共有payload/phantom/signature/protocol、native DebugとSerde/Charge/storageを用途別に検査する。descriptorの範囲・重複・欠落と旧projectionを検査する。固定logical identityのLow/Rust全文4goldenは物理file provenanceの証明と区別する",
+    "files": [
+      "compiler/src/capabilities.rs",
+      "compiler/src/stdlib.rs",
+      "compiler/src/tests/resource_contract_goldens.rs"
+    ],
+    "test_names": [
+      "native_payload_roles_are_purpose_specific",
+      "native_debug_does_not_require_generic_payload_debug",
+      "serde_charge_and_owned_fields_are_distinct_capabilities",
+      "http_inspection_golden",
+      "http_borrow_and_mappers_golden",
+      "actor_data_golden",
+      "data_derives_golden",
+      "registered_roles_match_the_independent_position_oracle",
+      "legacy_views_borrow_the_registered_descriptor",
+      "descriptor_rejects_missing_role",
+      "descriptor_rejects_duplicate_in_one_role",
+      "descriptor_rejects_overlapping_roles",
+      "descriptor_rejects_out_of_range_role",
+      "descriptor_rejects_roles_on_zero_arity",
+      "descriptor_rejects_arity_parameter_mismatch"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--lib"
     ]
   }
 ]
