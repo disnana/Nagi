@@ -62,7 +62,9 @@ Documentation-only changes do not require the full Rust test suite. Check links,
 
 For changes to editor APIs or compiler invocation, also exercise the affected operations in the actual editor and report the product, version, and results.
 
-Use `python scripts/verify_application_examples.py --compiler /path/to/nagic` to exercise practical examples. It currently covers seven projects: six High applications and their saved Low forms, plus one application written in Low, for thirteen check/build paths. It verifies input handling, HTTP, database persistence, and actor behavior. Reduce discovered bugs to small regression cases and include valid controls that should remain accepted.
+Use `python scripts/verify_application_examples.py --compiler /path/to/nagic` to exercise practical examples. It currently covers nine projects: eight High applications and their saved Low forms, plus one application written in Low, for seventeen check/build paths. It verifies input handling, HTTP, database persistence, actor behavior, and Rust integration. Reduce discovered bugs to small regression cases and include valid controls that should remain accepted.
+
+For type or ownership fixes, compile the generated Rust and verify return values and side effects as well as the `check` result. If a rule applies to High, saved Low, and handwritten Low, verify all three. Check that values after branches, loop updates, borrow lifetimes, and owned-value destruction order are preserved, and that invalid borrows remain rejected.
 
 ## Using AI tools
 

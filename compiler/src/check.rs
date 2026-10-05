@@ -1,4 +1,4 @@
-use crate::ast::*;
+use crate::ast::{block_returns as returns, *};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -592,14 +592,6 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         crate::routes::validate(p)?;
     }
     Ok(())
-}
-fn returns(ss: &[Stmt]) -> bool {
-    ss.iter().any(|s| match &s.kind {
-        S::Return(_) => true,
-        S::If(_, a, b) => returns(a) && returns(b),
-        S::Match(_, arms) => !arms.is_empty() && arms.iter().all(|arm| returns(&arm.body)),
-        _ => false,
-    })
 }
 impl Checker {
     fn resource(&self, name: &str) -> Option<crate::stdlib::Resource> {

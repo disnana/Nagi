@@ -107,7 +107,7 @@ fn branch_copies_are_synthetic_and_preserve_public_and_callback_lifetimes() {
                     original_statements += 1;
                     assert_eq!(generated.line_origin(index + 1), Some(2));
                 }
-                "alias = (local).as_str();" => {
+                "let mut alias: &::std::primitive::str = (local).as_str();" => {
                     original_statements += 1;
                     assert_eq!(generated.line_origin(index + 1), Some(5));
                 }
@@ -188,6 +188,11 @@ fn local_views_still_cannot_escape_a_terminating_or_continuing_branch() {
             "内側のscopeの所有値",
         ),
         (
+            "def bad(flag: bool, part: view[str]) -> view[str]:\n    alias = part\n    while flag:\n        local = \"inner\"\n        alias = view(local)\n    return alias\n",
+            "fn bad(flag: bool, part: view[str]) -> view[str] { let alias: view[str] = part; while flag { let local: str = \"inner\"; alias = view(local); } return alias; }",
+            "内側のscopeの所有値",
+        ),
+        (
             "def bad(flag: bool, parts: view[view[str]]) -> view[view[str]]:\n    if flag:\n        local = \"inner\"\n        values = [view(local)]\n        parts = view(values)\n        return parts\n    return parts\n",
             "fn bad(flag: bool, parts: view[view[str]]) -> view[view[str]] { if flag { let local: str = \"inner\"; let values: List[view[str]] = [view(local)]; parts = view(values); return parts; } return parts; }",
             "view escapes",
@@ -212,6 +217,35 @@ const HIGH: &str = r#"def choose(flag: bool, part: view[str]) -> view[str]:
         local = "inner"
         alias = view(local)
         assert_true(alias == "inner")
+        return part
+    return alias
+
+def direct_restore(part: view[str]) -> view[str]:
+    alias = part
+    local = "direct-local"
+    alias = view(local)
+    alias = part
+    return alias
+
+def branch_restore(flag: bool, part: view[str]) -> view[str]:
+    alias = part
+    if flag:
+        local = "branch-local"
+        alias = view(local)
+        assert_true(alias == "branch-local")
+        alias = alias
+        alias = part
+        return alias
+    return alias
+
+def early_return(flag: bool, nested: bool, part: view[str]) -> view[str]:
+    alias = part
+    if flag:
+        if nested:
+            return alias
+        local = "early-local"
+        alias = view(local)
+        assert_true(alias == "early-local")
         return part
     return alias
 
@@ -330,6 +364,14 @@ def continuing(flag: bool, part: view[str], replacement: view[str]) -> view[str]
         alias = replacement
     return alias
 
+def continuing_nested(flag: bool, update: bool, part: view[str], replacement: view[str]) -> view[str]:
+    alias = part
+    if flag:
+        if update:
+            alias = replacement
+        return alias
+    return alias
+
 def continuing_loop(count: i64, part: view[str], replacement: view[str]) -> view[str]:
     alias = part
     for number in range(count):
@@ -405,6 +447,36 @@ const LOW: &str = r#"fn choose(flag: bool, part: view[str]) -> view[str] {
         let local: str = "inner";
         alias = view(local);
         assert_true(alias == "inner");
+        return part;
+    }
+    return alias;
+}
+fn direct_restore(part: view[str]) -> view[str] {
+    let alias: view[str] = part;
+    let local: str = "direct-local";
+    alias = view(local);
+    alias = part;
+    return alias;
+}
+fn branch_restore(flag: bool, part: view[str]) -> view[str] {
+    let alias: view[str] = part;
+    if flag {
+        let local: str = "branch-local";
+        alias = view(local);
+        assert_true(alias == "branch-local");
+        alias = alias;
+        alias = part;
+        return alias;
+    }
+    return alias;
+}
+fn early_return(flag: bool, nested: bool, part: view[str]) -> view[str] {
+    let alias: view[str] = part;
+    if flag {
+        if nested { return alias; }
+        let local: str = "early-local";
+        alias = view(local);
+        assert_true(alias == "early-local");
         return part;
     }
     return alias;
@@ -528,6 +600,14 @@ fn continuing(flag: bool, part: view[str], replacement: view[str]) -> view[str] 
     if flag { alias = replacement; }
     return alias;
 }
+fn continuing_nested(flag: bool, update: bool, part: view[str], replacement: view[str]) -> view[str] {
+    let alias: view[str] = part;
+    if flag {
+        if update { alias = replacement; }
+        return alias;
+    }
+    return alias;
+}
 fn continuing_loop(count: i64, part: view[str], replacement: view[str]) -> view[str] {
     let alias: view[str] = part;
     for number in range(count) { alias = replacement; }
@@ -606,6 +686,10 @@ fn branch_values_and_borrowed_returns() {
     let parts = [original.as_str(), replacement.as_str()];
     for flag in [false, true] {
         assert_eq!(choose(flag, &original), "original");
+        assert_eq!(direct_restore(&original), "original");
+        assert_eq!(branch_restore(flag, &original), "original");
+        assert_eq!(early_return(flag, true, &original), "original");
+        assert_eq!(early_return(flag, false, &original), "original");
         assert_eq!(both(flag, &original), "original");
         for update in [false, true] {
             assert_eq!(nested(flag, update, &original), "original");
@@ -620,6 +704,12 @@ fn branch_values_and_borrowed_returns() {
             continuing(flag, &original, &replacement),
             if flag { "replacement" } else { "original" }
         );
+        for update in [false, true] {
+            assert_eq!(
+                continuing_nested(flag, update, &original, &replacement),
+                if flag && update { "replacement" } else { "original" }
+            );
+        }
         assert_eq!(list_reinitialized(flag, &original), 2);
         for reject in [false, true] {
             assert_eq!(propagated(flag, reject, &original),

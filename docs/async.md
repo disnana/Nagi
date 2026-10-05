@@ -47,4 +47,4 @@ async def main():
 
 async関数を入れた変数に、別のasync関数を再代入することはできません。別の変数を使うか、ifの各分岐で呼び出してください。同じ関数を入れ直すことや、同期関数を入れた変数の差し替えはできます。
 
-実装は[scopeのruntime](../runtime/src/concurrent.rs)と[コード生成](../compiler/src/emit.rs)にあります。[scopeのテスト](../compiler/tests/scoped_tasks.rs)と[async関数値のテスト](../compiler/tests/async_value_types.rs)が対応する入力と拒否する入力を示します。
+実装は[scopeのruntime](../runtime/src/concurrent.rs)と[コード生成](../compiler/src/emit.rs)にあります。[scopeのテスト](../compiler/tests/scoped_tasks.rs)と[async関数値のテスト](../compiler/tests/async_value_types.rs)が対応する入力と拒否する入力を示します。[実ランタイムのテスト](../compiler/tests/scope_runtime_contract.rs)では、子のエラー・panicと本体の`try`失敗について、本体の継続と子の破棄完了をHigh・保存Low・手書きLowで確認します。

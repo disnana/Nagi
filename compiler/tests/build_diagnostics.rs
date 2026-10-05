@@ -258,6 +258,110 @@ fn standalone_low_uses_the_original_low_lines() {
 }
 
 #[test]
+fn extern_argument_and_sync_async_mismatches_fail_at_the_declaration_in_high_and_low() {
+    fn declaration(source: &str) -> (usize, String) {
+        source
+            .lines()
+            .enumerate()
+            .find(|(_, line)| line.trim_start().starts_with("extern "))
+            .map(|(index, line)| (index + 1, line.trim_start().to_owned()))
+            .unwrap()
+    }
+
+    struct Mismatch {
+        high: &'static str,
+        handwritten_low: &'static str,
+        adapter: &'static str,
+        code: &'static str,
+        reason: &'static str,
+    }
+    let cases = [
+        Mismatch {
+            high: "@rust(\"native::invoke\")\nextern def invoke(value: i64) -> i64\ndef main():\n    print(42)\n",
+            handwritten_low: "@rust(\"native::invoke\")\nextern fn invoke(value: i64) -> i64;\nfn main() -> unit { print(42); }\n",
+            adapter: "pub fn invoke(value: &str) -> i64 { value.len() as i64 }\n",
+            code: "E0308",
+            reason: "mismatched types",
+        },
+        Mismatch {
+            high: "@rust(\"native::invoke\")\nextern def invoke(value: i64) -> i64\ndef main():\n    print(42)\n",
+            handwritten_low: "@rust(\"native::invoke\")\nextern fn invoke(value: i64) -> i64;\nfn main() -> unit { print(42); }\n",
+            adapter: "pub async fn invoke(value: i64) -> i64 { value }\n",
+            code: "E0308",
+            reason: "mismatched types",
+        },
+        Mismatch {
+            high: "@rust(\"native::invoke\")\nextern async def invoke(value: i64) -> i64\ndef main():\n    print(42)\n",
+            handwritten_low: "@rust(\"native::invoke\")\nextern async fn invoke(value: i64) -> i64;\nfn main() -> unit { print(42); }\n",
+            adapter: "pub fn invoke(value: i64) -> i64 { value }\n",
+            code: "E0277",
+            reason: "is not a future",
+        },
+    ];
+
+    for (case_index, case) in cases.iter().enumerate() {
+        let f = Fixture::new();
+        f.write("bridge.rs", case.adapter);
+        for source_form in ["high", "saved-low", "handwritten-low"] {
+            let (file, declaration_line, declaration_text) = match source_form {
+                "high" => {
+                    f.write("main.nagi", case.high);
+                    let (line, declaration) = declaration(case.high);
+                    ("main.nagi", line, declaration)
+                }
+                "saved-low" => {
+                    f.write("main.nagi", case.high);
+                    let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
+                    check::check(&mut loaded.program).unwrap();
+                    let low = emit::low(&loaded.program);
+                    let (line, declaration) = declaration(&low);
+                    f.write("saved.low", &low);
+                    ("saved.low", line, declaration)
+                }
+                "handwritten-low" => {
+                    f.write("main.low", case.handwritten_low);
+                    let (line, declaration) = declaration(case.handwritten_low);
+                    ("main.low", line, declaration)
+                }
+                _ => unreachable!(),
+            };
+
+            let checked = f.cli(&["check", file]);
+            assert!(
+                checked.status.success(),
+                "case {case_index} ({source_form}) should pass Nagi check: {}",
+                stderr(&checked)
+            );
+
+            let output = f.cli(&["build", file, "--rust", "bridge.rs"]);
+            assert!(
+                !output.status.success(),
+                "case {case_index} ({source_form}) unexpectedly built"
+            );
+            let text = stderr(&output);
+            let prefix = mapped_prefix(&text);
+            assert!(prefix.contains(case.code), "{text}");
+            assert!(prefix.contains(case.reason), "{text}");
+            assert!(
+                prefix.contains(&format!("{file}:{declaration_line}")),
+                "case {case_index} ({source_form}) should map to its extern declaration: {text}"
+            );
+            assert!(
+                prefix.contains(&format!("{declaration_line} | {declaration_text}")),
+                "case {case_index} ({source_form}) should print the declaration line: {text}"
+            );
+            let details = text
+                .split(" note: Rust backend details (generated code):")
+                .nth(1)
+                .unwrap_or("");
+            assert!(details.contains("error[E"), "{text}");
+            assert!(details.contains("native::invoke"), "{text}");
+            assert!(text.contains("Build failed."), "{text}");
+        }
+    }
+}
+
+#[test]
 fn imported_low_uses_its_own_file_instead_of_the_entry_file() {
     let f = Fixture::new();
     f.write(
