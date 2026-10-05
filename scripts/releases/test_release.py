@@ -48,6 +48,46 @@ class ReleasePlanTests(unittest.TestCase):
         for key in ("release_nagi", "release_vscode", "package_nagi", "package_vscode"):
             self.assertEqual(result[key], "false")
 
+    def test_compiler_runtime_and_cargo_changes_validate_only_nagi_without_releasing(self):
+        files = (
+            "compiler/src/check.rs", "compiler/src/emit.rs", "compiler/tests/codegen.rs",
+            "compiler/Cargo.toml", "runtime/src/lib.rs", "runtime/src/http/tests.rs",
+            "runtime/Cargo.toml", "Cargo.toml", "Cargo.lock",
+        )
+        for file in files:
+            with self.subTest(file=file):
+                base = plan.git("rev-parse", "HEAD").strip()
+                text = (self.root / file).read_text(encoding="utf-8") if (self.root / file).exists() else ""
+                comment = "//" if file.endswith(".rs") else "#"
+                self.change(file, text + f"{comment} Build input changed without a version bump\n")
+                head = self.commit()
+                result = plan.plan(base, head)
+                self.assertEqual(result["sha"], head)
+                self.assertEqual(result["package_nagi"], "true")
+                for key in ("package_vscode", "release_nagi", "release_vscode"):
+                    self.assertEqual(result[key], "false")
+                self.assertEqual(result["nagi_version"], "0.1.0")
+                self.assertEqual(result["vscode_version"], "0.1.5")
+
+    def test_compiler_change_before_a_final_docs_commit_still_validates_nagi(self):
+        self.change("compiler/src/emit.rs", "// Compiler change\n")
+        self.commit()
+        self.change("docs/example.md", "Docs follow the compiler change")
+        result = plan.plan(self.first, self.commit())
+        self.assertEqual(result["package_nagi"], "true")
+        for key in ("package_vscode", "release_nagi", "release_vscode"):
+            self.assertEqual(result[key], "false")
+
+    def test_root_docs_and_site_changes_do_not_package_or_release(self):
+        for file in ("DESIGN.md", "DESIGN.en.md", "README.md", "AGENTS.md",
+                     "docs/internal/plan.md", "website/templates/index.html"):
+            with self.subTest(file=file):
+                base = plan.git("rev-parse", "HEAD").strip()
+                self.change(file, "Documentation or site update")
+                result = plan.plan(base, self.commit())
+                for key in ("package_nagi", "package_vscode", "release_nagi", "release_vscode"):
+                    self.assertEqual(result[key], "false")
+
     def test_multicommit_push_detects_both_versions_before_final_docs_commit(self):
         self.change("Cargo.toml", '[workspace.package]\nversion = "0.1.1"\n')
         self.change("editors/vscode-nagi/package.json", '{"version":"0.1.6"}\n')
