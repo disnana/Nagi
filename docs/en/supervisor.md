@@ -2,6 +2,32 @@
 
 A Supervisor in `std.actor` manages startup, failure, restart, and shutdown of actors and async tasks registered in the same process. Its current restart strategy is one-for-one: only the failed child restarts, while other children keep working.
 
+## Manage a worker from startup to completion
+
+Python's TaskGroup provides a way to wait for related tasks. Restarting a failed worker from initialization requires a separate policy. In Nagi, register a factory and a policy with a Supervisor. Start with this complete example that runs once successfully.
+
+```nagi
+import std.actor as actor
+
+class Context:
+    message: str
+
+async def worker(context: shared[Context]) -> Result[unit, Error]:
+    return ok(print(context.message))
+
+async def main() -> Result[unit, Error]:
+    group = actor.supervisor[Context](Context(message="worker"), actor.default_options())
+    try actor.task(view(group), "once", worker, actor.RestartPolicy.TEMPORARY)
+    try await actor.run(group)
+    return ok(print("Done"))
+```
+
+It prints `worker`, then `Done`. `run` starts the registered child and returns after its completion and cleanup. Registration alone does not start execution.
+
+A common mistake is reading `PERMANENT` as "restart only on failure." It also restarts after normal completion. Use `TEMPORARY` for one run or `TRANSIENT` for restarting after failure; the next table gives their differences.
+
+**In one sentence: a Supervisor owns children and manages restart and shutdown according to policy.** See the [reference](actor-reference.md) for registration, observation, and shutdown APIs.
+
 ## Restart policy
 
 | Policy | Restart condition |

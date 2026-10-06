@@ -1,5 +1,9 @@
 # asyncとscope
 
+## 待ち終わった結果を使いたい
+
+Pythonの`await asyncio.sleep(0.01)`のように、Nagiも`await`で待ちます。Pythonのsleepは秒、Nagiの`sleep`はミリ秒です。`await`しただけで、別taskや別threadを作るわけではありません。
+
 タイマーやDBなどの処理を待つ関数は`async def`で定義し、`await`で結果を待ちます。NagiはこれをRustのFutureへ変換し、Tokio上で実行します。待っている間は、ほかの非同期処理を進められます。同期のCPU処理を自動で別スレッドへ移す機能ではありません。
 
 ```nagi
@@ -10,9 +14,27 @@ async def main() -> Result[unit, Error]:
 
 `sleep`の引数はミリ秒です。上のコードは待ち終わってからメッセージを表示します。失敗する可能性のある処理では、`try await db_open(...)`のように結果のエラーも扱います。
 
-## 複数の処理を始める
+よくある間違いは、`pending = sleep(10)`と戻り値を保存してから待つことです。現在はFutureの保存に対応していません。`await sleep(10)`と呼び出しを直接待ってください。
 
-`async with scope`の中で`spawn`すると、子の処理を始められます。scopeを出るときに、すべての子の終了を待ちます。
+**一言でいうと：awaitで結果を待つ。** Resultも返す呼び出しの扱いは[エラー処理](error-handling.md)を参照してください。
+
+## 待っている間に、別の処理も進めたい
+
+Pythonでは関連するtaskを`asyncio.TaskGroup`へ登録できます。
+
+```python
+import asyncio
+
+async def main():
+    async with asyncio.TaskGroup() as group:
+        group.create_task(asyncio.sleep(0.01))
+        group.create_task(asyncio.sleep(0.015))
+    print("完了")
+
+asyncio.run(main())
+```
+
+Nagiでは`async with scope`の中で`spawn`します。次はそのまま実行できる例です。
 
 ```nagi
 async def main() -> Result[unit, Error]:
@@ -22,13 +44,25 @@ async def main() -> Result[unit, Error]:
     return ok(print("完了"))
 ```
 
+どちらの待ち時間も終わってから`完了`を一度表示します。子同士がどの順番で実行されるかは保証しません。`spawn`は子を実行対象にする操作で、書いた瞬間に子の本体が動く保証もありません。
+
+二つの`await sleep(...)`を順に書くと、最初の待ち時間が終わってから次を待ち始めます。重ねて進めたい場合は上のようにspawnし、通常のscope終了で子の終了を待ちます。
+
+**一言でいうと：spawnで並行に進め、scopeで寿命を管理する。** PythonのTaskGroupと取消・失敗の全動作が同じではありません。正確な制約は次の節と[並行処理](concurrency.md)にあります。
+
+## scopeとspawnの現行リファレンス
+
 scope本体が終わると、子の結果を確認します。子が`Result`のエラーを返したりpanicしたりすると、残りをキャンセルして終了を待ちます。scope本体の実行中に子の失敗で割り込む動作はありません。`spawn`できるのは、`unit`か`Result[unit, Error]`を返す非同期処理です。scope内の`return`と、viewを子へ渡すことは未対応です。
 
 引数は`spawn`を書いた場所で評価し、できた値を子へ渡します。`spawn work(copy(part))`のようにviewから所有値を作ると、元のデータを親でも使い続けられます。配列をコピーしても中身にviewが残る場合は、子へ渡せません。
 
 scopeを使う関数はResultを返します。独自のエラーclass・enumを使う場合は、Rust連携で`From<nagi_runtime::Error>`を明示的に実装してください。子の失敗をその型へ変換できることはビルド時に確認します。spawnする子のエラー型は引き続きErrorです。
 
-親の処理そのものが破棄された場合や、scope本体がpanicした場合には、子へ停止を要求します。その場で全員の終了を待つ保証はありません。CPU処理の停止については[並行処理](concurrency.md)を参照してください。
+scope本体の`try`でErrを伝えて退出する場合は、子をキャンセルして終了を待ってから外側へErrを伝えます。親のFutureそのものが破棄された場合や、scope本体がpanicした場合には、子へ停止を要求します。同期のDropでは非同期の終了待ちができないため、その場で全員の終了が完了している保証はありません。取消要求は、受理済みのDB操作などの外部副作用を巻き戻すものでもありません。CPU処理の停止については[並行処理](concurrency.md)を参照してください。
+
+### 採用方針と、まだ使えない機能
+
+spawnから結果を受け取るhandleを返し、普通の業務Errをtask自体の故障と分ける方向を採用しています。将来は返却されたResultを値として受け取り、普通の業務Errだけでは兄弟を自動停止しない方針です。現行には結果handleがなく、子の`Result[unit, Error]`のErrでも兄弟をキャンセルします。handleの型・構文・結果の受け取り方・故障の表現は未決で、このページの例は現在の動作です。設計の理由と移行の境界は[DESIGN](../DESIGN.md)を参照してください。
 
 ## 関数を変数に入れて呼び出す
 

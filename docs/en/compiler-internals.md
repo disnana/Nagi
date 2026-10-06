@@ -8,7 +8,8 @@
 | Lowering | Low text with inferred types and let declarations |
 | Low parser / checker | Reparses braces and semicolons, then checks types and ownership again |
 | Native integration | Adds ordinary functions and checks `@replace` signatures |
-| Common IR | Uses the Program AST shared by High and Low |
+| Shared AST | High and Low share the Program AST |
+| Final validation and sealing | Creates CheckedProgram only after integrated checks and code-generation plans succeed |
 | Code generation | Rust and Serde, FromRow, and HTTP wrappers for supported types |
 | Backend | Native code through rustc/Cargo; also checks borrows and Send |
 
@@ -18,11 +19,13 @@ High and Low share a handwritten parser and Program AST, switching between inden
 
 Low retains type annotations, control flow, and module and definition IDs. Inferred expression types, name resolution, and move/borrow checking state are reconstructed after parsing, rather than carried forward as proofs. JSON module metadata preserves alias and type identity. Serde JSON is also used for diagnostics, cost reports, and editor symbol information.
 
+After final Low and native integration, type and ownership facts and private Rust generation plans are sealed into `CheckedProgram`. Rust code generation accepts only this input, not unchecked ASTs or ASTs still being recovered for editor queries. This is not a complete backend-independent typed IR, nor a proof of Rust traits, external crate behavior, or runtime resource cleanup. See [ADR 006](../internal/adr/006-sealed-codegen-input.md) for the internal contract.
+
 The AST retains original token ranges for expressions, arguments, and binding names. `symbols` returns types established by the usual checker rules alongside UTF-16 positions in the original files. Editor queries restore the variable environment after a failed statement and continue with subsequent statements; ordinary `check` stops at the first error. Completion information from invalid code does not mean it can be built.
 
 Local names for definition navigation are resolved by walking the AST separately from type and ownership checks. The compiler records arguments, first assignments, for bindings, and case bindings; reassignment retains the first location. Child block names do not escape, and a for binding that reuses an outer name restores the original binding after the loop. Use and definition positions are emitted in `references`. Navigation can work after a move or a type error if the binding is identifiable. VS Code passes unsaved buffers, but F12 does not use stale positions when a query falls back to saved declarations.
 
-Scopes generate a wrapper around Tokio's JoinSet. Classes generate Rust structs, with JSON and database implementations when their field types support them. Low is a compile-time common representation, not a runtime VM. The common IR is currently neither SSA nor a separate optimizer. Optimization comes from the Rust backend.
+Scopes generate a wrapper around Tokio's JoinSet. Classes generate Rust structs, with JSON and database implementations when their field types support them. Low text is a representation reparsed during compilation. Neither Program AST nor CheckedProgram provides SSA or an independent optimizer; optimization comes from the Rust backend. Another backend and self-hosting are separate decisions from Low's current role.
 
 Within one compilation, lowering and code generation retain a mapping from generated lines to the original statement, definition, or field line. Builds read Cargo's JSON diagnostics and show the corresponding Nagi or Low location and mapped related notes. `nagic build app.nagi --rust-diagnostics` also displays generated Rust text, notes, and suggestions. The option works with `run` too. Handwritten Rust and unmapped diagnostics remain visible at their Rust locations. Original expression columns and Rust edit suggestions are not guessed into Nagi coordinates.
 

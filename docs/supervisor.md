@@ -2,6 +2,32 @@
 
 `std.actor`のSupervisorは、同じプロセス内に登録したactorやasync処理の起動・異常終了・再起動・停止を管理します。現在の再起動方式は、失敗した子だけを起動し直すone-for-oneです。ほかの子は処理を続けます。
 
+## workerの開始から終了までをまとめて管理したい
+
+PythonのTaskGroupは関連するtaskの終了を待つ足場になります。workerの故障後に初期化からやり直す再起動方針は、別に設計する必要があります。NagiではSupervisorにfactoryと方針を登録します。まず、正常に一度だけ動く完全な例です。
+
+```nagi
+import std.actor as actor
+
+class Context:
+    message: str
+
+async def worker(context: shared[Context]) -> Result[unit, Error]:
+    return ok(print(context.message))
+
+async def main() -> Result[unit, Error]:
+    group = actor.supervisor[Context](Context(message="worker"), actor.default_options())
+    try actor.task(view(group), "once", worker, actor.RestartPolicy.TEMPORARY)
+    try await actor.run(group)
+    return ok(print("完了"))
+```
+
+`worker`、`完了`の順に表示します。`run`が登録した子を起動し、この子の終了と後片付けを確認してから戻ります。登録だけでは実行を始めません。
+
+よくある間違いは、`PERMANENT`を「故障したときだけ再起動する」と読むことです。正常完了後も再起動します。一度だけ実行するなら`TEMPORARY`、故障時の再起動なら`TRANSIENT`を選び、次の表で違いを確認してください。
+
+**一言でいうと：Supervisorが子を所有し、方針に従って再起動と停止を管理する。** 登録・監視・停止のAPIは[リファレンス](actor-reference.md)にあります。
+
 ## 再起動方針
 
 | 方針 | 再起動する場合 |

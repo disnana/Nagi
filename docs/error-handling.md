@@ -1,12 +1,52 @@
-# Resultで失敗を扱う
+# 値の不在と失敗を扱う
 
-[目次](README.md) · [文法](syntax.md) · [関数一覧](builtins.md)
+[目次](README.md) · [入門](language-guide.md#5-失敗する処理はresultで返す) · [文法](syntax.md) · [関数一覧](builtins.md)
 
-`Result[T, E]`は成功値`T`か失敗値`E`を返します。`E`には組み込みの`Error`や、自分で定義したclass・enumを使えます。失敗を呼び出し元へ返すには`try`、その場で処理するには`match`を使います。
+呼び出し側へ何を伝えたいかで型を選びます。次の三つは別です。
+
+| 伝えたいこと | Nagiの書き方 | 例 |
+|---|---|---|
+| 値がない場合がある | `T?`（Option） | 任意の年齢が`None` |
+| 処理が成功したか、失敗したか | `Result[T, E]` | 数値変換が`Err`を返す |
+| 通常の業務失敗として扱わない異常 | panic | 配列の範囲外アクセス |
+
+`None`は処理の失敗理由を持ちません。`Err`は返却値であり、Pythonの例外送出ではありません。コンパイルエラーやビルド環境の失敗も、この三つとは別です。
+
+## 値がない場合を扱う
+
+数がなければ既定値を使いたいとき、Pythonでは`None`を調べられます。
+
+```python
+def value_or(value, fallback):
+    if value is None:
+        return fallback
+    return value
+```
+
+Nagiでは`i64?`で不在の可能性を表し、両方のcaseを持つmatchで取り出します。次は完全なコードです。
+
+```nagi
+def value_or(value: i64?, fallback: i64) -> i64:
+    match value:
+        case Some(number):
+            return number
+        case None:
+            return fallback
+
+def main():
+    print(value_or(some(42), 0))
+    print(value_or(None, 0))
+```
+
+出力は`42`、`0`です。値があるものを作る関数は小文字の`some(...)`、取り出すパターンは大文字の`Some(...)`です。`None`にpayloadや括弧は付けません。取り出した`number`はcase内で使える`i64`です。
+
+この関数で直接`value + 1`と書くと、`i64?`は`i64`ではないため`check`が拒否します。`Some`の中の`number`を使って計算します。Pythonの`if value is not None:`による型絞り込みや汎用unwrap APIは未対応です。一言でいうと、不在を処理してから中身を使います。[型](types.md)と[matchの書式](syntax.md#resultasyncscope)も参照してください。
+
+`Result[T?, E]`は「処理が成功したか」と「成功時に値があるか」を組み合わせます。`Ok(None)`と`Err(problem)`は違います。
 
 ## 失敗を呼び出し元へ返す
 
-`try`は成功値を取り出し、失敗ならその値を返します。呼び出し先と自分の戻り値は、同じエラー型`E`である必要があります。
+入力したidを確認し、失敗を呼び出し元へ任せたいとします。Pythonでは`int(text)`の`ValueError`を捕捉しなければ、呼び出し元へ伝わります。Nagiでは次の関数のように、`Result`を返します。これは関数定義の断片です。
 
 ```nagi
 def read_id(text: view[str]) -> Result[i64, Error]:
@@ -16,11 +56,15 @@ def read_id(text: view[str]) -> Result[i64, Error]:
     return ok(id)
 ```
 
+`"2"`を読ませると成功値`2`を返し、`"oops"`は数値変換の失敗、`"0"`は自分で作った失敗を返します。`Result[T, E]`は成功値`T`か失敗値`E`を持ち、`E`には組み込み`Error`や独自class・enumを使えます。
+
+`try`は成功値を取り出し、失敗ならその値を呼び出し元へ返します。Pythonの`try/except`のように捕捉するブロックではありません。通常の`i64`を返す関数で`try`を使うと`check`が拒否します。上のようにResultを返すか、次の`match`で回復します。呼び出し先と自分の戻り値には同じエラー型`E`が必要です。一言でいうと、tryはErrを呼び出し元へ伝えます。
+
 非同期では`value = try await operation(...)`です。`try`の結果は`T`なので、Resultとして返すなら`return ok(try operation(...))`と書きます。異なるエラー型へは`match`か、後述の`std.result.map_error`で変換します。
 
 ## 成功と失敗を分ける
 
-失敗から既定値へ回復すれば、通常の`i64`を返せます。[result.nagi](../examples/tutorial/result.nagi)は次の完全な例です。
+変換できない入力には既定値を返したいとします。Pythonなら`try/except ValueError`で回復します。Nagiでは`match`で返却値を分ければ、通常の`i64`を返せます。[result.nagi](../examples/tutorial/result.nagi)は次の完全な例です。
 
 ```nagi
 def number_or(text: str, fallback: i64) -> i64:
@@ -45,6 +89,8 @@ nagic run result.nagi
 ```
 
 出力は順に`21`、`invalid`、`-1`です。`Ok`と`Err`は先頭が大文字のパターンです。値を作る関数は小文字の`ok(...)`や`error(...)`を使います。
+
+`Ok`だけを書いて失敗を省くと`check`が拒否します。`Err`にも処理を書き、意図して使わない失敗値だけを`_`で捨てます。一言でいうと、その場で扱うならmatchで両方を処理します。
 
 - `case Ok(...)`と`case Err(...)`を、それぞれ1回ずつ書く。順番はどちらでもよい。
 - 括弧内の名前には成功値・失敗値の型が付く。使わない値は`case Err(_):`などと書く。

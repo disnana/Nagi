@@ -9,7 +9,7 @@
 ## 初めて使う
 
 1. [準備と最初の実行](getting-started.md)でインストールし、Hello Worldを動かす。
-2. [コードを書きながら学ぶ](language-guide.md)で変数・関数・配列・エラー処理を覚える。
+2. [コードを書きながら学ぶ](language-guide.md)で、Pythonとの比較、短いNagi例、結果、間違いの直し方を順に読む。変数・関数・配列・値の渡し方・エラー処理を試せる。
 3. [HTTPとHTML](http.md)でAPIを作り、[SQLite](database.md)でデータを保存する。
 
 [VS Codeの使い方](editor.md)と[JetBrains版の導入方法](../editors/jetbrains-nagi/README.md)も確認できます。
@@ -42,6 +42,8 @@
 | 型・モジュール・呼び出しを図にする | [コードマップ](code-map.md) |
 
 動かせる入門例は[examples/tutorial/](../examples/tutorial/)にあります。リファレンスにはコードの断片も載せています。
+
+入門のコードは現行の書き方です。明示moveの新規則、spawn結果handle、actorのshared messageは[採用した設計方向](../DESIGN.md#値失敗taskについて採用する方針)に分けており、まだ使える構文ではありません。
 
 ## 仕組みと開発状況
 

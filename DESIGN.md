@@ -6,7 +6,7 @@ Nagiは、Rustの性能とライブラリを使い、HTTP・認証・認可・va
 
 連携の手間を減らすことと、失敗の理由をNagiのコードから理解できることを重視します。任意のRust APIをそのまま使えることや、Rustの知識が一切要らないことを、現在の機能として約束するものではありません。
 
-この文書には、現在の実装と、採用・保留した設計方針をまとめています。次フェーズの変更は未リリースで、PR #74とは別に検証します。使い方は[リファレンス](docs/README.md)、今後の順序は[roadmap](docs/roadmap.md)、公開版の変更は[CHANGELOG](CHANGELOG.md)で確認できます。
+この文書には、現在の実装と、採用・保留した設計方針をまとめています。main、作業PR、公開版は別です。使い方は[リファレンス](docs/README.md)、今後の順序は[roadmap](docs/roadmap.md)、公開版の変更は[CHANGELOG](CHANGELOG.md)で確認できます。
 
 ## 対象にする開発
 
@@ -39,6 +39,27 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 通常のライブラリ機能を追加するたびに、言語のキーワードを増やす方針にはしません。`std.http.server`・`std.actor`はimportできる一方、JSON・DB等には組み込みが残っています。moduleへの分離は未完了です。
 
 根拠: [型・所有権checker](compiler/src/check.rs)、[所有権のテスト](compiler/tests/ownership.rs)、[viewの出所のテスト](compiler/tests/view_origins.rs)、[独自エラーのテスト](compiler/tests/typed_errors.rs)、[標準importのテスト](compiler/tests/stdlib_imports.rs)、[HTTP応答の実装](runtime/src/http_server.rs)。これらのテストは対象ケースの回帰検査で、すべてのプログラムに対する証明ではありません。
+
+### 値・失敗・taskについて採用する方針
+
+書き味はPython、所有する値の扱いはRust、actorと監視はElixirを参考にします。どの言語とも同じ動作をするという意味ではありません。
+
+| やりたいこと | 方針 | 現在との差 |
+|---|---|---|
+| 値を渡して手放す | moveで値と後片付けの責任を渡す | 今は非Copyの代入・引数・returnに暗黙moveがある |
+| 渡したあとも読む | viewで貸す。独立した値が必要なら明示copy | 実装済み。借用元が必要な間の変更やmoveを制限する |
+| 同じ値を保持する | sharedで共有し、handle複製とpayload copyを分ける | 実装済み。sharedだけでthread安全性や終了完了を保証しない |
+| 普通の`a = b`を書く | コピー可能な単純値以外の既存所有値では操作を明示する | **移行予定**。現行の暗黙moveをまだ禁止しない。構文・Copy表・適用範囲は未決 |
+| 値がない、処理が失敗する | nullableとResultを使い分ける。通常の拒否にpanicを使わない | 実装済み。NagiのtryはErrの伝播で、Pythonのtry/exceptではない |
+| 並行な処理から結果を得る | scopeが子の寿命を持ち、handleから結果を一度受け取る | **handleは未実装**。今のspawnはunit/Result[unit, Error]だけ |
+| 子が業務Errを返す | Errを結果として扱い、taskの故障とは分ける | **移行予定**。今のScopeは子Errでも兄弟を取消す |
+| actorへ共有値を送る | 型と容量・寿命の条件を満たす明示sharedを許す | **未実装**。今のmessage/replyはsharedを拒否する |
+
+操作の明示は、Pythonの参照代入と違うことをコードから読めるようにするためです。新しい値を作る式まで機械的にmove指定を要求したり、「軽い値」をサイズ閾値で暗黙copyしたりはしません。引数・return・match等を一度に変更する方針でもありません。
+
+通常の引数と両側を評価するoperandは左から右、and/orは短絡する方針です。spawnしたtask同士の全実行順は保証しません。moveはcloseではなく、所有する資源の管理責任を渡します。単純な同一ブロックの所有ローカルは逆宣言順に片付ける意図ですが、再代入・部分move・一時値・field・List・shared・Futureには個別の規則があります。既存の右辺評価とcleanup位置を保ちます。
+
+現行との差、採用理由、根拠、後続実装の移行・検証条件は[ADR 011](docs/internal/adr/011-language-behavior-and-docs.md)へまとめます。現行の厳密な規則は[言語契約](docs/internal/language-invariants.md)に残します。入門は[Pythonとの具体的な比較](docs/language-guide.md)から始め、未実装の書き方で例を成立させません。
 
 ## なぜRustを使うのか
 
@@ -133,6 +154,10 @@ mainのHTTP実装は、応答開始前の捕捉可能なhandler panicを、内�
 
 scopeとactor／SupervisorはTokio上の同一プロセスで動きます。actorの業務replyでErrを返すことと、worker自体が失敗することは別です。Supervisorの再起動方針は後者へ適用します。scopeの兄弟取消やworkerの終了条件は、アプリの寿命にも影響します。
 
+現在のScopeは本体が終わってから子をjoinし、子のErr/panicで兄弟を取消します。本体実行中に子の故障で割り込む仕組みはありません。通常のエラー退出では終了を待ちますが、親Futureの直接破棄やunwindでは同期Dropが停止を要求するだけで、子の終了確認までは待てません。業務Errを結果handleで受け取る将来の設計でも、Supervisorのterminal failureがHTTPを止める接続を失わないよう移行します。
+
+actorは基本one-for-oneで、故障した子を初期化から作り直します。正常終了の扱いはTEMPORARY/TRANSIENT/PERMANENTで分け、明示停止や親の取消と混同しません。再起動上限はありますが、処理中messageの自動再配送やexactly-onceはありません。Control handleを捨てることと、Supervisor ownerの終了も別です。
+
 futureを破棄しても、受理済みのDB処理や外部への送信が取り消されるとは限りません。再起動も業務操作の再実行が安全であることを証明しません。冪等性、transaction、cleanup、資源の寿命は、APIとアプリの両方で扱う必要があります。
 
 独自VM、分散actor、無停止更新は未実装です。Elixir／BEAMと同じ障害隔離や運用機能を持つとは説明しません。
@@ -155,13 +180,17 @@ Nagiを使う価値は、同じAPI・DB処理・失敗条件のアプリで、�
 
 Phase 1のCheckedProgramはPR #78でmainへ入り、公開版には未反映です。生成側で型や借用を再推論せず、封印時に確定したplanを使います。実装は[最終factory](compiler/src/check/checked.rs)、検証は[封印境界のテスト](compiler/src/check/checked_tests.rs)と[ADR 006](docs/internal/adr/006-sealed-codegen-input.md)を参照してください。
 
+CheckedProgramは検査済みのNagiとRust生成向け私有planを渡す境界で、完全なbackend非依存IRではありません。別backendの採用とself-hostingは別の候補です。Nagiでコンパイラを書くことは、概念上Rustへの生成を続けながらでもできます。どちらも現在の実装計画へ追加しません。
+
 Phase 2の開発差分では、アプリIDと成功世代を分けます。同じ生成先のwriterはOS lockで直列化し、世代固有のCargo binをbuildしてからexeをコピーします。成功時だけlatestを更新し、旧exeは上書き・削除・killしません。依存キャッシュは共有し、runの前にlockを解放します。生成Low・Rust・manifest・読み取り済みsourceと行対応を世代に保存しますが、外部Rustや依存source全体の原子的snapshot、任意processの隔離、電源断後の耐久性は対象外です。実装は[世代の公開処理](compiler/src/generation.rs)、検証は[実Cargo回帰](compiler/tests/build_generations.rs)、判断は[ADR 007](docs/internal/adr/007-build-generations.md)を参照してください。
 
 Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しました。公開版には未反映です。Phase 3の先行テストも4 OSで成功しました。開発差分では、登録資源の型引数の役割とcapabilityの根拠を私有descriptorへ集め、公開ResourceInfoはその一部を参照します。型引数の範囲・重複・欠落を登録時に検査し、用途別の判定と既存APIを保ちます。資源のlifecycle保証はまだ追加しません。[ADR 008](docs/internal/adr/008-resource-contracts.md)に構造と検証の順序を記録しました。集約後の#80は4 OS・editor・site・merge gate CIが成功し、mainへ反映しました。Pool／Transactionはまだ未実装です。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)で、検証済みの範囲、mainと公開版への反映状況、予定を区別します。
 
 SQLite Pool／Transactionは[APIと終了policyの具体案](docs/internal/sqlite-pool-proposal.md)を用意しました。SQLiteの解析・bind・transactionはrusqliteへ任せ、Nagi側は公開する所有契約とworkerの完了・再利用を扱う案です。汎用引数を用意し、旧Dbの固定bindやSQL制約は変えません。2026-10-06にQ002の公開API・SQL制限・終了契約とruntime rusqlite hooksを承認しました。[ADR 010](docs/internal/adr/010-sqlite-transaction-boundary.md)に従い、一接続・一Txの試作から進めます。pool／workerは既存Rustライブラリと比較して選び、追加wrapper依存は別途判断します。標準APIの実装・検証はまだ完了していません。
 
-開発branchの[private試作](runtime/src/sqlite_prototype/session.rs)では、実SQLiteの禁止action、明示終端、取消後cleanup、native closeとworker joinを[22件のtest](runtime/src/sqlite_prototype/tests.rs)で確認しました。SQL Errだけで変更が戻ったとは扱いません。これは公開Pool、NagiのTx捕捉検査、4 OSでの動作を保証する結果ではありません。[検証結果](docs/internal/sqlite-session-results.md)と[次のadapter判断案](docs/internal/sqlite-pool-adapter-decision.md)に未完了範囲を残します。
+mainに入った[private試作](runtime/src/sqlite_prototype/session.rs)では、実SQLiteの禁止action、明示終端、取消後cleanup、native closeとworker joinを[22件のtest](runtime/src/sqlite_prototype/tests.rs)で確認しました。#81では4 OSのCIも成功しました。SQL Errだけで変更が戻ったとは扱いません。公開Pool、NagiのTx捕捉検査、多接続の保証は未完了です。[検証結果](docs/internal/sqlite-session-results.md)と[進捗](docs/internal/progress.md)に範囲を残します。
+
+Q004のgeneric deadpool 0.13.1とcapability表は承認済みです。[PR #82](https://github.com/disnana/Nagi/pull/82)の一接続adapter比較も4 OS CIを通りましたが、この文書branchのmain基点には入っていません。公開APIやPool/Txの完成とは区別します。
 
 意味論、公開API、High／Low／Rustの分担を変える場合は、変更の理由、代替案、互換性、検証結果をこの文書へ反映します。詳細なAPI説明や測定ログは対応する文書に置きます。
 

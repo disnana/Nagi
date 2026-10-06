@@ -1,6 +1,8 @@
 # 所有権
 
-文字列や配列を自作関数へ渡すと、そのデータの所有権が関数へ移ります。これをmoveと呼びます。渡した変数をもう一度使うとエラーになります。数値などのコピーできる値は、そのまま繰り返し使えます。
+[目次](README.md) · [入門](language-guide.md#4-読むだけならviewで借りる) · [型](types.md)
+
+関数に文字列を渡し、その関数が保持してよいようにするには、所有する値を渡します。Pythonではリストを別の名前へ代入すると、二つの名前が同じリストを指します。Nagiでは、値を手放す・読むために貸す・同じ値を共有する操作を区別します。
 
 ```nagi
 def use_name(name: str):
@@ -11,6 +13,54 @@ def main():
     use_name(name)
     # print(name) はmove後の使用
 ```
+
+この完全なコードは`alice`を表示します。呼び出した後、元の`name`ではその文字列を使えません。この引き渡しを**move**と呼び、後片付けの責任も新しい所有者へ移ります。moveそのものがcloseや破棄を行うわけではありません。
+
+コメントを外して`print(name)`を追加すると、move後の使用として`check`が拒否します。読むだけなら、引数を`view[str]`にして`view(name)`を渡します。独立した文字列が必要なら`copy(view(name))`を渡します。[入門の実行例](language-guide.md#4-読むだけならviewで借りる)で試せます。
+
+## 現在の代入と今後の変更
+
+現在の`a = b`は、数値・boolなどCopyとして扱う値ならコピーします。文字列や配列など、非Copyの所有値ならmoveします。Pythonの参照代入とは動作が異なります。
+
+```nagi
+def main():
+    count = 2
+    same_count = count
+    print(count + same_count)
+    name = "Nagi"
+    destination = name
+    print(destination)
+    name = "new"
+    print(name)
+```
+
+出力は`4`、`Nagi`、`new`です。`destination = name`の後、古い文字列は`destination`から使います。元の`name`も新しい値を代入した後なら使えます。再代入より前に`name`を読むと`check`が拒否します。両方の文字列を残すなら`destination = copy(view(name))`にします。
+
+現行のCopy規則にはview、同期関数値、UUID、timestampや、中身がCopy規則を満たすclass・enum・nullableも含まれます。これは現在のcheckerの規則であり、すべてのenumや小さいclassをコピーできるという新たな約束ではありません。[型](types.md)も参照してください。
+
+今後の移行では、既存の非Copy所有値の`a = b`に明示的な操作を求める方針を採用しています。手放すならmove、読むならview、独立した値を作るならcopy、同じ値を複数箇所で持つならsharedを選びます。**この移行は未実装で、現在の暗黙moveは引き続き受理されます。** `a = User(...)`のように新しい値を作る式とは区別します。将来のCopy対象の正確な型表、構文、引数・return・フィールド取り出し・view・shared handleの扱いは詳細設計で定めます。[設計判断](../DESIGN.md)を参照してください。
+
+## 同じ値を複数の場所で持つ
+
+独立したコピーではなく、同じ値を複数箇所で保持したいときは`share`と`clone_shared`を使います。Pythonの二つの名前への参照代入では不要な、明示的な操作です。次は文字列フィールドを持つclassを使った完全な例です。
+
+```nagi
+class Label:
+    text: str
+
+def main():
+    label = share(Label(text="Nagi"))
+    another = clone_shared(label)
+    duplicate = copy(view(another.text))
+    print(label.text)
+    print(duplicate)
+```
+
+出力は`Nagi`、`Nagi`です。`share(value)`は所有値を受け取り、`shared[T]`を返します。`clone_shared(label)`は同じ値を保持するhandleを増やし、中身全体はコピーしません。`copy(view(another.text))`は、それとは別に所有文字列を作ります。
+
+`text = another.text`で共有値から非Copyフィールドを奪おうとすると、`check`が拒否します。読むか、上のようにコピーしてください。sharedの通常の参照から任意の書き換えはできません。内部に状態を持つ資源は、同期や操作条件を定めたAPIを使います。sharedに包んでも任意のTがthread-safeになるわけではなく、共有や独立copyができない資源もあります。[組み込み関数](builtins.md#共有と型のサイズ)と[並行処理](concurrency.md)を参照してください。
+
+最後のshared handleが値を解放することと、外部サービスの停止が完了することは別です。共有参照が循環すると値を保持し続ける場合もあり、任意の共有グラフが自動回収される保証はありません。終了完了が必要なら、その資源のshutdown／close APIで確認します。
 
 ## classのフィールドを取り出す
 
