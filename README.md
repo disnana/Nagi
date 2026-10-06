@@ -65,7 +65,7 @@ Linux / macOS（bash）:
 
 次を`server.nagi`に保存します。DBなしのHTTPサーバーです。
 
-```nagi
+```python
 import std.http.server as http
 
 class State:
