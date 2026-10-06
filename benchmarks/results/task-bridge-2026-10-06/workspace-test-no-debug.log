@@ -1,0 +1,654 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling itoa v1.0.18
+   Compiling serde_core v1.0.229
+   Compiling syn v3.0.6
+   Compiling find-msvc-tools v0.1.14
+   Compiling shlex v2.0.1
+   Compiling cc v1.5.1
+   Compiling pkg-config v0.3.34
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling smallvec v1.16.2
+   Compiling vcpkg v0.2.15
+   Compiling serde_derive v1.0.229
+   Compiling libsqlite3-sys v0.38.2
+   Compiling serde_json v1.0.151
+   Compiling foldhash v0.2.0
+   Compiling hashbrown v0.17.1
+   Compiling memchr v2.8.3
+   Compiling hashlink v0.12.2
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling bitflags v2.13.2
+   Compiling fallible-iterator v0.3.0
+   Compiling winnow v1.0.4
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling serde_spanned v1.1.1
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling toml_writer v1.1.2+spec-1.1.0
+   Compiling toml v1.1.6+spec-1.1.0
+   Compiling libc v0.2.189
+   Compiling rusqlite v0.40.2
+   Compiling bytes v1.12.1
+   Compiling nagic v0.1.10 (/workspace/Nagi-task-handle-design-review/compiler)
+   Compiling pin-project-lite v0.2.17
+   Compiling version_check v0.9.5
+   Compiling generic-array v0.14.7
+   Compiling errno v0.3.14
+   Compiling futures-core v0.3.34
+   Compiling signal-hook-registry v1.4.8
+   Compiling http v1.5.0
+   Compiling mio v1.2.3
+   Compiling socket2 v0.6.5
+   Compiling tokio-macros v2.7.2
+   Compiling getrandom v0.3.4
+   Compiling cfg-if v1.0.5
+   Compiling zerocopy v0.8.59
+   Compiling typenum v1.20.1
+   Compiling tokio v1.53.1
+   Compiling httparse v1.10.1
+   Compiling log v0.4.34
+   Compiling rand_core v0.9.5
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling http-body v1.1.0
+   Compiling thiserror v2.0.21
+   Compiling once_cell v1.21.4
+   Compiling tracing-core v0.1.36
+   Compiling digest v0.10.7
+   Compiling futures-macro v0.3.34
+   Compiling thiserror-impl v2.0.21
+   Compiling futures-sink v0.3.34
+   Compiling cpufeatures v0.2.17
+   Compiling futures-task v0.3.34
+   Compiling tower-service v0.3.3
+   Compiling slab v0.4.12
+   Compiling futures-util v0.3.34
+   Compiling ppv-lite86 v0.2.21
+   Compiling rand_chacha v0.9.0
+   Compiling rand v0.9.5
+   Compiling sha1 v0.10.7
+   Compiling tracing v0.1.44
+   Compiling futures-channel v0.3.34
+   Compiling tower-layer v0.3.3
+   Compiling atomic-waker v1.1.2
+   Compiling percent-encoding v2.3.2
+   Compiling sync_wrapper v1.0.2
+   Compiling httpdate v1.0.3
+   Compiling data-encoding v2.11.1
+   Compiling hyper v1.11.1
+   Compiling tungstenite v0.29.0
+   Compiling form_urlencoded v1.2.2
+   Compiling http-body-util v0.1.5
+   Compiling ryu v1.0.23
+   Compiling mime v0.3.17
+   Compiling serde_urlencoded v0.7.1
+   Compiling axum-core v0.5.6
+   Compiling tokio-tungstenite v0.29.0
+   Compiling hyper-util v0.1.21
+   Compiling tower v0.5.3
+   Compiling deadpool-runtime v0.3.1
+   Compiling serde_path_to_error v0.1.20
+   Compiling base64 v0.22.1
+   Compiling matchit v0.8.4
+   Compiling deadpool v0.13.1
+   Compiling axum v0.8.9
+   Compiling bumpalo v3.20.3
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-task-handle-design-review/runtime)
+    Finished `test` profile [unoptimized] target(s) in 54.68s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-dae2517a3d1ff927)
+
+running 206 tests
+test actor::charge::tests::arithmetic_and_expired_deadlines_fail_before_acceptance ... ok
+test actor::charge::tests::option_and_result_visit_only_the_active_payload ... ok
+test actor::charge::tests::list_capacity_and_only_initialized_elements_contribute_heap ... ok
+test actor::charge::tests::recursive_owned_graphs_obey_depth_limit_and_restore_walk_after_errors ... ok
+test actor::charge::tests::root_inline_and_envelope_are_counted_once ... ok
+test actor::charge::tests::retained_string_bytes_and_error_capacities_are_charged ... ok
+test actor::charge::tests::inline_only_lists_skip_every_element_and_zero_sized_capacity_is_safe ... ok
+test actor::lifecycle_adversarial_tests::a_factory_constructor_panic_does_not_lose_the_context_cleanup_obligation ... ok
+test actor::charge::tests::work_budget_includes_root_and_initialized_non_inline_elements ... ok
+test actor::lifecycle_adversarial_tests::a_late_buffered_outer_failure_obeys_the_same_reply_deadline ... ok
+test actor::lifecycle_adversarial_tests::a_blocking_native_poll_retains_its_child_record_until_it_returns ... ok
+test actor::lifecycle_adversarial_tests::a_blocking_panic_payload_destructor_remains_a_retained_child_obligation ... ok
+test actor::lifecycle_adversarial_tests::a_reply_completed_after_deadline_times_out_even_when_already_buffered ... ok
+test actor::lifecycle_adversarial_tests::a_reply_completed_before_deadline_succeeds_when_the_caller_polls_after_deadline ... ok
+test actor::lifecycle_adversarial_tests::a_panic_payload_destructor_can_observe_and_stop_its_group_without_a_lock_cycle ... ok
+test actor::lifecycle_adversarial_tests::a_finite_follow_on_panic_payload_retains_the_guard_and_context_until_drop_finishes ... ok
+test actor::lifecycle_adversarial_tests::an_event_only_surviving_control_drains_cleanup_and_observes_stream_close ... ok
+test actor::lifecycle_adversarial_tests::a_non_yielding_poll_cannot_be_reported_as_completed_cleanup ... ok
+test actor::lifecycle_adversarial_tests::an_unrestarted_child_failure_is_retained_while_a_healthy_sibling_continues ... ok
+test actor::lifecycle_adversarial_tests::context_owned_by_a_child_panic_payload_is_cleaned_before_final_context_cleanup ... ok
+test actor::lifecycle_adversarial_tests::a_surviving_control_can_finish_cleanup_after_the_running_owner_is_dropped ... ok
+test actor::lifecycle_adversarial_tests::abort_does_not_complete_before_the_child_future_destructor_finishes ... ok
+test actor::lifecycle_adversarial_tests::origin_runtime_cancellation_does_not_restart_a_permanent_child_on_a_surviving_runtime ... ok
+test actor::lifecycle_adversarial_tests::panicking_factory_destruction_during_owner_drop_cannot_strand_context_cleanup ... ok
+test actor::lifecycle_adversarial_tests::stop_during_factory_construction_cancels_every_later_inserted_child ... ok
+test actor::lifecycle_adversarial_tests::user_destructors_do_not_run_under_the_ledger_or_stop_lock ... ok
+test actor::tests::a_smaller_immediate_call_cannot_bypass_a_waiting_byte_reservation ... ok
+test actor::tests::an_expired_admission_deadline_rejects_even_immediately_ready_operations ... ok
+test actor::lifecycle_adversarial_tests::canceled_observation_keeps_unfinished_joins_available_to_another_control ... ok
+test actor::tests::business_error_preserves_owned_state_and_restart_is_one_for_one ... ok
+test actor::tests::canceled_event_wait_does_not_consume_a_concurrently_published_event ... ok
+test actor::tests::escaped_readiness_tokens_reject_old_generations_and_do_not_retain_the_group ... ok
+test actor::tests::caller_timeout_keeps_accepted_work_and_all_reservations_until_handler_finishes ... ok
+test actor::tests::global_restart_intensity_counts_attempts_and_stops_a_pending_sibling ... ok
+test actor::tests::lifecycle_events_are_ordered_bounded_and_keep_utf8_truncation_metadata ... ok
+test actor::tests::event_deadlines_include_lock_contention_and_preserve_the_cursor ... ok
+test actor::tests::normally_finished_task_tokens_are_invalid_while_the_supervisor_stays_running ... ok
+test actor::tests::oversized_business_reply_keeps_next_state_and_retained_input_capacity_is_checked ... ok
+test actor::tests::startup_deadline_and_zero_restart_budget_end_the_group_without_a_ready_actor ... ok
+test actor::tests::stopped_tasks_cannot_publish_readiness_and_legacy_tasks_never_publish_it ... ok
+test actor::tests::task_readiness_follows_initialization_once_without_changing_started ... ok
+test auth::tests::grant_binds_identity_and_resource_without_payload_allocation ... ok
+test auth::tests::owned_proof_is_send_sync_without_requiring_marker_payload_traits ... ok
+test concurrent::tests::actor_pair_and_pipeline ... ok
+test concurrent::tests::actors_isolated ... ok
+test concurrent::tests::panic_isolated ... ok
+test actor::tests::native_factory_construction_is_included_in_the_startup_deadline ... ok
+test actor::lifecycle_adversarial_tests::final_context_destruction_is_a_retained_phase_before_completion ... ok
+test concurrent::tests::scope_finishes ... ok
+test concurrent::tests::sibling_error_cancelled ... ok
+test concurrent::tests::supervisor_drop_after_worker_start ... ok
+test concurrent::tests::supervisor_drop_while_waiting_for_worker_start ... ok
+test concurrent::tests::queue_retries_and_dead_letter ... ok
+test concurrent::tests::scope_cancel_drops_all ... ok
+test concurrent::tests::tasks_and_cpu ... ok
+test database::tests::column_order_independent ... ok
+test database::tests::crud_and_parameterization ... ok
+test database::tests::exec_counts_only_changes_in_the_current_batch ... ok
+test database::tests::exec_counts_trigger_changes_and_preserves_sql_errors ... ok
+test database::tests::missing_column_is_error ... ok
+test database::tests::runtime_type_mismatch ... ok
+test concurrent::tests::supervisor_intensity ... ok
+test concurrent::tests::supervisor_restart ... ok
+test http::panic_tests::handler_extractor_and_response_panics_return_sanitized_500_for_get_and_head ... ok
+test actor::lifecycle_adversarial_tests::delayed_native_context_owners_then_actual_context_drop_precede_completion ... ok
+test http::tests::request_wait_configuration_is_positive_finite_and_defaults_to_ten_seconds ... ok
+test http::tests::healthy_requests_work_with_more_than_128_idle_connections_and_shutdown_closes_them ... ok
+test http::tests::silent_partial_and_dripped_headers_expire_without_extending_the_deadline ... ok
+test http::tests::idle_reuse_and_buffered_partial_requests_share_the_header_deadline ... ok
+test http_server::tests::actual_chunk_sizes_and_absolute_body_deadlines_are_bounded ... ok
+test http_server::tests::apps_are_db_free_independent_and_support_native_extended_methods_and_template_paths ... ok
+test http_server::tests::async_handlers_use_app_mapping_route_override_and_leave_success_alone ... ok
+test http_server::tests::body_collection_moves_one_chunk_and_combines_only_multiple_chunks ... ok
+test http_server::tests::borrowed_lookup_validation_agrees_with_native_token_rules_and_length_limits ... ok
+test http_server::tests::buffered_native_response_body_is_unboxed_exact_and_moves_its_frame ... ok
+test http_server::tests::connection_capacity_and_shutdown_deadline_leave_no_handler_tasks ... ok
+test http_server::tests::forbidden_response_bodies_do_not_desynchronize_keepalive ... ok
+test http_server::tests::graceful_shutdown_finishes_an_in_flight_handler_and_response ... ok
+test http_server::tests::graceful_shutdown_preserves_stalled_response_send_deadline ... ok
+test http::tests::websocket_upgrade_is_exempt_from_the_http_wait ... ok
+test http_server::tests::handler_panic_after_deadline_returns_500_and_releases_admission ... ok
+test http::tests::streaming_and_backpressure_can_outlast_the_request_wait ... ok
+test http_server::tests::head_uses_get_representation_length_explicit_head_wins_and_allow_is_correct ... ok
+test http_server::tests::header_access_preserves_duplicates_and_checks_single_value_and_utf8 ... ok
+test http_server::tests::handler_timeout_cancels_future_and_releases_request_capacity ... ok
+test http_server::tests::heterogeneous_route_erasure_adds_exactly_one_future_allocation ... ok
+test http_server::tests::json_content_type_matches_tokens_and_validates_every_parameter ... ok
+test http_server::tests::json_encoding_is_fallible_and_default_internal_mapping_hides_details ... ok
+test http_server::tests::media_type_parser_rejects_controls_but_accepts_quoted_http_octets ... ok
+test http_server::tests::method_status_and_shared_state_inspection_allocate_nothing ... ok
+test http_server::tests::native_method_and_request_fields_do_not_stringify_or_normalize_extension_tokens ... ok
+test http_server::tests::options_validate_capacity_deadlines_and_leave_state_out_of_debug ... ok
+test http_server::tests::ordinary_response_framing_uses_the_native_body_length_without_allocating_a_header_value ... ok
+test http_server::tests::handler_timeout_rejects_a_ready_response_after_blocking_poll ... ok
+test http_server::tests::oversized_body_chunked_delivers_413_with_or_without_final_chunk ... ok
+test http_server::tests::oversized_body_content_length_delivers_413_without_calling_handler ... ok
+test http_server::tests::oversized_body_declared_length_rejects_headers_and_incomplete_upload_promptly ... ok
+test http_server::tests::oversized_body_rejects_keep_alive_upload_and_never_dispatches_pipeline ... ok
+test http_server::tests::oversized_headers_and_header_counts_are_rejected_without_reusing_the_connection ... ok
+test http_server::tests::panic_tests::http_error_mapper_panic_returns_500 ... ok
+test http_server::tests::panic_tests::http_handler_constructor_panic_returns_500 ... ok
+test http_server::tests::panic_tests::http_handler_division_by_zero_returns_500_and_server_keeps_serving ... ok
+test http_server::tests::panic_tests::http_handler_out_of_bounds_returns_500_and_server_keeps_serving ... ok
+test http_server::tests::panic_tests::http_handler_panic_after_await_returns_500_without_exposing_payload ... ok
+test http_server::tests::panic_tests::http_handler_panic_head_response_has_no_body ... ok
+test http_server::tests::request_capacity_rejects_unread_bodies_then_releases_admission ... ok
+test http_server::tests::response_headers_reject_injection_and_user_framing_and_keep_cookie_lines ... ok
+test http_server::tests::route_validation_returns_errors_without_panicking_and_supports_templates ... ok
+test http_server::tests::sockets_preserve_raw_duplicate_headers_cookies_and_strict_authorization ... ok
+test http_server::tests::oversized_body_boundary_accepts_4096_and_incomplete_upload_keeps_body_deadline ... ok
+test http_server::tests::standard_custom_mixed_case_and_long_borrowed_header_lookups_allocate_nothing ... ok
+test http_server::tests::status_is_compact_validated_and_has_modern_compatible_names ... ok
+test http_server::tests::successful_connect_is_rejected_instead_of_establishing_an_unowned_tunnel ... ok
+test http_server::tests::successful_json_content_type_checks_allocate_nothing_and_preserve_body ... ok
+test result::tests::borrowed_success_keeps_its_owner ... ok
+test result::tests::mapper_runs_once_only_for_failure ... ok
+test result::tests::owned_payloads_are_moved_without_cloning ... ok
+test http_server::tests::stalled_response_send_expires_and_releases_connection_permit ... ok
+test sqlite_prototype::acquire_tests::acquire_budget_arithmetic_keeps_immediate_distinct_and_checks_overflow ... ok
+test sqlite_prototype::acquire_tests::acquire_expired_finite_budget_does_not_register_even_when_native_free ... ok
+test sqlite_prototype::acquire_tests::acquire_expiry_does_not_replace_closed_or_recycle_failure_cause ... ok
+test sqlite_prototype::acquire_tests::acquire_immediate_free_reserves_before_slow_startup_and_reuses ... ok
+test sqlite_prototype::acquire_tests::acquire_immediate_logical_full_is_timeout_without_pool_failure ... ok
+test sqlite_prototype::acquire_tests::acquire_absolute_budget_survives_logical_wait_to_native_fence ... ok
+test http_server::tests::header_idle_deadline_is_independent_of_send_deadline_after_flush ... ok
+test sqlite_prototype::acquire_tests::acquire_same_task_scopes_are_isolated_and_drop_restores_legacy_begin ... ok
+test sqlite_prototype::adapter_tests::acquired_deadpool_object_after_close_is_rejected_before_user_begin ... ok
+test sqlite_prototype::adapter_tests::callback_panic_retires_pool_and_join_does_not_hide_native_close_failure ... ok
+test sqlite_prototype::adapter_tests::cancelled_begin_reply_keeps_checkout_until_eof_rollback_is_observed ... ok
+test sqlite_prototype::adapter_tests::cancelled_create_cannot_start_replacement_before_old_native_worker_joins ... ok
+test sqlite_prototype::adapter_tests::cancelled_get_during_create_preserves_startup_close_and_join_owner ... ok
+test sqlite_prototype::adapter_tests::cancelled_tx_keeps_deadpool_checkout_until_native_cleanup_completes ... ok
+test sqlite_prototype::adapter_tests::close_clone_and_cancel_keep_closing_while_active_checkout_can_finish ... ok
+test sqlite_prototype::adapter_tests::close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_waiter ... ok
+test sqlite_prototype::adapter_tests::close_waits_for_registered_create_and_late_create_cannot_begin ... ok
+test sqlite_prototype::adapter_tests::deadpool_adapter_reuses_same_native_worker_and_sql_session_core ... ok
+test sqlite_prototype::adapter_tests::deadpool_recycle_error_stops_create_instead_of_default_replacement ... ok
+test sqlite_prototype::adapter_tests::joined_is_published_only_after_terminal_native_failure_is_in_ledger ... ok
+test sqlite_prototype::adapter_tests::last_adapter_drop_closes_idle_worker_without_observer_owning_pool_or_tx_sender ... ok
+test sqlite_prototype::adapter_tests::last_adapter_drop_preserves_active_tx_until_its_explicit_finish ... ok
+test sqlite_prototype::adapter_tests::multi_b_terminal_failure_is_published_without_waiting_for_a ... ok
+test sqlite_prototype::adapter_tests::multi_cancelled_b_joins_and_c_begins_before_healthy_a_finishes ... ok
+test sqlite_prototype::adapter_tests::multi_close_during_b_startup_preserves_a_and_all_join_responsibility ... ok
+test sqlite_prototype::adapter_tests::multi_native_spawn_failure_keeps_cause_without_native_b_or_fake_join ... ok
+test sqlite_prototype::adapter_tests::multi_observer_spawn_failure_never_starts_or_fake_joins_native_b ... ok
+test sqlite_prototype::adapter_tests::multi_stock_detach_permit_gap_respects_native_cap_with_a_active ... ok
+test sqlite_prototype::adapter_tests::multi_two_filesystem_connections_begin_while_first_tx_stays_active ... ok
+test sqlite_prototype::adapter_tests::native_cleanup_failure_closes_deadpool_and_never_creates_replacement ... ok
+test sqlite_prototype::adapter_tests::native_close_failure_is_kept_after_deadpool_objects_and_workers_are_gone ... ok
+test sqlite_prototype::adapter_tests::object_take_and_last_pool_drop_both_preserve_native_close_join_observation ... ok
+test sqlite_prototype::adapter_tests::resize_zero_uses_worker_drop_even_when_manager_detach_is_bypassed ... ok
+test sqlite_prototype::adapter_tests::stock_detach_permit_before_handle_drop_cannot_start_another_native_worker ... ok
+test sqlite_prototype::adapter_tests::taken_object_cannot_start_replacement_before_old_native_worker_joins ... ok
+test sqlite_prototype::adapter_tests::tokio_runtime_drop_cannot_return_native_owned_checkout_before_cleanup ... ok
+test http::tests::body_timeout_remains_separate_from_header_wait ... ok
+test sqlite_prototype::comparison::bounded_and_unbounded_deadpool_warm_comparison ... ok
+test sqlite_prototype::tests::begin_reply_cancellation_closes_only_sender_and_runs_observed_cleanup ... ok
+test sqlite_prototype::tests::cancelled_commit_reply_preserves_committed_data_and_does_not_retry ... ok
+test sqlite_prototype::tests::cancelled_finish_before_full_inbox_admission_uses_eof_cleanup ... ok
+test sqlite_prototype::tests::close_timeout_and_cancel_keep_closing_until_native_close_and_join ... ok
+test sqlite_prototype::tests::commit_after_native_auto_rollback_returns_aborted_error_instead_of_success ... ok
+test sqlite_prototype::tests::commit_failure_and_failed_cleanup_preserve_both_causes_and_unknown_outcome ... ok
+test sqlite_prototype::tests::committed_outcome_and_cleanup_failure_are_both_preserved ... ok
+test sqlite_prototype::tests::eof_cleanup_blocks_next_session_and_unpolled_finish_still_owns_cleanup ... ok
+test sqlite_prototype::tests::existing_trigger_and_or_rollback_abort_session_and_reject_later_sql ... ok
+test sqlite_prototype::tests::failed_commit_with_successful_observed_rollback_can_reuse_connection ... ok
+test sqlite_prototype::tests::full_inbox_and_cancelled_admitted_operation_drain_before_eof_rollback ... ok
+test sqlite_prototype::tests::management_panic_restores_raii_flag_before_observed_rollback_and_retirement ... ok
+test sqlite_prototype::tests::native_close_failure_is_not_reported_as_success_even_after_join ... ok
+test sqlite_prototype::tests::one_statement_anonymous_bind_and_operation_shape_are_checked_before_step ... ok
+test sqlite_prototype::tests::ordinary_sql_error_does_not_abort_active_session_and_exec_counts_direct_changes ... ok
+test sqlite_prototype::tests::owned_bind_values_and_decode_errors_use_native_row_contract ... ok
+test sqlite_prototype::tests::pragma_tvf_existing_views_and_schema_reprepare_keep_authorizer_installed ... ok
+test sqlite_prototype::tests::raise_fail_preserves_active_prior_effects_until_explicit_rollback ... ok
+test sqlite_prototype::tests::rollback_failure_is_observed_without_native_drop_retry_and_retires_connection ... ok
+test sqlite_prototype::tests::sql_policy_denies_control_in_every_entry_and_keeps_tx_active ... ok
+test sqlite_prototype::tests::trigger_pragma_is_denied_and_native_prior_effects_require_explicit_rollback ... ok
+test sqlite_prototype::tests::user_callback_panic_restores_management_state_and_retires_worker ... ok
+test task_bridge_prototype::tests::cancelled_drain_can_resume_after_child_drop_gate ... ok
+test task_bridge_prototype::tests::discard_keeps_fault_and_legacy_error_observation ... ok
+test sqlite_prototype::acquire_tests::acquire_immediate_native_full_after_stock_detach_is_timeout ... ok
+test task_bridge_prototype::tests::fake_native_id_reuse_does_not_mix_unreceived_tickets_and_retire_records ... ok
+test task_bridge_prototype::tests::fault_return_waits_for_requested_sibling_cleanup_and_actual_join ... ok
+test task_bridge_prototype::tests::heterogeneous_results_and_business_error_keep_sibling_healthy ... ok
+test task_bridge_prototype::tests::legacy_structured_cause_preserves_kind_message_and_primary_after_later_fault ... ok
+test task_bridge_prototype::tests::parent_drop_requests_abort_but_does_not_report_child_destruction_complete ... ok
+test task_bridge_prototype::tests::received_fault_remains_sticky_at_scope_exit ... ok
+test task_bridge_prototype::tests::payload_drop_locations_distinguish_failed_send_buffer_and_received_value ... ok
+test task_bridge_prototype::tests::requested_cancel_does_not_hide_already_returned_legacy_error ... ok
+test task_bridge_prototype::tests::requested_cancel_preserves_panic_and_unrequested_cancel_is_fault ... ok
+test task_bridge_prototype::tests::receiver_notification_cannot_replace_actual_join ... ok
+test task_bridge_prototype::tests::spawn_after_fault_keeps_input_evaluation_and_actual_join_responsibility ... ok
+test task_bridge_prototype::tests::target_other_than_first_join_and_body_error_primary_are_preserved ... ok
+test task_bridge_prototype::tests::wrong_owner_and_missing_output_are_protocol_errors_without_stolen_join ... ok
+test tests::arena_scope ... ok
+test task_bridge_prototype::tests::unpolled_and_pending_receive_drop_keep_scope_join_responsibility ... ok
+test tests::float_validation ... ok
+test tests::borrowed_json_address ... ok
+test tests::json_direct ... ok
+test tests::json_invalid_utf8 ... ok
+test tests::json_wrong_type ... ok
+test tests::slice_bounds ... ok
+test tests::uuid_roundtrip ... ok
+test tests::zero_copy_pointer ... ok
+test sqlite_prototype::acquire_tests::acquire_registered_startup_and_begin_are_outside_finite_budget ... ok
+test sqlite_prototype::comparison::direct_and_deadpool_warm_native_session_comparison ... ok
+
+test result: ok. 206 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.01s
+
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagic-a61bd4a0952db730)
+
+running 121 tests
+test capabilities::tests::charge_recursive_lists_have_known_storage_but_require_a_walk ... ok
+test capabilities::tests::charge_inline_capability_accounts_for_every_enum_variant ... ok
+test capabilities::tests::charge_rejects_excluded_storage_with_a_nested_field_path ... ok
+test capabilities::tests::indirect_cycles_remain_serializable_only_with_serializable_fields ... ok
+test capabilities::tests::private_causes_prevent_serialization_through_nested_records ... ok
+test capabilities::tests::native_debug_does_not_require_generic_payload_debug ... ok
+test capabilities::tests::native_payload_roles_are_purpose_specific ... ok
+test check::checked::tests::final_diagnostic_transports_kind_without_changing_user_messages ... ok
+test check::checked::tests::final_factory_checks_and_seals_owned_input ... ok
+test check::checked::tests::final_factory_rejects_invalid_input ... ok
+test check::checked::tests::missing_binding_and_pattern_types_are_rejected_without_rechecking ... ok
+test capabilities::tests::serde_charge_and_owned_fields_are_distinct_capabilities ... ok
+test check::checked::tests::missing_declaration_type_is_rejected_without_rechecking ... ok
+test check::checked::tests::missing_name_resolution_is_rejected_without_rechecking ... ok
+test check::checked::tests::sealed_missing_expression_plan_fails_closed ... ok
+test check::checked::tests::facts_and_emission_are_deterministic_and_read_only ... ok
+test check::checked::tests::sealed_missing_rust_type_plan_fails_closed ... ok
+test check::checked::tests::sealing_rejects_missing_expression_types ... ok
+test check::checked::tests::sealed_missing_operand_role_fails_closed ... ok
+test check::checked::tests::unknown_origin_is_not_user_blame ... ok
+test check::checked::tests::symbolic_enum_owner_is_not_an_untyped_payload ... ok
+test check::checked::tests::sealed_missing_required_flow_or_slots_fails_closed ... ok
+test check::flow_metadata_tests::checked_operand_roles_reach_codegen_and_missing_roles_fail ... ok
+test check::flow_metadata_tests::content_mutation_events_survive_rhs_replacement_and_stay_in_their_statement ... ok
+test check::checked::tests::generated_saved_native_replacement_and_synthetic_origins_are_distinct ... ok
+test check::flow_metadata_tests::loop_regions_preserve_candidate_reads_and_assignments ... ok
+test check::flow_metadata_tests::flow_snapshots_only_keep_return_dependency_bindings ... ok
+test check::flow_metadata_tests::flow_collection_is_gated_to_view_return_dependencies ... ok
+test modules::metadata_tests::intrinsic_transport_rejects_forged_namespace_collisions_and_unknown_heads ... ok
+test modules::metadata_tests::intrinsic_type_transport_is_structural_and_avoids_real_bindings ... ok
+test check::flow_metadata_tests::semantic_value_edges_keep_mutation_inputs_without_scalar_overselection ... ok
+test modules::metadata_tests::low_identity_is_portable_between_unix_drive_and_unc_paths ... ok
+test modules::metadata_tests::malformed_internal_looking_names_keep_their_original_display ... ok
+test modules::metadata_tests::low_metadata_rejects_unknown_topology_and_span_fields ... ok
+test modules::metadata_tests::metadata_cannot_rebind_a_definition_to_a_builtin_or_unrelated_id ... ok
+test modules::metadata_tests::metadata_rejects_relative_noncanonical_and_traversing_ids ... ok
+test check::flow_metadata_tests::flow_facts_recompute_for_high_saved_low_and_self_consumption ... ok
+test sql_check::collect::tests::checked_high_and_saved_low_preserve_supported_operations_and_source_fields ... ok
+test sql_check::collect::tests::conditional_loop_and_match_bodies_are_collected_once ... ok
+test sql_check::collect::tests::dynamic_sql_and_exec_scripts_remain_visible_as_excluded_sites ... ok
+test sql_check::collect::tests::integrated_native_replacements_only_collect_the_final_function_body ... ok
+test sql_check::collect::tests::nested_value_expressions_returns_and_scope_spawn_keep_each_actual_call ... ok
+test sql_check::collect::tests::aliased_row_classes_use_canonical_identity_and_original_field_names ... ok
+test sql_check::collect::tests::same_named_user_function_and_local_function_value_are_not_sql_calls ... ok
+test sql_check::engine::tests::columns_aliases_and_sqlite_parameter_numbering ... ok
+test sql_check::engine::tests::every_default_expression_uses_the_function_allowlist_even_when_unused ... ok
+test sql_check::engine::tests::external_files_and_extension_paths_are_never_opened_or_modified ... ok
+test sql_check::collect::tests::collection_rejects_excessive_sites_at_the_first_over_limit_call ... ok
+test sql_check::collect::tests::repeated_row_metadata_is_bounded_before_building_the_worker_request ... ok
+test sql_check::engine::tests::ordinary_tables_indexes_views_and_pure_functions_are_supported ... ok
+test sql_check::engine::tests::prepare_authorizer_also_rejects_unsafe_view_functions ... ok
+test sql_check::engine::tests::prepare_only_dml_does_not_write_application_rows ... ok
+test sql_check::engine::tests::rejects_operation_shape_mismatches ... ok
+test sql_check::engine::tests::schema_is_ddl_snapshot_not_migration_or_arbitrary_sql ... ok
+test sql_check::tests::bounded_input_does_not_accept_a_truncated_prefix ... ok
+test sql_check::engine::tests::sqlite_identifier_defaults_remain_literals_without_hiding_function_terms ... ok
+test sql_check::engine::tests::finite_limits_reject_large_and_deep_inputs ... ok
+test sql_check::tests::terminating_a_worker_returns_its_reaped_exit_status ... ok
+test sql_check::tests::worker_fixture ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_arity_parameter_mismatch - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_duplicate_in_one_role - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_missing_role - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_out_of_range_role - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_overlapping_roles - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_roles_on_zero_arity - should panic ... ok
+test stdlib::resource_contract_tests::legacy_views_borrow_the_registered_descriptor ... ok
+test stdlib::resource_contract_tests::registered_roles_match_the_independent_position_oracle ... ok
+test tests::await_only_async ... ok
+test tests::bad_string ... ok
+test tests::class_field_check ... ok
+test tests::class_move ... ok
+test tests::console_io_roundtrip ... ok
+test tests::copy_value_class ... ok
+test tests::cost_not_dynamic_count ... ok
+test tests::duplicate_class_fields ... ok
+test tests::empty_list_inference ... ok
+test tests::error_propagation ... ok
+test tests::explicit_copy ... ok
+test tests::floating_literals_accept_f32_boundary_and_roundtrip ... ok
+test tests::floating_literals_keep_f64_range_and_default_inference ... ok
+test tests::floating_literals_reject_f32_overflow_in_high_and_low ... ok
+test tests::forgotten_await ... ok
+test tests::hello ... ok
+test tests::html_route_is_not_encoded_as_json ... ok
+test tests::invalid_indent ... ok
+test tests::low_standalone ... ok
+test tests::mismatched_type ... ok
+test tests::missing_return ... ok
+test tests::native_numeric ... ok
+test tests::nested_view_in_class_rejected ... ok
+test tests::no_implicit_conversion ... ok
+test tests::nullable ... ok
+test tests::number_overflow ... ok
+test tests::owned_parameter_cannot_return_view ... ok
+test tests::precedence ... ok
+test tests::recursive_value ... ok
+test tests::replace_bad_signature ... ok
+test tests::replace_exact_signature ... ok
+test sql_check::tests::encoded_metadata_is_bounded_including_json_escaping ... ok
+test sql_check::tests::deadline_kills_and_reaps_a_worker_with_blocked_input ... ok
+test tests::resource_contract_goldens::data_derives_golden ... ok
+test tests::resource_contract_goldens::actor_data_golden ... ok
+test tests::result_must_handle ... ok
+test tests::roundtrip_low ... ok
+test tests::rust_extern_interface_and_low_roundtrip ... ok
+test tests::scope_spawn ... ok
+test tests::signed_minimum_literals_are_in_range_in_high_and_low ... ok
+test tests::resource_contract_goldens::http_borrow_and_mappers_golden ... ok
+test tests::string_move ... ok
+test tests::tabs_rejected ... ok
+test tests::unknown_class ... ok
+test tests::unknown_name ... ok
+test tests::unscoped_spawn ... ok
+test tests::view_cannot_spawn ... ok
+test tests::view_escape ... ok
+test tests::view_prevents_move ... ok
+test tests::view_prevents_mutation ... ok
+test tests::view_return_parameter ... ok
+test tests::signed_minimum_literals_compile_and_run_after_lowering ... ok
+test tests::resource_contract_goldens::http_inspection_golden ... ok
+test check::flow_metadata_tests::return_alias_dependencies_keep_straight_line_snapshots_sparse ... ok
+
+test result: ok. 121 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.50s
+
+     Running unittests src/main.rs (/tmp/nagi-container-flow-target/debug/deps/nagic-541469ec0a24c719)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/actor_codegen.rs (/tmp/nagi-container-flow-target/debug/deps/actor_codegen-7b0cbadd8e0c31d7)
+
+running 2 tests
+test actor_charge_generation_survives_low_without_clones_reflection_or_serde_requirements ... ok
+test generated_nominal_charges_execute_against_native_capacity_and_walk_limits has been running for over 60 seconds
+test generated_nominal_charges_execute_against_native_capacity_and_walk_limits ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 76.61s
+
+     Running tests/actor_stdlib.rs (/tmp/nagi-container-flow-target/debug/deps/actor_stdlib-3d101f835d09a5b6)
+
+running 12 tests
+test lifecycle_text_views_follow_their_native_owner_and_cannot_serialize ... ok
+test actor_and_http_aliases_keep_distinct_registry_identity_without_fake_classes ... ok
+test callback_shapes_and_custom_error_identity_are_checked_before_native_build ... ok
+test named_task_factory_aliases_require_shared_context_async_unit_and_builtin_error ... ok
+test explicit_task_readiness_and_typed_event_deadlines_execute_from_high_and_low ... ok
+test readiness_factory_and_wait_error_contracts_are_checked_before_native_build ... ok
+test saved_low_cannot_invent_actor_types_capabilities_or_standard_implementations ... ok
+test spawning_borrowing_native_futures_requires_an_owned_named_wrapper ... ok
+test turn_inline_layout_generics_and_left_to_right_moves_are_not_erased ... ok
+test messages_replies_and_business_errors_reject_unaccounted_nested_payloads ... ok
+test owned_custom_class_replies_and_errors_execute_without_clone_or_serde_bounds ... ok
+test pending_owned_state_business_failure_and_restart_execute_from_high_and_low ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.24s
+
+     Running tests/asset_calls.rs (/tmp/nagi-container-flow-target/debug/deps/asset_calls-103c7a34e7c1edba)
+
+running 2 tests
+test a_missing_real_asset_still_reports_the_original_call ... ok
+test local_callbacks_named_include_text_keep_literals_and_restore_builtin_after_scope ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/async_value_types.rs (/tmp/nagi-container-flow-target/debug/deps/async_value_types-6ca03c513f546276)
+
+running 6 tests
+test assigning_an_unawaited_future_reports_the_call_site ... ok
+test async_function_signatures_and_container_types_fail_before_emission ... ok
+test changing_async_function_aliases_fails_at_the_assignment ... ok
+test a_class_named_future_is_not_an_async_result ... ok
+test local_async_aliases_keep_inferred_and_explicit_types ... ok
+test ordinary_future_records_are_not_awaited_or_treated_as_async_statements ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/auth_boundaries.rs (/tmp/nagi-container-flow-target/debug/deps/auth_boundaries-723f23d8c088f666)
+
+running 9 tests
+test handwritten_low_and_owned_local_containers_keep_nominal_marker_identity ... ok
+test aliases_option_result_and_async_delegation_preserve_proof_identity ... ok
+test missing_principal_grant_wrong_permission_and_reuse_are_rejected ... ok
+test a_function_signature_and_a_deep_dto_do_not_contain_a_proof_payload ... ok
+test opaque_proofs_cannot_be_constructed_decoded_copied_or_shared ... ok
+test indirect_arc_state_cannot_share_a_proof ... ok
+test native_phantom_types_do_not_become_field_payloads has been running for over 60 seconds
+test opaque_main_errors_fail_without_a_debug_bound_or_proof_payload has been running for over 60 seconds
+test proof_move_and_nominal_marker_build_and_run_against_real_runtime has been running for over 60 seconds
+test proof_move_and_nominal_marker_build_and_run_against_real_runtime ... ok
+test native_phantom_types_do_not_become_field_payloads ... ok
+test opaque_main_errors_fail_without_a_debug_bound_or_proof_payload ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 102.52s
+
+     Running tests/borrow_free_returns.rs (/tmp/nagi-container-flow-target/debug/deps/borrow_free_returns-b35132eebd82b278)
+
+running 5 tests
+test adding_local_views_to_absent_values_still_rejects_escape ... ok
+test clearing_values_does_not_erase_rust_lifetime_constraints ... ok
+test unknown_native_origins_do_not_gain_an_absence_proof ... ok
+test direct_absent_returns_remain_legal_after_local_borrows ... ok
+test absent_views_in_nullable_empty_lists_and_failures_can_be_returned ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+
+     Running tests/build_diagnostics.rs (/tmp/nagi-container-flow-target/debug/deps/build_diagnostics-a95d71efc7ca4ace)
+
+running 30 tests
+test child_notes_cannot_relabel_an_unmapped_primary_or_dependency ... ok
+test child_notes_keep_module_locations_and_readable_definition_names ... ok
+test existing_path_aliases_match_only_the_generated_file ... ok
+test dependency_synthetic_and_incomplete_diagnostics_fall_back_without_guessing ... ok
+test a_successful_run_stays_quiet_and_passes_through_program_output ... ok
+test finite_f32_extremes_compile_and_run_after_lowering ... ok
+test high_build_points_to_nagi_and_keeps_rust_notes_and_failure_status ... ok
+test cli_maps_adapter_mismatch_without_repeating_generated_rust_by_default ... ok
+test imported_high_uses_the_dependency_path_and_local_line ... ok
+test invalid_entrypoints_are_rejected_before_cargo_with_source_locations ... ok
+test imported_low_uses_its_own_file_instead_of_the_entry_file ... ok
+test iterator_mutation_fails_in_check_and_build_before_backend_generation ... ok
+test lowering_restores_nested_statement_expression_arm_and_field_lines ... ok
+test invalid_operators_in_imports_report_nagi_lines_before_rust_or_cargo ... ok
+test native_signature_errors_also_keep_the_native_low_location ... ok
+test overflowing_f32_is_rejected_at_the_source_before_backend_build ... ok
+test repeated_moves_fail_in_check_and_build_before_invoking_rust ... ok
+test repeated_moves_keep_imported_and_replacement_source_locations ... ok
+test native_rust_errors_are_not_relabelled_as_nagi ... ok
+test replacement_adapter_errors_point_to_the_handwritten_low_file ... ok
+test extern_argument_and_sync_async_mismatches_fail_at_the_declaration_in_high_and_low ... ok
+test safe_reinitialization_and_return_paths_check_build_and_run ... ok
+test standalone_low_uses_the_original_low_lines ... ok
+test try_result_reuse_reports_source_lines_before_invoking_cargo ... ok
+test unix_backslashes_do_not_turn_a_dependency_path_into_the_generated_file ... ok
+test imported_async_ffi_send_failure_maps_the_cause_note_in_high_and_saved_low ... ok
+test windows_paths_and_canonical_prefixes_match_only_the_generated_target ... ok
+test unsupported_class_fields_and_async_reassignments_fail_before_backend_generation ... ok
+test run_preserves_json_stdout_with_and_without_a_cost_report_in_high_and_saved_low ... ok
+test source_names_with_spaces_and_dots_build_and_run ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.04s
+
+     Running tests/build_generations.rs (/tmp/nagi-container-flow-target/debug/deps/build_generations-7533d5f1d360ce40)
+
+running 23 tests
+test cargo_cache_keeps_a_preexisting_default_package_binary_unchanged ... ok
+test invalid_input_does_not_create_output_or_its_lock ... ok
+test a_running_old_executable_is_not_replaced_by_a_new_build ... ok
+test cargo_failure_retains_latest_and_inherited_lockfile ... ok
+test lock_is_permanent_and_input_protection_is_rechecked_after_waiting ... ok
+test latest_metadata_used_as_an_input_cannot_be_overwritten_by_rebuild ... ok
+test nonwriting_low_check_and_lower_do_not_wait_for_the_output_writer_lock ... ok
+test compatibility_outputs_cannot_alias_previous_latest_metadata ... ok
+test long_basename_accepted_by_the_previous_cache_scheme_uses_a_short_generation_bin ... ok
+test latest_temp_failure_keeps_old_metadata_and_does_not_run_new_generation ... ok
+test published_manifest_runtime_reference_resolves_from_the_published_location ... ok
+test parallel_latest_readers_observe_only_complete_published_generations ... ok
+test orphan_cargo_uses_an_immutable_snapshot_and_cannot_replace_next_generation ... ok
+test projection_failure_keeps_old_latest_and_reports_partial_projection ... ok
+test rebuild_publishes_new_generation_and_preserves_old_executable_and_snapshot ... ok
+test source_snapshot_retains_raw_non_utf8_canonical_path_without_rejecting_old_accepted_input ... ok
+test run_releases_output_lock_before_waiting_for_the_selected_executable ... ok
+test user_low_snapshot_comes_from_this_input_instead_of_a_stale_high_projection ... ok
+test writing_high_check_cannot_alias_previous_latest ... ok
+test writing_cost_report_cannot_alias_previous_latest ... ok
+test writing_high_lower_cannot_alias_previous_latest ... ok
+test same_and_different_apps_with_equivalent_output_paths_wait_for_one_output_writer ... ok
+test writing_check_lower_and_cost_wait_while_build_owns_the_output_lock ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.37s
+
+     Running tests/builtin_cast_precedence.rs (/tmp/nagi-container-flow-target/debug/deps/builtin_cast_precedence-1a960e6805e84f54)
+
+running 1 test
+test length_and_size_casts_preserve_comparison_negation_and_numeric_contexts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/builtin_type_contracts.rs (/tmp/nagi-container-flow-target/debug/deps/builtin_type_contracts-b43a163e07dec8d3)
+
+running 10 tests
+test borrowed_byte_decoding_requires_builtin_u8_in_generated_slices ... ok
+test json_decoder_checks_borrowed_slices_and_builtin_map_key_traits ... ok
+test json_encoding_rejects_unawaited_futures_and_inferred_future_containers ... ok
+test encoded_runtime_values_are_rejected_even_when_a_same_named_class_exists ... ok
+test json_rejects_definitely_non_serializable_types_at_the_call ... ok
+test same_named_classes_keep_the_emitted_json_and_database_contracts ... ok
+test user_functions_with_json_builtin_names_keep_their_own_contracts ... ok
+test database_rows_keep_generated_and_manual_bridge_implementations ... ok
+test json_keeps_data_classes_shared_values_and_borrowed_strings_or_bytes ... ok
+test all_database_row_builtins_reject_scalar_or_foreign_container_targets ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/class_field_types.rs (/tmp/nagi-container-flow-target/debug/deps/class_field_types-287b4845df0a2145)
+
+running 5 tests
+test map_keys_with_missing_equality_or_hashing_fail_before_derivation ... ok
+test owned_database_fields_are_private_state_and_keep_high_low_emission_valid ... ok
+test unsupported_resource_and_function_fields_fail_at_the_field_line ... ok
+test nested_data_fields_and_bridge_defined_key_traits_remain_available ... ok
+test native_database_debug_hides_connection_details_inside_shared_state ... FAILED
+
+failures:
+
+---- native_database_debug_hides_connection_details_inside_shared_state stdout ----
+
+thread 'native_database_debug_hides_connection_details_inside_shared_state' (1487259) panicked at compiler/tests/class_field_types.rs:96:5:
+     Locking 108 packages to latest compatible versions
+   Compiling mio v1.2.4
+   Compiling zerocopy v0.8.60
+   Compiling tokio v1.53.2
+   Compiling ppv-lite86 v0.2.21
+   Compiling cc v1.6.0
+   Compiling rand_chacha v0.9.0
+   Compiling libsqlite3-sys v0.38.2
+   Compiling rand v0.9.5
+   Compiling tungstenite v0.29.0
+   Compiling hyper v1.11.1
+   Compiling hyper-util v0.1.21
+   Compiling tokio-tungstenite v0.29.0
+   Compiling tower v0.5.3
+   Compiling deadpool-runtime v0.3.1
+   Compiling axum v0.8.9
+error: failed to build archive at `/workspace/Nagi-task-handle-design-review/native-target/release/deps/libaxum-a7b4d8cb349b555d.rlib`: couldn't create a directory for the temp file: No space left on device (os error 28) at path "/workspace/Nagi-task-handle-design-review/native-target/release/deps/.tmpyfISm2.temp-archive"
+
+error: could not compile `axum` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+Build failed. Check the diagnostics above for code, dependency, or build environment errors.
+Compatibility projection may be partial; prior latest unchanged.
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    native_database_debug_hides_connection_details_inside_shared_state
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 53.03s
+
+error: test failed, to rerun pass `-p nagic --test class_field_types`

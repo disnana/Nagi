@@ -1,0 +1,8 @@
+{
+  "result_blocks": 93,
+  "passed_reported": 919,
+  "failed": 0,
+  "ignored": 0,
+  "nested_process_tests": "3 image_child runs with filtered cases are included in raw reported counts",
+  "commands": "workspace-test-native-target.json and workspace-checks.json"
+}

@@ -47,7 +47,9 @@ Scopeが唯一のJoinSet ownerとなり、Taskは型付きoneshot receiver、sco
 | runner oracle | 3成功。拒否段階、診断/元行不一致、実checkerの元位置を確認 |
 | 将来Task契約の現compiler照合 | 6一致・50未達、exit 1。既存互換4入力＋既存checker負例2入力のみ一致。新Task 50入力は未実装のparse RED |
 | fmt / runtime all-targets clippy | 成功 |
-| workspace全回帰・最新head CI | 下の追記に実行結果を記録。私有prototypeの成功から推測しない |
+| workspace全回帰 | 成功。ログの93 result block・919成功（うち子プロセスのimage_child再実行3件を含む）、failed/ignored 0。debug symbolsなし、build jobs 2、test並列度は既定 |
+| workspace fmt / all-targets clippy・runner oracle再確認 | 成功 |
+| source head `6223ad2`のCI | [checks 37467579939](https://github.com/disnana/Nagi/actions/runs/37467579939)と[website 37467579497](https://github.com/disnana/Nagi/actions/runs/37467579497)成功。4 OSでprivate16群が実行され、各16成功。Ready to merge成功、release skip |
 | allocation / Future size / throughput | 未測定。今回の一区切りには含めない |
 
 ## 設計上の問題と限界
@@ -80,3 +82,15 @@ Solがchecker周辺・runtime bridge・runnerを独立読取レビューした�
 workspace全回帰の初回はdebug symbol付きのCargo cache、二回目はworktreeのnative cacheがそれぞれ容量不足で失敗した。コンパイラ契約の失敗と混同せず原ログを保存し、再生成可能なcacheのみを整理した。debug symbolを省き、build jobsを2にし、native cacheを空き容量のある`/tmp/nagi-task-native-target`へ指定して全回帰を継続する。testの期待値・test並列度・公開ビルド先の契約は変えない。
 
 最初のCI設定はrun値末尾の`tests::`を引用しておらずYAML parseで失敗した。コマンド全体を引用して構文検査を通した。CI開始前の設定エラーを4 OS成功や実行済みtestへ数えない。
+
+
+## 最新の停止指示
+
+ユーザーが「次の自然な区切りまで進め、Sol 6.1向け引継ぎを書いて停止」へ方針を変更した。上の継続指示はそれ以前の履歴である。今回はStage 1の文書・全回帰・CI確認を区切りとし、compiler/public runtimeのTask実装は開始しない。[引継ぎ書](handoffs/2026-10-06-task-bridge-stage1.md)に再開手順と未実装の契約をまとめた。以後の新実装は再開指示を受けてから進める。
+
+
+## CIと最終の停止地点
+
+source head `6223ad222016962328f9b0c2bedd0b90e36b38e5`のCIを完了確認した。Linux、Windows x64、macOS Intel、macOS Apple Siliconのprivate bridge stepはそれぞれ16成功・failed/ignored 0。各package job、Linux全検査、IDE二製品、website、merge gateが成功し、releaseはskip。4 OSの原ログ抜粋とjob ledgerをartifactへ保存した。
+
+この検証済みsourceへ引継ぎ・結果・artifactを追記して停止する。Task checker/ownership/scope義務、Low/Rust生成、公開runtime、測定、SQLiteは開始していない。引継ぎ追記の最新head CIはPR Checksで別に確認し、上の実行済みsourceとproduction source hashが一致することを照合する。

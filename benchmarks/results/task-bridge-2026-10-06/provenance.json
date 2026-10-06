@@ -31,7 +31,14 @@
     "07-legacy-green/lib.rs": "542655ea316c182b5a367628252b9b73ec82c7a71fe5858ff95a82b81c39c00f",
     "07-legacy-green/source-and-logs.json": "189d1cdbb2d2a555653f2565ee7e8ca73471ef817706c2debb2022309a738a51",
     "07-legacy-green/task_bridge_prototype.rs": "ce8c9a54c1d55936ac004520dfbbc7c46926325ca3f3d668ae54be72c540dfb1",
+    "README.md": "a04826f2b2b4e2be2ec9b4ba1e3cc6e487f1b33b42a4d8db1b2e0d88964aa657",
+    "ci-linux.log": "d805337db0e7541a2bfc47b5ee89f3fef756db7ed111c5664c63d087e2d73add",
+    "ci-macos-arm64.log": "ae823340d0be3ce4d02b79f6162e3365736e8bb05ae5e204052ddc96faef8c81",
+    "ci-macos-intel.log": "ed217901e7ca13a6009711ee0ef6f00b40ef8326c769c8d4c5e97007e96d0733",
+    "ci-results.json": "96a384eb9ae110565b3ed6c19502c4af6a12fe184e967abafcab1c6a4a8060e4",
+    "ci-windows.log": "9fa8fd383ef2148e3ba905d002e86c928ae7463e5d97219cab57c08d786e5a6a",
     "clippy-legacy.log": "6ef142e93aa764eaf60df3490448bb1c8b513e934482f2323cfc2a6fac33161c",
+    "clippy-workspace.log": "ac88c99816a3d71c94704ea45adfffc3e721f8e4b86915c3dab53a5af5bfc737",
     "compiler-final-red/contract-red-corrected.log": "cf10f09a65749139fe2a0219b3fc7e252773a99bde68873d8a11ab9b446e74b6",
     "compiler-final-red/contract-red.log": "a590a1d5374d0c77b0dc31965d5a222a04980a730e0cf12430e53dbf727cd81d",
     "compiler-final-red/fixtures-before-comment-fix/README.md": "07025ed071397047dca8a0772a1fc803d1a8e41306c4976446cbbe97aa314f1a",
@@ -98,14 +105,27 @@
     "compiler-final-red/oracle-tests.log": "47d399832fcb8892b0471ede22fcdabb0ed59df5a7d115c0679a32726726ee8d",
     "compiler-final-red/runs-corrected.json": "9e285f3a4080a3305deadff28670bcc556776468d9a01a7f444b9613ce839743",
     "compiler-final-red/runs.json": "3c778bf1736efec391e2ef501cefa6d5bf3ed5e8a90f9ecde2f6b5dd5f7f42f3",
+    "document-links.json": "2841310f1b255a4c569ae69eab893eec44ca10ee397aed529c0b6d4a294001ad",
     "fmt-legacy.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fmt-workspace.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "green-private-legacy.log": "6921e96897612313d96f4b806dab55060ece9a8c6796d1ef4bed4f28aae98315",
     "green-runtime-legacy.log": "db778deb74ee4edd2ca2887a739725aaba8327b3520455633037b56465c518a5",
     "green-runtime-lib-network.log": "4d5fea3731cbb4053918a60cf899bfad7bfc748e4fdae2e41dc512e05bd8c149",
     "green-runtime-lib.log": "84cc311305e12aa78db46be4b644d42ef9ff2f3a3af526d994ab0a82d0e933ad",
+    "handoff-links.json": "a8e0d329676247c5f4e20f900d686c91bfdaacceea79eb2ee72a25194b2c9318",
+    "local-summary.json": "0704e6e584239126656ce25e22af5319a3bef4f56abf6c9b89fe1b9455faae32",
+    "oracle-current-profile.log": "eeede532bb9cec8f0c30ac07f545fc94b45b3d94dc8645581eae2c53476abb9c",
     "runner-location-red/red.log": "9d8dc86c3c8ea805f823abb8516dc040060dbd7cfab4f11e445fa47715ab3a32",
     "runner-location-red/run.json": "d6c7d44ba8c35a489462a728b15280eed6944c8398b7ab6a7d0200656502e664",
-    "runner-location-red/runner.rs": "8103c963e0f7cda5980945c372e766dc9dba9823398cb9045006f4e5dbfc9a09"
+    "runner-location-red/runner.rs": "8103c963e0f7cda5980945c372e766dc9dba9823398cb9045006f4e5dbfc9a09",
+    "workflow-yaml.json": "a4a7a6ddc6235f8c4eff651196662af584d25d94d70125349d086e8640a265f9",
+    "workspace-checks.json": "cb66e8567f86ce3b6e43e7b0e801c974444246b765eb4d5d7d5387ffb90ff49c",
+    "workspace-test-disk-full.json": "ef7fce6667198b021cf8450aa5f1e9be56f67acbe1616a388579e39631d191a8",
+    "workspace-test-disk-full.log": "a562edb448aef6192cec7ba12a577641e1c737fe3bfaec24434580163c80e78e",
+    "workspace-test-native-target.json": "c5296e37c8d0a8c077e4d7f1b87c57198e075255db3f65d0c0048085a88c84c0",
+    "workspace-test-native-target.log": "88c480c377fc26284058a61c892545fd9d8baf1181941d21a9fac945957f4695",
+    "workspace-test-no-debug.json": "2b1b827fdc68793c9b1c664aadec8f64fe0164746655b973c1ec7301c8f3ed51",
+    "workspace-test-no-debug.log": "b29e9a485e1e00d1fb7be1bc2ddbb3419df0ea2fd1e8ed3366392840ab9c762a"
   },
   "final_inputs_sha256": {
     "runtime/src/task_bridge_prototype.rs": "ce8c9a54c1d55936ac004520dfbbc7c46926325ca3f3d668ae54be72c540dfb1",
@@ -170,5 +190,6 @@
     "tests/task-handles/unreceived-unit.nagi": "8ab04f9f2708a76d476ab0b3f98c96a1e1681b57be424c5a87a3cea47e83e12a",
     "tests/task-handles/user-spawn-call.low": "0761e8a083a3580d491e327e2fd29bb84ac1b647be8d9d98ea871e97285022a8",
     "tests/task-handles/user-spawn-call.nagi": "1a8abf9ea630b5a03e996b717482a96bbe87cde6f32d59c7c26731c0c2870c52"
-  }
+  },
+  "ci_source_head": "6223ad222016962328f9b0c2bedd0b90e36b38e5"
 }

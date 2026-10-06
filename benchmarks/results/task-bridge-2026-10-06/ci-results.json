@@ -1,0 +1,117 @@
+{
+  "source_head": "6223ad222016962328f9b0c2bedd0b90e36b38e5",
+  "run_id": 37467579939,
+  "website_run_id": 37467579497,
+  "platforms": [
+    {
+      "platform": "macos-intel",
+      "job_id": 112282482379,
+      "task_passed": 16,
+      "failed": 0,
+      "ignored": 0,
+      "source_commit": "6223ad222016962328f9b0c2bedd0b90e36b38e5",
+      "run_id": 37467579939
+    },
+    {
+      "platform": "macos-arm64",
+      "job_id": 112282482475,
+      "task_passed": 16,
+      "failed": 0,
+      "ignored": 0,
+      "source_commit": "6223ad222016962328f9b0c2bedd0b90e36b38e5",
+      "run_id": 37467579939
+    },
+    {
+      "platform": "linux",
+      "job_id": 112282482483,
+      "task_passed": 16,
+      "failed": 0,
+      "ignored": 0,
+      "source_commit": "6223ad222016962328f9b0c2bedd0b90e36b38e5",
+      "run_id": 37467579939
+    },
+    {
+      "platform": "windows",
+      "job_id": 112282482584,
+      "task_passed": 16,
+      "failed": 0,
+      "ignored": 0,
+      "source_commit": "6223ad222016962328f9b0c2bedd0b90e36b38e5",
+      "run_id": 37467579939
+    }
+  ],
+  "jobs": [
+    {
+      "id": 112282382672,
+      "name": "release-plan",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112282383516,
+      "name": "changes",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112282482310,
+      "name": "vscode-package",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112282482379,
+      "name": "nagi-package (macos-15-intel, macos-x86_64, nagic, x86_64-apple-darwin)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112282482475,
+      "name": "nagi-package (macos-15, macos-arm64, nagic, aarch64-apple-darwin)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112282482483,
+      "name": "nagi-package (ubuntu-latest, linux-x86_64, nagic, x86_64-unknown-linux-gnu)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112282482584,
+      "name": "nagi-package (windows-latest, windows-x86_64, nagic.exe, x86_64-pc-windows-msvc)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112282484156,
+      "name": "linux",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112282485178,
+      "name": "jetbrains / JetBrains (PyCharm)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112282485204,
+      "name": "jetbrains / JetBrains (IntelliJ IDEA)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112290921544,
+      "name": "Ready to merge",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112290923595,
+      "name": "publish-release",
+      "status": "completed",
+      "conclusion": "skipped"
+    }
+  ]
+}

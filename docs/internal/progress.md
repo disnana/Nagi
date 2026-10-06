@@ -6,7 +6,7 @@
 
 [Stage 1結果](task-bridge-stage1-results.md)にprivate runtimeの16群、runner oracleの3群、56入力中6一致/50未達を記録した。新Taskはparse REDのまま。結果通知を実joinとしないこと、受取faultがscope故障を消さないこと、元legacy Errorを保持することをnative oracleで検査し、Solが修正後sourceを独立レビューした。初回socketのinfra失敗と、runner元行/Lowコメント誤りの記録も保存した。
 
-今回は先行RED＋cfg(test) private bridgeで止める。Nagi checker/Low/Rust生成、旧spawnの移行、allocation/Future size測定、公開SQLiteは後続。merge・release・版更新は行わない。全回帰と最新head CIは結果文書へ追記し、過去headの成功を流用しない。
+今回は先行RED＋cfg(test) private bridgeで止める。Nagi checker/Low/Rust生成、旧spawnの移行、allocation/Future size測定、公開SQLiteは後続。merge・release・版更新は行わない。全回帰と最新head CIは結果文書へ追記し、過去headの成功を流用しない。最新指示でこの区切りの後に停止し、[Sol 6.1向け引継ぎ](handoffs/2026-10-06-task-bridge-stage1.md)を作成する。checker/public runtimeのTask実装は未着手。source head `6223ad2`の[CI](https://github.com/disnana/Nagi/actions/runs/37467579939)は4 OSのprivate各16群・全必須jobが成功。引継ぎ追記後の最新CIはPR Checksで別に確認する。
 
 ## PR #87: 更新後CIの終了回帰と仕上げ
 
