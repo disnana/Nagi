@@ -1,0 +1,9 @@
+    Finished `test` profile [unoptimized] target(s) in 0.07s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31f33a377cbf1a2a)
+
+running 1 test
+NAGI_SQLITE_BUDGET_COMPARISON {"batches":32,"bounded":{"p50_ns":82354,"p95_ns":156686},"bounded_future_bytes":2040,"future_measurement":"size_of_val of unpolled begin future; not heap allocation or generated Nagi future","native_health_and_join":true,"scope":"private cfg(test) debug-profile, cap1 warm serial, bounded vs legacy fixture","sql":"SELECT 1 AS n","terminal":"rollback","transactions_per_batch_per_backend":128,"unbounded_fixture":{"p50_ns":92219,"p95_ns":149365},"unbounded_future_bytes":2024,"warmup_transactions_per_backend":8}
+test sqlite_prototype::comparison::bounded_and_unbounded_deadpool_warm_comparison ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 188 filtered out; finished in 0.96s
+
