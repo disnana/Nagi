@@ -6,11 +6,22 @@
 
 ## 採用方針と現行契約の区別
 
-2026-10-06の引継ぎを[ADR 011](adr/011-language-behavior-and-docs.md)へ取り込んだ。以下の契約表は現行動作を保つ。非Copyの既存値の代入を明示操作にするOWN-04、spawn結果handleと子業務Errの扱いを変えるASYNC-03/04、条件付きshared messageのACTOR-01は採用する方向であり、まだ有効な構文・受理規則ではない。
+2026-10-06の引継ぎを[ADR 011](adr/011-language-behavior-and-docs.md)へ取り込んだ。以下の契約表は作業branchの現行契約を表す。OWN-04は追加の承認を受け実装済み・未リリース。spawn結果handleと子業務Errの扱いを変えるASYNC-03/04、条件付きshared messageのACTOR-01は採用する方向であり、まだ有効な構文・受理規則ではない。
 
-変更する際はbefore/after、互換性と対象版、High/Low、診断位置、生成Rust、実runtimeの成功・失敗・取消を検査する。実装前に現行の暗黙moveやScope子Errの契約を削除しない。Supervisorのterminal failureをHTTP停止へ伝える接続も保つ。未決の細部は[Q-005〜007](open-questions.md#q-005-既存所有値の代入を明示する範囲)にまとめる。
+変更する際はbefore/after、互換性と対象版、High/Low、診断位置、生成Rust、実runtimeの成功・失敗・取消を検査する。移行前の暗黙代入moveは監査記録に残し、未変更の引数・return等のconsumeとScope子Errの契約を保つ。Supervisorのterminal failureをHTTP停止へ伝える接続も保つ。未決の細部は[Q-005〜007](open-questions.md#q-005-既存所有値の代入を明示する範囲)にまとめる。
 
-文書整備に続く段階実装は承認済み。[実装計画](value-task-implementation-plan.md)は明示moveの追加、狭い代入移行、task結果handle、故障分離の順とする案を示す。明示moveのAPI、Copy据置、所有するnonCopyローカルそのものの通常代入移行は追加指示で確定し、別branchで実装・検証中。この文書PRとmainの契約表はまだ変更しない。Taskの消費や故障型は後続で決める。
+明示moveの実装と通常代入の移行は、作者の追加指示で確定した。次のOWN-04を先行テストと実装へ反映した。公開版への反映と、このbranchの実行検証は[実装結果](explicit-move-results.md)で分けて記録する。task handleと故障型は別工程である。
+
+### OWN-04: 明示moveの確定仕様（実装済み・未リリース）
+
+- `std.ownership.move(value)`は引数一つ、戻り型は入力と同じ。明示型引数は不要かつ不許可。import/alias/qualified名はcanonical operation identityで解決し、ユーザーの同名関数を操作として扱わない。
+- 所有する非Copy値を消費し、その値・入れ子のview origin・cleanup責任を一度だけ転送する。clone、allocation、共有所有者の追加、closeやrollbackは行わない。Copy入力は既存のCopy規則に従う。
+- 代入の右辺が解決済みの所有ローカルそのもので非Copyなら、宣言・型注釈・再代入を含め通常代入を拒否する。括弧だけで包んでも同じ。borrowed loop localは所有者ではなく、従来の読み取り専用制約で拒否する。
+- 新規生成値や関数呼出しは通常束縛できる。引数、return、field/index、try、matchの既存consume規則を一括変更しない。moveを加えても借用中の所有者移動、shared/borrowed親の非Copy field取得、局所viewのescapeは許可されない。
+- Copy対象は既存`copy_type`とcanonical resource descriptorに従い、サイズやRustの推測から決め直さない。viewはCopyでも借用元の制約が残る。shared/ResultはpayloadがCopyでも非Copy。対応済みのローカルasync関数別名もCopyであり、関数値のasync provenanceを維持する。Futureや入れ子のFutureをこの操作で受け渡す機能は追加しない。
+- move後の使用はNagi位置で拒否し、再初期化で新しい値を受け取った後は再利用できる。分岐・loopの既存join/fixed pointを保つ。Highと保存・手書きLowで同じ意味にする。
+
+移行前の受理と実行は[監査結果](value-task-audit-results.md)に保存する。新仕様はテストのoracleを明示的に変更する承認済み契約であり、既存実装へ合わせて拒否を緩めない。[実装計画](value-task-implementation-plan.md)に順番と検証条件を記録する。
 
 通常の引数と両側を評価するoperandの左から右の順序、and/orの短絡、値とcleanup責任の移動を保つ。逆順cleanupの方針は単純な同一ブロックの所有ローカルの逆宣言順を指し、全値の生成時刻逆順ではない。再代入・一時値・部分move・field/List/shared/Futureの規則、取消要求と終了確認は別にする。CheckedProgramは静的factsとRust生成planの境界で、runtimeのI/O成功や全backendの意味同値を証明するものではない。
 
@@ -35,7 +46,7 @@ buildには外部環境が必要なため「check成功ならどんな環境で�
 
 | 項目 | 契約・制約 | 主な検査 |
 |---|---|---|
-| move / owned | 非Copy所有値を渡す・代入する・返すと所有権が移る。move後の使用を拒否する。`owned[T]`は`T`との暗黙変換ではない。一般的なowned constructorや透過的演算は未対応 | `ownership.rs`, `owned_copy_codegen.rs`, `result_discard.rs`, `ownership_calls.rs` |
+| move / owned | 非Copy所有値を渡す・返すと所有権が移る。所有する非Copyローカルそのものの通常代入は拒否し、`std.ownership.move`で明示する。新値生成とfield/index等の既存consume規則は維持する。move後の使用を拒否する。`owned[T]`は`T`との暗黙変換ではない。一般的なowned constructorや透過的演算は未対応 | `explicit_moves.rs`, `ownership.rs`, `owned_copy_codegen.rs`, `result_discard.rs`, `ownership_calls.rs` |
 | view / aliasing | viewは読み取り用の借用。借用元が必要な間、そのplaceまたは親のmove・上書き・変更を拒否する。別フィールドは区別する。独自の実行時寿命検査を加えない | `view_origins.rs`, `ownership_boundaries.rs`, `iterator_borrows.rs` |
 | shared | `shared[T]`は所有権を共有する。共有親から非Copyフィールドをmoveできない。Arcのcloneとpayloadのcopyを区別する。内部資源まで不変になる保証はない | `shared_field_moves.rs`, `comparison_ownership.rs`, `copy_capabilities.rs` |
 | field access | 所有classの部分moveを追跡する。borrowed/shared親から所有フィールドを取り出すなら明示的copyが必要。型の表示名だけで親の所有形態を決めない | `class_field_types.rs`, `shared_field_moves.rs`, `ownership_boundaries.rs` |

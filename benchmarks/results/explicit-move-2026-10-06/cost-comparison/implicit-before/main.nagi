@@ -1,0 +1,16 @@
+@rust("native::observe")
+extern def observe()
+@rust("native::pause")
+extern async def pause()
+
+async def arrange(text: view[str]) -> List[view[str]]:
+    parts = [text]
+    saved = parts
+    local = copy(text)
+    parts = [view(local)]
+    parts = saved
+    await pause()
+    return parts
+
+def main():
+    observe()

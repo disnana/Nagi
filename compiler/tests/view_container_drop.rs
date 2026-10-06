@@ -1,6 +1,6 @@
 #[path = "support/checked_emission.rs"]
 mod checked_emission;
-use nagic::{check, emit, parser};
+use nagic::{check, emit, source};
 use std::{
     fs,
     path::PathBuf,
@@ -74,7 +74,14 @@ impl Drop for Fixture {
 }
 
 fn checked(text: &str, high: bool) -> nagic::ast::Program {
-    let mut program = parser::parse(text, high).unwrap_or_else(|error| panic!("{text}\n{error}"));
+    let fixture = Fixture::new();
+    let path = fixture
+        .0
+        .join(if high { "input.nagi" } else { "input.low" });
+    fs::write(&path, text).unwrap();
+    let mut program = source::load(&path, high)
+        .unwrap_or_else(|error| panic!("{text}\n{error}"))
+        .program;
     check::check(&mut program).unwrap_or_else(|error| panic!("{text}\n{error}"));
     program
 }
@@ -95,7 +102,8 @@ fn local_view_container_replacement_preserves_allocations_and_drop_order() {
     }
 }
 
-const HIGH: &str = r#"enum Tag:
+const HIGH: &str = r#"from std.ownership import move
+enum Tag:
     Text(value: str)
 
 class Marker:
@@ -198,7 +206,7 @@ def alias_move_then_panic(part: view[str]) -> List[view[str]]:
     after = marker(140)
     capture(14)
     parts = [part]
-    selected = parts
+    selected = move(parts)
     crash()
     return selected
 
@@ -305,7 +313,8 @@ def loop_replacement(part: view[str], count: i64) -> List[view[str]]:
 
 // This Low is written separately so the fixture checks the same return and
 // lifetime contract without relying on High-to-Low serialization.
-const LOW: &str = r#"enum Tag { Text(value: str) }
+const LOW: &str = r#"from std.ownership import move
+enum Tag { Text(value: str) }
 record Marker { id: i64; tag: Tag }
 
 @rust("native::marker")
@@ -412,7 +421,7 @@ fn alias_move_then_panic(part: view[str]) -> List[view[str]] {
     let after: Marker = marker(140);
     capture(14);
     parts = [part];
-    let selected: List[view[str]] = parts;
+    let selected: List[view[str]] = move(parts);
     crash();
     return selected;
 }

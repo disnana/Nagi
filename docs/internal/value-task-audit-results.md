@@ -6,7 +6,7 @@
 
 - Linux、既存Rust toolchainとoffline Cargo cache。debug版nagicから生成アプリは既存release設定でbuild/runした。
 - コンパイラSHA-256: `9bc1dd95cdca288b6356dfc17094b9590059d35778e5d4f0623eaadcd91f7bad`。
-- 既存7 suite・36件が成功。コマンド・source tree・raw log hashは[実装計画](value-task-implementation-plan.md#監査の検証と現時点の停止条件)を参照。
+- 既存7 suite・36件が成功。コマンド・source tree・raw log hashは[実装計画](value-task-implementation-plan.md#移行前の監査と実装の進行条件)を参照。
 - 下記9例×High/手書きLowの18入力と、6つの生成保存Lowをcheckした。受理18、期待した拒否6。正常6例をHigh/保存Low/手書きLowでbuild/runし、18実行の出力が一致した。
 - CLIコマンドは48回（check 24、lower 6、buildを伴うrun 18）。42回がexit 0、拒否6回がexit 1。拒否理由・元行、正常stdout、stderrに出る成功artifact pathの存在を検査した。
 - hidden clone、allocation数、任意の破棄順、4 OS、候補APIはこのprobeでは検証していない。Copy resource/ownedの全組合せは既存harnessと後続V1の検査へ分ける。

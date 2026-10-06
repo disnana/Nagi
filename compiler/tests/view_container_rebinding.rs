@@ -1,6 +1,6 @@
 #[path = "support/checked_emission.rs"]
 mod checked_emission;
-use nagic::{check, emit, parser};
+use nagic::{check, emit, parser, source};
 use std::{
     fs,
     path::PathBuf,
@@ -62,7 +62,14 @@ impl Drop for Fixture {
 }
 
 fn checked(text: &str, high: bool) -> nagic::ast::Program {
-    let mut program = parser::parse(text, high).unwrap_or_else(|error| panic!("{text}\n{error}"));
+    let fixture = Fixture::new();
+    let path = fixture
+        .0
+        .join(if high { "input.nagi" } else { "input.low" });
+    fs::write(&path, text).unwrap();
+    let mut program = source::load(&path, high)
+        .unwrap_or_else(|error| panic!("{text}\n{error}"))
+        .program;
     check::check(&mut program).unwrap_or_else(|error| panic!("{text}\n{error}"));
     program
 }
@@ -98,7 +105,8 @@ fn local_container_escape_stays_rejected_in_high_and_low() {
 #[test]
 fn move_phi_and_mutation_fixtures_use_the_container_flow_plan() {
     for (source, high) in [(HIGH, true), (LOW, false)] {
-        let rust = emit::rust(&checked_emission::seal(&checked(source, high))).unwrap();
+        let program = checked(source, high);
+        let rust = emit::rust(&checked_emission::seal(&program)).unwrap();
         for name in [
             "nested_terminal",
             "continuing_phi",
@@ -117,7 +125,8 @@ fn move_phi_and_mutation_fixtures_use_the_container_flow_plan() {
             "condition_append_restore",
             "condition_append_consume",
         ] {
-            let function = rust.split(&format!("pub fn {name}<")).nth(1).unwrap();
+            let symbol = &program.modules.resolve_root_path(name).unwrap().symbol;
+            let function = rust.split(&format!("pub fn {symbol}<")).nth(1).unwrap();
             let function = function.split("\n}").next().unwrap();
             assert!(
                 function.contains("__nagi_view_flow_"),
@@ -131,13 +140,18 @@ fn move_phi_and_mutation_fixtures_use_the_container_flow_plan() {
 fn restore_rhs_keeps_its_source_line_and_generated_slots_are_synthetic() {
     let program = checked(HIGH, true);
     let generated = emit::rust_with_lines(&checked_emission::seal(&program)).unwrap();
+    let restore = &program
+        .modules
+        .resolve_root_path("container_restore")
+        .unwrap()
+        .symbol;
     let mut in_restore = false;
     let mut synthetic_container_declarations = 0;
     let mut saw_original_saved = 0;
     let mut saw_original_restore = 0;
 
     for (index, line) in generated.text.lines().enumerate() {
-        if line.contains("pub fn container_restore<") {
+        if line.contains(&format!("pub fn {restore}<")) {
             in_restore = true;
         }
         if !in_restore {
@@ -151,11 +165,18 @@ fn restore_rhs_keeps_its_source_line_and_generated_slots_are_synthetic() {
             synthetic_container_declarations += 1;
         }
         if line.trim_start().starts_with("let mut saved:") {
-            assert_eq!(generated.line_origin(index + 1), Some(2));
+            // canonical move import追加により元saved bindingはline 3。
+            assert_eq!(generated.line_origin(index + 1), Some(3));
             saw_original_saved += 1;
         }
-        if line.trim_start().starts_with("let ") && line.trim_end().ends_with("= saved;") {
-            assert_eq!(generated.line_origin(index + 1), Some(6));
+        // by-value identity生成先へ同期。元restore RHSの1回観測は維持。
+        if line.trim_start().starts_with("let ")
+            && line
+                .trim_end()
+                .ends_with("= ::std::convert::identity(saved);")
+        {
+            // restore RHSの元位置も同じimport分だけ+1。
+            assert_eq!(generated.line_origin(index + 1), Some(7));
             saw_original_restore += 1;
         }
         if line == "}" {
@@ -171,12 +192,13 @@ fn restore_rhs_keeps_its_source_line_and_generated_slots_are_synthetic() {
     assert_eq!(saw_original_saved, 1, "expected one mapped saved binding");
 }
 
-const HIGH: &str = r#"def container_restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
-    saved = parts
+const HIGH: &str = r#"from std.ownership import move
+def container_restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
+    saved = move(parts)
     local = "temporary"
     if flag:
         parts = [view(local)]
-    parts = saved
+    parts = move(saved)
     return parts
 
 def terminal_restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
@@ -189,59 +211,59 @@ def terminal_restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
     return alias
 
 def straightline_restore(parts: List[view[str]]) -> List[view[str]]:
-    saved = parts
+    saved = move(parts)
     local = "straightline temporary"
     parts = [view(local)]
-    parts = saved
+    parts = move(saved)
     return parts
 
 def terminal_update(flag: bool, parts: List[view[str]], replacement: List[view[str]]) -> List[view[str]]:
     if flag:
-        parts = replacement
+        parts = move(replacement)
         return parts
     return parts
 
 def nested_terminal(outer: bool, inner: bool, parts: List[view[str]], first: List[view[str]], second: List[view[str]]) -> List[view[str]]:
-    saved = parts
+    saved = move(parts)
     local = "nested temporary"
     parts = [view(local)]
-    parts = saved
+    parts = move(saved)
     if outer:
         if inner:
-            parts = first
+            parts = move(first)
             return parts
-        parts = second
+        parts = move(second)
         return parts
     return parts
 
 def continuing_phi(flag: bool, original: List[view[str]], replacement: List[view[str]], fallback: List[view[str]]) -> List[view[str]]:
     local = "phi temporary"
     selected = [view(local)]
-    selected = replacement
+    selected = move(replacement)
     if flag:
-        selected = original
+        selected = move(original)
     else:
-        selected = fallback
+        selected = move(fallback)
     return selected
 
 def self_move_then_reinit(flag: bool, parts: List[view[str]], replacement: List[view[str]]) -> List[view[str]]:
-    saved = parts
+    saved = move(parts)
     local = "self move temporary"
     parts = [view(local)]
-    parts = saved
-    parts = parts
+    parts = move(saved)
+    parts = move(parts)
     if flag:
-        parts = replacement
+        parts = move(replacement)
     return parts
 
 def maybe_move_then_reinit(flag: bool, parts: List[view[str]], replacement: List[view[str]]) -> List[view[str]]:
-    saved = parts
+    saved = move(parts)
     local = "maybe move temporary"
     parts = [view(local)]
-    parts = saved
+    parts = move(saved)
     if flag:
-        moved = parts
-    parts = replacement
+        moved = move(parts)
+    parts = move(replacement)
     return parts
 
 def consume_views(parts: List[view[str]]) -> bool:
@@ -292,7 +314,7 @@ def multiple_candidate_move(flag: bool, choose: bool, first_part: view[str], sec
     second = [view(local)]
     second = [second_part]
     if flag:
-        first = second
+        first = move(second)
     else:
         second = [second_part]
     second = [second_part]
@@ -307,9 +329,9 @@ def cross_candidate_move(flag: bool, choose: bool, first_part: view[str], second
     second = [view(local)]
     second = [second_part]
     if flag:
-        first = second
+        first = move(second)
     else:
-        second = first
+        second = move(first)
     first = [first_part]
     second = [second_part]
     if choose:
@@ -366,7 +388,7 @@ def condition_append_consume(flag: bool, part: view[str]) -> List[view[str]]:
 
 def ordinary_list(flag: bool, values: List[i64], replacement: List[i64]) -> List[i64]:
     if flag:
-        values = replacement
+        values = move(replacement)
     return values
 
 def ordinary_view(flag: bool, part: view[str], replacement: view[str]) -> view[str]:
@@ -377,13 +399,14 @@ def ordinary_view(flag: bool, part: view[str], replacement: view[str]) -> view[s
 
 // This Low is written independently so the same flow is checked without
 // relying on emit::low's serialization decisions.
-const LOW: &str = r#"fn container_restore(flag: bool, parts: List[view[str]]) -> List[view[str]] {
-    let saved: List[view[str]] = parts;
+const LOW: &str = r#"from std.ownership import move
+fn container_restore(flag: bool, parts: List[view[str]]) -> List[view[str]] {
+    let saved: List[view[str]] = move(parts);
     let local: str = "temporary";
     if flag {
         parts = [view(local)];
     }
-    parts = saved;
+    parts = move(saved);
     return parts;
 }
 
@@ -399,32 +422,32 @@ fn terminal_restore(flag: bool, parts: List[view[str]]) -> List[view[str]] {
 }
 
 fn straightline_restore(parts: List[view[str]]) -> List[view[str]] {
-    let saved: List[view[str]] = parts;
+    let saved: List[view[str]] = move(parts);
     let local: str = "straightline temporary";
     parts = [view(local)];
-    parts = saved;
+    parts = move(saved);
     return parts;
 }
 
 fn terminal_update(flag: bool, parts: List[view[str]], replacement: List[view[str]]) -> List[view[str]] {
     if flag {
-        parts = replacement;
+        parts = move(replacement);
         return parts;
     }
     return parts;
 }
 
 fn nested_terminal(outer: bool, inner: bool, parts: List[view[str]], first: List[view[str]], second: List[view[str]]) -> List[view[str]] {
-    let saved: List[view[str]] = parts;
+    let saved: List[view[str]] = move(parts);
     let local: str = "nested temporary";
     parts = [view(local)];
-    parts = saved;
+    parts = move(saved);
     if outer {
         if inner {
-            parts = first;
+            parts = move(first);
             return parts;
         }
-        parts = second;
+        parts = move(second);
         return parts;
     }
     return parts;
@@ -433,36 +456,36 @@ fn nested_terminal(outer: bool, inner: bool, parts: List[view[str]], first: List
 fn continuing_phi(flag: bool, original: List[view[str]], replacement: List[view[str]], fallback: List[view[str]]) -> List[view[str]] {
     let local: str = "phi temporary";
     let selected: List[view[str]] = [view(local)];
-    selected = replacement;
+    selected = move(replacement);
     if flag {
-        selected = original;
+        selected = move(original);
     } else {
-        selected = fallback;
+        selected = move(fallback);
     }
     return selected;
 }
 
 fn self_move_then_reinit(flag: bool, parts: List[view[str]], replacement: List[view[str]]) -> List[view[str]] {
-    let saved: List[view[str]] = parts;
+    let saved: List[view[str]] = move(parts);
     let local: str = "self move temporary";
     parts = [view(local)];
-    parts = saved;
-    parts = parts;
+    parts = move(saved);
+    parts = move(parts);
     if flag {
-        parts = replacement;
+        parts = move(replacement);
     }
     return parts;
 }
 
 fn maybe_move_then_reinit(flag: bool, parts: List[view[str]], replacement: List[view[str]]) -> List[view[str]] {
-    let saved: List[view[str]] = parts;
+    let saved: List[view[str]] = move(parts);
     let local: str = "maybe move temporary";
     parts = [view(local)];
-    parts = saved;
+    parts = move(saved);
     if flag {
-        let moved: List[view[str]] = parts;
+        let moved: List[view[str]] = move(parts);
     }
-    parts = replacement;
+    parts = move(replacement);
     return parts;
 }
 
@@ -522,7 +545,7 @@ fn multiple_candidate_move(flag: bool, choose: bool, first_part: view[str], seco
     let second: List[view[str]] = [view(local)];
     second = [second_part];
     if flag {
-        first = second;
+        first = move(second);
     } else {
         second = [second_part];
     }
@@ -540,9 +563,9 @@ fn cross_candidate_move(flag: bool, choose: bool, first_part: view[str], second_
     let second: List[view[str]] = [view(local)];
     second = [second_part];
     if flag {
-        first = second;
+        first = move(second);
     } else {
-        second = first;
+        second = move(first);
     }
     first = [first_part];
     second = [second_part];
@@ -615,7 +638,7 @@ fn condition_append_consume(flag: bool, part: view[str]) -> List[view[str]] {
 
 fn ordinary_list(flag: bool, values: List[i64], replacement: List[i64]) -> List[i64] {
     if flag {
-        values = replacement;
+        values = move(replacement);
     }
     return values;
 }

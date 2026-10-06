@@ -1,6 +1,6 @@
 #[path = "support/checked_emission.rs"]
 mod checked_emission;
-use nagic::{check, emit, parser};
+use nagic::{check, emit, source};
 use std::{
     fs,
     path::PathBuf,
@@ -15,11 +15,29 @@ impl Drop for Fixture {
         let _ = fs::remove_dir_all(&self.0);
     }
 }
-fn checked(source: &str, high: bool) -> nagic::ast::Program {
-    let mut program =
-        parser::parse(source, high).unwrap_or_else(|error| panic!("{error}\n{source}"));
-    check::check(&mut program).unwrap_or_else(|error| panic!("{error}\n{source}"));
-    program
+fn try_checked(text: &str, high: bool) -> Result<nagic::ast::Program, String> {
+    let fixture = loop {
+        let path = std::env::temp_dir().join(format!(
+            "nagi-view-foundation-check-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        match fs::create_dir(&path) {
+            Ok(()) => break Fixture(path),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => panic!("exclusive check fixture: {error}"),
+        }
+    };
+    let path = fixture
+        .0
+        .join(if high { "input.nagi" } else { "input.low" });
+    fs::write(&path, text).unwrap();
+    let mut program = source::load(&path, high)?.program;
+    check::check(&mut program)?;
+    Ok(program)
+}
+fn checked(text: &str, high: bool) -> nagic::ast::Program {
+    try_checked(text, high).unwrap_or_else(|error| panic!("{error}\n{text}"))
 }
 
 #[test]
@@ -57,8 +75,9 @@ fn return_observers_and_match_edges_compile_and_run_in_all_source_forms() {
             "mutation_input",
             "scalar_observation",
         ] {
+            let symbol = &program.modules.resolve_root_path(function).unwrap().symbol;
             let body = rust
-                .split(&format!("pub fn {function}<"))
+                .split(&format!("pub fn {symbol}<"))
                 .nth(1)
                 .unwrap()
                 .split("\n}")
@@ -101,16 +120,15 @@ fn return_observers_and_match_edges_compile_and_run_in_all_source_forms() {
 #[test]
 fn observer_lowering_does_not_accept_local_owner_escapes() {
     let cases = [
-        ("def bad() -> Result[List[view[str]], i64]:\n    local = \"inner\"\n    parts = [view(local)]\n    alias = parts\n    return ok(alias)\n", true),
-        ("fn bad() -> Result[List[view[str]], i64] { let local: str = \"inner\"; let parts: List[view[str]] = [view(local)]; let alias: List[view[str]] = parts; return ok(alias); }", false),
+        ("from std.ownership import move\ndef bad() -> Result[List[view[str]], i64]:\n    local = \"inner\"\n    parts = [view(local)]\n    alias = move(parts)\n    return ok(alias)\n", true),
+        ("from std.ownership import move;\nfn bad() -> Result[List[view[str]], i64] { let local: str = \"inner\"; let parts: List[view[str]] = [view(local)]; let alias: List[view[str]] = move(parts); return ok(alias); }", false),
         ("def bad(value: Option[i64]) -> List[view[str]]:\n    match value:\n        case Some(number):\n            local = \"inner\"\n            return [view(local)]\n        case None:\n            return []\n", true),
         ("fn bad(value: Option[i64]) -> List[view[str]] { match value { case Some(number) { let local: str = \"inner\"; return [view(local)]; } case None { return []; } } }", false),
         ("def bad() -> List[List[view[str]]]:\n    local = \"inner\"\n    nested = [[view(local)]]\n    return nested\n", true),
         ("fn bad() -> List[view[i64]] { let local: List[i64] = [1]; let parts: List[view[i64]] = [view(local)]; return parts; }", false),
     ];
     for (source, high) in cases {
-        let mut program = parser::parse(source, high).unwrap();
-        let error = check::check(&mut program).expect_err(source);
+        let error = try_checked(source, high).expect_err(source);
         assert!(
             error.contains("所有値") || error.contains("escapes its lifetime"),
             "{error}"
@@ -118,7 +136,8 @@ fn observer_lowering_does_not_accept_local_owner_escapes() {
     }
 }
 
-const HIGH: &str = r#"enum Three:
+const HIGH: &str = r#"from std.ownership import move
+enum Three:
     First
     Second
     Third
@@ -136,15 +155,15 @@ def alias_return(part: view[str]) -> List[view[str]]:
     local = "inner"
     parts = [view(local)]
     parts = [part]
-    first = parts
-    alias = first
+    first = move(parts)
+    alias = move(first)
     return alias
 
 def result_return(part: view[str]) -> Result[List[view[str]], i64]:
     local = "inner"
     parts = [view(local)]
     parts = [part]
-    alias = parts
+    alias = move(parts)
     return ok(alias)
 
 def option_return(part: view[str]) -> Option[List[view[str]]]:
@@ -203,7 +222,7 @@ def pattern_restore(value: Option[List[view[str]]], part: view[str]) -> List[vie
             local = "inner"
             type = [view(local)]
             type = [part]
-            alias = type
+            alias = move(type)
             return alias
         case None:
             return [part]
@@ -237,9 +256,9 @@ def cross_move(value: Three, choose: bool, part: view[str]) -> List[view[str]]:
     second = [part]
     match value:
         case Three.First:
-            first = second
+            first = move(second)
         case Three.Second:
-            second = first
+            second = move(first)
         case Three.Third:
             second = [part]
     first = [part]
@@ -317,17 +336,18 @@ def scalar_observation(part: view[str]) -> List[view[str]]:
     return parts
 "#;
 
-const LOW: &str = r#"enum Three { First; Second; Third; }
+const LOW: &str = r#"from std.ownership import move
+enum Three { First; Second; Third; }
 fn consume(parts: List[view[str]]) -> bool { return len(parts) > 0; }
 fn marker(ignored: bool) -> Option[i64] { return some(1); }
 fn select(parts: List[view[str]]) -> List[view[str]] { return parts; }
 fn alias_return(part: view[str]) -> List[view[str]] {
     let local: str = "inner"; let parts: List[view[str]] = [view(local)]; parts = [part];
-    let first: List[view[str]] = parts; let alias: List[view[str]] = first; return alias;
+    let first: List[view[str]] = move(parts); let alias: List[view[str]] = move(first); return alias;
 }
 fn result_return(part: view[str]) -> Result[List[view[str]], i64] {
     let local: str = "inner"; let parts: List[view[str]] = [view(local)]; parts = [part];
-    let alias: List[view[str]] = parts; return ok(alias);
+    let alias: List[view[str]] = move(parts); return ok(alias);
 }
 fn option_return(part: view[str]) -> Option[List[view[str]]] {
     let local: str = "inner"; let parts: List[view[str]] = [view(local)]; parts = [part]; return some(parts);
@@ -360,7 +380,7 @@ fn terminal_edge(value: Option[i64], part: view[str]) -> List[view[str]] {
 }
 fn pattern_restore(value: Option[List[view[str]]], part: view[str]) -> List[view[str]] {
     match value {
-        case Some(type) { let local: str = "inner"; type = [view(local)]; type = [part]; let alias: List[view[str]] = type; return alias; }
+        case Some(type) { let local: str = "inner"; type = [view(local)]; type = [part]; let alias: List[view[str]] = move(type); return alias; }
         case None { return [part]; }
     }
 }
@@ -376,7 +396,7 @@ fn condition_move(flag: bool, part: view[str]) -> List[view[str]] {
 fn cross_move(value: Three, choose: bool, part: view[str]) -> List[view[str]] {
     let local: str = "inner"; let first: List[view[str]] = [view(local)]; first = [part];
     let second: List[view[str]] = [view(local)]; second = [part];
-    match value { case Three.First { first = second; } case Three.Second { second = first; } case Three.Third { second = [part]; } }
+    match value { case Three.First { first = move(second); } case Three.Second { second = move(first); } case Three.Third { second = [part]; } }
     first = [part]; second = [part]; if choose { return first; } return second;
 }
 

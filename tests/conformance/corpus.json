@@ -340,5 +340,41 @@
     "oracle": "if cfg!(debug_assertions) { assert!(std::panic::catch_unwind(overflow).is_err()); } else { assert_eq!(overflow(), u8::MAX.wrapping_add(1)); }",
     "diagnostic": "",
     "line": 0
+  },
+  {
+    "name": "implicit_noncopy_assignment",
+    "source": "implicit_noncopy_assignment.nagi",
+    "high": true,
+    "expected": "reject:high-check",
+    "diagnostic": "代入は暗黙moveできません",
+    "line": 3,
+    "oracle": ""
+  },
+  {
+    "name": "implicit_noncopy_assignment_low",
+    "source": "implicit_noncopy_assignment_low.low",
+    "high": false,
+    "expected": "reject:low-check",
+    "diagnostic": "代入は暗黙moveできません",
+    "line": 3,
+    "oracle": ""
+  },
+  {
+    "name": "explicit_move",
+    "source": "explicit_move.nagi",
+    "high": true,
+    "expected": "run-pass",
+    "diagnostic": "",
+    "line": 0,
+    "oracle": "assert_eq!(transfer(String::from(\"Nagi日本語\")), \"Nagi日本語\");"
+  },
+  {
+    "name": "explicit_move_low",
+    "source": "explicit_move_low.low",
+    "high": false,
+    "expected": "run-pass",
+    "diagnostic": "",
+    "line": 0,
+    "oracle": "assert_eq!(transfer(String::from(\"Nagi日本語\")), \"Nagi日本語\");"
   }
 ]

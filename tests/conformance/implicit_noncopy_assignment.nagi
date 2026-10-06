@@ -1,0 +1,3 @@
+def evaluate():
+    value = "Nagi"
+    transferred = value

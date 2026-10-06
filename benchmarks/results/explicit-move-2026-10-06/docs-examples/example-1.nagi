@@ -1,0 +1,8 @@
+import std.ownership as ownership
+from std.ownership import move as transfer
+
+def main():
+    first = "Nagi"
+    second = ownership.move(first)
+    third = transfer(second)
+    print(third)

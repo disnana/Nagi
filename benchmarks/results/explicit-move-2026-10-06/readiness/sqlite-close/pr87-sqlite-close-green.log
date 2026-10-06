@@ -1,0 +1,9 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-boundary-foundation/runtime)
+    Finished `test` profile [unoptimized] target(s) in 7.02s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31f33a377cbf1a2a)
+
+running 1 test
+test sqlite_prototype::adapter_tests::close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_waiter ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 189 filtered out; finished in 0.00s
+

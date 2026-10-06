@@ -1,6 +1,12 @@
-use nagic::{check, emit, parser};
+use nagic::{check, emit, parser, source};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
-const MODEL: &str = "class Person:\n    name: str\n    note: str\n    age: i64\n\n\
+const MODEL: &str =
+    "from std.ownership import move\nclass Person:\n    name: str\n    note: str\n    age: i64\n\n\
     class Group:\n    person: Person\n    title: str\n\n\
     def take(text: str):\n    print(text)\n\n\
     def take_person(person: Person):\n    print(person.age)\n\n";
@@ -10,7 +16,28 @@ fn program(body: &str) -> String {
 }
 
 fn checked(source: &str) -> Result<nagic::ast::Program, String> {
-    let mut p = parser::parse(source, true)?;
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    struct Input(PathBuf);
+    impl Drop for Input {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    let input = loop {
+        let path = std::env::temp_dir().join(format!(
+            "nagi-field-ownership-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        match fs::create_dir(&path) {
+            Ok(()) => break Input(path),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => panic!("exclusive ownership fixture: {error}"),
+        }
+    };
+    let path = input.0.join("main.nagi");
+    fs::write(&path, source).unwrap();
+    let mut p = source::load(&path, true)?.program;
     check::check(&mut p)?;
     Ok(p)
 }
@@ -62,7 +89,7 @@ fn fields_are_consumed_in_calls_records_lists_and_owned_wrappers() {
 #[test]
 fn a_partially_moved_record_cannot_be_used_as_a_whole() {
     for use_person in [
-        "other = person",
+        "other = move(person)",
         "take_person(person)",
         "group = Group(person=person, title=\"group\")",
     ] {
@@ -78,7 +105,7 @@ fn nested_moves_block_the_moved_path_and_its_ancestors_and_children() {
     for use_group in [
         "print(group.person.name)",
         "other = group.person",
-        "other = group",
+        "other = move(group)",
     ] {
         rejects(
             &format!("    group = Group(person=Person(name=\"Nagi\", note=\"note\", age=1), title=\"group\")\n    name = group.person.name\n    {use_group}\n"),

@@ -1,0 +1,6 @@
+from std.ownership import move
+
+def main():
+    name = "Nagi"
+    destination = move(name)
+    print(destination)

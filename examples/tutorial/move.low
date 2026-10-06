@@ -1,0 +1,16 @@
+from std.ownership import move;
+
+fn receive(label: str) -> str {
+    return move(label);
+}
+
+fn main() -> unit {
+    let count: i64 = 2;
+    let same_count: i64 = count;
+    let source: str = "Nagi";
+    let destination: str = move(source);
+    print(receive(move(destination)));
+    source = "new";
+    print(source);
+    print(count + same_count);
+}

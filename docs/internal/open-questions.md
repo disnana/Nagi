@@ -67,17 +67,17 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 
 ### Q-005: 既存所有値の代入を明示する範囲
 
-状態: 明示moveのAPI・Copy据置・狭い通常代入移行は追加のユーザー指示で確定。別branchで実装・検証中であり、公開mainには未実装。[ADR 011のOWN-04](adr/011-language-behavior-and-docs.md#own-04-既存所有値の代入)にbefore/after、理由、移行・検査を記録した。
+状態: moveの意味論と通常代入の移行は確定し、作業branchで実装済み・未リリース。作者が既存設計に沿うAPIを自律的に選び実装するよう指示したため、確認待ちで止めない。[採用仕様V1/V2](value-task-implementation-plan.md#v1v2の採用仕様)と[OWN-04](adr/011-language-behavior-and-docs.md#own-04-既存所有値の代入)に統合した。
 
-canonical `std.ownership.move`（一引数、型推論、明示型引数なし）、現行Copy表の据置、右辺が所有するnonCopyローカルそのものの通常代入移行を採用した。[V1/V2の採用仕様](value-task-implementation-plan.md#v1v2の採用仕様)へ統合し、操作追加と狭い拒否を一つの別実装PRへ段階的に積む。新値生成、引数・return・field/index・try・matchの既存consume規則は維持する。Futureや入れ子のFutureはmove入力へ解禁せず、対応済みasync関数別名のCopyも維持する。
+canonical `std.ownership.move`、現行Copy表の据置、右辺がnonCopy所有ローカルそのものの代入の移行を採用する。操作の追加と通常代入拒否を先行テストの後に順に実装した。一つのdraft実装PRで全回帰と4 OS CIまで検証し、その状況とmain反映は[実装結果](explicit-move-results.md)と[進捗](progress.md)で別に記録する。新値生成、引数、return、field/index、matchは既存の規則を保つ。shared handleのtransferとclone_shared、viewとcopyを区別する。
 
-この文書PRと現在のmainでは非Copyの`a = b`を暗黙moveとして受理する。移行前の36件と正常18実行は監査証跡として保持し、別branchの実装成功やmain公開機能に読み替えない。merge・版更新・release、task結果handleの詳細は別工程とする。
+旧受理と18件の正常実行は移行前の監査結果として保存する。新規則に合わせたfixture修正は承認済み移行であり、借用・source位置・cleanupのoracleを緩めない。merge/releaseは別途判断する。
 
 ### Q-006: spawn結果handleと業務Err・task故障
 
 状態: 方向は採用、現行spawnとScopeは変更しない。[ADR 011](adr/011-language-behavior-and-docs.md#async-0304-結果handleと失敗の分類)に移行を分離した。
 
-段階実装の対象になったが、[S1/S2の具体案](value-task-implementation-plan.md#s1s2-task結果の境界)は未決を残す。scope-owned join、once-only結果、業務Resultと外側の故障、Supervisorからの明示的な故障伝播を検討する。V1/V2の確認時にこれら全てを再質問せず、task実装へ進む段階で必要な意味論をまとめて決める。
+段階実装の対象になったが、[S1/S2の具体案](value-task-implementation-plan.md#s1s2-task結果の境界)は未決を残す。scope-owned join、once-only結果、業務Resultと外側の故障、Supervisorからの明示的な故障伝播を検討する。moveの実装をこれらの判断で止めず、task実装へ進む段階で必要な意味論をまとめて決める。
 
 結果を一度受け取るhandle、scopeによる寿命・故障の管理、業務Errだけでは兄弟を止めない方向を採る。型名・構文、消費規則、故障/取消型、複数故障、未受取Result、検出時点、scope外への持出しは未決。現行の子Errによる兄弟取消、Supervisor terminal ErrとHTTP終了の連携は、明示的な移行なしに消さない。親本体がtry等で退出する場合と、子が業務Resultを返す場合を分ける。
 

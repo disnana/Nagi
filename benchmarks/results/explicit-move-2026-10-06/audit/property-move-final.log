@@ -1,0 +1,14 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi-boundary-foundation/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.53s
+     Running tests/conformance.rs (/tmp/nagi-container-flow-target/debug/deps/conformance-0ba950f127298fba)
+
+running 6 tests
+test batch_root_relocation_preserves_literals_raw_strings_and_comments ... ok
+test failure_shrinking_preserves_the_checker_failure_instead_of_a_parse_error ... ok
+test native_process_deadline_reaps_a_hanging_child ... ok
+test explicit_move_corpus_reaches_native_execution ... ok
+test backend_shrinking_does_not_turn_an_oracle_error_into_a_compiler_reproducer ... ok
+test corpus_and_bounded_generated_contracts_reach_native_execution ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.20s
+

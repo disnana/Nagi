@@ -1,0 +1,5 @@
+from std.ownership import move;
+fn transfer(source: str) -> str {
+    let destination: str = move(source);
+    return move(destination);
+}

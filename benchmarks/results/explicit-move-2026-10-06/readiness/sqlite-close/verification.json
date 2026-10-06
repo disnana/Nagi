@@ -1,0 +1,662 @@
+{
+  "scope": "cfg(test) private SQLite adapter only; no public runtime or move semantics change",
+  "runs": [
+    {
+      "label": "pr87-sqlite-close-red-clean",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagi-runtime",
+        "--lib",
+        "close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_waiter",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 101,
+      "seconds": 8.853,
+      "source_commit": "0051f7a85a895b9bb6f268fe5929bd833ed9ee98",
+      "source_tree": "2b7d06fc1cd18be355ca1af0b41589ae00f40cfa",
+      "log_sha256": "7c00fcc592983a90bf6f09e4b00aa3626648a8c02f55054299d04652bca96f55"
+    },
+    {
+      "label": "pr87-sqlite-close-green",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagi-runtime",
+        "--lib",
+        "close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_waiter",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "seconds": 7.095,
+      "source_commit": "a4883487e63b10df0eea3318cf04da6409d2ef33",
+      "source_tree": "519174884bb6266a0f8f7f6119d6dcd56ded2fc2",
+      "log_sha256": "4260683d31cbf8c73bbd87a861154e65961bf363e94a91c74382908c5026476e"
+    },
+    {
+      "label": "pr87-sqlite-close-final-full",
+      "command": [
+        "cargo",
+        "test",
+        "--locked"
+      ],
+      "exit": 0,
+      "seconds": 164.206,
+      "source_commit": "f6bc74a979ed9d83ef15def449d30b93b8e7bb6b",
+      "source_tree": "830c8c27ab50c45257a428d7ecbde3805682346a",
+      "log_sha256": "e87754c9f0a3706c29a5c68a40af04b9a960db2f0dcb5d32e5042576546a1919"
+    },
+    {
+      "label": "pr87-sqlite-close-final-format",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "seconds": 0.716,
+      "source_commit": "f6bc74a979ed9d83ef15def449d30b93b8e7bb6b",
+      "source_tree": "830c8c27ab50c45257a428d7ecbde3805682346a",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "pr87-sqlite-close-final-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "seconds": 3.324,
+      "source_commit": "f6bc74a979ed9d83ef15def449d30b93b8e7bb6b",
+      "source_tree": "830c8c27ab50c45257a428d7ecbde3805682346a",
+      "log_sha256": "052fcfb4324c0f5575090a86d7952c53e84472f3774cecd03c22b7d462477536"
+    }
+  ],
+  "files": [
+    {
+      "file": "ci-linux-68d215b.log",
+      "sha256": "36e04a3cb8f27eab7cdf9d22a6739b531dab267b328c5b24785801cec0eb572e"
+    },
+    {
+      "file": "sol-review.md",
+      "sha256": "62bfa3448d5474894e940b8fa9e425423cab15baf1b8f03557ec9cb1da74d7dc"
+    }
+  ],
+  "top_level_suites": 90,
+  "passed": 900,
+  "failed": 0,
+  "ignored": 0,
+  "suite_summaries": [
+    {
+      "suite": "Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-dae2517a3d1ff927)",
+      "passed": 190,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagic-a61bd4a0952db730)",
+      "passed": 121,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running unittests src/main.rs (/tmp/nagi-container-flow-target/debug/deps/nagic-541469ec0a24c719)",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/actor_codegen.rs (/tmp/nagi-container-flow-target/debug/deps/actor_codegen-7b0cbadd8e0c31d7)",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/actor_stdlib.rs (/tmp/nagi-container-flow-target/debug/deps/actor_stdlib-3d101f835d09a5b6)",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/asset_calls.rs (/tmp/nagi-container-flow-target/debug/deps/asset_calls-103c7a34e7c1edba)",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/async_value_types.rs (/tmp/nagi-container-flow-target/debug/deps/async_value_types-6ca03c513f546276)",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/auth_boundaries.rs (/tmp/nagi-container-flow-target/debug/deps/auth_boundaries-723f23d8c088f666)",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/borrow_free_returns.rs (/tmp/nagi-container-flow-target/debug/deps/borrow_free_returns-b35132eebd82b278)",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/build_diagnostics.rs (/tmp/nagi-container-flow-target/debug/deps/build_diagnostics-a95d71efc7ca4ace)",
+      "passed": 30,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/build_generations.rs (/tmp/nagi-container-flow-target/debug/deps/build_generations-7533d5f1d360ce40)",
+      "passed": 23,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/builtin_cast_precedence.rs (/tmp/nagi-container-flow-target/debug/deps/builtin_cast_precedence-1a960e6805e84f54)",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/builtin_type_contracts.rs (/tmp/nagi-container-flow-target/debug/deps/builtin_type_contracts-b43a163e07dec8d3)",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/class_field_types.rs (/tmp/nagi-container-flow-target/debug/deps/class_field_types-287b4845df0a2145)",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/cli.rs (/tmp/nagi-container-flow-target/debug/deps/cli-dee95745c9b548ff)",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/codegen.rs (/tmp/nagi-container-flow-target/debug/deps/codegen-9bef428f95955e2c)",
+      "passed": 16,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/comparison_ownership.rs (/tmp/nagi-container-flow-target/debug/deps/comparison_ownership-3a5b952c6574bc14)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/conformance.rs (/tmp/nagi-container-flow-target/debug/deps/conformance-55ddefd74e15f85a)",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/constant_validation.rs (/tmp/nagi-container-flow-target/debug/deps/constant_validation-4b0d96480c5def98)",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/copy_capabilities.rs (/tmp/nagi-container-flow-target/debug/deps/copy_capabilities-2b3e198e729b4896)",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/enum_emission.rs (/tmp/nagi-container-flow-target/debug/deps/enum_emission-0f626e52586527f3)",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/enum_modules.rs (/tmp/nagi-container-flow-target/debug/deps/enum_modules-3ccc1b42935c0464)",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/enum_parser.rs (/tmp/nagi-container-flow-target/debug/deps/enum_parser-85ce71ff4a184be9)",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/enum_patterns.rs (/tmp/nagi-container-flow-target/debug/deps/enum_patterns-762ccdff0008de51)",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/error_routes.rs (/tmp/nagi-container-flow-target/debug/deps/error_routes-5e9235635fc8f46d)",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/explicit_moves.rs (/tmp/nagi-container-flow-target/debug/deps/explicit_moves-2c7dafc5ef410b64)",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/expression_contracts.rs (/tmp/nagi-container-flow-target/debug/deps/expression_contracts-4b5ba9851be0010e)",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/frontend_contracts.rs (/tmp/nagi-container-flow-target/debug/deps/frontend_contracts-9b82279aadd95a2e)",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/graph_html.rs (/tmp/nagi-container-flow-target/debug/deps/graph_html-c3af040d63c6ed58)",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/graph_relations.rs (/tmp/nagi-container-flow-target/debug/deps/graph_relations-6964f24e12172ba5)",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/graph_render.rs (/tmp/nagi-container-flow-target/debug/deps/graph_render-6150aa0bf1e0a78d)",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/graph_types.rs (/tmp/nagi-container-flow-target/debug/deps/graph_types-85518bcee552214c)",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/http_codegen.rs (/tmp/nagi-container-flow-target/debug/deps/http_codegen-0b75056186eb00b9)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/http_entrypoint.rs (/tmp/nagi-container-flow-target/debug/deps/http_entrypoint-42a7327cb3bb5755)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/http_route_conflicts.rs (/tmp/nagi-container-flow-target/debug/deps/http_route_conflicts-4d490e6f5d37331a)",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/http_stdlib.rs (/tmp/nagi-container-flow-target/debug/deps/http_stdlib-3226ad5ba189dad2)",
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/imports.rs (/tmp/nagi-container-flow-target/debug/deps/imports-d052c0b510a72395)",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/installation.rs (/tmp/nagi-container-flow-target/debug/deps/installation-5dab5c651bdb3cf9)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/integer_arithmetic.rs (/tmp/nagi-container-flow-target/debug/deps/integer_arithmetic-de6b13dd9c03069d)",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/integer_zero_division.rs (/tmp/nagi-container-flow-target/debug/deps/integer_zero_division-8f08520c841d08e7)",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/iterator_borrows.rs (/tmp/nagi-container-flow-target/debug/deps/iterator_borrows-aa3c3844a38b4c45)",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/list_borrow_iteration.rs (/tmp/nagi-container-flow-target/debug/deps/list_borrow_iteration-eb922f0fcc9dc1f2)",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/list_ownership_inference.rs (/tmp/nagi-container-flow-target/debug/deps/list_ownership_inference-ac0e689b18a51f8f)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/literal_contracts.rs (/tmp/nagi-container-flow-target/debug/deps/literal_contracts-d35cb07db4e65b48)",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/loop_ownership.rs (/tmp/nagi-container-flow-target/debug/deps/loop_ownership-f533e47337b6e54d)",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/low_multiline.rs (/tmp/nagi-container-flow-target/debug/deps/low_multiline-6f97c4b3086d95e1)",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/map_cli.rs (/tmp/nagi-container-flow-target/debug/deps/map_cli-b1f0c470233dda96)",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/module_emission.rs (/tmp/nagi-container-flow-target/debug/deps/module_emission-5f68a6c57007aff5)",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/module_parser.rs (/tmp/nagi-container-flow-target/debug/deps/module_parser-3d4d6b84ac94026d)",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/module_symbols.rs (/tmp/nagi-container-flow-target/debug/deps/module_symbols-365943fec6809296)",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/modules.rs (/tmp/nagi-container-flow-target/debug/deps/modules-8a7b13b753da60fc)",
+      "passed": 32,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/nullable_database.rs (/tmp/nagi-container-flow-target/debug/deps/nullable_database-7d1e502ff96366fc)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/nullable_roundtrip.rs (/tmp/nagi-container-flow-target/debug/deps/nullable_roundtrip-2698cc02cde1b7ee)",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/operator_types.rs (/tmp/nagi-container-flow-target/debug/deps/operator_types-fd864cefe0fa1181)",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/option_match.rs (/tmp/nagi-container-flow-target/debug/deps/option_match-266b4eb6707e6747)",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/output_safety.rs (/tmp/nagi-container-flow-target/debug/deps/output_safety-8bf1471b66f5a53b)",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/output_types.rs (/tmp/nagi-container-flow-target/debug/deps/output_types-77a0d04dc4a0f68f)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/owned_copy_codegen.rs (/tmp/nagi-container-flow-target/debug/deps/owned_copy_codegen-f9f7fa4a236e7e57)",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/owned_database.rs (/tmp/nagi-container-flow-target/debug/deps/owned_database-04277fd188bfe164)",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/ownership.rs (/tmp/nagi-container-flow-target/debug/deps/ownership-68cee81bf1a31382)",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/ownership_boundaries.rs (/tmp/nagi-container-flow-target/debug/deps/ownership_boundaries-c9b9c2045f317c52)",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/ownership_calls.rs (/tmp/nagi-container-flow-target/debug/deps/ownership_calls-b47eb9cda129b4df)",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/project.rs (/tmp/nagi-container-flow-target/debug/deps/project-95c023f4c9590315)",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/resource_contract_characterization.rs (/tmp/nagi-container-flow-target/debug/deps/resource_contract_characterization-9a59c414d5ab3126)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/result_discard.rs (/tmp/nagi-container-flow-target/debug/deps/result_discard-b243c06082b56087)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/result_match.rs (/tmp/nagi-container-flow-target/debug/deps/result_match-8e8793755c7efcc1)",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/result_stdlib.rs (/tmp/nagi-container-flow-target/debug/deps/result_stdlib-266e59448e6d9bde)",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/rust_dependencies.rs (/tmp/nagi-container-flow-target/debug/deps/rust_dependencies-a8e10d5de0b6e4b0)",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/scope_runtime_contract.rs (/tmp/nagi-container-flow-target/debug/deps/scope_runtime_contract-780ff2758d8e891a)",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/scoped_tasks.rs (/tmp/nagi-container-flow-target/debug/deps/scoped_tasks-0ad5b59bd9231187)",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/shared_field_moves.rs (/tmp/nagi-container-flow-target/debug/deps/shared_field_moves-24769f5942012a61)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/shared_target.rs (/tmp/nagi-container-flow-target/debug/deps/shared_target-a4217ce3dc4dd14e)",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/sql_check.rs (/tmp/nagi-container-flow-target/debug/deps/sql_check-d5809bc3c96c7215)",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/sqlite_contract_inputs.rs (/tmp/nagi-container-flow-target/debug/deps/sqlite_contract_inputs-2d915bfb7aedb722)",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/static_callback_views.rs (/tmp/nagi-container-flow-target/debug/deps/static_callback_views-603dbd4b71586414)",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/stdlib_imports.rs (/tmp/nagi-container-flow-target/debug/deps/stdlib_imports-599454090a012fb8)",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/symbols.rs (/tmp/nagi-container-flow-target/debug/deps/symbols-a75087330f28ff0c)",
+      "passed": 21,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/type_layouts.rs (/tmp/nagi-container-flow-target/debug/deps/type_layouts-4a427d867e1fefe7)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/typed_errors.rs (/tmp/nagi-container-flow-target/debug/deps/typed_errors-17b00f7624337488)",
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/value_codegen.rs (/tmp/nagi-container-flow-target/debug/deps/value_codegen-e6d8fe35ea08eafc)",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/view_branch_rebinding.rs (/tmp/nagi-container-flow-target/debug/deps/view_branch_rebinding-a8e44ad0305968e9)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/view_container_drop.rs (/tmp/nagi-container-flow-target/debug/deps/view_container_drop-00a2ff56a8d54853)",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/view_container_rebinding.rs (/tmp/nagi-container-flow-target/debug/deps/view_container_rebinding-a92529382dd79732)",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/view_flow_completion.rs (/tmp/nagi-container-flow-target/debug/deps/view_flow_completion-3cd4da6e9b64c272)",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/view_flow_foundation.rs (/tmp/nagi-container-flow-target/debug/deps/view_flow_foundation-2e9f9857648479f6)",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/view_iteration.rs (/tmp/nagi-container-flow-target/debug/deps/view_iteration-7d2923bfb4fec63e)",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/view_origins.rs (/tmp/nagi-container-flow-target/debug/deps/view_origins-c82c62bc04686b09)",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Running tests/view_parameter_rebinding.rs (/tmp/nagi-container-flow-target/debug/deps/view_parameter_rebinding-30430fd3bafb7862)",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Doc-tests nagi_runtime",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Doc-tests nagic",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "ci_failure": {
+    "head": "68d215b71684d4b028dc9bf3a9a87ecf4994d8ae",
+    "run": 37454227747,
+    "job": 112237851487
+  },
+  "count_rule": "last unfiltered summary per parent Running/Doc-tests section; excludes nested graph_render child summaries",
+  "limits": "CI exact thread interleaving unknown. Stock API regression proves same idle-plus-reserved-permit failure state; bounded test evidence, not all lifecycle interleavings.",
+  "documentation_checks": {
+    "relative_links": {
+      "files": 31,
+      "relative_links": 672,
+      "python_fences_compiled": 12,
+      "missing": []
+    },
+    "website_pages": 90,
+    "website_local_links_anchors_assets": "passed",
+    "public_move_examples": "unchanged from previously executed 7 locations / 4 unique programs"
+  }
+}

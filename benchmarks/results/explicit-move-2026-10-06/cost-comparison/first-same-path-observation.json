@@ -1,0 +1,130 @@
+[
+  {
+    "physical_source": "/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi",
+    "physical_out": "/tmp/nagi-explicit-move-proof/cost-comparison/common/generated",
+    "case": "implicit-before",
+    "compiler_sha256": "9bc1dd95cdca288b6356dfc17094b9590059d35778e5d4f0623eaadcd91f7bad",
+    "source_sha256": "c3abb2c606a4ce97e341f799ded7616373a26caa1432609eb86a311e8c5752ff",
+    "adapter_sha256": "a7d9e4ed7732302123ad51e01e54a9656fc8fa802601f14616ac7d5bbdf9cc8c",
+    "build_seconds": 0.39715693099424243,
+    "binary_bytes": 459224,
+    "future": {
+      "future_bytes": 96
+    },
+    "warm_check_seconds": [
+      0.006708384025841951,
+      0.006817296962253749,
+      0.006130585039500147,
+      0.006697095988783985,
+      0.006595690036192536,
+      0.006974983960390091,
+      0.006880432018078864
+    ],
+    "warm_check_median_seconds": 0.006708384025841951,
+    "cost_report": {
+      "format": "nagi-cost-sites-v1",
+      "functions": {
+        "arrange": {
+          "primitive_boxing": 0,
+          "static_sites": [
+            {
+              "cost": "heap allocation; element boxing 0",
+              "kind": "contiguous_list",
+              "line": 7
+            },
+            {
+              "cost": "runtime/input dependent; measure allocation counters",
+              "kind": "copy",
+              "line": 9
+            },
+            {
+              "cost": "heap allocation; element boxing 0",
+              "kind": "contiguous_list",
+              "line": 10
+            }
+          ],
+          "warning": "sites are not dynamic allocation counts; runtime and loop multiplicity excluded"
+        },
+        "main": {
+          "primitive_boxing": 0,
+          "static_sites": [],
+          "warning": "sites are not dynamic allocation counts; runtime and loop multiplicity excluded"
+        },
+        "observe": {
+          "primitive_boxing": 0,
+          "static_sites": [],
+          "warning": "sites are not dynamic allocation counts; runtime and loop multiplicity excluded"
+        },
+        "pause": {
+          "primitive_boxing": 0,
+          "static_sites": [],
+          "warning": "sites are not dynamic allocation counts; runtime and loop multiplicity excluded"
+        }
+      }
+    }
+  },
+  {
+    "physical_source": "/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi",
+    "physical_out": "/tmp/nagi-explicit-move-proof/cost-comparison/common/generated",
+    "case": "explicit-after",
+    "compiler_sha256": "ca7b7e12b2766b65bdf01c98969973aecd29a7eef2b1d89aa1e547fd9fe4c8ce",
+    "source_sha256": "f85188ed51c70034005dd06256d2cc750436eb188affaf6f72b4fbf1118806a9",
+    "adapter_sha256": "a7d9e4ed7732302123ad51e01e54a9656fc8fa802601f14616ac7d5bbdf9cc8c",
+    "build_seconds": 0.19792936299927533,
+    "binary_bytes": 459224,
+    "future": {
+      "future_bytes": 96
+    },
+    "warm_check_seconds": [
+      0.05886965402169153,
+      0.016642961010802537,
+      0.019944659958127886,
+      0.01834894996136427,
+      0.014531993016134948,
+      0.017169567989185452,
+      0.01710909599205479
+    ],
+    "warm_check_median_seconds": 0.017169567989185452,
+    "cost_report": {
+      "format": "nagi-cost-sites-v1",
+      "functions": {
+        "arrange": {
+          "primitive_boxing": 0,
+          "static_sites": [
+            {
+              "cost": "heap allocation; element boxing 0",
+              "kind": "contiguous_list",
+              "line": 8
+            },
+            {
+              "cost": "runtime/input dependent; measure allocation counters",
+              "kind": "copy",
+              "line": 10
+            },
+            {
+              "cost": "heap allocation; element boxing 0",
+              "kind": "contiguous_list",
+              "line": 11
+            }
+          ],
+          "warning": "sites are not dynamic allocation counts; runtime and loop multiplicity excluded"
+        },
+        "main": {
+          "primitive_boxing": 0,
+          "static_sites": [],
+          "warning": "sites are not dynamic allocation counts; runtime and loop multiplicity excluded"
+        },
+        "observe": {
+          "primitive_boxing": 0,
+          "static_sites": [],
+          "warning": "sites are not dynamic allocation counts; runtime and loop multiplicity excluded"
+        },
+        "pause": {
+          "primitive_boxing": 0,
+          "static_sites": [],
+          "warning": "sites are not dynamic allocation counts; runtime and loop multiplicity excluded"
+        }
+      }
+    }
+  }
+]

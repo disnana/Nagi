@@ -1,0 +1,10 @@
+warning: field `text` is never read
+ --> /tmp/nagi-explicit-move-proof/materialization/tuple.rs:5:36
+  |
+5 | struct Pair { number: Option<i64>, text: String }
+  |        ---- field in this struct   ^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: 1 warning emitted
+

@@ -1,0 +1,44 @@
+{
+  "format": "nagi-cost-sites-v1",
+  "functions": {
+    "arrange": {
+      "primitive_boxing": 0,
+      "static_sites": [
+        {
+          "cost": "heap allocation; element boxing 0",
+          "kind": "contiguous_list",
+          "line": 8
+        },
+        {
+          "cost": "runtime/input dependent; measure allocation counters",
+          "kind": "copy",
+          "line": 10
+        },
+        {
+          "cost": "heap allocation; element boxing 0",
+          "kind": "contiguous_list",
+          "line": 11
+        }
+      ],
+      "warning": "sites are not dynamic allocation counts; runtime and loop multiplicity excluded"
+    },
+    "main": {
+      "primitive_boxing": 0,
+      "static_sites": [],
+      "warning": "sites are not dynamic allocation counts; runtime and loop multiplicity excluded"
+    },
+    "observe": {
+      "primitive_boxing": 0,
+      "static_sites": [],
+      "warning": "sites are not dynamic allocation counts; runtime and loop multiplicity excluded"
+    },
+    "pause": {
+      "primitive_boxing": 0,
+      "static_sites": [],
+      "warning": "sites are not dynamic allocation counts; runtime and loop multiplicity excluded"
+    }
+  }
+}
+   Compiling nagi-main-99afd7fa431ef73e v0.1.0 (/tmp/nagi-explicit-move-proof/cost-comparison/common/generated/.nagi/apps/nagi-main-99afd7fa431ef73e/generations/.staging-g-15bb7f-18dbe82943688471-0)
+    Finished `release` profile [optimized] target(s) in 0.16s
+native: /tmp/nagi-explicit-move-proof/cost-comparison/common/generated/.nagi/apps/nagi-main-99afd7fa431ef73e/generations/g-15bb7f-18dbe82943688471-0/nagi-99afd7fa431ef73e-g-15bb7f-18dbe82943688471-0

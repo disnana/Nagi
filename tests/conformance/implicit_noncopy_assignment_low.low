@@ -1,0 +1,4 @@
+fn evaluate() -> unit {
+    let value: str = "Nagi";
+    let transferred: str = value;
+}

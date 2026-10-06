@@ -280,7 +280,7 @@
   },
   {
     "name": "registered_resource_independent_inventory",
-    "contract": "22resource/47operation/32field・定数の独立期待、集合完全性、公開ResourceInfo shape、Passing/borrow ownerを検査する",
+    "contract": "22resource/48operation/32field・定数の独立期待、集合完全性、公開ResourceInfo shape、Passing/borrow ownerを検査する",
     "files": [
       "compiler/tests/resource_contract_characterization.rs"
     ],
@@ -332,6 +332,33 @@
       "-p",
       "nagic",
       "--lib"
+    ]
+  },
+  {
+    "name": "explicit_move_ownership_and_native_lifecycle",
+    "contract": "bare nonCopy local代入拒否とcopy/fresh/明示moveをHigh/Lowで検査し、High/保存Low/手書きLowを実Cargoへ通す。String/Vec同一allocation、Arc所有者数、RHS Err/panic、Drop/取消、定数diagnosticを区別する",
+    "files": [
+      "compiler/tests/explicit_moves.rs"
+    ],
+    "test_names": [
+      "implicit_noncopy_local_assignments_fail_at_the_original_source_line",
+      "copy_inputs_keep_ordinary_assignment_and_move_expected_type_inference",
+      "canonical_aliases_shadowing_and_transparent_values_run_in_all_three_sources",
+      "move_operation_rejects_arity_type_arguments_and_future_transfer",
+      "explicit_move_preserves_use_after_move_borrow_partial_move_and_loop_checks",
+      "moving_nested_view_containers_keeps_escape_and_temporary_rejections",
+      "identity_moves_preserve_rhs_failure_drop_order_and_async_cancellation",
+      "move_keeps_typed_constant_failures_and_profile_dependent_overflow",
+      "identity_move_materializes_copy_values_and_keeps_bare_place_comparison_loans"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "explicit_moves"
     ]
   }
 ]

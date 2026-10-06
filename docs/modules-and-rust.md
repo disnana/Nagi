@@ -61,7 +61,7 @@ def main():
 
 module名で見えるのは、そのファイル自身が定義した関数・class・enumです。importした名前は自動で再公開しません。`from "orders.nagi" import Order`のように別名を省略することもできます。複数の定義は`from "orders.nagi" import Order as SavedOrder, score`のように`,`で選べます。末尾の余分な`,`は付けません。`from`と`as`はimportの文脈だけで解釈し、関数や変数の名前にも使えます。関数内でmodule名と同じローカル名を使った場合は、現在のローカル変数の規則に従います。classのmethod呼び出しには対応していません。
 
-同じ実ファイルは、複数のmodule名・fromの別名・従来のimportを使っても1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在はエラーです。存在しない定義のfrom importや、同じ場所で異なる定義を同じ名前にするimportは、そのimport文でエラーになります。引用符なしのimportは登録済みの`std.http.server`、`std.actor`、`std.result`を対象にします。一般packageの探索と公開範囲の指定は未対応です。
+同じ実ファイルは、複数のmodule名・fromの別名・従来のimportを使っても1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在はエラーです。存在しない定義のfrom importや、同じ場所で異なる定義を同じ名前にするimportは、そのimport文でエラーになります。引用符なしのimportは登録済みの`std.http.server`、`std.actor`、`std.result`等を対象にします。作業branchでは未リリースの`std.auth`と`std.ownership`も登録されています。一般packageの探索と公開範囲の指定は未対応です。
 
 未リリースの`std.auth`では、認証済みの`Principal`と消費型の`Grant[P]`を試しています。Rustの検証処理とNagiの独自policyをつなぐ例は[認証・認可サンプル](../test-nagi-code/application-examples/auth-boundary/README.md)にあります。固定credentialの実験で、JWS検証や全routeの認可チェックを提供するものではありません。
 
@@ -108,6 +108,23 @@ from std.actor import Actor as Worker, CallError
 ```
 
 `Worker[M, R, E]`と`actor.Actor[M, R, E]`は同じnative型です。`Supervisor[C]`へ名前付きasyncのfactoryとhandlerを登録し、`Turn[S, R, E]`で次の状態と返信を返します。メッセージ・返信・業務エラーは容量を数えられる所有値が必要で、Map・view・shared・opaque resourceを含められません。[actor](actor.md)・[APIリファレンス](actor-reference.md)・[サンプル](../test-nagi-code/library-examples/supervised-service/README.md)に実際の署名と手順があります。
+
+## 標準の値転送操作を読み込む
+
+`std.ownership.move`は作業branchで実装済み・未リリースです。module名と定義の別名のどちらでも呼び出せます。次の完全な例は`Nagi`を表示します。
+
+```nagi
+import std.ownership as ownership
+from std.ownership import move as transfer
+
+def main():
+    first = "Nagi"
+    second = ownership.move(first)
+    third = transfer(second)
+    print(third)
+```
+
+所有する非Copyローカルそのものの代入には明示操作を使います。新値生成やCopy代入、引数・return・field/index等の既存consume規則は維持します。`move`は予約語ではなく、同名のユーザー関数は通常の関数です。標準操作自体を第一級関数値にすることはできません。引数は一つ、型は入力から推論し、明示型引数は受け付けません。借用やFutureの制約と正確な移行範囲は[所有権](ownership.md#代入と明示move)を参照してください。
 
 ## Rustの関数を呼ぶ
 

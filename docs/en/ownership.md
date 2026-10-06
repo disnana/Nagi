@@ -18,27 +18,35 @@ This complete program prints `alice`. After the call, the original `name` cannot
 
 Uncommenting `print(name)` makes `check` reject use after move. If the function only reads, accept `view[str]` and pass `view(name)`. If it needs an independent string, pass `copy(view(name))`. See the [runnable borrowing example](language-guide.md#4-borrow-with-view-when-you-only-need-to-read).
 
-## Assignment today and the planned change
+## Assignment and explicit move
 
-The current `a = b` copies values classified as Copy, such as numbers and bools. For a non-Copy owned value, such as a string or list, it moves the value. This does not behave like Python's reference assignment.
+The explicit move and assignment rules below are implemented on the work branch and are unreleased. An installed release may not support them. Python assignment keeps another reference to the same value. Nagi uses ordinary assignment for Copy values, such as numbers and bools. To transfer an existing non-Copy local, use `move`; ordinary `destination = name` is rejected.
+
+Writing `move` makes it clear that assignment gives the original variable's value away. The compiler does not choose a copy or shared ownership for you when you want to keep using the original.
 
 ```nagi
+from std.ownership import move
+
 def main():
     count = 2
     same_count = count
     print(count + same_count)
     name = "Nagi"
-    destination = name
+    destination = move(name)
     print(destination)
     name = "new"
     print(name)
 ```
 
-Output: `4`, `Nagi`, `new`. After `destination = name`, the old string is available through `destination`; the original `name` can be used again after receiving a new value. Reading `name` before that reassignment would fail `check`. To retain both strings, use `destination = copy(view(name))` instead.
+Output: `4`, `Nagi`, `new`. `destination = move(name)` transfers the string and cleanup responsibility. The move operation itself does not clone, allocate, or add a shared owner.
 
-Current Copy rules also cover views, function values (including supported local async function aliases), UUIDs, timestamps, and classes/enums/nullable/owned values whose contents meet the Copy rules. Result and shared remain non-Copy even when their payloads are Copy. Copying a function value does not allow storing its Future, nor does the rule cover every enum or small class. See [types](types.md) and [async](async.md).
+Reading `name` after the move and before reassignment is rejected. The variable name is still available: assigning a new value allows reuse. To keep the original string too, replace the move assignment above with `destination = copy(view(name))`. To read without owning, use `view(name)`; to retain the same value in several places, use `share` and `clone_shared`.
 
-The adopted direction for a future migration is to require an explicit operation when assigning an existing non-Copy owned value with `a = b`: move to give it away, view to read it, copy to create an independent value, or shared ownership to retain the same value in several places. **The rules are specified and are being implemented and validated on a separate branch; current main still accepts implicit moves.** The adopted `std.ownership.move` covers ordinary assignment of an owned non-Copy local itself. Copy policy, fresh construction, and existing argument, return, and field/index consumption remain unchanged. Main integration and release availability are separate steps. See [design decisions](../../DESIGN.en.md).
+Fresh construction, including `name = "Nagi"` and `a = User(...)`, needs no move annotation. This change covers a bare owned non-Copy local RHS in a declaration, annotated assignment, or reassignment, including parentheses. Arguments, returns, field/index extraction, `try`, and `match` retain their existing consumption rules. `move(name)` may also be passed or returned, without bypassing borrow restrictions.
+
+For a Copy type, even `move(count)` leaves the original `count` usable. Copy rules are unchanged: views, function values (including supported local async function aliases), UUIDs, timestamps, and classes/enums/nullable/owned values whose contents are Copy. Result and shared remain non-Copy even with Copy payloads. A copied view still requires its owner to remain valid; copying a function value does not allow storing its Future. See [types](types.md), [async](async.md), and [design decisions](../../DESIGN.en.md).
+
+`move` is imported from `std.ownership`, accepts one inferred argument, and does not accept explicit type arguments. Use `ownership.move(name)` after `import std.ownership as ownership`, or `transfer(name)` after `from std.ownership import move as transfer`. User functions named `move` keep their own meaning. Standard operations are not first-class function values. Non-Copy fields cannot be taken from borrowed/shared parents. Futures and nested Futures cannot be inputs; `move(await operation(...))` is allowed when the awaited result type is supported.
 
 ## Retain the same value in several places
 

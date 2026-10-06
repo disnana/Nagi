@@ -723,6 +723,40 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
     Ok(())
 }
 impl Checker {
+    fn transferred_value(e: &Expr) -> Option<&Expr> {
+        let E::Call(name, _, args) = &e.kind else {
+            return None;
+        };
+        if e.resolution != Some(NameResolution::Standard) {
+            return None;
+        }
+        let operation = crate::stdlib::operation(name)?;
+        let argument = crate::stdlib::operation_semantics(operation)
+            .value_transfer
+            .argument()?;
+        args.get(argument)
+    }
+
+    fn async_function_origin(&self, value: &Expr) -> Option<String> {
+        match (&value.kind, value.resolution) {
+            (E::Name(name), Some(NameResolution::Function)) => Some(name.clone()),
+            (E::Name(name), Some(NameResolution::Local)) => {
+                self.vars.get(name)?.async_function.clone()
+            }
+            (E::Call(name, _, args), Some(NameResolution::Standard)) => {
+                let operation = crate::stdlib::operation(name)?;
+                if let crate::stdlib::ValueTransfer::WholeValue { argument } =
+                    crate::stdlib::operation_semantics(operation).value_transfer
+                {
+                    self.async_function_origin(args.get(argument)?)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
     fn record_view_use(&mut self, expression: &Expr, mode: ExprUseMode) {
         if !self.collect_view_flow {
             return;
@@ -962,9 +996,34 @@ impl Checker {
         types: &[Type],
         args: &mut [Expr],
         line: usize,
+        expected: Option<&Type>,
     ) -> Result<Type, String> {
         use crate::stdlib::{Operation as O, Passing, Resource as R};
         let info = crate::stdlib::operation_info(operation);
+        if let crate::stdlib::OperationEmission::IdentityTransfer { argument } =
+            crate::stdlib::operation_semantics(operation).emission
+        {
+            if args.len() != info.arity {
+                return Err(error(
+                    line,
+                    format!("{}の引数は{}個です", info.name, info.arity),
+                ));
+            }
+            if !types.is_empty() {
+                return Err(error(
+                    line,
+                    "moveの型は入力から推論します。型引数は指定できません",
+                ));
+            }
+            let input = &mut args[argument];
+            let ty = self.expr(input, expected)?;
+            // Keep the existing supported-value boundary. In particular a
+            // Future wrapper must not hide borrowed captures from Spawn.
+            self.emittable(&ty, line, true)?;
+            self.consume(input)?;
+            self.hold_value(input, false);
+            return Ok(ty);
+        }
         if info.module == crate::stdlib::StandardModule::Actor {
             return self.actor_standard(operation, types, args, line);
         }
@@ -1847,12 +1906,8 @@ impl Checker {
                 }
             }
             E::Try(value) => self.views_absent(value),
-            E::Call(name, _, args)
-                if e.resolution == Some(NameResolution::Standard)
-                    && crate::stdlib::operation(name)
-                        == Some(crate::stdlib::Operation::ResultMapError) =>
-            {
-                self.views_absent(&args[0])
+            E::Call(_, _, _) if e.resolution == Some(NameResolution::Standard) => {
+                Self::transferred_value(e).is_some_and(|input| self.views_absent(input))
             }
             // Do not infer absence from view-containing locals: Rust unifies
             // a binding's lifetime type across aliases and all assignments,
@@ -1938,11 +1993,10 @@ impl Checker {
                 }
             }
             E::Call(name, _, args) if e.resolution == Some(NameResolution::Standard) => {
-                if crate::stdlib::operation(name) == Some(crate::stdlib::Operation::ResultMapError)
-                {
-                    // Mapping the failure leaves the success payload and all
-                    // nested view origins unchanged, without borrowing Result.
-                    return self.origin_at(&args[0], depth);
+                if let Some(input) = Self::transferred_value(e) {
+                    // Whole values and map_error's retained success payload
+                    // keep the established content-depth relation.
+                    return self.origin_at(input, depth);
                 }
                 crate::stdlib::operation(name)
                     .and_then(|op| crate::stdlib::operation_info(op).borrow_owner)
@@ -2071,9 +2125,8 @@ impl Checker {
                 }
             }
             E::Call(name, _, args) if e.resolution == Some(NameResolution::Standard) => {
-                if crate::stdlib::operation(name) == Some(crate::stdlib::Operation::ResultMapError)
-                {
-                    return visit(&args[0], depth);
+                if let Some(input) = Self::transferred_value(e) {
+                    return visit(input, depth);
                 }
                 crate::stdlib::operation(name)
                     .and_then(|op| crate::stdlib::operation_info(op).borrow_owner)
@@ -2638,14 +2691,15 @@ impl Checker {
                     self.valid(a, s.line)?;
                 }
                 self.emittable(&ty, s.line, true)?;
-                let async_function = if ty.is_async_function() {
-                    match (&value.kind, value.resolution) {
-                        (E::Name(n), Some(NameResolution::Function)) => Some(n.clone()),
-                        (E::Name(n), Some(NameResolution::Local)) => {
-                            self.vars[n].async_function.clone()
-                        }
-                        _ => None,
+                if let (E::Name(source), Some(NameResolution::Local)) =
+                    (&value.kind, value.resolution)
+                {
+                    if !self.copy_type(&ty) {
+                        return Err(error(s.line, format!("非Copyの既存値 {source} の代入は暗黙moveできません。std.ownership.moveで明示してください")));
                     }
+                }
+                let async_function = if ty.is_async_function() {
+                    self.async_function_origin(value)
                 } else {
                     None
                 };
@@ -3529,7 +3583,7 @@ impl Checker {
                     && self.registered.contains(n)
                 {
                     if let Some(operation) = crate::stdlib::operation(n) {
-                        let ty = self.standard(operation, ts, args, line)?;
+                        let ty = self.standard(operation, ts, args, line, expected)?;
                         e.resolution = Some(NameResolution::Standard);
                         e.ty = Some(ty.clone());
                         return Ok(ty);
@@ -4155,9 +4209,44 @@ fn integrate_mode(p: &mut Program, mut native: Program, editor: bool) -> Result<
 mod flow_metadata_tests {
     use super::*;
 
-    const RESTORE: &str = r#"def restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
+    fn resolved_high(source: &str) -> Program {
+        let mut program = crate::parser::parse(source, true).unwrap();
+        assert!(program.modules.is_empty());
+        assert!(program.imports.is_empty());
+        let imports = std::mem::take(&mut program.module_imports)
+            .into_iter()
+            .map(|import| {
+                assert_eq!(import.source, ImportSource::Standard);
+                let target = crate::stdlib::module(&import.path).unwrap();
+                (import, target)
+            })
+            .collect();
+        let root = ModuleId("/nagi-flow-metadata/main.nagi".into());
+        let unit = crate::modules::ModuleUnit {
+            id: root.clone(),
+            program,
+            imports,
+            tokens: crate::lexer::lex(source, true).unwrap(),
+            offset: 0,
+        };
+        let program = crate::modules::resolve(vec![unit], root).unwrap();
+        crate::modules::validate(&program).unwrap();
+        program
+    }
+
+    fn root_function<'a>(program: &'a Program, name: &str) -> &'a Function {
+        let definition = program.modules.resolve_root_path(name).unwrap();
+        program
+            .functions
+            .iter()
+            .find(|function| function.name == definition.symbol)
+            .unwrap()
+    }
+
+    const RESTORE: &str = r#"from std.ownership import move
+def restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
     alias = [parts[0]]
-    alias = alias
+    alias = move(alias)
     if flag:
         local = "temporary"
         alias = [view(local)]
@@ -4179,11 +4268,7 @@ mod flow_metadata_tests {
     }
 
     fn assert_restore_facts(program: &Program) -> BindingId {
-        let function = program
-            .functions
-            .iter()
-            .find(|function| function.name == "restore")
-            .unwrap();
+        let function = root_function(program, "restore");
         let first = function.body[0].flow.as_ref().unwrap();
         let alias_binding = first.assignment.unwrap().target;
         assert_eq!(snapshot(first, true, "alias").binding, alias_binding);
@@ -4235,7 +4320,7 @@ mod flow_metadata_tests {
 
     #[test]
     fn flow_facts_recompute_for_high_saved_low_and_self_consumption() {
-        let mut high = crate::parser::parse(RESTORE, true).unwrap();
+        let mut high = resolved_high(RESTORE);
         check(&mut high).unwrap();
         let high_binding = assert_restore_facts(&high);
 
@@ -4323,10 +4408,11 @@ mod flow_metadata_tests {
 
     #[test]
     fn flow_collection_is_gated_to_view_return_dependencies() {
-        let source = r#"def ordinary() -> i64:
+        let source = r#"from std.ownership import move
+def ordinary() -> i64:
     return 1
 async def asynchronous(parts: List[view[str]]) -> List[view[str]]:
-    alias = parts
+    alias = move(parts)
     return alias
 def looped(flag: bool, part: view[str]) -> List[view[str]]:
     alias = [part]
@@ -4344,15 +4430,16 @@ async def scoped() -> Result[unit, Error]:
         print(1)
     return ok(print(0))
 "#;
-        let mut program = crate::parser::parse(source, true).unwrap();
+        let mut program = resolved_high(source);
         check(&mut program).unwrap();
 
-        for function in program.functions.iter().filter(|function| {
-            !matches!(
-                function.name.as_str(),
-                "matched" | "looped" | "asynchronous"
-            )
-        }) {
+        let collected_functions = ["matched", "looped", "asynchronous"]
+            .map(|name| root_function(&program, name).name.as_str());
+        for function in program
+            .functions
+            .iter()
+            .filter(|function| !collected_functions.contains(&function.name.as_str()))
+        {
             assert!(
                 all_flow_none(&function.body),
                 "{} had flow facts",
@@ -4367,11 +4454,7 @@ async def scoped() -> Result[unit, Error]:
         let scalar = Type::named("i64");
         assert!(!should_collect_view_flow(false, false, &scalar, &[]));
         assert!(should_collect_view_flow(false, true, &view_list, &[]));
-        let function = program
-            .functions
-            .iter()
-            .find(|function| function.name == "scoped")
-            .unwrap();
+        let function = root_function(&program, "scoped");
         assert!(supports_view_flow(&function.body));
         assert!(!should_collect_view_flow(
             false,
@@ -4412,13 +4495,13 @@ async def scoped() -> Result[unit, Error]:
     fn return_alias_dependencies_keep_straight_line_snapshots_sparse() {
         for count in [100, 500, 1000] {
             let mut source = String::from(
-                "def ordinary(part: view[str]) -> List[view[str]]:\n    value0 = [part]\n",
+                "from std.ownership import move\ndef ordinary(part: view[str]) -> List[view[str]]:\n    value0 = [part]\n",
             );
             for index in 1..count {
-                source.push_str(&format!("    value{index} = value{}\n", index - 1));
+                source.push_str(&format!("    value{index} = move(value{})\n", index - 1));
             }
             source.push_str(&format!("    return value{}\n", count - 1));
-            let mut program = crate::parser::parse(&source, true).unwrap();
+            let mut program = resolved_high(&source);
             check(&mut program).unwrap();
             let function = &program.functions[0];
             let snapshots: usize = function

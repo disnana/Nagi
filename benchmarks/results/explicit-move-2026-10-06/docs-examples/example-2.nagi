@@ -1,0 +1,11 @@
+from std.ownership import move
+
+def main():
+    count = 2
+    same_count = count
+    print(count + same_count)
+    name = "Nagi"
+    destination = move(name)
+    print(destination)
+    name = "new"
+    print(name)

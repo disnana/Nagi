@@ -2,6 +2,30 @@
 mod support;
 
 #[test]
+fn explicit_move_corpus_reaches_native_execution() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/conformance");
+    let cases: Vec<_> = support::corpus(&root)
+        .into_iter()
+        .filter(|case| case.name == "explicit_move" || case.name == "explicit_move_low")
+        .collect();
+    assert_eq!(
+        cases.len(),
+        2,
+        "High/handwritten Low move corpus must be registered"
+    );
+    if let Err(failure) = support::run_cases(&cases) {
+        let artifact = support::save_failure(&support::failure_case(&failure), &failure);
+        panic!(
+            "{} stage={}\n{}\nartifact={}",
+            failure.name,
+            failure.stage,
+            failure.diagnostic,
+            artifact.display()
+        );
+    }
+}
+
+#[test]
 fn corpus_and_bounded_generated_contracts_reach_native_execution() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/conformance");
     let mut cases = support::corpus(&root);

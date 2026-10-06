@@ -1,5 +1,13 @@
 # コンパイラ・Rust境界の進捗
 
+## PR #87: 更新後CIの終了回帰と仕上げ
+
+2026-10-06。move補強のlocal `44c38b7`は90 suite・899件成功。公開head `68d215b`のLinux CIでprivate SQLite closeが1件失敗した。古いCI、ローカル成功、再実行だけで解消したとは扱わず、stock APIによる決定的反例をtest-only `0051f7a`へ保存した。
+
+原因はidle Objectと予約済みpermitが同時に存在するとstock closeがsenderを残せること。`cfg(test)` adapterのclose後idle退役5行と回帰1件を追加し、Solが独立レビューした。最終コード `f6bc74a`で全回帰90 suite・900件、failed/ignored 0、fmt・clippy成功。公開runtime、compiler本体、move仕様、依存、CI、版は変更していない。[原因・先行REDと修正](sqlite-close-regression.md)、[仕上げ監査](explicit-move-readiness.md)、[原ログとprovenance](../../benchmarks/results/explicit-move-2026-10-06/readiness/sqlite-close/)を残す。最新headの4 OS・必須CIはPR Checksで別に確認する。
+
+次の実装はS1結果handle→S2業務Err/task fault→公開Pool/Tx。委任に基づく全Tのawait/discardとsticky faultの設計採用は別のlocal設計branchに保存し、#87へ新Task実装を混ぜていない。公開Poolのcapacity allocationブロッカーは未解決。merge/release/版更新は行わない。
+
 ## PR0: 設計監査と段階計画
 
 2026-10-05。基点main `8f6cc6cf7d7c08811736325263618cbea19314b8`。PR #76はユーザー側でマージ済みで、head `13b59aa`とmainのtreeが一致することを読み戻した。
@@ -320,3 +328,27 @@ DESIGN日英、ADR011、invariants、Q005/006を実装順へ接続し、入門ow
 ユーザーが#85をマージした。main `f7799fa46ed513432b76cdf08648fe0986d44d5c`を#86へmergeし、private取得予算の60件・測定・終了契約の成果と、言語移行前の基点main `e7aff1d`での36件・正常18実行の監査を両方保持した。上のdraft維持・未merge・move具体案判断待ち等は当時の記録であり、現在の状態ではない。#86はユーザーが非draftにした状態を維持し、エージェントはPR状態を変更していない。
 
 その後のユーザー指示で、canonical `std.ownership.move`、Copy据置、所有する非Copyローカルそのものの通常代入だけを拒否する範囲は確定した。別作業branchで先行test・実装・検証を進めている。#86と公開mainのcompiler/runtimeにはこの言語変更を含めず、現在の暗黙代入を禁止とは書かない。task結果handle、故障型・未受取等の詳細は後続であり、moveを再承認待ちへ戻さない。今回のmerge解消で既存検査を再実行したとは数えない。
+
+## 2026-10-06: #85/#86を明示move実装branchへ統合
+
+#86の更新head `93ad01119cc9ee37e63197a408a0ee75e74f33f5`を、move実装branch `feat/explicit-move-contract`へmergeした。#85のprivate取得予算と60件の記録、基点mainの36件・正常18実行の監査を保持する。文書競合はこのbranchでのV1/V2実装済みという現在の記載を維持し、#86と公開mainにmoveが実装済みとは扱わない。#85はユーザーがmainへ反映済み、#86は非draftであり、過去のdraft・判断待ちの記録は履歴として残す。
+
+moveはRust標準の`std::convert::identity`へ入力を値として一度渡す実装で、OWN-04の範囲とCopy表を保つ。実装は未マージ・未リリースであり、統合後の再検証は[実装結果](explicit-move-results.md)へ別に記録する。Taskは[設計案](task-result-handle-design.md)の段階で未実装。このmergeだけを新たなCargo/4 OS検証の成功とは数えない。
+
+## 2026-10-06: moveの全回帰と#86 main反映
+
+#86の競合解消head `93ad011`でchecks／websiteが成功した後、ユーザーがマージした。main `7d2d96a8bdba191e456f796bdf477b95bc34c57e`のtreeは検証headと同じ`890fe8a425ce93005c4478e39685d0d8f239ecfd`で、originから読み戻した。エージェントは#85/#86のmerge操作を行っていない。
+
+moveの統合後head `29a4618`は全90 suite・899件、failed/ignored 0。以前の93 suite・902件はgraph_renderの子process再実行3件の重複を含んでいたため、原ログを保って訂正した。fmt／clippy全target、10プロジェクト19実行、日英7箇所の4完全例のcheck/runが成功した。移行前36件・正常18実行とは別に記録する。限定生成256、fuzz 10,000 mutation／128 native、Drop・temporary・by-value比較の有限検査と原ログは[実装結果](explicit-move-results.md)へ保存した。
+
+V1/V2は独立したmain向けdraft PRとして4 OS CIを確認する。mergeとreleaseは別途確認する。S1/S2のTask契約は設計案の段階で、公開SQLite Pool/Transactionも未実装。取消要求をjoin完了、rollback要求を完了と扱わない。
+
+## 2026-10-06: #87の仕上げ監査
+
+#87の公開head `e408973`はdraft・競合なしで、必須CIとwebsiteが成功した。レビュー提出・inline thread・通常コメントは監査時点で各0件。Sol 2人が実装と公開move Docsを独立に読み直し、未解決のP0/P1を見つけなかった。レビューは任意プログラムの保証ではない。
+
+local `44c38b7`で、Copy入力にmoveを使っても元が使える説明と、元を残すにはmove代入をcopyへ置き換える説明を日英で補った。既存9群の3-source native oracleへCopy元の再利用、裸の引数・return、match payloadの裸returnを追加した。compiler/runtime/依存/CIのbytesは公開headから変更していない。全90 suite・899件、fmt／clippy、7箇所の完全例check/run、website90ページが成功。件数は子processの重複を除く。
+
+前回の確認2点はmoveの残件ではなく、S1の未受取handleと故障回復性だった。今回の委任に基づき、全Tの正常出口await/discardと、受取後も残るscope故障を次工程の初版方針に選んだ。過去の方針に必然的に含まれていたとは扱わず、別の設計branchに採用理由・ADRと実装前の検証条件を記録する。Task実装、全spawn移行、公開Pool/Txを#87へ混ぜない。
+
+最新headのCI・draft解除条件・有限な検証範囲は[仕上げ監査](explicit-move-readiness.md)を参照する。merge・release・版更新は行わない。

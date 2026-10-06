@@ -1,0 +1,14 @@
+from std.ownership import move
+
+def receive(label: str) -> str:
+    return move(label)
+
+def main():
+    count = 2
+    same_count = count
+    source = "Nagi"
+    destination = move(source)
+    print(receive(move(destination)))
+    source = "new"
+    print(source)
+    print(count + same_count)

@@ -1,0 +1,20 @@
+# Nagi Low 0.1 / generated. 手書き変更はnative/で@replaceしてください。
+# nagi-modules-v1 {"root":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","modules":[{"id":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","path":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi"}],"definitions":[{"id":{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","kind":"Function","name":"observe"},"symbol":"__nagi_def_2f746d702f6e6167692d6578706c696369742d6d6f76652d70726f6f662f636f73742d636f6d70617269736f6e2f636f6d6d6f6e2f6d61696e2e6e616769_f_6f627365727665","line":2},{"id":{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","kind":"Function","name":"pause"},"symbol":"__nagi_def_2f746d702f6e6167692d6578706c696369742d6d6f76652d70726f6f662f636f73742d636f6d70617269736f6e2f636f6d6d6f6e2f6d61696e2e6e616769_f_7061757365","line":4},{"id":{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","kind":"Function","name":"arrange"},"symbol":"__nagi_def_2f746d702f6e6167692d6578706c696369742d6d6f76652d70726f6f662f636f73742d636f6d70617269736f6e2f636f6d6d6f6e2f6d61696e2e6e616769_f_617272616e6765","line":6},{"id":{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","kind":"Function","name":"main"},"symbol":"main","line":15}],"bindings":[{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","name":"observe","target":{"Definition":{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","kind":"Function","name":"observe"}},"public":true,"line":2,"span":{"start":8,"end":9}},{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","name":"pause","target":{"Definition":{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","kind":"Function","name":"pause"}},"public":true,"line":4,"span":{"start":21,"end":22}},{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","name":"arrange","target":{"Definition":{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","kind":"Function","name":"arrange"}},"public":true,"line":6,"span":{"start":27,"end":28}},{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","name":"main","target":{"Definition":{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","kind":"Function","name":"main"}},"public":true,"line":15,"span":{"start":87,"end":88}}],"references":[{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","line":12,"span":{"start":78,"end":81},"target":{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","kind":"Function","name":"pause"},"spelling":"pause"},{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","line":16,"span":{"start":93,"end":96},"target":{"module":"/tmp/nagi-explicit-move-proof/cost-comparison/common/main.nagi","kind":"Function","name":"observe"},"spelling":"observe"}]}
+@rust("native::observe")
+extern fn __nagi_def_2f746d702f6e6167692d6578706c696369742d6d6f76652d70726f6f662f636f73742d636f6d70617269736f6e2f636f6d6d6f6e2f6d61696e2e6e616769_f_6f627365727665() -> unit;
+@rust("native::pause")
+extern async fn __nagi_def_2f746d702f6e6167692d6578706c696369742d6d6f76652d70726f6f662f636f73742d636f6d70617269736f6e2f636f6d6d6f6e2f6d61696e2e6e616769_f_7061757365() -> unit;
+async fn __nagi_def_2f746d702f6e6167692d6578706c696369742d6d6f76652d70726f6f662f636f73742d636f6d70617269736f6e2f636f6d6d6f6e2f6d61696e2e6e616769_f_617272616e6765(text: view[str]) -> List[view[str]] {
+    let parts: List[view[str]] = [text];
+    let saved: List[view[str]] = parts;
+    let local: str = copy(text);
+    parts = [view(local)];
+    parts = saved;
+    await __nagi_def_2f746d702f6e6167692d6578706c696369742d6d6f76652d70726f6f662f636f73742d636f6d70617269736f6e2f636f6d6d6f6e2f6d61696e2e6e616769_f_7061757365();
+    return parts;
+}
+
+fn main() -> unit {
+    __nagi_def_2f746d702f6e6167692d6578706c696369742d6d6f76652d70726f6f662f636f73742d636f6d70617269736f6e2f636f6d6d6f6e2f6d61696e2e6e616769_f_6f627365727665();
+}
+

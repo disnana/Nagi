@@ -122,6 +122,17 @@ pub(crate) enum CompareRead {
     Slice,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum OperationPlan {
+    NativeCall {
+        path: String,
+        parameters: Vec<crate::stdlib::Passing>,
+        emit_type_arguments: bool,
+    },
+    /// Validated type-preserving transfer, realized as a Rust by-value result.
+    /// View origins remain checked facts; the operand's place is not preserved.
+    IdentityTransfer { argument: usize },
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ExpressionPlan {
     pub numeric_suffix: Option<String>,
     pub static_read: StaticRead,
@@ -130,7 +141,7 @@ pub(crate) struct ExpressionPlan {
     pub minimum: Option<String>,
     pub symbol_path: Option<String>,
     pub field: Option<(String, bool)>,
-    pub operation: Option<(String, Vec<crate::stdlib::Passing>, bool)>,
+    pub operation: Option<OperationPlan>,
     pub view: ViewRead,
     pub copy: CopyRead,
     pub json_string: bool,
@@ -556,12 +567,32 @@ fn expression_plan(e: &Expr, p: &Program) -> Result<ExpressionPlan, String> {
                 return Err("invalid checked standard operation identity".into());
             }
             let info = crate::stdlib::operation_info(op);
-            plan.symbol_path = Some(info.rust_path.into());
-            plan.operation = Some((
-                info.rust_path.into(),
-                info.parameters.to_vec(),
-                info.emit_type_arguments,
-            ));
+            plan.operation = Some(match crate::stdlib::operation_semantics(op).emission {
+                crate::stdlib::OperationEmission::NativeCall => {
+                    plan.symbol_path = Some(info.rust_path.into());
+                    OperationPlan::NativeCall {
+                        path: info.rust_path.into(),
+                        parameters: info.parameters.to_vec(),
+                        emit_type_arguments: info.emit_type_arguments,
+                    }
+                }
+                crate::stdlib::OperationEmission::IdentityTransfer { argument } => {
+                    let E::Call(_, type_arguments, args) = &e.kind else {
+                        return Err("invalid checked identity transfer".into());
+                    };
+                    if info.asynchronous
+                        || !type_arguments.is_empty()
+                        || args.len() != info.arity
+                        || info.parameters.get(argument) != Some(&crate::stdlib::Passing::Move)
+                        || args.get(argument).and_then(|input| input.ty.as_ref()) != Some(ty)
+                        || crate::stdlib::operation_semantics(op).value_transfer
+                            != (crate::stdlib::ValueTransfer::WholeValue { argument })
+                    {
+                        return Err("invalid checked identity transfer facts".into());
+                    }
+                    OperationPlan::IdentityTransfer { argument }
+                }
+            });
         }
     }
     match &e.kind {
