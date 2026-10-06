@@ -1,0 +1,12 @@
+[
+  {
+    "project": "task-results",
+    "checked_low_body_equal_after_root_identity_normalization": true,
+    "normalization": "Remove module provenance JSON header; replace hex-encoded root module path only."
+  },
+  {
+    "project": "supervised-service",
+    "checked_low_body_equal_after_root_identity_normalization": true,
+    "normalization": "Remove module provenance JSON header; replace hex-encoded root module path only."
+  }
+]

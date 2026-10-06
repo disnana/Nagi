@@ -56,3 +56,9 @@ Task静的制約はNagi checkerの保証。手書きRust handle consumeだけで
 | 別工程 | 公開Pool/Tx | S2 acceptanceとcapacity判断を前提に専用ADR/DB oracleで進む。Task取消/discardをDB cleanup完了としない |
 
 最新のmerge済PR・残件・検証・release状態はこの資料と[progress](../progress.md)へ追記する。PR完成、CI成功、Docs完了だけでセッションを止めず、既知release blockerを解消して公開読戻しまで継続する。
+
+## 追記: S1 mergeとS2の現在地
+
+#88の最新head `08e90c6984e689f7d026b3ff40277b9898ab4c68`はchecks `37540011861`・website `37540011529`が成功し、4 OSの110契約・private/public native・配布Task三構文を読戻した。main `aee1987a7ede5eeebb5e253afd65cb5ede327dde`へmerge済みで、双方tree `bc62c787471d9e4481e36c0cca6e2ed294cebbc1`。上の未merge・CI待ち表記は最終補強時点の履歴である。
+
+S2は別branch `feat/task-service-result-propagation`で既存APIを使い実装し、サービスmonitorの内側Resultを親tryへ接続した。新故障昇格APIは不要と判断した。HTTP旧spawn、業務Err継続、同期Drop/context保持の限界を維持し、三構文×7nativeケースと公開両例三構文はローカル成功。独立指摘2点を修正し、修正後読戻し/全回帰/4 OS/mergeを進める。[S2結果](../task-handles-s2-results.md)を現在の正本とする。リリース候補は既存patch履歴に沿う0.1.11、VSIX0.1.13は変更しない。migration/API差分監査の証拠は現在 `/tmp/nagi-release-task-audit/`、リリース工程へ保存する。公開済みとはまだ報告しない。

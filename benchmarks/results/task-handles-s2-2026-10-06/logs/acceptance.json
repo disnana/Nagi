@@ -1,0 +1,26 @@
+{
+  "source_base": "08e90c6984e689f7d026b3ff40277b9898ab4c68",
+  "scope": "Concrete Supervisor/HTTP composition through existing Task/Result/Error/try APIs; no new public operation or language rule",
+  "implementation_after": "S1 latest four-OS required CI and main merge",
+  "source_forms": ["High", "saved Low reloaded without original High", "independent handwritten Low"],
+  "native_cases": [
+    {"name":"business-and-normal-shutdown", "trigger":"actor reply business Err, healthy counter reply, explicit actor shutdown", "expected":"409 then200; after normal actor shutdown HTTP503 remains live; separate HTTP signal closes server; scopeOk"},
+    {"name":"terminal-body-error", "trigger":"restart intensity exhausted while HTTP stays healthy; typed monitor receipt Ok(innerErr); parent try inner", "expected":"original monitor Error kind/message; direct HTTP Future destroyed and listener stopped before parent returns; external shutdown signal unused"},
+    {"name":"weak-discarded-monitor-counterexample", "trigger":"same terminal innerErr; typed monitor explicitly discarded", "expected":"monitor-returned barrier establishes produced business Error; HTTP remains responsive503; external finite HTTP signal then scopeOk; this is valid Nagi behavior illustrating incorrect service composition"},
+    {"name":"legacy-http-error", "trigger":"real HTTP returns controlled Error while monitor remains active", "expected":"first observed legacy HTTP Error kind/message remains primary; monitor abort requested; direct child drain completes; separately retained Control elects actor drainer and confirms successful cleanup"},
+    {"name":"monitor-task-panic", "trigger":"normal actor shutdown and actual run cleanup, then monitor adapter panics", "expected":"outer TaskFailure Panicked; diagnostic handling cannot clear sticky scopeError; HTTP cancelled/joined; do not promise arbitrary panic payload text"},
+    {"name":"parent-drop", "trigger":"actor readiness and live HTTP request established, then parent future dropped while waiting for monitor", "expected":"synchronous Drop only requests abort; independently await HTTP Future destruction/listener stop and successful actor::shutdown with retained Control; no synchronous/transitive join guarantee"}
+  ],
+  "examples": {
+    "supervised-service": "typed monitor + legacy HTTP; business reply, normal shutdown and current API behavior preserved",
+    "task-results": "spawn/one-time receipt/canonical move/nested business Err/unit discard; Counter output oracle and final-after-scope suffix"
+  },
+  "limits": [
+    "HTTP Future cancellation aborts nested connections; direct server join is not arbitrary handler close completion",
+    "No SupervisorContext Arc is held by sample WebState (Actor/Control only); external retained context awaiting monitor can create a cycle",
+    "Error alone from actor::shutdown does not prove cleanup; no-worker-failure cancellation cases must require successful Ok",
+    "Monitor body Error wins only after parent receives it and executes try; HTTP fault observed earlier legitimately wins",
+    "Non-yielding work, native blocking/Drop, external rollback, general Future storage and task detach remain outside supported guarantees"
+  ],
+  "validation": ["strict Task110 contracts", "new native service cases", "actual library example CLI/socket all3forms", "workspace regression/fmt/clippy", "four-OS CI examples/native/distribution", "JA/EN Docs and DESIGN", "independent review and any fixes"]
+}

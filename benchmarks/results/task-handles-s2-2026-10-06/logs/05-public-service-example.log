@@ -1,0 +1,19 @@
+Passed: supervised-service (high)
+Passed: supervised-service (saved-low)
+Traceback (most recent call last):
+  File "/workspace/Nagi/scripts/verify_library_examples.py", line 388, in <module>
+    main()
+  File "/workspace/Nagi/scripts/verify_library_examples.py", line 320, in main
+    verify_forms(args.only)
+  File "/workspace/Nagi/scripts/verify_library_examples.py", line 310, in verify_forms
+    for mode, executable, directory in build_forms(compiler, name, env, output):
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/Nagi/scripts/verify_library_examples.py", line 280, in build_forms
+    run([compiler, "check", *options], env=env)
+  File "/workspace/Nagi/scripts/verify_library_examples.py", line 44, in run
+    raise RuntimeError(f"Command failed: {args}\n{result.stdout}{result.stderr}")
+RuntimeError: Command failed: [PosixPath('/tmp/nagi-container-flow-target/release/nagic'), 'check', PosixPath('/tmp/nagi-library-forms-5ho6symm/supervised-service/main.low'), '--project', PosixPath('/tmp/nagi-library-forms-5ho6symm/supervised-service'), '--out', PosixPath('/tmp/nagi-library-forms-5ho6symm/supervised-service/handwritten-low-build')]
+error: line 5:1: fn が必要です (found Id("class"))
+ --> /tmp/nagi-library-forms-5ho6symm/supervised-service/main.low:5
+ 5 | class Context { initial: i64; }
+

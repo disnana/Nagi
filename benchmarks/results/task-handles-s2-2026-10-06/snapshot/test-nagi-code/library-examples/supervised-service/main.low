@@ -1,0 +1,112 @@
+import std.actor as actor;
+import std.http.server as http;
+from std.task import message;
+
+record Context { initial: i64; }
+record CounterState { value: i64; label: str; }
+enum Message { Read; Add(amount: i64); }
+enum CounterError { InvalidIncrement; LimitReached; }
+record WebState {
+    counter: actor.Actor[Message, i64, CounterError];
+    control: actor.Control;
+}
+enum WebError { InvalidInput; Rejected; Unavailable; }
+
+async fn create_counter(context: shared[Context]) -> Result[CounterState, Error] {
+    return ok(CounterState(value=context.initial, label="counter"));
+}
+async fn update_counter(state: CounterState, message: Message) -> Result[actor.Turn[CounterState, i64, CounterError], Error] {
+    match message {
+        case Message.Read {
+            let value = state.value;
+            return ok(actor.turn[CounterState, i64, CounterError](state, ok(value)));
+        }
+        case Message.Add(amount) {
+            if amount < 1 or amount > 1000 {
+                return ok(actor.turn[CounterState, i64, CounterError](state, fail(CounterError.InvalidIncrement)));
+            }
+            if state.value > 1000000 - amount {
+                return ok(actor.turn[CounterState, i64, CounterError](state, fail(CounterError.LimitReached)));
+            }
+            let value = state.value + amount;
+            let next = CounterState(value=value, label=state.label);
+            return ok(actor.turn[CounterState, i64, CounterError](next, ok(value)));
+        }
+    }
+}
+fn number_response(value: i64) -> http.Response {
+    match http.json[i64](http.Status.OK, value) {
+        case Ok(response) { return response; }
+        case Err(_) { return http.empty(http.Status.INTERNAL_SERVER_ERROR); }
+    }
+}
+fn web_error(problem: WebError) -> http.Response {
+    match problem {
+        case WebError.InvalidInput { return http.text(http.Status.BAD_REQUEST, "send a JSON integer"); }
+        case WebError.Rejected { return http.text(http.Status.CONFLICT, "increment must be 1..1000 and total at most 1000000"); }
+        case WebError.Unavailable { return http.text(http.Status.SERVICE_UNAVAILABLE, "counter unavailable"); }
+    }
+}
+async fn execute(counter: view[actor.Actor[Message, i64, CounterError]], message: Message) -> Result[http.Response, WebError] {
+    match await actor.call(counter, message, 0, 1000) {
+        case Ok(reply) {
+            match reply {
+                case Ok(value) { return ok(number_response(value)); }
+                case Err(_) { return fail(WebError.Rejected); }
+            }
+        }
+        case Err(_) { return fail(WebError.Unavailable); }
+    }
+}
+async fn read_counter(request: http.Request, state: shared[WebState]) -> Result[http.Response, WebError] {
+    return await execute(view(state.counter), Message.Read);
+}
+async fn increment(request: http.Request, state: shared[WebState]) -> Result[http.Response, WebError] {
+    match json_decode[i64](request.body) {
+        case Ok(amount) { return await execute(view(state.counter), Message.Add(amount)); }
+        case Err(_) { return fail(WebError.InvalidInput); }
+    }
+}
+async fn stop_counter(request: http.Request, state: shared[WebState]) -> Result[http.Response, WebError] {
+    match await actor.shutdown(view(state.control)) {
+        case Ok(_) { return ok(http.empty(http.Status.NO_CONTENT)); }
+        case Err(_) { return fail(WebError.Unavailable); }
+    }
+}
+async fn monitor(group: actor.Supervisor[Context]) -> Result[unit, Error] {
+    return await actor.run(group);
+}
+async fn serve_web(app: http.App[WebState, WebError], ready: actor.Actor[Message, i64, CounterError], control: actor.Control, port: i64) -> Result[unit, Error] {
+    match await actor.ready(view(ready), 5000) {
+        case Ok(_) { assert_true(True); }
+        case Err(_) {
+            try await actor.shutdown(view(control));
+            return error("counter did not start");
+        }
+    }
+    let outcome = await http.serve(app, port, http.default_options());
+    try await actor.shutdown(view(control));
+    return outcome;
+}
+async fn main() -> Result[unit, Error] {
+    let group = actor.supervisor[Context](Context(initial=0), actor.default_options());
+    let counter = try actor.register[CounterState, Message, i64, CounterError](view(group), "counter", create_counter, update_counter, actor.default_actor_options());
+    let ready = actor.clone_actor(view(counter));
+    let control = actor.control(view(group));
+    let server_control = actor.clone_control(view(control));
+    let app = http.app[WebState, WebError](WebState(counter=counter, control=control), web_error);
+    app = try http.route(app, http.Method.GET, "/counter", read_counter);
+    app = try http.route(app, http.Method.POST, "/counter", increment);
+    app = try http.route(app, http.Method.POST, "/shutdown", stop_counter);
+    let port = try parse_i64(env("NAGI_SAMPLE_PORT", "8090"));
+    scope {
+        let monitor_task = spawn monitor(group);
+        spawn serve_web(app, ready, server_control, port);
+        let received = await monitor_task;
+        match received {
+            case Ok(inner) { try inner; }
+            case Err(failure) { print(message(failure)); }
+        }
+    }
+    return ok(assert_true(True));
+}

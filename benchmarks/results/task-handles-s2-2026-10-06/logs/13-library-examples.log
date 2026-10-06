@@ -1,0 +1,16 @@
+Passed: typed-errors
+Passed: module-imports
+Passed: low-kernel
+Passed: rust-json
+Passed: rust-async
+Passed: foundation-cli (both engines)
+Passed: foundation-report (both engines)
+Passed: custom-http (graceful shutdown)
+Passed: http-auth (graceful shutdown)
+Passed: supervised-service (high)
+Passed: supervised-service (saved-low)
+Passed: supervised-service (handwritten-low)
+Passed: task-results (high)
+Passed: task-results (saved-low)
+Passed: task-results (handwritten-low)
+{"checks": 15, "status": "passed"}

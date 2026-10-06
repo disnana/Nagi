@@ -57,6 +57,8 @@ async def main() -> Result[unit, Error]:
 
 [scope](async.md)本体が終わって子の終了を待つ段階で、spawnした`run`がErrorを返すと、同じscopeの残りの子をキャンセルして終了を待ちます。HTTPサーバーも同じscopeでspawnしていれば、その対象です。たとえば最後の`TEMPORARY` workerの失敗は、HTTPの終了につながります。業務上の拒否とworkerの故障を分けて返してください。
 
+これは旧statement spawnの動作です。[Task結果handle](task-handles.md)で`run`を起動すると、内側の業務Result Errだけではscopeは故障しません。[サービス例](../test-nagi-code/library-examples/supervised-service/README.md)は親がmonitorをawaitし、`Ok(inner)`を`try inner`でbody Errへ伝えてHTTPを取り消します。discardへの機械置換はこの接続を失います。正常shutdownはHTTPを継続します。
+
 `shutdown`の成功は、子と共通データの後片付け完了を表します。Errorには、後片付け完了後に返す記録済みの子の失敗と、期限切れによる未完了の両方があります。現行APIには専用の完了状態型がなく、Errorだけでは後片付けが完了したかを区別できません。
 
 期限内に終わらない場合は終了を追跡する記録を保持します。HTTPやnative処理が共通データを保持している間は、後片付けは完了しません。その解放がSupervisorの終了待ちに依存すると、互いに待つ構成になります。利用者側でも参照と停止の順序を設計する必要があります。Rust連携で別のTokio runtimeを使う場合は、`run`を開始したruntimeを後片付けまで維持します。

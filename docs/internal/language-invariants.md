@@ -6,7 +6,7 @@
 
 ## 採用方針と現行契約の区別
 
-2026-10-06の引継ぎを[ADR 011](adr/011-language-behavior-and-docs.md)へ取り込んだ。各節の現行契約表は作業branchの実装を表す。S1のTask契約は別節に分け、旧Scopeへ上書きしない。OWN-04は追加の承認を受け実装済み・未リリース。spawn結果handleと子業務Errの扱いを変えるASYNC-03/04は[ADR 012](adr/012-task-result-handles.md)に沿い作業branchへ接続済み・未リリース。条件付きshared messageのACTOR-01は方向のみ採用で、ACTOR-01は現在有効な受理規則ではない。
+2026-10-06の引継ぎを[ADR 011](adr/011-language-behavior-and-docs.md)へ取り込んだ。各節の現行契約表は作業branchの実装を表す。S1のTask契約は別節に分け、旧Scopeへ上書きしない。OWN-04は追加の承認を受け実装済み・未リリース。spawn結果handleと子業務Errの扱いを変えるASYNC-03/04は[ADR 012](adr/012-task-result-handles.md)に沿いmainへ接続済み・未リリース。条件付きshared messageのACTOR-01は方向のみ採用で、ACTOR-01は現在有効な受理規則ではない。
 
 変更する際はbefore/after、互換性と対象版、High/Low、診断位置、生成Rust、実runtimeの成功・失敗・取消を検査する。移行前の暗黙代入moveは監査記録に残し、未変更の引数・return等のconsumeとScope子Errの契約を保つ。Supervisorのterminal failureをHTTP停止へ伝える接続も保つ。未決の細部は[Q-005〜007](open-questions.md#q-005-既存所有値の代入を明示する範囲)にまとめる。
 
@@ -99,7 +99,7 @@ buildには外部環境が必要なため「check成功ならどんな環境で�
 
 Tokioのtask/Future、RustのDrop、Arcを利用する。BEAMのVM、分散監視、無停止コード更新、プロセス障害からの復旧は提供していない。
 
-### S1 Task結果handle（作業branch・未リリース）
+### S1 Task結果handle（main・未リリース）
 
 [ADR 012](adr/012-task-result-handles.md)と[接続判断](task-handle-implementation.md)に沿い、SpawnBind・canonical std.task metadata・私有ScopeIdとbinding義務・sealed受取/放棄/scope plan・public runtimeを接続した。[接続結果](task-handles-s1-results.md)でchecker、native、CI、測定の範囲を分ける。[Stage 1](task-bridge-stage1-results.md)は接続前の歴史的記録である。旧spawn-only Scopeは変更しない。
 
@@ -111,7 +111,7 @@ Tokioのtask/Future、RustのDrop、Arcを利用する。BEAMのVM、分散監�
 | scope fault | panic/予期しない取消/legacy Err/protocol故障は最初に観測したprimaryをsticky保持。兄弟abort要求→actual drain後に外側Err。受取Err処理後もscope出口Err、bodyの元Eを後続faultで置換しない |
 | owner / 取消 | 唯一JoinSet owner、scope内ticket、未join native ID対応。join Ready→record間にawaitを挟まない。receiptはScope強参照を持たず、受取Future取消でhandleを復活させない。Scope同期Dropはabort要求まで |
 | 放棄と保持 | discardやTのDropをactual join/close成功と数えない。完了未join task・未受取Tの保持とallocation/retireを検査し、実行中数だけでメモリを説明しない |
-| 既存連携 | S1では旧spawn fail-on-ErrとSupervisor terminal→HTTP取消を維持。S2で明示移行してから公開Pool/Txへ進む |
+| 既存連携 | S1では旧spawn fail-on-ErrとSupervisor terminal→HTTP取消を維持。S2は親がmonitor内側Resultをtryする移行。新fault昇格APIは追加せず、公開Pool/Txは別工程 |
 
 TaskFailureはopaque・非Copy・非Clone・非shared、kind()はCopyな四値enum、message()はFailure-origin view。Task bindingを含む最寄りscopeのみTaskScopeを選び、nested scopeは独立する。元cleanup anchorとbodyラベル、Error変換、評価順を維持する。保証範囲と未確認targetは[接続結果](task-handles-s1-results.md)へ記録し、公開Pool/Txやreleaseの保証へ広げない。
 

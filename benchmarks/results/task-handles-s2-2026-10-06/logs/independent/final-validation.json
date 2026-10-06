@@ -1,0 +1,56 @@
+{
+  "local_link_missing": [],
+  "native_markers": {
+    "high": [
+      "Normal",
+      "Terminal",
+      "Discarded",
+      "HttpError",
+      "MonitorPanic",
+      "ParentDrop",
+      "RetainedContext"
+    ],
+    "saved-low": [
+      "Normal",
+      "Terminal",
+      "Discarded",
+      "HttpError",
+      "MonitorPanic",
+      "ParentDrop",
+      "RetainedContext"
+    ],
+    "handwritten-low": [
+      "Normal",
+      "Terminal",
+      "Discarded",
+      "HttpError",
+      "MonitorPanic",
+      "ParentDrop",
+      "RetainedContext"
+    ]
+  },
+  "doc_paths_checked": [
+    "DESIGN.md",
+    "DESIGN.en.md",
+    "docs/task-handles.md",
+    "docs/en/task-handles.md",
+    "docs/supervisor.md",
+    "docs/en/supervisor.md",
+    "docs/roadmap.md",
+    "docs/en/roadmap.md",
+    "docs/internal/adr/012-task-result-handles.md",
+    "docs/internal/language-invariants.md",
+    "docs/internal/open-questions.md",
+    "docs/internal/progress.md",
+    "docs/internal/handoffs/2026-10-06-task-handles-s1-complete.md",
+    "docs/internal/task-handles-s2-results.md",
+    "test-nagi-code/library-examples/task-results/README.md",
+    "test-nagi-code/library-examples/task-results/README.en.md",
+    "test-nagi-code/library-examples/supervised-service/README.md",
+    "test-nagi-code/library-examples/supervised-service/README.en.md"
+  ],
+  "S1_head_and_base_trees": [
+    "bc62c787471d9e4481e36c0cca6e2ed294cebbc1",
+    "bc62c787471d9e4481e36c0cca6e2ed294cebbc1"
+  ]
+}

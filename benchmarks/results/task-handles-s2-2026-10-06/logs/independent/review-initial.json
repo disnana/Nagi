@@ -1,0 +1,39 @@
+{
+  "timestamp_utc": "2026-10-06T22:57:44.771049+00:00",
+  "base": "aee1987a7ede5eeebb5e253afd65cb5ede327dde",
+  "production_diff": "none in compiler/src, runtime, Cargo.toml, Cargo.lock",
+  "files": {
+    "compiler/tests/support/task_service_s2.rs": "320b2a976f4e679ea110e57de9649ae1ff977aa5a26960e23aea1a0ef024eb50",
+    "compiler/tests/task_handles.rs": "7a50924e76cd973280de26b548df52318f2bfba830c19ece6f44ed341d1a651e",
+    "scripts/verify_library_examples.py": "49e4f1775c44577208139fecd3275f0cab1beef3b2227d71deae20461d49878c",
+    ".github/workflows/ci.yml": "ba4d2c0523507110985393a6165e5334e7fba7f4c12babf247a5dd95372e2c87",
+    "test-nagi-code/library-examples/supervised-service/main.nagi": "90d6db367361c3ce19aaf9b16f9828c924235994d1beef0524641bd0509ae63b",
+    "test-nagi-code/library-examples/supervised-service/main.low": "cc5ee9c511cdf838f1dabeeb0410d99910d8f57f72dfd81174f994ca6ad7031e",
+    "test-nagi-code/library-examples/supervised-service/README.md": "ece59d5dd019b89bdf6043a2593eade9d5be465f60bb710b6105c69682e738f9",
+    "test-nagi-code/library-examples/supervised-service/README.en.md": "b4cb0fb608ebdbf8497c17598a67847e96a80818a189cba6677a17dcf3f661a8",
+    "test-nagi-code/library-examples/task-results/main.nagi": "2c4cc1112f380b0a07eeffe84bf619b0fd8eb8f591578934d3e5800e5558d102",
+    "test-nagi-code/library-examples/task-results/main.low": "8f3ec3c9f5fa84047d1916059b233a6cf4f2dc26757889546f106ae053fe5ce2",
+    "test-nagi-code/library-examples/task-results/README.md": "228fc1c9a32e6fb175118d34a635be6280cf15acd7ce8cb10ab452c039732f63",
+    "test-nagi-code/library-examples/task-results/README.en.md": "81fb36cb7562f8e2194c1711409d4c6851b843ac1f3501bdeec41ed57827a234"
+  },
+  "independent_native": "1 outer exact test; all 7 native scenarios in all 3 forms passed",
+  "high_low_comparison": "Checked Low bodies equal for both examples after removing module provenance and normalizing only root module path identity",
+  "review_notes": [
+    {
+      "severity": "P2",
+      "type": "oracle gap",
+      "file": "compiler/tests/support/task_service_s2.rs",
+      "line": 363,
+      "counterexample": "If a faulty parent returns immediately after abort request but before HTTP Future Drop, native::closed awaits http_dropped and then passes. This eventual-cleanup oracle therefore does not alone reject premature parent completion. Add an immediate http_dropped Acquire assertion before closed for every awaited-parent case, keeping ParentDrop separate.",
+      "status": "reported to root; implementation has unchanged S1 actual-join suites"
+    },
+    {
+      "severity": "P2",
+      "type": "documentation type accuracy",
+      "file": "test-nagi-code/library-examples/supervised-service/README.en.md",
+      "line": 27,
+      "issue": "spawn creates Task[Result[unit, Error]]; await yields Result[Result[unit, Error], TaskFailure]. New English and Japanese text attribute await type to spawn.",
+      "status": "reported to root"
+    }
+  ]
+}

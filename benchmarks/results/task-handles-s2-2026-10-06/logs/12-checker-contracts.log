@@ -1,0 +1,3 @@
+    Finished `dev` profile [unoptimized] target(s) in 0.05s
+     Running `/tmp/nagi-container-flow-target/debug/examples/task-contract-red --report /tmp/nagi-s2-review/task-contracts.json`
+Task contracts: 110/110 matched; report: /tmp/nagi-s2-review/task-contracts.json

@@ -1,0 +1,13 @@
+S2 最終独立レビュー（2026-10-06）
+
+対象は既存Task APIによるSupervisor monitor移行、実サービス契約試験、公開High/手書きLowサンプル、library verifier、4 OS CI登録、完成した日英Docs。AGENTS/.codexとagent設定PR #89は対象外。リポジトリへの編集・commit・push・mergeは行っていない。
+
+未解決指摘なし。P2のHTTP cleanup完了順序oracleはtask_service_s2.rs:363の直接Acquire assertで補強され、ParentDropの非同期観測と区別された。P2のREADME型表記はspawn=Task[Result[unit, Error]]とawait=Result[Result[unit, Error], TaskFailure]へ修正された。P3のroadmap日英はmove/S1=main未release、S2=working branchと揃った。
+
+修正後に独立でexact native testを実行し成功。High・元High削除後の保存Low・手書きLowの各native executableでNormal/Terminal/Discarded/HttpError/MonitorPanic/ParentDrop/RetainedContextの7ケース、合計21 scenario markerを確認した。filterされた既存6 outer testsを実行済みと数えず、既存原ログやrootの再実行を自身の検証として数えない。
+
+両公開例のchecked Low本文は、module provenance JSONとroot module識別子の差だけを除くとHigh/手書きLowで一致した。本文比較をnative lifecycle保証へ拡張していない。完成Docs18ファイルのローカルリンク対象に欠落なし（fragmentと外部URLは未検証）。S1 head08e90c6とmerge base aee1987のtreeはともにbc62c787471d9e4481e36c0cca6e2ed294cebbc1とlocal gitで読戻した。
+
+compiler/src、runtime、Cargo.toml、Cargo.lockのproduction差分はない。monitor内側Errは親のtryで伝播し、HTTPはlegacy spawnのfail-on-Errを維持する。discard反例、HTTPが先に故障した場合のprimary、正常shutdown後HTTP継続、sticky TaskFailure、親同期DropとContext保持の限界はいずれも採用契約と一致する。新しい公開fault昇格API・業務Errの自動故障化・一般Future保存の解禁・任意nested handlerのclose保証は追加されていない。
+
+このレビューはS2全workspace回帰/clippy、S2四OSのCI成功、merge、版更新、releaseを完了扱いしない。これらはparentが進行中の別gate。source/docs snapshot SHA-256と自身の原ログhashはreview.json、native原ログはnative-contract-final.logおよびnative-final/*stdoutに保存した。

@@ -1,0 +1,15 @@
+
+running 1 test
+S2 scenario: Normal passed
+S2 scenario: Terminal passed
+S2 scenario: Discarded passed
+Invalid: HTTP outer error sentinel
+S2 scenario: HttpError passed
+child panicked
+S2 scenario: MonitorPanic passed
+S2 scenario: ParentDrop passed
+S2 scenario: RetainedContext passed
+test typed_service_contracts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
