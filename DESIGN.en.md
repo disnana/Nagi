@@ -49,7 +49,7 @@ Python informs the writing style, Rust informs ownership, and Elixir informs act
 | Hand a value over | Move the value and its cleanup responsibility | Non-Copy assignment, arguments, and returns currently include implicit moves |
 | Read a value again later | Lend a view; make an explicit copy when an independent value is needed | Implemented; changes and moves of the owner are restricted while needed |
 | Keep the same value in several places | Share ownership; distinguish handle duplication from payload copying | Implemented; shared alone does not prove thread safety or completed shutdown |
-| Write ordinary `a = b` | Require an explicit operation for existing owned values other than simple Copy values | **Planned migration**. Implicit moves remain valid today; syntax, Copy types, and scope of the rule are open |
+| Write ordinary `a = b` | Assign Copy normally; use `std.ownership.move` for an owned non-Copy local itself | **Specified; implementation and validation on a separate branch**. Main still accepts implicit moves. Fresh values and argument, return, and field/index rules are retained |
 | Represent absence or failure | Use nullable or Result; avoid panic for ordinary rejection | Implemented. Nagi try propagates Err; it is not Python try/except |
 | Receive a concurrent result | Let scope own child lifetime and receive the result once through a handle | **Handles are unimplemented**. Spawn currently accepts only unit/Result[unit, Error] |
 | Receive a child's business Err | Treat it as a result, separately from task failure | **Planned migration**. Scope currently cancels siblings on child Err too |
@@ -60,6 +60,8 @@ Explicit operations should make the difference from Python reference assignment 
 Ordinary arguments and operators evaluating both operands should run left to right; and/or short-circuit. No complete execution order is promised between spawned tasks. A move transfers cleanup responsibility rather than closing the resource. Simple owned locals in one block are intended to be cleaned up in reverse declaration order, with separate rules for reassignment, partial moves, temporaries, fields, Lists, shared values, and Futures. Existing RHS evaluation and cleanup positions are preserved.
 
 [ADR 011](docs/internal/adr/011-language-behavior-and-docs.md) records reasons, evidence, differences, and migration and test conditions. Exact current rules remain in the [language contracts](docs/internal/language-invariants.md). The [tutorial](docs/en/language-guide.md) starts with concrete Python comparisons and does not depend on unimplemented syntax.
+
+These directions will be implemented in stages. The [implementation plan](docs/internal/value-task-implementation-plan.md) separates an explicit move operation from assignment migration, then task results from fault handling. Move now uses the adopted `from std.ownership import move` and `a = move(b)`, unchanged Copy rules, and narrow assignment migration. Implementation and validation are on a separate branch; this is not available on current main or in a published release. High/Low, generated Rust, samples, both languages of the docs, and CI must align before integration. Task result handle details are a later step.
 
 ## Why use Rust?
 

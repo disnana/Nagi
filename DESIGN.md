@@ -49,7 +49,7 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 | 値を渡して手放す | moveで値と後片付けの責任を渡す | 今は非Copyの代入・引数・returnに暗黙moveがある |
 | 渡したあとも読む | viewで貸す。独立した値が必要なら明示copy | 実装済み。借用元が必要な間の変更やmoveを制限する |
 | 同じ値を保持する | sharedで共有し、handle複製とpayload copyを分ける | 実装済み。sharedだけでthread安全性や終了完了を保証しない |
-| 普通の`a = b`を書く | コピー可能な単純値以外の既存所有値では操作を明示する | **移行予定**。現行の暗黙moveをまだ禁止しない。構文・Copy表・適用範囲は未決 |
+| 普通の`a = b`を書く | Copyは通常代入。所有する非Copyローカルそのものは`std.ownership.move`で渡す | **仕様確定・別branchで実装検証中**。現在のmainは旧暗黙moveを受理し、新値生成・引数・return・field/index等の規則は維持する |
 | 値がない、処理が失敗する | nullableとResultを使い分ける。通常の拒否にpanicを使わない | 実装済み。NagiのtryはErrの伝播で、Pythonのtry/exceptではない |
 | 並行な処理から結果を得る | scopeが子の寿命を持ち、handleから結果を一度受け取る | **handleは未実装**。今のspawnはunit/Result[unit, Error]だけ |
 | 子が業務Errを返す | Errを結果として扱い、taskの故障とは分ける | **移行予定**。今のScopeは子Errでも兄弟を取消す |
@@ -60,6 +60,8 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 通常の引数と両側を評価するoperandは左から右、and/orは短絡する方針です。spawnしたtask同士の全実行順は保証しません。moveはcloseではなく、所有する資源の管理責任を渡します。単純な同一ブロックの所有ローカルは逆宣言順に片付ける意図ですが、再代入・部分move・一時値・field・List・shared・Futureには個別の規則があります。既存の右辺評価とcleanup位置を保ちます。
 
 現行との差、採用理由、根拠、後続実装の移行・検証条件は[ADR 011](docs/internal/adr/011-language-behavior-and-docs.md)へまとめます。現行の厳密な規則は[言語契約](docs/internal/language-invariants.md)に残します。入門は[Pythonとの具体的な比較](docs/language-guide.md)から始め、未実装の書き方で例を成立させません。
+
+これらの方針は、文書だけで終わらせず段階実装します。[実装計画](docs/internal/value-task-implementation-plan.md)で、明示moveの追加と代入の移行、task結果と故障分離を別の差分に分けています。moveは`from std.ownership import move`と`a = move(b)`、Copy据置、狭い通常代入移行に確定し、別branchで実装・検証中です。現在のmainと公開版で使えるとは説明せず、High/Low・生成Rust・サンプル・日英Docs・CIを揃えてから反映します。task結果handleの詳細は後続です。
 
 ## なぜRustを使うのか
 

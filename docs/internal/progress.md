@@ -298,3 +298,25 @@ Sol 2人で実装と独立source/fixtureレビューを分担した。レビュ�
 | G-TX／G-POOL・Phase 4 acceptance | 未完了。Phase 5・版更新・releaseは未実施 |
 
 今回もmain向けの別PRにまとめ、merge承認は流用しない。未解決の公開条件は根拠・代替・検証条件を示して判断する。
+
+## 2026-10-06: #84反映後の取得予算CIと、言語仕様の実装準備
+
+ユーザーが#84をmainへ反映した。今回の監査基点は`e7aff1da0a36503d239d70cf5dbcf892655978e0`。続く[PR #85](https://github.com/disnana/Nagi/pull/85)はmain向けdraftで、private adapterのlogical待ちからnative登録まで同じ取得予算を保つ修正。公開Pool/Tx配線や新言語仕様ではない。
+
+#85の最終head `908cefff7305205069f90dd3d6d2e194b055a191`で[checks](https://github.com/disnana/Nagi/actions/runs/37426163565)／[website](https://github.com/disnana/Nagi/actions/runs/37426163260)が成功した。4 OSの各jobでsqlite_prototype 60件、追加取得予算9件の名前、failed/ignored 0を原ログから確認した。予定入力の2 parserテストも各OSで成功したが、46入力のsemantic conformanceではない。Linux全suite、両JetBrains、必須gateは成功、VSIX/releaseは対象外でskip。review submissionsとinline threadsは確認時点で各0件。draftを維持し、merge/releaseは行っていない。
+
+その後の依頼で、ADR011の明示move・spawn結果handle・子taskの業務Errと故障分離を、文書から段階実装まで広げた。Sol 2人がcompilerのCopy/consume/origin/checked planと、runtimeのScope/結果/取消/Supervisorを分担して監査し、rootの[実装計画](value-task-implementation-plan.md)を再レビューした。設計の大枠を未承認へ戻していない。具体構文・Copy表・handle故障型等の未決を採用済みともしていない。
+
+新しいownership operationは入力の値とoriginを透過する必要があり、native関数呼出しの名前追加だけでは足りない。Copy表を変えながら全consumeで明示要求を行うと、引数・return・record等まで別の互換性変更になる。初版はcanonical標準operationを追加し、旧暗黙代入の受理を保ち、次の差分でnonCopyローカル単純代入だけを移行する案とした。結果handleはscopeの実join所有と業務値を分け、Supervisor terminal ErrのHTTP停止を維持する必要がある。
+
+基点mainの既存7 suite・36件は成功。[移行前の9例](value-task-audit-results.md)はHigh/手書きLow/生成保存Lowでcheck 24回（受理18・期待する拒否6）、正常6例の18 native実行で出力が一致した。初回runnerのstdout/stderr観測誤りは原ログを残して修正し、全48 CLIコマンドを再実行した。入力・拒否期待・アプリ出力期待は変更していない。
+
+DESIGN日英、ADR011、invariants、Q005/006を実装順へ接続し、入門ownership日英のCopy説明を現行と照合した。compiler/runtime・依存・CI設定・生成コード・test期待は今回の準備差分で変更していない。新しいmove/Taskは未実装。V1/V2の具体APIと移行対象を判断できる資料を作り、その判断までは公開契約の実装を止める。S1/S2の細部を今すぐ全て質問せず、後続に分ける。Phase 4の公開acceptance、Phase 5、merge/releaseの承認を流用しない。
+
+準備差分10文書の相対リンク/anchor 319件、website 90ページのlocal links/anchors/assets、CI判定52件、diff checkが成功した。新しい意味論のtest期待を変えず、compiler/runtimeとCI入力も変更していない。文書PRはmain向けdraftに分離し、公開後のheadでCIを確認する。
+
+## 2026-10-06: #85 main反映と#86設計監査の同期
+
+ユーザーが#85をマージした。main `f7799fa46ed513432b76cdf08648fe0986d44d5c`を#86へmergeし、private取得予算の60件・測定・終了契約の成果と、言語移行前の基点main `e7aff1d`での36件・正常18実行の監査を両方保持した。上のdraft維持・未merge・move具体案判断待ち等は当時の記録であり、現在の状態ではない。#86はユーザーが非draftにした状態を維持し、エージェントはPR状態を変更していない。
+
+その後のユーザー指示で、canonical `std.ownership.move`、Copy据置、所有する非Copyローカルそのものの通常代入だけを拒否する範囲は確定した。別作業branchで先行test・実装・検証を進めている。#86と公開mainのcompiler/runtimeにはこの言語変更を含めず、現在の暗黙代入を禁止とは書かない。task結果handle、故障型・未受取等の詳細は後続であり、moveを再承認待ちへ戻さない。今回のmerge解消で既存検査を再実行したとは数えない。
