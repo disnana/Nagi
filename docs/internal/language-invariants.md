@@ -10,7 +10,7 @@
 
 変更する際はbefore/after、互換性と対象版、High/Low、診断位置、生成Rust、実runtimeの成功・失敗・取消を検査する。実装前に現行の暗黙moveやScope子Errの契約を削除しない。Supervisorのterminal failureをHTTP停止へ伝える接続も保つ。未決の細部は[Q-005〜007](open-questions.md#q-005-既存所有値の代入を明示する範囲)にまとめる。
 
-文書整備に続く段階実装は承認済み。[実装計画](value-task-implementation-plan.md)は明示moveの追加、狭い代入移行、task結果handle、故障分離の順とする案を示す。具体API・Copy対象・handleの消費や故障型の判断待ちと、現行保証を区別する。現在の契約表はまだ変更しない。
+文書整備に続く段階実装は承認済み。[実装計画](value-task-implementation-plan.md)は明示moveの追加、狭い代入移行、task結果handle、故障分離の順とする案を示す。明示moveのAPI、Copy据置、所有するnonCopyローカルそのものの通常代入移行は追加指示で確定し、別branchで実装・検証中。この文書PRとmainの契約表はまだ変更しない。Taskの消費や故障型は後続で決める。
 
 通常の引数と両側を評価するoperandの左から右の順序、and/orの短絡、値とcleanup責任の移動を保つ。逆順cleanupの方針は単純な同一ブロックの所有ローカルの逆宣言順を指し、全値の生成時刻逆順ではない。再代入・一時値・部分move・field/List/shared/Futureの規則、取消要求と終了確認は別にする。CheckedProgramは静的factsとRust生成planの境界で、runtimeのI/O成功や全backendの意味同値を証明するものではない。
 
@@ -107,6 +107,8 @@ PostgreSQL、一般的な可変長bind、poolは未実装。Rustアダプター�
 Q004で[capability初版表](sqlite-pool-adapter-decision.md#registry配線前に固定するcapability)を採用した。Poolは明示clone、Tx／ParametersはnonClone。Tx／ParametersのDebugは禁止し、Pool／FailureのDebugは状態のみ。Failureと小さいenumはshared可、全新resourceのSerdeと新Actor Charge対応は不可。関数署名やmarkerを実payloadと混同せず、Txの永続格納・task転送禁止をnative inline stateにも適用する。これらは公開配線時の契約で、private試作がcheckerで保証したという意味ではない。
 
 statement Errから「変更0」や「rollback済み」を推論しない。SQLiteの`OR FAIL`やAFTER triggerでのstep失敗は先行効果をactive Txへ残し得る。禁止actionの拒否とTx rollback成功を別oracleで検査する。普通のErrでの継続可という採用契約を、暗黙savepointや全Err自動abortへ変更しない。
+
+取得予算はlogical slot待ちからnative record登録まで共用し、登録後のready／BEGIN／SQLへ持ち越さない。0msは即時の空きを利用できる指定。取得期限切れだけでPoolを故障・退役・closingにしない。同taskの別取得と取消で予算を混同しない。[private設計](sqlite-acquire-budget-design.md)で先行検証し、公開Options／Poolの保証とは区別する。巨大capacityのstock allocationは[公開化前の判断](sqlite-capacity-decision.md)に残す。
 
 ## HTTP
 

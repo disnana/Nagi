@@ -67,11 +67,11 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 
 ### Q-005: 既存所有値の代入を明示する範囲
 
-状態: 大枠は2026-10-06の引継ぎで採用。細部は未決、実装は後続。[ADR 011のOWN-04](adr/011-language-behavior-and-docs.md#own-04-既存所有値の代入)にbefore/after、理由、移行・検査を記録した。
+状態: 明示moveのAPI・Copy据置・狭い通常代入移行は追加のユーザー指示で確定。別branchで実装・検証中であり、公開mainには未実装。[ADR 011のOWN-04](adr/011-language-behavior-and-docs.md#own-04-既存所有値の代入)にbefore/after、理由、移行・検査を記録した。
 
-作者が段階実装まで範囲を広げた。[具体案V1/V2](value-task-implementation-plan.md#v1v2の判断案)は、canonical `std.ownership.move`、現行Copy表の据置、右辺がnonCopyローカルそのものの代入だけを移行対象とする案。操作の追加を先に行い、旧暗黙代入の拒否は別draft PRへ分ける。この具体案の判断はまだ受けていない。引数・return・field・matchまで一斉に変更しない。
+canonical `std.ownership.move`（一引数、型推論、明示型引数なし）、現行Copy表の据置、右辺が所有するnonCopyローカルそのものの通常代入移行を採用した。[V1/V2の採用仕様](value-task-implementation-plan.md#v1v2の採用仕様)へ統合し、操作追加と狭い拒否を一つの別実装PRへ段階的に積む。新値生成、引数・return・field/index・try・matchの既存consume規則は維持する。Futureや入れ子のFutureはmove入力へ解禁せず、対応済みasync関数別名のCopyも維持する。
 
-現行の非Copy `a = b`は暗黙move。移行先ではコピー可能な単純値以外の既存所有値の操作を明示する。新値生成への機械的move要求、サイズ閾値、全enumのCopy化は採用していない。正確なCopy表、明示move構文、view/shared handle、引数・return・field・matchへの適用範囲を決める。現行Docsではまだ有効な暗黙moveを禁止にしない。
+この文書PRと現在のmainでは非Copyの`a = b`を暗黙moveとして受理する。移行前の36件と正常18実行は監査証跡として保持し、別branchの実装成功やmain公開機能に読み替えない。merge・版更新・release、task結果handleの詳細は別工程とする。
 
 ### Q-006: spawn結果handleと業務Err・task故障
 

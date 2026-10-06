@@ -1,0 +1,299 @@
+{
+  "runs": [
+    {
+      "label": "baseline-private",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagi-runtime",
+        "sqlite_prototype"
+      ],
+      "exit": 0,
+      "seconds": 0.816,
+      "source_commit": "e7aff1da0a36503d239d70cf5dbcf892655978e0",
+      "log_sha256": "0a99801d883a3b2e1801fa843e3b2ba5065252d14f8be0e79c09416348e6a146"
+    },
+    {
+      "label": "baseline-measurement",
+      "command": [
+        "env",
+        "NAGI_SQLITE_MEASURE_OUTPUT=/tmp/nagi-sqlite-acquire-proof/baseline-measurement.json",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagi-runtime",
+        "sqlite_prototype::comparison::direct_and_deadpool_warm_native_session_comparison",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "seconds": 0.917,
+      "source_commit": "ef965d04f4678f73324fd7e6ea11619f28f01a3b",
+      "log_sha256": "6340c36252666e7c404941f324f8745d0dee3b97ee462bc2aae6cea33e50ef09"
+    },
+    {
+      "label": "tests-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all"
+      ],
+      "exit": 0,
+      "seconds": 0.716,
+      "source_commit": "c4de72d6f209aaf5a95f9b56cec11b4f8b1ec032",
+      "source_tree": "82beb4cf45eafdbd4d58cb06d71128253c6a919d",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "compile-red",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagi-runtime",
+        "sqlite_prototype::acquire_tests"
+      ],
+      "exit": 101,
+      "seconds": 2.977,
+      "source_commit": "d30b4d00031139da3c2348efa33fadbcd992c83d",
+      "source_tree": "0bb5495b4aec515df26d82b8d20662e42163c277",
+      "log_sha256": "dbebc8fe69ea4539cb0979b68fa44948658955a92c15701b916aa1c027813484"
+    },
+    {
+      "label": "intermediate-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all"
+      ],
+      "exit": 0,
+      "seconds": 0.716,
+      "source_commit": "30932e001262f13c9345d6578eb313acb2f1a57e",
+      "source_tree": "7b2231a664649eddf8213963f48b129d54b8b2ea",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "runtime-red",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagi-runtime",
+        "sqlite_prototype::acquire_tests::acquire_absolute_budget_survives_logical_wait_to_native_fence",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": 101,
+      "seconds": 10.156,
+      "source_commit": "ae8ad4c7eee134d2a8092770f4facf59c8ce67e4",
+      "source_tree": "1c194e5a4d06c920c31882178ab98e29e00cdd70",
+      "log_sha256": "f123f49367712fb96e05b059d266d32265e0fe4f52946e3a2f09a84f0710b999"
+    },
+    {
+      "label": "final-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all"
+      ],
+      "exit": 0,
+      "seconds": 0.716,
+      "source_commit": "11e0231b067022ec10efb7fcc0bcd9f7fd9d5571",
+      "source_tree": "ecddcc65f1bfb6c24c837d9e14bd3a79e6548887",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "private-green",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagi-runtime",
+        "sqlite_prototype"
+      ],
+      "exit": 0,
+      "seconds": 7.25,
+      "source_commit": "910e7b652581e53ccab4a4d90a2f0cb2a1de49ba",
+      "source_tree": "55c13f221b07dfac5e5015d17412701b3fd5e6c4",
+      "log_sha256": "eb88936fbef7abbfdb47f4be47fb6a6b595d79ce7a2b939214bfa3f8bbbd83cb"
+    },
+    {
+      "label": "runtime-full",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagi-runtime"
+      ],
+      "exit": 0,
+      "seconds": 3.276,
+      "source_commit": "910e7b652581e53ccab4a4d90a2f0cb2a1de49ba",
+      "source_tree": "55c13f221b07dfac5e5015d17412701b3fd5e6c4",
+      "log_sha256": "888d9442b171216441dc99fdde613c0fbccbdbb8f8a95834e95d85adb2d12c66"
+    },
+    {
+      "label": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "seconds": 3.073,
+      "source_commit": "910e7b652581e53ccab4a4d90a2f0cb2a1de49ba",
+      "source_tree": "55c13f221b07dfac5e5015d17412701b3fd5e6c4",
+      "log_sha256": "2303c2505947682a573f292fdee672747372aabe8e9e15a9adebcf233fe483da"
+    },
+    {
+      "label": "website",
+      "command": [
+        "/workspace/test-tools/website-venv/bin/python",
+        "website/build.py",
+        "--base-path",
+        "/",
+        "--out",
+        "build/design-docs-site"
+      ],
+      "exit": 0,
+      "seconds": 1.066,
+      "source_commit": "910e7b652581e53ccab4a4d90a2f0cb2a1de49ba",
+      "source_tree": "55c13f221b07dfac5e5015d17412701b3fd5e6c4",
+      "log_sha256": "4b88c6fd13f1383725789e02d73d6b175e84b466583b90a9a63e472717ea213e"
+    },
+    {
+      "label": "ci-python",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "scripts/ci",
+        "-p",
+        "test_*.py"
+      ],
+      "exit": 0,
+      "seconds": 2.977,
+      "source_commit": "910e7b652581e53ccab4a4d90a2f0cb2a1de49ba",
+      "source_tree": "55c13f221b07dfac5e5015d17412701b3fd5e6c4",
+      "log_sha256": "e028789462eb0d4d26bad21da2b8b287fd61b0834354f4f90e3dbb080e4bd12d"
+    },
+    {
+      "label": "workspace",
+      "command": [
+        "cargo",
+        "test",
+        "--locked"
+      ],
+      "exit": 0,
+      "seconds": 152.808,
+      "source_commit": "910e7b652581e53ccab4a4d90a2f0cb2a1de49ba",
+      "source_tree": "62df34cd331ea48f419a5746fb12ddb969767eff",
+      "log_sha256": "ae7f77b87e36dbcd845bd54c2ca5926a266b3174a5a02cca825636c1a651fc60"
+    },
+    {
+      "label": "fuzz",
+      "command": [
+        "cargo",
+        "run",
+        "--locked",
+        "-p",
+        "nagic",
+        "--example",
+        "fuzz-smoke"
+      ],
+      "exit": 0,
+      "seconds": 0.365,
+      "source_commit": "a809ae7cbf9d20f48af145dd07ee9d21378b0d9e",
+      "source_tree": "62df34cd331ea48f419a5746fb12ddb969767eff",
+      "log_sha256": "17d5cde04d1593090f27747ee8cd61eb1ec4799036880ccc201c5624dc9d13e8"
+    },
+    {
+      "label": "fmt-check",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "seconds": 0.716,
+      "source_commit": "a809ae7cbf9d20f48af145dd07ee9d21378b0d9e",
+      "source_tree": "62df34cd331ea48f419a5746fb12ddb969767eff",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "budget-measurement",
+      "command": [
+        "env",
+        "NAGI_SQLITE_BUDGET_MEASURE_OUTPUT=/tmp/nagi-sqlite-acquire-proof/budget-measurement.json",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagi-runtime",
+        "sqlite_prototype::comparison::bounded_and_unbounded_deadpool_warm_comparison",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "seconds": 1.069,
+      "source_commit": "a809ae7cbf9d20f48af145dd07ee9d21378b0d9e",
+      "source_tree": "62df34cd331ea48f419a5746fb12ddb969767eff",
+      "log_sha256": "e8ab3b56079f70b5dac6519e36a4b4f3c0a57d05e2489e8f0210f950f7cb91cd"
+    },
+    {
+      "label": "direct-measurement",
+      "command": [
+        "env",
+        "NAGI_SQLITE_MEASURE_OUTPUT=/tmp/nagi-sqlite-acquire-proof/direct-measurement.json",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagi-runtime",
+        "sqlite_prototype::comparison::direct_and_deadpool_warm_native_session_comparison",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "seconds": 1.017,
+      "source_commit": "a809ae7cbf9d20f48af145dd07ee9d21378b0d9e",
+      "source_tree": "62df34cd331ea48f419a5746fb12ddb969767eff",
+      "log_sha256": "b60c7cd761708ab0546363019ce10134e2c9ba9fb3dd1b21afc2c204e5d5b11a"
+    },
+    {
+      "label": "website-final",
+      "command": [
+        "/workspace/test-tools/website-venv/bin/python",
+        "website/build.py",
+        "--base-path",
+        "/",
+        "--out",
+        "build/design-docs-site"
+      ],
+      "exit": 0,
+      "seconds": 0.967,
+      "source_commit": "a809ae7cbf9d20f48af145dd07ee9d21378b0d9e",
+      "source_tree": "62df34cd331ea48f419a5746fb12ddb969767eff",
+      "log_sha256": "4b88c6fd13f1383725789e02d73d6b175e84b466583b90a9a63e472717ea213e"
+    }
+  ],
+  "source_provenance": "Local GREEN/runtime/clippy/workspace ran on the formatted runtime bytes now committed as a809ae7. HEAD at some command starts was 910e7b6; the only runtime worktree delta was the rustfmt Immediate arm (3 added/1 deleted lines), committed during workspace execution without changing bytes. The earlier runner recorded source_tree at command completion; source_commit is the start reference. Raw records are preserved. No runtime bytes changed during validation. Measurement/fuzz/fmt-check source_commit and source_tree agree. Published commit IDs may differ; tree equality is checked."
+}

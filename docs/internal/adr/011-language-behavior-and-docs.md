@@ -2,7 +2,7 @@
 
 状態: 2026-10-06の作者の引継ぎを採用。これは設計・文書の判断であり、未実装の構文や挙動を公開した記録ではない。
 
-その後、作者が明示move・spawn結果handle・子taskの業務Errと故障の分離を段階実装する範囲を承認した。[実装順と具体案](../value-task-implementation-plan.md)に、現行との差、依存、Copy表、移行、先行テストを分離した。大枠は採用済みだが、その文書の具体APIと未決の意味論を承認済みにはしない。
+その後、作者が明示move・spawn結果handle・子taskの業務Errと故障の分離を段階実装する範囲を承認した。[実装順と具体案](../value-task-implementation-plan.md)に、現行との差、依存、Copy表、移行、先行テストを分離した。追加指示でcanonical `std.ownership.move`、Copy据置、狭い通常代入移行は確定し、別branchで実装・検証中。この文書PRとmainには未実装で、taskの残る意味論を承認済みにはしない。
 
 監査基点: main `ff6f7d4c81c8cf49c2bca7abffb3083f681d5b9d`。添付が照合したmainと一致した。文書branchは`docs/python-guide-design-contracts`。初回監査時点ではPR #82のprivate Pool比較は別差分だった。後にmain `7999bab`への反映を確認し、文書branchへ統合した。公開Pool/Tx APIとして扱わない。
 
@@ -23,7 +23,7 @@ Python風の字下げだけを説明しても、参照代入、例外、taskの�
 | OWN-01 | moveで値と後片付けの責任を渡す | 非Copy値の代入・引数・returnには暗黙moveがある。moveはcloseではなく、再初期化後の利用は別 | [ownership](../../ownership.md)、[move検査](../../../compiler/tests/ownership.rs) |
 | OWN-02 | viewは所有せず読む。元のplaceを必要な間保つ | 実装済み。検査はブロックを基準とする保守的なもの。全てのRust NLLケースを受理しない | [origin検査](../../../compiler/tests/view_origins.rs)、[呼出し内の借用](../../../compiler/tests/ownership_calls.rs) |
 | OWN-03 | sharedは所有権を共有する | 実装済み。handle複製とpayload copyは別。内部資源まで不変になるわけではなく、Send/Syncは最終Rust検査も必要 | [shared field](../../../compiler/tests/shared_field_moves.rs)、[capabilities](../../../compiler/src/capabilities.rs) |
-| OWN-04 | コピー可能な単純値以外の既存値の`a = b`は操作を明示する | **未実装・互換性変更**。明示moveの構文、Copy対象、view/shared handle、引数・return等への適用範囲は未決 | [checker](../../../compiler/src/check.rs)、[copy検査](../../../compiler/tests/copy_capabilities.rs) |
+| OWN-04 | 所有する非Copyローカルそのものの代入に`std.ownership.move`を使う | **仕様確定・別branchで実装検証中、main未実装**。Copy据置、新値生成と引数・return・field/index等のconsumeは維持 | [checker](../../../compiler/src/check.rs)、[copy検査](../../../compiler/tests/copy_capabilities.rs) |
 | OWN-05 | 通常の引数と両側を評価するoperandは左から右。短絡は不要側を評価しない | checkerと生成に順序を持つ。借用・引数・右辺置換のケースは検査済みのcorpusがある。全式の順序証明ではない | [引数](../../../compiler/tests/ownership_calls.rs)、[spawn引数](../../../compiler/tests/scoped_tasks.rs)、[置換・短絡](../../../compiler/tests/view_container_drop.rs) |
 | ERR-01 | nullable、Result、panicを分ける | Some/Noneのmatch、Resultのmatch/tryを実装済み。任意のPython風Noneチェックでの型絞り込みはない。裸のResult破棄を拒否するが、未使用の変数へ代入したResultを全て検出するわけではない | [Option](../../../compiler/tests/option_match.rs)、[Result破棄](../../../compiler/tests/result_discard.rs)、[独自E](../../../compiler/tests/typed_errors.rs) |
 | ERR-02 | panic捕捉は状態の復元ではない | HTTPの応答開始前のunwind捕捉を実装済み。abort/OOM/強制終了、変更済みstateやDBのrollbackは保証しない | [HTTP panic](../../../runtime/src/http_server/panic_tests.rs) |
@@ -54,7 +54,7 @@ self-hostingはコンパイラをNagiで書くこと、別backendはRust以外�
 ### OWN-04: 既存所有値の代入
 
 - before: 非Copyの`a = b`は暗黙move。after: 新値を作る式と既存値を渡す式を分け、後者の操作を明示する。
-- 先に決める: 正確なCopy表、明示moveの構文、view/shared handle、field/match、引数・returnへの適用範囲。サイズ閾値で軽い値を判定しない。
+- 採用済み: canonical `std.ownership.move`（一引数、型推論、明示型引数なし）、現行Copy据置。非Copy所有ローカルそのものの通常代入だけを移行し、field/index/引数/return等は従来のconsumeを保つ。サイズ閾値を使わない。
 - 移行: 対象版と既存例の書換えを提示し、High/Lowで同じ規則を採る。現行例は新規則の実装前に書き換えない。引数等へ一括拡大しない。
 - 成功条件: Copy代入、新値生成、非Copyの暗黙代入の拒否、明示move後の使用拒否、再初期化、借用中move。診断の元位置、High/保存Low/手書きLow、生成Rust build/run、cleanup責任を検査する。
 

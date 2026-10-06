@@ -49,7 +49,7 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 | 値を渡して手放す | moveで値と後片付けの責任を渡す | 今は非Copyの代入・引数・returnに暗黙moveがある |
 | 渡したあとも読む | viewで貸す。独立した値が必要なら明示copy | 実装済み。借用元が必要な間の変更やmoveを制限する |
 | 同じ値を保持する | sharedで共有し、handle複製とpayload copyを分ける | 実装済み。sharedだけでthread安全性や終了完了を保証しない |
-| 普通の`a = b`を書く | コピー可能な単純値以外の既存所有値では操作を明示する | **移行予定**。現行の暗黙moveをまだ禁止しない。構文・Copy表・適用範囲は未決 |
+| 普通の`a = b`を書く | Copyは通常代入。所有する非Copyローカルそのものは`std.ownership.move`で渡す | **仕様確定・別branchで実装検証中**。現在のmainは旧暗黙moveを受理し、新値生成・引数・return・field/index等の規則は維持する |
 | 値がない、処理が失敗する | nullableとResultを使い分ける。通常の拒否にpanicを使わない | 実装済み。NagiのtryはErrの伝播で、Pythonのtry/exceptではない |
 | 並行な処理から結果を得る | scopeが子の寿命を持ち、handleから結果を一度受け取る | **handleは未実装**。今のspawnはunit/Result[unit, Error]だけ |
 | 子が業務Errを返す | Errを結果として扱い、taskの故障とは分ける | **移行予定**。今のScopeは子Errでも兄弟を取消す |
@@ -61,7 +61,7 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 
 現行との差、採用理由、根拠、後続実装の移行・検証条件は[ADR 011](docs/internal/adr/011-language-behavior-and-docs.md)へまとめます。現行の厳密な規則は[言語契約](docs/internal/language-invariants.md)に残します。入門は[Pythonとの具体的な比較](docs/language-guide.md)から始め、未実装の書き方で例を成立させません。
 
-これらの方針は、文書だけで終わらせず段階実装します。[実装計画](docs/internal/value-task-implementation-plan.md)で、明示moveの追加と代入の移行、task結果と故障分離を別の差分に分けています。具体APIは候補の段階です。新しい操作を追加しただけで旧コードを拒否せず、High/Low・生成Rust・サンプル・日英Docs・CIを揃えてから次の変更へ進みます。
+これらの方針は、文書だけで終わらせず段階実装します。[実装計画](docs/internal/value-task-implementation-plan.md)で、明示moveの追加と代入の移行、task結果と故障分離を別の差分に分けています。moveは`from std.ownership import move`と`a = move(b)`、Copy据置、狭い通常代入移行に確定し、別branchで実装・検証中です。現在のmainと公開版で使えるとは説明せず、High/Low・生成Rust・サンプル・日英Docs・CIを揃えてから反映します。task結果handleの詳細は後続です。
 
 ## なぜRustを使うのか
 
@@ -190,7 +190,9 @@ Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しま
 
 SQLite Pool／Transactionは[APIと終了policyの具体案](docs/internal/sqlite-pool-proposal.md)を用意しました。SQLiteの解析・bind・transactionはrusqliteへ任せ、Nagi側は公開する所有契約とworkerの完了・再利用を扱う案です。汎用引数を用意し、旧Dbの固定bindやSQL制約は変えません。2026-10-06にQ002の公開API・SQL制限・終了契約とruntime rusqlite hooksを承認しました。[ADR 010](docs/internal/adr/010-sqlite-transaction-boundary.md)に従い、一接続・一Txの試作から進めます。pool／workerは既存Rustライブラリと比較して選び、Q004でgeneric deadpool =0.13.1（managed／rt_tokio_1、default featuresなし）とdeadpool-runtime 0.3.1の比較試作、capability表の初版値を採用しました。既存Tokio／rusqliteの版は維持します。poolの待機・回収を再利用し、Nagiのadapterではsession終了・native close・worker joinを確認します。標準APIの実装・検証はまだ完了していません。
 
-mainの[private試作](runtime/src/sqlite_prototype/session.rs)では、実SQLiteの禁止action、明示終端、取消後cleanup、native closeとworker joinを[22件のtest](runtime/src/sqlite_prototype/tests.rs)で確認しました。SQL Errだけで変更が戻ったとは扱いません。同coreの22件は#81の4 OS CIでも成功し、mainへ反映しました。後続のprivate deadpool比較では、同22件と追加20件で取消・close・cleanup前の再貸出を検査し、全suiteと比較測定も確認しました。Q004の依存とcapability表は承認済みで、#82は4 OS CI成功後にmainへ反映されました。公開Pool、NagiのTx捕捉検査、多接続、公開取得期限は未実装です。[先行基盤](docs/internal/sqlite-session-results.md)と[adapterの結果](docs/internal/sqlite-adapter-results.md)に検証条件と未完了範囲を残します。
+mainの[private試作](runtime/src/sqlite_prototype/session.rs)では、実SQLiteの禁止action、明示終端、取消後cleanup、native closeとworker joinを[22件のtest](runtime/src/sqlite_prototype/tests.rs)で確認しました。SQL Errだけで変更が戻ったとは扱いません。同coreの22件は#81の4 OS CIでも成功し、mainへ反映しました。後続のprivate deadpool比較では、同22件と追加20件で取消・close・cleanup前の再貸出を検査し、全suiteと比較測定も確認しました。Q004の依存とcapability表は承認済みで、#82は4 OS CI成功後にmainへ反映されました。
+
+#84ではprivateな二接続のnative容量と独立joinを検査し、元の試験と合わせて50件が4 OSで成功しました。main `e7aff1d`へ反映済みです。[多接続の結果](docs/internal/sqlite-multiconnection-results.md)と[取得予算の設計](docs/internal/sqlite-acquire-budget-design.md)を分けて記録します。開発差分では、予約までの予算を共用し、登録後のstartup／BEGINには期限を持ち越さないprivate回帰と[測定結果](docs/internal/sqlite-acquire-budget-results.md)を追加しました。公開Pool／Options、NagiのTx捕捉検査、sealed SQLは未実装で、標準APIから多接続や取得期限を使える状態ではありません。巨大capacityのstock allocationも[公開化前の判断](docs/internal/sqlite-capacity-decision.md)に残ります。private試作の検証を公開保証へ広げません。[先行基盤](docs/internal/sqlite-session-results.md)と[adapterの結果](docs/internal/sqlite-adapter-results.md)に検証条件と未完了範囲を残します。
 
 意味論、公開API、High／Low／Rustの分担を変える場合は、変更の理由、代替案、互換性、検証結果をこの文書へ反映します。詳細なAPI説明や測定ログは対応する文書に置きます。
 

@@ -38,7 +38,7 @@ def main():
 
 現行のCopy規則にはview、関数値（対応済みのローカルasync関数別名を含む）、UUID、timestampや、中身がCopy規則を満たすclass・enum・nullable・ownedも含まれます。Resultとsharedは、中身がCopyでも暗黙Copyになりません。関数値のCopyはFutureの保存を許すものではなく、すべてのenumや小さいclassをコピーできるという規則でもありません。[型](types.md)と[async](async.md)も参照してください。
 
-今後の移行では、既存の非Copy所有値の`a = b`に明示的な操作を求める方針を採用しています。手放すならmove、読むならview、独立した値を作るならcopy、同じ値を複数箇所で持つならsharedを選びます。**この移行は未実装で、現在の暗黙moveは引き続き受理されます。** `a = User(...)`のように新しい値を作る式とは区別します。将来のCopy対象の正確な型表、構文、引数・return・フィールド取り出し・view・shared handleの扱いは詳細設計で定めます。[設計判断](../DESIGN.md)を参照してください。
+今後の移行では、既存の非Copy所有値の`a = b`に明示的な操作を求める方針を採用しています。手放すならmove、読むならview、独立した値を作るならcopy、同じ値を複数箇所で持つならsharedを選びます。**仕様は確定し別branchで実装・検証中ですが、現在のmainでは暗黙moveを引き続き受理します。** 採用した`std.ownership.move`は、所有する非Copyローカルそのものの通常代入に使います。Copy表と、新値生成・引数・return・field/index等の既存consume規則は維持します。main反映と公開版への収録は別です。[設計判断](../DESIGN.md)を参照してください。
 
 ## 同じ値を複数の場所で持つ
 

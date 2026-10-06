@@ -42,6 +42,10 @@ terminal failure／causeをledgerへ公開してから完了joinを通知する�
 
 #82の一接続比較をmainへ反映した後、[native容量と独立join](../sqlite-multiconnection-design.md)を先行回帰で検証する。workerごとのobserverがnative JoinHandleを所有し、健康な別workerの寿命へ終了観測を依存させない。起動不成立をfake joinと数えず、公開取得期限とcapabilityは別の未完了範囲へ残す。private試作の内部設計であり、公開Pool契約の実装完了やLow/言語意味論の変更ではない。
 
+## #84後のprivate取得予算
+
+#84はmain `e7aff1d`へ反映済み。独立observerとnative容量を保持し、次は[取得予算の設計](../sqlite-acquire-budget-design.md)に従ってlogical slot待ちからnative登録までを同予算で検査する。登録後のready／BEGIN等は取得期限へ含めない。予算scopeと失敗分類の先行回帰から始め、公開Options／Poolの実装完了とは区別する。
+
 ## 最初の検証と段階
 
 1. このADRとinvariantsを記録する。

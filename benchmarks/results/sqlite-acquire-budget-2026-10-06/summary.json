@@ -1,0 +1,90 @@
+{
+  "observed_at_utc": "2026-10-06",
+  "source_commit": "a809ae7cbf9d20f48af145dd07ee9d21378b0d9e",
+  "source_tree": "62df34cd331ea48f419a5746fb12ddb969767eff",
+  "host": "Linux 6.18.44 x86_64 KVM, AMD EPYC 9V74 (5 vCPU)",
+  "profile": "test/unoptimized, DEBUG=0, INCREMENTAL=0, warm target, current_thread Tokio",
+  "reports": {
+    "baseline": {
+      "adapter_native_health_and_join": true,
+      "adapter_threads": "1 native worker + 1 independent join observer per connection",
+      "batches": 32,
+      "deadpool": {
+        "p50_ns": 60290,
+        "p95_ns": 122404
+      },
+      "direct": {
+        "p50_ns": 61793,
+        "p95_ns": 132039
+      },
+      "direct_native_health_and_join": true,
+      "direct_threads": "1 native worker + 1 join observer",
+      "scope": "private cfg(test) debug-profile, warm serial native session",
+      "sql": "SELECT 1 AS n",
+      "terminal": "rollback",
+      "transactions_per_batch_per_backend": 128,
+      "warmup_transactions_per_backend": 8
+    },
+    "budget": {
+      "batches": 32,
+      "bounded": {
+        "p50_ns": 82354,
+        "p95_ns": 156686
+      },
+      "bounded_future_bytes": 2040,
+      "future_measurement": "size_of_val of unpolled begin future; not heap allocation or generated Nagi future",
+      "native_health_and_join": true,
+      "scope": "private cfg(test) debug-profile, cap1 warm serial, bounded vs legacy fixture",
+      "sql": "SELECT 1 AS n",
+      "terminal": "rollback",
+      "transactions_per_batch_per_backend": 128,
+      "unbounded_fixture": {
+        "p50_ns": 92219,
+        "p95_ns": 149365
+      },
+      "unbounded_future_bytes": 2024,
+      "warmup_transactions_per_backend": 8
+    },
+    "direct": {
+      "adapter_native_health_and_join": true,
+      "adapter_threads": "1 native worker + 1 independent join observer per connection",
+      "batches": 32,
+      "deadpool": {
+        "p50_ns": 65308,
+        "p95_ns": 152990
+      },
+      "direct": {
+        "p50_ns": 84597,
+        "p95_ns": 154172
+      },
+      "direct_native_health_and_join": true,
+      "direct_threads": "1 native worker + 1 join observer",
+      "scope": "private cfg(test) debug-profile, warm serial native session",
+      "sql": "SELECT 1 AS n",
+      "terminal": "rollback",
+      "transactions_per_batch_per_backend": 128,
+      "warmup_transactions_per_backend": 8
+    }
+  },
+  "hashes": {
+    "baseline": {
+      "measurement_json_sha256": "f3ebe564cc6647b9ca0142fa0e0e8097d1d65bae80dff4daecbf4807d0fc4a0a",
+      "samples_csv_sha256": "2c8eb13b14d0a5f8b599d3bd08d2aec07fcb042a2c7adf93af79d68c9aa87a77"
+    },
+    "budget": {
+      "measurement_json_sha256": "1ce49b02b2802dade05dc1207399671974dfc014655e1ae23170378f146802c0",
+      "samples_csv_sha256": "54d2e97338ea9c8c3d7d9c6821409e4ae69b30d3b8ef0d7e0d14bd72aea488ee"
+    },
+    "direct": {
+      "measurement_json_sha256": "fb69af4a5e8c4d9c769acd23fd3adfbc204da0696b4b57a2b3d15708f1210edb",
+      "samples_csv_sha256": "e48f7ba52ab2727fc8f63afaf14dc2477cd611334a996e1a93e911997ca4e5dd"
+    }
+  },
+  "workspace": {
+    "suites": 92,
+    "passed": 891,
+    "failed": 0,
+    "ignored": 0
+  },
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+}

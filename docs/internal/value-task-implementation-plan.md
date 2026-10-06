@@ -1,6 +1,6 @@
 # 明示moveとtask結果の実装順
 
-状態: 実装範囲への拡大は承認済み。以下の具体的なAPI・移行案は判断待ち。現在の受理規則を変更した記録ではない。
+状態: canonical `std.ownership.move`、現行Copy据置、狭い非Copyローカル代入移行はユーザーの追加指示で確定した。別作業branchで実装・検証中であり、この文書PRと公開mainには未実装。task結果handleの詳細は後続で決める。現在のmainの受理規則を変更した記録ではない。
 
 監査基点はmain `e7aff1da0a36503d239d70cf5dbcf892655978e0`（#84反映済み）。[ADR 011](adr/011-language-behavior-and-docs.md)の方向を実装へ移すための計画である。契約の正本は[language-invariants](language-invariants.md)、未決の管理は[Q-005/006](open-questions.md#q-005-既存所有値の代入を明示する範囲)に残す。
 
@@ -12,12 +12,12 @@ moveの追加は現在のmodule identity、checked facts、生成planを使う�
 
 | 順番 | 差分 | 互換性と次へ進む条件 |
 |---|---|---|
-| V1 | 明示moveの操作を追加 | 具体APIの判断後、失敗テスト→実装。旧暗黙代入は残す。High/Low・元位置・Rust build/run・originと破棄を確認する |
-| V2 | 既存非Copyローカルの単純代入に明示操作を求める | V1のCI成功後に別draft PR。変更対象のサンプル、日英Docs、負例を揃える。対象版と移行条件は公開前に決める |
+| V1 | canonical明示moveを追加 | APIは確定。別作業branchで先行テスト→実装・検証。High/Low・元位置・Rust build/run・originと破棄を確認する |
+| V2 | 所有する非Copyローカルそのものの代入に明示操作を求める | 受理変更は承認済み。V1と同じ実装PRに段階的に積み、サンプル、日英Docs、負例、全回帰と4 OS CIを揃える。merge/releaseは別 |
 | S1 | scope所属の一回限りの結果handleと、新経路の業務Result・故障境界 | handle・故障・未受取の契約を具体化してから、失敗テスト→小さい縦切り実装。Resultを受け取る新経路では、この段階からErrを値として扱う。旧statement spawnと第一級Future一般の解禁は別 |
 | S2 | 旧statement spawnの移行とサービス故障の接続 | S1とSupervisorの移行例が揃ってから実装。現在のterminal Err→HTTP終了を消さない。新経路に業務Err分離がないまま「handle完成」としない |
 
-各差分はdraft PRとし、CI結果を確認する。merge、版更新、releaseは別の判断。互換性を壊す変更を「文書の修正」や「内部整理」として混ぜない。
+実装差分は別PRとし、CI結果を確認する。この設計監査の#86はユーザーが非draftにした状態を維持する。merge、版更新、releaseは別の判断。互換性を壊す変更を「文書の修正」や「内部整理」として混ぜない。
 
 ## 現行の根拠
 
@@ -32,7 +32,7 @@ moveの追加は現在のmodule identity、checked facts、生成planを使う�
 
 ### Copy判定を同時に変更しない
 
-V1/V2は、現行checkerの意味を据え置く案とする。primitive-onlyへの縮小や全enumのCopy化は行わない。
+V1/V2は、現行checkerのCopy判定を据え置く。primitive-onlyへの縮小や全enumのCopy化は行わない。
 
 | 型 | 現行の暗黙Copy |
 |---|---|
@@ -47,9 +47,9 @@ V1/V2は、現行checkerの意味を据え置く案とする。primitive-onlyへ
 
 判定には既存の再帰深さ制約もある。これは読み取り時のavailable/borrow検査の代替ではない。Type::is_copyだけで新たなCopy表を実装しない。shared handleのmoveとclone_sharedによる所有者追加、payload copyも区別する。
 
-## V1/V2の判断案
+## V1/V2の採用仕様
 
-### 推奨する書き方（未実装）
+### 採用する書き方（main未実装・別branchで実装検証中）
 
 ```text
 from std.ownership import move
@@ -66,16 +66,16 @@ def main():
 
 moveは一度評価した入力をそのまま渡す。非Copy値なら元placeを消費し、Copy値なら既存のCopy規則が働く。clone、Arc所有者の追加、allocation、closeを行う操作ではない。引数・return・field等の既存consume検査を迂回できない。
 
-引数は一つ、戻り型は入力から推論し、明示型引数は受け付けない案とする。入力は既存consume規則で渡せる式で、ローカル変数だけに限定しない。fresh値やCopy値への指定は任意。Future保存、非Copy index取得、borrowed/shared fieldからの所有値取得は既存の拒否を保つ。
+引数は一つ、戻り型は入力から推論し、明示型引数は受け付けない。入力は既存consume規則で渡せる式で、ローカル変数だけに限定しない。fresh値やCopy値への指定は任意。Futureや入れ子のFuture入力、非Copy index取得、borrowed/shared fieldからの所有値取得は既存の拒否を保つ。
 
-V2で新たに拒否するのは、代入の右辺が解決済みローカル変数そのもので、その型がnonCopyの場合だけとする。括弧で包んだ同じ変数も同じ対象。宣言、型注釈付き代入、再代入を含む。`a = User(...)`や関数呼出し、try、field/index、引数、return、matchを一括で変更しない。この最初の範囲は「すべての所有権移動に明示moveを要求する」規則ではない。
+V2で新たに拒否するのは、代入の右辺が解決済みの所有ローカル変数そのもので、その型がnonCopyの場合だけとする。括弧で包んだ同じ変数も同じ対象。宣言、型注釈付き代入、再代入を含む。`a = User(...)`や関数呼出し、try、field/index、引数、return、matchを一括で変更しない。この最初の範囲は「すべての所有権移動に明示moveを要求する」規則ではない。
 
 viewの代入はCopyとして維持。sharedはnonCopyなので、V2の単純代入ならmoveかclone_sharedを選ぶ。`move(shared_value)`はpayloadの独立copyではない。
 
 | 案 | 判断理由 |
 |---|---|
-| canonical `std.ownership.move` | 推奨。既存のimport/aliasとchecked operationの経路を使い、未importの名前を占有しない |
-| contextual `move source` | 候補。専用ASTと全遍歴・Low印字の追加が必要。`move(...)`が既存関数呼出しの場合との説明も必要 |
+| canonical `std.ownership.move` | 採用。既存のimport/aliasとchecked operationの経路を使い、未importの名前を占有しない |
+| contextual `move source` | 不採用。専用ASTと全遍歴・Low印字の追加が必要。`move(...)`が既存関数呼出しの場合との説明も必要 |
 | 常設builtin `move(...)` | 見送る案。ユーザー関数のshadowで同じ見た目の意味が変わりやすい |
 | 普通のRust identity関数だけ | 不十分。checkerでconsume/originを確定し、明示操作のidentityを保持する責任が残る |
 | Copyをprimitive-onlyに縮小 | 見送る案。代入移行と別の互換性変更を同時に増やす |
@@ -90,7 +90,7 @@ viewを含む所有List/Option/Result等を移す場合は、入力のoriginと�
 
 ### 先行テストと移行
 
-V1のtests-only差分で、operation未実装による失敗段階を記録する。V2のtests-only差分では、旧実装が暗黙代入を受理することを新しい拒否oracleが検出する。設計判断前に現行test期待を変更しない。
+V1のtests-only差分で、operation未実装による失敗段階を記録する。V2のtests-only差分では、旧実装が暗黙代入を受理することを新しい拒否oracleが検出する。別実装branchの通常代入期待は承認済み移行に合わせる。借用・使用後・cleanupのoracleは維持し、この文書PRのmain/testは変更しない。
 
 - pass: Copy表の各代表、非Copyの明示move、新値生成、再初期化、sharedのmove/clone_shared、alias/qualified import、ユーザーの同名関数。
 - identity: 引数数・明示型引数の不正、Low metadataの偽装、import aliasのshadowを拒否または通常の名前解決として処理し、誤ったoperationへ変えない。
@@ -137,10 +137,10 @@ runtimeの最小縦切りでは、異種Tの結果チャネルとscope所有のj
 
 ## 監査の検証と現時点の停止条件
 
-基点mainで関連する既存7 suite・36件を実行し、成功した。内訳はownership 14、shared_field_moves 4、copy_capabilities 2、result_discard 4、async_value_types 6、scoped_tasks 5、scope_runtime_contract 1。これは現在の契約の検査で、候補moveやTaskの実装成功ではない。
+基点mainで関連する既存7 suite・36件を実行し、成功した。内訳はownership 14、shared_field_moves 4、copy_capabilities 2、result_discard 4、async_value_types 6、scoped_tasks 5、scope_runtime_contract 1。これは移行前の基点mainの契約の検査で、新しいmoveやTaskの実装成功ではない。
 
 実行コマンドは`cargo test --locked -p nagic --test ownership --test shared_field_moves --test copy_capabilities --test result_discard --test async_value_types --test scoped_tasks --test scope_runtime_contract`。Linux、既存debug/test profile、offline依存cacheで実行した。source treeは`117533295a2bbd16d12d413cb00f72076d17133e`、raw log SHA-256は`e8bf0664eb1287ef05f38fb4896ce6bce6c416ca10124625d2b15ff74b4b500f`。
 
 さらに[9例の移行前検証](value-task-audit-results.md)を実行した。High/手書きLow18入力と生成保存Low6入力のcheckは受理18・期待した拒否6。正常6例をHigh/保存Low/手書きLowでbuild/runし、18実行の出力が一致した。既存Copy class/enum・nullable・view、async関数別名、ユーザーのmove識別子、Result/sharedのnonCopy、借用中move、所有view containerの移動を確認した。新APIの実装・コスト検証には数えない。
 
-合意済みの方向を再質問しない。最初の判断はV1/V2の具体API、Copy据置、狭い代入対象、追加→拒否の移行を一つの案として確認する。S1/S2の残る細部はその後の判断へ分ける。構文・公開保証・既存lifecycleの期待を候補のまま実装へ昇格しない。
+V1/V2の具体API、Copy据置、狭い代入対象、段階移行は確定済みで、別branchの実装を再承認待ちへ戻さない。High/Low、生成Rust、全回帰・4 OS CIと移行を検証してからmain反映と公開版を区別して記録する。S1/S2の残る細部はその後の判断へ分け、既存Scope/Supervisorの契約を候補だけで変更しない。
