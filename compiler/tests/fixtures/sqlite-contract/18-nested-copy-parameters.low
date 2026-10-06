@@ -1,0 +1,7 @@
+import std.db.sqlite as sqlite;
+record Holder {
+    params: sqlite.Parameters;
+}
+fn duplicate(parts: view[Option[Holder]]) -> List[Option[Holder]] {
+    return copy(parts);
+}

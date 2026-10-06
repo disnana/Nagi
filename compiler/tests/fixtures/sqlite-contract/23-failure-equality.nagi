@@ -1,0 +1,3 @@
+import std.db.sqlite as sqlite
+def invalid(left: sqlite.Failure, right: sqlite.Failure) -> bool:
+    return left == right

@@ -1,0 +1,7 @@
+import std.db.sqlite as sqlite;
+record Holder {
+    failure: Option[sqlite.Failure];
+}
+fn invalid(problem: Holder) -> Result[str, Error] {
+    return json_encode(problem);
+}

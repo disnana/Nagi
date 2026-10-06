@@ -4,7 +4,7 @@
 
 ## 予定入力と検証段階
 
-[fixture matrix](../../compiler/tests/fixtures/sqlite-contract/matrix.json)は15組のHigh／手書きLowを収録する。意味論は全件`planned_unwired`で、semantic harness未配線、check／Rust build／run未実行。[parse-only harness](../../compiler/tests/sqlite_contract_inputs.rs)はpublic parserを直接呼び、全入力の構文、matrix相対path／集合完全性、元行anchorとlexer token開始位置を検査する。2 testをローカルで実行して成功した。現在の未知module拒否はTxやSQL契約のREDではない。Lowは`import ... as ...;`を使う独立した利用者入力で、生成Low goldenではない。将来の保存Lowはchecker factsを持ち越さず、Highから生成して独立再load／checkする。
+[fixture matrix](../../compiler/tests/fixtures/sqlite-contract/matrix.json)は23組（46入力）のHigh／手書きLowを収録する。意味論は全件`planned_unwired`で、semantic harness未配線、check／Rust build／run未実行。[parse-only harness](../../compiler/tests/sqlite_contract_inputs.rs)はpublic parserを直接呼び、全入力の構文、matrix相対path／集合完全性、元行anchorとlexer token開始位置を検査する。既存01–15の30入力では2 testをローカルで実行して成功した。追加16–23の16入力はまだparse-onlyも未実行で、sole executorへ実行を依頼する。現在の未知module拒否はTxやSQL契約のREDではない。Lowは`import ... as ...;`を使う独立した利用者入力で、生成Low goldenではない。将来の保存Lowはchecker factsを持ち越さず、Highから生成して独立再load／checkする。
 
 | 入力 | 将来期待 | 主な観測 |
 |---|---|---|
@@ -18,10 +18,15 @@
 | 10 spawn-owned、11 spawn-alias-option | fail | 実引数Tx、async関数alias＋Option[Tx]のFuture捕捉をspawnで拒否 |
 | 12 future-storage、13 future-option、14 future-return | fail | 既存Future保存／container／返却制限を維持。捕捉検査の成功証拠とは別 |
 | 15 new-row-restriction | fail | 新allの未対応field拒否と、旧db_allのclass／手書きFromRow経路の維持 |
+| 16 parameters-field | pass | Parametersのclass／enum field保存。Debug不可を保存禁止へ取り違えない |
+| 17 nested-copy-tx、18 nested-copy-parameters、19 nested-copy-pool | fail | view引数のOption／class payloadからnonCopy資源をgeneric copyしない |
+| 20 copy-pointer-signature | pass | Txが署名にだけ現れる同期function pointer sliceのcopy |
+| 21 failure-shared | pass | Failureの直接／class／Option／Result共有化。Debug内容は別native oracleを予定 |
+| 22 failure-serde、23 failure-equality | fail | shared／metadata Debug可でもSerdeとequalityは別々に拒否 |
 
-matrixの`variants`は追加実行を要する派生検査の予定であり、15組から実行済みtest件数を増やして数えない。01／02のnative build／runには完成したruntime public APIを必要とする。旧Db baselineは既存`sql_check`、`nullable_database`、`owned_database`等を維持する。
+matrixの`variants`は追加実行を要する派生検査の予定であり、23組から実行済みtest件数を増やして数えない。01／02のnative build／runには完成したruntime public APIを必要とする。旧Db baselineは既存`sql_check`、`nullable_database`、`owned_database`等を維持する。
 
-High／Lowの実形の根拠は`parser.rs`のimport／type／statement処理、`emit.rs::low`のrecord、`case Some/None/Ok/Err { ... }`、`scope { ... }`、既存`scope_runtime_contract`の手書きLow。fixtureの構文成功は上のparse-only範囲で確認した。公開表示位置はsource loaderの元pathと宣言／statement行を期待する。`source.rs::diagnostic`は行単位で、High expression columnを保証していない。matrixのUTF-8 columnはfixtureレビュー用anchor位置のみで、公開診断保証ではない。
+High／Lowの実形の根拠は`parser.rs`のimport／type／statement処理、`emit.rs::low`のrecord、`case Some/None/Ok/Err { ... }`、`scope { ... }`、既存`scope_runtime_contract`の手書きLow。01–15の構文成功は上のparse-only範囲で確認した。16–23はそのgrammarと既存enum constructor／json_encode例に合わせた独立入力で、構文成功はまだ報告しない。公開表示位置はsource loaderの元pathと宣言／statement行を期待する。`source.rs::diagnostic`は行単位で、High expression columnを保証していない。matrixのUTF-8 columnはfixtureレビュー用anchor位置のみで、公開診断保証ではない。
 
 ## canonical importとresource registry
 
@@ -36,6 +41,18 @@ registry配線には、Q004で採用した[capability初版表](sqlite-pool-adap
 Failureの直接／Option／Result payload共有化はpass、Tx／Parameters／Optionsの共有化はfailへ分ける。`shared[Pool]`から`view[Pool]`への暗黙変換は追加しない。現在のReference passingはTまたはview[T]を受けるため、shared[State]内のowned Pool fieldからbegin／clone_poolへ借用する経路をpositiveで確認する。Failureのfieldからのkind／message／copy operationも同様。標準operationをfirst-class aliasにする追加は含めず、既存のuser async関数aliasを捕捉検査する。
 
 native owned payloadも承認済みTx field-storage禁止の観測対象である。`class_field`はuser class／enum fieldに効くが、local `actor.turn(tx, reply)`はTurnのinline state fieldにTxを保存しうる。Actor State SはMessage／Reply／EのCharge検査とは別で、現在Sへstorage検査を適用していない。registry配線時にはTurn／Actor Stateの実payload fieldへのTx永続保存も拒否する。function pointer署名はpayloadではなく、local Option／Result、owned関数委譲、同task awaitは許す。この観測対象の固定を新公共保証や一般effect解析の追加として扱わない。
+
+## capability配線前の生成Debug／generic copy境界
+
+Q004のParametersはfield保存可・Debug不可であり、既存native資源と異なる組合せになる。`check/checked.rs::ItemPlan.readable_debug`は名前を読みやすく表示するかを決めるfactで、Debug eligibilityではない。現在`emit.rs::rust_with_lines`はclass／enumでこの値がfalseならderive(Debug)、trueなら全fieldを読むcustom Debugを生成する。16の許可済みfieldを受理しても、どちらの生成経路もParameters: Debugを要求し、rustc拒否になりうる。これをfield保存禁止やParameters Debug追加で直さない。
+
+最小案は`check/checked.rs::ItemPlan`へprivate Debug eligibilityを別factとして持たせ、既存`capabilities.rs::debug_supported`でclass／enumの実field graphを検査し、sealでidentity／item対応と整合を検証すること。emitterはeligibility不可ならderived／custom Debugの両方を生成せず、可の時だけ現readable namesを使う。Serde／Copy／FromRow／Charge planから推測しない。16はclass／enumの保存・moveをnative buildで確かめ、Debug／Cloneの自動要求がないことも観測する。21は逆にFailure fieldのgenerated Debugが成立し、runtime native formatterがkind／outcome／retiredだけを表示することを別oracleで確かめる。SQL、bind、causeへ固有markerを入れ、出力への混入を拒否する。このformatter検査は予定であり、Nagiの`print(resource)`受理を追加する例ではない。
+
+もう一つの入口は`check.rs`のbuiltin copyである。直native resourceはCopy flagを検査するが、`view[Option[sqlite.Tx]]`はgeneric sliceとして`List[Option[Tx]]`を返せてしまい、`emit.rs`の`CopyRead::List`がto_vec()を生成するとCloneを要求する。17はview parameterから開始するため、local List生成の制限だけでは防げない。18は保存可能なParametersをuser class経由で含む同じ穴、19はPoolの明示clone_pool契約をgeneric cloneで迂回する穴を固定する。
+
+最小予防策はcanonicalに解決済みの新SQLite nonCopy資源を対象とするprivate copy-payload predicateを`capabilities.rs`に置き、builtin copyのgeneric slice入口で使うこと。Option／Result／ownedとuser class／enumの実payloadを訪問し、function pointer署名は訪問しない。20はそのfalse positiveを防ぐpositiveである。user class名Tx／Poolや旧resourceの受理範囲を同時に狭めず、一般Clone／trait solverやRust bridge解析は追加しない。直resourceの既存copy判定とsealed CopyRead planも維持し、copy拒否を17–19の元式位置で報告する。shared wrapper内のArc複製、native内部payload／phantomの扱いはこの例だけから一括決定せず、用途別roleと既存clone_shared境界を照合する。
+
+両件はpublic配線前に塞ぐP1候補で、SQLite未登録の現在のaccepted-invalidを示すものではない。予定pass／failは承認capabilityから置いた独立oracleであり、今のchecker出力を写した成功assertではない。全caseのsemantic結果は未設定のまま保持する。local List／MapへのTx保存はlocal Option／Resultの許可から一般化せず、最初のsliceで現supported boundaryを確認し、受理拡張が要るなら別判断へ戻す。旧手書きFromRowとuser async aliasの受理を拡張する根拠にも使わない。
 
 ## shared payloadとFutureの実捕捉
 
