@@ -67,17 +67,17 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 
 ### Q-005: 既存所有値の代入を明示する範囲
 
-状態: 大枠は2026-10-06の引継ぎで採用。細部は未決、実装は後続。[ADR 011のOWN-04](adr/011-language-behavior-and-docs.md#own-04-既存所有値の代入)にbefore/after、理由、移行・検査を記録した。
+状態: moveの意味論と通常代入の移行は確定。作者が既存設計に沿うAPIを自律的に選び実装するよう指示したため、確認待ちで止めない。[採用仕様V1/V2](value-task-implementation-plan.md#v1v2の採用仕様)と[OWN-04](adr/011-language-behavior-and-docs.md#own-04-既存所有値の代入)に統合した。
 
-作者が段階実装まで範囲を広げた。[具体案V1/V2](value-task-implementation-plan.md#v1v2の判断案)は、canonical `std.ownership.move`、現行Copy表の据置、右辺がnonCopyローカルそのものの代入だけを移行対象とする案。操作の追加を先に行い、旧暗黙代入の拒否は別draft PRへ分ける。この具体案の判断はまだ受けていない。引数・return・field・matchまで一斉に変更しない。
+canonical `std.ownership.move`、現行Copy表の据置、右辺がnonCopy所有ローカルそのものの代入の移行を採用する。操作の追加と通常代入拒否を順に実装し、一つのdraft実装PRで全回帰と4 OS CIまで検証する。新値生成、引数、return、field/index、matchは既存の規則を保つ。shared handleのtransferとclone_shared、viewとcopyを区別する。
 
-現行の非Copy `a = b`は暗黙move。移行先ではコピー可能な単純値以外の既存所有値の操作を明示する。新値生成への機械的move要求、サイズ閾値、全enumのCopy化は採用していない。正確なCopy表、明示move構文、view/shared handle、引数・return・field・matchへの適用範囲を決める。現行Docsではまだ有効な暗黙moveを禁止にしない。
+旧受理と18件の正常実行は移行前の監査結果として保存する。新規則に合わせたfixture修正は承認済み移行であり、借用・source位置・cleanupのoracleを緩めない。merge/releaseは別途判断する。
 
 ### Q-006: spawn結果handleと業務Err・task故障
 
 状態: 方向は採用、現行spawnとScopeは変更しない。[ADR 011](adr/011-language-behavior-and-docs.md#async-0304-結果handleと失敗の分類)に移行を分離した。
 
-段階実装の対象になったが、[S1/S2の具体案](value-task-implementation-plan.md#s1s2-task結果の境界)は未決を残す。scope-owned join、once-only結果、業務Resultと外側の故障、Supervisorからの明示的な故障伝播を検討する。V1/V2の確認時にこれら全てを再質問せず、task実装へ進む段階で必要な意味論をまとめて決める。
+段階実装の対象になったが、[S1/S2の具体案](value-task-implementation-plan.md#s1s2-task結果の境界)は未決を残す。scope-owned join、once-only結果、業務Resultと外側の故障、Supervisorからの明示的な故障伝播を検討する。moveの実装をこれらの判断で止めず、task実装へ進む段階で必要な意味論をまとめて決める。
 
 結果を一度受け取るhandle、scopeによる寿命・故障の管理、業務Errだけでは兄弟を止めない方向を採る。型名・構文、消費規則、故障/取消型、複数故障、未受取Result、検出時点、scope外への持出しは未決。現行の子Errによる兄弟取消、Supervisor terminal ErrとHTTP終了の連携は、明示的な移行なしに消さない。親本体がtry等で退出する場合と、子が業務Resultを返す場合を分ける。
 

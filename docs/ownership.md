@@ -18,27 +18,31 @@ def main():
 
 コメントを外して`print(name)`を追加すると、move後の使用として`check`が拒否します。読むだけなら、引数を`view[str]`にして`view(name)`を渡します。独立した文字列が必要なら`copy(view(name))`を渡します。[入門の実行例](language-guide.md#4-読むだけならviewで借りる)で試せます。
 
-## 現在の代入と今後の変更
+## 代入と明示move
 
-現在の`a = b`は、数値・boolなどCopyとして扱う値ならコピーします。文字列や配列など、非Copyの所有値ならmoveします。Pythonの参照代入とは動作が異なります。
+次は採用済みの移行仕様で、実装中・未リリースです。Pythonの代入は同じ値への参照を増やします。Nagiでは、数値やboolなどCopyとして扱う値は通常代入できます。既存の非Copyローカルを渡す場合は`move`を使い、裸の`destination = name`は拒否します。
 
 ```nagi
+from std.ownership import move
+
 def main():
     count = 2
     same_count = count
     print(count + same_count)
     name = "Nagi"
-    destination = name
+    destination = move(name)
     print(destination)
     name = "new"
     print(name)
 ```
 
-出力は`4`、`Nagi`、`new`です。`destination = name`の後、古い文字列は`destination`から使います。元の`name`も新しい値を代入した後なら使えます。再代入より前に`name`を読むと`check`が拒否します。両方の文字列を残すなら`destination = copy(view(name))`にします。
+期待する出力は`4`、`Nagi`、`new`です。`destination = move(name)`は文字列と後片付けの責任を渡します。clone、allocation、shared所有者の追加は行いません。再代入前に`name`を読むと拒否し、新しい値を受け取った後なら再利用できます。独立した文字列を残すなら`destination = copy(view(name))`、所有せず読むなら`view(name)`、同じ値を共有するなら`share`と`clone_shared`を使います。
 
-現行のCopy規則にはview、関数値（対応済みのローカルasync関数別名を含む）、UUID、timestampや、中身がCopy規則を満たすclass・enum・nullable・ownedも含まれます。Resultとsharedは、中身がCopyでも暗黙Copyになりません。関数値のCopyはFutureの保存を許すものではなく、すべてのenumや小さいclassをコピーできるという規則でもありません。[型](types.md)と[async](async.md)も参照してください。
+`name = "Nagi"`や`a = User(...)`のように新しい値を作る場合、move指定は不要です。この変更の対象は、宣言・型注釈・再代入の右辺が非Copyローカルそのものの場合で、括弧で包んでも同じです。引数、return、フィールド取り出し、`try`、`match`は既存のconsume規則を保ちます。`move(name)`を引数やreturnに使っても、借用の制約は回避できません。
 
-今後の移行では、既存の非Copy所有値の`a = b`に明示的な操作を求める方針を採用しています。手放すならmove、読むならview、独立した値を作るならcopy、同じ値を複数箇所で持つならsharedを選びます。**この移行は未実装で、現在の暗黙moveは引き続き受理されます。** `a = User(...)`のように新しい値を作る式とは区別します。将来のCopy対象の正確な型表、構文、引数・return・フィールド取り出し・view・shared handleの扱いは詳細設計で定めます。[設計判断](../DESIGN.md)を参照してください。
+Copy規則は変更しません。view、関数値（対応済みのローカルasync関数別名を含む）、UUID、timestampや、中身がCopyのclass・enum・nullable・ownedも対象です。Resultとsharedは、中身がCopyでも非Copyです。viewをCopyしても借用元は必要で、関数値のCopyはFutureの保存を許すものではありません。[型](types.md)、[async](async.md)、[設計判断](../DESIGN.md)を参照してください。
+
+`move`は`std.ownership`からimportする、引数一つの操作です。型は入力から推論し、明示型引数は受け付けません。qualified importやaliasも使えます。同名のユーザー関数は通常の関数として扱います。borrowed/shared値からの移動には、従来の所有権制約が適用されます。
 
 ## 同じ値を複数の場所で持つ
 

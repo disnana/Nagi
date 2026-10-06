@@ -49,7 +49,7 @@ Python informs the writing style, Rust informs ownership, and Elixir informs act
 | Hand a value over | Move the value and its cleanup responsibility | Non-Copy assignment, arguments, and returns currently include implicit moves |
 | Read a value again later | Lend a view; make an explicit copy when an independent value is needed | Implemented; changes and moves of the owner are restricted while needed |
 | Keep the same value in several places | Share ownership; distinguish handle duplication from payload copying | Implemented; shared alone does not prove thread safety or completed shutdown |
-| Write ordinary `a = b` | Require an explicit operation for existing owned values other than simple Copy values | **Planned migration**. Implicit moves remain valid today; syntax, Copy types, and scope of the rule are open |
+| Write ordinary `a = b` | Use ordinary assignment for Copy; use `std.ownership.move` to transfer an existing non-Copy local | **Specified; implementation in progress**. Fresh values and existing argument, return, and field rules are retained. Not in a published release yet |
 | Represent absence or failure | Use nullable or Result; avoid panic for ordinary rejection | Implemented. Nagi try propagates Err; it is not Python try/except |
 | Receive a concurrent result | Let scope own child lifetime and receive the result once through a handle | **Handles are unimplemented**. Spawn currently accepts only unit/Result[unit, Error] |
 | Receive a child's business Err | Treat it as a result, separately from task failure | **Planned migration**. Scope currently cancels siblings on child Err too |
@@ -61,7 +61,9 @@ Ordinary arguments and operators evaluating both operands should run left to rig
 
 [ADR 011](docs/internal/adr/011-language-behavior-and-docs.md) records reasons, evidence, differences, and migration and test conditions. Exact current rules remain in the [language contracts](docs/internal/language-invariants.md). The [tutorial](docs/en/language-guide.md) starts with concrete Python comparisons and does not depend on unimplemented syntax.
 
-These directions will be implemented in stages. The [implementation plan](docs/internal/value-task-implementation-plan.md) separates an explicit move operation from assignment migration, then task results from fault handling. Concrete APIs remain proposals. Adding an operation will not immediately reject existing code. Each stage must align High/Low, generated Rust, samples, Japanese and English docs, and CI before the next change.
+Explicit move and assignment migration are now specified. Use the existing import mechanism, `from std.ownership import move`, then `a = move(b)` to transfer the value and cleanup responsibility. This does not clone, create shared ownership, or extend a lifetime. Fresh construction does not require a move annotation; current Copy rules are retained. A view is a read borrow, shared provides safe shared ownership, and copy creates an independent duplicate.
+
+The [implementation plan](docs/internal/value-task-implementation-plan.md) records the rules, migration scope, and tests to add first. The explicit operation and rejection of ordinary non-Copy local assignment will be verified together across High/Low, Rust generation, samples, both languages of the docs, and four OS CI before task result handles. Merge and release require separate decisions.
 
 ## Why use Rust?
 

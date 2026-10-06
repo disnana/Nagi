@@ -18,27 +18,31 @@ This complete program prints `alice`. After the call, the original `name` cannot
 
 Uncommenting `print(name)` makes `check` reject use after move. If the function only reads, accept `view[str]` and pass `view(name)`. If it needs an independent string, pass `copy(view(name))`. See the [runnable borrowing example](language-guide.md#4-borrow-with-view-when-you-only-need-to-read).
 
-## Assignment today and the planned change
+## Assignment and explicit move
 
-The current `a = b` copies values classified as Copy, such as numbers and bools. For a non-Copy owned value, such as a string or list, it moves the value. This does not behave like Python's reference assignment.
+The following is the adopted migration, under implementation and not yet released. Python assignment keeps another reference to the same value. Nagi uses ordinary assignment for Copy values, such as numbers and bools. To transfer an existing non-Copy local, use `move`; ordinary `destination = name` will be rejected.
 
 ```nagi
+from std.ownership import move
+
 def main():
     count = 2
     same_count = count
     print(count + same_count)
     name = "Nagi"
-    destination = name
+    destination = move(name)
     print(destination)
     name = "new"
     print(name)
 ```
 
-Output: `4`, `Nagi`, `new`. After `destination = name`, the old string is available through `destination`; the original `name` can be used again after receiving a new value. Reading `name` before that reassignment would fail `check`. To retain both strings, use `destination = copy(view(name))` instead.
+Expected output: `4`, `Nagi`, `new`. `destination = move(name)` transfers the string and cleanup responsibility. It does not clone, allocate, or add a shared owner. Reading `name` before its reassignment is rejected; giving it a new value allows reuse. To keep an independent string, use `destination = copy(view(name))`. To read without owning, use `view(name)`; to keep shared ownership, use `share` and `clone_shared`.
 
-Current Copy rules also cover views, function values (including supported local async function aliases), UUIDs, timestamps, and classes/enums/nullable/owned values whose contents meet the Copy rules. Result and shared remain non-Copy even when their payloads are Copy. Copying a function value does not allow storing its Future, nor does the rule cover every enum or small class. See [types](types.md) and [async](async.md).
+Fresh construction, including `name = "Nagi"` and `a = User(...)`, needs no move annotation. This change covers a bare non-Copy local RHS in a declaration, annotated assignment, or reassignment, including parentheses. Arguments, returns, field extraction, `try`, and `match` retain their existing consumption rules. `move(name)` may also be passed or returned, without bypassing borrow restrictions.
 
-The adopted direction for a future migration is to require an explicit operation when assigning an existing non-Copy owned value with `a = b`: move to give it away, view to read it, copy to create an independent value, or shared ownership to retain the same value in several places. **That migration is not implemented. Current implicit moves remain accepted.** Constructing a new value, as in `a = User(...)`, is distinct. The exact future Copy type list, syntax, and treatment of arguments, returns, field extraction, views, and shared handles remain to be specified. See [design decisions](../../DESIGN.en.md).
+Copy rules are unchanged: views, function values (including supported local async function aliases), UUIDs, timestamps, and classes/enums/nullable/owned values whose contents are Copy. Result and shared remain non-Copy even with Copy payloads. A copied view still requires its owner to remain valid; copying a function value does not allow storing its Future. See [types](types.md), [async](async.md), and [design decisions](../../DESIGN.en.md).
+
+`move` is imported from `std.ownership`, accepts one inferred argument, and does not accept explicit type arguments. Qualified and aliased imports work normally. User functions named `move` keep their own meaning. Moving from borrowed/shared data is subject to the existing ownership rules.
 
 ## Retain the same value in several places
 

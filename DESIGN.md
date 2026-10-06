@@ -49,7 +49,7 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 | 値を渡して手放す | moveで値と後片付けの責任を渡す | 今は非Copyの代入・引数・returnに暗黙moveがある |
 | 渡したあとも読む | viewで貸す。独立した値が必要なら明示copy | 実装済み。借用元が必要な間の変更やmoveを制限する |
 | 同じ値を保持する | sharedで共有し、handle複製とpayload copyを分ける | 実装済み。sharedだけでthread安全性や終了完了を保証しない |
-| 普通の`a = b`を書く | コピー可能な単純値以外の既存所有値では操作を明示する | **移行予定**。現行の暗黙moveをまだ禁止しない。構文・Copy表・適用範囲は未決 |
+| 普通の`a = b`を書く | Copyなら通常代入。既存の非Copyローカルを渡すなら`std.ownership.move`を使う | **仕様確定・実装中**。新値生成、引数・return・fieldの既存規則は維持する。公開版には未反映 |
 | 値がない、処理が失敗する | nullableとResultを使い分ける。通常の拒否にpanicを使わない | 実装済み。NagiのtryはErrの伝播で、Pythonのtry/exceptではない |
 | 並行な処理から結果を得る | scopeが子の寿命を持ち、handleから結果を一度受け取る | **handleは未実装**。今のspawnはunit/Result[unit, Error]だけ |
 | 子が業務Errを返す | Errを結果として扱い、taskの故障とは分ける | **移行予定**。今のScopeは子Errでも兄弟を取消す |
@@ -61,7 +61,9 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 
 現行との差、採用理由、根拠、後続実装の移行・検証条件は[ADR 011](docs/internal/adr/011-language-behavior-and-docs.md)へまとめます。現行の厳密な規則は[言語契約](docs/internal/language-invariants.md)に残します。入門は[Pythonとの具体的な比較](docs/language-guide.md)から始め、未実装の書き方で例を成立させません。
 
-これらの方針は、文書だけで終わらせず段階実装します。[実装計画](docs/internal/value-task-implementation-plan.md)で、明示moveの追加と代入の移行、task結果と故障分離を別の差分に分けています。具体APIは候補の段階です。新しい操作を追加しただけで旧コードを拒否せず、High/Low・生成Rust・サンプル・日英Docs・CIを揃えてから次の変更へ進みます。
+明示moveの意味論と代入の移行は確定しました。既存のimportに沿って`from std.ownership import move`を使い、`a = move(b)`で値と後片付けの責任を渡します。暗黙clone、shared化、寿命の延長は行いません。新しく作る値にはmove指定を要求せず、Copy判定は現行の規則を保ちます。viewは読み取りの借用、sharedは同じ値の安全な共有、copyは独立した複製です。
+
+[実装計画](docs/internal/value-task-implementation-plan.md)に仕様、移行対象、先行テストを記録しています。明示操作と非Copyローカルの通常代入拒否を一つの変更として検証し、High/Low・Rust生成・サンプル・日英Docs・4 OS CIを揃えてからtask結果handleへ進みます。mergeとreleaseは別途判断します。
 
 ## なぜRustを使うのか
 
