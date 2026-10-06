@@ -89,4 +89,6 @@ Linux x86_64、既存warm target、locked／offline Cargo、debug profile。sock
 
 既存Linux全suiteと4 OS package matrixの`sqlite_prototype` stepが43件を実行する。予定High／Lowの専用stepは46入力をparserで検査する。stepは#81で登録済みで、今回の差分でCI条件を弱めていない。
 
-この記録時点では新adapterの4 OS結果は確認待ち。#81の4 OS成功を今回のadapter成功に流用しない。mainへ向けた別PRで最終headのCIを確認する。mainへのマージ、版更新、releaseは行っていない。
+head `a608f1a5585eae8b27e32eced0299070269f3b57`の[checks run 37402576311](https://github.com/disnana/Nagi/actions/runs/37402576311)と[website run 37402576023](https://github.com/disnana/Nagi/actions/runs/37402576023)はattempt 1で成功した。4 OSの各実ログでnative22＋adapter20＋比較1の43件、parser2件の成功を確認した。[job別の記録](../../benchmarks/results/sqlite-adapter-2026-10-06/ci-source-proof.json)に件数とIDを保存した。Linux全検査、IntelliJ IDEA、PyCharm、merge gateも成功。VSIX packageは変更対象外でskip、releaseもskipである。
+
+この後はartifactの改行・記録hashと次の設計メモだけを更新し、compiler／runtime／Cargo／CIは同じbytesを保つ。最終headのCIはPR #82で再確認する。#81の成功を新adapter成功に流用せず、各headと検査範囲を分けた。mainへのマージ、版更新、releaseは行っていない。

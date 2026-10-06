@@ -41,3 +41,5 @@ NAGI_SQLITE_MEASURE_OUTPUT=/tmp/sqlite-adapter-measurement.json \
 途中の19番ログは非Send MutexGuardによるcompile失敗で、名前にgreenがあっても成功の根拠に含めなかった。全ログ、途中RED source、final source、原JSONは別途ローカルartifact `nagi-phase4-adapter-evidence.tar.gz`へ保全した。archive SHA-256は`73c001623a11f9a647c614036b50a4b194da537b1b666e7c42d6162ea2ace01d`。このarchiveをrelease assetとして公開したという意味ではない。
 
 [実装と限界](../../../docs/internal/sqlite-adapter-results.md)に、sourceの分担、再現した共通原因、未配線のpublic API／多接続／取得期限を記録した。性能値をtestの合否thresholdにはしない。
+
+[ci-source-proof.json](ci-source-proof.json)には、実装head `a608f1a`で成功した4 OSのjob IDとnative22／adapter20／比較1／parser2の計数を保存した。測定の条件や数値はその後変更していない。

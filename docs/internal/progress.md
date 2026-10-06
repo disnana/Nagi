@@ -197,3 +197,9 @@ generic deadpoolのManagerへ共通native sessionを接続した。stock permit�
 同native coreの単独debug測定は各4096 Tx、direct p50 106.370µs、deadpool p50 114.402µs。raw sample、再実行条件、REDとGREEN、保証の限界は[結果](sqlite-adapter-results.md)と[測定](../../benchmarks/results/sqlite-adapter-2026-10-06/README.md)に保存した。throughput、allocator count、Future size、本番性能は未測定。main `ff6f7d4`を取り込んだ後も実装treeは同一。
 
 次のPRはmain向けに分離する。新adapterの4 OS CIは確認待ち。公開Pool／Tx、多接続・Options取得期限、capture検査、sealed SQL、Phase 4全体のacceptanceは未完了。Phase 5、版更新、releaseは開始していない。
+
+### #82のadapter実装CI
+
+main向け[PR #82](https://github.com/disnana/Nagi/pull/82)、head `a608f1a`のchecks `37402576311`／website `37402576023`がattempt 1で成功した。4 OSの実ログで43件のprivate試験とparser2件を確認し、Linux全検査、両JetBrains製品、merge gateも成功した。VSIX packageは変更対象外、releaseはskip。artifactの改行・hashと次の設計メモを修正した最終headでもCIを確認する。compiler／runtime／Cargo／CIのbytesは維持する。
+
+一接続比較は成立したが、公開配線のacceptanceとは分ける。[次の縦切り](sqlite-public-slice-plan.md)には、sequential join観測の多接続での反例候補、stock待機からnative fenceへの予算、巨大capacityの確保を整理した。source reviewによる候補で、実行済みのP1として数えていない。任意上限・新期限・新依存を追加する必要が出れば判断案へ戻す。エージェントによるmain merge・版更新・releaseはしていない。

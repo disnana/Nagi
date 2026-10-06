@@ -1,0 +1,65 @@
+{
+  "head": "a608f1a5585eae8b27e32eced0299070269f3b57",
+  "run_id": 37402576311,
+  "attempt": 1,
+  "website_run_id": 37402576023,
+  "scope": "private one-connection cfg(test), public SQLite semantics not wired",
+  "platforms": [
+    {
+      "platform": "windows-x86_64",
+      "job_id": 112072857472,
+      "native_case_count": 43,
+      "native_contracts": 22,
+      "adapter_contracts": 20,
+      "comparison_cases": 1,
+      "parser_tests": 2,
+      "failed": 0,
+      "ignored": 0,
+      "summary_lines": [
+        "2026-10-06T02:20:28.2633937Z test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 129 filtered out; finished in 1.64s"
+      ]
+    },
+    {
+      "platform": "linux-x86_64",
+      "job_id": 112072857637,
+      "native_case_count": 43,
+      "native_contracts": 22,
+      "adapter_contracts": 20,
+      "comparison_cases": 1,
+      "parser_tests": 2,
+      "failed": 0,
+      "ignored": 0,
+      "summary_lines": [
+        "2026-10-06T02:12:32.3207504Z test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 129 filtered out; finished in 0.97s"
+      ]
+    },
+    {
+      "platform": "macos-x86_64",
+      "job_id": 112072857476,
+      "native_case_count": 43,
+      "native_contracts": 22,
+      "adapter_contracts": 20,
+      "comparison_cases": 1,
+      "parser_tests": 2,
+      "failed": 0,
+      "ignored": 0,
+      "summary_lines": [
+        "2026-10-06T02:19:15.4841810Z test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 129 filtered out; finished in 2.43s"
+      ]
+    },
+    {
+      "platform": "macos-arm64",
+      "job_id": 112072857491,
+      "native_case_count": 43,
+      "native_contracts": 22,
+      "adapter_contracts": 20,
+      "comparison_cases": 1,
+      "parser_tests": 2,
+      "failed": 0,
+      "ignored": 0,
+      "summary_lines": [
+        "2026-10-06T02:13:50.6257430Z test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 129 filtered out; finished in 0.60s"
+      ]
+    }
+  ]
+}
