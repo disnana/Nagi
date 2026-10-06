@@ -6,6 +6,8 @@ pub mod actor;
 pub mod auth;
 mod concurrent;
 mod database;
+#[cfg(test)]
+mod sqlite_prototype;
 mod http;
 pub mod http_server;
 pub mod metrics;
