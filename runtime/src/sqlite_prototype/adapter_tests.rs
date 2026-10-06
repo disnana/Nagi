@@ -6,6 +6,59 @@ use futures_util::FutureExt;
 use rusqlite::{types::Value, Row};
 use std::{sync::Arc, time::Duration};
 
+// 多接続fixtureは同じfilesystem DBを使う。exclusive作成に成功したdirectoryだけ所有。
+struct MultiFile {
+    directory: std::path::PathBuf,
+    path: std::path::PathBuf,
+}
+impl MultiFile {
+    fn new() -> Self {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let directory = loop {
+            let ordinal = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let candidate = std::env::temp_dir().join(format!(
+                "nagi-sqlite-multi-{}-{ordinal}",
+                std::process::id()
+            ));
+            match std::fs::create_dir(&candidate) {
+                Ok(()) => break candidate,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("exclusive sqlite fixture: {error}"),
+            }
+        };
+        let path = directory.join("shared.sqlite");
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        connection.execute_batch("CREATE TABLE items(n)").unwrap();
+        connection.close().unwrap();
+        Self { directory, path }
+    }
+    fn config(&self) -> Config {
+        Config {
+            path: Some(self.path.clone()),
+            ..Config::default()
+        }
+    }
+}
+impl Drop for MultiFile {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.directory).expect("joined sqlite fixture cleanup");
+    }
+}
+
+// watchdog/panicは結果として保持し、Gate解放・active Tx終端・closeの後に失敗assertする。
+async fn multi_watch<F: std::future::Future>(future: F) -> Result<F::Output, &'static str> {
+    match tokio::time::timeout(
+        Duration::from_secs(10),
+        std::panic::AssertUnwindSafe(future).catch_unwind(),
+    )
+    .await
+    {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(_)) => Err("multi observation panicked"),
+        Err(_) => Err("multi watchdog expired"),
+    }
+}
+
 const DEADLINE: Duration = Duration::from_secs(2);
 #[derive(Debug, PartialEq)]
 struct Number(i64);
@@ -577,4 +630,351 @@ async fn stock_detach_permit_before_handle_drop_cannot_start_another_native_work
     assert_eq!(observer.snapshot().native_closed, 2);
     assert_eq!(observer.snapshot().joined, 2);
     assert_eq!(observer.snapshot().pending_workers, 0);
+}
+
+#[tokio::test]
+async fn multi_two_filesystem_connections_begin_while_first_tx_stays_active() {
+    let file = MultiFile::new();
+    let adapter = Adapter::with_capacity(file.config(), AdapterSeams::default(), 2);
+    let observer = adapter.observer();
+    let a = multi_watch(adapter.begin()).await.unwrap().unwrap();
+    let b = multi_watch(adapter.begin()).await;
+    let b_work = match b {
+        Ok(Ok(b)) => {
+            let inserted = multi_watch(b.exec("INSERT INTO items VALUES (7)", vec![])).await;
+            let operation = if matches!(inserted, Ok(Ok(1))) {
+                Finish::Commit
+            } else {
+                Finish::Rollback
+            };
+            let finished = multi_watch(b.finish(operation)).await;
+            matches!(inserted, Ok(Ok(1))) && matches!(finished, Ok(Ok(())))
+        }
+        _ => false,
+    };
+    let both_live = observer.snapshot();
+    let shared_row = multi_watch(a.query::<Number>("SELECT n FROM items", vec![])).await;
+    let a_finished = multi_watch(a.finish(Finish::Rollback)).await;
+    let closed = multi_watch(adapter.close(DEADLINE)).await;
+    let done = observer.snapshot();
+    assert!(
+        b_work,
+        "second connection was blocked or did not share filesystem DB"
+    );
+    assert!(matches!(shared_row, Ok(Ok(Some(Number(7))))));
+    assert!(matches!(a_finished, Ok(Ok(()))));
+    assert!(matches!(closed, Ok(Ok(()))));
+    assert_eq!(both_live.created, 2);
+    assert_eq!(both_live.native_started, 2);
+    assert_eq!(both_live.pending_workers, 2);
+    assert_eq!(both_live.joined, 0);
+    assert_eq!(done.native_closed, 2);
+    assert_eq!(done.joined, 2);
+    assert_eq!(done.start_failed, 0);
+    assert_eq!(done.pending_workers, 0);
+}
+
+#[tokio::test]
+async fn multi_cancelled_b_joins_and_c_begins_before_healthy_a_finishes() {
+    let file = MultiFile::new();
+    let startup = Arc::new(Gate::new());
+    let publication = Arc::new(Gate::new());
+    let adapter = Adapter::with_capacity(
+        file.config(),
+        AdapterSeams {
+            target_worker: Some(2),
+            startup: Some(Arc::clone(&startup)),
+            publication: Some(Arc::clone(&publication)),
+            ..AdapterSeams::default()
+        },
+        2,
+    );
+    let observer = adapter.observer();
+    let a = multi_watch(adapter.begin()).await.unwrap().unwrap();
+    let mut b = Box::pin(adapter.begin());
+    let started = multi_watch(async {
+        tokio::select! { _ = &mut b => panic!("B passed startup barrier"), _ = startup.wait() => {} }
+    })
+    .await;
+    drop(b);
+    let mut c = Box::pin(adapter.begin());
+    let c_waited = futures_util::poll!(&mut c).is_pending();
+    let before_b_join = observer.snapshot();
+    startup.release();
+    let independently_joined = if started.is_ok() {
+        multi_watch(publication.wait()).await
+    } else {
+        Err("B startup failed")
+    };
+    let at_b_join = observer.snapshot();
+    publication.release();
+    let c_finished = if independently_joined.is_ok() {
+        match multi_watch(c).await {
+            Ok(Ok(c)) => matches!(multi_watch(c.finish(Finish::Rollback)).await, Ok(Ok(()))),
+            _ => false,
+        }
+    } else {
+        drop(c);
+        false
+    };
+    let a_healthy = multi_watch(a.query::<Number>("SELECT 1 AS n", vec![])).await;
+    let a_finished = multi_watch(a.finish(Finish::Rollback)).await;
+    let closed = multi_watch(adapter.close(DEADLINE)).await;
+    let done = observer.snapshot();
+    assert!(started.is_ok());
+    assert!(
+        independently_joined.is_ok(),
+        "B join was queued behind active A"
+    );
+    assert!(c_waited && c_finished);
+    assert_eq!(before_b_join.created, 2);
+    assert_eq!(before_b_join.pending_workers, 2);
+    assert_eq!(at_b_join.native_closed, 1);
+    assert_eq!(
+        at_b_join.joined, 0,
+        "publication barrier precedes completion ledger"
+    );
+    assert!(matches!(a_healthy, Ok(Ok(Some(Number(1))))));
+    assert!(matches!(a_finished, Ok(Ok(()))));
+    assert!(matches!(closed, Ok(Ok(()))));
+    assert_eq!(done.created, 3);
+    assert_eq!(done.native_started, 3);
+    assert_eq!(done.joined, 3);
+    assert_eq!(done.native_closed, 3);
+    assert_eq!(done.start_failed, 0);
+    assert_eq!(done.pending_workers, 0);
+}
+
+#[tokio::test]
+async fn multi_stock_detach_permit_gap_respects_native_cap_with_a_active() {
+    let file = MultiFile::new();
+    let detaching = Arc::new(Gate::new());
+    let publication = Arc::new(Gate::new());
+    let adapter = Adapter::with_capacity(
+        file.config(),
+        AdapterSeams {
+            target_worker: Some(2),
+            detaching: Some(Arc::clone(&detaching)),
+            publication: Some(Arc::clone(&publication)),
+            ..AdapterSeams::default()
+        },
+        2,
+    );
+    let observer = adapter.observer();
+    let a = multi_watch(adapter.begin()).await.unwrap().unwrap();
+    let b = multi_watch(adapter.checkout_without_begin())
+        .await
+        .unwrap()
+        .unwrap();
+    let taking = std::thread::spawn(move || b.take_and_drop());
+    let detached = multi_watch(detaching.wait()).await;
+    let mut c = Box::pin(adapter.begin());
+    let c_waited = futures_util::poll!(&mut c).is_pending();
+    let permit_gap = observer.snapshot();
+    detaching.release();
+    let take_finished = taking.join();
+    let b_joined = multi_watch(publication.wait()).await;
+    let before_publication = observer.snapshot();
+    publication.release();
+    let c_finished = if b_joined.is_ok() {
+        match multi_watch(c).await {
+            Ok(Ok(c)) => matches!(multi_watch(c.finish(Finish::Rollback)).await, Ok(Ok(()))),
+            _ => false,
+        }
+    } else {
+        drop(c);
+        false
+    };
+    let a_healthy = multi_watch(a.query::<Number>("SELECT 1 AS n", vec![])).await;
+    let a_finished = multi_watch(a.finish(Finish::Rollback)).await;
+    let closed = multi_watch(adapter.close(DEADLINE)).await;
+    let done = observer.snapshot();
+    assert!(detached.is_ok() && take_finished.is_ok());
+    assert!(b_joined.is_ok(), "detached B join waited for healthy A");
+    assert!(c_waited && c_finished);
+    assert_eq!(permit_gap.handle_drops, 0);
+    assert_eq!(permit_gap.native_started, 2);
+    assert_eq!(permit_gap.created, 2);
+    assert_eq!(permit_gap.pending_workers, 2);
+    assert_eq!(before_publication.joined, 0);
+    assert_eq!(before_publication.native_closed, 1);
+    assert!(matches!(a_healthy, Ok(Ok(Some(Number(1))))));
+    assert!(matches!(a_finished, Ok(Ok(()))));
+    assert!(matches!(closed, Ok(Ok(()))));
+    assert_eq!(done.created, 3);
+    assert_eq!(done.joined, 3);
+    assert_eq!(done.native_closed, 3);
+    assert_eq!(done.start_failed, 0);
+    assert_eq!(done.pending_workers, 0);
+}
+
+#[tokio::test]
+async fn multi_b_terminal_failure_is_published_without_waiting_for_a() {
+    let file = MultiFile::new();
+    let publication = Arc::new(Gate::new());
+    let adapter = Adapter::with_capacity(
+        file.config(),
+        AdapterSeams {
+            target_worker: Some(2),
+            // 実SQLite closeは完了させ、observerがterminal causeだけ注入する。
+            // filesystemへ永久Statement leakを残す実close Err試験ではない。
+            fail_terminal_result: true,
+            publication: Some(Arc::clone(&publication)),
+            ..AdapterSeams::default()
+        },
+        2,
+    );
+    let observer = adapter.observer();
+    let a = multi_watch(adapter.begin()).await.unwrap().unwrap();
+    multi_watch(adapter.checkout_without_begin())
+        .await
+        .unwrap()
+        .unwrap()
+        .take_and_drop();
+    let independent = multi_watch(publication.wait()).await;
+    let mut waiting = Box::pin(adapter.begin());
+    let waiting_before_failure = futures_util::poll!(&mut waiting).is_pending();
+    publication.release();
+    let failure = if independent.is_ok() {
+        multi_watch(waiting).await
+    } else {
+        drop(waiting);
+        Err("B terminal failure not observed independently")
+    };
+    let b_joined = if independent.is_ok() {
+        multi_watch(observer.wait_joined(1)).await
+    } else {
+        Err("B join not observed independently")
+    };
+    let while_a_active = observer.snapshot();
+    let a_healthy = multi_watch(a.query::<Number>("SELECT 1 AS n", vec![])).await;
+    let a_finished = multi_watch(a.finish(Finish::Rollback)).await;
+    let closed = multi_watch(adapter.close(DEADLINE)).await;
+    let done = observer.snapshot();
+    assert!(
+        independent.is_ok() && b_joined.is_ok(),
+        "B failure was hidden behind A"
+    );
+    assert!(waiting_before_failure);
+    let error = failure.unwrap().unwrap_err();
+    assert_eq!(error.kind, Kind::Worker);
+    assert!(error.cleanup.is_some() && error.retired);
+    assert_eq!(while_a_active.joined, 1);
+    assert_eq!(while_a_active.created, 2, "failure started replacement");
+    assert!(while_a_active.closing);
+    assert!(matches!(a_healthy, Ok(Ok(Some(Number(1))))));
+    assert!(matches!(a_finished, Ok(Ok(()))));
+    let close_error = closed.unwrap().unwrap_err();
+    assert!(close_error.cleanup.is_some());
+    assert_eq!(done.created, 2);
+    assert_eq!(done.native_started, 2);
+    assert_eq!(done.joined, 2);
+    assert_eq!(
+        done.native_closed, 2,
+        "real native close succeeded for A and B"
+    );
+    assert_eq!(done.start_failed, 0);
+    assert_eq!(done.pending_workers, 0);
+}
+
+#[tokio::test]
+async fn multi_close_during_b_startup_preserves_a_and_all_join_responsibility() {
+    let file = MultiFile::new();
+    let startup = Arc::new(Gate::new());
+    let adapter = Adapter::with_capacity(
+        file.config(),
+        AdapterSeams {
+            target_worker: Some(2),
+            startup: Some(Arc::clone(&startup)),
+            ..AdapterSeams::default()
+        },
+        2,
+    );
+    let observer = adapter.observer();
+    let a = multi_watch(adapter.begin()).await.unwrap().unwrap();
+    let mut b = Box::pin(adapter.begin());
+    let started = multi_watch(async {
+        tokio::select! { _ = &mut b => panic!("B passed startup barrier"), _ = startup.wait() => {} }
+    })
+    .await;
+    let mut waiting = Box::pin(adapter.begin());
+    let waiting_pending = futures_util::poll!(&mut waiting).is_pending();
+    let mut closing = Box::pin(adapter.close(Duration::from_secs(10)));
+    let close_pending = futures_util::poll!(&mut closing).is_pending();
+    drop(closing);
+    let waiting_error = multi_watch(waiting).await;
+    let closing_kept = observer.snapshot().closing;
+    startup.release();
+    let late_b = multi_watch(b).await;
+    let b_joined = multi_watch(observer.wait_joined(1)).await;
+    let before_a_finish = observer.snapshot();
+    let close_timeout = adapter.close(Duration::ZERO).await;
+    let a_healthy = multi_watch(a.query::<Number>("SELECT 1 AS n", vec![])).await;
+    let a_finished = multi_watch(a.finish(Finish::Rollback)).await;
+    let closed = multi_watch(adapter.close(DEADLINE)).await;
+    let done = observer.snapshot();
+    assert!(started.is_ok() && b_joined.is_ok());
+    assert!(waiting_pending && close_pending && closing_kept);
+    assert_eq!(waiting_error.unwrap().unwrap_err().kind, Kind::Closed);
+    assert_eq!(late_b.unwrap().unwrap_err().kind, Kind::Closed);
+    assert_eq!(close_timeout.unwrap_err().kind, Kind::CloseTimeout);
+    assert_eq!(before_a_finish.joined, 1);
+    assert_eq!(
+        before_a_finish.admitted, 1,
+        "late startup admitted user BEGIN"
+    );
+    assert!(matches!(a_healthy, Ok(Ok(Some(Number(1))))));
+    assert!(matches!(a_finished, Ok(Ok(()))));
+    assert!(matches!(closed, Ok(Ok(()))));
+    assert_eq!(done.created, 2);
+    assert_eq!(done.native_started, 2);
+    assert_eq!(done.joined, 2);
+    assert_eq!(done.native_closed, 2);
+    assert_eq!(done.start_failed, 0);
+    assert_eq!(done.pending_workers, 0);
+}
+
+#[tokio::test]
+async fn multi_observer_spawn_failure_never_starts_or_fake_joins_native_b() {
+    let file = MultiFile::new();
+    let adapter = Adapter::with_capacity(
+        file.config(),
+        AdapterSeams {
+            target_worker: Some(2),
+            fail_observer_spawn: true,
+            ..AdapterSeams::default()
+        },
+        2,
+    );
+    let observer = adapter.observer();
+    let a = multi_watch(adapter.begin()).await.unwrap().unwrap();
+    let failed_b = multi_watch(adapter.begin()).await;
+    let after_failure = observer.snapshot();
+    let later = multi_watch(adapter.begin()).await;
+    let a_healthy = multi_watch(a.query::<Number>("SELECT 1 AS n", vec![])).await;
+    let a_finished = multi_watch(a.finish(Finish::Rollback)).await;
+    let closed = multi_watch(adapter.close(DEADLINE)).await;
+    let done = observer.snapshot();
+    let error = failed_b.unwrap().unwrap_err();
+    assert!(error.cleanup.is_some() && error.retired);
+    assert_eq!(error.outcome, Outcome::NotApplicable);
+    assert_eq!(after_failure.created, 2);
+    assert_eq!(after_failure.native_started, 1);
+    assert_eq!(after_failure.start_failed, 1);
+    assert_eq!(after_failure.joined, 0, "native B was never spawned");
+    assert_eq!(after_failure.native_closed, 0);
+    assert_eq!(after_failure.pending_workers, 1);
+    assert_eq!(after_failure.starting, 0);
+    assert!(after_failure.closing);
+    assert_eq!(later.unwrap().unwrap_err().kind, Kind::Worker);
+    assert!(matches!(a_healthy, Ok(Ok(Some(Number(1))))));
+    assert!(matches!(a_finished, Ok(Ok(()))));
+    assert!(closed.unwrap().unwrap_err().cleanup.is_some());
+    assert_eq!(done.created, 2);
+    assert_eq!(done.native_started, 1);
+    assert_eq!(done.joined, 1);
+    assert_eq!(done.native_closed, 1);
+    assert_eq!(done.start_failed, 1);
+    assert_eq!(done.joined + done.start_failed, done.created);
+    assert_eq!(done.pending_workers, 0);
 }
