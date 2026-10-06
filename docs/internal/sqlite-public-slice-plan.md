@@ -1,6 +1,6 @@
 # SQLite公開縦切りの前に検証すること
 
-2026-10-06。[一接続adapterの結果](sqlite-adapter-results.md)を踏まえた次の設計メモ。ここにある拡張案は未採用・未実装で、読み取りレビューから得た反例候補を実行再現したとは扱わない。Q002／Q004の公開API・所有契約・policy・依存は維持する。
+2026-10-06。[一接続adapterの結果](sqlite-adapter-results.md)を踏まえた次の設計メモ。ここにある公開配線の案は未実装で、読み取りレビューから得た反例候補を実行再現したとは扱わない。native容量と独立joinのprivate縦切りは[内部設計](sqlite-multiconnection-design.md)を先に記録し、回帰から検証する。Q002／Q004の公開API・所有契約・policy・依存は維持する。
 
 ## native容量と独立した終了観測
 
@@ -32,3 +32,13 @@ Q002の「巨大値を無条件に確保してvalidation済みとしない」を
 4. High／保存Low／手書きLow、実DB、4 OS、生成探索、縦切りのcostを検査してG-TX／G-POOLとPhase 4 acceptanceを判断する。Phase 5はその後。
 
 一次根拠: [deadpool Manager](https://docs.rs/deadpool/0.13.1/deadpool/managed/trait.Manager.html)、[Timeouts](https://docs.rs/deadpool/0.13.1/deadpool/managed/struct.Timeouts.html)、[pool.rs](https://docs.rs/crate/deadpool/0.13.1/source/src/managed/pool.rs)、[Q002のAPIと0ms](sqlite-pool-proposal.md)、[ADR 010](adr/010-sqlite-transaction-boundary.md)。仕様・採用判断と、sourceから考えた未検証案を分けて記録する。
+
+## 取得期限候補の独立sourceレビュー
+
+2026-10-06。Solによるdeadpool 0.13.1とTokio 1.53.1のsource照合では、取得ごとのtask-local scopeで予算を渡す候補はprivate試験へ進められる。deadpoolのcreate/recycleはcaller future内でpollされ、Tokio scopeはpoll/Dropの前後で値を復元する。同じtaskのjoin!/select!でもscopeを個別にする。別task/native threadへ予算を伝播させず、共有mutableな現在期限は使わない。これは読み取り結果で、実装・実行検証はまだない。
+
+候補はImmediateまたは絶対deadlineを保持し、stock waitへ残予算、create/recycle timeoutはNoneとする。native登録で取得期限を終え、ready/BEGIN/busyへtimerを持ち越さない。backendのAcquireTimeoutとstock Wait timeoutの種別を保持し、期限切れだけでPoolをfailedにしない。recycle失敗は現在のretirement/failureを維持し、予算を作り直してreplacementを許可しない。
+
+先行試験は0msの空き/論理不足/native不足、logical→nativeの残予算、同taskの異なる2予算、取消、登録後startupを期限超過させて解放後成功、recycle故障を対象にする。stock timeout_getは相対Durationからtimerを作り、Tokio TimeoutはReadyをtimerより先に返す。非yield/executor遅延も含む厳密な壁時計上限や、期限後のReadyを必ず拒否する新保証は加えない。
+
+巨大capacityは、正数/usize/Semaphoreと時間変換に加え、WorkerHandleを含む配列が確実にbyte表現不能な入力をallocation前に拒否する検証は可能。ただしその下限検査だけでprivate ObjectInnerの全容量を検証したことにはならない。公開Objectのsizeofを代用した余分に厳しい上限や、試しの巨大allocationは採らない。stock infallible allocationの扱いと公開受理範囲が残り、新policy/依存変更が必要なら判断へ戻す。
