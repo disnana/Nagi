@@ -4,6 +4,14 @@
 
 「契約」は維持する意味論、「委譲」はRustや外部環境で確かめる条件、「制約」は現在対応しない範囲を表す。テストは挙げたケースを継続検査するもので、全プログラムについての証明ではない。
 
+## 採用方針と現行契約の区別
+
+2026-10-06の引継ぎを[ADR 011](adr/011-language-behavior-and-docs.md)へ取り込んだ。以下の契約表は現行動作を保つ。非Copyの既存値の代入を明示操作にするOWN-04、spawn結果handleと子業務Errの扱いを変えるASYNC-03/04、条件付きshared messageのACTOR-01は採用する方向であり、まだ有効な構文・受理規則ではない。
+
+変更する際はbefore/after、互換性と対象版、High/Low、診断位置、生成Rust、実runtimeの成功・失敗・取消を検査する。実装前に現行の暗黙moveやScope子Errの契約を削除しない。Supervisorのterminal failureをHTTP停止へ伝える接続も保つ。未決の細部は[Q-005〜007](open-questions.md#q-005-既存所有値の代入を明示する範囲)にまとめる。
+
+通常の引数と両側を評価するoperandの左から右の順序、and/orの短絡、値とcleanup責任の移動を保つ。逆順cleanupの方針は単純な同一ブロックの所有ローカルの逆宣言順を指し、全値の生成時刻逆順ではない。再代入・一時値・部分move・field/List/shared/Futureの規則、取消要求と終了確認は別にする。CheckedProgramは静的factsとRust生成planの境界で、runtimeのI/O成功や全backendの意味同値を証明するものではない。
+
 ## コンパイラ
 
 | 項目 | 契約・境界 | 実装と検査 |

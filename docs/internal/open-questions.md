@@ -57,23 +57,43 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 2. runtimeのrusqlite `hooks`有効化と、新Txだけに適用する一文・transaction-control/PRAGMA等のSQL制約。[既存Rust wrapper](sqlite-pool-rust-reuse.md)の比較結果を反映し、追加crate/feature/版が必要なら別に明示する。hooks承認をwrapper依存承認と兼ねない。
 3. cleanup確認前の再利用禁止、退役時の新取得停止、commit outcomeとcleanup failureの分離、close後の取消/timeoutの扱い。
 
-上の3判断とruntime hooksは承認済み。同じ承認を再要求せず、ADRとfailing testsから進める。追加wrapperはQ004で別に判断した。一接続safe prototypeのローカル結果は[検証記録](sqlite-session-results.md)にある。公開Pool／Txのcapture追跡とcleanup保証は未実装・未検証。safe APIで成立しない場合は保証を下げず反例と代替案を示す。
+上の3判断とruntime hooksは承認済み。同じ承認を再要求せず、ADRとfailing testsから進める。wrapperは別のQ004で承認した。safe一接続prototypeは#81でmainに入り、その範囲のcleanupを検証した。公開Pool/Tx、Txのcapture追跡、多接続は未完了。safe APIで成立しない場合は保証を下げず反例と代替案を示す。
 
 ### Q-004: SQLite Poolのwrapper依存と未指定capability
 
-状態: 2026-10-06に2項目ともユーザーが承認。[採用方針](sqlite-pool-adapter-decision.md)のgeneric deadpool =0.13.1（managed／rt_tokio_1、default featuresなし）とdeadpool-runtime 0.3.1でManager adapterを比較試作する。既存Tokio／rusqlite／SQLiteの版を維持し、予想外の追加・更新が必要なら差分を示して判断へ戻す。承認時点でadapter build／実行は未確認。
+状態: 2026-10-06に依存とcapability表を承認済み。generic deadpool 0.13.1（managed／rt_tokio_1、default featuresなし）とdeadpool-runtime 0.3.1を比較試作へ追加し、既存Tokio／rusqliteの解決版を維持する。承認した表の値を、Q002の終了・転送契約とともに扱う。
 
-同文書のcapability表の初版値も採用する。Tx／ParametersのDebug不可、Pool／Failureの状態だけのDebug、Failureと小さいenumのshared可を固定した。Txのtask転送・永続格納禁止はQ002のまま。未完成runtimeへcheckerだけを先行公開しない。公開APIの実装・検証完了、mainへのmerge、版更新、releaseの承認とは区別する。
+[PR #82](https://github.com/disnana/Nagi/pull/82)のprivate一接続adapter比較は4 OS CIまで成功した。main `7999bab`へ反映済みだが、公開registry、NagiのTx捕捉検査、多接続、取得期限まで完成したとは扱わない。[main側の判断資料](sqlite-pool-adapter-decision.md)は依存選択の根拠として残し、承認と実装状況はこの記録を参照する。Q002/Q004を再び未承認へ戻さない。Tx／ParametersのDebug不可、Pool／Failureの状態だけのDebug、Failureと小さいenumのshared可は初版表の採用値で、公開checker配線は未完了。予想外の依存追加・版更新が必要なら差分を示して判断へ戻す。
+
+### Q-005: 既存所有値の代入を明示する範囲
+
+状態: 大枠は2026-10-06の引継ぎで採用。細部は未決、実装は後続。[ADR 011のOWN-04](adr/011-language-behavior-and-docs.md#own-04-既存所有値の代入)にbefore/after、理由、移行・検査を記録した。
+
+現行の非Copy `a = b`は暗黙move。移行先ではコピー可能な単純値以外の既存所有値の操作を明示する。新値生成への機械的move要求、サイズ閾値、全enumのCopy化は採用していない。正確なCopy表、明示move構文、view/shared handle、引数・return・field・matchへの適用範囲を決める。現行Docsではまだ有効な暗黙moveを禁止にしない。
+
+### Q-006: spawn結果handleと業務Err・task故障
+
+状態: 方向は採用、現行spawnとScopeは変更しない。[ADR 011](adr/011-language-behavior-and-docs.md#async-0304-結果handleと失敗の分類)に移行を分離した。
+
+結果を一度受け取るhandle、scopeによる寿命・故障の管理、業務Errだけでは兄弟を止めない方向を採る。型名・構文、消費規則、故障/取消型、複数故障、未受取Result、検出時点、scope外への持出しは未決。現行の子Errによる兄弟取消、Supervisor terminal ErrとHTTP終了の連携は、明示的な移行なしに消さない。親本体がtry等で退出する場合と、子が業務Resultを返す場合を分ける。
+
+### Q-007: actorの条件付きshared message
+
+状態: 方向は採用、型と容量・寿命の条件は未決。現行message/replyのshared拒否を維持する。[ADR 011](adr/011-language-behavior-and-docs.md#actor-01-条件付きshared-message)に移行・検査を記録した。
+
+Send/Sync、内部可変性、容量課金、資源の保持、replyへの流出を決める。sharedという型名だけで許可しない。既存owned message、業務reply Errとworker故障の区別、取消/timeout後に受理済み仕事が実行され得る契約を保つ。
+
+これらの未決項目で文書作業全体を止めない。構文や公開保証を実装する段階では、具体的な移行と失敗テストを用意してから判断する。周辺のoverflow、文字列index、class比較、Map key、mutable globalを、この判断の一部として追加決定しない。
 
 ### その他の項目
 
-以下はまだ値・APIを決めていない。現時点の実装や追加保証とは扱わない。
+承認済みの契約と、残る設計・実装を分ける。未実装を未承認へ戻さず、承認を実行保証にも読み替えない。
 
 | 項目 | 判断する時点 | 条件 |
 |---|---|---|
-| Pool容量・acquire/busy timeout・transaction開始mode | Phase 4設計 | 新しい公開policy値が必要ならStop。既存Dbの値を新Poolへ暗黙に流用しない |
-| Pool/Tx module・API、worker session/lease | Phase 4設計 | SQLite候補を既存依存で検証。unsafe/追加driver/依存が必要ならStop |
+| Pool容量・acquire/busy timeout・transaction開始mode | Q002契約は採用、公開実装は後続 | required Optionsとmode、既存Dbを変更しない方針は承認済み。新defaultや取得期限budget・巨大容量の検証に追加判断が必要なら根拠を示す |
+| Pool/Tx module・API、worker session/lease | Q002/Q004採用、Phase 4の公開配線は未完了 | safe一接続試作を維持し、公開registry・capture・SQL・多接続を検証。unsafe/新driver/追加依存が必要ならStop |
 | 旧Grant[P]とGrant[P,Scope]の互換性 | Phase 5以降 | Phase 4完了前に実装しない。arity変更・既存API削除は別途判断 |
 | 任意opaque Rust resource・async callback | 計画外 | Rust API自動importや自己申告Contractを追加しない。必要なら別設計 |
 | Txを捕捉したFutureのtask transfer | Phase 4設計・negative tests | Futureの戻り値型だけで判定しない。alias/return/Option/標準task起動を含むprivate capture factsを検証。一般effect/regionが必要ならStop |
-| 世代snapshotと互換出力の実装 | Phase 2設計・failing tests | canonical outのwrite lock、app別metadata、check/lower並行とprojection途中失敗を観測。外部workspace全体のatomic snapshotは追加しない |
+| 世代snapshotと互換出力 | Phase 2実装・main反映済み | canonical outのwrite lock、app別metadata、check/lower並行とprojection途中失敗を検証した。外部workspace全体のatomic snapshotは対象外。公開版への反映は別に確認 |

@@ -24,6 +24,8 @@ For list iteration, numeric elements copy and non-Copy elements borrow. Read a r
 
 For shared state, borrow a non-Copy field with `view(state.label)` rather than moving it out. `shared[T]` does not establish that T is safe across threads; Rust checks the required `Send`/`Sync` traits at build time.
 
+Current assignment of non-Copy owned values also moves them implicitly. A future explicit-operation assignment rule, spawn result handles, and shared actor messages are design directions, not supported syntax. Use the current [ownership](../docs/en/ownership.md) and [async](../docs/en/async.md) reference when generating code; [ADR 011](../docs/internal/adr/011-language-behavior-and-docs.md) records the migration work.
+
 ## Result and Option are values
 
 `try expression` extracts `Ok` or returns `Err` to the caller. The caller must return `Result[..., E]` with the same E; it does not catch exceptions or convert error types. Use `try await operation(...)` for an async Result. `ok` constructs success, `fail` wraps an Error/class/enum in a failure Result, and `error("message")` constructs an Err containing a built-in `invalid` Error. Convert another error type explicitly, for example with `std.result.map_error` and a synchronous named mapper.
@@ -68,7 +70,7 @@ Match Result with exactly `Ok` and `Err`, Option with `Some` and `None`, and an 
 
 Handle every Result deliberately. The checker rejects discarding a Result expression and unawaited async calls, but does not reject an unused Result assigned to a variable. `check` alone does not establish that every error is handled. Out-of-bounds indexing and an integer divisor that becomes zero at runtime panic rather than return Result; there is no general Python-style `raise`/`except`. Release arithmetic follows Rust fixed-width behavior; ordinary overflow can wrap.
 
-For integer `/` and `%`, High and Low checks reject explicit zero divisors, including parentheses and signed `-0`, after ordinary type checks. Variable values, constant expressions such as `1 - 1`, and signed minimum-value division by `-1` are not analyzed; they can pass `check` and fail the Rust build. Validate divisors and ranges for runtime inputs. See the [zero-division tests](../compiler/tests/integer_zero_division.rs) for the exact boundary.
+For integer `/` and `%`, the repository's unreleased common typed constant validator rejects proven zero divisors, including `1 - 1` and supported scalar aliases, and signed MIN division/remainder by `-1` across eight integer widths. It does not evaluate arbitrary function calls or propagate profile-dependent overflow values. Runtime-dependent divisors still need validation. Released 0.1.10's earlier literal-zero rule is narrower; see [constant validation](../compiler/tests/constant_validation.rs), [language contracts](../docs/internal/language-invariants.md), and [CHANGELOG](../CHANGELOG.md) before relying on the repository's additions.
 
 ## Async and imports
 
@@ -76,7 +78,7 @@ Named synchronous functions can be passed as values. `fn[i64, i64]` is a functio
 
 Use `async def`, then `await` its calls. You can store a named async function with `selected = answer` and call `await selected(...)`. Do not store an unawaited call result. General async callback parameters/return signatures, async functions in containers, and capturing closures are unsupported. The standard HTTP/actor registration functions support their documented named async handlers; this is not a general extern callback mechanism.
 
-`async with scope` and `spawn` wait for children when the scope ends. Children must return `unit` or `Result[unit, Error]`; passing borrowed views or returning from inside the scope is unsupported. Async CPU work does not automatically run on another thread. Cancellation is not rollback of external work or shared state.
+`async with scope` and `spawn` wait for children when the body ends. Children must return `unit` or `Result[unit, Error]`; passing borrowed views or returning from inside the scope is unsupported. Current child Err/panic cancels siblings; business Result handling is different in actor replies. Parent Future destruction requests abort without synchronously awaiting child completion. Async CPU work does not automatically run on another thread. Cancellation is not rollback of external work or shared state.
 
 Use quoted paths for local files:
 

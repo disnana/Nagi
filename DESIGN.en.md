@@ -6,7 +6,7 @@ Nagi aims to use Rust's performance and libraries while making HTTP, authenticat
 
 Priorities are reducing integration work and making failures understandable from Nagi code. Direct access to arbitrary Rust APIs, or needing no Rust knowledge at all, is not a claim about current capabilities.
 
-This document covers the current implementation and design decisions adopted or left open. The next phase is unreleased and is validated separately from PR #74. See the [reference](docs/en/README.md) for usage, the [roadmap](docs/en/roadmap.md) for priorities, and [CHANGELOG](CHANGELOG.md) for changes in published releases.
+This document covers the current implementation and design decisions adopted or left open. Main, work in a PR, and published releases are separate states. See the [reference](docs/en/README.md) for usage, the [roadmap](docs/en/roadmap.md) for priorities, and [CHANGELOG](CHANGELOG.md) for changes in published releases.
 
 ## The development we target
 
@@ -39,6 +39,27 @@ Owned arguments generally move; view supports read-only borrowing, and copy can 
 Adding an ordinary library operation should not require adding a language keyword. `std.http.server` and `std.actor` can be imported, while JSON and DB operations still include built-ins. Their separation into modules is incomplete.
 
 Evidence: the [type/ownership checker](compiler/src/check.rs), [ownership tests](compiler/tests/ownership.rs), [view-origin tests](compiler/tests/view_origins.rs), [custom-error tests](compiler/tests/typed_errors.rs), [standard-import tests](compiler/tests/stdlib_imports.rs), and [HTTP response implementation](runtime/src/http_server.rs). These tests cover regression cases; they are not proofs for every program.
+
+### Adopted direction for values, failures, and tasks
+
+Python informs the writing style, Rust informs ownership, and Elixir informs actors and supervision. Nagi does not share all their behavior.
+
+| Intent | Direction | Difference from today |
+|---|---|---|
+| Hand a value over | Move the value and its cleanup responsibility | Non-Copy assignment, arguments, and returns currently include implicit moves |
+| Read a value again later | Lend a view; make an explicit copy when an independent value is needed | Implemented; changes and moves of the owner are restricted while needed |
+| Keep the same value in several places | Share ownership; distinguish handle duplication from payload copying | Implemented; shared alone does not prove thread safety or completed shutdown |
+| Write ordinary `a = b` | Require an explicit operation for existing owned values other than simple Copy values | **Planned migration**. Implicit moves remain valid today; syntax, Copy types, and scope of the rule are open |
+| Represent absence or failure | Use nullable or Result; avoid panic for ordinary rejection | Implemented. Nagi try propagates Err; it is not Python try/except |
+| Receive a concurrent result | Let scope own child lifetime and receive the result once through a handle | **Handles are unimplemented**. Spawn currently accepts only unit/Result[unit, Error] |
+| Receive a child's business Err | Treat it as a result, separately from task failure | **Planned migration**. Scope currently cancels siblings on child Err too |
+| Send shared values to an actor | Allow explicit shared messages subject to type, capacity, and lifetime conditions | **Unimplemented**. Shared messages/replies are rejected today |
+
+Explicit operations should make the difference from Python reference assignment visible in code. Fresh construction should not mechanically require a move annotation; size thresholds should not decide whether a value is implicitly copied. Arguments, returns, and match are not all being changed at once.
+
+Ordinary arguments and operators evaluating both operands should run left to right; and/or short-circuit. No complete execution order is promised between spawned tasks. A move transfers cleanup responsibility rather than closing the resource. Simple owned locals in one block are intended to be cleaned up in reverse declaration order, with separate rules for reassignment, partial moves, temporaries, fields, Lists, shared values, and Futures. Existing RHS evaluation and cleanup positions are preserved.
+
+[ADR 011](docs/internal/adr/011-language-behavior-and-docs.md) records reasons, evidence, differences, and migration and test conditions. Exact current rules remain in the [language contracts](docs/internal/language-invariants.md). The [tutorial](docs/en/language-guide.md) starts with concrete Python comparisons and does not depend on unimplemented syntax.
 
 ## Why use Rust?
 
@@ -133,6 +154,10 @@ The HTTP implementation on main converts catchable handler panics before respons
 
 Scopes and actors/Supervisors run within one process on Tokio. An Err in an actor's business reply differs from failure of the worker itself. Supervisor restart policies apply to worker failures. Scope sibling cancellation and worker termination conditions also affect application lifetime.
 
+Scope currently joins children after its body ends, canceling siblings on a child's Err or panic. A child's failure does not interrupt the running body. Normal error exits await cleanup; direct destruction of the parent Future or unwinding requests abort through synchronous Drop without awaiting child completion. Future result-handle work must preserve the explicit connection from Supervisor terminal failure to HTTP shutdown.
+
+Actors use one-for-one supervision: restart a failed child by initializing fresh state. TEMPORARY, TRANSIENT, and PERMANENT distinguish normal completion; explicit stop and parent cancellation are separate. Restart limits do not provide automatic message redelivery or exactly-once processing. Dropping a Control handle is different from terminating the Supervisor owner.
+
 Dropping a future does not necessarily cancel accepted DB work or external sends. Restarting does not prove that repeating a business operation is safe. Idempotency, transactions, cleanup, and resource lifetimes require attention in both APIs and applications.
 
 An independent VM, distributed actors, and hot updates are unimplemented. Nagi does not claim Elixir/BEAM's fault isolation or operational capabilities.
@@ -155,13 +180,15 @@ The [compiler/Rust boundary plan](docs/internal/compiler-rust-boundary-plan.md) 
 
 Phase 1's CheckedProgram was merged into main in PR #78 and has not shipped. Code generation uses plans fixed during sealing rather than inferring types or borrows again. See the [final factory](compiler/src/check/checked.rs), [boundary tests](compiler/src/check/checked_tests.rs), and [ADR 006](docs/internal/adr/006-sealed-codegen-input.md).
 
+CheckedProgram carries checked Nagi and private Rust generation plans; it is not a complete backend-independent IR. Self-hosting and another backend are separate possibilities. A compiler written in Nagi could conceptually continue generating Rust. Neither is added to the current implementation plan.
+
 Phase 2's development changes separate application identity from successful generations. An OS lock serializes writers to the same output directory. Cargo builds a generation-specific bin, then Nagi copies its executable and updates latest only after success. Builds do not overwrite, delete, or kill earlier executables. Dependency caches remain shared, and the lock is released before running the application. Each generation stores generated Low, Rust, the manifest, read source text, and existing line mappings. This does not provide an atomic snapshot of external Rust and dependency sources, process isolation, or power-loss durability. See the [publication implementation](compiler/src/generation.rs), [real Cargo regressions](compiler/tests/build_generations.rs), and [ADR 007](docs/internal/adr/007-build-generations.md).
 
 Phase 2's PR #79 passed the four-platform and editor/package CI and was merged into main. It has not reached a published version. Phase 3 first records current resource behavior in characterization tests, then consolidates capability and type-argument retention metadata. It preserves purpose-specific checks and existing APIs and does not add resource lifecycle guarantees. [ADR 008](docs/internal/adr/008-resource-contracts.md) records the structure and validation order. PR #80 passed the four-platform, editor, website, and merge-gate CI and was merged into main. Pool/Transaction remain unimplemented. The [decision record](docs/internal/open-questions.md) and [progress](docs/internal/progress.md) distinguish verified coverage, changes on main or in published versions, and planned work.
 
 On 2026-10-06, Q002 approved the SQLite API, SQL restrictions, termination contract, and the runtime rusqlite hooks feature. [ADR 010](docs/internal/adr/010-sqlite-transaction-boundary.md) starts with a private one-connection, one-transaction prototype. Q004 separately approved a generic deadpool =0.13.1 Manager prototype (managed and rt_tokio_1, without default features), deadpool-runtime 0.3.1, and the initial capability table. Existing Tokio and rusqlite versions stay unchanged. Pool admission and recycling use the library; the adapter must verify session cleanup, native close, and worker join. Approval does not mean that the public API or its guarantees have been implemented and verified.
 
-The development branch's [private prototype](runtime/src/sqlite_prototype/session.rs) has [22 native tests](runtime/src/sqlite_prototype/tests.rs) for SQLite action rejection, explicit termination, cleanup after cancellation, native close, and worker join. A SQL error alone does not prove that earlier changes were rolled back. The same 22 core tests also passed PR #81's four-platform CI, and the foundation is now on main. The subsequent private deadpool comparison keeps those tests and adds 20 for cancellation, close, and retaining checkout until cleanup. The local full suite and comparison measurement passed. Public Pool behavior, Nagi's Tx capture checks, multiple connections, and public acquisition deadlines remain unimplemented. The [foundation results](docs/internal/sqlite-session-results.md) and [adapter results](docs/internal/sqlite-adapter-results.md) record tested conditions and remaining work.
+The [private prototype] on main(runtime/src/sqlite_prototype/session.rs) has [22 native tests](runtime/src/sqlite_prototype/tests.rs) for SQLite action rejection, explicit termination, cleanup after cancellation, native close, and worker join. A SQL error alone does not prove that earlier changes were rolled back. The same 22 core tests also passed PR #81's four-platform CI, and the foundation is now on main. The subsequent private deadpool comparison keeps those tests and adds 20 for cancellation, close, and retaining checkout until cleanup. The local full suite and comparison measurement passed. Q004's dependencies and capability table are approved; PR #82 passed four-platform CI and is now on main. Public Pool behavior, Nagi's Tx capture checks, multiple connections, and public acquisition deadlines remain unimplemented. The [foundation results](docs/internal/sqlite-session-results.md) and [adapter results](docs/internal/sqlite-adapter-results.md) record tested conditions and remaining work.
 
 Changes to semantics, public APIs, or the High/Low/Rust division should update the rationale, alternatives, compatibility, and verification results here. Detailed API descriptions and measurement logs belong in their corresponding documents.
 

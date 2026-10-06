@@ -203,3 +203,53 @@ generic deadpoolのManagerへ共通native sessionを接続した。stock permit�
 main向け[PR #82](https://github.com/disnana/Nagi/pull/82)、head `a608f1a`のchecks `37402576311`／website `37402576023`がattempt 1で成功した。4 OSの実ログで43件のprivate試験とparser2件を確認し、Linux全検査、両JetBrains製品、merge gateも成功した。VSIX packageは変更対象外、releaseはskip。artifactの改行・hashと次の設計メモを修正した最終headでもCIを確認する。compiler／runtime／Cargo／CIのbytesは維持する。
 
 一接続比較は成立したが、公開配線のacceptanceとは分ける。[次の縦切り](sqlite-public-slice-plan.md)には、sequential join観測の多接続での反例候補、stock待機からnative fenceへの予算、巨大capacityの確保を整理した。source reviewによる候補で、実行済みのP1として数えていない。任意上限・新期限・新依存を追加する必要が出れば判断案へ戻す。エージェントによるmain merge・版更新・releaseはしていない。
+
+## 2026-10-06: main反映と設計・Docs整備
+
+ユーザーが#81をマージし、main `ff6f7d4c81c8cf49c2bca7abffb3083f681d5b9d`を読み戻した。#81の[checks](https://github.com/disnana/Nagi/actions/runs/37397252295)と[website](https://github.com/disnana/Nagi/actions/runs/37397251707)は成功し、4 OSでnative22件・parser2件を確認した。上の「CI待ち」「未承認」は当時の作業記録で、現在の状態ではない。
+
+Q004の依存とcapability表は作者が承認した。別branchの[PR #82](https://github.com/disnana/Nagi/pull/82)は最終head `5a1c676`で[checks](https://github.com/disnana/Nagi/actions/runs/37404345603)・[website](https://github.com/disnana/Nagi/actions/runs/37404345104)が成功。4 OSの実ログでnative22＋adapter20＋比較1、parser2を確認し、レビュー可能にした。mainへのマージは行っていない。private一接続比較を公開Pool/Tx、多接続、取得期限、capture検査の完成とは扱わない。
+
+### 今回の監査と文書変更
+
+添付の設計・Docs引継ぎは同じmainを基点にしていた。`AGENTS.md`、DESIGN日英、内部契約、ADR 006/008/010、checker/emit、Scopeとactorの実装、ownership/Option/Scope/actorの関連testsを照合した。公開版、main、#82、採用方針を区別する。compiler/runtime/依存/CI/公開意味論は変更していない。
+
+[ADR 011](adr/011-language-behavior-and-docs.md)に18の方針ID、現行との差、根拠、不採用案、後続の移行・検証をまとめ、DESIGN日英・invariants・pipeline・ADR 006へ接続した。入門、ownership、error、syntax、async/concurrency、actor/Supervisor、Lowと各英語版を整備した。人間向けDocsとAI向け文書/skillは分離を保ち、AI文書の古い定数検査・世代生成の説明も修正した。
+
+Sol 2人が値と失敗／並行処理とLowをまとめて担当し、rootが設計と実装境界を照合した。独立した読み取りレビューで、承認済みSQLite項目を未決へ戻す記述、未決のhandle消費規則を無条件の二重await拒否として固定する記述を修正した。非Copy結果の二重取得を防ぐ方向と、Copy結果も含む再awaitの細部は分けた。
+
+### 実行した検査
+
+Linuxで基点mainの`cargo build --locked -p nagic`が成功、`nagic --version`は0.1.10。文書だけの差分なので、Rust全suiteや4 OS全体を再実行した結果とは報告しない。
+
+| 対象 | 観測結果 |
+|---|---|
+| 日英の掲載コードと、明示した補完main | 74ケースで`nagic check`→`build`→報告されたnative exe実行が成功し、期待stdoutと一致。数学module2箇所はimport元の完全例と一緒に検査 |
+| 定義だけのactor断片 | 日英2件のcheck成功。単独のactor起動・実行成功とは数えない |
+| 意図的な誤り | 日英のmove後使用2件、追加6件の計8件をcheck段階で拒否。代入move、shared非Copy field、nullable演算、unawaited呼出し、Future保存、非unit spawnを元の行と理由で確認 |
+| 新しい4種類の完全例 | 代入/reinitialization、shared handle/payload copy、nullable、TEMPORARY Supervisor。CLI `run`でも出力一致 |
+| 上記4例の保存Low | 独立コマンドのcheck/build/run成功、Highと出力一致 |
+| 評価順の小例 | 引数/両operandの左→右とand/orの短絡を実行で確認。全式・全backendの証明ではない |
+| 入力CLI | 日英で21の成功、abc/-1の非0終了を確認。大きな整数の2倍の範囲確認は例では省いていると日英に明記 |
+| 既存supervised-service | `python scripts/verify_library_examples.py --compiler … --only supervised-service`成功。実HTTPで状態更新、業務409、JSON400、shutdown204、停止後503、SIGINTのgraceful終了を確認 |
+| CIのDocs判定 | `python -m unittest discover -s scripts/ci -p 'test_*.py'`: 52成功 |
+| website | 既存venvで`website/build.py --base-path / --out build/design-docs-site`: 90ページ、日英ページ対応・local links/anchors/assets成功 |
+| Markdown・Python比較例 | 変更36文書の相対リンク721件・見出しの欠落0、Python比較例16個の構文確認成功。`git diff --check`成功 |
+
+ローカル検査の明細、抽出したsource、各check/build/executeログは`/tmp/nagi-design-docs-verification/`に保存した。初回の追加負例検査は期待していた診断の単語が実際の文と違ったためwrapper assertが失敗した。Nagi側の拒否は成立しており、元診断を確認して比較文字列を訂正した。処理系や既存testsの期待値は変えていない。
+
+`results.json`のSHA-256は`40d52379794dbe72a16fe015fdd84c2bf39db513b8aa4a9e069d0d1e96a8e1da`、保存Low/評価順の`followup.json`は`9ece2fd810adc5d2366d01dc101741dc2a2d13cc159435aff631510477ac5e19`。同ファイルはローカルの観測記録で、公開配布物ではない。公開後のPR CI結果はPR本文へ記録し、ローカル結果と分ける。
+
+### 残る差・未確認
+
+OWN-04の明示操作、ASYNC-03/04の結果handleと業務Errの分類、ACTOR-01のshared messageは後続実装。大枠を再質問せず、[Q-005〜007](open-questions.md#q-005-既存所有値の代入を明示する範囲)に未決を集約した。Copy表、構文/消費、故障型、検出時点、容量課金を今回勝手に決めていない。移行条件はADRへ記録した。
+
+今回は人間によるブラウザー操作、全外部リンクのHTTP到達、Windows/macOSでの掲載例の再実行を行っていない。既存CIの4 OS成功を今回のコード例の4 OS確認と取り違えない。リリース・版更新・main mergeも行っていない。
+
+## 2026-10-06: #82のmain反映と#83の競合解消
+
+#82のmerge依頼に対し、確認時点ですでに2026-10-06 12:20 JSTにmainへ反映されていた。GitHubのmerge commit `7999bab40b0a85b23ddf13b230e9e2db2c7ac3c9`とorigin/mainを読み戻し、最終head `5a1c676`が祖先であることを確認した。エージェントによる二重mergeは行っていない。最新のreview submissions・inline threads・discussionは各0件。最終headのchecks `37404345603`／website `37404345104`は成功し、4 OS・両JetBrains・Ready to mergeも成功。VSIXとreleaseは対象外でskipだった。
+
+#83へこのmainをmergeし、DESIGN日英・open questions・progress・adapter判断資料の5競合を解消した。#82の実装、43件の結果、46予定入力のparser限定、全履歴と測定は保持した。初回Docs監査のmain `ff6f7d4`は履歴として残し、現在の#82反映と分ける。ADR011の将来変更や公開Pool/Txが実装済みになったとは書かない。#83のmain差分は文書だけを維持する。
+
+解消後にwebsite90ページ、変更36文書の相対リンク728件・見出し欠落0、Python比較例16個、CI判定52件、diff checkが成功した。74実行・8拒否の初回検証は掲載sourceのhash一致を再確認し、新しい4完全例は更新mainでCLI runを実際に再実行して出力一致。独立Solレビューでもcompiler/runtime/scripts/Cargo/CI/benchmarkがmainと同一bytesであることを確認した。更新後PR CIは公開後に確認する。#83のmerge、版更新、releaseは今回の承認対象ではなく、実行しない。

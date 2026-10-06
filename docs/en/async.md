@@ -1,5 +1,9 @@
 # Async functions and scopes
 
+## Use a result after waiting
+
+Like Python's `await asyncio.sleep(0.01)`, Nagi uses `await` to wait. Python's sleep takes seconds; Nagi's `sleep` takes milliseconds. Awaiting a call does not by itself create another task or thread.
+
 Use `async def` for functions that wait for timers, database operations, or other async work. Use `await` to wait for the result. Nagi generates Rust futures and runs them on Tokio, allowing other async work to proceed while waiting. Synchronous CPU work is not automatically moved to another thread.
 
 ```nagi
@@ -10,9 +14,27 @@ async def main() -> Result[unit, Error]:
 
 `sleep` takes milliseconds. This program prints after the wait. For an operation that can fail, use `try await db_open(...)` to handle its Result as well.
 
-## Starting multiple operations
+A common mistake is to store the return value as `pending = sleep(10)` and await it later. Future storage is not currently supported. Write `await sleep(10)` to await the call directly.
 
-Inside `async with scope`, `spawn` starts child work. Leaving the scope waits for every child to finish.
+**In one sentence: await waits for a result.** See [Error handling](error-handling.md) for calls that also return Result.
+
+## Let other work proceed while waiting
+
+In Python, related tasks can be registered with `asyncio.TaskGroup`.
+
+```python
+import asyncio
+
+async def main():
+    async with asyncio.TaskGroup() as group:
+        group.create_task(asyncio.sleep(0.01))
+        group.create_task(asyncio.sleep(0.015))
+    print("Done")
+
+asyncio.run(main())
+```
+
+In Nagi, use `spawn` inside `async with scope`. This is a complete runnable example.
 
 ```nagi
 async def main() -> Result[unit, Error]:
@@ -22,13 +44,25 @@ async def main() -> Result[unit, Error]:
     return ok(print("Done"))
 ```
 
+Both waits finish before the program prints `Done` once. The execution order between children is not guaranteed. Spawn schedules child work; it does not guarantee that the child's body runs immediately at that statement.
+
+Two successive `await sleep(...)` calls start the second wait after the first finishes. To overlap them, spawn as above; normal scope exit waits for child completion.
+
+**In one sentence: spawn lets work proceed concurrently, and scope manages its lifetime.** Cancellation and failure behavior are not identical to Python's TaskGroup. The next section and [Concurrency](concurrency.md) give the exact limits.
+
+## Current scope and spawn reference
+
 The scope checks child results after its body finishes. If a child returns a Result error or panics, it cancels the remaining children and waits for them. A child failure does not interrupt the body while it runs. Spawned work must return `unit` or `Result[unit, Error]`. Returning from inside a scope and passing a view to a child are not supported.
 
 Arguments are evaluated at the `spawn` statement, and the resulting values are passed to the child. With `spawn work(copy(part))`, the child receives an owned copy, so the parent can keep using the original data. Copying a list does not make it safe to pass if its elements still contain views.
 
 A function using a scope returns Result. A custom error class or enum requires an explicit Rust adapter implementing `From<nagi_runtime::Error>`. The build checks that child failures can be converted to that type. Spawned children still use Error as their error type.
 
-If the parent operation itself is dropped, or the scope body panics, cancellation is requested without a guarantee that every child has already stopped. See [Concurrency](concurrency.md) for CPU work and cancellation.
+If a body `try` propagates Err out of the scope, children are canceled and awaited before the Err reaches the outer code. If the parent Future itself is dropped, or the scope body panics, cancellation is requested. Synchronous Drop cannot await async completion, so there is no guarantee that every child has already stopped at that point. Cancellation also does not roll back accepted database work or other external side effects. See [Concurrency](concurrency.md) for CPU work and cancellation.
+
+### Adopted direction and unavailable features
+
+The adopted direction is for spawn to return a result handle and to separate ordinary business Err values from task failure. The future policy is to receive a returned Result as a value, without automatically stopping siblings for an ordinary business Err alone. The current implementation has no result handle, and a child's `Result[unit, Error]` Err still cancels siblings. The handle type, syntax, result consumption, and failure representation remain undecided. Examples on this page use current behavior. See [DESIGN](../../DESIGN.en.md) for the reasoning and migration boundaries.
 
 ## Call a function stored in a variable
 
