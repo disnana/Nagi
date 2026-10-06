@@ -26,7 +26,7 @@ NAGI_SQLITE_MEASURE_OUTPUT=/tmp/sqlite-adapter-measurement.json \
 
 ## 検証artifact
 
-[verification.json](verification.json)は最終sourceの各ログのhashとRust test結果の計数。[audit](audit/)には重要なREDと最終43件、clippy／fmt／fuzz／単独測定のログを保存した。空のfmtログは出力なしで成功したコマンドの記録で、ログが空なだけで成功を推定したわけではない。
+[verification.json](verification.json)は最終sourceの原ログhash、公開ログhashとRust test結果の計数。公開CSVはLF、公開ログは末尾の空行だけを正規化した。数値・診断・テスト結果は維持し、原ログは別archiveに保全した。[audit](audit/)には重要なREDと最終43件、clippy／fmt／fuzz／単独測定のログを保存した。空のfmtログは出力なしで成功したコマンドの記録で、ログが空なだけで成功を推定したわけではない。
 
 | ログ | 意味 |
 |---|---|

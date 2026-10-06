@@ -62,4 +62,3 @@ NAGI_SQLITE_COMPARISON {"adapter_native_health_and_join":true,"adapter_threads":
 test sqlite_prototype::comparison::direct_and_deadpool_warm_native_session_comparison ... ok
 
 test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 129 filtered out; finished in 0.82s
-

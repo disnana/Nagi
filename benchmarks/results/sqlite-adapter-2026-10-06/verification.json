@@ -3,59 +3,64 @@
   "log_counts": [
     {
       "log": "25-final-prototype.log",
-      "sha256": "4e47e7a217fb6dd4c591d4b1a4076e90e69d8c5d565829911554971fdd226803",
       "suites": 1,
       "passed": 43,
       "failed": 0,
-      "ignored": 0
+      "ignored": 0,
+      "original_log_sha256": "4e47e7a217fb6dd4c591d4b1a4076e90e69d8c5d565829911554971fdd226803",
+      "published_log_sha256": "6835d2777330d6fcea5466f53b8a1977989af06d569e514ede4cc7a2b435d182"
     },
     {
       "log": "26-final-workspace.log",
-      "sha256": "0f1ce7c8d482f09af51074500d03de1721e6964e9252b69318305308746dbe2a",
       "suites": 92,
       "passed": 874,
       "failed": 0,
-      "ignored": 0
+      "ignored": 0,
+      "original_log_sha256": "0f1ce7c8d482f09af51074500d03de1721e6964e9252b69318305308746dbe2a"
     },
     {
       "log": "27-final-runtime.log",
-      "sha256": "b1038612023fd966b93a506d7f502f7aaec76edae569f7bfec59a8e3a34145fe",
       "suites": 2,
       "passed": 177,
       "failed": 0,
-      "ignored": 0
+      "ignored": 0,
+      "original_log_sha256": "b1038612023fd966b93a506d7f502f7aaec76edae569f7bfec59a8e3a34145fe"
     },
     {
       "log": "28-final-clippy.log",
-      "sha256": "185d6749ea002d84ffed5f4a615336611d39db96dac1a9ec840790047b617567",
       "suites": 0,
       "passed": 0,
       "failed": 0,
-      "ignored": 0
+      "ignored": 0,
+      "original_log_sha256": "185d6749ea002d84ffed5f4a615336611d39db96dac1a9ec840790047b617567",
+      "published_log_sha256": "185d6749ea002d84ffed5f4a615336611d39db96dac1a9ec840790047b617567"
     },
     {
       "log": "29-final-fmt.log",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "suites": 0,
       "passed": 0,
       "failed": 0,
-      "ignored": 0
+      "ignored": 0,
+      "original_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "published_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
       "log": "30-final-fuzz.log",
-      "sha256": "93a4b87431d97a25b9bd96d313a09e9b82205cbad3cd35aae82c1579c3a9a8e6",
       "suites": 0,
       "passed": 0,
       "failed": 0,
-      "ignored": 0
+      "ignored": 0,
+      "original_log_sha256": "93a4b87431d97a25b9bd96d313a09e9b82205cbad3cd35aae82c1579c3a9a8e6",
+      "published_log_sha256": "93a4b87431d97a25b9bd96d313a09e9b82205cbad3cd35aae82c1579c3a9a8e6"
     },
     {
       "log": "31-final-isolated-comparison.log",
-      "sha256": "986250b3dce51fb136e39c197ca3136053f9b40e96a0aef431b0fee3bc5cb8b9",
       "suites": 1,
       "passed": 1,
       "failed": 0,
-      "ignored": 0
+      "ignored": 0,
+      "original_log_sha256": "986250b3dce51fb136e39c197ca3136053f9b40e96a0aef431b0fee3bc5cb8b9",
+      "published_log_sha256": "fc046462f48e45df7042c62366fcd42fb5201edddd56072c87707e6437012d48"
     }
   ]
 }

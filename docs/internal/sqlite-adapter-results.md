@@ -77,6 +77,8 @@ Linux x86_64、既存warm target、locked／offline Cargo、debug profile。sock
 
 ## 未完了と次の順序
 
+多接続の終了観測、取得期限、巨大capacityのsourceレビューと先行oracleは[次の縦切りメモ](sqlite-public-slice-plan.md)へ分けた。これらの反例候補を実行済みの不具合として加算しない。
+
 1. 公開runtimeで多接続とOptionsの取得期限を接続する。一接続のlive-empty条件を多接続へ流用しない。健全active workerを妨げず、取消後のnative上限・cleanup・`acquire_ms=0`／有限待ちを同時に検査する。
 2. runtime公開入口とcanonical registry／capture facts／sealed SQLを一緒に接続する。Txのnested payload、function値、async capture、nonDebug field、generic copy、SQL所有化の予定ケースを本当のpositive／negativeへ昇格する。
 3. 元位置付きHigh／保存Low／手書きLow、旧Db、実DB、4 OS、生成探索、縦切りの性能を確認してPhase 4 acceptanceを判断する。
