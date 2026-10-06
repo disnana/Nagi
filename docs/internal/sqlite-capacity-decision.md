@@ -8,7 +8,7 @@ stock builderは`VecDeque::with_capacity(max_size)`で全slot容量をinfallible
 
 正数、usize、Semaphore上限、時間変換だけでは、内部配列のbyte容量が可表現で確保に失敗しないとは言えない。`Layout::array::<WorkerHandle>`の下限検査は確実に不正な値を拒否できるが、実際のslot全体のLayout検査を置き換えない。公開Objectのsizeofを代理にすると、別の余分な制限を作る。
 
-ここでは巨大allocationを実行していない。global OOM／abortの普遍的回復も保証しない。既存公開Dbの再現済み不具合として数えず、Phase 4公開配線前のP1設計条件として残す。
+ここでは巨大allocationを実行していない。global OOM／abortの普遍的回復も保証しない。既存公開Dbの再現済み不具合として数えず、Phase 4公開配線前のP2設計ブロッカーとして残す。未解決のまま公開してQ002のvalidation契約に反する場合は、公開契約違反として別に評価する。
 
 ## 選択肢
 

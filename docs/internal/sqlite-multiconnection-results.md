@@ -76,3 +76,11 @@ private縦切りの終了・容量契約を上の有限ケースで継続検査�
 | observer内部failureの観測 | P2の残る内部検証範囲 | 公開化前に内部panicがclose timeout等で観測される条件を点検。caller取消との混同を避ける |
 
 Phase 4全体のacceptance、G-TX/G-POOLの公開保証、Phase 5、版更新、releaseの成功とは報告しない。
+
+## #84のCIとmain反映
+
+公開head `ada363eecdd59d231ea04157e2bc3570ffffa990`は、ローカル最終sourceと同じtree `117533295a2bbd16d12d413cb00f72076d17133e`であることを確認した。[checks run 37417583234](https://github.com/disnana/Nagi/actions/runs/37417583234)と[website run 37417583024](https://github.com/disnana/Nagi/actions/runs/37417583024)は成功。Windows x64、Linux x64、macOS Intel／Apple Siliconの各ログで、sqlite_prototype stepの50件（native22＋adapter27＋比較1）と、予定構文parser2件の実行・成功を確認した。別stepのpanic filter再実行を新しいcase数へ加算していない。
+
+Linux全検査、PyCharm／IntelliJ、merge gateも成功。VSIX／releaseはこのPRではskip。外部の承認レビューはなく、SolのsourceレビューやCIと同一扱いしない。ユーザーが2026-10-06 05:47 UTCに[PR #84](https://github.com/disnana/Nagi/pull/84)をマージし、main `e7aff1da0a36503d239d70cf5dbcf892655978e0`を読み戻した。エージェントはmerge操作を行っていない。
+
+後続の[取得予算](sqlite-acquire-budget-design.md)と[公開capacity](sqlite-capacity-decision.md)は別の縦切り・判断で、#84の50件からその成功を推測しない。
