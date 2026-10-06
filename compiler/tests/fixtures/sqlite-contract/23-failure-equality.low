@@ -1,0 +1,4 @@
+import std.db.sqlite as sqlite;
+fn invalid(left: sqlite.Failure, right: sqlite.Failure) -> bool {
+    return left == right;
+}

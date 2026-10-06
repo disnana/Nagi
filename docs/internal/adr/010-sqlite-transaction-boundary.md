@@ -1,6 +1,6 @@
 # ADR 010: SQLite PoolとTransactionの境界
 
-状態: 2026-10-06、ユーザーがQ002の選択1を承認。公開API・SQL制限・終了契約とruntime rusqlite `hooks`を採用する。実装・検証の完了とは区別する。追加wrapperのcrate・版・featureはこの承認に含まれない。
+状態: 2026-10-06、ユーザーがQ002の選択1を承認。公開API・SQL制限・終了契約とruntime rusqlite `hooks`を採用する。実装・検証の完了とは区別する。追加wrapperのcrate・版・featureはQ004で別に判断した。同日にgeneric deadpool =0.13.1（managed／rt_tokio_1、default featuresなし）、deadpool-runtime 0.3.1の比較試作と[capability初版表](../sqlite-pool-adapter-decision.md#registry配線前に固定するcapability)をユーザーが承認した。既存Tokio／rusqliteの版は維持する。
 
 ## 前提と分担
 
@@ -10,7 +10,7 @@ Phase 3の#80はhead `35038940`で4 OS・editor・site・merge gateが成功し�
 
 SQLiteの解析・bind・row metadata・native Transactionはrusqlite 0.40.2へ任せる。Nagiは型付き操作、所有権、task転送、受理済み処理とcleanup／closeの完了を扱う。汎用SQL parser、trait/effect solver、独自native transaction、自己参照型、unsafeは追加しない。
 
-pool／dispatchの実装は[既存Rust比較](../sqlite-pool-rust-reuse.md)を基に選ぶ。最初の一接続prototypeで専用threadやbounded channelを使うことは、独自pool algorithmの採用やwrapper不採用を意味しない。追加依存が必要なら版・transitive dependencies・互換性を示して確認する。
+pool／dispatchの実装は[既存Rust比較](../sqlite-pool-rust-reuse.md)を基に選ぶ。最初の一接続prototypeで専用threadやbounded channelを使うことは、独自pool algorithmの採用やwrapper不採用を意味しない。Q004の範囲でManager adapterを試作する。予想外の追加依存・版更新が必要なら、transitive dependenciesと互換性を示して確認する。
 
 ## 所有とSQL
 
@@ -32,6 +32,12 @@ cleanup失敗・worker panic・状態不明では接続を退役し、Poolの新
 
 close開始後はclone共通で新取得を止め、active Txのcleanup、native close結果、worker終了を待つ。close timeout／取消でclosingを解除しない。再closeで完了待ちを許す。成功通知をworkerが送っただけではthread joinの証拠にならない。最後のPool Dropは閉鎖要求であり、非同期cleanup完了のAPIではない。
 
+## Pool adapterの終了記録
+
+stock deadpoolの論理slot返却と、native workerのclose／join完了は同じ出来事ではない。startup取消やObject::take後の退役workerが残る場合は、Manager.create内のcleanup fenceで終了を確認してからreplacementを起動する。独自のpool待機／公平性algorithmや、取消をfailedへ変える公開policyは足さない。一接続のprivate比較では、Object::takeがdetach／Dropより先にpermitを返すraceを避けるため、create入口のlive recordが空になるまで待つ。max_size=1の正常再貸出はrecycle経由で、健全active workerを待つ一般gateではない。multiへこの全live待機を流用せず、健全active workerの並列性とnative上限は別に検証する。公開acquire期限を接続する際はfence待ちも期限に含める。
+
+terminal failure／causeをledgerへ公開してから完了joinを通知する。通知を先に出すと、native close失敗を取り落とすraceが生じる。完了recordは同一ledgerのcounterへ集約し、未完了workerだけを保持する。これらはQ002／Q004の終了責任を実現する内部方針で、private一接続の反例から検査する。公開Pool保証の実装・検証完了とは区別する。
+
 ## 最初の検証と段階
 
 1. このADRとinvariantsを記録する。
@@ -41,4 +47,4 @@ close開始後はclone共通で新取得を止め、active Txのcleanup、native
 5. 同じ契約で既存wrapperのadapterと比較して内部実装を選び、Nagi registry／捕捉facts／sealed生成／SQL collectorを縦切りで接続する。
 6. pass／fail、元診断位置、High／保存Low／手書きLow、Rust build／run、旧Db、runtime独立build、4 OS CI、fuzz／生成探索と比較測定を行う。
 
-private prototype成功を公開API完成とは報告しない。新syntax、Future保存解禁、追加wrapper依存、safe hookで満たせないSQL反例、一般effect／region解析やunsafeが必要な場合は、保証を下げず根拠と代替案を示して止める。
+private prototype成功を公開API完成とは報告しない。新syntax、Future保存解禁、未承認の追加依存、safe hookで満たせないSQL反例、一般effect／region解析やunsafeが必要な場合は、保証を下げず根拠と代替案を示して止める。

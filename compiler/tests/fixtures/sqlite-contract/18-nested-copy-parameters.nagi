@@ -1,0 +1,5 @@
+import std.db.sqlite as sqlite
+class Holder:
+    params: sqlite.Parameters
+def duplicate(parts: view[Option[Holder]]) -> List[Option[Holder]]:
+    return copy(parts)

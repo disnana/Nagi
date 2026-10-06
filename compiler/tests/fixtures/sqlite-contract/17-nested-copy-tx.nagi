@@ -1,0 +1,3 @@
+import std.db.sqlite as sqlite
+def duplicate(parts: view[Option[sqlite.Tx]]) -> List[Option[sqlite.Tx]]:
+    return copy(parts)

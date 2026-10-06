@@ -50,7 +50,7 @@ pub(super) struct Failure {
     pub retired: bool,
 }
 impl Failure {
-    fn primary(kind: Kind, outcome: Outcome, message: impl Into<String>) -> Self {
+    pub(super) fn primary(kind: Kind, outcome: Outcome, message: impl Into<String>) -> Self {
         Self {
             kind,
             outcome,
@@ -59,7 +59,7 @@ impl Failure {
             retired: false,
         }
     }
-    fn cleanup(outcome: Outcome, message: impl Into<String>) -> Self {
+    pub(super) fn cleanup(outcome: Outcome, message: impl Into<String>) -> Self {
         Self {
             kind: Kind::Cleanup,
             outcome,
@@ -185,7 +185,7 @@ impl Gate {
             receiver: Mutex::new(Some(receiver)),
         }
     }
-    fn block_once(&self) {
+    pub(super) fn block_once(&self) {
         let receiver = self.receiver.lock().unwrap().take();
         if let Some(receiver) = receiver {
             self.entered.store(true, Ordering::SeqCst);
@@ -248,31 +248,40 @@ pub(super) struct Stats {
     pub joined: bool,
 }
 #[derive(Default)]
-struct State {
+pub(super) struct State {
     stats: Mutex<Stats>,
     failure: Mutex<Option<Failure>>,
     changed: Notify,
     mode: Arc<AtomicBool>,
 }
 impl State {
-    fn update(&self, change: impl FnOnce(&mut Stats)) {
+    pub(super) fn update(&self, change: impl FnOnce(&mut Stats)) {
         change(&mut self.stats.lock().unwrap());
         self.changed.notify_waiters();
     }
-    fn snapshot(&self) -> Stats {
+    pub(super) fn snapshot(&self) -> Stats {
         let mut stats = self.stats.lock().unwrap().clone();
         stats.management = self.mode.load(Ordering::SeqCst);
         stats
     }
-    fn fail(&self, error: Failure) {
+    pub(super) fn fail(&self, error: Failure) {
         let mut failed = self.failure.lock().unwrap();
         if failed.is_none() {
             *failed = Some(error);
+        } else if let Some(previous) = &mut *failed {
+            // worker panic等のprimaryを残し、後続native closeのcleanup causeも保持する。
+            if previous.cleanup.is_none() {
+                previous.cleanup = error.cleanup;
+            }
+            previous.retired |= error.retired;
         }
         drop(failed);
         self.changed.notify_waiters();
     }
-    fn worker_error(&self) -> Failure {
+    pub(super) fn error(&self) -> Option<Failure> {
+        self.failure.lock().unwrap().clone()
+    }
+    pub(super) fn worker_error(&self) -> Failure {
         let message = self
             .failure
             .lock()
@@ -299,8 +308,18 @@ impl State {
     }
 }
 
-struct BeginRequest {
+pub(super) struct BeginRequest {
     reply: oneshot::Sender<Result<Tx, Failure>>,
+    // lexical native cleanupが返るまで保持。session senderの強参照は入れない。
+    _owner: Option<Box<dyn Send>>,
+}
+impl BeginRequest {
+    pub(super) fn owned(reply: oneshot::Sender<Result<Tx, Failure>>, owner: Box<dyn Send>) -> Self {
+        Self {
+            reply,
+            _owner: Some(owner),
+        }
+    }
 }
 pub(super) struct Driver {
     // これは単一connectionの試験dispatch。pool/取得期限/容量制御の実装ではない。
@@ -310,49 +329,11 @@ pub(super) struct Driver {
 }
 impl Driver {
     pub fn open(config: Config) -> Self {
-        let (sender, mut receiver) = mpsc::channel::<BeginRequest>(1);
+        let (sender, receiver) = mpsc::channel::<BeginRequest>(1);
         let state = Arc::new(State::default());
         let worker_state = Arc::clone(&state);
         let worker = std::thread::spawn(move || {
-            CURRENT_MODE.with(|mode| *mode.borrow_mut() = Some(Arc::clone(&worker_state.mode)));
-            let result = catch_unwind(AssertUnwindSafe(|| {
-                let mut conn = Connection::open_in_memory().unwrap();
-                conn.busy_timeout(Duration::ZERO).unwrap();
-                conn.execute_batch(config.seed).unwrap(); // trusted fixtureのみ、user SQLではない。
-                install_authorizer(
-                    &conn,
-                    &worker_state.mode,
-                    &worker_state,
-                    config.deny_rollback,
-                    config.deny_commit,
-                )
-                .unwrap();
-                while let Some(request) = receiver.blocking_recv() {
-                    if worker_state.failure.lock().unwrap().is_some() {
-                        let _ = request.reply.send(Err(worker_state.worker_error()));
-                        break;
-                    }
-                    if !run_session(&mut conn, request, &config, &worker_state) {
-                        break;
-                    }
-                }
-                if config.leak_statement_at_close {
-                    // safeな故障seam。unfinalized native statementでcloseの実BUSYを起こす。
-                    std::mem::forget(conn.prepare("SELECT 1").unwrap());
-                }
-                match conn.close() {
-                    Ok(()) => worker_state.update(|stats| stats.native_closed = true),
-                    Err((_conn, error)) => worker_state
-                        .fail(Failure::cleanup(Outcome::NotApplicable, error.to_string())),
-                }
-                if let Some(gate) = &config.exit_gate {
-                    gate.block_once();
-                }
-            }));
-            if result.is_err() {
-                worker_state.fail(worker_state.worker_error());
-            }
-            CURRENT_MODE.with(|mode| mode.borrow_mut().take());
+            native_worker(Arc::new(config), worker_state, receiver, None, None)
         });
         // worker自身へJoinHandleの所有者を持たせない。通知はjoinの後にだけ出す。
         let join_state = Arc::clone(&state);
@@ -379,7 +360,10 @@ impl Driver {
             .ok_or_else(|| Failure::primary(Kind::Closed, Outcome::NotApplicable, "closing"))?;
         let (reply, receiver) = oneshot::channel();
         sender
-            .send(BeginRequest { reply })
+            .send(BeginRequest {
+                reply,
+                _owner: None,
+            })
             .await
             .map_err(|_| self.state.worker_error())?;
         self.state.update(|stats| stats.admitted += 1);
@@ -453,6 +437,65 @@ impl Drop for Driver {
     fn drop(&mut self) {
         self.request_close();
     }
+}
+
+// direct driverとdeadpool adapterが同じnative開始/SQL/cleanup/closeを呼ぶ。
+// checkoutの返却責任はBeginRequestのowned fieldにあり、Tokio taskへ逃がさない。
+pub(super) fn native_worker(
+    config: Arc<Config>,
+    state: Arc<State>,
+    mut receiver: mpsc::Receiver<BeginRequest>,
+    mut ready: Option<oneshot::Sender<Result<(), Failure>>>,
+    startup: Option<Arc<Gate>>,
+) {
+    CURRENT_MODE.with(|mode| *mode.borrow_mut() = Some(Arc::clone(&state.mode)));
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        if let Some(gate) = startup {
+            gate.block_once();
+        }
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.busy_timeout(Duration::ZERO).unwrap();
+        conn.execute_batch(config.seed).unwrap(); // trusted fixtureのみ。
+        install_authorizer(
+            &conn,
+            &state.mode,
+            &state,
+            config.deny_rollback,
+            config.deny_commit,
+        )
+        .unwrap();
+        if let Some(ready) = ready.take() {
+            let _ = ready.send(Ok(()));
+        }
+        while let Some(request) = receiver.blocking_recv() {
+            if state.error().is_some() {
+                let _ = request.reply.send(Err(state.worker_error()));
+                break;
+            }
+            if !run_session(&mut conn, request, &config, &state) {
+                break;
+            }
+        }
+        if config.leak_statement_at_close {
+            std::mem::forget(conn.prepare("SELECT 1").unwrap());
+        }
+        match conn.close() {
+            Ok(()) => state.update(|stats| stats.native_closed = true),
+            Err((_conn, error)) => {
+                state.fail(Failure::cleanup(Outcome::NotApplicable, error.to_string()))
+            }
+        }
+        if let Some(gate) = &config.exit_gate {
+            gate.block_once();
+        }
+    }));
+    if result.is_err() {
+        state.fail(state.worker_error());
+    }
+    if let Some(ready) = ready {
+        let _ = ready.send(Err(state.worker_error()));
+    }
+    CURRENT_MODE.with(|mode| mode.borrow_mut().take());
 }
 
 // 任意closureへConnectionやmanagement guardを渡さない。

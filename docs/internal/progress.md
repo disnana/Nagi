@@ -169,3 +169,37 @@ main `f10cb64`を基点に承認契約`3cce2f9`→tests-only `7accaec`→safe実
 15組の予定High／手書きLowを作り、parse-only 2件で30sourceの構文と元行anchorを確認した。semantic harnessは未配線で、新Txのcheck／Rust build成功と報告しない。[compiler境界](sqlite-compiler-boundary.md)にcanonical resource、実payload／capture facts、SQL所有化・opt-inと未指定capabilityを整理した。4 OS CIへnative session／parser入力の専用stepを追加したが、CI結果は公開後の確認待ち。
 
 次の[判断案](sqlite-pool-adapter-decision.md)はgeneric deadpool Managerを候補にする。独立レビューでdetachを経由しない破棄とin-flight createをcloseが待つ必要を確認し、候補へ反映した。追加crate／featureと未指定capabilityはQ004へ残す。未承認依存を追加したり、private Driverをそのままpublic Poolにしたりしない。Phase 4全体とPhase 5は未完了で、merge・版更新・releaseはしていない。
+
+### Q004承認とManager比較への継続
+
+2026-10-06。ユーザーがdeadpool =0.13.1（managed／rt_tokio_1、default featuresなし）とdeadpool-runtime 0.3.1による比較試作、およびcapability表の初版値を承認した。[ADR 010](adr/010-sqlite-transaction-boundary.md)・invariants・設計書へ反映し、追加・更新が必要なら差分を示して判断へ戻す。既存Tokio／rusqliteと旧Db／High／Lowの契約を維持する。
+
+一接続基盤はdraft [PR #81](https://github.com/disnana/Nagi/pull/81)、head `cfa65fa61de1f81d6acbebbfd4898541ba1ee5e1`で公開した。4 OS CIはこの記録時点では一部完了・全体確認待ち。次の比較はbranch `feat/sqlite-pool-adapter`へ分け、#81の成果を保持する。main `5fdfe49`のREADME code fence更新だけを取り込んだ。adapter試作はまだ未実行で、公開Pool／TxやPhase 4完了とは報告しない。
+
+終了責任はManager::detachだけへ置かない。in-flight create取消、idle破棄、active返却、Object::take、最後のPool Dropの経路を含め、worker起動前の登録からnative close／joinまで同じownerで保持する。checkerの先行公開や独自pool algorithmへの置換は行わない。mainへのmerge・版更新・releaseは実行していない。
+
+### #81の先行基盤CI成功
+
+head `cfa65fa`のchecks run `37397252295`とwebsite run `37397251707`はattempt 1で成功した。4 OSの実ログでprivate session22件／parser2件を確認し、両JetBrains製品・VSIX・merge gateの成功も確認した。[結果](sqlite-session-results.md#pr-81の4-os-ci)へ記録した。#81はreview可能、未マージ。これはnative一接続coreの検証で、Q004のadapter比較や公開Pool／Tx、Phase 4全体のacceptanceはまだ未完了である。
+
+### #81のmain反映とadapter比較中の反例
+
+ユーザーが#81をmain `ff6f7d4c81c8cf49c2bca7abffb3083f681d5b9d`へマージした。tree `cb8c3d061110e9866c208004f54d1cedf9d9481d`は、成功headに先行mainのREADME code fence変更を取り込んだtreeと一致する。エージェントはmerge操作をしていない。
+
+比較初版は共通native sessionを維持したまま、startup取消後のworker並存と、join通知がterminal cause公開に先行する反例を確認した。前者はdeadpoolの論理slotとnative終了、後者は完了通知と結果公開を同一視したことが原因。完了Stateの全履歴保持も公開runtimeには残さず、live recordと集約counterへ分ける。[比較方針](sqlite-pool-adapter-decision.md#論理slotとnative-workerの終了を分ける)を先に更新し、barrier回帰で確認する。公開Pool／Tx、multi-connection、captured Tx検査、sealed SQL、acquire期限への接続はまだ未完了。
+
+### Q004の一接続比較・ローカル検証
+
+generic deadpoolのManagerへ共通native sessionを接続した。stock permit・queue・recycleは再利用し、native close／joinをledgerで観測する。Object::takeのpermit先行返却でもworkerが並存する実反例を追加し、max_size=1限定のcreateはlive記録が空になるまで待つ単純な条件へ揃えた。cause公開後にcounterとlive記録を更新する。健康Objectの通常recycleは維持し、多接続へこの条件を流用しない。
+
+最終source tree `58297cd1`で、native22＋adapter20＋比較1の43件、全92 suite・874件、runtime172 unit＋5 doctest、fmt／all-target clippyが成功した。既存fuzzは1000 mutation／95 checked Low emit／16 native・panic 0。別のSolが登録と結果公開の順序をレビューした。23組46の予定High／Lowはparser検査だけで、semantic harness未配線のまま。追加依存は承認済み2個だけで、既存版更新なし。
+
+同native coreの単独debug測定は各4096 Tx、direct p50 106.370µs、deadpool p50 114.402µs。raw sample、再実行条件、REDとGREEN、保証の限界は[結果](sqlite-adapter-results.md)と[測定](../../benchmarks/results/sqlite-adapter-2026-10-06/README.md)に保存した。throughput、allocator count、Future size、本番性能は未測定。main `ff6f7d4`を取り込んだ後も実装treeは同一。
+
+次のPRはmain向けに分離する。新adapterの4 OS CIは確認待ち。公開Pool／Tx、多接続・Options取得期限、capture検査、sealed SQL、Phase 4全体のacceptanceは未完了。Phase 5、版更新、releaseは開始していない。
+
+### #82のadapter実装CI
+
+main向け[PR #82](https://github.com/disnana/Nagi/pull/82)、head `a608f1a`のchecks `37402576311`／website `37402576023`がattempt 1で成功した。4 OSの実ログで43件のprivate試験とparser2件を確認し、Linux全検査、両JetBrains製品、merge gateも成功した。VSIX packageは変更対象外、releaseはskip。artifactの改行・hashと次の設計メモを修正した最終headでもCIを確認する。compiler／runtime／Cargo／CIのbytesは維持する。
+
+一接続比較は成立したが、公開配線のacceptanceとは分ける。[次の縦切り](sqlite-public-slice-plan.md)には、sequential join観測の多接続での反例候補、stock待機からnative fenceへの予算、巨大capacityの確保を整理した。source reviewによる候補で、実行済みのP1として数えていない。任意上限・新期限・新依存を追加する必要が出れば判断案へ戻す。エージェントによるmain merge・版更新・releaseはしていない。

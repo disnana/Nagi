@@ -1,12 +1,12 @@
-# SQLite Pool adapter: 次の判断案
+# SQLite Pool adapter: 採用した比較方針
 
-2026-10-06。未採用。Q002は公開API・SQL範囲・終了契約・rusqlite hooksを承認したが、追加wrapper依存を含まない。[ADR 010](adr/010-sqlite-transaction-boundary.md)と[比較](sqlite-pool-rust-reuse.md)を前提に、次の小さい実装で検証する候補を具体化する。ここにあるPool adapterはまだbuild／実行していない。
+2026-10-06。Q004の2項目をユーザーが承認した。generic deadpool Managerの比較試作に使う依存と、下表のcapability初版値を採用する。Q002の公開API・SQL範囲・終了契約・rusqlite hooksは維持する。[ADR 010](adr/010-sqlite-transaction-boundary.md)と[比較](sqlite-pool-rust-reuse.md)を前提に、次の小さい実装で検証する候補を具体化する。一接続のprivate adapterを実装し、43件・ローカル全suiteと比較測定を確認した。[結果](sqlite-adapter-results.md)を参照。公開Pool／Tx、多接続、取得期限への接続は未完了。
 
 ## 推奨: generic deadpoolのManagerを使う
 
 `deadpool 0.13.1`のmanaged poolに、native workerのowned handleを持つManager adapterを接続する。poolの上限・待機・checkout・回収はdeadpool、SQLiteのSQL解析・native Transactionは既存rusqliteへ任せる。Nagi側に残すのはsession、cleanup結果、closing／failedの共有状態と完了観測である。pool algorithmやnative transactionをコピーしない。
 
-追加案はruntimeの以下一行。承認前には追加しない。
+比較試作で追加するruntime依存は以下の一行。これ以外の追加・更新が必要なら、理由と差分を示して判断へ戻す。
 
 ```toml
 deadpool = { version = "=0.13.1", default-features = false, features = ["managed", "rt_tokio_1"] }
@@ -14,7 +14,7 @@ deadpool = { version = "=0.13.1", default-features = false, features = ["managed
 
 公開されたmanifest／dependency metadataを2026-10-06に確認した。deadpool 0.13.1は2026-08-26公開、yankなし、MSRV 1.85、MIT OR Apache-2.0。選択featureで新しく必要になるcrateはdeadpoolとdeadpool-runtime 0.3.1。Tokioは現在の依存を使い、rusqlite 0.40.2、bundled、libsqlite3-sysを変更する案ではない。async-std／smol／serde／unmanagedは有効化しない。lockfileで実際の解決結果とfeature合成を確認し、予想外の追加・更新が必要ならその差を判断へ戻す。
 
-一次資料: [deadpool 0.13.1 metadata](https://crates.io/api/v1/crates/deadpool/0.13.1)、[dependencies](https://crates.io/api/v1/crates/deadpool/0.13.1/dependencies)、[deadpool-runtime 0.3.1](https://crates.io/api/v1/crates/deadpool-runtime/0.3.1)、[dependencies](https://crates.io/api/v1/crates/deadpool-runtime/0.3.1/dependencies)、[Manager](https://docs.rs/deadpool/0.13.1/deadpool/managed/trait.Manager.html)、[Pool](https://docs.rs/deadpool/0.13.1/deadpool/managed/struct.Pool.html)、[Object](https://docs.rs/deadpool/0.13.1/deadpool/managed/struct.Object.html)。release archiveのSHA-256をcrates.io metadataに照合して読み取った。Cargoへの追加・第三者コードの実行はしていない。
+一次資料: [deadpool 0.13.1 metadata](https://crates.io/api/v1/crates/deadpool/0.13.1)、[dependencies](https://crates.io/api/v1/crates/deadpool/0.13.1/dependencies)、[deadpool-runtime 0.3.1](https://crates.io/api/v1/crates/deadpool-runtime/0.3.1)、[dependencies](https://crates.io/api/v1/crates/deadpool-runtime/0.3.1/dependencies)、[Manager](https://docs.rs/deadpool/0.13.1/deadpool/managed/trait.Manager.html)、[Pool](https://docs.rs/deadpool/0.13.1/deadpool/managed/struct.Pool.html)、[Object](https://docs.rs/deadpool/0.13.1/deadpool/managed/struct.Object.html)。release archiveのSHA-256をcrates.io metadataに照合して読み取った。承認時点ではCargoへの追加・adapter実行はしていない。実際のlockfile差分と試験結果は後続記録へ残す。
 
 | 部分 | ownerと候補構造 | 必要なoracle |
 |---|---|---|
@@ -30,6 +30,18 @@ closing／failedとadmissionの判定は単一の小さいledgerで直列化す�
 
 closeはin-flight createも待つ。Manager::createが始まる前にclosing判定とstarting登録を同じcritical sectionで行い、worker完了・引渡し・取消で未完了件数を確定させる。close後に新workerが登録される経路を拒否し、starting件数だけを減らしてjoin責任を消さない。deadpool getが閉鎖後にObjectを返すraceでもuser BEGINを開始せず、そのowned handleを同じ終了所有者へ返す。これは終了責任のadapterであり、別のslot待機／pool公平性algorithmを追加する案ではない。late create、idle discard、active返却、Object::take、最後のPool Dropを別barrierで検査する。
 
+### 論理slotとnative workerの終了を分ける
+
+比較初版では、Manager.createの取消後にdeadpoolのpermitが返り、旧workerのjoin前に次のworkerを起動できた。max_size=1でcreated=2となるbarrier反例を確認した。Object::take後のWorkerHandle Dropにも同じ論理slotとnative終了の差がある。stock poolのsizeだけをnative worker上限の根拠にしない。
+
+Object::takeのstock実装はManager.detach／WorkerHandle Dropより先にpermitを返すため、stopping flagだけでは同時createの隙間が残った。今回のmax_size=1比較は、Manager.create内でlive recordが空になるまでnative close／joinを待つ単純なfenceを採る。正常なObject再貸出はrecycle経由、active Object中はstock permitを取得できないため、create入口で残るlive recordは先に論理slotを返した旧workerである。新登録とclosing判定は同じledger lockで確定する。stock permit・queue・公平性を置き換えず、取消だけをPool failedにするpolicyも足さない。
+
+これは単一接続の比較限定で、multi-connectionへ全live worker待機を流用しない。公開APIへ進む際は、健全active workerを妨げずnative上限とcleanupを両立する条件を別に検証する。公開Optionsの接続時にはfenceもacquire_ms=0／有限待ちの条件に含め、途中から無期限待ちへ変えない。
+
+完了workerのStateを全履歴として保持する初版のledgerも、公開runtimeへ流用しない。terminal causeを公開し、同じcritical sectionで完了件数へ集約してlive recordを除く。累積created／native close／joinedの観測は保ち、closeの完了条件を履歴Vecの全走査に依存させない。反復取消とtake/drop/createで、未終了record数と累積件数を別々に確認する。
+
+この節の反例を元にした修正版は、一接続のbarrier試験と全suiteで確認した。multi-connection／公開APIの完成は示さない。
+
 ## ほかの候補を今すぐ採らない理由
 
 - **deadpool-sqlite 0.14.0:** owned checkoutと短いinteractには適する候補。deadpool-syncの公開APIからConnectionを所有値として取り出す経路を確認できず、Object::takeはSyncWrapperを返す。Dropはbackground destructorなので、native close結果とworker joinまで完了した根拠にはならない。長い対話sessionはTokio blocking threadを占有する。generic Managerとの比較前に「利用不能」とは結論しない。
@@ -41,7 +53,7 @@ generic deadpoolでもnative closeやsessionを自動で保証してくれるわ
 
 ## registry配線前に固定するcapability
 
-下表は未指定だったDebug／shared等も含む初版の**判断案**。まだcheckerへ登録しない。全resourceのSerdeと新Actor Charge対応はなし。署名／markerと実payloadを区別し、Txのtask転送・永続格納禁止をnative inline stateにも適用する。ユーザーの同名classはこの制限の対象ではない。
+下表はQ004で採用した初版値。runtime公開入口と検査が揃うまでcheckerへ先行登録しない。全resourceのSerdeと新Actor Charge対応はなし。署名／markerと実payloadを区別し、Txのtask転送・永続格納禁止をnative inline stateにも適用する。ユーザーの同名classはこの制限の対象ではない。
 
 | resource | Copy | equality | field保存 | shared | Debug |
 |---|---|---|---|---|---|
@@ -55,7 +67,7 @@ generic deadpoolでもnative closeやsessionを自動で保証してくれるわ
 
 TxはnonClone、ParametersもnonClone。Poolのcloneはclone_poolのみ。local Option／Result、owned関数委譲、同task awaitはTxのfield保存やtask転送と同一扱いにしない。Failureのcause複製は明示copy operationだけで、DebugにSQL／bind値／cause本文を足さない。公開messageとcauseに含まれるDB診断が機密を含まないという保証は追加しない。
 
-## 承認後の順序
+## 実装と検証の順序
 
 1. 選択crate／feature／lockfileの差を確認し、一接続のManager adapterへ同じnative contract oracleを接続する。
 2. cleanup前checkout保持、close/admissionのrace、retire後replacement停止、native close／joinと最後のDropを検査する。

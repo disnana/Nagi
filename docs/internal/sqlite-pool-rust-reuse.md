@@ -43,6 +43,6 @@ tokio-rusqliteは専用thread/dispatchを再利用できる利点がある一方
 
 ## 判断と未確認範囲
 
-**runtime rusqlite hooksは2026-10-06のQ002で承認済み。追加wrapperのcrate／feature／版はユーザー判断までStop。** 承認後に一connection/一Txでprototype比較し、取消後もadapterがcheckoutを保持すること、cleanup前の再取得禁止、失敗時detach/新get停止、native close結果とworker終了をpositive barrierで確認する。SELECT health check、pool.close/status.size==0、wrapper close Okだけを完了証拠にしない。wrapper固有の自動補充・unbounded queue・blocking thread占有を含め、責任/code量/失敗経路が小さくなる案を選ぶ。現時点でcustom workerを確定案、wrapperを不可能、未実行の試験を成功とは書かない。
+**runtime rusqlite hooksは2026-10-06のQ002で承認済み。同日のQ004でgeneric deadpool =0.13.1（managed／rt_tokio_1、default featuresなし）とdeadpool-runtime 0.3.1の比較試作を承認した。これ以外の追加・版更新は判断へ戻す。** 承認後に一connection/一Txでprototype比較し、取消後もadapterがcheckoutを保持すること、cleanup前の再取得禁止、失敗時detach/新get停止、native close結果とworker終了をpositive barrierで確認する。SELECT health check、pool.close/status.size==0、wrapper close Okだけを完了証拠にしない。wrapper固有の自動補充・unbounded queue・blocking thread占有を含め、責任/code量/失敗経路が小さくなる案を選ぶ。現時点でcustom workerを確定案、wrapperを不可能、未実行の試験を成功とは書かない。
 
-wrapper未追加のprivate一接続coreはsafe Rustで実装し、22件のnative契約testと旧runtime baselineをローカルで実行した。[結果](sqlite-session-results.md)を参照。次の比較はgeneric deadpool Managerを推奨候補とするが未採用。public Pool、取得race、clone共通close、Nagi捕捉検査の成功証拠へ広げない。
+wrapper未追加のprivate一接続coreはsafe Rustで実装し、22件のnative契約testと旧runtime baselineをローカルで実行した。[結果](sqlite-session-results.md)を参照。次の比較はgeneric deadpool ManagerはQ004で比較試作を承認した。採用が決まったのは比較の依存とcapability表であり、adapterが契約を満たすかは実行で確認する。public Pool、取得race、clone共通close、Nagi捕捉検査の成功証拠へ広げない。

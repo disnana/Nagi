@@ -1,0 +1,24 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-boundary-foundation/runtime)
+    Finished `test` profile [unoptimized] target(s) in 6.13s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31f33a377cbf1a2a)
+
+running 1 test
+
+thread 'sqlite_prototype::adapter_tests::joined_is_published_only_after_terminal_native_failure_is_in_ledger' (1244918) panicked at runtime/src/sqlite_prototype/adapter.rs:531:9:
+assertion `left == right` failed
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'sqlite_prototype::adapter_tests::joined_is_published_only_after_terminal_native_failure_is_in_ledger' (1244918) panicked at runtime/src/sqlite_prototype/adapter_tests.rs:409:5:
+close panicked before native failure publication
+test sqlite_prototype::adapter_tests::joined_is_published_only_after_terminal_native_failure_is_in_ledger ... FAILED
+
+failures:
+
+failures:
+    sqlite_prototype::adapter_tests::joined_is_published_only_after_terminal_native_failure_is_in_ledger
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 166 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p nagi-runtime --lib`

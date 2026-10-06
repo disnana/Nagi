@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "planned_unwired",
-  "basis": "ADR 010 / local 90c5324; not public API acceptance",
+  "basis": "ADR 010 / Q002 + Q004 approved 2026-10-06; not public API acceptance",
   "execution": {
     "harness_registered": false,
     "parser_executed": false,
@@ -74,7 +74,12 @@
           "schema": "one statement, no returned columns"
         }
       ],
-      "native_requirement": "build + SQL ownership before params move; same-task await does not retain SQL view across worker boundary"
+      "native_requirement": "build + SQL ownership before params move; same-task await does not retain SQL view across worker boundary",
+      "variants": [
+        "share(Failure), share(Option[Failure]), and share(Result[i64, Failure]) are capability pass cases; not yet executed",
+        "shared[State] owned Pool field borrowed by begin/clone_pool; no implicit shared[Pool] to view[Pool] conversion",
+        "shared State Failure field borrowed for kind/message/copy_primary_error; Debug metadata only; Serde and equality remain prohibited"
+      ]
     },
     {
       "id": "03-user-type-names",
@@ -265,7 +270,7 @@
       "variants": [
         "shared[Option[Tx]] function parameter declaration",
         "share(Result[Tx, Failure])",
-        "share(Parameters/Options/Failure) directly and wrapped; same policy only for new SQLite resources"
+        "share(Parameters/Options) directly and wrapped; only nonshared SQLite resources are rejected"
       ]
     },
     {
@@ -552,6 +557,275 @@
         "scalar/enum/native resource type argument",
         "Option[nested class] field",
         "remove invalid(): legacy class-only checker acceptance preserved; native bridge must separately implement FromRow to build"
+      ]
+    },
+    {
+      "id": "16-parameters-field",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "pass",
+      "contract": "Parameters may move into class and enum fields despite Debug being prohibited",
+      "inputs": {
+        "high": "16-parameters-field.nagi",
+        "user_low": "16-parameters-field.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {},
+      "diagnostic_contract": null,
+      "validation_result": null,
+      "native_requirement": "class and enum field storage build without Clone, Copy, Serde, or Debug obligations on Parameters; move identity remains intact",
+      "checked_plan_requirement": "Debug eligibility is independent of readable_debug names; omit both derived and custom Debug for these payloads"
+    },
+    {
+      "id": "17-nested-copy-tx",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "generic copy must not clone Option[canonical SQLite Tx] payload",
+      "inputs": {
+        "high": "17-nested-copy-tx.nagi",
+        "user_low": "17-nested-copy-tx.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 3,
+          "anchor": "copy(parts)",
+          "column_utf8_for_fixture_review": 12,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 3,
+          "anchor": "copy(parts)",
+          "column_utf8_for_fixture_review": 12,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker capability: generic copy rejects nested nonCopy SQLite payload before Rust to_vec requires Clone",
+      "validation_result": null,
+      "payload_requirement": "inspect the actual slice element Option[Tx]; this view parameter does not require creating or storing a local List[Tx]",
+      "variants": [
+        "Result[Tx, Failure] slice element",
+        "owned[Option[Tx]] slice element",
+        "nested enum payload containing Parameters; no blanket trait solver"
+      ]
+    },
+    {
+      "id": "18-nested-copy-parameters",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "generic copy must traverse user class fields containing nonClone Parameters",
+      "inputs": {
+        "high": "18-nested-copy-parameters.nagi",
+        "user_low": "18-nested-copy-parameters.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 5,
+          "anchor": "copy(parts)",
+          "column_utf8_for_fixture_review": 12,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 6,
+          "anchor": "copy(parts)",
+          "column_utf8_for_fixture_review": 12,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker capability: generic copy rejects canonical Parameters reached through Option and user class payload",
+      "validation_result": null,
+      "payload_requirement": "field storage itself passes case 16; reject the copy expression rather than the permitted field declaration",
+      "native_requirement": "no generated class Debug obligation on Parameters may mask the intended copy rejection"
+    },
+    {
+      "id": "19-nested-copy-pool",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "generic copy does not replace explicit clone_pool",
+      "inputs": {
+        "high": "19-nested-copy-pool.nagi",
+        "user_low": "19-nested-copy-pool.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 3,
+          "anchor": "copy(parts)",
+          "column_utf8_for_fixture_review": 12,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 3,
+          "anchor": "copy(parts)",
+          "column_utf8_for_fixture_review": 12,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker capability: generic copy rejects nested Pool; handle cloning remains explicit clone_pool",
+      "validation_result": null,
+      "variants": [
+        "Option[Options] copy rejects despite Debug eligibility",
+        "Option[Failure] copy rejects despite shared and metadata Debug eligibility; cause copying uses explicit operations"
+      ]
+    },
+    {
+      "id": "20-copy-pointer-signature",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "pass",
+      "contract": "generic copy of capture-free function pointers does not copy Tx values named only in the signature",
+      "inputs": {
+        "high": "20-copy-pointer-signature.nagi",
+        "user_low": "20-copy-pointer-signature.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {},
+      "diagnostic_contract": null,
+      "validation_result": null,
+      "payload_requirement": "function pointer signature is not an environment or Tx payload; no closure or first-class standard-operation support is introduced",
+      "native_requirement": "slice of synchronous capture-free function pointers remains copyable; no Tx Clone bound is introduced"
+    },
+    {
+      "id": "21-failure-shared",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "pass",
+      "contract": "Failure direct and nested sharing is independent of Serde, equality, and Debug contents",
+      "inputs": {
+        "high": "21-failure-shared.nagi",
+        "user_low": "21-failure-shared.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {},
+      "diagnostic_contract": null,
+      "validation_result": null,
+      "native_requirement": "direct and nested shared Failure build with Send/Sync; generated Holder Debug may format only native metadata",
+      "debug_observation_plan": {
+        "allowed": [
+          "kind",
+          "outcome",
+          "retired"
+        ],
+        "excluded": [
+          "SQL text",
+          "bind values",
+          "error cause"
+        ],
+        "stage": "future native formatter oracle with distinctive secret markers; not executed by these parser inputs",
+        "public_print_resource_supported": false
+      },
+      "variants": [
+        "shared[State] owned Failure field borrowed by kind/message/copy_primary_error; existing Reference passing only"
+      ]
+    },
+    {
+      "id": "22-failure-serde",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "shared and metadata Debug capability does not grant nested Failure serialization",
+      "inputs": {
+        "high": "22-failure-serde.nagi",
+        "user_low": "22-failure-serde.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 5,
+          "anchor": "json_encode(problem)",
+          "column_utf8_for_fixture_review": 12,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 6,
+          "anchor": "json_encode(problem)",
+          "column_utf8_for_fixture_review": 12,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker Serialize capability: native Failure stays nonSerde through Option and user class fields",
+      "validation_result": null,
+      "variants": [
+        "json_decode[Holder] rejects independently",
+        "direct Failure serialization rejects; no SQL or cause exposure through native Serde"
+      ]
+    },
+    {
+      "id": "23-failure-equality",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "Failure metadata Debug and shared capability do not grant equality",
+      "inputs": {
+        "high": "23-failure-equality.nagi",
+        "user_low": "23-failure-equality.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 3,
+          "anchor": "return left == right",
+          "column_utf8_for_fixture_review": 5,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 3,
+          "anchor": "return left == right",
+          "column_utf8_for_fixture_review": 5,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker equality capability: Failure cannot be compared",
+      "validation_result": null,
+      "variants": [
+        "FailureKind and Outcome equality pass independently",
+        "nested Failure equality must not acquire equality from Debug or shared flags"
       ]
     }
   ],
