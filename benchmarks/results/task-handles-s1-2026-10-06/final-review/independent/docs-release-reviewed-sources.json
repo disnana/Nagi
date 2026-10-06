@@ -1,0 +1,9 @@
+{
+  "ai/language.md": "25a4423e31124446dda4bc592d425c920e38f37aeb18f25a26e528f3ad007540",
+  "docs/async.md": "7fa8ced2d5f3b269a2e069e2540182bbd813f988b460596acf530949f50e09e4",
+  "docs/en/async.md": "8e0380d8564329e3e6ae96dd8613cb5cf744a8b32278ead5c892322964827512",
+  "docs/internal/adr/011-language-behavior-and-docs.md": "7bbd2b87f8a520a9495defb84dff9e61758ae6eaa99cda185a1354cc2c8bf224",
+  "docs/internal/task-handles-s1-final-review.md": "e6a60ef53209aa83a075cf1aa1d716d882a1da6feba3c9e6239937de871a1707",
+  "scripts/releases/verify.py": "386032c7f0778983802f89c5816270cfa1de58b3456e46bb9ae092362d5681db",
+  "scripts/releases/test_verify.py": "07dd5951c1a3c04fa62325b723be82662229f5aecd827487a7437a2d17bc04eb"
+}

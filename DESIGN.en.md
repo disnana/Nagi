@@ -52,7 +52,7 @@ Python informs the writing style, Rust informs ownership, and Elixir informs act
 | Write ordinary `a = b` | Use ordinary assignment for Copy; use `std.ownership.move` to transfer an existing non-Copy local | **Implemented on the work branch; unreleased**. Fresh values and existing argument, return, and field/index rules are retained |
 | Represent absence or failure | Use nullable or Result; avoid panic for ordinary rejection | Implemented. Nagi try propagates Err; it is not Python try/except |
 | Receive a concurrent result | Let scope own child lifetime and receive the result once through a handle | **Implemented on the S1 working branch, unreleased**. Task receives once; legacy spawn retains unit/Result[unit, Error] |
-| Receive a child's business Err | Treat it as a result, separately from task failure | **Planned migration**. Scope currently cancels siblings on child Err too |
+| Receive a child's business Err | Treat it as a result, separately from task failure | A Task's inner business Err lets siblings continue. A legacy spawn Err cancels siblings |
 | Send shared values to an actor | Allow explicit shared messages subject to type, capacity, and lifetime conditions | **Unimplemented**. Shared messages/replies are rejected today |
 
 Explicit operations should make the difference from Python reference assignment visible in code. Fresh construction should not mechanically require a move annotation; size thresholds should not decide whether a value is implicitly copied. Arguments, returns, and match are not all being changed at once.

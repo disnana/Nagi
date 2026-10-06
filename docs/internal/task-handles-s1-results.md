@@ -1,5 +1,7 @@
 # Task結果handle S1接続の実行記録
 
+最新の仕上げは[PR #88最終レビュー](task-handles-s1-final-review.md)。以下のsource `34ac4d5` の90/90・4 OS・費用測定は接続完了時の記録として維持し、最終レビュー補強後の110/110・service専用回帰とは分ける。[次段階の引継ぎ](handoffs/2026-10-06-task-handles-s1-complete.md)にS2・release工程を整理した。
+
 2026-10-06。ユーザーの再開指示によるS1接続の記録。再開時のmainは `9ba4a104be6f65dba61eda0c7b1ef0f98c892cf7`、PR #88 headは `5c2c8282fbd9841cd3b0a2a78e9742d7ec3a811e`。再開時のchecks `37471066148`、website `37471065829` は成功し、レビュー提出・threadは0件だった。接続前sourceはStage 1検証head `6223ad2`と一致し、入力62件・artifact122件のSHA-256を確認した。今回の接続sourceとCIは末尾へ分けて記録する。
 
 ADR 012と接続判断を用い、追加RED、compiler/checker、公開runtime、Low/Rust、native、回帰・測定・日英文書・独立レビューを実行した。Stage 1の16private oracleや6/56一致を今回の成功へ数えない。merge、release、version更新、S2の具体API、公開SQLiteは対象外。

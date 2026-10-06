@@ -1,0 +1,7 @@
+.............
+----------------------------------------------------------------------
+Ran 13 tests in 0.021s
+
+OK
+Verified SQL engine: extracted compiler, offline schema, bad columns/binds, Nagi locations, no Cargo/runtime
+Verified Task handles: extracted compiler/runtime, High/saved Low/handwritten Low, receive/discard, nested business Err, early ownership diagnostics

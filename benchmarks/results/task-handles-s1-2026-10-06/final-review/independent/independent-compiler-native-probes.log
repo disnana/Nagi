@@ -1,0 +1,62 @@
+PROBE nested-move-receive
+   Compiling nagi-s1-final-review-probes v0.0.0 (/tmp/nagi-s1-final-review/probes)
+    Finished `test` profile [unoptimized] target(s) in 0.36s
+     Running unittests nested-move-receive.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_s1_final_review_probes-1a88076006025232)
+
+running 1 test
+0
+0
+test independent_native_run ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+PROBE self-move-alias
+   Compiling nagi-s1-final-review-probes v0.0.0 (/tmp/nagi-s1-final-review/probes)
+    Finished `test` profile [unoptimized] target(s) in 0.38s
+     Running unittests self-move-alias.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_s1_final_review_probes-1a88076006025232)
+
+running 1 test
+0
+0
+test independent_native_run ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+PROBE nested-move-discard
+   Compiling nagi-s1-final-review-probes v0.0.0 (/tmp/nagi-s1-final-review/probes)
+    Finished `test` profile [unoptimized] target(s) in 0.37s
+     Running unittests nested-move-discard.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_s1_final_review_probes-1a88076006025232)
+
+running 1 test
+0
+0
+test independent_native_run ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+PROBE branch-alias-transfer
+   Compiling nagi-s1-final-review-probes v0.0.0 (/tmp/nagi-s1-final-review/probes)
+    Finished `test` profile [unoptimized] target(s) in 0.37s
+     Running unittests branch-alias-transfer.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_s1_final_review_probes-1a88076006025232)
+
+running 1 test
+0
+0
+test independent_native_run ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+PROBE same-name-user-discard
+   Compiling nagi-s1-final-review-probes v0.0.0 (/tmp/nagi-s1-final-review/probes)
+    Finished `test` profile [unoptimized] target(s) in 0.35s
+     Running unittests same-name-user-discard.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_s1_final_review_probes-1a88076006025232)
+
+running 1 test
+1
+0
+1
+0
+test independent_native_run ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

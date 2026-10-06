@@ -1,0 +1,122 @@
+[
+  {
+    "source": "discard-await.nagi",
+    "exit": 1,
+    "diagnostic": "error: line 8: task はmove後に使用されています\n --> /tmp/nagi-s1-final-review/inputs/discard-await.nagi:8\n 8 |         received = await task  # primary\n",
+    "primary_line": 8
+  },
+  {
+    "source": "discard-await.low",
+    "exit": 1,
+    "diagnostic": "error: line 7: task はmove後に使用されています\n --> /tmp/nagi-s1-final-review/inputs/discard-await.low:7\n 7 |         let received = await task; # primary\n",
+    "primary_line": 7
+  },
+  {
+    "source": "task-copy.nagi",
+    "exit": 1,
+    "diagnostic": "error: line 7: Taskはawait/discard/move以外の操作へ渡せません\n --> /tmp/nagi-s1-final-review/inputs/task-copy.nagi:7\n 7 |         copied = copy(task)  # primary\n",
+    "primary_line": 7
+  },
+  {
+    "source": "task-copy.low",
+    "exit": 1,
+    "diagnostic": "error: line 6: Taskはawait/discard/move以外の操作へ渡せません\n --> /tmp/nagi-s1-final-review/inputs/task-copy.low:6\n 6 |         let copied = copy(task); # primary\n",
+    "primary_line": 6
+  },
+  {
+    "source": "task-share.nagi",
+    "exit": 1,
+    "diagnostic": "error: line 7: Taskはawait/discard/move以外の操作へ渡せません\n --> /tmp/nagi-s1-final-review/inputs/task-share.nagi:7\n 7 |         shared = share(task)  # primary\n",
+    "primary_line": 7
+  },
+  {
+    "source": "task-share.low",
+    "exit": 1,
+    "diagnostic": "error: line 6: Taskはawait/discard/move以外の操作へ渡せません\n --> /tmp/nagi-s1-final-review/inputs/task-share.low:6\n 6 |         let shared = share(task); # primary\n",
+    "primary_line": 6
+  },
+  {
+    "source": "task-view.nagi",
+    "exit": 1,
+    "diagnostic": "error: line 7: Taskはawait/discard/move以外の操作へ渡せません\n --> /tmp/nagi-s1-final-review/inputs/task-view.nagi:7\n 7 |         borrowed = view(task)  # primary\n",
+    "primary_line": 7
+  },
+  {
+    "source": "task-view.low",
+    "exit": 1,
+    "diagnostic": "error: line 6: Taskはawait/discard/move以外の操作へ渡せません\n --> /tmp/nagi-s1-final-review/inputs/task-view.low:6\n 6 |         let borrowed = view(task); # primary\n",
+    "primary_line": 6
+  },
+  {
+    "source": "task-print.nagi",
+    "exit": 1,
+    "diagnostic": "error: line 7: Taskはawait/discard/move以外の操作へ渡せません\n --> /tmp/nagi-s1-final-review/inputs/task-print.nagi:7\n 7 |         print(task)  # primary\n",
+    "primary_line": 7
+  },
+  {
+    "source": "task-print.low",
+    "exit": 1,
+    "diagnostic": "error: line 6: Taskはawait/discard/move以外の操作へ渡せません\n --> /tmp/nagi-s1-final-review/inputs/task-print.low:6\n 6 |         print(task); # primary\n",
+    "primary_line": 6
+  },
+  {
+    "source": "match-partial-consume.nagi",
+    "exit": 1,
+    "diagnostic": "error: line 6: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /tmp/nagi-s1-final-review/inputs/match-partial-consume.nagi:6\n 6 |         task = spawn work()  # primary\n",
+    "primary_line": 6
+  },
+  {
+    "source": "match-partial-consume.low",
+    "exit": 1,
+    "diagnostic": "error: line 5: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /tmp/nagi-s1-final-review/inputs/match-partial-consume.low:5\n 5 |         let task = spawn work(); # primary\n",
+    "primary_line": 5
+  },
+  {
+    "source": "while-multiple-consume.nagi",
+    "exit": 1,
+    "diagnostic": "error: line 8: task はmove後に使用されています（ループの次の周回でも使用されるため）\n --> /tmp/nagi-s1-final-review/inputs/while-multiple-consume.nagi:8\n 8 |             received = await task  # primary\n",
+    "primary_line": 8
+  },
+  {
+    "source": "while-multiple-consume.low",
+    "exit": 1,
+    "diagnostic": "error: line 7: task はmove後に使用されています（ループの次の周回でも使用されるため）\n --> /tmp/nagi-s1-final-review/inputs/while-multiple-consume.low:7\n 7 |             let received = await task; # primary\n",
+    "primary_line": 7
+  },
+  {
+    "source": "task-field.nagi",
+    "exit": 1,
+    "diagnostic": "error: line 3: Taskは同じscopeの直接ローカルbinding専用です。引数・戻り値・field・container・wrapperへ保存できません\n --> /tmp/nagi-s1-final-review/inputs/task-field.nagi:3\n 3 |     child: Task[i64]  # primary\n",
+    "primary_line": 3
+  },
+  {
+    "source": "task-field.low",
+    "exit": 1,
+    "diagnostic": "error: line 3: Taskは同じscopeの直接ローカルbinding専用です。引数・戻り値・field・container・wrapperへ保存できません\n --> /tmp/nagi-s1-final-review/inputs/task-field.low:3\n 3 |     child: Task[i64]; # primary\n",
+    "primary_line": 3
+  },
+  {
+    "source": "task-enum-payload.nagi",
+    "exit": 1,
+    "diagnostic": "error: line 3: Taskは同じscopeの直接ローカルbinding専用です。引数・戻り値・field・container・wrapperへ保存できません\n --> /tmp/nagi-s1-final-review/inputs/task-enum-payload.nagi:3\n 3 |     Child(child: Task[i64])  # primary\n",
+    "primary_line": 3
+  },
+  {
+    "source": "task-enum-payload.low",
+    "exit": 1,
+    "diagnostic": "error: line 3: Taskは同じscopeの直接ローカルbinding専用です。引数・戻り値・field・container・wrapperへ保存できません\n --> /tmp/nagi-s1-final-review/inputs/task-enum-payload.low:3\n 3 |     Child(child: Task[i64]); # primary\n",
+    "primary_line": 3
+  },
+  {
+    "source": "match-while-consumed.nagi",
+    "exit": 0,
+    "diagnostic": "checked /tmp/nagi-s1-final-review/inputs/match-while-consumed.nagi\n",
+    "primary_line": 0
+  },
+  {
+    "source": "match-while-consumed.low",
+    "exit": 0,
+    "diagnostic": "checked /tmp/nagi-s1-final-review/inputs/match-while-consumed.low\n",
+    "primary_line": 0
+  }
+]

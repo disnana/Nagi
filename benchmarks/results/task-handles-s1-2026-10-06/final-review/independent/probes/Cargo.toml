@@ -1,0 +1,15 @@
+[package]
+name="nagi-s1-final-review-probes"
+version="0.0.0"
+edition="2021"
+[dependencies]
+nagic={path="/workspace/Nagi/compiler"}
+nagi-runtime={path="/workspace/Nagi/runtime"}
+tokio={version="1.48",features=["rt","macros","sync","time"]}
+[[bin]]
+name="check-probes"
+path="probe.rs"
+
+[[bin]]
+name="s2-typed-monitor-check"
+path="s2-typed-monitor.rs"

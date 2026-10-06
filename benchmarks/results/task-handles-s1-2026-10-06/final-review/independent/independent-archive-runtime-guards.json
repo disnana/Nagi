@@ -1,0 +1,20 @@
+[
+  {
+    "mode": "high",
+    "runtime_dependency": "/tmp/nagi-s1-final-review/independent-archive-native/nagi-0.1.10-linux-x86_64/runtime",
+    "matches_extracted_runtime": true,
+    "manifest_sha256": "53e7ee154bd1c2106bd66f0f13921cf1a9809d7f4b0354d80575b019acacf103"
+  },
+  {
+    "mode": "saved-low",
+    "runtime_dependency": "/tmp/nagi-s1-final-review/independent-archive-native/nagi-0.1.10-linux-x86_64/runtime",
+    "matches_extracted_runtime": true,
+    "manifest_sha256": "374592845abff51368bc1490856196a08519845e9460d9c80942eaef2e924104"
+  },
+  {
+    "mode": "handwritten-low",
+    "runtime_dependency": "/tmp/nagi-s1-final-review/independent-archive-native/nagi-0.1.10-linux-x86_64/runtime",
+    "matches_extracted_runtime": true,
+    "manifest_sha256": "aa61ecdf57885e9b65ce7f8834fb45d23a633e6ccda0590bf1563fc5511773cb"
+  }
+]

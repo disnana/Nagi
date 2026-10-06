@@ -15,7 +15,7 @@
 
 詳細は[ライブラリとRust連携の設計案](library-design.md)へ。採用済みのSQLite初版契約は[ADR 010](internal/adr/010-sqlite-transaction-boundary.md)にあります。その他の資源のAPI名や終了契約には未確定の部分があります。
 
-値の扱いでは、既存所有値の代入に明示操作を要求する方向を採用しました。並行処理では、spawnの結果を受け取るhandle、業務Errとtask故障の区別、条件付きのshared actor messageを次の設計対象とします。これらは現行APIではありません。現在との差、未決の細部、移行条件は[DESIGN](../DESIGN.md)と[ADR 011](internal/adr/011-language-behavior-and-docs.md)へまとめています。
+既存所有値の代入に明示moveを要求する狭い移行と、spawnの結果handle・業務Errとtask故障の分離は、作業branchへ実装済み・未リリースです。Supervisor/HTTPのS2移行と条件付きshared actor messageは後続の設計対象です。公開版との差、未決の細部、移行条件は[DESIGN](../DESIGN.md)と[ADR 011](internal/adr/011-language-behavior-and-docs.md)へまとめています。
 
 処理系の検証は、既知のpass/fail例に加え、High・保存Low・生成Rustを通す小さい生成テストと変異試験で続けます。検査した範囲と未対応の組合せを分け、受理後の生成ミスを回帰例へ残します。
 

@@ -1,0 +1,18 @@
+@rust("native::monitor")
+extern async def monitor() -> Result[unit, Error]
+@rust("native::http")
+extern async def http() -> Result[unit, Error]
+@rust("native::exercise")
+extern async def exercise() -> unit
+async def typed_monitor_service() -> Result[unit, Error]:
+    async with scope:
+        monitor_task = spawn monitor()
+        spawn http()
+        await exercise()
+        received = await monitor_task
+        match received:
+            case Ok(inner):
+                try inner
+            case Err(failure):
+                print("monitor task fault")
+    return ok(print(0))

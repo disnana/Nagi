@@ -1,0 +1,252 @@
+{
+  "audit_date": "2026-10-06",
+  "main": "9ba4a104be6f65dba61eda0c7b1ef0f98c892cf7",
+  "audited_pr_head": "a9a0d42e94d6c7518bd7d955c9400299e554888c",
+  "latest_nagi": [
+    {
+      "tag": "nagi-v0.1.10",
+      "commit": "815b7d554dba3ac6b11ddad2089b782cbed46eb1",
+      "published_at": "2026-10-04T17:08:09Z",
+      "draft": false,
+      "prerelease": false,
+      "url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.10",
+      "assets": [
+        {
+          "name": "nagi-0.1.10-linux-x86_64.tar.gz",
+          "size": 2305618,
+          "digest": "sha256:e6d4679fe151b423ea72f37f75c163cf042047522b6152851a37955a284c8b0f"
+        },
+        {
+          "name": "nagi-0.1.10-linux-x86_64.tar.gz.sha256",
+          "size": 98,
+          "digest": "sha256:66ef3cfab864a3d08e1e3c0e2690f1062d60acb911ae17eed864d6d609fe936a"
+        },
+        {
+          "name": "nagi-0.1.10-macos-arm64.tar.gz",
+          "size": 2050465,
+          "digest": "sha256:73795344db78c9a4fd29f32137e2dc6b3ea6cd643f868d51d6ad0289b85a4099"
+        },
+        {
+          "name": "nagi-0.1.10-macos-arm64.tar.gz.sha256",
+          "size": 97,
+          "digest": "sha256:f93b45448bb49015132b54d3ca9b7f32f44e20e729c576f9bb91feda9b99267d"
+        },
+        {
+          "name": "nagi-0.1.10-macos-x86_64.tar.gz",
+          "size": 2181396,
+          "digest": "sha256:cafaeaf80cd70fb9930b20c78bf550b4a3899027ce5eda451ec8148c4cbb1fcf"
+        },
+        {
+          "name": "nagi-0.1.10-macos-x86_64.tar.gz.sha256",
+          "size": 98,
+          "digest": "sha256:14a83755837012b570b52ac235226744812a122ca7097f6ac4c8666a74c77a68"
+        },
+        {
+          "name": "nagi-0.1.10-windows-x86_64.zip",
+          "size": 2037081,
+          "digest": "sha256:868e9ba79d6787dc75f7d8019633613b1ca04ded0964ec388d881d1e4ff5931e"
+        },
+        {
+          "name": "nagi-0.1.10-windows-x86_64.zip.sha256",
+          "size": 98,
+          "digest": "sha256:df061bc0438375c3b1ad1b73dbc83cf63aa573a61ce95e50d19364df3aaf299a"
+        }
+      ]
+    }
+  ],
+  "observed_nagi_history": [
+    {
+      "tag": "nagi-v0.1.2",
+      "commit": "cd0a127ea74b1b5698633889318004e1d5ce2b96",
+      "published_at": "2026-10-01T08:47:53Z",
+      "draft": false,
+      "prerelease": false,
+      "url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.2"
+    },
+    {
+      "tag": "nagi-v0.1.3",
+      "commit": "3575e91091e7a865d8993c65aa409eb3e7420612",
+      "published_at": "2026-10-01T13:03:15Z",
+      "draft": false,
+      "prerelease": false,
+      "url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.3"
+    },
+    {
+      "tag": "nagi-v0.1.4",
+      "commit": "1c01386894f7c156909771f4e6554292dd664243",
+      "published_at": "2026-10-01T21:41:25Z",
+      "draft": false,
+      "prerelease": false,
+      "url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.4"
+    },
+    {
+      "tag": "nagi-v0.1.5",
+      "commit": "a27a677f01de85f5bdcc48c7620458c92a57d06c",
+      "published_at": "2026-10-01T23:23:31Z",
+      "draft": false,
+      "prerelease": false,
+      "url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.5"
+    },
+    {
+      "tag": "nagi-v0.1.6",
+      "commit": "f1f0af0020f82520bd7c11403ef15b54343b0c14",
+      "published_at": "2026-10-02T05:23:38Z",
+      "draft": false,
+      "prerelease": false,
+      "url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.6"
+    },
+    {
+      "tag": "nagi-v0.1.7",
+      "commit": "9e1ac2d8087cc0b97d45488a8ed6f31eba2d037c",
+      "published_at": "2026-10-03T00:49:53Z",
+      "draft": false,
+      "prerelease": false,
+      "url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.7"
+    },
+    {
+      "tag": "nagi-v0.1.8",
+      "commit": "2c10e566916615c091791b5edb9bb66c808697b4",
+      "published_at": "2026-10-03T13:34:03Z",
+      "draft": false,
+      "prerelease": false,
+      "url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.8"
+    },
+    {
+      "tag": "nagi-v0.1.9",
+      "commit": "5697f6292aadae2f095e57932cc034113c6c4fe9",
+      "published_at": "2026-10-04T04:10:40Z",
+      "draft": false,
+      "prerelease": false,
+      "url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.9"
+    },
+    {
+      "tag": "nagi-v0.1.10",
+      "commit": "815b7d554dba3ac6b11ddad2089b782cbed46eb1",
+      "published_at": "2026-10-04T17:08:09Z",
+      "draft": false,
+      "prerelease": false,
+      "url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.10"
+    }
+  ],
+  "observed_tags": [
+    {
+      "ref": "refs/tags/nagi-v0.1.10",
+      "sha": "815b7d554dba3ac6b11ddad2089b782cbed46eb1",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/nagi-v0.1.2",
+      "sha": "cd0a127ea74b1b5698633889318004e1d5ce2b96",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/nagi-v0.1.3",
+      "sha": "3575e91091e7a865d8993c65aa409eb3e7420612",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/nagi-v0.1.4",
+      "sha": "1c01386894f7c156909771f4e6554292dd664243",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/nagi-v0.1.5",
+      "sha": "a27a677f01de85f5bdcc48c7620458c92a57d06c",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/nagi-v0.1.6",
+      "sha": "f1f0af0020f82520bd7c11403ef15b54343b0c14",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/nagi-v0.1.7",
+      "sha": "9e1ac2d8087cc0b97d45488a8ed6f31eba2d037c",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/nagi-v0.1.8",
+      "sha": "2c10e566916615c091791b5edb9bb66c808697b4",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/nagi-v0.1.9",
+      "sha": "5697f6292aadae2f095e57932cc034113c6c4fe9",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/vscode-v0.1.10",
+      "sha": "2c10e566916615c091791b5edb9bb66c808697b4",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/vscode-v0.1.12",
+      "sha": "5697f6292aadae2f095e57932cc034113c6c4fe9",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/vscode-v0.1.13",
+      "sha": "815b7d554dba3ac6b11ddad2089b782cbed46eb1",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/vscode-v0.1.8",
+      "sha": "cd0a127ea74b1b5698633889318004e1d5ce2b96",
+      "type": "commit"
+    },
+    {
+      "ref": "refs/tags/vscode-v0.1.9",
+      "sha": "9e1ac2d8087cc0b97d45488a8ed6f31eba2d037c",
+      "type": "commit"
+    }
+  ],
+  "normative_version_rule": {
+    "source": "scripts/releases/README.md:16; scripts/releases/plan.py:53-58",
+    "rule": "Formal X.Y.Z strictly greater than previous component version; increment magnitude is not prescribed."
+  },
+  "inferred_next_nagi_version": "0.1.11",
+  "inference_basis": "Observed patch sequence including standard HTTP/actor/static-map additions and distribution path migration; current README describes language/API as in development.",
+  "vscode_version": "0.1.13",
+  "branch_protection_readback": "GET branches/main/protection returned HTTP 403 Resource not accessible by integration; detailed rules were not verified.",
+  "credentials": "Managed environment reported current enforced unrestricted network and no configured CLI identities/secrets; publication workflow uses its built-in GitHub Actions token.",
+  "source_hashes": {
+    "scripts/releases/verify.py": "386032c7f0778983802f89c5816270cfa1de58b3456e46bb9ae092362d5681db",
+    "scripts/releases/test_verify.py": "07dd5951c1a3c04fa62325b723be82662229f5aecd827487a7437a2d17bc04eb"
+  },
+  "verification": {
+    "oracle_red": {
+      "log": "01-verifier-red.log",
+      "exit": 1,
+      "tests": 13,
+      "errors": 7,
+      "cause": "verify_task_handles undefined"
+    },
+    "checkout_fallback_red": {
+      "log": "06-checkout-fallback-red.log",
+      "exit": 1,
+      "tests": 14,
+      "failures": 1,
+      "cause": "Task verifier accepted a generated manifest pointing to checkout/runtime"
+    },
+    "unit_final": {
+      "log": "07-final-unit-all.log",
+      "exit": 0,
+      "tests": 98
+    },
+    "package_final": {
+      "log": "08-final-packaged-verification.log",
+      "exit": 0,
+      "platform": "linux-x86_64",
+      "version": "0.1.10",
+      "commit": "a9a0d42e94d6c7518bd7d955c9400299e554888c",
+      "compiler_build_profile": "release",
+      "compiler_sha256": "a3eb76059325418818bd0114722ff8296d91e21cd538ec812a2aa699050ef338",
+      "archive_sha256": "8023d16bc6877db593e8b0094997b15419419973120cfa00e82e3e690163ebaf",
+      "task_native_forms": 3,
+      "task_negative_sources": 6,
+      "task_negative_cli_invocations": 12,
+      "published": false
+    },
+    "four_os_new_verifier": "Awaiting root's final source CI; not asserted from local Linux execution."
+  }
+}

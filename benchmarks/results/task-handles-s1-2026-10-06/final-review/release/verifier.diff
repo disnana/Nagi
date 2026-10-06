@@ -1,0 +1,373 @@
+diff --git a/scripts/releases/test_verify.py b/scripts/releases/test_verify.py
+index 97f23f1..d88ae45 100644
+--- a/scripts/releases/test_verify.py
++++ b/scripts/releases/test_verify.py
+@@ -1,4 +1,5 @@
+-"""Keep SQL distribution verification from accepting a missing or ineffective engine."""
++"""Keep distribution gates from accepting missing or ineffective compiler features."""
++import json
+ import os
+ import subprocess
+ import tempfile
+@@ -92,5 +93,143 @@ class SqlDistributionVerificationTests(unittest.TestCase):
+             self.check(backend_error)
+ 
+ 
++class TaskDistributionVerificationTests(unittest.TestCase):
++    OUTPUT = "42\nbusiness sentinel\ndiscarded child\nunit child\nreceived unit\nafter scope\ncompleted\n"
++
++    def setUp(self):
++        self.temporary = tempfile.TemporaryDirectory(prefix="nagi Task distribution 凪 ")
++        self.addCleanup(self.temporary.cleanup)
++        self.root = Path(self.temporary.name)
++        self.compiler = self.root / "installed compiler" / "nagic"
++        self.environment = {"PATH": "existing tools", "NAGI_ROOT": "existing runtime"}
++        self.calls = []
++
++    def answer(self, command, **kwargs):
++        self.calls.append((command, kwargs))
++        self.assertEqual(command[0], str(self.compiler))
++        self.assertEqual(kwargs["cwd"], self.root)
++        self.assertTrue(kwargs["capture_output"])
++        self.assertEqual(kwargs["encoding"], "utf-8")
++        source = Path(command[2])
++        self.assertTrue(source.is_file())
++        action = command[1]
++        if action == "run":
++            self.assertEqual(kwargs["env"]["PATH"], "existing tools")
++            self.assertNotIn("NAGI_ROOT", kwargs["env"])
++            self.assertTrue(kwargs["check"])
++            if source.name == "saved.low":
++                # A saved Low run must not quietly reload the original High.
++                self.assertFalse(source.with_name("main.nagi").exists())
++            if source.name == "handwritten.low":
++                self.assertIn("async fn main()", source.read_text(encoding="utf-8"))
++            output = Path(command[command.index("--out") + 1])
++            output.mkdir()
++            (output / "Cargo.toml").write_text(
++                "[dependencies]\nnagi-runtime = { path = "
++                + json.dumps(str(self.compiler.parent / "runtime")) + " }\n", encoding="utf-8")
++            return subprocess.CompletedProcess(command, 0, self.OUTPUT, "native build progress\n")
++        self.assertEqual(kwargs["env"]["PATH"], "")
++        self.assertFalse(Path(kwargs["env"]["NAGI_ROOT"]).exists())
++        self.assertEqual(kwargs["timeout"], 15)
++        if action == "lower":
++            output = Path(command[command.index("--out") + 1])
++            output.mkdir()
++            (output / "generated.low").write_text("# independently emitted Low\n", encoding="utf-8")
++            return subprocess.CompletedProcess(command, 0, "lowered source\n", "")
++        if source.stem in ("unreceived", "double-await", "discard-await"):
++            marker = "# primary"
++            lines = source.read_text(encoding="utf-8").splitlines()
++            line = next(index for index, text in enumerate(lines, 1) if marker in text)
++            detail = "未受取Task" if source.stem == "unreceived" else "move後"
++            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:{line}: {detail}\n")
++        return subprocess.CompletedProcess(command, 0, "checked source\n", "")
++
++    def check(self, answer):
++        previous_path = os.environ.get("PATH")
++        with patch.object(verify.subprocess, "run", side_effect=answer):
++            verify.verify_task_handles(self.compiler, self.root, self.environment)
++        self.assertEqual(os.environ.get("PATH"), previous_path)
++        self.assertEqual(self.environment, {"PATH": "existing tools", "NAGI_ROOT": "existing runtime"})
++
++    def test_archive_task_gate_checks_three_source_forms_and_early_negatives(self):
++        self.check(self.answer)
++        native = [Path(command[2]).name for command, _ in self.calls if command[1] == "run"]
++        self.assertEqual(native, ["main.nagi", "saved.low", "handwritten.low"])
++        negatives = [(Path(command[2]).suffix, command[1]) for command, kwargs in self.calls
++                     if Path(command[2]).stem in ("unreceived", "double-await", "discard-await")]
++        self.assertEqual(len(negatives), 12)
++        self.assertEqual(set(negatives), {(suffix, action) for suffix in (".nagi", ".low")
++                                         for action in ("check", "build")})
++
++    def test_missing_business_result_is_not_a_successful_native_task_run(self):
++        def missing_business(command, **kwargs):
++            result = self.answer(command, **kwargs)
++            if command[1] == "run":
++                result.stdout = result.stdout.replace("business sentinel\n", "")
++            return result
++        with self.assertRaisesRegex(AssertionError, "Task native output"):
++            self.check(missing_business)
++
++    def test_checkout_runtime_cannot_replace_the_bundled_task_runtime(self):
++        def checkout_runtime(command, **kwargs):
++            result = self.answer(command, **kwargs)
++            if command[1] == "run":
++                output = Path(command[command.index("--out") + 1])
++                (output / "Cargo.toml").write_text(
++                    "[dependencies]\nnagi-runtime = { path = "
++                    + json.dumps(str(self.root / "checkout/runtime")) + " }\n", encoding="utf-8")
++            return result
++        with self.assertRaisesRegex(AssertionError, "Task runtime came from outside the distribution"):
++            self.check(checkout_runtime)
++
++    def test_discarded_child_must_finish_before_scope_exit(self):
++        def late_child(command, **kwargs):
++            result = self.answer(command, **kwargs)
++            if command[1] == "run":
++                result.stdout = result.stdout.replace("discarded child\n", "") + "discarded child\n"
++            return result
++        with self.assertRaisesRegex(AssertionError, "Task scope completion"):
++            self.check(late_child)
++
++    def test_a_checker_accepting_pending_tasks_cannot_pass(self):
++        def accepts_task(command, **kwargs):
++            result = self.answer(command, **kwargs)
++            if Path(command[2]).stem == "unreceived":
++                result.returncode = 0
++            return result
++        with self.assertRaisesRegex(AssertionError, "Task unreceived.*was accepted"):
++            self.check(accepts_task)
++
++    def test_parser_rejection_does_not_prove_task_ownership(self):
++        def parser_rejection(command, **kwargs):
++            result = self.answer(command, **kwargs)
++            if result.returncode != 0:
++                result.stderr = result.stderr.replace("未受取Task", "parse error: unexpected spawn")
++            return result
++        with self.assertRaisesRegex(AssertionError, "parse error"):
++            self.check(parser_rejection)
++
++    def test_wrong_primary_line_does_not_prove_task_ownership(self):
++        def wrong_line(command, **kwargs):
++            result = self.answer(command, **kwargs)
++            if result.returncode != 0:
++                source = Path(command[2])
++                line = next(index for index, text in enumerate(source.read_text(encoding="utf-8").splitlines(), 1)
++                            if "# primary" in text)
++                result.stderr = result.stderr.replace(f":{line}:", f":{line + 1}:")
++            return result
++        with self.assertRaisesRegex(AssertionError, "Task primary line"):
++            self.check(wrong_line)
++
++    def test_backend_rejection_cannot_replace_task_checker_evidence(self):
++        def backend_rejection(command, **kwargs):
++            result = self.answer(command, **kwargs)
++            if result.returncode != 0:
++                result.stderr += "Cargo missing; Rust backend failed\n"
++            return result
++        with self.assertRaisesRegex(AssertionError, "Cargo missing"):
++            self.check(backend_rejection)
++
++
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/scripts/releases/verify.py b/scripts/releases/verify.py
+index d2f38ca..3030756 100644
+--- a/scripts/releases/verify.py
++++ b/scripts/releases/verify.py
+@@ -3,10 +3,12 @@ import argparse
+ import hashlib
+ import json
+ import os
++import re
+ import subprocess
+ import tarfile
+ import tempfile
+ import tomllib
++from collections import Counter
+ from pathlib import Path
+ from zipfile import ZipFile
+ 
+@@ -129,6 +131,200 @@ def main():
+             os.environ["PATH"] = previous_path
+         verify_local_dependency(exe, folder, environment)
+         verify_actor(exe, folder, environment)
++        verify_task_handles(exe, folder, environment)
++
++
++def verify_task_handles(exe: Path, folder: Path, environment: dict) -> None:
++    project = folder / "Task handle project 凪"
++    project.mkdir()
++    isolated = {**environment, "PATH": "", "NAGI_ROOT": str(folder / "missing runtime")}
++    native_environment = dict(environment)
++    native_environment.pop("NAGI_ROOT", None)
++    negative_sources = {
++        "unreceived.nagi": ('''async def work() -> i64:
++    return 7
++async def main() -> Result[unit, Error]:
++    async with scope:
++        task = spawn work()  # primary
++    return ok(print(0))
++''', 5, "未受取Task"),
++        "unreceived.low": ('''async fn work() -> i64 { return 7; }
++async fn main() -> Result[unit, Error] {
++    scope {
++        let task = spawn work(); # primary
++    }
++    return ok(print(0));
++}
++''', 4, "未受取Task"),
++        "double-await.nagi": ('''async def work() -> i64:
++    return 7
++async def main() -> Result[unit, Error]:
++    async with scope:
++        task = spawn work()
++        first = await task
++        second = await task  # primary
++    return ok(print(0))
++''', 7, "move後"),
++        "double-await.low": ('''async fn work() -> i64 { return 7; }
++async fn main() -> Result[unit, Error] {
++    scope {
++        let task = spawn work();
++        let first = await task;
++        let second = await task; # primary
++    }
++    return ok(print(0));
++}
++''', 6, "move後"),
++        "discard-await.nagi": ('''import std.task as tasks
++async def work() -> i64:
++    return 7
++async def main() -> Result[unit, Error]:
++    async with scope:
++        task = spawn work()
++        tasks.discard(task)
++        received = await task  # primary
++    return ok(print(0))
++''', 8, "move後"),
++        "discard-await.low": ('''import std.task as tasks;
++async fn work() -> i64 { return 7; }
++async fn main() -> Result[unit, Error] {
++    scope {
++        let task = spawn work();
++        tasks.discard(task);
++        let received = await task; # primary
++    }
++    return ok(print(0));
++}
++''', 7, "move後"),
++    }
++    # Both CLI paths must reject at the checker, before Cargo or a runtime can
++    # be found. Parser rejection, a backend failure, or a different primary
++    # source line cannot stand in for ownership evidence.
++    for filename, (source, line, detail) in negative_sources.items():
++        path = project / filename
++        path.write_text(source, encoding="utf-8")
++        for action in ("check", "build"):
++            output = project / f"negative-{path.stem}-{path.suffix[1:]}-{action}"
++            result = subprocess.run([str(exe), action, str(path), "--no-project", "--out", str(output)],
++                                    cwd=folder, env=isolated, capture_output=True, text=True,
++                                    encoding="utf-8", timeout=15)
++            assert result.returncode != 0, f"Task {filename} {action} was accepted"
++            assert detail in result.stderr, result.stderr
++            location = re.search(re.escape(filename) + r":(\d+)(?::|\b)", result.stderr)
++            assert location and int(location.group(1)) == line, f"Task primary line: {result.stderr}"
++            assert not any(phase in result.stderr.lower() for phase in
++                           ("cargo", "rust backend", "parse error", "compiler defect", "internal compiler")), result.stderr
++            assert not (output / "src/main.rs").exists(), "Task rejection generated native Rust"
++            assert not (output / "Cargo.toml").exists(), "Task rejection reached native generation"
++
++    high = project / "main.nagi"
++    high.write_text('''import std.task as tasks
++async def answer() -> i64:
++    return 42
++async def business() -> Result[i64, Error]:
++    return error("business sentinel")
++async def discarded() -> i64:
++    print("discarded child")
++    return 9
++async def empty() -> unit:
++    return print("unit child")
++async def main() -> Result[unit, Error]:
++    async with scope:
++        task = spawn answer()
++        first = await task
++        match first:
++            case Ok(value):
++                print(value)
++            case Err(problem):
++                print("unexpected answer failure")
++        task_result = spawn business()
++        nested = await task_result
++        match nested:
++            case Ok(inner):
++                match inner:
++                    case Ok(value):
++                        print("unexpected business success")
++                    case Err(problem):
++                        print(error_message(problem))
++            case Err(problem):
++                print("unexpected outer failure")
++        ignored = spawn discarded()
++        tasks.discard(ignored)
++        unit_task = spawn empty()
++        received = await unit_task
++        match received:
++            case Ok(done):
++                print("received unit")
++            case Err(problem):
++                print("unexpected unit failure")
++    print("after scope")
++    return ok(print("completed"))
++''', encoding="utf-8")
++    handwritten = project / "handwritten.low"
++    handwritten.write_text('''import std.task as tasks;
++async fn answer() -> i64 { return 42; }
++async fn business() -> Result[i64, Error] { return error("business sentinel"); }
++async fn discarded() -> i64 { print("discarded child"); return 9; }
++async fn empty() -> unit { return print("unit child"); }
++async fn main() -> Result[unit, Error] {
++    scope {
++        let task = spawn answer();
++        let first = await task;
++        match first {
++            case Ok(value) { print(value); }
++            case Err(problem) { print("unexpected answer failure"); }
++        }
++        let task_result = spawn business();
++        let nested = await task_result;
++        match nested {
++            case Ok(inner) { match inner {
++                case Ok(value) { print("unexpected business success"); }
++                case Err(problem) { print(error_message(problem)); }
++            } }
++            case Err(problem) { print("unexpected outer failure"); }
++        }
++        let ignored = spawn discarded();
++        tasks.discard(ignored);
++        let unit_task = spawn empty();
++        let received = await unit_task;
++        match received {
++            case Ok(done) { print("received unit"); }
++            case Err(problem) { print("unexpected unit failure"); }
++        }
++    }
++    print("after scope");
++    return ok(print("completed"));
++}
++''', encoding="utf-8")
++    lowered = project / "lowered"
++    subprocess.run([str(exe), "lower", str(high), "--no-project", "--out", str(lowered)],
++                   cwd=folder, env=isolated, check=True, capture_output=True, text=True,
++                   encoding="utf-8", timeout=15)
++    saved = project / "saved.low"
++    saved.write_bytes((lowered / "generated.low").read_bytes())
++    expected = Counter(("42", "business sentinel", "discarded child", "unit child",
++                        "received unit", "after scope", "completed"))
++    for mode, source in (("high", high), ("saved-low", saved), ("handwritten-low", handwritten)):
++        if mode == "saved-low":
++            # Keep only the saved Low text, without its High file/source map.
++            high.unlink()
++        output = project / mode
++        command = [str(exe), "check", str(source), "--no-project", "--out", str(output)]
++        subprocess.run(command, cwd=folder, env=isolated, check=True, capture_output=True,
++                       text=True, encoding="utf-8", timeout=15)
++        result = subprocess.run([str(exe), "run", str(source), "--no-project", "--out", str(output)],
++                                cwd=folder, env=native_environment, check=True, capture_output=True,
++                                text=True, encoding="utf-8", timeout=600)
++        manifest = tomllib.loads((output / "Cargo.toml").read_text(encoding="utf-8"))
++        runtime = (output / manifest["dependencies"]["nagi-runtime"]["path"]).resolve()
++        # Development compilers can fall back to their original checkout.
++        # Successful execution alone therefore does not prove the shipped
++        # runtime was used; the generated dependency must point beside this exe.
++        assert runtime == (exe.parent / "runtime").resolve(), f"Task runtime came from outside the distribution: {runtime}"
++        lines = result.stdout.splitlines()
++        assert Counter(lines) == expected, f"Task native output ({mode}): {result.stdout}"
++        assert lines[-2:] == ["after scope", "completed"], f"Task scope completion ({mode}): {result.stdout}"
++    print("Verified Task handles: extracted compiler/runtime, High/saved Low/handwritten Low, receive/discard, nested business Err, early ownership diagnostics")
+ 
+ 
+ def verify_sql(exe: Path, folder: Path, environment: dict) -> None:

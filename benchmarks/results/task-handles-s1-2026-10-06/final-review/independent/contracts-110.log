@@ -1,0 +1,5 @@
+    Blocking waiting for file lock on build directory
+   Compiling nagic v0.1.10 (/workspace/Nagi/compiler)
+    Finished `dev` profile [unoptimized] target(s) in 7.67s
+     Running `/tmp/nagi-container-flow-target/debug/examples/task-contract-red --report /tmp/nagi-s1-final-review/contracts-110.json`
+Task contracts: 110/110 matched; report: /tmp/nagi-s1-final-review/contracts-110.json

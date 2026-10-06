@@ -1,0 +1,7 @@
+{
+  "result_blocks": 95,
+  "passed": 934,
+  "failed": 0,
+  "ignored": 1,
+  "scope": "includes three image_child subprocess re-executions; one ignored cost oracle explicitly measured in S1 source validation"
+}

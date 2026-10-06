@@ -1,0 +1,9 @@
+from std.task import discard;
+async fn work() -> i64 { return 7; }
+async fn main() -> Result[unit, Error] {
+    scope {
+        let task = spawn work();
+        let borrowed = view(task); # primary
+    }
+    return ok(print(0));
+}

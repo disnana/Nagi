@@ -1,0 +1,3 @@
+from std.task import Task
+class Holder:
+    child: Task[i64]  # primary

@@ -1,0 +1,21 @@
+.................................................................................................
+----------------------------------------------------------------------
+Ran 97 tests in 13.155s
+
+OK
+Verified formal release: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: nagi-v0.1.1 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: nagi-v0.2.1 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Already published and verified; keeping existing assets: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: nagi-v0.1.8 (16f679985ade0d881fe457adeeb3a44d2f02aa5a)
+Verified formal release: vscode-v0.1.10 (16f679985ade0d881fe457adeeb3a44d2f02aa5a)
+Verified formal release: nagi-v0.1.8 (16f679985ade0d881fe457adeeb3a44d2f02aa5a)
+Verified formal release: vscode-v0.1.10 (16f679985ade0d881fe457adeeb3a44d2f02aa5a)
+Verified formal release: nagi-v0.1.8 (16f679985ade0d881fe457adeeb3a44d2f02aa5a)
+Already published and verified; keeping existing assets: vscode-v0.1.10 (16f679985ade0d881fe457adeeb3a44d2f02aa5a)
+Verified formal release: vscode-v0.1.10 (16f679985ade0d881fe457adeeb3a44d2f02aa5a)
+Verified SQL engine: extracted compiler, offline schema, bad columns/binds, Nagi locations, no Cargo/runtime
+Verified Task handles: extracted compiler/runtime, High/saved Low/handwritten Low, receive/discard, nested business Err, early ownership diagnostics

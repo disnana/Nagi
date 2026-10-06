@@ -12,3 +12,5 @@ cargo test --locked -p nagic --test task_handles
 元の28対にbinding放棄、branch合流/再生成、nested/same-depth scope、引数/return/wrapper escape、Failure viewとClone/shared境界、ユーザーspawn名互換の縮小反例を追加。Task native harnessは全positiveをHigh・保存Low・手書きLowでbuild/runし、別のbarrier付きoracleで業務Err、sticky fault、body/legacy元Err、Dropとactual joinを区別する。固定seedの16経路も両flagで三構文実行する。private試作からpublicへの17runtime oracleは `task::tests::`。
 
 [Stage 1結果](../../docs/internal/task-bridge-stage1-results.md)は50入力がparse REDだった歴史的記録。[接続結果](../../docs/internal/task-handles-s1-results.md)と[新artifact](../../benchmarks/results/task-handles-s1-2026-10-06/README.md)に今回の実行・原ログ・hash・保証範囲を残す。S2とSQLiteは対象外。
+
+最終レビューでdiscard→await、直接Task操作、match/while、field/enum escapeのnegative9対とpositive1対を追加し、110入力/55対となった。Task nativeは6群で、旧spawn-only/Task混在scopeの実Supervisor・HTTP専用oracleを含む。[最終レビュー](../../docs/internal/task-handles-s1-final-review.md)と[次リリース引継ぎ](../../docs/internal/handoffs/2026-10-06-task-handles-s1-complete.md)に接続時の90件と補強後の検証を分ける。

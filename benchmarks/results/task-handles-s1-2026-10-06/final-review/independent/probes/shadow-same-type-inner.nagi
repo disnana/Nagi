@@ -1,0 +1,12 @@
+from std.task import discard
+from std.ownership import move
+async def work() -> i64:
+    return 7
+async def exercise(flag: bool) -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        async with scope:
+            task = spawn work()
+            discard(task)
+        discard(task)
+    return ok(print(0))

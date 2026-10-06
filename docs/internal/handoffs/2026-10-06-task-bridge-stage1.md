@@ -1,5 +1,7 @@
 # Sol 6.1への引継ぎ: Task結果handleのStage 1
 
+**履歴資料。** 以下はprivate bridgeで停止した時点の記録。現在のPR #88はS1完成PR。[完成後と次リリースの引継ぎ](2026-10-06-task-handles-s1-complete.md)と[最終レビュー](../task-handles-s1-final-review.md)を先に読む。
+
 更新日: 2026-10-06。**停止地点は、先行RED・private Task bridge・文書・CIの検証まで。Taskのcompiler/public runtime接続は開始していない。** ユーザーの最新指示で、ここを自然な区切りとして停止し、次の大きい実装へ進まない。
 
 この文書はNagiそのものの開発向け。Nagiでアプリを書く資料は`ai/README.md`。最初にrootの`AGENTS.md`を読む。以下はrepository内のsource・保存ログ・GitHubの読戻しを根拠にする。AIの成功報告や会話の記憶を実装済みの証拠にしない。
@@ -197,3 +199,7 @@ CLI pushはGitHub書込み認証がなく失敗したため、接続GitHub API�
 ## 停止状態の確認
 
 引継ぎ対象のproduction sourceは4 OS検証head `6223ad2`から変更していない。追加したのは結果・原ログ・接続設計・この引継ぎのみ。Task checker/public runtime接続は未着手、50入力はparse RED、測定は未実施のまま停止する。次の担当はこの境界を保ったまま、再開指示を受けて最初のRED追加とchecker接続から進める。
+
+## S1完成後の追記（2026-10-06）
+
+停止後の再開指示でcompiler/public runtime接続、三構文native、4 OS、費用、独立レビューを完了した。最終レビューの回帰補強・Docs修正、未実装項目・技術的負債・次PR候補・推奨順は[完成後引継ぎ](2026-10-06-task-handles-s1-complete.md)へ追記した。最新指示はTask関連を次リリース公開まで継続する範囲であり、上のmerge/release禁止・「未着手」「50入力parse RED」「測定未実施」を現在の状態として引き継がない。

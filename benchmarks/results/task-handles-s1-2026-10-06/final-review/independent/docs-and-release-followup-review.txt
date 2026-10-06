@@ -1,0 +1,25 @@
+Independent follow-up: Docs corrections and release Task verifier — 2026-10-06
+
+Disposition: three reported documentation ambiguities are resolved in the reviewed files. No new correctness defect identified in scripts/releases/verify.py or test_verify.py.
+
+Readback: ai/language.md explicitly restricts old unit/Result[unit,Error] and fail-on-Err statements to legacy statement spawn, and describes supported owned Task result types separately. JP/EN async reference heading and Error-type statement are explicitly legacy; inner Task business errors may use any supported E. ADR011 updates status, ASYNC02-05, and detailed adoption to implemented working-branch S1/unreleased while preserving audit history. docs/internal/task-handles-s1-final-review.md explicitly says its real service oracle has no pending handler at terminal, so it does not claim pending-handler Drop completion. These resolve the prior final-review.txt documentation findings; other validation limits remain.
+
+Release verifier source review:
+- Uses the extracted compiler's exact absolute path and separate unrelated Unicode/space project directory.
+- Six invalid High/Low inputs run through both check and build, requiring diagnostic fragment and original primary line. PATH is empty and NAGI_ROOT deliberately invalid; parser/backend/ICE text cannot substitute for expected ownership rejection; output native Rust and Cargo manifests must be absent.
+- Positive lower/check do not need Cargo/runtime; emitted saved Low is copied alone and original High removed before saved Low checking/running.
+- High, saved Low, and independently handwritten Low are each actually run. Required output Counter catches missing/extra/incorrect business/receive/discard/unit observations. Last two output lines confirm child prints precede after-scope and completion prints.
+- Native environment removes NAGI_ROOT. Each generated Cargo manifest's nagi-runtime path must resolve to runtime next to extracted nagic, detecting checkout fallback.
+- Unit mock tests exercise guard failures, not Rust/runtime semantics. Their success is not native evidence. Independent unittest discover test_verify.py executed 14 tests successfully (6SQL+8Task control-path tests).
+
+Independent native verification:
+Ran independent_archive_task.py through /tmp/nagi-run.py. It verified SHA256 sidecar, extracted the existing locally prepared archive under /tmp/nagi-s1-final-review/independent-archive-native, set Cargo offline and reused /tmp/nagi-container-flow-target only for dependencies, then invoked the current real verify_task_handles function with the extracted compiler. No subprocess mocking.
+Result: exit0; all three native source forms and12 early negative CLI checks passed. The original High is absent after savedLow verification; three native generated Cargo manifests exist and no negative Cargo manifests exist. All three runtime paths match the extracted runtime. Extracted runtime/src/task.rs exactly matches current repository production source.
+
+Evidence: independent-archive-task-native.log, independent_archive_task.py, independent-archive-identity.json, independent-archive-runtime-guards.json, docs-release-reviewed-sources.json, immutable reviewed snapshots.
+Archive SHA256:8023d16bc6877db593e8b0094997b15419419973120cfa00e82e3e690163ebaf
+Compiler SHA256:a3eb76059325418818bd0114722ff8296d91e21cd538ec812a2aa699050ef338
+Verifier SHA256:386032c7f0778983802f89c5816270cfa1de58b3456e46bb9ae092362d5681db
+Runtime Task SHA256:89ebba9bba8761af98d7997f09fdade51d8100d0c76034d7681e57cad3689545
+
+Limits: local Linux x86_64 archive is a development verification artifact labelled0.1.10 with source commit a9a0d42, not a newly published release. This independent run exercises Task gate, not full archive verifier nor four-OS packaging; release agent separately ran full archive verification. Archive fixture does not exercise live sibling barriers at business Err, sticky native panic, arbitrary native Drop gates, or Supervisor/HTTP, and must not replace existing native lifecycle suites. The print-order oracle does not equate printing with arbitrary resource close/Drop completion. New version/tag/publication and S2 next-PR acceptance remain parent/release responsibilities. Repository remains unedited by this reviewer.

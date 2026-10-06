@@ -1,0 +1,3 @@
+from std.task import Task
+enum Holder:
+    Child(child: Task[i64])  # primary

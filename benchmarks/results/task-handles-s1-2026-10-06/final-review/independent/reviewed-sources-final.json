@@ -1,0 +1,20 @@
+{
+  "head": "a9a0d42e94d6c7518bd7d955c9400299e554888c",
+  "sources": {
+    "compiler/src/check.rs": "b4efdd95aaacacc9db8dd0016d139e6e2fdcd98d426f5ffa9476eaf40cea76f0",
+    "compiler/src/check/checked.rs": "3e6a174038b1a6c48f05ad3815c2dd8a9c196a06ca7135acbfc0e81d38727f75",
+    "compiler/src/emit.rs": "d8643509d2a35cd4eb479f9a97acd86e342632be91d915c5f72c45b1efca89ba",
+    "compiler/src/ast.rs": "200d87e42b319927480ade27e78dbcb98eed9b3d5762f0332d7f9368978a6ac9",
+    "compiler/src/capabilities.rs": "8a9105f09f5b53abae74e00f405eabcb2f323d9c461b3e64df5291822e0e4314",
+    "compiler/src/stdlib.rs": "e381b6ae46d851e6ba27615815d327a6d03a5542da3e5c45c4efbbf57c7a92ac",
+    "runtime/src/task.rs": "89ebba9bba8761af98d7997f09fdade51d8100d0c76034d7681e57cad3689545",
+    "runtime/src/concurrent.rs": "b17ac40d8e856e412c0544785cba053e195d943e3d60fa4f88f568506e86ceeb",
+    "compiler/tests/task_handles.rs": "aced0f29bd876257f874ebb2c333af3dc008c6d8bd8a137098a5f5f58716d6de",
+    "compiler/tests/support/task_service.rs": "ca318871fb04172d4c31bd7dbc48bb17a28732d57353254d9067fb720cfafbd4",
+    "compiler/examples/task-contract-red.rs": "468a68084fe78bc5047a1cb32b42f4e9c001c45a4a77a14d3b4555eeaaa53b0a",
+    "tests/task-handles/contracts.json": "586949a8c0dad488cfa83742bdc743142ca0ebfff5d6ab9281b5f8f8aa892ac7",
+    "docs/task-handles.md": "07118166d5a45e09487f1b0a13fecb84df7e97315af67d763558429001f6ec0a",
+    "docs/en/task-handles.md": "068c34c92fef3a29d2f2c91befcbe858cf0982cbe2d066e860ab8a7e7de0a0b0",
+    "ai/language.md": "26db3044ed0866fc6f7669be27c0ff7df53eec789c66ca77cd4746d5597af4ea"
+  }
+}

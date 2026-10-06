@@ -1,0 +1,10 @@
+   Compiling nagi-s1-final-review-probes v0.0.0 (/tmp/nagi-s1-final-review/probes)
+    Finished `test` profile [unoptimized] target(s) in 0.94s
+     Running unittests s2-typed-monitor.rs (/tmp/nagi-container-flow-target/debug/deps/s2_typed_monitor_check-99a1794e318831ca)
+
+running 1 test
+0
+test service_contract ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

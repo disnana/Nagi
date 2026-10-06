@@ -1,0 +1,14 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi/compiler)
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi/runtime)
+   Compiling nagi-s1-final-review-probes v0.0.0 (/tmp/nagi-s1-final-review/probes)
+    Finished `dev` profile [unoptimized] target(s) in 8.59s
+     Running `/tmp/nagi-container-flow-target/debug/check-probes`
+nested-move-receive: phase=emit accepted=true expected=true
+self-move-alias: phase=emit accepted=true expected=true
+nested-move-discard: phase=emit accepted=true expected=true
+branch-alias-transfer: phase=emit accepted=true expected=true
+shadow-same-type-inner: phase=check accepted=false expected=false diagnostic=line 9: 未受取Taskを再代入で放棄できません。先にawaitまたはdiscardしてください
+outer-consumed-new-inner: phase=check accepted=false expected=false diagnostic=line 10: Taskを別scopeのbindingへ移せません
+unreceived-after-conditional-try: phase=check accepted=false expected=false diagnostic=line 9: 未定義の関数: err
+for-branch-local-obligation: phase=check accepted=false expected=false diagnostic=line 9: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください
+same-name-user-discard: phase=emit accepted=true expected=true

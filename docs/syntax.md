@@ -180,7 +180,7 @@ async def main() -> Result[unit, Error]:
     return ok(print("完了"))
 ```
 
-このコードは両方のsleepが終了してから`完了`を表示します。通常のscope終了では子taskを待ちます。現行では本体終了後に子のErrやpanicを検出すると、残りの子を止めて待ちます。親Futureの破棄や本体panicでは停止要求と終了確認を区別します。scope内の`return`、viewを別taskへ渡すこと、旧statement spawnはunitか`Result[unit, Error]`に限ります。[Task結果handle](task-handles.md)は作業branchに実装済み・未リリースです。詳細は[async](async.md)を参照してください。
+このコードは両方のsleepが終了してから`完了`を表示します。通常のscope終了では子taskを待ちます。旧statement spawnでは本体終了後に子のErrやpanicを検出すると、残りの子を止めて待ちます。親Futureの破棄や本体panicでは停止要求と終了確認を区別します。scope内の`return`とviewを別taskへ渡すことは未対応です。旧statement spawnはunitか`Result[unit, Error]`を返すasync呼出しに限ります。[Task結果handle](task-handles.md)は作業branchに実装済み・未リリースです。詳細は[async](async.md)を参照してください。
 
 ## import、HTTP、Rust
 

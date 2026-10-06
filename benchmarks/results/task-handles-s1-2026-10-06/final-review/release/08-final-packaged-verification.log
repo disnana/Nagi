@@ -1,0 +1,13 @@
+{
+  "packaged_commit": "a9a0d42e94d6c7518bd7d955c9400299e554888c",
+  "version": "0.1.10",
+  "compiler_sha256": "a3eb76059325418818bd0114722ff8296d91e21cd538ec812a2aa699050ef338",
+  "archive": "/tmp/nagi-release-task-audit/distribution/nagi-0.1.10-linux-x86_64.tar.gz",
+  "archive_sha256": "8023d16bc6877db593e8b0094997b15419419973120cfa00e82e3e690163ebaf"
+}
+Verified SQL engine: extracted compiler, offline schema, bad columns/binds, Nagi locations, no Cargo/runtime
+Verified 0.1.10 linux-x86_64: PATH, external projects, version, help, function aliases, shared/borrowed JSON, early Nagi diagnostics
+Verified local Rust dependency: manifest-relative path, package alias, features, default-features, separate cwd/output
+Verified standard actor library: extracted runtime, typed context, task, tracked cleanup
+Verified Task handles: extracted compiler/runtime, High/saved Low/handwritten Low, receive/discard, nested business Err, early ownership diagnostics
+PACKAGED_TASK_FULL_VERIFICATION_OK
