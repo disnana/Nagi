@@ -475,6 +475,9 @@ def copy_shapes(pair: Pair, tag: CopyTag, optional: i64?, part: view[str]) -> Pa
     text = part
     text2 = transfer(part)
     return original
+def copy_input_remains_usable(value: i64) -> i64:
+    moved = transfer(value)
+    return value + moved
 def hints() -> i64:
     small: i8 = transfer(1)
     absent: i64? = transfer(None)
@@ -504,6 +507,14 @@ def fresh(value: str) -> Packet:
     return Packet(text=value)
 def argument(value: str) -> str:
     return text(transfer(value))
+def plain_argument_and_return(value: str) -> str:
+    return text(value)
+def plain_match_payload(value: Result[str, i64]) -> str:
+    match value:
+        case Ok(payload):
+            return payload
+        case Err(_):
+            return "rejected"
 def views(value: List[view[str]]) -> List[view[str]]:
     moved = transfer(value)
     return moved
@@ -547,6 +558,7 @@ fn copy_shapes(pair: Pair, tag: CopyTag, optional: i64?, part: view[str]) -> Pai
     let text2: view[str] = transfer(part);
     return original;
 }
+fn copy_input_remains_usable(value: i64) -> i64 { let moved: i64 = transfer(value); return value + moved; }
 fn hints() -> i64 { let small: i8 = transfer(1); let absent: i64? = transfer(None); return 1; }
 fn text(value: str) -> str { let moved: str = ownership.move(value); moved = transfer(moved); return moved; }
 fn nested(value: str) -> str { return transfer(transfer(value)); }
@@ -557,6 +569,13 @@ fn result(value: Result[str, i64]) -> Result[str, i64] { let moved: Result[str, 
 fn field(value: Packet) -> str { return value.text; }
 fn fresh(value: str) -> Packet { return Packet(text=value); }
 fn argument(value: str) -> str { return text(transfer(value)); }
+fn plain_argument_and_return(value: str) -> str { return text(value); }
+fn plain_match_payload(value: Result[str, i64]) -> str {
+    match value {
+        case Ok(payload) { return payload; }
+        case Err(_) { return "rejected"; }
+    }
+}
 fn views(value: List[view[str]]) -> List[view[str]] { let moved: List[view[str]] = transfer(value); return moved; }
 fn optional_views(value: List[view[str]]?) -> List[view[str]]? { let moved: List[view[str]]? = transfer(value); return moved; }
 fn result_views(value: Result[List[view[str]], i64]) -> Result[List[view[str]], i64] { let moved: Result[List[view[str]], i64] = transfer(value); return moved; }
@@ -577,6 +596,7 @@ fn moved_payloads_and_copy_provenance() {
     assert_eq!(user_shadow(), 12);
     assert_eq!(local_shadow(), 7);
     assert_eq!(copy_shapes(Pair { count: 3 }, CopyTag::Number { value: 4 }, Some(5), "caller").count, 3);
+    assert_eq!(copy_input_remains_usable(21), 42);
     assert_eq!(hints(), 1);
     let input = String::from("Nagi");
     let pointer = input.as_ptr();
@@ -597,6 +617,17 @@ fn moved_payloads_and_copy_provenance() {
     assert_eq!(result(Ok(String::from("ok"))), Ok(String::from("ok")));
     assert_eq!(result(Err(9)), Err(9));
     assert_eq!(argument(field(fresh(String::from("field")))), "field");
+    let input = String::from("plain argument and return");
+    let pointer = input.as_ptr();
+    let output = plain_argument_and_return(input);
+    assert_eq!(output, "plain argument and return");
+    assert_eq!(output.as_ptr(), pointer);
+    let input = String::from("plain match payload");
+    let pointer = input.as_ptr();
+    let output = plain_match_payload(Ok(input));
+    assert_eq!(output, "plain match payload");
+    assert_eq!(output.as_ptr(), pointer);
+    assert_eq!(plain_match_payload(Err(9)), "rejected");
     let owner = String::from("caller-owned");
     assert_eq!(views(vec![owner.as_str()]), vec!["caller-owned"]);
     assert_eq!(optional_views(Some(vec![owner.as_str()])), Some(vec!["caller-owned"]));

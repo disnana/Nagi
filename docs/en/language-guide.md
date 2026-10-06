@@ -164,7 +164,7 @@ def main():
     print(destination)
 ```
 
-Output: `Nagi`. Bare `destination = name` is rejected for an owned non-Copy local, and `name` is unavailable after `move(name)`. To keep reading the original, create a separate value with `copy(view(name))`. Copy values such as numbers and freshly constructed values use ordinary assignment; existing argument, return, and field/index rules are unchanged. See [assignment and explicit move](ownership.md#assignment-and-explicit-move) for import aliases and the exact scope.
+Output: `Nagi`. Bare `destination = name` is rejected for an owned non-Copy local, and `name` is unavailable after `move(name)`. To keep reading the original, replace the assignment with `destination = copy(view(name))`; do not add the copy after moving the value. Copy values such as numbers and freshly constructed values use ordinary assignment; existing argument, return, and field/index rules are unchanged. See [assignment and explicit move](ownership.md#assignment-and-explicit-move) for import aliases and the exact scope.
 
 This complete program intentionally fails `check`:
 

@@ -1,0 +1,129 @@
+{
+  "source_commit": "44c38b7687d2b95830f673f7d57c29745dc9e567",
+  "source_tree": "155784cfc0b98cc8a35338553473c545e50de187",
+  "parent_suites": 90,
+  "parent_tests_passed": 899,
+  "failed": 0,
+  "ignored": 0,
+  "counting": "last unfiltered summary per top-level Running/Doc-tests section; repeated graph_render child execution is not an independent test",
+  "runs": [
+    {
+      "label": "pr87-readiness-full",
+      "command": [
+        "cargo",
+        "test",
+        "--locked"
+      ],
+      "exit": 0,
+      "seconds": 157.734,
+      "source_commit": "44c38b7687d2b95830f673f7d57c29745dc9e567",
+      "source_tree": "155784cfc0b98cc8a35338553473c545e50de187",
+      "log_sha256": "a753c6b8f063b49ad7f0c6064d0e3ffcd3e5ceba23ba0c4272c2cefbd3481348"
+    },
+    {
+      "label": "pr87-readiness-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "seconds": 0.315,
+      "source_commit": "44c38b7687d2b95830f673f7d57c29745dc9e567",
+      "source_tree": "155784cfc0b98cc8a35338553473c545e50de187",
+      "log_sha256": "0d5a9f5f1b999d4c976122a0409c2ab8d3042ce4612b3aa06ceb58bec6668d1b"
+    },
+    {
+      "label": "pr87-readiness-docs",
+      "command": [
+        "python",
+        "/tmp/nagi-move-docs-native.py"
+      ],
+      "exit": 0,
+      "seconds": 0.869,
+      "source_commit": "44c38b7687d2b95830f673f7d57c29745dc9e567",
+      "source_tree": "155784cfc0b98cc8a35338553473c545e50de187",
+      "log_sha256": "b86a0de7fab546cfad616345b5f3ba7536e8dbb21dc215a226943cb5643b5b5e"
+    },
+    {
+      "label": "pr87-readiness-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "seconds": 0.767,
+      "source_commit": "44c38b7687d2b95830f673f7d57c29745dc9e567",
+      "source_tree": "155784cfc0b98cc8a35338553473c545e50de187",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "docs": [
+    {
+      "file": "docs/language-guide.md",
+      "line": 159,
+      "source_sha256": "406df4d483453f976b6a07c44fb767f8d2c9f3c16b175304f957f4c7f7970253",
+      "check_exit": 0,
+      "run_exit": 0,
+      "stdout": "Nagi\n"
+    },
+    {
+      "file": "docs/en/language-guide.md",
+      "line": 159,
+      "source_sha256": "406df4d483453f976b6a07c44fb767f8d2c9f3c16b175304f957f4c7f7970253",
+      "same_code_as": 0
+    },
+    {
+      "file": "docs/modules-and-rust.md",
+      "line": 117,
+      "source_sha256": "effbad8aaff9295989837c767f3c526f44f248ae5713fc0dabe295706bf64dc5",
+      "check_exit": 0,
+      "run_exit": 0,
+      "stdout": "Nagi\n"
+    },
+    {
+      "file": "docs/en/modules-and-rust.md",
+      "line": 117,
+      "source_sha256": "effbad8aaff9295989837c767f3c526f44f248ae5713fc0dabe295706bf64dc5",
+      "same_code_as": 1
+    },
+    {
+      "file": "docs/ownership.md",
+      "line": 28,
+      "source_sha256": "1ff4fe5d99d8043a5d4e05aeca02630dbccb94680fbdcfd6ccf8448cb33bed37",
+      "check_exit": 0,
+      "run_exit": 0,
+      "stdout": "4\nNagi\nnew\n"
+    },
+    {
+      "file": "docs/en/ownership.md",
+      "line": 28,
+      "source_sha256": "1ff4fe5d99d8043a5d4e05aeca02630dbccb94680fbdcfd6ccf8448cb33bed37",
+      "same_code_as": 2
+    },
+    {
+      "file": "docs/internal/value-task-implementation-plan.md",
+      "line": 57,
+      "source_sha256": "9ec9f91334a3eb928dc8b8001e9bb35d3cf7a781ab46f7c90b5cc0e21df17383",
+      "check_exit": 0,
+      "run_exit": 0,
+      "stdout": "Nagi\nnew\n"
+    }
+  ],
+  "website": {
+    "pages": 90,
+    "local_links_anchors_assets": "passed"
+  },
+  "files_sha256": {
+    "implementation-sol-review.md": "2c37419610fba300fbbdd15a6db47501cae34a27c3d9dc13297e691304830d87",
+    "docs-sol-review.md": "2d1edaa9f91c227a0a04a157e74896cb0195be3c853b2767a0e3449a9b5c559e",
+    "full.log": "a753c6b8f063b49ad7f0c6064d0e3ffcd3e5ceba23ba0c4272c2cefbd3481348"
+  }
+}

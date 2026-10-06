@@ -164,7 +164,7 @@ def main():
     print(destination)
 ```
 
-出力は`Nagi`です。`destination = name`では所有する非Copyローカルの通常代入として拒否され、`move(name)`で渡した後の`name`も使えません。元の文字列も読むなら`copy(view(name))`で別の値を作ります。数値等のCopy値と新しい値を作る式は通常代入でき、関数への引数・return・field/indexの既存ルールは変わりません。importの別名と正確な範囲は[代入と明示move](ownership.md#代入と明示move)で確認できます。
+出力は`Nagi`です。`destination = name`では所有する非Copyローカルの通常代入として拒否され、`move(name)`で渡した後の`name`も使えません。元の文字列も読むなら、moveした後にcopyを追加するのではなく、代入を`destination = copy(view(name))`へ置き換えます。数値等のCopy値と新しい値を作る式は通常代入でき、関数への引数・return・field/indexの既存ルールは変わりません。importの別名と正確な範囲は[代入と明示move](ownership.md#代入と明示move)で確認できます。
 
 次は意図的に`check`エラーになる完全な例です。
 

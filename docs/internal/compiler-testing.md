@@ -70,6 +70,8 @@ seedを保存し、失敗したcase indexを含む件数以上で同じcommand�
 
 ## Oracleと段階境界
 
+Cargoログの成功件数は、上位の各test binary・doctestの最終summaryから集計する。`graph_render`は同じtest binaryを子processで再実行しており、そのsummaryも親stdoutに出る。全summaryの単純合計は重複計上になる。実行した子processの観測と、独立したtest数を分け、出力のinterleaveを失敗や新しいtestの証拠としない。
+
 `tests/conformance/corpus.json` はsource path、High/Low、compile-pass/run-pass/reject:stage、期待診断substring、期待line、native assertionを指定する。negativeは対象の初期parse/checkで拒否することに加え、診断意味とsource行も必須。panicや異なる段階での拒否をcompile-fail成功としない。正例はHigh parse/check → Low pretty → Low parse/check → High/Low各finalize・封印 → Rust生成 → rustc → 必要なnative実行まで全て必須で、後段拒否は保存して失敗する。finalize失敗の分類もartifactへ記録する。
 
 生成は18種のaccepted bounded grammarを順番に使用し、seedで値を変える。i64算術/比較/list index/lenだけでなく、view copyと条件rebind、loop内local ownerから復元、List[view[str]] move/reinit、nested Result match、関数値、複数borrow sourceを持つResult/Option、最初のpollで完了する純async関数を含む。overflow、zero division、無限loopを作らない範囲を生成する。整数演算の期待値は独立host Rust計算、文字列長は明示byte数。明示moveの文字列/List/Result/Option・branch/loop再初期化5種も含む。High/Low両結果をこの期待値へ照合する。High/Lowは共通frontend/backendを使うので独立compiler間のdifferential testではなく、限定的なmetamorphic/観測同値検査である。純粋な生成にはsystem/environment依存や未対応owned[T]を混ぜない。

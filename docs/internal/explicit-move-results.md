@@ -18,7 +18,9 @@
 
 ## 検証状況
 
-`dcd7cab`の全回帰は93 suite・892件成功。#85/#86を統合した`29a4618`（tree `9a23bf5cc4c55818fe3382c7007b7bb7c1e0167f`）では93 suite・902件成功、失敗・ignoredは0件。compilerとtestsのbytesは変えず、#85のprivate runtime修正を統合して確認した。4 OS CIは公開後に確認する。以前の7 suite・36件と正常18実行は[移行前監査](value-task-audit-results.md)で、新仕様の成功件数には加算しない。
+`dcd7cab`の全回帰は90 suite・889件成功。#85/#86を統合した`29a4618`（tree `9a23bf5cc4c55818fe3382c7007b7bb7c1e0167f`）では90 suite・899件成功、失敗・ignoredは0件。compilerとtestsのbytesは変えず、#85のprivate runtime修正を統合して確認した。以前の93 suite・892/902件という集計は、graph_render内の同じテストの子process再実行3件を二重に数えていたため訂正した。原ログは変更しない。以前の7 suite・36件と正常18実行は[移行前監査](value-task-audit-results.md)で、新仕様の成功件数には加算しない。
+
+[PR #87](https://github.com/disnana/Nagi/pull/87)の初回公開head `e4089735de35e5f8496a1191b870e7b5f7edffc9`は、[checks](https://github.com/disnana/Nagi/actions/runs/37447928596)と[website](https://github.com/disnana/Nagi/actions/runs/37447928084)が成功した。4 OSの各ログでmove専用9件、conformance6件、installation4件の実行成功、失敗・ignored 0を確認した。Linux全suite、VSIX、両JetBrainsも成功し、releaseはskip。追加レビューと最新headの確認方法は[仕上げ監査](explicit-move-readiness.md)へ分けた。
 
 | 検査 | 結果と範囲 |
 |---|---|

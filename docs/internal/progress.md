@@ -331,6 +331,16 @@ moveはRust標準の`std::convert::identity`へ入力を値として一度渡す
 
 #86の競合解消head `93ad011`でchecks／websiteが成功した後、ユーザーがマージした。main `7d2d96a8bdba191e456f796bdf477b95bc34c57e`のtreeは検証headと同じ`890fe8a425ce93005c4478e39685d0d8f239ecfd`で、originから読み戻した。エージェントは#85/#86のmerge操作を行っていない。
 
-moveの統合後head `29a4618`は全93 suite・902件、failed/ignored 0。fmt／clippy全target、10プロジェクト19実行、日英7箇所の4完全例のcheck/runが成功した。移行前36件・正常18実行とは別に記録する。限定生成256、fuzz 10,000 mutation／128 native、Drop・temporary・by-value比較の有限検査と原ログは[実装結果](explicit-move-results.md)へ保存した。
+moveの統合後head `29a4618`は全90 suite・899件、failed/ignored 0。以前の93 suite・902件はgraph_renderの子process再実行3件の重複を含んでいたため、原ログを保って訂正した。fmt／clippy全target、10プロジェクト19実行、日英7箇所の4完全例のcheck/runが成功した。移行前36件・正常18実行とは別に記録する。限定生成256、fuzz 10,000 mutation／128 native、Drop・temporary・by-value比較の有限検査と原ログは[実装結果](explicit-move-results.md)へ保存した。
 
 V1/V2は独立したmain向けdraft PRとして4 OS CIを確認する。mergeとreleaseは別途確認する。S1/S2のTask契約は設計案の段階で、公開SQLite Pool/Transactionも未実装。取消要求をjoin完了、rollback要求を完了と扱わない。
+
+## 2026-10-06: #87の仕上げ監査
+
+#87の公開head `e408973`はdraft・競合なしで、必須CIとwebsiteが成功した。レビュー提出・inline thread・通常コメントは監査時点で各0件。Sol 2人が実装と公開move Docsを独立に読み直し、未解決のP0/P1を見つけなかった。レビューは任意プログラムの保証ではない。
+
+local `44c38b7`で、Copy入力にmoveを使っても元が使える説明と、元を残すにはmove代入をcopyへ置き換える説明を日英で補った。既存9群の3-source native oracleへCopy元の再利用、裸の引数・return、match payloadの裸returnを追加した。compiler/runtime/依存/CIのbytesは公開headから変更していない。全90 suite・899件、fmt／clippy、7箇所の完全例check/run、website90ページが成功。件数は子processの重複を除く。
+
+前回の確認2点はmoveの残件ではなく、S1の未受取handleと故障回復性だった。今回の委任に基づき、全Tの正常出口await/discardと、受取後も残るscope故障を次工程の初版方針に選んだ。過去の方針に必然的に含まれていたとは扱わず、別の設計branchに採用理由・ADRと実装前の検証条件を記録する。Task実装、全spawn移行、公開Pool/Txを#87へ混ぜない。
+
+最新headのCI・draft解除条件・有限な検証範囲は[仕上げ監査](explicit-move-readiness.md)を参照する。merge・release・版更新は行わない。
