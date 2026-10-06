@@ -30,6 +30,16 @@ closing／failedとadmissionの判定は単一の小さいledgerで直列化す�
 
 closeはin-flight createも待つ。Manager::createが始まる前にclosing判定とstarting登録を同じcritical sectionで行い、worker完了・引渡し・取消で未完了件数を確定させる。close後に新workerが登録される経路を拒否し、starting件数だけを減らしてjoin責任を消さない。deadpool getが閉鎖後にObjectを返すraceでもuser BEGINを開始せず、そのowned handleを同じ終了所有者へ返す。これは終了責任のadapterであり、別のslot待機／pool公平性algorithmを追加する案ではない。late create、idle discard、active返却、Object::take、最後のPool Dropを別barrierで検査する。
 
+### 論理slotとnative workerの終了を分ける
+
+比較初版では、Manager.createの取消後にdeadpoolのpermitが返り、旧workerのjoin前に次のworkerを起動できた。max_size=1でcreated=2となるbarrier反例を確認した。Object::take後のWorkerHandle Dropにも同じ論理slotとnative終了の差がある。stock poolのsizeだけをnative worker上限の根拠にしない。
+
+共通の退役／startup取消記録を使い、Manager.create内では未終端のそのworkerだけのclose／joinを待つ。新登録とclosing判定は同じledger lockで確定する。deadpoolのpermit、queue、公平性を置き換えず、取消だけをPool failedにするpolicyも足さない。健全なactive workerのjoinまで待つ一般gateにはしない。公開Optionsを接続する際には、このfenceもacquire_ms=0／有限待ちの条件に含め、途中から無期限待ちへ変えない。
+
+完了workerのStateを全履歴として保持する初版のledgerも、公開runtimeへ流用しない。terminal causeを公開し、同じcritical sectionで完了件数へ集約してlive recordを除く。累積created／native close／joinedの観測は保ち、closeの完了条件を履歴Vecの全走査に依存させない。反復取消とtake/drop/createで、未終了record数と累積件数を別々に確認する。
+
+この節は失敗の原因と採用した内部修正方針であり、追加後のGREENやmulti-connection／公開APIの完成を示さない。
+
 ## ほかの候補を今すぐ採らない理由
 
 - **deadpool-sqlite 0.14.0:** owned checkoutと短いinteractには適する候補。deadpool-syncの公開APIからConnectionを所有値として取り出す経路を確認できず、Object::takeはSyncWrapperを返す。Dropはbackground destructorなので、native close結果とworker joinまで完了した根拠にはならない。長い対話sessionはTokio blocking threadを占有する。generic Managerとの比較前に「利用不能」とは結論しない。

@@ -32,6 +32,12 @@ cleanup失敗・worker panic・状態不明では接続を退役し、Poolの新
 
 close開始後はclone共通で新取得を止め、active Txのcleanup、native close結果、worker終了を待つ。close timeout／取消でclosingを解除しない。再closeで完了待ちを許す。成功通知をworkerが送っただけではthread joinの証拠にならない。最後のPool Dropは閉鎖要求であり、非同期cleanup完了のAPIではない。
 
+## Pool adapterの終了記録
+
+stock deadpoolの論理slot返却と、native workerのclose／join完了は同じ出来事ではない。startup取消やObject::take後の退役workerが残る場合は、Manager.create内のcleanup fenceで終了を確認してからreplacementを起動する。独自のpool待機／公平性algorithmや、取消をfailedへ変える公開policyは足さない。健全active workerはfenceの対象にしない。公開acquire期限を接続する際はfence待ちも期限に含める。
+
+terminal failure／causeをledgerへ公開してから完了joinを通知する。通知を先に出すと、native close失敗を取り落とすraceが生じる。完了recordは同一ledgerのcounterへ集約し、未完了workerだけを保持する。これらはQ002／Q004の終了責任を実現する内部方針で、private一接続の反例から検査する。公開Pool保証の実装・検証完了とは区別する。
+
 ## 最初の検証と段階
 
 1. このADRとinvariantsを記録する。

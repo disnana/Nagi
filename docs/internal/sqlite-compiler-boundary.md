@@ -100,3 +100,9 @@ Future保存／返却解禁、一般effect／trait／region solver、unsafe、�
 独立Python SQLite 3.53.1の`:memory:`再現も、同じPragma DenyでBEFORE triggerは0行、AFTER triggerは1行、いずれもSQLITE_AUTH／Tx ACTIVEで、明示rollback後は0行だった。通常の許可DMLだけでも`INSERT OR FAIL ... VALUES (1), (1)`はUNIQUE Err後に最初の1行を残し、TxはACTIVEのまま継続できる。SQLiteの[FAIL契約](https://www.sqlite.org/lang_conflict.html)と[RAISE契約](https://www.sqlite.org/lang_createtrigger.html#the_raise_function)、bundled一次sourceの`OE_Fail`説明は、先行変更をback outしないことを明示する。[Authorizer契約](https://www.sqlite.org/c3ref/set_authorizer.html)はDenyで当該prepare等を拒否するもので、許可済み親DMLの先行効果すべてをundoする保証ではない。
 
 direct prepare時の拒否／禁止管理操作の拒否における不変確認と、AFTER triggerのstep失敗時のnative先行効果を混同しない。後者をTx rollback前から0と表示しない。各statementへsavepoint／自動undoを追加する、AFTER triggerを一律禁止する等は公開SQL／終了policyの別判断であり、このレビューでは採用しない。この追記は根拠と検査の分離を記録するもので、未実行の修正test成功やcompiler捕捉／source mapping完成を示さない。
+
+## local containerとsharedのcopyに関する照合
+
+[ADR 008](adr/008-resource-contracts.md)のstorageはclass等の所有field格納を指す。既存checkerのList生成／appendは要素をmoveし、nonCopy要素のforは借用、index取得と直resource Listのview作成は拒否する。storage不可のGrantをlocal Listへ保持する既存native回帰もある（[auth_boundaries](../../compiler/tests/auth_boundaries.rs)）。この規則を保つ場合、local List／Mapのowned Tx移動まで一律拒否する追加policyは不要。新Txでの実check／Rust buildは未実行で、List／Map経由のfield保存・shared・spawn捕捉を別negativeで確認する。Mapの構築／lookup APIやconsuming iterationを追加する判断ではない。
+
+sharedのcopyはArc参照の複製とpayloadのCloneを分ける。`view[Option[shared[Failure]]]`のcopyはOptionの中のArcを複製し、Failure／causeの深いcopyを要求しない。copy用途predicateはsharedで探索を止め、owned／Option／Result／List／Map等の実Clone義務だけを辿る。shared禁止のTx／Parameters／Optionsはvalid／share入口で拒否する。classの自動Cloneを増やさず、既存手書きRust境界を保つ。新SQLiteのこの経路も予定検証であり、未登録のAPIが通ったと報告しない。

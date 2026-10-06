@@ -181,3 +181,9 @@ main `f10cb64`を基点に承認契約`3cce2f9`→tests-only `7accaec`→safe実
 ### #81の先行基盤CI成功
 
 head `cfa65fa`のchecks run `37397252295`とwebsite run `37397251707`はattempt 1で成功した。4 OSの実ログでprivate session22件／parser2件を確認し、両JetBrains製品・VSIX・merge gateの成功も確認した。[結果](sqlite-session-results.md#pr-81の4-os-ci)へ記録した。#81はreview可能、未マージ。これはnative一接続coreの検証で、Q004のadapter比較や公開Pool／Tx、Phase 4全体のacceptanceはまだ未完了である。
+
+### #81のmain反映とadapter比較中の反例
+
+ユーザーが#81をmain `ff6f7d4c81c8cf49c2bca7abffb3083f681d5b9d`へマージした。tree `cb8c3d061110e9866c208004f54d1cedf9d9481d`は、成功headに先行mainのREADME code fence変更を取り込んだtreeと一致する。エージェントはmerge操作をしていない。
+
+比較初版は共通native sessionを維持したまま、startup取消後のworker並存と、join通知がterminal cause公開に先行する反例を確認した。前者はdeadpoolの論理slotとnative終了、後者は完了通知と結果公開を同一視したことが原因。完了Stateの全履歴保持も公開runtimeには残さず、live recordと集約counterへ分ける。[比較方針](sqlite-pool-adapter-decision.md#論理slotとnative-workerの終了を分ける)を先に更新し、barrier回帰で確認する。公開Pool／Tx、multi-connection、captured Tx検査、sealed SQL、acquire期限への接続はまだ未完了。
