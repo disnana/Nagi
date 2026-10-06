@@ -187,11 +187,16 @@ async fn close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_w
     drop(held);
     let closed = multi_watch(adapter.close(DEADLINE)).await;
     let after_close = observer.snapshot();
-    let waited = multi_watch(&mut waiting).await;
+    // 異常なReadyを観測したfixtureでも完了Futureを再pollしない。
+    let waited = if waiting_pending {
+        Some(multi_watch(&mut waiting).await)
+    } else {
+        None
+    };
     let (waiting_error, late_cleanup) = match waited {
-        Ok(Err(error)) => (Some(error), None),
-        Ok(Ok(tx)) => (None, Some(multi_watch(tx.finish(Finish::Rollback)).await)),
-        Err(_) => (None, None),
+        Some(Ok(Err(error))) => (Some(error), None),
+        Some(Ok(Ok(tx))) => (None, Some(multi_watch(tx.finish(Finish::Rollback)).await)),
+        Some(Err(_)) | None => (None, None),
     };
     // 元実装のCloseTimeoutやwatchdogでも、残るfutureとPoolをDropしてidle
     // handleの所有者を解放し、actual joinを観測してから失敗assertする。
