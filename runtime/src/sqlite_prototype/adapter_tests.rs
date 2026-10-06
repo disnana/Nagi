@@ -163,6 +163,71 @@ async fn deadpool_adapter_reuses_same_native_worker_and_sql_session_core() {
 }
 
 #[tokio::test]
+async fn close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_waiter() {
+    let adapter = Adapter::new(Config::default(), AdapterSeams::default());
+    let observer = adapter.observer();
+    let held = multi_setup(
+        &adapter,
+        multi_watch(adapter.checkout_without_begin()).await,
+        &mut None,
+        &[],
+    )
+    .await;
+    let mut waiting = Box::pin(adapter.begin());
+    let first_poll = futures_util::poll!(&mut waiting);
+    let waiting_pending = first_poll.is_pending();
+    let early_cleanup = if let std::task::Poll::Ready(Ok(tx)) = first_poll {
+        Some(multi_watch(tx.finish(Finish::Rollback)).await)
+    } else {
+        None
+    };
+    // Objectはidle queueへ戻る。公平semaphoreはpermitを既にPendingのwaiterへ
+    // 割り当てるが、再pollしないのでObjectはqueueから取り出されていない。
+    // closeのresize(0)がtry_acquireできない状況をstock APIだけで固定する。
+    drop(held);
+    let closed = multi_watch(adapter.close(DEADLINE)).await;
+    let after_close = observer.snapshot();
+    let waited = multi_watch(&mut waiting).await;
+    let (waiting_error, late_cleanup) = match waited {
+        Ok(Err(error)) => (Some(error), None),
+        Ok(Ok(tx)) => (None, Some(multi_watch(tx.finish(Finish::Rollback)).await)),
+        Err(_) => (None, None),
+    };
+    // 元実装のCloseTimeoutやwatchdogでも、残るfutureとPoolをDropしてidle
+    // handleの所有者を解放し、actual joinを観測してから失敗assertする。
+    drop(waiting);
+    drop(adapter);
+    let joined = multi_watch(observer.wait_joined(1)).await;
+    let done = observer.snapshot();
+    assert!(
+        joined.is_ok(),
+        "native cleanup did not join after Pool Drop"
+    );
+    assert!(waiting_pending && early_cleanup.is_none());
+    assert!(late_cleanup.is_none());
+    assert_eq!(
+        waiting_error
+            .expect("closed waiter, not watchdog/success")
+            .kind,
+        Kind::Closed
+    );
+    assert!(
+        matches!(&closed, Ok(Ok(()))),
+        "close must retire the idle worker despite a reserved permit: {closed:?}"
+    );
+    assert_eq!(after_close.native_closed, 1);
+    assert_eq!(after_close.joined, 1);
+    assert_eq!(after_close.pending_workers, 0);
+    assert_eq!(done.created, 1);
+    assert_eq!(done.native_started, 1);
+    assert_eq!(done.native_closed, 1);
+    assert_eq!(done.joined, 1);
+    assert_eq!(done.start_failed, 0);
+    assert_eq!(done.starting, 0);
+    assert_eq!(done.pending_workers, 0);
+}
+
+#[tokio::test]
 async fn cancelled_tx_keeps_deadpool_checkout_until_native_cleanup_completes() {
     let gate = Arc::new(Gate::new());
     let adapter = Adapter::new(
