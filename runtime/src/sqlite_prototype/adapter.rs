@@ -415,13 +415,21 @@ impl Manager for NativeManager {
         let seams = Arc::clone(&self.seams);
         let observer_ready = Arc::clone(&ready);
         let observer = if self.seams.applies(ordinal) && self.seams.fail_observer_spawn {
-            Err(std::io::Error::other("private observer startup failure seam"))
+            Err(std::io::Error::other(
+                "private observer startup failure seam",
+            ))
         } else {
             std::thread::Builder::new()
                 .name("nagi-sqlite-join-observer".into())
                 .spawn(move || {
                     observe_native(
-                        ordinal, config, observer_state, ledger, seams, receiver, observer_ready,
+                        ordinal,
+                        config,
+                        observer_state,
+                        ledger,
+                        seams,
+                        receiver,
+                        observer_ready,
                     )
                 })
         };
