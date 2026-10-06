@@ -453,7 +453,9 @@ impl Manager for NativeManager {
                     }
                 }
                 // Immediateは上の同lock容量判定で登録かErrへ進み、ここでは待たない。
-                Some(AcquireBudget::Immediate) => unreachable!("immediate registration cannot wait"),
+                Some(AcquireBudget::Immediate) => {
+                    unreachable!("immediate registration cannot wait")
+                }
                 None => changed.await,
             }
         };
