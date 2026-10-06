@@ -2,4 +2,6 @@
 mod session;
 use session::*;
 #[cfg(test)]
+mod adapter_tests;
+#[cfg(test)]
 mod tests;
