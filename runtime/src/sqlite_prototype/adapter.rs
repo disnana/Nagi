@@ -7,9 +7,8 @@ use deadpool::managed::{self, Manager, Metrics, RecycleError, RecycleResult};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc as blocking_channel, Arc, Mutex, Weak,
+        Arc, Mutex,
     },
-    thread::JoinHandle,
     time::Duration,
 };
 use tokio::sync::{mpsc, oneshot, Notify};
@@ -17,15 +16,25 @@ use tokio::sync::{mpsc, oneshot, Notify};
 const WATCHDOG: Duration = Duration::from_secs(10);
 type NativePool = managed::Pool<NativeManager>;
 type Checkout = managed::Object<NativeManager>;
+type ReadyReply = Arc<Mutex<Option<oneshot::Sender<Result<(), Failure>>>>>;
 
 #[derive(Default)]
 pub(super) struct AdapterSeams {
+    pub target_worker: Option<usize>,
     pub startup: Option<Arc<Gate>>,
     pub created: Option<Arc<AdmissionGate>>,
     pub checkout: Option<Arc<AdmissionGate>>,
     pub fail_recycle: bool,
     pub publication: Option<Arc<Gate>>,
     pub detaching: Option<Arc<Gate>>,
+    pub fail_terminal_result: bool,
+    pub fail_observer_spawn: bool,
+    pub fail_native_spawn: bool,
+}
+impl AdapterSeams {
+    fn applies(&self, ordinal: usize) -> bool {
+        self.target_worker.is_none_or(|target| target == ordinal)
+    }
 }
 pub(super) struct AdmissionGate {
     entered: AtomicBool,
@@ -72,6 +81,8 @@ impl AdmissionGate {
 #[derive(Clone, Default)]
 pub(super) struct AdapterStats {
     pub created: usize,
+    pub native_started: usize,
+    pub start_failed: usize,
     pub starting: usize,
     pub admitted: usize,
     pub returned: usize,
@@ -89,14 +100,9 @@ struct Records {
     workers: Vec<Arc<State>>,
     failure: Option<Failure>,
 }
-enum Reap {
-    Worker(Arc<State>, JoinHandle<()>),
-    Wake,
-}
 struct Ledger {
     records: Mutex<Records>,
     pool: Mutex<Option<managed::WeakPool<NativeManager>>>,
-    reap: blocking_channel::Sender<Reap>,
     changed: Notify,
 }
 impl Ledger {
@@ -133,7 +139,6 @@ impl Ledger {
         if let Some(pool) = pool {
             pool.close();
         }
-        let _ = self.reap.send(Reap::Wake);
     }
     fn fail(&self, error: Failure) {
         {
@@ -174,9 +179,22 @@ impl Ledger {
         drop(records);
         self.changed.notify_waiters();
     }
+    fn start_failed(&self, state: &Arc<State>) {
+        let mut records = self.records.lock().unwrap();
+        let index = records
+            .workers
+            .iter()
+            .position(|worker| Arc::ptr_eq(worker, state))
+            .expect("failed start without registration");
+        // native未起動。State.joined/native_closedも成功counterも変更しない。
+        records.stats.start_failed += 1;
+        records.workers.swap_remove(index);
+        drop(records);
+        self.changed.notify_waiters();
+    }
     fn done(&self) -> bool {
         let stats = self.snapshot();
-        stats.starting == 0 && stats.joined == stats.created
+        stats.starting == 0 && stats.joined + stats.start_failed == stats.created
     }
     async fn until(&self, predicate: impl Fn(&AdapterStats) -> bool) {
         tokio::time::timeout(WATCHDOG, async {
@@ -207,6 +225,7 @@ impl Observer {
 }
 
 struct WorkerHandle {
+    ordinal: usize,
     sender: Option<mpsc::Sender<BeginRequest>>,
     state: Arc<State>,
     ledger: Arc<Ledger>,
@@ -253,7 +272,6 @@ impl Drop for Startup {
         if self.registered {
             self.ledger.change(|stats| stats.starting -= 1);
         }
-        let _ = self.ledger.reap.send(Reap::Wake);
     }
 }
 
@@ -261,13 +279,89 @@ struct NativeManager {
     config: Arc<Config>,
     seams: Arc<AdapterSeams>,
     ledger: Arc<Ledger>,
+    capacity: usize,
 }
+
+// replyの喪失より先に起動失敗を公開。native未起動をfake joinへ変えない。
+fn fail_start(ledger: &Ledger, state: &Arc<State>, ready: &ReadyReply, error: Failure) {
+    state.fail(error.clone());
+    ledger.fail(error.clone());
+    ledger.start_failed(state);
+    let reply = ready.lock().unwrap().take();
+    if let Some(reply) = reply {
+        let _ = reply.send(Err(error));
+    }
+}
+
+fn observe_native(
+    ordinal: usize,
+    config: Arc<Config>,
+    state: Arc<State>,
+    ledger: Arc<Ledger>,
+    seams: Arc<AdapterSeams>,
+    receiver: mpsc::Receiver<BeginRequest>,
+    ready: ReadyReply,
+) {
+    let worker_state = Arc::clone(&state);
+    let worker_ledger = Arc::clone(&ledger);
+    let worker_ready = Arc::clone(&ready);
+    let startup = seams.startup.clone().filter(|_| seams.applies(ordinal));
+    // observer自身がnativeを起動し、成功したJoinHandleをこのscopeから外へ渡さない。
+    let worker = if seams.applies(ordinal) && seams.fail_native_spawn {
+        Err(std::io::Error::other("private native startup failure seam"))
+    } else {
+        std::thread::Builder::new()
+            .name("nagi-sqlite-adapter".into())
+            .spawn(move || {
+                worker_ledger.change(|stats| stats.native_started += 1);
+                let reply = worker_ready.lock().unwrap().take();
+                native_worker(config, worker_state, receiver, reply, startup);
+            })
+    };
+    let worker = match worker {
+        Ok(worker) => worker,
+        Err(error) => {
+            fail_start(
+                &ledger,
+                &state,
+                &ready,
+                Failure::cleanup(Outcome::NotApplicable, error.to_string()),
+            );
+            return;
+        }
+    };
+    if worker.join().is_err() {
+        state.fail(state.worker_error());
+    }
+    if seams.applies(ordinal) {
+        if seams.fail_terminal_result {
+            state.fail(Failure::cleanup(
+                Outcome::NotApplicable,
+                "private terminal-result failure seam; native close succeeded",
+            ));
+        }
+        if let Some(gate) = &seams.publication {
+            gate.block_once();
+        }
+    }
+    if let Some(error) = state.error() {
+        ledger.fail(error);
+    }
+    // terminal cause公開→actual join済みcounter/live除去→通知。
+    ledger.completed(&state);
+    // native entry前panic等でSenderが残る場合も、failure公開後にだけ通知する。
+    let reply = ready.lock().unwrap().take();
+    if let Some(reply) = reply {
+        let _ = reply.send(Err(state.worker_error()));
+    }
+}
+
 impl Manager for NativeManager {
     type Type = WorkerHandle;
     type Error = Failure;
     async fn create(&self) -> Result<WorkerHandle, Failure> {
         let state = Arc::new(State::default());
-        loop {
+        let ordinal = loop {
             let changed = self.ledger.changed.notified();
             let registered = {
                 let mut records = self.ledger.records.lock().unwrap();
@@ -283,29 +377,28 @@ impl Manager for NativeManager {
                         "create after close",
                     ));
                 }
-                // max1比較試作のnative終了fence。deadpool permitが先に返っても、
-                // live workerのactual join前には次のworkerを起動しない。
-                // 健康Object再貸出ではcreateへ来ない。多接続へこのpredicateを流用しない。
+                // starting/healthy/取消/detachedを含むnative容量の終了fence。
                 // slotの選択/待機順序/公平性はstock deadpoolが引き続き所有する。
-                if !records.workers.is_empty() {
-                    false
+                if records.workers.len() >= self.capacity {
+                    None
                 } else {
                     // closing確認とstarting/join責任の登録はspawn前の同じcritical section。
                     records.workers.push(Arc::clone(&state));
                     records.stats.created += 1;
                     records.stats.starting += 1;
-                    true
+                    Some(records.stats.created)
                 }
             };
-            if registered {
-                break;
+            if let Some(ordinal) = registered {
+                break ordinal;
             }
             changed.await;
-        }
+        };
         self.ledger.changed.notify_waiters();
         let (sender, receiver) = mpsc::channel(1);
         let startup = Startup {
             handle: Some(WorkerHandle {
+                ordinal,
                 sender: Some(sender),
                 state: Arc::clone(&state),
                 ledger: Arc::clone(&self.ledger),
@@ -314,34 +407,49 @@ impl Manager for NativeManager {
             registered: true,
         };
         let (ready, ready_receiver) = oneshot::channel();
+        // Builder.spawn ErrはclosureをDropするが、Senderはobserver側にも残す。
+        let ready = Arc::new(Mutex::new(Some(ready)));
         let config = Arc::clone(&self.config);
-        let worker_state = Arc::clone(&state);
-        let gate = self.seams.startup.clone();
-        let thread = std::thread::Builder::new()
-            .name("nagi-sqlite-adapter".into())
-            .spawn(move || native_worker(config, worker_state, receiver, Some(ready), gate));
-        let thread = match thread {
-            Ok(thread) => thread,
+        let observer_state = Arc::clone(&state);
+        let ledger = Arc::clone(&self.ledger);
+        let seams = Arc::clone(&self.seams);
+        let observer_ready = Arc::clone(&ready);
+        let observer = if self.seams.applies(ordinal) && self.seams.fail_observer_spawn {
+            Err(std::io::Error::other(
+                "private observer startup failure seam",
+            ))
+        } else {
+            std::thread::Builder::new()
+                .name("nagi-sqlite-join-observer".into())
+                .spawn(move || {
+                    observe_native(
+                        ordinal,
+                        config,
+                        observer_state,
+                        ledger,
+                        seams,
+                        receiver,
+                        observer_ready,
+                    )
+                })
+        };
+        match observer {
+            Ok(observer) => drop(observer), // native JoinHandleはobserver closure内だけにある。
             Err(error) => {
                 let error = Failure::cleanup(Outcome::NotApplicable, error.to_string());
-                state.fail(error.clone());
-                self.ledger.fail(error.clone());
-                self.ledger.completed(&state); // spawn不成立:存在しないworkerを待たない。
+                fail_start(&self.ledger, &state, &ready, error.clone());
                 return Err(error);
             }
-        };
-        // JoinHandleはcreate Futureから直ちに独立。取消でこの責任は消えない。
-        self.ledger
-            .reap
-            .send(Reap::Worker(Arc::clone(&state), thread))
-            .expect("reaper disappeared before worker handoff");
+        }
         let ready = ready_receiver.await.map_err(|_| state.worker_error())?;
         if let Err(error) = ready {
             self.ledger.fail(error.clone());
             return Err(error);
         }
-        if let Some(gate) = &self.seams.created {
-            gate.pause().await;
+        if self.seams.applies(ordinal) {
+            if let Some(gate) = &self.seams.created {
+                gate.pause().await;
+            }
         }
         startup.handoff()
     }
@@ -375,9 +483,11 @@ impl Manager for NativeManager {
         }
         Ok(())
     }
-    fn detach(&self, _worker: &mut WorkerHandle) {
-        if let Some(gate) = &self.seams.detaching {
-            gate.block_once();
+    fn detach(&self, worker: &mut WorkerHandle) {
+        if self.seams.applies(worker.ordinal) {
+            if let Some(gate) = &self.seams.detaching {
+                gate.block_once();
+            }
         }
         self.ledger.change(|stats| stats.detached += 1);
     }
@@ -412,54 +522,24 @@ impl Drop for Inner {
 pub(super) struct Adapter(Arc<Inner>);
 impl Adapter {
     pub fn new(config: Config, seams: AdapterSeams) -> Self {
-        let (sender, receiver) = blocking_channel::channel();
+        Self::with_capacity(config, seams, 1)
+    }
+    pub fn with_capacity(config: Config, seams: AdapterSeams, capacity: usize) -> Self {
+        assert!(capacity > 0, "private fixture capacity must be positive");
         let ledger = Arc::new(Ledger {
             records: Mutex::new(Records::default()),
             pool: Mutex::new(None),
-            reap: sender,
             changed: Notify::new(),
         });
-        let reaper_ledger: Weak<Ledger> = Arc::downgrade(&ledger);
         let seams = Arc::new(seams);
-        let reaper_seams = Arc::clone(&seams);
-        // 比較prototypeはconnection worker+poolごとに1 reaper thread。
-        // close/getのTokio cancellationやruntime破棄へworker joinを依存させない。
-        std::thread::spawn(move || {
-            while let Ok(message) = receiver.recv() {
-                let ledger = reaper_ledger.upgrade();
-                if let Reap::Worker(state, thread) = message {
-                    if thread.join().is_err() {
-                        state.fail(state.worker_error());
-                    }
-                    if let Some(gate) = &reaper_seams.publication {
-                        gate.block_once();
-                    }
-                    if let Some(ledger) = &ledger {
-                        if let Some(error) = state.error() {
-                            ledger.fail(error);
-                        }
-                    }
-                    // native終端causeを先に公開。joinedはclose完了を判断してよい最後の通知。
-                    if let Some(ledger) = &ledger {
-                        ledger.completed(&state);
-                    } else {
-                        state.update(|stats| stats.joined = true);
-                    }
-                }
-                if let Some(ledger) = ledger {
-                    if ledger.snapshot().closing && ledger.done() {
-                        break;
-                    }
-                }
-            }
-        });
         let manager = NativeManager {
             config: Arc::new(config),
             seams: Arc::clone(&seams),
             ledger: Arc::clone(&ledger),
+            capacity,
         };
         let pool = NativePool::builder(manager)
-            .max_size(1)
+            .max_size(capacity)
             .runtime(deadpool::Runtime::Tokio1)
             .build()
             .unwrap();
@@ -495,8 +575,10 @@ impl Adapter {
                 )
             })
         })?;
-        if let Some(gate) = &self.0.seams.checkout {
-            gate.pause().await;
+        if self.0.seams.applies(object.ordinal) {
+            if let Some(gate) = &self.0.seams.checkout {
+                gate.pause().await;
+            }
         }
         let sender = object.sender.as_ref().unwrap().clone();
         let state = Arc::clone(&object.state);
@@ -548,9 +630,9 @@ impl Adapter {
         if !self.0.ledger.done()
             && tokio::time::timeout(
                 timeout,
-                self.0
-                    .ledger
-                    .until(|stats| stats.starting == 0 && stats.joined == stats.created),
+                self.0.ledger.until(|stats| {
+                    stats.starting == 0 && stats.joined + stats.start_failed == stats.created
+                }),
             )
             .await
             .is_err()

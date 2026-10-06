@@ -253,3 +253,29 @@ OWN-04の明示操作、ASYNC-03/04の結果handleと業務Errの分類、ACTOR-
 #83へこのmainをmergeし、DESIGN日英・open questions・progress・adapter判断資料の5競合を解消した。#82の実装、43件の結果、46予定入力のparser限定、全履歴と測定は保持した。初回Docs監査のmain `ff6f7d4`は履歴として残し、現在の#82反映と分ける。ADR011の将来変更や公開Pool/Txが実装済みになったとは書かない。#83のmain差分は文書だけを維持する。
 
 解消後にwebsite90ページ、変更36文書の相対リンク728件・見出し欠落0、Python比較例16個、CI判定52件、diff checkが成功した。74実行・8拒否の初回検証は掲載sourceのhash一致を再確認し、新しい4完全例は更新mainでCLI runを実際に再実行して出力一致。独立Solレビューでもcompiler/runtime/scripts/Cargo/CI/benchmarkがmainと同一bytesであることを確認した。更新後PR CIは公開後に確認する。#83のmerge、版更新、releaseは今回の承認対象ではなく、実行しない。
+
+### #83の更新CIとユーザーによるmain反映
+
+競合解消後の最終head `b8bf768`で[checks](https://github.com/disnana/Nagi/actions/runs/37414124387)／[website](https://github.com/disnana/Nagi/actions/runs/37414124147)が成功した。文書だけの差分としてRust/native/editor/releaseはskip、CI判定52件とmerge gateは成功。#83本文へ結果を反映した後、ユーザーが2026-10-06 13:36 JSTにマージした。merge commit `a3c947fbc587dabc0c9c0dfc39ff42f7f389251c`をorigin/mainから読み戻し、続くPhase 4 branchへ取り込んだ。エージェントは#83のmerge操作を行っていない。
+
+## 2026-10-06: Phase 4のprivate多接続と独立終了観測
+
+[設計](sqlite-multiconnection-design.md)とADR010参照を先に保存し、6件のtests-onlyを追加した。容量だけを接続し単一reaperを残した中間source `3a9824d`では、A active中にBのjoin publicationが到達せず、cleanup後のassertでexit 101を観測した。単なる未実装APIのcompile REDとは分けた。公開Poolの多接続バグを直したとは報告しない。
+
+native live登録の容量確認とclosing/failedを同lockで確定し、observer先起動→closure内native起動/actual join→cause公開→completionにした。nativeのJoinHandleをasync createやchannelへ渡さない。slot選択・公平性・healthy recycleはstock deadpool、SQL/cleanupは既存session coreのまま。起動不成立をfake joinにせず別counterへ記録する。
+
+Sol 2人で実装と独立source/fixtureレビューを分担した。レビューでnative起動失敗を7件目に追加し、未join DBの削除・二重panic、setup失敗時のcleanup、publication前のCの再pollも改善した。元43件の期待値を削除・緩和していない。public semantics、compiler、cfg(test)以外のruntime、依存、CI設定、版は変更していない。
+
+ローカル実装source `711ed4b`でprivate50件、runtime179 unit＋5 doctest、全92 suite/881件、fmt/all-target clippyが成功。fuzzは1000 mutation/95 checked Low emit/16 bounded native、panic 0。CI判定Python52件、website90ページのlocal links/anchors/assetsも成功。新sourceの4 OS CIは公開後に確認する。原ログ・共通原因・分類・限界は[結果](sqlite-multiconnection-results.md)へ保存した。
+
+単独のwarm直列・cap1概測は各4096 sample。direct p50/p95 65.629/138.899µs、adapter 113.731/159.469µs。条件、生データ、hash、再実行法は[測定](../../benchmarks/results/sqlite-independent-observer-2026-10-06/README.md)。本番性能、多接続throughput、cold起動、allocationやFutureサイズの比較ではない。
+
+| 次の対象 | 現在の状態 |
+|---|---|
+| 取得期限 | stock logical待ちからnative登録まで同予算を保つ候補はsourceレビュー済み。0ms・取消・同task scopeのprivate先行テストは未実装 |
+| 巨大capacity | 可表現性の下限検査だけでstock allocationを検証済みとしない。公開受理範囲は残る判断 |
+| 公開Pool/Tx | Options/Failure/Parameters、registry/capture/sealed SQLの配線は未実装 |
+| compiler契約 | 予定23組46入力はparser2件のみ。semantic/pass-fail/元位置/Rust buildの検証へ昇格が必要 |
+| 次Phase・配布 | G-TX/G-POOLの公開acceptance、Phase 5、版更新、releaseは未着手 |
+
+この縦切りはmain向けの別PRとし、今回のmerge承認を流用しない。取得期限・巨大capacity・公開配線を進める順序と条件は[後続計画](sqlite-public-slice-plan.md)を維持する。

@@ -1,0 +1,32 @@
+{
+  "observed_at_utc": "2026-10-06",
+  "source_commit": "711ed4b830eaa3a32ba7f6e8f6eedca420419fe9",
+  "source_tree": "121b0e3da279ba32e37f95ddbdf0f727d5352566",
+  "host": "Linux 6.18.44 x86_64 KVM, AMD EPYC 9V74 (5 vCPU)",
+  "rustc": "1.98.1 (48a229cea 2026-09-01)",
+  "cargo": "1.98.1 (797e8a9bc 2026-08-05)",
+  "profile": "test/unoptimized, DEBUG=0, INCREMENTAL=0, warm target, current_thread Tokio",
+  "summary": {
+    "adapter_native_health_and_join": true,
+    "adapter_threads": "1 native worker + 1 independent join observer per connection",
+    "batches": 32,
+    "deadpool": {
+      "p50_ns": 113731,
+      "p95_ns": 159469
+    },
+    "direct": {
+      "p50_ns": 65629,
+      "p95_ns": 138899
+    },
+    "direct_native_health_and_join": true,
+    "direct_threads": "1 native worker + 1 join observer",
+    "scope": "private cfg(test) debug-profile, warm serial native session",
+    "sql": "SELECT 1 AS n",
+    "terminal": "rollback",
+    "transactions_per_batch_per_backend": 128,
+    "warmup_transactions_per_backend": 8
+  },
+  "measurement_json_sha256": "10e6a4254205d4885a131ff422b09afa86c9f906aec535ecd7c95fa09c66fb30",
+  "samples_csv_sha256": "775855c1639e8f035dcc86c413ce890f659d7fc6b93dfe439cf789f2eca3c833",
+  "samples": 8192
+}

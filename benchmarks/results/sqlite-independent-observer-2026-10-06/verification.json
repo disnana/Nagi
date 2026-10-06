@@ -1,0 +1,141 @@
+[
+  {
+    "label": "red-compile",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagi-runtime",
+      "sqlite_prototype::adapter_tests::multi_"
+    ],
+    "exit": 101,
+    "seconds": 2.823,
+    "source_commit": "c4dfa04d6e35f915d6d77dd6cdc5f32f15d24753",
+    "log_sha256": "85aa64b862cd4e8fa4d179c58c40f42efb1cc4f920a4e93a47969d381dcf84d6"
+  },
+  {
+    "label": "red-head-of-line",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagi-runtime",
+      "sqlite_prototype::adapter_tests::multi_cancelled_b_joins_and_c_begins_before_healthy_a_finishes",
+      "--",
+      "--nocapture"
+    ],
+    "exit": 101,
+    "seconds": 16.278,
+    "source_commit": "3a9824d595fe4e6b4807401b7f5f2035ae48930c",
+    "log_sha256": "bfe45cf658c2e63f4cf8d4784ec074790ea7fa9c88cd6ca4634202c2f20a6351"
+  },
+  {
+    "label": "red-native-spawn-contract",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagi-runtime",
+      "sqlite_prototype::adapter_tests::multi_native_spawn_failure_keeps_cause_without_native_b_or_fake_join"
+    ],
+    "exit": 101,
+    "seconds": 2.779,
+    "source_commit": "24fb95aa541f59ae68ad19515365cfc19cad23ef",
+    "log_sha256": "1133c9ce77be30ba42aeac82f982a017d989001484bb290a60d5b24fc6159f12"
+  },
+  {
+    "label": "green-private",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagi-runtime",
+      "sqlite_prototype",
+      "--",
+      "--nocapture"
+    ],
+    "exit": 0,
+    "seconds": 8.093,
+    "source_commit": "e705c5b404706b9bff48e3523e9c08a77a3f5578",
+    "log_sha256": "735a9b2421dadf1d3210e237605b3a3e12a9fde926f560b55d2328754fcb58c0"
+  },
+  {
+    "label": "green-runtime",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagi-runtime"
+    ],
+    "exit": 0,
+    "seconds": 8.603,
+    "source_commit": "711ed4b830eaa3a32ba7f6e8f6eedca420419fe9",
+    "log_sha256": "6a89b72effae3d63d736b399a9c6edee9ce2b82afda008199751319a18de9fee"
+  },
+  {
+    "label": "green-workspace",
+    "command": [
+      "cargo",
+      "test",
+      "--locked"
+    ],
+    "exit": 0,
+    "seconds": 151.325,
+    "source_commit": "711ed4b830eaa3a32ba7f6e8f6eedca420419fe9",
+    "log_sha256": "87f60a0d0b21f22e783f4605b4e1e1de9f21a7edc5d117a1114ea369c4766e19"
+  },
+  {
+    "label": "green-clippy",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0,
+    "seconds": 2.876,
+    "source_commit": "711ed4b830eaa3a32ba7f6e8f6eedca420419fe9",
+    "log_sha256": "ec1ccdafe794c7b90b371f0005448ea211b234f81e62edbf17b22d569d3784c5"
+  },
+  {
+    "label": "green-fuzz",
+    "command": [
+      "cargo",
+      "run",
+      "--locked",
+      "-p",
+      "nagic",
+      "--example",
+      "fuzz-smoke"
+    ],
+    "exit": 0,
+    "seconds": 0.417,
+    "source_commit": "711ed4b830eaa3a32ba7f6e8f6eedca420419fe9",
+    "log_sha256": "93a4b87431d97a25b9bd96d313a09e9b82205cbad3cd35aae82c1579c3a9a8e6"
+  },
+  {
+    "label": "measure-native",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagi-runtime",
+      "direct_and_deadpool_warm_native_session_comparison",
+      "--",
+      "--nocapture"
+    ],
+    "exit": 0,
+    "seconds": 1.017,
+    "source_commit": "711ed4b830eaa3a32ba7f6e8f6eedca420419fe9",
+    "log_sha256": "bce11637c19a48d696dbb0b0958cd70f77a9ae87fd62fdc44378efa175e9e05a"
+  }
+]
