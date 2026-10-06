@@ -1,0 +1,5 @@
+def spawn(value: i64) -> i64:
+    return value + 1
+def main():
+    alias = spawn
+    print(alias(2))

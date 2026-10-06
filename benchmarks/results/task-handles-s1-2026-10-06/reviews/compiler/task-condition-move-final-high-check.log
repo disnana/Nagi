@@ -1,0 +1,3 @@
+error: line 9: task はmove後に使用されています（ループの次の周回でも使用されるため）
+ --> /tmp/nagi-task-review/task-condition-move.nagi:9
+ 9 |                 received = await task

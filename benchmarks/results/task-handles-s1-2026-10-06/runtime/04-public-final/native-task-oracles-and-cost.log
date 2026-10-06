@@ -1,0 +1,60 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi/runtime)
+    Finished `test` profile [unoptimized] target(s) in 14.43s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31400cc29fcdf7fc)
+
+running 17 tests
+
+thread 'task::tests::discard_keeps_fault_and_legacy_error_observation' (8391) panicked at runtime/src/task.rs:782:57:
+discarded child still faults
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+{"build":"cfg_test","cancel_future_bytes":112,"discard_batch_future_bytes":360,"entry_bytes":24,"failure_bytes":40,"handle_u64_bytes":40,"join_future_bytes":96,"kind_bytes":1,"name":"task_handle_native_sizes","receive_batch_future_bytes":488,"receive_future_bytes":128,"scope_bytes":248,"target":"x86_64"}
+test task::tests::discard_keeps_fault_and_legacy_error_observation ... ok
+test task::tests::cancelled_drain_can_resume_after_child_drop_gate ... ok
+test task::tests::fake_native_id_reuse_does_not_mix_unreceived_tickets_and_retire_records ... ok
+
+thread 'tokio-rt-worker' (8397) panicked at runtime/src/task.rs:700:58:
+primary
+test task::tests::heterogeneous_results_and_business_error_keep_sibling_healthy ... ok
+test task::tests::fault_return_waits_for_requested_sibling_cleanup_and_actual_join ... ok
+test task::tests::parent_drop_requests_abort_but_does_not_report_child_destruction_complete ... ok
+
+thread 'tokio-rt-worker' (8411) panicked at runtime/src/task.rs:672:56:
+controlled child fault
+test task::tests::received_fault_remains_sticky_at_scope_exit ... ok
+test task::tests::payload_drop_locations_distinguish_failed_send_buffer_and_received_value ... ok
+test task::tests::legacy_structured_cause_preserves_kind_message_and_primary_after_later_fault ... ok
+
+thread 'tokio-rt-worker' (8421) panicked at runtime/src/task.rs:1047:21:
+panic already unwinding before abort request
+test task::tests::requested_cancel_does_not_hide_already_returned_legacy_error ... ok
+test task::tests::receiver_notification_cannot_replace_actual_join ... ok
+
+thread 'task::tests::spawn_after_fault_keeps_input_evaluation_and_actual_join_responsibility' (8422) panicked at runtime/src/task.rs:1096:56:
+sticky before new spawn
+test task::tests::requested_cancel_preserves_panic_and_unrequested_cancel_is_fault ... ok
+test task::tests::spawn_after_fault_keeps_input_evaluation_and_actual_join_responsibility ... ok
+test task::tests::target_other_than_first_join_and_body_error_primary_are_preserved ... ok
+test task::tests::wrong_owner_and_missing_output_are_protocol_errors_without_stolen_join ... ok
+test task::tests::unpolled_and_pending_receive_drop_keep_scope_join_responsibility ... ok
+{"allocation":{"allocated_bytes":99932,"allocations":536,"deallocations":536,"reallocations":0},"allocation_counter_thread":"calling thread only","items":128,"loops_per_repetition":3,"name":"taskscope_native_receive","ns_per_item":9588.010416666666,"ns_per_op":1227265.3333333333,"raw_ns":[1227265.3333333333,1273794.6666666667,1215040.3333333333,1153902.0,1187277.0,1308019.3333333333,1239983.3333333333],"throughput_items_s":104296.92465307693}
+{"allocation":{"allocated_bytes":94812,"allocations":535,"deallocations":535,"reallocations":0},"allocation_counter_thread":"calling thread only","items":128,"loops_per_repetition":3,"name":"taskscope_native_discard","ns_per_item":9361.893229166666,"ns_per_op":1198322.3333333333,"raw_ns":[1111569.3333333333,1547949.6666666667,1108482.0,1187192.6666666667,1198322.3333333333,2362388.3333333335,2001077.3333333333],"throughput_items_s":106816.00137080536}
+{"allocation":{"allocated_bytes":798956,"allocations":4129,"deallocations":4129,"reallocations":0},"allocation_counter_thread":"calling thread only","items":1024,"loops_per_repetition":3,"name":"taskscope_native_receive","ns_per_item":11873.208658854166,"ns_per_op":12158165.666666666,"raw_ns":[15373821.666666666,11018421.666666666,12463932.666666666,12158165.666666666,9951939.666666666,9273694.333333334,14310807.0],"throughput_items_s":84223.23137177191}
+{"allocation":{"allocated_bytes":757996,"allocations":4128,"deallocations":4128,"reallocations":0},"allocation_counter_thread":"calling thread only","items":1024,"loops_per_repetition":3,"name":"taskscope_native_discard","ns_per_item":9887.0537109375,"ns_per_op":10124343.0,"raw_ns":[10522509.333333334,8544033.666666666,8956908.333333334,11212151.666666666,10301551.0,8012280.666666667,10124343.0],"throughput_items_s":101142.3654848517}
+{"allocation":{"allocated_bytes":6390140,"allocations":32810,"deallocations":32810,"reallocations":0},"allocation_counter_thread":"calling thread only","items":8192,"loops_per_repetition":3,"name":"taskscope_native_receive","ns_per_item":11580.102294921875,"ns_per_op":94864198.0,"raw_ns":[91690307.0,106710259.66666667,95699217.33333333,94864198.0,94785884.33333333,93475118.0,97756128.0],"throughput_items_s":86355.02299824428}
+{"allocation":{"allocated_bytes":6062460,"allocations":32809,"deallocations":32809,"reallocations":0},"allocation_counter_thread":"calling thread only","items":8192,"loops_per_repetition":3,"name":"taskscope_native_discard","ns_per_item":10790.872477213541,"ns_per_op":88398827.33333333,"raw_ns":[95399991.0,88381200.33333333,85592417.66666667,88398827.33333333,92066497.0,101215119.66666667,86361653.0],"throughput_items_s":92670.91258020535}
+{"allocation":{"allocated_bytes":872748,"allocations":5154,"deallocations":28,"reallocations":0},"buffered_payload_bytes":65536,"entries":1024,"entries_capacity":1792,"items":1024,"joinset_entries":1024,"name":"completed_unjoined","unjoined":1024}
+{"allocation":{"allocated_bytes":64,"allocations":1,"deallocations":2049,"reallocations":0},"buffered_payload_bytes":65536,"entries":1024,"entries_capacity":1792,"items":1024,"joinset_entries":0,"name":"joined_unreceived","unjoined":0}
+{"allocation":{"allocated_bytes":0,"allocations":0,"deallocations":2049,"reallocations":0},"buffered_payload_bytes":0,"entries":1024,"entries_capacity":1792,"name":"joined_handle_drop_before_scope_operation"}
+{"allocation":{"allocated_bytes":0,"allocations":0,"deallocations":1024,"reallocations":0},"entries":0,"entries_capacity":1759,"name":"retired_records","native_keys_capacity":1724,"related_capacity":0,"unjoined_capacity":1768}
+{"allocation":{"allocated_bytes":30,"allocations":1,"deallocations":1,"reallocations":0},"name":"internal_primary_fault_clone"}
+{"entries":0,"fault_bytes":40,"name":"related_fault_retention","primary":true,"related":127,"related_capacity":128}
+test task::cost_tests::native_task_handle_costs ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 5.97s
+
+     Running tests/task_handles.rs (/tmp/nagi-container-flow-target/debug/deps/task_handles-1fdbf05c5538d590)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+

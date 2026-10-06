@@ -1,0 +1,115 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi/compiler)
+    Finished `dev` profile [unoptimized] target(s) in 8.79s
+     Running `/tmp/nagi-container-flow-target/debug/nagic build /tmp/nagi-task-review/failure-wrapper-copy.nagi --out /tmp/nagi-task-review/out-copy`
+    Updating crates.io index
+     Locking 108 packages to highest compatible versions
+      Adding generic-array v0.14.7 (available: v0.14.9)
+      Adding matchit v0.8.4 (available: v0.8.6)
+ Downloading crates ...
+  Downloaded mio v1.2.4
+  Downloaded cc v1.6.0
+  Downloaded libc v0.2.190
+  Downloaded tokio v1.53.2
+  Downloaded zerocopy v0.8.60
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling libc v0.2.190
+   Compiling syn v3.0.6
+   Compiling bytes v1.12.1
+   Compiling itoa v1.0.18
+   Compiling pin-project-lite v0.2.17
+   Compiling version_check v0.9.5
+   Compiling generic-array v0.14.7
+   Compiling errno v0.3.14
+   Compiling futures-core v0.3.34
+   Compiling signal-hook-registry v1.4.8
+   Compiling tokio-macros v2.7.2
+   Compiling http v1.5.0
+   Compiling mio v1.2.4
+   Compiling socket2 v0.6.5
+   Compiling zerocopy v0.8.60
+   Compiling cfg-if v1.0.5
+   Compiling getrandom v0.3.4
+   Compiling typenum v1.20.1
+   Compiling tokio v1.53.2
+   Compiling httparse v1.10.1
+   Compiling serde_core v1.0.229
+   Compiling log v0.4.34
+   Compiling rand_core v0.9.5
+   Compiling ppv-lite86 v0.2.21
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling http-body v1.1.0
+   Compiling once_cell v1.21.4
+   Compiling thiserror v2.0.21
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling cc v1.6.0
+   Compiling tracing-core v0.1.36
+   Compiling digest v0.10.7
+   Compiling rand_chacha v0.9.0
+   Compiling thiserror-impl v2.0.21
+   Compiling futures-macro v0.3.34
+   Compiling tower-service v0.3.3
+   Compiling futures-task v0.3.34
+   Compiling pkg-config v0.3.34
+   Compiling slab v0.4.12
+   Compiling smallvec v1.16.2
+   Compiling cpufeatures v0.2.17
+   Compiling serde v1.0.229
+   Compiling vcpkg v0.2.15
+   Compiling futures-sink v0.3.34
+   Compiling zmij v1.0.23
+   Compiling futures-util v0.3.34
+   Compiling libsqlite3-sys v0.38.2
+   Compiling sha1 v0.10.7
+   Compiling tracing v0.1.44
+   Compiling rand v0.9.5
+   Compiling serde_derive v1.0.229
+   Compiling futures-channel v0.3.34
+   Compiling tower-layer v0.3.3
+   Compiling atomic-waker v1.1.2
+   Compiling sync_wrapper v1.0.2
+   Compiling serde_json v1.0.151
+   Compiling data-encoding v2.11.1
+   Compiling httpdate v1.0.3
+   Compiling foldhash v0.2.0
+   Compiling percent-encoding v2.3.2
+   Compiling form_urlencoded v1.2.2
+   Compiling hashbrown v0.17.1
+   Compiling hyper v1.11.1
+   Compiling tungstenite v0.29.0
+   Compiling http-body-util v0.1.5
+   Compiling memchr v2.8.3
+   Compiling mime v0.3.17
+   Compiling ryu v1.0.23
+   Compiling serde_urlencoded v0.7.1
+   Compiling axum-core v0.5.6
+   Compiling tokio-tungstenite v0.29.0
+   Compiling hyper-util v0.1.21
+   Compiling hashlink v0.12.2
+   Compiling tower v0.5.3
+   Compiling serde_path_to_error v0.1.20
+   Compiling deadpool-runtime v0.3.1
+   Compiling fallible-iterator v0.3.0
+   Compiling base64 v0.22.1
+   Compiling matchit v0.8.4
+   Compiling bitflags v2.13.2
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling axum v0.8.9
+   Compiling deadpool v0.13.1
+   Compiling bumpalo v3.20.3
+   Compiling rusqlite v0.40.2
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi/runtime)
+   Compiling nagi-failure-wrapper-copy-68cb3c6013a138de v0.1.0 (/tmp/nagi-task-review/out-copy/.nagi/apps/nagi-failure-wrapper-copy-68cb3c6013a138de/generations/.staging-g-235d-18dbf654bc91fe86-0)
+error[E0277]: the trait bound `std::option::Option<TaskFailure>: Clone` is not satisfied
+ --> /tmp/nagi-task-review/failure-wrapper-copy.nagi:13
+ 13 |                 copied = copy(view(failures))
+  = the trait `Clone` is not implemented for `std::option::Option<TaskFailure>`
+  = emission origin: generated Low
+ note: use --rust-diagnostics for generated Rust notes and suggestions
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `nagi-failure-wrapper-copy-68cb3c6013a138de` (bin "nagi-68cb3c6013a138de-g-235d-18dbf654bc91fe86-0") due to 1 previous error
+Build failed. Check the diagnostics above for code, dependency, or build environment errors.
+Compatibility projection may be partial; prior latest unchanged.

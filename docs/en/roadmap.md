@@ -30,3 +30,5 @@ See [High and Low](low-language.md) for these limits and current usage.
 An independent backend, self-hosting, a custom VM or scheduler, hot code replacement, and distributed actors have not been started. Whether to pursue them remains undecided.
 
 Preserving semantics with another backend requires contracts and implementations for types, ownership, cleanup, failures, asynchronous work, and runtime integration. Rewriting the compiler in Low is not a requirement for the current development stage.
+
+S1 Task result handles are connected on the working branch and remain unreleased. See [usage](task-handles.md) and [validation status](../internal/task-handles-s1-results.md). S2 Supervisor/HTTP migration and public Pool/Tx remain later work.

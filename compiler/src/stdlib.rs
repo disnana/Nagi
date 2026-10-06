@@ -12,6 +12,8 @@ pub const AUTH_MODULE_NAME: &str = "std.auth";
 pub const AUTH_MODULE_ID: &str = "stdlib:std.auth";
 pub const OWNERSHIP_MODULE_NAME: &str = "std.ownership";
 pub const OWNERSHIP_MODULE_ID: &str = "stdlib:std.ownership";
+pub const TASK_MODULE_NAME: &str = "std.task";
+pub const TASK_MODULE_ID: &str = "stdlib:std.task";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StandardModule {
@@ -20,6 +22,7 @@ pub enum StandardModule {
     Result,
     Auth,
     Ownership,
+    Task,
 }
 pub struct StandardModuleInfo {
     pub name: &'static str,
@@ -32,6 +35,7 @@ pub const MODULES: &[StandardModule] = &[
     StandardModule::Result,
     StandardModule::Auth,
     StandardModule::Ownership,
+    StandardModule::Task,
 ];
 pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
     match module {
@@ -60,6 +64,11 @@ pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
             id: OWNERSHIP_MODULE_ID,
             rust_namespace: "::std::convert",
         },
+        StandardModule::Task => &StandardModuleInfo {
+            name: TASK_MODULE_NAME,
+            id: TASK_MODULE_ID,
+            rust_namespace: "::nagi_runtime",
+        },
     }
 }
 
@@ -87,6 +96,9 @@ pub enum Resource {
     WaitError,
     Principal,
     Grant,
+    Task,
+    TaskFailure,
+    TaskFailureKind,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Operation {
@@ -138,6 +150,9 @@ pub enum Operation {
     ActorYieldNow,
     ResultMapError,
     OwnershipMove,
+    TaskDiscard,
+    TaskKind,
+    TaskMessage,
 }
 
 /// Compiler-owned operation behavior. Public declaration metadata remains a
@@ -266,6 +281,9 @@ pub const RESOURCES: &[Resource] = &[
     Resource::WaitError,
     Resource::Principal,
     Resource::Grant,
+    Resource::Task,
+    Resource::TaskFailure,
+    Resource::TaskFailureKind,
 ];
 pub const OPERATIONS: &[Operation] = &[
     Operation::Status,
@@ -316,6 +334,9 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::ActorYieldNow,
     Operation::ResultMapError,
     Operation::OwnershipMove,
+    Operation::TaskDiscard,
+    Operation::TaskKind,
+    Operation::TaskMessage,
 ];
 
 pub fn module(name: &str) -> Option<ModuleId> {
@@ -463,6 +484,64 @@ impl ResourceContract {
         }
     }
 }
+
+static CONTRACT_TASK: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Task,
+        name: "Task",
+        arity: 1,
+        type_parameters: &["T"],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::Task",
+        copy: false,
+        equality: false,
+        storage: false,
+        shared: false,
+        debug: false,
+    },
+    &[],
+    &[0],
+    &[],
+    &[],
+);
+static CONTRACT_TASK_FAILURE: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Task,
+        name: "TaskFailure",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::TaskFailure",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: false,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+static CONTRACT_TASK_FAILURE_KIND: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Task,
+        name: "TaskFailureKind",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::TaskFailureKind",
+        copy: true,
+        equality: true,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
 
 static CONTRACT_PRINCIPAL: ResourceContract = ResourceContract::new(
     ResourceInfo {
@@ -908,6 +987,9 @@ fn resource_contract(resource: Resource) -> &'static ResourceContract {
     match resource {
         Resource::Principal => &CONTRACT_PRINCIPAL,
         Resource::Grant => &CONTRACT_GRANT,
+        Resource::Task => &CONTRACT_TASK,
+        Resource::TaskFailure => &CONTRACT_TASK_FAILURE,
+        Resource::TaskFailureKind => &CONTRACT_TASK_FAILURE_KIND,
         Resource::Request => &CONTRACT_REQUEST,
         Resource::Response => &CONTRACT_RESPONSE,
         Resource::Method => &CONTRACT_METHOD,
@@ -948,6 +1030,9 @@ pub(crate) fn native_serde_supported(resource: Resource) -> bool {
 
 pub fn operation_info(operation: Operation) -> &'static OperationInfo {
     match operation {
+        Operation::TaskDiscard => &OperationInfo { module: StandardModule::Task, name: "discard", rust_path: "::nagi_runtime::TaskScope::discard", arity: 1, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Move], borrow_owner: None, signature: "(task: Task[T]) -> unit" },
+        Operation::TaskKind => &OperationInfo { module: StandardModule::Task, name: "kind", rust_path: "::nagi_runtime::TaskFailure::kind", arity: 1, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Reference], borrow_owner: None, signature: "(failure: view[TaskFailure]) -> TaskFailureKind" },
+        Operation::TaskMessage => &OperationInfo { module: StandardModule::Task, name: "message", rust_path: "::nagi_runtime::TaskFailure::message", arity: 1, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Reference], borrow_owner: Some(0), signature: "(failure: view[TaskFailure]) -> view[str]" },
  Operation::Status => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "status", rust_path: "::nagi_runtime::http_server::status", arity: 1, generic_arity: 0, parameters: &[Passing::Move], borrow_owner: None, signature: "(value: i64) -> Result[Status, Error]" },
  Operation::Method => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "method", rust_path: "::nagi_runtime::http_server::method", arity: 1, generic_arity: 0, parameters: &[Passing::Reference], borrow_owner: None, signature: "(name: view[str]) -> Result[Method, Error]" },
  Operation::MethodName => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "method_name", rust_path: "::nagi_runtime::http_server::method_name", arity: 1, generic_arity: 0, parameters: &[Passing::Reference], borrow_owner: Some(0), signature: "(method: view[Method]) -> view[str]" },
@@ -1466,6 +1551,24 @@ const EVENT_KIND_CONSTANTS: &[ConstantInfo] = &[
 ];
 pub fn constants(resource: Resource) -> &'static [ConstantInfo] {
     match resource {
+        Resource::TaskFailureKind => &[
+            ConstantInfo {
+                name: "Panicked",
+                native_name: "Panicked",
+            },
+            ConstantInfo {
+                name: "Cancelled",
+                native_name: "Cancelled",
+            },
+            ConstantInfo {
+                name: "LegacyError",
+                native_name: "LegacyError",
+            },
+            ConstantInfo {
+                name: "Internal",
+                native_name: "Internal",
+            },
+        ],
         Resource::Method => METHOD_CONSTANTS,
         Resource::Status => STATUS_CONSTANTS,
         Resource::RestartPolicy => RESTART_POLICY_CONSTANTS,
@@ -1762,6 +1865,7 @@ mod resource_contract_tests {
                 Resource::Actor => &[IndirectProtocol, IndirectProtocol, IndirectProtocol],
                 Resource::Turn => &[InlinePayload, InlinePayload, InlinePayload],
                 Resource::Grant => &[NominalPhantom],
+                Resource::Task => &[IndirectProtocol],
                 _ => &[],
             };
             let contract = resource_contract(resource);

@@ -1,0 +1,5 @@
+def value_of(spawn: i64) -> i64:
+    value = spawn + 1
+    return value
+def main() -> unit:
+    print(value_of(5))

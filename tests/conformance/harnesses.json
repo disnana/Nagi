@@ -360,5 +360,27 @@
       "--test",
       "explicit_moves"
     ]
+  },
+  {
+    "name": "Task_handles_native_three_source_forms",
+    "contract": "Taskの業務Err/外側fault sticky、actual join、legacy/body元ErrとDrop、分岐/再生成/nested scopeをHigh・保存Low・手書きLowで実行する",
+    "files": [
+      "compiler/tests/task_handles.rs",
+      "compiler/tests/support/native_triple.rs"
+    ],
+    "test_names": [
+      "positive_contracts_build_and_run_high_saved_and_handwritten_low",
+      "native_business_fault_cleanup_and_branch_contracts",
+      "bounded_generated_task_paths_reach_native"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "task_handles"
+    ]
   }
 ]

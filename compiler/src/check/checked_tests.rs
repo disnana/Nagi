@@ -90,7 +90,7 @@ fn missing_binding_and_pattern_types_are_rejected_without_rechecking() {
         crate::check::check(&mut program).unwrap();
         let statement = &mut program.functions[0].body[0];
         match &mut statement.kind {
-            S::Assign { .. } | S::For(..) => statement.binding_type = None,
+            S::Assign { .. } | S::SpawnBind { .. } | S::For(..) => statement.binding_type = None,
             S::Match(_, arms) => arms[0].pattern.bindings_mut()[0].ty = None,
             _ => panic!("wrong fault fixture"),
         }
@@ -375,4 +375,37 @@ fn final_diagnostic_transports_kind_without_changing_user_messages() {
         crate::diagnostics::finalize_message(&user, &sources),
         sources.diagnostic(&message)
     );
+}
+
+#[test]
+fn task_sealing_rejects_missing_or_mismatched_scope_and_use_facts() {
+    let checked = checked_high("async def work() -> i64:\n    return 7\nasync def main() -> Result[unit, Error]:\n    async with scope:\n        task = spawn work()\n        received = await task\n    return ok(print(0))\n");
+    for mutation in 0..4 {
+        let mut program = checked.program().clone();
+        let main = program
+            .functions
+            .iter_mut()
+            .find(|f| f.name == "main")
+            .unwrap();
+        let scope = &mut main.body[0];
+        if mutation == 0 {
+            scope.task.bridge = false;
+        }
+        let S::Scope(body) = &mut scope.kind else {
+            panic!()
+        };
+        if mutation == 1 {
+            body[0].task.scope = None;
+        }
+        if mutation == 2 {
+            body[1].task.uses.clear();
+        }
+        if mutation == 3 {
+            body[1].task.uses[0].action = TaskAction::Discard;
+        }
+        let error = CheckedProgram::seal(program, SourceProvenance::user_low_unmapped())
+            .err()
+            .expect("invalid checked Task facts must not reach emission");
+        assert_eq!(error.kind(), FailureKind::CompilerDefect);
+    }
 }

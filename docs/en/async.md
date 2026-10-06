@@ -60,9 +60,9 @@ A function using a scope returns Result. A custom error class or enum requires a
 
 If a body `try` propagates Err out of the scope, children are canceled and awaited before the Err reaches the outer code. If the parent Future itself is dropped, or the scope body panics, cancellation is requested. Synchronous Drop cannot await async completion, so there is no guarantee that every child has already stopped at that point. Cancellation also does not roll back accepted database work or other external side effects. See [Concurrency](concurrency.md) for CPU work and cancellation.
 
-### Adopted direction and unavailable features
+### Receive a child's result (working branch, unreleased)
 
-Result handles are unimplemented. [ADR 012](../internal/adr/012-task-result-handles.md) adopts an S1 design where ordinary business Err alone does not stop siblings, all new handles require await or explicit discard before normal exit, and handling a receive fault still leaves scope exit unsuccessful. API names and syntax remain proposals and cannot be used yet. Current spawn/Scope behavior is unchanged: a child's `Result[unit, Error]` Err still cancels siblings. Examples on this page use current behavior. See [DESIGN](../../DESIGN.en.md) for design and migration boundaries.
+S1 implements `task = spawn work()`, `await task`, and `std.task.discard(task)` on the working branch. [Task result handles](task-handles.md) describes single consumption for every T, await/discard obligations at normal exits, scope escape rejection, and TaskFailure APIs. An inner business Err does not stop siblings; handling a receive fault leaves the scope failed. The legacy statement spawn above still cancels siblings on a child `Result[unit, Error]` Err. Supervisor/HTTP migration and public SQLite Pool/Tx remain separate work.
 
 ## Call a function stored in a variable
 

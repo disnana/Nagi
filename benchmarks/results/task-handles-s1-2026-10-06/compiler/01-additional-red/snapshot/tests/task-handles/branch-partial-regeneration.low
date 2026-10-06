@@ -1,0 +1,9 @@
+async fn work() -> i64 { return 7; }
+async fn exercise(flag: bool) -> Result[unit, Error] {
+    scope {
+        let task = spawn work(); # primary
+        if flag { let received = await task; }
+        else { let received = await task; task = spawn work(); }
+    }
+    return ok(print(0));
+}

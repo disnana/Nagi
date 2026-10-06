@@ -15,6 +15,30 @@ type ResourceExpected = (
 );
 const RESOURCES: &[ResourceExpected] = &[
     (
+        R::Task,
+        M::Task,
+        "Task",
+        &["T"],
+        [false, false, false, false, false],
+        &[],
+    ),
+    (
+        R::TaskFailure,
+        M::Task,
+        "TaskFailure",
+        &[],
+        [false, false, true, false, true],
+        &[],
+    ),
+    (
+        R::TaskFailureKind,
+        M::Task,
+        "TaskFailureKind",
+        &[],
+        [true, true, true, true, true],
+        &[],
+    ),
+    (
         R::Request,
         M::HttpServer,
         "Request",
@@ -202,6 +226,7 @@ fn module(module: M) -> (&'static str, &'static str, &'static str) {
         M::Result => ("std.result", "stdlib:std.result", "::nagi_runtime::result"),
         M::Auth => ("std.auth", "stdlib:std.auth", "::nagi_runtime::auth"),
         M::Ownership => ("std.ownership", "stdlib:std.ownership", "::std::convert"),
+        M::Task => ("std.task", "stdlib:std.task", "::nagi_runtime"),
     }
 }
 #[test]
@@ -222,8 +247,8 @@ fn registered_resources_match_the_independent_inventory() {
         shared: false,
         debug: false,
     };
-    assert_eq!(RESOURCES.len(), 22);
-    assert_eq!(stdlib::RESOURCES.len(), 22);
+    assert_eq!(RESOURCES.len(), 25);
+    assert_eq!(stdlib::RESOURCES.len(), 25);
     assert_eq!(
         stdlib::RESOURCES.iter().copied().collect::<HashSet<_>>(),
         RESOURCES.iter().map(|r| r.0).collect()
@@ -302,6 +327,9 @@ macro_rules! op {
     };
 }
 const OPERATIONS: &[OperationExpected] = &[
+    op!(TaskDiscard,Task,"discard",1,&[],"M",None,false,false,"(task: Task[T]) -> unit"),
+    op!(TaskKind,Task,"kind",1,&[],"R",None,false,false,"(failure: view[TaskFailure]) -> TaskFailureKind"),
+    op!(TaskMessage,Task,"message",1,&[],"R",Some(0),false,false,"(failure: view[TaskFailure]) -> view[str]"),
     op!(Status,HttpServer,"status",1,&[],"M",None,false,true,"(value: i64) -> Result[Status, Error]"),
     op!(Method,HttpServer,"method",1,&[],"R",None,false,true,"(name: view[str]) -> Result[Method, Error]"),
     op!(MethodName,HttpServer,"method_name",1,&[],"R",Some(0),false,true,"(method: view[Method]) -> view[str]"),
@@ -353,8 +381,8 @@ const OPERATIONS: &[OperationExpected] = &[
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 48);
-    assert_eq!(stdlib::OPERATIONS.len(), 48);
+    assert_eq!(OPERATIONS.len(), 51);
+    assert_eq!(stdlib::OPERATIONS.len(), 51);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()
@@ -380,6 +408,9 @@ fn registered_operations_match_signatures_and_passing() {
         // moveはchecked identity action。宣言metadataのnative pathだけidentityを指す。
         let rust_path = match expected.operation {
             O::OwnershipMove => "::std::convert::identity".to_owned(),
+            O::TaskDiscard => "::nagi_runtime::TaskScope::discard".to_owned(),
+            O::TaskKind => "::nagi_runtime::TaskFailure::kind".to_owned(),
+            O::TaskMessage => "::nagi_runtime::TaskFailure::message".to_owned(),
             _ => format!("{native}::{}", expected.name),
         };
         assert_eq!(actual.rust_path, rust_path);
@@ -522,6 +553,7 @@ fn registered_accessors_match_the_complete_inventory() {
 }
 
 const CONSTANTS: &[(R, &str)] = &[
+    (R::TaskFailureKind,"Panicked Cancelled LegacyError Internal"),
     (R::Method,"GET POST PUT DELETE PATCH HEAD OPTIONS CONNECT TRACE"),
     (R::Status,"OK CREATED ACCEPTED NON_AUTHORITATIVE_INFORMATION NO_CONTENT RESET_CONTENT PARTIAL_CONTENT MULTI_STATUS ALREADY_REPORTED IM_USED MULTIPLE_CHOICES MOVED_PERMANENTLY FOUND SEE_OTHER NOT_MODIFIED USE_PROXY TEMPORARY_REDIRECT PERMANENT_REDIRECT BAD_REQUEST UNAUTHORIZED PAYMENT_REQUIRED FORBIDDEN NOT_FOUND METHOD_NOT_ALLOWED NOT_ACCEPTABLE PROXY_AUTHENTICATION_REQUIRED REQUEST_TIMEOUT CONFLICT GONE LENGTH_REQUIRED PRECONDITION_FAILED PAYLOAD_TOO_LARGE REQUEST_ENTITY_TOO_LARGE REQUEST_URI_TOO_LONG REQUESTED_RANGE_NOT_SATISFIABLE CONTENT_TOO_LARGE URI_TOO_LONG UNSUPPORTED_MEDIA_TYPE RANGE_NOT_SATISFIABLE EXPECTATION_FAILED IM_A_TEAPOT MISDIRECTED_REQUEST UNPROCESSABLE_ENTITY UNPROCESSABLE_CONTENT LOCKED FAILED_DEPENDENCY TOO_EARLY UPGRADE_REQUIRED PRECONDITION_REQUIRED TOO_MANY_REQUESTS REQUEST_HEADER_FIELDS_TOO_LARGE UNAVAILABLE_FOR_LEGAL_REASONS INTERNAL_SERVER_ERROR NOT_IMPLEMENTED BAD_GATEWAY SERVICE_UNAVAILABLE GATEWAY_TIMEOUT HTTP_VERSION_NOT_SUPPORTED VARIANT_ALSO_NEGOTIATES INSUFFICIENT_STORAGE LOOP_DETECTED NOT_EXTENDED NETWORK_AUTHENTICATION_REQUIRED"),
     (R::RestartPolicy,"TEMPORARY TRANSIENT PERMANENT"),
@@ -531,7 +563,7 @@ const CONSTANTS: &[(R, &str)] = &[
 ];
 #[test]
 fn registered_constants_match_the_complete_inventory() {
-    assert_eq!(CONSTANTS.len(), 6);
+    assert_eq!(CONSTANTS.len(), 7);
     for &(resource, ..) in RESOURCES {
         let names = CONSTANTS
             .iter()

@@ -1,0 +1,16 @@
+[package]
+name = "nagi-task-cost-manual"
+version = "0.0.0"
+edition = "2021"
+[lib]
+name = "task_cost"
+path = "lib.rs"
+[[bin]]
+name = "task-cost-manual"
+path = "main.rs"
+[dependencies]
+nagi-runtime = { path = "/workspace/Nagi/runtime" }
+tokio = { version = "1.48", features = ["rt-multi-thread", "time", "sync"] }
+serde_json = "1.0"
+[profile.release]
+debug = 0

@@ -139,6 +139,12 @@ pub enum S {
         value: Expr,
         declare: bool,
     },
+    SpawnBind {
+        name: String,
+        annotation: Option<Type>,
+        value: Expr,
+        declare: bool,
+    },
     Return(Option<Expr>),
     Expr(Expr),
     If(Expr, Vec<Stmt>, Vec<Stmt>),
@@ -199,6 +205,32 @@ pub struct Stmt {
     pub binding_type: Option<Type>,
     pub binding_borrowed: bool,
     pub(crate) flow: Option<StmtFlowFacts>,
+    pub(crate) task: TaskStatementFacts,
+}
+
+/// Structural scope identity, assigned once before checking loop fixed points.
+/// It is neither lexical depth nor a runtime ticket.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(crate) struct ScopeId(pub usize);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TaskAction {
+    Receive,
+    Discard,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct TaskUse {
+    pub expression: ExprUseId,
+    pub scope: ScopeId,
+    pub action: TaskAction,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct TaskStatementFacts {
+    pub scope: Option<ScopeId>,
+    pub bridge: bool,
+    pub uses: Vec<TaskUse>,
 }
 
 /// Stable identity of a source binding. Token offsets survive Rust-only name
@@ -322,7 +354,7 @@ pub(crate) fn supports_view_flow(statements: &[Stmt]) -> bool {
         }
         S::Match(_, arms) => arms.iter().all(|arm| supports_view_flow(&arm.body)),
         S::While(_, body) | S::For(_, _, body) | S::Scope(body) => supports_view_flow(body),
-        S::Assign { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => true,
+        S::Assign { .. } | S::SpawnBind { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => true,
     })
 }
 
@@ -395,6 +427,28 @@ pub(crate) fn block_returns(statements: &[Stmt]) -> bool {
         S::Match(_, arms) => !arms.is_empty() && arms.iter().all(|arm| block_returns(&arm.body)),
         _ => false,
     })
+}
+
+/// Task bindings in control flow belong to the nearest scope. Nested scopes
+/// choose their own bridge independently.
+pub(crate) fn scope_has_task_binding(statements: &[Stmt]) -> bool {
+    statements.iter().any(|s| match &s.kind {
+        S::SpawnBind { .. } => true,
+        S::If(_, a, b) => scope_has_task_binding(a) || scope_has_task_binding(b),
+        S::Match(_, arms) => arms.iter().any(|a| scope_has_task_binding(&a.body)),
+        S::While(_, b) | S::For(_, _, b) => scope_has_task_binding(b),
+        _ => false,
+    })
+}
+
+pub(crate) fn contains_task_binding(statements: &[Stmt]) -> bool {
+    scope_has_task_binding(statements)
+        || statements.iter().any(|s| match &s.kind {
+            S::Scope(b) | S::While(_, b) | S::For(_, _, b) => contains_task_binding(b),
+            S::If(_, a, b) => contains_task_binding(a) || contains_task_binding(b),
+            S::Match(_, arms) => arms.iter().any(|a| contains_task_binding(&a.body)),
+            _ => false,
+        })
 }
 
 #[derive(Clone, Debug)]

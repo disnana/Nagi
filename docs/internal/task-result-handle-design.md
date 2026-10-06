@@ -1,6 +1,6 @@
 # S1: scope所属のtask結果handle
 
-状態: **詳細意味論を設計採用・未実装**。[ADR 012](adr/012-task-result-handles.md)で全Tの正常出口await/discardとscope故障のsticky保持を採用した。今回の自律判断の委任による新しい詳細判断であり、過去の承認から必然だったとは扱わない。名称・構文・runtime接続は以下の推奨案で、現行parser・checker・runtimeや公開版を変更していない。実装開始、CI、main反映、releaseとは区別する。
+状態: **採用時の設計記録**。以下の未実装記述は採用時点の状態。現在のS1作業branchは[接続判断](task-handle-implementation.md)に沿い実装済み・未リリースで、[接続結果](task-handles-s1-results.md)を現在の検証正本とする。[ADR 012](adr/012-task-result-handles.md)で全Tの正常出口await/discardとscope故障のsticky保持を採用した。今回の自律判断の委任による新しい詳細判断であり、過去の承認から必然だったとは扱わない。名称・構文・runtime接続は以下の推奨案で、現行parser・checker・runtimeや公開版を変更していない。実装開始、CI、main反映、releaseとは区別する。
 
 [ADR 011](adr/011-language-behavior-and-docs.md#async-0304-結果handleと失敗の分類)、[実装順S1/S2](value-task-implementation-plan.md#s1s2-task結果の境界)、[Q-006](open-questions.md#q-006-spawn結果handleと業務errtask故障)を前提とする。scopeが寿命と実joinを所有し、普通のResultの業務Errをtask故障へ昇格しない方向は既に採用されている。scope-local・全Tの一回受取と正常出口await/discard、業務Resultの外側に置く故障、sticky faultは採用する初版意味論である。Task/TaskFailure等のAPI名と具体構文は接続候補で、使用可能な標準機能ではない。[独立レビュー](task-result-handle-review.md)に選択理由と不採用案をまとめる。
 

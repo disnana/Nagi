@@ -1,0 +1,13 @@
+async def work() -> i64:
+    return 7
+async def exercise(flag: bool) -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        if flag:
+            received = await task
+            task = spawn work()
+        else:
+            received = await task
+            task = spawn work()
+        final = await task
+    return ok(print(0))

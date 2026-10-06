@@ -1,0 +1,9 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi/compiler)
+    Finished `test` profile [unoptimized] target(s) in 7.56s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagic-c07566afaa115644)
+
+running 1 test
+test check::checked::tests::task_sealing_rejects_missing_or_mismatched_scope_and_use_facts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 0.01s
+

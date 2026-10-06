@@ -1,6 +1,6 @@
 # ADR 012: scope所属の結果handleと故障の保持
 
-状態: **設計採用・Nagi API未実装**。private runtime bridgeの先行検証は[Stage 1結果](../task-bridge-stage1-results.md)に記録する。2026-10-06の「既存設計から安全に判断できるものは理由を示して自律確定」という追加指示に基づく詳細判断。旧Scope、spawn、test期待、公開版を変更した記録ではない。API名・構文とruntime接続は[設計案](../task-result-handle-design.md)、検証の順序は[実装計画](../value-task-implementation-plan.md#s1s2-task結果の境界)に残す。
+状態: **設計採用・S1作業branchに接続済み・未リリース**。private runtime bridgeの先行検証は[Stage 1結果](../task-bridge-stage1-results.md)に記録する。2026-10-06の「既存設計から安全に判断できるものは理由を示して自律確定」という追加指示に基づく詳細判断。旧Scope、spawn、test期待、公開版を変更した記録ではない。API名・構文とruntime接続は[設計案](../task-result-handle-design.md)、検証の順序は[実装計画](../value-task-implementation-plan.md#s1s2-task結果の境界)に残す。
 
 ## 根拠と今回の判断
 
@@ -17,7 +17,7 @@ at-most-onceとmust-consumeは別である。全T義務は新Taskだけに適用
 
 ## 初版の採用契約
 
-ここでのTask、TaskFailure、discardは設計上の呼称で、canonical moduleやoperation名、binding構文は接続候補である。現在使える標準APIには追加しない。
+ここでのTask、TaskFailure、discardは採用契約の呼称である。2026-10-06のS1再開では[接続判断](../task-handle-implementation.md)の `task = spawn work()`、canonical `std.task.Task[T]`、`discard` (unit)、`kind`、`message` (failure-origin view) を実装方針として確定し、先行負例から接続する。KindはPanicked/Cancelled/LegacyError/Internalの4値。scope選択は最寄りscope単位のsealed planに保持する。まだ実装完成・公開版での利用を示さない。
 
 - Task[T]はscope所属、非Copy・非Clone・非shared。作成時と同じscopeのlocalでのみ保持・移動し、scope外、関数引数/return、field/container/wrapper、他taskへ逃がさない。一般region/effect checkerやFuture保存は追加しない。
 - awaitはhandleをconsumeし、TがCopyでも一回だけ受け取る。未poll/Pendingの受取Future Dropでhandleを復活させない。正常binding/scope出口とloop継続では全Tでawaitまたは明示discardを必要とし、move aliasへ義務を移す。body Err/panic/親取消はcleanup経路で扱う。
@@ -37,7 +37,7 @@ background joinなしでは、長いbody中の完了未join task、join済み未
 
 ## 未検証のbridgeとacceptance
 
-新Taskのparse/check/生成Rust/公開runtime接続は未実装。private bridgeの検査と公開言語保証を分ける。次の表はS1全体の必要な検証であり、各項目の成功範囲は[Stage 1結果](../task-bridge-stage1-results.md)へ記録する。
+新Taskのparse/check/保存Low/生成Rust/公開runtimeを接続した。private bridgeの歴史的検査は[Stage 1結果](../task-bridge-stage1-results.md)、公開言語の検証と未確認範囲は[接続結果](../task-handles-s1-results.md)に分ける。次の表はS1全体のacceptanceであり、接続開始だけを全項目成功としない。
 
 | 対象 | 先行oracleと必要な確認 |
 |---|---|

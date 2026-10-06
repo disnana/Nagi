@@ -1,0 +1,49 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [unoptimized] target(s) in 3.58s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31400cc29fcdf7fc)
+
+running 18 tests
+test task::cost_tests::native_task_handle_costs ... ignored, native cost measurement; run explicitly with --ignored --nocapture
+
+thread 'task::tests::discard_keeps_fault_and_legacy_error_observation' (20211) panicked at runtime/src/task.rs:806:57:
+discarded child still faults
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'tokio-rt-worker' (20215) panicked at runtime/src/task.rs:724:58:
+primary
+test task::tests::discard_keeps_fault_and_legacy_error_observation ... ok
+test task::tests::cancelled_drain_can_resume_after_child_drop_gate ... ok
+test task::tests::fault_return_waits_for_requested_sibling_cleanup_and_actual_join ... ok
+test task::tests::parent_drop_requests_abort_but_does_not_report_child_destruction_complete ... ok
+test task::tests::heterogeneous_results_and_business_error_keep_sibling_healthy ... ok
+test task::tests::legacy_structured_cause_preserves_kind_message_and_primary_after_later_fault ... ok
+test task::tests::fake_native_id_reuse_does_not_mix_unreceived_tickets_and_retire_records ... ok
+
+thread 'tokio-rt-worker' (20231) panicked at runtime/src/task.rs:696:56:
+controlled child fault
+test task::tests::receiver_notification_cannot_replace_actual_join ... ok
+
+thread 'tokio-rt-worker' (20240) panicked at runtime/src/task.rs:1071:21:
+panic already unwinding before abort request
+test task::tests::payload_drop_locations_distinguish_failed_send_buffer_and_received_value ... ok
+test task::tests::received_fault_remains_sticky_at_scope_exit ... ok
+
+thread 'task::tests::spawn_after_fault_keeps_input_evaluation_and_actual_join_responsibility' (20242) panicked at runtime/src/task.rs:1120:56:
+sticky before new spawn
+test task::tests::requested_cancel_does_not_hide_already_returned_legacy_error ... ok
+test task::tests::spawn_after_fault_keeps_input_evaluation_and_actual_join_responsibility ... ok
+test task::tests::sticky_receive_retires_its_joined_ticket ... ok
+test task::tests::target_other_than_first_join_and_body_error_primary_are_preserved ... ok
+test task::tests::unpolled_and_pending_receive_drop_keep_scope_join_responsibility ... ok
+test task::tests::wrong_owner_and_missing_output_are_protocol_errors_without_stolen_join ... ok
+test task::tests::requested_cancel_preserves_panic_and_unrequested_cancel_is_fault ... ok
+
+test result: ok. 17 passed; 0 failed; 1 ignored; 0 measured; 190 filtered out; finished in 0.01s
+
+     Running tests/task_handles.rs (/tmp/nagi-container-flow-target/debug/deps/task_handles-1fdbf05c5538d590)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+

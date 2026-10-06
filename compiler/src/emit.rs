@@ -106,6 +106,12 @@ pub fn low_with_lines(p: &Program) -> Generated {
                     annotation,
                     value,
                     declare,
+                }
+                | S::SpawnBind {
+                    name,
+                    annotation,
+                    value,
+                    declare,
                 } => out.push_str(&format!(
                     "{}{name}{} = {};\n",
                     if *declare { "let " } else { "" },
@@ -114,7 +120,11 @@ pub fn low_with_lines(p: &Program) -> Generated {
                     } else {
                         String::new()
                     },
-                    expr(value)
+                    if matches!(s.kind, S::SpawnBind { .. }) {
+                        format!("spawn {}", expr(value))
+                    } else {
+                        expr(value)
+                    }
                 )),
                 S::Return(e) => out.push_str(&format!(
                     "return{};\n",
@@ -554,9 +564,28 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 )
             }
         }
-        E::Await(x) => format!("({}).await", re(x, types)),
+        E::Await(x) => {
+            if let Some(use_) = types.expression(e).task {
+                assert_eq!(use_.action, TaskAction::Receive);
+                format!(
+                    "__nagi_task_scope_{}.receive({}).await",
+                    use_.scope.0,
+                    re(x, types)
+                )
+            } else {
+                format!("({}).await", re(x, types))
+            }
+        }
         E::Try(x) => try_result(re(x, types), types),
         E::Call(n, ts, a) => {
+            if let Some(use_) = types.expression(e).task {
+                assert_eq!(use_.action, TaskAction::Discard);
+                return format!(
+                    "__nagi_task_scope_{}.discard({})",
+                    use_.scope.0,
+                    re(&a[0], types)
+                );
+            }
             if types.expression(e).argument_resolution == Some(NameResolution::Standard) {
                 let operation = types
                     .expression(e)
@@ -840,6 +869,12 @@ fn rb(
                 annotation,
                 value,
                 declare,
+            }
+            | S::SpawnBind {
+                name,
+                annotation,
+                value,
+                declare,
             } => {
                 // A block that returns has no outgoing binding updates.
                 // Give each top-level immutable view assignment its own
@@ -877,7 +912,12 @@ fn rb(
                 } else {
                     let rebind = decision.rebind;
                     let storage = types.storage_slots.contains(name);
-                    let value = re(value, types);
+                    let value = if matches!(s.kind, S::SpawnBind { .. }) {
+                        let id = decision.scope.expect("sealed SpawnBind scope");
+                        format!("{{ let __nagi_spawn_future = {}; __nagi_task_scope_{}.spawn_value(async move {{ __nagi_spawn_future.await }}) }}",re(value,types),id.0)
+                    } else {
+                        re(value, types)
+                    };
                     out.push_str(&format!(
                         "{}{name}{} = {};\n",
                         if *declare || rebind { "let mut " } else { "" },
@@ -1044,8 +1084,16 @@ fn rb(
             }
             S::Spawn(e) => {
                 let returns_result = decision.spawn_result;
+                let scope = if decision.task_bridge {
+                    format!(
+                        "__nagi_task_scope_{}",
+                        decision.scope.expect("sealed spawn scope").0
+                    )
+                } else {
+                    "__scope".into()
+                };
                 out.push_str(&format!(
-                    "{{ let __nagi_spawn_future = {}; __scope.spawn(async move {{ __nagi_spawn_future.await{} }}); }}\n",
+                    "{{ let __nagi_spawn_future = {}; {scope}.spawn(async move {{ __nagi_spawn_future.await{} }}); }}\n",
                     re(e, types),
                     if returns_result {
                         ""
@@ -1073,7 +1121,17 @@ fn rb(
                     types.function_error.expect("checked scope Result function"),
                     types,
                 );
-                out.push_str(&format!("{pad}    let mut __scope = ::nagi_runtime::Scope::new();\n{pad}    let __scope_result: ::std::result::Result<(), {failure}> = '__nagi_scope_body_{depth}: {{\n"));
+                let (scope, scope_type, cancel) = if decision.task_bridge {
+                    let scope = format!(
+                        "__nagi_task_scope_{}",
+                        decision.scope.expect("sealed scope identity").0
+                    );
+                    let cancel = format!("let _ = {scope}.cancel().await;");
+                    (scope, "TaskScope", cancel)
+                } else {
+                    ("__scope".into(), "Scope", "__scope.cancel().await;".into())
+                };
+                out.push_str(&format!("{pad}    let mut {scope} = ::nagi_runtime::{scope_type}::new();\n{pad}    let __scope_result: ::std::result::Result<(), {failure}> = '__nagi_scope_body_{depth}: {{\n"));
                 rb(
                     b,
                     out,
@@ -1083,7 +1141,7 @@ fn rb(
                     node.map(|node| &node.children[0]),
                 );
                 out.origin(::std::option::Option::Some(s.line));
-                out.push_str(&format!("{pad}        ::std::result::Result::Ok(())\n{pad}    }};\n{pad}    if let ::std::result::Result::Err(e) = __scope_result {{ __scope.cancel().await; {}; }}\n{pad}    {};\n{pad}}}\n", error_exit("e", types), try_result("__scope.join().await".into(), types)));
+                out.push_str(&format!("{pad}        ::std::result::Result::Ok(())\n{pad}    }};\n{pad}    if let ::std::result::Result::Err(e) = __scope_result {{ {cancel} {}; }}\n{pad}    {};\n{pad}}}\n", error_exit("e", types), try_result(format!("{scope}.join().await"), types)));
             }
         }
         if let Some(node) = node {
@@ -1422,6 +1480,11 @@ pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
                 let Some(definition) = p.modules.definition_id(id) else {
                     continue;
                 };
+                if plan.native_paths.contains_key(&definition.symbol)
+                    && !plan.native_reexports.contains(&definition.symbol)
+                {
+                    continue;
+                }
                 let alias = names.source_name(&binding.name);
                 let symbol = names.definition(definition);
                 let path = plan
@@ -1440,6 +1503,11 @@ pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
                 let alias = names.source_name(&binding.name);
                 out.push_str(&format!("#[allow(non_snake_case)]\npub mod {alias} {{\n"));
                 for definition in p.modules.exports(module) {
+                    if plan.native_paths.contains_key(&definition.symbol)
+                        && !plan.native_reexports.contains(&definition.symbol)
+                    {
+                        continue;
+                    }
                     let symbol = names.definition(definition);
                     let export = names.source_name(&definition.id.name);
                     let path = plan
@@ -2070,7 +2138,10 @@ pub fn cost_report(p: &Program) -> serde_json::Value {
     fn stmts(ss: &[Stmt], a: &mut Vec<serde_json::Value>) {
         for s in ss {
             match &s.kind {
-                S::Assign { value, .. } | S::Expr(value) | S::Spawn(value) => walk(value, a),
+                S::Assign { value, .. }
+                | S::SpawnBind { value, .. }
+                | S::Expr(value)
+                | S::Spawn(value) => walk(value, a),
                 S::Return(Some(e)) => walk(e, a),
                 S::If(c, x, y) => {
                     walk(c, a);

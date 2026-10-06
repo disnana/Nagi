@@ -139,6 +139,9 @@ fn visit_types(program: &mut Program, visitor: &mut impl FnMut(&mut Type)) {
             match &mut stmt.kind {
                 S::Assign {
                     annotation, value, ..
+                }
+                | S::SpawnBind {
+                    annotation, value, ..
                 } => {
                     if let Some(ty) = annotation {
                         visitor(ty);
@@ -648,7 +651,10 @@ fn insert_binding(metadata: &mut ModuleMetadata, binding: ModuleBinding) -> Resu
     Ok(())
 }
 
-fn register_standard_module(metadata: &mut ModuleMetadata, id: &ModuleId) -> Result<(), String> {
+pub(crate) fn register_standard_module(
+    metadata: &mut ModuleMetadata,
+    id: &ModuleId,
+) -> Result<(), String> {
     if !crate::stdlib::is_registered_module(id) {
         return Err("未登録のstd moduleです".into());
     }
@@ -693,6 +699,17 @@ pub(crate) fn resolve(mut units: Vec<ModuleUnit>, root: ModuleId) -> Result<Prog
         root: Some(root.clone()),
         ..Default::default()
     };
+    if units.iter().any(|u| {
+        u.program
+            .functions
+            .iter()
+            .any(|f| contains_task_binding(&f.body))
+    }) {
+        register_standard_module(
+            &mut metadata,
+            &ModuleId(crate::stdlib::TASK_MODULE_ID.into()),
+        )?;
+    }
     for unit in &units {
         if !unit.program.modules.is_empty() {
             metadata.merge(unit.program.modules.clone())?;
@@ -964,6 +981,12 @@ pub fn remap_definition(program: &mut Program, old: &str, new: &str) {
             }
             match &mut stmt.kind {
                 S::Assign {
+                    name,
+                    annotation,
+                    value,
+                    ..
+                }
+                | S::SpawnBind {
                     name,
                     annotation,
                     value,
@@ -1755,6 +1778,12 @@ impl<'a> Resolver<'a> {
             }
             match &mut stmt.kind {
                 S::Assign {
+                    name,
+                    annotation,
+                    value,
+                    ..
+                }
+                | S::SpawnBind {
                     name,
                     annotation,
                     value,

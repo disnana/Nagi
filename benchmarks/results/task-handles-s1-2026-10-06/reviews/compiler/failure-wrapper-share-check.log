@@ -1,0 +1,4 @@
+    Blocking waiting for file lock on build directory
+    Finished `dev` profile [unoptimized] target(s) in 7.48s
+     Running `/tmp/nagi-container-flow-target/debug/nagic check /tmp/nagi-task-review/failure-wrapper-share.nagi --out /tmp/nagi-task-review/out-share`
+checked /tmp/nagi-task-review/failure-wrapper-share.nagi

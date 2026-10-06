@@ -1,0 +1,7 @@
+class Item:
+    value: i64
+def value_of(spawn: Item) -> i64:
+    value = spawn.value
+    return value
+def main() -> unit:
+    print(0)

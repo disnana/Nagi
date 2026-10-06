@@ -1,0 +1,21 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi/runtime)
+    Finished `test` profile [unoptimized] target(s) in 16.36s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31400cc29fcdf7fc)
+
+running 1 test
+
+thread 'task::tests::sticky_receive_retires_its_joined_ticket' (19764) panicked at runtime/src/task.rs:538:13:
+assertion `left == right` failed
+  left: 128
+ right: 127
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test task::tests::sticky_receive_retires_its_joined_ticket ... FAILED
+
+failures:
+
+failures:
+    task::tests::sticky_receive_retires_its_joined_ticket
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 207 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p nagi-runtime --lib`

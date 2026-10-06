@@ -1,0 +1,9 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi/compiler)
+   Compiling nagi-task-raw-check-review v0.0.0 (/tmp/nagi-task-review/raw-check-api)
+    Finished `dev` profile [unoptimized] target(s) in 9.78s
+     Running `/tmp/nagi-container-flow-target/debug/nagi-task-raw-check-review`
+raw-High-unreceived: raw check = Err("module metadataのrootが不正です")
+
+thread 'main' (20260) panicked at src/main.rs:17:17:
+wrong error: module metadataのrootが不正です
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

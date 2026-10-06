@@ -1,0 +1,18 @@
+    Blocking waiting for file lock on package cache
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi/runtime)
+   Compiling nagi-s1-independent-public-review v0.0.0 (/tmp/nagi-s1-independent-review/public-counterexamples)
+    Finished `test` profile [unoptimized] target(s) in 3.59s
+     Running unittests review.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_s1_independent_public_review-8844f079b5a00b57)
+
+running 4 tests
+
+thread 'tests::discard_does_not_stop_child_and_cannot_suppress_later_fault' (20207) panicked at review.rs:14:101:
+discarded fault
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test tests::completed_target_is_not_delivered_from_an_already_poisoned_scope ... ok
+test tests::wrong_owner_cannot_drain_or_poison_original_owner ... ok
+test tests::discard_does_not_stop_child_and_cannot_suppress_later_fault ... ok
+test tests::cancelled_pending_receive_can_reuse_scope_for_a_business_error ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

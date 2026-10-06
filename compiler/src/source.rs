@@ -298,7 +298,7 @@ impl Sources {
         fn block(files: &[SourceFile], names: &mut HashMap<String, String>, stmts: &[Stmt]) {
             for stmt in stmts {
                 match &stmt.kind {
-                    S::Assign { name, .. } => {
+                    S::Assign { name, .. } | S::SpawnBind { name, .. } => {
                         if let Some(span) = stmt.binding_span {
                             binding(files, names, stmt.line, span, name);
                         }
@@ -549,6 +549,7 @@ pub fn map_lines(program: &mut Program, map: impl Fn(usize) -> usize) {
             stmt.line = map(stmt.line);
             match &mut stmt.kind {
                 S::Assign { value, .. }
+                | S::SpawnBind { value, .. }
                 | S::Expr(value)
                 | S::Spawn(value)
                 | S::Return(Some(value)) => expr(value, map),
@@ -640,6 +641,7 @@ pub fn resolve_assets(program: &mut Program, source: &Path) -> Result<(), String
         for stmt in stmts {
             match &mut stmt.kind {
                 S::Assign { value, .. }
+                | S::SpawnBind { value, .. }
                 | S::Expr(value)
                 | S::Spawn(value)
                 | S::Return(Some(value)) => expr(value, source)?,

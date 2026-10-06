@@ -1,0 +1,15 @@
+from std.task import TaskFailure
+async def work() -> unit:
+    print(1)
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        received = await task
+        match received:
+            case Ok(value):
+                print(0)
+            case Err(failure):
+                failures = [some(failure)]
+                copied = copy(view(failures))
+                print(len(copied))
+    return ok(print(0))

@@ -41,3 +41,7 @@ High/保存Low/手書きLowは[AST](../../compiler/src/ast.rs)、[parser](../../
 ## Stage 1後の独立確認
 
 [Stage 1結果](task-bridge-stage1-results.md)のprivate sourceとrunnerを別途読取レビューした。元Errorを表示messageだけに置換する問題と、runnerのcanonical path不一致を指摘し、修正後を再確認した。legacy causeは元ErrorをArc内に保持し、Ready→record→cause公開後にnative JoinError payloadを破棄する。既存checkerの元行負例をHigh/Lowで直接確認するrunnerを残した。新ブロッカーなし。ただしレビュー担当はCargoを実行しておらず、Nagi Taskの全T義務/escape/codegenを完成とは評価していない。速度・allocation・Future sizeは後続の測定対象。
+
+## S1接続後の独立レビュー
+
+2026-10-06。runtime担当のSolがcompilerを読取レビューし、別のSolがruntime/lifecycle境界を独立レビューした。compilerのFailure wrapper copy/share、ユーザーspawn名互換、関連メソッドpub use、raw checker APIのcanonical metadata不一致は縮小入力・修正後再実行で確認した。runtime故障後の大量receiveのO(n²)掃除はnative REDからticket退役へ修正し、17oracleと同じ公開APIのrelease測定で再確認した。担当の自己報告を独立レビューに代用せず、Linuxでの確認・未確認target・任意Drop/panicの限界は[接続結果](task-handles-s1-results.md)と[原ログ](../../benchmarks/results/task-handles-s1-2026-10-06/README.md)へ残す。

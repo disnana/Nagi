@@ -1,0 +1,3 @@
+record Item { value: i64 }
+fn value_of(spawn: Item) -> i64 { let value = spawn.value; return value; }
+fn main() -> unit { print(0); }

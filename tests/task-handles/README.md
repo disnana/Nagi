@@ -1,17 +1,14 @@
-# S1 Task handleの先行契約
+# Task結果handleの段階別契約入力
 
-この入力はADR 012の採用仕様をテストへ落としたもの。現行Nagiで使えるサンプルではない。private bridgeの実証と、Nagiのchecker/生成の完成は別である。
-
-`contracts.json`にHighと独立した手書きLowを対で登録した。全Tの正常出口義務、一回消費、move alias、再代入、分岐・loop、scope所属、旧spawnと同名ユーザー関数を対象にする。negativeの期待はchecker段階・診断の意味・元のprimary行で固定する。現在のparse/import拒否はnegative成功に数えない。
-
-`shadow`は既存のlet重複禁止を維持する例で、shadow機能を追加する要求ではない。Taskを上書きする`reassignment`の未受取義務とは分ける。scope内returnの解禁や一般Result bindingのmust-useも追加しない。
+S1作業branchのHigh/Low契約。`contracts.json`はchecker成功、またはchecker段階＋diagnostic fragment＋primary元行の拒否を指定する。parse/import拒否・ICE・違う行の拒否はnegativeの成功ではない。登録検査とrunner oracleだけではTaskの成功を保証しない。
 
 ```sh
 python scripts/verify_task_handle_contract_inputs.py
 cargo test --locked -p nagic --example task-contract-red
 cargo run --locked -p nagic --example task-contract-red -- --report /tmp/task-contracts.json
+cargo test --locked -p nagic --test task_handles
 ```
 
-最初のコマンドは登録だけ、二つ目はrunnerが誤った段階や位置を成功扱いしない検査。三つ目は各契約を現行compilerへ照合し、一つでも未達ならexit 1、runnerの入出力失敗ならexit 2、ICEならpanic失敗となる。未実装の時点ではREDとなる。この失敗をskipや期待変更で隠さない。
+元の28対にbinding放棄、branch合流/再生成、nested/same-depth scope、引数/return/wrapper escape、Failure viewとClone/shared境界、ユーザーspawn名互換の縮小反例を追加。Task native harnessは全positiveをHigh・保存Low・手書きLowでbuild/runし、別のbarrier付きoracleで業務Err、sticky fault、body/legacy元Err、Dropとactual joinを区別する。固定seedの16経路も両flagで三構文実行する。private試作からpublicへの17runtime oracleは `task::tests::`。
 
-checker/生成への接続後はこのrunnerのREDを解消し、保存Lowの再check・封印・実Cargo/native・診断対応を専用conformance harnessへ移す。ここはparse/checkまでの先行入力であり、std-onlyの既存conformanceへTokio stubを入れてruntime保証を作らない。
+[Stage 1結果](../../docs/internal/task-bridge-stage1-results.md)は50入力がparse REDだった歴史的記録。[接続結果](../../docs/internal/task-handles-s1-results.md)と[新artifact](../../benchmarks/results/task-handles-s1-2026-10-06/README.md)に今回の実行・原ログ・hash・保証範囲を残す。S2とSQLiteは対象外。

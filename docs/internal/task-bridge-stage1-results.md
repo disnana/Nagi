@@ -4,7 +4,7 @@
 
 ## 今回実装した範囲
 
-[ADR 012](adr/012-task-result-handles.md)のruntime接続を、[cfg(test)のprivate module](../../runtime/src/task_bridge_prototype.rs)で検証した。公開Scope、compiler本体、旧statement spawn、Supervisor/HTTPサンプル、SQLite、依存は変更していない。NagiのTask構文、型、must-consume、escape検査、Low/Rust生成への接続は**未実装**。
+[ADR 012](adr/012-task-result-handles.md)のruntime接続を、[cfg(test)のprivate module](../../benchmarks/results/task-bridge-2026-10-06/07-legacy-green/task_bridge_prototype.rs)で検証した。公開Scope、compiler本体、旧statement spawn、Supervisor/HTTPサンプル、SQLite、依存は変更していない。NagiのTask構文、型、must-consume、escape検査、Low/Rust生成への接続は**未実装**。
 
 Scopeが唯一のJoinSet ownerとなり、Taskは型付きoneshot receiver、scope identity token、再利用しないticket、小さいreceipt stateを持つ。結果の通知とactual join、結果の受取状態とscopeのsticky failureを分けた。旧spawnのErrは構造化した元Errorをcauseへ保持する。公開TaskFailure・Error変換は後続の実装対象である。
 

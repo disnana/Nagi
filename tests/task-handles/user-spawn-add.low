@@ -1,0 +1,2 @@
+fn value_of(spawn: i64) -> i64 { let value = spawn + 1; return value; }
+fn main() -> unit { print(value_of(5)); }

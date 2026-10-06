@@ -235,7 +235,10 @@ fn database_builtin(name: &str) -> bool {
 pub(super) fn statements(body: &[Stmt], visit: &mut impl FnMut(&Expr)) {
     for statement in body {
         match &statement.kind {
-            S::Assign { value, .. } | S::Expr(value) | S::Spawn(value) => expr(value, visit),
+            S::Assign { value, .. }
+            | S::SpawnBind { value, .. }
+            | S::Expr(value)
+            | S::Spawn(value) => expr(value, visit),
             S::Return(value) => {
                 if let Some(value) = value {
                     expr(value, visit);

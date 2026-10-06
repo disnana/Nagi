@@ -1,0 +1,14 @@
+from std.task import discard
+async def work() -> i64:
+    return 7
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        for iteration in range(2):
+            async with scope:
+                inner = spawn work()
+                discard(inner)
+            received = await task
+            task = spawn work()
+        discard(task)
+    return ok(print(0))

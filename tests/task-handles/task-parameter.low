@@ -1,0 +1,2 @@
+from std.task import Task;
+fn accept(task: Task[i64]) -> unit { print(0); } # primary

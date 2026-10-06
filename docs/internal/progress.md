@@ -1,5 +1,12 @@
 # コンパイラ・Rust境界の進捗
 
+## S1 Task結果handleの接続（作業branch・未リリース）
+
+2026-10-06、ユーザーの再開指示を受け、Stage 1の停止境界から追加RED→checker/public runtimeへ接続した。SpawnBind、canonical std.task、stable ScopeIdとbinding義務、sealed受取/放棄/Scope planを実装。High・保存Low・手書きLowの全positive nativeと、業務Err兄弟継続・sticky fault・legacy/body元Err・Drop/actual joinを検証した。独立レビューのFailure wrapper copy/share、spawnユーザー名、associated method再export、raw public checker APIの不一致を縮小反例で修正した。故障後大量受取のO(n²)掃除もRED→ticket退役へ修正し、17native oracleへ追加した。
+
+[接続結果](task-handles-s1-results.md)と[artifact](../../benchmarks/results/task-handles-s1-2026-10-06/README.md)が進行中の正本。4 OS最新head CI・測定・全回帰・文書は個別に実行結果を追記する。Stage 1結果を今回の実行と数えず、S2、公開SQLite、merge、release、版更新は行わない。
+
+
 ## S1 Stage 1: 先行REDとprivate Task bridge
 
 2026-10-06。ユーザーによる#87のマージを確認した。最終head `5985e1b`とmain `9ba4a10`のtreeは一致。#87は追加変更せず、S1は別のmain向けdraft PRへ分離する。

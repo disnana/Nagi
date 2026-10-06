@@ -67,6 +67,21 @@ pub(crate) fn contains_auth_proof(
     })
 }
 
+/// Task handles and their opaque failures cannot be cloned or shared through
+/// a wrapper or a generated record. Follow stored payloads, not phantom types.
+pub(crate) fn contains_task_owner(
+    ty: &Type,
+    classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
+) -> bool {
+    payload_any(ty, classes, enums, true, |r| {
+        matches!(
+            r,
+            crate::stdlib::Resource::Task | crate::stdlib::Resource::TaskFailure
+        )
+    })
+}
+
 /// Registered native types decide their own Debug contract. Their custom
 /// formatter need not format phantom/indirect type parameters. Owned wrappers
 /// and generated class/enum fields, however, do require their payload's Debug.
@@ -458,6 +473,7 @@ mod tests {
                 R::Actor => [&[], &[], &[0, 1, 2], &[], &[]],
                 R::Turn => [&[0, 1, 2], &[], &[], &[], &[]],
                 R::Grant => [&[], &[], &[], &[], &[0]],
+                R::Task => [&[], &[], &[0], &[], &[]],
                 _ => [&[], &[], &[], &[], &[]],
             };
             let info = crate::stdlib::resource_info(resource);

@@ -1,0 +1,12 @@
+Diff in /workspace/Nagi/compiler/src/check.rs:3971:
+             };
+             let ty = self.expr(a, hint.as_ref())?;
+             if self.contains_task(&ty) {
+-                return Err(error(a.line, "Taskはawait/discard/move以外の操作へ渡せません"));
++                return Err(error(
++                    a.line,
++                    "Taskはawait/discard/move以外の操作へ渡せません",
++                ));
+             }
+             // DB SQL is copied into Sql::Owned before later arguments are
+             // evaluated; env finishes its key lookup before the fallback.

@@ -30,6 +30,12 @@ struct Var {
     content_origins: Vec<HashSet<BorrowedPlace>>,
     async_function: Option<String>,
     borrowed_element: bool,
+    task: Option<TaskObligation>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct TaskObligation {
+    scope: ScopeId,
+    pending: bool,
 }
 struct Checker {
     classes: HashMap<String, Class>,
@@ -40,6 +46,9 @@ struct Checker {
     ret: Type,
     asynchronous: bool,
     scope: usize,
+    task_scopes: Vec<ScopeId>,
+    task_bridges: Vec<bool>,
+    task_uses: Vec<TaskUse>,
     editor: bool,
     collect_view_flow: bool,
     view_flow_names: HashSet<String>,
@@ -62,21 +71,27 @@ fn matches_type(a: &Type, b: &Type) -> bool {
     a == b
 }
 
-fn reset_flow(statements: &mut [Stmt]) {
+fn reset_flow(statements: &mut [Stmt], next_scope: &mut usize) {
     for statement in statements {
         statement.flow = None;
+        statement.task = Default::default();
+        if let S::Scope(body) = &statement.kind {
+            statement.task.scope = Some(ScopeId(*next_scope));
+            *next_scope += 1;
+            statement.task.bridge = scope_has_task_binding(body);
+        }
         match &mut statement.kind {
             S::If(_, then_body, else_body) => {
-                reset_flow(then_body);
-                reset_flow(else_body);
+                reset_flow(then_body, next_scope);
+                reset_flow(else_body, next_scope);
             }
             S::Match(_, arms) => {
                 for arm in arms {
-                    reset_flow(&mut arm.body);
+                    reset_flow(&mut arm.body, next_scope);
                 }
             }
-            S::While(_, body) | S::For(_, _, body) | S::Scope(body) => reset_flow(body),
-            S::Assign { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => {}
+            S::While(_, body) | S::For(_, _, body) | S::Scope(body) => reset_flow(body, next_scope),
+            S::Assign { .. } | S::SpawnBind { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => {}
         }
     }
 }
@@ -120,7 +135,11 @@ fn view_return_dependency_names(body: &[Stmt]) -> HashSet<String> {
                 S::While(_, body) | S::For(_, _, body) | S::Scope(body) => {
                     statements(body, observers, groups)
                 }
-                S::Assign { .. } | S::Return(None) | S::Expr(_) | S::Spawn(_) => {}
+                S::Assign { .. }
+                | S::SpawnBind { .. }
+                | S::Return(None)
+                | S::Expr(_)
+                | S::Spawn(_) => {}
             }
             if !names.is_empty() {
                 groups.push(names);
@@ -153,7 +172,7 @@ fn view_return_dependency_names(body: &[Stmt]) -> HashSet<String> {
 fn statement_view_names(statement: &Stmt) -> HashSet<String> {
     let mut names = HashSet::new();
     match &statement.kind {
-        S::Assign { name, value, .. } => {
+        S::Assign { name, value, .. } | S::SpawnBind { name, value, .. } => {
             names.insert(name.clone());
             expression_names(value, &mut names);
         }
@@ -437,11 +456,41 @@ pub(crate) fn editor_types(primary: &Program, native: &Program) -> Option<Progra
 }
 
 fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
+    let mut next_scope = 0;
     for function in &mut p.functions {
-        reset_flow(&mut function.body);
+        reset_flow(&mut function.body, &mut next_scope);
     }
     if !p.imports.is_empty() || !p.module_imports.is_empty() {
         return Err("importはnagicのファイル読み込み経路で解決してください".into());
+    }
+    // SpawnBind is contextual syntax even for the public in-memory API. Register
+    // its canonical resource before checking; file resolution is not required
+    // to retain obligations or round-trip this type through saved Low.
+    if p.functions
+        .iter()
+        .any(|f| crate::ast::contains_task_binding(&f.body))
+    {
+        if p.modules.is_empty() {
+            // In-memory input has no filesystem origin. Use a reserved logical
+            // root and the same resolver as file inputs, without inventing an
+            // original-source diagnostic mapping.
+            let root = ModuleId("/__nagi_memory__/program.nagi".into());
+            *p = crate::modules::resolve(
+                vec![crate::modules::ModuleUnit {
+                    id: root.clone(),
+                    program: p.clone(),
+                    imports: vec![],
+                    tokens: vec![],
+                    offset: 0,
+                }],
+                root,
+            )?;
+        } else {
+            crate::modules::register_standard_module(
+                &mut p.modules,
+                &ModuleId(crate::stdlib::TASK_MODULE_ID.into()),
+            )?;
+        }
     }
     crate::modules::decode_low_types(p)?;
     if p.modules
@@ -466,6 +515,9 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         ret: Type::named("unit"),
         asynchronous: false,
         scope: 0,
+        task_scopes: vec![],
+        task_bridges: vec![],
+        task_uses: vec![],
         editor,
         collect_view_flow: false,
         view_flow_names: HashSet::new(),
@@ -636,6 +688,9 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         c.ret = f.ret.clone();
         c.asynchronous = f.asynchronous;
         c.scope = 0;
+        c.task_scopes.clear();
+        c.task_bridges.clear();
+        c.task_uses.clear();
         c.collect_view_flow = should_collect_view_flow(editor, f.asynchronous, &f.ret, &f.body);
         c.view_flow_names.clear();
         if c.collect_view_flow {
@@ -676,6 +731,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
                         origins,
                         async_function: None,
                         borrowed_element: false,
+                        task: None,
                     },
                 )
                 .is_some()
@@ -723,6 +779,92 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
     Ok(())
 }
 impl Checker {
+    fn is_task(&self, t: &Type) -> bool {
+        self.resource(&t.0) == Some(crate::stdlib::Resource::Task)
+    }
+    fn contains_task(&self, t: &Type) -> bool {
+        self.is_task(t) || t.1.iter().any(|t| self.contains_task(t))
+    }
+    fn task_source<'a>(&self, e: &'a Expr) -> Option<&'a str> {
+        if let (E::Name(n), Some(NameResolution::Local)) = (&e.kind, e.resolution) {
+            return Some(n);
+        }
+        Self::transferred_value(e).and_then(|value| self.task_source(value))
+    }
+    fn task_obligation(&self, e: &Expr) -> Result<TaskObligation, String> {
+        let obligation = self
+            .task_source(e)
+            .and_then(|n| self.vars.get(n))
+            .and_then(|v| v.task)
+            .ok_or_else(|| {
+                error(
+                    e.line,
+                    "Taskは所属scopeのローカルhandleとして使用してください",
+                )
+            })?;
+        if self.task_scopes.last() != Some(&obligation.scope) {
+            return Err(error(e.line, "Taskは作成した同じscope内だけで使用できます"));
+        }
+        Ok(obligation)
+    }
+    fn clear_task(&mut self, e: &Expr) {
+        if let Some(name) = self.task_source(e).map(str::to_owned) {
+            if let Some(task) = self.vars.get_mut(&name).and_then(|v| v.task.as_mut()) {
+                task.pending = false;
+            }
+        }
+    }
+    fn task_operation(
+        &mut self,
+        operation: crate::stdlib::Operation,
+        types: &[Type],
+        args: &mut [Expr],
+        expression: ExprUseId,
+    ) -> Result<Type, String> {
+        use crate::stdlib::{Operation as O, Resource as R};
+        let line = expression.line;
+        if !types.is_empty() || args.len() != 1 {
+            return Err(error(line, "Task operationは型引数なしの1引数です"));
+        }
+        let wanted = crate::stdlib::resource_type(R::TaskFailure, vec![]);
+        let ty = self.expr(&mut args[0], None)?;
+        if operation == O::TaskDiscard {
+            if !self.is_task(&ty) {
+                return Err(error(line, "discardにはTaskが必要です"));
+            }
+            let obligation = self.task_obligation(&args[0])?;
+            self.consume(&args[0])?;
+            self.clear_task(&args[0]);
+            self.task_uses.push(TaskUse {
+                expression,
+                scope: obligation.scope,
+                action: TaskAction::Discard,
+            });
+            Ok(Type::named("unit"))
+        } else {
+            self.reference(&ty, &Type::generic("view", vec![wanted]), line)?;
+            self.hold_value(&args[0], true);
+            if operation == O::TaskKind {
+                Ok(crate::stdlib::resource_type(R::TaskFailureKind, vec![]))
+            } else {
+                Ok(Type::generic("view", vec![Type::named("str")]))
+            }
+        }
+    }
+    fn pending_tasks(&self, retained: &HashSet<BindingId>) -> Result<(), String> {
+        if let Some(var) = self
+            .vars
+            .values()
+            .filter(|v| !retained.contains(&v.binding) && v.task.is_some_and(|t| t.pending))
+            .min_by_key(|v| v.binding)
+        {
+            return Err(error(
+                var.binding.line,
+                "未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください",
+            ));
+        }
+        Ok(())
+    }
     fn transferred_value(e: &Expr) -> Option<&Expr> {
         let E::Call(name, _, args) = &e.kind else {
             return None;
@@ -997,9 +1139,13 @@ impl Checker {
         args: &mut [Expr],
         line: usize,
         expected: Option<&Type>,
+        expression: ExprUseId,
     ) -> Result<Type, String> {
         use crate::stdlib::{Operation as O, Passing, Resource as R};
         let info = crate::stdlib::operation_info(operation);
+        if info.module == crate::stdlib::StandardModule::Task {
+            return self.task_operation(operation, types, args, expression);
+        }
         if let crate::stdlib::OperationEmission::IdentityTransfer { argument } =
             crate::stdlib::operation_semantics(operation).emission
         {
@@ -1670,6 +1816,9 @@ impl Checker {
         Ok(Some(Type::named(&owner)))
     }
     fn emittable(&self, t: &Type, line: usize, local: bool) -> Result<(), String> {
+        if self.contains_task(t) && !(local && self.is_task(t)) {
+            return Err(error(line,"Taskは同じscopeの直接ローカルbinding専用です。引数・戻り値・field・container・wrapperへ保存できません"));
+        }
         fn contains_future(t: &Type) -> bool {
             t.is_future() || t.1.iter().any(contains_future)
         }
@@ -2444,6 +2593,9 @@ impl Checker {
         for (n, v) in after {
             if let Some(x) = self.vars.get_mut(&n) {
                 x.moved |= v.moved;
+                if let (Some(x), Some(v)) = (&mut x.task, v.task) {
+                    x.pending |= v.pending;
+                }
                 x.moved_fields.extend(v.moved_fields);
                 x.origins.extend(v.origins);
                 for (contents, origins) in x.content_origins.iter_mut().zip(v.content_origins) {
@@ -2460,6 +2612,11 @@ impl Checker {
         }
         for (name, var) in &mut self.vars {
             var.moved = paths.iter().any(|path| path[name].moved);
+            if let Some(task) = var.task.as_mut() {
+                task.pending = paths
+                    .iter()
+                    .any(|path| path[name].task.is_some_and(|t| t.pending));
+            }
             var.moved_fields = paths
                 .iter()
                 .flat_map(|path| path[name].moved_fields.iter().cloned())
@@ -2558,6 +2715,7 @@ impl Checker {
         }
     }
     fn block(&mut self, ss: &mut [Stmt]) -> Result<(), String> {
+        let retained = self.vars.values().map(|v| v.binding).collect();
         // A path that returns will never advance any enclosing iterator again.
         // New loops inside this block still acquire their own loans.
         let ending = returns(ss).then(|| std::mem::take(&mut self.iterators));
@@ -2565,7 +2723,11 @@ impl Checker {
         if let Some(iterators) = ending {
             self.iterators = iterators;
         }
-        checked
+        checked?;
+        if !returns(ss) {
+            self.pending_tasks(&retained)?;
+        }
+        Ok(())
     }
     fn block_statements(&mut self, ss: &mut [Stmt]) -> Result<(), String> {
         for s in ss {
@@ -2597,10 +2759,12 @@ impl Checker {
         // parent's condition effects while checking either branch.
         let parent_mutations = std::mem::take(&mut self.view_content_mutations);
         let parent_uses = std::mem::take(&mut self.view_expression_uses);
+        let parent_task_uses = std::mem::take(&mut self.task_uses);
         let mut assignment = None;
         let mut branch_entry = None;
         let mut loop_entry = None;
         let checked = self.statement_inner(s, &mut assignment, &mut branch_entry, &mut loop_entry);
+        s.task.uses = std::mem::replace(&mut self.task_uses, parent_task_uses);
         let content_mutations =
             std::mem::replace(&mut self.view_content_mutations, parent_mutations);
         let mut expression_uses: Vec<_> =
@@ -2612,10 +2776,12 @@ impl Checker {
             let mut value_dependencies = Vec::new();
             let mut return_observers = Vec::new();
             match &s.kind {
-                S::Assign { value, .. } => value_dependencies.push(FlowValueDependency {
-                    target: assignment.unwrap().target,
-                    inputs: self.view_value_bindings(value),
-                }),
+                S::Assign { value, .. } | S::SpawnBind { value, .. } => {
+                    value_dependencies.push(FlowValueDependency {
+                        target: assignment.unwrap().target,
+                        inputs: self.view_value_bindings(value),
+                    })
+                }
                 S::Match(value, arms) => {
                     let inputs = self.view_value_bindings(value);
                     for arm in arms {
@@ -2665,8 +2831,15 @@ impl Checker {
         branch_entry: &mut Option<Vec<ViewListBindingSnapshot>>,
         loop_entry: &mut Option<FlowLoopEntry>,
     ) -> Result<(), String> {
+        let spawn_binding = matches!(s.kind, S::SpawnBind { .. });
         match &mut s.kind {
             S::Assign {
+                name,
+                annotation,
+                value,
+                declare,
+            }
+            | S::SpawnBind {
                 name,
                 annotation,
                 value,
@@ -2683,7 +2856,13 @@ impl Checker {
                     return Err(error(s.line, "同じscope内でletを重複できません"));
                 }
                 let expected = annotation.as_ref().or_else(|| old.as_ref().map(|v| &v.ty));
-                let ty = self.expr(value, expected)?;
+                let ty = if spawn_binding {
+                    let output = self.check_spawn(value, false)?;
+                    s.task.scope = self.task_scopes.last().copied();
+                    crate::stdlib::resource_type(crate::stdlib::Resource::Task, vec![output])
+                } else {
+                    self.expr(value, expected)?
+                };
                 if let Some(t) = expected {
                     self.demand(&ty, t, s.line)?;
                 }
@@ -2691,6 +2870,18 @@ impl Checker {
                     self.valid(a, s.line)?;
                 }
                 self.emittable(&ty, s.line, true)?;
+                let task = if self.is_task(&ty) {
+                    Some(if spawn_binding {
+                        TaskObligation {
+                            scope: s.task.scope.expect("checked spawn scope"),
+                            pending: true,
+                        }
+                    } else {
+                        self.task_obligation(value)?
+                    })
+                } else {
+                    None
+                };
                 if let (E::Name(source), Some(NameResolution::Local)) =
                     (&value.kind, value.resolution)
                 {
@@ -2725,6 +2916,24 @@ impl Checker {
                 };
                 let content_origins = self.content_origins(value, &ty, 0);
                 self.consume(value)?;
+                if task.is_some() && !spawn_binding {
+                    self.clear_task(value);
+                }
+                if self
+                    .vars
+                    .get(name)
+                    .is_some_and(|v| v.task.is_some_and(|t| t.pending))
+                {
+                    return Err(error(
+                        s.line,
+                        "未受取Taskを再代入で放棄できません。先にawaitまたはdiscardしてください",
+                    ));
+                }
+                if let (Some(previous), Some(next)) = (old.as_ref().and_then(|v| v.task), task) {
+                    if previous.scope != next.scope {
+                        return Err(error(s.line, "Taskを別scopeのbindingへ移せません"));
+                    }
+                }
                 let target_binding = old.as_ref().map(|v| v.binding).unwrap_or(BindingId {
                     line: s.line,
                     token: s.binding_span.unwrap_or_default().start,
@@ -2753,6 +2962,7 @@ impl Checker {
                         content_origins,
                         async_function,
                         borrowed_element: false,
+                        task,
                     },
                 );
             }
@@ -2788,6 +2998,9 @@ impl Checker {
             }
             S::Expr(e) => {
                 let t = self.expr(e, None)?;
+                if self.contains_task(&t) {
+                    return Err(error(s.line,"Taskを裸の式で放棄できません。awaitまたはstd.task.discardを使用してください"));
+                }
                 if t.is_future() {
                     return Err(error(
                         s.line,
@@ -2983,6 +3196,7 @@ impl Checker {
                                 moved_fields: HashSet::new(),
                                 async_function: None,
                                 borrowed_element: false,
+                                task: None,
                             },
                         );
                     }
@@ -3118,6 +3332,7 @@ impl Checker {
                             content_origins,
                             async_function: None,
                             borrowed_element,
+                            task: None,
                         },
                     )),
                     s.line,
@@ -3148,50 +3363,70 @@ impl Checker {
                     return Err(error(s.line, format!("scopeの失敗はErrorです。戻り値のエラー型 {failure} へ変換できません。ErrorまたはRust連携でFrom<Error>を実装したclassまたはenumを使用してください")));
                 }
                 self.scope += 1;
+                self.task_scopes
+                    .push(s.task.scope.expect("structural scope identity"));
+                self.task_bridges.push(s.task.bridge);
                 let m = self.child(b);
+                self.task_bridges.pop();
+                self.task_scopes.pop();
                 self.scope -= 1;
                 let m = m?;
                 Self::scope_origins(&self.vars, &m, s.line)?;
                 self.merge_moves(m);
             }
             S::Spawn(e) => {
-                if self.scope == 0 {
-                    return Err(error(
-                        s.line,
-                        "spawnはasync with scopeの中で使用してください",
-                    ));
-                }
-                let t = self.expr(e, None)?;
-                if t != future(Type::named("unit")) && t != future(result(Type::named("unit"))) {
-                    return Err(error(
-                        s.line,
-                        "0.1のspawnはasync unitまたはResult[unit,Error]を取ります",
-                    ));
-                }
-                if let E::Call(name, _, args) = &e.kind {
-                    let passing = (e.resolution == Some(NameResolution::Standard))
-                        .then(|| crate::stdlib::operation(name))
-                        .flatten()
-                        .map(|operation| crate::stdlib::operation_info(operation).parameters);
-                    for (index, arg) in args.iter().enumerate() {
-                        let native_borrow = passing.is_some_and(|parameters| {
-                            matches!(
-                                parameters[index],
-                                crate::stdlib::Passing::Reference | crate::stdlib::Passing::Borrow
-                            )
-                        });
-                        if !arg.ty.as_ref().is_some_and(Type::contains_view) && !native_borrow {
-                            continue;
-                        }
-                        return Err(error(
-                            s.line,
-                            "viewを別taskへ渡せません。copyを使用してください",
-                        ));
-                    }
-                }
+                self.check_spawn(e, true)?;
+                s.task.scope = self.task_scopes.last().copied();
+                s.task.bridge = self.task_bridges.last().copied().unwrap_or(false);
             }
         }
         Ok(())
+    }
+    fn check_spawn(&mut self, e: &mut Expr, legacy: bool) -> Result<Type, String> {
+        if self.scope == 0 {
+            return Err(error(
+                e.line,
+                "spawnはasync with scopeの中で使用してください",
+            ));
+        }
+        let t = self.expr(e, None)?;
+        if legacy && t != future(Type::named("unit")) && t != future(result(Type::named("unit"))) {
+            return Err(error(
+                e.line,
+                "0.1のspawnはasync unitまたはResult[unit,Error]を取ります",
+            ));
+        }
+        if !t.is_future() {
+            return Err(error(e.line, "spawn対象はasync呼び出しです"));
+        }
+        if !legacy {
+            self.emittable(&t.inner(), e.line, false)?;
+            if t.inner().contains_view() {
+                return Err(error(e.line, "viewをTaskの結果として保持できません"));
+            }
+        }
+        if let E::Call(name, _, args) = &e.kind {
+            let passing = (e.resolution == Some(NameResolution::Standard))
+                .then(|| crate::stdlib::operation(name))
+                .flatten()
+                .map(|operation| crate::stdlib::operation_info(operation).parameters);
+            for (index, arg) in args.iter().enumerate() {
+                let native_borrow = passing.is_some_and(|parameters| {
+                    matches!(
+                        parameters[index],
+                        crate::stdlib::Passing::Reference | crate::stdlib::Passing::Borrow
+                    )
+                });
+                if !arg.ty.as_ref().is_some_and(Type::contains_view) && !native_borrow {
+                    continue;
+                }
+                return Err(error(
+                    e.line,
+                    "viewを別taskへ渡せません。copyを使用してください",
+                ));
+            }
+        }
+        Ok(t.inner())
     }
     fn expr(&mut self, e: &mut Expr, expected: Option<&Type>) -> Result<Type, String> {
         self.expr_mode(e, expected, false)
@@ -3222,6 +3457,7 @@ impl Checker {
         projection: bool,
     ) -> Result<Type, String> {
         let line = e.line;
+        let expression = ExprUseId::of(e);
         if e.resolution == Some(NameResolution::Module) {
             let alias = match &e.kind {
                 E::Name(name) | E::Call(name, _, _) | E::Record(name, _) => name.as_str(),
@@ -3557,10 +3793,31 @@ impl Checker {
                     return Err(error(line, "awaitはasync関数内で使用してください"));
                 }
                 let t = self.expr(x, None)?;
-                if !t.is_future() {
-                    return Err(error(line, "await対象はasync呼び出しです"));
+                if self.is_task(&t) {
+                    let obligation = self.task_obligation(x)?;
+                    self.consume(x)?;
+                    self.clear_task(x);
+                    self.task_uses.push(TaskUse {
+                        expression,
+                        scope: obligation.scope,
+                        action: TaskAction::Receive,
+                    });
+                    Type::generic(
+                        "Result",
+                        vec![
+                            t.inner(),
+                            crate::stdlib::resource_type(
+                                crate::stdlib::Resource::TaskFailure,
+                                vec![],
+                            ),
+                        ],
+                    )
+                } else {
+                    if !t.is_future() {
+                        return Err(error(line, "await対象はasync呼び出しです"));
+                    }
+                    t.inner()
                 }
-                t.inner()
             }
             E::Try(x) => {
                 if self.ret.0 != "Result" {
@@ -3583,7 +3840,7 @@ impl Checker {
                     && self.registered.contains(n)
                 {
                     if let Some(operation) = crate::stdlib::operation(n) {
-                        let ty = self.standard(operation, ts, args, line, expected)?;
+                        let ty = self.standard(operation, ts, args, line, expected, expression)?;
                         e.resolution = Some(NameResolution::Standard);
                         e.ty = Some(ty.clone());
                         return Ok(ty);
@@ -3631,6 +3888,9 @@ impl Checker {
                     }
                     for (arg, t) in args.iter_mut().zip(&signature) {
                         let got = self.expr(arg, Some(t))?;
+                        if self.contains_task(&got) {
+                            return Err(error(arg.line, "Taskを関数または別taskへ渡せません"));
+                        }
                         self.demand(&got, t, line)?;
                         self.consume(arg)?;
                         self.hold_value(arg, false);
@@ -3710,6 +3970,12 @@ impl Checker {
                 _ => None,
             };
             let ty = self.expr(a, hint.as_ref())?;
+            if self.contains_task(&ty) {
+                return Err(error(
+                    a.line,
+                    "Taskはawait/discard/move以外の操作へ渡せません",
+                ));
+            }
             // DB SQL is copied into Sql::Owned before later arguments are
             // evaluated; env finishes its key lookup before the fallback.
             // Their input views do not remain borrowed for the enclosing call.
@@ -3811,6 +4077,12 @@ impl Checker {
                 }
             }
             "copy" => {
+                if crate::capabilities::contains_task_owner(&types[0], &self.classes, &self.enums) {
+                    return Err(error(
+                        line,
+                        "Task/TaskFailureはcopyできません（nested wrapperを含みます）",
+                    ));
+                }
                 if crate::capabilities::contains_auth_proof(&types[0], &self.classes, &self.enums) {
                     return Err(error(
                         line,
@@ -3837,6 +4109,12 @@ impl Checker {
                 })
             }
             "share" => {
+                if crate::capabilities::contains_task_owner(&types[0], &self.classes, &self.enums) {
+                    return Err(error(
+                        line,
+                        "Task/TaskFailureをsharedへ変換できません（nested wrapperを含みます）",
+                    ));
+                }
                 if crate::capabilities::contains_auth_proof(&types[0], &self.classes, &self.enums) {
                     return Err(error(
                         line,
@@ -4313,7 +4591,11 @@ def restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
                     }
                     S::Match(_, arms) => arms.iter().all(|arm| all_flow_none(&arm.body)),
                     S::While(_, body) | S::For(_, _, body) | S::Scope(body) => all_flow_none(body),
-                    S::Assign { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => true,
+                    S::Assign { .. }
+                    | S::SpawnBind { .. }
+                    | S::Return(_)
+                    | S::Expr(_)
+                    | S::Spawn(_) => true,
                 }
         })
     }

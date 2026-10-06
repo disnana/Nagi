@@ -553,7 +553,18 @@ impl Parser {
                 } else {
                     None
                 };
+                let mut spawn_binding = false;
                 let value = if self.eat("=") {
+                    // Contextual statement syntax; spawn(...) stays an ordinary call.
+                    spawn_binding = matches!(&self.t().kind, K::Id(s) if s == "spawn")
+                        && self.ts.get(self.pos + 1).is_some_and(|t| match &t.kind {
+                            K::Id(word) => !matches!(word.as_str(), "and" | "or" | "in"),
+                            K::Num(_) | K::Str(_) => true,
+                            _ => false,
+                        });
+                    if spawn_binding {
+                        self.pos += 1;
+                    }
                     self.expr(0)?
                 } else {
                     let op = if self.eat("+=") {
@@ -585,11 +596,20 @@ impl Parser {
                     }
                 };
                 self.end_stmt()?;
-                S::Assign {
-                    name: n,
-                    annotation,
-                    value,
-                    declare: explicit,
+                if spawn_binding {
+                    S::SpawnBind {
+                        name: n,
+                        annotation,
+                        value,
+                        declare: explicit,
+                    }
+                } else {
+                    S::Assign {
+                        name: n,
+                        annotation,
+                        value,
+                        declare: explicit,
+                    }
                 }
             } else {
                 let e = self.expr(0)?;
@@ -604,6 +624,7 @@ impl Parser {
             binding_type: None,
             binding_borrowed: false,
             flow: None,
+            task: Default::default(),
         })
     }
     fn pattern_binding(&mut self) -> Result<PatternBinding, String> {

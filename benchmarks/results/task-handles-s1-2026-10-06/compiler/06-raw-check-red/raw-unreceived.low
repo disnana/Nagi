@@ -1,0 +1,12 @@
+# Nagi Low 0.1 / generated. 手書き変更はnative/で@replaceしてください。
+async fn work() -> i64 {
+    return 7;
+}
+
+async fn main() -> Result[unit, Error] {
+    scope {
+        let task: __nagi_def_7374646c69623a7374642e7461736b_r_5461736b[i64] = spawn work();
+    }
+    return ok(print(0));
+}
+

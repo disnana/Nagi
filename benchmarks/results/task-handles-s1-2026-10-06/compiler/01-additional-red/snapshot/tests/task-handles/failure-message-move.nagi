@@ -1,0 +1,16 @@
+from std.task import message
+from std.ownership import move
+async def work() -> i64:
+    return 7
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        received = await task
+        match received:
+            case Ok(value):
+                print(value)
+            case Err(failure):
+                text = message(failure)
+                moved = move(failure)  # primary
+                print(text)
+    return ok(print(0))

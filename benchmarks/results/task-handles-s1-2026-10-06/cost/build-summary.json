@@ -1,0 +1,52 @@
+{
+  "generated": {
+    "first_build_s": 3.2982516960000794,
+    "package_rebuild_warm_dependencies_s": [
+      3.0826567070002966,
+      2.86844161099998,
+      2.858803552000154
+    ],
+    "binary_bytes": 1254848,
+    "target": "x86_64-unknown-linux-gnu",
+    "profile": "release",
+    "loops": 25,
+    "cache": "shared warm Cargo target; not clean build",
+    "compiler_and_runtime_contract": "same TaskScope, sequential receive and batched discard",
+    "command": [
+      "cargo",
+      "build",
+      "--offline",
+      "--release",
+      "--manifest-path",
+      "/tmp/nagi-task-cost-final/generated/Cargo.toml",
+      "--bin",
+      "task-cost-generated",
+      "--message-format=json"
+    ]
+  },
+  "manual": {
+    "first_build_s": 3.468466160999924,
+    "package_rebuild_warm_dependencies_s": [
+      3.252544557999954,
+      3.6164360799998576,
+      3.4020323069998994
+    ],
+    "binary_bytes": 1234304,
+    "target": "x86_64-unknown-linux-gnu",
+    "profile": "release",
+    "loops": 25,
+    "cache": "shared warm Cargo target; not clean build",
+    "compiler_and_runtime_contract": "same TaskScope, sequential receive and batched discard",
+    "command": [
+      "cargo",
+      "build",
+      "--offline",
+      "--release",
+      "--manifest-path",
+      "/tmp/nagi-task-cost-final/manual/Cargo.toml",
+      "--bin",
+      "task-cost-manual",
+      "--message-format=json"
+    ]
+  }
+}

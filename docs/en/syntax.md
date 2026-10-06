@@ -180,7 +180,7 @@ async def main() -> Result[unit, Error]:
     return ok(print("Done"))
 ```
 
-This program prints `Done` after both sleeps finish. Normal scope exit waits for its children. Today, detecting a child Err or panic after the body finishes stops and waits for the remaining children. Parent Future destruction or body panic requests termination without guaranteeing that termination has completed. Returning inside a scope, passing views to another task, spawning tasks returning anything other than unit or `Result[unit, Error]`, and result handles are currently unsupported. See [async](async.md).
+This program prints `Done` after both sleeps finish. Normal scope exit waits for its children. Today, detecting a child Err or panic after the body finishes stops and waits for the remaining children. Parent Future destruction or body panic requests termination without guaranteeing that termination has completed. Returning inside a scope, passing views to another task, spawning tasks returning anything other than unit or `Result[unit, Error]`, remain unsupported for legacy spawn. [Task result handles](task-handles.md) are implemented on the working branch and remain unreleased. See [async](async.md).
 
 ## Imports, HTTP, and Rust
 

@@ -1,0 +1,3 @@
+error: line 2:21: 式が必要です (found Num("1"))
+ --> /tmp/nagi-task-review/user-spawn-add.nagi:2
+ 2 |     value = spawn + 1

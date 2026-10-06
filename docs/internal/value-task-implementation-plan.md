@@ -1,6 +1,6 @@
 # 明示moveとtask結果の実装順
 
-状態: 明示moveの意味論と非Copy既存値の通常代入移行は確定。作者は既存設計に沿うAPIの選択と実装を承認した。以下のmove仕様は採用済みで、作業branch `feat/explicit-move-contract`に実装済み・未リリース。検証状況とmain反映は[実装結果](explicit-move-results.md)と[進捗](progress.md)で別に記録する。S1の詳細意味論は[ADR 012](adr/012-task-result-handles.md)で設計採用・未実装。API名・構文・生成bridgeは接続案を検証する。
+状態: 明示moveの意味論と非Copy既存値の通常代入移行は確定。作者は既存設計に沿うAPIの選択と実装を承認した。以下のmove仕様は採用済みで、作業branch `feat/explicit-move-contract`に実装済み・未リリース。検証状況とmain反映は[実装結果](explicit-move-results.md)と[進捗](progress.md)で別に記録する。S1は[ADR 012](adr/012-task-result-handles.md)と[接続判断](task-handle-implementation.md)に沿い作業branchへ接続済み・未リリース。[接続結果](task-handles-s1-results.md)に実証範囲を記録する。以下の先行手順・未実装記述は設計時点の記録。
 
 監査基点はmain `e7aff1da0a36503d239d70cf5dbcf892655978e0`（#84反映済み）。[ADR 011](adr/011-language-behavior-and-docs.md)の方向を実装へ移すための計画である。契約の正本は[language-invariants](language-invariants.md)、未決の管理は[Q-005/006](open-questions.md#q-005-既存所有値の代入を明示する範囲)に残す。
 

@@ -1,0 +1,7 @@
+async def work():
+    print(1)
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        spawn work()
+    return ok(print(0))

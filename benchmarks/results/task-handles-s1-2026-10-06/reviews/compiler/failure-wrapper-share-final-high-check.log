@@ -1,0 +1,3 @@
+error: line 12: Task/TaskFailureをsharedへ変換できません（nested wrapperを含みます）
+ --> /tmp/nagi-task-review/failure-wrapper-share.nagi:12
+ 12 |                 shared_failure = share(some(failure))

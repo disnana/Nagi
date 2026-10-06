@@ -28,7 +28,7 @@ private試作のrecord毎の全entry sweepはO(n²)候補。対象ticketの退�
 
 ## 先行テストと進行条件
 
-[56入力](../../tests/task-handles/README.md)に加え、裸move放棄、両分岐消費、消費後再生成の合流、nested旧scopeから戻った外Task受取、同深さの別scope、Failure.message借用中moveを固定する。陰性例は拒否段階・元行・診断を確認し、parse/import失敗でGREENにしない。
+[契約入力](../../tests/task-handles/README.md)に加え、裸move放棄、両分岐消費、消費後再生成の合流、nested旧scopeから戻った外Task受取、同深さの別scope、Failure.message借用中moveを固定する。陰性例は拒否段階・元行・診断を確認し、parse/import失敗でGREENにしない。
 
 High→保存Low→nativeと独立Low→nativeで、業務Errの兄弟継続、TaskFailure観測後のscope Err、取消要求後の全join、旧spawn混在、未受取/二重受取/escape拒否を確認する。runtime 16群も本体へ移して回帰する。
 
@@ -37,4 +37,4 @@ High→保存Low→nativeと独立Low→nativeで、業務Errの兄弟継続、T
 
 ## 停止と引継ぎ
 
-最新指示によりStage 1の自然な区切りで停止し、上のcompiler/public runtime接続はまだ開始しない。[Sol 6.1向け引継ぎ](handoffs/2026-10-06-task-bridge-stage1.md)に現在地と再開条件を記録した。実装の開始・完了と接続案を区別する。
+Stage 1は自然な区切りで停止した。[Sol 6.1向け引継ぎ](handoffs/2026-10-06-task-bridge-stage1.md)は、その停止時点の記録である。2026-10-06のユーザーの再開指示を受け、main `9ba4a104`、PR #88 head `5c2c8282`、最新headのchecks/website成功を読み戻してS1接続を開始する。上記の具体API・scope選択・義務追跡を接続方針として用い、追加REDから検証する。開始と完成を区別し、結果は[接続の実行記録](task-handles-s1-results.md)へ残す。

@@ -1,0 +1,107 @@
+[
+  {
+    "source": "/tmp/nagi-task-review/failure-wrapper-copy.nagi",
+    "stage": "high-check",
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "log": "/tmp/nagi-task-review/failure-wrapper-copy-final-high-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/failure-wrapper-share.nagi",
+    "stage": "high-check",
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "log": "/tmp/nagi-task-review/failure-wrapper-share-final-high-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/user-spawn-alias.nagi",
+    "stage": "high-check",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "log": "/tmp/nagi-task-review/user-spawn-alias-final-high-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/out-user-spawn-alias/generated.low",
+    "stage": "saved-low-check",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "log": "/tmp/nagi-task-review/user-spawn-alias-final-saved-low-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/user-spawn-add.nagi",
+    "stage": "high-check",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "log": "/tmp/nagi-task-review/user-spawn-add-final-high-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/out-user-spawn-add/generated.low",
+    "stage": "saved-low-check",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "log": "/tmp/nagi-task-review/user-spawn-add-final-saved-low-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/user-spawn-field.nagi",
+    "stage": "high-check",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "log": "/tmp/nagi-task-review/user-spawn-field-final-high-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/out-user-spawn-field/generated.low",
+    "stage": "saved-low-check",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "log": "/tmp/nagi-task-review/user-spawn-field-final-saved-low-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/task-condition-move.nagi",
+    "stage": "high-check",
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "log": "/tmp/nagi-task-review/task-condition-move-final-high-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/loops-regeneration.nagi",
+    "stage": "high-check",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "log": "/tmp/nagi-task-review/loops-regeneration-final-high-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/out-loops-regeneration/generated.low",
+    "stage": "saved-low-check",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "log": "/tmp/nagi-task-review/loops-regeneration-final-saved-low-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/loop-inner-scope.nagi",
+    "stage": "high-check",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "log": "/tmp/nagi-task-review/loop-inner-scope-final-high-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/out-loop-inner-scope/generated.low",
+    "stage": "saved-low-check",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "log": "/tmp/nagi-task-review/loop-inner-scope-final-saved-low-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/alias-loop-exit.nagi",
+    "stage": "high-check",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "log": "/tmp/nagi-task-review/alias-loop-exit-final-high-check.log"
+  },
+  {
+    "source": "/tmp/nagi-task-review/out-alias-loop-exit/generated.low",
+    "stage": "saved-low-check",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "log": "/tmp/nagi-task-review/alias-loop-exit-final-saved-low-check.log"
+  }
+]

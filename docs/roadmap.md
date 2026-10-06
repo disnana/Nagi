@@ -30,3 +30,5 @@
 独自バックエンド、self-hosting、独自VM・scheduler、無停止更新、分散actorは未着手です。今後採用するかも未決です。
 
 Rust以外のバックエンドでも同じ意味を保つには、型・所有権・解放・失敗・非同期処理・runtime接続の契約と実装が必要です。Lowを使ってコンパイラを書き直すことを、現在の開発段階の必須条件にはしません。
+
+S1 Task結果handleは作業branchへ接続済み・未リリースです。[使い方](task-handles.md)と[検証状況](internal/task-handles-s1-results.md)を分けています。Supervisor/HTTPのS2移行と公開Pool/Txは後続です。

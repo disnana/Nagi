@@ -296,6 +296,12 @@ impl Bindings<'_, '_> {
                     value,
                     declare,
                     ..
+                }
+                | S::SpawnBind {
+                    name,
+                    value,
+                    declare,
+                    ..
                 } => {
                     // A use in the initializer resolves before the new binding.
                     self.expr(value);
@@ -516,12 +522,15 @@ impl Types<'_, '_> {
     fn block(&mut self, ss: &[Stmt]) {
         for s in ss {
             if let (Some(span), Some(ty)) = (s.binding_span, &s.binding_type) {
-                if let S::Assign { name, .. } | S::For(name, _, _) = &s.kind {
+                if let S::Assign { name, .. } | S::SpawnBind { name, .. } | S::For(name, _, _) =
+                    &s.kind
+                {
                     self.binding(s.line, span, name, ty, s.binding_borrowed);
                 }
             }
             match &s.kind {
                 S::Assign { value, .. }
+                | S::SpawnBind { value, .. }
                 | S::Return(Some(value))
                 | S::Expr(value)
                 | S::Spawn(value) => self.expr(value),

@@ -1,0 +1,12 @@
+     Locking 108 packages to highest compatible versions
+   Compiling nagi-alias-loop-exit-3a61f105ff8490d1 v0.1.0 (/tmp/nagi-task-review/out-alias-loop-exit/.nagi/apps/nagi-alias-loop-exit-3a61f105ff8490d1/generations/.staging-g-2e43-18dbf6e151893f41-0)
+error[E0432]: unresolved import `nagi_runtime::TaskScope`
+  --> src/main.rs:29:25
+   |
+29 | pub use ::nagi_runtime::TaskScope::discard as discard;
+   |                         ^^^^^^^^^ `TaskScope` is a struct, not a module
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `nagi-alias-loop-exit-3a61f105ff8490d1` (bin "nagi-3a61f105ff8490d1-g-2e43-18dbf6e151893f41-0") due to 1 previous error
+Build failed. Check the diagnostics above for code, dependency, or build environment errors.
+Compatibility projection may be partial; prior latest unchanged.

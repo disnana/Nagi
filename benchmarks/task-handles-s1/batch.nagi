@@ -1,0 +1,24 @@
+from std.task import discard
+
+async def work(value: i64) -> i64:
+    return value
+
+async def receive_batch(n: i64) -> Result[i64, Error]:
+    total = 0
+    async with scope:
+        for number in range(n):
+            child = spawn work(number)
+            received = await child
+            match received:
+                case Ok(value):
+                    total += value
+                case Err(failure):
+                    assert_true(False)
+    return ok(total)
+
+async def discard_batch(n: i64) -> Result[i64, Error]:
+    async with scope:
+        for number in range(n):
+            child = spawn work(number)
+            discard(child)
+    return ok(0)

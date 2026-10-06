@@ -1,0 +1,19 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.82s
+     Running tests/task_handles.rs (/tmp/nagi-container-flow-target/debug/deps/task_handles-d0cc06a902147195)
+
+running 1 test
+
+thread 'native_business_fault_cleanup_and_branch_contracts' (10409) panicked at compiler/tests/support/native_triple.rs:82:14:
+handwritten Low check: "error: line 3:1: fn が必要です (found Id(\"struct\"))\n --> /tmp/nagi-explicit-moves-10408-0/handwritten.low:3\n 3 | struct Marker { text: str }"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test native_business_fault_cleanup_and_branch_contracts ... FAILED
+
+failures:
+
+failures:
+    native_business_fault_cleanup_and_branch_contracts
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.07s
+
+error: test failed, to rerun pass `-p nagic --test task_handles`

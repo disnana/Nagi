@@ -134,6 +134,7 @@ pub(crate) enum OperationPlan {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ExpressionPlan {
+    pub task: Option<TaskUse>,
     pub numeric_suffix: Option<String>,
     pub static_read: StaticRead,
     pub reference_is_view: bool,
@@ -207,6 +208,8 @@ pub(crate) struct BlockPlan {
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct StatementPlan {
+    pub scope: Option<ScopeId>,
+    pub task_bridge: bool,
     pub rebind: bool,
     pub annotate: bool,
     pub iterator: Option<IteratorRead>,
@@ -254,6 +257,7 @@ pub(crate) struct EmissionPlan {
     pub enums: Vec<ItemPlan>,
     pub functions: Vec<FunctionPlan>,
     pub native_paths: BTreeMap<String, String>,
+    pub native_reexports: BTreeSet<String>,
     pub routes: Vec<RoutePlan>,
     pub needs_server: bool,
     pub main_error: MainError,
@@ -533,6 +537,7 @@ fn expression_plan(e: &Expr, p: &Program) -> Result<ExpressionPlan, String> {
         return Err("missing checked name resolution".into());
     }
     let mut plan = ExpressionPlan {
+        task: None,
         numeric_suffix: (matches!(e.kind, E::Int(_) | E::Float(_))
             && matches!(
                 ty.0.as_str(),
@@ -723,6 +728,7 @@ fn visit_statement_expressions(
 ) -> Result<(), String> {
     match &s.kind {
         S::Assign { value, .. }
+        | S::SpawnBind { value, .. }
         | S::Expr(value)
         | S::Spawn(value)
         | S::Return(Some(value))
@@ -777,8 +783,27 @@ fn validate_facts(p: &Program) -> Result<(), String> {
 // Check only facts already recorded by the checker, without reconstructing
 // types, control flow, or ownership after the final check.
 fn validate_statement_facts(statement: &Stmt) -> Result<(), String> {
+    if matches!(
+        statement.kind,
+        S::Scope(_) | S::Spawn(_) | S::SpawnBind { .. }
+    ) && statement.task.scope.is_none()
+    {
+        return Err("missing checked scope identity".into());
+    }
+    if let S::SpawnBind { value, .. } = &statement.kind {
+        let output = value
+            .ty
+            .as_ref()
+            .filter(|t| t.is_future())
+            .ok_or("missing checked spawn Future")?
+            .inner();
+        let wanted = crate::stdlib::resource_type(crate::stdlib::Resource::Task, vec![output]);
+        if statement.binding_type.as_ref() != Some(&wanted) {
+            return Err("inconsistent checked Task binding".into());
+        }
+    }
     match &statement.kind {
-        S::Assign { annotation, .. } => {
+        S::Assign { annotation, .. } | S::SpawnBind { annotation, .. } => {
             let annotation = annotation
                 .as_ref()
                 .ok_or("missing checked declaration type")?;
@@ -834,7 +859,9 @@ fn assigned_views(
 ) {
     for s in statements {
         match &s.kind {
-            S::Assign { name, declare, .. } if !declare && bindings.contains_key(name) => {
+            S::Assign { name, declare, .. } | S::SpawnBind { name, declare, .. }
+                if !declare && bindings.contains_key(name) =>
+            {
                 assigned.insert(name.clone());
             }
             S::If(_, a, b) => {
@@ -888,9 +915,19 @@ fn block_plan(
     for (index, original) in statements.iter().enumerate() {
         let node = flow.map(|block| &block.statements[index]);
         let statement = node.map_or(original, |node| &node.stmt);
-        let mut plan = StatementPlan::default();
+        let mut plan = StatementPlan {
+            scope: statement.task.scope,
+            task_bridge: statement.task.bridge,
+            ..Default::default()
+        };
         match &statement.kind {
             S::Assign {
+                name,
+                annotation,
+                declare,
+                ..
+            }
+            | S::SpawnBind {
                 name,
                 annotation,
                 declare,
@@ -1152,10 +1189,84 @@ impl EmissionPlan {
                 .cloned()
                 .collect();
             let body = block_plan(&f.body, &bindings, flow.as_ref().map(|p| &p.body), false);
+            fn task_uses(
+                statements: &[Stmt],
+                current: Option<(ScopeId, bool)>,
+                uses: &mut BTreeMap<ExprUseId, TaskUse>,
+            ) -> Result<(), String> {
+                for s in statements {
+                    for use_ in &s.task.uses {
+                        if current != Some((use_.scope, true)) {
+                            return Err("invalid checked Task scope use".into());
+                        }
+                        if uses
+                            .insert(use_.expression, *use_)
+                            .is_some_and(|old| old != *use_)
+                        {
+                            return Err("conflicting checked Task use".into());
+                        }
+                    }
+                    match &s.kind {
+                        S::Scope(body) => {
+                            let scope = s.task.scope.ok_or("missing checked scope identity")?;
+                            if s.task.bridge != scope_has_task_binding(body) {
+                                return Err("inconsistent checked Task scope bridge".into());
+                            }
+                            task_uses(body, Some((scope, s.task.bridge)), uses)?;
+                        }
+                        S::SpawnBind { .. }
+                            if current != s.task.scope.map(|scope| (scope, true)) =>
+                        {
+                            return Err("invalid checked Task spawn scope".into())
+                        }
+                        S::Spawn(_)
+                            if current != s.task.scope.map(|scope| (scope, s.task.bridge)) =>
+                        {
+                            return Err("invalid checked legacy spawn scope".into())
+                        }
+                        S::If(_, a, b) => {
+                            task_uses(a, current, uses)?;
+                            task_uses(b, current, uses)?;
+                        }
+                        S::While(_, b) | S::For(_, _, b) => task_uses(b, current, uses)?,
+                        S::Match(_, arms) => {
+                            for a in arms {
+                                task_uses(&a.body, current, uses)?;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(())
+            }
+            let mut tasks = BTreeMap::new();
+            task_uses(&f.body, None, &mut tasks)?;
             let mut expressions = BTreeMap::new();
             let mut add = |e: &Expr| {
                 let key = ExpressionKey::of(e);
-                let plan = expression_plan(e, p)?;
+                let mut plan = expression_plan(e, p)?;
+                plan.task = tasks.get(&ExprUseId::of(e)).copied();
+                let requires_task = match &e.kind {
+                    E::Await(x)
+                        if x.ty.as_ref().is_some_and(|t| {
+                            registered_resource(&t.0, &p.modules)
+                                == Some(crate::stdlib::Resource::Task)
+                        }) =>
+                    {
+                        Some(TaskAction::Receive)
+                    }
+                    E::Call(n, _, _)
+                        if e.resolution == Some(NameResolution::Standard)
+                            && crate::stdlib::operation(n)
+                                == Some(crate::stdlib::Operation::TaskDiscard) =>
+                    {
+                        Some(TaskAction::Discard)
+                    }
+                    _ => None,
+                };
+                if requires_task != plan.task.map(|use_| use_.action) {
+                    return Err("missing or inconsistent checked Task use plan".into());
+                }
                 if let Some(old) = expressions.insert(key, plan.clone()) {
                     if old != plan {
                         return Err(format!(
@@ -1183,8 +1294,10 @@ impl EmissionPlan {
         }
         let mut native_paths = BTreeMap::new();
         let mut native_view_types = BTreeSet::new();
+        let mut native_reexports = BTreeSet::new();
         for d in &p.modules.definitions {
             if let Some(r) = registered_resource(&d.symbol, &p.modules) {
+                native_reexports.insert(d.symbol.clone());
                 native_paths.insert(
                     d.symbol.clone(),
                     crate::stdlib::resource_info(r).rust_path.into(),
@@ -1199,6 +1312,17 @@ impl EmissionPlan {
                 }
             } else if let Some(op) = crate::stdlib::operation(&d.symbol) {
                 if d.id == crate::stdlib::function_id(op) {
+                    // Scope-dependent discard and failure getters are checked
+                    // operations, not Rust module items. Calls use sealed plans;
+                    // associated methods cannot be reexported with `pub use`.
+                    if !matches!(
+                        op,
+                        crate::stdlib::Operation::TaskDiscard
+                            | crate::stdlib::Operation::TaskKind
+                            | crate::stdlib::Operation::TaskMessage
+                    ) {
+                        native_reexports.insert(d.symbol.clone());
+                    }
                     native_paths.insert(
                         d.symbol.clone(),
                         crate::stdlib::operation_info(op).rust_path.into(),
@@ -1220,6 +1344,10 @@ impl EmissionPlan {
                 }
                 match &s.kind {
                     S::Assign {
+                        annotation: Some(t),
+                        ..
+                    }
+                    | S::SpawnBind {
                         annotation: Some(t),
                         ..
                     } => add(t, out),
@@ -1371,6 +1499,7 @@ impl EmissionPlan {
             enums: enum_plans,
             functions,
             native_paths,
+            native_reexports,
             routes,
             needs_server,
             main_error,
