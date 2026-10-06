@@ -296,3 +296,88 @@ async fn native_close_failure_is_kept_after_deadpool_objects_and_workers_are_gon
     assert_eq!(adapter.observer().snapshot().joined, 1);
     assert_eq!(adapter.observer().snapshot().native_closed, 0);
 }
+
+#[tokio::test]
+async fn last_adapter_drop_preserves_active_tx_until_its_explicit_finish() {
+    let adapter = Adapter::new(Config::default(), AdapterSeams::default());
+    let observer = adapter.observer();
+    let tx = adapter.begin().await.unwrap();
+    drop(adapter);
+    assert!(observer.snapshot().closing);
+    assert_eq!(observer.snapshot().native_closed, 0);
+    assert_eq!(observer.snapshot().joined, 0);
+    assert_eq!(
+        tx.query::<Number>("SELECT 5 AS n", vec![]).await.unwrap(),
+        Some(Number(5))
+    );
+    tx.finish(Finish::Commit).await.unwrap();
+    observer.wait_joined(1).await;
+    assert_eq!(observer.snapshot().native_closed, 1);
+}
+
+#[tokio::test]
+async fn cancelled_begin_reply_keeps_checkout_until_eof_rollback_is_observed() {
+    let begin_gate = Arc::new(Gate::new());
+    let cleanup_gate = Arc::new(Gate::new());
+    let adapter = Adapter::new(
+        Config {
+            begin_gate: Some(Arc::clone(&begin_gate)),
+            cleanup_gate: Some(Arc::clone(&cleanup_gate)),
+            ..Config::default()
+        },
+        AdapterSeams::default(),
+    );
+    let mut begin = Box::pin(adapter.begin());
+    tokio::select! { _ = &mut begin => panic!("begin passed reply barrier"), _ = begin_gate.wait() => {} }
+    drop(begin);
+    begin_gate.release();
+    cleanup_gate.wait().await;
+    assert_eq!(adapter.available(), 0);
+    assert_eq!(adapter.observer().snapshot().returned, 0);
+    let mut next = Box::pin(adapter.begin());
+    assert!(futures_util::poll!(&mut next).is_pending());
+    cleanup_gate.release();
+    let tx = next.await.unwrap();
+    tx.finish(Finish::Rollback).await.unwrap();
+    adapter.close(DEADLINE).await.unwrap();
+    assert_eq!(adapter.observer().snapshot().created, 1);
+}
+
+#[tokio::test]
+async fn callback_panic_retires_pool_and_join_does_not_hide_native_close_failure() {
+    struct PanicRow;
+    impl FromRow for PanicRow {
+        fn columns() -> &'static [&'static str] {
+            &["n"]
+        }
+        fn read(_: &Row<'_>, _: &[usize]) -> rusqlite::Result<Self> {
+            assert!(!super::management_active());
+            panic!("adapter callback panic seam")
+        }
+    }
+    for fail_close in [false, true] {
+        let adapter = Adapter::new(
+            Config {
+                leak_statement_at_close: fail_close,
+                ..Config::default()
+            },
+            AdapterSeams::default(),
+        );
+        let tx = adapter.begin().await.unwrap();
+        let mut waiting = Box::pin(adapter.begin());
+        assert!(futures_util::poll!(&mut waiting).is_pending());
+        assert!(tx.query::<PanicRow>("SELECT 1 AS n", vec![]).await.is_err());
+        drop(tx);
+        assert_eq!(waiting.await.unwrap_err().kind, Kind::Worker);
+        assert_eq!(adapter.begin().await.unwrap_err().kind, Kind::Worker);
+        let error = adapter.close(DEADLINE).await.unwrap_err();
+        assert!(error.primary.is_some());
+        if fail_close {
+            assert!(error.cleanup.is_some());
+        }
+        let stats = adapter.observer().snapshot();
+        assert_eq!(stats.created, 1);
+        assert_eq!(stats.joined, 1);
+        assert_eq!(stats.native_closed, usize::from(!fail_close));
+    }
+}
