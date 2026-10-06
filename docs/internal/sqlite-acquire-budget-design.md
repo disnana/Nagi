@@ -15,6 +15,8 @@
 
 一取得の予算はImmediate、または一つの絶対deadline。duration入口は最初のpollで一度だけdeadlineを作る。native fenceは同じdeadlineを受け取り、Notifyの待機をその期限へ結び付ける。純粋な残時間計算も固定入力で検査する。
 
+private署名は`AcquireBudget::{Immediate, Deadline(Instant)}`と`begin_with_budget(budget)`。`after_at(now, duration)`はchecked_addのOptionを返し、表現不能なdeadlineでpanicしない。duration入口は今回のtest helperで、公開Optionsのvalidationや利用者向け署名を実装したものではない。
+
 deadpool 0.13.1の`Manager.create`には取得ごとの引数がない。`timeout_get`を一つのTokio task-local scopeで包み、Managerがpollされるたびにそのscopeの値をcopyする。scopeは一取得に限定し、共有mutableな「現在の期限」を置かない。native thread、spawn先、別取得へ渡さない。`try_with`のclosure内でawait／再pollしない。
 
 stock `Timeouts.wait`には残時間を渡し、create／recycle timeoutはNoneにする。stockのslot選択、公平性、recycleを維持する。recycle故障は既存cause公開・Pool停止を維持し、期限を作り直してreplacementする逃げ道を加えない。
