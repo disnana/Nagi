@@ -26,7 +26,7 @@ Python風の構文を使いますが、Pythonと同じ動作をする言語で�
 | Rust資産との共存 | アプリの処理をHighで書き、既存framework・driver・独自基盤を組み合わせる | Axumとの双方向async連携をサンプルで検証。一般のasync callback型は未対応 |
 | Low | 既存互換性、波括弧構文、生成内容の確認、関数差し替えに範囲を絞る | 実装済み。独立した低水準言語への拡張は当面進めない |
 | 実行ファイルの生成 | 現在のRust backendを使う | Rust/Cargoによるネイティブ生成を実装済み |
-| DBの拡張 | SQLiteとPostgreSQLの型を分け、操作・行・エラーの規則を揃える | 新APIは未実装。module名・資源契約は未決 |
+| DBの拡張 | SQLiteとPostgreSQLの型を分け、操作・行・エラーの規則を揃える | SQLiteの初版API・終了契約は承認済み、公開APIは未実装。PostgreSQLは後続設計 |
 | 標準HTTPの基盤 | Axum／Towerを第一候補として比較する | 採用は未決。条件を揃えた比較は未実施 |
 | 独自backend・VM・self-hosting | 将来の採否を保留する | 未実装。現在の機能や次のリリースの約束に含めない |
 
@@ -157,9 +157,11 @@ Phase 1のCheckedProgramはPR #78でmainへ入り、公開版には未反映で�
 
 Phase 2の開発差分では、アプリIDと成功世代を分けます。同じ生成先のwriterはOS lockで直列化し、世代固有のCargo binをbuildしてからexeをコピーします。成功時だけlatestを更新し、旧exeは上書き・削除・killしません。依存キャッシュは共有し、runの前にlockを解放します。生成Low・Rust・manifest・読み取り済みsourceと行対応を世代に保存しますが、外部Rustや依存source全体の原子的snapshot、任意processの隔離、電源断後の耐久性は対象外です。実装は[世代の公開処理](compiler/src/generation.rs)、検証は[実Cargo回帰](compiler/tests/build_generations.rs)、判断は[ADR 007](docs/internal/adr/007-build-generations.md)を参照してください。
 
-Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しました。公開版には未反映です。Phase 3の先行テストも4 OSで成功しました。開発差分では、登録資源の型引数の役割とcapabilityの根拠を私有descriptorへ集め、公開ResourceInfoはその一部を参照します。型引数の範囲・重複・欠落を登録時に検査し、用途別の判定と既存APIを保ちます。資源のlifecycle保証はまだ追加しません。[ADR 008](docs/internal/adr/008-resource-contracts.md)に構造と検証の順序を記録しました。集約後の検証は進行中で、Pool／Transactionは未実装です。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)で、検証済みの範囲、mainと公開版への反映状況、予定を区別します。
+Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しました。公開版には未反映です。Phase 3の先行テストも4 OSで成功しました。開発差分では、登録資源の型引数の役割とcapabilityの根拠を私有descriptorへ集め、公開ResourceInfoはその一部を参照します。型引数の範囲・重複・欠落を登録時に検査し、用途別の判定と既存APIを保ちます。資源のlifecycle保証はまだ追加しません。[ADR 008](docs/internal/adr/008-resource-contracts.md)に構造と検証の順序を記録しました。集約後の#80は4 OS・editor・site・merge gate CIが成功し、mainへ反映しました。Pool／Transactionはまだ未実装です。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)で、検証済みの範囲、mainと公開版への反映状況、予定を区別します。
 
-SQLite Pool／Transactionは[APIと終了policyの具体案](docs/internal/sqlite-pool-proposal.md)を用意しました。SQLiteの解析・bind・transactionはrusqliteへ任せ、Nagi側は公開する所有契約とworkerの完了・再利用を扱う案です。汎用引数を用意し、旧Dbの固定bindやSQL制約は変えません。新API・policy・依存featureは未承認で、実装はまだありません。
+SQLite Pool／Transactionは[APIと終了policyの具体案](docs/internal/sqlite-pool-proposal.md)を用意しました。SQLiteの解析・bind・transactionはrusqliteへ任せ、Nagi側は公開する所有契約とworkerの完了・再利用を扱う案です。汎用引数を用意し、旧Dbの固定bindやSQL制約は変えません。2026-10-06にQ002の公開API・SQL制限・終了契約とruntime rusqlite hooksを承認しました。[ADR 010](docs/internal/adr/010-sqlite-transaction-boundary.md)に従い、一接続・一Txの試作から進めます。pool／workerは既存Rustライブラリと比較して選び、追加wrapper依存は別途判断します。標準APIの実装・検証はまだ完了していません。
+
+開発branchの[private試作](runtime/src/sqlite_prototype/session.rs)では、実SQLiteの禁止action、明示終端、取消後cleanup、native closeとworker joinを[22件のtest](runtime/src/sqlite_prototype/tests.rs)で確認しました。SQL Errだけで変更が戻ったとは扱いません。これは公開Pool、NagiのTx捕捉検査、4 OSでの動作を保証する結果ではありません。[検証結果](docs/internal/sqlite-session-results.md)と[次のadapter判断案](docs/internal/sqlite-pool-adapter-decision.md)に未完了範囲を残します。
 
 意味論、公開API、High／Low／Rustの分担を変える場合は、変更の理由、代替案、互換性、検証結果をこの文書へ反映します。詳細なAPI説明や測定ログは対応する文書に置きます。
 

@@ -1,0 +1,4 @@
+import std.db.sqlite as sqlite;
+fn invalid(tx: sqlite.Tx) -> unit {
+    let boxed: shared[Option[sqlite.Tx]] = share(some(tx));
+}

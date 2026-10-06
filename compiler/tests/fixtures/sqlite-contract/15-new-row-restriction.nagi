@@ -1,0 +1,11 @@
+import std.db.sqlite as sqlite
+class Nested:
+    id: i64
+class Row:
+    child: Nested
+async def legacy(db: Db) -> Result[unit, Error]:
+    rows = try await db_all[Row](db, "SELECT child FROM items")
+    return ok(print(0))
+async def invalid(tx: sqlite.Tx) -> Result[unit, sqlite.Failure]:
+    rows = try await sqlite.all[Row](tx, "SELECT child FROM items", sqlite.parameters())
+    return await sqlite.rollback(tx)

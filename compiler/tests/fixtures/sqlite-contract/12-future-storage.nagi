@@ -1,0 +1,3 @@
+import std.db.sqlite as sqlite
+def invalid(tx: sqlite.Tx):
+    pending = sqlite.commit(tx)

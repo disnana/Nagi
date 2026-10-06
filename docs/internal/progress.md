@@ -153,3 +153,19 @@ head `0b2a5a5`のchecks run `37347188897`で、Windowsの既存Axum sampleが保
 ADR→実行配線→tests-only→sample実装の順にcommitした。独立レビューのP2検査穴をhandler直接回帰で補い、元HTTP caseを維持して分割送信・4097byte正常JSONの413を追加した。High/保存Low各native8、HTTP19、不正port3が成功した。Python helper5/artifact9/CI52、site90も成功。生成applicationのstrict clippyは元generated main.rsのneedless_return2件で失敗し、allow・生成patchで隠していない。本体strict clippy成功とは分ける。
 
 修正後4 OS CIは未確認。#80のbaseを#79のfeature branchからmainへ変更して、修正headのCIを確認する。#79の成功と、この修正の成功を混同しない。Pool/Txの内部は[既存Rust再利用比較](sqlite-pool-rust-reuse.md)を具体案へ反映し、自作pool/driverに確定していない。Phase 4のpublic API・hooks/依存・cleanup/close policyは未承認で、実装は開始しない。
+
+## Phase 3 main反映とPhase 4の承認
+
+2026-10-06。#80 head `35038940`のchecks run `37387962329`とwebsite run `37387961643`はattempt 1で成功した。4 OS・VSIX・IntelliJ IDEA・PyCharm・merge gateの成功を確認し、Windowsの実ログでもAxum High／保存Lowの成功を確認した。その後ユーザーがmain `f10cb64`へマージし、tree `e45dbede`の一致を読み戻した。エージェントはmerge・版更新・releaseを実行していない。過去のWindows失敗記録は残す。
+
+同日、ユーザーがQ002の選択1を承認した。公開API・SQL制限・cleanup／close policyとruntime rusqlite hooksを[ADR 010](adr/010-sqlite-transaction-boundary.md)へ固定した。追加wrapperの依存承認は含まれない。標準APIを先に受理して未完成runtimeへ送らず、private一接続・一Txのfailing testsとsafe prototypeから開始する。Tx捕捉・nested shared・SQL opt-inの不足は設計とnegative corpusへ先に整理する。実装・検証結果は後続記録へ分ける。
+
+## Phase 4: 一接続prototypeと次の判断
+
+main `f10cb64`を基点に承認契約`3cce2f9`→tests-only `7accaec`→safe実装`3dff473`の順で進めた。追加wrapper、public registry、syntax、旧Db/APIは変更していない。private native22件、runtime151 unit＋5 doctest、全Rust92 suite・853件、fmt／all-target clippyがローカルで成功した。fuzz smokeは1000 mutation／95 checked Low-emit／16 nativeでpanic 0、CI helper52件成功。詳細は[結果](sqlite-session-results.md)。件数は包含関係にあり加算しない。
+
+一接続の失敗探索で終端outcomeと自動rollback後commitのfake-success候補を修正した。禁止PRAGMAのstep拒否でAFTER trigger前のINSERTが残るnative挙動も再現した。新testが未採用のstatement atomicityを要求していたため、REDと一次根拠を残し、deny action／先行効果／明示rollback／reuseへoracleを分けた。普通のErr後にnative activeなら継続可という採用契約、既存test期待や保証は変えていない。
+
+15組の予定High／手書きLowを作り、parse-only 2件で30sourceの構文と元行anchorを確認した。semantic harnessは未配線で、新Txのcheck／Rust build成功と報告しない。[compiler境界](sqlite-compiler-boundary.md)にcanonical resource、実payload／capture facts、SQL所有化・opt-inと未指定capabilityを整理した。4 OS CIへnative session／parser入力の専用stepを追加したが、CI結果は公開後の確認待ち。
+
+次の[判断案](sqlite-pool-adapter-decision.md)はgeneric deadpool Managerを候補にする。独立レビューでdetachを経由しない破棄とin-flight createをcloseが待つ必要を確認し、候補へ反映した。追加crate／featureと未指定capabilityはQ004へ残す。未承認依存を追加したり、private Driverをそのままpublic Poolにしたりしない。Phase 4全体とPhase 5は未完了で、merge・版更新・releaseはしていない。

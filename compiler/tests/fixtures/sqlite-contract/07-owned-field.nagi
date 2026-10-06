@@ -1,0 +1,3 @@
+import std.db.sqlite as sqlite
+class Holder:
+    tx: owned[Option[sqlite.Tx]]

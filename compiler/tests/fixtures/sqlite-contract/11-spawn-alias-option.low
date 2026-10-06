@@ -1,0 +1,12 @@
+import std.db.sqlite as sqlite;
+async fn child(tx: Option[sqlite.Tx]) -> unit {
+    print(0);
+}
+async fn invalid(tx: sqlite.Tx) -> Result[unit, Error] {
+    let callback = child;
+    let boxed: Option[sqlite.Tx] = some(tx);
+    scope {
+        spawn callback(boxed);
+    }
+    return ok(print(1));
+}

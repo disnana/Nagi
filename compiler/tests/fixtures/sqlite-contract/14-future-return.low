@@ -1,0 +1,4 @@
+import std.db.sqlite as sqlite;
+fn invalid(tx: sqlite.Tx) -> Future[Result[unit, sqlite.Failure]] {
+    return sqlite.commit(tx);
+}

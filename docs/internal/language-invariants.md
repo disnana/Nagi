@@ -90,6 +90,12 @@ Tokioのtask/Future、RustのDrop、Arcを利用する。BEAMのVM、分散監�
 
 PostgreSQL、一般的な可変長bind、poolは未実装。Rustアダプター経由の独自実装を標準機能の保証と混同しない。
 
+### Phase 4で採用した契約（実装・検証中）
+
+[ADR 010](adr/010-sqlite-transaction-boundary.md)と[API契約](sqlite-pool-proposal.md)は2026-10-06に承認済み。旧Dbの契約を変えない。TxのnonCopy／nonshared／field保存・task転送禁止、終端consume、cleanup確認前の再利用禁止、結果不明とcleanup failureの分離、close後のclosing維持を採る。関数pointer署名と実捕捉、native Dropとrollback成功、close通知とworker joinを区別する。SQLiteのSQL解析・native Txはrusqliteへ委譲する。private試作の成功を標準APIの保証へ広げず、public checker／生成／実DB／4 OS acceptanceまで未検証範囲を記録する。
+
+statement Errから「変更0」や「rollback済み」を推論しない。SQLiteの`OR FAIL`やAFTER triggerでのstep失敗は先行効果をactive Txへ残し得る。禁止actionの拒否とTx rollback成功を別oracleで検査する。普通のErrでの継続可という採用契約を、暗黙savepointや全Err自動abortへ変更しない。
+
 ## HTTP
 
 | 項目 | 契約・境界 | 実装と検査 |

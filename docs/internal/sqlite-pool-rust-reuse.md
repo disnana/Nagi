@@ -10,7 +10,7 @@
 | [tokio-rusqlite 3aa3388](https://github.com/programatik29/tokio-rusqlite/tree/3aa3388f3ae4050080d175204734f650672deed0) | manifest 0.8.0、rusqlite 0.40.1、Tokio 1、crossbeam-channel 0.5。hooks/bundledのforward featureあり |
 | [r2d2-sqlite 097400a](https://github.com/ivanceras/r2d2-sqlite/tree/097400ac6de61b9adf77a34474d3e31cb72e4b39)＋[r2d2 c1b0d9f](https://github.com/sfackler/r2d2/tree/c1b0d9f976e12e97f92554063a7c6bd295eee471) | manifest r2d2_sqlite 0.35.0＋r2d2 0.8.10、rusqlite 0.40。UUID等の追加依存を持つ |
 
-これは各repositoryのmanifest版で、crates.io最新公開版・release済みとは確認していない。全wrapperは現在のNagi依存にない。採用する版、追加crate/transitive dependencies、feature、MSRV/lockfile/link互換性は**依存追加Stopの具体判断**。既存rusqlite版を下げる判断はしない。
+この表は固定repositoryのmanifest版。追加の2026-10-06調査で、deadpool-sqlite 0.14.0、deadpool 0.13.1、deadpool-runtime 0.3.1、tokio-rusqlite 0.8.0のcrates.io公開とyankなしを確認した。deadpoolとdeadpool-runtimeはrelease archiveのchecksumもmetadataへ照合して読み取った。[具体判断案](sqlite-pool-adapter-decision.md)に版・feature・追加依存・残るadapterを記録した。全wrapperは現在のNagi依存にない。実lockfile／feature／link互換性は承認後の検査であり、source読取を実行成功と数えない。既存rusqlite版を下げる判断はしない。
 
 ## 提供される境界と残るadapter
 
@@ -43,4 +43,6 @@ tokio-rusqliteは専用thread/dispatchを再利用できる利点がある一方
 
 ## 判断と未確認範囲
 
-**追加依存/feature/版はユーザー判断までStop。** 承認後に一connection/一Txでprototype比較し、取消後もadapterがcheckoutを保持すること、cleanup前の再取得禁止、失敗時detach/新get停止、native close結果とworker終了をpositive barrierで確認する。SELECT health check、pool.close/status.size==0、wrapper close Okだけを完了証拠にしない。wrapper固有の自動補充・unbounded queue・blocking thread占有を含め、責任/code量/失敗経路が小さくなる案を選ぶ。現時点でcustom workerを確定案、wrapperを不可能、未実行の試験を成功とは書かない。
+**runtime rusqlite hooksは2026-10-06のQ002で承認済み。追加wrapperのcrate／feature／版はユーザー判断までStop。** 承認後に一connection/一Txでprototype比較し、取消後もadapterがcheckoutを保持すること、cleanup前の再取得禁止、失敗時detach/新get停止、native close結果とworker終了をpositive barrierで確認する。SELECT health check、pool.close/status.size==0、wrapper close Okだけを完了証拠にしない。wrapper固有の自動補充・unbounded queue・blocking thread占有を含め、責任/code量/失敗経路が小さくなる案を選ぶ。現時点でcustom workerを確定案、wrapperを不可能、未実行の試験を成功とは書かない。
+
+wrapper未追加のprivate一接続coreはsafe Rustで実装し、22件のnative契約testと旧runtime baselineをローカルで実行した。[結果](sqlite-session-results.md)を参照。次の比較はgeneric deadpool Managerを推奨候補とするが未採用。public Pool、取得race、clone共通close、Nagi捕捉検査の成功証拠へ広げない。

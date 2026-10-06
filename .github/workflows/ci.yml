@@ -230,6 +230,8 @@ jobs:
         run: node --test editors/vscode-nagi/test/*.test.js scripts/test_graph_html_viewport.mjs
       - name: Check generated output protection and native expression behavior
         run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
+      - name: Parse planned SQLite High and handwritten Low contract inputs
+        run: cargo test --locked -p nagic --test sqlite_contract_inputs
       - name: Check successful application artifact selection
         run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
       - name: Check Axum native test execution and result validation
@@ -292,6 +294,8 @@ jobs:
           cargo test --locked -p nagi-runtime supervisor_drop
       - name: Check SQLite row counts on the target platform
         run: cargo test --locked -p nagi-runtime database::tests
+      - name: Check private SQLite session cleanup and close on the target platform
+        run: cargo test --locked -p nagi-runtime sqlite_prototype
       - name: Verify High, saved Low, and standalone Low applications
         run: python scripts/verify_application_examples.py
       - name: Verify the PowerShell installer and User PATH

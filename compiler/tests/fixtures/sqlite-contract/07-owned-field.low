@@ -1,0 +1,4 @@
+import std.db.sqlite as sqlite;
+record Holder {
+    tx: owned[Option[sqlite.Tx]];
+}

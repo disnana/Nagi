@@ -1,0 +1,5 @@
+import std.db.sqlite as sqlite;
+import std.http.server as http;
+fn invalid(app: http.App[Option[sqlite.Tx], Error]) -> unit {
+    print(0);
+}
