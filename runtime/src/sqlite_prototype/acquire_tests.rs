@@ -24,6 +24,30 @@ async fn watch<F: Future>(future: F) -> Result<F::Output, &'static str> {
     }
 }
 
+// held checkoutのsetup失敗も、全barrier解放とcloseを試してから失敗にする。
+async fn setup<T>(
+    adapter: &Adapter,
+    result: Result<Result<T, Failure>, &'static str>,
+    gates: &[&Gate],
+) -> T {
+    let error = match result {
+        Ok(Ok(value)) => return value,
+        Ok(Err(error)) => format!("{error:?}"),
+        Err(error) => error.to_owned(),
+    };
+    let mut release_failed = false;
+    for gate in gates {
+        release_failed |=
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| gate.release())).is_err();
+    }
+    let closed = watch(adapter.close(CLOSE)).await;
+    let stats = adapter.observer().snapshot();
+    panic!(
+        "acquire setup failed: {error}; gate_release_failed={release_failed}; close={closed:?}; pending={}, starting={}",
+        stats.pending_workers, stats.starting
+    );
+}
+
 // duration fixtureはFuture構築時でなく、最初のpollで一度だけ予算を作る。
 async fn begin_after(adapter: &Adapter, duration: Duration) -> Result<Tx, Failure> {
     let budget = AcquireBudget::after_at(Instant::now(), duration)
@@ -148,7 +172,7 @@ async fn acquire_immediate_free_reserves_before_slow_startup_and_reuses() {
 #[tokio::test]
 async fn acquire_immediate_logical_full_is_timeout_without_pool_failure() {
     let adapter = Adapter::new(Config::default(), AdapterSeams::default());
-    let held = adapter.checkout_without_begin().await.unwrap();
+    let held = setup(&adapter, watch(adapter.checkout_without_begin()).await, &[]).await;
     let failed =
         expected_error(watch(adapter.begin_with_budget(AcquireBudget::Immediate)).await).await;
     let unchanged = adapter.observer().snapshot();
@@ -179,7 +203,12 @@ async fn acquire_immediate_native_full_after_stock_detach_is_timeout() {
             ..AdapterSeams::default()
         },
     );
-    let held = adapter.checkout_without_begin().await.unwrap();
+    let held = setup(
+        &adapter,
+        watch(adapter.checkout_without_begin()).await,
+        &[&detaching, &publication],
+    )
+    .await;
     let taking = std::thread::spawn(move || held.take_and_drop());
     let entered = watch(detaching.wait()).await;
     let failed =
@@ -234,7 +263,12 @@ async fn acquire_absolute_budget_survives_logical_wait_to_native_fence() {
             ..AdapterSeams::default()
         },
     );
-    let held = adapter.checkout_without_begin().await.unwrap();
+    let held = setup(
+        &adapter,
+        watch(adapter.checkout_without_begin()).await,
+        &[&detaching, &publication],
+    )
+    .await;
     let deadline = Instant::now() + Duration::from_millis(200);
     let mut get = Box::pin(adapter.begin_with_budget(AcquireBudget::Deadline(deadline)));
     let logical_pending = futures_util::poll!(&mut get).is_pending();
@@ -301,8 +335,26 @@ async fn acquire_expired_finite_budget_does_not_register_even_when_native_free()
 
 #[tokio::test]
 async fn acquire_same_task_scopes_are_isolated_and_drop_restores_legacy_begin() {
-    let adapter = Adapter::new(Config::default(), AdapterSeams::default());
-    let held = adapter.checkout_without_begin().await.unwrap();
+    let detaching = Arc::new(Gate::new());
+    let publication = Arc::new(Gate::new());
+    let adapter = Adapter::new(
+        Config::default(),
+        AdapterSeams {
+            target_worker: Some(1),
+            detaching: Some(Arc::clone(&detaching)),
+            publication: Some(Arc::clone(&publication)),
+            ..AdapterSeams::default()
+        },
+    );
+    let held = setup(
+        &adapter,
+        watch(adapter.checkout_without_begin()).await,
+        &[&detaching, &publication],
+    )
+    .await;
+    let taking = std::thread::spawn(move || held.take_and_drop());
+    let entered = watch(detaching.wait()).await;
+    // stock permitは返却済み。longはManagerが予算を読むnative fenceまで進む。
     let mut long = Box::pin(adapter.begin_with_budget(AcquireBudget::Deadline(
         Instant::now() + Duration::from_secs(20),
     )));
@@ -313,17 +365,21 @@ async fn acquire_same_task_scopes_are_isolated_and_drop_restores_legacy_begin() 
     let long_still_pending = futures_util::poll!(&mut long).is_pending();
     drop(long);
     let unchanged = adapter.observer().snapshot();
-    held.take_and_drop();
+    detaching.release();
+    let taken = taking.join();
+    let published = watch(publication.wait()).await;
+    publication.release();
     let joined = watch(adapter.observer().wait_joined(1)).await;
     // 新native登録を必要にする。健康worker再貸出だけではscope漏れを隠し得る。
     let legacy = successful_tx(watch(adapter.begin()).await).await;
     let closed = watch(adapter.close(CLOSE)).await;
-    assert!(long_pending && long_still_pending);
+    assert!(entered.is_ok() && long_pending && long_still_pending);
     assert_timeout(short);
     assert_eq!(unchanged.created, 1);
     assert_eq!(unchanged.native_started, 1);
+    assert_eq!(unchanged.pending_workers, 1);
     assert!(!unchanged.closing);
-    assert!(joined.is_ok());
+    assert!(taken.is_ok() && published.is_ok() && joined.is_ok());
     legacy.unwrap();
     closed.unwrap().unwrap();
     assert_joined(&adapter, 2);
