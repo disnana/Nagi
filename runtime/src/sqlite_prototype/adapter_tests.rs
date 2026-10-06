@@ -2,6 +2,7 @@
 use super::adapter::{Adapter, AdapterSeams, AdmissionGate};
 use super::{Config, Finish, Gate, Kind, Outcome};
 use crate::FromRow;
+use futures_util::FutureExt;
 use rusqlite::{types::Value, Row};
 use std::{sync::Arc, time::Duration};
 
@@ -380,4 +381,151 @@ async fn callback_panic_retires_pool_and_join_does_not_hide_native_close_failure
         assert_eq!(stats.joined, 1);
         assert_eq!(stats.native_closed, usize::from(!fail_close));
     }
+}
+
+#[tokio::test]
+async fn joined_is_published_only_after_terminal_native_failure_is_in_ledger() {
+    let gate = Arc::new(Gate::new());
+    let adapter = Adapter::new(
+        Config {
+            leak_statement_at_close: true,
+            ..Config::default()
+        },
+        AdapterSeams {
+            publication: Some(Arc::clone(&gate)),
+            ..AdapterSeams::default()
+        },
+    );
+    let tx = adapter.begin().await.unwrap();
+    tx.finish(Finish::Rollback).await.unwrap();
+    let mut closing = Box::pin(adapter.close(DEADLINE));
+    tokio::select! { _ = &mut closing => panic!("close passed publication barrier"), _ = gate.wait() => {} }
+    let observed = std::panic::AssertUnwindSafe(adapter.close(Duration::ZERO))
+        .catch_unwind()
+        .await;
+    let prematurely_joined = adapter.observer().snapshot().joined;
+    gate.release();
+    drop(closing);
+    assert!(
+        observed.is_ok(),
+        "close panicked before native failure publication"
+    );
+    assert_eq!(observed.unwrap().unwrap_err().kind, Kind::CloseTimeout);
+    assert_eq!(prematurely_joined, 0);
+    let error = adapter.close(DEADLINE).await.unwrap_err();
+    assert!(error.cleanup.is_some());
+    assert_eq!(adapter.observer().snapshot().joined, 1);
+}
+
+#[test]
+fn tokio_runtime_drop_cannot_return_native_owned_checkout_before_cleanup() {
+    let gate = Arc::new(Gate::new());
+    let adapter = Adapter::new(
+        Config {
+            cleanup_gate: Some(Arc::clone(&gate)),
+            ..Config::default()
+        },
+        AdapterSeams::default(),
+    );
+    let observer = adapter.observer();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let tx = runtime.block_on(adapter.begin()).unwrap();
+    drop(tx.finish(Finish::Commit));
+    runtime.block_on(gate.wait());
+    assert_eq!(observer.snapshot().returned, 0);
+    drop(runtime);
+    assert_eq!(observer.snapshot().returned, 0);
+    assert_eq!(observer.snapshot().joined, 0);
+    gate.release();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(adapter.close(DEADLINE)).unwrap();
+    assert_eq!(observer.snapshot().returned, 1);
+    assert_eq!(observer.snapshot().native_closed, 1);
+    assert_eq!(observer.snapshot().joined, 1);
+}
+
+#[tokio::test]
+async fn cancelled_create_cannot_start_replacement_before_old_native_worker_joins() {
+    let startup = Arc::new(Gate::new());
+    let created = Arc::new(AdmissionGate::new());
+    let adapter = Adapter::new(
+        Config::default(),
+        AdapterSeams {
+            startup: Some(Arc::clone(&startup)),
+            created: Some(Arc::clone(&created)),
+            ..AdapterSeams::default()
+        },
+    );
+    let observer = adapter.observer();
+    let mut first = Box::pin(adapter.begin());
+    tokio::select! { _ = &mut first => panic!("first get passed startup barrier"), _ = startup.wait() => {} }
+    drop(first);
+    let mut second = Box::pin(adapter.begin());
+    assert!(futures_util::poll!(&mut second).is_pending());
+    let before_old_join = observer.snapshot();
+    startup.release();
+    created.release();
+    let tx = tokio::time::timeout(Duration::from_secs(10), second)
+        .await
+        .expect("replacement get watchdog expired")
+        .unwrap();
+    tx.finish(Finish::Rollback).await.unwrap();
+    adapter.close(DEADLINE).await.unwrap();
+    assert_eq!(
+        before_old_join.created, 1,
+        "max1 started another native worker while cancelled startup still owned one"
+    );
+    assert_eq!(before_old_join.admitted, 0);
+    assert_eq!(before_old_join.joined, 0);
+    assert_eq!(observer.snapshot().created, 2);
+    assert_eq!(observer.snapshot().joined, 2);
+    assert_eq!(observer.snapshot().native_closed, 2);
+}
+
+#[tokio::test]
+async fn taken_object_cannot_start_replacement_before_old_native_worker_joins() {
+    let exit = Arc::new(Gate::new());
+    let created = Arc::new(AdmissionGate::new());
+    created.release();
+    let adapter = Adapter::new(
+        Config {
+            exit_gate: Some(Arc::clone(&exit)),
+            ..Config::default()
+        },
+        AdapterSeams {
+            created: Some(Arc::clone(&created)),
+            ..AdapterSeams::default()
+        },
+    );
+    let observer = adapter.observer();
+    adapter.checkout_without_begin().await.unwrap().take_and_drop();
+    exit.wait().await;
+    let mut second = Box::pin(adapter.begin());
+    let early = futures_util::poll!(&mut second);
+    let before_old_join = observer.snapshot();
+    exit.release();
+    let tx = match early {
+        std::task::Poll::Ready(result) => result.unwrap(),
+        std::task::Poll::Pending => tokio::time::timeout(Duration::from_secs(10), second)
+            .await
+            .expect("replacement get watchdog expired")
+            .unwrap(),
+    };
+    tx.finish(Finish::Rollback).await.unwrap();
+    adapter.close(DEADLINE).await.unwrap();
+    assert_eq!(
+        before_old_join.created, 1,
+        "Object::take returned a stock slot before old native join completed"
+    );
+    assert_eq!(before_old_join.joined, 0);
+    assert_eq!(before_old_join.native_closed, 1);
+    assert_eq!(observer.snapshot().created, 2);
+    assert_eq!(observer.snapshot().joined, 2);
+    assert_eq!(observer.snapshot().native_closed, 2);
 }
