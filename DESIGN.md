@@ -61,13 +61,13 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 
 現行との差、採用理由、根拠、後続実装の移行・検証条件は[ADR 011](docs/internal/adr/011-language-behavior-and-docs.md)へまとめます。現行の厳密な規則は[言語契約](docs/internal/language-invariants.md)に残します。入門は[Pythonとの具体的な比較](docs/language-guide.md)から始め、未実装の書き方で例を成立させません。
 
-明示moveと狭い代入移行は作業branchで実装済み・未リリースです。既存のimportに沿って`from std.ownership import move`を使い、`a = move(b)`で値と後片付けの責任を渡します。暗黙clone、shared化、寿命の延長は行いません。新しく作る値にはmove指定を要求せず、Copy判定は現行の規則を保ちます。対応済みのローカルasync関数別名もCopyのままで、Futureや入れ子のFutureをmoveで渡す機能はありません。viewは読み取りの借用、sharedは同じ値の安全な共有、copyは独立した複製です。
+明示moveと狭い代入移行はmainで実装済み・未リリースです。既存のimportに沿って`from std.ownership import move`を使い、`a = move(b)`で値と後片付けの責任を渡します。暗黙clone、shared化、寿命の延長は行いません。新しく作る値にはmove指定を要求せず、Copy判定は現行の規則を保ちます。対応済みのローカルasync関数別名もCopyのままで、Futureや入れ子のFutureをmoveで渡す機能はありません。viewは読み取りの借用、sharedは同じ値の安全な共有、copyは独立した複製です。
 
-[実装計画](docs/internal/value-task-implementation-plan.md)に仕様、移行対象、先行テストを記録しています。明示操作と非Copyローカルの通常代入拒否を一つの変更として実装し、High/Low・Rust生成・サンプル・日英Docs・4 OS CIの検証状況は[進捗](docs/internal/progress.md)に分けて残します。task結果handleはS1作業branchへ接続しました。mergeとreleaseは別途判断します。
+[実装計画](docs/internal/value-task-implementation-plan.md)に仕様、移行対象、先行テストを記録しています。明示操作と非Copyローカルの通常代入拒否を一つの変更として実装し、High/Low・Rust生成・サンプル・日英Docs・4 OS CIの検証状況は[進捗](docs/internal/progress.md)に分けて残します。Task結果handleのS1はPR #88としてmainへ反映しました。公開releaseへの反映は別に記録します。
 
-S1は[ADR 012](docs/internal/adr/012-task-result-handles.md)に沿い**作業branchへ接続済み・未リリース**です。`task = spawn work()`でscope内handleを作り、`await task`で一回受け取ります。全Tの正常出口でawaitまたは`std.task.discard`を求め、moveは義務も移します。scope外・引数/return・field/container/wrapper・他taskへのescapeを拒否します。Taskは非Copy・非Clone・非sharedで、TaskFailureのkind/messageは標準metadataに接続します。業務Resultは外側faultと分け、受取Errを処理してもscope故障を消しません。fault観測→兄弟取消要求→全actual join→scope出口Errorの順とbody元Errを保ちます。discardは受取放棄であり、終了確認ではありません。
+S1は[ADR 012](docs/internal/adr/012-task-result-handles.md)に沿い**mainへ接続済み・未リリース**です。`task = spawn work()`でscope内handleを作り、`await task`で一回受け取ります。全Tの正常出口でawaitまたは`std.task.discard`を求め、moveは義務も移します。scope外・引数/return・field/container/wrapper・他taskへのescapeを拒否します。Taskは非Copy・非Clone・非sharedで、TaskFailureのkind/messageは標準metadataに接続します。業務Resultは外側faultと分け、受取Errを処理してもscope故障を消しません。fault観測→兄弟取消要求→全actual join→scope出口Errorの順とbody元Errを保ちます。discardは受取放棄であり、終了確認ではありません。
 
-新Taskを含む最寄りscopeだけpublic TaskScopeを選び、旧spawn-only Scope、Supervisor/HTTPの旧連携を維持します。checkerの私有ScopeId/binding義務とsealed planから生成し、暗黙cloneやemitterの所有権再推論は加えません。[Stage 1](docs/internal/task-bridge-stage1-results.md)と[接続結果](docs/internal/task-handles-s1-results.md)を分け、High/保存Low/手書きLow、native、回帰、4 OS、測定、独立レビューの保証範囲を後者に残します。S2の具体API、公開Pool/Tx、merge/release/版更新は別工程です。使い方は[Task結果handle](docs/task-handles.md)を参照してください。
+新Taskを含む最寄りscopeだけpublic TaskScopeを選び、旧spawn-only Scope、Supervisor/HTTPの旧連携を維持します。checkerの私有ScopeId/binding義務とsealed planから生成し、暗黙cloneやemitterの所有権再推論は加えません。[Stage 1](docs/internal/task-bridge-stage1-results.md)と[接続結果](docs/internal/task-handles-s1-results.md)を分け、High/保存Low/手書きLow、native、回帰、4 OS、測定、独立レビューの保証範囲を後者に残します。S2は既存APIでmonitorの内側Errを親bodyの`try`へ接続し、HTTPの旧spawnを維持します。[サービス例](test-nagi-code/library-examples/supervised-service/README.md)と[検証結果](docs/internal/task-handles-s2-results.md)に移行と終了条件を記録します。新しい故障昇格APIや公開Pool/Txは追加しません。使い方は[Task結果handle](docs/task-handles.md)を参照してください。
 
 ## なぜRustを使うのか
 
@@ -162,7 +162,7 @@ mainのHTTP実装は、応答開始前の捕捉可能なhandler panicを、内�
 
 scopeとactor／SupervisorはTokio上の同一プロセスで動きます。actorの業務replyでErrを返すことと、worker自体が失敗することは別です。Supervisorの再起動方針は後者へ適用します。scopeの兄弟取消やworkerの終了条件は、アプリの寿命にも影響します。
 
-現在のScopeは本体が終わってから子をjoinし、子のErr/panicで兄弟を取消します。本体実行中に子の故障で割り込む仕組みはありません。通常のエラー退出では終了を待ちますが、親Futureの直接破棄やunwindでは同期Dropが停止を要求するだけで、子の終了確認までは待てません。業務Errを結果handleで受け取る将来の設計でも、Supervisorのterminal failureがHTTPを止める接続を失わないよう移行します。
+旧Scopeは本体が終わってから子をjoinし、子のErr/panicで兄弟を取消します。本体実行中に子の故障で割り込む仕組みはありません。通常のエラー退出では終了を待ちますが、親Futureの直接破棄やunwindでは同期Dropが停止を要求するだけで、子の終了確認までは待てません。Taskを含むscopeではawaitや出口のdrainで故障を観測します。Supervisorの結果handleは親が内側Resultを`try`し、terminal failureからHTTP取消への接続を維持します。
 
 actorは基本one-for-oneで、故障した子を初期化から作り直します。正常終了の扱いはTEMPORARY/TRANSIENT/PERMANENTで分け、明示停止や親の取消と混同しません。再起動上限はありますが、処理中messageの自動再配送やexactly-onceはありません。Control handleを捨てることと、Supervisor ownerの終了も別です。
 

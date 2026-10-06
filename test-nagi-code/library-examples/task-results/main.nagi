@@ -1,0 +1,38 @@
+from std.task import discard, message
+from std.ownership import move
+
+async def answer() -> i64:
+    return 42
+
+async def business() -> Result[i64, str]:
+    return fail("business sentinel")
+
+async def announce() -> unit:
+    print("sibling finished")
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        original = spawn answer()
+        transferred = move(original)
+        received = await transferred
+        match received:
+            case Ok(value):
+                print(value)
+            case Err(failure):
+                print(message(failure))
+        request = spawn business()
+        sibling = spawn announce()
+        discard(sibling)
+        outcome = await request
+        match outcome:
+            case Ok(inner):
+                match inner:
+                    case Ok(value):
+                        print(value)
+                    case Err(problem):
+                        print(problem)
+            case Err(failure):
+                print(message(failure))
+    print("after scope")
+    print("task-results: OK")
+    return ok(assert_true(True))

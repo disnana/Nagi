@@ -1,0 +1,33 @@
+from std.task import discard, message;
+from std.ownership import move;
+
+async fn answer() -> i64 { return 42; }
+async fn business() -> Result[i64, str] { return fail("business sentinel"); }
+async fn announce() -> unit { print("sibling finished"); }
+async fn main() -> Result[unit, Error] {
+    scope {
+        let original = spawn answer();
+        let transferred = move(original);
+        let received = await transferred;
+        match received {
+            case Ok(value) { print(value); }
+            case Err(failure) { print(message(failure)); }
+        }
+        let request = spawn business();
+        let sibling = spawn announce();
+        discard(sibling);
+        let outcome = await request;
+        match outcome {
+            case Ok(inner) {
+                match inner {
+                    case Ok(value) { print(value); }
+                    case Err(problem) { print(problem); }
+                }
+            }
+            case Err(failure) { print(message(failure)); }
+        }
+    }
+    print("after scope");
+    print("task-results: OK");
+    return ok(assert_true(True));
+}

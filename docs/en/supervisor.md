@@ -57,6 +57,8 @@ Passing a Supervisor to `run` seals registration. A `Control` handle requests sh
 
 Once a [scope](async.md) body finishes and joins its children, an Error from a spawned `run` cancels the scope's remaining children and waits for them to stop. This includes an HTTP server spawned in the same scope. For example, failure of the last `TEMPORARY` worker can lead to HTTP shutdown. Return business rejections separately from worker failures.
 
+This describes legacy statement spawn. When `run` is started through a [Task result handle](task-handles.md), its inner business Result Err alone does not fault the scope. The [service example](../../test-nagi-code/library-examples/supervised-service/README.en.md) awaits the monitor and propagates `Ok(inner)` through the parent's `try inner` as a body Err, requesting HTTP cancellation. Mechanically replacing receipt with discard loses this connection. Normal shutdown leaves HTTP running.
+
 Successful `shutdown` means children and shared context cleanup have finished. An Error can mean either a retained child failure returned after cleanup, or an expired deadline with cleanup incomplete. The current API has no separate completion type, so an Error alone does not distinguish completed from incomplete cleanup.
 
 After the deadline expires, ownership records remain available to track termination. HTTP or native work holding shared context must release it before cleanup can finish. If releasing that reference depends on Supervisor completion, both can wait for each other; callers must design ownership and shutdown order accordingly. When Rust integration uses another Tokio runtime, keep the runtime where `run` started alive through cleanup.

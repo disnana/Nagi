@@ -1,0 +1,87 @@
+{
+  "timestamp_utc": "2026-10-06T23:05:29.591169+00:00",
+  "base": "aee1987a7ede5eeebb5e253afd65cb5ede327dde",
+  "production_diff": "none in compiler/src, runtime, Cargo.toml, Cargo.lock",
+  "files": {
+    "compiler/tests/support/task_service_s2.rs": "49e9d53839e7db1251c340331c5e03b90007434b60a835887e9d5eb2b38c368c",
+    "compiler/tests/task_handles.rs": "7a50924e76cd973280de26b548df52318f2bfba830c19ece6f44ed341d1a651e",
+    "scripts/verify_library_examples.py": "49e4f1775c44577208139fecd3275f0cab1beef3b2227d71deae20461d49878c",
+    ".github/workflows/ci.yml": "ba4d2c0523507110985393a6165e5334e7fba7f4c12babf247a5dd95372e2c87",
+    "test-nagi-code/library-examples/supervised-service/main.nagi": "90d6db367361c3ce19aaf9b16f9828c924235994d1beef0524641bd0509ae63b",
+    "test-nagi-code/library-examples/supervised-service/main.low": "cc5ee9c511cdf838f1dabeeb0410d99910d8f57f72dfd81174f994ca6ad7031e",
+    "test-nagi-code/library-examples/supervised-service/README.md": "ca55427dd222b2da970e52afb172ee0da08e0cbe1c54f0df5bf25a22ba7d0976",
+    "test-nagi-code/library-examples/supervised-service/README.en.md": "9dbcd394bf3bb416a5514f526e0ef47f82d510c74b76f773bfdd9c52caf1e9e8",
+    "test-nagi-code/library-examples/task-results/main.nagi": "2c4cc1112f380b0a07eeffe84bf619b0fd8eb8f591578934d3e5800e5558d102",
+    "test-nagi-code/library-examples/task-results/main.low": "8f3ec3c9f5fa84047d1916059b233a6cf4f2dc26757889546f106ae053fe5ce2",
+    "test-nagi-code/library-examples/task-results/README.md": "228fc1c9a32e6fb175118d34a635be6280cf15acd7ce8cb10ab452c039732f63",
+    "test-nagi-code/library-examples/task-results/README.en.md": "81fb36cb7562f8e2194c1711409d4c6851b843ac1f3501bdeec41ed57827a234",
+    "CHANGELOG.md": "82c8c43b6b88dca0e3cf98dae18a6d6c14dd15c6c07e507d390dae176637d04f",
+    "DESIGN.md": "be9e5178dffde382475969c5f03b502e4ac9bcc0e17315fc60d9e98bd4ca12fd",
+    "DESIGN.en.md": "2fde2625521719d3de096d56cc8e387a98c08df17181dafd2a878d46ce21d38c",
+    "docs/task-handles.md": "55fea7b8f08ba3dac4779595a8f2cb025fdf220d8a4f3a32b6c33936ddbf4766",
+    "docs/en/task-handles.md": "0126d41ae6f8492c1b72543e28626700e81e0e6807ff44a5b2777205cc637233",
+    "docs/supervisor.md": "bb67d480acc6cfd6775585820f6ad464c74f14ee06d6dfe9a3f0833e32025642",
+    "docs/en/supervisor.md": "0fe49df47586991dc45bbe77f02356c3426a5fda7ae4777663e0f0a8da8d60fc",
+    "docs/roadmap.md": "33c77a1b633d68f77fa5e014a1f430f2442e88f2ce87e8e2bfe4d0969dfd85ef",
+    "docs/en/roadmap.md": "7eb7fd54cf426258cb2909091fadccd51309c66c18aac03687e56e150f36f91e",
+    "docs/internal/adr/012-task-result-handles.md": "8640a42053d845175f4d3740c655aa13e8ec7e0575881fcb166e66de028c5c84",
+    "docs/internal/language-invariants.md": "180a6927d69a48e45081de21cbd1856d23962d79aeebae0af2d01c3d7af8b7fd",
+    "docs/internal/open-questions.md": "fd32825d0c28aa24307036bf11b8efb52ffe6fdd443eab18b05ab36b9f45ead7",
+    "docs/internal/progress.md": "fa47b94e12e200e1d94a762773fd1b23c96d0c87dc96c4db448cf1444dd3c04d",
+    "docs/internal/handoffs/2026-10-06-task-handles-s1-complete.md": "37c1646391ff4f5217d8b2530b19f8109787e2a2659a85dbb8f4618ba5eb5b3a",
+    "docs/internal/task-handles-s2-results.md": "c775a7dce6208f012b096be6dd4af3d506dd0327144acedd830bb8b38086c140"
+  },
+  "independent_native": "Final exact outer test executed by independent reviewer after fixes. All seven scenario markers verified in each of High, saved Low after High removal, and handwritten Low. 1 outer test passed, 0 failed, 0 ignored, 6 filtered; each native executable: 1 test passed, 0 failed, 0 ignored, 0 filtered.",
+  "high_low_comparison": "Checked Low bodies equal for both examples after removing module provenance and normalizing only root module path identity",
+  "review_notes": [
+    {
+      "severity": "P2",
+      "type": "oracle gap",
+      "file": "compiler/tests/support/task_service_s2.rs",
+      "line": 363,
+      "counterexample": "If a faulty parent returns immediately after abort request but before HTTP Future Drop, native::closed awaits http_dropped and then passes. This eventual-cleanup oracle therefore does not alone reject premature parent completion. Add an immediate http_dropped Acquire assertion before closed for every awaited-parent case, keeping ParentDrop separate.",
+      "status": "resolved and independently re-executed: immediate Acquire http_dropped assertion before closed for all awaited-parent cases; ParentDrop retains independent events"
+    },
+    {
+      "severity": "P2",
+      "type": "documentation type accuracy",
+      "file": "test-nagi-code/library-examples/supervised-service/README.en.md",
+      "line": 27,
+      "issue": "spawn creates Task[Result[unit, Error]]; await yields Result[Result[unit, Error], TaskFailure]. New English and Japanese text attribute await type to spawn.",
+      "status": "resolved in Japanese and English README: spawn Task and await Result types separated"
+    },
+    {
+      "severity": "P3",
+      "type": "documentation implementation status",
+      "files": [
+        "docs/roadmap.md",
+        "docs/en/roadmap.md"
+      ],
+      "lines": [
+        18,
+        34
+      ],
+      "issue": "S1 and move status still said working branch while main implementation was confirmed.",
+      "status": "resolved and independently read back: move/S1 main, unreleased; S2 working branch"
+    }
+  ],
+  "disposition": "No unresolved findings in the reviewed S2 source and completed documentation snapshot. Local independent validation passed. Broader workspace regressions, clippy, S2 four-OS CI, merge and release remain parent-owned gates, not certified by this review.",
+  "logs": {
+    "native-contract-final.log": "5da6a1faafc10a72c60fc861a27f7af8cc2aa10c8b81d1e53442021f2543664f",
+    "high-low-comparison.json": "6f4f2f9fb0c7399f941178281b09e155ef6264efe0627c0731826083105aad03",
+    "final-validation.json": "c8e74f2c8c03e482ed86d98965cfc1f77fb3dc3390c37cd2a38f7f2b5b357824",
+    "native-final/explicit-move-task-service-s2-handwritten-low.stdout": "221b719df2cf6971de570cdda67612ab0cc021596049840caee70ce2afcc7092",
+    "native-final/explicit-move-task-service-s2-saved-low.stdout": "221b719df2cf6971de570cdda67612ab0cc021596049840caee70ce2afcc7092",
+    "native-final/explicit-move-task-service-s2-high.stdout": "221b719df2cf6971de570cdda67612ab0cc021596049840caee70ce2afcc7092"
+  },
+  "S1_head_and_merge_base_trees": [
+    "bc62c787471d9e4481e36c0cca6e2ed294cebbc1",
+    "bc62c787471d9e4481e36c0cca6e2ed294cebbc1"
+  ],
+  "excluded_scope": [
+    "AGENTS.md",
+    ".codex/**",
+    "docs/internal/agent-routing.md",
+    "agent configuration PR #89"
+  ]
+}

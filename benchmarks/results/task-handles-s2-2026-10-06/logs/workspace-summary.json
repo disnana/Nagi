@@ -1,0 +1,7 @@
+{
+  "result_blocks": 95,
+  "passed": 935,
+  "failed": 0,
+  "ignored": 1,
+  "child_result_blocks_included": "image child re-execution outputs included; not unique test inventory"
+}

@@ -1,6 +1,6 @@
 # 並行処理の結果を一度受け取る
 
-Task結果handleは作業branchのS1実装です。公開releaseにはまだ含まれません。旧`spawn work()`は引き続き使えます。
+Task結果handleはmainに実装済みです。公開releaseにはまだ含まれません。旧`spawn work()`は引き続き使えます。[実行可能なHigh・手書きLowの例](../test-nagi-code/library-examples/task-results/README.md)があります。
 
 ```nagi
 from std.task import discard
@@ -38,4 +38,10 @@ Taskを関数の引数や戻り値、field、List、Option、Resultなどのwrap
 
 `discard(task)`はunitを返し、結果の受取を放棄します。子の停止、detach、故障の抑制、終了待ちの省略、資源closeの完了を意味しません。scopeはその子の終了も待ちます。Taskを含むscope内に旧`spawn work()`が混在する場合、その旧spawnの`Result[unit, Error]` Errは引き続きscope故障です。Supervisor/HTTPの旧連携も維持しています。
 
-親FutureのDropやpanicでは取消を要求しますが、同期Dropから実join完了は保証できません。yieldしない処理の強制停止や、DBなどの外部副作用の巻戻しも保証しません。[asyncとscope](async.md)、[並行処理](concurrency.md)、[実装と検証状況](internal/task-handles-s1-results.md)も参照してください。
+## SupervisorとHTTPの移行
+
+[サービス例](../test-nagi-code/library-examples/supervised-service/README.md)ではmonitorだけをTaskへ移し、HTTPの旧spawnを維持します。`await monitor_task`の`Ok(inner)`を親の`try inner`で処理すると、Supervisorのterminal Errがbody Errとなり、HTTPへ取消を要求して直接の子の実join後に元Errorを返します。単にdiscardすると、この内側ErrはHTTPを止めません。正常なSupervisor shutdownはHTTPを継続します。HTTP故障が先に観測されれば、それがscopeのprimaryになります。
+
+HTTP stateはSupervisor contextを保持しません。外部のshared/native Arcがcontextを保持すると、その解放までSupervisorのcleanupが待つ場合があり、Taskは参照循環を解消しません。
+
+親FutureのDropやpanicでは取消を要求しますが、同期Dropから実join完了は保証できません。scopeの直接の子が終了しても、Rust連携内の任意の子taskやHTTP handlerの非同期close完了を保証するものではありません。yieldしない処理の強制停止や、DBなどの外部副作用の巻戻しも保証しません。[asyncとscope](async.md)、[並行処理](concurrency.md)、[実装と検証状況](internal/task-handles-s1-results.md)も参照してください。

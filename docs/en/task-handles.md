@@ -1,6 +1,6 @@
 # Receive a concurrent result once
 
-Task result handles are implemented on the S1 working branch. They are not included in a published release yet. The existing `spawn work()` statement remains available.
+Task result handles are implemented on main. They are not included in a published release yet. The existing `spawn work()` statement remains available. See the [runnable High and handwritten Low example](../../test-nagi-code/library-examples/task-results/README.en.md).
 
 ```nagi
 from std.task import discard
@@ -38,4 +38,10 @@ Receiving and matching a fault leaves the scope failed. The first observed fault
 
 `discard(task)` returns unit and abandons receipt. It does not stop or detach the child, suppress a fault, omit joining, or confirm resource closure. The scope still waits for that child. A legacy `spawn work()` mixed into a Task scope still treats its `Result[unit, Error]` Err as a scope fault. Existing Supervisor/HTTP failure coupling is preserved.
 
-Dropping or panicking the parent Future requests cancellation; synchronous Drop cannot confirm actual joining. Forced termination of non-yielding code and rollback of external effects such as database work are not guaranteed. See [Async and scopes](async.md), [Concurrency](concurrency.md), and [implementation and validation status](../internal/task-handles-s1-results.md).
+## Migrating Supervisor and HTTP
+
+The [service example](../../test-nagi-code/library-examples/supervised-service/README.en.md) migrates only its monitor to a Task and retains the legacy HTTP spawn. Handling the `Ok(inner)` from `await monitor_task` with the parent's `try inner` propagates a terminal Supervisor Err as the body Err. The scope requests HTTP cancellation, joins its direct children, and returns the original Error. Simply discarding the handle would abandon that inner Err and leave HTTP running. Normal Supervisor shutdown also leaves HTTP running. If an HTTP fault is observed first, it becomes the scope primary.
+
+HTTP state does not hold the Supervisor context. External shared/native Arc owners can make Supervisor cleanup wait until they release the context; a Task does not collect reference cycles.
+
+Dropping or panicking the parent Future requests cancellation; synchronous Drop cannot confirm actual joining. Termination of the scope's direct children does not confirm asynchronous closure of arbitrary nested Rust tasks or HTTP handlers. Forced termination of non-yielding code and rollback of external effects such as database work are not guaranteed. See [Async and scopes](async.md), [Concurrency](concurrency.md), and [implementation and validation status](../internal/task-handles-s1-results.md).

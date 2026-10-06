@@ -1,0 +1,20 @@
+{
+  "review_kind": "read-only acceptance plan review; no new S2 implementation/native execution",
+  "head": "08e90c6984e689f7d026b3ff40277b9898ab4c68",
+  "tree": "bc62c787471d9e4481e36c0cca6e2ed294cebbc1",
+  "sources": {
+    "AGENTS.md": "4fb8707c9b861affa0aac392d00ccec4970964250e857aa60bf60ca084067c02",
+    "docs/internal/adr/012-task-result-handles.md": "315d1092e0f714225f57b35a1c79e691762ad8647755a5d6d96988257a687103",
+    "docs/internal/task-result-handle-design.md": "3b58bdb777bcd75bd3bda436a96dd8642835507c6f402ec3f241d5c30ac037eb",
+    "docs/internal/value-task-implementation-plan.md": "56da6f54e2077ce9ececce4b1ea87c4b303f5c59caf6b2fae5528db42e7a218c",
+    "runtime/src/task.rs": "89ebba9bba8761af98d7997f09fdade51d8100d0c76034d7681e57cad3689545",
+    "runtime/src/actor.rs": "2179d42204259d9b728e01939669b3576e312966e1a8aec5e86b6ba80ce18d71",
+    "runtime/src/actor/lifecycle.rs": "db34427f6d643fbece84e9fc773583c906c1509b9b5e34bdea508627eb1340ac",
+    "runtime/src/http_server.rs": "b9d081eea566f26806436945620a329b95ca8a766029c1910e286a0fdd6751d8",
+    "compiler/src/emit.rs": "d8643509d2a35cd4eb479f9a97acd86e342632be91d915c5f72c45b1efca89ba",
+    "compiler/tests/support/task_service.rs": "ca318871fb04172d4c31bd7dbc48bb17a28732d57353254d9067fb720cfafbd4",
+    "test-nagi-code/library-examples/supervised-service/main.nagi": "70dc1b71b8852aa133daa4c7a187537d272c7ecd76f0ae2036519fa0032a416d",
+    "scripts/verify_library_examples.py": "e0347e91f4094e8c4b7a8f531ebd74a900f28f43f8e7efb073b697444a400d85",
+    "scripts/verify_application_examples.py": "3afa9ea0118d7180d3e79750a9e843207e2a44916532d90c48fc5212e9163793"
+  }
+}

@@ -1,5 +1,11 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-06: S1 main反映とS2サービス接続
+
+PR #88最終head `08e90c6`は4 OS・必須CI成功、未解決review0でmain `aee1987`へmergeした。両tree `bc62c787471d9e4481e36c0cca6e2ed294cebbc1`を読戻した。別branchのS2で既存Task awaitの内側Resultを親tryへ接続し、HTTP旧spawnを維持する。新API/意味論/compiler/runtime/依存は追加していない。native三構文×7終了ケース、公開両例の三構文nativeがローカル成功。独立Sol Highの2指摘を修正し、最終回帰・4 OS・修正後読戻しを進める。[S2結果](task-handles-s2-results.md)が現在の正本。旧節の停止・未merge指示は当時の履歴で、最新のリリース完了指示を制限しない。
+
+agent運用は別差分で整理し、Fast Luna Max、Engineer/Reviewer Sol High、Architect xHigh、Critical Max、Astra例外をcustom TOMLへ接続。[構成記録](agent-routing.md)で仕様検査とstandalone CLIの未実行範囲を分ける。Taskのproduction検証成功へ数えない。
+
 ## PR #88最終レビューとTask次リリース準備
 
 2026-10-06。#88をS1完成PRとしてレビューし、production本体・依存を維持した。未実装と書かれた日英/AI文書、negative9対＋positive1対、旧Supervisor terminal→実HTTP停止の三構文専用oracleを補強。契約110/110、Task native6群、全workspace原ログ95 block・934成功・failed0・費用用ignored1、fmt/clippyが成功した。過去の90/90・source CIを今回の再実行へ数えない。

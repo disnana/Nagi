@@ -1,6 +1,6 @@
 # ADR 012: scope所属の結果handleと故障の保持
 
-状態: **設計採用・S1作業branchに接続済み・未リリース**。private runtime bridgeの先行検証は[Stage 1結果](../task-bridge-stage1-results.md)に記録する。2026-10-06の「既存設計から安全に判断できるものは理由を示して自律確定」という追加指示に基づく詳細判断。旧Scope、spawn、test期待、公開版を変更した記録ではない。API名・構文とruntime接続は[設計案](../task-result-handle-design.md)、検証の順序は[実装計画](../value-task-implementation-plan.md#s1s2-task結果の境界)に残す。
+状態: **設計採用・S1 main反映済み・未リリース**。S2は既存のawaitと親body `try`による[サービス移行](../task-handles-s2-results.md)で接続し、一般業務Errの自動故障化や新しい公開昇格APIは追加しない。private runtime bridgeの先行検証は[Stage 1結果](../task-bridge-stage1-results.md)に記録する。2026-10-06の「既存設計から安全に判断できるものは理由を示して自律確定」という追加指示に基づく詳細判断。旧Scope、spawn、test期待、公開版を変更した記録ではない。API名・構文とruntime接続は[設計案](../task-result-handle-design.md)、検証の順序は[実装計画](../value-task-implementation-plan.md#s1s2-task結果の境界)に残す。
 
 ## 根拠と今回の判断
 
