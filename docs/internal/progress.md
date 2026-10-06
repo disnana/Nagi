@@ -4,7 +4,7 @@
 
 2026-10-06、ユーザーの再開指示を受け、Stage 1の停止境界から追加RED→checker/public runtimeへ接続した。SpawnBind、canonical std.task、stable ScopeIdとbinding義務、sealed受取/放棄/Scope planを実装。High・保存Low・手書きLowの全positive nativeと、業務Err兄弟継続・sticky fault・legacy/body元Err・Drop/actual joinを検証した。独立レビューのFailure wrapper copy/share、spawnユーザー名、associated method再export、raw public checker APIの不一致を縮小反例で修正した。故障後大量受取のO(n²)掃除もRED→ticket退役へ修正し、17native oracleへ追加した。
 
-[接続結果](task-handles-s1-results.md)と[artifact](../../benchmarks/results/task-handles-s1-2026-10-06/README.md)が進行中の正本。4 OS最新head CI・測定・全回帰・文書は個別に実行結果を追記する。Stage 1結果を今回の実行と数えず、S2、公開SQLite、merge、release、版更新は行わない。
+[接続結果](task-handles-s1-results.md)と[artifact](../../benchmarks/results/task-handles-s1-2026-10-06/README.md)に90/90契約、三構文native、全workspace回帰、探索、測定、日英Docsと独立レビューを記録した。公開source `34ac4d5` の[checks](https://github.com/disnana/Nagi/actions/runs/37489343115)・[website](https://github.com/disnana/Nagi/actions/runs/37489342523)は成功。4 OSともTask native5群・runtime17群・公開3・doc9・checker90/90、Linux全workspace原ログ933成功・failed0・費用用ignored1、全package・両IDE・merge gateが成功した。結果追記headのChecksはPR #88で別に確認する。Stage 1結果を今回の実行と数えず、S2、公開SQLite、merge、release、版更新は行わない。
 
 
 ## S1 Stage 1: 先行REDとprivate Task bridge

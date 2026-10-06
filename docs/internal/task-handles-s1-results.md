@@ -1,8 +1,8 @@
 # Task結果handle S1接続の実行記録
 
-2026-10-06。ユーザーの再開指示による作業中の記録。基点mainは `9ba4a104be6f65dba61eda0c7b1ef0f98c892cf7`、PR #88 headは `5c2c8282fbd9841cd3b0a2a78e9742d7ec3a811e`。最新headのchecks `37471066148`、website `37471065829` は成功。レビュー提出・threadは0件。sourceはStage 1検証head `6223ad2`と一致し、入力62件・artifact122件のSHA-256を確認した。
+2026-10-06。ユーザーの再開指示によるS1接続の記録。再開時のmainは `9ba4a104be6f65dba61eda0c7b1ef0f98c892cf7`、PR #88 headは `5c2c8282fbd9841cd3b0a2a78e9742d7ec3a811e`。再開時のchecks `37471066148`、website `37471065829` は成功し、レビュー提出・threadは0件だった。接続前sourceはStage 1検証head `6223ad2`と一致し、入力62件・artifact122件のSHA-256を確認した。今回の接続sourceとCIは末尾へ分けて記録する。
 
-ADR 012と接続判断を用い、追加RED、compiler/checker、公開runtime、Low/Rust、native、回帰・測定・日英文書・独立レビューの順に進める。Stage 1の16private oracleや6/56一致をS1完成として扱わない。merge、release、version更新、S2の具体API、公開SQLiteは対象外。
+ADR 012と接続判断を用い、追加RED、compiler/checker、公開runtime、Low/Rust、native、回帰・測定・日英文書・独立レビューを実行した。Stage 1の16private oracleや6/56一致を今回の成功へ数えない。merge、release、version更新、S2の具体API、公開SQLiteは対象外。
 
 原ログと実装前snapshotは `benchmarks/results/task-handles-s1-2026-10-06/` に保存する。新しい環境にはRust/Cargoとcacheがなかったため、通常toolchainを `/workspace/toolchains/` に導入した。環境固有pathをrepository既定へ固定しない。
 
@@ -31,7 +31,7 @@ private prototypeをruntime/src/task.rsのpublic本体へ移し、二重実装�
 
 runtime担当Solがcompilerを独立レビューし、別のSolがruntime/cleanupを独立レビューした。確認済みP1はFailure wrapper copy/share（check受理後Rust E0277）、ユーザー名spawnのalias/binary/field、関連メソッドpub use（Rust E0432）、raw checker APIのcanonical Task欠落。縮小入力をcorpusへ残し、段階別原ログと修正後再実行を保存した。封印factsの欠落・bridge/ScopeId/action不一致はCompilerDefectとして拒否する。
 
-runtimeの故障後大量receiveにはO(n²)の全record掃除が残っていた。entries128!=127のnative REDから、残joinがあればdrainし、受取対象ticketだけを退役する経路へ修正した。同じ公開APIの独立release harnessで8192件中央値97.3ms→1.75ms、17oracleと追加公開4組を再確認。一般的なlatency保証へ広げない。レビューは全経路の証明ではなく、原ログ・reviewed hashesは保存artifactにある。
+runtimeの故障後大量receiveにはO(n²)の全record掃除が残っていた。entries128!=127のnative REDから、残joinがあればdrainし、受取対象ticketだけを退役する経路へ修正した。同じ公開APIの独立release harnessで8192件中央値97.3ms→1.75ms、17oracleと追加公開4組を再確認。一般的なlatency保証へ広げない。レビューは全経路の証明ではなく、原ログ・reviewed hashesは保存artifactにある。レビュー後にhashが変わったcheckerとruntimeはcargo fmtだけの差で、`reviews/final-format-provenance.json`と二つのdiffに対応を保存した。
 
 ## 同条件の生成Rustと手書きRust
 
@@ -53,4 +53,17 @@ Linux x86_64、rustc 1.99.0、current-thread Tokio、release。双方が同じTa
 
 ## 公開確認
 
-現時点で新sourceの4 OS/最新head CIは未確認。PR #88はmain向けdraftを維持し、CI読戻し後にsource headとrunを追記する。Stage 1のCIを今回の実行として数えない。merge、release、version更新、S2の具体API、公開SQLiteは行わない。
+接続sourceを `34ac4d585084877372965e3d58ed5c2002604529`、tree `781e031eafbdc0efa00038007d41cf16dc538862` として公開し、PR #88の実headとtreeを読み戻した。CLI pushはGitHub書込み認証がなく失敗したため、接続GitHub APIでtree/commit/refを作成した。ローカルcommitとはSHAが異なるが、treeと151 source hashesは一致する。
+
+このsourceの[checks run 37489343115](https://github.com/disnana/Nagi/actions/runs/37489343115)と[website run 37489342523](https://github.com/disnana/Nagi/actions/runs/37489342523)は成功した。各jobの原ログ、run/job metadataと集計はartifactの `ci/source-34ac4d5/` に保存した。
+
+| target | Task native | runtime oracle | 公開API / doc | checker契約 |
+|---|---:|---:|---:|---:|
+| Linux x86_64 | 5 | 17 | 3 / 9 | 90/90 |
+| Windows x86_64 | 5 | 17 | 3 / 9 | 90/90 |
+| macOS ARM64 | 5 | 17 | 3 / 9 | 90/90 |
+| macOS Intel | 5 | 17 | 3 / 9 | 90/90 |
+
+すべてfailed/ignored 0。nativeの5群には全19 positive対の三構文と生成探索を含み、checker契約90件とnative実行件数は別である。フィルタによる0件実行を成功に数えていない。Linux全workspace原ログも95 result block・933成功・failed0・費用用ignored1で、fmt/clippy、no-default-features、実HTTP、fuzz、全package・両IDEとmerge gateが成功。websiteは92ページのbuild/link検査成功、PRなのでdeployはskip、release publishもskipだった。
+
+後続の結果・CI追記は文書/artifactのみで、production sourceの151 hashesを維持する。追記headの必須ChecksはPR #88で別に読み戻し、上のsource headの実行と分ける。Stage 1のCIを今回の実行として数えない。main向けdraftを維持し、merge、release、version更新、S2の具体API、公開SQLiteは行わない。

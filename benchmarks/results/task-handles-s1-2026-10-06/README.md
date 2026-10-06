@@ -14,10 +14,13 @@
 | runtime/05-sticky-retirement-red | 故障後大量受取のO(n²)掃除。entries128!=127のnative RED→個別ticket退役 |
 | verification | checker段階・元行を含む90/90契約、三構文nativeと周辺回帰・生成探索、封印facts検査 |
 | reviews/compiler・runtime | 独立レビューの縮小反例、再実行ログ、source hashesと限界 |
+| ci/source-34ac4d5 | 新接続sourceの4 OS原ログ・run/job metadata・実行件数。Stage 1のCIは含めない |
 | cost | 同じTaskScope・Tokio・入力の手書き/生成Rust。allocation、Future、時間、binary、warm依存のpackage再build原ログ |
 
 runtimeの旧16にretirement回帰を追加して17群。fault receiveは同じ独立release harnessで8192件97.3ms→1.75ms。任意Rust Drop/panicの回復、non-yielding強制停止、外部副作用rollbackを保証しない。同期Dropはabort要求まで。
 
 測定はLinux x86_64、current-thread Tokio、release、25 loops×7回。allocation counterは呼出しthreadのみ。手書き/生成RustのFutureはreceive416B/discard408B、allocation数とbytesは一致。時間は共有hostのばらつきを含み、ゼロコストや一般的な速度優位を主張しない。cache使用をclean buildと呼ばない。runtime単体の一括spawn/receive測定は、言語fixtureの順次spawn/receiveとは別 workload。productionとcfg(test) layoutも分ける。
 
-最新の結果・CI・保証範囲は[接続結果](../../../docs/internal/task-handles-s1-results.md)。S2、公開SQLite、merge/release/版更新は対象外。provenance.jsonは最終sourceと保存artifactのSHA-256を記録する。
+source `34ac4d585084877372965e3d58ed5c2002604529`、tree `781e031eafbdc0efa00038007d41cf16dc538862` のchecks `37489343115`・website `37489342523` は成功。各OSでTask native5群・runtime17群・公開API3・doc9・checker90/90を原ログから確認した。Linux workspaceは原ログ95 block・933成功・failed0・費用用ignored1。deploy/publishのskipを成功実行へ数えない。
+
+最新の結果・CI・保証範囲は[接続結果](../../../docs/internal/task-handles-s1-results.md)。結果追記headのChecksはPR #88で別に読み戻す。S2、公開SQLite、merge/release/版更新は対象外。provenance.jsonは最終sourceと保存artifactのSHA-256を記録する。

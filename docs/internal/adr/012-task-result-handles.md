@@ -17,7 +17,7 @@ at-most-onceとmust-consumeは別である。全T義務は新Taskだけに適用
 
 ## 初版の採用契約
 
-ここでのTask、TaskFailure、discardは採用契約の呼称である。2026-10-06のS1再開では[接続判断](../task-handle-implementation.md)の `task = spawn work()`、canonical `std.task.Task[T]`、`discard` (unit)、`kind`、`message` (failure-origin view) を実装方針として確定し、先行負例から接続する。KindはPanicked/Cancelled/LegacyError/Internalの4値。scope選択は最寄りscope単位のsealed planに保持する。まだ実装完成・公開版での利用を示さない。
+ここでのTask、TaskFailure、discardは採用契約の呼称である。2026-10-06のS1再開では[接続判断](../task-handle-implementation.md)の `task = spawn work()`、canonical `std.task.Task[T]`、`discard` (unit)、`kind`、`message` (failure-origin view) を実装方針として確定し、先行負例から接続した。KindはPanicked/Cancelled/LegacyError/Internalの4値。scope選択は最寄りscope単位のsealed planに保持する。実装・4 OS CIと限界は[接続結果](../task-handles-s1-results.md)に記録し、公開releaseでの利用とは分ける。
 
 - Task[T]はscope所属、非Copy・非Clone・非shared。作成時と同じscopeのlocalでのみ保持・移動し、scope外、関数引数/return、field/container/wrapper、他taskへ逃がさない。一般region/effect checkerやFuture保存は追加しない。
 - awaitはhandleをconsumeし、TがCopyでも一回だけ受け取る。未poll/Pendingの受取Future Dropでhandleを復活させない。正常binding/scope出口とloop継続では全Tでawaitまたは明示discardを必要とし、move aliasへ義務を移す。body Err/panic/親取消はcleanup経路で扱う。
@@ -35,7 +35,7 @@ join Readyによる除去→ticket解決→actual join記録→未join対応除�
 
 background joinなしでは、長いbody中の完了未join task、join済み未受取Tが保持され得る。実joinかつ受取/放棄後にentryを退役し、実行中task数だけでメモリ量を説明しない。送信失敗Tのchild側Dropと送信済みbufferのparent側Dropを区別する。新capacity、timeout、依存、default、独自GC、async destructorは追加しない。
 
-## 未検証のbridgeとacceptance
+## bridgeとacceptance
 
 新Taskのparse/check/保存Low/生成Rust/公開runtimeを接続した。private bridgeの歴史的検査は[Stage 1結果](../task-bridge-stage1-results.md)、公開言語の検証と未確認範囲は[接続結果](../task-handles-s1-results.md)に分ける。次の表はS1全体のacceptanceであり、接続開始だけを全項目成功としない。
 

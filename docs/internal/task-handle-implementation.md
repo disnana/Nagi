@@ -1,6 +1,6 @@
 # S1 Task結果handle: 実装の接続判断
 
-2026-10-06。ADR 012の採用意味論を変えず、[Stage 1](task-bridge-stage1-results.md)のprivate runtime検証からcompiler接続へ進むための記録。最新4 OS CI確認まではcompiler/runtime本体への接続を始めない。公開SQLite、release、版更新は対象外。
+2026-10-06。ADR 012の採用意味論を変えず、[Stage 1](task-bridge-stage1-results.md)のprivate runtime検証からcompiler接続へ進むための記録。Stage 1 source `6223ad2` の4 OS検証と再開時の最新head CIを確認してから、ユーザーの再開指示に沿ってcompiler/runtime本体へ接続した。今回の実装・回帰・測定・独立レビュー・CIは[接続結果](task-handles-s1-results.md)に記録する。公開SQLite、release、版更新は対象外。
 
 ## 最小APIと互換性
 
@@ -37,4 +37,4 @@ High→保存Low→nativeと独立Low→nativeで、業務Errの兄弟継続、T
 
 ## 停止と引継ぎ
 
-Stage 1は自然な区切りで停止した。[Sol 6.1向け引継ぎ](handoffs/2026-10-06-task-bridge-stage1.md)は、その停止時点の記録である。2026-10-06のユーザーの再開指示を受け、main `9ba4a104`、PR #88 head `5c2c8282`、最新headのchecks/website成功を読み戻してS1接続を開始する。上記の具体API・scope選択・義務追跡を接続方針として用い、追加REDから検証する。開始と完成を区別し、結果は[接続の実行記録](task-handles-s1-results.md)へ残す。
+Stage 1は自然な区切りで停止した。[Sol 6.1向け引継ぎ](handoffs/2026-10-06-task-bridge-stage1.md)は、その停止時点の記録である。2026-10-06のユーザーの再開指示を受け、main `9ba4a104`、PR #88 head `5c2c8282`、再開時のchecks/website成功を読み戻してS1を接続した。上記の具体API・scope選択・義務追跡を用い、追加RED、checker/public runtime、三構文native、回帰・測定・日英Docs・独立レビュー・4 OS CIを[接続の実行記録](task-handles-s1-results.md)へ残した。S1完成後のS2具体API、公開SQLite、merge/release/版更新は別工程とする。

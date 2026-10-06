@@ -1,0 +1,13 @@
+{
+  "site": {
+    "pages": 92,
+    "localLinksAnchorsAssets": "passed",
+    "ref": "feat/task-result-bridge-stage1"
+  },
+  "changedDocumentation": {
+    "files": 6,
+    "localPathChecks": 70,
+    "errors": []
+  },
+  "scope": "Final CI/result documentation and artifact notes; external documentation URLs were not fetched; no production source changes."
+}

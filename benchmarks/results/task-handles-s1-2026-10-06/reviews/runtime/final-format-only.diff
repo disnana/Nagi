@@ -1,0 +1,25 @@
+diff --git a/benchmarks/results/task-handles-s1-2026-10-06/reviews/runtime/runtime_src_task_after.rs b/runtime/src/task.rs
+index bc56ef4..594169d 100644
+--- a/benchmarks/results/task-handles-s1-2026-10-06/reviews/runtime/runtime_src_task_after.rs
++++ b/runtime/src/task.rs
+@@ -536,13 +536,18 @@ mod tests {
+     #[tokio::test]
+     async fn sticky_receive_retires_its_joined_ticket() {
+         let mut scope = TaskScope::new();
+-        let handles: Vec<_> = (0..128).map(|value| scope.spawn_value(async move { value })).collect();
++        let handles: Vec<_> = (0..128)
++            .map(|value| scope.spawn_value(async move { value }))
++            .collect();
+         scope.join().await.unwrap();
+         scope.spawn(async { Err(Error::invalid("retirement fault")) });
+         assert!(scope.join().await.is_err());
+         assert_eq!(scope.stats().entries, 128);
+         for (index, handle) in handles.into_iter().enumerate() {
+-            assert_eq!(scope.receive(handle).await.unwrap_err().message(), "Invalid: retirement fault");
++            assert_eq!(
++                scope.receive(handle).await.unwrap_err().message(),
++                "Invalid: retirement fault"
++            );
+             assert_eq!(scope.stats().entries, 127 - index);
+         }
+         assert!(scope.join().await.is_err());

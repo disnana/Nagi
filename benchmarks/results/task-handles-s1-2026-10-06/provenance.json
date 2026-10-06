@@ -159,7 +159,26 @@
     "runtime/src/task_bridge_prototype.rs"
   ],
   "artifacts": {
-    "README.md": "6847009d6de3f1bbdb44ac6cd3e61df7c7644406e1c9f1c67b5b0cfed905f7e1",
+    "README.md": "03485d944813438ac06e6dd1e04c46d8b9167a3431b8226fe0d24fff0bc45142",
+    "ci/README.md": "460e8efb1140942b4ee3f04bd5d5c55125485000934866a4abb0732f773db5e1",
+    "ci/source-34ac4d5/changes.log": "c17fbcaf2b7beea7d25d65688f581d7453bfa0552d521778482ebd263b04f0e2",
+    "ci/source-34ac4d5/checks-jobs.json": "75fb82e6562b4b192c69c3068c56ccb06623eca0311168039300134d3aefb9c3",
+    "ci/source-34ac4d5/checks-run.json": "95484123bde754d6a999629f83d2a9495807777d64757207fab768ff1363a990",
+    "ci/source-34ac4d5/jetbrains-intellij.log": "a5f8a4e2afaf77c3e92f1967dc87c93f6ded2e644c01e545faa852c59bc04c6b",
+    "ci/source-34ac4d5/jetbrains-pycharm.log": "872ad55d15b4fbd195473c9582fd3b50def25d2944ab3ac916f1d9a92420a542",
+    "ci/source-34ac4d5/linux-full.log": "fb378dff6ebdd6c276e3781777175f690f258fa9a18699f61095939b69797a70",
+    "ci/source-34ac4d5/linux-x86_64.log": "4f432f777868b4a514b74318f62722f9b01d184604d7d0ac474caa534eeeaa78",
+    "ci/source-34ac4d5/macos-arm64.log": "a1e1aa88dd6b716487f72a52355d3c3e92efc52904f337a46add181821646695",
+    "ci/source-34ac4d5/macos-x86_64.log": "7f9f5620be896f45c561c756b51f386f832942dd318d60ebb1a417a52c371809",
+    "ci/source-34ac4d5/ready.log": "b3840235448977428938b233530f15bb86e6869ef2134ba3507376fa780b2401",
+    "ci/source-34ac4d5/release-plan.log": "126474f6c93cc07afd0c7705eaf13c39df496535ccca1541bd9fa18c788951ba",
+    "ci/source-34ac4d5/task-observations.json": "12086a22eb330cfc53d841dc0158d9724278d54e5877360628519257e125f6cc",
+    "ci/source-34ac4d5/verify_task_observations.py": "719615324baec63db6bed0b88d681bc97e9abb9a57480579df14a0ff3e69f795",
+    "ci/source-34ac4d5/vscode-package.log": "d06f362bd3f013236b33ba345afd3e589acebee79ab3888b38f14180ddf6b21f",
+    "ci/source-34ac4d5/website-build.log": "668dbc801381d61e9d4a7f9e70578d7b25e208354b377c47c97b52479074f50d",
+    "ci/source-34ac4d5/website-jobs.json": "d39fc13c40b34e31b19a238abeef2deaf44ce70465a4bfd0ea4def0364b9c6db",
+    "ci/source-34ac4d5/website-run.json": "849654d8b8daf68d645d9a665181730818e70e334fe110d21fc1e26c9af68361",
+    "ci/source-34ac4d5/windows-x86_64.log": "19ccae7a340043ddcbdb144ca6fbac9539bc1f9cf2d2e173681ab931bf56e24b",
     "compiler/01-additional-red/compile-and-contracts.log": "7be926b9d587daec85daa3286fc4afd79ee745e6728b4697e971996dabbe0f11",
     "compiler/01-additional-red/observations.json": "381c9a930f2d8b83286476b138c4da6990aceeb0da1bc1b6a08190ca41378586",
     "compiler/01-additional-red/snapshot/compiler/examples/task-contract-red.rs": "138f94562cdb73f4d69a3cfba256b3de4f7a13877ce43c0ea9ec0d23288bc844",
@@ -345,6 +364,7 @@
     "reviews/compiler/failure-wrapper-share.nagi": "00bc7a4e6331145f2a5e3cd3a522de3cbbdbf0750b89eff43f8fbe98c05dff06",
     "reviews/compiler/final-check-results.json": "ae3a98c71da9aa9be795f48510580cb6ede1dc609e160873cdc7f1b8d91caddc",
     "reviews/compiler/final-compiler-build.log": "af1d2cf35aacaf94dd1c8a40bb1eb81981171b00ae7b6668106f5acb3a38e60c",
+    "reviews/compiler/final-format-only.diff": "d3cfb674ac8058c1fea6d07eeb3a644176cef4df16f33a0f896b4183e069c6aa",
     "reviews/compiler/final-native-results.json": "9c331f0505ebfaab393328fb598b81b5f8856f7e07e8c0c813f37da2bc009363",
     "reviews/compiler/loop-inner-scope-check.log": "33d6524a8288764cd742c9414cf434e1f4ca8c2d9988a1042175c57798a2eed4",
     "reviews/compiler/loop-inner-scope-final-high-check.log": "33d6524a8288764cd742c9414cf434e1f4ca8c2d9988a1042175c57798a2eed4",
@@ -392,6 +412,7 @@
     "reviews/compiler/user-spawn-field-final-high-check.log": "e2952b4c1b11b35abf5d992c4062bbb446e733bd3f566074c487dd9a98bcbb65",
     "reviews/compiler/user-spawn-field-final-saved-low-check.log": "766bf133f51aed7c4c336254be0ec6f2c5369c3edf3c5a451788f6da48293e7c",
     "reviews/compiler/user-spawn-field.nagi": "596c21f9234c278505e041ae9410b1d01b5e23535484fe325df453788a0378ae",
+    "reviews/final-format-provenance.json": "a663a073ff110ff3dfc26e696b4b615ab5e16373a9bf7542569de20771062bf7",
     "reviews/runtime/Cargo.lock": "bfdeed59cfe19dbd36440f48695f2cb36a9eb5e8398a63a2d50006e3838a37e1",
     "reviews/runtime/Cargo.toml": "b303e943cd34ad3d01c522a3e9afec79f78d9b5c0ecb6d03e5c194cecdea4a4f",
     "reviews/runtime/compiler-native-lifecycle-after-fixture-fix.log": "4b966aec8108055d9bd5e3d5acfa9bc39f8fd714e3408d50251318ad0ab3a584",
@@ -400,6 +421,7 @@
     "reviews/runtime/compiler_src_emit.rs": "ce3661a4e08736768b3a1fc80048a9c16dde89194986e8ec05c1a7a62b039464",
     "reviews/runtime/compiler_tests_task_handles.rs": "19f6436a8f3d8498672548094df81b1de7d6cd30acc106ba249b00b919d53c65",
     "reviews/runtime/fault_cost.rs": "587d51f5694bc0cf9d36ad5bc4cfc37b58a0c31545259c5a78603f3644d13bfb",
+    "reviews/runtime/final-format-only.diff": "3528c1209ddfc367793c66b65ca59aa24683a817156f794d965a4740ba70b292",
     "reviews/runtime/independent-public-counterexamples-after.log": "673f648325f27b35e690a52e2cc71dc72b77227bc481b6b37450acb061cb78ac",
     "reviews/runtime/independent-public-counterexamples.log": "9e6929886c404ee0fc5fcb13a0080444668a2529f7be66d053a2e2d41f45eeba",
     "reviews/runtime/retirement-fix-review.txt": "2a92e47eb6b9611ebb5a1c4e5ba75b39299aacbf949a0aee3e16bc19584f04b0",
@@ -449,6 +471,7 @@
     "runtime/provenance.json": "4d8f72ff743ce56a3571c0d99ed031d60d2d289a9fa79e8614b31eaacc7565ce",
     "verification/application-examples.json": "ad071b9f13062211b5da310d9a27162fa4b2da5a14581c7c5a1c18d627f3dc5e",
     "verification/document-links.json": "68d31477a78ef27d9995950cdc1a4483168db8270ebe6ba610379c68c49e0036",
+    "verification/final-ci-documentation.json": "10addf98bde6e755088d6adcc86cb661b2449c5f79d4e9f6241468fd2146f56d",
     "verification/nagi-s1-applications.log": "d04d916e2289a47691e556804d294dfec205e890a4a4d258dff979b764e4fb88",
     "verification/nagi-s1-contracts.json": "1c881d52bc2abe00b34dccbbb1b19dec569c3a578c2ea4cada433d1f7dca7f82",
     "verification/nagi-s1-contracts.log": "4f65f31733ab0c8fc3a471096295aa3488f19b9950376417779c23b2cf063846",
@@ -474,7 +497,14 @@
   "limitations": [
     "Linux measurements only",
     "warm dependency/package rebuild is not a clean build",
-    "arbitrary Rust Drop/panic and side-effect rollback excluded",
-    "new source CI pending at implementation commit"
-  ]
+    "arbitrary Rust Drop/panic and side-effect rollback excluded"
+  ],
+  "validated_source_head": "34ac4d585084877372965e3d58ed5c2002604529",
+  "validated_source_tree": "781e031eafbdc0efa00038007d41cf16dc538862",
+  "ci": {
+    "checks_run": 37489343115,
+    "website_run": 37489342523,
+    "conclusion": "success",
+    "scope": "source head; subsequent documentation/artifact head checks read separately in PR #88"
+  }
 }

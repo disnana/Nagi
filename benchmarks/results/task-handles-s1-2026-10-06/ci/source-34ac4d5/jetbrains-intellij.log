@@ -1,0 +1,874 @@
+﻿2026-10-06T15:39:45.4771050Z Current runner version: '2.337.0'
+2026-10-06T15:39:45.4791640Z ##[group]Runner Image Provisioner
+2026-10-06T15:39:45.4792333Z Hosted Compute Agent
+2026-10-06T15:39:45.4792902Z Version: 20260901.588
+2026-10-06T15:39:45.4793469Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+2026-10-06T15:39:45.4794064Z Build Date: 2026-09-01T19:56:44Z
+2026-10-06T15:39:45.4794682Z Worker ID: {6c5b7048-e9ba-4475-92c6-bc9facf15aca}
+2026-10-06T15:39:45.4795254Z Azure Region: westus3
+2026-10-06T15:39:45.4795799Z ##[endgroup]
+2026-10-06T15:39:45.4796873Z ##[group]Operating System
+2026-10-06T15:39:45.4797383Z Ubuntu
+2026-10-06T15:39:45.4797897Z 24.04.5
+2026-10-06T15:39:45.4798320Z LTS
+2026-10-06T15:39:45.4798729Z ##[endgroup]
+2026-10-06T15:39:45.4799280Z ##[group]Runner Image
+2026-10-06T15:39:45.4799780Z Image: ubuntu-24.04
+2026-10-06T15:39:45.4800484Z Version: 20260927.320.1
+2026-10-06T15:39:45.4801528Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-06T15:39:45.4802856Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+2026-10-06T15:39:45.4803644Z ##[endgroup]
+2026-10-06T15:39:45.4804631Z ##[group]GITHUB_TOKEN Permissions
+2026-10-06T15:39:45.4806177Z Contents: read
+2026-10-06T15:39:45.4806835Z Metadata: read
+2026-10-06T15:39:45.4807302Z ##[endgroup]
+2026-10-06T15:39:45.4808996Z Secret source: Actions
+2026-10-06T15:39:45.4809864Z Cache mode: write
+2026-10-06T15:39:45.4810562Z Prepare workflow directory
+2026-10-06T15:39:45.5156618Z Prepare all required actions
+2026-10-06T15:39:45.5194937Z Getting action download info
+2026-10-06T15:39:45.8893599Z Download action repository 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-06T15:39:45.9759961Z Download action repository 'actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
+2026-10-06T15:39:46.9897885Z Download action repository 'gradle/actions@ed408507eac070d1f99cc633dbcf757c94c7933a' (SHA:ed408507eac070d1f99cc633dbcf757c94c7933a)
+2026-10-06T15:39:48.8609055Z Download action repository 'dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d' (SHA:89b12181fb390509a0842a86cc55eeb8eb928c1d)
+2026-10-06T15:39:49.0900592Z Download action repository 'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-10-06T15:39:49.2142883Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-06T15:39:49.5607129Z Uses: disnana/Nagi/.github/workflows/jetbrains.yml@refs/pull/88/merge (cff579d1a239726dff532dc83aaea44710038d91)
+2026-10-06T15:39:49.5611083Z Complete job name: jetbrains / JetBrains (IntelliJ IDEA)
+2026-10-06T15:39:49.6235731Z ##[group]Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-10-06T15:39:49.6236244Z with:
+2026-10-06T15:39:49.6236427Z   persist-credentials: false
+2026-10-06T15:39:49.6236657Z   repository: disnana/Nagi
+2026-10-06T15:39:49.6238792Z   token: ***
+2026-10-06T15:39:49.6238982Z   ssh-strict: true
+2026-10-06T15:39:49.6239161Z   ssh-user: git
+2026-10-06T15:39:49.6239325Z   clean: true
+2026-10-06T15:39:49.6239506Z   sparse-checkout-cone-mode: true
+2026-10-06T15:39:49.6239726Z   fetch-depth: 1
+2026-10-06T15:39:49.6239897Z   fetch-tags: false
+2026-10-06T15:39:49.6240072Z   show-progress: true
+2026-10-06T15:39:49.6240443Z   lfs: false
+2026-10-06T15:39:49.6240600Z   submodules: false
+2026-10-06T15:39:49.6240771Z   set-safe-directory: true
+2026-10-06T15:39:49.6240973Z   allow-unsafe-pr-checkout: false
+2026-10-06T15:39:49.6241344Z ##[endgroup]
+2026-10-06T15:39:49.7031970Z Syncing repository: disnana/Nagi
+2026-10-06T15:39:49.7033408Z ##[group]Getting Git version info
+2026-10-06T15:39:49.7033912Z Working directory is '/home/runner/work/Nagi/Nagi'
+2026-10-06T15:39:49.7034623Z [command]/usr/bin/git version
+2026-10-06T15:39:49.7702959Z git version 2.55.0
+2026-10-06T15:39:49.7719694Z ##[endgroup]
+2026-10-06T15:39:49.7733204Z Temporarily overriding HOME='/home/runner/work/_temp/5f44fe6d-507f-4efb-b670-86a342e8b478' before making global git config changes
+2026-10-06T15:39:49.7734315Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-06T15:39:49.7738284Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Nagi/Nagi
+2026-10-06T15:39:49.7801417Z Deleting the contents of '/home/runner/work/Nagi/Nagi'
+2026-10-06T15:39:49.7805801Z ##[group]Initializing the repository
+2026-10-06T15:39:49.7808899Z [command]/usr/bin/git init /home/runner/work/Nagi/Nagi
+2026-10-06T15:39:49.7910445Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-06T15:39:49.7911235Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-06T15:39:49.7911881Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-06T15:39:49.7912316Z hint: call:
+2026-10-06T15:39:49.7912485Z hint:
+2026-10-06T15:39:49.7912839Z hint: 	git config --global init.defaultBranch <name>
+2026-10-06T15:39:49.7913266Z hint:
+2026-10-06T15:39:49.7913652Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-06T15:39:49.7914278Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-06T15:39:49.7914728Z hint:
+2026-10-06T15:39:49.7914900Z hint: 	git branch -m <name>
+2026-10-06T15:39:49.7915144Z hint:
+2026-10-06T15:39:49.7915545Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-06T15:39:49.7916117Z Initialized empty Git repository in /home/runner/work/Nagi/Nagi/.git/
+2026-10-06T15:39:49.7922337Z [command]/usr/bin/git remote add origin https://github.com/disnana/Nagi
+2026-10-06T15:39:49.7965988Z ##[endgroup]
+2026-10-06T15:39:49.7966524Z ##[group]Disabling automatic garbage collection
+2026-10-06T15:39:49.7969764Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-06T15:39:49.7998283Z ##[endgroup]
+2026-10-06T15:39:49.7998761Z ##[group]Setting up auth
+2026-10-06T15:39:49.8004092Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-06T15:39:49.8033654Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-06T15:39:49.8587711Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-06T15:39:49.8618825Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-06T15:39:49.8811124Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-06T15:39:49.8839718Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-06T15:39:49.9028212Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-06T15:39:49.9062656Z ##[endgroup]
+2026-10-06T15:39:49.9063235Z ##[group]Fetching the repository
+2026-10-06T15:39:49.9069711Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +cff579d1a239726dff532dc83aaea44710038d91:refs/remotes/pull/88/merge
+2026-10-06T15:39:51.6821875Z From https://github.com/disnana/Nagi
+2026-10-06T15:39:51.6822654Z  * [new ref]         cff579d1a239726dff532dc83aaea44710038d91 -> pull/88/merge
+2026-10-06T15:39:51.6824740Z ##[endgroup]
+2026-10-06T15:39:51.6825320Z ##[group]Determining the checkout info
+2026-10-06T15:39:51.6831188Z ##[endgroup]
+2026-10-06T15:39:51.6845638Z [command]/usr/bin/git sparse-checkout disable
+2026-10-06T15:39:51.6895305Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-06T15:39:51.6922543Z ##[group]Checking out the ref
+2026-10-06T15:39:51.6926542Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/88/merge
+2026-10-06T15:39:51.7928363Z Note: switching to 'refs/remotes/pull/88/merge'.
+2026-10-06T15:39:51.7936395Z 
+2026-10-06T15:39:51.7936818Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-06T15:39:51.7937461Z changes and commit them, and you can discard any commits you make in this
+2026-10-06T15:39:51.7938203Z state without impacting any branches by switching back to a branch.
+2026-10-06T15:39:51.7938714Z 
+2026-10-06T15:39:51.7939225Z If you want to create a new branch to retain commits you create, you may
+2026-10-06T15:39:51.7939726Z do so (now or later) by using -c with the switch command. Example:
+2026-10-06T15:39:51.7940013Z 
+2026-10-06T15:39:51.7940320Z   git switch -c <new-branch-name>
+2026-10-06T15:39:51.7940568Z 
+2026-10-06T15:39:51.7940690Z Or undo this operation with:
+2026-10-06T15:39:51.7941974Z 
+2026-10-06T15:39:51.7942090Z   git switch -
+2026-10-06T15:39:51.7942271Z 
+2026-10-06T15:39:51.7942550Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-06T15:39:51.7942923Z 
+2026-10-06T15:39:51.7943359Z HEAD is now at cff579d Merge 34ac4d585084877372965e3d58ed5c2002604529 into 9ba4a104be6f65dba61eda0c7b1ef0f98c892cf7
+2026-10-06T15:39:51.7944845Z ##[endgroup]
+2026-10-06T15:39:51.7983258Z [command]/usr/bin/git log -1 --format=%H
+2026-10-06T15:39:51.8006511Z cff579d1a239726dff532dc83aaea44710038d91
+2026-10-06T15:39:51.8015015Z ##[group]Removing auth
+2026-10-06T15:39:51.8018485Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-06T15:39:51.8047995Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-06T15:39:51.8248375Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-06T15:39:51.8274169Z http.https://github.com/.extraheader
+2026-10-06T15:39:51.8281254Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-06T15:39:51.8313684Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-06T15:39:51.8519170Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-06T15:39:51.8551939Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-06T15:39:51.8752609Z ##[endgroup]
+2026-10-06T15:39:51.8981291Z ##[group]Run actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+2026-10-06T15:39:51.8981600Z with:
+2026-10-06T15:39:51.8981767Z   distribution: temurin
+2026-10-06T15:39:51.8981952Z   java-version: 21
+2026-10-06T15:39:51.8982123Z   java-package: jdk
+2026-10-06T15:39:51.8982291Z   check-latest: false
+2026-10-06T15:39:51.8982489Z   server-id: github
+2026-10-06T15:39:51.8982659Z   server-username: GITHUB_ACTOR
+2026-10-06T15:39:51.8982868Z   server-password: GITHUB_TOKEN
+2026-10-06T15:39:51.8983075Z   overwrite-settings: true
+2026-10-06T15:39:51.8983266Z   job-status: success
+2026-10-06T15:39:51.8985354Z   token: ***
+2026-10-06T15:39:51.8985522Z ##[endgroup]
+2026-10-06T15:39:52.0315967Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+2026-10-06T15:39:52.0322501Z ##[group]Installed distributions
+2026-10-06T15:39:52.0350524Z Resolved Java 21.0.12+1 from tool-cache
+2026-10-06T15:39:52.0351010Z Setting Java 21.0.12+1 as the default
+2026-10-06T15:39:52.0358587Z (node:2162) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T15:39:52.0359413Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T15:39:52.0361858Z Creating toolchains.xml for JDK version 21 from temurin
+2026-10-06T15:39:52.0418254Z Writing to /home/runner/.m2/toolchains.xml
+2026-10-06T15:39:52.0418595Z 
+2026-10-06T15:39:52.0418712Z Java configuration:
+2026-10-06T15:39:52.0418981Z   Distribution: temurin
+2026-10-06T15:39:52.0419239Z   Version: 21.0.12+1
+2026-10-06T15:39:52.0419614Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.0419954Z 
+2026-10-06T15:39:52.0420430Z ##[endgroup]
+2026-10-06T15:39:52.0435188Z Creating settings.xml with server-id: github
+2026-10-06T15:39:52.0460009Z Writing to /home/runner/.m2/settings.xml
+2026-10-06T15:39:52.0784463Z ##[group]Run gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+2026-10-06T15:39:52.0784809Z with:
+2026-10-06T15:39:52.0784981Z   cache-disabled: false
+2026-10-06T15:39:52.0785167Z   cache-read-only: true
+2026-10-06T15:39:52.0785356Z   cache-write-only: false
+2026-10-06T15:39:52.0785561Z   cache-overwrite-existing: false
+2026-10-06T15:39:52.0785775Z   cache-cleanup: on-success
+2026-10-06T15:39:52.0786007Z   gradle-home-cache-includes: caches
+notifications
+
+2026-10-06T15:39:52.0786288Z   add-job-summary: always
+2026-10-06T15:39:52.0786495Z   add-job-summary-as-pr-comment: never
+2026-10-06T15:39:52.0786720Z   dependency-graph: disabled
+2026-10-06T15:39:52.0787013Z   dependency-graph-report-dir: dependency-graph-reports
+2026-10-06T15:39:52.0787306Z   dependency-graph-continue-on-failure: true
+2026-10-06T15:39:52.0787553Z   build-scan-publish: false
+2026-10-06T15:39:52.0787772Z   validate-wrappers: true
+2026-10-06T15:39:52.0787980Z   allow-snapshot-wrappers: false
+2026-10-06T15:39:52.0788261Z   gradle-home-cache-strict-match: false
+2026-10-06T15:39:52.0788744Z   workflow-job-context: {
+  "product": "IntelliJ IDEA",
+  "platformType": "IC",
+  "platformVersion": "2025.1.1",
+  "minimumPlatformVersion": "2024.3.7"
+}
+2026-10-06T15:39:52.0791377Z   github-token: ***
+2026-10-06T15:39:52.0791562Z env:
+2026-10-06T15:39:52.0791811Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.0792210Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.0792508Z ##[endgroup]
+2026-10-06T15:39:52.4336095Z Merged default JDK locations into /home/runner/.m2/toolchains.xml
+2026-10-06T15:39:52.4338966Z ##[group]Restore Gradle state from cache
+2026-10-06T15:39:52.6489971Z Gradle User Home cache not found. Will initialize empty.
+2026-10-06T15:39:52.6491405Z ##[endgroup]
+2026-10-06T15:39:52.6747536Z ##[group]All Gradle Wrapper jars are valid
+2026-10-06T15:39:52.6748451Z ✓ Found known Gradle Wrapper JAR files:
+2026-10-06T15:39:52.6749286Z   81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.jar
+2026-10-06T15:39:52.6750400Z ##[endgroup]
+2026-10-06T15:39:52.6966439Z ##[group]Run dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d
+2026-10-06T15:39:52.6966759Z with:
+2026-10-06T15:39:52.6966919Z   toolchain: stable
+2026-10-06T15:39:52.6967088Z env:
+2026-10-06T15:39:52.6967327Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.6967743Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.6968103Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:39:52.6968357Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:39:52.6968588Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:39:52.6968824Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:39:52.6969170Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:39:52.6969545Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:39:52.6969801Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:39:52.6970060Z ##[endgroup]
+2026-10-06T15:39:52.7023195Z ##[start-action display=Parse toolchain version;id=rust.parse]
+2026-10-06T15:39:52.7067946Z ##[group]Run if [[ -z $toolchain ]]; then
+2026-10-06T15:39:52.7068276Z [36;1mif [[ -z $toolchain ]]; then[0m
+2026-10-06T15:39:52.7068931Z [36;1m  # GitHub does not enforce `required: true` inputs itself. https://github.com/actions/runner/issues/1070[0m
+2026-10-06T15:39:52.7069387Z [36;1m  echo "'toolchain' is a required input" >&2[0m
+2026-10-06T15:39:52.7069626Z [36;1m  exit 1[0m
+2026-10-06T15:39:52.7069901Z [36;1melif [[ $toolchain =~ ^stable' '[0-9]+' '(year|month|week|day)s?' 'ago$ ]]; then[0m
+2026-10-06T15:39:52.7070491Z [36;1m  if [[ Linux == macOS ]]; then[0m
+2026-10-06T15:39:52.7070906Z [36;1m    echo "toolchain=1.$((($(date -v-$(sed 's/stable \([0-9]*\) \(.\).*/\1\2/' <<< $toolchain) +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT[0m
+2026-10-06T15:39:52.7071292Z [36;1m  else[0m
+2026-10-06T15:39:52.7071621Z [36;1m    echo "toolchain=1.$((($(date --date "${toolchain#stable }" +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT[0m
+2026-10-06T15:39:52.7071970Z [36;1m  fi[0m
+2026-10-06T15:39:52.7072206Z [36;1melif [[ $toolchain =~ ^stable' 'minus' '[0-9]+' 'releases?$ ]]; then[0m
+2026-10-06T15:39:52.7072603Z [36;1m  echo "toolchain=1.$((($(date +%s)/60/60/24-16569)/7/6-${toolchain//[^0-9]/}))" >> $GITHUB_OUTPUT[0m
+2026-10-06T15:39:52.7072968Z [36;1melif [[ $toolchain =~ ^1\.[0-9]+$ ]]; then[0m
+2026-10-06T15:39:52.7073362Z [36;1m  echo "toolchain=1.$((i=${toolchain#1.}, c=($(date +%s)/60/60/24-16569)/7/6, i+9*i*(10*i<=c)+90*i*(100*i<=c)))" >> $GITHUB_OUTPUT[0m
+2026-10-06T15:39:52.7073728Z [36;1melse[0m
+2026-10-06T15:39:52.7073926Z [36;1m  echo "toolchain=$toolchain" >> $GITHUB_OUTPUT[0m
+2026-10-06T15:39:52.7074160Z [36;1mfi[0m
+2026-10-06T15:39:52.7323234Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T15:39:52.7323521Z env:
+2026-10-06T15:39:52.7323776Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.7324175Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.7324504Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:39:52.7324742Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:39:52.7324985Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:39:52.7325218Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:39:52.7325551Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:39:52.7325920Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:39:52.7326172Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:39:52.7326389Z   toolchain: stable
+2026-10-06T15:39:52.7326554Z ##[endgroup]
+2026-10-06T15:39:52.7443578Z ##[end-action id=rust.parse;outcome=success;conclusion=success;duration_ms=41]
+2026-10-06T15:39:52.7448929Z ##[start-action display=Construct rustup command line;id=rust.flags]
+2026-10-06T15:39:52.7465891Z ##[group]Run echo "targets=$(for t in ${targets//,/ }; do echo -n ' --target' $t; done)" >> $GITHUB_OUTPUT
+2026-10-06T15:39:52.7466436Z [36;1mecho "targets=$(for t in ${targets//,/ }; do echo -n ' --target' $t; done)" >> $GITHUB_OUTPUT[0m
+2026-10-06T15:39:52.7466929Z [36;1mecho "components=$(for c in ${components//,/ }; do echo -n ' --component' $c; done)" >> $GITHUB_OUTPUT[0m
+2026-10-06T15:39:52.7467313Z [36;1mecho "downgrade=" >> $GITHUB_OUTPUT[0m
+2026-10-06T15:39:52.7517155Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T15:39:52.7517421Z env:
+2026-10-06T15:39:52.7517665Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.7518044Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.7518369Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:39:52.7518604Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:39:52.7518835Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:39:52.7519084Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:39:52.7519422Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:39:52.7519790Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:39:52.7520043Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:39:52.7520511Z   targets: 
+2026-10-06T15:39:52.7520670Z   components: 
+2026-10-06T15:39:52.7520837Z ##[endgroup]
+2026-10-06T15:39:52.7601443Z ##[end-action id=rust.flags;outcome=success;conclusion=success;duration_ms=15]
+2026-10-06T15:39:52.7603007Z ##[start-action display=Set $CARGO_HOME;id=rust.__run]
+2026-10-06T15:39:52.7618388Z ##[group]Run echo CARGO_HOME=${CARGO_HOME:-"$HOME/.cargo"} >> $GITHUB_ENV
+2026-10-06T15:39:52.7618760Z [36;1mecho CARGO_HOME=${CARGO_HOME:-"$HOME/.cargo"} >> $GITHUB_ENV[0m
+2026-10-06T15:39:52.7666097Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T15:39:52.7666366Z env:
+2026-10-06T15:39:52.7666616Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.7666997Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.7667329Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:39:52.7667578Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:39:52.7667812Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:39:52.7668047Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:39:52.7668383Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:39:52.7668756Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:39:52.7669007Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:39:52.7669213Z ##[endgroup]
+2026-10-06T15:39:52.7739313Z ##[end-action id=rust.__run;outcome=success;conclusion=success;duration_ms=13]
+2026-10-06T15:39:52.7741144Z ##[start-action display=Install rustup if needed;id=rust.__run_2]
+2026-10-06T15:39:52.7772867Z ##[group]Run if ! command -v rustup &>/dev/null; then
+2026-10-06T15:39:52.7773174Z [36;1mif ! command -v rustup &>/dev/null; then[0m
+2026-10-06T15:39:52.7773774Z [36;1m  curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused --location --silent --show-error --fail https://sh.rustup.rs | sh -s -- --default-toolchain none -y[0m
+2026-10-06T15:39:52.7774365Z [36;1m  echo "$CARGO_HOME/bin" >> $GITHUB_PATH[0m
+2026-10-06T15:39:52.7774599Z [36;1mfi[0m
+2026-10-06T15:39:52.7822944Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T15:39:52.7823214Z env:
+2026-10-06T15:39:52.7823459Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.7823839Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.7824196Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:39:52.7824442Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:39:52.7824668Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:39:52.7824900Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:39:52.7825404Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:39:52.7825865Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:39:52.7826146Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:39:52.7826383Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:39:52.7826587Z ##[endgroup]
+2026-10-06T15:39:52.7897177Z ##[end-action id=rust.__run_2;outcome=success;conclusion=success;duration_ms=15]
+2026-10-06T15:39:52.7898838Z ##[start-action display=Install rustup if needed on windows;id=rust.__run_3]
+2026-10-06T15:39:52.7903599Z ##[end-action id=rust.__run_3;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-06T15:39:52.7912337Z ##[start-action display=rustup toolchain install stable;id=rust.__run_4]
+2026-10-06T15:39:52.7927982Z ##[group]Run log=$(mktemp)
+2026-10-06T15:39:52.7928211Z [36;1mlog=$(mktemp)[0m
+2026-10-06T15:39:52.7928407Z [36;1mtrap 'rm -f "$log"' EXIT[0m
+2026-10-06T15:39:52.7928633Z [36;1mfor attempt in 1 2 3 4 5; do[0m
+2026-10-06T15:39:52.7929049Z [36;1m  if rustup toolchain install stable --profile minimal --no-self-update --force-non-host 2>&1 | tee "$log"; then[0m
+2026-10-06T15:39:52.7929447Z [36;1m    break[0m
+2026-10-06T15:39:52.7929613Z [36;1m  else[0m
+2026-10-06T15:39:52.7929914Z [36;1m    status=$?[0m
+2026-10-06T15:39:52.7930096Z [36;1m  fi[0m
+2026-10-06T15:39:52.7930594Z [36;1m  if [[ $attempt == 5 ]] || ! grep -Fq 'checksum failed for ' "$log" \[0m
+2026-10-06T15:39:52.7931041Z [36;1m      || ! grep -Fq 'this is likely due to an ongoing update of the official release server' "$log"; then[0m
+2026-10-06T15:39:52.7931402Z [36;1m    exit "$status"[0m
+2026-10-06T15:39:52.7931582Z [36;1m  fi[0m
+2026-10-06T15:39:52.7931863Z [36;1m  echo "Retrying rustup toolchain install in 30 seconds (retry $attempt of 4)" >&2[0m
+2026-10-06T15:39:52.7932183Z [36;1m  sleep 30[0m
+2026-10-06T15:39:52.7932349Z [36;1mdone[0m
+2026-10-06T15:39:52.7980411Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T15:39:52.7980782Z env:
+2026-10-06T15:39:52.7981028Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.7981408Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:39:52.7981742Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:39:52.7981981Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:39:52.7982205Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:39:52.7982434Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:39:52.7982774Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:39:52.7983160Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:39:52.7983408Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:39:52.7983631Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:39:52.7983841Z   RUSTUP_PERMIT_COPY_RENAME: 1
+2026-10-06T15:39:52.7984036Z ##[endgroup]
+2026-10-06T15:39:53.5707677Z info: syncing channel updates for stable-x86_64-unknown-linux-gnu
+2026-10-06T15:39:53.8132395Z info: latest update on 2026-10-01 for version 1.99.0 (b940084d7 2026-09-28)
+2026-10-06T15:39:53.8240355Z info: removing previous version of component rustfmt
+2026-10-06T15:39:53.8447553Z info: removing previous version of component clippy
+2026-10-06T15:39:53.8732428Z info: removing previous version of component cargo
+2026-10-06T15:39:53.8961951Z info: removing previous version of component rust-std
+2026-10-06T15:39:53.9257171Z info: removing previous version of component rustc
+2026-10-06T15:39:54.0796741Z info: downloading 5 components
+2026-10-06T15:40:01.9275593Z 
+2026-10-06T15:40:01.9335002Z   stable-x86_64-unknown-linux-gnu updated - rustc 1.99.0 (b940084d7 2026-09-28) (from rustc 1.98.1 (48a229cea 2026-09-01))
+2026-10-06T15:40:01.9335410Z 
+2026-10-06T15:40:01.9389204Z ##[end-action id=rust.__run_4;outcome=success;conclusion=success;duration_ms=9147]
+2026-10-06T15:40:01.9394505Z ##[start-action display=rustup default stable;id=rust.__run_5]
+2026-10-06T15:40:01.9409711Z ##[group]Run rustup default stable --force-non-host
+2026-10-06T15:40:01.9410025Z [36;1mrustup default stable --force-non-host[0m
+2026-10-06T15:40:01.9467177Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T15:40:01.9467472Z env:
+2026-10-06T15:40:01.9467713Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:01.9468090Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:01.9468417Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:40:01.9468658Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:40:01.9468885Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:40:01.9469116Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:40:01.9469453Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:40:01.9469825Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:40:01.9470087Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:40:01.9470484Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:40:01.9470693Z ##[endgroup]
+2026-10-06T15:40:01.9575004Z info: using existing install for stable-x86_64-unknown-linux-gnu
+2026-10-06T15:40:01.9910478Z info: default toolchain set to stable-x86_64-unknown-linux-gnu
+2026-10-06T15:40:01.9911109Z 
+2026-10-06T15:40:01.9966250Z   stable-x86_64-unknown-linux-gnu unchanged - rustc 1.99.0 (b940084d7 2026-09-28)
+2026-10-06T15:40:01.9966564Z 
+2026-10-06T15:40:01.9981431Z ##[end-action id=rust.__run_5;outcome=success;conclusion=success;duration_ms=58]
+2026-10-06T15:40:01.9983335Z ##[start-action display=Create cachekey;id=rust.rustc-version]
+2026-10-06T15:40:01.9999337Z ##[group]Run DATE=$(rustc +stable --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')
+2026-10-06T15:40:01.9999984Z [36;1mDATE=$(rustc +stable --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')[0m
+2026-10-06T15:40:02.0000689Z [36;1mHASH=$(rustc +stable --version --verbose | sed -ne 's/^commit-hash: //p')[0m
+2026-10-06T15:40:02.0001073Z [36;1mecho "cachekey=$(echo $DATE$HASH | head -c12)" >> $GITHUB_OUTPUT[0m
+2026-10-06T15:40:02.0055844Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T15:40:02.0056125Z env:
+2026-10-06T15:40:02.0056369Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.0056754Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.0057086Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:40:02.0057333Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:40:02.0057562Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:40:02.0057803Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:40:02.0058144Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:40:02.0058525Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:40:02.0058775Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:40:02.0058997Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:40:02.0059192Z ##[endgroup]
+2026-10-06T15:40:02.0343344Z ##[end-action id=rust.rustc-version;outcome=success;conclusion=success;duration_ms=35]
+2026-10-06T15:40:02.0345427Z ##[start-action display=Disable incremental compilation;id=rust.__run_6]
+2026-10-06T15:40:02.0360911Z ##[group]Run if [ -z "${CARGO_INCREMENTAL+set}" ]; then
+2026-10-06T15:40:02.0361230Z [36;1mif [ -z "${CARGO_INCREMENTAL+set}" ]; then[0m
+2026-10-06T15:40:02.0361496Z [36;1m  echo CARGO_INCREMENTAL=0 >> $GITHUB_ENV[0m
+2026-10-06T15:40:02.0361727Z [36;1mfi[0m
+2026-10-06T15:40:02.0416372Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T15:40:02.0416649Z env:
+2026-10-06T15:40:02.0416894Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.0417414Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.0417757Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:40:02.0418010Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:40:02.0418238Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:40:02.0418466Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:40:02.0418811Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:40:02.0419175Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:40:02.0419421Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:40:02.0419634Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:40:02.0419832Z ##[endgroup]
+2026-10-06T15:40:02.1125024Z ##[end-action id=rust.__run_6;outcome=success;conclusion=success;duration_ms=77]
+2026-10-06T15:40:02.1126962Z ##[start-action display=Enable colors in Cargo output;id=rust.__run_7]
+2026-10-06T15:40:02.1142159Z ##[group]Run if [ -z "${CARGO_TERM_COLOR+set}" ]; then
+2026-10-06T15:40:02.1142466Z [36;1mif [ -z "${CARGO_TERM_COLOR+set}" ]; then[0m
+2026-10-06T15:40:02.1142754Z [36;1m  echo CARGO_TERM_COLOR=always >> $GITHUB_ENV[0m
+2026-10-06T15:40:02.1142993Z [36;1mfi[0m
+2026-10-06T15:40:02.1198206Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T15:40:02.1198660Z env:
+2026-10-06T15:40:02.1198906Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.1199280Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.1199604Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:40:02.1199841Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:40:02.1200070Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:40:02.1200542Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:40:02.1200882Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:40:02.1201253Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:40:02.1201510Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:40:02.1201730Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:40:02.1201929Z   CARGO_INCREMENTAL: 0
+2026-10-06T15:40:02.1202105Z ##[endgroup]
+2026-10-06T15:40:02.1321524Z ##[end-action id=rust.__run_7;outcome=success;conclusion=success;duration_ms=19]
+2026-10-06T15:40:02.1323279Z ##[start-action display=Enable Cargo sparse registry;id=rust.__run_8]
+2026-10-06T15:40:02.1338738Z ##[group]Run # implemented in 1.66, stabilized in 1.68, made default in 1.70
+2026-10-06T15:40:02.1339133Z [36;1m# implemented in 1.66, stabilized in 1.68, made default in 1.70[0m
+2026-10-06T15:40:02.1339675Z [36;1mif [ -z "${CARGO_REGISTRIES_CRATES_IO_PROTOCOL+set}" -o -f "/home/runner/work/_temp"/.implicit_cargo_registries_crates_io_protocol ]; then[0m
+2026-10-06T15:40:02.1340415Z [36;1m  if rustc +stable --version --verbose | grep -q '^release: 1\.6[89]\.'; then[0m
+2026-10-06T15:40:02.1340885Z [36;1m    touch "/home/runner/work/_temp"/.implicit_cargo_registries_crates_io_protocol || true[0m
+2026-10-06T15:40:02.1341298Z [36;1m    echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse >> $GITHUB_ENV[0m
+2026-10-06T15:40:02.1341677Z [36;1m  elif rustc +stable --version --verbose | grep -q '^release: 1\.6[67]\.'; then[0m
+2026-10-06T15:40:02.1342105Z [36;1m    touch "/home/runner/work/_temp"/.implicit_cargo_registries_crates_io_protocol || true[0m
+2026-10-06T15:40:02.1342501Z [36;1m    echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git >> $GITHUB_ENV[0m
+2026-10-06T15:40:02.1342773Z [36;1m  fi[0m
+2026-10-06T15:40:02.1342932Z [36;1mfi[0m
+2026-10-06T15:40:02.1393116Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T15:40:02.1393488Z env:
+2026-10-06T15:40:02.1394137Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.1394784Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.1395450Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:40:02.1396117Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:40:02.1396612Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:40:02.1397116Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:40:02.1397772Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:40:02.1398451Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:40:02.1399031Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:40:02.1399544Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:40:02.1400072Z   CARGO_INCREMENTAL: 0
+2026-10-06T15:40:02.1400629Z   CARGO_TERM_COLOR: always
+2026-10-06T15:40:02.1401000Z ##[endgroup]
+2026-10-06T15:40:02.1833923Z ##[end-action id=rust.__run_8;outcome=success;conclusion=success;duration_ms=50]
+2026-10-06T15:40:02.1836072Z ##[start-action display=Work around spurious network errors in curl 8.0;id=rust.__run_9]
+2026-10-06T15:40:02.1852892Z ##[group]Run # https://rust-lang.zulipchat.com/#narrow/stream/246057-t-cargo/topic/timeout.20investigation
+2026-10-06T15:40:02.1853508Z [36;1m# https://rust-lang.zulipchat.com/#narrow/stream/246057-t-cargo/topic/timeout.20investigation[0m
+2026-10-06T15:40:02.1853983Z [36;1mif rustc +stable --version --verbose | grep -q '^release: 1\.7[01]\.'; then[0m
+2026-10-06T15:40:02.1854361Z [36;1m  echo CARGO_HTTP_MULTIPLEXING=false >> $GITHUB_ENV[0m
+2026-10-06T15:40:02.1854755Z [36;1mfi[0m
+2026-10-06T15:40:02.1913267Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T15:40:02.1913542Z env:
+2026-10-06T15:40:02.1913787Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.1914202Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.1914534Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:40:02.1914777Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:40:02.1915011Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:40:02.1915251Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:40:02.1915603Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:40:02.1915978Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:40:02.1916235Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:40:02.1916457Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:40:02.1916663Z   CARGO_INCREMENTAL: 0
+2026-10-06T15:40:02.1916844Z   CARGO_TERM_COLOR: always
+2026-10-06T15:40:02.1917034Z ##[endgroup]
+2026-10-06T15:40:02.2222041Z ##[end-action id=rust.__run_9;outcome=success;conclusion=success;duration_ms=38]
+2026-10-06T15:40:02.2225389Z ##[start-action display=rustc +stable --version --verbose;id=rust.__run_10]
+2026-10-06T15:40:02.2241131Z ##[group]Run rustc +stable --version --verbose
+2026-10-06T15:40:02.2241417Z [36;1mrustc +stable --version --verbose[0m
+2026-10-06T15:40:02.2299192Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T15:40:02.2299592Z env:
+2026-10-06T15:40:02.2299967Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.2300723Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.2301186Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:40:02.2301433Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:40:02.2301686Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:40:02.2301927Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:40:02.2302288Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:40:02.2302674Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:40:02.2302938Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:40:02.2303169Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:40:02.2303371Z   CARGO_INCREMENTAL: 0
+2026-10-06T15:40:02.2303552Z   CARGO_TERM_COLOR: always
+2026-10-06T15:40:02.2303734Z ##[endgroup]
+2026-10-06T15:40:02.2506352Z rustc 1.99.0 (b940084d7 2026-09-28)
+2026-10-06T15:40:02.2506983Z binary: rustc
+2026-10-06T15:40:02.2507834Z commit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4
+2026-10-06T15:40:02.2508244Z commit-date: 2026-09-28
+2026-10-06T15:40:02.2508518Z host: x86_64-unknown-linux-gnu
+2026-10-06T15:40:02.2508900Z release: 1.99.0
+2026-10-06T15:40:02.2509152Z LLVM version: 23.1.1
+2026-10-06T15:40:02.2523470Z ##[end-action id=rust.__run_10;outcome=success;conclusion=success;duration_ms=29]
+2026-10-06T15:40:02.4224605Z ##[group]Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+2026-10-06T15:40:02.4224897Z with:
+2026-10-06T15:40:02.4225095Z   path: ~/.cargo/registry
+~/.cargo/git
+target
+
+2026-10-06T15:40:02.4225576Z   key: nagi-jetbrains-compiler-Linux-20260928b940-1b909c730bfafe4d4be83fec91874a1839731612c377cdc6dd7c5336d9d35d4d
+2026-10-06T15:40:02.4226099Z   restore-keys: nagi-jetbrains-compiler-Linux-20260928b940-
+
+2026-10-06T15:40:02.4226387Z   enableCrossOsArchive: false
+2026-10-06T15:40:02.4226588Z   fail-on-cache-miss: false
+2026-10-06T15:40:02.4226777Z   lookup-only: false
+2026-10-06T15:40:02.4226946Z   save-always: false
+2026-10-06T15:40:02.4227108Z env:
+2026-10-06T15:40:02.4227343Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.4227729Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:02.4228270Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:40:02.4228554Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:40:02.4228784Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:40:02.4229014Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:40:02.4229351Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:40:02.4229711Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:40:02.4229955Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:40:02.4230362Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:40:02.4230564Z   CARGO_INCREMENTAL: 0
+2026-10-06T15:40:02.4230768Z   CARGO_TERM_COLOR: always
+2026-10-06T15:40:02.4230949Z ##[endgroup]
+2026-10-06T15:40:02.5101652Z (node:2352) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T15:40:02.5102240Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T15:40:02.7386896Z Cache hit for restore-key: nagi-jetbrains-compiler-Linux-20260928b940-670ed7282502a9ce97be3ebc8928cca0cb8c3742453c5c22889d7c0d9a2ba2a0
+2026-10-06T15:40:02.7471531Z (node:2352) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-06T15:40:03.9668270Z Received 33554432 of 73966259 (45.4%), 32.0 MBs/sec
+2026-10-06T15:40:04.2876115Z Received 73966259 of 73966259 (100.0%), 53.4 MBs/sec
+2026-10-06T15:40:04.2877847Z Cache Size: ~71 MB (73966259 B)
+2026-10-06T15:40:04.2931835Z [command]/usr/bin/tar -xf /home/runner/work/_temp/95a55760-c8ed-410f-a642-416afaa78022/cache.tzst -P -C /home/runner/work/Nagi/Nagi --use-compress-program unzstd
+2026-10-06T15:40:04.7143899Z Cache restored successfully
+2026-10-06T15:40:04.7237960Z Cache restored from key: nagi-jetbrains-compiler-Linux-20260928b940-670ed7282502a9ce97be3ebc8928cca0cb8c3742453c5c22889d7c0d9a2ba2a0
+2026-10-06T15:40:04.7337140Z ##[group]Run cargo build --locked -p nagic
+2026-10-06T15:40:04.7337427Z [36;1mcargo build --locked -p nagic[0m
+2026-10-06T15:40:04.7395445Z shell: /usr/bin/bash -e {0}
+2026-10-06T15:40:04.7395659Z env:
+2026-10-06T15:40:04.7395912Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:04.7396311Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:04.7396648Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:40:04.7396891Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:40:04.7397132Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:40:04.7397379Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:40:04.7397739Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:40:04.7398118Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:40:04.7398380Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:40:04.7398668Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:40:04.7398879Z   CARGO_INCREMENTAL: 0
+2026-10-06T15:40:04.7399061Z   CARGO_TERM_COLOR: always
+2026-10-06T15:40:04.7399249Z ##[endgroup]
+2026-10-06T15:40:04.8145093Z [1m[92m   Compiling[0m nagic v0.1.10 (/home/runner/work/Nagi/Nagi/compiler)
+2026-10-06T15:40:09.8609501Z [1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 5.10s
+2026-10-06T15:40:09.8687652Z ##[group]Run ./gradlew --no-daemon --stacktrace test buildPlugin verifyPlugin -PplatformType=IC -PplatformVersion=2025.1.1 -PminimumPlatformVersion=2024.3.7
+2026-10-06T15:40:09.8688552Z [36;1m./gradlew --no-daemon --stacktrace test buildPlugin verifyPlugin -PplatformType=IC -PplatformVersion=2025.1.1 -PminimumPlatformVersion=2024.3.7[0m
+2026-10-06T15:40:09.8744551Z shell: /usr/bin/bash -e {0}
+2026-10-06T15:40:09.8744763Z env:
+2026-10-06T15:40:09.8745026Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:09.8745422Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:40:09.8746079Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:40:09.8746325Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:40:09.8746568Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:40:09.8746805Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:40:09.8747190Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:40:09.8747565Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:40:09.8747818Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:40:09.8748051Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:40:09.8748255Z   CARGO_INCREMENTAL: 0
+2026-10-06T15:40:09.8748439Z   CARGO_TERM_COLOR: always
+2026-10-06T15:40:09.8748697Z   NAGI_TEST_COMPILER: /home/runner/work/Nagi/Nagi/target/debug/nagic
+2026-10-06T15:40:09.8748982Z ##[endgroup]
+2026-10-06T15:40:10.1347487Z Downloading https://services.gradle.org/distributions/gradle-8.13-bin.zip
+2026-10-06T15:40:12.0613961Z .............10%.............20%.............30%.............40%.............50%.............60%.............70%.............80%.............90%.............100%
+2026-10-06T15:40:13.1837500Z 
+2026-10-06T15:40:13.1838179Z Welcome to Gradle 8.13!
+2026-10-06T15:40:13.2840805Z 
+2026-10-06T15:40:13.2856634Z Here are the highlights of this release:
+2026-10-06T15:40:13.2868940Z  - Daemon JVM auto-provisioning
+2026-10-06T15:40:13.2890730Z  - Enhancements for Scala plugin and JUnit testing
+2026-10-06T15:40:13.2897493Z  - Improvements for build authors and plugin developers
+2026-10-06T15:40:13.2910462Z 
+2026-10-06T15:40:13.2916445Z For more details see https://docs.gradle.org/8.13/release-notes.html
+2026-10-06T15:40:13.2940544Z 
+2026-10-06T15:40:13.3829409Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.13/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-06T15:40:14.7831636Z Daemon will be stopped at the end of the build 
+2026-10-06T15:41:39.7872380Z Layout component 'intellij.android.gradle.declarative.lang.sync' has some nonexistent 'classPath' elements: 'plugins/android-gradle-declarative-lang-ide/lib/modules/intellij.android.gradle.declarative.lang.sync.jar'
+2026-10-06T15:41:39.7874564Z Layout component 'intellij.json' has some nonexistent 'classPath' elements: 'plugins/json/lib/modules/intellij.json.jar'
+2026-10-06T15:41:39.7901429Z Layout component 'intellij.qodana.sarif' has some nonexistent 'classPath' elements: 'plugins/qodana/lib/modules/intellij.qodana.sarif.jar'
+2026-10-06T15:41:39.7931347Z Layout component 'intellij.vcs.git/localHistory' has some nonexistent 'classPath' elements: 'plugins/vcs-git/lib/modules/intellij.vcs.git/localHistory.jar'
+2026-10-06T15:41:39.7961029Z Layout component 'intellij.vcs.github' has some nonexistent 'classPath' elements: 'plugins/vcs-github-IU/lib/modules/intellij.vcs.github.jar'
+2026-10-06T15:41:39.7971109Z Layout component 'intellij.yaml' has some nonexistent 'classPath' elements: 'plugins/yaml/lib/modules/intellij.yaml.jar'
+2026-10-06T15:41:39.8001502Z Layout component 'intellij.android.gradle.declarative.lang.sync' has some nonexistent 'classPath' elements: 'plugins/android-gradle-declarative-lang-ide/lib/modules/intellij.android.gradle.declarative.lang.sync.jar'
+2026-10-06T15:41:39.8042837Z Layout component 'intellij.json' has some nonexistent 'classPath' elements: 'plugins/json/lib/modules/intellij.json.jar'
+2026-10-06T15:41:39.8070988Z Layout component 'intellij.qodana.sarif' has some nonexistent 'classPath' elements: 'plugins/qodana/lib/modules/intellij.qodana.sarif.jar'
+2026-10-06T15:41:39.8101133Z Layout component 'intellij.vcs.git/localHistory' has some nonexistent 'classPath' elements: 'plugins/vcs-git/lib/modules/intellij.vcs.git/localHistory.jar'
+2026-10-06T15:41:39.8102577Z Layout component 'intellij.vcs.github' has some nonexistent 'classPath' elements: 'plugins/vcs-github-IU/lib/modules/intellij.vcs.github.jar'
+2026-10-06T15:41:39.8130953Z Layout component 'intellij.yaml' has some nonexistent 'classPath' elements: 'plugins/yaml/lib/modules/intellij.yaml.jar'
+2026-10-06T15:42:22.1837123Z 
+2026-10-06T15:42:22.1856773Z > Task :initializeIntellijPlatformPlugin
+2026-10-06T15:42:22.1858098Z [org.jetbrains.intellij.platform] IntelliJ Platform Gradle Plugin is outdated: 2.3.0. Update `org.jetbrains.intellij.platform` to: 2.19.0
+2026-10-06T15:42:22.1859155Z 
+2026-10-06T15:42:22.1859485Z > Task :patchPluginXml
+2026-10-06T15:42:22.2825957Z 
+2026-10-06T15:42:22.2845701Z > Task :verifyPluginProjectConfiguration
+2026-10-06T15:42:22.2846713Z [org.jetbrains.intellij.platform] The following plugin configuration issues were found:
+2026-10-06T15:42:22.2847717Z - The since-build='243' is lower than the target IntelliJ Platform major version: '251'.
+2026-10-06T15:42:34.4830910Z 
+2026-10-06T15:42:34.4840511Z > Task :compileJava
+2026-10-06T15:42:34.4841489Z Note: /home/runner/work/Nagi/Nagi/editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiCompilerAction.java uses or overrides a deprecated API.
+2026-10-06T15:42:34.4842489Z Note: Recompile with -Xlint:deprecation for details.
+2026-10-06T15:42:45.7826911Z 
+2026-10-06T15:42:45.7827644Z > Task :processResources
+2026-10-06T15:42:45.7840747Z > Task :classes
+2026-10-06T15:42:45.7841486Z > Task :generateManifest
+2026-10-06T15:42:50.5827034Z > Task :instrumentCode
+2026-10-06T15:42:50.5827339Z > Task :jar
+2026-10-06T15:42:53.5829732Z Note: /home/runner/work/Nagi/Nagi/editors/jetbrains-nagi/src/test/java/com/disnana/nagi/NagiRunLineMarkerTest.java uses or overrides a deprecated API.
+2026-10-06T15:42:53.5830740Z 
+2026-10-06T15:42:53.5830970Z > Task :compileTestJava
+2026-10-06T15:42:53.5853151Z Note: Recompile with -Xlint:deprecation for details.
+2026-10-06T15:42:53.9836685Z 
+2026-10-06T15:42:53.9847558Z > Task :processTestResources
+2026-10-06T15:42:53.9848363Z > Task :testClasses
+2026-10-06T15:42:54.0828862Z > Task :instrumentTestCode
+2026-10-06T15:42:54.0841468Z > Task :instrumentedJar
+2026-10-06T15:42:54.0842837Z > Task :composedJar
+2026-10-06T15:42:54.0843372Z > Task :prepareTestSandbox
+2026-10-06T15:42:54.0843847Z > Task :prepareTest
+2026-10-06T15:42:59.8825981Z 
+2026-10-06T15:42:59.8831318Z > Task :test
+2026-10-06T15:42:59.8832939Z Layout component 'intellij.android.gradle.declarative.lang.sync' has some nonexistent 'classPath' elements: 'plugins/android-gradle-declarative-lang-ide/lib/modules/intellij.android.gradle.declarative.lang.sync.jar'
+2026-10-06T15:42:59.8834761Z Layout component 'intellij.json' has some nonexistent 'classPath' elements: 'plugins/json/lib/modules/intellij.json.jar'
+2026-10-06T15:42:59.8836184Z Layout component 'intellij.qodana.sarif' has some nonexistent 'classPath' elements: 'plugins/qodana/lib/modules/intellij.qodana.sarif.jar'
+2026-10-06T15:42:59.8837705Z Layout component 'intellij.vcs.git/localHistory' has some nonexistent 'classPath' elements: 'plugins/vcs-git/lib/modules/intellij.vcs.git/localHistory.jar'
+2026-10-06T15:42:59.8839248Z Layout component 'intellij.vcs.github' has some nonexistent 'classPath' elements: 'plugins/vcs-github-IU/lib/modules/intellij.vcs.github.jar'
+2026-10-06T15:42:59.8840763Z Layout component 'intellij.yaml' has some nonexistent 'classPath' elements: 'plugins/yaml/lib/modules/intellij.yaml.jar'
+2026-10-06T15:42:59.8843065Z Layout component 'intellij.android.gradle.declarative.lang.sync' has some nonexistent 'classPath' elements: 'plugins/android-gradle-declarative-lang-ide/lib/modules/intellij.android.gradle.declarative.lang.sync.jar'
+2026-10-06T15:42:59.8844921Z Layout component 'intellij.json' has some nonexistent 'classPath' elements: 'plugins/json/lib/modules/intellij.json.jar'
+2026-10-06T15:42:59.8846336Z Layout component 'intellij.qodana.sarif' has some nonexistent 'classPath' elements: 'plugins/qodana/lib/modules/intellij.qodana.sarif.jar'
+2026-10-06T15:42:59.8847849Z Layout component 'intellij.vcs.git/localHistory' has some nonexistent 'classPath' elements: 'plugins/vcs-git/lib/modules/intellij.vcs.git/localHistory.jar'
+2026-10-06T15:42:59.8849703Z Layout component 'intellij.vcs.github' has some nonexistent 'classPath' elements: 'plugins/vcs-github-IU/lib/modules/intellij.vcs.github.jar'
+2026-10-06T15:42:59.8851214Z Layout component 'intellij.yaml' has some nonexistent 'classPath' elements: 'plugins/yaml/lib/modules/intellij.yaml.jar'
+2026-10-06T15:43:11.1852219Z Layout component 'intellij.android.gradle.declarative.lang.sync' has some nonexistent 'classPath' elements: 'plugins/android-gradle-declarative-lang-ide/lib/modules/intellij.android.gradle.declarative.lang.sync.jar'
+2026-10-06T15:43:11.1881034Z Layout component 'intellij.json' has some nonexistent 'classPath' elements: 'plugins/json/lib/modules/intellij.json.jar'
+2026-10-06T15:43:11.1882631Z Layout component 'intellij.qodana.sarif' has some nonexistent 'classPath' elements: 'plugins/qodana/lib/modules/intellij.qodana.sarif.jar'
+2026-10-06T15:43:11.1911081Z Layout component 'intellij.vcs.git/localHistory' has some nonexistent 'classPath' elements: 'plugins/vcs-git/lib/modules/intellij.vcs.git/localHistory.jar'
+2026-10-06T15:43:11.1941093Z Layout component 'intellij.vcs.github' has some nonexistent 'classPath' elements: 'plugins/vcs-github-IU/lib/modules/intellij.vcs.github.jar'
+2026-10-06T15:43:11.1970824Z Layout component 'intellij.yaml' has some nonexistent 'classPath' elements: 'plugins/yaml/lib/modules/intellij.yaml.jar'
+2026-10-06T15:43:11.1972478Z Layout component 'intellij.android.gradle.declarative.lang.sync' has some nonexistent 'classPath' elements: 'plugins/android-gradle-declarative-lang-ide/lib/modules/intellij.android.gradle.declarative.lang.sync.jar'
+2026-10-06T15:43:11.2000832Z Layout component 'intellij.json' has some nonexistent 'classPath' elements: 'plugins/json/lib/modules/intellij.json.jar'
+2026-10-06T15:43:11.2030867Z Layout component 'intellij.qodana.sarif' has some nonexistent 'classPath' elements: 'plugins/qodana/lib/modules/intellij.qodana.sarif.jar'
+2026-10-06T15:43:11.2061027Z Layout component 'intellij.vcs.git/localHistory' has some nonexistent 'classPath' elements: 'plugins/vcs-git/lib/modules/intellij.vcs.git/localHistory.jar'
+2026-10-06T15:43:11.2062607Z Layout component 'intellij.vcs.github' has some nonexistent 'classPath' elements: 'plugins/vcs-github-IU/lib/modules/intellij.vcs.github.jar'
+2026-10-06T15:43:11.2091041Z Layout component 'intellij.yaml' has some nonexistent 'classPath' elements: 'plugins/yaml/lib/modules/intellij.yaml.jar'
+2026-10-06T15:43:16.7844251Z Layout component 'intellij.android.gradle.declarative.lang.sync' has some nonexistent 'classPath' elements: 'plugins/android-gradle-declarative-lang-ide/lib/modules/intellij.android.gradle.declarative.lang.sync.jar'
+2026-10-06T15:43:16.7871105Z Layout component 'intellij.json' has some nonexistent 'classPath' elements: 'plugins/json/lib/modules/intellij.json.jar'
+2026-10-06T15:43:16.7901131Z Layout component 'intellij.qodana.sarif' has some nonexistent 'classPath' elements: 'plugins/qodana/lib/modules/intellij.qodana.sarif.jar'
+2026-10-06T15:43:16.7915787Z Layout component 'intellij.vcs.git/localHistory' has some nonexistent 'classPath' elements: 'plugins/vcs-git/lib/modules/intellij.vcs.git/localHistory.jar'
+2026-10-06T15:43:16.7931171Z Layout component 'intellij.vcs.github' has some nonexistent 'classPath' elements: 'plugins/vcs-github-IU/lib/modules/intellij.vcs.github.jar'
+2026-10-06T15:43:16.7961838Z Layout component 'intellij.yaml' has some nonexistent 'classPath' elements: 'plugins/yaml/lib/modules/intellij.yaml.jar'
+2026-10-06T15:43:16.7991591Z Layout component 'intellij.android.gradle.declarative.lang.sync' has some nonexistent 'classPath' elements: 'plugins/android-gradle-declarative-lang-ide/lib/modules/intellij.android.gradle.declarative.lang.sync.jar'
+2026-10-06T15:43:16.8016177Z Layout component 'intellij.json' has some nonexistent 'classPath' elements: 'plugins/json/lib/modules/intellij.json.jar'
+2026-10-06T15:43:16.8039382Z Layout component 'intellij.qodana.sarif' has some nonexistent 'classPath' elements: 'plugins/qodana/lib/modules/intellij.qodana.sarif.jar'
+2026-10-06T15:43:16.8062005Z Layout component 'intellij.vcs.git/localHistory' has some nonexistent 'classPath' elements: 'plugins/vcs-git/lib/modules/intellij.vcs.git/localHistory.jar'
+2026-10-06T15:43:16.8071078Z Layout component 'intellij.vcs.github' has some nonexistent 'classPath' elements: 'plugins/vcs-github-IU/lib/modules/intellij.vcs.github.jar'
+2026-10-06T15:43:16.8101261Z Layout component 'intellij.yaml' has some nonexistent 'classPath' elements: 'plugins/yaml/lib/modules/intellij.yaml.jar'
+2026-10-06T15:43:21.8827857Z Layout component 'intellij.android.gradle.declarative.lang.sync' has some nonexistent 'classPath' elements: 'plugins/android-gradle-declarative-lang-ide/lib/modules/intellij.android.gradle.declarative.lang.sync.jar'
+2026-10-06T15:43:21.8835901Z Layout component 'intellij.json' has some nonexistent 'classPath' elements: 'plugins/json/lib/modules/intellij.json.jar'
+2026-10-06T15:43:21.8841001Z Layout component 'intellij.qodana.sarif' has some nonexistent 'classPath' elements: 'plugins/qodana/lib/modules/intellij.qodana.sarif.jar'
+2026-10-06T15:43:21.8848343Z Layout component 'intellij.vcs.git/localHistory' has some nonexistent 'classPath' elements: 'plugins/vcs-git/lib/modules/intellij.vcs.git/localHistory.jar'
+2026-10-06T15:43:21.8851856Z Layout component 'intellij.vcs.github' has some nonexistent 'classPath' elements: 'plugins/vcs-github-IU/lib/modules/intellij.vcs.github.jar'
+2026-10-06T15:43:21.8853402Z Layout component 'intellij.yaml' has some nonexistent 'classPath' elements: 'plugins/yaml/lib/modules/intellij.yaml.jar'
+2026-10-06T15:43:21.8855072Z Layout component 'intellij.android.gradle.declarative.lang.sync' has some nonexistent 'classPath' elements: 'plugins/android-gradle-declarative-lang-ide/lib/modules/intellij.android.gradle.declarative.lang.sync.jar'
+2026-10-06T15:43:21.8856681Z Layout component 'intellij.json' has some nonexistent 'classPath' elements: 'plugins/json/lib/modules/intellij.json.jar'
+2026-10-06T15:43:21.8857887Z Layout component 'intellij.qodana.sarif' has some nonexistent 'classPath' elements: 'plugins/qodana/lib/modules/intellij.qodana.sarif.jar'
+2026-10-06T15:43:21.8859281Z Layout component 'intellij.vcs.git/localHistory' has some nonexistent 'classPath' elements: 'plugins/vcs-git/lib/modules/intellij.vcs.git/localHistory.jar'
+2026-10-06T15:43:21.8860853Z Layout component 'intellij.vcs.github' has some nonexistent 'classPath' elements: 'plugins/vcs-github-IU/lib/modules/intellij.vcs.github.jar'
+2026-10-06T15:43:21.8862380Z Layout component 'intellij.yaml' has some nonexistent 'classPath' elements: 'plugins/yaml/lib/modules/intellij.yaml.jar'
+2026-10-06T15:43:25.7859332Z [0.007s][warning][cds] Archived non-system classes are disabled because the java.system.class.loader property is specified (value = "com.intellij.util.lang.PathClassLoader"). To use archived non-system classes, this property must not be set
+2026-10-06T15:43:38.9826399Z 
+2026-10-06T15:43:38.9830669Z > Task :prepareSandbox
+2026-10-06T15:43:40.9839593Z 
+2026-10-06T15:43:40.9858055Z 2026-10-06 15:43:40,756 [   1520]   WARN - #c.i.i.s.p.i.BundledSharedIndexProvider - Bundled shared index is not found at: /home/runner/.gradle/caches/8.13/transforms/431c21d8274dc4f440e5c3a1988bae9c/transformed/ideaIC-2025.1.1/jdk-shared-indexes
+2026-10-06T15:43:40.9859440Z > Task :buildSearchableOptions
+2026-10-06T15:43:40.9889057Z [0.006s][warning][cds] Archived non-system classes are disabled because the java.system.class.loader property is specified (value = "com.intellij.util.lang.PathClassLoader"). To use archived non-system classes, this property must not be set
+2026-10-06T15:43:44.1828667Z 2026-10-06 15:43:44,085 [   4849]   WARN - #c.i.i.u.UIThemeBean - Unknown field: CombinedDiff
+2026-10-06T15:43:44.1829780Z 2026-10-06 15:43:44,086 [   4850]   WARN - #c.i.i.u.UIThemeBean - Unknown field: BlockBorder
+2026-10-06T15:43:45.5832797Z 2026-10-06 15:43:45,541 [   6305]   WARN - #c.i.d.d.GridUtil - No settings for grid {GRID_CELL_EDITOR_HELPER_KEY=com.intellij.database.run.ui.grid.editors.GridCellEditorHelperImpl@241f1f3f, GRID_HELPER_KEY=com.intellij.database.datagrid.GridHelperImpl@1fd8aea0, FACTORY_PROVIDER_KEY=com.intellij.database.run.ui.grid.editors.GridCellEditorFactoryImpl@4c027fb6, RENDERER_FACTORIES_KEY=com.intellij.database.run.ui.grid.renderers.GridCellRendererFactories@5213f853, FORMATTER_CREATOR_KEY=com.intellij.database.datagrid.FormatterCreatorProvider$$Lambda/0x00007f6fb52fe4e8@ea9e3c9, CONVERSION_GRAPH_KEY=com.intellij.database.data.types.BaseConversionGraph@545ef112}.Make sure DATA_GRID_SETTINGS_KEY set for your grid.TableResultPanel inheritors could use 'configurator' constructor parameter to pass settings
+2026-10-06T15:43:45.6840331Z 2026-10-06 15:43:45,615 [   6379]   WARN - #c.i.d.d.GridUtil - No settings for grid {GRID_CELL_EDITOR_HELPER_KEY=com.intellij.database.run.ui.grid.editors.GridCellEditorHelperImpl@241f1f3f, GRID_HELPER_KEY=com.intellij.database.datagrid.GridHelperImpl@1fd8aea0, FACTORY_PROVIDER_KEY=com.intellij.database.run.ui.grid.editors.GridCellEditorFactoryImpl@4c027fb6, RENDERER_FACTORIES_KEY=com.intellij.database.run.ui.grid.renderers.GridCellRendererFactories@5213f853, FORMATTER_CREATOR_KEY=com.intellij.database.datagrid.FormatterCreatorProvider$$Lambda/0x00007f6fb52fe4e8@ea9e3c9, CONVERSION_GRAPH_KEY=com.intellij.database.data.types.BaseConversionGraph@545ef112}.Make sure DATA_GRID_SETTINGS_KEY set for your grid.TableResultPanel inheritors could use 'configurator' constructor parameter to pass settings
+2026-10-06T15:43:45.6849240Z 2026-10-06 15:43:45,625 [   6389]   WARN - #c.i.d.d.GridUtil - No settings for grid {GRID_CELL_EDITOR_HELPER_KEY=com.intellij.database.run.ui.grid.editors.GridCellEditorHelperImpl@241f1f3f, GRID_HELPER_KEY=com.intellij.database.datagrid.GridHelperImpl@1fd8aea0, FACTORY_PROVIDER_KEY=com.intellij.database.run.ui.grid.editors.GridCellEditorFactoryImpl@4c027fb6, RENDERER_FACTORIES_KEY=com.intellij.database.run.ui.grid.renderers.GridCellRendererFactories@5213f853, FORMATTER_CREATOR_KEY=com.intellij.database.datagrid.FormatterCreatorProvider$$Lambda/0x00007f6fb52fe4e8@ea9e3c9, CONVERSION_GRAPH_KEY=com.intellij.database.data.types.BaseConversionGraph@545ef112}.Make sure DATA_GRID_SETTINGS_KEY set for your grid.TableResultPanel inheritors could use 'configurator' constructor parameter to pass settings
+2026-10-06T15:43:45.6859364Z 2026-10-06 15:43:45,660 [   6424]   WARN - #c.i.d.d.GridUtil - No settings for grid {GRID_CELL_EDITOR_HELPER_KEY=com.intellij.database.run.ui.grid.editors.GridCellEditorHelperImpl@7a795ffc, GRID_HELPER_KEY=com.intellij.database.datagrid.GridHelperImpl@5e29de92, FACTORY_PROVIDER_KEY=com.intellij.database.run.ui.grid.editors.GridCellEditorFactoryImpl@4c027fb6, RENDERER_FACTORIES_KEY=com.intellij.database.run.ui.grid.renderers.GridCellRendererFactories@6d126c69, FORMATTER_CREATOR_KEY=com.intellij.database.datagrid.FormatterCreatorProvider$$Lambda/0x00007f6fb52fe4e8@51e1c09b, CONVERSION_GRAPH_KEY=com.intellij.database.data.types.BaseConversionGraph@6157f3e4}.Make sure DATA_GRID_SETTINGS_KEY set for your grid.TableResultPanel inheritors could use 'configurator' constructor parameter to pass settings
+2026-10-06T15:43:45.6867862Z 2026-10-06 15:43:45,669 [   6433]   WARN - #c.i.d.d.GridUtil - No settings for grid {GRID_CELL_EDITOR_HELPER_KEY=com.intellij.database.run.ui.grid.editors.GridCellEditorHelperImpl@7a795ffc, GRID_HELPER_KEY=com.intellij.database.datagrid.GridHelperImpl@5e29de92, FACTORY_PROVIDER_KEY=com.intellij.database.run.ui.grid.editors.GridCellEditorFactoryImpl@4c027fb6, RENDERER_FACTORIES_KEY=com.intellij.database.run.ui.grid.renderers.GridCellRendererFactories@6d126c69, FORMATTER_CREATOR_KEY=com.intellij.database.datagrid.FormatterCreatorProvider$$Lambda/0x00007f6fb52fe4e8@51e1c09b, CONVERSION_GRAPH_KEY=com.intellij.database.data.types.BaseConversionGraph@6157f3e4}.Make sure DATA_GRID_SETTINGS_KEY set for your grid.TableResultPanel inheritors could use 'configurator' constructor parameter to pass settings
+2026-10-06T15:43:45.6876327Z 2026-10-06 15:43:45,670 [   6434]   WARN - #c.i.d.d.GridUtil - No settings for grid {GRID_CELL_EDITOR_HELPER_KEY=com.intellij.database.run.ui.grid.editors.GridCellEditorHelperImpl@7a795ffc, GRID_HELPER_KEY=com.intellij.database.datagrid.GridHelperImpl@5e29de92, FACTORY_PROVIDER_KEY=com.intellij.database.run.ui.grid.editors.GridCellEditorFactoryImpl@4c027fb6, RENDERER_FACTORIES_KEY=com.intellij.database.run.ui.grid.renderers.GridCellRendererFactories@6d126c69, FORMATTER_CREATOR_KEY=com.intellij.database.datagrid.FormatterCreatorProvider$$Lambda/0x00007f6fb52fe4e8@51e1c09b, CONVERSION_GRAPH_KEY=com.intellij.database.data.types.BaseConversionGraph@6157f3e4}.Make sure DATA_GRID_SETTINGS_KEY set for your grid.TableResultPanel inheritors could use 'configurator' constructor parameter to pass settings
+2026-10-06T15:43:48.9840857Z 2026-10-06 15:43:48,881 [   9645]   WARN - #c.i.u.j.JBCefApp - JCEF is manually disabled in headless env via 'ide.browser.jcef.headless.enabled=false'
+2026-10-06T15:43:51.0826583Z Found 230 configurables
+2026-10-06T15:43:53.1852743Z save to /home/runner/work/Nagi/Nagi/editors/jetbrains-nagi/build/tmp/buildSearchableOptions
+2026-10-06T15:43:53.8832742Z 
+2026-10-06T15:43:53.8854694Z > Task :prepareJarSearchableOptions
+2026-10-06T15:43:53.8876906Z > Task :jarSearchableOptions
+2026-10-06T15:43:53.8893646Z > Task :buildPlugin
+2026-10-06T15:43:55.8846158Z 
+2026-10-06T15:43:55.8858909Z > Task :verifyPlugin
+2026-10-06T15:43:55.8859523Z Starting the IntelliJ Plugin Verifier 1.410
+2026-10-06T15:43:55.8860690Z Verification reports directory: /home/runner/work/Nagi/Nagi/editors/jetbrains-nagi/build/reports/pluginVerifier
+2026-10-06T15:43:55.8862013Z 2026-10-06T15:43:54 [main] INFO  verification - Reading IDE /home/runner/.gradle/caches/8.13/transforms/431c21d8274dc4f440e5c3a1988bae9c/transformed/ideaIC-2025.1.1
+2026-10-06T15:43:55.8863534Z 2026-10-06T15:43:54 [main] INFO  c.j.p.options.OptionsParser - Reading IDE from /home/runner/.gradle/caches/8.13/transforms/431c21d8274dc4f440e5c3a1988bae9c/transformed/ideaIC-2025.1.1
+2026-10-06T15:43:55.8865459Z 2026-10-06T15:43:54 [main] INFO  c.j.p.options.OptionsParser - Using Java runtime from /home/runner/.gradle/caches/8.13/transforms/a3bed17627fc23caa871531b098e1219/transformed/jbr-jbr_jcef-21.0.6-linux-x64-b895.109/jbr_jcef-21.0.6-linux-x64-b895.109
+2026-10-06T15:43:55.8868045Z 2026-10-06T15:43:54 [main] WARN  c.j.p.s.i.r.ValidatingLayoutComponentsProvider - Layout component 'intellij.android.gradle.declarative.lang.sync' has some nonexistent 'classPath' elements: 'plugins/android-gradle-declarative-lang-ide/lib/modules/intellij.android.gradle.declarative.lang.sync.jar'
+2026-10-06T15:43:55.8870063Z Layout component 'intellij.json' has some nonexistent 'classPath' elements: 'plugins/json/lib/modules/intellij.json.jar'
+2026-10-06T15:43:55.8871395Z Layout component 'intellij.qodana.sarif' has some nonexistent 'classPath' elements: 'plugins/qodana/lib/modules/intellij.qodana.sarif.jar'
+2026-10-06T15:43:55.8872734Z Layout component 'intellij.vcs.git/localHistory' has some nonexistent 'classPath' elements: 'plugins/vcs-git/lib/modules/intellij.vcs.git/localHistory.jar'
+2026-10-06T15:43:55.8874087Z Layout component 'intellij.vcs.github' has some nonexistent 'classPath' elements: 'plugins/vcs-github-IU/lib/modules/intellij.vcs.github.jar'
+2026-10-06T15:43:55.8875236Z Layout component 'intellij.yaml' has some nonexistent 'classPath' elements: 'plugins/yaml/lib/modules/intellij.yaml.jar'
+2026-10-06T15:43:55.8876819Z 2026-10-06T15:43:54 [main] INFO  verification - Reading IDE /home/runner/.gradle/caches/8.13/transforms/2d84f87f202d391b129992ede4d85125/transformed/ideaIC-2024.3.7
+2026-10-06T15:43:55.8878369Z 2026-10-06T15:43:54 [main] INFO  c.j.p.options.OptionsParser - Reading IDE from /home/runner/.gradle/caches/8.13/transforms/2d84f87f202d391b129992ede4d85125/transformed/ideaIC-2024.3.7
+2026-10-06T15:43:55.8880497Z 2026-10-06T15:43:54 [main] INFO  c.j.p.options.OptionsParser - Using Java runtime from /home/runner/.gradle/caches/8.13/transforms/a3bed17627fc23caa871531b098e1219/transformed/jbr-jbr_jcef-21.0.6-linux-x64-b895.109/jbr_jcef-21.0.6-linux-x64-b895.109
+2026-10-06T15:43:55.8882654Z 2026-10-06T15:43:55 [main] INFO  verification - Reading plugin to check from /home/runner/work/Nagi/Nagi/editors/jetbrains-nagi/build/distributions/nagi-jetbrains-0.1.0.zip
+2026-10-06T15:43:58.2827348Z 2026-10-06T15:43:58 [main] INFO  verification - Task check-plugin parameters:
+2026-10-06T15:43:58.2829272Z Scheduled verifications (2):
+2026-10-06T15:43:58.2830287Z com.disnana.nagi:0.1.0 against IC-251.25410.109, com.disnana.nagi:0.1.0 against IC-243.28141.18
+2026-10-06T15:43:58.2830806Z 
+2026-10-06T15:44:10.9826752Z 2026-10-06T15:44:10 [main] INFO  verification - Finished 1 of 2 verifications (in 12.7 s): IC-243.28141.18 against com.disnana.nagi:0.1.0: Compatible. 2 usages of experimental API
+2026-10-06T15:44:11.9842037Z 2026-10-06T15:44:11 [main] INFO  verification - Finished 2 of 2 verifications (in 13.7 s): IC-251.25410.109 against com.disnana.nagi:0.1.0: Compatible. 1 usage of deprecated API. 2 usages of experimental API
+2026-10-06T15:44:11.9843645Z 2026-10-06T15:44:11 [main] INFO  c.j.p.PluginVerifierMain - Started printing results (CheckPluginResultPrinter)
+2026-10-06T15:44:11.9844805Z Plugin com.disnana.nagi:0.1.0 against IC-243.28141.18: Compatible. 2 usages of experimental API
+2026-10-06T15:44:11.9845459Z Experimental API usages (2): 
+2026-10-06T15:44:11.9846162Z     #Experimental API method com.intellij.ide.impl.TrustedProjects.isTrusted(Project) invocation
+2026-10-06T15:44:11.9848081Z         Experimental API method com.intellij.ide.impl.TrustedProjects.isTrusted(com.intellij.openapi.project.Project $this$isTrusted) : boolean is invoked in com.disnana.nagi.NagiCompilerAction.execute(Project, VirtualFile) : void. This method can be changed in a future release leading to incompatibilities
+2026-10-06T15:44:11.9849916Z     #Experimental API class com.intellij.ide.impl.TrustedProjects reference
+2026-10-06T15:44:11.9851496Z         Experimental API class com.intellij.ide.impl.TrustedProjects is referenced in com.disnana.nagi.NagiCompilerAction.execute(Project, VirtualFile) : void. This class can be changed in a future release leading to incompatibilities
+2026-10-06T15:44:11.9852804Z Dynamic Plugin Eligibility:
+2026-10-06T15:44:11.9853280Z     Plugin can probably be enabled or disabled without IDE restart
+2026-10-06T15:44:11.9853697Z 
+2026-10-06T15:44:11.9854264Z Plugin com.disnana.nagi:0.1.0 against IC-251.25410.109: Compatible. 1 usage of deprecated API. 2 usages of experimental API
+2026-10-06T15:44:11.9855032Z Deprecated API usages (1): 
+2026-10-06T15:44:11.9855678Z     #Deprecated method com.intellij.ide.impl.TrustedProjects.isTrusted(Project) invocation
+2026-10-06T15:44:11.9857177Z         Deprecated method com.intellij.ide.impl.TrustedProjects.isTrusted(com.intellij.openapi.project.Project $this$isTrusted) : boolean is invoked in com.disnana.nagi.NagiCompilerAction.execute(Project, VirtualFile) : void
+2026-10-06T15:44:11.9858471Z Experimental API usages (2): 
+2026-10-06T15:44:11.9859123Z     #Experimental API method com.intellij.ide.impl.TrustedProjects.isTrusted(Project) invocation
+2026-10-06T15:44:11.9861182Z         Experimental API method com.intellij.ide.impl.TrustedProjects.isTrusted(com.intellij.openapi.project.Project $this$isTrusted) : boolean is invoked in com.disnana.nagi.NagiCompilerAction.execute(Project, VirtualFile) : void. This method can be changed in a future release leading to incompatibilities
+2026-10-06T15:44:11.9863304Z     #Experimental API class com.intellij.ide.impl.TrustedProjects reference
+2026-10-06T15:44:11.9864741Z         Experimental API class com.intellij.ide.impl.TrustedProjects is referenced in com.disnana.nagi.NagiCompilerAction.execute(Project, VirtualFile) : void. This class can be changed in a future release leading to incompatibilities
+2026-10-06T15:44:11.9866054Z Dynamic Plugin Eligibility:
+2026-10-06T15:44:11.9866540Z     Plugin can probably be enabled or disabled without IDE restart
+2026-10-06T15:44:11.9866951Z 
+2026-10-06T15:44:11.9867377Z 2026-10-06T15:44:11 [main] INFO  c.j.p.PluginVerifierMain - Finished printing results in 21ms
+2026-10-06T15:44:11.9870562Z 2026-10-06T15:44:11 [main] INFO  verification - Total time spent downloading plugins and their dependencies: 2 s 312 ms
+2026-10-06T15:44:11.9877746Z 2026-10-06T15:44:11 [main] INFO  verification - Total amount of plugins and dependencies downloaded: 101.11 MB
+2026-10-06T15:44:11.9878796Z 2026-10-06T15:44:11 [main] INFO  verification - Total amount of space used for plugins and dependencies: 101.11 MB
+2026-10-06T15:44:11.9879994Z 2026-10-06T15:44:11 [main] INFO  verification - PluginDetailsCache statistics: hits=6, misses=7, failures=0, evictions=0, total=13, hit-rate=46.2%
+2026-10-06T15:44:11.9881679Z 2026-10-06T15:44:11 [main] INFO  verification - Verification reports for com.disnana.nagi:0.1.0 saved to /home/runner/work/Nagi/Nagi/editors/jetbrains-nagi/build/reports/pluginVerifier/IC-243.28141.18
+2026-10-06T15:44:11.9883421Z 2026-10-06T15:44:11 [main] INFO  verification - Verification reports for com.disnana.nagi:0.1.0 saved to /home/runner/work/Nagi/Nagi/editors/jetbrains-nagi/build/reports/pluginVerifier/IC-251.25410.109
+2026-10-06T15:44:11.9884696Z 2026-10-06T15:44:11 [main] INFO  verification - Total time spent in plugin verification: 17 s 418 ms
+2026-10-06T15:44:12.7858899Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1791301217698.json
+2026-10-06T15:44:12.7859312Z 
+2026-10-06T15:44:12.7859733Z [Incubating] Problems report is available at: file:///home/runner/work/Nagi/Nagi/editors/jetbrains-nagi/build/reports/problems/problems-report.html
+2026-10-06T15:44:12.7860370Z 
+2026-10-06T15:44:12.7860490Z BUILD SUCCESSFUL in 4m 2s
+2026-10-06T15:44:12.7860707Z 21 actionable tasks: 21 executed
+2026-10-06T15:44:12.9542906Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+2026-10-06T15:44:12.9543226Z with:
+2026-10-06T15:44:12.9543392Z   name: nagi-jetbrains-IC
+2026-10-06T15:44:12.9543626Z   path: editors/jetbrains-nagi/build/distributions/*.zip
+2026-10-06T15:44:12.9543887Z   if-no-files-found: error
+2026-10-06T15:44:12.9544096Z   compression-level: 6
+2026-10-06T15:44:12.9544271Z   overwrite: false
+2026-10-06T15:44:12.9544442Z   include-hidden-files: false
+2026-10-06T15:44:12.9544632Z env:
+2026-10-06T15:44:12.9544872Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:44:12.9545247Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:44:12.9545569Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:44:12.9545807Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:44:12.9546033Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:44:12.9546295Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:44:12.9546635Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:44:12.9546999Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:44:12.9547255Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:44:12.9547469Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:44:12.9547670Z   CARGO_INCREMENTAL: 0
+2026-10-06T15:44:12.9547861Z   CARGO_TERM_COLOR: always
+2026-10-06T15:44:12.9548045Z ##[endgroup]
+2026-10-06T15:44:13.1000047Z (node:3098) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T15:44:13.1001192Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T15:44:13.1049433Z With the provided path, there will be 1 file uploaded
+2026-10-06T15:44:13.1054040Z Artifact name is valid!
+2026-10-06T15:44:13.1055460Z Root directory input is valid!
+2026-10-06T15:44:13.4811658Z Beginning upload of artifact content to blob storage
+2026-10-06T15:44:13.4970668Z (node:3098) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-06T15:44:13.7890478Z Uploaded bytes 56522
+2026-10-06T15:44:13.8456899Z Finished uploading artifact content to blob storage!
+2026-10-06T15:44:13.8458023Z SHA256 digest of uploaded artifact zip is 1ccb1ca339dca4c24f2e5d2d6f23207016e29dc36e6ceda56a2523f09f10628e
+2026-10-06T15:44:13.8458641Z Finalizing artifact upload
+2026-10-06T15:44:14.1439524Z Artifact nagi-jetbrains-IC.zip successfully finalized. Artifact ID 11425206250
+2026-10-06T15:44:14.1440661Z Artifact nagi-jetbrains-IC has been successfully uploaded! Final size is 56522 bytes. Artifact ID is 11425206250
+2026-10-06T15:44:14.1444931Z Artifact download URL: https://github.com/disnana/Nagi/actions/runs/37489343115/artifacts/11425206250
+2026-10-06T15:44:14.1573166Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+2026-10-06T15:44:14.1573498Z with:
+2026-10-06T15:44:14.1573679Z   name: nagi-jetbrains-reports-IC
+2026-10-06T15:44:14.1574209Z   path: editors/jetbrains-nagi/build/reports/tests/
+editors/jetbrains-nagi/build/test-results/
+editors/jetbrains-nagi/build/reports/pluginVerifier/
+
+2026-10-06T15:44:14.1574721Z   if-no-files-found: warn
+2026-10-06T15:44:14.1574939Z   compression-level: 6
+2026-10-06T15:44:14.1575117Z   overwrite: false
+2026-10-06T15:44:14.1575295Z   include-hidden-files: false
+2026-10-06T15:44:14.1575493Z env:
+2026-10-06T15:44:14.1575734Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:44:14.1576117Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-10-06T15:44:14.1576449Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-06T15:44:14.1576689Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-06T15:44:14.1576955Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-06T15:44:14.1577198Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-06T15:44:14.1577543Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-06T15:44:14.1577914Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-06T15:44:14.1578167Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-06T15:44:14.1578387Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T15:44:14.1578601Z   CARGO_INCREMENTAL: 0
+2026-10-06T15:44:14.1578786Z   CARGO_TERM_COLOR: always
+2026-10-06T15:44:14.1578983Z ##[endgroup]
+2026-10-06T15:44:14.2892732Z (node:3114) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T15:44:14.2893448Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T15:44:14.3015430Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-06T15:44:14.3017837Z The least common ancestor is /home/runner/work/Nagi/Nagi/editors/jetbrains-nagi/build. This will be the root directory of the artifact
+2026-10-06T15:44:14.3018729Z With the provided path, there will be 29 files uploaded
+2026-10-06T15:44:14.3022533Z Artifact name is valid!
+2026-10-06T15:44:14.3022962Z Root directory input is valid!
+2026-10-06T15:44:14.6411258Z Beginning upload of artifact content to blob storage
+2026-10-06T15:44:14.6781021Z (node:3114) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-06T15:44:14.9257119Z Uploaded bytes 29990
+2026-10-06T15:44:14.9832629Z Finished uploading artifact content to blob storage!
+2026-10-06T15:44:14.9833288Z SHA256 digest of uploaded artifact zip is 04e46ea17754795747a75f5b632941b5bcfa42a408e9f46c9146d34b016290f9
+2026-10-06T15:44:14.9834236Z Finalizing artifact upload
+2026-10-06T15:44:15.2634021Z Artifact nagi-jetbrains-reports-IC.zip successfully finalized. Artifact ID 11424234590
+2026-10-06T15:44:15.2634790Z Artifact nagi-jetbrains-reports-IC has been successfully uploaded! Final size is 29990 bytes. Artifact ID is 11424234590
+2026-10-06T15:44:15.2639599Z Artifact download URL: https://github.com/disnana/Nagi/actions/runs/37489343115/artifacts/11424234590
+2026-10-06T15:44:15.4736527Z Post job cleanup.
+2026-10-06T15:44:15.5710878Z (node:3138) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T15:44:15.5711876Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T15:44:15.5853822Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/Nagi/Nagi --files-from manifest.txt --use-compress-program zstdmt
+2026-10-06T15:44:16.3998685Z Failed to save: Unable to reserve cache with key nagi-jetbrains-compiler-Linux-20260928b940-1b909c730bfafe4d4be83fec91874a1839731612c377cdc6dd7c5336d9d35d4d, another job may be creating this cache.
+2026-10-06T15:44:16.4209249Z Post job cleanup.
+2026-10-06T15:44:16.6639962Z In post-action step
+2026-10-06T15:44:16.6646794Z Cache is read-only: will not save state for use in subsequent builds.
+2026-10-06T15:44:16.6651972Z Generating Job Summary
+2026-10-06T15:44:16.6673302Z Completed post-action step
+2026-10-06T15:44:16.6856234Z Post job cleanup.
+2026-10-06T15:44:16.8028444Z (node:3170) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T15:44:16.8029462Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T15:44:16.8215677Z Post job cleanup.
+2026-10-06T15:44:16.8959539Z [command]/usr/bin/git version
+2026-10-06T15:44:16.9009547Z git version 2.55.0
+2026-10-06T15:44:16.9051969Z Temporarily overriding HOME='/home/runner/work/_temp/a3fbedd5-a28f-421e-90e7-aa72110031a7' before making global git config changes
+2026-10-06T15:44:16.9053149Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-06T15:44:16.9059233Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Nagi/Nagi
+2026-10-06T15:44:16.9104812Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-06T15:44:16.9148035Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-06T15:44:16.9412450Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-06T15:44:16.9445727Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-06T15:44:16.9701561Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-06T15:44:16.9739437Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-06T15:44:17.0145231Z Cleaning up orphan processes
+2026-10-06T15:44:17.0406557Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830, actions/checkout@11d5960a326750d5838078e36cf38b85af677262, actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3, actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02, gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
