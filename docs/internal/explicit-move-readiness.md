@@ -15,7 +15,7 @@ Sol 2人が実装・公開Docsを独立に読み、rootもchecked factsとRust�
 - `docs/ownership.md`と英語版へ、moveの必要性、元変数の再初期化、Copy入力はmove後も使えることを補足。
 - 入門日英へ、元を残すにはmove後にcopyを追加せず、代入を`copy(view(name))`へ置き換えると明記。
 - [既存9群](../../compiler/tests/explicit_moves.rs)の正常native群へ、Copy元の再利用、明示操作なしの非Copy引数・return、match payloadの裸returnを追加。元のpointer・Drop・borrow・取消assertは維持。
-- compiler本体/runtime/依存/CIのbytesは初回headから変更していない。テストは上記の正常oracleを追加した。Rust標準identityの単一by-value評価と[OWN-04](language-invariants.md#own-04-明示moveの確定仕様実装済み未リリース)の範囲を保つ。
+- compiler本体・公開runtime・依存・CIのbytesは初回headから変更していない。moveテストは上記の正常oracleを追加した。後のCIで見つかったprivate `cfg(test)` SQLite adapterの終了契約は[別の回帰記録](sqlite-close-regression.md)に分ける。Rust標準identityの単一by-value評価と[OWN-04](language-invariants.md#own-04-明示moveの確定仕様実装済み未リリース)の範囲を保つ。
 
 ## moveの説明の照合
 
@@ -39,6 +39,14 @@ fmt、全target clippy、日英7箇所・4種類の完全例check/run、website9
 今回の[実行記録](../../benchmarks/results/explicit-move-2026-10-06/readiness/verification.json)、[全回帰原ログ](../../benchmarks/results/explicit-move-2026-10-06/readiness/full.log)、[実装Solレビュー](../../benchmarks/results/explicit-move-2026-10-06/readiness/implementation-sol-review.md)、[Docs Solレビュー](../../benchmarks/results/explicit-move-2026-10-06/readiness/docs-sol-review.md)を保存した。レビュー担当が独立にテストを再実行した記録ではない。
 
 以前の93 suite・902件はgraph_render内の子process再実行3件を重複計上していた。旧全回帰も上位の90 suite・899件であり、原ログと期待は変更しない。stdout interleaveで子summaryが混ざる場合があるため、全summaryの単純合計を避ける。[集計規則](compiler-testing.md#oracleと段階境界)に記録した。
+
+## 更新後CIで見つかったprivate終了回帰
+
+head `68d215b`の[Linux CI](https://github.com/disnana/Nagi/actions/runs/37454227747)はprivate SQLite終了テストのCloseTimeoutで失敗した。古いCIやローカルの成功で打ち消さず、[原因・決定的再現・修正](sqlite-close-regression.md)を残した。stock APIの未poll waiterへ予約済みのpermitとidle Objectを作り、test-only snapshot `0051f7a`で同じCloseTimeoutを観測した。
+
+閉鎖後のidle退役5行と先行回帰1件を`cfg(test)` adapterに追加し、Solが独立レビューした。production compiler/runtime、move生成、依存・CI、公開仕様は変更していない。期限の延長、旧close期待の緩和、third-party修正、actual joinの偽装は行わない。fixtureの異常経路でも完了Futureを再pollしない。
+
+最終コードsnapshot `f6bc74a979ed9d83ef15def449d30b93b8e7bb6b`（tree `830c8c27ab50c45257a428d7ecbde3805682346a`）で`cargo test --locked`、fmt、全target clippyが成功。全回帰は90 suite・**900件**、failed/ignored 0。上の899件に新しい終了回帰1件を加えた数である。全回帰raw SHA-256は`e87754c9f0a3706c29a5c68a40af04b9a960db2f0dcb5d32e5042576546a1919`。[RED/GREEN/最終ログとsource/hash](../../benchmarks/results/explicit-move-2026-10-06/readiness/sqlite-close/verification.json)と[Solレビュー](../../benchmarks/results/explicit-move-2026-10-06/readiness/sqlite-close/sol-review.md)を保存した。新headの必須CIはPRのChecksで別に確認する。
 
 ## 残る範囲と次工程
 

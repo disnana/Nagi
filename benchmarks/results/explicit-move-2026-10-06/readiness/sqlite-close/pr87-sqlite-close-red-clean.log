@@ -1,0 +1,19 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-boundary-foundation/runtime)
+    Finished `test` profile [unoptimized] target(s) in 6.79s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31f33a377cbf1a2a)
+
+running 1 test
+
+thread 'sqlite_prototype::adapter_tests::close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_waiter' (1444852) panicked at runtime/src/sqlite_prototype/adapter_tests.rs:214:5:
+close must retire the idle worker despite a reserved permit: Ok(Err(Failure { kind: CloseTimeout, outcome: NotApplicable, primary: Some("adapter workers not joined"), cleanup: None, retired: false }))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test sqlite_prototype::adapter_tests::close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_waiter ... FAILED
+
+failures:
+
+failures:
+    sqlite_prototype::adapter_tests::close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_waiter
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 189 filtered out; finished in 2.00s
+
+error: test failed, to rerun pass `-p nagi-runtime --lib`

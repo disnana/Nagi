@@ -1,0 +1,744 @@
+﻿2026-10-06T11:06:56.8347835Z Current runner version: '2.337.0'
+2026-10-06T11:06:56.8372417Z ##[group]Runner Image Provisioner
+2026-10-06T11:06:56.8373313Z Hosted Compute Agent
+2026-10-06T11:06:56.8374043Z Version: 20260901.588
+2026-10-06T11:06:56.8374701Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+2026-10-06T11:06:56.8375419Z Build Date: 2026-09-01T19:56:44Z
+2026-10-06T11:06:56.8376218Z Worker ID: {552c4d97-edbc-4912-9471-554b67f292b8}
+2026-10-06T11:06:56.8376935Z Azure Region: westus
+2026-10-06T11:06:56.8377607Z ##[endgroup]
+2026-10-06T11:06:56.8379038Z ##[group]Operating System
+2026-10-06T11:06:56.8379913Z Ubuntu
+2026-10-06T11:06:56.8380566Z 24.04.5
+2026-10-06T11:06:56.8381134Z LTS
+2026-10-06T11:06:56.8381708Z ##[endgroup]
+2026-10-06T11:06:56.8382336Z ##[group]Runner Image
+2026-10-06T11:06:56.8382959Z Image: ubuntu-24.04
+2026-10-06T11:06:56.8383621Z Version: 20260927.320.1
+2026-10-06T11:06:56.8384845Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-06T11:06:56.8386519Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+2026-10-06T11:06:56.8387490Z ##[endgroup]
+2026-10-06T11:06:56.8388655Z ##[group]GITHUB_TOKEN Permissions
+2026-10-06T11:06:56.8390996Z Contents: read
+2026-10-06T11:06:56.8391792Z Metadata: read
+2026-10-06T11:06:56.8392376Z ##[endgroup]
+2026-10-06T11:06:56.8394456Z Secret source: Actions
+2026-10-06T11:06:56.8395464Z Cache mode: write
+2026-10-06T11:06:56.8396242Z Prepare workflow directory
+2026-10-06T11:06:56.8946073Z Prepare all required actions
+2026-10-06T11:06:56.8996386Z Getting action download info
+2026-10-06T11:06:57.3026024Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-06T11:06:57.4108233Z Download action repository 'dtolnay/rust-toolchain@stable' (SHA:89b12181fb390509a0842a86cc55eeb8eb928c1d)
+2026-10-06T11:06:57.6214693Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-10-06T11:06:57.7164701Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-10-06T11:06:57.7914289Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-10-06T11:06:57.8767794Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-06T11:06:58.1772754Z Complete job name: linux
+2026-10-06T11:06:58.2938868Z ##[group]Run actions/checkout@v4
+2026-10-06T11:06:58.2940605Z with:
+2026-10-06T11:06:58.2941404Z   repository: disnana/Nagi
+2026-10-06T11:06:58.2949125Z   token: ***
+2026-10-06T11:06:58.2950172Z   ssh-strict: true
+2026-10-06T11:06:58.2950959Z   ssh-user: git
+2026-10-06T11:06:58.2951761Z   persist-credentials: true
+2026-10-06T11:06:58.2952633Z   clean: true
+2026-10-06T11:06:58.2953424Z   sparse-checkout-cone-mode: true
+2026-10-06T11:06:58.2954360Z   fetch-depth: 1
+2026-10-06T11:06:58.2955132Z   fetch-tags: false
+2026-10-06T11:06:58.2955936Z   show-progress: true
+2026-10-06T11:06:58.2956768Z   lfs: false
+2026-10-06T11:06:58.2957520Z   submodules: false
+2026-10-06T11:06:58.2958336Z   set-safe-directory: true
+2026-10-06T11:06:58.2959273Z   allow-unsafe-pr-checkout: false
+2026-10-06T11:06:58.2960825Z env:
+2026-10-06T11:06:58.2961889Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:06:58.2963187Z ##[endgroup]
+2026-10-06T11:06:58.3987146Z Syncing repository: disnana/Nagi
+2026-10-06T11:06:58.3990178Z ##[group]Getting Git version info
+2026-10-06T11:06:58.3992273Z Working directory is '/home/runner/work/Nagi/Nagi'
+2026-10-06T11:06:58.3994681Z [command]/usr/bin/git version
+2026-10-06T11:06:58.4086042Z git version 2.55.0
+2026-10-06T11:06:58.4123054Z ##[endgroup]
+2026-10-06T11:06:58.4141860Z Temporarily overriding HOME='/home/runner/work/_temp/3f6e98cd-ea2b-4d09-b2fb-1c0f250646f5' before making global git config changes
+2026-10-06T11:06:58.4146693Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-06T11:06:58.4150570Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Nagi/Nagi
+2026-10-06T11:06:58.4202162Z Deleting the contents of '/home/runner/work/Nagi/Nagi'
+2026-10-06T11:06:58.4209030Z ##[group]Initializing the repository
+2026-10-06T11:06:58.4216903Z [command]/usr/bin/git init /home/runner/work/Nagi/Nagi
+2026-10-06T11:06:58.4319326Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-06T11:06:58.4322605Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-06T11:06:58.4324380Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-06T11:06:58.4325749Z hint: call:
+2026-10-06T11:06:58.4326485Z hint:
+2026-10-06T11:06:58.4327398Z hint: 	git config --global init.defaultBranch <name>
+2026-10-06T11:06:58.4328511Z hint:
+2026-10-06T11:06:58.4329824Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-06T11:06:58.4331590Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-06T11:06:58.4332980Z hint:
+2026-10-06T11:06:58.4333733Z hint: 	git branch -m <name>
+2026-10-06T11:06:58.4334585Z hint:
+2026-10-06T11:06:58.4335749Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-06T11:06:58.4342968Z Initialized empty Git repository in /home/runner/work/Nagi/Nagi/.git/
+2026-10-06T11:06:58.4355228Z [command]/usr/bin/git remote add origin https://github.com/disnana/Nagi
+2026-10-06T11:06:58.4407912Z ##[endgroup]
+2026-10-06T11:06:58.4410848Z ##[group]Disabling automatic garbage collection
+2026-10-06T11:06:58.4413400Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-06T11:06:58.4449108Z ##[endgroup]
+2026-10-06T11:06:58.4451471Z ##[group]Setting up auth
+2026-10-06T11:06:58.4456398Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-06T11:06:58.4497078Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-06T11:06:58.4861653Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-06T11:06:58.4912318Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-06T11:06:58.5134410Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-06T11:06:58.5170908Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-06T11:06:58.5393253Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-06T11:06:58.5433976Z ##[endgroup]
+2026-10-06T11:06:58.5436215Z ##[group]Fetching the repository
+2026-10-06T11:06:58.5443979Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +8c882f571503d177c6fd10dcbee53d00c387a2ca:refs/remotes/pull/87/merge
+2026-10-06T11:06:59.6700625Z From https://github.com/disnana/Nagi
+2026-10-06T11:06:59.6701998Z  * [new ref]         8c882f571503d177c6fd10dcbee53d00c387a2ca -> pull/87/merge
+2026-10-06T11:06:59.6711158Z ##[endgroup]
+2026-10-06T11:06:59.6712060Z ##[group]Determining the checkout info
+2026-10-06T11:06:59.6712897Z ##[endgroup]
+2026-10-06T11:06:59.6715078Z [command]/usr/bin/git sparse-checkout disable
+2026-10-06T11:06:59.6772550Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-06T11:06:59.6813289Z ##[group]Checking out the ref
+2026-10-06T11:06:59.6817330Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/87/merge
+2026-10-06T11:06:59.7781103Z Note: switching to 'refs/remotes/pull/87/merge'.
+2026-10-06T11:06:59.7781914Z 
+2026-10-06T11:06:59.7783330Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-06T11:06:59.7785310Z changes and commit them, and you can discard any commits you make in this
+2026-10-06T11:06:59.7786823Z state without impacting any branches by switching back to a branch.
+2026-10-06T11:06:59.7787824Z 
+2026-10-06T11:06:59.7788626Z If you want to create a new branch to retain commits you create, you may
+2026-10-06T11:06:59.7790108Z do so (now or later) by using -c with the switch command. Example:
+2026-10-06T11:06:59.7790921Z 
+2026-10-06T11:06:59.7791348Z   git switch -c <new-branch-name>
+2026-10-06T11:06:59.7791928Z 
+2026-10-06T11:06:59.7792319Z Or undo this operation with:
+2026-10-06T11:06:59.7792860Z 
+2026-10-06T11:06:59.7793190Z   git switch -
+2026-10-06T11:06:59.7793654Z 
+2026-10-06T11:06:59.7794342Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-06T11:06:59.7795219Z 
+2026-10-06T11:06:59.7796129Z HEAD is now at 8c882f5 Merge 68d215b71684d4b028dc9bf3a9a87ecf4994d8ae into 7d2d96a8bdba191e456f796bdf477b95bc34c57e
+2026-10-06T11:06:59.7799291Z ##[endgroup]
+2026-10-06T11:06:59.7845742Z [command]/usr/bin/git log -1 --format=%H
+2026-10-06T11:06:59.7873620Z 8c882f571503d177c6fd10dcbee53d00c387a2ca
+2026-10-06T11:06:59.8270518Z ##[group]Run dtolnay/rust-toolchain@stable
+2026-10-06T11:06:59.8271053Z with:
+2026-10-06T11:06:59.8271450Z   components: rustfmt, clippy
+2026-10-06T11:06:59.8271875Z   toolchain: stable
+2026-10-06T11:06:59.8272230Z env:
+2026-10-06T11:06:59.8272712Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:06:59.8273276Z ##[endgroup]
+2026-10-06T11:06:59.8342688Z ##[start-action display=Parse toolchain version;id=rust.parse]
+2026-10-06T11:06:59.8394169Z ##[group]Run if [[ -z $toolchain ]]; then
+2026-10-06T11:06:59.8394769Z [36;1mif [[ -z $toolchain ]]; then[0m
+2026-10-06T11:06:59.8395547Z [36;1m  # GitHub does not enforce `required: true` inputs itself. https://github.com/actions/runner/issues/1070[0m
+2026-10-06T11:06:59.8396337Z [36;1m  echo "'toolchain' is a required input" >&2[0m
+2026-10-06T11:06:59.8396812Z [36;1m  exit 1[0m
+2026-10-06T11:06:59.8397428Z [36;1melif [[ $toolchain =~ ^stable' '[0-9]+' '(year|month|week|day)s?' 'ago$ ]]; then[0m
+2026-10-06T11:06:59.8398083Z [36;1m  if [[ Linux == macOS ]]; then[0m
+2026-10-06T11:06:59.8398847Z [36;1m    echo "toolchain=1.$((($(date -v-$(sed 's/stable \([0-9]*\) \(.\).*/\1\2/' <<< $toolchain) +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT[0m
+2026-10-06T11:06:59.8399764Z [36;1m  else[0m
+2026-10-06T11:06:59.8400371Z [36;1m    echo "toolchain=1.$((($(date --date "${toolchain#stable }" +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT[0m
+2026-10-06T11:06:59.8401027Z [36;1m  fi[0m
+2026-10-06T11:06:59.8401522Z [36;1melif [[ $toolchain =~ ^stable' 'minus' '[0-9]+' 'releases?$ ]]; then[0m
+2026-10-06T11:06:59.8402287Z [36;1m  echo "toolchain=1.$((($(date +%s)/60/60/24-16569)/7/6-${toolchain//[^0-9]/}))" >> $GITHUB_OUTPUT[0m
+2026-10-06T11:06:59.8402964Z [36;1melif [[ $toolchain =~ ^1\.[0-9]+$ ]]; then[0m
+2026-10-06T11:06:59.8403718Z [36;1m  echo "toolchain=1.$((i=${toolchain#1.}, c=($(date +%s)/60/60/24-16569)/7/6, i+9*i*(10*i<=c)+90*i*(100*i<=c)))" >> $GITHUB_OUTPUT[0m
+2026-10-06T11:06:59.8404441Z [36;1melse[0m
+2026-10-06T11:06:59.8404865Z [36;1m  echo "toolchain=$toolchain" >> $GITHUB_OUTPUT[0m
+2026-10-06T11:06:59.8405332Z [36;1mfi[0m
+2026-10-06T11:06:59.8676635Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T11:06:59.8677212Z env:
+2026-10-06T11:06:59.8677733Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:06:59.8678334Z   toolchain: stable
+2026-10-06T11:06:59.8678716Z ##[endgroup]
+2026-10-06T11:06:59.8825187Z ##[end-action id=rust.parse;outcome=success;conclusion=success;duration_ms=48]
+2026-10-06T11:06:59.8870169Z ##[start-action display=Construct rustup command line;id=rust.flags]
+2026-10-06T11:06:59.8913435Z ##[group]Run echo "targets=$(for t in ${targets//,/ }; do echo -n ' --target' $t; done)" >> $GITHUB_OUTPUT
+2026-10-06T11:06:59.8914312Z [36;1mecho "targets=$(for t in ${targets//,/ }; do echo -n ' --target' $t; done)" >> $GITHUB_OUTPUT[0m
+2026-10-06T11:06:59.8915349Z [36;1mecho "components=$(for c in ${components//,/ }; do echo -n ' --component' $c; done)" >> $GITHUB_OUTPUT[0m
+2026-10-06T11:06:59.8916053Z [36;1mecho "downgrade=" >> $GITHUB_OUTPUT[0m
+2026-10-06T11:06:59.8981672Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T11:06:59.8982188Z env:
+2026-10-06T11:06:59.8982665Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:06:59.8983208Z   targets: 
+2026-10-06T11:06:59.8983571Z   components: rustfmt, clippy
+2026-10-06T11:06:59.8983968Z ##[endgroup]
+2026-10-06T11:06:59.9090638Z ##[end-action id=rust.flags;outcome=success;conclusion=success;duration_ms=21]
+2026-10-06T11:06:59.9093513Z ##[start-action display=Set $CARGO_HOME;id=rust.__run]
+2026-10-06T11:06:59.9126687Z ##[group]Run echo CARGO_HOME=${CARGO_HOME:-"$HOME/.cargo"} >> $GITHUB_ENV
+2026-10-06T11:06:59.9127361Z [36;1mecho CARGO_HOME=${CARGO_HOME:-"$HOME/.cargo"} >> $GITHUB_ENV[0m
+2026-10-06T11:06:59.9195919Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T11:06:59.9196432Z env:
+2026-10-06T11:06:59.9197140Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:06:59.9197696Z ##[endgroup]
+2026-10-06T11:06:59.9298089Z ##[end-action id=rust.__run;outcome=success;conclusion=success;duration_ms=20]
+2026-10-06T11:06:59.9301305Z ##[start-action display=Install rustup if needed;id=rust.__run_2]
+2026-10-06T11:06:59.9393577Z ##[group]Run if ! command -v rustup &>/dev/null; then
+2026-10-06T11:06:59.9394144Z [36;1mif ! command -v rustup &>/dev/null; then[0m
+2026-10-06T11:06:59.9395152Z [36;1m  curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused --location --silent --show-error --fail https://sh.rustup.rs | sh -s -- --default-toolchain none -y[0m
+2026-10-06T11:06:59.9396141Z [36;1m  echo "$CARGO_HOME/bin" >> $GITHUB_PATH[0m
+2026-10-06T11:06:59.9396591Z [36;1mfi[0m
+2026-10-06T11:06:59.9463296Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T11:06:59.9463841Z env:
+2026-10-06T11:06:59.9464329Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:06:59.9464922Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:06:59.9465328Z ##[endgroup]
+2026-10-06T11:06:59.9561479Z ##[end-action id=rust.__run_2;outcome=success;conclusion=success;duration_ms=25]
+2026-10-06T11:06:59.9564305Z ##[start-action display=Install rustup if needed on windows;id=rust.__run_3]
+2026-10-06T11:06:59.9572193Z ##[end-action id=rust.__run_3;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-06T11:06:59.9584417Z ##[start-action display=rustup toolchain install stable;id=rust.__run_4]
+2026-10-06T11:06:59.9619001Z ##[group]Run log=$(mktemp)
+2026-10-06T11:06:59.9619881Z [36;1mlog=$(mktemp)[0m
+2026-10-06T11:06:59.9620301Z [36;1mtrap 'rm -f "$log"' EXIT[0m
+2026-10-06T11:06:59.9620743Z [36;1mfor attempt in 1 2 3 4 5; do[0m
+2026-10-06T11:06:59.9621632Z [36;1m  if rustup toolchain install stable --component rustfmt --component clippy --profile minimal --no-self-update --force-non-host 2>&1 | tee "$log"; then[0m
+2026-10-06T11:06:59.9622562Z [36;1m    break[0m
+2026-10-06T11:06:59.9622916Z [36;1m  else[0m
+2026-10-06T11:06:59.9623263Z [36;1m    status=$?[0m
+2026-10-06T11:06:59.9623630Z [36;1m  fi[0m
+2026-10-06T11:06:59.9624102Z [36;1m  if [[ $attempt == 5 ]] || ! grep -Fq 'checksum failed for ' "$log" \[0m
+2026-10-06T11:06:59.9624879Z [36;1m      || ! grep -Fq 'this is likely due to an ongoing update of the official release server' "$log"; then[0m
+2026-10-06T11:06:59.9625546Z [36;1m    exit "$status"[0m
+2026-10-06T11:06:59.9625929Z [36;1m  fi[0m
+2026-10-06T11:06:59.9626460Z [36;1m  echo "Retrying rustup toolchain install in 30 seconds (retry $attempt of 4)" >&2[0m
+2026-10-06T11:06:59.9627061Z [36;1m  sleep 30[0m
+2026-10-06T11:06:59.9627414Z [36;1mdone[0m
+2026-10-06T11:06:59.9696943Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T11:06:59.9697472Z env:
+2026-10-06T11:06:59.9698105Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:06:59.9698688Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:06:59.9699112Z   RUSTUP_PERMIT_COPY_RENAME: 1
+2026-10-06T11:06:59.9699751Z ##[endgroup]
+2026-10-06T11:07:00.1501547Z info: syncing channel updates for stable-x86_64-unknown-linux-gnu
+2026-10-06T11:07:00.2420101Z info: latest update on 2026-10-01 for version 1.99.0 (b940084d7 2026-09-28)
+2026-10-06T11:07:00.2551538Z info: removing previous version of component rustfmt
+2026-10-06T11:07:00.2567820Z info: removing previous version of component clippy
+2026-10-06T11:07:00.2579786Z info: removing previous version of component cargo
+2026-10-06T11:07:00.2632537Z info: removing previous version of component rust-std
+2026-10-06T11:07:00.2680067Z info: removing previous version of component rustc
+2026-10-06T11:07:00.2733177Z info: downloading 5 components
+2026-10-06T11:07:09.4059949Z 
+2026-10-06T11:07:09.4128787Z   stable-x86_64-unknown-linux-gnu updated - rustc 1.99.0 (b940084d7 2026-09-28) (from rustc 1.98.1 (48a229cea 2026-09-01))
+2026-10-06T11:07:09.4130018Z 
+2026-10-06T11:07:09.4197112Z ##[end-action id=rust.__run_4;outcome=success;conclusion=success;duration_ms=9461]
+2026-10-06T11:07:09.4204135Z ##[start-action display=rustup default stable;id=rust.__run_5]
+2026-10-06T11:07:09.4226205Z ##[group]Run rustup default stable --force-non-host
+2026-10-06T11:07:09.4226596Z [36;1mrustup default stable --force-non-host[0m
+2026-10-06T11:07:09.4288813Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T11:07:09.4289162Z env:
+2026-10-06T11:07:09.4289722Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:09.4290172Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:09.4290424Z ##[endgroup]
+2026-10-06T11:07:09.4409908Z info: using existing install for stable-x86_64-unknown-linux-gnu
+2026-10-06T11:07:09.4415800Z info: default toolchain set to stable-x86_64-unknown-linux-gnu
+2026-10-06T11:07:09.4416140Z 
+2026-10-06T11:07:09.4477763Z   stable-x86_64-unknown-linux-gnu unchanged - rustc 1.99.0 (b940084d7 2026-09-28)
+2026-10-06T11:07:09.4478506Z 
+2026-10-06T11:07:09.4494256Z ##[end-action id=rust.__run_5;outcome=success;conclusion=success;duration_ms=28]
+2026-10-06T11:07:09.4496658Z ##[start-action display=Create cachekey;id=rust.rustc-version]
+2026-10-06T11:07:09.4517768Z ##[group]Run DATE=$(rustc +stable --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')
+2026-10-06T11:07:09.4518622Z [36;1mDATE=$(rustc +stable --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')[0m
+2026-10-06T11:07:09.4519268Z [36;1mHASH=$(rustc +stable --version --verbose | sed -ne 's/^commit-hash: //p')[0m
+2026-10-06T11:07:09.4520111Z [36;1mecho "cachekey=$(echo $DATE$HASH | head -c12)" >> $GITHUB_OUTPUT[0m
+2026-10-06T11:07:09.4580097Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T11:07:09.4580460Z env:
+2026-10-06T11:07:09.4580779Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:09.4581196Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:09.4581461Z ##[endgroup]
+2026-10-06T11:07:09.4900299Z ##[end-action id=rust.rustc-version;outcome=success;conclusion=success;duration_ms=40]
+2026-10-06T11:07:09.4902829Z ##[start-action display=Disable incremental compilation;id=rust.__run_6]
+2026-10-06T11:07:09.4923094Z ##[group]Run if [ -z "${CARGO_INCREMENTAL+set}" ]; then
+2026-10-06T11:07:09.4923491Z [36;1mif [ -z "${CARGO_INCREMENTAL+set}" ]; then[0m
+2026-10-06T11:07:09.4923834Z [36;1m  echo CARGO_INCREMENTAL=0 >> $GITHUB_ENV[0m
+2026-10-06T11:07:09.4924123Z [36;1mfi[0m
+2026-10-06T11:07:09.4986299Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T11:07:09.4986655Z env:
+2026-10-06T11:07:09.4986959Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:09.4987355Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:09.4987618Z ##[endgroup]
+2026-10-06T11:07:09.5073443Z ##[end-action id=rust.__run_6;outcome=success;conclusion=success;duration_ms=16]
+2026-10-06T11:07:09.5075590Z ##[start-action display=Enable colors in Cargo output;id=rust.__run_7]
+2026-10-06T11:07:09.5095355Z ##[group]Run if [ -z "${CARGO_TERM_COLOR+set}" ]; then
+2026-10-06T11:07:09.5095736Z [36;1mif [ -z "${CARGO_TERM_COLOR+set}" ]; then[0m
+2026-10-06T11:07:09.5096076Z [36;1m  echo CARGO_TERM_COLOR=always >> $GITHUB_ENV[0m
+2026-10-06T11:07:09.5096372Z [36;1mfi[0m
+2026-10-06T11:07:09.5161073Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T11:07:09.5161433Z env:
+2026-10-06T11:07:09.5161743Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:09.5162134Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:09.5162396Z   CARGO_INCREMENTAL: 0
+2026-10-06T11:07:09.5162616Z ##[endgroup]
+2026-10-06T11:07:09.5256071Z ##[end-action id=rust.__run_7;outcome=success;conclusion=success;duration_ms=17]
+2026-10-06T11:07:09.5258082Z ##[start-action display=Enable Cargo sparse registry;id=rust.__run_8]
+2026-10-06T11:07:09.5279153Z ##[group]Run # implemented in 1.66, stabilized in 1.68, made default in 1.70
+2026-10-06T11:07:09.5279998Z [36;1m# implemented in 1.66, stabilized in 1.68, made default in 1.70[0m
+2026-10-06T11:07:09.5280712Z [36;1mif [ -z "${CARGO_REGISTRIES_CRATES_IO_PROTOCOL+set}" -o -f "/home/runner/work/_temp"/.implicit_cargo_registries_crates_io_protocol ]; then[0m
+2026-10-06T11:07:09.5281460Z [36;1m  if rustc +stable --version --verbose | grep -q '^release: 1\.6[89]\.'; then[0m
+2026-10-06T11:07:09.5282042Z [36;1m    touch "/home/runner/work/_temp"/.implicit_cargo_registries_crates_io_protocol || true[0m
+2026-10-06T11:07:09.5282587Z [36;1m    echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse >> $GITHUB_ENV[0m
+2026-10-06T11:07:09.5283085Z [36;1m  elif rustc +stable --version --verbose | grep -q '^release: 1\.6[67]\.'; then[0m
+2026-10-06T11:07:09.5283664Z [36;1m    touch "/home/runner/work/_temp"/.implicit_cargo_registries_crates_io_protocol || true[0m
+2026-10-06T11:07:09.5284203Z [36;1m    echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git >> $GITHUB_ENV[0m
+2026-10-06T11:07:09.5284553Z [36;1m  fi[0m
+2026-10-06T11:07:09.5284745Z [36;1mfi[0m
+2026-10-06T11:07:09.5340609Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T11:07:09.5340952Z env:
+2026-10-06T11:07:09.5341249Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:09.5341639Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:09.5341893Z   CARGO_INCREMENTAL: 0
+2026-10-06T11:07:09.5342119Z   CARGO_TERM_COLOR: always
+2026-10-06T11:07:09.5342341Z ##[endgroup]
+2026-10-06T11:07:09.5636802Z ##[end-action id=rust.__run_8;outcome=success;conclusion=success;duration_ms=37]
+2026-10-06T11:07:09.5639219Z ##[start-action display=Work around spurious network errors in curl 8.0;id=rust.__run_9]
+2026-10-06T11:07:09.5659864Z ##[group]Run # https://rust-lang.zulipchat.com/#narrow/stream/246057-t-cargo/topic/timeout.20investigation
+2026-10-06T11:07:09.5660657Z [36;1m# https://rust-lang.zulipchat.com/#narrow/stream/246057-t-cargo/topic/timeout.20investigation[0m
+2026-10-06T11:07:09.5661278Z [36;1mif rustc +stable --version --verbose | grep -q '^release: 1\.7[01]\.'; then[0m
+2026-10-06T11:07:09.5661741Z [36;1m  echo CARGO_HTTP_MULTIPLEXING=false >> $GITHUB_ENV[0m
+2026-10-06T11:07:09.5662065Z [36;1mfi[0m
+2026-10-06T11:07:09.5724134Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T11:07:09.5724746Z env:
+2026-10-06T11:07:09.5725217Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:09.5725617Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:09.5725886Z   CARGO_INCREMENTAL: 0
+2026-10-06T11:07:09.5726111Z   CARGO_TERM_COLOR: always
+2026-10-06T11:07:09.5726343Z ##[endgroup]
+2026-10-06T11:07:09.5924742Z ##[end-action id=rust.__run_9;outcome=success;conclusion=success;duration_ms=28]
+2026-10-06T11:07:09.5928631Z ##[start-action display=rustc +stable --version --verbose;id=rust.__run_10]
+2026-10-06T11:07:09.5949033Z ##[group]Run rustc +stable --version --verbose
+2026-10-06T11:07:09.5949384Z [36;1mrustc +stable --version --verbose[0m
+2026-10-06T11:07:09.6008103Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-06T11:07:09.6008458Z env:
+2026-10-06T11:07:09.6008760Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:09.6009165Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:09.6009735Z   CARGO_INCREMENTAL: 0
+2026-10-06T11:07:09.6010012Z   CARGO_TERM_COLOR: always
+2026-10-06T11:07:09.6010238Z ##[endgroup]
+2026-10-06T11:07:09.6183079Z rustc 1.99.0 (b940084d7 2026-09-28)
+2026-10-06T11:07:09.6184208Z binary: rustc
+2026-10-06T11:07:09.6184616Z commit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4
+2026-10-06T11:07:09.6184975Z commit-date: 2026-09-28
+2026-10-06T11:07:09.6185348Z host: x86_64-unknown-linux-gnu
+2026-10-06T11:07:09.6185794Z release: 1.99.0
+2026-10-06T11:07:09.6186171Z LLVM version: 23.1.1
+2026-10-06T11:07:09.6200240Z ##[end-action id=rust.__run_10;outcome=success;conclusion=success;duration_ms=27]
+2026-10-06T11:07:09.9451630Z ##[group]Run actions/cache@v4
+2026-10-06T11:07:09.9451936Z with:
+2026-10-06T11:07:09.9452220Z   path: ~/.cargo/registry
+~/.cargo/git
+target
+native-target
+
+2026-10-06T11:07:09.9453168Z   key: nagi-rust-v1-checks-Linux-X64-20260928b940-601958ff337592e5f2a53aba9b5ce590b2902bb894b23107ca273c3687ede46d-40951ebfd947b40ec40689ea24481caee892cc515cd999c919c5cd903ad2e560
+2026-10-06T11:07:09.9454562Z   restore-keys: nagi-rust-v1-checks-Linux-X64-20260928b940-601958ff337592e5f2a53aba9b5ce590b2902bb894b23107ca273c3687ede46d-
+nagi-rust-v1-checks-Linux-X64-20260928b940-
+
+2026-10-06T11:07:09.9455370Z   enableCrossOsArchive: false
+2026-10-06T11:07:09.9455629Z   fail-on-cache-miss: false
+2026-10-06T11:07:09.9455876Z   lookup-only: false
+2026-10-06T11:07:09.9456097Z   save-always: false
+2026-10-06T11:07:09.9456301Z env:
+2026-10-06T11:07:09.9456595Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:09.9457001Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:09.9457287Z   CARGO_INCREMENTAL: 0
+2026-10-06T11:07:09.9457525Z   CARGO_TERM_COLOR: always
+2026-10-06T11:07:09.9457752Z ##[endgroup]
+2026-10-06T11:07:10.0518264Z (node:2390) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T11:07:10.0519226Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T11:07:10.3088770Z Cache hit for restore-key: nagi-rust-v1-checks-Linux-X64-20260928b940-601958ff337592e5f2a53aba9b5ce590b2902bb894b23107ca273c3687ede46d-c1cfaf78ffa281dc07160a481335318d1e12f1990916c819ec57fabfe492efd9
+2026-10-06T11:07:10.3198139Z (node:2390) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-06T11:07:11.5820726Z Received 4194304 of 1565750031 (0.3%), 4.0 MBs/sec
+2026-10-06T11:07:12.5840881Z Received 130023424 of 1565750031 (8.3%), 62.0 MBs/sec
+2026-10-06T11:07:13.5871836Z Received 264241152 of 1565750031 (16.9%), 84.0 MBs/sec
+2026-10-06T11:07:14.5835203Z Received 373293056 of 1565750031 (23.8%), 89.0 MBs/sec
+2026-10-06T11:07:15.5843506Z Received 494927872 of 1565750031 (31.6%), 94.3 MBs/sec
+2026-10-06T11:07:16.5853681Z Received 603979776 of 1565750031 (38.6%), 95.9 MBs/sec
+2026-10-06T11:07:17.5861698Z Received 700448768 of 1565750031 (44.7%), 95.4 MBs/sec
+2026-10-06T11:07:18.5862720Z Received 805306368 of 1565750031 (51.4%), 95.9 MBs/sec
+2026-10-06T11:07:19.5920443Z Received 931135488 of 1565750031 (59.5%), 98.6 MBs/sec
+2026-10-06T11:07:20.5884894Z Received 1027604480 of 1565750031 (65.6%), 97.9 MBs/sec
+2026-10-06T11:07:21.5888878Z Received 1136656384 of 1565750031 (72.6%), 98.5 MBs/sec
+2026-10-06T11:07:22.5899930Z Received 1233125376 of 1565750031 (78.8%), 97.9 MBs/sec
+2026-10-06T11:07:23.5943113Z Received 1342177280 of 1565750031 (85.7%), 98.4 MBs/sec
+2026-10-06T11:07:24.5954343Z Received 1434451968 of 1565750031 (91.6%), 97.6 MBs/sec
+2026-10-06T11:07:25.5958452Z Received 1518338048 of 1565750031 (97.0%), 96.4 MBs/sec
+2026-10-06T11:07:26.0232886Z Received 1565750031 of 1565750031 (100.0%), 96.7 MBs/sec
+2026-10-06T11:07:26.0235221Z Cache Size: ~1493 MB (1565750031 B)
+2026-10-06T11:07:26.0349187Z [command]/usr/bin/tar -xf /home/runner/work/_temp/c7337e0f-8cdd-4d52-becd-59f5606e430f/cache.tzst -P -C /home/runner/work/Nagi/Nagi --use-compress-program unzstd
+2026-10-06T11:07:40.6283810Z Cache restored successfully
+2026-10-06T11:07:41.8143678Z Cache restored from key: nagi-rust-v1-checks-Linux-X64-20260928b940-601958ff337592e5f2a53aba9b5ce590b2902bb894b23107ca273c3687ede46d-c1cfaf78ffa281dc07160a481335318d1e12f1990916c819ec57fabfe492efd9
+2026-10-06T11:07:41.8325825Z ##[group]Run actions/setup-python@v5
+2026-10-06T11:07:41.8326122Z with:
+2026-10-06T11:07:41.8326323Z   python-version: 3.12
+2026-10-06T11:07:41.8326557Z   cache: pip
+2026-10-06T11:07:41.8326824Z   cache-dependency-path: tests/requirements.txt
+2026-10-06T11:07:41.8327138Z   check-latest: false
+2026-10-06T11:07:41.8329691Z   token: ***
+2026-10-06T11:07:41.8329989Z   update-environment: true
+2026-10-06T11:07:41.8330246Z   allow-prereleases: false
+2026-10-06T11:07:41.8330481Z   freethreaded: false
+2026-10-06T11:07:41.8330696Z env:
+2026-10-06T11:07:41.8330991Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:41.8331377Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:41.8331631Z   CARGO_INCREMENTAL: 0
+2026-10-06T11:07:41.8331866Z   CARGO_TERM_COLOR: always
+2026-10-06T11:07:41.8332090Z ##[endgroup]
+2026-10-06T11:07:41.9658270Z ##[group]Installed versions
+2026-10-06T11:07:42.3132325Z (node:2414) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T11:07:42.3133045Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T11:07:42.3134099Z Successfully set up CPython (3.12.14)
+2026-10-06T11:07:42.3135059Z ##[endgroup]
+2026-10-06T11:07:42.4312131Z [command]/opt/hostedtoolcache/Python/3.12.14/x64/bin/pip cache dir
+2026-10-06T11:07:42.7269836Z /home/runner/.cache/pip
+2026-10-06T11:07:43.0088400Z Cache hit for: setup-python-Linux-x64-24.04-Ubuntu-python-3.12.14-pip-f4a5294b4bd46adaf127fd95bcfc2d415f7eaa1f75e1723bb333e1a6f0ebebec
+2026-10-06T11:07:43.0194247Z (node:2414) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-06T11:07:44.2769443Z Received 4194304 of 7595647 (55.2%), 4.0 MBs/sec
+2026-10-06T11:07:44.2830649Z Received 7595647 of 7595647 (100.0%), 7.2 MBs/sec
+2026-10-06T11:07:44.2831687Z Cache Size: ~7 MB (7595647 B)
+2026-10-06T11:07:44.2859385Z [command]/usr/bin/tar -xf /home/runner/work/_temp/9ec784ab-28d8-46ae-95c6-d776c1c8227a/cache.tzst -P -C /home/runner/work/Nagi/Nagi --use-compress-program unzstd
+2026-10-06T11:07:44.3116875Z Cache restored successfully
+2026-10-06T11:07:44.3125929Z Cache restored from key: setup-python-Linux-x64-24.04-Ubuntu-python-3.12.14-pip-f4a5294b4bd46adaf127fd95bcfc2d415f7eaa1f75e1723bb333e1a6f0ebebec
+2026-10-06T11:07:44.3292731Z ##[group]Run actions/setup-node@v4
+2026-10-06T11:07:44.3293026Z with:
+2026-10-06T11:07:44.3293231Z   node-version: 22
+2026-10-06T11:07:44.3293448Z   always-auth: false
+2026-10-06T11:07:44.3293672Z   check-latest: false
+2026-10-06T11:07:44.3295968Z   token: ***
+2026-10-06T11:07:44.3296166Z env:
+2026-10-06T11:07:44.3296475Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:44.3296868Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:44.3297133Z   CARGO_INCREMENTAL: 0
+2026-10-06T11:07:44.3297359Z   CARGO_TERM_COLOR: always
+2026-10-06T11:07:44.3297657Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:44.3298124Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T11:07:44.3298752Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:44.3299145Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:44.3299898Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:44.3300307Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T11:07:44.3300643Z ##[endgroup]
+2026-10-06T11:07:44.4756807Z Found in cache @ /opt/hostedtoolcache/node/22.23.3/x64
+2026-10-06T11:07:44.4760339Z (node:2448) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T11:07:44.4761282Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T11:07:44.4763536Z ##[group]Environment details
+2026-10-06T11:07:44.8695713Z node: v22.23.3
+2026-10-06T11:07:44.8696590Z npm: 10.9.9
+2026-10-06T11:07:44.8697193Z yarn: 1.22.22
+2026-10-06T11:07:44.8697952Z ##[endgroup]
+2026-10-06T11:07:44.8811532Z ##[group]Run cargo fmt --all -- --check
+2026-10-06T11:07:44.8811921Z [36;1mcargo fmt --all -- --check[0m
+2026-10-06T11:07:44.8882350Z shell: /usr/bin/bash -e {0}
+2026-10-06T11:07:44.8882621Z env:
+2026-10-06T11:07:44.8882933Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:44.8883336Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:44.8883607Z   CARGO_INCREMENTAL: 0
+2026-10-06T11:07:44.8883838Z   CARGO_TERM_COLOR: always
+2026-10-06T11:07:44.8884147Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:44.8884594Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T11:07:44.8885031Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:44.8885432Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:44.8885830Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:44.8886260Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T11:07:44.8886597Z ##[endgroup]
+2026-10-06T11:07:45.6942355Z ##[group]Run cargo clippy --all-targets -- -D warnings
+2026-10-06T11:07:45.6943605Z [36;1mcargo clippy --all-targets -- -D warnings[0m
+2026-10-06T11:07:45.7029757Z shell: /usr/bin/bash -e {0}
+2026-10-06T11:07:45.7030032Z env:
+2026-10-06T11:07:45.7030356Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:45.7030767Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:45.7031041Z   CARGO_INCREMENTAL: 0
+2026-10-06T11:07:45.7031279Z   CARGO_TERM_COLOR: always
+2026-10-06T11:07:45.7031595Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:45.7032040Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T11:07:45.7032471Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:45.7032856Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:45.7033251Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:45.7033677Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T11:07:45.7034020Z ##[endgroup]
+2026-10-06T11:07:45.8477364Z [1m[92m    Checking[0m nagic v0.1.10 (/home/runner/work/Nagi/Nagi/compiler)
+2026-10-06T11:07:45.8491681Z [1m[92m    Checking[0m nagi-runtime v0.1.10 (/home/runner/work/Nagi/Nagi/runtime)
+2026-10-06T11:07:52.1559041Z [1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 6.41s
+2026-10-06T11:07:52.1736455Z ##[group]Run python scripts/verify_compiler_contracts.py
+2026-10-06T11:07:52.1736941Z [36;1mpython scripts/verify_compiler_contracts.py[0m
+2026-10-06T11:07:52.1800713Z shell: /usr/bin/bash -e {0}
+2026-10-06T11:07:52.1800987Z env:
+2026-10-06T11:07:52.1801322Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:52.1801748Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:52.1802021Z   CARGO_INCREMENTAL: 0
+2026-10-06T11:07:52.1802256Z   CARGO_TERM_COLOR: always
+2026-10-06T11:07:52.1802565Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:52.1803211Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T11:07:52.1803640Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:52.1804030Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:52.1804412Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:52.1804833Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T11:07:52.1805168Z ##[endgroup]
+2026-10-06T11:07:52.2702152Z conformance corpus: 42, linked harnesses: 17 (registration checked)
+2026-10-06T11:07:52.2779063Z ##[group]Run cargo test --locked
+2026-10-06T11:07:52.2779390Z [36;1mcargo test --locked[0m
+2026-10-06T11:07:52.2840464Z shell: /usr/bin/bash -e {0}
+2026-10-06T11:07:52.2840730Z env:
+2026-10-06T11:07:52.2841037Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:07:52.2841439Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:07:52.2841726Z   CARGO_INCREMENTAL: 0
+2026-10-06T11:07:52.2841956Z   CARGO_TERM_COLOR: always
+2026-10-06T11:07:52.2842265Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:52.2842717Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T11:07:52.2843154Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:52.2843549Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:52.2843930Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:07:52.2844346Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T11:07:52.2844678Z ##[endgroup]
+2026-10-06T11:07:52.4055769Z [1m[92m   Compiling[0m nagic v0.1.10 (/home/runner/work/Nagi/Nagi/compiler)
+2026-10-06T11:07:52.4069085Z [1m[92m   Compiling[0m nagi-runtime v0.1.10 (/home/runner/work/Nagi/Nagi/runtime)
+2026-10-06T11:08:20.7363999Z [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 28.43s
+2026-10-06T11:08:20.7486319Z [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nagi_runtime-66c0617345294f0c)
+2026-10-06T11:08:20.7501132Z 
+2026-10-06T11:08:20.7501402Z running 189 tests
+2026-10-06T11:08:20.7504192Z test actor::charge::tests::arithmetic_and_expired_deadlines_fail_before_acceptance ... ok
+2026-10-06T11:08:20.7505960Z test actor::charge::tests::list_capacity_and_only_initialized_elements_contribute_heap ... ok
+2026-10-06T11:08:20.7507302Z test actor::charge::tests::option_and_result_visit_only_the_active_payload ... ok
+2026-10-06T11:08:20.7508647Z test actor::charge::tests::recursive_owned_graphs_obey_depth_limit_and_restore_walk_after_errors ... ok
+2026-10-06T11:08:20.7514951Z test actor::charge::tests::retained_string_bytes_and_error_capacities_are_charged ... ok
+2026-10-06T11:08:20.7516940Z test actor::charge::tests::root_inline_and_envelope_are_counted_once ... ok
+2026-10-06T11:08:20.7544918Z test actor::charge::tests::inline_only_lists_skip_every_element_and_zero_sized_capacity_is_safe ... ok
+2026-10-06T11:08:20.7553220Z test actor::lifecycle_adversarial_tests::a_factory_constructor_panic_does_not_lose_the_context_cleanup_obligation ... ok
+2026-10-06T11:08:20.7636042Z test actor::charge::tests::work_budget_includes_root_and_initialized_non_inline_elements ... ok
+2026-10-06T11:08:20.7637881Z test actor::lifecycle_adversarial_tests::a_late_buffered_outer_failure_obeys_the_same_reply_deadline ... ok
+2026-10-06T11:08:20.8042788Z test actor::lifecycle_adversarial_tests::a_blocking_native_poll_retains_its_child_record_until_it_returns ... ok
+2026-10-06T11:08:20.8050885Z test actor::lifecycle_adversarial_tests::a_panic_payload_destructor_can_observe_and_stop_its_group_without_a_lock_cycle ... ok
+2026-10-06T11:08:20.8052806Z test actor::lifecycle_adversarial_tests::a_reply_completed_after_deadline_times_out_even_when_already_buffered ... ok
+2026-10-06T11:08:20.8054794Z test actor::lifecycle_adversarial_tests::a_reply_completed_before_deadline_succeeds_when_the_caller_polls_after_deadline ... ok
+2026-10-06T11:08:20.8058949Z test actor::lifecycle_adversarial_tests::a_blocking_panic_payload_destructor_remains_a_retained_child_obligation ... ok
+2026-10-06T11:08:20.8081594Z test actor::lifecycle_adversarial_tests::a_finite_follow_on_panic_payload_retains_the_guard_and_context_until_drop_finishes ... ok
+2026-10-06T11:08:20.8087155Z test actor::lifecycle_adversarial_tests::an_event_only_surviving_control_drains_cleanup_and_observes_stream_close ... ok
+2026-10-06T11:08:20.8166987Z test actor::lifecycle_adversarial_tests::a_non_yielding_poll_cannot_be_reported_as_completed_cleanup ... ok
+2026-10-06T11:08:20.8354479Z test actor::lifecycle_adversarial_tests::an_unrestarted_child_failure_is_retained_while_a_healthy_sibling_continues ... ok
+2026-10-06T11:08:20.8359105Z test actor::lifecycle_adversarial_tests::context_owned_by_a_child_panic_payload_is_cleaned_before_final_context_cleanup ... ok
+2026-10-06T11:08:20.8585058Z test actor::lifecycle_adversarial_tests::a_surviving_control_can_finish_cleanup_after_the_running_owner_is_dropped ... ok
+2026-10-06T11:08:20.8591268Z test actor::lifecycle_adversarial_tests::abort_does_not_complete_before_the_child_future_destructor_finishes ... ok
+2026-10-06T11:08:20.8593454Z test actor::lifecycle_adversarial_tests::origin_runtime_cancellation_does_not_restart_a_permanent_child_on_a_surviving_runtime ... ok
+2026-10-06T11:08:20.8605172Z test actor::lifecycle_adversarial_tests::panicking_factory_destruction_during_owner_drop_cannot_strand_context_cleanup ... ok
+2026-10-06T11:08:20.8610795Z test actor::lifecycle_adversarial_tests::stop_during_factory_construction_cancels_every_later_inserted_child ... ok
+2026-10-06T11:08:20.8616586Z test actor::lifecycle_adversarial_tests::user_destructors_do_not_run_under_the_ledger_or_stop_lock ... ok
+2026-10-06T11:08:20.8625624Z test actor::tests::a_smaller_immediate_call_cannot_bypass_a_waiting_byte_reservation ... ok
+2026-10-06T11:08:20.8632604Z test actor::tests::an_expired_admission_deadline_rejects_even_immediately_ready_operations ... ok
+2026-10-06T11:08:20.8695713Z test actor::lifecycle_adversarial_tests::canceled_observation_keeps_unfinished_joins_available_to_another_control ... ok
+2026-10-06T11:08:20.8755359Z test actor::tests::business_error_preserves_owned_state_and_restart_is_one_for_one ... ok
+2026-10-06T11:08:20.8763831Z test actor::tests::canceled_event_wait_does_not_consume_a_concurrently_published_event ... ok
+2026-10-06T11:08:20.8879489Z test actor::tests::escaped_readiness_tokens_reject_old_generations_and_do_not_retain_the_group ... ok
+2026-10-06T11:08:20.8915456Z test actor::tests::caller_timeout_keeps_accepted_work_and_all_reservations_until_handler_finishes ... ok
+2026-10-06T11:08:20.8924313Z test actor::tests::event_deadlines_include_lock_contention_and_preserve_the_cursor ... ok
+2026-10-06T11:08:20.8930594Z test actor::tests::lifecycle_events_are_ordered_bounded_and_keep_utf8_truncation_metadata ... ok
+2026-10-06T11:08:20.8944989Z test actor::tests::global_restart_intensity_counts_attempts_and_stops_a_pending_sibling ... ok
+2026-10-06T11:08:20.8949331Z test actor::tests::normally_finished_task_tokens_are_invalid_while_the_supervisor_stays_running ... ok
+2026-10-06T11:08:20.8956346Z test actor::tests::oversized_business_reply_keeps_next_state_and_retained_input_capacity_is_checked ... ok
+2026-10-06T11:08:20.9023522Z test actor::tests::startup_deadline_and_zero_restart_budget_end_the_group_without_a_ready_actor ... ok
+2026-10-06T11:08:20.9026834Z test actor::tests::stopped_tasks_cannot_publish_readiness_and_legacy_tasks_never_publish_it ... ok
+2026-10-06T11:08:20.9052160Z test actor::tests::task_readiness_follows_initialization_once_without_changing_started ... ok
+2026-10-06T11:08:20.9053268Z test auth::tests::grant_binds_identity_and_resource_without_payload_allocation ... ok
+2026-10-06T11:08:20.9054581Z test auth::tests::owned_proof_is_send_sync_without_requiring_marker_payload_traits ... ok
+2026-10-06T11:08:20.9086984Z test actor::tests::native_factory_construction_is_included_in_the_startup_deadline ... ok
+2026-10-06T11:08:20.9088926Z test concurrent::tests::actor_pair_and_pipeline ... ok
+2026-10-06T11:08:20.9090503Z test concurrent::tests::actors_isolated ... ok
+2026-10-06T11:08:20.9092261Z test concurrent::tests::panic_isolated ... ok
+2026-10-06T11:08:20.9114612Z test actor::lifecycle_adversarial_tests::final_context_destruction_is_a_retained_phase_before_completion ... ok
+2026-10-06T11:08:20.9120021Z test concurrent::tests::scope_finishes ... ok
+2026-10-06T11:08:20.9122217Z test concurrent::tests::sibling_error_cancelled ... ok
+2026-10-06T11:08:20.9125200Z test concurrent::tests::supervisor_drop_after_worker_start ... ok
+2026-10-06T11:08:20.9128291Z test concurrent::tests::supervisor_drop_while_waiting_for_worker_start ... ok
+2026-10-06T11:08:20.9151161Z test concurrent::tests::queue_retries_and_dead_letter ... ok
+2026-10-06T11:08:20.9162971Z test concurrent::tests::scope_cancel_drops_all ... ok
+2026-10-06T11:08:20.9231583Z test concurrent::tests::tasks_and_cpu ... ok
+2026-10-06T11:08:20.9238776Z test database::tests::column_order_independent ... ok
+2026-10-06T11:08:20.9247889Z test database::tests::crud_and_parameterization ... ok
+2026-10-06T11:08:20.9259010Z test database::tests::exec_counts_only_changes_in_the_current_batch ... ok
+2026-10-06T11:08:20.9267995Z test database::tests::exec_counts_trigger_changes_and_preserves_sql_errors ... ok
+2026-10-06T11:08:20.9273105Z test database::tests::missing_column_is_error ... ok
+2026-10-06T11:08:20.9278119Z test database::tests::runtime_type_mismatch ... ok
+2026-10-06T11:08:20.9299315Z test concurrent::tests::supervisor_intensity ... ok
+2026-10-06T11:08:20.9322710Z test concurrent::tests::supervisor_restart ... ok
+2026-10-06T11:08:20.9396085Z test http::panic_tests::handler_extractor_and_response_panics_return_sanitized_500_for_get_and_head ... ok
+2026-10-06T11:08:20.9509627Z test actor::lifecycle_adversarial_tests::delayed_native_context_owners_then_actual_context_drop_precede_completion ... ok
+2026-10-06T11:08:20.9511343Z test http::tests::request_wait_configuration_is_positive_finite_and_defaults_to_ten_seconds ... ok
+2026-10-06T11:08:20.9648597Z test http::tests::healthy_requests_work_with_more_than_128_idle_connections_and_shutdown_closes_them ... ok
+2026-10-06T11:08:21.5570481Z test http::tests::silent_partial_and_dripped_headers_expire_without_extending_the_deadline ... ok
+2026-10-06T11:08:21.5748486Z test http::tests::idle_reuse_and_buffered_partial_requests_share_the_header_deadline ... ok
+2026-10-06T11:08:21.6787142Z test http_server::tests::actual_chunk_sizes_and_absolute_body_deadlines_are_bounded ... ok
+2026-10-06T11:08:21.6805277Z test http_server::tests::apps_are_db_free_independent_and_support_native_extended_methods_and_template_paths ... ok
+2026-10-06T11:08:21.6822596Z test http_server::tests::async_handlers_use_app_mapping_route_override_and_leave_success_alone ... ok
+2026-10-06T11:08:21.6824121Z test http_server::tests::body_collection_moves_one_chunk_and_combines_only_multiple_chunks ... ok
+2026-10-06T11:08:21.6838656Z test http_server::tests::borrowed_lookup_validation_agrees_with_native_token_rules_and_length_limits ... ok
+2026-10-06T11:08:21.6840588Z test http_server::tests::buffered_native_response_body_is_unboxed_exact_and_moves_its_frame ... ok
+2026-10-06T11:08:21.7664382Z test http_server::tests::connection_capacity_and_shutdown_deadline_leave_no_handler_tasks ... ok
+2026-10-06T11:08:21.7678918Z test http_server::tests::forbidden_response_bodies_do_not_desynchronize_keepalive ... ok
+2026-10-06T11:08:21.7687263Z test http_server::tests::graceful_shutdown_finishes_an_in_flight_handler_and_response ... ok
+2026-10-06T11:08:21.9288842Z test http_server::tests::graceful_shutdown_preserves_stalled_response_send_deadline ... ok
+2026-10-06T11:08:22.0087103Z test http::tests::websocket_upgrade_is_exempt_from_the_http_wait ... ok
+2026-10-06T11:08:22.0107051Z test http_server::tests::handler_panic_after_deadline_returns_500_and_releases_admission ... ok
+2026-10-06T11:08:22.0710173Z test http::tests::streaming_and_backpressure_can_outlast_the_request_wait ... ok
+2026-10-06T11:08:22.0724889Z test http_server::tests::head_uses_get_representation_length_explicit_head_wins_and_allow_is_correct ... ok
+2026-10-06T11:08:22.0726155Z test http_server::tests::header_access_preserves_duplicates_and_checks_single_value_and_utf8 ... ok
+2026-10-06T11:08:22.0925425Z test http_server::tests::handler_timeout_rejects_a_ready_response_after_blocking_poll ... ok
+2026-10-06T11:08:22.0927006Z test http_server::tests::heterogeneous_route_erasure_adds_exactly_one_future_allocation ... ok
+2026-10-06T11:08:22.0928566Z test http_server::tests::json_content_type_matches_tokens_and_validates_every_parameter ... ok
+2026-10-06T11:08:22.0930535Z test http_server::tests::json_encoding_is_fallible_and_default_internal_mapping_hides_details ... ok
+2026-10-06T11:08:22.0931985Z test http_server::tests::media_type_parser_rejects_controls_but_accepts_quoted_http_octets ... ok
+2026-10-06T11:08:22.0933111Z test http_server::tests::method_status_and_shared_state_inspection_allocate_nothing ... ok
+2026-10-06T11:08:22.0934554Z test http_server::tests::native_method_and_request_fields_do_not_stringify_or_normalize_extension_tokens ... ok
+2026-10-06T11:08:22.0935663Z test http_server::tests::options_validate_capacity_deadlines_and_leave_state_out_of_debug ... ok
+2026-10-06T11:08:22.0937013Z test http_server::tests::ordinary_response_framing_uses_the_native_body_length_without_allocating_a_header_value ... ok
+2026-10-06T11:08:22.1113439Z test http_server::tests::handler_timeout_cancels_future_and_releases_request_capacity ... ok
+2026-10-06T11:08:22.1138497Z test http_server::tests::oversized_body_chunked_delivers_413_with_or_without_final_chunk ... ok
+2026-10-06T11:08:22.1161612Z test http_server::tests::oversized_body_content_length_delivers_413_without_calling_handler ... ok
+2026-10-06T11:08:22.1185470Z test http_server::tests::oversized_body_declared_length_rejects_headers_and_incomplete_upload_promptly ... ok
+2026-10-06T11:08:22.1201641Z test http_server::tests::oversized_body_rejects_keep_alive_upload_and_never_dispatches_pipeline ... ok
+2026-10-06T11:08:22.1220803Z test http_server::tests::oversized_headers_and_header_counts_are_rejected_without_reusing_the_connection ... ok
+2026-10-06T11:08:22.1234382Z test http_server::tests::panic_tests::http_error_mapper_panic_returns_500 ... ok
+2026-10-06T11:08:22.1248567Z test http_server::tests::panic_tests::http_handler_constructor_panic_returns_500 ... ok
+2026-10-06T11:08:22.1262621Z test http_server::tests::panic_tests::http_handler_division_by_zero_returns_500_and_server_keeps_serving ... ok
+2026-10-06T11:08:22.1276367Z test http_server::tests::panic_tests::http_handler_out_of_bounds_returns_500_and_server_keeps_serving ... ok
+2026-10-06T11:08:22.1291046Z test http_server::tests::panic_tests::http_handler_panic_after_await_returns_500_without_exposing_payload ... ok
+2026-10-06T11:08:22.1304036Z test http_server::tests::panic_tests::http_handler_panic_head_response_has_no_body ... ok
+2026-10-06T11:08:22.1318041Z test http_server::tests::request_capacity_rejects_unread_bodies_then_releases_admission ... ok
+2026-10-06T11:08:22.1319731Z test http_server::tests::response_headers_reject_injection_and_user_framing_and_keep_cookie_lines ... ok
+2026-10-06T11:08:22.1321295Z test http_server::tests::route_validation_returns_errors_without_panicking_and_supports_templates ... ok
+2026-10-06T11:08:22.1335232Z test http_server::tests::sockets_preserve_raw_duplicate_headers_cookies_and_strict_authorization ... ok
+2026-10-06T11:08:22.2962425Z test http_server::tests::oversized_body_boundary_accepts_4096_and_incomplete_upload_keeps_body_deadline ... ok
+2026-10-06T11:08:22.3167333Z test http_server::tests::standard_custom_mixed_case_and_long_borrowed_header_lookups_allocate_nothing ... ok
+2026-10-06T11:08:22.3168776Z test http_server::tests::status_is_compact_validated_and_has_modern_compatible_names ... ok
+2026-10-06T11:08:22.3176513Z test http_server::tests::successful_connect_is_rejected_instead_of_establishing_an_unowned_tunnel ... ok
+2026-10-06T11:08:22.3190643Z test http_server::tests::successful_json_content_type_checks_allocate_nothing_and_preserve_body ... ok
+2026-10-06T11:08:22.3192301Z test result::tests::borrowed_success_keeps_its_owner ... ok
+2026-10-06T11:08:22.3193196Z test result::tests::mapper_runs_once_only_for_failure ... ok
+2026-10-06T11:08:22.3194154Z test result::tests::owned_payloads_are_moved_without_cloning ... ok
+2026-10-06T11:08:22.4360170Z test http_server::tests::stalled_response_send_expires_and_releases_connection_permit ... ok
+2026-10-06T11:08:22.4361336Z test sqlite_prototype::acquire_tests::acquire_budget_arithmetic_keeps_immediate_distinct_and_checks_overflow ... ok
+2026-10-06T11:08:22.4371893Z test sqlite_prototype::acquire_tests::acquire_expired_finite_budget_does_not_register_even_when_native_free ... ok
+2026-10-06T11:08:22.4380324Z test sqlite_prototype::acquire_tests::acquire_expiry_does_not_replace_closed_or_recycle_failure_cause ... ok
+2026-10-06T11:08:22.4390005Z test sqlite_prototype::acquire_tests::acquire_immediate_free_reserves_before_slow_startup_and_reuses ... ok
+2026-10-06T11:08:22.4397830Z test sqlite_prototype::acquire_tests::acquire_immediate_logical_full_is_timeout_without_pool_failure ... ok
+2026-10-06T11:08:22.5223695Z test sqlite_prototype::acquire_tests::acquire_absolute_budget_survives_logical_wait_to_native_fence ... ok
+2026-10-06T11:08:22.5754244Z test http_server::tests::header_idle_deadline_is_independent_of_send_deadline_after_flush ... ok
+2026-10-06T11:08:22.5769028Z test sqlite_prototype::acquire_tests::acquire_same_task_scopes_are_isolated_and_drop_restores_legacy_begin ... ok
+2026-10-06T11:08:22.5785736Z test sqlite_prototype::adapter_tests::acquired_deadpool_object_after_close_is_rejected_before_user_begin ... ok
+2026-10-06T11:08:22.5799712Z test sqlite_prototype::adapter_tests::callback_panic_retires_pool_and_join_does_not_hide_native_close_failure ... ok
+2026-10-06T11:08:22.5806238Z test sqlite_prototype::adapter_tests::cancelled_begin_reply_keeps_checkout_until_eof_rollback_is_observed ... ok
+2026-10-06T11:08:22.5815914Z test sqlite_prototype::adapter_tests::cancelled_create_cannot_start_replacement_before_old_native_worker_joins ... ok
+2026-10-06T11:08:22.5832754Z test sqlite_prototype::adapter_tests::cancelled_get_during_create_preserves_startup_close_and_join_owner ... ok
+2026-10-06T11:08:22.5842772Z test sqlite_prototype::adapter_tests::cancelled_tx_keeps_deadpool_checkout_until_native_cleanup_completes ... ok
+2026-10-06T11:08:22.5860087Z test sqlite_prototype::adapter_tests::close_clone_and_cancel_keep_closing_while_active_checkout_can_finish ... ok
+2026-10-06T11:08:22.5876873Z test sqlite_prototype::adapter_tests::close_waits_for_registered_create_and_late_create_cannot_begin ... ok
+2026-10-06T11:08:22.5887546Z test sqlite_prototype::adapter_tests::deadpool_adapter_reuses_same_native_worker_and_sql_session_core ... ok
+2026-10-06T11:08:22.5894624Z test sqlite_prototype::adapter_tests::deadpool_recycle_error_stops_create_instead_of_default_replacement ... ok
+2026-10-06T11:08:22.5912511Z test sqlite_prototype::adapter_tests::joined_is_published_only_after_terminal_native_failure_is_in_ledger ... ok
+2026-10-06T11:08:22.5918990Z test sqlite_prototype::adapter_tests::last_adapter_drop_closes_idle_worker_without_observer_owning_pool_or_tx_sender ... ok
+2026-10-06T11:08:22.5926301Z test sqlite_prototype::adapter_tests::last_adapter_drop_preserves_active_tx_until_its_explicit_finish ... ok
+2026-10-06T11:08:22.5971821Z test sqlite_prototype::adapter_tests::multi_b_terminal_failure_is_published_without_waiting_for_a ... ok
+2026-10-06T11:08:22.6001927Z test sqlite_prototype::adapter_tests::multi_cancelled_b_joins_and_c_begins_before_healthy_a_finishes ... ok
+2026-10-06T11:08:22.6039146Z test sqlite_prototype::adapter_tests::multi_close_during_b_startup_preserves_a_and_all_join_responsibility ... ok
+2026-10-06T11:08:22.6061871Z test sqlite_prototype::adapter_tests::multi_native_spawn_failure_keeps_cause_without_native_b_or_fake_join ... ok
+2026-10-06T11:08:22.6090813Z test sqlite_prototype::adapter_tests::multi_observer_spawn_failure_never_starts_or_fake_joins_native_b ... ok
+2026-10-06T11:08:22.6118163Z test sqlite_prototype::adapter_tests::multi_stock_detach_permit_gap_respects_native_cap_with_a_active ... ok
+2026-10-06T11:08:22.6153257Z test sqlite_prototype::adapter_tests::multi_two_filesystem_connections_begin_while_first_tx_stays_active ... ok
+2026-10-06T11:08:22.6160049Z test sqlite_prototype::adapter_tests::native_cleanup_failure_closes_deadpool_and_never_creates_replacement ... ok
+2026-10-06T11:08:22.6167413Z test sqlite_prototype::adapter_tests::native_close_failure_is_kept_after_deadpool_objects_and_workers_are_gone ... ok
+2026-10-06T11:08:22.6176642Z test sqlite_prototype::adapter_tests::object_take_and_last_pool_drop_both_preserve_native_close_join_observation ... ok
+2026-10-06T11:08:22.6182838Z test sqlite_prototype::adapter_tests::resize_zero_uses_worker_drop_even_when_manager_detach_is_bypassed ... ok
+2026-10-06T11:08:22.6193683Z test sqlite_prototype::adapter_tests::stock_detach_permit_before_handle_drop_cannot_start_another_native_worker ... ok
+2026-10-06T11:08:22.6204140Z test sqlite_prototype::adapter_tests::taken_object_cannot_start_replacement_before_old_native_worker_joins ... ok
+2026-10-06T11:08:22.6211800Z test sqlite_prototype::adapter_tests::tokio_runtime_drop_cannot_return_native_owned_checkout_before_cleanup ... ok
+2026-10-06T11:08:22.9326507Z test http::tests::body_timeout_remains_separate_from_header_wait ... ok
+2026-10-06T11:08:23.4426997Z test sqlite_prototype::acquire_tests::acquire_immediate_native_full_after_stock_detach_is_timeout ... ok
+2026-10-06T11:08:23.4439062Z test sqlite_prototype::tests::begin_reply_cancellation_closes_only_sender_and_runs_observed_cleanup ... ok
+2026-10-06T11:08:23.4451849Z test sqlite_prototype::tests::cancelled_commit_reply_preserves_committed_data_and_does_not_retry ... ok
+2026-10-06T11:08:23.4464226Z test sqlite_prototype::tests::cancelled_finish_before_full_inbox_admission_uses_eof_cleanup ... ok
+2026-10-06T11:08:23.4494351Z test sqlite_prototype::tests::close_timeout_and_cancel_keep_closing_until_native_close_and_join ... ok
+2026-10-06T11:08:23.4512882Z test sqlite_prototype::tests::commit_after_native_auto_rollback_returns_aborted_error_instead_of_success ... ok
+2026-10-06T11:08:23.4519177Z test sqlite_prototype::tests::commit_failure_and_failed_cleanup_preserve_both_causes_and_unknown_outcome ... ok
+2026-10-06T11:08:23.4530798Z test sqlite_prototype::tests::committed_outcome_and_cleanup_failure_are_both_preserved ... ok
+2026-10-06T11:08:23.4536838Z test sqlite_prototype::tests::eof_cleanup_blocks_next_session_and_unpolled_finish_still_owns_cleanup ... ok
+2026-10-06T11:08:23.4557188Z test sqlite_prototype::tests::existing_trigger_and_or_rollback_abort_session_and_reject_later_sql ... ok
+2026-10-06T11:08:23.4564192Z test sqlite_prototype::tests::failed_commit_with_successful_observed_rollback_can_reuse_connection ... ok
+2026-10-06T11:08:23.4576507Z test sqlite_prototype::tests::full_inbox_and_cancelled_admitted_operation_drain_before_eof_rollback ... ok
+2026-10-06T11:08:23.4591664Z test sqlite_prototype::tests::management_panic_restores_raii_flag_before_observed_rollback_and_retirement ... ok
+2026-10-06T11:08:23.4598868Z test sqlite_prototype::tests::native_close_failure_is_not_reported_as_success_even_after_join ... ok
+2026-10-06T11:08:23.4619271Z test sqlite_prototype::tests::one_statement_anonymous_bind_and_operation_shape_are_checked_before_step ... ok
+2026-10-06T11:08:23.4635506Z test sqlite_prototype::tests::ordinary_sql_error_does_not_abort_active_session_and_exec_counts_direct_changes ... ok
+2026-10-06T11:08:23.4645859Z test sqlite_prototype::tests::owned_bind_values_and_decode_errors_use_native_row_contract ... ok
+2026-10-06T11:08:23.4680304Z test sqlite_prototype::tests::pragma_tvf_existing_views_and_schema_reprepare_keep_authorizer_installed ... ok
+2026-10-06T11:08:23.4695441Z test sqlite_prototype::tests::raise_fail_preserves_active_prior_effects_until_explicit_rollback ... ok
+2026-10-06T11:08:23.4699908Z test sqlite_prototype::tests::rollback_failure_is_observed_without_native_drop_retry_and_retires_connection ... ok
+2026-10-06T11:08:23.4727427Z test sqlite_prototype::tests::sql_policy_denies_control_in_every_entry_and_keeps_tx_active ... ok
+2026-10-06T11:08:23.4760152Z test sqlite_prototype::tests::trigger_pragma_is_denied_and_native_prior_effects_require_explicit_rollback ... ok
+2026-10-06T11:08:23.4768492Z test sqlite_prototype::tests::user_callback_panic_restores_management_state_and_retires_worker ... ok
+2026-10-06T11:08:23.4770049Z test tests::arena_scope ... ok
+2026-10-06T11:08:23.4771000Z test tests::borrowed_json_address ... ok
+2026-10-06T11:08:23.4771900Z test tests::float_validation ... ok
+2026-10-06T11:08:23.4773872Z test tests::json_direct ... ok
+2026-10-06T11:08:23.4776719Z test tests::json_invalid_utf8 ... ok
+2026-10-06T11:08:23.4779386Z test tests::json_wrong_type ... ok
+2026-10-06T11:08:23.4780335Z test tests::slice_bounds ... ok
+2026-10-06T11:08:23.4780988Z test tests::uuid_roundtrip ... ok
+2026-10-06T11:08:23.4782551Z test tests::zero_copy_pointer ... ok
+2026-10-06T11:08:24.5011150Z test sqlite_prototype::comparison::bounded_and_unbounded_deadpool_warm_comparison ... ok
+2026-10-06T11:08:24.7522712Z test sqlite_prototype::comparison::direct_and_deadpool_warm_native_session_comparison ... ok
+2026-10-06T11:08:25.5268478Z test sqlite_prototype::acquire_tests::acquire_registered_startup_and_begin_are_outside_finite_budget ... FAILED
+2026-10-06T11:08:25.5269261Z 
+2026-10-06T11:08:25.5269723Z failures:
+2026-10-06T11:08:25.5269937Z 
+2026-10-06T11:08:25.5270738Z ---- sqlite_prototype::acquire_tests::acquire_registered_startup_and_begin_are_outside_finite_budget stdout ----
+2026-10-06T11:08:25.5271445Z 
+2026-10-06T11:08:25.5272754Z thread 'sqlite_prototype::acquire_tests::acquire_registered_startup_and_begin_are_outside_finite_budget' (4600) panicked at runtime/src/sqlite_prototype/acquire_tests.rs:439:21:
+2026-10-06T11:08:25.5275041Z called `Result::unwrap()` on an `Err` value: Failure { kind: CloseTimeout, outcome: NotApplicable, primary: Some("adapter workers not joined"), cleanup: None, retired: false }
+2026-10-06T11:08:25.5276065Z 
+2026-10-06T11:08:25.5276074Z 
+2026-10-06T11:08:25.5276224Z failures:
+2026-10-06T11:08:25.5276958Z     sqlite_prototype::acquire_tests::acquire_registered_startup_and_begin_are_outside_finite_budget
+2026-10-06T11:08:25.5277607Z 
+2026-10-06T11:08:25.5278272Z test result: FAILED. 188 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.78s
+2026-10-06T11:08:25.5278909Z 
+2026-10-06T11:08:25.5291294Z [1m[91merror[0m: test failed, to rerun pass `-p nagi-runtime --lib`
+2026-10-06T11:08:25.5342334Z ##[error]Process completed with exit code 101.
+2026-10-06T11:08:25.5452669Z ##[group]Run actions/upload-artifact@v4
+2026-10-06T11:08:25.5452961Z with:
+2026-10-06T11:08:25.5453177Z   name: compiler-failures-linux
+2026-10-06T11:08:25.5453448Z   path: build/compiler-failures/
+2026-10-06T11:08:25.5453719Z   if-no-files-found: ignore
+2026-10-06T11:08:25.5453962Z   compression-level: 6
+2026-10-06T11:08:25.5454186Z   overwrite: false
+2026-10-06T11:08:25.5454414Z   include-hidden-files: false
+2026-10-06T11:08:25.5454668Z env:
+2026-10-06T11:08:25.5454960Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T11:08:25.5455351Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T11:08:25.5455618Z   CARGO_INCREMENTAL: 0
+2026-10-06T11:08:25.5455851Z   CARGO_TERM_COLOR: always
+2026-10-06T11:08:25.5456155Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:08:25.5456597Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T11:08:25.5457056Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:08:25.5457439Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:08:25.5457825Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T11:08:25.5458218Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T11:08:25.5458545Z ##[endgroup]
+2026-10-06T11:08:25.7214599Z (node:4812) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T11:08:25.7216735Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T11:08:25.7232468Z No files were found with the provided path: build/compiler-failures/. No artifacts will be uploaded.
+2026-10-06T11:08:25.8127245Z Post job cleanup.
+2026-10-06T11:08:25.9080320Z [command]/usr/bin/git version
+2026-10-06T11:08:25.9120105Z git version 2.55.0
+2026-10-06T11:08:25.9167484Z Temporarily overriding HOME='/home/runner/work/_temp/1cbd7922-bee0-4e26-ad80-88e13cb87569' before making global git config changes
+2026-10-06T11:08:25.9169186Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-06T11:08:25.9176468Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Nagi/Nagi
+2026-10-06T11:08:26.0195365Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-06T11:08:26.0264541Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-06T11:08:26.0519704Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-06T11:08:26.1096370Z http.https://github.com/.extraheader
+2026-10-06T11:08:26.1113072Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-06T11:08:26.2579274Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-06T11:08:26.2835848Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-06T11:08:26.2876134Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-06T11:08:26.3268311Z Cleaning up orphan processes
+2026-10-06T11:08:26.3518420Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@v4, actions/checkout@v4, actions/setup-node@v4, actions/setup-python@v5, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

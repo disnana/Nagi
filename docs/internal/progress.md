@@ -1,5 +1,13 @@
 # コンパイラ・Rust境界の進捗
 
+## PR #87: 更新後CIの終了回帰と仕上げ
+
+2026-10-06。move補強のlocal `44c38b7`は90 suite・899件成功。公開head `68d215b`のLinux CIでprivate SQLite closeが1件失敗した。古いCI、ローカル成功、再実行だけで解消したとは扱わず、stock APIによる決定的反例をtest-only `0051f7a`へ保存した。
+
+原因はidle Objectと予約済みpermitが同時に存在するとstock closeがsenderを残せること。`cfg(test)` adapterのclose後idle退役5行と回帰1件を追加し、Solが独立レビューした。最終コード `f6bc74a`で全回帰90 suite・900件、failed/ignored 0、fmt・clippy成功。公開runtime、compiler本体、move仕様、依存、CI、版は変更していない。[原因・先行REDと修正](sqlite-close-regression.md)、[仕上げ監査](explicit-move-readiness.md)、[原ログとprovenance](../../benchmarks/results/explicit-move-2026-10-06/readiness/sqlite-close/)を残す。最新headの4 OS・必須CIはPR Checksで別に確認する。
+
+次の実装はS1結果handle→S2業務Err/task fault→公開Pool/Tx。委任に基づく全Tのawait/discardとsticky faultの設計採用は別のlocal設計branchに保存し、#87へ新Task実装を混ぜていない。公開Poolのcapacity allocationブロッカーは未解決。merge/release/版更新は行わない。
+
 ## PR0: 設計監査と段階計画
 
 2026-10-05。基点main `8f6cc6cf7d7c08811736325263618cbea19314b8`。PR #76はユーザー側でマージ済みで、head `13b59aa`とmainのtreeが一致することを読み戻した。
