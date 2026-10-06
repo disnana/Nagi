@@ -43,4 +43,4 @@ tokio-rusqliteは専用thread/dispatchを再利用できる利点がある一方
 
 ## 判断と未確認範囲
 
-**追加依存/feature/版はユーザー判断までStop。** 承認後に一connection/一Txでprototype比較し、取消後もadapterがcheckoutを保持すること、cleanup前の再取得禁止、失敗時detach/新get停止、native close結果とworker終了をpositive barrierで確認する。SELECT health check、pool.close/status.size==0、wrapper close Okだけを完了証拠にしない。wrapper固有の自動補充・unbounded queue・blocking thread占有を含め、責任/code量/失敗経路が小さくなる案を選ぶ。現時点でcustom workerを確定案、wrapperを不可能、未実行の試験を成功とは書かない。
+**runtime rusqlite hooksは2026-10-06のQ002で承認済み。追加wrapperのcrate／feature／版はユーザー判断までStop。** 承認後に一connection/一Txでprototype比較し、取消後もadapterがcheckoutを保持すること、cleanup前の再取得禁止、失敗時detach/新get停止、native close結果とworker終了をpositive barrierで確認する。SELECT health check、pool.close/status.size==0、wrapper close Okだけを完了証拠にしない。wrapper固有の自動補充・unbounded queue・blocking thread占有を含め、責任/code量/失敗経路が小さくなる案を選ぶ。現時点でcustom workerを確定案、wrapperを不可能、未実行の試験を成功とは書かない。

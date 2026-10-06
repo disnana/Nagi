@@ -1,6 +1,6 @@
 # コンパイラとRust境界の段階計画
 
-状態: PR0は#77でmainへ反映済み。Q-001は2026-10-05に承認済み。Phase 1は#78のhead `08199bf`で4 OS・editor CIまで成功し、その後ユーザーがmain `0107f37`へマージした。tree一致を確認済みで、エージェントはマージ操作を行っていない。Phase 2は[ADR 007](adr/007-build-generations.md)に基づき実装し、#79 head `27c8bf4`の4 OS・editor/package・Docs・merge gate CIが成功。その後ユーザーがmain `2f2c93d`へマージし、成功headとのtree一致を確認した。Phase 3は[ADR 008](adr/008-resource-contracts.md)と先行test-only head `eb93873`の4 OS CI成功を確認し、集約実装へ着手。集約後のacceptanceは確認中で、Phase 4以降は未実装。[進捗](progress.md)を参照。
+状態: PR0は#77でmainへ反映済み。Q-001は2026-10-05に承認済み。Phase 1は#78のhead `08199bf`で4 OS・editor CIまで成功し、その後ユーザーがmain `0107f37`へマージした。tree一致を確認済みで、エージェントはマージ操作を行っていない。Phase 2は[ADR 007](adr/007-build-generations.md)に基づき実装し、#79 head `27c8bf4`の4 OS・editor/package・Docs・merge gate CIが成功。その後ユーザーがmain `2f2c93d`へマージし、成功headとのtree一致を確認した。Phase 3は#80 head `35038940`の4 OS・editor・site・merge gate CIが成功し、main `f10cb64`へ反映済み。tree一致を確認した。Phase 4のQ002は2026-10-06に承認済みで、[ADR 010](adr/010-sqlite-transaction-boundary.md)に従い一接続・一Txの検証から進める。追加wrapper依存は未承認、Phase 5は未実装。[進捗](progress.md)を参照。
 
 基点はmain `8f6cc6cf7d7c08811736325263618cbea19314b8`。PR #76のhead `13b59aa`とtreeは同じであり、#74・#76のchecked facts、Low互換性、Rust backendを維持する。本計画は2026-10-05の依頼に基づく。実装済みの保証と、後続Phaseで追加する予定の保証を分ける。
 
@@ -156,7 +156,7 @@ Future[return]の戻り値型だけでは、Future内部に捕捉したTxを見�
 
 COMMITがDBへ送信された後、応答受信前にcaller Futureがdropされた場合は結果不明になり得る。commit済みとrollback済みをどちらも断定しない。normal return、Result error、Future cancellation、unwind panicをテストし、acquire途中取消、transaction進行中取消、commit応答喪失を別ケースにする。
 
-pool容量、acquire timeout、busy timeout、transaction開始mode、module/API名は未決。既存Dbのqueue 64/busy 500msを新Poolの既定値へ流用しない。新しい公開policy値を決める必要が出たらStop。nested transaction/savepointは対象外。
+pool容量・acquire/busy timeoutはOptionsの必須指定、transaction開始modeはBeginModeの必須指定、module/API名はQ002と[ADR 010](adr/010-sqlite-transaction-boundary.md)で採用した。既存Dbのqueue 64/busy 500msを新Poolの既定値へ流用しない。新しい公開policy値を決める必要が出たらStop。nested transaction/savepointは対象外。
 
 依存の監査基点はCargo.lockのrusqlite 0.40.2、Tokio 1.53.1、Axum 0.8.9。manifestのversion要求と実際の解決版を混同しない。
 

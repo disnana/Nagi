@@ -1,0 +1,42 @@
+# ADR 010: SQLite PoolとTransactionの境界
+
+状態: 2026-10-06、ユーザーがQ002の選択1を承認。公開API・SQL制限・終了契約とruntime rusqlite `hooks`を採用する。実装・検証の完了とは区別する。追加wrapperのcrate・版・featureはこの承認に含まれない。
+
+## 前提と分担
+
+Phase 3の#80はhead `35038940`で4 OS・editor・site・merge gateが成功し、main `f10cb64`へ反映済み。両者のtree `e45dbede`は一致する。旧Db/API、High／Lowの意味論、Rust backendを保つ。
+
+採用する署名・資源・capability・値とSQL受理範囲は[API契約](../sqlite-pool-proposal.md)の表に固定する。`std.db.sqlite`、owned Parameters、明示Options／BeginMode、Failureのprimary／cleanup causeとoutcomeを採る。容量・期限の数値defaultは追加せず、0msは即時に条件が成立すれば成功する。
+
+SQLiteの解析・bind・row metadata・native Transactionはrusqlite 0.40.2へ任せる。Nagiは型付き操作、所有権、task転送、受理済み処理とcleanup／closeの完了を扱う。汎用SQL parser、trait/effect solver、独自native transaction、自己参照型、unsafeは追加しない。
+
+pool／dispatchの実装は[既存Rust比較](../sqlite-pool-rust-reuse.md)を基に選ぶ。最初の一接続prototypeで専用threadやbounded channelを使うことは、独自pool algorithmの採用やwrapper不採用を意味しない。追加依存が必要なら版・transitive dependencies・互換性を示して確認する。
+
+## 所有とSQL
+
+TxはnonCopy／nonClone／nonshared／nonSerde。field・enum等の永続格納とtask転送を禁止し、同task内のawait、owned委譲、local Option／Resultを許す。commit／rollbackはFuture作成時からTxをconsumeする。async関数値の実引数を捕捉として検査し、戻りFuture型だけで転送可能と判断しない。関数pointerの署名は捕捉payloadではない。既存Future保存・返却制限と旧resourceの受理は維持する。
+
+新Txのuser SQLは一文・匿名`?`。query／allはSQLiteがreadonlyかつ返却列ありと判断する文、execは返却列なし。行型は既存の標準FromRowが生成できるclass fieldに限る。NULL・値型・範囲・bind数は実行時にも検査する。opt-in schema検査の成功を実DB一致やTx安全の証明としない。動的Parametersのbind未検査を明示する。
+
+常設safe Authorizerでuser SQLのTransaction全variant・Savepoint・Pragma・Attach・Detach・Unknownを拒否する。virtual table／extension／raw Connectionは公開しない。管理BEGIN／COMMIT／ROLLBACKはprivate区間のみ。user statementのprepare・step・reprepare・finalizeまでhookを保ち、管理権限でFromRow／user callbackを実行しない。keywordやSQL文字列の自作解析を根拠にしない。
+
+## cleanupと終了
+
+一Txは一接続を専有する。取消は受理済みSQLを戻さない。未poll終端、送信前取消、begin返信喪失、最後のTx Dropでもcleanup責任をworkerへ残す。満杯queueへのDrop.try_send成功だけに依存しない。
+
+native rollbackの結果、autocommit、statement破棄、user hook状態、worker健全性を確認する前に再利用しない。native TransactionのDropはrollback成功の証拠ではない。普通のSQL／bind／decode Errでnative Txがactiveなら継続でき、自動rollbackはAbortedとして後続SQLを拒否する。
+
+cleanup失敗・worker panic・状態不明では接続を退役し、Poolの新取得を止める。既存active Txは終端を続け、自動replacement／retryは追加しない。COMMIT完了とcleanup失敗は両方保持する。返信喪失の結果はUNKNOWNで、再実行可能と決めつけない。
+
+close開始後はclone共通で新取得を止め、active Txのcleanup、native close結果、worker終了を待つ。close timeout／取消でclosingを解除しない。再closeで完了待ちを許す。成功通知をworkerが送っただけではthread joinの証拠にならない。最後のPool Dropは閉鎖要求であり、非同期cleanup完了のAPIではない。
+
+## 最初の検証と段階
+
+1. このADRとinvariantsを記録する。
+2. public Poolを先に登録せず、private一接続sessionの失敗テストを作る。未実装によるcompile failureと実SQLによるcontract failureを区別する。
+3. lexical native Tx、常設hook、typed command、EOF cleanupをsafe Rustで試作する。正常・Err・panic・取消・満杯inbox・未poll終端をpositive barrierで検査する。
+4. transaction-control、pragma TVF、trigger／view、reprepare、bind、操作形、自動rollback、native closeとjoinを実SQLiteで検証する。
+5. 同じ契約で既存wrapperのadapterと比較して内部実装を選び、Nagi registry／捕捉facts／sealed生成／SQL collectorを縦切りで接続する。
+6. pass／fail、元診断位置、High／保存Low／手書きLow、Rust build／run、旧Db、runtime独立build、4 OS CI、fuzz／生成探索と比較測定を行う。
+
+private prototype成功を公開API完成とは報告しない。新syntax、Future保存解禁、追加wrapper依存、safe hookで満たせないSQL反例、一般effect／region解析やunsafeが必要な場合は、保証を下げず根拠と代替案を示して止める。

@@ -153,3 +153,9 @@ head `0b2a5a5`のchecks run `37347188897`で、Windowsの既存Axum sampleが保
 ADR→実行配線→tests-only→sample実装の順にcommitした。独立レビューのP2検査穴をhandler直接回帰で補い、元HTTP caseを維持して分割送信・4097byte正常JSONの413を追加した。High/保存Low各native8、HTTP19、不正port3が成功した。Python helper5/artifact9/CI52、site90も成功。生成applicationのstrict clippyは元generated main.rsのneedless_return2件で失敗し、allow・生成patchで隠していない。本体strict clippy成功とは分ける。
 
 修正後4 OS CIは未確認。#80のbaseを#79のfeature branchからmainへ変更して、修正headのCIを確認する。#79の成功と、この修正の成功を混同しない。Pool/Txの内部は[既存Rust再利用比較](sqlite-pool-rust-reuse.md)を具体案へ反映し、自作pool/driverに確定していない。Phase 4のpublic API・hooks/依存・cleanup/close policyは未承認で、実装は開始しない。
+
+## Phase 3 main反映とPhase 4の承認
+
+2026-10-06。#80 head `35038940`のchecks run `37387962329`とwebsite run `37387961643`はattempt 1で成功した。4 OS・VSIX・IntelliJ IDEA・PyCharm・merge gateの成功を確認し、Windowsの実ログでもAxum High／保存Lowの成功を確認した。その後ユーザーがmain `f10cb64`へマージし、tree `e45dbede`の一致を読み戻した。エージェントはmerge・版更新・releaseを実行していない。過去のWindows失敗記録は残す。
+
+同日、ユーザーがQ002の選択1を承認した。公開API・SQL制限・cleanup／close policyとruntime rusqlite hooksを[ADR 010](adr/010-sqlite-transaction-boundary.md)へ固定した。追加wrapperの依存承認は含まれない。標準APIを先に受理して未完成runtimeへ送らず、private一接続・一Txのfailing testsとsafe prototypeから開始する。Tx捕捉・nested shared・SQL opt-inの不足は設計とnegative corpusへ先に整理する。実装・検証結果は後続記録へ分ける。

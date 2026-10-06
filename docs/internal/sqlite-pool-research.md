@@ -1,6 +1,6 @@
 # Phase 4 Pool／affine Tx: 実装前の判断案
 
-2026-10-05。未採用の候補。#80 test-only head `ca9362e5`の4 OS CI待ち中に、既存`sqlite-pool-proposal.md`を具体化した読み取り設計。repository変更・Cargo・prototype実行・追加agentなし。Phase 3 acceptance後に判断する資料であり、公開API・policy・依存featureを採用したとは扱わない。
+2026-10-05時点の判断前調査。公開API・SQL制限・終了契約とruntime hooksは2026-10-06のQ002で承認された。現在の採用範囲は[ADR 010](adr/010-sqlite-transaction-boundary.md)を参照。追加wrapperは未採用。#80 test-only head `ca9362e5`の4 OS CI待ち中に、既存`sqlite-pool-proposal.md`を具体化した読み取り設計。repository変更・Cargo・prototype実行・追加agentなし。Phase 3 acceptance後に判断する資料であり、公開API・policy・依存featureを採用したとは扱わない。
 
 ## 推奨する一案と承認が必要な範囲
 

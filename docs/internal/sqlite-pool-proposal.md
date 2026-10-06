@@ -1,12 +1,12 @@
-# Phase 4: SQLite Pool・affine Txの第一候補
+# Phase 4: SQLite Pool・affine Txの初版契約
 
-2026-10-05。**未採用のレビュー案。実装・依存feature変更の許可ではない。** 詳細根拠は[decision proposal](sqlite-pool-research.md)。safe prototypeは未実行で、Nagi/Rustの借用・取消・障害時の成立は承認後に検証する。Phase 3 acceptanceが実装開始の前提。
+2026-10-05の提案を、2026-10-06にQ002の選択1として承認。**公開API・SQL制限・終了policyとruntime rusqlite hooksを採用済み。実装・検証の完了ではない。** [ADR 010](adr/010-sqlite-transaction-boundary.md)に判断を固定した。詳細根拠は[decision proposal](sqlite-pool-research.md)。safe prototypeはこの記録時点では未実行。Phase 3 acceptanceは#80のCI成功とmain反映で満たした。
 
 第一候補は新module `std.db.sqlite`（canonical ID `stdlib:std.db.sqlite`）、runtime namespace `nagi_runtime::sqlite`。既存Db、db_*、FromRow、Sql、Error、標準HTTP/Actor Optionsを変更・削除しない。新APIへ固定id/name/age bindを継承しない。新言語syntax、reflection、ToParams derive、generic trait solverは導入しない。
 
-内部のpool/dispatchはまだ確定していない。[既存Rust wrapperの比較](sqlite-pool-rust-reuse.md)では、deadpoolのowned checkout、tokio-rusqliteの専用worker、r2d2の同期poolと、狭いsession adapterを候補に残した。専用workerという説明をpool algorithmの自作決定とは扱わない。cleanupとcloseの観測まで同じ条件でprototypeし、責任とコードを減らせる実装を選ぶ。追加wrapperの依存承認はruntime hooksの承認とは別で、どちらも未承認。
+内部のpool/dispatchはまだ確定していない。[既存Rust wrapperの比較](sqlite-pool-rust-reuse.md)では、deadpoolのowned checkout、tokio-rusqliteの専用worker、r2d2の同期poolと、狭いsession adapterを候補に残した。専用workerという説明をpool algorithmの自作決定とは扱わない。cleanupとcloseの観測まで同じ条件でprototypeし、責任とコードを減らせる実装を選ぶ。runtime hooksは承認済み、追加wrapperの依存は未承認。
 
-## 資源と値の候補
+## 採用した資源と値
 
 | 名前 | 所有・capabilityの第一候補 |
 |---|---|
@@ -18,9 +18,9 @@
 | `Failure` | nonCopy、owned field保存可。既存CallError/WaitError同様のnative値で、利用者のclass literalで構築しない。Serdeなし。primary/cleanup causeと終端outcomeを別に保持 |
 | `FailureKind` / `Outcome` | Copy/equality可のnative enum＋定数。Nagiの新enum構文やnative enumの網羅match機能を要求しない |
 
-これらは**承認対象の新capability**。Pool/Options/Failureのshared・Debug等の最終値もADRへ固定する。Parametersの内部`Vec<Value>`はString/Vec/u8/i64/f64/Nullを所有し、Nagiのstr/bytesは既にString/Vec<u8>へ生成される。move builderで実装可能性があり、既存非Copy resourceのcopy拒否を使える。Rustの最終Send/Syncは独立runtime/生成appのbuildで検証し、無条件のunsafe implを加えない。
+これらは**Q002で承認した新capability**。Pool/Options/Failureのshared・Debug等の最終値もADRへ固定する。Parametersの内部`Vec<Value>`はString/Vec/u8/i64/f64/Nullを所有し、Nagiのstr/bytesは既にString/Vec<u8>へ生成される。move builderで実装可能性があり、既存非Copy resourceのcopy拒否を使える。Rustの最終Send/Syncは独立runtime/生成appのbuildで検証し、無条件のunsafe implを加えない。
 
-## module操作の第一候補
+## 採用したmodule操作
 
 下表の`R`はPassing::Reference、`M`はPassing::Move。順序は引数順。一般のBorrowやHandler/Mapperは新SQL APIへ要求しない。既存OperationInfoの登録・canonical identity経由で解決し、public ResourceInfoのfield/戻りshapeを変更しない。
 
@@ -71,13 +71,13 @@ closeはclone共通の新取得停止、active Tx/cleanup待ち、connection clo
 
 SQLiteの自動rollbackは上の拒否でも残る。pragma TVF、既存trigger/view、reprepareでpolicyを迂回できないかを実SQLiteで検証する。safe hooksで承認制約を満たせない反例はStop。悪意あるDB schemaや全SQL functionに対する包括sandboxは承認案に含めない。
 
-rusqlite 0.40.2は維持し、runtimeの既存`bundled`へ**`hooks` featureだけを追加する判断**が必要。compilerのfeature合成だけに依存しない。safe Authorizerとsafe params_from_iterは実在するが、prototype未実行。Parametersはowned Vec<Value>をconsumeし、text/bytesをdeep cloneせず移す候補。Vec成長、literal生成、動的SQL所有化、SQLite SQLITE_TRANSIENTのtext/blob copy、job/reply、row/list出力は残る。zero-copy、allocation数不変、速度改善を保証しない。
+rusqlite 0.40.2は維持し、runtimeの既存`bundled`へ**`hooks` featureだけの追加をQ002で承認済み**。compilerのfeature合成だけに依存しない。safe Authorizerとsafe params_from_iterは実在するが、prototype未実行。Parametersはowned Vec<Value>をconsumeし、text/bytesをdeep cloneせず移す候補。Vec成長、literal生成、動的SQL所有化、SQLite SQLITE_TRANSIENTのtext/blob copy、job/reply、row/list出力は残る。zero-copy、allocation数不変、速度改善を保証しない。
 
 SQL literalは新operationのsealed planからSql::Static、その他は呼出時にSql::Ownedへ所有化する候補。SQL引数の所有化を後続Parameters moveより前に完了し、既存評価順/alias/High/保存Low一致を検査する。Referenceという表示だけでSQL viewをworkerへ渡さない。
 
 SQL opt-inは新canonical operation用adapterを追加する候補。literal SQLのschema/返却列検査とbind検査を分離し、動的Parametersの個数/型が静的に証明できない場合は**bind未検査**として表示する。動的SQLはSQL未検査。既存collectorの固定0/1/2/3を捏造しない。runtimeでは全入口でsafe bind個数・値型・NULL/decodeを検査する。opt-inの成功をTx/取消/実データ保証と扱わず、既存db_*の結果・件数を維持する。
 
-## 実装前にレビューする3判断
+## Q002で採用した3判断
 
 1. **新APIと所有契約:** module/resource/署名/Passing/Failure表現、Parameters B、初版のclass行型・plain NULL・匿名placeholder・SQLite読取専用row文/columnなしexecという範囲、required Options/mode/timeoutと0msの意味、`:memory:`複数接続/URI拒否を採るか。数値defaultなし。旧Db/APIは不変。
 2. **依存とSQL policy:** runtime hooks追加、および一文/Authorizer/管理SQL分離/PRAGMA等拒否を採るか。既存DB trigger等も含む反例検査で満たせなければ、保証を縮めず再判断する。
