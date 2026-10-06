@@ -1,0 +1,170 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-boundary-foundation/runtime)
+error[E0560]: struct `session::Config` has no field named `path`
+  --> runtime/src/sqlite_prototype/adapter_tests.rs:37:13
+   |
+37 |             path: Some(self.path.clone()),
+   |             ^^^^ `session::Config` does not have this field
+   |
+   = note: available fields are: `seed`, `begin_gate`, `command_gate`, `cleanup_gate`, `commit_gate` ... and 6 others
+
+error[E0599]: no associated function or constant named `with_capacity` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:638:28
+    |
+638 |     let adapter = Adapter::with_capacity(file.config(), AdapterSeams::default(), 2);
+    |                            ^^^^^^^^^^^^^ associated function or constant not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:412:1
+    |
+412 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- associated function or constant `with_capacity` not found for this struct
+    |
+note: if you're trying to build a new `Adapter`, consider using `Adapter::new` which returns `Adapter`
+   --> runtime/src/sqlite_prototype/adapter.rs:414:5
+    |
+414 |     pub fn new(config: Config, seams: AdapterSeams) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no associated function or constant named `with_capacity` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:682:28
+    |
+682 |     let adapter = Adapter::with_capacity(
+    |                            ^^^^^^^^^^^^^ associated function or constant not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:412:1
+    |
+412 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- associated function or constant `with_capacity` not found for this struct
+    |
+note: if you're trying to build a new `Adapter`, consider using `Adapter::new` which returns `Adapter`
+   --> runtime/src/sqlite_prototype/adapter.rs:414:5
+    |
+414 |     pub fn new(config: Config, seams: AdapterSeams) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0560]: struct `AdapterSeams` has no field named `target_worker`
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:685:13
+    |
+685 |             target_worker: Some(2),
+    |             ^^^^^^^^^^^^^ `AdapterSeams` does not have this field
+    |
+    = note: available fields are: `created`, `checkout`, `fail_recycle`, `detaching`
+
+error[E0599]: no associated function or constant named `with_capacity` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:753:28
+    |
+753 |     let adapter = Adapter::with_capacity(
+    |                            ^^^^^^^^^^^^^ associated function or constant not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:412:1
+    |
+412 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- associated function or constant `with_capacity` not found for this struct
+    |
+note: if you're trying to build a new `Adapter`, consider using `Adapter::new` which returns `Adapter`
+   --> runtime/src/sqlite_prototype/adapter.rs:414:5
+    |
+414 |     pub fn new(config: Config, seams: AdapterSeams) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0560]: struct `AdapterSeams` has no field named `target_worker`
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:756:13
+    |
+756 |             target_worker: Some(2),
+    |             ^^^^^^^^^^^^^ `AdapterSeams` does not have this field
+    |
+    = note: available fields are: `startup`, `created`, `checkout`, `fail_recycle`
+
+error[E0599]: no associated function or constant named `with_capacity` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:815:28
+    |
+815 |     let adapter = Adapter::with_capacity(
+    |                            ^^^^^^^^^^^^^ associated function or constant not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:412:1
+    |
+412 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- associated function or constant `with_capacity` not found for this struct
+    |
+note: if you're trying to build a new `Adapter`, consider using `Adapter::new` which returns `Adapter`
+   --> runtime/src/sqlite_prototype/adapter.rs:414:5
+    |
+414 |     pub fn new(config: Config, seams: AdapterSeams) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0560]: struct `AdapterSeams` has no field named `target_worker`
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:818:13
+    |
+818 |             target_worker: Some(2),
+    |             ^^^^^^^^^^^^^ `AdapterSeams` does not have this field
+    |
+    = note: available fields are: `startup`, `created`, `checkout`, `fail_recycle`, `detaching`
+
+error[E0560]: struct `AdapterSeams` has no field named `fail_terminal_result`
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:821:13
+    |
+821 |             fail_terminal_result: true,
+    |             ^^^^^^^^^^^^^^^^^^^^ `AdapterSeams` does not have this field
+    |
+    = note: available fields are: `startup`, `created`, `checkout`, `fail_recycle`, `detaching`
+
+error[E0599]: no associated function or constant named `with_capacity` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:884:28
+    |
+884 |     let adapter = Adapter::with_capacity(
+    |                            ^^^^^^^^^^^^^ associated function or constant not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:412:1
+    |
+412 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- associated function or constant `with_capacity` not found for this struct
+    |
+note: if you're trying to build a new `Adapter`, consider using `Adapter::new` which returns `Adapter`
+   --> runtime/src/sqlite_prototype/adapter.rs:414:5
+    |
+414 |     pub fn new(config: Config, seams: AdapterSeams) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0560]: struct `AdapterSeams` has no field named `target_worker`
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:887:13
+    |
+887 |             target_worker: Some(2),
+    |             ^^^^^^^^^^^^^ `AdapterSeams` does not have this field
+    |
+    = note: available fields are: `created`, `checkout`, `fail_recycle`, `publication`, `detaching`
+
+error[E0599]: no associated function or constant named `with_capacity` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:940:28
+    |
+940 |     let adapter = Adapter::with_capacity(
+    |                            ^^^^^^^^^^^^^ associated function or constant not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:412:1
+    |
+412 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- associated function or constant `with_capacity` not found for this struct
+    |
+note: if you're trying to build a new `Adapter`, consider using `Adapter::new` which returns `Adapter`
+   --> runtime/src/sqlite_prototype/adapter.rs:414:5
+    |
+414 |     pub fn new(config: Config, seams: AdapterSeams) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0560]: struct `AdapterSeams` has no field named `target_worker`
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:943:13
+    |
+943 |             target_worker: Some(2),
+    |             ^^^^^^^^^^^^^ `AdapterSeams` does not have this field
+    |
+    = note: available fields are: `startup`, `created`, `checkout`, `fail_recycle`, `publication`, `detaching`
+
+error[E0560]: struct `AdapterSeams` has no field named `fail_observer_spawn`
+   --> runtime/src/sqlite_prototype/adapter_tests.rs:944:13
+    |
+944 |             fail_observer_spawn: true,
+    |             ^^^^^^^^^^^^^^^^^^^ `AdapterSeams` does not have this field
+    |
+    = note: available fields are: `startup`, `created`, `checkout`, `fail_recycle`, `publication`, `detaching`
+
+Some errors have detailed explanations: E0560, E0599.
+For more information about an error, try `rustc --explain E0560`.
+error: could not compile `nagi-runtime` (lib test) due to 14 previous errors

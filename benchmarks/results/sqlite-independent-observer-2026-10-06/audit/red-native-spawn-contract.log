@@ -1,0 +1,11 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-boundary-foundation/runtime)
+error[E0560]: struct `AdapterSeams` has no field named `fail_native_spawn`
+    --> runtime/src/sqlite_prototype/adapter_tests.rs:1108:13
+     |
+1108 |             fail_native_spawn: true,
+     |             ^^^^^^^^^^^^^^^^^ `AdapterSeams` does not have this field
+     |
+     = note: available fields are: `startup`, `created`, `checkout`, `fail_recycle`, `publication` ... and 3 others
+
+For more information about this error, try `rustc --explain E0560`.
+error: could not compile `nagi-runtime` (lib test) due to 1 previous error

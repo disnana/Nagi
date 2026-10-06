@@ -1,0 +1,22 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-boundary-foundation/runtime)
+    Finished `test` profile [unoptimized] target(s) in 6.21s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31f33a377cbf1a2a)
+
+running 1 test
+
+thread 'sqlite_prototype::adapter_tests::multi_cancelled_b_joins_and_c_begins_before_healthy_a_finishes' (1296137) panicked at runtime/src/sqlite_prototype/session.rs:209:10:
+test barrier watchdog expired: Elapsed(())
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'sqlite_prototype::adapter_tests::multi_cancelled_b_joins_and_c_begins_before_healthy_a_finishes' (1296137) panicked at runtime/src/sqlite_prototype/adapter_tests.rs:725:5:
+B join was queued behind active A
+test sqlite_prototype::adapter_tests::multi_cancelled_b_joins_and_c_begins_before_healthy_a_finishes ... FAILED
+
+failures:
+
+failures:
+    sqlite_prototype::adapter_tests::multi_cancelled_b_joins_and_c_begins_before_healthy_a_finishes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 177 filtered out; finished in 10.01s
+
+error: test failed, to rerun pass `-p nagi-runtime --lib`

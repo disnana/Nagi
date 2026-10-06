@@ -1,0 +1,1433 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-boundary-foundation/runtime)
+   Compiling nagic v0.1.10 (/workspace/Nagi-boundary-foundation/compiler)
+    Finished `test` profile [unoptimized] target(s) in 6.96s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-dae2517a3d1ff927)
+
+running 179 tests
+test actor::charge::tests::list_capacity_and_only_initialized_elements_contribute_heap ... ok
+test actor::charge::tests::arithmetic_and_expired_deadlines_fail_before_acceptance ... ok
+test actor::charge::tests::option_and_result_visit_only_the_active_payload ... ok
+test actor::charge::tests::retained_string_bytes_and_error_capacities_are_charged ... ok
+test actor::charge::tests::root_inline_and_envelope_are_counted_once ... ok
+test actor::charge::tests::recursive_owned_graphs_obey_depth_limit_and_restore_walk_after_errors ... ok
+test actor::charge::tests::inline_only_lists_skip_every_element_and_zero_sized_capacity_is_safe ... ok
+test actor::lifecycle_adversarial_tests::a_factory_constructor_panic_does_not_lose_the_context_cleanup_obligation ... ok
+test actor::charge::tests::work_budget_includes_root_and_initialized_non_inline_elements ... ok
+test actor::lifecycle_adversarial_tests::a_late_buffered_outer_failure_obeys_the_same_reply_deadline ... ok
+test actor::lifecycle_adversarial_tests::a_blocking_panic_payload_destructor_remains_a_retained_child_obligation ... ok
+test actor::lifecycle_adversarial_tests::a_blocking_native_poll_retains_its_child_record_until_it_returns ... ok
+test actor::lifecycle_adversarial_tests::a_reply_completed_after_deadline_times_out_even_when_already_buffered ... ok
+test actor::lifecycle_adversarial_tests::a_reply_completed_before_deadline_succeeds_when_the_caller_polls_after_deadline ... ok
+test actor::lifecycle_adversarial_tests::a_panic_payload_destructor_can_observe_and_stop_its_group_without_a_lock_cycle ... ok
+test actor::lifecycle_adversarial_tests::a_finite_follow_on_panic_payload_retains_the_guard_and_context_until_drop_finishes ... ok
+test actor::lifecycle_adversarial_tests::an_event_only_surviving_control_drains_cleanup_and_observes_stream_close ... ok
+test actor::lifecycle_adversarial_tests::a_non_yielding_poll_cannot_be_reported_as_completed_cleanup ... ok
+test actor::lifecycle_adversarial_tests::an_unrestarted_child_failure_is_retained_while_a_healthy_sibling_continues ... ok
+test actor::lifecycle_adversarial_tests::context_owned_by_a_child_panic_payload_is_cleaned_before_final_context_cleanup ... ok
+test actor::lifecycle_adversarial_tests::a_surviving_control_can_finish_cleanup_after_the_running_owner_is_dropped ... ok
+test actor::lifecycle_adversarial_tests::abort_does_not_complete_before_the_child_future_destructor_finishes ... ok
+test actor::lifecycle_adversarial_tests::origin_runtime_cancellation_does_not_restart_a_permanent_child_on_a_surviving_runtime ... ok
+test actor::lifecycle_adversarial_tests::panicking_factory_destruction_during_owner_drop_cannot_strand_context_cleanup ... ok
+test actor::lifecycle_adversarial_tests::stop_during_factory_construction_cancels_every_later_inserted_child ... ok
+test actor::lifecycle_adversarial_tests::user_destructors_do_not_run_under_the_ledger_or_stop_lock ... ok
+test actor::tests::a_smaller_immediate_call_cannot_bypass_a_waiting_byte_reservation ... ok
+test actor::tests::an_expired_admission_deadline_rejects_even_immediately_ready_operations ... ok
+test actor::lifecycle_adversarial_tests::canceled_observation_keeps_unfinished_joins_available_to_another_control ... ok
+test actor::tests::business_error_preserves_owned_state_and_restart_is_one_for_one ... ok
+test actor::tests::canceled_event_wait_does_not_consume_a_concurrently_published_event ... ok
+test actor::tests::caller_timeout_keeps_accepted_work_and_all_reservations_until_handler_finishes ... ok
+test actor::tests::escaped_readiness_tokens_reject_old_generations_and_do_not_retain_the_group ... ok
+test actor::tests::global_restart_intensity_counts_attempts_and_stops_a_pending_sibling ... ok
+test actor::tests::event_deadlines_include_lock_contention_and_preserve_the_cursor ... ok
+test actor::tests::lifecycle_events_are_ordered_bounded_and_keep_utf8_truncation_metadata ... ok
+test actor::tests::normally_finished_task_tokens_are_invalid_while_the_supervisor_stays_running ... ok
+test actor::tests::oversized_business_reply_keeps_next_state_and_retained_input_capacity_is_checked ... ok
+test actor::tests::startup_deadline_and_zero_restart_budget_end_the_group_without_a_ready_actor ... ok
+test actor::tests::stopped_tasks_cannot_publish_readiness_and_legacy_tasks_never_publish_it ... ok
+test actor::tests::task_readiness_follows_initialization_once_without_changing_started ... ok
+test auth::tests::grant_binds_identity_and_resource_without_payload_allocation ... ok
+test auth::tests::owned_proof_is_send_sync_without_requiring_marker_payload_traits ... ok
+test concurrent::tests::actor_pair_and_pipeline ... ok
+test concurrent::tests::actors_isolated ... ok
+test concurrent::tests::panic_isolated ... ok
+test actor::tests::native_factory_construction_is_included_in_the_startup_deadline ... ok
+test actor::lifecycle_adversarial_tests::final_context_destruction_is_a_retained_phase_before_completion ... ok
+test concurrent::tests::scope_finishes ... ok
+test concurrent::tests::sibling_error_cancelled ... ok
+test concurrent::tests::queue_retries_and_dead_letter ... ok
+test concurrent::tests::supervisor_drop_after_worker_start ... ok
+test concurrent::tests::supervisor_drop_while_waiting_for_worker_start ... ok
+test concurrent::tests::scope_cancel_drops_all ... ok
+test concurrent::tests::tasks_and_cpu ... ok
+test database::tests::column_order_independent ... ok
+test database::tests::crud_and_parameterization ... ok
+test database::tests::exec_counts_only_changes_in_the_current_batch ... ok
+test database::tests::exec_counts_trigger_changes_and_preserves_sql_errors ... ok
+test database::tests::missing_column_is_error ... ok
+test database::tests::runtime_type_mismatch ... ok
+test concurrent::tests::supervisor_intensity ... ok
+test concurrent::tests::supervisor_restart ... ok
+test http::panic_tests::handler_extractor_and_response_panics_return_sanitized_500_for_get_and_head ... ok
+test actor::lifecycle_adversarial_tests::delayed_native_context_owners_then_actual_context_drop_precede_completion ... ok
+test http::tests::request_wait_configuration_is_positive_finite_and_defaults_to_ten_seconds ... ok
+test http::tests::healthy_requests_work_with_more_than_128_idle_connections_and_shutdown_closes_them ... ok
+test http::tests::silent_partial_and_dripped_headers_expire_without_extending_the_deadline ... ok
+test http::tests::idle_reuse_and_buffered_partial_requests_share_the_header_deadline ... ok
+test http_server::tests::actual_chunk_sizes_and_absolute_body_deadlines_are_bounded ... ok
+test http_server::tests::apps_are_db_free_independent_and_support_native_extended_methods_and_template_paths ... ok
+test http_server::tests::async_handlers_use_app_mapping_route_override_and_leave_success_alone ... ok
+test http_server::tests::body_collection_moves_one_chunk_and_combines_only_multiple_chunks ... ok
+test http_server::tests::borrowed_lookup_validation_agrees_with_native_token_rules_and_length_limits ... ok
+test http_server::tests::buffered_native_response_body_is_unboxed_exact_and_moves_its_frame ... ok
+test http_server::tests::connection_capacity_and_shutdown_deadline_leave_no_handler_tasks ... ok
+test http_server::tests::forbidden_response_bodies_do_not_desynchronize_keepalive ... ok
+test http_server::tests::graceful_shutdown_finishes_an_in_flight_handler_and_response ... ok
+test http_server::tests::graceful_shutdown_preserves_stalled_response_send_deadline ... ok
+test http_server::tests::handler_panic_after_deadline_returns_500_and_releases_admission ... ok
+test http::tests::websocket_upgrade_is_exempt_from_the_http_wait ... ok
+test http::tests::streaming_and_backpressure_can_outlast_the_request_wait ... ok
+test http_server::tests::head_uses_get_representation_length_explicit_head_wins_and_allow_is_correct ... ok
+test http_server::tests::header_access_preserves_duplicates_and_checks_single_value_and_utf8 ... ok
+test http_server::tests::handler_timeout_rejects_a_ready_response_after_blocking_poll ... ok
+test http_server::tests::heterogeneous_route_erasure_adds_exactly_one_future_allocation ... ok
+test http_server::tests::json_content_type_matches_tokens_and_validates_every_parameter ... ok
+test http_server::tests::json_encoding_is_fallible_and_default_internal_mapping_hides_details ... ok
+test http_server::tests::media_type_parser_rejects_controls_but_accepts_quoted_http_octets ... ok
+test http_server::tests::method_status_and_shared_state_inspection_allocate_nothing ... ok
+test http_server::tests::native_method_and_request_fields_do_not_stringify_or_normalize_extension_tokens ... ok
+test http_server::tests::options_validate_capacity_deadlines_and_leave_state_out_of_debug ... ok
+test http_server::tests::ordinary_response_framing_uses_the_native_body_length_without_allocating_a_header_value ... ok
+test http_server::tests::handler_timeout_cancels_future_and_releases_request_capacity ... ok
+test http_server::tests::oversized_body_chunked_delivers_413_with_or_without_final_chunk ... ok
+test http_server::tests::oversized_body_content_length_delivers_413_without_calling_handler ... ok
+test http_server::tests::oversized_body_declared_length_rejects_headers_and_incomplete_upload_promptly ... ok
+test http_server::tests::oversized_body_rejects_keep_alive_upload_and_never_dispatches_pipeline ... ok
+test http_server::tests::oversized_headers_and_header_counts_are_rejected_without_reusing_the_connection ... ok
+test http_server::tests::panic_tests::http_error_mapper_panic_returns_500 ... ok
+test http_server::tests::panic_tests::http_handler_constructor_panic_returns_500 ... ok
+test http_server::tests::panic_tests::http_handler_division_by_zero_returns_500_and_server_keeps_serving ... ok
+test http_server::tests::panic_tests::http_handler_out_of_bounds_returns_500_and_server_keeps_serving ... ok
+test http_server::tests::panic_tests::http_handler_panic_after_await_returns_500_without_exposing_payload ... ok
+test http_server::tests::panic_tests::http_handler_panic_head_response_has_no_body ... ok
+test http_server::tests::request_capacity_rejects_unread_bodies_then_releases_admission ... ok
+test http_server::tests::response_headers_reject_injection_and_user_framing_and_keep_cookie_lines ... ok
+test http_server::tests::route_validation_returns_errors_without_panicking_and_supports_templates ... ok
+test http_server::tests::sockets_preserve_raw_duplicate_headers_cookies_and_strict_authorization ... ok
+test http_server::tests::oversized_body_boundary_accepts_4096_and_incomplete_upload_keeps_body_deadline ... ok
+test http_server::tests::standard_custom_mixed_case_and_long_borrowed_header_lookups_allocate_nothing ... ok
+test http_server::tests::status_is_compact_validated_and_has_modern_compatible_names ... ok
+test http_server::tests::successful_connect_is_rejected_instead_of_establishing_an_unowned_tunnel ... ok
+test http_server::tests::successful_json_content_type_checks_allocate_nothing_and_preserve_body ... ok
+test result::tests::borrowed_success_keeps_its_owner ... ok
+test result::tests::mapper_runs_once_only_for_failure ... ok
+test result::tests::owned_payloads_are_moved_without_cloning ... ok
+test sqlite_prototype::adapter_tests::acquired_deadpool_object_after_close_is_rejected_before_user_begin ... ok
+test sqlite_prototype::adapter_tests::callback_panic_retires_pool_and_join_does_not_hide_native_close_failure ... ok
+test sqlite_prototype::adapter_tests::cancelled_begin_reply_keeps_checkout_until_eof_rollback_is_observed ... ok
+test sqlite_prototype::adapter_tests::cancelled_create_cannot_start_replacement_before_old_native_worker_joins ... ok
+test sqlite_prototype::adapter_tests::cancelled_get_during_create_preserves_startup_close_and_join_owner ... ok
+test sqlite_prototype::adapter_tests::cancelled_tx_keeps_deadpool_checkout_until_native_cleanup_completes ... ok
+test sqlite_prototype::adapter_tests::close_clone_and_cancel_keep_closing_while_active_checkout_can_finish ... ok
+test sqlite_prototype::adapter_tests::close_waits_for_registered_create_and_late_create_cannot_begin ... ok
+test sqlite_prototype::adapter_tests::deadpool_adapter_reuses_same_native_worker_and_sql_session_core ... ok
+test sqlite_prototype::adapter_tests::deadpool_recycle_error_stops_create_instead_of_default_replacement ... ok
+test sqlite_prototype::adapter_tests::joined_is_published_only_after_terminal_native_failure_is_in_ledger ... ok
+test sqlite_prototype::adapter_tests::last_adapter_drop_closes_idle_worker_without_observer_owning_pool_or_tx_sender ... ok
+test sqlite_prototype::adapter_tests::last_adapter_drop_preserves_active_tx_until_its_explicit_finish ... ok
+test sqlite_prototype::adapter_tests::multi_b_terminal_failure_is_published_without_waiting_for_a ... ok
+test sqlite_prototype::adapter_tests::multi_cancelled_b_joins_and_c_begins_before_healthy_a_finishes ... ok
+test sqlite_prototype::adapter_tests::multi_close_during_b_startup_preserves_a_and_all_join_responsibility ... ok
+test sqlite_prototype::adapter_tests::multi_native_spawn_failure_keeps_cause_without_native_b_or_fake_join ... ok
+test sqlite_prototype::adapter_tests::multi_observer_spawn_failure_never_starts_or_fake_joins_native_b ... ok
+test sqlite_prototype::adapter_tests::multi_stock_detach_permit_gap_respects_native_cap_with_a_active ... ok
+test sqlite_prototype::adapter_tests::multi_two_filesystem_connections_begin_while_first_tx_stays_active ... ok
+test sqlite_prototype::adapter_tests::native_cleanup_failure_closes_deadpool_and_never_creates_replacement ... ok
+test sqlite_prototype::adapter_tests::native_close_failure_is_kept_after_deadpool_objects_and_workers_are_gone ... ok
+test sqlite_prototype::adapter_tests::object_take_and_last_pool_drop_both_preserve_native_close_join_observation ... ok
+test sqlite_prototype::adapter_tests::resize_zero_uses_worker_drop_even_when_manager_detach_is_bypassed ... ok
+test sqlite_prototype::adapter_tests::stock_detach_permit_before_handle_drop_cannot_start_another_native_worker ... ok
+test sqlite_prototype::adapter_tests::taken_object_cannot_start_replacement_before_old_native_worker_joins ... ok
+test sqlite_prototype::adapter_tests::tokio_runtime_drop_cannot_return_native_owned_checkout_before_cleanup ... ok
+test http_server::tests::stalled_response_send_expires_and_releases_connection_permit ... ok
+test sqlite_prototype::tests::begin_reply_cancellation_closes_only_sender_and_runs_observed_cleanup ... ok
+test sqlite_prototype::tests::cancelled_commit_reply_preserves_committed_data_and_does_not_retry ... ok
+test sqlite_prototype::tests::cancelled_finish_before_full_inbox_admission_uses_eof_cleanup ... ok
+test sqlite_prototype::tests::close_timeout_and_cancel_keep_closing_until_native_close_and_join ... ok
+test sqlite_prototype::tests::commit_after_native_auto_rollback_returns_aborted_error_instead_of_success ... ok
+test sqlite_prototype::tests::commit_failure_and_failed_cleanup_preserve_both_causes_and_unknown_outcome ... ok
+test sqlite_prototype::tests::committed_outcome_and_cleanup_failure_are_both_preserved ... ok
+test sqlite_prototype::tests::eof_cleanup_blocks_next_session_and_unpolled_finish_still_owns_cleanup ... ok
+test sqlite_prototype::tests::existing_trigger_and_or_rollback_abort_session_and_reject_later_sql ... ok
+test sqlite_prototype::tests::failed_commit_with_successful_observed_rollback_can_reuse_connection ... ok
+test sqlite_prototype::tests::full_inbox_and_cancelled_admitted_operation_drain_before_eof_rollback ... ok
+test sqlite_prototype::tests::management_panic_restores_raii_flag_before_observed_rollback_and_retirement ... ok
+test sqlite_prototype::tests::native_close_failure_is_not_reported_as_success_even_after_join ... ok
+test sqlite_prototype::tests::one_statement_anonymous_bind_and_operation_shape_are_checked_before_step ... ok
+test sqlite_prototype::tests::ordinary_sql_error_does_not_abort_active_session_and_exec_counts_direct_changes ... ok
+test sqlite_prototype::tests::owned_bind_values_and_decode_errors_use_native_row_contract ... ok
+test sqlite_prototype::tests::pragma_tvf_existing_views_and_schema_reprepare_keep_authorizer_installed ... ok
+test sqlite_prototype::tests::raise_fail_preserves_active_prior_effects_until_explicit_rollback ... ok
+test sqlite_prototype::tests::rollback_failure_is_observed_without_native_drop_retry_and_retires_connection ... ok
+test sqlite_prototype::tests::sql_policy_denies_control_in_every_entry_and_keeps_tx_active ... ok
+test sqlite_prototype::tests::trigger_pragma_is_denied_and_native_prior_effects_require_explicit_rollback ... ok
+test sqlite_prototype::tests::user_callback_panic_restores_management_state_and_retires_worker ... ok
+test tests::arena_scope ... ok
+test tests::borrowed_json_address ... ok
+test tests::float_validation ... ok
+test tests::json_direct ... ok
+test tests::json_invalid_utf8 ... ok
+test tests::json_wrong_type ... ok
+test tests::slice_bounds ... ok
+test tests::uuid_roundtrip ... ok
+test tests::zero_copy_pointer ... ok
+test http_server::tests::header_idle_deadline_is_independent_of_send_deadline_after_flush ... ok
+test http::tests::body_timeout_remains_separate_from_header_wait ... ok
+test sqlite_prototype::comparison::direct_and_deadpool_warm_native_session_comparison ... ok
+
+test result: ok. 179 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.44s
+
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagic-a61bd4a0952db730)
+
+running 121 tests
+test capabilities::tests::charge_recursive_lists_have_known_storage_but_require_a_walk ... ok
+test capabilities::tests::charge_inline_capability_accounts_for_every_enum_variant ... ok
+test capabilities::tests::charge_rejects_excluded_storage_with_a_nested_field_path ... ok
+test capabilities::tests::indirect_cycles_remain_serializable_only_with_serializable_fields ... ok
+test capabilities::tests::private_causes_prevent_serialization_through_nested_records ... ok
+test capabilities::tests::native_debug_does_not_require_generic_payload_debug ... ok
+test capabilities::tests::native_payload_roles_are_purpose_specific ... ok
+test check::checked::tests::final_diagnostic_transports_kind_without_changing_user_messages ... ok
+test check::checked::tests::final_factory_checks_and_seals_owned_input ... ok
+test capabilities::tests::serde_charge_and_owned_fields_are_distinct_capabilities ... ok
+test check::checked::tests::final_factory_rejects_invalid_input ... ok
+test check::checked::tests::missing_declaration_type_is_rejected_without_rechecking ... ok
+test check::checked::tests::missing_binding_and_pattern_types_are_rejected_without_rechecking ... ok
+test check::checked::tests::missing_name_resolution_is_rejected_without_rechecking ... ok
+test check::checked::tests::sealed_missing_expression_plan_fails_closed ... ok
+test check::checked::tests::sealed_missing_operand_role_fails_closed ... ok
+test check::checked::tests::facts_and_emission_are_deterministic_and_read_only ... ok
+test check::checked::tests::sealing_rejects_missing_expression_types ... ok
+test check::checked::tests::sealed_missing_rust_type_plan_fails_closed ... ok
+test check::checked::tests::unknown_origin_is_not_user_blame ... ok
+test check::checked::tests::symbolic_enum_owner_is_not_an_untyped_payload ... ok
+test check::checked::tests::sealed_missing_required_flow_or_slots_fails_closed ... ok
+test check::flow_metadata_tests::flow_collection_is_gated_to_view_return_dependencies ... ok
+test check::flow_metadata_tests::checked_operand_roles_reach_codegen_and_missing_roles_fail ... ok
+test check::flow_metadata_tests::flow_facts_recompute_for_high_saved_low_and_self_consumption ... ok
+test check::checked::tests::generated_saved_native_replacement_and_synthetic_origins_are_distinct ... ok
+test check::flow_metadata_tests::content_mutation_events_survive_rhs_replacement_and_stay_in_their_statement ... ok
+test check::flow_metadata_tests::loop_regions_preserve_candidate_reads_and_assignments ... ok
+test modules::metadata_tests::intrinsic_transport_rejects_forged_namespace_collisions_and_unknown_heads ... ok
+test modules::metadata_tests::intrinsic_type_transport_is_structural_and_avoids_real_bindings ... ok
+test modules::metadata_tests::low_identity_is_portable_between_unix_drive_and_unc_paths ... ok
+test modules::metadata_tests::low_metadata_rejects_unknown_topology_and_span_fields ... ok
+test modules::metadata_tests::malformed_internal_looking_names_keep_their_original_display ... ok
+test modules::metadata_tests::metadata_cannot_rebind_a_definition_to_a_builtin_or_unrelated_id ... ok
+test modules::metadata_tests::metadata_rejects_relative_noncanonical_and_traversing_ids ... ok
+test check::flow_metadata_tests::flow_snapshots_only_keep_return_dependency_bindings ... ok
+test sql_check::collect::tests::checked_high_and_saved_low_preserve_supported_operations_and_source_fields ... ok
+test check::flow_metadata_tests::semantic_value_edges_keep_mutation_inputs_without_scalar_overselection ... ok
+test sql_check::collect::tests::conditional_loop_and_match_bodies_are_collected_once ... ok
+test sql_check::collect::tests::dynamic_sql_and_exec_scripts_remain_visible_as_excluded_sites ... ok
+test sql_check::collect::tests::integrated_native_replacements_only_collect_the_final_function_body ... ok
+test sql_check::collect::tests::aliased_row_classes_use_canonical_identity_and_original_field_names ... ok
+test sql_check::collect::tests::nested_value_expressions_returns_and_scope_spawn_keep_each_actual_call ... ok
+test sql_check::collect::tests::same_named_user_function_and_local_function_value_are_not_sql_calls ... ok
+test sql_check::engine::tests::columns_aliases_and_sqlite_parameter_numbering ... ok
+test sql_check::engine::tests::every_default_expression_uses_the_function_allowlist_even_when_unused ... ok
+test sql_check::engine::tests::external_files_and_extension_paths_are_never_opened_or_modified ... ok
+test sql_check::collect::tests::collection_rejects_excessive_sites_at_the_first_over_limit_call ... ok
+test sql_check::engine::tests::ordinary_tables_indexes_views_and_pure_functions_are_supported ... ok
+test sql_check::collect::tests::repeated_row_metadata_is_bounded_before_building_the_worker_request ... ok
+test sql_check::engine::tests::prepare_only_dml_does_not_write_application_rows ... ok
+test sql_check::engine::tests::prepare_authorizer_also_rejects_unsafe_view_functions ... ok
+test sql_check::engine::tests::rejects_operation_shape_mismatches ... ok
+test sql_check::engine::tests::schema_is_ddl_snapshot_not_migration_or_arbitrary_sql ... ok
+test sql_check::tests::bounded_input_does_not_accept_a_truncated_prefix ... ok
+test sql_check::engine::tests::sqlite_identifier_defaults_remain_literals_without_hiding_function_terms ... ok
+test check::flow_metadata_tests::return_alias_dependencies_keep_straight_line_snapshots_sparse ... ok
+test sql_check::tests::terminating_a_worker_returns_its_reaped_exit_status ... ok
+test sql_check::tests::worker_fixture ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_arity_parameter_mismatch - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_duplicate_in_one_role - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_missing_role - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_out_of_range_role - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_overlapping_roles - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_roles_on_zero_arity - should panic ... ok
+test stdlib::resource_contract_tests::legacy_views_borrow_the_registered_descriptor ... ok
+test stdlib::resource_contract_tests::registered_roles_match_the_independent_position_oracle ... ok
+test tests::await_only_async ... ok
+test tests::bad_string ... ok
+test tests::class_field_check ... ok
+test tests::class_move ... ok
+test tests::console_io_roundtrip ... ok
+test tests::copy_value_class ... ok
+test tests::cost_not_dynamic_count ... ok
+test tests::duplicate_class_fields ... ok
+test tests::empty_list_inference ... ok
+test tests::error_propagation ... ok
+test tests::explicit_copy ... ok
+test tests::floating_literals_accept_f32_boundary_and_roundtrip ... ok
+test tests::floating_literals_keep_f64_range_and_default_inference ... ok
+test tests::floating_literals_reject_f32_overflow_in_high_and_low ... ok
+test tests::forgotten_await ... ok
+test tests::hello ... ok
+test tests::html_route_is_not_encoded_as_json ... ok
+test tests::invalid_indent ... ok
+test tests::low_standalone ... ok
+test tests::mismatched_type ... ok
+test tests::missing_return ... ok
+test tests::native_numeric ... ok
+test tests::nested_view_in_class_rejected ... ok
+test tests::no_implicit_conversion ... ok
+test tests::nullable ... ok
+test tests::number_overflow ... ok
+test tests::owned_parameter_cannot_return_view ... ok
+test tests::precedence ... ok
+test tests::recursive_value ... ok
+test tests::replace_bad_signature ... ok
+test tests::replace_exact_signature ... ok
+test sql_check::engine::tests::finite_limits_reject_large_and_deep_inputs ... ok
+test sql_check::tests::encoded_metadata_is_bounded_including_json_escaping ... ok
+test sql_check::tests::deadline_kills_and_reaps_a_worker_with_blocked_input ... ok
+test tests::resource_contract_goldens::data_derives_golden ... ok
+test tests::result_must_handle ... ok
+test tests::roundtrip_low ... ok
+test tests::rust_extern_interface_and_low_roundtrip ... ok
+test tests::scope_spawn ... ok
+test tests::signed_minimum_literals_are_in_range_in_high_and_low ... ok
+test tests::signed_minimum_literals_compile_and_run_after_lowering ... ok
+test tests::string_move ... ok
+test tests::tabs_rejected ... ok
+test tests::unknown_class ... ok
+test tests::unknown_name ... ok
+test tests::unscoped_spawn ... ok
+test tests::view_cannot_spawn ... ok
+test tests::view_escape ... ok
+test tests::view_prevents_move ... ok
+test tests::view_prevents_mutation ... ok
+test tests::view_return_parameter ... ok
+test tests::resource_contract_goldens::actor_data_golden ... ok
+test tests::resource_contract_goldens::http_borrow_and_mappers_golden ... ok
+test tests::resource_contract_goldens::http_inspection_golden ... ok
+
+test result: ok. 121 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+     Running unittests src/main.rs (/tmp/nagi-container-flow-target/debug/deps/nagic-541469ec0a24c719)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/actor_codegen.rs (/tmp/nagi-container-flow-target/debug/deps/actor_codegen-7b0cbadd8e0c31d7)
+
+running 2 tests
+test actor_charge_generation_survives_low_without_clones_reflection_or_serde_requirements ... ok
+test generated_nominal_charges_execute_against_native_capacity_and_walk_limits ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.08s
+
+     Running tests/actor_stdlib.rs (/tmp/nagi-container-flow-target/debug/deps/actor_stdlib-3d101f835d09a5b6)
+
+running 12 tests
+test lifecycle_text_views_follow_their_native_owner_and_cannot_serialize ... ok
+test actor_and_http_aliases_keep_distinct_registry_identity_without_fake_classes ... ok
+test callback_shapes_and_custom_error_identity_are_checked_before_native_build ... ok
+test named_task_factory_aliases_require_shared_context_async_unit_and_builtin_error ... ok
+test explicit_task_readiness_and_typed_event_deadlines_execute_from_high_and_low ... ok
+test readiness_factory_and_wait_error_contracts_are_checked_before_native_build ... ok
+test saved_low_cannot_invent_actor_types_capabilities_or_standard_implementations ... ok
+test spawning_borrowing_native_futures_requires_an_owned_named_wrapper ... ok
+test turn_inline_layout_generics_and_left_to_right_moves_are_not_erased ... ok
+test messages_replies_and_business_errors_reject_unaccounted_nested_payloads ... ok
+test owned_custom_class_replies_and_errors_execute_without_clone_or_serde_bounds ... ok
+test pending_owned_state_business_failure_and_restart_execute_from_high_and_low ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.17s
+
+     Running tests/asset_calls.rs (/tmp/nagi-container-flow-target/debug/deps/asset_calls-103c7a34e7c1edba)
+
+running 2 tests
+test a_missing_real_asset_still_reports_the_original_call ... ok
+test local_callbacks_named_include_text_keep_literals_and_restore_builtin_after_scope ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/async_value_types.rs (/tmp/nagi-container-flow-target/debug/deps/async_value_types-6ca03c513f546276)
+
+running 6 tests
+test assigning_an_unawaited_future_reports_the_call_site ... ok
+test async_function_signatures_and_container_types_fail_before_emission ... ok
+test a_class_named_future_is_not_an_async_result ... ok
+test changing_async_function_aliases_fails_at_the_assignment ... ok
+test local_async_aliases_keep_inferred_and_explicit_types ... ok
+test ordinary_future_records_are_not_awaited_or_treated_as_async_statements ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/auth_boundaries.rs (/tmp/nagi-container-flow-target/debug/deps/auth_boundaries-723f23d8c088f666)
+
+running 9 tests
+test handwritten_low_and_owned_local_containers_keep_nominal_marker_identity ... ok
+test aliases_option_result_and_async_delegation_preserve_proof_identity ... ok
+test a_function_signature_and_a_deep_dto_do_not_contain_a_proof_payload ... ok
+test missing_principal_grant_wrong_permission_and_reuse_are_rejected ... ok
+test opaque_proofs_cannot_be_constructed_decoded_copied_or_shared ... ok
+test indirect_arc_state_cannot_share_a_proof ... ok
+test proof_move_and_nominal_marker_build_and_run_against_real_runtime ... ok
+test native_phantom_types_do_not_become_field_payloads ... ok
+test opaque_main_errors_fail_without_a_debug_bound_or_proof_payload ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.81s
+
+     Running tests/borrow_free_returns.rs (/tmp/nagi-container-flow-target/debug/deps/borrow_free_returns-b35132eebd82b278)
+
+running 5 tests
+test adding_local_views_to_absent_values_still_rejects_escape ... ok
+test clearing_values_does_not_erase_rust_lifetime_constraints ... ok
+test unknown_native_origins_do_not_gain_an_absence_proof ... ok
+test direct_absent_returns_remain_legal_after_local_borrows ... ok
+test absent_views_in_nullable_empty_lists_and_failures_can_be_returned ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+
+     Running tests/build_diagnostics.rs (/tmp/nagi-container-flow-target/debug/deps/build_diagnostics-a95d71efc7ca4ace)
+
+running 30 tests
+test child_notes_cannot_relabel_an_unmapped_primary_or_dependency ... ok
+test child_notes_keep_module_locations_and_readable_definition_names ... ok
+test dependency_synthetic_and_incomplete_diagnostics_fall_back_without_guessing ... ok
+test existing_path_aliases_match_only_the_generated_file ... ok
+test a_successful_run_stays_quiet_and_passes_through_program_output ... ok
+test finite_f32_extremes_compile_and_run_after_lowering ... ok
+test high_build_points_to_nagi_and_keeps_rust_notes_and_failure_status ... ok
+test cli_maps_adapter_mismatch_without_repeating_generated_rust_by_default ... ok
+test imported_high_uses_the_dependency_path_and_local_line ... ok
+test invalid_entrypoints_are_rejected_before_cargo_with_source_locations ... ok
+test invalid_operators_in_imports_report_nagi_lines_before_rust_or_cargo ... ok
+test imported_low_uses_its_own_file_instead_of_the_entry_file ... ok
+test iterator_mutation_fails_in_check_and_build_before_backend_generation ... ok
+test lowering_restores_nested_statement_expression_arm_and_field_lines ... ok
+test native_signature_errors_also_keep_the_native_low_location ... ok
+test overflowing_f32_is_rejected_at_the_source_before_backend_build ... ok
+test repeated_moves_fail_in_check_and_build_before_invoking_rust ... ok
+test repeated_moves_keep_imported_and_replacement_source_locations ... ok
+test native_rust_errors_are_not_relabelled_as_nagi ... ok
+test replacement_adapter_errors_point_to_the_handwritten_low_file ... ok
+test extern_argument_and_sync_async_mismatches_fail_at_the_declaration_in_high_and_low ... ok
+test safe_reinitialization_and_return_paths_check_build_and_run ... ok
+test standalone_low_uses_the_original_low_lines ... ok
+test try_result_reuse_reports_source_lines_before_invoking_cargo ... ok
+test unix_backslashes_do_not_turn_a_dependency_path_into_the_generated_file ... ok
+test unsupported_class_fields_and_async_reassignments_fail_before_backend_generation ... ok
+test windows_paths_and_canonical_prefixes_match_only_the_generated_target ... ok
+test run_preserves_json_stdout_with_and_without_a_cost_report_in_high_and_saved_low ... ok
+test imported_async_ffi_send_failure_maps_the_cause_note_in_high_and_saved_low ... ok
+test source_names_with_spaces_and_dots_build_and_run ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.85s
+
+     Running tests/build_generations.rs (/tmp/nagi-container-flow-target/debug/deps/build_generations-7533d5f1d360ce40)
+
+running 23 tests
+test cargo_cache_keeps_a_preexisting_default_package_binary_unchanged ... ok
+test invalid_input_does_not_create_output_or_its_lock ... ok
+test a_running_old_executable_is_not_replaced_by_a_new_build ... ok
+test latest_metadata_used_as_an_input_cannot_be_overwritten_by_rebuild ... ok
+test cargo_failure_retains_latest_and_inherited_lockfile ... ok
+test lock_is_permanent_and_input_protection_is_rechecked_after_waiting ... ok
+test nonwriting_low_check_and_lower_do_not_wait_for_the_output_writer_lock ... ok
+test compatibility_outputs_cannot_alias_previous_latest_metadata ... ok
+test long_basename_accepted_by_the_previous_cache_scheme_uses_a_short_generation_bin ... ok
+test latest_temp_failure_keeps_old_metadata_and_does_not_run_new_generation ... ok
+test published_manifest_runtime_reference_resolves_from_the_published_location ... ok
+test orphan_cargo_uses_an_immutable_snapshot_and_cannot_replace_next_generation ... ok
+test parallel_latest_readers_observe_only_complete_published_generations ... ok
+test projection_failure_keeps_old_latest_and_reports_partial_projection ... ok
+test rebuild_publishes_new_generation_and_preserves_old_executable_and_snapshot ... ok
+test source_snapshot_retains_raw_non_utf8_canonical_path_without_rejecting_old_accepted_input ... ok
+test run_releases_output_lock_before_waiting_for_the_selected_executable ... ok
+test user_low_snapshot_comes_from_this_input_instead_of_a_stale_high_projection ... ok
+test writing_high_check_cannot_alias_previous_latest ... ok
+test writing_cost_report_cannot_alias_previous_latest ... ok
+test writing_high_lower_cannot_alias_previous_latest ... ok
+test same_and_different_apps_with_equivalent_output_paths_wait_for_one_output_writer ... ok
+test writing_check_lower_and_cost_wait_while_build_owns_the_output_lock ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.30s
+
+     Running tests/builtin_cast_precedence.rs (/tmp/nagi-container-flow-target/debug/deps/builtin_cast_precedence-1a960e6805e84f54)
+
+running 1 test
+test length_and_size_casts_preserve_comparison_negation_and_numeric_contexts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/builtin_type_contracts.rs (/tmp/nagi-container-flow-target/debug/deps/builtin_type_contracts-b43a163e07dec8d3)
+
+running 10 tests
+test borrowed_byte_decoding_requires_builtin_u8_in_generated_slices ... ok
+test json_decoder_checks_borrowed_slices_and_builtin_map_key_traits ... ok
+test json_encoding_rejects_unawaited_futures_and_inferred_future_containers ... ok
+test encoded_runtime_values_are_rejected_even_when_a_same_named_class_exists ... ok
+test json_rejects_definitely_non_serializable_types_at_the_call ... ok
+test same_named_classes_keep_the_emitted_json_and_database_contracts ... ok
+test user_functions_with_json_builtin_names_keep_their_own_contracts ... ok
+test database_rows_keep_generated_and_manual_bridge_implementations ... ok
+test all_database_row_builtins_reject_scalar_or_foreign_container_targets ... ok
+test json_keeps_data_classes_shared_values_and_borrowed_strings_or_bytes ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/class_field_types.rs (/tmp/nagi-container-flow-target/debug/deps/class_field_types-287b4845df0a2145)
+
+running 5 tests
+test map_keys_with_missing_equality_or_hashing_fail_before_derivation ... ok
+test nested_data_fields_and_bridge_defined_key_traits_remain_available ... ok
+test unsupported_resource_and_function_fields_fail_at_the_field_line ... ok
+test owned_database_fields_are_private_state_and_keep_high_low_emission_valid ... ok
+test native_database_debug_hides_connection_details_inside_shared_state ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s
+
+     Running tests/cli.rs (/tmp/nagi-container-flow-target/debug/deps/cli-dee95745c9b548ff)
+
+running 7 tests
+test an_unusable_cargo_is_not_reported_as_a_missing_rust_installation ... ok
+test check_and_lower_put_status_on_stderr_and_keep_cost_report_machine_readable ... ok
+test check_needs_no_cargo_and_build_reports_the_missing_tool ... ok
+test version_rejects_unexpected_arguments ... ok
+test help_works_without_source_or_valid_project ... ok
+test version_works_without_project_runtime_or_build_tools ... ok
+test cargo_failure_preserves_the_cause_without_blaming_the_nagi_program ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/codegen.rs (/tmp/nagi-container-flow-target/debug/deps/codegen-9bef428f95955e2c)
+
+running 16 tests
+test a_record_named_fn_does_not_become_a_copy_function_value ... ok
+test builtin_option_and_result_constructors_do_not_call_user_functions ... ok
+test async_function_values_keep_their_future_return_type ... ok
+test explicit_local_async_function_annotations_compile_and_run ... ok
+test for_bindings_can_be_reassigned_without_changing_the_iterator_or_outer_binding ... ok
+test local_function_values_shadow_builtins_and_functions ... ok
+test function_values_preserve_the_shared_view_lifetime ... ok
+test nested_views_compile_and_copy_strings_bytes_and_lists ... ok
+test numeric_negation_and_nested_view_comparisons_compile_and_run ... ok
+test reassignment_of_the_same_async_function_through_aliases_compiles_and_runs ... ok
+test output_compiles_for_numbers_booleans_and_borrowed_strings ... ok
+test result_match_compiles_and_runs_owned_and_borrowed_payloads ... ok
+test rust_keywords_and_generated_helper_names_remain_valid_nagi_names ... ok
+test returning_a_function_value_does_not_borrow_local_data ... ok
+test user_functions_with_builtin_names_keep_their_call_targets ... ok
+test user_and_local_functions_named_serve_compile_without_http_runtime ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+
+     Running tests/comparison_ownership.rs (/tmp/nagi-container-flow-target/debug/deps/comparison_ownership-3a5b952c6574bc14)
+
+running 4 tests
+test comparisons_hold_the_left_operand_through_right_operand_evaluation ... ok
+test copy_aggregate_comparisons_borrow_fields_and_indexed_containers ... ok
+test native_resource_comparisons_do_not_allow_moving_the_borrowed_request ... ok
+test completed_copy_operands_disjoint_fields_and_temporary_views_remain_valid ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/conformance.rs (/tmp/nagi-container-flow-target/debug/deps/conformance-55ddefd74e15f85a)
+
+running 5 tests
+test batch_root_relocation_preserves_literals_raw_strings_and_comments ... ok
+test failure_shrinking_preserves_the_checker_failure_instead_of_a_parse_error ... ok
+test native_process_deadline_reaps_a_hanging_child ... ok
+test backend_shrinking_does_not_turn_an_oracle_error_into_a_compiler_reproducer ... ok
+test corpus_and_bounded_generated_contracts_reach_native_execution ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+     Running tests/constant_validation.rs (/tmp/nagi-container-flow-target/debug/deps/constant_validation-4b0d96480c5def98)
+
+running 10 tests
+test builtin_widening_uses_resolution_and_result_casts_remain_opaque ... ok
+test compound_failures_are_checked_even_in_dead_branches_and_short_circuit_rhs ... ok
+test binding_facts_follow_reassignment_scope_and_continuing_branch_joins ... ok
+test loop_writes_kill_facts_before_conditions_and_respect_shadowed_counter_bindings ... ok
+test profile_dependent_intermediates_are_not_folded_to_a_known_zero ... ok
+test signed_minimum_division_and_remainder_are_static_failures_in_every_width ... ok
+test typed_ast_errors_precede_new_constant_diagnostics ... ok
+test compound_and_alias_zero_fail_after_type_check_in_all_widths_and_forms ... ok
+test compound_diagnostics_identify_original_modules_before_cargo ... ok
+test minimum_negation_and_integer_oracle_build_and_run_in_both_profiles ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+
+     Running tests/copy_capabilities.rs (/tmp/nagi-container-flow-target/debug/deps/copy_capabilities-2b3e198e729b4896)
+
+running 2 tests
+test omitted_clone_adapter_reports_the_element_clone_bound ... ok
+test manual_clone_adapter_copies_owned_enum_payloads_in_high_and_independent_low ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/enum_emission.rs (/tmp/nagi-container-flow-target/debug/deps/enum_emission-0f626e52586527f3)
+
+running 5 tests
+test data_records_keep_serde_while_enum_fields_remain_private ... ok
+test custom_main_errors_need_only_debug_and_copy_enums_reuse_values ... ok
+test native_enum_constructors_patterns_and_result_propagation_roundtrip ... ok
+test error_cause_records_move_payloads_without_serde_or_clone_requirements ... ok
+test module_enum_aliases_preserve_identity_and_escape_variant_fields ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/enum_modules.rs (/tmp/nagi-container-flow-target/debug/deps/enum_modules-3ccc1b42935c0464)
+
+running 9 tests
+test builtin_spelled_enum_aliases_keep_intrinsic_types_distinct_in_generated_low ... ok
+test enum_payload_types_use_the_definition_file_scope_and_survive_low ... ok
+test different_files_have_distinct_enum_types_even_with_equal_names_and_variants ... ok
+test enum_aliases_and_guessed_canonical_symbols_do_not_escape_module_scopes ... ok
+test namespace_from_and_flat_imports_share_enum_identity_in_constructors_and_patterns ... ok
+test local_values_shadow_enum_value_syntax_but_named_constructor_uses_type_scope ... ok
+test native_fragments_reuse_high_enum_aliases_and_export_their_own_enum_identity ... ok
+test saved_low_enum_variants_navigate_to_the_opened_file ... ok
+test enum_symbols_keep_variant_targets_alias_signatures_and_payload_binding_types ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/enum_parser.rs (/tmp/nagi-container-flow-target/debug/deps/enum_parser-85ce71ff4a184be9)
+
+running 8 tests
+test enum_constructors_keep_the_existing_expression_forms ... ok
+test enums_keep_variant_names_fields_types_and_source_locations ... ok
+test contextual_enum_word_remains_an_identifier_inside_declarations_and_calls ... ok
+test enum_payload_types_use_the_existing_nesting_limit ... ok
+test invalid_enum_declarations_return_parse_errors ... ok
+test result_patterns_preserve_ok_err_and_discard_bindings ... ok
+test enum_patterns_keep_qualified_names_and_each_payload_binding_span ... ok
+test patterns_reject_wildcards_nested_matches_and_unnamed_variants ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/enum_patterns.rs (/tmp/nagi-container-flow-target/debug/deps/enum_patterns-762ccdff0008de51)
+
+running 1 test
+test mutable_enum_patterns_preserve_names_and_compile_without_shorthand_warnings ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/error_routes.rs (/tmp/nagi-container-flow-target/debug/deps/error_routes-5e9235635fc8f46d)
+
+running 2 tests
+test existing_data_and_html_http_routes_keep_their_representations ... ok
+test private_error_data_is_rejected_at_http_json_boundaries_in_high_and_low ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/expression_contracts.rs (/tmp/nagi-container-flow-target/debug/deps/expression_contracts-4b5ba9851be0010e)
+
+running 2 tests
+test literal_suffixes_preserve_contextual_numeric_types_and_negative_boundaries ... ok
+test inferred_i64_literals_keep_their_type_without_a_rust_type_context ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/frontend_contracts.rs (/tmp/nagi-container-flow-target/debug/deps/frontend_contracts-9b82279aadd95a2e)
+
+running 5 tests
+test generic_builtins_and_ordinary_record_constructors_still_roundtrip ... ok
+test speculative_index_recovery_preserves_actual_nesting_limits ... ok
+test record_constructors_reject_type_arguments_in_high_low_and_symbols ... ok
+test lowering_keeps_try_and_await_as_field_and_index_receivers ... ok
+test index_lookahead_does_not_accumulate_nesting_across_statements_or_functions ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.92s
+
+     Running tests/graph_html.rs (/tmp/nagi-container-flow-target/debug/deps/graph_html-c3af040d63c6ed58)
+
+running 3 tests
+test standalone_viewer_keeps_assets_local_and_uses_safe_dom_text ... ok
+test only_physical_absolute_sources_receive_encoded_user_action_links ... ok
+test hostile_unicode_graph_data_remains_json_and_cannot_close_the_script ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/graph_relations.rs (/tmp/nagi-container-flow-target/debug/deps/graph_relations-6964f24e12172ba5)
+
+running 9 tests
+test all_views_use_shortest_unique_physical_suffixes_before_filtering ... ok
+test calls_resolve_named_aliases_without_guessing_local_function_values ... ok
+test module_imports_are_read_from_loaded_overlay_text ... ok
+test checked_standard_and_database_operations_are_boundaries_not_routing_or_table_guesses ... ok
+test native_replacements_keep_the_generated_id_and_low_ffi_locations ... ok
+test module_edges_use_exact_identities_and_recover_empty_flat_imports ... ok
+test one_line_low_import_references_do_not_hide_body_uses ... ok
+test saved_low_keeps_definition_ids_without_mapping_foreign_modules_to_its_file ... ok
+test nested_calls_are_visited_but_class_and_enum_constructors_are_not_calls ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/graph_render.rs (/tmp/nagi-container-flow-target/debug/deps/graph_render-6150aa0bf1e0a78d)
+
+running 9 tests
+test image_arguments_are_validated_before_starting_a_renderer ... ok
+test diagram_order_is_deterministic_and_empty_graphs_are_readable ... ok
+test clustered_edges_reference_declared_nodes_without_group_boundary_duplicates ... ok
+test labels_preserve_unicode_without_becoming_diagram_syntax_or_links ... ok
+test mermaid_literal_hashes_backticks_and_directives_cannot_change_the_render_config ... ok
+test process_tests::image_child ... ok
+
+running 1 test
+test process_tests::image_child ... 
+running 1 test
+test process_tests::image_child ... 
+running 1 test
+test process_tests::image_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+test process_tests::missing_renderer_explains_installation_and_d2_source_fallback ... ok
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+test process_tests::export_passes_arguments_literally_without_a_shell ... ok
+test process_tests::failed_renderer_reports_stderr_and_removes_its_source ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/graph_types.rs (/tmp/nagi-container-flow-target/debug/deps/graph_types-85518bcee552214c)
+
+running 7 tests
+test imported_same_named_types_keep_author_identity_and_original_source_lines ... ok
+test focused_depth_is_bounded_on_cycles_and_defaults_to_one_hop ... ok
+test ir_deduplicates_and_sorts_without_renderer_syntax_or_losing_isolated_types ... ok
+test field_display_limits_do_not_erase_relationships_from_later_fields ... ok
+test independent_low_preserves_type_identity_and_reports_its_physical_source ... ok
+test declarations_preserve_field_variant_wrapper_and_signature_meanings ... ok
+test resource_type_arguments_are_dependencies_without_inventing_runtime_instances ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/http_codegen.rs (/tmp/nagi-container-flow-target/debug/deps/http_codegen-0b75056186eb00b9)
+
+running 4 tests
+test literal_view_optimization_does_not_change_a_shadowing_owned_function ... ok
+test borrowed_http_inspection_and_async_registration_add_no_owned_adapter_work ... ok
+test borrow_and_named_mappers_preserve_high_low_codegen ... ok
+test borrow_and_named_mapper_registration_execute_native_adapters ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.89s
+
+     Running tests/http_entrypoint.rs (/tmp/nagi-container-flow-target/debug/deps/http_entrypoint-42a7327cb3bb5755)
+
+running 4 tests
+test routes_without_a_serve_call_still_emit_http_glue ... ok
+test shadowed_serve_calls_and_non_http_programs_do_not_emit_http_glue ... ok
+test zero_route_entrypoint_follows_builtin_calls_in_nested_high_and_low ... ok
+test zero_route_servers_build_and_return_runtime_errors_in_high_and_low ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.95s
+
+     Running tests/http_route_conflicts.rs (/tmp/nagi-container-flow-target/debug/deps/http_route_conflicts-4d490e6f5d37331a)
+
+running 3 tests
+test get_handlers_cannot_replace_builtin_endpoints ... ok
+test shared_patterns_distinct_paths_and_literal_braces_remain_available ... ok
+test equivalent_capture_paths_are_rejected_even_for_different_methods ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/http_stdlib.rs (/tmp/nagi-container-flow-target/debug/deps/http_stdlib-3226ad5ba189dad2)
+
+running 15 tests
+test handlers_require_exact_async_request_shared_state_and_error_contracts ... ok
+test header_views_depend_on_request_owner_and_not_the_name_temporary ... ok
+test borrowed_option_temporaries_allow_arm_local_use_but_cannot_escape ... ok
+test json_content_type_requires_a_request_and_has_no_generic_arguments ... ok
+test apps_validate_generic_arity_owned_state_and_mapper_error_type ... ok
+test method_name_views_can_return_from_borrowed_request_parameters ... ok
+test optional_header_and_query_views_keep_the_request_borrow_through_match ... ok
+test ordinary_classes_and_local_shadows_cannot_impersonate_standard_resources ... ok
+test saved_low_cannot_change_registry_identity_or_define_resource_implementations ... ok
+test native_method_comparisons_borrow_but_assignment_tracks_request_partial_moves ... ok
+test standard_resolution_ignores_cwd_files_and_unsaved_lookalikes ... ok
+test standard_aliases_are_registry_resources_and_roundtrip_independently ... ok
+test resource_construction_serialization_and_shared_field_moves_fail_before_build ... ok
+test resource_references_do_not_acquire_legacy_slice_operations ... ok
+test status_method_and_db_free_app_execute_from_high_and_saved_low ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.34s
+
+     Running tests/imports.rs (/tmp/nagi-container-flow-target/debug/deps/imports-d052c0b510a72395)
+
+running 6 tests
+test cycles_missing_files_and_mixed_language_imports_are_errors ... ok
+test field_move_errors_point_to_the_original_imported_file_and_line ... ok
+test low_imports_use_the_low_parser ... ok
+test diamond_import_is_loaded_once_and_assets_use_their_source_directory ... ok
+test type_errors_point_to_the_original_imported_file_and_line ... ok
+test match_arms_preserve_imported_diagnostics_and_embedded_assets ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/installation.rs (/tmp/nagi-container-flow-target/debug/deps/installation-5dab5c651bdb3cf9)
+
+running 3 tests
+test wrong_root_explains_the_distribution_folder_before_calling_cargo ... ok
+test moved_distribution_builds_an_external_project_with_no_root_override ... ok
+test standalone_build_keeps_native_artifacts_in_the_working_directory ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/integer_arithmetic.rs (/tmp/nagi-container-flow-target/debug/deps/integer_arithmetic-de6b13dd9c03069d)
+
+running 2 tests
+test native_adapter_constant_overflow_keeps_rust_diagnostics ... ok
+test constant_integer_arithmetic_preserves_release_wrapping_and_debug_panics ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/integer_zero_division.rs (/tmp/nagi-container-flow-target/debug/deps/integer_zero_division-8f08520c841d08e7)
+
+running 5 tests
+test dynamic_aliases_remain_runtime_operations ... ok
+test operand_and_earlier_type_errors_keep_priority_over_zero_divisor_errors ... ok
+test explicit_integer_zero_divisors_fail_in_high_handwritten_low_and_saved_low ... ok
+test cli_rejects_zero_at_the_original_file_and_line_before_cargo ... ok
+test dynamic_zero_nonzero_and_float_controls_compile_and_run_in_both_profiles ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s
+
+     Running tests/iterator_borrows.rs (/tmp/nagi-container-flow-target/debug/deps/iterator_borrows-aa3c3844a38b4c45)
+
+running 6 tests
+test iterator_borrows_reject_mutation_reassignment_and_moves_on_continuing_paths ... ok
+test iterator_loans_survive_view_alias_changes_and_nested_loops ... ok
+test view_origins_survive_branch_joins_and_nonborrowed_call_arguments ... ok
+test field_loans_keep_disjoint_fields_available_and_block_the_whole_owner ... ok
+test returning_paths_do_not_retain_an_unused_iterator_loan ... ok
+test unrelated_values_shadowed_bindings_and_post_loop_mutation_stay_valid ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/list_borrow_iteration.rs (/tmp/nagi-container-flow-target/debug/deps/list_borrow_iteration-eb922f0fcc9dc1f2)
+
+running 5 tests
+test borrowed_elements_and_their_field_views_cannot_escape ... ok
+test borrowed_elements_cannot_move_reassign_or_mutate ... ok
+test an_active_element_pins_its_owner_and_aliases ... ok
+test symbols_distinguish_borrowed_record_locals_and_fields ... ok
+test noncopy_iteration_is_native_and_survives_saved_low ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
+     Running tests/list_ownership_inference.rs (/tmp/nagi-container-flow-target/debug/deps/list_ownership_inference-ac0e689b18a51f8f)
+
+running 4 tests
+test inferred_lists_still_reject_second_moves_and_mixed_element_types ... ok
+test explicit_list_element_types_still_contextualize_the_first_literal ... ok
+test record_list_iteration_accepts_copy_values_and_readonly_noncopy_borrows ... ok
+test inferred_list_first_elements_can_move_owned_inputs_once ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/literal_contracts.rs (/tmp/nagi-container-flow-target/debug/deps/literal_contracts-d35cb07db4e65b48)
+
+running 1 test
+test strings_preserve_control_characters_through_high_low_and_rust ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/loop_ownership.rs (/tmp/nagi-container-flow-target/debug/deps/loop_ownership-f533e47337b6e54d)
+
+running 13 tests
+test conditional_reinitialization_needs_every_continuing_path ... ok
+test fields_and_nested_fields_cannot_be_consumed_on_later_iterations ... ok
+test locals_copy_values_and_borrowed_arguments_are_available_each_iteration ... ok
+test a_for_iterator_expression_is_evaluated_only_once ... ok
+test owned_values_cannot_be_consumed_on_later_iterations ... ok
+test all_continuing_branches_can_restore_a_moved_value ... ok
+test branch_joins_preserve_reassignment_and_return_outside_loops ... ok
+test standalone_low_rejects_repeated_moves_at_the_original_line ... ok
+test nested_loops_are_checked_without_carrying_local_declarations ... ok
+test reinitialization_before_and_after_a_move_is_allowed ... ok
+test while_conditions_are_checked_on_each_evaluation_and_on_exit ... ok
+test zero_iterations_and_loop_bindings_preserve_outer_state ... ok
+test return_paths_do_not_repeat_or_consume_values_on_other_paths ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/low_multiline.rs (/tmp/nagi-container-flow-target/debug/deps/low_multiline-6f97c4b3086d95e1)
+
+running 3 tests
+test low_braces_keep_newline_statement_boundaries ... ok
+test multiline_errors_keep_physical_source_lines ... ok
+test multiline_quote_matches_high_and_runs_as_native_low ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/map_cli.rs (/tmp/nagi-container-flow-target/debug/deps/map_cli-b1f0c470233dda96)
+
+running 9 tests
+test failed_check_points_to_original_source_and_writes_no_map ... ok
+test map_preparse_keeps_existing_project_overrides_and_output_path_precedence ... ok
+test map_output_cannot_overwrite_loaded_input_or_project_configuration ... ok
+test help_and_argument_errors_do_not_load_a_project_or_mutate_files ... ok
+test image_formats_require_output_and_fail_helpfully_without_local_d2 ... ok
+test project_discovery_reuses_native_replacements_and_extern_resolution ... ok
+test namespace_module_filter_and_focus_select_original_definitions ... ok
+test map_views_check_high_and_low_without_runtime_or_generated_output ... ok
+test text_formats_write_only_requested_output_and_keep_stdout_clean ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/module_emission.rs (/tmp/nagi-container-flow-target/debug/deps/module_emission-5f68a6c57007aff5)
+
+running 8 tests
+test legacy_flat_cost_report_keeps_public_function_names ... ok
+test inferred_primitive_values_and_a_class_alias_keep_distinct_type_identities ... ok
+test qualified_nested_types_emit_internal_names_through_low ... ok
+test independent_low_parser_preserves_module_ids_and_native_function_aliases ... ok
+test unresolved_high_imports_keep_as_and_from_syntax_in_low ... ok
+test source_function_names_that_match_foreign_symbols_keep_distinct_call_targets ... ok
+test source_locals_that_match_generated_symbols_keep_distinct_values ... ok
+test inferred_builtin_types_survive_module_aliases_low_transport_and_rust_emission ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+
+     Running tests/module_parser.rs (/tmp/nagi-container-flow-target/debug/deps/module_parser-3d4d6b84ac94026d)
+
+running 9 tests
+test import_forms_keep_original_names_aliases_and_token_spans ... ok
+test from_and_as_remain_contextual_identifiers ... ok
+test low_metadata_is_read_without_changing_source_spans ... ok
+test module_replace_path_remains_a_structured_attribute_value ... ok
+test qualified_types_parse_inside_nested_generics_lists_and_nullable_types ... ok
+test malformed_imports_and_qualified_constructs_keep_parser_errors ... ok
+test qualified_types_respect_existing_nesting_limit ... ok
+test qualified_index_lookahead_restores_depth_and_preserves_index_nodes ... ok
+test qualified_calls_constructors_and_function_values_preserve_semantic_choice ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/module_symbols.rs (/tmp/nagi-container-flow-target/debug/deps/module_symbols-365943fec6809296)
+
+running 5 tests
+test local_names_colliding_with_the_entrypoint_keep_source_names_and_navigation ... ok
+test module_bindings_export_only_own_definitions_and_share_definition_identity ... ok
+test saved_low_namespaces_use_the_opened_file_and_rebased_definition_locations ... ok
+test record_and_import_alias_named_option_remain_record_types_in_editor_output ... ok
+test unsaved_imported_buffers_drive_fields_and_shadowed_aliases_use_local_bindings ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+     Running tests/modules.rs (/tmp/nagi-container-flow-target/debug/deps/modules-8a7b13b753da60fc)
+
+running 32 tests
+test alias_imports_keep_cycle_relative_path_and_language_guards ... ok
+test conflicting_import_bindings_report_the_import_statement ... ok
+test corrupted_low_identity_metadata_cannot_rename_or_invent_definitions ... ok
+test aliases_keep_original_source_diagnostics_and_embedded_asset_paths ... ok
+test aliases_of_one_function_cannot_be_replaced_twice_across_native_files ... ok
+test flat_imported_main_remains_an_entry_but_namespace_imported_main_does_not ... ok
+test edited_saved_low_body_resolves_original_aliases_and_maps_only_its_physical_root ... ok
+test foreign_functions_keep_their_builtin_scope_when_root_aliases_use_builtin_names ... ok
+test aliases_from_imports_and_flat_imports_share_the_canonical_class ... ok
+test high_and_native_modules_can_use_the_same_private_namespace_spelling ... ok
+test every_explicit_native_root_gets_high_aliases_without_overwriting_own_or_dependency_scopes ... ok
+test imported_bindings_are_private_but_own_definitions_can_use_them ... ok
+test imported_names_cannot_silently_fall_back_to_builtins_of_a_different_kind ... ok
+test legacy_flat_helpers_can_call_root_definitions_without_inheriting_private_aliases ... ok
+test guessed_internal_symbols_cannot_bypass_private_imports_in_raw_source ... ok
+test legacy_classes_constructors_and_intrinsic_types_keep_their_original_namespaces ... ok
+test local_fields_and_function_values_shadow_imports_only_in_their_scope ... ok
+test native_main_replacement_keeps_the_generated_identity_and_recursive_target ... ok
+test native_import_aliases_remain_local_while_own_functions_are_available_to_high ... ok
+test namespace_imports_preserve_depth_file_count_and_total_byte_limits ... ok
+test omitted_unit_returns_keep_builtin_identity_while_explicit_namespace_types_are_rejected ... ok
+test low_alias_syntax_resolves_qualified_record_and_generic_types ... ok
+test renamed_local_main_diagnostics_keep_source_spelling_after_program_is_taken ... ok
+test old_flat_imports_keep_transitive_names_and_diamond_deduplication ... ok
+test same_named_classes_from_different_files_are_distinct_in_all_type_positions ... ok
+test saved_generated_low_can_be_imported_without_reidentifying_its_main ... ok
+test qualified_replacements_compare_definition_identity_and_report_low_sources ... ok
+test the_checker_rejects_parser_only_alias_imports_until_the_source_loader_resolves_them ... ok
+test separate_native_files_can_reuse_a_replacement_declaration_name ... ok
+test unsaved_overlays_change_imported_definitions_and_keep_disk_sources_unchanged ... ok
+test saved_low_flat_and_from_imports_promote_the_original_definition_to_entry ... ok
+test project_aliases_cross_low_replacement_and_rust_record_bridges_from_an_external_cwd ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+     Running tests/nullable_database.rs (/tmp/nagi-container-flow-target/debug/deps/nullable_database-7d1e502ff96366fc)
+
+running 4 tests
+test unsupported_nullable_payloads_keep_manual_from_row_eligibility ... ok
+test raw_numeric_and_bool_field_shadows_keep_manual_row_implementations ... ok
+test raw_nullable_classes_can_supply_a_native_sqlite_row_bridge ... ok
+test nullable_scalars_read_sqlite_null_and_non_null_rows_in_high_and_saved_low ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.71s
+
+     Running tests/nullable_roundtrip.rs (/tmp/nagi-container-flow-target/debug/deps/nullable_roundtrip-2698cc02cde1b7ee)
+
+running 1 test
+test nested_options_keep_distinct_none_and_some_values_through_independent_low ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/operator_types.rs (/tmp/nagi-container-flow-target/debug/deps/operator_types-fd864cefe0fa1181)
+
+running 3 tests
+test uuid_and_timestamp_equality_and_supported_views_still_check ... ok
+test negation_rejects_non_numeric_types_regardless_of_their_names ... ok
+test comparison_checks_the_operation_and_borrowed_element_types ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/option_match.rs (/tmp/nagi-container-flow-target/debug/deps/option_match-266b4eb6707e6747)
+
+running 5 tests
+test option_cases_must_be_exhaustive_unique_and_match_the_subject_type ... ok
+test option_matching_accepts_discarded_payloads_and_borrowed_string_contents ... ok
+test option_payload_bindings_obey_move_scope_and_borrow_owner_rules ... ok
+test some_and_none_patterns_keep_binding_spans_without_synthetic_none_payload ... ok
+test some_patterns_reject_unsupported_payload_shapes_and_none_parentheses ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/output_safety.rs (/tmp/nagi-container-flow-target/debug/deps/output_safety-8bf1471b66f5a53b)
+
+running 10 tests
+test custom_project_manifest_is_protected_before_generated_outputs ... ok
+test build_preflights_rust_adapter_before_writing_any_generated_files ... ok
+test aliased_generated_outputs_are_rejected_without_partial_writes ... ok
+test include_text_assets_are_protected_in_generated_and_map_outputs ... ok
+test native_low_is_not_replaced_by_check_or_lower_output ... ok
+test every_generated_file_rejects_a_hard_link_to_an_imported_source ... ok
+test loaded_empty_module_filters_produce_empty_type_and_call_graphs ... ok
+test symlinked_generated_paths_preserve_all_inputs ... ok
+test repeated_checks_and_build_preparation_keep_existing_generated_outputs_usable ... ok
+test map_formats_protect_hard_links_to_sources_manifest_and_rust_adapter ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/output_types.rs (/tmp/nagi-container-flow-target/debug/deps/output_types-77a0d04dc4a0f68f)
+
+running 4 tests
+test output_rejects_unit_calls_and_function_names ... ok
+test user_functions_named_print_and_write_keep_their_own_signatures ... ok
+test output_rejects_non_displayable_values_in_high_and_low ... ok
+test output_keeps_all_supported_types_and_does_not_move_strings ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owned_copy_codegen.rs (/tmp/nagi-container-flow-target/debug/deps/owned_copy_codegen-f9f7fa4a236e7e57)
+
+running 2 tests
+test owned_string_and_list_fields_remain_moves ... ok
+test owned_scalar_fields_copy_in_native_high_and_independent_low ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+
+     Running tests/owned_database.rs (/tmp/nagi-container-flow-target/debug/deps/owned_database-04277fd188bfe164)
+
+running 2 tests
+test owned_wrappers_preserve_unsupported_fields_and_manual_row_eligibility ... ok
+test owned_scalars_decode_sqlite_rows_in_high_and_independent_saved_low ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.42s
+
+     Running tests/ownership.rs (/tmp/nagi-container-flow-target/debug/deps/ownership-68cee81bf1a31382)
+
+running 14 tests
+test copy_record_fields_can_be_used_repeatedly ... ok
+test field_access_after_moving_the_whole_record_is_still_rejected ... ok
+test a_partially_moved_record_cannot_be_used_as_a_whole ... ok
+test field_moves_are_merged_from_async_scopes ... ok
+test assigning_a_new_record_restores_its_fields ... ok
+test field_names_are_compared_as_path_segments ... ok
+test a_borrowed_field_cannot_be_moved_but_copy_fields_can_be_read ... ok
+test nested_moves_block_the_moved_path_and_its_ancestors_and_children ... ok
+test repeated_field_move_is_rejected_at_the_second_assignment ... ok
+test standalone_low_checks_field_moves ... ok
+test reading_borrowing_and_copying_do_not_move_a_field ... ok
+test field_moves_are_merged_from_branches_match_arms_and_loops ... ok
+test unrelated_owned_fields_and_copy_fields_remain_available ... ok
+test fields_are_consumed_in_calls_records_lists_and_owned_wrappers ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/ownership_boundaries.rs (/tmp/nagi-container-flow-target/debug/deps/ownership_boundaries-c9b9c2045f317c52)
+
+running 7 tests
+test nested_view_containers_cannot_keep_child_scope_owners ... ok
+test branch_loop_and_payload_owners_cannot_escape_in_outer_views ... ok
+test index_evaluation_holds_the_container_but_releases_it_afterwards ... ok
+test copied_iterator_elements_keep_their_own_borrow_depth ... ok
+test outer_owners_local_copies_restored_aliases_and_return_paths_remain_valid ... ok
+test temporary_iterator_views_cannot_escape_but_body_use_and_static_views_remain_valid ... ok
+test static_resource_views_remain_valid_across_branch_scopes ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/ownership_calls.rs (/tmp/nagi-container-flow-target/debug/deps/ownership_calls-b47eb9cda129b4df)
+
+running 9 tests
+test database_receiver_is_borrowed_but_materialized_sql_does_not_extend_its_loan ... ok
+test discarded_owned_places_are_consumed_but_copy_and_borrowed_values_remain_available ... ok
+test earlier_view_arguments_block_later_moves_in_direct_and_aliased_calls ... ok
+test earlier_views_remain_borrowed_while_nested_later_arguments_are_evaluated ... ok
+test earlier_list_elements_hold_views_through_later_element_evaluation ... ok
+test completed_inner_calls_copies_and_disjoint_owners_do_not_keep_call_loans ... ok
+test list_mutation_checks_outer_loans_without_rejecting_two_phase_reads ... ok
+test call_conflicts_and_discarded_moves_fail_before_backend_tools_are_needed ... ok
+test implicit_standard_references_hold_the_owner_through_later_arguments ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/project.rs (/tmp/nagi-container-flow-target/debug/deps/project-95c023f4c9590315)
+
+running 12 tests
+test actual_cli_manifest_and_import_errors_point_to_original_files ... ok
+test cli_overrides_scalars_and_dependency_versions_and_adds_native_files ... ok
+test dependency_alias_collision_across_manifest_and_cli_is_rejected ... ok
+test actual_cli_checks_entry_with_low_support_from_a_subdirectory ... ok
+test explicit_source_keeps_legacy_behavior_even_next_to_a_broken_manifest ... ok
+test invalid_commands_and_flags_fail_before_loading_sources ... ok
+test manifest_typos_wrong_types_duplicates_and_empty_paths_are_rejected ... ok
+test nearest_project_uses_manifest_relative_paths_from_any_subdirectory ... ok
+test rust_diagnostic_details_are_an_explicit_build_or_run_option ... ok
+test escaped_record_and_route_names_preserve_json_sqlite_and_rust_bridges ... ok
+test a_borrowed_record_field_does_not_block_moving_a_disjoint_field ... ok
+test actual_run_uses_rust_dependencies_and_a_stable_project_working_directory ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 59.33s
+
+     Running tests/resource_contract_characterization.rs (/tmp/nagi-container-flow-target/debug/deps/resource_contract_characterization-9a59c414d5ab3126)
+
+running 4 tests
+test registered_accessors_match_the_complete_inventory ... ok
+test registered_resources_match_the_independent_inventory ... ok
+test registered_operations_match_signatures_and_passing ... ok
+test registered_constants_match_the_complete_inventory ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/result_discard.rs (/tmp/nagi-container-flow-target/debug/deps/result_discard-b243c06082b56087)
+
+running 4 tests
+test direct_result_discard_rejects_outer_owned_wrappers_in_both_syntaxes ... ok
+test wrapped_result_operations_and_type_identity_are_not_made_transparent ... ok
+test stored_passed_and_returned_owned_values_remain_accepted ... ok
+test extern_failures_are_rejected_before_backend_or_execution_in_both_syntaxes ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/result_match.rs (/tmp/nagi-container-flow-target/debug/deps/result_match-8e8793755c7efcc1)
+
+running 11 tests
+test match_requires_result_and_exactly_one_of_each_arm ... ok
+test bindings_have_payload_types_and_do_not_escape_or_shadow ... ok
+test error_helpers_preserve_types_and_ownership ... ok
+test nested_match_async_and_complete_return_paths_are_checked ... ok
+test source_and_owned_payloads_are_consumed_and_branch_moves_merge ... ok
+test high_low_roundtrip_and_both_arms_return_values ... ok
+test try_consumes_stored_results_before_a_second_try_or_match ... ok
+test try_consumption_is_checked_on_loop_backedges_and_while_conditions ... ok
+test views_in_result_payloads_keep_borrowing_until_the_arm_ends ... ok
+test try_payloads_keep_copy_reuse_reinitialization_and_borrow_origins ... ok
+test try_consumes_only_the_selected_result_field ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/result_stdlib.rs (/tmp/nagi-container-flow-target/debug/deps/result_stdlib-266e59448e6d9bde)
+
+running 6 tests
+test mapping_moves_input_left_to_right_and_preserves_borrow_origins ... ok
+test mapper_contract_errors_fail_before_rust_backend_in_high_and_saved_low ... ok
+test try_keeps_exact_error_identity_and_map_error_does_not_reserve_local_names ... ok
+test inferred_mapping_keeps_enum_class_aliases_and_borrowed_success_through_saved_low ... ok
+test native_success_failure_and_original_cause_survive_high_and_saved_low ... ok
+test static_error_labels_avoid_read_allocations_but_keep_owned_results_and_shadowing ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.49s
+
+     Running tests/rust_dependencies.rs (/tmp/nagi-container-flow-target/debug/deps/rust_dependencies-a8e10d5de0b6e4b0)
+
+running 9 tests
+test generated_manifest_preserves_legacy_versions_and_every_supported_table_field ... ok
+test dependency_paths_follow_the_selected_manifest_with_different_cwd_and_output ... ok
+test generated_toml_round_trips_quotes_backslashes_and_newlines_without_extra_tables ... ok
+test cli_version_replaces_the_whole_table_and_keeps_alias_collision_checks ... ok
+test missing_local_dependency_is_valid_for_check_and_reported_by_cargo_during_build ... ok
+test non_utf8_project_paths_check_but_cannot_generate_lossy_dependency_paths ... ok
+test invalid_dependency_tables_fail_in_the_public_cli_before_cargo ... ok
+test check_and_symbols_accept_dependency_tables_without_cargo_or_checked_out_crates ... ok
+test local_package_rename_features_and_disabled_defaults_run_without_registry_dependencies ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/scope_runtime_contract.rs (/tmp/nagi-container-flow-target/debug/deps/scope_runtime_contract-780ff2758d8e891a)
+
+running 1 test
+test generated_scope_failure_and_cancellation_contract_runs_with_the_real_runtime ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.92s
+
+     Running tests/scoped_tasks.rs (/tmp/nagi-container-flow-target/debug/deps/scoped_tasks-0ad5b59bd9231187)
+
+running 5 tests
+test moving_an_owned_argument_still_consumes_it_before_later_parent_work ... ok
+test futures_that_still_hold_views_are_rejected_after_copying_containers ... ok
+test scope_rejects_known_foreign_error_types_and_preserves_local_error_adapters ... ok
+test copied_views_and_values_computed_from_views_can_enter_tasks ... ok
+test spawn_evaluates_owned_arguments_before_parent_continues_and_keeps_sources ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/shared_field_moves.rs (/tmp/nagi-container-flow-target/debug/deps/shared_field_moves-24769f5942012a61)
+
+running 4 tests
+test nested_shared_parents_and_call_temporaries_cannot_supply_owned_fields ... ok
+test invalid_shared_field_moves_fail_before_check_build_or_run_needs_cargo ... ok
+test shared_field_moves_are_rejected_in_each_consuming_context_in_high_and_handwritten_low ... ok
+test valid_arc_moves_copy_fields_and_explicit_copies_run_in_high_and_independent_low ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+
+     Running tests/shared_target.rs (/tmp/nagi-container-flow-target/debug/deps/shared_target-a4217ce3dc4dd14e)
+
+running 3 tests
+test repeated_timestamps_keep_fixture_ownership_distinct ... ok
+test explicitly_shared_targets_keep_application_identity_stable_and_generations_distinct ... ok
+test default_shared_targets_keep_application_identity_stable_and_generations_distinct ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+
+     Running tests/sql_check.rs (/tmp/nagi-container-flow-target/debug/deps/sql_check-d5809bc3c96c7215)
+
+running 13 tests
+test enabled::a_user_function_named_db_all_is_not_a_builtin_sql_query ... ok
+test enabled::dynamic_sql_and_db_exec_are_reported_as_runtime_checks ... ok
+test enabled::explicit_project_schema_path_is_relative_to_invocation_directory ... ok
+test enabled::aliases_case_reordering_extra_columns_and_reused_numbered_bind_are_valid ... ok
+test enabled::imported_queries_report_the_original_module_file_and_line ... ok
+test enabled::bounded_schema_and_query_inputs_fail_before_sql_preparation ... ok
+test enabled::literal_insert_update_delete_are_prepared_without_executing_queries ... ok
+test enabled::schema_and_dialect_are_paired_check_only_options ... ok
+test enabled::schema_check_is_opt_in_and_reports_bad_columns_in_high_and_saved_low ... ok
+test enabled::missing_return_columns_and_wrong_bind_count_use_query_source_lines ... ok
+test enabled::helper_statement_kind_and_single_statement_contracts_are_checked ... ok
+test enabled::literal_queries_cannot_change_schema_or_access_external_functions ... ok
+test enabled::unsafe_schema_operations_cannot_create_or_modify_external_files ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/sqlite_contract_inputs.rs (/tmp/nagi-container-flow-target/debug/deps/sqlite_contract_inputs-2d915bfb7aedb722)
+
+running 2 tests
+test planned_rejection_anchors_identify_original_fixture_lines_and_lexer_tokens ... ok
+test every_planned_high_and_handwritten_low_input_parses_before_module_resolution ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/static_callback_views.rs (/tmp/nagi-container-flow-target/debug/deps/static_callback_views-603dbd4b71586414)
+
+running 3 tests
+test input_bound_callback_results_still_borrow_their_actual_inputs ... ok
+test static_outputs_do_not_allow_local_or_owned_parameter_borrows ... ok
+test static_callbacks_keep_their_origins_and_independent_lifetime_scopes_in_high_and_low ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.12s
+
+     Running tests/stdlib_imports.rs (/tmp/nagi-container-flow-target/debug/deps/stdlib_imports-599454090a012fb8)
+
+running 12 tests
+test comma_separated_from_imports_preserve_each_name_alias_and_source_span ... ok
+test constant_fields_and_function_aliases_resolve_without_ignoring_local_shadowing ... ok
+test malformed_standard_imports_do_not_fall_back_to_file_lookup ... ok
+test low_metadata_cannot_forge_standard_ids_or_implement_registry_functions ... ok
+test parser_distinguishes_standard_names_from_quoted_files_and_keeps_alias_spans ... ok
+test from_list_reuses_existing_conflict_and_same_definition_rules ... ok
+test low_metadata_rejects_native_paths_capabilities_and_unimported_canonical_names ... ok
+test registered_resources_and_functions_are_separate_from_source_definitions ... ok
+test standard_imports_ignore_local_lookalikes_and_unsaved_overlays ... ok
+test saved_low_keeps_registry_identity_without_standard_source_files ... ok
+test multiple_from_aliases_keep_registry_identity_in_independently_loaded_low ... ok
+test repeated_standard_imports_do_not_shift_registry_declaration_lines ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/symbols.rs (/tmp/nagi-container-flow-target/debug/deps/symbols-a75087330f28ff0c)
+
+running 21 tests
+test editor_input_rejects_invalid_schema_alias_duplicates_and_other_commands ... ok
+test actual_symbols_command_resolves_transitive_imports_and_utf16_columns ... ok
+test expression_ranges_cover_multiline_receivers_and_do_not_unwrap_results ... ok
+test editor_buffers_update_imported_and_low_signatures_without_writing_files ... ok
+test failed_iterator_mutation_does_not_leak_a_loan_or_move_into_editor_types ... ok
+test duplicate_let_and_case_bindings_cannot_replace_an_outer_definition ... ok
+test imported_and_native_types_use_unsaved_buffers_and_utf16_ranges ... ok
+test inferred_locals_parameters_and_loop_bindings_obey_exact_scopes ... ok
+test invalid_signatures_do_not_generate_guessed_local_types ... ok
+test local_call_and_function_value_navigation_use_the_resolved_binding ... ok
+test local_navigation_preserves_binding_identity_across_reassignments_and_scopes ... ok
+test low_records_replacements_and_same_line_bindings_keep_their_source_positions ... ok
+test match_payloads_and_child_locals_do_not_escape_their_arm ... ok
+test moved_values_and_scope_locals_have_no_later_inferred_type ... ok
+test native_low_symbols_and_calls_inside_match_keep_original_files ... ok
+test navigation_resolves_case_and_scope_bindings_without_leaking_them ... ok
+test navigation_uses_unsaved_import_and_low_replacement_positions_in_utf16 ... ok
+test navigation_is_available_after_moves_and_invalid_types_but_not_before_binding ... ok
+test partial_moves_do_not_infer_invalid_bindings_or_hide_unmoved_fields ... ok
+test local_function_value_uses_have_hover_types_without_replacing_global_signatures ... ok
+test symbols_work_despite_type_errors_and_distinguish_fields_locals_and_calls ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s
+
+     Running tests/type_layouts.rs (/tmp/nagi-container-flow-target/debug/deps/type_layouts-4a427d867e1fefe7)
+
+running 4 tests
+test invalid_field_types_point_at_the_field_instead_of_the_class_header ... ok
+test mixed_direct_and_nullable_class_cycles_are_rejected ... ok
+test inline_wrappers_do_not_break_recursive_layouts_in_high_or_low ... ok
+test indirect_storage_and_reused_non_recursive_types_remain_valid ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/typed_errors.rs (/tmp/nagi-container-flow-target/debug/deps/typed_errors-17b00f7624337488)
+
+running 15 tests
+test diagnostic_cause_containers_are_rejected_by_json_serialization ... ok
+test direct_parser_builtin_enum_names_require_canonical_source_loading ... ok
+test async_custom_errors_propagate_the_same_enum_through_await_and_try ... ok
+test enum_constructors_reject_unknown_variants_wrong_arity_and_wrong_payload_types ... ok
+test enum_matches_require_exhaustive_unique_matching_variants_and_payload_bindings ... ok
+test enum_payload_moves_and_borrowed_views_cannot_escape_match_arms ... ok
+test builtin_error_causes_survive_wrapping_without_json_or_database_requirements ... ok
+test fail_and_try_reject_implicit_conversion_between_custom_error_types ... ok
+test class_errors_keep_context_nested_results_same_error_try_and_explicit_conversion ... ok
+test entry_result_errors_keep_exit_status_through_owned_wrappers_and_async_saved_low ... ok
+test same_named_module_enums_are_distinct_error_types_for_try_and_patterns ... ok
+test enums_construct_match_owned_payloads_and_preserve_copy_variants ... ok
+test file_loaded_builtin_spelled_enums_keep_literal_types_and_variant_identity ... ok
+test module_aliases_share_enum_error_identity_and_keep_qualified_variants ... ok
+test scope_enum_conversion_requires_the_explicit_rust_bridge_and_keeps_the_owned_cause ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.01s
+
+     Running tests/value_codegen.rs (/tmp/nagi-container-flow-target/debug/deps/value_codegen-e6d8fe35ea08eafc)
+
+running 2 tests
+test try_result_consumption_preserves_payloads_reinitialization_and_errors ... ok
+test inferred_lists_compile_with_a_moving_first_call_or_wrapper ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/view_branch_rebinding.rs (/tmp/nagi-container-flow-target/debug/deps/view_branch_rebinding-a8e44ad0305968e9)
+
+running 4 tests
+test local_views_still_cannot_escape_a_terminating_or_continuing_branch ... ok
+test terminating_parent_blocks_respect_loop_and_pattern_binding_names ... ok
+test branch_copies_are_synthetic_and_preserve_public_and_callback_lifetimes ... ok
+test terminating_view_updates_compile_and_run_in_high_saved_low_and_handwritten_low ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+     Running tests/view_container_drop.rs (/tmp/nagi-container-flow-target/debug/deps/view_container_drop-00a2ff56a8d54853)
+
+running 1 test
+test local_view_container_replacement_preserves_allocations_and_drop_order ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+
+     Running tests/view_container_rebinding.rs (/tmp/nagi-container-flow-target/debug/deps/view_container_rebinding-a92529382dd79732)
+
+running 4 tests
+test local_container_escape_stays_rejected_in_high_and_low ... ok
+test restore_rhs_keeps_its_source_line_and_generated_slots_are_synthetic ... ok
+test move_phi_and_mutation_fixtures_use_the_container_flow_plan ... ok
+test owning_view_container_rebinding_runs_in_high_saved_low_and_handwritten_low ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+     Running tests/view_flow_completion.rs (/tmp/nagi-container-flow-target/debug/deps/view_flow_completion-3cd4da6e9b64c272)
+
+running 3 tests
+test completion_keeps_local_and_iterator_owner_escape_rejections ... ok
+test scopes_keep_lexical_storage_and_route_nested_errors ... ok
+test owned_storage_loops_and_async_compile_and_run_in_all_source_forms ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+
+     Running tests/view_flow_foundation.rs (/tmp/nagi-container-flow-target/debug/deps/view_flow_foundation-2e9f9857648479f6)
+
+running 2 tests
+test observer_lowering_does_not_accept_local_owner_escapes ... ok
+test return_observers_and_match_edges_compile_and_run_in_all_source_forms ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+
+     Running tests/view_iteration.rs (/tmp/nagi-container-flow-target/debug/deps/view_iteration-7d2923bfb4fec63e)
+
+running 3 tests
+test string_views_reject_iteration_and_numeric_indexing_in_high_and_low ... ok
+test native_resource_views_still_reject_iteration ... ok
+test byte_views_use_u8_and_preserve_nested_views_and_owned_element_slices ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/view_origins.rs (/tmp/nagi-container-flow-target/debug/deps/view_origins-c82c62bc04686b09)
+
+running 10 tests
+test borrowed_json_results_block_input_moves_and_reassignment ... ok
+test copied_containers_cannot_keep_views_of_temporary_elements ... ok
+test borrowed_json_origins_survive_aliases_match_arms_and_branch_joins ... ok
+test json_borrows_only_the_input_field_and_ends_with_the_match ... ok
+test json_literal_input_and_immediate_temporary_input_remain_legal ... ok
+test storing_views_of_temporary_owners_is_rejected_at_the_assignment ... ok
+test returning_views_borrows_parameter_contents_without_borrowing_owned_containers ... ok
+test immediate_temporary_views_owned_copies_and_match_aliases_remain_legal ... ok
+test copied_or_indexed_views_keep_only_the_content_owners ... ok
+test temporary_views_fail_in_check_and_build_before_cargo ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/view_parameter_rebinding.rs (/tmp/nagi-container-flow-target/debug/deps/view_parameter_rebinding-30430fd3bafb7862)
+
+running 5 tests
+test rebinding_is_synthetic_and_does_not_change_signatures_or_extern_wrappers ... ok
+test local_borrows_still_cannot_escape_through_reassigned_parameters ... ok
+test local_parameter_updates_compile_and_run_in_high_and_saved_low ... ok
+test owning_parameters_keep_their_drop_order_when_a_view_container_is_rebound ... ok
+test views_of_owned_record_fields_can_be_used_locally_through_parameters ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+
+   Doc-tests nagi_runtime
+
+running 5 tests
+test runtime/src/auth.rs - auth::Grant (line 53) - compile fail ... ok
+test runtime/src/auth.rs - auth::Principal (line 13) - compile fail ... ok
+test runtime/src/auth.rs - auth::Grant (line 48) - compile fail ... ok
+test runtime/src/auth.rs - auth::Principal (line 16) - compile fail ... ok
+test runtime/src/auth.rs - auth::Principal (line 20) - compile fail ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+   Doc-tests nagic
+
+running 3 tests
+test compiler/src/check/checked.rs - check::checked::CheckedProgram (line 18) - compile fail ... ok
+test compiler/src/check/checked.rs - check::checked::CheckedProgram (line 13) - compile fail ... ok
+test compiler/src/emit.rs - emit::rust (line 1086) - compile fail ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
