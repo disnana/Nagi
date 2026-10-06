@@ -72,4 +72,11 @@ parent Future Drop/unwindの同期Dropはactual join完了を返せない。non-
 
 Solがchecker周辺・runtime bridge・runnerを独立読取レビューした。Task checker未実装とnative prototypeを分け、元Errorの消失と元行runnerの不一致を指摘した。修正後のsourceを再レビューし、新たなブロッカーは見つからなかった。レビュー担当はCargoを実行しておらず、上の実行ログをAIの成功報告で代用していない。
 
-今回はユーザー指定の「先行RED＋private bridge検証」で止める。今回のdraft PRの最新head・4 OS CIが成功したことを確認してから、次のchecker/ownership/scope義務へ進める。旧spawnは一括置換しない。merge・release・version更新・SQLiteの開始は別途指示を待つ。
+最初の一区切りは「先行RED＋private bridge検証」とする。その後の追加指示により、文書化と最新head・4 OS CIが成功したら、checker/ownership/scope義務、Low/Rust生成、native conformance、全回帰、測定、日英Docs、Solレビューまで継続する。旧spawnは一括置換せず、main向けPRの完成で止める。merge・release・version更新・SQLiteは行わない。
+
+
+## ローカル検証環境の補正
+
+workspace全回帰の初回はdebug symbol付きのCargo cache、二回目はworktreeのnative cacheがそれぞれ容量不足で失敗した。コンパイラ契約の失敗と混同せず原ログを保存し、再生成可能なcacheのみを整理した。debug symbolを省き、build jobsを2にし、native cacheを空き容量のある`/tmp/nagi-task-native-target`へ指定して全回帰を継続する。testの期待値・test並列度・公開ビルド先の契約は変えない。
+
+最初のCI設定はrun値末尾の`tests::`を引用しておらずYAML parseで失敗した。コマンド全体を引用して構文検査を通した。CI開始前の設定エラーを4 OS成功や実行済みtestへ数えない。
