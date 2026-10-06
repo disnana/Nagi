@@ -569,7 +569,10 @@ async fn stock_detach_permit_before_handle_drop_cannot_start_another_native_work
     assert_eq!(before_handle_drop.handle_drops, 0);
     assert_eq!(before_handle_drop.joined, 0);
     assert_eq!(before_handle_drop.pending_workers, 1);
-    assert_eq!(before_handle_drop.created, 1, "stock permit preceded handle retirement");
+    assert_eq!(
+        before_handle_drop.created, 1,
+        "stock permit preceded handle retirement"
+    );
     assert_eq!(observer.snapshot().created, 2);
     assert_eq!(observer.snapshot().native_closed, 2);
     assert_eq!(observer.snapshot().joined, 2);
