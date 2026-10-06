@@ -279,3 +279,19 @@ Sol 2人で実装と独立source/fixtureレビューを分担した。レビュ�
 | 次Phase・配布 | G-TX/G-POOLの公開acceptance、Phase 5、版更新、releaseは未着手 |
 
 この縦切りはmain向けの別PRとし、今回のmerge承認を流用しない。取得期限・巨大capacity・公開配線を進める順序と条件は[後続計画](sqlite-public-slice-plan.md)を維持する。
+
+## 2026-10-06: #84反映後の取得予算CIと、言語仕様の実装準備
+
+ユーザーが#84をmainへ反映した。今回の監査基点は`e7aff1da0a36503d239d70cf5dbcf892655978e0`。続く[PR #85](https://github.com/disnana/Nagi/pull/85)はmain向けdraftで、private adapterのlogical待ちからnative登録まで同じ取得予算を保つ修正。公開Pool/Tx配線や新言語仕様ではない。
+
+#85の最終head `908cefff7305205069f90dd3d6d2e194b055a191`で[checks](https://github.com/disnana/Nagi/actions/runs/37426163565)／[website](https://github.com/disnana/Nagi/actions/runs/37426163260)が成功した。4 OSの各jobでsqlite_prototype 60件、追加取得予算9件の名前、failed/ignored 0を原ログから確認した。予定入力の2 parserテストも各OSで成功したが、46入力のsemantic conformanceではない。Linux全suite、両JetBrains、必須gateは成功、VSIX/releaseは対象外でskip。review submissionsとinline threadsは確認時点で各0件。draftを維持し、merge/releaseは行っていない。
+
+その後の依頼で、ADR011の明示move・spawn結果handle・子taskの業務Errと故障分離を、文書から段階実装まで広げた。Sol 2人がcompilerのCopy/consume/origin/checked planと、runtimeのScope/結果/取消/Supervisorを分担して監査し、rootの[実装計画](value-task-implementation-plan.md)を再レビューした。設計の大枠を未承認へ戻していない。具体構文・Copy表・handle故障型等の未決を採用済みともしていない。
+
+新しいownership operationは入力の値とoriginを透過する必要があり、native関数呼出しの名前追加だけでは足りない。Copy表を変えながら全consumeで明示要求を行うと、引数・return・record等まで別の互換性変更になる。初版はcanonical標準operationを追加し、旧暗黙代入の受理を保ち、次の差分でnonCopyローカル単純代入だけを移行する案とした。結果handleはscopeの実join所有と業務値を分け、Supervisor terminal ErrのHTTP停止を維持する必要がある。
+
+基点mainの既存7 suite・36件は成功。[移行前の9例](value-task-audit-results.md)はHigh/手書きLow/生成保存Lowでcheck 24回（受理18・期待する拒否6）、正常6例の18 native実行で出力が一致した。初回runnerのstdout/stderr観測誤りは原ログを残して修正し、全48 CLIコマンドを再実行した。入力・拒否期待・アプリ出力期待は変更していない。
+
+DESIGN日英、ADR011、invariants、Q005/006を実装順へ接続し、入門ownership日英のCopy説明を現行と照合した。compiler/runtime・依存・CI設定・生成コード・test期待は今回の準備差分で変更していない。新しいmove/Taskは未実装。V1/V2の具体APIと移行対象を判断できる資料を作り、その判断までは公開契約の実装を止める。S1/S2の細部を今すぐ全て質問せず、後続に分ける。Phase 4の公開acceptance、Phase 5、merge/releaseの承認を流用しない。
+
+準備差分10文書の相対リンク/anchor 319件、website 90ページのlocal links/anchors/assets、CI判定52件、diff checkが成功した。新しい意味論のtest期待を変えず、compiler/runtimeとCI入力も変更していない。文書PRはmain向けdraftに分離し、公開後のheadでCIを確認する。

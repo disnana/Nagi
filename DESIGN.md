@@ -61,6 +61,8 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 
 現行との差、採用理由、根拠、後続実装の移行・検証条件は[ADR 011](docs/internal/adr/011-language-behavior-and-docs.md)へまとめます。現行の厳密な規則は[言語契約](docs/internal/language-invariants.md)に残します。入門は[Pythonとの具体的な比較](docs/language-guide.md)から始め、未実装の書き方で例を成立させません。
 
+これらの方針は、文書だけで終わらせず段階実装します。[実装計画](docs/internal/value-task-implementation-plan.md)で、明示moveの追加と代入の移行、task結果と故障分離を別の差分に分けています。具体APIは候補の段階です。新しい操作を追加しただけで旧コードを拒否せず、High/Low・生成Rust・サンプル・日英Docs・CIを揃えてから次の変更へ進みます。
+
 ## なぜRustを使うのか
 
 Nagi自身が構文解析、名前解決、型・move・viewの検査、Rust生成を担当します。依存のビルド、最終的な借用・trait検査、最適化、機械語生成はRust/Cargoへ任せます。現在もコンパイラを持っていますが、独自の機械語backendは持っていません。

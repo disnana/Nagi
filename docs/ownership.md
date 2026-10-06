@@ -36,7 +36,7 @@ def main():
 
 出力は`4`、`Nagi`、`new`です。`destination = name`の後、古い文字列は`destination`から使います。元の`name`も新しい値を代入した後なら使えます。再代入より前に`name`を読むと`check`が拒否します。両方の文字列を残すなら`destination = copy(view(name))`にします。
 
-現行のCopy規則にはview、同期関数値、UUID、timestampや、中身がCopy規則を満たすclass・enum・nullableも含まれます。これは現在のcheckerの規則であり、すべてのenumや小さいclassをコピーできるという新たな約束ではありません。[型](types.md)も参照してください。
+現行のCopy規則にはview、関数値（対応済みのローカルasync関数別名を含む）、UUID、timestampや、中身がCopy規則を満たすclass・enum・nullable・ownedも含まれます。Resultとsharedは、中身がCopyでも暗黙Copyになりません。関数値のCopyはFutureの保存を許すものではなく、すべてのenumや小さいclassをコピーできるという規則でもありません。[型](types.md)と[async](async.md)も参照してください。
 
 今後の移行では、既存の非Copy所有値の`a = b`に明示的な操作を求める方針を採用しています。手放すならmove、読むならview、独立した値を作るならcopy、同じ値を複数箇所で持つならsharedを選びます。**この移行は未実装で、現在の暗黙moveは引き続き受理されます。** `a = User(...)`のように新しい値を作る式とは区別します。将来のCopy対象の正確な型表、構文、引数・return・フィールド取り出し・view・shared handleの扱いは詳細設計で定めます。[設計判断](../DESIGN.md)を参照してください。
 

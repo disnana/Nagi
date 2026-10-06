@@ -61,6 +61,8 @@ Ordinary arguments and operators evaluating both operands should run left to rig
 
 [ADR 011](docs/internal/adr/011-language-behavior-and-docs.md) records reasons, evidence, differences, and migration and test conditions. Exact current rules remain in the [language contracts](docs/internal/language-invariants.md). The [tutorial](docs/en/language-guide.md) starts with concrete Python comparisons and does not depend on unimplemented syntax.
 
+These directions will be implemented in stages. The [implementation plan](docs/internal/value-task-implementation-plan.md) separates an explicit move operation from assignment migration, then task results from fault handling. Concrete APIs remain proposals. Adding an operation will not immediately reject existing code. Each stage must align High/Low, generated Rust, samples, Japanese and English docs, and CI before the next change.
+
 ## Why use Rust?
 
 Nagi performs parsing, name resolution, type/move/view checking, and Rust generation. Rust/Cargo handles dependency builds, final borrow and trait checks, optimization, and machine-code generation. Nagi already has a compiler, but it has no independent machine-code backend.

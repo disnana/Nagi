@@ -2,6 +2,8 @@
 
 状態: 2026-10-06の作者の引継ぎを採用。これは設計・文書の判断であり、未実装の構文や挙動を公開した記録ではない。
 
+その後、作者が明示move・spawn結果handle・子taskの業務Errと故障の分離を段階実装する範囲を承認した。[実装順と具体案](../value-task-implementation-plan.md)に、現行との差、依存、Copy表、移行、先行テストを分離した。大枠は採用済みだが、その文書の具体APIと未決の意味論を承認済みにはしない。
+
 監査基点: main `ff6f7d4c81c8cf49c2bca7abffb3083f681d5b9d`。添付が照合したmainと一致した。文書branchは`docs/python-guide-design-contracts`。初回監査時点ではPR #82のprivate Pool比較は別差分だった。後にmain `7999bab`への反映を確認し、文書branchへ統合した。公開Pool/Tx APIとして扱わない。
 
 ## 問題と採用理由
