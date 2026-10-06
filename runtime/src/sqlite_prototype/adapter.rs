@@ -29,6 +29,7 @@ pub(super) struct AdapterSeams {
     pub detaching: Option<Arc<Gate>>,
     pub fail_terminal_result: bool,
     pub fail_observer_spawn: bool,
+    pub fail_native_spawn: bool,
 }
 impl AdapterSeams {
     fn applies(&self, ordinal: usize) -> bool {
@@ -306,13 +307,17 @@ fn observe_native(
     let worker_ready = Arc::clone(&ready);
     let startup = seams.startup.clone().filter(|_| seams.applies(ordinal));
     // observer自身がnativeを起動し、成功したJoinHandleをこのscopeから外へ渡さない。
-    let worker = std::thread::Builder::new()
-        .name("nagi-sqlite-adapter".into())
-        .spawn(move || {
-            worker_ledger.change(|stats| stats.native_started += 1);
-            let reply = worker_ready.lock().unwrap().take();
-            native_worker(config, worker_state, receiver, reply, startup);
-        });
+    let worker = if seams.applies(ordinal) && seams.fail_native_spawn {
+        Err(std::io::Error::other("private native startup failure seam"))
+    } else {
+        std::thread::Builder::new()
+            .name("nagi-sqlite-adapter".into())
+            .spawn(move || {
+                worker_ledger.change(|stats| stats.native_started += 1);
+                let reply = worker_ready.lock().unwrap().take();
+                native_worker(config, worker_state, receiver, reply, startup);
+            })
+    };
     let worker = match worker {
         Ok(worker) => worker,
         Err(error) => {
