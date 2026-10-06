@@ -57,3 +57,9 @@ Linux checksの全Cargo suiteに新testが含まれる。4 OS package matrixへp
 1. wrapper／未指定capabilityの判断後、一接続Manager adapterを同じcleanup／close oracleへ接続する。
 2. public runtimeとcanonical registry、Tx実payload／Future捕捉、sealed SQL planを小さい縦切りで揃える。
 3. 元位置付きnegative、High／保存Low／手書きLowの実Cargo、旧Db／4 OS、生成探索と性能測定でPhase 4 acceptanceを確認する。
+
+## PR #81の4 OS CI
+
+head `cfa65fa61de1f81d6acbebbfd4898541ba1ee5e1`の[checks run 37397252295](https://github.com/disnana/Nagi/actions/runs/37397252295)と[website run 37397251707](https://github.com/disnana/Nagi/actions/runs/37397251707)はattempt 1で成功した。Windows x64、Linux x64、macOS Intel、macOS Apple Siliconの各jobログで、private session 22件（失敗・ignoreなし）とparser 2件の実行を確認した。Linux全検査、VSIX、IntelliJ IDEA、PyCharm、merge gateも成功した。releaseはskipで、公開版への反映ではない。
+
+#81をreview可能へ変更した。mainへのmerge・版更新・releaseは実行していない。このCIが確認したのは同headの一接続coreと30の構文入力であり、後続deadpool adapter・公開Pool／Tx・Future捕捉検査の成功とは区別する。Q004承認後のManager比較は別branch `feat/sqlite-pool-adapter`で進める。

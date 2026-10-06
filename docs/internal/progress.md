@@ -177,3 +177,7 @@ main `f10cb64`を基点に承認契約`3cce2f9`→tests-only `7accaec`→safe実
 一接続基盤はdraft [PR #81](https://github.com/disnana/Nagi/pull/81)、head `cfa65fa61de1f81d6acbebbfd4898541ba1ee5e1`で公開した。4 OS CIはこの記録時点では一部完了・全体確認待ち。次の比較はbranch `feat/sqlite-pool-adapter`へ分け、#81の成果を保持する。main `5fdfe49`のREADME code fence更新だけを取り込んだ。adapter試作はまだ未実行で、公開Pool／TxやPhase 4完了とは報告しない。
 
 終了責任はManager::detachだけへ置かない。in-flight create取消、idle破棄、active返却、Object::take、最後のPool Dropの経路を含め、worker起動前の登録からnative close／joinまで同じownerで保持する。checkerの先行公開や独自pool algorithmへの置換は行わない。mainへのmerge・版更新・releaseは実行していない。
+
+### #81の先行基盤CI成功
+
+head `cfa65fa`のchecks run `37397252295`とwebsite run `37397251707`はattempt 1で成功した。4 OSの実ログでprivate session22件／parser2件を確認し、両JetBrains製品・VSIX・merge gateの成功も確認した。[結果](sqlite-session-results.md#pr-81の4-os-ci)へ記録した。#81はreview可能、未マージ。これはnative一接続coreの検証で、Q004のadapter比較や公開Pool／Tx、Phase 4全体のacceptanceはまだ未完了である。
