@@ -1,4 +1,4 @@
-# Nagi 0.1.10 — a backend language in development
+# Nagi 0.1.11 — a backend language in development
 
 [日本語](README.md)
 
@@ -41,7 +41,7 @@ nagic --help
 
 A [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang) and an [IntelliJ IDEA/PyCharm plugin](editors/jetbrains-nagi/README.en.md) are available. See the [editor guide](docs/en/editor.md).
 
-The installer comes from main; the compiler comes from a published Release. The examples here use Nagi 0.1.10. Check your installed compiler with `nagic --version`, and see [CHANGELOG](CHANGELOG.md) for versioned changes and unreleased work.
+The installer comes from main; the compiler comes from a published Release. These examples target Nagi 0.1.11. Check the official release record to confirm that 0.1.11 is published, and verify your installed compiler with `nagic --version`. See [CHANGELOG](CHANGELOG.md) for changes and the [0.1.11 migration guide](docs/en/migration-0.1.11.md) for compatibility notes.
 
 ### Uninstall
 

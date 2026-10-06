@@ -26,7 +26,7 @@ Task静的制約はNagi checkerの保証。手書きRust handle consumeだけで
 
 | 項目 | 現在と扱い |
 |---|---|
-| S2 service接続 | Supervisor monitorの内側Resultを親body Errへ接続する移行は未実装。既存try/Result/Errorで進められる候補を優先。新しい明示fault昇格operationのAPI名/型/順序は未採用で、必要性が残る場合だけ判断する |
+| S2 service接続 | PR #90で完成・main反映済み。既存try/Result/ErrorでSupervisor monitorの内側Resultを親body Errへ接続し、HTTP旧spawnを維持。新しい明示fault昇格operationは不要で追加していない |
 | 旧spawn移行 | 通常業務Err、service終端Err、HTTP失敗を分類して具体serviceだけを移行。全spawnの機械置換は禁止。HTTPをtyped handleにしてdiscardすると内側Errが失われ得る |
 | 個別Task cancel/close/detach、scope外Task、一般Future保存 | S1機能ではなく採用済み次工程でもない。今回のrelease条件の語句だけから追加しない |
 | 公開関連cause/acknowledge/recovery | 内部記録以上の公開APIは未実装。sticky故障解除は別の意味論判断 |
@@ -49,8 +49,8 @@ Task静的制約はNagi checkerの保証。手書きRust handle consumeだけで
 
 | 順 | PR候補 | 成果と終了条件 |
 |---|---|---|
-| 1 | #88の最終補強完了 | 110契約・三構文service・archive Task E2E・全回帰・4 OS・日英整合・独立最終レビュー。source/tree/readback後にmerge |
-| 2 | S2の具体service移行 | 既存APIでmonitor内側Err→親body Err、HTTP旧故障伝播を保つ。業務reply継続、terminal停止、正常shutdown、親取消、context保持/cycleの限界を三構文・実socket・4 OSで確認。新APIが必要なら具体案判断 |
+| 完了 | #88の最終補強 | 110契約・三構文service・archive Task E2E・全回帰・4 OS・日英整合・独立最終レビューを完了し、main `aee1987`へ反映 |
+| 完了 | #90 S2の具体service移行 | 既存APIでmonitor内側Err→親body Err、HTTP旧故障伝播を保持。業務reply継続、terminal停止、正常shutdown、親取消、context保持/cycleの限界を三構文・実socket・4 OSで確認し、main `f9b25782`へ反映 |
 | 3 | 次リリース準備/公開 | API差分、#87 mandatory moveのmigration note、changelog/notes、version、配布artifact/hash、全suite/examples/HighLow/native/4 OSと独立最終レビュー。既存release workflowを使い重複tag/releaseしない |
 | 後続 | 保持/測定/探索の改善 | 同条件大batch/長body/故障/Dropを測り、小さく改善。Task releaseの既知blockerと単なる範囲拡張を区別 |
 | 別工程 | 公開Pool/Tx | S2 acceptanceとcapacity判断を前提に専用ADR/DB oracleで進む。Task取消/discardをDB cleanup完了としない |
@@ -61,4 +61,4 @@ Task静的制約はNagi checkerの保証。手書きRust handle consumeだけで
 
 #88の最新head `08e90c6984e689f7d026b3ff40277b9898ab4c68`はchecks `37540011861`・website `37540011529`が成功し、4 OSの110契約・private/public native・配布Task三構文を読戻した。main `aee1987a7ede5eeebb5e253afd65cb5ede327dde`へmerge済みで、双方tree `bc62c787471d9e4481e36c0cca6e2ed294cebbc1`。上の未merge・CI待ち表記は最終補強時点の履歴である。
 
-S2は別branch `feat/task-service-result-propagation`で既存APIを使い実装し、サービスmonitorの内側Resultを親tryへ接続した。新故障昇格APIは不要と判断した。HTTP旧spawn、業務Err継続、同期Drop/context保持の限界を維持し、三構文×7nativeケースと公開両例三構文はローカル成功。独立指摘2点を修正し、修正後読戻し/全回帰/4 OS/mergeを進める。[S2結果](../task-handles-s2-results.md)を現在の正本とする。リリース候補は既存patch履歴に沿う0.1.11、VSIX0.1.13は変更しない。migration/API差分監査の証拠は現在 `/tmp/nagi-release-task-audit/`、リリース工程へ保存する。公開済みとはまだ報告しない。
+S2はPR #90で既存APIを使い完成し、サービスmonitorの内側Resultを親tryへ接続した。新故障昇格APIは不要と判断した。HTTP旧spawn、業務Err継続、同期Drop/context保持の限界を維持し、三構文×7nativeケースと公開両例三構文が成功。独立指摘3点の修正と読戻し、全回帰、4 OSを完了した。最終head `f149705308fb042f3633fcc0a6cc533579ce5c77`のchecks `37545273020`・website `37545272936`は成功、main `f9b25782a8704bcf962f689d9103ab804f7ab3cf`へmergeし、共通tree `84d1696053a9cf5ef256b44fcd50afff91863c9d`を読戻した。[S2結果](../task-handles-s2-results.md)が正本。リリース候補は既存patch履歴に沿う0.1.11、VSIX0.1.13は変更しない。migration/API差分とCI原ログは[release artifact](../../../benchmarks/results/task-release-0.1.11/README.md)へ保存し、[release引継ぎ](2026-10-06-task-release-0.1.11.md)に版更新と正式公開の読戻しを記録する。

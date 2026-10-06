@@ -42,7 +42,7 @@ See [syntax](syntax.md) for parameter, return, and borrow annotations; [ownershi
 
 In Nagi 0.1.10, `view[bytes]` iteration and indexing yield `u8` values. Character iteration and integer indexing of `view[str]` are unsupported. Use `slice` to borrow part of a string with checked UTF-8 byte boundaries.
 
-Nagi 0.1.10 supports rebinding a view parameter to local data and adding local views to lists that hold views. These views cannot outlive their local owners or be returned as borrowed input data. Complex borrows across branches can still pass check and fail the Rust build.
+Nagi 0.1.10 supports rebinding a view parameter to local data and adding local views to lists that hold views. These views cannot outlive their local owners or be returned as borrowed input data. The Nagi 0.1.11 target adds checked flow plans and regression cases for restoring view-containing List/Result/Option values across nested values, branches, loops, and async code. This is not blanket support for every view combination. If supported Nagi code passes check and generated Rust is then rejected for a Nagi-originated type, move, or lifetime problem, treat that as a compiler defect. Rust adapter crate APIs and traits, targets, and dependency environments still require a Rust build.
 
 ## Distinguish variants with an enum
 

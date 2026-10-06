@@ -123,7 +123,7 @@ Command-line relative paths use the terminal's working directory. Duplicate SOUR
 
 Generated Low, Rust, and Cargo.toml go to `build/<entry filename without extension>/`. The build cache remains in `build/native-target/`. The `native:` line that `build` and `run` print to stderr gives the executable's actual path.
 
-The next unreleased version stores an executable for each build under the generated directory's `.nagi/`. The same entry source and output directory keep their application ID, while rebuilding changes the executable path. Builds do not overwrite, delete, or stop an older executable. A failed build does not run its new executable and leaves the previous successful metadata in place.
+The Nagi 0.1.11 target stores an executable for each build generation under the generated directory's `.nagi/`. The same entry source and output directory keep their application ID, while rebuilding changes the executable path. Builds do not overwrite, delete, or stop an older executable. A failed build does not run its new executable and leaves the previous successful metadata in place.
 
 Writes to the same generated directory are serialized by an OS lock. Contention prints `waiting for output lock:` and waits until generation, Cargo, and successful publication finish. The application runs after releasing the lock. Writing `check`, `lower`, and cost reports use the same lock; an editor check that writes no files does not need it.
 

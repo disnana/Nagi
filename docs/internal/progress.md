@@ -2,9 +2,9 @@
 
 ## 2026-10-06: S1 main反映とS2サービス接続
 
-PR #88最終head `08e90c6`は4 OS・必須CI成功、未解決review0でmain `aee1987`へmergeした。両tree `bc62c787471d9e4481e36c0cca6e2ed294cebbc1`を読戻した。別branchのS2で既存Task awaitの内側Resultを親tryへ接続し、HTTP旧spawnを維持する。新API/意味論/compiler/runtime/依存は追加していない。native三構文×7終了ケース、公開両例の三構文nativeがローカル成功。独立Sol Highの2指摘を修正し、最終回帰・4 OS・修正後読戻しを進める。[S2結果](task-handles-s2-results.md)が現在の正本。旧節の停止・未merge指示は当時の履歴で、最新のリリース完了指示を制限しない。
+PR #88最終head `08e90c6`は4 OS・必須CI成功、未解決review0でmain `aee1987`へmergeした。両tree `bc62c787471d9e4481e36c0cca6e2ed294cebbc1`を読戻した。S2のPR #90は既存Task awaitの内側Resultを親tryへ接続し、HTTP旧spawnを維持する。新API/意味論/compiler/runtime/依存は追加していない。native三構文×7終了ケース、公開両例の三構文native、独立Sol High指摘3点の修正と読戻し、全回帰と4 OSを完了した。最終head `f1497053`のchecks `37545273020`・website `37545272936`が成功し、main `f9b25782`へmerge、共通tree `84d1696053a9cf5ef256b44fcd50afff91863c9d`を確認した。[S2結果](task-handles-s2-results.md)が正本。次は別PRの0.1.11版更新・移行資料・独立最終review・公開検証で、[release引継ぎ](handoffs/2026-10-06-task-release-0.1.11.md)へ記録する。旧節の停止・未merge指示は当時の履歴で、最新のリリース完了指示を制限しない。
 
-agent運用は別差分で整理し、Fast Luna Max、Engineer/Reviewer Sol High、Architect xHigh、Critical Max、Astra例外をcustom TOMLへ接続。[構成記録](agent-routing.md)で仕様検査とstandalone CLIの未実行範囲を分ける。Taskのproduction検証成功へ数えない。
+agent運用はPR #89で整理しmain `f65c6093`へ反映、Fast Luna Max、Engineer/Reviewer Sol High、Architect xHigh、Critical Max、Astra例外をcustom TOMLへ接続した。checks `37544283368`・website `37544282939`成功、tree `4d2faacf5eeea630ab8bae7968fe5a2708f42046`を確認。[構成記録](agent-routing.md)で仕様検査とstandalone CLIの未実行範囲を分ける。Taskのproduction検証成功へ数えない。
 
 ## PR #88最終レビューとTask次リリース準備
 

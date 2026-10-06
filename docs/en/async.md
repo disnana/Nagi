@@ -52,7 +52,7 @@ Two successive `await sleep(...)` calls start the second wait after the first fi
 
 ## Legacy statement spawn and scope reference
 
-The scope checks child results after its body finishes. If a child returns a Result error or panics, it cancels the remaining children and waits for them. A child failure does not interrupt the body while it runs. Spawned work must return `unit` or `Result[unit, Error]`. Returning from inside a scope and passing a view to a child are not supported.
+Legacy statement spawn checks child results after the scope body finishes. If a child returns Err or panics, it cancels the remaining children and waits for them; the failure does not interrupt the body. By contrast, awaiting a Task binding receives that Task's result inside the body. Handling a received failure does not clear the scope fault, and scope exit still waits for every actual join. Legacy statement spawn requires `unit` or `Result[unit, Error]` work. Returning from inside a scope and passing a view to a child are not supported.
 
 Arguments are evaluated at the `spawn` statement, and the resulting values are passed to the child. With `spawn work(copy(part))`, the child receives an owned copy, so the parent can keep using the original data. Copying a list does not make it safe to pass if its elements still contain views.
 
@@ -60,9 +60,9 @@ A function using a scope returns Result. A custom error class or enum requires a
 
 If a body `try` propagates Err out of the scope, children are canceled and awaited before the Err reaches the outer code. If the parent Future itself is dropped, or the scope body panics, cancellation is requested. Synchronous Drop cannot await async completion, so there is no guarantee that every child has already stopped at that point. Cancellation also does not roll back accepted database work or other external side effects. See [Concurrency](concurrency.md) for CPU work and cancellation.
 
-### Receive a child's result (working branch, unreleased)
+### Receive a child's result (targeted for Nagi 0.1.11)
 
-S1 implements `task = spawn work()`, `await task`, and `std.task.discard(task)` on the working branch. [Task result handles](task-handles.md) describes single consumption for every T, await/discard obligations at normal exits, scope escape rejection, and TaskFailure APIs. An inner business Err does not stop siblings; handling a receive fault leaves the scope failed. The legacy statement spawn above still cancels siblings on a child `Result[unit, Error]` Err. Supervisor/HTTP migration and public SQLite Pool/Tx remain separate work.
+S1 Task result handles and the S2 Supervisor-monitor migration target Nagi 0.1.11. S2 awaits the monitor with the existing Task API and passes `Ok(inner)` through the parent body's `try`. The implementation is complete; final four-OS CI passed and the change was merged into main. Check the official release record before relying on published availability. [Task result handles](task-handles.md) describes single consumption for every T, await/discard obligations at normal exits, scope escape rejection, and TaskFailure APIs. An inner business Err does not stop siblings; handling a receive fault leaves the scope failed. Legacy statement spawn still cancels siblings on a child `Result[unit, Error]` Err. Public SQLite Pool/Tx remains separate work.
 
 ## Call a function stored in a variable
 

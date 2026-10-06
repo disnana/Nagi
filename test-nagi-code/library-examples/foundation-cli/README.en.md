@@ -28,6 +28,6 @@ $env:NAGI_PRICING_ENGINE = "rust"
 
 `nagi.toml` selects `foundation_cli.nagi` and the small `native.rs` adapter. The adapter includes `../shared/bridge.rs`, reached through `@rust("native::engine::foundation_rust_quote")`. No additional crates are required. Both implementations are compiled into the application; selection changes the function that runs.
 
-Generated sources go to this folder's `build/foundation_cli/`. Read the executable path from the `native:` line. The next unreleased compiler also adds an identifier to default names: `build/native-target/release/nagi-foundation-cli-<identifier>`, with `.exe` on Windows. `NAGI_NATIVE_TARGET_DIR` overrides that output directory. Building requires Rust/Cargo and a compatible C build environment.
+Generated sources go to this folder's `build/foundation_cli/`. Successful executables are stored by build generation under the generated directory's `.nagi/`; read the actual path from the `native:` line instead of constructing a filename or generation path. This executable layout targets Nagi 0.1.11; check the official release record to confirm published availability. `NAGI_NATIVE_TARGET_DIR` selects a shared dependency cache and does not change the executable location. The `native:` path includes `.exe` on Windows. Building requires Rust/Cargo and a compatible C build environment.
 
 [日本語](README.md)

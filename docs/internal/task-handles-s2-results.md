@@ -2,7 +2,7 @@
 
 2026-10-06。S1のPR [#88](https://github.com/disnana/Nagi/pull/88)は最終head `08e90c6984e689f7d026b3ff40277b9898ab4c68`で検証し、main `aee1987a7ede5eeebb5e253afd65cb5ede327dde`へmergeした。両treeは `bc62c787471d9e4481e36c0cca6e2ed294cebbc1`。[checks](https://github.com/disnana/Nagi/actions/runs/37540011861)・[website](https://github.com/disnana/Nagi/actions/runs/37540011529)は成功。4 OSのchecker110/110、native6、runtime17、public3、doc9、配布Task三構文/12拒否、Linux workspace934成功・failed0・費用用ignored1を観測した。未解決review threadは0。まだリリース済みではない。
 
-S2は別branch `feat/task-service-result-propagation`で作業中。compiler/runtime、Cargo依存、公開API・意味論を変更せず、既存awaitと親のtryでservice故障を接続する。新しいfault昇格操作、業務Errの自動故障化、SQLite公開化は追加しない。以下はローカル検証の現在地。4 OS・最終回帰・指摘修正後の独立確認・mergeは追記するまで未完了。
+S2はPR [#90](https://github.com/disnana/Nagi/pull/90)として完成しmainへ反映した。最終head `f149705308fb042f3633fcc0a6cc533579ce5c77`、merge `f9b25782a8704bcf962f689d9103ab804f7ab3cf`、共通tree `84d1696053a9cf5ef256b44fcd50afff91863c9d`を読み戻した。compiler/runtime、Cargo依存、公開API・意味論を変更せず、既存awaitと親のtryでservice故障を接続した。新しいfault昇格操作、業務Errの自動故障化、SQLite公開化は追加しない。TaskのS1/S2は完成し、正式releaseへの反映は別の版更新工程で行う。
 
 ## 移行と契約
 
@@ -36,6 +36,8 @@ WebStateはActor/Controlのみを持ち、Supervisor contextをHTTP stateへ追�
 
 ローカルtask-resultsは3構文成功。serviceも3構文で実HTTPの200/409/400、正常shutdown204、停止後503、Linux SIGINT正常終了を確認した。Windowsではprocess terminateによる停止検査で、graceful Ctrl+Cの実証とは数えない。4 OS CIへ両例の三構文を追加した。
 
-Sol Highは自身のnative全3構文×7ケースと両sampleのchecked本文一致を確認した。HTTP Drop待ちが早いparent returnを隠す可能性と、spawn/await型のDocs表記を指摘し、直接assertと型の分離で修正した。修正後のSol High独立読戻しは完了、未解決指摘0。全workspaceは95 result block・935成功・failed0・費用用ignored1、fmt/clippy、checker110/110、全library15検証、website92頁が成功。4 OSはまだ未完了。原ログとsource/hashは[保存artifact](../../benchmarks/results/task-handles-s2-2026-10-06/README.md)へ集約した。S1最終CI原ログは現セッション`/tmp/nagi-s1-final-ci/`。PR headのCIは別に読む。
+Sol Highは自身のnative全3構文×7ケースと両sampleのchecked本文一致を確認した。HTTP Drop待ちが早いparent returnを隠す可能性と、spawn/await型のDocs表記を指摘し、直接assertと型の分離で修正した。修正後のSol High独立読戻しは完了、未解決指摘0。全workspaceは95 result block・935成功・failed0・費用用ignored1、fmt/clippy、checker110/110、全library15検証、application10 project/19 native実行、fuzz1000 mutation/panic0/別枠bounded native16、website92頁が成功。原ログとsource/hashは[保存artifact](../../benchmarks/results/task-handles-s2-2026-10-06/README.md)へ集約した。
 
-次はS2の全回帰・日英/リンク・独立確認・4 OSを完了してmainへ反映し、既存リリース手順で0.1.11を準備する。API差分/migration、全例、配布、版更新と最終独立reviewは別工程。公開Pool/Tx、条件付きshared actor message、一般Future保存、回復可能fault APIは今回のTask release blockerではなく未採用/別工程を維持する。
+最終headの[checks 37545273020](https://github.com/disnana/Nagi/actions/runs/37545273020)・[website 37545272936](https://github.com/disnana/Nagi/actions/runs/37545272936)は成功。Linux x86_64、macOS arm64/x86_64、Windows x86_64の全てでchecker110/110、compiler Task native7、runtime17、公開API3、runtime doc9、両公開例の三構文、抽出archiveのTask gateを実ログで確認した。Linux全suiteは95 result block/935成功/failed0/費用ignored1、VSIXと両IDEとReady gateも成功。未解決review thread0。版不変のpublish skipは公開実行へ数えない。最終CI原ログとSHA-256は[release準備artifact](../../benchmarks/results/task-release-0.1.11/README.md)へ保存する。cacheを利用した実行をclean buildと呼ばず、0件filterや未実行stepも成功件数へ加えない。
+
+次は既存リリース手順で0.1.11を準備する。API差分/migration、全例、配布、版更新と最終独立reviewを別PRへまとめる。公開Pool/Tx、条件付きshared actor message、一般Future保存、回復可能fault APIは今回のTask release blockerではなく未採用/別工程を維持する。

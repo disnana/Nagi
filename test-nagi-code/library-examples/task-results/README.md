@@ -1,6 +1,6 @@
 # Taskの結果・move・業務Err
 
-このディレクトリで`nagic check`、`nagic run`を実行します。手書きLowは`nagic run main.low`で実行できます。Taskはmainへ接続済みで、公開releaseにはまだ含まれません。
+この例はNagi 0.1.11への導入対象であるTask結果handleを使います。公開配布で使えるかは公式Release記録を確認してください。このディレクトリで`nagic check`、`nagic run`を実行します。手書きLowは`nagic run main.low`で実行できます。
 
 `original`のhandleと受取義務を`move`で移し、一度awaitして42を受け取ります。次のTaskは業務Errを返します。外側のTaskFailureと内側のResultを別にmatchするため、業務Errでも兄弟は終了まで動きます。unitを返す兄弟は明示discardします。discardは子の停止ではなく受取放棄で、scopeは実際の終了を待ちます。
 

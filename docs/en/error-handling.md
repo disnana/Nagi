@@ -183,7 +183,7 @@ The checker rejects a `Result` discarded as an expression, including values with
 
 Result failures differ from panics. Out-of-bounds array access and integer `/` or `%` whose divisor becomes zero at runtime panic rather than return Result. There is no general exception syntax equivalent to Python's `raise`/`except`.
 
-For integers, `check` rejects `/` or `%` with an explicit zero divisor in both High and Low. The unreleased constant validation also rejects `1 / (1 - 1)` and zero values established by scalar bindings within the same function. Division or remainder of a signed integer's minimum by `-1` is also rejected. New constant diagnostics run after successful name and type checking.
+Nagi 0.1.10 rejects a literal zero divisor for integer `/` or `%` in both High and Low. The constant validation targeted for Nagi 0.1.11 also rejects `1 / (1 - 1)`, zero values established by scalar bindings within the same function, and signed minimum division or remainder by `-1`. New constant diagnostics run after successful name and type checking. Check the official release record to confirm availability.
 
 Constant failures in unreachable branches are checked too, so previously buildable dead branches can now be rejected. Overflow from `+`, `-`, and `*` still panics in debug builds and wraps in release. Profile-dependent values, calls, extern functions, fields, and indexing are not propagated as known constants. This does not detect every runtime zero divisor.
 

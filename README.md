@@ -1,4 +1,4 @@
-# Nagi 0.1.10 — 開発中のバックエンド向け言語
+# Nagi 0.1.11 — 開発中のバックエンド向け言語
 
 [English](README.en.md)
 
@@ -41,7 +41,7 @@ nagic --help
 
 [VS Code拡張](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)と[IntelliJ IDEA・PyCharm向けプラグイン](editors/jetbrains-nagi/README.md)もあります。操作は[エディターの案内](docs/editor.md)を参照してください。
 
-インストーラーはmainから、コンパイラは公開Releaseから取得します。このREADMEのコード例はNagi 0.1.10用です。インストールした版は`nagic --version`で、版ごとの変更と未リリースの変更は[CHANGELOG](CHANGELOG.md)で確認できます。
+インストーラーはmainから、コンパイラは公開Releaseから取得します。このREADMEの例はNagi 0.1.11を対象にしています。0.1.11の公開有無は公式Release記録で確認し、インストールした版は`nagic --version`で確かめてください。変更内容は[CHANGELOG](CHANGELOG.md)、互換性の変更は[0.1.11移行ガイド](docs/migration-0.1.11.md)を参照してください。
 
 ### アンインストール
 

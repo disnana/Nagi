@@ -2,7 +2,7 @@
 
 [English](README.en.md)
 
-未リリースの`std.auth`実験例です。Rust/AxumがHTTPとcredential検証、Nagiが独自認可policy、Rust adapterが封印した許可証の発行とSQLite readを担当します。通常classはDTOに使います。`Principal`と`Grant[Read]`は、Nagiからの手動構築・JSON復元・clone・shared化を許さない型です。
+`std.auth`のexperimental APIを使うNagi 0.1.11導入対象の例です。公開配布で利用できるかは公式Release記録を確認してください。Rust/AxumがHTTPとcredential検証、Nagiが独自認可policy、Rust adapterが封印した許可証の発行とSQLite readを担当します。通常classはDTOに使います。`Principal`と`Grant[Read]`は、Nagiからの手動構築・JSON復元・clone・shared化を許さない型です。
 
 ```sh
 nagic run --project test-nagi-code/application-examples/auth-boundary

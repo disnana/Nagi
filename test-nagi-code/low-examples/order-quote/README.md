@@ -36,6 +36,6 @@ nagic build
 python3 smoke.py --executable "/path/to/executable"
 ```
 
-`/path/to/executable`を、ビルドの`native:`行に表示された実際のパスへ置き換えてください。次の未リリース版では既定の実行ファイル名にも識別子が付きます。Windowsでは`.exe`まで含めたパスを渡します。`NAGI_NATIVE_TARGET_DIR`でビルド先を変更した場合も同じです。
+`/path/to/executable`を、buildの標準エラーに出る`native:`行のpathへ置き換えてください。成功した実行ファイルは生成先の`.nagi/`にbuild世代ごとに保存されます。この配置はNagi 0.1.11への導入対象です。公開配布での利用可否は公式Release記録を確認してください。`NAGI_NATIVE_TARGET_DIR`は共有依存cacheだけを選び、実行ファイルの場所を変えません。filenameやgeneration pathを組み立てず、Windowsでは`native:`行に表示された`.exe`付きpathを使ってください。
 
 [English](README.en.md) · [HighとLow](../../../docs/low-language.md) · [JSON](../../../docs/json.md)
