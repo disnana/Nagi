@@ -23,6 +23,7 @@ Nagi 0.1 betaの既知不具合再発を小さな再現sourceと段階別oracle�
 | Property / 限定differential | bounded生成と独立host oracle、High/保存Low二経路 | compiler/tests/support/conformance.rs, compiler/tests/conformance.rs |
 | Planned input syntax | 未配線APIのHigh／手書きLow構文、matrix完全性、元行anchor。compile-pass／failや診断保証とは別 | compiler/tests/sqlite_contract_inputs.rs、fixtures/sqlite-contract/matrix.json |
 | Private native contract | 実SQLiteのuser hook、終端／cleanup結果、取消、native close／worker join。public Pool保証ではない | runtime/src/sqlite_prototype/tests.rs、[結果](sqlite-session-results.md) |
+| Private pool adapter | stock checkoutの所有、create取消、close競合、retire後replacement停止、native上限、結果公開順。単一接続prototypeの検査で、多接続・公開取得期限の保証ではない | runtime/src/sqlite_prototype/adapter_tests.rs、[結果](sqlite-adapter-results.md) |
 
 ### Negative testの領域
 

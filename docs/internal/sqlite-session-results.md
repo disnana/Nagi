@@ -1,6 +1,6 @@
 # Phase 4: private SQLite sessionの検証結果
 
-2026-10-06。main `f10cb64`（#80成功headとtree一致）を基点に、Q002／[ADR 010](adr/010-sqlite-transaction-boundary.md)の一接続・一Tx試作を実装した。public Pool／Txは未実装で、Phase 4のacceptance完了ではない。mainへのmerge、版更新、releaseは行っていない。
+2026-10-06。main `f10cb64`（#80成功headとtree一致）を基点に、Q002／[ADR 010](adr/010-sqlite-transaction-boundary.md)の一接続・一Tx試作を実装した。public Pool／Txは未実装で、Phase 4のacceptance完了ではない。先行基盤は4 OS CI成功後、ユーザーが#81をmain `ff6f7d4`へマージした。版更新・releaseは未実施。後続の[adapter比較結果](sqlite-adapter-results.md)は別記録とする。
 
 ## 変更と責任範囲
 

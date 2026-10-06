@@ -187,3 +187,13 @@ head `cfa65fa`のchecks run `37397252295`とwebsite run `37397251707`はattempt 
 ユーザーが#81をmain `ff6f7d4c81c8cf49c2bca7abffb3083f681d5b9d`へマージした。tree `cb8c3d061110e9866c208004f54d1cedf9d9481d`は、成功headに先行mainのREADME code fence変更を取り込んだtreeと一致する。エージェントはmerge操作をしていない。
 
 比較初版は共通native sessionを維持したまま、startup取消後のworker並存と、join通知がterminal cause公開に先行する反例を確認した。前者はdeadpoolの論理slotとnative終了、後者は完了通知と結果公開を同一視したことが原因。完了Stateの全履歴保持も公開runtimeには残さず、live recordと集約counterへ分ける。[比較方針](sqlite-pool-adapter-decision.md#論理slotとnative-workerの終了を分ける)を先に更新し、barrier回帰で確認する。公開Pool／Tx、multi-connection、captured Tx検査、sealed SQL、acquire期限への接続はまだ未完了。
+
+### Q004の一接続比較・ローカル検証
+
+generic deadpoolのManagerへ共通native sessionを接続した。stock permit・queue・recycleは再利用し、native close／joinをledgerで観測する。Object::takeのpermit先行返却でもworkerが並存する実反例を追加し、max_size=1限定のcreateはlive記録が空になるまで待つ単純な条件へ揃えた。cause公開後にcounterとlive記録を更新する。健康Objectの通常recycleは維持し、多接続へこの条件を流用しない。
+
+最終source tree `58297cd1`で、native22＋adapter20＋比較1の43件、全92 suite・874件、runtime172 unit＋5 doctest、fmt／all-target clippyが成功した。既存fuzzは1000 mutation／95 checked Low emit／16 native・panic 0。別のSolが登録と結果公開の順序をレビューした。23組46の予定High／Lowはparser検査だけで、semantic harness未配線のまま。追加依存は承認済み2個だけで、既存版更新なし。
+
+同native coreの単独debug測定は各4096 Tx、direct p50 106.370µs、deadpool p50 114.402µs。raw sample、再実行条件、REDとGREEN、保証の限界は[結果](sqlite-adapter-results.md)と[測定](../../benchmarks/results/sqlite-adapter-2026-10-06/README.md)に保存した。throughput、allocator count、Future size、本番性能は未測定。main `ff6f7d4`を取り込んだ後も実装treeは同一。
+
+次のPRはmain向けに分離する。新adapterの4 OS CIは確認待ち。公開Pool／Tx、多接続・Options取得期限、capture検査、sealed SQL、Phase 4全体のacceptanceは未完了。Phase 5、版更新、releaseは開始していない。

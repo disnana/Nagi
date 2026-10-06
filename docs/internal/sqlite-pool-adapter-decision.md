@@ -1,6 +1,6 @@
 # SQLite Pool adapter: 採用した比較方針
 
-2026-10-06。Q004の2項目をユーザーが承認した。generic deadpool Managerの比較試作に使う依存と、下表のcapability初版値を採用する。Q002の公開API・SQL範囲・終了契約・rusqlite hooksは維持する。[ADR 010](adr/010-sqlite-transaction-boundary.md)と[比較](sqlite-pool-rust-reuse.md)を前提に、次の小さい実装で検証する候補を具体化する。ここにあるPool adapterはまだbuild／実行していない。
+2026-10-06。Q004の2項目をユーザーが承認した。generic deadpool Managerの比較試作に使う依存と、下表のcapability初版値を採用する。Q002の公開API・SQL範囲・終了契約・rusqlite hooksは維持する。[ADR 010](adr/010-sqlite-transaction-boundary.md)と[比較](sqlite-pool-rust-reuse.md)を前提に、次の小さい実装で検証する候補を具体化する。一接続のprivate adapterを実装し、43件・ローカル全suiteと比較測定を確認した。[結果](sqlite-adapter-results.md)を参照。公開Pool／Tx、多接続、取得期限への接続は未完了。
 
 ## 推奨: generic deadpoolのManagerを使う
 
@@ -40,7 +40,7 @@ Object::takeのstock実装はManager.detach／WorkerHandle Dropより先にpermi
 
 完了workerのStateを全履歴として保持する初版のledgerも、公開runtimeへ流用しない。terminal causeを公開し、同じcritical sectionで完了件数へ集約してlive recordを除く。累積created／native close／joinedの観測は保ち、closeの完了条件を履歴Vecの全走査に依存させない。反復取消とtake/drop/createで、未終了record数と累積件数を別々に確認する。
 
-この節は失敗の原因と採用した内部修正方針であり、追加後のGREENやmulti-connection／公開APIの完成を示さない。
+この節の反例を元にした修正版は、一接続のbarrier試験と全suiteで確認した。multi-connection／公開APIの完成は示さない。
 
 ## ほかの候補を今すぐ採らない理由
 
