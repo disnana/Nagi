@@ -79,7 +79,7 @@ async fn direct_and_deadpool_warm_native_session_comparison() {
         "warmup_transactions_per_backend": WARMUP, "sql": "SELECT 1 AS n", "terminal": "rollback",
         "direct": percentiles(&direct_samples), "deadpool": percentiles(&adapter_samples),
         "direct_threads": "1 native worker + 1 join observer",
-        "adapter_threads": "1 native worker + 1 pool reaper",
+        "adapter_threads": "1 native worker + 1 independent join observer per connection",
         "direct_native_health_and_join": true, "adapter_native_health_and_join": true });
     eprintln!("NAGI_SQLITE_COMPARISON {summary}");
     // この環境値はprivate測定artifactの保存先だけを指定。公開policy/defaultではない。

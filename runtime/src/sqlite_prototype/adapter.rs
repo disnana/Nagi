@@ -7,9 +7,8 @@ use deadpool::managed::{self, Manager, Metrics, RecycleError, RecycleResult};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc as blocking_channel, Arc, Mutex, Weak,
+        Arc, Mutex,
     },
-    thread::JoinHandle,
     time::Duration,
 };
 use tokio::sync::{mpsc, oneshot, Notify};
@@ -17,6 +16,7 @@ use tokio::sync::{mpsc, oneshot, Notify};
 const WATCHDOG: Duration = Duration::from_secs(10);
 type NativePool = managed::Pool<NativeManager>;
 type Checkout = managed::Object<NativeManager>;
+type ReadyReply = Arc<Mutex<Option<oneshot::Sender<Result<(), Failure>>>>>;
 
 #[derive(Default)]
 pub(super) struct AdapterSeams {
@@ -99,14 +99,9 @@ struct Records {
     workers: Vec<Arc<State>>,
     failure: Option<Failure>,
 }
-enum Reap {
-    Worker(usize, Arc<State>, JoinHandle<()>),
-    Wake,
-}
 struct Ledger {
     records: Mutex<Records>,
     pool: Mutex<Option<managed::WeakPool<NativeManager>>>,
-    reap: blocking_channel::Sender<Reap>,
     changed: Notify,
 }
 impl Ledger {
@@ -143,7 +138,6 @@ impl Ledger {
         if let Some(pool) = pool {
             pool.close();
         }
-        let _ = self.reap.send(Reap::Wake);
     }
     fn fail(&self, error: Failure) {
         {
@@ -277,7 +271,6 @@ impl Drop for Startup {
         if self.registered {
             self.ledger.change(|stats| stats.starting -= 1);
         }
-        let _ = self.ledger.reap.send(Reap::Wake);
     }
 }
 
@@ -287,6 +280,77 @@ struct NativeManager {
     ledger: Arc<Ledger>,
     capacity: usize,
 }
+
+// replyの喪失より先に起動失敗を公開。native未起動をfake joinへ変えない。
+fn fail_start(ledger: &Ledger, state: &Arc<State>, ready: &ReadyReply, error: Failure) {
+    state.fail(error.clone());
+    ledger.fail(error.clone());
+    ledger.start_failed(state);
+    let reply = ready.lock().unwrap().take();
+    if let Some(reply) = reply {
+        let _ = reply.send(Err(error));
+    }
+}
+
+fn observe_native(
+    ordinal: usize,
+    config: Arc<Config>,
+    state: Arc<State>,
+    ledger: Arc<Ledger>,
+    seams: Arc<AdapterSeams>,
+    receiver: mpsc::Receiver<BeginRequest>,
+    ready: ReadyReply,
+) {
+    let worker_state = Arc::clone(&state);
+    let worker_ledger = Arc::clone(&ledger);
+    let worker_ready = Arc::clone(&ready);
+    let startup = seams.startup.clone().filter(|_| seams.applies(ordinal));
+    // observer自身がnativeを起動し、成功したJoinHandleをこのscopeから外へ渡さない。
+    let worker = std::thread::Builder::new()
+        .name("nagi-sqlite-adapter".into())
+        .spawn(move || {
+            worker_ledger.change(|stats| stats.native_started += 1);
+            let reply = worker_ready.lock().unwrap().take();
+            native_worker(config, worker_state, receiver, reply, startup);
+        });
+    let worker = match worker {
+        Ok(worker) => worker,
+        Err(error) => {
+            fail_start(
+                &ledger,
+                &state,
+                &ready,
+                Failure::cleanup(Outcome::NotApplicable, error.to_string()),
+            );
+            return;
+        }
+    };
+    if worker.join().is_err() {
+        state.fail(state.worker_error());
+    }
+    if seams.applies(ordinal) {
+        if seams.fail_terminal_result {
+            state.fail(Failure::cleanup(
+                Outcome::NotApplicable,
+                "private terminal-result failure seam; native close succeeded",
+            ));
+        }
+        if let Some(gate) = &seams.publication {
+            gate.block_once();
+        }
+    }
+    if let Some(error) = state.error() {
+        ledger.fail(error);
+    }
+    // terminal cause公開→actual join済みcounter/live除去→通知。
+    ledger.completed(&state);
+    // native entry前panic等でSenderが残る場合も、failure公開後にだけ通知する。
+    let reply = ready.lock().unwrap().take();
+    if let Some(reply) = reply {
+        let _ = reply.send(Err(state.worker_error()));
+    }
+}
+
 impl Manager for NativeManager {
     type Type = WorkerHandle;
     type Error = Failure;
@@ -308,7 +372,7 @@ impl Manager for NativeManager {
                         "create after close",
                     ));
                 }
-                // 中間版: native容量だけを一般化。下の単一reaper順次joinはまだ残す。
+                // starting/healthy/取消/detachedを含むnative容量の終了fence。
                 // slotの選択/待機順序/公平性はstock deadpoolが引き続き所有する。
                 if records.workers.len() >= self.capacity {
                     None
@@ -338,45 +402,32 @@ impl Manager for NativeManager {
             registered: true,
         };
         let (ready, ready_receiver) = oneshot::channel();
-        if self.seams.applies(ordinal) && self.seams.fail_observer_spawn {
-            // 中間版ではobserver構造未導入。私有起動失敗seamはnative起動前だけ。
-            let error = Failure::cleanup(
-                Outcome::NotApplicable,
-                "private observer startup failure seam",
-            );
-            state.fail(error.clone());
-            self.ledger.fail(error.clone());
-            self.ledger.start_failed(&state);
-            return Err(error);
-        }
+        // Builder.spawn ErrはclosureをDropするが、Senderはobserver側にも残す。
+        let ready = Arc::new(Mutex::new(Some(ready)));
         let config = Arc::clone(&self.config);
-        let worker_state = Arc::clone(&state);
-        let gate = self
-            .seams
-            .startup
-            .clone()
-            .filter(|_| self.seams.applies(ordinal));
-        let thread = std::thread::Builder::new()
-            .name("nagi-sqlite-adapter".into())
-            .spawn(move || native_worker(config, worker_state, receiver, Some(ready), gate));
-        let thread = match thread {
-            Ok(thread) => {
-                self.ledger.change(|stats| stats.native_started += 1);
-                thread
-            }
+        let observer_state = Arc::clone(&state);
+        let ledger = Arc::clone(&self.ledger);
+        let seams = Arc::clone(&self.seams);
+        let observer_ready = Arc::clone(&ready);
+        let observer = if self.seams.applies(ordinal) && self.seams.fail_observer_spawn {
+            Err(std::io::Error::other("private observer startup failure seam"))
+        } else {
+            std::thread::Builder::new()
+                .name("nagi-sqlite-join-observer".into())
+                .spawn(move || {
+                    observe_native(
+                        ordinal, config, observer_state, ledger, seams, receiver, observer_ready,
+                    )
+                })
+        };
+        match observer {
+            Ok(observer) => drop(observer), // native JoinHandleはobserver closure内だけにある。
             Err(error) => {
                 let error = Failure::cleanup(Outcome::NotApplicable, error.to_string());
-                state.fail(error.clone());
-                self.ledger.fail(error.clone());
-                self.ledger.start_failed(&state);
+                fail_start(&self.ledger, &state, &ready, error.clone());
                 return Err(error);
             }
-        };
-        // JoinHandleはcreate Futureから直ちに独立。取消でこの責任は消えない。
-        self.ledger
-            .reap
-            .send(Reap::Worker(ordinal, Arc::clone(&state), thread))
-            .expect("reaper disappeared before worker handoff");
+        }
         let ready = ready_receiver.await.map_err(|_| state.worker_error())?;
         if let Err(error) = ready {
             self.ledger.fail(error.clone());
@@ -462,55 +513,12 @@ impl Adapter {
     }
     pub fn with_capacity(config: Config, seams: AdapterSeams, capacity: usize) -> Self {
         assert!(capacity > 0, "private fixture capacity must be positive");
-        let (sender, receiver) = blocking_channel::channel();
         let ledger = Arc::new(Ledger {
             records: Mutex::new(Records::default()),
             pool: Mutex::new(None),
-            reap: sender,
             changed: Notify::new(),
         });
-        let reaper_ledger: Weak<Ledger> = Arc::downgrade(&ledger);
         let seams = Arc::new(seams);
-        let reaper_seams = Arc::clone(&seams);
-        // 比較prototypeはconnection worker+poolごとに1 reaper thread。
-        // close/getのTokio cancellationやruntime破棄へworker joinを依存させない。
-        std::thread::spawn(move || {
-            while let Ok(message) = receiver.recv() {
-                let ledger = reaper_ledger.upgrade();
-                if let Reap::Worker(ordinal, state, thread) = message {
-                    if thread.join().is_err() {
-                        state.fail(state.worker_error());
-                    }
-                    if reaper_seams.applies(ordinal) {
-                        if reaper_seams.fail_terminal_result {
-                            state.fail(Failure::cleanup(
-                                Outcome::NotApplicable,
-                                "private terminal-result failure seam; native close succeeded",
-                            ));
-                        }
-                        if let Some(gate) = &reaper_seams.publication {
-                            gate.block_once();
-                        }
-                    }
-                    if let Some(ledger) = &ledger {
-                        if let Some(error) = state.error() {
-                            ledger.fail(error);
-                        }
-                    }
-                    // native終端causeを先に公開。joinedはclose完了を判断してよい最後の通知。
-                    if let Some(ledger) = &ledger {
-                        ledger.completed(&state);
-                    } else {
-                        state.update(|stats| stats.joined = true);
-                    }
-                }
-                if let Some(ledger) = ledger {
-                    if ledger.snapshot().closing && ledger.done() {
-                        break;
-                    }
-                }
-            }
-        });
         let manager = NativeManager {
             config: Arc::new(config),
             seams: Arc::clone(&seams),
