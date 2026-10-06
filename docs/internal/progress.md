@@ -1,5 +1,13 @@
 # コンパイラ・Rust境界の進捗
 
+## S1 Stage 1: 先行REDとprivate Task bridge
+
+2026-10-06。ユーザーによる#87のマージを確認した。最終head `5985e1b`とmain `9ba4a10`のtreeは一致。#87は追加変更せず、S1は別のmain向けdraft PRへ分離する。
+
+[Stage 1結果](task-bridge-stage1-results.md)にprivate runtimeの16群、runner oracleの3群、56入力中6一致/50未達を記録した。新Taskはparse REDのまま。結果通知を実joinとしないこと、受取faultがscope故障を消さないこと、元legacy Errorを保持することをnative oracleで検査し、Solが修正後sourceを独立レビューした。初回socketのinfra失敗と、runner元行/Lowコメント誤りの記録も保存した。
+
+今回は先行RED＋cfg(test) private bridgeで止める。Nagi checker/Low/Rust生成、旧spawnの移行、allocation/Future size測定、公開SQLiteは後続。merge・release・版更新は行わない。全回帰と最新head CIは結果文書へ追記し、過去headの成功を流用しない。
+
 ## PR #87: 更新後CIの終了回帰と仕上げ
 
 2026-10-06。move補強のlocal `44c38b7`は90 suite・899件成功。公開head `68d215b`のLinux CIでprivate SQLite closeが1件失敗した。古いCI、ローカル成功、再実行だけで解消したとは扱わず、stock APIによる決定的反例をtest-only `0051f7a`へ保存した。

@@ -62,7 +62,7 @@ If a body `try` propagates Err out of the scope, children are canceled and await
 
 ### Adopted direction and unavailable features
 
-The adopted direction is for spawn to return a result handle and to separate ordinary business Err values from task failure. The future policy is to receive a returned Result as a value, without automatically stopping siblings for an ordinary business Err alone. The current implementation has no result handle, and a child's `Result[unit, Error]` Err still cancels siblings. The handle type, syntax, result consumption, and failure representation remain undecided. Examples on this page use current behavior. See [DESIGN](../../DESIGN.en.md) for the reasoning and migration boundaries.
+Result handles are unimplemented. [ADR 012](../internal/adr/012-task-result-handles.md) adopts an S1 design where ordinary business Err alone does not stop siblings, all new handles require await or explicit discard before normal exit, and handling a receive fault still leaves scope exit unsuccessful. API names and syntax remain proposals and cannot be used yet. Current spawn/Scope behavior is unchanged: a child's `Result[unit, Error]` Err still cancels siblings. Examples on this page use current behavior. See [DESIGN](../../DESIGN.en.md) for design and migration boundaries.
 
 ## Call a function stored in a variable
 

@@ -1,0 +1,45 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling serde_spanned v1.1.1
+   Compiling rusqlite v0.40.2
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling toml v1.1.6+spec-1.1.0
+   Compiling quote v1.0.47
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling tokio-macros v2.7.2
+   Compiling futures-macro v0.3.34
+   Compiling thiserror-impl v2.0.21
+   Compiling tokio v1.53.1
+   Compiling futures-util v0.3.34
+   Compiling thiserror v2.0.21
+   Compiling tungstenite v0.29.0
+   Compiling serde v1.0.229
+   Compiling nagic v0.1.10 (/workspace/Nagi-task-handle-design-review/compiler)
+   Compiling serde_urlencoded v0.7.1
+   Compiling hyper v1.11.1
+   Compiling hyper-util v0.1.21
+   Compiling tokio-tungstenite v0.29.0
+   Compiling deadpool-runtime v0.3.1
+   Compiling tower v0.5.3
+   Compiling deadpool v0.13.1
+   Compiling axum v0.8.9
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-task-handle-design-review/runtime)
+rustc-LLVM ERROR: IO failure on output stream: No space left on device
+rustc-LLVM ERROR: IO failure on output stream: No space left on device
+rustc-LLVM ERROR: IO failure on output stream: No space left on device
+error: could not compile `nagic` (test "cli")
+
+Caused by:
+  No space left on device (os error 28)
+
+Caused by:
+  failed to parse process output: `/workspace/toolchains/rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name cli --edition=2021 compiler/tests/cli.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --test --cfg 'feature="default"' --cfg 'feature="sql-check"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "sql-check"))' -C metadata=c2f520ed195d0bbe -C extra-filename=-c40425d8d16842c0 --out-dir /tmp/nagi-container-flow-target/debug/deps -L dependency=/tmp/nagi-container-flow-target/debug/deps --extern nagic=/tmp/nagi-container-flow-target/debug/deps/libnagic-49d76bf83683455b.rlib --extern rusqlite=/tmp/nagi-container-flow-target/debug/deps/librusqlite-93e05d1e4dd3c172.rlib --extern serde=/tmp/nagi-container-flow-target/debug/deps/libserde-ec495f6c39226bcb.rlib --extern serde_json=/tmp/nagi-container-flow-target/debug/deps/libserde_json-67f26424ebe7cb89.rlib --extern toml=/tmp/nagi-container-flow-target/debug/deps/libtoml-06471a174723f8d7.rlib --extern unicode_ident=/tmp/nagi-container-flow-target/debug/deps/libunicode_ident-092dd8320acc1894.rlib -L native=/tmp/nagi-container-flow-target/debug/build/libsqlite3-sys-19ed83858359c6a9/out` (exit status: 101)
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `nagic` (test "http_entrypoint")
+
+Caused by:
+  No space left on device (os error 28)
+
+Caused by:
+  failed to parse process output: `/workspace/toolchains/rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name http_entrypoint --edition=2021 compiler/tests/http_entrypoint.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --test --cfg 'feature="default"' --cfg 'feature="sql-check"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "sql-check"))' -C metadata=b4e41362b8a26be6 -C extra-filename=-869e34b34b3266b4 --out-dir /tmp/nagi-container-flow-target/debug/deps -L dependency=/tmp/nagi-container-flow-target/debug/deps --extern nagic=/tmp/nagi-container-flow-target/debug/deps/libnagic-49d76bf83683455b.rlib --extern rusqlite=/tmp/nagi-container-flow-target/debug/deps/librusqlite-93e05d1e4dd3c172.rlib --extern serde=/tmp/nagi-container-flow-target/debug/deps/libserde-ec495f6c39226bcb.rlib --extern serde_json=/tmp/nagi-container-flow-target/debug/deps/libserde_json-67f26424ebe7cb89.rlib --extern toml=/tmp/nagi-container-flow-target/debug/deps/libtoml-06471a174723f8d7.rlib --extern unicode_ident=/tmp/nagi-container-flow-target/debug/deps/libunicode_ident-092dd8320acc1894.rlib -L native=/tmp/nagi-container-flow-target/debug/build/libsqlite3-sys-19ed83858359c6a9/out` (exit status: 101)
+error: could not 

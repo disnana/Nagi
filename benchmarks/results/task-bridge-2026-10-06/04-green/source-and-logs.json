@@ -1,0 +1,29 @@
+{
+  "sha256": {
+    "runtime/src/task_bridge_prototype.rs": "1edc8b2e4b416a3d87b8ce3c51ea0beda98d747805ba44c666458e0ac8737252",
+    "runtime/src/lib.rs": "542655ea316c182b5a367628252b9b73ec82c7a71fe5858ff95a82b81c39c00f",
+    "green-private.log": "9f34391d2a8ec2f85553f947cbee027755605ba1c797125b19b6f339b133570a",
+    "green-runtime-lib.log": "84cc311305e12aa78db46be4b644d42ef9ff2f3a3af526d994ab0a82d0e933ad",
+    "green-runtime-lib-network.log": "4d5fea3731cbb4053918a60cf899bfad7bfc748e4fdae2e41dc512e05bd8c149",
+    "clippy-runtime.log": "5ea44854d930ca0ec110c9eeaf1c64b37a4a817ffe77b80a2590bb83a43206db",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "results": {
+    "private": {
+      "exit": 0,
+      "passed": 15
+    },
+    "runtime_sandbox": {
+      "exit": 101,
+      "passed": 170,
+      "failed": 35,
+      "reason": "socket bind PermissionDenied"
+    },
+    "runtime_with_network": {
+      "exit": 0,
+      "passed": 205
+    },
+    "clippy_runtime_all_targets": 0,
+    "fmt_all": 0
+  }
+}

@@ -1,0 +1,8 @@
+async fn work() -> unit { return print(1); }
+async fn main() -> Result[unit, Error] {
+    scope {
+        let task = spawn work();
+        let received = await task;
+    }
+    return ok(print(0));
+}

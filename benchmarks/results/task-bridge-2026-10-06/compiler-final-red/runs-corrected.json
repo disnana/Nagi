@@ -1,0 +1,35 @@
+[
+  {
+    "label": "oracle-tests-green",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "-p",
+      "nagic",
+      "--example",
+      "task-contract-red"
+    ],
+    "exit": 0,
+    "seconds": 0.05794699495891109
+  },
+  {
+    "label": "contract-red-corrected",
+    "command": [
+      "cargo",
+      "run",
+      "--locked",
+      "--offline",
+      "-p",
+      "nagic",
+      "--example",
+      "task-contract-red",
+      "--",
+      "--report",
+      "/tmp/nagi-task-bridge-stage1/compiler-final-red/observations-corrected.json"
+    ],
+    "exit": 1,
+    "seconds": 0.0638918629847467
+  }
+]

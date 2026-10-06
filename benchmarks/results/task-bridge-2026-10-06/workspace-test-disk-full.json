@@ -1,0 +1,6 @@
+{
+  "exit_code": 101,
+  "failure": "No space left on device during Rust compilation; no completed full-suite result",
+  "profile": "default debug symbols",
+  "classification": "infrastructure"
+}

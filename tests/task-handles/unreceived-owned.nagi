@@ -1,0 +1,7 @@
+async def work() -> str:
+    return "Nagi"
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()  # primary
+    return ok(print(0))

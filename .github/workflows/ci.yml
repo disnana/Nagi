@@ -71,6 +71,10 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - name: Check conformance corpus and regression harness registration
         run: python scripts/verify_compiler_contracts.py
+      - name: Check future Task contract input registration (checker remains unimplemented)
+        run: python scripts/verify_task_handle_contract_inputs.py
+      - name: Check Task contract runner distinguishes parse rejection from checker evidence
+        run: cargo test --locked -p nagic --example task-contract-red
       - run: cargo test --locked
       - name: Check a compiler without the SQL validation engine
         run: |
@@ -232,6 +236,8 @@ jobs:
         run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test explicit_moves --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
       - name: Parse planned SQLite High and handwritten Low contract inputs
         run: cargo test --locked -p nagic --test sqlite_contract_inputs
+      - name: Check private Task bridge lifecycle on the target platform
+        run: cargo test --locked -p nagi-runtime task_bridge_prototype::tests::
       - name: Check successful application artifact selection
         run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
       - name: Check Axum native test execution and result validation

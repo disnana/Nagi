@@ -1,0 +1,21 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi-task-handle-design-review/compiler)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+     Running unittests examples/task-contract-red.rs (/tmp/nagi-container-flow-target/debug/examples/task_contract_red-0fd8645c276796a1)
+
+running 1 test
+
+thread 'tests::existing_checker_negative_preserves_original_fixture_location' (1474685) panicked at compiler/examples/task-contract-red.rs:158:13:
+assertion `left == right` failed: Observation { case: Case { name: "checker-location-control.nagi", source: "checker-location-control.nagi", high: true, contract: "infrastructure-control", expected: "check-fail", diagnostic: "型", primary_line: 2 }, stage: "check", diagnostic: "error: line 2: 型が一致しません: expected i64, got str。変換は明示してください\n --> /workspace/Nagi-task-handle-design-review/tests/task-handles/checker-location-control.nagi:2\n 2 |     value: i64 = \"wrong\"  # primary", line: None, matched_contract: false }
+  left: None
+ right: Some(2)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test tests::existing_checker_negative_preserves_original_fixture_location ... FAILED
+
+failures:
+
+failures:
+    tests::existing_checker_negative_preserves_original_fixture_location
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p nagic --example task-contract-red`

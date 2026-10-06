@@ -4,6 +4,8 @@
 
 その後、作者が明示move・spawn結果handle・子taskの業務Errと故障の分離を段階実装する範囲を承認した。さらにmoveの意味と通常代入の移行を確定し、既存設計から自然に決まるAPIを自律的に選ぶよう指示した。`std.ownership.move`、現行Copy据置、狭い代入移行を採用し、作業branchで実装した。未リリースで、main反映と検証結果は[実装結果](../explicit-move-results.md)と[進捗](../progress.md)で別に記録する。[実装順](../value-task-implementation-plan.md)と[OWN-04の契約](../language-invariants.md#own-04-明示moveの確定仕様実装済み未リリース)が正本。taskの未決はmoveの実装を止める理由にしない。
 
+続く自律判断の委任に基づき、[ADR 012](012-task-result-handles.md)でS1の全T正常出口await/discardとsticky faultを設計採用した。旧承認から必然だったとは扱わず、新しい詳細判断として理由を記録する。Task/Scopeの新経路は未実装で、現行契約は変更しない。
+
 監査基点: main `ff6f7d4c81c8cf49c2bca7abffb3083f681d5b9d`。添付が照合したmainと一致した。文書branchは`docs/python-guide-design-contracts`。初回監査時点ではPR #82のprivate Pool比較は別差分だった。後にmain `7999bab`への反映を確認し、文書branchへ統合した。公開Pool/Tx APIとして扱わない。
 
 ## 問題と採用理由
@@ -29,8 +31,8 @@ Python風の字下げだけを説明しても、参照代入、例外、taskの�
 | ERR-02 | panic捕捉は状態の復元ではない | HTTPの応答開始前のunwind捕捉を実装済み。abort/OOM/強制終了、変更済みstateやDBのrollbackは保証しない | [HTTP panic](../../../runtime/src/http_server/panic_tests.rs) |
 | ASYNC-01 | awaitは結果を待つ。呼ぶだけで独立taskを作らない | async本体と引数評価・moveを分ける。第一級Futureの保存・返却・containerは未対応 | [async値](../../../compiler/tests/async_value_types.rs)、[生成](../../../compiler/src/emit.rs) |
 | ASYNC-02 | spawnはscope所属の子を実行対象にする | 実装済み。別CPUでの同時実行や開始時刻は保証しない。spawnは文で、結果handleを返さない | [scope検査](../../../compiler/tests/scoped_tasks.rs)、[Scope](../../../runtime/src/concurrent.rs) |
-| ASYNC-03 | 結果を一度受け取るhandleを用意する | **未実装**。現行spawnはunitまたはResult[unit, Error]だけ。型名、故障型、消費規則、scope外への持出しは未決 | [checkerのSpawn](../../../compiler/src/check.rs)、[JoinSet出力](../../../runtime/src/concurrent.rs) |
-| ASYNC-04 | 普通の子taskの業務Errは値として受け取り、task故障とは分ける | **現行と相違**。Scopeは子のErrでも兄弟を取消し、通常出口では終了を待つ。Supervisor terminal ErrをHTTP停止へ伝える既存連携は維持して移行する | [実Scope契約](../../../compiler/tests/scope_runtime_contract.rs)、[Supervisor](../../supervisor.md) |
+| ASYNC-03 | 結果を一度受け取るhandleを用意する | **設計採用・未実装**。ADR 012でscope-local・全T一回await consume・正常出口await/discard・escape拒否を採用。現行spawnはunit/Result[unit, Error]だけ。API名と接続構文は候補 | [checkerのSpawn](../../../compiler/src/check.rs)、[JoinSet出力](../../../runtime/src/concurrent.rs) |
+| ASYNC-04 | 普通の子taskの業務Errは値として受け取り、task故障とは分ける | **設計採用・未実装**。ADR 012で業務Resultと外側faultを分離し、faultはsticky保持。現Scopeは子Errでも兄弟取消。Supervisor terminal→HTTP停止は旧経路を維持して移行 | [実Scope契約](../../../compiler/tests/scope_runtime_contract.rs)、[Supervisor](../../supervisor.md) |
 | ASYNC-05 | 取消要求と終了確認を分ける | scope本体終了後のjoinで子の失敗を検出する。本体実行中に割り込まない。親Future Drop/unwindでは同期Dropがabort要求を出すだけで、join完了を待てない | [Scope実装](../../../runtime/src/concurrent.rs)、[実Scope検査](../../../compiler/tests/scope_runtime_contract.rs) |
 | LIFE-01 | 操作用handle、実行owner、終了確認APIを分ける | Supervisor ControlのDropだけでは終了しない。Arcの循環を自動回収しない。sharedだけで終了完了を保証しない | [Supervisor](../../supervisor.md)、[lifecycle](../../../runtime/src/actor/lifecycle.rs) |
 | LIFE-02 | 同一ブロックの単純な所有ローカルは逆宣言順に片付ける | 一時値、再代入、部分move、field/List/shared/Futureの規則を一括で生成時刻逆順にしない。既存cleanup anchorとRHS→置換→旧値退役を維持する | [cleanupの観測](../../../compiler/tests/view_container_drop.rs)、[生成経路](../compiler-pipeline.md) |
@@ -61,9 +63,9 @@ self-hostingはコンパイラをNagiで書くこと、別backendはRust以外�
 ### ASYNC-03/04: 結果handleと失敗の分類
 
 - before: spawnは文、子出力はunit/Result[unit, Error]、子Errでscope失敗。after: scopeが寿命と故障を保持し、handle経由でTまたはResult[U, E]をそのまま受け取る。業務Errだけでは兄弟を止めない。
-- 先に決める: 一度限りの取得、handle型と故障/取消型、未受取Resultの扱い、複数故障、検出時点、scope外へ持ち出せるか。非Copy結果を二重取得させない。
+- 詳細採用: [ADR 012](012-task-result-handles.md)にscope-local非Copy/nonClone/nonshared、一回await consume、全T正常出口await/discard、実join後の外側Result[T, TaskFailure]、業務Resultの入れ子、sticky faultとbody Err primaryを記録した。API名/構文/生成bridgeは接続候補で未実装。
 - 移行: 現行Supervisor terminal Errをtask故障へつなぐ明示方法を設計し、HTTPとの共倒れ停止を黙って失わない。scope本体のtry退出と親Future Dropは別経路。古い契約の負例を無説明に緩めない。
-- 成功条件: unit、非Copy T、ResultのOk/Err、未受取、非Copy結果の二重取得拒否、兄弟継続/取消、親body Err/panic/Drop、明示shutdown、non-yielding処理、SupervisorとHTTPの終了。Copy結果も含めた再awaitとhandleの消費規則は詳細設計へ残す。実runtimeのbarrierで先後関係を確認する。sleepだけで順序を決めない。
+- 成功条件: unit、非Copy T、ResultのOk/Err、未受取、非Copy結果の二重取得拒否、兄弟継続/取消、親body Err/panic/Drop、明示shutdown、non-yielding処理、SupervisorとHTTPの終了。Copy結果も再awaitを拒否し、全Tの未受取正常出口とsticky出口を新仕様の先行oracleで検査する。実runtimeのbarrierで先後関係を確認する。sleepだけで順序を決めない。
 
 ### ACTOR-01: 条件付きshared message
 

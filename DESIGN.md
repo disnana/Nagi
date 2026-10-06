@@ -65,6 +65,8 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 
 [実装計画](docs/internal/value-task-implementation-plan.md)に仕様、移行対象、先行テストを記録しています。明示操作と非Copyローカルの通常代入拒否を一つの変更として実装し、High/Low・Rust生成・サンプル・日英Docs・4 OS CIの検証状況は[進捗](docs/internal/progress.md)に分けて残します。task結果handleは後続工程です。mergeとreleaseは別途判断します。
 
+S1の詳細は[ADR 012](docs/internal/adr/012-task-result-handles.md)で**設計採用・未実装**としました。新Taskはscope内の一回限りの受取とし、全Tの正常出口でawaitまたは明示discardを求めます。普通の業務Resultは外側のtask故障と分け、観測した故障はscopeに保持し、受取Errを処理してもscope出口の失敗を消しません。この二点は今回の自律判断の委任で選んだ詳細方針です。現行Scopeと旧spawnは変更せず、S1→S2のSupervisor/HTTP移行→公開Pool/Txの順に検証します。具体API名と構文は接続案であり、現在使える機能には追加していません。[先行REDとprivate bridge検証](docs/internal/task-bridge-stage1-results.md)では、結果通知と実join、受取とscope故障を分けるnative oracleを確認しました。NagiのTask checker・生成は未実装です。
+
 ## なぜRustを使うのか
 
 Nagi自身が構文解析、名前解決、型・move・viewの検査、Rust生成を担当します。依存のビルド、最終的な借用・trait検査、最適化、機械語生成はRust/Cargoへ任せます。現在もコンパイラを持っていますが、独自の機械語backendは持っていません。

@@ -62,7 +62,7 @@ scope本体の`try`でErrを伝えて退出する場合は、子をキャンセ�
 
 ### 採用方針と、まだ使えない機能
 
-spawnから結果を受け取るhandleを返し、普通の業務Errをtask自体の故障と分ける方向を採用しています。将来は返却されたResultを値として受け取り、普通の業務Errだけでは兄弟を自動停止しない方針です。現行には結果handleがなく、子の`Result[unit, Error]`のErrでも兄弟をキャンセルします。handleの型・構文・結果の受け取り方・故障の表現は未決で、このページの例は現在の動作です。設計の理由と移行の境界は[DESIGN](../DESIGN.md)を参照してください。
+結果handleは未実装です。S1では普通の業務Errだけで兄弟を止めず、新handleは結果の型にかかわらず正常出口までにawaitまたは明示discardを求め、受取faultを処理してもscope出口を失敗にする方針を[ADR 012](internal/adr/012-task-result-handles.md)で設計採用しました。API名・構文は接続案で、現在は使えません。現行spawn/Scopeは変わらず、子の`Result[unit, Error]`のErrでも兄弟をキャンセルします。このページの例は現在の動作です。設計と移行の境界は[DESIGN](../DESIGN.md)を参照してください。
 
 ## 関数を変数に入れて呼び出す
 

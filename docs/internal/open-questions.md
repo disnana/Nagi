@@ -75,11 +75,13 @@ canonical `std.ownership.move`、現行Copy表の据置、右辺がnonCopy所有
 
 ### Q-006: spawn結果handleと業務Err・task故障
 
-状態: 方向は採用、現行spawnとScopeは変更しない。[ADR 011](adr/011-language-behavior-and-docs.md#async-0304-結果handleと失敗の分類)に移行を分離した。
+状態: **初版の詳細意味論を設計採用・未実装**。[ADR 012](adr/012-task-result-handles.md)で全Tの正常出口await/discard、scope faultのsticky保持を採用した。既承認の方向から必然としたのではなく、「安全に判断できるものは理由を示して自律確定」という今回の委任に基づく選択であり、二点の確認待ちは解除する。現行spawn/Scopeと公開版は変更していない。
 
-段階実装の対象になったが、[S1/S2の具体案](value-task-implementation-plan.md#s1s2-task結果の境界)は未決を残す。scope-owned join、once-only結果、業務Resultと外側の故障、Supervisorからの明示的な故障伝播を検討する。moveの実装をこれらの判断で止めず、task実装へ進む段階で必要な意味論をまとめて決める。
+scope所属の非Copy・非Clone・非shared Taskを一回await consumeし、scope外escapeを拒否する。受取は実join後の外側Result[T, TaskFailure]で、Tの業務Resultは入れ子のまま保つ。業務Errは兄弟を止めず、panic/予期しない取消/legacy Err/protocol故障はsticky primaryとして兄弟abort要求→actual drainへ進む。bodyの元Errは後続faultで置換しない。全T義務は新Taskに限り、一般owned/Result bindingへmust-useを広げない。
 
-結果を一度受け取るhandle、scopeによる寿命・故障の管理、業務Errだけでは兄弟を止めない方向を採る。型名・構文、消費規則、故障/取消型、複数故障、未受取Result、検出時点、scope外への持出しは未決。現行の子Errによる兄弟取消、Supervisor terminal ErrとHTTP終了の連携は、明示的な移行なしに消さない。親本体がtry等で退出する場合と、子が業務Resultを返す場合を分ける。
+[設計と接続候補](task-result-handle-design.md)、[独立レビュー](task-result-handle-review.md)、[S1/S2実装順](value-task-implementation-plan.md#s1s2-task結果の境界)へ根拠・不採用案・先行oracleを残す。API名、binding構文、故障診断操作と生成bridgeは推奨案であり、使用可能なAPIではない。実装/先行テストは未着手で、join record、取消、任意T Drop、allocation/未join未受取保持、High/Low・Rust・4 OSの成立を確認する。
+
+旧statement spawnのfail-on-ErrとSupervisor terminal→HTTP取消をS1で維持し、S2で明示的に接続する。依存順はS1→S2→公開Pool/Txで、公開capacityブロッカーを解決済みにしない。merge/版更新/releaseは別に扱う。
 
 ### Q-007: actorの条件付きshared message
 
