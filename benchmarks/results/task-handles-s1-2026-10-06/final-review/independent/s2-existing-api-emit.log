@@ -1,0 +1,3 @@
+   Compiling nagi-s1-final-review-probes v0.0.0 (/tmp/nagi-s1-final-review/probes)
+    Finished `dev` profile [unoptimized] target(s) in 0.28s
+     Running `/tmp/nagi-container-flow-target/debug/check-probes /tmp/nagi-s1-final-review/probes/s2-typed-monitor.nagi /tmp/nagi-s1-final-review/probes/s2-typed-monitor.rs`

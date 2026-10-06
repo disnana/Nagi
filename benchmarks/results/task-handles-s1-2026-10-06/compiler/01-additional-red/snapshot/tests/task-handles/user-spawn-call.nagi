@@ -1,0 +1,6 @@
+def spawn(value: i64) -> i64:
+    return value
+
+def main():
+    value = spawn(42)
+    print(value)

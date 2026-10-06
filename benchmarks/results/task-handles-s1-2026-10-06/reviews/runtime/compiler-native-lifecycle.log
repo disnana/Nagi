@@ -1,0 +1,21 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Finished `test` profile [unoptimized] target(s) in 0.09s
+     Running tests/task_handles.rs (/tmp/nagi-container-flow-target/debug/deps/task_handles-d0cc06a902147195)
+
+running 1 test
+
+thread 'native_business_fault_cleanup_and_branch_contracts' (13243) panicked at compiler/tests/support/native_triple.rs:82:14:
+handwritten Low check: "line 65: 同じscope内でletを重複できません"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test native_business_fault_cleanup_and_branch_contracts ... FAILED
+
+failures:
+
+failures:
+    native_business_fault_cleanup_and_branch_contracts
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.15s
+
+error: test failed, to rerun pass `-p nagic --test task_handles`

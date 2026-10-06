@@ -253,7 +253,7 @@ fn collect_candidates(
             }
         }
         match &statement.kind {
-            S::Assign { .. } => {
+            S::Assign { .. } | S::SpawnBind { .. } => {
                 if let Some(assignment) = flow.assignment {
                     if let Some(snapshot) = flow
                         .after
@@ -288,7 +288,7 @@ fn collect_candidates(
 fn find_declarations(statements: &[Stmt], declarations: &mut HashSet<BindingId>) {
     for statement in statements {
         match &statement.kind {
-            S::Assign { declare: true, .. } => {
+            S::Assign { declare: true, .. } | S::SpawnBind { declare: true, .. } => {
                 if let Some(target) = statement
                     .flow
                     .as_ref()
@@ -320,7 +320,7 @@ fn find_declarations(statements: &[Stmt], declarations: &mut HashSet<BindingId>)
                 });
                 find_declarations(body, declarations);
             }
-            S::Assign { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => {}
+            S::Assign { .. } | S::SpawnBind { .. } | S::Return(_) | S::Expr(_) | S::Spawn(_) => {}
             S::While(_, body) | S::Scope(body) => find_declarations(body, declarations),
         }
     }
@@ -589,6 +589,12 @@ impl Builder {
 
             match &mut node.stmt.kind {
                 S::Assign {
+                    name,
+                    value,
+                    declare,
+                    ..
+                }
+                | S::SpawnBind {
                     name,
                     value,
                     declare,
@@ -1253,6 +1259,7 @@ pub(crate) fn plan(function: &Function) -> Result<Option<Plan>, String> {
         for node in &block.statements {
             match &node.stmt.kind {
                 S::Assign { value, .. }
+                | S::SpawnBind { value, .. }
                 | S::Expr(value)
                 | S::Spawn(value)
                 | S::Return(Some(value))

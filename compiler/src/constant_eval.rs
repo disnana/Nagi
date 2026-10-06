@@ -320,7 +320,7 @@ fn writes(
 ) {
     for statement in statements {
         match &statement.kind {
-            S::Assign { name, declare, .. } => {
+            S::Assign { name, declare, .. } | S::SpawnBind { name, declare, .. } => {
                 if *declare {
                     visible.insert(name.clone(), statement_id(statement));
                 } else if let Some(id) = visible.get(name) {
@@ -380,6 +380,12 @@ fn block(statements: &[Stmt], facts: &mut Facts) -> Result<(), String> {
     for statement in statements {
         match &statement.kind {
             S::Assign {
+                name,
+                value,
+                declare,
+                ..
+            }
+            | S::SpawnBind {
                 name,
                 value,
                 declare,

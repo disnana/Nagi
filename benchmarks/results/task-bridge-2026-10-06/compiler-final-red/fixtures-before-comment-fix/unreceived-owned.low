@@ -1,0 +1,7 @@
+async fn work() -> str { return "Nagi"; }
+async fn main() -> Result[unit, Error] {
+    scope {
+        let task = spawn work(); // primary
+    }
+    return ok(print(0));
+}

@@ -1,0 +1,1148 @@
+{
+  "matched": 6,
+  "observations": [
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "receive-copy-nagi",
+        "primary_line": 0,
+        "source": "receive-copy.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "receive-copy-low",
+        "primary_line": 0,
+        "source": "receive-copy.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "typed-result",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "receive-unit-nagi",
+        "primary_line": 0,
+        "source": "receive-unit.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "typed-result",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "receive-unit-low",
+        "primary_line": 0,
+        "source": "receive-unit.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "unreceived-unit-nagi",
+        "primary_line": 6,
+        "source": "unreceived-unit.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "unreceived-unit-low",
+        "primary_line": 4,
+        "source": "unreceived-unit.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "typed-result",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "receive-owned-nagi",
+        "primary_line": 0,
+        "source": "receive-owned.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "typed-result",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "receive-owned-low",
+        "primary_line": 0,
+        "source": "receive-owned.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "unreceived-owned-nagi",
+        "primary_line": 6,
+        "source": "unreceived-owned.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "unreceived-owned-low",
+        "primary_line": 4,
+        "source": "unreceived-owned.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "typed-result",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "receive-result-nagi",
+        "primary_line": 0,
+        "source": "receive-result.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "typed-result",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "receive-result-low",
+        "primary_line": 0,
+        "source": "receive-result.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "unreceived-result-nagi",
+        "primary_line": 6,
+        "source": "unreceived-result.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "unreceived-result-low",
+        "primary_line": 4,
+        "source": "unreceived-result.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "unreceived-copy-nagi",
+        "primary_line": 6,
+        "source": "unreceived-copy.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "unreceived-copy-low",
+        "primary_line": 4,
+        "source": "unreceived-copy.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "explicit-discard",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "discard-nagi",
+        "primary_line": 0,
+        "source": "discard.nagi"
+      },
+      "diagnostic": "line 8:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 8,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "explicit-discard",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "discard-low",
+        "primary_line": 0,
+        "source": "discard.low"
+      },
+      "diagnostic": "line 5:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "move-obligation",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "move-alias-nagi",
+        "primary_line": 0,
+        "source": "move-alias.nagi"
+      },
+      "diagnostic": "line 8:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 8,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "move-obligation",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "move-alias-low",
+        "primary_line": 0,
+        "source": "move-alias.low"
+      },
+      "diagnostic": "line 5:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": true,
+        "name": "double-await-nagi",
+        "primary_line": 8,
+        "source": "double-await.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": false,
+        "name": "double-await-low",
+        "primary_line": 6,
+        "source": "double-await.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": true,
+        "name": "double-discard-nagi",
+        "primary_line": 10,
+        "source": "double-discard.nagi"
+      },
+      "diagnostic": "line 8:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 8,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": false,
+        "name": "double-discard-low",
+        "primary_line": 7,
+        "source": "double-discard.low"
+      },
+      "diagnostic": "line 5:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": true,
+        "name": "await-discard-nagi",
+        "primary_line": 10,
+        "source": "await-discard.nagi"
+      },
+      "diagnostic": "line 8:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 8,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": false,
+        "name": "await-discard-low",
+        "primary_line": 7,
+        "source": "await-discard.low"
+      },
+      "diagnostic": "line 5:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "move-obligation",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": true,
+        "name": "move-old-handle-nagi",
+        "primary_line": 10,
+        "source": "move-old-handle.nagi"
+      },
+      "diagnostic": "line 8:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 8,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "move-obligation",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": false,
+        "name": "move-old-handle-low",
+        "primary_line": 7,
+        "source": "move-old-handle.low"
+      },
+      "diagnostic": "line 5:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "reassignment-nagi",
+        "primary_line": 7,
+        "source": "reassignment.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "reassignment-low",
+        "primary_line": 5,
+        "source": "reassignment.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "existing-no-shadow",
+        "diagnostic": "letを重複",
+        "expected": "check-fail",
+        "high": true,
+        "name": "shadow-nagi",
+        "primary_line": 8,
+        "source": "shadow.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "existing-no-shadow",
+        "diagnostic": "letを重複",
+        "expected": "check-fail",
+        "high": false,
+        "name": "shadow-low",
+        "primary_line": 6,
+        "source": "shadow.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "branch-nagi",
+        "primary_line": 6,
+        "source": "branch.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "branch-low",
+        "primary_line": 4,
+        "source": "branch.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "loop-nagi",
+        "primary_line": 7,
+        "source": "loop.nagi"
+      },
+      "diagnostic": "line 7:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 7,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "loop-low",
+        "primary_line": 5,
+        "source": "loop.low"
+      },
+      "diagnostic": "line 5:30: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "container-escape-nagi",
+        "primary_line": 7,
+        "source": "container-escape.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "container-escape-low",
+        "primary_line": 5,
+        "source": "container-escape.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "same-scope",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "nested-scope-nagi",
+        "primary_line": 8,
+        "source": "nested-scope.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "same-scope",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "nested-scope-low",
+        "primary_line": 6,
+        "source": "nested-scope.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "未定義",
+        "expected": "check-fail",
+        "high": true,
+        "name": "outside-scope-nagi",
+        "primary_line": 8,
+        "source": "outside-scope.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "未定義",
+        "expected": "check-fail",
+        "high": false,
+        "name": "outside-scope-low",
+        "primary_line": 7,
+        "source": "outside-scope.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "scope",
+        "expected": "check-fail",
+        "high": true,
+        "name": "spawn-outside-scope-nagi",
+        "primary_line": 5,
+        "source": "spawn-outside-scope.nagi"
+      },
+      "diagnostic": "line 5:18: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "scope",
+        "expected": "check-fail",
+        "high": false,
+        "name": "spawn-outside-scope-low",
+        "primary_line": 3,
+        "source": "spawn-outside-scope.low"
+      },
+      "diagnostic": "line 3:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 3,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "legacy-spawn-nagi",
+        "primary_line": 0,
+        "source": "legacy-spawn.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "legacy-spawn-low",
+        "primary_line": 0,
+        "source": "legacy-spawn.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "user-spawn-call-nagi",
+        "primary_line": 0,
+        "source": "user-spawn-call.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "user-spawn-call-low",
+        "primary_line": 0,
+        "source": "user-spawn-call.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "move-obligation",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "move-alias-unreceived-nagi",
+        "primary_line": 9,
+        "source": "move-alias-unreceived.nagi"
+      },
+      "diagnostic": "line 8:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 8,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "move-obligation",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "move-alias-unreceived-low",
+        "primary_line": 6,
+        "source": "move-alias-unreceived.low"
+      },
+      "diagnostic": "line 5:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "reassign-after-await-nagi",
+        "primary_line": 0,
+        "source": "reassign-after-await.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "reassign-after-await-low",
+        "primary_line": 0,
+        "source": "reassign-after-await.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "loop-consumed-nagi",
+        "primary_line": 0,
+        "source": "loop-consumed.nagi"
+      },
+      "diagnostic": "line 7:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 7,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "loop-consumed-low",
+        "primary_line": 0,
+        "source": "loop-consumed.low"
+      },
+      "diagnostic": "line 5:30: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "infrastructure-control",
+        "diagnostic": "型",
+        "expected": "check-fail",
+        "high": true,
+        "name": "checker-location-control-nagi",
+        "primary_line": 2,
+        "source": "checker-location-control.nagi"
+      },
+      "diagnostic": "error: line 2: 型が一致しません: expected i64, got str。変換は明示してください\n --> /workspace/Nagi/tests/task-handles/checker-location-control.nagi:2\n 2 |     value: i64 = \"wrong\"  # primary",
+      "line": 2,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "infrastructure-control",
+        "diagnostic": "型",
+        "expected": "check-fail",
+        "high": false,
+        "name": "checker-location-control-low",
+        "primary_line": 2,
+        "source": "checker-location-control.low"
+      },
+      "diagnostic": "error: line 2: 型が一致しません: expected i64, got str。変換は明示してください\n --> /workspace/Nagi/tests/task-handles/checker-location-control.low:2\n 2 |     let value: i64 = \"wrong\"; # primary",
+      "line": 2,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "bare-move-drop-nagi",
+        "primary_line": 7,
+        "source": "bare-move-drop.nagi"
+      },
+      "diagnostic": "line 6:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "bare-move-drop-low",
+        "primary_line": 6,
+        "source": "bare-move-drop.low"
+      },
+      "diagnostic": "line 5:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "both-branches-consume-nagi",
+        "primary_line": 0,
+        "source": "both-branches-consume.nagi"
+      },
+      "diagnostic": "line 5:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "both-branches-consume-low",
+        "primary_line": 0,
+        "source": "both-branches-consume.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "branch-regeneration-nagi",
+        "primary_line": 0,
+        "source": "branch-regeneration.nagi"
+      },
+      "diagnostic": "line 5:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "branch-regeneration-low",
+        "primary_line": 0,
+        "source": "branch-regeneration.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "branch-partial-regeneration-nagi",
+        "primary_line": 5,
+        "source": "branch-partial-regeneration.nagi"
+      },
+      "diagnostic": "line 5:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "branch-partial-regeneration-low",
+        "primary_line": 4,
+        "source": "branch-partial-regeneration.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "same-scope",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "nested-resume-outer-nagi",
+        "primary_line": 0,
+        "source": "nested-resume-outer.nagi"
+      },
+      "diagnostic": "line 7:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 7,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "same-scope",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "nested-resume-outer-low",
+        "primary_line": 0,
+        "source": "nested-resume-outer.low"
+      },
+      "diagnostic": "line 5:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "same-scope",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "same-depth-scopes-nagi",
+        "primary_line": 0,
+        "source": "same-depth-scopes.nagi"
+      },
+      "diagnostic": "line 5:23: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "same-scope",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "same-depth-scopes-low",
+        "primary_line": 0,
+        "source": "same-depth-scopes.low"
+      },
+      "diagnostic": "line 3:31: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 3,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "borrow-owner",
+        "diagnostic": "view",
+        "expected": "check-fail",
+        "high": true,
+        "name": "failure-message-move-nagi",
+        "primary_line": 14,
+        "source": "failure-message-move.nagi"
+      },
+      "diagnostic": "line 7:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 7,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "borrow-owner",
+        "diagnostic": "view",
+        "expected": "check-fail",
+        "high": false,
+        "name": "failure-message-move-low",
+        "primary_line": 12,
+        "source": "failure-message-move.low"
+      },
+      "diagnostic": "line 6:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 6,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "task-parameter-nagi",
+        "primary_line": 2,
+        "source": "task-parameter.nagi"
+      },
+      "diagnostic": "error: line 1: 未定義のstd module: std.task\n --> /workspace/Nagi/tests/task-handles/task-parameter.nagi:1\n 1 | from std.task import Task",
+      "line": null,
+      "matched_contract": false,
+      "stage": "resolve"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "task-parameter-low",
+        "primary_line": 2,
+        "source": "task-parameter.low"
+      },
+      "diagnostic": "error: line 1: 未定義のstd module: std.task\n --> /workspace/Nagi/tests/task-handles/task-parameter.low:1\n 1 | from std.task import Task;",
+      "line": null,
+      "matched_contract": false,
+      "stage": "resolve"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "task-return-nagi",
+        "primary_line": 2,
+        "source": "task-return.nagi"
+      },
+      "diagnostic": "line 4:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "task-return-low",
+        "primary_line": 2,
+        "source": "task-return.low"
+      },
+      "diagnostic": "line 3:30: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 3,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "task-wrapper-nagi",
+        "primary_line": 6,
+        "source": "task-wrapper.nagi"
+      },
+      "diagnostic": "line 5:22: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 5,
+      "matched_contract": false,
+      "stage": "parse"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "task-wrapper-low",
+        "primary_line": 5,
+        "source": "task-wrapper.low"
+      },
+      "diagnostic": "line 4:26: 改行または ; が必要です (found Id(\"work\"))",
+      "line": 4,
+      "matched_contract": false,
+      "stage": "parse"
+    }
+  ],
+  "scope": "parse/name resolution/check only; no lowering, Rust build, runtime or static Task guarantee",
+  "total": 76,
+  "unmatched": 70
+}

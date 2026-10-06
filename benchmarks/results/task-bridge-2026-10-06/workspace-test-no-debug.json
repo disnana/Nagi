@@ -1,0 +1,14 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--offline"
+  ],
+  "exit_code": 101,
+  "elapsed_seconds": 311.991,
+  "network_permission": true,
+  "debug_symbols": false,
+  "build_jobs": 2,
+  "incremental": false
+}

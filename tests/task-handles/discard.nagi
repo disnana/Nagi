@@ -1,0 +1,10 @@
+import std.task as tasks
+
+async def work() -> i64:
+    return 7
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        tasks.discard(task)
+    return ok(print(0))

@@ -1,0 +1,10 @@
+async fn work() -> i64 { return 7; }
+async fn main() -> Result[unit, Error] {
+    scope {
+        let task = spawn work();
+        let first = await task;
+        task = spawn work();
+        let second = await task;
+    }
+    return ok(print(0));
+}

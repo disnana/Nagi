@@ -1,0 +1,34 @@
+S1 independent runtime/compiler bridge review — 2026-10-06
+
+Read-only repository review. No repository files edited. Reviewed source snapshots and hashes are beside this report in reviewed-sources.json.
+
+Finding P2: repeated sticky-fault receive remains quadratic.
+Location: runtime/src/task.rs:436-437 (primary fault receive calls drain), 420-422 (drain always sweeps), 348-350 (HashMap retain).
+A scope can join a fault while retaining n LIVE handles whose values were not received. Each later receive enters the primary branch, drains an already-empty JoinSet, then scans the entries HashMap; the current task only becomes abandoned when the receive future returns. Even as old entries retire, retain walks map capacity. n receives cause n scans of O(n) retained capacity. This contradicts any broad claim that receive retirement is now linear across all modes, although healthy record/receive/discard paths have the intended constant per-ticket work. No lifecycle semantics failure is established by this finding.
+
+Reproduction: python3 /tmp/nagi-run.py /tmp/nagi-s1-independent-review/sticky-retirement-cost.log cargo run --offline --release --manifest-path /tmp/nagi-s1-independent-review/public-counterexamples/Cargo.toml --bin fault-retirement-cost
+Release current-thread runtime, three repeats, child spawn/join excluded from timer. Medians: sticky receive 128=46,289ns; 1024=1,284,534ns; 8192=97,300,511ns. Sticky discard comparison 128=16,087ns;1024=115,892ns;8192=1,210,761ns. These are short microbenchmarks, not production latency estimates; the structural repeated retain establishes the asymptotic issue. Current author cost evidence measures healthy receive/discard and one bulk fault drain, so it misses this repeated receiving mode.
+
+Recommendation: avoid full entries sweeps for every sticky receive, retire the failed current ticket after appropriate abandonment, preserve the explicit join/drain sweep for externally dropped handles as needed, and add this mode to the cost oracle. Any change must retain actual joins and cancellation-safe cause publication.
+
+Other review observations:
+- TaskScope is sole JoinSet owner. Task holds typed receiver, owner identity and ticket, receipt, and nonSync marker; no second join owner.
+- register/record use native IDs only for unjoined tasks; record clears native mapping and AbortHandle before deferred panic-payload destruction. Fake native-ID reuse test covers A joined/unreceived followed by B with reused key.
+- Sticky primary is set once. Requested cancellation is excluded; actual panic/legacy Err remains observed. Structured legacy Error is retained by Arc and preserved at scope Error exit, related faults retain no task Future/T.
+- Healthy receive waits for actual target join; a receiver notification cannot replace joining. Cancel/drop receive or drain leaves scope responsibility intact. Discard is unit and does not abort/detach. Synchronous TaskScope Drop only requests abort.
+- emit.rs:1080-1114 retains lexical labeled cleanup: locals leave body before cancel await, body Error takes precedence over cleanup faults; nested scope propagation enters enclosing label cleanup. Distinct scope identities name TaskScope values, old statement spawn dispatches via sealed bridge plan, nested old scopes retain old Scope. compiler/src/check/checked.rs validates mandatory task-use plans before emission. No new compiler/runtime correctness defect found in these paths.
+- git diff -- runtime/src/concurrent.rs is empty.
+- Existing runtime provenance source hashes exactly matched reviewed runtime files.
+
+Independent verification:
+1. cargo test --offline --locked -p nagi-runtime task:: -- --nocapture — 16 task oracles pass, cost1 ignored. runtime-task-only.log.
+2. cargo test --offline --locked -p nagi-runtime --test task_handles -- --nocapture — public API3 pass. runtime-public-tests.log.
+3. Four independently authored public API combinations pass: discarded child continues and later fault sticks; joined success target cannot bypass existing fault; pending receive Drop preserves cancel and subsequent healthy business Err; wrong-owner receive cannot poison/drain original owner. independent-public-counterexamples.log and public-counterexamples/review.rs.
+4. cargo test --offline --locked -p nagic --test task_handles native_business_fault_cleanup_and_branch_contracts -- --nocapture — after author fixture corrections, High/saved Low/independent Low native lifecycle paths pass. compiler-native-lifecycle-after-fixture-fix.log.
+
+Resolved pre-fix test observations:
+- Native compiler lifecycle initially stopped at handwritten Low line65 duplicate let received (compiler-native-lifecycle.log). Author corrected reassignment to match existing no-shadow language rule.
+- Native compiler oracle initially expected raw native panic text, but adopted implementation returns child panicked and does not guarantee arbitrary native panic payload retention. Author corrected oracle to adopted contract; runtime Error exit is exactly child panicked, without a kind prefix.
+
+Limits:
+Linux x86_64 only. No 4-OS verification, release/merge/version/S2/SQLite action. Full compiler checker obligation coverage remains parent review scope; this review concentrated on runtime and sealed emission/cleanup boundary. Broader first `cargo test ... task` filter included an HTTP socket bind EPERM (runtime-tests.log at http_server/tests.rs:24), an infrastructure failure rather than Task defect. Socket suite not independently rerun with network permission. No zero-allocation, bounded complete history, arbitrary Drop-panic recovery, non-yielding stop, or external-side-effect rollback guarantee inferred.

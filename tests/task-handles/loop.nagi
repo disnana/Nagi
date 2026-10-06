@@ -1,0 +1,8 @@
+async def work() -> i64:
+    return 7
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        for item in range(2):
+            task = spawn work()  # primary
+    return ok(print(0))

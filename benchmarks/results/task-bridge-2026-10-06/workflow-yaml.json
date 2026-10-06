@@ -1,0 +1,15 @@
+{
+  "old_failure": "unquoted run command ending in colon; YAML ScannerError at line 240",
+  "new_validation": "PyYAML safe_load succeeded",
+  "jobs": [
+    "changes",
+    "jetbrains",
+    "linux",
+    "release-plan",
+    "vscode-package",
+    "nagi-package",
+    "ready",
+    "publish-release"
+  ],
+  "classification": "CI configuration bug; no checks workflow run started at first head"
+}

@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--offline",
+    "-p",
+    "nagic",
+    "--example",
+    "task-contract-red",
+    "existing_checker_negative_preserves_original_fixture_location",
+    "--",
+    "--nocapture"
+  ],
+  "exit": 101,
+  "seconds": 0.35763904597843066,
+  "runner_sha256": "8103c963e0f7cda5980945c372e766dc9dba9823398cb9045006f4e5dbfc9a09"
+}

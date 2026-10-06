@@ -15,7 +15,7 @@ This page describes the priorities for future development. Release dates remain 
 
 See the [library and Rust integration proposal](library-design.md). [ADR 010](../internal/adr/010-sqlite-transaction-boundary.md) records the adopted initial SQLite contract. API names and cleanup contracts for other resources still have unresolved details.
 
-The adopted direction for values requires an explicit operation when assigning an existing owned value. Upcoming concurrency design covers handles for spawn results, separating business errors from task faults, and conditional shared actor messages. These are not current APIs. See [DESIGN](../../DESIGN.en.md) and [ADR 011](../internal/adr/011-language-behavior-and-docs.md) for current differences, unresolved details, and migration conditions.
+The narrow migration requiring explicit move for assignment of an existing owned value, spawn result handles, and business Err/task fault separation are implemented on the working branch and remain unreleased. S2 Supervisor/HTTP migration and conditional shared actor messages remain later design work. See [DESIGN](../../DESIGN.en.md) and [ADR 011](../internal/adr/011-language-behavior-and-docs.md) for differences from published releases, unresolved details, and migration conditions.
 
 Compiler verification combines known pass/fail examples with bounded generated programs through High, saved Low, and Rust, plus mutation tests. Keep tested cases separate from unsupported combinations and preserve accepted-then-rejected cases as regressions.
 
@@ -30,3 +30,5 @@ See [High and Low](low-language.md) for these limits and current usage.
 An independent backend, self-hosting, a custom VM or scheduler, hot code replacement, and distributed actors have not been started. Whether to pursue them remains undecided.
 
 Preserving semantics with another backend requires contracts and implementations for types, ownership, cleanup, failures, asynchronous work, and runtime integration. Rewriting the compiler in Low is not a requirement for the current development stage.
+
+S1 Task result handles are connected on the working branch and remain unreleased. See [usage](task-handles.md) and [validation status](../internal/task-handles-s1-results.md). S2 Supervisor/HTTP migration and public Pool/Tx remain later work.

@@ -1,0 +1,14 @@
+{
+  "compiler/src/check.rs": {
+    "reviewed_sha256": "6467cd5560fd12bcf8c7b3856f33008f70e7215d531e409cfb52bc2577ab5ca1",
+    "published_sha256": "b4efdd95aaacacc9db8dd0016d139e6e2fdcd98d426f5ffa9476eaf40cea76f0",
+    "difference": "cargo fmt line wrapping and trailing comma; no semantic changes",
+    "evidence": "compiler/final-format-only.diff"
+  },
+  "runtime/src/task.rs": {
+    "reviewed_sha256": "3551b03383e597b4853c9dc4d163d076a48990aa77b021bb928f85c01c540392",
+    "published_sha256": "89ebba9bba8761af98d7997f09fdade51d8100d0c76034d7681e57cad3689545",
+    "difference": "cargo fmt line wrapping and trailing comma; no semantic changes",
+    "evidence": "runtime/final-format-only.diff"
+  }
+}

@@ -1,0 +1,231 @@
+diff --git a/DESIGN.en.md b/DESIGN.en.md
+index 7fc41a3..104e4b0 100644
+--- a/DESIGN.en.md
++++ b/DESIGN.en.md
+@@ -52,7 +52,7 @@ Python informs the writing style, Rust informs ownership, and Elixir informs act
+ | Write ordinary `a = b` | Use ordinary assignment for Copy; use `std.ownership.move` to transfer an existing non-Copy local | **Implemented on the work branch; unreleased**. Fresh values and existing argument, return, and field/index rules are retained |
+ | Represent absence or failure | Use nullable or Result; avoid panic for ordinary rejection | Implemented. Nagi try propagates Err; it is not Python try/except |
+ | Receive a concurrent result | Let scope own child lifetime and receive the result once through a handle | **Implemented on the S1 working branch, unreleased**. Task receives once; legacy spawn retains unit/Result[unit, Error] |
+-| Receive a child's business Err | Treat it as a result, separately from task failure | **Planned migration**. Scope currently cancels siblings on child Err too |
++| Receive a child's business Err | Treat it as a result, separately from task failure | A Task's inner business Err lets siblings continue. A legacy spawn Err cancels siblings |
+ | Send shared values to an actor | Allow explicit shared messages subject to type, capacity, and lifetime conditions | **Unimplemented**. Shared messages/replies are rejected today |
+ 
+ Explicit operations should make the difference from Python reference assignment visible in code. Fresh construction should not mechanically require a move annotation; size thresholds should not decide whether a value is implicitly copied. Arguments, returns, and match are not all being changed at once.
+diff --git a/ai/language.md b/ai/language.md
+index c996bcc..1cb5eb7 100644
+--- a/ai/language.md
++++ b/ai/language.md
+@@ -29,7 +29,7 @@ The work branch implements unreleased `std.ownership.move`: import `move`, then
+ 
+ Copy policy is unchanged, including supported local async function aliases; shared and Result remain non-Copy even with Copy payloads. The operation evaluates its input once, preserving view origins and cleanup responsibility without cloning or allocating. Qualified/aliased imports use canonical identity; a user function named `move` is ordinary. One inferred argument is required; explicit type arguments and first-class standard operation values are unsupported. Futures/nested Futures remain unsupported; a supported awaited result can be moved. Borrowing restrictions still apply.
+ 
+-Confirm the compiler version before assuming an installed release has these rules. Spawn result handles and shared actor messages remain future directions. See [ownership](../docs/en/ownership.md), [async](../docs/en/async.md), and [ADR 011](../docs/internal/adr/011-language-behavior-and-docs.md).
++Confirm the compiler version before assuming an installed release has these rules. Task result handles are implemented on the S1 working branch and remain unreleased; shared actor messages remain a future direction. See [ownership](../docs/en/ownership.md), [async](../docs/en/async.md), and [ADR 011](../docs/internal/adr/011-language-behavior-and-docs.md).
+ 
+ ## Result and Option are values
+ 
+@@ -83,7 +83,7 @@ Named synchronous functions can be passed as values. `fn[i64, i64]` is a functio
+ 
+ Use `async def`, then `await` its calls. You can store a named async function with `selected = answer` and call `await selected(...)`. Do not store an unawaited call result. General async callback parameters/return signatures, async functions in containers, and capturing closures are unsupported. The standard HTTP/actor registration functions support their documented named async handlers; this is not a general extern callback mechanism.
+ 
+-`async with scope` and `spawn` wait for children when the body ends. Children must return `unit` or `Result[unit, Error]`; passing borrowed views or returning from inside the scope is unsupported. Current child Err/panic cancels siblings; business Result handling is different in actor replies. Parent Future destruction requests abort without synchronously awaiting child completion. Async CPU work does not automatically run on another thread. Cancellation is not rollback of external work or shared state.
++Normal `async with scope` exit waits for children. Legacy statement `spawn work()` accepts children returning `unit` or `Result[unit, Error]` and cancels siblings on child Err/panic. On the unreleased S1 branch, `task = spawn work()` accepts supported owned result types; `await task` preserves an inner business Result without cancelling siblings for its Err. Passing borrowed views or returning from inside the scope remains unsupported. Parent Future destruction requests abort without synchronously awaiting child completion. Async CPU work does not automatically run on another thread. Cancellation is not rollback of external work or shared state.
+ 
+ Use quoted paths for local files:
+ 
+@@ -94,7 +94,7 @@ from "models.nagi" import Item as SavedItem
+ 
+ Paths are relative to the importing file. High imports High; Low imports Low. The aliased module exposes that file's own definitions. Definitions imported into it are not re-exported automatically. `models.Item` and `SavedItem` identify the same type; same-named classes in different files identify different types. Cycles are rejected.
+ 
+-Only registered standard modules use unquoted imports: `std.http.server`, `std.actor`, and `std.result`; the unreleased repository also registers `std.auth` and `std.ownership`. Module imports require an alias, for example `import std.result as result`. There is no general package discovery or arbitrary `import serde_json`; declare a Rust adapter for crates.
++Only registered standard modules use unquoted imports: `std.http.server`, `std.actor`, and `std.result`; the unreleased repository also registers `std.auth`, `std.ownership`, and `std.task`. Module imports require an alias, for example `import std.result as result`. There is no general package discovery or arbitrary `import serde_json`; declare a Rust adapter for crates.
+ 
+ ## Common generated-code corrections
+ 
+diff --git a/docs/async.md b/docs/async.md
+index 89b8e28..3db3ccb 100644
+--- a/docs/async.md
++++ b/docs/async.md
+@@ -50,13 +50,13 @@ async def main() -> Result[unit, Error]:
+ 
+ **一言でいうと：spawnで並行に進め、scopeで寿命を管理する。** PythonのTaskGroupと取消・失敗の全動作が同じではありません。正確な制約は次の節と[並行処理](concurrency.md)にあります。
+ 
+-## scopeとspawnの現行リファレンス
++## 旧statement spawnとscopeのリファレンス
+ 
+ scope本体が終わると、子の結果を確認します。子が`Result`のエラーを返したりpanicしたりすると、残りをキャンセルして終了を待ちます。scope本体の実行中に子の失敗で割り込む動作はありません。`spawn`できるのは、`unit`か`Result[unit, Error]`を返す非同期処理です。scope内の`return`と、viewを子へ渡すことは未対応です。
+ 
+ 引数は`spawn`を書いた場所で評価し、できた値を子へ渡します。`spawn work(copy(part))`のようにviewから所有値を作ると、元のデータを親でも使い続けられます。配列をコピーしても中身にviewが残る場合は、子へ渡せません。
+ 
+-scopeを使う関数はResultを返します。独自のエラーclass・enumを使う場合は、Rust連携で`From<nagi_runtime::Error>`を明示的に実装してください。子の失敗をその型へ変換できることはビルド時に確認します。spawnする子のエラー型は引き続きErrorです。
++scopeを使う関数はResultを返します。独自のエラーclass・enumを使う場合は、Rust連携で`From<nagi_runtime::Error>`を明示的に実装してください。scope出口の失敗をその型へ変換できることはビルド時に確認します。旧statement spawnの子がResultを返す場合、そのエラー型はErrorです。Task bindingの内側業務Resultは、対応する任意のエラー型を使えます。
+ 
+ scope本体の`try`でErrを伝えて退出する場合は、子をキャンセルして終了を待ってから外側へErrを伝えます。親のFutureそのものが破棄された場合や、scope本体がpanicした場合には、子へ停止を要求します。同期のDropでは非同期の終了待ちができないため、その場で全員の終了が完了している保証はありません。取消要求は、受理済みのDB操作などの外部副作用を巻き戻すものでもありません。CPU処理の停止については[並行処理](concurrency.md)を参照してください。
+ 
+diff --git a/docs/en/async.md b/docs/en/async.md
+index 526f679..c319785 100644
+--- a/docs/en/async.md
++++ b/docs/en/async.md
+@@ -50,13 +50,13 @@ Two successive `await sleep(...)` calls start the second wait after the first fi
+ 
+ **In one sentence: spawn lets work proceed concurrently, and scope manages its lifetime.** Cancellation and failure behavior are not identical to Python's TaskGroup. The next section and [Concurrency](concurrency.md) give the exact limits.
+ 
+-## Current scope and spawn reference
++## Legacy statement spawn and scope reference
+ 
+ The scope checks child results after its body finishes. If a child returns a Result error or panics, it cancels the remaining children and waits for them. A child failure does not interrupt the body while it runs. Spawned work must return `unit` or `Result[unit, Error]`. Returning from inside a scope and passing a view to a child are not supported.
+ 
+ Arguments are evaluated at the `spawn` statement, and the resulting values are passed to the child. With `spawn work(copy(part))`, the child receives an owned copy, so the parent can keep using the original data. Copying a list does not make it safe to pass if its elements still contain views.
+ 
+-A function using a scope returns Result. A custom error class or enum requires an explicit Rust adapter implementing `From<nagi_runtime::Error>`. The build checks that child failures can be converted to that type. Spawned children still use Error as their error type.
++A function using a scope returns Result. A custom error class or enum requires an explicit Rust adapter implementing `From<nagi_runtime::Error>`. The build checks that scope exit failures can be converted to that type. A legacy statement spawn child's Result uses Error as its error type. A Task binding's inner business Result may use any supported error type.
+ 
+ If a body `try` propagates Err out of the scope, children are canceled and awaited before the Err reaches the outer code. If the parent Future itself is dropped, or the scope body panics, cancellation is requested. Synchronous Drop cannot await async completion, so there is no guarantee that every child has already stopped at that point. Cancellation also does not roll back accepted database work or other external side effects. See [Concurrency](concurrency.md) for CPU work and cancellation.
+ 
+diff --git a/docs/en/roadmap.md b/docs/en/roadmap.md
+index 0a57b3b..c43cd89 100644
+--- a/docs/en/roadmap.md
++++ b/docs/en/roadmap.md
+@@ -15,7 +15,7 @@ This page describes the priorities for future development. Release dates remain
+ 
+ See the [library and Rust integration proposal](library-design.md). [ADR 010](../internal/adr/010-sqlite-transaction-boundary.md) records the adopted initial SQLite contract. API names and cleanup contracts for other resources still have unresolved details.
+ 
+-The adopted direction for values requires an explicit operation when assigning an existing owned value. Upcoming concurrency design covers handles for spawn results, separating business errors from task faults, and conditional shared actor messages. These are not current APIs. See [DESIGN](../../DESIGN.en.md) and [ADR 011](../internal/adr/011-language-behavior-and-docs.md) for current differences, unresolved details, and migration conditions.
++The narrow migration requiring explicit move for assignment of an existing owned value, spawn result handles, and business Err/task fault separation are implemented on the working branch and remain unreleased. S2 Supervisor/HTTP migration and conditional shared actor messages remain later design work. See [DESIGN](../../DESIGN.en.md) and [ADR 011](../internal/adr/011-language-behavior-and-docs.md) for differences from published releases, unresolved details, and migration conditions.
+ 
+ Compiler verification combines known pass/fail examples with bounded generated programs through High, saved Low, and Rust, plus mutation tests. Keep tested cases separate from unsupported combinations and preserve accepted-then-rejected cases as regressions.
+ 
+diff --git a/docs/en/syntax.md b/docs/en/syntax.md
+index ac1be91..418af0b 100644
+--- a/docs/en/syntax.md
++++ b/docs/en/syntax.md
+@@ -180,7 +180,7 @@ async def main() -> Result[unit, Error]:
+     return ok(print("Done"))
+ ```
+ 
+-This program prints `Done` after both sleeps finish. Normal scope exit waits for its children. Today, detecting a child Err or panic after the body finishes stops and waits for the remaining children. Parent Future destruction or body panic requests termination without guaranteeing that termination has completed. Returning inside a scope, passing views to another task, spawning tasks returning anything other than unit or `Result[unit, Error]`, remain unsupported for legacy spawn. [Task result handles](task-handles.md) are implemented on the working branch and remain unreleased. See [async](async.md).
++This program prints `Done` after both sleeps finish. Normal scope exit waits for its children. With legacy statement spawn, detecting a child Err or panic after the body finishes stops and waits for the remaining children. Parent Future destruction or body panic requests termination without guaranteeing that termination has completed. Returning inside a scope and passing views to another task remain unsupported. Legacy statement spawn accepts only async calls returning unit or `Result[unit, Error]`. [Task result handles](task-handles.md) are implemented on the working branch and remain unreleased. See [async](async.md).
+ 
+ ## Imports, HTTP, and Rust
+ 
+diff --git a/docs/internal/adr/011-language-behavior-and-docs.md b/docs/internal/adr/011-language-behavior-and-docs.md
+index c487553..66e773e 100644
+--- a/docs/internal/adr/011-language-behavior-and-docs.md
++++ b/docs/internal/adr/011-language-behavior-and-docs.md
+@@ -4,7 +4,7 @@
+ 
+ その後、作者が明示move・spawn結果handle・子taskの業務Errと故障の分離を段階実装する範囲を承認した。さらにmoveの意味と通常代入の移行を確定し、既存設計から自然に決まるAPIを自律的に選ぶよう指示した。`std.ownership.move`、現行Copy据置、狭い代入移行を採用し、作業branchで実装した。未リリースで、main反映と検証結果は[実装結果](../explicit-move-results.md)と[進捗](../progress.md)で別に記録する。[実装順](../value-task-implementation-plan.md)と[OWN-04の契約](../language-invariants.md#own-04-明示moveの確定仕様実装済み未リリース)が正本。taskの未決はmoveの実装を止める理由にしない。
+ 
+-続く自律判断の委任に基づき、[ADR 012](012-task-result-handles.md)でS1の全T正常出口await/discardとsticky faultを設計採用した。旧承認から必然だったとは扱わず、新しい詳細判断として理由を記録する。Task/Scopeの新経路は未実装で、現行契約は変更しない。
++続く自律判断の委任に基づき、[ADR 012](012-task-result-handles.md)でS1の全T正常出口await/discardとsticky faultを設計採用した。旧承認から必然だったとは扱わず、新しい詳細判断として理由を記録する。その後、Task/Scopeの新経路を作業branchへ接続し、未リリースのS1として検証した。[接続結果](../task-handles-s1-results.md)と[最終レビュー](../task-handles-s1-final-review.md)に実装/実行の範囲を残す。旧statement spawnの契約は維持する。
+ 
+ 監査基点: main `ff6f7d4c81c8cf49c2bca7abffb3083f681d5b9d`。添付が照合したmainと一致した。文書branchは`docs/python-guide-design-contracts`。初回監査時点ではPR #82のprivate Pool比較は別差分だった。後にmain `7999bab`への反映を確認し、文書branchへ統合した。公開Pool/Tx APIとして扱わない。
+ 
+@@ -30,10 +30,10 @@ Python風の字下げだけを説明しても、参照代入、例外、taskの
+ | ERR-01 | nullable、Result、panicを分ける | Some/Noneのmatch、Resultのmatch/tryを実装済み。任意のPython風Noneチェックでの型絞り込みはない。裸のResult破棄を拒否するが、未使用の変数へ代入したResultを全て検出するわけではない | [Option](../../../compiler/tests/option_match.rs)、[Result破棄](../../../compiler/tests/result_discard.rs)、[独自E](../../../compiler/tests/typed_errors.rs) |
+ | ERR-02 | panic捕捉は状態の復元ではない | HTTPの応答開始前のunwind捕捉を実装済み。abort/OOM/強制終了、変更済みstateやDBのrollbackは保証しない | [HTTP panic](../../../runtime/src/http_server/panic_tests.rs) |
+ | ASYNC-01 | awaitは結果を待つ。呼ぶだけで独立taskを作らない | async本体と引数評価・moveを分ける。第一級Futureの保存・返却・containerは未対応 | [async値](../../../compiler/tests/async_value_types.rs)、[生成](../../../compiler/src/emit.rs) |
+-| ASYNC-02 | spawnはscope所属の子を実行対象にする | 実装済み。別CPUでの同時実行や開始時刻は保証しない。spawnは文で、結果handleを返さない | [scope検査](../../../compiler/tests/scoped_tasks.rs)、[Scope](../../../runtime/src/concurrent.rs) |
+-| ASYNC-03 | 結果を一度受け取るhandleを用意する | **設計採用・未実装**。ADR 012でscope-local・全T一回await consume・正常出口await/discard・escape拒否を採用。現行spawnはunit/Result[unit, Error]だけ。API名と接続構文は候補 | [checkerのSpawn](../../../compiler/src/check.rs)、[JoinSet出力](../../../runtime/src/concurrent.rs) |
+-| ASYNC-04 | 普通の子taskの業務Errは値として受け取り、task故障とは分ける | **設計採用・未実装**。ADR 012で業務Resultと外側faultを分離し、faultはsticky保持。現Scopeは子Errでも兄弟取消。Supervisor terminal→HTTP停止は旧経路を維持して移行 | [実Scope契約](../../../compiler/tests/scope_runtime_contract.rs)、[Supervisor](../../supervisor.md) |
+-| ASYNC-05 | 取消要求と終了確認を分ける | scope本体終了後のjoinで子の失敗を検出する。本体実行中に割り込まない。親Future Drop/unwindでは同期Dropがabort要求を出すだけで、join完了を待てない | [Scope実装](../../../runtime/src/concurrent.rs)、[実Scope検査](../../../compiler/tests/scope_runtime_contract.rs) |
++| ASYNC-02 | spawnはscope所属の子を実行対象にする | 実装済み。別CPUでの同時実行や開始時刻は保証しない。旧statement spawnはhandleを返さず、S1のSpawnBindはscope-local Taskを作る | [scope検査](../../../compiler/tests/scoped_tasks.rs)、[Task検査](../../../compiler/tests/task_handles.rs) |
++| ASYNC-03 | 結果を一度受け取るhandleを用意する | **S1作業branchで実装・未リリース**。scope-local・全T一回await consume・正常出口await/discard・escape拒否を実装。旧spawnはunit/Result[unit, Error]を維持 | [checker](../../../compiler/src/check.rs)、[接続結果](../task-handles-s1-results.md) |
++| ASYNC-04 | 普通の子taskの業務Errは値として受け取り、task故障とは分ける | **S1作業branchで実装・未リリース**。Taskの業務Resultとsticky外側faultを分離。旧spawn Errは兄弟取消を維持。Supervisor/HTTPの具体移行はS2 | [Task runtime](../../../runtime/src/task.rs)、[Supervisor](../../supervisor.md) |
++| ASYNC-05 | 取消要求と終了確認を分ける | 旧scopeの出口join、またはTaskの受取/出口で故障を観測する。bodyへの非同期割込みはない。親Future Drop/unwindでは同期Dropがabort要求を出すだけで、join完了を待てない | [Task実装](../../../runtime/src/task.rs)、[実Scope検査](../../../compiler/tests/scope_runtime_contract.rs) |
+ | LIFE-01 | 操作用handle、実行owner、終了確認APIを分ける | Supervisor ControlのDropだけでは終了しない。Arcの循環を自動回収しない。sharedだけで終了完了を保証しない | [Supervisor](../../supervisor.md)、[lifecycle](../../../runtime/src/actor/lifecycle.rs) |
+ | LIFE-02 | 同一ブロックの単純な所有ローカルは逆宣言順に片付ける | 一時値、再代入、部分move、field/List/shared/Futureの規則を一括で生成時刻逆順にしない。既存cleanup anchorとRHS→置換→旧値退役を維持する | [cleanupの観測](../../../compiler/tests/view_container_drop.rs)、[生成経路](../compiler-pipeline.md) |
+ | LIFE-03 | commitを明示し、未終端Txのcleanupをworkerが所有する | ADR 010承認済み。private一接続試作と公開Pool/Tx完成は別。取消、rollback結果、COMMIT outcome、native close、joinを別に観測する | [ADR 010](010-sqlite-transaction-boundary.md)、[試作結果](../sqlite-session-results.md) |
+@@ -63,7 +63,7 @@ self-hostingはコンパイラをNagiで書くこと、別backendはRust以外
+ ### ASYNC-03/04: 結果handleと失敗の分類
+ 
+ - before: spawnは文、子出力はunit/Result[unit, Error]、子Errでscope失敗。after: scopeが寿命と故障を保持し、handle経由でTまたはResult[U, E]をそのまま受け取る。業務Errだけでは兄弟を止めない。
+-- 詳細採用: [ADR 012](012-task-result-handles.md)にscope-local非Copy/nonClone/nonshared、一回await consume、全T正常出口await/discard、実join後の外側Result[T, TaskFailure]、業務Resultの入れ子、sticky faultとbody Err primaryを記録した。API名/構文/生成bridgeは接続候補で未実装。
++- 詳細採用: [ADR 012](012-task-result-handles.md)にscope-local非Copy/nonClone/nonshared、一回await consume、全T正常出口await/discard、実join後の外側Result[T, TaskFailure]、業務Resultの入れ子、sticky faultとbody Err primaryを記録した。API名/構文/生成bridgeは[接続判断](../task-handle-implementation.md)に沿いS1へ実装し、未リリースの[接続結果](../task-handles-s1-results.md)へ検証を残した。
+ - 移行: 現行Supervisor terminal Errをtask故障へつなぐ明示方法を設計し、HTTPとの共倒れ停止を黙って失わない。scope本体のtry退出と親Future Dropは別経路。古い契約の負例を無説明に緩めない。
+ - 成功条件: unit、非Copy T、ResultのOk/Err、未受取、非Copy結果の二重取得拒否、兄弟継続/取消、親body Err/panic/Drop、明示shutdown、non-yielding処理、SupervisorとHTTPの終了。Copy結果も再awaitを拒否し、全Tの未受取正常出口とsticky出口を新仕様の先行oracleで検査する。実runtimeのbarrierで先後関係を確認する。sleepだけで順序を決めない。
+ 
+diff --git a/docs/internal/handoffs/2026-10-06-task-bridge-stage1.md b/docs/internal/handoffs/2026-10-06-task-bridge-stage1.md
+index 9fd2ca9..5ae0578 100644
+--- a/docs/internal/handoffs/2026-10-06-task-bridge-stage1.md
++++ b/docs/internal/handoffs/2026-10-06-task-bridge-stage1.md
+@@ -1,5 +1,7 @@
+ # Sol 6.1への引継ぎ: Task結果handleのStage 1
+ 
++**履歴資料。** 以下はprivate bridgeで停止した時点の記録。現在のPR #88はS1完成PR。[完成後と次リリースの引継ぎ](2026-10-06-task-handles-s1-complete.md)と[最終レビュー](../task-handles-s1-final-review.md)を先に読む。
++
+ 更新日: 2026-10-06。**停止地点は、先行RED・private Task bridge・文書・CIの検証まで。Taskのcompiler/public runtime接続は開始していない。** ユーザーの最新指示で、ここを自然な区切りとして停止し、次の大きい実装へ進まない。
+ 
+ この文書はNagiそのものの開発向け。Nagiでアプリを書く資料は`ai/README.md`。最初にrootの`AGENTS.md`を読む。以下はrepository内のsource・保存ログ・GitHubの読戻しを根拠にする。AIの成功報告や会話の記憶を実装済みの証拠にしない。
+@@ -197,3 +199,7 @@ CLI pushはGitHub書込み認証がなく失敗したため、接続GitHub API
+ ## 停止状態の確認
+ 
+ 引継ぎ対象のproduction sourceは4 OS検証head `6223ad2`から変更していない。追加したのは結果・原ログ・接続設計・この引継ぎのみ。Task checker/public runtime接続は未着手、50入力はparse RED、測定は未実施のまま停止する。次の担当はこの境界を保ったまま、再開指示を受けて最初のRED追加とchecker接続から進める。
++
++## S1完成後の追記（2026-10-06）
++
++停止後の再開指示でcompiler/public runtime接続、三構文native、4 OS、費用、独立レビューを完了した。最終レビューの回帰補強・Docs修正、未実装項目・技術的負債・次PR候補・推奨順は[完成後引継ぎ](2026-10-06-task-handles-s1-complete.md)へ追記した。最新指示はTask関連を次リリース公開まで継続する範囲であり、上のmerge/release禁止・「未着手」「50入力parse RED」「測定未実施」を現在の状態として引き継がない。
+diff --git a/docs/internal/progress.md b/docs/internal/progress.md
+index f074325..8260116 100644
+--- a/docs/internal/progress.md
++++ b/docs/internal/progress.md
+@@ -1,5 +1,11 @@
+ # コンパイラ・Rust境界の進捗
+ 
++## PR #88最終レビューとTask次リリース準備
++
++2026-10-06。#88をS1完成PRとしてレビューし、production本体・依存を維持した。未実装と書かれた日英/AI文書、negative9対＋positive1対、旧Supervisor terminal→実HTTP停止の三構文専用oracleを補強。契約110/110、Task native6群、全workspace原ログ95 block・934成功・failed0・費用用ignored1、fmt/clippyが成功した。過去の90/90・source CIを今回の再実行へ数えない。
++
++[最終レビュー](task-handles-s1-final-review.md)と[完成後引継ぎ](handoffs/2026-10-06-task-handles-s1-complete.md)へ、契約照合・負債・次PR/依存順を記録する。最新ユーザー指示で、S1完成後も停止せずTask残件と次Nagiリリース公開へ継続する。新公開仕様などの判断が不要な実装・検証は自律進行する。新しいSol独立レビューはDocs修正と配布Task三構文/12拒否を確認し、productionの追加不具合なし。release unit98と検証用Linux archive全体も成功した。最新headの4 OS・必須CIを読戻し、既存手順に沿い必要PRのmerge/版更新/releaseまで進める。
++
+ ## S1 Task結果handleの接続（作業branch・未リリース）
+ 
+ 2026-10-06、ユーザーの再開指示を受け、Stage 1の停止境界から追加RED→checker/public runtimeへ接続した。SpawnBind、canonical std.task、stable ScopeIdとbinding義務、sealed受取/放棄/Scope planを実装。High・保存Low・手書きLowの全positive nativeと、業務Err兄弟継続・sticky fault・legacy/body元Err・Drop/actual joinを検証した。独立レビューのFailure wrapper copy/share、spawnユーザー名、associated method再export、raw public checker APIの不一致を縮小反例で修正した。故障後大量受取のO(n²)掃除もRED→ticket退役へ修正し、17native oracleへ追加した。
+diff --git a/docs/internal/task-handles-s1-results.md b/docs/internal/task-handles-s1-results.md
+index f87f628..a88d7d3 100644
+--- a/docs/internal/task-handles-s1-results.md
++++ b/docs/internal/task-handles-s1-results.md
+@@ -1,5 +1,7 @@
+ # Task結果handle S1接続の実行記録
+ 
++最新の仕上げは[PR #88最終レビュー](task-handles-s1-final-review.md)。以下のsource `34ac4d5` の90/90・4 OS・費用測定は接続完了時の記録として維持し、最終レビュー補強後の110/110・service専用回帰とは分ける。[次段階の引継ぎ](handoffs/2026-10-06-task-handles-s1-complete.md)にS2・release工程を整理した。
++
+ 2026-10-06。ユーザーの再開指示によるS1接続の記録。再開時のmainは `9ba4a104be6f65dba61eda0c7b1ef0f98c892cf7`、PR #88 headは `5c2c8282fbd9841cd3b0a2a78e9742d7ec3a811e`。再開時のchecks `37471066148`、website `37471065829` は成功し、レビュー提出・threadは0件だった。接続前sourceはStage 1検証head `6223ad2`と一致し、入力62件・artifact122件のSHA-256を確認した。今回の接続sourceとCIは末尾へ分けて記録する。
+ 
+ ADR 012と接続判断を用い、追加RED、compiler/checker、公開runtime、Low/Rust、native、回帰・測定・日英文書・独立レビューを実行した。Stage 1の16private oracleや6/56一致を今回の成功へ数えない。merge、release、version更新、S2の具体API、公開SQLiteは対象外。
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 604f211..737a080 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -15,7 +15,7 @@
+ 
+ 詳細は[ライブラリとRust連携の設計案](library-design.md)へ。採用済みのSQLite初版契約は[ADR 010](internal/adr/010-sqlite-transaction-boundary.md)にあります。その他の資源のAPI名や終了契約には未確定の部分があります。
+ 
+-値の扱いでは、既存所有値の代入に明示操作を要求する方向を採用しました。並行処理では、spawnの結果を受け取るhandle、業務Errとtask故障の区別、条件付きのshared actor messageを次の設計対象とします。これらは現行APIではありません。現在との差、未決の細部、移行条件は[DESIGN](../DESIGN.md)と[ADR 011](internal/adr/011-language-behavior-and-docs.md)へまとめています。
++既存所有値の代入に明示moveを要求する狭い移行と、spawnの結果handle・業務Errとtask故障の分離は、作業branchへ実装済み・未リリースです。Supervisor/HTTPのS2移行と条件付きshared actor messageは後続の設計対象です。公開版との差、未決の細部、移行条件は[DESIGN](../DESIGN.md)と[ADR 011](internal/adr/011-language-behavior-and-docs.md)へまとめています。
+ 
+ 処理系の検証は、既知のpass/fail例に加え、High・保存Low・生成Rustを通す小さい生成テストと変異試験で続けます。検査した範囲と未対応の組合せを分け、受理後の生成ミスを回帰例へ残します。
+ 
+diff --git a/docs/syntax.md b/docs/syntax.md
+index 2e2832c..44f46fb 100644
+--- a/docs/syntax.md
++++ b/docs/syntax.md
+@@ -180,7 +180,7 @@ async def main() -> Result[unit, Error]:
+     return ok(print("完了"))
+ ```
+ 
+-このコードは両方のsleepが終了してから`完了`を表示します。通常のscope終了では子taskを待ちます。現行では本体終了後に子のErrやpanicを検出すると、残りの子を止めて待ちます。親Futureの破棄や本体panicでは停止要求と終了確認を区別します。scope内の`return`、viewを別taskへ渡すこと、旧statement spawnはunitか`Result[unit, Error]`に限ります。[Task結果handle](task-handles.md)は作業branchに実装済み・未リリースです。詳細は[async](async.md)を参照してください。
++このコードは両方のsleepが終了してから`完了`を表示します。通常のscope終了では子taskを待ちます。旧statement spawnでは本体終了後に子のErrやpanicを検出すると、残りの子を止めて待ちます。親Futureの破棄や本体panicでは停止要求と終了確認を区別します。scope内の`return`とviewを別taskへ渡すことは未対応です。旧statement spawnはunitか`Result[unit, Error]`を返すasync呼出しに限ります。[Task結果handle](task-handles.md)は作業branchに実装済み・未リリースです。詳細は[async](async.md)を参照してください。
+ 
+ ## import、HTTP、Rust
+ 
+diff --git a/tests/task-handles/README.md b/tests/task-handles/README.md
+index 7bd6e7c..8928e2b 100644
+--- a/tests/task-handles/README.md
++++ b/tests/task-handles/README.md
+@@ -12,3 +12,5 @@ cargo test --locked -p nagic --test task_handles
+ 元の28対にbinding放棄、branch合流/再生成、nested/same-depth scope、引数/return/wrapper escape、Failure viewとClone/shared境界、ユーザーspawn名互換の縮小反例を追加。Task native harnessは全positiveをHigh・保存Low・手書きLowでbuild/runし、別のbarrier付きoracleで業務Err、sticky fault、body/legacy元Err、Dropとactual joinを区別する。固定seedの16経路も両flagで三構文実行する。private試作からpublicへの17runtime oracleは `task::tests::`。
+ 
+ [Stage 1結果](../../docs/internal/task-bridge-stage1-results.md)は50入力がparse REDだった歴史的記録。[接続結果](../../docs/internal/task-handles-s1-results.md)と[新artifact](../../benchmarks/results/task-handles-s1-2026-10-06/README.md)に今回の実行・原ログ・hash・保証範囲を残す。S2とSQLiteは対象外。
++
++最終レビューでdiscard→await、直接Task操作、match/while、field/enum escapeのnegative9対とpositive1対を追加し、110入力/55対となった。Task nativeは6群で、旧spawn-only/Task混在scopeの実Supervisor・HTTP専用oracleを含む。[最終レビュー](../../docs/internal/task-handles-s1-final-review.md)と[次リリース引継ぎ](../../docs/internal/handoffs/2026-10-06-task-handles-s1-complete.md)に接続時の90件と補強後の検証を分ける。

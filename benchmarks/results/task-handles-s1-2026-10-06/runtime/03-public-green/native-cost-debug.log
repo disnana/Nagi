@@ -1,0 +1,26 @@
+    Finished `test` profile [unoptimized] target(s) in 0.06s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31400cc29fcdf7fc)
+
+running 1 test
+{"cancel_future_bytes":112,"discard_batch_future_bytes":360,"entry_bytes":24,"failure_bytes":40,"handle_u64_bytes":40,"join_future_bytes":96,"kind_bytes":1,"name":"task_handle_native_sizes","receive_batch_future_bytes":488,"receive_future_bytes":128,"scope_bytes":248,"target":"x86_64"}
+{"allocation":{"allocated_bytes":99932,"allocations":536,"deallocations":536,"reallocations":0},"allocation_counter_thread":"calling thread only","items":128,"loops_per_repetition":3,"name":"taskscope_native_receive","ns_per_item":11273.705729166666,"ns_per_op":1443034.3333333333,"raw_ns":[1436526.6666666667,1313951.0,2393587.3333333335,1988585.0,1341983.3333333333,1443034.3333333333,1843771.6666666667],"throughput_items_s":88701.97821581054}
+{"allocation":{"allocated_bytes":94812,"allocations":535,"deallocations":535,"reallocations":0},"allocation_counter_thread":"calling thread only","items":128,"loops_per_repetition":3,"name":"taskscope_native_discard","ns_per_item":8211.419270833334,"ns_per_op":1051061.6666666667,"raw_ns":[1014741.6666666666,960421.3333333334,1051061.6666666667,2546425.0,1042983.0,1442070.3333333333,1838061.0],"throughput_items_s":121781.62714842294}
+{"allocation":{"allocated_bytes":798956,"allocations":4129,"deallocations":4129,"reallocations":0},"allocation_counter_thread":"calling thread only","items":1024,"loops_per_repetition":3,"name":"taskscope_native_receive","ns_per_item":10021.8603515625,"ns_per_op":10262385.0,"raw_ns":[16671616.0,10808521.666666666,10108411.666666666,9573742.333333334,10262385.0,8738727.666666666,13915563.333333334],"throughput_items_s":99781.87331697262}
+{"allocation":{"allocated_bytes":757996,"allocations":4128,"deallocations":4128,"reallocations":0},"allocation_counter_thread":"calling thread only","items":1024,"loops_per_repetition":3,"name":"taskscope_native_discard","ns_per_item":9989.634440104166,"ns_per_op":10229385.666666666,"raw_ns":[10838234.666666666,10229385.666666666,8814458.666666666,9957372.666666666,10181567.666666666,12914557.0,11237974.0],"throughput_items_s":100103.76315527844}
+{"allocation":{"allocated_bytes":6390140,"allocations":32810,"deallocations":32810,"reallocations":0},"allocation_counter_thread":"calling thread only","items":8192,"loops_per_repetition":3,"name":"taskscope_native_receive","ns_per_item":12119.520182291666,"ns_per_op":99283109.33333333,"raw_ns":[98967978.66666667,91845013.66666667,109602583.66666667,89039563.0,105786088.0,107368760.66666667,99283109.33333333],"throughput_items_s":82511.51736692856}
+{"allocation":{"allocated_bytes":6062460,"allocations":32809,"deallocations":32809,"reallocations":0},"allocation_counter_thread":"calling thread only","items":8192,"loops_per_repetition":3,"name":"taskscope_native_discard","ns_per_item":10515.464152018229,"ns_per_op":86142682.33333333,"raw_ns":[86142682.33333333,81452077.0,115819297.66666667,88169977.0,80151641.66666667,82397855.33333333,121343266.33333333],"throughput_items_s":95098.03709502166}
+{"allocation":{"allocated_bytes":872748,"allocations":5154,"deallocations":28,"reallocations":0},"buffered_payload_bytes":65536,"entries":1024,"entries_capacity":1792,"items":1024,"name":"completed_unjoined","native_tasks":1024,"unjoined":1024}
+{"allocation":{"allocated_bytes":64,"allocations":1,"deallocations":2049,"reallocations":0},"buffered_payload_bytes":65536,"entries":1024,"entries_capacity":1792,"items":1024,"name":"joined_unreceived","native_tasks":0,"unjoined":0}
+{"allocation":{"allocated_bytes":0,"allocations":0,"deallocations":2049,"reallocations":0},"buffered_payload_bytes":0,"entries":1024,"entries_capacity":1792,"name":"joined_handle_drop_before_scope_operation"}
+{"allocation":{"allocated_bytes":0,"allocations":0,"deallocations":1024,"reallocations":0},"entries":0,"entries_capacity":1735,"name":"retired_records","native_keys_capacity":1754,"related_capacity":0,"unjoined_capacity":1722}
+{"entries":0,"fault_bytes":40,"name":"related_fault_retention","primary":true,"related":127,"related_capacity":128}
+test task::cost_tests::native_task_handle_costs ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 206 filtered out; finished in 6.11s
+
+     Running tests/task_handles.rs (/tmp/nagi-container-flow-target/debug/deps/task_handles-1fdbf05c5538d590)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+

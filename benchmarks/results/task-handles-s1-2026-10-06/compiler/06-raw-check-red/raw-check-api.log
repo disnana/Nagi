@@ -1,0 +1,11 @@
+     Locking 48 packages to highest compatible versions
+   Compiling cc v1.6.0
+   Compiling libsqlite3-sys v0.38.2
+   Compiling rusqlite v0.40.2
+   Compiling nagic v0.1.10 (/workspace/Nagi/compiler)
+   Compiling nagi-task-raw-check-review v0.0.0 (/tmp/nagi-task-review/raw-check-api)
+    Finished `dev` profile [unoptimized] target(s) in 28.31s
+     Running `/tmp/nagi-container-flow-target/debug/nagi-task-raw-check-review`
+unreceived: raw High check = Ok(())
+unreceived: generated Low finalize = Some(FinalizeError { message: "line 8: generic class/functionは0.1では未実装です: stdlib:std.task::Task[i64]", kind: UserError })
+received: raw High check = Err("line 6: await対象はasync呼び出しまたはTaskです")

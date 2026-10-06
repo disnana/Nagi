@@ -1,0 +1,34 @@
+[
+  {
+    "path": "compiler/src/check.rs",
+    "same_as_production_34ac4d5": true
+  },
+  {
+    "path": "compiler/src/check/checked.rs",
+    "same_as_production_34ac4d5": true
+  },
+  {
+    "path": "compiler/src/emit.rs",
+    "same_as_production_34ac4d5": true
+  },
+  {
+    "path": "compiler/src/ast.rs",
+    "same_as_production_34ac4d5": true
+  },
+  {
+    "path": "compiler/src/capabilities.rs",
+    "same_as_production_34ac4d5": true
+  },
+  {
+    "path": "compiler/src/stdlib.rs",
+    "same_as_production_34ac4d5": true
+  },
+  {
+    "path": "runtime/src/task.rs",
+    "same_as_production_34ac4d5": true
+  },
+  {
+    "path": "runtime/src/concurrent.rs",
+    "same_as_production_34ac4d5": true
+  }
+]

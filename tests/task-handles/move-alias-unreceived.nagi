@@ -1,0 +1,10 @@
+from std.ownership import move
+
+async def work() -> i64:
+    return 7
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        alias = move(task)  # primary
+    return ok(print(0))

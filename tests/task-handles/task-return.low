@@ -1,0 +1,5 @@
+from std.task import Task;
+async fn work() -> Task[i64] { # primary
+    scope { let task = spawn work(); }
+    return task;
+}

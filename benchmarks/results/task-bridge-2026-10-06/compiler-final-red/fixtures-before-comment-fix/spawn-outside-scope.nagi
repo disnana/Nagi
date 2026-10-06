@@ -1,0 +1,6 @@
+async def work() -> i64:
+    return 7
+
+async def main() -> Result[unit, Error]:
+    task = spawn work()  # primary
+    return ok(print(0))

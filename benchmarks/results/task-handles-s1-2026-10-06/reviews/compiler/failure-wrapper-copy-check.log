@@ -1,0 +1,4 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi/compiler)
+    Finished `dev` profile [unoptimized] target(s) in 9.34s
+     Running `/tmp/nagi-container-flow-target/debug/nagic check /tmp/nagi-task-review/failure-wrapper-copy.nagi --out /tmp/nagi-task-review/out-copy`
+checked /tmp/nagi-task-review/failure-wrapper-copy.nagi

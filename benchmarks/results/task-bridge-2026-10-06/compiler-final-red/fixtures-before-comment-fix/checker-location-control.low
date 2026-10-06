@@ -1,0 +1,4 @@
+fn main() -> unit {
+    let value: i64 = "wrong"; // primary
+    print(value);
+}

@@ -1,0 +1,17 @@
+from std.task import discard
+
+async def answer() -> i64:
+    return 42
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn answer()
+        result = await task
+        match result:
+            case Ok(value):
+                print(value)
+            case Err(failure):
+                print("子taskが故障しました")
+        background = spawn sleep(10)
+        discard(background)
+    return ok(print("完了"))

@@ -1,0 +1,5 @@
+{
+  "exit": 101,
+  "failure": "E0432 unresolved private APIs",
+  "log_sha256": "f2393f879c2787a9e623fa21d6c3af02100954b790a4d31e2b2c2cfda1c88b8b"
+}

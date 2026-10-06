@@ -1,0 +1,5 @@
+from std.task import Task
+async def work() -> Task[i64]:  # primary
+    async with scope:
+        task = spawn work()
+    return task

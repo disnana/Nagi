@@ -1,0 +1,83 @@
+......EEEEEEE
+======================================================================
+ERROR: test_a_checker_accepting_pending_tasks_cannot_pass (test_verify.TaskDistributionVerificationTests.test_a_checker_accepting_pending_tasks_cannot_pass)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 183, in test_a_checker_accepting_pending_tasks_cannot_pass
+    self.check(accepts_task)
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 144, in check
+    verify.verify_task_handles(self.compiler, self.root, self.environment)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'verify' has no attribute 'verify_task_handles'
+
+======================================================================
+ERROR: test_archive_task_gate_checks_three_source_forms_and_early_negatives (test_verify.TaskDistributionVerificationTests.test_archive_task_gate_checks_three_source_forms_and_early_negatives)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 149, in test_archive_task_gate_checks_three_source_forms_and_early_negatives
+    self.check(self.answer)
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 144, in check
+    verify.verify_task_handles(self.compiler, self.root, self.environment)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'verify' has no attribute 'verify_task_handles'
+
+======================================================================
+ERROR: test_backend_rejection_cannot_replace_task_checker_evidence (test_verify.TaskDistributionVerificationTests.test_backend_rejection_cannot_replace_task_checker_evidence)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 213, in test_backend_rejection_cannot_replace_task_checker_evidence
+    self.check(backend_rejection)
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 144, in check
+    verify.verify_task_handles(self.compiler, self.root, self.environment)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'verify' has no attribute 'verify_task_handles'
+
+======================================================================
+ERROR: test_discarded_child_must_finish_before_scope_exit (test_verify.TaskDistributionVerificationTests.test_discarded_child_must_finish_before_scope_exit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 174, in test_discarded_child_must_finish_before_scope_exit
+    self.check(late_child)
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 144, in check
+    verify.verify_task_handles(self.compiler, self.root, self.environment)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'verify' has no attribute 'verify_task_handles'
+
+======================================================================
+ERROR: test_missing_business_result_is_not_a_successful_native_task_run (test_verify.TaskDistributionVerificationTests.test_missing_business_result_is_not_a_successful_native_task_run)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 165, in test_missing_business_result_is_not_a_successful_native_task_run
+    self.check(missing_business)
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 144, in check
+    verify.verify_task_handles(self.compiler, self.root, self.environment)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'verify' has no attribute 'verify_task_handles'
+
+======================================================================
+ERROR: test_parser_rejection_does_not_prove_task_ownership (test_verify.TaskDistributionVerificationTests.test_parser_rejection_does_not_prove_task_ownership)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 192, in test_parser_rejection_does_not_prove_task_ownership
+    self.check(parser_rejection)
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 144, in check
+    verify.verify_task_handles(self.compiler, self.root, self.environment)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'verify' has no attribute 'verify_task_handles'
+
+======================================================================
+ERROR: test_wrong_primary_line_does_not_prove_task_ownership (test_verify.TaskDistributionVerificationTests.test_wrong_primary_line_does_not_prove_task_ownership)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 204, in test_wrong_primary_line_does_not_prove_task_ownership
+    self.check(wrong_line)
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 144, in check
+    verify.verify_task_handles(self.compiler, self.root, self.environment)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'verify' has no attribute 'verify_task_handles'
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.012s
+
+FAILED (errors=7)
+Verified SQL engine: extracted compiler, offline schema, bad columns/binds, Nagi locations, no Cargo/runtime

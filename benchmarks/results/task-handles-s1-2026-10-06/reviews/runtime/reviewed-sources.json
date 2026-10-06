@@ -1,0 +1,6 @@
+{
+  "runtime/src/task.rs": "c7d77eb61b0cb640894b5c4bffd4f24e1cc3ca4bb892357cb5588aefcf9d39c3",
+  "compiler/src/emit.rs": "ce3661a4e08736768b3a1fc80048a9c16dde89194986e8ec05c1a7a62b039464",
+  "compiler/src/check/checked.rs": "e720731a6bf3144d1072c61aecaa394cb2c637158db8799845e023de74d3061f",
+  "compiler/tests/task_handles.rs": "19f6436a8f3d8498672548094df81b1de7d6cd30acc106ba249b00b919d53c65"
+}

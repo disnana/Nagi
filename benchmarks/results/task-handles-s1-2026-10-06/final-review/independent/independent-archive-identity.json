@@ -1,0 +1,11 @@
+{
+  "archive_sha256": "8023d16bc6877db593e8b0094997b15419419973120cfa00e82e3e690163ebaf",
+  "compiler_sha256": "a3eb76059325418818bd0114722ff8296d91e21cd538ec812a2aa699050ef338",
+  "verifier_sha256": "386032c7f0778983802f89c5816270cfa1de58b3456e46bb9ae092362d5681db",
+  "runtime_task_sha256": "89ebba9bba8761af98d7997f09fdade51d8100d0c76034d7681e57cad3689545",
+  "release_json": {
+    "version": "0.1.10",
+    "platform": "linux-x86_64",
+    "commit": "a9a0d42e94d6c7518bd7d955c9400299e554888c"
+  }
+}

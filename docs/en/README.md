@@ -43,7 +43,7 @@ See the [VS Code guide](editor.md) for editor support. See [JetBrains installati
 
 Runnable examples are in [examples/tutorial/](../../examples/tutorial/). References also include code fragments.
 
-Tutorial code uses today's syntax. The explicit-move migration, unimplemented spawn result handles, and shared actor messages are tracked in the [adopted design direction](../../DESIGN.en.md#adopted-direction-for-values-failures-and-tasks). Repository implementation and published release status are distinguished.
+Tutorial code uses today's syntax. The explicit-move migration, [Task result handles](task-handles.md) on the working branch (unreleased), and shared actor messages are tracked in the [adopted design direction](../../DESIGN.en.md#adopted-direction-for-values-failures-and-tasks). Repository implementation and published release status are distinguished.
 
 ## Implementation and development
 

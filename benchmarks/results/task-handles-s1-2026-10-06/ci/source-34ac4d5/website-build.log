@@ -1,0 +1,482 @@
+﻿2026-10-06T15:39:27.8308756Z Current runner version: '2.337.0'
+2026-10-06T15:39:27.8338910Z ##[group]Runner Image Provisioner
+2026-10-06T15:39:27.8339959Z Hosted Compute Agent
+2026-10-06T15:39:27.8340719Z Version: 20260901.588
+2026-10-06T15:39:27.8341776Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+2026-10-06T15:39:27.8342693Z Build Date: 2026-09-01T19:56:44Z
+2026-10-06T15:39:27.8343506Z Worker ID: {8f46fb18-5403-467a-a439-a12378304be0}
+2026-10-06T15:39:27.8344439Z Azure Region: eastus
+2026-10-06T15:39:27.8345182Z ##[endgroup]
+2026-10-06T15:39:27.8346956Z ##[group]Operating System
+2026-10-06T15:39:27.8347738Z Ubuntu
+2026-10-06T15:39:27.8348390Z 24.04.5
+2026-10-06T15:39:27.8349027Z LTS
+2026-10-06T15:39:27.8349659Z ##[endgroup]
+2026-10-06T15:39:27.8350444Z ##[group]Runner Image
+2026-10-06T15:39:27.8351166Z Image: ubuntu-24.04
+2026-10-06T15:39:27.8352003Z Version: 20260927.320.1
+2026-10-06T15:39:27.8353713Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-06T15:39:27.8355905Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+2026-10-06T15:39:27.8357164Z ##[endgroup]
+2026-10-06T15:39:27.8358568Z ##[group]GITHUB_TOKEN Permissions
+2026-10-06T15:39:27.8361004Z Contents: read
+2026-10-06T15:39:27.8362066Z Metadata: read
+2026-10-06T15:39:27.8362750Z ##[endgroup]
+2026-10-06T15:39:27.8365250Z Secret source: Actions
+2026-10-06T15:39:27.8366382Z Cache mode: write
+2026-10-06T15:39:27.8367369Z Prepare workflow directory
+2026-10-06T15:39:27.8747080Z Prepare all required actions
+2026-10-06T15:39:27.8803499Z Getting action download info
+2026-10-06T15:39:28.0583134Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-06T15:39:28.1654445Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-10-06T15:39:28.2584072Z Download action repository 'actions/upload-pages-artifact@v3' (SHA:56afc609e74202658d3ffba0e8f6dda462b719fa)
+2026-10-06T15:39:28.4666828Z Getting action download info
+2026-10-06T15:39:28.5699482Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-06T15:39:28.7366830Z Complete job name: build
+2026-10-06T15:39:28.8039897Z ##[group]Run actions/checkout@v4
+2026-10-06T15:39:28.8040683Z with:
+2026-10-06T15:39:28.8041065Z   repository: disnana/Nagi
+2026-10-06T15:39:28.8044697Z   token: ***
+2026-10-06T15:39:28.8045089Z   ssh-strict: true
+2026-10-06T15:39:28.8045474Z   ssh-user: git
+2026-10-06T15:39:28.8045856Z   persist-credentials: true
+2026-10-06T15:39:28.8046270Z   clean: true
+2026-10-06T15:39:28.8046646Z   sparse-checkout-cone-mode: true
+2026-10-06T15:39:28.8047084Z   fetch-depth: 1
+2026-10-06T15:39:28.8047447Z   fetch-tags: false
+2026-10-06T15:39:28.8047831Z   show-progress: true
+2026-10-06T15:39:28.8048251Z   lfs: false
+2026-10-06T15:39:28.8048632Z   submodules: false
+2026-10-06T15:39:28.8049034Z   set-safe-directory: true
+2026-10-06T15:39:28.8049486Z   allow-unsafe-pr-checkout: false
+2026-10-06T15:39:28.8050214Z ##[endgroup]
+2026-10-06T15:39:28.8991721Z Syncing repository: disnana/Nagi
+2026-10-06T15:39:28.8993873Z ##[group]Getting Git version info
+2026-10-06T15:39:28.8994927Z Working directory is '/home/runner/work/Nagi/Nagi'
+2026-10-06T15:39:28.8996290Z [command]/usr/bin/git version
+2026-10-06T15:39:28.9008793Z git version 2.55.0
+2026-10-06T15:39:28.9044097Z ##[endgroup]
+2026-10-06T15:39:28.9048048Z Temporarily overriding HOME='/home/runner/work/_temp/c05bbab6-cec6-4c05-ab42-2a0b1120a836' before making global git config changes
+2026-10-06T15:39:28.9049312Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-06T15:39:28.9050306Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Nagi/Nagi
+2026-10-06T15:39:28.9098307Z Deleting the contents of '/home/runner/work/Nagi/Nagi'
+2026-10-06T15:39:28.9106409Z ##[group]Initializing the repository
+2026-10-06T15:39:28.9112728Z [command]/usr/bin/git init /home/runner/work/Nagi/Nagi
+2026-10-06T15:39:28.9185217Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-06T15:39:28.9186624Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-06T15:39:28.9188015Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-06T15:39:28.9188938Z hint: call:
+2026-10-06T15:39:28.9189464Z hint:
+2026-10-06T15:39:28.9189956Z hint: 	git config --global init.defaultBranch <name>
+2026-10-06T15:39:28.9190530Z hint:
+2026-10-06T15:39:28.9191059Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-06T15:39:28.9192270Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-06T15:39:28.9192932Z hint:
+2026-10-06T15:39:28.9193305Z hint: 	git branch -m <name>
+2026-10-06T15:39:28.9193728Z hint:
+2026-10-06T15:39:28.9194317Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-06T15:39:28.9195644Z Initialized empty Git repository in /home/runner/work/Nagi/Nagi/.git/
+2026-10-06T15:39:28.9214290Z [command]/usr/bin/git remote add origin https://github.com/disnana/Nagi
+2026-10-06T15:39:28.9257780Z ##[endgroup]
+2026-10-06T15:39:28.9259347Z ##[group]Disabling automatic garbage collection
+2026-10-06T15:39:28.9263464Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-06T15:39:28.9301125Z ##[endgroup]
+2026-10-06T15:39:28.9302152Z ##[group]Setting up auth
+2026-10-06T15:39:28.9314017Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-06T15:39:28.9421618Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-06T15:39:28.9671975Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-06T15:39:28.9710822Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-06T15:39:28.9911178Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-06T15:39:28.9943165Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-06T15:39:29.0135134Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-06T15:39:29.0171923Z ##[endgroup]
+2026-10-06T15:39:29.0172901Z ##[group]Fetching the repository
+2026-10-06T15:39:29.0179577Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +cff579d1a239726dff532dc83aaea44710038d91:refs/remotes/pull/88/merge
+2026-10-06T15:39:30.1986253Z From https://github.com/disnana/Nagi
+2026-10-06T15:39:30.1987993Z  * [new ref]         cff579d1a239726dff532dc83aaea44710038d91 -> pull/88/merge
+2026-10-06T15:39:30.1994240Z ##[endgroup]
+2026-10-06T15:39:30.1995212Z ##[group]Determining the checkout info
+2026-10-06T15:39:30.1996229Z ##[endgroup]
+2026-10-06T15:39:30.1997173Z [command]/usr/bin/git sparse-checkout disable
+2026-10-06T15:39:30.2048868Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-06T15:39:30.2078343Z ##[group]Checking out the ref
+2026-10-06T15:39:30.2080819Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/88/merge
+2026-10-06T15:39:30.3084991Z Note: switching to 'refs/remotes/pull/88/merge'.
+2026-10-06T15:39:30.3085779Z 
+2026-10-06T15:39:30.3086370Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-06T15:39:30.3087762Z changes and commit them, and you can discard any commits you make in this
+2026-10-06T15:39:30.3089146Z state without impacting any branches by switching back to a branch.
+2026-10-06T15:39:30.3089945Z 
+2026-10-06T15:39:30.3090588Z If you want to create a new branch to retain commits you create, you may
+2026-10-06T15:39:30.3092313Z do so (now or later) by using -c with the switch command. Example:
+2026-10-06T15:39:30.3092994Z 
+2026-10-06T15:39:30.3093345Z   git switch -c <new-branch-name>
+2026-10-06T15:39:30.3093907Z 
+2026-10-06T15:39:30.3094431Z Or undo this operation with:
+2026-10-06T15:39:30.3095018Z 
+2026-10-06T15:39:30.3095474Z   git switch -
+2026-10-06T15:39:30.3096077Z 
+2026-10-06T15:39:30.3097091Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-06T15:39:30.3098155Z 
+2026-10-06T15:39:30.3099394Z HEAD is now at cff579d Merge 34ac4d585084877372965e3d58ed5c2002604529 into 9ba4a104be6f65dba61eda0c7b1ef0f98c892cf7
+2026-10-06T15:39:30.3103699Z ##[endgroup]
+2026-10-06T15:39:30.3139581Z [command]/usr/bin/git log -1 --format=%H
+2026-10-06T15:39:30.3163126Z cff579d1a239726dff532dc83aaea44710038d91
+2026-10-06T15:39:30.3484680Z ##[group]Run actions/setup-python@v5
+2026-10-06T15:39:30.3485632Z with:
+2026-10-06T15:39:30.3486327Z   python-version: 3.12
+2026-10-06T15:39:30.3487085Z   cache: pip
+2026-10-06T15:39:30.3487918Z   cache-dependency-path: website/requirements.txt
+2026-10-06T15:39:30.3488972Z   check-latest: false
+2026-10-06T15:39:30.3496976Z   token: ***
+2026-10-06T15:39:30.3497752Z   update-environment: true
+2026-10-06T15:39:30.3498603Z   allow-prereleases: false
+2026-10-06T15:39:30.3499421Z   freethreaded: false
+2026-10-06T15:39:30.3500167Z ##[endgroup]
+2026-10-06T15:39:30.4628580Z ##[group]Installed versions
+2026-10-06T15:39:30.4696879Z (node:2164) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T15:39:30.4700336Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T15:39:30.4702637Z Successfully set up CPython (3.12.14)
+2026-10-06T15:39:30.4704824Z ##[endgroup]
+2026-10-06T15:39:30.4953285Z [command]/opt/hostedtoolcache/Python/3.12.14/x64/bin/pip cache dir
+2026-10-06T15:39:30.7485695Z /home/runner/.cache/pip
+2026-10-06T15:39:30.8345079Z Cache hit for: setup-python-Linux-x64-24.04-Ubuntu-python-3.12.14-pip-614165bb5e0138c76fe9b694a85dbef945cc0028555b3ce409b930ff053586eb
+2026-10-06T15:39:30.8412877Z (node:2164) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-06T15:39:31.0442268Z Received 7596264 of 7596264 (100.0%), 46.7 MBs/sec
+2026-10-06T15:39:31.0442757Z Cache Size: ~7 MB (7596264 B)
+2026-10-06T15:39:31.0465059Z [command]/usr/bin/tar -xf /home/runner/work/_temp/ab742752-3b8d-4626-92ad-44a4c031d0a6/cache.tzst -P -C /home/runner/work/Nagi/Nagi --use-compress-program unzstd
+2026-10-06T15:39:31.0666261Z Cache restored successfully
+2026-10-06T15:39:31.0674304Z Cache restored from key: setup-python-Linux-x64-24.04-Ubuntu-python-3.12.14-pip-f4a5294b4bd46adaf127fd95bcfc2d415f7eaa1f75e1723bb333e1a6f0ebebec
+2026-10-06T15:39:31.0819809Z ##[group]Run python -m pip install -r website/requirements.txt
+2026-10-06T15:39:31.0820297Z [36;1mpython -m pip install -r website/requirements.txt[0m
+2026-10-06T15:39:31.1026810Z shell: /usr/bin/bash -e {0}
+2026-10-06T15:39:31.1027050Z env:
+2026-10-06T15:39:31.1027296Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:31.1027654Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T15:39:31.1027994Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:31.1028299Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:31.1028612Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:31.1028914Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T15:39:31.1029178Z ##[endgroup]
+2026-10-06T15:39:31.6328095Z Collecting markdown-it-py==4.2.0 (from -r website/requirements.txt (line 1))
+2026-10-06T15:39:31.6340808Z   Using cached markdown_it_py-4.2.0-py3-none-any.whl.metadata (7.4 kB)
+2026-10-06T15:39:31.6547484Z Collecting mdurl==0.1.2 (from -r website/requirements.txt (line 2))
+2026-10-06T15:39:31.6557675Z   Using cached mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+2026-10-06T15:39:31.6692337Z Collecting Pygments==2.21.0 (from -r website/requirements.txt (line 3))
+2026-10-06T15:39:31.6702373Z   Using cached pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+2026-10-06T15:39:31.6733441Z Using cached markdown_it_py-4.2.0-py3-none-any.whl (91 kB)
+2026-10-06T15:39:31.6743296Z Using cached mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+2026-10-06T15:39:31.6752763Z Using cached pygments-2.21.0-py3-none-any.whl (1.3 MB)
+2026-10-06T15:39:31.7143755Z Installing collected packages: Pygments, mdurl, markdown-it-py
+2026-10-06T15:39:32.3726490Z 
+2026-10-06T15:39:32.3735885Z Successfully installed Pygments-2.21.0 markdown-it-py-4.2.0 mdurl-0.1.2
+2026-10-06T15:39:32.4187033Z ##[group]Run python website/build.py \
+2026-10-06T15:39:32.4187320Z [36;1mpython website/build.py \[0m
+2026-10-06T15:39:32.4187611Z [36;1m--repository "https://github.com/$SITE_REPOSITORY"[0m
+2026-10-06T15:39:32.4244288Z shell: /usr/bin/bash -e {0}
+2026-10-06T15:39:32.4244495Z env:
+2026-10-06T15:39:32.4244718Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:32.4245063Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T15:39:32.4245408Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:32.4245706Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:32.4246010Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:32.4246312Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T15:39:32.4246589Z   SITE_REPOSITORY: disnana/Nagi
+2026-10-06T15:39:32.4246797Z ##[endgroup]
+2026-10-06T15:39:33.5808613Z Built 92 pages; all local links, anchors and assets verified: /home/runner/work/Nagi/Nagi/build/website
+2026-10-06T15:39:33.6036164Z ##[group]Run actions/upload-pages-artifact@v3
+2026-10-06T15:39:33.6036427Z with:
+2026-10-06T15:39:33.6036598Z   path: build/website
+2026-10-06T15:39:33.6036798Z   name: github-pages
+2026-10-06T15:39:33.6036978Z   retention-days: 1
+2026-10-06T15:39:33.6037154Z env:
+2026-10-06T15:39:33.6037373Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.6037718Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T15:39:33.6038053Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.6038367Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.6038669Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.6038968Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T15:39:33.6039233Z ##[endgroup]
+2026-10-06T15:39:33.6087268Z ##[start-action display=Archive artifact;id=__actions_upload-pages-artifact.__run]
+2026-10-06T15:39:33.6109533Z ##[group]Run echo ::group::Archive artifact
+2026-10-06T15:39:33.6109809Z [36;1mecho ::group::Archive artifact[0m
+2026-10-06T15:39:33.6110029Z [36;1mtar \[0m
+2026-10-06T15:39:33.6110251Z [36;1m  --dereference --hard-dereference \[0m
+2026-10-06T15:39:33.6110504Z [36;1m  --directory "$INPUT_PATH" \[0m
+2026-10-06T15:39:33.6110753Z [36;1m  -cvf "$RUNNER_TEMP/artifact.tar" \[0m
+2026-10-06T15:39:33.6110987Z [36;1m  --exclude=.git \[0m
+2026-10-06T15:39:33.6111198Z [36;1m  --exclude=.github \[0m
+2026-10-06T15:39:33.6111394Z [36;1m  .[0m
+2026-10-06T15:39:33.6111774Z [36;1mecho ::endgroup::[0m
+2026-10-06T15:39:33.6136002Z shell: /usr/bin/sh -e {0}
+2026-10-06T15:39:33.6136216Z env:
+2026-10-06T15:39:33.6136447Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.6136802Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T15:39:33.6137141Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.6137469Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.6137770Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.6138071Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T15:39:33.6138488Z   INPUT_PATH: build/website
+2026-10-06T15:39:33.6138683Z ##[endgroup]
+2026-10-06T15:39:33.6174595Z ##[group]Archive artifact
+2026-10-06T15:39:33.6186361Z ./
+2026-10-06T15:39:33.6186620Z ./CNAME
+2026-10-06T15:39:33.6186789Z ./.nojekyll
+2026-10-06T15:39:33.6186981Z ./assets/
+2026-10-06T15:39:33.6187224Z ./assets/site.css
+2026-10-06T15:39:33.6187471Z ./assets/highlight.css
+2026-10-06T15:39:33.6187710Z ./assets/favicon.svg
+2026-10-06T15:39:33.6205735Z ./assets/http-capacity/
+2026-10-06T15:39:33.6206126Z ./assets/http-capacity/http-connections.png
+2026-10-06T15:39:33.6206548Z ./assets/http-capacity/http-rates.png
+2026-10-06T15:39:33.6206897Z ./assets/http-capacity/http-endurance.svg
+2026-10-06T15:39:33.6207287Z ./assets/http-capacity/http-endurance.png
+2026-10-06T15:39:33.6207684Z ./assets/http-capacity/http-connections.svg
+2026-10-06T15:39:33.6208056Z ./assets/http-capacity/http-rates.svg
+2026-10-06T15:39:33.6208377Z ./assets/site.js
+2026-10-06T15:39:33.6208643Z ./assets/theme.js
+2026-10-06T15:39:33.6208889Z ./en/
+2026-10-06T15:39:33.6209127Z ./en/index.html
+2026-10-06T15:39:33.6209372Z ./en/404.html
+2026-10-06T15:39:33.6209604Z ./en/docs/
+2026-10-06T15:39:33.6209839Z ./en/docs/web-demo/
+2026-10-06T15:39:33.6210125Z ./en/docs/web-demo/index.html
+2026-10-06T15:39:33.6210443Z ./en/docs/compiler-internals/
+2026-10-06T15:39:33.6210775Z ./en/docs/compiler-internals/index.html
+2026-10-06T15:39:33.6211131Z ./en/docs/http-stdlib-performance/
+2026-10-06T15:39:33.6211634Z ./en/docs/http-stdlib-performance/index.html
+2026-10-06T15:39:33.6212029Z ./en/docs/http/
+2026-10-06T15:39:33.6212291Z ./en/docs/http/index.html
+2026-10-06T15:39:33.6212579Z ./en/docs/http-server/
+2026-10-06T15:39:33.6212884Z ./en/docs/http-server/index.html
+2026-10-06T15:39:33.6213243Z ./en/docs/classes/
+2026-10-06T15:39:33.6213750Z ./en/docs/classes/index.html
+2026-10-06T15:39:33.6214050Z ./en/docs/builtins/
+2026-10-06T15:39:33.6214340Z ./en/docs/builtins/index.html
+2026-10-06T15:39:33.6214639Z ./en/docs/supervisor/
+2026-10-06T15:39:33.6214922Z ./en/docs/supervisor/index.html
+2026-10-06T15:39:33.6215221Z ./en/docs/ownership/
+2026-10-06T15:39:33.6215504Z ./en/docs/ownership/index.html
+2026-10-06T15:39:33.6215816Z ./en/docs/library-design/
+2026-10-06T15:39:33.6216128Z ./en/docs/library-design/index.html
+2026-10-06T15:39:33.6216479Z ./en/docs/modules-and-rust/
+2026-10-06T15:39:33.6216805Z ./en/docs/modules-and-rust/index.html
+2026-10-06T15:39:33.6217176Z ./en/docs/sql-check/
+2026-10-06T15:39:33.6217457Z ./en/docs/sql-check/index.html
+2026-10-06T15:39:33.6217770Z ./en/docs/json/
+2026-10-06T15:39:33.6218025Z ./en/docs/json/index.html
+2026-10-06T15:39:33.6218333Z ./en/docs/error-handling/
+2026-10-06T15:39:33.6218636Z ./en/docs/error-handling/index.html
+2026-10-06T15:39:33.6218958Z ./en/docs/memory-model/
+2026-10-06T15:39:33.6219262Z ./en/docs/memory-model/index.html
+2026-10-06T15:39:33.6219584Z ./en/docs/async/
+2026-10-06T15:39:33.6219838Z ./en/docs/async/index.html
+2026-10-06T15:39:33.6220130Z ./en/docs/introduction/
+2026-10-06T15:39:33.6220415Z ./en/docs/introduction/index.html
+2026-10-06T15:39:33.6220739Z ./en/docs/http-capacity/
+2026-10-06T15:39:33.6221038Z ./en/docs/http-capacity/index.html
+2026-10-06T15:39:33.6221357Z ./en/docs/libraries/
+2026-10-06T15:39:33.6221753Z ./en/docs/libraries/index.html
+2026-10-06T15:39:33.6222055Z ./en/docs/low-language/
+2026-10-06T15:39:33.6222342Z ./en/docs/low-language/index.html
+2026-10-06T15:39:33.6222650Z ./en/docs/index.html
+2026-10-06T15:39:33.6222925Z ./en/docs/actor-performance/
+2026-10-06T15:39:33.6223245Z ./en/docs/actor-performance/index.html
+2026-10-06T15:39:33.6223594Z ./en/docs/getting-started/
+2026-10-06T15:39:33.6223886Z ./en/docs/getting-started/index.html
+2026-10-06T15:39:33.6224213Z ./en/docs/vscode-extension/
+2026-10-06T15:39:33.6224529Z ./en/docs/vscode-extension/index.html
+2026-10-06T15:39:33.6224850Z ./en/docs/actor/
+2026-10-06T15:39:33.6225097Z ./en/docs/actor/index.html
+2026-10-06T15:39:33.6225372Z ./en/docs/database/
+2026-10-06T15:39:33.6225793Z ./en/docs/database/index.html
+2026-10-06T15:39:33.6226091Z ./en/docs/ffi/
+2026-10-06T15:39:33.6226340Z ./en/docs/ffi/index.html
+2026-10-06T15:39:33.6226619Z ./en/docs/http-legacy/
+2026-10-06T15:39:33.6226904Z ./en/docs/http-legacy/index.html
+2026-10-06T15:39:33.6227219Z ./en/docs/task-handles/
+2026-10-06T15:39:33.6227541Z ./en/docs/task-handles/index.html
+2026-10-06T15:39:33.6227855Z ./en/docs/code-map/
+2026-10-06T15:39:33.6228118Z ./en/docs/code-map/index.html
+2026-10-06T15:39:33.6228416Z ./en/docs/queue/
+2026-10-06T15:39:33.6228664Z ./en/docs/queue/index.html
+2026-10-06T15:39:33.6228943Z ./en/docs/performance/
+2026-10-06T15:39:33.6229225Z ./en/docs/performance/index.html
+2026-10-06T15:39:33.6229530Z ./en/docs/editor/
+2026-10-06T15:39:33.6229788Z ./en/docs/editor/index.html
+2026-10-06T15:39:33.6230086Z ./en/docs/actor-reference/
+2026-10-06T15:39:33.6230385Z ./en/docs/actor-reference/index.html
+2026-10-06T15:39:33.6230729Z ./en/docs/library-examples/
+2026-10-06T15:39:33.6231037Z ./en/docs/library-examples/index.html
+2026-10-06T15:39:33.6231362Z ./en/docs/types/
+2026-10-06T15:39:33.6231744Z ./en/docs/types/index.html
+2026-10-06T15:39:33.6232035Z ./en/docs/measurements/
+2026-10-06T15:39:33.6232325Z ./en/docs/measurements/index.html
+2026-10-06T15:39:33.6232630Z ./en/docs/roadmap/
+2026-10-06T15:39:33.6232889Z ./en/docs/roadmap/index.html
+2026-10-06T15:39:33.6233189Z ./en/docs/language-guide/
+2026-10-06T15:39:33.6233489Z ./en/docs/language-guide/index.html
+2026-10-06T15:39:33.6233808Z ./en/docs/view-and-zero-copy/
+2026-10-06T15:39:33.6234127Z ./en/docs/view-and-zero-copy/index.html
+2026-10-06T15:39:33.6234455Z ./en/docs/concurrency/
+2026-10-06T15:39:33.6234738Z ./en/docs/concurrency/index.html
+2026-10-06T15:39:33.6235035Z ./en/docs/projects/
+2026-10-06T15:39:33.6235298Z ./en/docs/projects/index.html
+2026-10-06T15:39:33.6235739Z ./en/docs/result-api/
+2026-10-06T15:39:33.6236014Z ./en/docs/result-api/index.html
+2026-10-06T15:39:33.6236322Z ./en/docs/syntax/
+2026-10-06T15:39:33.6236578Z ./en/docs/syntax/index.html
+2026-10-06T15:39:33.6236861Z ./index.html
+2026-10-06T15:39:33.6237092Z ./404.html
+2026-10-06T15:39:33.6237331Z ./sitemap.xml
+2026-10-06T15:39:33.6237562Z ./docs/
+2026-10-06T15:39:33.6237788Z ./docs/web-demo/
+2026-10-06T15:39:33.6238040Z ./docs/web-demo/index.html
+2026-10-06T15:39:33.6238335Z ./docs/compiler-internals/
+2026-10-06T15:39:33.6238632Z ./docs/compiler-internals/index.html
+2026-10-06T15:39:33.6238975Z ./docs/http-stdlib-performance/
+2026-10-06T15:39:33.6239313Z ./docs/http-stdlib-performance/index.html
+2026-10-06T15:39:33.6239658Z ./docs/http/
+2026-10-06T15:39:33.6239907Z ./docs/http/index.html
+2026-10-06T15:39:33.6240178Z ./docs/http-server/
+2026-10-06T15:39:33.6240444Z ./docs/http-server/index.html
+2026-10-06T15:39:33.6240732Z ./docs/classes/
+2026-10-06T15:39:33.6240994Z ./docs/classes/index.html
+2026-10-06T15:39:33.6241275Z ./docs/builtins/
+2026-10-06T15:39:33.6241740Z ./docs/builtins/index.html
+2026-10-06T15:39:33.6242024Z ./docs/supervisor/
+2026-10-06T15:39:33.6242306Z ./docs/supervisor/index.html
+2026-10-06T15:39:33.6242605Z ./docs/ownership/
+2026-10-06T15:39:33.6242863Z ./docs/ownership/index.html
+2026-10-06T15:39:33.6243148Z ./docs/library-design/
+2026-10-06T15:39:33.6243431Z ./docs/library-design/index.html
+2026-10-06T15:39:33.6243754Z ./docs/modules-and-rust/
+2026-10-06T15:39:33.6244052Z ./docs/modules-and-rust/index.html
+2026-10-06T15:39:33.6244362Z ./docs/sql-check/
+2026-10-06T15:39:33.6244615Z ./docs/sql-check/index.html
+2026-10-06T15:39:33.6244894Z ./docs/json/
+2026-10-06T15:39:33.6245129Z ./docs/json/index.html
+2026-10-06T15:39:33.6245394Z ./docs/error-handling/
+2026-10-06T15:39:33.6245668Z ./docs/error-handling/index.html
+2026-10-06T15:39:33.6245976Z ./docs/memory-model/
+2026-10-06T15:39:33.6246251Z ./docs/memory-model/index.html
+2026-10-06T15:39:33.6246537Z ./docs/async/
+2026-10-06T15:39:33.6246781Z ./docs/async/index.html
+2026-10-06T15:39:33.6247077Z ./docs/introduction/
+2026-10-06T15:39:33.6247362Z ./docs/introduction/index.html
+2026-10-06T15:39:33.6247803Z ./docs/http-capacity/
+2026-10-06T15:39:33.6248222Z ./docs/http-capacity/index.html
+2026-10-06T15:39:33.6248546Z ./docs/libraries/
+2026-10-06T15:39:33.6248806Z ./docs/libraries/index.html
+2026-10-06T15:39:33.6249083Z ./docs/low-language/
+2026-10-06T15:39:33.6249349Z ./docs/low-language/index.html
+2026-10-06T15:39:33.6249551Z ./docs/index.html
+2026-10-06T15:39:33.6249729Z ./docs/actor-performance/
+2026-10-06T15:39:33.6249931Z ./docs/actor-performance/index.html
+2026-10-06T15:39:33.6250149Z ./docs/getting-started/
+2026-10-06T15:39:33.6250338Z ./docs/getting-started/index.html
+2026-10-06T15:39:33.6250543Z ./docs/vscode-extension/
+2026-10-06T15:39:33.6250750Z ./docs/vscode-extension/index.html
+2026-10-06T15:39:33.6250951Z ./docs/actor/
+2026-10-06T15:39:33.6251115Z ./docs/actor/index.html
+2026-10-06T15:39:33.6251295Z ./docs/database/
+2026-10-06T15:39:33.6251634Z ./docs/database/index.html
+2026-10-06T15:39:33.6251897Z ./docs/ffi/
+2026-10-06T15:39:33.6252122Z ./docs/ffi/index.html
+2026-10-06T15:39:33.6252382Z ./docs/http-legacy/
+2026-10-06T15:39:33.6252650Z ./docs/http-legacy/index.html
+2026-10-06T15:39:33.6252956Z ./docs/task-handles/
+2026-10-06T15:39:33.6253242Z ./docs/task-handles/index.html
+2026-10-06T15:39:33.6253540Z ./docs/code-map/
+2026-10-06T15:39:33.6253725Z ./docs/code-map/index.html
+2026-10-06T15:39:33.6253908Z ./docs/queue/
+2026-10-06T15:39:33.6254078Z ./docs/queue/index.html
+2026-10-06T15:39:33.6254260Z ./docs/performance/
+2026-10-06T15:39:33.6254450Z ./docs/performance/index.html
+2026-10-06T15:39:33.6254643Z ./docs/editor/
+2026-10-06T15:39:33.6254813Z ./docs/editor/index.html
+2026-10-06T15:39:33.6254999Z ./docs/actor-reference/
+2026-10-06T15:39:33.6255188Z ./docs/actor-reference/index.html
+2026-10-06T15:39:33.6255405Z ./docs/library-examples/
+2026-10-06T15:39:33.6255599Z ./docs/library-examples/index.html
+2026-10-06T15:39:33.6255800Z ./docs/types/
+2026-10-06T15:39:33.6256114Z ./docs/types/index.html
+2026-10-06T15:39:33.6256314Z ./docs/measurements/
+2026-10-06T15:39:33.6256500Z ./docs/measurements/index.html
+2026-10-06T15:39:33.6256696Z ./docs/roadmap/
+2026-10-06T15:39:33.6256868Z ./docs/roadmap/index.html
+2026-10-06T15:39:33.6257063Z ./docs/language-guide/
+2026-10-06T15:39:33.6257258Z ./docs/language-guide/index.html
+2026-10-06T15:39:33.6257467Z ./docs/view-and-zero-copy/
+2026-10-06T15:39:33.6257669Z ./docs/view-and-zero-copy/index.html
+2026-10-06T15:39:33.6257880Z ./docs/concurrency/
+2026-10-06T15:39:33.6258061Z ./docs/concurrency/index.html
+2026-10-06T15:39:33.6258254Z ./docs/projects/
+2026-10-06T15:39:33.6258426Z ./docs/projects/index.html
+2026-10-06T15:39:33.6258612Z ./docs/result-api/
+2026-10-06T15:39:33.6258803Z ./docs/result-api/index.html
+2026-10-06T15:39:33.6258995Z ./docs/syntax/
+2026-10-06T15:39:33.6259163Z ./docs/syntax/index.html
+2026-10-06T15:39:33.6259523Z ##[endgroup]
+2026-10-06T15:39:33.6268698Z ##[end-action id=__actions_upload-pages-artifact.__run;outcome=success;conclusion=success;duration_ms=18]
+2026-10-06T15:39:33.6271990Z ##[start-action display=Archive artifact;id=__actions_upload-pages-artifact.__run_2]
+2026-10-06T15:39:33.6276250Z ##[end-action id=__actions_upload-pages-artifact.__run_2;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-06T15:39:33.6278369Z ##[start-action display=Archive artifact;id=__actions_upload-pages-artifact.__run_3]
+2026-10-06T15:39:33.6281238Z ##[end-action id=__actions_upload-pages-artifact.__run_3;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-06T15:39:33.6283137Z ##[start-action display=Upload artifact;id=__actions_upload-pages-artifact.upload-artifact]
+2026-10-06T15:39:33.6325851Z ##[group]Run actions/upload-artifact@v4
+2026-10-06T15:39:33.6326084Z with:
+2026-10-06T15:39:33.6326244Z   name: github-pages
+2026-10-06T15:39:33.6326441Z   path: /home/runner/work/_temp/artifact.tar
+2026-10-06T15:39:33.6326669Z   retention-days: 1
+2026-10-06T15:39:33.6326863Z   if-no-files-found: error
+2026-10-06T15:39:33.6327069Z   compression-level: 6
+2026-10-06T15:39:33.6327257Z   overwrite: false
+2026-10-06T15:39:33.6327441Z   include-hidden-files: false
+2026-10-06T15:39:33.6327778Z env:
+2026-10-06T15:39:33.6327991Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.6328350Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T15:39:33.6328680Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.6328974Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.6329269Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.6329568Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T15:39:33.6329823Z ##[endgroup]
+2026-10-06T15:39:33.7662315Z (node:2228) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T15:39:33.7662915Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T15:39:33.7722168Z With the provided path, there will be 1 file uploaded
+2026-10-06T15:39:33.7732317Z Artifact name is valid!
+2026-10-06T15:39:33.7732689Z Root directory input is valid!
+2026-10-06T15:39:33.9720582Z Beginning upload of artifact content to blob storage
+2026-10-06T15:39:34.0369262Z (node:2228) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-06T15:39:34.0886082Z Uploaded bytes 826693
+2026-10-06T15:39:34.1016019Z Finished uploading artifact content to blob storage!
+2026-10-06T15:39:34.1016804Z SHA256 digest of uploaded artifact zip is 56d87800558de01d391e1bc320a09ed4ee020ddebf7851dd2c69bb5976908b5b
+2026-10-06T15:39:34.1020270Z Finalizing artifact upload
+2026-10-06T15:39:34.3230500Z Artifact github-pages.zip successfully finalized. Artifact ID 11424816675
+2026-10-06T15:39:34.3232066Z Artifact github-pages has been successfully uploaded! Final size is 826693 bytes. Artifact ID is 11424816675
+2026-10-06T15:39:34.3237594Z Artifact download URL: https://github.com/disnana/Nagi/actions/runs/37489342523/artifacts/11424816675
+2026-10-06T15:39:34.3339193Z ##[end-action id=__actions_upload-pages-artifact.upload-artifact;outcome=success;conclusion=success;duration_ms=705]
+2026-10-06T15:39:34.3423902Z Post job cleanup.
+2026-10-06T15:39:34.4422961Z (node:2240) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T15:39:34.4423561Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T15:39:34.4586667Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/Nagi/Nagi --files-from manifest.txt --use-compress-program zstdmt
+2026-10-06T15:39:34.6032888Z (node:2240) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-06T15:39:34.7699543Z Sent 7595262 of 7595262 (100.0%), 41.9 MBs/sec
+2026-10-06T15:39:35.1030302Z Cache saved with the key: setup-python-Linux-x64-24.04-Ubuntu-python-3.12.14-pip-614165bb5e0138c76fe9b694a85dbef945cc0028555b3ce409b930ff053586eb
+2026-10-06T15:39:35.1166563Z Post job cleanup.
+2026-10-06T15:39:35.1859084Z [command]/usr/bin/git version
+2026-10-06T15:39:35.1895661Z git version 2.55.0
+2026-10-06T15:39:35.1925262Z Temporarily overriding HOME='/home/runner/work/_temp/534464ca-b85d-4861-9447-adc7c0fe6e14' before making global git config changes
+2026-10-06T15:39:35.1926375Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-06T15:39:35.1929785Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Nagi/Nagi
+2026-10-06T15:39:35.1963790Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-06T15:39:35.1993820Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-06T15:39:35.2220889Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-06T15:39:35.2248551Z http.https://github.com/.extraheader
+2026-10-06T15:39:35.2258527Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-06T15:39:35.2289524Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-06T15:39:35.2525785Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-06T15:39:35.2566551Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-06T15:39:35.2912145Z Cleaning up orphan processes
+2026-10-06T15:39:35.3157323Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+

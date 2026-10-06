@@ -1,0 +1,25 @@
+Independent follow-up review of sticky receive retirement fix — 2026-10-06
+
+Disposition: P2 quadratic sticky-receive retirement finding is resolved in the reviewed runtime source. No additional defect found in this change.
+
+Before source SHA-256: c7d77eb61b0cb640894b5c4bffd4f24e1cc3ca4bb892357cb5588aefcf9d39c3
+After source SHA-256: 3551b03383e597b4853c9dc4d163d076a48990aa77b021bb928f85c01c540392
+Immutable snapshots: runtime_src_task.rs / runtime_src_task_after.rs.
+
+Reasoning: TaskScope is the only JoinSet consumer. record publishes every native join into ticket accounting synchronously, so an empty JoinSet is sufficient to skip a redundant drain for the sticky primary branch. When joins remain, receive still awaits their actual drain before returning a fault. Once drained, the branch clones the same primary cause, drops its Task (publishing ABANDONED before dropping buffered T), and retires that one joined ticket. Primary/related cause retention, requested cancellation, and actual-join responsibility remain unchanged. Arbitrary buffered-T Drop panic remains within the existing explicitly excluded recovery boundary; published abandonment permits a later explicit drain sweep if normal execution resumes. External Task Drops continue to be swept by explicit join/drain as before.
+
+Independent release remeasurement used the identical public fault_cost.rs harness, current-thread runtime, three repeats, and excludes spawn/join from the timed receive/discard loop. Raw samples and log hashes are in sticky-retirement-before-after.json.
+
+items       receive before       receive after        discard after
+128         46,289 ns            17,471 ns            11,494 ns
+1024        1,284,534 ns         131,799 ns           95,516 ns
+8192        97,300,511 ns        1,754,456 ns         1,124,789 ns
+
+At 8192 handles the median receive time improved approximately 55.5 times. The structural full-map sweep per fault receive is removed; the remaining short-sample timing variability should not be presented as a production latency guarantee.
+
+Rechecks:
+- Existing native task suite: 17 passed, cost1 ignored (runtime-task-only-after.log).
+- Four independently authored public API combinations: 4 passed (independent-public-counterexamples-after.log). These cover sticky result suppression, discarded-child continuation and later fault, pending receive Future Drop followed by cancel/reuse, and wrong-owner isolation.
+- Same public release cost harness: exit0 (sticky-retirement-cost-after.log).
+
+No repository edits performed. Linux x86_64 only. No broadened claim of full S1, all-OS, socket suite, arbitrary Drop panic, or side-effect rollback verification.

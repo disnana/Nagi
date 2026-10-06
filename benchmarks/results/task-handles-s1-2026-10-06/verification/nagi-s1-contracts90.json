@@ -1,0 +1,1358 @@
+{
+  "matched": 90,
+  "observations": [
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "receive-copy-nagi",
+        "primary_line": 0,
+        "source": "receive-copy.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "receive-copy-low",
+        "primary_line": 0,
+        "source": "receive-copy.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "typed-result",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "receive-unit-nagi",
+        "primary_line": 0,
+        "source": "receive-unit.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "typed-result",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "receive-unit-low",
+        "primary_line": 0,
+        "source": "receive-unit.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "unreceived-unit-nagi",
+        "primary_line": 6,
+        "source": "unreceived-unit.nagi"
+      },
+      "diagnostic": "error: line 6: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/unreceived-unit.nagi:6\n 6 |         task = spawn work()  # primary",
+      "line": 6,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "unreceived-unit-low",
+        "primary_line": 4,
+        "source": "unreceived-unit.low"
+      },
+      "diagnostic": "error: line 4: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/unreceived-unit.low:4\n 4 |         let task = spawn work(); # primary",
+      "line": 4,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "typed-result",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "receive-owned-nagi",
+        "primary_line": 0,
+        "source": "receive-owned.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "typed-result",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "receive-owned-low",
+        "primary_line": 0,
+        "source": "receive-owned.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "unreceived-owned-nagi",
+        "primary_line": 6,
+        "source": "unreceived-owned.nagi"
+      },
+      "diagnostic": "error: line 6: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/unreceived-owned.nagi:6\n 6 |         task = spawn work()  # primary",
+      "line": 6,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "unreceived-owned-low",
+        "primary_line": 4,
+        "source": "unreceived-owned.low"
+      },
+      "diagnostic": "error: line 4: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/unreceived-owned.low:4\n 4 |         let task = spawn work(); # primary",
+      "line": 4,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "typed-result",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "receive-result-nagi",
+        "primary_line": 0,
+        "source": "receive-result.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "typed-result",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "receive-result-low",
+        "primary_line": 0,
+        "source": "receive-result.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "unreceived-result-nagi",
+        "primary_line": 6,
+        "source": "unreceived-result.nagi"
+      },
+      "diagnostic": "error: line 6: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/unreceived-result.nagi:6\n 6 |         task = spawn work()  # primary",
+      "line": 6,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "unreceived-result-low",
+        "primary_line": 4,
+        "source": "unreceived-result.low"
+      },
+      "diagnostic": "error: line 4: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/unreceived-result.low:4\n 4 |         let task = spawn work(); # primary",
+      "line": 4,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "unreceived-copy-nagi",
+        "primary_line": 6,
+        "source": "unreceived-copy.nagi"
+      },
+      "diagnostic": "error: line 6: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/unreceived-copy.nagi:6\n 6 |         task = spawn work()  # primary",
+      "line": 6,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "unreceived-copy-low",
+        "primary_line": 4,
+        "source": "unreceived-copy.low"
+      },
+      "diagnostic": "error: line 4: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/unreceived-copy.low:4\n 4 |         let task = spawn work(); # primary",
+      "line": 4,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "explicit-discard",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "discard-nagi",
+        "primary_line": 0,
+        "source": "discard.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "explicit-discard",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "discard-low",
+        "primary_line": 0,
+        "source": "discard.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "move-obligation",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "move-alias-nagi",
+        "primary_line": 0,
+        "source": "move-alias.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "move-obligation",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "move-alias-low",
+        "primary_line": 0,
+        "source": "move-alias.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": true,
+        "name": "double-await-nagi",
+        "primary_line": 8,
+        "source": "double-await.nagi"
+      },
+      "diagnostic": "error: line 8: task はmove後に使用されています\n --> /workspace/Nagi/tests/task-handles/double-await.nagi:8\n 8 |         second = await task  # primary",
+      "line": 8,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": false,
+        "name": "double-await-low",
+        "primary_line": 6,
+        "source": "double-await.low"
+      },
+      "diagnostic": "error: line 6: task はmove後に使用されています\n --> /workspace/Nagi/tests/task-handles/double-await.low:6\n 6 |         let second = await task; # primary",
+      "line": 6,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": true,
+        "name": "double-discard-nagi",
+        "primary_line": 10,
+        "source": "double-discard.nagi"
+      },
+      "diagnostic": "error: line 10: task はmove後に使用されています\n --> /workspace/Nagi/tests/task-handles/double-discard.nagi:10\n 10 |         tasks.discard(task)  # primary",
+      "line": 10,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": false,
+        "name": "double-discard-low",
+        "primary_line": 7,
+        "source": "double-discard.low"
+      },
+      "diagnostic": "error: line 7: task はmove後に使用されています\n --> /workspace/Nagi/tests/task-handles/double-discard.low:7\n 7 |         tasks.discard(task); # primary",
+      "line": 7,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": true,
+        "name": "await-discard-nagi",
+        "primary_line": 10,
+        "source": "await-discard.nagi"
+      },
+      "diagnostic": "error: line 10: task はmove後に使用されています\n --> /workspace/Nagi/tests/task-handles/await-discard.nagi:10\n 10 |         tasks.discard(task)  # primary",
+      "line": 10,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "at-most-once",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": false,
+        "name": "await-discard-low",
+        "primary_line": 7,
+        "source": "await-discard.low"
+      },
+      "diagnostic": "error: line 7: task はmove後に使用されています\n --> /workspace/Nagi/tests/task-handles/await-discard.low:7\n 7 |         tasks.discard(task); # primary",
+      "line": 7,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "move-obligation",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": true,
+        "name": "move-old-handle-nagi",
+        "primary_line": 10,
+        "source": "move-old-handle.nagi"
+      },
+      "diagnostic": "error: line 10: task はmove後に使用されています\n --> /workspace/Nagi/tests/task-handles/move-old-handle.nagi:10\n 10 |         received = await task  # primary",
+      "line": 10,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "move-obligation",
+        "diagnostic": "move後",
+        "expected": "check-fail",
+        "high": false,
+        "name": "move-old-handle-low",
+        "primary_line": 7,
+        "source": "move-old-handle.low"
+      },
+      "diagnostic": "error: line 7: task はmove後に使用されています\n --> /workspace/Nagi/tests/task-handles/move-old-handle.low:7\n 7 |         let received = await task; # primary",
+      "line": 7,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "reassignment-nagi",
+        "primary_line": 7,
+        "source": "reassignment.nagi"
+      },
+      "diagnostic": "error: line 7: 未受取Taskを再代入で放棄できません。先にawaitまたはdiscardしてください\n --> /workspace/Nagi/tests/task-handles/reassignment.nagi:7\n 7 |         task = spawn work()  # primary",
+      "line": 7,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "reassignment-low",
+        "primary_line": 5,
+        "source": "reassignment.low"
+      },
+      "diagnostic": "error: line 5: 未受取Taskを再代入で放棄できません。先にawaitまたはdiscardしてください\n --> /workspace/Nagi/tests/task-handles/reassignment.low:5\n 5 |         task = spawn work(); # primary",
+      "line": 5,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "existing-no-shadow",
+        "diagnostic": "letを重複",
+        "expected": "check-fail",
+        "high": true,
+        "name": "shadow-nagi",
+        "primary_line": 8,
+        "source": "shadow.nagi"
+      },
+      "diagnostic": "error: line 8: 同じscope内でletを重複できません\n --> /workspace/Nagi/tests/task-handles/shadow.nagi:8\n 8 |             let task = spawn work()  # primary",
+      "line": 8,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "existing-no-shadow",
+        "diagnostic": "letを重複",
+        "expected": "check-fail",
+        "high": false,
+        "name": "shadow-low",
+        "primary_line": 6,
+        "source": "shadow.low"
+      },
+      "diagnostic": "error: line 6: 同じscope内でletを重複できません\n --> /workspace/Nagi/tests/task-handles/shadow.low:6\n 6 |             let task = spawn work(); # primary",
+      "line": 6,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "branch-nagi",
+        "primary_line": 6,
+        "source": "branch.nagi"
+      },
+      "diagnostic": "error: line 6: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/branch.nagi:6\n 6 |         task = spawn work()  # primary",
+      "line": 6,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "branch-low",
+        "primary_line": 4,
+        "source": "branch.low"
+      },
+      "diagnostic": "error: line 4: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/branch.low:4\n 4 |         let task = spawn work(); # primary",
+      "line": 4,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "loop-nagi",
+        "primary_line": 7,
+        "source": "loop.nagi"
+      },
+      "diagnostic": "error: line 7: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/loop.nagi:7\n 7 |             task = spawn work()  # primary",
+      "line": 7,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "loop-low",
+        "primary_line": 5,
+        "source": "loop.low"
+      },
+      "diagnostic": "error: line 5: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/loop.low:5\n 5 |             let task = spawn work(); # primary",
+      "line": 5,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "container-escape-nagi",
+        "primary_line": 7,
+        "source": "container-escape.nagi"
+      },
+      "diagnostic": "error: line 7: Taskは同じscopeの直接ローカルbinding専用です。引数・戻り値・field・container・wrapperへ保存できません\n --> /workspace/Nagi/tests/task-handles/container-escape.nagi:7\n 7 |         saved = [task]  # primary",
+      "line": 7,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "container-escape-low",
+        "primary_line": 5,
+        "source": "container-escape.low"
+      },
+      "diagnostic": "error: line 5: Taskは同じscopeの直接ローカルbinding専用です。引数・戻り値・field・container・wrapperへ保存できません\n --> /workspace/Nagi/tests/task-handles/container-escape.low:5\n 5 |         let saved = [task]; # primary",
+      "line": 5,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "same-scope",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "nested-scope-nagi",
+        "primary_line": 8,
+        "source": "nested-scope.nagi"
+      },
+      "diagnostic": "error: line 8: Taskは作成した同じscope内だけで使用できます\n --> /workspace/Nagi/tests/task-handles/nested-scope.nagi:8\n 8 |             received = await task  # primary",
+      "line": 8,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "same-scope",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "nested-scope-low",
+        "primary_line": 6,
+        "source": "nested-scope.low"
+      },
+      "diagnostic": "error: line 6: Taskは作成した同じscope内だけで使用できます\n --> /workspace/Nagi/tests/task-handles/nested-scope.low:6\n 6 |             let received = await task; # primary",
+      "line": 6,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "未定義",
+        "expected": "check-fail",
+        "high": true,
+        "name": "outside-scope-nagi",
+        "primary_line": 8,
+        "source": "outside-scope.nagi"
+      },
+      "diagnostic": "error: line 8: 未定義の変数: task\n --> /workspace/Nagi/tests/task-handles/outside-scope.nagi:8\n 8 |     invalid = task  # primary",
+      "line": 8,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "未定義",
+        "expected": "check-fail",
+        "high": false,
+        "name": "outside-scope-low",
+        "primary_line": 7,
+        "source": "outside-scope.low"
+      },
+      "diagnostic": "error: line 7: 未定義の変数: task\n --> /workspace/Nagi/tests/task-handles/outside-scope.low:7\n 7 |     let invalid = task; # primary",
+      "line": 7,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "scope",
+        "expected": "check-fail",
+        "high": true,
+        "name": "spawn-outside-scope-nagi",
+        "primary_line": 5,
+        "source": "spawn-outside-scope.nagi"
+      },
+      "diagnostic": "error: line 5: spawnはasync with scopeの中で使用してください\n --> /workspace/Nagi/tests/task-handles/spawn-outside-scope.nagi:5\n 5 |     task = spawn work()  # primary",
+      "line": 5,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "scope",
+        "expected": "check-fail",
+        "high": false,
+        "name": "spawn-outside-scope-low",
+        "primary_line": 3,
+        "source": "spawn-outside-scope.low"
+      },
+      "diagnostic": "error: line 3: spawnはasync with scopeの中で使用してください\n --> /workspace/Nagi/tests/task-handles/spawn-outside-scope.low:3\n 3 |     let task = spawn work(); # primary",
+      "line": 3,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "legacy-spawn-nagi",
+        "primary_line": 0,
+        "source": "legacy-spawn.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "legacy-spawn-low",
+        "primary_line": 0,
+        "source": "legacy-spawn.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "user-spawn-call-nagi",
+        "primary_line": 0,
+        "source": "user-spawn-call.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "user-spawn-call-low",
+        "primary_line": 0,
+        "source": "user-spawn-call.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "move-obligation",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "move-alias-unreceived-nagi",
+        "primary_line": 9,
+        "source": "move-alias-unreceived.nagi"
+      },
+      "diagnostic": "error: line 9: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/move-alias-unreceived.nagi:9\n 9 |         alias = move(task)  # primary",
+      "line": 9,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "move-obligation",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "move-alias-unreceived-low",
+        "primary_line": 6,
+        "source": "move-alias-unreceived.low"
+      },
+      "diagnostic": "error: line 6: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/move-alias-unreceived.low:6\n 6 |         let alias = move(task); # primary",
+      "line": 6,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "reassign-after-await-nagi",
+        "primary_line": 0,
+        "source": "reassign-after-await.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "reassign-after-await-low",
+        "primary_line": 0,
+        "source": "reassign-after-await.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "loop-consumed-nagi",
+        "primary_line": 0,
+        "source": "loop-consumed.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "loop-consumed-low",
+        "primary_line": 0,
+        "source": "loop-consumed.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "infrastructure-control",
+        "diagnostic": "型",
+        "expected": "check-fail",
+        "high": true,
+        "name": "checker-location-control-nagi",
+        "primary_line": 2,
+        "source": "checker-location-control.nagi"
+      },
+      "diagnostic": "error: line 2: 型が一致しません: expected i64, got str。変換は明示してください\n --> /workspace/Nagi/tests/task-handles/checker-location-control.nagi:2\n 2 |     value: i64 = \"wrong\"  # primary",
+      "line": 2,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "infrastructure-control",
+        "diagnostic": "型",
+        "expected": "check-fail",
+        "high": false,
+        "name": "checker-location-control-low",
+        "primary_line": 2,
+        "source": "checker-location-control.low"
+      },
+      "diagnostic": "error: line 2: 型が一致しません: expected i64, got str。変換は明示してください\n --> /workspace/Nagi/tests/task-handles/checker-location-control.low:2\n 2 |     let value: i64 = \"wrong\"; # primary",
+      "line": 2,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "bare-move-drop-nagi",
+        "primary_line": 7,
+        "source": "bare-move-drop.nagi"
+      },
+      "diagnostic": "error: line 7: Taskを裸の式で放棄できません。awaitまたはstd.task.discardを使用してください\n --> /workspace/Nagi/tests/task-handles/bare-move-drop.nagi:7\n 7 |         move(task)  # primary",
+      "line": 7,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "bare-move-drop-low",
+        "primary_line": 6,
+        "source": "bare-move-drop.low"
+      },
+      "diagnostic": "error: line 6: Taskを裸の式で放棄できません。awaitまたはstd.task.discardを使用してください\n --> /workspace/Nagi/tests/task-handles/bare-move-drop.low:6\n 6 |         move(task); # primary",
+      "line": 6,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "both-branches-consume-nagi",
+        "primary_line": 0,
+        "source": "both-branches-consume.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "both-branches-consume-low",
+        "primary_line": 0,
+        "source": "both-branches-consume.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "branch-regeneration-nagi",
+        "primary_line": 0,
+        "source": "branch-regeneration.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "branch-regeneration-low",
+        "primary_line": 0,
+        "source": "branch-regeneration.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "branch-partial-regeneration-nagi",
+        "primary_line": 5,
+        "source": "branch-partial-regeneration.nagi"
+      },
+      "diagnostic": "error: line 5: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/branch-partial-regeneration.nagi:5\n 5 |         task = spawn work()  # primary",
+      "line": 5,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "must-consume",
+        "diagnostic": "未受取Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "branch-partial-regeneration-low",
+        "primary_line": 4,
+        "source": "branch-partial-regeneration.low"
+      },
+      "diagnostic": "error: line 4: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください\n --> /workspace/Nagi/tests/task-handles/branch-partial-regeneration.low:4\n 4 |         let task = spawn work(); # primary",
+      "line": 4,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "same-scope",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "nested-resume-outer-nagi",
+        "primary_line": 0,
+        "source": "nested-resume-outer.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "same-scope",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "nested-resume-outer-low",
+        "primary_line": 0,
+        "source": "nested-resume-outer.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "same-scope",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "same-depth-scopes-nagi",
+        "primary_line": 0,
+        "source": "same-depth-scopes.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "same-scope",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "same-depth-scopes-low",
+        "primary_line": 0,
+        "source": "same-depth-scopes.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "borrow-owner",
+        "diagnostic": "view",
+        "expected": "check-fail",
+        "high": true,
+        "name": "failure-message-move-nagi",
+        "primary_line": 14,
+        "source": "failure-message-move.nagi"
+      },
+      "diagnostic": "error: line 14: failure はviewまたはループから参照されています。借用を終了するかcopyしてください\n --> /workspace/Nagi/tests/task-handles/failure-message-move.nagi:14\n 14 |                 moved = move(failure)  # primary",
+      "line": 14,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "borrow-owner",
+        "diagnostic": "view",
+        "expected": "check-fail",
+        "high": false,
+        "name": "failure-message-move-low",
+        "primary_line": 12,
+        "source": "failure-message-move.low"
+      },
+      "diagnostic": "error: line 12: failure はviewまたはループから参照されています。借用を終了するかcopyしてください\n --> /workspace/Nagi/tests/task-handles/failure-message-move.low:12\n 12 |                 let moved = move(failure); # primary",
+      "line": 12,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "task-parameter-nagi",
+        "primary_line": 2,
+        "source": "task-parameter.nagi"
+      },
+      "diagnostic": "error: line 2: Taskは同じscopeの直接ローカルbinding専用です。引数・戻り値・field・container・wrapperへ保存できません\n --> /workspace/Nagi/tests/task-handles/task-parameter.nagi:2\n 2 | def accept(task: Task[i64]) -> unit:  # primary",
+      "line": 2,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "task-parameter-low",
+        "primary_line": 2,
+        "source": "task-parameter.low"
+      },
+      "diagnostic": "error: line 2: Taskは同じscopeの直接ローカルbinding専用です。引数・戻り値・field・container・wrapperへ保存できません\n --> /workspace/Nagi/tests/task-handles/task-parameter.low:2\n 2 | fn accept(task: Task[i64]) -> unit { print(0); } # primary",
+      "line": 2,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "task-return-nagi",
+        "primary_line": 2,
+        "source": "task-return.nagi"
+      },
+      "diagnostic": "error: line 2: Taskは同じscopeの直接ローカルbinding専用です。引数・戻り値・field・container・wrapperへ保存できません\n --> /workspace/Nagi/tests/task-handles/task-return.nagi:2\n 2 | async def work() -> Task[i64]:  # primary",
+      "line": 2,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "task-return-low",
+        "primary_line": 2,
+        "source": "task-return.low"
+      },
+      "diagnostic": "error: line 2: Taskは同じscopeの直接ローカルbinding専用です。引数・戻り値・field・container・wrapperへ保存できません\n --> /workspace/Nagi/tests/task-handles/task-return.low:2\n 2 | async fn work() -> Task[i64] { # primary",
+      "line": 2,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": true,
+        "name": "task-wrapper-nagi",
+        "primary_line": 6,
+        "source": "task-wrapper.nagi"
+      },
+      "diagnostic": "error: line 6: Taskはawait/discard/move以外の操作へ渡せません\n --> /workspace/Nagi/tests/task-handles/task-wrapper.nagi:6\n 6 |         wrapped = some(task)  # primary",
+      "line": 6,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "scope-local",
+        "diagnostic": "Task",
+        "expected": "check-fail",
+        "high": false,
+        "name": "task-wrapper-low",
+        "primary_line": 5,
+        "source": "task-wrapper.low"
+      },
+      "diagnostic": "error: line 5: Taskはawait/discard/move以外の操作へ渡せません\n --> /workspace/Nagi/tests/task-handles/task-wrapper.low:5\n 5 |         let wrapped = some(task); # primary",
+      "line": 5,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "user-spawn-alias-nagi",
+        "primary_line": 0,
+        "source": "user-spawn-alias.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "user-spawn-alias-low",
+        "primary_line": 0,
+        "source": "user-spawn-alias.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "opaque-failure",
+        "diagnostic": "TaskFailure",
+        "expected": "check-fail",
+        "high": true,
+        "name": "failure-wrapper-copy-nagi",
+        "primary_line": 12,
+        "source": "failure-wrapper-copy.nagi"
+      },
+      "diagnostic": "error: line 12: Task/TaskFailureはcopyできません（nested wrapperを含みます）\n --> /workspace/Nagi/tests/task-handles/failure-wrapper-copy.nagi:12\n 12 |                 copied = copy(view(failures))  # primary",
+      "line": 12,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "opaque-failure",
+        "diagnostic": "TaskFailure",
+        "expected": "check-fail",
+        "high": false,
+        "name": "failure-wrapper-copy-low",
+        "primary_line": 9,
+        "source": "failure-wrapper-copy.low"
+      },
+      "diagnostic": "error: line 9: Task/TaskFailureはcopyできません（nested wrapperを含みます）\n --> /workspace/Nagi/tests/task-handles/failure-wrapper-copy.low:9\n 9 |                 let copied = copy(view(failures)); # primary",
+      "line": 9,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "opaque-failure",
+        "diagnostic": "TaskFailure",
+        "expected": "check-fail",
+        "high": true,
+        "name": "failure-wrapper-share-nagi",
+        "primary_line": 12,
+        "source": "failure-wrapper-share.nagi"
+      },
+      "diagnostic": "error: line 12: Task/TaskFailureをsharedへ変換できません（nested wrapperを含みます）\n --> /workspace/Nagi/tests/task-handles/failure-wrapper-share.nagi:12\n 12 |                 copied = share(failures)  # primary",
+      "line": 12,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "opaque-failure",
+        "diagnostic": "TaskFailure",
+        "expected": "check-fail",
+        "high": false,
+        "name": "failure-wrapper-share-low",
+        "primary_line": 9,
+        "source": "failure-wrapper-share.low"
+      },
+      "diagnostic": "error: line 9: Task/TaskFailureをsharedへ変換できません（nested wrapperを含みます）\n --> /workspace/Nagi/tests/task-handles/failure-wrapper-share.low:9\n 9 |                 let copied = share(failures); # primary",
+      "line": 9,
+      "matched_contract": true,
+      "stage": "check"
+    },
+    {
+      "case": {
+        "contract": "legacy-name-compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "user-spawn-add-nagi",
+        "primary_line": 0,
+        "source": "user-spawn-add.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "legacy-name-compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "user-spawn-add-low",
+        "primary_line": 0,
+        "source": "user-spawn-add.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "legacy-name-compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "user-spawn-field-nagi",
+        "primary_line": 0,
+        "source": "user-spawn-field.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "legacy-name-compatibility",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "user-spawn-field-low",
+        "primary_line": 0,
+        "source": "user-spawn-field.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "canonical-identity",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "user-task-type-nagi",
+        "primary_line": 0,
+        "source": "user-task-type.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "canonical-identity",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "user-task-type-low",
+        "primary_line": 0,
+        "source": "user-task-type.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "public-doc-example",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": true,
+        "name": "docs-example-nagi",
+        "primary_line": 0,
+        "source": "docs-example.nagi"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    },
+    {
+      "case": {
+        "contract": "public-doc-example",
+        "diagnostic": "",
+        "expected": "check-pass",
+        "high": false,
+        "name": "docs-example-low",
+        "primary_line": 0,
+        "source": "docs-example.low"
+      },
+      "diagnostic": "",
+      "line": null,
+      "matched_contract": true,
+      "stage": "accepted"
+    }
+  ],
+  "scope": "parse/name resolution/check only; no lowering, Rust build, runtime or static Task guarantee",
+  "total": 90,
+  "unmatched": 0
+}

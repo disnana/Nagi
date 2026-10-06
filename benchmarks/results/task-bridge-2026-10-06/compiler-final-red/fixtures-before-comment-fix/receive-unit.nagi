@@ -1,0 +1,8 @@
+async def work() -> unit:
+    return print(1)
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        received = await task
+    return ok(print(0))

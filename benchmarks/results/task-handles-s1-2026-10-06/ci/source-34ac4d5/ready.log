@@ -1,0 +1,203 @@
+﻿2026-10-06T15:59:58.7392318Z Current runner version: '2.337.0'
+2026-10-06T15:59:58.7418326Z ##[group]Runner Image Provisioner
+2026-10-06T15:59:58.7419289Z Hosted Compute Agent
+2026-10-06T15:59:58.7419903Z Version: 20260901.588
+2026-10-06T15:59:58.7420526Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+2026-10-06T15:59:58.7421580Z Build Date: 2026-09-01T19:56:44Z
+2026-10-06T15:59:58.7422338Z Worker ID: {7684b0bd-6eeb-4a82-8415-8daefa58aad1}
+2026-10-06T15:59:58.7423127Z Azure Region: northcentralus
+2026-10-06T15:59:58.7423777Z ##[endgroup]
+2026-10-06T15:59:58.7425653Z ##[group]Operating System
+2026-10-06T15:59:58.7426403Z Ubuntu
+2026-10-06T15:59:58.7426958Z 24.04.5
+2026-10-06T15:59:58.7427547Z LTS
+2026-10-06T15:59:58.7428090Z ##[endgroup]
+2026-10-06T15:59:58.7428645Z ##[group]Runner Image
+2026-10-06T15:59:58.7429299Z Image: ubuntu-24.04
+2026-10-06T15:59:58.7429907Z Version: 20260927.320.1
+2026-10-06T15:59:58.7431574Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-06T15:59:58.7433270Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+2026-10-06T15:59:58.7434337Z ##[endgroup]
+2026-10-06T15:59:58.7435544Z ##[group]GITHUB_TOKEN Permissions
+2026-10-06T15:59:58.7438014Z Contents: read
+2026-10-06T15:59:58.7438634Z Metadata: read
+2026-10-06T15:59:58.7439181Z ##[endgroup]
+2026-10-06T15:59:58.7441814Z Secret source: Actions
+2026-10-06T15:59:58.7443084Z Cache mode: write
+2026-10-06T15:59:58.7444308Z Prepare workflow directory
+2026-10-06T15:59:58.7795036Z Prepare all required actions
+2026-10-06T15:59:58.7845843Z Getting action download info
+2026-10-06T15:59:59.0928402Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-06T15:59:59.1861556Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-10-06T15:59:59.3699432Z Complete job name: Ready to merge
+2026-10-06T15:59:59.4466157Z ##[group]Run actions/checkout@v4
+2026-10-06T15:59:59.4467076Z with:
+2026-10-06T15:59:59.4467524Z   repository: disnana/Nagi
+2026-10-06T15:59:59.4471744Z   token: ***
+2026-10-06T15:59:59.4472189Z   ssh-strict: true
+2026-10-06T15:59:59.4472627Z   ssh-user: git
+2026-10-06T15:59:59.4473081Z   persist-credentials: true
+2026-10-06T15:59:59.4473579Z   clean: true
+2026-10-06T15:59:59.4474031Z   sparse-checkout-cone-mode: true
+2026-10-06T15:59:59.4474574Z   fetch-depth: 1
+2026-10-06T15:59:59.4475015Z   fetch-tags: false
+2026-10-06T15:59:59.4475458Z   show-progress: true
+2026-10-06T15:59:59.4475911Z   lfs: false
+2026-10-06T15:59:59.4476327Z   submodules: false
+2026-10-06T15:59:59.4476777Z   set-safe-directory: true
+2026-10-06T15:59:59.4477285Z   allow-unsafe-pr-checkout: false
+2026-10-06T15:59:59.4478068Z ##[endgroup]
+2026-10-06T15:59:59.5510922Z Syncing repository: disnana/Nagi
+2026-10-06T15:59:59.5514546Z ##[group]Getting Git version info
+2026-10-06T15:59:59.5515909Z Working directory is '/home/runner/work/Nagi/Nagi'
+2026-10-06T15:59:59.5517214Z [command]/usr/bin/git version
+2026-10-06T15:59:59.5609690Z git version 2.55.0
+2026-10-06T15:59:59.5635723Z ##[endgroup]
+2026-10-06T15:59:59.5650826Z Temporarily overriding HOME='/home/runner/work/_temp/eae0617f-a7ff-4771-a6ae-4c93634709c6' before making global git config changes
+2026-10-06T15:59:59.5653560Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-06T15:59:59.5656509Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Nagi/Nagi
+2026-10-06T15:59:59.5720638Z Deleting the contents of '/home/runner/work/Nagi/Nagi'
+2026-10-06T15:59:59.5724431Z ##[group]Initializing the repository
+2026-10-06T15:59:59.5727970Z [command]/usr/bin/git init /home/runner/work/Nagi/Nagi
+2026-10-06T15:59:59.5864686Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-06T15:59:59.5866712Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-06T15:59:59.5869275Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-06T15:59:59.5870856Z hint: call:
+2026-10-06T15:59:59.5871822Z hint:
+2026-10-06T15:59:59.5872658Z hint: 	git config --global init.defaultBranch <name>
+2026-10-06T15:59:59.5873739Z hint:
+2026-10-06T15:59:59.5874759Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-06T15:59:59.5876315Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-06T15:59:59.5877778Z hint:
+2026-10-06T15:59:59.5878446Z hint: 	git branch -m <name>
+2026-10-06T15:59:59.5879478Z hint:
+2026-10-06T15:59:59.5881626Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-06T15:59:59.5883342Z Initialized empty Git repository in /home/runner/work/Nagi/Nagi/.git/
+2026-10-06T15:59:59.5885471Z [command]/usr/bin/git remote add origin https://github.com/disnana/Nagi
+2026-10-06T15:59:59.5938006Z ##[endgroup]
+2026-10-06T15:59:59.5939453Z ##[group]Disabling automatic garbage collection
+2026-10-06T15:59:59.5941984Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-06T15:59:59.5983394Z ##[endgroup]
+2026-10-06T15:59:59.5984775Z ##[group]Setting up auth
+2026-10-06T15:59:59.5991766Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-06T15:59:59.6029230Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-06T15:59:59.6433400Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-06T15:59:59.6477777Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-06T15:59:59.6714223Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-06T15:59:59.6753112Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-06T15:59:59.6981634Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-06T15:59:59.7024368Z ##[endgroup]
+2026-10-06T15:59:59.7025172Z ##[group]Fetching the repository
+2026-10-06T15:59:59.7037012Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +cff579d1a239726dff532dc83aaea44710038d91:refs/remotes/pull/88/merge
+2026-10-06T16:00:01.0132310Z From https://github.com/disnana/Nagi
+2026-10-06T16:00:01.0134214Z  * [new ref]         cff579d1a239726dff532dc83aaea44710038d91 -> pull/88/merge
+2026-10-06T16:00:01.0154259Z ##[endgroup]
+2026-10-06T16:00:01.0155527Z ##[group]Determining the checkout info
+2026-10-06T16:00:01.0156935Z ##[endgroup]
+2026-10-06T16:00:01.0157781Z [command]/usr/bin/git sparse-checkout disable
+2026-10-06T16:00:01.0248792Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-06T16:00:01.0286580Z ##[group]Checking out the ref
+2026-10-06T16:00:01.0288573Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/88/merge
+2026-10-06T16:00:01.1566661Z Note: switching to 'refs/remotes/pull/88/merge'.
+2026-10-06T16:00:01.1568136Z 
+2026-10-06T16:00:01.1569057Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-06T16:00:01.1571248Z changes and commit them, and you can discard any commits you make in this
+2026-10-06T16:00:01.1572535Z state without impacting any branches by switching back to a branch.
+2026-10-06T16:00:01.1573265Z 
+2026-10-06T16:00:01.1573795Z If you want to create a new branch to retain commits you create, you may
+2026-10-06T16:00:01.1574986Z do so (now or later) by using -c with the switch command. Example:
+2026-10-06T16:00:01.1575695Z 
+2026-10-06T16:00:01.1575971Z   git switch -c <new-branch-name>
+2026-10-06T16:00:01.1576481Z 
+2026-10-06T16:00:01.1576804Z Or undo this operation with:
+2026-10-06T16:00:01.1577265Z 
+2026-10-06T16:00:01.1577781Z   git switch -
+2026-10-06T16:00:01.1578212Z 
+2026-10-06T16:00:01.1579215Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-06T16:00:01.1580486Z 
+2026-10-06T16:00:01.1581757Z HEAD is now at cff579d Merge 34ac4d585084877372965e3d58ed5c2002604529 into 9ba4a104be6f65dba61eda0c7b1ef0f98c892cf7
+2026-10-06T16:00:01.1584605Z ##[endgroup]
+2026-10-06T16:00:01.1629583Z [command]/usr/bin/git log -1 --format=%H
+2026-10-06T16:00:01.1656818Z cff579d1a239726dff532dc83aaea44710038d91
+2026-10-06T16:00:01.2011806Z ##[group]Run actions/setup-python@v5
+2026-10-06T16:00:01.2012638Z with:
+2026-10-06T16:00:01.2013110Z   python-version: 3.12
+2026-10-06T16:00:01.2013691Z   check-latest: false
+2026-10-06T16:00:01.2023121Z   token: ***
+2026-10-06T16:00:01.2023641Z   update-environment: true
+2026-10-06T16:00:01.2024280Z   allow-prereleases: false
+2026-10-06T16:00:01.2024922Z   freethreaded: false
+2026-10-06T16:00:01.2025464Z ##[endgroup]
+2026-10-06T16:00:01.3405127Z ##[group]Installed versions
+2026-10-06T16:00:01.3496952Z (node:2279) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T16:00:01.3500370Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T16:00:01.3502652Z Successfully set up CPython (3.12.14)
+2026-10-06T16:00:01.3504498Z ##[endgroup]
+2026-10-06T16:00:01.3692277Z ##[group]Run python scripts/ci/gate.py
+2026-10-06T16:00:01.3693257Z [36;1mpython scripts/ci/gate.py[0m
+2026-10-06T16:00:01.4018805Z shell: /usr/bin/bash -e {0}
+2026-10-06T16:00:01.4019604Z env:
+2026-10-06T16:00:01.4020382Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T16:00:01.4022070Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T16:00:01.4023537Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T16:00:01.4024703Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T16:00:01.4025850Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T16:00:01.4027070Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T16:00:01.4034240Z   NAGI_CI_NEEDS: {
+  "changes": {
+    "result": "success",
+    "outputs": {
+      "full_checks": "true",
+      "jetbrains_checks": "true"
+    }
+  },
+  "linux": {
+    "result": "success",
+    "outputs": {}
+  },
+  "jetbrains": {
+    "result": "success",
+    "outputs": {}
+  },
+  "release-plan": {
+    "result": "success",
+    "outputs": {
+      "release_nagi": "false",
+      "release_vscode": "false",
+      "package_nagi": "true",
+      "package_vscode": "true",
+      "sha": "cff579d1a239726dff532dc83aaea44710038d91",
+      "nagi_version": "0.1.10",
+      "vscode_version": "0.1.13"
+    }
+  },
+  "vscode-package": {
+    "result": "success",
+    "outputs": {}
+  },
+  "nagi-package": {
+    "result": "success",
+    "outputs": {}
+  }
+}
+2026-10-06T16:00:01.4040915Z ##[endgroup]
+2026-10-06T16:00:01.4716398Z Required checks and planned packages passed.
+2026-10-06T16:00:01.4920766Z Post job cleanup.
+2026-10-06T16:00:01.6143682Z (node:2289) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T16:00:01.6232062Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T16:00:01.6518006Z Post job cleanup.
+2026-10-06T16:00:01.7436837Z [command]/usr/bin/git version
+2026-10-06T16:00:01.7484364Z git version 2.55.0
+2026-10-06T16:00:01.7529993Z Temporarily overriding HOME='/home/runner/work/_temp/bb8d0af1-4af7-45e2-a237-0d82b32620ec' before making global git config changes
+2026-10-06T16:00:01.7533579Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-06T16:00:01.7536259Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Nagi/Nagi
+2026-10-06T16:00:01.7625553Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-06T16:00:01.7637700Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-06T16:00:01.7957358Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-06T16:00:01.7988510Z http.https://github.com/.extraheader
+2026-10-06T16:00:01.8000431Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-06T16:00:01.8048427Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-06T16:00:01.8324417Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-06T16:00:01.8364540Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-06T16:00:01.8793726Z Cleaning up orphan processes
+2026-10-06T16:00:01.9094955Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

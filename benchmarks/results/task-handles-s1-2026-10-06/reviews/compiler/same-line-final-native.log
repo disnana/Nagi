@@ -1,0 +1,6 @@
+     Locking 108 packages to highest compatible versions
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi/runtime)
+   Compiling nagi-same-line-88bcce8ab9387b80 v0.1.0 (/tmp/nagi-task-review/out-same-line/.nagi/apps/nagi-same-line-88bcce8ab9387b80/generations/.staging-g-5006-18dbf79548c18b96-0)
+    Finished `release` profile [optimized] target(s) in 13.36s
+native: /tmp/nagi-task-review/out-same-line/.nagi/apps/nagi-same-line-88bcce8ab9387b80/generations/g-5006-18dbf79548c18b96-0/nagi-88bcce8ab9387b80-g-5006-18dbf79548c18b96-0
+0

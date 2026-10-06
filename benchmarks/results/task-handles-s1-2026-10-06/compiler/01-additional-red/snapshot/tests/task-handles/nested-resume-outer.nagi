@@ -1,0 +1,11 @@
+async def work() -> i64:
+    return 7
+async def idle() -> unit:
+    print(1)
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        async with scope:
+            spawn idle()
+        received = await task
+    return ok(print(0))

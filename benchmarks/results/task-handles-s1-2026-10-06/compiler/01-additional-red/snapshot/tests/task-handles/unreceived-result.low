@@ -1,0 +1,7 @@
+async fn work() -> Result[i64, Error] { return error("business"); }
+async fn main() -> Result[unit, Error] {
+    scope {
+        let task = spawn work(); # primary
+    }
+    return ok(print(0));
+}

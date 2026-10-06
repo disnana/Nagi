@@ -1,0 +1,24 @@
+    Finished `test` profile [unoptimized] target(s) in 0.05s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31f33a377cbf1a2a)
+
+running 1 test
+test task_bridge_prototype::tests::received_fault_remains_sticky_at_scope_exit ... FAILED
+
+failures:
+
+---- task_bridge_prototype::tests::received_fault_remains_sticky_at_scope_exit stdout ----
+
+thread 'tokio-rt-worker' (1473334) panicked at runtime/src/task_bridge_prototype.rs:559:50:
+controlled child fault
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'task_bridge_prototype::tests::received_fault_remains_sticky_at_scope_exit' (1473332) panicked at runtime/src/task_bridge_prototype.rs:565:34:
+called `Result::unwrap_err()` on an `Ok` value: ()
+
+
+failures:
+    task_bridge_prototype::tests::received_fault_remains_sticky_at_scope_exit
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 204 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p nagi-runtime --lib`

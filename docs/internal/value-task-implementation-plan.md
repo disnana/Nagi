@@ -1,8 +1,10 @@
 # 明示moveとtask結果の実装順
 
-状態: 明示moveの意味論と非Copy既存値の通常代入移行は確定。作者は既存設計に沿うAPIの選択と実装を承認した。以下のmove仕様は採用済みで、作業branch `feat/explicit-move-contract`に実装済み・未リリース。検証状況とmain反映は[実装結果](explicit-move-results.md)と[進捗](progress.md)で別に記録する。taskの残る意味論は別工程で決める。
+状態: 明示moveの意味論と非Copy既存値の通常代入移行は確定。作者は既存設計に沿うAPIの選択と実装を承認した。以下のmove仕様は採用済みで、作業branch `feat/explicit-move-contract`に実装済み・未リリース。検証状況とmain反映は[実装結果](explicit-move-results.md)と[進捗](progress.md)で別に記録する。S1は[ADR 012](adr/012-task-result-handles.md)と[接続判断](task-handle-implementation.md)に沿い作業branchへ接続済み・未リリース。[接続結果](task-handles-s1-results.md)に実証範囲を記録する。以下の先行手順・未実装記述は設計時点の記録。
 
 監査基点はmain `e7aff1da0a36503d239d70cf5dbcf892655978e0`（#84反映済み）。[ADR 011](adr/011-language-behavior-and-docs.md)の方向を実装へ移すための計画である。契約の正本は[language-invariants](language-invariants.md)、未決の管理は[Q-005/006](open-questions.md#q-005-既存所有値の代入を明示する範囲)に残す。
+
+今回の最新参照はmain `7d2d96a`（#85/#86反映済み）とdraft #87 head `5985e1b`。この設計branchには#87のDocs・先行回帰・private SQLite close修正を取り込み、compiler/runtime/testsは#87と同bytesに揃えた。差分はS1詳細設計の11 Markdownだけ。S1の新構文・新Task・fault ledgerはまだ実装していない。#87の最終CI判定やmain反映とは分ける。
 
 ## 依存関係と順番
 
@@ -14,10 +16,10 @@ moveの追加は現在のmodule identity、checked facts、生成planを使う�
 |---|---|---|
 | V1 | canonical明示moveを追加 | 仕様→失敗テスト→実装。入力の型・origin・async provenanceとcleanup責任を維持し、Rust標準identityへ入力を一度だけ値として渡す |
 | V2 | 既存非Copyローカルの単純代入に明示操作を求める | V1と同じdraft実装PRに順に積む。承認済みの受理変更としてサンプル・日英Docs・負例を移行し、全既存testと4 OS CIまで確認する |
-| S1 | scope所属の一回限りの結果handleと、新経路の業務Result・故障境界 | handle・故障・未受取の契約を具体化してから、失敗テスト→小さい縦切り実装。Resultを受け取る新経路では、この段階からErrを値として扱う。旧statement spawnと第一級Future一般の解禁は別 |
+| S1 | scope所属の一回限りの結果handleと、新経路の業務Result・故障境界 | ADR 012の採用契約を先行失敗テスト→私有bridge→High/Lowの小さい縦切りへ接続。新経路は業務Resultと外側faultを分離。旧statement spawnを維持し、第一級Future一般の解禁は含めない |
 | S2 | 旧statement spawnの移行とサービス故障の接続 | S1とSupervisorの移行例が揃ってから実装。現在のterminal Err→HTTP終了を消さない。新経路に業務Err分離がないまま「handle完成」としない |
 
-実装差分は別PRとし、CI結果を確認する。この設計監査の#86はユーザーが非draftにした状態を維持する。merge、版更新、releaseは別の判断。互換性を壊す変更を「文書の修正」や「内部整理」として混ぜない。
+実装差分は別PRとし、CI結果を確認する。#85/#86はユーザーがmainへ反映済み、moveの#87はdraftを維持する。merge、版更新、releaseは別の判断。互換性を壊す変更を「文書の修正」や「内部整理」として混ぜない。
 
 ## 移行前の基点と現行の根拠
 
@@ -105,7 +107,7 @@ tests-only差分で、operation未実装による失敗と、旧実装が暗黙�
 
 ## S1/S2: task結果の境界
 
-以下は詳細設計の候補で、使用可能な構文ではない。
+[ADR 012](adr/012-task-result-handles.md)の初版意味論を設計採用した。全T正常出口await/discardとsticky faultは、今回の自律判断の委任による新しい詳細判断であり、旧承認から必然だったとは扱わない。現行spawn/Scope、compiler/runtimeとtest期待は変更しない。[設計](task-result-handle-design.md)のAPI名・構文・生成bridgeは未実装の接続候補である。
 
 ```text
 async with scope:
@@ -113,29 +115,25 @@ async with scope:
     received = await task
 ```
 
-taskがTを返す場合はT、Result[U, E]を返す場合はそのResultを受け取る。業務Errを故障へ自動昇格しない。故障を返却値の外側に置くなら、結果は概念的にResult[T, TaskFailure]となり、Result taskは二重Resultになる。これはactor callで使う「輸送失敗とreplyを分ける」規則とも比較する。
+この構文例は使用可能なHighではない。Task[T]の受取はactual join後の外側Result[T, TaskFailure]とし、TがResult[U, E]なら二重Resultを保つ。普通の業務Errだけでは兄弟を止めない。
 
-| 決める細部 | 初版の検討案・検証条件 |
+| 採用する境界 | 先行接続と必要な観測 |
 |---|---|
-| handleの取得 | 型名は候補Task[T]。awaitでconsumeし、Copy結果を含め二度目を拒否。implicit cloneは禁止 |
-| 所有者 | 生存scopeだけがJoinSetとjoin記録を所有する。handle Dropでdetachしない。故障はscope退出・明示受取等、決めた検出点で観測する。本体中のbackground監視を既に提供するとはしない |
-| 結果受取とjoin | oneshotの通知だけをtaskの終了確認としない。scopeによる実join、出力の保持・破棄、task Future Dropの順序を観測する |
-| 受取待ちの取消 | awaitはhandleをconsumeし、そのPending Futureが破棄されても再取得しない案。子停止を自動的に意味しない。生存scopeは実join責任を持ち、scope自身のDropはabort要求まで |
-| scope外持出し | 初版は拒否する案。alias、Option/Result、class/List、return、子taskへの転送で抜けないことを検査する。普通のRust 'staticだけに委譲しない |
-| 未受取 | unit以外の省略、Resultを未使用変数へ入れる場合、branch/loopの未取得を仕様化する。現行の裸Result拒否だけで全未取得を検出できるとはしない |
-| 故障 | panic、取消、明示的サービス故障を業務Errと分ける。型、複数故障、body Errと子faultのprimary/関連診断、検出時点をS1実装前に決める |
-| 親の退出 | body Errは取消とjoin完了を待つ。親Future Drop/unwindは取消要求まで。受理済みDBや外部副作用は戻らない |
-| Supervisor連携 | terminal Errを明示的なtask故障へ変換する経路を用意するか、旧fail-fast spawnを移行中に維持する。HTTPの永久待ちを回帰で検出する |
+| scope所属/一回受取 | handleは非Copy/nonClone/nonshared。awaitでconsumeしCopy結果も二度目を拒否。同scope localのmove aliasは責任を移し、scope外・関数・field/container/wrapper・他taskへのescapeを拒否 |
+| 全T正常出口 | unit/Copy/Resultともawait/discardを求める。branch/loopとaliasの義務を追跡し、body Err/panic/親取消はcleanup。一般ownedや受取後Resultの未使用検出へ広げない |
+| sticky故障 | panic/予期しない取消/legacy Err/protocol故障をprimaryに保持。兄弟abort→全actual drain後に外側Err、受取Err処理後も出口Err。bodyの元Eは後続faultで置換しない |
+| 唯一join owner | ScopeがJoinSetを所有。ticketをentry key、native ID→ticketは未joinのみ。Ready→record間await無し、fake-ID再利用で未受取recordの混同拒否、receive/drain取消後の再開 |
+| 受取/放棄 | sender Readyをactual joinとしない。receiptはScope強参照無し。未poll/Pending取消でhandleを復活させず、discard/T Dropは子停止・join/close完了を返さない |
+| 親退出 | body Errはlocals退役→abort/drain→元Err伝播。親Future Drop/unwindはabort要求のみ。non-yielding・任意Drop panic・外部副作用の限界を残す |
+| Supervisor | S1は旧statement spawnとterminal→HTTP取消を維持。S2で明示service fault昇格または親body Errへ接続。内側業務Resultへの機械置換はしない |
 
-既存statement spawnをすぐ値取得経路へ置き換える案は採らない。旧経路を残して結果handleを追加する案と、全spawnの契約を切り替える案を比較し、削除時期・故障の昇格方法を決める。結果をoneshotで送るだけ、Tokio JoinHandleを捨てるだけ、独立observer taskを足すだけではscopeの終了責任を満たさない。
+実装順はmove V1/V2→S1→S2→公開Pool/Tx。S1はtests-only→compile RED→小さい私有runtime bridgeから始め、結果通知だけのpublication前倒し版のruntime REDも保存する。Taskのscope依存awaitが現生成構造で表現できるかは未検証である。sealed Spawn/Await/Discard plan、scope label、元のview/cleanup anchor、Error変換を維持し、現bodyを全面async wrapperへ置き換えない。
 
-runtimeの最小縦切りでは、異種Tの結果チャネルとscope所有のjoinを分ける案を試す。独自GC、async destructor、general region/effect checker、任意Future保存を同時に導入しない。安全なscope依存のawaitが現在の生成構造で表現できるかを先に検証する。
+typed結果channelと均一join recordを分ける接続を比較する。独自GC、async destructor、observer/追加JoinHandle owner、Any/downcast/unsafe、general region/effect checker、任意Future保存、新依存/default/timeoutは追加しない。現shutdownが後続Err/panicを返さないことから、新primary/related recordはabort_all＋ID付き手動drainで検証する。
 
-現Scopeのshutdownはabort要求後に実joinをdrainするが、その途中の後続Err/panicは返さない。複数faultや取消競合のcauseを保持する新契約なら、abort_allとjoin_next_with_idによる手動drainを比較する。旧body Err→cancel→元Err伝播のprimaryを、子の後続panicで無説明に上書きしない。
+正常/業務Ok/Err、fault、全T未受取、再await、escape、兄弟継続/取消、body Err/panic/Drop、故障後bodyをbarrierで観測する。sender通知、取消要求、Future Drop、actual join、結果受取を別eventにし、私有prototype成功を公開language完成と数えない。child側送信失敗Tとparent側buffer TのDrop、channel/entry allocation、長いbodyの完了未join/未受取保持、Future frame、retireは未検証の測定対象である。
 
-正常/業務Ok/業務Err、panic、handle二重取得、未受取、兄弟継続と取消、body Err/panic/Drop、明示shutdown、non-yielding、SupervisorとHTTP停止をbarrierで観測する。結果送信、取消要求、Future破棄、join完了を別のeventとしてassertする。cancel/closeの名前だけで完了を判定しない。
-
-既存のscoped_tasksには評価順用のruntime stubもある。それをTokioの取消・join完了の実証と数えない。scope_runtime_contractは実runtimeを使う。supervised-serviceの検査は業務409・正常shutdown等を含むが、Supervisor terminal故障からHTTP取消への専用統合oracleではない。S2ではその経路を実socketとbarrierで追加する。
+scoped_tasksの一部runtime stubをTokioの終了実証としない。scope_runtime_contractは実runtimeを使う。旧service例の成功もSupervisor terminal fault→実HTTP停止の専用oracleではない。このbridgeとterminal連携を先行回帰で確認し、S2で明示移行を検証する。既存回帰と4 OS、[公開capacityの未解決ブロッカー](sqlite-capacity-decision.md)を別に記録し、公開Pool/Tx acceptanceやPhase 5を完了扱いしない。
 
 ## 移行前の監査と実装の進行条件
 
@@ -145,4 +143,11 @@ runtimeの最小縦切りでは、異種Tの結果チャネルとscope所有のj
 
 さらに[9例の移行前検証](value-task-audit-results.md)を実行した。High/手書きLow18入力と生成保存Low6入力のcheckは受理18・期待した拒否6。正常6例をHigh/保存Low/手書きLowでbuild/runし、18実行の出力が一致した。既存Copy class/enum・nullable・view、async関数別名、ユーザーのmove識別子、Result/sharedのnonCopy、借用中move、所有view containerの移動を確認した。新APIの実装・コスト検証には数えない。
 
-V1/V2の意味論は確定済みで、既存設計に沿う具体APIの選択も今回の指示で認められた。同じ大枠を再質問せず、仕様→先行test→High/Low check→生成→Docs移行→全回帰→4 OS CIの順で進める。#85はユーザーがmainへ反映し、#86はユーザーが非draftにした状態を維持する。move実装は別PRとし、この作業branchへの文書統合をmain反映と扱わない。moveの完了後はS1、業務Errと故障の分離、公開SQLite Pool/Txの順に進める。意味論への大きな未決だけ具体案をまとめて確認し、merge/releaseは実行しない。
+V1/V2の意味論は確定済みで、既存設計に沿う具体APIの選択も今回の指示で認められた。同じ大枠を再質問せず、仕様→先行test→High/Low check→生成→Docs移行→全回帰→4 OS CIの順で進める。#85/#86はユーザーがmainへ反映済み。move実装の#87は最終head `5985e1b`から変更せず、ユーザーがmain `9ba4a10`へマージしたことを確認した。この設計・試作の別branchはmain向けdraftとし、こちらではマージしない。moveの完了後はS1、S2の明示サービス故障移行、公開SQLite Pool/Txの順に進める。S1の二つの確認待ちはADR 012の詳細採用で解除した。API接続・実装上の成立を先行テストで検証し、大きな新規意味論が必要なら理由と代替を記録する。merge/releaseはこの設計差分では実行しない。
+
+
+## S1 Stage 1: 先行REDとprivate bridge（今回の一区切り）
+
+[結果](task-bridge-stage1-results.md)にnative 16群、runner 3群、High/手書きLow56入力の照合を記録した。50の新Task入力はparse REDのまま。cfg(test) private bridgeのみを追加し、checker/codegen/旧Scope/SQLiteは変更していない。完了通知と実join、receiptとsticky fault、表示messageと元Error causeを分ける。コストは未測定。
+
+この工程で止めて報告する。次は最新head・4 OS CI確認後、checkerのscope所属・一回消費・正常出口義務からsealed planへ進む。旧spawnの一括移行、公開Pool/Tx、merge/release/版更新は開始しない。

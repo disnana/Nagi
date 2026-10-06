@@ -1,0 +1,180 @@
+use super::native_triple::Fixture;
+
+#[test]
+fn legacy_supervisor_terminal_and_normal_shutdown_reach_real_http() {
+    // The same old monitor/HTTP statements run in a legacy-only scope and in
+    // a Task scope. A business reply must leave HTTP healthy; terminal failure
+    // must cancel HTTP; normal Supervisor shutdown must leave HTTP running
+    // until its separate shutdown signal. None of those are stubbed futures.
+    Fixture::new().run_three("task-service", HIGH, LOW, ADAPTER, ASSERTIONS);
+}
+
+const HIGH: &str = r#"from std.task import discard
+@rust("native::monitor")
+extern async def monitor() -> Result[unit, Error]
+@rust("native::http")
+extern async def http() -> Result[unit, Error]
+@rust("native::exercise")
+extern async def exercise() -> unit
+async def legacy_service() -> Result[unit, Error]:
+    async with scope:
+        spawn monitor()
+        spawn http()
+        await exercise()
+    return ok(print(0))
+async def mixed_service() -> Result[unit, Error]:
+    async with scope:
+        handle = spawn sleep(0)
+        discard(handle)
+        spawn monitor()
+        spawn http()
+        await exercise()
+    return ok(print(0))
+"#;
+
+const LOW: &str = r#"from std.task import discard;
+@rust("native::monitor")
+extern async fn monitor() -> Result[unit, Error];
+@rust("native::http")
+extern async fn http() -> Result[unit, Error];
+@rust("native::exercise")
+extern async fn exercise() -> unit;
+async fn legacy_service() -> Result[unit, Error] {
+    scope { spawn monitor(); spawn http(); await exercise(); }
+    return ok(print(0));
+}
+async fn mixed_service() -> Result[unit, Error] {
+    scope { let handle = spawn sleep(0); discard(handle);
+        spawn monitor(); spawn http(); await exercise(); }
+    return ok(print(0));
+}
+"#;
+
+const ADAPTER: &str = r#"
+mod native {
+    use nagi_runtime::{actor, http_server as web, Error};
+    use std::{net::SocketAddr, sync::{Mutex, atomic::{AtomicBool, Ordering}}};
+    use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}, sync::oneshot};
+
+    struct Service {
+        group: Option<actor::Supervisor<()>>,
+        listener: Option<TcpListener>,
+        counter: actor::Actor<i64, i64, String>,
+        control: actor::Control,
+        shutdown: Option<oneshot::Sender<()>>,
+        stopped: Option<oneshot::Receiver<()>>,
+        address: SocketAddr,
+        terminal: bool,
+    }
+    static SERVICE: Mutex<Option<Service>> = Mutex::new(None);
+    static HTTP_DROPPED: AtomicBool = AtomicBool::new(false);
+    struct HttpGuard;
+    impl Drop for HttpGuard {
+        fn drop(&mut self) { HTTP_DROPPED.store(true, Ordering::SeqCst); }
+    }
+    pub async fn setup(terminal: bool) {
+        let group = actor::supervisor((), actor::options(1, 16, 0, 10000, 1000).unwrap());
+        let counter = actor::register(&group, "counter", |_| async { Ok(9_i64) },
+            |state: i64, change: i64| async move {
+                if change == -2 { return Err(Error::invalid("terminal sentinel")); }
+                let reply = if change < 0 { Err("business sentinel".to_owned()) } else { Ok(state) };
+                Ok(actor::turn(state, reply))
+            }, actor::default_actor_options()).unwrap();
+        let control = actor::control(&group);
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (shutdown, stopped) = oneshot::channel();
+        HTTP_DROPPED.store(false, Ordering::SeqCst);
+        let mut slot = SERVICE.lock().unwrap();
+        assert!(slot.is_none());
+        *slot = Some(Service { group: Some(group), listener: Some(listener), counter,
+            control, shutdown: Some(shutdown), stopped: Some(stopped), address, terminal });
+    }
+    pub fn monitor() -> impl std::future::Future<Output = Result<(), Error>> {
+        let group = SERVICE.lock().unwrap().as_mut().unwrap().group.take().unwrap();
+        actor::run(group)
+    }
+    pub async fn http() -> Result<(), Error> {
+        let _guard = HttpGuard;
+        let (listener, counter, stopped) = {
+            let mut slot = SERVICE.lock().unwrap();
+            let service = slot.as_mut().unwrap();
+            (service.listener.take().unwrap(), actor::clone_actor(&service.counter), service.stopped.take().unwrap())
+        };
+        let app = web::route(web::app_default(counter), web::Method::GET, "/counter",
+            |_, counter| async move {
+                Ok(match actor::call(&counter, 0, 0, 1000).await {
+                    Ok(Ok(value)) => web::text(web::Status::OK, &value.to_string()),
+                    _ => web::text(web::Status::SERVICE_UNAVAILABLE, "stopped"),
+                })
+            }).unwrap();
+        let app = web::route(app, web::Method::GET, "/business", |_, counter| async move {
+            let reply = actor::call(&counter, -1, 0, 1000).await.unwrap();
+            assert_eq!(reply, Err("business sentinel".to_owned()));
+            Ok(web::text(web::Status::CONFLICT, "business sentinel"))
+        }).unwrap();
+        web::serve_listener(listener, app, web::default_options(), async { let _ = stopped.await; }).await
+    }
+    async fn request(path: &str) -> Vec<u8> {
+        let address = SERVICE.lock().unwrap().as_ref().unwrap().address;
+        let mut socket = TcpStream::connect(address).await.unwrap();
+        socket.write_all(format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").as_bytes()).await.unwrap();
+        let mut response = Vec::new();
+        socket.read_to_end(&mut response).await.unwrap();
+        response
+    }
+    pub async fn exercise() {
+        let (counter, control, terminal) = {
+            let slot = SERVICE.lock().unwrap();
+            let service = slot.as_ref().unwrap();
+            (actor::clone_actor(&service.counter), actor::clone_control(&service.control), service.terminal)
+        };
+        actor::ready(&counter, 1000).await.unwrap();
+        let response = request("/business").await;
+        assert!(response.starts_with(b"HTTP/1.1 409 "), "{response:?}");
+        assert!(response.ends_with(b"business sentinel"));
+        let response = request("/counter").await;
+        assert!(response.starts_with(b"HTTP/1.1 200 "), "{response:?}");
+        assert!(response.ends_with(b"9"));
+        assert!(!HTTP_DROPPED.load(Ordering::SeqCst));
+        if terminal {
+            assert_eq!(actor::call(&counter, -2, 0, 1000).await.unwrap_err().kind(), actor::CallKind::REPLY_LOST);
+        } else {
+            actor::shutdown(&control).await.unwrap();
+            let response = request("/counter").await;
+            assert!(response.starts_with(b"HTTP/1.1 503 "), "{response:?}");
+            assert!(!HTTP_DROPPED.load(Ordering::SeqCst), "normal Supervisor shutdown cancelled HTTP");
+            SERVICE.lock().unwrap().as_mut().unwrap().shutdown.take().unwrap().send(()).unwrap();
+        }
+    }
+    pub async fn verify_closed() {
+        assert!(HTTP_DROPPED.load(Ordering::SeqCst), "scope returned before HTTP future destruction");
+        let address = SERVICE.lock().unwrap().as_ref().unwrap().address;
+        assert!(TcpStream::connect(address).await.is_err(), "HTTP listener survived actual scope joining");
+        SERVICE.lock().unwrap().take().unwrap();
+    }
+}
+"#;
+
+const ASSERTIONS: &str = r#"
+#[test]
+fn service_contract() {
+    let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap();
+    rt.block_on(async {
+        for mixed in [false, true] {
+            for terminal in [false, true] {
+                tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                    native::setup(terminal).await;
+                    let result = if mixed { mixed_service().await } else { legacy_service().await };
+                    if terminal {
+                        let error = result.unwrap_err();
+                        assert!(matches!(error.kind, nagi_runtime::ErrorKind::Internal));
+                        assert!(error.message.contains("restart intensity"), "{error}");
+                    } else { result.unwrap(); }
+                    native::verify_closed().await;
+                }).await.unwrap();
+            }
+        }
+    });
+}
+"#;

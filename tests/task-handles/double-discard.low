@@ -1,0 +1,10 @@
+import std.task as tasks;
+async fn work() -> i64 { return 7; }
+async fn main() -> Result[unit, Error] {
+    scope {
+        let task = spawn work();
+        tasks.discard(task);
+        tasks.discard(task); # primary
+    }
+    return ok(print(0));
+}

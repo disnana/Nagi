@@ -1,0 +1,687 @@
+[
+  {
+    "name": "receive-copy-nagi",
+    "source": "receive-copy.nagi",
+    "high": true,
+    "contract": "at-most-once",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "receive-copy-low",
+    "source": "receive-copy.low",
+    "high": false,
+    "contract": "at-most-once",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "receive-unit-nagi",
+    "source": "receive-unit.nagi",
+    "high": true,
+    "contract": "typed-result",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "receive-unit-low",
+    "source": "receive-unit.low",
+    "high": false,
+    "contract": "typed-result",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "unreceived-unit-nagi",
+    "source": "unreceived-unit.nagi",
+    "high": true,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 6
+  },
+  {
+    "name": "unreceived-unit-low",
+    "source": "unreceived-unit.low",
+    "high": false,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 4
+  },
+  {
+    "name": "receive-owned-nagi",
+    "source": "receive-owned.nagi",
+    "high": true,
+    "contract": "typed-result",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "receive-owned-low",
+    "source": "receive-owned.low",
+    "high": false,
+    "contract": "typed-result",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "unreceived-owned-nagi",
+    "source": "unreceived-owned.nagi",
+    "high": true,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 6
+  },
+  {
+    "name": "unreceived-owned-low",
+    "source": "unreceived-owned.low",
+    "high": false,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 4
+  },
+  {
+    "name": "receive-result-nagi",
+    "source": "receive-result.nagi",
+    "high": true,
+    "contract": "typed-result",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "receive-result-low",
+    "source": "receive-result.low",
+    "high": false,
+    "contract": "typed-result",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "unreceived-result-nagi",
+    "source": "unreceived-result.nagi",
+    "high": true,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 6
+  },
+  {
+    "name": "unreceived-result-low",
+    "source": "unreceived-result.low",
+    "high": false,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 4
+  },
+  {
+    "name": "unreceived-copy-nagi",
+    "source": "unreceived-copy.nagi",
+    "high": true,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 6
+  },
+  {
+    "name": "unreceived-copy-low",
+    "source": "unreceived-copy.low",
+    "high": false,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 4
+  },
+  {
+    "name": "discard-nagi",
+    "source": "discard.nagi",
+    "high": true,
+    "contract": "explicit-discard",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "discard-low",
+    "source": "discard.low",
+    "high": false,
+    "contract": "explicit-discard",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "move-alias-nagi",
+    "source": "move-alias.nagi",
+    "high": true,
+    "contract": "move-obligation",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "move-alias-low",
+    "source": "move-alias.low",
+    "high": false,
+    "contract": "move-obligation",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "double-await-nagi",
+    "source": "double-await.nagi",
+    "high": true,
+    "contract": "at-most-once",
+    "expected": "check-fail",
+    "diagnostic": "move後",
+    "primary_line": 8
+  },
+  {
+    "name": "double-await-low",
+    "source": "double-await.low",
+    "high": false,
+    "contract": "at-most-once",
+    "expected": "check-fail",
+    "diagnostic": "move後",
+    "primary_line": 6
+  },
+  {
+    "name": "double-discard-nagi",
+    "source": "double-discard.nagi",
+    "high": true,
+    "contract": "at-most-once",
+    "expected": "check-fail",
+    "diagnostic": "move後",
+    "primary_line": 10
+  },
+  {
+    "name": "double-discard-low",
+    "source": "double-discard.low",
+    "high": false,
+    "contract": "at-most-once",
+    "expected": "check-fail",
+    "diagnostic": "move後",
+    "primary_line": 7
+  },
+  {
+    "name": "await-discard-nagi",
+    "source": "await-discard.nagi",
+    "high": true,
+    "contract": "at-most-once",
+    "expected": "check-fail",
+    "diagnostic": "move後",
+    "primary_line": 10
+  },
+  {
+    "name": "await-discard-low",
+    "source": "await-discard.low",
+    "high": false,
+    "contract": "at-most-once",
+    "expected": "check-fail",
+    "diagnostic": "move後",
+    "primary_line": 7
+  },
+  {
+    "name": "move-old-handle-nagi",
+    "source": "move-old-handle.nagi",
+    "high": true,
+    "contract": "move-obligation",
+    "expected": "check-fail",
+    "diagnostic": "move後",
+    "primary_line": 10
+  },
+  {
+    "name": "move-old-handle-low",
+    "source": "move-old-handle.low",
+    "high": false,
+    "contract": "move-obligation",
+    "expected": "check-fail",
+    "diagnostic": "move後",
+    "primary_line": 7
+  },
+  {
+    "name": "reassignment-nagi",
+    "source": "reassignment.nagi",
+    "high": true,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 7
+  },
+  {
+    "name": "reassignment-low",
+    "source": "reassignment.low",
+    "high": false,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 5
+  },
+  {
+    "name": "shadow-nagi",
+    "source": "shadow.nagi",
+    "high": true,
+    "contract": "existing-no-shadow",
+    "expected": "check-fail",
+    "diagnostic": "letを重複",
+    "primary_line": 8
+  },
+  {
+    "name": "shadow-low",
+    "source": "shadow.low",
+    "high": false,
+    "contract": "existing-no-shadow",
+    "expected": "check-fail",
+    "diagnostic": "letを重複",
+    "primary_line": 6
+  },
+  {
+    "name": "branch-nagi",
+    "source": "branch.nagi",
+    "high": true,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 6
+  },
+  {
+    "name": "branch-low",
+    "source": "branch.low",
+    "high": false,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 4
+  },
+  {
+    "name": "loop-nagi",
+    "source": "loop.nagi",
+    "high": true,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 7
+  },
+  {
+    "name": "loop-low",
+    "source": "loop.low",
+    "high": false,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 5
+  },
+  {
+    "name": "container-escape-nagi",
+    "source": "container-escape.nagi",
+    "high": true,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "Task",
+    "primary_line": 7
+  },
+  {
+    "name": "container-escape-low",
+    "source": "container-escape.low",
+    "high": false,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "Task",
+    "primary_line": 5
+  },
+  {
+    "name": "nested-scope-nagi",
+    "source": "nested-scope.nagi",
+    "high": true,
+    "contract": "same-scope",
+    "expected": "check-fail",
+    "diagnostic": "Task",
+    "primary_line": 8
+  },
+  {
+    "name": "nested-scope-low",
+    "source": "nested-scope.low",
+    "high": false,
+    "contract": "same-scope",
+    "expected": "check-fail",
+    "diagnostic": "Task",
+    "primary_line": 6
+  },
+  {
+    "name": "outside-scope-nagi",
+    "source": "outside-scope.nagi",
+    "high": true,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "未定義",
+    "primary_line": 8
+  },
+  {
+    "name": "outside-scope-low",
+    "source": "outside-scope.low",
+    "high": false,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "未定義",
+    "primary_line": 7
+  },
+  {
+    "name": "spawn-outside-scope-nagi",
+    "source": "spawn-outside-scope.nagi",
+    "high": true,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "scope",
+    "primary_line": 5
+  },
+  {
+    "name": "spawn-outside-scope-low",
+    "source": "spawn-outside-scope.low",
+    "high": false,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "scope",
+    "primary_line": 3
+  },
+  {
+    "name": "legacy-spawn-nagi",
+    "source": "legacy-spawn.nagi",
+    "high": true,
+    "contract": "compatibility",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "legacy-spawn-low",
+    "source": "legacy-spawn.low",
+    "high": false,
+    "contract": "compatibility",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "user-spawn-call-nagi",
+    "source": "user-spawn-call.nagi",
+    "high": true,
+    "contract": "compatibility",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "user-spawn-call-low",
+    "source": "user-spawn-call.low",
+    "high": false,
+    "contract": "compatibility",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "move-alias-unreceived-nagi",
+    "source": "move-alias-unreceived.nagi",
+    "high": true,
+    "contract": "move-obligation",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 9
+  },
+  {
+    "name": "move-alias-unreceived-low",
+    "source": "move-alias-unreceived.low",
+    "high": false,
+    "contract": "move-obligation",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 6
+  },
+  {
+    "name": "reassign-after-await-nagi",
+    "source": "reassign-after-await.nagi",
+    "high": true,
+    "contract": "must-consume",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "reassign-after-await-low",
+    "source": "reassign-after-await.low",
+    "high": false,
+    "contract": "must-consume",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "loop-consumed-nagi",
+    "source": "loop-consumed.nagi",
+    "high": true,
+    "contract": "must-consume",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "loop-consumed-low",
+    "source": "loop-consumed.low",
+    "high": false,
+    "contract": "must-consume",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "checker-location-control-nagi",
+    "source": "checker-location-control.nagi",
+    "high": true,
+    "contract": "infrastructure-control",
+    "expected": "check-fail",
+    "diagnostic": "型",
+    "primary_line": 2
+  },
+  {
+    "name": "checker-location-control-low",
+    "source": "checker-location-control.low",
+    "high": false,
+    "contract": "infrastructure-control",
+    "expected": "check-fail",
+    "diagnostic": "型",
+    "primary_line": 2
+  }
+  ,
+  {
+    "name": "bare-move-drop-nagi",
+    "source": "bare-move-drop.nagi",
+    "high": true,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "Task",
+    "primary_line": 7
+  },
+  {
+    "name": "bare-move-drop-low",
+    "source": "bare-move-drop.low",
+    "high": false,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "Task",
+    "primary_line": 6
+  },
+  {
+    "name": "both-branches-consume-nagi",
+    "source": "both-branches-consume.nagi",
+    "high": true,
+    "contract": "must-consume",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "both-branches-consume-low",
+    "source": "both-branches-consume.low",
+    "high": false,
+    "contract": "must-consume",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "branch-regeneration-nagi",
+    "source": "branch-regeneration.nagi",
+    "high": true,
+    "contract": "must-consume",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "branch-regeneration-low",
+    "source": "branch-regeneration.low",
+    "high": false,
+    "contract": "must-consume",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "branch-partial-regeneration-nagi",
+    "source": "branch-partial-regeneration.nagi",
+    "high": true,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 5
+  },
+  {
+    "name": "branch-partial-regeneration-low",
+    "source": "branch-partial-regeneration.low",
+    "high": false,
+    "contract": "must-consume",
+    "expected": "check-fail",
+    "diagnostic": "未受取Task",
+    "primary_line": 4
+  },
+  {
+    "name": "nested-resume-outer-nagi",
+    "source": "nested-resume-outer.nagi",
+    "high": true,
+    "contract": "same-scope",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "nested-resume-outer-low",
+    "source": "nested-resume-outer.low",
+    "high": false,
+    "contract": "same-scope",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "same-depth-scopes-nagi",
+    "source": "same-depth-scopes.nagi",
+    "high": true,
+    "contract": "same-scope",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "same-depth-scopes-low",
+    "source": "same-depth-scopes.low",
+    "high": false,
+    "contract": "same-scope",
+    "expected": "check-pass",
+    "diagnostic": "",
+    "primary_line": 0
+  },
+  {
+    "name": "failure-message-move-nagi",
+    "source": "failure-message-move.nagi",
+    "high": true,
+    "contract": "borrow-owner",
+    "expected": "check-fail",
+    "diagnostic": "view",
+    "primary_line": 14
+  },
+  {
+    "name": "failure-message-move-low",
+    "source": "failure-message-move.low",
+    "high": false,
+    "contract": "borrow-owner",
+    "expected": "check-fail",
+    "diagnostic": "view",
+    "primary_line": 12
+  },
+  {
+    "name": "task-parameter-nagi",
+    "source": "task-parameter.nagi",
+    "high": true,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "Task",
+    "primary_line": 2
+  },
+  {
+    "name": "task-parameter-low",
+    "source": "task-parameter.low",
+    "high": false,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "Task",
+    "primary_line": 2
+  },
+  {
+    "name": "task-return-nagi",
+    "source": "task-return.nagi",
+    "high": true,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "Task",
+    "primary_line": 2
+  },
+  {
+    "name": "task-return-low",
+    "source": "task-return.low",
+    "high": false,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "Task",
+    "primary_line": 2
+  },
+  {
+    "name": "task-wrapper-nagi",
+    "source": "task-wrapper.nagi",
+    "high": true,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "Task",
+    "primary_line": 6
+  },
+  {
+    "name": "task-wrapper-low",
+    "source": "task-wrapper.low",
+    "high": false,
+    "contract": "scope-local",
+    "expected": "check-fail",
+    "diagnostic": "Task",
+    "primary_line": 5
+  }
+]

@@ -1,0 +1,44 @@
+{
+  "source_head": "34ac4d585084877372965e3d58ed5c2002604529",
+  "tree": "781e031eafbdc0efa00038007d41cf16dc538862",
+  "checks_run": 37489343115,
+  "website_run": 37489342523,
+  "task_observations": {
+    "linux-x86_64": {
+      "native_tests": 5,
+      "public_api_tests": 3,
+      "runtime_oracles": 17,
+      "runtime_doc_tests": 9,
+      "strict_contracts": 90
+    },
+    "windows-x86_64": {
+      "native_tests": 5,
+      "public_api_tests": 3,
+      "runtime_oracles": 17,
+      "runtime_doc_tests": 9,
+      "strict_contracts": 90
+    },
+    "macos-arm64": {
+      "native_tests": 5,
+      "public_api_tests": 3,
+      "runtime_oracles": 17,
+      "runtime_doc_tests": 9,
+      "strict_contracts": 90
+    },
+    "macos-x86_64": {
+      "native_tests": 5,
+      "public_api_tests": 3,
+      "runtime_oracles": 17,
+      "runtime_doc_tests": 9,
+      "strict_contracts": 90
+    }
+  },
+  "linux_workspace": {
+    "result_blocks": 95,
+    "passed": 933,
+    "failed": 0,
+    "ignored": 1,
+    "includes": "three image_child subprocess reruns; cost oracle is ignored here and explicitly measured locally"
+  },
+  "scope": "Counts are verified in decoded job logs; accepted checker contracts are not a native test count."
+}

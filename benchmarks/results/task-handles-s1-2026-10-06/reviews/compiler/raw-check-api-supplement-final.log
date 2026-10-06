@@ -1,0 +1,13 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi/compiler)
+   Compiling nagi-task-raw-check-review v0.0.0 (/tmp/nagi-task-review/raw-check-api)
+    Finished `dev` profile [unoptimized] target(s) in 18.06s
+     Running `/tmp/nagi-container-flow-target/debug/nagi-task-raw-check-review`
+raw-High-unreceived: raw check = Err("line 5: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください")
+raw-High-received: raw check = Ok(())
+raw-High-received: generated Low finalize and Rust emit = Ok
+raw-Low-unreceived: raw check = Err("line 4: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください")
+raw-Low-received: raw check = Ok(())
+raw-Low-received: generated Low finalize and Rust emit = Ok
+task-builtin print(task): line 6: Taskはawait/discard/move以外の操作へ渡せません
+task-builtin view(task): line 6: Taskはawait/discard/move以外の操作へ渡せません
+task-builtin some(task): line 6: Taskはawait/discard/move以外の操作へ渡せません

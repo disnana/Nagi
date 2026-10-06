@@ -1,0 +1,22 @@
+{
+  "sha256": {
+    "runtime/src/task_bridge_prototype.rs": "ce8c9a54c1d55936ac004520dfbbc7c46926325ca3f3d668ae54be72c540dfb1",
+    "runtime/src/lib.rs": "542655ea316c182b5a367628252b9b73ec82c7a71fe5858ff95a82b81c39c00f",
+    "green-private-legacy.log": "6921e96897612313d96f4b806dab55060ece9a8c6796d1ef4bed4f28aae98315",
+    "green-runtime-legacy.log": "db778deb74ee4edd2ca2887a739725aaba8327b3520455633037b56465c518a5",
+    "clippy-legacy.log": "6ef142e93aa764eaf60df3490448bb1c8b513e934482f2323cfc2a6fac33161c",
+    "fmt-legacy.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "results": {
+    "private": {
+      "exit": 0,
+      "passed": 16
+    },
+    "runtime_with_network": {
+      "exit": 0,
+      "passed": 206
+    },
+    "clippy_runtime_all_targets": 0,
+    "fmt_all": 0
+  }
+}

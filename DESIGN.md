@@ -51,8 +51,8 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 | 同じ値を保持する | sharedで共有し、handle複製とpayload copyを分ける | 実装済み。sharedだけでthread安全性や終了完了を保証しない |
 | 普通の`a = b`を書く | Copyなら通常代入。既存の非Copyローカルを渡すなら`std.ownership.move`を使う | **作業branchで実装済み・未リリース**。新値生成、引数・return・field/indexの既存規則は維持する |
 | 値がない、処理が失敗する | nullableとResultを使い分ける。通常の拒否にpanicを使わない | 実装済み。NagiのtryはErrの伝播で、Pythonのtry/exceptではない |
-| 並行な処理から結果を得る | scopeが子の寿命を持ち、handleから結果を一度受け取る | **handleは未実装**。今のspawnはunit/Result[unit, Error]だけ |
-| 子が業務Errを返す | Errを結果として扱い、taskの故障とは分ける | **移行予定**。今のScopeは子Errでも兄弟を取消す |
+| 並行な処理から結果を得る | scopeが子の寿命を持ち、handleから結果を一度受け取る | **S1作業branchで実装・未リリース**。Taskは一回受取、旧spawnはunit/Result[unit, Error]を維持 |
+| 子が業務Errを返す | Errを結果として扱い、taskの故障とは分ける | Taskの内側業務Errでは兄弟を継続。旧spawnのErrは兄弟を取消す |
 | actorへ共有値を送る | 型と容量・寿命の条件を満たす明示sharedを許す | **未実装**。今のmessage/replyはsharedを拒否する |
 
 操作の明示は、Pythonの参照代入と違うことをコードから読めるようにするためです。新しい値を作る式まで機械的にmove指定を要求したり、「軽い値」をサイズ閾値で暗黙copyしたりはしません。引数・return・match等を一度に変更する方針でもありません。
@@ -63,7 +63,11 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 
 明示moveと狭い代入移行は作業branchで実装済み・未リリースです。既存のimportに沿って`from std.ownership import move`を使い、`a = move(b)`で値と後片付けの責任を渡します。暗黙clone、shared化、寿命の延長は行いません。新しく作る値にはmove指定を要求せず、Copy判定は現行の規則を保ちます。対応済みのローカルasync関数別名もCopyのままで、Futureや入れ子のFutureをmoveで渡す機能はありません。viewは読み取りの借用、sharedは同じ値の安全な共有、copyは独立した複製です。
 
-[実装計画](docs/internal/value-task-implementation-plan.md)に仕様、移行対象、先行テストを記録しています。明示操作と非Copyローカルの通常代入拒否を一つの変更として実装し、High/Low・Rust生成・サンプル・日英Docs・4 OS CIの検証状況は[進捗](docs/internal/progress.md)に分けて残します。task結果handleは後続工程です。mergeとreleaseは別途判断します。
+[実装計画](docs/internal/value-task-implementation-plan.md)に仕様、移行対象、先行テストを記録しています。明示操作と非Copyローカルの通常代入拒否を一つの変更として実装し、High/Low・Rust生成・サンプル・日英Docs・4 OS CIの検証状況は[進捗](docs/internal/progress.md)に分けて残します。task結果handleはS1作業branchへ接続しました。mergeとreleaseは別途判断します。
+
+S1は[ADR 012](docs/internal/adr/012-task-result-handles.md)に沿い**作業branchへ接続済み・未リリース**です。`task = spawn work()`でscope内handleを作り、`await task`で一回受け取ります。全Tの正常出口でawaitまたは`std.task.discard`を求め、moveは義務も移します。scope外・引数/return・field/container/wrapper・他taskへのescapeを拒否します。Taskは非Copy・非Clone・非sharedで、TaskFailureのkind/messageは標準metadataに接続します。業務Resultは外側faultと分け、受取Errを処理してもscope故障を消しません。fault観測→兄弟取消要求→全actual join→scope出口Errorの順とbody元Errを保ちます。discardは受取放棄であり、終了確認ではありません。
+
+新Taskを含む最寄りscopeだけpublic TaskScopeを選び、旧spawn-only Scope、Supervisor/HTTPの旧連携を維持します。checkerの私有ScopeId/binding義務とsealed planから生成し、暗黙cloneやemitterの所有権再推論は加えません。[Stage 1](docs/internal/task-bridge-stage1-results.md)と[接続結果](docs/internal/task-handles-s1-results.md)を分け、High/保存Low/手書きLow、native、回帰、4 OS、測定、独立レビューの保証範囲を後者に残します。S2の具体API、公開Pool/Tx、merge/release/版更新は別工程です。使い方は[Task結果handle](docs/task-handles.md)を参照してください。
 
 ## なぜRustを使うのか
 

@@ -1,0 +1,24 @@
+pub mod ast;
+mod capabilities;
+pub mod check;
+pub mod checked;
+mod constant_eval;
+pub mod diagnostics;
+pub mod emit;
+mod generation;
+pub mod graph;
+mod installation;
+pub mod lexer;
+pub mod modules;
+mod output;
+pub mod parser;
+pub mod project;
+mod routes;
+mod rust_names;
+pub mod source;
+mod sql_check;
+pub mod stdlib;
+pub mod symbols;
+#[cfg(test)]
+mod tests;
+mod view_flow;

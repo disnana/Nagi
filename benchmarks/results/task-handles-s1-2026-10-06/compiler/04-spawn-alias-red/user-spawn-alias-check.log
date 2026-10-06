@@ -1,0 +1,3 @@
+error: line 5:5: 式が必要です (found Id("print"))
+ --> /tmp/nagi-task-review/user-spawn-alias.nagi:5
+ 5 |     print(alias(5))

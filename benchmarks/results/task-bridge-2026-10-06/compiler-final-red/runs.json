@@ -1,0 +1,37 @@
+[
+  {
+    "label": "oracle-tests",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "-p",
+      "nagic",
+      "--example",
+      "task-contract-red"
+    ],
+    "exit": 101,
+    "seconds": 0.38510816695634276,
+    "runner_sha256": "138f94562cdb73f4d69a3cfba256b3de4f7a13877ce43c0ea9ec0d23288bc844"
+  },
+  {
+    "label": "contract-red",
+    "command": [
+      "cargo",
+      "run",
+      "--locked",
+      "--offline",
+      "-p",
+      "nagic",
+      "--example",
+      "task-contract-red",
+      "--",
+      "--report",
+      "/tmp/nagi-task-bridge-stage1/compiler-final-red/observations.json"
+    ],
+    "exit": 1,
+    "seconds": 0.45806755701778457,
+    "runner_sha256": "138f94562cdb73f4d69a3cfba256b3de4f7a13877ce43c0ea9ec0d23288bc844"
+  }
+]

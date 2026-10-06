@@ -1,0 +1,103 @@
+{
+  "start_head": "5c2c8282fbd9841cd3b0a2a78e9742d7ec3a811e",
+  "observed_head": "5c2c8282fbd9841cd3b0a2a78e9742d7ec3a811e",
+  "sources": {
+    "runtime/src/task.rs": "c7d77eb61b0cb640894b5c4bffd4f24e1cc3ca4bb892357cb5588aefcf9d39c3",
+    "runtime/src/lib.rs": "4d5ba694aa083ce5031d0f2ae93dd44978e0b1046e54be8e35eedc33e8737cc0",
+    "runtime/tests/task_handles.rs": "bbdbdfd3a9d909d8922b1b85424a1d2289108dd229671fa3862732e5d6362cfc",
+    "runtime/examples/task_handles_cost.rs": "b0fdd64dc97a38d2ea34ee21a3b1d71f9c8a26c4952de773b82f9ef8c3bf0924"
+  },
+  "snapshots": {
+    "03-public-green/task_handles.rs": "d28b38e82c233cba1e035ecfcb9e463f0c463d92ec2b5cccc82a84623aabf345",
+    "03-public-green/task.rs": "5cbfd55af8e03e3bc6901d8c193b33bb79b363c02b546a2b461b66d15e6a8677",
+    "03-public-green/lib.rs": "4d5ba694aa083ce5031d0f2ae93dd44978e0b1046e54be8e35eedc33e8737cc0",
+    "04-public-final/task_handles.rs": "bbdbdfd3a9d909d8922b1b85424a1d2289108dd229671fa3862732e5d6362cfc",
+    "04-public-final/task.rs": "c7d77eb61b0cb640894b5c4bffd4f24e1cc3ca4bb892357cb5588aefcf9d39c3",
+    "04-public-final/lib.rs": "4d5ba694aa083ce5031d0f2ae93dd44978e0b1046e54be8e35eedc33e8737cc0",
+    "04-public-final/task_handles_cost.rs": "b0fdd64dc97a38d2ea34ee21a3b1d71f9c8a26c4952de773b82f9ef8c3bf0924",
+    "01-public-api-red/task_handles.rs": "d28b38e82c233cba1e035ecfcb9e463f0c463d92ec2b5cccc82a84623aabf345",
+    "01-public-api-red/task_bridge_prototype.rs": "ce8c9a54c1d55936ac004520dfbbc7c46926325ca3f3d668ae54be72c540dfb1",
+    "01-public-api-red/lib.rs": "542655ea316c182b5a367628252b9b73ec82c7a71fe5858ff95a82b81c39c00f"
+  },
+  "logs": [
+    {
+      "path": "01-public-api-red/cargo-test.log",
+      "exit_code": 143,
+      "meaning": "infra: sandbox network unavailable; retry process terminated",
+      "sha256": "5dd9f16ef6c983f94ac6f8e63ab8b312cec83c5e4a7a04213e5c399c61141f7a"
+    },
+    {
+      "path": "01-public-api-red/cargo-test-network.log",
+      "exit_code": 101,
+      "meaning": "compile RED: E0432 missing four public task types",
+      "sha256": "1902e3911df6cfe899c878fa9fab29954fc3e59fe2bf5741a37439a71640aa02"
+    },
+    {
+      "path": "02-public-migration-first.log",
+      "exit_code": 0,
+      "meaning": "16 migrated native oracles",
+      "sha256": "840721e2c2e8e8ad036b9f707037a8a4601aa963b6e53dd0c07839dd1111b79e"
+    },
+    {
+      "path": "03-public-green/cargo-test-runtime.log",
+      "exit_code": 0,
+      "meaning": "intermediate runtime unit/public API/doc tests",
+      "sha256": "48b4b18bba1ef691ae872b06558a8348a0897e4500d3830d6365831c1304c528"
+    },
+    {
+      "path": "03-public-green/native-cost-debug.log",
+      "exit_code": 0,
+      "meaning": "intermediate explicit ignored cost measurement",
+      "sha256": "cf5b88fb90c245ee8e1153e95d0c52d856ce36cb6b92164c760ab6b1e7f99937"
+    },
+    {
+      "path": "04-public-final/cargo-test-runtime.log",
+      "exit_code": 0,
+      "meaning": "206 unit tests; 1 cost ignored; 3 public API; 9 docs",
+      "sha256": "e08839e9f86e2b48dc2f88d8681d5f7ee7589bfa0e3aad7bbcac435458d72e49"
+    },
+    {
+      "path": "04-public-final/native-cost-unit-debug.log",
+      "exit_code": 0,
+      "meaning": "explicit ignored measurement before JoinSet metric label correction",
+      "sha256": "f54461aeb6d716e6c48b96e70279982c045ee545e36ce1c6212fefff08d29535"
+    },
+    {
+      "path": "04-public-final/native-task-oracles-and-cost.log",
+      "exit_code": 0,
+      "meaning": "16 final native oracles plus explicit ignored measurement",
+      "sha256": "0e79fde6446482b0f8d8c1990d75470fcfcc75a38d282909220045a56db1b1b6"
+    },
+    {
+      "path": "04-public-final/native-cost-production-release-first.log",
+      "exit_code": 0,
+      "meaning": "production release baseline: 5 loops, 7 repetitions",
+      "sha256": "f8ac75c8571ebf49f1120f1e0c127c4927c3bfc9ae450311d6af0bc71d645b7a"
+    },
+    {
+      "path": "04-public-final/native-cost-production-release.log",
+      "exit_code": 0,
+      "meaning": "production release baseline: 25 loops, 7 repetitions",
+      "sha256": "d17e832f9f3aba23f2c8e111a0e2747aa84faab8e967ef1cc8e71a8432e593e2"
+    },
+    {
+      "path": "04-public-final/cargo-clippy-runtime.log",
+      "exit_code": 0,
+      "meaning": "runtime --all-targets -D warnings",
+      "sha256": "804d16be4dc9f615b06daf28822fcf476a955d6c35c9de457ae3bb99053ebb34"
+    },
+    {
+      "path": "04-public-final/rustfmt-runtime.log",
+      "exit_code": 0,
+      "meaning": "runtime files rustfmt --check",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "runtime_test_only_key_layout_differs": true,
+  "production_benchmark_runtime": "current_thread",
+  "benchmark_allocator": "calling thread only; all fixture children run on calling thread",
+  "native_targets_verified": [
+    "Linux x86_64"
+  ],
+  "committed": false
+}

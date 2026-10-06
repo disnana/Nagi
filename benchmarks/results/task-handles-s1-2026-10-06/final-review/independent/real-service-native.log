@@ -1,0 +1,9 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.38s
+     Running tests/task_handles.rs (/tmp/nagi-container-flow-target/debug/deps/task_handles-d0cc06a902147195)
+
+running 1 test
+test task_service::legacy_supervisor_terminal_and_normal_shutdown_reach_real_http ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 3.91s
+

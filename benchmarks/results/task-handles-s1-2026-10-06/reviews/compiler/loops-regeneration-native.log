@@ -1,0 +1,12 @@
+     Locking 108 packages to highest compatible versions
+   Compiling nagi-loops-regeneration-ced2c45320515023 v0.1.0 (/tmp/nagi-task-review/out-loops-regeneration/.nagi/apps/nagi-loops-regeneration-ced2c45320515023/generations/.staging-g-2e2b-18dbf6e1262b9690-0)
+error[E0432]: unresolved import `nagi_runtime::TaskScope`
+  --> src/main.rs:27:25
+   |
+27 | pub use ::nagi_runtime::TaskScope::discard as discard;
+   |                         ^^^^^^^^^ `TaskScope` is a struct, not a module
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `nagi-loops-regeneration-ced2c45320515023` (bin "nagi-ced2c45320515023-g-2e2b-18dbf6e1262b9690-0") due to 1 previous error
+Build failed. Check the diagnostics above for code, dependency, or build environment errors.
+Compatibility projection may be partial; prior latest unchanged.

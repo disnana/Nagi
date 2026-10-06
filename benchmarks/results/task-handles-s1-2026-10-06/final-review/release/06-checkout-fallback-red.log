@@ -1,0 +1,17 @@
+.........F....
+======================================================================
+FAIL: test_checkout_runtime_cannot_replace_the_bundled_task_runtime (test_verify.TaskDistributionVerificationTests.test_checkout_runtime_cannot_replace_the_bundled_task_runtime)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Nagi/scripts/releases/test_verify.py", line 182, in test_checkout_runtime_cannot_replace_the_bundled_task_runtime
+    with self.assertRaisesRegex(AssertionError, "Task runtime came from outside the distribution"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: AssertionError not raised
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.018s
+
+FAILED (failures=1)
+Verified SQL engine: extracted compiler, offline schema, bad columns/binds, Nagi locations, no Cargo/runtime
+Verified Task handles: extracted compiler/runtime, High/saved Low/handwritten Low, receive/discard, nested business Err, early ownership diagnostics
+Verified Task handles: extracted compiler/runtime, High/saved Low/handwritten Low, receive/discard, nested business Err, early ownership diagnostics

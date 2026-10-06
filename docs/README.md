@@ -43,7 +43,7 @@
 
 動かせる入門例は[examples/tutorial/](../examples/tutorial/)にあります。リファレンスにはコードの断片も載せています。
 
-入門のコードは現行の書き方です。明示moveの移行仕様、未実装のspawn結果handleとactorのshared messageは[採用した設計方向](../DESIGN.md#値失敗taskについて採用する方針)に分けており、実装状況と公開版への反映を区別します。
+入門のコードは現行の書き方です。明示moveの移行仕様、作業branchに実装済み・未リリースの[Task結果handle](task-handles.md)とactorのshared messageは[採用した設計方向](../DESIGN.md#値失敗taskについて採用する方針)に分けており、実装状況と公開版への反映を区別します。
 
 ## 仕組みと開発状況
 

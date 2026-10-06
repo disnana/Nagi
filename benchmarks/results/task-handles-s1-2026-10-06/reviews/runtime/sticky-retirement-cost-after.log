@@ -1,0 +1,10 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi/runtime)
+   Compiling nagi-s1-independent-public-review v0.0.0 (/tmp/nagi-s1-independent-review/public-counterexamples)
+    Finished `release` profile [optimized] target(s) in 10.67s
+     Running `/tmp/nagi-container-flow-target/release/fault-retirement-cost`
+items=128 mode=sticky_receive raw_ns=[17687, 16741, 17471]
+items=128 mode=sticky_discard raw_ns=[11672, 11494, 11391]
+items=1024 mode=sticky_receive raw_ns=[133675, 131799, 130507]
+items=1024 mode=sticky_discard raw_ns=[156372, 95516, 90170]
+items=8192 mode=sticky_receive raw_ns=[1754456, 1756333, 1345862]
+items=8192 mode=sticky_discard raw_ns=[1124789, 939330, 1637281]

@@ -1,0 +1,42 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-task-handle-design-review/runtime)
+error[E0599]: no method named `legacy_cause` found for struct `Fault` in the current scope
+   --> runtime/src/task_bridge_prototype.rs:953:14
+    |
+ 29 |   struct Fault {
+    |   ------------ method `legacy_cause` not found for this struct
+...
+952 |           let original = primary
+    |  ________________________-
+953 | |             .legacy_cause()
+    | |             -^^^^^^^^^^^^ method not found in `Fault`
+    | |_____________|
+    |
+
+error[E0599]: no method named `legacy_cause` found for struct `Fault` in the current scope
+   --> runtime/src/task_bridge_prototype.rs:959:14
+    |
+ 29 |   struct Fault {
+    |   ------------ method `legacy_cause` not found for this struct
+...
+958 |           let repeated_original = repeated
+    |  _________________________________-
+959 | |             .legacy_cause()
+    | |             -^^^^^^^^^^^^ method not found in `Fault`
+    | |_____________|
+    |
+
+error[E0599]: no method named `legacy_cause` found for struct `Fault` in the current scope
+   --> runtime/src/task_bridge_prototype.rs:965:14
+    |
+ 29 |   struct Fault {
+    |   ------------ method `legacy_cause` not found for this struct
+...
+964 |           let later_cause = scope.related[0]
+    |  ___________________________-
+965 | |             .legacy_cause()
+    | |             -^^^^^^^^^^^^ method not found in `Fault`
+    | |_____________|
+    |
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `nagi-runtime` (lib test) due to 3 previous errors

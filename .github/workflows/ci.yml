@@ -71,6 +71,12 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - name: Check conformance corpus and regression harness registration
         run: python scripts/verify_compiler_contracts.py
+      - name: Check Task contract input registration
+        run: python scripts/verify_task_handle_contract_inputs.py
+      - name: Check Task contract runner distinguishes parse rejection from checker evidence
+        run: cargo test --locked -p nagic --example task-contract-red
+      - name: Check Task ownership contracts and original diagnostic lines
+        run: cargo run --locked -p nagic --example task-contract-red -- --report /tmp/task-contracts.json
       - run: cargo test --locked
       - name: Check a compiler without the SQL validation engine
         run: |
@@ -229,9 +235,21 @@ jobs:
         shell: bash
         run: node --test editors/vscode-nagi/test/*.test.js scripts/test_graph_html_viewport.mjs
       - name: Check generated output protection and native expression behavior
-        run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test explicit_moves --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
+        run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test explicit_moves --test task_handles --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
       - name: Parse planned SQLite High and handwritten Low contract inputs
         run: cargo test --locked -p nagic --test sqlite_contract_inputs
+      - name: Check public Task bridge lifecycle on the target platform
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked -p nagi-runtime --lib task::tests:: 2>&1 | tee "$RUNNER_TEMP/task-runtime.log"
+          python -c 'import pathlib,re,os; text=pathlib.Path(os.environ["RUNNER_TEMP"],"task-runtime.log").read_text(); assert re.search(r"test result: ok\. 17 passed; 0 failed; 0 ignored;",text),text'
+          cargo test --locked -p nagi-runtime --test task_handles
+          cargo test --locked -p nagi-runtime --doc
+
+      - name: Check Task checker contracts on the target platform
+        shell: bash
+        run: cargo run --locked -p nagic --example task-contract-red -- --report "$RUNNER_TEMP/task-contracts.json"
       - name: Check successful application artifact selection
         run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
       - name: Check Axum native test execution and result validation

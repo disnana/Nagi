@@ -1,0 +1,26 @@
+[
+  {
+    "source": "loops-regeneration",
+    "stage": "high-low-native-run",
+    "exit_code": 0,
+    "log": "/tmp/nagi-task-review/loops-regeneration-final-native.log"
+  },
+  {
+    "source": "loop-inner-scope",
+    "stage": "high-low-native-run",
+    "exit_code": 0,
+    "log": "/tmp/nagi-task-review/loop-inner-scope-final-native.log"
+  },
+  {
+    "source": "alias-loop-exit",
+    "stage": "high-low-native-run",
+    "exit_code": 0,
+    "log": "/tmp/nagi-task-review/alias-loop-exit-final-native.log"
+  },
+  {
+    "source": "same-line.low",
+    "stage": "low-native-run",
+    "exit_code": 0,
+    "log": "/tmp/nagi-task-review/same-line-final-native.log"
+  }
+]

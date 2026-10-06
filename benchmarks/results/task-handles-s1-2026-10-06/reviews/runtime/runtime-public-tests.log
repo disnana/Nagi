@@ -1,0 +1,18 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [unoptimized] target(s) in 0.11s
+     Running tests/task_handles.rs (/tmp/nagi-container-flow-target/debug/deps/task_handles-1fdbf05c5538d590)
+
+running 3 tests
+
+thread 'public_failure_getters_keep_fault_sticky_after_receive' (13246) panicked at runtime/tests/task_handles.rs:30:52:
+public child panic
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test public_failure_getters_keep_fault_sticky_after_receive ... ok
+test public_task_results_keep_business_error_inside_and_legacy_error_at_exit ... ok
+test public_mixed_legacy_failure_keeps_failure_category_and_native_exit_error ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

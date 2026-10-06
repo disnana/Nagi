@@ -1,0 +1,2 @@
+async fn work()->i64 { return 7; }
+async fn main()->Result[unit,Error] { scope { let a=spawn work(); let b=await a; } scope { let c=spawn work(); let d=await c; } return ok(print(0)); }

@@ -1,0 +1,29 @@
+ Downloading crates ...
+  Downloaded serde_spanned v1.1.1
+  Downloaded toml_writer v1.1.2+spec-1.1.0
+  Downloaded equivalent v1.0.2
+  Downloaded toml v1.1.6+spec-1.1.0
+  Downloaded toml_datetime v1.1.1+spec-1.1.0
+  Downloaded indexmap v2.14.2
+  Downloaded toml_parser v1.1.3+spec-1.1.0
+  Downloaded winnow v1.0.4
+   Compiling serde_core v1.0.229
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling syn v3.0.6
+   Compiling winnow v1.0.4
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling serde_derive v1.0.229
+   Compiling serde_spanned v1.1.1
+   Compiling toml_writer v1.1.2+spec-1.1.0
+   Compiling memchr v2.8.3
+   Compiling smallvec v1.16.2
+   Compiling rusqlite v0.40.2
+   Compiling toml v1.1.6+spec-1.1.0
+   Compiling nagic v0.1.10 (/workspace/Nagi/compiler)
+    Finished `dev` profile [unoptimized] target(s) in 16.03s
+     Running `/tmp/nagi-container-flow-target/debug/examples/task-contract-red --report benchmarks/results/task-handles-s1-2026-10-06/compiler/01-additional-red/observations.json`
+Task contracts: 6/76 matched; report: benchmarks/results/task-handles-s1-2026-10-06/compiler/01-additional-red/observations.json

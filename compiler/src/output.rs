@@ -171,6 +171,7 @@ pub(crate) fn assets(program: &crate::ast::Program) -> Vec<PathBuf> {
         for statement in statements {
             match &statement.kind {
                 S::Assign { value, .. }
+                | S::SpawnBind { value, .. }
                 | S::Expr(value)
                 | S::Spawn(value)
                 | S::Return(Some(value)) => expr(value, assets),

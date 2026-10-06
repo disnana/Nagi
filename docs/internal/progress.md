@@ -1,5 +1,26 @@
 # コンパイラ・Rust境界の進捗
 
+## PR #88最終レビューとTask次リリース準備
+
+2026-10-06。#88をS1完成PRとしてレビューし、production本体・依存を維持した。未実装と書かれた日英/AI文書、negative9対＋positive1対、旧Supervisor terminal→実HTTP停止の三構文専用oracleを補強。契約110/110、Task native6群、全workspace原ログ95 block・934成功・failed0・費用用ignored1、fmt/clippyが成功した。過去の90/90・source CIを今回の再実行へ数えない。
+
+[最終レビュー](task-handles-s1-final-review.md)と[完成後引継ぎ](handoffs/2026-10-06-task-handles-s1-complete.md)へ、契約照合・負債・次PR/依存順を記録する。最新ユーザー指示で、S1完成後も停止せずTask残件と次Nagiリリース公開へ継続する。新公開仕様などの判断が不要な実装・検証は自律進行する。新しいSol独立レビューはDocs修正と配布Task三構文/12拒否を確認し、productionの追加不具合なし。release unit98と検証用Linux archive全体も成功した。最新headの4 OS・必須CIを読戻し、既存手順に沿い必要PRのmerge/版更新/releaseまで進める。
+
+## S1 Task結果handleの接続（作業branch・未リリース）
+
+2026-10-06、ユーザーの再開指示を受け、Stage 1の停止境界から追加RED→checker/public runtimeへ接続した。SpawnBind、canonical std.task、stable ScopeIdとbinding義務、sealed受取/放棄/Scope planを実装。High・保存Low・手書きLowの全positive nativeと、業務Err兄弟継続・sticky fault・legacy/body元Err・Drop/actual joinを検証した。独立レビューのFailure wrapper copy/share、spawnユーザー名、associated method再export、raw public checker APIの不一致を縮小反例で修正した。故障後大量受取のO(n²)掃除もRED→ticket退役へ修正し、17native oracleへ追加した。
+
+[接続結果](task-handles-s1-results.md)と[artifact](../../benchmarks/results/task-handles-s1-2026-10-06/README.md)に90/90契約、三構文native、全workspace回帰、探索、測定、日英Docsと独立レビューを記録した。公開source `34ac4d5` の[checks](https://github.com/disnana/Nagi/actions/runs/37489343115)・[website](https://github.com/disnana/Nagi/actions/runs/37489342523)は成功。4 OSともTask native5群・runtime17群・公開3・doc9・checker90/90、Linux全workspace原ログ933成功・failed0・費用用ignored1、全package・両IDE・merge gateが成功した。結果追記headのChecksはPR #88で別に確認する。Stage 1結果を今回の実行と数えず、S2、公開SQLite、merge、release、版更新は行わない。
+
+
+## S1 Stage 1: 先行REDとprivate Task bridge
+
+2026-10-06。ユーザーによる#87のマージを確認した。最終head `5985e1b`とmain `9ba4a10`のtreeは一致。#87は追加変更せず、S1は別のmain向けdraft PRへ分離する。
+
+[Stage 1結果](task-bridge-stage1-results.md)にprivate runtimeの16群、runner oracleの3群、56入力中6一致/50未達を記録した。新Taskはparse REDのまま。結果通知を実joinとしないこと、受取faultがscope故障を消さないこと、元legacy Errorを保持することをnative oracleで検査し、Solが修正後sourceを独立レビューした。初回socketのinfra失敗と、runner元行/Lowコメント誤りの記録も保存した。
+
+今回は先行RED＋cfg(test) private bridgeで止める。Nagi checker/Low/Rust生成、旧spawnの移行、allocation/Future size測定、公開SQLiteは後続。merge・release・版更新は行わない。全回帰と最新head CIは結果文書へ追記し、過去headの成功を流用しない。最新指示でこの区切りの後に停止し、[Sol 6.1向け引継ぎ](handoffs/2026-10-06-task-bridge-stage1.md)を作成する。checker/public runtimeのTask実装は未着手。source head `6223ad2`の[CI](https://github.com/disnana/Nagi/actions/runs/37467579939)は4 OSのprivate各16群・全必須jobが成功。引継ぎ追記後の最新CIはPR Checksで別に確認する。
+
 ## PR #87: 更新後CIの終了回帰と仕上げ
 
 2026-10-06。move補強のlocal `44c38b7`は90 suite・899件成功。公開head `68d215b`のLinux CIでprivate SQLite closeが1件失敗した。古いCI、ローカル成功、再実行だけで解消したとは扱わず、stock APIによる決定的反例をtest-only `0051f7a`へ保存した。

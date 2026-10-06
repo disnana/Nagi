@@ -1,0 +1,3 @@
+error: line 4:19: 式が必要です (found Id("value"))
+ --> /tmp/nagi-task-review/user-spawn-field.nagi:4
+ 4 |     value = spawn.value

@@ -33,6 +33,8 @@ fn main() {
         ("def evaluate() -> i64:\n    value: Result[i64, i64] = ok(7)\n    match value:\n        case Ok(number):\n            return number\n        case Err(code):\n            return code\n", true),
         ("from std.ownership import move\ndef evaluate() -> i64:\n    value = [7, 8]\n    transferred = move(value)\n    return transferred[0] + len(transferred)\n", true),
         ("from std.ownership import move;\nfn evaluate() -> i64 { let value: List[i64] = [7, 8]; let transferred: List[i64] = move(value); return transferred[0] + len(transferred); }", false),
+        ("async def work() -> i64:\n    return 7\nasync def evaluate() -> Result[unit, Error]:\n    async with scope:\n        task = spawn work()\n        received = await task\n    return ok(print(0))\n", true),
+        ("async fn work() -> i64 { return 7; }\nasync fn evaluate() -> Result[unit,Error] { scope { let task = spawn work(); let received = await task; } return ok(print(0)); }", false),
     ];
     let mut state = seed;
     let mut accepted = 0;

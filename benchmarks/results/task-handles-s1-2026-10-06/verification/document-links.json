@@ -1,0 +1,14 @@
+{
+  "markdown": {
+    "files": 221,
+    "localLinks": 1926,
+    "externalLinksNotFetched": 248,
+    "errors": []
+  },
+  "site": {
+    "pages": 92,
+    "localLinksAndAssets": 11214,
+    "errors": []
+  },
+  "scope": "current documentation; historical source snapshots excluded; website/build.py checks HTML anchors/assets"
+}

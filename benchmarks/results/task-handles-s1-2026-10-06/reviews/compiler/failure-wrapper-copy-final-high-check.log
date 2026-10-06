@@ -1,0 +1,3 @@
+error: line 13: Task/TaskFailureはcopyできません（nested wrapperを含みます）
+ --> /tmp/nagi-task-review/failure-wrapper-copy.nagi:13
+ 13 |                 copied = copy(view(failures))

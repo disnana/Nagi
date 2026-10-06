@@ -1,0 +1,7 @@
+{
+  "result_blocks": 95,
+  "passed": 933,
+  "failed": 0,
+  "ignored": 1,
+  "note": "raw log count includes nested image_child reexecution; ignored cost measurement is separately invoked"
+}

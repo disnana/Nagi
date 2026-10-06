@@ -1,0 +1,3 @@
+from std.task import Task
+def accept(task: Task[i64]) -> unit:  # primary
+    print(0)

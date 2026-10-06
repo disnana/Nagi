@@ -1,0 +1,3 @@
+from std.task import discard;
+async fn answer() -> i64 { return 42; }
+async fn main() -> Result[unit,Error] { scope { let task = spawn answer(); let result = await task; match result { case Ok(value) { print(value); } case Err(failure) { print("子taskが故障しました"); } } let background = spawn sleep(10); discard(background); } return ok(print("完了")); }

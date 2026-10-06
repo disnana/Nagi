@@ -1,0 +1,14 @@
+from std.task import discard
+from std.ownership import move
+async def work() -> i64:
+    return 7
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        alias = move(task)
+        for iteration in range(2):
+            received = await alias
+            task = spawn work()
+            alias = move(task)
+        discard(alias)
+    return ok(print(0))

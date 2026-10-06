@@ -1,0 +1,13 @@
+[package]
+name="nagi-s1-independent-public-review"
+version="0.0.0"
+edition="2021"
+[dependencies]
+nagi-runtime={path="/workspace/Nagi/runtime"}
+tokio={version="1.48",features=["rt","macros","sync","time"]}
+[lib]
+path="review.rs"
+
+[[bin]]
+name="fault-retirement-cost"
+path="fault_cost.rs"

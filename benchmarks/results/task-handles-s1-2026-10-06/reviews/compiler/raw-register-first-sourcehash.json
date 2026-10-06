@@ -1,0 +1,10 @@
+{
+  "compiler/src/ast.rs": "9c035c860a253a95078d97d90c95b70695fe98b522bf236bceb4b87939c0ca31",
+  "compiler/src/parser.rs": "236a18acfba25a29050317adf45e77cd905ff95312e4f925c668c78c2246af70",
+  "compiler/src/check.rs": "7fd06f71c37303ee7418203b36d6cf75ef2a836a9b10076efc383519ff850f0a",
+  "compiler/src/check/checked.rs": "e720731a6bf3144d1072c61aecaa394cb2c637158db8799845e023de74d3061f",
+  "compiler/src/stdlib.rs": "0b61f3b01fd3d85ca77ab994595f39bcb5ac888feebeff8851d7b0fe71bd231d",
+  "compiler/src/modules.rs": "b631b4a22ed4b77895e5d6de229383fd7f406fc9a5f13002daae3928b9c7ab8a",
+  "compiler/src/emit.rs": "ce3661a4e08736768b3a1fc80048a9c16dde89194986e8ec05c1a7a62b039464",
+  "compiler/src/capabilities.rs": "85a6b678c92f95528b9ff4f68984ab0cd307dcccddeea24d493fefc7b06a173c"
+}

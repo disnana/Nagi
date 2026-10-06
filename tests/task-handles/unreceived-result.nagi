@@ -1,0 +1,7 @@
+async def work() -> Result[i64, Error]:
+    return error("business")
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()  # primary
+    return ok(print(0))

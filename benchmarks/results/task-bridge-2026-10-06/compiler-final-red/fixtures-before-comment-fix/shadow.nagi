@@ -1,0 +1,11 @@
+async def work() -> i64:
+    return 7
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        if True:
+            let task = spawn work()  # primary
+            received = await task
+        kept = await task
+    return ok(print(0))

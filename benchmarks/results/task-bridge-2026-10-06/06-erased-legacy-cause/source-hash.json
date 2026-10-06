@@ -1,0 +1,4 @@
+{
+  "sha256": "2f77b2e9c161fa29606009448fa4091a80234a061df67b9d67541d597e5a5375",
+  "representation": "Fault kind/message only; native Error erased; getter has no original Error to return"
+}

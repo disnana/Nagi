@@ -1,0 +1,39 @@
+2026-10-06T13:07:06.8675749Z ##[group]Run cargo test --locked -p nagi-runtime task_bridge_prototype::tests::
+2026-10-06T13:07:06.8677182Z [36;1mcargo test --locked -p nagi-runtime task_bridge_prototype::tests::[0m
+2026-10-06T13:07:06.8752443Z shell: /usr/bin/bash -e {0}
+2026-10-06T13:07:06.8752908Z env:
+2026-10-06T13:07:06.8753453Z   NAGI_FAILURE_DIR: /home/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-06T13:07:06.8754189Z   CARGO_HOME: /home/runner/.cargo
+2026-10-06T13:07:06.8754686Z   CARGO_INCREMENTAL: 0
+2026-10-06T13:07:06.8754970Z   CARGO_TERM_COLOR: always
+2026-10-06T13:07:06.8755282Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T13:07:06.8755726Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T13:07:06.8756180Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T13:07:06.8756883Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T13:07:06.8757348Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T13:07:06.8757785Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T13:07:06.8758130Z ##[endgroup]
+2026-10-06T13:07:06.9433492Z [1m[92m   Compiling[0m nagi-runtime v0.1.10 (/home/runner/work/Nagi/Nagi/runtime)
+2026-10-06T13:07:16.7465303Z [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 9.85s
+2026-10-06T13:07:16.7516395Z [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nagi_runtime-cd38048656decff3)
+2026-10-06T13:07:16.7532347Z 
+2026-10-06T13:07:16.7532628Z running 16 tests
+2026-10-06T13:07:16.7548111Z test task_bridge_prototype::tests::discard_keeps_fault_and_legacy_error_observation ... ok
+2026-10-06T13:07:16.7549619Z test task_bridge_prototype::tests::cancelled_drain_can_resume_after_child_drop_gate ... ok
+2026-10-06T13:07:16.7551528Z test task_bridge_prototype::tests::fault_return_waits_for_requested_sibling_cleanup_and_actual_join ... ok
+2026-10-06T13:07:16.7557031Z test task_bridge_prototype::tests::fake_native_id_reuse_does_not_mix_unreceived_tickets_and_retire_records ... ok
+2026-10-06T13:07:16.7559120Z test task_bridge_prototype::tests::parent_drop_requests_abort_but_does_not_report_child_destruction_complete ... ok
+2026-10-06T13:07:16.7561803Z test task_bridge_prototype::tests::legacy_structured_cause_preserves_kind_message_and_primary_after_later_fault ... ok
+2026-10-06T13:07:16.7564186Z test task_bridge_prototype::tests::heterogeneous_results_and_business_error_keep_sibling_healthy ... ok
+2026-10-06T13:07:16.7566340Z test task_bridge_prototype::tests::received_fault_remains_sticky_at_scope_exit ... ok
+2026-10-06T13:07:16.7571881Z test task_bridge_prototype::tests::requested_cancel_does_not_hide_already_returned_legacy_error ... ok
+2026-10-06T13:07:16.7575151Z test task_bridge_prototype::tests::payload_drop_locations_distinguish_failed_send_buffer_and_received_value ... ok
+2026-10-06T13:07:16.7577183Z test task_bridge_prototype::tests::spawn_after_fault_keeps_input_evaluation_and_actual_join_responsibility ... ok
+2026-10-06T13:07:16.7579023Z test task_bridge_prototype::tests::target_other_than_first_join_and_body_error_primary_are_preserved ... ok
+2026-10-06T13:07:16.7580454Z test task_bridge_prototype::tests::receiver_notification_cannot_replace_actual_join ... ok
+2026-10-06T13:07:16.7581809Z test task_bridge_prototype::tests::requested_cancel_preserves_panic_and_unrequested_cancel_is_fault ... ok
+2026-10-06T13:07:16.7582951Z test task_bridge_prototype::tests::wrong_owner_and_missing_output_are_protocol_errors_without_stolen_join ... ok
+2026-10-06T13:07:16.7584010Z test task_bridge_prototype::tests::unpolled_and_pending_receive_drop_keep_scope_join_responsibility ... ok
+2026-10-06T13:07:16.7584573Z 
+2026-10-06T13:07:16.7585140Z test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 0.01s
+2026-10-06T13:07:16.7585654Z 

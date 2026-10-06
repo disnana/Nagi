@@ -1,0 +1,100 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling libc v0.2.189
+   Compiling bytes v1.12.1
+   Compiling syn v3.0.6
+   Compiling itoa v1.0.18
+   Compiling pin-project-lite v0.2.17
+   Compiling version_check v0.9.5
+   Compiling generic-array v0.14.7
+   Compiling errno v0.3.14
+   Compiling futures-core v0.3.34
+   Compiling signal-hook-registry v1.4.8
+   Compiling http v1.5.0
+   Compiling mio v1.2.3
+   Compiling socket2 v0.6.5
+   Compiling zerocopy v0.8.59
+   Compiling tokio-macros v2.7.2
+   Compiling cfg-if v1.0.5
+   Compiling getrandom v0.3.4
+   Compiling typenum v1.20.1
+   Compiling tokio v1.53.1
+   Compiling httparse v1.10.1
+   Compiling serde_core v1.0.229
+   Compiling log v0.4.34
+   Compiling rand_core v0.9.5
+   Compiling ppv-lite86 v0.2.21
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling http-body v1.1.0
+   Compiling thiserror v2.0.21
+   Compiling once_cell v1.21.4
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling cc v1.5.1
+   Compiling tracing-core v0.1.36
+   Compiling digest v0.10.7
+   Compiling rand_chacha v0.9.0
+   Compiling futures-macro v0.3.34
+   Compiling thiserror-impl v2.0.21
+   Compiling futures-sink v0.3.34
+   Compiling zmij v1.0.23
+   Compiling pkg-config v0.3.34
+   Compiling futures-task v0.3.34
+   Compiling cpufeatures v0.2.17
+   Compiling serde v1.0.229
+   Compiling smallvec v1.16.2
+   Compiling vcpkg v0.2.15
+   Compiling slab v0.4.12
+   Compiling tower-service v0.3.3
+   Compiling futures-util v0.3.34
+   Compiling libsqlite3-sys v0.38.2
+   Compiling sha1 v0.10.7
+   Compiling rand v0.9.5
+   Compiling tracing v0.1.44
+   Compiling serde_derive v1.0.229
+   Compiling futures-channel v0.3.34
+   Compiling foldhash v0.2.0
+   Compiling serde_json v1.0.151
+   Compiling atomic-waker v1.1.2
+   Compiling tower-layer v0.3.3
+   Compiling percent-encoding v2.3.2
+   Compiling data-encoding v2.11.1
+   Compiling httpdate v1.0.3
+   Compiling sync_wrapper v1.0.2
+   Compiling hyper v1.11.1
+   Compiling tungstenite v0.29.0
+   Compiling form_urlencoded v1.2.2
+   Compiling hashbrown v0.17.1
+   Compiling http-body-util v0.1.5
+   Compiling memchr v2.8.3
+   Compiling mime v0.3.17
+   Compiling ryu v1.0.23
+   Compiling serde_urlencoded v0.7.1
+   Compiling axum-core v0.5.6
+   Compiling hashlink v0.12.2
+   Compiling tokio-tungstenite v0.29.0
+   Compiling hyper-util v0.1.21
+   Compiling tower v0.5.3
+   Compiling serde_path_to_error v0.1.20
+   Compiling deadpool-runtime v0.3.1
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling fallible-iterator v0.3.0
+   Compiling matchit v0.8.4
+   Compiling bitflags v2.13.2
+   Compiling base64 v0.22.1
+   Compiling axum v0.8.9
+   Compiling deadpool v0.13.1
+   Compiling bumpalo v3.20.3
+   Compiling rusqlite v0.40.2
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi/runtime)
+    Finished `release` profile [optimized] target(s) in 2m 15s
+     Running `/tmp/nagi-container-flow-target/release/examples/task_handles_cost`
+{"cancel_future_bytes":112,"discard_batch_future_bytes":360,"failure_bytes":40,"handle_u64_bytes":40,"join_future_bytes":96,"kind_bytes":1,"name":"task_handle_production_sizes","receive_batch_future_bytes":488,"receive_future_bytes":128,"scope_bytes":248,"target":"x86_64"}
+{"allocation":{"allocated_bytes":91804,"allocations":536,"deallocations":536,"reallocations":0},"allocation_counter_thread":"calling thread only","items":128,"loops_per_repetition":5,"name":"taskscope_production_receive","ns_per_item":1111.06875,"ns_per_op":142216.8,"raw_ns":[225200.6,143861.4,115321.0,108735.0,142216.8,134944.8,531135.2],"throughput_items_s":900034.313808214}
+{"allocation":{"allocated_bytes":86684,"allocations":535,"deallocations":535,"reallocations":0},"allocation_counter_thread":"calling thread only","items":128,"loops_per_repetition":5,"name":"taskscope_production_discard","ns_per_item":1736.7015625,"ns_per_op":222297.8,"raw_ns":[233290.4,222297.8,156749.0,859727.6,216286.4,179664.4,635340.6],"throughput_items_s":575804.1690021224}
+{"allocation":{"allocated_bytes":733484,"allocations":4129,"deallocations":4129,"reallocations":0},"allocation_counter_thread":"calling thread only","items":1024,"loops_per_repetition":5,"name":"taskscope_production_receive","ns_per_item":1140.9126953125,"ns_per_op":1168294.6,"raw_ns":[1768421.4,1232195.6,1030654.6,1168294.6,972132.8,1020400.0,1217314.6],"throughput_items_s":876491.2548598615}
+{"allocation":{"allocated_bytes":692524,"allocations":4128,"deallocations":4128,"reallocations":0},"allocation_counter_thread":"calling thread only","items":1024,"loops_per_repetition":5,"name":"taskscope_production_discard","ns_per_item":926.512109375,"ns_per_op":948748.4,"raw_ns":[1065215.0,948748.4,910001.6,1079410.6,947158.0,939288.2,1351912.4],"throughput_items_s":1079316.70820209}
+{"allocation":{"allocated_bytes":5865916,"allocations":32810,"deallocations":32810,"reallocations":0},"allocation_counter_thread":"calling thread only","items":8192,"loops_per_repetition":5,"name":"taskscope_production_receive","ns_per_item":1354.09130859375,"ns_per_op":11092716.0,"raw_ns":[12955358.6,10569952.8,11092716.0,12686600.4,10073413.6,13348404.2,10676191.8],"throughput_items_s":738502.635423101}
+{"allocation":{"allocated_bytes":5538236,"allocations":32809,"deallocations":32809,"reallocations":0},"allocation_counter_thread":"calling thread only","items":8192,"loops_per_repetition":5,"name":"taskscope_production_discard","ns_per_item":1397.531298828125,"ns_per_op":11448576.4,"raw_ns":[12988588.8,11981500.8,11448576.4,11195753.6,10948175.2,12936778.4,10225368.2],"throughput_items_s":715547.4806457158}

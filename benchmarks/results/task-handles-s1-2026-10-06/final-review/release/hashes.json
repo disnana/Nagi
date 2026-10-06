@@ -1,0 +1,12 @@
+{
+  "scripts/releases/verify.py": "386032c7f0778983802f89c5816270cfa1de58b3456e46bb9ae092362d5681db",
+  "scripts/releases/test_verify.py": "07dd5951c1a3c04fa62325b723be82662229f5aecd827487a7437a2d17bc04eb",
+  "08-final-packaged-verification.log": "14a93a941948190684d7e5aac35ee9292d602d89da9188689431eae96529a038",
+  "07-final-unit-all.log": "1c27d25fbfc7593fafe87ef54bd9e39d9e080a12586368dc4de85021bf7ae57f",
+  "06-checkout-fallback-red.log": "bdf38513bfdb82ecb65eb0d30b621139e274f2343a9f67f5721f8d0b3411c75b",
+  "05-release-unit-all.log": "2b4d346b41503aa70df0c41754899c8495dc49f6a3bcee2e8ae020a75271d8b0",
+  "04-packaged-verification.log": "14a93a941948190684d7e5aac35ee9292d602d89da9188689431eae96529a038",
+  "03-release-compiler-build.log": "cd7c5a58297487daae533d530a00006999c4041f7bb8c714663e73327af88066",
+  "02-verifier-unit.log": "73112ac1a5f2a5414a18649fd868399031944bf38ab15214c95adc2b85dd0212",
+  "01-verifier-red.log": "1c54def0bcd7f5c8a7dad27ae3984828a6371d2137b49d5def6c2ce801a5c7a5"
+}

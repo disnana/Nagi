@@ -1,0 +1,10 @@
+from std.ownership import move;
+async fn work() -> i64 { return 7; }
+async fn main() -> Result[unit, Error] {
+    scope {
+        let task = spawn work();
+        let alias = move(task);
+        let received = await alias;
+    }
+    return ok(print(0));
+}

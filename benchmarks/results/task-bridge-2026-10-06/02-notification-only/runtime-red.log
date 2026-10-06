@@ -1,0 +1,21 @@
+    Finished `test` profile [unoptimized] target(s) in 0.05s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31f33a377cbf1a2a)
+
+running 1 test
+test task_bridge_prototype::tests::receiver_notification_cannot_replace_actual_join ... FAILED
+
+failures:
+
+---- task_bridge_prototype::tests::receiver_notification_cannot_replace_actual_join stdout ----
+
+thread 'task_bridge_prototype::tests::receiver_notification_cannot_replace_actual_join' (1473314) panicked at runtime/src/task_bridge_prototype.rs:550:9:
+typed notification arrived before child Future Drop/join
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    task_bridge_prototype::tests::receiver_notification_cannot_replace_actual_join
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 204 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p nagi-runtime --lib`

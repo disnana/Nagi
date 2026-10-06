@@ -1,0 +1,290 @@
+﻿2026-10-06T15:39:29.3726028Z Current runner version: '2.337.0'
+2026-10-06T15:39:29.3746582Z ##[group]Runner Image Provisioner
+2026-10-06T15:39:29.3747325Z Hosted Compute Agent
+2026-10-06T15:39:29.3747909Z Version: 20260901.588
+2026-10-06T15:39:29.3748437Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+2026-10-06T15:39:29.3749057Z Build Date: 2026-09-01T19:56:44Z
+2026-10-06T15:39:29.3749656Z Worker ID: {7fe19d9f-7160-4b89-b9b9-8044dc057195}
+2026-10-06T15:39:29.3750226Z Azure Region: westus3
+2026-10-06T15:39:29.3750738Z ##[endgroup]
+2026-10-06T15:39:29.3751845Z ##[group]Operating System
+2026-10-06T15:39:29.3752437Z Ubuntu
+2026-10-06T15:39:29.3752924Z 24.04.5
+2026-10-06T15:39:29.3753361Z LTS
+2026-10-06T15:39:29.3753834Z ##[endgroup]
+2026-10-06T15:39:29.3754294Z ##[group]Runner Image
+2026-10-06T15:39:29.3754771Z Image: ubuntu-24.04
+2026-10-06T15:39:29.3755315Z Version: 20260927.320.1
+2026-10-06T15:39:29.3756354Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-06T15:39:29.3757764Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+2026-10-06T15:39:29.3758532Z ##[endgroup]
+2026-10-06T15:39:29.3759523Z ##[group]GITHUB_TOKEN Permissions
+2026-10-06T15:39:29.3760975Z Contents: read
+2026-10-06T15:39:29.3761561Z Metadata: read
+2026-10-06T15:39:29.3762039Z ##[endgroup]
+2026-10-06T15:39:29.3763704Z Secret source: Actions
+2026-10-06T15:39:29.3764547Z Cache mode: write
+2026-10-06T15:39:29.3765170Z Prepare workflow directory
+2026-10-06T15:39:29.4020857Z Prepare all required actions
+2026-10-06T15:39:29.4060650Z Getting action download info
+2026-10-06T15:39:29.7246932Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-06T15:39:29.8642124Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-10-06T15:39:30.3916984Z Complete job name: changes
+2026-10-06T15:39:30.4530541Z ##[group]Run actions/checkout@v4
+2026-10-06T15:39:30.4531242Z with:
+2026-10-06T15:39:30.4531640Z   fetch-depth: 0
+2026-10-06T15:39:30.4532044Z   repository: disnana/Nagi
+2026-10-06T15:39:30.4535145Z   token: ***
+2026-10-06T15:39:30.4535532Z   ssh-strict: true
+2026-10-06T15:39:30.4535932Z   ssh-user: git
+2026-10-06T15:39:30.4536328Z   persist-credentials: true
+2026-10-06T15:39:30.4537091Z   clean: true
+2026-10-06T15:39:30.4537487Z   sparse-checkout-cone-mode: true
+2026-10-06T15:39:30.4537943Z   fetch-tags: false
+2026-10-06T15:39:30.4538341Z   show-progress: true
+2026-10-06T15:39:30.4538733Z   lfs: false
+2026-10-06T15:39:30.4539099Z   submodules: false
+2026-10-06T15:39:30.4539504Z   set-safe-directory: true
+2026-10-06T15:39:30.4539938Z   allow-unsafe-pr-checkout: false
+2026-10-06T15:39:30.4540604Z ##[endgroup]
+2026-10-06T15:39:30.5333403Z Syncing repository: disnana/Nagi
+2026-10-06T15:39:30.5335524Z ##[group]Getting Git version info
+2026-10-06T15:39:30.5336697Z Working directory is '/home/runner/work/Nagi/Nagi'
+2026-10-06T15:39:30.5338042Z [command]/usr/bin/git version
+2026-10-06T15:39:30.6298585Z git version 2.55.0
+2026-10-06T15:39:30.6314481Z ##[endgroup]
+2026-10-06T15:39:30.6326882Z Temporarily overriding HOME='/home/runner/work/_temp/79480dab-cce0-4fbe-a69a-487dd37cc698' before making global git config changes
+2026-10-06T15:39:30.6328103Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-06T15:39:30.6331203Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Nagi/Nagi
+2026-10-06T15:39:30.6654009Z Deleting the contents of '/home/runner/work/Nagi/Nagi'
+2026-10-06T15:39:30.6657936Z ##[group]Initializing the repository
+2026-10-06T15:39:30.6661337Z [command]/usr/bin/git init /home/runner/work/Nagi/Nagi
+2026-10-06T15:39:30.6832050Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-06T15:39:30.6833529Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-06T15:39:30.6834976Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-06T15:39:30.6836304Z hint: call:
+2026-10-06T15:39:30.6837042Z hint:
+2026-10-06T15:39:30.6837792Z hint: 	git config --global init.defaultBranch <name>
+2026-10-06T15:39:30.6838668Z hint:
+2026-10-06T15:39:30.6839436Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-06T15:39:30.6840489Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-06T15:39:30.6841146Z hint:
+2026-10-06T15:39:30.6841541Z hint: 	git branch -m <name>
+2026-10-06T15:39:30.6842153Z hint:
+2026-10-06T15:39:30.6843111Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-06T15:39:30.6844291Z Initialized empty Git repository in /home/runner/work/Nagi/Nagi/.git/
+2026-10-06T15:39:30.6845713Z [command]/usr/bin/git remote add origin https://github.com/disnana/Nagi
+2026-10-06T15:39:30.6889380Z ##[endgroup]
+2026-10-06T15:39:30.6890073Z ##[group]Disabling automatic garbage collection
+2026-10-06T15:39:30.6892060Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-06T15:39:30.6920000Z ##[endgroup]
+2026-10-06T15:39:30.6924837Z ##[group]Setting up auth
+2026-10-06T15:39:30.6925755Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-06T15:39:30.6954040Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-06T15:39:30.7258202Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-06T15:39:30.7288093Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-06T15:39:30.7474418Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-06T15:39:30.7504177Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-06T15:39:30.7691443Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-06T15:39:30.7725743Z ##[endgroup]
+2026-10-06T15:39:30.7726707Z ##[group]Fetching the repository
+2026-10-06T15:39:30.7733983Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +cff579d1a239726dff532dc83aaea44710038d91:refs/remotes/pull/88/merge
+2026-10-06T15:39:33.4987960Z From https://github.com/disnana/Nagi
+2026-10-06T15:39:33.4988640Z  * [new branch]      chore/remove-legacy-source-zip           -> origin/chore/remove-legacy-source-zip
+2026-10-06T15:39:33.4989492Z  * [new branch]      ci/docs-only-checks                      -> origin/ci/docs-only-checks
+2026-10-06T15:39:33.4990382Z  * [new branch]      ci/required-merge-checks                 -> origin/ci/required-merge-checks
+2026-10-06T15:39:33.4991290Z  * [new branch]      design/compiler-rust-boundary-plan       -> origin/design/compiler-rust-boundary-plan
+2026-10-06T15:39:33.4992153Z  * [new branch]      docs/contribution-security               -> origin/docs/contribution-security
+2026-10-06T15:39:33.4992888Z  * [new branch]      docs/http-capacity                       -> origin/docs/http-capacity
+2026-10-06T15:39:33.4993606Z  * [new branch]      docs/json-wire-behavior                  -> origin/docs/json-wire-behavior
+2026-10-06T15:39:33.4994482Z  * [new branch]      docs/language-purpose-and-contracts      -> origin/docs/language-purpose-and-contracts
+2026-10-06T15:39:33.4995427Z  * [new branch]      docs/library-samples                     -> origin/docs/library-samples
+2026-10-06T15:39:33.4996316Z  * [new branch]      docs/python-guide-design-contracts       -> origin/docs/python-guide-design-contracts
+2026-10-06T15:39:33.4997575Z  * [new branch]      docs/recovery-worker-correction          -> origin/docs/recovery-worker-correction
+2026-10-06T15:39:33.4999029Z  * [new branch]      docs/value-task-implementation-plan      -> origin/docs/value-task-implementation-plan
+2026-10-06T15:39:33.5000039Z  * [new branch]      feat/bilingual-pages-and-releases        -> origin/feat/bilingual-pages-and-releases
+2026-10-06T15:39:33.5000970Z  * [new branch]      feat/docs-website                        -> origin/feat/docs-website
+2026-10-06T15:39:33.5001778Z  * [new branch]      feat/editor-inferred-types               -> origin/feat/editor-inferred-types
+2026-10-06T15:39:33.5002739Z  * [new branch]      feat/editor-local-definitions            -> origin/feat/editor-local-definitions
+2026-10-06T15:39:33.5003663Z  * [new branch]      feat/explicit-move-contract              -> origin/feat/explicit-move-contract
+2026-10-06T15:39:33.5004550Z  * [new branch]      feat/http-stdlib                         -> origin/feat/http-stdlib
+2026-10-06T15:39:33.5005348Z  * [new branch]      feat/jetbrains-nagi                      -> origin/feat/jetbrains-nagi
+2026-10-06T15:39:33.5006139Z  * [new branch]      feat/module-imports                      -> origin/feat/module-imports
+2026-10-06T15:39:33.5007032Z  * [new branch]      feat/native-supervisor                   -> origin/feat/native-supervisor
+2026-10-06T15:39:33.5007891Z  * [new branch]      feat/runtime-usability                   -> origin/feat/runtime-usability
+2026-10-06T15:39:33.5008694Z  * [new branch]      feat/sqlite-acquire-budget               -> origin/feat/sqlite-acquire-budget
+2026-10-06T15:39:33.5009645Z  * [new branch]      feat/sqlite-multiconnection-observer     -> origin/feat/sqlite-multiconnection-observer
+2026-10-06T15:39:33.5010557Z  * [new branch]      feat/sqlite-pool-adapter                 -> origin/feat/sqlite-pool-adapter
+2026-10-06T15:39:33.5011417Z  * [new branch]      feat/sqlite-transaction-foundation       -> origin/feat/sqlite-transaction-foundation
+2026-10-06T15:39:33.5012720Z  * [new branch]      feat/task-result-bridge-stage1           -> origin/feat/task-result-bridge-stage1
+2026-10-06T15:39:33.5013229Z  * [new branch]      feat/typed-errors                        -> origin/feat/typed-errors
+2026-10-06T15:39:33.5013813Z  * [new branch]      fix/application-readiness                -> origin/fix/application-readiness
+2026-10-06T15:39:33.5014544Z  * [new branch]      fix/backend-boundary-foundation          -> origin/fix/backend-boundary-foundation
+2026-10-06T15:39:33.5015097Z  * [new branch]      fix/borrow-and-builtin-contracts         -> origin/fix/borrow-and-builtin-contracts
+2026-10-06T15:39:33.5015639Z  * [new branch]      fix/build-generation-isolation           -> origin/fix/build-generation-isolation
+2026-10-06T15:39:33.5016152Z  * [new branch]      fix/check-build-foundation               -> origin/fix/check-build-foundation
+2026-10-06T15:39:33.5016853Z  * [new branch]      fix/check-consistency                    -> origin/fix/check-consistency
+2026-10-06T15:39:33.5017389Z  * [new branch]      fix/compiler-contract-stability          -> origin/fix/compiler-contract-stability
+2026-10-06T15:39:33.5017968Z  * [new branch]      fix/compiler-production-checks           -> origin/fix/compiler-production-checks
+2026-10-06T15:39:33.5018512Z  * [new branch]      fix/custom-domain-assets                 -> origin/fix/custom-domain-assets
+2026-10-06T15:39:33.5019030Z  * [new branch]      fix/diagnostic-consistency               -> origin/fix/diagnostic-consistency
+2026-10-06T15:39:33.5019807Z  * [new branch]      fix/docs-readability-followup            -> origin/fix/docs-readability-followup
+2026-10-06T15:39:33.5020676Z  * [new branch]      fix/docs-sidebar-preferences             -> origin/fix/docs-sidebar-preferences
+2026-10-06T15:39:33.5021447Z  * [new branch]      fix/docs-usability                       -> origin/fix/docs-usability
+2026-10-06T15:39:33.5022165Z  * [new branch]      fix/editor-indentation                   -> origin/fix/editor-indentation
+2026-10-06T15:39:33.5022982Z  * [new branch]      fix/f32-literal-range                    -> origin/fix/f32-literal-range
+2026-10-06T15:39:33.5024025Z  * [new branch]      fix/frontend-contracts-after-feedback    -> origin/fix/frontend-contracts-after-feedback
+2026-10-06T15:39:33.5024928Z  * [new branch]      fix/http-request-wait-timeout            -> origin/fix/http-request-wait-timeout
+2026-10-06T15:39:33.5025740Z  * [new branch]      fix/installer-messages                   -> origin/fix/installer-messages
+2026-10-06T15:39:33.5026614Z  * [new branch]      fix/installer-upgrades                   -> origin/fix/installer-upgrades
+2026-10-06T15:39:33.5027377Z  * [new branch]      fix/iterator-borrow-check                -> origin/fix/iterator-borrow-check
+2026-10-06T15:39:33.5028230Z  * [new branch]      fix/language-contract-hardening          -> origin/fix/language-contract-hardening
+2026-10-06T15:39:33.5029026Z  * [new branch]      fix/language-contracts                   -> origin/fix/language-contracts
+2026-10-06T15:39:33.5029836Z  * [new branch]      fix/language-readiness-next              -> origin/fix/language-readiness-next
+2026-10-06T15:39:33.5030554Z  * [new branch]      fix/loop-ownership                       -> origin/fix/loop-ownership
+2026-10-06T15:39:33.5031022Z  * [new branch]      fix/low-authoring                        -> origin/fix/low-authoring
+2026-10-06T15:39:33.5031528Z  * [new branch]      fix/nagi-build-diagnostics               -> origin/fix/nagi-build-diagnostics
+2026-10-06T15:39:33.5032058Z  * [new branch]      fix/output-type-checks                   -> origin/fix/output-type-checks
+2026-10-06T15:39:33.5032572Z  * [new branch]      fix/owned-result-discard                 -> origin/fix/owned-result-discard
+2026-10-06T15:39:33.5033088Z  * [new branch]      fix/ownership-contracts                  -> origin/fix/ownership-contracts
+2026-10-06T15:39:33.5033612Z  * [new branch]      fix/ownership-field-moves                -> origin/fix/ownership-field-moves
+2026-10-06T15:39:33.5034273Z  * [new branch]      fix/owning-view-flow                     -> origin/fix/owning-view-flow
+2026-10-06T15:39:33.5034841Z  * [new branch]      fix/portable-release-installation        -> origin/fix/portable-release-installation
+2026-10-06T15:39:33.5035434Z  * [new branch]      fix/post-release-readiness               -> origin/fix/post-release-readiness
+2026-10-06T15:39:33.5035958Z  * [new branch]      fix/readiness-followups                  -> origin/fix/readiness-followups
+2026-10-06T15:39:33.5036659Z  * [new branch]      fix/readiness-followups-main             -> origin/fix/readiness-followups-main
+2026-10-06T15:39:33.5037209Z  * [new branch]      fix/release-created-id                   -> origin/fix/release-created-id
+2026-10-06T15:39:33.5037751Z  * [new branch]      fix/release-draft-lookup                 -> origin/fix/release-draft-lookup
+2026-10-06T15:39:33.5038324Z  * [new branch]      fix/release-runtime-cache                -> origin/fix/release-runtime-cache
+2026-10-06T15:39:33.5038887Z  * [new branch]      fix/resolved-call-identifiers            -> origin/fix/resolved-call-identifiers
+2026-10-06T15:39:33.5039438Z  * [new branch]      fix/runtime-and-ownership                -> origin/fix/runtime-and-ownership
+2026-10-06T15:39:33.5039984Z  * [new branch]      fix/signed-minimum-literals              -> origin/fix/signed-minimum-literals
+2026-10-06T15:39:33.5040543Z  * [new branch]      fix/source-filename-package              -> origin/fix/source-filename-package
+2026-10-06T15:39:33.5041092Z  * [new branch]      fix/static-callback-views                -> origin/fix/static-callback-views
+2026-10-06T15:39:33.5041617Z  * [new branch]      fix/static-callbacks-main                -> origin/fix/static-callbacks-main
+2026-10-06T15:39:33.5042140Z  * [new branch]      fix/tasks-checkbox-error                 -> origin/fix/tasks-checkbox-error
+2026-10-06T15:39:33.5042663Z  * [new branch]      fix/view-flow-foundation                 -> origin/fix/view-flow-foundation
+2026-10-06T15:39:33.5043217Z  * [new branch]      fix/vscode-0.1.11-release-notes          -> origin/fix/vscode-0.1.11-release-notes
+2026-10-06T15:39:33.5043777Z  * [new branch]      fix/vsix-package-metadata                -> origin/fix/vsix-package-metadata
+2026-10-06T15:39:33.5044403Z  * [new branch]      fix/vsix-publisher                       -> origin/fix/vsix-publisher
+2026-10-06T15:39:33.5044853Z  * [new branch]      main                                     -> origin/main
+2026-10-06T15:39:33.5045392Z  * [new branch]      perf/actions-cache-and-parallel-builds   -> origin/perf/actions-cache-and-parallel-builds
+2026-10-06T15:39:33.5046035Z  * [new branch]      refactor/checked-program-boundary        -> origin/refactor/checked-program-boundary
+2026-10-06T15:39:33.5047216Z  * [new branch]      refactor/resource-contract-foundation    -> origin/refactor/resource-contract-foundation
+2026-10-06T15:39:33.5048146Z  * [new branch]      release/0.1.8                            -> origin/release/0.1.8
+2026-10-06T15:39:33.5049019Z  * [new branch]      release/core-and-vscode-polish           -> origin/release/core-and-vscode-polish
+2026-10-06T15:39:33.5049987Z  * [new branch]      release/nagi-0.1.7-vscode-0.1.9          -> origin/release/nagi-0.1.7-vscode-0.1.9
+2026-10-06T15:39:33.5050774Z  * [new tag]         nagi-v0.1.10                             -> nagi-v0.1.10
+2026-10-06T15:39:33.5051399Z  * [new tag]         nagi-v0.1.2                              -> nagi-v0.1.2
+2026-10-06T15:39:33.5052028Z  * [new tag]         nagi-v0.1.3                              -> nagi-v0.1.3
+2026-10-06T15:39:33.5052636Z  * [new tag]         nagi-v0.1.4                              -> nagi-v0.1.4
+2026-10-06T15:39:33.5053235Z  * [new tag]         nagi-v0.1.5                              -> nagi-v0.1.5
+2026-10-06T15:39:33.5053850Z  * [new tag]         nagi-v0.1.6                              -> nagi-v0.1.6
+2026-10-06T15:39:33.5054441Z  * [new tag]         nagi-v0.1.7                              -> nagi-v0.1.7
+2026-10-06T15:39:33.5055024Z  * [new tag]         nagi-v0.1.8                              -> nagi-v0.1.8
+2026-10-06T15:39:33.5055829Z  * [new tag]         nagi-v0.1.9                              -> nagi-v0.1.9
+2026-10-06T15:39:33.5056709Z  * [new tag]         vscode-v0.1.10                           -> vscode-v0.1.10
+2026-10-06T15:39:33.5057381Z  * [new tag]         vscode-v0.1.12                           -> vscode-v0.1.12
+2026-10-06T15:39:33.5058028Z  * [new tag]         vscode-v0.1.13                           -> vscode-v0.1.13
+2026-10-06T15:39:33.5058741Z  * [new tag]         vscode-v0.1.8                            -> vscode-v0.1.8
+2026-10-06T15:39:33.5059366Z  * [new tag]         vscode-v0.1.9                            -> vscode-v0.1.9
+2026-10-06T15:39:33.5060164Z  * [new ref]         cff579d1a239726dff532dc83aaea44710038d91 -> pull/88/merge
+2026-10-06T15:39:33.5061621Z ##[endgroup]
+2026-10-06T15:39:33.5062012Z ##[group]Determining the checkout info
+2026-10-06T15:39:33.5062409Z ##[endgroup]
+2026-10-06T15:39:33.5062661Z [command]/usr/bin/git sparse-checkout disable
+2026-10-06T15:39:33.5063376Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-06T15:39:33.5084317Z ##[group]Checking out the ref
+2026-10-06T15:39:33.5084984Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/88/merge
+2026-10-06T15:39:33.6085943Z Note: switching to 'refs/remotes/pull/88/merge'.
+2026-10-06T15:39:33.6086382Z 
+2026-10-06T15:39:33.6086910Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-06T15:39:33.6087628Z changes and commit them, and you can discard any commits you make in this
+2026-10-06T15:39:33.6088323Z state without impacting any branches by switching back to a branch.
+2026-10-06T15:39:33.6088719Z 
+2026-10-06T15:39:33.6088984Z If you want to create a new branch to retain commits you create, you may
+2026-10-06T15:39:33.6089606Z do so (now or later) by using -c with the switch command. Example:
+2026-10-06T15:39:33.6089980Z 
+2026-10-06T15:39:33.6090153Z   git switch -c <new-branch-name>
+2026-10-06T15:39:33.6090391Z 
+2026-10-06T15:39:33.6090635Z Or undo this operation with:
+2026-10-06T15:39:33.6090869Z 
+2026-10-06T15:39:33.6091010Z   git switch -
+2026-10-06T15:39:33.6091511Z 
+2026-10-06T15:39:33.6091833Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-06T15:39:33.6092274Z 
+2026-10-06T15:39:33.6092757Z HEAD is now at cff579d Merge 34ac4d585084877372965e3d58ed5c2002604529 into 9ba4a104be6f65dba61eda0c7b1ef0f98c892cf7
+2026-10-06T15:39:33.6100648Z ##[endgroup]
+2026-10-06T15:39:33.6139523Z [command]/usr/bin/git log -1 --format=%H
+2026-10-06T15:39:33.6161947Z cff579d1a239726dff532dc83aaea44710038d91
+2026-10-06T15:39:33.6441516Z ##[group]Run actions/setup-python@v5
+2026-10-06T15:39:33.6441790Z with:
+2026-10-06T15:39:33.6442219Z   python-version: 3.12
+2026-10-06T15:39:33.6442459Z   check-latest: false
+2026-10-06T15:39:33.6444397Z   token: ***
+2026-10-06T15:39:33.6444619Z   update-environment: true
+2026-10-06T15:39:33.6444862Z   allow-prereleases: false
+2026-10-06T15:39:33.6445095Z   freethreaded: false
+2026-10-06T15:39:33.6445313Z ##[endgroup]
+2026-10-06T15:39:33.7466917Z ##[group]Installed versions
+2026-10-06T15:39:33.7574494Z (node:2081) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T15:39:33.7575565Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T15:39:33.7576139Z Successfully set up CPython (3.12.14)
+2026-10-06T15:39:33.7576967Z ##[endgroup]
+2026-10-06T15:39:33.7702498Z ##[group]Run python -m unittest discover -s scripts/ci -p 'test_*.py'
+2026-10-06T15:39:33.7703029Z [36;1mpython -m unittest discover -s scripts/ci -p 'test_*.py'[0m
+2026-10-06T15:39:33.8130260Z shell: /usr/bin/bash -e {0}
+2026-10-06T15:39:33.8130598Z env:
+2026-10-06T15:39:33.8130891Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.8131299Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T15:39:33.8131685Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.8132046Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.8132400Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:33.8132775Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T15:39:33.8133074Z ##[endgroup]
+2026-10-06T15:39:38.7887373Z ....................................................
+2026-10-06T15:39:38.7887971Z ----------------------------------------------------------------------
+2026-10-06T15:39:38.7888401Z Ran 52 tests in 4.485s
+2026-10-06T15:39:38.7888558Z 
+2026-10-06T15:39:38.7888676Z OK
+2026-10-06T15:39:38.8049945Z ##[group]Run python scripts/ci/changes.py --event "$CHECK_EVENT" --base "$CHECK_BASE" --head "$CHECK_HEAD" --output "$GITHUB_OUTPUT"
+2026-10-06T15:39:38.8050637Z [36;1mpython scripts/ci/changes.py --event "$CHECK_EVENT" --base "$CHECK_BASE" --head "$CHECK_HEAD" --output "$GITHUB_OUTPUT"[0m
+2026-10-06T15:39:38.8107071Z shell: /usr/bin/bash -e {0}
+2026-10-06T15:39:38.8107288Z env:
+2026-10-06T15:39:38.8107513Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:38.8107861Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T15:39:38.8108208Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:38.8108512Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:38.8108814Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T15:39:38.8109109Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T15:39:38.8109371Z   CHECK_EVENT: pull_request
+2026-10-06T15:39:38.8109627Z   CHECK_BASE: 9ba4a104be6f65dba61eda0c7b1ef0f98c892cf7
+2026-10-06T15:39:38.8109900Z   CHECK_HEAD: cff579d1a239726dff532dc83aaea44710038d91
+2026-10-06T15:39:38.8110126Z ##[endgroup]
+2026-10-06T15:39:38.8575670Z {
+2026-10-06T15:39:38.8575946Z   "full_checks": "true",
+2026-10-06T15:39:38.8576258Z   "jetbrains_checks": "true",
+2026-10-06T15:39:38.8576790Z   "reason": "Code, configuration, build inputs, or an unrecognized path changed."
+2026-10-06T15:39:38.8577118Z }
+2026-10-06T15:39:38.8716952Z Post job cleanup.
+2026-10-06T15:39:38.9639912Z (node:3923) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-06T15:39:38.9640488Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-06T15:39:38.9781921Z Post job cleanup.
+2026-10-06T15:39:39.0476843Z [command]/usr/bin/git version
+2026-10-06T15:39:39.0518565Z git version 2.55.0
+2026-10-06T15:39:39.0550297Z Temporarily overriding HOME='/home/runner/work/_temp/08b625dc-b0ad-493c-a1af-276da3dd4c4f' before making global git config changes
+2026-10-06T15:39:39.0551048Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-06T15:39:39.0554756Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Nagi/Nagi
+2026-10-06T15:39:39.0707253Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-06T15:39:39.0738497Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-06T15:39:39.0996890Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-06T15:39:39.1028913Z http.https://github.com/.extraheader
+2026-10-06T15:39:39.1048107Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-06T15:39:39.1127906Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-06T15:39:39.1356143Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-06T15:39:39.1386622Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-06T15:39:39.1698459Z Evaluate and set job outputs
+2026-10-06T15:39:39.1703034Z Set output 'full_checks'
+2026-10-06T15:39:39.1704515Z Set output 'jetbrains_checks'
+2026-10-06T15:39:39.1705531Z Cleaning up orphan processes
+2026-10-06T15:39:39.1949431Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -1,0 +1,4 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi-task-handle-design-review/compiler)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.42s
+     Running `/tmp/nagi-container-flow-target/debug/examples/task-contract-red --report /tmp/nagi-task-bridge-stage1/compiler-final-red/observations.json`
+Task contracts: 5/56 matched; report: /tmp/nagi-task-bridge-stage1/compiler-final-red/observations.json

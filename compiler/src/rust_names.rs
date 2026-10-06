@@ -262,6 +262,12 @@ fn visit(program: &mut Program, name: &mut impl FnMut(&mut String)) {
                     annotation,
                     value,
                     ..
+                }
+                | S::SpawnBind {
+                    name: n,
+                    annotation,
+                    value,
+                    ..
                 } => {
                     name(n);
                     if let Some(t) = annotation {

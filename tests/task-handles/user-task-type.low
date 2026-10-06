@@ -1,0 +1,3 @@
+record Task { count: i64 }
+async fn work() -> i64 { return 3; }
+async fn main() -> Result[unit,Error] { let local = Task(count=1); scope { let task = spawn work(); let received = await task; } return ok(print(local.count)); }

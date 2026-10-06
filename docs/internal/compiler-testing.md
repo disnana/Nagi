@@ -117,3 +117,9 @@ Phase 3では、登録資源の独立inventory、用途別capability、4例のLo
 ## 明示moveの回帰
 
 `explicit_moves.rs`は既存非Copyローカルの通常代入を拒否する負例と、明示move・Copy・新規値の正例を対にする。canonical importを通常のresolverへ通し、元行と診断内容を確認する。実nativeの9経路はHigh・保存Low・手書きLowそれぞれで通常transfer、RHS失敗／破棄／取消、Copy集約値の比較を観測する。全操作のallocation数や全Future型を保証する検査ではない。先行失敗、既存fixtureの移行理由、検証結果は[明示moveの記録](explicit-move-results.md)に分ける。4 OSの明示Cargo一覧にもこのharnessを含める。
+
+## Task結果handle
+
+`tests/task-handles/contracts.json` のHigh/Low対は `cargo run --locked -p nagic --example task-contract-red -- --report /tmp/task-contracts.json` でchecker段階、diagnostic fragment、primary元行まで照合する。parse/import拒否、ICE、違う行の拒否をnegative成功にしない。runner自身のoracleは `cargo test --locked -p nagic --example task-contract-red`。登録検査だけで意味論の成功を保証しない。
+
+`cargo test --locked -p nagic --test task_handles` は全positiveのHigh・保存Low・手書きLowを実Cargo build/runし、barrierによる業務Err・sticky fault・body/legacy元Err・Drop/actual joinと固定seed16経路も実行する。`cargo test --locked -p nagi-runtime --lib task::tests::` は17native oracle。CIの4 OSに双方を含め、filterで0件を実行したログを成功として報告しない。費用のignored unitは明示実行だけを測定に数え、production-layoutの手書き/生成Rust比較は `compiler/examples/task-handles-cost.rs` と `benchmarks/task-handles-s1/` を使う。原ログ/hash/範囲は[接続結果](task-handles-s1-results.md)へ。

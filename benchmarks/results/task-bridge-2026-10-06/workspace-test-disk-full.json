@@ -1,0 +1,8 @@
+{
+  "failure": "No space left on device during Rust compilation; no completed full-suite result",
+  "profile": "default debug symbols",
+  "classification": "infrastructure",
+  "wrapper_exit_code": 1,
+  "cargo_exit_code": "not persisted: result.json write also failed due to ENOSPC",
+  "rustc_exit_code_in_stderr": 101
+}
