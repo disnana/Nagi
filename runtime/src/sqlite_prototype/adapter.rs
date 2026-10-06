@@ -12,11 +12,34 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{mpsc, oneshot, Notify};
+use tokio::time::Instant;
 
 const WATCHDOG: Duration = Duration::from_secs(10);
 type NativePool = managed::Pool<NativeManager>;
 type Checkout = managed::Object<NativeManager>;
 type ReadyReply = Arc<Mutex<Option<oneshot::Sender<Result<(), Failure>>>>>;
+
+// private一取得の不変予算。Immediateは期限切れDeadlineとは別に扱う。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum AcquireBudget {
+    Immediate,
+    Deadline(Instant),
+}
+impl AcquireBudget {
+    pub fn after_at(now: Instant, duration: Duration) -> Option<Self> {
+        if duration.is_zero() {
+            Some(Self::Immediate)
+        } else {
+            now.checked_add(duration).map(Self::Deadline)
+        }
+    }
+    pub fn remaining_at(self, now: Instant) -> Duration {
+        match self {
+            Self::Immediate => Duration::ZERO,
+            Self::Deadline(deadline) => deadline.saturating_duration_since(now),
+        }
+    }
+}
 
 #[derive(Default)]
 pub(super) struct AdapterSeams {
@@ -563,18 +586,47 @@ impl Adapter {
         self.0.pool.resize(0);
     }
     pub async fn begin(&self) -> Result<Tx, Failure> {
+        self.begin_inner(None).await
+    }
+    pub async fn begin_with_budget(&self, budget: AcquireBudget) -> Result<Tx, Failure> {
+        self.begin_inner(Some(budget)).await
+    }
+    fn get_failure(&self, error: managed::PoolError<Failure>) -> Failure {
+        self.0.ledger.error().unwrap_or_else(|| match error {
+            managed::PoolError::Timeout(managed::TimeoutType::Wait) => Failure::primary(
+                Kind::AcquireTimeout,
+                Outcome::NotApplicable,
+                "logical slot reservation timed out",
+            ),
+            managed::PoolError::Backend(error) => error,
+            managed::PoolError::Closed => {
+                Failure::primary(Kind::Closed, Outcome::NotApplicable, "deadpool closed")
+            }
+            error => Failure::primary(
+                Kind::Worker,
+                Outcome::NotApplicable,
+                format!("deadpool get: {error:?}"),
+            ),
+        })
+    }
+    async fn begin_inner(&self, budget: Option<AcquireBudget>) -> Result<Tx, Failure> {
         if let Some(error) = self.0.ledger.error() {
             return Err(error);
         }
-        let object = self.0.pool.get().await.map_err(|error| {
-            self.0.ledger.error().unwrap_or_else(|| {
-                Failure::primary(
-                    Kind::Worker,
-                    Outcome::NotApplicable,
-                    format!("deadpool get: {error:?}"),
-                )
-            })
-        })?;
+        // 中間RED段階: stockのlogical待ちだけに予算を適用する。
+        // native registration fenceへの同予算の伝播はまだ未実装。
+        let object = match budget {
+            Some(budget) => {
+                let timeouts = managed::Timeouts {
+                    wait: Some(budget.remaining_at(Instant::now())),
+                    create: None,
+                    recycle: None,
+                };
+                self.0.pool.timeout_get(&timeouts).await
+            }
+            None => self.0.pool.get().await,
+        }
+        .map_err(|error| self.get_failure(error))?;
         if self.0.seams.applies(object.ordinal) {
             if let Some(gate) = &self.0.seams.checkout {
                 gate.pause().await;

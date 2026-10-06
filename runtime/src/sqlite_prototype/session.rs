@@ -30,6 +30,7 @@ pub(super) enum Kind {
     Cleanup,
     Worker,
     Closed,
+    AcquireTimeout,
     CloseTimeout,
     ReplyLost,
 }
