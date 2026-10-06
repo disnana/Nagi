@@ -1,0 +1,4 @@
+from std.ownership import move
+def transfer(source: str) -> str:
+    destination = move(source)
+    return move(destination)

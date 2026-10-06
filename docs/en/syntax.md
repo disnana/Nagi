@@ -46,7 +46,7 @@ def main():
 | `count = 11` | Reassignment with the same type |
 | `count += 1` / `-= 1` / `*= 2` | Compound assignment; `/=` and `%=` unsupported |
 
-Reassignment cannot change a variable’s type. Today, `a = b` moves an existing non-Copy owned value. The future direction requiring an explicit operation is not implemented; see [assignment rules](ownership.md#assignment-today-and-the-planned-change).
+Reassignment cannot change a variable’s type. The explicit move migration uses `std.ownership.move` when assigning an existing non-Copy local. Fresh values and Copy assignment do not require it. See [assignment rules](ownership.md#assignment-and-explicit-move) for implementation and release status.
 
 String escapes are `\n`, `\r`, `\t`, `\"`, `\'`, and `\\`. String concatenation with `+`, f-strings, interpolation, and triple-quoted strings are unsupported. See [types](types.md).
 

@@ -66,7 +66,7 @@ def main():
 
 moveは一度評価した入力をそのまま渡す。非Copy値なら元placeを消費し、Copy値なら既存のCopy規則が働く。clone、Arc所有者の追加、allocation、closeを行う操作ではない。引数・return・field等の既存consume検査を迂回できない。
 
-引数は一つ、戻り型は入力から推論し、明示型引数は受け付けない。入力は既存consume規則で渡せる式で、ローカル変数だけに限定しない。fresh値やCopy値への指定は任意。Future保存、非Copy index取得、borrowed/shared fieldからの所有値取得は既存の拒否を保つ。
+引数は一つ、戻り型は入力から推論し、明示型引数は受け付けない。入力は既存consume規則で渡せる式で、ローカル変数だけに限定しない。fresh値やCopy値への指定は任意。Futureそのものや入れ子のFutureをmoveへ渡すこと、非Copy index取得、borrowed/shared fieldからの所有値取得は既存の拒否を保つ。awaitの結果値は対応する型なら渡せる。
 
 V2で新たに拒否するのは、代入の右辺が解決済みローカル変数そのもので、その型がnonCopyの場合だけとする。括弧で包んだ同じ変数も同じ対象。宣言、型注釈付き代入、再代入を含む。`a = User(...)`や関数呼出し、try、field/index、引数、return、matchを一括で変更しない。この最初の範囲は「すべての所有権移動に明示moveを要求する」規則ではない。
 

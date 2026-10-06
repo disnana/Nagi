@@ -18,7 +18,7 @@
 - 所有する非Copy値を消費し、その値・入れ子のview origin・cleanup責任を一度だけ転送する。clone、allocation、共有所有者の追加、closeやrollbackは行わない。Copy入力は既存のCopy規則に従う。
 - 代入の右辺が解決済みの所有ローカルそのもので非Copyなら、宣言・型注釈・再代入を含め通常代入を拒否する。括弧だけで包んでも同じ。borrowed loop localは所有者ではなく、従来の読み取り専用制約で拒否する。
 - 新規生成値や関数呼出しは通常束縛できる。引数、return、field/index、try、matchの既存consume規則を一括変更しない。moveを加えても借用中の所有者移動、shared/borrowed親の非Copy field取得、局所viewのescapeは許可されない。
-- Copy対象は既存`copy_type`とcanonical resource descriptorに従い、サイズやRustの推測から決め直さない。viewはCopyでも借用元の制約が残る。shared/ResultはpayloadがCopyでも非Copy。関数値のasync provenanceを維持する。
+- Copy対象は既存`copy_type`とcanonical resource descriptorに従い、サイズやRustの推測から決め直さない。viewはCopyでも借用元の制約が残る。shared/ResultはpayloadがCopyでも非Copy。関数値のasync provenanceを維持する。Futureや入れ子のFutureをこの操作で受け渡す機能は追加しない。
 - move後の使用はNagi位置で拒否し、再初期化で新しい値を受け取った後は再利用できる。分岐・loopの既存join/fixed pointを保つ。Highと保存・手書きLowで同じ意味にする。
 
 移行前の受理と実行は[監査結果](value-task-audit-results.md)に保存する。新仕様はテストのoracleを明示的に変更する承認済み契約であり、既存実装へ合わせて拒否を緩めない。[実装計画](value-task-implementation-plan.md)に順番と検証条件を記録する。

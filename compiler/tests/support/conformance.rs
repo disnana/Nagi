@@ -87,6 +87,7 @@ pub fn pipeline(case: &Case) -> Result<(String, String), Box<Failure>> {
     let mut program = step(case, &format!("{prefix}-parse"), || {
         parser::parse(&case.source, case.high)
     })?;
+    program = resolve_imports(case, program)?;
     step(case, &format!("{prefix}-check"), || {
         check::check(&mut program)
     })?;
@@ -128,6 +129,13 @@ pub fn mutation(case: &Case) -> Result<MutationOutcome, Box<Failure>> {
         Ok(program) => program,
         Err(error) if !error.diagnostic.starts_with("panic:") => {
             return Ok(MutationOutcome::ParseRejected)
+        }
+        Err(error) => return Err(error),
+    };
+    program = match resolve_imports(case, program) {
+        Ok(program) => program,
+        Err(error) if !error.diagnostic.starts_with("panic:") => {
+            return Ok(MutationOutcome::CheckRejected)
         }
         Err(error) => return Err(error),
     };
@@ -206,7 +214,7 @@ pub fn generated(seed: u64, count: usize) -> Vec<Case> {
     (0..count)
         .map(|index| {
             let input = GeneratedInput {
-                variant: index % 13,
+                variant: index % 18,
                 a: (next(&mut state) % 2001) as i64 - 1000,
                 b: (next(&mut state) % 2001) as i64 - 1000,
                 c: (next(&mut state) % 97 + 1) as i64,
@@ -227,8 +235,13 @@ fn generated_case(name: String, seed: u64, input: GeneratedInput) -> Case {
             6 => (format!("    text = \"Nagi日本語\"\n    other = \"abc\"\n    alias = view(text)\n    if {a} < {b}:\n        alias = view(other)\n    return len(alias) + {c}\n"), if a < b { 3+c } else { 13+c }),
             7 => (format!("    text = \"Nagi日本語\"\n    alias = view(text)\n    for index in range(3):\n        local = \"inner\"\n        alias = view(local)\n        alias = view(text)\n    return len(alias) + {a}\n"), 13+a),
             8 => (format!("    outer: Result[Result[i64, i64], i64] = ok(ok({a}))\n    match outer:\n        case Ok(inner):\n            match inner:\n                case Ok(value):\n                    return value + {b}\n                case Err(code):\n                    return code\n        case Err(problem):\n            return problem\n"), a+b),
-            9 => (format!("    text = \"Nagi日本語\"\n    values = [view(text)]\n    moved = values\n    values = [view(text)]\n    return len(moved[0]) + len(values[0]) + {a}\n"), 26+a),
+            9 => (format!("    text = \"Nagi日本語\"\n    values = [view(text)]\n    moved = move(values)\n    values = [view(text)]\n    return len(moved[0]) + len(values[0]) + {a}\n"), 26+a),
             10 => (format!("    text = \"Nagi日本語\"\n    reader = identity\n    alias = reader(view(text))\n    return len(alias) + {a}\n"), 13+a),
+            13 => (format!("    value = \"Nagi日本語\"\n    transferred = move(value)\n    value = \"abc\"\n    return len(transferred) + len(value) + {a}\n"), 16+a),
+            14 => (format!("    value = [{a}, {b}]\n    transferred = move(value)\n    return transferred[0] + transferred[1]\n"), a+b),
+            15 => (format!("    value: Result[Option[i64], i64] = ok(some({a}))\n    transferred = move(value)\n    match transferred:\n        case Ok(optional):\n            match optional:\n                case Some(number):\n                    return number + {b}\n                case None:\n                    return 0\n        case Err(problem):\n            return problem\n"), a+b),
+            16 => (format!("    value = \"Nagi日本語\"\n    if {a} < {b}:\n        transferred = move(value)\n        return len(transferred) + {c}\n    else:\n        transferred = move(value)\n        return len(transferred) + {a}\n"), if a < b {13+c} else {13+a}),
+            17 => (format!("    value = \"Nagi日本語\"\n    total = {a}\n    for index in range(3):\n        transferred = move(value)\n        total += len(transferred)\n        value = \"abc\"\n    return total + len(value)\n"), a+22),
             _ => (format!("    text = \"Nagi日本語\"\n    other = \"abc\"\n    chosen = choose(view(text), view(other), {a} < {b})\n    match chosen:\n        case Ok(optional):\n            match optional:\n                case Some(alias):\n                    return len(alias) + {c}\n                case None:\n                    return 0\n        case Err(problem):\n            return problem\n"), if a < b { 13+c } else { 3+c }),
         };
     let helpers = match input.variant {
@@ -249,7 +262,7 @@ fn generated_case(name: String, seed: u64, input: GeneratedInput) -> Case {
     };
     Case {
         name,
-        source: format!("{helpers}{declaration} evaluate() -> i64:\n{body}"),
+        source: format!("{}{helpers}{declaration} evaluate() -> i64:\n{body}", if input.variant == 9 || input.variant >= 13 { "from std.ownership import move\n" } else { "" }),
         high: true,
         expected: "run-pass".into(),
         diagnostic: String::new(),
@@ -263,17 +276,32 @@ fn generated_case(name: String, seed: u64, input: GeneratedInput) -> Case {
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "nagi-conformance-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir_all(&root).unwrap();
-        Self(root)
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        loop {
+            let root = std::env::temp_dir().join(format!(
+                "nagi-conformance-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            ));
+            match fs::create_dir(&root) {
+                Ok(()) => return Self(root),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("conformance fixture: {error}"),
+            }
+        }
     }
+}
+fn resolve_imports(case: &Case, program: nagic::ast::Program) -> Result<nagic::ast::Program, Box<Failure>> {
+    if program.module_imports.is_empty() {
+        return Ok(program);
+    }
+    // canonical標準operationもCLIと同じ解決を通す。未解決を成功扱いしない。
+    let fixture = Fixture::new();
+    let path = fixture.0.join(if case.high { "main.nagi" } else { "main.low" });
+    step(case, "resolve-imports", || {
+        fs::write(&path, &case.source).map_err(|error| error.to_string())?;
+        nagic::source::load(&path, case.high).map(|sources| sources.program)
+    })
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
