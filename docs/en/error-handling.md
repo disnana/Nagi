@@ -1,12 +1,52 @@
-# Handling failures with Result
+# Absent values, failures, and panics
 
-[Contents](README.md) · [Syntax](syntax.md) · [Functions](builtins.md)
+[Contents](README.md) · [Guide](language-guide.md#5-return-failures-with-result) · [Syntax](syntax.md) · [Functions](builtins.md)
 
-`Result[T, E]` returns either a success value `T` or a failure value `E`. Use the built-in `Error` or your own class or enum for `E`. Use `try` to return failures to the caller, or `match` to handle them locally.
+Choose what the caller needs to know before choosing a type. These three situations differ:
+
+| Situation | Nagi form | Example |
+|---|---|---|
+| A value may be absent | `T?` (Option) | An optional age is `None` |
+| An operation returns success or failure | `Result[T, E]` | Number conversion returns `Err` |
+| An abnormal failure outside ordinary business error handling | panic | An out-of-bounds list index |
+
+`None` does not explain a processing failure, and `Err` is a returned value rather than a Python exception. Compilation errors and build environment failures are separate from all three.
+
+## Handle an absent value
+
+To use a default when no number is present, Python can check for `None`:
+
+```python
+def value_or(value, fallback):
+    if value is None:
+        return fallback
+    return value
+```
+
+Nagi marks possible absence with `i64?` and extracts the value by matching both cases. This is a complete program:
+
+```nagi
+def value_or(value: i64?, fallback: i64) -> i64:
+    match value:
+        case Some(number):
+            return number
+        case None:
+            return fallback
+
+def main():
+    print(value_or(some(42), 0))
+    print(value_or(None, 0))
+```
+
+Output: `42`, `0`. Construct a present value with lowercase `some(...)`; extract it with uppercase `Some(...)`. `None` needs no payload or parentheses. The extracted `number` is an `i64` available inside its case.
+
+Using `value + 1` directly in that function fails `check`: `i64?` is not an `i64`. Perform the operation on `number` inside `Some`. Python-style `if value is not None:` narrowing and a general unwrap API are unsupported. Handle absence before using the inner value; see [types](types.md) and [match syntax](syntax.md#result-async-and-scopes).
+
+`Result[T?, E]` combines two questions: did the operation succeed, and, if so, is there a value? Its `Ok(None)` differs from `Err(problem)`.
 
 ## Propagate failure to the caller
 
-`try` extracts the success value or returns the failure. The called function and your function must use the same error type `E`.
+To validate an input id and leave failure handling to the caller, Python can let a `ValueError` from `int(text)` propagate without catching it. Nagi instead returns a `Result`, as in this function definition fragment:
 
 ```nagi
 def read_id(text: view[str]) -> Result[i64, Error]:
@@ -16,11 +56,15 @@ def read_id(text: view[str]) -> Result[i64, Error]:
     return ok(id)
 ```
 
+Reading `"2"` returns success containing `2`; `"oops"` returns a conversion failure, and `"0"` returns the failure you constructed. `Result[T, E]` holds success `T` or failure `E`; use built-in `Error` or your own class or enum for `E`.
+
+`try` extracts the success value or returns the failure to the caller. It is not a catching block like Python’s `try/except`. Using it in a function returning plain `i64` fails `check`. Return Result as above, or recover with `match`, described next. The called function and your function must use the same error type `E`. Use try to propagate Err.
+
 For async operations, write `value = try await operation(...)`. The value of `try` is `T`; to return a Result, write `return ok(try operation(...))`. Convert a different error type with `match` or `std.result.map_error`, described below.
 
 ## Separate success and failure
 
-Recovering to a default lets the function return an ordinary `i64`. This complete program is in [result.nagi](../../examples/tutorial/result.nagi).
+To return a default for invalid input, Python can recover with `try/except ValueError`. In Nagi, use `match` to branch on the returned value and return an ordinary `i64`. This complete program is in [result.nagi](../../examples/tutorial/result.nagi).
 
 ```nagi
 def number_or(text: str, fallback: i64) -> i64:
@@ -45,6 +89,8 @@ nagic run result.nagi
 ```
 
 Output: `21`, `invalid`, `-1`. Patterns begin with uppercase `Ok` and `Err`; constructors use lowercase `ok(...)` and `error(...)`.
+
+Writing only `Ok` and omitting failure fails `check`. Provide an `Err` case, and use `_` only when intentionally discarding its value. Handle both cases with match for local recovery.
 
 - Write exactly one `case Ok(...)` and one `case Err(...)`, in either order.
 - Bound names receive the success or failure type. Use `case Err(_):` for an unused value.

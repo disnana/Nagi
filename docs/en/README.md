@@ -9,7 +9,7 @@ See [About Nagi](introduction.md) for its purpose and current scope. The referen
 ## First steps
 
 1. [Setup and first run](getting-started.md): install Nagi and run Hello World.
-2. [Learn by writing code](language-guide.md): variables, functions, lists, and error handling.
+2. [Learn by writing code](language-guide.md): follow Python comparisons, short Nagi examples, results, and corrections for common mistakes. Try variables, functions, lists, passing values, and error handling.
 3. [HTTP and HTML](http.md): build an API, then store data with [SQLite](database.md).
 
 See the [VS Code guide](editor.md) for editor support. See [JetBrains installation](../../editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm.
@@ -42,6 +42,8 @@ See the [VS Code guide](editor.md) for editor support. See [JetBrains installati
 | Diagram types, modules, and calls | [Code maps](code-map.md) |
 
 Runnable examples are in [examples/tutorial/](../../examples/tutorial/). References also include code fragments.
+
+Tutorial code uses today's syntax. New explicit-move assignment rules, spawn result handles, and shared actor messages belong to the [adopted design direction](../../DESIGN.en.md#adopted-direction-for-values-failures-and-tasks); they are not available syntax yet.
 
 ## Implementation and development
 

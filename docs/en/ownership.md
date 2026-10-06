@@ -1,6 +1,8 @@
 # Ownership
 
-Passing a string or list to a user-defined function transfers ownership of that data to the function. This is called a move. Reusing the original variable is an error. Copyable values, such as numbers, can be used repeatedly.
+[Contents](README.md) · [Guide](language-guide.md#4-borrow-with-view-when-you-only-need-to-read) · [Types](types.md)
+
+To give a function a string it may keep, pass an owned value. In Python, assigning a list to another name makes both names refer to the same list. Nagi distinguishes giving a value away, lending it for reading, and sharing ownership.
 
 ```nagi
 def use_name(name: str):
@@ -11,6 +13,54 @@ def main():
     use_name(name)
     # print(name) would use a moved value
 ```
+
+This complete program prints `alice`. After the call, the original `name` cannot use that string. Giving the value away is called a **move**; its new owner also takes responsibility for cleanup. Moving is not itself closing or destroying the value.
+
+Uncommenting `print(name)` makes `check` reject use after move. If the function only reads, accept `view[str]` and pass `view(name)`. If it needs an independent string, pass `copy(view(name))`. See the [runnable borrowing example](language-guide.md#4-borrow-with-view-when-you-only-need-to-read).
+
+## Assignment today and the planned change
+
+The current `a = b` copies values classified as Copy, such as numbers and bools. For a non-Copy owned value, such as a string or list, it moves the value. This does not behave like Python's reference assignment.
+
+```nagi
+def main():
+    count = 2
+    same_count = count
+    print(count + same_count)
+    name = "Nagi"
+    destination = name
+    print(destination)
+    name = "new"
+    print(name)
+```
+
+Output: `4`, `Nagi`, `new`. After `destination = name`, the old string is available through `destination`; the original `name` can be used again after receiving a new value. Reading `name` before that reassignment would fail `check`. To retain both strings, use `destination = copy(view(name))` instead.
+
+Current Copy rules also cover views, synchronous function values, UUIDs, timestamps, and classes/enums/nullable values whose contents meet the Copy rules. This describes the current checker, not a new promise that every enum or small record can be copied. See [types](types.md).
+
+The adopted direction for a future migration is to require an explicit operation when assigning an existing non-Copy owned value with `a = b`: move to give it away, view to read it, copy to create an independent value, or shared ownership to retain the same value in several places. **That migration is not implemented. Current implicit moves remain accepted.** Constructing a new value, as in `a = User(...)`, is distinct. The exact future Copy type list, syntax, and treatment of arguments, returns, field extraction, views, and shared handles remain to be specified. See [design decisions](../../DESIGN.en.md).
+
+## Retain the same value in several places
+
+To retain a shared value instead of making independent copies, use `share` and `clone_shared`. Python's two-name reference assignment does not require these explicit operations. This complete Nagi example uses a class with a string field:
+
+```nagi
+class Label:
+    text: str
+
+def main():
+    label = share(Label(text="Nagi"))
+    another = clone_shared(label)
+    duplicate = copy(view(another.text))
+    print(label.text)
+    print(duplicate)
+```
+
+Output: `Nagi`, `Nagi`. `share(value)` takes ownership and returns `shared[T]`. `clone_shared(label)` creates another handle to the same value without copying the payload. `copy(view(another.text))` instead creates an independent owned string.
+
+Trying `text = another.text` would move a non-Copy field out of shared data, so `check` rejects it. Read the field, or copy it as above. Ordinary shared access does not permit arbitrary writes; resources with internal state need APIs that define their synchronization and operation rules. Sharing does not make every T thread-safe, and some resources cannot be shared or independently copied. See [built-ins](builtins.md#sharing-and-type-sizes) and [concurrency](concurrency.md).
+
+The last shared handle releasing its value is distinct from an external service completing shutdown. Reference cycles can also retain shared values; there is no promise that arbitrary sharing graphs are automatically collected. Use the resource's explicit shutdown/close API when completion matters.
 
 ## Taking a class field
 

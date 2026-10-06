@@ -16,6 +16,8 @@
 
 任意のschemaを検査したという証明は含めない。`--sql-schema`の検査はCLIが封印後のcanonical ASTを読み、Rust生成前に行う。schemaを指定しない通常checkにSQL検査を追加しない。
 
+[ADR 011](011-language-behavior-and-docs.md)の方針でもこの境界を維持する。CheckedProgramは検査済みNagiとRust生成向け確定情報を渡すもので、完全なbackend非依存IRでもruntimeの終了完了の証明でもない。別backend、self-hosting、Low構文の互換性は別の判断である。
+
 封印時に従来の判定関数と順序を使い、Rust名へ変換した私有AST、derive・resource access・呼出しpassing・view storage・cleanup・statement出力の決定を持つ。canonical AST/definition IDとRust上の綴りは別に保持する。emitterは確定planを印字し、capabilityやmove/borrowを独自に再推論しない。
 
 ## 保持するもの

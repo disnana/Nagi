@@ -4,6 +4,18 @@
 
 このページはHigh（`.nagi`）の書式を引くための資料です。字下げと型付きの関数・値を使ってアプリを書く構文です。短い例は関数内に書く断片も含みます。各例をまとめて動かすには[入門の完成コード](../examples/tutorial/basics.nagi)を使ってください。
 
+Pythonでよく書く処理から探すなら、次の入口を使ってください。
+
+| やりたいこと | Pythonでの書き方 | 現在のNagiで学ぶ場所 |
+|---|---|---|
+| 値を更新する | `count += 1` | [値と型](language-guide.md#1-値と型)。再代入でも型は同じ |
+| 関数を使う | `def add(a, b):` | [関数](language-guide.md#2-関数を定義する)。引数型を指定し、実行はmainから |
+| リストへ追加する | `items.append(value)` | [配列と反復](language-guide.md#3-配列class分岐繰り返し)。`append(items, value)` |
+| 渡した値を後でも使う | `b = a`で同じ値を参照 | [viewとcopy](language-guide.md#4-読むだけならviewで借りる)、[共有](ownership.md#同じ値を複数の場所で持つ) |
+| 値がない場合を分ける | `if value is None:` | [Some／None](error-handling.md#値がない場合を扱う)のmatch |
+| 失敗をその場で扱う | `try/except` | [Resultのmatch](error-handling.md#成功と失敗を分ける)。`try 式`はErrの伝播 |
+| 非同期処理を待つ | `await operation()` | [await](language-guide.md#7-asyncとapiへ進む)、[spawnとscope](async.md) |
+
 ## ファイルと字下げ
 
 - UTF-8で保存し、拡張子を`.nagi`にする。
@@ -33,6 +45,8 @@ def main():
 | `present: i64? = some(42)` | 値があるnullable |
 | `count = 11` | 同じ型で再代入 |
 | `count += 1` / `-= 1` / `*= 2` | 複合代入。`/=` / `%=`は未対応 |
+
+変数へ別の型の値を再代入することはできません。既存の非Copy所有値の`a = b`は現在moveします。明示操作を求める将来方針は未実装です。[代入の規則](ownership.md#現在の代入と今後の変更)を参照してください。
 
 文字列のエスケープは`\n`、`\r`、`\t`、`\"`、`\'`、`\\`です。文字列の`+`による連結、f-string、文字列の補間、三重引用符は未対応です。型の一覧は[型](types.md)を参照してください。
 
@@ -124,7 +138,7 @@ def main():
     print(len(duplicate))
 ```
 
-classは全フィールドを名前付きで指定します。フィールド・indexへの代入、method、継承は未対応です。indexは0からで、負数や範囲外は実行時panicになります。文字列のindexは使えません。配列や文字列の区間を借りる場合は`try slice(view(data), start, end)`です。
+classは全フィールドを名前付きで指定します。フィールド・indexへの代入、method、継承は未対応です。indexは0からで、負数や範囲外は実行時panicになります。文字列のindexは使えません。文字列の`len`はUTF-8のbyte数で、Pythonの`len(str)`の文字数とは違います。`len("あ")`は`3`です。配列の`len`は要素数です。配列や文字列の区間を借りる場合は`try slice(view(data), start, end)`です。
 
 自作関数への所有文字列・配列の引き渡しはmoveです。読むだけなら引数を`view[str]`や`view[i64]`にし、`view(value)`で渡します。詳細は[入門ガイド](language-guide.md)と[所有権](ownership.md)を参照してください。
 
@@ -142,7 +156,7 @@ classは全フィールドを名前付きで指定します。フィールド・
 | `await sleep(10)` | 非同期処理を待つ。単位はミリ秒 |
 | `db = try await db_open(":memory:")` | 非同期処理を待ち、Resultの失敗も伝える |
 
-`try`はResultを返す関数内、`await`はasync関数内で使います。その場でResultの成功・失敗を処理する場合は、次のように両方のcaseを書きます。これは関数内の断片です。
+`try`は同じエラー型のResultを返す関数内、`await`はasync関数内で使います。`try`はPythonの例外捕捉ではなく、成功値を取り出し、Errを呼び出し元へ返します。その場でResultの成功・失敗を処理する場合は、次のように両方のcaseを書きます。これは関数内の断片です。
 
 ```nagi
 match parse_i64("42"):
@@ -152,7 +166,7 @@ match parse_i64("42"):
         print(error_kind(problem))
 ```
 
-Optionも`case Some(value):`と`case None:`の両方を書いて処理します。`Some(_)`で値を捨てられます。
+値がない場合の`T?`（Option）は処理のErrやpanicとは別です。`case Some(value):`と`case None:`の両方を書いて取り出します。[不在の実行例](error-handling.md#値がない場合を扱う)も参照してください。`Some(_)`で値を捨てられます。
 
 使わないpayloadは`_`にします。matchは対象の所有値を消費し、payloadの名前はcase内だけで使えます。外側の変数と同じ名前は使えません。`Result[T, E]`のEには独自class・enumも使えます。enumは`case Choice.Cancelled:`や`case Choice.Selected(id):`で全種類を処理します。[型の定義](types.md#enumで種類を分ける)と[エラー処理](error-handling.md)を参照してください。
 
@@ -166,7 +180,7 @@ async def main() -> Result[unit, Error]:
     return ok(print("完了"))
 ```
 
-scopeを出るときに子taskを待ちます。scope内の`return`、viewを別taskへ渡すこと、値を返す子taskのspawnは現在未対応です。詳細は[async](async.md)を参照してください。
+このコードは両方のsleepが終了してから`完了`を表示します。通常のscope終了では子taskを待ちます。現行では本体終了後に子のErrやpanicを検出すると、残りの子を止めて待ちます。親Futureの破棄や本体panicでは停止要求と終了確認を区別します。scope内の`return`、viewを別taskへ渡すこと、unitまたは`Result[unit, Error]`以外を返す子taskのspawnや、結果handleは現在未対応です。詳細は[async](async.md)を参照してください。
 
 ## import、HTTP、Rust
 

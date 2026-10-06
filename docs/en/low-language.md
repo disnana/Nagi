@@ -4,6 +4,8 @@ High uses indentation in `.nagi` files. Low uses braces and semicolons in `.low`
 
 Types, ownership, borrowing, and Result handling follow the same rules as High. High can [call Rust functions directly](modules-and-rust.md), so handwritten Low is not required for Rust integration. Moving code to Low alone does not make it faster or bypass Rust's borrow checker. Expanding Low into an independent systems language is outside the current development scope.
 
+You do not need to learn Low before writing an application. Python users can begin with High in the [language guide](language-guide.md), then visit this page to inspect generated code or replace a function while keeping the original High source. Low is an alternative syntax that also preserves compatibility with existing code.
+
 ## Write and run a standalone Low program
 
 After [setting up the compiler and build environment](getting-started.md), save this as `app.low` in your working folder:
@@ -34,7 +36,7 @@ Try the [order quote CLI](../../test-nagi-code/low-examples/order-quote/README.e
 
 ## Convert High to Low
 
-Save this as `app.nagi`:
+Defining and calling functions resembles Python, but the program is checked under Nagi's type and ownership rules. To inspect generated code, save this complete example as `app.nagi`:
 
 ```nagi
 def score(value: i64) -> i64:
@@ -51,7 +53,11 @@ nagic lower app.nagi
 
 The program prints `14`. `lower` checks types and ownership, then writes Low to `build/app/generated.low`. Low declares functions with `fn` and encloses blocks in `{ }`. Generated variable declarations include `let` and their inferred types.
 
-Loading Low checks its types and ownership again. Saved Low retains module identity, but does not save diagnostic mappings back to the original High. See [compiler internals](compiler-internals.md).
+An ordinary High build also checks High, converts it to Low text, then parses and checks it again. Low is an alternative syntax with shared rules, not a guaranteed stable, backend-independent semantic IR. Loading Low checks its types and ownership again. Saved Low retains module identity, but does not save diagnostic mappings back to the original High. See [compiler internals](compiler-internals.md).
+
+A common mistake is editing `generated.low` to keep a change. The next command regenerates it. Put a lasting replacement implementation in a separate `native.low` file.
+
+**In one sentence: use High for everyday code, and Low to inspect generation or replace functions.** See [types](types.md) and [ownership](ownership.md) for the shared rules, and [compiler internals](compiler-internals.md) for the conversion path.
 
 ## Replace a function with handwritten Low
 
@@ -73,7 +79,7 @@ The result is now `42`. High still calls `score(7)`, but the body that runs come
 
 For a function imported at the High root with `import "orders.nagi" as orders`, use `@replace generated::orders::score`. A from function alias can be selected with `@replace generated::alias`. Type annotations such as `orders.Order` and from class aliases resolve to the same definition IDs. See [imports and Rust integration](modules-and-rust.md).
 
-The replacement must match the original function's parameter count and types, return type, and async status. A missing target or multiple replacements of the same function is an error. Replacements affect whole functions.
+The replacement must match the original function's parameter count and types, return type, and async status. A missing target or multiple replacements of the same function is an error. Replacements affect whole functions. A matching signature does not prove that behavior is equivalent to the original. This example intentionally changes the calculation result.
 
 Commands regenerate `generated.low`. Save changes in `native.low` to keep them. `--native` can also add ordinary Low functions that High can call. See [project configuration](projects.md#add-rust-and-handwritten-low) to save these options.
 
@@ -81,7 +87,7 @@ Commands regenerate `generated.low`. Save changes in `native.low` to keep them. 
 
 Use `import "orders.low" as orders;` or `from "orders.low" import Order as SavedOrder;` for relative-file imports. A module name exposes functions, records, and enums defined in that file.
 
-This function handles a Result:
+This fragment defines a function that handles a Result. Call it from `main` to run it:
 
 ```low
 fn number_or(text: view[str], fallback: i64) -> i64 {
@@ -94,7 +100,7 @@ fn number_or(text: view[str], fallback: i64) -> i64 {
 
 Both `Ok` and `Err` cases are required. See [error handling](error-handling.md).
 
-Enums have the same variants and payloads as High. Match every variant:
+Enums have the same variants and payloads as High. Match every variant. The following is also a definition fragment:
 
 ```low
 enum Choice {

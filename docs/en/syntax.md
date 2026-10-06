@@ -4,6 +4,18 @@
 
 This reference describes High (`.nagi`): indented application code with typed functions and values. Some short examples are fragments for a function body. Use the [complete introductory program](../../examples/tutorial/basics.nagi) to run several features together.
 
+To find a familiar Python operation, start here:
+
+| Goal | Python form | Learn the current Nagi form |
+|---|---|---|
+| Update a value | `count += 1` | [Values and types](language-guide.md#1-values-and-types); reassignment keeps the type |
+| Use a function | `def add(a, b):` | [Functions](language-guide.md#2-define-functions); annotate parameters and run from main |
+| Append to a list | `items.append(value)` | [Lists and loops](language-guide.md#3-lists-classes-branches-and-loops); `append(items, value)` |
+| Keep using a passed value | `b = a` refers to the same value | [Views and copies](language-guide.md#4-borrow-with-view-when-you-only-need-to-read), [sharing](ownership.md#retain-the-same-value-in-several-places) |
+| Handle an absent value | `if value is None:` | [Some/None](error-handling.md#handle-an-absent-value) matching |
+| Handle failure locally | `try/except` | [Result matching](error-handling.md#separate-success-and-failure); `try expression` propagates Err |
+| Wait for async work | `await operation()` | [Await](language-guide.md#7-move-on-to-async-and-apis), [spawn and scopes](async.md) |
+
 ## Files and indentation
 
 - Save as UTF-8 with a `.nagi` extension.
@@ -33,6 +45,8 @@ def main():
 | `present: i64? = some(42)` | Present nullable value |
 | `count = 11` | Reassignment with the same type |
 | `count += 1` / `-= 1` / `*= 2` | Compound assignment; `/=` and `%=` unsupported |
+
+Reassignment cannot change a variable’s type. Today, `a = b` moves an existing non-Copy owned value. The future direction requiring an explicit operation is not implemented; see [assignment rules](ownership.md#assignment-today-and-the-planned-change).
 
 String escapes are `\n`, `\r`, `\t`, `\"`, `\'`, and `\\`. String concatenation with `+`, f-strings, interpolation, and triple-quoted strings are unsupported. See [types](types.md).
 
@@ -124,7 +138,7 @@ def main():
     print(len(duplicate))
 ```
 
-Construct classes with every field named. Assigning fields/indices, methods, and inheritance are unsupported. Indices start at zero; negative or out-of-range indices panic at runtime. Strings cannot be indexed. Borrow a string/list range with `try slice(view(data), start, end)`.
+Construct classes with every field named. Assigning fields/indices, methods, and inheritance are unsupported. Indices start at zero; negative or out-of-range indices panic at runtime. Strings cannot be indexed. String `len` counts UTF-8 bytes, unlike Python’s character count: `len("あ")` is `3`. List `len` counts elements. Borrow a string/list range with `try slice(view(data), start, end)`.
 
 Passing owned strings/lists to user-defined functions moves them. For read-only arguments, accept `view[str]` or `view[i64]` and pass `view(value)`. See the [guide](language-guide.md) and [ownership](ownership.md).
 
@@ -142,7 +156,7 @@ Passing owned strings/lists to user-defined functions moves them. For read-only 
 | `await sleep(10)` | Waits for 10 milliseconds |
 | `db = try await db_open(":memory:")` | Waits and propagates Result failure |
 
-Use `try` in Result-returning functions and `await` in async functions. Handle Result locally with both cases. This is a function-body fragment:
+Use `try` in functions returning Result with the same error type, and `await` in async functions. `try` extracts success or returns Err to the caller; it does not catch Python-style exceptions. Handle Result locally with both cases. This is a function-body fragment:
 
 ```nagi
 match parse_i64("42"):
@@ -152,7 +166,7 @@ match parse_i64("42"):
         print(error_kind(problem))
 ```
 
-Match Option with both `case Some(value):` and `case None:`. Use `Some(_)` to discard the value.
+An absent `T?` (Option) differs from Err and panic. Extract it with both `case Some(value):` and `case None:`; see the [absence example](error-handling.md#handle-an-absent-value). Use `Some(_)` to discard the value.
 
 Use `_` for unused payloads. Matching consumes its owned subject; names exist only in their case and cannot reuse outer variable names. E in `Result[T, E]` can be a custom class or enum. Match every enum variant with cases such as `case Choice.Cancelled:` and `case Choice.Selected(id):`. See [enum definitions](types.md#distinguish-variants-with-an-enum) and [error handling](error-handling.md).
 
@@ -166,7 +180,7 @@ async def main() -> Result[unit, Error]:
     return ok(print("Done"))
 ```
 
-Leaving a scope waits for its children. Returning inside it, passing views to another task, and spawning value-returning tasks are currently unsupported. See [async](async.md).
+This program prints `Done` after both sleeps finish. Normal scope exit waits for its children. Today, detecting a child Err or panic after the body finishes stops and waits for the remaining children. Parent Future destruction or body panic requests termination without guaranteeing that termination has completed. Returning inside a scope, passing views to another task, spawning tasks returning anything other than unit or `Result[unit, Error]`, and result handles are currently unsupported. See [async](async.md).
 
 ## Imports, HTTP, and Rust
 

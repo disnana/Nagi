@@ -33,6 +33,8 @@ Phase 1の差分では、Rust生成の入力を`CheckedProgram`に限定した�
 
 `Program`はHigh/Low共通ASTだが、すべての状態で型が揃う専用Typed IRではない。`Expr.ty`などはoptionalで、名前解決とcheckerの状態にも依存する。「Common IR」と呼ぶだけではbackend前提の保証にならない。
 
+[ADR 011](adr/011-language-behavior-and-docs.md)では、Lowを中間的な構文と呼ぶことと、安定したbackend非依存の意味論IRとして保証することを分けた。Nagiの観測可能な契約、標準APIのruntime契約、checked facts、Rust backendの表現は別の責任である。意味論を定義してRustへ実装を任せることは両立する。今回、この経路の撤去・全面IR化やself-hostingは行わない。
+
 ## 問題
 
 1. textへの往復でcheckerの事実を失う。型付きLowとmetadataの出力漏れは、HighとLowの差になる。
