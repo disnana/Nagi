@@ -483,9 +483,11 @@ async fn cancelled_create_cannot_start_replacement_before_old_native_worker_join
     );
     assert_eq!(before_old_join.admitted, 0);
     assert_eq!(before_old_join.joined, 0);
+    assert_eq!(before_old_join.pending_workers, 1);
     assert_eq!(observer.snapshot().created, 2);
     assert_eq!(observer.snapshot().joined, 2);
     assert_eq!(observer.snapshot().native_closed, 2);
+    assert_eq!(observer.snapshot().pending_workers, 0);
 }
 
 #[tokio::test]
@@ -504,7 +506,11 @@ async fn taken_object_cannot_start_replacement_before_old_native_worker_joins() 
         },
     );
     let observer = adapter.observer();
-    adapter.checkout_without_begin().await.unwrap().take_and_drop();
+    adapter
+        .checkout_without_begin()
+        .await
+        .unwrap()
+        .take_and_drop();
     exit.wait().await;
     let mut second = Box::pin(adapter.begin());
     let early = futures_util::poll!(&mut second);
@@ -525,7 +531,47 @@ async fn taken_object_cannot_start_replacement_before_old_native_worker_joins() 
     );
     assert_eq!(before_old_join.joined, 0);
     assert_eq!(before_old_join.native_closed, 1);
+    assert_eq!(before_old_join.pending_workers, 1);
     assert_eq!(observer.snapshot().created, 2);
     assert_eq!(observer.snapshot().joined, 2);
     assert_eq!(observer.snapshot().native_closed, 2);
+    assert_eq!(observer.snapshot().pending_workers, 0);
+}
+
+#[tokio::test]
+async fn stock_detach_permit_before_handle_drop_cannot_start_another_native_worker() {
+    let detaching = Arc::new(Gate::new());
+    let adapter = Adapter::new(
+        Config::default(),
+        AdapterSeams {
+            detaching: Some(Arc::clone(&detaching)),
+            ..AdapterSeams::default()
+        },
+    );
+    let observer = adapter.observer();
+    let object = adapter.checkout_without_begin().await.unwrap();
+    let taking = std::thread::spawn(move || object.take_and_drop());
+    detaching.wait().await; // stock semaphore permitは返却済み、WorkerHandleは生存。
+    let mut next = Box::pin(adapter.begin());
+    let early = futures_util::poll!(&mut next);
+    let before_handle_drop = observer.snapshot();
+    detaching.release();
+    taking.join().unwrap();
+    let tx = match early {
+        std::task::Poll::Ready(result) => result.unwrap(),
+        std::task::Poll::Pending => tokio::time::timeout(Duration::from_secs(10), next)
+            .await
+            .expect("detached replacement watchdog expired")
+            .unwrap(),
+    };
+    tx.finish(Finish::Rollback).await.unwrap();
+    adapter.close(DEADLINE).await.unwrap();
+    assert_eq!(before_handle_drop.handle_drops, 0);
+    assert_eq!(before_handle_drop.joined, 0);
+    assert_eq!(before_handle_drop.pending_workers, 1);
+    assert_eq!(before_handle_drop.created, 1, "stock permit preceded handle retirement");
+    assert_eq!(observer.snapshot().created, 2);
+    assert_eq!(observer.snapshot().native_closed, 2);
+    assert_eq!(observer.snapshot().joined, 2);
+    assert_eq!(observer.snapshot().pending_workers, 0);
 }
