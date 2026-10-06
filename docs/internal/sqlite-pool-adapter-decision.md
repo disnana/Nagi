@@ -1,12 +1,12 @@
-# SQLite Pool adapter: 次の判断案
+# SQLite Pool adapter: 採用した比較方針
 
-2026-10-06。未採用。Q002は公開API・SQL範囲・終了契約・rusqlite hooksを承認したが、追加wrapper依存を含まない。[ADR 010](adr/010-sqlite-transaction-boundary.md)と[比較](sqlite-pool-rust-reuse.md)を前提に、次の小さい実装で検証する候補を具体化する。ここにあるPool adapterはまだbuild／実行していない。
+2026-10-06。Q004の2項目をユーザーが承認した。generic deadpool Managerの比較試作に使う依存と、下表のcapability初版値を採用する。Q002の公開API・SQL範囲・終了契約・rusqlite hooksは維持する。[ADR 010](adr/010-sqlite-transaction-boundary.md)と[比較](sqlite-pool-rust-reuse.md)を前提に、次の小さい実装で検証する候補を具体化する。ここにあるPool adapterはまだbuild／実行していない。
 
 ## 推奨: generic deadpoolのManagerを使う
 
 `deadpool 0.13.1`のmanaged poolに、native workerのowned handleを持つManager adapterを接続する。poolの上限・待機・checkout・回収はdeadpool、SQLiteのSQL解析・native Transactionは既存rusqliteへ任せる。Nagi側に残すのはsession、cleanup結果、closing／failedの共有状態と完了観測である。pool algorithmやnative transactionをコピーしない。
 
-追加案はruntimeの以下一行。承認前には追加しない。
+比較試作で追加するruntime依存は以下の一行。これ以外の追加・更新が必要なら、理由と差分を示して判断へ戻す。
 
 ```toml
 deadpool = { version = "=0.13.1", default-features = false, features = ["managed", "rt_tokio_1"] }
@@ -14,7 +14,7 @@ deadpool = { version = "=0.13.1", default-features = false, features = ["managed
 
 公開されたmanifest／dependency metadataを2026-10-06に確認した。deadpool 0.13.1は2026-08-26公開、yankなし、MSRV 1.85、MIT OR Apache-2.0。選択featureで新しく必要になるcrateはdeadpoolとdeadpool-runtime 0.3.1。Tokioは現在の依存を使い、rusqlite 0.40.2、bundled、libsqlite3-sysを変更する案ではない。async-std／smol／serde／unmanagedは有効化しない。lockfileで実際の解決結果とfeature合成を確認し、予想外の追加・更新が必要ならその差を判断へ戻す。
 
-一次資料: [deadpool 0.13.1 metadata](https://crates.io/api/v1/crates/deadpool/0.13.1)、[dependencies](https://crates.io/api/v1/crates/deadpool/0.13.1/dependencies)、[deadpool-runtime 0.3.1](https://crates.io/api/v1/crates/deadpool-runtime/0.3.1)、[dependencies](https://crates.io/api/v1/crates/deadpool-runtime/0.3.1/dependencies)、[Manager](https://docs.rs/deadpool/0.13.1/deadpool/managed/trait.Manager.html)、[Pool](https://docs.rs/deadpool/0.13.1/deadpool/managed/struct.Pool.html)、[Object](https://docs.rs/deadpool/0.13.1/deadpool/managed/struct.Object.html)。release archiveのSHA-256をcrates.io metadataに照合して読み取った。Cargoへの追加・第三者コードの実行はしていない。
+一次資料: [deadpool 0.13.1 metadata](https://crates.io/api/v1/crates/deadpool/0.13.1)、[dependencies](https://crates.io/api/v1/crates/deadpool/0.13.1/dependencies)、[deadpool-runtime 0.3.1](https://crates.io/api/v1/crates/deadpool-runtime/0.3.1)、[dependencies](https://crates.io/api/v1/crates/deadpool-runtime/0.3.1/dependencies)、[Manager](https://docs.rs/deadpool/0.13.1/deadpool/managed/trait.Manager.html)、[Pool](https://docs.rs/deadpool/0.13.1/deadpool/managed/struct.Pool.html)、[Object](https://docs.rs/deadpool/0.13.1/deadpool/managed/struct.Object.html)。release archiveのSHA-256をcrates.io metadataに照合して読み取った。承認時点ではCargoへの追加・adapter実行はしていない。実際のlockfile差分と試験結果は後続記録へ残す。
 
 | 部分 | ownerと候補構造 | 必要なoracle |
 |---|---|---|
@@ -41,7 +41,7 @@ generic deadpoolでもnative closeやsessionを自動で保証してくれるわ
 
 ## registry配線前に固定するcapability
 
-下表は未指定だったDebug／shared等も含む初版の**判断案**。まだcheckerへ登録しない。全resourceのSerdeと新Actor Charge対応はなし。署名／markerと実payloadを区別し、Txのtask転送・永続格納禁止をnative inline stateにも適用する。ユーザーの同名classはこの制限の対象ではない。
+下表はQ004で採用した初版値。runtime公開入口と検査が揃うまでcheckerへ先行登録しない。全resourceのSerdeと新Actor Charge対応はなし。署名／markerと実payloadを区別し、Txのtask転送・永続格納禁止をnative inline stateにも適用する。ユーザーの同名classはこの制限の対象ではない。
 
 | resource | Copy | equality | field保存 | shared | Debug |
 |---|---|---|---|---|---|
@@ -55,7 +55,7 @@ generic deadpoolでもnative closeやsessionを自動で保証してくれるわ
 
 TxはnonClone、ParametersもnonClone。Poolのcloneはclone_poolのみ。local Option／Result、owned関数委譲、同task awaitはTxのfield保存やtask転送と同一扱いにしない。Failureのcause複製は明示copy operationだけで、DebugにSQL／bind値／cause本文を足さない。公開messageとcauseに含まれるDB診断が機密を含まないという保証は追加しない。
 
-## 承認後の順序
+## 実装と検証の順序
 
 1. 選択crate／feature／lockfileの差を確認し、一接続のManager adapterへ同じnative contract oracleを接続する。
 2. cleanup前checkout保持、close/admissionのrace、retire後replacement停止、native close／joinと最後のDropを検査する。

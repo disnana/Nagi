@@ -57,13 +57,13 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 2. runtimeのrusqlite `hooks`有効化と、新Txだけに適用する一文・transaction-control/PRAGMA等のSQL制約。[既存Rust wrapper](sqlite-pool-rust-reuse.md)の比較結果を反映し、追加crate/feature/版が必要なら別に明示する。hooks承認をwrapper依存承認と兼ねない。
 3. cleanup確認前の再利用禁止、退役時の新取得停止、commit outcomeとcleanup failureの分離、close後の取消/timeoutの扱い。
 
-上の3判断とruntime hooksは承認済み。同じ承認を再要求せず、ADRとfailing testsから進める。追加wrapperのcrate／版／featureは未承認で、hooks承認と兼ねない。safe prototype、Txのcapture追跡、cleanup保証はこの記録時点では未実装・未検証。safe APIで成立しない場合は保証を下げず反例と代替案を示す。
+上の3判断とruntime hooksは承認済み。同じ承認を再要求せず、ADRとfailing testsから進める。追加wrapperはQ004で別に判断した。一接続safe prototypeのローカル結果は[検証記録](sqlite-session-results.md)にある。公開Pool／Txのcapture追跡とcleanup保証は未実装・未検証。safe APIで成立しない場合は保証を下げず反例と代替案を示す。
 
 ### Q-004: SQLite Poolのwrapper依存と未指定capability
 
-未採用。[具体判断案](sqlite-pool-adapter-decision.md)に、generic deadpool 0.13.1（managed／rt_tokio_1、default featuresなし）、新transitive deadpool-runtime 0.3.1、既存Tokio／rusqliteの維持、Manager adapterに残る終了責任を記録した。release metadata／checksum／sourceを読み取っただけで、依存追加・adapter build／実行はしていない。追加依存Stopに従い、判断前にはCargoへ追加しない。
+状態: 2026-10-06に2項目ともユーザーが承認。[採用方針](sqlite-pool-adapter-decision.md)のgeneric deadpool =0.13.1（managed／rt_tokio_1、default featuresなし）とdeadpool-runtime 0.3.1でManager adapterを比較試作する。既存Tokio／rusqlite／SQLiteの版を維持し、予想外の追加・更新が必要なら差分を示して判断へ戻す。承認時点でadapter build／実行は未確認。
 
-同文書のcapability表は、Q002で明記した値を維持し、未指定Debug／shared等を具体化する判断案。まだpublic registryへ登録しない。Q002の承認をwrapper追加や未指定値の自動採用へ広げない。
+同文書のcapability表の初版値も採用する。Tx／ParametersのDebug不可、Pool／Failureの状態だけのDebug、Failureと小さいenumのshared可を固定した。Txのtask転送・永続格納禁止はQ002のまま。未完成runtimeへcheckerだけを先行公開しない。公開APIの実装・検証完了、mainへのmerge、版更新、releaseの承認とは区別する。
 
 ### その他の項目
 

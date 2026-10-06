@@ -72,13 +72,13 @@ sealは必要なFuture生成／spawn factsの集合完全性、callee identity�
 
 private一接続coreは、lexical native Transaction、user authorizer、typed command、EOF cleanup、結果／cleanup outcome、native closeとworker joinを実SQLiteで確かめる契約oracleとなる。public Pool／Txの受理、multi-connection admission、全Future捕捉、clone共通closeが成立した証拠ではない。
 
-[Rust wrapper比較](sqlite-pool-rust-reuse.md)では同じoracleへadapterを接続し、checkoutを未終端sessionの間保持できるか、取消後のcleanup完了を誰が観測するか、retire時の自動replacementを止められるか、native closeとthread joinを誰が保証するかを比較する。専用thread prototypeをpool algorithm採用の決定にしない。crate既定のrecycle health check／close Ok／size==0だけを契約達成としない。追加依存は未承認なので、候補adapterの版／feature／transitive依存と具体差分を判断へ戻す。
+[Rust wrapper比較](sqlite-pool-rust-reuse.md)では同じoracleへadapterを接続し、checkoutを未終端sessionの間保持できるか、取消後のcleanup完了を誰が観測するか、retire時の自動replacementを止められるか、native closeとthread joinを誰が保証するかを比較する。専用thread prototypeをpool algorithm採用の決定にしない。crate既定のrecycle health check／close Ok／size==0だけを契約達成としない。Q004のgeneric deadpool比較とcapability初版表は承認済み。予想外の追加依存・更新が必要なら、版／feature／transitive依存と具体差分を判断へ戻す。
 
 ## 実装開始・停止の境界
 
 public registryを生やす前にruntime native APIの実在と上記capability oracleを揃える。受理後の生成RustがNagiで検出可能な型／move／lifetimeで拒否されればP1として元checker／planへ戻す。実DB SQL型／NULL／範囲／worker failure、依存infra、trusted Rust adapterの最終Send等を別段階として報告する。
 
-Future保存／返却解禁、一般effect／trait／region solver、unsafe、旧Db受理縮小、追加wrapper未承認、authorizerの具体反例で承認SQL境界を満たせない場合はStop。fixtureの期待をacceptやskipへ緩めて解消しない。public配線後は元位置付きnegative、positive native build／run、High／保存Low／手書きLow、seal integrity、SQL opt-in、旧Db baseline、runtime独立build、4 OS CI、既存fuzz／生成探索が必要である。
+Future保存／返却解禁、一般effect／trait／region solver、unsafe、旧Db受理縮小、未承認の追加依存、authorizerの具体反例で承認SQL境界を満たせない場合はStop。fixtureの期待をacceptやskipへ緩めて解消しない。public配線後は元位置付きnegative、positive native build／run、High／保存Low／手書きLow、seal integrity、SQL opt-in、旧Db baseline、runtime独立build、4 OS CI、既存fuzz／生成探索が必要である。
 
 ## native監査で区別したstatement Errと先行効果
 

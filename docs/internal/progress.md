@@ -169,3 +169,11 @@ main `f10cb64`を基点に承認契約`3cce2f9`→tests-only `7accaec`→safe実
 15組の予定High／手書きLowを作り、parse-only 2件で30sourceの構文と元行anchorを確認した。semantic harnessは未配線で、新Txのcheck／Rust build成功と報告しない。[compiler境界](sqlite-compiler-boundary.md)にcanonical resource、実payload／capture facts、SQL所有化・opt-inと未指定capabilityを整理した。4 OS CIへnative session／parser入力の専用stepを追加したが、CI結果は公開後の確認待ち。
 
 次の[判断案](sqlite-pool-adapter-decision.md)はgeneric deadpool Managerを候補にする。独立レビューでdetachを経由しない破棄とin-flight createをcloseが待つ必要を確認し、候補へ反映した。追加crate／featureと未指定capabilityはQ004へ残す。未承認依存を追加したり、private Driverをそのままpublic Poolにしたりしない。Phase 4全体とPhase 5は未完了で、merge・版更新・releaseはしていない。
+
+### Q004承認とManager比較への継続
+
+2026-10-06。ユーザーがdeadpool =0.13.1（managed／rt_tokio_1、default featuresなし）とdeadpool-runtime 0.3.1による比較試作、およびcapability表の初版値を承認した。[ADR 010](adr/010-sqlite-transaction-boundary.md)・invariants・設計書へ反映し、追加・更新が必要なら差分を示して判断へ戻す。既存Tokio／rusqliteと旧Db／High／Lowの契約を維持する。
+
+一接続基盤はdraft [PR #81](https://github.com/disnana/Nagi/pull/81)、head `cfa65fa61de1f81d6acbebbfd4898541ba1ee5e1`で公開した。4 OS CIはこの記録時点では一部完了・全体確認待ち。次の比較はbranch `feat/sqlite-pool-adapter`へ分け、#81の成果を保持する。main `5fdfe49`のREADME code fence更新だけを取り込んだ。adapter試作はまだ未実行で、公開Pool／TxやPhase 4完了とは報告しない。
+
+終了責任はManager::detachだけへ置かない。in-flight create取消、idle破棄、active返却、Object::take、最後のPool Dropの経路を含め、worker起動前の登録からnative close／joinまで同じownerで保持する。checkerの先行公開や独自pool algorithmへの置換は行わない。mainへのmerge・版更新・releaseは実行していない。

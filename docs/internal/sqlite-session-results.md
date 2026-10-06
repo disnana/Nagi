@@ -48,7 +48,7 @@ Linux x86_64、既存Rust toolchain／warm target、locked／offline Cargo。soc
 
 Linux checksの全Cargo suiteに新testが含まれる。4 OS package matrixへprivate SQLite sessionと予定High／Low入力の専用stepを追加した。Linux x64、Windows x64、macOS Intel／Apple Siliconの結果は、公開後のCI確認まで未確認。step登録だけで4 OS成功と報告しない。
 
-新APIのHigh→保存Low→Rust build／run、Tx capture facts、native state収納拒否、dynamic SQL所有化、SQL opt-inのbind未検査表示、wrapper checkout／取得race、multi-connection、clone共通close、starting／idle／active／detached worker全joinは未完了。source mappingは既存の行単位で、新fixture columnを診断保証にしない。追加wrapperは[具体判断案](sqlite-pool-adapter-decision.md)が未採用である。
+新APIのHigh→保存Low→Rust build／run、Tx capture facts、native state収納拒否、dynamic SQL所有化、SQL opt-inのbind未検査表示、wrapper checkout／取得race、multi-connection、clone共通close、starting／idle／active／detached worker全joinは未完了。source mappingは既存の行単位で、新fixture columnを診断保証にしない。追加wrapperの[generic deadpool比較方針](sqlite-pool-adapter-decision.md)は、この一接続試作の後にQ004で承認された。adapterの実行成功はこの結果に含まれない。
 
 性能改善は行っていない。prototypeはSQLを所有Stringへするため、そのcostを最終Static／Owned生成planの結果と混同しない。SQLite copy、owned reply／row allocation、Future frame、binary／compile timeは完成した縦切りで測る。既知のFuture +32 byteとCopy深さのP2も未解決である。
 
