@@ -166,6 +166,11 @@ impl Ledger {
             .and_then(|pool| pool.upgrade());
         if let Some(pool) = pool {
             pool.close();
+            // Pending waiterへのpermit予約や返却途中ではresize(0)がidle Objectを
+            // 残し得る。closed/max_size=0の後にqueueを退役し、late返却はstock
+            // detachへ渡す。active checkoutには触れず、ledger lock外でDropする。
+            let removed = pool.retain(|_, _| false).removed;
+            drop(removed);
         }
     }
     fn fail(&self, error: Failure) {
