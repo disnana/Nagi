@@ -1,0 +1,15 @@
+import std.db.sqlite as sqlite
+class State:
+    pool: sqlite.Pool
+class Row:
+    id: i64
+    label: Option[str]
+    data: bytes
+    enabled: bool
+def publish(pool: sqlite.Pool) -> shared[State]:
+    return share(State(pool=sqlite.clone_pool(pool)))
+async def read(tx: sqlite.Tx, sql: str, params: sqlite.Parameters) -> Result[unit, sqlite.Failure]:
+    row = try await sqlite.query[Row](tx, "SELECT id, label, data, enabled FROM items WHERE id = ?", params)
+    rows = try await sqlite.all[Row](tx, view(sql), sqlite.parameters())
+    count = try await sqlite.exec(tx, "DELETE FROM items", sqlite.parameters())
+    return await sqlite.rollback(tx)

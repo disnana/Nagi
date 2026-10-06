@@ -1,0 +1,4 @@
+import std.db.sqlite as sqlite
+import std.http.server as http
+def invalid(app: http.App[Option[sqlite.Tx], Error]):
+    print(0)

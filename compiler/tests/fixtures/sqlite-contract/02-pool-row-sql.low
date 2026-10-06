@@ -1,0 +1,19 @@
+import std.db.sqlite as sqlite;
+record State {
+    pool: sqlite.Pool;
+}
+record Row {
+    id: i64;
+    label: Option[str];
+    data: bytes;
+    enabled: bool;
+}
+fn publish(pool: sqlite.Pool) -> shared[State] {
+    return share(State(pool=sqlite.clone_pool(pool)));
+}
+async fn read(tx: sqlite.Tx, sql: str, params: sqlite.Parameters) -> Result[unit, sqlite.Failure] {
+    let row: Option[Row] = try await sqlite.query[Row](tx, "SELECT id, label, data, enabled FROM items WHERE id = ?", params);
+    let rows: List[Row] = try await sqlite.all[Row](tx, view(sql), sqlite.parameters());
+    let count: i64 = try await sqlite.exec(tx, "DELETE FROM items", sqlite.parameters());
+    return await sqlite.rollback(tx);
+}

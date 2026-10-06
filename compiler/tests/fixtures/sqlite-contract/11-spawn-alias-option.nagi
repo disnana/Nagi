@@ -1,0 +1,9 @@
+import std.db.sqlite as sqlite
+async def child(tx: Option[sqlite.Tx]):
+    print(0)
+async def invalid(tx: sqlite.Tx) -> Result[unit, Error]:
+    callback = child
+    boxed = some(tx)
+    async with scope:
+        spawn callback(boxed)
+    return ok(print(1))

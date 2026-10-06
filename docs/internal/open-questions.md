@@ -59,6 +59,12 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 
 上の3判断とruntime hooksは承認済み。同じ承認を再要求せず、ADRとfailing testsから進める。追加wrapperのcrate／版／featureは未承認で、hooks承認と兼ねない。safe prototype、Txのcapture追跡、cleanup保証はこの記録時点では未実装・未検証。safe APIで成立しない場合は保証を下げず反例と代替案を示す。
 
+### Q-004: SQLite Poolのwrapper依存と未指定capability
+
+未採用。[具体判断案](sqlite-pool-adapter-decision.md)に、generic deadpool 0.13.1（managed／rt_tokio_1、default featuresなし）、新transitive deadpool-runtime 0.3.1、既存Tokio／rusqliteの維持、Manager adapterに残る終了責任を記録した。release metadata／checksum／sourceを読み取っただけで、依存追加・adapter build／実行はしていない。追加依存Stopに従い、判断前にはCargoへ追加しない。
+
+同文書のcapability表は、Q002で明記した値を維持し、未指定Debug／shared等を具体化する判断案。まだpublic registryへ登録しない。Q002の承認をwrapper追加や未指定値の自動採用へ広げない。
+
 ### その他の項目
 
 以下はまだ値・APIを決めていない。現時点の実装や追加保証とは扱わない。

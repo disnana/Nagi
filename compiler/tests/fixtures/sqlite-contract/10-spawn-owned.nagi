@@ -1,0 +1,7 @@
+import std.db.sqlite as sqlite
+async def child(tx: sqlite.Tx):
+    print(0)
+async def invalid(tx: sqlite.Tx) -> Result[unit, Error]:
+    async with scope:
+        spawn child(tx)
+    return ok(print(1))

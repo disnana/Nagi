@@ -1,0 +1,4 @@
+import std.db.sqlite as sqlite
+async def invalid(tx: sqlite.Tx) -> Result[unit, sqlite.Failure]:
+    try await sqlite.commit(tx)
+    return await sqlite.rollback(tx)

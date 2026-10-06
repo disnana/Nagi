@@ -1,0 +1,10 @@
+import std.db.sqlite as sqlite;
+async fn child(tx: sqlite.Tx) -> unit {
+    print(0);
+}
+async fn invalid(tx: sqlite.Tx) -> Result[unit, Error] {
+    scope {
+        spawn child(tx);
+    }
+    return ok(print(1));
+}

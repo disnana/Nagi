@@ -26,7 +26,7 @@ The name comes from the Japanese word 凪, meaning calm. The idea is that the su
 | Coexistence with Rust assets | Write application logic in High and combine it with existing frameworks, drivers, and custom infrastructure | Bidirectional async integration with Axum is verified in a sample; general async function types are unsupported |
 | Low | Limit its scope to compatibility, brace syntax, generated-code inspection, and function replacement | Implemented; expansion into an independent systems language is paused |
 | Executable generation | Keep the current Rust backend | Native generation through Rust/Cargo is implemented |
-| DB expansion | Separate SQLite and PostgreSQL types; align operation, row, and error conventions | New APIs are unimplemented; module names and resource contracts are undecided |
+| DB expansion | Separate SQLite and PostgreSQL types; align operation, row, and error conventions | The initial SQLite API and termination contract are approved; public APIs are unimplemented. PostgreSQL design follows later |
 | Standard HTTP foundation | Evaluate Axum/Tower as the first candidate | Adoption is undecided; a comparison under equal conditions has not been run |
 | Independent backend, VM, self-hosting | Leave future adoption open | Unimplemented; these are not current features or next-release promises |
 
@@ -160,6 +160,8 @@ Phase 2's development changes separate application identity from successful gene
 Phase 2's PR #79 passed the four-platform and editor/package CI and was merged into main. It has not reached a published version. Phase 3 first records current resource behavior in characterization tests, then consolidates capability and type-argument retention metadata. It preserves purpose-specific checks and existing APIs and does not add resource lifecycle guarantees. [ADR 008](docs/internal/adr/008-resource-contracts.md) records the structure and validation order. PR #80 passed the four-platform, editor, website, and merge-gate CI and was merged into main. Pool/Transaction remain unimplemented. The [decision record](docs/internal/open-questions.md) and [progress](docs/internal/progress.md) distinguish verified coverage, changes on main or in published versions, and planned work.
 
 On 2026-10-06, Q002 approved the SQLite API, SQL restrictions, termination contract, and the runtime rusqlite hooks feature. [ADR 010](docs/internal/adr/010-sqlite-transaction-boundary.md) starts with a private one-connection, one-transaction prototype. Existing Rust pool/worker libraries remain comparison candidates; additional wrapper dependencies need a separate decision. Approval does not mean that the public API or its guarantees have been implemented and verified.
+
+The development branch's [private prototype](runtime/src/sqlite_prototype/session.rs) has [22 native tests](runtime/src/sqlite_prototype/tests.rs) for SQLite action rejection, explicit termination, cleanup after cancellation, native close, and worker join. A SQL error alone does not prove that earlier changes were rolled back. This does not establish public Pool behavior, Nagi's Tx capture checks, or four-platform support. [Results](docs/internal/sqlite-session-results.md) and the [next adapter proposal](docs/internal/sqlite-pool-adapter-decision.md) record the remaining work.
 
 Changes to semantics, public APIs, or the High/Low/Rust division should update the rationale, alternatives, compatibility, and verification results here. Detailed API descriptions and measurement logs belong in their corresponding documents.
 

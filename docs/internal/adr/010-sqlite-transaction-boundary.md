@@ -26,6 +26,8 @@ TxはnonCopy／nonClone／nonshared／nonSerde。field・enum等の永続格納�
 
 native rollbackの結果、autocommit、statement破棄、user hook状態、worker健全性を確認する前に再利用しない。native TransactionのDropはrollback成功の証拠ではない。普通のSQL／bind／decode Errでnative Txがactiveなら継続でき、自動rollbackはAbortedとして後続SQLを拒否する。
 
+`Err`はstatementの変更がゼロであることを保証しない。SQLiteの`INSERT OR FAIL`やAFTER trigger途中の失敗では先行する変更がTx内に残り得る。禁止PRAGMAの拒否と、許可された親DMLの巻き戻しは別の観測である。変更を破棄する場合は明示rollback、または未終端sessionのEOF cleanupを確認する。各statementの暗黙savepointや全Errでの自動abortは採用していない。
+
 cleanup失敗・worker panic・状態不明では接続を退役し、Poolの新取得を止める。既存active Txは終端を続け、自動replacement／retryは追加しない。COMMIT完了とcleanup失敗は両方保持する。返信喪失の結果はUNKNOWNで、再実行可能と決めつけない。
 
 close開始後はclone共通で新取得を止め、active Txのcleanup、native close結果、worker終了を待つ。close timeout／取消でclosingを解除しない。再closeで完了待ちを許す。成功通知をworkerが送っただけではthread joinの証拠にならない。最後のPool Dropは閉鎖要求であり、非同期cleanup完了のAPIではない。

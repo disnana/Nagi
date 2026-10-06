@@ -1,0 +1,559 @@
+{
+  "schema_version": 1,
+  "status": "planned_unwired",
+  "basis": "ADR 010 / local 90c5324; not public API acceptance",
+  "execution": {
+    "harness_registered": false,
+    "parser_executed": false,
+    "checker_executed": false,
+    "native_build_executed": false,
+    "runtime_executed": false,
+    "parser_harness_registered": true
+  },
+  "low_kind": "handwritten Low imports; not generated Low goldens",
+  "canonical_identity": {
+    "module": "stdlib:std.db.sqlite",
+    "resource_Tx_symbol": "__nagi_def_7374646c69623a7374642e64622e73716c697465_r_5478"
+  },
+  "cases": [
+    {
+      "id": "01-same-task-affine",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "pass",
+      "contract": "local Option/Result and owned delegation survive await",
+      "inputs": {
+        "high": "01-same-task-affine.nagi",
+        "user_low": "01-same-task-affine.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {},
+      "diagnostic_contract": null,
+      "validation_result": null,
+      "native_requirement": "build/run after runtime public API exists; no rustc move/lifetime rejection"
+    },
+    {
+      "id": "02-pool-row-sql",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "pass",
+      "contract": "Pool owned/shared storage; scalar row; literal versus dynamic SQL; unknown bind count",
+      "inputs": {
+        "high": "02-pool-row-sql.nagi",
+        "user_low": "02-pool-row-sql.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {},
+      "diagnostic_contract": null,
+      "validation_result": null,
+      "sql_plan": [
+        {
+          "operation": "query",
+          "sql": "Static",
+          "bind": "unknown: Parameters function argument",
+          "schema": "check required columns; report bind unchecked"
+        },
+        {
+          "operation": "all",
+          "sql": "Owned",
+          "bind": "known empty builder may be proven separately",
+          "schema": "dynamic SQL unchecked"
+        },
+        {
+          "operation": "exec",
+          "sql": "Static",
+          "bind": "empty builder may be proven separately",
+          "schema": "one statement, no returned columns"
+        }
+      ],
+      "native_requirement": "build + SQL ownership before params move; same-task await does not retain SQL view across worker boundary"
+    },
+    {
+      "id": "03-user-type-names",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "pass",
+      "contract": "import-only canonical identity preserves user resource-like names",
+      "inputs": {
+        "high": "03-user-type-names.nagi",
+        "user_low": "03-user-type-names.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {},
+      "diagnostic_contract": null,
+      "validation_result": null,
+      "identity_requirement": "user Class DefId and stdlib:std.db.sqlite Resource DefId remain distinct; repeat without import"
+    },
+    {
+      "id": "04-pointer-signature",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "pass",
+      "contract": "capture-free function pointer signature is not Tx payload",
+      "inputs": {
+        "high": "04-pointer-signature.nagi",
+        "user_low": "04-pointer-signature.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {},
+      "diagnostic_contract": null,
+      "validation_result": null,
+      "capture_expectation": "accept Future captures callback pointer only, not a Tx; no closure syntax or hidden environment"
+    },
+    {
+      "id": "05-consume-reuse",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "commit consumes Tx at Future creation",
+      "inputs": {
+        "high": "05-consume-reuse.nagi",
+        "user_low": "05-consume-reuse.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 4,
+          "anchor": "return await sqlite.rollback(tx)",
+          "column_utf8_for_fixture_review": 5,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 4,
+          "anchor": "return await sqlite.rollback(tx)",
+          "column_utf8_for_fixture_review": 5,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker ownership: move後",
+      "validation_result": null,
+      "variants": [
+        "rollback then commit",
+        "commit argument evaluation then later same-expression Tx reuse; no Future-save relaxation"
+      ]
+    },
+    {
+      "id": "06-copy-tx",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "Tx is nonCopy/nonClone",
+      "inputs": {
+        "high": "06-copy-tx.nagi",
+        "user_low": "06-copy-tx.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 3,
+          "anchor": "copy(view(tx))",
+          "column_utf8_for_fixture_review": 17,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 3,
+          "anchor": "copy(view(tx))",
+          "column_utf8_for_fixture_review": 32,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker capability: nonCopy resource copy refusal",
+      "validation_result": null
+    },
+    {
+      "id": "07-owned-field",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "Tx cannot be stored in owned class/enum field",
+      "inputs": {
+        "high": "07-owned-field.nagi",
+        "user_low": "07-owned-field.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 3,
+          "anchor": "tx: owned[Option[sqlite.Tx]]",
+          "column_utf8_for_fixture_review": 5,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 3,
+          "anchor": "tx: owned[Option[sqlite.Tx]]",
+          "column_utf8_for_fixture_review": 5,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker field storage: 所有field",
+      "validation_result": null,
+      "variants": [
+        "direct Tx field",
+        "Result[Tx, Error] field",
+        "List[Tx] field",
+        "enum payload Tx",
+        "no false positive for user class Tx"
+      ]
+    },
+    {
+      "id": "08-nested-shared",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "Tx payload cannot enter Arc through nested wrapper",
+      "inputs": {
+        "high": "08-nested-shared.nagi",
+        "user_low": "08-nested-shared.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 3,
+          "anchor": "share(some(tx))",
+          "column_utf8_for_fixture_review": 13,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 3,
+          "anchor": "share(some(tx))",
+          "column_utf8_for_fixture_review": 44,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker new-resource shared capability, including nested payload",
+      "validation_result": null,
+      "variants": [
+        "shared[Option[Tx]] function parameter declaration",
+        "share(Result[Tx, Failure])",
+        "share(Parameters/Options/Failure) directly and wrapped; same policy only for new SQLite resources"
+      ]
+    },
+    {
+      "id": "09-native-shared-context",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "standard resource Arc context enforces actual payload capability",
+      "inputs": {
+        "high": "09-native-shared-context.nagi",
+        "user_low": "09-native-shared-context.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 3,
+          "anchor": "invalid(app: http.App[Option[sqlite.Tx], Error])",
+          "column_utf8_for_fixture_review": 5,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 3,
+          "anchor": "invalid(app: http.App[Option[sqlite.Tx], Error])",
+          "column_utf8_for_fixture_review": 4,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker native SharedPayload role rejects nested Tx",
+      "validation_result": null,
+      "variants": [
+        "std.actor.Supervisor[Option[Tx]] context",
+        "App callback error signature mentioning Tx is not shared payload"
+      ]
+    },
+    {
+      "id": "10-spawn-owned",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "owned Tx argument retained by Future cannot transfer task",
+      "inputs": {
+        "high": "10-spawn-owned.nagi",
+        "user_low": "10-spawn-owned.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 6,
+          "anchor": "spawn child(tx)",
+          "column_utf8_for_fixture_review": 9,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 7,
+          "anchor": "spawn child(tx)",
+          "column_utf8_for_fixture_review": 9,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker task-transfer: actual Tx capture (even unused in child)",
+      "validation_result": null,
+      "capture_expectation": {
+        "call": "child(tx)",
+        "argument_index": 0,
+        "argument_anchor": "tx",
+        "owner_binding": "invalid parameter tx",
+        "resource_id": {
+          "module": "stdlib:std.db.sqlite",
+          "kind": "Resource",
+          "name": "Tx"
+        }
+      },
+      "variants": [
+        "spawn child(try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)) using Error mapping at outer function",
+        "spawn child(view[Tx]) keeps existing view task rejection",
+        "Tx acquired inside child is permitted: no caller Tx transferred"
+      ]
+    },
+    {
+      "id": "11-spawn-alias-option",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "async function alias preserves real Option[Tx] capture",
+      "inputs": {
+        "high": "11-spawn-alias-option.nagi",
+        "user_low": "11-spawn-alias-option.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 8,
+          "anchor": "spawn callback(boxed)",
+          "column_utf8_for_fixture_review": 9,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 9,
+          "anchor": "spawn callback(boxed)",
+          "column_utf8_for_fixture_review": 9,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker task-transfer through local async alias and actual wrapper payload",
+      "validation_result": null,
+      "capture_expectation": {
+        "call": "callback(boxed)",
+        "named_function": "child",
+        "argument_index": 0,
+        "argument_anchor": "boxed",
+        "owner_binding": "boxed local declaration",
+        "payload": "Option[canonical SQLite Tx]"
+      },
+      "variants": [
+        "Result[Tx, Failure] capture",
+        "owned[Tx] capture",
+        "second alias = callback",
+        "same alias awaited on current task passes"
+      ]
+    },
+    {
+      "id": "12-future-storage",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "existing Future local storage remains unsupported",
+      "inputs": {
+        "high": "12-future-storage.nagi",
+        "user_low": "12-future-storage.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 3,
+          "anchor": "pending = sqlite.commit(tx)",
+          "column_utf8_for_fixture_review": 5,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 3,
+          "anchor": "pending = sqlite.commit(tx)",
+          "column_utf8_for_fixture_review": 9,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker emittable: Future cannot be saved; not task-transfer evidence",
+      "validation_result": null
+    },
+    {
+      "id": "13-future-option",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "existing nested Future storage remains unsupported",
+      "inputs": {
+        "high": "13-future-option.nagi",
+        "user_low": "13-future-option.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 3,
+          "anchor": "pending = some(sqlite.commit(tx))",
+          "column_utf8_for_fixture_review": 5,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 3,
+          "anchor": "pending = some(sqlite.commit(tx))",
+          "column_utf8_for_fixture_review": 9,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker emittable: Future container unsupported; not capture validation",
+      "validation_result": null,
+      "variants": [
+        "Future in Result",
+        "Future passed to callback parameter; fn[...,Future] parameter remains unsupported"
+      ]
+    },
+    {
+      "id": "14-future-return",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "existing explicit Future return remains unsupported",
+      "inputs": {
+        "high": "14-future-return.nagi",
+        "user_low": "14-future-return.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 2,
+          "anchor": "invalid(tx: sqlite.Tx) -> Future[Result[unit, sqlite.Failure]]",
+          "column_utf8_for_fixture_review": 5,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 2,
+          "anchor": "invalid(tx: sqlite.Tx) -> Future[Result[unit, sqlite.Failure]]",
+          "column_utf8_for_fixture_review": 4,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker unsupported Future signature before any spawn; preserve current rejection stage",
+      "validation_result": null,
+      "variants": [
+        "function callback returning Future then spawn; reject unsupported callback parameter, not pretend capture tracked"
+      ]
+    },
+    {
+      "id": "15-new-row-restriction",
+      "status": "planned_unwired",
+      "expected_after_public_vertical_slice": "fail",
+      "contract": "new API rejects unsupported autoFromRow field while legacy accepts class bridge",
+      "inputs": {
+        "high": "15-new-row-restriction.nagi",
+        "user_low": "15-new-row-restriction.low"
+      },
+      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "required_paths": [
+        "High source::load/check",
+        "independently loaded handwritten Low",
+        "saved Low regenerated after registry integration"
+      ],
+      "expected_origin": {
+        "high": {
+          "line": 10,
+          "anchor": "sqlite.all[Row](tx",
+          "column_utf8_for_fixture_review": 22,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        },
+        "user_low": {
+          "line": 9,
+          "anchor": "sqlite.all[Row](tx",
+          "column_utf8_for_fixture_review": 37,
+          "public_diagnostic": "original file path and statement/declaration line",
+          "private_span": "lexer token range for anchor; not a Rust span"
+        }
+      },
+      "diagnostic_contract": "checker new operation row eligibility before rustc FromRow failure",
+      "validation_result": null,
+      "variants": [
+        "new query same Row",
+        "u64 field",
+        "scalar/enum/native resource type argument",
+        "Option[nested class] field",
+        "remove invalid(): legacy class-only checker acceptance preserved; native bridge must separately implement FromRow to build"
+      ]
+    }
+  ],
+  "execution_note": "harness_registered denotes public semantic contract wiring; the parse-only integration harness is separate and has not been executed"
+}

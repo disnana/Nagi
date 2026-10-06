@@ -114,7 +114,7 @@ COMMIT結果とcleanup結果は独立軸。`Committed + Retired`、`NotCommitted
 
 ## 最小testsと実行gate
 
-- **SQL制約:** 実SQLiteでCOMMIT／END／ROLLBACK／BEGIN／SAVEPOINT／RELEASE／ROLLBACK TO／PRAGMA／ATTACH／DETACHを各exec/query入口へ渡す。大小文字・コメント・引用内の語・複数statement・prepared reuse／schema reprepare・pragma TVF／viewを含める。禁止SQLはprepare／step時の拒否とrow不変を確認し、普通の文字列`'COMMIT'`は許容する。keyword normalizer／skipで通さない。
+- **SQL制約:** 実SQLiteでCOMMIT／END／ROLLBACK／BEGIN／SAVEPOINT／RELEASE／ROLLBACK TO／PRAGMA／ATTACH／DETACHを各exec/query入口へ渡す。大小文字・コメント・引用内の語・複数statement・prepared reuse／schema reprepare・pragma TVF／viewを含める。direct prepareで拒否する文ではrow不変を確認し、step中の拒否はdeny action・native状態・先行DML効果・明示rollback後の不変を分けて確認する。AFTER triggerでの拒否を「全statement効果0」の保証へ広げない。普通の文字列`'COMMIT'`は許容する。keyword normalizer／skipで通さない。
 - **自動rollback:** UNIQUEに対するINSERT OR ROLLBACKと、実triggerのRAISE(ROLLBACK)を使い、Aborted後のSQLが保存されないことを別connectionで確認。BUSY／interrupt／decode Errは別oracle。triggerが初版SQL受理範囲外なら、既存schema triggerを含むDBの扱いを明示して検証する。
 - **leaseと取消:** acquire前後、BEGIN実行後／reply前、operation admission後、commit admission前後／reply前、unpolled Future、Pending中Dropの正のbarrier。capacity=1でcleanup中に同slotを次beginが取得しないこと、cleanup後のrow可視性、epoch／worker終了／permit解放を確認。sleepだけの成功oracleにしない。
 - **失敗:** private test seamでrollback／hook restore／connection close失敗・worker panicを注入。retired slotの不再利用、waiting acquire failure、close timeout→再待機、primary＋cleanup cause／unknown outcomeを観測。公開故障注入APIは作らない。

@@ -1,6 +1,6 @@
 # Phase 4: SQLite Pool・affine Txの初版契約
 
-2026-10-05の提案を、2026-10-06にQ002の選択1として承認。**公開API・SQL制限・終了policyとruntime rusqlite hooksを採用済み。実装・検証の完了ではない。** [ADR 010](adr/010-sqlite-transaction-boundary.md)に判断を固定した。詳細根拠は[decision proposal](sqlite-pool-research.md)。safe prototypeはこの記録時点では未実行。Phase 3 acceptanceは#80のCI成功とmain反映で満たした。
+2026-10-05の提案を、2026-10-06にQ002の選択1として承認。**公開API・SQL制限・終了policyとruntime rusqlite hooksを採用済み。実装・検証の完了ではない。** [ADR 010](adr/010-sqlite-transaction-boundary.md)に判断を固定した。詳細根拠は[decision proposal](sqlite-pool-research.md)。同日のprivate一接続prototypeとローカル検証は[結果](sqlite-session-results.md)へ記録した。public API・wrapper adapterは未実装。Phase 3 acceptanceは#80のCI成功とmain反映で満たした。
 
 第一候補は新module `std.db.sqlite`（canonical ID `stdlib:std.db.sqlite`）、runtime namespace `nagi_runtime::sqlite`。既存Db、db_*、FromRow、Sql、Error、標準HTTP/Actor Optionsを変更・削除しない。新APIへ固定id/name/age bindを継承しない。新言語syntax、reflection、ToParams derive、generic trait solverは導入しない。
 
@@ -63,6 +63,8 @@ commit/rollbackのhandle consumeはFuture作成時から有効。未poll、送�
 
 普通のSQL/bind/decode Errではnative Txがactiveなら継続可。SQLiteの自動rollbackを検出したらAbortedへ移し、そのhandleの後続SQLを拒否する。rollback/cleanup失敗、worker panic、状態確認不能は接続retire＋Pool新取得停止＋waiting acquireへfailure。既存active Txは終端を続ける。自動replacement/retryをしない。COMMIT完了＋cleanup失敗は`outcome=COMMITTED, retired=true`のErrとして両方保持する。返信が失われれば呼び手は結果不明で、rollback済み・再実行可能とは判断しない。取消されたFutureに架空のErrを届ける保証もない。
 
+statementのErrは「変更なし」でも「rollback済み」でもない。`INSERT OR FAIL`やAFTER triggerでのstep失敗は、先行する変更をactive Tx内に残し得る。Authorizerが禁止PRAGMAを拒否しても、親INSERTの先行効果を自動で戻す契約にはならない。明示rollbackと未終端session cleanupの完了は別に検査する。暗黙のstatement savepointや、全Errでの強制abortを追加しない。
+
 closeはclone共通の新取得停止、active Tx/cleanup待ち、connection close/worker終了の観測。closeの処理開始後は、timeout/close Future取消でもclosingは解除しない。未pollのFutureだけで閉鎖開始を保証しない。active Txの強制kill/rollbackはしない。再closeで完了待ちを許す。Pool最後のDropは新取得停止と閉鎖要求までで、非同期cleanup完了の保証ではない。無期限blocking SQL、abort/OOM/process kill、trusted Rust adapter内部のspawnや外部副作用の普遍回復は保証外。
 
 ## SQL・依存・allocationの境界
@@ -71,7 +73,7 @@ closeはclone共通の新取得停止、active Tx/cleanup待ち、connection clo
 
 SQLiteの自動rollbackは上の拒否でも残る。pragma TVF、既存trigger/view、reprepareでpolicyを迂回できないかを実SQLiteで検証する。safe hooksで承認制約を満たせない反例はStop。悪意あるDB schemaや全SQL functionに対する包括sandboxは承認案に含めない。
 
-rusqlite 0.40.2は維持し、runtimeの既存`bundled`へ**`hooks` featureだけの追加をQ002で承認済み**。compilerのfeature合成だけに依存しない。safe Authorizerとsafe params_from_iterは実在するが、prototype未実行。Parametersはowned Vec<Value>をconsumeし、text/bytesをdeep cloneせず移す候補。Vec成長、literal生成、動的SQL所有化、SQLite SQLITE_TRANSIENTのtext/blob copy、job/reply、row/list出力は残る。zero-copy、allocation数不変、速度改善を保証しない。
+rusqlite 0.40.2は維持し、runtimeの既存`bundled`へ**`hooks` featureだけの追加をQ002で承認済み**。compilerのfeature合成だけに依存しない。safe Authorizerとsafe params_from_iterはprivate prototypeで実行したが、public APIとwrapperはまだ接続していない。Parametersはowned Vec<Value>をconsumeし、text/bytesをdeep cloneせず移す候補。Vec成長、literal生成、動的SQL所有化、SQLite SQLITE_TRANSIENTのtext/blob copy、job/reply、row/list出力は残る。zero-copy、allocation数不変、速度改善を保証しない。
 
 SQL literalは新operationのsealed planからSql::Static、その他は呼出時にSql::Ownedへ所有化する候補。SQL引数の所有化を後続Parameters moveより前に完了し、既存評価順/alias/High/保存Low一致を検査する。Referenceという表示だけでSQL viewをworkerへ渡さない。
 
@@ -83,6 +85,6 @@ SQL opt-inは新canonical operation用adapterを追加する候補。literal SQL
 2. **依存とSQL policy:** runtime hooks追加、および一文/Authorizer/管理SQL分離/PRAGMA等拒否を採るか。既存DB trigger等も含む反例検査で満たせなければ、保証を縮めず再判断する。
 3. **終了と障害policy:** cleanup確認前reuse禁止、退役時Pool取得停止・retry/replacementなし、ordinary Errのactive継続、自動rollbackのAborted化、commit outcomeとcleanup causeの分離、close timeout後もclosing維持・killなしを採るか。
 
-判断後にADR固定→小さいsafe prototype/failing tests→実装→High/保存Low/UserLow/native、取消/cleanup/reuse/SQL迂回のpositive barrier、旧Db baseline、独立runtime/生成app・4 OS CIの順。protoで借用、task捕捉、hook復元、Drop cleanupのどれかを満たせない場合は具体反例でStopする。現時点では新API・保証の実装成功を報告しない。
+判断後にADR固定→小さいsafe prototype/failing tests→実装→High/保存Low/UserLow/native、取消/cleanup/reuse/SQL迂回のpositive barrier、旧Db baseline、独立runtime/生成app・4 OS CIの順。protoで借用、task捕捉、hook復元、Drop cleanupのどれかを満たせない場合は具体反例でStopする。private一接続の成功を、新public API・保証の実装成功と報告しない。
 
 根拠: repository `compiler/src/stdlib.rs`のOperationInfo/Passing/constants/FieldInfo、`compiler/src/check.rs`のstandard operation検査・非Copy resource copy拒否・既存DB class要求、`compiler/src/check/checked.rs`のstr/bytes生成型とFromRow plan、`runtime/src/database.rs:9–18,120–191`、`runtime/src/lib.rs:28–40`、`docs/library-design.md:44–74`。依存safe API/SQLite actionとDropの行根拠は詳細decision proposalに記録済み。
