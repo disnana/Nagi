@@ -237,7 +237,7 @@ jobs:
       - name: Parse planned SQLite High and handwritten Low contract inputs
         run: cargo test --locked -p nagic --test sqlite_contract_inputs
       - name: Check private Task bridge lifecycle on the target platform
-        run: cargo test --locked -p nagi-runtime task_bridge_prototype::tests::
+        run: "cargo test --locked -p nagi-runtime task_bridge_prototype::tests::"
       - name: Check successful application artifact selection
         run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
       - name: Check Axum native test execution and result validation
