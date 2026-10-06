@@ -220,6 +220,8 @@ impl Gate {
 }
 #[derive(Default)]
 pub(super) struct Config {
+    // private multi-connection fixtureのみ。公開path/Options validationの実装ではない。
+    pub path: Option<std::path::PathBuf>,
     pub seed: &'static str,
     pub begin_gate: Option<Arc<Gate>>,
     pub command_gate: Option<Arc<Gate>>,
@@ -453,7 +455,10 @@ pub(super) fn native_worker(
         if let Some(gate) = startup {
             gate.block_once();
         }
-        let mut conn = Connection::open_in_memory().unwrap();
+        let mut conn = match &config.path {
+            Some(path) => Connection::open(path).unwrap(),
+            None => Connection::open_in_memory().unwrap(),
+        };
         conn.busy_timeout(Duration::ZERO).unwrap();
         conn.execute_batch(config.seed).unwrap(); // trusted fixtureのみ。
         install_authorizer(
