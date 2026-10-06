@@ -279,3 +279,22 @@ Sol 2人で実装と独立source/fixtureレビューを分担した。レビュ�
 | 次Phase・配布 | G-TX/G-POOLの公開acceptance、Phase 5、版更新、releaseは未着手 |
 
 この縦切りはmain向けの別PRとし、今回のmerge承認を流用しない。取得期限・巨大capacity・公開配線を進める順序と条件は[後続計画](sqlite-public-slice-plan.md)を維持する。
+
+## 2026-10-06: #84反映とprivate取得予算
+
+ユーザーが#84を05:47 UTCにマージした。main `e7aff1d`を読み戻し、取得予算は`feat/sqlite-acquire-budget`へ分離した。#84の最終headでは4 OSのprivate50件とparser2件、Linux／両JetBrains／website／gateが成功している。[CI記録](sqlite-multiconnection-results.md#84のciとmain反映)を追記した。エージェントはmergeしていない。
+
+設計・ADR・invariants→tests-only→compile RED→stock waitのみのruntime RED→native予算接続→GREENの順で保存した。独立Solレビューで、期限後の最初のpollを固定するoracle、task-local消費点まで進める隔離試験、setup失敗時cleanupを補強した。元50件を維持し、取得9件と比較1件を加えた。公開API・数値default・依存・CI設定は変更していない。
+
+ローカルでprivate60、runtime189＋doctest5、全92 suite／891、fmt／clippy、fuzz1000 mutation／95 Low emit／16 bounded native／panic0、CI Python52、website90が成功。budget比較の未poll begin Futureは2040 byte、従来fixtureは2024 byte。p50/p95の大小は逆で、速度向上を主張しない。source provenance、原ログ、生sampleと再実行法は[取得予算の結果](sqlite-acquire-budget-results.md)へ保存した。新headの4 OS CIは公開後に確認する。
+
+| 次の対象 | 状態 |
+|---|---|
+| native容量と独立join | #84 main反映、private4 OS成功 |
+| 取得予算 | private先行9件とローカルGREEN、公開入口は未配線 |
+| 巨大capacity | P2公開前ブロッカー。stock版の全slot確保をvalidation済みとしない。[判断案](sqlite-capacity-decision.md) |
+| Options／Pool／Failure／Parameters | 公開runtime未実装 |
+| registry／capture／sealed SQL | 46入力をsemantic検査／元位置／High・Low・Rustへ接続する作業が残る |
+| G-TX／G-POOL・Phase 4 acceptance | 未完了。Phase 5・版更新・releaseは未実施 |
+
+今回もmain向けの別PRにまとめ、merge承認は流用しない。未解決の公開条件は根拠・代替・検証条件を示して判断する。

@@ -190,7 +190,7 @@ SQLite Pool／Transactionは[APIと終了policyの具体案](docs/internal/sqlit
 
 mainの[private試作](runtime/src/sqlite_prototype/session.rs)では、実SQLiteの禁止action、明示終端、取消後cleanup、native closeとworker joinを[22件のtest](runtime/src/sqlite_prototype/tests.rs)で確認しました。SQL Errだけで変更が戻ったとは扱いません。同coreの22件は#81の4 OS CIでも成功し、mainへ反映しました。後続のprivate deadpool比較では、同22件と追加20件で取消・close・cleanup前の再貸出を検査し、全suiteと比較測定も確認しました。Q004の依存とcapability表は承認済みで、#82は4 OS CI成功後にmainへ反映されました。
 
-#84ではprivateな二接続のnative容量と独立joinを検査し、元の試験と合わせて50件が4 OSで成功しました。main `e7aff1d`へ反映済みです。[多接続の結果](docs/internal/sqlite-multiconnection-results.md)と[取得予算の次の設計](docs/internal/sqlite-acquire-budget-design.md)を分けて記録します。公開Pool／Options、NagiのTx捕捉検査、sealed SQLは未実装で、標準APIから多接続や取得期限を使える状態ではありません。巨大capacityのstock allocationも[公開化前の判断](docs/internal/sqlite-capacity-decision.md)に残ります。private試作の検証を公開保証へ広げません。[先行基盤](docs/internal/sqlite-session-results.md)と[adapterの結果](docs/internal/sqlite-adapter-results.md)に検証条件と未完了範囲を残します。
+#84ではprivateな二接続のnative容量と独立joinを検査し、元の試験と合わせて50件が4 OSで成功しました。main `e7aff1d`へ反映済みです。[多接続の結果](docs/internal/sqlite-multiconnection-results.md)と[取得予算の設計](docs/internal/sqlite-acquire-budget-design.md)を分けて記録します。開発差分では、予約までの予算を共用し、登録後のstartup／BEGINには期限を持ち越さないprivate回帰と[測定結果](docs/internal/sqlite-acquire-budget-results.md)を追加しました。公開Pool／Options、NagiのTx捕捉検査、sealed SQLは未実装で、標準APIから多接続や取得期限を使える状態ではありません。巨大capacityのstock allocationも[公開化前の判断](docs/internal/sqlite-capacity-decision.md)に残ります。private試作の検証を公開保証へ広げません。[先行基盤](docs/internal/sqlite-session-results.md)と[adapterの結果](docs/internal/sqlite-adapter-results.md)に検証条件と未完了範囲を残します。
 
 意味論、公開API、High／Low／Rustの分担を変える場合は、変更の理由、代替案、互換性、検証結果をこの文書へ反映します。詳細なAPI説明や測定ログは対応する文書に置きます。
 

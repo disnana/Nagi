@@ -1,0 +1,9 @@
+    Finished `test` profile [unoptimized] target(s) in 0.05s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31f33a377cbf1a2a)
+
+running 1 test
+NAGI_SQLITE_COMPARISON {"adapter_native_health_and_join":true,"adapter_threads":"1 native worker + 1 independent join observer per connection","batches":32,"deadpool":{"p50_ns":65308,"p95_ns":152990},"direct":{"p50_ns":84597,"p95_ns":154172},"direct_native_health_and_join":true,"direct_threads":"1 native worker + 1 join observer","scope":"private cfg(test) debug-profile, warm serial native session","sql":"SELECT 1 AS n","terminal":"rollback","transactions_per_batch_per_backend":128,"warmup_transactions_per_backend":8}
+test sqlite_prototype::comparison::direct_and_deadpool_warm_native_session_comparison ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 188 filtered out; finished in 0.91s
+
