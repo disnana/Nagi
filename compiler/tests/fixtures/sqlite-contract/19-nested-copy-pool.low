@@ -1,0 +1,4 @@
+import std.db.sqlite as sqlite;
+fn duplicate(parts: view[Option[sqlite.Pool]]) -> List[Option[sqlite.Pool]] {
+    return copy(parts);
+}

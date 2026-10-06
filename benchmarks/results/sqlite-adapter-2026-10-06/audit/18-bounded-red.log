@@ -1,0 +1,28 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-boundary-foundation/runtime)
+    Finished `test` profile [unoptimized] target(s) in 5.98s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31f33a377cbf1a2a)
+
+running 2 tests
+
+thread 'sqlite_prototype::adapter_tests::cancelled_create_cannot_start_replacement_before_old_native_worker_joins' (1258595) panicked at runtime/src/sqlite_prototype/adapter_tests.rs:480:5:
+assertion `left == right` failed: max1 started another native worker while cancelled startup still owned one
+  left: 2
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'sqlite_prototype::adapter_tests::taken_object_cannot_start_replacement_before_old_native_worker_joins' (1258596) panicked at runtime/src/sqlite_prototype/adapter_tests.rs:522:5:
+assertion `left == right` failed: Object::take returned a stock slot before old native join completed
+  left: 2
+ right: 1
+test sqlite_prototype::adapter_tests::taken_object_cannot_start_replacement_before_old_native_worker_joins ... FAILED
+test sqlite_prototype::adapter_tests::cancelled_create_cannot_start_replacement_before_old_native_worker_joins ... FAILED
+
+failures:
+
+failures:
+    sqlite_prototype::adapter_tests::cancelled_create_cannot_start_replacement_before_old_native_worker_joins
+    sqlite_prototype::adapter_tests::taken_object_cannot_start_replacement_before_old_native_worker_joins
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 169 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p nagi-runtime --lib`

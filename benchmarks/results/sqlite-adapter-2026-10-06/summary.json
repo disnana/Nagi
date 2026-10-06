@@ -1,0 +1,34 @@
+{
+  "adapter_native_health_and_join": true,
+  "adapter_threads": "1 native worker + 1 pool reaper",
+  "batches": 32,
+  "deadpool": {
+    "p50_ns": 114402,
+    "p95_ns": 152410
+  },
+  "direct": {
+    "p50_ns": 106370,
+    "p95_ns": 141402
+  },
+  "direct_native_health_and_join": true,
+  "direct_threads": "1 native worker + 1 join observer",
+  "scope": "private cfg(test) debug-profile, warm serial native session",
+  "sql": "SELECT 1 AS n",
+  "terminal": "rollback",
+  "transactions_per_batch_per_backend": 128,
+  "warmup_transactions_per_backend": 8,
+  "date_utc": "2026-10-06",
+  "source_commit": "fe741a333e56a1bbc8966b9fd7e540109d2d4b28",
+  "source_tree": "58297cd18df0746046fec2dd7e6c313d352c61b0",
+  "sample_count": 8192,
+  "raw_json_sha256": "ddd688b56569836d2480df3c1d27adf205743f7200fae61badbb7fad6641168e",
+  "csv_sha256": "104127a074826a7347b323a6b1d0154a66056097d6a2506856c2913371a5922b",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "platform": "Linux x86_64",
+  "percentile_estimator": "sorted[(n - 1) * percentile // 100]",
+  "performance_guarantee": false,
+  "release_measured": false,
+  "allocation_count_measured": false,
+  "future_size_measured": false,
+  "multi_connection_measured": false
+}

@@ -1,0 +1,586 @@
+//! Q004のprivate generic deadpool比較。slot待機/公平性/recycle algorithmはdeadpool。
+//! native session/closeはsession.rs、ここはowned checkoutと終了観測のadapterだけ。
+use super::session::{
+    native_worker, BeginRequest, Config, Failure, Gate, Kind, Outcome, State, Tx,
+};
+use deadpool::managed::{self, Manager, Metrics, RecycleError, RecycleResult};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc as blocking_channel, Arc, Mutex, Weak,
+    },
+    thread::JoinHandle,
+    time::Duration,
+};
+use tokio::sync::{mpsc, oneshot, Notify};
+
+const WATCHDOG: Duration = Duration::from_secs(10);
+type NativePool = managed::Pool<NativeManager>;
+type Checkout = managed::Object<NativeManager>;
+
+#[derive(Default)]
+pub(super) struct AdapterSeams {
+    pub startup: Option<Arc<Gate>>,
+    pub created: Option<Arc<AdmissionGate>>,
+    pub checkout: Option<Arc<AdmissionGate>>,
+    pub fail_recycle: bool,
+    pub publication: Option<Arc<Gate>>,
+    pub detaching: Option<Arc<Gate>>,
+}
+pub(super) struct AdmissionGate {
+    entered: AtomicBool,
+    released: AtomicBool,
+    changed: Notify,
+}
+impl AdmissionGate {
+    pub fn new() -> Self {
+        Self {
+            entered: AtomicBool::new(false),
+            released: AtomicBool::new(false),
+            changed: Notify::new(),
+        }
+    }
+    async fn pause(&self) {
+        if self.entered.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        self.changed.notify_waiters();
+        self.wait_for(&self.released).await;
+    }
+    async fn wait_for(&self, flag: &AtomicBool) {
+        tokio::time::timeout(WATCHDOG, async {
+            loop {
+                let changed = self.changed.notified();
+                if flag.load(Ordering::SeqCst) {
+                    return;
+                }
+                changed.await;
+            }
+        })
+        .await
+        .expect("adapter barrier watchdog expired");
+    }
+    pub async fn wait(&self) {
+        self.wait_for(&self.entered).await;
+    }
+    pub fn release(&self) {
+        self.released.store(true, Ordering::SeqCst);
+        self.changed.notify_waiters();
+    }
+}
+
+#[derive(Clone, Default)]
+pub(super) struct AdapterStats {
+    pub created: usize,
+    pub starting: usize,
+    pub admitted: usize,
+    pub returned: usize,
+    pub detached: usize,
+    pub handle_drops: usize,
+    pub native_closed: usize,
+    pub joined: usize,
+    pub pending_workers: usize,
+    pub closing: bool,
+}
+#[derive(Default)]
+struct Records {
+    stats: AdapterStats,
+    // 完了したStateは保持せず、join/native closeの累積counterだけ残す。
+    workers: Vec<Arc<State>>,
+    failure: Option<Failure>,
+}
+enum Reap {
+    Worker(Arc<State>, JoinHandle<()>),
+    Wake,
+}
+struct Ledger {
+    records: Mutex<Records>,
+    pool: Mutex<Option<managed::WeakPool<NativeManager>>>,
+    reap: blocking_channel::Sender<Reap>,
+    changed: Notify,
+}
+impl Ledger {
+    fn error(&self) -> Option<Failure> {
+        let records = self.records.lock().unwrap();
+        if records.failure.is_some() {
+            let mut error = records.failure.clone().unwrap();
+            error.kind = Kind::Worker;
+            return Some(error);
+        }
+        if records.stats.closing {
+            Some(Failure::primary(
+                Kind::Closed,
+                Outcome::NotApplicable,
+                "adapter closing",
+            ))
+        } else {
+            None
+        }
+    }
+    fn change(&self, update: impl FnOnce(&mut AdapterStats)) {
+        update(&mut self.records.lock().unwrap().stats);
+        self.changed.notify_waiters();
+    }
+    fn request_close(&self) {
+        self.change(|stats| stats.closing = true);
+        // deadpool.close drops WorkerHandle inside its own lock。ledger lockを保持しない。
+        let pool = self
+            .pool
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|pool| pool.upgrade());
+        if let Some(pool) = pool {
+            pool.close();
+        }
+        let _ = self.reap.send(Reap::Wake);
+    }
+    fn fail(&self, error: Failure) {
+        {
+            let mut records = self.records.lock().unwrap();
+            if records.failure.is_none() {
+                records.failure = Some(error);
+            } else if let Some(previous) = &mut records.failure {
+                if previous.cleanup.is_none() {
+                    previous.cleanup = error.cleanup;
+                }
+                previous.retired |= error.retired;
+            }
+        }
+        self.request_close();
+    }
+    fn snapshot(&self) -> AdapterStats {
+        let records = self.records.lock().unwrap();
+        let mut stats = records.stats.clone();
+        stats.native_closed += records
+            .workers
+            .iter()
+            .filter(|worker| worker.snapshot().native_closed)
+            .count();
+        stats.pending_workers = records.workers.len();
+        stats
+    }
+    fn completed(&self, state: &Arc<State>) {
+        let mut records = self.records.lock().unwrap();
+        let index = records
+            .workers
+            .iter()
+            .position(|worker| Arc::ptr_eq(worker, state))
+            .expect("worker completion without registration");
+        state.update(|stats| stats.joined = true);
+        records.stats.joined += 1;
+        records.stats.native_closed += usize::from(state.snapshot().native_closed);
+        records.workers.swap_remove(index);
+        drop(records);
+        self.changed.notify_waiters();
+    }
+    fn done(&self) -> bool {
+        let stats = self.snapshot();
+        stats.starting == 0 && stats.joined == stats.created
+    }
+    async fn until(&self, predicate: impl Fn(&AdapterStats) -> bool) {
+        tokio::time::timeout(WATCHDOG, async {
+            loop {
+                let changed = self.changed.notified();
+                if predicate(&self.snapshot()) {
+                    return;
+                }
+                changed.await;
+            }
+        })
+        .await
+        .expect("adapter observation watchdog expired");
+    }
+}
+#[derive(Clone)]
+pub(super) struct Observer(Arc<Ledger>);
+impl Observer {
+    pub fn snapshot(&self) -> AdapterStats {
+        self.0.snapshot()
+    }
+    pub async fn wait_returned(&self, count: usize) {
+        self.0.until(|stats| stats.returned >= count).await;
+    }
+    pub async fn wait_joined(&self, count: usize) {
+        self.0.until(|stats| stats.joined >= count).await;
+    }
+}
+
+struct WorkerHandle {
+    sender: Option<mpsc::Sender<BeginRequest>>,
+    state: Arc<State>,
+    ledger: Arc<Ledger>,
+}
+impl Drop for WorkerHandle {
+    fn drop(&mut self) {
+        // Dropは閉鎖要求だけ。自分のworkerのjoinやasync cleanupをここでしない。
+        self.sender.take();
+        self.ledger.change(|stats| stats.handle_drops += 1);
+    }
+}
+struct Startup {
+    handle: Option<WorkerHandle>,
+    ledger: Arc<Ledger>,
+    registered: bool,
+}
+impl Startup {
+    fn handoff(mut self) -> Result<WorkerHandle, Failure> {
+        if let Some(error) = self.ledger.error() {
+            return Err(error);
+        }
+        // handoffもclosing/startup登録と同じledgerで確定。
+        let result = {
+            let mut records = self.ledger.records.lock().unwrap();
+            if records.stats.closing {
+                Err(Failure::primary(
+                    Kind::Closed,
+                    Outcome::NotApplicable,
+                    "create finished after close",
+                ))
+            } else {
+                records.stats.starting -= 1;
+                self.registered = false;
+                Ok(self.handle.take().unwrap())
+            }
+        };
+        self.ledger.changed.notify_waiters();
+        result
+    }
+}
+impl Drop for Startup {
+    fn drop(&mut self) {
+        self.handle.take(); // cancelled create Futureもnative close要求を残す。
+        if self.registered {
+            self.ledger.change(|stats| stats.starting -= 1);
+        }
+        let _ = self.ledger.reap.send(Reap::Wake);
+    }
+}
+
+struct NativeManager {
+    config: Arc<Config>,
+    seams: Arc<AdapterSeams>,
+    ledger: Arc<Ledger>,
+}
+impl Manager for NativeManager {
+    type Type = WorkerHandle;
+    type Error = Failure;
+    async fn create(&self) -> Result<WorkerHandle, Failure> {
+        let state = Arc::new(State::default());
+        loop {
+            let changed = self.ledger.changed.notified();
+            let registered = {
+                let mut records = self.ledger.records.lock().unwrap();
+                if let Some(error) = &records.failure {
+                    let mut error = error.clone();
+                    error.kind = Kind::Worker;
+                    return Err(error);
+                }
+                if records.stats.closing {
+                    return Err(Failure::primary(
+                        Kind::Closed,
+                        Outcome::NotApplicable,
+                        "create after close",
+                    ));
+                }
+                // max1比較試作のnative終了fence。deadpool permitが先に返っても、
+                // live workerのactual join前には次のworkerを起動しない。
+                // 健康Object再貸出ではcreateへ来ない。多接続へこのpredicateを流用しない。
+                // slotの選択/待機順序/公平性はstock deadpoolが引き続き所有する。
+                if !records.workers.is_empty() {
+                    false
+                } else {
+                    // closing確認とstarting/join責任の登録はspawn前の同じcritical section。
+                    records.workers.push(Arc::clone(&state));
+                    records.stats.created += 1;
+                    records.stats.starting += 1;
+                    true
+                }
+            };
+            if registered {
+                break;
+            }
+            changed.await;
+        }
+        self.ledger.changed.notify_waiters();
+        let (sender, receiver) = mpsc::channel(1);
+        let startup = Startup {
+            handle: Some(WorkerHandle {
+                sender: Some(sender),
+                state: Arc::clone(&state),
+                ledger: Arc::clone(&self.ledger),
+            }),
+            ledger: Arc::clone(&self.ledger),
+            registered: true,
+        };
+        let (ready, ready_receiver) = oneshot::channel();
+        let config = Arc::clone(&self.config);
+        let worker_state = Arc::clone(&state);
+        let gate = self.seams.startup.clone();
+        let thread = std::thread::Builder::new()
+            .name("nagi-sqlite-adapter".into())
+            .spawn(move || native_worker(config, worker_state, receiver, Some(ready), gate));
+        let thread = match thread {
+            Ok(thread) => thread,
+            Err(error) => {
+                let error = Failure::cleanup(Outcome::NotApplicable, error.to_string());
+                state.fail(error.clone());
+                self.ledger.fail(error.clone());
+                self.ledger.completed(&state); // spawn不成立:存在しないworkerを待たない。
+                return Err(error);
+            }
+        };
+        // JoinHandleはcreate Futureから直ちに独立。取消でこの責任は消えない。
+        self.ledger
+            .reap
+            .send(Reap::Worker(Arc::clone(&state), thread))
+            .expect("reaper disappeared before worker handoff");
+        let ready = ready_receiver.await.map_err(|_| state.worker_error())?;
+        if let Err(error) = ready {
+            self.ledger.fail(error.clone());
+            return Err(error);
+        }
+        if let Some(gate) = &self.seams.created {
+            gate.pause().await;
+        }
+        startup.handoff()
+    }
+    async fn recycle(
+        &self,
+        worker: &mut WorkerHandle,
+        _metrics: &Metrics,
+    ) -> RecycleResult<Failure> {
+        let error = worker.state.error().or_else(|| {
+            if self.seams.fail_recycle {
+                Some(Failure::cleanup(
+                    Outcome::NotApplicable,
+                    "private recycle failure seam",
+                ))
+            } else {
+                self.ledger.error()
+            }
+        });
+        if let Some(error) = error {
+            self.ledger.fail(error.clone());
+            return Err(RecycleError::Backend(error));
+        }
+        let stats = worker.state.snapshot();
+        if stats.joined || stats.begun != stats.settled || stats.management {
+            let error = Failure::cleanup(
+                Outcome::NotApplicable,
+                "worker/session cleanup not verified",
+            );
+            self.ledger.fail(error.clone());
+            return Err(RecycleError::Backend(error));
+        }
+        Ok(())
+    }
+    fn detach(&self, _worker: &mut WorkerHandle) {
+        if let Some(gate) = &self.seams.detaching {
+            gate.block_once();
+        }
+        self.ledger.change(|stats| stats.detached += 1);
+    }
+}
+
+// Objectはnative workerのBeginRequest内へ移動し、cleanupのscope末尾でだけ返す。
+// ledgerはTx/session senderを保持しない。Tokio task Dropで早期返却する経路もない。
+struct CheckoutOwner {
+    object: Option<Checkout>,
+    ledger: Arc<Ledger>,
+    state: Arc<State>,
+}
+impl Drop for CheckoutOwner {
+    fn drop(&mut self) {
+        if let Some(error) = self.state.error() {
+            self.ledger.fail(error);
+        }
+        self.object.take();
+        self.ledger.change(|stats| stats.returned += 1);
+    }
+}
+struct Inner {
+    pool: NativePool,
+    ledger: Arc<Ledger>,
+    seams: Arc<AdapterSeams>,
+}
+impl Drop for Inner {
+    fn drop(&mut self) {
+        self.ledger.request_close();
+    }
+}
+pub(super) struct Adapter(Arc<Inner>);
+impl Adapter {
+    pub fn new(config: Config, seams: AdapterSeams) -> Self {
+        let (sender, receiver) = blocking_channel::channel();
+        let ledger = Arc::new(Ledger {
+            records: Mutex::new(Records::default()),
+            pool: Mutex::new(None),
+            reap: sender,
+            changed: Notify::new(),
+        });
+        let reaper_ledger: Weak<Ledger> = Arc::downgrade(&ledger);
+        let seams = Arc::new(seams);
+        let reaper_seams = Arc::clone(&seams);
+        // 比較prototypeはconnection worker+poolごとに1 reaper thread。
+        // close/getのTokio cancellationやruntime破棄へworker joinを依存させない。
+        std::thread::spawn(move || {
+            while let Ok(message) = receiver.recv() {
+                let ledger = reaper_ledger.upgrade();
+                if let Reap::Worker(state, thread) = message {
+                    if thread.join().is_err() {
+                        state.fail(state.worker_error());
+                    }
+                    if let Some(gate) = &reaper_seams.publication {
+                        gate.block_once();
+                    }
+                    if let Some(ledger) = &ledger {
+                        if let Some(error) = state.error() {
+                            ledger.fail(error);
+                        }
+                    }
+                    // native終端causeを先に公開。joinedはclose完了を判断してよい最後の通知。
+                    if let Some(ledger) = &ledger {
+                        ledger.completed(&state);
+                    } else {
+                        state.update(|stats| stats.joined = true);
+                    }
+                }
+                if let Some(ledger) = ledger {
+                    if ledger.snapshot().closing && ledger.done() {
+                        break;
+                    }
+                }
+            }
+        });
+        let manager = NativeManager {
+            config: Arc::new(config),
+            seams: Arc::clone(&seams),
+            ledger: Arc::clone(&ledger),
+        };
+        let pool = NativePool::builder(manager)
+            .max_size(1)
+            .runtime(deadpool::Runtime::Tokio1)
+            .build()
+            .unwrap();
+        *ledger.pool.lock().unwrap() = Some(pool.weak());
+        Self(Arc::new(Inner {
+            pool,
+            ledger,
+            seams,
+        }))
+    }
+    pub fn clone_handle(&self) -> Self {
+        Self(Arc::clone(&self.0))
+    }
+    pub fn observer(&self) -> Observer {
+        Observer(Arc::clone(&self.0.ledger))
+    }
+    pub fn available(&self) -> usize {
+        self.0.pool.status().available
+    }
+    pub fn resize_zero(&self) {
+        self.0.pool.resize(0);
+    }
+    pub async fn begin(&self) -> Result<Tx, Failure> {
+        if let Some(error) = self.0.ledger.error() {
+            return Err(error);
+        }
+        let object = self.0.pool.get().await.map_err(|error| {
+            self.0.ledger.error().unwrap_or_else(|| {
+                Failure::primary(
+                    Kind::Worker,
+                    Outcome::NotApplicable,
+                    format!("deadpool get: {error:?}"),
+                )
+            })
+        })?;
+        if let Some(gate) = &self.0.seams.checkout {
+            gate.pause().await;
+        }
+        let sender = object.sender.as_ref().unwrap().clone();
+        let state = Arc::clone(&object.state);
+        let (reply, receiver) = oneshot::channel();
+        let owner = CheckoutOwner {
+            object: Some(object),
+            ledger: Arc::clone(&self.0.ledger),
+            state,
+        };
+        let mut request = Some(BeginRequest::owned(reply, Box::new(owner)));
+        // admissionとclosingは同じledgerで直列化。try_sendはworker inboxのみで、
+        // slot待機/queue fairnessはdeadpool.getへ委譲する。
+        let mut rejected = None;
+        let result = {
+            let mut records = self.0.ledger.records.lock().unwrap();
+            if records.failure.is_some() {
+                Err(Kind::Worker)
+            } else if records.stats.closing {
+                Err(Kind::Closed)
+            } else {
+                match sender.try_send(request.take().unwrap()) {
+                    Ok(()) => {
+                        records.stats.admitted += 1;
+                        Ok(())
+                    }
+                    Err(error) => {
+                        rejected = Some(error.into_inner());
+                        Err(Kind::Worker)
+                    }
+                }
+            }
+        };
+        // rejected owned ObjectのDropはledger lockの外側でだけ行う。
+        drop(request);
+        drop(rejected);
+        drop(sender);
+        self.0.ledger.changed.notify_waiters();
+        result.map_err(|kind| {
+            self.0.ledger.error().unwrap_or_else(|| {
+                Failure::primary(kind, Outcome::NotApplicable, "session admission failed")
+            })
+        })?;
+        receiver
+            .await
+            .map_err(|_| Failure::primary(Kind::ReplyLost, Outcome::Unknown, "begin reply lost"))?
+    }
+    pub async fn close(&self, timeout: Duration) -> Result<(), Failure> {
+        self.0.ledger.request_close();
+        if !self.0.ledger.done()
+            && tokio::time::timeout(
+                timeout,
+                self.0
+                    .ledger
+                    .until(|stats| stats.starting == 0 && stats.joined == stats.created),
+            )
+            .await
+            .is_err()
+        {
+            return Err(Failure::primary(
+                Kind::CloseTimeout,
+                Outcome::NotApplicable,
+                "adapter workers not joined",
+            ));
+        }
+        if let Some(error) = self.0.ledger.records.lock().unwrap().failure.clone() {
+            return Err(error);
+        }
+        let stats = self.0.ledger.snapshot();
+        assert_eq!(stats.native_closed, stats.created);
+        Ok(())
+    }
+    pub async fn checkout_without_begin(&self) -> Result<HeldCheckout, Failure> {
+        let object = self
+            .0
+            .pool
+            .get()
+            .await
+            .map_err(|_| self.0.ledger.error().unwrap())?;
+        Ok(HeldCheckout(object))
+    }
+}
+pub(super) struct HeldCheckout(Checkout);
+impl HeldCheckout {
+    pub fn take_and_drop(self) {
+        drop(Checkout::take(self.0));
+    }
+}

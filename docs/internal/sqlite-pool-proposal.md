@@ -1,10 +1,10 @@
 # Phase 4: SQLite Pool・affine Txの初版契約
 
-2026-10-05の提案を、2026-10-06にQ002の選択1として承認。**公開API・SQL制限・終了policyとruntime rusqlite hooksを採用済み。実装・検証の完了ではない。** [ADR 010](adr/010-sqlite-transaction-boundary.md)に判断を固定した。詳細根拠は[decision proposal](sqlite-pool-research.md)。同日のprivate一接続prototypeとローカル検証は[結果](sqlite-session-results.md)へ記録した。public API・wrapper adapterは未実装。Phase 3 acceptanceは#80のCI成功とmain反映で満たした。
+2026-10-05の提案を、2026-10-06にQ002の選択1として承認。**公開API・SQL制限・終了policyとruntime rusqlite hooksを採用済み。実装・検証の完了ではない。** [ADR 010](adr/010-sqlite-transaction-boundary.md)に判断を固定した。詳細根拠は[decision proposal](sqlite-pool-research.md)。同日のprivate一接続prototypeとローカル検証は[結果](sqlite-session-results.md)へ記録した。public APIは未実装。一接続のprivate wrapper adapterは[比較結果](sqlite-adapter-results.md)へ分けて記録した。Phase 3 acceptanceは#80のCI成功とmain反映で満たした。
 
 第一候補は新module `std.db.sqlite`（canonical ID `stdlib:std.db.sqlite`）、runtime namespace `nagi_runtime::sqlite`。既存Db、db_*、FromRow、Sql、Error、標準HTTP/Actor Optionsを変更・削除しない。新APIへ固定id/name/age bindを継承しない。新言語syntax、reflection、ToParams derive、generic trait solverは導入しない。
 
-内部のpool/dispatchはまだ確定していない。[既存Rust wrapperの比較](sqlite-pool-rust-reuse.md)では、deadpoolのowned checkout、tokio-rusqliteの専用worker、r2d2の同期poolと、狭いsession adapterを候補に残した。専用workerという説明をpool algorithmの自作決定とは扱わない。cleanupとcloseの観測まで同じ条件でprototypeし、責任とコードを減らせる実装を選ぶ。runtime hooksは承認済み、追加wrapperの依存は未承認。
+内部のpool/dispatchはまだ確定していない。[既存Rust wrapperの比較](sqlite-pool-rust-reuse.md)では、deadpoolのowned checkout、tokio-rusqliteの専用worker、r2d2の同期poolと、狭いsession adapterを候補に残した。専用workerという説明をpool algorithmの自作決定とは扱わない。cleanupとcloseの観測まで同じ条件でprototypeし、責任とコードを減らせる実装を選ぶ。runtime hooksはQ002で承認済み。Q004で[generic deadpoolの比較試作とcapability初版値](sqlite-pool-adapter-decision.md)を採用した。内部実装の成立と公開APIの検証はまだ完了していない。
 
 ## 採用した資源と値
 

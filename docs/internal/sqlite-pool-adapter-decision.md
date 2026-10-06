@@ -1,12 +1,12 @@
-# SQLite Pool adapter: 次の判断案
+# SQLite Pool adapter: 採用した比較方針
 
-2026-10-06の判断資料。Q004で下記の依存とcapability表を承認済み。[PR #82](https://github.com/disnana/Nagi/pull/82)ではprivate一接続adapterのbuild／実行・4 OS CIまで確認したが、この文書branchのmain基点には未反映である。以下の候補比較は承認前の調査記録として残す。公開Pool／Txや多接続まで実装済みとは扱わない。[承認記録](open-questions.md#q-004-sqlite-poolのwrapper依存と未指定capability)と[ADR 010](adr/010-sqlite-transaction-boundary.md)を参照。
+2026-10-06の判断資料。Q004で下記の依存とcapability表を承認済み。[PR #82](https://github.com/disnana/Nagi/pull/82)ではprivate一接続adapterのbuild／実行・4 OS CIを確認し、main `7999bab`へ反映された。[比較結果](sqlite-adapter-results.md)に43件・全suite・測定と未完了範囲がある。以下の候補比較は承認前の調査記録として残す。公開Pool／Txや多接続まで実装済みとは扱わない。[承認記録](open-questions.md#q-004-sqlite-poolのwrapper依存と未指定capability)と[ADR 010](adr/010-sqlite-transaction-boundary.md)を参照。
 
 ## 推奨: generic deadpoolのManagerを使う
 
 `deadpool 0.13.1`のmanaged poolに、native workerのowned handleを持つManager adapterを接続する。poolの上限・待機・checkout・回収はdeadpool、SQLiteのSQL解析・native Transactionは既存rusqliteへ任せる。Nagi側に残すのはsession、cleanup結果、closing／failedの共有状態と完了観測である。pool algorithmやnative transactionをコピーしない。
 
-承認した比較試作の依存は以下一行。mainへの反映は別に確認する。
+承認した比較試作の依存は以下一行で、mainへ反映済み。これ以外の追加・更新が必要なら、理由と差分を示して判断へ戻す。
 
 ```toml
 deadpool = { version = "=0.13.1", default-features = false, features = ["managed", "rt_tokio_1"] }
@@ -29,6 +29,18 @@ closing／failedとadmissionの判定は単一の小さいledgerで直列化す�
 独立レビューで、deadpoolの`resize(0)`／Pool Drop／WeakPool失効時のObject破棄はManager::detachを経由しないことを確認した。detach callbackだけを全cleanupのownerにはしない。WorkerHandle Dropは閉鎖要求へ接続し、ledger側の終了所有者はstarting／idle／active／detachedの全workerとnative close／joinの完了を保持する。senderの強参照を持ってsession EOFを妨げない。get取消でManager::create Futureが破棄される場合は、worker起動前に登録したstartup guardが責任を引き継ぐ。
 
 closeはin-flight createも待つ。Manager::createが始まる前にclosing判定とstarting登録を同じcritical sectionで行い、worker完了・引渡し・取消で未完了件数を確定させる。close後に新workerが登録される経路を拒否し、starting件数だけを減らしてjoin責任を消さない。deadpool getが閉鎖後にObjectを返すraceでもuser BEGINを開始せず、そのowned handleを同じ終了所有者へ返す。これは終了責任のadapterであり、別のslot待機／pool公平性algorithmを追加する案ではない。late create、idle discard、active返却、Object::take、最後のPool Dropを別barrierで検査する。
+
+### 論理slotとnative workerの終了を分ける
+
+比較初版では、Manager.createの取消後にdeadpoolのpermitが返り、旧workerのjoin前に次のworkerを起動できた。max_size=1でcreated=2となるbarrier反例を確認した。Object::take後のWorkerHandle Dropにも同じ論理slotとnative終了の差がある。stock poolのsizeだけをnative worker上限の根拠にしない。
+
+Object::takeのstock実装はManager.detach／WorkerHandle Dropより先にpermitを返すため、stopping flagだけでは同時createの隙間が残った。今回のmax_size=1比較は、Manager.create内でlive recordが空になるまでnative close／joinを待つ単純なfenceを採る。正常なObject再貸出はrecycle経由、active Object中はstock permitを取得できないため、create入口で残るlive recordは先に論理slotを返した旧workerである。新登録とclosing判定は同じledger lockで確定する。stock permit・queue・公平性を置き換えず、取消だけをPool failedにするpolicyも足さない。
+
+これは単一接続の比較限定で、multi-connectionへ全live worker待機を流用しない。公開APIへ進む際は、健全active workerを妨げずnative上限とcleanupを両立する条件を別に検証する。公開Optionsの接続時にはfenceもacquire_ms=0／有限待ちの条件に含め、途中から無期限待ちへ変えない。
+
+完了workerのStateを全履歴として保持する初版のledgerも、公開runtimeへ流用しない。terminal causeを公開し、同じcritical sectionで完了件数へ集約してlive recordを除く。累積created／native close／joinedの観測は保ち、closeの完了条件を履歴Vecの全走査に依存させない。反復取消とtake/drop/createで、未終了record数と累積件数を別々に確認する。
+
+この節の反例を元にした修正版は、一接続のbarrier試験と全suiteで確認した。multi-connection／公開APIの完成は示さない。
 
 ## ほかの候補を今すぐ採らない理由
 
@@ -55,7 +67,7 @@ generic deadpoolでもnative closeやsessionを自動で保証してくれるわ
 
 TxはnonClone、ParametersもnonClone。Poolのcloneはclone_poolのみ。local Option／Result、owned関数委譲、同task awaitはTxのfield保存やtask転送と同一扱いにしない。Failureのcause複製は明示copy operationだけで、DebugにSQL／bind値／cause本文を足さない。公開messageとcauseに含まれるDB診断が機密を含まないという保証は追加しない。
 
-## 承認後の順序
+## 実装と検証の順序
 
 1. 選択crate／feature／lockfileの差を確認し、一接続のManager adapterへ同じnative contract oracleを接続する。
 2. cleanup前checkout保持、close/admissionのrace、retire後replacement停止、native close／joinと最後のDropを検査する。

@@ -2,7 +2,7 @@
 
 状態: 2026-10-06の作者の引継ぎを採用。これは設計・文書の判断であり、未実装の構文や挙動を公開した記録ではない。
 
-監査基点: main `ff6f7d4c81c8cf49c2bca7abffb3083f681d5b9d`。添付が照合したmainと一致した。文書branchは`docs/python-guide-design-contracts`。PR #82のprivate Pool比較は別差分で、mainの公開APIとして扱わない。
+監査基点: main `ff6f7d4c81c8cf49c2bca7abffb3083f681d5b9d`。添付が照合したmainと一致した。文書branchは`docs/python-guide-design-contracts`。初回監査時点ではPR #82のprivate Pool比較は別差分だった。後にmain `7999bab`への反映を確認し、文書branchへ統合した。公開Pool/Tx APIとして扱わない。
 
 ## 問題と採用理由
 

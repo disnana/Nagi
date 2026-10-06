@@ -1,0 +1,21 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-boundary-foundation/runtime)
+    Finished `test` profile [unoptimized] target(s) in 5.97s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31f33a377cbf1a2a)
+
+running 1 test
+
+thread 'sqlite_prototype::adapter_tests::stock_detach_permit_before_handle_drop_cannot_start_another_native_worker' (1271006) panicked at runtime/src/sqlite_prototype/adapter_tests.rs:571:5:
+assertion `left == right` failed
+  left: 2
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test sqlite_prototype::adapter_tests::stock_detach_permit_before_handle_drop_cannot_start_another_native_worker ... FAILED
+
+failures:
+
+failures:
+    sqlite_prototype::adapter_tests::stock_detach_permit_before_handle_drop_cannot_start_another_native_worker
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 171 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p nagi-runtime --lib`

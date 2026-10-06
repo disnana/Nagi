@@ -1,6 +1,6 @@
 # Phase 4: private SQLite sessionの検証結果
 
-2026-10-06。main `f10cb64`（#80成功headとtree一致）を基点に、Q002／[ADR 010](adr/010-sqlite-transaction-boundary.md)の一接続・一Tx試作を実装した。public Pool／Txは未実装で、Phase 4のacceptance完了ではない。mainへのmerge、版更新、releaseは行っていない。
+2026-10-06。main `f10cb64`（#80成功headとtree一致）を基点に、Q002／[ADR 010](adr/010-sqlite-transaction-boundary.md)の一接続・一Tx試作を実装した。public Pool／Txは未実装で、Phase 4のacceptance完了ではない。先行基盤は4 OS CI成功後、ユーザーが#81をmain `ff6f7d4`へマージした。版更新・releaseは未実施。後続の[adapter比較結果](sqlite-adapter-results.md)は別記録とする。
 
 ## 変更と責任範囲
 
@@ -48,7 +48,7 @@ Linux x86_64、既存Rust toolchain／warm target、locked／offline Cargo。soc
 
 Linux checksの全Cargo suiteに新testが含まれる。4 OS package matrixへprivate SQLite sessionと予定High／Low入力の専用stepを追加した。Linux x64、Windows x64、macOS Intel／Apple Siliconの結果は、公開後のCI確認まで未確認。step登録だけで4 OS成功と報告しない。
 
-新APIのHigh→保存Low→Rust build／run、Tx capture facts、native state収納拒否、dynamic SQL所有化、SQL opt-inのbind未検査表示、wrapper checkout／取得race、multi-connection、clone共通close、starting／idle／active／detached worker全joinは未完了。source mappingは既存の行単位で、新fixture columnを診断保証にしない。追加wrapperは[具体判断案](sqlite-pool-adapter-decision.md)が未採用である。
+新APIのHigh→保存Low→Rust build／run、Tx capture facts、native state収納拒否、dynamic SQL所有化、SQL opt-inのbind未検査表示、wrapper checkout／取得race、multi-connection、clone共通close、starting／idle／active／detached worker全joinは未完了。source mappingは既存の行単位で、新fixture columnを診断保証にしない。追加wrapperの[generic deadpool比較方針](sqlite-pool-adapter-decision.md)は、この一接続試作の後にQ004で承認された。adapterの実行成功はこの結果に含まれない。
 
 性能改善は行っていない。prototypeはSQLを所有Stringへするため、そのcostを最終Static／Owned生成planの結果と混同しない。SQLite copy、owned reply／row allocation、Future frame、binary／compile timeは完成した縦切りで測る。既知のFuture +32 byteとCopy深さのP2も未解決である。
 
@@ -57,3 +57,9 @@ Linux checksの全Cargo suiteに新testが含まれる。4 OS package matrixへp
 1. wrapper／未指定capabilityの判断後、一接続Manager adapterを同じcleanup／close oracleへ接続する。
 2. public runtimeとcanonical registry、Tx実payload／Future捕捉、sealed SQL planを小さい縦切りで揃える。
 3. 元位置付きnegative、High／保存Low／手書きLowの実Cargo、旧Db／4 OS、生成探索と性能測定でPhase 4 acceptanceを確認する。
+
+## PR #81の4 OS CI
+
+head `cfa65fa61de1f81d6acbebbfd4898541ba1ee5e1`の[checks run 37397252295](https://github.com/disnana/Nagi/actions/runs/37397252295)と[website run 37397251707](https://github.com/disnana/Nagi/actions/runs/37397251707)はattempt 1で成功した。Windows x64、Linux x64、macOS Intel、macOS Apple Siliconの各jobログで、private session 22件（失敗・ignoreなし）とparser 2件の実行を確認した。Linux全検査、VSIX、IntelliJ IDEA、PyCharm、merge gateも成功した。releaseはskipで、公開版への反映ではない。
+
+#81をreview可能へ変更した。mainへのmerge・版更新・releaseは実行していない。このCIが確認したのは同headの一接続coreと30の構文入力であり、後続deadpool adapter・公開Pool／Tx・Future捕捉検査の成功とは区別する。Q004承認後のManager比較は別branch `feat/sqlite-pool-adapter`で進める。

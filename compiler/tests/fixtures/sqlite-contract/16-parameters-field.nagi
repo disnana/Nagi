@@ -1,0 +1,10 @@
+import std.db.sqlite as sqlite
+class Holder:
+    params: sqlite.Parameters
+enum Envelope:
+    Empty
+    Data(params: sqlite.Parameters)
+def hold(params: sqlite.Parameters) -> Holder:
+    return Holder(params=params)
+def wrap(params: sqlite.Parameters) -> Envelope:
+    return Envelope.Data(params)

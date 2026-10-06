@@ -63,7 +63,7 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 
 状態: 2026-10-06に依存とcapability表を承認済み。generic deadpool 0.13.1（managed／rt_tokio_1、default featuresなし）とdeadpool-runtime 0.3.1を比較試作へ追加し、既存Tokio／rusqliteの解決版を維持する。承認した表の値を、Q002の終了・転送契約とともに扱う。
 
-[PR #82](https://github.com/disnana/Nagi/pull/82)のprivate一接続adapter比較は4 OS CIまで成功した。この文書branchのmain基点には未反映で、公開registry、NagiのTx捕捉検査、多接続、取得期限まで完成したとは扱わない。[main側の判断資料](sqlite-pool-adapter-decision.md)は依存選択の根拠として残し、承認と実装状況はこの記録を参照する。Q002/Q004を再び未承認へ戻さない。
+[PR #82](https://github.com/disnana/Nagi/pull/82)のprivate一接続adapter比較は4 OS CIまで成功した。main `7999bab`へ反映済みだが、公開registry、NagiのTx捕捉検査、多接続、取得期限まで完成したとは扱わない。[main側の判断資料](sqlite-pool-adapter-decision.md)は依存選択の根拠として残し、承認と実装状況はこの記録を参照する。Q002/Q004を再び未承認へ戻さない。Tx／ParametersのDebug不可、Pool／Failureの状態だけのDebug、Failureと小さいenumのshared可は初版表の採用値で、公開checker配線は未完了。予想外の依存追加・版更新が必要なら差分を示して判断へ戻す。
 
 ### Q-005: 既存所有値の代入を明示する範囲
 
