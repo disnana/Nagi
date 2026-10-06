@@ -38,6 +38,10 @@ stock deadpoolの論理slot返却と、native workerのclose／join完了は同�
 
 terminal failure／causeをledgerへ公開してから完了joinを通知する。通知を先に出すと、native close失敗を取り落とすraceが生じる。完了recordは同一ledgerのcounterへ集約し、未完了workerだけを保持する。これらはQ002／Q004の終了責任を実現する内部方針で、private一接続の反例から検査する。公開Pool保証の実装・検証完了とは区別する。
 
+## 多接続へ向けたprivate縦切り
+
+#82の一接続比較をmainへ反映した後、[native容量と独立join](../sqlite-multiconnection-design.md)を先行回帰で検証する。workerごとのobserverがnative JoinHandleを所有し、健康な別workerの寿命へ終了観測を依存させない。起動不成立をfake joinと数えず、公開取得期限とcapabilityは別の未完了範囲へ残す。private試作の内部設計であり、公開Pool契約の実装完了やLow/言語意味論の変更ではない。
+
 ## 最初の検証と段階
 
 1. このADRとinvariantsを記録する。
