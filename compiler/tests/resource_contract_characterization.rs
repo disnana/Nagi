@@ -201,6 +201,7 @@ fn module(module: M) -> (&'static str, &'static str, &'static str) {
         M::Actor => ("std.actor", "stdlib:std.actor", "::nagi_runtime::actor"),
         M::Result => ("std.result", "stdlib:std.result", "::nagi_runtime::result"),
         M::Auth => ("std.auth", "stdlib:std.auth", "::nagi_runtime::auth"),
+        M::Ownership => ("std.ownership", "stdlib:std.ownership", "::std::convert"),
     }
 }
 #[test]
@@ -347,12 +348,13 @@ const OPERATIONS: &[OperationExpected] = &[
     op!(ActorShutdown,Actor,"shutdown",1,&[],"R",None,true,true,"(control: view[Control]) -> Future[Result[unit, Error]]"),
     op!(ActorNextEvent,Actor,"next_event",1,&[],"R",None,true,true,"(control: view[Control]) -> Future[Result[Option[Event], Error]]"),
     op!(ActorYieldNow,Actor,"yield_now",0,&[],"",None,true,true,"() -> Future[unit]"),
+    op!(OwnershipMove,Ownership,"move",1,&[],"M",None,false,false,"(value: T) -> T"),
     op!(ResultMapError,Result,"map_error",2,&[],"MP",None,false,false,"(value: Result[T, E], mapper: fn[E, F]) -> Result[T, F]"),
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 47);
-    assert_eq!(stdlib::OPERATIONS.len(), 47);
+    assert_eq!(OPERATIONS.len(), 48);
+    assert_eq!(stdlib::OPERATIONS.len(), 48);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()
@@ -375,7 +377,12 @@ fn registered_operations_match_signatures_and_passing() {
             .collect();
         assert_eq!(actual.module, expected.module);
         assert_eq!(actual.name, expected.name);
-        assert_eq!(actual.rust_path, format!("{native}::{}", expected.name));
+        // moveはchecked identity action。宣言metadataのnative pathだけidentityを指す。
+        let rust_path = match expected.operation {
+            O::OwnershipMove => "::std::convert::identity".to_owned(),
+            _ => format!("{native}::{}", expected.name),
+        };
+        assert_eq!(actual.rust_path, rust_path);
         assert_eq!(actual.arity, expected.arity, "{:?}", expected.operation);
         assert_eq!(actual.parameters, passing, "{:?}", expected.operation);
         assert_eq!(passing.len(), expected.arity);

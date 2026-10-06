@@ -20,7 +20,7 @@ def main():
 
 ## 代入と明示move
 
-次は採用済みの移行仕様で、実装中・未リリースです。Pythonの代入は同じ値への参照を増やします。Nagiでは、数値やboolなどCopyとして扱う値は通常代入できます。既存の非Copyローカルを渡す場合は`move`を使い、裸の`destination = name`は拒否します。
+以下の明示moveと代入規則は作業branchで実装済み・未リリースです。インストール済みの公開版では使えるとは限りません。Pythonの代入は同じ値への参照を増やします。Nagiでは、数値やboolなどCopyとして扱う値は通常代入できます。既存の非Copyローカルを渡す場合は`move`を使い、裸の`destination = name`は拒否します。
 
 ```nagi
 from std.ownership import move
@@ -36,13 +36,13 @@ def main():
     print(name)
 ```
 
-期待する出力は`4`、`Nagi`、`new`です。`destination = move(name)`は文字列と後片付けの責任を渡します。clone、allocation、shared所有者の追加は行いません。再代入前に`name`を読むと拒否し、新しい値を受け取った後なら再利用できます。独立した文字列を残すなら`destination = copy(view(name))`、所有せず読むなら`view(name)`、同じ値を共有するなら`share`と`clone_shared`を使います。
+出力は`4`、`Nagi`、`new`です。`destination = move(name)`は文字列と後片付けの責任を渡します。move操作自体はclone、allocation、shared所有者の追加を行いません。再代入前に`name`を読むと拒否し、新しい値を受け取った後なら再利用できます。独立した文字列を残すなら`destination = copy(view(name))`、所有せず読むなら`view(name)`、同じ値を共有するなら`share`と`clone_shared`を使います。
 
-`name = "Nagi"`や`a = User(...)`のように新しい値を作る場合、move指定は不要です。この変更の対象は、宣言・型注釈・再代入の右辺が非Copyローカルそのものの場合で、括弧で包んでも同じです。引数、return、フィールド取り出し、`try`、`match`は既存のconsume規則を保ちます。`move(name)`を引数やreturnに使っても、借用の制約は回避できません。
+`name = "Nagi"`や`a = User(...)`のように新しい値を作る場合、move指定は不要です。この変更の対象は、宣言・型注釈・再代入の右辺が所有する非Copyローカルそのものの場合で、括弧で包んでも同じです。引数、return、フィールド・index取り出し、`try`、`match`は既存のconsume規則を保ちます。`move(name)`を引数やreturnに使っても、借用の制約は回避できません。
 
 Copy規則は変更しません。view、関数値（対応済みのローカルasync関数別名を含む）、UUID、timestampや、中身がCopyのclass・enum・nullable・ownedも対象です。Resultとsharedは、中身がCopyでも非Copyです。viewをCopyしても借用元は必要で、関数値のCopyはFutureの保存を許すものではありません。[型](types.md)、[async](async.md)、[設計判断](../DESIGN.md)を参照してください。
 
-`move`は`std.ownership`からimportする、引数一つの操作です。型は入力から推論し、明示型引数は受け付けません。qualified importやaliasも使えます。同名のユーザー関数は通常の関数として扱います。borrowed/shared値からの移動には、従来の所有権制約が適用されます。
+`move`は`std.ownership`からimportする、引数一つの操作です。型は入力から推論し、明示型引数は受け付けません。`import std.ownership as ownership`からの`ownership.move(name)`、`from std.ownership import move as transfer`からの`transfer(name)`も使えます。同名のユーザー関数は通常の関数として扱います。標準操作そのものの第一級関数値化は未対応です。borrowed/shared親の非Copyフィールドは奪えません。Futureや入れ子のFutureは入力にできませんが、`move(await operation(...))`はawait後の結果型が対応範囲なら使えます。
 
 ## 同じ値を複数の場所で持つ
 

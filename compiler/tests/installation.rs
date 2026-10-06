@@ -1,17 +1,58 @@
-use std::{fs, path::PathBuf, process::Command};
+use std::{
+    fs,
+    path::PathBuf,
+    process::Command,
+    sync::{Arc, Mutex, Weak},
+};
 
 static ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-struct Fixture(PathBuf);
-impl Fixture {
-    fn new() -> Self {
+fn exclusive_root(label: &str) -> PathBuf {
+    loop {
         let root = std::env::temp_dir().join(format!(
-            "nagi install 凪 {} {}",
+            "{label} {} {}",
             std::process::id(),
             ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
-        fs::create_dir_all(&root).unwrap();
-        Self(root)
+        match fs::create_dir(&root) {
+            Ok(()) => return root,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => panic!("exclusive installation fixture: {error}"),
+        }
+    }
+}
+
+struct Seed(PathBuf);
+impl Seed {
+    fn new() -> Self {
+        let seed = Self(exclusive_root("nagi install seed"));
+        fs::copy(env!("CARGO_BIN_EXE_nagic"), seed.0.join("compiler")).unwrap();
+        seed
+    }
+    fn shared() -> Arc<Self> {
+        static SEED: Mutex<Weak<Seed>> = Mutex::new(Weak::new());
+        let mut cached = SEED.lock().unwrap();
+        if let Some(seed) = cached.upgrade() {
+            return seed;
+        }
+        // Copy completes before any fixture can spawn this inode. Later
+        // distribution links never open it for writing, including during fork.
+        let seed = Arc::new(Self::new());
+        *cached = Arc::downgrade(&seed);
+        seed
+    }
+}
+impl Drop for Seed {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+struct Fixture(PathBuf, Arc<Seed>);
+impl Fixture {
+    fn new() -> Self {
+        let seed = Seed::shared();
+        Self(exclusive_root("nagi install 凪"), seed)
     }
     fn write(&self, path: &str, text: &str) {
         let path = self.0.join(path);
@@ -29,7 +70,8 @@ impl Fixture {
             .0
             .join("distribution")
             .join(format!("nagic{}", std::env::consts::EXE_SUFFIX));
-        fs::copy(env!("CARGO_BIN_EXE_nagic"), &exe).unwrap();
+        let seed = &self.1;
+        fs::hard_link(seed.0.join("compiler"), &exe).unwrap();
         exe
     }
     fn command(&self, exe: &PathBuf) -> Command {
@@ -113,4 +155,26 @@ fn wrong_root_explains_the_distribution_folder_before_calling_cargo() {
     assert!(error.contains("展開フォルダー"), "{error}");
     assert!(!error.contains("cargo/rustc"), "{error}");
     assert!(!f.0.join("build/main/Cargo.toml").exists());
+}
+
+#[test]
+fn linked_distributions_keep_the_seed_until_the_last_owner_drops() {
+    let seed = Arc::new(Seed::new());
+    let root = seed.0.clone();
+    let first = Fixture(exclusive_root("nagi install 凪"), Arc::clone(&seed));
+    let second = Fixture(exclusive_root("nagi install 凪"), Arc::clone(&seed));
+    let first_exe = first.distribution();
+    let second_exe = second.distribution();
+    assert_ne!(first_exe, second_exe);
+    assert!(Arc::ptr_eq(&first.1, &second.1));
+    let expected = fs::read(env!("CARGO_BIN_EXE_nagic")).unwrap();
+    assert_eq!(fs::read(root.join("compiler")).unwrap(), expected);
+    assert_eq!(fs::read(&first_exe).unwrap(), expected);
+    assert_eq!(fs::read(&second_exe).unwrap(), expected);
+    drop(seed);
+    drop(first);
+    assert!(root.is_dir(), "second distribution still owns the seed");
+    assert!(second_exe.is_file());
+    drop(second);
+    assert!(!root.exists(), "last owner must remove its exclusive seed");
 }

@@ -280,6 +280,25 @@ Sol 2人で実装と独立source/fixtureレビューを分担した。レビュ�
 
 この縦切りはmain向けの別PRとし、今回のmerge承認を流用しない。取得期限・巨大capacity・公開配線を進める順序と条件は[後続計画](sqlite-public-slice-plan.md)を維持する。
 
+## 2026-10-06: #84反映とprivate取得予算
+
+ユーザーが#84を05:47 UTCにマージした。main `e7aff1d`を読み戻し、取得予算は`feat/sqlite-acquire-budget`へ分離した。#84の最終headでは4 OSのprivate50件とparser2件、Linux／両JetBrains／website／gateが成功している。[CI記録](sqlite-multiconnection-results.md#84のciとmain反映)を追記した。エージェントはmergeしていない。
+
+設計・ADR・invariants→tests-only→compile RED→stock waitのみのruntime RED→native予算接続→GREENの順で保存した。独立Solレビューで、期限後の最初のpollを固定するoracle、task-local消費点まで進める隔離試験、setup失敗時cleanupを補強した。元50件を維持し、取得9件と比較1件を加えた。公開API・数値default・依存・CI設定は変更していない。
+
+ローカルでprivate60、runtime189＋doctest5、全92 suite／891、fmt／clippy、fuzz1000 mutation／95 Low emit／16 bounded native／panic0、CI Python52、website90が成功。budget比較の未poll begin Futureは2040 byte、従来fixtureは2024 byte。p50/p95の大小は逆で、速度向上を主張しない。source provenance、原ログ、生sampleと再実行法は[取得予算の結果](sqlite-acquire-budget-results.md)へ保存した。新headの4 OS CIは公開後に確認する。
+
+| 次の対象 | 状態 |
+|---|---|
+| native容量と独立join | #84 main反映、private4 OS成功 |
+| 取得予算 | private先行9件とローカルGREEN、公開入口は未配線 |
+| 巨大capacity | P2公開前ブロッカー。stock版の全slot確保をvalidation済みとしない。[判断案](sqlite-capacity-decision.md) |
+| Options／Pool／Failure／Parameters | 公開runtime未実装 |
+| registry／capture／sealed SQL | 46入力をsemantic検査／元位置／High・Low・Rustへ接続する作業が残る |
+| G-TX／G-POOL・Phase 4 acceptance | 未完了。Phase 5・版更新・releaseは未実施 |
+
+今回もmain向けの別PRにまとめ、merge承認は流用しない。未解決の公開条件は根拠・代替・検証条件を示して判断する。
+
 ## 2026-10-06: #84反映後の取得予算CIと、言語仕様の実装準備
 
 ユーザーが#84をmainへ反映した。今回の監査基点は`e7aff1da0a36503d239d70cf5dbcf892655978e0`。続く[PR #85](https://github.com/disnana/Nagi/pull/85)はmain向けdraftで、private adapterのlogical待ちからnative登録まで同じ取得予算を保つ修正。公開Pool/Tx配線や新言語仕様ではない。
@@ -295,3 +314,23 @@ Sol 2人で実装と独立source/fixtureレビューを分担した。レビュ�
 DESIGN日英、ADR011、invariants、Q005/006を実装順へ接続し、入門ownership日英のCopy説明を現行と照合した。compiler/runtime・依存・CI設定・生成コード・test期待は今回の準備差分で変更していない。新しいmove/Taskは未実装。V1/V2の具体APIと移行対象を判断できる資料を作り、その判断までは公開契約の実装を止める。S1/S2の細部を今すぐ全て質問せず、後続に分ける。Phase 4の公開acceptance、Phase 5、merge/releaseの承認を流用しない。
 
 準備差分10文書の相対リンク/anchor 319件、website 90ページのlocal links/anchors/assets、CI判定52件、diff checkが成功した。新しい意味論のtest期待を変えず、compiler/runtimeとCI入力も変更していない。文書PRはmain向けdraftに分離し、公開後のheadでCIを確認する。
+
+## 2026-10-06: #85 main反映と#86設計監査の同期
+
+ユーザーが#85をマージした。main `f7799fa46ed513432b76cdf08648fe0986d44d5c`を#86へmergeし、private取得予算の60件・測定・終了契約の成果と、言語移行前の基点main `e7aff1d`での36件・正常18実行の監査を両方保持した。上のdraft維持・未merge・move具体案判断待ち等は当時の記録であり、現在の状態ではない。#86はユーザーが非draftにした状態を維持し、エージェントはPR状態を変更していない。
+
+その後のユーザー指示で、canonical `std.ownership.move`、Copy据置、所有する非Copyローカルそのものの通常代入だけを拒否する範囲は確定した。別作業branchで先行test・実装・検証を進めている。#86と公開mainのcompiler/runtimeにはこの言語変更を含めず、現在の暗黙代入を禁止とは書かない。task結果handle、故障型・未受取等の詳細は後続であり、moveを再承認待ちへ戻さない。今回のmerge解消で既存検査を再実行したとは数えない。
+
+## 2026-10-06: #85/#86を明示move実装branchへ統合
+
+#86の更新head `93ad01119cc9ee37e63197a408a0ee75e74f33f5`を、move実装branch `feat/explicit-move-contract`へmergeした。#85のprivate取得予算と60件の記録、基点mainの36件・正常18実行の監査を保持する。文書競合はこのbranchでのV1/V2実装済みという現在の記載を維持し、#86と公開mainにmoveが実装済みとは扱わない。#85はユーザーがmainへ反映済み、#86は非draftであり、過去のdraft・判断待ちの記録は履歴として残す。
+
+moveはRust標準の`std::convert::identity`へ入力を値として一度渡す実装で、OWN-04の範囲とCopy表を保つ。実装は未マージ・未リリースであり、統合後の再検証は[実装結果](explicit-move-results.md)へ別に記録する。Taskは[設計案](task-result-handle-design.md)の段階で未実装。このmergeだけを新たなCargo/4 OS検証の成功とは数えない。
+
+## 2026-10-06: moveの全回帰と#86 main反映
+
+#86の競合解消head `93ad011`でchecks／websiteが成功した後、ユーザーがマージした。main `7d2d96a8bdba191e456f796bdf477b95bc34c57e`のtreeは検証headと同じ`890fe8a425ce93005c4478e39685d0d8f239ecfd`で、originから読み戻した。エージェントは#85/#86のmerge操作を行っていない。
+
+moveの統合後head `29a4618`は全93 suite・902件、failed/ignored 0。fmt／clippy全target、10プロジェクト19実行、日英7箇所の4完全例のcheck/runが成功した。移行前36件・正常18実行とは別に記録する。限定生成256、fuzz 10,000 mutation／128 native、Drop・temporary・by-value比較の有限検査と原ログは[実装結果](explicit-move-results.md)へ保存した。
+
+V1/V2は独立したmain向けdraft PRとして4 OS CIを確認する。mergeとreleaseは別途確認する。S1/S2のTask契約は設計案の段階で、公開SQLite Pool/Transactionも未実装。取消要求をjoin完了、rollback要求を完了と扱わない。

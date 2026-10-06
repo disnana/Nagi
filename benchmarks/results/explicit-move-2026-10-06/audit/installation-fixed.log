@@ -1,0 +1,12 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi-boundary-foundation/compiler)
+    Finished `test` profile [unoptimized] target(s) in 5.35s
+     Running tests/installation.rs (/tmp/nagi-container-flow-target/debug/deps/installation-9a45f6077b0da150)
+
+running 4 tests
+test wrong_root_explains_the_distribution_folder_before_calling_cargo ... ok
+test linked_distributions_keep_the_seed_until_the_last_owner_drops ... ok
+test moved_distribution_builds_an_external_project_with_no_root_override ... ok
+test standalone_build_keeps_native_artifacts_in_the_working_directory ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+

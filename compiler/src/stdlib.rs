@@ -10,6 +10,8 @@ pub const RESULT_MODULE_NAME: &str = "std.result";
 pub const RESULT_MODULE_ID: &str = "stdlib:std.result";
 pub const AUTH_MODULE_NAME: &str = "std.auth";
 pub const AUTH_MODULE_ID: &str = "stdlib:std.auth";
+pub const OWNERSHIP_MODULE_NAME: &str = "std.ownership";
+pub const OWNERSHIP_MODULE_ID: &str = "stdlib:std.ownership";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StandardModule {
@@ -17,6 +19,7 @@ pub enum StandardModule {
     Actor,
     Result,
     Auth,
+    Ownership,
 }
 pub struct StandardModuleInfo {
     pub name: &'static str,
@@ -28,6 +31,7 @@ pub const MODULES: &[StandardModule] = &[
     StandardModule::Actor,
     StandardModule::Result,
     StandardModule::Auth,
+    StandardModule::Ownership,
 ];
 pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
     match module {
@@ -50,6 +54,11 @@ pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
             name: AUTH_MODULE_NAME,
             id: AUTH_MODULE_ID,
             rust_namespace: "::nagi_runtime::auth",
+        },
+        StandardModule::Ownership => &StandardModuleInfo {
+            name: OWNERSHIP_MODULE_NAME,
+            id: OWNERSHIP_MODULE_ID,
+            rust_namespace: "::std::convert",
         },
     }
 }
@@ -128,6 +137,61 @@ pub enum Operation {
     ActorMarkReady,
     ActorYieldNow,
     ResultMapError,
+    OwnershipMove,
+}
+
+/// Compiler-owned operation behavior. Public declaration metadata remains a
+/// projection; neither serialized Low nor an imported spelling chooses this.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OperationEmission {
+    NativeCall,
+    /// A by-value result with the input type and view origins; not a place alias.
+    IdentityTransfer {
+        argument: usize,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ValueTransfer {
+    None,
+    WholeValue {
+        argument: usize,
+    },
+    /// map_error retains the success payload, but replaces the error payload.
+    ResultSuccess {
+        argument: usize,
+    },
+}
+impl ValueTransfer {
+    pub(crate) fn argument(self) -> Option<usize> {
+        match self {
+            Self::None => None,
+            Self::WholeValue { argument } | Self::ResultSuccess { argument } => Some(argument),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct OperationSemantics {
+    pub emission: OperationEmission,
+    pub value_transfer: ValueTransfer,
+}
+
+pub(crate) fn operation_semantics(operation: Operation) -> OperationSemantics {
+    match operation {
+        Operation::OwnershipMove => OperationSemantics {
+            emission: OperationEmission::IdentityTransfer { argument: 0 },
+            value_transfer: ValueTransfer::WholeValue { argument: 0 },
+        },
+        Operation::ResultMapError => OperationSemantics {
+            emission: OperationEmission::NativeCall,
+            value_transfer: ValueTransfer::ResultSuccess { argument: 0 },
+        },
+        _ => OperationSemantics {
+            emission: OperationEmission::NativeCall,
+            value_transfer: ValueTransfer::None,
+        },
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Passing {
@@ -251,6 +315,7 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::ActorMarkReady,
     Operation::ActorYieldNow,
     Operation::ResultMapError,
+    Operation::OwnershipMove,
 ];
 
 pub fn module(name: &str) -> Option<ModuleId> {
@@ -930,6 +995,9 @@ pub fn operation_info(operation: Operation) -> &'static OperationInfo {
         Operation::ActorNextEvent => &OperationInfo { module: StandardModule::Actor, name: "next_event", rust_path: "::nagi_runtime::actor::next_event", arity: 1, generic_arity: 0, type_parameters: &[], asynchronous: true, emit_type_arguments: true, parameters: &[Passing::Reference], borrow_owner: None, signature: "(control: view[Control]) -> Future[Result[Option[Event], Error]]" },
         Operation::ActorYieldNow => &OperationInfo { module: StandardModule::Actor, name: "yield_now", rust_path: "::nagi_runtime::actor::yield_now", arity: 0, generic_arity: 0, type_parameters: &[], asynchronous: true, emit_type_arguments: true, parameters: &[], borrow_owner: None, signature: "() -> Future[unit]" },
         Operation::ResultMapError => &OperationInfo { module: StandardModule::Result, name: "map_error", rust_path: "::nagi_runtime::result::map_error", arity: 2, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Move, Passing::Mapper], borrow_owner: None, signature: "(value: Result[T, E], mapper: fn[E, F]) -> Result[T, F]" },
+        // The compiler seals transfer semantics and the matching input/output type.
+        // Rust identity materializes that by-value result without a Nagi helper.
+        Operation::OwnershipMove => &OperationInfo { module: StandardModule::Ownership, name: "move", rust_path: "::std::convert::identity", arity: 1, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Move], borrow_owner: None, signature: "(value: T) -> T" },
 }
 }
 pub fn resource_id(resource: Resource) -> DefId {

@@ -1,6 +1,6 @@
 #[path = "support/checked_emission.rs"]
 mod checked_emission;
-use nagic::{check, emit, parser};
+use nagic::{check, emit, parser, source};
 use std::{
     fs,
     path::PathBuf,
@@ -9,7 +9,10 @@ use std::{
 };
 
 fn checked(text: &str, high: bool) -> Result<nagic::ast::Program, String> {
-    let mut program = parser::parse(text, high)?;
+    let fixture = Fixture::new();
+    let path = fixture.0.join(if high { "main.nagi" } else { "main.low" });
+    fs::write(&path, text).unwrap();
+    let mut program = source::load(&path, high)?.program;
     check::check(&mut program)?;
     Ok(program)
 }
@@ -40,7 +43,7 @@ fn direct_result_discard_rejects_outer_owned_wrappers_in_both_syntaxes() {
 #[test]
 fn stored_passed_and_returned_owned_values_remain_accepted() {
     let high = checked(
-        "class Packet:\n    name: str\ndef pass_result(value: owned[owned[Result[i64, Error]]]) -> owned[owned[Result[i64, Error]]]:\n    return value\ndef store_result(value: owned[owned[Result[i64, Error]]]) -> owned[owned[Result[i64, Error]]]:\n    saved = value\n    return pass_result(saved)\ndef pass_number(value: owned[i64]) -> owned[i64]:\n    saved = value\n    return saved\ndef pass_packet(value: owned[Packet]) -> owned[Packet]:\n    saved = value\n    return saved\ndef discard_number(value: owned[i64]):\n    value\ndef discard_packet(value: owned[Packet]):\n    value\ndef read_results(values: view[Result[i64, Error]]):\n    values\n    values\ndef discard_shared(value: shared[Result[i64, Error]]):\n    value\ndef discard_list(values: List[Result[i64, Error]]):\n    values\ndef main() -> Result[unit, Error]:\n    value = try parse_i64(\"42\")\n    match parse_i64(\"invalid\"):\n        case Ok(number):\n            print(number)\n        case Err(problem):\n            print(error_kind(problem))\n    return ok(print(value))\n",
+        "from std.ownership import move\nclass Packet:\n    name: str\ndef pass_result(value: owned[owned[Result[i64, Error]]]) -> owned[owned[Result[i64, Error]]]:\n    return value\ndef store_result(value: owned[owned[Result[i64, Error]]]) -> owned[owned[Result[i64, Error]]]:\n    saved = move(value)\n    return pass_result(saved)\ndef pass_number(value: owned[i64]) -> owned[i64]:\n    saved = value\n    return saved\ndef pass_packet(value: owned[Packet]) -> owned[Packet]:\n    saved = move(value)\n    return saved\ndef discard_number(value: owned[i64]):\n    value\ndef discard_packet(value: owned[Packet]):\n    value\ndef read_results(values: view[Result[i64, Error]]):\n    values\n    values\ndef discard_shared(value: shared[Result[i64, Error]]):\n    value\ndef discard_list(values: List[Result[i64, Error]]):\n    values\ndef main() -> Result[unit, Error]:\n    value = try parse_i64(\"42\")\n    match parse_i64(\"invalid\"):\n        case Ok(number):\n            print(number)\n        case Err(problem):\n            print(error_kind(problem))\n    return ok(print(value))\n",
         true,
     )
     .unwrap();

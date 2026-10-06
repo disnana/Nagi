@@ -61,7 +61,7 @@ def main():
 
 A module name exposes functions, classes, and enums defined in that file. Imported names are not automatically re-exported. The alias is optional in `from "orders.nagi" import Order`. Select several definitions with commas, for example `from "orders.nagi" import Order as SavedOrder, score`. Do not add a trailing comma. `from` and `as` are contextual import keywords and can still be function or variable names. A local with the same name as a module follows the existing local-variable rules. Class method calls remain unsupported.
 
-Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted imports select the registered `std.http.server`, `std.actor`, and `std.result` modules. General package discovery and visibility declarations are unsupported.
+Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted imports select registered modules such as `std.http.server`, `std.actor`, and `std.result`. The work branch also registers unreleased `std.auth` and `std.ownership`. General package discovery and visibility declarations are unsupported.
 
 The unreleased `std.auth` experiment provides an authenticated `Principal` and a consumed `Grant[P]`. The [authentication and authorization example](../../test-nagi-code/application-examples/auth-boundary/README.en.md) connects Rust verification with a custom Nagi policy. It uses fixed credentials; it does not implement JWS verification or check authorization across every route.
 
@@ -108,6 +108,23 @@ from std.actor import Actor as Worker, CallError
 ```
 
 `Worker[M, R, E]` and `actor.Actor[M, R, E]` are the same native type. Register named async factories and handlers with `Supervisor[C]`, then return the next state and reply in `Turn[S, R, E]`. Messages, replies, and business errors must be owned values whose capacity can be accounted for; they cannot contain Map, views, shared graphs, or opaque resources. See [actors](actor.md), the [API reference](actor-reference.md), and the [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) for signatures and steps.
+
+## Import the standard value transfer operation
+
+`std.ownership.move` is implemented on the work branch and is unreleased. Call it through a module name or an imported alias. This complete program prints `Nagi`:
+
+```nagi
+import std.ownership as ownership
+from std.ownership import move as transfer
+
+def main():
+    first = "Nagi"
+    second = ownership.move(first)
+    third = transfer(second)
+    print(third)
+```
+
+Use the explicit operation for assigning an owned non-Copy local itself. Fresh values, Copy assignment, and existing argument, return, and field/index consumption rules are unchanged. `move` is not a keyword; user functions with that name remain ordinary functions. Standard operations are not first-class function values. This operation takes one inferred argument and accepts no explicit type arguments. See [ownership](ownership.md#assignment-and-explicit-move) for borrowing/Future restrictions and the exact migration scope.
 
 ## Call Rust functions
 

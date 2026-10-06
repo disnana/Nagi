@@ -558,11 +558,24 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
         E::Try(x) => try_result(re(x, types), types),
         E::Call(n, ts, a) => {
             if types.expression(e).argument_resolution == Some(NameResolution::Standard) {
-                let (path, parameters, emit_type_arguments) = types
+                let operation = types
                     .expression(e)
                     .operation
                     .as_ref()
                     .expect("sealed operation");
+                let (path, parameters, emit_type_arguments) = match operation {
+                    crate::check::checked::OperationPlan::IdentityTransfer { argument } => {
+                        // Consume or copy into a value temporary even when the caller
+                        // only borrows the result. Parentheses would preserve a place;
+                        // a block would shorten lifetimes of borrowed temporaries.
+                        return format!("::std::convert::identity({})", re(&a[*argument], types));
+                    }
+                    crate::check::checked::OperationPlan::NativeCall {
+                        path,
+                        parameters,
+                        emit_type_arguments,
+                    } => (path, parameters, emit_type_arguments),
+                };
                 let arguments = a
                     .iter()
                     .zip(parameters)

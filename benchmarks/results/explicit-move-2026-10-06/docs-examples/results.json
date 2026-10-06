@@ -1,0 +1,52 @@
+[
+  {
+    "file": "docs/language-guide.md",
+    "line": 159,
+    "source_sha256": "406df4d483453f976b6a07c44fb767f8d2c9f3c16b175304f957f4c7f7970253",
+    "check_exit": 0,
+    "run_exit": 0,
+    "stdout": "Nagi\n"
+  },
+  {
+    "file": "docs/en/language-guide.md",
+    "line": 159,
+    "source_sha256": "406df4d483453f976b6a07c44fb767f8d2c9f3c16b175304f957f4c7f7970253",
+    "same_code_as": 0
+  },
+  {
+    "file": "docs/modules-and-rust.md",
+    "line": 117,
+    "source_sha256": "effbad8aaff9295989837c767f3c526f44f248ae5713fc0dabe295706bf64dc5",
+    "check_exit": 0,
+    "run_exit": 0,
+    "stdout": "Nagi\n"
+  },
+  {
+    "file": "docs/en/modules-and-rust.md",
+    "line": 117,
+    "source_sha256": "effbad8aaff9295989837c767f3c526f44f248ae5713fc0dabe295706bf64dc5",
+    "same_code_as": 1
+  },
+  {
+    "file": "docs/ownership.md",
+    "line": 26,
+    "source_sha256": "1ff4fe5d99d8043a5d4e05aeca02630dbccb94680fbdcfd6ccf8448cb33bed37",
+    "check_exit": 0,
+    "run_exit": 0,
+    "stdout": "4\nNagi\nnew\n"
+  },
+  {
+    "file": "docs/en/ownership.md",
+    "line": 26,
+    "source_sha256": "1ff4fe5d99d8043a5d4e05aeca02630dbccb94680fbdcfd6ccf8448cb33bed37",
+    "same_code_as": 2
+  },
+  {
+    "file": "docs/internal/value-task-implementation-plan.md",
+    "line": 57,
+    "source_sha256": "9ec9f91334a3eb928dc8b8001e9bb35d3cf7a781ab46f7c90b5cc0e21df17383",
+    "check_exit": 0,
+    "run_exit": 0,
+    "stdout": "Nagi\nnew\n"
+  }
+]

@@ -1,0 +1,42 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi-boundary-foundation/compiler)
+    Finished `test` profile [unoptimized] target(s) in 6.91s
+     Running tests/explicit_moves.rs (/tmp/nagi-container-flow-target/debug/deps/explicit_moves-86e1a40be48ac6e2)
+
+running 2 tests
+
+thread 'identity_move_materializes_copy_values_and_keeps_bare_place_comparison_loans' (1380627) panicked at compiler/tests/explicit_moves.rs:73:14:
+High check before backend: "line 12: pair は同じ式で先に参照されています。copyを使うか、別の所有値を渡してください"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test identity_move_materializes_copy_values_and_keeps_bare_place_comparison_loans ... FAILED
+
+thread 'identity_moves_preserve_rhs_failure_drop_order_and_async_cancellation' (1380628) panicked at compiler/tests/explicit_moves.rs:184:13:
+high backend run:
+
+running 1 test
+test transfer_failure_and_future_cleanup ... FAILED
+
+failures:
+
+failures:
+    transfer_failure_and_future_cleanup
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+thread 'transfer_failure_and_future_cleanup' (1380649) panicked at high.rs:154:5:
+assertion `left == right` failed: moved Vec must retire after borrowed len, before capture
+  left: [112, 313, 314, 314, 212]
+ right: [112, 212, 313, 314, 314]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+test identity_moves_preserve_rhs_failure_drop_order_and_async_cancellation ... FAILED
+
+failures:
+
+failures:
+    identity_move_materializes_copy_values_and_keeps_bare_place_comparison_loans
+    identity_moves_preserve_rhs_failure_drop_order_and_async_cancellation
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.38s
+
+error: test failed, to rerun pass `-p nagic --test explicit_moves`

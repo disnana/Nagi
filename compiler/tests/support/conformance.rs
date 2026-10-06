@@ -262,7 +262,14 @@ fn generated_case(name: String, seed: u64, input: GeneratedInput) -> Case {
     };
     Case {
         name,
-        source: format!("{}{helpers}{declaration} evaluate() -> i64:\n{body}", if input.variant == 9 || input.variant >= 13 { "from std.ownership import move\n" } else { "" }),
+        source: format!(
+            "{}{helpers}{declaration} evaluate() -> i64:\n{body}",
+            if input.variant == 9 || input.variant >= 13 {
+                "from std.ownership import move\n"
+            } else {
+                ""
+            }
+        ),
         high: true,
         expected: "run-pass".into(),
         diagnostic: String::new(),
@@ -291,13 +298,18 @@ impl Fixture {
         }
     }
 }
-fn resolve_imports(case: &Case, program: nagic::ast::Program) -> Result<nagic::ast::Program, Box<Failure>> {
+fn resolve_imports(
+    case: &Case,
+    program: nagic::ast::Program,
+) -> Result<nagic::ast::Program, Box<Failure>> {
     if program.module_imports.is_empty() {
         return Ok(program);
     }
     // canonical標準operationもCLIと同じ解決を通す。未解決を成功扱いしない。
     let fixture = Fixture::new();
-    let path = fixture.0.join(if case.high { "main.nagi" } else { "main.low" });
+    let path = fixture
+        .0
+        .join(if case.high { "main.nagi" } else { "main.low" });
     step(case, "resolve-imports", || {
         fs::write(&path, &case.source).map_err(|error| error.to_string())?;
         nagic::source::load(&path, case.high).map(|sources| sources.program)

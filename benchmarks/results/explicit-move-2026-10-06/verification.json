@@ -1,0 +1,587 @@
+[
+  {
+    "label": "red-conformance",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "conformance",
+      "corpus_and_bounded_generated_contracts_reach_native_execution",
+      "--",
+      "--exact"
+    ],
+    "exit": 101,
+    "seconds": 0.619,
+    "source_commit": "e976b2b3dc4e446607c581eaa9d01c91a3d78a34",
+    "source_tree": "473704df0b6503026fc71549d39458f6fc9e18ae",
+    "log_sha256": "4752801ad0a129fbbf85c183798a5f7cfaf4e1f0d3937300e18a621003c28d77"
+  },
+  {
+    "label": "red-canonical-move",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "conformance",
+      "explicit_move_corpus_reaches_native_execution",
+      "--",
+      "--exact"
+    ],
+    "exit": 101,
+    "seconds": 0.519,
+    "source_commit": "4706300fb69335a3be72256028de41dac781a2e2",
+    "source_tree": "b85ab4c8d57e0a1c0e38f39af6492ff2beeade76",
+    "log_sha256": "a3bdaadd1e291ba21ea1d28e70c36a9ad3eb270bed09f9012b4962cee2df5ea4"
+  },
+  {
+    "label": "red-explicit-cached-build",
+    "command": [
+      "rustc",
+      "--edition=2021",
+      "--test",
+      "compiler/tests/explicit_moves.rs",
+      "--extern",
+      "nagic=/tmp/nagi-container-flow-target/debug/deps/libnagic-bab1ac6b07035825.rlib",
+      "-L",
+      "dependency=/tmp/nagi-container-flow-target/debug/deps",
+      "-C",
+      "debuginfo=0",
+      "-o",
+      "/tmp/nagi-explicit-move-proof/old-checker-tests"
+    ],
+    "exit": 0,
+    "seconds": 0.315,
+    "source_commit": "dd044e103ae315cc94658a84a06b8da2aac54125",
+    "source_tree": "966a48e0f1796cc015235ed3d4153c5015c3f274",
+    "log_sha256": "4164bfa77db9ef5148f6fa64b71c69ec8be090e31af96259fa7ed3287b13eec2"
+  },
+  {
+    "label": "red-explicit-cached-run",
+    "command": [
+      "/tmp/nagi-explicit-move-proof/old-checker-tests",
+      "--nocapture"
+    ],
+    "exit": 101,
+    "seconds": 0.008,
+    "source_commit": "dd044e103ae315cc94658a84a06b8da2aac54125",
+    "source_tree": "966a48e0f1796cc015235ed3d4153c5015c3f274",
+    "log_sha256": "72b246581a4abd41e6d0b65b10fcb3004dd600a33f571fb91f7e122a94ef1863"
+  },
+  {
+    "label": "green-targeted-first",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "explicit_moves",
+      "--test",
+      "conformance"
+    ],
+    "exit": 101,
+    "seconds": 5.599,
+    "source_commit": "d3220e8e094ac2057b0ec5c42a89de713b441e59",
+    "source_tree": "e670e26e0b74e8504b874df7f6103d1ec45b6336",
+    "log_sha256": "93a4a788eebcde46cf8b4e9cc1d70306262bbbe7109ab7b4123bd2f7bffba1d0"
+  },
+  {
+    "label": "green-explicit-first",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "explicit_moves"
+    ],
+    "exit": 101,
+    "seconds": 0.516,
+    "source_commit": "d3220e8e094ac2057b0ec5c42a89de713b441e59",
+    "source_tree": "e670e26e0b74e8504b874df7f6103d1ec45b6336",
+    "log_sha256": "7d01d74ee1486cbbd76f158c4b07b2e5dfb5cab31e736c1b8cf771385173ac7e"
+  },
+  {
+    "label": "green-conformance-second",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "conformance"
+    ],
+    "exit": 0,
+    "seconds": 0.622,
+    "source_commit": "d1a428e2d9a721d8401b199a05fd7afb7220b1f6",
+    "source_tree": "5f079209e9cf774fd3053fdd67768ec51774ebc2",
+    "log_sha256": "71707e686e571b76c2a0d08c8bf05da213ffe77b4f2835fa8e4a88fb5381cea5"
+  },
+  {
+    "label": "discovery-full-suite",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--no-fail-fast"
+    ],
+    "exit": 101,
+    "seconds": 11.648,
+    "source_commit": "d1a428e2d9a721d8401b199a05fd7afb7220b1f6",
+    "source_tree": "5f079209e9cf774fd3053fdd67768ec51774ebc2",
+    "log_sha256": "a8408407781f4504a881fb6ae132680593aadcbcc73f29f40d1254f312f7ca5d"
+  },
+  {
+    "label": "green-explicit-second",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "explicit_moves",
+      "--",
+      "--nocapture"
+    ],
+    "exit": 0,
+    "seconds": 10.777,
+    "source_commit": "4a595a745d5c48351d3ffa7039427342e81547a0",
+    "source_tree": "393f8ff3a3212ade13e299d752c9c9988b1ccd97",
+    "log_sha256": "09f7839c827f2084922fd301af1eda8f00faa904672b429089926fdae67e1fe6"
+  },
+  {
+    "label": "discovery-full-second",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--no-fail-fast"
+    ],
+    "exit": 101,
+    "seconds": 7.693,
+    "source_commit": "603dce4eded9d7d54295e4d84a6308166206d377",
+    "source_tree": "77465cc4bbc854f6bb2ab9f8e2cceb674df2b1cd",
+    "log_sha256": "fad7fe36fc056e783ca13a5923cd02a519c6ee466293b802b127927ff143c8ca"
+  },
+  {
+    "label": "discovery-full-third",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--no-fail-fast"
+    ],
+    "exit": 101,
+    "seconds": 149.828,
+    "source_commit": "0e9202b7e6c69bbcf256630f90c445b58f09b332",
+    "source_tree": "ac74592a4e7cb5a96a03d4737b4e0f184cfb0755",
+    "log_sha256": "a69d051ad30e1d032664379f893db5de14ac3ce2d99883f45f68fb3723f5ce44"
+  },
+  {
+    "label": "green-move-regressions",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--lib",
+      "--test",
+      "explicit_moves",
+      "--test",
+      "iterator_borrows",
+      "--test",
+      "symbols",
+      "--test",
+      "result_discard",
+      "--test",
+      "view_container_drop",
+      "--test",
+      "view_container_rebinding",
+      "--test",
+      "view_flow_completion",
+      "--test",
+      "view_flow_foundation",
+      "--test",
+      "ownership",
+      "--test",
+      "resource_contract_characterization",
+      "--test",
+      "conformance"
+    ],
+    "exit": 101,
+    "seconds": 14.586,
+    "source_commit": "6e273c3cbd3c32575c353fd2f881873391d3fe97",
+    "source_tree": "4f494151020b03a8d20f82f1e6c2ffe9e1bd633e",
+    "log_sha256": "86ae6b2445d250e13a0d99f759776172ea6af2086bc4091dc85898d994da2220"
+  },
+  {
+    "label": "full-cargo-final",
+    "command": [
+      "cargo",
+      "test",
+      "--locked"
+    ],
+    "exit": 0,
+    "seconds": 162.307,
+    "source_commit": "90c7746ff64e4cc91b6f724efa06d9e53b7b0a50",
+    "source_tree": "ca5e9460290228ca269f8873a94bb5c760dc4322",
+    "log_sha256": "c6c50ab00017976d88556066bea1196e5047c70637316046ae7681148a0c3ecf"
+  },
+  {
+    "label": "move-cost-comparison",
+    "command": [
+      "python",
+      "/tmp/nagi-explicit-move-proof/measure_move.py"
+    ],
+    "exit": 0,
+    "seconds": 0.927,
+    "source_commit": "90c7746ff64e4cc91b6f724efa06d9e53b7b0a50",
+    "source_tree": "ca5e9460290228ca269f8873a94bb5c760dc4322",
+    "log_sha256": "10ab530cdce3aa6e3839a2e82e22b9c29b9085d775b7d30cd70b7159323710ba"
+  },
+  {
+    "label": "red-comparison-place",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "explicit_moves",
+      "identity_move_keeps_comparison_place_loans_for_copy_aggregates",
+      "--",
+      "--exact"
+    ],
+    "exit": 101,
+    "seconds": 0.418,
+    "source_commit": "ffd20f10b36700572bdb6ec66dd826c24c2ac2ea",
+    "source_tree": "49c977f501e624ccba714307da698c2915dcea10",
+    "log_sha256": "64a96a4255289cee42c3c8ded2d7a69ab30e56943face7800e0b8e9bf997c58f"
+  },
+  {
+    "label": "documentation-native-examples",
+    "command": [
+      "python",
+      "-"
+    ],
+    "exit": 0,
+    "seconds": 3.379,
+    "source_commit": "d74e9651d6272c1390f411c2870afe30950f1c7f",
+    "source_tree": "f00f78f6815ff43c7b810b97bdccabf0acad9a29",
+    "log_sha256": "02e40344db1e150da252751c54a5e25f2d7aa73b5730449878a54cdff6589429"
+  },
+  {
+    "label": "full-cargo-reviewed",
+    "command": [
+      "cargo",
+      "test",
+      "--locked"
+    ],
+    "exit": 101,
+    "seconds": 122.964,
+    "source_commit": "d74e9651d6272c1390f411c2870afe30950f1c7f",
+    "source_tree": "f00f78f6815ff43c7b810b97bdccabf0acad9a29",
+    "log_sha256": "3e19513c26540e127dc99999215b7c11a11de88f53db2ca2a3c069aca4153155"
+  },
+  {
+    "label": "red-identity-materialization",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "explicit_moves",
+      "identity_move",
+      "--",
+      "--nocapture"
+    ],
+    "exit": 101,
+    "seconds": 7.313,
+    "source_commit": "d4c94de3ed9dde72a5f632a164c2b17d82d9b959",
+    "source_tree": "05492eac6342aeb85d0a7964529e14d019c3263e",
+    "log_sha256": "3c5fe7363384f3900343ff7bfa00491175063c3e03ca1b95405748cf558f96ec"
+  },
+  {
+    "label": "full-cargo-value-transfer",
+    "command": [
+      "cargo",
+      "test",
+      "--locked"
+    ],
+    "exit": 101,
+    "seconds": 60.148,
+    "source_commit": "799ba9a3ac5547a7b4f47def2240910b9c99f7f7",
+    "source_tree": "0d7150ac7be075d54c130627907765a32e992788",
+    "log_sha256": "f6b3f9f204592779dc6228407286bcb5630e930b751de15eea90c287f02af8a5"
+  },
+  {
+    "label": "installation-diagnosis",
+    "command": [
+      "python",
+      "-"
+    ],
+    "exit": 1,
+    "seconds": 0.032,
+    "source_commit": "00e133119b5b835bb70069eb50ee1563d63faa48",
+    "source_tree": "efe247ec803351058e41d361c2eea8c491387bb8",
+    "log_sha256": "e981589be6c996e9a8a5dddc790c03d434ed004b56dc8842a1c136c33779e466"
+  },
+  {
+    "label": "installation-diagnosis-matched",
+    "command": [
+      "python",
+      "-"
+    ],
+    "exit": 1,
+    "seconds": 1.825,
+    "source_commit": "00e133119b5b835bb70069eb50ee1563d63faa48",
+    "source_tree": "efe247ec803351058e41d361c2eea8c491387bb8",
+    "log_sha256": "12070d50a633a85a40ca5873eb24c8892448485cbb6a1a492f549e3b6ba55202"
+  },
+  {
+    "label": "fmt-before-final",
+    "command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit": 0,
+    "seconds": 0.817,
+    "source_commit": "00e133119b5b835bb70069eb50ee1563d63faa48",
+    "source_tree": "efe247ec803351058e41d361c2eea8c491387bb8",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "clippy-reviewed",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 101,
+    "seconds": 4.146,
+    "source_commit": "00e133119b5b835bb70069eb50ee1563d63faa48",
+    "source_tree": "efe247ec803351058e41d361c2eea8c491387bb8",
+    "log_sha256": "1dad9ef31ef05e993a7ffb41bb8f789d2eaaa39e58c016e3726393555893b2e9"
+  },
+  {
+    "label": "installation-fixed",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "installation"
+    ],
+    "exit": 0,
+    "seconds": 5.537,
+    "source_commit": "86d5b930a5a38a0a58ff9e6866777083a9479bea",
+    "source_tree": "9cc925325d58a056a4ce3c755a4ae78a4e702a3f",
+    "log_sha256": "479d35a3d0700f3ef8a28408f61e04516804757bc2b611070e75d5cd9f0625a7"
+  },
+  {
+    "label": "fmt-value-transfer",
+    "command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit": 0,
+    "seconds": 0.818,
+    "source_commit": "86d5b930a5a38a0a58ff9e6866777083a9479bea",
+    "source_tree": "9cc925325d58a056a4ce3c755a4ae78a4e702a3f",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "full-cargo-final-stable",
+    "command": [
+      "cargo",
+      "test",
+      "--locked"
+    ],
+    "exit": 0,
+    "seconds": 154.755,
+    "source_commit": "dcd7cab4699785b12bc39c87e835bc889e3a4973",
+    "source_tree": "739c21bb57e674274e4c5c1d80a95fd855fc5dc6",
+    "log_sha256": "e37139cbe01246db97f1f7b354a12c50c58bdc331a887b5fbad2a460ec04174c"
+  },
+  {
+    "label": "move-cost-final",
+    "command": [
+      "python",
+      "/tmp/nagi-explicit-move-proof/measure_move.py"
+    ],
+    "exit": 0,
+    "seconds": 0.986,
+    "source_commit": "dcd7cab4699785b12bc39c87e835bc889e3a4973",
+    "source_tree": "739c21bb57e674274e4c5c1d80a95fd855fc5dc6",
+    "log_sha256": "b7296fbd4075d3e5d22d5860a7680d8f6f8790a6cf5db0180e6590d212ca60d8"
+  },
+  {
+    "label": "property-move-final",
+    "command": [
+      "env",
+      "NAGI_CONFORMANCE_CASES=256",
+      "NAGI_CONFORMANCE_SEED=3735928559",
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "conformance"
+    ],
+    "exit": 0,
+    "seconds": 2.779,
+    "source_commit": "80de6781e4e4f8a60c8c2f0a8c9b2e186a57aad5",
+    "source_tree": "05bf2108dc4bac552036c767ffd3917ca3e705e0",
+    "log_sha256": "e920e55157d8f3a890745f39c8400427c10e3ce7d694ef8b21bd9626754aab0e"
+  },
+  {
+    "label": "fuzz-move-final",
+    "command": [
+      "env",
+      "NAGI_FUZZ_MUTATIONS=10000",
+      "NAGI_FUZZ_CASES=128",
+      "NAGI_FUZZ_SEED=305419896",
+      "cargo",
+      "run",
+      "--locked",
+      "-p",
+      "nagic",
+      "--example",
+      "fuzz-smoke"
+    ],
+    "exit": 0,
+    "seconds": 3.225,
+    "source_commit": "80de6781e4e4f8a60c8c2f0a8c9b2e186a57aad5",
+    "source_tree": "05bf2108dc4bac552036c767ffd3917ca3e705e0",
+    "log_sha256": "a5aad6cc4607fcd25b4dfa78ee056793b7b822eb3555e9be5b7ed46510e33a8e"
+  },
+  {
+    "label": "view-storage-cost-final",
+    "command": [
+      "env",
+      "NAGI_TEST_ARTIFACT_DIR=/tmp/nagi-explicit-move-proof/view-storage",
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "view_container_drop"
+    ],
+    "exit": 0,
+    "seconds": 1.423,
+    "source_commit": "80de6781e4e4f8a60c8c2f0a8c9b2e186a57aad5",
+    "source_tree": "05bf2108dc4bac552036c767ffd3917ca3e705e0",
+    "log_sha256": "f5c016e4de0f988e292d39cc1c5956908648ba9b52f71ff816674bcde964a457"
+  },
+  {
+    "label": "full-cargo-main-integrated",
+    "command": [
+      "cargo",
+      "test",
+      "--locked"
+    ],
+    "exit": 0,
+    "seconds": 165.677,
+    "source_commit": "29a46181043d8ef72c32c998fccaf9d98cf60b08",
+    "source_tree": "9a23bf5cc4c55818fe3382c7007b7bb7c1e0167f",
+    "log_sha256": "be40eb73ff366b232706bd01e123f0723a91044a5190cd1a56e67152e4f66330"
+  },
+  {
+    "label": "clippy-main-integrated",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0,
+    "seconds": 3.634,
+    "source_commit": "29a46181043d8ef72c32c998fccaf9d98cf60b08",
+    "source_tree": "9a23bf5cc4c55818fe3382c7007b7bb7c1e0167f",
+    "log_sha256": "ca264e0c501ad4a2dcaddcb31b9fc8d514e22655bac28f7a5afd1df595b8126c"
+  },
+  {
+    "label": "fmt-main-integrated",
+    "command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit": 0,
+    "seconds": 0.817,
+    "source_commit": "29a46181043d8ef72c32c998fccaf9d98cf60b08",
+    "source_tree": "9a23bf5cc4c55818fe3382c7007b7bb7c1e0167f",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "docs-native-main-integrated",
+    "command": [
+      "python",
+      "/tmp/nagi-move-docs-native.py"
+    ],
+    "exit": 0,
+    "seconds": 1.326,
+    "source_commit": "29a46181043d8ef72c32c998fccaf9d98cf60b08",
+    "source_tree": "9a23bf5cc4c55818fe3382c7007b7bb7c1e0167f",
+    "log_sha256": "b86a0de7fab546cfad616345b5f3ba7536e8dbb21dc215a226943cb5643b5b5e"
+  },
+  {
+    "label": "applications-main-integrated",
+    "command": [
+      "python",
+      "scripts/verify_application_examples.py",
+      "--compiler",
+      "/tmp/nagi-container-flow-target/debug/nagic"
+    ],
+    "exit": 0,
+    "seconds": 77.031,
+    "source_commit": "29a46181043d8ef72c32c998fccaf9d98cf60b08",
+    "source_tree": "9a23bf5cc4c55818fe3382c7007b7bb7c1e0167f",
+    "log_sha256": "d04d916e2289a47691e556804d294dfec205e890a4a4d258dff979b764e4fb88"
+  },
+  {
+    "label": "move-cost-main-integrated",
+    "command": [
+      "python",
+      "/tmp/nagi-explicit-move-proof/measure_move.py"
+    ],
+    "exit": 0,
+    "seconds": 0.67,
+    "source_commit": "29a46181043d8ef72c32c998fccaf9d98cf60b08",
+    "source_tree": "9a23bf5cc4c55818fe3382c7007b7bb7c1e0167f",
+    "log_sha256": "ee7cec56c1887a69bd9bf3965b0ae3ad215e64bb957510e6d8c05e809ea0714f"
+  }
+]

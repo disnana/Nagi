@@ -67,9 +67,9 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 
 ### Q-005: 既存所有値の代入を明示する範囲
 
-状態: moveの意味論と通常代入の移行は確定。作者が既存設計に沿うAPIを自律的に選び実装するよう指示したため、確認待ちで止めない。[採用仕様V1/V2](value-task-implementation-plan.md#v1v2の採用仕様)と[OWN-04](adr/011-language-behavior-and-docs.md#own-04-既存所有値の代入)に統合した。
+状態: moveの意味論と通常代入の移行は確定し、作業branchで実装済み・未リリース。作者が既存設計に沿うAPIを自律的に選び実装するよう指示したため、確認待ちで止めない。[採用仕様V1/V2](value-task-implementation-plan.md#v1v2の採用仕様)と[OWN-04](adr/011-language-behavior-and-docs.md#own-04-既存所有値の代入)に統合した。
 
-canonical `std.ownership.move`、現行Copy表の据置、右辺がnonCopy所有ローカルそのものの代入の移行を採用する。操作の追加と通常代入拒否を順に実装し、一つのdraft実装PRで全回帰と4 OS CIまで検証する。新値生成、引数、return、field/index、matchは既存の規則を保つ。shared handleのtransferとclone_shared、viewとcopyを区別する。
+canonical `std.ownership.move`、現行Copy表の据置、右辺がnonCopy所有ローカルそのものの代入の移行を採用する。操作の追加と通常代入拒否を先行テストの後に順に実装した。一つのdraft実装PRで全回帰と4 OS CIまで検証し、その状況とmain反映は[実装結果](explicit-move-results.md)と[進捗](progress.md)で別に記録する。新値生成、引数、return、field/index、matchは既存の規則を保つ。shared handleのtransferとclone_shared、viewとcopyを区別する。
 
 旧受理と18件の正常実行は移行前の監査結果として保存する。新規則に合わせたfixture修正は承認済み移行であり、借用・source位置・cleanupのoracleを緩めない。merge/releaseは別途判断する。
 

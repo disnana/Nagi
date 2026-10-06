@@ -8,10 +8,20 @@ fn explicit_move_corpus_reaches_native_execution() {
         .into_iter()
         .filter(|case| case.name == "explicit_move" || case.name == "explicit_move_low")
         .collect();
-    assert_eq!(cases.len(), 2, "High/handwritten Low move corpus must be registered");
+    assert_eq!(
+        cases.len(),
+        2,
+        "High/handwritten Low move corpus must be registered"
+    );
     if let Err(failure) = support::run_cases(&cases) {
         let artifact = support::save_failure(&support::failure_case(&failure), &failure);
-        panic!("{} stage={}\n{}\nartifact={}", failure.name, failure.stage, failure.diagnostic, artifact.display());
+        panic!(
+            "{} stage={}\n{}\nartifact={}",
+            failure.name,
+            failure.stage,
+            failure.diagnostic,
+            artifact.display()
+        );
     }
 }
 

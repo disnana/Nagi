@@ -1,0 +1,19 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-boundary-foundation/runtime)
+    Finished `test` profile [unoptimized] target(s) in 6.89s
+     Running unittests src/lib.rs (/tmp/nagi-container-flow-target/debug/deps/nagi_runtime-31f33a377cbf1a2a)
+
+running 1 test
+
+thread 'sqlite_prototype::acquire_tests::acquire_absolute_budget_survives_logical_wait_to_native_fence' (1313494) panicked at runtime/src/sqlite_prototype/acquire_tests.rs:265:5:
+original absolute budget must already be expired at native fence
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test sqlite_prototype::acquire_tests::acquire_absolute_budget_survives_logical_wait_to_native_fence ... FAILED
+
+failures:
+
+failures:
+    sqlite_prototype::acquire_tests::acquire_absolute_budget_survives_logical_wait_to_native_fence
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 188 filtered out; finished in 3.21s
+
+error: test failed, to rerun pass `-p nagi-runtime --lib`

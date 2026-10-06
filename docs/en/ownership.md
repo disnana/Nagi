@@ -20,7 +20,7 @@ Uncommenting `print(name)` makes `check` reject use after move. If the function 
 
 ## Assignment and explicit move
 
-The following is the adopted migration, under implementation and not yet released. Python assignment keeps another reference to the same value. Nagi uses ordinary assignment for Copy values, such as numbers and bools. To transfer an existing non-Copy local, use `move`; ordinary `destination = name` will be rejected.
+The explicit move and assignment rules below are implemented on the work branch and are unreleased. An installed release may not support them. Python assignment keeps another reference to the same value. Nagi uses ordinary assignment for Copy values, such as numbers and bools. To transfer an existing non-Copy local, use `move`; ordinary `destination = name` is rejected.
 
 ```nagi
 from std.ownership import move
@@ -36,13 +36,13 @@ def main():
     print(name)
 ```
 
-Expected output: `4`, `Nagi`, `new`. `destination = move(name)` transfers the string and cleanup responsibility. It does not clone, allocate, or add a shared owner. Reading `name` before its reassignment is rejected; giving it a new value allows reuse. To keep an independent string, use `destination = copy(view(name))`. To read without owning, use `view(name)`; to keep shared ownership, use `share` and `clone_shared`.
+Output: `4`, `Nagi`, `new`. `destination = move(name)` transfers the string and cleanup responsibility. The move operation itself does not clone, allocate, or add a shared owner. Reading `name` before its reassignment is rejected; giving it a new value allows reuse. To keep an independent string, use `destination = copy(view(name))`. To read without owning, use `view(name)`; to keep shared ownership, use `share` and `clone_shared`.
 
-Fresh construction, including `name = "Nagi"` and `a = User(...)`, needs no move annotation. This change covers a bare non-Copy local RHS in a declaration, annotated assignment, or reassignment, including parentheses. Arguments, returns, field extraction, `try`, and `match` retain their existing consumption rules. `move(name)` may also be passed or returned, without bypassing borrow restrictions.
+Fresh construction, including `name = "Nagi"` and `a = User(...)`, needs no move annotation. This change covers a bare owned non-Copy local RHS in a declaration, annotated assignment, or reassignment, including parentheses. Arguments, returns, field/index extraction, `try`, and `match` retain their existing consumption rules. `move(name)` may also be passed or returned, without bypassing borrow restrictions.
 
 Copy rules are unchanged: views, function values (including supported local async function aliases), UUIDs, timestamps, and classes/enums/nullable/owned values whose contents are Copy. Result and shared remain non-Copy even with Copy payloads. A copied view still requires its owner to remain valid; copying a function value does not allow storing its Future. See [types](types.md), [async](async.md), and [design decisions](../../DESIGN.en.md).
 
-`move` is imported from `std.ownership`, accepts one inferred argument, and does not accept explicit type arguments. Qualified and aliased imports work normally. User functions named `move` keep their own meaning. Moving from borrowed/shared data is subject to the existing ownership rules.
+`move` is imported from `std.ownership`, accepts one inferred argument, and does not accept explicit type arguments. Use `ownership.move(name)` after `import std.ownership as ownership`, or `transfer(name)` after `from std.ownership import move as transfer`. User functions named `move` keep their own meaning. Standard operations are not first-class function values. Non-Copy fields cannot be taken from borrowed/shared parents. Futures and nested Futures cannot be inputs; `move(await operation(...))` is allowed when the awaited result type is supported.
 
 ## Retain the same value in several places
 

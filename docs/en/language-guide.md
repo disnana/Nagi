@@ -153,6 +153,19 @@ Output: `4`, `4`, `Nagi`, `Nagi`. `copy(view(name))` creates a separate owned st
 
 Passing a string or list as an owned argument to a user-defined function gives the value away. This is called a **move**.
 
+To transfer a string to another local, make the operation explicit. This assignment rule is implemented on the work branch and is unreleased:
+
+```nagi
+from std.ownership import move
+
+def main():
+    name = "Nagi"
+    destination = move(name)
+    print(destination)
+```
+
+Output: `Nagi`. Bare `destination = name` is rejected for an owned non-Copy local, and `name` is unavailable after `move(name)`. To keep reading the original, create a separate value with `copy(view(name))`. Copy values such as numbers and freshly constructed values use ordinary assignment; existing argument, return, and field/index rules are unchanged. See [assignment and explicit move](ownership.md#assignment-and-explicit-move) for import aliases and the exact scope.
+
 This complete program intentionally fails `check`:
 
 ```nagi

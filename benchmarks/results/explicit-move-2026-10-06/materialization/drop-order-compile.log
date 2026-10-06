@@ -1,0 +1,20 @@
+warning: variable `old` is assigned to, but never used
+ --> /tmp/nagi-explicit-move-proof/materialization/drop-order.rs:9:14
+  |
+9 | fn rhs(){let mut old=marker(2);let source=marker(3);old=std::convert::identity(source);EVENTS.lock().unwrap().push(300);}
+  |              ^^^^^^^
+  |
+  = note: consider using `_old` instead
+  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `old` is never read
+ --> /tmp/nagi-explicit-move-proof/materialization/drop-order.rs:9:53
+  |
+9 | fn rhs(){let mut old=marker(2);let source=marker(3);old=std::convert::identity(source);EVENTS.lock().unwrap().push(300);}
+  |                                                     ^^^
+  |
+  = help: maybe it is overwritten before being read?
+  = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: 2 warnings emitted
+

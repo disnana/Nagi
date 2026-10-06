@@ -12,11 +12,39 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{mpsc, oneshot, Notify};
+use tokio::time::Instant;
 
 const WATCHDOG: Duration = Duration::from_secs(10);
 type NativePool = managed::Pool<NativeManager>;
 type Checkout = managed::Object<NativeManager>;
 type ReadyReply = Arc<Mutex<Option<oneshot::Sender<Result<(), Failure>>>>>;
+
+tokio::task_local! {
+    // Manager.createの署名に取得引数がないため、stock getのpoll中だけ設定する。
+    static CURRENT_ACQUIRE_BUDGET: AcquireBudget;
+}
+
+// private一取得の不変予算。Immediateは期限切れDeadlineとは別に扱う。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum AcquireBudget {
+    Immediate,
+    Deadline(Instant),
+}
+impl AcquireBudget {
+    pub fn after_at(now: Instant, duration: Duration) -> Option<Self> {
+        if duration.is_zero() {
+            Some(Self::Immediate)
+        } else {
+            now.checked_add(duration).map(Self::Deadline)
+        }
+    }
+    pub fn remaining_at(self, now: Instant) -> Duration {
+        match self {
+            Self::Immediate => Duration::ZERO,
+            Self::Deadline(deadline) => deadline.saturating_duration_since(now),
+        }
+    }
+}
 
 #[derive(Default)]
 pub(super) struct AdapterSeams {
@@ -360,6 +388,9 @@ impl Manager for NativeManager {
     type Type = WorkerHandle;
     type Error = Failure;
     async fn create(&self) -> Result<WorkerHandle, Failure> {
+        // 最初のpollで取得ごとの値をcopyし、同じ絶対期限を全native待機へ使う。
+        // scopeなしは従来のprivate begin/checkout比較用。公開defaultではない。
+        let budget = CURRENT_ACQUIRE_BUDGET.try_with(|budget| *budget).ok();
         let state = Arc::new(State::default());
         let ordinal = loop {
             let changed = self.ledger.changed.notified();
@@ -377,9 +408,26 @@ impl Manager for NativeManager {
                         "create after close",
                     ));
                 }
+                // finiteは新native登録前に失効を確認。Immediateの空き判定と区別する。
+                if let Some(AcquireBudget::Deadline(deadline)) = budget {
+                    if Instant::now() >= deadline {
+                        return Err(Failure::primary(
+                            Kind::AcquireTimeout,
+                            Outcome::NotApplicable,
+                            "native slot reservation deadline expired",
+                        ));
+                    }
+                }
                 // starting/healthy/取消/detachedを含むnative容量の終了fence。
                 // slotの選択/待機順序/公平性はstock deadpoolが引き続き所有する。
                 if records.workers.len() >= self.capacity {
+                    if matches!(budget, Some(AcquireBudget::Immediate)) {
+                        return Err(Failure::primary(
+                            Kind::AcquireTimeout,
+                            Outcome::NotApplicable,
+                            "native slot is not immediately available",
+                        ));
+                    }
                     None
                 } else {
                     // closing確認とstarting/join責任の登録はspawn前の同じcritical section。
@@ -392,8 +440,26 @@ impl Manager for NativeManager {
             if let Some(ordinal) = registered {
                 break ordinal;
             }
-            changed.await;
+            match budget {
+                Some(AcquireBudget::Deadline(deadline)) => {
+                    if tokio::time::timeout_at(deadline, changed).await.is_err() {
+                        return Err(self.ledger.error().unwrap_or_else(|| {
+                            Failure::primary(
+                                Kind::AcquireTimeout,
+                                Outcome::NotApplicable,
+                                "native slot reservation timed out",
+                            )
+                        }));
+                    }
+                }
+                // Immediateは上の同lock容量判定で登録かErrへ進み、ここでは待たない。
+                Some(AcquireBudget::Immediate) => {
+                    unreachable!("immediate registration cannot wait")
+                }
+                None => changed.await,
+            }
         };
+        // 登録後はstartup/ready/BEGINへ取得timerを持ち越さない。
         self.ledger.changed.notify_waiters();
         let (sender, receiver) = mpsc::channel(1);
         let startup = Startup {
@@ -563,18 +629,50 @@ impl Adapter {
         self.0.pool.resize(0);
     }
     pub async fn begin(&self) -> Result<Tx, Failure> {
+        // 従来のprivate無期限比較入口。公開Options/defaultの保証ではない。
+        self.begin_inner(None).await
+    }
+    pub async fn begin_with_budget(&self, budget: AcquireBudget) -> Result<Tx, Failure> {
+        self.begin_inner(Some(budget)).await
+    }
+    fn get_failure(&self, error: managed::PoolError<Failure>) -> Failure {
+        self.0.ledger.error().unwrap_or_else(|| match error {
+            managed::PoolError::Timeout(managed::TimeoutType::Wait) => Failure::primary(
+                Kind::AcquireTimeout,
+                Outcome::NotApplicable,
+                "logical slot reservation timed out",
+            ),
+            managed::PoolError::Backend(error) => error,
+            managed::PoolError::Closed => {
+                Failure::primary(Kind::Closed, Outcome::NotApplicable, "deadpool closed")
+            }
+            error => Failure::primary(
+                Kind::Worker,
+                Outcome::NotApplicable,
+                format!("deadpool get: {error:?}"),
+            ),
+        })
+    }
+    async fn begin_inner(&self, budget: Option<AcquireBudget>) -> Result<Tx, Failure> {
         if let Some(error) = self.0.ledger.error() {
             return Err(error);
         }
-        let object = self.0.pool.get().await.map_err(|error| {
-            self.0.ledger.error().unwrap_or_else(|| {
-                Failure::primary(
-                    Kind::Worker,
-                    Outcome::NotApplicable,
-                    format!("deadpool get: {error:?}"),
-                )
-            })
-        })?;
+        let object = match budget {
+            Some(budget) => {
+                let timeouts = managed::Timeouts {
+                    wait: Some(budget.remaining_at(Instant::now())),
+                    create: None,
+                    recycle: None,
+                };
+                // scopeはstock取得Futureだけ。task-localはpoll/Drop後に元の値へ戻る。
+                // native threadやcheckout後のsession admission/返信には渡さない。
+                CURRENT_ACQUIRE_BUDGET
+                    .scope(budget, self.0.pool.timeout_get(&timeouts))
+                    .await
+            }
+            None => self.0.pool.get().await,
+        }
+        .map_err(|error| self.get_failure(error))?;
         if self.0.seams.applies(object.ordinal) {
             if let Some(gate) = &self.0.seams.checkout {
                 gate.pause().await;
@@ -651,6 +749,7 @@ impl Adapter {
         Ok(())
     }
     pub async fn checkout_without_begin(&self) -> Result<HeldCheckout, Failure> {
+        // privateの無期限pool所有権fixture。公開取得入口ではない。
         let object = self
             .0
             .pool

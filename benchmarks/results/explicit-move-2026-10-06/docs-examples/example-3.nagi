@@ -1,0 +1,8 @@
+from std.ownership import move
+
+def main():
+    source = "Nagi"
+    destination = move(source)
+    print(destination)
+    source = "new"
+    print(source)

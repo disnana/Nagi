@@ -1,0 +1,209 @@
+   Compiling nagi-runtime v0.1.10 (/workspace/Nagi-boundary-foundation/runtime)
+error[E0432]: unresolved import `super::adapter::AcquireBudget`
+ --> runtime/src/sqlite_prototype/acquire_tests.rs:2:22
+  |
+2 | use super::adapter::{AcquireBudget, Adapter, AdapterSeams};
+  |                      ^^^^^^^^^^^^^ no `AcquireBudget` in `sqlite_prototype::adapter`
+
+error[E0432]: unresolved import `super::adapter::AcquireBudget`
+ --> runtime/src/sqlite_prototype/comparison.rs:3:15
+  |
+3 |     adapter::{AcquireBudget, Adapter, AdapterSeams},
+  |               ^^^^^^^^^^^^^ no `AcquireBudget` in `sqlite_prototype::adapter`
+
+error[E0599]: no method named `begin_with_budget` found for reference `&Adapter` in the current scope
+  --> runtime/src/sqlite_prototype/acquire_tests.rs:31:13
+   |
+31 |     adapter.begin_with_budget(budget).await
+   |             ^^^^^^^^^^^^^^^^^ method not found in `&Adapter`
+
+error[E0599]: no variant, associated function, or constant named `AcquireTimeout` found for enum `session::Kind` in the current scope
+  --> runtime/src/sqlite_prototype/acquire_tests.rs:76:34
+   |
+76 |     assert_eq!(error.kind, Kind::AcquireTimeout);
+   |                                  ^^^^^^^^^^^^^^ variant, associated function, or constant not found in `session::Kind`
+   |
+  ::: runtime/src/sqlite_prototype/session.rs:25:1
+   |
+25 | pub(super) enum Kind {
+   | -------------------- variant, associated function, or constant `AcquireTimeout` not found for this enum
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:153:38
+    |
+153 |         expected_error(watch(adapter.begin_with_budget(AcquireBudget::Immediate)).await).await;
+    |                                      ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:157:37
+    |
+157 |         successful_tx(watch(adapter.begin_with_budget(AcquireBudget::Immediate)).await).await;
+    |                                     ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:186:38
+    |
+186 |         expected_error(watch(adapter.begin_with_budget(AcquireBudget::Immediate)).await).await;
+    |                                      ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:188:39
+    |
+188 |     let mut finite = Box::pin(adapter.begin_with_budget(AcquireBudget::Deadline(
+    |                               --------^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:239:36
+    |
+239 |     let mut get = Box::pin(adapter.begin_with_budget(AcquireBudget::Deadline(deadline)));
+    |                                    ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:272:38
+    |
+272 |         expected_error(watch(adapter.begin_with_budget(AcquireBudget::Deadline(expired))).await)
+    |                                      ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:276:37
+    |
+276 |         successful_tx(watch(adapter.begin_with_budget(AcquireBudget::Immediate)).await).await;
+    |                                     ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:293:37
+    |
+293 |     let mut long = Box::pin(adapter.begin_with_budget(AcquireBudget::Deadline(
+    |                             --------^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:299:46
+    |
+299 |     let short = expected_error(watch(adapter.begin_with_budget(expired)).await).await;
+    |                                              ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:334:36
+    |
+334 |     let mut get = Box::pin(adapter.begin_with_budget(AcquireBudget::Deadline(deadline)));
+    |                                    ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:380:53
+    |
+380 |     let closed_error = expected_error(watch(adapter.begin_with_budget(expired)).await).await;
+    |                                                     ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:395:38
+    |
+395 |         expected_error(watch(adapter.begin_with_budget(AcquireBudget::Immediate)).await).await;
+    |                                      ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/acquire_tests.rs:396:54
+    |
+396 |     let failure_error = expected_error(watch(adapter.begin_with_budget(expired)).await).await;
+    |                                                      ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/comparison.rs:105:63
+    |
+105 |     let bounded_future_bytes = std::mem::size_of_val(&bounded.begin_with_budget(budget()));
+    |                                                               ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/comparison.rs:108:35
+    |
+108 |         native_round_trip(bounded.begin_with_budget(budget()).await.unwrap()).await;
+    |                                   ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+error[E0599]: no method named `begin_with_budget` found for struct `Adapter` in the current scope
+   --> runtime/src/sqlite_prototype/comparison.rs:119:47
+    |
+119 |                     native_round_trip(bounded.begin_with_budget(budget()).await.unwrap()).await;
+    |                                               ^^^^^^^^^^^^^^^^^ method not found in `Adapter`
+    |
+   ::: runtime/src/sqlite_prototype/adapter.rs:522:1
+    |
+522 | pub(super) struct Adapter(Arc<Inner>);
+    | ------------------------- method `begin_with_budget` not found for this struct
+
+Some errors have detailed explanations: E0432, E0599.
+For more information about an error, try `rustc --explain E0432`.
+error: could not compile `nagi-runtime` (lib test) due to 20 previous errors

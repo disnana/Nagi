@@ -15,6 +15,7 @@ Use `.nagi` for application code and four spaces for blocks. Top level contains 
 | Absent / present value | `missing: i64? = None`, `present: i64? = some(42)` |
 | Read a string without moving it | Parameter `text: view[str]`, call with `view(text)` |
 | Read an integer list | Parameter `values: view[i64]`, call with `view(values)` |
+| Transfer an existing owned non-Copy local | `from std.ownership import move`, then `destination = move(source)` (unreleased repository compiler) |
 | Own a separate string/list copy | `copy(view(value))` |
 | Share a value | `share(value)`; duplicate the reference with `clone_shared` |
 
@@ -24,7 +25,11 @@ For list iteration, numeric elements copy and non-Copy elements borrow. Read a r
 
 For shared state, borrow a non-Copy field with `view(state.label)` rather than moving it out. `shared[T]` does not establish that T is safe across threads; Rust checks the required `Send`/`Sync` traits at build time.
 
-Current assignment of non-Copy owned values also moves them implicitly. A future explicit-operation assignment rule, spawn result handles, and shared actor messages are design directions, not supported syntax. Use the current [ownership](../docs/en/ownership.md) and [async](../docs/en/async.md) reference when generating code; [ADR 011](../docs/internal/adr/011-language-behavior-and-docs.md) records the migration work.
+The work branch implements unreleased `std.ownership.move`: import `move`, then use `destination = move(source)` to transfer an existing owned non-Copy local. Bare local RHS assignment is rejected, including declarations, annotations, reassignment, and parentheses. Fresh construction and existing argument/return/field/index/try/match consumption rules are unchanged; do not wrap every transfer.
+
+Copy policy is unchanged, including supported local async function aliases; shared and Result remain non-Copy even with Copy payloads. The operation evaluates its input once, preserving view origins and cleanup responsibility without cloning or allocating. Qualified/aliased imports use canonical identity; a user function named `move` is ordinary. One inferred argument is required; explicit type arguments and first-class standard operation values are unsupported. Futures/nested Futures remain unsupported; a supported awaited result can be moved. Borrowing restrictions still apply.
+
+Confirm the compiler version before assuming an installed release has these rules. Spawn result handles and shared actor messages remain future directions. See [ownership](../docs/en/ownership.md), [async](../docs/en/async.md), and [ADR 011](../docs/internal/adr/011-language-behavior-and-docs.md).
 
 ## Result and Option are values
 
@@ -89,7 +94,7 @@ from "models.nagi" import Item as SavedItem
 
 Paths are relative to the importing file. High imports High; Low imports Low. The aliased module exposes that file's own definitions. Definitions imported into it are not re-exported automatically. `models.Item` and `SavedItem` identify the same type; same-named classes in different files identify different types. Cycles are rejected.
 
-Only registered standard modules use unquoted imports: `std.http.server`, `std.actor`, and `std.result`. Module imports require an alias, for example `import std.result as result`. There is no general package discovery or arbitrary `import serde_json`; declare a Rust adapter for crates.
+Only registered standard modules use unquoted imports: `std.http.server`, `std.actor`, and `std.result`; the unreleased repository also registers `std.auth` and `std.ownership`. Module imports require an alias, for example `import std.result as result`. There is no general package discovery or arbitrary `import serde_json`; declare a Rust adapter for crates.
 
 ## Common generated-code corrections
 

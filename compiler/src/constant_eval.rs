@@ -224,6 +224,15 @@ fn evaluate(expr: &Expr, facts: &Facts) -> Result<Evaluation, String> {
                 .iter()
                 .map(|arg| evaluate(arg, facts))
                 .collect::<Result<Vec<_>, _>>()?;
+            if expr.resolution == Some(NameResolution::Standard) {
+                if let Some(operation) = crate::stdlib::operation(name) {
+                    if let crate::stdlib::ValueTransfer::WholeValue { argument } =
+                        crate::stdlib::operation_semantics(operation).value_transfer
+                    {
+                        return values.get(argument).copied().ok_or_else(|| internal(expr));
+                    }
+                }
+            }
             if name == "i64" && expr.resolution == Some(NameResolution::Builtin) {
                 if let [Evaluation::Known(Value::Integer(_, value))] = values.as_slice() {
                     let integer = IntegerType::of(ty).ok_or_else(|| internal(expr))?;

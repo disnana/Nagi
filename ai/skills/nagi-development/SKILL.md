@@ -11,7 +11,7 @@ Deliver readable application logic and a working executable. Prefer High (`.nagi
 
 1. Read the user's goal, repository instructions, the nearest `nagi.toml`, and the entry source plus relevant imports. Preserve existing project structure and dependency constraints.
 2. Run `nagic --version` and `nagic --help`. The accompanying repository guides describe compiler 0.1.10; confirm the installed compiler instead of assuming the VS Code extension's version is the language version.
-3. Pick a small working example or inspect current builtin signatures/tests before adding an unfamiliar API. Registered unquoted imports are `std.http.server`, `std.actor`, and `std.result`; Rust crates require an adapter, not a new arbitrary Nagi import. Roadmap proposals are not available APIs.
+3. Pick a small working example or inspect current builtin signatures/tests before adding an unfamiliar API. Registered unquoted imports include `std.http.server`, `std.actor`, and `std.result`; the unreleased repository adds `std.auth` and `std.ownership`. Confirm installed-compiler support; Rust crates require an adapter, not a new arbitrary Nagi import. Roadmap proposals are not available APIs.
 
 ## Implement a narrow, usable change
 
@@ -20,6 +20,8 @@ Annotate parameters and returned values. Represent records with classes, alterna
 Use `Result[T, E]` for expected failures: `ok(value)`, `fail(problem)`, or built-in `error("reason")`, which returns an Err containing an invalid Error. `try expression` propagates the same error type; use explicit conversion when E differs. Match both `Ok`/`Err` when recovering. This is not Python exception handling. Handle each Result deliberately, including Results assigned to locals.
 
 Pass read-only strings/lists as `view[str]`/`view[T]` and pass `view(owner)` at the call. Owned arguments move. Copy with `copy(view(owner))` only when the caller needs an independent value. To store a view, first save its owner: `text = "Nagi"`, then `borrowed = view(text)`; `borrowed = view("Nagi")` borrows a temporary and is rejected. Keep borrowed owners valid, and do not move non-Copy fields from shared state or borrowed list elements. Use ordinary owned types rather than unfinished `owned[T]` wrappers.
+
+In the unreleased repository compiler, import `move` from `std.ownership` and use `destination = move(source)` for a bare owned non-Copy local assignment; declarations, annotations, reassignment, and parentheses follow this rule. Fresh values and argument/return/field/index consumption keep their existing rules. Copy policy is unchanged, including supported local async function aliases; Result/shared remain non-Copy. Qualified imports and aliases use the canonical operation; user functions named `move` remain ordinary. The operation takes one inferred input, with no explicit type arguments, cloning, or allocation. It preserves nested view origins and cleanup responsibility, without allowing borrowed/shared field theft, Future/nested Future inputs, or first-class standard operation values. Confirm installed-release support before generating this syntax.
 
 Use plain functions and loops. Methods, inheritance, field assignment, tuples, dictionaries, comprehensions, lambdas, f-strings, string `+`, trailing commas, `elif`, `break`, `continue`, and `pass` are unsupported. Check exact builtin signatures instead of guessing Python or Rust syntax. Validate numeric and indexing limits before operations that can wrap or panic.
 

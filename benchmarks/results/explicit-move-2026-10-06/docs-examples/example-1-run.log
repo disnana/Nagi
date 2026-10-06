@@ -1,0 +1,5 @@
+Nagi
+     Locking 108 packages to latest compatible versions
+   Compiling nagi-example-1-e801063261ecad43 v0.1.0 (/tmp/nagi-explicit-move-proof/docs-examples-final/example-1-generated/.nagi/apps/nagi-example-1-e801063261ecad43/generations/.staging-g-15b7d2-18dbe800156c3103-0)
+    Finished `release` profile [optimized] target(s) in 0.24s
+native: /tmp/nagi-explicit-move-proof/docs-examples-final/example-1-generated/.nagi/apps/nagi-example-1-e801063261ecad43/generations/g-15b7d2-18dbe800156c3103-0/nagi-e801063261ecad43-g-15b7d2-18dbe800156c3103-0

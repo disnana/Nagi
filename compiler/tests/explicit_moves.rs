@@ -1,13 +1,34 @@
 // 承認済みの狭い所有代入移行。型・move・origin拒否と実生成Rustを別に観測する。
 #[path = "support/checked_emission.rs"]
 mod checked_emission;
-use nagic::{check, emit, parser, source};
+use nagic::{check, emit, source};
 use std::{
+    collections::HashSet,
     fs,
     path::PathBuf,
-    process::Command,
+    process::{Child, Command, Output, Stdio},
     sync::atomic::{AtomicU64, Ordering},
+    thread,
+    time::{Duration, Instant},
 };
+
+fn locked_packages(text: &str) -> HashSet<(String, String, Option<String>)> {
+    let lock: toml::Value = toml::from_str(text).unwrap();
+    lock["package"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|package| {
+            (
+                package["name"].as_str().unwrap().to_owned(),
+                package["version"].as_str().unwrap().to_owned(),
+                package
+                    .get("source")
+                    .map(|source| source.as_str().unwrap().to_owned()),
+            )
+        })
+        .collect()
+}
 
 struct Fixture(PathBuf);
 impl Fixture {
@@ -64,6 +85,11 @@ impl Fixture {
             .checked("saved.low")
             .expect("saved Low after High removal");
         assert_eq!(emit::low(&saved), emit::low(&independent));
+        // workspaceと同じ依存版から始め、fixture packageだけCargoに追記させる。
+        let repository = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let lock = fs::read_to_string(repository.parent().unwrap().join("Cargo.lock")).unwrap();
+        self.write("Cargo.lock", &lock);
+        let approved = locked_packages(&lock);
         for (name, program) in [
             ("high", program),
             ("saved-low", independent),
@@ -72,31 +98,89 @@ impl Fixture {
             let generated =
                 emit::rust(&checked_emission::seal(&program)).expect("sealed Rust emission");
             let rust = self.0.join(format!("{name}.rs"));
-            let binary = self
-                .0
-                .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
             fs::write(&rust, format!("{generated}\n{adapter}\n{assertions}")).unwrap();
-            let compiled =
-                Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
-                    .args([
-                        "--edition=2021",
-                        "--test",
-                        "-C",
-                        "panic=unwind",
-                        "-C",
-                        "debuginfo=0",
-                    ])
-                    .arg(&rust)
-                    .arg("-o")
-                    .arg(&binary)
-                    .output()
-                    .unwrap();
+            let package = self.0.file_name().unwrap().to_str().unwrap();
+            let runtime = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap()
+                .join("runtime");
+            // 実runtimeのserde等へリンクする。生成Rustそのものは書き換えない。
+            let runtime = toml::Value::String(runtime.to_str().unwrap().to_owned());
+            self.write("Cargo.toml", &format!(
+                "[package]\nname = \"{package}\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[lib]\npath = \"{name}.rs\"\n[dependencies]\nnagi-runtime = {{ path = {runtime} }}\n[profile.dev]\ndebug = 0\n[profile.test]\ndebug = 0\n"
+            ));
+            let mut build =
+                Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
+            build
+                .current_dir(&self.0)
+                .args([
+                    "test",
+                    "--offline",
+                    "--manifest-path",
+                    "Cargo.toml",
+                    "--lib",
+                    "--no-run",
+                    "--message-format=json",
+                ])
+                .env("CARGO_PROFILE_DEV_DEBUG", "0")
+                .env("CARGO_PROFILE_TEST_DEBUG", "0")
+                .env("CARGO_INCREMENTAL", "0");
+            // 親が使用中のwarm cacheを使い、新しいfixture targetを作らない。
+            let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
+                .or_else(|| std::env::var_os("CARGO_TARGET_DIR"))
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .parent()
+                        .unwrap()
+                        .join("target")
+                });
+            let target = if target.is_absolute() {
+                target
+            } else {
+                std::env::current_dir().unwrap().join(target)
+            };
+            build.env("CARGO_TARGET_DIR", target);
+            let compiled = self.run_bounded(
+                &mut build,
+                &format!("{name}-build"),
+                Duration::from_secs(180),
+            );
             assert!(
                 compiled.status.success(),
-                "{name} backend build:\n{}\n{generated}",
+                "{name} backend Cargo build:\n{}{}\n{generated}",
+                String::from_utf8_lossy(&compiled.stdout),
                 String::from_utf8_lossy(&compiled.stderr)
             );
-            let ran = Command::new(&binary).arg("--nocapture").output().unwrap();
+            for dependency in
+                locked_packages(&fs::read_to_string(self.0.join("Cargo.lock")).unwrap())
+            {
+                if dependency.0 == package {
+                    assert_eq!(dependency.1, "0.0.0");
+                    assert_eq!(dependency.2, None);
+                } else {
+                    assert!(
+                        approved.contains(&dependency),
+                        "fixture changed locked dependency: {dependency:?}"
+                    );
+                }
+            }
+            let binary = String::from_utf8_lossy(&compiled.stdout)
+                .lines()
+                .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+                .find_map(|event| {
+                    (event["reason"] == "compiler-artifact"
+                        && event["target"]["name"] == package.replace('-', "_")
+                        && event["profile"]["test"] == true)
+                        .then(|| event["executable"].as_str().map(PathBuf::from))
+                        .flatten()
+                })
+                .expect("Cargo must report this fixture's actual test executable");
+            let ran = self.run_bounded(
+                Command::new(&binary).arg("--nocapture"),
+                &format!("{name}-run"),
+                Duration::from_secs(15),
+            );
             assert!(
                 ran.status.success(),
                 "{name} backend run:\n{}{}",
@@ -117,6 +201,47 @@ impl Fixture {
                 )
                 .unwrap();
             }
+        }
+    }
+    fn run_bounded(&self, command: &mut Command, label: &str, timeout: Duration) -> Output {
+        // ファイル捕捉で大量のcompiler診断によるpipe満杯を避ける。
+        let stdout = self.0.join(format!("{label}.stdout"));
+        let stderr = self.0.join(format!("{label}.stderr"));
+        command
+            .stdout(Stdio::from(fs::File::create(&stdout).unwrap()))
+            .stderr(Stdio::from(fs::File::create(&stderr).unwrap()));
+        struct Reap(Child);
+        impl Drop for Reap {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+        let mut child = Reap(
+            command
+                .spawn()
+                .unwrap_or_else(|error| panic!("{label} spawn: {error}")),
+        );
+        let deadline = Instant::now() + timeout;
+        let status = loop {
+            if let Some(status) = child.0.try_wait().unwrap() {
+                break status;
+            }
+            if Instant::now() >= deadline {
+                let _ = child.0.kill();
+                child.0.wait().unwrap();
+                panic!(
+                    "{label} timed out: stdout={} stderr={}",
+                    fs::read_to_string(&stdout).unwrap(),
+                    fs::read_to_string(&stderr).unwrap()
+                );
+            }
+            thread::sleep(Duration::from_millis(5));
+        };
+        Output {
+            status,
+            stdout: fs::read(stdout).unwrap(),
+            stderr: fs::read(stderr).unwrap(),
         }
     }
 }
@@ -214,7 +339,7 @@ fn move_operation_rejects_arity_type_arguments_and_future_transfer() {
         let error = fixture.checked(name).expect_err("move must not hide a borrowed Future from spawn");
         let line = if name.ends_with("nagi") { 7 } else { 6 };
         assert!(error.starts_with(&format!("line {line}:")), "{error}");
-        assert!(error.contains("Future") || error.contains("async呼び出し"), "{error}");
+        assert!(error.contains("非同期処理の戻り値"), "{error}");
     }
 }
 
@@ -236,7 +361,7 @@ fn explicit_move_preserves_use_after_move_borrow_partial_move_and_loop_checks() 
         assert!(high_error.starts_with(&format!("line {line}:")) && high_error.contains(reason), "{high_error}");
         fixture.write("bad.low", low);
         let low_error = fixture.checked("bad.low").expect_err(low);
-        let low_line = if high.contains("class Packet") { line - 1 } else if high.contains("if True") { line - 1 } else { line };
+        let low_line = if high.contains("class Packet") || high.contains("if True") { line - 1 } else { line };
         assert!(low_error.starts_with(&format!("line {low_line}:")) && low_error.contains(reason), "{low_error}");
     }
     fixture.reject("from std.ownership import move\ndef bad(values: List[str]):\n    for value in values:\n        moved = move(value)\n", "from std.ownership import move;\nfn bad(values: List[str]) -> unit {\n    for value in values {\n        let moved: str = move(value);\n    }\n}\n", 4, "借用");
@@ -264,6 +389,64 @@ fn identity_moves_preserve_rhs_failure_drop_order_and_async_cancellation() {
         LIFE_ADAPTER,
         LIFE_ASSERTIONS,
     );
+}
+
+#[test]
+fn move_keeps_typed_constant_failures_and_profile_dependent_overflow() {
+    let fixture = Fixture::new();
+    for (import, operation) in [
+        ("from std.ownership import move", "move"),
+        ("from std.ownership import move as transfer", "transfer"),
+    ] {
+        for ty in ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64"] {
+            for operator in ["/", "%"] {
+                for zero in ["0", "(1 - 1)"] {
+                    fixture.reject(
+                        &format!("{import}\ndef calculate(input: {ty}) -> {ty}:\n    return input {operator} {operation}({zero})\n"),
+                        &format!("{import};\nfn calculate(input: {ty}) -> {ty} {{\n    return input {operator} {operation}({zero});\n}}\n"),
+                        3, "E_CONST_ZERO_DIVISOR",
+                    );
+                }
+                fixture.reject(
+                    &format!("{import}\ndef calculate(input: {ty}) -> {ty}:\n    zero: {ty} = {operation}(2 - 2)\n    return input {operator} zero\n"),
+                    &format!("{import};\nfn calculate(input: {ty}) -> {ty} {{\n    let zero: {ty} = {operation}(2 - 2);\n    return input {operator} zero;\n}}\n"),
+                    4, "E_CONST_ZERO_DIVISOR",
+                );
+            }
+        }
+        for (ty, minimum) in [
+            ("i8", "-128"),
+            ("i16", "-32768"),
+            ("i32", "-2147483648"),
+            ("i64", "-9223372036854775808"),
+        ] {
+            for operator in ["/", "%"] {
+                fixture.reject(
+                    &format!("{import}\ndef calculate() -> {ty}:\n    return {operation}({minimum}) {operator} {operation}(-1)\n"),
+                    &format!("{import};\nfn calculate() -> {ty} {{\n    return {operation}({minimum}) {operator} {operation}(-1);\n}}\n"),
+                    3, "E_CONST_SIGNED_DIV_OVERFLOW",
+                );
+            }
+        }
+        // debug/release依存の中間値はKnown(0)へ変えず、現行受理を維持する。
+        for (ty, maximum) in [
+            ("i8", "127"),
+            ("i16", "32767"),
+            ("i32", "2147483647"),
+            ("i64", "9223372036854775807"),
+            ("u8", "255"),
+            ("u16", "65535"),
+            ("u32", "4294967295"),
+            ("u64", "18446744073709551615"),
+        ] {
+            fixture.write("profile.nagi", &format!("{import}\ndef calculate() -> {ty}:\n    divisor: {ty} = {operation}({maximum} + 1)\n    return 1 / {operation}(divisor)\n"));
+            let high = fixture.checked("profile.nagi").unwrap();
+            fixture.write("profile.low", &emit::low(&high));
+            fixture.checked("profile.low").unwrap();
+            fixture.write("handwritten.low", &format!("{import};\nfn calculate() -> {ty} {{\n    let divisor: {ty} = {operation}({maximum} + 1);\n    return 1 / {operation}(divisor);\n}}\n"));
+            fixture.checked("handwritten.low").unwrap();
+        }
+    }
 }
 
 const NORMAL_HIGH: &str = r#"from std.ownership import move as transfer
@@ -320,7 +503,7 @@ def field(value: Packet) -> str:
 def fresh(value: str) -> Packet:
     return Packet(text=value)
 def argument(value: str) -> str:
-    return text(value)
+    return text(transfer(value))
 def views(value: List[view[str]]) -> List[view[str]]:
     moved = transfer(value)
     return moved
@@ -373,7 +556,7 @@ fn shared(value: shared[str]) -> shared[str] { let duplicate = clone_shared(valu
 fn result(value: Result[str, i64]) -> Result[str, i64] { let moved: Result[str, i64] = transfer(value); return moved; }
 fn field(value: Packet) -> str { return value.text; }
 fn fresh(value: str) -> Packet { return Packet(text=value); }
-fn argument(value: str) -> str { return text(value); }
+fn argument(value: str) -> str { return text(transfer(value)); }
 fn views(value: List[view[str]]) -> List[view[str]] { let moved: List[view[str]] = transfer(value); return moved; }
 fn optional_views(value: List[view[str]]?) -> List[view[str]]? { let moved: List[view[str]]? = transfer(value); return moved; }
 fn result_views(value: Result[List[view[str]], i64]) -> Result[List[view[str]], i64] { let moved: Result[List[view[str]], i64] = transfer(value); return moved; }
@@ -433,6 +616,8 @@ class Marker:
 extern def marker(id: i64) -> Marker
 @rust("native::capture")
 extern def capture(id: i64)
+@rust("native::read")
+extern def read(part: view[str])
 @rust("native::step")
 extern def step() -> Result[Marker, i64]
 @rust("native::crash")
@@ -444,6 +629,12 @@ def replace():
     source = marker(2)
     destination = move(source)
     capture(3)
+def borrowed_observation():
+    values = [marker(12)]
+    count = len(move(values))
+    capture(13)
+    read(move(view("Nagi")))
+    read(move(move(view("Nagi"))))
 def rhs_error() -> Result[unit, i64]:
     destination = marker(4)
     replacement = step()
@@ -469,16 +660,30 @@ async def suspended(part: view[str]) -> List[view[str]]:
 "#;
 const LIFE_LOW: &str = r#"from std.ownership import move;
 record Marker { id: i64; text: str; }
-@rust("native::marker") extern fn marker(id: i64) -> Marker;
-@rust("native::capture") extern fn capture(id: i64) -> unit;
-@rust("native::step") extern fn step() -> Result[Marker, i64];
-@rust("native::crash") extern fn crash() -> Marker;
-@rust("native::pause") extern async fn pause() -> unit;
+@rust("native::marker")
+extern fn marker(id: i64) -> Marker;
+@rust("native::capture")
+extern fn capture(id: i64) -> unit;
+@rust("native::read")
+extern fn read(part: view[str]) -> unit;
+@rust("native::step")
+extern fn step() -> Result[Marker, i64];
+@rust("native::crash")
+extern fn crash() -> Marker;
+@rust("native::pause")
+extern async fn pause() -> unit;
 fn replace() -> unit {
     let destination: Marker = marker(1);
     let source: Marker = marker(2);
     destination = move(source);
     capture(3);
+}
+fn borrowed_observation() -> unit {
+    let values: List[Marker] = [marker(12)];
+    let count: i64 = len(move(values));
+    capture(13);
+    read(move(view("Nagi")));
+    read(move(move(view("Nagi"))));
 }
 fn rhs_error() -> Result[unit, i64] {
     let destination: Marker = marker(4);
@@ -521,6 +726,7 @@ impl Drop for Marker {
 mod native {
     pub fn marker(id: i64) -> super::Marker { super::record(100 + id); super::Marker { id, text: String::from("owned") } }
     pub fn capture(id: i64) { super::record(300 + id); }
+    pub fn read(part: &str) { assert_eq!(part, "Nagi"); super::record(314); }
     pub fn step() -> Result<super::Marker, i64> { super::record(400); Err(9) }
     pub fn crash() -> super::Marker { super::record(500); panic!("controlled RHS panic"); }
     pub async fn pause() { super::record(600); std::future::pending::<()>().await; }
@@ -531,6 +737,8 @@ const LIFE_ASSERTIONS: &str = r#"
 fn transfer_failure_and_future_cleanup() {
     replace();
     assert_eq!(history(), vec![101, 102, 201, 303, 202]);
+    borrowed_observation();
+    assert_eq!(history(), vec![112, 212, 313, 314, 314], "moved Vec must retire after borrowed len, before capture");
     assert_eq!(rhs_error(), Err(9));
     assert_eq!(history(), vec![104, 400, 204]);
     assert!(std::panic::catch_unwind(rhs_panic).is_err());
@@ -550,3 +758,60 @@ fn transfer_failure_and_future_cleanup() {
     assert_eq!(owner, "caller-owned");
 }
 "#;
+
+#[test]
+fn identity_move_materializes_copy_values_and_keeps_bare_place_comparison_loans() {
+    let fixture = Fixture::new();
+    let imports = "from std.ownership import move\nfrom std.ownership import move as transfer\nimport std.ownership as ownership\n";
+    // 裸placeのPartialEq借用は維持。moveはby-valueなのでCopy入力から新temporaryを作る。
+    // 旧9群は括弧だけの誤生成を前提にmove入力も借用placeと期待していた。
+    for ty in ["i64?", "unit"] {
+        let high_field = format!("{imports}class Pair:\n    number: {ty}\n    text: str\ndef take(pair: Pair) -> {ty}:\n    return pair.number\ndef compare(pair: Pair) -> bool:\n    return pair.number == take(pair)\n");
+        let low_field = format!("{imports}record Pair {{ number: {ty}; text: str; }}\nfn take(pair: Pair) -> {ty} {{ return pair.number; }}\nfn compare(pair: Pair) -> bool {{\n    return pair.number == take(pair);\n}}\n");
+        let high_index = format!("{imports}def take(values: List[{ty}]) -> {ty}:\n    return values[0]\ndef compare(values: List[{ty}]) -> bool:\n    return values[0] == take(values)\n");
+        let low_index = format!("{imports}fn take(values: List[{ty}]) -> {ty} {{ return values[0]; }}\nfn compare(values: List[{ty}]) -> bool {{\n    return values[0] == take(values);\n}}\n");
+        for (name, input, line) in [
+            ("field.nagi", &high_field, 10),
+            ("field.low", &low_field, 7),
+            ("index.nagi", &high_index, 7),
+            ("index.low", &low_index, 6),
+        ] {
+            fixture.write(name, input);
+            let error = fixture.checked(name).expect_err(input);
+            assert!(
+                error.starts_with(&format!("line {line}:")),
+                "{error}\n{input}"
+            );
+            assert!(error.contains("同じ式で先に参照"), "{error}\n{input}");
+        }
+    }
+    let mut high = imports.to_owned();
+    let mut low = imports.to_owned();
+    let mut assertions =
+        "#[test] fn copied_comparison_values_outlive_original_places() {\n".to_owned();
+    for (type_index, (ty, value)) in [("i64?", "Some(7)"), ("unit", "()"), ("i64", "7")]
+        .iter()
+        .enumerate()
+    {
+        let pair = format!("Pair{type_index}");
+        high.push_str(&format!("class {pair}:\n    number: {ty}\n    text: str\ndef take_field{type_index}(pair: {pair}) -> {ty}:\n    return pair.number\ndef take_index{type_index}(values: List[{ty}]) -> {ty}:\n    return values[0]\n"));
+        low.push_str(&format!("record {pair} {{ number: {ty}; text: str; }}\nfn take_field{type_index}(pair: {pair}) -> {ty} {{ return pair.number; }}\nfn take_index{type_index}(values: List[{ty}]) -> {ty} {{ return values[0]; }}\n"));
+        for (wrapper_index, wrapper) in [
+            "move({place})",
+            "transfer({place})",
+            "ownership.move(move({place}))",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let field = wrapper.replace("{place}", "pair.number");
+            let index = wrapper.replace("{place}", "values[0]");
+            let suffix = format!("{type_index}_{wrapper_index}");
+            high.push_str(&format!("def compare_field{suffix}(pair: {pair}) -> bool:\n    return {field} == take_field{type_index}(pair)\ndef compare_index{suffix}(values: List[{ty}]) -> bool:\n    return {index} == take_index{type_index}(values)\n"));
+            low.push_str(&format!("fn compare_field{suffix}(pair: {pair}) -> bool {{ return {field} == take_field{type_index}(pair); }}\nfn compare_index{suffix}(values: List[{ty}]) -> bool {{ return {index} == take_index{type_index}(values); }}\n"));
+            assertions.push_str(&format!("assert!(compare_field{suffix}({pair} {{ number: {value}, text: String::from(\"owner\") }}));\nassert!(compare_index{suffix}(vec![{value}]));\n"));
+        }
+    }
+    assertions.push_str("}\n");
+    fixture.run_three("comparison-values", &high, &low, "", &assertions);
+}

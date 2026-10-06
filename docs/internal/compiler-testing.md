@@ -25,6 +25,7 @@ Nagi 0.1 betaの既知不具合再発を小さな再現sourceと段階別oracle�
 | Private native contract | 実SQLiteのuser hook、終端／cleanup結果、取消、native close／worker join。public Pool保証ではない | runtime/src/sqlite_prototype/tests.rs、[結果](sqlite-session-results.md) |
 | Private pool adapter | stock checkoutの所有、create取消、close競合、retire後replacement停止、native上限、結果公開順。単一接続prototypeの検査で、多接続・公開取得期限の保証ではない | runtime/src/sqlite_prototype/adapter_tests.rs、[結果](sqlite-adapter-results.md) |
 | Private multi-connection lifecycle | 同じfilesystem DBの2接続、active AとBの独立join、startup取消、stock detach先行permit、terminal cause、observer/native起動不成立。公開Options/取得期限の保証とは別 | runtime/src/sqlite_prototype/adapter_tests.rs、[内部設計](sqlite-multiconnection-design.md)、[検証記録](sqlite-multiconnection-results.md) |
+| Private acquisition budget | Immediateの空き／logical不足／native不足、native待機中の有限期限、同absolute予算の引継ぎ、同task scope／取消、登録後startupとBEGIN、failure cause。公開Optionsの配線とは別 | runtime/src/sqlite_prototype/acquire_tests.rs、[設計](sqlite-acquire-budget-design.md) |
 
 ### Negative testの領域
 
@@ -33,7 +34,7 @@ Nagi 0.1 betaの既知不具合再発を小さな再現sourceと段階別oracle�
 | 分類 | 実harnessの例 |
 |---|---|
 | valid / invalid_type | conformance.rs, expression_contracts.rs, operator_types.rs |
-| invalid_move / invalid_borrow | ownership_calls.rs, shared_field_moves.rs, view_origins.rs |
+| invalid_move / invalid_borrow | explicit_moves.rs, ownership_calls.rs, shared_field_moves.rs, view_origins.rs |
 | invalid_null / invalid_result | option_match.rs, nullable_roundtrip.rs, result_discard.rs |
 | invalid_async | async_value_types.rs, scoped_tasks.rs |
 | invalid_auth / invalid_authz | auth_boundaries.rs: missing/fake Principal、wrong permission、proof再利用・共有 |
@@ -53,7 +54,7 @@ cargo run --locked -p nagic --example fuzz-smoke
 python3 scripts/verify_compiler_contracts.py --run-linked
 ```
 
-通常CIのconformanceは外部corpus38件＋限定生成24件。正常経路では全正例のHigh直接生成Rustと保存Low経由Rustをmoduleで隔離し、1回の `rustc --test` とnative実行にまとめる。High function callの `crate::` rootはcase moduleへ移し、生成string literal内のbytesを保持する。これはstd-only corpus用の隔離で、extern adapter/HTTP/SQLは専用harnessを使う。runtime依存を小runnerでstubして保証にしない。
+通常CIのconformanceは外部corpus42件＋限定生成24件。正常経路では全正例のHigh直接生成Rustと保存Low経由Rustをmoduleで隔離し、1回の `rustc --test` とnative実行にまとめる。High function callの `crate::` rootはcase moduleへ移し、生成string literal内のbytesを保持する。これはstd-only corpus用の隔離で、extern adapter/HTTP/SQLは専用harnessを使う。runtime依存を小runnerでstubして保証にしない。
 
 `NAGI_CONFORMANCE_CASES` は1..2048（default 24）、`NAGI_CONFORMANCE_SEED` は1..u64::MAX（default 305419896）。`NAGI_FUZZ_MUTATIONS` は1..100000（default 1000）、`NAGI_FUZZ_CASES` は1..2048（default 16）、`NAGI_FUZZ_SEED` は1..u64::MAX（default 305419896）。不正なenv値は失敗とし、黙ってdefaultに戻さない。`RUSTC`でnative compilerを指定できる。
 
@@ -71,7 +72,7 @@ seedを保存し、失敗したcase indexを含む件数以上で同じcommand�
 
 `tests/conformance/corpus.json` はsource path、High/Low、compile-pass/run-pass/reject:stage、期待診断substring、期待line、native assertionを指定する。negativeは対象の初期parse/checkで拒否することに加え、診断意味とsource行も必須。panicや異なる段階での拒否をcompile-fail成功としない。正例はHigh parse/check → Low pretty → Low parse/check → High/Low各finalize・封印 → Rust生成 → rustc → 必要なnative実行まで全て必須で、後段拒否は保存して失敗する。finalize失敗の分類もartifactへ記録する。
 
-生成は13種のaccepted bounded grammarを順番に使用し、seedで値を変える。i64算術/比較/list index/lenだけでなく、view copyと条件rebind、loop内local ownerから復元、List[view[str]] move/reinit、nested Result match、関数値、複数borrow sourceを持つResult/Option、最初のpollで完了する純async関数を含む。overflow、zero division、無限loopを作らない範囲を生成する。整数演算の期待値は独立host Rust計算、文字列長は明示byte数。High/Low両結果をこの期待値へ照合する。High/Lowは共通frontend/backendを使うので独立compiler間のdifferential testではなく、限定的なmetamorphic/観測同値検査である。純粋な生成にはsystem/environment依存や未対応owned[T]を混ぜない。
+生成は18種のaccepted bounded grammarを順番に使用し、seedで値を変える。i64算術/比較/list index/lenだけでなく、view copyと条件rebind、loop内local ownerから復元、List[view[str]] move/reinit、nested Result match、関数値、複数borrow sourceを持つResult/Option、最初のpollで完了する純async関数を含む。overflow、zero division、無限loopを作らない範囲を生成する。整数演算の期待値は独立host Rust計算、文字列長は明示byte数。明示moveの文字列/List/Result/Option・branch/loop再初期化5種も含む。High/Low両結果をこの期待値へ照合する。High/Lowは共通frontend/backendを使うので独立compiler間のdifferential testではなく、限定的なmetamorphic/観測同値検査である。純粋な生成にはsystem/environment依存や未対応owned[T]を混ぜない。
 
 任意text mutationは初期parse/checkの通常拒否を許すがpanicを許さない。check成功後はLow再parse/checkとRust emit成功まで要求する。accepted件数とparse/check拒否件数を分けて報告する。任意mutationを大量rustcへ投げず、native段階は限定生成caseだけにする。以前同じsmokeに混ざっていたSerdeJSON mutationはNagi compilerの検証ではないので削除した。
 
@@ -93,7 +94,7 @@ PRとpushでは既存`Nagi checks`の変更検出を使う。compiler/runtime/te
 
 ## Cargo / HTTP / SQLとの接続
 
-`tests/conformance/harnesses.json` に実test名とcommandを登録する。`verify_compiler_contracts.py` は登録先source/testが存在することを検査し、`--run-linked` で16harnessを順番に実行する。HTTP panicは実request、500/sanitized body、HEAD body、server継続性まで検査する既存runtime harnessが責任を持つ。SQL missing-columnは実SQLite schemaのopt-in checkとHigh/保存Lowのquery行を既存SQL harnessで検査する。HTTP生成と成功build世代は実Cargo build/実行harnessへ接続する。conformance corpusへの文字列記録だけではこれらの性質を保証しない。
+`tests/conformance/harnesses.json` に実test名とcommandを登録する。`verify_compiler_contracts.py` は登録先source/testが存在することを検査し、`--run-linked` で17harnessを順番に実行する。HTTP panicは実request、500/sanitized body、HEAD body、server継続性まで検査する既存runtime harnessが責任を持つ。SQL missing-columnは実SQLite schemaのopt-in checkとHigh/保存Lowのquery行を既存SQL harnessで検査する。HTTP生成と成功build世代は実Cargo build/実行harnessへ接続する。conformance corpusへの文字列記録だけではこれらの性質を保証しない。
 
 Phase 3では、登録資源の独立inventory、用途別capability、4例のLow/Rust全文goldenも接続した。固定logical ModuleIdのgoldenはresolver・生成の決定性を検査し、実fileのsource mapは既存統合testへ任せる。HTTPの追加native例は借用JSONとnamed mapperの登録構築を実行するもので、mapper本体を呼んだ証拠とはしない。4 OSの明示Cargo一覧にはinventoryと既存shared-field native回帰を追加し、既存HTTP/Actor/auth/copy検査も維持する。
 
@@ -101,7 +102,7 @@ Phase 3では、登録資源の独立inventory、用途別capability、4例のLo
 
 - [rustc test infra](https://rustc-dev-guide.rust-lang.org/tests/intro.html) / [UI tests](https://rustc-dev-guide.rust-lang.org/tests/ui.html): check/build/runの区別と期待診断/位置を採用。rustc専用compiletestの直接依存、環境差を含む全面stderr snapshotは採用しない。
 - [Rust Fuzz Book](https://rust-fuzz.github.io/book/cargo-fuzz.html) / [LLVM LibFuzzer](https://llvm.org/docs/LibFuzzer.html): 多様なcorpus、決定性、失敗保存/縮小を採用。現smokeはcoverage-guided fuzzではない。nightly/sanitizer/libfuzzer-sys導入は専用laneの検討として保留。
-- [Proptest](https://proptest-rs.github.io/proptest/intro.html) / [generation・shrinking・persistence](https://proptest-rs.github.io/proptest/proptest/getting-started.html): property検査は既知regressionを補完する。今回は13種の小さなgeneratorと既存stdで縮小/保存を実測し、新dependencyを加えず実装できた。strategyの組合せが増え構造的shrinkingが必要になった段階でproptest dev-dependencyを提案する。
+- [Proptest](https://proptest-rs.github.io/proptest/intro.html) / [generation・shrinking・persistence](https://proptest-rs.github.io/proptest/proptest/getting-started.html): property検査は既知regressionを補完する。今回は18種の小さなgeneratorと既存stdで縮小/保存を実測し、新dependencyを加えず実装できた。strategyの組合せが増え構造的shrinkingが必要になった段階でproptest dev-dependencyを提案する。
 - [Csmith](https://embed.cs.utah.edu/csmith/): 未定義挙動を除く生成と独立oracleを採用。C言語generator自体は非採用。Nagiに独立compilerがないことを明記する。
 - [Crater](https://rustc-dev-guide.rust-lang.org/tests/crater.html): check/build/runのコスト分離を採用。小corpusの成功を全言語/全platform保証と解釈しない。
 
@@ -110,3 +111,7 @@ Phase 3では、登録資源の独立inventory、用途別capability、4例のLo
 [ADR 009](adr/009-axum-rejected-body.md)のContent-Type欠落時のpolicyは、sampleのnative unitと元clientの実HTTPで分けて検査する。共通application runnerは、成功世代のmanifest・唯一のbinを使ってHigh/保存Lowそれぞれの`native::tests::`を実行する。0件・ignore・Cargo失敗は成功にならない。`test_application_native_tests.py`の5回帰もLinuxと4 OSのCIへ接続した。
 
 制御read Futureのpoll/EOF・error・取消/Dropと、実Bodyの4096/4097、実handlerの分岐を確認する。実HTTPの19caseと不正port3caseは別に数える。分割送信と正常JSON4097byteの413を追加し、旧request/期待は維持する。全TCP分割・keep-alive・hard wall期限・clientへの必達を証明するtestではない。先行testのhelper未定義によるcompile失敗と、元Windowsの受信失敗を混同しない。
+
+## 明示moveの回帰
+
+`explicit_moves.rs`は既存非Copyローカルの通常代入を拒否する負例と、明示move・Copy・新規値の正例を対にする。canonical importを通常のresolverへ通し、元行と診断内容を確認する。実nativeの9経路はHigh・保存Low・手書きLowそれぞれで通常transfer、RHS失敗／破棄／取消、Copy集約値の比較を観測する。全操作のallocation数や全Future型を保証する検査ではない。先行失敗、既存fixtureの移行理由、検証結果は[明示moveの記録](explicit-move-results.md)に分ける。4 OSの明示Cargo一覧にもこのharnessを含める。

@@ -1,6 +1,6 @@
 #[path = "support/checked_emission.rs"]
 mod checked_emission;
-use nagic::{check, emit, parser};
+use nagic::{check, emit, parser, source};
 use std::{
     fs,
     path::PathBuf,
@@ -34,8 +34,14 @@ async def ordinary() -> Result[unit, Error]:
     let saved = checked(&emit::low(&high), false);
     for program in [high, saved] {
         let rust = emit::rust(&checked_emission::seal(&program)).unwrap();
+        let restore_symbol = &program.modules.resolve_root_path("restore").unwrap().symbol;
+        let ordinary_symbol = &program
+            .modules
+            .resolve_root_path("ordinary")
+            .unwrap()
+            .symbol;
         let restore = rust
-            .split("pub async fn restore<")
+            .split(&format!("pub async fn {restore_symbol}<"))
             .nth(1)
             .unwrap()
             .split("\n}")
@@ -49,7 +55,7 @@ async def ordinary() -> Result[unit, Error]:
         assert!(restore.contains("::std::convert::From::from(__nagi_try_error)"));
         assert!(!restore.contains("= async {"));
         let ordinary = rust
-            .split("pub async fn ordinary(")
+            .split(&format!("pub async fn {ordinary_symbol}("))
             .nth(1)
             .unwrap()
             .split("\n}")
@@ -73,8 +79,25 @@ impl Drop for Fixture {
     }
 }
 fn checked(source: &str, high: bool) -> nagic::ast::Program {
-    let mut program =
-        parser::parse(source, high).unwrap_or_else(|error| panic!("{error}\n{source}"));
+    let fixture = loop {
+        let path = std::env::temp_dir().join(format!(
+            "nagi-view-completion-check-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        match fs::create_dir(&path) {
+            Ok(()) => break Fixture(path),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => panic!("exclusive check fixture: {error}"),
+        }
+    };
+    let path = fixture
+        .0
+        .join(if high { "input.nagi" } else { "input.low" });
+    fs::write(&path, source).unwrap();
+    let mut program = source::load(&path, high)
+        .unwrap_or_else(|error| panic!("{error}\n{source}"))
+        .program;
     check::check(&mut program).unwrap_or_else(|error| panic!("{error}\n{source}"));
     program
 }
@@ -117,10 +140,11 @@ fn owned_storage_loops_and_async_compile_and_run_in_all_source_forms() {
             "async_await",
             "async_loop",
         ] {
+            let symbol = &program.modules.resolve_root_path(function).unwrap().symbol;
             let marker = if function.starts_with("async_") {
-                format!("pub async fn {function}<")
+                format!("pub async fn {symbol}<")
             } else {
-                format!("pub fn {function}<")
+                format!("pub fn {symbol}<")
             };
             let body = rust
                 .split(&marker)
@@ -174,7 +198,8 @@ fn completion_keeps_local_and_iterator_owner_escape_rejections() {
         ("def bad(part: view[str]) -> List[view[str]]:\n    parts = [part]\n    for item in parts:\n        parts = [part]\n    return parts\n",true),
     ] { let mut program = parser::parse(source,high).unwrap(); assert!(check::check(&mut program).is_err(),"{source}"); }
 }
-const HIGH: &str = r#"def consume(parts: List[view[str]]) -> bool:
+const HIGH: &str = r#"from std.ownership import move
+def consume(parts: List[view[str]]) -> bool:
     return len(parts) > 0
 
 def mark(unit: unit) -> bool:
@@ -334,10 +359,10 @@ def cross_move(part: view[str], count: i64, flag: bool) -> List[view[str]]:
         first = [part]
         second = [part]
         if flag:
-            first = second
+            first = move(second)
             second = [part]
         else:
-            second = first
+            second = move(first)
             first = [part]
     return first
 
@@ -398,7 +423,8 @@ async def async_loop(part: view[str], count: i64) -> List[view[str]]:
         parts = [part]
     return parts
 "#;
-const LOW: &str = r#"fn consume(parts: List[view[str]]) -> bool { return len(parts) > 0; }
+const LOW: &str = r#"from std.ownership import move
+fn consume(parts: List[view[str]]) -> bool { return len(parts) > 0; }
 fn mark(unit: unit) -> bool { return false; }
 fn env_failure() -> Result[str, i64] { return fail(7); }
 fn env_try(key: str) -> Result[str, i64] { let value: str = env(key, try env_failure()); return ok(value); }
@@ -419,7 +445,7 @@ fn for_read(part: view[str], count: i64) -> List[view[str]] { let local: str = "
 fn loop_append(part: view[str], count: i64) -> List[view[str]] { let parts: List[view[str]] = [part]; for i in range(count) { let local: str = "inner"; append(parts, view(local)); parts = [part]; } return parts; }
 fn loop_branch(part: view[str], count: i64, flag: bool) -> List[view[str]] { let parts: List[view[str]] = [part]; for i in range(count) { let local: str = "inner"; if flag { parts = [view(local)]; } else { append(parts, view(local)); } parts = [part]; } return parts; }
 fn loop_terminal(part: view[str], count: i64) -> List[view[str]] { let parts: List[view[str]] = [part]; for i in range(count) { let local: str = "inner"; parts = [view(local)]; parts = [part]; return parts; } return parts; }
-fn cross_move(part: view[str], count: i64, flag: bool) -> List[view[str]] { let first: List[view[str]] = [part]; let second: List[view[str]] = [part]; for i in range(count) { let local: str = "inner"; first = [view(local)]; second = [view(local)]; first = [part]; second = [part]; if flag { first = second; second = [part]; } else { second = first; first = [part]; } } return first; }
+fn cross_move(part: view[str], count: i64, flag: bool) -> List[view[str]] { let first: List[view[str]] = [part]; let second: List[view[str]] = [part]; for i in range(count) { let local: str = "inner"; first = [view(local)]; second = [view(local)]; first = [part]; second = [part]; if flag { first = move(second); second = [part]; } else { second = move(first); first = [part]; } } return first; }
 fn condition_mutation(part: view[str], count: i64) -> List[view[str]] { let local: str = "inner"; let parts: List[view[str]] = [part]; let i: i64 = 0; while i < count and not mark(append(parts, view(local))) { parts = [part]; i += 1; } parts = [part]; return parts; }
 fn condition_move(part: view[str], count: i64, flag: bool) -> List[view[str]] { let local: str = "inner"; let parts: List[view[str]] = [view(local)]; parts = [part]; let i: i64 = 0; while i < count and flag and consume(parts) { parts = [part]; i += 1; } parts = [part]; return parts; }
 fn pattern_loop(value: Option[List[view[str]]], part: view[str], count: i64) -> List[view[str]] { match value { case Some(parts) { for i in range(count) { let local: str = "inner"; parts = [view(local)]; parts = [part]; } return parts; } case None { return [part]; } } }

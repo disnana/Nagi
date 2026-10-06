@@ -1,11 +1,31 @@
 #[path = "support/checked_emission.rs"]
 mod checked_emission;
-use nagic::{check, emit, parser};
-use std::{fs, process::Command};
+use nagic::{check, emit, parser, source};
+use std::{fs, path::PathBuf, process::Command};
 static ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 fn checked(source: &str) -> Result<nagic::ast::Program, String> {
-    let mut p = parser::parse(source, true)?;
+    struct Input(PathBuf);
+    impl Drop for Input {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    let input = loop {
+        let path = std::env::temp_dir().join(format!(
+            "nagi-iterator-check-{}-{}",
+            std::process::id(),
+            ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        match fs::create_dir(&path) {
+            Ok(()) => break Input(path),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => panic!("exclusive iterator fixture: {error}"),
+        }
+    };
+    let path = input.0.join("main.nagi");
+    fs::write(&path, source).unwrap();
+    let mut p = source::load(&path, true)?.program;
     check::check(&mut p)?;
     Ok(p)
 }
@@ -41,13 +61,24 @@ fn accepts(source: &str) {
 
 #[test]
 fn iterator_borrows_reject_mutation_reassignment_and_moves_on_continuing_paths() {
-    for operation in ["append(values, item)", "values = [3, 4]", "taken = values"] {
+    for operation in [
+        "append(values, item)",
+        "values = [3, 4]",
+        "taken = move(values)",
+    ] {
+        let import = if operation.contains("move(") {
+            "from std.ownership import move\n"
+        } else {
+            ""
+        };
         let source = format!(
-            "def main():\n    values = [1, 2]\n    for item in values:\n        {operation}\n"
+            "{import}def main():\n    values = [1, 2]\n    for item in values:\n        {operation}\n"
         );
         let error = checked(&source).unwrap_err();
         assert!(
-            error.starts_with("line 4:") && error.contains("参照"),
+            // move caseだけcanonical importを1行追加。元operationを同じ位置で観測する。
+            error.starts_with(&format!("line {}:", if import.is_empty() { 4 } else { 5 }))
+                && error.contains("参照"),
             "{error}"
         );
     }
@@ -93,11 +124,16 @@ fn field_loans_keep_disjoint_fields_available_and_block_the_whole_owner() {
     ))
     .unwrap();
     for operation in [
-        "taken = data",
+        "taken = move(data)",
         "taken = data.values",
         "data = Data(values=[3], name=\"next\")",
     ] {
-        assert!(checked(&format!("{base}    {operation}\n"))
+        let import = if operation.contains("move(") {
+            "from std.ownership import move\n"
+        } else {
+            ""
+        };
+        assert!(checked(&format!("{import}{base}    {operation}\n"))
             .unwrap_err()
             .contains("参照"));
     }
