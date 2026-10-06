@@ -31,13 +31,9 @@ High／Lowの実形の根拠は`parser.rs`のimport／type／statement処理、`
 
 public `ResourceInfo`のshapeは変更せず、private `ResourceContract`へTxのtask-transfer禁止を表すlifecycle／predicateを追加する。旧resourceは現在の`Unspecified`のまま。所有値は既存move検査、copy拒否は既存native copy判定、field／enum保存は`check.rs::class_field`の`storage=false`を使う。local Option／Resultをfield保存と同一扱いで拒否しない。Serde、Debug、shared、Charge、task-transferを単一trait solverへまとめない。
 
-registry着手前に次のcapability oracleを具体値へ固定する必要がある。ADR／API表から明示できるPool Debug可、Parameters Debug不可、Tx nonshared／storage不可、Options shared不可、全新resourceのSerdeなしは推測で変更しない。
+registry配線には、Q004で採用した[capability初版表](sqlite-pool-adapter-decision.md#registry配線前に固定するcapability)を独立した手書きoracleとして使う。Tx／ParametersはDebug不可、Pool／FailureのDebugは状態のみ。Failureと小さいenumのshared可を、Serdeやequalityの許可と混同しない。署名・resource集合・PassingもAPI表と別々に照合する。
 
-- TxのDebug、OptionsのDebug、FailureのDebug／shared／equality。
-- BeginMode／FailureKind／Outcomeのstorage／shared／Debugと、表で明示されていない各資源のequality。
-- Options／Failure等の未明示capabilityを既存類似resourceから一括trueとしない。`print(options)`や`share(failure)`の受理は明示oracleが必要。
-
-これは未確定値の列挙であり、Tx/task捕捉の承認済み禁止を弱める判断ではない。
+Failureの直接／Option／Result payload共有化はpass、Tx／Parameters／Optionsの共有化はfailへ分ける。`shared[Pool]`から`view[Pool]`への暗黙変換は追加しない。現在のReference passingはTまたはview[T]を受けるため、shared[State]内のowned Pool fieldからbegin／clone_poolへ借用する経路をpositiveで確認する。Failureのfieldからのkind／message／copy operationも同様。標準operationをfirst-class aliasにする追加は含めず、既存のuser async関数aliasを捕捉検査する。
 
 native owned payloadも承認済みTx field-storage禁止の観測対象である。`class_field`はuser class／enum fieldに効くが、local `actor.turn(tx, reply)`はTurnのinline state fieldにTxを保存しうる。Actor State SはMessage／Reply／EのCharge検査とは別で、現在Sへstorage検査を適用していない。registry配線時にはTurn／Actor Stateの実payload fieldへのTx永続保存も拒否する。function pointer署名はpayloadではなく、local Option／Result、owned関数委譲、同task awaitは許す。この観測対象の固定を新公共保証や一般effect解析の追加として扱わない。
 

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "planned_unwired",
-  "basis": "ADR 010 / local 90c5324; not public API acceptance",
+  "basis": "ADR 010 / Q002 + Q004 approved 2026-10-06; not public API acceptance",
   "execution": {
     "harness_registered": false,
     "parser_executed": false,
@@ -74,7 +74,12 @@
           "schema": "one statement, no returned columns"
         }
       ],
-      "native_requirement": "build + SQL ownership before params move; same-task await does not retain SQL view across worker boundary"
+      "native_requirement": "build + SQL ownership before params move; same-task await does not retain SQL view across worker boundary",
+      "variants": [
+        "share(Failure), share(Option[Failure]), and share(Result[i64, Failure]) are capability pass cases; not yet executed",
+        "shared[State] owned Pool field borrowed by begin/clone_pool; no implicit shared[Pool] to view[Pool] conversion",
+        "shared State Failure field borrowed for kind/message/copy_primary_error; Debug metadata only; Serde and equality remain prohibited"
+      ]
     },
     {
       "id": "03-user-type-names",
@@ -265,7 +270,7 @@
       "variants": [
         "shared[Option[Tx]] function parameter declaration",
         "share(Result[Tx, Failure])",
-        "share(Parameters/Options/Failure) directly and wrapped; same policy only for new SQLite resources"
+        "share(Parameters/Options) directly and wrapped; only nonshared SQLite resources are rejected"
       ]
     },
     {
