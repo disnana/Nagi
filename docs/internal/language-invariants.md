@@ -106,6 +106,8 @@ Q004で[capability初版表](sqlite-pool-adapter-decision.md#registry配線前�
 
 statement Errから「変更0」や「rollback済み」を推論しない。SQLiteの`OR FAIL`やAFTER triggerでのstep失敗は先行効果をactive Txへ残し得る。禁止actionの拒否とTx rollback成功を別oracleで検査する。普通のErrでの継続可という採用契約を、暗黙savepointや全Err自動abortへ変更しない。
 
+取得予算はlogical slot待ちからnative record登録まで共用し、登録後のready／BEGIN／SQLへ持ち越さない。0msは即時の空きを利用できる指定。取得期限切れだけでPoolを故障・退役・closingにしない。同taskの別取得と取消で予算を混同しない。[private設計](sqlite-acquire-budget-design.md)で先行検証し、公開Options／Poolの保証とは区別する。巨大capacityのstock allocationは[公開化前の判断](sqlite-capacity-decision.md)に残す。
+
 ## HTTP
 
 | 項目 | 契約・境界 | 実装と検査 |
