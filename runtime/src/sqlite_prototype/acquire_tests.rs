@@ -242,7 +242,16 @@ async fn acquire_absolute_budget_survives_logical_wait_to_native_fence() {
     let entered = watch(detaching.wait()).await;
     // Gateがpermit返却と旧nativeの生存を確定する。sleepは期限到達だけに使う。
     tokio::time::sleep_until(deadline).await;
-    let failed = expected_error(watch(&mut get).await).await;
+    let after_deadline = futures_util::poll!(&mut get);
+    let original_budget_expired = matches!(
+        &after_deadline,
+        std::task::Poll::Ready(Err(error)) if error.kind == Kind::AcquireTimeout
+    );
+    let result = match after_deadline {
+        std::task::Poll::Ready(result) => Ok(result),
+        std::task::Poll::Pending => watch(&mut get).await,
+    };
+    let failed = expected_error(result).await;
     drop(get);
     let unchanged = adapter.observer().snapshot();
     detaching.release();
@@ -253,6 +262,10 @@ async fn acquire_absolute_budget_survives_logical_wait_to_native_fence() {
     let replacement = successful_tx(watch(adapter.begin()).await).await;
     let closed = watch(adapter.close(CLOSE)).await;
     assert!(logical_pending && entered.is_ok());
+    assert!(
+        original_budget_expired,
+        "original absolute budget must already be expired at native fence"
+    );
     assert_timeout(failed);
     assert_eq!(unchanged.created, 1);
     assert_eq!(unchanged.native_started, 1);
