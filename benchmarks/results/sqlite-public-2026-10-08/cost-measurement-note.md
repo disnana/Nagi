@@ -1,0 +1,9 @@
+# SQLite 費用測定の観測範囲
+
+Linux x86_64、release、同じruntime/Options/active Tx、4 warmup + 32 measured INSERTs。各変更数1、rollback、actual closeをassertした。calling threadのallocationだけでnative SQLite/worker/observerの全heapは含まない。時間は同じ共有host上の順次一回測定。throughputや性能差の有意性を保証しない。
+
+Futureはliteral双方424 bytes、dynamic generated456/manual440 bytes。全sampleのallocation分布はcost-summary.jsonへ記録し、最初のsampleだけで全て一定とは扱わない。lazy openは双方7 allocation/688 bytes。closeの0 allocationは当該thread/callだけの観測。
+
+初回の外部照合scriptはCargo.lockの複数同名版をdictへ畳み込み、既存hashbrown/synを誤って依存差としてassertした。製品や測定programの失敗ではない。name/version/source/checksumの集合照合へ訂正し、新registry版0を双方で確認した。generated初回build成功ログは12.00s、最終再実行はcache済み。manualとのbuild時間はcache条件が異なるため比較性能として扱わない。source/debug/native cacheは既存を再利用しclean buildではない。
+
+Cost packagesのRust sourceとCargo.lockは出力directoryへ保持した。新しい依存は導入していない。compiler finalizationのAST clone/check再実行のpeak memory・compile段階別費用、他OSの費用、全heap保持量は未測定。

@@ -1,0 +1,25 @@
+....................................................................................................................
+----------------------------------------------------------------------
+Ran 116 tests in 14.361s
+
+OK
+Already published and verified; keeping existing assets: jetbrains-v0.1.8 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: jetbrains-v0.1.8 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: jetbrains-v0.1.8 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: nagi-v0.1.1 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: nagi-v0.2.1 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Already published and verified; keeping existing assets: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: nagi-v0.1.8 (de5304e20330c6b2882184e9e42dcd3780fad08a)
+Verified formal release: vscode-v0.1.10 (de5304e20330c6b2882184e9e42dcd3780fad08a)
+Verified formal release: nagi-v0.1.8 (d3eb21872b9fae63e5b876cd43c88faa8530ccce)
+Verified formal release: vscode-v0.1.10 (d3eb21872b9fae63e5b876cd43c88faa8530ccce)
+Verified formal release: nagi-v0.1.8 (d3eb21872b9fae63e5b876cd43c88faa8530ccce)
+Already published and verified; keeping existing assets: vscode-v0.1.10 (d3eb21872b9fae63e5b876cd43c88faa8530ccce)
+Verified formal release: vscode-v0.1.10 (d3eb21872b9fae63e5b876cd43c88faa8530ccce)
+Verified SQL engine: extracted compiler, offline schema, bad columns/binds, Nagi locations, no Cargo/runtime
+Verified SQLite Pool/Tx: extracted runtime, High and independent saved Low, typed parameters, commit/rollback/close
+Verified Task handles: extracted compiler/runtime, High/saved Low/handwritten Low, receive/discard, nested business Err, early ownership diagnostics

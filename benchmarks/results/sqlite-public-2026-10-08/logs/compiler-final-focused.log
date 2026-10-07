@@ -1,0 +1,185 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-sqlite-public/compiler)
+    Finished `test` profile [unoptimized] target(s) in 11.19s
+     Running unittests src/lib.rs (/workspace/nagi-build-cache/check/debug/deps/nagic-834fc7e7ecda3b99)
+
+running 127 tests
+test capabilities::tests::charge_recursive_lists_have_known_storage_but_require_a_walk ... ok
+test capabilities::tests::charge_rejects_excluded_storage_with_a_nested_field_path ... ok
+test capabilities::tests::indirect_cycles_remain_serializable_only_with_serializable_fields ... ok
+test capabilities::tests::charge_inline_capability_accounts_for_every_enum_variant ... ok
+test capabilities::tests::private_causes_prevent_serialization_through_nested_records ... ok
+test capabilities::tests::native_debug_does_not_require_generic_payload_debug ... ok
+test check::checked::tests::final_diagnostic_transports_kind_without_changing_user_messages ... ok
+test capabilities::tests::native_payload_roles_are_purpose_specific ... ok
+test check::checked::tests::final_factory_checks_and_seals_owned_input ... ok
+test check::checked::tests::final_factory_rejects_invalid_input ... ok
+test check::checked::tests::final_future_capture_facts_reject_identity_argument_owner_and_span_tampering ... ok
+test capabilities::tests::serde_charge_and_owned_fields_are_distinct_capabilities ... ok
+test check::checked::tests::missing_binding_and_pattern_types_are_rejected_without_rechecking ... ok
+test check::checked::tests::missing_declaration_type_is_rejected_without_rechecking ... ok
+test check::checked::tests::missing_name_resolution_is_rejected_without_rechecking ... ok
+test check::checked::tests::facts_and_emission_are_deterministic_and_read_only ... ok
+test check::checked::tests::sealed_missing_expression_plan_fails_closed ... ok
+test check::checked::tests::item_debug_eligibility_and_identity_are_sealed ... ok
+test check::checked::tests::sealed_missing_operand_role_fails_closed ... ok
+test check::checked::tests::sealing_rejects_missing_expression_types ... ok
+test check::checked::tests::sealed_missing_rust_type_plan_fails_closed ... ok
+test check::checked::tests::symbolic_enum_owner_is_not_an_untyped_payload ... ok
+test check::checked::tests::generated_saved_native_replacement_and_synthetic_origins_are_distinct ... ok
+test check::checked::tests::unknown_origin_is_not_user_blame ... ok
+test check::checked::tests::sealed_missing_required_flow_or_slots_fails_closed ... ok
+test check::flow_metadata_tests::checked_operand_roles_reach_codegen_and_missing_roles_fail ... ok
+test check::flow_metadata_tests::content_mutation_events_survive_rhs_replacement_and_stay_in_their_statement ... ok
+test check::checked::tests::task_sealing_rejects_missing_or_mismatched_scope_and_use_facts ... ok
+test check::flow_metadata_tests::flow_collection_is_gated_to_view_return_dependencies ... ok
+test check::flow_metadata_tests::loop_regions_preserve_candidate_reads_and_assignments ... ok
+test check::flow_metadata_tests::flow_facts_recompute_for_high_saved_low_and_self_consumption ... ok
+test check::flow_metadata_tests::semantic_value_edges_keep_mutation_inputs_without_scalar_overselection ... ok
+test modules::metadata_tests::intrinsic_transport_rejects_forged_namespace_collisions_and_unknown_heads ... ok
+test modules::metadata_tests::intrinsic_type_transport_is_structural_and_avoids_real_bindings ... ok
+test check::flow_metadata_tests::flow_snapshots_only_keep_return_dependency_bindings ... ok
+test modules::metadata_tests::low_metadata_rejects_unknown_topology_and_span_fields ... ok
+test modules::metadata_tests::malformed_internal_looking_names_keep_their_original_display ... ok
+test modules::metadata_tests::metadata_cannot_rebind_a_definition_to_a_builtin_or_unrelated_id ... ok
+test modules::metadata_tests::low_identity_is_portable_between_unix_drive_and_unc_paths ... ok
+test modules::metadata_tests::metadata_rejects_relative_noncanonical_and_traversing_ids ... ok
+test sql_check::collect::tests::checked_high_and_saved_low_preserve_supported_operations_and_source_fields ... ok
+test sql_check::collect::tests::aliased_row_classes_use_canonical_identity_and_original_field_names ... ok
+test sql_check::collect::tests::conditional_loop_and_match_bodies_are_collected_once ... ok
+test sql_check::collect::tests::dynamic_sql_and_exec_scripts_remain_visible_as_excluded_sites ... ok
+test sql_check::collect::tests::integrated_native_replacements_only_collect_the_final_function_body ... ok
+test sql_check::collect::tests::nested_value_expressions_returns_and_scope_spawn_keep_each_actual_call ... ok
+test check::checked::tests::sqlite_sql_argument_plan_rejects_missing_index_and_representation_tampering ... ok
+test sql_check::collect::tests::same_named_user_function_and_local_function_value_are_not_sql_calls ... ok
+test sql_check::collect::tests::repeated_row_metadata_is_bounded_before_building_the_worker_request ... ok
+test sql_check::engine::tests::columns_aliases_and_sqlite_parameter_numbering ... ok
+test sql_check::engine::tests::every_default_expression_uses_the_function_allowlist_even_when_unused ... ok
+test sql_check::collect::tests::collection_rejects_excessive_sites_at_the_first_over_limit_call ... ok
+test sql_check::engine::tests::external_files_and_extension_paths_are_never_opened_or_modified ... ok
+test sql_check::engine::tests::ordinary_tables_indexes_views_and_pure_functions_are_supported ... ok
+test sql_check::engine::tests::prepare_authorizer_also_rejects_unsafe_view_functions ... ok
+test sql_check::engine::tests::prepare_only_dml_does_not_write_application_rows ... ok
+test sql_check::engine::tests::rejects_operation_shape_mismatches ... ok
+test sql_check::engine::tests::schema_is_ddl_snapshot_not_migration_or_arbitrary_sql ... ok
+test sql_check::engine::tests::sqlite_identifier_defaults_remain_literals_without_hiding_function_terms ... ok
+test sql_check::engine::tests::sqlite_parameters_shape_and_prepare_only_ddl_preserve_snapshot ... ok
+test sql_check::tests::bounded_input_does_not_accept_a_truncated_prefix ... ok
+test sql_check::collect::tests::sqlite_canonical_calls_and_saved_low_keep_unknown_bind_metadata ... ok
+test sql_check::tests::deadline_kills_and_reaps_a_worker_with_blocked_input ... ok
+test sql_check::tests::terminating_a_worker_returns_its_reaped_exit_status ... ok
+test sql_check::tests::worker_fixture ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_arity_parameter_mismatch - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_duplicate_in_one_role - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_missing_role - should panic ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_out_of_range_role - should panic ... ok
+test sql_check::engine::tests::finite_limits_reject_large_and_deep_inputs ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_roles_on_zero_arity - should panic ... ok
+test stdlib::resource_contract_tests::legacy_views_borrow_the_registered_descriptor ... ok
+test stdlib::resource_contract_tests::registered_roles_match_the_independent_position_oracle ... ok
+test stdlib::resource_contract_tests::descriptor_rejects_overlapping_roles - should panic ... ok
+test tests::await_only_async ... ok
+test tests::bad_string ... ok
+test tests::class_field_check ... ok
+test tests::class_move ... ok
+test tests::copy_value_class ... ok
+test tests::console_io_roundtrip ... ok
+test tests::cost_not_dynamic_count ... ok
+test tests::duplicate_class_fields ... ok
+test tests::empty_list_inference ... ok
+test tests::error_propagation ... ok
+test tests::explicit_copy ... ok
+test tests::floating_literals_accept_f32_boundary_and_roundtrip ... ok
+test tests::floating_literals_reject_f32_overflow_in_high_and_low ... ok
+test tests::floating_literals_keep_f64_range_and_default_inference ... ok
+test sql_check::tests::encoded_metadata_is_bounded_including_json_escaping ... ok
+test tests::forgotten_await ... ok
+test tests::hello ... ok
+test tests::html_route_is_not_encoded_as_json ... ok
+test tests::invalid_indent ... ok
+test tests::mismatched_type ... ok
+test tests::missing_return ... ok
+test tests::native_numeric ... ok
+test tests::nested_view_in_class_rejected ... ok
+test tests::no_implicit_conversion ... ok
+test tests::low_standalone ... ok
+test tests::nullable ... ok
+test tests::number_overflow ... ok
+test tests::owned_parameter_cannot_return_view ... ok
+test tests::precedence ... ok
+test tests::recursive_value ... ok
+test tests::replace_bad_signature ... ok
+test tests::replace_exact_signature ... ok
+test tests::resource_contract_goldens::data_derives_golden ... ok
+test tests::resource_contract_goldens::http_borrow_and_mappers_golden ... ok
+test tests::result_must_handle ... ok
+test tests::roundtrip_low ... ok
+test tests::rust_extern_interface_and_low_roundtrip ... ok
+test tests::scope_spawn ... ok
+test tests::signed_minimum_literals_are_in_range_in_high_and_low ... ok
+test tests::signed_minimum_literals_compile_and_run_after_lowering ... ok
+test tests::string_move ... ok
+test tests::tabs_rejected ... ok
+test tests::unknown_class ... ok
+test tests::unknown_name ... ok
+test tests::unscoped_spawn ... ok
+test tests::view_cannot_spawn ... ok
+test tests::view_escape ... ok
+test tests::view_prevents_move ... ok
+test tests::view_prevents_mutation ... ok
+test tests::view_return_parameter ... ok
+test tests::resource_contract_goldens::actor_data_golden ... ok
+test tests::resource_contract_goldens::http_inspection_golden ... ok
+test check::flow_metadata_tests::return_alias_dependencies_keep_straight_line_snapshots_sparse ... ok
+
+test result: ok. 127 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.86s
+
+     Running tests/resource_contract_characterization.rs (/workspace/nagi-build-cache/check/debug/deps/resource_contract_characterization-186096c763b6b56c)
+
+running 4 tests
+test registered_accessors_match_the_complete_inventory ... ok
+test registered_operations_match_signatures_and_passing ... ok
+test registered_constants_match_the_complete_inventory ... ok
+test registered_resources_match_the_independent_inventory ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sql_check.rs (/workspace/nagi-build-cache/check/debug/deps/sql_check-819a7e9cf4d406fb)
+
+running 14 tests
+test enabled::a_user_function_named_db_all_is_not_a_builtin_sql_query ... ok
+test enabled::dynamic_sql_and_db_exec_are_reported_as_runtime_checks ... ok
+test enabled::explicit_project_schema_path_is_relative_to_invocation_directory ... ok
+test enabled::imported_queries_report_the_original_module_file_and_line ... ok
+test enabled::bounded_schema_and_query_inputs_fail_before_sql_preparation ... ok
+test enabled::aliases_case_reordering_extra_columns_and_reused_numbered_bind_are_valid ... ok
+test enabled::literal_insert_update_delete_are_prepared_without_executing_queries ... ok
+test enabled::schema_and_dialect_are_paired_check_only_options ... ok
+test enabled::missing_return_columns_and_wrong_bind_count_use_query_source_lines ... ok
+test enabled::schema_check_is_opt_in_and_reports_bad_columns_in_high_and_saved_low ... ok
+test enabled::helper_statement_kind_and_single_statement_contracts_are_checked ... ok
+test enabled::literal_queries_cannot_change_schema_or_access_external_functions ... ok
+test enabled::unsafe_schema_operations_cannot_create_or_modify_external_files ... ok
+test enabled::sqlite_public_literal_shape_columns_and_unknown_bind_count_use_source_origins ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.28s
+
+     Running tests/sqlite_contract_inputs.rs (/workspace/nagi-build-cache/check/debug/deps/sqlite_contract_inputs-edb447e3368e604e)
+
+running 2 tests
+test rejection_anchors_identify_original_fixture_lines_and_lexer_tokens ... ok
+test every_public_high_and_handwritten_low_input_parses_before_module_resolution ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/sqlite_public.rs (/workspace/nagi-build-cache/check/debug/deps/sqlite_public-74b9292058dabfcd)
+
+running 6 tests
+test matrix_checker_rejections_keep_stage_raw_cause_and_original_line ... ok
+test public_sqlite_high_saved_low_and_handwritten_low_execute_real_transactions ... ok
+test sqlite_task_result_nested_actual_capture_and_actor_state_reject_in_checker ... ok
+test local_containers_shared_copy_and_failure_accessor_execute ... ok
+test sqlite_sql_evaluation_order_and_row_decode_execute ... ok
+test matrix_positive_pairs_execute_high_saved_and_handwritten_low ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.98s
+

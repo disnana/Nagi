@@ -1,0 +1,8 @@
+    Blocking waiting for file lock on package cache
+   Compiling rusqlite v0.40.2
+   Compiling serde_spanned v1.1.1
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling toml v1.1.6+spec-1.1.0
+   Compiling nagi-runtime v0.1.11 (/workspace/Nagi-sqlite-public/runtime)
+   Compiling nagic v0.1.11 (/workspace/Nagi-sqlite-public/compiler)
+    Finished `release` profile [optimized] target(s) in 1m 08s

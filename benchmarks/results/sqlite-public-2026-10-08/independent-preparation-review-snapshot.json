@@ -1,0 +1,37 @@
+{
+  "base": "676576724829e45b077b58628bfe2417e6cf3673",
+  "commit": "8cd703f",
+  "recorded_utc": "2026-10-07T22:45:07.788747+00:00",
+  "files": [
+    {
+      "path": "compiler/examples/sqlite-contract-check.rs",
+      "sha256": "63f1a3da4ea2de34463795bd9429e3e369271449d069f5afdc44ef1025de892e",
+      "lines": 198
+    },
+    {
+      "path": "compiler/examples/task-contract-red.rs",
+      "sha256": "468a68084fe78bc5047a1cb32b42f4e9c001c45a4a77a14d3b4555eeaaa53b0a",
+      "lines": 171
+    },
+    {
+      "path": "compiler/tests/fixtures/sqlite-contract/matrix.json",
+      "sha256": "cedbf1fe73d932f2a03de442841a119126b1b67861f47906c88d9b1fa5bbac45",
+      "lines": 857
+    },
+    {
+      "path": "compiler/tests/sqlite_contract_inputs.rs",
+      "sha256": "aa7651117c97e605df1d52972bb261ddf59f4fdf0170b303543995ddd455d6e8",
+      "lines": 136
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "25ae6f1903f9d27e9738496e038eb7fd22104843b270251e9ed13a30f33c2461",
+      "lines": 444
+    },
+    {
+      "path": "docs/internal/sqlite-capacity-research-2026-10-08.md",
+      "sha256": "7fed911e7a75c76cc99dc8a34ef7b94586825a58ce5f5fda39cf07f3369f9027",
+      "lines": 131
+    }
+  ]
+}

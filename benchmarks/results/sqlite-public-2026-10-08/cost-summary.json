@@ -1,0 +1,128 @@
+{
+  "generated": [
+    {
+      "allocation_scope": "calling thread only; native SQLite, worker and observer allocations excluded",
+      "arch": "x86_64",
+      "dynamic_future_bytes": 456,
+      "lazy_open_allocation": {
+        "allocated_bytes": 688,
+        "allocations": 7,
+        "deallocations": 0,
+        "reallocations": 0
+      },
+      "literal_future_bytes": 424,
+      "name": "future_and_open"
+    },
+    {
+      "name": "literal",
+      "n": 32,
+      "ns_min": 25691,
+      "ns_median": 26328.5,
+      "ns_max": 81545,
+      "allocation_distribution": [
+        {
+          "count": 31,
+          "allocated_bytes": 280,
+          "allocations": 2,
+          "deallocations": 1,
+          "reallocations": 0
+        },
+        {
+          "count": 1,
+          "allocated_bytes": 2104,
+          "allocations": 3,
+          "deallocations": 1,
+          "reallocations": 0
+        }
+      ]
+    },
+    {
+      "name": "dynamic",
+      "n": 32,
+      "ns_min": 26108,
+      "ns_median": 26468.0,
+      "ns_max": 27253,
+      "allocation_distribution": [
+        {
+          "count": 32,
+          "allocated_bytes": 307,
+          "allocations": 3,
+          "deallocations": 1,
+          "reallocations": 0
+        }
+      ]
+    },
+    {
+      "allocation": {
+        "allocated_bytes": 0,
+        "allocations": 0,
+        "deallocations": 1,
+        "reallocations": 0
+      },
+      "name": "close_after_rollback"
+    }
+  ],
+  "manual": [
+    {
+      "allocation_scope": "calling thread only; native SQLite, worker and observer allocations excluded",
+      "arch": "x86_64",
+      "dynamic_future_bytes": 440,
+      "lazy_open_allocation": {
+        "allocated_bytes": 688,
+        "allocations": 7,
+        "deallocations": 0,
+        "reallocations": 0
+      },
+      "literal_future_bytes": 424,
+      "name": "future_and_open"
+    },
+    {
+      "name": "literal",
+      "n": 32,
+      "ns_min": 25880,
+      "ns_median": 26552.0,
+      "ns_max": 102650,
+      "allocation_distribution": [
+        {
+          "count": 31,
+          "allocated_bytes": 280,
+          "allocations": 2,
+          "deallocations": 1,
+          "reallocations": 0
+        },
+        {
+          "count": 1,
+          "allocated_bytes": 2104,
+          "allocations": 3,
+          "deallocations": 1,
+          "reallocations": 0
+        }
+      ]
+    },
+    {
+      "name": "dynamic",
+      "n": 32,
+      "ns_min": 26052,
+      "ns_median": 26464.5,
+      "ns_max": 55266,
+      "allocation_distribution": [
+        {
+          "count": 32,
+          "allocated_bytes": 307,
+          "allocations": 3,
+          "deallocations": 1,
+          "reallocations": 0
+        }
+      ]
+    },
+    {
+      "allocation": {
+        "allocated_bytes": 0,
+        "allocations": 0,
+        "deallocations": 1,
+        "reallocations": 0
+      },
+      "name": "close_after_rollback"
+    }
+  ]
+}

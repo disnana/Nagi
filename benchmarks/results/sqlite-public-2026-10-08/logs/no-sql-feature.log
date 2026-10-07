@@ -1,0 +1,22 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-sqlite-public/compiler)
+    Finished `test` profile [unoptimized] target(s) in 9.12s
+     Running tests/cli.rs (/workspace/nagi-build-cache/check/debug/deps/cli-53df2caa25d8c172)
+
+running 7 tests
+test an_unusable_cargo_is_not_reported_as_a_missing_rust_installation ... ok
+test check_and_lower_put_status_on_stderr_and_keep_cost_report_machine_readable ... ok
+test check_needs_no_cargo_and_build_reports_the_missing_tool ... ok
+test version_rejects_unexpected_arguments ... ok
+test version_works_without_project_runtime_or_build_tools ... ok
+test help_works_without_source_or_valid_project ... ok
+test cargo_failure_preserves_the_cause_without_blaming_the_nagi_program ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/sql_check.rs (/workspace/nagi-build-cache/check/debug/deps/sql_check-93ad38332ae369a8)
+
+running 1 test
+test compiler_without_sql_engine_preserves_regular_check_and_reports_feature_requirement ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

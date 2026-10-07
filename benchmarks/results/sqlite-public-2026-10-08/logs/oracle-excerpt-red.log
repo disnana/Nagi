@@ -1,0 +1,19 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-sqlite-public/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.40s
+     Running unittests examples/sqlite-contract-check.rs (/workspace/nagi-build-cache/check/debug/examples/sqlite_contract_check-c5228b623dfc2d4c)
+
+running 1 test
+
+thread 'tests::source_excerpt_is_not_checker_evidence' (319250) panicked at compiler/examples/sqlite-contract-check.rs:208:13:
+assertion failed: !matches_contract("fail", &stage, &diagnostic, "wrong", line, Some(2))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test tests::source_excerpt_is_not_checker_evidence ... FAILED
+
+failures:
+
+failures:
+    tests::source_excerpt_is_not_checker_evidence
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p nagic --example sqlite-contract-check`

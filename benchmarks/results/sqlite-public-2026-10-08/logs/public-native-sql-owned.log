@@ -1,0 +1,19 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-sqlite-public/compiler)
+    Finished `test` profile [unoptimized] target(s) in 7.18s
+     Running tests/resource_contract_characterization.rs (/workspace/nagi-build-cache/check/debug/deps/resource_contract_characterization-186096c763b6b56c)
+
+running 4 tests
+test registered_accessors_match_the_complete_inventory ... ok
+test registered_resources_match_the_independent_inventory ... ok
+test registered_operations_match_signatures_and_passing ... ok
+test registered_constants_match_the_complete_inventory ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sqlite_public.rs (/workspace/nagi-build-cache/check/debug/deps/sqlite_public-74b9292058dabfcd)
+
+running 1 test
+test public_sqlite_high_saved_low_and_handwritten_low_execute_real_transactions ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.83s
+

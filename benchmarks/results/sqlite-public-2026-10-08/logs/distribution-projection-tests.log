@@ -1,0 +1,10 @@
+   Compiling nagi-runtime v0.1.11 (/workspace/nagi-sqlite-public-2026-10-08/distribution-projection/runtime)
+   Compiling nagi-sqlite-distribution-consumer v0.0.0 (/workspace/nagi-sqlite-public-2026-10-08/distribution-projection/consumer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.89s
+     Running tests/sqlite_public_api.rs (target/debug/deps/sqlite_public_api-035679e7e89d16a6)
+
+running 1 test
+test published_sqlite_pool_api_builds_without_test_seams ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,11 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-sqlite-public/compiler)
+    Finished `test` profile [unoptimized] target(s) in 10.43s
+     Running tests/sqlite_public.rs (/workspace/nagi-build-cache/check/debug/deps/sqlite_public-74b9292058dabfcd)
+
+running 3 tests
+test sql_materialization_does_not_release_the_transaction_borrow ... ok
+test materialized_sql_allows_later_parameter_move_of_the_same_string ... ok
+test sqlite_sql_evaluation_order_and_row_decode_execute ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 3.24s
+

@@ -1,0 +1,22 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-sqlite-public/compiler)
+    Finished `test` profile [unoptimized] target(s) in 8.79s
+     Running unittests examples/sqlite-contract-check.rs (/workspace/nagi-build-cache/check/debug/examples/sqlite_contract_check-c5228b623dfc2d4c)
+
+running 4 tests
+test tests::a_wrong_diagnostic_or_original_line_remains_red ... ok
+test tests::infrastructure_failure_never_satisfies_a_checker_negative ... ok
+test tests::source_excerpt_is_not_checker_evidence ... ok
+test tests::existing_checker_negative_is_mapped_to_the_original_source ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests examples/task-contract-red.rs (/workspace/nagi-build-cache/check/debug/examples/task_contract_red-ee4863edcaebdf04)
+
+running 4 tests
+test tests::wrong_diagnostic_or_source_location_is_a_contract_failure ... ok
+test tests::parse_or_resolve_rejection_cannot_satisfy_a_checker_contract ... ok
+test tests::existing_checker_negative_preserves_original_fixture_location ... ok
+test tests::source_excerpt_is_not_checker_evidence ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

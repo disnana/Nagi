@@ -1,0 +1,4 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-sqlite-public/compiler)
+    Finished `dev` profile [unoptimized] target(s) in 0.34s
+     Running `/workspace/nagi-build-cache/check/debug/examples/sqlite-contract-check --report /workspace/nagi-sqlite-public-2026-10-08/contracts-initial-red.json`
+SQLite contracts: 0/46 matched; report: /workspace/nagi-sqlite-public-2026-10-08/contracts-initial-red.json
