@@ -1,5 +1,7 @@
 # SQLite Pool adapter: 採用した比較方針
 
+2026-10-08追記: Q004のdeadpoolは比較試作として採用した履歴。公開実装はユーザー承認下で既存Tokio Semaphoreとlazy専用adapterを選び、deadpool/deadpool-runtimeを削除する。理由・互換性・終了責任・検証は[公開runtime判断](sqlite-public-runtime-decision.md)を参照。以下の比較とcapability表は履歴として保持する。
+
 2026-10-06の判断資料。Q004で下記の依存とcapability表を承認済み。[PR #82](https://github.com/disnana/Nagi/pull/82)ではprivate一接続adapterのbuild／実行・4 OS CIを確認し、main `7999bab`へ反映された。[比較結果](sqlite-adapter-results.md)に43件・全suite・測定と未完了範囲がある。以下の候補比較は承認前の調査記録として残す。公開Pool／Txや多接続まで実装済みとは扱わない。[承認記録](open-questions.md#q-004-sqlite-poolのwrapper依存と未指定capability)と[ADR 010](adr/010-sqlite-transaction-boundary.md)を参照。
 
 ## 推奨: generic deadpoolのManagerを使う

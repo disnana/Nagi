@@ -217,6 +217,10 @@ class ReleasePlanTests(unittest.TestCase):
         self.change("runtime/src/lib.rs", "// committed runtime\n")
         self.change("runtime/src/http/tests.rs", "// development test\n")
         self.change("runtime/src/actor/lifecycle_adversarial_tests.rs", "// development lifecycle tests\n")
+        self.change("runtime/src/sqlite/mod.rs", "// public SQLite module\n")
+        self.change("runtime/src/sqlite/adapter.rs", "// lazy SQLite adapter\n")
+        self.change("runtime/src/sqlite/session.rs", "// native SQLite session\n")
+        self.change("runtime/src/sqlite/public_tests.rs", "// development SQLite tests\n")
         self.change("runtime/examples/bench.rs", "// development benchmark\n")
         self.change("LICENSE", "MIT license fixture\n")
         self.change("compiler/Cargo.toml", '[package]\nname="nagic"\n')
@@ -277,7 +281,8 @@ class ReleasePlanTests(unittest.TestCase):
         prefix = f"nagi-0.1.0-{platform}/"
         self.assertEqual(set(names), {prefix + name for name in (
             "nagic.exe" if platform == "windows-x86_64" else "nagic",
-            "runtime/Cargo.toml", "runtime/src/lib.rs", "LICENSE", "release.json", "README.txt")})
+            "runtime/Cargo.toml", "runtime/src/lib.rs", "runtime/src/sqlite/mod.rs", "runtime/src/sqlite/adapter.rs",
+            "runtime/src/sqlite/session.rs", "LICENSE", "release.json", "README.txt")})
         self.assertEqual(read(prefix + "runtime/src/lib.rs"), b"// committed runtime\n")
         manifest = tomllib.loads(read(prefix + "runtime/Cargo.toml").decode())
         self.assertEqual(manifest["package"], {"name": "nagi-runtime", "version": "0.1.0", "edition": "2021", "license": "MIT"})

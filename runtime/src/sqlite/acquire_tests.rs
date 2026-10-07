@@ -1,4 +1,4 @@
-// private取得予算の先行oracle。公開Options/defaultの実装ではない。
+// 既存の取得予算oracleを本体adapterで再実行する。None予算はtest-only。
 use super::adapter::{AcquireBudget, Adapter, AdapterSeams};
 use super::{Config, Failure, Finish, Gate, Kind, Outcome, Tx};
 use crate::FromRow;
@@ -191,7 +191,7 @@ async fn acquire_immediate_logical_full_is_timeout_without_pool_failure() {
 }
 
 #[tokio::test]
-async fn acquire_immediate_native_full_after_stock_detach_is_timeout() {
+async fn acquire_immediate_native_full_after_checkout_detach_is_timeout() {
     let detaching = Arc::new(Gate::new());
     let publication = Arc::new(Gate::new());
     let adapter = Adapter::new(
@@ -334,7 +334,7 @@ async fn acquire_expired_finite_budget_does_not_register_even_when_native_free()
 }
 
 #[tokio::test]
-async fn acquire_same_task_scopes_are_isolated_and_drop_restores_legacy_begin() {
+async fn acquire_same_task_explicit_budgets_are_isolated_and_cancel_preserves_legacy_begin() {
     let detaching = Arc::new(Gate::new());
     let publication = Arc::new(Gate::new());
     let adapter = Adapter::new(
@@ -354,7 +354,7 @@ async fn acquire_same_task_scopes_are_isolated_and_drop_restores_legacy_begin() 
     .await;
     let taking = std::thread::spawn(move || held.take_and_drop());
     let entered = watch(detaching.wait()).await;
-    // stock permitは返却済み。longはManagerが予算を読むnative fenceまで進む。
+    // semaphore permitは返却済み。longはManagerが予算を読むnative fenceまで進む。
     let mut long = Box::pin(adapter.begin_with_budget(AcquireBudget::Deadline(
         Instant::now() + Duration::from_secs(20),
     )));
@@ -471,7 +471,16 @@ async fn acquire_expiry_does_not_replace_closed_or_recycle_failure_cause() {
     assert!(error.retired && error.cleanup.is_some());
     let repeated = failure_error.unwrap();
     assert_eq!(repeated.kind, Kind::Worker);
-    assert_eq!(repeated.cleanup, error.cleanup);
+    assert_eq!(
+        repeated
+            .cleanup
+            .as_ref()
+            .map(|e| (&e.message, crate::error_kind(e))),
+        error
+            .cleanup
+            .as_ref()
+            .map(|e| (&e.message, crate::error_kind(e)))
+    );
     assert!(repeated.retired);
     assert!(closed.unwrap().is_err());
     assert_joined(&adapter, 1);

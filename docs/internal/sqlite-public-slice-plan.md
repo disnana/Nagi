@@ -1,6 +1,9 @@
-# SQLite公開縦切りの前に検証すること
+# SQLite公開縦切りの検証計画
 
-2026-10-06。[一接続adapterの結果](sqlite-adapter-results.md)を踏まえた設計と進行状況。公開配線は未実装。native容量と独立joinは[内部設計](sqlite-multiconnection-design.md)と[先行回帰の結果](sqlite-multiconnection-results.md)を分け、#84でmainへ反映した。取得予算も別の[設計](sqlite-acquire-budget-design.md)・[private検証結果](sqlite-acquire-budget-results.md)を保存した。巨大capacityは[公開前の判断](sqlite-capacity-decision.md)として残る。Q002／Q004の公開API・所有契約・policy・依存は維持する。
+2026-10-08更新。runtimeは`runtime::sqlite`へ統合し、専用Tokio adapterでcapacity判断を解消した。[公開runtime判断](sqlite-public-runtime-decision.md)に確定差分と証拠を記録する。compiler canonical registry/SQL/46入力/三構文native/4 OSは別に検証し、単体runtime成功をPhase 4 acceptanceへ読み替えない。以下は2026-10-06時点の候補と履歴で、stock deadpool/task-localの記述は現在の実装ではない。現在は明示AcquireBudgetをadapterへ渡す。
+
+
+2026-10-06時点の計画記録。[一接続adapterの結果](sqlite-adapter-results.md)を踏まえた設計と進行状況。当時は公開配線が未実装。native容量と独立joinは[内部設計](sqlite-multiconnection-design.md)と[先行回帰の結果](sqlite-multiconnection-results.md)を分け、#84でmainへ反映した。取得予算も別の[設計](sqlite-acquire-budget-design.md)・[private検証結果](sqlite-acquire-budget-results.md)を保存した。巨大capacityは[公開前の判断](sqlite-capacity-decision.md)として残る。Q002／Q004の公開API・所有契約・policy・依存は維持する。
 
 ## native容量と独立した終了観測
 

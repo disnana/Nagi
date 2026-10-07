@@ -1,29 +1,25 @@
-# SQLite公開capacity: stock allocationの残る判断
+# SQLite公開capacityの判断
 
-2026-10-06。[Q002](sqlite-pool-proposal.md)は数値default／任意の上限を加えず、正数・native変換・Tokio受理範囲を検査し、巨大値を無条件に確保してvalidation済みとしない方針。Q004はdeadpool 0.13.1の比較試作を承認した。公開Poolへそのまま配線してよいとするacceptanceではない。
+2026-10-08。stock deadpool 0.13.1の全slot infallible予約を公開へ接続するブロッカーは、既存Tokio Semaphoreとlazy専用adapterの採用によって解消する。ユーザーは正式化前の長期的な妥当性を優先し、必要な依存/API/Failure分類変更を承認した。最新release/mainにもfallible builderがないこと、限定vendorとbb8/mobcの費用は[一次調査](sqlite-capacity-research-2026-10-08.md)に残す。
 
-## sourceから確認した境界
+## 受理範囲と責務
 
-stock builderは`VecDeque::with_capacity(max_size)`で全slot容量をinfallibleに確保する。0でbuildしてからresizeしても、`reserve_exact`による確保が残る。`ObjectInner`はprivateで、wrapperからその配列のLayoutやfallible予約へアクセスするAPIはない。
+`options`はconnections/queue_capacityの正数・usize変換・`Semaphore::MAX_PERMITS`以下、非負ms・Durationとnative Instant加算、busy_msのi32変換を検査する。rusqlite busy_timeoutのi32変換panicを公開境界で防ぐ。任意の数値cap/default、無期限sentinelは加えない。
 
-正数、usize、Semaphore上限、時間変換だけでは、内部配列のbyte容量が可表現で確保に失敗しないとは言えない。`Layout::array::<WorkerHandle>`の下限検査は確実に不正な値を拒否できるが、実際のslot全体のLayout検査を置き換えない。公開Objectのsizeofを代理にすると、別の余分な制限を作る。
+connections個のslot配列を持たないため、`Layout::array<ObjectInner>`という受理上限は適用しない。idleとnative ledgerは実際の接続数に応じて増え、追加の前に`try_reserve(1)`する。queue_capacityは各session inboxの上限であり全heapの上限ではない。Tokio bounded mpscも指定数のCommandを一括確保する構造ではない。
 
-ここでは巨大allocationを実行していない。global OOM／abortの普遍的回復も保証しない。既存公開Dbの再現済み不具合として数えず、Phase 4公開配線前のP2設計ブロッカーとして残す。未解決のまま公開してQ002のvalidation契約に反する場合は、公開契約違反として別に評価する。
+openは空path、URI、複数connectionの`:memory:`を拒否してpathを所有し、小さい管理構造を作る。native Connection/worker/observerはbegin時にlazy起動する。取得予算はSemaphore待ちからnative record登録まで同じ絶対期限で、登録後のopen/ready/BEGIN/busyは含まない。0msは条件が即時に満たされれば成功する。
 
-## 選択肢
+## 予約失敗と終了責任
 
-| 案 | できること | 残る条件 |
-|---|---|---|
-| 現stock版でprivate小容量の検証を継続 | native容量／join／取得予算の契約を実行検証できる | 公開capacityの受理範囲とallocationの検査は未完了 |
-| deadpool内でLayout検査とfallible予約を行うbuild APIを利用 | wrapperからprivate配置を複製せず、crate自身へ容量と確保を任せられる | そのAPIを備える版は本調査で確認できていない。上流対応・依存版変更・failure分類の判断が必要 |
-| wrapperを再比較する | 同じlifecycle oracleを維持し、allocation APIも比較できる | 代替をまだ選定していない。依存の承認、4 OS、取得／取消／終了の再検証が必要 |
+新`FailureKind.ALLOCATION`はfallible container予約が実際にErrを返した場合に用いる。設定不正のINVALID、worker/native起動や故障のWORKERと区別する。primary causeは既存Errorのkind/messageを保持し、明示copy operationで取得する。
 
-今は一案目で取得予算の縦切りを進める。公開化前に残る選択を判断し、その時点で必要な依存差分・移行・検証条件を提示する。source読取だけで二案目のAPIが存在するとは書かない。
+native ledgerの予約失敗はworker起動前に`NOT_APPLICABLE / false`を返す。idle queue返却の予約失敗はDrop内なので、`NOT_APPLICABLE / true`をledgerへ記録してclosingへ進める。idleをlock外で破棄し、workerのsenderを解放し、独立observerが実joinとcause公開を終えるまでlive recordを除かない。返却処理を終えたことを回復やjoinの証明にしない。
 
-## 採らない回避策
+最後のPool ownerのDropでもclose要求を開始する。checkout/TxはPoolを強参照せず、active Txのcleanupを完了させてからnative終了する。明示closeのtimeout/取消でclosingを解除しない。再closeで実完了を待てる。close/acquireのFailure outcomeはTxがないためNOT_APPLICABLEとする。
 
-`catch_unwind`はallocator abortを回復しない。先に大きいbufferを`try_reserve`して捨てても、stockが次に行う確保の成功を証明しない。private slot構造のコピーや任意の数値capを承認なしで追加しない。巨大値を試してプロセスを落とすこともvalidationの代わりにしない。
+## 検証の限界
 
-次の判断では、公開Options／openのどこで容量・確保失敗を返すか、Failure分類、受理範囲を明示する。公開配線前に未決のまま成功扱いすることを避ける。[ADR 010](adr/010-sqlite-transaction-boundary.md)と[公開縦切り計画](sqlite-public-slice-plan.md)を参照。
+巨大allocation/resource exhaustion実験は行わない。小さいfault injectionで予約失敗と停止/joinを検査し、通常cap1/cap2とscalar境界で受理範囲を検査する。Arc/String/Tokio/allocator全体をfallible化せず、global OOM/abortの普遍回復は保証しない。SQL制限・native上限・独立join・取消・取得予算の既存oracleは公開本体上へ移す。compiler三構文/46入力と4 OSの完了はruntime単体成功と区別する。
 
-一次根拠: [deadpool pool.rs](https://docs.rs/crate/deadpool/0.13.1/source/src/managed/pool.rs)、[object.rs](https://docs.rs/crate/deadpool/0.13.1/source/src/managed/object.rs)、[Rust Layout::array](https://doc.rust-lang.org/std/alloc/struct.Layout.html#method.array)、[VecDeque::try_reserve_exact](https://doc.rust-lang.org/std/collections/struct.VecDeque.html#method.try_reserve_exact)。Solによる独立sourceレビューと照合した。allocation結果を測定した資料ではない。
+採用理由・API差分・配布境界・検証ログは[公開runtime判断](sqlite-public-runtime-decision.md)、公開契約は[Q002](sqlite-pool-proposal.md)、決定履歴は[ADR 010](adr/010-sqlite-transaction-boundary.md)を参照。

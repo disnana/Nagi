@@ -1,27 +1,149 @@
-//! Q004のprivate generic deadpool比較。slot待機/公平性/recycle algorithmはdeadpool。
+//! Public SQLite checkout adapter. Tokio owns FIFO slot waiting and cancellation.
 //! native session/closeはsession.rs、ここはowned checkoutと終了観測のadapterだけ。
 use super::session::{
     native_worker, BeginRequest, Config, Failure, Gate, Kind, Outcome, State, Tx,
 };
-use deadpool::managed::{self, Manager, Metrics, RecycleError, RecycleResult};
+use std::collections::VecDeque;
+use std::ops::Deref;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, Weak,
     },
     time::Duration,
 };
-use tokio::sync::{mpsc, oneshot, Notify};
+use tokio::sync::{mpsc, oneshot, Notify, OwnedSemaphorePermit, Semaphore};
 use tokio::time::Instant;
 
 const WATCHDOG: Duration = Duration::from_secs(10);
-type NativePool = managed::Pool<NativeManager>;
-type Checkout = managed::Object<NativeManager>;
 type ReadyReply = Arc<Mutex<Option<oneshot::Sender<Result<(), Failure>>>>>;
 
-tokio::task_local! {
-    // Manager.createの署名に取得引数がないため、stock getのpoll中だけ設定する。
-    static CURRENT_ACQUIRE_BUDGET: AcquireBudget;
+// Tokio owns FIFO waiting, permit cancellation, and closing wakeups. This small
+// adapter owns only lazy idle handles and cleanup-before-return checkout ownership.
+struct LogicalPool {
+    manager: NativeManager,
+    idle: Mutex<VecDeque<WorkerHandle>>,
+    semaphore: Arc<Semaphore>,
+}
+struct NativePool(Arc<LogicalPool>);
+struct Checkout {
+    worker: Option<WorkerHandle>,
+    pool: Weak<LogicalPool>,
+    _permit: Option<OwnedSemaphorePermit>,
+}
+impl Deref for Checkout {
+    type Target = WorkerHandle;
+    fn deref(&self) -> &WorkerHandle {
+        self.worker.as_ref().unwrap()
+    }
+}
+impl Checkout {
+    #[cfg(test)]
+    fn take(mut this: Self) -> WorkerHandle {
+        let mut worker = this.worker.take().unwrap();
+        this._permit.take(); // fixture preserves the pre-detach permit gap oracle.
+        if let Some(pool) = this.pool.upgrade() {
+            pool.manager.detach(&mut worker);
+        }
+        worker
+    }
+}
+impl Drop for Checkout {
+    fn drop(&mut self) {
+        let Some(worker) = self.worker.take() else {
+            return;
+        };
+        let Some(pool) = self.pool.upgrade() else {
+            drop(worker);
+            return;
+        };
+        let mut worker = Some(worker);
+        let error = {
+            let mut idle = pool.idle.lock().unwrap();
+            if pool.semaphore.is_closed() {
+                None
+            } else if pool.manager.seams.fail_idle_reserve || idle.try_reserve(1).is_err() {
+                Some(Failure::allocation("SQLite idle handle reservation failed"))
+            } else {
+                idle.push_back(worker.take().unwrap());
+                None
+            }
+        };
+        if let Some(mut error) = error {
+            error.retired = true;
+            pool.manager.ledger.fail(error); // cause -> shared stop/drain before native Drop/join.
+        }
+        drop(worker); // lock-free closure request; ledger keeps actual join responsibility.
+    }
+}
+impl NativePool {
+    fn new(manager: NativeManager, capacity: usize) -> Self {
+        Self(Arc::new(LogicalPool {
+            manager,
+            idle: Mutex::new(VecDeque::new()),
+            semaphore: Arc::new(Semaphore::new(capacity)),
+        }))
+    }
+    fn close(&self) {
+        self.0.semaphore.close();
+        let idle = std::mem::take(&mut *self.0.idle.lock().unwrap());
+        drop(idle); // never while holding the queue or native ledger locks.
+    }
+    #[cfg(test)]
+    fn available(&self) -> usize {
+        self.0.idle.lock().unwrap().len()
+    }
+    async fn get(&self, budget: Option<AcquireBudget>) -> Result<Checkout, Failure> {
+        if let Some(error) = self.0.manager.ledger.error() {
+            return Err(error);
+        }
+        let semaphore = Arc::clone(&self.0.semaphore);
+        let permit = match budget {
+            Some(AcquireBudget::Immediate) => {
+                semaphore.try_acquire_owned().map_err(|error| match error {
+                    tokio::sync::TryAcquireError::Closed => {
+                        Failure::primary(Kind::Closed, Outcome::NotApplicable, "SQLite pool closed")
+                    }
+                    tokio::sync::TryAcquireError::NoPermits => Failure::primary(
+                        Kind::AcquireTimeout,
+                        Outcome::NotApplicable,
+                        "logical slot not immediately available",
+                    ),
+                })
+            }
+            Some(AcquireBudget::Deadline(deadline)) => {
+                match tokio::time::timeout_at(deadline, semaphore.acquire_owned()).await {
+                    Ok(result) => result.map_err(|_| {
+                        Failure::primary(Kind::Closed, Outcome::NotApplicable, "SQLite pool closed")
+                    }),
+                    Err(_) => Err(Failure::primary(
+                        Kind::AcquireTimeout,
+                        Outcome::NotApplicable,
+                        "logical slot reservation timed out",
+                    )),
+                }
+            }
+            None => semaphore.acquire_owned().await.map_err(|_| {
+                Failure::primary(Kind::Closed, Outcome::NotApplicable, "SQLite pool closed")
+            }),
+        }
+        .map_err(|error| self.0.manager.ledger.error().unwrap_or(error))?;
+        if let Some(error) = self.0.manager.ledger.error() {
+            return Err(error);
+        }
+        let worker = self.0.idle.lock().unwrap().pop_front();
+        let result = if let Some(mut worker) = worker {
+            self.0.manager.recycle(&mut worker).await.map(|()| worker)
+        } else {
+            self.0.manager.create(budget).await
+        };
+        let worker = result.map_err(|error| self.0.manager.ledger.error().unwrap_or(error))?;
+        Ok(Checkout {
+            worker: Some(worker),
+            pool: Arc::downgrade(&self.0),
+            _permit: Some(permit),
+        })
+    }
 }
 
 // private一取得の不変予算。Immediateは期限切れDeadlineとは別に扱う。
@@ -38,6 +160,7 @@ impl AcquireBudget {
             now.checked_add(duration).map(Self::Deadline)
         }
     }
+    #[cfg(test)]
     pub fn remaining_at(self, now: Instant) -> Duration {
         match self {
             Self::Immediate => Duration::ZERO,
@@ -54,10 +177,13 @@ pub(super) struct AdapterSeams {
     pub checkout: Option<Arc<AdmissionGate>>,
     pub fail_recycle: bool,
     pub publication: Option<Arc<Gate>>,
+    #[cfg(test)]
     pub detaching: Option<Arc<Gate>>,
     pub fail_terminal_result: bool,
     pub fail_observer_spawn: bool,
     pub fail_native_spawn: bool,
+    pub fail_native_reserve: bool,
+    pub fail_idle_reserve: bool,
 }
 impl AdapterSeams {
     fn applies(&self, ordinal: usize) -> bool {
@@ -70,6 +196,7 @@ pub(super) struct AdmissionGate {
     changed: Notify,
 }
 impl AdmissionGate {
+    #[cfg(test)]
     pub fn new() -> Self {
         Self {
             entered: AtomicBool::new(false),
@@ -97,9 +224,11 @@ impl AdmissionGate {
         .await
         .expect("adapter barrier watchdog expired");
     }
+    #[cfg(test)]
     pub async fn wait(&self) {
         self.wait_for(&self.entered).await;
     }
+    #[cfg(test)]
     pub fn release(&self) {
         self.released.store(true, Ordering::SeqCst);
         self.changed.notify_waiters();
@@ -114,6 +243,7 @@ pub(super) struct AdapterStats {
     pub starting: usize,
     pub admitted: usize,
     pub returned: usize,
+    #[cfg(test)]
     pub detached: usize,
     pub handle_drops: usize,
     pub native_closed: usize,
@@ -130,15 +260,18 @@ struct Records {
 }
 struct Ledger {
     records: Mutex<Records>,
-    pool: Mutex<Option<managed::WeakPool<NativeManager>>>,
+    pool: Mutex<Option<Weak<LogicalPool>>>,
     changed: Notify,
 }
 impl Ledger {
     fn error(&self) -> Option<Failure> {
         let records = self.records.lock().unwrap();
-        if records.failure.is_some() {
-            let mut error = records.failure.clone().unwrap();
-            error.kind = Kind::Worker;
+        if let Some(failure) = &records.failure {
+            let mut error = failure.duplicate();
+            if error.kind != Kind::Allocation {
+                error.kind = Kind::Worker;
+            }
+            error.outcome = Outcome::NotApplicable;
             return Some(error);
         }
         if records.stats.closing {
@@ -157,22 +290,13 @@ impl Ledger {
     }
     fn request_close(&self) {
         self.change(|stats| stats.closing = true);
-        // deadpool.close drops WorkerHandle inside its own lock。ledger lockを保持しない。
-        let pool = self
-            .pool
-            .lock()
-            .unwrap()
-            .as_ref()
-            .and_then(|pool| pool.upgrade());
+        // idle handlesのDropはledgerを触るためledger lockを保持しない。
+        let pool = self.pool.lock().unwrap().as_ref().and_then(Weak::upgrade);
         if let Some(pool) = pool {
-            pool.close();
-            // Pending waiterへのpermit予約や返却途中ではresize(0)がidle Objectを
-            // 残し得る。closed/max_size=0の後にqueueを退役し、late返却はstock
-            // detachへ渡す。active checkoutには触れず、ledger lock外でDropする。
-            let removed = pool.retain(|_, _| false).removed;
-            drop(removed);
+            NativePool(pool).close();
         }
     }
+
     fn fail(&self, error: Failure) {
         {
             let mut records = self.records.lock().unwrap();
@@ -230,21 +354,19 @@ impl Ledger {
         stats.starting == 0 && stats.joined + stats.start_failed == stats.created
     }
     async fn until(&self, predicate: impl Fn(&AdapterStats) -> bool) {
-        tokio::time::timeout(WATCHDOG, async {
-            loop {
-                let changed = self.changed.notified();
-                if predicate(&self.snapshot()) {
-                    return;
-                }
-                changed.await;
+        loop {
+            let changed = self.changed.notified();
+            if predicate(&self.snapshot()) {
+                return;
             }
-        })
-        .await
-        .expect("adapter observation watchdog expired");
+            changed.await;
+        }
     }
 }
 #[derive(Clone)]
+#[cfg(test)]
 pub(super) struct Observer(Arc<Ledger>);
+#[cfg(test)]
 impl Observer {
     pub fn snapshot(&self) -> AdapterStats {
         self.0.snapshot()
@@ -317,8 +439,8 @@ struct NativeManager {
 
 // replyの喪失より先に起動失敗を公開。native未起動をfake joinへ変えない。
 fn fail_start(ledger: &Ledger, state: &Arc<State>, ready: &ReadyReply, error: Failure) {
-    state.fail(error.clone());
-    ledger.fail(error.clone());
+    state.fail(error.duplicate());
+    ledger.fail(error.duplicate());
     ledger.start_failed(state);
     let reply = ready.lock().unwrap().take();
     if let Some(reply) = reply {
@@ -389,21 +511,21 @@ fn observe_native(
     }
 }
 
-impl Manager for NativeManager {
-    type Type = WorkerHandle;
-    type Error = Failure;
-    async fn create(&self) -> Result<WorkerHandle, Failure> {
-        // 最初のpollで取得ごとの値をcopyし、同じ絶対期限を全native待機へ使う。
-        // scopeなしは従来のprivate begin/checkout比較用。公開defaultではない。
-        let budget = CURRENT_ACQUIRE_BUDGET.try_with(|budget| *budget).ok();
+impl NativeManager {
+    async fn create(&self, budget: Option<AcquireBudget>) -> Result<WorkerHandle, Failure> {
+        // 明示された同じ絶対予算をlogical permitとnative登録待ちへ使う。
+        // Noneはtest-only比較入口。共有期限やtask-localは不要。
         let state = Arc::new(State::default());
         let ordinal = loop {
             let changed = self.ledger.changed.notified();
             let registered = {
                 let mut records = self.ledger.records.lock().unwrap();
                 if let Some(error) = &records.failure {
-                    let mut error = error.clone();
-                    error.kind = Kind::Worker;
+                    let mut error = error.duplicate();
+                    if error.kind != Kind::Allocation {
+                        error.kind = Kind::Worker;
+                    }
+                    error.outcome = Outcome::NotApplicable;
                     return Err(error);
                 }
                 if records.stats.closing {
@@ -424,7 +546,7 @@ impl Manager for NativeManager {
                     }
                 }
                 // starting/healthy/取消/detachedを含むnative容量の終了fence。
-                // slotの選択/待機順序/公平性はstock deadpoolが引き続き所有する。
+                // slotの選択/待機順序/公平性はTokio Semaphoreへ委譲する。
                 if records.workers.len() >= self.capacity {
                     if matches!(budget, Some(AcquireBudget::Immediate)) {
                         return Err(Failure::primary(
@@ -436,6 +558,11 @@ impl Manager for NativeManager {
                     None
                 } else {
                     // closing確認とstarting/join責任の登録はspawn前の同じcritical section。
+                    if self.seams.fail_native_reserve || records.workers.try_reserve(1).is_err() {
+                        return Err(Failure::allocation(
+                            "SQLite native record reservation failed",
+                        ));
+                    }
                     records.workers.push(Arc::clone(&state));
                     records.stats.created += 1;
                     records.stats.starting += 1;
@@ -508,13 +635,13 @@ impl Manager for NativeManager {
             Ok(observer) => drop(observer), // native JoinHandleはobserver closure内だけにある。
             Err(error) => {
                 let error = Failure::cleanup(Outcome::NotApplicable, error.to_string());
-                fail_start(&self.ledger, &state, &ready, error.clone());
+                fail_start(&self.ledger, &state, &ready, error.duplicate());
                 return Err(error);
             }
         }
         let ready = ready_receiver.await.map_err(|_| state.worker_error())?;
         if let Err(error) = ready {
-            self.ledger.fail(error.clone());
+            self.ledger.fail(error.duplicate());
             return Err(error);
         }
         if self.seams.applies(ordinal) {
@@ -524,11 +651,7 @@ impl Manager for NativeManager {
         }
         startup.handoff()
     }
-    async fn recycle(
-        &self,
-        worker: &mut WorkerHandle,
-        _metrics: &Metrics,
-    ) -> RecycleResult<Failure> {
+    async fn recycle(&self, worker: &mut WorkerHandle) -> Result<(), Failure> {
         let error = worker.state.error().or_else(|| {
             if self.seams.fail_recycle {
                 Some(Failure::cleanup(
@@ -540,8 +663,8 @@ impl Manager for NativeManager {
             }
         });
         if let Some(error) = error {
-            self.ledger.fail(error.clone());
-            return Err(RecycleError::Backend(error));
+            self.ledger.fail(error.duplicate());
+            return Err(error);
         }
         let stats = worker.state.snapshot();
         if stats.joined || stats.begun != stats.settled || stats.management {
@@ -549,11 +672,12 @@ impl Manager for NativeManager {
                 Outcome::NotApplicable,
                 "worker/session cleanup not verified",
             );
-            self.ledger.fail(error.clone());
-            return Err(RecycleError::Backend(error));
+            self.ledger.fail(error.duplicate());
+            return Err(error);
         }
         Ok(())
     }
+    #[cfg(test)]
     fn detach(&self, worker: &mut WorkerHandle) {
         if self.seams.applies(worker.ordinal) {
             if let Some(gate) = &self.seams.detaching {
@@ -564,7 +688,7 @@ impl Manager for NativeManager {
     }
 }
 
-// Objectはnative workerのBeginRequest内へ移動し、cleanupのscope末尾でだけ返す。
+// Checkoutはnative workerのBeginRequest内へ移動し、cleanupのscope末尾でだけ返す。
 // ledgerはTx/session senderを保持しない。Tokio task Dropで早期返却する経路もない。
 struct CheckoutOwner {
     object: Option<Checkout>,
@@ -592,6 +716,7 @@ impl Drop for Inner {
 }
 pub(super) struct Adapter(Arc<Inner>);
 impl Adapter {
+    #[cfg(test)]
     pub fn new(config: Config, seams: AdapterSeams) -> Self {
         Self::with_capacity(config, seams, 1)
     }
@@ -609,75 +734,62 @@ impl Adapter {
             ledger: Arc::clone(&ledger),
             capacity,
         };
-        let pool = NativePool::builder(manager)
-            .max_size(capacity)
-            .runtime(deadpool::Runtime::Tokio1)
-            .build()
-            .unwrap();
-        *ledger.pool.lock().unwrap() = Some(pool.weak());
+        let pool = NativePool::new(manager, capacity);
+        *ledger.pool.lock().unwrap() = Some(Arc::downgrade(&pool.0));
         Self(Arc::new(Inner {
             pool,
             ledger,
             seams,
         }))
     }
+    pub fn is_closing(&self) -> bool {
+        self.0.ledger.snapshot().closing
+    }
     pub fn clone_handle(&self) -> Self {
         Self(Arc::clone(&self.0))
     }
+    #[cfg(test)]
     pub fn observer(&self) -> Observer {
         Observer(Arc::clone(&self.0.ledger))
     }
+    #[cfg(test)]
     pub fn available(&self) -> usize {
-        self.0.pool.status().available
+        self.0.pool.available()
     }
+    #[cfg(test)]
     pub fn resize_zero(&self) {
-        self.0.pool.resize(0);
+        self.0.pool.close();
     }
+    #[cfg(test)]
     pub async fn begin(&self) -> Result<Tx, Failure> {
         // 従来のprivate無期限比較入口。公開Options/defaultの保証ではない。
         self.begin_inner(None).await
     }
+    #[cfg(test)]
     pub async fn begin_with_budget(&self, budget: AcquireBudget) -> Result<Tx, Failure> {
         self.begin_inner(Some(budget)).await
     }
-    fn get_failure(&self, error: managed::PoolError<Failure>) -> Failure {
-        self.0.ledger.error().unwrap_or_else(|| match error {
-            managed::PoolError::Timeout(managed::TimeoutType::Wait) => Failure::primary(
-                Kind::AcquireTimeout,
-                Outcome::NotApplicable,
-                "logical slot reservation timed out",
-            ),
-            managed::PoolError::Backend(error) => error,
-            managed::PoolError::Closed => {
-                Failure::primary(Kind::Closed, Outcome::NotApplicable, "deadpool closed")
-            }
-            error => Failure::primary(
-                Kind::Worker,
-                Outcome::NotApplicable,
-                format!("deadpool get: {error:?}"),
-            ),
-        })
+    pub async fn begin_mode_with_budget(
+        &self,
+        mode: super::BeginMode,
+        budget: AcquireBudget,
+    ) -> Result<Tx, Failure> {
+        self.begin_inner_mode(Some(budget), mode).await
     }
+    #[cfg(test)]
     async fn begin_inner(&self, budget: Option<AcquireBudget>) -> Result<Tx, Failure> {
+        self.begin_inner_mode(budget, super::BeginMode::Deferred)
+            .await
+    }
+    async fn begin_inner_mode(
+        &self,
+        budget: Option<AcquireBudget>,
+        mode: super::BeginMode,
+    ) -> Result<Tx, Failure> {
         if let Some(error) = self.0.ledger.error() {
             return Err(error);
         }
-        let object = match budget {
-            Some(budget) => {
-                let timeouts = managed::Timeouts {
-                    wait: Some(budget.remaining_at(Instant::now())),
-                    create: None,
-                    recycle: None,
-                };
-                // scopeはstock取得Futureだけ。task-localはpoll/Drop後に元の値へ戻る。
-                // native threadやcheckout後のsession admission/返信には渡さない。
-                CURRENT_ACQUIRE_BUDGET
-                    .scope(budget, self.0.pool.timeout_get(&timeouts))
-                    .await
-            }
-            None => self.0.pool.get().await,
-        }
-        .map_err(|error| self.get_failure(error))?;
+        let object = self.0.pool.get(budget).await?;
         if self.0.seams.applies(object.ordinal) {
             if let Some(gate) = &self.0.seams.checkout {
                 gate.pause().await;
@@ -692,8 +804,9 @@ impl Adapter {
             state,
         };
         let mut request = Some(BeginRequest::owned(reply, Box::new(owner)));
+        request.as_mut().unwrap().mode = mode;
         // admissionとclosingは同じledgerで直列化。try_sendはworker inboxのみで、
-        // slot待機/queue fairnessはdeadpool.getへ委譲する。
+        // slot待機/queue fairnessはTokio Semaphoreへ委譲する。
         let mut rejected = None;
         let result = {
             let mut records = self.0.ledger.records.lock().unwrap();
@@ -746,25 +859,33 @@ impl Adapter {
                 "adapter workers not joined",
             ));
         }
-        if let Some(error) = self.0.ledger.records.lock().unwrap().failure.clone() {
+        if let Some(mut error) = self
+            .0
+            .ledger
+            .records
+            .lock()
+            .unwrap()
+            .failure
+            .as_ref()
+            .map(Failure::duplicate)
+        {
+            error.outcome = Outcome::NotApplicable;
             return Err(error);
         }
         let stats = self.0.ledger.snapshot();
         assert_eq!(stats.native_closed, stats.created);
         Ok(())
     }
+    #[cfg(test)]
     pub async fn checkout_without_begin(&self) -> Result<HeldCheckout, Failure> {
         // privateの無期限pool所有権fixture。公開取得入口ではない。
-        let object = self
-            .0
-            .pool
-            .get()
-            .await
-            .map_err(|_| self.0.ledger.error().unwrap())?;
+        let object = self.0.pool.get(None).await?;
         Ok(HeldCheckout(object))
     }
 }
+#[cfg(test)]
 pub(super) struct HeldCheckout(Checkout);
+#[cfg(test)]
 impl HeldCheckout {
     pub fn take_and_drop(self) {
         drop(Checkout::take(self.0));

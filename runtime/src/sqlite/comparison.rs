@@ -33,7 +33,7 @@ fn percentiles(samples: &[u128]) -> serde_json::Value {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn direct_and_deadpool_warm_native_session_comparison() {
+async fn direct_and_tokio_adapter_warm_native_session_comparison() {
     const BATCHES: usize = 32;
     const PER_BATCH: usize = 128;
     const WARMUP: usize = 8;
@@ -63,7 +63,7 @@ async fn direct_and_deadpool_warm_native_session_comparison() {
                     direct_samples.push(elapsed);
                 }
                 raw.push(serde_json::json!({ "batch": batch, "phase": phase, "index": index,
-                    "backend": if use_adapter { "deadpool" } else { "direct" }, "elapsed_ns": elapsed }));
+                    "backend": if use_adapter { "tokio_adapter" } else { "direct" }, "elapsed_ns": elapsed }));
             }
         }
     }
@@ -77,7 +77,7 @@ async fn direct_and_deadpool_warm_native_session_comparison() {
     let summary = serde_json::json!({ "scope": "private cfg(test) debug-profile, warm serial native session",
         "batches": BATCHES, "transactions_per_batch_per_backend": PER_BATCH,
         "warmup_transactions_per_backend": WARMUP, "sql": "SELECT 1 AS n", "terminal": "rollback",
-        "direct": percentiles(&direct_samples), "deadpool": percentiles(&adapter_samples),
+        "direct": percentiles(&direct_samples), "tokio_adapter": percentiles(&adapter_samples),
         "direct_threads": "1 native worker + 1 join observer",
         "adapter_threads": "1 native worker + 1 independent join observer per connection",
         "direct_native_health_and_join": true, "adapter_native_health_and_join": true });
@@ -90,9 +90,9 @@ async fn direct_and_deadpool_warm_native_session_comparison() {
     }
 }
 
-// 同じstock/native coreの取得予算あり/なし。数値は合否条件にしない。
+// 同じadapter/native coreの取得予算あり/なし。数値は合否条件にしない。
 #[tokio::test(flavor = "current_thread")]
-async fn bounded_and_unbounded_deadpool_warm_comparison() {
+async fn bounded_and_unbounded_tokio_adapter_warm_comparison() {
     const BATCHES: usize = 32;
     const PER_BATCH: usize = 128;
     const WARMUP: usize = 8;
@@ -152,5 +152,64 @@ async fn bounded_and_unbounded_deadpool_warm_comparison() {
         let file = std::fs::File::create(path).unwrap();
         serde_json::to_writer(file, &serde_json::json!({ "summary": summary, "raw": raw }))
             .unwrap();
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn public_two_connection_native_cost_snapshot() {
+    fn threads() -> Option<usize> {
+        #[cfg(target_os = "linux")]
+        {
+            std::fs::read_dir("/proc/self/task")
+                .ok()
+                .map(|entries| entries.count())
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            None
+        }
+    }
+    let mut file = super::adapter_tests::MultiFile::new();
+    let before = threads();
+    let options = super::options(2, 2, 1_000, 0).unwrap();
+    let opened = Instant::now();
+    let pool = super::open(file.path.to_str().unwrap(), options)
+        .await
+        .unwrap();
+    let open_ns = opened.elapsed().as_nanos();
+    file.observe(&pool.adapter);
+    let observer = pool.adapter.observer();
+    let lazy = observer.snapshot();
+    let first = super::begin(&pool, super::BeginMode::Deferred)
+        .await
+        .unwrap();
+    let second = super::begin(&pool, super::BeginMode::Deferred)
+        .await
+        .unwrap();
+    let active = observer.snapshot();
+    let active_threads = threads();
+    super::rollback(second).await.unwrap();
+    super::rollback(first).await.unwrap();
+    super::close(&pool, 2_000).await.unwrap();
+    let joined = observer.snapshot();
+    assert_eq!(
+        (
+            lazy.created,
+            active.native_started,
+            joined.joined,
+            joined.pending_workers
+        ),
+        (0, 2, 2, 0)
+    );
+    let summary = serde_json::json!({"scope":"public API cap2 normal-size debug snapshot; no performance threshold",
+        "open_ns":open_ns,"threads_before":before,"threads_active":active_threads,
+        "native_workers":active.native_started,"native_joined":joined.joined,
+        "native_pending":joined.pending_workers,"lazy_open_created":lazy.created,
+        "thread_model":"one native worker and one independent join observer per started connection",
+        "options_bytes":std::mem::size_of::<super::Options>(),"pool_bytes":std::mem::size_of::<super::Pool>(),
+        "tx_bytes":std::mem::size_of::<super::Tx>()});
+    eprintln!("NAGI_SQLITE_PUBLIC_COST {summary}");
+    if let Some(path) = std::env::var_os("NAGI_SQLITE_PUBLIC_COST_OUTPUT") {
+        serde_json::to_writer(std::fs::File::create(path).unwrap(), &summary).unwrap();
     }
 }

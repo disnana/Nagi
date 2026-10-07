@@ -1,10 +1,10 @@
 # Phase 4: SQLite Pool・affine Txの初版契約
 
-2026-10-05の提案を、2026-10-06にQ002の選択1として承認。**公開API・SQL制限・終了policyとruntime rusqlite hooksを採用済み。実装・検証の完了ではない。** [ADR 010](adr/010-sqlite-transaction-boundary.md)に判断を固定した。詳細根拠は[decision proposal](sqlite-pool-research.md)。同日のprivate一接続prototypeとローカル検証は[結果](sqlite-session-results.md)へ記録した。public APIは未実装。一接続のprivate wrapper adapterは[比較結果](sqlite-adapter-results.md)へ分けて記録した。Phase 3 acceptanceは#80のCI成功とmain反映で満たした。
+2026-10-05の提案を、2026-10-06にQ002の選択1として承認。**公開API・SQL制限・終了policyとruntime rusqlite hooksを採用済み。実装・検証の完了ではない。** [ADR 010](adr/010-sqlite-transaction-boundary.md)に判断を固定した。詳細根拠は[decision proposal](sqlite-pool-research.md)。同日のprivate一接続prototypeとローカル検証は[結果](sqlite-session-results.md)へ記録した。公開runtimeは2026-10-08に実装し、compiler縦切りと4 OSのacceptanceは別に検証する。一接続のprivate wrapper adapterは[比較結果](sqlite-adapter-results.md)へ分けて記録した。Phase 3 acceptanceは#80のCI成功とmain反映で満たした。
 
 第一候補は新module `std.db.sqlite`（canonical ID `stdlib:std.db.sqlite`）、runtime namespace `nagi_runtime::sqlite`。既存Db、db_*、FromRow、Sql、Error、標準HTTP/Actor Optionsを変更・削除しない。新APIへ固定id/name/age bindを継承しない。新言語syntax、reflection、ToParams derive、generic trait solverは導入しない。
 
-内部のpool/dispatchはまだ確定していない。[既存Rust wrapperの比較](sqlite-pool-rust-reuse.md)では、deadpoolのowned checkout、tokio-rusqliteの専用worker、r2d2の同期poolと、狭いsession adapterを候補に残した。専用workerという説明をpool algorithmの自作決定とは扱わない。cleanupとcloseの観測まで同じ条件でprototypeし、責任とコードを減らせる実装を選ぶ。runtime hooksはQ002で承認済み。Q004で[generic deadpoolの比較試作とcapability初版値](sqlite-pool-adapter-decision.md)を採用した。内部実装の成立と公開APIの検証はまだ完了していない。
+当初は内部pool/dispatchが未確定だった。2026-10-08の採用は下の確定差分と[公開runtime判断](sqlite-public-runtime-decision.md)に記録する。[既存Rust wrapperの比較](sqlite-pool-rust-reuse.md)では、deadpoolのowned checkout、tokio-rusqliteの専用worker、r2d2の同期poolと、狭いsession adapterを候補に残した。専用workerという説明をpool algorithmの自作決定とは扱わない。cleanupとcloseの観測まで同じ条件でprototypeし、責任とコードを減らせる実装を選ぶ。runtime hooksはQ002で承認済み。Q004で[generic deadpoolの比較試作とcapability初版値](sqlite-pool-adapter-decision.md)を採用した。内部実装の成立と公開APIの検証はまだ完了していない。
 
 ## 採用した資源と値
 
@@ -53,7 +53,7 @@ bind_f64は有限値だけを受ける候補で、NaN/InfinityをSQLiteのNULL�
 
 query/allのTは、現行Nagi DB同様にclassのみ（enum・scalar・resource・任意genericは対象外）。初版の標準行変換は現在生成FromRowが対応するscalar str/bytes/数値/boolとそのOption fieldに限定し、field名からcolumn indexを解決する。NULL/整数範囲/型不一致はruntime decode Err。新APIで未対応のclass fieldを受理してrustcへ送らない。既存Rust連携の手書きFromRow経路・旧Db受理範囲は保持する。query/allはsafe prepare後のSQLite readonlyかつcolumn_count>0という「読取専用でrowを返す一文」と定義し、VALUES等も含める。SQL構文をNagiで再parseしてSELECT keywordだけへ制限しない。queryは0行→None・最初の1行→Some、allは全行。execはcolumn_count==0の一文で、RETURNINGはcolumn検査で実行前に拒否する候補。readonly/column検査は操作形の検証であり、Txcontrol防護のAuthorizerを代替しない。row-countはそのstatementの直接変更数で、旧Db.execの複数文・trigger込みtotal_changesとは区別する。
 
-Failureの公開field候補は`kind: FailureKind`、`outcome: Outcome`、`retired: bool`、`message: view[str]`。messageはFailure ownerから借用する既存FieldInfo形式。causeを必要とする呼び手は上の明示copy operationを使い、Errorのkind/messageを複製するコストを隠さない。FailureKind定数候補は`INVALID` / `CLOSED` / `ACQUIRE_TIMEOUT` / `BUSY` / `SQL` / `BIND` / `DECODE` / `ABORTED` / `CLEANUP` / `WORKER` / `REPLY_LOST` / `CLOSE_TIMEOUT`。Outcomeは`NOT_APPLICABLE` / `ACTIVE` / `COMMITTED` / `ROLLED_BACK` / `UNKNOWN`。NOT_APPLICABLEはTxがまだないvalidation/acquire/close等、ACTIVEはstatement Err後もnative Txがactiveと確認できた場合。Failureから既存Errorへの暗黙変換は足さず、必要なアプリで既存std.result.map_errorを使う。
+Failureの公開field候補は`kind: FailureKind`、`outcome: Outcome`、`retired: bool`、`message: view[str]`。messageはFailure ownerから借用する既存FieldInfo形式。causeを必要とする呼び手は上の明示copy operationを使い、Errorのkind/messageを複製するコストを隠さない。FailureKind定数候補は`INVALID` / `CLOSED` / `ACQUIRE_TIMEOUT` / `BUSY` / `SQL` / `BIND` / `DECODE` / `ABORTED` / `CLEANUP` / `WORKER` / `REPLY_LOST` / `CLOSE_TIMEOUT` / `ALLOCATION`。Outcomeは`NOT_APPLICABLE` / `ACTIVE` / `COMMITTED` / `ROLLED_BACK` / `UNKNOWN`。NOT_APPLICABLEはTxがまだないvalidation/acquire/close等、ACTIVEはstatement Err後もnative Txがactiveと確認できた場合。Failureから既存Errorへの暗黙変換は足さず、必要なアプリで既存std.result.map_errorを使う。
 
 ## 保証と失敗時policyの候補
 
@@ -88,3 +88,11 @@ SQL opt-inは新canonical operation用adapterを追加する候補。literal SQL
 判断後にADR固定→小さいsafe prototype/failing tests→実装→High/保存Low/UserLow/native、取消/cleanup/reuse/SQL迂回のpositive barrier、旧Db baseline、独立runtime/生成app・4 OS CIの順。protoで借用、task捕捉、hook復元、Drop cleanupのどれかを満たせない場合は具体反例でStopする。private一接続の成功を、新public API・保証の実装成功と報告しない。
 
 根拠: repository `compiler/src/stdlib.rs`のOperationInfo/Passing/constants/FieldInfo、`compiler/src/check.rs`のstandard operation検査・非Copy resource copy拒否・既存DB class要求、`compiler/src/check/checked.rs`のstr/bytes生成型とFromRow plan、`runtime/src/database.rs:9–18,120–191`、`runtime/src/lib.rs:28–40`、`docs/library-design.md:44–74`。依存safe API/SQLite actionとDropの行根拠は詳細decision proposalに記録済み。
+
+## 2026-10-08の公開runtime確定差分
+
+ユーザー承認に基づき、deadpoolの試作から既存Tokio Semaphore＋lazy専用adapterへ移行する。全connections分のslot配列を持たないためOptionsへprivate slot Layout上限を加えず、正数/usize/Tokio上限と時間表現、busy_msのi32境界を検査する。native ledger/idle queueの実増分はfallible予約で検査し、新ALLOCATIONはそのErrを表す。予約失敗をINVALIDや未起動WORKERへ混ぜない。OOM普遍回復を保証しない。
+
+openはpathを所有して管理構造を作るlazy operationで、native Connection/worker起動はbegin時に行う。したがってfilesystem/native open不成立はbeginのWORKERで構造化Database causeを保持する。初版にeager prefillは追加しない。取得予算はSemaphore待ちからnative record登録までで終了し、0ms・登録後ready/BEGIN/busy除外を維持する。
+
+Failureのcauseは既存Errorのkind/messageを保持し、Debugはkind/outcome/retiredだけを表示する。idle返却の予約失敗はDrop内で記録して停止・退役・実joinへ進む。Txがないopen/acquire/close失敗はNOT_APPLICABLEを返す。公開Rust moduleはruntime::sqlite一つで、private prototype oracleもこの本体を実行する。詳細は[公開runtime判断](sqlite-public-runtime-decision.md)を参照。

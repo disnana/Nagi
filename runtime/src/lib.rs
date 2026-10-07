@@ -10,8 +10,7 @@ mod http;
 pub mod http_server;
 pub mod metrics;
 pub mod result;
-#[cfg(test)]
-mod sqlite_prototype;
+pub mod sqlite;
 mod task;
 use axum::{
     body::Body,

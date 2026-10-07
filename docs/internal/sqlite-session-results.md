@@ -1,10 +1,12 @@
 # Phase 4: private SQLite sessionの検証結果
 
+2026-10-08追記: 以下は当時のprivate試作の記録で、source linkは公開移行前baseへ固定する。現在の公開本体・adapter選択は[公開runtime判断](sqlite-public-runtime-decision.md)を参照。
+
 2026-10-06。main `f10cb64`（#80成功headとtree一致）を基点に、Q002／[ADR 010](adr/010-sqlite-transaction-boundary.md)の一接続・一Tx試作を実装した。public Pool／Txは未実装で、Phase 4のacceptance完了ではない。先行基盤は4 OS CI成功後、ユーザーが#81をmain `ff6f7d4`へマージした。版更新・releaseは未実施。後続の[adapter比較結果](sqlite-adapter-results.md)は別記録とする。
 
 ## 変更と責任範囲
 
-`runtime/src/lib.rs`からcfg(test)でだけ[prototype](../../runtime/src/sqlite_prototype/session.rs)を読み込む。runtimeのrusqlite 0.40.2へ承認済みhooksを明示追加した。native SQL解析・bind・metadata・Transactionはrusqliteを使い、unsafe、自己参照、SQL parser、追加wrapper、pool algorithmを追加していない。
+`runtime/src/lib.rs`からcfg(test)でだけ[prototype](https://github.com/disnana/Nagi/blob/676576724829e45b077b58628bfe2417e6cf3673/runtime/src/sqlite_prototype/session.rs)を読み込む。runtimeのrusqlite 0.40.2へ承認済みhooksを明示追加した。native SQL解析・bind・metadata・Transactionはrusqliteを使い、unsafe、自己参照、SQL parser、追加wrapper、pool algorithmを追加していない。
 
 専用workerのlexical scopeにnative Transactionを置き、外側のnonClone handleはbounded senderを所有する。worker／ledgerはsession senderの強参照を保持しない。未pollの終端Future、送信前取消、begin reply喪失、最後のsender DropでEOF cleanupへ進む。受理済みcommandはcaller取消でも処理を続ける。常設Authorizerはprepare／step／reprepare／finalizeまで保持し、privateな管理区間でだけnative終端を許す。
 
@@ -33,7 +35,7 @@ Linux x86_64、既存Rust toolchain／warm target、locked／offline Cargo。soc
 
 | 検査 | 結果・範囲 |
 |---|---|
-| [private native tests](../../runtime/src/sqlite_prototype/tests.rs) | 22件成功。SQL制約、bind／shape／row decode、trigger／view／reprepare、自動rollback、EOF、満杯inbox、未poll／取消、COMMIT reply喪失、cleanup失敗／panic退役、native close失敗／join |
+| [private native tests](https://github.com/disnana/Nagi/blob/676576724829e45b077b58628bfe2417e6cf3673/runtime/src/sqlite_prototype/tests.rs) | 22件成功。SQL制約、bind／shape／row decode、trigger／view／reprepare、自動rollback、EOF、満杯inbox、未poll／取消、COMMIT reply喪失、cleanup失敗／panic退役、native close失敗／join |
 | runtime baseline | 151 unit＋5 doctest成功。上の22件を含む。旧Db／HTTP／Actorも実行 |
 | [予定High／手書きLow入力](../../compiler/tests/sqlite_contract_inputs.rs) | 2 test成功。15組30sourceの構文と負例anchorを検査。semantic harnessは未配線、未知module拒否をTxのcompile-fail成功と数えない |
 | workspace `cargo test --locked` | 92 suite・853成功、failed／ignored 0。上記runtime／parser検査を含み、件数を加算しない |
