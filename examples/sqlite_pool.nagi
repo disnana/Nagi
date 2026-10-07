@@ -16,7 +16,7 @@ def database_error(cause: sqlite.Failure) -> AppFailure:
 
 async def write_and_read(pool: view[sqlite.Pool]) -> Result[i64, sqlite.Failure]:
     tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
-    try await sqlite.exec(tx, "CREATE TABLE amounts(amount INTEGER NOT NULL)", sqlite.parameters())
+    try await sqlite.exec(tx, "CREATE TABLE IF NOT EXISTS amounts(amount INTEGER NOT NULL)", sqlite.parameters())
     values = sqlite.bind_i64(sqlite.parameters(), 7)
     try await sqlite.exec(tx, "INSERT INTO amounts VALUES (?)", values)
     try await sqlite.commit(tx)

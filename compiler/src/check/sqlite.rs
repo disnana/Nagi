@@ -107,7 +107,14 @@ impl Checker {
                 self.demand(&ty, &hints[index], arg.line)?;
                 self.consume(arg)?;
             }
-            self.hold_value(arg, info.parameters[index] == Passing::Reference);
+            // The sealed SQL plan owns argument 1 before evaluating Parameters.
+            // Its temporary input loan ends there, unlike the Tx loan retained
+            // by the async operation. Keep persistent local-view loans intact.
+            let materialized_sql =
+                index == 1 && matches!(operation, O::SqliteQuery | O::SqliteAll | O::SqliteExec);
+            if !materialized_sql {
+                self.hold_value(arg, info.parameters[index] == Passing::Reference);
+            }
         }
         Ok(if info.asynchronous {
             future(output)

@@ -524,3 +524,74 @@ mod native {
 }
 "#);
 }
+
+#[test]
+fn materialized_sql_allows_later_parameter_move_of_the_same_string() {
+    Fixture::new().run_three(
+        "sqlite-sql-alias",
+        r#"import std.db.sqlite as sqlite
+class Row:
+    value: str
+async def insert(tx: view[sqlite.Tx], sql: str) -> Result[i64, sqlite.Failure]:
+    return await sqlite.exec(tx, view(sql), sqlite.bind_text(sqlite.parameters(), sql))
+async def one(tx: view[sqlite.Tx], sql: str) -> Result[Row?, sqlite.Failure]:
+    return await sqlite.query[Row](tx, view(sql), sqlite.bind_text(sqlite.parameters(), sql))
+async def many(tx: view[sqlite.Tx], sql: str) -> Result[List[Row], sqlite.Failure]:
+    return await sqlite.all[Row](tx, view(sql), sqlite.bind_text(sqlite.parameters(), sql))
+"#,
+        r#"import std.db.sqlite as sqlite;
+record Row { value: str; }
+async fn insert(tx: view[sqlite.Tx], sql: str) -> Result[i64, sqlite.Failure] {
+    return await sqlite.exec(tx, view(sql), sqlite.bind_text(sqlite.parameters(), sql));
+}
+async fn one(tx: view[sqlite.Tx], sql: str) -> Result[Row?, sqlite.Failure] {
+    return await sqlite.query[Row](tx, view(sql), sqlite.bind_text(sqlite.parameters(), sql));
+}
+async fn many(tx: view[sqlite.Tx], sql: str) -> Result[List[Row], sqlite.Failure] {
+    return await sqlite.all[Row](tx, view(sql), sqlite.bind_text(sqlite.parameters(), sql));
+}
+"#,
+        "",
+        r#"
+#[test]
+fn own_sql_before_parameter_move() {
+    use nagi_runtime::{sqlite as db,Sql};
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        let pool=db::open(":memory:",db::options(1,2,1000,0).unwrap()).await.unwrap();
+        let tx=db::begin(&pool,db::BeginMode::Deferred).await.unwrap();
+        db::exec(&tx,Sql::Static("CREATE TABLE data(value TEXT)"),db::parameters()).await.unwrap();
+        let insert_sql="INSERT INTO data VALUES (?)";
+        assert_eq!(insert(&tx,insert_sql.into()).await.unwrap(),1);
+        let stored=one(&tx,"SELECT ? AS value".into()).await.unwrap().unwrap();
+        assert_eq!(stored.value,"SELECT ? AS value");
+        let rows=many(&tx,"SELECT ? AS value FROM data".into()).await.unwrap();
+        assert_eq!(rows.len(),1);
+        assert_eq!(rows[0].value,"SELECT ? AS value FROM data");
+        db::rollback(tx).await.unwrap();
+        db::close(&pool,1000).await.unwrap();
+    });
+}
+"#,
+    );
+}
+
+#[test]
+fn sql_materialization_does_not_release_the_transaction_borrow() {
+    Fixture::new().reject(
+        r#"import std.db.sqlite as sqlite
+def consume(tx: sqlite.Tx) -> sqlite.Parameters:
+    return sqlite.parameters()
+async def invalid(tx: sqlite.Tx) -> Result[i64, sqlite.Failure]:
+    return await sqlite.exec(tx, "DELETE FROM data", consume(tx))
+"#,
+        r#"import std.db.sqlite as sqlite;
+fn consume(tx: sqlite.Tx) -> sqlite.Parameters { return sqlite.parameters(); }
+# The Tx loan still lasts through the async SQL operation.
+async fn invalid(tx: sqlite.Tx) -> Result[i64, sqlite.Failure] {
+    return await sqlite.exec(tx, "DELETE FROM data", consume(tx));
+}
+"#,
+        5,
+        "先に参照",
+    );
+}

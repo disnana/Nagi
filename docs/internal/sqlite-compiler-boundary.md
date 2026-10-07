@@ -42,14 +42,18 @@ CLI testsはHigh／独立保存Lowで、新SQLのunknown bind表示、動的SQL�
 
 [fixture matrix](../../compiler/tests/fixtures/sqlite-contract/matrix.json)は23組（46入力）を収録し、statusを`validated_public_slice`へ更新した。[parser harness](../../compiler/tests/sqlite_contract_inputs.rs)はsyntax／集合完全性／元行anchorを検査する。[semantic/native harness](../../compiler/tests/sqlite_public.rs)は全High／手書きLowのchecker結果を確認し、16 negative組は生のchecker診断fragmentと元path／行を照合する。parse／resolve拒否をnegative成功へ数えない。
 
-7 positive組（01、02、03、04、16、20、21）は、各組の関数を実際に呼ぶRust assertionを用い、High、High削除後に再loadした保存Low、独立手書きLowの3経路でgenerated Rustをbuild／runする。空mainを実行しただけの証拠ではない。real SQLite Tx終端、row／Parameters、user名、function pointer、Parameters field、shared Failureとmetadata Debugを観測する。matrixのvariants文字列は追加観測の説明であり、matrixの23組から実行件数を増やして数えない。
+7 positive組（01、02、03、04、16、20、21）は、各組の関数を実際に呼ぶRust assertionを用い、High、High削除後に再loadした保存Low、独立手書きLowの3経路でgenerated Rustをbuild／runする。空mainを実行しただけの証拠ではない。real SQLite Tx終端、row／Parameters、user名、function pointer、Parameters field、shared Failureとmetadata Debugを観測する。04はlaunch内で関数pointerをtaskへ渡す経路を実行し、callbackの署名を実Tx捕捉と混同しないことを検査する。受信側acceptはcallback本体を呼ばず、未呼出関数の実行まで保証したとは数えない。matrixのvariants文字列は追加観測の説明であり、matrixの23組から実行件数を増やして数えない。
 
 追加native inputではlocal Tx List／Map、Option[shared[Failure]]のcopyが同じArcを保つこと、Failure accessor、shared StateのPool／Failure借用、完了済みsubfutureの非unionを確認する。追加negativeはTxのTask結果、nested awaitから得た実Tx payload、Actor Turn State、Failure.message借用中のmoveをHigh／手書きLowのcheckerで拒否する。private unit tamper testsはFuture facts、Debug plan、SQL planの整合を別々に検証する。
 
-local Linuxでの実行ログはsession artifact directory `/workspace/nagi-sqlite-public-2026-10-08`へ保存し、生成Low／Cargo JSON build出力／test出力を残す。focused lib 127、registry 4、SQL CLI 14、parser 2は成功。native matrixと追加caseの最終統合ログは`compiler-public-native-matrix.log`。この件数だけを品質の証明にはしない。4 OS CI実行、全回帰、fuzz、独立review、cost測定、immutable archiveの配布検査はtop-levelの完了判断へ別途統合する。このローカル記録だけで他OSやrelease済み機能を主張しない。
+local Linuxでの実行ログはsession artifact directory `/workspace/nagi-sqlite-public-2026-10-08`へ保存し、生成Low／Cargo JSON build出力／test出力を残す。focused lib 127、registry 4、SQL CLI 14、parser 2は成功。native matrixと追加case 6群の統合成功は`compiler-final-focused.log`へ保存した。`compiler-public-native-matrix.log`は手書きLowのextern改行誤りによる5成功/1失敗の途中ログで、最終成功の証拠ではない。この件数だけを品質の証明にはしない。4 OS CI実行、全回帰、fuzz、独立review、cost測定、immutable archiveの配布検査はtop-levelの完了判断へ別途統合する。このローカル記録だけで他OSやrelease済み機能を主張しない。
 
 ## runtime保証との境界
 
 SQLのordinary ErrはTx ACTIVEのまま継続し、先行効果が残る場合がある。取消やpanic捕捉をrollback成功と表示しない。`INSERT OR FAIL`やAFTER triggerのstep Errから「全statement Errで変更0」を追加しない。runtimeのauthorizer、cleanup outcome、retire、close、joinの証拠は[runtime実装判断](sqlite-public-runtime-decision.md)と独立runtime testsへ委ねる。
 
 compilerが受理したsupported NagiをRust型／move／lifetimeで拒否された場合はP1としてchecker／private planを直す。trusted Rust adapterの最終Send／Sync／Clone、link／target／依存infra、実DB値／NULL／schema不一致は別の観測段階として報告する。新依存、旧Db受理縮小、Future保存解禁、一般solver、unsafe、runtime全面交換はこのcompiler実装の判断へ含めない。
+
+## 独立レビュー後のSQL所有化修正
+
+先行REDでは`sqlite.exec(tx, view(sql), sqlite.bind_text(params, sql))`がHigh/手書きLowとも同式内借用として拒否された。sealed生成ではSQLを後続引数より先に所有化するため、checkerはcanonical query/all/execのSQL引数だけ一時borrowの保持を終える。Txのborrowと永続local viewの制約は維持する。追加native oracleは3操作を三構文で実行し、Tx借用中consumeのnegativeと既存SQL Err/panic評価順も再検証した。`sql-alias-green.log`は3群成功、先行REDと独立読戻しは`compiler-review-oracles/`へ保存する。
