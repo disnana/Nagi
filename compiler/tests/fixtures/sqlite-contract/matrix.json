@@ -8,7 +8,8 @@
     "checker_executed": false,
     "native_build_executed": false,
     "runtime_executed": false,
-    "parser_harness_registered": true
+    "parser_harness_registered": true,
+    "semantic_runner_registered": true
   },
   "low_kind": "handwritten Low imports; not generated Low goldens",
   "canonical_identity": {
@@ -34,7 +35,8 @@
       "expected_origin": {},
       "diagnostic_contract": null,
       "validation_result": null,
-      "native_requirement": "build/run after runtime public API exists; no rustc move/lifetime rejection"
+      "native_requirement": "build/run after runtime public API exists; no rustc move/lifetime rejection",
+      "checker_diagnostic_fragment": ""
     },
     {
       "id": "02-pool-row-sql",
@@ -79,7 +81,8 @@
         "share(Failure), share(Option[Failure]), and share(Result[i64, Failure]) are capability pass cases; not yet executed",
         "shared[State] owned Pool field borrowed by begin/clone_pool; no implicit shared[Pool] to view[Pool] conversion",
         "shared State Failure field borrowed for kind/message/copy_primary_error; Debug metadata only; Serde and equality remain prohibited"
-      ]
+      ],
+      "checker_diagnostic_fragment": ""
     },
     {
       "id": "03-user-type-names",
@@ -99,7 +102,8 @@
       "expected_origin": {},
       "diagnostic_contract": null,
       "validation_result": null,
-      "identity_requirement": "user Class DefId and stdlib:std.db.sqlite Resource DefId remain distinct; repeat without import"
+      "identity_requirement": "user Class DefId and stdlib:std.db.sqlite Resource DefId remain distinct; repeat without import",
+      "checker_diagnostic_fragment": ""
     },
     {
       "id": "04-pointer-signature",
@@ -119,7 +123,8 @@
       "expected_origin": {},
       "diagnostic_contract": null,
       "validation_result": null,
-      "capture_expectation": "accept Future captures callback pointer only, not a Tx; no closure syntax or hidden environment"
+      "capture_expectation": "accept Future captures callback pointer only, not a Tx; no closure syntax or hidden environment",
+      "checker_diagnostic_fragment": ""
     },
     {
       "id": "05-consume-reuse",
@@ -157,7 +162,8 @@
       "variants": [
         "rollback then commit",
         "commit argument evaluation then later same-expression Tx reuse; no Future-save relaxation"
-      ]
+      ],
+      "checker_diagnostic_fragment": "move後"
     },
     {
       "id": "06-copy-tx",
@@ -191,7 +197,8 @@
         }
       },
       "diagnostic_contract": "checker capability: nonCopy resource copy refusal",
-      "validation_result": null
+      "validation_result": null,
+      "checker_diagnostic_fragment": "copy"
     },
     {
       "id": "07-owned-field",
@@ -232,7 +239,8 @@
         "List[Tx] field",
         "enum payload Tx",
         "no false positive for user class Tx"
-      ]
+      ],
+      "checker_diagnostic_fragment": "所有field"
     },
     {
       "id": "08-nested-shared",
@@ -271,7 +279,8 @@
         "shared[Option[Tx]] function parameter declaration",
         "share(Result[Tx, Failure])",
         "share(Parameters/Options) directly and wrapped; only nonshared SQLite resources are rejected"
-      ]
+      ],
+      "checker_diagnostic_fragment": "共有"
     },
     {
       "id": "09-native-shared-context",
@@ -309,7 +318,8 @@
       "variants": [
         "std.actor.Supervisor[Option[Tx]] context",
         "App callback error signature mentioning Tx is not shared payload"
-      ]
+      ],
+      "checker_diagnostic_fragment": "共有"
     },
     {
       "id": "10-spawn-owned",
@@ -359,7 +369,8 @@
         "spawn child(try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)) using Error mapping at outer function",
         "spawn child(view[Tx]) keeps existing view task rejection",
         "Tx acquired inside child is permitted: no caller Tx transferred"
-      ]
+      ],
+      "checker_diagnostic_fragment": "task"
     },
     {
       "id": "11-spawn-alias-option",
@@ -407,7 +418,8 @@
         "owned[Tx] capture",
         "second alias = callback",
         "same alias awaited on current task passes"
-      ]
+      ],
+      "checker_diagnostic_fragment": "task"
     },
     {
       "id": "12-future-storage",
@@ -441,7 +453,8 @@
         }
       },
       "diagnostic_contract": "checker emittable: Future cannot be saved; not task-transfer evidence",
-      "validation_result": null
+      "validation_result": null,
+      "checker_diagnostic_fragment": "Future"
     },
     {
       "id": "13-future-option",
@@ -479,7 +492,8 @@
       "variants": [
         "Future in Result",
         "Future passed to callback parameter; fn[...,Future] parameter remains unsupported"
-      ]
+      ],
+      "checker_diagnostic_fragment": "Future"
     },
     {
       "id": "14-future-return",
@@ -516,7 +530,8 @@
       "validation_result": null,
       "variants": [
         "function callback returning Future then spawn; reject unsupported callback parameter, not pretend capture tracked"
-      ]
+      ],
+      "checker_diagnostic_fragment": "Future"
     },
     {
       "id": "15-new-row-restriction",
@@ -557,7 +572,8 @@
         "scalar/enum/native resource type argument",
         "Option[nested class] field",
         "remove invalid(): legacy class-only checker acceptance preserved; native bridge must separately implement FromRow to build"
-      ]
+      ],
+      "checker_diagnostic_fragment": "FromRow"
     },
     {
       "id": "16-parameters-field",
@@ -578,7 +594,8 @@
       "diagnostic_contract": null,
       "validation_result": null,
       "native_requirement": "class and enum field storage build without Clone, Copy, Serde, or Debug obligations on Parameters; move identity remains intact",
-      "checked_plan_requirement": "Debug eligibility is independent of readable_debug names; omit both derived and custom Debug for these payloads"
+      "checked_plan_requirement": "Debug eligibility is independent of readable_debug names; omit both derived and custom Debug for these payloads",
+      "checker_diagnostic_fragment": ""
     },
     {
       "id": "17-nested-copy-tx",
@@ -618,7 +635,8 @@
         "Result[Tx, Failure] slice element",
         "owned[Option[Tx]] slice element",
         "nested enum payload containing Parameters; no blanket trait solver"
-      ]
+      ],
+      "checker_diagnostic_fragment": "copy"
     },
     {
       "id": "18-nested-copy-parameters",
@@ -654,7 +672,8 @@
       "diagnostic_contract": "checker capability: generic copy rejects canonical Parameters reached through Option and user class payload",
       "validation_result": null,
       "payload_requirement": "field storage itself passes case 16; reject the copy expression rather than the permitted field declaration",
-      "native_requirement": "no generated class Debug obligation on Parameters may mask the intended copy rejection"
+      "native_requirement": "no generated class Debug obligation on Parameters may mask the intended copy rejection",
+      "checker_diagnostic_fragment": "copy"
     },
     {
       "id": "19-nested-copy-pool",
@@ -692,7 +711,8 @@
       "variants": [
         "Option[Options] copy rejects despite Debug eligibility",
         "Option[Failure] copy rejects despite shared and metadata Debug eligibility; cause copying uses explicit operations"
-      ]
+      ],
+      "checker_diagnostic_fragment": "copy"
     },
     {
       "id": "20-copy-pointer-signature",
@@ -713,7 +733,8 @@
       "diagnostic_contract": null,
       "validation_result": null,
       "payload_requirement": "function pointer signature is not an environment or Tx payload; no closure or first-class standard-operation support is introduced",
-      "native_requirement": "slice of synchronous capture-free function pointers remains copyable; no Tx Clone bound is introduced"
+      "native_requirement": "slice of synchronous capture-free function pointers remains copyable; no Tx Clone bound is introduced",
+      "checker_diagnostic_fragment": ""
     },
     {
       "id": "21-failure-shared",
@@ -750,7 +771,8 @@
       },
       "variants": [
         "shared[State] owned Failure field borrowed by kind/message/copy_primary_error; existing Reference passing only"
-      ]
+      ],
+      "checker_diagnostic_fragment": ""
     },
     {
       "id": "22-failure-serde",
@@ -788,7 +810,8 @@
       "variants": [
         "json_decode[Holder] rejects independently",
         "direct Failure serialization rejects; no SQL or cause exposure through native Serde"
-      ]
+      ],
+      "checker_diagnostic_fragment": "json_encode"
     },
     {
       "id": "23-failure-equality",
@@ -826,7 +849,8 @@
       "variants": [
         "FailureKind and Outcome equality pass independently",
         "nested Failure equality must not acquire equality from Debug or shared flags"
-      ]
+      ],
+      "checker_diagnostic_fragment": "比較"
     }
   ],
   "execution_note": "harness_registered denotes public semantic contract wiring; the parse-only integration harness is separate and has not been executed"
