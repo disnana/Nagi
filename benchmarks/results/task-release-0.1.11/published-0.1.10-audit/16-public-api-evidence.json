@@ -1,0 +1,301 @@
+{
+  "base": "815b7d554dba3ac6b11ddad2089b782cbed46eb1",
+  "head": "08e90c6984e689f7d026b3ff40277b9898ab4c68",
+  "tree": "bc62c787471d9e4481e36c0cca6e2ed294cebbc1",
+  "method": "Immutable full-source diff plus public-declaration extraction; not a formal Rust semver-checker result. Effective visibility and changed public-enum variants are reviewed separately.",
+  "public_declaration_diff": [
+    {
+      "path": "compiler/src/ast.rs",
+      "declaration": "+    pub fn of(expr: &Expr) -> Self {"
+    },
+    {
+      "path": "compiler/src/check.rs",
+      "declaration": "+pub fn finalize("
+    },
+    {
+      "path": "compiler/src/check/checked.rs",
+      "declaration": "+pub struct CheckedProgram {"
+    },
+    {
+      "path": "compiler/src/check/checked.rs",
+      "declaration": "+    pub fn program(&self) -> &Program {"
+    },
+    {
+      "path": "compiler/src/check/checked.rs",
+      "declaration": "+    pub fn provenance(&self) -> &SourceProvenance {"
+    },
+    {
+      "path": "compiler/src/check/checked.rs",
+      "declaration": "+pub enum FailureKind {"
+    },
+    {
+      "path": "compiler/src/check/checked.rs",
+      "declaration": "+pub struct FinalizeError {"
+    },
+    {
+      "path": "compiler/src/check/checked.rs",
+      "declaration": "+    pub fn kind(&self) -> FailureKind {"
+    },
+    {
+      "path": "compiler/src/checked.rs",
+      "declaration": "+pub use crate::check::checked::{CheckedProgram, FailureKind, FinalizeError};"
+    },
+    {
+      "path": "compiler/src/diagnostics.rs",
+      "declaration": "+    pub fn line_provenance(&self, line: usize) -> crate::source::SourceOrigin {"
+    },
+    {
+      "path": "compiler/src/diagnostics.rs",
+      "declaration": "+pub fn finalize_message(error: &crate::checked::FinalizeError, sources: &Sources) -> String {"
+    },
+    {
+      "path": "compiler/src/diagnostics.rs",
+      "declaration": "+pub fn cargo_message_with_details("
+    },
+    {
+      "path": "compiler/src/emit.rs",
+      "declaration": "-pub fn rust(p: &Program) -> Result<String, String> {"
+    },
+    {
+      "path": "compiler/src/emit.rs",
+      "declaration": "+pub fn rust(p: &CheckedProgram) -> Result<String, String> {"
+    },
+    {
+      "path": "compiler/src/emit.rs",
+      "declaration": "-pub fn rust_with_lines(p: &Program) -> Result<Generated, String> {"
+    },
+    {
+      "path": "compiler/src/emit.rs",
+      "declaration": "+pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {"
+    },
+    {
+      "path": "compiler/src/lib.rs",
+      "declaration": "+pub mod checked;"
+    },
+    {
+      "path": "compiler/src/source.rs",
+      "declaration": "+pub enum LoweringKind {"
+    },
+    {
+      "path": "compiler/src/source.rs",
+      "declaration": "+pub struct SourceOrigin {"
+    },
+    {
+      "path": "compiler/src/source.rs",
+      "declaration": "+pub struct SourceProvenance {"
+    },
+    {
+      "path": "compiler/src/source.rs",
+      "declaration": "+    pub fn user_low_unmapped() -> Self {"
+    },
+    {
+      "path": "compiler/src/source.rs",
+      "declaration": "+    pub fn origin(&self, line: usize) -> SourceOrigin {"
+    },
+    {
+      "path": "compiler/src/source.rs",
+      "declaration": "+    pub fn synthetic() -> SourceOrigin {"
+    },
+    {
+      "path": "compiler/src/source.rs",
+      "declaration": "+    pub fn provenance(&self) -> SourceProvenance {"
+    },
+    {
+      "path": "compiler/src/stdlib.rs",
+      "declaration": "+pub const AUTH_MODULE_NAME: &str = \"std.auth\";"
+    },
+    {
+      "path": "compiler/src/stdlib.rs",
+      "declaration": "+pub const AUTH_MODULE_ID: &str = \"stdlib:std.auth\";"
+    },
+    {
+      "path": "compiler/src/stdlib.rs",
+      "declaration": "+pub const OWNERSHIP_MODULE_NAME: &str = \"std.ownership\";"
+    },
+    {
+      "path": "compiler/src/stdlib.rs",
+      "declaration": "+pub const OWNERSHIP_MODULE_ID: &str = \"stdlib:std.ownership\";"
+    },
+    {
+      "path": "compiler/src/stdlib.rs",
+      "declaration": "+pub const TASK_MODULE_NAME: &str = \"std.task\";"
+    },
+    {
+      "path": "compiler/src/stdlib.rs",
+      "declaration": "+pub const TASK_MODULE_ID: &str = \"stdlib:std.task\";"
+    },
+    {
+      "path": "compiler/src/stdlib.rs",
+      "declaration": "-pub fn resource_info(resource: Resource) -> &'static ResourceInfo {"
+    },
+    {
+      "path": "compiler/src/stdlib.rs",
+      "declaration": "+pub fn resource_info(resource: Resource) -> &'static ResourceInfo {"
+    },
+    {
+      "path": "runtime/src/auth.rs",
+      "declaration": "+pub struct Principal {"
+    },
+    {
+      "path": "runtime/src/auth.rs",
+      "declaration": "+    pub fn from_verified_subject(subject: i64) -> Self {"
+    },
+    {
+      "path": "runtime/src/auth.rs",
+      "declaration": "+    pub fn subject(&self) -> i64 {"
+    },
+    {
+      "path": "runtime/src/auth.rs",
+      "declaration": "+pub struct Grant<P> {"
+    },
+    {
+      "path": "runtime/src/auth.rs",
+      "declaration": "+    pub fn from_authorized(principal: &Principal, resource: i64) -> Self {"
+    },
+    {
+      "path": "runtime/src/auth.rs",
+      "declaration": "+    pub fn into_authorized_parts(self) -> (i64, i64) {"
+    },
+    {
+      "path": "runtime/src/lib.rs",
+      "declaration": "+pub mod auth;"
+    },
+    {
+      "path": "runtime/src/lib.rs",
+      "declaration": "+pub use task::{Task, TaskFailure, TaskFailureKind, TaskScope};"
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+pub enum TaskFailureKind {"
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+pub struct TaskFailure(Fault);"
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+    pub fn kind(&self) -> TaskFailureKind {"
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+    pub fn message(&self) -> &str {"
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+pub struct Task<T> {"
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+pub struct TaskScope {"
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+    pub fn new() -> Self {"
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+    pub fn spawn_value<T: Send + 'static>("
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+    pub fn spawn("
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+    pub fn receive<'a, T: 'a>("
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+    pub fn discard<T>(&mut self, task: Task<T>) {"
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+    pub async fn join(&mut self) -> Result<(), crate::Error> {"
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "declaration": "+    pub async fn cancel(&mut self) -> Result<(), crate::Error> {"
+    }
+  ],
+  "unchanged_sources": [
+    {
+      "path": "runtime/src/concurrent.rs",
+      "unchanged": true
+    },
+    {
+      "path": "runtime/src/actor.rs",
+      "unchanged": true
+    },
+    {
+      "path": "runtime/src/http_server.rs",
+      "unchanged": true
+    },
+    {
+      "path": "runtime/src/http.rs",
+      "unchanged": true
+    },
+    {
+      "path": "runtime/src/database.rs",
+      "unchanged": true
+    },
+    {
+      "path": "runtime/src/result.rs",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/install.sh",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/install.ps1",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/uninstall.sh",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/uninstall.ps1",
+      "unchanged": true
+    },
+    {
+      "path": "Cargo.toml",
+      "unchanged": true
+    },
+    {
+      "path": "compiler/Cargo.toml",
+      "unchanged": true
+    },
+    {
+      "path": "editors/vscode-nagi/package.json",
+      "unchanged": true
+    }
+  ],
+  "lock_removed": [],
+  "lock_added": [
+    {
+      "name": "deadpool",
+      "version": "0.13.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "deadpool-runtime",
+      "version": "0.3.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    }
+  ],
+  "workspace_packages_to_bump": [
+    {
+      "name": "nagi-runtime",
+      "old_version": "0.1.10",
+      "next_version": "0.1.11"
+    },
+    {
+      "name": "nagic",
+      "old_version": "0.1.10",
+      "next_version": "0.1.11"
+    }
+  ],
+  "vscode_version": "0.1.13",
+  "runtime_dependency_manifest_diff": "diff --git a/runtime/Cargo.toml b/runtime/Cargo.toml\nindex 33d6019..2690b8a 100644\n--- a/runtime/Cargo.toml\n+++ b/runtime/Cargo.toml\n@@ -9,7 +9,8 @@ tokio = { version = \"1.48\", features = [\"rt-multi-thread\", \"macros\", \"net\", \"syn\n axum = { version = \"0.8\", features = [\"ws\"] }\n serde = { version = \"1.0\", features = [\"derive\", \"rc\"] }\n serde_json = \"1.0\"\n-rusqlite = { version = \"0.40\", features = [\"bundled\"] }\n+rusqlite = { version = \"0.40\", features = [\"bundled\", \"hooks\"] }\n+deadpool = { version = \"=0.13.1\", default-features = false, features = [\"managed\", \"rt_tokio_1\"] }\n bumpalo = \"3.20\"\n futures-util = \"0.3\"\n hyper = { version = \"1.11\", features = [\"http1\", \"server\"] }\n"
+}

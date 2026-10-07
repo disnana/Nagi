@@ -2,9 +2,9 @@
 
 ## 2026-10-06: S1 main反映とS2サービス接続
 
-PR #88最終head `08e90c6`は4 OS・必須CI成功、未解決review0でmain `aee1987`へmergeした。両tree `bc62c787471d9e4481e36c0cca6e2ed294cebbc1`を読戻した。別branchのS2で既存Task awaitの内側Resultを親tryへ接続し、HTTP旧spawnを維持する。新API/意味論/compiler/runtime/依存は追加していない。native三構文×7終了ケース、公開両例の三構文nativeがローカル成功。独立Sol Highの2指摘を修正し、最終回帰・4 OS・修正後読戻しを進める。[S2結果](task-handles-s2-results.md)が現在の正本。旧節の停止・未merge指示は当時の履歴で、最新のリリース完了指示を制限しない。
+PR #88最終head `08e90c6`は4 OS・必須CI成功、未解決review0でmain `aee1987`へmergeした。両tree `bc62c787471d9e4481e36c0cca6e2ed294cebbc1`を読戻した。S2のPR #90は既存Task awaitの内側Resultを親tryへ接続し、HTTP旧spawnを維持する。新API/意味論/compiler/runtime/依存は追加していない。native三構文×7終了ケース、公開両例の三構文native、独立Sol High指摘3点の修正と読戻し、全回帰と4 OSを完了した。最終head `f1497053`のchecks `37545273020`・website `37545272936`が成功し、main `f9b25782`へmerge、共通tree `84d1696053a9cf5ef256b44fcd50afff91863c9d`を確認した。[S2結果](task-handles-s2-results.md)が正本。次は別PRの0.1.11版更新・移行資料・独立最終review・公開検証で、[release引継ぎ](handoffs/2026-10-06-task-release-0.1.11.md)へ記録する。旧節の停止・未merge指示は当時の履歴で、最新のリリース完了指示を制限しない。
 
-agent運用は別差分で整理し、Fast Luna Max、Engineer/Reviewer Sol High、Architect xHigh、Critical Max、Astra例外をcustom TOMLへ接続。[構成記録](agent-routing.md)で仕様検査とstandalone CLIの未実行範囲を分ける。Taskのproduction検証成功へ数えない。
+agent運用はPR #89で整理しmain `f65c6093`へ反映、Fast Luna Max、Engineer/Reviewer Sol High、Architect xHigh、Critical Max、Astra例外をcustom TOMLへ接続した。checks `37544283368`・website `37544282939`成功、tree `4d2faacf5eeea630ab8bae7968fe5a2708f42046`を確認。[構成記録](agent-routing.md)で仕様検査とstandalone CLIの未実行範囲を分ける。Taskのproduction検証成功へ数えない。
 
 ## PR #88最終レビューとTask次リリース準備
 
@@ -379,3 +379,11 @@ local `44c38b7`で、Copy入力にmoveを使っても元が使える説明と、
 前回の確認2点はmoveの残件ではなく、S1の未受取handleと故障回復性だった。今回の委任に基づき、全Tの正常出口await/discardと、受取後も残るscope故障を次工程の初版方針に選んだ。過去の方針に必然的に含まれていたとは扱わず、別の設計branchに採用理由・ADRと実装前の検証条件を記録する。Task実装、全spawn移行、公開Pool/Txを#87へ混ぜない。
 
 最新headのCI・draft解除条件・有限な検証範囲は[仕上げ監査](explicit-move-readiness.md)を参照する。merge・release・版更新は行わない。
+
+## 2026-10-07: Task S1/S2完成・条件付き消費修正と0.1.11候補
+
+その後のユーザー指示により、同じ文脈でTaskを次Nagi release公開まで進める承認がある。前節のmerge/release停止は当時の履歴。#87はmainへ反映済み。Task S1 #88はcompiler→公開runtime、ownership/正常出口義務、sticky fault、実join、110契約/三構文native/4 OS/独立review/測定/日英Docsを完成し、main `aee1987`へ反映した。agent運用 #89はmain `f65c6093`へ反映した。S2 #90は既存await/tryでmonitorの内側Errを親bodyへ接続し、HTTP旧spawnを維持した。専用7ケース×三構文・両公開例・全回帰・4 OS・独立review後、main `f9b25782`へ反映した。新fault昇格APIやSQLite公開化を追加していない。
+
+release直前の独立Sol Maxが短絡RHS/lazy env fallbackだけのawait/discardでskip経路のTask義務を消すP2をnative再現した。#92はcheckerの既存branch合流で修正し、emitter/runtime/API/評価順/依存/版は維持。148契約、三構文7経路、workspace95 result block/936成功/failed0/費用ignored1、fuzz1000/panic0/bounded native16、4 OS、両IDE/Ready/website、独立post-fix未解決0を確認しmain `97e62f82b1f67dbcea699071477cbeec7388a713`へmergeした。headとmainのtree `3e8cac92b12394f0887f661df90b989679bc0cce`を読み戻した。
+
+版PR #91は修正mainを統合した0.1.11候補を準備中。compiler/runtimeはmainと一致し、版差分はworkspaceとlockの自package2件だけ。日英migrationはmandatory move、Rust checked emitter/AST、native生成先、typed monitorのErr伝播を説明する。新しい最終headの4 OS/全回帰/配布/独立reviewを確認してmergeし、既存main workflowによる正式releaseと8assets/tag/source/hash/latestを読み戻す。まだ0.1.11の公開完了とは扱わない。[最新引継ぎ](handoffs/2026-10-06-task-release-0.1.11.md)、[fix結果](task-conditional-consumption-fix.md)、[保存artifact](../../benchmarks/results/task-release-0.1.11/README.md)を参照する。

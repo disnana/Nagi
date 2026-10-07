@@ -1,0 +1,82 @@
+{
+  "head": "f149705308fb042f3633fcc0a6cc533579ce5c77",
+  "logs": {
+    "linux.log": {
+      "sha256": "d390b13db2847cfb0de5057992fc1e63c19fd5b5e3d5a2d823383074514ecaae",
+      "task_contract_reports": [
+        [
+          "110",
+          "110"
+        ]
+      ],
+      "task_service_cases": [
+        "test task_service::legacy_supervisor_terminal_and_normal_shutdown_reach_real_http ... ok",
+        "test task_service_s2::typed_monitor_preserves_service_errors_shutdown_and_parent_drop ... ok"
+      ],
+      "archive_task_gate": true,
+      "workspace": {
+        "result_blocks": 95,
+        "passed": 935,
+        "failed": 0,
+        "ignored": 1
+      }
+    },
+    "macos-x86_64.log": {
+      "sha256": "e6c794b7b4b91771a9a97adf8ebdc82a28aad25cd44226c862906db07894efa6",
+      "task_contract_reports": [
+        [
+          "110",
+          "110"
+        ]
+      ],
+      "task_service_cases": [
+        "test task_service::legacy_supervisor_terminal_and_normal_shutdown_reach_real_http ... ok",
+        "test task_service_s2::typed_monitor_preserves_service_errors_shutdown_and_parent_drop ... ok"
+      ],
+      "archive_task_gate": true
+    },
+    "macos-arm64.log": {
+      "sha256": "b9312e9854c46e1598773a15c64b96e166acb5fec97505653d3a24d8ef739339",
+      "task_contract_reports": [
+        [
+          "110",
+          "110"
+        ]
+      ],
+      "task_service_cases": [
+        "test task_service::legacy_supervisor_terminal_and_normal_shutdown_reach_real_http ... ok",
+        "test task_service_s2::typed_monitor_preserves_service_errors_shutdown_and_parent_drop ... ok"
+      ],
+      "archive_task_gate": true
+    },
+    "linux-package.log": {
+      "sha256": "069aacdf935de7ba2914358f21a158327dd798c8c92017dabc7334b99b3c9de9",
+      "task_contract_reports": [
+        [
+          "110",
+          "110"
+        ]
+      ],
+      "task_service_cases": [
+        "test task_service::legacy_supervisor_terminal_and_normal_shutdown_reach_real_http ... ok",
+        "test task_service_s2::typed_monitor_preserves_service_errors_shutdown_and_parent_drop ... ok"
+      ],
+      "archive_task_gate": true
+    },
+    "windows-x86_64.log": {
+      "sha256": "0d075299ad8ed055af670a0942104ce010a97911a38bd6a61bb0e2d8ebe1fc4d",
+      "task_contract_reports": [
+        [
+          "110",
+          "110"
+        ]
+      ],
+      "task_service_cases": [
+        "test task_service::legacy_supervisor_terminal_and_normal_shutdown_reach_real_http ... ok",
+        "test task_service_s2::typed_monitor_preserves_service_errors_shutdown_and_parent_drop ... ok"
+      ],
+      "archive_task_gate": true
+    }
+  },
+  "suite_count_note": "Generic Cargo header association omitted because stdout/stderr and filtered invocations can interleave; use S2 validated.json and actual per-step test inventories for native counts."
+}

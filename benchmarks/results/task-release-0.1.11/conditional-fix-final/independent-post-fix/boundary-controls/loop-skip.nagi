@@ -1,0 +1,16 @@
+from std.task import TaskFailure
+def take(result: Result[i64, TaskFailure]) -> bool:
+    match result:
+        case Ok(value):
+            return True
+        case Err(failure):
+            return False
+async def number() -> i64:
+    return 7
+async def main() -> Result[unit, Error]:
+    async with scope:
+        for index in range(2):
+            task = spawn number() # primary
+            value = False and take(await task)
+            print(value)
+    return ok(print(0))

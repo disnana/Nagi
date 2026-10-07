@@ -42,7 +42,7 @@ match present:
 
 Nagi 0.1.10以降では、`view[bytes]`を`for`で読むと、各要素は`u8`です。indexで取り出す値も`u8`になります。`view[str]`の文字単位の反復や整数indexは未対応です。文字列の一部を借りる場合は、UTF-8のbyte境界を確認する`slice`を使います。
 
-Nagi 0.1.10以降では、関数内で引数のviewを局所データのviewへ付け替えたり、viewを含む配列へ局所データのviewを追加したりできます。局所データを借りたviewは、そのデータの寿命を越えて保存・返却できません。分岐をまたぐ複雑な借用では、checkを通ってもRustのビルドに失敗する場合があります。
+Nagi 0.1.10以降では、関数内で引数のviewを局所データのviewへ付け替えたり、viewを含む配列へ局所データのviewを追加したりできます。局所データを借りたviewは、そのデータの寿命を越えて保存・返却できません。Nagi 0.1.11への導入対象では、viewを含むList/Result/Optionの復元をnested value・branch・loop・asyncで検査するflow planと回帰例を追加しています。これは任意のview組合せすべての対応を意味しません。サポートされるNagiコードをcheckした後に生成RustがNagi由来の型・move・lifetime問題で拒否する場合はcompiler defectとして扱います。Rust adapterのcrate APIやtrait、target、依存環境は引き続き別途Rust buildで確認します。
 
 ## enumで種類を分ける
 

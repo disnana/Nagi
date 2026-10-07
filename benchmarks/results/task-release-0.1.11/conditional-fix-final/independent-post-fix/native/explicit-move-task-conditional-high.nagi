@@ -1,0 +1,75 @@
+from std.task import TaskFailure, discard as abandon
+from std.ownership import move as transfer
+@rust("native::mark")
+extern def mark(code: i64) -> unit
+@rust("native::probe")
+extern def probe(value: bool) -> bool
+@rust("native::fallback")
+extern def fallback() -> str
+def take(result: Result[i64, TaskFailure], value: bool) -> bool:
+    mark(1)
+    match result:
+        case Ok(number):
+            assert_true(number == 7)
+            return value
+        case Err(failure):
+            assert_true(False)
+            return False
+def text(result: Result[str, TaskFailure]) -> str:
+    mark(4)
+    match result:
+        case Ok(value):
+            return value
+        case Err(failure):
+            assert_true(False)
+            return "failed"
+def truth(value: unit) -> bool:
+    mark(6)
+    return True
+def key(value: unit) -> str:
+    mark(7)
+    return "NAGI_CONDITIONAL_PRESENT"
+async def number() -> i64:
+    return 7
+async def string(value: str) -> str:
+    return value
+async def left(flag: bool) -> Result[unit, Error]:
+    async with scope:
+        task = spawn number()
+        value = take(await task, flag) and probe(True)
+        assert_true(value == flag)
+    mark(3)
+    async with scope:
+        task = spawn number()
+        value = take(await task, flag) or probe(False)
+        assert_true(value == flag)
+    mark(3)
+    return ok(print("scope-ok"))
+async def env_key(name: str) -> Result[str, Error]:
+    value = ""
+    async with scope:
+        task = spawn string(name)
+        value = env(text(await task), fallback())
+    mark(3)
+    return ok(value)
+async def eager(name: str) -> Result[str, Error]:
+    value = ""
+    async with scope:
+        task = spawn string("payload")
+        received = await task
+        mark(8)
+        value = env(name, text(transfer(received)))
+    mark(3)
+    return ok(value)
+async def left_discard() -> Result[unit, Error]:
+    async with scope:
+        task = spawn number()
+        value = truth(abandon(task)) and probe(False)
+        assert_true(not value)
+    mark(3)
+    async with scope:
+        task = spawn number()
+        value = env(key(abandon(task)), fallback())
+        assert_true(view(value) == "present")
+    mark(3)
+    return ok(print("scope-ok"))

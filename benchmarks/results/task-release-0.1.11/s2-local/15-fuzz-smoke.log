@@ -1,0 +1,4 @@
+   Compiling nagic v0.1.10 (/workspace/Nagi/compiler)
+    Finished `dev` profile [unoptimized] target(s) in 0.54s
+     Running `/tmp/nagi-container-flow-target/debug/examples/fuzz-smoke`
+{"bounded_native_cases":16,"check_rejected":192,"checked_low_emit_mutations":77,"coverage_guided":false,"panics":0,"parse_rejected":731,"seed":305419896,"text_mutations":1000}

@@ -1,0 +1,3 @@
+error: line 9: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください
+ --> /tmp/nagi-critical-release-review/post-fix/boundary-controls/loop-skip.low:9
+ 9 |             let task = spawn number(); # primary

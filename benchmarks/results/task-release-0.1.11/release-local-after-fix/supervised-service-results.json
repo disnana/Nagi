@@ -1,0 +1,20 @@
+[
+  {
+    "project": "supervised-service",
+    "form": "high",
+    "check_build_run": "passed",
+    "shutdown": "graceful"
+  },
+  {
+    "project": "supervised-service",
+    "form": "saved-low",
+    "check_build_run": "passed",
+    "shutdown": "graceful"
+  },
+  {
+    "project": "supervised-service",
+    "form": "handwritten-low",
+    "check_build_run": "passed",
+    "shutdown": "graceful"
+  }
+]

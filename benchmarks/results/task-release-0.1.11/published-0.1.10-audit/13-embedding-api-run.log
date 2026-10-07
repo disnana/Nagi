@@ -1,0 +1,5 @@
+   Compiling nagic v0.1.10 (/tmp/nagi-release-task-audit/embedding-api-probe/source/compiler)
+   Compiling nagi-release-embedding-probe v0.0.0 (/tmp/nagi-release-task-audit/embedding-api-probe)
+    Finished `dev` profile [unoptimized] target(s) in 8.71s
+     Running `/tmp/nagi-container-flow-target/debug/nagi-release-embedding-probe`
+sealed compiler embedding API: passed

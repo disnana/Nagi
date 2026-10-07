@@ -1,0 +1,17 @@
+[
+  {
+    "project": "task-results",
+    "form": "high",
+    "check_build_run": "passed"
+  },
+  {
+    "project": "task-results",
+    "form": "saved-low",
+    "check_build_run": "passed"
+  },
+  {
+    "project": "task-results",
+    "form": "handwritten-low",
+    "check_build_run": "passed"
+  }
+]

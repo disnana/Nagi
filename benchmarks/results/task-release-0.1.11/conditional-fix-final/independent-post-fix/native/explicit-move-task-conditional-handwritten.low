@@ -1,0 +1,51 @@
+from std.task import TaskFailure, discard as abandon;
+from std.ownership import move as transfer;
+@rust("native::mark")
+extern fn mark(code: i64) -> unit;
+@rust("native::probe")
+extern fn probe(value: bool) -> bool;
+@rust("native::fallback")
+extern fn fallback() -> str;
+fn take(result: Result[i64,TaskFailure], value: bool) -> bool {
+    mark(1); match result {
+        case Ok(number) { assert_true(number == 7); return value; }
+        case Err(failure) { assert_true(False); return False; }
+    }
+}
+fn text(result: Result[str,TaskFailure]) -> str {
+    mark(4); match result {
+        case Ok(value) { return value; }
+        case Err(failure) { assert_true(False); return "failed"; }
+    }
+}
+fn truth(value: unit) -> bool { mark(6); return True; }
+fn key(value: unit) -> str { mark(7); return "NAGI_CONDITIONAL_PRESENT"; }
+async fn number() -> i64 { return 7; }
+async fn string(value: str) -> str { return value; }
+async fn left(flag: bool) -> Result[unit,Error] {
+    scope { let task = spawn number();
+        let value = take(await task, flag) and probe(True); assert_true(value == flag);
+    } mark(3);
+    scope { let task = spawn number();
+        let value = take(await task, flag) or probe(False); assert_true(value == flag);
+    } mark(3); return ok(print("scope-ok"));
+}
+async fn env_key(name: str) -> Result[str,Error] {
+    let value = "";
+    scope { let task = spawn string(name); value = env(text(await task), fallback()); }
+    mark(3); return ok(value);
+}
+async fn eager(name: str) -> Result[str,Error] {
+    let value = "";
+    scope { let task = spawn string("payload"); let received = await task; mark(8);
+        value = env(name, text(transfer(received)));
+    } mark(3); return ok(value);
+}
+async fn left_discard() -> Result[unit,Error] {
+    scope { let task = spawn number();
+        let value = truth(abandon(task)) and probe(False); assert_true(not value);
+    } mark(3);
+    scope { let task = spawn number();
+        let value = env(key(abandon(task)), fallback()); assert_true(view(value) == "present");
+    } mark(3); return ok(print("scope-ok"));
+}

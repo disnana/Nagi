@@ -15,7 +15,7 @@ This page describes the priorities for future development. Release dates remain 
 
 See the [library and Rust integration proposal](library-design.md). [ADR 010](../internal/adr/010-sqlite-transaction-boundary.md) records the adopted initial SQLite contract. API names and cleanup contracts for other resources still have unresolved details.
 
-The narrow migration requiring explicit move for assignment of an existing owned value, spawn result handles, and business Err/task fault separation are implemented on main and remain unreleased. S2 Supervisor/HTTP migration is connected on the working branch using existing APIs. Conditional shared actor messages remain later design work. See [DESIGN](../../DESIGN.en.md) and [ADR 011](../internal/adr/011-language-behavior-and-docs.md) for differences from published releases, unresolved details, and migration conditions.
+The narrow migration requiring explicit move for assignment of an existing owned value, spawn result handles, and business Err/task-fault separation target Nagi 0.1.11. The S2 Supervisor/HTTP migration is implemented with the existing Task API and passes the monitor's inner Err through the parent body's `try`. S2 passed final four-OS CI and was merged into main; check the official release record before relying on published availability. Conditional shared actor messages remain later design work. See [DESIGN](../../DESIGN.en.md) and [ADR 011](../internal/adr/011-language-behavior-and-docs.md) for differences from published releases, unresolved details, and migration conditions.
 
 Compiler verification combines known pass/fail examples with bounded generated programs through High, saved Low, and Rust, plus mutation tests. Keep tested cases separate from unsupported combinations and preserve accepted-then-rejected cases as regressions.
 
@@ -31,4 +31,4 @@ An independent backend, self-hosting, a custom VM or scheduler, hot code replace
 
 Preserving semantics with another backend requires contracts and implementations for types, ownership, cleanup, failures, asynchronous work, and runtime integration. Rewriting the compiler in Low is not a requirement for the current development stage.
 
-S1 Task result handles are connected on main and remain unreleased. See [usage](task-handles.md) and [validation status](../internal/task-handles-s1-results.md). S2 Supervisor/HTTP migration is connected in the [service example](../../test-nagi-code/library-examples/supervised-service/README.en.md). Public Pool/Tx remains later work.
+S1 Task result handles and the S2 Supervisor/HTTP migration target Nagi 0.1.11. S2 is implemented with existing APIs; final four-OS CI passed and the change was merged into main. Check [usage](task-handles.md) and the [service example](../../test-nagi-code/library-examples/supervised-service/README.en.md). Public Pool/Tx remains later work.

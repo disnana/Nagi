@@ -1,0 +1,27 @@
+{
+  "examined_sha": "b7545d2839d8ac6fb22e1dcbd045b1dccc11107a",
+  "examined_tree": "3e8cac92b12394f0887f661df90b989679bc0cce",
+  "status": "clean",
+  "compiler_source_sha256": "3af29cf80213715c6af5abbcb72f7a42e4060b6356bc9880cdc3b87cbd07cf69",
+  "built_cli_sha256": "8b86d663e5de1ffbfdea5fff4cb8e584cc86ba11463612e6382f881f63ccf94b",
+  "reported_github_head": "8db1607352bbce580bf87c1636988ce08c9b8bf7",
+  "reported_github_tree": "3e8cac92b12394f0887f661df90b989679bc0cce",
+  "remote_identity_independently_read": false,
+  "reported_parent_workspace": {
+    "exit": 0,
+    "result_blocks": 95,
+    "passed": 936,
+    "failed": 0,
+    "cost_ignored": 1,
+    "independent_review_execution": false
+  },
+  "reported_fix_ci": {
+    "checks_run": "37550315500",
+    "four_os_and_linux_ide": "in_progress_at_parent_message",
+    "website": "success",
+    "independently_read": false
+  },
+  "source_edits": false,
+  "publication_actions": false,
+  "managed_environment_status": "RPC UNAVAILABLE; no network or credential success inferred"
+}

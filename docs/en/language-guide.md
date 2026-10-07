@@ -153,7 +153,7 @@ Output: `4`, `4`, `Nagi`, `Nagi`. `copy(view(name))` creates a separate owned st
 
 Passing a string or list as an owned argument to a user-defined function gives the value away. This is called a **move**.
 
-To transfer a string to another local, make the operation explicit. This assignment rule is implemented on the work branch and is unreleased:
+To transfer a string to another local, make the operation explicit. This assignment rule targets Nagi 0.1.11; check the official release record before relying on it:
 
 ```nagi
 from std.ownership import move

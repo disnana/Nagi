@@ -1,0 +1,37 @@
+from std.task import TaskFailure
+
+def take(result: Result[i64, TaskFailure]) -> bool:
+    print("loop-receipt")
+    match result:
+        case Ok(number):
+            assert_true(number == 7)
+            return True
+        case Err(failure):
+            return False
+
+def text(result: Result[str, TaskFailure]) -> str:
+    print("env-receipt")
+    match result:
+        case Ok(value):
+            return value
+        case Err(failure):
+            return "failed"
+
+def env(key: str, value: str) -> str:
+    print("user-env")
+    return value
+
+async def number() -> i64:
+    return 7
+async def word() -> str:
+    return "payload"
+async def main() -> Result[unit, Error]:
+    async with scope:
+        for index in range(2):
+            task = spawn number()
+            value = take(await task) and (index == 0 or index == 1)
+            assert_true(value)
+        text_task = spawn word()
+        value = env("ignored", text(await text_task))
+        assert_true(view(value) == "payload")
+    return ok(print("loop-and-user-env-ok"))

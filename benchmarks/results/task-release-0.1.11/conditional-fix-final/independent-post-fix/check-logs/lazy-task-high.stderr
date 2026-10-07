@@ -1,0 +1,3 @@
+error: line 16: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください
+ --> /tmp/nagi-critical-release-review/lazy-task.nagi:16
+ 16 |         task = spawn work()

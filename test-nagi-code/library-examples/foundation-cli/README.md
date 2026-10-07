@@ -28,6 +28,6 @@ $env:NAGI_PRICING_ENGINE = "rust"
 
 `nagi.toml`は`foundation_cli.nagi`とRustアダプターの`native.rs`を指定します。Rust moduleは`../shared/bridge.rs`から組み込み、既存の`@rust("native::engine::foundation_rust_quote")`を呼びます。依存crateの追加はありません。両方の実装を同じアプリに含め、選ぶ関数を切り替えるサンプルです。
 
-生成ソースはこのフォルダーの`build/foundation_cli/`です。実行ファイルは`native:`行のパスで確認します。次の未リリース版では既定名にも識別子が付き、`build/native-target/release/nagi-foundation-cli-<識別子>`となります。Windowsでは`.exe`が付き、`NAGI_NATIVE_TARGET_DIR`を設定した場合は出力先が変わります。ビルドにはRust/CargoとCビルド環境が必要です。
+生成ソースはこのフォルダーの`build/foundation_cli/`です。成功した実行ファイルは各build世代の生成先`.nagi/`に保存されるため、`native:`行に出る実際のpathを使い、固定のfilenameやgeneration pathを組み立てないでください。この実行ファイル配置はNagi 0.1.11への導入対象で、公開配布での利用可否は公式Release記録を確認してください。`NAGI_NATIVE_TARGET_DIR`は共有依存cacheを選び、実行ファイルの場所は変更しません。Windowsでは`native:`行のpathに`.exe`が含まれます。ビルドにはRust/CargoとCビルド環境が必要です。
 
 [English](README.en.md)

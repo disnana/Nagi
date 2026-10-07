@@ -1,0 +1,20 @@
+[package]
+name = "nagi-handwritten-efa09e36a7966f5b"
+version = "0.1.0"
+edition = "2021"
+autobins = false
+
+[[bin]]
+name = "nagi-efa09e36a7966f5b-g-25a7b-18dc16f41afd15d0-0"
+path = "src/main.rs"
+
+[workspace]
+
+[dependencies.nagi-runtime]
+path = "../../../../nagi-task-conditional-consumption/runtime"
+
+[profile.release]
+opt-level = 3
+lto = false
+codegen-units = 1
+panic = "unwind"

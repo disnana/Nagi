@@ -1,0 +1,10 @@
+{
+  "command": "cargo test --locked",
+  "exit_code": 0,
+  "cached_build": true,
+  "result_blocks": 95,
+  "passed": 936,
+  "failed": 0,
+  "ignored": 1,
+  "note": "Child-process image re-execution result blocks included; the ignored cost test is not executed. Source matches frozen checker/helper/native fixture."
+}

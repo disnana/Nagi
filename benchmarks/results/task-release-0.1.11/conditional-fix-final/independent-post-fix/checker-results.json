@@ -1,0 +1,1133 @@
+{
+  "examined_sha": "b7545d2839d8ac6fb22e1dcbd045b1dccc11107a",
+  "compiler_version": "nagic 0.1.10",
+  "compiler_sha256": "8b86d663e5de1ffbfdea5fff4cb8e584cc86ba11463612e6382f881f63ccf94b",
+  "total": 56,
+  "original_red_checks": 6,
+  "original_symmetry_checks": 12,
+  "added_contract_checks": 38,
+  "accepted": 4,
+  "rejected": 52,
+  "checks": [
+    {
+      "id": "lazy-task-high",
+      "source": "/tmp/nagi-critical-release-review/lazy-task.nagi",
+      "expected": "check-fail",
+      "line": 16,
+      "fragment": "未受取Task",
+      "group": "original-red",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-task.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/lazy-task-high"
+      ],
+      "source_sha256": "5ab68fa85c90685955fd2a6a39cd0cf85a1b1a8b20a7349772811c608bd5036e",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "lazy-task-saved-low",
+      "source": "/tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low",
+      "expected": "check-fail",
+      "line": 21,
+      "fragment": "未受取Task",
+      "group": "original-red",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/lazy-task-saved-low"
+      ],
+      "source_sha256": "fa3ea4a4c4e21667912f4f3e52e76655af2f0d6cd2851042c157fc31f4bcad89",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "lazy-task-handwritten-low",
+      "source": "/tmp/nagi-critical-release-review/lazy-task.low",
+      "expected": "check-fail",
+      "line": 12,
+      "fragment": "未受取Task",
+      "group": "original-red",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-task.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/lazy-task-handwritten-low"
+      ],
+      "source_sha256": "650382459e0ebb0899fd2b99576b10086c684ee86d018843eb12585dac496835",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "short-task-high",
+      "source": "/tmp/nagi-critical-release-review/short-task.nagi",
+      "expected": "check-fail",
+      "line": 16,
+      "fragment": "未受取Task",
+      "group": "original-red",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/short-task.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/short-task-high"
+      ],
+      "source_sha256": "68e34c37ed67f59b4e72a66d6fc8e7b75d8539ce3b21acf2d2d4f417e39c93e0",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "short-task-saved-low",
+      "source": "/tmp/nagi-critical-release-review/short-task-saved-source/saved.low",
+      "expected": "check-fail",
+      "line": 21,
+      "fragment": "未受取Task",
+      "group": "original-red",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/short-task-saved-source/saved.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/short-task-saved-low"
+      ],
+      "source_sha256": "e222dc2158f41fc6b741fb8806471a4d813a1829defff5bdead37ae1d7f8f4bd",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "short-task-handwritten-low",
+      "source": "/tmp/nagi-critical-release-review/short-task.low",
+      "expected": "check-fail",
+      "line": 12,
+      "fragment": "未受取Task",
+      "group": "original-red",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/short-task.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/short-task-handwritten-low"
+      ],
+      "source_sha256": "1df04af389b03f15b1caabde43e9937f5f90091dfba9737b1ce6cb2682653c3f",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "symmetry-and-rhs-discard.nagi",
+      "source": "/tmp/nagi-critical-release-review/lazy-symmetry/and-rhs-discard.nagi",
+      "expected": "check-fail",
+      "line": 10,
+      "fragment": "未受取Task",
+      "group": "original-symmetry",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-symmetry/and-rhs-discard.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/symmetry-and-rhs-discard.nagi"
+      ],
+      "source_sha256": "39005373fbf12dc7c869a969d55a72ca31f5579f0eeb52525ae0562dc0423842",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "symmetry-and-rhs-discard.low",
+      "source": "/tmp/nagi-critical-release-review/lazy-symmetry/and-rhs-discard.low",
+      "expected": "check-fail",
+      "line": 7,
+      "fragment": "未受取Task",
+      "group": "original-symmetry",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-symmetry/and-rhs-discard.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/symmetry-and-rhs-discard.low"
+      ],
+      "source_sha256": "21e87181fd853e624cf94ef9a29015828fdf7d1c925047cf33b53aecec367458",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "symmetry-or-rhs-discard.nagi",
+      "source": "/tmp/nagi-critical-release-review/lazy-symmetry/or-rhs-discard.nagi",
+      "expected": "check-fail",
+      "line": 10,
+      "fragment": "未受取Task",
+      "group": "original-symmetry",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-symmetry/or-rhs-discard.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/symmetry-or-rhs-discard.nagi"
+      ],
+      "source_sha256": "da9ac3785ea10b19e456fc3a1e011a2dd82c7c905c9ee88be4f03edd35004b07",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "symmetry-or-rhs-discard.low",
+      "source": "/tmp/nagi-critical-release-review/lazy-symmetry/or-rhs-discard.low",
+      "expected": "check-fail",
+      "line": 7,
+      "fragment": "未受取Task",
+      "group": "original-symmetry",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-symmetry/or-rhs-discard.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/symmetry-or-rhs-discard.low"
+      ],
+      "source_sha256": "fe361cc3b8cc04a4d7794e095458c44833b677c8bb0ab5b2e059537973185c68",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "symmetry-nested-short-discard.nagi",
+      "source": "/tmp/nagi-critical-release-review/lazy-symmetry/nested-short-discard.nagi",
+      "expected": "check-fail",
+      "line": 10,
+      "fragment": "未受取Task",
+      "group": "original-symmetry",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-symmetry/nested-short-discard.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/symmetry-nested-short-discard.nagi"
+      ],
+      "source_sha256": "87643f7cebb883cbd4908621d253f658d38bb3e199755b636fbf8a83fa5fecad",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "symmetry-nested-short-discard.low",
+      "source": "/tmp/nagi-critical-release-review/lazy-symmetry/nested-short-discard.low",
+      "expected": "check-fail",
+      "line": 7,
+      "fragment": "未受取Task",
+      "group": "original-symmetry",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-symmetry/nested-short-discard.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/symmetry-nested-short-discard.low"
+      ],
+      "source_sha256": "7ab42909e0e15c52833b82b4613b78221e89f01f93d7e41442d7975f15ce0d91",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "symmetry-nested-env-discard.nagi",
+      "source": "/tmp/nagi-critical-release-review/lazy-symmetry/nested-env-discard.nagi",
+      "expected": "check-fail",
+      "line": 10,
+      "fragment": "未受取Task",
+      "group": "original-symmetry",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-symmetry/nested-env-discard.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/symmetry-nested-env-discard.nagi"
+      ],
+      "source_sha256": "490896a7c99a3f018d7317506ad4311dc42bf4bfb3307d2633069945115539df",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "symmetry-nested-env-discard.low",
+      "source": "/tmp/nagi-critical-release-review/lazy-symmetry/nested-env-discard.low",
+      "expected": "check-fail",
+      "line": 7,
+      "fragment": "未受取Task",
+      "group": "original-symmetry",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-symmetry/nested-env-discard.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/symmetry-nested-env-discard.low"
+      ],
+      "source_sha256": "73e40a0d4abe60a67f7ce24528e8f731adc7438e1e3117a079189feb2f5d8deb",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "symmetry-and-left-discard.nagi",
+      "source": "/tmp/nagi-critical-release-review/lazy-symmetry/and-left-discard.nagi",
+      "expected": "check-pass",
+      "line": null,
+      "fragment": null,
+      "group": "original-symmetry",
+      "returncode": 0,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-symmetry/and-left-discard.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/symmetry-and-left-discard.nagi"
+      ],
+      "source_sha256": "5f50807753728166ca24f2dbf76cf30a92a9bf1273f7b9416dfeabf92a86e429",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "symmetry-and-left-discard.low",
+      "source": "/tmp/nagi-critical-release-review/lazy-symmetry/and-left-discard.low",
+      "expected": "check-pass",
+      "line": null,
+      "fragment": null,
+      "group": "original-symmetry",
+      "returncode": 0,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-symmetry/and-left-discard.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/symmetry-and-left-discard.low"
+      ],
+      "source_sha256": "53665a180a66374045fe4880cae82d1d3065e3173af6509983cf09383886b554",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "symmetry-env-key-discard.nagi",
+      "source": "/tmp/nagi-critical-release-review/lazy-symmetry/env-key-discard.nagi",
+      "expected": "check-pass",
+      "line": null,
+      "fragment": null,
+      "group": "original-symmetry",
+      "returncode": 0,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-symmetry/env-key-discard.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/symmetry-env-key-discard.nagi"
+      ],
+      "source_sha256": "a48f96fbc3d09524a81fd1f8a568e9b2fe3578929b61112e6d8d4bf39531a819",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "symmetry-env-key-discard.low",
+      "source": "/tmp/nagi-critical-release-review/lazy-symmetry/env-key-discard.low",
+      "expected": "check-pass",
+      "line": null,
+      "fragment": null,
+      "group": "original-symmetry",
+      "returncode": 0,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/lazy-symmetry/env-key-discard.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/symmetry-env-key-discard.low"
+      ],
+      "source_sha256": "830068c8682c8723fb90400e873d9ffb094d926da2eac4943ec3c01985c4663f",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-and-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-and.nagi",
+      "expected": "check-fail",
+      "line": 15,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-and.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-and-nagi"
+      ],
+      "source_sha256": "b233604fab74b9eee3ae3b815d35c80243e4e4b17910ba3601a0c4617bd97813",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-and-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-and.low",
+      "expected": "check-fail",
+      "line": 8,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-and.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-and-low"
+      ],
+      "source_sha256": "815f883d7faea7c99300e5d50741c906fdee278cdca0088b7677d0ee39291d99",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-or-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-or.nagi",
+      "expected": "check-fail",
+      "line": 15,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-or.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-or-nagi"
+      ],
+      "source_sha256": "f4d07d20a6b5a92ea70cc79735ede2770eac8d2cca2e32681c898e67de411ee0",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-or-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-or.low",
+      "expected": "check-fail",
+      "line": 8,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-or.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-or-low"
+      ],
+      "source_sha256": "cc87581d1b743cd0c7e26d80242b6c7c2d5092ea3d60e689959b3db64e8f9718",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-unknown-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-unknown.nagi",
+      "expected": "check-fail",
+      "line": 15,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-unknown.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-unknown-nagi"
+      ],
+      "source_sha256": "5a2662f39ec5fab705cd4b6f86cad3ab3af6c2eccd2270b16818896615ebfd02",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-unknown-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-unknown.low",
+      "expected": "check-fail",
+      "line": 8,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-unknown.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-unknown-low"
+      ],
+      "source_sha256": "f68be796278702f701db05814e4031050a43d9a44674bd0e2897d9cc66924f2a",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-nested-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-nested.nagi",
+      "expected": "check-fail",
+      "line": 15,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-nested.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-nested-nagi"
+      ],
+      "source_sha256": "67d80971fab797b5e1b41c50298c2013ff3055156f1c08582eec86871f729855",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-nested-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-nested.low",
+      "expected": "check-fail",
+      "line": 8,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-nested.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-nested-low"
+      ],
+      "source_sha256": "290d0454154361a4d3f200f056fc8e153625a2d05fef3d458dbe40ad22bdd1bb",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-receive-again-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-receive-again.nagi",
+      "expected": "check-fail",
+      "line": 17,
+      "fragment": "move後",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-receive-again.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-receive-again-nagi"
+      ],
+      "source_sha256": "7427dff49dd863b9a3d2b6e274200c71611e4f7b280d27918d4662e12b36ab19",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-receive-again-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-receive-again.low",
+      "expected": "check-fail",
+      "line": 10,
+      "fragment": "move後",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-receive-again.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-receive-again-low"
+      ],
+      "source_sha256": "95bd35ea30e89f34ca6189384d4adc464366b9027004e2aa52810349d407c10f",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-lazy-env-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env.nagi",
+      "expected": "check-fail",
+      "line": 15,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-lazy-env-nagi"
+      ],
+      "source_sha256": "25f4ae1cf2c4f244e625c297e8e3e9f68799d537b2ea80bb74b5c26d40278b0f",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-lazy-env-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env.low",
+      "expected": "check-fail",
+      "line": 8,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-lazy-env-low"
+      ],
+      "source_sha256": "8c646af188232638a36437c620ce27e6d040762ea1f0b1667e7122450c469d77",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-lazy-env-nested-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env-nested.nagi",
+      "expected": "check-fail",
+      "line": 15,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env-nested.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-lazy-env-nested-nagi"
+      ],
+      "source_sha256": "65dd8d9d0413b0d3bf588f818b3ca633979b186be6a8eee782c1ba052b96428f",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-lazy-env-nested-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env-nested.low",
+      "expected": "check-fail",
+      "line": 8,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env-nested.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-lazy-env-nested-low"
+      ],
+      "source_sha256": "5164e3f04739232114950b77b5bbd406019c3c2dda304351c6934bba8eb27c49",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-lazy-env-receive-again-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env-receive-again.nagi",
+      "expected": "check-fail",
+      "line": 17,
+      "fragment": "move後",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env-receive-again.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-lazy-env-receive-again-nagi"
+      ],
+      "source_sha256": "a377d4deb953eb73477472565e50b7800b2217a61742aae67f8d9d21be4910b9",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-lazy-env-receive-again-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env-receive-again.low",
+      "expected": "check-fail",
+      "line": 10,
+      "fragment": "move後",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env-receive-again.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-lazy-env-receive-again-low"
+      ],
+      "source_sha256": "05979928be9c2cd023d4c0004917e6fe04fcf2f269deedb759c7b72b26f966fb",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-conditional-and-rhs-discard-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-and-rhs-discard.nagi",
+      "expected": "check-fail",
+      "line": 10,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-and-rhs-discard.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-conditional-and-rhs-discard-nagi"
+      ],
+      "source_sha256": "39005373fbf12dc7c869a969d55a72ca31f5579f0eeb52525ae0562dc0423842",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-conditional-and-rhs-discard-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-and-rhs-discard.low",
+      "expected": "check-fail",
+      "line": 7,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-and-rhs-discard.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-conditional-and-rhs-discard-low"
+      ],
+      "source_sha256": "21e87181fd853e624cf94ef9a29015828fdf7d1c925047cf33b53aecec367458",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-conditional-or-rhs-discard-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-or-rhs-discard.nagi",
+      "expected": "check-fail",
+      "line": 10,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-or-rhs-discard.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-conditional-or-rhs-discard-nagi"
+      ],
+      "source_sha256": "da9ac3785ea10b19e456fc3a1e011a2dd82c7c905c9ee88be4f03edd35004b07",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-conditional-or-rhs-discard-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-or-rhs-discard.low",
+      "expected": "check-fail",
+      "line": 7,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-or-rhs-discard.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-conditional-or-rhs-discard-low"
+      ],
+      "source_sha256": "fe361cc3b8cc04a4d7794e095458c44833b677c8bb0ab5b2e059537973185c68",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-conditional-nested-short-discard-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-nested-short-discard.nagi",
+      "expected": "check-fail",
+      "line": 10,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-nested-short-discard.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-conditional-nested-short-discard-nagi"
+      ],
+      "source_sha256": "87643f7cebb883cbd4908621d253f658d38bb3e199755b636fbf8a83fa5fecad",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-conditional-nested-short-discard-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-nested-short-discard.low",
+      "expected": "check-fail",
+      "line": 7,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-nested-short-discard.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-conditional-nested-short-discard-low"
+      ],
+      "source_sha256": "7ab42909e0e15c52833b82b4613b78221e89f01f93d7e41442d7975f15ce0d91",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-conditional-nested-env-discard-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-nested-env-discard.nagi",
+      "expected": "check-fail",
+      "line": 10,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-nested-env-discard.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-conditional-nested-env-discard-nagi"
+      ],
+      "source_sha256": "490896a7c99a3f018d7317506ad4311dc42bf4bfb3307d2633069945115539df",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-conditional-nested-env-discard-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-nested-env-discard.low",
+      "expected": "check-fail",
+      "line": 7,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/conditional-nested-env-discard.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-conditional-nested-env-discard-low"
+      ],
+      "source_sha256": "73e40a0d4abe60a67f7ce24528e8f731adc7438e1e3117a079189feb2f5d8deb",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-unit-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-unit.nagi",
+      "expected": "check-fail",
+      "line": 8,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-unit.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-unit-nagi"
+      ],
+      "source_sha256": "242f072eb9e8b97476f1df16c7121abaa5dda0eaaef07a327d3cff7a9ef1e20f",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-unit-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-unit.low",
+      "expected": "check-fail",
+      "line": 6,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-unit.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-unit-low"
+      ],
+      "source_sha256": "27028e0cfad182e9634585c724302f95e26bad3f8b6560c8ea6633455cdb4277",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-str-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-str.nagi",
+      "expected": "check-fail",
+      "line": 8,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-str.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-str-nagi"
+      ],
+      "source_sha256": "9509b946cc7990397d6a8d9b7671617e147c9107ce73e2b31ea66f333bc02168",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-str-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-str.low",
+      "expected": "check-fail",
+      "line": 6,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-str.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-str-low"
+      ],
+      "source_sha256": "df18d39f55305ab13cb72a2f5236d67320843303bc158d009c58bb1c38b70927",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-result-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-result.nagi",
+      "expected": "check-fail",
+      "line": 8,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-result.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-result-nagi"
+      ],
+      "source_sha256": "bfc5fc4c3ddacd288bf4e712ef8da5a4b16c3f6ca25859742cabd2f728815138",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-result-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-result.low",
+      "expected": "check-fail",
+      "line": 6,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-result.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-result-low"
+      ],
+      "source_sha256": "20f8a94a386c61ad17c52534a09aa58e50c82f2f2876467b9d0aaee6a3507eb5",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-move-alias-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-move-alias.nagi",
+      "expected": "check-fail",
+      "line": 17,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-move-alias.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-move-alias-nagi"
+      ],
+      "source_sha256": "7a442fb50b80a3f0d46dd2ea591dc9972f8b6c69781d14b388063f309650a96f",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-move-alias-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-move-alias.low",
+      "expected": "check-fail",
+      "line": 10,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-move-alias.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-move-alias-low"
+      ],
+      "source_sha256": "83cf6e9e7ab7fe5664d93d2ac1d932ced14803e47f0d0fc730d9da7724c77cc7",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-reassign-nagi",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-reassign.nagi",
+      "expected": "check-fail",
+      "line": 17,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-reassign.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-reassign-nagi"
+      ],
+      "source_sha256": "162f1e57971e1d5fd77a488b2483253fc048d0f54eb1d0dbbe0047c45c4255dc",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-reassign-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-reassign.low",
+      "expected": "check-fail",
+      "line": 10,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-reassign.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-reassign-low"
+      ],
+      "source_sha256": "c9a9faa5afaa88868bcf79785a3fc946366ee7475b6541ce8a101fd3993f6523",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-and-saved-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-and-saved.low",
+      "expected": "check-fail",
+      "line": 20,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-and-saved.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-and-saved-low"
+      ],
+      "source_sha256": "bf30757e97ef939b96d90a53eea1bbfdc5b8001a2011c907f77f4c76b73f940e",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-lazy-env-saved-low",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env-saved.low",
+      "expected": "check-fail",
+      "line": 20,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env-saved.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-lazy-env-saved-low"
+      ],
+      "source_sha256": "34622898452e7f427448e86b39ffad392b8e348be297b5e991719bc32f6ea9ca",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-short-and-saved-high",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-and-saved.nagi",
+      "expected": "check-fail",
+      "line": 15,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/short-and-saved.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-short-and-saved-high"
+      ],
+      "source_sha256": "b233604fab74b9eee3ae3b815d35c80243e4e4b17910ba3601a0c4617bd97813",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    },
+    {
+      "id": "added-lazy-env-saved-high",
+      "source": "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env-saved.nagi",
+      "expected": "check-fail",
+      "line": 15,
+      "fragment": "未受取Task",
+      "group": "added-contract",
+      "returncode": 1,
+      "command": [
+        "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+        "check",
+        "/tmp/nagi-task-conditional-consumption/tests/task-handles/lazy-env-saved.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/post-fix/check-output/added-lazy-env-saved-high"
+      ],
+      "source_sha256": "25f4ae1cf2c4f244e625c297e8e3e9f68799d537b2ea80bb74b5c26d40278b0f",
+      "native_build": false,
+      "cargo_and_runtime_available": false
+    }
+  ]
+}
