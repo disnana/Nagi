@@ -666,17 +666,15 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
     }
     // Do not infer calls from an invalid signature, including functions checked
     // later in source order. Declaration-only symbol information remains usable.
-    if editor {
-        for f in &p.functions {
-            c.valid(&f.ret, f.line)?;
-            c.emittable(&f.ret, f.line, false)?;
-            let mut names = HashSet::new();
-            for (n, t) in &f.params {
-                c.valid(t, f.line)?;
-                c.emittable(t, f.line, false)?;
-                if !names.insert(n) {
-                    return Err(error(f.line, "引数の重複"));
-                }
+    for f in &p.functions {
+        c.valid(&f.ret, f.line)?;
+        c.emittable(&f.ret, f.line, false)?;
+        let mut names = HashSet::new();
+        for (n, t) in &f.params {
+            c.valid(t, f.line)?;
+            c.emittable(t, f.line, false)?;
+            if editor && !names.insert(n) {
+                return Err(error(f.line, "引数の重複"));
             }
         }
     }
@@ -3838,14 +3836,23 @@ impl Checker {
                 if self.ret.0 != "Result" {
                     return Err(error(line, "tryで伝播する関数の戻り値はResultが必要です"));
                 }
+                let propagated_error = self
+                    .ret
+                    .1
+                    .get(1)
+                    .cloned()
+                    .ok_or_else(|| error(line, "Resultの型引数は2個です"))?;
                 let hint = expected.map(|success| {
-                    Type::generic("Result", vec![success.clone(), self.ret.1[1].clone()])
+                    Type::generic("Result", vec![success.clone(), propagated_error.clone()])
                 });
                 let t = self.expr(x, hint.as_ref())?;
                 if t.0 != "Result" {
                     return Err(error(line, "try対象はResultです"));
                 }
-                self.demand(&t.1[1], &self.ret.1[1], line)?;
+                let target_error =
+                    t.1.get(1)
+                        .ok_or_else(|| error(line, "Resultの型引数は2個です"))?;
+                self.demand(target_error, &propagated_error, line)?;
                 self.consume(x)?;
                 t.inner()
             }

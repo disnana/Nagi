@@ -6,13 +6,14 @@
 
 ## 採用方針と現行契約の区別
 
-2026-10-06の引継ぎを[ADR 011](adr/011-language-behavior-and-docs.md)へ取り込んだ。各節の現行契約表は作業branchの実装を表す。S1のTask契約は別節に分け、旧Scopeへ上書きしない。OWN-04は追加の承認を受け実装済み・未リリース。spawn結果handleと子業務Errの扱いを変えるASYNC-03/04は[ADR 012](adr/012-task-result-handles.md)に沿いmainへ接続済み・未リリース。条件付きshared messageのACTOR-01は方向のみ採用で、ACTOR-01は現在有効な受理規則ではない。
+2026-10-06の引継ぎを[ADR 011](adr/011-language-behavior-and-docs.md)へ取り込んだ。2026-10-07時点で各節の現行契約表はmainの実装を表す。S1のTask契約は別節に分け、旧Scopeへ上書きしない。OWN-04は追加の承認を受け実装・main反映済みで、Nagi 0.1.11に含まれる。spawn結果handleと子業務Errの扱いを変えるASYNC-03/04は[ADR 012](adr/012-task-result-handles.md)に沿ってS1/S2をmainへ反映し、Nagi 0.1.11として公開済み。条件付きshared messageのACTOR-01は方向のみ採用で、ACTOR-01は現在有効な受理規則ではない。
 
 変更する際はbefore/after、互換性と対象版、High/Low、診断位置、生成Rust、実runtimeの成功・失敗・取消を検査する。移行前の暗黙代入moveは監査記録に残し、未変更の引数・return等のconsumeとScope子Errの契約を保つ。Supervisorのterminal failureをHTTP停止へ伝える接続も保つ。未決の細部は[Q-005〜007](open-questions.md#q-005-既存所有値の代入を明示する範囲)にまとめる。
 
-明示moveの実装と通常代入の移行は、作者の追加指示で確定した。次のOWN-04を先行テストと実装へ反映した。公開版への反映と、このbranchの実行検証は[実装結果](explicit-move-results.md)で分けて記録する。task handleと故障型は別工程である。
+明示moveの実装と通常代入の移行は、作者の追加指示で確定し、OWN-04としてmainへ反映してNagi 0.1.11で公開した。実装・検証範囲と限界は[実装結果](explicit-move-results.md)に記録する。Task handleと故障型は別工程として採用・実装した。
 
-### OWN-04: 明示moveの確定仕様（実装済み・未リリース）
+<a id="own-04-明示moveの確定仕様実装済み未リリース"></a>
+### OWN-04: 明示moveの確定仕様（Nagi 0.1.11公開済み）
 
 - `std.ownership.move(value)`は引数一つ、戻り型は入力と同じ。明示型引数は不要かつ不許可。import/alias/qualified名はcanonical operation identityで解決し、ユーザーの同名関数を操作として扱わない。
 - 所有する非Copy値を消費し、その値・入れ子のview origin・cleanup責任を一度だけ転送する。clone、allocation、共有所有者の追加、closeやrollbackは行わない。Copy入力は既存のCopy規則に従う。
@@ -34,9 +35,9 @@
 | check→codegenの封印 | 最終Low/native統合・checkと生成plan確定を通したCheckedProgramだけをRust生成へ渡す。外部構築・可変化・未検査Programの生成を許さない。必須型・名前・operand・storage factsの欠落を再check/defaultで修復しない | `check/checked.rs`, `emit.rs`; API compile-fail、`check/checked_tests.rs`、conformanceのfinalize stages。Phase 1の変更 |
 | check→build | サポートするNagi機能の受理後、Nagi側で検出可能な型・所有権・寿命の問題で**コンパイラ生成Rust**が拒否されるのは不具合。rustcの拒否を「追加の安全確認」として隠さない | `emit.rs`, `view_flow.rs`; conformance、`view_flow_foundation.rs`, `view_flow_completion.rs` |
 | Rustへ委譲 | 手書きRustの本体、外部crateのAPIとtrait実装、最終的なClone/Send/Sync、依存取得・link・target設定をbuildで確かめる。この委譲をNagi自身の型生成ミスの免責に使わない | `rust_dependencies.rs`, `build_diagnostics.rs`, `copy_capabilities.rs`, `scoped_tasks.rs` |
-| High/Low | 同じ名前解決・型・所有権規則を使う。Lowに別のメモリモデルはない。保存Lowを再解析して受理でき、対応するプログラムの観測結果が一致することを検査する | `parser.rs`, `check.rs`, `modules.rs`; `ownership_boundaries.rs`, `stdlib_imports.rs`, conformance |
+| High/Low | 同じ名前解決・型・所有権規則を使う。Lowに別のメモリモデルはない。ユーザー入力の2 MB/file上限内では保存Lowを独立に再解析して受理でき、対応するプログラムの観測結果が一致することを検査する。import統合後の生成Lowは内部transportとして有限の64 MB上限で再解析し、ユーザー入力のper-file上限と混同しない。2 MBを超える保存Lowを別コマンドの入力へ戻す場合は通常のユーザー入力上限が適用される | `parser.rs`, `check.rs`, `modules.rs`; `frontend_contracts.rs`, `ownership_boundaries.rs`, `stdlib_imports.rs`, conformance |
 | 診断 | Nagiで分かる誤りはNagi位置へ返す。生成Rustのprimary診断は対応がある時だけ元ファイル・行を示す。Rustの列・補足spanを推測してNagi位置に変換しない | `source.rs`, `diagnostics.rs`; `build_diagnostics.rs`, `symbols.rs` |
-| ビルド成果物 | 別の入口ソース・生成先のアプリを共通targetへ置いても、片方の実行ファイルをもう片方で上書きしない。Phase 2では同じapp IDの再buildも世代を分け、旧成功exeを上書き・削除・killしない。協調するwriterをcanonical out単位で直列化し、Cargo・公開・互換出力の更新後だけlatestを置換する。run前にlockを解放し、選択したexe pathを保持する | `generation.rs`, `emit.rs`; `build_generations.rs`, `shared_target.rs`, `project.rs`; [ADR 007](adr/007-build-generations.md)。Phase 2の開発差分。公開版への反映状況は[進捗](progress.md)を参照 |
+| ビルド成果物 | 別の入口ソース・生成先のアプリを共通targetへ置いても、片方の実行ファイルをもう片方で上書きしない。Phase 2では同じapp IDの再buildも世代を分け、旧成功exeを上書き・削除・killしない。協調するwriterをcanonical out単位で直列化し、Cargo・公開・互換出力の更新後だけlatestを置換する。run前にlockを解放し、選択したexe pathを保持する | `generation.rs`, `emit.rs`; `build_generations.rs`, `shared_target.rs`, `project.rs`; [ADR 007](adr/007-build-generations.md)。Phase 2の実装はNagi 0.1.11で公開済み。 |
 
 buildには外部環境が必要なため「check成功ならどんな環境でもbuild成功」とは保証しない。未対応のNagi構文・型の組合せは早い段階で明示的に拒否する。現時点では全受理プログラムのbackend conformanceを証明できておらず、未知の不一致は残り得る。
 
@@ -79,7 +80,7 @@ buildには外部環境が必要なため「check成功ならどんな環境で�
 
 ## 認証・認可の最小境界
 
-未リリースの実験。`std.auth.Principal`と`Grant[P]`は登録済みopaque resourceで、通常classの構築・JSON復元とは分ける。`P`は解決済みclass/enumのnominal IDで、型引数を持たない。proofはnonCopy/nonClone/nonSerdeで、nested wrapperからもcopy/shared化できない。class/enum fieldへの格納も拒否する。localの所有Option/Resultによる移動とasyncへのowned delegationは許す。
+Nagi 0.1.11で公開した実験機能。`std.auth.Principal`と`Grant[P]`は登録済みopaque resourceで、通常classの構築・JSON復元とは分ける。`P`は解決済みclass/enumのnominal IDで、型引数を持たない。proofはnonCopy/nonClone/nonSerdeで、nested wrapperからもcopy/shared化できない。class/enum fieldへの格納も拒否する。localの所有Option/Resultによる移動とasyncへのowned delegationは許す。
 
 保護externの署名がGrant[P]を要求する場合、その権限型の値を渡し、move後に再利用しないことをcheckする。保護adapterは消費したGrantのresource IDで処理し、別のbare IDへ権限を付け替えない。署名を実際に守ること、verifierとNagi/Rust policyの正しさ、expiry/revocation/DB競合への対応はtrusted adapterとアプリの責任である。
 
@@ -99,11 +100,11 @@ buildには外部環境が必要なため「check成功ならどんな環境で�
 
 Tokioのtask/Future、RustのDrop、Arcを利用する。BEAMのVM、分散監視、無停止コード更新、プロセス障害からの復旧は提供していない。
 
-### S1 Task結果handle（main・未リリース）
+### S1 Task結果handle（main・Nagi 0.1.11公開済み）
 
 [ADR 012](adr/012-task-result-handles.md)と[接続判断](task-handle-implementation.md)に沿い、SpawnBind・canonical std.task metadata・私有ScopeIdとbinding義務・sealed受取/放棄/scope plan・public runtimeを接続した。[接続結果](task-handles-s1-results.md)でchecker、native、CI、測定の範囲を分ける。[Stage 1](task-bridge-stage1-results.md)は接続前の歴史的記録である。旧spawn-only Scopeは変更しない。
 
-| 項目 | 作業branchの契約 |
+| 項目 | Nagi 0.1.11公開版の契約 |
 |---|---|
 | handle / scope | Taskは非Copy・非Clone・非shared。作成時scopeのlocalに限定し、scope外・関数・field/container/wrapper・他taskへのescapeを拒否する |
 | consume | TがCopyでもawaitで一回だけconsumeする。全T正常binding/scope出口とloop継続でawait/discardを必要とし、move aliasへ義務を移す。異常退出はcleanup。一般owned/内側Result bindingのmust-useは追加しない |
@@ -111,9 +112,9 @@ Tokioのtask/Future、RustのDrop、Arcを利用する。BEAMのVM、分散監�
 | scope fault | panic/予期しない取消/legacy Err/protocol故障は最初に観測したprimaryをsticky保持。兄弟abort要求→actual drain後に外側Err。受取Err処理後もscope出口Err、bodyの元Eを後続faultで置換しない |
 | owner / 取消 | 唯一JoinSet owner、scope内ticket、未join native ID対応。join Ready→record間にawaitを挟まない。receiptはScope強参照を持たず、受取Future取消でhandleを復活させない。Scope同期Dropはabort要求まで |
 | 放棄と保持 | discardやTのDropをactual join/close成功と数えない。完了未join task・未受取Tの保持とallocation/retireを検査し、実行中数だけでメモリを説明しない |
-| 既存連携 | S1では旧spawn fail-on-ErrとSupervisor terminal→HTTP取消を維持。S2は親がmonitor内側Resultをtryする移行。新fault昇格APIは追加せず、公開Pool/Txは別工程 |
+| 既存連携 | S1では旧spawn fail-on-ErrとSupervisor terminal→HTTP取消を維持。S2は既存awaitと親bodyの`try`でmonitor内側Resultを接続し、旧HTTP spawnの故障伝播を維持 ([S2接続結果](task-handles-s2-results.md))。新fault昇格APIは追加せず、公開Pool/Txは別工程 |
 
-TaskFailureはopaque・非Copy・非Clone・非shared、kind()はCopyな四値enum、message()はFailure-origin view。Task bindingを含む最寄りscopeのみTaskScopeを選び、nested scopeは独立する。元cleanup anchorとbodyラベル、Error変換、評価順を維持する。保証範囲と未確認targetは[接続結果](task-handles-s1-results.md)へ記録し、公開Pool/Txやreleaseの保証へ広げない。
+TaskFailureはopaque・非Copy・非Clone・非shared、kind()はCopyな四値enum、message()はFailure-origin view。Task bindingを含む最寄りscopeのみTaskScopeを選び、nested scopeは独立する。元cleanup anchorとbodyラベル、Error変換、評価順を維持する。保証範囲と未確認targetは[接続結果](task-handles-s1-results.md)へ記録し、公開Pool/Txの保証へ広げない。
 
 ## DB
 

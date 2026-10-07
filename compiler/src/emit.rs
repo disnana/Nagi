@@ -57,8 +57,38 @@ pub fn low_with_lines(p: &Program) -> Generated {
     let p = &transport;
     fn receiver(e: &Expr) -> String {
         match &e.kind {
-            E::Unary(_, _) | E::Await(_) | E::Try(_) => format!("({})", expr(e)),
+            E::Binary(_, _, _) | E::Unary(_, _) | E::Await(_) | E::Try(_) => {
+                format!("({})", expr(e))
+            }
             _ => expr(e),
+        }
+    }
+    fn precedence(operator: &str) -> Option<u8> {
+        match operator {
+            "or" => Some(1),
+            "and" => Some(2),
+            "==" | "!=" => Some(3),
+            "<" | ">" | "<=" | ">=" => Some(4),
+            "+" | "-" => Some(5),
+            "*" | "/" | "%" => Some(6),
+            _ => None,
+        }
+    }
+    fn binary_operand(e: &Expr, parent: u8, right: bool) -> String {
+        let rendered = expr(e);
+        if let E::Binary(_, operator, _) = &e.kind {
+            let child = precedence(operator);
+            if child.is_none_or(|child| child < parent || right && child == parent) {
+                return format!("({rendered})");
+            }
+        }
+        rendered
+    }
+    fn prefix_operand(e: &Expr) -> String {
+        if matches!(e.kind, E::Binary(_, _, _)) {
+            format!("({})", expr(e))
+        } else {
+            expr(e)
         }
     }
     fn expr(e: &Expr) -> String {
@@ -67,8 +97,18 @@ pub fn low_with_lines(p: &Program) -> Generated {
             E::Str(s) => low_quote(s),
             E::Bool(b) => b.to_string(),
             E::Null => "None".into(),
-            E::Binary(a, o, b) => format!("({} {o} {})", expr(a), expr(b)),
-            E::Unary(o, x) => format!("{o} {}", expr(x)),
+            E::Binary(a, o, b) => {
+                if let Some(level) = precedence(o) {
+                    format!(
+                        "{} {o} {}",
+                        binary_operand(a, level, false),
+                        binary_operand(b, level, true)
+                    )
+                } else {
+                    format!("({} {o} {})", expr(a), expr(b))
+                }
+            }
+            E::Unary(o, x) => format!("{o} {}", prefix_operand(x)),
             E::Call(n, t, a) => format!(
                 "{n}{}({})",
                 if t.is_empty() {
@@ -91,8 +131,8 @@ pub fn low_with_lines(p: &Program) -> Generated {
             E::Field(x, n) => format!("{}.{n}", receiver(x)),
             E::Index(x, i) => format!("{}[{}]", receiver(x), expr(i)),
             E::List(a) => format!("[{}]", a.iter().map(expr).collect::<Vec<_>>().join(", ")),
-            E::Await(x) => format!("await {}", expr(x)),
-            E::Try(x) => format!("try {}", expr(x)),
+            E::Await(x) => format!("await {}", prefix_operand(x)),
+            E::Try(x) => format!("try {}", prefix_operand(x)),
         }
     }
     fn block(ss: &[Stmt], n: usize, out: &mut Generated) {
@@ -1903,7 +1943,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                 .map_err(|e| partial_projection(e.to_string()))?;
         }
         // 生成Lowの文字列を独立parserに通す。High ASTをcodegenへ直接渡さない。
-        p = crate::parser::parse(&low_source.text, false).map_err(partial_projection)?;
+        p = crate::parser::parse_generated_low(&low_source.text).map_err(partial_projection)?;
         low_source
             .restore_lines(&mut p)
             .map_err(partial_projection)?;

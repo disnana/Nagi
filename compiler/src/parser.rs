@@ -1,9 +1,33 @@
 use crate::ast::*;
 use crate::lexer::{lex, Token, K};
 
+const SOURCE_LIMIT: usize = 2_000_000;
+// Generated Low combines as many as 8 MB of bounded user modules and adds
+// resolved metadata and inferred types. Keep its internal parser budget finite
+// without treating that transport as one user source file.
+const GENERATED_LOW_LIMIT: usize = 64_000_000;
+
 pub fn parse(src: &str, high: bool) -> Result<Program, String> {
-    if src.len() > 2_000_000 {
-        return Err("source limit: 2 MB".into());
+    parse_bounded(src, high, SOURCE_LIMIT, "source limit: 2 MB")
+}
+
+pub(crate) fn parse_generated_low(src: &str) -> Result<Program, String> {
+    parse_bounded(
+        src,
+        false,
+        GENERATED_LOW_LIMIT,
+        "generated Low limit: 64 MB",
+    )
+}
+
+fn parse_bounded(
+    src: &str,
+    high: bool,
+    limit: usize,
+    limit_error: &str,
+) -> Result<Program, String> {
+    if src.len() > limit {
+        return Err(limit_error.into());
     }
     let mut modules = ModuleMetadata::default();
     if !high {
