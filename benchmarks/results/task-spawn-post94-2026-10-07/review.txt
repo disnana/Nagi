@@ -13,3 +13,7 @@ Task公開metadata、scope内の一回消費・正常出口義務、moveによ�
 After correction, readback:
 先のP3指摘は解消しました。ai/language.md:97はstd.taskを含む追加moduleを「Nagi 0.1.11以降で利用可能」と明記し、公開状態と整合しています。
 今回レビューしたTask統合・公開状態説明の範囲に未解決の指摘はありません。production/API/依存/版の変更がないことと、git diff --check成功をread-onlyで確認しました。テストは再実行していません。
+
+Additional public documentation review (Task/move publication only):
+P3: async JP/EN headings and modules-and-rust JP/EN move description still said targeted for 0.1.11. Corrected them, plus the matching ownership/language-guide descriptions.
+Readback: 先のP3指摘2件は解消しました。追加のownership・language-guide日英4ファイルも、公開済みの事実とcompiler 0.1.11以降の要件に整合しています。今回の公開状態修正に未解決の指摘はありません。例コード・契約・制約・productionは不変で、git diff --checkも成功しました。read-only確認のみで、テストは再実行していません。最新HEADの4 OS成功確認は別途必要です。

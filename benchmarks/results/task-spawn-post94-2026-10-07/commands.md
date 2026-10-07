@@ -16,6 +16,7 @@ cargo run --locked -p nagic --example fuzz-smoke
 python scripts/verify_compiler_contracts.py
 python scripts/verify_library_examples.py --compiler /tmp/nagi-container-flow-target/debug/nagic
 python scripts/verify_application_examples.py --compiler /tmp/nagi-container-flow-target/debug/nagic
+/tmp/nagi-static-site-venv/bin/python benchmarks/results/task-spawn-post94-2026-10-07/verify-markdown.py /workspace/nagi-task-post94-2026-10-07/markdown.json
 /tmp/nagi-static-site-venv/bin/python website/build.py --repository https://github.com/disnana/Nagi
 git diff --check
 ```

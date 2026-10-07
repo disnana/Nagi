@@ -20,7 +20,7 @@ Uncommenting `print(name)` makes `check` reject use after move. If the function 
 
 ## Assignment and explicit move
 
-The explicit move and assignment rules below target Nagi 0.1.11. Check the official release record to confirm availability in an installed compiler. Python assignment keeps another reference to the same value. Nagi uses ordinary assignment for Copy values, such as numbers and bools. To transfer an existing non-Copy local, use `move`; ordinary `destination = name` is rejected.
+The explicit move and assignment rules below are published in Nagi 0.1.11. Confirm that the installed compiler is version 0.1.11 or later. Python assignment keeps another reference to the same value. Nagi uses ordinary assignment for Copy values, such as numbers and bools. To transfer an existing non-Copy local, use `move`; ordinary `destination = name` is rejected.
 
 Writing `move` makes it clear that assignment gives the original variable's value away. The compiler does not choose a copy or shared ownership for you when you want to keep using the original.
 

@@ -1,0 +1,16 @@
+{
+  "source_head": "428bcb07f2700b31f712cc8d10e8bc0ec3d29ce0",
+  "checks": {
+    "id": 37611344198,
+    "url": "https://github.com/disnana/Nagi/actions/runs/37611344198",
+    "status": "completed",
+    "conclusion": "success",
+    "attempt": 1
+  },
+  "website": {
+    "id": 37611343828,
+    "url": "https://github.com/disnana/Nagi/actions/runs/37611343828",
+    "conclusion": "success"
+  },
+  "note": "Source/test frozen head before subsequent publication-only documentation and CI artifact additions; latest PR HEAD checks are read separately."
+}

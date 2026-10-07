@@ -15,7 +15,7 @@
 
 詳細は[ライブラリとRust連携の設計案](library-design.md)へ。採用済みのSQLite初版契約は[ADR 010](internal/adr/010-sqlite-transaction-boundary.md)にあります。その他の資源のAPI名や終了契約には未確定の部分があります。
 
-既存所有値の代入に明示moveを要求する狭い移行、spawn結果handle、業務Errとtask故障の分離はNagi 0.1.11への導入対象です。Supervisor/HTTPのS2移行も既存Task APIを使って実装し、monitorの内側Errを親bodyの`try`へ渡します。S2は最終4 OS CIが成功しmainへ反映済みです。公開版での利用可否はRelease記録で確認してください。条件付きshared actor messageは後続の設計対象です。公開版との差、未決の細部、移行条件は[DESIGN](../DESIGN.md)と[ADR 011](internal/adr/011-language-behavior-and-docs.md)へまとめています。
+既存所有値の代入に明示moveを要求する狭い移行、spawn結果handle、業務Errとtask故障の分離はNagi 0.1.11で公開済みです。Supervisor/HTTPのS2移行も既存Task APIを使って実装し、monitorの内側Errを親bodyの`try`へ渡します。S2もNagi 0.1.11で公開済みです。利用するcompilerの版を確認してください。条件付きshared actor messageは後続の設計対象です。公開版との差、未決の細部、移行条件は[DESIGN](../DESIGN.md)と[ADR 011](internal/adr/011-language-behavior-and-docs.md)へまとめています。
 
 処理系の検証は、既知のpass/fail例に加え、High・保存Low・生成Rustを通す小さい生成テストと変異試験で続けます。検査した範囲と未対応の組合せを分け、受理後の生成ミスを回帰例へ残します。
 
@@ -31,4 +31,4 @@
 
 Rust以外のバックエンドでも同じ意味を保つには、型・所有権・解放・失敗・非同期処理・runtime接続の契約と実装が必要です。Lowを使ってコンパイラを書き直すことを、現在の開発段階の必須条件にはしません。
 
-S1 Task結果handleとS2 Supervisor/HTTP移行はNagi 0.1.11への導入対象です。S2は既存APIで実装済みで、最終4 OS CIが成功し、mainへ反映しました。[使い方](task-handles.md)と[検証状況](internal/task-handles-s1-results.md)を分けています。Supervisor/HTTPのS2移行は[サービス例](../test-nagi-code/library-examples/supervised-service/README.md)へ接続しました。公開Pool/Txは後続です。
+S1 Task結果handleとS2 Supervisor/HTTP移行はNagi 0.1.11で公開済みです。S2は既存APIで実装しています。[使い方](task-handles.md)と[検証状況](internal/task-handles-s1-results.md)を分けています。Supervisor/HTTPのS2移行は[サービス例](../test-nagi-code/library-examples/supervised-service/README.md)へ接続しました。公開Pool/Txは後続です。

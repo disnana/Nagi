@@ -396,3 +396,5 @@ release直前の独立Sol Maxが短絡RHS/lazy env fallbackだけのawait/discar
 ユーザーによる#94 merge後のmain `97b7242c2172c1d0c701a7b662294e4dbe268abf`を取得した。Task結果handleは#88 S1/#90 S2/#92として既にmain反映・0.1.11公開済みで、旧private bridge停止時点を現在の未実装状態とは扱わない。採用済み契約をsourceから照合し、#94の署名先行検査・Low括弧化・内部transport境界とTaskを組み合わせる追加3回帰を固定した。production/compiler/runtime/API/依存/版/CI定義を変更せず、Task/move公開済み状態の日英Docs/DESIGN/AI資料を揃えた。
 
 今回148契約・三構文native・全回帰・例・fuzz・費用/保持・独立Sol Highと、今回PRの4 OSは[結果](task-spawn-post94-results.md)、[原ログ](../../benchmarks/results/task-spawn-post94-2026-10-07/README.md)、PR Checksに記録する。過去の公開CIと今回の実行を区別する。次担当は[最新引継ぎ](handoffs/2026-10-07-task-spawn-post94.md)から読戻す。この依頼ではmain向けPRまでで停止し、merge/release/version bumpは行わない。SQLite Pool/Transactionは別の次工程。
+
+source/test凍結head `428bcb07f2700b31f712cc8d10e8bc0ec3d29ce0`の今回4 OS checks `37611344198`/website `37611343828`が成功。各frontend13（追加3含む）・Task148/native8/runtime17/public3/doc9・両例三構文・archive gateを原ログから確認し、両IDE/Readyも成功した。公開Docs/実行例/AI skillに残った導入対象表記の日英修正と原ログ追記はcompiler/runtime/test/依存/CIの66 hashが同一。追記後の最新HEAD CIをPR #95で別に確認して停止する。

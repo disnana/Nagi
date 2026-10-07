@@ -7,3 +7,5 @@
 測定はLinux x86_64 release、current-thread Tokio、calling-thread allocation、25 loop×7反復。同じTaskScope保証の手書きRustと生成RustでallocationとFutureが一致した。共有hostでbuild/回帰と同時進行したためtime生値から速度優劣を主張せず、buildログをclean buildや同条件compile時間比較と呼ばない。binary byteは集計に記録した。`cfg(test)` runtime費用oracleは別のlayout/workloadで、保持量・retire/high-water・fault causeを観測する。
 
 通常suiteで費用用ignored 1を成功実行へ数えず、別の明示`--ignored`実行の1群を区別する。今回branchの4 OS/websiteの最新実行はPR ChecksとPR説明の読戻しに記録する。過去main/0.1.11の成功や今回のskip/filterを新規成功へ足さない。
+
+`ci/source-428bcb0/`は今回のsource/test凍結headの4 OS原ログ・validator・成功job/実行metadata・66 source hashを保存する。`python ci/source-428bcb0/validate.py`でfrontend13/追加3群・Task148/native8/runtime17/public3/doc9・両公開例三構文・展開archiveを再集計できる。公開Docs/結果追記HEADのCIはPR #95で別に確認し、凍結sourceの結果と混同しない。

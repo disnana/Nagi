@@ -6,7 +6,7 @@
 
 今回の変更は#94との統合回帰3群、Task/moveの公開状態を揃える日英DESIGN/Docs/AI資料、結果・原ログ。production compiler/runtime/API/依存/版/CI定義はbaseとの差分0。三構文のTask結果と129項左結合/右括弧、Taskから後方不正Result署名を参照したときのchecker元位置、import統合Low >2 MBと保存Low再入力の別予算を固定した。新しいRED→GREEN実装とは報告しない。
 
-checkerのscope/binding義務とcanonical std.task metadata、私有sealed生成、High→Low→Rust、保存Low/手書きLow、内側業務Resultとsticky TaskFailure、cancel要求とactual join、discardと同期Drop、旧spawnとSupervisor/HTTPは接続済み。既存契約148/148、runner oracle3、追加後frontend13、native/public/runtime・全回帰・例・fuzz・Docs・4 OSの根拠は今回結果、artifact、PR Checksに分けて残す。過去CI/skip/filter/ignoredを今回の実行成功へ数えない。
+checkerのscope/binding義務とcanonical std.task metadata、私有sealed生成、High→Low→Rust、保存Low/手書きLow、内側業務Resultとsticky TaskFailure、cancel要求とactual join、discardと同期Drop、旧spawnとSupervisor/HTTPは接続済み。既存契約148/148、runner oracle3、追加後frontend13、native/public/runtime・全回帰・例・fuzz・Docs・4 OSの根拠は今回結果、artifact、PR Checksに分けて残す。source/test凍結head `428bcb07f2700b31f712cc8d10e8bc0ec3d29ce0`の4 OS checks `37611344198`/website `37611343828`は成功し、frontend13・契約148・Task native8/runtime17/public3/doc9・両例三構文・展開archiveを原ログから確認した。公開Docs/CI artifact追記headのCIは[PR #95](https://github.com/disnana/Nagi/pull/95)で別に読戻す。過去CI/skip/filter/ignoredを今回の実行成功へ数えない。
 
 同保証の生成/手書きRustを今回再測定し、6条件のallocation/byteが一致、batch Future受取416 B/discard408 B。runtime保持oracleも明示実行した。共有host・cache使用・calling-thread限定であり、multi-thread全allocation/他target/clean build/長時間網羅は未測定。独立Sol High reviewはP3の公開状態表現を修正後、未解決0。reviewerによるテスト独立再実行はない。
 
