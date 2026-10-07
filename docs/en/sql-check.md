@@ -1,6 +1,6 @@
 # SQL checks
 
-Supply a schema to `check` to validate names, result columns, and bind counts in SQLite SQL strings before execution. Ordinary `check`, `build`, and `run` do not enable this automatically. This feature is supported in Nagi 0.1.10; see the [Changelog](../../CHANGELOG.md) for versioned changes.
+Supply a schema to `check` to validate names, result columns, and bind counts in literal SQL passed to the existing SQLite `db_*` API. Ordinary `check`, `build`, and `run` do not enable this automatically. In the development source, the unreleased `std.db.sqlite` `query` / `all` / `exec` operations are also checked. The new API's Parameters bind counts and value types are not statically known, so they remain runtime checks and are reported as `bind unchecked`. The new API is not included in Nagi 0.1.11. See the [Changelog](../../CHANGELOG.md) for versioned changes.
 
 ## Usage
 
@@ -41,19 +41,21 @@ For a project, use `nagic check --project ./app --sql-schema ./app/schema.sql --
 
 | Target | Checks |
 |---|---|
-| `db_all`, `db_query` | A single SQL statement, table/column names, bind count, required row-class columns |
-| `db_insert`, `db_update` | A single write statement, bind count, required `RETURNING` columns |
-| `db_write` | A single write statement without returned rows, bind count |
+| `db_all`, `db_query` | A single statement, table/column names, fixed API argument count, required row-class columns |
+| `db_insert`, `db_update` | A single write statement, fixed API argument count, required `RETURNING` columns |
+| `db_write` | A single statement without returned rows, fixed API argument count |
+| `sqlite.query`, `sqlite.all` in the development source | One readonly row-producing statement, table/column names, and required class columns. Parameters bind count is unchecked |
+| `sqlite.exec` in the development source | One rowless statement shape and schema references. DDL is prepare-only and never executed. Parameters bind count is unchecked |
 
-Checks apply to string literals passed directly to resolved built-in database calls. A user function with the same name is not a target. Changed column order, correct aliases, and extra result columns are allowed. Placeholder counts follow SQLite's rules; reusing the same `?1` does not add a bind.
+Checks apply to string literals passed directly to calls resolved as standard database operations. A user function with the same name is not a target. Changed column order, correct aliases, and extra result columns are allowed. Placeholder counts for the existing `db_*` API follow SQLite's rules; reusing the same `?1` does not add a bind. The new `sqlite.*` API uses anonymous `?` placeholders and owned `Parameters`, so the checker cannot verify its bind count or value types.
 
-Handwritten Rust `FromRow` bodies are not analyzed. This check treats class field names as required result columns, so use suitable SQL aliases. Ordinary `check`, `build`, and Rust row decoding remain unchanged.
+Handwritten Rust `FromRow` bodies are not analyzed. For the new API, class field names are treated as required result columns, so use suitable SQL aliases. Ordinary `check`, `build`, and Rust row decoding remain unchanged.
 
-SQL stored in a variable or built in Rust remains subject to runtime checks. `db_exec`, including batches and schema changes, is excluded. The checker does not execute CREATE TABLE statements in the application to infer a schema. Results show the count of inspected literals and the count, locations, and reasons for calls left to runtime checks.
+SQL stored in a variable or built in Rust remains subject to runtime checks. The existing `db_exec`, including batches and schema changes, is excluded. New `sqlite.exec` calls are prepared only to check a single statement's shape; DDL is never executed and the application schema is not inferred from it. The checker does not execute application queries or schema changes. New API Parameters bind count and value types remain unchecked. Results show the count of inspected literals and the count, locations, and reasons for calls left to runtime checks.
 
 ## Schema and runtime boundaries
 
-The checker builds the supplied schema in a new in-memory database and prepares SQL to inspect names, columns, and binds. It does not execute application queries, connect to the application's database, or invoke Cargo. Ordinary `check` creates no SQL connection or worker. Generated Rust and the application's database execution path are unchanged.
+The checker builds the supplied schema in a new in-memory database and prepares SQL to inspect names, columns, and bind metadata. It does not execute application queries or `sqlite.exec` DDL, connect to the application's database, or invoke Cargo. Ordinary `check` creates no SQL connection or worker. Generated Rust and the application's database execution path are unchanged.
 
 Use ordinary CREATE TABLE, INDEX, and VIEW statements in the schema. This is not a migration runner. ATTACH/DETACH, PRAGMA, external database or file writes, extension loading, TEMP/virtual tables, triggers, transactions, and CREATE TABLE AS SELECT are rejected. Functions use an allowlist; random and date/time functions, including `DEFAULT CURRENT_TIMESTAMP`, are unsupported.
 
@@ -61,7 +63,7 @@ The schema is limited to 2 MiB and 1024 statements, and each SQL string to 256 K
 
 Each check validates all target SQL against one supplied schema. It does not infer connections for multiple Db values. Keep the deployed database schema consistent with the supplied schema.
 
-The check does not guarantee value types, integer ranges, NULL behavior, query results, permissions, or the state of a deployed database. For example, `SELECT 'oops' AS id, 'Nagi' AS name FROM users` provides the required columns, so this check alone cannot detect the id type mismatch. Row decoding and dynamic SQL still use runtime Result errors. See [SQLite limits](database.md#implementation-and-limits).
+The check does not guarantee value types, integer ranges, NULL behavior, query results, permissions, or the state of a deployed database. New API Parameters bind counts are also unchecked statically. For example, `SELECT 'oops' AS id, 'Nagi' AS name FROM users` provides the required columns, so this check alone cannot detect the id type mismatch. Row decoding, bind values, and dynamic SQL still use runtime Result errors. See [existing SQLite limits](database.md) and [new API limits](sqlite-pool.md).
 
 ## Build a compiler without SQLite
 

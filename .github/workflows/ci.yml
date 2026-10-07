@@ -78,6 +78,10 @@ jobs:
         run: python scripts/verify_task_handle_contract_inputs.py
       - name: Check Task contract runner distinguishes parse rejection from checker evidence
         run: cargo test --locked -p nagic --example task-contract-red
+      - name: Check SQLite runner stage and source-location oracles
+        run: cargo test --locked -p nagic --example sqlite-contract-check
+      - name: Check SQLite ownership contracts and original diagnostic lines
+        run: cargo run --locked -p nagic --example sqlite-contract-check -- --report /tmp/sqlite-contracts.json
       - name: Check Task ownership contracts and original diagnostic lines
         run: cargo run --locked -p nagic --example task-contract-red -- --report /tmp/task-contracts.json
       - run: cargo test --locked
@@ -86,6 +90,8 @@ jobs:
           cargo build --locked -p nagic --no-default-features
           cargo test --locked -p nagic --no-default-features --test cli --test sql_check
       - run: cargo build --release --examples --bins --locked
+      - name: Verify bilingual SQLite tutorial through High and independent saved Low
+        run: python scripts/verify_sqlite_example.py
       - run: node --test editors/vscode-nagi/test/*.test.js
       - run: node --test scripts/test_graph_html_viewport.mjs
       - run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
@@ -244,10 +250,17 @@ jobs:
         run: node --test editors/vscode-nagi/test/*.test.js scripts/test_graph_html_viewport.mjs
       - name: Check generated output protection and native expression behavior
         run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test explicit_moves --test task_handles --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
-      - name: Parse planned SQLite High and handwritten Low contract inputs
+      - name: Check SQLite High and handwritten Low contract registration
         run: cargo test --locked -p nagic --test sqlite_contract_inputs
       - name: Verify bilingual first-app tutorial in High and saved Low
         run: python scripts/verify_onboarding_examples.py
+      - name: Check planned SQLite runner stage and source-location oracles
+        run: cargo test --locked -p nagic --example sqlite-contract-check
+      - name: Check SQLite contracts and native High, saved Low and handwritten Low
+        shell: bash
+        run: |
+          cargo run --locked -p nagic --example sqlite-contract-check -- --report "$RUNNER_TEMP/sqlite-contracts.json"
+          cargo test --locked -p nagic --test sqlite_public
       - name: Check public Task bridge lifecycle on the target platform
         shell: bash
         run: |
@@ -326,8 +339,15 @@ jobs:
           cargo test --locked -p nagi-runtime supervisor_drop
       - name: Check SQLite row counts on the target platform
         run: cargo test --locked -p nagi-runtime database::tests
-      - name: Check private SQLite session cleanup and close on the target platform
-        run: cargo test --locked -p nagi-runtime sqlite_prototype
+      - name: Check public SQLite session cleanup, cancellation and close on the target platform
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked -p nagi-runtime --lib sqlite:: 2>&1 | tee "$RUNNER_TEMP/sqlite-runtime.log"
+          python -c 'import pathlib,re,os; text=pathlib.Path(os.environ["RUNNER_TEMP"],"sqlite-runtime.log").read_text(); assert re.search(r"test result: ok\. 73 passed; 0 failed; 0 ignored;",text),text'
+          cargo test --locked -p nagi-runtime --test sqlite_public_api
+      - name: Verify bilingual SQLite tutorial through High and independent saved Low
+        run: python scripts/verify_sqlite_example.py
       - name: Verify High, saved Low, and standalone Low applications
         run: python scripts/verify_application_examples.py
       - name: Verify the PowerShell installer and User PATH

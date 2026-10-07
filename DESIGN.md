@@ -12,7 +12,7 @@ Nagiは、Rustの性能とライブラリを使い、HTTP・認証・認可・va
 
 Rustを知らずにAPIを作る人と、Rustのライブラリや独自の基盤を組み合わせる人の両方を対象にします。前者が通常の処理でRustアダプターを書く必要をなくし、後者には高度な処理を追加する入口を残します。
 
-Python風の構文を使いますが、Pythonと同じ動作をする言語ではありません。利用者はNagiの型、move、view、Resultを理解する必要があります。標準PostgreSQL、送信HTTP、汎用DB引数、利用者が定義する不透明な資源型は未実装です。現在は、普通のアプリでもRustへ降りる場面が残っています。
+Python風の構文を使いますが、Pythonと同じ動作をする言語ではありません。利用者はNagiの型、move、view、Resultを理解する必要があります。標準PostgreSQL、送信HTTP、database間共通の汎用DB API、利用者が定義する不透明な資源型は未実装です。SQLite固有の新しいPool/Txとtyped Parametersは開発sourceにあります。現在は、普通のアプリでもRustへ降りる場面が残っています。
 
 名前は日本語の「凪」です。「内部は激しく動いていても、表面は凪のように穏やか」という考えを込めています。これは設計の方向を表すもので、所有権や障害を利用者から隠す約束ではありません。
 
@@ -26,7 +26,7 @@ Python風の構文を使いますが、Pythonと同じ動作をする言語で�
 | Rust資産との共存 | アプリの処理をHighで書き、既存framework・driver・独自基盤を組み合わせる | Axumとの双方向async連携をサンプルで検証。一般のasync callback型は未対応 |
 | Low | 既存互換性、波括弧構文、生成内容の確認、関数差し替えに範囲を絞る | 実装済み。独立した低水準言語への拡張は当面進めない |
 | 実行ファイルの生成 | 現在のRust backendを使う | Rust/Cargoによるネイティブ生成を実装済み |
-| DBの拡張 | SQLiteとPostgreSQLの型を分け、操作・行・エラーの規則を揃える | SQLiteの初版API・終了契約は承認済み、公開APIは未実装。PostgreSQLは後続設計 |
+| DBの拡張 | SQLiteとPostgreSQLの型を分け、操作・行・エラーの規則を揃える | SQLite Pool/Tx APIは開発sourceに実装。0.1.11には未収録で、4 OSの最新head CIは確認中。PostgreSQLは後続設計 |
 | 標準HTTPの基盤 | Axum／Towerを第一候補として比較する | 採用は未決。条件を揃えた比較は未実施 |
 | 独自backend・VM・self-hosting | 将来の採否を保留する | 未実装。現在の機能や次のリリースの約束に含めない |
 
@@ -148,7 +148,7 @@ Highの別実装、ASTの表示、Rustアダプターも比較対象にします
 
 既存ライブラリを使っても、Nagi側の責任は残ります。どの型を公開するか、引数をmoveするか借りるか、どの失敗をResultへ返すか、取消とcloseで何が終わるかを決める必要があります。Rustの型を単に隠しても、扱いやすいNagi APIになるとは限りません。
 
-現在の標準HTTPは型付きrequest・response・共有state・async handlerを提供します。SQLiteはclassへの行変換を提供しますが、bindは固定形で、SQL文字列や列名を通常の`check`で検査しません。Nagi 0.1.10以降では、schemaを明示して名前・必要な返却列・bind数を確認する[SQLの事前検査](docs/sql-check.md)を使えます。値の型・NULL可否は検査しません。pool・transaction・PostgreSQLの標準APIもありません。新しいDB資源とアダプターの契約は[ライブラリ設計案](docs/library-design.md)で検討します。
+現在の標準HTTPは型付きrequest・response・共有state・async handlerを提供します。従来のSQLite `db_*` APIはclassへの行変換と固定bind形を持ちます。Nagi 0.1.10以降のschema指定[SQL事前検査](docs/sql-check.md)は、名前・必要な返却列・従来APIのbind数を検査し、実値型やNULL可否は検査しません。開発sourceには未リリースの`std.db.sqlite` Pool/Tx APIがあり、任意個数のtyped Parametersと明示transactionを提供します。新APIのSQL検査はParametersのbind数・値型を未検査としてruntimeに残します。[SQLite Pool/Tx reference](docs/sqlite-pool.md)を参照してください。このAPIはNagi 0.1.11には含まれず、4 OSの最新head CIは確認中です。PostgreSQLの標準APIはありません。
 
 Axum／Towerを採用するかは、同じAPI、接続容量、期限、本文上限、panic応答、停止条件で比べてから判断します。AxumもHyperを使うため、Router／middlewareの比較とlistenerの変更を分けます。既存の異なる条件のベンチマークを、採用の根拠にはしません。
 
@@ -192,13 +192,13 @@ CheckedProgramは検査済みのNagiとRust生成向け私有planを渡す境界
 
 Phase 2の開発差分では、アプリIDと成功世代を分けます。同じ生成先のwriterはOS lockで直列化し、世代固有のCargo binをbuildしてからexeをコピーします。成功時だけlatestを更新し、旧exeは上書き・削除・killしません。依存キャッシュは共有し、runの前にlockを解放します。生成Low・Rust・manifest・読み取り済みsourceと行対応を世代に保存しますが、外部Rustや依存source全体の原子的snapshot、任意processの隔離、電源断後の耐久性は対象外です。実装は[世代の公開処理](compiler/src/generation.rs)、検証は[実Cargo回帰](compiler/tests/build_generations.rs)、判断は[ADR 007](docs/internal/adr/007-build-generations.md)を参照してください。
 
-Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しました。Nagi 0.1.11への導入対象で、公開版での利用可否はRelease記録で確認してください。Phase 3の先行テストも4 OSで成功しました。開発差分では、登録資源の型引数の役割とcapabilityの根拠を私有descriptorへ集め、公開ResourceInfoはその一部を参照します。型引数の範囲・重複・欠落を登録時に検査し、用途別の判定と既存APIを保ちます。資源のlifecycle保証はまだ追加しません。[ADR 008](docs/internal/adr/008-resource-contracts.md)に構造と検証の順序を記録しました。集約後の#80は4 OS・editor・site・merge gate CIが成功し、mainへ反映しました。Pool／Transactionはまだ未実装です。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)で、検証済みの範囲、mainと公開版への反映状況、予定を区別します。
+Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しました。Nagi 0.1.11への導入対象で、公開版での利用可否はRelease記録で確認してください。Phase 3の先行テストも4 OSで成功しました。開発差分では、登録資源の型引数の役割とcapabilityの根拠を私有descriptorへ集め、公開ResourceInfoはその一部を参照します。型引数の範囲・重複・欠落を登録時に検査し、用途別の判定と既存APIを保ちます。資源のlifecycle保証はまだ追加しません。[ADR 008](docs/internal/adr/008-resource-contracts.md)に構造と検証の順序を記録しました。集約後の#80は4 OS・editor・site・merge gate CIが成功し、mainへ反映しました。その後のSQLite Pool/Tx APIは開発sourceに実装され、[公開reference](docs/sqlite-pool.md)へ使い方と制約を記載しています。Nagi 0.1.11には含まれず、最新headの4 OS CIは確認中です。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)はmain・公開版・開発sourceの状況を区別します。
 
-SQLite Pool／Transactionは[APIと終了policyの具体案](docs/internal/sqlite-pool-proposal.md)を用意しました。SQLiteの解析・bind・transactionはrusqliteへ任せ、Nagi側は公開する所有契約とworkerの完了・再利用を扱う案です。汎用引数を用意し、旧Dbの固定bindやSQL制約は変えません。2026-10-06にQ002の公開API・SQL制限・終了契約とruntime rusqlite hooksを承認しました。[ADR 010](docs/internal/adr/010-sqlite-transaction-boundary.md)に従い、一接続・一Txの試作から進めます。pool／workerは既存Rustライブラリと比較して選び、Q004でgeneric deadpool =0.13.1（managed／rt_tokio_1、default featuresなし）とdeadpool-runtime 0.3.1の比較試作、capability表の初版値を採用しました。既存Tokio／rusqliteの版は維持します。poolの待機・回収を再利用し、Nagiのadapterではsession終了・native close・worker joinを確認します。標準APIの実装・検証はまだ完了していません。
+2026-10-06にQ002でSQLite API・SQL制限・終了契約とruntime rusqlite hooksを承認しました。続く実装では、当初のdeadpool比較試作から既存Tokio Semaphore＋lazy専用adapterへ変更し、deadpool/deadpool-runtimeを削除しました。新crateやTokio/rusqliteの版追加はありません。公開`std.db.sqlite`は8 resourceと18 operationからなり、従来`db_*` APIは変更していません。現sourceでの使い方、failure/outcome、SQL・ownership・close境界は[SQLite PoolとTransaction](docs/sqlite-pool.md)を参照してください。APIはNagi 0.1.11には含まれません。compiler/runtimeの現在の差分は検証中で、最新headの4 OS CIと公開版配布は未確認です。
 
-mainの[private試作](runtime/src/sqlite_prototype/session.rs)では、実SQLiteの禁止action、明示終端、取消後cleanup、native closeとworker joinを[22件のtest](runtime/src/sqlite_prototype/tests.rs)で確認しました。SQL Errだけで変更が戻ったとは扱いません。同coreの22件は#81の4 OS CIでも成功し、mainへ反映しました。後続のprivate deadpool比較では、同22件と追加20件で取消・close・cleanup前の再貸出を検査し、全suiteと比較測定も確認しました。Q004の依存とcapability表は承認済みで、#82は4 OS CI成功後にmainへ反映されました。
+初期のprivate transaction/SQL回帰は現在の[SQLite session](runtime/src/sqlite/session.rs)と[SQLite tests](runtime/src/sqlite/tests.rs)にあります。SQL Errだけで変更が戻ったとは扱いません。adapterのclose/capacity/join回帰は[adapter tests](runtime/src/sqlite/adapter_tests.rs)、公開API回帰は[public tests](runtime/src/sqlite/public_tests.rs)へ移っています。初期private試作とdeadpool比較の歴史は、現在の公開APIがその依存を使うという意味ではありません。
 
-#84ではprivateな二接続のnative容量と独立joinを検査し、元の試験と合わせて50件が4 OSで成功しました。main `e7aff1d`へ反映済みです。[多接続の結果](docs/internal/sqlite-multiconnection-results.md)と[取得予算の設計](docs/internal/sqlite-acquire-budget-design.md)を分けて記録します。#85は予約までの予算を共用し、登録後のstartup／BEGINには期限を持ち越さないprivate回帰を追加しました。元の50件と取得予算9件・比較1件を合わせた60件は4 OS CIで成功し、ユーザーがmain `f7799fa`へ反映しました。[取得予算の結果](docs/internal/sqlite-acquire-budget-results.md)に測定条件と限界を記録します。公開Pool／Options、NagiのTx捕捉検査、sealed SQLは未実装で、標準APIから多接続や取得期限を使える状態ではありません。巨大capacityのstock allocationも[公開化前の判断](docs/internal/sqlite-capacity-decision.md)に残ります。private試作の検証を公開保証へ広げません。[先行基盤](docs/internal/sqlite-session-results.md)と[adapterの結果](docs/internal/sqlite-adapter-results.md)に検証条件と未完了範囲を残します。
+#84/#85ではprivate段階で複数接続、native capacity、独立join、取得budgetを順に検査し、該当する4 OS CIを通してmainへ反映しました。これらの試作結果は今回のpublic API acceptanceへ流用しません。現在の公開実装の契約範囲と確認制限は[SQLite Pool reference](docs/sqlite-pool.md)に分けています。最新headの4 OS CIは確認中です。
 
 意味論、公開API、High／Low／Rustの分担を変える場合は、変更の理由、代替案、互換性、検証結果をこの文書へ反映します。詳細なAPI説明や測定ログは対応する文書に置きます。
 
