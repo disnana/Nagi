@@ -15,6 +15,70 @@ type ResourceExpected = (
 );
 const RESOURCES: &[ResourceExpected] = &[
     (
+        R::SqlitePool,
+        M::Sqlite,
+        "Pool",
+        &[],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::SqliteTx,
+        M::Sqlite,
+        "Tx",
+        &[],
+        [false, false, false, false, false],
+        &[],
+    ),
+    (
+        R::SqliteParameters,
+        M::Sqlite,
+        "Parameters",
+        &[],
+        [false, false, true, false, false],
+        &[],
+    ),
+    (
+        R::SqliteOptions,
+        M::Sqlite,
+        "Options",
+        &[],
+        [false, false, true, false, true],
+        &[],
+    ),
+    (
+        R::SqliteBeginMode,
+        M::Sqlite,
+        "BeginMode",
+        &[],
+        [true, true, true, true, true],
+        &[],
+    ),
+    (
+        R::SqliteFailure,
+        M::Sqlite,
+        "Failure",
+        &[],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::SqliteFailureKind,
+        M::Sqlite,
+        "FailureKind",
+        &[],
+        [true, true, true, true, true],
+        &[],
+    ),
+    (
+        R::SqliteOutcome,
+        M::Sqlite,
+        "Outcome",
+        &[],
+        [true, true, true, true, true],
+        &[],
+    ),
+    (
         R::Task,
         M::Task,
         "Task",
@@ -227,6 +291,11 @@ fn module(module: M) -> (&'static str, &'static str, &'static str) {
         M::Auth => ("std.auth", "stdlib:std.auth", "::nagi_runtime::auth"),
         M::Ownership => ("std.ownership", "stdlib:std.ownership", "::std::convert"),
         M::Task => ("std.task", "stdlib:std.task", "::nagi_runtime"),
+        M::Sqlite => (
+            "std.db.sqlite",
+            "stdlib:std.db.sqlite",
+            "::nagi_runtime::sqlite",
+        ),
     }
 }
 #[test]
@@ -247,8 +316,8 @@ fn registered_resources_match_the_independent_inventory() {
         shared: false,
         debug: false,
     };
-    assert_eq!(RESOURCES.len(), 25);
-    assert_eq!(stdlib::RESOURCES.len(), 25);
+    assert_eq!(RESOURCES.len(), 33);
+    assert_eq!(stdlib::RESOURCES.len(), 33);
     assert_eq!(
         stdlib::RESOURCES.iter().copied().collect::<HashSet<_>>(),
         RESOURCES.iter().map(|r| r.0).collect()
@@ -327,6 +396,24 @@ macro_rules! op {
     };
 }
 const OPERATIONS: &[OperationExpected] = &[
+    op!(SqliteOptions,Sqlite,"options",4,&[],"MMMM",None,false,false,"(connections: i64, queue_capacity: i64, acquire_ms: i64, busy_ms: i64) -> Result[Options, Error]"),
+    op!(SqliteOpen,Sqlite,"open",2,&[],"RM",None,true,false,"(path: view[str], options: Options) -> Future[Result[Pool, Failure]]"),
+    op!(SqliteClonePool,Sqlite,"clone_pool",1,&[],"R",None,false,false,"(pool: view[Pool]) -> Pool"),
+    op!(SqliteBegin,Sqlite,"begin",2,&[],"RM",None,true,false,"(pool: view[Pool], mode: BeginMode) -> Future[Result[Tx, Failure]]"),
+    op!(SqliteParameters,Sqlite,"parameters",0,&[],"",None,false,false,"() -> Parameters"),
+    op!(SqliteBindI64,Sqlite,"bind_i64",2,&[],"MM",None,false,false,"(parameters: Parameters, value: i64) -> Parameters"),
+    op!(SqliteBindF64,Sqlite,"bind_f64",2,&[],"MM",None,false,false,"(parameters: Parameters, value: f64) -> Result[Parameters, Error]"),
+    op!(SqliteBindText,Sqlite,"bind_text",2,&[],"MM",None,false,false,"(parameters: Parameters, value: str) -> Parameters"),
+    op!(SqliteBindBytes,Sqlite,"bind_bytes",2,&[],"MM",None,false,false,"(parameters: Parameters, value: bytes) -> Parameters"),
+    op!(SqliteBindNull,Sqlite,"bind_null",1,&[],"M",None,false,false,"(parameters: Parameters) -> Parameters"),
+    op!(SqliteQuery,Sqlite,"query",3,&["T"],"RRM",None,true,true,"[T](tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[Option[T], Failure]]"),
+    op!(SqliteAll,Sqlite,"all",3,&["T"],"RRM",None,true,true,"[T](tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[List[T], Failure]]"),
+    op!(SqliteExec,Sqlite,"exec",3,&[],"RRM",None,true,false,"(tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[i64, Failure]]"),
+    op!(SqliteCommit,Sqlite,"commit",1,&[],"M",None,true,false,"(tx: Tx) -> Future[Result[unit, Failure]]"),
+    op!(SqliteRollback,Sqlite,"rollback",1,&[],"M",None,true,false,"(tx: Tx) -> Future[Result[unit, Failure]]"),
+    op!(SqliteClose,Sqlite,"close",2,&[],"RM",None,true,false,"(pool: view[Pool], timeout_ms: i64) -> Future[Result[unit, Failure]]"),
+    op!(SqliteCopyPrimaryError,Sqlite,"copy_primary_error",1,&[],"R",None,false,false,"(problem: view[Failure]) -> Option[Error]"),
+    op!(SqliteCopyCleanupError,Sqlite,"copy_cleanup_error",1,&[],"R",None,false,false,"(problem: view[Failure]) -> Option[Error]"),
     op!(TaskDiscard,Task,"discard",1,&[],"M",None,false,false,"(task: Task[T]) -> unit"),
     op!(TaskKind,Task,"kind",1,&[],"R",None,false,false,"(failure: view[TaskFailure]) -> TaskFailureKind"),
     op!(TaskMessage,Task,"message",1,&[],"R",Some(0),false,false,"(failure: view[TaskFailure]) -> view[str]"),
@@ -381,8 +468,8 @@ const OPERATIONS: &[OperationExpected] = &[
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 51);
-    assert_eq!(stdlib::OPERATIONS.len(), 51);
+    assert_eq!(OPERATIONS.len(), 69);
+    assert_eq!(stdlib::OPERATIONS.len(), 69);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()
@@ -457,6 +544,25 @@ fn registered_operations_match_signatures_and_passing() {
 // Resource-valued fields are written as nominal names and resolved only after
 // their independent resource identity oracle above has been checked.
 const FIELDS: &[(R, &str, &str, [bool; 3])] = &[
+    (
+        R::SqliteFailure,
+        "kind",
+        "SqliteFailureKind",
+        [false, true, false],
+    ),
+    (
+        R::SqliteFailure,
+        "outcome",
+        "SqliteOutcome",
+        [false, true, false],
+    ),
+    (R::SqliteFailure, "retired", "bool", [false, true, false]),
+    (
+        R::SqliteFailure,
+        "message",
+        "view[str]",
+        [false, true, false],
+    ),
     (R::Request, "method", "Method", [true, false, false]),
     (R::Request, "path", "view[str]", [false, true, false]),
     (
@@ -497,6 +603,8 @@ const FIELDS: &[(R, &str, &str, [bool; 3])] = &[
 ];
 fn field_type(ty: &str) -> Type {
     match ty {
+        "SqliteFailureKind" => stdlib::resource_type(R::SqliteFailureKind, vec![]),
+        "SqliteOutcome" => stdlib::resource_type(R::SqliteOutcome, vec![]),
         "Method" => stdlib::resource_type(R::Method, vec![]),
         "Status" => stdlib::resource_type(R::Status, vec![]),
         "WaitKind" => stdlib::resource_type(R::WaitKind, vec![]),
@@ -514,14 +622,14 @@ fn field_type(ty: &str) -> Type {
 }
 #[test]
 fn registered_accessors_match_the_complete_inventory() {
-    assert_eq!(FIELDS.len(), 32);
+    assert_eq!(FIELDS.len(), 36);
     assert_eq!(
         FIELDS
             .iter()
             .map(|r| (r.0, r.1))
             .collect::<HashSet<_>>()
             .len(),
-        32
+        36
     );
     let mut total = 0;
     for &(resource, ..) in RESOURCES {
@@ -540,7 +648,7 @@ fn registered_accessors_match_the_complete_inventory() {
         assert!(stdlib::field(resource, "not_an_accessor").is_none());
         total += actual.len();
     }
-    assert_eq!(total, 32);
+    assert_eq!(total, 36);
     for &(resource, name, ty, flags) in FIELDS {
         let actual = stdlib::field(resource, name).unwrap();
         assert_eq!(actual.ty, field_type(ty), "{resource:?}.{name}");
@@ -553,6 +661,9 @@ fn registered_accessors_match_the_complete_inventory() {
 }
 
 const CONSTANTS: &[(R, &str)] = &[
+    (R::SqliteBeginMode,"DEFERRED IMMEDIATE EXCLUSIVE"),
+    (R::SqliteFailureKind,"INVALID CLOSED ACQUIRE_TIMEOUT BUSY SQL BIND DECODE ABORTED CLEANUP WORKER REPLY_LOST CLOSE_TIMEOUT ALLOCATION"),
+    (R::SqliteOutcome,"NOT_APPLICABLE ACTIVE COMMITTED ROLLED_BACK UNKNOWN"),
     (R::TaskFailureKind,"Panicked Cancelled LegacyError Internal"),
     (R::Method,"GET POST PUT DELETE PATCH HEAD OPTIONS CONNECT TRACE"),
     (R::Status,"OK CREATED ACCEPTED NON_AUTHORITATIVE_INFORMATION NO_CONTENT RESET_CONTENT PARTIAL_CONTENT MULTI_STATUS ALREADY_REPORTED IM_USED MULTIPLE_CHOICES MOVED_PERMANENTLY FOUND SEE_OTHER NOT_MODIFIED USE_PROXY TEMPORARY_REDIRECT PERMANENT_REDIRECT BAD_REQUEST UNAUTHORIZED PAYMENT_REQUIRED FORBIDDEN NOT_FOUND METHOD_NOT_ALLOWED NOT_ACCEPTABLE PROXY_AUTHENTICATION_REQUIRED REQUEST_TIMEOUT CONFLICT GONE LENGTH_REQUIRED PRECONDITION_FAILED PAYLOAD_TOO_LARGE REQUEST_ENTITY_TOO_LARGE REQUEST_URI_TOO_LONG REQUESTED_RANGE_NOT_SATISFIABLE CONTENT_TOO_LARGE URI_TOO_LONG UNSUPPORTED_MEDIA_TYPE RANGE_NOT_SATISFIABLE EXPECTATION_FAILED IM_A_TEAPOT MISDIRECTED_REQUEST UNPROCESSABLE_ENTITY UNPROCESSABLE_CONTENT LOCKED FAILED_DEPENDENCY TOO_EARLY UPGRADE_REQUIRED PRECONDITION_REQUIRED TOO_MANY_REQUESTS REQUEST_HEADER_FIELDS_TOO_LARGE UNAVAILABLE_FOR_LEGAL_REASONS INTERNAL_SERVER_ERROR NOT_IMPLEMENTED BAD_GATEWAY SERVICE_UNAVAILABLE GATEWAY_TIMEOUT HTTP_VERSION_NOT_SUPPORTED VARIANT_ALSO_NEGOTIATES INSUFFICIENT_STORAGE LOOP_DETECTED NOT_EXTENDED NETWORK_AUTHENTICATION_REQUIRED"),
@@ -563,7 +674,7 @@ const CONSTANTS: &[(R, &str)] = &[
 ];
 #[test]
 fn registered_constants_match_the_complete_inventory() {
-    assert_eq!(CONSTANTS.len(), 7);
+    assert_eq!(CONSTANTS.len(), 10);
     for &(resource, ..) in RESOURCES {
         let names = CONSTANTS
             .iter()
@@ -580,6 +691,27 @@ fn registered_constants_match_the_complete_inventory() {
         assert_eq!(actual.len(), expected.len());
         for name in expected {
             let native = match (resource, name) {
+                (R::SqliteBeginMode, "DEFERRED") => "Deferred",
+                (R::SqliteBeginMode, "IMMEDIATE") => "Immediate",
+                (R::SqliteBeginMode, "EXCLUSIVE") => "Exclusive",
+                (R::SqliteFailureKind, "INVALID") => "Invalid",
+                (R::SqliteFailureKind, "CLOSED") => "Closed",
+                (R::SqliteFailureKind, "ACQUIRE_TIMEOUT") => "AcquireTimeout",
+                (R::SqliteFailureKind, "BUSY") => "Busy",
+                (R::SqliteFailureKind, "SQL") => "Sql",
+                (R::SqliteFailureKind, "BIND") => "Bind",
+                (R::SqliteFailureKind, "DECODE") => "Decode",
+                (R::SqliteFailureKind, "ABORTED") => "Aborted",
+                (R::SqliteFailureKind, "CLEANUP") => "Cleanup",
+                (R::SqliteFailureKind, "WORKER") => "Worker",
+                (R::SqliteFailureKind, "REPLY_LOST") => "ReplyLost",
+                (R::SqliteFailureKind, "CLOSE_TIMEOUT") => "CloseTimeout",
+                (R::SqliteFailureKind, "ALLOCATION") => "Allocation",
+                (R::SqliteOutcome, "NOT_APPLICABLE") => "NotApplicable",
+                (R::SqliteOutcome, "ACTIVE") => "Active",
+                (R::SqliteOutcome, "COMMITTED") => "Committed",
+                (R::SqliteOutcome, "ROLLED_BACK") => "RolledBack",
+                (R::SqliteOutcome, "UNKNOWN") => "Unknown",
                 (R::Status, "REQUEST_ENTITY_TOO_LARGE") => "PAYLOAD_TOO_LARGE",
                 (R::Status, "REQUEST_URI_TOO_LONG") => "URI_TOO_LONG",
                 (R::Status, "REQUESTED_RANGE_NOT_SATISFIABLE") => "RANGE_NOT_SATISFIABLE",

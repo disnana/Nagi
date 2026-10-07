@@ -61,6 +61,8 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 
 ### Q-004: SQLite Poolのwrapper依存と未指定capability
 
+2026-10-08追記: ユーザーはSQLite正式化前の長期的妥当性を優先し、必要な依存置換・API/Failure分類変更を承認した。比較後、既存Tokio Semaphore＋lazy専用adapterを採用し、deadpool/deadpool-runtimeを除去した。新依存・版更新なし。ALLOCATION、lazy open/beginの責任、scalar容量の受理範囲は[確定判断](sqlite-public-runtime-decision.md)を正とする。以下のdeadpool承認は比較試作の履歴で、現実装の依存ではない。
+
 状態: 2026-10-06に依存とcapability表を承認済み。generic deadpool 0.13.1（managed／rt_tokio_1、default featuresなし）とdeadpool-runtime 0.3.1を比較試作へ追加し、既存Tokio／rusqliteの解決版を維持する。承認した表の値を、Q002の終了・転送契約とともに扱う。
 
 [PR #82](https://github.com/disnana/Nagi/pull/82)のprivate一接続adapter比較は4 OS CIまで成功した。main `7999bab`へ反映済みだが、公開registry、NagiのTx捕捉検査、多接続、取得期限まで完成したとは扱わない。[main側の判断資料](sqlite-pool-adapter-decision.md)は依存選択の根拠として残し、承認と実装状況はこの記録を参照する。Q002/Q004を再び未承認へ戻さない。Tx／ParametersのDebug不可、Pool／Failureの状態だけのDebug、Failureと小さいenumのshared可は初版表の採用値で、公開checker配線は未完了。予想外の依存追加・版更新が必要なら差分を示して判断へ戻す。

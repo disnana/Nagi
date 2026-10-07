@@ -36,6 +36,8 @@ pub(super) enum Operation {
     Insert,
     Update,
     Write,
+    SqliteRows,
+    SqliteExec,
 }
 
 #[cfg(feature = "sql-check")]
@@ -44,7 +46,7 @@ pub(super) struct Site {
     pub operation: Option<Operation>,
     pub operation_name: String,
     pub sql: Option<String>,
-    pub bind_count: usize,
+    pub bind_count: Option<usize>,
     pub fields: Vec<String>,
     pub reason: Option<String>,
 }
@@ -55,7 +57,7 @@ pub(super) struct Site {
 pub(super) struct Query {
     pub operation: Operation,
     pub sql: String,
-    pub bind_count: usize,
+    pub bind_count: Option<usize>,
     pub fields: Vec<String>,
 }
 
@@ -327,8 +329,13 @@ pub(crate) fn check(
                     .location(site.line)
                     .map(|location| format!("{}:{}", location.path.display(), location.line))
                     .unwrap_or_else(|| format!("line {}", site.line));
+                let category = if site.operation.is_some() && site.sql.is_some() {
+                    "bind unchecked"
+                } else {
+                    "runtime/unsupported"
+                };
                 eprintln!(
-                    "SQL runtime/unsupported: {}: {reason}\n --> {location}",
+                    "SQL {category}: {}: {reason}\n --> {location}",
                     site.operation_name
                 );
             }

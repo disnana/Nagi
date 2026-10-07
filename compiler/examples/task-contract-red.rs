@@ -59,7 +59,9 @@ fn observe(root: &Path, case: Case) -> Result<Observation, Box<dyn std::error::E
                         .and_then(|global| loaded.location(global))
                         .filter(|location| location.path == path)
                         .map(|location| location.line);
-                    ("check", loaded.diagnostic(&error), line)
+                    // The rendered diagnostic includes source text and filenames;
+                    // neither may satisfy the expected checker message fragment.
+                    ("check", error, line)
                 }
             },
         },
@@ -166,6 +168,27 @@ mod tests {
             assert_eq!(observed.stage, "check");
             assert_eq!(observed.line, Some(2), "{observed:?}");
             assert!(observed.matched_contract, "{observed:?}");
+        }
+    }
+
+    #[test]
+    fn source_excerpt_is_not_checker_evidence() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/task-handles");
+        for (source, high) in [
+            ("checker-location-control.nagi", true),
+            ("checker-location-control.low", false),
+        ] {
+            let case = Case {
+                name: source.into(),
+                source: source.into(),
+                high,
+                contract: "infrastructure-control".into(),
+                expected: "check-fail".into(),
+                diagnostic: "wrong".into(),
+                primary_line: 2,
+            };
+            let observed = observe(&root, case).unwrap();
+            assert!(!observed.matched_contract, "{observed:?}");
         }
     }
 }

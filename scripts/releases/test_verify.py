@@ -231,5 +231,67 @@ class TaskDistributionVerificationTests(unittest.TestCase):
             self.check(backend_rejection)
 
 
+class SqlitePoolDistributionVerificationTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="nagi SQLite distribution 凪 ")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.compiler = self.root / "installed compiler" / "nagic"
+        self.environment = {"PATH": "existing tools", "NAGI_ROOT": "existing runtime"}
+        self.native_sources = []
+
+    def answer(self, command, **kwargs):
+        self.assertEqual(command[0], str(self.compiler))
+        self.assertEqual(kwargs["cwd"], self.root)
+        source = Path(command[2])
+        self.assertTrue(source.is_file())
+        output = Path(command[command.index("--out") + 1])
+        if command[1] == "run":
+            self.native_sources.append(source.name)
+            self.assertNotIn("NAGI_ROOT", kwargs["env"])
+            self.assertEqual(kwargs["env"]["PATH"], "existing tools")
+            if source.name == "saved.low":
+                self.assertFalse(source.with_name("sqlite_pool.nagi").exists())
+            output.mkdir()
+            (output / "Cargo.toml").write_text(
+                "[dependencies]\nnagi-runtime = { path = "
+                + json.dumps(str(self.compiler.parent / "runtime")) + " }\n", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, "7\nclosed\n", "build progress\n")
+        self.assertEqual(kwargs["env"]["PATH"], "")
+        self.assertFalse(Path(kwargs["env"]["NAGI_ROOT"]).exists())
+        if command[1] == "lower":
+            output.mkdir()
+            (output / "generated.low").write_text("# saved Low fixture\n", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    def check(self, answer):
+        with patch.object(verify.subprocess, "run", side_effect=answer):
+            verify.verify_sqlite_pool(self.compiler, self.root, self.environment)
+        self.assertEqual(self.environment, {"PATH": "existing tools", "NAGI_ROOT": "existing runtime"})
+
+    def test_both_forms_use_the_bundled_runtime_after_high_removal(self):
+        self.check(self.answer)
+        self.assertEqual(self.native_sources, ["sqlite_pool.nagi", "saved.low"])
+
+    def test_checkout_runtime_is_not_distribution_evidence(self):
+        def wrong_runtime(command, **kwargs):
+            result = self.answer(command, **kwargs)
+            if command[1] == "run":
+                output = Path(command[command.index("--out") + 1])
+                (output / "Cargo.toml").write_text('[dependencies]\nnagi-runtime={path="/checkout/runtime"}\n', encoding="utf-8")
+            return result
+        with self.assertRaisesRegex(AssertionError, "runtime outside distribution"):
+            self.check(wrong_runtime)
+
+    def test_missing_native_effect_is_not_success(self):
+        def no_native_effect(command, **kwargs):
+            result = self.answer(command, **kwargs)
+            if command[1] == "run":
+                result.stdout = "checked source\n"
+            return result
+        with self.assertRaisesRegex(AssertionError, "SQLite native output"):
+            self.check(no_native_effect)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -9,12 +9,13 @@ fn payload_any(
     classes: &HashMap<String, Class>,
     enums: &HashMap<String, Enum>,
     native_payloads: bool,
+    stop_at_shared: bool,
     predicate: impl Fn(crate::stdlib::Resource) -> bool,
 ) -> bool {
     let mut pending = vec![ty];
     let mut visited = HashSet::new();
     while let Some(current) = pending.pop() {
-        if current.0 == "fn" {
+        if current.0 == "fn" || stop_at_shared && current.0 == "shared" {
             continue;
         }
         if let Some(resource) = crate::stdlib::resource(&current.0) {
@@ -59,7 +60,7 @@ pub(crate) fn contains_auth_proof(
     classes: &HashMap<String, Class>,
     enums: &HashMap<String, Enum>,
 ) -> bool {
-    payload_any(ty, classes, enums, true, |resource| {
+    payload_any(ty, classes, enums, true, false, |resource| {
         matches!(
             resource,
             crate::stdlib::Resource::Principal | crate::stdlib::Resource::Grant
@@ -74,7 +75,7 @@ pub(crate) fn contains_task_owner(
     classes: &HashMap<String, Class>,
     enums: &HashMap<String, Enum>,
 ) -> bool {
-    payload_any(ty, classes, enums, true, |r| {
+    payload_any(ty, classes, enums, true, false, |r| {
         matches!(
             r,
             crate::stdlib::Resource::Task | crate::stdlib::Resource::TaskFailure
@@ -90,8 +91,84 @@ pub(crate) fn debug_supported(
     classes: &HashMap<String, Class>,
     enums: &HashMap<String, Enum>,
 ) -> bool {
-    !payload_any(ty, classes, enums, false, |resource| {
+    !payload_any(ty, classes, enums, false, false, |resource| {
         !crate::stdlib::resource_info(resource).debug
+    })
+}
+
+pub(crate) fn contains_sqlite_nonshared(
+    ty: &Type,
+    classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
+) -> bool {
+    payload_any(ty, classes, enums, true, false, |resource| {
+        let info = crate::stdlib::resource_info(resource);
+        info.module == crate::stdlib::StandardModule::Sqlite && !info.shared
+    })
+}
+
+/// Clone of an Arc clones its handle, not its payload. A function signature is
+/// likewise not a stored transaction. This traversal follows actual Clone work.
+pub(crate) fn contains_sqlite_noncopy(
+    ty: &Type,
+    classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
+) -> bool {
+    payload_any(ty, classes, enums, true, true, |resource| {
+        let info = crate::stdlib::resource_info(resource);
+        info.module == crate::stdlib::StandardModule::Sqlite && !info.copy
+    })
+}
+
+pub(crate) fn contains_same_task_resource(
+    ty: &Type,
+    classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
+) -> bool {
+    payload_any(
+        ty,
+        classes,
+        enums,
+        true,
+        false,
+        crate::stdlib::requires_same_task,
+    )
+}
+
+/// Fields supported by the generated FromRow adapter. This is not a solver for
+/// handwritten Rust implementations; only the new SQLite API requires it.
+pub(crate) fn generated_row_supported(
+    class: &Class,
+    classes: &HashMap<String, Class>,
+    resolved: bool,
+) -> bool {
+    class.fields.iter().all(|(_, ty)| {
+        let mut scalar = ty;
+        while scalar.0 == "owned" {
+            let Some(inner) = scalar.1.first() else {
+                return false;
+            };
+            scalar = inner;
+        }
+        if scalar.0 == "Option" {
+            let Some(inner) = scalar.1.first() else {
+                return false;
+            };
+            scalar = inner;
+        }
+        while scalar.0 == "owned" {
+            let Some(inner) = scalar.1.first() else {
+                return false;
+            };
+            scalar = inner;
+        }
+        [
+            "i8", "i16", "i32", "i64", "u8", "u16", "u32", "f32", "f64", "bool", "str", "bytes",
+        ]
+        .contains(&scalar.0.as_str())
+            && (matches!(scalar.0.as_str(), "str" | "bytes")
+                || resolved
+                || !classes.contains_key(&scalar.0))
     })
 }
 

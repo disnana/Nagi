@@ -560,17 +560,17 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
         E::Field(x, n)
             if types.expression(e).argument_resolution == Some(NameResolution::ResourceField) =>
         {
-            let (accessor, owned) = types
+            use crate::check::checked::FieldRead;
+            match types
                 .expression(e)
                 .field
                 .as_ref()
-                .expect("sealed field accessor");
-            format!(
-                "({}).{}{}",
-                re(x, types),
-                accessor,
-                if *owned { "" } else { "()" }
-            )
+                .expect("sealed field accessor")
+            {
+                FieldRead::Method(accessor) => format!("({}).{}()", re(x, types), accessor),
+                FieldRead::Value(field) => format!("({}).{}", re(x, types), field),
+                FieldRead::BorrowStr(field) => format!("({}).{}.as_str()", re(x, types), field),
+            }
         }
         E::Field(x, n) => format!("({}).{n}", re(x, types)),
         E::Index(x, i) => format!(
@@ -632,7 +632,7 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                     .operation
                     .as_ref()
                     .expect("sealed operation");
-                let (path, parameters, emit_type_arguments) = match operation {
+                let (path, parameters, emit_type_arguments, sql) = match operation {
                     crate::check::checked::OperationPlan::IdentityTransfer { argument } => {
                         // Consume or copy into a value temporary even when the caller
                         // only borrows the result. Parentheses would preserve a place;
@@ -643,19 +643,37 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                         path,
                         parameters,
                         emit_type_arguments,
-                    } => (path, parameters, emit_type_arguments),
+                        sql,
+                    } => (path, parameters, emit_type_arguments, sql),
                 };
                 let arguments = a
                     .iter()
                     .zip(parameters)
-                    .map(|(argument, passing)| match passing {
-                        crate::stdlib::Passing::Reference => reference_arg(argument, types),
-                        crate::stdlib::Passing::Borrow => {
-                            format!("&({})", re(argument, types))
+                    .enumerate()
+                    .map(|(index, (argument, passing))| {
+                        if let Some(sql) = sql.filter(|sql| sql.index == index) {
+                            return match sql.representation {
+                                crate::check::checked::SqlRepresentation::Static => {
+                                    let E::Str(value) = &argument.kind else {
+                                        unreachable!("sealed static SQL")
+                                    };
+                                    format!("::nagi_runtime::Sql::Static({})", quote(value))
+                                }
+                                crate::check::checked::SqlRepresentation::Owned => format!(
+                                    "::nagi_runtime::Sql::Owned(<::std::primitive::str as ::std::borrow::ToOwned>::to_owned({}))",
+                                    string_arg(argument, types)
+                                ),
+                            };
                         }
-                        crate::stdlib::Passing::Move
-                        | crate::stdlib::Passing::Handler
-                        | crate::stdlib::Passing::Mapper => re(argument, types),
+                        match passing {
+                            crate::stdlib::Passing::Reference => reference_arg(argument, types),
+                            crate::stdlib::Passing::Borrow => {
+                                format!("&({})", re(argument, types))
+                            }
+                            crate::stdlib::Passing::Move
+                            | crate::stdlib::Passing::Handler
+                            | crate::stdlib::Passing::Mapper => re(argument, types),
+                        }
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
@@ -1247,7 +1265,7 @@ pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
         let item = &plan.classes[index];
         let (copy, serde, readable_debug) = (item.copy, item.serde, item.readable_debug);
         let mut derives = Vec::new();
-        if !readable_debug {
+        if item.debug && !readable_debug {
             derives.push("Debug");
         }
         if serde {
@@ -1281,7 +1299,7 @@ pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
         }
         out.origin(::std::option::Option::Some(c.line));
         out.push_str("}\n");
-        if readable_debug {
+        if item.debug && readable_debug {
             out.origin(None);
             let label = p
                 .modules
@@ -1325,7 +1343,7 @@ pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
         let item = &plan.enums[index];
         let (copy, readable_debug) = (item.copy, item.readable_debug);
         let mut derives = Vec::new();
-        if !readable_debug {
+        if item.debug && !readable_debug {
             derives.push("Debug");
         }
         if copy {
@@ -1358,7 +1376,7 @@ pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
         }
         out.origin(Some(enumeration.line));
         out.push_str("}\n");
-        if readable_debug {
+        if item.debug && readable_debug {
             out.origin(None);
             out.push_str(&format!(
                 "impl ::std::fmt::Debug for {} {{\n    fn fmt(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {{\n        match self {{\n",

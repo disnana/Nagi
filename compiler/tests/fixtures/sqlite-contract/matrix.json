@@ -1,15 +1,16 @@
 {
   "schema_version": 1,
-  "status": "planned_unwired",
-  "basis": "ADR 010 / Q002 + Q004 approved 2026-10-06; not public API acceptance",
+  "status": "validated_public_slice",
+  "basis": "ADR 010 / Q002 + Q004 approved 2026-10-06; public implementation, local Linux evidence; not released",
   "execution": {
-    "harness_registered": false,
-    "parser_executed": false,
-    "checker_executed": false,
-    "native_build_executed": false,
-    "runtime_executed": false,
+    "harness_registered": true,
+    "parser_executed": true,
+    "checker_executed": true,
+    "native_build_executed": true,
+    "runtime_executed": true,
     "parser_harness_registered": true,
-    "semantic_runner_registered": true
+    "semantic_runner_registered": true,
+    "native_scope": "7 positive pairs: High, independently saved Low after High removal, handwritten Low; compiler/tests/sqlite_public.rs"
   },
   "low_kind": "handwritten Low imports; not generated Low goldens",
   "canonical_identity": {
@@ -19,14 +20,14 @@
   "cases": [
     {
       "id": "01-same-task-affine",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "pass",
       "contract": "local Option/Result and owned delegation survive await",
       "inputs": {
         "high": "01-same-task-affine.nagi",
         "user_low": "01-same-task-affine.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -34,20 +35,29 @@
       ],
       "expected_origin": {},
       "diagnostic_contract": null,
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "accepted",
+        "checker_user_low": "accepted",
+        "native_positive_forms": [
+          "high",
+          "saved_low",
+          "user_low"
+        ],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "native_requirement": "build/run after runtime public API exists; no rustc move/lifetime rejection",
       "checker_diagnostic_fragment": ""
     },
     {
       "id": "02-pool-row-sql",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "pass",
       "contract": "Pool owned/shared storage; scalar row; literal versus dynamic SQL; unknown bind count",
       "inputs": {
         "high": "02-pool-row-sql.nagi",
         "user_low": "02-pool-row-sql.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -55,7 +65,16 @@
       ],
       "expected_origin": {},
       "diagnostic_contract": null,
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "accepted",
+        "checker_user_low": "accepted",
+        "native_positive_forms": [
+          "high",
+          "saved_low",
+          "user_low"
+        ],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "sql_plan": [
         {
           "operation": "query",
@@ -86,14 +105,14 @@
     },
     {
       "id": "03-user-type-names",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "pass",
       "contract": "import-only canonical identity preserves user resource-like names",
       "inputs": {
         "high": "03-user-type-names.nagi",
         "user_low": "03-user-type-names.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -101,20 +120,29 @@
       ],
       "expected_origin": {},
       "diagnostic_contract": null,
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "accepted",
+        "checker_user_low": "accepted",
+        "native_positive_forms": [
+          "high",
+          "saved_low",
+          "user_low"
+        ],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "identity_requirement": "user Class DefId and stdlib:std.db.sqlite Resource DefId remain distinct; repeat without import",
       "checker_diagnostic_fragment": ""
     },
     {
       "id": "04-pointer-signature",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "pass",
       "contract": "capture-free function pointer signature is not Tx payload",
       "inputs": {
         "high": "04-pointer-signature.nagi",
         "user_low": "04-pointer-signature.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -122,20 +150,29 @@
       ],
       "expected_origin": {},
       "diagnostic_contract": null,
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "accepted",
+        "checker_user_low": "accepted",
+        "native_positive_forms": [
+          "high",
+          "saved_low",
+          "user_low"
+        ],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "capture_expectation": "accept Future captures callback pointer only, not a Tx; no closure syntax or hidden environment",
       "checker_diagnostic_fragment": ""
     },
     {
       "id": "05-consume-reuse",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "commit consumes Tx at Future creation",
       "inputs": {
         "high": "05-consume-reuse.nagi",
         "user_low": "05-consume-reuse.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -158,7 +195,12 @@
         }
       },
       "diagnostic_contract": "checker ownership: move後",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "variants": [
         "rollback then commit",
         "commit argument evaluation then later same-expression Tx reuse; no Future-save relaxation"
@@ -167,14 +209,14 @@
     },
     {
       "id": "06-copy-tx",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "Tx is nonCopy/nonClone",
       "inputs": {
         "high": "06-copy-tx.nagi",
         "user_low": "06-copy-tx.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -197,19 +239,24 @@
         }
       },
       "diagnostic_contract": "checker capability: nonCopy resource copy refusal",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "checker_diagnostic_fragment": "copy"
     },
     {
       "id": "07-owned-field",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "Tx cannot be stored in owned class/enum field",
       "inputs": {
         "high": "07-owned-field.nagi",
         "user_low": "07-owned-field.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -232,7 +279,12 @@
         }
       },
       "diagnostic_contract": "checker field storage: 所有field",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "variants": [
         "direct Tx field",
         "Result[Tx, Error] field",
@@ -244,14 +296,14 @@
     },
     {
       "id": "08-nested-shared",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "Tx payload cannot enter Arc through nested wrapper",
       "inputs": {
         "high": "08-nested-shared.nagi",
         "user_low": "08-nested-shared.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -274,7 +326,12 @@
         }
       },
       "diagnostic_contract": "checker new-resource shared capability, including nested payload",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "variants": [
         "shared[Option[Tx]] function parameter declaration",
         "share(Result[Tx, Failure])",
@@ -284,14 +341,14 @@
     },
     {
       "id": "09-native-shared-context",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "standard resource Arc context enforces actual payload capability",
       "inputs": {
         "high": "09-native-shared-context.nagi",
         "user_low": "09-native-shared-context.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -314,7 +371,12 @@
         }
       },
       "diagnostic_contract": "checker native SharedPayload role rejects nested Tx",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "variants": [
         "std.actor.Supervisor[Option[Tx]] context",
         "App callback error signature mentioning Tx is not shared payload"
@@ -323,14 +385,14 @@
     },
     {
       "id": "10-spawn-owned",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "owned Tx argument retained by Future cannot transfer task",
       "inputs": {
         "high": "10-spawn-owned.nagi",
         "user_low": "10-spawn-owned.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -353,7 +415,12 @@
         }
       },
       "diagnostic_contract": "checker task-transfer: actual Tx capture (even unused in child)",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "capture_expectation": {
         "call": "child(tx)",
         "argument_index": 0,
@@ -374,14 +441,14 @@
     },
     {
       "id": "11-spawn-alias-option",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "async function alias preserves real Option[Tx] capture",
       "inputs": {
         "high": "11-spawn-alias-option.nagi",
         "user_low": "11-spawn-alias-option.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -404,7 +471,12 @@
         }
       },
       "diagnostic_contract": "checker task-transfer through local async alias and actual wrapper payload",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "capture_expectation": {
         "call": "callback(boxed)",
         "named_function": "child",
@@ -423,14 +495,14 @@
     },
     {
       "id": "12-future-storage",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "existing Future local storage remains unsupported",
       "inputs": {
         "high": "12-future-storage.nagi",
         "user_low": "12-future-storage.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -453,19 +525,24 @@
         }
       },
       "diagnostic_contract": "checker emittable: Future cannot be saved; not task-transfer evidence",
-      "validation_result": null,
-      "checker_diagnostic_fragment": "Future"
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
+      "checker_diagnostic_fragment": "非同期処理の戻り値は変数へ保存できません"
     },
     {
       "id": "13-future-option",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "existing nested Future storage remains unsupported",
       "inputs": {
         "high": "13-future-option.nagi",
         "user_low": "13-future-option.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -488,23 +565,28 @@
         }
       },
       "diagnostic_contract": "checker emittable: Future container unsupported; not capture validation",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "variants": [
         "Future in Result",
         "Future passed to callback parameter; fn[...,Future] parameter remains unsupported"
       ],
-      "checker_diagnostic_fragment": "Future"
+      "checker_diagnostic_fragment": "コンテナーの型として指定することは未対応です"
     },
     {
       "id": "14-future-return",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "existing explicit Future return remains unsupported",
       "inputs": {
         "high": "14-future-return.nagi",
         "user_low": "14-future-return.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -527,7 +609,12 @@
         }
       },
       "diagnostic_contract": "checker unsupported Future signature before any spawn; preserve current rejection stage",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "variants": [
         "function callback returning Future then spawn; reject unsupported callback parameter, not pretend capture tracked"
       ],
@@ -535,14 +622,14 @@
     },
     {
       "id": "15-new-row-restriction",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "new API rejects unsupported autoFromRow field while legacy accepts class bridge",
       "inputs": {
         "high": "15-new-row-restriction.nagi",
         "user_low": "15-new-row-restriction.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -565,7 +652,12 @@
         }
       },
       "diagnostic_contract": "checker new operation row eligibility before rustc FromRow failure",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "variants": [
         "new query same Row",
         "u64 field",
@@ -577,14 +669,14 @@
     },
     {
       "id": "16-parameters-field",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "pass",
       "contract": "Parameters may move into class and enum fields despite Debug being prohibited",
       "inputs": {
         "high": "16-parameters-field.nagi",
         "user_low": "16-parameters-field.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -592,21 +684,30 @@
       ],
       "expected_origin": {},
       "diagnostic_contract": null,
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "accepted",
+        "checker_user_low": "accepted",
+        "native_positive_forms": [
+          "high",
+          "saved_low",
+          "user_low"
+        ],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "native_requirement": "class and enum field storage build without Clone, Copy, Serde, or Debug obligations on Parameters; move identity remains intact",
       "checked_plan_requirement": "Debug eligibility is independent of readable_debug names; omit both derived and custom Debug for these payloads",
       "checker_diagnostic_fragment": ""
     },
     {
       "id": "17-nested-copy-tx",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "generic copy must not clone Option[canonical SQLite Tx] payload",
       "inputs": {
         "high": "17-nested-copy-tx.nagi",
         "user_low": "17-nested-copy-tx.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -629,7 +730,12 @@
         }
       },
       "diagnostic_contract": "checker capability: generic copy rejects nested nonCopy SQLite payload before Rust to_vec requires Clone",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "payload_requirement": "inspect the actual slice element Option[Tx]; this view parameter does not require creating or storing a local List[Tx]",
       "variants": [
         "Result[Tx, Failure] slice element",
@@ -640,14 +746,14 @@
     },
     {
       "id": "18-nested-copy-parameters",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "generic copy must traverse user class fields containing nonClone Parameters",
       "inputs": {
         "high": "18-nested-copy-parameters.nagi",
         "user_low": "18-nested-copy-parameters.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -670,21 +776,26 @@
         }
       },
       "diagnostic_contract": "checker capability: generic copy rejects canonical Parameters reached through Option and user class payload",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "payload_requirement": "field storage itself passes case 16; reject the copy expression rather than the permitted field declaration",
       "native_requirement": "no generated class Debug obligation on Parameters may mask the intended copy rejection",
       "checker_diagnostic_fragment": "copy"
     },
     {
       "id": "19-nested-copy-pool",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "generic copy does not replace explicit clone_pool",
       "inputs": {
         "high": "19-nested-copy-pool.nagi",
         "user_low": "19-nested-copy-pool.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -707,7 +818,12 @@
         }
       },
       "diagnostic_contract": "checker capability: generic copy rejects nested Pool; handle cloning remains explicit clone_pool",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "variants": [
         "Option[Options] copy rejects despite Debug eligibility",
         "Option[Failure] copy rejects despite shared and metadata Debug eligibility; cause copying uses explicit operations"
@@ -716,14 +832,14 @@
     },
     {
       "id": "20-copy-pointer-signature",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "pass",
       "contract": "generic copy of capture-free function pointers does not copy Tx values named only in the signature",
       "inputs": {
         "high": "20-copy-pointer-signature.nagi",
         "user_low": "20-copy-pointer-signature.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -731,21 +847,30 @@
       ],
       "expected_origin": {},
       "diagnostic_contract": null,
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "accepted",
+        "checker_user_low": "accepted",
+        "native_positive_forms": [
+          "high",
+          "saved_low",
+          "user_low"
+        ],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "payload_requirement": "function pointer signature is not an environment or Tx payload; no closure or first-class standard-operation support is introduced",
       "native_requirement": "slice of synchronous capture-free function pointers remains copyable; no Tx Clone bound is introduced",
       "checker_diagnostic_fragment": ""
     },
     {
       "id": "21-failure-shared",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "pass",
       "contract": "Failure direct and nested sharing is independent of Serde, equality, and Debug contents",
       "inputs": {
         "high": "21-failure-shared.nagi",
         "user_low": "21-failure-shared.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -753,7 +878,16 @@
       ],
       "expected_origin": {},
       "diagnostic_contract": null,
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "accepted",
+        "checker_user_low": "accepted",
+        "native_positive_forms": [
+          "high",
+          "saved_low",
+          "user_low"
+        ],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "native_requirement": "direct and nested shared Failure build with Send/Sync; generated Holder Debug may format only native metadata",
       "debug_observation_plan": {
         "allowed": [
@@ -776,14 +910,14 @@
     },
     {
       "id": "22-failure-serde",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "shared and metadata Debug capability does not grant nested Failure serialization",
       "inputs": {
         "high": "22-failure-serde.nagi",
         "user_low": "22-failure-serde.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -806,7 +940,12 @@
         }
       },
       "diagnostic_contract": "checker Serialize capability: native Failure stays nonSerde through Option and user class fields",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "variants": [
         "json_decode[Holder] rejects independently",
         "direct Failure serialization rejects; no SQL or cause exposure through native Serde"
@@ -815,14 +954,14 @@
     },
     {
       "id": "23-failure-equality",
-      "status": "planned_unwired",
+      "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "fail",
       "contract": "Failure metadata Debug and shared capability do not grant equality",
       "inputs": {
         "high": "23-failure-equality.nagi",
         "user_low": "23-failure-equality.low"
       },
-      "current_sqlite_module_status": "not registered; unknown-module rejection is not this case's contract result",
+      "current_sqlite_module_status": "registered canonical std.db.sqlite",
       "required_paths": [
         "High source::load/check",
         "independently loaded handwritten Low",
@@ -845,7 +984,12 @@
         }
       },
       "diagnostic_contract": "checker equality capability: Failure cannot be compared",
-      "validation_result": null,
+      "validation_result": {
+        "checker_high": "rejected at expected checker origin",
+        "checker_user_low": "rejected at expected checker origin",
+        "native_positive_forms": [],
+        "harness": "compiler/tests/sqlite_public.rs"
+      },
       "variants": [
         "FailureKind and Outcome equality pass independently",
         "nested Failure equality must not acquire equality from Debug or shared flags"

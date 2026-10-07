@@ -47,7 +47,10 @@ fn observe(path: &Path, high: bool) -> Result<(String, String, Option<usize>), S
                         .and_then(|global| loaded.location(global))
                         .filter(|location| location.path == path)
                         .map(|location| location.line);
-                    ("check".into(), loaded.diagnostic(&error), line)
+                    // Match the checker message only. Rendering adds a path and
+                    // source excerpt that can contain the expected fragment even
+                    // when the actual rejection has an unrelated cause.
+                    ("check".into(), error, line)
                 }
             },
         },
@@ -193,6 +196,26 @@ mod tests {
                 matches_contract("fail", &stage, &diagnostic, "型", line, Some(2)),
                 "{file}: {stage}: {diagnostic}"
             );
+        }
+    }
+
+    #[test]
+    fn source_excerpt_is_not_checker_evidence() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/task-handles");
+        for (file, high) in [
+            ("checker-location-control.nagi", true),
+            ("checker-location-control.low", false),
+        ] {
+            let (stage, diagnostic, line) = observe(&root.join(file), high).unwrap();
+            // `wrong` appears in the source value, not in the type diagnostic.
+            assert!(!matches_contract(
+                "fail",
+                &stage,
+                &diagnostic,
+                "wrong",
+                line,
+                Some(2)
+            ));
         }
     }
 }

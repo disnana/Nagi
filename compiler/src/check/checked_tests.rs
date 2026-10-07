@@ -26,6 +26,24 @@ fn final_factory_rejects_invalid_input() {
 }
 
 #[test]
+fn item_debug_eligibility_and_identity_are_sealed() {
+    let source = "class Row:\n    value: i64\ndef main():\n    print(1)\n";
+    let mut checked = checked_high(source);
+    assert!(checked.emission.classes[0].debug);
+    checked.emission.classes[0].debug = false;
+    assert!(checked
+        .validate_for_emission()
+        .unwrap_err()
+        .contains("item Debug plan"));
+    let mut checked = checked_high(source);
+    checked.emission.classes[0].identity = "WrongRow".into();
+    assert!(checked
+        .validate_for_emission()
+        .unwrap_err()
+        .contains("item Debug plan"));
+}
+
+#[test]
 fn sealing_rejects_missing_expression_types() {
     let program = crate::parser::parse("fn main() -> unit { print(42); }", false).unwrap();
     let error = validate_facts(&program).unwrap_err();
@@ -49,7 +67,7 @@ fn missing_name_resolution_is_rejected_without_rechecking() {
         panic!()
     };
     expression.resolution = None;
-    let error = CheckedProgram::seal(program, SourceProvenance::user_low_unmapped())
+    let error = CheckedProgram::seal_rechecked(program, SourceProvenance::user_low_unmapped())
         .err()
         .unwrap();
     assert_eq!(error.kind(), FailureKind::CompilerDefect);
@@ -70,7 +88,7 @@ fn missing_declaration_type_is_rejected_without_rechecking() {
         panic!()
     };
     *annotation = None;
-    let error = CheckedProgram::seal(program, SourceProvenance::user_low_unmapped())
+    let error = CheckedProgram::seal_rechecked(program, SourceProvenance::user_low_unmapped())
         .err()
         .expect("missing declaration type must not reach the emitter");
     assert_eq!(error.kind(), FailureKind::CompilerDefect);
@@ -94,7 +112,7 @@ fn missing_binding_and_pattern_types_are_rejected_without_rechecking() {
             S::Match(_, arms) => arms[0].pattern.bindings_mut()[0].ty = None,
             _ => panic!("wrong fault fixture"),
         }
-        let error = CheckedProgram::seal(program, SourceProvenance::user_low_unmapped()).err().expect("missing binding type must not reach codegen");
+        let error = CheckedProgram::seal_rechecked(program, SourceProvenance::user_low_unmapped()).err().expect("missing binding type must not reach codegen");
         assert_eq!(error.kind(), FailureKind::CompilerDefect);
         assert!(error.to_string().contains("missing checked"));
     }
@@ -403,9 +421,86 @@ fn task_sealing_rejects_missing_or_mismatched_scope_and_use_facts() {
         if mutation == 3 {
             body[1].task.uses[0].action = TaskAction::Discard;
         }
-        let error = CheckedProgram::seal(program, SourceProvenance::user_low_unmapped())
+        let error = CheckedProgram::seal_rechecked(program, SourceProvenance::user_low_unmapped())
             .err()
             .expect("invalid checked Task facts must not reach emission");
         assert_eq!(error.kind(), FailureKind::CompilerDefect);
+    }
+}
+
+#[test]
+fn final_future_capture_facts_reject_identity_argument_owner_and_span_tampering() {
+    let mut program = crate::parser::parse("async def child(value: i64) -> i64:\n    return value\nasync def work(value: i64) -> i64:\n    callback = child\n    return await callback(value)\n", true).unwrap();
+    let facts = super::super::check_mode(&mut program, false).unwrap();
+    assert_eq!(
+        facts.functions["work"].values().next().unwrap().callee,
+        "child"
+    );
+    for mutation in 0..7 {
+        let mut facts = facts.clone();
+        let captures = facts.functions.get_mut("work").unwrap();
+        if mutation == 0 {
+            captures.clear();
+        } else {
+            let capture = captures.values_mut().next().unwrap();
+            match mutation {
+                1 => capture.callee = "wrong".into(),
+                2 => capture.arguments[0].index = 1,
+                3 => capture.arguments[0].owners[0].1.token += 1,
+                4 => capture.arguments[0].expression.end += 1,
+                5 => capture.arguments[0].passing = crate::stdlib::Passing::Borrow,
+                6 => {
+                    let (mut key, value) = captures.pop_first().unwrap();
+                    key.start += 1;
+                    captures.insert(key, value);
+                }
+                _ => unreachable!(),
+            }
+        }
+        let error = CheckedProgram::seal(
+            program.clone(),
+            SourceProvenance::user_low_unmapped(),
+            facts,
+        )
+        .err()
+        .unwrap();
+        assert_eq!(error.kind(), FailureKind::CompilerDefect);
+        assert!(error.to_string().contains("Future capture facts"));
+    }
+}
+
+#[test]
+fn sqlite_sql_argument_plan_rejects_missing_index_and_representation_tampering() {
+    let fixture = Files::new();
+    let path = fixture.0.join("sqlite.nagi");
+    std::fs::write(&path, "import std.db.sqlite as sqlite\nasync def work(tx: sqlite.Tx) -> Result[i64, sqlite.Failure]:\n    return await sqlite.exec(tx, \"DELETE FROM items\", sqlite.parameters())\n").unwrap();
+    let loaded = crate::source::load(&path, true).unwrap();
+    let provenance = loaded.provenance();
+    let checked = crate::check::finalize(loaded.program, Program::default(), provenance).unwrap();
+    for mutation in 0..3 {
+        let mut emission = EmissionPlan::build(checked.program(), checked.provenance()).unwrap();
+        let sql = emission
+            .functions
+            .iter_mut()
+            .flat_map(|f| f.expressions.values_mut())
+            .find_map(|p| {
+                if let Some(OperationPlan::NativeCall { sql: Some(_), .. }) = &p.operation {
+                    if let Some(OperationPlan::NativeCall { sql, .. }) = &mut p.operation {
+                        return Some(sql);
+                    }
+                }
+                None
+            })
+            .unwrap();
+        match mutation {
+            0 => *sql = None,
+            1 => sql.as_mut().unwrap().index = 2,
+            2 => sql.as_mut().unwrap().representation = SqlRepresentation::Owned,
+            _ => unreachable!(),
+        }
+        assert!(emission
+            .validate()
+            .unwrap_err()
+            .contains("SQL argument plan"));
     }
 }

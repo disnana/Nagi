@@ -25,6 +25,7 @@ pub struct CheckedProgram {
     program: Program,
     provenance: SourceProvenance,
     pub(crate) emission: EmissionPlan,
+    _final_check_facts: FinalCheckFacts,
 }
 impl CheckedProgram {
     pub fn program(&self) -> &Program {
@@ -41,14 +42,58 @@ impl CheckedProgram {
     pub(super) fn seal(
         program: Program,
         provenance: SourceProvenance,
+        facts: FinalCheckFacts,
     ) -> Result<Self, FinalizeError> {
         validate_facts(&program).map_err(FinalizeError::defect)?;
+        // Reuse the ownership checker to verify the private proof against the
+        // final source AST. This avoids a second, subtly different owner solver.
+        let rebuilt =
+            super::check_mode(&mut program.clone(), false).map_err(FinalizeError::defect)?;
+        if rebuilt != facts {
+            return Err(FinalizeError::defect(
+                "missing or inconsistent final Future capture facts".into(),
+            ));
+        }
         let emission = EmissionPlan::build(&program, &provenance).map_err(FinalizeError::defect)?;
         Ok(Self {
             program,
             provenance,
             emission,
+            _final_check_facts: facts,
         })
+    }
+}
+
+// Private checker proof: no syntax field can assert safe task transfer.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct FinalCheckFacts {
+    pub functions: BTreeMap<String, BTreeMap<ExprUseId, FutureCapture>>,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct FutureCapture {
+    pub callee: String,
+    pub resolution: NameResolution,
+    pub arguments: Vec<FutureArgument>,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct FutureArgument {
+    pub index: usize,
+    pub expression: ExprUseId,
+    pub ty: Type,
+    pub passing: crate::stdlib::Passing,
+    pub owners: Vec<(ExprUseId, BindingId)>,
+}
+
+#[cfg(test)]
+impl CheckedProgram {
+    pub(super) fn seal_rechecked(
+        program: Program,
+        provenance: SourceProvenance,
+    ) -> Result<Self, FinalizeError> {
+        validate_facts(&program).map_err(FinalizeError::defect)?;
+        let facts =
+            super::check_mode(&mut program.clone(), false).map_err(FinalizeError::defect)?;
+        Self::seal(program, provenance, facts)
     }
 }
 
@@ -127,10 +172,27 @@ pub(crate) enum OperationPlan {
         path: String,
         parameters: Vec<crate::stdlib::Passing>,
         emit_type_arguments: bool,
+        sql: Option<SqlArgumentPlan>,
     },
     /// Validated type-preserving transfer, realized as a Rust by-value result.
     /// View origins remain checked facts; the operand's place is not preserved.
     IdentityTransfer { argument: usize },
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SqlRepresentation {
+    Static,
+    Owned,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SqlArgumentPlan {
+    pub index: usize,
+    pub representation: SqlRepresentation,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum FieldRead {
+    Method(String),
+    Value(String),
+    BorrowStr(String),
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ExpressionPlan {
@@ -141,7 +203,7 @@ pub(crate) struct ExpressionPlan {
     pub comparison: Option<(CompareRead, CompareRead)>,
     pub minimum: Option<String>,
     pub symbol_path: Option<String>,
-    pub field: Option<(String, bool)>,
+    pub field: Option<FieldRead>,
     pub operation: Option<OperationPlan>,
     pub view: ViewRead,
     pub copy: CopyRead,
@@ -182,8 +244,10 @@ impl ExpressionKey {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ItemPlan {
+    identity: String,
     pub copy: bool,
     pub serde: bool,
+    pub debug: bool,
     pub readable_debug: bool,
     pub charge: Option<bool>,
     pub from_row: bool,
@@ -464,27 +528,6 @@ fn copy_type(t: &Type, p: &Program, depth: usize) -> bool {
         false
     }
 }
-fn from_row(class: &Class, p: &Program) -> bool {
-    class.fields.iter().all(|(_, t)| {
-        let mut scalar = t;
-        while scalar.0 == "owned" {
-            scalar = &scalar.1[0];
-        }
-        if scalar.0 == "Option" {
-            scalar = &scalar.1[0];
-        }
-        while scalar.0 == "owned" {
-            scalar = &scalar.1[0];
-        }
-        [
-            "i8", "i16", "i32", "i64", "u8", "u16", "u32", "f32", "f64", "bool", "str", "bytes",
-        ]
-        .contains(&scalar.0.as_str())
-            && (matches!(scalar.0.as_str(), "str" | "bytes")
-                || p.modules.root.is_some()
-                || !p.classes.iter().any(|class| class.name == scalar.0))
-    })
-}
 fn static_read(e: &Expr) -> StaticRead {
     match &e.kind {
         E::Str(_) => StaticRead::Literal,
@@ -572,6 +615,33 @@ fn expression_plan(e: &Expr, p: &Program) -> Result<ExpressionPlan, String> {
                 return Err("invalid checked standard operation identity".into());
             }
             let info = crate::stdlib::operation_info(op);
+            let sql = if matches!(
+                op,
+                crate::stdlib::Operation::SqliteQuery
+                    | crate::stdlib::Operation::SqliteAll
+                    | crate::stdlib::Operation::SqliteExec
+            ) {
+                let E::Call(_, _, args) = &e.kind else {
+                    return Err("missing checked SQL call".into());
+                };
+                let argument = args.get(1).ok_or("missing checked SQL argument")?;
+                if !argument.ty.as_ref().is_some_and(|ty| {
+                    ty == &Type::named("str")
+                        || ty == &Type::generic("view", vec![Type::named("str")])
+                }) {
+                    return Err("invalid checked SQL argument type".into());
+                }
+                Some(SqlArgumentPlan {
+                    index: 1,
+                    representation: if matches!(argument.kind, E::Str(_)) {
+                        SqlRepresentation::Static
+                    } else {
+                        SqlRepresentation::Owned
+                    },
+                })
+            } else {
+                None
+            };
             plan.operation = Some(match crate::stdlib::operation_semantics(op).emission {
                 crate::stdlib::OperationEmission::NativeCall => {
                     plan.symbol_path = Some(info.rust_path.into());
@@ -579,6 +649,7 @@ fn expression_plan(e: &Expr, p: &Program) -> Result<ExpressionPlan, String> {
                         path: info.rust_path.into(),
                         parameters: info.parameters.to_vec(),
                         emit_type_arguments: info.emit_type_arguments,
+                        sql,
                     }
                 }
                 crate::stdlib::OperationEmission::IdentityTransfer { argument } => {
@@ -653,7 +724,15 @@ fn expression_plan(e: &Expr, p: &Program) -> Result<ExpressionPlan, String> {
             .ok_or("missing checked field resource")?;
             let field =
                 crate::stdlib::field(resource, name).ok_or("missing checked resource field")?;
-            plan.field = Some((field.accessor.into(), field.owned));
+            plan.field = Some(
+                if resource == crate::stdlib::Resource::SqliteFailure && field.ty.is_view() {
+                    FieldRead::BorrowStr(field.accessor.into())
+                } else if field.owned || resource == crate::stdlib::Resource::SqliteFailure {
+                    FieldRead::Value(field.accessor.into())
+                } else {
+                    FieldRead::Method(field.accessor.into())
+                },
+            );
         }
         E::Call(_, _, args) if e.resolution == Some(NameResolution::Builtin) => {
             plan.view = if native_view(ty, &p.modules).is_some() {
@@ -692,7 +771,7 @@ fn expression_plan(e: &Expr, p: &Program) -> Result<ExpressionPlan, String> {
     }
     Ok(plan)
 }
-fn visit_expression(
+pub(super) fn visit_expression(
     e: &Expr,
     visit: &mut impl FnMut(&Expr) -> Result<(), String>,
 ) -> Result<(), String> {
@@ -1024,6 +1103,39 @@ impl EmissionPlan {
         {
             return Err("missing checked item plan".into());
         }
+        let classes: HashMap<_, _> = self
+            .program
+            .classes
+            .iter()
+            .map(|item| (item.name.clone(), item.clone()))
+            .collect();
+        let enums: HashMap<_, _> = self
+            .program
+            .enums
+            .iter()
+            .map(|item| (item.name.clone(), item.clone()))
+            .collect();
+        for (name, plan) in self
+            .program
+            .classes
+            .iter()
+            .map(|item| &item.name)
+            .zip(&self.classes)
+            .chain(
+                self.program
+                    .enums
+                    .iter()
+                    .map(|item| &item.name)
+                    .zip(&self.enums),
+            )
+        {
+            if &plan.identity != name
+                || plan.debug
+                    != crate::capabilities::debug_supported(&Type::named(name), &classes, &enums)
+            {
+                return Err("inconsistent checked item Debug plan".into());
+            }
+        }
         fn block(
             statements: &[Stmt],
             plan: &BlockPlan,
@@ -1075,6 +1187,14 @@ impl EmissionPlan {
                 if !plan.expressions.contains_key(&ExpressionKey::of(e)) {
                     return Err("missing checked expression plan".into());
                 }
+                let actual = &plan.expressions[&ExpressionKey::of(e)];
+                let expected = expression_plan(e, &self.program)?;
+                if actual.field != expected.field {
+                    return Err("inconsistent checked resource field plan".into());
+                }
+                if actual.operation != expected.operation {
+                    return Err("inconsistent checked native operation/SQL argument plan".into());
+                }
                 if let (Some(flow), E::Name(name)) = (&plan.flow, &e.kind) {
                     if flow.storage_slots.contains(name)
                         && !flow.expression_uses.contains_key(&ExprUseId::of(e))
@@ -1113,11 +1233,17 @@ impl EmissionPlan {
             .classes
             .iter()
             .map(|c| ItemPlan {
+                identity: c.name.clone(),
                 copy: c.fields.iter().all(|(_, t)| copy_type(t, p, 0)),
                 serde: c
                     .fields
                     .iter()
                     .all(|(_, t)| crate::capabilities::serde_type(t, &classes, &enums)),
+                debug: crate::capabilities::debug_supported(
+                    &Type::named(&c.name),
+                    &classes,
+                    &enums,
+                ),
                 readable_debug: p.modules.definition(&c.name).is_some()
                     || names.original(&c.name) != c.name
                     || c.fields.iter().any(|(n, _)| names.original(n) != n),
@@ -1131,18 +1257,28 @@ impl EmissionPlan {
                 .then(|| {
                     crate::capabilities::charge_inline_only(&Type::named(&c.name), &classes, &enums)
                 }),
-                from_row: from_row(c, p),
+                from_row: crate::capabilities::generated_row_supported(
+                    c,
+                    &classes,
+                    p.modules.root.is_some(),
+                ),
             })
             .collect();
         let enum_plans = p
             .enums
             .iter()
             .map(|e| ItemPlan {
+                identity: e.name.clone(),
                 copy: e
                     .variants
                     .iter()
                     .all(|v| v.fields.iter().all(|(_, t)| copy_type(t, p, 0))),
                 serde: false,
+                debug: crate::capabilities::debug_supported(
+                    &Type::named(&e.name),
+                    &classes,
+                    &enums,
+                ),
                 readable_debug: e.variants.iter().any(|v| {
                     names.original(&v.name) != v.name
                         || v.fields.iter().any(|(n, _)| names.original(n) != n)

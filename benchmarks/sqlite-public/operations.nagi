@@ -1,0 +1,9 @@
+import std.db.sqlite as sqlite
+
+async def literal(tx: view[sqlite.Tx], value: i64) -> Result[i64, sqlite.Failure]:
+    params = sqlite.bind_i64(sqlite.parameters(), value)
+    return await sqlite.exec(tx, "INSERT INTO data VALUES (?)", params)
+
+async def dynamic(tx: view[sqlite.Tx], sql: view[str], value: i64) -> Result[i64, sqlite.Failure]:
+    params = sqlite.bind_i64(sqlite.parameters(), value)
+    return await sqlite.exec(tx, sql, params)

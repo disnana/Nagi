@@ -1,6 +1,6 @@
-//! Syntax-stage validation of planned SQLite contract inputs.
-//! The SQLite module and semantic harness are not registered. Passing this test
-//! proves parseability and fixture locations, not Tx/API/SQL acceptance.
+//! Syntax-stage validation of the public SQLite contract matrix.
+//! This parser harness proves fixture grammar and locations; the separate
+//! sqlite_public harness observes checker rejection and native execution.
 use nagic::{lexer, parser};
 use serde_json::Value;
 use std::{
@@ -34,12 +34,12 @@ fn relative_input(root: &Path, name: &str, extension: &str) -> PathBuf {
 }
 
 #[test]
-fn every_planned_high_and_handwritten_low_input_parses_before_module_resolution() {
+fn every_public_high_and_handwritten_low_input_parses_before_module_resolution() {
     let root = fixture_root();
     let matrix = matrix();
     assert_eq!(matrix["schema_version"], 1);
-    assert_eq!(matrix["status"], "planned_unwired");
-    assert_eq!(matrix["execution"]["harness_registered"], false);
+    assert_eq!(matrix["status"], "validated_public_slice");
+    assert_eq!(matrix["execution"]["harness_registered"], true);
     let mut ids = BTreeSet::new();
     let mut registered = BTreeSet::new();
     let cases = matrix["cases"].as_array().expect("matrix cases");
@@ -47,10 +47,10 @@ fn every_planned_high_and_handwritten_low_input_parses_before_module_resolution(
     for case in cases {
         let id = case["id"].as_str().expect("case ID");
         assert!(ids.insert(id), "duplicate case {id}");
-        assert_eq!(case["status"], "planned_unwired", "{id}");
+        assert_eq!(case["status"], "validated_public_slice", "{id}");
         assert!(
-            case["validation_result"].is_null(),
-            "{id}: semantic result must stay unset"
+            case["validation_result"].is_object(),
+            "{id}: explicit validation scope is required"
         );
         assert!(matches!(
             case["expected_after_public_vertical_slice"].as_str(),
@@ -94,7 +94,7 @@ fn every_planned_high_and_handwritten_low_input_parses_before_module_resolution(
 }
 
 #[test]
-fn planned_rejection_anchors_identify_original_fixture_lines_and_lexer_tokens() {
+fn rejection_anchors_identify_original_fixture_lines_and_lexer_tokens() {
     let root = fixture_root();
     let matrix = matrix();
     for case in matrix["cases"].as_array().unwrap() {

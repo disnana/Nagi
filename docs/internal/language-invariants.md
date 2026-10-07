@@ -41,7 +41,7 @@
 
 buildには外部環境が必要なため「check成功ならどんな環境でもbuild成功」とは保証しない。未対応のNagi構文・型の組合せは早い段階で明示的に拒否する。現時点では全受理プログラムのbackend conformanceを証明できておらず、未知の不一致は残り得る。
 
-登録resourceのCopy/shared/field storage/Debugと型引数の保持関係は、[ADR 008](adr/008-resource-contracts.md)の単一根拠へ集約する。これはPhase 3の採用設計で、現受理意味論は変えない。inline/shared payload、Actorの間接protocol、callback署名、nominal phantomを区別し、全capabilityへ同じ遍歴を使わない。lifecycleは不活性のUnspecifiedに留め、Tx/Poolや任意Rustの安全契約を実装済みとしない。
+登録resourceのCopy/shared/field storage/Debugと型引数の保持関係は、[ADR 008](adr/008-resource-contracts.md)の単一根拠へ集約する。inline/shared payload、Actorの間接protocol、callback署名、nominal phantomを区別し、全capabilityへ同じ遍歴を使わない。Phase 3ではlifecycleをUnspecifiedに留めた。未リリースのSQLite公開対応ではcanonical TxだけにSameTaskを登録し、実payloadとFutureの実引数を検査する。任意Rustのlifecycleやtraitを推論する仕組みへ拡張しない。
 
 ## 所有権・借用
 
@@ -120,15 +120,16 @@ TaskFailureはopaque・非Copy・非Clone・非shared、kind()はCopyな四値en
 
 | 項目 | 契約・境界 | 実装と検査 |
 |---|---|---|
-| SQL static check | `check --sql-schema … --sql-dialect sqlite`の指定時だけ、対象builtinの直接literalをprepareし、名前・必要返却列・bind数・文種別を検査する。queryは実行しない | `compiler/src/sql_check/mod.rs`, `compiler/tests/sql_check.rs` |
+| SQL static check | `check --sql-schema … --sql-dialect sqlite`の指定時だけ、対象builtinとcanonical SQLite operationの直接literalをprepareする。新Parametersの個数は静的に証明せずbind未検査を表示する。query/execを実行してschemaを変更しない。旧Dbの固定bind検査を維持 | `compiler/src/sql_check/mod.rs`, `compiler/tests/sql_check.rs` |
 | schema assumptions | 1つの指定schemaが検査対象DBに一致することを利用者が管理する。アプリのmigrationや複数Dbからschemaを推測しない。schema処理の権限・入力・時間を制限する | `sql_check.rs` tests、[公開リファレンス](../sql-check.md) |
 | NULL / type mismatch | 必要列があっても値型・範囲・NULL・実DBの状態は実行時まで分からない。nullableフィールドのNoneと非nullableの読み取り失敗を区別する | `runtime/src/database.rs`, `compiler/tests/nullable_database.rs`, `owned_database.rs` |
-| transaction | 標準のtransaction ownership APIは未実装。共有Dbへ複数のBEGIN/query/COMMITを送っても、呼出し間の排他所有は保証しない | `runtime/src/database.rs`; [DB制約](../database.md#実装と制約) |
-| cancellation | 送信待ちと受理後を区別する。受理済みSQLite jobはcallerの取消後にも完了・commitし得る。最後のDb所有者のDropはworker終了を待ち、即時終了ではない | `database.rs::call`, `Inner::drop`; database tests、公開DB制約 |
+| legacy transaction | 共有Dbへ複数のBEGIN/query/COMMITを送っても、呼出し間の排他所有は保証しない。新Txへ機械置換しない | `runtime/src/database.rs`; [DB制約](../database.md#実装と制約) |
+| legacy cancellation | 送信待ちと受理後を区別する。受理済みSQLite jobはcallerの取消後にも完了・commitし得る。最後のDb所有者のDropはworker終了を待ち、即時終了ではない | `database.rs::call`, `Inner::drop`; database tests、公開DB制約 |
+| SQLite Pool/Tx（未リリース） | `std.db.sqlite`は専有Tx、owned Parameters、明示終端を公開。Txの同task委譲は許すがtask転送・owned field・sharedを拒否。SQL/Parametersと終端Futureの所有をchecker/私有planへ固定 | `compiler/src/check/sqlite.rs`, `check/checked.rs`, `runtime/src/sqlite`; [公開リファレンス](../sqlite-pool.md) |
 
-PostgreSQL、一般的な可変長bind、poolは未実装。Rustアダプター経由の独自実装を標準機能の保証と混同しない。
+PostgreSQLは未実装。新SQLiteの型別Parameters builderは可変長bindを扱う。旧Dbの固定bind形を変更せず、任意のRust型や自動ToParamsを標準機能の保証へ加えない。
 
-### Phase 4で採用した契約（実装・検証中）
+### Phase 4のSQLite公開契約（未リリース）
 
 [ADR 010](adr/010-sqlite-transaction-boundary.md)と[API契約](sqlite-pool-proposal.md)は2026-10-06に承認済み。旧Dbの契約を変えない。TxのnonCopy／nonshared／field保存・task転送禁止、終端consume、cleanup確認前の再利用禁止、結果不明とcleanup failureの分離、close後のclosing維持を採る。関数pointer署名と実捕捉、native Dropとrollback成功、close通知とworker joinを区別する。SQLiteのSQL解析・native Txはrusqliteへ委譲する。private試作の成功を標準APIの保証へ広げず、public checker／生成／実DB／4 OS acceptanceまで未検証範囲を記録する。
 
@@ -136,7 +137,9 @@ Q004で[capability初版表](sqlite-pool-adapter-decision.md#registry配線前�
 
 statement Errから「変更0」や「rollback済み」を推論しない。SQLiteの`OR FAIL`やAFTER triggerでのstep失敗は先行効果をactive Txへ残し得る。禁止actionの拒否とTx rollback成功を別oracleで検査する。普通のErrでの継続可という採用契約を、暗黙savepointや全Err自動abortへ変更しない。
 
-取得予算はlogical slot待ちからnative record登録まで共用し、登録後のready／BEGIN／SQLへ持ち越さない。0msは即時の空きを利用できる指定。取得期限切れだけでPoolを故障・退役・closingにしない。同taskの別取得と取消で予算を混同しない。[private設計](sqlite-acquire-budget-design.md)で先行検証し、公開Options／Poolの保証とは区別する。巨大capacityのstock allocationは[公開化前の判断](sqlite-capacity-decision.md)に残す。
+取得予算はlogical slot待ちからnative record登録まで共用し、登録後のready／BEGIN／SQLへ持ち越さない。0msは即時の空きを利用できる指定。取得期限切れだけでPoolを故障・退役・closingにしない。同taskの別取得と取消で予算を混同しない。[private設計](sqlite-acquire-budget-design.md)のoracleを公開本体で実行する。
+
+2026-10-08のユーザー承認により、stock deadpoolの全capacity確保から既存Tokio Semaphoreとlazy専用adapterへ変更した。Optionsはscalarの受理範囲、openはpathとlazy管理構造、beginはnative起動を担当する。fallibleなledger/idle増分予約の失敗はALLOCATIONとし、全OOMからの回復は保証しない。FIFOはlogical permit待ちに限定する。Failure.retired=falseから接続の健全性・rollback完了・retry安全を推論しない。比較、互換性、限定scopeの独立レビューは[公開runtime判断](sqlite-public-runtime-decision.md)に記録する。compiler/三構文・最終head・4 OSの検証はruntime単体成功と分ける。
 
 ## HTTP
 

@@ -132,6 +132,39 @@ def main():
         verify_local_dependency(exe, folder, environment)
         verify_actor(exe, folder, environment)
         verify_task_handles(exe, folder, environment)
+        verify_sqlite_pool(exe, folder, environment)
+
+
+def verify_sqlite_pool(exe: Path, folder: Path, environment: dict) -> None:
+    project = folder / "SQLite pool distribution 凪"
+    project.mkdir()
+    high = project / "sqlite_pool.nagi"
+    tutorial = Path(__file__).resolve().parents[2] / "examples/sqlite_pool.nagi"
+    high.write_bytes(tutorial.read_bytes())
+    isolated = {**environment, "PATH": "", "NAGI_ROOT": str(folder / "missing runtime")}
+    native_environment = dict(environment)
+    native_environment.pop("NAGI_ROOT", None)
+    lowered = project / "lowered"
+    subprocess.run([str(exe), "lower", str(high), "--no-project", "--out", str(lowered)],
+                   cwd=folder, env=isolated, check=True, capture_output=True, text=True,
+                   encoding="utf-8", timeout=15)
+    saved = project / "saved.low"
+    saved.write_bytes((lowered / "generated.low").read_bytes())
+    for form, source in (("high", high), ("saved-low", saved)):
+        if form == "saved-low":
+            high.unlink()
+        output = project / form
+        subprocess.run([str(exe), "check", str(source), "--no-project", "--out", str(output)],
+                       cwd=folder, env=isolated, check=True, capture_output=True, text=True,
+                       encoding="utf-8", timeout=15)
+        completed = subprocess.run([str(exe), "run", str(source), "--no-project", "--out", str(output)],
+                                   cwd=folder, env=native_environment, check=True, capture_output=True,
+                                   text=True, encoding="utf-8", timeout=600)
+        manifest = tomllib.loads((output / "Cargo.toml").read_text(encoding="utf-8"))
+        runtime = (output / manifest["dependencies"]["nagi-runtime"]["path"]).resolve()
+        assert runtime == (exe.parent / "runtime").resolve(), f"SQLite runtime outside distribution: {runtime}"
+        assert completed.stdout.splitlines() == ["7", "closed"], f"SQLite native output ({form}): {completed.stdout}"
+    print("Verified SQLite Pool/Tx: extracted runtime, High and independent saved Low, typed parameters, commit/rollback/close")
 
 
 def verify_task_handles(exe: Path, folder: Path, environment: dict) -> None:

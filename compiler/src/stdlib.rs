@@ -1,6 +1,7 @@
 //! Compiler-owned standard definitions. Serialized Low names this registry;
 //! it cannot choose native paths, capabilities, or callback contracts.
 use crate::ast::*;
+mod sqlite;
 
 pub const MODULE_NAME: &str = "std.http.server";
 pub const MODULE_ID: &str = "stdlib:std.http.server";
@@ -14,6 +15,8 @@ pub const OWNERSHIP_MODULE_NAME: &str = "std.ownership";
 pub const OWNERSHIP_MODULE_ID: &str = "stdlib:std.ownership";
 pub const TASK_MODULE_NAME: &str = "std.task";
 pub const TASK_MODULE_ID: &str = "stdlib:std.task";
+pub const SQLITE_MODULE_NAME: &str = "std.db.sqlite";
+pub const SQLITE_MODULE_ID: &str = "stdlib:std.db.sqlite";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StandardModule {
@@ -23,6 +26,7 @@ pub enum StandardModule {
     Auth,
     Ownership,
     Task,
+    Sqlite,
 }
 pub struct StandardModuleInfo {
     pub name: &'static str,
@@ -36,6 +40,7 @@ pub const MODULES: &[StandardModule] = &[
     StandardModule::Auth,
     StandardModule::Ownership,
     StandardModule::Task,
+    StandardModule::Sqlite,
 ];
 pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
     match module {
@@ -69,6 +74,11 @@ pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
             id: TASK_MODULE_ID,
             rust_namespace: "::nagi_runtime",
         },
+        StandardModule::Sqlite => &StandardModuleInfo {
+            name: SQLITE_MODULE_NAME,
+            id: SQLITE_MODULE_ID,
+            rust_namespace: "::nagi_runtime::sqlite",
+        },
     }
 }
 
@@ -99,6 +109,14 @@ pub enum Resource {
     Task,
     TaskFailure,
     TaskFailureKind,
+    SqlitePool,
+    SqliteTx,
+    SqliteParameters,
+    SqliteOptions,
+    SqliteBeginMode,
+    SqliteFailure,
+    SqliteFailureKind,
+    SqliteOutcome,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Operation {
@@ -153,6 +171,24 @@ pub enum Operation {
     TaskDiscard,
     TaskKind,
     TaskMessage,
+    SqliteOptions,
+    SqliteOpen,
+    SqliteClonePool,
+    SqliteBegin,
+    SqliteParameters,
+    SqliteBindI64,
+    SqliteBindF64,
+    SqliteBindText,
+    SqliteBindBytes,
+    SqliteBindNull,
+    SqliteQuery,
+    SqliteAll,
+    SqliteExec,
+    SqliteCommit,
+    SqliteRollback,
+    SqliteClose,
+    SqliteCopyPrimaryError,
+    SqliteCopyCleanupError,
 }
 
 /// Compiler-owned operation behavior. Public declaration metadata remains a
@@ -284,6 +320,14 @@ pub const RESOURCES: &[Resource] = &[
     Resource::Task,
     Resource::TaskFailure,
     Resource::TaskFailureKind,
+    Resource::SqlitePool,
+    Resource::SqliteTx,
+    Resource::SqliteParameters,
+    Resource::SqliteOptions,
+    Resource::SqliteBeginMode,
+    Resource::SqliteFailure,
+    Resource::SqliteFailureKind,
+    Resource::SqliteOutcome,
 ];
 pub const OPERATIONS: &[Operation] = &[
     Operation::Status,
@@ -337,6 +381,24 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::TaskDiscard,
     Operation::TaskKind,
     Operation::TaskMessage,
+    Operation::SqliteOptions,
+    Operation::SqliteOpen,
+    Operation::SqliteClonePool,
+    Operation::SqliteBegin,
+    Operation::SqliteParameters,
+    Operation::SqliteBindI64,
+    Operation::SqliteBindF64,
+    Operation::SqliteBindText,
+    Operation::SqliteBindBytes,
+    Operation::SqliteBindNull,
+    Operation::SqliteQuery,
+    Operation::SqliteAll,
+    Operation::SqliteExec,
+    Operation::SqliteCommit,
+    Operation::SqliteRollback,
+    Operation::SqliteClose,
+    Operation::SqliteCopyPrimaryError,
+    Operation::SqliteCopyCleanupError,
 ];
 
 pub fn module(name: &str) -> Option<ModuleId> {
@@ -362,6 +424,7 @@ pub(crate) enum TypeArgumentRole {
 #[derive(Clone, Copy)]
 enum ResourceLifecycle {
     Unspecified,
+    SameTask,
 }
 
 struct ResourceContract {
@@ -375,6 +438,10 @@ struct ResourceContract {
 }
 
 impl ResourceContract {
+    const fn with_lifecycle(mut self, lifecycle: ResourceLifecycle) -> Self {
+        self.lifecycle = lifecycle;
+        self
+    }
     const fn new(
         info: ResourceInfo,
         shared: &'static [usize],
@@ -480,7 +547,7 @@ impl ResourceContract {
             position += 1;
         }
         match self.lifecycle {
-            ResourceLifecycle::Unspecified => {}
+            ResourceLifecycle::Unspecified | ResourceLifecycle::SameTask => {}
         }
     }
 }
@@ -985,6 +1052,14 @@ static CONTRACT_EVENT: ResourceContract = ResourceContract::new(
 
 fn resource_contract(resource: Resource) -> &'static ResourceContract {
     match resource {
+        Resource::SqlitePool
+        | Resource::SqliteTx
+        | Resource::SqliteParameters
+        | Resource::SqliteOptions
+        | Resource::SqliteBeginMode
+        | Resource::SqliteFailure
+        | Resource::SqliteFailureKind
+        | Resource::SqliteOutcome => sqlite::resource_contract(resource),
         Resource::Principal => &CONTRACT_PRINCIPAL,
         Resource::Grant => &CONTRACT_GRANT,
         Resource::Task => &CONTRACT_TASK,
@@ -1013,6 +1088,13 @@ fn resource_contract(resource: Resource) -> &'static ResourceContract {
     }
 }
 
+pub(crate) fn requires_same_task(resource: Resource) -> bool {
+    matches!(
+        resource_contract(resource).lifecycle,
+        ResourceLifecycle::SameTask
+    )
+}
+
 pub fn resource_info(resource: Resource) -> &'static ResourceInfo {
     &resource_contract(resource).info
 }
@@ -1030,6 +1112,24 @@ pub(crate) fn native_serde_supported(resource: Resource) -> bool {
 
 pub fn operation_info(operation: Operation) -> &'static OperationInfo {
     match operation {
+        Operation::SqliteOptions
+        | Operation::SqliteOpen
+        | Operation::SqliteClonePool
+        | Operation::SqliteBegin
+        | Operation::SqliteParameters
+        | Operation::SqliteBindI64
+        | Operation::SqliteBindF64
+        | Operation::SqliteBindText
+        | Operation::SqliteBindBytes
+        | Operation::SqliteBindNull
+        | Operation::SqliteQuery
+        | Operation::SqliteAll
+        | Operation::SqliteExec
+        | Operation::SqliteCommit
+        | Operation::SqliteRollback
+        | Operation::SqliteClose
+        | Operation::SqliteCopyPrimaryError
+        | Operation::SqliteCopyCleanupError => sqlite::operation_info(operation),
         Operation::TaskDiscard => &OperationInfo { module: StandardModule::Task, name: "discard", rust_path: "::nagi_runtime::TaskScope::discard", arity: 1, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Move], borrow_owner: None, signature: "(task: Task[T]) -> unit" },
         Operation::TaskKind => &OperationInfo { module: StandardModule::Task, name: "kind", rust_path: "::nagi_runtime::TaskFailure::kind", arity: 1, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Reference], borrow_owner: None, signature: "(failure: view[TaskFailure]) -> TaskFailureKind" },
         Operation::TaskMessage => &OperationInfo { module: StandardModule::Task, name: "message", rust_path: "::nagi_runtime::TaskFailure::message", arity: 1, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: false, parameters: &[Passing::Reference], borrow_owner: Some(0), signature: "(failure: view[TaskFailure]) -> view[str]" },
@@ -1551,6 +1651,9 @@ const EVENT_KIND_CONSTANTS: &[ConstantInfo] = &[
 ];
 pub fn constants(resource: Resource) -> &'static [ConstantInfo] {
     match resource {
+        Resource::SqliteBeginMode | Resource::SqliteFailureKind | Resource::SqliteOutcome => {
+            sqlite::constants(resource)
+        }
         Resource::TaskFailureKind => &[
             ConstantInfo {
                 name: "Panicked",
@@ -1588,6 +1691,26 @@ pub fn constant(resource: Resource, name: &str) -> Option<ConstantInfo> {
 pub fn field(resource: Resource, name: &str) -> Option<FieldInfo> {
     let view = |ty| Type::generic("view", vec![ty]);
     let (ty, owned, whole_owner, static_borrow, accessor) = match (resource, name) {
+        (Resource::SqliteFailure, "kind") => (
+            resource_type(Resource::SqliteFailureKind, vec![]),
+            false,
+            true,
+            false,
+            "kind",
+        ),
+        (Resource::SqliteFailure, "outcome") => (
+            resource_type(Resource::SqliteOutcome, vec![]),
+            false,
+            true,
+            false,
+            "outcome",
+        ),
+        (Resource::SqliteFailure, "retired") => {
+            (Type::named("bool"), false, true, false, "retired")
+        }
+        (Resource::SqliteFailure, "message") => {
+            (view(Type::named("str")), false, true, false, "message")
+        }
         (Resource::Request, "method") => (
             resource_type(Resource::Method, vec![]),
             true,
@@ -1684,6 +1807,7 @@ pub fn field(resource: Resource, name: &str) -> Option<FieldInfo> {
 }
 pub fn fields(resource: Resource) -> Vec<(&'static str, FieldInfo)> {
     let names: &[&str] = match resource {
+        Resource::SqliteFailure => &["kind", "outcome", "retired", "message"],
         Resource::Request => &[
             "method",
             "path",
@@ -1879,7 +2003,10 @@ mod resource_contract_tests {
             }
             assert_eq!(contract.role_at(expected.len()), None, "{resource:?}");
             assert_eq!(contract.role_at(usize::MAX), None, "{resource:?}");
-            assert!(matches!(contract.lifecycle, ResourceLifecycle::Unspecified));
+            assert_eq!(
+                matches!(contract.lifecycle, ResourceLifecycle::SameTask),
+                resource == Resource::SqliteTx
+            );
         }
     }
 
