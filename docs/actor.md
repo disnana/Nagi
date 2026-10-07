@@ -24,6 +24,28 @@ async def add(state: Counter, amount: i64) -> Result[actor.Turn[Counter, i64, Er
 
 よくある間違いは、入力の拒否をhandler自身の`Err(Error)`で返すことです。それはworkerの故障として再起動方針の対象になります。想定した拒否は`ok(actor.turn(..., fail(problem)))`のようにTurnの返信へ入れ、次の状態を返してください。
 
+これは文法上のエラーではなく、エラーを返す場所による動作の違いです。次の登録済みhandlerが負の金額を通常拒否したい場合、左はworkerの失敗として扱われます。
+
+```nagi
+async def add(state: Counter, amount: i64) -> Result[actor.Turn[Counter, i64, Error], Error]:
+    if amount < 0:
+        return error("amount must be non-negative")  # supervisor restart policy applies
+    next_state = Counter(total=state.total + amount)
+    return ok(actor.turn[Counter, i64, Error](next_state, ok(next_state.total)))
+```
+
+拒否を呼び出し元への返信にしたいなら、Turnの外側を`ok(...)`にします。
+
+```nagi
+async def add(state: Counter, amount: i64) -> Result[actor.Turn[Counter, i64, Error], Error]:
+    if amount < 0:
+        return ok(actor.turn[Counter, i64, Error](state, error("amount must be non-negative")))
+    next_state = Counter(total=state.total + amount)
+    return ok(actor.turn[Counter, i64, Error](next_state, ok(next_state.total)))
+```
+
+この場合、負の金額は返信の`Err`になり状態を変えず、workerの再起動にはなりません。
+
 **一言でいうと：状態の更新はmessageで頼み、業務上の拒否は返信で返す。** 正確なAPIは[actorリファレンス](actor-reference.md)、失敗の区別は次の節にあります。
 
 `Turn`は次の状態と返信をまとめた値です。状態を毎回コピーする必要はありません。登録・起動・呼び出し・停止までのコードは、[実行できるサンプル](../test-nagi-code/library-examples/supervised-service/README.md)にあります。

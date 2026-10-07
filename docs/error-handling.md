@@ -42,6 +42,26 @@ def main():
 
 この関数で直接`value + 1`と書くと、`i64?`は`i64`ではないため`check`が拒否します。`Some`の中の`number`を使って計算します。Pythonの`if value is not None:`による型絞り込みや汎用unwrap APIは未対応です。一言でいうと、不在を処理してから中身を使います。[型](types.md)と[matchの書式](syntax.md#resultasyncscope)も参照してください。
 
+```nagi
+def add_one(value: i64?) -> i64:
+    return value + 1  # checkはi64?をi64として使うため拒否
+```
+
+`Some`と`None`を分けてから計算します。`None`を0として扱うこの例の出力は`42`、`0`です。
+
+```nagi
+def add_one(value: i64?) -> i64:
+    match value:
+        case Some(number):
+            return number + 1
+        case None:
+            return 0
+
+def main():
+    print(add_one(some(41)))
+    print(add_one(None))
+```
+
 `Result[T?, E]`は「処理が成功したか」と「成功時に値があるか」を組み合わせます。`Ok(None)`と`Err(problem)`は違います。
 
 ## 失敗を呼び出し元へ返す
@@ -59,6 +79,14 @@ def read_id(text: view[str]) -> Result[i64, Error]:
 `"2"`を読ませると成功値`2`を返し、`"oops"`は数値変換の失敗、`"0"`は自分で作った失敗を返します。`Result[T, E]`は成功値`T`か失敗値`E`を持ち、`E`には組み込み`Error`や独自class・enumを使えます。
 
 `try`は成功値を取り出し、失敗ならその値を呼び出し元へ返します。Pythonの`try/except`のように捕捉するブロックではありません。通常の`i64`を返す関数で`try`を使うと`check`が拒否します。上のようにResultを返すか、次の`match`で回復します。呼び出し先と自分の戻り値には同じエラー型`E`が必要です。一言でいうと、tryはErrを呼び出し元へ伝えます。
+
+```nagi
+def read_id(text: view[str]) -> i64:
+    id = try parse_i64(text)  # checkはErrを返す型がないため拒否
+    return id
+```
+
+失敗を呼び出し元へ伝えるなら、この関数の戻り値を`Result[i64, Error]`にして`try`を使います（上の`read_id`例）。ここで回復して数値を返すなら、`match`で`Ok`と`Err`の両方を扱います（[result.nagi](../examples/tutorial/result.nagi)）。
 
 非同期では`value = try await operation(...)`です。`try`の結果は`T`なので、Resultとして返すなら`return ok(try operation(...))`と書きます。異なるエラー型へは`match`か、後述の`std.result.map_error`で変換します。
 

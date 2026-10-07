@@ -42,6 +42,26 @@ Output: `42`, `0`. Construct a present value with lowercase `some(...)`; extract
 
 Using `value + 1` directly in that function fails `check`: `i64?` is not an `i64`. Perform the operation on `number` inside `Some`. Python-style `if value is not None:` narrowing and a general unwrap API are unsupported. Handle absence before using the inner value; see [types](types.md) and [match syntax](syntax.md#result-async-and-scopes).
 
+```nagi
+def add_one(value: i64?) -> i64:
+    return value + 1  # check rejects using i64? as an i64
+```
+
+Match both `Some` and `None` before doing the calculation. This example treats `None` as zero and prints `42`, then `0`.
+
+```nagi
+def add_one(value: i64?) -> i64:
+    match value:
+        case Some(number):
+            return number + 1
+        case None:
+            return 0
+
+def main():
+    print(add_one(some(41)))
+    print(add_one(None))
+```
+
 `Result[T?, E]` combines two questions: did the operation succeed, and, if so, is there a value? Its `Ok(None)` differs from `Err(problem)`.
 
 ## Propagate failure to the caller
@@ -59,6 +79,14 @@ def read_id(text: view[str]) -> Result[i64, Error]:
 Reading `"2"` returns success containing `2`; `"oops"` returns a conversion failure, and `"0"` returns the failure you constructed. `Result[T, E]` holds success `T` or failure `E`; use built-in `Error` or your own class or enum for `E`.
 
 `try` extracts the success value or returns the failure to the caller. It is not a catching block like Python’s `try/except`. Using it in a function returning plain `i64` fails `check`. Return Result as above, or recover with `match`, described next. The called function and your function must use the same error type `E`. Use try to propagate Err.
+
+```nagi
+def read_id(text: view[str]) -> i64:
+    id = try parse_i64(text)  # check rejects this: the function cannot return Err
+    return id
+```
+
+To propagate the failure, give this function the return type `Result[i64, Error]` and use `try`, as in the corrected `read_id` above. To recover here and return a plain number, match both `Ok` and `Err` instead; see [result.nagi](../../examples/tutorial/result.nagi).
 
 For async operations, write `value = try await operation(...)`. The value of `try` is `T`; to return a Result, write `return ok(try operation(...))`. Convert a different error type with `match` or `std.result.map_error`, described below.
 

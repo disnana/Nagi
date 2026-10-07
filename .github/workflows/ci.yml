@@ -91,6 +91,8 @@ jobs:
       - run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
       - run: python -m unittest discover -s scripts -p 'test_application_native_tests.py'
       - run: python scripts/build_examples.py
+      - name: Verify bilingual first-app tutorial in High and saved Low
+        run: python scripts/verify_onboarding_examples.py
       - run: pip install -r tests/requirements.txt
       - run: python tests/http_integration.py
       - run: python tests/route_integration.py
@@ -244,6 +246,8 @@ jobs:
         run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test explicit_moves --test task_handles --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
       - name: Parse planned SQLite High and handwritten Low contract inputs
         run: cargo test --locked -p nagic --test sqlite_contract_inputs
+      - name: Verify bilingual first-app tutorial in High and saved Low
+        run: python scripts/verify_onboarding_examples.py
       - name: Check public Task bridge lifecycle on the target platform
         shell: bash
         run: |

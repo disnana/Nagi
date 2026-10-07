@@ -10,7 +10,7 @@ Nagiは、Python風のHighで型付きの処理を書き、Rustのライブラ�
 
 ## 書き方を読む
 
-[準備と最初の実行](docs/getting-started.md) → [入門ガイド](docs/language-guide.md) → [HTTP](docs/http.md)の順で始められます。書式やAPIを引くには[リファレンスの目次](docs/README.md)、実例を読むには[サンプル一覧](docs/library-examples.md)へ。
+[準備と最初の実行](docs/getting-started.md) → [入門ガイド](docs/language-guide.md) → [最初のCLIアプリ](docs/first-app.md) → [HTTP](docs/http.md)の順で始められます。全機能の入口は[言語機能索引](docs/README.md#言語機能索引)、書式やAPIを引くには[リファレンスの目次](docs/README.md)、実例を読むには[サンプル一覧](docs/library-examples.md)へ。
 
 紹介と日英のDocsは[公式サイト](https://nagi.disnana.com/)で読めます。[目的と実装の範囲](docs/introduction.md)、[設計判断とその理由](DESIGN.md)、[今後の優先順位](docs/roadmap.md)も記載しています。
 
@@ -41,7 +41,7 @@ nagic --help
 
 [VS Code拡張](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)と[IntelliJ IDEA・PyCharm向けプラグインとRelease ZIPの導入方法](editors/jetbrains-nagi/README.md)もあります。操作は[エディターの案内](docs/editor.md)を参照してください。
 
-インストーラーはmainから、コンパイラは公開Releaseから取得します。このREADMEの例はNagi 0.1.11を対象にしています。0.1.11の公開有無は公式Release記録で確認し、インストールした版は`nagic --version`で確かめてください。変更内容は[CHANGELOG](CHANGELOG.md)、互換性の変更は[0.1.11移行ガイド](docs/migration-0.1.11.md)を参照してください。
+インストーラーはmainから、コンパイラは公開Releaseから取得します。このREADMEの例は、2026-10-07に公開したNagi 0.1.11を対象にしています。インストールした版は`nagic --version`で確かめてください。変更内容は[CHANGELOG](CHANGELOG.md)、互換性の変更は[0.1.11移行ガイド](docs/migration-0.1.11.md)を参照してください。
 
 ### アンインストール
 
@@ -151,4 +151,4 @@ python3 scripts/build_examples.py
 
 ## 貢献・ライセンス
 
-不具合の報告、修正、Docsや翻訳の改善を受け付けます。[貢献ガイド](CONTRIBUTING.md)に変更の相談、検証、AI利用の方針を記載しています。脆弱性は[セキュリティ方針](SECURITY.md)の非公開報告先へ。ライセンスは[MIT](LICENSE)です。
+不具合の報告、修正、Docsや翻訳の改善を受け付けます。[貢献ガイド](CONTRIBUTING.md)に変更の相談、検証、AI利用の方針、[本体変更の手順](docs/contributing.md)にrepo mapから小さい修正・test・PRまでの入口を記載しています。脆弱性は[セキュリティ方針](SECURITY.md)の非公開報告先へ。ライセンスは[MIT](LICENSE)です。

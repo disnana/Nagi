@@ -31,7 +31,7 @@ nagic --version
 nagic --help
 ```
 
-The Nagi 0.1.11 release build is expected to report `nagic 0.1.11`. You can also use `nagic -V` or `nagic version`. Check the official release record to confirm 0.1.11 availability, and verify the installed compiler with `nagic --version`. Version and help work without Rust or project configuration.
+The compiler released on 2026-10-07 reports `nagic 0.1.11`. You can also use `nagic -V` or `nagic version`. Verify the installed compiler with `nagic --version`. Version and help work without Rust or project configuration.
 
 ### Tools for building applications
 
@@ -82,7 +82,7 @@ If the filename contains spaces, quote the path, as in `nagic run "hello world.n
 
 Currently, both `check` and `lower` save the Low generated from High. A successful `check` can still be followed by a failed `build` if Rust's type or borrow checks reject the generated program.
 
-When a source location can be identified, build errors show the corresponding Nagi or Low filename and line. The Nagi 0.1.11 target adds `--rust-diagnostics` to include generated Rust details. Errors in handwritten Rust, or errors without an identifiable source location, retain Rust's diagnostics in the normal output.
+When a source location can be identified, build errors show the corresponding Nagi or Low filename and line. Nagi 0.1.11 adds `--rust-diagnostics` to include generated Rust details. Errors in handwritten Rust, or errors without an identifiable source location, retain Rust's diagnostics in the normal output.
 
 ```powershell
 nagic check hello.nagi
@@ -98,7 +98,7 @@ Default output locations:
 | `build/hello/generated.low` | Low translated from High |
 | `build/hello/src/main.rs` | Generated Rust during build/run |
 | `build/hello/Cargo.toml` | Generated Rust project during build/run |
-| `build/hello/.nagi/` | Executables and generated snapshots for each successful build generation in the Nagi 0.1.11 target |
+| `build/hello/.nagi/` | Executables and generated snapshots for each successful build generation in Nagi 0.1.11 |
 | `native-target/` | Shared build cache |
 
 Generated files go to `build/<source filename without its extension>/`. Use `--out build/my-hello` to choose another location. `NAGI_NATIVE_TARGET_DIR` changes the build cache location. Rebuilding changes the executable path; use the reported `native:` path. See [build generations and shared caches](projects.md).
@@ -115,7 +115,7 @@ Install the [Nagi extension](vscode-extension.md), then open your project folder
 
 ### Update
 
-Run the installation command above again. It checks the latest published release, downloads and verifies it, then switches the command. It never treats a main build or the VSIX as a release; while 0.1.11 is not published, it selects the latest earlier published version. Repeating an install of the same version does not add another copy.
+Run the installation command above again. It checks the latest published release, downloads and verifies it, then switches the command. It never treats a main build or the VSIX as a release. Repeating an install of the same version does not add another copy.
 
 Windows installs under `%LOCALAPPDATA%\Nagi\versions` and puts its `current` subdirectory on PATH. Linux/macOS use `~/.local/share/nagi`, with the command in `~/.local/bin/nagic`; the installer also adds PATH to bash/zsh configuration. These command locations stay the same across updates.
 
@@ -123,7 +123,7 @@ Stop Nagi builds before updating. After the new command starts successfully, the
 
 Old URLs such as `nagi-v0.1.6/scripts/install.ps1` are pinned to 0.1.6. Use this page's `main/scripts/install.ps1` to update. On Windows, version-specific PATH entries from the original installer are replaced with the fixed `current` entry. If VS Code's `nagi.compilerPath` points to an old version, clear it to enable automatic discovery or set the new executable's absolute path, then restart VS Code.
 
-To select a specific version, use the commands below once that version is published. These examples select Nagi 0.1.11; check the official release record before running them. The same one-version retention policy applies.
+To select a specific version, use the commands below. These examples select the published Nagi 0.1.11. The same one-version retention policy applies.
 
 ```powershell
 & ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.11
@@ -155,7 +155,7 @@ Distributions are compared with their published archives before removal. Directo
 
 ### Extract the archive yourself
 
-Download the file for your OS from [GitHub Releases](https://github.com/disnana/Nagi/releases). The names below are the planned Nagi 0.1.11 filenames. Confirm that 0.1.11 and these assets appear in the official release before downloading.
+Download the file for your OS from [GitHub Releases](https://github.com/disnana/Nagi/releases). The names below are the published Nagi 0.1.11 filenames.
 
 | Your system | File to download |
 |---|---|
@@ -195,4 +195,4 @@ The compiler is `target/release/nagic` (`nagic.exe` on Windows). Add `target/rel
 | Rebuilding a running exe fails on Windows | Stop the executable and rebuild |
 | A server does not exit | `serve` keeps waiting for requests; press Ctrl+C in its terminal |
 
-Continue with [Learn by writing code](language-guide.md), from variables through APIs.
+Continue with [Learn by writing code](language-guide.md) and [Your first small CLI app](first-app.md) to try values, input, failures, and a boundary check.

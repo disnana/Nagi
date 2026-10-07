@@ -26,6 +26,14 @@ It prints `worker`, then `Done`. `run` starts the registered child and returns a
 
 A common mistake is reading `PERMANENT` as "restart only on failure." It also restarts after normal completion. Use `TEMPORARY` for one run or `TRANSIENT` for restarting after failure; the next table gives their differences.
 
+For a worker that should run once and finish normally, this registration is valid syntax but does not match that intent: it restarts after normal completion.
+
+```nagi
+try actor.task(view(group), "once", worker, actor.RestartPolicy.PERMANENT)
+```
+
+Change the policy to `TEMPORARY` for a one-shot job. Use `TRANSIENT` to stop after normal completion and restart only after an Error or panic. The Supervisor exits when it has no more work to run, and `run` returns.
+
 **In one sentence: a Supervisor owns children and manages restart and shutdown according to policy.** See the [reference](actor-reference.md) for registration, observation, and shutdown APIs.
 
 ## Restart policy

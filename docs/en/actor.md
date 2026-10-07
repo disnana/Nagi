@@ -24,6 +24,28 @@ For example, a state with `total=3` and a message with `amount=2` produces a nex
 
 A common mistake is returning an input rejection as the handler's own `Err(Error)`. That is a worker failure subject to restart policy. Return an expected rejection in the Turn reply, as in `ok(actor.turn(..., fail(problem)))`, together with the next state.
 
+This is not a syntax error; behavior depends on where the error is returned. If a registered handler should reject a negative amount as an ordinary business result, the version below is treated as a worker failure:
+
+```nagi
+async def add(state: Counter, amount: i64) -> Result[actor.Turn[Counter, i64, Error], Error]:
+    if amount < 0:
+        return error("amount must be non-negative")  # supervisor restart policy applies
+    next_state = Counter(total=state.total + amount)
+    return ok(actor.turn[Counter, i64, Error](next_state, ok(next_state.total)))
+```
+
+To send the rejection to the caller, wrap the Turn in the outer `ok(...)`:
+
+```nagi
+async def add(state: Counter, amount: i64) -> Result[actor.Turn[Counter, i64, Error], Error]:
+    if amount < 0:
+        return ok(actor.turn[Counter, i64, Error](state, error("amount must be non-negative")))
+    next_state = Counter(total=state.total + amount)
+    return ok(actor.turn[Counter, i64, Error](next_state, ok(next_state.total)))
+```
+
+The negative amount is now an `Err` reply, leaves the state unchanged, and does not restart the worker.
+
 **In one sentence: request state updates with messages, and return business rejections in replies.** See the [actor reference](actor-reference.md) for APIs and the next section for failure distinctions.
 
 `Turn` contains the next state and a reply. State does not need to be copied for each message. The [runnable example](../../test-nagi-code/library-examples/supervised-service/README.en.md) includes registration, startup, calls, and shutdown.

@@ -10,7 +10,7 @@ The name comes from the Japanese word *nagi* (凪), meaning calm seas: the surfa
 
 ## Learn the language
 
-Start with [setup](docs/en/getting-started.md), the [language guide](docs/en/language-guide.md), and [HTTP](docs/en/http.md). Use the [reference index](docs/en/README.md) to look up syntax and APIs, or read the [sample projects](docs/en/library-examples.md).
+Start with [setup](docs/en/getting-started.md), the [language guide](docs/en/language-guide.md), [your first CLI app](docs/en/first-app.md), and then [HTTP](docs/en/http.md). Use the [language feature index](docs/en/README.md#language-feature-index) and [reference index](docs/en/README.md) to look up features and APIs, or read the [sample projects](docs/en/library-examples.md).
 
 The [official website](https://nagi.disnana.com/en/) includes the introduction and English Docs. See [purpose and current scope](docs/en/introduction.md), [design decisions and rationale](DESIGN.en.md), and the [development priorities](docs/en/roadmap.md).
 
@@ -41,7 +41,7 @@ nagic --help
 
 A [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang) and an [IntelliJ IDEA/PyCharm plugin with Release ZIP installation instructions](editors/jetbrains-nagi/README.en.md) are available. See the [editor guide](docs/en/editor.md).
 
-The installer comes from main; the compiler comes from a published Release. These examples target Nagi 0.1.11. Check the official release record to confirm that 0.1.11 is published, and verify your installed compiler with `nagic --version`. See [CHANGELOG](CHANGELOG.md) for changes and the [0.1.11 migration guide](docs/en/migration-0.1.11.md) for compatibility notes.
+The installer comes from main; the compiler comes from a published Release. These examples target Nagi 0.1.11, officially released on 2026-10-07. Verify your installed compiler with `nagic --version`. See [CHANGELOG](CHANGELOG.md) for changes and the [0.1.11 migration guide](docs/en/migration-0.1.11.md) for compatibility notes.
 
 ### Uninstall
 
@@ -151,4 +151,4 @@ The [compiler test guide](docs/internal/compiler-testing.md) covers contracts, r
 
 ## Contributing and license
 
-Bug reports, fixes, documentation, and translations are welcome. The [contribution guide](CONTRIBUTING.en.md) covers proposals, verification, and AI use. Report vulnerabilities privately using the [security policy](SECURITY.en.md). Nagi uses the [MIT license](LICENSE).
+Bug reports, fixes, documentation, and translations are welcome. The [contribution guide](CONTRIBUTING.en.md) covers proposals, verification, and AI use; the [first contribution walkthrough](docs/en/contributing.md) follows a small change from repository map to tests and PR. Report vulnerabilities privately using the [security policy](SECURITY.en.md). Nagi uses the [MIT license](LICENSE).
