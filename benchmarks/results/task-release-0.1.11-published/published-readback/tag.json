@@ -1,0 +1,10 @@
+{
+  "ref": "refs/tags/nagi-v0.1.11",
+  "node_id": "REF_kwDOU01mu7ZyZWZzL3RhZ3MvbmFnaS12MC4xLjEx",
+  "url": "https://api.github.com/repos/disnana/Nagi/git/refs/tags/nagi-v0.1.11",
+  "object": {
+    "sha": "003a594de086383100016b7c75466da37705646c",
+    "type": "commit",
+    "url": "https://api.github.com/repos/disnana/Nagi/git/commits/003a594de086383100016b7c75466da37705646c"
+  }
+}

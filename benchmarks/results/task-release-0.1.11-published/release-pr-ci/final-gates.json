@@ -1,0 +1,96 @@
+{
+  "head": "c2b227533b89268028ecb2d67e39492b7aa4e4a5",
+  "base": "97e62f82b1f67dbcea699071477cbeec7388a713",
+  "tree": "13b41a034bf463a9426c53327b42c4184a53c7ed",
+  "run_id": 37553704154,
+  "run_attempt": 2,
+  "conclusion": "success",
+  "website_run": 37553703967,
+  "website_conclusion": "success",
+  "review_threads": 0,
+  "review_count": 1,
+  "changes_requested": 0,
+  "review_note": "Copilot quota notification is not an executed review or approval",
+  "independent_review_unresolved": 0,
+  "jobs": [
+    {
+      "id": 112582967201,
+      "name": "nagi-package (macos-15-intel, macos-x86_64, nagic, x86_64-apple-darwin)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112582967256,
+      "name": "release-plan",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112582967570,
+      "name": "changes",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112582967994,
+      "name": "nagi-package (ubuntu-latest, linux-x86_64, nagic, x86_64-unknown-linux-gnu)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112582967998,
+      "name": "linux",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112582968009,
+      "name": "vscode-package",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 112582968041,
+      "name": "jetbrains / JetBrains (IntelliJ IDEA)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112582968069,
+      "name": "nagi-package (windows-latest, windows-x86_64, nagic.exe, x86_64-pc-windows-msvc)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112582968072,
+      "name": "nagi-package (macos-15, macos-arm64, nagic, aarch64-apple-darwin)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112582968398,
+      "name": "jetbrains / JetBrains (PyCharm)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112590910936,
+      "name": "Ready to merge",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112590911891,
+      "name": "publish-release",
+      "status": "completed",
+      "conclusion": "skipped"
+    }
+  ],
+  "retained_successful_log_jobs": {
+    "linux_package": 112575279608,
+    "linux": 112575285948,
+    "macos_arm64": 112575279471,
+    "windows": 112575279490
+  },
+  "rerun_macos_intel_job": 112582967201
+}

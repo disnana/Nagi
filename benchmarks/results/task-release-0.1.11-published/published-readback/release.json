@@ -1,0 +1,79 @@
+{
+  "id": 405305095,
+  "html_url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.11",
+  "tag_name": "nagi-v0.1.11",
+  "target_commitish": "003a594de086383100016b7c75466da37705646c",
+  "name": "Nagi 0.1.11",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2026-10-07T01:47:56Z",
+  "updated_at": "2026-10-07T02:11:53Z",
+  "published_at": "2026-10-07T02:11:53Z",
+  "body": "## Installation\n\nArchives include the prebuilt compiler and the matching runtime sources, license, and installation notes. Extract the whole archive and add its root folder to PATH. Run `nagic --version` to verify the installed version. The compiler finds the bundled runtime automatically; NAGI_ROOT is normally unnecessary. Building Nagi applications still requires Rust/Cargo and a C build environment. Linux x86_64, Windows x64, macOS Apple Silicon (arm64), and macOS Intel (x86_64) are included. macOS archives are verified on macOS 15.\n\n## Changes\n\n- Add scope-local Task result handles through High, saved Low, and handwritten Low. Require one await or explicit discard for every result type; move transfers both the handle and obligation. Separate inner business Results from sticky TaskFailure, request sibling cancellation on faults, and join direct children before normal/error scope exit. Preserve legacy spawn behavior, original body/legacy Errors, and synchronous Drop limits. Provide typed Supervisor monitor migration using parent try, runnable Task examples, and isolated-distribution Task validation without changing HTTP failure propagation or adding a fault escalation API.\n- Add canonical `std.ownership.move` with one inferred input, preserving nested view origins, async function alias provenance, constant validation, and cleanup responsibility. Generate Rust's by-value `std::convert::identity` without a new runtime helper, clone, or allocation. Reject bare owned non-Copy local assignment; fresh values and existing argument, return, field/index, try, and match consumption remain unchanged. Keep current Copy rules and the existing Future restrictions.\n- Separate stable application identity, shared dependency caches, and successful native build generations. Serialize writers to the same generated directory with an OS lock, preserve earlier successful executables, and update latest only after a successful build. Use the emitted `native:` path; `NAGI_NATIVE_TARGET_DIR` selects the dependency cache rather than the executable location.\n- Seal Rust generation behind `check::finalize` and immutable `check::checked::CheckedProgram`. Rust embedding callers pass the finalized value to `emit::rust` and `emit::rust_with_lines`; mutable Program inputs are no longer accepted. Parser construction replaces external `ast::Stmt` struct literals, and public AST/standard metadata enums gain ownership, Task, and auth variants. See the Japanese and English 0.1.11 migration guides.\n- Add a common typed constant validator for compound/alias zero divisors and signed MIN division/remainder across eight integer widths. Preserve debug/release overflow behavior; unreachable constant failures are rejected as documented. Print signed MIN leaves without generating out-of-range Rust literals.\n- Add experimental `std.auth.Principal` and nominal `Grant[P]` proof boundaries with no Nagi construction, JSON decoding, copying, or sharing. Demonstrate custom Nagi authorization through a trusted Rust/Axum adapter; the example uses fixed credentials and does not implement JWS verification or general authorization analysis.\n- Keep mapped Rust errors concise by default; `build/run --rust-diagnostics` retains generated Rust details. Native, dependency, and unmapped errors stay visible. Extend the conformance corpus to 42 sources and bounded generation to 18 grammars, including explicit moves, function values, multiple borrow sources, and pure async Result/Option.\n- Lower view-containing List, Result, and Option restorations through one private checked-flow plan, including aliases, nested values, branches, loops, and async. Preserve source cleanup positions, RHS-before-replacement evaluation, and cancellation without cloning payloads. Use the checker's move/borrow facts and final loop facts rather than reconstructing them from builtin names.\n- Keep scope bodies in the same coroutine so local views do not cross an extra async boundary, including functions that use but do not return views. Verify nested body/join errors, completed sibling cancellation on normal errors, parent Future destruction, and body panic with the real runtime through High, saved Low, and handwritten Low.\n- Generate lazy `env` fallbacks without a closure so source-level `try` and `await` keep their error and async context. Preserve Task receipt obligations on skipped short-circuit operands and env fallbacks; retain always-evaluated left/key receipts without forcing evaluation. Verify present/missing values, fallback failures, and conditional consumption in all three source forms.\n- Add repository-development AGENTS.md, model-specific custom agents, explicit language contracts, compiler pipeline/research notes, bounded program generation with failure artifacts and shrinking, and staged fuzz smoke. Run the bounded corpus in PR CI and larger fixed-seed explorations weekly.\n- Give sequential direct-view assignments in return-terminated blocks separate inferred lifetimes. Compile and execute restored input views and earlier nested returns through High, saved Low, and handwritten Low; preserve continuing branch and loop updates.\n- Verify Rust extern argument and sync/async mismatches with source-mapped build diagnostics through High, saved Low, and handwritten Low.\n- Exercise generated scope code against the real runtime for child errors, child panics, body error propagation, and completed sibling cancellation through all three source forms.\n\n[CHANGELOG at the released commit](https://github.com/disnana/Nagi/blob/003a594de086383100016b7c75466da37705646c/CHANGELOG.md)\n\n## Release comparison\n\nPrevious nagi release: [nagi-v0.1.10](https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.10) at [815b7d554dba3ac6b11ddad2089b782cbed46eb1](https://github.com/disnana/Nagi/commit/815b7d554dba3ac6b11ddad2089b782cbed46eb1).\n\n- [Previous tag → released commit](https://github.com/disnana/Nagi/compare/nagi-v0.1.10...003a594de086383100016b7c75466da37705646c)\n- [Previous commit → released commit](https://github.com/disnana/Nagi/compare/815b7d554dba3ac6b11ddad2089b782cbed46eb1...003a594de086383100016b7c75466da37705646c)\n\n## Pull requests and contributors\n\n## What's Changed\n* Fix sequential view lifetimes and verify compiler/runtime contracts by @tp-li-dev in https://github.com/disnana/Nagi/pull/70\n* 借用配列の修正 #71・#72 をmainへ反映 by @tp-li-dev in https://github.com/disnana/Nagi/pull/73\n* 借用生成の不一致を修正し、言語契約と継続検証を整備 by @tp-li-dev in https://github.com/disnana/Nagi/pull/74\n* checkとRust生成の整合を高め、認可境界と共有ビルドを検証する by @tp-li-dev in https://github.com/disnana/Nagi/pull/76\n* コンパイラとRust境界の段階計画・保証一覧を固定する by @tp-li-dev in https://github.com/disnana/Nagi/pull/77\n* Phase 1: 最終check済みのRust生成入力を封印する by @tp-li-dev in https://github.com/disnana/Nagi/pull/78\n* 同一アプリのビルド世代を分離し、失敗時の旧成果物を維持する by @tp-li-dev in https://github.com/disnana/Nagi/pull/79\n* 登録資源の定義を集約し、判定とHigh・Low生成の互換性を検証する by @tp-li-dev in https://github.com/disnana/Nagi/pull/80\n* SQLite Txの承認契約と一接続cleanupの先行基盤 by @tp-li-dev in https://github.com/disnana/Nagi/pull/81\n* SQLite Poolの一接続adapter比較とcleanup競合を検証する by @tp-li-dev in https://github.com/disnana/Nagi/pull/82\n* Python経験者向けDocsと値・失敗・taskの設計方針を整理する by @tp-li-dev in https://github.com/disnana/Nagi/pull/83\n* SQLite多接続の終了観測を独立させ起動失敗・取消の回帰を固定する by @tp-li-dev in https://github.com/disnana/Nagi/pull/84\n* SQLite取得予算をnative予約まで共用し、期限と取消の回帰を固定する by @tp-li-dev in https://github.com/disnana/Nagi/pull/85\n* 明示moveとtask結果の実装順を整理し、現行High/Lowの移行例を検証する by @tp-li-dev in https://github.com/disnana/Nagi/pull/86\n* 非Copyローカルの代入を明示moveへ移行し、High/Lowの生成と破棄を揃える by @tp-li-dev in https://github.com/disnana/Nagi/pull/87\n* Task結果handle S1を完成し、言語・native・配布契約を検証する by @tp-li-dev in https://github.com/disnana/Nagi/pull/88\n* 開発agentのモデル選択・昇格・並列数を設定する by @tp-li-dev in https://github.com/disnana/Nagi/pull/89\n* Task結果を親へ伝えるSupervisorサービス移行を完成する by @tp-li-dev in https://github.com/disnana/Nagi/pull/90\n* 短絡とlazy式でもTaskの正常出口義務を維持する by @tp-li-dev in https://github.com/disnana/Nagi/pull/92\n* Task結果handleを含むNagi 0.1.11の正式リリースを準備する by @tp-li-dev in https://github.com/disnana/Nagi/pull/91\n\n\n**Full Changelog**: https://github.com/disnana/Nagi/compare/nagi-v0.1.10...nagi-v0.1.11\n\nBuilt from commit [003a594de086383100016b7c75466da37705646c](https://github.com/disnana/Nagi/commit/003a594de086383100016b7c75466da37705646c) after Nagi checks succeeded. SHA-256 files accompany every download.\n",
+  "assets": [
+    {
+      "id": 617295467,
+      "name": "nagi-0.1.11-linux-x86_64.tar.gz",
+      "state": "uploaded",
+      "size": 2570585,
+      "digest": "sha256:74ba38a62439e8f5d4fff5402aaa67efa3575441647985cbcfb9b38459c5c60b",
+      "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-linux-x86_64.tar.gz"
+    },
+    {
+      "id": 617295484,
+      "name": "nagi-0.1.11-linux-x86_64.tar.gz.sha256",
+      "state": "uploaded",
+      "size": 98,
+      "digest": "sha256:16b26af432194b19aa9407b9c19257893e277d032de9d3f000c2dcc85ea2e3bc",
+      "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-linux-x86_64.tar.gz.sha256"
+    },
+    {
+      "id": 617295537,
+      "name": "nagi-0.1.11-macos-arm64.tar.gz",
+      "state": "uploaded",
+      "size": 2285214,
+      "digest": "sha256:9b15baebdb6b1f5e02146fcd303cf377ef127b39fd44948160c54e7716af4992",
+      "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-macos-arm64.tar.gz"
+    },
+    {
+      "id": 617295558,
+      "name": "nagi-0.1.11-macos-arm64.tar.gz.sha256",
+      "state": "uploaded",
+      "size": 97,
+      "digest": "sha256:19ff91b288937abe89126e5c16c39790ba575e6ab6a518319fc9b3fd7336b034",
+      "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-macos-arm64.tar.gz.sha256"
+    },
+    {
+      "id": 617295572,
+      "name": "nagi-0.1.11-macos-x86_64.tar.gz",
+      "state": "uploaded",
+      "size": 2445042,
+      "digest": "sha256:b190f2695a3ae87f5eb388d78bf1fafb47785076456d562a82ba35eda3f2c439",
+      "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-macos-x86_64.tar.gz"
+    },
+    {
+      "id": 617295585,
+      "name": "nagi-0.1.11-macos-x86_64.tar.gz.sha256",
+      "state": "uploaded",
+      "size": 98,
+      "digest": "sha256:7f4ef9afc75181104d77b599f91bfede80398ae75805c41805c14ae8c874034e",
+      "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-macos-x86_64.tar.gz.sha256"
+    },
+    {
+      "id": 617295504,
+      "name": "nagi-0.1.11-windows-x86_64.zip",
+      "state": "uploaded",
+      "size": 2306520,
+      "digest": "sha256:a3b088adee61f7f20782ce3528db6e4e4d3a0e6080cac45cf54edfeb74aeb68d",
+      "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-windows-x86_64.zip"
+    },
+    {
+      "id": 617295517,
+      "name": "nagi-0.1.11-windows-x86_64.zip.sha256",
+      "state": "uploaded",
+      "size": 98,
+      "digest": "sha256:7a95c106bef7d7ba1089444ccc9a447a98f02bafc5ead72a3fabeb397239f144",
+      "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-windows-x86_64.zip.sha256"
+    }
+  ]
+}

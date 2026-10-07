@@ -1,0 +1,117 @@
+{
+  "head": "003a594de086383100016b7c75466da37705646c",
+  "platforms": {
+    "linux-package": {
+      "log_sha256": "bec916a504b8bcbf091f1d75090b42d1b6d2bba80eebd88573e28be834efc571",
+      "task_contracts": "148/148",
+      "native_suite": [
+        "Running tests/task_handles.rs (target/debug/deps/task_handles-ec04dbe8422597b2)",
+        8,
+        [
+          8,
+          0,
+          0
+        ]
+      ],
+      "new_service_oracle": true,
+      "conditional_consumption_oracle": true,
+      "runtime_task_tests": 17,
+      "public_api_tests": 3,
+      "runtime_doc_tests": 9,
+      "example_forms": [
+        "Passed: task-results (high)",
+        "Passed: task-results (saved-low)",
+        "Passed: task-results (handwritten-low)",
+        "Passed: supervised-service (high)",
+        "Passed: supervised-service (saved-low)",
+        "Passed: supervised-service (handwritten-low)"
+      ],
+      "extracted_archive_version": "0.1.11",
+      "extracted_archive_task_gate": true
+    },
+    "macos-arm64": {
+      "log_sha256": "d3f389ba1b9c0133649d4a472e267f73367c573679fb6a5413a5e94634ab9f3f",
+      "task_contracts": "148/148",
+      "native_suite": [
+        "Running tests/task_handles.rs (target/debug/deps/task_handles-94832b6fbc85b68e)",
+        8,
+        [
+          8,
+          0,
+          0
+        ]
+      ],
+      "new_service_oracle": true,
+      "conditional_consumption_oracle": true,
+      "runtime_task_tests": 17,
+      "public_api_tests": 3,
+      "runtime_doc_tests": 9,
+      "example_forms": [
+        "Passed: task-results (high)",
+        "Passed: task-results (saved-low)",
+        "Passed: task-results (handwritten-low)",
+        "Passed: supervised-service (high)",
+        "Passed: supervised-service (saved-low)",
+        "Passed: supervised-service (handwritten-low)"
+      ],
+      "extracted_archive_version": "0.1.11",
+      "extracted_archive_task_gate": true
+    },
+    "macos-x86_64": {
+      "log_sha256": "f10c9f68ba0780892ae6e63c5cf6aa4f2ed6b07d62fa6fce99de94635014a21b",
+      "task_contracts": "148/148",
+      "native_suite": [
+        "Running tests/task_handles.rs (target/debug/deps/task_handles-29d84e148203c0ad)",
+        8,
+        [
+          8,
+          0,
+          0
+        ]
+      ],
+      "new_service_oracle": true,
+      "conditional_consumption_oracle": true,
+      "runtime_task_tests": 17,
+      "public_api_tests": 3,
+      "runtime_doc_tests": 9,
+      "example_forms": [
+        "Passed: task-results (high)",
+        "Passed: task-results (saved-low)",
+        "Passed: task-results (handwritten-low)",
+        "Passed: supervised-service (high)",
+        "Passed: supervised-service (saved-low)",
+        "Passed: supervised-service (handwritten-low)"
+      ],
+      "extracted_archive_version": "0.1.11",
+      "extracted_archive_task_gate": true
+    },
+    "windows-x86_64": {
+      "log_sha256": "5a9520ee21cf936c5e65a505eb09ff6d208476545b42384e80585a4b78448b07",
+      "task_contracts": "148/148",
+      "native_suite": [
+        "Running tests\\task_handles.rs (target\\debug\\deps\\task_handles-2841af5c301e3b9c.exe)",
+        8,
+        [
+          8,
+          0,
+          0
+        ]
+      ],
+      "new_service_oracle": true,
+      "conditional_consumption_oracle": true,
+      "runtime_task_tests": 17,
+      "public_api_tests": 3,
+      "runtime_doc_tests": 9,
+      "example_forms": [
+        "Passed: task-results (high)",
+        "Passed: task-results (saved-low)",
+        "Passed: task-results (handwritten-low)",
+        "Passed: supervised-service (high)",
+        "Passed: supervised-service (saved-low)",
+        "Passed: supervised-service (handwritten-low)"
+      ],
+      "extracted_archive_version": "0.1.11",
+      "extracted_archive_task_gate": true
+    }
+  }
+}

@@ -1,0 +1,13 @@
+diff --git a/benchmarks/results/task-release-0.1.11/provenance.json b/benchmarks/results/task-release-0.1.11/provenance.json
+index f00e0d6..a1b677c 100644
+--- a/benchmarks/results/task-release-0.1.11/provenance.json
++++ b/benchmarks/results/task-release-0.1.11/provenance.json
+@@ -109,7 +109,7 @@
+     "scripts/releases/verify.py": "386032c7f0778983802f89c5816270cfa1de58b3456e46bb9ae092362d5681db"
+   },
+   "artifact_sha256": {
+-    "README.md": "ed2e2edf20dcbea6021af32cf76b56c8ea13cacc83ec079ab9bc4951e9882845",
++    "README.md": "6057b7d2f35b4a8df83dbfb42327255ce58f6178fb0df48645c05aa4526676a5",
+     "conditional-fix-final/ci/gates.json": "0d9e5375c9af198a7012d92b489e54991c238d19f646c8fa3b0d1d3a8590785f",
+     "conditional-fix-final/ci/linux-package.log": "797696a91e1b27fdff32da2c830d32524dd5697f2fd689c3a7ea912413e6da2e",
+     "conditional-fix-final/ci/linux-workspace.json": "5fe46b55b6033f26991d8c35935da92c188dd0558d713cf927d4e9a2efb76128",

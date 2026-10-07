@@ -1,0 +1,1850 @@
+{
+  "examined_sha": "64a7f3d5c5306abca579e5d95dd9990087747699",
+  "source_hashes_checked": 79,
+  "artifact_hashes_checked": 221,
+  "source_mismatches": [],
+  "artifact_mismatches": [],
+  "platform_raw_log_evidence": {
+    "linux-package": {
+      "raw_log_sha256": "797696a91e1b27fdff32da2c830d32524dd5697f2fd689c3a7ea912413e6da2e",
+      "reported_sha256_matches": true,
+      "dedicated_conditional_and_service_oracles_present": true,
+      "contracts148_and_extracted_archive_gate_present": true,
+      "test_execution": "inherited CI; no local tests run"
+    },
+    "macos-arm64": {
+      "raw_log_sha256": "a43e26753fbabee88ed1f2d50bf5d223da7c8ba448730bec6971399db45b427e",
+      "reported_sha256_matches": true,
+      "dedicated_conditional_and_service_oracles_present": true,
+      "contracts148_and_extracted_archive_gate_present": true,
+      "test_execution": "inherited CI; no local tests run"
+    },
+    "macos-x86_64": {
+      "raw_log_sha256": "4540478501933f0efa79c4fa3dfcbc86b121689e00436ee1115874e0d0d58c90",
+      "reported_sha256_matches": true,
+      "dedicated_conditional_and_service_oracles_present": true,
+      "contracts148_and_extracted_archive_gate_present": true,
+      "test_execution": "inherited CI; no local tests run"
+    },
+    "windows-x86_64": {
+      "raw_log_sha256": "ccae2c741d60226f66dbdbdd2afe24057f68865db9447c1aa0a4b2f4dfde0eb1",
+      "reported_sha256_matches": true,
+      "dedicated_conditional_and_service_oracles_present": true,
+      "contracts148_and_extracted_archive_gate_present": true,
+      "test_execution": "inherited CI; no local tests run"
+    }
+  },
+  "own_historic_review_copies_byte_identical": [
+    "final-review.txt",
+    "findings.json",
+    "final-provenance.json",
+    "checker-results.json",
+    "boundary-control-results.json",
+    "conditional-native-independent.log"
+  ],
+  "remote_api_status_not_independently_read": true,
+  "source_checks": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "matches": true,
+      "expected": "ba4d2c0523507110985393a6165e5334e7fba7f4c12babf247a5dd95372e2c87",
+      "actual": "ba4d2c0523507110985393a6165e5334e7fba7f4c12babf247a5dd95372e2c87"
+    },
+    {
+      "path": "Cargo.lock",
+      "matches": true,
+      "expected": "b13de41074569b218cfdeb29b69591f08a2f9c504663b7d11fd23ff263a01856",
+      "actual": "b13de41074569b218cfdeb29b69591f08a2f9c504663b7d11fd23ff263a01856"
+    },
+    {
+      "path": "Cargo.toml",
+      "matches": true,
+      "expected": "5fa413bc2e39cc024bc6b00ead0baae5b91f69ec6eca5299328376d64b65c1e6",
+      "actual": "5fa413bc2e39cc024bc6b00ead0baae5b91f69ec6eca5299328376d64b65c1e6"
+    },
+    {
+      "path": "compiler/Cargo.toml",
+      "matches": true,
+      "expected": "832efb0dc32ab93c17d0592ff986026e650d10fd384f6c93a5418752f05ae2aa",
+      "actual": "832efb0dc32ab93c17d0592ff986026e650d10fd384f6c93a5418752f05ae2aa"
+    },
+    {
+      "path": "compiler/src/ast.rs",
+      "matches": true,
+      "expected": "200d87e42b319927480ade27e78dbcb98eed9b3d5762f0332d7f9368978a6ac9",
+      "actual": "200d87e42b319927480ade27e78dbcb98eed9b3d5762f0332d7f9368978a6ac9"
+    },
+    {
+      "path": "compiler/src/capabilities.rs",
+      "matches": true,
+      "expected": "8a9105f09f5b53abae74e00f405eabcb2f323d9c461b3e64df5291822e0e4314",
+      "actual": "8a9105f09f5b53abae74e00f405eabcb2f323d9c461b3e64df5291822e0e4314"
+    },
+    {
+      "path": "compiler/src/check.rs",
+      "matches": true,
+      "expected": "3af29cf80213715c6af5abbcb72f7a42e4060b6356bc9880cdc3b87cbd07cf69",
+      "actual": "3af29cf80213715c6af5abbcb72f7a42e4060b6356bc9880cdc3b87cbd07cf69"
+    },
+    {
+      "path": "compiler/src/check/checked.rs",
+      "matches": true,
+      "expected": "3e6a174038b1a6c48f05ad3815c2dd8a9c196a06ca7135acbfc0e81d38727f75",
+      "actual": "3e6a174038b1a6c48f05ad3815c2dd8a9c196a06ca7135acbfc0e81d38727f75"
+    },
+    {
+      "path": "compiler/src/check/checked_tests.rs",
+      "matches": true,
+      "expected": "ed747d1c829e674bfc8ed0bc769ee6adc1c3cb5687b02e5b4ea50ab6044b7957",
+      "actual": "ed747d1c829e674bfc8ed0bc769ee6adc1c3cb5687b02e5b4ea50ab6044b7957"
+    },
+    {
+      "path": "compiler/src/checked.rs",
+      "matches": true,
+      "expected": "90da9d29983e5b122ab883af6f163a964ba7ab619152bca5ba0b3f36627423c1",
+      "actual": "90da9d29983e5b122ab883af6f163a964ba7ab619152bca5ba0b3f36627423c1"
+    },
+    {
+      "path": "compiler/src/constant_eval.rs",
+      "matches": true,
+      "expected": "afe6ac28c0354399f1848c9891e65aa4dced9006c0b6e18889dc6ca9c859c245",
+      "actual": "afe6ac28c0354399f1848c9891e65aa4dced9006c0b6e18889dc6ca9c859c245"
+    },
+    {
+      "path": "compiler/src/diagnostics.rs",
+      "matches": true,
+      "expected": "2981cc430dd9a0cdc8c91bb3e58511d5f601b8282b32336990e992634971ea28",
+      "actual": "2981cc430dd9a0cdc8c91bb3e58511d5f601b8282b32336990e992634971ea28"
+    },
+    {
+      "path": "compiler/src/emit.rs",
+      "matches": true,
+      "expected": "d8643509d2a35cd4eb479f9a97acd86e342632be91d915c5f72c45b1efca89ba",
+      "actual": "d8643509d2a35cd4eb479f9a97acd86e342632be91d915c5f72c45b1efca89ba"
+    },
+    {
+      "path": "compiler/src/generation.rs",
+      "matches": true,
+      "expected": "74d2853b5bacd57833e1a11e095ba1ccfb272121cf3e30f53d0b8401715ab7f0",
+      "actual": "74d2853b5bacd57833e1a11e095ba1ccfb272121cf3e30f53d0b8401715ab7f0"
+    },
+    {
+      "path": "compiler/src/graph/calls.rs",
+      "matches": true,
+      "expected": "daeeb8e28ea58f5f1fcec3dac77b65d6c3aeeb327adf8d9ad65be1a20d774336",
+      "actual": "daeeb8e28ea58f5f1fcec3dac77b65d6c3aeeb327adf8d9ad65be1a20d774336"
+    },
+    {
+      "path": "compiler/src/graph/html.rs",
+      "matches": true,
+      "expected": "171c3e7425e724717bb109f24bc624b5813ef3eb835d8093f4f14d52eafc27a5",
+      "actual": "171c3e7425e724717bb109f24bc624b5813ef3eb835d8093f4f14d52eafc27a5"
+    },
+    {
+      "path": "compiler/src/graph/mod.rs",
+      "matches": true,
+      "expected": "5c65b1c0542d71e992aecf0124d33d94667c7e1f95e7315a4ac8170a55abb9d1",
+      "actual": "5c65b1c0542d71e992aecf0124d33d94667c7e1f95e7315a4ac8170a55abb9d1"
+    },
+    {
+      "path": "compiler/src/graph/modules.rs",
+      "matches": true,
+      "expected": "2afacc41c30c25679f6aa04764bad692d70841572c6a79a4393e7c81f6513d3a",
+      "actual": "2afacc41c30c25679f6aa04764bad692d70841572c6a79a4393e7c81f6513d3a"
+    },
+    {
+      "path": "compiler/src/graph/render.rs",
+      "matches": true,
+      "expected": "3fe6486b0774a09c51a9acdfb6b17029f564a273ff428e9335050fea0995ffd0",
+      "actual": "3fe6486b0774a09c51a9acdfb6b17029f564a273ff428e9335050fea0995ffd0"
+    },
+    {
+      "path": "compiler/src/graph/types.rs",
+      "matches": true,
+      "expected": "8f1b954c6cb30eaf26523ad3d9e7ef7f1cc98d03298d9fb3807e910a3ad1b82e",
+      "actual": "8f1b954c6cb30eaf26523ad3d9e7ef7f1cc98d03298d9fb3807e910a3ad1b82e"
+    },
+    {
+      "path": "compiler/src/installation.rs",
+      "matches": true,
+      "expected": "6c65e4b171ed9e3f8505de356ad77340d63067f6b210f7b104f853b8921a0290",
+      "actual": "6c65e4b171ed9e3f8505de356ad77340d63067f6b210f7b104f853b8921a0290"
+    },
+    {
+      "path": "compiler/src/lexer.rs",
+      "matches": true,
+      "expected": "ea50dc18a1422b2cfbc0bd4a3638687487d6ddbb8c1ee02afbb7b7dfc8417cff",
+      "actual": "ea50dc18a1422b2cfbc0bd4a3638687487d6ddbb8c1ee02afbb7b7dfc8417cff"
+    },
+    {
+      "path": "compiler/src/lib.rs",
+      "matches": true,
+      "expected": "24c21b005069d2f29600c3c038a17bdbd869544177371ef2f7604d148ded7de5",
+      "actual": "24c21b005069d2f29600c3c038a17bdbd869544177371ef2f7604d148ded7de5"
+    },
+    {
+      "path": "compiler/src/main.rs",
+      "matches": true,
+      "expected": "191afb833de01bcf4458bd68a1a4e7be6c5ddc38e79e4c19c6e9e14155565ea7",
+      "actual": "191afb833de01bcf4458bd68a1a4e7be6c5ddc38e79e4c19c6e9e14155565ea7"
+    },
+    {
+      "path": "compiler/src/modules.rs",
+      "matches": true,
+      "expected": "42d07557fb4186739d8819da9881f871a8f5e485f160003d8fc619d212909525",
+      "actual": "42d07557fb4186739d8819da9881f871a8f5e485f160003d8fc619d212909525"
+    },
+    {
+      "path": "compiler/src/output.rs",
+      "matches": true,
+      "expected": "2bf4d3c06cb1ab49c2951ad66a98ad714b54e91a1d4f866b27ad9abc4f4beef3",
+      "actual": "2bf4d3c06cb1ab49c2951ad66a98ad714b54e91a1d4f866b27ad9abc4f4beef3"
+    },
+    {
+      "path": "compiler/src/parser.rs",
+      "matches": true,
+      "expected": "54f51a31cc6cab3996deca9a43b0310793d838685cc0765f22ddd27cf1d92688",
+      "actual": "54f51a31cc6cab3996deca9a43b0310793d838685cc0765f22ddd27cf1d92688"
+    },
+    {
+      "path": "compiler/src/project.rs",
+      "matches": true,
+      "expected": "44aa547059f7d6b2fc1e3ee10be3b7991eda177f25b59adabc941760d15635d5",
+      "actual": "44aa547059f7d6b2fc1e3ee10be3b7991eda177f25b59adabc941760d15635d5"
+    },
+    {
+      "path": "compiler/src/routes.rs",
+      "matches": true,
+      "expected": "35abbd527210e373a3442fa3b706c775abef76db7b3bcb3d99c00558774997c9",
+      "actual": "35abbd527210e373a3442fa3b706c775abef76db7b3bcb3d99c00558774997c9"
+    },
+    {
+      "path": "compiler/src/rust_names.rs",
+      "matches": true,
+      "expected": "1f66d12c0456fade227a5994b34230852c025825992b885328b24b8c63751a95",
+      "actual": "1f66d12c0456fade227a5994b34230852c025825992b885328b24b8c63751a95"
+    },
+    {
+      "path": "compiler/src/source.rs",
+      "matches": true,
+      "expected": "97760d2bbeaa2b758f42442ee1987dc251daab2f433c7ec1c24ed4fcfbb95323",
+      "actual": "97760d2bbeaa2b758f42442ee1987dc251daab2f433c7ec1c24ed4fcfbb95323"
+    },
+    {
+      "path": "compiler/src/sql_check/collect.rs",
+      "matches": true,
+      "expected": "92af75826b745c54501c73bd6aaf064f612c86e54a7ff5b485918ab49dfb1896",
+      "actual": "92af75826b745c54501c73bd6aaf064f612c86e54a7ff5b485918ab49dfb1896"
+    },
+    {
+      "path": "compiler/src/sql_check/engine.rs",
+      "matches": true,
+      "expected": "7ccf9152a4e012e549ff44e1f911e75007653115d57e90cd6ed44ec8e38c8a33",
+      "actual": "7ccf9152a4e012e549ff44e1f911e75007653115d57e90cd6ed44ec8e38c8a33"
+    },
+    {
+      "path": "compiler/src/sql_check/mod.rs",
+      "matches": true,
+      "expected": "ba8cd13537b9056b3f054aca2cd6cf03631fbc5d819819074802fbf2532bf818",
+      "actual": "ba8cd13537b9056b3f054aca2cd6cf03631fbc5d819819074802fbf2532bf818"
+    },
+    {
+      "path": "compiler/src/stdlib.rs",
+      "matches": true,
+      "expected": "e381b6ae46d851e6ba27615815d327a6d03a5542da3e5c45c4efbbf57c7a92ac",
+      "actual": "e381b6ae46d851e6ba27615815d327a6d03a5542da3e5c45c4efbbf57c7a92ac"
+    },
+    {
+      "path": "compiler/src/symbols.rs",
+      "matches": true,
+      "expected": "5c1b4f0cb68edf8d05966428605b9495a0c55c047447517b663ae91277368533",
+      "actual": "5c1b4f0cb68edf8d05966428605b9495a0c55c047447517b663ae91277368533"
+    },
+    {
+      "path": "compiler/src/tests.rs",
+      "matches": true,
+      "expected": "e7d1aa3ba95775d880360b39d308030a7a972078bebb0b19fd9627281eec40ed",
+      "actual": "e7d1aa3ba95775d880360b39d308030a7a972078bebb0b19fd9627281eec40ed"
+    },
+    {
+      "path": "compiler/src/tests/resource_contract_goldens.rs",
+      "matches": true,
+      "expected": "152c88db88d68113eceba828f2430cf76d274bed57a120ab7ac12c69a6831bda",
+      "actual": "152c88db88d68113eceba828f2430cf76d274bed57a120ab7ac12c69a6831bda"
+    },
+    {
+      "path": "compiler/src/view_flow.rs",
+      "matches": true,
+      "expected": "4aa4bb3556abb2803b266427accda9073f9b32f59ff0f5d7ecf5987e0e7a0718",
+      "actual": "4aa4bb3556abb2803b266427accda9073f9b32f59ff0f5d7ecf5987e0e7a0718"
+    },
+    {
+      "path": "runtime/Cargo.toml",
+      "matches": true,
+      "expected": "2310f96203a6f475438fc7af9186a5a174e18fa0bcff1010f98d97a118440768",
+      "actual": "2310f96203a6f475438fc7af9186a5a174e18fa0bcff1010f98d97a118440768"
+    },
+    {
+      "path": "runtime/src/actor.rs",
+      "matches": true,
+      "expected": "2179d42204259d9b728e01939669b3576e312966e1a8aec5e86b6ba80ce18d71",
+      "actual": "2179d42204259d9b728e01939669b3576e312966e1a8aec5e86b6ba80ce18d71"
+    },
+    {
+      "path": "runtime/src/actor/charge.rs",
+      "matches": true,
+      "expected": "7452c432e1f09715f6fde95400b98ec86529c7d4b64f438475b194628a404952",
+      "actual": "7452c432e1f09715f6fde95400b98ec86529c7d4b64f438475b194628a404952"
+    },
+    {
+      "path": "runtime/src/actor/lifecycle.rs",
+      "matches": true,
+      "expected": "db34427f6d643fbece84e9fc773583c906c1509b9b5e34bdea508627eb1340ac",
+      "actual": "db34427f6d643fbece84e9fc773583c906c1509b9b5e34bdea508627eb1340ac"
+    },
+    {
+      "path": "runtime/src/actor/lifecycle_adversarial_tests.rs",
+      "matches": true,
+      "expected": "a98591b717a27b7af157ae2c0011bdc6e6016165dabe6f9c24ab8ed6b51190cf",
+      "actual": "a98591b717a27b7af157ae2c0011bdc6e6016165dabe6f9c24ab8ed6b51190cf"
+    },
+    {
+      "path": "runtime/src/actor/tests.rs",
+      "matches": true,
+      "expected": "3bd7c11d015ef2410a8d5ebfd1c661f61fcada298d8fc64501cb6e626084816e",
+      "actual": "3bd7c11d015ef2410a8d5ebfd1c661f61fcada298d8fc64501cb6e626084816e"
+    },
+    {
+      "path": "runtime/src/auth.rs",
+      "matches": true,
+      "expected": "9324b87a9baa7d429f1418592658d628ef2f6e9d64bce7de7d378ccd6f752f86",
+      "actual": "9324b87a9baa7d429f1418592658d628ef2f6e9d64bce7de7d378ccd6f752f86"
+    },
+    {
+      "path": "runtime/src/concurrent.rs",
+      "matches": true,
+      "expected": "b17ac40d8e856e412c0544785cba053e195d943e3d60fa4f88f568506e86ceeb",
+      "actual": "b17ac40d8e856e412c0544785cba053e195d943e3d60fa4f88f568506e86ceeb"
+    },
+    {
+      "path": "runtime/src/database.rs",
+      "matches": true,
+      "expected": "ce60cfa34428b00ad36a51b41ec8bf4d541a3e452fefa4140907744cf26beced",
+      "actual": "ce60cfa34428b00ad36a51b41ec8bf4d541a3e452fefa4140907744cf26beced"
+    },
+    {
+      "path": "runtime/src/http.rs",
+      "matches": true,
+      "expected": "4619a2cc53a20dc966ad97c411512954b774d63fb27c9d7b87d7ff83ff3a5b49",
+      "actual": "4619a2cc53a20dc966ad97c411512954b774d63fb27c9d7b87d7ff83ff3a5b49"
+    },
+    {
+      "path": "runtime/src/http/panic_tests.rs",
+      "matches": true,
+      "expected": "b0f72df9b14975067ecc8172bd07cecedfd33f5ad05de130d681732db09611f5",
+      "actual": "b0f72df9b14975067ecc8172bd07cecedfd33f5ad05de130d681732db09611f5"
+    },
+    {
+      "path": "runtime/src/http/tests.rs",
+      "matches": true,
+      "expected": "20c75d75465725aaef841378f2ff7989132b8e9a562c7626cf10e6141053f9a0",
+      "actual": "20c75d75465725aaef841378f2ff7989132b8e9a562c7626cf10e6141053f9a0"
+    },
+    {
+      "path": "runtime/src/http_server.rs",
+      "matches": true,
+      "expected": "b9d081eea566f26806436945620a329b95ca8a766029c1910e286a0fdd6751d8",
+      "actual": "b9d081eea566f26806436945620a329b95ca8a766029c1910e286a0fdd6751d8"
+    },
+    {
+      "path": "runtime/src/http_server/panic_tests.rs",
+      "matches": true,
+      "expected": "1407693b6e58d9d42f4b1fa0e5baee24a176ec5083eeec5a3d722c96b2906206",
+      "actual": "1407693b6e58d9d42f4b1fa0e5baee24a176ec5083eeec5a3d722c96b2906206"
+    },
+    {
+      "path": "runtime/src/http_server/tests.rs",
+      "matches": true,
+      "expected": "f1ca9cd884c68f54197d60a86592dc32ed758f5fa6ff3d653ee3996cb032438b",
+      "actual": "f1ca9cd884c68f54197d60a86592dc32ed758f5fa6ff3d653ee3996cb032438b"
+    },
+    {
+      "path": "runtime/src/lib.rs",
+      "matches": true,
+      "expected": "4d5ba694aa083ce5031d0f2ae93dd44978e0b1046e54be8e35eedc33e8737cc0",
+      "actual": "4d5ba694aa083ce5031d0f2ae93dd44978e0b1046e54be8e35eedc33e8737cc0"
+    },
+    {
+      "path": "runtime/src/metrics.rs",
+      "matches": true,
+      "expected": "e6562f697fa328e8f34b2a6a80f6a13fc87be0418731256a84638ceb2dfde5a3",
+      "actual": "e6562f697fa328e8f34b2a6a80f6a13fc87be0418731256a84638ceb2dfde5a3"
+    },
+    {
+      "path": "runtime/src/result.rs",
+      "matches": true,
+      "expected": "9e1b568fad2c4971f59d8ee0d886566d519bdedccfb106d7c47ec812c479e050",
+      "actual": "9e1b568fad2c4971f59d8ee0d886566d519bdedccfb106d7c47ec812c479e050"
+    },
+    {
+      "path": "runtime/src/sqlite_prototype/acquire_tests.rs",
+      "matches": true,
+      "expected": "4a026fdfe0ceac0eb1a598e65add137ca1e5f7748f401a2074450056382cb3e7",
+      "actual": "4a026fdfe0ceac0eb1a598e65add137ca1e5f7748f401a2074450056382cb3e7"
+    },
+    {
+      "path": "runtime/src/sqlite_prototype/adapter.rs",
+      "matches": true,
+      "expected": "963c93d094df4b4c88d361286ea61361dae8a31091e92cc5a2de076617468ad2",
+      "actual": "963c93d094df4b4c88d361286ea61361dae8a31091e92cc5a2de076617468ad2"
+    },
+    {
+      "path": "runtime/src/sqlite_prototype/adapter_tests.rs",
+      "matches": true,
+      "expected": "7b218ed82d2d53b0a5dbee671e727a05c772b88e70c77c04be5964b66380b8b9",
+      "actual": "7b218ed82d2d53b0a5dbee671e727a05c772b88e70c77c04be5964b66380b8b9"
+    },
+    {
+      "path": "runtime/src/sqlite_prototype/comparison.rs",
+      "matches": true,
+      "expected": "e5cfd30070489bb07a22e56d288f76194c48aef43249b1c2b7642de9fc83fdb7",
+      "actual": "e5cfd30070489bb07a22e56d288f76194c48aef43249b1c2b7642de9fc83fdb7"
+    },
+    {
+      "path": "runtime/src/sqlite_prototype/mod.rs",
+      "matches": true,
+      "expected": "667799f37696319441c8baa9b65c1ad607f985e9c2a0e6fd2ba48401f9a895fb",
+      "actual": "667799f37696319441c8baa9b65c1ad607f985e9c2a0e6fd2ba48401f9a895fb"
+    },
+    {
+      "path": "runtime/src/sqlite_prototype/session.rs",
+      "matches": true,
+      "expected": "f2e910f2b222bde5356bf48c47d0d9ece5d0109abecd154ddb58b414dc929c6c",
+      "actual": "f2e910f2b222bde5356bf48c47d0d9ece5d0109abecd154ddb58b414dc929c6c"
+    },
+    {
+      "path": "runtime/src/sqlite_prototype/tests.rs",
+      "matches": true,
+      "expected": "51d4ce2ba268db58ff419c180853196d7194ad3f6f13721837b986b197ca00db",
+      "actual": "51d4ce2ba268db58ff419c180853196d7194ad3f6f13721837b986b197ca00db"
+    },
+    {
+      "path": "runtime/src/task.rs",
+      "matches": true,
+      "expected": "89ebba9bba8761af98d7997f09fdade51d8100d0c76034d7681e57cad3689545",
+      "actual": "89ebba9bba8761af98d7997f09fdade51d8100d0c76034d7681e57cad3689545"
+    },
+    {
+      "path": "scripts/releases/README.md",
+      "matches": true,
+      "expected": "90479b145ae284598978bf4107865a21c3dcfd4d98a88469ec888491391af916",
+      "actual": "90479b145ae284598978bf4107865a21c3dcfd4d98a88469ec888491391af916"
+    },
+    {
+      "path": "scripts/releases/notes.py",
+      "matches": true,
+      "expected": "5c0b974d82c7e751f6b47dc8286411cdf909cb219fd42c2690999dca3de52f43",
+      "actual": "5c0b974d82c7e751f6b47dc8286411cdf909cb219fd42c2690999dca3de52f43"
+    },
+    {
+      "path": "scripts/releases/package.py",
+      "matches": true,
+      "expected": "f0bae9117c091f38bb4dcd556e9cafef77a128599b6018931fa02e9450181cda",
+      "actual": "f0bae9117c091f38bb4dcd556e9cafef77a128599b6018931fa02e9450181cda"
+    },
+    {
+      "path": "scripts/releases/plan.py",
+      "matches": true,
+      "expected": "3664f239129f274db9c27275379088b9e4e5d894940661df487d162df5efd017",
+      "actual": "3664f239129f274db9c27275379088b9e4e5d894940661df487d162df5efd017"
+    },
+    {
+      "path": "scripts/releases/publish.py",
+      "matches": true,
+      "expected": "4633794de211ed079a1b6b07daa83cbc31b98ff0b2d61ce4401ccf5724f20982",
+      "actual": "4633794de211ed079a1b6b07daa83cbc31b98ff0b2d61ce4401ccf5724f20982"
+    },
+    {
+      "path": "scripts/releases/test_install.ps1",
+      "matches": true,
+      "expected": "630cb2e6a9988ff4c621b50d4196d6c7eb89a585c849e977d67c67d3c16e6cb0",
+      "actual": "630cb2e6a9988ff4c621b50d4196d6c7eb89a585c849e977d67c67d3c16e6cb0"
+    },
+    {
+      "path": "scripts/releases/test_install.py",
+      "matches": true,
+      "expected": "ed44e7f6211bb81902461f2e9ec9554852b8ee82dedd31235a85b3f2df9dfeec",
+      "actual": "ed44e7f6211bb81902461f2e9ec9554852b8ee82dedd31235a85b3f2df9dfeec"
+    },
+    {
+      "path": "scripts/releases/test_release.py",
+      "matches": true,
+      "expected": "a3134c784057feb3d86851ae4e9a1e7c043838460f822b550b90f0802d451dff",
+      "actual": "a3134c784057feb3d86851ae4e9a1e7c043838460f822b550b90f0802d451dff"
+    },
+    {
+      "path": "scripts/releases/test_release_notes.py",
+      "matches": true,
+      "expected": "6dda4863119030d2a11cd532bbdb3376b25c540b4e371bdb2e39fe5663a3eccf",
+      "actual": "6dda4863119030d2a11cd532bbdb3376b25c540b4e371bdb2e39fe5663a3eccf"
+    },
+    {
+      "path": "scripts/releases/test_uninstall.ps1",
+      "matches": true,
+      "expected": "2b950e069bcc05cbf87afc8fd014e046088c1bdda5181fbc3b54cab2f4a043a8",
+      "actual": "2b950e069bcc05cbf87afc8fd014e046088c1bdda5181fbc3b54cab2f4a043a8"
+    },
+    {
+      "path": "scripts/releases/test_uninstall.py",
+      "matches": true,
+      "expected": "2cc2149d0ff80b4347e609288b30f319c428287dfaf51f5fcec84e5ec3f5e9fe",
+      "actual": "2cc2149d0ff80b4347e609288b30f319c428287dfaf51f5fcec84e5ec3f5e9fe"
+    },
+    {
+      "path": "scripts/releases/test_verify.py",
+      "matches": true,
+      "expected": "07dd5951c1a3c04fa62325b723be82662229f5aecd827487a7437a2d17bc04eb",
+      "actual": "07dd5951c1a3c04fa62325b723be82662229f5aecd827487a7437a2d17bc04eb"
+    },
+    {
+      "path": "scripts/releases/test_vsix_package.py",
+      "matches": true,
+      "expected": "b749805f8a6e95bdaba98d001fe42efeba6e4355af2531d0159c45a564fe0d23",
+      "actual": "b749805f8a6e95bdaba98d001fe42efeba6e4355af2531d0159c45a564fe0d23"
+    },
+    {
+      "path": "scripts/releases/verify.py",
+      "matches": true,
+      "expected": "386032c7f0778983802f89c5816270cfa1de58b3456e46bb9ae092362d5681db",
+      "actual": "386032c7f0778983802f89c5816270cfa1de58b3456e46bb9ae092362d5681db"
+    }
+  ],
+  "artifact_checks": [
+    {
+      "path": "benchmarks/results/task-release-0.1.11/README.md",
+      "matches": true,
+      "expected": "6057b7d2f35b4a8df83dbfb42327255ce58f6178fb0df48645c05aa4526676a5",
+      "actual": "6057b7d2f35b4a8df83dbfb42327255ce58f6178fb0df48645c05aa4526676a5"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/ci/gates.json",
+      "matches": true,
+      "expected": "0d9e5375c9af198a7012d92b489e54991c238d19f646c8fa3b0d1d3a8590785f",
+      "actual": "0d9e5375c9af198a7012d92b489e54991c238d19f646c8fa3b0d1d3a8590785f"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/ci/linux-package.log",
+      "matches": true,
+      "expected": "797696a91e1b27fdff32da2c830d32524dd5697f2fd689c3a7ea912413e6da2e",
+      "actual": "797696a91e1b27fdff32da2c830d32524dd5697f2fd689c3a7ea912413e6da2e"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/ci/linux-workspace.json",
+      "matches": true,
+      "expected": "5fe46b55b6033f26991d8c35935da92c188dd0558d713cf927d4e9a2efb76128",
+      "actual": "5fe46b55b6033f26991d8c35935da92c188dd0558d713cf927d4e9a2efb76128"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/ci/linux.log",
+      "matches": true,
+      "expected": "d857593a1cbeeefb06adcf86661ed0c3b4ea098949d52b1070b2ebe2e8105558",
+      "actual": "d857593a1cbeeefb06adcf86661ed0c3b4ea098949d52b1070b2ebe2e8105558"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/ci/macos-arm64.log",
+      "matches": true,
+      "expected": "a43e26753fbabee88ed1f2d50bf5d223da7c8ba448730bec6971399db45b427e",
+      "actual": "a43e26753fbabee88ed1f2d50bf5d223da7c8ba448730bec6971399db45b427e"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/ci/macos-x86_64.log",
+      "matches": true,
+      "expected": "4540478501933f0efa79c4fa3dfcbc86b121689e00436ee1115874e0d0d58c90",
+      "actual": "4540478501933f0efa79c4fa3dfcbc86b121689e00436ee1115874e0d0d58c90"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/ci/validate.py",
+      "matches": true,
+      "expected": "64d9eaa0b2e0dcf5628db3169e10056cd2c55b8c1d12af3e38829d63034f6ed9",
+      "actual": "64d9eaa0b2e0dcf5628db3169e10056cd2c55b8c1d12af3e38829d63034f6ed9"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/ci/validated.json",
+      "matches": true,
+      "expected": "6557aeb0f03b28941aaf321c29b7fdf1c425ea411a853e37126925c64ccaaf09",
+      "actual": "6557aeb0f03b28941aaf321c29b7fdf1c425ea411a853e37126925c64ccaaf09"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/ci/windows-x86_64.log",
+      "matches": true,
+      "expected": "ccae2c741d60226f66dbdbdd2afe24057f68865db9447c1aa0a4b2f4dfde0eb1",
+      "actual": "ccae2c741d60226f66dbdbdd2afe24057f68865db9447c1aa0a4b2f4dfde0eb1"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/artifact-hashes.json",
+      "matches": true,
+      "expected": "b84b1015df77a5cfd8b681c7fee629e1b44ccdf33d884d99b2f9b9c9c8d4b5f9",
+      "actual": "b84b1015df77a5cfd8b681c7fee629e1b44ccdf33d884d99b2f9b9c9c8d4b5f9"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-control-results.json",
+      "matches": true,
+      "expected": "981810aaead05e5952c968e916e1d302e841164cdd1ba909706250acf9507bd1",
+      "actual": "981810aaead05e5952c968e916e1d302e841164cdd1ba909706250acf9507bd1"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/generated/generated.low",
+      "matches": true,
+      "expected": "16d2f19027d4b33fa8fc0a90f7a02ba58e5a42f3e904d7f24e817baad0ab4e9e",
+      "actual": "16d2f19027d4b33fa8fc0a90f7a02ba58e5a42f3e904d7f24e817baad0ab4e9e"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/handwritten-low-native.stderr",
+      "matches": true,
+      "expected": "fdcff752ab8359a3359cfcf3e58046c43d12890a5a539cd18fa3c6bae487428a",
+      "actual": "fdcff752ab8359a3359cfcf3e58046c43d12890a5a539cd18fa3c6bae487428a"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/handwritten-low-native.stdout",
+      "matches": true,
+      "expected": "505e1fd34ce626ffa4fef68206020e3fe49365713356d5eb0386abfdbb2a742d",
+      "actual": "505e1fd34ce626ffa4fef68206020e3fe49365713356d5eb0386abfdbb2a742d"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/handwritten-low-out/Cargo.lock",
+      "matches": true,
+      "expected": "4974e07a4cafc51104e0da583dddd157a689a185f19e2e70edb5007d5dc97bb4",
+      "actual": "4974e07a4cafc51104e0da583dddd157a689a185f19e2e70edb5007d5dc97bb4"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/handwritten-low-out/Cargo.toml",
+      "matches": true,
+      "expected": "e12eae267796fd4a6b5503600b61ae2268ddfcf59ceb8caf6d2eb77a73cb2a68",
+      "actual": "e12eae267796fd4a6b5503600b61ae2268ddfcf59ceb8caf6d2eb77a73cb2a68"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/handwritten-low-out/src/main.rs",
+      "matches": true,
+      "expected": "102fbf26e227d5fae8a9f8add57744fa43deace5aa099d93149a53ea4fa02a88",
+      "actual": "102fbf26e227d5fae8a9f8add57744fa43deace5aa099d93149a53ea4fa02a88"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/handwritten.low",
+      "matches": true,
+      "expected": "23b2ace210af910563a8d7c8f42eba308da1f2ab6bef14af7a765bcaa3dc7946",
+      "actual": "23b2ace210af910563a8d7c8f42eba308da1f2ab6bef14af7a765bcaa3dc7946"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/high-check.stderr",
+      "matches": true,
+      "expected": "cebc2cab202f751f355ed198a2e4317a4df0cb7a2088453e56783ba78a1806de",
+      "actual": "cebc2cab202f751f355ed198a2e4317a4df0cb7a2088453e56783ba78a1806de"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/high-check.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/high-native.stderr",
+      "matches": true,
+      "expected": "714728e82dbfdb5910f36dc437dd07917ac2b311c5c2a4d2c307f280a2bd0778",
+      "actual": "714728e82dbfdb5910f36dc437dd07917ac2b311c5c2a4d2c307f280a2bd0778"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/high-native.stdout",
+      "matches": true,
+      "expected": "505e1fd34ce626ffa4fef68206020e3fe49365713356d5eb0386abfdbb2a742d",
+      "actual": "505e1fd34ce626ffa4fef68206020e3fe49365713356d5eb0386abfdbb2a742d"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/high-out/Cargo.lock",
+      "matches": true,
+      "expected": "0494cde43696338f3176e8e25c7efc2a00b2133ea46e6f0baa15284724002d3b",
+      "actual": "0494cde43696338f3176e8e25c7efc2a00b2133ea46e6f0baa15284724002d3b"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/high-out/Cargo.toml",
+      "matches": true,
+      "expected": "5c8037214233e8635db559371c997d769a90c74f373c802e796ebeb576664a6e",
+      "actual": "5c8037214233e8635db559371c997d769a90c74f373c802e796ebeb576664a6e"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/high-out/generated.low",
+      "matches": true,
+      "expected": "f9395b42aadfeded25a0fa5e6dbc20724b1c079de908e5af714d863c3d38ec3e",
+      "actual": "f9395b42aadfeded25a0fa5e6dbc20724b1c079de908e5af714d863c3d38ec3e"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/high-out/src/main.rs",
+      "matches": true,
+      "expected": "b5d57407a9b375f1572b515308291114a4ff26fd494ee6c46ed67021c2427c74",
+      "actual": "b5d57407a9b375f1572b515308291114a4ff26fd494ee6c46ed67021c2427c74"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/loop-skip.low",
+      "matches": true,
+      "expected": "3f73f9e2159524e0c113199999e3d18e129de3275d3fbf6e32bff715c68dd8fb",
+      "actual": "3f73f9e2159524e0c113199999e3d18e129de3275d3fbf6e32bff715c68dd8fb"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/loop-skip.low.stderr",
+      "matches": true,
+      "expected": "19b8c4a68d5d1d09175e6f6eee84056271dda983b765ebe4132f64c536e38a77",
+      "actual": "19b8c4a68d5d1d09175e6f6eee84056271dda983b765ebe4132f64c536e38a77"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/loop-skip.low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/loop-skip.nagi",
+      "matches": true,
+      "expected": "340eb29693b2110502970b5fd5cb092f828061398f33290228ae44b75b0a4692",
+      "actual": "340eb29693b2110502970b5fd5cb092f828061398f33290228ae44b75b0a4692"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/loop-skip.nagi.stderr",
+      "matches": true,
+      "expected": "aa2100e2037d068b3b6ad9b23edb5751d34d861d561756f19ec8313d02924381",
+      "actual": "aa2100e2037d068b3b6ad9b23edb5751d34d861d561756f19ec8313d02924381"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/loop-skip.nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/native-high.nagi",
+      "matches": true,
+      "expected": "dad336b3a6451b5a4f238005a134b450596acb672e61f1aced25e0eb6c048248",
+      "actual": "dad336b3a6451b5a4f238005a134b450596acb672e61f1aced25e0eb6c048248"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/original-high.nagi.saved",
+      "matches": true,
+      "expected": "dad336b3a6451b5a4f238005a134b450596acb672e61f1aced25e0eb6c048248",
+      "actual": "dad336b3a6451b5a4f238005a134b450596acb672e61f1aced25e0eb6c048248"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/saved-low-native.stderr",
+      "matches": true,
+      "expected": "22fff16d3bc4eb28b57ac6070d96c44a7bb6297167cd28d46936efa9b5b7b0bf",
+      "actual": "22fff16d3bc4eb28b57ac6070d96c44a7bb6297167cd28d46936efa9b5b7b0bf"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/saved-low-native.stdout",
+      "matches": true,
+      "expected": "505e1fd34ce626ffa4fef68206020e3fe49365713356d5eb0386abfdbb2a742d",
+      "actual": "505e1fd34ce626ffa4fef68206020e3fe49365713356d5eb0386abfdbb2a742d"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/saved-low-out/Cargo.lock",
+      "matches": true,
+      "expected": "b93d4d1cf322c65ade5cc0cc170faac73f4b857ae57922e84eba1970f5fd9d06",
+      "actual": "b93d4d1cf322c65ade5cc0cc170faac73f4b857ae57922e84eba1970f5fd9d06"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/saved-low-out/Cargo.toml",
+      "matches": true,
+      "expected": "a07542520e91466e0e3f5d7fee7c136bd14f2d14e55e2951584a655450ea486f",
+      "actual": "a07542520e91466e0e3f5d7fee7c136bd14f2d14e55e2951584a655450ea486f"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/saved-low-out/src/main.rs",
+      "matches": true,
+      "expected": "9f6ddceaca43a6206132c87f06e005675db70bb7d55de1300b4164035fcbab15",
+      "actual": "9f6ddceaca43a6206132c87f06e005675db70bb7d55de1300b4164035fcbab15"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls/saved.low",
+      "matches": true,
+      "expected": "16d2f19027d4b33fa8fc0a90f7a02ba58e5a42f3e904d7f24e817baad0ab4e9e",
+      "actual": "16d2f19027d4b33fa8fc0a90f7a02ba58e5a42f3e904d7f24e817baad0ab4e9e"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls.log",
+      "matches": true,
+      "expected": "88289fc2d73b9f374a069a0711520a59483add8ea9a054e65d539615c601b21a",
+      "actual": "88289fc2d73b9f374a069a0711520a59483add8ea9a054e65d539615c601b21a"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/boundary-controls.py",
+      "matches": true,
+      "expected": "c407e29f2c0da732c92ced54ce51dee49961442c06da399043f1cf31bc1b43e0",
+      "actual": "c407e29f2c0da732c92ced54ce51dee49961442c06da399043f1cf31bc1b43e0"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-and-rhs-discard-low.stderr",
+      "matches": true,
+      "expected": "2d13a06eccb786729b1e68e17bc7f1614b4e66b8a7b36f8112c67d83e17a3d0c",
+      "actual": "2d13a06eccb786729b1e68e17bc7f1614b4e66b8a7b36f8112c67d83e17a3d0c"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-and-rhs-discard-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-and-rhs-discard-nagi.stderr",
+      "matches": true,
+      "expected": "139d7b813d31042a57cd176843558bd2e76016b6cd8ba2768a571a0fe8cb506b",
+      "actual": "139d7b813d31042a57cd176843558bd2e76016b6cd8ba2768a571a0fe8cb506b"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-and-rhs-discard-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-nested-env-discard-low.stderr",
+      "matches": true,
+      "expected": "c5c3f120506d1edd104a3d42c53eb604ecc5ea29f85157d47eb90cd33234b61e",
+      "actual": "c5c3f120506d1edd104a3d42c53eb604ecc5ea29f85157d47eb90cd33234b61e"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-nested-env-discard-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-nested-env-discard-nagi.stderr",
+      "matches": true,
+      "expected": "5eb2f73068b354a884cc4ec545658f6452d73e765cc1ff5583c6f66c2298d073",
+      "actual": "5eb2f73068b354a884cc4ec545658f6452d73e765cc1ff5583c6f66c2298d073"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-nested-env-discard-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-nested-short-discard-low.stderr",
+      "matches": true,
+      "expected": "23bad1e2bda5b5bf00447c2f0be4982dd020c8a7fb70209f1edc296d8b76666a",
+      "actual": "23bad1e2bda5b5bf00447c2f0be4982dd020c8a7fb70209f1edc296d8b76666a"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-nested-short-discard-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-nested-short-discard-nagi.stderr",
+      "matches": true,
+      "expected": "03526ff8001778cac06ec6e7d049694cd5eb8fa67ef4462d00db3118c8f21519",
+      "actual": "03526ff8001778cac06ec6e7d049694cd5eb8fa67ef4462d00db3118c8f21519"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-nested-short-discard-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-or-rhs-discard-low.stderr",
+      "matches": true,
+      "expected": "08f194bcf95f5a4a4778bc433e4028c04b8efdce33663a32318290ff4b613aac",
+      "actual": "08f194bcf95f5a4a4778bc433e4028c04b8efdce33663a32318290ff4b613aac"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-or-rhs-discard-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-or-rhs-discard-nagi.stderr",
+      "matches": true,
+      "expected": "b640f5595bdffc90c844d8799ea1aa9133b999af58599bf5effe8a279ffbceba",
+      "actual": "b640f5595bdffc90c844d8799ea1aa9133b999af58599bf5effe8a279ffbceba"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-conditional-or-rhs-discard-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-low.stderr",
+      "matches": true,
+      "expected": "ea27834cc9fa8a0614c66890b178825108f74aa4bcf3e2f487d951e463957f4b",
+      "actual": "ea27834cc9fa8a0614c66890b178825108f74aa4bcf3e2f487d951e463957f4b"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-nagi.stderr",
+      "matches": true,
+      "expected": "7146cbe2f2bd76843d3b6b8f46c0d590d504a84de45ef2368a51ab79555dc9c3",
+      "actual": "7146cbe2f2bd76843d3b6b8f46c0d590d504a84de45ef2368a51ab79555dc9c3"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-nested-low.stderr",
+      "matches": true,
+      "expected": "4b971ee10a5a2e9bc5d784a1574c450b77bd7bb2ab5ac16f8b08a2ff4665a8a2",
+      "actual": "4b971ee10a5a2e9bc5d784a1574c450b77bd7bb2ab5ac16f8b08a2ff4665a8a2"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-nested-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-nested-nagi.stderr",
+      "matches": true,
+      "expected": "b184d05f93977c3a882f6f85bf86e667caf368d956d46e554d83006fabd28843",
+      "actual": "b184d05f93977c3a882f6f85bf86e667caf368d956d46e554d83006fabd28843"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-nested-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-receive-again-low.stderr",
+      "matches": true,
+      "expected": "d360c17d79678718a5779c6283bfe5bb5540622ff9a1a03ab3403756064d2122",
+      "actual": "d360c17d79678718a5779c6283bfe5bb5540622ff9a1a03ab3403756064d2122"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-receive-again-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-receive-again-nagi.stderr",
+      "matches": true,
+      "expected": "aad557b3dd8a8a0409139a166299e77e24421c862357c02fd5e2c81c779d48ff",
+      "actual": "aad557b3dd8a8a0409139a166299e77e24421c862357c02fd5e2c81c779d48ff"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-receive-again-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-saved-high.stderr",
+      "matches": true,
+      "expected": "c68069b2532e478eb437c6a065143d5c53c38c670f5f5321e4a5148c72f70b75",
+      "actual": "c68069b2532e478eb437c6a065143d5c53c38c670f5f5321e4a5148c72f70b75"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-saved-high.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-saved-low.stderr",
+      "matches": true,
+      "expected": "0b8769d42af5b63763a4e9727e548c9371cf1d4a7ab85800dc55026bcfdd52ae",
+      "actual": "0b8769d42af5b63763a4e9727e548c9371cf1d4a7ab85800dc55026bcfdd52ae"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-lazy-env-saved-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-and-low.stderr",
+      "matches": true,
+      "expected": "bbd31065906f9565a4874a91f47aa861c31fd7f873d910a001a2819b9f11770e",
+      "actual": "bbd31065906f9565a4874a91f47aa861c31fd7f873d910a001a2819b9f11770e"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-and-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-and-nagi.stderr",
+      "matches": true,
+      "expected": "51fc886d6f9a26c51e1e7f9a4d4250af7581378de62b1e3ad7a4de8288bbab96",
+      "actual": "51fc886d6f9a26c51e1e7f9a4d4250af7581378de62b1e3ad7a4de8288bbab96"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-and-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-and-saved-high.stderr",
+      "matches": true,
+      "expected": "fb12b712d941e087ae7ff58d748da2a7875569d68e9c6cdcb158b85138b8053a",
+      "actual": "fb12b712d941e087ae7ff58d748da2a7875569d68e9c6cdcb158b85138b8053a"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-and-saved-high.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-and-saved-low.stderr",
+      "matches": true,
+      "expected": "4225299c89cb2648ee64ed2f6597730a39876a21c1910a43e575e2e1e5536126",
+      "actual": "4225299c89cb2648ee64ed2f6597730a39876a21c1910a43e575e2e1e5536126"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-and-saved-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-move-alias-low.stderr",
+      "matches": true,
+      "expected": "89abae91f56675764b66fa40db4347e79f3a0edbfa2d1e08bb581bcf003be554",
+      "actual": "89abae91f56675764b66fa40db4347e79f3a0edbfa2d1e08bb581bcf003be554"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-move-alias-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-move-alias-nagi.stderr",
+      "matches": true,
+      "expected": "0ba546c6d033882cb4279e1aff0c7150d1f6de449c8bb4d149dd1b0a90098885",
+      "actual": "0ba546c6d033882cb4279e1aff0c7150d1f6de449c8bb4d149dd1b0a90098885"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-move-alias-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-nested-low.stderr",
+      "matches": true,
+      "expected": "b4914cac745544b9bd7e6b4f207767258ddfdb25cc7fc4c857a9a926027d94ff",
+      "actual": "b4914cac745544b9bd7e6b4f207767258ddfdb25cc7fc4c857a9a926027d94ff"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-nested-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-nested-nagi.stderr",
+      "matches": true,
+      "expected": "333b9f88746283bd4a80e24138f719b497413c4927cc97b2705ffcfb6144d140",
+      "actual": "333b9f88746283bd4a80e24138f719b497413c4927cc97b2705ffcfb6144d140"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-nested-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-or-low.stderr",
+      "matches": true,
+      "expected": "6dc7d8ebeff079f100fdabc18b6e92b0c5acee9611f5cfec1a44a3559f065904",
+      "actual": "6dc7d8ebeff079f100fdabc18b6e92b0c5acee9611f5cfec1a44a3559f065904"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-or-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-or-nagi.stderr",
+      "matches": true,
+      "expected": "34a0475923a1262d3508be68298ee94036c368fd9c67ff09e044e9bc9a95f588",
+      "actual": "34a0475923a1262d3508be68298ee94036c368fd9c67ff09e044e9bc9a95f588"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-or-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-reassign-low.stderr",
+      "matches": true,
+      "expected": "d6b86f2e633250917e3156f98a8a91d6636d4d572da18673c7d25f615fa26564",
+      "actual": "d6b86f2e633250917e3156f98a8a91d6636d4d572da18673c7d25f615fa26564"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-reassign-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-reassign-nagi.stderr",
+      "matches": true,
+      "expected": "dee6a06f936e44310fa46e0f54d6234ad9cefa9f34be66bff2a324f712aad4dc",
+      "actual": "dee6a06f936e44310fa46e0f54d6234ad9cefa9f34be66bff2a324f712aad4dc"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-reassign-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-receive-again-low.stderr",
+      "matches": true,
+      "expected": "26d56e7155409defbb0f2cfa3a22dd2f008cd84a07f8190197d22383ee915544",
+      "actual": "26d56e7155409defbb0f2cfa3a22dd2f008cd84a07f8190197d22383ee915544"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-receive-again-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-receive-again-nagi.stderr",
+      "matches": true,
+      "expected": "4c4bab037b9fbc68db0df17776ad0c2e29bf0c6cfc42cf0ae0a9dac87d6b757a",
+      "actual": "4c4bab037b9fbc68db0df17776ad0c2e29bf0c6cfc42cf0ae0a9dac87d6b757a"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-receive-again-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-result-low.stderr",
+      "matches": true,
+      "expected": "d4b0257393aa3c070b073c15fd2aecdc8e01ba7df66e36f082a5698a7f75ab72",
+      "actual": "d4b0257393aa3c070b073c15fd2aecdc8e01ba7df66e36f082a5698a7f75ab72"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-result-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-result-nagi.stderr",
+      "matches": true,
+      "expected": "625e3db157b22ead9138704f11ae57b9d745b249fb91f91fb40440b3d4c01018",
+      "actual": "625e3db157b22ead9138704f11ae57b9d745b249fb91f91fb40440b3d4c01018"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-result-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-str-low.stderr",
+      "matches": true,
+      "expected": "ade2a0ccda8e356be7fa5891cb53720c0da67fbf336fa79f73d8152346ae3d47",
+      "actual": "ade2a0ccda8e356be7fa5891cb53720c0da67fbf336fa79f73d8152346ae3d47"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-str-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-str-nagi.stderr",
+      "matches": true,
+      "expected": "dd1b2f386968a50183f3fdc9757276a4e7e6c5a70e054ccb919d7393614f9d95",
+      "actual": "dd1b2f386968a50183f3fdc9757276a4e7e6c5a70e054ccb919d7393614f9d95"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-str-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-unit-low.stderr",
+      "matches": true,
+      "expected": "b971340a1506b0d32f637ebf6398d0879e3dbfe89a04f31368d8c560533940c0",
+      "actual": "b971340a1506b0d32f637ebf6398d0879e3dbfe89a04f31368d8c560533940c0"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-unit-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-unit-nagi.stderr",
+      "matches": true,
+      "expected": "1f43ca94e9f050d0a101ff7aa0f35686c7e1c85a831957d9ca6dfaeead868c44",
+      "actual": "1f43ca94e9f050d0a101ff7aa0f35686c7e1c85a831957d9ca6dfaeead868c44"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-unit-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-unknown-low.stderr",
+      "matches": true,
+      "expected": "5f70a4e32b6992ea0a1b6de1a655cb4600f65b1e336b9ffaecee9783f073b035",
+      "actual": "5f70a4e32b6992ea0a1b6de1a655cb4600f65b1e336b9ffaecee9783f073b035"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-unknown-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-unknown-nagi.stderr",
+      "matches": true,
+      "expected": "b74f81e7519b3a0f7f6854b15398d7d6c87c775ba917a1a9f00b6f5d088dbaed",
+      "actual": "b74f81e7519b3a0f7f6854b15398d7d6c87c775ba917a1a9f00b6f5d088dbaed"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/added-short-unknown-nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/lazy-task-handwritten-low.stderr",
+      "matches": true,
+      "expected": "ea63c531f63eb8a210bf37d49fcb485ecc4ed10f2ed276bdba320ff37b6d283a",
+      "actual": "ea63c531f63eb8a210bf37d49fcb485ecc4ed10f2ed276bdba320ff37b6d283a"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/lazy-task-handwritten-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/lazy-task-high.stderr",
+      "matches": true,
+      "expected": "73e9a420cb7ce59f6ac9781a7f81dee50e205cbbe4e55e4279aabf379887f613",
+      "actual": "73e9a420cb7ce59f6ac9781a7f81dee50e205cbbe4e55e4279aabf379887f613"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/lazy-task-high.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/lazy-task-saved-low.stderr",
+      "matches": true,
+      "expected": "4b49aefbfcaf4ccd46cf791f919e0e4a8ef83e6d6c6f84d1cc0a04443de17bfa",
+      "actual": "4b49aefbfcaf4ccd46cf791f919e0e4a8ef83e6d6c6f84d1cc0a04443de17bfa"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/lazy-task-saved-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/short-task-handwritten-low.stderr",
+      "matches": true,
+      "expected": "b3101fb5e0f656613a44c3612a65f6d8b85f26bb83b36fc5f0792478253fa1f7",
+      "actual": "b3101fb5e0f656613a44c3612a65f6d8b85f26bb83b36fc5f0792478253fa1f7"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/short-task-handwritten-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/short-task-high.stderr",
+      "matches": true,
+      "expected": "01a9512fa26e7f7c6137b8b19ad05137294681fb6efb4205a384ba677b55f264",
+      "actual": "01a9512fa26e7f7c6137b8b19ad05137294681fb6efb4205a384ba677b55f264"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/short-task-high.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/short-task-saved-low.stderr",
+      "matches": true,
+      "expected": "930ee0e3585e556905f1b4b09799cf2584834af16f95c45af4e7a9a2b5d30ef7",
+      "actual": "930ee0e3585e556905f1b4b09799cf2584834af16f95c45af4e7a9a2b5d30ef7"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/short-task-saved-low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-and-left-discard.low.stderr",
+      "matches": true,
+      "expected": "bc1e388c8c1f5f3fed5961e490442e19d42e1a8c28a03f38f61c40f041c29a4b",
+      "actual": "bc1e388c8c1f5f3fed5961e490442e19d42e1a8c28a03f38f61c40f041c29a4b"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-and-left-discard.low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-and-left-discard.nagi.stderr",
+      "matches": true,
+      "expected": "eb062601ad0a54bf07fb0e29e678780f0e5ff75d0889d2512b2e36cc8c4d7f5b",
+      "actual": "eb062601ad0a54bf07fb0e29e678780f0e5ff75d0889d2512b2e36cc8c4d7f5b"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-and-left-discard.nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-and-rhs-discard.low.stderr",
+      "matches": true,
+      "expected": "8862e2ff5544e61907f27b0b800eaebbafa279eecf33fb6d9698ff9a54233f17",
+      "actual": "8862e2ff5544e61907f27b0b800eaebbafa279eecf33fb6d9698ff9a54233f17"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-and-rhs-discard.low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-and-rhs-discard.nagi.stderr",
+      "matches": true,
+      "expected": "c7c00b740a290c018295f6f919a5adcc0024d8e54562bd5b7f7fa2f9d17455ad",
+      "actual": "c7c00b740a290c018295f6f919a5adcc0024d8e54562bd5b7f7fa2f9d17455ad"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-and-rhs-discard.nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-env-key-discard.low.stderr",
+      "matches": true,
+      "expected": "9159f1e7f379e10d222efe0e01c5c1d5af79915d913408e264366266530745bf",
+      "actual": "9159f1e7f379e10d222efe0e01c5c1d5af79915d913408e264366266530745bf"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-env-key-discard.low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-env-key-discard.nagi.stderr",
+      "matches": true,
+      "expected": "627ae889adff2a9686ce93b2ceb7b00e39b5ea6a0c98ef53ee073801460d492b",
+      "actual": "627ae889adff2a9686ce93b2ceb7b00e39b5ea6a0c98ef53ee073801460d492b"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-env-key-discard.nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-nested-env-discard.low.stderr",
+      "matches": true,
+      "expected": "4c5a50a5d4f5236a1c49edceeed576c87e6f77bc785f7f8a615e8cebfd4c4a77",
+      "actual": "4c5a50a5d4f5236a1c49edceeed576c87e6f77bc785f7f8a615e8cebfd4c4a77"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-nested-env-discard.low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-nested-env-discard.nagi.stderr",
+      "matches": true,
+      "expected": "2d0f828e0e655991d28848e611cec92f36f7faf5a3c89d0d195013a2e04f2b86",
+      "actual": "2d0f828e0e655991d28848e611cec92f36f7faf5a3c89d0d195013a2e04f2b86"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-nested-env-discard.nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-nested-short-discard.low.stderr",
+      "matches": true,
+      "expected": "7c660e84ac0e6c81b02177274eeeacd85df9ecb8d6a6241c40f36205ce10ad13",
+      "actual": "7c660e84ac0e6c81b02177274eeeacd85df9ecb8d6a6241c40f36205ce10ad13"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-nested-short-discard.low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-nested-short-discard.nagi.stderr",
+      "matches": true,
+      "expected": "2e2e3bc589c63102d0e35b874076880c4cee3e93cf486d22884e8ee79f919828",
+      "actual": "2e2e3bc589c63102d0e35b874076880c4cee3e93cf486d22884e8ee79f919828"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-nested-short-discard.nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-or-rhs-discard.low.stderr",
+      "matches": true,
+      "expected": "8c1c28f0e6cdf4876e1cb671b6e0533b51851ef6ebe5185578ccfa12523b04ec",
+      "actual": "8c1c28f0e6cdf4876e1cb671b6e0533b51851ef6ebe5185578ccfa12523b04ec"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-or-rhs-discard.low.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-or-rhs-discard.nagi.stderr",
+      "matches": true,
+      "expected": "e949d3bb09af79e02f6a8ede828d70cf5af860273a7725fac667bc22db48859d",
+      "actual": "e949d3bb09af79e02f6a8ede828d70cf5af860273a7725fac667bc22db48859d"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-logs/symmetry-or-rhs-discard.nagi.stdout",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-output/symmetry-and-left-discard.nagi/generated.low",
+      "matches": true,
+      "expected": "df5a6a7207fabde9399c5463a4bf02f2721f5409cc69f63beae95227620600b2",
+      "actual": "df5a6a7207fabde9399c5463a4bf02f2721f5409cc69f63beae95227620600b2"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check-output/symmetry-env-key-discard.nagi/generated.low",
+      "matches": true,
+      "expected": "020022bb52a1611664bd0213aaec4bc132235ed84ccb28dbf94b990e4006a7fd",
+      "actual": "020022bb52a1611664bd0213aaec4bc132235ed84ccb28dbf94b990e4006a7fd"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/check_cases.py",
+      "matches": true,
+      "expected": "7a6aac331e94280eed77ea88fa03803c5f4a3052748a72e71c446c94ece86da8",
+      "actual": "7a6aac331e94280eed77ea88fa03803c5f4a3052748a72e71c446c94ece86da8"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/checker-independent.log",
+      "matches": true,
+      "expected": "1329eec5eb3d4d4ed8563359d530b21186e36c79947da0f1ee3ca09e60e48184",
+      "actual": "1329eec5eb3d4d4ed8563359d530b21186e36c79947da0f1ee3ca09e60e48184"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/checker-results.json",
+      "matches": true,
+      "expected": "d9a4b515b087ec2acb61c9ebb6d6c7995d1fd770975da58bde49826d66e77114",
+      "actual": "d9a4b515b087ec2acb61c9ebb6d6c7995d1fd770975da58bde49826d66e77114"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/conditional-native-independent.log",
+      "matches": true,
+      "expected": "51c6ef2017e3d02e0a19ae15c2c81e3e1cd2a71d5b7902842af11e3fcbb11401",
+      "actual": "51c6ef2017e3d02e0a19ae15c2c81e3e1cd2a71d5b7902842af11e3fcbb11401"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/final-provenance.json",
+      "matches": true,
+      "expected": "071f94753d19915ceefe75a23950d82554df5eef0299b4e9bfd9c33f9f7b8549",
+      "actual": "071f94753d19915ceefe75a23950d82554df5eef0299b4e9bfd9c33f9f7b8549"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/final-review.txt",
+      "matches": true,
+      "expected": "43dd51533d11c0e922b2422e5c3858f0b35a998375706b577a8043607fe1ef8b",
+      "actual": "43dd51533d11c0e922b2422e5c3858f0b35a998375706b577a8043607fe1ef8b"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/findings.json",
+      "matches": true,
+      "expected": "09b475d83bd5049af3eb63ad77cad100140f9b3223fc1ca35f6a4a81ab6a6a84",
+      "actual": "09b475d83bd5049af3eb63ad77cad100140f9b3223fc1ca35f6a4a81ab6a6a84"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/fixed-cli-build.log",
+      "matches": true,
+      "expected": "799c79326718f5fdf49805cdd7f65368f18cca0def14931a946240c7f10b2035",
+      "actual": "799c79326718f5fdf49805cdd7f65368f18cca0def14931a946240c7f10b2035"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/fixed-cli-version.log",
+      "matches": true,
+      "expected": "4651d3ec0c0ce7506e9bcf5f92d0c10cf66183187edf28f89f095af8681f747c",
+      "actual": "4651d3ec0c0ce7506e9bcf5f92d0c10cf66183187edf28f89f095af8681f747c"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/initial-provenance.json",
+      "matches": true,
+      "expected": "6e854e84be9ad0f53c6acf7bd30decd257e0ee96723eabb567f76f2fe04a45a5",
+      "actual": "6e854e84be9ad0f53c6acf7bd30decd257e0ee96723eabb567f76f2fe04a45a5"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-handwritten-low-build.stderr",
+      "matches": true,
+      "expected": "7e2f412f413ebd6b1106af3a39d7bba2e72105fb33cfbfaea6bcd000be25ec42",
+      "actual": "7e2f412f413ebd6b1106af3a39d7bba2e72105fb33cfbfaea6bcd000be25ec42"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-handwritten-low-build.stdout",
+      "matches": true,
+      "expected": "a48df71869244488c562e357b90254e2ab196cb7daf2ca16e5a7613d35e19bba",
+      "actual": "a48df71869244488c562e357b90254e2ab196cb7daf2ca16e5a7613d35e19bba"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-handwritten-low-run.stderr",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-handwritten-low.rs",
+      "matches": true,
+      "expected": "065d2ff2b0c9876e1720e5314cdf55edc3a7f8f798a71c762be4ca87f616419a",
+      "actual": "065d2ff2b0c9876e1720e5314cdf55edc3a7f8f798a71c762be4ca87f616419a"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-handwritten-low.stdout",
+      "matches": true,
+      "expected": "95628ff195533438209188197dd130841b1d55da8f1bfd24491120c18b0ea761",
+      "actual": "95628ff195533438209188197dd130841b1d55da8f1bfd24491120c18b0ea761"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-handwritten.low",
+      "matches": true,
+      "expected": "ea2986423b4ffb74d9b3f4241e159a62c2692dc1192eb973bef0cbf8373b7c68",
+      "actual": "ea2986423b4ffb74d9b3f4241e159a62c2692dc1192eb973bef0cbf8373b7c68"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-high-build.stderr",
+      "matches": true,
+      "expected": "71a5ffbfcb81e61009abdeea5757481366921c80f0bdccbb1fed38d0315de772",
+      "actual": "71a5ffbfcb81e61009abdeea5757481366921c80f0bdccbb1fed38d0315de772"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-high-build.stdout",
+      "matches": true,
+      "expected": "3d8070e93d1e53ecc7acf667f92c5fa9475f342a69465e26ae7a26475a2bbc29",
+      "actual": "3d8070e93d1e53ecc7acf667f92c5fa9475f342a69465e26ae7a26475a2bbc29"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-high-run.stderr",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-high.nagi",
+      "matches": true,
+      "expected": "e5f37f8287c5743f8d727b28d1c7b5b0d0b425752ad11c72c3ba7ab6690780d8",
+      "actual": "e5f37f8287c5743f8d727b28d1c7b5b0d0b425752ad11c72c3ba7ab6690780d8"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-high.rs",
+      "matches": true,
+      "expected": "fb2499f424d000b77295a655e180693a57c83dc7d321d75225e5148bbcd4b05d",
+      "actual": "fb2499f424d000b77295a655e180693a57c83dc7d321d75225e5148bbcd4b05d"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-high.stdout",
+      "matches": true,
+      "expected": "95628ff195533438209188197dd130841b1d55da8f1bfd24491120c18b0ea761",
+      "actual": "95628ff195533438209188197dd130841b1d55da8f1bfd24491120c18b0ea761"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-saved-low-build.stderr",
+      "matches": true,
+      "expected": "21190021cf03e8d4bc488fb7769f08ce4777b8e64dc694bcf77bcbb104441a5e",
+      "actual": "21190021cf03e8d4bc488fb7769f08ce4777b8e64dc694bcf77bcbb104441a5e"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-saved-low-build.stdout",
+      "matches": true,
+      "expected": "600813cf03c5dd17e37e2ea5ddadfb7906e0582a2345784d76e9b2860691937c",
+      "actual": "600813cf03c5dd17e37e2ea5ddadfb7906e0582a2345784d76e9b2860691937c"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-saved-low-run.stderr",
+      "matches": true,
+      "expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "actual": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-saved-low.rs",
+      "matches": true,
+      "expected": "fb2499f424d000b77295a655e180693a57c83dc7d321d75225e5148bbcd4b05d",
+      "actual": "fb2499f424d000b77295a655e180693a57c83dc7d321d75225e5148bbcd4b05d"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-saved-low.stdout",
+      "matches": true,
+      "expected": "95628ff195533438209188197dd130841b1d55da8f1bfd24491120c18b0ea761",
+      "actual": "95628ff195533438209188197dd130841b1d55da8f1bfd24491120c18b0ea761"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/independent-post-fix/native/explicit-move-task-conditional-saved.low",
+      "matches": true,
+      "expected": "aae877352d0b7e77ab8a6f81df8e6fbe92a661fd53b9eb7e3c97a3fddc05775b",
+      "actual": "aae877352d0b7e77ab8a6f81df8e6fbe92a661fd53b9eb7e3c97a3fddc05775b"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/provenance.json",
+      "matches": true,
+      "expected": "304cdb20f91e1ac2d43d787d0c06775d22e69148e368d9957453ed6b498ad3d5",
+      "actual": "304cdb20f91e1ac2d43d787d0c06775d22e69148e368d9957453ed6b498ad3d5"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/root-local/workspace-root.log",
+      "matches": true,
+      "expected": "568bcab97404ee1736fba449c4c4352d67917a7bdb7cb9039db53f092f5232e9",
+      "actual": "568bcab97404ee1736fba449c4c4352d67917a7bdb7cb9039db53f092f5232e9"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/conditional-fix-final/root-local/workspace-summary.json",
+      "matches": true,
+      "expected": "d3b08761383a805b99533c7a2e586577910c3ceb712b40abd48cc840153f1374",
+      "actual": "d3b08761383a805b99533c7a2e586577910c3ceb712b40abd48cc840153f1374"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/published-0.1.10-audit/11-public-source.diff",
+      "matches": true,
+      "expected": "cecba1a1c6ce1915a57037157b3dddefe9960b6cfd3f92ca25e7a97c793fec93",
+      "actual": "cecba1a1c6ce1915a57037157b3dddefe9960b6cfd3f92ca25e7a97c793fec93"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/published-0.1.10-audit/13-embedding-api-run.log",
+      "matches": true,
+      "expected": "24878a25a824089249c67a993bff854ab76a4369a4db6aee106b0a54d895588d",
+      "actual": "24878a25a824089249c67a993bff854ab76a4369a4db6aee106b0a54d895588d"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/published-0.1.10-audit/16-public-api-evidence.json",
+      "matches": true,
+      "expected": "4ff20e9c3372182c4337c775f181b28db18961e20b3a0bc5d1a56f8f7bc1b708",
+      "actual": "4ff20e9c3372182c4337c775f181b28db18961e20b3a0bc5d1a56f8f7bc1b708"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/published-0.1.10-audit/17-version-reference-actions.json",
+      "matches": true,
+      "expected": "71f24f36ed7d06833bb166c8eef892d02796006eb704545d84c38b7eea4830cf",
+      "actual": "71f24f36ed7d06833bb166c8eef892d02796006eb704545d84c38b7eea4830cf"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/published-0.1.10-audit/22-api-compatibility.md",
+      "matches": true,
+      "expected": "bdb904f31bc7ccc7c860feb44b235e400dd3ca462b498d39a9b7a8801f8409c6",
+      "actual": "bdb904f31bc7ccc7c860feb44b235e400dd3ca462b498d39a9b7a8801f8409c6"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/published-0.1.10-audit/23-audit-artifact-hashes.json",
+      "matches": true,
+      "expected": "9610687db1e3835b327d2d9768cb5723c8e6788275675a0197d210f7f2403061",
+      "actual": "9610687db1e3835b327d2d9768cb5723c8e6788275675a0197d210f7f2403061"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/published-0.1.10-audit/25-migration-docs-worker-review.md",
+      "matches": true,
+      "expected": "c89353e7799bdeb9ef8548c8bd592054065b08e5b990da8324cf6ac7e42ec588",
+      "actual": "c89353e7799bdeb9ef8548c8bd592054065b08e5b990da8324cf6ac7e42ec588"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/published-0.1.10-audit/26-version-docs-worker-review.md",
+      "matches": true,
+      "expected": "4cded6778da6b28a4a1fcdd6d78256c93098d5eb8cb6e6dc6bf86d7ce52f501b",
+      "actual": "4cded6778da6b28a4a1fcdd6d78256c93098d5eb8cb6e6dc6bf86d7ce52f501b"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local/applications.log",
+      "matches": true,
+      "expected": "d04d916e2289a47691e556804d294dfec205e890a4a4d258dff979b764e4fb88",
+      "actual": "d04d916e2289a47691e556804d294dfec205e890a4a4d258dff979b764e4fb88"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local/build.log",
+      "matches": true,
+      "expected": "fb71275aabe35e1dce8c6f7ae23a6223723a2468a0a41cb01f8578ffd3601638",
+      "actual": "fb71275aabe35e1dce8c6f7ae23a6223723a2468a0a41cb01f8578ffd3601638"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local/check.log",
+      "matches": true,
+      "expected": "d1273f0452e7ec45c360d2a2530b42cb92fb1822ca73217a0e11174fbbe47660",
+      "actual": "d1273f0452e7ec45c360d2a2530b42cb92fb1822ca73217a0e11174fbbe47660"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local/library.log",
+      "matches": true,
+      "expected": "40f38719503a711d3902e424506dbf389abbb5c23d90500dd960772e7832acdf",
+      "actual": "40f38719503a711d3902e424506dbf389abbb5c23d90500dd960772e7832acdf"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local/release-tests.log",
+      "matches": true,
+      "expected": "3c08d7a8a0099f2655fe08979f757802c1ef2516575e0433bf9868f4b2e390eb",
+      "actual": "3c08d7a8a0099f2655fe08979f757802c1ef2516575e0433bf9868f4b2e390eb"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local/site.log",
+      "matches": true,
+      "expected": "05a1862a68271e46f37e77d07c58851405e35531adb4a2725cb21b8ab558ba93",
+      "actual": "05a1862a68271e46f37e77d07c58851405e35531adb4a2725cb21b8ab558ba93"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local-after-fix/build.log",
+      "matches": true,
+      "expected": "a2460ddb72d4ce3b02876fc56668f964283affb57054ed91681bf8db6854cbd2",
+      "actual": "a2460ddb72d4ce3b02876fc56668f964283affb57054ed91681bf8db6854cbd2"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local-after-fix/contracts.json",
+      "matches": true,
+      "expected": "bc37e460e66384a4ffb5e0e83a154d5322ecefd081d9d81d431b23553d4c3198",
+      "actual": "bc37e460e66384a4ffb5e0e83a154d5322ecefd081d9d81d431b23553d4c3198"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local-after-fix/contracts.log",
+      "matches": true,
+      "expected": "5fd8ef886d583e56a7f087897f5f9f633f78130786f8ff385b374812d5323da2",
+      "actual": "5fd8ef886d583e56a7f087897f5f9f633f78130786f8ff385b374812d5323da2"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local-after-fix/supervised-service-results.json",
+      "matches": true,
+      "expected": "01730d012a5fdb8748389abd31c6caa89616206c88f29bf65b0b7a95c3177777",
+      "actual": "01730d012a5fdb8748389abd31c6caa89616206c88f29bf65b0b7a95c3177777"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local-after-fix/supervised-service.log",
+      "matches": true,
+      "expected": "d031486d62fb767541ec73a33d497c712f4d4836f416811b10020d7301e3f37c",
+      "actual": "d031486d62fb767541ec73a33d497c712f4d4836f416811b10020d7301e3f37c"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local-after-fix/task-results-results.json",
+      "matches": true,
+      "expected": "c0ab400b83adf0a5880b7ef9eecf104018dd6fbb15cceb777fb8632ab5a341f0",
+      "actual": "c0ab400b83adf0a5880b7ef9eecf104018dd6fbb15cceb777fb8632ab5a341f0"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/release-local-after-fix/task-results.log",
+      "matches": true,
+      "expected": "bf08f243f94f081ba1e38ecc27d604b367768d51446420ca3cc0931f6555670f",
+      "actual": "bf08f243f94f081ba1e38ecc27d604b367768d51446420ca3cc0931f6555670f"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/s1-final-ci/summary.json",
+      "matches": true,
+      "expected": "2b6fd2b5457b762e37b12f6b95c0fce00224c21eb0f9324b990d6606558a5aef",
+      "actual": "2b6fd2b5457b762e37b12f6b95c0fce00224c21eb0f9324b990d6606558a5aef"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/s1-final-ci/workspace-summary.json",
+      "matches": true,
+      "expected": "9caff59c9e61e854e53713ae27b3884ab297c287ef8ebe50b1a23baf4b94ee29",
+      "actual": "9caff59c9e61e854e53713ae27b3884ab297c287ef8ebe50b1a23baf4b94ee29"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/s2-ci/linux-package.log",
+      "matches": true,
+      "expected": "069aacdf935de7ba2914358f21a158327dd798c8c92017dabc7334b99b3c9de9",
+      "actual": "069aacdf935de7ba2914358f21a158327dd798c8c92017dabc7334b99b3c9de9"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/s2-ci/linux.log",
+      "matches": true,
+      "expected": "d390b13db2847cfb0de5057992fc1e63c19fd5b5e3d5a2d823383074514ecaae",
+      "actual": "d390b13db2847cfb0de5057992fc1e63c19fd5b5e3d5a2d823383074514ecaae"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/s2-ci/macos-arm64.log",
+      "matches": true,
+      "expected": "b9312e9854c46e1598773a15c64b96e166acb5fec97505653d3a24d8ef739339",
+      "actual": "b9312e9854c46e1598773a15c64b96e166acb5fec97505653d3a24d8ef739339"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/s2-ci/macos-x86_64.log",
+      "matches": true,
+      "expected": "e6c794b7b4b91771a9a97adf8ebdc82a28aad25cd44226c862906db07894efa6",
+      "actual": "e6c794b7b4b91771a9a97adf8ebdc82a28aad25cd44226c862906db07894efa6"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/s2-ci/summary.json",
+      "matches": true,
+      "expected": "057495f9902bb569727f1f0849aa15abe7ed1434bdcb16feef4f8289e4baae36",
+      "actual": "057495f9902bb569727f1f0849aa15abe7ed1434bdcb16feef4f8289e4baae36"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/s2-ci/validate.py",
+      "matches": true,
+      "expected": "a2e4c3e6b01248c4d273dedb34e9e51cfaaf4d3a7dcfc9d4e8a9600a0530ca77",
+      "actual": "a2e4c3e6b01248c4d273dedb34e9e51cfaaf4d3a7dcfc9d4e8a9600a0530ca77"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/s2-ci/validated.json",
+      "matches": true,
+      "expected": "6a491c57b3ba53f73752693c50f30f0e22290d6879c87830152aec5a246b499e",
+      "actual": "6a491c57b3ba53f73752693c50f30f0e22290d6879c87830152aec5a246b499e"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/s2-ci/windows-x86_64.log",
+      "matches": true,
+      "expected": "0d075299ad8ed055af670a0942104ce010a97911a38bd6a61bb0e2d8ebe1fc4d",
+      "actual": "0d075299ad8ed055af670a0942104ce010a97911a38bd6a61bb0e2d8ebe1fc4d"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/s2-local/14-application-examples.log",
+      "matches": true,
+      "expected": "d04d916e2289a47691e556804d294dfec205e890a4a4d258dff979b764e4fb88",
+      "actual": "d04d916e2289a47691e556804d294dfec205e890a4a4d258dff979b764e4fb88"
+    },
+    {
+      "path": "benchmarks/results/task-release-0.1.11/s2-local/15-fuzz-smoke.log",
+      "matches": true,
+      "expected": "d08e0e702c87b78b18f0772b0e215b88a9c6c4b89cbf6e73dcefda235a82c252",
+      "actual": "d08e0e702c87b78b18f0772b0e215b88a9c6c4b89cbf6e73dcefda235a82c252"
+    }
+  ]
+}

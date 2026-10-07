@@ -1,6 +1,6 @@
 # Taskの条件付き消費と正常出口義務の修正
 
-2026-10-07。ADR 012の全T正常出口await/discard契約に対する実装修正。実装baseは `f9b25782a8704bcf962f689d9103ab804f7ab3cf`。未リリースであり、merge・4 OS・releaseの完了を示す記録ではない。
+2026-10-07。ADR 012の全T正常出口await/discard契約に対する実装修正。実装baseは `f9b25782a8704bcf962f689d9103ab804f7ab3cf`。下の実装者の記録と親の最終gateを区別する。#92はmain反映済みで、修正を含む0.1.11の正式公開・4 OS・公開asset/E2Eは[最終引継ぎ](handoffs/2026-10-07-task-release-0.1.11.md)で確認した。
 
 `False and take(await task)`、`True or take(await task)`、環境変数が存在する `env(key, take(await task))` は、実行時に受取式を省略する。旧checkerは省略される側も無条件に検査し、そこでTask binding義務を消去していた。そのため正常scope出口を誤受理した。生成Rustの短絡・lazy fallbackは契約どおりだった。
 

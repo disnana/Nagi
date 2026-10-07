@@ -1,0 +1,15 @@
+{
+  "asset_download_verifier": {
+    "exit_code": 0,
+    "assets": 8,
+    "archive_identities": 4
+  },
+  "linux_public_archive_verifier": {
+    "exit_code": 0,
+    "elapsed_seconds": 26.849,
+    "native_dependency_cache": "/tmp/nagi-container-flow-target",
+    "clean_build": false,
+    "archive": "nagi-0.1.11-linux-x86_64.tar.gz",
+    "source": "003a594de086383100016b7c75466da37705646c"
+  }
+}

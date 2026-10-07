@@ -1,0 +1,41 @@
+{
+  "identity": {
+    "sha": "64a7f3d5c5306abca579e5d95dd9990087747699",
+    "tree": "13b41a034bf463a9426c53327b42c4184a53c7ed",
+    "status": ""
+  },
+  "fixed_main_tree": "3e8cac92b12394f0887f661df90b989679bc0cce",
+  "checker_sha256": "3af29cf80213715c6af5abbcb72f7a42e4060b6356bc9880cdc3b87cbd07cf69",
+  "protected_source_identical_to_independently_reviewed_fix": true,
+  "final_correction_files": [
+    "docs/task-handles.md",
+    "benchmarks/results/task-release-0.1.11/provenance.json"
+  ],
+  "release_plan": {
+    "sha": "64a7f3d5c5306abca579e5d95dd9990087747699",
+    "nagi_version": "0.1.11",
+    "release_nagi": "true",
+    "package_nagi": "true",
+    "vscode_version": "0.1.13",
+    "release_vscode": "false",
+    "package_vscode": "false"
+  },
+  "changelog_items": 14,
+  "changelog_date": "2026-10-07",
+  "standalone_runtime_version": "0.1.11",
+  "archive_names": [
+    "nagi-0.1.11-linux-x86_64.tar.gz",
+    "nagi-0.1.11-macos-arm64.tar.gz",
+    "nagi-0.1.11-macos-x86_64.tar.gz",
+    "nagi-0.1.11-windows-x86_64.zip"
+  ],
+  "matching_checksums": [
+    "nagi-0.1.11-linux-x86_64.tar.gz.sha256",
+    "nagi-0.1.11-macos-arm64.tar.gz.sha256",
+    "nagi-0.1.11-macos-x86_64.tar.gz.sha256",
+    "nagi-0.1.11-windows-x86_64.zip.sha256"
+  ],
+  "migration_rust_samples_ja_en_equal_and_unchanged": true,
+  "dynamic_tests_rerun": false,
+  "source_writes": false
+}

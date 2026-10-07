@@ -1,0 +1,198 @@
+﻿2026-10-07T02:11:40.6692842Z Current runner version: '2.337.0'
+2026-10-07T02:11:40.6729277Z ##[group]Runner Image Provisioner
+2026-10-07T02:11:40.6730903Z Hosted Compute Agent
+2026-10-07T02:11:40.6731866Z Version: 20261002.596
+2026-10-07T02:11:40.6732842Z Commit: c3d12f3313a95f25162a1503be624f3b0617f8c0
+2026-10-07T02:11:40.6734133Z Build Date: 2026-10-02T22:28:27Z
+2026-10-07T02:11:40.6735223Z Worker ID: {fef64541-f055-46fe-bde6-221266991015}
+2026-10-07T02:11:40.6736328Z Region: eastus2
+2026-10-07T02:11:40.6737320Z Cloud: Azure
+2026-10-07T02:11:40.6738163Z ##[endgroup]
+2026-10-07T02:11:40.6740418Z ##[group]Operating System
+2026-10-07T02:11:40.6741373Z Ubuntu
+2026-10-07T02:11:40.6742162Z 24.04.5
+2026-10-07T02:11:40.6743070Z LTS
+2026-10-07T02:11:40.6743907Z ##[endgroup]
+2026-10-07T02:11:40.6744878Z ##[group]Runner Image
+2026-10-07T02:11:40.6745855Z Image: ubuntu-24.04
+2026-10-07T02:11:40.6746745Z Version: 20261004.327.1
+2026-10-07T02:11:40.6748795Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261004.327/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-07T02:11:40.6751746Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261004.327
+2026-10-07T02:11:40.6753410Z ##[endgroup]
+2026-10-07T02:11:40.6755258Z ##[group]GITHUB_TOKEN Permissions
+2026-10-07T02:11:40.6758755Z Contents: write
+2026-10-07T02:11:40.6759750Z Metadata: read
+2026-10-07T02:11:40.6761066Z ##[endgroup]
+2026-10-07T02:11:40.6763946Z Secret source: Actions
+2026-10-07T02:11:40.6765532Z Cache mode: write
+2026-10-07T02:11:40.6767018Z Prepare workflow directory
+2026-10-07T02:11:40.7233216Z Prepare all required actions
+2026-10-07T02:11:40.7286618Z Getting action download info
+2026-10-07T02:11:40.9348644Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-07T02:11:41.0392568Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-10-07T02:11:41.1185044Z Download action repository 'actions/download-artifact@v4' (SHA:d3f86a106a0bac45b974a628896c90dbdf5c8093)
+2026-10-07T02:11:41.4387899Z Complete job name: publish-release
+2026-10-07T02:11:41.5154465Z ##[group]Run actions/checkout@v4
+2026-10-07T02:11:41.5155293Z with:
+2026-10-07T02:11:41.5155734Z   repository: disnana/Nagi
+2026-10-07T02:11:41.5159500Z   token: ***
+2026-10-07T02:11:41.5160013Z   ssh-strict: true
+2026-10-07T02:11:41.5160716Z   ssh-user: git
+2026-10-07T02:11:41.5161174Z   persist-credentials: true
+2026-10-07T02:11:41.5161664Z   clean: true
+2026-10-07T02:11:41.5162116Z   sparse-checkout-cone-mode: true
+2026-10-07T02:11:41.5162644Z   fetch-depth: 1
+2026-10-07T02:11:41.5163076Z   fetch-tags: false
+2026-10-07T02:11:41.5163597Z   show-progress: true
+2026-10-07T02:11:41.5164047Z   lfs: false
+2026-10-07T02:11:41.5164457Z   submodules: false
+2026-10-07T02:11:41.5164903Z   set-safe-directory: true
+2026-10-07T02:11:41.5165412Z   allow-unsafe-pr-checkout: false
+2026-10-07T02:11:41.5166165Z ##[endgroup]
+2026-10-07T02:11:41.6208429Z Syncing repository: disnana/Nagi
+2026-10-07T02:11:41.6210724Z ##[group]Getting Git version info
+2026-10-07T02:11:41.6211452Z Working directory is '/home/runner/work/Nagi/Nagi'
+2026-10-07T02:11:41.6212428Z [command]/usr/bin/git version
+2026-10-07T02:11:41.6315578Z git version 2.55.0
+2026-10-07T02:11:41.6346449Z ##[endgroup]
+2026-10-07T02:11:41.6366762Z Temporarily overriding HOME='/home/runner/work/_temp/31821885-c57d-4e71-a0de-ec4d797ad2c7' before making global git config changes
+2026-10-07T02:11:41.6369431Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-07T02:11:41.6373558Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Nagi/Nagi
+2026-10-07T02:11:41.6435255Z Deleting the contents of '/home/runner/work/Nagi/Nagi'
+2026-10-07T02:11:41.6441857Z ##[group]Initializing the repository
+2026-10-07T02:11:41.6444535Z [command]/usr/bin/git init /home/runner/work/Nagi/Nagi
+2026-10-07T02:11:41.6558719Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-07T02:11:41.6561047Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-07T02:11:41.6562541Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-07T02:11:41.6563709Z hint: call:
+2026-10-07T02:11:41.6564341Z hint:
+2026-10-07T02:11:41.6565131Z hint: 	git config --global init.defaultBranch <name>
+2026-10-07T02:11:41.6566143Z hint:
+2026-10-07T02:11:41.6567030Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-07T02:11:41.6568491Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-07T02:11:41.6569643Z hint:
+2026-10-07T02:11:41.6570456Z hint: 	git branch -m <name>
+2026-10-07T02:11:41.6571199Z hint:
+2026-10-07T02:11:41.6572568Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-07T02:11:41.6574141Z Initialized empty Git repository in /home/runner/work/Nagi/Nagi/.git/
+2026-10-07T02:11:41.6576698Z [command]/usr/bin/git remote add origin https://github.com/disnana/Nagi
+2026-10-07T02:11:41.6630953Z ##[endgroup]
+2026-10-07T02:11:41.6632161Z ##[group]Disabling automatic garbage collection
+2026-10-07T02:11:41.6639429Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-07T02:11:41.6682056Z ##[endgroup]
+2026-10-07T02:11:41.6683514Z ##[group]Setting up auth
+2026-10-07T02:11:41.6691094Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-07T02:11:41.6745198Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-07T02:11:41.7151850Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-07T02:11:41.7197908Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-07T02:11:41.7494944Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-07T02:11:41.7525529Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-07T02:11:41.7789206Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-07T02:11:41.7832812Z ##[endgroup]
+2026-10-07T02:11:41.7834044Z ##[group]Fetching the repository
+2026-10-07T02:11:41.7844160Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +003a594de086383100016b7c75466da37705646c:refs/remotes/origin/main
+2026-10-07T02:11:42.5833838Z From https://github.com/disnana/Nagi
+2026-10-07T02:11:42.5836258Z  * [new ref]         003a594de086383100016b7c75466da37705646c -> origin/main
+2026-10-07T02:11:42.5842058Z ##[endgroup]
+2026-10-07T02:11:42.5843336Z ##[group]Determining the checkout info
+2026-10-07T02:11:42.5844671Z ##[endgroup]
+2026-10-07T02:11:42.5849899Z [command]/usr/bin/git sparse-checkout disable
+2026-10-07T02:11:42.5910906Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-07T02:11:42.5949215Z ##[group]Checking out the ref
+2026-10-07T02:11:42.5966433Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-10-07T02:11:42.7772646Z Switched to a new branch 'main'
+2026-10-07T02:11:42.7775585Z branch 'main' set up to track 'origin/main'.
+2026-10-07T02:11:42.7789885Z ##[endgroup]
+2026-10-07T02:11:42.7840697Z [command]/usr/bin/git log -1 --format=%H
+2026-10-07T02:11:42.7871421Z 003a594de086383100016b7c75466da37705646c
+2026-10-07T02:11:42.8243832Z ##[group]Run actions/setup-python@v5
+2026-10-07T02:11:42.8245107Z with:
+2026-10-07T02:11:42.8246027Z   python-version: 3.12
+2026-10-07T02:11:42.8247097Z   check-latest: false
+2026-10-07T02:11:42.8255088Z   token: ***
+2026-10-07T02:11:42.8256088Z   update-environment: true
+2026-10-07T02:11:42.8257202Z   allow-prereleases: false
+2026-10-07T02:11:42.8258560Z   freethreaded: false
+2026-10-07T02:11:42.8259568Z ##[endgroup]
+2026-10-07T02:11:42.9743412Z ##[group]Installed versions
+2026-10-07T02:11:42.9842707Z (node:2292) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-07T02:11:42.9845531Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-07T02:11:42.9847605Z Successfully set up CPython (3.12.15)
+2026-10-07T02:11:42.9850005Z ##[endgroup]
+2026-10-07T02:11:43.0132223Z ##[group]Run actions/download-artifact@v4
+2026-10-07T02:11:43.0133519Z with:
+2026-10-07T02:11:43.0134440Z   pattern: release-*
+2026-10-07T02:11:43.0135412Z   merge-multiple: true
+2026-10-07T02:11:43.0136421Z   path: build/release-assets
+2026-10-07T02:11:43.0137487Z   repository: disnana/Nagi
+2026-10-07T02:11:43.0138646Z   run-id: 37558874886
+2026-10-07T02:11:43.0141119Z env:
+2026-10-07T02:11:43.0142809Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-07T02:11:43.0145296Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-10-07T02:11:43.0147178Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-07T02:11:43.0148698Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-07T02:11:43.0150413Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-07T02:11:43.0152068Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-10-07T02:11:43.0153403Z ##[endgroup]
+2026-10-07T02:11:43.1890829Z (node:2300) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-07T02:11:43.2659423Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-07T02:11:43.2681044Z Found 4 artifact(s)
+2026-10-07T02:11:43.2682712Z Filtering artifacts by pattern 'release-*'
+2026-10-07T02:11:43.2702020Z Preparing to download the following artifacts:
+2026-10-07T02:11:43.2703933Z - release-windows-x86_64 (ID: 11456876143, Size: 2303869, Expected Digest: sha256:e053c508bed0765b534fbd1dba667e152d0f41ac8a8503ef9ef862fa878a0236)
+2026-10-07T02:11:43.2706327Z - release-linux-x86_64 (ID: 11456530572, Size: 2569534, Expected Digest: sha256:7251645f201d70f7bdaeb9f235f57a6fa38a3b197612f170551320724946fef2)
+2026-10-07T02:11:43.2708619Z - release-macos-x86_64 (ID: 11456332955, Size: 2444750, Expected Digest: sha256:c807cfcf385933dd13ef3be470e92bc87fd3581a6c4e3b5a99ff9abc97268b6d)
+2026-10-07T02:11:43.2711247Z - release-macos-arm64 (ID: 11456202195, Size: 2284671, Expected Digest: sha256:509e922546120ec3c40044f56fe4832bf95a4d4f888f6928e6e804df338cc241)
+2026-10-07T02:11:43.3995059Z Redirecting to blob download url: https://productionresultssa11.blob.core.windows.net/actions-results/be8eb332-2b99-8a33-a245-8d39ee8fcde9/workflow-job-run-aa65f70f-6bfb-5b78-af73-d2038bb4bbd1/artifacts/440c989279e04f1eafa3fdf32437b3d5ea8c93c092d5c5d3e6f667a2531561e6.zip
+2026-10-07T02:11:43.3996454Z Starting download of artifact to: /home/runner/work/Nagi/Nagi/build/release-assets
+2026-10-07T02:11:43.4349292Z Redirecting to blob download url: https://productionresultssa11.blob.core.windows.net/actions-results/be8eb332-2b99-8a33-a245-8d39ee8fcde9/workflow-job-run-f50f3d14-75db-5201-a3ef-d5a3e2ae9302/artifacts/00b539d0ddfba2aeffa97e8fc49ce2351f3b8ed4d3bf6dac0804d6c74986ea63.zip
+2026-10-07T02:11:43.4352038Z Starting download of artifact to: /home/runner/work/Nagi/Nagi/build/release-assets
+2026-10-07T02:11:43.4364226Z Redirecting to blob download url: https://productionresultssa11.blob.core.windows.net/actions-results/be8eb332-2b99-8a33-a245-8d39ee8fcde9/workflow-job-run-dfee47a8-2379-51cf-9a63-7a631e2f8f3e/artifacts/9d91e35943af1b77e7672c07294735cfe3209a7b4e0013b93cc4d43718228567.zip
+2026-10-07T02:11:43.4366198Z Starting download of artifact to: /home/runner/work/Nagi/Nagi/build/release-assets
+2026-10-07T02:11:43.4497757Z Redirecting to blob download url: https://productionresultssa11.blob.core.windows.net/actions-results/be8eb332-2b99-8a33-a245-8d39ee8fcde9/workflow-job-run-ee0ae55a-490d-50fd-9d87-8187947e4e8a/artifacts/f87eb00c3c819a0a0aea3e6930b1ff0b44ff4cc4a8632c1f70dd818b8e9a34e5.zip
+2026-10-07T02:11:43.4499453Z Starting download of artifact to: /home/runner/work/Nagi/Nagi/build/release-assets
+2026-10-07T02:11:43.5058743Z (node:2300) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-10-07T02:11:43.6512326Z SHA256 digest of downloaded artifact is 7251645f201d70f7bdaeb9f235f57a6fa38a3b197612f170551320724946fef2
+2026-10-07T02:11:43.6513187Z Artifact download completed successfully.
+2026-10-07T02:11:43.6525694Z SHA256 digest of downloaded artifact is c807cfcf385933dd13ef3be470e92bc87fd3581a6c4e3b5a99ff9abc97268b6d
+2026-10-07T02:11:43.6526468Z Artifact download completed successfully.
+2026-10-07T02:11:43.6540868Z SHA256 digest of downloaded artifact is 509e922546120ec3c40044f56fe4832bf95a4d4f888f6928e6e804df338cc241
+2026-10-07T02:11:43.6541847Z Artifact download completed successfully.
+2026-10-07T02:11:43.6542599Z SHA256 digest of downloaded artifact is e053c508bed0765b534fbd1dba667e152d0f41ac8a8503ef9ef862fa878a0236
+2026-10-07T02:11:43.6543228Z Artifact download completed successfully.
+2026-10-07T02:11:43.6543643Z Total of 4 artifact(s) downloaded
+2026-10-07T02:11:43.6547603Z Download artifact has finished successfully
+2026-10-07T02:11:43.6749694Z ##[group]Run python scripts/releases/publish.py --repository "$GITHUB_REPOSITORY" --component nagi --version "$RELEASE_VERSION" --sha "$RELEASE_SHA" --assets build/release-assets
+2026-10-07T02:11:43.6751529Z [36;1mpython scripts/releases/publish.py --repository "$GITHUB_REPOSITORY" --component nagi --version "$RELEASE_VERSION" --sha "$RELEASE_SHA" --assets build/release-assets[0m
+2026-10-07T02:11:43.7006198Z shell: /usr/bin/bash -e {0}
+2026-10-07T02:11:43.7006661Z env:
+2026-10-07T02:11:43.7007104Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-07T02:11:43.7007724Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-10-07T02:11:43.7008321Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-07T02:11:43.7008812Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-07T02:11:43.7009315Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-07T02:11:43.7009870Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-10-07T02:11:43.7013082Z   GH_TOKEN: ***
+2026-10-07T02:11:43.7013403Z   RELEASE_VERSION: 0.1.11
+2026-10-07T02:11:43.7013811Z   RELEASE_SHA: 003a594de086383100016b7c75466da37705646c
+2026-10-07T02:11:43.7014232Z ##[endgroup]
+2026-10-07T02:11:54.3034585Z Verified formal release: nagi-v0.1.11 (003a594de086383100016b7c75466da37705646c)
+2026-10-07T02:11:54.3235611Z Post job cleanup.
+2026-10-07T02:11:54.4472977Z (node:2456) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-07T02:11:54.4473994Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-07T02:11:54.4702016Z Post job cleanup.
+2026-10-07T02:11:54.5648973Z [command]/usr/bin/git version
+2026-10-07T02:11:54.5696342Z git version 2.55.0
+2026-10-07T02:11:54.5738168Z Temporarily overriding HOME='/home/runner/work/_temp/69765613-78a8-44a5-a221-33d950ed6587' before making global git config changes
+2026-10-07T02:11:54.5739506Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-07T02:11:54.5744425Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Nagi/Nagi
+2026-10-07T02:11:54.5785558Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-07T02:11:54.5822771Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-07T02:11:54.6105348Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-07T02:11:54.6158535Z http.https://github.com/.extraheader
+2026-10-07T02:11:54.6161309Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-07T02:11:54.6203867Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-07T02:11:54.6552685Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-07T02:11:54.6604036Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-07T02:11:54.7119316Z Cleaning up orphan processes
+2026-10-07T02:11:54.7416729Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/download-artifact@v4, actions/setup-python@v5. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -1,6 +1,6 @@
 # Migrating from Nagi 0.1.10 to 0.1.11
 
-This guide describes migration to Nagi 0.1.11. Check the official release record to confirm availability; repository changes alone do not establish publication.
+This guide describes migration to [Nagi 0.1.11](https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.11), officially published on 2026-10-07. Download each platform's archive and SHA-256 file from the official release.
 
 ## Assigning an existing owned value to another local
 
