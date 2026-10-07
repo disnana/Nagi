@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 from package import PLATFORMS, archive_name
 from plan import version_tuple
+from jetbrains import archive_name as jetbrains_archive_name, verify_archive
 from notes import release_notes, tag_commit
 
 
@@ -103,11 +104,18 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
         filenames = [archive_name(version, platform) for platform in PLATFORMS]
         title = f"Nagi {version}"
         notes = "Archives include the prebuilt compiler and the matching runtime sources, license, and installation notes. Extract the whole archive and add its root folder to PATH. Run `nagic --version` to verify the installed version. The compiler finds the bundled runtime automatically; NAGI_ROOT is normally unnecessary. Building Nagi applications still requires Rust/Cargo and a C build environment. Linux x86_64, Windows x64, macOS Apple Silicon (arm64), and macOS Intel (x86_64) are included. macOS archives are verified on macOS 15.\n"
+    elif component == "jetbrains":
+        filenames = [jetbrains_archive_name(platform_type, version) for platform_type in ("IC", "PC")]
+        title = f"Nagi for JetBrains IDEs {version}"
+        notes = "Download the IntelliJ IDEA (IC) or PyCharm (PC) ZIP, then use Settings/Preferences → Plugins → Install Plugin from Disk. Select the ZIP for the IDE you use and restart the IDE. Install the Nagi compiler separately for check and run commands.\n"
     else:
         raise ValueError(f"Unknown release component: {component}")
     assets = []
     for filename in filenames:
         path = directory / filename
+        if component == "jetbrains":
+            platform_type = filename.removeprefix("nagi-jetbrains-").removesuffix(f"-{version}.zip")
+            verify_archive(path, platform_type, version)
         checksum = directory / (filename + ".sha256")
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         if checksum.read_text(encoding="utf-8").strip() != f"{digest}  {filename}":
@@ -196,7 +204,7 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", required=True)
-    parser.add_argument("--component", choices=("nagi", "vscode"), required=True)
+    parser.add_argument("--component", choices=("nagi", "vscode", "jetbrains"), required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--sha", required=True)
     parser.add_argument("--assets", type=Path, required=True)

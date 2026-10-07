@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Publish separately verified IntelliJ IDEA and PyCharm plugin ZIPs to GitHub Releases when the JetBrains plugin version is updated on main. Verify the installed plugin id and version from each packaged JAR, preserve SHA-256 readback and immutable release assets, and keep current-version CI changes out of published releases.
+
 ## Nagi 0.1.11 — 2026-10-07
 
 - Add scope-local Task result handles through High, saved Low, and handwritten Low. Require one await or explicit discard for every result type; move transfers both the handle and obligation. Separate inner business Results from sticky TaskFailure, request sibling cancellation on faults, and join direct children before normal/error scope exit. Preserve legacy spawn behavior, original body/legacy Errors, and synchronous Drop limits. Provide typed Supervisor monitor migration using parent try, runnable Task examples, and isolated-distribution Task validation without changing HTTP failure propagation or adding a fault escalation API.

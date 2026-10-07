@@ -11,7 +11,8 @@ from plan import VERSION, version_tuple
 ROOT = Path(__file__).resolve().parents[2]
 HEADING = re.compile(
     rf"## (?:(?:Nagi (?P<nagi>{VERSION.pattern}))(?: / VS Code (?P<vscode>{VERSION.pattern}))?"
-    rf"|VS Code (?P<extension>{VERSION.pattern}))(?: — [0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})?"
+    rf"|VS Code (?P<extension>{VERSION.pattern})|JetBrains (?P<jetbrains>{VERSION.pattern}))"
+    rf"(?: — [0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})?"
 )
 
 
@@ -45,7 +46,11 @@ def changelog_entry(sha: str, component: str, version: str) -> str:
         match = HEADING.fullmatch(heading)
         if not match:
             continue
-        selected = match.group("nagi") if component == "nagi" else match.group("vscode") or match.group("extension")
+        selected = {
+            "nagi": match.group("nagi"),
+            "vscode": match.group("vscode") or match.group("extension"),
+            "jetbrains": match.group("jetbrains"),
+        }[component]
         if selected == version:
             end = headings[position + 1][0] if position + 1 < len(headings) else len(lines)
             sections.append("\n".join(lines[start + 1:end]).strip())
@@ -116,7 +121,7 @@ def release_notes(client, component: str, version: str, sha: str, installation: 
             raise RuntimeError("GitHub did not return generated release notes")
         body += f"\n## Pull requests and contributors\n\n{generated['body'].strip()}\n"
     else:
-        name = "Nagi" if component == "nagi" else "VS Code extension"
+        name = {"nagi": "Nagi", "vscode": "VS Code extension", "jetbrains": "JetBrains plugin"}[component]
         body += f"First {name} release: no previous published {component} release tag is available. [Source snapshot]({base}/tree/{sha}).\n"
-    body += f"\nBuilt from commit [{sha}]({base}/commit/{sha}) after Nagi checks succeeded. SHA-256 files accompany every download.\n"
+    body += f"\nBuilt from commit [{sha}]({base}/commit/{sha}) after the required release checks succeeded. SHA-256 files accompany every download.\n"
     return body

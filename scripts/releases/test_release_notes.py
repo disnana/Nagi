@@ -126,6 +126,29 @@ class ReleaseNotesTests(unittest.TestCase):
         self.assertIn(f"/compare/vscode-v0.1.9...{self.sha}", client.release["body"])
         self.assertNotIn("/compare/nagi-", client.release["body"])
 
+    def test_jetbrains_notes_use_the_jetbrains_entry_and_previous_plugin_release(self):
+        self.write_changelog(
+            "# Changelog\n\n## Unreleased\n\n- Future work.\n\n"
+            "## JetBrains 0.1.8 — 2026-10-07\n\n- Ship compatible IDEA and PyCharm ZIPs.\n\n"
+            "## JetBrains 0.1.7\n\n- Previous plugin changes.\n"
+        )
+        self.sha = self.commit()
+        client = NotesGitHub(
+            [previous("nagi-v0.1.7"), previous("vscode-v0.1.10"), previous("jetbrains-v0.1.7"),
+             previous("jetbrains-v0.1.9", draft=True)],
+            {"jetbrains-v0.1.7": "b" * 40},
+        )
+        body = notes.release_notes(client, "jetbrains", "0.1.8", self.sha, "Install the IDEA or PyCharm ZIP.")
+        self.assertIn("Ship compatible IDEA and PyCharm ZIPs", body)
+        self.assertNotIn("Future work", body)
+        self.assertIn("[Previous tag → released commit]", body)
+        self.assertIn("/compare/jetbrains-v0.1.7...", body)
+        self.assertNotIn("/compare/nagi-", body)
+        self.assertNotIn("/compare/vscode-", body)
+        self.assertEqual(client.generated, [("jetbrains-v0.1.8", self.sha, "jetbrains-v0.1.7")])
+        self.assertIn("First JetBrains", notes.release_notes(NotesGitHub([previous("nagi-v0.1.7")]),
+                                                             "jetbrains", "0.1.8", self.sha, "Install."))
+
     def test_first_component_release_skips_generator_even_when_another_component_exists(self):
         for component, foreign in [("nagi", "vscode-v99.0.0"), ("vscode", "nagi-v0.1.7")]:
             with self.subTest(component=component):

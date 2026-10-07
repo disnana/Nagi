@@ -398,3 +398,7 @@ release直前の独立Sol Maxが短絡RHS/lazy env fallbackだけのawait/discar
 今回148契約・三構文native・全回帰・例・fuzz・費用/保持・独立Sol Highと、今回PRの4 OSは[結果](task-spawn-post94-results.md)、[原ログ](../../benchmarks/results/task-spawn-post94-2026-10-07/README.md)、PR Checksに記録する。過去の公開CIと今回の実行を区別する。次担当は[最新引継ぎ](handoffs/2026-10-07-task-spawn-post94.md)から読戻す。この依頼ではmain向けPRまでで停止し、merge/release/version bumpは行わない。SQLite Pool/Transactionは別の次工程。
 
 source/test凍結head `428bcb07f2700b31f712cc8d10e8bc0ec3d29ce0`の今回4 OS checks `37611344198`/website `37611343828`が成功。各frontend13（追加3含む）・Task148/native8/runtime17/public3/doc9・両例三構文・archive gateを原ログから確認し、両IDE/Readyも成功した。公開Docs/実行例/AI skillに残った導入対象表記の日英修正と原ログ追記はcompiler/runtime/test/依存/CIの66 hashが同一。追記後の最新HEAD CIをPR #95で別に確認して停止する。
+
+## 2026-10-07: JetBrains GitHub Release接続
+
+Task/spawn対応とは独立に、JetBrainsプラグインのIC/PC検証済みZIPを将来のmain版更新時にGitHub Releasesへ公開する経路を追加した。プラグイン0.1.0、Nagi/VS Code版、compiler/runtime/APIを維持し、merge・tag・公開は行っていない。release113件・CI gate55件・日英Docs・Sol High独立reviewを確認。実IDE検証と最新HEADのCIはPRで確認する。[配布契約と検証範囲](jetbrains-release-pipeline-results.md)を参照。

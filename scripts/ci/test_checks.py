@@ -1,6 +1,5 @@
 """Exercise complete Git ranges and the required-check result contract."""
 import copy
-import fnmatch
 import os
 import re
 import subprocess
@@ -377,12 +376,16 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
 
 
 class GateTests(unittest.TestCase):
-    def needs(self, full="true", package_nagi="false", package_vscode="false", jetbrains="false"):
+    def needs(self, full="true", package_nagi="false", package_vscode="false",
+              package_jetbrains="false", jetbrains="false"):
         return {
             "changes": {"result": "success", "outputs": {"full_checks": full, "jetbrains_checks": jetbrains}},
             "linux": {"result": "success" if full == "true" else "skipped"},
-            "jetbrains": {"result": "success" if jetbrains == "true" else "skipped"},
-            "release-plan": {"result": "success", "outputs": {"package_nagi": package_nagi, "package_vscode": package_vscode}},
+            "jetbrains": {"result": "success" if jetbrains == "true" or package_jetbrains == "true" else "skipped"},
+            "release-plan": {"result": "success", "outputs": {
+                "package_nagi": package_nagi, "package_vscode": package_vscode,
+                "package_jetbrains": package_jetbrains,
+            }},
             "nagi-package": {"result": "success" if package_nagi == "true" else "skipped"},
             "vscode-package": {"result": "success" if package_vscode == "true" else "skipped"},
         }
@@ -392,8 +395,11 @@ class GateTests(unittest.TestCase):
             for nagi in ("true", "false"):
                 for vscode in ("true", "false"):
                     for jetbrains in ("true", "false"):
-                        with self.subTest(full=full, nagi=nagi, vscode=vscode, jetbrains=jetbrains):
-                            self.assertEqual(gate.errors(self.needs(full, nagi, vscode, jetbrains)), [])
+                        for package_jetbrains in ("true", "false"):
+                            with self.subTest(full=full, nagi=nagi, vscode=vscode,
+                                              jetbrains=jetbrains, package_jetbrains=package_jetbrains):
+                                needs = self.needs(full, nagi, vscode, package_jetbrains, jetbrains)
+                                self.assertEqual(gate.errors(needs), [])
 
     def test_failed_or_canceled_detection_cannot_make_checks_optional(self):
         for result in ("failure", "cancelled", "skipped", ""):
@@ -455,6 +461,16 @@ class GateTests(unittest.TestCase):
                     needs[job]["result"] = result
                     self.assertTrue(gate.errors(needs))
 
+    def test_jetbrains_release_package_is_required_even_without_path_checks(self):
+        needs = self.needs(full="false", package_jetbrains="true")
+        needs["jetbrains"]["result"] = "skipped"
+        self.assertEqual(gate.errors(needs), ["jetbrains: skipped, expected success"])
+
+    def test_jetbrains_checks_are_not_required_when_no_plugin_work_is_planned(self):
+        needs = self.needs(full="false")
+        needs["jetbrains"]["result"] = "success"
+        self.assertEqual(gate.errors(needs), ["jetbrains: success, expected skipped"])
+
     def test_unplanned_packages_must_be_skipped(self):
         for job in ("nagi-package", "vscode-package"):
             needs = self.needs("false")
@@ -463,7 +479,7 @@ class GateTests(unittest.TestCase):
 
     def test_invalid_package_plans_are_rejected(self):
         for value in (None, "", "FALSE", True, False):
-            for component in ("nagi", "vscode"):
+            for component in ("nagi", "vscode", "jetbrains"):
                 with self.subTest(value=value, component=component):
                     needs = self.needs("false")
                     needs["release-plan"]["outputs"][f"package_{component}"] = value
@@ -484,7 +500,7 @@ class GateTests(unittest.TestCase):
 
 
 class JetBrainsWorkflowTests(unittest.TestCase):
-    def test_paths_skipped_by_rust_have_main_and_reusable_plugin_checks(self):
+    def test_jetbrains_workflow_is_reusable_without_a_duplicate_main_push_run(self):
         workflow = Path(__file__).resolve().parents[2] / ".github/workflows/jetbrains.yml"
         text = workflow.read_text(encoding="utf-8")
         plugin_paths = (
@@ -498,17 +514,16 @@ class JetBrainsWorkflowTests(unittest.TestCase):
                          "compiler/src/lib.rs", "runtime/src/lib.rs")
         for path in plugin_paths:
             self.assertTrue(changes.is_jetbrains_path(path), path)
-        block = re.search(r"^  push:\n((?: {4}[^\n]*\n|\n)+)", text, re.MULTILINE)
-        self.assertIsNotNone(block, "Missing main push trigger")
-        patterns = re.findall(r"^\s+- ['\"]([^'\"]+)['\"]\s*$", block.group(1), re.MULTILINE)
         for path in watched_paths:
             self.assertTrue(changes.requires_jetbrains(path), path)
-            self.assertTrue(any(fnmatch.fnmatchcase(path, pattern) for pattern in patterns),
-                            f"main push does not check {path}")
-        self.assertIn("    branches: [main]\n", text)
+        self.assertNotIn("  push:\n", text)
         self.assertIn("  workflow_dispatch:\n", text)
         self.assertIn("  workflow_call:\n", text)
-        self.assertNotIn("  pull_request:\n", text)
+        self.assertIn("release_version:", text)
+        self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", text)
+        self.assertIn("github.ref == 'refs/heads/main' && github.sha", text)
+        self.assertIn("NAGI_TEST_COMPILER:", text)
+        self.assertIn("scripts/releases/jetbrains.py", text)
 
     def test_existing_pr_merge_gate_waits_for_the_reusable_plugin_workflow(self):
         workflow = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
@@ -517,9 +532,10 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         self.assertIn("      jetbrains_checks: ${{ steps.changes.outputs.jetbrains_checks }}\n", text)
         job = re.search(r"^  jetbrains:\n((?: {4}[^\n]*\n|\n)+)", text, re.MULTILINE)
         self.assertIsNotNone(job)
-        self.assertIn("    needs: changes\n", job.group(1))
-        self.assertIn("github.event_name != 'push'", job.group(1))
+        self.assertIn("    needs: [changes, release-plan]\n", job.group(1))
         self.assertIn("needs.changes.outputs.jetbrains_checks == 'true'", job.group(1))
+        self.assertIn("needs.release-plan.outputs.package_jetbrains == 'true'", job.group(1))
+        self.assertIn("release_version: ${{ needs.release-plan.outputs.jetbrains_version }}", job.group(1))
         self.assertIn("    uses: ./.github/workflows/jetbrains.yml\n", job.group(1))
         ready = re.search(r"^  ready:\n((?: {4,}[^\n]*\n|\n)+)", text, re.MULTILINE)
         self.assertIsNotNone(ready)
@@ -528,6 +544,21 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         self.assertIn("jetbrains", [name.strip() for name in dependencies.group(1).split(",")])
         self.assertIn("    if: github.event_name == 'pull_request' && always()\n", ready.group(1))
         self.assertIn("        run: python scripts/ci/gate.py\n", ready.group(1))
+
+    def test_main_publish_waits_for_verified_jetbrains_and_preserves_other_linux_gates(self):
+        workflow = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
+        text = workflow.read_text(encoding="utf-8")
+        release_plan = re.search(r"^  release-plan:\n((?: {4}[^\n]*\n|\n)+)", text, re.MULTILINE)
+        self.assertIsNotNone(release_plan)
+        self.assertIn("python -m unittest discover -s scripts/releases -p 'test_*.py'", release_plan.group(1))
+        publish = re.search(r"^  publish-release:\n((?: {4,}[^\n]*\n|\n)+)", text, re.MULTILINE)
+        self.assertIsNotNone(publish)
+        block = publish.group(1)
+        self.assertIn("needs: [linux, release-plan, jetbrains, vscode-package, nagi-package]", block)
+        self.assertIn("needs.release-plan.outputs.release_jetbrains != 'true' || needs.jetbrains.result == 'success'", block)
+        self.assertIn("needs.release-plan.outputs.release_nagi != 'true'", block)
+        self.assertIn("needs.release-plan.outputs.release_vscode != 'true'", block)
+        self.assertIn("--component jetbrains", block)
 
 
 if __name__ == "__main__":

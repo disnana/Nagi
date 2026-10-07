@@ -4,7 +4,7 @@
 
 Nagi support for IntelliJ IDEA and PyCharm. [Install the compiler separately](https://nagi.disnana.com/en/docs/getting-started/).
 
-The plugin version is 0.1.0. This README describes main. Initial ZIPs do not include the run button beside `main`; use the latest Actions artifact for it.
+The plugin version is managed in `build.gradle.kts`. User ZIPs are published to GitHub Releases only when a new plugin version reaches main. Adding the publication pipeline does not create a release for the current version. The plugin is not published to the Marketplace.
 
 ## Features
 
@@ -19,9 +19,9 @@ Whole-file formatting, semantic completion, go to definition, and automatic chec
 
 ## Installation
 
-On GitHub, open a successful **Actions → Nagi checks** run (PR) or **Nagi JetBrains plugin** run (main) and download the `nagi-jetbrains-IC` (IDEA) or `nagi-jetbrains-PC` (PyCharm) artifact. Extract that download to find the plugin ZIP.
+Download a formal build from [GitHub Releases](https://github.com/disnana/Nagi/releases). Choose `nagi-jetbrains-IC-X.Y.Z.zip` for IDEA or `nagi-jetbrains-PC-X.Y.Z.zip` for PyCharm. Each ZIP has a matching `.sha256` file.
 
-Select `nagi-jetbrains-*.zip` in **Settings → Plugins → ⚙ → Install Plugin from Disk**, then restart the IDE. For a local build, use the ZIP in `build/distributions/`. The plugin has not been published to the Marketplace.
+Select the ZIP in **Settings → Plugins → ⚙ → Install Plugin from Disk**, then restart the IDE. To try a PR build, use the `release-jetbrains-IC` or `release-jetbrains-PC` artifact from a successful **Actions → Nagi checks** run. For a local build, use the ZIP in `build/distributions/`.
 
 Set the compiler executable in **Settings → Languages & Frameworks → Nagi**. An empty value uses `nagic` from `PATH`. Relative paths resolve from the IDE project root.
 
@@ -52,7 +52,7 @@ The same code can be checked against the PyCharm SDK:
 
 Use `-PlocalPlatformPath=/path/to/ide` to build against a local IDE. `runIde` starts an isolated development IDE.
 
-Tests cover scanning, folding, indentation, CLI argument boundaries, diagnostic locations, and real IntelliJ Platform editor fixtures for file types, Enter, comments, paired brackets, and save failures. A real process also tests cancellation during startup. Set `NAGI_TEST_COMPILER` to an installed `nagic` executable to check High, Low, and project commands with the compiler; this real-compiler integration test is skipped when unset. The current JetBrains CI does not set that variable.
+Tests cover scanning, folding, indentation, CLI argument boundaries, diagnostic locations, and real IntelliJ Platform editor fixtures for file types, Enter, comments, paired brackets, and save failures. A real process also tests cancellation during startup. Set `NAGI_TEST_COMPILER` to a `nagic` executable to check High, Low, and project commands with the compiler. JetBrains CI builds the compiler from the same commit and runs this integration test for both IDEA and PyCharm.
 
 The primary targets are IDEA and PyCharm 2025.1.1, with build 243 as the minimum API. CI tests and packages against both products' 2025.1.1 SDKs, then verifies the same ZIP against 2025.1.1 and the minimum SDK (IDEA 2024.3.7 or PyCharm 2024.3.6). These checks are separate from interacting with the complete IDE.
 

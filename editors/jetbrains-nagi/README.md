@@ -4,7 +4,7 @@
 
 IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
 
-プラグインの版は0.1.0です。このREADMEはmainのソースを説明します。`main`の左の実行ボタンは初期ZIPには含まれないため、最新のActions成果物を使ってください。
+プラグインの版は`build.gradle.kts`で管理します。利用者向けZIPはプラグインの版を更新してmainに反映したときだけ、GitHub Releasesへ公開します。公開処理を追加しただけでは現在の版のReleaseを作りません。Marketplaceには公開していません。
 
 ## できること
 
@@ -19,9 +19,9 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは[�
 
 ## インストール
 
-GitHubの **Actions → Nagi checks**（PR）または **Nagi JetBrains plugin**（main）で成功した実行を開き、Artifactsの`nagi-jetbrains-IC`（IDEA）または`nagi-jetbrains-PC`（PyCharm）をダウンロードします。展開するとプラグインのZIPが入っています。
+正式版は[GitHub Releases](https://github.com/disnana/Nagi/releases)から取得します。IDEAには`nagi-jetbrains-IC-X.Y.Z.zip`、PyCharmには`nagi-jetbrains-PC-X.Y.Z.zip`を選び、対応する`.sha256`ファイルで確認できます。
 
-その`nagi-jetbrains-*.zip`をIDEの **Settings → Plugins → ⚙ → Install Plugin from Disk** で選び、IDEを再起動します。自己ビルドした場合は`build/distributions/`にあるZIPを使います。Marketplaceへの公開はまだ行っていません。
+ZIPをIDEの **Settings → Plugins → ⚙ → Install Plugin from Disk** で選び、IDEを再起動します。PRで動作確認する場合は、成功した **Actions → Nagi checks** の`release-jetbrains-IC`または`release-jetbrains-PC` artifactを使えます。自己ビルドした場合は`build/distributions/`にあるZIPを使います。
 
 **Settings → Languages & Frameworks → Nagi** でコンパイラのパスを設定できます。空欄なら`PATH`の`nagic`を使います。相対パスはIDEプロジェクトのルートから解決します。
 
@@ -52,7 +52,7 @@ PyCharm用SDKでも同じコードを検証できます。
 
 手元のIDEをSDKに使う場合は`-PlocalPlatformPath=/path/to/ide`を指定します。`runIde`は開発用の別環境でIDEを起動します。
 
-テストには字句解析・折りたたみ・インデント・CLI引数・診断位置の検証と、IntelliJ Platformの実エディターfixtureを使ったファイル種別・改行・コメント・括弧補完・保存失敗の検証があります。実プロセスを使った起動中止の検証も含みます。`NAGI_TEST_COMPILER`にインストール済み`nagic`のパスを設定すると、High・Low・プロジェクトの実型検査も確認します。未設定なら、この実コンパイラ連携テストをスキップします。現在のJetBrains CIはこの環境変数を設定していません。
+テストには字句解析・折りたたみ・インデント・CLI引数・診断位置の検証と、IntelliJ Platformの実エディターfixtureを使ったファイル種別・改行・コメント・括弧補完・保存失敗の検証があります。実プロセスを使った起動中止の検証も含みます。`NAGI_TEST_COMPILER`に`nagic`のパスを設定すると、High・Low・プロジェクトの実型検査も確認します。JetBrains CIは同じコミットからコンパイラをビルドし、IDEAとPyCharmの双方でこの連携テストを実行します。
 
 主対象はIDEA・PyCharmの2025.1.1、最低対象APIはbuild 243です。CIでは両製品の2025.1.1 SDKでテスト・ZIP生成を行い、同じZIPを2025.1.1と最低対象SDK（IDEA 2024.3.7／PyCharm 2024.3.6）でPlugin Verifierにかけます。IDE全体の画面操作とは別の検証です。
 
