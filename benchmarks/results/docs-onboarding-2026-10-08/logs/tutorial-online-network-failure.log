@@ -1,0 +1,50 @@
+    Updating crates.io index
+warning: spurious network error (3 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 2 ms: Could not connect to server)
+warning: spurious network error (2 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (1 try remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 1 ms: Could not connect to server)
+warning: spurious network error (3 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (3 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (3 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (3 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (3 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (3 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (3 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (3 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (3 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (3 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (2 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (2 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (2 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (2 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (2 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (2 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (2 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (2 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (2 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (2 tries remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (1 try remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (1 try remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (1 try remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (1 try remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (1 try remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (1 try remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (1 try remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (1 try remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (1 try remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+warning: spurious network error (1 try remaining): [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+error: failed to get `axum` as a dependency of package `nagi-runtime v0.1.11 (/workspace/Nagi-sqlite-public/runtime)`
+    ... which satisfies path dependency `nagi-runtime` of package `nagi-first-app-4bb781e5156dcaf4 v0.1.0 (/workspace/nagi-docs-onboarding-2026-10-08/nagi-budget/build/first_app/.nagi/apps/nagi-first-app-4bb781e5156dcaf4/generations/.staging-g-4d47a-18dc60354412e344-0)`
+
+Caused by:
+  failed to load source for dependency `axum`
+
+Caused by:
+  unable to update registry `crates-io`
+
+Caused by:
+  download of config.json failed
+
+Caused by:
+  [7] Could not connect to server (Failed to connect to index.crates.io:443 over proxy proxy after 0 ms: Could not connect to server)
+Build failed. Check the diagnostics above for code, dependency, or build environment errors.
+Compatibility projection may be partial; prior latest unchanged.

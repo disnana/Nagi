@@ -1,5 +1,7 @@
 # Docs onboarding audit
 
+PR handoff and evidence for this audit are in the [internal onboarding handoff](handoffs/2026-10-08-docs-onboarding.md) and [verification bundle](../../benchmarks/results/docs-onboarding-2026-10-08/README.md).
+
 基準日は2026-10-08、確認対象のsource treeは`676576724829e45b077b58628bfe2417e6cf3673`を親とするDocs作業branch。公開対象ページの棚卸し、日英route parity、初心者が最初のアプリと本体変更に到達する導線を記録する。compiler/runtimeの仕様全体を再監査する文書ではない。
 
 ## 方法と範囲
@@ -21,7 +23,7 @@
 | [README](../README.md) / [README](../../docs/en/README.md) | セットアップとreference入口はあるが、1 file実用アプリと本体への小変更経路がなかった。言語機能の見出しだけでは例の結果・誤例・選択肢が辿りにくかったため全機能索引を追加。 | D, W。機能ごとの用途/例/制約/誤り・修正/使い分けの所在を照合。 |
 | [getting-started](../getting-started.md) / [getting-started](../../docs/en/getting-started.md) | install、Hello World、check/buildの切り分け、VS Code、updateがある。導入後の実用入力・test・修正は扱わず、新CLI教程へ分担。 | P, W。各OSのinstaller操作は未実行。 |
 | [language-guide](../language-guide.md) / [language-guide](../../docs/en/language-guide.md) | 値、関数、List/class/control、view、Result、moduleの順で学ぶ。実用アプリの単独手順とtest/practice flowは別ページへ分離。 | D, W。first-appへの用語リンクを確認。全章のsampleは再実行していない。 |
-| [first-app](../first-app.md) / [first-app](../../docs/en/first-app.md) | 新設。budget判定CLIでstdin、型付き失敗、境界値、修正をつなぐ。 | D, W, X。0.1.11 compilerでJP/EN掲載code一致、Highとstandalone saved Lowのcheck/build、各700/1000/1001・`abc`・`-1`をnative実行（計10件）まで確認。実行記録は指定log folder。 |
+| [first-app](../first-app.md) / [first-app](../../docs/en/first-app.md) | 新設。budget判定CLIでstdin、型付き失敗、境界値、修正をつなぐ。 | D, W, X。0.1.11 compilerでJP/EN掲載code一致、Highとstandalone saved Lowのcheck/build、各700/1000/1001・`abc`・`-1`をnative実行（計10件）まで確認。さらにscratchで`<=`を一時的に`<`へ変え、1000が`over budget`になることを観測後、`<=`へ戻して3境界値を再確認。実行記録は指定log folder。 |
 | [editor](../editor.md) / [editor](../../docs/en/editor.md) | VS Codeのinstall/補完/移動機能を説明。IDE連携からcompiler開発環境への移行は新contribution pageへ。 | P, W。VS Code/JetBrains上のUI操作は未実行。 |
 | [syntax](../syntax.md) / [syntax](../../docs/en/syntax.md) | ファイル、値、関数、control、operator、class、Result、async、importの早見表。詳しい用途はreferenceへ続く。 | D, W。文法項目から機能索引先へ辿れることを確認。全例compileは未実行。 |
 | [builtins](../builtins.md) / [builtins](../../docs/en/builtins.md) | I/O、文字列/List、変換、JSON/HTML、async/HTTP/SQLite、shared、測定関数を署名と条件で検索。 | P, W。関数ごとの全実行値は再検証していない。 |
@@ -29,7 +31,7 @@
 | [classes](../classes.md) / [classes](../../docs/en/classes.md) | named fieldとclassの対応範囲を説明。誤ったconstructorの名前/位置引数、enumとclassの選択補助を追加。 | D, W。正誤例と翻訳を確認。各例のnative buildは未実行。 |
 | [ownership](../ownership.md) / [ownership](../../docs/en/ownership.md) | move、明示move代入、copy/shared、field、loop、viewの範囲が詳しい。最初のuse-after-moveの誤例とview/copy/ownership transferの修正を追加。source-level transferをzero-cost保証と読める表現を改めた。 | D, W, X。誤ったmove後使用が`check`で拒否、移譲先を使う形が受理。性能・native costは測定していない。 |
 | [view-and-zero-copy](../view-and-zero-copy.md) / [view-and-zero-copy](../../docs/en/view-and-zero-copy.md) | view、文字列範囲、copyと既存受渡しを詳述。ownership pageは一般的な移動/借用規則を担当する。 | P, W。zero-copy保証を新たに追加していない。各sample実行は未実施。 |
-| [error-handling](../error-handling.md) / [error-handling](../../docs/en/error-handling.md) | Result/Option/Err/panic、match、独自errorを説明。nullableとplain return内の`try`の誤用を対比例にし、結果・失敗伝播の使い分けを追加。 | D, W, X。nullable/Result誤例は拒否、修正版はcheck受理。run出力はfirst-appの入力失敗のみ確認。 |
+| [error-handling](../error-handling.md) / [error-handling](../../docs/en/error-handling.md) | Result/Option/Err/panic、match、独自errorを説明。nullableとplain return内の`try`の誤用を対比例にし、結果・失敗伝播の使い分けを追加。 | D, W, X。nullable/Result誤例は拒否、修正版はcheck受理。first-appの入力失敗を実行時エラーとして確認（compiler診断とは区別）。 |
 | [low-language](../low-language.md) / [low-language](../../docs/en/low-language.md) | High→Low変換、Low直書き、関数差し替えを説明し、同じ型/ownership規則の範囲を示す。 | P, W。Low専用実行matrixは未実行。 |
 
 ### アプリ、async、runtime/API reference
@@ -103,8 +105,8 @@
 
 実行ログを`/workspace/nagi-docs-onboarding-2026-10-08/`に保存した。Nagi compiler 0.1.11は現在のDocs worktreeから`cargo build --locked -p nagic`してcheck/runに用いた。build cacheを使ったためclean buildとは記録しない。教程の初回runはネットワーク制限でcrate index取得に失敗し、Cargo offline modeと既存cacheで再実行すると成功した。利用者向け本文はcache固有pathを使わず、dependency取得が失敗する場合の確認先を案内する。
 
-`examples/tutorial/first_app.nagi`とJP/EN page codeの完全一致を確認し、dedicated working folderでHighとstandalone saved Lowをそれぞれcheck/buildした後、700/1000/1001、`abc`、`-1`をnative実行し計10件の結果とexit codeを記録した。Contributingのfixture例は別scratch worktreeに`nullable_default.nagi`とcorpus entryを追加してsource checkし、`cargo test --locked -p nagic --test conformance corpus_and_bounded_generated_contracts_reach_native_execution -- --exact`、`git diff --cached --check`、staged diffを検証した。fork作成、push、commit、PR作成は外部GitHub操作であり、このDocs作業では行っていない。記載したWindows PowerShell/macOSのコマンドもこのLinux environmentでは未実行。
+`examples/tutorial/first_app.nagi`とJP/EN page codeの完全一致を確認し、dedicated working folderでHighとstandalone saved Lowをそれぞれcheck/buildした後、700/1000/1001、`abc`、`-1`をnative実行し計10件の結果とexit codeを記録した。加えてscratchで境界比較を一時変更し、1000の誤判定と修正後の3結果を確認した。Contributingのfixture例は別scratch worktreeに`nullable_default.nagi`とcorpus entryを追加してsource checkし、`cargo test --locked -p nagic --test conformance corpus_and_bounded_generated_contracts_reach_native_execution -- --exact`、`git diff --cached --check`、staged diffを検証した。fork作成、push、commit、PR作成は外部GitHub操作であり、このDocs作業では行っていない。記載したWindows PowerShell/macOSのコマンドもこのLinux environmentでは未実行。
 
 所有権、nullable、Result、Future storage、Task、nested Result、Actor handlerの新しい例は0.1.11 compilerでcheckした。intentional invalid snippetsは期待どおり拒否され、修正版は受理された。これらはruntime behavior、全High/Low variants、Rust adapter、HTTP/Actor lifecycleを検証したものではない。
 
-websiteのHTML previewはPython 3.12と既存site venvで生成し、日英のsite route、内部linkと見出しanchorをbuild時に検査する。tutorial drift／High/Low検証は`/workspace/nagi-docs-onboarding-2026-10-08/onboarding-harness.log`と`build/onboarding-example-verification/`にも記録した。最初のharness呼び出しはtemp directoryに`nagi.toml`がないままproject modeで`lower`して失敗したため、standalone fileとして再実行して成功した。失敗と成功の記録はそれぞれ`onboarding-script.log`、`onboarding-harness.log`にある。compiler/native buildは既存cacheを利用しておりclean buildではない。外部URL到達性、ページの視覚表示、IDE上の操作は検査対象外。全ての既存API例をrunしたという記録ではない。
+websiteのHTML previewはPython 3.12と既存site venvで生成し、日英のsite route、内部linkと見出しanchorをbuild時に検査する。tutorial drift／High/Low検証は[10件のnative結果](../../benchmarks/results/docs-onboarding-2026-10-08/native10-results.json)と[harness log](../../benchmarks/results/docs-onboarding-2026-10-08/logs/onboarding-high-saved-low-success.log)、境界比較の一時変更と復元確認は[boundary log](../../benchmarks/results/docs-onboarding-2026-10-08/logs/boundary-regression-review.log)に記録した。最初のharness呼び出しはtemp directoryに`nagi.toml`がないままproject modeで`lower`して失敗したため、standalone fileとして再実行して成功した。失敗と成功の記録はそれぞれ[initial log](../../benchmarks/results/docs-onboarding-2026-10-08/logs/onboarding-project-mode-failure.log)、[success log](../../benchmarks/results/docs-onboarding-2026-10-08/logs/onboarding-high-saved-low-success.log)にある。compiler/native buildは既存cacheを利用しておりclean buildではない。外部URL到達性、ページの視覚表示、IDE上の操作は検査対象外。全ての既存API例をrunしたという記録ではない。

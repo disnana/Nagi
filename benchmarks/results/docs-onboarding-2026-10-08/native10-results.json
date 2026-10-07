@@ -1,0 +1,75 @@
+{
+  "docs_code": "Japanese/English match",
+  "native_cases": [
+    {
+      "form": "high",
+      "input": "700",
+      "exit": 0,
+      "stdout": "Enter a whole-number amount:\nwithin budget\ndone\n",
+      "stderr": ""
+    },
+    {
+      "form": "high",
+      "input": "1000",
+      "exit": 0,
+      "stdout": "Enter a whole-number amount:\nwithin budget\ndone\n",
+      "stderr": ""
+    },
+    {
+      "form": "high",
+      "input": "1001",
+      "exit": 0,
+      "stdout": "Enter a whole-number amount:\nover budget\ndone\n",
+      "stderr": ""
+    },
+    {
+      "form": "high",
+      "input": "abc",
+      "exit": 1,
+      "stdout": "Enter a whole-number amount:\n",
+      "stderr": "Invalid: invalid digit found in string\n"
+    },
+    {
+      "form": "high",
+      "input": "-1",
+      "exit": 1,
+      "stdout": "Enter a whole-number amount:\n",
+      "stderr": "Invalid: amount must be non-negative\n"
+    },
+    {
+      "form": "saved-low",
+      "input": "700",
+      "exit": 0,
+      "stdout": "Enter a whole-number amount:\nwithin budget\ndone\n",
+      "stderr": ""
+    },
+    {
+      "form": "saved-low",
+      "input": "1000",
+      "exit": 0,
+      "stdout": "Enter a whole-number amount:\nwithin budget\ndone\n",
+      "stderr": ""
+    },
+    {
+      "form": "saved-low",
+      "input": "1001",
+      "exit": 0,
+      "stdout": "Enter a whole-number amount:\nover budget\ndone\n",
+      "stderr": ""
+    },
+    {
+      "form": "saved-low",
+      "input": "abc",
+      "exit": 1,
+      "stdout": "Enter a whole-number amount:\n",
+      "stderr": "Invalid: invalid digit found in string\n"
+    },
+    {
+      "form": "saved-low",
+      "input": "-1",
+      "exit": 1,
+      "stdout": "Enter a whole-number amount:\n",
+      "stderr": "Invalid: amount must be non-negative\n"
+    }
+  ]
+}

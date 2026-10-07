@@ -1,0 +1,7 @@
+   Compiling nagi-runtime v0.1.11 (/workspace/Nagi-docs-onboarding/runtime)
+   Compiling nagi-first-app-4bb781e5156dcaf4 v0.1.0 (/workspace/nagi-docs-onboarding-2026-10-08/nagi-budget/build/first_app/.nagi/apps/nagi-first-app-4bb781e5156dcaf4/generations/.staging-g-4d875-18dc605283d14f84-0)
+    Finished `release` profile [optimized] target(s) in 7.52s
+native: /workspace/nagi-docs-onboarding-2026-10-08/nagi-budget/build/first_app/.nagi/apps/nagi-first-app-4bb781e5156dcaf4/generations/g-4d875-18dc605283d14f84-0/nagi-4bb781e5156dcaf4-g-4d875-18dc605283d14f84-0
+Enter a whole-number amount:
+within budget
+done

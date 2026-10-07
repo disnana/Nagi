@@ -2,7 +2,7 @@
 
 [Docsの目次](README.md) · [不具合を再現して動かす](first-app.md) · [リポジトリの貢献方針](../CONTRIBUTING.md)
 
-この手順は、Nagiのcompiler、runtime、標準library、Docsへ最初の変更を送る人向けです。ここでは、compilerの既存動作を調べて小さい修正を送る流れを説明します。構文、型、ownership、失敗、非同期処理、resourceの終了方法を変える提案は、実装前にIssueで挙動と互換性を相談してください。
+この手順は、Nagiのcompiler、runtime、標準library、Docsへ最初の変更を送る人向けです。ここでは、既存の契約とtestを調べ、nullableを扱うconformance fixtureを1件追加してPRを送る流れを説明します。構文、型、ownership、失敗、非同期処理、resourceの終了方法を変える提案は、実装前にIssueで挙動と互換性を相談してください。
 
 ## 1. 作業環境とbranchを用意する
 

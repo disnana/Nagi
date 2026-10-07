@@ -74,7 +74,7 @@ Tutorial code uses the current syntax. Explicit move and Task result handles are
 
 [About Nagi](introduction.md) · [Design decisions](../../DESIGN.en.md) · [Low](low-language.md) · [Memory](memory-model.md) · [Compiler](compiler-internals.md) · [Language interfaces](ffi.md) · [Roadmap](roadmap.md)
 
-Follow the [first contribution walkthrough](contributing.md) to locate a source file, make a small change, run the relevant checks, and open a PR. The internal [Docs onboarding audit](../internal/docs-onboarding-audit.md) records the existing explanations, overlaps, translation inconsistencies, and review scope.
+Follow the [first contribution walkthrough](contributing.md) to locate a source file, make a small change, run the relevant checks, and open a PR.
 
 `std.actor` is a standard library available from Nagi 0.1.8. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) covers registration, calls, and shutdown. The older actor/Supervisor built-ins and [queues](queue.md) remain test APIs. For performance, read the [measurement methods](performance.md), [results](measurements.md), and [HTTP load tests](http-capacity.md).
 

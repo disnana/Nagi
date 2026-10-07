@@ -78,7 +78,19 @@ done
 
 ## 3. 境界値を試して間違いを直す
 
-`within_budget`の最後の比較が`amount < limit`だったとします。次の3入力を使うと、上限ちょうどのときだけ結果が違うことを確かめられます。
+実際に間違いを観測するため、`within_budget`の`return ok(amount <= limit)`を一時的に`return ok(amount < limit)`へ変更して保存します。作業フォルダーからcheckし、上限と等しい`1000`を入力してください。
+
+```sh
+nagic check first_app.nagi
+printf '1000\n' | nagic run first_app.nagi
+```
+
+```powershell
+nagic check .\first_app.nagi
+"1000" | nagic run .\first_app.nagi
+```
+
+この状態では`1000`の判定行が`over budget`になります。上限と等しい額も受け入れるため、比較を`amount <= limit`へ戻して保存します。`nagic check first_app.nagi`をもう一度実行し、次の3入力で修正を確認してください。
 
 | 入力 | 期待する出力 | 確かめること |
 |---|---|---|
@@ -102,14 +114,14 @@ printf '%s\n' '1001' | nagic run first_app.nagi
 "1001" | nagic run .\first_app.nagi
 ```
 
-各コマンドはプロンプトの後に表の判定、`done`の順で表示します。`abc`は数値変換の失敗、`-1`はアプリが作った失敗として終了コード1になります。Nagi 0.1.11でのエラー出力は次のとおりです。
+各コマンドはプロンプトの後に表の判定、`done`の順で表示します。`abc`は数値変換の失敗、`-1`はアプリが作った失敗として終了コード1になります。次の表は、compiler診断ではなく、起動したアプリが実行時に表示するエラーです。Nagi 0.1.11での表示は次のとおりです。
 
-| 入力 | エラー出力 | exit code |
+| 入力 | 実行時エラー出力 | exit code |
 |---|---|---:|
 | `abc` | `Invalid: invalid digit found in string` | 1 |
 | `-1` | `Invalid: amount must be non-negative` | 1 |
 
-Linux/macOSでは`printf '%s\n' 'abc'`または`printf '%s\n' '-1'`を、PowerShellでは`"abc"`または`"-1"`を同じようにpipeして確認できます。診断が表示されたら[Resultの伝播と回復](error-handling.md#失敗を呼び出し元へ返す)を確認してください。
+Linux/macOSでは`printf '%s\n' 'abc'`または`printf '%s\n' '-1'`を、PowerShellでは`"abc"`または`"-1"`を同じようにpipeして確認できます。実行時エラーが表示されたら[Resultの伝播と回復](error-handling.md#失敗を呼び出し元へ返す)を確認してください。アプリが起動する前にcompilerやCargoの診断が出た場合は、前節のbuild準備と[検査とビルド](getting-started.md#3-検査とビルドを使い分ける)を確認します。
 
 負数はアプリが作った`Error`、`abc`は`parse_i64`が返す`Error`になります。どちらも`try`を通って`main`へ伝わります。失敗をその場で別の値に置き換える方法は[Resultとエラー処理](error-handling.md)を参照してください。
 

@@ -1,0 +1,65 @@
+$ nagic check /workspace/Nagi-docs-onboarding/examples/tutorial/first_app.nagi
+exit=0; expected=success; PASS
+checked /workspace/Nagi-docs-onboarding/examples/tutorial/first_app.nagi
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/ownership_invalid.nagi
+exit=1; expected=rejection; PASS
+error: line 6: name はmove後に使用されています
+ --> /workspace/nagi-docs-onboarding-2026-10-08/fixtures/ownership_invalid.nagi:6
+ 6 |     print(name)
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/ownership_correct.nagi
+exit=0; expected=success; PASS
+checked /workspace/nagi-docs-onboarding-2026-10-08/fixtures/ownership_correct.nagi
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/nullable_invalid.nagi
+exit=1; expected=rejection; PASS
+error: line 2: 型が一致しません: expected i64?, got i64。変換は明示してください
+ --> /workspace/nagi-docs-onboarding-2026-10-08/fixtures/nullable_invalid.nagi:2
+ 2 |     return value + 1
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/nullable_correct.nagi
+exit=0; expected=success; PASS
+checked /workspace/nagi-docs-onboarding-2026-10-08/fixtures/nullable_correct.nagi
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/result_invalid.nagi
+exit=1; expected=rejection; PASS
+error: line 2: tryで伝播する関数の戻り値はResultが必要です
+ --> /workspace/nagi-docs-onboarding-2026-10-08/fixtures/result_invalid.nagi:2
+ 2 |     id = try parse_i64(text)
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/result_correct.nagi
+exit=0; expected=success; PASS
+checked /workspace/nagi-docs-onboarding-2026-10-08/fixtures/result_correct.nagi
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/async_invalid.nagi
+exit=1; expected=rejection; PASS
+error: line 2: 非同期処理の戻り値は変数へ保存できません。呼び出し時にawaitしてください
+ --> /workspace/nagi-docs-onboarding-2026-10-08/fixtures/async_invalid.nagi:2
+ 2 |     pending = sleep(10)
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/async_correct.nagi
+exit=0; expected=success; PASS
+checked /workspace/nagi-docs-onboarding-2026-10-08/fixtures/async_correct.nagi
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/task_invalid.nagi
+exit=1; expected=rejection; PASS
+error: line 6: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください
+ --> /workspace/nagi-docs-onboarding-2026-10-08/fixtures/task_invalid.nagi:6
+ 6 |         task = spawn answer()
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/task_correct.nagi
+exit=0; expected=success; PASS
+checked /workspace/nagi-docs-onboarding-2026-10-08/fixtures/task_correct.nagi
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/task_nested_result.nagi
+exit=0; expected=success; PASS
+checked /workspace/nagi-docs-onboarding-2026-10-08/fixtures/task_nested_result.nagi
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/actor_wrong_business_error.nagi
+exit=0; expected=success; PASS
+checked /workspace/nagi-docs-onboarding-2026-10-08/fixtures/actor_wrong_business_error.nagi
+
+$ nagic check /workspace/nagi-docs-onboarding-2026-10-08/fixtures/actor_correct_business_error.nagi
+exit=0; expected=success; PASS
+checked /workspace/nagi-docs-onboarding-2026-10-08/fixtures/actor_correct_business_error.nagi

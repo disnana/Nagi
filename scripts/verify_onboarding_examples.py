@@ -28,6 +28,8 @@ def main():
     parser.add_argument("--compiler", default=str(
         Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
         / "release" / ("nagic" + EXE)))
+    parser.add_argument("--docs-only", action="store_true",
+                        help="Check published code against the native-tested source without building")
     args = parser.parse_args()
     compiler = Path(shutil.which(args.compiler) or args.compiler).resolve()
     source = ROOT / "examples/tutorial/first_app.nagi"
@@ -37,6 +39,10 @@ def main():
                             re.MULTILINE | re.DOTALL)
         if sum(block.strip() == expected for block in blocks) != 1:
             raise AssertionError(f"Tutorial code differs from the runnable example: {doc}")
+
+    if args.docs_only:
+        print("Onboarding: Japanese/English tutorial code matches the native-tested source")
+        return
 
     output = ROOT / "build/onboarding-example-verification"
     output.mkdir(parents=True, exist_ok=True)

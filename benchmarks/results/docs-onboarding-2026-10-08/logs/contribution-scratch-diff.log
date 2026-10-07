@@ -1,0 +1,31 @@
+diff --git a/tests/conformance/corpus.json b/tests/conformance/corpus.json
+index fe7f82e..bf797a6 100644
+--- a/tests/conformance/corpus.json
++++ b/tests/conformance/corpus.json
+@@ -376,5 +376,14 @@
+     "diagnostic": "",
+     "line": 0,
+     "oracle": "assert_eq!(transfer(String::from(\"Nagi日本語\")), \"Nagi日本語\");"
++  },
++  {
++    "name": "nullable_default",
++    "source": "nullable_default.nagi",
++    "high": true,
++    "expected": "run-pass",
++    "oracle": "assert_eq!(number_or_zero(Some(42i64)), 42i64); assert_eq!(number_or_zero(None), 0i64);",
++    "diagnostic": "",
++    "line": 0
+   }
+ ]
+diff --git a/tests/conformance/nullable_default.nagi b/tests/conformance/nullable_default.nagi
+new file mode 100644
+index 0000000..f1a8687
+--- /dev/null
++++ b/tests/conformance/nullable_default.nagi
+@@ -0,0 +1,6 @@
++def number_or_zero(value: i64?) -> i64:
++    match value:
++        case Some(number):
++            return number
++        case None:
++            return 0

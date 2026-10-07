@@ -74,7 +74,7 @@
 
 [Nagiについて](introduction.md) · [設計判断](../DESIGN.md) · [Low](low-language.md) · [メモリ](memory-model.md) · [コンパイラ](compiler-internals.md) · [他の言語との連携](ffi.md) · [開発予定](roadmap.md)
 
-本体のfileを探し、小さい修正を実行・検証してPRにする手順は[初めての貢献](contributing.md)へ。既存ページの説明、重複、翻訳と検証範囲の棚卸しは内部記録の[Docs onboarding audit](internal/docs-onboarding-audit.md)にあります。
+本体のfileを探し、小さい変更を実行・検証してPRにする手順は[初めての貢献](contributing.md)へ。
 
 `std.actor`はNagi 0.1.8から使える標準ライブラリです。[サンプル](../test-nagi-code/library-examples/supervised-service/README.md)で登録・呼び出し・停止を試せます。旧actor／Supervisorの組み込み関数と[キュー](queue.md)は検証用APIです。性能を調べる場合は、[測定方法](performance.md)、[測定結果](../PERFORMANCE.md)、[通信の負荷試験](http-capacity.md)を確認してください。
 

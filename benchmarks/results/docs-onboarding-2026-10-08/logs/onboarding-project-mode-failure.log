@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/workspace/Nagi-docs-onboarding/scripts/verify_onboarding_examples.py", line 95, in <module>
+    main()
+  File "/workspace/Nagi-docs-onboarding/scripts/verify_onboarding_examples.py", line 64, in main
+    compile_step("lower", high, lowered, "lower.log")
+  File "/workspace/Nagi-docs-onboarding/scripts/verify_onboarding_examples.py", line 61, in compile_step
+    raise RuntimeError(f"{stage} failed: {result.stdout}{result.stderr}")
+RuntimeError: lower failed: nagi.toml: No such file or directory (os error 2)
+ --> /workspace/Nagi-docs-onboarding/build/onboarding-example-verification/nagi-onboarding-vn3z56m3/nagi.toml:1
+

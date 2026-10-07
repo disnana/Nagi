@@ -78,7 +78,19 @@ done
 
 ## 3. Try boundary values and fix a mistake
 
-Suppose the last comparison in `within_budget` were `amount < limit`. These three inputs expose the difference at the boundary:
+To observe the mistake, temporarily change `return ok(amount <= limit)` in `within_budget` to `return ok(amount < limit)` and save the file. From the working folder, check it and enter the amount equal to the limit, `1000`:
+
+```sh
+nagic check first_app.nagi
+printf '1000\n' | nagic run first_app.nagi
+```
+
+```powershell
+nagic check .\first_app.nagi
+"1000" | nagic run .\first_app.nagi
+```
+
+With `<`, the result line is `over budget`. To accept an amount equal to the limit, change the comparison back to `amount <= limit`, save it, run `nagic check first_app.nagi` again, and verify the fix with these three inputs:
 
 | Input | Expected output | What it checks |
 |---|---|---|
@@ -102,14 +114,14 @@ printf '%s\n' '1001' | nagic run first_app.nagi
 "1001" | nagic run .\first_app.nagi
 ```
 
-Each command prints the prompt, the result in the table, and `done`. `abc` fails number conversion; `-1` returns the app's own error. Both exit with status 1. Nagi 0.1.11 prints:
+Each command prints the prompt, the result in the table, and `done`. `abc` fails number conversion; `-1` returns the app's own error. Both exit with status 1. The following table shows runtime errors printed by the started app, not compiler diagnostics. Nagi 0.1.11 prints:
 
 | Input | Error output | Exit code |
 |---|---|---:|
 | `abc` | `Invalid: invalid digit found in string` | 1 |
 | `-1` | `Invalid: amount must be non-negative` | 1 |
 
-On Linux/macOS, pipe `printf '%s\n' 'abc'` or `printf '%s\n' '-1'` into `nagic run first_app.nagi`; in PowerShell, pipe `"abc"` or `"-1"` the same way. If an error is shown, see [propagating and recovering from Result](error-handling.md#propagate-failure-to-the-caller).
+On Linux/macOS, pipe `printf '%s\n' 'abc'` or `printf '%s\n' '-1'` into `nagic run first_app.nagi`; in PowerShell, pipe `"abc"` or `"-1"` the same way. If a runtime error is shown, see [propagating and recovering from Result](error-handling.md#propagate-failure-to-the-caller). If the compiler or Cargo reports an error before the app starts, check the build tools and [check versus build](getting-started.md#3-choose-between-checking-and-building).
 
 A negative amount returns the `Error` created by the app; `abc` returns the `Error` from `parse_i64`. `try` propagates both to `main`. See [Results and error handling](error-handling.md) to recover from a failure locally.
 

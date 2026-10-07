@@ -2,7 +2,7 @@
 
 [Docs contents](README.md) · [Reproduce and run a bug](first-app.md) · [Repository contribution policy](../../CONTRIBUTING.en.md)
 
-This walkthrough is for a first change to Nagi's compiler, runtime, standard libraries, or Docs. It follows a small compiler fix from the existing behavior to a pull request. Discuss syntax, types, ownership, failures, async behavior, or resource shutdown changes in an issue before implementing them.
+This walkthrough is for a first change to Nagi's compiler, runtime, standard libraries, or Docs. It follows a focused regression fixture for nullable values from understanding the existing contract through a test and pull request. Discuss syntax, types, ownership, failures, async behavior, or resource shutdown changes in an issue before implementing them.
 
 ## 1. Prepare the environment and branch
 
