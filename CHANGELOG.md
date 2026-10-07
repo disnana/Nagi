@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## JetBrains 0.1.1 — 2026-10-08
+
+- Publish the first formal GitHub Release of the IntelliJ IDEA and PyCharm plugin. Include the existing High/Low highlighting, indentation, folding, check/run commands, and gutter Run buttons. Install the matching IC or PC ZIP from disk; the compiler remains a separate installation. This release does not publish to JetBrains Marketplace.
 - Publish separately verified IntelliJ IDEA and PyCharm plugin ZIPs to GitHub Releases when the JetBrains plugin version is updated on main. Verify the installed plugin id and version from each packaged JAR, preserve SHA-256 readback and immutable release assets, and keep current-version CI changes out of published releases.
 
 ## Nagi 0.1.11 — 2026-10-07
