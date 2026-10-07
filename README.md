@@ -39,7 +39,7 @@ nagic --version
 nagic --help
 ```
 
-[VS Code拡張](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)と[IntelliJ IDEA・PyCharm向けプラグイン](editors/jetbrains-nagi/README.md)もあります。操作は[エディターの案内](docs/editor.md)を参照してください。
+[VS Code拡張](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)と[IntelliJ IDEA・PyCharm向けプラグインとRelease ZIPの導入方法](editors/jetbrains-nagi/README.md)もあります。操作は[エディターの案内](docs/editor.md)を参照してください。
 
 インストーラーはmainから、コンパイラは公開Releaseから取得します。このREADMEの例はNagi 0.1.11を対象にしています。0.1.11の公開有無は公式Release記録で確認し、インストールした版は`nagic --version`で確かめてください。変更内容は[CHANGELOG](CHANGELOG.md)、互換性の変更は[0.1.11移行ガイド](docs/migration-0.1.11.md)を参照してください。
 

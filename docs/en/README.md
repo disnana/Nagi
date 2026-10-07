@@ -2,7 +2,7 @@
 
 Start with [installation](getting-started.md). To look up code, open the [syntax reference](syntax.md) or [built-in functions](builtins.md).
 
-These Docs target Nagi 0.1.11 as the compiler version; the VS Code extension remains a separate component at 0.1.13. The official site is normally built from main and may include changes not yet published. Check the official release record to confirm 0.1.11 availability. See the [Changelog](../../CHANGELOG.md) and the [0.1.11 migration guide](migration-0.1.11.md).
+These Docs target Nagi 0.1.11 as the compiler version; the VS Code extension at 0.1.13 and the JetBrains plugin are separate components. The official site is normally built from main and may include changes not yet published. Check the official release record to confirm 0.1.11 availability. See the [JetBrains installation guide](../../editors/jetbrains-nagi/README.en.md) for the released version and the IDEA or PyCharm ZIP to select. See the [Changelog](../../CHANGELOG.md) and the [0.1.11 migration guide](migration-0.1.11.md).
 
 See [About Nagi](introduction.md) for its purpose and current scope. The references below describe implemented APIs and their limits. Unimplemented proposals are kept in [design](library-design.md) and the [roadmap](roadmap.md).
 
@@ -12,7 +12,7 @@ See [About Nagi](introduction.md) for its purpose and current scope. The referen
 2. [Learn by writing code](language-guide.md): follow Python comparisons, short Nagi examples, results, and corrections for common mistakes. Try variables, functions, lists, passing values, and error handling.
 3. [HTTP and HTML](http.md): build an API, then store data with [SQLite](database.md).
 
-See the [VS Code guide](editor.md) for editor support. See [JetBrains installation](../../editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm.
+See the [VS Code guide](editor.md) for editor support. See [JetBrains installation and Release ZIP selection](../../editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm.
 
 ## Language reference
 

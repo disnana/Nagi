@@ -23,6 +23,7 @@ class ReleasePlanTests(unittest.TestCase):
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
         self.change("Cargo.toml", '[workspace.package]\nversion = "0.1.0"\nedition = "2021"\nlicense = "MIT"\n')
         self.change("editors/vscode-nagi/package.json", '{"version":"0.1.5"}\n')
+        self.change("editors/jetbrains-nagi/build.gradle.kts", 'group = "com.disnana.nagi"\nversion = "0.1.0"\n')
         self.first = self.commit()
         self.root_patch = patch.object(plan, "ROOT", self.root)
         self.root_patch.start()
@@ -45,7 +46,8 @@ class ReleasePlanTests(unittest.TestCase):
     def test_docs_only_does_not_package_or_release(self):
         self.change("docs/example.md", "Updated documentation")
         result = plan.plan(self.first, self.commit())
-        for key in ("release_nagi", "release_vscode", "package_nagi", "package_vscode"):
+        for key in ("release_nagi", "release_vscode", "release_jetbrains",
+                    "package_nagi", "package_vscode", "package_jetbrains"):
             self.assertEqual(result[key], "false")
 
     def test_compiler_runtime_and_cargo_changes_validate_only_nagi_without_releasing(self):
@@ -90,14 +92,16 @@ class ReleasePlanTests(unittest.TestCase):
                 for key in ("package_nagi", "package_vscode", "release_nagi", "release_vscode"):
                     self.assertEqual(result[key], "false")
 
-    def test_multicommit_push_detects_both_versions_before_final_docs_commit(self):
+    def test_multicommit_push_detects_all_three_versions_before_final_docs_commit(self):
         self.change("Cargo.toml", '[workspace.package]\nversion = "0.1.1"\n')
         self.change("editors/vscode-nagi/package.json", '{"version":"0.1.6"}\n')
+        self.change("editors/jetbrains-nagi/build.gradle.kts", 'group = "com.disnana.nagi"\nversion = "0.1.1"\n')
         self.commit()
         self.change("docs/example.md", "Docs follow the version bump")
         result = plan.plan(self.first, self.commit())
         self.assertEqual(result["release_nagi"], "true")
         self.assertEqual(result["release_vscode"], "true")
+        self.assertEqual(result["release_jetbrains"], "true")
 
     def test_extension_version_does_not_release_compiler(self):
         self.change("editors/vscode-nagi/package.json", '{"version":"0.1.6"}\n')
@@ -105,6 +109,42 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertEqual(result["release_vscode"], "true")
         self.assertEqual(result["release_nagi"], "false")
         self.assertEqual(result["package_nagi"], "false")
+
+    def test_jetbrains_artifact_changes_validate_without_publishing_an_unchanged_version(self):
+        self.change("editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiLexer.java", "// plugin change\n")
+        result = plan.plan(self.first, self.commit())
+        self.assertEqual(result["package_jetbrains"], "true")
+        self.assertEqual(result["release_jetbrains"], "false")
+        self.assertEqual(result["jetbrains_version"], "0.1.0")
+        self.assertEqual(result["package_nagi"], "false")
+        self.assertEqual(result["package_vscode"], "false")
+
+    def test_jetbrains_version_bump_plans_only_the_jetbrains_release(self):
+        self.change("editors/jetbrains-nagi/build.gradle.kts", 'group = "com.disnana.nagi"\nversion = "0.1.1"\n')
+        result = plan.plan(self.first, self.commit())
+        self.assertEqual(result["release_jetbrains"], "true")
+        self.assertEqual(result["package_jetbrains"], "true")
+        self.assertEqual(result["jetbrains_version"], "0.1.1")
+        self.assertEqual(result["release_nagi"], "false")
+        self.assertEqual(result["release_vscode"], "false")
+
+    def test_jetbrains_readme_and_test_only_changes_do_not_create_release_packages(self):
+        for path in ("editors/jetbrains-nagi/README.md", "editors/jetbrains-nagi/README.en.md",
+                     "editors/jetbrains-nagi/src/test/java/com/disnana/nagi/NagiCoreTest.java"):
+            with self.subTest(path=path):
+                base = plan.git("rev-parse", "HEAD").strip()
+                self.change(path, "// documentation or test-only change\n")
+                result = plan.plan(base, self.commit())
+                self.assertEqual(result["package_jetbrains"], "false")
+                self.assertEqual(result["release_jetbrains"], "false")
+
+    def test_jetbrains_workflow_change_packages_only_the_plugin(self):
+        self.change(".github/workflows/jetbrains.yml", "# Plugin build policy update\n")
+        result = plan.plan(self.first, self.commit())
+        self.assertEqual(result["package_jetbrains"], "true")
+        self.assertEqual(result["release_jetbrains"], "false")
+        self.assertEqual(result["package_nagi"], "false")
+        self.assertEqual(result["package_vscode"], "false")
 
     def test_publisher_change_packages_the_extension_without_releasing(self):
         self.change("editors/vscode-nagi/package.json", '{"version":"0.1.5","publisher":"Disnana"}\n')
@@ -137,13 +177,16 @@ class ReleasePlanTests(unittest.TestCase):
         result = plan.plan(self.first, self.commit())
         self.assertEqual(result["package_nagi"], "true")
         self.assertEqual(result["package_vscode"], "true")
+        self.assertEqual(result["package_jetbrains"], "true")
         self.assertEqual(result["release_nagi"], "false")
         self.assertEqual(result["release_vscode"], "false")
+        self.assertEqual(result["release_jetbrains"], "false")
 
     def test_initial_push_does_not_invent_release(self):
         result = plan.plan("0" * 40, self.first)
         self.assertEqual(result["release_nagi"], "false")
         self.assertEqual(result["release_vscode"], "false")
+        self.assertEqual(result["release_jetbrains"], "false")
 
     def test_installer_and_uninstaller_only_changes_run_checks_without_releasing(self):
         for file in ("scripts/install.sh", "scripts/install.ps1",
@@ -162,6 +205,11 @@ class ReleasePlanTests(unittest.TestCase):
             plan.plan(self.first, self.commit())
         self.change("editors/vscode-nagi/package.json", '{"version":"0.1.6-beta.1"}\n')
         with self.assertRaisesRegex(ValueError, "x.y.z"):
+            plan.plan(self.first, self.commit())
+        self.change("editors/vscode-nagi/package.json", '{"version":"0.1.5"}\n')
+        self.commit()
+        self.change("editors/jetbrains-nagi/build.gradle.kts", 'group = "com.disnana.nagi"\nversion = "0.0.9"\n')
+        with self.assertRaisesRegex(ValueError, "must increase"):
             plan.plan(self.first, self.commit())
 
     def test_package_uses_committed_source_and_excludes_untracked_files(self):
@@ -240,10 +288,11 @@ class ReleasePlanTests(unittest.TestCase):
 
 
 class FakeGitHub:
-    def __init__(self, sha=None, draft=None, latest=None):
+    def __init__(self, sha=None, draft=None, latest=None, component="vscode", version="0.1.6"):
         self.sha = sha
+        self.tag = f"{component}-v{version}"
         self.release = None if draft is None else {
-            "id": 1, "tag_name": "vscode-v0.1.6", "draft": draft, "assets": [], "body": "fixture notes"}
+            "id": 1, "tag_name": self.tag, "draft": draft, "assets": [], "body": "fixture notes"}
         self.calls = []
         self.api_calls = []
         self.files = {}

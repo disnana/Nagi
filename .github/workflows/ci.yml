@@ -30,10 +30,13 @@ jobs:
         run: python scripts/ci/changes.py --event "$CHECK_EVENT" --base "$CHECK_BASE" --head "$CHECK_HEAD" --output "$GITHUB_OUTPUT"
 
   jetbrains:
-    needs: changes
-    # main pushes use the dedicated workflow; PRs share the merge gate below.
-    if: github.event_name != 'push' && needs.changes.outputs.jetbrains_checks == 'true'
+    needs: [changes, release-plan]
+    if: >-
+      always() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
+      (needs.changes.outputs.jetbrains_checks == 'true' || needs.release-plan.outputs.package_jetbrains == 'true')
     uses: ./.github/workflows/jetbrains.yml
+    with:
+      release_version: ${{ needs.release-plan.outputs.jetbrains_version }}
 
   linux:
     needs: changes
@@ -85,7 +88,6 @@ jobs:
       - run: cargo build --release --examples --bins --locked
       - run: node --test editors/vscode-nagi/test/*.test.js
       - run: node --test scripts/test_graph_html_viewport.mjs
-      - run: python -m unittest discover -s scripts/releases -p 'test_*.py'
       - run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
       - run: python -m unittest discover -s scripts -p 'test_application_native_tests.py'
       - run: python scripts/build_examples.py
@@ -103,16 +105,18 @@ jobs:
           if-no-files-found: ignore
 
   release-plan:
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.plan.outputs.sha }}
       nagi_version: ${{ steps.plan.outputs.nagi_version }}
       vscode_version: ${{ steps.plan.outputs.vscode_version }}
+      jetbrains_version: ${{ steps.plan.outputs.jetbrains_version }}
       release_nagi: ${{ steps.plan.outputs.release_nagi }}
       release_vscode: ${{ steps.plan.outputs.release_vscode }}
+      release_jetbrains: ${{ steps.plan.outputs.release_jetbrains }}
       package_nagi: ${{ steps.plan.outputs.package_nagi }}
       package_vscode: ${{ steps.plan.outputs.package_vscode }}
+      package_jetbrains: ${{ steps.plan.outputs.package_jetbrains }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -120,6 +124,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Check release planning, notes, and immutable publication safeguards
+        run: python -m unittest discover -s scripts/releases -p 'test_*.py'
       - name: Compare versions across the complete push or PR
         id: plan
         env:
@@ -378,15 +384,23 @@ jobs:
         run: python scripts/ci/gate.py
 
   publish-release:
-    needs: [linux, release-plan, vscode-package, nagi-package]
+    needs: [linux, release-plan, jetbrains, vscode-package, nagi-package]
     if: >-
       always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
-      needs.linux.result == 'success' && needs.release-plan.result == 'success' &&
+      (
+        needs.linux.result == 'success' ||
+        (needs.release-plan.outputs.release_jetbrains == 'true' &&
+         needs.release-plan.outputs.release_nagi != 'true' &&
+         needs.release-plan.outputs.release_vscode != 'true' &&
+         needs.linux.result == 'skipped')
+      ) && needs.release-plan.result == 'success' &&
+      (needs.jetbrains.result == 'success' || needs.jetbrains.result == 'skipped') &&
       (needs.vscode-package.result == 'success' || needs.vscode-package.result == 'skipped') &&
       (needs.nagi-package.result == 'success' || needs.nagi-package.result == 'skipped') &&
+      (needs.release-plan.outputs.release_jetbrains != 'true' || needs.jetbrains.result == 'success') &&
       (needs.release-plan.outputs.release_vscode != 'true' || needs.vscode-package.result == 'success') &&
       (needs.release-plan.outputs.release_nagi != 'true' || needs.nagi-package.result == 'success') &&
-      (needs.release-plan.outputs.release_vscode == 'true' || needs.release-plan.outputs.release_nagi == 'true')
+      (needs.release-plan.outputs.release_vscode == 'true' || needs.release-plan.outputs.release_nagi == 'true' || needs.release-plan.outputs.release_jetbrains == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -417,3 +431,10 @@ jobs:
           RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
           RELEASE_SHA: ${{ needs.release-plan.outputs.sha }}
         run: python scripts/releases/publish.py --repository "$GITHUB_REPOSITORY" --component nagi --version "$RELEASE_VERSION" --sha "$RELEASE_SHA" --assets build/release-assets
+      - name: Publish JetBrains plugin
+        if: needs.release-plan.outputs.release_jetbrains == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.jetbrains_version }}
+          RELEASE_SHA: ${{ needs.release-plan.outputs.sha }}
+        run: python scripts/releases/publish.py --repository "$GITHUB_REPOSITORY" --component jetbrains --version "$RELEASE_VERSION" --sha "$RELEASE_SHA" --assets build/release-assets

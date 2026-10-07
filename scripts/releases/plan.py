@@ -1,4 +1,4 @@
-"""Plan independent Nagi/VSIX releases from a push's complete commit range."""
+"""Plan independent Nagi, editor, and JetBrains releases from a commit range."""
 from __future__ import annotations
 
 import argparse
@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
+GRADLE_VERSION = re.compile(r'^version\s*=\s*["\']([^"\']+)["\']\s*$', re.MULTILINE)
 
 
 def git(*args: str) -> str:
@@ -24,9 +25,14 @@ def version_tuple(value: str) -> tuple[int, int, int]:
 
 
 def versions(ref: str) -> dict[str, str]:
+    gradle = git("show", f"{ref}:editors/jetbrains-nagi/build.gradle.kts")
+    matches = GRADLE_VERSION.findall(gradle)
+    if len(matches) != 1:
+        raise ValueError(f"Expected exactly one JetBrains Gradle project version at {ref}")
     return {
         "nagi": tomllib.loads(git("show", f"{ref}:Cargo.toml"))["workspace"]["package"]["version"],
         "vscode": json.loads(git("show", f"{ref}:editors/vscode-nagi/package.json"))["version"],
+        "jetbrains": matches[0],
     }
 
 
@@ -39,7 +45,8 @@ def plan(base: str, head: str) -> dict[str, str]:
     base = git("rev-parse", "--verify", f"{base}^{{commit}}").strip()
     previous = versions(base)
     changed = git("diff", "--name-only", base, head).splitlines()
-    packaging_changed = any(p in (".github/workflows/ci.yml", "scripts/install.sh", "scripts/install.ps1",
+    packaging_changed = any(p in (".github/workflows/ci.yml",
+                                  "scripts/install.sh", "scripts/install.ps1",
                                   "scripts/uninstall.sh", "scripts/uninstall.ps1")
                             or p.startswith("scripts/releases/") for p in changed)
     # Validate all four native distributions when their build/test inputs
@@ -49,6 +56,13 @@ def plan(base: str, head: str) -> dict[str, str]:
     extension_changed = any(p.startswith("editors/vscode-nagi/")
                             and not p.startswith("editors/vscode-nagi/test/")
                             and p != "editors/vscode-nagi/README.md" for p in changed)
+    jetbrains_artifact_changed = any(
+        p.startswith("editors/jetbrains-nagi/")
+        and not p.startswith(("editors/jetbrains-nagi/src/test/",))
+        and not p.endswith(("/README.md", "/README.en.md"))
+        for p in changed
+    )
+    jetbrains_pipeline_changed = ".github/workflows/jetbrains.yml" in changed
     result = {"sha": head}
     for component, value in current.items():
         new = version_tuple(value)
@@ -60,7 +74,8 @@ def plan(base: str, head: str) -> dict[str, str]:
         result[f"release_{component}"] = str(release).lower()
         package = (release or packaging_changed
                    or (component == "nagi" and nagi_changed)
-                   or (component == "vscode" and extension_changed))
+                   or (component == "vscode" and extension_changed)
+                   or (component == "jetbrains" and (jetbrains_artifact_changed or jetbrains_pipeline_changed)))
         result[f"package_{component}"] = str(package).lower()
     return result
 

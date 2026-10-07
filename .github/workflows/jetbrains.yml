@@ -1,28 +1,25 @@
 name: Nagi JetBrains plugin
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'editors/jetbrains-nagi/**'
-      - '.github/workflows/jetbrains.yml'
-      - '.github/workflows/ci.yml'
-      - 'scripts/ci/changes.py'
-      - 'scripts/ci/gate.py'
-      - 'scripts/ci/test_checks.py'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'compiler/**'
-      - 'runtime/**'
   workflow_call:
+    inputs:
+      release_version:
+        description: Version selected from the checked-out source commit
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      release_version:
+        description: Optional expected plugin version (defaults to Gradle source)
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: jetbrains-${{ github.ref }}
-  cancel-in-progress: true
+  group: jetbrains-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   verify:
@@ -52,7 +49,28 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - name: Resolve the expected JetBrains plugin version
+        id: release-version
+        env:
+          PROVIDED_VERSION: ${{ inputs.release_version }}
+        run: |
+          if [ -n "$PROVIDED_VERSION" ]; then
+            echo "version=$PROVIDED_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            python - <<'PY'
+          import subprocess, sys
+          sys.path.insert(0, '../../scripts/releases')
+          from plan import versions
+          commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          import os
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f"version={versions(commit)['jetbrains']}\n")
+          PY
+          fi
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         id: rust
       - name: Cache the compiler for integration checks
@@ -76,11 +94,23 @@ jobs:
           -PplatformType=${{ matrix.platformType }}
           -PplatformVersion=${{ matrix.platformVersion }}
           -PminimumPlatformVersion=${{ matrix.minimumPlatformVersion }}
-      - name: Upload the verified plugin
+      - name: Verify the ZIP descriptor and prepare release assets
+        env:
+          RELEASE_VERSION: ${{ steps.release-version.outputs.version }}
+          PLATFORM_TYPE: ${{ matrix.platformType }}
+        run: >-
+          python ../../scripts/releases/jetbrains.py
+          --archive "build/distributions/nagi-jetbrains-$RELEASE_VERSION.zip"
+          --output ../../build/release-assets
+          --platform-type "$PLATFORM_TYPE"
+          --version "$RELEASE_VERSION"
+      - name: Upload the verified plugin and checksum
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: nagi-jetbrains-${{ matrix.platformType }}
-          path: editors/jetbrains-nagi/build/distributions/*.zip
+          name: release-jetbrains-${{ matrix.platformType }}
+          path: |
+            build/release-assets/nagi-jetbrains-${{ matrix.platformType }}-*.zip
+            build/release-assets/nagi-jetbrains-${{ matrix.platformType }}-*.zip.sha256
           if-no-files-found: error
       - name: Upload test and compatibility reports
         if: always()

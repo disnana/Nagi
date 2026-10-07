@@ -2,7 +2,7 @@
 
 初めて使うなら[インストール](getting-started.md)、書き方を調べるなら[文法](syntax.md)・[組み込み関数](builtins.md)へ。
 
-このDocsはNagi 0.1.11をcompiler基準版とし、VS Code拡張0.1.13は別componentとして扱います。公式サイトは通常mainから生成するため、まだ公開されていない変更も含むことがあります。0.1.11の公開有無は公式Release記録で確認してください。版ごとの変更は[Changelog](../CHANGELOG.md)、互換性の変更は[0.1.11移行ガイド](migration-0.1.11.md)にあります。
+このDocsはNagi 0.1.11をcompiler基準版とし、VS Code拡張0.1.13とJetBrainsプラグインは別componentとして扱います。公式サイトは通常mainから生成するため、まだ公開されていない変更も含むことがあります。0.1.11の公開有無は公式Release記録で確認してください。JetBrains版の配布版とIDE別ZIPの選び方は[導入方法](../editors/jetbrains-nagi/README.md)を参照してください。版ごとの変更は[Changelog](../CHANGELOG.md)、互換性の変更は[0.1.11移行ガイド](migration-0.1.11.md)にあります。
 
 目的と現在の範囲は[Nagiについて](introduction.md)へ。以下のリファレンスは実装済みAPIの使い方と制限を示します。未実装の案は[設計](library-design.md)・[開発予定](roadmap.md)に分けています。
 
@@ -12,7 +12,7 @@
 2. [コードを書きながら学ぶ](language-guide.md)で、Pythonとの比較、短いNagi例、結果、間違いの直し方を順に読む。変数・関数・配列・値の渡し方・エラー処理を試せる。
 3. [HTTPとHTML](http.md)でAPIを作り、[SQLite](database.md)でデータを保存する。
 
-[VS Codeの使い方](editor.md)と[JetBrains版の導入方法](../editors/jetbrains-nagi/README.md)も確認できます。
+[VS Codeの使い方](editor.md)と[JetBrains版の導入・Release ZIPの選び方](../editors/jetbrains-nagi/README.md)も確認できます。
 
 ## 言語リファレンス
 
