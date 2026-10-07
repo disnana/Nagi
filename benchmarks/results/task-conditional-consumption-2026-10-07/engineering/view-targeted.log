@@ -1,0 +1,74 @@
+   Compiling nagic v0.1.10 (/tmp/nagi-task-conditional-consumption/compiler)
+    Finished `test` profile [unoptimized] target(s) in 7.71s
+     Running tests/comparison_ownership.rs (/tmp/nagi-container-flow-target/debug/deps/comparison_ownership-08a373995d7121b8)
+
+running 4 tests
+test comparisons_hold_the_left_operand_through_right_operand_evaluation ... ok
+test copy_aggregate_comparisons_borrow_fields_and_indexed_containers ... ok
+test native_resource_comparisons_do_not_allow_moving_the_borrowed_request ... ok
+test completed_copy_operands_disjoint_fields_and_temporary_views_remain_valid ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/loop_ownership.rs (/tmp/nagi-container-flow-target/debug/deps/loop_ownership-cf17e01a85345d0a)
+
+running 13 tests
+test conditional_reinitialization_needs_every_continuing_path ... ok
+test fields_and_nested_fields_cannot_be_consumed_on_later_iterations ... ok
+test a_for_iterator_expression_is_evaluated_only_once ... ok
+test locals_copy_values_and_borrowed_arguments_are_available_each_iteration ... ok
+test owned_values_cannot_be_consumed_on_later_iterations ... ok
+test nested_loops_are_checked_without_carrying_local_declarations ... ok
+test all_continuing_branches_can_restore_a_moved_value ... ok
+test standalone_low_rejects_repeated_moves_at_the_original_line ... ok
+test branch_joins_preserve_reassignment_and_return_outside_loops ... ok
+test reinitialization_before_and_after_a_move_is_allowed ... ok
+test while_conditions_are_checked_on_each_evaluation_and_on_exit ... ok
+test zero_iterations_and_loop_bindings_preserve_outer_state ... ok
+test return_paths_do_not_repeat_or_consume_values_on_other_paths ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+     Running tests/static_callback_views.rs (/tmp/nagi-container-flow-target/debug/deps/static_callback_views-40ae0a6b7d7d54d9)
+
+running 3 tests
+test input_bound_callback_results_still_borrow_their_actual_inputs ... ok
+test static_outputs_do_not_allow_local_or_owned_parameter_borrows ... ok
+test static_callbacks_keep_their_origins_and_independent_lifetime_scopes_in_high_and_low ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.39s
+
+     Running tests/view_branch_rebinding.rs (/tmp/nagi-container-flow-target/debug/deps/view_branch_rebinding-f34dc10953a5b66e)
+
+running 4 tests
+test branch_copies_are_synthetic_and_preserve_public_and_callback_lifetimes ... ok
+test local_views_still_cannot_escape_a_terminating_or_continuing_branch ... ok
+test terminating_parent_blocks_respect_loop_and_pattern_binding_names ... ok
+test terminating_view_updates_compile_and_run_in_high_saved_low_and_handwritten_low ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s
+
+     Running tests/view_container_drop.rs (/tmp/nagi-container-flow-target/debug/deps/view_container_drop-fa0d6915b28b4e29)
+
+running 1 test
+test local_view_container_replacement_preserves_allocations_and_drop_order ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.40s
+
+     Running tests/view_flow_completion.rs (/tmp/nagi-container-flow-target/debug/deps/view_flow_completion-19b1e45e441b1bda)
+
+running 3 tests
+test completion_keeps_local_and_iterator_owner_escape_rejections ... ok
+test scopes_keep_lexical_storage_and_route_nested_errors ... ok
+test owned_storage_loops_and_async_compile_and_run_in_all_source_forms ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+
+     Running tests/view_flow_foundation.rs (/tmp/nagi-container-flow-target/debug/deps/view_flow_foundation-39dc65cba305891d)
+
+running 2 tests
+test observer_lowering_does_not_accept_local_owner_escapes ... ok
+test return_observers_and_match_edges_compile_and_run_in_all_source_forms ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+

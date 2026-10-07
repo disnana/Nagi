@@ -1,0 +1,194 @@
+[
+  {
+    "case": "and-rhs-discard.nagi",
+    "command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/and-rhs-discard.nagi",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/and-rhs-discard.nagi-out"
+    ],
+    "observed_exit": 0,
+    "expected_after_fix": "checker-reject",
+    "expected_primary_line": 10,
+    "expected_fragment": "未受取Task",
+    "native_executed": false
+  },
+  {
+    "case": "and-rhs-discard.low",
+    "command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/and-rhs-discard.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/and-rhs-discard.low-out"
+    ],
+    "observed_exit": 0,
+    "expected_after_fix": "checker-reject",
+    "expected_primary_line": 7,
+    "expected_fragment": "未受取Task",
+    "native_executed": false
+  },
+  {
+    "case": "or-rhs-discard.nagi",
+    "command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/or-rhs-discard.nagi",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/or-rhs-discard.nagi-out"
+    ],
+    "observed_exit": 0,
+    "expected_after_fix": "checker-reject",
+    "expected_primary_line": 10,
+    "expected_fragment": "未受取Task",
+    "native_executed": false
+  },
+  {
+    "case": "or-rhs-discard.low",
+    "command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/or-rhs-discard.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/or-rhs-discard.low-out"
+    ],
+    "observed_exit": 0,
+    "expected_after_fix": "checker-reject",
+    "expected_primary_line": 7,
+    "expected_fragment": "未受取Task",
+    "native_executed": false
+  },
+  {
+    "case": "nested-short-discard.nagi",
+    "command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/nested-short-discard.nagi",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/nested-short-discard.nagi-out"
+    ],
+    "observed_exit": 0,
+    "expected_after_fix": "checker-reject",
+    "expected_primary_line": 10,
+    "expected_fragment": "未受取Task",
+    "native_executed": false
+  },
+  {
+    "case": "nested-short-discard.low",
+    "command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/nested-short-discard.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/nested-short-discard.low-out"
+    ],
+    "observed_exit": 0,
+    "expected_after_fix": "checker-reject",
+    "expected_primary_line": 7,
+    "expected_fragment": "未受取Task",
+    "native_executed": false
+  },
+  {
+    "case": "nested-env-discard.nagi",
+    "command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/nested-env-discard.nagi",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/nested-env-discard.nagi-out"
+    ],
+    "observed_exit": 0,
+    "expected_after_fix": "checker-reject",
+    "expected_primary_line": 10,
+    "expected_fragment": "未受取Task",
+    "native_executed": false
+  },
+  {
+    "case": "nested-env-discard.low",
+    "command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/nested-env-discard.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/nested-env-discard.low-out"
+    ],
+    "observed_exit": 0,
+    "expected_after_fix": "checker-reject",
+    "expected_primary_line": 7,
+    "expected_fragment": "未受取Task",
+    "native_executed": false
+  },
+  {
+    "case": "and-left-discard.nagi",
+    "command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/and-left-discard.nagi",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/and-left-discard.nagi-out"
+    ],
+    "observed_exit": 0,
+    "expected_after_fix": "check-pass",
+    "expected_primary_line": null,
+    "expected_fragment": null,
+    "native_executed": false
+  },
+  {
+    "case": "and-left-discard.low",
+    "command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/and-left-discard.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/and-left-discard.low-out"
+    ],
+    "observed_exit": 0,
+    "expected_after_fix": "check-pass",
+    "expected_primary_line": null,
+    "expected_fragment": null,
+    "native_executed": false
+  },
+  {
+    "case": "env-key-discard.nagi",
+    "command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/env-key-discard.nagi",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/env-key-discard.nagi-out"
+    ],
+    "observed_exit": 0,
+    "expected_after_fix": "check-pass",
+    "expected_primary_line": null,
+    "expected_fragment": null,
+    "native_executed": false
+  },
+  {
+    "case": "env-key-discard.low",
+    "command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/env-key-discard.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-symmetry/env-key-discard.low-out"
+    ],
+    "observed_exit": 0,
+    "expected_after_fix": "check-pass",
+    "expected_primary_line": null,
+    "expected_fragment": null,
+    "native_executed": false
+  }
+]

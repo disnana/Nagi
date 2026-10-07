@@ -1,0 +1,4 @@
+     Locking 107 packages to highest compatible versions
+   Compiling nagi-lazy-task-42b5252f16737204 v0.1.0 (/tmp/nagi-critical-release-review/lazy-task-handwritten-low-native-output/.nagi/apps/nagi-lazy-task-42b5252f16737204/generations/.staging-g-1f696-18dc15d9f6bec8c0-0)
+    Finished `release` profile [optimized] target(s) in 1.33s
+native: /tmp/nagi-critical-release-review/lazy-task-handwritten-low-native-output/.nagi/apps/nagi-lazy-task-42b5252f16737204/generations/g-1f696-18dc15d9f6bec8c0-0/nagi-42b5252f16737204-g-1f696-18dc15d9f6bec8c0-0

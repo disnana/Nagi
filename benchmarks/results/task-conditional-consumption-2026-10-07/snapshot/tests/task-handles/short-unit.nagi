@@ -1,0 +1,11 @@
+from std.task import TaskFailure
+def take(result: Result[unit, TaskFailure]) -> bool:
+    return True
+async def work() -> unit:
+    return print(0)
+async def exercise(flag: bool) -> Result[unit, Error]:
+    async with scope:
+        task = spawn work() # primary
+        value = flag and take(await task)
+        print(value)
+    return ok(print(0))

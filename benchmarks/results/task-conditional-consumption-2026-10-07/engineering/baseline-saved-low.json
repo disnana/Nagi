@@ -1,0 +1,16 @@
+[
+  {
+    "source": "short-and-saved.low",
+    "sha256": "1b807d2d7e65fe4420427daca1d0cc44a2dddfbdf0f47ba7ef99d1d99c9cba10",
+    "source_removed": true,
+    "baseline_saved_check_exit": 0,
+    "primary_line": 20
+  },
+  {
+    "source": "lazy-env-saved.low",
+    "sha256": "bfbd0b823d214e4b696c851efd8509fb3fa8f28188d06f65cdf008dd3def6e21",
+    "source_removed": true,
+    "baseline_saved_check_exit": 0,
+    "primary_line": 20
+  }
+]

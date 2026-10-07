@@ -1,0 +1,14 @@
+from std.task import TaskFailure;
+fn take(result: Result[str,TaskFailure]) -> str {
+    match result { case Ok(value) { return value; } case Err(failure) { return "failed"; } }
+}
+async fn work() -> str { return "fallback"; }
+async fn exercise(flag: bool) -> Result[unit,Error] {
+    scope {
+        let task = spawn work();
+        let value = env("NAGI_TASK_PRESENT", take(await task));
+        let received = await task; # primary
+        print(view(value));
+    }
+    return ok(print(0));
+}

@@ -1,0 +1,14 @@
+{
+  "source_commit": "3a259a5c1f27557344eec6365e050268da887a81",
+  "source_tree": "33219ad1883014a242451f047e9a3972b3011ec4",
+  "archived_paths": [
+    "Cargo.toml",
+    "Cargo.lock",
+    "compiler",
+    "runtime",
+    "fuzz"
+  ],
+  "source_archive_sha256": "4dafcd8a7cea35f29df78d8b4519ed0178d9c7dad888339cd9eb090f44352b0c",
+  "snapshot": "/tmp/nagi-critical-release-review/frozen-candidate",
+  "frozen_cli_sha256": "1ad53527beb382a6a13bca7c550cc5b68ea60483509720ac9d4beaefed012c0b"
+}

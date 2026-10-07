@@ -1,0 +1,13 @@
+from std.ownership import move
+def take(parts: List[view[str]]) -> bool:
+    return True
+def example(flag: bool):
+    owner = "payload"
+    parts = [view(owner)]
+    value = flag and take(parts)
+    transferred = move(owner)
+
+def main():
+    example(False)
+    example(True)
+    print("view-control-ok")

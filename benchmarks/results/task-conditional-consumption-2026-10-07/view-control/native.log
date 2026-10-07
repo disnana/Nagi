@@ -1,0 +1,8 @@
+    Updating crates.io index
+     Locking 107 packages to highest compatible versions
+      Adding generic-array v0.14.7 (available: v0.14.9)
+      Adding matchit v0.8.4 (available: v0.8.6)
+   Compiling nagi-main-fc85f52ddec22b61 v0.1.0 (/tmp/nagi-conditional-view-check/generated/.nagi/apps/nagi-main-fc85f52ddec22b61/generations/.staging-g-218d4-18dc163325663f67-0)
+    Finished `release` profile [optimized] target(s) in 1.91s
+native: /tmp/nagi-conditional-view-check/generated/.nagi/apps/nagi-main-fc85f52ddec22b61/generations/g-218d4-18dc163325663f67-0/nagi-fc85f52ddec22b61-g-218d4-18dc163325663f67-0
+view-control-ok

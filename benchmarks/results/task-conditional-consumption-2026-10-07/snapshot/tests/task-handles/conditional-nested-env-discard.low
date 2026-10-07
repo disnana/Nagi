@@ -1,0 +1,12 @@
+from std.task import discard;
+fn truth(done: unit) -> bool { return True; }
+fn text(done: unit) -> str { return "NAGI_CRITICAL_PRESENT"; }
+async fn work() -> i64 { return 42; }
+async fn main() -> Result[unit, Error] {
+    scope {
+        let task = spawn work(); # primary
+        let value = env("NAGI_CRITICAL_PRESENT", env("NAGI_CRITICAL_MISSING", text(discard(task))));
+        print(value);
+    }
+    return ok(print("scope-ok"));
+}

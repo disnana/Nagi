@@ -1,0 +1,9 @@
+    Blocking waiting for file lock on package cache
+     Locking 107 packages to highest compatible versions
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling nagi-short-task-84754e7e004da970 v0.1.0 (/tmp/nagi-critical-release-review/short-task-native/.nagi/apps/nagi-short-task-84754e7e004da970/generations/.staging-g-1f49a-18dc159cc542b2de-0)
+    Finished `release` profile [optimized] target(s) in 1.93s
+native: /tmp/nagi-critical-release-review/short-task-native/.nagi/apps/nagi-short-task-84754e7e004da970/generations/g-1f49a-18dc159cc542b2de-0/nagi-84754e7e004da970-g-1f49a-18dc159cc542b2de-0
+false
+scope-ok

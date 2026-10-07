@@ -1,0 +1,45 @@
+{
+  "immutable_sha": "3a259a5c1f27557344eec6365e050268da887a81",
+  "release_plan": {
+    "sha": "3a259a5c1f27557344eec6365e050268da887a81",
+    "nagi_version": "0.1.11",
+    "release_nagi": "true",
+    "package_nagi": "true",
+    "vscode_version": "0.1.13",
+    "release_vscode": "false",
+    "package_vscode": "false"
+  },
+  "lock_changes": [
+    {
+      "name": "nagi-runtime",
+      "from": "0.1.10",
+      "to": "0.1.11"
+    },
+    {
+      "name": "nagic",
+      "from": "0.1.10",
+      "to": "0.1.11"
+    }
+  ],
+  "third_party_lock_packages_unchanged": true,
+  "release_changelog_item_count": 14,
+  "release_changelog_sha256": "a93dee73cd33599a42c73b802a7a8cdfd5b3beb2edc6ea3d58b6041deb4997df",
+  "standalone_runtime_version": "0.1.11",
+  "standalone_runtime_manifest_inherits_workspace": false,
+  "archive_filenames": {
+    "linux-x86_64": "nagi-0.1.11-linux-x86_64.tar.gz",
+    "windows-x86_64": "nagi-0.1.11-windows-x86_64.zip",
+    "macos-arm64": "nagi-0.1.11-macos-arm64.tar.gz",
+    "macos-x86_64": "nagi-0.1.11-macos-x86_64.tar.gz"
+  },
+  "getting_started_ja_en_archive_names_match": true,
+  "followup_local_sha": "9cca4219b283d2ff11cd25ac4d4667a2192c85e0",
+  "followup_local_tree": "374efc4db6a5fde9a709237eb46fee8ed9f027c5",
+  "followup_changed_files": [
+    "benchmarks/results/task-release-0.1.11/README.md",
+    "benchmarks/results/task-release-0.1.11/provenance.json",
+    "benchmarks/results/task-release-0.1.11/release-local/applications.log",
+    "benchmarks/results/task-release-0.1.11/release-local/library.log",
+    "docs/internal/handoffs/2026-10-06-task-release-0.1.11.md"
+  ]
+}

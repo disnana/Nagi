@@ -1,0 +1,122 @@
+[
+  {
+    "case": "lazy-task",
+    "form": "saved-low",
+    "source": "/tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low",
+    "source_sha256": "fa3ea4a4c4e21667912f4f3e52e76655af2f0d6cd2851042c157fc31f4bcad89",
+    "check_command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-task-saved-low-check-output"
+    ],
+    "check_returncode": 0,
+    "run_command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "run",
+      "/tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-task-saved-low-native-output"
+    ],
+    "build_run_returncode": 0,
+    "stdout": "present\nscope-ok\n",
+    "receipt_marker_seen": false,
+    "scope_normal_exit_seen": true,
+    "native_executable": "/tmp/nagi-critical-release-review/lazy-task-saved-low-native-output/.nagi/apps/nagi-saved-954e7a1a3e988a79/generations/g-1f637-18dc15d7ff598051-0/nagi-954e7a1a3e988a79-g-1f637-18dc15d7ff598051-0",
+    "native_runtime_path": "../frozen-candidate/runtime",
+    "generated_rust_sha256": "8573498512cb16651f85d0853f415271f9b3943bb28cb64a0d22a621f6880a48"
+  },
+  {
+    "case": "lazy-task",
+    "form": "handwritten-low",
+    "source": "/tmp/nagi-critical-release-review/lazy-task.low",
+    "source_sha256": "650382459e0ebb0899fd2b99576b10086c684ee86d018843eb12585dac496835",
+    "check_command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/lazy-task.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-task-handwritten-low-check-output"
+    ],
+    "check_returncode": 0,
+    "run_command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "run",
+      "/tmp/nagi-critical-release-review/lazy-task.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/lazy-task-handwritten-low-native-output"
+    ],
+    "build_run_returncode": 0,
+    "stdout": "present\nscope-ok\n",
+    "receipt_marker_seen": false,
+    "scope_normal_exit_seen": true,
+    "native_executable": "/tmp/nagi-critical-release-review/lazy-task-handwritten-low-native-output/.nagi/apps/nagi-lazy-task-42b5252f16737204/generations/g-1f696-18dc15d9f6bec8c0-0/nagi-42b5252f16737204-g-1f696-18dc15d9f6bec8c0-0",
+    "native_runtime_path": "../frozen-candidate/runtime",
+    "generated_rust_sha256": "9a9cc68960e25190149c4f1e9aeaba9566be91a01e3a8c1436ef634c638dc28b"
+  },
+  {
+    "case": "short-task",
+    "form": "saved-low",
+    "source": "/tmp/nagi-critical-release-review/short-task-saved-source/saved.low",
+    "source_sha256": "e222dc2158f41fc6b741fb8806471a4d813a1829defff5bdead37ae1d7f8f4bd",
+    "check_command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/short-task-saved-source/saved.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/short-task-saved-low-check-output"
+    ],
+    "check_returncode": 0,
+    "run_command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "run",
+      "/tmp/nagi-critical-release-review/short-task-saved-source/saved.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/short-task-saved-low-native-output"
+    ],
+    "build_run_returncode": 0,
+    "stdout": "false\nscope-ok\n",
+    "receipt_marker_seen": false,
+    "scope_normal_exit_seen": true,
+    "native_executable": "/tmp/nagi-critical-release-review/short-task-saved-low-native-output/.nagi/apps/nagi-saved-56fa475ed977451c/generations/g-1f6b3-18dc15da49a71380-0/nagi-56fa475ed977451c-g-1f6b3-18dc15da49a71380-0",
+    "native_runtime_path": "../frozen-candidate/runtime",
+    "generated_rust_sha256": "3711eba4783af4d964bb4012162a67d07ce7fa4329b06b0b4ece9f58cbf3d3ff"
+  },
+  {
+    "case": "short-task",
+    "form": "handwritten-low",
+    "source": "/tmp/nagi-critical-release-review/short-task.low",
+    "source_sha256": "1df04af389b03f15b1caabde43e9937f5f90091dfba9737b1ce6cb2682653c3f",
+    "check_command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/short-task.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/short-task-handwritten-low-check-output"
+    ],
+    "check_returncode": 0,
+    "run_command": [
+      "/tmp/nagi-critical-release-review/bin/nagic",
+      "run",
+      "/tmp/nagi-critical-release-review/short-task.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/short-task-handwritten-low-native-output"
+    ],
+    "build_run_returncode": 0,
+    "stdout": "false\nscope-ok\n",
+    "receipt_marker_seen": false,
+    "scope_normal_exit_seen": true,
+    "native_executable": "/tmp/nagi-critical-release-review/short-task-handwritten-low-native-output/.nagi/apps/nagi-short-task-b59a4575151d9a12/generations/g-1f6d0-18dc15daacb02598-0/nagi-b59a4575151d9a12-g-1f6d0-18dc15daacb02598-0",
+    "native_runtime_path": "../frozen-candidate/runtime",
+    "generated_rust_sha256": "90efd6f37de0b129b9dc7e93ca2144cdb6af839d01194b3401b837e72d2f3e80"
+  }
+]
