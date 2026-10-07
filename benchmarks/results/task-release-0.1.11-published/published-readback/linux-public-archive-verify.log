@@ -1,0 +1,5 @@
+Verified SQL engine: extracted compiler, offline schema, bad columns/binds, Nagi locations, no Cargo/runtime
+Verified 0.1.11 linux-x86_64: PATH, external projects, version, help, function aliases, shared/borrowed JSON, early Nagi diagnostics
+Verified local Rust dependency: manifest-relative path, package alias, features, default-features, separate cwd/output
+Verified standard actor library: extracted runtime, typed context, task, tracked cleanup
+Verified Task handles: extracted compiler/runtime, High/saved Low/handwritten Low, receive/discard, nested business Err, early ownership diagnostics

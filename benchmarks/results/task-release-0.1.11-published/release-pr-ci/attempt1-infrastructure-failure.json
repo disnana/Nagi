@@ -1,0 +1,10 @@
+{
+  "run_id": 37553704154,
+  "head": "c2b227533b89268028ecb2d67e39492b7aa4e4a5",
+  "failed_job_id": 112575279483,
+  "classification": "infrastructure",
+  "observed": "crates.io config.json DNS/connect/transfer failure while building handwritten Low Task example",
+  "prior_in_job": "148 contracts/runtime17/public3/doc9/High+savedLow example succeeded",
+  "action": "rerun failed jobs on same immutable head; original raw log preserved",
+  "test_expectations_changed": false
+}

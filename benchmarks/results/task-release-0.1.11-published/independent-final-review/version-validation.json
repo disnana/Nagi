@@ -1,0 +1,92 @@
+{
+  "workspace": {
+    "version": "0.1.11",
+    "edition": "2021",
+    "license": "MIT"
+  },
+  "lock_package_count": 117,
+  "lock_changed": [
+    {
+      "key": "nagi-runtime:",
+      "old": {
+        "name": "nagi-runtime",
+        "version": "0.1.10",
+        "dependencies": [
+          "axum",
+          "bumpalo",
+          "deadpool",
+          "futures-util",
+          "hyper",
+          "hyper-util",
+          "matchit",
+          "rusqlite",
+          "serde",
+          "serde_json",
+          "tokio"
+        ]
+      },
+      "new": {
+        "name": "nagi-runtime",
+        "version": "0.1.11",
+        "dependencies": [
+          "axum",
+          "bumpalo",
+          "deadpool",
+          "futures-util",
+          "hyper",
+          "hyper-util",
+          "matchit",
+          "rusqlite",
+          "serde",
+          "serde_json",
+          "tokio"
+        ]
+      }
+    },
+    {
+      "key": "nagic:",
+      "old": {
+        "name": "nagic",
+        "version": "0.1.10",
+        "dependencies": [
+          "rusqlite",
+          "serde",
+          "serde_json",
+          "toml",
+          "unicode-ident"
+        ]
+      },
+      "new": {
+        "name": "nagic",
+        "version": "0.1.11",
+        "dependencies": [
+          "rusqlite",
+          "serde",
+          "serde_json",
+          "toml",
+          "unicode-ident"
+        ]
+      }
+    }
+  ],
+  "child_package_version_workspace": {
+    "compiler/Cargo.toml": {
+      "name": "nagic",
+      "version": {
+        "workspace": true
+      }
+    },
+    "runtime/Cargo.toml": {
+      "name": "nagi-runtime",
+      "version": {
+        "workspace": true
+      }
+    }
+  },
+  "vsix": {
+    "editors/vscode-nagi/package.json": {
+      "version": "0.1.13",
+      "unchanged_from_fixed_main": true
+    }
+  }
+}

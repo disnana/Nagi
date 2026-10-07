@@ -1,0 +1,38 @@
+Nagi 0.1.11 統合release候補の独立最終review（READ ONLY）
+
+開始候補: 1062b6985195979a2afb4c16699607909ae3c44a / tree 54a6ef24e5291d3b379931c694826408d38f6120。
+日本語Doc精度修正確認: c4ddc23a905c0f0e3642a6c820c6b5d5e652b241 / tree 60c1daa29e06eb6d5fcde603a348723938d45b9d、clean。
+独立review済fix: b7545d2839d8ac6fb22e1dcbd045b1dccc11107a / tree 3e8cac92b12394f0887f661df90b989679bc0cce。
+local gitで読戻したfix main: 97e62f82b1f67dbcea699071477cbeec7388a713 / 同tree。
+compiler/src/check.rs SHA-256: 3af29cf80213715c6af5abbcb72f7a42e4060b6356bc9880cdc3b87cbd07cf69。
+
+最終確認候補: 64a7f3d5c5306abca579e5d95dd9990087747699 / tree 13b41a034bf463a9426c53327b42c4184a53c7ed、clean。
+結論: 未解決0（P0/P1/P2/P3すべて0）。既存P2条件付きTask消費blockerは修正を維持し、統合/互換移行/公開Doc/API/配布deltaに追加blockerはない。今回の日本語Doc精度とartifact README hashのP3 2点は親が修正し、各限定差分と最終凍結sourceを独立読戻し、解決済み。
+
+前回の独立review証拠を継承する。P2 TASK-LAZY-CONSUME-001はcheck段階の元Task生成行で原6ケースを拒否。独立checker58件（54拒否/4受理）、専用High/保存Low/手書きLow native各7経路、loopと通常ユーザーenvの追加native3実行が成功し、pendingOR/movedOR・元位置・always-evaluated LHS/key・lazy emissionを確認済み。今回は同じnative/全workspace/4 OSを再実行していない。
+
+自身が今回確認・実行したもの:
+- 最終immutable git SHA/tree、clean status/diff --check、fix mainとのprotected source差分、source/artifact blob SHA-256。記録のproduction/source79とartifact221すべて一致し、metadata修正後の追加差分はREADME hash1行だけ。compiler/runtime/全test/CI/scripts/AGENTS/.codexはfix mainと差分0。root manifest/lock版と公開Docs/artifactのみのrelease差分。
+- Cargo.tomlのworkspace版0.1.11。Cargo.lock変更はnagic/nagi-runtimeの版2件だけで第三者packageのrecordsと依存配列は不変。compiler/runtime manifestsはworkspace版を利用。VSIX package0.1.13とその設定は不変。
+- immutable sourceから既存plan.plan(fix_main, candidate)を読み取り実行。Nagi .11 release/packageだけtrue、VSIX .13 release/packageはfalse。正式version規則X.Y.Zかつ値増加、独立component方針と一致。
+- 既存notes.changelog_entry(candidate,nagi,0.1.11)のreadonly抽出を実行。対象版節は一つ・非空、2026-10-07、14項目。Unreleasedを代用せず、Task conditional obligationとRust embedding/API/cache移行を説明。
+- package.runtime_manifest/readme/archive_nameの純粋な生成を実行。standalone runtime version0.1.11、edition/license解決、日英README、4 OS archive名と各sha256名が一致。package/publish/networkは実行していない。
+- 追加日英Task/移行Docの条件付き受取説明を既存fixと照合。Task受取だけをRHS/fallbackへ置くと正常skip経路に義務が残り、literal条件で免除しない。常時LHS/keyでのawait/discard、およびeager受取後の通常Result条件利用を維持。
+- 日本語Task guide:29の「右辺は評価されません」は英語can be skippedと一致する「右辺は評価が省略されることがあり」へ親が修正し、1062→c4の差分がその1文だけであることを独立読戻し。c4でreadonly SHA検証がREADMEの旧hash1件を検出したため親へ通知し、c4→64a7の差分がprovenance.json内の該当hash1行だけと確認。初回metadata検証の拒否はこの精度指摘であり、プログラム/test/infra失敗ではない。原c4 mismatch証拠も保存した。
+- 日英migrationのRust code blockは同一で、前回candidate外部crate実行済み例からbyte不変。sealed CheckedProgram/finalize、private Stmt facts、public enum variant増加、native成功世代pathとcache分離の移行を説明。High原位置をuser_low_unmapped扱いにせず、Rust trait/target/adapter責務をNagiのtype/move/lifetime生成ミスへ広げていない。
+- Task kindはCopy Kind、messageはfailureに借用元が結び付くview[str]、discardはunitで受取放棄だけ。business Errとouter stickyfaultの二重Result、親try接続、legacy Supervisor/HTTP fail-on-Err、body Err/同期Drop/actual joinの保証と限界は前回review済みsource/APIから不変。新cancel/close/detach/故障昇格APIや一般Future/公開SQLiteは追加していない。
+- 公開Docsは0.1.11対象を説明し、正式Release記録で入手可否を確認する。未公開sourceを公開済みsourceとして数えず、historical 0.1.10監査/初回version候補/fix/最新release検証を区別。
+- 保存4 OS CIログのshaと148契約・conditional/service actual ok oracle・展開archive Task gateを照合。私のpost-fix主要報告/結果/log6ファイルのrepository copyは原artifactとbyte一致。
+
+継承した証拠（今回の自身実行と別）:
+- fix #92 head8db1607352bbce580bf87c1636988ce08c9b8bf7、checks37550315500/website37550315181成功、4 OS各148契約/Task native8/runtime17/public3/doc9/両例三構文/展開archive、Linux936成功/failed0/費用ignored1、fuzz1000/panic0/native16、両IDE/Ready成功は親のremote readbackとraw-validator記録。今回reviewはsaved raw/hash/oracleを読戻した。
+- 親のnetwork付き全workspace原ログ、95 result blocks/936成功/failed0/費用ignored1を継承。worker途中HTTP PermissionDeniedや中止wrapperを意味論失敗/成功へ数えていない。
+- 親のfix統合後実nagic0.1.11 release build/148契約/Task-service計6native、website92頁、221Markdown/1993local links/欠落0。保存build/contracts/examples原ログと結果を読戻した。doc1文修正はlink/実装を変えていない。
+- 親が報告した途中#91 remote head7d2d7fa923bcbec7705f8b38b4e12ed9dda58007はc4と同treeでbase97e62f82、draft。metadata修正後の64a7へのremote更新と最新CIは親が追う。reviewerはremote APIを再取得しておらず、GitHubのhead/base/CI/公開状態は親の証拠として分離する。
+
+未確認範囲/公開gate:
+- 新しい最終release PR headの4 OS/必須CI、main integration、正式Release/tag/8assets/checksum/latestの公開後readbackは親の後続gate。旧release head219605b2/tree374、fixCI成功や今回read-only reviewを新版CI/公開の代用にしない。
+- 新scheduler/raceの網羅証明、cold cache、追加target、任意panic payload/Drop・yieldしない処理の強制停止・外部rollback・外部Context cycle解消は検証していない。採用ADR012の限界を拡張しない。
+- source編集、sub-agent、commit、GitHub投稿/merge、network publicationは行っていない。自分のreport/検証artifactのみ専用/tmpへ保存。
+
+自身保存artifact: release-integration-validation.json、version-validation.json、inherited-evidence-validation-64a7f3d5.json、final-doc-correction.diff、final-metadata-correction.diff、extracted-release-notes.txt、standalone-runtime.Cargo.toml、純粋readonly検証script。歴史初回チェックとc4 mismatch/draftは最終結果の代用ではない。

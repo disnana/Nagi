@@ -1,0 +1,21 @@
+{
+  "head": "003a594de086383100016b7c75466da37705646c",
+  "checks_run": 37558874886,
+  "job": 112591422758,
+  "log_sha256": "d9baeea34b7e94098491969aa18dd7ed54b16de956684d653a5a6106416ed199",
+  "workspace_result_blocks": 95,
+  "workspace_passed": 936,
+  "workspace_failed": 0,
+  "workspace_ignored_cost": 1,
+  "task_contracts_148": true,
+  "fuzz": {
+    "bounded_native_cases": 16,
+    "check_rejected": 192,
+    "checked_low_emit_mutations": 77,
+    "coverage_guided": false,
+    "panics": 0,
+    "parse_rejected": 731,
+    "seed": 305419896,
+    "text_mutations": 1000
+  }
+}

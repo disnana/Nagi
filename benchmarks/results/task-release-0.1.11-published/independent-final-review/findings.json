@@ -1,0 +1,71 @@
+{
+  "examined_sha": "64a7f3d5c5306abca579e5d95dd9990087747699",
+  "examined_tree": "13b41a034bf463a9426c53327b42c4184a53c7ed",
+  "unresolved": 0,
+  "unresolved_by_severity": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "review_gate": "passed",
+  "new_release_blockers": [],
+  "closed_findings": [
+    {
+      "id": "TASK-LAZY-CONSUME-001",
+      "severity": "P2",
+      "status": "resolved and retained after integration",
+      "fixed_source_sha": "b7545d2839d8ac6fb22e1dcbd045b1dccc11107a",
+      "fixed_source_tree": "3e8cac92b12394f0887f661df90b989679bc0cce",
+      "carried_independent_proof": "original six reject at checker/binding line; checker58 (reject54/accept4); dedicated native7 scenarios in3 forms; boundary native3",
+      "production_source_unchanged": true
+    },
+    {
+      "id": "DOC-LAZY-EVALUATION-001",
+      "severity": "P3",
+      "release_blocker": false,
+      "status": "resolved",
+      "file": "docs/task-handles.md",
+      "line": 29,
+      "stage": "public Japanese documentation comparison with English and fixed checker/emitter",
+      "impact": "unqualified wording could imply RHS is always unevaluated",
+      "fix": "right operand evaluation can be skipped",
+      "fixed_sha": "c4ddc23a905c0f0e3642a6c820c6b5d5e652b241",
+      "independent_readback": true
+    },
+    {
+      "id": "ARTIFACT-README-HASH-001",
+      "severity": "P3",
+      "release_blocker": false,
+      "status": "resolved",
+      "file": "benchmarks/results/task-release-0.1.11/provenance.json",
+      "line": 112,
+      "stage": "immutable artifact SHA comparison",
+      "impact": "one recorded README hash described older content; source79 and other artifact220 matched",
+      "fix": "record actual README SHA-256 6057b7d2f35b4a8df83dbfb42327255ce58f6178fb0df48645c05aa4526676a5",
+      "fixed_sha": "64a7f3d5c5306abca579e5d95dd9990087747699",
+      "independent_readback": true,
+      "source_hashes_verified": 79,
+      "artifact_hashes_verified": 221
+    }
+  ],
+  "independent_checks_this_phase": {
+    "immutable_local_git_identity": "pass, clean; diff --check",
+    "protected_source_matches_fixed_main": true,
+    "production_checker_sha256": "3af29cf80213715c6af5abbcb72f7a42e4060b6356bc9880cdc3b87cbd07cf69",
+    "workspace_lock_own_versions_only": "0.1.11 nagic/nagi-runtime; third parties unchanged",
+    "vsix_version_unchanged": "0.1.13",
+    "readonly_release_plan": "Nagi release/package true; VSIX false",
+    "immutable_changelog_extract": "2026-10-07,14items",
+    "standalone_runtime_manifest": "0.1.11",
+    "archives_and_checksums": "four archives plus four checksum names",
+    "public_doc_api_compatibility_delta": "matches adopted contract and previously reviewed source",
+    "migration_rust_samples": "JA/EN identical, unchanged from independently run example",
+    "inherited_four_os_raw_log_hashes_and_oracles": "match",
+    "own_postfix_report_copies": "6 byte-identical",
+    "dynamic_tests_rerun": false
+  },
+  "source_edits_by_reviewer": false,
+  "publication_actions": false,
+  "release_gate": "parent must verify new final GitHub head CI, main and release publication readback; not completed by this independent review"
+}

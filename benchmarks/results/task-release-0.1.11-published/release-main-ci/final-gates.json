@@ -1,0 +1,83 @@
+{
+  "source": "003a594de086383100016b7c75466da37705646c",
+  "checks": {
+    "id": 37558874886,
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/disnana/Nagi/actions/runs/37558874886"
+  },
+  "website": {
+    "id": 37558874635,
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/disnana/Nagi/actions/runs/37558874635"
+  },
+  "jobs": [
+    {
+      "id": 112591367202,
+      "name": "release-plan",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112591367442,
+      "name": "changes",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112591403574,
+      "name": "nagi-package (windows-latest, windows-x86_64, nagic.exe, x86_64-pc-windows-msvc)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112591403610,
+      "name": "nagi-package (macos-15-intel, macos-x86_64, nagic, x86_64-apple-darwin)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112591403658,
+      "name": "nagi-package (ubuntu-latest, linux-x86_64, nagic, x86_64-unknown-linux-gnu)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112591403689,
+      "name": "nagi-package (macos-15, macos-arm64, nagic, aarch64-apple-darwin)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112591404957,
+      "name": "vscode-package",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 112591422758,
+      "name": "linux",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112591424574,
+      "name": "jetbrains",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 112597346200,
+      "name": "publish-release",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112597347327,
+      "name": "Ready to merge",
+      "status": "completed",
+      "conclusion": "skipped"
+    }
+  ]
+}

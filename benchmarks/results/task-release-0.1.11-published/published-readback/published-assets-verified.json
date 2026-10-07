@@ -1,0 +1,98 @@
+{
+  "tag": "nagi-v0.1.11",
+  "commit": "003a594de086383100016b7c75466da37705646c",
+  "published_at": "2026-10-07T02:11:53Z",
+  "release_url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.11",
+  "assets": [
+    {
+      "name": "nagi-0.1.11-linux-x86_64.tar.gz",
+      "bytes": 2570585,
+      "sha256": "74ba38a62439e8f5d4fff5402aaa67efa3575441647985cbcfb9b38459c5c60b",
+      "github_digest": "sha256:74ba38a62439e8f5d4fff5402aaa67efa3575441647985cbcfb9b38459c5c60b"
+    },
+    {
+      "name": "nagi-0.1.11-linux-x86_64.tar.gz.sha256",
+      "bytes": 98,
+      "sha256": "16b26af432194b19aa9407b9c19257893e277d032de9d3f000c2dcc85ea2e3bc",
+      "github_digest": "sha256:16b26af432194b19aa9407b9c19257893e277d032de9d3f000c2dcc85ea2e3bc"
+    },
+    {
+      "name": "nagi-0.1.11-macos-arm64.tar.gz",
+      "bytes": 2285214,
+      "sha256": "9b15baebdb6b1f5e02146fcd303cf377ef127b39fd44948160c54e7716af4992",
+      "github_digest": "sha256:9b15baebdb6b1f5e02146fcd303cf377ef127b39fd44948160c54e7716af4992"
+    },
+    {
+      "name": "nagi-0.1.11-macos-arm64.tar.gz.sha256",
+      "bytes": 97,
+      "sha256": "19ff91b288937abe89126e5c16c39790ba575e6ab6a518319fc9b3fd7336b034",
+      "github_digest": "sha256:19ff91b288937abe89126e5c16c39790ba575e6ab6a518319fc9b3fd7336b034"
+    },
+    {
+      "name": "nagi-0.1.11-macos-x86_64.tar.gz",
+      "bytes": 2445042,
+      "sha256": "b190f2695a3ae87f5eb388d78bf1fafb47785076456d562a82ba35eda3f2c439",
+      "github_digest": "sha256:b190f2695a3ae87f5eb388d78bf1fafb47785076456d562a82ba35eda3f2c439"
+    },
+    {
+      "name": "nagi-0.1.11-macos-x86_64.tar.gz.sha256",
+      "bytes": 98,
+      "sha256": "7f4ef9afc75181104d77b599f91bfede80398ae75805c41805c14ae8c874034e",
+      "github_digest": "sha256:7f4ef9afc75181104d77b599f91bfede80398ae75805c41805c14ae8c874034e"
+    },
+    {
+      "name": "nagi-0.1.11-windows-x86_64.zip",
+      "bytes": 2306520,
+      "sha256": "a3b088adee61f7f20782ce3528db6e4e4d3a0e6080cac45cf54edfeb74aeb68d",
+      "github_digest": "sha256:a3b088adee61f7f20782ce3528db6e4e4d3a0e6080cac45cf54edfeb74aeb68d"
+    },
+    {
+      "name": "nagi-0.1.11-windows-x86_64.zip.sha256",
+      "bytes": 98,
+      "sha256": "7a95c106bef7d7ba1089444ccc9a447a98f02bafc5ead72a3fabeb397239f144",
+      "github_digest": "sha256:7a95c106bef7d7ba1089444ccc9a447a98f02bafc5ead72a3fabeb397239f144"
+    }
+  ],
+  "archives": [
+    {
+      "name": "nagi-0.1.11-linux-x86_64.tar.gz",
+      "checksum_sidecar_matched": true,
+      "release_json": {
+        "version": "0.1.11",
+        "platform": "linux-x86_64",
+        "commit": "003a594de086383100016b7c75466da37705646c"
+      },
+      "standalone_runtime_version": "0.1.11"
+    },
+    {
+      "name": "nagi-0.1.11-macos-arm64.tar.gz",
+      "checksum_sidecar_matched": true,
+      "release_json": {
+        "version": "0.1.11",
+        "platform": "macos-arm64",
+        "commit": "003a594de086383100016b7c75466da37705646c"
+      },
+      "standalone_runtime_version": "0.1.11"
+    },
+    {
+      "name": "nagi-0.1.11-macos-x86_64.tar.gz",
+      "checksum_sidecar_matched": true,
+      "release_json": {
+        "version": "0.1.11",
+        "platform": "macos-x86_64",
+        "commit": "003a594de086383100016b7c75466da37705646c"
+      },
+      "standalone_runtime_version": "0.1.11"
+    },
+    {
+      "name": "nagi-0.1.11-windows-x86_64.zip",
+      "checksum_sidecar_matched": true,
+      "release_json": {
+        "version": "0.1.11",
+        "platform": "windows-x86_64",
+        "commit": "003a594de086383100016b7c75466da37705646c"
+      },
+      "standalone_runtime_version": "0.1.11"
+    }
+  ]
+}
