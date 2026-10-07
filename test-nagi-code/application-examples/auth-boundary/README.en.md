@@ -2,7 +2,7 @@
 
 [日本語](README.md)
 
-This example requires the unreleased `std.auth` experiment. Rust/Axum owns HTTP and credential verification, Nagi owns a custom authorization policy, and a trusted Rust adapter issues a sealed grant and reads SQLite. Ordinary classes are DTOs; `Principal` and `Grant[Read]` cannot be constructed, JSON-decoded, cloned, or shared by Nagi.
+This example uses the experimental `std.auth` API targeted for Nagi 0.1.11. Check the official release record to confirm published availability. Rust/Axum owns HTTP and credential verification, Nagi owns a custom authorization policy, and a trusted Rust adapter issues a sealed grant and reads SQLite. Ordinary classes are DTOs; `Principal` and `Grant[Read]` cannot be constructed, JSON-decoded, cloned, or shared by Nagi.
 
 ```sh
 nagic run --project test-nagi-code/application-examples/auth-boundary

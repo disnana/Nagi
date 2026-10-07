@@ -31,7 +31,7 @@ nagic --version
 nagic --help
 ```
 
-0.1.10の版表示は`nagic 0.1.10`です。`nagic -V`と`nagic version`でも確認できます。版とヘルプの表示にはRustやプロジェクト設定は必要ありません。
+0.1.11の配布compilerでは`nagic 0.1.11`と表示される想定です。`nagic -V`と`nagic version`でも確認できます。0.1.11の公開有無は公式Release記録で確かめ、実際にインストールした版は`nagic --version`で確認してください。版とヘルプの表示にはRustやプロジェクト設定は必要ありません。
 
 ### アプリのビルドに必要なもの
 
@@ -82,7 +82,7 @@ nagic run hello.nagi
 
 `check`と`lower`は現在どちらもHighの生成Lowを保存します。`check`が成功しても、Rust側の型・借用などの検査で`build`が失敗する場合があります。
 
-ビルド時のエラーには、対応を特定できる場合は元のNagi・Lowのファイル名と行を表示します。次の未リリース版では、生成Rustの詳細を`--rust-diagnostics`で表示します。手書きRustや元の位置を特定できないエラーは、通常表示にもRustの診断を残します。
+ビルド時のエラーには、対応を特定できる場合は元のNagi・Lowのファイル名と行を表示します。Nagi 0.1.11の導入対象では、生成Rustの詳細を`--rust-diagnostics`で表示できます。手書きRustや元の位置を特定できないエラーは、通常表示にもRustの診断を残します。
 
 ```powershell
 nagic check hello.nagi
@@ -98,7 +98,7 @@ nagic build hello.nagi
 | `build/hello/generated.low` | Highから変換したLow |
 | `build/hello/src/main.rs` | 生成したRust（build / run時） |
 | `build/hello/Cargo.toml` | 生成したRustプロジェクト（build / run時） |
-| `build/hello/.nagi/` | 成功したビルドごとの実行ファイル・生成物（次の未リリース版） |
+| `build/hello/.nagi/` | 0.1.11の導入対象では、成功したbuild世代ごとの実行ファイル・生成物 |
 | `native-target/` | 共有するビルド用キャッシュ |
 
 `build/<ソースのファイル名から拡張子を除いた名前>/`に出力します。別の場所に生成する場合は`--out build/my-hello`を付けます。`NAGI_NATIVE_TARGET_DIR`はビルド用キャッシュの場所を変更します。再ビルド後の実行ファイルは別のパスになるため、`native:`で確認します。[ビルド世代と共有キャッシュ](projects.md)も参照してください。
@@ -117,7 +117,7 @@ nagic build hello.nagi
 
 ### 更新する
 
-上のインストールコマンドを再実行します。実行した時点の最新公開版を確認し、ダウンロード・検証してからコマンドを切り替えます。mainの未リリース版やVSIXはインストールしません。既に最新版なら、同じ版を増やしません。
+上のインストーラーは実行時点の最新公式Releaseを確認し、ダウンロード・検証してからコマンドを切り替えます。0.1.11がRelease記録に載る前は、その時点で公開済みの最新compilerをインストールします。mainのbranch buildやVSIXはReleaseとして扱いません。既に最新版なら、同じ版を増やしません。
 
 Windowsの保存先は`%LOCALAPPDATA%\Nagi\versions`で、PATHに追加する入口はその下の`current`です。Linux/macOSの保存先は`~/.local/share/nagi`、コマンドは`~/.local/bin/nagic`です。bash/zshの設定にもPATHを追記します。更新時も入口は変わりません。
 
@@ -125,14 +125,14 @@ Windowsの保存先は`%LOCALAPPDATA%\Nagi\versions`で、PATHに追加する入
 
 以前の`nagi-v0.1.6/scripts/install.ps1`などのURLは0.1.6固定です。更新にはこのページの`main/scripts/install.ps1`を使ってください。Windowsの旧インストーラーが登録した版ごとのPATHも、固定の`current`へ整理します。VS Codeの`nagi.compilerPath`に旧版の絶対パスを指定している場合は、空欄に戻して自動探索するか、新しい実行ファイルの絶対パスを指定し、VS Codeを再起動してください。
 
-版を指定する場合は、その版の公開後に次のコマンドを使います。ここでは0.1.10を指定しています。過去の版を指定して戻す場合も、使う1版だけ残す方針は同じです。
+版を指定する場合は、その版の公開後に次のコマンドを使います。以下はNagi 0.1.11の指定例です。公式Releaseに0.1.11が掲載されたことを確認してから実行してください。過去の版へ戻す場合も、使う1版だけ残す方針は同じです。
 
 ```powershell
-& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.10
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.11
 ```
 
 ```bash
-(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.10) && export PATH="$HOME/.local/bin:$PATH"
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.11) && export PATH="$HOME/.local/bin:$PATH"
 ```
 
 保存先を変更していた場合は、再実行時も同じ`-InstallDir`（PowerShell）または`--prefix`と`--bin-dir`（bash）を指定します。`-NoPath`／`--no-path`はPATHの永続設定を変更しません。その場合は固定の入口を自分でPATHへ登録してください。別の場所へ手動展開した配布物は自動削除の対象外です。
@@ -157,14 +157,14 @@ Linux・macOSでは次を実行します。
 
 ### 自分で展開する
 
-[GitHub Releases](https://github.com/disnana/Nagi/releases)から、使うOSのファイルを取得します。以下は0.1.10のファイル名の例です。取得する版の公開済みAssetsを選んでください。
+[GitHub Releases](https://github.com/disnana/Nagi/releases)から、使うOSのファイルを取得します。以下は0.1.11の予定ファイル名です。0.1.11が公開され、該当Assetsが表示されていることを確認してから取得してください。
 
 | 使う環境 | ダウンロードするファイル |
 |---|---|
-| Windows x64 | `nagi-0.1.10-windows-x86_64.zip` |
-| Linux x86_64 | `nagi-0.1.10-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `nagi-0.1.10-macos-arm64.tar.gz` |
-| macOS Intel | `nagi-0.1.10-macos-x86_64.tar.gz` |
+| Windows x64 | `nagi-0.1.11-windows-x86_64.zip` |
+| Linux x86_64 | `nagi-0.1.11-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `nagi-0.1.11-macos-arm64.tar.gz` |
+| macOS Intel | `nagi-0.1.11-macos-x86_64.tar.gz` |
 
 アーカイブ全体を展開し、`nagic`または`nagic.exe`と`runtime/`の位置を保ってください。**展開フォルダーそのもの**をPATHに追加すると、任意の場所で`nagic`を使えます。`NAGI_ROOT`は通常不要です。GitHubの「Source code」はコンパイラ入りの配布物ではありません。
 

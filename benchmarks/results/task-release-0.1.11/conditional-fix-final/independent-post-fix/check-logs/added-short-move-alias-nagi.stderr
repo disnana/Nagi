@@ -1,0 +1,3 @@
+error: line 17: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください
+ --> /tmp/nagi-task-conditional-consumption/tests/task-handles/short-move-alias.nagi:17
+ 17 |         alias = transfer(task) # primary

@@ -31,3 +31,9 @@
 - `fmt-final.log`: `cargo fmt --all -- --check` 成功。`clippy.log`: `cargo clippy --locked --all-targets -- -D warnings` 成功。`git diff --check` と既存compiler corpus登録検査も成功。
 
 全workspace、HTTP2件の再確認、4 OS、独立critical review、最終commit/tree、merge、release接続は親の担当で、この実装者の結果では完了扱いにしない。一般view-containerを条件付きで渡し、その後containerを再使用せずownerを移動する対照例は、親が旧CLIの実build/nativeで成功を確認した。NLL上のloan終了が許される経路であり、Task blockerや今回の追加変更には数えない。
+
+## 親による最終gateとmain反映
+
+PR [#92](https://github.com/disnana/Nagi/pull/92)の最終head `8db1607352bbce580bf87c1636988ce08c9b8bf7`は[checks 37550315500](https://github.com/disnana/Nagi/actions/runs/37550315500)・[website 37550315181](https://github.com/disnana/Nagi/actions/runs/37550315181)が成功。4 OS各148契約、compiler Task native8、runtime17、公開API3、runtime doc9、両公開例の三構文、展開archive Taskを実ログから確認した。Linux全suiteは95 result block/936成功/failed0/費用ignored1（子image再実行を含む）、fuzzは固定seed305419896・1000mutation・panic0・別枠bounded native16。両IDEとReady gateも成功し、版不変のVSIX/publish skipは実行成功へ数えない。
+
+独立Sol Maxは旧6再現を元行でchecker拒否、計58 CLI check、三構文native21経路とloop/user env追加native3実行、source/hashを確認し未解決0。自身の実行と親の全workspace/4 OSを区別した。最終headをguardしてmain `97e62f82b1f67dbcea699071477cbeec7388a713`へmergeし、双方tree `3e8cac92b12394f0887f661df90b989679bc0cce`をAPI/gitで読み戻した。原ログ・独立結果とhashは[release artifact](../../benchmarks/results/task-release-0.1.11/README.md)の`conditional-fix-final/`へ保存した。正式0.1.11の公開は[release引継ぎ](handoffs/2026-10-06-task-release-0.1.11.md)の後続gateで確認する。

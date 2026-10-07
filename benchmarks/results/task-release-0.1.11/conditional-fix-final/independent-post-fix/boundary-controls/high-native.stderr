@@ -1,0 +1,4 @@
+     Locking 107 packages to highest compatible versions
+   Compiling nagi-native-high-5fc913f06e8cceeb v0.1.0 (/tmp/nagi-critical-release-review/post-fix/boundary-controls/high-out/.nagi/apps/nagi-native-high-5fc913f06e8cceeb/generations/.staging-g-25a43-18dc16f31415e4f5-0)
+    Finished `release` profile [optimized] target(s) in 2.12s
+native: /tmp/nagi-critical-release-review/post-fix/boundary-controls/high-out/.nagi/apps/nagi-native-high-5fc913f06e8cceeb/generations/g-25a43-18dc16f31415e4f5-0/nagi-5fc913f06e8cceeb-g-25a43-18dc16f31415e4f5-0

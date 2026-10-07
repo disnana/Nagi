@@ -1,0 +1,85 @@
+{
+  "head": "8db1607352bbce580bf87c1636988ce08c9b8bf7",
+  "tree": "3e8cac92b12394f0887f661df90b989679bc0cce",
+  "checks_run": 37550315500,
+  "website_run": 37550315181,
+  "checks": "success",
+  "website": "success",
+  "jobs": [
+    {
+      "id": 112563946329,
+      "name": "changes",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112563946524,
+      "name": "release-plan",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112563979493,
+      "name": "nagi-package (ubuntu-latest, linux-x86_64, nagic, x86_64-unknown-linux-gnu)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112563979526,
+      "name": "nagi-package (macos-15-intel, macos-x86_64, nagic, x86_64-apple-darwin)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112563979543,
+      "name": "nagi-package (windows-latest, windows-x86_64, nagic.exe, x86_64-pc-windows-msvc)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112563979602,
+      "name": "nagi-package (macos-15, macos-arm64, nagic, aarch64-apple-darwin)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112563981448,
+      "name": "vscode-package",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 112564004262,
+      "name": "linux",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112564004886,
+      "name": "jetbrains / JetBrains (IntelliJ IDEA)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112564004913,
+      "name": "jetbrains / JetBrains (PyCharm)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112570178083,
+      "name": "Ready to merge",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112570179061,
+      "name": "publish-release",
+      "status": "completed",
+      "conclusion": "skipped"
+    }
+  ],
+  "unresolved_threads": 0,
+  "independent_review_unresolved": 0,
+  "merge": "97e62f82b1f67dbcea699071477cbeec7388a713"
+}

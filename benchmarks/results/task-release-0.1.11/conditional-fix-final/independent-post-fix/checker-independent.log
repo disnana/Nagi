@@ -1,0 +1,56 @@
+lazy-task-high: checker rejection with expected fragment and original line
+lazy-task-saved-low: checker rejection with expected fragment and original line
+lazy-task-handwritten-low: checker rejection with expected fragment and original line
+short-task-high: checker rejection with expected fragment and original line
+short-task-saved-low: checker rejection with expected fragment and original line
+short-task-handwritten-low: checker rejection with expected fragment and original line
+symmetry-and-rhs-discard.nagi: checker rejection with expected fragment and original line
+symmetry-and-rhs-discard.low: checker rejection with expected fragment and original line
+symmetry-or-rhs-discard.nagi: checker rejection with expected fragment and original line
+symmetry-or-rhs-discard.low: checker rejection with expected fragment and original line
+symmetry-nested-short-discard.nagi: checker rejection with expected fragment and original line
+symmetry-nested-short-discard.low: checker rejection with expected fragment and original line
+symmetry-nested-env-discard.nagi: checker rejection with expected fragment and original line
+symmetry-nested-env-discard.low: checker rejection with expected fragment and original line
+symmetry-and-left-discard.nagi: accepted control
+symmetry-and-left-discard.low: accepted control
+symmetry-env-key-discard.nagi: accepted control
+symmetry-env-key-discard.low: accepted control
+added-short-and-nagi: checker rejection with expected fragment and original line
+added-short-and-low: checker rejection with expected fragment and original line
+added-short-or-nagi: checker rejection with expected fragment and original line
+added-short-or-low: checker rejection with expected fragment and original line
+added-short-unknown-nagi: checker rejection with expected fragment and original line
+added-short-unknown-low: checker rejection with expected fragment and original line
+added-short-nested-nagi: checker rejection with expected fragment and original line
+added-short-nested-low: checker rejection with expected fragment and original line
+added-short-receive-again-nagi: checker rejection with expected fragment and original line
+added-short-receive-again-low: checker rejection with expected fragment and original line
+added-lazy-env-nagi: checker rejection with expected fragment and original line
+added-lazy-env-low: checker rejection with expected fragment and original line
+added-lazy-env-nested-nagi: checker rejection with expected fragment and original line
+added-lazy-env-nested-low: checker rejection with expected fragment and original line
+added-lazy-env-receive-again-nagi: checker rejection with expected fragment and original line
+added-lazy-env-receive-again-low: checker rejection with expected fragment and original line
+added-conditional-and-rhs-discard-nagi: checker rejection with expected fragment and original line
+added-conditional-and-rhs-discard-low: checker rejection with expected fragment and original line
+added-conditional-or-rhs-discard-nagi: checker rejection with expected fragment and original line
+added-conditional-or-rhs-discard-low: checker rejection with expected fragment and original line
+added-conditional-nested-short-discard-nagi: checker rejection with expected fragment and original line
+added-conditional-nested-short-discard-low: checker rejection with expected fragment and original line
+added-conditional-nested-env-discard-nagi: checker rejection with expected fragment and original line
+added-conditional-nested-env-discard-low: checker rejection with expected fragment and original line
+added-short-unit-nagi: checker rejection with expected fragment and original line
+added-short-unit-low: checker rejection with expected fragment and original line
+added-short-str-nagi: checker rejection with expected fragment and original line
+added-short-str-low: checker rejection with expected fragment and original line
+added-short-result-nagi: checker rejection with expected fragment and original line
+added-short-result-low: checker rejection with expected fragment and original line
+added-short-move-alias-nagi: checker rejection with expected fragment and original line
+added-short-move-alias-low: checker rejection with expected fragment and original line
+added-short-reassign-nagi: checker rejection with expected fragment and original line
+added-short-reassign-low: checker rejection with expected fragment and original line
+added-short-and-saved-low: checker rejection with expected fragment and original line
+added-lazy-env-saved-low: checker rejection with expected fragment and original line
+added-short-and-saved-high: checker rejection with expected fragment and original line
+added-lazy-env-saved-high: checker rejection with expected fragment and original line

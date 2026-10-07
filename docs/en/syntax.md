@@ -180,7 +180,7 @@ async def main() -> Result[unit, Error]:
     return ok(print("Done"))
 ```
 
-This program prints `Done` after both sleeps finish. Normal scope exit waits for its children. With legacy statement spawn, detecting a child Err or panic after the body finishes stops and waits for the remaining children. Parent Future destruction or body panic requests termination without guaranteeing that termination has completed. Returning inside a scope and passing views to another task remain unsupported. Legacy statement spawn accepts only async calls returning unit or `Result[unit, Error]`. [Task result handles](task-handles.md) are implemented on the working branch and remain unreleased. See [async](async.md).
+This program prints `Done` after both sleeps finish. Normal scope exit waits for its children. With legacy statement spawn, detecting a child Err or panic after the body finishes stops and waits for the remaining children. Parent Future destruction or body panic requests termination without guaranteeing that termination has completed. Returning inside a scope and passing views to another task remain unsupported. Legacy statement spawn accepts only async calls returning unit or `Result[unit, Error]`. [Task result handles](task-handles.md) target Nagi 0.1.11. A Task binding receives its child's result inside the scope body when awaited. Handling a received failure leaves the scope fault sticky, and scope exit waits for actual joins. Check the release record to confirm published availability. See [async](async.md).
 
 ## Imports, HTTP, and Rust
 

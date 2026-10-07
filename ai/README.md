@@ -4,7 +4,7 @@ This directory contains agent documentation and a reusable development skill. Hu
 
 For changes to the Nagi compiler, runtime, editors, or repository itself, read the root [AGENTS.md](../AGENTS.md) instead. These application guides do not define compiler invariants.
 
-Nagi is useful for typed application logic with concise, indented High code (`.nagi`), existing Rust libraries behind small adapters, and handwritten Low (`.low`) where needed. High lowers to Low, then Rust builds the executable. This guide describes the repository's **0.1.10** compiler; the VS Code extension has its own **0.1.13** version. Check the actual compiler before relying on these features. Repository versions do not establish that a release has been published.
+Nagi is useful for typed application logic with concise, indented High code (`.nagi`), existing Rust libraries behind small adapters, and handwritten Low (`.low`) where needed. High lowers to Low, then Rust builds the executable. This guide targets the Nagi **0.1.11** compiler release; the VS Code extension has its own **0.1.13** version. Check the official release record and installed compiler before relying on a feature; a repository version alone does not establish publication.
 
 ## Load only what the task needs
 
@@ -59,7 +59,7 @@ nagic build my-app/build/main/generated.low --project my-app --out my-app/build/
 
 Omitting SOURCE searches upward for `nagi.toml`. An explicit source such as `nagic check my-app/main.nagi` does **not** load nearby project configuration. Use `--project` whenever the application depends on a Rust adapter, Cargo dependencies, or native Low. Paths passed on the command line are relative to the current terminal directory; paths inside `nagi.toml` are relative to that file.
 
-Do not edit generated Low/Rust to repair High source. Inspect `generated.low`, generated `src/main.rs`, and backend diagnostics to identify the source or adapter change. In the current unreleased repository compiler, stable application identity is separate from each successful build generation. Cooperating writers to the same output directory use an OS lock; successful executables remain side by side and old ones are not overwritten. Read the emitted `native:` path instead of constructing a filename from the entry stem. [`NAGI_NATIVE_TARGET_DIR`](../docs/en/projects.md) selects a shared dependency cache, not a successful generation. See [ADR 007](../docs/internal/adr/007-build-generations.md) and [CHANGELOG](../CHANGELOG.md) for scope and release status.
+Do not edit generated Low/Rust to repair High source. Inspect `generated.low`, generated `src/main.rs`, and backend diagnostics to identify the source or adapter change. In the compiler targeted for Nagi 0.1.11, stable application identity is separate from each successful build generation. Cooperating writers to the same output directory use an OS lock; successful executables remain side by side and old ones are not overwritten. Read the emitted `native:` path instead of constructing a filename from the entry stem. [`NAGI_NATIVE_TARGET_DIR`](../docs/en/projects.md) selects a shared dependency cache, not a successful generation. See [ADR 007](../docs/internal/adr/007-build-generations.md) and [CHANGELOG](../CHANGELOG.md) for scope and release status.
 
 ## Reuse tested applications and assets
 

@@ -1,0 +1,4 @@
+     Locking 107 packages to highest compatible versions
+   Compiling nagi-handwritten-efa09e36a7966f5b v0.1.0 (/tmp/nagi-critical-release-review/post-fix/boundary-controls/handwritten-low-out/.nagi/apps/nagi-handwritten-efa09e36a7966f5b/generations/.staging-g-25a7b-18dc16f41afd15d0-0)
+    Finished `release` profile [optimized] target(s) in 2.58s
+native: /tmp/nagi-critical-release-review/post-fix/boundary-controls/handwritten-low-out/.nagi/apps/nagi-handwritten-efa09e36a7966f5b/generations/g-25a7b-18dc16f41afd15d0-0/nagi-efa09e36a7966f5b-g-25a7b-18dc16f41afd15d0-0

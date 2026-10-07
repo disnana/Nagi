@@ -1,0 +1,54 @@
+{
+  "unresolved": 0,
+  "closed_findings": [
+    {
+      "id": "TASK-LAZY-CONSUME-001",
+      "original_severity": "P2",
+      "status": "resolved",
+      "original_source_sha": "3a259a5c1f27557344eec6365e050268da887a81",
+      "fixed_source_sha": "b7545d2839d8ac6fb22e1dcbd045b1dccc11107a",
+      "fixed_source_tree": "3e8cac92b12394f0887f661df90b989679bc0cce",
+      "independent_original_red_rejections": 6,
+      "independent_checker_checks": 58,
+      "independent_checker_rejected": 54,
+      "independent_checker_accepted": 4,
+      "independent_dedicated_native": [
+        {
+          "form": "high",
+          "native_tests": 1,
+          "native_scenarios_asserted": 7,
+          "explicit_receive_sites": 4,
+          "explicit_discard_sites": 2,
+          "lazy_env_sites": 3,
+          "clone_calls": 0
+        },
+        {
+          "form": "saved-low",
+          "native_tests": 1,
+          "native_scenarios_asserted": 7,
+          "explicit_receive_sites": 4,
+          "explicit_discard_sites": 2,
+          "lazy_env_sites": 3,
+          "clone_calls": 0
+        },
+        {
+          "form": "handwritten-low",
+          "native_tests": 1,
+          "native_scenarios_asserted": 7,
+          "explicit_receive_sites": 4,
+          "explicit_discard_sites": 2,
+          "lazy_env_sites": 3,
+          "clone_calls": 0
+        }
+      ],
+      "independent_additional_native_controls": 3,
+      "source_edited": false,
+      "subagents": false,
+      "full_workspace_independently_rerun": false,
+      "four_os_independently_rerun": false
+    }
+  ],
+  "new_findings": [],
+  "review_gate": "passed",
+  "release_gate": "Not evaluated; four OS, main integration, final release candidate and publication readback remain parent gates."
+}

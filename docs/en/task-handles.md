@@ -1,6 +1,6 @@
 # Receive a concurrent result once
 
-Task result handles are implemented on main. They are not included in a published release yet. The existing `spawn work()` statement remains available. See the [runnable High and handwritten Low example](../../test-nagi-code/library-examples/task-results/README.en.md).
+Task result handles and the S2 Supervisor-monitor migration target Nagi 0.1.11. S2 is implemented with the existing API; final four-OS CI passed and the change was merged into main. Check the official release record to confirm published availability. The existing `spawn work()` statement remains available. See the [runnable High and handwritten Low example](../../test-nagi-code/library-examples/task-results/README.en.md).
 
 ```nagi
 from std.task import discard
@@ -25,6 +25,8 @@ async def main() -> Result[unit, Error]:
 `task = spawn answer()` starts concurrent work and returns `Task[i64]`. `await task` consumes the handle once and returns `Result[i64, TaskFailure]` after the child has actually terminated. Direct await of an async call remains available. Storing a Future itself is unsupported.
 
 Task is non-Copy, non-Clone, and non-shared for every result type. It belongs to a local in its creating scope. Await or discard is required before normal binding exits, scope exits, and loop continuation. Both branches must satisfy this obligation. With `from std.ownership import move`, `alias = move(task)` transfers the handle and obligation. A bare `move(task)` cannot abandon it.
+
+The right side of short-circuit `and`/`or` can be skipped, and an `env` fallback is skipped when a value exists. Awaiting or discarding only there does not satisfy the normal-exit obligation. The checker does not waive this obligation based on constant conditions. Receive the Task first, then use its ordinary Result conditionally. Receipt in an always-evaluated position, such as the left operand or the `env` key, remains valid.
 
 A Task cannot escape through a function argument or return, a field, a List, an Option or Result wrapper, or another task. An inner scope cannot receive an outer scope's Task. Receive it in its original scope after the inner scope finishes. Return inside a scope remains unsupported.
 

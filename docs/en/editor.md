@@ -2,7 +2,7 @@
 
 [Contents](README.md) · [Setup](getting-started.md) · [Extension installation and settings](vscode-extension.md)
 
-Use Nagi extension 0.1.13 and `nagic` 0.1.10 to try type hovers, field completion, and definition navigation. Open the repository in VS Code, or save the example below in your own folder.
+Use Nagi extension 0.1.13 and `nagic` 0.1.11 after its availability is confirmed in the official 0.1.11 release record. This guide targets the 0.1.11 release. Open the repository in VS Code, or save the example below in your own folder.
 
 ## Indentation support
 

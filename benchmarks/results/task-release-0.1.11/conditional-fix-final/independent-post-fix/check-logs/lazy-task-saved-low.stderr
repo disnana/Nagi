@@ -1,0 +1,3 @@
+error: line 21: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください
+ --> /tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low:21
+ 21 |         let task: __nagi_def_7374646c69623a7374642e7461736b_r_5461736b[str] = spawn __nagi_def_2f746d702f6e6167692d637269746963616c2d72656c656173652d7265766965772f6c617a792d7461736b2d73617665642d736f757263652f6d61696e2e6e616769_f_776f726b();

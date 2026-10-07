@@ -1,6 +1,6 @@
 # 並行処理の結果を一度受け取る
 
-Task結果handleはmainに実装済みです。公開releaseにはまだ含まれません。旧`spawn work()`は引き続き使えます。[実行可能なHigh・手書きLowの例](../test-nagi-code/library-examples/task-results/README.md)があります。
+Task結果handleとSupervisor monitorのS2移行はNagi 0.1.11への導入対象です。S2は既存APIで実装済みで、最終4 OS CIが成功し、mainへ反映しました。公開配布で使えるかは公式Release記録を確認してください。旧`spawn work()`は引き続き使えます。[実行可能なHigh・手書きLowの例](../test-nagi-code/library-examples/task-results/README.md)があります。
 
 ```nagi
 from std.task import discard
@@ -25,6 +25,8 @@ async def main() -> Result[unit, Error]:
 `task = spawn answer()`は並行処理を開始し、`Task[i64]`を得ます。`await task`はhandleを一度消費し、子の実際の終了を待ってから`Result[i64, TaskFailure]`を返します。通常のasync呼出しを直接awaitする書き方も使えます。Futureそのものの保存には対応しません。
 
 Taskは結果の型にかかわらず非Copy・非Clone・非sharedです。作成したscope内のローカルに限り、正常なbinding出口・scope出口・loop継続までにawaitかdiscardが必要です。両方の分岐で義務を満たしてください。`from std.ownership import move`の`alias = move(task)`はhandleと義務を移します。裸の`move(task)`で放棄はできません。
+
+短絡`and`/`or`の右辺は評価が省略されることがあり、値が存在する場合の`env` fallbackは評価されません。その中だけでawait/discardしても、正常出口の義務を満たしません。checkerは条件の定数値でこの義務を省略しないため、先にTaskを受け取り、得た通常のResultを条件付きで使ってください。左辺や`env`のkeyのように必ず評価する位置での受取は有効です。
 
 Taskを関数の引数や戻り値、field、List、Option、Resultなどのwrapper、他taskへ渡すことはできません。内側の別scopeで外側のTaskを受け取ることもできません。内側のscopeが終わってから、元のscopeで受け取ってください。scope内のreturnは引き続き未対応です。
 

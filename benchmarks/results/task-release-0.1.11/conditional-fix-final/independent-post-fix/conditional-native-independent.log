@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized] target(s) in 0.05s
+     Running tests/task_handles.rs (/tmp/nagi-container-flow-target/debug/deps/task_handles-d0cc06a902147195)
+
+running 1 test
+test task_conditional_consumption::always_evaluated_receipts_and_lazy_values_run_in_three_sources ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 2.49s
+

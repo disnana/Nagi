@@ -1,0 +1,5 @@
+high: loop repeated receipt and user-defined env eager arguments preserved
+saved-low: loop repeated receipt and user-defined env eager arguments preserved
+handwritten-low: loop repeated receipt and user-defined env eager arguments preserved
+loop-skip.nagi: skipped receipt rejected at per-loop Task binding
+loop-skip.low: skipped receipt rejected at per-loop Task binding

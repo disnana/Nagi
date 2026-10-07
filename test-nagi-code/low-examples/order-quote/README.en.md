@@ -36,6 +36,6 @@ nagic build
 python3 smoke.py --executable "/path/to/executable"
 ```
 
-Replace `/path/to/executable` with the actual path shown in the build's `native:` line. The next unreleased compiler also adds an identifier to default executable names. On Windows, include `.exe` in the path. This also works when `NAGI_NATIVE_TARGET_DIR` changes the build location.
+Replace `/path/to/executable` with the path printed to standard error in the build's `native:` line. Successful executables are stored by build generation under the generated directory's `.nagi/`. This layout targets Nagi 0.1.11; check the official release record to confirm published availability. `NAGI_NATIVE_TARGET_DIR` selects a shared dependency cache; it does not change the executable location. Do not construct the filename or generation path. On Windows, use the `.exe` path printed in `native:`.
 
 [日本語](README.md) · [High and Low](../../../docs/en/low-language.md) · [JSON](../../../docs/en/json.md)

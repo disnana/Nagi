@@ -52,7 +52,7 @@ async def main() -> Result[unit, Error]:
 
 ## 旧statement spawnとscopeのリファレンス
 
-scope本体が終わると、子の結果を確認します。子が`Result`のエラーを返したりpanicしたりすると、残りをキャンセルして終了を待ちます。scope本体の実行中に子の失敗で割り込む動作はありません。`spawn`できるのは、`unit`か`Result[unit, Error]`を返す非同期処理です。scope内の`return`と、viewを子へ渡すことは未対応です。
+旧statement spawnではscope本体が終わると子の結果を確認し、子のErrやpanicで残りをキャンセルして終了を待ちます。子の失敗が本体へ割り込むことはありません。一方、Task bindingをawaitすると本体の実行中でもそのTaskの結果を受け取れます。受取failureを処理してもscope faultは残り、scope出口で全子の実joinを待ちます。旧statement形式でspawnできるのは、`unit`か`Result[unit, Error]`を返す非同期処理です。scope内の`return`と、viewを子へ渡すことは未対応です。
 
 引数は`spawn`を書いた場所で評価し、できた値を子へ渡します。`spawn work(copy(part))`のようにviewから所有値を作ると、元のデータを親でも使い続けられます。配列をコピーしても中身にviewが残る場合は、子へ渡せません。
 
@@ -60,9 +60,9 @@ scopeを使う関数はResultを返します。独自のエラーclass・enumを
 
 scope本体の`try`でErrを伝えて退出する場合は、子をキャンセルして終了を待ってから外側へErrを伝えます。親のFutureそのものが破棄された場合や、scope本体がpanicした場合には、子へ停止を要求します。同期のDropでは非同期の終了待ちができないため、その場で全員の終了が完了している保証はありません。取消要求は、受理済みのDB操作などの外部副作用を巻き戻すものでもありません。CPU処理の停止については[並行処理](concurrency.md)を参照してください。
 
-### 並行な子の結果を受け取る（作業branch・未リリース）
+### 並行な子の結果を受け取る（Nagi 0.1.11導入対象）
 
-S1の`task = spawn work()`、`await task`、`std.task.discard(task)`は作業branchに実装しました。[Task結果handle](task-handles.md)に、全Tの一回消費、正常出口でのawait/discard義務、scope外へのescape拒否とTaskFailure APIをまとめています。内側の業務Errは兄弟を止めず、受取faultを処理してもscope故障は残ります。上の旧statement spawnは子の`Result[unit, Error]` Errで兄弟を取消す動作を維持します。Supervisor/HTTP移行と公開SQLite Pool/Txは別工程です。
+S1の`task = spawn work()`、`await task`、`std.task.discard(task)`とS2のSupervisor monitor移行はNagi 0.1.11の導入対象です。S2は既存Task APIでmonitorをawaitし、`Ok(inner)`を親bodyの`try`へ渡します。実装は完了し、最終4 OS CIが成功し、mainへ反映しました。公開配布で使えるかはRelease記録を確認してください。[Task結果handle](task-handles.md)に、全Tの一回消費、正常出口でのawait/discard義務、scope外へのescape拒否とTaskFailure APIをまとめています。内側の業務Errは兄弟を止めず、受取faultを処理してもscope故障は残ります。旧statement spawnは`Result[unit, Error]` Errで兄弟を取消す動作を維持します。公開SQLite Pool/Txは別工程です。
 
 ## 関数を変数に入れて呼び出す
 

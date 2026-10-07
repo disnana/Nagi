@@ -2,7 +2,7 @@
 
 Start with [installation](getting-started.md). To look up code, open the [syntax reference](syntax.md) or [built-in functions](builtins.md).
 
-These Docs describe the repository source; code examples use Nagi 0.1.10 and VS Code extension 0.1.13. The official site is normally built from main and can include unreleased changes. See the [Changelog](../../CHANGELOG.md) for versioned changes and work under `Unreleased`.
+These Docs target Nagi 0.1.11 as the compiler version; the VS Code extension remains a separate component at 0.1.13. The official site is normally built from main and may include changes not yet published. Check the official release record to confirm 0.1.11 availability. See the [Changelog](../../CHANGELOG.md) and the [0.1.11 migration guide](migration-0.1.11.md).
 
 See [About Nagi](introduction.md) for its purpose and current scope. The references below describe implemented APIs and their limits. Unimplemented proposals are kept in [design](library-design.md) and the [roadmap](roadmap.md).
 
@@ -43,7 +43,7 @@ See the [VS Code guide](editor.md) for editor support. See [JetBrains installati
 
 Runnable examples are in [examples/tutorial/](../../examples/tutorial/). References also include code fragments.
 
-Tutorial code uses today's syntax. The explicit-move migration, [Task result handles](task-handles.md) on the working branch (unreleased), and shared actor messages are tracked in the [adopted design direction](../../DESIGN.en.md#adopted-direction-for-values-failures-and-tasks). Repository implementation and published release status are distinguished.
+Tutorial code uses the current syntax. Explicit move and Task result handles target Nagi 0.1.11; check its official release record before using them with a published compiler. See the [migration guide](migration-0.1.11.md) and [Task result handles](task-handles.md). Shared actor messages remain future design work.
 
 ## Implementation and development
 

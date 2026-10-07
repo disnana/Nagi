@@ -1,6 +1,6 @@
 # Supervisorでカウンターを管理する
 
-actorが値を順番に更新し、HTTP handlerが結果を返す例です。`CounterError`は利用者向けの失敗で、値を保ったまま返します。actor自体が失敗するとSupervisorが再起動し、factoryで初期状態を作り直します。
+actorが値を順番に更新し、HTTP handlerが結果を返す例です。`CounterError`は利用者向けの失敗で、値を保ったまま返します。actor自体が失敗するとSupervisorが再起動し、factoryで初期状態を作り直します。この例のSupervisor monitor移行は既存Task APIで実装済みです。Nagi 0.1.11への導入対象で、最終4 OS CIが成功し、mainへ反映しました。公開配布での利用可否は公式Release記録を確認してください。
 
 このディレクトリで実行してください。
 

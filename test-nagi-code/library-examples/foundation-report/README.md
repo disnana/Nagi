@@ -34,6 +34,6 @@ nagic run --project test-nagi-code/library-examples/foundation-report
 
 入力classは数値fieldだけなのでCopyとして反復できます。出力のclassはラベルなどを所有し、型を付けたListへ`append`します。1000行と共有APIの価格上限により、合計もi64の範囲に収まります。料金の単位・丸め・検証条件とRustへの置き換えは[共有APIの説明](../shared/README.md)を参照してください。
 
-`nagi.toml`は`foundation_report.nagi`と`native.rs`を指定します。Rust側はCLIと同じ`../shared/bridge.rs`と`pricing.rs`です。DB・HTTP・追加crateを使いません。生成ソースはこのフォルダーの`build/foundation_report/`です。実行ファイルは`native:`行のパスで確認します。次の未リリース版では既定名にも識別子が付き、`build/native-target/release/nagi-foundation-report-<識別子>`となります。Windowsでは`.exe`が付き、`NAGI_NATIVE_TARGET_DIR`で出力先を変更できます。ビルドにはRust/CargoとCビルド環境が必要です。
+`nagi.toml`は`foundation_report.nagi`と`native.rs`を指定します。Rust側はCLIと同じ`../shared/bridge.rs`と`pricing.rs`です。DB・HTTP・追加crateを使いません。生成ソースはこのフォルダーの`build/foundation_report/`です。成功した実行ファイルは各build世代の生成先`.nagi/`に保存されるため、`native:`行に出る実際のpathを使い、固定のfilenameやgeneration pathを組み立てないでください。この実行ファイル配置はNagi 0.1.11への導入対象で、公開配布での利用可否は公式Release記録を確認してください。`NAGI_NATIVE_TARGET_DIR`は共有依存cacheを選び、実行ファイルの場所は変更しません。Windowsでは`native:`行のpathに`.exe`が含まれます。ビルドにはRust/CargoとCビルド環境が必要です。
 
 [English](README.en.md)

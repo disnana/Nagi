@@ -1,0 +1,80 @@
+[
+  {
+    "form": "high",
+    "command": [
+      "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+      "run",
+      "/tmp/nagi-critical-release-review/post-fix/boundary-controls/native-high.nagi",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/post-fix/boundary-controls/high-out"
+    ],
+    "returncode": 0,
+    "stdout": "loop-receipt\nloop-receipt\nenv-receipt\nuser-env\nloop-and-user-env-ok\n",
+    "source_sha256": "dad336b3a6451b5a4f238005a134b450596acb672e61f1aced25e0eb6c048248",
+    "origin_high_main_exists": false,
+    "runtime": "/tmp/nagi-task-conditional-consumption/runtime"
+  },
+  {
+    "form": "saved-low",
+    "command": [
+      "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+      "run",
+      "/tmp/nagi-critical-release-review/post-fix/boundary-controls/saved.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/post-fix/boundary-controls/saved-low-out"
+    ],
+    "returncode": 0,
+    "stdout": "loop-receipt\nloop-receipt\nenv-receipt\nuser-env\nloop-and-user-env-ok\n",
+    "source_sha256": "16d2f19027d4b33fa8fc0a90f7a02ba58e5a42f3e904d7f24e817baad0ab4e9e",
+    "origin_high_main_exists": false,
+    "runtime": "/tmp/nagi-task-conditional-consumption/runtime"
+  },
+  {
+    "form": "handwritten-low",
+    "command": [
+      "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+      "run",
+      "/tmp/nagi-critical-release-review/post-fix/boundary-controls/handwritten.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/post-fix/boundary-controls/handwritten-low-out"
+    ],
+    "returncode": 0,
+    "stdout": "loop-receipt\nloop-receipt\nenv-receipt\nuser-env\nloop-and-user-env-ok\n",
+    "source_sha256": "23b2ace210af910563a8d7c8f42eba308da1f2ab6bef14af7a765bcaa3dc7946",
+    "origin_high_main_exists": false,
+    "runtime": "/tmp/nagi-task-conditional-consumption/runtime"
+  },
+  {
+    "form": "loop-skip.nagi",
+    "command": [
+      "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/post-fix/boundary-controls/loop-skip.nagi",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/post-fix/boundary-controls/loop-skip.nagi-out"
+    ],
+    "returncode": 1,
+    "expected_primary_line": 13,
+    "diagnostic_fragment": "未受取Task",
+    "native_build": false
+  },
+  {
+    "form": "loop-skip.low",
+    "command": [
+      "/tmp/nagi-critical-release-review/post-fix/bin/nagic",
+      "check",
+      "/tmp/nagi-critical-release-review/post-fix/boundary-controls/loop-skip.low",
+      "--no-project",
+      "--out",
+      "/tmp/nagi-critical-release-review/post-fix/boundary-controls/loop-skip.low-out"
+    ],
+    "returncode": 1,
+    "expected_primary_line": 9,
+    "diagnostic_fragment": "未受取Task",
+    "native_build": false
+  }
+]

@@ -16,7 +16,7 @@ These functions need no imports. `T` stands for a supported type. User-defined g
 
 `read_line` displays pending output, then reads a line and removes its trailing newline. It retains other whitespace and returns an empty string at the end of input. It blocks while waiting for input, so use it in console applications.
 
-`env` evaluates its second argument only when the variable is unavailable. When a value exists, a function constructing the default is not called. See [Unreleased](../../CHANGELOG.md) for the generation fix for defaults containing `try` or `await`.
+`env` evaluates its second argument only when the variable is unavailable. When a value exists, a function constructing the default is not called. The generation fix for defaults containing `try` or `await` targets Nagi 0.1.11; check [GitHub Releases](https://github.com/disnana/Nagi/releases) to confirm published availability.
 
 ## Strings, lists, and borrowing
 

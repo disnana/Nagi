@@ -1,0 +1,3 @@
+error: line 7: 未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください
+ --> /tmp/nagi-critical-release-review/lazy-symmetry/nested-short-discard.low:7
+ 7 |         let task = spawn work(); # primary

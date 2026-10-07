@@ -2,7 +2,7 @@
 
 初めて使うなら[インストール](getting-started.md)、書き方を調べるなら[文法](syntax.md)・[組み込み関数](builtins.md)へ。
 
-このDocsのコード例はNagi 0.1.10とVS Code拡張0.1.13を基準にしています。公式サイトは通常mainから生成するため、未リリースの変更も含まれます。版ごとの変更と`Unreleased`の内容は[Changelog](../CHANGELOG.md)で確認できます。
+このDocsはNagi 0.1.11をcompiler基準版とし、VS Code拡張0.1.13は別componentとして扱います。公式サイトは通常mainから生成するため、まだ公開されていない変更も含むことがあります。0.1.11の公開有無は公式Release記録で確認してください。版ごとの変更は[Changelog](../CHANGELOG.md)、互換性の変更は[0.1.11移行ガイド](migration-0.1.11.md)にあります。
 
 目的と現在の範囲は[Nagiについて](introduction.md)へ。以下のリファレンスは実装済みAPIの使い方と制限を示します。未実装の案は[設計](library-design.md)・[開発予定](roadmap.md)に分けています。
 
@@ -43,7 +43,7 @@
 
 動かせる入門例は[examples/tutorial/](../examples/tutorial/)にあります。リファレンスにはコードの断片も載せています。
 
-入門のコードは現行の書き方です。明示moveの移行仕様、作業branchに実装済み・未リリースの[Task結果handle](task-handles.md)とactorのshared messageは[採用した設計方向](../DESIGN.md#値失敗taskについて採用する方針)に分けており、実装状況と公開版への反映を区別します。
+入門のコードは現行の書き方です。明示moveとTask結果handleは0.1.11への導入対象で、公開版で使えるかはRelease記録で確認してください。[移行ガイド](migration-0.1.11.md)と[Task結果handle](task-handles.md)に使い方をまとめています。actorのshared messageは将来の設計対象です。
 
 ## 仕組みと開発状況
 

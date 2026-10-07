@@ -1,0 +1,3 @@
+error: line 17: 未受取Taskを再代入で放棄できません。先にawaitまたはdiscardしてください
+ --> /tmp/nagi-task-conditional-consumption/tests/task-handles/short-reassign.nagi:17
+ 17 |         task = spawn work() # primary

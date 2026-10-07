@@ -1,0 +1,1037 @@
+{
+  "base": "815b7d554dba3ac6b11ddad2089b782cbed46eb1",
+  "head": "08e90c6984e689f7d026b3ff40277b9898ab4c68",
+  "scope": "全143初期ref＋Nagi自身のCargo.lock2entry。過去tags・fixtures・内部保存ログ・依存crate versionsは更新対象にしない。",
+  "counts": {
+    "update": 105,
+    "preserve": 38,
+    "review": 2
+  },
+  "refs": [
+    {
+      "path": "CHANGELOG.md",
+      "line": 3,
+      "text": "## Unreleased",
+      "action": "update",
+      "reason": "現Unreleasedを非空のNagi0.1.11/date sectionへ移し、S1/S2とsealed-emitter移行を追記。過去sectionは維持。"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "line": 20,
+      "text": "## Nagi 0.1.10",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "line": 85,
+      "text": "- Publish the extension to Visual Studio Marketplace as 0.1.11. There are no functionality changes from 0.1.10.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "line": 87,
+      "text": "## Nagi 0.1.8 / VS Code 0.1.10",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "Cargo.toml",
+      "line": 6,
+      "text": "version = \"0.1.10\"",
+      "action": "update",
+      "reason": "Nagi workspaceとlockfileのnagic/nagi-runtimeを0.1.11へ更新。"
+    },
+    {
+      "path": "DESIGN.en.md",
+      "line": 52,
+      "text": "| Write ordinary `a = b` | Use ordinary assignment for Copy; use `std.ownership.move` to transfer an existing non-Copy local | **Implemented on the work branch; unreleased**. Fresh values and existing argument, return, and field/index rules are retained |",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.en.md",
+      "line": 54,
+      "text": "| Receive a concurrent result | Let scope own child lifetime and receive the result once through a handle | **Implemented on the S1 working branch, unreleased**. Task receives once; legacy spawn retains unit/Result[unit, Error] |",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.en.md",
+      "line": 64,
+      "text": "Explicit move and the narrow assignment migration are implemented on the work branch and are unreleased. Use the existing import mechanism, `from std.ownership import move`, then `a = move(b)` to transfer the value and cleanup responsibility. This does not clone, create shared ownership, or extend a lifetime. Fresh construction does not require a move annotation; current Copy rules are retained. Supported local async function aliases remain Copy; moving a Future or nested Future is unsupported. A view is a read borrow, shared provides safe shared ownership, and copy creates an independent duplicate.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.en.md",
+      "line": 66,
+      "text": "The [implementation plan](docs/internal/value-task-implementation-plan.md) records the rules, migration scope, and tests added first. The explicit operation and rejection of ordinary non-Copy local assignment are implemented together; [progress](docs/internal/progress.md) separately records validation across High/Low, Rust generation, samples, both languages of the docs, and four OS CI. Task result handles are connected on the S1 working branch. Merge and release require separate decisions.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.en.md",
+      "line": 68,
+      "text": "[ADR 012](docs/internal/adr/012-task-result-handles.md) is **connected on the S1 working branch, unreleased**. `task = spawn work()` creates a scope-local handle; `await task` receives once. Every T requires await or `std.task.discard` at normal exits. Move transfers the obligation. Tasks cannot escape via scopes, arguments/returns, fields, containers, wrappers, or another task. Task is non-Copy, non-Clone, and non-shared. Canonical metadata provides TaskFailure kind/message getters. Business Results remain nested inside outer task failures. Handling a receive Err leaves the scope fault sticky: observation, sibling cancellation requests, all actual joins, then scope Error. The original body Err is preserved. Discard abandons receipt without confirming termination.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.en.md",
+      "line": 112,
+      "text": "The unreleased `std.auth` module carries an authenticated `Principal` and a `Grant[P]` bound to a permission type and resource. Ordinary classes remain useful for inputs and claims, but construction and JSON decoding cannot establish successful verification. Nagi cannot construct, JSON-decode, copy, or share these proofs; protected APIs consume them by move.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.en.md",
+      "line": 151,
+      "text": "Standard HTTP exposes typed requests, responses, shared state, and async handlers. SQLite converts rows into classes, but bind arguments have fixed shapes, and ordinary `check` does not validate SQL strings or column names. Nagi 0.1.10 supports explicit [SQL/schema checks](docs/en/sql-check.md) for names, required result columns, and bind counts. These checks do not validate value types or NULL behavior. Standard pool, transaction, and PostgreSQL APIs are absent. New DB resources and adapter contracts are discussed in the [library design proposal](docs/en/library-design.md).",
+      "action": "preserve",
+      "reason": "既存APIの導入版・panic限界説明。"
+    },
+    {
+      "path": "DESIGN.en.md",
+      "line": 161,
+      "text": "The HTTP implementation on main converts catchable handler panics before response start into a 500 without internal details. This does not guarantee recovery during a response, recovery from abort or OOM, or rollback of state changes or database work. Check the [CHANGELOG](CHANGELOG.md) for inclusion in published releases.",
+      "action": "preserve",
+      "reason": "既存APIの導入版・panic限界説明。"
+    },
+    {
+      "path": "DESIGN.en.md",
+      "line": 195,
+      "text": "Phase 2's PR #79 passed the four-platform and editor/package CI and was merged into main. It has not reached a published version. Phase 3 first records current resource behavior in characterization tests, then consolidates capability and type-argument retention metadata. It preserves purpose-specific checks and existing APIs and does not add resource lifecycle guarantees. [ADR 008](docs/internal/adr/008-resource-contracts.md) records the structure and validation order. PR #80 passed the four-platform, editor, website, and merge-gate CI and was merged into main. Pool/Transaction remain unimplemented. The [decision record](docs/internal/open-questions.md) and [progress](docs/internal/progress.md) distinguish verified coverage, changes on main or in published versions, and planned work.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.md",
+      "line": 52,
+      "text": "| 普通の`a = b`を書く | Copyなら通常代入。既存の非Copyローカルを渡すなら`std.ownership.move`を使う | **作業branchで実装済み・未リリース**。新値生成、引数・return・field/indexの既存規則は維持する |",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.md",
+      "line": 54,
+      "text": "| 並行な処理から結果を得る | scopeが子の寿命を持ち、handleから結果を一度受け取る | **S1作業branchで実装・未リリース**。Taskは一回受取、旧spawnはunit/Result[unit, Error]を維持 |",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.md",
+      "line": 64,
+      "text": "明示moveと狭い代入移行は作業branchで実装済み・未リリースです。既存のimportに沿って`from std.ownership import move`を使い、`a = move(b)`で値と後片付けの責任を渡します。暗黙clone、shared化、寿命の延長は行いません。新しく作る値にはmove指定を要求せず、Copy判定は現行の規則を保ちます。対応済みのローカルasync関数別名もCopyのままで、Futureや入れ子のFutureをmoveで渡す機能はありません。viewは読み取りの借用、sharedは同じ値の安全な共有、copyは独立した複製です。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.md",
+      "line": 66,
+      "text": "[実装計画](docs/internal/value-task-implementation-plan.md)に仕様、移行対象、先行テストを記録しています。明示操作と非Copyローカルの通常代入拒否を一つの変更として実装し、High/Low・Rust生成・サンプル・日英Docs・4 OS CIの検証状況は[進捗](docs/internal/progress.md)に分けて残します。task結果handleはS1作業branchへ接続しました。mergeとreleaseは別途判断します。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.md",
+      "line": 68,
+      "text": "S1は[ADR 012](docs/internal/adr/012-task-result-handles.md)に沿い**作業branchへ接続済み・未リリース**です。`task = spawn work()`でscope内handleを作り、`await task`で一回受け取ります。全Tの正常出口でawaitまたは`std.task.discard`を求め、moveは義務も移します。scope外・引数/return・field/container/wrapper・他taskへのescapeを拒否します。Taskは非Copy・非Clone・非sharedで、TaskFailureのkind/messageは標準metadataに接続します。業務Resultは外側faultと分け、受取Errを処理してもscope故障を消しません。fault観測→兄弟取消要求→全actual join→scope出口Errorの順とbody元Errを保ちます。discardは受取放棄であり、終了確認ではありません。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.md",
+      "line": 112,
+      "text": "未リリースの`std.auth`は、認証済みの`Principal`と権限型・対象に結び付いた`Grant[P]`を扱います。通常のclassは入力やclaimsを表す型として使えますが、構築やJSON復元ができるため、認証成功の証明にはしません。proofはNagiから構築・JSON復元・copy・shared化できず、保護APIへmoveして渡します。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "DESIGN.md",
+      "line": 151,
+      "text": "現在の標準HTTPは型付きrequest・response・共有state・async handlerを提供します。SQLiteはclassへの行変換を提供しますが、bindは固定形で、SQL文字列や列名を通常の`check`で検査しません。Nagi 0.1.10以降では、schemaを明示して名前・必要な返却列・bind数を確認する[SQLの事前検査](docs/sql-check.md)を使えます。値の型・NULL可否は検査しません。pool・transaction・PostgreSQLの標準APIもありません。新しいDB資源とアダプターの契約は[ライブラリ設計案](docs/library-design.md)で検討します。",
+      "action": "preserve",
+      "reason": "既存APIの導入版・panic限界説明。"
+    },
+    {
+      "path": "README.en.md",
+      "line": 1,
+      "text": "# Nagi 0.1.10 — a backend language in development",
+      "action": "update",
+      "reason": "現在のタイトル・README例の基準版を0.1.11へ。"
+    },
+    {
+      "path": "README.en.md",
+      "line": 44,
+      "text": "The installer comes from main; the compiler comes from a published Release. The examples here use Nagi 0.1.10. Check your installed compiler with `nagic --version`, and see [CHANGELOG](CHANGELOG.md) for versioned changes and unreleased work.",
+      "action": "update",
+      "reason": "現在のタイトル・README例の基準版を0.1.11へ。"
+    },
+    {
+      "path": "README.en.md",
+      "line": 119,
+      "text": "SQLite SQL literals support explicit [schema checks](docs/en/sql-check.md) for names, required result columns, and bind counts. Value types, NULL behavior, and consistency with the deployed schema are not guaranteed. Check the [CHANGELOG](CHANGELOG.md) for inclusion in published releases.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "README.md",
+      "line": 1,
+      "text": "# Nagi 0.1.10 — 開発中のバックエンド向け言語",
+      "action": "update",
+      "reason": "現在のタイトル・README例の基準版を0.1.11へ。"
+    },
+    {
+      "path": "README.md",
+      "line": 44,
+      "text": "インストーラーはmainから、コンパイラは公開Releaseから取得します。このREADMEのコード例はNagi 0.1.10用です。インストールした版は`nagic --version`で、版ごとの変更と未リリースの変更は[CHANGELOG](CHANGELOG.md)で確認できます。",
+      "action": "update",
+      "reason": "現在のタイトル・README例の基準版を0.1.11へ。"
+    },
+    {
+      "path": "ai/README.md",
+      "line": 7,
+      "text": "Nagi is useful for typed application logic with concise, indented High code (`.nagi`), existing Rust libraries behind small adapters, and handwritten Low (`.low`) where needed. High lowers to Low, then Rust builds the executable. This guide describes the repository's **0.1.10** compiler; the VS Code extension has its own **0.1.13** version. Check the actual compiler before relying on these features. Repository versions do not establish that a release has been published.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/README.md",
+      "line": 62,
+      "text": "Do not edit generated Low/Rust to repair High source. Inspect `generated.low`, generated `src/main.rs`, and backend diagnostics to identify the source or adapter change. In the current unreleased repository compiler, stable application identity is separate from each successful build generation. Cooperating writers to the same output directory use an OS lock; successful executables remain side by side and old ones are not overwritten. Read the emitted `native:` path instead of constructing a filename from the entry stem. [`NAGI_NATIVE_TARGET_DIR`](../docs/en/projects.md) selects a shared dependency cache, not a successful generation. See [ADR 007](../docs/internal/adr/007-build-generations.md) and [CHANGELOG](../CHANGELOG.md) for scope and release status.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/language.md",
+      "line": 18,
+      "text": "| Transfer an existing owned non-Copy local | `from std.ownership import move`, then `destination = move(source)` (unreleased repository compiler) |",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/language.md",
+      "line": 28,
+      "text": "The work branch implements unreleased `std.ownership.move`: import `move`, then use `destination = move(source)` to transfer an existing owned non-Copy local. Bare local RHS assignment is rejected, including declarations, annotations, reassignment, and parentheses. Fresh construction and existing argument/return/field/index/try/match consumption rules are unchanged; do not wrap every transfer.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/language.md",
+      "line": 32,
+      "text": "Confirm the compiler version before assuming an installed release has these rules. Task result handles are implemented on the S1 working branch and remain unreleased; shared actor messages remain a future direction. See [ownership](../docs/en/ownership.md), [async](../docs/en/async.md), and [ADR 011](../docs/internal/adr/011-language-behavior-and-docs.md).",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/language.md",
+      "line": 78,
+      "text": "For integer `/` and `%`, the repository's unreleased common typed constant validator rejects proven zero divisors, including `1 - 1` and supported scalar aliases, and signed MIN division/remainder by `-1` across eight integer widths. It does not evaluate arbitrary function calls or propagate profile-dependent overflow values. Runtime-dependent divisors still need validation. Released 0.1.10's earlier literal-zero rule is narrower; see [constant validation](../compiler/tests/constant_validation.rs), [language contracts](../docs/internal/language-invariants.md), and [CHANGELOG](../CHANGELOG.md) before relying on the repository's additions.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/language.md",
+      "line": 86,
+      "text": "Normal `async with scope` exit waits for children. Legacy statement `spawn work()` accepts children returning `unit` or `Result[unit, Error]` and cancels siblings on child Err/panic. On the unreleased S1 branch, `task = spawn work()` accepts supported owned result types; `await task` preserves an inner business Result without cancelling siblings for its Err. Passing borrowed views or returning from inside the scope remains unsupported. Parent Future destruction requests abort without synchronously awaiting child completion. Async CPU work does not automatically run on another thread. Cancellation is not rollback of external work or shared state.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/language.md",
+      "line": 97,
+      "text": "Only registered standard modules use unquoted imports: `std.http.server`, `std.actor`, and `std.result`; the unreleased repository also registers `std.auth`, `std.ownership`, and `std.task`. Module imports require an alias, for example `import std.result as result`. There is no general package discovery or arbitrary `import serde_json`; declare a Rust adapter for crates.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/language.md",
+      "line": 115,
+      "text": "See [syntax](../docs/en/syntax.md), [types](../docs/en/types.md), and [ownership](../docs/en/ownership.md) for exact forms. Evidence: [Result checks](../compiler/tests/result_discard.rs), [Result matching](../compiler/tests/result_match.rs), [Option matching](../compiler/tests/option_match.rs), [view origins](../compiler/tests/view_origins.rs), [async values](../compiler/tests/async_value_types.rs), [iteration borrows](../compiler/tests/iterator_borrows.rs), and [registered imports](../compiler/tests/stdlib_imports.rs). [View-rebinding execution tests](../compiler/tests/view_branch_rebinding.rs) cover temporary local borrows restored to an input view inside return-terminated blocks. The current repository adds [checked storage tests](../compiler/tests/view_flow_completion.rs) for List/Result/Option restoration, nested values, branches, loops, and async. [Cleanup tests](../compiler/tests/view_container_drop.rs) cover RHS failure, replacement Drop panic, and Future cancellation; [real scope tests](../compiler/tests/scope_runtime_contract.rs) cover lexical borrowing and nested error cleanup. Local views still cannot escape their owner. These unreleased changes require the current repository compiler; check [CHANGELOG](../CHANGELOG.md) before assuming they are in an installed release. Rust adapter types and trait bounds still require a successful `build` after `check`.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/language.md",
+      "line": 117,
+      "text": "Task result handles are available on the S1 working branch, not in a published release: `task = spawn work()` within scope; `await task` consumes once and yields `Result[T, TaskFailure]`, retaining a nested business Result. Every T requires await or `std.task.discard(task)` before normal binding/scope exit or loop continuation. Task is non-Copy/non-Clone/non-shared and cannot escape through arguments/return/fields/containers/wrappers/another task or a nested scope. Move transfers the obligation. Handling a TaskFailure does not clear the scope fault; scope exit joins all children and returns Error. `std.task.kind` and `message` inspect failure; message borrows the failure. Discard abandons receipt without stopping/detaching or suppressing faults. See [Task handles](../docs/en/task-handles.md). Existing statement spawn/Supervisor/HTTP behavior is preserved.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/skills/nagi-development/SKILL.md",
+      "line": 13,
+      "text": "2. Run `nagic --version` and `nagic --help`. The accompanying repository guides describe compiler 0.1.10; confirm the installed compiler instead of assuming the VS Code extension's version is the language version.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/skills/nagi-development/SKILL.md",
+      "line": 14,
+      "text": "3. Pick a small working example or inspect current builtin signatures/tests before adding an unfamiliar API. Registered unquoted imports include `std.http.server`, `std.actor`, and `std.result`; the unreleased repository adds `std.auth` and `std.ownership`. Confirm installed-compiler support; Rust crates require an adapter, not a new arbitrary Nagi import. Roadmap proposals are not available APIs.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/skills/nagi-development/SKILL.md",
+      "line": 24,
+      "text": "In the unreleased repository compiler, import `move` from `std.ownership` and use `destination = move(source)` for a bare owned non-Copy local assignment; declarations, annotations, reassignment, and parentheses follow this rule. Fresh values and argument/return/field/index consumption keep their existing rules. Copy policy is unchanged, including supported local async function aliases; Result/shared remain non-Copy. Qualified imports and aliases use the canonical operation; user functions named `move` remain ordinary. The operation takes one inferred input, with no explicit type arguments, cloning, or allocation. It preserves nested view origins and cleanup responsibility, without allowing borrowed/shared field theft, Future/nested Future inputs, or first-class standard operation values. Confirm installed-release support before generating this syntax.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/skills/nagi-development/SKILL.md",
+      "line": 53,
+      "text": "For a different entry stem, use its generated directory. In the current unreleased repository compiler, stable application identity is separate from each successful build generation. Cooperating writers to one output directory use an OS lock; successful executables remain side by side. Read the emitted `native:` path. Set `NAGI_NATIVE_TARGET_DIR` to choose a shared dependency cache, not a successful generation. Confirm installed-release support before relying on this repository behavior. Retain the generated Cargo.lock. For a locked Rust resolution after generation, run `cargo build --release --locked --manifest-path build/main/Cargo.toml`; `nagic build --locked` is unsupported.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "ai/skills/nagi-development/SKILL.md",
+      "line": 65,
+      "text": "State the behavior delivered, relevant files, checks actually run, and any remaining build/environment limitation. Separate successful Nagi checks from successful Rust builds and executed behavior. Do not infer complete error handling, concurrency safety, rollback, server guarantees, or published release status from a successful `check` or a roadmap entry.",
+      "action": "preserve",
+      "reason": "検査だけで公開済みと推測しない一般原則。"
+    },
+    {
+      "path": "docs/README.md",
+      "line": 5,
+      "text": "このDocsのコード例はNagi 0.1.10とVS Code拡張0.1.13を基準にしています。公式サイトは通常mainから生成するため、未リリースの変更も含まれます。版ごとの変更と`Unreleased`の内容は[Changelog](../CHANGELOG.md)で確認できます。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/README.md",
+      "line": 46,
+      "text": "入門のコードは現行の書き方です。明示moveの移行仕様、作業branchに実装済み・未リリースの[Task結果handle](task-handles.md)とactorのshared messageは[採用した設計方向](../DESIGN.md#値失敗taskについて採用する方針)に分けており、実装状況と公開版への反映を区別します。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/async.md",
+      "line": 63,
+      "text": "### 並行な子の結果を受け取る（作業branch・未リリース）",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/async.md",
+      "line": 65,
+      "text": "S1の`task = spawn work()`、`await task`、`std.task.discard(task)`は作業branchに実装しました。[Task結果handle](task-handles.md)に、全Tの一回消費、正常出口でのawait/discard義務、scope外へのescape拒否とTaskFailure APIをまとめています。内側の業務Errは兄弟を止めず、受取faultを処理してもscope故障は残ります。上の旧statement spawnは子の`Result[unit, Error]` Errで兄弟を取消す動作を維持します。Supervisor/HTTP移行と公開SQLite Pool/Txは別工程です。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/builtins.md",
+      "line": 19,
+      "text": "`env`の第2引数は、環境変数を取得できなかったときだけ評価します。値が存在すれば、既定値を作る関数も呼びません。既定値の式で`try`や`await`を使う場合の生成修正は[Unreleased](../CHANGELOG.md)を参照してください。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/database.md",
+      "line": 33,
+      "text": "Nagi 0.1.10以降では、これらの型を`owned[...]`で包んだフィールドにも行の読み取り実装を自動生成します。`owned[str]`や`owned[i64?]`に手書きの`FromRow`は不要です。以前の回避策として追加していた場合は、重複する実装を削除してください。対応外のフィールドは、Rust側の読み取り実装や型変換を使います。",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/database.md",
+      "line": 71,
+      "text": "Nagi 0.1.10以降では、[SQLの事前検査](sql-check.md)を明示的に指定すると、SQLiteの文字列リテラルの構文・名前・必要な返却列・bind数を確認できます。動的SQL、`db_exec`、実データの型・NULL・値の範囲は対象外で、対応するフィールド型では実行時のResultで扱います。未対応の行フィールドなど、Rustの変換要件を満たさない型はbuildで失敗する場合もあります。",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/editor.md",
+      "line": 5,
+      "text": "Nagi拡張0.1.13と`nagic` 0.1.10で、型ホバー・フィールド補完・定義への移動を試します。リポジトリをVS Codeで開くか、以下のコードを自分のフォルダーへ保存してください。",
+      "action": "update",
+      "reason": "現在のcompiler基準版だけ0.1.11へ。VS Code0.1.13は別componentとして維持。"
+    },
+    {
+      "path": "docs/en/README.md",
+      "line": 5,
+      "text": "These Docs describe the repository source; code examples use Nagi 0.1.10 and VS Code extension 0.1.13. The official site is normally built from main and can include unreleased changes. See the [Changelog](../../CHANGELOG.md) for versioned changes and work under `Unreleased`.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/README.md",
+      "line": 46,
+      "text": "Tutorial code uses today's syntax. The explicit-move migration, [Task result handles](task-handles.md) on the working branch (unreleased), and shared actor messages are tracked in the [adopted design direction](../../DESIGN.en.md#adopted-direction-for-values-failures-and-tasks). Repository implementation and published release status are distinguished.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/async.md",
+      "line": 63,
+      "text": "### Receive a child's result (working branch, unreleased)",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/async.md",
+      "line": 65,
+      "text": "S1 implements `task = spawn work()`, `await task`, and `std.task.discard(task)` on the working branch. [Task result handles](task-handles.md) describes single consumption for every T, await/discard obligations at normal exits, scope escape rejection, and TaskFailure APIs. An inner business Err does not stop siblings; handling a receive fault leaves the scope failed. The legacy statement spawn above still cancels siblings on a child `Result[unit, Error]` Err. Supervisor/HTTP migration and public SQLite Pool/Tx remain separate work.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/builtins.md",
+      "line": 19,
+      "text": "`env` evaluates its second argument only when the variable is unavailable. When a value exists, a function constructing the default is not called. See [Unreleased](../../CHANGELOG.md) for the generation fix for defaults containing `try` or `await`.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/database.md",
+      "line": 33,
+      "text": "Nagi 0.1.10 also generates row readers for these types wrapped in `owned[...]`. Fields such as `owned[str]` and `owned[i64?]` need no handwritten `FromRow`; remove any earlier workaround implementation that would now duplicate the generated one. For unsupported fields, use a Rust row reader or type conversion.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/en/database.md",
+      "line": 71,
+      "text": "Nagi 0.1.10 supports explicit [SQL checks](sql-check.md) that validate SQLite string literals for syntax, names, required result columns, and bind counts. Dynamic SQL, `db_exec`, and actual value types, NULLs, and ranges remain outside this check; supported field types handle these at runtime through Result. Unsupported row fields or other unmet Rust conversion requirements may instead fail at build time.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/en/editor.md",
+      "line": 5,
+      "text": "Use Nagi extension 0.1.13 and `nagic` 0.1.10 to try type hovers, field completion, and definition navigation. Open the repository in VS Code, or save the example below in your own folder.",
+      "action": "update",
+      "reason": "現在のcompiler基準版だけ0.1.11へ。VS Code0.1.13は別componentとして維持。"
+    },
+    {
+      "path": "docs/en/error-handling.md",
+      "line": 186,
+      "text": "For integers, `check` rejects `/` or `%` with an explicit zero divisor in both High and Low. The unreleased constant validation also rejects `1 / (1 - 1)` and zero values established by scalar bindings within the same function. Division or remainder of a signed integer's minimum by `-1` is also rejected. New constant diagnostics run after successful name and type checking.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/error-handling.md",
+      "line": 190,
+      "text": "In Nagi 0.1.10, HTTP servers convert unwinding handler panics before the response starts into a generic 500 and close the connection. A 500 does not roll back database or shared state changes. See the [HTTP reference](http-server.md#app-and-routes) for the recovery limits.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/en/getting-started.md",
+      "line": 34,
+      "text": "For Nagi 0.1.10, the version output is `nagic 0.1.10`. You can also use `nagic -V` or `nagic version`. Version and help work without Rust or project configuration.",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/en/getting-started.md",
+      "line": 85,
+      "text": "When a source location can be identified, build errors show the corresponding Nagi or Low filename and line. In the next unreleased version, use `--rust-diagnostics` to include generated Rust details. Errors in handwritten Rust, or errors without an identifiable source location, retain Rust's diagnostics in the normal output.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/getting-started.md",
+      "line": 101,
+      "text": "| `build/hello/.nagi/` | Executables and generated snapshots for successful builds (next unreleased version) |",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/getting-started.md",
+      "line": 118,
+      "text": "Run the installation command above again. It checks the latest published release, downloads and verifies it, then switches the command. It installs neither unreleased main builds nor the VSIX. Repeating an install of the same version does not add another copy.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/getting-started.md",
+      "line": 126,
+      "text": "To select a specific version, use the commands below once that version is published. These examples use 0.1.10. The same one-version retention policy applies.",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/en/getting-started.md",
+      "line": 129,
+      "text": "& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.10",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/en/getting-started.md",
+      "line": 133,
+      "text": "(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.10) && export PATH=\"$HOME/.local/bin:$PATH\"",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/en/getting-started.md",
+      "line": 158,
+      "text": "Download the file for your OS from [GitHub Releases](https://github.com/disnana/Nagi/releases). The names below use 0.1.10; select the assets listed for your chosen published version.",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/en/getting-started.md",
+      "line": 162,
+      "text": "| Windows x64 | `nagi-0.1.10-windows-x86_64.zip` |",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/en/getting-started.md",
+      "line": 163,
+      "text": "| Linux x86_64 | `nagi-0.1.10-linux-x86_64.tar.gz` |",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/en/getting-started.md",
+      "line": 164,
+      "text": "| macOS Apple Silicon | `nagi-0.1.10-macos-arm64.tar.gz` |",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/en/getting-started.md",
+      "line": 165,
+      "text": "| macOS Intel | `nagi-0.1.10-macos-x86_64.tar.gz` |",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/en/http-legacy.md",
+      "line": 115,
+      "text": "Nagi 0.1.10 converts handler panics before the response starts into 500 responses. This does not roll back database or state updates, or recover from process aborts and failures during response transmission. See [Error handling](error-handling.md#checks-and-panics) for its scope.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/en/http-server.md",
+      "line": 80,
+      "text": "In Nagi 0.1.10, an unwinding panic in a handler or mapper before the response starts returns a generic 500 and closes that connection. Catching a panic does not roll back shared state or database updates. Return ordinary failures through Result. Recovery is not guaranteed for `panic=abort`, process termination such as OOM, a second panic during unwinding, custom Rust cleanup, or failures after the response starts.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/en/http-server.md",
+      "line": 99,
+      "text": "In Nagi 0.1.10, a handler that completes normally after its deadline returns 504, including when it did not yield. The deadline cannot forcibly stop synchronous work: the response waits for control to return, and completed state changes are not rolled back.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/en/language-guide.md",
+      "line": 156,
+      "text": "To transfer a string to another local, make the operation explicit. This assignment rule is implemented on the work branch and is unreleased:",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/library-design.md",
+      "line": 74,
+      "text": "Do not translate SQL automatically or send BEGIN/COMMIT through different pooled connections. Static SQL/schema checks and runtime checks of actual types/NULLs are separate. Ordinary `check` does not validate SQL. Nagi 0.1.10 supports explicit [SQLite checks](sql-check.md), which do not guarantee actual value types or NULL behavior.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/en/measurements.md",
+      "line": 181,
+      "text": "This checks for observed abnormalities and unreleased FDs within a finite period. It does not prove absence of memory leaks, multi-day stability, allocator fragmentation, or GC pauses. Retained high-water RSS needs further observation separating drops, allocator retention, and fragmentation. Whole-process allocation/free tracking and heap profiling were not performed.",
+      "action": "preserve",
+      "reason": "unreleased FDsは未解放file descriptorsでありsoftware公開版ではない。"
+    },
+    {
+      "path": "docs/en/modules-and-rust.md",
+      "line": 64,
+      "text": "Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted imports select registered modules such as `std.http.server`, `std.actor`, and `std.result`. The work branch also registers unreleased `std.auth` and `std.ownership`. General package discovery and visibility declarations are unsupported.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/modules-and-rust.md",
+      "line": 66,
+      "text": "The unreleased `std.auth` experiment provides an authenticated `Principal` and a consumed `Grant[P]`. The [authentication and authorization example](../../test-nagi-code/application-examples/auth-boundary/README.en.md) connects Rust verification with a custom Nagi policy. It uses fixed credentials; it does not implement JWS verification or check authorization across every route.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/modules-and-rust.md",
+      "line": 114,
+      "text": "`std.ownership.move` is implemented on the work branch and is unreleased. Call it through a module name or an imported alias. This complete program prints `Nagi`:",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/ownership.md",
+      "line": 23,
+      "text": "The explicit move and assignment rules below are implemented on the work branch and are unreleased. An installed release may not support them. Python assignment keeps another reference to the same value. Nagi uses ordinary assignment for Copy values, such as numbers and bools. To transfer an existing non-Copy local, use `move`; ordinary `destination = name` is rejected.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/projects.md",
+      "line": 126,
+      "text": "The next unreleased version stores an executable for each build under the generated directory's `.nagi/`. The same entry source and output directory keep their application ID, while rebuilding changes the executable path. Builds do not overwrite, delete, or stop an older executable. A failed build does not run its new executable and leaves the previous successful metadata in place.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/projects.md",
+      "line": 130,
+      "text": "`NAGI_NATIVE_TARGET_DIR` shares dependency builds across applications. The default cache also distinguishes applications. Nagi 0.1.10 added identifiers only with this environment variable; both paths now follow the same rule. Scripts that looked up binaries using the cache or Cargo package name should use `native:`. Identifiers and internal paths are not fixed across compiler versions. Choose distribution filenames when copying executables.",
+      "action": "preserve",
+      "reason": "既定cache identityと0.1.10との差を説明する明示的な比較履歴。"
+    },
+    {
+      "path": "docs/en/roadmap.md",
+      "line": 12,
+      "text": "4. **Generalize database access.** Use separate modules and resource types for SQLite and PostgreSQL while aligning parameter, row, and error rules. The initial SQLite Pool/Tx API and cleanup policy have been adopted. A private prototype has tested capacity, cancellation, and shutdown with two connections, but the public API remains unimplemented. Pool/Tx is not yet available through the standard library. Nagi 0.1.10's [explicit SQL/schema checks](sql-check.md) cover SQLite names, result columns, and bind counts, but not value types, NULL behavior, or other databases.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/en/roadmap.md",
+      "line": 18,
+      "text": "The narrow migration requiring explicit move for assignment of an existing owned value, spawn result handles, and business Err/task fault separation are implemented on the working branch and remain unreleased. S2 Supervisor/HTTP migration and conditional shared actor messages remain later design work. See [DESIGN](../../DESIGN.en.md) and [ADR 011](../internal/adr/011-language-behavior-and-docs.md) for differences from published releases, unresolved details, and migration conditions.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/roadmap.md",
+      "line": 34,
+      "text": "S1 Task result handles are connected on the working branch and remain unreleased. See [usage](task-handles.md) and [validation status](../internal/task-handles-s1-results.md). S2 Supervisor/HTTP migration and public Pool/Tx remain later work.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/sql-check.md",
+      "line": 3,
+      "text": "Supply a schema to `check` to validate names, result columns, and bind counts in SQLite SQL strings before execution. Ordinary `check`, `build`, and `run` do not enable this automatically. This feature is supported in Nagi 0.1.10; see the [Changelog](../../CHANGELOG.md) for versioned changes.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/en/syntax.md",
+      "line": 183,
+      "text": "This program prints `Done` after both sleeps finish. Normal scope exit waits for its children. With legacy statement spawn, detecting a child Err or panic after the body finishes stops and waits for the remaining children. Parent Future destruction or body panic requests termination without guaranteeing that termination has completed. Returning inside a scope and passing views to another task remain unsupported. Legacy statement spawn accepts only async calls returning unit or `Result[unit, Error]`. [Task result handles](task-handles.md) are implemented on the working branch and remain unreleased. See [async](async.md).",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/task-handles.md",
+      "line": 3,
+      "text": "Task result handles are implemented on the S1 working branch. They are not included in a published release yet. The existing `spawn work()` statement remains available.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/en/types.md",
+      "line": 43,
+      "text": "In Nagi 0.1.10, `view[bytes]` iteration and indexing yield `u8` values. Character iteration and integer indexing of `view[str]` are unsupported. Use `slice` to borrow part of a string with checked UTF-8 byte boundaries.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/en/types.md",
+      "line": 45,
+      "text": "Nagi 0.1.10 supports rebinding a view parameter to local data and adding local views to lists that hold views. These views cannot outlive their local owners or be returned as borrowed input data. Complex borrows across branches can still pass check and fail the Rust build.",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/error-handling.md",
+      "line": 186,
+      "text": "整数の`/`・`%`で除数を直接`0`と書くと、High・Lowとも`check`が拒否します。未リリースの定数検査では、`1 / (1 - 1)`や同じ関数内で確定した変数の0も拒否します。符号付き整数の最小値を`-1`で割る、または剰余を求める場合も対象です。新しい定数診断は名前・型検査の成功後に行います。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/error-handling.md",
+      "line": 190,
+      "text": "Nagi 0.1.10以降のHTTPサーバーは、応答開始前のhandlerでunwindするpanicを詳細のない500へ変換して接続を閉じます。HTTP応答へ変換できても、DBや共有状態の変更は巻き戻しません。回復できる範囲の詳細は[HTTPリファレンス](http-server.md#appとroute)を参照してください。",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "line": 34,
+      "text": "0.1.10の版表示は`nagic 0.1.10`です。`nagic -V`と`nagic version`でも確認できます。版とヘルプの表示にはRustやプロジェクト設定は必要ありません。",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "line": 85,
+      "text": "ビルド時のエラーには、対応を特定できる場合は元のNagi・Lowのファイル名と行を表示します。次の未リリース版では、生成Rustの詳細を`--rust-diagnostics`で表示します。手書きRustや元の位置を特定できないエラーは、通常表示にもRustの診断を残します。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "line": 101,
+      "text": "| `build/hello/.nagi/` | 成功したビルドごとの実行ファイル・生成物（次の未リリース版） |",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "line": 120,
+      "text": "上のインストールコマンドを再実行します。実行した時点の最新公開版を確認し、ダウンロード・検証してからコマンドを切り替えます。mainの未リリース版やVSIXはインストールしません。既に最新版なら、同じ版を増やしません。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "line": 128,
+      "text": "版を指定する場合は、その版の公開後に次のコマンドを使います。ここでは0.1.10を指定しています。過去の版を指定して戻す場合も、使う1版だけ残す方針は同じです。",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "line": 131,
+      "text": "& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.1.10",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "line": 135,
+      "text": "(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.1.10) && export PATH=\"$HOME/.local/bin:$PATH\"",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "line": 160,
+      "text": "[GitHub Releases](https://github.com/disnana/Nagi/releases)から、使うOSのファイルを取得します。以下は0.1.10のファイル名の例です。取得する版の公開済みAssetsを選んでください。",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "line": 164,
+      "text": "| Windows x64 | `nagi-0.1.10-windows-x86_64.zip` |",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "line": 165,
+      "text": "| Linux x86_64 | `nagi-0.1.10-linux-x86_64.tar.gz` |",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "line": 166,
+      "text": "| macOS Apple Silicon | `nagi-0.1.10-macos-arm64.tar.gz` |",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "line": 167,
+      "text": "| macOS Intel | `nagi-0.1.10-macos-x86_64.tar.gz` |",
+      "action": "update",
+      "reason": "現在nagic --version・明示版インストール・archive名を0.1.11へ。古い導入版の履歴は保持。"
+    },
+    {
+      "path": "docs/http-legacy.md",
+      "line": 115,
+      "text": "Nagi 0.1.10以降では、応答開始前のhandlerのpanicを500へ変換します。DBや状態の更新を巻き戻さず、プロセスのabortや応答送信中の障害は回復しません。詳しい範囲は[エラー処理](error-handling.md#検査とpanicの範囲)を参照してください。",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/http-server.md",
+      "line": 80,
+      "text": "Nagi 0.1.10以降では、応答開始前のhandlerやmapperでunwindするpanicが起きた場合、詳細を含まない500を返し、その接続を閉じます。これはpanicの検出であり、共有状態やDBの更新を巻き戻す仕組みではありません。通常の失敗はResultで返してください。`panic=abort`、OOMなどによるプロセス終了、unwind中の二重panic、独自Rustの解放処理、応答開始後の障害は回復を保証しません。",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/http-server.md",
+      "line": 99,
+      "text": "Nagi 0.1.10以降では、handlerの応答生成が正常に完了した時点で期限を過ぎていれば、504を返します。同期処理を期限時刻に強制停止する機能ではありません。処理が制御を戻すまで応答は遅れ、すでに行った状態変更も巻き戻しません。",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/language-guide.md",
+      "line": 156,
+      "text": "別のローカル変数へ文字列を渡す場合は、次のように明示します。この代入規則は作業branchで実装済み・未リリースです。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/library-design.md",
+      "line": 74,
+      "text": "SQLは自動翻訳せず、poolの別接続へBEGIN／COMMITを送る方式も使いません。SQL/schemaの静的検査と実データの型・NULL検査は分けます。通常の`check`はSQLを検査しません。Nagi 0.1.10以降では明示的な[SQLiteの事前検査](sql-check.md)を使えますが、実データの型・NULLの保証は含みません。",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/modules-and-rust.md",
+      "line": 64,
+      "text": "同じ実ファイルは、複数のmodule名・fromの別名・従来のimportを使っても1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在はエラーです。存在しない定義のfrom importや、同じ場所で異なる定義を同じ名前にするimportは、そのimport文でエラーになります。引用符なしのimportは登録済みの`std.http.server`、`std.actor`、`std.result`等を対象にします。作業branchでは未リリースの`std.auth`と`std.ownership`も登録されています。一般packageの探索と公開範囲の指定は未対応です。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/modules-and-rust.md",
+      "line": 66,
+      "text": "未リリースの`std.auth`では、認証済みの`Principal`と消費型の`Grant[P]`を試しています。Rustの検証処理とNagiの独自policyをつなぐ例は[認証・認可サンプル](../test-nagi-code/application-examples/auth-boundary/README.md)にあります。固定credentialの実験で、JWS検証や全routeの認可チェックを提供するものではありません。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/modules-and-rust.md",
+      "line": 114,
+      "text": "`std.ownership.move`は作業branchで実装済み・未リリースです。module名と定義の別名のどちらでも呼び出せます。次の完全な例は`Nagi`を表示します。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/ownership.md",
+      "line": 23,
+      "text": "以下の明示moveと代入規則は作業branchで実装済み・未リリースです。インストール済みの公開版では使えるとは限りません。Pythonの代入は同じ値への参照を増やします。Nagiでは、数値やboolなどCopyとして扱う値は通常代入できます。既存の非Copyローカルを渡す場合は`move`を使い、裸の`destination = name`は拒否します。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/projects.md",
+      "line": 126,
+      "text": "次の未リリース版では、生成先の`.nagi/`内にビルドごとの実行ファイルを保存します。同じ入口ソースと生成先ならアプリIDは変わりませんが、再ビルド後の実行ファイルのパスは変わります。起動中の旧実行ファイルを上書き・削除・停止する処理はありません。ビルドが失敗した場合は、新しい実行ファイルを起動せず、前回の成功を示すmetadataを残します。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/projects.md",
+      "line": 130,
+      "text": "`NAGI_NATIVE_TARGET_DIR`を指定すると、依存ライブラリのビルドを複数のアプリで共有できます。既定キャッシュでも別のアプリを識別します。0.1.10では環境変数を指定した場合だけ識別していたため、その経路を揃える変更です。実行ファイルをcacheやCargoのpackage名から探していたスクリプトは、`native:`行のパスを使ってください。識別子と内部パスはcompiler版をまたいで固定された名前ではありません。配布用の名前はコピー時に指定できます。",
+      "action": "preserve",
+      "reason": "既定cache identityと0.1.10との差を説明する明示的な比較履歴。"
+    },
+    {
+      "path": "docs/roadmap.md",
+      "line": 12,
+      "text": "4. **DBを汎用化する。** SQLiteとPostgreSQLは別module・別資源型とし、引数・行・エラーの規則を揃える。SQLite Pool/Txの初版APIと終了方針は採用済み。内部試作では二接続の容量・取消・終了を検証したが、公開APIは未実装。標準APIからPool/Txを使える段階にはない。Nagi 0.1.10の[明示SQL/schema検査](sql-check.md)はSQLiteの名前・返却列・bind数が対象で、値の型・NULLや他DBの検査は未対応。",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/roadmap.md",
+      "line": 18,
+      "text": "既存所有値の代入に明示moveを要求する狭い移行と、spawnの結果handle・業務Errとtask故障の分離は、作業branchへ実装済み・未リリースです。Supervisor/HTTPのS2移行と条件付きshared actor messageは後続の設計対象です。公開版との差、未決の細部、移行条件は[DESIGN](../DESIGN.md)と[ADR 011](internal/adr/011-language-behavior-and-docs.md)へまとめています。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/roadmap.md",
+      "line": 34,
+      "text": "S1 Task結果handleは作業branchへ接続済み・未リリースです。[使い方](task-handles.md)と[検証状況](internal/task-handles-s1-results.md)を分けています。Supervisor/HTTPのS2移行と公開Pool/Txは後続です。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/sql-check.md",
+      "line": 3,
+      "text": "Nagi 0.1.10以降では、`check`にschemaを指定すると、SQLiteのSQL文字列の名前・返却列・bind数を実行前に検査できます。通常の`check`や`build`・`run`では自動で有効になりません。版ごとの変更は[変更履歴](../CHANGELOG.md)を参照してください。",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/syntax.md",
+      "line": 183,
+      "text": "このコードは両方のsleepが終了してから`完了`を表示します。通常のscope終了では子taskを待ちます。旧statement spawnでは本体終了後に子のErrやpanicを検出すると、残りの子を止めて待ちます。親Futureの破棄や本体panicでは停止要求と終了確認を区別します。scope内の`return`とviewを別taskへ渡すことは未対応です。旧statement spawnはunitか`Result[unit, Error]`を返すasync呼出しに限ります。[Task結果handle](task-handles.md)は作業branchに実装済み・未リリースです。詳細は[async](async.md)を参照してください。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/task-handles.md",
+      "line": 3,
+      "text": "Task結果handleは作業branchのS1実装です。公開releaseにはまだ含まれません。旧`spawn work()`は引き続き使えます。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "docs/types.md",
+      "line": 43,
+      "text": "Nagi 0.1.10以降では、`view[bytes]`を`for`で読むと、各要素は`u8`です。indexで取り出す値も`u8`になります。`view[str]`の文字単位の反復や整数indexは未対応です。文字列の一部を借りる場合は、UTF-8のbyte境界を確認する`slice`を使います。",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "docs/types.md",
+      "line": 45,
+      "text": "Nagi 0.1.10以降では、関数内で引数のviewを局所データのviewへ付け替えたり、viewを含む配列へ局所データのviewを追加したりできます。局所データを借りたviewは、そのデータの寿命を越えて保存・返却できません。分岐をまたぐ複雑な借用では、checkを通ってもRustのビルドに失敗する場合があります。",
+      "action": "preserve",
+      "reason": "過去に導入済みの版・最小対応版、または一般的なリリース説明。機械置換しない。"
+    },
+    {
+      "path": "editors/jetbrains-nagi/README.en.md",
+      "line": 24,
+      "text": "Select `nagi-jetbrains-*.zip` in **Settings → Plugins → ⚙ → Install Plugin from Disk**, then restart the IDE. For a local build, use the ZIP in `build/distributions/`. The plugin has not been published to the Marketplace.",
+      "action": "preserve",
+      "reason": "Marketplace未公開のJetBrains plugin状況。Nagi release公開では変えない。"
+    },
+    {
+      "path": "test-nagi-code/README.en.md",
+      "line": 7,
+      "text": "Obtain the full repository and run from its root. You need Nagi 0.1.9, Rust/Cargo, and your OS's build tools; see [setup](../docs/en/getting-started.md). A compiler built from `main` may include unreleased fixes even when its version number matches the public release.",
+      "action": "review",
+      "reason": "全repoproject案内の最小版0.1.9はauth等新例に不足。現repo一式の推奨版0.1.11と各例の最小版を区別。"
+    },
+    {
+      "path": "test-nagi-code/README.md",
+      "line": 7,
+      "text": "リポジトリ一式を取得し、そのルートで実行してください。Nagi 0.1.9とRust/Cargo、OSごとのビルド環境が必要です。[セットアップ](../docs/getting-started.md)を参照してください。`main`からビルドしたコンパイラには、公開版と同じ版番号でも未リリースの修正が含まれる場合があります。",
+      "action": "review",
+      "reason": "全repoproject案内の最小版0.1.9はauth等新例に不足。現repo一式の推奨版0.1.11と各例の最小版を区別。"
+    },
+    {
+      "path": "test-nagi-code/application-examples/README.en.md",
+      "line": 15,
+      "text": "| [Authentication and authorization boundaries](auth-boundary/README.en.md) | Rust authentication, custom Nagi policy, and a consumed grant for a protected DB operation. Unreleased experiment |",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "test-nagi-code/application-examples/README.en.md",
+      "line": 19,
+      "text": "The byte inspector requires Nagi 0.1.10 or later; the Axum quote API is verified with 0.1.10. The authentication example is an unreleased experiment. The other existing examples also run on Nagi 0.1.9. Download or clone the repository, then run each folder with its `nagi.toml` from the repository root. See [setup](../../docs/en/getting-started.md) for Rust/Cargo and your OS's build tools.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "test-nagi-code/application-examples/README.md",
+      "line": 15,
+      "text": "| [認証・認可の型境界](auth-boundary/README.md) | Rustの認証、Nagiの独自policy、消費型の許可証を使うDB操作。未リリースの実験 |",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "test-nagi-code/application-examples/README.md",
+      "line": 19,
+      "text": "バイト列APIにはNagi 0.1.10以降が必要で、Axum見積APIは0.1.10で検証しています。認証・認可の例は未リリースの実験で、その他の既存例はNagi 0.1.9でも動きます。サンプルはリポジトリ一式を取得し、そのルートで各フォルダの`nagi.toml`を指定して実行してください。Rust/CargoとOSごとのビルド環境は[セットアップ](../../docs/getting-started.md)で確認できます。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "test-nagi-code/application-examples/auth-boundary/README.en.md",
+      "line": 5,
+      "text": "This example requires the unreleased `std.auth` experiment. Rust/Axum owns HTTP and credential verification, Nagi owns a custom authorization policy, and a trusted Rust adapter issues a sealed grant and reads SQLite. Ordinary classes are DTOs; `Principal` and `Grant[Read]` cannot be constructed, JSON-decoded, cloned, or shared by Nagi.",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "test-nagi-code/application-examples/auth-boundary/README.md",
+      "line": 5,
+      "text": "未リリースの`std.auth`実験例です。Rust/AxumがHTTPとcredential検証、Nagiが独自認可policy、Rust adapterが封印した許可証の発行とSQLite readを担当します。通常classはDTOに使います。`Principal`と`Grant[Read]`は、Nagiからの手動構築・JSON復元・clone・shared化を許さない型です。",
+      "action": "update",
+      "reason": "採用済みcurrent機能のbranch/未リリース表示を0.1.11導入へ。公開前はrelease対象予定と書き、公開後のreadbackで確定。未来機能の未実装表示は維持。"
+    },
+    {
+      "path": "test-nagi-code/application-examples/axum-service/README.en.md",
+      "line": 11,
+      "text": "Run from the repository root. This example is verified with Nagi 0.1.10. nagic and Rust/Cargo are required. The server listens at `http://127.0.0.1:8097`; change the port with `NAGI_SAMPLE_PORT`. Press Ctrl+C to stop.",
+      "action": "preserve",
+      "reason": "0.1.10で検証済みという過去記録・byte API導入最小版は有効。0.1.11での新検証は別途追記できる。"
+    },
+    {
+      "path": "test-nagi-code/application-examples/axum-service/README.md",
+      "line": 11,
+      "text": "リポジトリのルートで実行します。この例はNagi 0.1.10で検証しています。nagicとRust/Cargoが必要です。接続先は`http://127.0.0.1:8097`で、`NAGI_SAMPLE_PORT`で変更できます。Ctrl+Cで停止します。",
+      "action": "preserve",
+      "reason": "0.1.10で検証済みという過去記録・byte API導入最小版は有効。0.1.11での新検証は別途追記できる。"
+    },
+    {
+      "path": "test-nagi-code/application-examples/byte-inspector/README.en.md",
+      "line": 9,
+      "text": "This example requires Nagi 0.1.10 or later for the byte-view iteration and indexing fixes. The following command builds the compiler from repository source and runs the example:",
+      "action": "preserve",
+      "reason": "0.1.10で検証済みという過去記録・byte API導入最小版は有効。0.1.11での新検証は別途追記できる。"
+    },
+    {
+      "path": "test-nagi-code/application-examples/byte-inspector/README.md",
+      "line": 9,
+      "text": "この例には、バイト列の反復・indexの修正を含むNagi 0.1.10以降が必要です。次のコマンドはリポジトリのソースからコンパイラをビルドして実行します。",
+      "action": "preserve",
+      "reason": "0.1.10で検証済みという過去記録・byte API導入最小版は有効。0.1.11での新検証は別途追記できる。"
+    },
+    {
+      "path": "test-nagi-code/library-examples/foundation-cli/README.en.md",
+      "line": 31,
+      "text": "Generated sources go to this folder's `build/foundation_cli/`. Read the executable path from the `native:` line. The next unreleased compiler also adds an identifier to default names: `build/native-target/release/nagi-foundation-cli-<identifier>`, with `.exe` on Windows. `NAGI_NATIVE_TARGET_DIR` overrides that output directory. Building requires Rust/Cargo and a compatible C build environment.",
+      "action": "update",
+      "reason": "現native generation契約へ。成功実行ファイルはgenerated-dir/.nagi内の世代別artifact、NAGI_NATIVE_TARGET_DIRは共有依存cache。native:を読み固定cache pathを組まない。"
+    },
+    {
+      "path": "test-nagi-code/library-examples/foundation-cli/README.md",
+      "line": 31,
+      "text": "生成ソースはこのフォルダーの`build/foundation_cli/`です。実行ファイルは`native:`行のパスで確認します。次の未リリース版では既定名にも識別子が付き、`build/native-target/release/nagi-foundation-cli-<識別子>`となります。Windowsでは`.exe`が付き、`NAGI_NATIVE_TARGET_DIR`を設定した場合は出力先が変わります。ビルドにはRust/CargoとCビルド環境が必要です。",
+      "action": "update",
+      "reason": "現native generation契約へ。成功実行ファイルはgenerated-dir/.nagi内の世代別artifact、NAGI_NATIVE_TARGET_DIRは共有依存cache。native:を読み固定cache pathを組まない。"
+    },
+    {
+      "path": "test-nagi-code/library-examples/foundation-report/README.en.md",
+      "line": 37,
+      "text": "`nagi.toml` selects `foundation_report.nagi` and `native.rs`. The Rust source is the same `../shared/bridge.rs` and `pricing.rs` used by the CLI. No database, HTTP server, or additional crates are used. Generated sources go to this folder's `build/foundation_report/`. Read the executable path from the `native:` line. The next unreleased compiler also adds an identifier to default names: `build/native-target/release/nagi-foundation-report-<identifier>`, with `.exe` on Windows. `NAGI_NATIVE_TARGET_DIR` overrides its output directory. Building requires Rust/Cargo and a compatible C build environment.",
+      "action": "update",
+      "reason": "現native generation契約へ。成功実行ファイルはgenerated-dir/.nagi内の世代別artifact、NAGI_NATIVE_TARGET_DIRは共有依存cache。native:を読み固定cache pathを組まない。"
+    },
+    {
+      "path": "test-nagi-code/library-examples/foundation-report/README.md",
+      "line": 37,
+      "text": "`nagi.toml`は`foundation_report.nagi`と`native.rs`を指定します。Rust側はCLIと同じ`../shared/bridge.rs`と`pricing.rs`です。DB・HTTP・追加crateを使いません。生成ソースはこのフォルダーの`build/foundation_report/`です。実行ファイルは`native:`行のパスで確認します。次の未リリース版では既定名にも識別子が付き、`build/native-target/release/nagi-foundation-report-<識別子>`となります。Windowsでは`.exe`が付き、`NAGI_NATIVE_TARGET_DIR`で出力先を変更できます。ビルドにはRust/CargoとCビルド環境が必要です。",
+      "action": "update",
+      "reason": "現native generation契約へ。成功実行ファイルはgenerated-dir/.nagi内の世代別artifact、NAGI_NATIVE_TARGET_DIRは共有依存cache。native:を読み固定cache pathを組まない。"
+    },
+    {
+      "path": "test-nagi-code/low-examples/order-quote/README.en.md",
+      "line": 39,
+      "text": "Replace `/path/to/executable` with the actual path shown in the build's `native:` line. The next unreleased compiler also adds an identifier to default executable names. On Windows, include `.exe` in the path. This also works when `NAGI_NATIVE_TARGET_DIR` changes the build location.",
+      "action": "update",
+      "reason": "次未リリース表示を0.1.11へ。target overrideが成功実行ファイル場所を決めるという誤解を修正しnative: pathを使用。"
+    },
+    {
+      "path": "test-nagi-code/low-examples/order-quote/README.md",
+      "line": 39,
+      "text": "`/path/to/executable`を、ビルドの`native:`行に表示された実際のパスへ置き換えてください。次の未リリース版では既定の実行ファイル名にも識別子が付きます。Windowsでは`.exe`まで含めたパスを渡します。`NAGI_NATIVE_TARGET_DIR`でビルド先を変更した場合も同じです。",
+      "action": "update",
+      "reason": "次未リリース表示を0.1.11へ。target overrideが成功実行ファイル場所を決めるという誤解を修正しnative: pathを使用。"
+    },
+    {
+      "path": "Cargo.lock",
+      "line": 479,
+      "text": "version = \"0.1.10\"",
+      "package": "nagi-runtime",
+      "action": "update",
+      "reason": "Nagi workspaceとlockfileのnagic/nagi-runtimeを0.1.11へ更新。"
+    },
+    {
+      "path": "Cargo.lock",
+      "line": 496,
+      "text": "version = \"0.1.10\"",
+      "package": "nagic",
+      "action": "update",
+      "reason": "Nagi workspaceとlockfileのnagic/nagi-runtimeを0.1.11へ更新。"
+    }
+  ],
+  "additional_guidance": [
+    "ai/language.md:78は共通定数検査の導入を0.1.11へ更新し、0.1.10 literal-zeroとの比較は保持。",
+    "ai/skills/nagi-development/SKILL.md:14のregistered modulesへstd.taskも追加。",
+    "DESIGNとroadmapのS2状況は親が新PRで検証した実装を最終headで読戻してから更新。",
+    "docs/types.md/en/types.mdのcheck受理後Rust lifetime拒否の広い注意は、新checked-flow保証との対応を再確認。サポート内の生成誤りを委譲と書かない。",
+    "docs/tasks/async/error-handlingのlegacy scope body終了後fault観測の説明はtyped awaitがbody内観測する場合も明記。",
+    "内部historicalhandoff/artifactsの停止状態を過去からrewriteせず、最新progress/readinessへrelease状態を追記。"
+  ]
+}
