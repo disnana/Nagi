@@ -1,0 +1,471 @@
+diff --git a/compiler/src/check.rs b/compiler/src/check.rs
+index 0e9107f..ef449ab 100644
+--- a/compiler/src/check.rs
++++ b/compiler/src/check.rs
+@@ -3431,6 +3431,17 @@ impl Checker {
+     fn expr(&mut self, e: &mut Expr, expected: Option<&Type>) -> Result<Type, String> {
+         self.expr_mode(e, expected, false)
+     }
++    fn conditional_expr(&mut self, e: &mut Expr, expected: Option<&Type>) -> Result<Type, String> {
++        // Check the evaluated path, including its typed/ownership facts, then
++        // join the skipped path. A conditional consume makes a value possibly
++        // moved, but cannot discharge a Task obligation on every normal path.
++        // Like statement branches, this remains conservative for literal
++        // conditions; expression checking does not fold runtime control flow.
++        let skipped = self.vars.clone();
++        let ty = self.expr(e, expected)?;
++        self.merge_moves(skipped);
++        Ok(ty)
++    }
+     fn expr_mode(
+         &mut self,
+         e: &mut Expr,
+@@ -3596,7 +3607,11 @@ impl Checker {
+                 if comparison {
+                     self.hold_comparison(a, &left);
+                 }
+-                let right = self.expr(b, Some(&left))?;
++                let right = if matches!(op.as_str(), "and" | "or") {
++                    self.conditional_expr(b, Some(&left))?
++                } else {
++                    self.expr(b, Some(&left))?
++                };
+                 let borrowed_pair = comparison
+                     && ((left.0 == "view"
+                         && matches!(left.inner().0.as_str(), "str" | "bytes")
+@@ -3969,7 +3984,11 @@ impl Checker {
+                 "db_update" if i == 4 => Some(Type::named("i32")),
+                 _ => None,
+             };
+-            let ty = self.expr(a, hint.as_ref())?;
++            let ty = if n == "env" && i == 1 {
++                self.conditional_expr(a, hint.as_ref())?
++            } else {
++                self.expr(a, hint.as_ref())?
++            };
+             if self.contains_task(&ty) {
+                 return Err(error(
+                     a.line,
+diff --git a/compiler/tests/support/native_triple.rs b/compiler/tests/support/native_triple.rs
+index a191bac..55cd9a7 100644
+--- a/compiler/tests/support/native_triple.rs
++++ b/compiler/tests/support/native_triple.rs
+@@ -87,6 +87,22 @@ impl Fixture {
+         let handwritten = self
+             .checked("handwritten.low")
+             .expect("handwritten Low check");
++        if let Some(directory) = std::env::var_os("NAGI_TEST_ARTIFACT_DIR") {
++            let directory = PathBuf::from(directory);
++            fs::create_dir_all(&directory).unwrap();
++            for (name, source) in [("high.nagi", high), ("handwritten.low", low)] {
++                fs::write(
++                    directory.join(format!("explicit-move-{case}-{name}")),
++                    source,
++                )
++                .unwrap();
++            }
++            fs::copy(
++                self.0.join("saved.low"),
++                directory.join(format!("explicit-move-{case}-saved.low")),
++            )
++            .unwrap();
++        }
+         // 保存Lowの再読込は元High fileへ依存してはならない。
+         fs::remove_file(self.0.join("main.nagi")).unwrap();
+         let independent = self
+@@ -154,6 +170,19 @@ impl Fixture {
+                 &format!("{name}-build"),
+                 Duration::from_secs(180),
+             );
++            if let Some(directory) = std::env::var_os("NAGI_TEST_ARTIFACT_DIR") {
++                let directory = PathBuf::from(directory);
++                fs::write(
++                    directory.join(format!("explicit-move-{case}-{name}-build.stdout")),
++                    &compiled.stdout,
++                )
++                .unwrap();
++                fs::write(
++                    directory.join(format!("explicit-move-{case}-{name}-build.stderr")),
++                    &compiled.stderr,
++                )
++                .unwrap();
++            }
+             assert!(
+                 compiled.status.success(),
+                 "{name} backend Cargo build:\n{}{}\n{generated}",
+@@ -208,6 +237,11 @@ impl Fixture {
+                     &ran.stdout,
+                 )
+                 .unwrap();
++                fs::write(
++                    directory.join(format!("explicit-move-{case}-{name}-run.stderr")),
++                    &ran.stderr,
++                )
++                .unwrap();
+             }
+         }
+     }
+diff --git a/compiler/tests/task_handles.rs b/compiler/tests/task_handles.rs
+index 67936ac..8e1d877 100644
+--- a/compiler/tests/task_handles.rs
++++ b/compiler/tests/task_handles.rs
+@@ -1,5 +1,7 @@
+ #[path = "support/native_triple.rs"]
+ mod native_triple;
++#[path = "support/task_conditional_consumption.rs"]
++mod task_conditional_consumption;
+ #[path = "support/task_service.rs"]
+ mod task_service;
+ #[path = "support/task_service_s2.rs"]
+diff --git a/tests/task-handles/contracts.json b/tests/task-handles/contracts.json
+index e8ca16e..85d9a47 100644
+--- a/tests/task-handles/contracts.json
++++ b/tests/task-handles/contracts.json
+@@ -988,5 +988,347 @@
+     "expected": "check-pass",
+     "diagnostic": "",
+     "primary_line": 0
++  },
++  {
++    "name": "short-and-nagi",
++    "source": "short-and.nagi",
++    "high": true,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 15
++  },
++  {
++    "name": "short-and-low",
++    "source": "short-and.low",
++    "high": false,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 8
++  },
++  {
++    "name": "short-or-nagi",
++    "source": "short-or.nagi",
++    "high": true,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 15
++  },
++  {
++    "name": "short-or-low",
++    "source": "short-or.low",
++    "high": false,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 8
++  },
++  {
++    "name": "short-unknown-nagi",
++    "source": "short-unknown.nagi",
++    "high": true,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 15
++  },
++  {
++    "name": "short-unknown-low",
++    "source": "short-unknown.low",
++    "high": false,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 8
++  },
++  {
++    "name": "short-nested-nagi",
++    "source": "short-nested.nagi",
++    "high": true,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 15
++  },
++  {
++    "name": "short-nested-low",
++    "source": "short-nested.low",
++    "high": false,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 8
++  },
++  {
++    "name": "short-receive-again-nagi",
++    "source": "short-receive-again.nagi",
++    "high": true,
++    "contract": "conditional-at-most-once",
++    "expected": "check-fail",
++    "diagnostic": "move後",
++    "primary_line": 17
++  },
++  {
++    "name": "short-receive-again-low",
++    "source": "short-receive-again.low",
++    "high": false,
++    "contract": "conditional-at-most-once",
++    "expected": "check-fail",
++    "diagnostic": "move後",
++    "primary_line": 10
++  },
++  {
++    "name": "lazy-env-nagi",
++    "source": "lazy-env.nagi",
++    "high": true,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 15
++  },
++  {
++    "name": "lazy-env-low",
++    "source": "lazy-env.low",
++    "high": false,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 8
++  },
++  {
++    "name": "lazy-env-nested-nagi",
++    "source": "lazy-env-nested.nagi",
++    "high": true,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 15
++  },
++  {
++    "name": "lazy-env-nested-low",
++    "source": "lazy-env-nested.low",
++    "high": false,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 8
++  },
++  {
++    "name": "lazy-env-receive-again-nagi",
++    "source": "lazy-env-receive-again.nagi",
++    "high": true,
++    "contract": "conditional-at-most-once",
++    "expected": "check-fail",
++    "diagnostic": "move後",
++    "primary_line": 17
++  },
++  {
++    "name": "lazy-env-receive-again-low",
++    "source": "lazy-env-receive-again.low",
++    "high": false,
++    "contract": "conditional-at-most-once",
++    "expected": "check-fail",
++    "diagnostic": "move後",
++    "primary_line": 10
++  },
++  {
++    "name": "conditional-and-rhs-discard-nagi",
++    "source": "conditional-and-rhs-discard.nagi",
++    "high": true,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 10
++  },
++  {
++    "name": "conditional-and-rhs-discard-low",
++    "source": "conditional-and-rhs-discard.low",
++    "high": false,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 7
++  },
++  {
++    "name": "conditional-or-rhs-discard-nagi",
++    "source": "conditional-or-rhs-discard.nagi",
++    "high": true,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 10
++  },
++  {
++    "name": "conditional-or-rhs-discard-low",
++    "source": "conditional-or-rhs-discard.low",
++    "high": false,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 7
++  },
++  {
++    "name": "conditional-nested-short-discard-nagi",
++    "source": "conditional-nested-short-discard.nagi",
++    "high": true,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 10
++  },
++  {
++    "name": "conditional-nested-short-discard-low",
++    "source": "conditional-nested-short-discard.low",
++    "high": false,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 7
++  },
++  {
++    "name": "conditional-nested-env-discard-nagi",
++    "source": "conditional-nested-env-discard.nagi",
++    "high": true,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 10
++  },
++  {
++    "name": "conditional-nested-env-discard-low",
++    "source": "conditional-nested-env-discard.low",
++    "high": false,
++    "contract": "conditional-must-consume",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 7
++  },
++  {
++    "name": "short-unit-nagi",
++    "source": "short-unit.nagi",
++    "high": true,
++    "contract": "conditional-all-payloads",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 8
++  },
++  {
++    "name": "short-unit-low",
++    "source": "short-unit.low",
++    "high": false,
++    "contract": "conditional-all-payloads",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 6
++  },
++  {
++    "name": "short-str-nagi",
++    "source": "short-str.nagi",
++    "high": true,
++    "contract": "conditional-all-payloads",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 8
++  },
++  {
++    "name": "short-str-low",
++    "source": "short-str.low",
++    "high": false,
++    "contract": "conditional-all-payloads",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 6
++  },
++  {
++    "name": "short-result-nagi",
++    "source": "short-result.nagi",
++    "high": true,
++    "contract": "conditional-all-payloads",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 8
++  },
++  {
++    "name": "short-result-low",
++    "source": "short-result.low",
++    "high": false,
++    "contract": "conditional-all-payloads",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 6
++  },
++  {
++    "name": "short-move-alias-nagi",
++    "source": "short-move-alias.nagi",
++    "high": true,
++    "contract": "conditional-move-obligation",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 17
++  },
++  {
++    "name": "short-move-alias-low",
++    "source": "short-move-alias.low",
++    "high": false,
++    "contract": "conditional-move-obligation",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 10
++  },
++  {
++    "name": "short-reassign-nagi",
++    "source": "short-reassign.nagi",
++    "high": true,
++    "contract": "conditional-move-obligation",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 17
++  },
++  {
++    "name": "short-reassign-low",
++    "source": "short-reassign.low",
++    "high": false,
++    "contract": "conditional-move-obligation",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 10
++  },
++  {
++    "name": "short-and-saved-low",
++    "source": "short-and-saved.low",
++    "high": false,
++    "contract": "conditional-saved-low",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 20
++  },
++  {
++    "name": "lazy-env-saved-low",
++    "source": "lazy-env-saved.low",
++    "high": false,
++    "contract": "conditional-saved-low",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 20
++  },
++  {
++    "name": "short-and-saved-high",
++    "source": "short-and-saved.nagi",
++    "high": true,
++    "contract": "conditional-saved-low",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 15
++  },
++  {
++    "name": "lazy-env-saved-high",
++    "source": "lazy-env-saved.nagi",
++    "high": true,
++    "contract": "conditional-saved-low",
++    "expected": "check-fail",
++    "diagnostic": "未受取Task",
++    "primary_line": 15
+   }
+ ]

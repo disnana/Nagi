@@ -1,0 +1,4 @@
+   Compiling nagic v0.1.10 (/tmp/nagi-task-conditional-consumption/compiler)
+    Finished `dev` profile [unoptimized] target(s) in 8.09s
+     Running `/tmp/nagi-container-flow-target/debug/examples/task-contract-red --report /tmp/nagi-conditional-task-fix/original-red.json`
+Task contracts: 114/134 matched; report: /tmp/nagi-conditional-task-fix/original-red.json

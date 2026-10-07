@@ -1,0 +1,17 @@
+from std.task import TaskFailure;
+fn take(result: Result[i64, TaskFailure]) -> bool {
+    print("receipt-executed");
+    match result {
+        case Ok(value) { return True; }
+        case Err(failure) { return False; }
+    }
+}
+async fn work() -> i64 { return 42; }
+async fn main() -> Result[unit, Error] {
+    scope {
+        let task = spawn work();
+        let value = False and take(await task);
+        print(value);
+    }
+    return ok(print("scope-ok"));
+}

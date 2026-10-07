@@ -1,0 +1,4 @@
+   Compiling nagic v0.1.11 (/tmp/nagi-release-0.1.11/compiler)
+   Compiling nagi_critical_release_embedding v0.0.0 (/tmp/nagi-critical-release-review/embedding)
+    Finished `dev` profile [unoptimized] target(s) in 6.78s
+     Running `/tmp/nagi-container-flow-target/debug/nagi_critical_release_embedding`

@@ -1,0 +1,160 @@
+{
+  "compiler_version": "nagic 0.1.11",
+  "compiler_sha256": "1ad53527beb382a6a13bca7c550cc5b68ea60483509720ac9d4beaefed012c0b",
+  "checks": [
+    {
+      "case": "bare-owned-parenthesized.nagi",
+      "expected": "checker-reject",
+      "command": [
+        "/tmp/nagi-container-flow-target/release/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/cli-cases/bare-owned-parenthesized.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/check-output/bare-owned-parenthesized"
+      ],
+      "returncode": 1,
+      "diagnostic_fragment": "非Copyの既存値 source の代入は暗黙moveできません",
+      "primary_line": 3,
+      "sha256": "7781ff39ced26379e8feae0bcea23dcd3521f92409f9a1b46504f5bd28637fb3",
+      "native_build": false,
+      "cargo_available_in_path": false,
+      "runtime_available": false
+    },
+    {
+      "case": "bare-owned-parenthesized.low",
+      "expected": "checker-reject",
+      "command": [
+        "/tmp/nagi-container-flow-target/release/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/cli-cases/bare-owned-parenthesized.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/check-output/bare-owned-parenthesized"
+      ],
+      "returncode": 1,
+      "diagnostic_fragment": "非Copyの既存値 source の代入は暗黙moveできません",
+      "primary_line": 3,
+      "sha256": "6756eb64d7b3ea6215e8838a5a49e9c87a1b40a2d1672e630d57451ab58d75d4",
+      "native_build": false,
+      "cargo_available_in_path": false,
+      "runtime_available": false
+    },
+    {
+      "case": "explicit-owned-move.nagi",
+      "expected": "check-pass",
+      "command": [
+        "/tmp/nagi-container-flow-target/release/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/cli-cases/explicit-owned-move.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/check-output/explicit-owned-move"
+      ],
+      "returncode": 0,
+      "diagnostic_fragment": "",
+      "primary_line": null,
+      "sha256": "03576e8cdc11dcc2ae7e3e3ed30d91aa4552b4bc4211543f91e3715832fb829f",
+      "native_build": false,
+      "cargo_available_in_path": false,
+      "runtime_available": false
+    },
+    {
+      "case": "explicit-owned-move.low",
+      "expected": "check-pass",
+      "command": [
+        "/tmp/nagi-container-flow-target/release/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/cli-cases/explicit-owned-move.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/check-output/explicit-owned-move"
+      ],
+      "returncode": 0,
+      "diagnostic_fragment": "",
+      "primary_line": null,
+      "sha256": "15609da1191029be3ab5c94dd6841653c57af13dc3111fd41ce624d85afbce5b",
+      "native_build": false,
+      "cargo_available_in_path": false,
+      "runtime_available": false
+    },
+    {
+      "case": "copy-task-alias-unreceived.nagi",
+      "expected": "checker-reject",
+      "command": [
+        "/tmp/nagi-container-flow-target/release/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/cli-cases/copy-task-alias-unreceived.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/check-output/copy-task-alias-unreceived"
+      ],
+      "returncode": 1,
+      "diagnostic_fragment": "未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください",
+      "primary_line": 7,
+      "sha256": "4ba718757de6551af7fa9096c07b46ac2443f762fee6d21425b0d39b8e281b13",
+      "native_build": false,
+      "cargo_available_in_path": false,
+      "runtime_available": false
+    },
+    {
+      "case": "copy-task-alias-unreceived.low",
+      "expected": "checker-reject",
+      "command": [
+        "/tmp/nagi-container-flow-target/release/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/cli-cases/copy-task-alias-unreceived.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/check-output/copy-task-alias-unreceived"
+      ],
+      "returncode": 1,
+      "diagnostic_fragment": "未受取Taskは正常出口までにawaitまたはstd.task.discardで消費してください",
+      "primary_line": 6,
+      "sha256": "49cc227f4d9174aec93e3d235c099414ba430432848562a77c3587bbcd261fef",
+      "native_build": false,
+      "cargo_available_in_path": false,
+      "runtime_available": false
+    },
+    {
+      "case": "copy-task-alias-received.nagi",
+      "expected": "check-pass",
+      "command": [
+        "/tmp/nagi-container-flow-target/release/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/cli-cases/copy-task-alias-received.nagi",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/check-output/copy-task-alias-received"
+      ],
+      "returncode": 0,
+      "diagnostic_fragment": "",
+      "primary_line": null,
+      "sha256": "33cbcb6109f5205f9648aca55a4f7ac0441e2ac2d2dd864dd8618090f50f299a",
+      "native_build": false,
+      "cargo_available_in_path": false,
+      "runtime_available": false
+    },
+    {
+      "case": "copy-task-alias-received.low",
+      "expected": "check-pass",
+      "command": [
+        "/tmp/nagi-container-flow-target/release/nagic",
+        "check",
+        "/tmp/nagi-critical-release-review/cli-cases/copy-task-alias-received.low",
+        "--no-project",
+        "--out",
+        "/tmp/nagi-critical-release-review/check-output/copy-task-alias-received"
+      ],
+      "returncode": 0,
+      "diagnostic_fragment": "",
+      "primary_line": null,
+      "sha256": "b96e1db1f7d77a08b7e6fa16c3e943faaa3e42a79c200f308c7ea0e6075ae436",
+      "native_build": false,
+      "cargo_available_in_path": false,
+      "runtime_available": false
+    }
+  ],
+  "accepted": 4,
+  "rejected": 4
+}

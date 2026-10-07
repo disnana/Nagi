@@ -1,0 +1,17 @@
+from std.task import TaskFailure;
+fn take(result: Result[str, TaskFailure]) -> str {
+    print("receipt-executed");
+    match result {
+        case Ok(value) { return value; }
+        case Err(failure) { return "failed"; }
+    }
+}
+async fn work() -> str { return "fallback"; }
+async fn main() -> Result[unit, Error] {
+    scope {
+        let task = spawn work();
+        let value = env("NAGI_CRITICAL_PRESENT", take(await task));
+        print(view(value));
+    }
+    return ok(print("scope-ok"));
+}

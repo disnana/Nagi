@@ -1,0 +1,19 @@
+from std.task import TaskFailure
+
+def take(result: Result[str, TaskFailure]) -> str:
+    print("receipt-executed")
+    match result:
+        case Ok(value):
+            return value
+        case Err(failure):
+            return "failed"
+
+async def work() -> str:
+    return "fallback"
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        value = env("NAGI_CRITICAL_PRESENT", take(await task))
+        print(view(value))
+    return ok(print("scope-ok"))

@@ -1,0 +1,7 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Checking nagic v0.1.10 (/tmp/nagi-task-conditional-consumption/compiler)
+    Checking nagi-runtime v0.1.10 (/tmp/nagi-task-conditional-consumption/runtime)
+    Finished `dev` profile [unoptimized] target(s) in 15.05s

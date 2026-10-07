@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/tmp/nagi-critical-release-review/run_low_reproductions.py", line 23, in <module>
+    assert Path(manifest['dependencies']['nagi-runtime']['path']).resolve()==Path('/tmp/nagi-release-0.1.11/runtime')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

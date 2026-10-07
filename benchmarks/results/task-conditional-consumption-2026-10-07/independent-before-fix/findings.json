@@ -1,0 +1,90 @@
+{
+  "unresolved": 1,
+  "findings": [
+    {
+      "id": "TASK-LAZY-CONSUME-001",
+      "severity": "P2",
+      "release_blocker": true,
+      "status": "unresolved",
+      "title": "Short-circuit and lazy fallback consumption incorrectly clears Task receipt obligation",
+      "examined_sha": "3a259a5c1f27557344eec6365e050268da887a81",
+      "examined_tree": "33219ad1883014a242451f047e9a3972b3011ec4",
+      "followup_local_sha": "9cca4219b283d2ff11cd25ac4d4667a2192c85e0",
+      "followup_local_tree": "374efc4db6a5fde9a709237eb46fee8ed9f027c5",
+      "source_locations": [
+        {
+          "file": "compiler/src/check.rs",
+          "line": 3599,
+          "role": "Binary RHS checked unconditionally"
+        },
+        {
+          "file": "compiler/src/check.rs",
+          "line": 3961,
+          "role": "env fallback included in unconditional argument traversal"
+        },
+        {
+          "file": "compiler/src/check.rs",
+          "line": 3799,
+          "role": "await clears obligation"
+        },
+        {
+          "file": "compiler/src/check.rs",
+          "line": 837,
+          "role": "discard clears obligation"
+        },
+        {
+          "file": "compiler/src/emit.rs",
+          "line": 727,
+          "role": "env fallback emitted in missing-key arm only"
+        }
+      ],
+      "contract_locations": [
+        {
+          "file": "docs/task-handles.md",
+          "line": 27
+        },
+        {
+          "file": "docs/internal/language-invariants.md",
+          "line": 109
+        }
+      ],
+      "reproduction_groups": [
+        {
+          "name": "lazy-task",
+          "high_source": "lazy-task.nagi",
+          "manual_low_source": "lazy-task.low",
+          "saved_low_source": "lazy-task-saved-source/saved.low",
+          "native_stdout": "present\nscope-ok\n",
+          "expected_high_primary_line": 16,
+          "expected_manual_low_primary_line": 12
+        },
+        {
+          "name": "short-task",
+          "high_source": "short-task.nagi",
+          "manual_low_source": "short-task.low",
+          "saved_low_source": "short-task-saved-source/saved.low",
+          "native_stdout": "false\nscope-ok\n",
+          "expected_high_primary_line": 16,
+          "expected_manual_low_primary_line": 12
+        }
+      ],
+      "observed_stages": [
+        "parse-pass",
+        "resolve-pass",
+        "check-pass",
+        "final-check-seal-pass",
+        "rust-emission-pass",
+        "native-build-pass",
+        "native-run-exit-0"
+      ],
+      "expected_stage": "checker-reject",
+      "native_scenarios_independently_executed": 6,
+      "native_control": "Same env native executable with key absent executes receipt marker, fallback and scope-ok",
+      "impact": "Task receipt can be silently abandoned on normal exit without await/discard despite the all-T contract. No actual join leak or loss of sticky fault is claimed.",
+      "required_fix": "Retain obligations for skip paths of and/or RHS and env fallback; reject unconsumed normal exits at the original Task binding; preserve unconditional left/key consumption and cover await/discard, nested lazy, High/Low.",
+      "additional_findings": 0,
+      "fix_verified": false,
+      "full_workspace_or_four_os_independently_rerun": false
+    }
+  ]
+}

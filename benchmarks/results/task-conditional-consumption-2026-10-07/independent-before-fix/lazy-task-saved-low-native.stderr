@@ -1,0 +1,4 @@
+   Compiling nagi-runtime v0.1.11 (/tmp/nagi-critical-release-review/frozen-candidate/runtime)
+   Compiling nagi-saved-954e7a1a3e988a79 v0.1.0 (/tmp/nagi-critical-release-review/lazy-task-saved-low-native-output/.nagi/apps/nagi-saved-954e7a1a3e988a79/generations/.staging-g-1f637-18dc15d7ff598051-0)
+    Finished `release` profile [optimized] target(s) in 8.39s
+native: /tmp/nagi-critical-release-review/lazy-task-saved-low-native-output/.nagi/apps/nagi-saved-954e7a1a3e988a79/generations/g-1f637-18dc15d7ff598051-0/nagi-954e7a1a3e988a79-g-1f637-18dc15d7ff598051-0

@@ -1,0 +1,11 @@
+from std.task import TaskFailure;
+fn take(result: Result[Result[i64, i64],TaskFailure]) -> bool { return True; }
+async fn work() -> Result[i64, i64] { return ok(7); }
+async fn exercise(flag: bool) -> Result[unit,Error] {
+    scope {
+        let task = spawn work(); # primary
+        let value = flag and take(await task);
+        print(value);
+    }
+    return ok(print(0));
+}

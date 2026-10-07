@@ -1,0 +1,4 @@
+    Blocking waiting for file lock on build directory
+    Finished `dev` profile [unoptimized] target(s) in 9.99s
+     Running `/tmp/nagi-container-flow-target/debug/examples/task-contract-red --report /tmp/nagi-conditional-task-fix/fixed-contracts.json`
+Task contracts: 146/146 matched; report: /tmp/nagi-conditional-task-fix/fixed-Task contracts: 146/146 matched; report: /tmp/nagi-conditional-task-fix/fixed-contracts.json

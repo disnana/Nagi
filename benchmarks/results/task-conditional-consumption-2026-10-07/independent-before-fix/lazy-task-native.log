@@ -1,0 +1,10 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+     Locking 107 packages to highest compatible versions
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+   Compiling nagi-lazy-task-3e74e96a86c27623 v0.1.0 (/tmp/nagi-critical-release-review/lazy-task-native/.nagi/apps/nagi-lazy-task-3e74e96a86c27623/generations/.staging-g-1f49b-18dc159cc5e535a5-0)
+    Finished `release` profile [optimized] target(s) in 3.35s
+native: /tmp/nagi-critical-release-review/lazy-task-native/.nagi/apps/nagi-lazy-task-3e74e96a86c27623/generations/g-1f49b-18dc159cc5e535a5-0/nagi-3e74e96a86c27623-g-1f49b-18dc159cc5e535a5-0
+present
+scope-ok

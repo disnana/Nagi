@@ -1,0 +1,24 @@
+{
+  "frozen_cli": "/tmp/nagi-critical-release-review/bin/nagic",
+  "frozen_cli_sha256": "1ad53527beb382a6a13bca7c550cc5b68ea60483509720ac9d4beaefed012c0b",
+  "cases": [
+    {
+      "case": "lazy-task",
+      "saved_low": "/tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low",
+      "deleted_origin_high": "/tmp/nagi-critical-release-review/lazy-task-saved-source/main.nagi",
+      "deleted_origin_high_exists": false,
+      "saved_low_sha256": "fa3ea4a4c4e21667912f4f3e52e76655af2f0d6cd2851042c157fc31f4bcad89",
+      "manual_low": "/tmp/nagi-critical-release-review/lazy-task.low",
+      "manual_low_sha256": "650382459e0ebb0899fd2b99576b10086c684ee86d018843eb12585dac496835"
+    },
+    {
+      "case": "short-task",
+      "saved_low": "/tmp/nagi-critical-release-review/short-task-saved-source/saved.low",
+      "deleted_origin_high": "/tmp/nagi-critical-release-review/short-task-saved-source/main.nagi",
+      "deleted_origin_high_exists": false,
+      "saved_low_sha256": "e222dc2158f41fc6b741fb8806471a4d813a1829defff5bdead37ae1d7f8f4bd",
+      "manual_low": "/tmp/nagi-critical-release-review/short-task.low",
+      "manual_low_sha256": "1df04af389b03f15b1caabde43e9937f5f90091dfba9737b1ce6cb2682653c3f"
+    }
+  ]
+}

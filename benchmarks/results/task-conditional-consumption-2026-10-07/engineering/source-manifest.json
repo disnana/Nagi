@@ -1,0 +1,225 @@
+{
+  "base_commit": "f9b25782a8704bcf962f689d9103ab804f7ab3cf",
+  "files": [
+    {
+      "path": "compiler/src/check.rs",
+      "bytes": 206951,
+      "sha256": "3af29cf80213715c6af5abbcb72f7a42e4060b6356bc9880cdc3b87cbd07cf69"
+    },
+    {
+      "path": "compiler/tests/support/native_triple.rs",
+      "bytes": 12008,
+      "sha256": "91670a1d61101a2310803f897e5e816999cd8930d542e3c0f68eeee0ba2f23fe"
+    },
+    {
+      "path": "compiler/tests/support/task_conditional_consumption.rs",
+      "bytes": 6039,
+      "sha256": "ade31d9ad5351eabfdd5d761551e8490b50f283f4cf78cd2a75c6e1c384fb2cd"
+    },
+    {
+      "path": "compiler/tests/task_handles.rs",
+      "bytes": 16952,
+      "sha256": "e94462bbd9608bdda7c3d028d8c9ee731bf97d8e7a1ce636abb1961a23c0a967"
+    },
+    {
+      "path": "docs/internal/task-conditional-consumption-fix.md",
+      "bytes": 5944,
+      "sha256": "34ca13694d454891c6aa71f7d4486225d5506ea587fef09df825bf8e66be5322"
+    },
+    {
+      "path": "tests/task-handles/conditional-and-rhs-discard.low",
+      "bytes": 389,
+      "sha256": "21e87181fd853e624cf94ef9a29015828fdf7d1c925047cf33b53aecec367458"
+    },
+    {
+      "path": "tests/task-handles/conditional-and-rhs-discard.nagi",
+      "bytes": 381,
+      "sha256": "39005373fbf12dc7c869a969d55a72ca31f5579f0eeb52525ae0562dc0423842"
+    },
+    {
+      "path": "tests/task-handles/conditional-nested-env-discard.low",
+      "bytes": 438,
+      "sha256": "73e40a0d4abe60a67f7ce24528e8f731adc7438e1e3117a079189feb2f5d8deb"
+    },
+    {
+      "path": "tests/task-handles/conditional-nested-env-discard.nagi",
+      "bytes": 430,
+      "sha256": "490896a7c99a3f018d7317506ad4311dc42bf4bfb3307d2633069945115539df"
+    },
+    {
+      "path": "tests/task-handles/conditional-nested-short-discard.low",
+      "bytes": 400,
+      "sha256": "7ab42909e0e15c52833b82b4613b78221e89f01f93d7e41442d7975f15ce0d91"
+    },
+    {
+      "path": "tests/task-handles/conditional-nested-short-discard.nagi",
+      "bytes": 392,
+      "sha256": "87643f7cebb883cbd4908621d253f658d38bb3e199755b636fbf8a83fa5fecad"
+    },
+    {
+      "path": "tests/task-handles/conditional-or-rhs-discard.low",
+      "bytes": 387,
+      "sha256": "fe361cc3b8cc04a4d7794e095458c44833b677c8bb0ab5b2e059537973185c68"
+    },
+    {
+      "path": "tests/task-handles/conditional-or-rhs-discard.nagi",
+      "bytes": 379,
+      "sha256": "da9ac3785ea10b19e456fc3a1e011a2dd82c7c905c9ee88be4f03edd35004b07"
+    },
+    {
+      "path": "tests/task-handles/contracts.json",
+      "bytes": 32578,
+      "sha256": "13e7d48fd2a5f48453812078a2444c4cfc133009b4aae764dbbbdfdb6a23a795"
+    },
+    {
+      "path": "tests/task-handles/lazy-env-nested.low",
+      "bytes": 485,
+      "sha256": "5164e3f04739232114950b77b5bbd406019c3c2dda304351c6934bba8eb27c49"
+    },
+    {
+      "path": "tests/task-handles/lazy-env-nested.nagi",
+      "bytes": 507,
+      "sha256": "65dd8d9d0413b0d3bf588f818b3ca633979b186be6a8eee782c1ba052b96428f"
+    },
+    {
+      "path": "tests/task-handles/lazy-env-receive-again.low",
+      "bytes": 494,
+      "sha256": "05979928be9c2cd023d4c0004917e6fe04fcf2f269deedb759c7b72b26f966fb"
+    },
+    {
+      "path": "tests/task-handles/lazy-env-receive-again.nagi",
+      "bytes": 511,
+      "sha256": "a377d4deb953eb73477472565e50b7800b2217a61742aae67f8d9d21be4910b9"
+    },
+    {
+      "path": "tests/task-handles/lazy-env-saved.low",
+      "bytes": 6657,
+      "sha256": "34622898452e7f427448e86b39ffad392b8e348be297b5e991719bc32f6ea9ca"
+    },
+    {
+      "path": "tests/task-handles/lazy-env-saved.nagi",
+      "bytes": 481,
+      "sha256": "25f4ae1cf2c4f244e625c297e8e3e9f68799d537b2ea80bb74b5c26d40278b0f"
+    },
+    {
+      "path": "tests/task-handles/lazy-env.low",
+      "bytes": 459,
+      "sha256": "8c646af188232638a36437c620ce27e6d040762ea1f0b1667e7122450c469d77"
+    },
+    {
+      "path": "tests/task-handles/lazy-env.nagi",
+      "bytes": 481,
+      "sha256": "25f4ae1cf2c4f244e625c297e8e3e9f68799d537b2ea80bb74b5c26d40278b0f"
+    },
+    {
+      "path": "tests/task-handles/short-and-saved.low",
+      "bytes": 6696,
+      "sha256": "bf30757e97ef939b96d90a53eea1bbfdc5b8001a2011c907f77f4c76b73f940e"
+    },
+    {
+      "path": "tests/task-handles/short-and-saved.nagi",
+      "bytes": 447,
+      "sha256": "b233604fab74b9eee3ae3b815d35c80243e4e4b17910ba3601a0c4617bd97813"
+    },
+    {
+      "path": "tests/task-handles/short-and.low",
+      "bytes": 425,
+      "sha256": "815f883d7faea7c99300e5d50741c906fdee278cdca0088b7677d0ee39291d99"
+    },
+    {
+      "path": "tests/task-handles/short-and.nagi",
+      "bytes": 447,
+      "sha256": "b233604fab74b9eee3ae3b815d35c80243e4e4b17910ba3601a0c4617bd97813"
+    },
+    {
+      "path": "tests/task-handles/short-move-alias.low",
+      "bytes": 505,
+      "sha256": "83cf6e9e7ab7fe5664d93d2ac1d932ced14803e47f0d0fc730d9da7724c77cc7"
+    },
+    {
+      "path": "tests/task-handles/short-move-alias.nagi",
+      "bytes": 521,
+      "sha256": "7a442fb50b80a3f0d46dd2ea591dc9972f8b6c69781d14b388063f309650a96f"
+    },
+    {
+      "path": "tests/task-handles/short-nested.low",
+      "bytes": 434,
+      "sha256": "290d0454154361a4d3f200f056fc8e153625a2d05fef3d458dbe40ad22bdd1bb"
+    },
+    {
+      "path": "tests/task-handles/short-nested.nagi",
+      "bytes": 456,
+      "sha256": "67d80971fab797b5e1b41c50298c2013ff3055156f1c08582eec86871f729855"
+    },
+    {
+      "path": "tests/task-handles/short-or.low",
+      "bytes": 423,
+      "sha256": "cc87581d1b743cd0c7e26d80242b6c7c2d5092ea3d60e689959b3db64e8f9718"
+    },
+    {
+      "path": "tests/task-handles/short-or.nagi",
+      "bytes": 445,
+      "sha256": "f4d07d20a6b5a92ea70cc79735ede2770eac8d2cca2e32681c898e67de411ee0"
+    },
+    {
+      "path": "tests/task-handles/short-reassign.low",
+      "bytes": 453,
+      "sha256": "c9a9faa5afaa88868bcf79785a3fc946366ee7475b6541ce8a101fd3993f6523"
+    },
+    {
+      "path": "tests/task-handles/short-reassign.nagi",
+      "bytes": 474,
+      "sha256": "162f1e57971e1d5fd77a488b2483253fc048d0f54eb1d0dbbe0047c45c4255dc"
+    },
+    {
+      "path": "tests/task-handles/short-receive-again.low",
+      "bytes": 458,
+      "sha256": "95bd35ea30e89f34ca6189384d4adc464366b9027004e2aa52810349d407c10f"
+    },
+    {
+      "path": "tests/task-handles/short-receive-again.nagi",
+      "bytes": 475,
+      "sha256": "7427dff49dd863b9a3d2b6e274200c71611e4f7b280d27918d4662e12b36ab19"
+    },
+    {
+      "path": "tests/task-handles/short-result.low",
+      "bytes": 378,
+      "sha256": "20f8a94a386c61ad17c52534a09aa58e50c82f2f2876467b9d0aaee6a3507eb5"
+    },
+    {
+      "path": "tests/task-handles/short-result.nagi",
+      "bytes": 371,
+      "sha256": "bfc5fc4c3ddacd288bf4e712ef8da5a4b16c3f6ca25859742cabd2f728815138"
+    },
+    {
+      "path": "tests/task-handles/short-str.low",
+      "bytes": 356,
+      "sha256": "df18d39f55305ab13cb72a2f5236d67320843303bc158d009c58bb1c38b70927"
+    },
+    {
+      "path": "tests/task-handles/short-str.nagi",
+      "bytes": 349,
+      "sha256": "9509b946cc7990397d6a8d9b7671617e147c9107ce73e2b31ea66f333bc02168"
+    },
+    {
+      "path": "tests/task-handles/short-unit.low",
+      "bytes": 357,
+      "sha256": "27028e0cfad182e9634585c724302f95e26bad3f8b6560c8ea6633455cdb4277"
+    },
+    {
+      "path": "tests/task-handles/short-unit.nagi",
+      "bytes": 350,
+      "sha256": "242f072eb9e8b97476f1df16c7121abaa5dda0eaaef07a327d3cff7a9ef1e20f"
+    },
+    {
+      "path": "tests/task-handles/short-unknown.low",
+      "bytes": 424,
+      "sha256": "f68be796278702f701db05814e4031050a43d9a44674bd0e2897d9cc66924f2a"
+    },
+    {
+      "path": "tests/task-handles/short-unknown.nagi",
+      "bytes": 446,
+      "sha256": "5a2662f39ec5fab705cd4b6f86cad3ab3af6c2eccd2270b16818896615ebfd02"
+    }
+  ]
+}

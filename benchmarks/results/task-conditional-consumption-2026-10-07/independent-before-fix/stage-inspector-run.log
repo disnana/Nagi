@@ -1,0 +1,36 @@
+   Compiling nagic v0.1.11 (/tmp/nagi-critical-release-review/frozen-candidate/compiler)
+   Compiling nagi_critical_stage_inspector v0.0.0 (/tmp/nagi-critical-release-review/stage-inspector)
+    Finished `dev` profile [unoptimized] target(s) in 6.73s
+     Running `/tmp/nagi-container-flow-target/debug/nagi_critical_stage_inspector /tmp/nagi-critical-release-review/lazy-task.nagi /tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low /tmp/nagi-critical-release-review/lazy-task.low /tmp/nagi-critical-release-review/short-task.nagi /tmp/nagi-critical-release-review/short-task-saved-source/saved.low /tmp/nagi-critical-release-review/short-task.low`
+/tmp/nagi-critical-release-review/lazy-task.nagi: parse-pass
+/tmp/nagi-critical-release-review/lazy-task.nagi: resolve-pass
+/tmp/nagi-critical-release-review/lazy-task.nagi: check-pass
+/tmp/nagi-critical-release-review/lazy-task.nagi: generated-low-reparse-pass
+/tmp/nagi-critical-release-review/lazy-task.nagi: final-check-seal-pass
+/tmp/nagi-critical-release-review/lazy-task.nagi: rust-emission-pass
+/tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low: parse-pass
+/tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low: resolve-pass
+/tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low: check-pass
+/tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low: final-check-seal-pass
+/tmp/nagi-critical-release-review/lazy-task-saved-source/saved.low: rust-emission-pass
+/tmp/nagi-critical-release-review/lazy-task.low: parse-pass
+/tmp/nagi-critical-release-review/lazy-task.low: resolve-pass
+/tmp/nagi-critical-release-review/lazy-task.low: check-pass
+/tmp/nagi-critical-release-review/lazy-task.low: final-check-seal-pass
+/tmp/nagi-critical-release-review/lazy-task.low: rust-emission-pass
+/tmp/nagi-critical-release-review/short-task.nagi: parse-pass
+/tmp/nagi-critical-release-review/short-task.nagi: resolve-pass
+/tmp/nagi-critical-release-review/short-task.nagi: check-pass
+/tmp/nagi-critical-release-review/short-task.nagi: generated-low-reparse-pass
+/tmp/nagi-critical-release-review/short-task.nagi: final-check-seal-pass
+/tmp/nagi-critical-release-review/short-task.nagi: rust-emission-pass
+/tmp/nagi-critical-release-review/short-task-saved-source/saved.low: parse-pass
+/tmp/nagi-critical-release-review/short-task-saved-source/saved.low: resolve-pass
+/tmp/nagi-critical-release-review/short-task-saved-source/saved.low: check-pass
+/tmp/nagi-critical-release-review/short-task-saved-source/saved.low: final-check-seal-pass
+/tmp/nagi-critical-release-review/short-task-saved-source/saved.low: rust-emission-pass
+/tmp/nagi-critical-release-review/short-task.low: parse-pass
+/tmp/nagi-critical-release-review/short-task.low: resolve-pass
+/tmp/nagi-critical-release-review/short-task.low: check-pass
+/tmp/nagi-critical-release-review/short-task.low: final-check-seal-pass
+/tmp/nagi-critical-release-review/short-task.low: rust-emission-pass

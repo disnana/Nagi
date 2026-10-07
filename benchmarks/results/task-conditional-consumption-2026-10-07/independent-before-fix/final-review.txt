@@ -1,0 +1,29 @@
+Nagi 0.1.11 Critical Reviewer 独立最終レビュー（修正前candidate）
+2026-10-06。source read-only、sub-agentなし、元repositoryへの編集・commit・外部投稿・merge・release操作なし。
+
+結論: 未解決1件。P2の公開Task正常出口義務違反をrelease blockerとして返す。今回のversion/移行Docs/公開API説明/notes/packaging整合には、これ以外の指摘はない。既存成功でこの負例を正当化せず、Docsの保証を弱めて解決しない。
+
+調査対象sourceはcommit 3a259a5c1f27557344eec6365e050268da887a81、tree 33219ad1883014a242451f047e9a3972b3011ec4。開始時のworktree cleanを実gitで確認した。S2 main f9b25782a8704bcf962f689d9103ab804f7ab3cf/tree84d1696053a9cf5ef256b44fcd50afff91863c9dからcompiler/src、runtime/src、crate manifests、scripts、CI、AGENTS/.codexは不変だった。
+
+後続local9cca4219b283d2ff11cd25ac4d4667a2192c85e0/tree374efc4db6a5fde9a709237eb46fee8ed9f027c5も実gitで確認した。3a259a5からの5ファイルはrelease原ログ2本、provenance、artifact README、handoffのみ。compiler/runtime/公開Docs/Cargo/CHANGELOGに変更はない。親から通知されたGitHub head219605b2d20aabc776326200c279f8a64ebc0ddcは同treeだが、GitHubの実読戻しは親の担当であり、このreview自身のremote確認とは数えない。最終git statusには親が更新中のhandoff1件があり、上書きしていない。
+
+P2: 条件付き評価のTask消費をcheckerが無条件の消費として扱い、正常出口must-consumeを回避できる。
+根拠はcompiler/src/check.rs:3599のBinary RHSの無条件解析、:3961/:3972のbuiltin全引数（env fallback含む）の無条件解析、:3799のawait時clear_task、:837のdiscard時clear_task。生成Rustはand/orを短絡し、emit.rs:727のenvはErr arm内だけでfallbackを評価する。ADR012「全Tの正常出口await/discard」、docs/task-handles.md:27、language-invariants.md:109は全て正常pathでの受取または明示放棄を要求する。
+
+再現はTask[str]のawaitをenvのpresent-key fallback内だけに置くlazy-task.nagi、Task[i64]のawaitをFalse andのRHS内だけに置くshort-task.nagi。take関数はreceipt-executed markerを出す。実0.1.11で両方checker受理、final check/seal受理、Rust生成、Cargo build、native exit0。出力はそれぞれpresent/scope-ok、false/scope-okでmarkerなし。handleは正常scope出口までawait/discardされず、暗黙Dropでreceiptが放棄される。Scopeのactual join責任やfaultのsticky保持が失われるとまでは主張しない。保証違反と内側業務結果の意図しない放棄が影響であり、Rust型生成エラーではないためP2とする。
+
+2群のHigh・保存Low（対応High削除後）・独立手書きLow、計6入力でparse→resolve→check→final check/seal→Rust emissionと実Cargo/nativeを独立確認した。stage-inspectorはgit archiveで凍結3a259a5から取ったcompiler snapshotへ依存する外部Rust crate。実CLIもoriginal binaryをhash照合してbin/nagicへ保存し、後続compiler buildとの混同を防いだ。envは同じ成功native executableでkeyを除いたcontrolも実行し、receipt-executed/fallback/scope-okになる。marker観測自体の欠陥ではない。
+
+初回Low reviewer harnessのruntime dependency assertは、相対pathをgenerated Cargo.tomlのparentではなくprocess cwdで解決して失敗した。child check/build/nativeはexit0だった。review harnessだけを修正し、凍結runtime依存を正しく照合した最終4実行を採用する。初回失敗logと訂正理由を保存し、product defectや成功件数へ混ぜない。
+
+必要修正は、and/or RHSとenv fallbackが省略されるpathのTask pending義務を保ち、全正常pathにawait/discardがない場合checkerで拒否すること。常時評価される左側/keyの消費は受理を維持する。await/discard両入口、or、nested short-circuit/lazy、High/Lowを覆い、元binding位置で拒否する。例のexpected primaryはHigh16行、手書きLow12行。追加symmetry fixturesのand-rhs-discard/or-rhs-discard/nested-short-discard/nested-env-discardはHigh10行/Low7行の未受取Task拒否、and-left-discardとenv-key-discardは受理維持。詳細はlazy-symmetry-results.json。
+
+その他の照合: ADR012のbody Err優先、sticky fault、二重Result、全T consume/escape、actual joinと同期Drop限界をTaskScope実装、checker、sealed emission plan、S2 service oracleと照合した。runtimeは唯一JoinSet ownerとscope ticketを維持し、join Ready→record間にawaitを挟まず、要求済み取消と実panic/legacy Errを区別する。Task public kind/message/discardはmetadataのCopy Kind/view[str]借用元0/unitとDocsが一致する。TaskFailure→Errorの暗黙変換、新fault昇格、個別Task cancel/close/detach、一般Future保存、SQLite公開は導入されていない。legacy Supervisor/HTTP sourceは今回変更されず、S2 monitorのOk(inner)→親tryとHTTP旧spawnのfail-on-Errを維持する。
+
+公開移行案は狭い既存owned non-Copy bare-RHS assignmentへのmove、emit &CheckedProgram/check::finalize、private Stmt facts、新enum、native成功世代path/cache分離を正しく説明する。日英の唯一のRust blockは一致し、exact例をcandidate依存の外部crateでcargo run --locked --offline成功。これはRust caller compile/runとemitter stringの証拠であり、生成Rustのnative buildの証拠へ拡張しない。独立CLIのmandatory moveとCopy payload Task義務のHigh/手書きLow negative/positive対8 checkも期待診断と元行で確認した。
+
+Formal release planはNagi0.1.11のみrelease/package true、VSIX0.1.13は不変。lockの差はnagic/nagi-runtimeの0.1.10→0.1.11のみで第三者package変更0。immutable CHANGELOG節は非空14項目。standalone runtime manifestは0.1.11でworkspace継承が残らず、4 OS archive名と日英getting-startedが一致する。公式公開前の準備状態と過去S1/S2実績をDocs/artifactが分けている。
+
+引継ぎ証拠と今回の実行は区別する。S1/S2の110契約、native7、runtime17/public3/doc9、4 OS、全workspace935成功/failed0/費用ignored1、archive/IDE/VSIX/Ready成功と、過去Sol Highの21 service nativeは保存済み原資料として再利用した。親のcandidate library/application/site/link成功やCI進行もこのreview自身の実行ではない。全workspace、4 OS、full fuzz、費用測定、任意scheduler/Drop payload、release publicationは独立再実行していない。適用fixの独立再検証は未完了で、current candidateはrelease可と判定しない。
+
+原資料: final-provenance.json、initial-provenance.json、release-static-checks.json、embedding-run.log、cli-check-results.json、stage-inspector-run.log、lazy-task-low-native-results.json、lazy-task-native.log、short-task-native.log、*-native.stdout/*-native.stderr、lazy-symmetry-results.json、review-harness-correction.json。artifact-hashes.jsonにはreview reportと主要log/sourceのSHA-256を保存する。

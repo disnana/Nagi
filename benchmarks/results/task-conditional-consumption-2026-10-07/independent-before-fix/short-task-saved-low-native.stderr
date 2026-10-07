@@ -1,0 +1,4 @@
+     Locking 107 packages to highest compatible versions
+   Compiling nagi-saved-56fa475ed977451c v0.1.0 (/tmp/nagi-critical-release-review/short-task-saved-low-native-output/.nagi/apps/nagi-saved-56fa475ed977451c/generations/.staging-g-1f6b3-18dc15da49a71380-0)
+    Finished `release` profile [optimized] target(s) in 1.59s
+native: /tmp/nagi-critical-release-review/short-task-saved-low-native-output/.nagi/apps/nagi-saved-56fa475ed977451c/generations/g-1f6b3-18dc15da49a71380-0/nagi-56fa475ed977451c-g-1f6b3-18dc15da49a71380-0

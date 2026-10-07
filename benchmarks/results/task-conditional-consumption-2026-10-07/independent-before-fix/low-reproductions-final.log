@@ -1,0 +1,5 @@
+lazy-task-saved-low: check/build/native passed; no receipt; normal scope exit
+lazy-task-handwritten-low: check/build/native passed; no receipt; normal scope exit
+short-task-saved-low: check/build/native passed; no receipt; normal scope exit
+short-task-handwritten-low: check/build/native passed; no receipt; normal scope exit
+Missing-key control: same native executable actually receives task before normal scope exit

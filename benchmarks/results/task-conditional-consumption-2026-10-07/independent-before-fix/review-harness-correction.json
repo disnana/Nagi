@@ -1,0 +1,7 @@
+{
+  "initial_child_check_run_exit": 0,
+  "initial_child_stdout": "present\nscope-ok\n",
+  "review_harness_failure": "Relative runtime dependency path was initially resolved against process cwd instead of generated Cargo.toml parent.",
+  "correction": "Resolve against generated directory; use immutable candidate snapshot runtime.",
+  "production_code_changed": false
+}

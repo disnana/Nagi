@@ -1,0 +1,4 @@
+     Locking 107 packages to highest compatible versions
+   Compiling nagi-short-task-b59a4575151d9a12 v0.1.0 (/tmp/nagi-critical-release-review/short-task-handwritten-low-native-output/.nagi/apps/nagi-short-task-b59a4575151d9a12/generations/.staging-g-1f6d0-18dc15daacb02598-0)
+    Finished `release` profile [optimized] target(s) in 1.43s
+native: /tmp/nagi-critical-release-review/short-task-handwritten-low-native-output/.nagi/apps/nagi-short-task-b59a4575151d9a12/generations/g-1f6d0-18dc15daacb02598-0/nagi-b59a4575151d9a12-g-1f6d0-18dc15daacb02598-0

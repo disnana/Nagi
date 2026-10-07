@@ -1,0 +1,20 @@
+from std.ownership import move as transfer
+from std.task import TaskFailure
+
+def take(result: Result[i64, TaskFailure]) -> bool:
+    match result:
+        case Ok(value):
+            return True
+        case Err(failure):
+            return False
+
+async def work() -> i64:
+    return 7
+
+async def exercise(flag: bool) -> Result[unit, Error]:
+    async with scope:
+        task = spawn work()
+        alias = transfer(task) # primary
+        value = flag and take(await alias)
+        print(value)
+    return ok(print(0))
