@@ -1,34 +1,35 @@
-# SQLite公開APIの引継ぎ (2026-10-08)
+# SQLite公開APIと導入Docsの引継ぎ (2026-10-08)
 
-## source・PRの状態
+## 完成したsourceとPR構成
 
-- base: main 676576724829e45b077b58628bfe2417e6cf3673
-- source head: e3e0ea3962bd847a9ffdaef4fdabb7598844459f、tree e6d986d13345743465b74dfeb34f005a66a4c924
-- 主な段階: runtime e78f35a、compiler 0f9dd79、SQL alias fix 0bebcd0、Docs/CI e3e0ea3。source branchは計5 commits。
-- [PR #99](https://github.com/disnana/Nagi/pull/99)はmain baseのdraft。e3e0ea3のinitial checksは実行中で、latest-head CIの最終readbackはまだない。merge/release/version bumpなし。APIは0.1.11未収録。
-- 導入Docsの[PR #98](https://github.com/disnana/Nagi/pull/98)は別branch、head bc6a76b。[checks 37701060949](https://github.com/disnana/Nagi/actions/runs/37701060949)と[website 37701060552](https://github.com/disnana/Nagi/actions/runs/37701060552)を確認し、4 OS/Linux/IDE/package/gate/website成功後ready、未merge。各OS raw jobのonboarding harnessは10 native cases success。PR #98結果はPR #99 CIの代用にしない。
+開始時mainは`676576724829e45b077b58628bfe2417e6cf3673`。Task/moveは0.1.11、JetBrainsは0.1.1で公開済み。今回のSQLite APIは未リリースで、merge/release/version bumpをしていない。
 
-## 変更内容
+- [PR #98](https://github.com/disnana/Nagi/pull/98): 初アプリ・本体貢献の日英Docs、言語機能索引と不足説明、実行例。main向け、head `bc6a76bf2422aadaca799b739ab75e5f1e6bc450`。4 OS/Linux/IDE/package/website成功を読み戻してready、未merge。
+- [PR #99](https://github.com/disnana/Nagi/pull/99): SQLite Pool/Transaction公開API・compiler・runtime・日英reference・検証。#98上の依存PR（base `docs/first-app-and-contributing`）、最終反映先はmain。目次・CIの5か所の競合を両方保持して解消済み。最終head/CI/ready状態はPR本文とChecksを参照する。
 
-Q002/Q004承認に基づくSQLite-specific Pool/Tx API、compiler resource/ownership/SQL checks、日英referenceと既存SQLite/SQL Docs更新、website nav、example、CI、DESIGN、CHANGELOGをPR #99へまとめた。runtimeは既存Tokio FIFO semaphoreとlazy adapterを使い、deadpool/deadpool-runtimeを除去。新依存やTokio/rusqliteの版更新はない。public APIは8 types/resources、18 operations。既存db_* APIは維持され、SQLite新APIは未リリースのまま。
+rebase前の検証sourceは`e3e0ea3962bd847a9ffdaef4fdabb7598844459f`。統合source `fbfebd3`とのcompiler/runtime/Cargo.lock/SQLite配布gate/費用harnessの差分は0。PR履歴のcommit SHAが変わっても[provenance](../../../benchmarks/results/sqlite-public-2026-10-08/provenance.json)のfile hashesで照合できる。
 
-今回のcapacity承認で、巨大scalar設定のALLOCATIONはfallible reservationだけを示し、universal OOM回復保証にはしない。新APIのtransaction, close, failure, logical FIFO, SQL prepare-only limitsは[日英public reference](../../sqlite-pool.md)と[英語reference](../../en/sqlite-pool.md)を正本とする。古いdeadpool比較記録は履歴として保持し、現在のruntime dependencyと読み替えない。
+## 重要な設計判断
 
-## 主要な検証とそのstage
+ユーザー承認に従いvendor限定案も代替依存も比較し、既存Tokio FIFO semaphoreとlazy専用adapterを採用した。deadpool/deadpool-runtimeを除去し、新依存・Tokio/rusqliteの版更新はない。Optionsはscalar/native範囲を検査し、全capacityの予約はしない。openはpath/policyを検査し、native workerはbeginでlazy起動する。実増分のfallible reservation失敗だけをALLOCATIONとして扱い、任意OOM/allocator abortの回復は保証しない。
 
-再利用cache上のruntime結果はe78f35a stage、compiler focused結果は0f9dd79 stage、同じowned SQL文字列を後続Parametersへmoveする修正と回帰は0bebcd0 stage、Docs code/website/schema preflightはe3e0ea3 stageで記録した。source revisionごとのログ・件数・範囲・hashは[検証結果](../sqlite-public-results.md)と[artifact README](../../../benchmarks/results/sqlite-public-2026-10-08/README.md)を読む。最新Linux workspace test/fmt/clippy、release build、examples、seeded fuzz、SQLite native sample、extracted local archiveは成功した。workspace raw logはgzipで保持し、95 result blocks/970 passedという文字集計にはchild processの重複を含むためunique test数として扱わない。SQLite runtime full suiteには73件のsqlite:: testsがある。別のfocused oracle logにある71件は後から加わった2件を含まない古いsnapshotである。
+8 type/resources、18 operationsをcheckerのcanonical metadataからsealed plan、Low/Rust生成、public runtimeへ接続した。旧db_*とTask/spawnは互換性を維持する。Txはsame-task affine resource、SQLはworker転送前に所有化、Parametersは型別owned builder。取消要求と終了確認を区別し、close成功はnative close＋actual joinまで待つ。acquire予算はlogicalからnativeへ同じ残予算を渡し、0ms immediate取得を許し、BEGIN/busy/SQLまで延長しない。
 
-独立runtime reviewはP0/P1/P2 blockerなしで、logical semaphore waitに限るFIFO、retired=falseの非保証、ReplyLost/UNKNOWNの不確実性をDocsが扱うべきと指摘した。独立compiler reviewは一時SQL loanが後続Parameters moveを不当に拒むP2を発見し、argument 1 materializationだけでloanを解放する修正を追跡し、3 operation regression/native確認とTx-loan negativeをレビューした。独立Docs reviewのP2も修正済み。各reviewの限界は原記録に残す。
+詳細は[確定判断](../sqlite-public-runtime-decision.md)、[ADR 010](../adr/010-sqlite-transaction-boundary.md)、[日英public reference](../../sqlite-pool.md) / [English](../../en/sqlite-pool.md)。過去のdeadpool比較・private bridge資料は履歴として保持し、現実装の状態と混同しない。
 
-PR #98のready状態と4 OS例検証は今回artifactの[小さい証拠抜粋](../../../benchmarks/results/sqlite-public-2026-10-08/logs/related-docs-pr98-evidence.md)で参照できる。PR #98 raw CI logsは4ファイルともhashを記録したが、巨大な完全ログは今回artifactへ複製していない。
+## 検証結果と証拠
 
-## 後続担当の作業
+[段階別results](../sqlite-public-results.md)と[保存artifact](../../../benchmarks/results/sqlite-public-2026-10-08/README.md)に原ログとhashを保存した。46/46契約入力（14受理、32checker拒否）、7正例×High/保存Low/手書きLowのnative、negative元位置、SQLite native 73、public API consumer1を確認。最終workspaceではsqlite_public8/8、全回帰exit0（raw文字集計970pass、0failed、1既存ignored、子process重複あり）、Task148/148、fmt/clippy、seeded fuzz、examples10projects/19runsが成功した。
 
-1. PR #99 latest headの4 OS/checksとwebsiteをraw jobsから読み戻し、対象commit、SQLite testcase数、failed/ignored、Onboarding PR #98とは別の実行であることを確認する。e3e0ea3 initial checksは進行中で、4 OS readbackは未確認のまま扱う。
-2. generated-versus-manual cost sampleは記録済み。sample scope、per-sample allocation outlier、cache条件、raw resultは[検証結果](../sqlite-public-results.md)、[measurement note](../../../benchmarks/results/sqlite-public-2026-10-08/cost-measurement-note.md)、[summary JSON](../../../benchmarks/results/sqlite-public-2026-10-08/cost-summary.json)にある。共有hostの小標本で性能差を主張しない。
-3. PR #99 latest CIの読戻し結果だけを[検証結果](../sqlite-public-results.md)、[progress](../progress.md)、[provenance](../../../benchmarks/results/sqlite-public-2026-10-08/provenance.json)へ追記する。Linux source buildのfuzz/native CLI/extracted local archiveはすでに成功ログを保存したが、これらをPR CIの代用にしない。
-4. PR #99のdraft/merge/release判断、PR #98のmerge、Nagi版更新は別に扱う。SQLite APIが未リリースというpublic statusは維持する。
+SQLite教程High/独立保存Low、local linux-x86_64 archiveの展開compiler/runtime実行を確認した。公式配布物の更新はしていない。統合後はwebsite98pagesのlinks/anchors/assets、初アプリ10native、SQLite日英code一致、CI policy59 testsが成功。4 OSの最終結果はPR #99の固定headと各jobログを読み戻してPR本文へ記録する。source記録を作る時点のpendingを最終CI成功の証拠にしない。
 
-## 証拠の入口
+独立runtime reviewはP0/P1/P2なし。独立compiler reviewのSQL一時loan過剰保持P2と誤ったログ参照P3は修正・追跡確認済み。Docsの初心者視点レビューとSQLite日英説明の不足も修正・再確認済み。費用測定は同runtimeの生成/手書きRustでFuture、calling-thread allocation、時間、binary bytesを記録した。全heap、他OS費用、clean-build費用、全interleavingは未測定。巨大allocationや資源枯渇実験は行っていない。
 
-[SQLite public result](../sqlite-public-results.md)がstage別の可視結果と非保証をまとめる。[artifact README](../../../benchmarks/results/sqlite-public-2026-10-08/README.md)はrepo内に保存した小さいevidence setとmachine-readable provenanceを案内する。大量のbuild tree、binary、Cargo cacheは持ち込まない。
+## 後続の順番と範囲外
+
+1. PR #98と#99の最終本文・Checksを読む。この依頼の完了点はPR作成と検証で、両PRのmerge/release承認ではない。
+2. 後日mergeが指示された場合は#98を先にmainへ反映し、#99をmainへretarget/rebaseして必須CIを確認する。squash後は旧baseのDocs commitsを再導入しない。
+3. リリースは別指示でversion/changelog/互換性と配布gateを確認する。Nagi compilerのRust埋込み利用でmetadata enumをexhaustive matchする場合は新variant対応が必要。旧Nagi Db APIは維持する。
+4. 任意Rust resource/一般effect・region、pool resize/min-idle/expiry、自動retry、他DB対応、全OOM回復、compiler finalization追加passのpeak memory最適化は今回の公開sliceに含めない。必要なら別PRと契約・oracleを用意する。
+
+Docsの入口は[最初のアプリ](../../first-app.md)、[初めての貢献](../../contributing.md)、[言語機能索引](../../README.md)。全既存snippet、外部URL、GUI/IDE操作、各OSの手動インストールまでは実行していない。CLIの主要手順は自動native harnessと独立確認の範囲を明記した。

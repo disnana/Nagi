@@ -38,3 +38,5 @@ runtimeの独立レビューはe78f35aを対象とし、P0/P1/P2 blockerを報�
 - 作業時点の公式release source/mainにはTask/moveが公開済みだが、SQLite Pool/Txはまだ含まれない。
 
 Evidence file SHA-256と変更source pathのhashは[provenance.json](../../benchmarks/results/sqlite-public-2026-10-08/provenance.json)に保存する。runtime/compiler/docsの確認stageが異なるので、provenance上の各test run source revisionも分けている。
+
+2026-10-08 統合追記: PR #98のhead `bc6a76b`へPR #99をrebaseし、#98をbaseとする依存PRへ整理した。最終反映先はmain。双方の目次・CIを保持し、compiler/runtime/Cargo.lock・SQLite配布gate・費用harnessは検証済み`e3e0ea3`から差分なし。統合source `fbfebd3`でwebsite 98 pages、初アプリHigh/保存Low native 10件、SQLite日英コード一致、CI policy 59 testsを確認した。以降の公開headと必須CIの最終結果は[PR #99](https://github.com/disnana/Nagi/pull/99)の本文とChecksを正とし、この文書の作成時点のCI pendingを現在状態と読み替えない。

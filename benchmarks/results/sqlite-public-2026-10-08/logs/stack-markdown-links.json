@@ -1,0 +1,24 @@
+{
+  "markdown_files": 285,
+  "archived_source_copies_excluded": [
+    "benchmarks/results/task-conditional-consumption-2026-10-07/snapshot/docs/internal/task-conditional-consumption-fix.md",
+    "benchmarks/results/task-handles-s1-2026-10-06/compiler/01-additional-red/snapshot/docs/internal/adr/012-task-result-handles.md",
+    "benchmarks/results/task-handles-s1-2026-10-06/compiler/01-additional-red/snapshot/docs/internal/task-handle-implementation.md",
+    "benchmarks/results/task-handles-s1-2026-10-06/compiler/01-additional-red/snapshot/tests/task-handles/README.md",
+    "benchmarks/results/task-handles-s1-2026-10-06/final-review/independent/ai_language.md",
+    "benchmarks/results/task-handles-s1-2026-10-06/final-review/independent/docs_en_task-handles.md",
+    "benchmarks/results/task-handles-s1-2026-10-06/final-review/independent/docs_task-handles.md",
+    "benchmarks/results/task-handles-s1-2026-10-06/final-review/independent/final_ai_language.md",
+    "benchmarks/results/task-handles-s1-2026-10-06/final-review/independent/final_docs_async.md",
+    "benchmarks/results/task-handles-s1-2026-10-06/final-review/independent/final_docs_en_async.md",
+    "benchmarks/results/task-handles-s1-2026-10-06/final-review/independent/final_docs_internal_adr_011-language-behavior-and-docs.md",
+    "benchmarks/results/task-handles-s1-2026-10-06/final-review/independent/final_docs_internal_task-handles-s1-final-review.md",
+    "benchmarks/results/task-handles-s2-2026-10-06/snapshot/test-nagi-code/library-examples/supervised-service/README.en.md",
+    "benchmarks/results/task-handles-s2-2026-10-06/snapshot/test-nagi-code/library-examples/supervised-service/README.md",
+    "benchmarks/results/task-handles-s2-2026-10-06/snapshot/test-nagi-code/library-examples/task-results/README.en.md",
+    "benchmarks/results/task-handles-s2-2026-10-06/snapshot/test-nagi-code/library-examples/task-results/README.md"
+  ],
+  "relative_file_links": 2550,
+  "missing": [],
+  "scope": "current-document relative file existence; immutable partial source snapshots retain original relative links and are excluded; website separately checks public page anchors/assets; external URLs not fetched; absolute historical artifact paths excluded"
+}

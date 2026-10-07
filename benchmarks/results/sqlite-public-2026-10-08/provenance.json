@@ -304,6 +304,17 @@
       "log": "logs/sqlite-example-preflight.log",
       "scope": "Three literal SQLs checked, 0 unsupported sites, three Parameters bind-unchecked notices, command succeeded against temporary ordinary schema CREATE TABLE amounts(amount INTEGER NOT NULL);. Example DDL is prepared only and uses IF NOT EXISTS.",
       "command": "NAGI_ROOT=/workspace/Nagi-sqlite-public /workspace/nagi-build-cache/check/debug/nagic check examples/sqlite_pool.nagi --sql-schema /tmp/nagi-sqlite-public-schema.sql --sql-dialect sqlite"
+    },
+    {
+      "id": "post-implementation-linux-validation",
+      "source_revision": "e3e0ea3962bd847a9ffdaef4fdabb7598844459f",
+      "command_script": "logs/run-validation.sh",
+      "scope": "All commands exit0; fmt/clippy, SQLite46/Task148, oracles4+4, release build, native tutorial, seeded fuzz, root/library/application examples, no-SQL feature, local archive extraction."
+    },
+    {
+      "id": "generated-manual-cost",
+      "source_revision": "e3e0ea3962bd847a9ffdaef4fdabb7598844459f",
+      "scope": "See cost-summary.json and cost-measurement-note.md; generated/manual exact registry version/source/checksum subset of workspace lock, calling thread only."
     }
   ],
   "environment": {
@@ -408,6 +419,7 @@
     "logs/release-build.log": "bcc7e44834db697cb200928ec2518498f50731c531fcd5da7f5a963ff4f4b900",
     "logs/release-package-tests.log": "0f515f79a08d14b1a3f063ce12e4400ab2c25fc5630355afd544df1b4e45d727",
     "logs/release-python-all.log": "a5224f2df607d7503d1611b03e4ef20286b6f55df3f1d358df68efc7f3f9d484",
+    "logs/run-validation.sh": "c77afe13d4913bfe74e94abb11ff15a4ee1ea10ad3e41a0a7a310139a323f81b",
     "logs/runner-oracles-final.log": "e51c0c45f43069f0e0614bce642f424cdf8940df8b92862a573f7a3fcb92d914",
     "logs/runtime-clippy-final.log": "16f9521e2c2c7fde238d20b8d5dc0b2156a05b61e084a8676df224f09fdbe36a",
     "logs/runtime-comparison.log": "0497f3a89eaf25710bdca306f56d18cb95298bebf55df9f215767b24991cd552",
@@ -417,12 +429,17 @@
     "logs/sql-alias-green.log": "48e9468f5b16cc677c9456ce6e57e096eb7a57fd5a4e502983c05fe1d1dc2da4",
     "logs/sqlite-example-native.log": "e247f1beb189e3925e67c29ca1fef3a0ab9605c9314c19718a55ef6bff4ccc37",
     "logs/sqlite-example-preflight.log": "745d301222d622d3f3820998ad50ba239c5cd983a91dc554604829e7b659a6ba",
+    "logs/stack-ci-oracles.log": "be55aae98531def513b22d2ba0cd8bb20d6314431a86b9cba3e206d54d0d7001",
+    "logs/stack-markdown-links.json": "c6ea112c53cfca157998291d44208fb6e15495cdbfc40ca98179ef8ed71765b5",
+    "logs/stack-onboarding-native.log": "f7d099ac62854d9c30a55fee8f61dffe6c6d95ed5486eaaacaaae7fb07257dfa",
+    "logs/stack-sqlite-docs.log": "6ba5e568c745b02685c968f13b9b5522111573938f673f48a22ee2098e5bc8b0",
+    "logs/stack-website.log": "0a63539352f0c47be4af4c53e9e4e80e32f6c2067e5a8c2f5d412caa21bf2c2b",
     "logs/task-contracts-final.log": "c6d9d006082db9aa0796e0fca156c18a2dabd2d71aad56923ee83f4ea51d256b",
     "logs/task-contracts-raw.log": "e87d32a5505ed19d6ab9c6da92d23b90046a095e98f83c1fd4e4e377a5a0b6f1",
     "logs/task-oracle-excerpt-red.log": "150caec30f73b285052f19a6ef070404caaf5d441b8109c3a182a92e45d64aed",
     "logs/website-final.log": "17ae2a8b3bdd1fb535675457176df6c049a76592fca5ae67a1ccf37ec7ac4458",
     "logs/workspace-clippy-final.log": "bda3e2b0fc2a22b0962ca5b3ba7ef58fd809278d4518d33fcb12e0a0be35a046",
-    "logs/workspace-tests-final-summary.md": "04035c8db9e2a5923489d2138c443a4a8a8f103d0645d15c3ef9b2f5a5b89259",
+    "logs/workspace-tests-final-summary.md": "b140e61107c47f0edeee80f393303c15157d03a6ed6b6f006e8a61d2f1fc4193",
     "logs/workspace-tests-final.log.gz": "1fc7ac633129c3d78f1e8e7a3f2d1e424ef3fdb7fd6b9846f505b8996ebd3905",
     "runtime-adapter-comparison.json": "938ad9908cf550985bffefc1d0f9a46d281ecff89a8dbb76055a1d2c0afdea06",
     "runtime-budget-comparison.json": "666931ff21c65accdbf539907f42e281412f84258708b26ca4ec488874568d54",
@@ -434,9 +451,18 @@
   "provenance_self_hash": "Not included; a file cannot contain its own stable hash. Hash the committed file externally if needed.",
   "limits": [
     "PR #99 latest-head four-OS CI was not confirmed at capture.",
-    "SQLite fuzz, native CLI acceptance, generated-versus-manual benchmark, and actual immutable archive execution were not complete at capture.",
     "runtime-public-cost.json is a diagnostic debug snapshot, not a performance benchmark.",
     "Release-package unit tests, mock gates, and extracted source projection tests do not prove actual published archive execution.",
-    "The 95/970 workspace test count is a textual aggregate with child-process duplicate results, not a unique test count."
-  ]
+    "The 95/970 workspace test count is a textual aggregate with child-process duplicate results, not a unique test count.",
+    "All heap, non-Linux costs, compiler replay peak memory and clean builds were not measured.",
+    "Raw text logs preserve original trailing blank lines; diff whitespace checks exclude blank-at-eof for those immutable logs."
+  ],
+  "stack_integration": {
+    "source": "fbfebd3",
+    "base": "bc6a76bf2422aadaca799b739ab75e5f1e6bc450",
+    "ultimate_base": "main",
+    "production_diff_from_tested_source": "none in compiler/runtime/Cargo.lock/SQLite distribution gates/cost harness",
+    "local_results": "website98pages, first-app10native, SQLitebilingualcode, CIpolicy59pass",
+    "final_ci": "Read actual PR #99 head and checks; not claimed at capture."
+  }
 }

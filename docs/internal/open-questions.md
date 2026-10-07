@@ -105,3 +105,5 @@ Send/Sync、内部可変性、容量課金、資源の保持、replyへの流出
 | 任意opaque Rust resource・async callback | 計画外 | Rust API自動importや自己申告Contractを追加しない。必要なら別設計 |
 | Txを捕捉したFutureのtask transfer | PR #99で対応するchecker negativeを追加 | Pool/Txの具体的なtask transfer負例をsource oracleで検証。任意Futureや一般effect/regionについての保証へ拡張しない。4 OS/native全体受入は待ち |
 | 世代snapshotと互換出力 | Phase 2実装・main反映済み | canonical outのwrite lock、app別metadata、check/lower並行とprojection途中失敗を検証した。外部workspace全体のatomic snapshotは対象外。公開版への反映は別に確認 |
+
+2026-10-08 統合追記: PR #98のhead `bc6a76b`へPR #99をrebaseし、#98をbaseとする依存PRへ整理した。最終反映先はmain。双方の目次・CIを保持し、compiler/runtime/Cargo.lock・SQLite配布gate・費用harnessは検証済み`e3e0ea3`から差分なし。統合source `fbfebd3`でwebsite 98 pages、初アプリHigh/保存Low native 10件、SQLite日英コード一致、CI policy 59 testsを確認した。以降の公開headと必須CIの最終結果は[PR #99](https://github.com/disnana/Nagi/pull/99)の本文とChecksを正とし、この文書の作成時点のCI pendingを現在状態と読み替えない。
