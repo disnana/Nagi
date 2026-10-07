@@ -60,7 +60,7 @@ fn console_io_roundtrip() {
 #[test]
 fn precedence() {
     let p = high("def main() -> i64:\n    return 2 + 3 * 4\n").unwrap();
-    assert!(emit::low(&p).contains("(2 + (3 * 4))"));
+    assert!(emit::low(&p).contains("return 2 + 3 * 4;"));
 }
 #[test]
 fn roundtrip_low() {

@@ -75,7 +75,7 @@ canonical `std.ownership.move`、現行Copy表の据置、右辺がnonCopy所有
 
 ### Q-006: spawn結果handleと業務Err・task故障
 
-状態: **初版を採用・S1 main反映済み・未リリース**。[ADR 012](adr/012-task-result-handles.md)で全Tの正常出口await/discard、scope faultのsticky保持を採用した。既承認の方向から必然としたのではなく、「安全に判断できるものは理由を示して自律確定」という今回の委任に基づく選択であり、二点の確認待ちは解除する。現行spawn/Scopeと公開版は変更していない。
+状態: **初版を採用・S1/S2 main反映済み・Nagi 0.1.11公開済み**。[ADR 012](adr/012-task-result-handles.md)で全Tの正常出口await/discard、scope faultのsticky保持を採用した。既承認の方向から必然としたのではなく、「安全に判断できるものは理由を示して自律確定」という今回の委任に基づく選択であり、二点の確認待ちは解除する。採用時点では既存spawn/Scopeと公開版は変更していなかった。
 
 scope所属の非Copy・非Clone・非shared Taskを一回await consumeし、scope外escapeを拒否する。受取は実join後の外側Result[T, TaskFailure]で、Tの業務Resultは入れ子のまま保つ。業務Errは兄弟を止めず、panic/予期しない取消/legacy Err/protocol故障はsticky primaryとして兄弟abort要求→actual drainへ進む。bodyの元Errは後続faultで置換しない。全T義務は新Taskに限り、一般owned/Result bindingへmust-useを広げない。
 

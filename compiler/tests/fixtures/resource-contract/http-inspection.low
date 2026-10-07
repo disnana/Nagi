@@ -5,19 +5,19 @@ record __nagi_def_2f6e6167692d676f6c64656e2f687474702d696e7370656374696f6e2f6d61
 }
 
 fn __nagi_def_2f6e6167692d676f6c64656e2f687474702d696e7370656374696f6e2f6d61696e2e6e616769_f_616c6c6f776564(request: __nagi_builtin_0.view[__nagi_def_7374646c69623a7374642e687474702e736572766572_r_52657175657374], state: __nagi_builtin_0.shared[__nagi_def_2f6e6167692d676f6c64656e2f687474702d696e7370656374696f6e2f6d61696e2e6e616769_c_5374617465]) -> __nagi_builtin_0.Result[__nagi_builtin_0.bool, __nagi_builtin_0.Error] {
-    assert_true((request.method == __nagi_def_7374646c69623a7374642e687474702e736572766572_r_4d6574686f64.GET));
-    assert_true((request.path == "/probe"));
-    assert_true((request.path < "/z"));
-    assert_true(("/a" < request.path));
-    assert_true((request.path <= state.expected));
-    assert_true((state.expected >= request.path));
-    assert_true((request.body <= request.body));
-    assert_true((len(request.body) == 0));
+    assert_true(request.method == __nagi_def_7374646c69623a7374642e687474702e736572766572_r_4d6574686f64.GET);
+    assert_true(request.path == "/probe");
+    assert_true(request.path < "/z");
+    assert_true("/a" < request.path);
+    assert_true(request.path <= state.expected);
+    assert_true(state.expected >= request.path);
+    assert_true(request.body <= request.body);
+    assert_true(len(request.body) == 0);
     let status: __nagi_def_7374646c69623a7374642e687474702e736572766572_r_537461747573 = copy(view(__nagi_def_7374646c69623a7374642e687474702e736572766572_r_537461747573.OK));
-    assert_true((status.value == 200));
+    assert_true(status.value == 200);
     match try __nagi_def_7374646c69623a7374642e687474702e736572766572_f_6865616465725f74657874(request, view("Authorization")) {
         case Some(value) {
-            return ok((value == view(state.expected)));
+            return ok(value == view(state.expected));
         }
         case None {
             return ok(false);
