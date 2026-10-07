@@ -12,7 +12,7 @@
 
 ## 検証と独立レビュー
 
-ローカルでRelease suite 113件、CI gate suite 55件、Python compile、両workflowのYAML parse、差分whitespace検査が成功した。publisherの検証にはFakeGitHubだけを使い、外部へのRelease/tag/asset書込みは行っていない。
+ローカルでRelease suite 113件、CI suite 59件、Python compile、両workflowのYAML parse、差分whitespace検査が成功した。CI suiteは実workflowの公開条件を限定文法で読み、手書きtruth tableでmain限定・版変更・各package・Linux skip例外・失敗と取消を確認する。publisherの検証にはFakeGitHubだけを使い、外部へのRelease/tag/asset書込みは行っていない。
 
 Sol 6.1 Highの実装担当から独立したread-onlyレビューで、公開条件、同一run・両IDEの依存、初回pipeline追加と版更新の区別、draft再開、immutable Release、日英Docsとfixtureを確認し、未解決指摘は0。reviewer自身によるテスト再実行は行っていない。
 

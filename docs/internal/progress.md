@@ -401,4 +401,4 @@ source/test凍結head `428bcb07f2700b31f712cc8d10e8bc0ec3d29ce0`の今回4 OS ch
 
 ## 2026-10-07: JetBrains GitHub Release接続
 
-Task/spawn対応とは独立に、JetBrainsプラグインのIC/PC検証済みZIPを将来のmain版更新時にGitHub Releasesへ公開する経路を追加した。プラグイン0.1.0、Nagi/VS Code版、compiler/runtime/APIを維持し、merge・tag・公開は行っていない。release113件・CI gate55件・日英Docs・Sol High独立reviewを確認。実IDE検証と最新HEADのCIはPRで確認する。[配布契約と検証範囲](jetbrains-release-pipeline-results.md)を参照。
+Task/spawn対応とは独立に、JetBrainsプラグインのIC/PC検証済みZIPを将来のmain版更新時にGitHub Releasesへ公開する経路を追加した。プラグイン0.1.0、Nagi/VS Code版、compiler/runtime/APIを維持し、merge・tag・公開は行っていない。release113件・CI suite59件・日英Docs・Sol High独立reviewを確認。実IDE検証と最新HEADのCIはPRで確認する。[配布契約と検証範囲](jetbrains-release-pipeline-results.md)を参照。
