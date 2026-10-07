@@ -1,0 +1,4 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-task-integration/compiler)
+    Finished `dev` profile [unoptimized] target(s) in 0.23s
+     Running `/tmp/nagi-container-flow-target/debug/examples/task-handles-cost /tmp/nagi-task-post94-cost`
+/tmp/nagi-task-post94-cost

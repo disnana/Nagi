@@ -1,0 +1,21 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-task-integration/compiler)
+    Finished `test` profile [unoptimized] target(s) in 8.21s
+     Running tests/frontend_contracts.rs (/tmp/nagi-container-flow-target/debug/deps/frontend_contracts-90a1a089348a7020)
+
+running 13 tests
+test forward_invalid_result_signature_is_a_checker_diagnostic ... ok
+test generated_low_preserves_right_grouping_and_prefix_precedence ... ok
+test generic_builtins_and_ordinary_record_constructors_still_roundtrip ... ok
+test forward_invalid_task_result_signature_is_rejected_at_the_declaration ... ok
+test lowering_keeps_try_and_await_as_field_and_index_receivers ... ok
+test record_constructors_reject_type_arguments_in_high_low_and_symbols ... ok
+test source_file_byte_limit_still_applies_to_high_and_handwritten_low ... ok
+test speculative_index_recovery_preserves_actual_nesting_limits ... ok
+test index_lookahead_does_not_accumulate_nesting_across_statements_or_functions ... ok
+test combined_generated_low_does_not_use_the_source_file_byte_limit ... ok
+test task_results_from_imports_cross_the_internal_low_transport_boundary ... ok
+test flat_left_associative_expression_roundtrips_without_added_depth ... ok
+test task_results_preserve_flat_arithmetic_and_right_grouping_in_three_sources ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.74s
+

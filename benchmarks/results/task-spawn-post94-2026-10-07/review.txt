@@ -1,0 +1,15 @@
+Independent reviewer: GPT-6.1 Sol / High, /root/static_fix_review
+Read-only scope: current Task metadata/checker/sealed emission/runtime/legacy spawn/S2,
+#94 compiler interaction, three added integration regressions, release-state docs.
+Tests were not independently rerun by the reviewer.
+
+Final implementation review:
+Task/spawnの採用契約を未完成と判断する実装違反は見つかりませんでした。
+Task公開metadata、scope内の一回消費・正常出口義務、moveによる義務転送、sealed生成、内側の業務Result、sticky fault、actual join、取消・Dropの境界、旧spawnとS2のHTTP停止連携を現在sourceで照合しました。#94の署名先行検査、Lowの括弧削減、内部64 MB、CLI workerとの不整合も見当たりません。
+追加3testは、三構文のTask結果と結合順、後方定義の不正署名の宣言位置、import統合Lowと保存Lowの入力上限を具体的に検査しています。
+残る軽微な指摘はP3・ai/language.md:97。std.taskを含む登録moduleについて「0.1.11 target / Confirm release availability」が残り、今回更新した公開済み説明と揃っていません。
+同期Dropのabort要求までの保証、non-yielding処理、外部副作用、保持・費用の未測定範囲、8 MiBを超える平坦ASTのstackリスクは、明記された制約・別工程として扱えます。
+
+After correction, readback:
+先のP3指摘は解消しました。ai/language.md:97はstd.taskを含む追加moduleを「Nagi 0.1.11以降で利用可能」と明記し、公開状態と整合しています。
+今回レビューしたTask統合・公開状態説明の範囲に未解決の指摘はありません。production/API/依存/版の変更がないことと、git diff --check成功をread-onlyで確認しました。テストは再実行していません。

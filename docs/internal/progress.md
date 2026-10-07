@@ -389,3 +389,10 @@ release直前の独立Sol Maxが短絡RHS/lazy env fallbackだけのawait/discar
 版PR #91の最終head `c2b227533b89268028ecb2d67e39492b7aa4e4a5`は4 OS・全回帰・配布・独立Sol Max未解決0・日英migrationを確認し、main `003a594de086383100016b7c75466da37705646c`へmergeした。source共通treeは`13b41a034bf463a9426c53327b42c4184a53c7ed`。版差分はworkspaceとlockの自package2件だけ、VSIX0.1.13は不変。main checks `37558874886`・website `37558874635`が成功し、既存workflowが[Nagi 0.1.11](https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.11)を2026-10-07 02:11:53 UTCに正式公開した。
 
 公開tag/source/latest、前版0.1.10とのnotes比較、全8assetsの実download/byte/SHA-256/GitHub digest、4archive release.jsonと同梱runtime版の一致を確認した。公開Linux archiveのcheckout外E2Eはexit0でTask三構文/12拒否・SQL/actor/local Rust/JSON/元位置も成功。公開mainの4 OS各148契約・native8・runtime17・public3・doc9・両例三構文・archive gate、Linux workspace95 result blocks/936成功/failed0/費用ignored1、fuzz1000/panic0/bounded native16を原ログで読戻した。IDE/VSIX等のmain skipは再実行へ数えない。既知のTask release blockerはない。次の測定・探索・内部整理と未採用公開API/SQLiteを分けた[最終引継ぎ](handoffs/2026-10-07-task-release-0.1.11.md)、[公開後artifact](../../benchmarks/results/task-release-0.1.11-published/README.md)が現在の正本。
+
+
+## 2026-10-07: #94後のTask/spawn統合確認
+
+ユーザーによる#94 merge後のmain `97b7242c2172c1d0c701a7b662294e4dbe268abf`を取得した。Task結果handleは#88 S1/#90 S2/#92として既にmain反映・0.1.11公開済みで、旧private bridge停止時点を現在の未実装状態とは扱わない。採用済み契約をsourceから照合し、#94の署名先行検査・Low括弧化・内部transport境界とTaskを組み合わせる追加3回帰を固定した。production/compiler/runtime/API/依存/版/CI定義を変更せず、Task/move公開済み状態の日英Docs/DESIGN/AI資料を揃えた。
+
+今回148契約・三構文native・全回帰・例・fuzz・費用/保持・独立Sol Highと、今回PRの4 OSは[結果](task-spawn-post94-results.md)、[原ログ](../../benchmarks/results/task-spawn-post94-2026-10-07/README.md)、PR Checksに記録する。過去の公開CIと今回の実行を区別する。次担当は[最新引継ぎ](handoffs/2026-10-07-task-spawn-post94.md)から読戻す。この依頼ではmain向けPRまでで停止し、merge/release/version bumpは行わない。SQLite Pool/Transactionは別の次工程。

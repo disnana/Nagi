@@ -167,6 +167,101 @@ fn source_file_byte_limit_still_applies_to_high_and_handwritten_low() {
 }
 
 #[test]
+fn task_results_preserve_flat_arithmetic_and_right_grouping_in_three_sources() {
+    let expression = format!("value{}", " - 1".repeat(129));
+    let high = format!(
+        "async def work(value: i64) -> Result[i64, i64]:\n    return fail({expression})\nasync def main() -> Result[unit, Error]:\n    async with scope:\n        child = spawn work(20 - (5 - 2))\n        sibling = spawn sleep(0)\n        received = await child\n        match received:\n            case Ok(inner):\n                match inner:\n                    case Ok(value):\n                        assert_true(False)\n                    case Err(value):\n                        print(value)\n            case Err(failure):\n                assert_true(False)\n        done = await sibling\n    return ok(print(7))\n"
+    );
+    let handwritten = format!(
+        "async fn work(value: i64) -> Result[i64, i64] {{ return fail({expression}); }}\nasync fn main() -> Result[unit, Error] {{ scope {{\nlet child = spawn work(20 - (5 - 2));\nlet sibling = spawn sleep(0);\nlet received = await child;\nmatch received {{ case Ok(inner) {{ match inner {{ case Ok(value) {{ assert_true(False); }} case Err(value) {{ print(value); }} }} }} case Err(failure) {{ assert_true(False); }} }}\nlet done = await sibling;\n}} return ok(print(7)); }}\n"
+    );
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", &high);
+    fixture.succeeds("check", "main.nagi");
+    let saved = fs::read_to_string(fixture.0.join("out/generated.low")).unwrap();
+    fixture.write("saved.low", &saved);
+    fixture.write("handwritten.low", &handwritten);
+    for name in ["main.nagi", "saved.low", "handwritten.low"] {
+        if name == "saved.low" {
+            // Saved Low must remain independent of the original High input.
+            fs::remove_file(fixture.0.join("main.nagi")).unwrap();
+        }
+        fixture.succeeds("check", name);
+        let output = fixture.succeeds("run", name);
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "-112\n7");
+    }
+}
+
+#[test]
+fn forward_invalid_task_result_signature_is_rejected_at_the_declaration() {
+    let high = "async def main() -> Result[unit, Error]:\n    async with scope:\n        child = spawn later()\n        received = await child\n        match received:\n            case Ok(inner):\n                value = try inner\n            case Err(failure):\n                print(0)\n    return ok(print(0))\nasync def later() -> Result[i64]:\n    return 1\n";
+    let low = "async fn main() -> Result[unit, Error] { scope {\nlet child = spawn later();\nlet received = await child;\nmatch received { case Ok(inner) { let value = try inner; } case Err(failure) { print(0); } }\n} return ok(print(0)); }\nasync fn later() -> Result[i64] { return 1; }\n";
+    let saved = emit::low(&parser::parse(high, true).expect("valid High syntax"));
+    let fixture = Fixture::new();
+    for (name, text, high) in [
+        ("bad.nagi", high, true),
+        ("saved.low", saved.as_str(), false),
+        ("handwritten.low", low, false),
+    ] {
+        let mut program = parser::parse(text, high).expect("must reach signature checking");
+        let declaration = program.functions[1].line;
+        let checked =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check::check(&mut program)));
+        let diagnostic = checked
+            .expect("signature checking must not panic")
+            .unwrap_err();
+        assert!(
+            diagnostic.starts_with(&format!("line {declaration}:")),
+            "{diagnostic}"
+        );
+        assert!(diagnostic.contains("型引数は2個です"), "{diagnostic}");
+        fixture.write(name, text);
+        let output = fixture.run("check", name);
+        let diagnostic = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{diagnostic}");
+        assert!(
+            diagnostic.contains(&format!("{name}:{declaration}")),
+            "{diagnostic}"
+        );
+        assert!(diagnostic.contains("型引数は2個です"), "{diagnostic}");
+    }
+}
+
+#[test]
+fn task_results_from_imports_cross_the_internal_low_transport_boundary() {
+    let fixture = Fixture::new();
+    let left = format!(
+        "async def left() -> str:\n    return \"{}\"\n",
+        "a".repeat(1_000_000)
+    );
+    let right = format!(
+        "async def right() -> str:\n    return \"{}\"\n",
+        "b".repeat(1_000_000)
+    );
+    let main = "import \"left.nagi\"\nimport \"right.nagi\"\nasync def main() -> Result[unit, Error]:\n    async with scope:\n        a = spawn left()\n        b = spawn right()\n        received_a = await a\n        received_b = await b\n        match received_a:\n            case Ok(value_a):\n                match received_b:\n                    case Ok(value_b):\n                        print(len(view(value_a)) + len(view(value_b)))\n                    case Err(failure):\n                        assert_true(False)\n            case Err(failure):\n                assert_true(False)\n    return ok(print(7))\n";
+    assert!(left.len() < 2_000_000 && right.len() < 2_000_000);
+    assert!(left.len() + right.len() + main.len() < 8_000_000);
+    fixture.write("left.nagi", &left);
+    fixture.write("right.nagi", &right);
+    fixture.write("main.nagi", main);
+    fixture.succeeds("check", "main.nagi");
+    assert!(
+        fs::metadata(fixture.0.join("out/generated.low"))
+            .unwrap()
+            .len()
+            > 2_000_000
+    );
+    let output = fixture.succeeds("run", "main.nagi");
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "2000000\n7");
+    // Reopening the combined artifact is a new user input, with its own limit.
+    let saved = fs::read_to_string(fixture.0.join("out/generated.low")).unwrap();
+    fixture.write("saved.low", &saved);
+    let output = fixture.run("check", "saved.low");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("source limit: 2 MB"));
+}
+
+#[test]
 fn index_lookahead_does_not_accumulate_nesting_across_statements_or_functions() {
     let mut source = String::from("def main():\n    values = [7]\n");
     for _ in 0..80 {

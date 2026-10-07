@@ -1,0 +1,23 @@
+{
+  "release": {
+    "tag": "nagi-v0.1.11",
+    "url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.11",
+    "target": "003a594de086383100016b7c75466da37705646c",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-10-07T02:11:53Z",
+    "asset_count": 8
+  },
+  "pr94": {
+    "url": "https://github.com/disnana/Nagi/pull/94",
+    "state": "closed",
+    "merged": true,
+    "merged_at": "2026-10-07T10:41:09Z",
+    "merge_commit_sha": "97b7242c2172c1d0c701a7b662294e4dbe268abf",
+    "head_sha": "4867298ed16da66f2c8b1f4b89f1ab09d16acd67"
+  },
+  "main": {
+    "sha": "97b7242c2172c1d0c701a7b662294e4dbe268abf",
+    "tree": "ef8873dcd5fad802f86f9fd6fc0eb85aa5ec2801"
+  }
+}
