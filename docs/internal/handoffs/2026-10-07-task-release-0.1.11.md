@@ -1,5 +1,7 @@
 # Task・Nagi 0.1.11とagent構成の引継ぎ
 
+公開後の#94統合確認は[最新引継ぎ](2026-10-07-task-spawn-post94.md)を参照。この文書は0.1.11公開時の根拠を保持する。
+
 更新: 2026-10-07。[Nagi 0.1.11](https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.11)は正式公開済み。Task S1/S2、条件付き消費の修正、agent構成、版PRはmain反映済み。公開sourceの4 OS CI、tag/latest、全8公開assetsのdownload/checksum、実Linux配布archiveのnative E2Eを確認した。既知のTask release blockerはない。旧Stage 1の未実装/停止指示は歴史的snapshotで、現在のsource状態ではない。
 
 ## 完成したsource

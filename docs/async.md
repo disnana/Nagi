@@ -60,9 +60,9 @@ scopeを使う関数はResultを返します。独自のエラーclass・enumを
 
 scope本体の`try`でErrを伝えて退出する場合は、子をキャンセルして終了を待ってから外側へErrを伝えます。親のFutureそのものが破棄された場合や、scope本体がpanicした場合には、子へ停止を要求します。同期のDropでは非同期の終了待ちができないため、その場で全員の終了が完了している保証はありません。取消要求は、受理済みのDB操作などの外部副作用を巻き戻すものでもありません。CPU処理の停止については[並行処理](concurrency.md)を参照してください。
 
-### 並行な子の結果を受け取る（Nagi 0.1.11導入対象）
+### 並行な子の結果を受け取る（Nagi 0.1.11以降）
 
-S1の`task = spawn work()`、`await task`、`std.task.discard(task)`とS2のSupervisor monitor移行はNagi 0.1.11の導入対象です。S2は既存Task APIでmonitorをawaitし、`Ok(inner)`を親bodyの`try`へ渡します。実装は完了し、最終4 OS CIが成功し、mainへ反映しました。公開配布で使えるかはRelease記録を確認してください。[Task結果handle](task-handles.md)に、全Tの一回消費、正常出口でのawait/discard義務、scope外へのescape拒否とTaskFailure APIをまとめています。内側の業務Errは兄弟を止めず、受取faultを処理してもscope故障は残ります。旧statement spawnは`Result[unit, Error]` Errで兄弟を取消す動作を維持します。公開SQLite Pool/Txは別工程です。
+S1の`task = spawn work()`、`await task`、`std.task.discard(task)`とS2のSupervisor monitor移行はNagi 0.1.11で公開済みです。S2は既存Task APIでmonitorをawaitし、`Ok(inner)`を親bodyの`try`へ渡します。利用するcompilerが0.1.11以降であることを確認してください。[Task結果handle](task-handles.md)に、全Tの一回消費、正常出口でのawait/discard義務、scope外へのescape拒否とTaskFailure APIをまとめています。内側の業務Errは兄弟を止めず、受取faultを処理してもscope故障は残ります。旧statement spawnは`Result[unit, Error]` Errで兄弟を取消す動作を維持します。公開SQLite Pool/Txは別工程です。
 
 ## 関数を変数に入れて呼び出す
 

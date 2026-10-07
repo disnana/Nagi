@@ -1,6 +1,6 @@
 # Manage a counter with a Supervisor
 
-An actor updates a value in order, and HTTP handlers return its replies. `CounterError` represents a business failure and preserves the current value. An actor failure lets the Supervisor restart it; the factory creates fresh initial state. The monitor migration in this example is implemented with the existing Task API and targets Nagi 0.1.11. Final four-OS CI passed and the migration was merged into main; check the official release record to confirm published availability.
+An actor updates a value in order, and HTTP handlers return its replies. `CounterError` represents a business failure and preserves the current value. An actor failure lets the Supervisor restart it; the factory creates fresh initial state. The monitor migration in this example uses the existing Task API and is published in Nagi 0.1.11. Confirm that the installed compiler is version 0.1.11 or later.
 
 Run from this directory:
 

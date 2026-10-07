@@ -1,0 +1,92 @@
+{
+  "target": "x86_64",
+  "batch_future_sizes": {
+    "discard_bytes": 408,
+    "name": "batch_future_sizes",
+    "receive_bytes": 416,
+    "target": "x86_64"
+  },
+  "conditions": "release, current-thread Tokio, calling-thread allocator; 25 loops x 7 repetitions; shared host and concurrent builds/tests; not clean build",
+  "measurements": [
+    {
+      "name": "receive",
+      "items": 128,
+      "allocation": {
+        "allocated_bytes": 52628,
+        "allocations": 517,
+        "deallocations": 517,
+        "reallocations": 0
+      },
+      "generated_median_ns": 159180.8,
+      "manual_median_ns": 247154.12
+    },
+    {
+      "name": "discard",
+      "items": 128,
+      "allocation": {
+        "allocated_bytes": 86684,
+        "allocations": 535,
+        "deallocations": 535,
+        "reallocations": 0
+      },
+      "generated_median_ns": 149890.48,
+      "manual_median_ns": 194357.0
+    },
+    {
+      "name": "receive",
+      "items": 1024,
+      "allocation": {
+        "allocated_bytes": 418196,
+        "allocations": 4101,
+        "deallocations": 4101,
+        "reallocations": 0
+      },
+      "generated_median_ns": 1680162.88,
+      "manual_median_ns": 2771437.96
+    },
+    {
+      "name": "discard",
+      "items": 1024,
+      "allocation": {
+        "allocated_bytes": 692524,
+        "allocations": 4128,
+        "deallocations": 4128,
+        "reallocations": 0
+      },
+      "generated_median_ns": 1775955.96,
+      "manual_median_ns": 2513168.12
+    },
+    {
+      "name": "receive",
+      "items": 8192,
+      "allocation": {
+        "allocated_bytes": 3342740,
+        "allocations": 32773,
+        "deallocations": 32773,
+        "reallocations": 0
+      },
+      "generated_median_ns": 10888859.96,
+      "manual_median_ns": 15647996.64
+    },
+    {
+      "name": "discard",
+      "items": 8192,
+      "allocation": {
+        "allocated_bytes": 5538236,
+        "allocations": 32809,
+        "deallocations": 32809,
+        "reallocations": 0
+      },
+      "generated_median_ns": 15310905.48,
+      "manual_median_ns": 17347770.2
+    }
+  ],
+  "binaries": {
+    "generated": {
+      "bytes": 1258752
+    },
+    "manual": {
+      "bytes": 1234320
+    }
+  }
+}

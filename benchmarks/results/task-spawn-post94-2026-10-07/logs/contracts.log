@@ -1,0 +1,4 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-task-integration/compiler)
+    Finished `dev` profile [unoptimized] target(s) in 0.30s
+     Running `/tmp/nagi-container-flow-target/debug/examples/task-contract-red --report /workspace/nagi-task-post94-2026-10-07/task-contracts.json`
+Task contracts: 148/148 matched; report: /workspace/nagi-task-post94-2026-10-07/task-contracts.json

@@ -43,7 +43,7 @@
 
 動かせる入門例は[examples/tutorial/](../examples/tutorial/)にあります。リファレンスにはコードの断片も載せています。
 
-入門のコードは現行の書き方です。明示moveとTask結果handleは0.1.11への導入対象で、公開版で使えるかはRelease記録で確認してください。[移行ガイド](migration-0.1.11.md)と[Task結果handle](task-handles.md)に使い方をまとめています。actorのshared messageは将来の設計対象です。
+入門のコードは現行の書き方です。明示moveとTask結果handleはNagi 0.1.11で公開済みです。利用するcompilerが0.1.11以降であることを確認してください。[移行ガイド](migration-0.1.11.md)と[Task結果handle](task-handles.md)に使い方をまとめています。actorのshared messageは将来の設計対象です。
 
 ## 仕組みと開発状況
 

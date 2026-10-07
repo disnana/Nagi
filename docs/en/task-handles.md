@@ -1,6 +1,6 @@
 # Receive a concurrent result once
 
-Task result handles and the S2 Supervisor-monitor migration target Nagi 0.1.11. S2 is implemented with the existing API; final four-OS CI passed and the change was merged into main. Check the official release record to confirm published availability. The existing `spawn work()` statement remains available. See the [runnable High and handwritten Low example](../../test-nagi-code/library-examples/task-results/README.en.md).
+Task result handles and the S2 Supervisor-monitor migration are published in [Nagi 0.1.11](https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.11). Confirm that the installed compiler is version 0.1.11 or later. The existing `spawn work()` statement remains available. See the [runnable High and handwritten Low example](../../test-nagi-code/library-examples/task-results/README.en.md).
 
 ```nagi
 from std.task import discard

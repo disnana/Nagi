@@ -43,7 +43,7 @@ See the [VS Code guide](editor.md) for editor support. See [JetBrains installati
 
 Runnable examples are in [examples/tutorial/](../../examples/tutorial/). References also include code fragments.
 
-Tutorial code uses the current syntax. Explicit move and Task result handles target Nagi 0.1.11; check its official release record before using them with a published compiler. See the [migration guide](migration-0.1.11.md) and [Task result handles](task-handles.md). Shared actor messages remain future design work.
+Tutorial code uses the current syntax. Explicit move and Task result handles are published in Nagi 0.1.11; confirm that the installed compiler is version 0.1.11 or later. See the [migration guide](migration-0.1.11.md) and [Task result handles](task-handles.md). Shared actor messages remain future design work.
 
 ## Implementation and development
 

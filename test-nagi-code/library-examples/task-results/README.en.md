@@ -1,6 +1,6 @@
 # Task results, move, and business Err
 
-This example uses Task result handles targeted for Nagi 0.1.11. Check the official release record to confirm published availability. Run `nagic check` and `nagic run` from this directory. Run the handwritten Low with `nagic run main.low`.
+This example uses Task result handles published in Nagi 0.1.11. Confirm that the installed compiler is version 0.1.11 or later. Run `nagic check` and `nagic run` from this directory. Run the handwritten Low with `nagic run main.low`.
 
 The example transfers `original` and its receipt obligation with `move`, then awaits once to receive 42. The next Task returns a business Err. Separate matches handle the outer TaskFailure and the inner Result, so the business Err lets its sibling finish. The unit sibling is explicitly discarded. Discard abandons receipt and does not stop the child; the scope still waits for actual termination.
 

@@ -60,9 +60,9 @@ A function using a scope returns Result. A custom error class or enum requires a
 
 If a body `try` propagates Err out of the scope, children are canceled and awaited before the Err reaches the outer code. If the parent Future itself is dropped, or the scope body panics, cancellation is requested. Synchronous Drop cannot await async completion, so there is no guarantee that every child has already stopped at that point. Cancellation also does not roll back accepted database work or other external side effects. See [Concurrency](concurrency.md) for CPU work and cancellation.
 
-### Receive a child's result (targeted for Nagi 0.1.11)
+### Receive a child's result (Nagi 0.1.11 and later)
 
-S1 Task result handles and the S2 Supervisor-monitor migration target Nagi 0.1.11. S2 awaits the monitor with the existing Task API and passes `Ok(inner)` through the parent body's `try`. The implementation is complete; final four-OS CI passed and the change was merged into main. Check the official release record before relying on published availability. [Task result handles](task-handles.md) describes single consumption for every T, await/discard obligations at normal exits, scope escape rejection, and TaskFailure APIs. An inner business Err does not stop siblings; handling a receive fault leaves the scope failed. Legacy statement spawn still cancels siblings on a child `Result[unit, Error]` Err. Public SQLite Pool/Tx remains separate work.
+S1 Task result handles and the S2 Supervisor-monitor migration are published in Nagi 0.1.11. S2 awaits the monitor with the existing Task API and passes `Ok(inner)` through the parent body's `try`. Confirm that the installed compiler is version 0.1.11 or later. [Task result handles](task-handles.md) describes single consumption for every T, await/discard obligations at normal exits, scope escape rejection, and TaskFailure APIs. An inner business Err does not stop siblings; handling a receive fault leaves the scope failed. Legacy statement spawn still cancels siblings on a child `Result[unit, Error]` Err. Public SQLite Pool/Tx remains separate work.
 
 ## Call a function stored in a variable
 

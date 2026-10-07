@@ -11,7 +11,7 @@ Deliver readable application logic and a working executable. Prefer High (`.nagi
 
 1. Read the user's goal, repository instructions, the nearest `nagi.toml`, and the entry source plus relevant imports. Preserve existing project structure and dependency constraints.
 2. Run `nagic --version` and `nagic --help`. The accompanying repository guides target Nagi compiler 0.1.11; confirm its official release record and the installed compiler instead of assuming the VS Code extension's version is the language version.
-3. Pick a small working example or inspect current builtin signatures/tests before adding an unfamiliar API. Registered unquoted imports include `std.http.server`, `std.actor`, and `std.result`; Nagi 0.1.11 targets the additional modules `std.auth`, `std.ownership`, and `std.task`. Confirm release availability before relying on them. Confirm installed-compiler support; Rust crates require an adapter, not a new arbitrary Nagi import. Roadmap proposals are not available APIs.
+3. Pick a small working example or inspect current builtin signatures/tests before adding an unfamiliar API. Registered unquoted imports include `std.http.server`, `std.actor`, and `std.result`; Nagi 0.1.11 and later also provide `std.auth`, `std.ownership`, and `std.task`. Confirm installed-compiler support; Rust crates require an adapter, not a new arbitrary Nagi import. Roadmap proposals are not available APIs.
 
 ## Implement a narrow, usable change
 

@@ -1,6 +1,6 @@
 # 並行処理の結果を一度受け取る
 
-Task結果handleとSupervisor monitorのS2移行はNagi 0.1.11への導入対象です。S2は既存APIで実装済みで、最終4 OS CIが成功し、mainへ反映しました。公開配布で使えるかは公式Release記録を確認してください。旧`spawn work()`は引き続き使えます。[実行可能なHigh・手書きLowの例](../test-nagi-code/library-examples/task-results/README.md)があります。
+Task結果handleとSupervisor monitorのS2移行は[Nagi 0.1.11](https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.11)で公開済みです。利用するcompilerが0.1.11以降であることを確認してください。旧`spawn work()`は引き続き使えます。[実行可能なHigh・手書きLowの例](../test-nagi-code/library-examples/task-results/README.md)があります。
 
 ```nagi
 from std.task import discard

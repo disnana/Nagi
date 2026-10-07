@@ -1,0 +1,157 @@
+{
+  "head": "428bcb07f2700b31f712cc8d10e8bc0ec3d29ce0",
+  "platforms": {
+    "linux-package": {
+      "log_sha256": "eb3c3691feb72cb1b3c630fa75eb16807f1210da7e20de8a72536e3013d3d57e",
+      "task_contracts": "148/148",
+      "native_suite": [
+        "Running tests/task_handles.rs (target/debug/deps/task_handles-ec04dbe8422597b2)",
+        8,
+        [
+          8,
+          0,
+          0
+        ]
+      ],
+      "new_service_oracle": true,
+      "conditional_consumption_oracle": true,
+      "frontend_task_integration_tests": 3,
+      "frontend_suite": [
+        "Running tests/frontend_contracts.rs (target/debug/deps/frontend_contracts-e0e4b42a10e95be6)",
+        13,
+        [
+          13,
+          0,
+          0
+        ]
+      ],
+      "runtime_task_tests": 17,
+      "public_api_tests": 3,
+      "runtime_doc_tests": 9,
+      "example_forms": [
+        "Passed: task-results (high)",
+        "Passed: task-results (saved-low)",
+        "Passed: task-results (handwritten-low)",
+        "Passed: supervised-service (high)",
+        "Passed: supervised-service (saved-low)",
+        "Passed: supervised-service (handwritten-low)"
+      ],
+      "extracted_archive_version": "0.1.11",
+      "extracted_archive_task_gate": true
+    },
+    "macos-arm64": {
+      "log_sha256": "f2f4f83da7899f83e7a06e2cfa792f81bbd257f5e913ad377b5019575333c37d",
+      "task_contracts": "148/148",
+      "native_suite": [
+        "Running tests/task_handles.rs (target/debug/deps/task_handles-94832b6fbc85b68e)",
+        8,
+        [
+          8,
+          0,
+          0
+        ]
+      ],
+      "new_service_oracle": true,
+      "conditional_consumption_oracle": true,
+      "frontend_task_integration_tests": 3,
+      "frontend_suite": [
+        "Running tests/frontend_contracts.rs (target/debug/deps/frontend_contracts-f19a24f252a1cc0f)",
+        13,
+        [
+          13,
+          0,
+          0
+        ]
+      ],
+      "runtime_task_tests": 17,
+      "public_api_tests": 3,
+      "runtime_doc_tests": 9,
+      "example_forms": [
+        "Passed: task-results (high)",
+        "Passed: task-results (saved-low)",
+        "Passed: task-results (handwritten-low)",
+        "Passed: supervised-service (high)",
+        "Passed: supervised-service (saved-low)",
+        "Passed: supervised-service (handwritten-low)"
+      ],
+      "extracted_archive_version": "0.1.11",
+      "extracted_archive_task_gate": true
+    },
+    "macos-x86_64": {
+      "log_sha256": "353b65e00be55008de25681903df9cf88b0ff44af72515fa55e93d03dd75faf3",
+      "task_contracts": "148/148",
+      "native_suite": [
+        "Running tests/task_handles.rs (target/debug/deps/task_handles-29d84e148203c0ad)",
+        8,
+        [
+          8,
+          0,
+          0
+        ]
+      ],
+      "new_service_oracle": true,
+      "conditional_consumption_oracle": true,
+      "frontend_task_integration_tests": 3,
+      "frontend_suite": [
+        "Running tests/frontend_contracts.rs (target/debug/deps/frontend_contracts-4df0672f30ad599f)",
+        13,
+        [
+          13,
+          0,
+          0
+        ]
+      ],
+      "runtime_task_tests": 17,
+      "public_api_tests": 3,
+      "runtime_doc_tests": 9,
+      "example_forms": [
+        "Passed: task-results (high)",
+        "Passed: task-results (saved-low)",
+        "Passed: task-results (handwritten-low)",
+        "Passed: supervised-service (high)",
+        "Passed: supervised-service (saved-low)",
+        "Passed: supervised-service (handwritten-low)"
+      ],
+      "extracted_archive_version": "0.1.11",
+      "extracted_archive_task_gate": true
+    },
+    "windows-x86_64": {
+      "log_sha256": "5b9447a665e17a0e822428e10729e64fa499f1d4c0cd15bf840a1277a40e0141",
+      "task_contracts": "148/148",
+      "native_suite": [
+        "Running tests\\task_handles.rs (target\\debug\\deps\\task_handles-2841af5c301e3b9c.exe)",
+        8,
+        [
+          8,
+          0,
+          0
+        ]
+      ],
+      "new_service_oracle": true,
+      "conditional_consumption_oracle": true,
+      "frontend_task_integration_tests": 3,
+      "frontend_suite": [
+        "Running tests\\frontend_contracts.rs (target\\debug\\deps\\frontend_contracts-5b2247ea3f9f9374.exe)",
+        13,
+        [
+          13,
+          0,
+          0
+        ]
+      ],
+      "runtime_task_tests": 17,
+      "public_api_tests": 3,
+      "runtime_doc_tests": 9,
+      "example_forms": [
+        "Passed: task-results (high)",
+        "Passed: task-results (saved-low)",
+        "Passed: task-results (handwritten-low)",
+        "Passed: supervised-service (high)",
+        "Passed: supervised-service (saved-low)",
+        "Passed: supervised-service (handwritten-low)"
+      ],
+      "extracted_archive_version": "0.1.11",
+      "extracted_archive_task_gate": true
+    }
+  }
+}

@@ -1,0 +1,4 @@
+# Keep byte-exact stdout and generated Low, including whitespace from the tools.
+logs/*.log -whitespace
+cost/saved.low -whitespace
+ci/**/*.log -whitespace

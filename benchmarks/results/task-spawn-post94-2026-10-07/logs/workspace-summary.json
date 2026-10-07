@@ -1,0 +1,9 @@
+{
+  "exit_code": 0,
+  "raw_result_blocks": 95,
+  "raw_passed": 944,
+  "child_image_process_blocks": 3,
+  "passed_excluding_child_reinvocations": 941,
+  "failed": 0,
+  "ignored_cost_oracle": 1
+}

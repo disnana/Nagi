@@ -61,7 +61,7 @@ def main():
 
 A module name exposes functions, classes, and enums defined in that file. Imported names are not automatically re-exported. The alias is optional in `from "orders.nagi" import Order`. Select several definitions with commas, for example `from "orders.nagi" import Order as SavedOrder, score`. Do not add a trailing comma. `from` and `as` are contextual import keywords and can still be function or variable names. A local with the same name as a module follows the existing local-variable rules. Class method calls remain unsupported.
 
-Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted imports select registered modules such as `std.http.server`, `std.actor`, and `std.result`. Nagi 0.1.11 targets the additional registered modules `std.auth`, `std.ownership`, and `std.task`. Check the official release record to confirm availability. General package discovery and visibility declarations are unsupported.
+Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted imports select registered modules such as `std.http.server`, `std.actor`, and `std.result`. Nagi 0.1.11 and later also provide the registered modules `std.auth`, `std.ownership`, and `std.task`. Confirm the installed compiler version. General package discovery and visibility declarations are unsupported.
 
 The experimental `std.auth` API targets Nagi 0.1.11 and provides an authenticated `Principal` and a consumed `Grant[P]`. Check the official release record to confirm availability. The [authentication and authorization example](../../test-nagi-code/application-examples/auth-boundary/README.en.md) connects Rust verification with a custom Nagi policy. It uses fixed credentials; it does not implement JWS verification or check authorization across every route.
 
@@ -111,7 +111,7 @@ from std.actor import Actor as Worker, CallError
 
 ## Import the standard value transfer operation
 
-`std.ownership.move` targets Nagi 0.1.11. Check the official release record to confirm availability. Call it through a module name or an imported alias. This complete program prints `Nagi`:
+`std.ownership.move` is published in Nagi 0.1.11. Confirm that the installed compiler is version 0.1.11 or later. Call it through a module name or an imported alias. This complete program prints `Nagi`:
 
 ```nagi
 import std.ownership as ownership

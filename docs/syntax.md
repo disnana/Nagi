@@ -180,7 +180,7 @@ async def main() -> Result[unit, Error]:
     return ok(print("完了"))
 ```
 
-このコードは両方のsleepが終了してから`完了`を表示します。通常のscope終了では子taskを待ちます。旧statement spawnでは本体終了後に子のErrやpanicを検出すると、残りの子を止めて待ちます。親Futureの破棄や本体panicでは停止要求と終了確認を区別します。scope内の`return`とviewを別taskへ渡すことは未対応です。旧statement spawnはunitか`Result[unit, Error]`を返すasync呼出しに限ります。[Task結果handle](task-handles.md)はNagi 0.1.11への導入対象です。Task bindingはawait時に子の結果をscope body内で受け取ります。受取failureを処理してもscope faultは残り、scope出口では子の実joinを待ちます。公開配布での利用可否はRelease記録で確認してください。詳細は[async](async.md)を参照してください。
+このコードは両方のsleepが終了してから`完了`を表示します。通常のscope終了では子taskを待ちます。旧statement spawnでは本体終了後に子のErrやpanicを検出すると、残りの子を止めて待ちます。親Futureの破棄や本体panicでは停止要求と終了確認を区別します。scope内の`return`とviewを別taskへ渡すことは未対応です。旧statement spawnはunitか`Result[unit, Error]`を返すasync呼出しに限ります。[Task結果handle](task-handles.md)はNagi 0.1.11で公開済みです。Task bindingはawait時に子の結果をscope body内で受け取ります。受取failureを処理してもscope faultは残り、scope出口では子の実joinを待ちます。利用するcompilerが0.1.11以降であることを確認してください。詳細は[async](async.md)を参照してください。
 
 ## import、HTTP、Rust
 

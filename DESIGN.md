@@ -49,9 +49,9 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 | 値を渡して手放す | moveで値と後片付けの責任を渡す | 既存の引数・return・field等のconsume規則を維持する。所有する非Copyローカルそのものの代入には明示操作を使う |
 | 渡したあとも読む | viewで貸す。独立した値が必要なら明示copy | 実装済み。借用元が必要な間の変更やmoveを制限する |
 | 同じ値を保持する | sharedで共有し、handle複製とpayload copyを分ける | 実装済み。sharedだけでthread安全性や終了完了を保証しない |
-| 普通の`a = b`を書く | Copyなら通常代入。既存の非Copyローカルを渡すなら`std.ownership.move`を使う | Nagi 0.1.11への導入対象。新値生成、引数・return・field/indexの既存規則は維持する。公開版での利用可否はRelease記録で確認する |
+| 普通の`a = b`を書く | Copyなら通常代入。既存の非Copyローカルを渡すなら`std.ownership.move`を使う | Nagi 0.1.11で公開済み。新値生成、引数・return・field/indexの既存規則は維持する |
 | 値がない、処理が失敗する | nullableとResultを使い分ける。通常の拒否にpanicを使わない | 実装済み。NagiのtryはErrの伝播で、Pythonのtry/exceptではない |
-| 並行な処理から結果を得る | scopeが子の寿命を持ち、handleから結果を一度受け取る | Nagi 0.1.11への導入対象。Taskは一回受取、旧spawnはunit/Result[unit, Error]を維持する。公開版での利用可否はRelease記録で確認する |
+| 並行な処理から結果を得る | scopeが子の寿命を持ち、handleから結果を一度受け取る | Nagi 0.1.11で公開済み。Taskは一回受取、旧spawnはunit/Result[unit, Error]を維持する |
 | 子が業務Errを返す | Errを結果として扱い、taskの故障とは分ける | Taskの内側業務Errでは兄弟を継続。旧spawnのErrは兄弟を取消す |
 | actorへ共有値を送る | 型と容量・寿命の条件を満たす明示sharedを許す | **未実装**。今のmessage/replyはsharedを拒否する |
 
@@ -61,11 +61,11 @@ Highでは、日常的なコードの書き方を増やすより、型・デー�
 
 現行との差、採用理由、根拠、後続実装の移行・検証条件は[ADR 011](docs/internal/adr/011-language-behavior-and-docs.md)へまとめます。現行の厳密な規則は[言語契約](docs/internal/language-invariants.md)に残します。入門は[Pythonとの具体的な比較](docs/language-guide.md)から始め、未実装の書き方で例を成立させません。
 
-明示moveと狭い代入移行はNagi 0.1.11への導入対象です。公開配布に含まれるかは公式Release記録で確認してください。既存のimportに沿って`from std.ownership import move`を使い、`a = move(b)`で値と後片付けの責任を渡します。暗黙clone、shared化、寿命の延長は行いません。新しく作る値にはmove指定を要求せず、Copy判定は現行の規則を保ちます。対応済みのローカルasync関数別名もCopyのままで、Futureや入れ子のFutureをmoveで渡す機能はありません。viewは読み取りの借用、sharedは同じ値の安全な共有、copyは独立した複製です。
+明示moveと狭い代入移行は[Nagi 0.1.11](https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.11)で公開済みです。既存のimportに沿って`from std.ownership import move`を使い、`a = move(b)`で値と後片付けの責任を渡します。暗黙clone、shared化、寿命の延長は行いません。新しく作る値にはmove指定を要求せず、Copy判定は現行の規則を保ちます。対応済みのローカルasync関数別名もCopyのままで、Futureや入れ子のFutureをmoveで渡す機能はありません。viewは読み取りの借用、sharedは同じ値の安全な共有、copyは独立した複製です。
 
-[実装計画](docs/internal/value-task-implementation-plan.md)に仕様、移行対象、先行テストを記録しています。明示操作と非Copyローカルの通常代入拒否を一つの変更として実装し、High/Low・Rust生成・サンプル・日英Docs・4 OS CIの検証状況は[進捗](docs/internal/progress.md)に分けて残します。S1 Task結果handleのPR #88はmainへmerge済みです。S2のSupervisor/HTTP monitor移行は既存APIを使って実装し、PR #90の最終4 OS CIが成功し、mainへ反映しました。S1とS2は0.1.11への導入対象で、公開配布で使えるかは公式Release記録で確認してください。
+[実装計画](docs/internal/value-task-implementation-plan.md)に仕様、移行対象、先行テストを記録しています。明示操作と非Copyローカルの通常代入拒否を一つの変更として実装し、High/Low・Rust生成・サンプル・日英Docs・4 OS CIの検証状況は[進捗](docs/internal/progress.md)に分けて残します。S1 Task結果handleのPR #88はmainへmerge済みです。S2のSupervisor/HTTP monitor移行は既存APIを使って実装し、PR #90の最終4 OS CIが成功し、mainへ反映しました。S1とS2はNagi 0.1.11で公開済みです。
 
-S1 Task result handleとS2 Supervisor/HTTP monitor移行はNagi 0.1.11への導入対象です。S2は既存APIで実装済みで、PR #90の最終4 OS CIが成功し、mainへ反映しました。公開配布での利用可否は公式Release記録を確認してください。[ADR 012](docs/internal/adr/012-task-result-handles.md)に沿い、`task = spawn work()`でscope内handleを作り、`await task`で一回受け取ります。全Tの正常出口でawaitまたは`std.task.discard`を求め、moveは義務も移します。scope外・引数/return・field/container/wrapper・他taskへのescapeを拒否します。Taskは非Copy・非Clone・非sharedで、TaskFailureのkind/messageは標準metadataに接続します。業務Resultは外側faultと分け、受取Errを処理してもscope故障を消しません。fault観測→兄弟取消要求→全actual join→scope出口Errorの順とbody元Errを保ちます。discardは受取放棄であり、終了確認ではありません。
+S1 Task結果handleとS2 Supervisor/HTTP monitor移行はNagi 0.1.11で公開済みです。S2は既存APIで実装し、PR #90の最終4 OS CIが成功した後にmainへ反映しました。[ADR 012](docs/internal/adr/012-task-result-handles.md)に沿い、`task = spawn work()`でscope内handleを作り、`await task`で一回受け取ります。全Tの正常出口でawaitまたは`std.task.discard`を求め、moveは義務も移します。scope外・引数/return・field/container/wrapper・他taskへのescapeを拒否します。Taskは非Copy・非Clone・非sharedで、TaskFailureのkind/messageは標準metadataに接続します。業務Resultは外側faultと分け、受取Errを処理してもscope故障を消しません。fault観測→兄弟取消要求→全actual join→scope出口Errorの順とbody元Errを保ちます。discardは受取放棄であり、終了確認ではありません。
 
 新Taskを含む最寄りscopeだけpublic TaskScopeを選び、旧spawn-only Scope、Supervisor/HTTPの旧連携を維持します。checkerの私有ScopeId/binding義務とsealed planから生成し、暗黙cloneやemitterの所有権再推論は加えません。[Stage 1](docs/internal/task-bridge-stage1-results.md)と[接続結果](docs/internal/task-handles-s1-results.md)を分け、High/保存Low/手書きLow、native、回帰、4 OS、測定、独立レビューの保証範囲を後者に残します。S2は既存APIでmonitorの内側Errを親bodyの`try`へ接続し、HTTPの旧spawnを維持します。[サービス例](test-nagi-code/library-examples/supervised-service/README.md)と[検証結果](docs/internal/task-handles-s2-results.md)に移行と終了条件を記録します。新しい故障昇格APIや公開Pool/Txは追加しません。使い方は[Task結果handle](docs/task-handles.md)を参照してください。
 
