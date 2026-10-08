@@ -2,7 +2,7 @@
 
 [English](rfc.en.md) · [現行調査](baseline-audit.md) · [PR/検証計画](implementation-plan.md)
 
-状態: **独立レビュー完了・採用前の提案**。2026-10-08 JST。0.2.0機能は未実装・未リリース。このRFCの保存は新しい公開仕様の採用ではない。既存のG-AUTH、Task/spawn、Tx、High/Lowの契約を維持し、[判断D1–D3](#公開判断)の採否を記録してから公開APIを実装する。
+状態: **安全性優先の実装方針へ改訂**。2026-10-08 JST。ユーザーの最新指示に基づき、D1–D3の互換性優先案を見直した。[判断と移行](decisions-and-migration.md)を実装の基準にする。0.2.0機能は未実装・未リリースで、現行0.1.xの利用条件を遡及変更しない。Task/spawn・Tx・High/Lowの基本契約は維持する。
 
 ## 目的と範囲
 
@@ -12,7 +12,7 @@
 
 ## 現行の基点
 
-main `62bbda9`（#99込み）、公開0.1.11 `003a594`、open PR0。詳細とsource hashは[調査](baseline-audit.md)。現行Principal/Grant[P]はopaqueでNagiから偽造・copy/shared/JSON復元できないが、request終了・expiry・失効に連動しない。owned async delegationは許される。標準routeに認証方針引数はなく、htmlは生文字列、Cookie/Session/CSRF/CORSの標準契約と送信HTTPはない。
+main `62bbda9`（#99込み）、公開0.1.11 `003a594`、調査開始時open PR0、現在設計PR #100。詳細とsource hashは[調査](baseline-audit.md)。現行Principal/Grant[P]はopaqueでNagiから偽造・copy/shared/JSON復元できないが、request終了・expiry・失効に連動しない。owned async delegationは許される。標準routeに認証方針引数はなく、htmlは生文字列、Cookie/Session/CSRF/CORSの標準契約と送信HTTPはない。
 
 SQLite Parametersの値bindとnative authorizerは実装済み。SQL/schema preflightはopt-inで、動的SQLの出所やtenant policyを証明しない。HTTPにはbody/header/同時処理/各期限があり、frontendには入力/深さ制限がある。これを再実装しない。
 
@@ -26,7 +26,7 @@ SQLite Parametersの値bindとnative authorizerは実装済み。SQL/schema pref
 | identity → operation | nominal permissionと対象実値、現在有効性の検査、DB側predicate | 全policyの正しさ・全SQLのtenant制約・検査後の外部状態変化 |
 | browser → route | route方針、Session/CSRF/Origin、CORSの別責務 | GETで副作用を作るアプリ、信頼したoriginの侵害、browser extension |
 | data → response | 文脈別renderer、URL検証、CSP/nosniff等の防御補助 | 任意raw HTML/JS/CSS、DTOの機密分類、全DOM情報流 |
-| values → SQL | 固定構造とbind、native parse/authorizer | arbitrary SQL/Rust/既存Db exec、DB運用権限 |
+| values → SQL | 固定構造とbind、native parse/authorizer | trusted hostのschema管理/任意Rust、DB運用権限、DB運用権限 |
 | URL/DNS → socket | policyを実接続・redirect・proxy・pool再利用まで適用 | raw Rust networking、ネットワーク経路全体の信頼性 |
 | work → resource | bounded admission/queue/cache/size/deadline、release/join oracle | non-yieldingの強制停止、OOM普遍回復、回線DDoS、OS隔離 |
 
@@ -39,7 +39,7 @@ Webセキュリティの型はproofの偽造/誤用を狭めるもので、攻�
 | 項目 | Nagi checkerで固定する契約 | runtime/配置で確認する事項 | 証明しないこと |
 |---|---|---|---|
 | route | canonical operationに必須policy、protected handlerの型、policy欠落/不一致を拒否 | dynamic route登録・全method/fallbackにpolicyを保持 | すべてのrouteがprivateであること、任意Rust Routerの網羅 |
-| AuthScope/ScopedGrant | opaque、非Copy/Clone/Serde/shared/owned field、same-task、permission型、consume | request lease、scope ID・対象・expiry・失効、issuer/policy成功 | 無期限の有効性、policy論理、任意副作用のrollback |
+| AuthScope/Grant[P] | opaque、非Copy/Clone/Serde/shared/owned field、same-task、permission型、consume | request lease、scope ID・対象・expiry・失効、issuer/policy成功 | 無期限の有効性、policy論理、任意副作用のrollback |
 | CSRF | policy source分類、sessionを使うunsafe methodのCSRF policy省略を拒否 | token/session binding、exact origin、重複/不正/欠落、一定時間内検査 | tokenだけでXSSを防ぐこと、アプリの副作用推論 |
 | HTML | 対応rendererの型、slot文脈、raw stringとfragmentを区別 | text/attribute encoding、URL scheme、出力上限 | raw HTML/JS/CSS、全browserの完全な安全性 |
 | SQL | security query constructorのliteral構造、Parameters、generic行型 | prepare/bind/shape、schema/NULL/type、authorizer | arbitrary dynamic SQL、権限やtenant条件の自動推論 |
@@ -58,7 +58,7 @@ literal以外のpolicy値を静的に解析できない場合は、runtimeのfal
 2. High→Lowでは型とcanonical identityを保持し、securityの受理証明やtrustedフラグをコメントから復元しない。保存Low・手書きLowも同じcheckerへ入り、自分の位置で診断する。
 3. native Low/`@replace`統合後に最終check・sealed planを作る。policy欠落、偽造standard ID、消えたscope、異なるhandler型やchecked factsの欠落をdefaultで埋めない。外部からsecurity factsを与えるpublic setterは作らない。
 4. emitterは確定したroute/auth/borrow/call planをRustへ実現する。clone、static化、auth推測を追加しない。Rustはtrait/Send/Sync/borrow/native実装を検査する。
-5. runtimeは有限のinput validation、現在の権限/lease、native接続/SQL、終了確認を行う。compilerの成功はverifier成功・browser policy・DB結果の証明ではない。
+5. runtimeは有限のinput validation、現在のrequest lease/期限、native接続/SQL、終了確認を行う。compilerの成功はverifier成功・browser policy・DB結果の証明ではない。
 
 同名のユーザー`AuthScope`/`route`/`html`/`query`をbuiltinにしない。resource genericには実payload/Arc state/indirect protocol/callback/phantomの区分を登録する。任意Rustのpayloadやsecurity意味論は推論しない。High受理後のNagi由来type/move/lifetime rejectionはP1の既存方針を維持する。
 
@@ -66,12 +66,12 @@ literal以外のpolicy値を静的に解析できない場合は、runtimeのfal
 
 AuthScopeをTaskの`scope`構文、SQLite Tx、DB検索条件の「scope」と混同しない。将来方針の「許可対象の実値を保持する」は維持する。request lifecycleという新しい部分は別の実値/leaseで表す。
 
-推奨は既存Principal/Grant[P]を維持し、新しいrequest用AuthScopeとScopedGrant[P]を追加する案。初版の対象IDは現行Grantと同じi64で実値を保持し、permission Pはnominal phantom。`Grant[P, S]`へ既存arityを変更する案、任意target型Sを今回公開する案は互換性・payload検査範囲が増えるため後続比較とする。
+D2の推奨最終形は**単一のAuthScopeとrequest-bound Grant[P]**。旧PrincipalをAuthScopeへ、旧Grantの内部とissuer/consumerをlease付き契約へ置換し、無期限proofや別名ScopedGrantは併存させない。対象IDは実値i64、permission Pはnominal phantomを保つ。arityを維持する理由は互換性ではなく、汎用target payload/region解析を追加せず、必要な対象とrequest有効性を明示できるため。将来方針のScope実値はprivate lease/request ID/対象として保持する。
 
 - AuthScopeはverified subject、credential source、request固有ID、private leaseの実値を持つopaque resource。handlerへruntimeが作り、Nagiのbool/string/JSONからmintできない。認証に成功した事実と認可成功を分ける。
-- ScopedGrant[P]はsubject、resource実値、request leaseを結び付ける。trusted issuerがレビュー対象policyの成功後だけ発行する。operationは別bare resource IDを取らず、Grantの実値でbindする。同一request leaseとの対応はruntime ID照合で検査し、nominal型だけで同requestと断定しない。
-- AuthScope/ScopedGrantは同taskの引数/return・owned Option/Result localへ移動できる。class/enum field、shared、Actor state/message、Task capture/result、background escapeは拒否する。既存Txのsame-task検査を参考に実payload/Future引数を調べるが、Tx専用条件へ無理にauthを混ぜない。
-- 初版はrequest proofのTaskへのdelegateを提供しない。asyncの同task呼出しは可。旧Principal/Grantのowned delegationは現状を維持する。将来のbackground delegationは別credential/audience/期限を必要とする別設計で、今回は追加しない。
+- Grant[P]はsubject、resource実値、request leaseを結び付ける。trusted issuerがレビュー対象policyの成功後だけ発行する。operationは別bare resource IDを取らず、Grantの実値でbindする。同一request leaseとの対応はruntime ID照合で検査し、nominal型だけで同requestと断定しない。
+- AuthScope/Grant[P]は同taskの引数/return・owned Option/Result localへ移動できる。class/enum field、shared、Actor state/message、Task capture/result、background escapeは拒否する。既存Txのsame-task検査を参考に実payload/Future引数を調べるが、Tx専用条件へ無理にauthを混ぜない。
+- request proofのTaskへのdelegateを提供しない。asyncの同task呼出しは可。旧Principal/Grantのowned delegationは0.2.0では拒否する。background jobは非proofのjob入力だけを転送し、別のtrusted service adapterが用途/audience/期限を検証して独立に再認可する。request proofを無期限service proofへ変換するAPIは追加しない。
 - request dispatcherがprivate lease ownerを持つ。handler正常/Err/panic/timeout/cancelと未poll Future Dropで失効させ、auth failureのmapperも同じ境界に含める。security operationは使用時とnative admission直前にlease/expiry/失効状態を検査する。await中に期限を越えた証明を、まだadmissionしていない新しい処理へ渡さない。
 - admissionは、保護operationの対象・内容に結び付いた一回限りのprivate execution permitを発行する線形化点と定義する。queue slot予約やFuture生成はadmissionではない。queue等の待機→有限resource予約→lease失効と共有する短いprivate gate内で現在時刻/有効状態を検査しpermitを発行→permitをconsumeしてnative commandへ渡す。gate内でawaitしない。dispatcher失効とpermit発行は同じgateで順序を確定する。予約待ち/検査後・permit発行前の失効は拒否し予約を解放する。期限の判定時刻はこのgate内の検査時刻で固定する。gate後に失効しても既発行permitのoperationは受理済みであり、任意副作用の停止/rollbackを約束しない。native adapterはこの保護operationのpermitのない新commandを開始せず、送信失敗・結果不明はdriverの観測に従う。単にboolをreadして後でenqueueする実装ではこの契約を満たさない。
 - admission前の無効化は副作用を開始しない。admission後のDB/外部I/Oは失効・取消で巻き戻ったとは説明しない。policyとSQLのTOCTOUには同じ対象のpredicateまたはTx内の再確認が必要で、自動的に保証しない。
@@ -81,16 +81,16 @@ JWS verifierを追加する場合は既存crateへ署名/algorithm/key処理を�
 
 ## HTTPルート方針
 
-検討する選択肢は、旧routeのarityを変更して全APIにpolicyを必須化する案A、新しいpolicy必須のapp/routeを追加して旧APIをdeprecatedにする案B、decoratorだけの暗黙保護を追加する案C。**推奨はB**。破壊を避けつつ、新しい0.2.0 Security Foundation対象appはpolicy省略で構築できない。旧APIを使うappまで自動保護したとは宣言しない。
+D1は**全標準HTTPをpolicy必須の一つのApp/route/serve経路へ統合する案A**を選ぶ。旧経路をdeprecatedとして残す案Bはpolicyを省略でき、異なるdispatcherを保守するため不採用。decoratorだけの案Cはdynamic/手書きLowを網羅できない。
 
-型で区別したpolicy付きappに、public/authenticated/authorizedのいずれかを各method/path登録時に必須指定する。publicは意図的匿名公開であり、CSRF/CORS/limitsを無効化する値ではない。authenticatedはverified AuthScopeを必要とし、authorizedはさらにnamed policy/permission/対象解決を要求する。保護operation側のGrant要求も保つ。
+public/authenticated/authorizedを各method/pathの必須実値にする。publicは意図的匿名公開で、CSRF/CORS/limitsを無効化しない。authenticatedはverified AuthScope、authorizedはnamed policy/permission/対象解決を必要とする。保護operation側のGrant要求も保つ。anonymous handlerへproofを自動発行しない。
 
-登録policyはroute recordの実値で、dynamic pathでも保持する。policyなしの旧Appをsecurity serveへ暗黙変換しない。すべてのhandler型・mapper型とpolicy relationをsealed planで検査する。public handlerへ認証済みproofを自動発行しない。
+現行route/route_mapped署名とhandler/mapper relationを更新し、policyなし旧arity、旧decorator、legacy serveをHigh/Low checkerで移行診断として拒否する。旧App、unchecked register、publicへの暗黙変換、legacy serveをfeature flagで復活させる経路は標準runtime/配布物に残さない。trusted Rustが独自serverを持つ場合は明示された保証外で、Nagi標準の代替入口として再exportしない。
 
-- GET→HEAD fallbackはGETと同じpolicy。明示HEADは自分のpolicyを要求する。duplicate/重なり/同名captureは既存route条件を保つ。
-- OPTIONS preflightはCORSが限られたmetadata応答として扱い、protected handlerや認証済みproofを発行しない。通常OPTIONSは明示policyで登録する。
-- 404/405はtransport応答でbody/proofを公開しない。Allowのroute存在情報は秘匿保証の外と明記する。private route存在を隠すAPIを初版へ暗黙追加しない。
-- legacy decorator、`serve(Db, port)`由来の組込`/health`/`/stream`/`/ws`、Rust/Axum Routerはpolicy付きappと別経路。新appへ勝手に注入しない。旧appの移行時に組込endpointを明示登録するか削除する。WebSocket upgradeの認証/session再検査は今回の新HTTP appの対象外として機能差を明記する。
+- dynamic routeも同じpolicy recordとsealed handler/mapper planを使う。GET→HEADはGET policyを継承し、明示HEADは自分のpolicyが必須。
+- OPTIONS preflightは有限metadata応答のみでhandler/proofを発行しない。通常OPTIONSには明示policyが必須。
+- 404/405はtransport応答。Allowによる存在情報は秘匿保証の外。
+- 組込`/health`/`/stream`/`/ws`の自動注入を削除する。healthは必要なappだけ明示public等で登録。stream demoは有限bytes/response例へ移行する。任意streaming APIも初版非対応とする。WebSocketは0.2.0標準経路では提供せず、旧入口を診断で拒否する。既存ユーザーの機能喪失と代替のtrusted Rust hostをmigrationへ明記し、upgrade認証/再失効/有限message budgetを満たす将来の専用設計まで旧無保護入口を戻さない。
 
 pre-dispatchはconnection/header制限→path/method選択→request/security admission→曖昧header/外部origin/credential検査→認証→CSRF必要性判定→有限body/token検査→handler/認可operationの順を基準とする。単一handler期限とは別にsecurity検査の共通絶対予算を持ち、verifier/key/session待ちごとに期限をリセットしない。認証前に必要なpublic/loginのbodyも同じ有限admission/body制限を受ける。既存transport status優先順位を変更する場合は明示し、すべての早期returnでpermit/body/leaseを片付ける。
 
@@ -100,11 +100,13 @@ pre-dispatchはconnection/header制限→path/method選択→request/security ad
 
 Sessionはbrowser用host-only cookieのopaque IDを基点にserver側のbounded storeで主体/expiry/失効世代を保持する案を推奨する。Cookieは`Secure`/`HttpOnly`/`Path=/`と明示SameSite、Domain省略の`__Host-`形状を検証する。SameSite=NoneはSecureを必要とし、cross-origin用途を明示する。正確なparser/serializerは維持されているcrateを比較し、独自cookie grammarを作らない。複数Cookie headerを含めて解析し、認証用の同名cookieが重複する場合は選び直さず拒否する。
 
-標準Session発行/rotation/認証状態を含む応答とCSRF token配布応答は、新appのfinalizerが`Cache-Control: no-store`を所有する。Set-Cookieだけでcache禁止と扱わない。handlerがpublic/max-age等の競合cache headerを加えた場合は拒否し、304/共有cacheによるtoken/session応答再利用をしない。発行/token応答には明示したcookie/credential source/認証依存のVaryを併用するが、Varyをno-storeの代わりにしない。普通のDTOの機密性・cache policyを自動推論したとは説明せず、app作者が別途指定する。
+標準Session発行/rotation/認証状態を含む応答とCSRF token配布応答は、標準appのfinalizerが`Cache-Control: no-store`を所有する。Set-Cookieだけでcache禁止と扱わない。handlerがpublic/max-age等の競合cache headerを加えた場合は拒否し、304/共有cacheによるtoken/session応答再利用をしない。発行/token応答には明示したcookie/credential source/認証依存のVaryを併用するが、Varyをno-storeの代わりにしない。普通のDTOの機密性・cache policyを自動推論したとは説明せず、app作者が別途指定する。
 
 session IDはOS CSPRNGから少なくとも128bitの推測不能性を持つopaque値。secretのDebug/Serde/response echoを提供しない。login/権限変更時にrotationし、atomicに旧ID無効化と新ID発行を行う。idleとabsolute expiry、logout/失効、同時request/rotation、clock rollbackの挙動を定義する。cookie削除はserver失効の代用ではない。storeの停止/応答喪失を認証成功へ変換しない。
 
-初版のreference storeは明示capacity/expiryの単一processメモリstore候補。再起動でlogout、多instanceの共有保証なしを契約にする。production store adapterはlookup/rotate/revokeのatomic契約を必要とし、単純なMap put/getの成功を線形性の証明にしない。SQLite store案と比較し、永続/多instance要件をD3で固定する。
+D3の標準は既存SQLite Pool/Transactionを使う**永続server Session store**。lookup/rotate/revoke、世代compare-and-swap、capacity/expiry cleanupをnative Txでatomicにする。メモリstoreのproduction fallbackとstateless signed cookieは提供しない。小さなtest doubleは非公開test-onlyで同じstore contractを検査する。DB file/ディレクトリの権限、共有fileのlock/時刻、backup/復元を配置条件に含め、分散store保証を付けない。
+
+revocation commit後の新規lookupは旧ID/世代を拒否する。既に発行されたrequest leaseは最長request/credential/session absolute期限までの認証snapshotであり、全processへの即時失効broadcastを保証しない。request終了/取消とpermit発行は局所gateで順序化するが、DBのlogout commitはそのgateと同じ原子操作ではない。即時整合が必要な保護更新は、Session表と対象データを同じSQLite fileに置き、session世代/権限のpredicateを同じTxへ組み込む。別file/storeの事前lookupは代用でなく、現行ATTACH禁止を保つ。外部I/O全般へ保証を広げない。rotationで応答を失ったら結果不明として再認証し、旧IDを復活させず、新IDをcommit前に送らない。詳細なcrash/時計/容量契約は[判断記録](decisions-and-migration.md#d3-永続sessionを標準にする)。
 
 GET/HEAD/OPTIONSをsafe methodとして扱うが、そのhandlerに副作用がないことをcheckerは証明しない。cookie等のambient credentialを使うunsafe methodは、**public/login/logoutを含め**CSRF policy必須。初版はsessionまたはpre-loginの有限anonymous sessionにboundしたsynchronizer tokenを推奨する。token長/読取上限、CSPRNG、constant-time比較、rotationを既存crypto部品へ委譲する。tokenをURL/query/logに入れない。form bodyはboundedかつ一意tokenを要求し、JSON APIでは専用headerを使う。
 
@@ -120,17 +122,17 @@ CORSはbrowserによるcross-origin response読取規則で、認証/認可/CSRF
 
 credentialsとwildcard originの併用、null origin、複数Originは拒否する。許可originのみ反映し、`Vary: Origin`とpreflightのmethod/header依存を付ける。401/403/413/429/500等の早期応答にもpolicyを適用するが、許可されないoriginへcredential responseを読ませない。preflight成功はactual request成功を保証せず、actual requestで再度auth/CSRFを検査する。
 
-新appではsecurity-managedのCORS/session/CSP等headerを統合finalizerが所有し、handlerのappend headerで二重・矛盾値を上書きできない。旧raw response header APIの意味は維持する。reserved集合とreject段階をcontract testで固定する。
+標準appではsecurity-managedのCORS/session/CSP等headerを統合finalizerが所有し、handlerのappend headerで二重・矛盾値を上書きできない。既存append_headerは非reserved headerのみに制限し、raw header経由のsecurity/Content-Type迂回を拒否する。reserved集合とreject段階をcontract testで固定する。
 
 ## XSSとHTML出力
 
-JSON/plain text出力は現行APIを使い、必要なContent-Typeと`nosniff`を新appのfinalizerで揃える。JSON encodingがscript埋込やHTML attribute向けencodingとは説明しない。
+JSON/plain text出力は現行APIを使い、必要なContent-Typeと`nosniff`を標準appのfinalizerで揃える。JSON encodingがscript埋込やHTML attribute向けencodingとは説明しない。
 
 初版は既存string interpolationで安全を推測せず、opaque HtmlFragment等のtyped builderで対応するHTML subsetを構築する案。text node、quoted attribute、許可URL attributeを別operationにし、component/fragmentの結合もcontextを保つ。要素/attribute名は静的allowlistで、event handler、script/style、rawtext、任意CSS、srcdoc、非対応namespaceを拒否する。encodingが必要な文字・Unicode・NUL・再encodingの挙動と出力budgetを固定する。
 
 URL attributeはHTML encodingとscheme/用途の検証を両方必要とする。ナビゲーションURLとSSRF用network Targetは別型にし、hrefが有効だからserverが取得してよいとはしない。任意HTMLを「洗う」sanitizer、文字列をそのままtrusted fragmentへcastするNagi factoryは初版に提供しない。
 
-旧`Html`/`html`/`http.html`はraw互換APIで、XSS保証外を日英Docsに明示する。新appはtyped rendererを推奨し、raw APIへのwarning/後の制限をD1のmigrationに含める。CSPのrestrictive profileは防御補助で、encoding/認可の代用ではない。nonceが必要な拡張はrequest生成・秘密管理・template統合を別に設計し、unsafe inlineを黙って許可しない。
+旧`Html`/`html`/`http.html`のraw標準入口を削除し、HTML responseはtyped fragmentを必須とする。bytes＋手動Content-Typeやmapperでもactive HTML/JS/SVG responseへ迂回できないようbody種別とheaderをfinalizerが所有する。初版の任意active content配信は保証外のtrusted hostへ分ける。CSPのrestrictive profileは防御補助で、encoding/認可の代用ではない。nonceが必要な拡張はrequest生成・秘密管理・template統合を別に設計し、unsafe inlineを黙って許可しない。
 
 ## SQL Injection
 
@@ -138,9 +140,9 @@ URL attributeはHTML encodingとscheme/用途の検証を両方必要とする�
 
 literalのSQL構文をcompilerに独自実装せず、実行時SQLite prepareの一文/bind/shape制約を保持する。literalでも権限のあるSQLを必ず良い操作とは呼ばない。identifier/order等の選択はレビュー済みliteral queryから選ぶ。任意identifier quotingやSQL escapingでvalue bindを代替しない。
 
-既存dynamic query/旧Db.execは互換を維持し、trusted structureをappが保証する経路として明示する。新Queryを既存Sqlと暗黙変換せず、新operationがopaque Queryを必須にする。通常checkへschema engine必須依存を追加しない。値型/NULL/bind長/schema差はnative実行で確認し、G-SQLのopt-inと別の保証IDで記録する。
+0.2.0の標準SQLite query/execはopaque Queryを必須とし、動的string/Sqlからの変換、旧Db.execを含む標準Db入口は削除する。Pool/Txの終了・取得・busy・結果不明契約は保つ。schema migration/bootstrapはtrusted hostのレビュー済み管理処理に分け、request向け任意SQL factoryへ再exportしない。通常checkへschema engine必須依存を追加しない。値型/NULL/bind長/schema差はnative実行で確認し、G-SQLのopt-inと別の保証IDで記録する。
 
-ScopedGrantでprotected DB operationへ入る場合はGrant内対象実値をbindし、owner/tenant等をSQL predicateか同Txで再確認する。汎用queryにGrantを渡せば全SQLのtenant制約が成立するAPIは作らない。取消/lease失効/Errを自動rollback成功へ変換しない。
+Grantでprotected DB operationへ入る場合はGrant内対象実値をbindし、owner/tenant等をSQL predicateか同Txで再確認する。汎用queryにGrantを渡せば全SQLのtenant制約が成立するAPIは作らない。取消/lease失効/Errを自動rollback成功へ変換しない。
 
 ## SSRFと送信HTTP
 
@@ -166,21 +168,19 @@ rate limitingはauth主体/route等のbounded identityと明示policyで提供�
 
 ## 互換性と移行
 
-既存move、borrow origin、正常Task出口義務、業務Err/sticky fault、legacy spawn、Supervisor/HTTP、Tx affine/close/outcomeを維持する。High/Lowの同時移行を必須とし、保存Low metadataの既存拒否条件を弱めない。Rust public constructorの削除やGrant arity変更は行わない。
+0.2.0では旧HTTP/proof/raw HTML/dynamic SQLの併存を廃止する。これは公開breaking changeで、最新ユーザー指示の安全基盤に必要な変更として進める。Task/spawnの業務Err/sticky fault/義務、Supervisor停止連携、move/view、Tx affine/close/outcomeと取得budgetは維持する。HTTPとauthの既存testの期待を一律GREEN維持せず、旧入口の明示拒否と移行後の同等業務動作を対にする。
 
-推奨Bでは0.2.0でpolicy付きHTTP app/route、AuthScope/ScopedGrant、HtmlFragment、Query、Target/Cookie/Session等を追加する。旧app/decorator/raw HTML/dynamic SQLはdeprecated/保証外境界として明示し、専用migration guideと移行後native sampleを提供する。警告はcompiler check・editor・saved/hand Lowで同じ意味にする。警告を抑えるsecurity bypassやファイル拡張子による免除を作らない。
-
-全標準HTTPにpolicyを必須化して旧route署名/handlerを削除する案Aは公開breaking changeであり、別途承認が必要。単に0.2という版番号だから自由に破壊できるとは判断しない。新appからlegacy serve/routeへ暗黙downgradeする操作は設けない。安全性を主張する範囲をcompiler diagnostic・Docs・配布API差分で同じにする。
+[判断・移行表](decisions-and-migration.md)に各旧入口、移行先、保持理由、失う機能、元位置診断、High/保存Low/手書きLow/native/Rust consumerのacceptanceを固定する。警告だけでpolicyなし実行を許さない。旧metadataを新proof/routeとして読み替えず、policy/publicやleaseを自動挿入しない。標準crateの旧public Rust constructor/serveも削除/変更し、Nagiだけ閉じてRust公開APIにunchecked代替を残さない。既存0.1.xタグ/配布物はそのまま保持する。
 
 ## 公開判断
 
-| ID | 比較と推奨 | 利用者への影響・採用前のblocker |
+| ID | 推奨最終形と比較結果 | 互換影響・保証の限界 |
 |---|---|---|
-| D1 | A=旧HTTPもpolicy必須へ破壊、B=新policy必須Appを追加＋旧経路deprecated、C=decoratorだけ保護。**B推奨** | 全Nagi HTTP routeの一律義務ではなく新appの網羅保証。既存署名維持、移行は明示。全経路一律義務が必要ならAと組込endpoint/Low/Rust adapterの移行を選ぶ必要がある |
-| D2 | 旧Grant arity変更、既存Grantに失効を付加、新AuthScope/ScopedGrant併存。**追加型とsame-task request proof推奨** | 旧delegation保持、新request proofはTask/Actor転送不可。将来の任意target型やbackground delegationは別設計。公開名/対象型/constructor/handler signatureをADRで固定する |
-| D3 | server store型Session（bounded memory/SQLite/trusted external）とstateless signed cookieを比較。**server store＋host-only cookie、初版bounded memoryとatomic adapter契約推奨** | 再起動でlogout、多instanceには対応store必須。stateless cookieは即時失効/rotationが複雑。production persistenceが0.2必須ならSQLite adapterをacceptanceへ加える。新crypto/cookie/client crateは実source/保守/license/4 OSで選定し、採用差分を記録する |
+| D1 | 全標準HTTPのpolicy必須化、単一dispatcher。併存B/decorator限定Cを撤回 | 旧arity/decorator/serve/builtins/raw responseの移行が必要。明示publicは匿名であり全private保証ではない。Rust hostはtrusted境界 |
+| D2 | AuthScope＋lease付き単一Grant[P]へ置換。無期限Principal/Grant/ScopedGrant併存なし | issuer/consumerと旧owned delegationはbreaking。P/i64は十分な対象表現として保持。same-taskとruntime expiry/gate、policy正当性/外部rollbackは証明しない |
+| D3 | 永続SQLite server Session＋host-only cookie。memory production fallback/stateless cookieなし | restart/logout/rotation/storage errorを明示。既発行snapshotの全process即時失効/分散可用性は保証しない。native atomic/crash/時計検証が必須 |
 
-これらは提案であり、旧ADRの未承認部分を採用済みと書き換えない。次段階は判断をADRへ固定→専用RED→実装。機能別PR、独立レビューと各検証のacceptance、全体release gateは[実装計画](implementation-plan.md)にある。
+これらは最新指示に従う実装基準で、未実装を現行言語の保証へ格上げしない。従来ADR 001の最小実験と将来計画の互換性保留を0.2.0対象で置き換える理由を[判断記録](decisions-and-migration.md)へ残す。機能別PR、順序、日英Docs/実行sample同時更新とrelease gateは[実装計画](implementation-plan.md)。
 
 ## 指針と保証の限界
 

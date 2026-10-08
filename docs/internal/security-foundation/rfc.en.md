@@ -2,7 +2,7 @@
 
 [日本語](rfc.md) · [Baseline audit (Japanese)](baseline-audit.md) · [Implementation plan](implementation-plan.en.md)
 
-Status: **independently reviewed proposal, not yet adopted**, 2026-10-08 JST. These features are unimplemented and unreleased. Saving this RFC does not adopt new public semantics. Preserve G-AUTH, Task/spawn, Tx, and High/Low contracts; record decisions D1–D3 before implementing public APIs. API names below are candidates, not executable examples.
+Status: 2026-10-08 JST. **Revised implementation direction: security before compatibility.** The latest user instruction supersedes the coexistence recommendations D1–D3. [Decisions and migration](decisions-and-migration.en.md) govern implementation. No 0.2.0 feature is implemented or released; existing 0.1.x conditions are not retroactively changed. Preserve Task/spawn, Tx lifecycle, and High/Low fundamentals.
 
 ## Purpose and scope
 
@@ -12,7 +12,7 @@ Scope: AuthScope, HTTP route policy, CSRF, HTML output/XSS, SQL structure/bindin
 
 ## Baseline
 
-Main `62bbda9` includes merged SQLite PR #99; released 0.1.11 is `003a594`; open PR count was zero. See [evidence and limitations](baseline-audit.md) and [source hashes](baseline.json). Principal/Grant[P] cannot be constructed, copied, shared, or decoded from JSON in Nagi, but are not request-bound and do not enforce expiry/revocation. Owned async delegation is allowed. Standard route registration has no authentication policy argument; HTML is raw text; standard Cookie/Session/CSRF/CORS and an outbound client are absent.
+Main `62bbda9` includes merged SQLite PR #99; released 0.1.11 is `003a594`; open PR count was zero at the initial baseline; design PR #100 is now open. See [evidence and limitations](baseline-audit.md) and [source hashes](baseline.json). Principal/Grant[P] cannot be constructed, copied, shared, or decoded from JSON in Nagi, but are not request-bound and do not enforce expiry/revocation. Owned async delegation is allowed. Standard route registration has no authentication policy argument; HTML is raw text; standard Cookie/Session/CSRF/CORS and an outbound client are absent.
 
 SQLite Parameters bind values and native authorizer checks exist. Opt-in literal schema preflight does not establish dynamic SQL provenance or tenant isolation. Existing HTTP and frontend limits remain in force.
 
@@ -39,7 +39,7 @@ All following guarantees are **proposed**. Do not promote them to current guaran
 | Feature | Nagi checker | Runtime/deployment | Not proven |
 |---|---|---|---|
 | Route | Required canonical policy, handler type, missing/mismatched policy rejection | Dynamic registration and all methods/fallbacks retain policy | Every route is private, or arbitrary Rust Router coverage |
-| AuthScope/ScopedGrant | Opaque, nonCopy/nonClone/nonSerde/nonshared, no owned fields, same-task, nominal permission, consume | Request lease, ID/target matching, expiry/revocation, successful issuer/policy | Indefinite validity, policy logic, rollback |
+| AuthScope/Grant[P] | Opaque, nonCopy/nonClone/nonSerde/nonshared, no owned fields, same-task, nominal permission, consume | Request lease, ID/target matching, expiry/revocation, successful issuer/policy | Indefinite validity, policy logic, rollback |
 | CSRF | Credential-source classification and required policy for unsafe ambient-credential requests | Token/session binding, exact origin, malformed/ambiguous/missing data, budget | XSS prevention or static proof of application side effects |
 | HTML | Renderer/context types distinguish raw strings and fragments | Encoding, URL scheme, output bounds | Raw HTML/JS/CSS or universal browser safety |
 | SQL | Direct literal structure, Parameters, supported row types | Native prepare/bind/shape/schema/NULL/type/authorizer | Arbitrary dynamic SQL and automatic tenant/permission inference |
@@ -66,12 +66,12 @@ User-defined lookalikes are not builtins. Register actual payload, shared state,
 
 Distinguish AuthScope from Task `scope`, SQLite Tx, and query/domain scope. Preserve the existing direction that grants contain actual authorized targets; request lifetime is an additional value/lease, not a new region type system.
 
-Recommend retaining Principal/Grant[P] and adding request AuthScope plus ScopedGrant[P]. Initial resource identity remains an actual i64, as with Grant, while P remains a nominal phantom. Changing old Grant to two parameters or introducing arbitrary target payload S requires a separate compatibility/payload design.
+Recommend **one AuthScope and request-bound Grant[P] family**, replacing Principal and old unbounded Grant internals/factories/consumers. Do not coexist with ScopedGrant or indefinite proofs. Retain actual i64 targets and nominal phantom P because they express the required target without arbitrary payload/region machinery, not to preserve compatibility. The previously planned actual Scope value is represented by the private request ID/lease and bound target.
 
 - AuthScope contains verified subject, credential source, request ID, and private lease. Runtime supplies it to handlers; Nagi bool/string/JSON cannot mint it. Authentication and authorization are separate.
-- ScopedGrant binds subject/resource/request lease after a reviewed policy succeeds. Protected operations use its actual resource, not a separate supplied resource ID. Runtime verifies request ID matching; nominal types alone do not prove same-request identity.
+- Grant binds subject/resource/request lease after a reviewed policy succeeds. Protected operations use its actual resource, not a separate supplied resource ID. Runtime verifies request ID matching; nominal types alone do not prove same-request identity.
 - Both are opaque, same-task, and cannot enter shared/owned fields/Actor state/messages/Task capture or results/background work. Same-task calls/returns and owned local Option/Result are permitted. Inspect actual payloads and Future inputs, while retaining existing Tx semantics.
-- No request-proof Task delegation in the first version. Same-task async calls are permitted; legacy Principal/Grant owned delegation stays unchanged. Background delegation would require separately designed credentials/audience/expiry.
+- Reject request-proof Task delegation, including old Principal/Grant delegation. Same-task async calls remain permitted. Background jobs transfer non-proof input and independently reauthorize through a trusted service adapter with purpose/audience/expiry; no conversion into indefinite service authority.
 - Dispatcher owns the lease and invalidates on normal/Err/panic/timeout/cancel/unpolled Drop, including security mappers. Check validity on use and immediately before native admission; expiration during an await must be checked before new work that has not been admitted.
 - Define admission as the linearization point issuing a single-use private execution permit bound to the protected target and operation. Queue-slot reservation/Future construction is not admission. Wait and reserve bounded native capacity, then check time/validity and issue the permit inside the same short private gate used for dispatcher invalidation; never await under that gate. Consume the permit at native command submission. Invalidation while waiting or between earlier checks and permit issuance rejects and releases reservations. The gate check supplies the expiry timestamp. Invalidation after issuance does not undo admitted effects. Native adapters never start a new command for this protected operation without its permit; send failure/unknown outcome follows driver evidence. A boolean read followed later by enqueue cannot meet this contract.
 - Invalidity before admission prevents starting effects. Already admitted DB/external work is not rolled back by expiry/cancellation. Authorization snapshots require predicates or transactional rechecks for TOCTOU; this is not universally inferred.
@@ -81,16 +81,16 @@ Real JWS verification delegates signatures/algorithms/keys to an existing review
 
 ## Explicit HTTP policy
 
-Options: A changes old HTTP signatures to require policy everywhere; B adds a distinct policy-required app/route and deprecates old paths; C only protects decorators. **Recommend B**. New Security Foundation apps cannot register a policy-free route; old applications are not automatically secured or covered by a universal route guarantee.
+Choose **D1=A: unify standard HTTP under one policy-required App/route/serve dispatcher**. Reject coexistence B because it retains policy-free registration and two dispatch specifications; decorator-only C misses dynamic and handwritten Low paths.
 
-Every method/path in the new app explicitly chooses public, authenticated, or authorized. Public means deliberate anonymous access, not disabling CSRF/CORS/limits. Authenticated requires verified AuthScope; authorized additionally requires named policy/permission/target resolution. Protected operations still require grants.
+Each method/path requires an actual public/authenticated/authorized policy. Public deliberately permits anonymous access, while retaining CSRF/CORS/limits. Authenticated requires AuthScope; authorized adds named policy/permission/target resolution. Protected operations still require grants; anonymous handlers receive no implicit proof.
 
-Dynamic registration stores a real policy value. No implicit legacy App→security app conversion or downgrade. Seal handler/mapper/policy relations. Public handlers receive no automatically authenticated proof.
+Change route/route_mapped and handler/mapper signatures. Reject old arities, decorators and legacy serve with migration diagnostics in High and Low. Remove unchecked registration, implicit public defaults, legacy App/serve and feature-flag restoration from standard runtime/distribution. A trusted Rust host can provide its own server outside the guarantee; do not re-export it as an alternative standard entry point.
 
-- GET→HEAD fallback inherits GET policy; explicit HEAD requires its own policy. Keep duplicate/capture constraints.
-- CORS preflight OPTIONS only emits constrained metadata; it invokes no protected handler and issues no proof. Ordinary OPTIONS requires explicit policy.
-- 404/405 are transport responses. Allow may disclose route existence; private route-existence concealment is not promised.
-- Legacy decorators, builtin `/health`/`/stream`/`/ws`, `serve(Db, port)`, and Rust/Axum routers are separate. Never inject them into the new app. Migration registers/removes them explicitly. New-app WebSocket authentication/session renewal is out of scope and documented as a feature difference.
+- Dynamic registration uses the same policy record and sealed handler/mapper relation. GET→HEAD inherits policy; explicit HEAD needs its own.
+- CORS preflight emits bounded metadata only, with no handler/proof. Ordinary OPTIONS needs explicit policy.
+- 404/405 are transport responses; Allow may reveal route existence.
+- Remove automatic `/health`/`/stream`/`/ws`. Applications explicitly register health and supported response streaming. Standard WebSocket support is absent in 0.2.0 and old entry points are rejected. Document this lost functionality and the trusted-host alternative. A future upgrade design must cover authentication/revocation/message budgets before becoming standard; do not restore an unprotected legacy route.
 
 Baseline dispatch order: connection/header bounds → path/method → request/security admission → ambiguous header/external-origin/credential checks → authentication → CSRF applicability → bounded body/token verification → handler/authorized operation. Security verification has an absolute shared budget across verifier/key/session waits, separate from the handler budget. Public/login bodies remain bounded. Changes to existing transport-status precedence require explicit contracts. All early returns release permits/body/leases.
 
@@ -100,11 +100,13 @@ Authentication identifies a subject; authorization permits an operation; CSRF co
 
 Recommend opaque host-only session IDs with a server-side bounded store for subject/expiry/revocation generation. Validate Secure/HttpOnly/Path=/, explicit SameSite, no Domain, and `__Host-` shape. SameSite=None requires Secure and an explicit cross-origin use case. Compare maintained cookie parsers/serializers rather than inventing grammar. Parse all Cookie headers and reject duplicate authentication-cookie names instead of choosing one.
 
-For standard session issuance/rotation/authentication-state responses and CSRF-token delivery, the new-app finalizer owns `Cache-Control: no-store`. Set-Cookie alone does not prohibit caching. Reject conflicting public/max-age headers and do not use 304/shared-cache reuse for token/session responses. Add explicit cookie/credential-source/authentication-dependent Vary where required, without substituting Vary for no-store. Do not claim automatic confidentiality/cache classification for ordinary DTOs; applications specify that separately.
+For standard session issuance/rotation/authentication-state responses and CSRF-token delivery, the standard-app finalizer owns `Cache-Control: no-store`. Set-Cookie alone does not prohibit caching. Reject conflicting public/max-age headers and do not use 304/shared-cache reuse for token/session responses. Add explicit cookie/credential-source/authentication-dependent Vary where required, without substituting Vary for no-store. Do not claim automatic confidentiality/cache classification for ordinary DTOs; applications specify that separately.
 
 IDs use OS CSPRNG with at least 128 bits of unpredictability, without secret Debug/Serde/response echo. Rotate on login/privilege changes, atomically invalidating old IDs. Specify idle/absolute expiry, logout/revocation, concurrent rotation, and clock rollback. Cookie removal is not server revocation. Store failure/reply loss never implies authentication success.
 
-Candidate reference store: explicitly bounded single-process memory store, restart logout, no multi-instance sharing. Production adapters need atomic lookup/rotate/revoke semantics; Map put/get alone proves nothing about linearizability. Compare SQLite storage; D3 decides whether persistence/multi-instance support is mandatory in 0.2.0.
+D3 standardizes a **durable SQLite server session store** using existing Pool/Transaction. Native transactions make lookup/rotate/revoke, generation compare-and-swap, capacity and cleanup atomic. No production memory fallback or stateless signed-cookie mode. Private test doubles exercise the same contract. File permissions, shared-file locking/clocks and backup/restore are deployment requirements; distributed availability is not promised.
+
+A new lookup after revocation commits rejects the old ID/generation. Already issued request leases are bounded authentication snapshots, not a promise of immediate revocation across processes. Local dispatcher invalidation and permit issuance share a gate; a database logout commit does not share that gate. Updates requiring immediate consistency need session tables and protected data in one SQLite file, with a session-generation/authority predicate in the same Tx. Separate-file/store prechecks are insufficient; preserve the ATTACH prohibition and do not extend this guarantee to arbitrary external I/O. Lost rotation responses mean unknown outcome and reauthentication: never revive the old ID or send the new ID before commit. See [crash/time/capacity details](decisions-and-migration.en.md#d3-durable-server-sessions).
 
 Treat GET/HEAD/OPTIONS as safe methods without claiming the checker proves handlers side-effect-free. Unsafe ambient-cookie requests require CSRF policy **including public login/logout**. Recommend a synchronizer token bound to a session or bounded anonymous pre-login session. Specify CSPRNG, length, constant-time comparison, and rotation using reviewed primitives; never place tokens in URL/query/log. Bounded forms require one unambiguous token; JSON APIs use a dedicated header.
 
@@ -120,17 +122,17 @@ CORS governs browser response reading, not authentication, authorization, or CSR
 
 Reject wildcard with credentials, null and duplicate origins. Reflect only allowed origins and add Vary for Origin and preflight method/header dependencies. Apply policy to early errors including 401/403/413/429/500. Preflight success does not authorize actual requests; repeat authentication/CSRF checks.
 
-The new app finalizer owns security-managed CORS/session/CSP headers and rejects conflicting handler additions. Preserve old raw header API semantics. Fix reserved-header sets and rejection stages in tests.
+The standard app finalizer owns security-managed CORS/session/CSP headers and rejects conflicting handler additions. Restrict append_header to non-reserved headers; reject security/Content-Type overrides. Fix reserved sets and rejection stages in tests.
 
 ## XSS and HTML output
 
-Use current JSON/plain-text APIs, appropriate Content-Type, and new-app nosniff. JSON encoding is not HTML-attribute or script-embedding encoding.
+Use current JSON/plain-text APIs, appropriate Content-Type, and standard-app nosniff. JSON encoding is not HTML-attribute or script-embedding encoding.
 
 Recommend an opaque typed HtmlFragment builder for a supported subset, rather than inference over string interpolation. Separate text nodes, quoted attributes, and allowed URL attributes; fragment composition preserves context. Static element/attribute allowlists exclude event handlers, script/style/rawtext, arbitrary CSS, srcdoc, and unsupported namespaces. Specify Unicode/NUL/re-encoding and output budgets.
 
 URL attributes need both HTML encoding and scheme/use validation. Navigation URLs and SSRF Target are separate types. Do not initially ship arbitrary-HTML sanitization or a Nagi raw-string→trusted-fragment cast.
 
-Legacy Html/html/http.html remain raw compatibility paths outside XSS guarantees. Recommend typed rendering in the new app and document raw warnings/migration under D1. Restrictive CSP supplements encoding; nonce extensions require separate request/template design, without silently allowing unsafe inline content.
+Remove standard raw Html/html/http.html entry points. Require typed fragments for HTML responses. Finalizers own body classification and headers, including mapper results, so bytes plus manual Content-Type cannot produce active HTML/JS/SVG. Arbitrary active-content hosting belongs to the explicit trusted-host boundary. Restrictive CSP supplements encoding; nonce extensions require separate request/template design, without silently allowing unsafe inline content.
 
 ## SQL injection
 
@@ -138,7 +140,7 @@ Keep Pool/Tx/Parameters/authorizer/shape/cleanup contracts. Recommend a security
 
 Reuse native SQLite parsing and single-statement/bind/shape validation. Literal SQL is not necessarily authorized or semantically correct. Choose among reviewed literal queries for identifiers/order; no escaping substitute for bound values.
 
-Legacy dynamic SQL/Db.exec remain trusted-structure compatibility paths. Query and Sql have no implicit conversion; new operations require Query. Do not make schema validation mandatory for ordinary check. Validate values/NULL/count/schema through native execution and distinguish this guarantee from opt-in G-SQL.
+All standard SQLite query/exec operations require opaque Query. Remove dynamic string/Sql conversion and legacy Db entry points, including Db.exec. Retain Pool/Tx acquisition/busy/completion/unknown-outcome semantics. Schema migration/bootstrap is reviewed trusted-host management, never re-exported as a request-facing arbitrary SQL factory. Do not make schema validation mandatory for ordinary check. Validate values/NULL/count/schema through native execution and distinguish this guarantee from opt-in G-SQL.
 
 Protected operations use grant targets in predicates/binds or recheck within a Tx. A grant passed to a generic query does not establish all tenant restrictions. Cancellation, lease invalidation, or Err does not imply rollback completion.
 
@@ -166,17 +168,17 @@ Normal/denied/Err/panic/unpolled/Pending cancellation/shutdown must release perm
 
 ## Compatibility and public decisions
 
-Preserve move/view origins, Task normal-exit obligations/business Err/sticky faults, legacy spawn, Supervisor/HTTP, Tx affine/close/outcome, Low checks and metadata rejection. Do not delete Rust factories or alter old Grant arity.
+Remove coexistence of legacy HTTP/proofs/raw HTML/dynamic SQL in 0.2.0. The latest user instruction authorizes necessary breaking changes within this security foundation. Preserve move/views, Task obligations/business Err/sticky faults, legacy spawn, Supervisor termination coupling, and Tx affine/close/unknown outcomes/acquisition budgets. Update affected HTTP/auth test expectations deliberately: pair old-entry rejection with equivalent migrated business behavior instead of preserving old acceptance everywhere.
 
-Under recommended B, add policy-required HTTP and new resources while retaining deprecated/explicitly uncovered old app/decorator/raw HTML/dynamic SQL paths. Provide migration guides and native migrated samples. Check/editor/saved/hand Low warnings share semantics; no extension-based exemption or security suppression mechanism. A 0.2 version number alone does not authorize breaking APIs. No implicit downgrade from the new app.
+[Decisions and migration](decisions-and-migration.en.md) lists replacements, retained compatibility reasons, removed functionality, source diagnostics and High/saved/handwritten Low/native/Rust-consumer acceptance. Warnings cannot permit policy-free execution. Do not reinterpret old metadata or inject public/lease defaults. Remove or change legacy public Rust constructors/serve too; closing only Nagi while retaining unchecked standard Rust entry points is insufficient. Existing 0.1.x tags/distributions remain intact.
 
-| ID | Alternatives and recommendation | Impact / adoption blocker |
+| ID | Recommended final form and rejected alternatives | Compatibility and limits |
 |---|---|---|
-| D1 | A=break old HTTP to require policy; B=distinct required-policy app plus deprecated legacy; C=decorators only. **B** | Covers all new-app routes, not every Nagi HTTP program. Preserves old signatures. Universal obligation needs A and legacy/builtin/Low/Rust migrations |
-| D2 | Change Grant arity; change old Grant validity; add AuthScope/ScopedGrant. **Add new same-task request proofs** | Preserve old delegation; reject Task/Actor transfer for new proofs. Fix names/target representation/factories/handler signatures in an ADR before code |
-| D3 | Server store (bounded memory/SQLite/trusted external) vs stateless signed cookie. **Server store, host-only cookie, bounded memory reference and atomic adapter contract** | Restart logout; multi-instance requires appropriate store. If persistent production store is required, add SQLite adapter to acceptance. Select crypto/cookie/client dependencies using actual source/maintenance/licenses/4 OS evidence |
+| D1 | One policy-required standard HTTP dispatcher; withdraw coexistence B and decorator-only C | Breaking old arities/decorators/serve/builtins/raw responses. Explicit public is anonymous, not universal private access. Trusted Rust host remains outside guarantees |
+| D2 | Replace old proofs with AuthScope and one lease-bound Grant[P]; no indefinite Principal/Grant or ScopedGrant coexistence | Issuers/consumers/delegation break. Retain P/i64 because sufficient, with same-task checking and runtime expiry/gates. No proof of policy correctness or rollback |
+| D3 | Durable SQLite server sessions and host-only cookies; no production memory fallback/stateless cookie | Define restart/rotation/store failures. No immediate cross-process invalidation of issued snapshots or distributed availability. Native atomic/crash/time evidence required |
 
-These are proposals, not amendments silently adopted over existing ADRs. Record decisions, then RED contracts, then implementation. See [PR plan and completion gates](implementation-plan.en.md).
+These are implementation directions under the latest instruction, not current-language guarantees. [Decision record](decisions-and-migration.en.md) explains superseding ADR 001's minimum experiment and earlier compatibility deferral for 0.2.0. [The plan](implementation-plan.en.md) requires coherent implementation/tests/bilingual docs/executable examples, feature PRs and release gates.
 
 ## References and limits
 

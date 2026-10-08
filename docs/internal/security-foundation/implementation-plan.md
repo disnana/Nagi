@@ -2,7 +2,7 @@
 
 [RFC](rfc.md) · [English plan](implementation-plan.en.md) · [現行調査](baseline-audit.md)
 
-2026-10-08 JST。**計画であり実装完了記録ではない。** 現時点ではRFC・調査だけ。D1–D3と公開signatureを採用ADRへ固定するまで、新resource/API/言語保証を追加しない。意味論が一意な内部調査、依存比較、test harness設計は並行して進められる。
+2026-10-08 JST。**計画であり実装完了記録ではない。** 現時点ではRFC・調査だけ。最新ユーザー指示に従う[D1–D3判断・移行](decisions-and-migration.md)を実装基準とし、旧資料の互換性保留を再承認待ちにしない。各featureの公開signature/contractはRED追加前に固定する。意味論が一意な内部調査、依存比較、test harness設計は並行して進められる。
 
 ## 実装の分割と依存
 
@@ -10,17 +10,17 @@
 
 | PR | 内容と責務 | 依存/採用判断 | 完了oracle |
 |---|---|---|---|
-| SF00 | baseline、RFC、移行/完了条件、独立設計review | 最新main、D1–D3は提案 | source/CI/PR readback、Docs links/site、レビュー指摘追跡。新機能のGREENを主張しない |
-| SF01 | security resource metadata、failure分類、AuthScope/ScopedGrant、policy必須HTTP app/route、dispatcher lifecycle。予算/managed-header共通境界も固定 | SF00、D1/D2・公開API ADR | spoof/share/escape/wrong permission/同request照合、失効/一回execution permit発行の線形化と失効前後admission、正常/Err/panic/取消Drop、GET/HEAD/OPTIONS/404/405、dynamic route、legacy互換 |
-| SF02 | credentials verifier adapterとCookie/Session store/rotation/失効。crypto/cookie library比較、秘密ログ制限 | SF01、D3・store/依存選定 | duplicate credentials、claims検証、session rotation/logout/expiry/容量、store fail-closed/結果不明、発行/token応答no-storeと競合拒否、TLS cookie browser native E2E |
+| SF00 | baseline、RFC、移行/完了条件、独立設計review | 最新main、安全性優先D1–D3の判断・移行 | source/CI/PR readback、Docs links/site、レビュー指摘追跡。新機能のGREENを主張しない |
+| SF01 | security resource metadata、failure分類、AuthScope/単一Grant[P]、policy必須HTTP app/route、dispatcher lifecycle。予算/managed-header共通境界も固定 | SF00、D1/D2・公開API ADR | spoof/share/escape/wrong permission/同request照合、失効/一回execution permit発行の線形化と失効前後admission、正常/Err/panic/取消Drop、GET/HEAD/OPTIONS/404/405、dynamic route、旧入口のmigration診断/削除と移行後native |
+| SF02 | credentials verifier adapterとCookie/Session store/rotation/失効。crypto/cookie library比較、秘密ログ制限 | SF01/SF05、D3・永続SQLite store/依存選定 | duplicate credentials、claims検証、session rotation/logout/expiry/容量、restart/crash/clock/multi-process世代競合、生存/保存総数上限と失効行cleanup遅延、同file predicate配置、物理容量とlogical boundの区別、store fail-closed/結果不明、発行/token応答no-storeと競合拒否、TLS cookie browser native E2E |
 | SF03 | CSRFとCORSを別policyで接続、origin/proxy信頼、preflight、early response finalizer | SF01/SF02、credential source/外部origin契約 | public login/logoutを含むunsafe cookie request、token/origin、credentials/wildcard拒否、Vary/preflight、denial時handler未呼出とpermit解放 |
-| SF04 | typed HTML subset renderer、URL attribute、CSP/nosniff、raw互換Docs | SF01、対応subset/managed-header契約 | text/attribute/URL context・unsupported要素拒否・再encoding・出力予算。browserで構造/挙動、High/Low native wire |
-| SF05 | literal QueryとParameters、protected DB対象bindの縦切り、SQL安全境界migration | SF01、新Query API契約。#99は既にmain | dynamic constructorのchecker拒否、literal/Parameters native、schema/shape/NULL/Outcome/authorizer旧回帰、protected predicate |
+| SF04 | typed HTML subset renderer、URL attribute、CSP/nosniff、raw標準入口削除/response迂回拒否 | SF01、対応subset/managed-header契約 | text/attribute/URL context・unsupported要素拒否・再encoding・出力予算。browserで構造/挙動、High/Low native wire |
+| SF05 | literal QueryとParametersを標準SQLiteへ統一、旧Db/dynamic入口削除、protected DB対象bind、管理SQL境界migration | SF01、新Query API契約。#99は既にmain | dynamic constructorのchecker拒否、literal/Parameters native、schema/shape/NULL/Outcome/authorizer旧回帰、protected predicate |
 | SF06 | policy付き送信HTTP、URL/DNS/socket/proxy/TLS/pool対応の依存比較とadapter | SF01、client/URL/TLS依存選定 | checked addressと実socket対応、retry/pool/redirect不追従、size/deadline、取消解放。mockのみをGREENにしない |
 | SF07 | 横断budgetとbounded rate limiter、cache/entry上限、観測とcleanup、必要なpeer/proxy境界 | 各機能のbudgetは各PR必須。SF01–SF06の実装を統合 | 偽時計/少数entry/小容量で上限/期限/解放、認証deny後と正常継続。既存frontend/HTTP/Actor/SQLite防御不変 |
 | SF08 | migration guide、全機能アプリ、public API差分、日英Docs/examples/IDE、配布外native、最終独立review | SF01–SF07の4 OS/レビュー完了 | 下記全体acceptanceの全行に最新source headの証拠、未解決blocker0。リリースは別の明示承認後 |
 
-推奨順はSF00→SF01→SF02→SF03、その後SF04/SF05/SF06を独立に仕上げ、SF07→SF08。SF04/05/06は別fileの調査なら並行可能だが、compiler stdlib/checked planを複数agentで同時編集しない。共通型/metadataはSF01で固める。HTTPのAxum全面置換は含めず、既存Hyper transport上で責務を分ける。
+推奨順はSF00→SF01→SF05→SF02→SF03、その後SF04/SF06を独立に仕上げ、SF07→SF08。SF04/06は別fileの調査なら並行可能だが、compiler stdlib/checked planを複数agentで同時編集しない。共通型/metadataはSF01で固める。HTTPのAxum全面置換は含めず、既存Hyper transport上で責務を分ける。
 
 ## 各PRの必須手順
 
@@ -69,7 +69,7 @@ browser試験は実TLSと制御されたoriginだけでCookie/SameSite/CORS/CSRF
 
 ## 維持する回帰とコスト
 
-既存のownership/move/view、resource registry、sealed facts、auth boundaries、Task全契約と16native oracle、旧spawn/Supervisor/HTTP、SQL/SQLite public/Tx、frontend limits、CLI生成/cache/output、editor trust、examples、配布gateを維持する。少なくとも次を各コードPRの変更に応じて実行する。
+[移行表](decisions-and-migration.md#移行対応表と検証)に記録したHTTP/auth/SQL/raw-outputの旧受理だけは、移行診断と移行後同等業務動作の対へ変更する。仕様変更に無関係な既存のownership/move/view、resource registry、sealed facts、auth boundaries、Task全契約と16native oracle、旧spawn/Supervisor/HTTP、SQL/SQLite public/Tx、frontend limits、CLI生成/cache/output、editor trust、examples、配布gateを維持する。少なくとも次を各コードPRの変更に応じて実行する。
 
 ```sh
 cargo fmt --all -- --check
@@ -92,7 +92,7 @@ socket/Cargo依存を用意し、infra失敗と契約失敗を別記録。文書
 
 0.2.0 Security Foundationとして完成を宣言するには、以下の全行にfeature PR・最新head・test/report/artifactを結び付ける。未実装を「制約」として隠してrelease gateから除外しない。後続へ明示的に外した任意機能は、RFCの対応範囲を修正し採用判断を記録する。
 
-- D1–D3、公開API/失敗分類/所有権/失効/route/credential source/上限をADRとpublic API差分に固定。現行/提案/未対応の表が日英で一致。
+- D1–D3の判断と全旧入口export/migration inventory、公開API/失敗分類/所有権/失効/route/credential source/上限をADRとpublic API差分に固定。現行/実装方針/未対応の表が日英で一致。deprecated並走・policyなし標準入口・raw HTML/header/SQL bypassが残っていない。
 - AuthScope/認可、route網羅、CSRF、typed HTML、SQL構造/bind、実接続SSRF、CORS、Cookie/Session、bounded DoSの各positive/negative/normal/Err/panic/cancel oracleがGREEN。受理後の新check/build mismatchなし。
 - High/生成Low/保存Low/手書きLow/native統合/配布外の対応表を埋め、元位置、wire/DB結果、handler未呼出、permit/lease/native終了を実観測。0件filter、parse拒否、compile-onlyをnative成功に数えない。
 - 既存move/Task/spawn/HTTP/SQLite/Actor/CLI/editor/examplesの全回帰とfuzz、最新source headの4 OS必須CI/website/配布gateが成功。全skip/ignored/infra制約を列挙。

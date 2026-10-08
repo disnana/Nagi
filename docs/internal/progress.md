@@ -4,7 +4,7 @@
 
 現在mainは#99 merge後の`62bbda9`、SQLite公開APIを含む4 OS/Linux/site CIをreadback済み。公開0.1.11は`003a594`でSQLite公開API未収録。確認時open PR0。過去のdraft/pending記述は履歴で、最新状態はこのmainとGitHubを正とする。
 
-[Security Foundation RFC日英](security-foundation/rfc.md)と[PR/検証/全体完了計画](security-foundation/implementation-plan.md)、[source根拠付き調査](security-foundation/baseline-audit.md)を作成した。AuthScope/CSRF/XSS/SQL Injection/SSRF/CORS/Cookie/Session/DoSの予定契約を現行保証と区別する。設計PR [#100](https://github.com/disnana/Nagi/pull/100)をmain向けdraftとして作成した。D1–D3の公開選択は未採用、新API/compiler/runtime実装は未着手。独立reviewの指摘/修正/再確認とDocs検査は[review台帳](security-foundation/review-log.md)、次順序は[引継ぎ](handoffs/2026-10-08-security-foundation-rfc.md)へ記録する。merge/版更新/tag/正式releaseは行わない。
+[Security Foundation RFC日英](security-foundation/rfc.md)と[PR/検証/全体完了計画](security-foundation/implementation-plan.md)、[source根拠付き調査](security-foundation/baseline-audit.md)を作成した。AuthScope/CSRF/XSS/SQL Injection/SSRF/CORS/Cookie/Session/DoSの予定契約を現行保証と区別する。設計PR [#100](https://github.com/disnana/Nagi/pull/100)をmain向けdraftとして作成した。最新指示に基づき[D1–D3](security-foundation/decisions-and-migration.md)を安全性優先で再評価し、policy必須単一HTTP・request-bound単一Grant・永続SQLite Sessionを実装基準にした。旧API併存を撤回し、移行/削除/保持範囲と日英計画を同期。新API/compiler/runtime実装は未着手。独立reviewの指摘/修正/再確認とDocs検査は[review台帳](security-foundation/review-log.md)、次順序は[引継ぎ](handoffs/2026-10-08-security-foundation-rfc.md)へ記録する。merge/版更新/tag/正式releaseは行わない。
 
 ## 2026-10-06: S1 main反映とS2サービス接続
 

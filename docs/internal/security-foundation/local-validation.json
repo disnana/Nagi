@@ -9,9 +9,23 @@
       "SF-R01",
       "SF-R02",
       "SF-R03",
-      "SF-R04"
+      "SF-R04",
+      "SF-R05",
+      "SF-R06"
     ],
-    "unresolved": []
+    "unresolved": [],
+    "iterations": {
+      "initial_compatibility_proposal": [
+        "SF-R01",
+        "SF-R02",
+        "SF-R03",
+        "SF-R04"
+      ],
+      "security_first_revision": [
+        "SF-R05",
+        "SF-R06"
+      ]
+    }
   },
   "checks": {
     "website": {
@@ -26,10 +40,10 @@
     },
     "git_diff_check": "passed",
     "maintained_markdown_paths": {
-      "markdown_files": 246,
-      "local_links_and_images": 2531,
+      "markdown_files": 248,
+      "local_links_and_images": 2570,
       "missing": [],
-      "scope": "maintained Markdown outside archived benchmarks/results; local paths only, not external URLs/anchors"
+      "scope": "maintained Markdown outside archived benchmarks/results; paths only, not external URLs/anchors"
     },
     "baseline_source_hashes": {
       "files": 25,
@@ -40,7 +54,15 @@
     "No new Rust/runtime/native or browser tests for this documentation-only RFC",
     "Baseline full/four-platform CI is separate from RFC-head CI",
     "Historical partial artifact links (145 in 12 unchanged files) were separated; artifacts were not rewritten",
-    "Public D1-D3 decisions remain unadopted",
-    "Dependency choices, actual browser/proxy/TLS/client integration, budgets, performance and migrations remain future acceptance"
-  ]
+    "Dependency choices, actual browser/proxy/TLS/client integration, budgets, performance and migrations remain future acceptance",
+    "Security-first D1-D3 are implementation direction; no new compiler/runtime/native features are implemented"
+  ],
+  "prior_design_head_ci": {
+    "head": "56da8684a7c18d6331203e43f02dd4c0fde88b5b",
+    "checks_run": 37746386753,
+    "website_run": 37746386400,
+    "conclusion": "success",
+    "linux_full_checks": "success including locked workspace tests, High/saved Low SQLite and onboarding examples, HTTP integrations and fuzz-smoke",
+    "four_os_packages": "skipped for this design PR; main four-OS evidence is separate"
+  }
 }

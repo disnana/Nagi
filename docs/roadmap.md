@@ -35,4 +35,4 @@ S1 Task結果handleとS2 Supervisor/HTTP移行はNagi 0.1.11で公開済みで�
 
 ## 0.2.0 Security Foundation
 
-次工程の[設計RFC](internal/security-foundation/rfc.md)と[機能別PR/検証計画](internal/security-foundation/implementation-plan.md)を作成しました。認証・認可、CSRF、HTML出力、SQL構造/bind、送信先検証、CORS、Cookie/Session、資源上限の責務を分けます。現在は設計段階で、新機能を利用できるという案内ではありません。公開APIの互換性・request proof・Session方式の採用判断後に実装し、統合検証前に正式0.2.0を公開しません。
+次工程の[設計RFC](internal/security-foundation/rfc.md)と[機能別PR/検証計画](internal/security-foundation/implementation-plan.md)を作成しました。認証・認可、CSRF、HTML出力、SQL構造/bind、送信先検証、CORS、Cookie/Session、資源上限の責務を分けます。現在は設計段階で、新機能を利用できるという案内ではありません。最新指示による[安全性優先の判断と移行](internal/security-foundation/decisions-and-migration.md)を基準に、全標準HTTP policy必須・単一request-bound Grant・永続Sessionを実装し、統合検証前に正式0.2.0を公開しません。

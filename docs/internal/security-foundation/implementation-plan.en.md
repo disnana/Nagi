@@ -2,23 +2,23 @@
 
 [RFC](rfc.en.md) · [日本語](implementation-plan.md) · [Baseline audit](baseline-audit.md)
 
-2026-10-08 JST. **Planned work, not completed implementation.** D1–D3 and public signatures must be recorded in adopted ADRs before adding APIs/guarantees. Independent internal investigations, dependency comparisons, and harness design can proceed. IDs below are candidate units, not assigned GitHub PR numbers.
+2026-10-08 JST. **Planned work, not completed implementation.** [Revised D1–D3 decisions](decisions-and-migration.en.md) govern implementation under the latest user instruction; previous compatibility deferrals do not require renewed approval. Fix feature signatures/contracts before RED tests. Independent internal investigations, dependency comparisons, and harness design can proceed. IDs below are candidate units, not assigned GitHub PR numbers.
 
 ## PR boundaries and dependencies
 
 | PR | Scope | Dependencies/decisions | Completion evidence |
 |---|---|---|---|
-| SF00 | Baseline/RFC/migration/acceptance/independent design review | Main; D1–D3 proposed | Source/CI/PR readback, links/site, review tracking; no new-feature GREEN claims |
-| SF01 | Resource/failure metadata, AuthScope/ScopedGrant, policy-required HTTP, lifecycle, common budget/managed-header boundary | SF00, D1/D2/API ADR | Forgery/sharing/escape/permission/request-ID rejection, linearized single-use execution-permit issuance/invalidation/admission/Drop, methods/fallbacks/dynamic routes/legacy compatibility |
-| SF02 | Credential verifier adapters, Cookie/Session store/rotation/revocation, crypto/cookie comparison, secret handling | SF01, D3/store/dependencies | Ambiguous credentials/claims, rotation/logout/expiry/capacity, fail-closed/unknown outcome, issuance/token no-store and conflicts, real TLS browser flow |
+| SF00 | Baseline/RFC/migration/acceptance/independent design review | Main; revised security-first D1–D3 decisions/migration | Source/CI/PR readback, links/site, review tracking; no new-feature GREEN claims |
+| SF01 | Resource/failure metadata, AuthScope/single Grant[P], policy-required HTTP, lifecycle, common budget/managed-header boundary | SF00, D1/D2/API ADR | Forgery/sharing/escape/permission/request-ID rejection, linearized single-use execution-permit issuance/invalidation/admission/Drop, methods/fallbacks/dynamic routes/old-entry migration diagnostics and removal/migrated native behavior |
+| SF02 | Credential verifier adapters, Cookie/Session store/rotation/revocation, crypto/cookie comparison, secret handling | SF01/SF05, D3/durable SQLite store/dependencies | Ambiguous credentials/claims, rotation/logout/expiry/capacity/restart/crash/clocks/multi-process generation conflicts, live/total-row limits with delayed cleanup, same-file predicate placement, physical versus logical bounds, fail-closed/unknown outcome, issuance/token no-store and conflicts, real TLS browser flow |
 | SF03 | Separate CSRF/CORS, origin/proxy trust, preflight, early-response finalization | SF01/02, credential-source/origin contracts | Unsafe cookie requests including public login/logout, token/origin, wildcard/credentials, Vary, denial without handler calls and resource leaks |
-| SF04 | Typed HTML subset, URL attributes, CSP/nosniff, raw compatibility docs | SF01/subset/header contract | Context/unsupported syntax/re-encoding/output bounds; browser structure and High/Low native wire |
-| SF05 | Literal Query/Parameters and protected target binding, SQL migration | SF01/Query API; #99 already merged | Checker-rejected dynamic construction; native literals/binds/schema/shape/NULL/outcomes/authorizer/predicates |
+| SF04 | Typed HTML subset, URL attributes, CSP/nosniff, raw-standard removal and response-bypass rejection | SF01/subset/header contract | Context/unsupported syntax/re-encoding/output bounds; browser structure and High/Low native wire |
+| SF05 | Unify standard SQLite with literal Query/Parameters, remove Db/dynamic entries, protected target binding and management migration | SF01/Query API; #99 already merged | Checker-rejected dynamic construction; native literals/binds/schema/shape/NULL/outcomes/authorizer/predicates |
 | SF06 | Policy-constrained outbound HTTP; URL/DNS/socket/proxy/TLS/pooling library comparison | SF01/dependency selection | Actual socket bound to checked address, retries/pooling/no redirects/budgets/cancellation; mocks alone insufficient |
 | SF07 | Cross-cutting budgets, bounded rate limiting/caches/observability/cleanup, necessary peer/proxy boundary | Budgets mandatory in each feature PR, then SF01–06 integration | Small deterministic capacity/deadline/release/recovery oracles, unchanged existing defenses |
 | SF08 | Migration/public API diff/docs/examples/IDE/extracted package/integration/final independent review | SF01–07 CI/review | Every acceptance item linked to latest-head evidence; zero unresolved blockers. Release requires separate approval |
 
-Recommended order: SF00→SF01→SF02→SF03, then independent SF04/05/06, then SF07→SF08. Separate investigations may overlap, never concurrent edits of common checker/registry/plan files. Retain Hyper transport; a wholesale Axum migration is outside scope.
+Recommended order: SF00→SF01→SF05→SF02→SF03, then independent SF04/06, then SF07→SF08. Separate investigations may overlap, never concurrent edits of common checker/registry/plan files. Retain Hyper transport; a wholesale Axum migration is outside scope.
 
 Use latest main for PRs; identify stacked dependencies if necessary. Do not count a feature-branch merge as main integration. Dependent work requires preceding contracts/required CI/review acceptance. Do not automatically merge, tag, formally release, or destructively alter existing branches.
 
@@ -69,7 +69,7 @@ Browser integration uses real TLS and controlled origins; record Chromium/Firefo
 
 ## Regression, cost, and release acceptance
 
-Preserve ownership/move/views/resources/sealed facts/auth/Task contracts and 16 native bridge oracles/legacy spawn/Supervisor/HTTP/SQL/Tx/frontend/output/cache/editor/examples/distribution coverage. Use existing commands as applicable:
+Deliberately replace only accepted legacy HTTP/auth/SQL/raw-output cases listed in the [migration matrix](decisions-and-migration.en.md#migration-and-acceptance-matrix) with migration diagnostics plus equivalent migrated business behavior. Preserve unrelated ownership/move/views/resources/sealed facts/auth/Task contracts and 16 native bridge oracles/legacy spawn/Supervisor/HTTP/SQL/Tx/frontend/output/cache/editor/examples/distribution coverage. Use existing commands as applicable:
 
 ```sh
 cargo fmt --all -- --check
@@ -90,7 +90,7 @@ Compare generated Nagi and manual Rust under equal guarantees/inputs/dependencie
 
 Before declaring 0.2.0 Foundation complete, link each item to feature PR/latest source head/test/artifact:
 
-- Adopted D1–D3, APIs/failures/ownership/expiry/routes/sources/budgets, matching public API diff and bilingual current/proposed/unsupported tables.
+- Revised D1–D3, complete old-entry export/migration inventory, APIs/failures/ownership/expiry/routes/sources/budgets, matching public API diff and bilingual current/direction/unsupported tables; no deprecated parallel, policy-free standard, raw HTML/header/SQL bypasses.
 - AuthScope/routes/CSRF/typed HTML/SQL/actual-connection SSRF/CORS/Session/DoS positive/negative/lifecycle oracles GREEN, without new check/build mismatch.
 - Complete High/generated/saved/hand Low/native integration/extracted-package matrix, diagnostics, wire/DB outcomes, denial counters, resource/actual join evidence.
 - Full existing regressions/fuzz/latest-head four-platform CI/site/package, explicit skipped/ignored/infrastructure limitations.

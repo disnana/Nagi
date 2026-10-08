@@ -206,4 +206,4 @@ Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しま
 
 ## 0.2.0 Security Foundationの設計段階
 
-[Security Foundation RFC](docs/internal/security-foundation/rfc.md)に現行mainの調査、AuthScope・CSRF・XSS・SQL Injection・SSRF・CORS・Cookie/Session・DoSの提案、静的/実行時境界、移行・機能別PR・全体完了条件をまとめています。新APIや公開意味論は未採用・未実装です。既存Principal/Grant、move/Task/spawn、High/Low、SQLiteの採用契約を変更したものではありません。正式0.2.0リリースとtagには別途明示承認が必要です。
+[Security Foundation RFC](docs/internal/security-foundation/rfc.md)に現行mainの調査、AuthScope・CSRF・XSS・SQL Injection・SSRF・CORS・Cookie/Session・DoSの提案、静的/実行時境界、移行・機能別PR・全体完了条件をまとめています。最新指示に基づく[安全性優先のD1–D3判断と移行](docs/internal/security-foundation/decisions-and-migration.md)を実装基準にしています。全標準HTTPのpolicy必須化、request-boundの単一Grant、永続Sessionを推奨し、旧入口併存は撤回しました。新APIは未実装で、現行0.1.xへ遡及適用しません。move/Task/spawn、High/Low、SQLiteのnative lifecycleは維持します。正式0.2.0リリースとtagには別途明示承認が必要です。
