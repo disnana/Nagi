@@ -200,6 +200,86 @@ jobs:
             args+=("-PminimumPlatformVersion=$MINIMUM_PLATFORM_VERSION")
           fi
           ./gradlew "${args[@]}"
+      - name: Record the resolved IDE build from product-info.json
+        if: always()
+        env:
+          PLATFORM_TYPE: ${{ matrix.product_code }}
+          PLATFORM_VERSION: ${{ matrix.platform_version }}
+          PLATFORM_CHANNEL: ${{ matrix.channel }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+
+          platform_type = os.environ["PLATFORM_TYPE"]
+          requested_version = os.environ["PLATFORM_VERSION"]
+          channel = os.environ["PLATFORM_CHANNEL"]
+          distribution = {
+              "IC": "ideaIC",
+              "PC": "pycharmPC",
+          }.get(platform_type)
+          if distribution is None:
+              raise SystemExit(f"unsupported IntelliJ platform type: {platform_type}")
+
+          artifact_directory = f"{distribution}-{requested_version}"
+          cache_root = Path.home() / ".gradle" / "caches"
+          candidates = sorted(
+              path for path in cache_root.rglob("product-info.json")
+              if artifact_directory in path.parts
+          )
+          if not candidates:
+              raise SystemExit(
+                  f"no product-info.json found below Gradle cache artifact {artifact_directory!r}"
+              )
+
+          resolved = []
+          for path in candidates:
+              descriptor = json.loads(path.read_text(encoding="utf-8"))
+              version = descriptor.get("version")
+              build_number = descriptor.get("buildNumber")
+              product_code = descriptor.get("productCode")
+              if not version or not build_number or not product_code:
+                  raise SystemExit(f"incomplete product-info.json: {path}")
+              identity = (version, build_number, product_code)
+              resolved.append((identity, path, descriptor))
+
+          identities = {item[0] for item in resolved}
+          if len(identities) != 1:
+              raise SystemExit(
+                  f"ambiguous SDK metadata for {artifact_directory}: {sorted(identities)}"
+              )
+
+          (version, build_number, product_code), source, descriptor = resolved[0]
+          destination_dir = Path("build/verification-metadata")
+          destination_dir.mkdir(parents=True, exist_ok=True)
+          stem = f"{platform_type.lower()}-{channel}"
+          raw_destination = destination_dir / f"{stem}-product-info.json"
+          shutil.copyfile(source, raw_destination)
+          raw_sha256 = hashlib.sha256(raw_destination.read_bytes()).hexdigest()
+          record = {
+              "requestedPlatformVersion": requested_version,
+              "resolvedPlatformVersion": version,
+              "resolvedBuildNumber": build_number,
+              "resolvedProductCode": product_code,
+              "productType": platform_type,
+              "channel": channel,
+              "gradleArtifactDirectory": artifact_directory,
+              "productInfoPathWithinGradleCache": source.relative_to(cache_root).as_posix(),
+              "productInfoSha256": raw_sha256,
+          }
+          (destination_dir / f"{stem}-resolved-platform.json").write_text(
+              json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(
+                  f"- {platform_type} {channel}: requested `{requested_version}`, "
+                  f"resolved `{version}` build `{build_number}` (`{product_code}`).\n"
+              )
+          print(json.dumps(record, indent=2, sort_keys=True))
+          PY
       - name: Upload IDE and compatibility reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -209,6 +289,7 @@ jobs:
             editors/jetbrains-nagi/build/reports/tests/
             editors/jetbrains-nagi/build/test-results/
             editors/jetbrains-nagi/build/reports/pluginVerifier/
+            editors/jetbrains-nagi/build/verification-metadata/
           if-no-files-found: warn
 
   package:

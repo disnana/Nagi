@@ -1,5 +1,6 @@
 """Exercise complete Git ranges and the required-check result contract."""
 import copy
+import json
 import os
 import re
 import subprocess
@@ -353,6 +354,58 @@ class ChangeTests(unittest.TestCase):
                          "existing=value\nfull_checks=false\njetbrains_checks=true\n")
 
 
+class JetBrainsBuildContractTests(unittest.TestCase):
+    repo = Path(__file__).resolve().parents[2]
+
+    def test_eap_descriptor_parser_upgrade_keeps_plugin_version_and_verifier_checks(self):
+        build = (self.repo / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
+        wrapper = (self.repo / "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.properties").read_text(encoding="utf-8")
+        workflow = (self.repo / ".github/workflows/jetbrains.yml").read_text(encoding="utf-8")
+
+        self.assertIn('id("org.jetbrains.intellij.platform") version "2.12.0"', build)
+        self.assertIn('version = "0.1.1"', build)
+        self.assertIn("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.0.0-bin.zip", wrapper)
+        self.assertIn("distributionSha256Sum=8fad3d78296ca518113f3d29016617c7f9367dc005f932bd9d93bf45ba46072b", wrapper)
+        self.assertIn("create(type, version) { useInstaller.set(false) }", build)
+        self.assertNotIn("useInstaller = false", build)
+        self.assertNotIn("ide(type, version, useInstaller", build)
+        self.assertIn('freeArgs.addAll(listOf("-mute", "TemplateWordInPluginName"))', build)
+        self.assertNotIn('freeArgs.addAll(listOf("-mute", "PluginCompatibility"))', build)
+        self.assertIn("Verify candidate on ${{ matrix.product }} ${{ matrix.channel }}", workflow)
+        self.assertIn("Record the resolved IDE build from product-info.json", workflow)
+        self.assertIn("resolvedBuildNumber", workflow)
+        self.assertIn("editors/jetbrains-nagi/build/verification-metadata/", workflow)
+
+    def test_existing_marketplace_destination_remains_under_review_with_release_zip_fallback(self):
+        marketplace_url = "https://plugins.jetbrains.com/plugin/34891-nagi"
+        release_url = "https://github.com/disnana/Nagi/releases"
+        status_by_file = {
+            "README.md": "審査中",
+            "README.en.md": "under review",
+            "docs/getting-started.md": "審査中",
+            "docs/en/getting-started.md": "under review",
+            "docs/editor.md": "審査中",
+            "docs/en/editor.md": "under review",
+            "website/templates/home.html": "審査中",
+            "website/templates/home.en.html": "under review",
+            "editors/jetbrains-nagi/README.md": "審査中",
+            "editors/jetbrains-nagi/README.en.md": "under review",
+        }
+        for relative_path, review_status in status_by_file.items():
+            with self.subTest(path=relative_path):
+                content = (self.repo / relative_path).read_text(encoding="utf-8")
+                self.assertIn(marketplace_url, content)
+                self.assertIn(release_url, content)
+                self.assertIn(review_status, content)
+
+        plugin_xml = (self.repo / "editors/jetbrains-nagi/src/main/resources/META-INF/plugin.xml").read_text(encoding="utf-8")
+        readback = json.loads((self.repo / "docs/internal/jetbrains-marketplace-readback-2026-10-08.json").read_text(encoding="utf-8"))
+        self.assertIn("<id>com.disnana.nagi</id>", plugin_xml)
+        self.assertEqual(readback["listingUrl"], marketplace_url)
+        self.assertEqual(readback["metadata"]["xmlId"], "com.disnana.nagi")
+        self.assertFalse(readback["metadata"]["approve"])
+
+
 class ResourceCharacterizationWorkflowTests(unittest.TestCase):
     def test_four_platform_job_runs_registry_and_native_resource_oracles(self):
         workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
@@ -545,7 +598,7 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         self.assertIn("name: jetbrains-common-candidate", candidate_body)
         self.assertNotIn("name: release-jetbrains", candidate_body)
         self.assertIn("strategy:\n      fail-fast: false", verify_body)
-        self.assertEqual(verify_body.count("product_code:"), 4)
+        self.assertEqual(len(re.findall(r"(?m)^            product_code:", verify_body)), 4)
         self.assertEqual(verify_body.count("channel: stable"), 2)
         self.assertEqual(verify_body.count("channel: EAP"), 2)
         for target in (

@@ -4,7 +4,7 @@
 
 IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
 
-プラグインの版は`build.gradle.kts`で管理します。現在公開中の最新版は0.1.1です。IntelliJ IDEA用とPyCharm用のZIPは別々に添付されています。Marketplace登録は審査中です。
+プラグインの版は`build.gradle.kts`で管理します。現在公開中の最新版は0.1.1です。IntelliJ IDEA用とPyCharm用のZIPは別々に添付されています。正式公開先は[JetBrains MarketplaceのNagiページ](https://plugins.jetbrains.com/plugin/34891-nagi)で、現在審査中です。
 
 ## できること
 
@@ -19,9 +19,9 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは[�
 
 ## インストール
 
-正式版は[GitHub Releases](https://github.com/disnana/Nagi/releases)から取得します。現在公開中の`jetbrains-v0.1.1`には、IDEA用`nagi-jetbrains-IC-0.1.1.zip`とPyCharm用`nagi-jetbrains-PC-0.1.1.zip`があり、それぞれ`.sha256`も添付されています。
+審査中の現時点では[GitHub Releases](https://github.com/disnana/Nagi/releases)からZIPを取得します。現在公開中の`jetbrains-v0.1.1`には、IDEA用`nagi-jetbrains-IC-0.1.1.zip`とPyCharm用`nagi-jetbrains-PC-0.1.1.zip`があり、それぞれ`.sha256`も添付されています。Marketplaceでの正式な公開先は[JetBrains MarketplaceのNagiページ](https://plugins.jetbrains.com/plugin/34891-nagi)です。
 
-ZIPをIDEの **Settings → Plugins → ⚙ → Install Plugin from Disk** で選び、IDEを再起動します。Marketplace登録は審査中です。PRの動作確認用ZIPは、IDEA/PyCharmのstable/EAP検証がすべて成功した **Actions → Nagi checks** の`release-jetbrains` artifactから取得できます。自己ビルドした場合は`build/distributions/`にあるZIPを使います。
+ZIPをIDEの **Settings → Plugins → ⚙ → Install Plugin from Disk** で選び、IDEを再起動します。Marketplace掲載ページは現在審査中です。PRの動作確認用ZIPは、IDEA/PyCharmのstable/EAP検証がすべて成功した **Actions → Nagi checks** の`release-jetbrains` artifactから取得できます。自己ビルドした場合は`build/distributions/`にあるZIPを使います。
 
 **Settings → Languages & Frameworks → Nagi** でコンパイラのパスを設定できます。空欄なら`PATH`の`nagic`を使います。相対パスはIDEプロジェクトのルートから解決します。
 
@@ -42,7 +42,7 @@ cd editors/jetbrains-nagi
 ./gradlew test buildPlugin
 ```
 
-Windowsでは`gradlew.bat`を使います。Gradle Wrapperは8.13、IntelliJ Platform Gradle Pluginは2.3.0、既定のSDKはIntelliJ IDEA Community 2025.1.1です。初回はSDKと依存関係を取得します。
+Windowsでは`gradlew.bat`を使います。Gradle Wrapperは9.0.0、IntelliJ Platform Gradle Pluginは2.12.0、既定のSDKはIntelliJ IDEA Community 2025.1.1です。初回はSDKと依存関係を取得します。
 
 PyCharm用SDKでも同じコードを検証できます。
 
@@ -56,6 +56,6 @@ PyCharm用SDKでも同じコードを検証できます。
 
 主対象の2025.1.1は既存の対応対象です。CIはstable IDEA向けの共通ZIP候補を先に1回だけビルドし、IDEA/PyCharmのstable（2025.1.1）とEAPの計4経路で同一候補のIDE testとPlugin Verifierを実行します。最低対象のIDEA 2024.3.7とPyCharm 2024.3.6（build 243）はPlugin Verifierのみで確認し、そこでIDE testは行いません。四経路すべてが成功した後にだけ、元の候補ZIPを配布artifactへ昇格します。公開中の0.1.1に付属する二つのZIPは以前の配布物であり、今後の共通ZIPとは別です。これらのチェックはIDE全体を操作するテストとは異なります。
 
-通常の互換性確認は`./gradlew test buildPlugin verifyPlugin`を実行します。最低対象も確認するには、IDEAでは`-PminimumPlatformVersion=2024.3.7`、PyCharmでは`-PplatformType=PC -PminimumPlatformVersion=2024.3.6`を追加します。最新EAPの検査では`-PplatformVersion=LATEST-EAP-SNAPSHOT`を指定します。`-PlocalPlatformPath`を指定した場合は、そのローカルSDKだけを検証します。
+通常の互換性確認は`./gradlew test buildPlugin verifyPlugin`を実行します。Verifierでは要求された表示名に関する`TemplateWordInPluginName` lintだけをmuteし、API互換性・deprecated・experimentalの警告はmuteしません。最低対象も確認するには、IDEAでは`-PminimumPlatformVersion=2024.3.7`、PyCharmでは`-PplatformType=PC -PminimumPlatformVersion=2024.3.6`を追加します。最新EAPの検査では`-PplatformVersion=LATEST-EAP-SNAPSHOT`を指定します。`-PlocalPlatformPath`を指定した場合は、そのローカルSDKだけを検証します。
 
 公式資料: [Plugin SDK](https://plugins.jetbrains.com/docs/intellij/developing-plugins.html)、[Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html)。ライセンスは[MIT](LICENSE)です。

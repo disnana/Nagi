@@ -3,7 +3,7 @@ import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 
 plugins {
     java
-    id("org.jetbrains.intellij.platform") version "2.3.0"
+    id("org.jetbrains.intellij.platform") version "2.12.0"
 }
 
 group = "com.disnana.nagi"
@@ -21,8 +21,7 @@ dependencies {
         else create(
             providers.gradleProperty("platformType").getOrElse("IC"),
             providers.gradleProperty("platformVersion").getOrElse("2025.1.1"),
-            useInstaller = false,
-        )
+        ) { useInstaller.set(false) }
         testFramework(TestFrameworkType.Platform)
         pluginVerifier()
     }
@@ -47,12 +46,18 @@ intellijPlatform {
             else {
                 val type = providers.gradleProperty("platformType").getOrElse("IC")
                 val version = providers.gradleProperty("platformVersion").getOrElse("2025.1.1")
-                ide(type, version, useInstaller = false)
+                create(type, version) { useInstaller.set(false) }
                 val minimum = providers.gradleProperty("minimumPlatformVersion").orNull
-                if (minimum != null && minimum != version) ide(type, minimum, useInstaller = false)
+                if (minimum != null && minimum != version) {
+                    create(type, minimum) { useInstaller.set(false) }
+                }
             }
         }
     }
+}
+
+tasks.named<VerifyPluginTask>("verifyPlugin") {
+    freeArgs.addAll(listOf("-mute", "TemplateWordInPluginName"))
 }
 
 providers.gradleProperty("verificationArchive").orNull?.let { archivePath ->

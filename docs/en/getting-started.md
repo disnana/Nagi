@@ -37,7 +37,7 @@ The compiler released on 2026-10-07 reports `nagic 0.1.11`. You can also use `na
 
 Get the VS Code extension from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang) or download `nagi-language-0.1.13.vsix` and its `.sha256` from [GitHub Releases](https://github.com/disnana/Nagi/releases). In VS Code, use **Extensions: Install from VSIX** and select the file.
 
-For IntelliJ IDEA or PyCharm, download **Nagi for JetBrains** from GitHub Releases. The currently published 0.1.1 release has `nagi-jetbrains-IC-0.1.1.zip` for IDEA and `nagi-jetbrains-PC-0.1.1.zip` for PyCharm. In the IDE, choose **Settings → Plugins → ⚙ → Install Plugin from Disk**, select the ZIP, then restart. Its Marketplace registration is under review. Neither editor extension includes the compiler.
+The official destination for **Nagi for JetBrains** for IntelliJ IDEA and PyCharm is its [JetBrains Marketplace page](https://plugins.jetbrains.com/plugin/34891-nagi), which is currently under review. Until approval, download the ZIP from [GitHub Releases](https://github.com/disnana/Nagi/releases). The currently published 0.1.1 release has `nagi-jetbrains-IC-0.1.1.zip` for IDEA and `nagi-jetbrains-PC-0.1.1.zip` for PyCharm. In the IDE, choose **Settings → Plugins → ⚙ → Install Plugin from Disk**, select the ZIP, then restart. Neither editor extension includes the compiler.
 
 ### Tools for building applications
 

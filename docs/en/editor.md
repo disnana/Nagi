@@ -2,7 +2,7 @@
 
 [Contents](README.md) · [Setup](getting-started.md) · [Extension installation and settings](vscode-extension.md)
 
-Install the VS Code extension from the Marketplace or a VSIX on GitHub Releases. The [Nagi for JetBrains](https://github.com/disnana/Nagi/blob/main/editors/jetbrains-nagi/README.en.md) plugin for IntelliJ IDEA and PyCharm is installed from a Release ZIP. See the [setup guide](getting-started.md) for the current asset names.
+Install the VS Code extension from the Marketplace or a VSIX on GitHub Releases. The official destination for the [Nagi for JetBrains](https://github.com/disnana/Nagi/blob/main/editors/jetbrains-nagi/README.en.md) plugin for IntelliJ IDEA and PyCharm is its [JetBrains Marketplace page](https://plugins.jetbrains.com/plugin/34891-nagi), currently under review. Until approval, install it manually from a ZIP on [GitHub Releases](https://github.com/disnana/Nagi/releases). See the [setup guide](getting-started.md) for the current asset names.
 
 Use Nagi extension 0.1.13 and `nagic` 0.1.11 after its availability is confirmed in the official 0.1.11 release record. This guide targets the 0.1.11 release. Open the repository in VS Code, or save the example below in your own folder.
 
