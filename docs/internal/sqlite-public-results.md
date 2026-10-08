@@ -40,3 +40,7 @@ runtimeの独立レビューはe78f35aを対象とし、P0/P1/P2 blockerを報�
 Evidence file SHA-256と変更source pathのhashは[provenance.json](../../benchmarks/results/sqlite-public-2026-10-08/provenance.json)に保存する。runtime/compiler/docsの確認stageが異なるので、provenance上の各test run source revisionも分けている。
 
 2026-10-08 統合追記: PR #98のhead `bc6a76b`へPR #99をrebaseし、#98をbaseとする依存PRへ整理した。最終反映先はmain。双方の目次・CIを保持し、compiler/runtime/Cargo.lock・SQLite配布gate・費用harnessは検証済み`e3e0ea3`から差分なし。統合source `fbfebd3`でwebsite 98 pages、初アプリHigh/保存Low native 10件、SQLite日英コード一致、CI policy 59 testsを確認した。以降の公開headと必須CIの最終結果は[PR #99](https://github.com/disnana/Nagi/pull/99)の本文とChecksを正とし、この文書の作成時点のCI pendingを現在状態と読み替えない。
+
+rebase直後の`f4166ee` push runでは`release-plan`が旧`event.before=e3e0ea3`をfresh checkoutから解決できず失敗した（[原ログ](../../benchmarks/results/sqlite-public-2026-10-08/logs/stack-release-plan-failure.log)）。同headのPR runではbaseが到達可能なためrelease-planは成功した。release意味論を変更せず、次の通常pushで到達可能な親commitを比較させる。これはCI取得条件の失敗であり、SQLite契約GREENや4 OS成功には数えない。
+
+統合後の[独立Docs/evidenceレビュー](../../benchmarks/results/sqlite-public-2026-10-08/logs/independent-stack-evidence-review.md)でも追加指摘なし。両方の導線・CI、Task公開済み表記、70 evidence/68 source hashes、統合前後のproduction差分0を照合した。最終CIの成否はこの静的レビューとは別にPR本文へ記録する。
