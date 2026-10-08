@@ -79,7 +79,9 @@ jobs:
       - name: Build the common archive once against stable IDEA
         env:
           RELEASE_VERSION: ${{ steps.release-version.outputs.version }}
-        run: ./gradlew --no-daemon --stacktrace buildPlugin -PplatformType=IC -PplatformVersion=2025.1.1
+        run: >-
+          ./gradlew --no-daemon --stacktrace buildPlugin
+          -PplatformType=IC -PplatformVersion=2025.1.1 -PnagiJavaToolchainVersion=21
       - name: Verify the common ZIP descriptor and checksum
         env:
           RELEASE_VERSION: ${{ steps.release-version.outputs.version }}
@@ -183,12 +185,22 @@ jobs:
       - name: Build the current compiler for integration checks
         working-directory: .
         run: cargo build --locked -p nagic
+      - name: Verify the selected Java compiler toolchain
+        env:
+          MATRIX_JAVA_VERSION: ${{ matrix.java_version }}
+        run: >-
+          ./gradlew --no-daemon --stacktrace verifyNagiJavaToolchain
+          -PnagiJavaToolchainVersion="$MATRIX_JAVA_VERSION"
       - name: Test ${{ matrix.product }} ${{ matrix.channel }}
         env:
           NAGI_TEST_COMPILER: ${{ github.workspace }}/target/debug/nagic
           PLATFORM_TYPE: ${{ matrix.product_code }}
           PLATFORM_VERSION: ${{ matrix.platform_version }}
-        run: ./gradlew --no-daemon --stacktrace test -PplatformType="$PLATFORM_TYPE" -PplatformVersion="$PLATFORM_VERSION"
+          MATRIX_JAVA_VERSION: ${{ matrix.java_version }}
+        run: >-
+          ./gradlew --no-daemon --stacktrace test
+          -PplatformType="$PLATFORM_TYPE" -PplatformVersion="$PLATFORM_VERSION"
+          -PnagiJavaToolchainVersion="$MATRIX_JAVA_VERSION"
       - name: Verify candidate on ${{ matrix.product }} ${{ matrix.channel }}
         if: ${{ !cancelled() }}
         env:
@@ -196,10 +208,12 @@ jobs:
           PLATFORM_TYPE: ${{ matrix.product_code }}
           PLATFORM_VERSION: ${{ matrix.platform_version }}
           MINIMUM_PLATFORM_VERSION: ${{ matrix.minimum_platform_version }}
+          MATRIX_JAVA_VERSION: ${{ matrix.java_version }}
         run: |
           args=(--no-daemon --stacktrace verifyPlugin \
             "-PverificationArchive=$PWD/build/release-assets/nagi-jetbrains-$RELEASE_VERSION.zip" \
-            "-PplatformType=$PLATFORM_TYPE" "-PplatformVersion=$PLATFORM_VERSION")
+            "-PplatformType=$PLATFORM_TYPE" "-PplatformVersion=$PLATFORM_VERSION" \
+            "-PnagiJavaToolchainVersion=$MATRIX_JAVA_VERSION")
           if [ -n "$MINIMUM_PLATFORM_VERSION" ]; then
             args+=("-PminimumPlatformVersion=$MINIMUM_PLATFORM_VERSION")
           fi
@@ -237,6 +251,22 @@ jobs:
                   f"matrix requested JDK {expected_java_major}, but java runs as "
                   f"JDK {runtime_java_major}"
               )
+          compiler_record_path = Path("build/verification-metadata/nagi-java-toolchain.json")
+          if not compiler_record_path.is_file():
+              raise SystemExit("the selected Java compiler toolchain record is missing")
+          compiler_record = json.loads(compiler_record_path.read_text(encoding="utf-8"))
+          if compiler_record.get("expectedCompilerMajor") != expected_java_major:
+              raise SystemExit(f"compiler toolchain expectation does not match the matrix: {compiler_record}")
+          if compiler_record.get("selectedCompilerMajor") != expected_java_major:
+              raise SystemExit(f"Gradle selected the wrong javac toolchain: {compiler_record}")
+          if compiler_record.get("release") != 21:
+              raise SystemExit(f"the common plugin compiler release changed: {compiler_record}")
+          compile_tasks = compiler_record.get("compileTasks")
+          if not isinstance(compile_tasks, list) or not compile_tasks:
+              raise SystemExit(f"JavaCompile task evidence is missing: {compiler_record}")
+          for compile_task in compile_tasks:
+              if compile_task.get("selectedCompilerMajor") != expected_java_major or compile_task.get("release") != 21:
+                  raise SystemExit(f"a JavaCompile task selected an unexpected compiler or release: {compile_task}")
           distribution = {
               "IC": "ideaIC",
               "PC": "pycharmPC",
@@ -293,6 +323,8 @@ jobs:
               "resolvedProductCode": product_code,
               "matrixJavaVersion": expected_java_major,
               "javaRuntimeMajor": runtime_java_major,
+              "compilerToolchainMajor": compiler_record["selectedCompilerMajor"],
+              "compilerRelease": compiler_record["release"],
               "sdkMinimumJavaVersion": minimum_java_major,
               "productType": platform_type,
               "channel": channel,
@@ -307,7 +339,9 @@ jobs:
               summary.write(
                   f"- {platform_type} {channel}: requested `{requested_version}`, "
                   f"resolved `{version}` build `{build_number}` (`{product_code}`); "
-                  f"JDK `{runtime_java_major}` (SDK minimum `{minimum_java_major}`).\n"
+                  f"Gradle/JVM `{runtime_java_major}`, javac `{compiler_record['selectedCompilerMajor']}` "
+                  f"with bytecode release `{compiler_record['release']}` "
+                  f"(SDK minimum `{minimum_java_major}`).\n"
               )
           print(json.dumps(record, indent=2, sort_keys=True))
           PY

@@ -35,7 +35,7 @@ Nagiアプリのビルド・実行にはRust/CargoとOSごとのビルド環境�
 
 ## ビルドと検証
 
-stable SDKと共通ZIP候補のビルドにはJDK 21を使います。EAP検証は、解決したSDKが要求するJDKを使います。現在の2026.3 EAPはJDK 25を要求するため、EAP検証にはJDK 25が必要です。JDK 25で検証しても、プラグインのJava API・class file targetは`options.release=21`で固定します。
+stable SDKと共通ZIP候補のビルドにはJDK 21を使います。EAP検証は、解決したSDKが要求するJDKを使います。現在の2026.3 EAPはJDK 25を要求するため、EAP検証にはJDK 25が必要です。Gradle JVMとJava compiler toolchainはIDEのSDKに合わせ、stableは21、現在のEAPは25を使います。JDK 25で検証しても、プラグインのJava API・class file targetは`options.release=21`で固定します。
 
 ```sh
 cd editors/jetbrains-nagi
@@ -54,9 +54,9 @@ PyCharm用SDKでも同じコードを検証できます。
 
 テストには字句解析・折りたたみ・インデント・CLI引数・診断位置の検証と、IntelliJ Platformの実エディターfixtureを使ったファイル種別・改行・コメント・括弧補完・保存失敗の検証があります。実プロセスを使った起動中止の検証も含みます。`NAGI_TEST_COMPILER`に`nagic`のパスを設定すると、High・Low・プロジェクトの実型検査も確認します。JetBrains CIは同じコミットからコンパイラをビルドし、IDEAとPyCharmの双方でこの連携テストを実行します。
 
-次版の最低対象は2025.1.1です。IDEAではbuild `251.25410.109`、PyCharmではbuild `251.25410.122`を確認しています。2025.1 branchの初期build `251.23774`は、実行時のtrusted-project checkが呼ぶ公開APIを持たず、Plugin Verifierが未解決methodを報告したため対象に含めません。CIはstable IDEA/JDK 21向けの共通ZIP候補を先に1回だけビルドします。IDEA/PyCharmのstable（2025.1.1）とEAPの計4 SDKで、同じsourceからIDE testを実行し、各Verifierには同一の候補ZIPを渡します。stable testはJDK 21、EAP testは各EAP SDKが要求するJDKを使います。現在のEAPはJDK 25です。最低対象のIDEA/PyCharm 2025.1.1もPlugin Verifierで確認します。四経路すべてのtestとVerifierが成功した後にだけ、元の候補ZIPを配布artifactへ昇格します。公開中の0.1.1に付属する二つのZIPは以前の配布物であり、今後の共通ZIPとは別です。MarketplaceのUIインストールやIDE全体の操作は検証対象ではありません。
+次版の最低対象は2025.1.1です。IDEAではbuild `251.25410.109`、PyCharmではbuild `251.25410.122`を確認しています。2025.1 branchの初期build `251.23774`は、実行時のtrusted-project checkが呼ぶ公開APIを持たず、Plugin Verifierが未解決methodを報告したため対象に含めません。CIはstable IDEA/JDK 21向けの共通ZIP候補を先に1回だけビルドします。IDEA/PyCharmのstable（2025.1.1）とEAPの計4 SDKで、同じsourceからIDE testを実行し、各Verifierには同一の候補ZIPを渡します。stable testはJava 21 compiler toolchain、EAP testは各EAP SDKが要求するtoolchainを使います。現在のEAPはJDK 25です。最低対象のIDEA/PyCharm 2025.1.1もPlugin Verifierで確認します。四経路すべてのtestとVerifierが成功した後にだけ、元の候補ZIPを配布artifactへ昇格します。公開中の0.1.1に付属する二つのZIPは以前の配布物であり、今後の共通ZIPとは別です。MarketplaceのUIインストールやIDE全体の操作は検証対象ではありません。
 
-通常のstable互換性確認は`./gradlew test buildPlugin verifyPlugin`をJDK 21で実行します。EAP SDKがJDK 25を要求する場合は、そのJDKでEAP testを実行します。`options.release=21`により、いずれのJDKでもプラグインのcompile targetと参照可能なJava APIは21です。Verifierでは要求された表示名に関する`TemplateWordInPluginName` lintだけをmuteし、API互換性・deprecated・experimentalの警告はmuteしません。最低対象も確認するには、IDEA/PyCharmで`-PminimumPlatformVersion=2025.1.1`を指定します。最新EAPの検査では`-PplatformVersion=LATEST-EAP-SNAPSHOT`を指定します。`-PlocalPlatformPath`を指定した場合は、そのローカルSDKだけを検証します。
+通常のstable互換性確認は`./gradlew test buildPlugin verifyPlugin`をJDK 21で実行します。EAP SDKがJDK 25を要求する場合は、JDK 25でGradleを起動し、EAP testに`-PnagiJavaToolchainVersion=25`を指定します（stableの既定値は21です）。`options.release=21`により、いずれのJDKでもプラグインのcompile targetと参照可能なJava APIは21です。Verifierでは要求された表示名に関する`TemplateWordInPluginName` lintだけをmuteし、API互換性・deprecated・experimentalの警告はmuteしません。最低対象も確認するには、IDEA/PyCharmで`-PminimumPlatformVersion=2025.1.1`を指定します。最新EAPの検査では`-PplatformVersion=LATEST-EAP-SNAPSHOT`を指定します。`-PlocalPlatformPath`を指定した場合は、そのローカルSDKだけを検証します。
 
 公式資料: [Plugin SDK](https://plugins.jetbrains.com/docs/intellij/developing-plugins.html)、[Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html)。ライセンスは[MIT](LICENSE)です。
 
