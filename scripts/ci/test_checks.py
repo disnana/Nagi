@@ -359,7 +359,7 @@ class ChangeTests(unittest.TestCase):
 class JetBrainsBuildContractTests(unittest.TestCase):
     repo = Path(__file__).resolve().parents[2]
 
-    def test_eap_descriptor_parser_upgrade_keeps_plugin_version_and_verifier_checks(self):
+    def test_eap_descriptor_and_home_path_fixes_keep_plugin_version_and_verifier_checks(self):
         build = (self.repo / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
         settings = (self.repo / "editors/jetbrains-nagi/settings.gradle.kts").read_text(encoding="utf-8")
         wrapper = (self.repo / "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.properties").read_text(encoding="utf-8")
@@ -370,7 +370,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIsNotNone(plugin_repositories)
         self.assertIn("gradlePluginPortal()", plugin_repositories.group("body"))
         self.assertIn("mavenCentral()", plugin_repositories.group("body"))
-        self.assertIn('id("org.jetbrains.intellij.platform") version "2.15.0"', build)
+        self.assertIn('id("org.jetbrains.intellij.platform") version "2.17.0"', build)
         self.assertIn('version = "0.1.1"', build)
         self.assertIn("options.release.set(21)", build)
         self.assertIn('sinceBuild = "251.25410.109"', build)
