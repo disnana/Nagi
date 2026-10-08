@@ -80,12 +80,15 @@ JetBrainsの[Plugin recommendations](https://plugins.jetbrains.com/docs/marketpl
 
 - IntelliJ IDEA `IC-251.23774.435`は2026-10-08 13:05:59.8338867 UTC、PyCharm `PC-251.23774.444`は13:06:09.2894757 UTCにそれぞれ失敗した。両方が`NagiCompilerAction.execute(Project, VirtualFile)`の`invokestatic TrustedProjects.isProjectTrusted(Project): boolean`を未解決とし、実行時`NoSuchMethodError`の可能性を1件、`TrustedProjects` internal class使用を1件ずつ報告した。
 - 同じVerifier runで、IDEA `IC-251.25410.109`とPyCharm `PC-251.25410.122`は個別に`Compatible`だった。
+- pluginManagement repository fix後のrun [37781493904](https://github.com/disnana/Nagi/actions/runs/37781493904)でもcandidate artifact `11552782187`のchecksumは同じSHA-256だった。IC `251.23774.435`は13:15:19.8623788 UTCに同じ2件を報告し、`251.25410.109`は13:15:19.8661994 UTCにCompatible。PC `251.23774.444`は13:14:57.2447195 UTCに同じ2件を報告し、`251.25410.122`は13:14:57.2470220 UTCにCompatible。独立したcandidate runでも最低buildの対象差を再現した。
 
 このため`sinceBuild=251`と最低`2025.1` aliasでは、公開trust APIを持たない初期buildまで許容してしまう。次版の最低対象は初期buildを含むbranch全体ではなく、readbackで確認できた2025.1.1 build `251.25410.109` (IC) と`251.25410.122` (PC)に限定する。`sinceBuild=251.25410.109`にし、両製品のstable test/最低Verifier targetを2025.1.1へ合わせた。既存public APIの使用は維持し、旧Experimental APIへのadapterもPlugin Verifier警告muteも追加しない。2025.1初期buildでは公開済み0.1.1を使うか、上記supported build以降へ更新する必要がある。
 
 ### SDKごとのJava runtime
 
 2.15.0 candidate run 37780661641のIDEA/PyCharm EAP testはTemurin 21上で失敗した。`javac`はEAP SDKのclass file major `69.0`を読み込めず、JDK 21が扱うmajor `65.0`との不一致を報告した。PC EAPのreadback artifact `11551858292`が保存した`product-info.json`は、2026.3 build `263.6259.38`と`minRequiredJavaVersion: 25`を記録し、原JSON SHA-256は`90fc426a1401e8b8d80c63ca6ade4e7fbc6e5f9f297c30af316767f853f85a23`。
+
+pluginManagement fix後のrun 37781493904でも、JDK 21上のPyCharm EAP test job `113328028509`は13:12:53 UTCに同じmajor 69/65 mismatchで失敗した。readback artifact `11552902416`はPC EAP `263.6259.38`、minimum JDK 25と同じ`product-info.json` SHAを保存し、Plugin Verifier自体は`PC-263.6259.38: Compatible`と報告した。したがって修正箇所はEAP SDK向けのIDE test JVMであり、候補ZIPのEAP verifier compatibility failureではない。
 
 この差は、[JetBrains API changes 2026](https://plugins.jetbrains.com/docs/intellij/api-changes-list-2026.html)の「2026.2以降はJava 25をtargetにする」案内、[Gradle Java compatibility matrix](https://docs.gradle.org/current/userguide/compatibility.html)でJava 25がGradle 9.1.0以降のGradle runtimeとして対応することと整合する。wrapperは9.4.0のままでJava 25でGradleを動かせる。Gradleの[`options.release`](https://docs.gradle.org/current/userguide/building_java_projects.html)を21に固定すると、JDK 25を使うEAP compileもJava 21のAPI surface/class targetになる。
 
