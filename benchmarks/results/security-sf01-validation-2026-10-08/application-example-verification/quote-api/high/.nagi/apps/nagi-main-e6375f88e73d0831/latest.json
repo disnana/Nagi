@@ -1,0 +1,12 @@
+{
+  "app_id": "nagi-main-e6375f88e73d0831",
+  "executable": "generations/g-6853f-18dc87c0afe8929e-0/nagi-e6375f88e73d0831-g-6853f-18dc87c0afe8929e-0",
+  "generation": "g-6853f-18dc87c0afe8929e-0",
+  "lock": "generations/g-6853f-18dc87c0afe8929e-0/Cargo.lock",
+  "low": "generations/g-6853f-18dc87c0afe8929e-0/generated.low",
+  "manifest": "generations/g-6853f-18dc87c0afe8929e-0/Cargo.toml",
+  "provenance": "generations/g-6853f-18dc87c0afe8929e-0/provenance.json",
+  "rust": "generations/g-6853f-18dc87c0afe8929e-0/src/main.rs",
+  "schema_version": 1,
+  "sources": "generations/g-6853f-18dc87c0afe8929e-0/sources.json"
+}

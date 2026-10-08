@@ -123,7 +123,7 @@ TaskFailureはopaque・非Copy・非Clone・非shared、kind()はCopyな四値en
 | SQL static check | `check --sql-schema … --sql-dialect sqlite`の指定時だけ、対象builtinとcanonical SQLite operationの直接literalをprepareする。新Parametersの個数は静的に証明せずbind未検査を表示する。query/execを実行してschemaを変更しない。旧Dbの固定bind検査を維持 | `compiler/src/sql_check/mod.rs`, `compiler/tests/sql_check.rs` |
 | schema assumptions | 1つの指定schemaが検査対象DBに一致することを利用者が管理する。アプリのmigrationや複数Dbからschemaを推測しない。schema処理の権限・入力・時間を制限する | `sql_check.rs` tests、[公開リファレンス](../sql-check.md) |
 | NULL / type mismatch | 必要列があっても値型・範囲・NULL・実DBの状態は実行時まで分からない。nullableフィールドのNoneと非nullableの読み取り失敗を区別する | `runtime/src/database.rs`, `compiler/tests/nullable_database.rs`, `owned_database.rs` |
-| legacy transaction | 共有Dbへ複数のBEGIN/query/COMMITを送っても、呼出し間の排他所有は保証しない。新Txへ機械置換しない | `runtime/src/database.rs`; [DB制約](../database.md#実装と制約) |
+| legacy transaction | 共有Dbへ複数のBEGIN/query/COMMITを送っても、呼出し間の排他所有は保証しない。新Txへ機械置換しない | `runtime/src/database.rs`; [DB制約](../database.md#従来apiの実装と制約) |
 | legacy cancellation | 送信待ちと受理後を区別する。受理済みSQLite jobはcallerの取消後にも完了・commitし得る。最後のDb所有者のDropはworker終了を待ち、即時終了ではない | `database.rs::call`, `Inner::drop`; database tests、公開DB制約 |
 | SQLite Pool/Tx（未リリース） | `std.db.sqlite`は専有Tx、owned Parameters、明示終端を公開。Txの同task委譲は許すがtask転送・owned field・sharedを拒否。SQL/Parametersと終端Futureの所有をchecker/私有planへ固定 | `compiler/src/check/sqlite.rs`, `check/checked.rs`, `runtime/src/sqlite`; [公開リファレンス](../sqlite-pool.md) |
 

@@ -1,0 +1,12 @@
+import std.http.server as http
+class Holder:
+    policy: http.Policy[i64, unit]
+def inspect(value: shared[http.Policy[i64, unit]]):
+    print(0)
+def main():
+    wrapped = share(some(http.public_policy[i64]()))
+    again = clone_shared(wrapped)
+    holder = Holder(policy=http.public_policy[i64]())
+    shared_holder = share(holder)
+    again_holder = clone_shared(shared_holder)
+    print(7)

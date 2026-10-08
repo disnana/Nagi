@@ -1,0 +1,5 @@
+import std.auth as auth
+def main():
+    values = [some(auth.denied())]
+    duplicate = copy(view(values))
+    print(len(duplicate))

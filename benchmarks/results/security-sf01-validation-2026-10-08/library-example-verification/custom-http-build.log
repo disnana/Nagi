@@ -1,0 +1,4 @@
+     Locking 105 packages to highest compatible versions
+   Compiling nagi-custom-http-fffb5b533ec43962 v0.1.0 (/workspace/Nagi-security-sf01/test-nagi-code/library-examples/custom-http/build/custom_http/.nagi/apps/nagi-custom-http-fffb5b533ec43962/generations/.staging-g-6929d-18dc880e60ac2490-0)
+    Finished `release` profile [optimized] target(s) in 10.34s
+native: /workspace/Nagi-security-sf01/test-nagi-code/library-examples/custom-http/build/custom_http/.nagi/apps/nagi-custom-http-fffb5b533ec43962/generations/g-6929d-18dc880e60ac2490-0/nagi-fffb5b533ec43962-g-6929d-18dc880e60ac2490-0

@@ -1,0 +1,38 @@
+{
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "python": "3.12.14",
+  "cpu_count": 5,
+  "versions": {
+    "compiler": "nagic 0.1.11",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)"
+  },
+  "compiler_path": "/workspace/nagi-sf01-target/debug/nagic",
+  "compiler_sha256": "f728a78c49650457e6996594df7f065e568d78f8df5464dbffd858d046ffe51f",
+  "environment": {
+    "CARGO_HOME": "/workspace/toolchains/cargo",
+    "RUSTUP_HOME": "/workspace/toolchains/rustup",
+    "CARGO_TARGET_DIR": "/workspace/nagi-sf01-target",
+    "NAGI_NATIVE_TARGET_DIR": "/workspace/nagi-sf01-native-target",
+    "NAGI_ROOT": "/workspace/Nagi-security-sf01",
+    "CARGO_NET_OFFLINE": "true",
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_RELEASE_DEBUG": "0",
+    "NAGI_THREADS": "1"
+  },
+  "build_profile": "nagic build generated executable, optimized Cargo release profile; shared dependency cache retained, no clean target",
+  "cache_policy": "existing CARGO_TARGET_DIR and NAGI_NATIVE_TARGET_DIR retained; offline build; three same-source builds per variant",
+  "source_sha256": {
+    "benchmarks/security-sf01/fixtures/common/native_common.rs": "3f54d8f5fe541f0bdad5ad7ce31deeaa5053d9870d0c40f1c1ed8a729bb607ff",
+    "benchmarks/security-sf01/fixtures/nagi-policy/main.nagi": "61faaed591d49c67b76978d410d99602af7cb1bd3b4f57f5102f9687dd04ae74",
+    "benchmarks/security-sf01/fixtures/nagi-policy/nagi.toml": "e16fffa728270ac84aabaef04553768af53c7ae375b6548fd37f12c45fe5ca6a",
+    "benchmarks/security-sf01/fixtures/nagi-policy/authorize.rs": "9dc23870c1971ab8bf82f33d126ec348913ffd981d0699928c495ed2ea2249a0",
+    "benchmarks/security-sf01/fixtures/rust-policy/main.nagi": "940e4e2f849c31585dd10ed6b95968ad72c70268b15543ccf12a38b0ed3d64eb",
+    "benchmarks/security-sf01/fixtures/rust-policy/nagi.toml": "e16fffa728270ac84aabaef04553768af53c7ae375b6548fd37f12c45fe5ca6a",
+    "benchmarks/security-sf01/fixtures/rust-policy/authorize.rs": "41bad13e751f7b553367d9588a8069a35ba77293cccbd8aa251290d67c960419",
+    "benchmarks/security-sf01/run_security_sf01.py": "614639985bf656199c19fd4a41e94312417950db70eb9507a5f39ba05ddef18a"
+  }
+}

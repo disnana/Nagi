@@ -1,0 +1,24 @@
+[package]
+name = "nagi-main-04b4b7b019932244"
+version = "0.1.0"
+edition = "2021"
+autobins = false
+
+[[bin]]
+name = "nagi-04b4b7b019932244-g-71f50-18dc893314d15dd8-0"
+path = "src/main.rs"
+
+[workspace]
+
+[dependencies.nagi-runtime]
+path = "../../../../../../../../../../runtime"
+
+[dependencies.tokio]
+version = "1.48"
+features = ["rt", "sync", "time"]
+
+[profile.release]
+opt-level = 3
+lto = false
+codegen-units = 1
+panic = "unwind"

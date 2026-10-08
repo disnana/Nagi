@@ -1,0 +1,74 @@
+[
+  {
+    "case": "unicode warehouse",
+    "exit_code": 0,
+    "stdout": "{\"warehouse\":\"東京倉庫\",\"products\":2,\"available\":9,\"reserved\":8}\n",
+    "stderr": ""
+  },
+  {
+    "case": "empty warehouse inventory",
+    "exit_code": 0,
+    "stdout": "{\"warehouse\":\"north\",\"products\":0,\"available\":0,\"reserved\":0}\n",
+    "stderr": ""
+  },
+  {
+    "case": "maximum supported batch",
+    "exit_code": 0,
+    "stdout": "{\"warehouse\":\"north\",\"products\":10000,\"available\":10000000000,\"reserved\":0}\n",
+    "stderr": ""
+  },
+  {
+    "case": "reserved exceeds stock",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: counts must satisfy 0 <= reserved <= on_hand <= 1000000\n"
+  },
+  {
+    "case": "negative count",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: counts must satisfy 0 <= reserved <= on_hand <= 1000000\n"
+  },
+  {
+    "case": "invalid product",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: product_id must be positive\n"
+  },
+  {
+    "case": "missing field",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: input must contain a warehouse name and an items array with product_id, on_hand and reserved\n"
+  },
+  {
+    "case": "invalid JSON",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: input must contain a warehouse name and an items array with product_id, on_hand and reserved\n"
+  },
+  {
+    "case": "wrong field type",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: input must contain a warehouse name and an items array with product_id, on_hand and reserved\n"
+  },
+  {
+    "case": "blank warehouse",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: warehouse must contain 1 to 80 UTF-8 bytes\n"
+  },
+  {
+    "case": "UTF-8 warehouse byte limit",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: warehouse must contain 1 to 80 UTF-8 bytes\n"
+  },
+  {
+    "case": "batch exceeds limit",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: input contains more than 10000 products\n"
+  }
+]

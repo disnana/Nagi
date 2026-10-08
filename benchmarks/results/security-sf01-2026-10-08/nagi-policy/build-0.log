@@ -1,0 +1,8 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+     Locking 105 packages to highest compatible versions
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+   Compiling nagi-main-561df82d96b0251d v0.1.0 (/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/nagi-policy/generated-app/.nagi/apps/nagi-main-561df82d96b0251d/generations/.staging-g-71a98-18dc89263347e899-0)
+    Finished `release` profile [optimized] target(s) in 14.77s
+native: /workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/nagi-policy/generated-app/.nagi/apps/nagi-main-561df82d96b0251d/generations/g-71a98-18dc89263347e899-0/nagi-561df82d96b0251d-g-71a98-18dc89263347e899-0

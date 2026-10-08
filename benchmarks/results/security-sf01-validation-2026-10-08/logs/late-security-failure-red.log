@@ -1,0 +1,24 @@
+   Compiling nagi-runtime v0.1.11 (/workspace/Nagi-security-sf01/runtime)
+    Finished `test` profile [unoptimized] target(s) in 20.30s
+     Running unittests src/lib.rs (/workspace/nagi-sf01-target/debug/deps/nagi_runtime-869e41f629d9bcdc)
+
+running 1 test
+test http_server::tests::security_tests::late_verifier_failure_uses_the_exhausted_security_budget ... FAILED
+
+failures:
+
+---- http_server::tests::security_tests::late_verifier_failure_uses_the_exhausted_security_budget stdout ----
+
+thread 'http_server::tests::security_tests::late_verifier_failure_uses_the_exhausted_security_budget' (422232) panicked at runtime/src/http_server/security_tests.rs:80:127:
+assertion `left == right` failed
+  left: 403
+ right: 504
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    http_server::tests::security_tests::late_verifier_failure_uses_the_exhausted_security_budget
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 225 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p nagi-runtime --lib`

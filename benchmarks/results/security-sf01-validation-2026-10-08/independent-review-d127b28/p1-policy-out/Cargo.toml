@@ -1,0 +1,20 @@
+[package]
+name = "nagi-p1-policy-08ec9cacb2bc770f"
+version = "0.1.0"
+edition = "2021"
+autobins = false
+
+[[bin]]
+name = "nagi-08ec9cacb2bc770f-g-72c7a-18dc895149f0165f-0"
+path = "src/main.rs"
+
+[workspace]
+
+[dependencies.nagi-runtime]
+path = "../../../Nagi-security-sf01/runtime"
+
+[profile.release]
+opt-level = 3
+lto = false
+codegen-units = 1
+panic = "unwind"

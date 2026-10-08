@@ -1,0 +1,39 @@
+{
+  "repository": "disnana/Nagi",
+  "source_head": "d127b28c292a6b58b401738ed061ff3461bcddba",
+  "source_head_recorded_from": "git rev-parse HEAD",
+  "recorded_at_utc": "2026-10-08",
+  "working_tree_clean_at_measurement": "not recorded; do not infer a clean checkout from source_head",
+  "compiler_sha256": "f728a78c49650457e6996594df7f065e568d78f8df5464dbffd858d046ffe51f",
+  "fixture_source_sha256": {
+    "benchmarks/security-sf01/fixtures/common/native_common.rs": "3f54d8f5fe541f0bdad5ad7ce31deeaa5053d9870d0c40f1c1ed8a729bb607ff",
+    "benchmarks/security-sf01/fixtures/nagi-policy/main.nagi": "61faaed591d49c67b76978d410d99602af7cb1bd3b4f57f5102f9687dd04ae74",
+    "benchmarks/security-sf01/fixtures/nagi-policy/nagi.toml": "e16fffa728270ac84aabaef04553768af53c7ae375b6548fd37f12c45fe5ca6a",
+    "benchmarks/security-sf01/fixtures/nagi-policy/authorize.rs": "9dc23870c1971ab8bf82f33d126ec348913ffd981d0699928c495ed2ea2249a0",
+    "benchmarks/security-sf01/fixtures/rust-policy/main.nagi": "940e4e2f849c31585dd10ed6b95968ad72c70268b15543ccf12a38b0ed3d64eb",
+    "benchmarks/security-sf01/fixtures/rust-policy/nagi.toml": "e16fffa728270ac84aabaef04553768af53c7ae375b6548fd37f12c45fe5ca6a",
+    "benchmarks/security-sf01/fixtures/rust-policy/authorize.rs": "41bad13e751f7b553367d9588a8069a35ba77293cccbd8aa251290d67c960419",
+    "benchmarks/security-sf01/run_security_sf01.py": "614639985bf656199c19fd4a41e94312417950db70eb9507a5f39ba05ddef18a"
+  },
+  "post_measurement_runner_update": {
+    "current_runner_sha256": "bcd2bcd8a358a76e88e0e35da327d96b75c57f843e2c44d158111bd5ff7b7d70",
+    "change": "Added an aggregate request-budget check before sending every readiness, warmup, normal, and denial request; request 64 is allowed and request 65 is rejected before transmission.",
+    "measured_runner_sha256_preserved": "614639985bf656199c19fd4a41e94312417950db70eb9507a5f39ba05ddef18a",
+    "original_runner_snapshot_retained_or_found": false,
+    "snapshot_note": "The pre-change runner snapshot was not retained or found. Do not reconstruct it from the post-measurement runner or present a reconstruction as the measured source.",
+    "measurement_rerun": false
+  },
+  "binary_retention": {
+    "executable_copies_removed_after_measurement": true,
+    "removed_files": [
+      "benchmarks/results/security-sf01-2026-10-08/nagi-policy/generated-app/.nagi/apps/nagi-main-561df82d96b0251d/generations/g-71a98-18dc89263347e899-0/nagi-561df82d96b0251d-g-71a98-18dc89263347e899-0",
+      "benchmarks/results/security-sf01-2026-10-08/nagi-policy/generated-app/.nagi/apps/nagi-main-561df82d96b0251d/generations/g-71aec-18dc892a01cc86da-0/nagi-561df82d96b0251d-g-71aec-18dc892a01cc86da-0",
+      "benchmarks/results/security-sf01-2026-10-08/nagi-policy/generated-app/.nagi/apps/nagi-main-561df82d96b0251d/generations/g-71b44-18dc892d7b26c2f6-0/nagi-561df82d96b0251d-g-71b44-18dc892d7b26c2f6-0",
+      "benchmarks/results/security-sf01-2026-10-08/rust-policy/generated-app/.nagi/apps/nagi-main-04b4b7b019932244/generations/g-71bb3-18dc89315bfd2e74-0/nagi-04b4b7b019932244-g-71bb3-18dc89315bfd2e74-0",
+      "benchmarks/results/security-sf01-2026-10-08/rust-policy/generated-app/.nagi/apps/nagi-main-04b4b7b019932244/generations/g-71f50-18dc893314d15dd8-0/nagi-04b4b7b019932244-g-71f50-18dc893314d15dd8-0",
+      "benchmarks/results/security-sf01-2026-10-08/rust-policy/generated-app/.nagi/apps/nagi-main-04b4b7b019932244/generations/g-7208f-18dc8934cf831746-0/nagi-04b4b7b019932244-g-7208f-18dc8934cf831746-0"
+    ],
+    "measured_sizes_and_sha256_retained_in": "build-results.json",
+    "generated_rust_low_project_sources_and_logs_retained": true
+  }
+}

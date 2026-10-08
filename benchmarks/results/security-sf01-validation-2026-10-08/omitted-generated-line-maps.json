@@ -1,0 +1,173 @@
+{
+  "reason": "Derived per-generation Rust diagnostic line maps are omitted from Git after hashing to avoid repeated generated metadata. Original commands/logs, generated Rust and Low, and source/environment provenance remain; no source hash or measurement is rewritten. These archived generations are evidence, not directly executable distributions.",
+  "files": [
+    {
+      "path": "independent-review-d127b28/p2-out/.nagi/apps/nagi-p2-policy-35ccc66b490314f2/generations/g-72cb6-18dc89522477954b-0/provenance.json",
+      "bytes": 42797,
+      "sha256": "959fd5794b1c3e593260581ddafd273752716fa67ade3b9a230322a9a9837016",
+      "schema_version": 1,
+      "rust_line_map_entries": 103
+    },
+    {
+      "path": "independent-review-d127b28/p1-failure-manual-out/.nagi/apps/nagi-p1-failure-manual-aa1d875f9354c1f4/generations/.staging-g-72ca7-18dc8951bf0b4a15-0/provenance.json",
+      "bytes": 16650,
+      "sha256": "86a8afb5a75c1a51f6d47cf8a7b50d511f68beb6dff3872fe454a16776f79c58",
+      "schema_version": 1,
+      "rust_line_map_entries": 41
+    },
+    {
+      "path": "independent-review-d127b28/p1-policy-manual-out/.nagi/apps/nagi-p1-policy-manual-b6977e88cc69b451/generations/.staging-g-72c87-18dc895182e7ba49-0/provenance.json",
+      "bytes": 24234,
+      "sha256": "8d594e5f0d5216ac90854fb3471be03f991cb02268223b76f96c193b0e2613d1",
+      "schema_version": 1,
+      "rust_line_map_entries": 83
+    },
+    {
+      "path": "independent-review-d127b28/p1-policy-out/.nagi/apps/nagi-p1-policy-08ec9cacb2bc770f/generations/.staging-g-72c7a-18dc895149f0165f-0/provenance.json",
+      "bytes": 23664,
+      "sha256": "382a0b27f5412386cc3f24ab83c4ae78177c4d17bae81b3e259b39c3944a97b9",
+      "schema_version": 1,
+      "rust_line_map_entries": 83
+    },
+    {
+      "path": "independent-review-d127b28/p1-failure-out/.nagi/apps/nagi-p1-failure-75d7df2239c97c9a/generations/.staging-g-72c9a-18dc8951a875408f-0/provenance.json",
+      "bytes": 16080,
+      "sha256": "83153391b41f6535b9f767b624dba7c19ee63b77ed021b9566749627243943f5",
+      "schema_version": 1,
+      "rust_line_map_entries": 41
+    },
+    {
+      "path": "application-example-verification/seat-reservations/low/.nagi/apps/nagi-generated-6e019547dcaf9e72/generations/g-6821b-18dc87be88e389bd-0/provenance.json",
+      "bytes": 479567,
+      "sha256": "d41bf91b20ccc8122f4a6a10a66fd390054f9d68ab7eceaea4f6d5680561910a",
+      "schema_version": 1,
+      "rust_line_map_entries": 421
+    },
+    {
+      "path": "application-example-verification/seat-reservations/high/.nagi/apps/nagi-main-a4f539420f7b69d5/generations/g-6800a-18dc87bd59d2871b-0/provenance.json",
+      "bytes": 437826,
+      "sha256": "d51edc3f7e25b0953565cff5fed7c4b9466ec821195bdfa94301a5684b09393a",
+      "schema_version": 1,
+      "rust_line_map_entries": 421
+    },
+    {
+      "path": "application-example-verification/auth-boundary/low/.nagi/apps/nagi-generated-0989aba6f98d99e2/generations/g-68fe8-18dc87d768f0be3d-0/provenance.json",
+      "bytes": 465036,
+      "sha256": "b31fa34b85710012e2cf5eff7fabefb05db660ba24f966bd59dfbbb51be2aafe",
+      "schema_version": 1,
+      "rust_line_map_entries": 454
+    },
+    {
+      "path": "application-example-verification/auth-boundary/high/.nagi/apps/nagi-main-337d3f9b511f3240/generations/g-68fb3-18dc87d3b32a4b08-0/provenance.json",
+      "bytes": 423874,
+      "sha256": "7660e77fbc00329d20a7cdf610b5f36a41f051be1ea90a55f5c53113273fbb9f",
+      "schema_version": 1,
+      "rust_line_map_entries": 454
+    },
+    {
+      "path": "application-example-verification/byte-inspector/low/.nagi/apps/nagi-generated-428eeb5192e2aaa4/generations/g-687a0-18dc87ca3844b5cf-0/provenance.json",
+      "bytes": 105719,
+      "sha256": "8f701900ab9cc561902bc99cd3a80d5ed8868ec2ca8a04c7a8b3d6717f8ddf50",
+      "schema_version": 1,
+      "rust_line_map_entries": 156
+    },
+    {
+      "path": "application-example-verification/byte-inspector/high/.nagi/apps/nagi-main-9f8d78c375ad82d3/generations/g-6872a-18dc87c7ef02f0f9-0/provenance.json",
+      "bytes": 97490,
+      "sha256": "f746438462f5c689aa8c0e8763e058688bf0c4ed72cdbf3845b6f6b45c3c2f8b",
+      "schema_version": 1,
+      "rust_line_map_entries": 156
+    },
+    {
+      "path": "application-example-verification/axum-service/low/.nagi/apps/nagi-generated-adbced325ce435a3/generations/g-688d0-18dc87cfbe921907-0/provenance.json",
+      "bytes": 81851,
+      "sha256": "7ae764991759e0601742cc64f94102ca944347fa567dd659eccb9ce75125ff86",
+      "schema_version": 1,
+      "rust_line_map_entries": 81
+    },
+    {
+      "path": "application-example-verification/axum-service/high/.nagi/apps/nagi-main-71b4bfa55d7c422a/generations/g-687d9-18dc87cba3fc54d7-0/provenance.json",
+      "bytes": 74553,
+      "sha256": "180e12f39f9a1db66b9d7f3a54faf30b51990f271e0ceddb57edcf1fa26b51d0",
+      "schema_version": 1,
+      "rust_line_map_entries": 81
+    },
+    {
+      "path": "application-example-verification/stock-report/low/.nagi/apps/nagi-generated-09fdb8976962978a/generations/g-67b7e-18dc87b86f00e8f2-0/provenance.json",
+      "bytes": 210230,
+      "sha256": "b344343678e464c3f4e608f211651ff8437bc525a501f63a13140970e599b904",
+      "schema_version": 1,
+      "rust_line_map_entries": 162
+    },
+    {
+      "path": "application-example-verification/stock-report/high/.nagi/apps/nagi-main-4077b03008e8473f/generations/g-67b10-18dc87b7534dcb24-0/provenance.json",
+      "bytes": 198494,
+      "sha256": "d0954f3ddffe239f361cc49b07c1ff466c4ce75fb5b2e543a9b3474c4beda92d",
+      "schema_version": 1,
+      "rust_line_map_entries": 162
+    },
+    {
+      "path": "application-example-verification/order-quote/low/.nagi/apps/nagi-main-4c2402690807049c/generations/g-69018-18dc87da751134ea-0/provenance.json",
+      "bytes": 207979,
+      "sha256": "a7fa62fa52b5919ec8c041a1cca198e21f93ea4e7a1b749686886372acc6e734",
+      "schema_version": 1,
+      "rust_line_map_entries": 187
+    },
+    {
+      "path": "application-example-verification/quote-api/low/.nagi/apps/nagi-generated-c8d39f4d9ca52717/generations/g-685ad-18dc87c2cf453d55-0/provenance.json",
+      "bytes": 454095,
+      "sha256": "c3b0016d51a06e9e7836def2a806285c32ea5aad6c6f56b4a6f876325a4289e7",
+      "schema_version": 1,
+      "rust_line_map_entries": 428
+    },
+    {
+      "path": "application-example-verification/quote-api/high/.nagi/apps/nagi-main-e6375f88e73d0831/generations/g-6853f-18dc87c0afe8929e-0/provenance.json",
+      "bytes": 411987,
+      "sha256": "1bb473680db74987ad881fcd2555d96ab743b8456f84cabe8c8584a38ec792c0",
+      "schema_version": 1,
+      "rust_line_map_entries": 428
+    },
+    {
+      "path": "application-example-verification/device-settings/low/.nagi/apps/nagi-generated-abda696007b804ac/generations/g-67d41-18dc87bb5a19e196-0/provenance.json",
+      "bytes": 163618,
+      "sha256": "4e0b196f282824ccaa5f37e4482964dbaf96b544ada364f015c91eebe6141a96",
+      "schema_version": 1,
+      "rust_line_map_entries": 197
+    },
+    {
+      "path": "application-example-verification/device-settings/high/.nagi/apps/nagi-main-529b12fc00a56214/generations/g-67bcc-18dc87b991968e13-0/provenance.json",
+      "bytes": 150154,
+      "sha256": "ef0ce48ca5dc8c8b7aef67ab381d60fce1756b3cf3708320c5da8d43ea4f0d46",
+      "schema_version": 1,
+      "rust_line_map_entries": 197
+    },
+    {
+      "path": "application-example-verification/supervised-worker/low/.nagi/apps/nagi-generated-93e1ade1521df0c6/generations/g-686ba-18dc87c6a1271862-0/provenance.json",
+      "bytes": 645017,
+      "sha256": "e59308d19f0e99d59b0496d5b25cb00b6738910683452b46c4b10561499817c8",
+      "schema_version": 1,
+      "rust_line_map_entries": 562
+    },
+    {
+      "path": "application-example-verification/supervised-worker/high/.nagi/apps/nagi-main-2b56fd8f9f82851c/generations/g-68660-18dc87c551f7ce6a-0/provenance.json",
+      "bytes": 588891,
+      "sha256": "663f8ed782e664ae02e1b95a3a0d43aaa2b721ebdbd4e02dbce84f574928d739",
+      "schema_version": 1,
+      "rust_line_map_entries": 562
+    },
+    {
+      "path": "application-example-verification/file-json/low/.nagi/apps/nagi-generated-7bd368f6bde9d58f/generations/g-684fe-18dc87bfee759d76-0/provenance.json",
+      "bytes": 58497,
+      "sha256": "5a5f4fbf448c47fcf7a97c81db3d7540a8675a7b0faad429c29525ac3367d751",
+      "schema_version": 1,
+      "rust_line_map_entries": 55
+    },
+    {
+      "path": "application-example-verification/file-json/high/.nagi/apps/nagi-main-c638d54767e772c0/generations/g-6845d-18dc87bf9a5b63cd-0/provenance.json",
+      "bytes": 53070,
+      "sha256": "4c217297c8e98d187c6db4d4ad275291f32ad2b688451ffa76f7d0ab99551157",
+      "schema_version": 1,
+      "rust_line_map_entries": 55
+    }
+  ]
+}

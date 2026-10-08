@@ -1,0 +1,6 @@
+     Locking 105 packages to highest compatible versions
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling nagi-main-04b4b7b019932244 v0.1.0 (/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/rust-policy/generated-app/.nagi/apps/nagi-main-04b4b7b019932244/generations/.staging-g-71bb3-18dc89315bfd2e74-0)
+    Finished `release` profile [optimized] target(s) in 6.25s
+native: /workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/rust-policy/generated-app/.nagi/apps/nagi-main-04b4b7b019932244/generations/g-71bb3-18dc89315bfd2e74-0/nagi-04b4b7b019932244-g-71bb3-18dc89315bfd2e74-0

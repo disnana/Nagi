@@ -1,0 +1,5 @@
+fixture_hashes_match False
+validation_source_hashes_match True
+measurement_status passed requests {'used': 62, 'maximum': 64}
+nagi-policy build_median 15.622754345007706 size 1524160 requestcount 31 median 146321 p95 251420 checks {'wrong_resource': {'status': 403, 'body': 'permission denied'}, 'missing_credential': {'status': 401, 'body': 'invalid credential', 'www_authenticate': 'Bearer'}}
+rust-policy build_median 7.499188528017839 size 1523960 requestcount 31 median 142711 p95 308033 checks {'wrong_resource': {'status': 403, 'body': 'permission denied'}, 'missing_credential': {'status': 401, 'body': 'invalid credential', 'www_authenticate': 'Bearer'}}

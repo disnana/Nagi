@@ -1,0 +1,43 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf01/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.56s
+     Running tests/security_sf01.rs (/workspace/nagi-sf01-target/debug/deps/security_sf01-4f55148d3dc7aafd)
+
+running 4 tests
+test legacy_principal_is_a_checker_migration_diagnostic ... FAILED
+test legacy_decorator_is_a_checker_migration_diagnostic ... FAILED
+test legacy_global_serve_is_a_checker_migration_diagnostic ... FAILED
+test policy_free_route_is_a_checker_migration_diagnostic ... FAILED
+
+failures:
+
+---- legacy_principal_is_a_checker_migration_diagnostic stdout ----
+
+thread 'legacy_principal_is_a_checker_migration_diagnostic' (409949) panicked at compiler/tests/security_sf01.rs:25:57:
+legacy security entry accepted: ()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- legacy_decorator_is_a_checker_migration_diagnostic stdout ----
+
+thread 'legacy_decorator_is_a_checker_migration_diagnostic' (409947) panicked at compiler/tests/security_sf01.rs:25:57:
+legacy security entry accepted: ()
+
+---- legacy_global_serve_is_a_checker_migration_diagnostic stdout ----
+
+thread 'legacy_global_serve_is_a_checker_migration_diagnostic' (409948) panicked at compiler/tests/security_sf01.rs:25:57:
+legacy security entry accepted: ()
+
+---- policy_free_route_is_a_checker_migration_diagnostic stdout ----
+
+thread 'policy_free_route_is_a_checker_migration_diagnostic' (409950) panicked at compiler/tests/security_sf01.rs:25:57:
+legacy security entry accepted: ()
+
+
+failures:
+    legacy_decorator_is_a_checker_migration_diagnostic
+    legacy_global_serve_is_a_checker_migration_diagnostic
+    legacy_principal_is_a_checker_migration_diagnostic
+    policy_free_route_is_a_checker_migration_diagnostic
+
+test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+error: test failed, to rerun pass `-p nagic --test security_sf01`

@@ -1,0 +1,24 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf01/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.24s
+     Running tests/security_sf01_native.rs (/workspace/nagi-sf01-target/debug/deps/security_sf01_native-9ff5e4ae1b4a33de)
+
+running 1 test
+test policies_and_nominal_request_proofs_execute_in_all_three_paths ... FAILED
+
+failures:
+
+---- policies_and_nominal_request_proofs_execute_in_all_three_paths stdout ----
+
+thread 'policies_and_nominal_request_proofs_execute_in_all_three_paths' (416852) panicked at compiler/tests/security_sf01_native.rs:107:125:
+manual.low: error: line 4:1: fn が必要です (found Id("struct"))
+ --> /tmp/nagi-sf01-native-416851-0/manual.low:4
+ 4 | struct State { value: i64; }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    policies_and_nominal_request_proofs_execute_in_all_three_paths
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 38.16s
+
+error: test failed, to rerun pass `-p nagic --test security_sf01_native`

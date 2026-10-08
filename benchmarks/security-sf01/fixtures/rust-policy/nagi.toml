@@ -1,0 +1,7 @@
+entry = "main.nagi"
+
+[rust]
+file = "native.rs"
+
+[rust.dependencies]
+tokio = { version = "1.48", features = ["rt", "sync", "time"] }

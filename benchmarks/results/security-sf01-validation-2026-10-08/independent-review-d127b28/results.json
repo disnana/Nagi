@@ -1,0 +1,62 @@
+[
+  {
+    "name": "p1-policy-check",
+    "exit": 0,
+    "log": "/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p1-policy-check.log"
+  },
+  {
+    "name": "p1-policy-lower",
+    "exit": 0,
+    "log": "/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p1-policy-lower.log"
+  },
+  {
+    "name": "p1-policy-saved-check",
+    "exit": 0,
+    "log": "/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p1-policy-saved-check.log"
+  },
+  {
+    "name": "p1-policy-build",
+    "exit": 1,
+    "log": "/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p1-policy-build.log"
+  },
+  {
+    "name": "p1-policy-manual-build",
+    "exit": 1,
+    "log": "/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p1-policy-manual-build.log"
+  },
+  {
+    "name": "p1-failure-check",
+    "exit": 0,
+    "log": "/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p1-failure-check.log"
+  },
+  {
+    "name": "p1-failure-lower",
+    "exit": 0,
+    "log": "/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p1-failure-lower.log"
+  },
+  {
+    "name": "p1-failure-saved-check",
+    "exit": 0,
+    "log": "/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p1-failure-saved-check.log"
+  },
+  {
+    "name": "p1-failure-build",
+    "exit": 1,
+    "log": "/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p1-failure-build.log"
+  },
+  {
+    "name": "p1-failure-manual-build",
+    "exit": 1,
+    "log": "/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p1-failure-manual-build.log"
+  },
+  {
+    "name": "p2-policy-check",
+    "exit": 0,
+    "log": "/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p2-policy-check.log"
+  },
+  {
+    "name": "p2-policy-native",
+    "exit": 0,
+    "log": "/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p2-policy-native.log"
+  }
+]

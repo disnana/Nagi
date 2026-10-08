@@ -1,0 +1,30 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf01/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.30s
+     Running tests/copy_capabilities.rs (/workspace/nagi-sf01-target/debug/deps/copy_capabilities-899192a2fdb0dc10)
+
+running 2 tests
+test omitted_clone_adapter_reports_the_element_clone_bound ... ok
+test manual_clone_adapter_copies_owned_enum_payloads_in_high_and_independent_low ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests/security_sf01_native.rs (/workspace/nagi-sf01-target/debug/deps/security_sf01_native-9ff5e4ae1b4a33de)
+
+running 1 test
+test policies_and_nominal_request_proofs_execute_in_all_three_paths ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.34s
+
+     Running tests/task_handles.rs (/workspace/nagi-sf01-target/debug/deps/task_handles-693fc87e1cd07cd8)
+
+running 8 tests
+test canonical_task_metadata_survives_saved_low_and_user_task_names ... ok
+test raw_check_registers_contextual_task_and_preserves_obligation ... ok
+test task_conditional_consumption::always_evaluated_receipts_and_lazy_values_run_in_three_sources ... ok
+test native_business_fault_cleanup_and_branch_contracts ... ok
+test bounded_generated_task_paths_reach_native ... ok
+test task_service::legacy_supervisor_terminal_and_normal_shutdown_reach_real_http ... ok
+test task_service_s2::typed_monitor_preserves_service_errors_shutdown_and_parent_drop ... ok
+test positive_contracts_build_and_run_high_saved_and_handwritten_low ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 58.88s

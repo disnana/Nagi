@@ -1,0 +1,4 @@
+     Locking 105 packages to highest compatible versions
+   Compiling nagi-main-40e553eb5109cb85 v0.1.0 (/workspace/Nagi-security-sf01/test-nagi-code/library-examples/http-auth/build/main/.nagi/apps/nagi-main-40e553eb5109cb85/generations/.staging-g-692c2-18dc8811f7a17df5-0)
+    Finished `release` profile [optimized] target(s) in 9.70s
+native: /workspace/Nagi-security-sf01/test-nagi-code/library-examples/http-auth/build/main/.nagi/apps/nagi-main-40e553eb5109cb85/generations/g-692c2-18dc8811f7a17df5-0/nagi-40e553eb5109cb85-g-692c2-18dc8811f7a17df5-0

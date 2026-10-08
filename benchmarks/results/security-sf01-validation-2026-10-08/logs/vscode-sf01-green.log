@@ -1,0 +1,40 @@
+✔ editors/vscode-nagi/test/actor-features.test.js (112.888619ms)
+✔ editors/vscode-nagi/test/actor-navigation.test.js (4638.10301ms)
+✔ editors/vscode-nagi/test/borrowed-locals.test.js (111.198878ms)
+✔ editors/vscode-nagi/test/compiler.test.js (1048.073016ms)
+✔ editors/vscode-nagi/test/enum-features.test.js (194.32767ms)
+✔ editors/vscode-nagi/test/enum-navigation.test.js (1832.586009ms)
+✔ editors/vscode-nagi/test/features.test.js (141.437459ms)
+✔ editors/vscode-nagi/test/folding.test.js (108.869247ms)
+✖ editors/vscode-nagi/test/high-snippets.test.js (2518.524587ms)
+✔ editors/vscode-nagi/test/import-navigation.test.js (1892.445641ms)
+✔ editors/vscode-nagi/test/indentation.test.js (105.922469ms)
+✔ editors/vscode-nagi/test/inferred-types.test.js (12057.454985ms)
+✔ editors/vscode-nagi/test/local-shadow.test.js (2734.447856ms)
+✖ editors/vscode-nagi/test/low-snippets.test.js (543.504068ms)
+✔ editors/vscode-nagi/test/module-features.test.js (212.661334ms)
+✔ editors/vscode-nagi/test/navigation.test.js (1155.30854ms)
+✔ editors/vscode-nagi/test/providers.test.js (323.838859ms)
+✔ editors/vscode-nagi/test/static-assistance.test.js (140.426211ms)
+✔ editors/vscode-nagi/test/stdlib-features.test.js (89.268943ms)
+✔ editors/vscode-nagi/test/stdlib-navigation.test.js (6407.252993ms)
+✔ editors/vscode-nagi/test/usability-catalog.test.js (142.546799ms)
+✔ editors/vscode-nagi/test/usability-navigation.test.js (3489.006774ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 20
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16131.96669
+
+✖ failing tests:
+
+test at editors/vscode-nagi/test/high-snippets.test.js:1:1
+✖ editors/vscode-nagi/test/high-snippets.test.js (2518.524587ms)
+  'test failed'
+
+test at editors/vscode-nagi/test/low-snippets.test.js:1:1
+✖ editors/vscode-nagi/test/low-snippets.test.js (543.504068ms)
+  'test failed'

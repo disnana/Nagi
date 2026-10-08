@@ -1,0 +1,6 @@
+import std.http.server as http;
+fn main() -> unit {
+ let values = [some(http.public_policy[i64]())];
+ let duplicate = copy(view(values));
+ print(len(duplicate));
+}

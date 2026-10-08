@@ -1,0 +1,4 @@
+     Locking 105 packages to highest compatible versions
+   Compiling nagi-main-2b56fd8f9f82851c v0.1.0 (/workspace/Nagi-security-sf01/build/application-example-verification/supervised-worker/high/.nagi/apps/nagi-main-2b56fd8f9f82851c/generations/.staging-g-68660-18dc87c551f7ce6a-0)
+    Finished `release` profile [optimized] target(s) in 3.73s
+native: /workspace/Nagi-security-sf01/build/application-example-verification/supervised-worker/high/.nagi/apps/nagi-main-2b56fd8f9f82851c/generations/g-68660-18dc87c551f7ce6a-0/nagi-2b56fd8f9f82851c-g-68660-18dc87c551f7ce6a-0

@@ -1,0 +1,6 @@
+import std.auth as auth;
+fn main() -> unit {
+ let values = [some(auth.denied())];
+ let duplicate = copy(view(values));
+ print(len(duplicate));
+}
