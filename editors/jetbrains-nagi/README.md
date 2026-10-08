@@ -4,7 +4,7 @@
 
 IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
 
-プラグインの版は`build.gradle.kts`で管理します。現在公開中の最新版は0.1.1です。IntelliJ IDEA用とPyCharm用のZIPは別々に添付されています。正式公開先は[JetBrains MarketplaceのNagiページ](https://plugins.jetbrains.com/plugin/34891-nagi)で、現在審査中です。
+プラグインの版は`build.gradle.kts`で管理します。現在公開中の版は0.1.1です。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)からIDE別ZIPを取得できます。
 
 ## できること
 
@@ -19,9 +19,9 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは[�
 
 ## インストール
 
-審査中の現時点では[GitHub Releases](https://github.com/disnana/Nagi/releases)からZIPを取得します。現在公開中の`jetbrains-v0.1.1`には、IDEA用`nagi-jetbrains-IC-0.1.1.zip`とPyCharm用`nagi-jetbrains-PC-0.1.1.zip`があり、それぞれ`.sha256`も添付されています。Marketplaceでの正式な公開先は[JetBrains MarketplaceのNagiページ](https://plugins.jetbrains.com/plugin/34891-nagi)です。
+`jetbrains-v0.1.1`には、IDEA用`nagi-jetbrains-IC-0.1.1.zip`とPyCharm用`nagi-jetbrains-PC-0.1.1.zip`があり、それぞれ`.sha256`も添付されています。
 
-ZIPをIDEの **Settings → Plugins → ⚙ → Install Plugin from Disk** で選び、IDEを再起動します。Marketplace掲載ページは現在審査中です。PRの動作確認用ZIPは、IDEA/PyCharmのstable/EAP検証がすべて成功した **Actions → Nagi checks** の`release-jetbrains` artifactから取得できます。自己ビルドした場合は`build/distributions/`にあるZIPを使います。
+GitHub ReleasesのZIPを使う場合は、IDEの **Settings → Plugins → ⚙ → Install Plugin from Disk** で選び、IDEを再起動します。PRの動作確認用ZIPは、IDEA/PyCharmのstable/EAP検証がすべて成功した **Actions → Nagi checks** の`release-jetbrains` artifactから取得できます。自己ビルドした場合は`build/distributions/`にあるZIPを使います。
 
 **Settings → Languages & Frameworks → Nagi** でコンパイラのパスを設定できます。空欄なら`PATH`の`nagic`を使います。相対パスはIDEプロジェクトのルートから解決します。
 
@@ -42,7 +42,7 @@ cd editors/jetbrains-nagi
 ./gradlew test buildPlugin
 ```
 
-Windowsでは`gradlew.bat`を使います。Gradle Wrapperは9.0.0、IntelliJ Platform Gradle Pluginは2.12.0、既定のSDKはIntelliJ IDEA Community 2025.1.1です。初回はSDKと依存関係を取得します。
+Windowsでは`gradlew.bat`を使います。Gradle Wrapperは9.4.0、IntelliJ Platform Gradle Pluginは2.14.0、既定のSDKはIntelliJ IDEA Community 2025.1.1です。初回はSDKと依存関係を取得します。
 
 PyCharm用SDKでも同じコードを検証できます。
 

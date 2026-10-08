@@ -6,7 +6,9 @@ import re
 import subprocess
 import tempfile
 import unittest
+from html.parser import HTMLParser
 from pathlib import Path
+from xml.etree import ElementTree as ET
 from unittest.mock import patch
 
 import changes
@@ -362,10 +364,10 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         wrapper = (self.repo / "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.properties").read_text(encoding="utf-8")
         workflow = (self.repo / ".github/workflows/jetbrains.yml").read_text(encoding="utf-8")
 
-        self.assertIn('id("org.jetbrains.intellij.platform") version "2.12.0"', build)
+        self.assertIn('id("org.jetbrains.intellij.platform") version "2.14.0"', build)
         self.assertIn('version = "0.1.1"', build)
-        self.assertIn("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.0.0-bin.zip", wrapper)
-        self.assertIn("distributionSha256Sum=8fad3d78296ca518113f3d29016617c7f9367dc005f932bd9d93bf45ba46072b", wrapper)
+        self.assertIn("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.0-bin.zip", wrapper)
+        self.assertIn("distributionSha256Sum=60ea723356d81263e8002fec0fcf9e2b0eee0c0850c7a3d7ab0a63f2ccc601f3", wrapper)
         self.assertIn("create(type, version) { useInstaller.set(false) }", build)
         self.assertNotIn("useInstaller = false", build)
         self.assertNotIn("ide(type, version, useInstaller", build)
@@ -376,34 +378,66 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIn("resolvedBuildNumber", workflow)
         self.assertIn("editors/jetbrains-nagi/build/verification-metadata/", workflow)
 
-    def test_existing_marketplace_destination_remains_under_review_with_release_zip_fallback(self):
+    def test_published_marketplace_destination_and_release_zip_fallback(self):
         marketplace_url = "https://plugins.jetbrains.com/plugin/34891-nagi"
         release_url = "https://github.com/disnana/Nagi/releases"
-        status_by_file = {
-            "README.md": "審査中",
-            "README.en.md": "under review",
-            "docs/getting-started.md": "審査中",
-            "docs/en/getting-started.md": "under review",
-            "docs/editor.md": "審査中",
-            "docs/en/editor.md": "under review",
-            "website/templates/home.html": "審査中",
-            "website/templates/home.en.html": "under review",
-            "editors/jetbrains-nagi/README.md": "審査中",
-            "editors/jetbrains-nagi/README.en.md": "under review",
-        }
-        for relative_path, review_status in status_by_file.items():
+        install_guides = (
+            "README.md", "README.en.md", "docs/getting-started.md", "docs/en/getting-started.md",
+            "docs/editor.md", "docs/en/editor.md", "website/templates/home.html",
+            "website/templates/home.en.html", "editors/jetbrains-nagi/README.md",
+            "editors/jetbrains-nagi/README.en.md",
+        )
+        for relative_path in install_guides:
             with self.subTest(path=relative_path):
                 content = (self.repo / relative_path).read_text(encoding="utf-8")
                 self.assertIn(marketplace_url, content)
                 self.assertIn(release_url, content)
-                self.assertIn(review_status, content)
+                self.assertNotIn("審査中", content)
+                self.assertNotIn("under review", content.lower())
+                self.assertNotIn("coming soon", content.lower())
 
-        plugin_xml = (self.repo / "editors/jetbrains-nagi/src/main/resources/META-INF/plugin.xml").read_text(encoding="utf-8")
-        readback = json.loads((self.repo / "docs/internal/jetbrains-marketplace-readback-2026-10-08.json").read_text(encoding="utf-8"))
-        self.assertIn("<id>com.disnana.nagi</id>", plugin_xml)
-        self.assertEqual(readback["listingUrl"], marketplace_url)
-        self.assertEqual(readback["metadata"]["xmlId"], "com.disnana.nagi")
-        self.assertFalse(readback["metadata"]["approve"])
+        descriptor_path = self.repo / "editors/jetbrains-nagi/src/main/resources/META-INF/plugin.xml"
+        descriptor = ET.parse(descriptor_path).getroot()
+        description = descriptor.findtext("description") or ""
+        self.assertEqual(descriptor.findtext("id"), "com.disnana.nagi")
+        self.assertLess(description.index("Nagi language support"), description.index("IntelliJ IDEA・PyCharm"))
+        self.assertIn("nagi.toml", description)
+        self.assertIn("not bundled", description)
+
+        class DescriptionTags(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.tags = []
+                self.links = []
+                self.attributes = []
+
+            def handle_starttag(self, tag, attrs):
+                self.tags.append(tag)
+                self.attributes.append((tag, attrs))
+                if tag == "a":
+                    self.links.extend(value for name, value in attrs if name == "href")
+
+        parser = DescriptionTags()
+        parser.feed(description)
+        # Keep the descriptor to tags confirmed in the Marketplace UI readback.
+        # This local check does not claim to reproduce Marketplace rendering.
+        self.assertTrue(set(parser.tags) <= {"p", "h3", "h4", "a", "hr"})
+        self.assertEqual(parser.links, [release_url, release_url])
+        for tag, attributes in parser.attributes:
+            if tag == "a":
+                self.assertEqual(attributes, [("href", release_url)])
+            else:
+                self.assertEqual(attributes, [])
+
+        historical = json.loads((self.repo / "docs/internal/jetbrains-marketplace-readback-2026-10-08.json").read_text(encoding="utf-8"))
+        current = json.loads((self.repo / "docs/internal/jetbrains-marketplace-current-readback-2026-10-08-122229Z.json").read_text(encoding="utf-8"))
+        self.assertEqual(historical["listingUrl"], marketplace_url)
+        self.assertTrue(historical["metadata"]["hasUnapprovedUpdate"])
+        self.assertEqual(current["availability"].split(",")[0], "PubliclyAvailable")
+        self.assertEqual(current["stableVersion"], "0.1.1")
+        self.assertEqual(current["apiFieldsReadBack"]["xmlId"], "com.disnana.nagi")
+        self.assertFalse(current["apiFieldsReadBack"]["hasUnapprovedUpdate"])
+        self.assertIn("previous English-only description", current["interpretation"])
 
 
 class ResourceCharacterizationWorkflowTests(unittest.TestCase):

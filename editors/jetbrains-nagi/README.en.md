@@ -4,7 +4,7 @@
 
 Nagi support for IntelliJ IDEA and PyCharm. [Install the compiler separately](https://nagi.disnana.com/en/docs/getting-started/).
 
-The plugin version is managed in `build.gradle.kts`. The latest published version is 0.1.1, with separate ZIPs for IntelliJ IDEA and PyCharm. Its official destination is the [Nagi page on JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi), which is currently under review.
+The plugin version is managed in `build.gradle.kts`. The published version is 0.1.1. Install it directly from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) in a compatible IDE, or download an IDE-specific ZIP from [GitHub Releases](https://github.com/disnana/Nagi/releases).
 
 ## Features
 
@@ -19,9 +19,9 @@ Whole-file formatting, semantic completion, go to definition, and automatic chec
 
 ## Installation
 
-Until Marketplace review is complete, download the ZIP from [GitHub Releases](https://github.com/disnana/Nagi/releases). The currently published `jetbrains-v0.1.1` release contains `nagi-jetbrains-IC-0.1.1.zip` for IDEA and `nagi-jetbrains-PC-0.1.1.zip` for PyCharm, each with a matching `.sha256` file. The official Marketplace destination is the [Nagi listing](https://plugins.jetbrains.com/plugin/34891-nagi).
+The `jetbrains-v0.1.1` release contains `nagi-jetbrains-IC-0.1.1.zip` for IDEA and `nagi-jetbrains-PC-0.1.1.zip` for PyCharm, each with a matching `.sha256` file.
 
-Select the ZIP in **Settings → Plugins → ⚙ → Install Plugin from Disk**, then restart the IDE. The Marketplace listing is under review. A PR build is available as the `release-jetbrains` artifact only after all IDEA/PyCharm stable/EAP checks pass in **Actions → Nagi checks**. For a local build, use the ZIP in `build/distributions/`.
+To install a GitHub Release ZIP, select it in **Settings → Plugins → ⚙ → Install Plugin from Disk**, then restart the IDE. A PR build is available as the `release-jetbrains` artifact only after all IDEA/PyCharm stable/EAP checks pass in **Actions → Nagi checks**. For a local build, use the ZIP in `build/distributions/`.
 
 Set the compiler executable in **Settings → Languages & Frameworks → Nagi**. An empty value uses `nagic` from `PATH`. Relative paths resolve from the IDE project root.
 
@@ -42,7 +42,7 @@ cd editors/jetbrains-nagi
 ./gradlew test buildPlugin
 ```
 
-On Windows, use `gradlew.bat`. The wrapper pins Gradle 9.0.0, IntelliJ Platform Gradle Plugin 2.12.0, and IntelliJ IDEA Community 2025.1.1 as the default SDK. The first build downloads the SDK and dependencies.
+On Windows, use `gradlew.bat`. The wrapper pins Gradle 9.4.0, IntelliJ Platform Gradle Plugin 2.14.0, and IntelliJ IDEA Community 2025.1.1 as the default SDK. The first build downloads the SDK and dependencies.
 
 The same code can be checked against the PyCharm SDK:
 

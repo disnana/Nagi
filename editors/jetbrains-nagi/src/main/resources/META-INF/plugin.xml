@@ -3,8 +3,15 @@
     <name>Nagi for JetBrains</name>
     <vendor url="https://nagi.disnana.com">Disnana</vendor>
     <description><![CDATA[
-        Nagi High and Low language support: highlighting, folding, indentation,
-        and explicit compiler checks and project execution. Requires a separate Nagi compiler.
+        <p>Nagi language support for IntelliJ IDEA and PyCharm.</p>
+        <p>Provides syntax highlighting for High (.nagi) and Low (.low) files, code folding, and indentation support.</p>
+        <p>Use Nagi: Check and Nagi: Run for a Nagi file or the nearest project containing nagi.toml.</p>
+        <p>Requires the Nagi compiler, installed separately. It is not bundled with the plugin. Download the compiler from <a href="https://github.com/disnana/Nagi/releases">GitHub Releases</a>.</p>
+        <h3>日本語</h3>
+        <p>IntelliJ IDEA・PyCharm向けのNagi言語サポートです。</p>
+        <p>High（.nagi）・Low（.low）のシンタックスハイライト、コードの折りたたみ、インデント支援を提供します。</p>
+        <p>Nagi: Check / Nagi: RunでNagiファイルまたは最寄りのnagi.tomlを含むプロジェクトを検査・実行できます。</p>
+        <p>Nagiコンパイラは別途インストールしてください。プラグインには同梱されていません。コンパイラは<a href="https://github.com/disnana/Nagi/releases">GitHub Releases</a>から取得できます。</p>
     ]]></description>
     <depends>com.intellij.modules.platform</depends>
     <extensions defaultExtensionNs="com.intellij">

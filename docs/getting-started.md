@@ -37,7 +37,7 @@ nagic --help
 
 VS Code拡張は[Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)から、または[GitHub Releases](https://github.com/disnana/Nagi/releases)の`nagi-language-0.1.13.vsix`と対応する`.sha256`から入手できます。VSIXはVS Codeの**拡張機能: VSIXからのインストール**で選びます。
 
-IntelliJ IDEA・PyCharm向けの**Nagi for JetBrains**の正式公開先は[JetBrains MarketplaceのNagiページ](https://plugins.jetbrains.com/plugin/34891-nagi)で、現在審査中です。審査中の現時点では[GitHub Releases](https://github.com/disnana/Nagi/releases)からZIPを取得します。現在の公開版0.1.1には、IDEA用`nagi-jetbrains-IC-0.1.1.zip`とPyCharm用`nagi-jetbrains-PC-0.1.1.zip`があります。IDEで**Settings → Plugins → ⚙ → Install Plugin from Disk**を選び、ZIPを指定してIDEを再起動してください。どちらの拡張にもコンパイラは含まれません。
+IntelliJ IDEA・PyCharm向けの**Nagi for JetBrains**は[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)または[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。Marketplaceから対応IDEへ直接インストールするか、GitHub ReleasesからZIPを取得してください。公開中の0.1.1 releaseには、IDEA用`nagi-jetbrains-IC-0.1.1.zip`とPyCharm用`nagi-jetbrains-PC-0.1.1.zip`があります。Release ZIPはIDEで**Settings → Plugins → ⚙ → Install Plugin from Disk**を選び、ZIPを指定してインストールします。どちらの拡張にもコンパイラは含まれません。
 
 ### アプリのビルドに必要なもの
 

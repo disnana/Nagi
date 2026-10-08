@@ -2,7 +2,7 @@
 
 [目次](README.md) · [準備と最初の実行](getting-started.md) · [拡張のインストールと設定](../editors/vscode-nagi/README.md)
 
-VS Code拡張はMarketplaceまたはGitHub ReleasesのVSIXから導入できます。IntelliJ IDEA・PyCharm向け[Nagi for JetBrains](https://github.com/disnana/Nagi/blob/main/editors/jetbrains-nagi/README.md)の正式公開先は[JetBrains MarketplaceのNagiページ](https://plugins.jetbrains.com/plugin/34891-nagi)ですが、現在審査中です。審査中の現時点は[GitHub Releases](https://github.com/disnana/Nagi/releases)のZIPを手動で入れてください。最新の公開ファイル名は[導入ガイド](getting-started.md)を参照してください。
+VS Code拡張はMarketplaceまたはGitHub ReleasesのVSIXから導入できます。IntelliJ IDEA・PyCharm向け[Nagi for JetBrains](https://github.com/disnana/Nagi/blob/main/editors/jetbrains-nagi/README.md)は[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)または[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。Marketplaceから対応IDEへ直接インストールするか、GitHub ReleasesのZIPを手動で入れてください。公開ファイル名は[導入ガイド](getting-started.md)を参照してください。
 
 Nagi拡張0.1.13と、0.1.11の公開記録で入手可能と確認できた`nagic` 0.1.11を使って、型ホバー・フィールド補完・定義への移動を試します。この文書は0.1.11リリース対象です。リポジトリをVS Codeで開くか、以下のコードを自分のフォルダーへ保存してください。
 
