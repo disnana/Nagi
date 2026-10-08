@@ -2,6 +2,14 @@
 
 状態: 2026-10-06、ユーザーがQ002の選択1を承認。公開API・SQL制限・終了契約とruntime rusqlite `hooks`を採用する。実装・検証の完了とは区別する。追加wrapperのcrate・版・featureはQ004で別に判断した。同日にgeneric deadpool =0.13.1（managed／rt_tokio_1、default featuresなし）、deadpool-runtime 0.3.1の比較試作と[capability初版表](../sqlite-pool-adapter-decision.md#registry配線前に固定するcapability)をユーザーが承認した。既存Tokio／rusqliteの版は維持する。
 
+## 2026-10-08の実装判断
+
+正式化前に長期的な妥当性を優先するユーザー承認に基づき、deadpool試作から既存Tokio Semaphoreとlazy専用adapterへ移行する。限定vendorは未採用で、新依存・版更新を加えずdeadpool/deadpool-runtimeを削除する。独自waiter公平性や取消schedulerは作らずTokioへ任せ、idle checkout/returnと既存native ledger/observerの接続をNagiが保守する。取得ごとの予算はtask-localではなく明示引数で渡す。
+
+Optionsは全slot Layoutを検査する構造から、usize/正数/Semaphoreとnative時間/busy_ms i32を検査する構造へ変わる。実container増分の予約失敗にはALLOCATIONを追加し、Drop返却失敗も停止・退役・cause公開・actual joinまで追跡する。openはlazy native起動を保つ。SQL/affine Tx/0ms/同じ取得予算/登録で期限終了/終了責任/旧Db契約は維持する。判断比較、構造化cause、公開API、配布証拠は[公開runtime判断](../sqlite-public-runtime-decision.md)を参照する。
+
+以下のdeadpool/Object::takeとprivate試作の記述は決定履歴であり、現在の公開pool依存を示すものではない。
+
 ## 前提と分担
 
 Phase 3の#80はhead `35038940`で4 OS・editor・site・merge gateが成功し、main `f10cb64`へ反映済み。両者のtree `e45dbede`は一致する。旧Db/API、High／Lowの意味論、Rust backendを保つ。

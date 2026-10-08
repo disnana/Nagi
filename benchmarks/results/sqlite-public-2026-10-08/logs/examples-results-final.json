@@ -1,0 +1,79 @@
+[
+  {
+    "sample": "hello",
+    "build": "passed",
+    "stdout": "Hello, Nagi!\n4\n",
+    "stderr": "",
+    "run": "passed"
+  },
+  {
+    "sample": "values",
+    "build": "passed",
+    "stdout": "10\n16\n",
+    "stderr": "",
+    "run": "passed"
+  },
+  {
+    "sample": "cpu",
+    "build": "passed"
+  },
+  {
+    "sample": "crud",
+    "build": "passed"
+  },
+  {
+    "sample": "async",
+    "build": "passed",
+    "stdout": "10000\n全task完了\n",
+    "stderr": "",
+    "run": "passed"
+  },
+  {
+    "sample": "actor",
+    "build": "passed",
+    "stdout": "1000\nactor終了\n",
+    "stderr": "",
+    "run": "passed"
+  },
+  {
+    "sample": "supervisor",
+    "build": "passed",
+    "stdout": "3\n独立workerは継続\n",
+    "stderr": "\nthread 'tokio-rt-worker' (387955) panicked at runtime/src/concurrent.rs:192:17:\nintentional supervised worker crash 0\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'tokio-rt-worker' (387955) panicked at runtime/src/concurrent.rs:192:17:\nintentional supervised worker crash 1\n\nthread 'tokio-rt-worker' (387956) panicked at runtime/src/concurrent.rs:192:17:\nintentional supervised worker crash 2\n",
+    "run": "passed"
+  },
+  {
+    "sample": "queue",
+    "build": "passed",
+    "stdout": "36\n全job処理完了（dead letterを含む）\n",
+    "stderr": "",
+    "run": "passed"
+  },
+  {
+    "sample": "zero_copy",
+    "build": "passed",
+    "stdout": "alice\nalice\n",
+    "stderr": "",
+    "run": "passed"
+  },
+  {
+    "sample": "low_call",
+    "build": "passed",
+    "stdout": "42\n",
+    "stderr": "",
+    "run": "passed"
+  },
+  {
+    "sample": "override",
+    "build": "passed",
+    "stdout": "42\n",
+    "stderr": "",
+    "run": "passed"
+  },
+  {
+    "sample": "hello.low",
+    "build": "passed",
+    "run": "passed",
+    "stdout": "4\n"
+  }
+]

@@ -1,0 +1,41 @@
+import std.db.sqlite as sqlite
+import std.result as result
+
+class Total:
+    amount: i64
+
+enum AppFailure:
+    Configuration(cause: Error)
+    Database(cause: sqlite.Failure)
+
+def configuration_error(cause: Error) -> AppFailure:
+    return AppFailure.Configuration(cause)
+
+def database_error(cause: sqlite.Failure) -> AppFailure:
+    return AppFailure.Database(cause)
+
+async def write_and_read(pool: view[sqlite.Pool]) -> Result[i64, sqlite.Failure]:
+    tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
+    try await sqlite.exec(tx, "CREATE TABLE IF NOT EXISTS amounts(amount INTEGER NOT NULL)", sqlite.parameters())
+    values = sqlite.bind_i64(sqlite.parameters(), 7)
+    try await sqlite.exec(tx, "INSERT INTO amounts VALUES (?)", values)
+    try await sqlite.commit(tx)
+    tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
+    row = try await sqlite.query[Total](tx, "SELECT amount FROM amounts", sqlite.parameters())
+    try await sqlite.rollback(tx)
+    match row:
+        case Some(total):
+            return ok(total.amount)
+        case None:
+            return ok(0)
+
+async def main() -> Result[unit, AppFailure]:
+    config = try result.map_error(sqlite.options(1, 2, 1000, 0), configuration_error)
+    pool = try result.map_error(await sqlite.open(":memory:", config), database_error)
+    work = await write_and_read(view(pool))
+    ending = await sqlite.close(pool, 1000)
+    # Observe close even when the transaction failed; preserve the work error first.
+    amount = try result.map_error(work, database_error)
+    try result.map_error(ending, database_error)
+    print(amount)
+    return ok(print("closed"))

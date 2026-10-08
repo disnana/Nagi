@@ -17,6 +17,7 @@ const ENGINE_DEADLINE: Duration = Duration::from_millis(4500);
 enum Phase {
     Schema,
     Query,
+    SqliteExec,
     Metadata,
 }
 
@@ -186,6 +187,26 @@ fn authorize(
             // In particular, CREATE TABLE AS SELECT cannot populate tables.
             // A CREATE VIEW stores its SELECT without executing it.
             _ => false,
+        },
+        Phase::SqliteExec => match context.action {
+            // These statements are prepared only. No query is stepped, so DDL
+            // cannot change the loaded schema snapshot or application rows.
+            AuthAction::CreateTable { .. }
+            | AuthAction::CreateIndex { .. }
+            | AuthAction::CreateView { .. }
+            | AuthAction::DropTable { .. }
+            | AuthAction::DropIndex { .. }
+            | AuthAction::DropView { .. }
+            | AuthAction::AlterTable { .. }
+            | AuthAction::Reindex { .. } => true,
+            AuthAction::Insert { table_name }
+            | AuthAction::Update { table_name, .. }
+            | AuthAction::Delete { table_name }
+                if is_schema_table(table_name) =>
+            {
+                true
+            }
+            _ => authorize(context, Phase::Query, actions, catalog),
         },
         Phase::Query => match context.action {
             // Eponymous virtual tables (including pragma_* tables) need not
@@ -500,7 +521,12 @@ fn check_query(
     if query.sql.len() > MAX_SQL_BYTES {
         return Err(format!("query exceeds {MAX_SQL_BYTES} bytes"));
     }
-    let actions = install_authorizer(connection, Phase::Query, Arc::clone(catalog))?;
+    let phase = if query.operation == Operation::SqliteExec {
+        Phase::SqliteExec
+    } else {
+        Phase::Query
+    };
+    let actions = install_authorizer(connection, phase, Arc::clone(catalog))?;
     // Batch uses SQLite's tail pointer rather than splitting on semicolons in
     // strings or comments. Neither the first nor any later statement is run.
     let mut batch = Batch::new(connection, &query.sql);
@@ -533,17 +559,43 @@ fn check_query(
                 return Err("db_insert/db_update require DML with RETURNING columns".to_owned());
             }
         }
+        Operation::SqliteRows => {
+            if !statement.readonly() || columns == 0 {
+                return Err(
+                    "sqlite.query/sqlite.all require a read-only statement with returned columns"
+                        .into(),
+                );
+            }
+        }
+        Operation::SqliteExec => {
+            if columns != 0 {
+                return Err("sqlite.exec requires a statement without returned columns".into());
+            }
+        }
         Operation::Write => {
             if statement.readonly() || !actions.writes || columns != 0 {
                 return Err("db_write requires DML without returned columns".to_owned());
             }
         }
     }
-    if statement.parameter_count() != query.bind_count {
+    if matches!(
+        query.operation,
+        Operation::SqliteRows | Operation::SqliteExec
+    ) {
+        for index in 1..=statement.parameter_count() {
+            if statement.parameter_name(index).is_some() {
+                return Err("sqlite operations require anonymous ? bind parameters".into());
+            }
+        }
+    }
+    if query
+        .bind_count
+        .is_some_and(|count| statement.parameter_count() != count)
+    {
         return Err(format!(
             "SQL requires {} bind parameters, but this operation supplies {}",
             statement.parameter_count(),
-            query.bind_count
+            query.bind_count.unwrap()
         ));
     }
     let missing: Vec<_> = query
@@ -572,7 +624,7 @@ mod tests {
         Query {
             operation,
             sql: sql.to_owned(),
-            bind_count: binds,
+            bind_count: Some(binds),
             fields: fields.iter().map(|field| (*field).to_owned()).collect(),
         }
     }
@@ -595,6 +647,69 @@ mod tests {
             response.queries[0].error.is_none(),
             "{:?}",
             response.queries[0].error
+        );
+    }
+
+    #[test]
+    fn sqlite_parameters_shape_and_prepare_only_ddl_preserve_snapshot() {
+        let deadline = Instant::now() + ENGINE_DEADLINE;
+        let connection = open_scratch(deadline).unwrap();
+        let catalog = load_schema(&connection, SCHEMA, deadline).unwrap();
+        for (operation, sql, accepted) in [
+            (
+                Operation::SqliteRows,
+                "SELECT id FROM users WHERE id = ? AND age = ?",
+                true,
+            ),
+            (
+                Operation::SqliteRows,
+                "SELECT id FROM users WHERE id = ?1",
+                false,
+            ),
+            (
+                Operation::SqliteRows,
+                "SELECT id FROM users WHERE id = :id",
+                false,
+            ),
+            (
+                Operation::SqliteRows,
+                "DELETE FROM users RETURNING id",
+                false,
+            ),
+            (
+                Operation::SqliteExec,
+                "CREATE TABLE prepared_only(id INTEGER)",
+                true,
+            ),
+            (
+                Operation::SqliteExec,
+                "DELETE FROM users WHERE id = ?",
+                true,
+            ),
+            (
+                Operation::SqliteExec,
+                "DELETE FROM users RETURNING id",
+                false,
+            ),
+            (Operation::SqliteExec, "SELECT id FROM users", false),
+            (
+                Operation::SqliteExec,
+                "CREATE TABLE prepared_only(id); SELECT id FROM users",
+                false,
+            ),
+        ] {
+            let mut query = query(operation, sql, 0, &[]);
+            query.bind_count = None;
+            let result = check_query(&connection, &query, deadline, &catalog);
+            assert_eq!(result.is_ok(), accepted, "{sql}: {result:?}");
+            assert_eq!(connection.total_changes(), 0);
+        }
+        assert!(connection.prepare("SELECT id FROM prepared_only").is_err());
+        assert_eq!(
+            connection
+                .query_row("SELECT count(*) FROM users", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            0
         );
     }
 

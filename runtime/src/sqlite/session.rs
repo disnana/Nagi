@@ -1,6 +1,5 @@
-//! 一接続の試験driverと、wrapperに依存しないlexical native session。
-//! pool選択・acquire policy・Nagi capability・公開APIはここでは実装しない。
-use crate::{database::indices, FromRow};
+//! Public lexical native session core; test-only Driver reuses this same implementation.
+use crate::{database::indices, FromRow, Sql};
 use rusqlite::{
     hooks::{AuthAction, AuthContext, Authorization},
     params_from_iter,
@@ -9,67 +8,19 @@ use rusqlite::{
 };
 use std::{
     cell::RefCell,
-    future::Future,
     panic::{catch_unwind, AssertUnwindSafe},
-    pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc as blocking_channel, Arc, Mutex,
     },
     time::Duration,
 };
+#[cfg(test)]
+use std::{future::Future, pin::Pin};
 use tokio::sync::{mpsc, oneshot, Notify};
 const WATCHDOG: Duration = Duration::from_secs(10);
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) enum Kind {
-    Sql,
-    Bind,
-    Decode,
-    Aborted,
-    Cleanup,
-    Worker,
-    Closed,
-    AcquireTimeout,
-    CloseTimeout,
-    ReplyLost,
-}
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) enum Outcome {
-    NotApplicable,
-    Active,
-    Committed,
-    RolledBack,
-    Unknown,
-}
-#[derive(Clone, Debug)]
-pub(super) struct Failure {
-    pub kind: Kind,
-    pub outcome: Outcome,
-    pub primary: Option<String>,
-    pub cleanup: Option<String>,
-    pub retired: bool,
-}
-impl Failure {
-    pub(super) fn primary(kind: Kind, outcome: Outcome, message: impl Into<String>) -> Self {
-        Self {
-            kind,
-            outcome,
-            primary: Some(message.into()),
-            cleanup: None,
-            retired: false,
-        }
-    }
-    pub(super) fn cleanup(outcome: Outcome, message: impl Into<String>) -> Self {
-        Self {
-            kind: Kind::Cleanup,
-            outcome,
-            primary: None,
-            cleanup: Some(message.into()),
-            retired: true,
-        }
-    }
-}
+pub(super) use super::{Failure, FailureKind as Kind, Outcome};
 #[derive(Clone, Copy)]
 pub(super) enum Finish {
     Commit,
@@ -173,10 +124,12 @@ fn install_authorizer(
 pub(super) struct Gate {
     entered: AtomicBool,
     changed: Notify,
+    #[cfg(test)]
     sender: Mutex<Option<blocking_channel::SyncSender<()>>>,
     receiver: Mutex<Option<blocking_channel::Receiver<()>>>,
 }
 impl Gate {
+    #[cfg(test)]
     pub fn new() -> Self {
         let (sender, receiver) = blocking_channel::sync_channel(1);
         Self {
@@ -196,6 +149,7 @@ impl Gate {
                 .expect("test barrier watchdog expired or owner disappeared");
         }
     }
+    #[cfg(test)]
     pub async fn wait(&self) {
         tokio::time::timeout(WATCHDOG, async {
             loop {
@@ -209,6 +163,7 @@ impl Gate {
         .await
         .expect("test barrier watchdog expired");
     }
+    #[cfg(test)]
     pub fn release(&self) {
         self.sender
             .lock()
@@ -221,9 +176,11 @@ impl Gate {
 }
 #[derive(Default)]
 pub(super) struct Config {
-    // private multi-connection fixtureのみ。公開path/Options validationの実装ではない。
+    // Public Options/path values and private test seams.
     pub path: Option<std::path::PathBuf>,
     pub seed: &'static str,
+    pub queue_capacity: Option<usize>,
+    pub busy: Duration,
     pub begin_gate: Option<Arc<Gate>>,
     pub command_gate: Option<Arc<Gate>>,
     pub cleanup_gate: Option<Arc<Gate>>,
@@ -237,6 +194,7 @@ pub(super) struct Config {
 }
 #[derive(Clone, Default)]
 pub(super) struct Stats {
+    #[cfg(test)]
     pub admitted: usize,
     pub begun: usize,
     pub executed: usize,
@@ -246,6 +204,7 @@ pub(super) struct Stats {
     pub rollback_attempts: usize,
     pub denied_pragmas: usize,
     pub management: bool,
+    #[cfg(test)]
     pub closing: bool,
     pub native_closed: bool,
     pub joined: bool,
@@ -282,7 +241,11 @@ impl State {
         self.changed.notify_waiters();
     }
     pub(super) fn error(&self) -> Option<Failure> {
-        self.failure.lock().unwrap().clone()
+        self.failure
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(Failure::duplicate)
     }
     pub(super) fn worker_error(&self) -> Failure {
         let message = self
@@ -291,11 +254,12 @@ impl State {
             .unwrap()
             .as_ref()
             .and_then(|error| error.primary.clone().or_else(|| error.cleanup.clone()))
-            .unwrap_or_else(|| "worker stopped".into());
-        let mut error = Failure::primary(Kind::Worker, Outcome::NotApplicable, message);
+            .unwrap_or_else(|| crate::Error::internal("worker stopped"));
+        let mut error = Failure::primary_error(Kind::Worker, Outcome::NotApplicable, message);
         error.retired = true;
         error
     }
+    #[cfg(test)]
     async fn until(&self, predicate: impl Fn(&Stats) -> bool) {
         tokio::time::timeout(WATCHDOG, async {
             loop {
@@ -312,6 +276,7 @@ impl State {
 }
 
 pub(super) struct BeginRequest {
+    pub(super) mode: super::BeginMode,
     reply: oneshot::Sender<Result<Tx, Failure>>,
     // lexical native cleanupが返るまで保持。session senderの強参照は入れない。
     _owner: Option<Box<dyn Send>>,
@@ -319,17 +284,20 @@ pub(super) struct BeginRequest {
 impl BeginRequest {
     pub(super) fn owned(reply: oneshot::Sender<Result<Tx, Failure>>, owner: Box<dyn Send>) -> Self {
         Self {
+            mode: super::BeginMode::Deferred,
             reply,
             _owner: Some(owner),
         }
     }
 }
+#[cfg(test)]
 pub(super) struct Driver {
     // これは単一connectionの試験dispatch。pool/取得期限/容量制御の実装ではない。
     // begin senderのclone→sendとcloseの全raceを調停するadmission adapterも未実装。
     begin_sender: Mutex<Option<mpsc::Sender<BeginRequest>>>,
     state: Arc<State>,
 }
+#[cfg(test)]
 impl Driver {
     pub fn open(config: Config) -> Self {
         let (sender, receiver) = mpsc::channel::<BeginRequest>(1);
@@ -364,6 +332,7 @@ impl Driver {
         let (reply, receiver) = oneshot::channel();
         sender
             .send(BeginRequest {
+                mode: super::BeginMode::Deferred,
                 reply,
                 _owner: None,
             })
@@ -408,7 +377,14 @@ impl Driver {
                 "worker not joined",
             ));
         }
-        if let Some(error) = self.state.failure.lock().unwrap().clone() {
+        if let Some(error) = self
+            .state
+            .failure
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(Failure::duplicate)
+        {
             return Err(error);
         }
         assert!(self.stats().native_closed);
@@ -436,13 +412,14 @@ impl Driver {
         Ok(denied)
     }
 }
+#[cfg(test)]
 impl Drop for Driver {
     fn drop(&mut self) {
         self.request_close();
     }
 }
 
-// direct driverとdeadpool adapterが同じnative開始/SQL/cleanup/closeを呼ぶ。
+// test Driverと公開adapterが同じnative開始/SQL/cleanup/closeを呼ぶ。
 // checkoutの返却責任はBeginRequestのowned fieldにあり、Tokio taskへ逃がさない。
 pub(super) fn native_worker(
     config: Arc<Config>,
@@ -452,24 +429,28 @@ pub(super) fn native_worker(
     startup: Option<Arc<Gate>>,
 ) {
     CURRENT_MODE.with(|mode| *mode.borrow_mut() = Some(Arc::clone(&state.mode)));
-    let result = catch_unwind(AssertUnwindSafe(|| {
+    let result = catch_unwind(AssertUnwindSafe(|| -> rusqlite::Result<()> {
         if let Some(gate) = startup {
             gate.block_once();
         }
         let mut conn = match &config.path {
-            Some(path) => Connection::open(path).unwrap(),
-            None => Connection::open_in_memory().unwrap(),
+            Some(path) => Connection::open_with_flags(
+                path,
+                rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE
+                    | rusqlite::OpenFlags::SQLITE_OPEN_CREATE
+                    | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+            )?,
+            None => Connection::open_in_memory()?,
         };
-        conn.busy_timeout(Duration::ZERO).unwrap();
-        conn.execute_batch(config.seed).unwrap(); // trusted fixtureのみ。
+        conn.busy_timeout(config.busy)?;
+        conn.execute_batch(config.seed)?; // trusted fixtureのみ。
         install_authorizer(
             &conn,
             &state.mode,
             &state,
             config.deny_rollback,
             config.deny_commit,
-        )
-        .unwrap();
+        )?;
         if let Some(ready) = ready.take() {
             let _ = ready.send(Ok(()));
         }
@@ -487,16 +468,25 @@ pub(super) fn native_worker(
         }
         match conn.close() {
             Ok(()) => state.update(|stats| stats.native_closed = true),
-            Err((_conn, error)) => {
-                state.fail(Failure::cleanup(Outcome::NotApplicable, error.to_string()))
-            }
+            Err((_conn, error)) => state.fail(Failure::cleanup_error(
+                Outcome::NotApplicable,
+                native_error(error),
+            )),
         }
         if let Some(gate) = &config.exit_gate {
             gate.block_once();
         }
+        Ok(())
     }));
-    if result.is_err() {
-        state.fail(state.worker_error());
+    match result {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            let mut failure =
+                Failure::primary_error(Kind::Worker, Outcome::NotApplicable, native_error(error));
+            failure.retired = true;
+            state.fail(failure);
+        }
+        Err(_) => state.fail(state.worker_error()),
     }
     if let Some(ready) = ready {
         let _ = ready.send(Err(state.worker_error()));
@@ -509,7 +499,7 @@ pub(super) fn native_worker(
 type ReadCommand = Box<dyn FnOnce(&Transaction<'_>) -> Option<Failure> + Send>;
 enum Command {
     Exec {
-        sql: String,
+        sql: Sql,
         values: Vec<Value>,
         reply: oneshot::Sender<Result<i64, Failure>>,
     },
@@ -519,9 +509,14 @@ enum Command {
         reply: oneshot::Sender<Result<(), Failure>>,
     },
 }
-pub(super) struct Tx {
+/// A transaction session. It has no Clone or public Debug implementation.
+/// ```compile_fail
+/// fn expose(tx: &nagi_runtime::sqlite::Tx) { println!("{tx:?}"); }
+/// ```
+pub struct Tx {
     sender: mpsc::Sender<Command>,
 }
+#[cfg(test)]
 impl std::fmt::Debug for Tx {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TestTx").finish_non_exhaustive()
@@ -531,8 +526,11 @@ fn reply_lost() -> Failure {
     Failure::primary(Kind::ReplyLost, Outcome::Unknown, "session reply lost")
 }
 impl Tx {
-    pub async fn exec(&self, sql: &str, values: Vec<Value>) -> Result<i64, Failure> {
-        let sql = sql.to_owned();
+    #[cfg(test)]
+    pub(super) async fn exec(&self, sql: &str, values: Vec<Value>) -> Result<i64, Failure> {
+        self.exec_sql(Sql::Owned(sql.to_owned()), values).await
+    }
+    pub(super) async fn exec_sql(&self, sql: Sql, values: Vec<Value>) -> Result<i64, Failure> {
         let (reply, receiver) = oneshot::channel();
         self.sender
             .send(Command::Exec { sql, values, reply })
@@ -540,28 +538,55 @@ impl Tx {
             .map_err(|_| reply_lost())?;
         receiver.await.map_err(|_| reply_lost())?
     }
-    pub async fn query<T: FromRow>(
+    #[cfg(test)]
+    pub(super) async fn query<T: FromRow>(
         &self,
         sql: &str,
+        values: Vec<Value>,
+    ) -> Result<Option<T>, Failure> {
+        let mut result = self
+            .read::<T>(Sql::Owned(sql.to_owned()), values, true)
+            .await?;
+        Ok(result.pop())
+    }
+    #[cfg(test)]
+    pub(super) async fn all<T: FromRow>(
+        &self,
+        sql: &str,
+        values: Vec<Value>,
+    ) -> Result<Vec<T>, Failure> {
+        self.read::<T>(Sql::Owned(sql.to_owned()), values, false)
+            .await
+    }
+    pub(super) async fn query_sql<T: FromRow>(
+        &self,
+        sql: Sql,
         values: Vec<Value>,
     ) -> Result<Option<T>, Failure> {
         let mut result = self.read::<T>(sql, values, true).await?;
         Ok(result.pop())
     }
-    pub async fn all<T: FromRow>(&self, sql: &str, values: Vec<Value>) -> Result<Vec<T>, Failure> {
+    pub(super) async fn all_sql<T: FromRow>(
+        &self,
+        sql: Sql,
+        values: Vec<Value>,
+    ) -> Result<Vec<T>, Failure> {
         self.read::<T>(sql, values, false).await
     }
     async fn read<T: FromRow>(
         &self,
-        sql: &str,
+        sql: Sql,
         values: Vec<Value>,
         first: bool,
     ) -> Result<Vec<T>, Failure> {
-        let sql = sql.to_owned();
         let (reply, receiver) = oneshot::channel();
         let command = Command::Read(Box::new(move |native| {
-            let result = read_rows::<T>(native, &sql, values, first);
-            let retired = result.as_ref().err().filter(|error| error.retired).cloned();
+            let result = read_rows::<T>(native, sql_ref(&sql), values, first);
+            let retired = result
+                .as_ref()
+                .err()
+                .filter(|error| error.retired)
+                .map(Failure::duplicate);
             let _ = reply.send(result);
             retired
         }));
@@ -569,7 +594,7 @@ impl Tx {
         receiver.await.map_err(|_| reply_lost())?
     }
     // async fnのowned引数はFuture生成時から所有され、未poll DropもEOF cleanupへ進む。
-    pub async fn finish(self, operation: Finish) -> Result<(), Failure> {
+    pub(super) async fn finish(self, operation: Finish) -> Result<(), Failure> {
         let (reply, receiver) = oneshot::channel();
         self.sender
             .send(Command::Finish { operation, reply })
@@ -577,15 +602,17 @@ impl Tx {
             .map_err(|_| reply_lost())?;
         receiver.await.map_err(|_| reply_lost())?
     }
+    #[cfg(test)]
     pub fn available_capacity(&self) -> usize {
         self.sender.capacity()
     }
+    #[cfg(test)]
     pub async fn enqueue_without_reply(&self, sql: &str) {
         let (reply, receiver) = oneshot::channel();
         drop(receiver);
         self.sender
             .send(Command::Exec {
-                sql: sql.into(),
+                sql: Sql::Owned(sql.to_owned()),
                 values: vec![],
                 reply,
             })
@@ -594,6 +621,38 @@ impl Tx {
     }
 }
 
+fn sql_ref(sql: &Sql) -> &str {
+    match sql {
+        Sql::Static(s) => s,
+        Sql::Owned(s) => s,
+    }
+}
+fn native_error(error: rusqlite::Error) -> crate::Error {
+    let kind = if matches!(
+        error.sqlite_error_code(),
+        Some(rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked)
+    ) {
+        crate::ErrorKind::Busy
+    } else {
+        crate::ErrorKind::Database
+    };
+    crate::Error {
+        kind,
+        message: error.to_string(),
+    }
+}
+fn current_error(conn: &Connection, kind: Kind, error: crate::Error) -> Failure {
+    let kind = if matches!(error.kind, crate::ErrorKind::Busy) {
+        Kind::Busy
+    } else {
+        kind
+    };
+    if conn.is_autocommit() {
+        Failure::primary_error(Kind::Aborted, Outcome::RolledBack, error)
+    } else {
+        Failure::primary_error(kind, Outcome::Active, error)
+    }
+}
 fn current_failure(conn: &Connection, kind: Kind, message: impl Into<String>) -> Failure {
     if conn.is_autocommit() {
         Failure::primary(Kind::Aborted, Outcome::RolledBack, message)
@@ -617,7 +676,7 @@ fn prepare<'a>(
     assert!(!management_active());
     let statement = conn
         .prepare(sql)
-        .map_err(|error| current_failure(conn, Kind::Sql, error.to_string()))?;
+        .map_err(|error| current_error(conn, Kind::Sql, native_error(error)))?;
     if statement.parameter_count() != values.len()
         || (1..=statement.parameter_count()).any(|index| statement.parameter_name(index).is_some())
     {
@@ -644,7 +703,7 @@ fn execute(conn: &Connection, sql: &str, values: Vec<Value>) -> Result<i64, Fail
     let mut statement = prepare(conn, sql, &values, false)?;
     let result = statement
         .execute(params_from_iter(values))
-        .map_err(|error| current_failure(conn, Kind::Sql, error.to_string()));
+        .map_err(|error| current_error(conn, Kind::Sql, native_error(error)));
     let finalized = statement.finalize();
     let count = observe_finalization(conn, result, finalized)?;
     i64::try_from(count).map_err(|error| current_failure(conn, Kind::Sql, error.to_string()))
@@ -658,19 +717,19 @@ fn read_rows<T: FromRow>(
     let mut statement = prepare(conn, sql, &values, true)?;
     let result = (|| {
         let indices = indices::<T>(&statement)
-            .map_err(|error| current_failure(conn, Kind::Decode, error.to_string()))?;
+            .map_err(|error| current_error(conn, Kind::Decode, native_error(error)))?;
         let mut rows = statement
             .query(params_from_iter(values))
-            .map_err(|error| current_failure(conn, Kind::Bind, error.to_string()))?;
+            .map_err(|error| current_error(conn, Kind::Bind, native_error(error)))?;
         let mut output = vec![];
         while let Some(row) = rows
             .next()
-            .map_err(|error| current_failure(conn, Kind::Sql, error.to_string()))?
+            .map_err(|error| current_error(conn, Kind::Sql, native_error(error)))?
         {
             assert!(!management_active());
             output.push(
                 T::read(row, &indices)
-                    .map_err(|error| current_failure(conn, Kind::Decode, error.to_string()))?,
+                    .map_err(|error| current_error(conn, Kind::Decode, native_error(error)))?,
             );
             if first {
                 break;
@@ -700,7 +759,7 @@ fn observe_finalization<T>(
                     "statement finalize failed",
                 )
             });
-            failure.cleanup = Some(error.to_string());
+            failure.cleanup = Some(native_error(error));
             failure.retired = true;
             Err(failure)
         }
@@ -717,15 +776,19 @@ fn run_session(
     let (result, mut outcome, terminal_reply) = {
         let begun = {
             let _management = Management::enter(&mode);
-            conn.transaction_with_behavior(TransactionBehavior::Deferred)
+            conn.transaction_with_behavior(match request.mode {
+                super::BeginMode::Deferred => TransactionBehavior::Deferred,
+                super::BeginMode::Immediate => TransactionBehavior::Immediate,
+                super::BeginMode::Exclusive => TransactionBehavior::Exclusive,
+            })
         };
         let mut native = match begun {
             Ok(native) => native,
             Err(error) => {
-                let _ = request.reply.send(Err(Failure::primary(
+                let _ = request.reply.send(Err(Failure::primary_error(
                     Kind::Sql,
                     Outcome::NotApplicable,
-                    error.to_string(),
+                    native_error(error),
                 )));
                 return true;
             }
@@ -735,7 +798,7 @@ fn run_session(
         // panic unwind後にも外側scopeが明示rollbackを所有する。
         native.set_drop_behavior(DropBehavior::Ignore);
         state.update(|stats| stats.begun += 1);
-        let (sender, mut inbox) = mpsc::channel(1);
+        let (sender, mut inbox) = mpsc::channel(config.queue_capacity.unwrap_or(1));
         if let Some(gate) = &config.begin_gate {
             gate.block_once();
         }
@@ -749,9 +812,13 @@ fn run_session(
                         if let Some(gate) = &config.command_gate {
                             gate.block_once();
                         }
-                        let result = execute(&native, &sql, values);
+                        let result = execute(&native, sql_ref(&sql), values);
                         state.update(|stats| stats.executed += usize::from(result.is_ok()));
-                        let retired = result.as_ref().err().filter(|error| error.retired).cloned();
+                        let retired = result
+                            .as_ref()
+                            .err()
+                            .filter(|error| error.retired)
+                            .map(Failure::duplicate);
                         let _ = reply.send(result);
                         if let Some(error) = retired {
                             return Err(error);
@@ -798,11 +865,13 @@ fn run_session(
                             outcome = Outcome::Unknown;
                         }
                         return result.map_err(|error| match operation {
-                            Finish::Commit => {
-                                Failure::primary(Kind::Sql, Outcome::Unknown, error.to_string())
-                            }
+                            Finish::Commit => Failure::primary_error(
+                                Kind::Sql,
+                                Outcome::Unknown,
+                                native_error(error),
+                            ),
                             Finish::Rollback => {
-                                Failure::cleanup(Outcome::Unknown, error.to_string())
+                                Failure::cleanup_error(Outcome::Unknown, native_error(error))
                             }
                         });
                     }
@@ -824,7 +893,7 @@ fn run_session(
             } else {
                 outcome = Outcome::Unknown;
             }
-            result.map_err(|error| Failure::cleanup(Outcome::Unknown, error.to_string()))
+            result.map_err(|error| Failure::cleanup_error(Outcome::Unknown, native_error(error)))
         }));
         (result, outcome, terminal_reply)
     };
@@ -855,7 +924,7 @@ fn run_session(
                 let mut failure = result
                     .err()
                     .unwrap_or_else(|| Failure::cleanup(outcome, "transaction remained active"));
-                failure.cleanup = Some(error.to_string());
+                failure.cleanup = Some(native_error(error));
                 failure.retired = true;
                 result = Err(failure);
             }
@@ -867,14 +936,14 @@ fn run_session(
             .unwrap_or_else(|| Failure::cleanup(outcome, "cleanup state could not be verified"));
         failure
             .cleanup
-            .get_or_insert_with(|| "cleanup state could not be verified".into());
+            .get_or_insert_with(|| crate::Error::internal("cleanup state could not be verified"));
         failure.retired = true;
         result = Err(failure);
     }
     if let Err(error) = &mut result {
         error.outcome = outcome;
         if error.retired {
-            state.fail(error.clone());
+            state.fail(error.duplicate());
         }
     }
     state.update(|stats| stats.settled += 1);

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the unreleased `std.db.sqlite` Pool and affine Tx API with typed owned Parameters, explicit transaction boundaries, structured failure outcomes, and observed close. Keep the existing `db_*` API unchanged; the new API is not included in Nagi 0.1.11.
+- Extend opt-in SQLite SQL checks to literal `std.db.sqlite` query/all/exec operations in the development source. Check schema and row shape, prepare new exec DDL without executing it, and report Parameters bind counts as unchecked.
+- Replace the private deadpool prototype with the existing Tokio semaphore and a lazy adapter; remove deadpool/deadpool-runtime without adding dependencies. Distinguish recoverable reservation failures as ALLOCATION without promising universal OOM recovery. Rust compiler embedding users must handle the added SQLite variants of public standard-module/resource/operation enums; existing Nagi APIs and syntax remain unchanged.
+
 ## JetBrains 0.1.1 — 2026-10-08
 
 - Publish the first formal GitHub Release of the IntelliJ IDEA and PyCharm plugin. Include the existing High/Low highlighting, indentation, folding, check/run commands, and gutter Run buttons. Install the matching IC or PC ZIP from disk; the compiler remains a separate installation. This release does not publish to JetBrains Marketplace.

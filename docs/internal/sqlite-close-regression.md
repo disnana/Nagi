@@ -1,5 +1,7 @@
 # SQLite比較試作: closeとidle返却の回帰
 
+2026-10-08追記: 以下は当時のprivate試作の記録で、source linkは公開移行前baseへ固定する。現在の公開本体・adapter選択は[公開runtime判断](sqlite-public-runtime-decision.md)を参照。
+
 2026-10-06。[PR #87](https://github.com/disnana/Nagi/pull/87)のmove補強後、head `68d215b`の[Linux CI](https://github.com/disnana/Nagi/actions/runs/37454227747)で、取得予算の既存テストが最後のcloseに失敗した。runtime 188成功・1失敗。取得・SQL・rollbackの検査は成功し、`CloseTimeout: adapter workers not joined`になった。
 
 対象の`sqlite_prototype`は[runtime/src/lib.rs](../../runtime/src/lib.rs)で`cfg(test)`に限定した比較試作。公開Dbや本番runtimeで同じ障害を再現した記録ではない。分類は試作の終了契約に対するP1。再実行で成功する場合も、終了確認の期限を延ばしたり失敗をskipしたりして解決扱いにしない。
@@ -16,11 +18,11 @@ CIの正確なthread interleavingはログからは分からない。ローカ�
 4. 待機Futureを再pollせず、closeする。idle Objectはqueueに残るが、resizeは予約済みpermitを取得できない。
 5. closeの結果を保持し、待機FutureとPoolをDropし、observerでactual joinを確認してからassertする。
 
-[回帰テスト](../../runtime/src/sqlite_prototype/adapter_tests.rs)の`close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_waiter`は、testのみのcommit `0051f7a`でexit101、2秒後のCloseTimeoutになった。後片付けのactual join検査は通った。stock crate、公開API、既存の期限、期待は変更していない。
+[回帰テスト](https://github.com/disnana/Nagi/blob/676576724829e45b077b58628bfe2417e6cf3673/runtime/src/sqlite_prototype/adapter_tests.rs)の`close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_waiter`は、testのみのcommit `0051f7a`でexit101、2秒後のCloseTimeoutになった。後片付けのactual join検査は通った。stock crate、公開API、既存の期限、期待は変更していない。
 
 ## 修正と保持した契約
 
-[adapter](../../runtime/src/sqlite_prototype/adapter.rs)の`request_close`で、stockの`pool.close()`後に`retain(false)`から残るidle WorkerHandleを取り出し、ledger lock外でDropする。`max_size=0`の後の返却はstock detachへ進むため、新しいidle entryを足さない。
+[adapter](https://github.com/disnana/Nagi/blob/676576724829e45b077b58628bfe2417e6cf3673/runtime/src/sqlite_prototype/adapter.rs)の`request_close`で、stockの`pool.close()`後に`retain(false)`から残るidle WorkerHandleを取り出し、ledger lock外でDropする。`max_size=0`の後の返却はstock detachへ進むため、新しいidle entryを足さない。
 
 - active checkoutとtransactionを途中で返却しない。rollback・native close・actual joinの責任は維持する。
 - close通知、handle Drop、worker終了、observerのjoinを同じeventと扱わない。

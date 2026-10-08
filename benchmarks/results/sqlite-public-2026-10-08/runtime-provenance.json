@@ -1,0 +1,52 @@
+{
+  "base_commit": "676576724829e45b077b58628bfe2417e6cf3673",
+  "runtime_commit": "e78f35a1d4272b1475e9763fc36870e04c46e2be",
+  "runtime_source_sha256": {
+    "runtime/src/sqlite/acquire_tests.rs": "ff6a88124c63cbaa5647c6b7462aa1f28a5a34e222374b46737e243c2b169cee",
+    "runtime/src/sqlite/adapter.rs": "f921083b5b1090618fa02bc3ec28af57d6560507c7b0194ec2d30b4e3389d0dc",
+    "runtime/src/sqlite/adapter_tests.rs": "92df970e2975c2a968e1846e0f24b7c330ff7a16711d3149551d5be2247e27f7",
+    "runtime/src/sqlite/comparison.rs": "59f9c09383c42167a21a20aca7605e3ec91e9ce0aff0532f0ed1f99da9dde202",
+    "runtime/src/sqlite/mod.rs": "662958b509a9f0de5509a47a5a3fcc2d51e6128017eabac217af0ca5faede854",
+    "runtime/src/sqlite/public_tests.rs": "3693c4e7a00c9166deb36ced968e86a1826e1ef1072ed8b9575c7fc510bde37c",
+    "runtime/src/sqlite/session.rs": "e0fefe12fc7c25fc47b053e6cda36a3d18f048327d5e33cc7377c1f203cab7df",
+    "runtime/src/sqlite/tests.rs": "51d4ce2ba268db58ff419c180853196d7194ad3f6f13721837b986b197ca00db",
+    "runtime/src/lib.rs": "0ebb88cbae466840a96c590ec5340b70819c66b6dbcdd0df4b39490871b296ee",
+    "runtime/Cargo.toml": "02d77f654e25021518fbcc7ad34fa5475cdc3b16251ada4da4baa7a5a55e56ba",
+    "runtime/tests/sqlite_public_api.rs": "017aac61e7a002bab8c480a2312771cd710261118e7e8f85dc2000540cd4858b",
+    "Cargo.lock": "25cb43cbe7bfbcd411ad0235b6527bc0e5d6349e5a2d436cea2ae1d3300b0496"
+  },
+  "evidence_sha256": {
+    "contracts-check.json": "b1169b7977b6c0499cac835e1ff66d803c2e14f49b5f4e834dee87d9238b0927",
+    "contracts-initial-red.json": "ad6155e7d6c41d0d914bf6b0ea37892ec6a0e27193a00a423807f12c3eb49b99",
+    "independent-preparation-review-snapshot.json": "2228b89d90690bdbdd08b229af38924ba899ea375932a7acab242bb4ea18c879",
+    "logs/contracts-check.log": "ec294d7a94611ee699ac9a799a1842011b14aaabffa6e9c2255226e33409ade3",
+    "logs/contracts-initial-red.log": "a7f98d7e6684688f5b9b55cfd4ca21306bd706a711c5f325b831352a3577c600",
+    "logs/distribution-gate-oracles.log": "64f2b0a0fd56af32d9e648eb7f595ea183ee6360aab25a5501d92cf6a093cc0c",
+    "logs/distribution-projection-tests.log": "898035a6b8ad921b24cd037d6dc0322db32cbe2858e86173e6fa890893f7bbfa",
+    "logs/independent-preparation-review.md": "a035e9c597cd1473415b60391850d2afca6602f63a74cf120f25d0b9b5060e58",
+    "logs/independent-runtime-review.md": "aaf8e3eba186ce0d5f0f0f6509b4f04c8b2ed359db77f331ceec2f850490e574",
+    "logs/oracle-excerpt-green.log": "12d563afffea44ec8117495665a16d95672209c313331611ae66895722f0562b",
+    "logs/oracle-excerpt-red.log": "c01cae2f5c151a2e73b70988b04af739fa2ef8b6b3ac29a3383ac60be5795850",
+    "logs/public-native-final-input.log": "464fc23f25b16939b098e21e0450aa85399ec3da35ad138169a821cda3f92d34",
+    "logs/public-native-sql-owned.log": "dcf32d53a778e9b4148e224deb401f72056951489a4faa3cabbdd1ee2fd5a7ea",
+    "logs/release-package-tests.log": "0f515f79a08d14b1a3f063ce12e4400ab2c25fc5630355afd544df1b4e45d727",
+    "logs/runtime-clippy-final.log": "16f9521e2c2c7fde238d20b8d5dc0b2156a05b61e084a8676df224f09fdbe36a",
+    "logs/runtime-comparison.log": "0497f3a89eaf25710bdca306f56d18cb95298bebf55df9f215767b24991cd552",
+    "logs/runtime-full-tests-final.log": "30d1886146d4045761f8cd97c2a33369172098e5dd2f8bf41851fda06f477ece",
+    "logs/runtime-full-tests.log": "8c2921f98d071350fd4fca10dfc1403ec2531e2619565f10d6f6920bb3543159",
+    "logs/task-contracts-raw.log": "e87d32a5505ed19d6ab9c6da92d23b90046a095e98f83c1fd4e4e377a5a0b6f1",
+    "logs/task-oracle-excerpt-red.log": "150caec30f73b285052f19a6ef070404caaf5d441b8109c3a182a92e45d64aed",
+    "runtime-adapter-comparison.json": "938ad9908cf550985bffefc1d0f9a46d281ecff89a8dbb76055a1d2c0afdea06",
+    "runtime-budget-comparison.json": "666931ff21c65accdbf539907f42e281412f84258708b26ca4ec488874568d54",
+    "runtime-public-cost.json": "391560d5205b1099567102da0d8a7f66318349110c76d720df2fc5156b68d07d",
+    "task-contracts-raw.json": "2963aefacdd42c1bda10a66b65d9a403905d7a70d30bad4ff0a48facd82898aa"
+  },
+  "scope": "Intermediate Linux runtime and initial compiler evidence. Compiler working tree continues; not final-head or 4 OS acceptance. Existing caches reused.",
+  "negative_history": {
+    "contracts-initial-red": "0/46, unknown module at resolution; not semantic success",
+    "oracle-excerpt-red": "runner falsely accepts source excerpts before raw checker error fix",
+    "public-native-final-input": "generated SQL borrowed str ownership mismatch; not native success",
+    "runtime-full-tests": "35 socket PermissionDenied infrastructure failures; rerun network allowed in runtime-full-tests-final"
+  },
+  "independent_review": "Independent runtime review at e78f35a, no P0/P1/P2 blocker; logical FIFO and ReplyLost retired interpretation documented separately."
+}

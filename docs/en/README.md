@@ -56,7 +56,8 @@ Each detail page describes current behavior and release scope, then provides or 
 |---|---|
 | HTTP without a database, headers, and response statuses | [HTTP](http.md), [API reference](http-server.md) |
 | Read and write JSON | [JSON](json.md) |
-| Check SQLite SQL against a schema | [SQL preflight checks](sql-check.md) |
+| Use the existing SQLite API and preflight SQL | [SQLite](database.md), [SQL checks](sql-check.md) |
+| Use typed parameters, a Pool, and transactions | [SQLite Pools and Transactions (unreleased development source)](sqlite-pool.md) |
 | Split code into files or call Rust | [Imports and Rust](modules-and-rust.md) |
 | Share your own libraries or use Rust crates | [Libraries and Rust assets](libraries.md) |
 | Save an entry file and build settings | [nagi.toml](projects.md) |
@@ -69,6 +70,8 @@ Each detail page describes current behavior and release scope, then provides or 
 Runnable examples are in [examples/tutorial/](../../examples/tutorial/). References also include code fragments.
 
 Tutorial code uses the current syntax. Explicit move and Task result handles are published in Nagi 0.1.11; confirm that the installed compiler is version 0.1.11 or later with `nagic --version`. See the [migration guide](migration-0.1.11.md) and [Task result handles](task-handles.md). Shared actor messages remain future design work.
+
+The new [SQLite Pool/Tx API](sqlite-pool.md) is available in the development source only; it is not included in 0.1.11.
 
 ## Implementation and development
 

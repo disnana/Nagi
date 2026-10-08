@@ -4,7 +4,9 @@
 
 ## First reads and writes
 
-The standard database API supports SQLite. Define the stored type with a class, open a database with `db_open`, and create a table with `db_exec`. Handle these fallible async operations with `try await`. Other databases, including PostgreSQL, currently require Rust integration.
+This page describes the existing standard `db_*` API. Define the stored type with a class, open a database with `db_open`, and create a table with `db_exec`. Handle these fallible async operations with `try await`. Other databases, including PostgreSQL, currently require Rust integration.
+
+> The development source has a separate `std.db.sqlite` Pool/Transaction API, but it is not included in Nagi 0.1.11. See [SQLite Pools and Transactions](sqlite-pool.md) for the new API and the limits below for the existing one.
 
 Save the following code as `database.nagi` and run `nagic run database.nagi`. It inserts one row in memory and prints `Nagi`, then `Saved`.
 
@@ -58,20 +60,20 @@ async def get_user(db: Db, id: i64) -> Result[User?, Error]:
 
 Iterate over the result of `db_all[User]` with `for user in users` to borrow each row for reading, without cloning its strings. See [ownership](ownership.md) for the borrow restrictions. An HTTP handler can still return `await db_all[User](...)` as a JSON array. See the [CRUD API](../../examples/crud.nagi) and [task management source](../../test-nagi-code/web-demo/tasks.nagi).
 
-## Implementation and limits
+## Existing API implementation and limits
 
-Nagi provides typed calls and class row conversion. rusqlite and SQLite execute SQL, store data, and enforce database constraints. SQLite is bundled with the runtime.
+This section describes only the existing `Db` / `db_*` API. Nagi provides typed calls and class row conversion. rusqlite and SQLite execute SQL, store data, and enforce database constraints. SQLite is bundled with the runtime.
 
-Each opened Db runs operations in order on a dedicated thread. Its queue holds up to 64 waiting jobs; senders wait when it is full. Nagi waits asynchronously for results, but SQLite reads and writes are synchronous. Releasing the last Db owner waits for the worker to exit, so destruction is not guaranteed to return immediately.
+With this API, each opened Db runs operations in order on a dedicated thread. Its queue holds up to 64 waiting jobs; senders wait when it is full. Nagi waits asynchronously for results, but SQLite reads and writes are synchronous. Releasing the last Db owner waits for the worker to exit, so destruction is not guaranteed to return immediately. The new Pool API has separate worker and queue rules described on [its own page](sqlite-pool.md).
 
-Prepared statements are cached. Column names are resolved on each call; `db_all` reuses those column indices for every row in that result. Returned strings and byte sequences are owned so they remain valid after processing the SQLite row.
+This API caches prepared statements. Column names are resolved on each call; `db_all` reuses those column indices for every row in that result. Returned strings and byte sequences are owned so they remain valid after processing the SQLite row.
 
 Ordinary `check` validates Nagi argument types and requires a class for returned rows. It does not check SQL syntax, schema, column names, bind counts, or the correspondence between SQL NULL and class fields.
 
-Nagi 0.1.10 supports explicit [SQL checks](sql-check.md) that validate SQLite string literals for syntax, names, required result columns, and bind counts. Dynamic SQL, `db_exec`, and actual value types, NULLs, and ranges remain outside this check; supported field types handle these at runtime through Result. Unsupported row fields or other unmet Rust conversion requirements may instead fail at build time.
+Nagi 0.1.10 supports explicit [SQL checks](sql-check.md) for SQLite string literals, including syntax, names, required result columns, and bind counts in the existing API. Dynamic SQL, the old `db_exec`, and actual value types, NULLs, and ranges remain outside this check; supported field types handle these at runtime through Result. Unsupported row fields or other unmet Rust conversion requirements may instead fail at build time. The development source also checks literal SQL passed to the new `query` / `all` / `exec` operations; Parameters bind counts and value types remain unchecked statically and are checked at runtime. See [SQL checks](sql-check.md).
 
-General variable-length typed parameters, transaction APIs, connection pools, and PostgreSQL are not implemented. Writing BEGIN/COMMIT in SQL does not reserve the connection across multiple calls: other operations using the shared Db can run between them.
+The existing `db_*` API does not provide variable-length typed parameters, a transaction that reserves a connection across calls, or a connection pool. Writing BEGIN/COMMIT in SQL does not reserve the connection across multiple calls: other operations using the shared Db can run between them. The unreleased API in the development source provides explicit Tx and Pool; it is not part of 0.1.11.
 
 A database job already accepted may complete and commit even after its HTTP caller times out. Cancelling the caller does not guarantee that a write is rolled back.
 
-See the [DB runtime](../../runtime/src/database.rs), [generated class row conversion](../../compiler/src/emit.rs), [CRUD example](../../examples/crud.nagi), and [DB tests](../../runtime/src/database.rs) for the implementation and checks. Separate SQLite/PostgreSQL types with common operation rules are a [design proposal](library-design.md), distinct from the API above.
+See the existing API's [DB runtime](../../runtime/src/database.rs), [generated class row conversion](../../compiler/src/emit.rs), [CRUD example](../../examples/crud.nagi), and [DB tests](../../runtime/src/database.rs). For the new Pool API, see [SQLite Pools and Transactions](sqlite-pool.md). Separate SQLite/PostgreSQL types with common operation rules remain a [design proposal](library-design.md).

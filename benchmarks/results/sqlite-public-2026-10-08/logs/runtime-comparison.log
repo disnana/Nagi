@@ -1,0 +1,26 @@
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.88s
+     Running unittests src/lib.rs (target/debug/deps/nagi_runtime-6a8e8f3cb8327ccb)
+
+running 3 tests
+test sqlite::comparison::bounded_and_unbounded_tokio_adapter_warm_comparison ... NAGI_SQLITE_BUDGET_COMPARISON {"batches":32,"bounded":{"p50_ns":115781,"p95_ns":298179},"bounded_future_bytes":784,"future_measurement":"size_of_val of unpolled begin future; not heap allocation or generated Nagi future","native_health_and_join":true,"scope":"private cfg(test) debug-profile, cap1 warm serial, bounded vs legacy fixture","sql":"SELECT 1 AS n","terminal":"rollback","transactions_per_batch_per_backend":128,"unbounded_fixture":{"p50_ns":116441,"p95_ns":379032},"unbounded_future_bytes":768,"warmup_transactions_per_backend":8}
+ok
+test sqlite::comparison::direct_and_tokio_adapter_warm_native_session_comparison ... NAGI_SQLITE_COMPARISON {"adapter_native_health_and_join":true,"adapter_threads":"1 native worker + 1 independent join observer per connection","batches":32,"direct":{"p50_ns":114611,"p95_ns":314969},"direct_native_health_and_join":true,"direct_threads":"1 native worker + 1 join observer","scope":"private cfg(test) debug-profile, warm serial native session","sql":"SELECT 1 AS n","terminal":"rollback","tokio_adapter":{"p50_ns":117056,"p95_ns":391033},"transactions_per_batch_per_backend":128,"warmup_transactions_per_backend":8}
+ok
+test sqlite::comparison::public_two_connection_native_cost_snapshot ... NAGI_SQLITE_PUBLIC_COST {"lazy_open_created":0,"native_joined":2,"native_pending":0,"native_workers":2,"open_ns":38281,"options_bytes":48,"pool_bytes":24,"scope":"public API cap2 normal-size debug snapshot; no performance threshold","thread_model":"one native worker and one independent join observer per started connection","threads_active":6,"threads_before":2,"tx_bytes":8}
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 217 filtered out; finished in 3.09s
+
+     Running tests/sqlite_public_api.rs (target/debug/deps/sqlite_public_api-21c0cdd0f351ac67)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/task_handles.rs (target/debug/deps/task_handles-3d87caac1571c141)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+

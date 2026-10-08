@@ -1,0 +1,15 @@
+✖ editors/vscode-nagi/test/stdlib-navigation.test.js (135.755276ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 148.770658
+
+✖ failing tests:
+
+test at editors/vscode-nagi/test/stdlib-navigation.test.js:1:1
+✖ editors/vscode-nagi/test/stdlib-navigation.test.js (135.755276ms)
+  'test failed'

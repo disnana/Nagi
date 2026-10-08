@@ -1,0 +1,1 @@
+{"lazy_open_created":0,"native_joined":2,"native_pending":0,"native_workers":2,"open_ns":38281,"options_bytes":48,"pool_bytes":24,"scope":"public API cap2 normal-size debug snapshot; no performance threshold","thread_model":"one native worker and one independent join observer per started connection","threads_active":6,"threads_before":2,"tx_bytes":8}

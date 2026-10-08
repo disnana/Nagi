@@ -1,0 +1,8 @@
+rlib: /workspace/nagi-build-cache/check/debug/deps/libnagic-fb588797a134a277.rlib
+sql-alias.nagi: Ok(())
+sql-alias.nagi: finalization + sealed SQL emission accepted
+sql-alias.low: Ok(())
+sql-alias.low: finalization + sealed SQL emission accepted
+sql-retained-local-view.nagi: Err("line 4: sql はviewまたはループから参照されています。借用を終了するかcopyしてください")
+tx-loan.nagi: Err("line 5: tx は同じ式で先に参照されています。copyを使うか、別の所有値を渡してください")
+exit: 0

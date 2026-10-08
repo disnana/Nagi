@@ -134,6 +134,68 @@ mod enabled {
     }
 
     #[test]
+    fn sqlite_public_literal_shape_columns_and_unknown_bind_count_use_source_origins() {
+        let fixture = Fixture::new();
+        let good = "import std.db.sqlite as sqlite\nclass Row:\n    id: i64\n    name: str\nasync def read(tx: sqlite.Tx, sql: str) -> Result[unit, sqlite.Failure]:\n    row = try await sqlite.query[Row](tx, \"SELECT id,name FROM users WHERE id=?\", sqlite.parameters())\n    rows = try await sqlite.all[Row](tx, sql, sqlite.parameters())\n    count = try await sqlite.exec(tx, \"CREATE TABLE prepared_only(id INTEGER)\", sqlite.parameters())\n    return await sqlite.rollback(tx)\n";
+        write_high_and_independent_low(&fixture, good);
+        for source in ["main.nagi", "saved.low"] {
+            let output = fixture.sql_check(source);
+            let diagnostic = String::from_utf8_lossy(&output.stderr);
+            assert!(output.status.success(), "{diagnostic}");
+            assert!(
+                diagnostic.contains("SQL checked 2 literal queries; 1 runtime/unsupported sites"),
+                "{diagnostic}"
+            );
+            assert!(diagnostic.contains("SQL bind unchecked:"), "{diagnostic}");
+            assert!(
+                diagnostic.contains("Parameters bind count is unknown"),
+                "{diagnostic}"
+            );
+            assert!(
+                diagnostic.contains("dynamic SQL is checked at runtime"),
+                "{diagnostic}"
+            );
+        }
+        for (sql, fragment) in [
+            (
+                "SELECT id FROM users WHERE id=?",
+                "missing row fields: name",
+            ),
+            ("SELECT id,name FROM users WHERE id=?1", "anonymous ?"),
+            ("SELECT id,name FROM users WHERE id=:id", "anonymous ?"),
+            ("DELETE FROM users RETURNING id,name", "read-only"),
+        ] {
+            let source = good.replace("SELECT id,name FROM users WHERE id=?", sql);
+            let low = write_high_and_independent_low(&fixture, &source);
+            for (name, source) in [("main.nagi", source.as_str()), ("saved.low", low.as_str())] {
+                let output = fixture.sql_check(name);
+                let diagnostic = String::from_utf8_lossy(&output.stderr);
+                assert!(!output.status.success(), "{diagnostic}");
+                assert!(diagnostic.contains(fragment), "{diagnostic}");
+                diagnostic_on(&diagnostic, name, query_line(source, sql));
+            }
+        }
+        for (sql, fragment) in [
+            ("SELECT id FROM users", "without returned columns"),
+            ("DELETE FROM users RETURNING id", "without returned columns"),
+            (
+                "CREATE TABLE prepared_only(id); SELECT id FROM users",
+                "only one SQL statement",
+            ),
+        ] {
+            let source = good.replace("CREATE TABLE prepared_only(id INTEGER)", sql);
+            let low = write_high_and_independent_low(&fixture, &source);
+            for (name, source) in [("main.nagi", source.as_str()), ("saved.low", low.as_str())] {
+                let output = fixture.sql_check(name);
+                let diagnostic = String::from_utf8_lossy(&output.stderr);
+                assert!(!output.status.success(), "{diagnostic}");
+                assert!(diagnostic.contains(fragment), "{diagnostic}");
+                diagnostic_on(&diagnostic, name, query_line(source, sql));
+            }
+        }
+    }
+
+    #[test]
     fn schema_check_is_opt_in_and_reports_bad_columns_in_high_and_saved_low() {
         let fixture = Fixture::new();
         let high = row_program(

@@ -1,0 +1,133 @@
+{
+  "source_head": "e86a9419fbcc547e937a13f0c0bf3927f98053b8",
+  "run": {
+    "id": 37706126168,
+    "status": "completed",
+    "conclusion": "success",
+    "attempt": 2
+  },
+  "jobs": [
+    {
+      "id": 113090439243,
+      "name": "nagi-package (macos-15-intel, macos-x86_64, nagic, x86_64-apple-darwin)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-08T00:41:36Z",
+      "completed_at": "2026-10-08T01:12:50Z"
+    },
+    {
+      "id": 113090439603,
+      "name": "release-plan",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-08T00:09:34Z",
+      "completed_at": "2026-10-08T00:09:51Z"
+    },
+    {
+      "id": 113090440045,
+      "name": "changes",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-08T00:09:33Z",
+      "completed_at": "2026-10-08T00:09:43Z"
+    },
+    {
+      "id": 113090440403,
+      "name": "linux",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-08T00:09:46Z",
+      "completed_at": "2026-10-08T00:23:34Z"
+    },
+    {
+      "id": 113090440469,
+      "name": "nagi-package (macos-15, macos-arm64, nagic, aarch64-apple-darwin)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-08T00:09:58Z",
+      "completed_at": "2026-10-08T00:21:33Z"
+    },
+    {
+      "id": 113090440498,
+      "name": "nagi-package (windows-latest, windows-x86_64, nagic.exe, x86_64-pc-windows-msvc)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-08T00:09:54Z",
+      "completed_at": "2026-10-08T00:40:23Z"
+    },
+    {
+      "id": 113090440512,
+      "name": "nagi-package (ubuntu-latest, linux-x86_64, nagic, x86_64-unknown-linux-gnu)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-08T00:09:53Z",
+      "completed_at": "2026-10-08T00:21:48Z"
+    },
+    {
+      "id": 113090441868,
+      "name": "jetbrains / JetBrains (PyCharm)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-08T00:09:54Z",
+      "completed_at": "2026-10-08T00:14:05Z"
+    },
+    {
+      "id": 113090441928,
+      "name": "jetbrains / JetBrains (IntelliJ IDEA)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-08T00:09:53Z",
+      "completed_at": "2026-10-08T00:12:59Z"
+    },
+    {
+      "id": 113090484815,
+      "name": "vscode-package",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-08T00:09:54Z",
+      "completed_at": "2026-10-08T00:10:02Z"
+    },
+    {
+      "id": 113099106114,
+      "name": "Ready to merge",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-08T01:12:53Z",
+      "completed_at": "2026-10-08T01:13:01Z"
+    },
+    {
+      "id": 113099106941,
+      "name": "publish-release",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-10-08T01:12:51Z",
+      "completed_at": "2026-10-08T01:12:50Z"
+    }
+  ],
+  "actual_successful_execution_jobs": {
+    "linux": 113081255940,
+    "ubuntu": 113081297043,
+    "windows": 113081297039,
+    "macos_arm64": 113081297118,
+    "macos_intel_retry": 113090439243
+  },
+  "failed_job": {
+    "id": 113081297091,
+    "reason": "Two positive editor symbol tests reached their unchanged 5000ms timeout; cause not established."
+  },
+  "retry_scope": "Only failed macOS Intel job was re-executed; predecessor successes shown under attempt 2 were not re-executions.",
+  "website": {
+    "id": 37706125992,
+    "status": "completed",
+    "conclusion": "success",
+    "source_head": "e86a9419fbcc547e937a13f0c0bf3927f98053b8"
+  },
+  "push": {
+    "id": 37706121800,
+    "status": "completed",
+    "conclusion": "success",
+    "source_head": "e86a9419fbcc547e937a13f0c0bf3927f98053b8"
+  },
+  "pr98_merge": "2d87d8354808b221d537a8b1555ca39d2b95ef89",
+  "pr99_base": "main"
+}

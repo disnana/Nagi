@@ -1,0 +1,19 @@
+Source commit: e3e0ea3962bd847a9ffdaef4fdabb7598844459f
+Cached compiler: /workspace/nagi-build-cache/check/debug/nagic
+Reused CARGO_TARGET_DIR: /workspace/nagi-build-cache/check (not a clean build)
+
+Schema input:
+CREATE TABLE amounts(amount INTEGER NOT NULL);
+
+Command:
+NAGI_ROOT=/workspace/Nagi-sqlite-public /workspace/nagi-build-cache/check/debug/nagic check examples/sqlite_pool.nagi --sql-schema /tmp/nagi-sqlite-public-schema.sql --sql-dialect sqlite
+
+Output:
+SQL checked 3 literal queries; 0 runtime/unsupported sites
+SQL bind unchecked: sqlite.exec: Parameters bind count is unknown; checked at runtime
+ --> /workspace/Nagi-sqlite-public/examples/sqlite_pool.nagi:19
+SQL bind unchecked: sqlite.exec: Parameters bind count is unknown; checked at runtime
+ --> /workspace/Nagi-sqlite-public/examples/sqlite_pool.nagi:21
+SQL bind unchecked: sqlite.query: Parameters bind count is unknown; checked at runtime
+ --> /workspace/Nagi-sqlite-public/examples/sqlite_pool.nagi:24
+checked /workspace/Nagi-sqlite-public/examples/sqlite_pool.nagi

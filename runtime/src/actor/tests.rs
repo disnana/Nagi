@@ -40,10 +40,17 @@ async fn business_error_preserves_owned_state_and_restart_is_one_for_one() {
     );
     assert_eq!(call(&actor, 0, 0, 1000).await.unwrap(), Ok(15));
     assert_eq!(call(&sibling, 3, 0, 1000).await.unwrap(), Ok(13));
+    let failed_generation = actor.sender(None).await.unwrap();
     assert_eq!(
         call(&actor, -2, 0, 1000).await.unwrap_err().kind(),
         CallKind::REPLY_LOST
     );
+    // A lost reply precedes full generation teardown. Wait for its mailbox
+    // to close before waiting for replacement readiness.
+    timeout(Duration::from_secs(1), failed_generation.closed())
+        .await
+        .unwrap();
+    drop(failed_generation);
     ready(&actor, 1000).await.unwrap();
     assert_eq!(call(&actor, 0, 0, 1000).await.unwrap(), Ok(10));
     assert_eq!(call(&sibling, 0, 0, 1000).await.unwrap(), Ok(13));

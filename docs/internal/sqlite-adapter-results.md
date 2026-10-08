@@ -1,14 +1,16 @@
 # Phase 4: 一接続deadpool adapterの比較結果
 
+2026-10-08追記: 以下は当時のprivate試作の記録で、source linkは公開移行前baseへ固定する。現在の公開本体・adapter選択は[公開runtime判断](sqlite-public-runtime-decision.md)を参照。
+
 2026-10-06。Q004で承認されたgeneric deadpool Managerの比較試作。#81はユーザーがmain `ff6f7d4`へマージ済みで、そのcoreと22件のnative試験を維持した。公開Pool／Txは未実装で、Phase 4全体の完了ではない。
 
 検証した実装は[fe741a3](https://github.com/disnana/Nagi/commit/fe741a333e56a1bbc8966b9fd7e540109d2d4b28)、tree `58297cd18df0746046fec2dd7e6c313d352c61b0`。この後に取り込んだmainは同じtreeを保つ。結果文書の追加だけを理由にRust全suiteを繰り返さず、公開後のCIでは最終PR headを検査する。
 
 ## 採用した構造と比較の判断
 
-[adapter.rs](../../runtime/src/sqlite_prototype/adapter.rs)は`cfg(test)`の私有モジュール。stock deadpoolのpermit・queue・checkout・recycleを使い、SQLiteの解析・bind・Transactionは既存rusqliteへ任せる。独自pool algorithm、SQL parser、unsafe、自己参照型は追加していない。
+[adapter.rs](https://github.com/disnana/Nagi/blob/676576724829e45b077b58628bfe2417e6cf3673/runtime/src/sqlite_prototype/adapter.rs)は`cfg(test)`の私有モジュール。stock deadpoolのpermit・queue・checkout・recycleを使い、SQLiteの解析・bind・Transactionは既存rusqliteへ任せる。独自pool algorithm、SQL parser、unsafe、自己参照型は追加していない。
 
-native workerがowned Objectをsession開始要求と一緒に受け取り、[共通session](../../runtime/src/sqlite_prototype/session.rs)のcleanup完了まで保持する。Tokio上の別cleanup taskへ所有者を移さない。WorkerHandle Dropはroot senderを閉じ、startup guard・ledger・reaperがnative closeと実JoinHandleを観測する。ledgerはTx senderを延命せず、ObserverもPoolを延命しない。
+native workerがowned Objectをsession開始要求と一緒に受け取り、[共通session](https://github.com/disnana/Nagi/blob/676576724829e45b077b58628bfe2417e6cf3673/runtime/src/sqlite_prototype/session.rs)のcleanup完了まで保持する。Tokio上の別cleanup taskへ所有者を移さない。WorkerHandle Dropはroot senderを閉じ、startup guard・ledger・reaperがnative closeと実JoinHandleを観測する。ledgerはTx senderを延命せず、ObserverもPoolを延命しない。
 
 新しいlockfile項目はdeadpool 0.13.1とdeadpool-runtime 0.3.1の2個だけ。選択featureはmanaged／rt_tokio_1、default featuresなし。既存Tokio・rusqlite・SQLiteの解決版は変更していない。[依存](../../runtime/Cargo.toml)と[判断](sqlite-pool-adapter-decision.md)を参照。
 
@@ -29,7 +31,7 @@ tests-only段階の未定義adapter（E0432）、detach seam未定義（E0560）
 
 ## 継続検査する契約
 
-[adapter試験](../../runtime/src/sqlite_prototype/adapter_tests.rs)20件の主分類。1件を複数分類へ加算していない。
+[adapter試験](https://github.com/disnana/Nagi/blob/676576724829e45b077b58628bfe2417e6cf3673/runtime/src/sqlite_prototype/adapter_tests.rs)20件の主分類。1件を複数分類へ加算していない。
 
 | 契約 | 件数 | 代表する観測 |
 |---|---:|---|
@@ -42,7 +44,7 @@ tests-only段階の未定義adapter（E0432）、detach seam未定義（E0560）
 | failure公開／retire | 3 | begin返信取消・worker panic・join通知とcauseの順序 |
 | native worker上限／live記録解放 | 3 | create取消とstock detachの隙間でも単一worker、完了記録を解放 |
 
-元の[native22件](../../runtime/src/sqlite_prototype/tests.rs)は、SQL／authorizer／bind／decode／ACTIVE・ABORTEDを9件、cleanup／reuse／retire／outcomeを7件、取消／inbox／返信喪失を4件、native closeとjoinを2件で検査する。ordinary SQL Errだけで先行効果が戻ったとは扱わない。[先行基盤の結果](sqlite-session-results.md)を参照。
+元の[native22件](https://github.com/disnana/Nagi/blob/676576724829e45b077b58628bfe2417e6cf3673/runtime/src/sqlite_prototype/tests.rs)は、SQL／authorizer／bind／decode／ACTIVE・ABORTEDを9件、cleanup／reuse／retire／outcomeを7件、取消／inbox／返信喪失を4件、native closeとjoinを2件で検査する。ordinary SQL Errだけで先行効果が戻ったとは扱わない。[先行基盤の結果](sqlite-session-results.md)を参照。
 
 ## ローカルの結果
 
@@ -62,7 +64,7 @@ Linux x86_64、既存warm target、locked／offline Cargo、debug profile。sock
 
 ## 同条件の概測
 
-[比較入口](../../runtime/src/sqlite_prototype/comparison.rs)で、同じnative core・hooks・SQLを使い、begin→`SELECT 1 AS n`→rollbackを測定した。各8回warmup後、32 batch×128 Txを両backendで実行し、batchごとに実行順を交互にした。各4096 sample、計8192 sampleを[CSV](../../benchmarks/results/sqlite-adapter-2026-10-06/samples.csv)へ保存した。両方でSQL結果・native close・joinもassertする。
+[比較入口](https://github.com/disnana/Nagi/blob/676576724829e45b077b58628bfe2417e6cf3673/runtime/src/sqlite_prototype/comparison.rs)で、同じnative core・hooks・SQLを使い、begin→`SELECT 1 AS n`→rollbackを測定した。各8回warmup後、32 batch×128 Txを両backendで実行し、batchごとに実行順を交互にした。各4096 sample、計8192 sampleを[CSV](../../benchmarks/results/sqlite-adapter-2026-10-06/samples.csv)へ保存した。両方でSQL結果・native close・joinもassertする。
 
 | debug・warm・直列・一接続 | p50 | p95 |
 |---|---:|---:|

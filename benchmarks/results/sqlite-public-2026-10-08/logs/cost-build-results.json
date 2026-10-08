@@ -1,0 +1,15 @@
+{
+  "generated": {
+    "cached_build_seconds": 0.08429614899796434,
+    "binary_bytes": 3702976,
+    "binary_sha256": "e6dc34aa11f9554e041a06be217adcaf69693059cd3339fb2ccbaded4f722c37",
+    "registry_version_changes": []
+  },
+  "manual": {
+    "cached_build_seconds": 2.9020739820116432,
+    "binary_bytes": 3699704,
+    "binary_sha256": "c1ed867f8d4128063d7c0251b60b8ad0c8b04cef789c612fc98eeef20db8f57a",
+    "registry_version_changes": []
+  },
+  "conditions": "Existing shared target cache; generated had one prior successful build. Build times are not clean-build or comparative performance measurements. Dependency identity checks name/version/source/checksum, allowing multiple locked versions."
+}

@@ -15,19 +15,36 @@ pub(super) fn collect(program: &Program) -> Result<Vec<Site>, String> {
     let mut failure = None;
     for function in &program.functions {
         statements(&function.body, &mut |expression| {
-            if failure.is_some() || expression.resolution != Some(NameResolution::Builtin) {
+            if failure.is_some() {
                 return;
             }
             let E::Call(name, types, arguments) = &expression.kind else {
                 return;
             };
-            let (operation, bind_count) = match name.as_str() {
-                "db_all" => (Some(Operation::All), 0),
-                "db_query" => (Some(Operation::Query), 1),
-                "db_insert" => (Some(Operation::Insert), 2),
-                "db_update" => (Some(Operation::Update), 3),
-                "db_write" => (Some(Operation::Write), 1),
-                "db_exec" => (None, 0),
+            let standard = if expression.resolution == Some(NameResolution::Standard) {
+                crate::stdlib::operation(name).filter(|op| {
+                    program.modules.definition(name).map(|d| &d.id)
+                        == Some(&crate::stdlib::function_id(*op))
+                })
+            } else {
+                None
+            };
+            let (operation, bind_count) = match standard {
+                Some(
+                    crate::stdlib::Operation::SqliteQuery | crate::stdlib::Operation::SqliteAll,
+                ) => (Some(Operation::SqliteRows), None),
+                Some(crate::stdlib::Operation::SqliteExec) => (Some(Operation::SqliteExec), None),
+                _ if expression.resolution == Some(NameResolution::Builtin) => {
+                    match name.as_str() {
+                        "db_all" => (Some(Operation::All), Some(0)),
+                        "db_query" => (Some(Operation::Query), Some(1)),
+                        "db_insert" => (Some(Operation::Insert), Some(2)),
+                        "db_update" => (Some(Operation::Update), Some(3)),
+                        "db_write" => (Some(Operation::Write), Some(1)),
+                        "db_exec" => (None, Some(0)),
+                        _ => return,
+                    }
+                }
                 _ => return,
             };
             if sites.len() >= MAX_QUERIES {
@@ -54,6 +71,8 @@ pub(super) fn collect(program: &Program) -> Result<Vec<Site>, String> {
                 Some("db_exec scripts are checked at runtime")
             } else if sql.is_none() {
                 Some("dynamic SQL is checked at runtime")
+            } else if bind_count.is_none() {
+                Some("Parameters bind count is unknown; checked at runtime")
             } else {
                 None
             };
@@ -80,7 +99,9 @@ pub(super) fn collect(program: &Program) -> Result<Vec<Site>, String> {
             sites.push(Site {
                 line: expression.line,
                 operation,
-                operation_name: name.clone(),
+                operation_name: standard
+                    .map(|op| format!("sqlite.{}", crate::stdlib::operation_info(op).name))
+                    .unwrap_or_else(|| name.clone()),
                 sql: sql.map(str::to_owned),
                 bind_count,
                 fields: fields.iter().map(|(name, _)| name.clone()).collect(),
@@ -204,7 +225,7 @@ async def read(db: Db) -> Result[unit, Error]:
             .enumerate()
             {
                 assert_eq!(sites[index].operation, Some(operation));
-                assert_eq!(sites[index].bind_count, binds);
+                assert_eq!(sites[index].bind_count, Some(binds));
                 assert!(sites[index].sql.is_some());
                 assert!(sites[index].reason.is_none());
                 assert_eq!(
@@ -377,6 +398,30 @@ async def read(db: Db) -> Result[unit, Error]:
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn sqlite_canonical_calls_and_saved_low_keep_unknown_bind_metadata() {
+        let fixture = Fixture::new();
+        fixture.write("main.nagi", "import std.db.sqlite as sqlite\nclass Row:\n    id: i64\nasync def read(tx: sqlite.Tx, sql: str) -> Result[unit, sqlite.Failure]:\n    row = try await sqlite.query[Row](tx, \"SELECT id FROM users WHERE id=?\", sqlite.parameters())\n    rows = try await sqlite.all[Row](tx, sql, sqlite.parameters())\n    count = try await sqlite.exec(tx, \"CREATE TABLE new_table(id INTEGER)\", sqlite.parameters())\n    return await sqlite.rollback(tx)\n");
+        let mut loaded = source::load(&fixture.0.join("main.nagi"), true).unwrap();
+        check::check(&mut loaded.program).unwrap();
+        let mut low = parser::parse(&emit::low(&loaded.program), false).unwrap();
+        check::check(&mut low).unwrap();
+        for program in [&loaded.program, &low] {
+            let sites = collect(program).unwrap();
+            assert_eq!(sites.len(), 3);
+            assert_eq!(sites[0].operation, Some(Operation::SqliteRows));
+            assert_eq!(sites[2].operation, Some(Operation::SqliteExec));
+            assert!(sites.iter().all(|s| s.bind_count.is_none()));
+            assert_eq!(sites[0].fields, ["id"]);
+            assert!(sites[0].reason.as_ref().unwrap().contains("unknown"));
+            assert!(sites[1].sql.is_none());
+        }
+        fixture.write("names.nagi", "import std.db.sqlite as sqlite\ndef query(sql: str) -> str:\n    return sql\ndef main():\n    print(query(\"not SQL\"))\n");
+        let mut named = source::load(&fixture.0.join("names.nagi"), true).unwrap();
+        check::check(&mut named.program).unwrap();
+        assert!(collect(&named.program).unwrap().is_empty());
     }
 
     #[test]

@@ -1,0 +1,38 @@
+Passed: rust-library (local crate, package alias, feature selection, separate cwd/output)
+{"samples": 12, "builds": "passed", "native_preserved": true}
+Passed: typed-errors
+Passed: module-imports
+Passed: low-kernel
+Passed: rust-json
+Passed: rust-async
+Passed: foundation-cli (both engines)
+Passed: foundation-report (both engines)
+Passed: custom-http (graceful shutdown)
+Passed: http-auth (graceful shutdown)
+Passed: supervised-service (high)
+Passed: supervised-service (saved-low)
+Passed: supervised-service (handwritten-low)
+Passed: task-results (high)
+Passed: task-results (saved-low)
+Passed: task-results (handwritten-low)
+{"checks": 15, "status": "passed"}
+Passed: stock-report (high)
+Passed: stock-report (low)
+Passed: device-settings (high)
+Passed: device-settings (low)
+Passed: seat-reservations (high)
+Passed: seat-reservations (low)
+Passed: file-json (high)
+Passed: file-json (low)
+Passed: quote-api (high)
+Passed: quote-api (low)
+Passed: supervised-worker (high)
+Passed: supervised-worker (low)
+Passed: byte-inspector (high)
+Passed: byte-inspector (low)
+Passed: axum-service (high)
+Passed: axum-service (low)
+Passed: auth-boundary (high)
+Passed: auth-boundary (low)
+Passed: order-quote (low)
+{"projects": 10, "runs": 19, "status": "passed"}

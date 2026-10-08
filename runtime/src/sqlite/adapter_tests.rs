@@ -1,4 +1,4 @@
-// Q004のgeneric deadpool比較試作。公開Poolの完成テストではない。
+// Q004の既存oracleを公開adapter上で再実行する。native coreは本体と同じ。
 use super::adapter::{Adapter, AdapterSeams, AdmissionGate, Observer};
 use super::{Config, Failure, Finish, Gate, Kind, Outcome, Tx};
 use crate::FromRow;
@@ -7,13 +7,13 @@ use rusqlite::{types::Value, Row};
 use std::{sync::Arc, time::Duration};
 
 // 多接続fixtureは同じfilesystem DBを使う。exclusive作成に成功したdirectoryだけ所有。
-struct MultiFile {
+pub(super) struct MultiFile {
     directory: std::path::PathBuf,
-    path: std::path::PathBuf,
+    pub(super) path: std::path::PathBuf,
     observer: Option<Observer>,
 }
 impl MultiFile {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let directory = loop {
             let ordinal = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -43,7 +43,7 @@ impl MultiFile {
             ..Config::default()
         }
     }
-    fn observe(&mut self, adapter: &Adapter) {
+    pub(super) fn observe(&mut self, adapter: &Adapter) {
         self.observer = Some(adapter.observer());
     }
 }
@@ -128,7 +128,7 @@ impl FromRow for Number {
 }
 
 #[tokio::test]
-async fn deadpool_adapter_reuses_same_native_worker_and_sql_session_core() {
+async fn tokio_adapter_adapter_reuses_same_native_worker_and_sql_session_core() {
     let adapter = Adapter::new(
         Config {
             seed: "CREATE TABLE items(n)",
@@ -163,7 +163,7 @@ async fn deadpool_adapter_reuses_same_native_worker_and_sql_session_core() {
 }
 
 #[tokio::test]
-async fn close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_waiter() {
+async fn close_retires_idle_worker_while_semaphore_permit_is_reserved_for_unpolled_waiter() {
     let adapter = Adapter::new(Config::default(), AdapterSeams::default());
     let observer = adapter.observer();
     let held = multi_setup(
@@ -183,7 +183,7 @@ async fn close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_w
     };
     // Objectはidle queueへ戻る。公平semaphoreはpermitを既にPendingのwaiterへ
     // 割り当てるが、再pollしないのでObjectはqueueから取り出されていない。
-    // closeのresize(0)がtry_acquireできない状況をstock APIだけで固定する。
+    // permit予約済みでもidle handleはqueueに残るraceを固定する。
     drop(held);
     let closed = multi_watch(adapter.close(DEADLINE)).await;
     let after_close = observer.snapshot();
@@ -233,7 +233,7 @@ async fn close_retires_idle_worker_while_stock_permit_is_reserved_for_unpolled_w
 }
 
 #[tokio::test]
-async fn cancelled_tx_keeps_deadpool_checkout_until_native_cleanup_completes() {
+async fn cancelled_tx_keeps_tokio_adapter_checkout_until_native_cleanup_completes() {
     let gate = Arc::new(Gate::new());
     let adapter = Adapter::new(
         Config {
@@ -322,7 +322,7 @@ async fn close_waits_for_registered_create_and_late_create_cannot_begin() {
 }
 
 #[tokio::test]
-async fn acquired_deadpool_object_after_close_is_rejected_before_user_begin() {
+async fn acquired_tokio_adapter_object_after_close_is_rejected_before_user_begin() {
     let gate = Arc::new(AdmissionGate::new());
     let adapter = Adapter::new(
         Config::default(),
@@ -375,7 +375,7 @@ async fn close_clone_and_cancel_keep_closing_while_active_checkout_can_finish() 
 }
 
 #[tokio::test]
-async fn native_cleanup_failure_closes_deadpool_and_never_creates_replacement() {
+async fn native_cleanup_failure_closes_tokio_adapter_and_never_creates_replacement() {
     let adapter = Adapter::new(
         Config {
             deny_rollback: true,
@@ -397,7 +397,7 @@ async fn native_cleanup_failure_closes_deadpool_and_never_creates_replacement() 
 }
 
 #[tokio::test]
-async fn deadpool_recycle_error_stops_create_instead_of_default_replacement() {
+async fn tokio_adapter_recycle_error_stops_create_instead_of_default_replacement() {
     let adapter = Adapter::new(
         Config::default(),
         AdapterSeams {
@@ -460,7 +460,7 @@ async fn last_adapter_drop_closes_idle_worker_without_observer_owning_pool_or_tx
 }
 
 #[tokio::test]
-async fn native_close_failure_is_kept_after_deadpool_objects_and_workers_are_gone() {
+async fn native_close_failure_is_kept_after_tokio_adapter_objects_and_workers_are_gone() {
     let adapter = Adapter::new(
         Config {
             leak_statement_at_close: true,
@@ -705,7 +705,7 @@ async fn taken_object_cannot_start_replacement_before_old_native_worker_joins() 
     adapter.close(DEADLINE).await.unwrap();
     assert_eq!(
         before_old_join.created, 1,
-        "Object::take returned a stock slot before old native join completed"
+        "Object::take returned a logical slot before old native join completed"
     );
     assert_eq!(before_old_join.joined, 0);
     assert_eq!(before_old_join.native_closed, 1);
@@ -717,7 +717,7 @@ async fn taken_object_cannot_start_replacement_before_old_native_worker_joins() 
 }
 
 #[tokio::test]
-async fn stock_detach_permit_before_handle_drop_cannot_start_another_native_worker() {
+async fn checkout_detach_permit_before_handle_drop_cannot_start_another_native_worker() {
     let detaching = Arc::new(Gate::new());
     let adapter = Adapter::new(
         Config::default(),
@@ -729,7 +729,7 @@ async fn stock_detach_permit_before_handle_drop_cannot_start_another_native_work
     let observer = adapter.observer();
     let object = adapter.checkout_without_begin().await.unwrap();
     let taking = std::thread::spawn(move || object.take_and_drop());
-    detaching.wait().await; // stock semaphore permitは返却済み、WorkerHandleは生存。
+    detaching.wait().await; // Tokio semaphore permitは返却済み、WorkerHandleは生存。
     let mut next = Box::pin(adapter.begin());
     let early = futures_util::poll!(&mut next);
     let before_handle_drop = observer.snapshot();
@@ -749,7 +749,7 @@ async fn stock_detach_permit_before_handle_drop_cannot_start_another_native_work
     assert_eq!(before_handle_drop.pending_workers, 1);
     assert_eq!(
         before_handle_drop.created, 1,
-        "stock permit preceded handle retirement"
+        "semaphore permit preceded handle retirement"
     );
     assert_eq!(observer.snapshot().created, 2);
     assert_eq!(observer.snapshot().native_closed, 2);
@@ -891,7 +891,7 @@ async fn multi_cancelled_b_joins_and_c_begins_before_healthy_a_finishes() {
 }
 
 #[tokio::test]
-async fn multi_stock_detach_permit_gap_respects_native_cap_with_a_active() {
+async fn multi_checkout_detach_permit_gap_respects_native_cap_with_a_active() {
     let mut file = MultiFile::new();
     let detaching = Arc::new(Gate::new());
     let publication = Arc::new(Gate::new());

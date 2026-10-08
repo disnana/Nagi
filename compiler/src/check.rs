@@ -1,4 +1,5 @@
 pub(crate) mod checked;
+mod sqlite;
 
 use crate::ast::{block_returns as returns, *};
 use std::collections::{HashMap, HashSet};
@@ -57,6 +58,7 @@ struct Checker {
     parameter_views: HashSet<BindingId>,
     iterators: Vec<HashSet<BorrowedPlace>>,
     expression_loans: Vec<HashSet<BorrowedPlace>>,
+    future_captures: std::collections::BTreeMap<ExprUseId, checked::FutureCapture>,
 }
 fn error(line: usize, s: impl AsRef<str>) -> String {
     format!("line {line}: {}", s.as_ref())
@@ -409,7 +411,7 @@ fn negative_boundary_type(expr: &Expr, expected: Option<&Type>) -> Option<Type> 
 }
 
 pub fn check(p: &mut Program) -> Result<(), String> {
-    check_mode(p, false)
+    check_mode(p, false).map(|_| ())
 }
 
 /// Uses the same type and ownership rules as compilation. Failed statements
@@ -455,7 +457,8 @@ pub(crate) fn editor_types(primary: &Program, native: &Program) -> Option<Progra
     Some(p)
 }
 
-fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
+fn check_mode(p: &mut Program, editor: bool) -> Result<checked::FinalCheckFacts, String> {
+    let mut facts = checked::FinalCheckFacts::default();
     let mut next_scope = 0;
     for function in &mut p.functions {
         reset_flow(&mut function.body, &mut next_scope);
@@ -526,6 +529,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         parameter_views: HashSet::new(),
         iterators: vec![],
         expression_loans: vec![],
+        future_captures: Default::default(),
     };
     let mut symbols = HashSet::new();
     for class in &p.classes {
@@ -689,6 +693,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         c.task_scopes.clear();
         c.task_bridges.clear();
         c.task_uses.clear();
+        c.future_captures.clear();
         c.collect_view_flow = should_collect_view_flow(editor, f.asynchronous, &f.ret, &f.body);
         c.view_flow_names.clear();
         if c.collect_view_flow {
@@ -762,6 +767,9 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
             return Err(error(f.line, "@rustはextern関数にのみ指定できます"));
         }
         c.block(&mut f.body)?;
+        facts
+            .functions
+            .insert(f.name.clone(), c.future_captures.clone());
         if !editor && f.ret.0 != "unit" && !returns(&f.body) {
             return Err(error(f.line, "すべての経路で戻り値を返してください"));
         }
@@ -774,7 +782,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<(), String> {
         }
         crate::routes::validate(p)?;
     }
-    Ok(())
+    Ok(facts)
 }
 impl Checker {
     fn is_task(&self, t: &Type) -> bool {
@@ -1141,6 +1149,9 @@ impl Checker {
     ) -> Result<Type, String> {
         use crate::stdlib::{Operation as O, Passing, Resource as R};
         let info = crate::stdlib::operation_info(operation);
+        if info.module == crate::stdlib::StandardModule::Sqlite {
+            return self.sqlite_standard(operation, types, args, line);
+        }
         if info.module == crate::stdlib::StandardModule::Task {
             return self.task_operation(operation, types, args, expression);
         }
@@ -1922,6 +1933,16 @@ impl Checker {
                 }
             }
             for index in crate::stdlib::shared_type_arguments(resource) {
+                if crate::capabilities::contains_sqlite_nonshared(
+                    &t.1[*index],
+                    &self.classes,
+                    &self.enums,
+                ) {
+                    return Err(error(
+                        line,
+                        "SQLiteの非共有resourceを内部shared state/contextへ格納できません",
+                    ));
+                }
                 if crate::capabilities::contains_auth_proof(
                     &t.1[*index],
                     &self.classes,
@@ -1944,6 +1965,16 @@ impl Checker {
                     self.actor_payload(argument, line, role)?;
                 }
             } else if resource == crate::stdlib::Resource::Turn {
+                if crate::capabilities::contains_same_task_resource(
+                    &t.1[0],
+                    &self.classes,
+                    &self.enums,
+                ) {
+                    return Err(error(
+                        line,
+                        "SQLite Txをnative stateの所有fieldへ保存できません",
+                    ));
+                }
                 self.actor_payload(&t.1[1], line, "Turn Reply")?;
                 self.actor_payload(&t.1[2], line, "Turn E")?;
             }
@@ -1965,6 +1996,14 @@ impl Checker {
             _ => None,
         };
         if let Some(n) = arity {
+            if t.0 == "shared"
+                && crate::capabilities::contains_sqlite_nonshared(t, &self.classes, &self.enums)
+            {
+                return Err(error(
+                    line,
+                    "SQLiteの非共有resourceをsharedへ格納できません（nested wrapperを含みます）",
+                ));
+            }
             if t.0 == "shared"
                 && crate::capabilities::contains_auth_proof(t, &self.classes, &self.enums)
             {
@@ -3397,27 +3436,42 @@ impl Checker {
         if !t.is_future() {
             return Err(error(e.line, "spawn対象はasync呼び出しです"));
         }
+        if crate::capabilities::contains_same_task_resource(&t.inner(), &self.classes, &self.enums)
+        {
+            return Err(error(
+                e.line,
+                "SQLite Txの実payloadをTaskの結果として別taskへ渡せません",
+            ));
+        }
         if !legacy {
             self.emittable(&t.inner(), e.line, false)?;
             if t.inner().contains_view() {
                 return Err(error(e.line, "viewをTaskの結果として保持できません"));
             }
         }
-        if let E::Call(name, _, args) = &e.kind {
-            let passing = (e.resolution == Some(NameResolution::Standard))
-                .then(|| crate::stdlib::operation(name))
-                .flatten()
-                .map(|operation| crate::stdlib::operation_info(operation).parameters);
-            for (index, arg) in args.iter().enumerate() {
-                let native_borrow = passing.is_some_and(|parameters| {
-                    matches!(
-                        parameters[index],
-                        crate::stdlib::Passing::Reference | crate::stdlib::Passing::Borrow
-                    )
-                });
-                if !arg.ty.as_ref().is_some_and(Type::contains_view) && !native_borrow {
-                    continue;
-                }
+        let capture = self.future_captures.get(&ExprUseId::of(e)).ok_or_else(|| {
+            error(
+                e.line,
+                "internal compiler error: missing Future capture facts",
+            )
+        })?;
+        for argument in &capture.arguments {
+            if crate::capabilities::contains_same_task_resource(
+                &argument.ty,
+                &self.classes,
+                &self.enums,
+            ) {
+                return Err(error(
+                    e.line,
+                    "SQLite Txの実payloadを別taskへ渡せません。同taskでawaitしてください",
+                ));
+            }
+            if argument.ty.contains_view()
+                || matches!(
+                    argument.passing,
+                    crate::stdlib::Passing::Reference | crate::stdlib::Passing::Borrow
+                )
+            {
                 return Err(error(
                     e.line,
                     "viewを別taskへ渡せません。copyを使用してください",
@@ -3456,6 +3510,57 @@ impl Checker {
         let checked = self.expr_scoped(e, expected, projection);
         if retains_values {
             self.expression_loans.pop();
+        }
+        if checked.as_ref().is_ok_and(Type::is_future) {
+            if let E::Call(name, _, args) = &e.kind {
+                let callee = if e.resolution == Some(NameResolution::Local) {
+                    self.vars
+                        .get(name)
+                        .and_then(|v| v.async_function.clone())
+                        .ok_or_else(|| {
+                            error(
+                                e.line,
+                                "internal compiler error: missing async callee identity",
+                            )
+                        })?
+                } else {
+                    name.clone()
+                };
+                let passing = (e.resolution == Some(NameResolution::Standard))
+                    .then(|| crate::stdlib::operation(name))
+                    .flatten()
+                    .map(|op| crate::stdlib::operation_info(op).parameters);
+                let mut arguments = Vec::new();
+                for (index, arg) in args.iter().enumerate() {
+                    let mut owners = Vec::new();
+                    checked::visit_expression(arg, &mut |operand| {
+                        if let E::Name(name) = &operand.kind {
+                            if let Some(var) = self.vars.get(name) {
+                                owners.push((ExprUseId::of(operand), var.binding));
+                            }
+                        }
+                        Ok(())
+                    })?;
+                    arguments.push(checked::FutureArgument {
+                        index,
+                        expression: ExprUseId::of(arg),
+                        ty: arg.ty.clone().ok_or("missing Future argument type")?,
+                        passing: passing
+                            .and_then(|p| p.get(index))
+                            .copied()
+                            .unwrap_or(crate::stdlib::Passing::Move),
+                        owners,
+                    });
+                }
+                self.future_captures.insert(
+                    ExprUseId::of(e),
+                    checked::FutureCapture {
+                        callee,
+                        resolution: e.resolution.ok_or("missing Future callee resolution")?,
+                        arguments,
+                    },
+                );
+            }
         }
         checked
     }
@@ -4103,6 +4208,16 @@ impl Checker {
                 }
             }
             "copy" => {
+                if crate::capabilities::contains_sqlite_noncopy(
+                    &types[0],
+                    &self.classes,
+                    &self.enums,
+                ) {
+                    return Err(error(
+                        line,
+                        "SQLiteの非Copy resourceはcopyできません（nested payloadを含みます）",
+                    ));
+                }
                 if crate::capabilities::contains_task_owner(&types[0], &self.classes, &self.enums) {
                     return Err(error(
                         line,
@@ -4135,6 +4250,13 @@ impl Checker {
                 })
             }
             "share" => {
+                if crate::capabilities::contains_sqlite_nonshared(
+                    &types[0],
+                    &self.classes,
+                    &self.enums,
+                ) {
+                    return Err(error(line, "SQLiteの非共有resourceをsharedへ変換できません（nested wrapperを含みます）"));
+                }
                 if crate::capabilities::contains_task_owner(&types[0], &self.classes, &self.enums) {
                     return Err(error(
                         line,
@@ -4401,16 +4523,20 @@ pub fn finalize(
     let mixed =
         !native.functions.is_empty() || !native.classes.is_empty() || !native.enums.is_empty();
     provenance.mark_replacements(&primary, &native);
-    integrate_mode(&mut primary, native, false)
+    let facts = integrate_mode(&mut primary, native, false)
         .map_err(|error| checked::FinalizeError::checked(error, &provenance, mixed))?;
-    checked::CheckedProgram::seal(primary, provenance)
+    checked::CheckedProgram::seal(primary, provenance, facts)
 }
 
 pub fn integrate(p: &mut Program, native: Program) -> Result<(), String> {
-    integrate_mode(p, native, false)
+    integrate_mode(p, native, false).map(|_| ())
 }
 
-fn integrate_mode(p: &mut Program, mut native: Program, editor: bool) -> Result<(), String> {
+fn integrate_mode(
+    p: &mut Program,
+    mut native: Program,
+    editor: bool,
+) -> Result<checked::FinalCheckFacts, String> {
     crate::modules::rebind_native(p, &mut native)?;
     let mut replaced = HashSet::new();
     // Resolve all replacement targets before changing the definitions. Aliases
@@ -4671,7 +4797,7 @@ def restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
             body[5].flow.as_ref().unwrap().expression_uses[0].mode,
             ExprUseMode::Move
         );
-        let checked = checked::CheckedProgram::seal(
+        let checked = checked::CheckedProgram::seal_rechecked(
             program.clone(),
             crate::source::SourceProvenance::user_low_unmapped(),
         )
@@ -4689,7 +4815,7 @@ def restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
             .unwrap()
             .expression_uses
             .clear();
-        assert!(checked::CheckedProgram::seal(
+        assert!(checked::CheckedProgram::seal_rechecked(
             program.clone(),
             crate::source::SourceProvenance::user_low_unmapped()
         )
@@ -4704,7 +4830,7 @@ def restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
             .unwrap()
             .expression_uses
             .push(wrong_binding);
-        assert!(checked::CheckedProgram::seal(
+        assert!(checked::CheckedProgram::seal_rechecked(
             program.clone(),
             crate::source::SourceProvenance::user_low_unmapped()
         )

@@ -56,7 +56,8 @@
 |---|---|
 | DBなしのHTTP、ヘッダー、応答status | [HTTP](http.md)、[APIリファレンス](http-server.md) |
 | JSONを読み書きする | [JSON](json.md) |
-| SQLiteのSQLをschemaと照合する | [SQLの事前検査](sql-check.md) |
+| 旧SQLite APIとSQLの事前検査 | [SQLite](database.md)、[SQLの事前検査](sql-check.md) |
+| 型付きparameters・Pool・transactionを使う | [SQLite PoolとTransaction（開発source・未リリース）](sqlite-pool.md) |
 | 複数ファイルに分ける、Rustを呼ぶ | [importとRust連携](modules-and-rust.md) |
 | 自作の共通コードやRustのcrateを使う | [ライブラリとRustの資産](libraries.md) |
 | 入口やビルド設定を保存する | [nagi.toml](projects.md) |
@@ -69,6 +70,8 @@
 動かせる入門例は[examples/tutorial/](../examples/tutorial/)にあります。リファレンスにはコードの断片も載せています。
 
 入門のコードは現行の書き方です。明示moveとTask結果handleはNagi 0.1.11で公開済みです。利用するcompilerが0.1.11以降であることを`nagic --version`で確認してください。[移行ガイド](migration-0.1.11.md)と[Task結果handle](task-handles.md)に使い方をまとめています。actorのshared messageは将来の設計対象です。
+
+新しい[SQLite Pool/Tx](sqlite-pool.md)は開発sourceのみで、0.1.11には含まれません。
 
 ## 仕組みと開発状況
 

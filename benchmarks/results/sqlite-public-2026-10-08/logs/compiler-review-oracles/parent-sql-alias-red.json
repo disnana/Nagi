@@ -1,0 +1,14 @@
+[
+  {
+    "source": "sql-alias.nagi",
+    "exit": 1,
+    "stderr": "error: line 3: sql は同じ式で先に参照されています。copyを使うか、別の所有値を渡してください\n --> /workspace/nagi-sqlite-public-2026-10-08/compiler-review-oracles/sql-alias.nagi:3\n 3 |     return await sqlite.exec(tx, view(sql), sqlite.bind_text(params, sql))\n",
+    "expected_after_fix": "checker acceptance, then native execution in all three forms"
+  },
+  {
+    "source": "sql-alias.low",
+    "exit": 1,
+    "stderr": "error: line 3: sql は同じ式で先に参照されています。copyを使うか、別の所有値を渡してください\n --> /workspace/nagi-sqlite-public-2026-10-08/compiler-review-oracles/sql-alias.low:3\n 3 |     return await sqlite.exec(tx, view(sql), sqlite.bind_text(params, sql));\n",
+    "expected_after_fix": "checker acceptance, then native execution in all three forms"
+  }
+]
