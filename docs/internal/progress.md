@@ -1,5 +1,11 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-08: Security Foundationの調査/RFC
+
+現在mainは#99 merge後の`62bbda9`、SQLite公開APIを含む4 OS/Linux/site CIをreadback済み。公開0.1.11は`003a594`でSQLite公開API未収録。確認時open PR0。過去のdraft/pending記述は履歴で、最新状態はこのmainとGitHubを正とする。
+
+[Security Foundation RFC日英](security-foundation/rfc.md)と[PR/検証/全体完了計画](security-foundation/implementation-plan.md)、[source根拠付き調査](security-foundation/baseline-audit.md)を作成した。AuthScope/CSRF/XSS/SQL Injection/SSRF/CORS/Cookie/Session/DoSの予定契約を現行保証と区別する。設計PR [#100](https://github.com/disnana/Nagi/pull/100)をmain向けdraftとして作成した。最新指示に基づき[D1–D3](security-foundation/decisions-and-migration.md)を安全性優先で再評価し、policy必須単一HTTP・request-bound単一Grant・永続SQLite Sessionを実装基準にした。旧API併存を撤回し、移行/削除/保持範囲と日英計画を同期。新API/compiler/runtime実装は未着手。独立reviewの指摘/修正/再確認とDocs検査は[review台帳](security-foundation/review-log.md)、次順序は[引継ぎ](handoffs/2026-10-08-security-foundation-rfc.md)へ記録する。merge/版更新/tag/正式releaseは行わない。
+
 ## 2026-10-06: S1 main反映とS2サービス接続
 
 PR #88最終head `08e90c6`は4 OS・必須CI成功、未解決review0でmain `aee1987`へmergeした。両tree `bc62c787471d9e4481e36c0cca6e2ed294cebbc1`を読戻した。S2のPR #90は既存Task awaitの内側Resultを親tryへ接続し、HTTP旧spawnを維持する。新API/意味論/compiler/runtime/依存は追加していない。native三構文×7終了ケース、公開両例の三構文native、独立Sol High指摘3点の修正と読戻し、全回帰と4 OSを完了した。最終head `f1497053`のchecks `37545273020`・website `37545272936`が成功し、main `f9b25782`へmerge、共通tree `84d1696053a9cf5ef256b44fcd50afff91863c9d`を確認した。[S2結果](task-handles-s2-results.md)が正本。次は別PRの0.1.11版更新・移行資料・独立最終review・公開検証で、[release引継ぎ](handoffs/2026-10-06-task-release-0.1.11.md)へ記録する。旧節の停止・未merge指示は当時の履歴で、最新のリリース完了指示を制限しない。

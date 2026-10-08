@@ -26,7 +26,7 @@ Python風の構文を使いますが、Pythonと同じ動作をする言語で�
 | Rust資産との共存 | アプリの処理をHighで書き、既存framework・driver・独自基盤を組み合わせる | Axumとの双方向async連携をサンプルで検証。一般のasync callback型は未対応 |
 | Low | 既存互換性、波括弧構文、生成内容の確認、関数差し替えに範囲を絞る | 実装済み。独立した低水準言語への拡張は当面進めない |
 | 実行ファイルの生成 | 現在のRust backendを使う | Rust/Cargoによるネイティブ生成を実装済み |
-| DBの拡張 | SQLiteとPostgreSQLの型を分け、操作・行・エラーの規則を揃える | SQLite Pool/Tx APIは開発sourceに実装。0.1.11には未収録で、4 OSの最新head CIは確認中。PostgreSQLは後続設計 |
+| DBの拡張 | SQLiteとPostgreSQLの型を分け、操作・行・エラーの規則を揃える | SQLite Pool/Tx APIは#99としてmainへ反映済み。0.1.11には未収録。main 62bbda9の4 OS CI成功を確認。PostgreSQLは後続設計 |
 | 標準HTTPの基盤 | Axum／Towerを第一候補として比較する | 採用は未決。条件を揃えた比較は未実施 |
 | 独自backend・VM・self-hosting | 将来の採否を保留する | 未実装。現在の機能や次のリリースの約束に含めない |
 
@@ -186,20 +186,24 @@ Nagiを使う価値は、同じAPI・DB処理・失敗条件のアプリで、�
 
 コンパイラとRustの境界は、[段階計画](docs/internal/compiler-rust-boundary-plan.md)で整理しています。最終check済みの情報を封印して生成へ渡すCheckedProgram、ビルド世代の分離、資源契約の集約、Pool／Transactionの順に検証します。High→Lowテキスト→再解析とRust backendは維持します。
 
-Phase 1のCheckedProgramはPR #78でmainへ入り、公開版には未反映です。生成側で型や借用を再推論せず、封印時に確定したplanを使います。実装は[最終factory](compiler/src/check/checked.rs)、検証は[封印境界のテスト](compiler/src/check/checked_tests.rs)と[ADR 006](docs/internal/adr/006-sealed-codegen-input.md)を参照してください。
+Phase 1のCheckedProgramはPR #78でmainへ入り、Nagi 0.1.11に収録済みです。生成側で型や借用を再推論せず、封印時に確定したplanを使います。実装は[最終factory](compiler/src/check/checked.rs)、検証は[封印境界のテスト](compiler/src/check/checked_tests.rs)と[ADR 006](docs/internal/adr/006-sealed-codegen-input.md)を参照してください。
 
 CheckedProgramは検査済みのNagiとRust生成向け私有planを渡す境界で、完全なbackend非依存IRではありません。別backendの採用とself-hostingは別の候補です。Nagiでコンパイラを書くことは、概念上Rustへの生成を続けながらでもできます。どちらも現在の実装計画へ追加しません。
 
 Phase 2の開発差分では、アプリIDと成功世代を分けます。同じ生成先のwriterはOS lockで直列化し、世代固有のCargo binをbuildしてからexeをコピーします。成功時だけlatestを更新し、旧exeは上書き・削除・killしません。依存キャッシュは共有し、runの前にlockを解放します。生成Low・Rust・manifest・読み取り済みsourceと行対応を世代に保存しますが、外部Rustや依存source全体の原子的snapshot、任意processの隔離、電源断後の耐久性は対象外です。実装は[世代の公開処理](compiler/src/generation.rs)、検証は[実Cargo回帰](compiler/tests/build_generations.rs)、判断は[ADR 007](docs/internal/adr/007-build-generations.md)を参照してください。
 
-Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しました。Nagi 0.1.11への導入対象で、公開版での利用可否はRelease記録で確認してください。Phase 3の先行テストも4 OSで成功しました。開発差分では、登録資源の型引数の役割とcapabilityの根拠を私有descriptorへ集め、公開ResourceInfoはその一部を参照します。型引数の範囲・重複・欠落を登録時に検査し、用途別の判定と既存APIを保ちます。資源のlifecycle保証はまだ追加しません。[ADR 008](docs/internal/adr/008-resource-contracts.md)に構造と検証の順序を記録しました。集約後の#80は4 OS・editor・site・merge gate CIが成功し、mainへ反映しました。その後のSQLite Pool/Tx APIは開発sourceに実装され、[公開reference](docs/sqlite-pool.md)へ使い方と制約を記載しています。Nagi 0.1.11には含まれず、最新headの4 OS CIは確認中です。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)はmain・公開版・開発sourceの状況を区別します。
+Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しました。Nagi 0.1.11への導入対象で、公開版での利用可否はRelease記録で確認してください。Phase 3の先行テストも4 OSで成功しました。開発差分では、登録資源の型引数の役割とcapabilityの根拠を私有descriptorへ集め、公開ResourceInfoはその一部を参照します。型引数の範囲・重複・欠落を登録時に検査し、用途別の判定と既存APIを保ちます。資源のlifecycle保証はまだ追加しません。[ADR 008](docs/internal/adr/008-resource-contracts.md)に構造と検証の順序を記録しました。集約後の#80は4 OS・editor・site・merge gate CIが成功し、mainへ反映しました。その後のSQLite Pool/Tx APIは開発sourceに実装され、[公開reference](docs/sqlite-pool.md)へ使い方と制約を記載しています。Nagi 0.1.11には含まれません。#99としてmainへ反映済みで、main 62bbda9の4 OS CI成功を確認しています。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)はmain・公開版・開発sourceの状況を区別します。
 
-2026-10-06にQ002でSQLite API・SQL制限・終了契約とruntime rusqlite hooksを承認しました。続く実装では、当初のdeadpool比較試作から既存Tokio Semaphore＋lazy専用adapterへ変更し、deadpool/deadpool-runtimeを削除しました。新crateやTokio/rusqliteの版追加はありません。公開`std.db.sqlite`は8 resourceと18 operationからなり、従来`db_*` APIは変更していません。現sourceでの使い方、failure/outcome、SQL・ownership・close境界は[SQLite PoolとTransaction](docs/sqlite-pool.md)を参照してください。APIはNagi 0.1.11には含まれません。compiler/runtimeの現在の差分は検証中で、最新headの4 OS CIと公開版配布は未確認です。
+2026-10-06にQ002でSQLite API・SQL制限・終了契約とruntime rusqlite hooksを承認しました。続く実装では、当初のdeadpool比較試作から既存Tokio Semaphore＋lazy専用adapterへ変更し、deadpool/deadpool-runtimeを削除しました。新crateやTokio/rusqliteの版追加はありません。公開`std.db.sqlite`は8 resourceと18 operationからなり、従来`db_*` APIは変更していません。現sourceでの使い方、failure/outcome、SQL・ownership・close境界は[SQLite PoolとTransaction](docs/sqlite-pool.md)を参照してください。APIはNagi 0.1.11には含まれません。compiler/runtimeは#99としてmainへ反映済みで、main 62bbda9の4 OS CI成功を確認しています。新APIの正式リリース配布はまだ行っていません。
 
 初期のprivate transaction/SQL回帰は現在の[SQLite session](runtime/src/sqlite/session.rs)と[SQLite tests](runtime/src/sqlite/tests.rs)にあります。SQL Errだけで変更が戻ったとは扱いません。adapterのclose/capacity/join回帰は[adapter tests](runtime/src/sqlite/adapter_tests.rs)、公開API回帰は[public tests](runtime/src/sqlite/public_tests.rs)へ移っています。初期private試作とdeadpool比較の歴史は、現在の公開APIがその依存を使うという意味ではありません。
 
-#84/#85ではprivate段階で複数接続、native capacity、独立join、取得budgetを順に検査し、該当する4 OS CIを通してmainへ反映しました。これらの試作結果は今回のpublic API acceptanceへ流用しません。現在の公開実装の契約範囲と確認制限は[SQLite Pool reference](docs/sqlite-pool.md)に分けています。最新headの4 OS CIは確認中です。
+#84/#85ではprivate段階で複数接続、native capacity、独立join、取得budgetを順に検査し、該当する4 OS CIを通してmainへ反映しました。これらの試作結果は今回のpublic API acceptanceへ流用しません。現在の公開実装の契約範囲と確認制限は[SQLite Pool reference](docs/sqlite-pool.md)に分けています。公開APIを含むmain 62bbda9の4 OS CI成功を確認しています。
 
 意味論、公開API、High／Low／Rustの分担を変える場合は、変更の理由、代替案、互換性、検証結果をこの文書へ反映します。詳細なAPI説明や測定ログは対応する文書に置きます。
 
 未実装の案を実装済みへ変えるときは、実装とテストの参照を追加します。テストがあることを言語全体の保証へ拡大せず、測定していない効果は測定済みとして書きません。議論で合意したことと、動作が検証できたことも区別します。
+
+## 0.2.0 Security Foundationの設計段階
+
+[Security Foundation RFC](docs/internal/security-foundation/rfc.md)に現行mainの調査、AuthScope・CSRF・XSS・SQL Injection・SSRF・CORS・Cookie/Session・DoSの提案、静的/実行時境界、移行・機能別PR・全体完了条件をまとめています。最新指示に基づく[安全性優先のD1–D3判断と移行](docs/internal/security-foundation/decisions-and-migration.md)を実装基準にしています。全標準HTTPのpolicy必須化、request-boundの単一Grant、永続Sessionを推奨し、旧入口併存は撤回しました。新APIは未実装で、現行0.1.xへ遡及適用しません。move/Task/spawn、High/Low、SQLiteのnative lifecycleは維持します。正式0.2.0リリースとtagには別途明示承認が必要です。
