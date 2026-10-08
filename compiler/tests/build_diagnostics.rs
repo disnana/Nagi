@@ -915,12 +915,12 @@ fn source_names_with_spaces_and_dots_build_and_run() {
 fn invalid_entrypoints_are_rejected_before_cargo_with_source_locations() {
     let cases = [
         ("def main(value: i64):\n    print(value)\n", "fn main(value: i64) -> unit { print(value); }\n", "mainは引数"),
-        ("@get(\"/x\")\ndef handler() -> Result[i64, Error]:\n    return ok(1)\n", "@get(\"/x\")\nfn handler() -> Result[i64, Error] { return ok(1); }\n", "HTTP handler"),
-        ("@get(\"/x\")\nasync def handler() -> i64:\n    return 1\n", "@get(\"/x\")\nasync fn handler() -> i64 { return 1; }\n", "HTTP handler"),
-        ("@get(\"/x\")\nasync def handler(values: List[i64]) -> Result[i64, Error]:\n    return ok(1)\n", "@get(\"/x\")\nasync fn handler(values: List[i64]) -> Result[i64, Error] { return ok(1); }\n", "HTTPの引数"),
-        ("@post(\"/x\")\nasync def handler(a: view[bytes], b: view[bytes]) -> Result[i64, Error]:\n    return ok(1)\n", "@post(\"/x\")\nasync fn handler(a: view[bytes], b: view[bytes]) -> Result[i64, Error] { return ok(1); }\n", "bodyを受け取る引数は1つ"),
-        ("@get(\"x\")\nasync def handler() -> Result[i64, Error]:\n    return ok(1)\n", "@get(\"x\")\nasync fn handler() -> Result[i64, Error] { return ok(1); }\n", "pathは /"),
-        ("@get(\"/x\")\nasync def first() -> Result[i64, Error]:\n    return ok(1)\n@get(\"/x\")\nasync def second() -> Result[i64, Error]:\n    return ok(2)\n", "@get(\"/x\")\nasync fn first() -> Result[i64, Error] { return ok(1); }\n@get(\"/x\")\nasync fn second() -> Result[i64, Error] { return ok(2); }\n", "HTTPの定義が重複"),
+        ("@get(\"/x\")\ndef handler() -> Result[i64, Error]:\n    return ok(1)\n", "@get(\"/x\")\nfn handler() -> Result[i64, Error] { return ok(1); }\n", "SF01 migration"),
+        ("@get(\"/x\")\nasync def handler() -> i64:\n    return 1\n", "@get(\"/x\")\nasync fn handler() -> i64 { return 1; }\n", "SF01 migration"),
+        ("@get(\"/x\")\nasync def handler(values: List[i64]) -> Result[i64, Error]:\n    return ok(1)\n", "@get(\"/x\")\nasync fn handler(values: List[i64]) -> Result[i64, Error] { return ok(1); }\n", "SF01 migration"),
+        ("@post(\"/x\")\nasync def handler(a: view[bytes], b: view[bytes]) -> Result[i64, Error]:\n    return ok(1)\n", "@post(\"/x\")\nasync fn handler(a: view[bytes], b: view[bytes]) -> Result[i64, Error] { return ok(1); }\n", "SF01 migration"),
+        ("@get(\"x\")\nasync def handler() -> Result[i64, Error]:\n    return ok(1)\n", "@get(\"x\")\nasync fn handler() -> Result[i64, Error] { return ok(1); }\n", "SF01 migration"),
+        ("@get(\"/x\")\nasync def first() -> Result[i64, Error]:\n    return ok(1)\n@get(\"/x\")\nasync def second() -> Result[i64, Error]:\n    return ok(2)\n", "@get(\"/x\")\nasync fn first() -> Result[i64, Error] { return ok(1); }\n@get(\"/x\")\nasync fn second() -> Result[i64, Error] { return ok(2); }\n", "SF01 migration"),
     ];
     for (high, low, message) in cases {
         for (name, source) in [("handlers.nagi", high), ("handlers.low", low)] {
@@ -1076,16 +1076,18 @@ pub mod http_server {
     pub struct Method;
     impl Method { pub const GET: Self = Self; }
     pub struct App<S, E>(PhantomData<(S, E)>);
+    pub struct Policy<S, A>(PhantomData<(S, A)>);
+    pub fn public_policy<S>() -> Policy<S, ()> { Policy(PhantomData) }
     pub fn empty(_: Status) -> Response { Response }
     pub fn app<S, E>(_: S, _: fn(E) -> Response) -> App<S, E> { App(PhantomData) }
-    pub fn route<S, E, H, F>(app: App<S, E>, _: Method, _: &str, _: H) -> Result<App<S, E>, super::Error>
+    pub fn route<S, E, H, F>(app: App<S, E>, _: Method, _: &str, _: Policy<S, ()>, _: H) -> Result<App<S, E>, super::Error>
     where S: Send + Sync + 'static, E: Send + 'static,
-          H: Fn(Request, Arc<S>) -> F + Send + Sync + 'static,
+          H: Fn(Request, Arc<S>, ()) -> F + Send + Sync + 'static,
           F: Future<Output = Result<Response, E>> + Send + 'static { Ok(app) }
 }
 "#);
-    f.write("main.nagi", "from std.http.server import Response, Status, Method, app, empty, route\nimport \"lib/handler.nagi\" as handlers\n\ndef error_response(problem: i64) -> Response:\n    return empty(Status.BAD_REQUEST)\n\ndef main():\n    current = app[i64, i64](0, error_response)\n    registered = route(current, Method.GET, \"/\", handlers.handle)\n");
-    f.write("lib/handler.nagi", "from std.http.server import Request, Response, Status, empty\n\n@rust(\"native::non_send\")\nextern async def suspend() -> unit\n\nasync def handle(request: Request, state: shared[i64]) -> Result[Response, i64]:\n    await suspend()\n    return ok(empty(Status.OK))\n");
+    f.write("main.nagi", "from std.http.server import Response, Status, Method, app, empty, route, public_policy\nimport \"lib/handler.nagi\" as handlers\n\ndef error_response(problem: i64) -> Response:\n    return empty(Status.BAD_REQUEST)\n\ndef main():\n    current = app[i64, i64](0, error_response)\n    registered = route(current, Method.GET, \"/\", public_policy[i64](), handlers.handle)\n");
+    f.write("lib/handler.nagi", "from std.http.server import Request, Response, Status, empty\n\n@rust(\"native::non_send\")\nextern async def suspend() -> unit\n\nasync def handle(request: Request, state: shared[i64], authority: unit) -> Result[Response, i64]:\n    await suspend()\n    return ok(empty(Status.OK))\n");
     f.write(
         "bridge.rs",
         r#"

@@ -192,7 +192,7 @@ async def main() -> Result[unit, Error]:
 | 標準HTTPを読み込む | `import std.http.server as http` | `http.Request`や`http.Status.OK`を使う。`as`は必須 |
 | 標準型を選ぶ | `from std.http.server import Request, Response, Status as Code` | [標準import](modules-and-rust.md#標準http-libraryを読み込む) |
 | GET handlerを定義する | 関数の前に`@get("/users/{id}")` | [HTTP](http.md)。`@post`、`@put`、`@delete`もある |
-| HTMLを返す | `return ok(html("<h1>Hello</h1>"))` | 戻り値は`Result[Html, Error]` |
+| HTTP公開方針 | `http.public_policy[State]()` | 全routeへ明示Policy。active HTMLはSF04まで未対応 |
 | テキストを埋め込む | `include_text("index.html")` | ソースの場所を基準に、コンパイル時に埋め込む |
 | Rust関数を宣言する | `@rust("native::crc32")`の次行に`extern def crc32(text: view[str]) -> i64` | [Rust連携](modules-and-rust.md)。本体・末尾の`:`は不要 |
 

@@ -17,7 +17,7 @@ def allowed(request: view[http.Request], state: shared[State]) -> Result[bool, E
             return ok(value == view(state.expected))
         case None:
             return ok(False)
-async def handler(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def handler(request: http.Request, state: shared[State], access: unit) -> Result[http.Response, Error]:
     accepted = try allowed(view(request), state)
     if accepted:
         return ok(http.empty(http.Status.OK))
@@ -25,5 +25,5 @@ async def handler(request: http.Request, state: shared[State]) -> Result[http.Re
         return ok(http.empty(http.Status.UNAUTHORIZED))
 def register(state: State) -> Result[http.App[State, Error], Error]:
     app = http.app_default[State](state)
-    app = try http.route(app, http.Method.GET, view("/probe"), handler)
+    app = try http.route(app, http.Method.GET, view("/probe"), http.public_policy[State](), handler)
     return ok(app)

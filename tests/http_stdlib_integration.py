@@ -18,31 +18,38 @@ EXTRA_HANDLERS = '''
 def operation_error(problem: Error) -> http.Response:
     return http.text(http.Status.INTERNAL_SERVER_ERROR, "operation failed")
 
-async def echo(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+def forbidden(problem: AuthError) -> http.Response:
+    return http.text(http.Status.FORBIDDEN, "access denied")
+
+async def echo(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     return ok(http.bytes(http.Status.CREATED, request.body))
 
-async def cookies(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def cookies(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     output = http.text(http.Status.OK, "cookies")
-    output = try http.append_header(output, "Set-Cookie", request.body)
-    output = try http.append_header(output, "Set-Cookie", request.body)
+    output = try http.append_header_text(output, "X-Trace", "first")
+    output = try http.append_header_text(output, "X-Trace", "second")
     return ok(output)
 
-async def text_headers(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def text_headers(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     output = http.text(http.Status.OK, "text headers")
     output = try http.append_header_text(output, "X-Demo", "nagi")
-    output = try http.append_header_text(output, "Set-Cookie", "first=demo")
-    output = try http.append_header_text(output, "Set-Cookie", "second=demo")
+    output = try http.append_header_text(output, "X-Trace", "first=demo")
+    output = try http.append_header_text(output, "X-Trace", "second=demo")
     return ok(output)
 
-async def invalid_header(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def reserved_header(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    output = http.text(http.Status.OK, "reserved header")
+    return http.append_header_text(output, "Set-Cookie", "sid=demo")
+
+async def invalid_header(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     output = http.empty(http.Status.OK)
     return http.append_header_text(output, "X-Demo", "demo\\r\\nX-Injected: yes")
 
-async def invalid_framing(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def invalid_framing(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     output = http.empty(http.Status.OK)
     return http.append_header_text(output, "Content-Length", "123")
 
-async def panic_index(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def panic_index(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     match request.query:
         case Some(value):
             index = try parse_i64(value)
@@ -53,7 +60,7 @@ async def panic_index(request: http.Request, state: shared[State]) -> Result[htt
         case None:
             return error("missing index")
 
-async def panic_divide(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def panic_divide(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     match request.query:
         case Some(value):
             divisor = try parse_i64(value)
@@ -62,29 +69,29 @@ async def panic_divide(request: http.Request, state: shared[State]) -> Result[ht
         case None:
             return error("missing divisor")
 
-async def no_content(request: http.Request, state: shared[State]) -> Result[http.Response, AuthError]:
+async def no_content(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
     return ok(http.text(http.Status.NO_CONTENT, "must not be sent"))
 
-async def reset_content(request: http.Request, state: shared[State]) -> Result[http.Response, AuthError]:
+async def reset_content(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
     return ok(http.text(http.Status.RESET_CONTENT, "must not be sent"))
 
-async def not_modified(request: http.Request, state: shared[State]) -> Result[http.Response, AuthError]:
+async def not_modified(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
     return ok(http.text(http.Status.NOT_MODIFIED, "must not be sent"))
 
-async def conflict(request: http.Request, state: shared[State]) -> Result[http.Response, AuthError]:
+async def conflict(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
     return ok(http.text(http.Status.CONFLICT, "already exists"))
 
-async def throttled(request: http.Request, state: shared[State]) -> Result[http.Response, AuthError]:
+async def throttled(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
     return ok(http.text(http.Status.TOO_MANY_REQUESTS, "slow down"))
 
-async def query(request: http.Request, state: shared[State]) -> Result[http.Response, AuthError]:
+async def query(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
     match request.query:
         case Some(value):
             return ok(http.text(http.Status.OK, value))
         case None:
             return ok(http.text(http.Status.OK, "no query"))
 
-async def explicit_head(request: http.Request, state: shared[State]) -> Result[http.Response, AuthError]:
+async def explicit_head(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
     return ok(http.text(http.Status.ACCEPTED, "head-only"))
 
 def method_name(request: view[http.Request]) -> view[str]:
@@ -93,7 +100,7 @@ def method_name(request: view[http.Request]) -> view[str]:
 def direct_method_name(request: view[http.Request]) -> view[str]:
     return http.method_name(request.method)
 
-async def method(request: http.Request, state: shared[State]) -> Result[http.Response, AuthError]:
+async def method(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
     name = method_name(view(request))
     direct = direct_method_name(view(request))
     assert_true(name == direct)
@@ -141,7 +148,7 @@ def compare_bytes(owned: bytes, borrowed: view[bytes]) -> bool:
     assert_true(borrowed >= owned)
     return True
 
-async def comparisons(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def comparisons(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     assert_true(compare_strings(copy(request.path), request.path))
     assert_true(compare_bytes(copy(request.body), request.body))
     empty = try slice(request.body, 0, 0)
@@ -159,32 +166,33 @@ async def launch(app: http.App[State, AuthError], port: i64) -> Result[unit, Err
     return await http.serve(app, port, http.default_options())
 
 async def main() -> Result[unit, Error]:
-    state = State(authorization=env("NAGI_DEMO_AUTHORIZATION", ""), greeting="first app")
+    state = State(authorization=env("NAGI_DEMO_AUTHORIZATION", ""), greeting="first app", subject=1)
     app = http.app[State, AuthError](state, auth_error)
-    app = try http.route(app, http.Method.GET, "/health", health)
-    app = try http.route(app, http.Method.GET, "/me", profile)
-    app = try http.route_mapped(app, http.Method.GET, "/restricted", restricted, forbidden)
-    app = try http.route_mapped(app, http.Method.POST, "/echo", echo, operation_error)
-    app = try http.route_mapped(app, http.Method.POST, "/cookies", cookies, operation_error)
-    app = try http.route_mapped(app, http.Method.GET, "/text-headers", text_headers, operation_error)
-    app = try http.route_mapped(app, http.Method.GET, "/invalid-header", invalid_header, operation_error)
-    app = try http.route_mapped(app, http.Method.GET, "/invalid-framing", invalid_framing, operation_error)
-    app = try http.route_mapped(app, http.Method.GET, "/panic-index", panic_index, operation_error)
-    app = try http.route_mapped(app, http.Method.GET, "/panic-divide", panic_divide, operation_error)
-    app = try http.route(app, http.Method.GET, "/no-content", no_content)
-    app = try http.route(app, http.Method.GET, "/reset-content", reset_content)
-    app = try http.route(app, http.Method.GET, "/not-modified", not_modified)
-    app = try http.route(app, http.Method.GET, "/conflict", conflict)
-    app = try http.route(app, http.Method.GET, "/throttled", throttled)
-    app = try http.route(app, http.Method.GET, "/query", query)
-    app = try http.route(app, http.Method.GET, "/head", health)
-    app = try http.route(app, http.Method.HEAD, "/head", explicit_head)
-    app = try http.route_mapped(app, http.Method.POST, "/comparisons", comparisons, operation_error)
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    app = try http.route(app, http.Method.GET, "/me", http.authenticated_policy[State](verify), profile)
+    app = try http.route_mapped(app, http.Method.GET, "/restricted", http.public_policy[State](), restricted, forbidden)
+    app = try http.route_mapped(app, http.Method.POST, "/echo", http.public_policy[State](), echo, operation_error)
+    app = try http.route_mapped(app, http.Method.POST, "/cookies", http.public_policy[State](), cookies, operation_error)
+    app = try http.route_mapped(app, http.Method.GET, "/text-headers", http.public_policy[State](), text_headers, operation_error)
+    app = try http.route_mapped(app, http.Method.GET, "/reserved-header", http.public_policy[State](), reserved_header, operation_error)
+    app = try http.route_mapped(app, http.Method.GET, "/invalid-header", http.public_policy[State](), invalid_header, operation_error)
+    app = try http.route_mapped(app, http.Method.GET, "/invalid-framing", http.public_policy[State](), invalid_framing, operation_error)
+    app = try http.route_mapped(app, http.Method.GET, "/panic-index", http.public_policy[State](), panic_index, operation_error)
+    app = try http.route_mapped(app, http.Method.GET, "/panic-divide", http.public_policy[State](), panic_divide, operation_error)
+    app = try http.route(app, http.Method.GET, "/no-content", http.public_policy[State](), no_content)
+    app = try http.route(app, http.Method.GET, "/reset-content", http.public_policy[State](), reset_content)
+    app = try http.route(app, http.Method.GET, "/not-modified", http.public_policy[State](), not_modified)
+    app = try http.route(app, http.Method.GET, "/conflict", http.public_policy[State](), conflict)
+    app = try http.route(app, http.Method.GET, "/throttled", http.public_policy[State](), throttled)
+    app = try http.route(app, http.Method.GET, "/query", http.public_policy[State](), query)
+    app = try http.route(app, http.Method.GET, "/head", http.public_policy[State](), health)
+    app = try http.route(app, http.Method.HEAD, "/head", http.public_policy[State](), explicit_head)
+    app = try http.route_mapped(app, http.Method.POST, "/comparisons", http.public_policy[State](), comparisons, operation_error)
     extended = try http.method("PROPFIND")
-    app = try http.route(app, extended, "/method", method)
-    second = http.app[State, AuthError](State(authorization=env("NAGI_SECOND_AUTHORIZATION", ""), greeting="second app"), auth_error)
-    second = try http.route(second, http.Method.GET, "/health", health)
-    second = try http.route(second, http.Method.GET, "/me", profile)
+    app = try http.route(app, extended, "/method", http.public_policy[State](), method)
+    second = http.app[State, AuthError](State(authorization=env("NAGI_SECOND_AUTHORIZATION", ""), greeting="second app", subject=2), auth_error)
+    second = try http.route(second, http.Method.GET, "/health", http.public_policy[State](), health)
+    second = try http.route(second, http.Method.GET, "/me", http.authenticated_policy[State](verify), profile)
     port = try parse_i64(env("NAGI_TEST_PORT", "0"))
     second_port = try parse_i64(env("NAGI_SECOND_PORT", "0"))
     async with scope:
@@ -218,8 +226,8 @@ def duplicate_header(port: int):
 
 
 def invalid_utf8_header(port: int):
-    # The HTTP parser accepts opaque header bytes. UTF-8 conversion belongs to
-    # header_text, whose error must reach the application's safe error mapper.
+    # The HTTP auth policy rejects malformed credentials before the verifier
+    # or application handler receives them.
     with socket.create_connection(("127.0.0.1", port), timeout=5) as connection:
         connection.sendall(b"GET /me HTTP/1.1\r\nHost: localhost\r\nAuthorization: \xff\r\nConnection: close\r\n\r\n")
         response = http.client.HTTPResponse(connection)
@@ -305,25 +313,25 @@ def check_server(executable: Path, folder: Path, environment: dict[str, str], so
         try:
             wait_for_server(first, process, log_path)
             wait_for_server(second, process, log_path)
-            expect(first, "GET", "/me", 401, b"authentication required")
-            expect(first, "GET", "/me", 401, b"invalid credentials", headers={"Authorization": "Bearer wrong-value"})
+            expect(first, "GET", "/me", 401, b"invalid credential")
+            expect(first, "GET", "/me", 401, b"invalid credential", headers={"Authorization": "Bearer wrong-value"})
             expect(first, "GET", "/me", 200, b"first app", headers={"Authorization": environment["NAGI_DEMO_AUTHORIZATION"]})
             expect(second, "GET", "/me", 200, b"second app", headers={"Authorization": environment["NAGI_SECOND_AUTHORIZATION"]})
-            expect(second, "GET", "/me", 401, b"invalid credentials", headers={"Authorization": environment["NAGI_DEMO_AUTHORIZATION"]})
+            expect(second, "GET", "/me", 401, b"invalid credential", headers={"Authorization": environment["NAGI_DEMO_AUTHORIZATION"]})
             expect(first, "GET", "/restricted", 403, b"access denied")
-            assert duplicate_header(first) == (400, b"invalid authorization header")
+            assert duplicate_header(first) == (400, b"invalid security request")
             checked += 1
-            assert invalid_utf8_header(first) == (400, b"invalid authorization header")
+            assert invalid_utf8_header(first) == (400, b"invalid security request")
             checked += 1
             expect(first, "POST", "/echo", 201, "日本語\x00body".encode(), body="日本語\x00body".encode())
             expect(first, "POST", "/echo", 201, b"", body=b"")
-            cookies = expect(first, "POST", "/cookies", 200, b"cookies", body=b"sid=demo; HttpOnly")
-            assert [value for name, value in cookies if name.lower() == "set-cookie"] == ["sid=demo; HttpOnly", "sid=demo; HttpOnly"], cookies
-            headers = expect(first, "POST", "/cookies", 500, b"operation failed", body=b"sid=demo\r\nX-Injected: yes")
-            assert all(name.lower() != "x-injected" for name, _ in headers)
+            cookies = expect(first, "POST", "/cookies", 200, b"cookies", body=b"ignored")
+            assert [value for name, value in cookies if name.lower() == "x-trace"] == ["first", "second"], cookies
+            headers = expect(first, "GET", "/reserved-header", 500, b"operation failed")
+            assert all(name.lower() != "set-cookie" for name, _ in headers)
             headers = expect(first, "GET", "/text-headers", 200, b"text headers")
             assert {name.lower(): value for name, value in headers}.get("x-demo") == "nagi", headers
-            assert [value for name, value in headers if name.lower() == "set-cookie"] == ["first=demo", "second=demo"], headers
+            assert [value for name, value in headers if name.lower() == "x-trace"] == ["first=demo", "second=demo"], headers
             headers = expect(first, "GET", "/invalid-header", 500, b"operation failed")
             assert all(name.lower() != "x-injected" for name, _ in headers)
             expect(first, "GET", "/invalid-framing", 500, b"operation failed")
@@ -383,6 +391,8 @@ def verify(compiler: Path, target: Path) -> None:
         assert separator, "the authentication example must retain its executable entry point"
         source = folder / "http-app.nagi"
         source.write_text(prefix + EXTRA_HANDLERS, encoding="utf-8")
+        native_source = folder / "native.rs"
+        native_source.write_text((AUTH_EXAMPLE.parent / "native.rs").read_text(encoding="utf-8"), encoding="utf-8")
         for command in ["check", "lower"]:
             result = subprocess.run([str(compiler), command, str(source), "--no-project", "--out", str(folder / "lowered")],
                                     cwd=folder, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=60)
@@ -395,7 +405,7 @@ def verify(compiler: Path, target: Path) -> None:
         for input_file in [source, lowered]:
             if input_file == lowered:
                 source.unlink()
-            result = subprocess.run([str(compiler), "build", str(input_file), "--no-project", "--out", str(folder / "build")],
+            result = subprocess.run([str(compiler), "build", str(input_file), "--no-project", "--rust", str(native_source), "--out", str(folder / "build")],
                                     cwd=folder, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=180)
             assert result.returncode == 0, result.stdout + result.stderr
             native = [line.removeprefix("native: ").strip()

@@ -1,13 +1,12 @@
 [
   {
     "name": "HTTP_handler_panic_isolation",
-    "contract": "handler/extractor/response/error-mapper panicはpayloadを公開せずHTTP 500、HEADは空body、serverは次のrequestを処理する",
+    "contract": "標準HTTP handler構築/poll/error-mapper panicはpayloadを公開せずHTTP 500、HEADは空body、serverは次のrequestを処理する",
     "files": [
-      "runtime/src/http/panic_tests.rs",
       "runtime/src/http_server/panic_tests.rs"
     ],
     "test_names": [
-      "handler_extractor_and_response_panics_return_sanitized_500_for_get_and_head",
+      "http_handler_constructor_panic_returns_500",
       "http_handler_out_of_bounds_returns_500_and_server_keeps_serving",
       "http_handler_panic_head_response_has_no_body"
     ],
@@ -42,12 +41,12 @@
   },
   {
     "name": "HTTP_generated_Cargo_build_and_runtime_error",
-    "contract": "zero-route High/Low programを実Cargo buildし、起動時runtime errorを確認する",
+    "contract": "明示Policy登録のHigh/保存Low programを実Cargo buildし、起動時invalid port runtime errorを確認する",
     "files": [
       "compiler/tests/http_entrypoint.rs"
     ],
     "test_names": [
-      "zero_route_servers_build_and_return_runtime_errors_in_high_and_low"
+      "explicit_http_server_builds_and_returns_invalid_port_in_high_and_low"
     ],
     "command": [
       "cargo",
@@ -202,7 +201,6 @@
     ],
     "test_names": [
       "missing_principal_grant_wrong_permission_and_reuse_are_rejected",
-      "proof_move_and_nominal_marker_build_and_run_against_real_runtime",
       "opaque_main_errors_fail_without_a_debug_bound_or_proof_payload",
       "native_phantom_types_do_not_become_field_payloads"
     ],
@@ -381,6 +379,49 @@
       "nagic",
       "--test",
       "task_handles"
+    ]
+  },
+  {
+    "name": "request_policy_contracts_and_native",
+    "contract": "旧入口を元位置migration診断で拒否。High/保存Low/手書きLowでexplicit Policyとrequest-bound Grantを実native実行する",
+    "files": [
+      "compiler/tests/security_sf01.rs",
+      "compiler/tests/security_sf01_native.rs"
+    ],
+    "test_names": [
+      "legacy_decorator_is_a_checker_migration_diagnostic",
+      "native_replacements_and_aliases_cannot_downgrade_security_contracts",
+      "policies_and_nominal_request_proofs_execute_in_all_three_paths"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "security_sf01",
+      "--test",
+      "security_sf01_native"
+    ]
+  },
+  {
+    "name": "request_lease_public_runtime",
+    "contract": "実socket request終了後にretained trusted Rust proofが失効する",
+    "files": [
+      "runtime/tests/security_sf01.rs"
+    ],
+    "test_names": [
+      "request_end_invalidates_retained_rust_proofs"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagi-runtime",
+      "--test",
+      "security_sf01"
     ]
   }
 ]

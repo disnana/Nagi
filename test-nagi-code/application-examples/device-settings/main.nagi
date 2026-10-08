@@ -1,3 +1,5 @@
+import std.http.server as http
+
 class DeviceSettings:
     id: i64
     enabled: bool?
@@ -5,18 +7,47 @@ class DeviceSettings:
     label: str?
     calibration: bytes?
 
-@get("/devices/{id}")
-async def find_device(db: Db, id: i64) -> Result[DeviceSettings?, Error]:
-    return await db_query[DeviceSettings](db, "SELECT id, enabled, gain, label, calibration FROM devices WHERE id = ?1", id)
+class State:
+    db: Db
 
-@get("/devices")
-async def devices(db: Db) -> Result[List[DeviceSettings], Error]:
-    return await db_all[DeviceSettings](db, "SELECT id, enabled, gain, label, calibration FROM devices ORDER BY id")
+class ErrorBody:
+    error: str
+
+def device_id(request: view[http.Request]) -> Result[i64, Error]:
+    if len(request.path) <= 9:
+        return error("device id is missing")
+    return parse_i64(try slice(request.path, 9, len(request.path)))
+
+def missing_device() -> Result[http.Response, Error]:
+    return http.json[ErrorBody](http.Status.NOT_FOUND, ErrorBody(error="not found"))
+
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, "ok"))
+
+async def find_device(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    id = try device_id(view(request))
+    match await db_query[DeviceSettings](state.db, "SELECT id, enabled, gain, label, calibration FROM devices WHERE id = ?1", id):
+        case Ok(found):
+            match found:
+                case Some(device):
+                    return http.json[DeviceSettings](http.Status.OK, device)
+                case None:
+                    return missing_device()
+        case Err(problem):
+            return fail(problem)
+
+async def devices(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    rows = try await db_all[DeviceSettings](state.db, "SELECT id, enabled, gain, label, calibration FROM devices ORDER BY id")
+    return http.json[List[DeviceSettings]](http.Status.OK, rows)
 
 async def main() -> Result[unit, Error]:
     path = env("NAGI_SAMPLE_DB", "settings.sqlite")
     db = try await db_open(path)
     try await db_exec(db, "CREATE TABLE IF NOT EXISTS devices(id INTEGER PRIMARY KEY, enabled INTEGER, gain REAL, label TEXT, calibration BLOB)")
     try await db_exec(db, "INSERT OR IGNORE INTO devices VALUES (1, 1, 1.25, NULL, X'0001FF'), (2, NULL, NULL, 'front-door', NULL), (3, 0, 0.5, 'side-door', X'')")
+    app = http.app_default[State](State(db=db))
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    app = try http.route(app, http.Method.GET, "/devices", http.public_policy[State](), devices)
+    app = try http.route(app, http.Method.GET, "/devices/{id}", http.public_policy[State](), find_device)
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8091"))
-    return await serve(db, port)
+    return await http.serve(app, port, http.default_options())

@@ -1,6 +1,8 @@
-# Read headers and handle authentication errors in Nagi
+# Bearer authentication through a standard HTTP policy
 
-A small Bearer authentication example using only the standard HTTP API. It needs no Rust adapter or database. Shared state holds a demo value, and an async handler reads `Authorization`.
+[日本語](README.md)
+
+The standard HTTP dispatcher calls a Rust verifier and passes an authenticated `AuthScope` only to the `/me` handler. `/health` and `/restricted` are explicitly public routes.
 
 Run from this directory:
 
@@ -28,13 +30,11 @@ curl -i http://127.0.0.1:8089/restricted
 | Route | Response |
 |---|---|
 | `/health` | 200, `ok` |
-| `/me`, missing or incorrect header | 401 |
+| `/me`, missing or incorrect header | The same 401, `invalid credential`, and `WWW-Authenticate: Bearer` |
 | `/me`, matching configured value | 200, `Hello, Nagi!` |
-| `/me`, duplicate headers or invalid UTF-8 | 400 |
-| `/restricted` | Its route mapper overrides the app mapper and returns 403 |
+| `/me`, duplicate header names or invalid UTF-8 | 400, `invalid security request` |
+| `/restricted` | A business 403 from the public handler, `access denied` |
 
-401 responses include `WWW-Authenticate: Bearer` and omit the credential and internal errors. An unset value causes a startup error. Change the port with `NAGI_SAMPLE_PORT`; stop with Ctrl+C.
+The 401/400 responses are standard policy failures. `/restricted` is a handler response, not an authentication-policy denial. An empty `NAGI_DEMO_AUTHORIZATION` causes a startup error. Change the port with `NAGI_SAMPLE_PORT`; stop with Ctrl+C.
 
-The fixed comparison demonstrates the HTTP API. This example does not implement production authentication, user management, or token issuance and revocation.
-
-[日本語](README.md)
+The `native.rs` verifier compares one configured string with a demo credential and returns a finite-lived `VerifiedIdentity` for subject 1. This demonstrates the boundary wiring; it does not implement a production token format, signature, audience, expiry validation, revocation lookup, or user management. Production use needs a reviewed token verifier.

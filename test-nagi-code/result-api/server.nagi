@@ -1,49 +1,101 @@
-import "storage.nagi"
+import "models.nagi"
+import std.http.server as http
 
-@get("/api/double")
-async def double(value: str) -> Result[Number, Error]:
+class State:
+    db: Db
+
+class ErrorBody:
+    error: str
+
+async def read_optional(state: shared[State]) -> Result[Item?, Error]:
+    return await db_query[Item](state.db, "SELECT id, name FROM optional_items WHERE id = ?1", 1)
+
+async def read_item(state: shared[State], id: i64) -> Result[Item?, Error]:
+    return await db_query[Item](state.db, "SELECT id, name FROM sample_items WHERE id = ?1", id)
+
+def response_error(status: http.Status, message: str) -> http.Response:
+    match http.json[ErrorBody](status, ErrorBody(error=message)):
+        case Ok(response):
+            return response
+        case Err(_):
+            return http.empty(http.Status.INTERNAL_SERVER_ERROR)
+
+def api_error(problem: Error) -> http.Response:
+    kind = error_kind(problem)
+    if kind == "invalid":
+        return response_error(http.Status.BAD_REQUEST, error_message(problem))
+    if kind == "not_found":
+        return response_error(http.Status.NOT_FOUND, error_message(problem))
+    return response_error(http.Status.INTERNAL_SERVER_ERROR, "internal error")
+
+def query_value(request: view[http.Request]) -> Result[str, Error]:
+    match request.query:
+        case Some(query):
+            if len(query) < 7 or try slice(query, 0, 6) != "value=":
+                return error("value must be an integer")
+            return ok(copy(try slice(query, 6, len(query))))
+        case None:
+            return error("value must be an integer")
+
+def item_id(request: view[http.Request]) -> Result[i64, Error]:
+    if len(request.path) <= 11:
+        return error("id must be positive")
+    return parse_i64(try slice(request.path, 11, len(request.path)))
+
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, "ok"))
+
+async def double(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    value = try query_value(view(request))
     match parse_i64(view(value)):
         case Ok(number):
             if number < 0 or number > 1000000:
                 return error("value must be between 0 and 1000000")
-            return ok(Number(value=number * 2))
+            return http.json[Number](http.Status.OK, Number(value=number * 2))
         case Err(_):
             return error("value must be an integer")
 
-@get("/api/items/{id}")
-async def get_item(db: Db, id: i64) -> Result[Item?, Error]:
+async def get_item(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    id = try item_id(view(request))
     if id < 1:
         return error("id must be positive")
     if id > 1000000:
         return not_found("item is outside the sample range")
-    match await read_item(db, id):
+    match await read_item(state, id):
         case Ok(item):
-            # NoneはHTTPルートで404になる。SomeはJSONになる。
-            return ok(item)
+            match item:
+                case Some(value):
+                    return http.json[Item](http.Status.OK, value)
+                case None:
+                    return not_found("not found")
         case Err(problem):
             return fail(problem)
 
-@get("/api/fallback")
-async def fallback(db: Db) -> Result[Item?, Error]:
-    match await read_optional(db):
+async def fallback(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    match await read_optional(state):
         case Ok(item):
-            return ok(item)
+            match item:
+                case Some(value):
+                    return http.json[Item](http.Status.OK, value)
+                case None:
+                    return not_found("not found")
         case Err(problem):
             print(error_kind(problem))
-            return ok(some(Item(id=0, name="cached item")))
+            return http.json[Item](http.Status.OK, Item(id=0, name="cached item"))
 
-@get("/api/db-error")
-async def database_error(db: Db) -> Result[Item?, Error]:
-    match await read_optional(db):
+async def database_error(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    match await read_optional(state):
         case Ok(item):
-            return ok(item)
+            match item:
+                case Some(value):
+                    return http.json[Item](http.Status.OK, value)
+                case None:
+                    return not_found("not found")
         case Err(problem):
-            # kindを保持して失敗を返す。SQLの詳細はHTTP応答に出さない。
             print(error_kind(problem))
             return fail(problem)
 
-@get("/api/internal-error")
-async def internal_failure() -> Result[Number, Error]:
+async def internal_failure(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     return internal_error("sample internal failure")
 
 async def main() -> Result[unit, Error]:
@@ -53,4 +105,11 @@ async def main() -> Result[unit, Error]:
     db = try await db_open(":memory:")
     try await db_exec(db, "CREATE TABLE sample_items(id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
     try await db_exec(db, "INSERT INTO sample_items(id, name) VALUES (1, 'notebook')")
-    return await serve(db, port)
+    app = http.app[State, Error](State(db=db), api_error)
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    app = try http.route(app, http.Method.GET, "/api/double", http.public_policy[State](), double)
+    app = try http.route(app, http.Method.GET, "/api/items/{id}", http.public_policy[State](), get_item)
+    app = try http.route(app, http.Method.GET, "/api/fallback", http.public_policy[State](), fallback)
+    app = try http.route(app, http.Method.GET, "/api/db-error", http.public_policy[State](), database_error)
+    app = try http.route(app, http.Method.GET, "/api/internal-error", http.public_policy[State](), internal_failure)
+    return await http.serve(app, port, http.default_options())

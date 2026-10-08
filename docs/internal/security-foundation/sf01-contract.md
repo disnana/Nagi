@@ -6,7 +6,7 @@
 
 標準型はcanonical IDから解決し、同名のユーザー型/関数を占有しない。
 
-- `auth.AuthScope`: opaque、verified subject/credential source/request ID/private lease/絶対期限。非Copy/Clone/Serde/shared/field、SameTask。`auth.subject(view(scope))`はIDの読取のみ。
+- `auth.AuthScope`: opaque、verified subject/request ID/private lease/絶対期限。SF01のcredential sourceは一意のBearer headerだけ。非Copy/Clone/Serde/shared/field、SameTask。`auth.subject(view(scope))`はIDの読取のみ。
 - `auth.Grant[P]`: 同じ制約、nominal permission P、subject/対象実値i64/同じprivate leaseを持つ。一回consume。Rustのtrusted authorizerは `Grant::from_authorized(scope, resource) -> Result[Grant[P], auth.Failure]` を使い、policy成功をその前に確認する。生subjectだけでproofを作るfactoryやunchecked parts取出しは廃止する。
 - `auth.VerifiedIdentity`: trusted verifierの期限付き結果。proofではなく、dispatcherだけが生きたrequest leaseへ結び付ける。Rust factoryはsubjectと有限の絶対期限を要求し、Nagi factoryはない。
 - `auth.Failure`とCopy enum `auth.FailureKind`: INVALID_CREDENTIAL / DENIED / EXPIRED / INVALID_REQUEST / UNAVAILABLE / INTERNAL。安定した秘密なしmessageをviewで読み、kindを値で読む。denial/expiryは業務Resultで、TaskFailureへflattenしない。panic/unexpected cancellationは既存故障境界。
@@ -38,3 +38,13 @@ native capacity予約はadmissionではない。予約取得後に `Grant::submi
 finalizerがContent-Typeとnosniff、security-managed headersを所有する。append_headerは非reservedのみ。Content-Length/Transfer-Encoding/Content-Type/Set-Cookie/CORS/CSP/安全関連Cache-Control等を任意値で追加して迂回しない。transport early errorsにも同じ基本headersを付ける。Session発行/no-storeの専用所有はSF02、CORS/CSRFはSF03、typed HTMLはSF04で追加する。raw HTML標準入口は診断で拒否し、SF01でXSS renderer完成と主張しない。旧HTML業務例の完全なtyped移行はSF04の残事項として明記する。
 
 旧API拒否をparser/import/未定義エラーの成功に数えず、元位置migration診断と移行後同等なHTTP/認可/CRUD業務nativeを対にする。native proof/leaseのfakeはテスト専用privateで、公開factoryへ混ぜない。REDのstage、診断、元行とnative effectの観測を保存する。
+
+## 独立境界レビューと追加RED
+
+Sol High独立レビューは失効/permit発行の同Mutex、Policy protocol metadata、SameTask、最終Low/native sealを確認した。旧RoutePlan/needs_server/__route__/__nagi_serveはmigration拒否されるdecorator/global builtinだけの生成経路であり、標準routeの動的登録検査とは別である。main引数禁止と旧decoratorの元位置診断は維持して生成経路を削除した。
+
+削除操作は初回の自動承認レビューで「新routeの競合検査を失う」と拒否された。ソース照合・独立レビュー・移行後High/保存Lowの実登録Errを追加し、同じ削除を根拠付きで再実行して承認された。拒否を別経路で迂回していない。
+
+旧decoratorの静的path競合は、標準Appのfallible dynamic登録ではmatchitの登録Errになる。pathを変数/分岐で作る既存標準APIを維持し、checkerに文字列/名前推測による別routing仕様を追加しない。曖昧routerを起動しない同等業務をnativeで確認する。
+
+レビュー候補だったnon-yielding verifierの期限後Errについて、小さい20ms/5ms fixtureで403対504のREDを保存した。共通deadline判定をOk/Err/panic全結果へ適用した。同期処理の強制停止や副作用rollbackは保証しない。Bearer security401ではWWW-Authenticateをframeworkが所有し、Failureの安定messageを返す。アプリの通常Result Errはmapper、security Failureはhandlerに入る前の固定分類で分離する。

@@ -4,6 +4,4 @@ entry = "main.nagi"
 file = "native.rs"
 
 [rust.dependencies]
-axum = "0.8"
-tokio = "1.48"
-futures-util = "0.3"
+tokio = { version = "1.48", features = ["rt", "sync", "time"] }

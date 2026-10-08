@@ -46,13 +46,13 @@ pub fn __nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572
     return ::nagi_runtime::http_server::empty(::nagi_runtime::http_server::Status::BAD_REQUEST);
 }
 #[allow(non_snake_case, arithmetic_overflow)]
-pub async fn __nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_f_68616e646c6572(mut request: ::nagi_runtime::http_server::Request, mut state: ::std::sync::Arc<__nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_c_5374617465>) -> ::std::result::Result<::nagi_runtime::http_server::Response, ::std::string::String> {
+pub async fn __nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_f_68616e646c6572(mut request: ::nagi_runtime::http_server::Request, mut state: ::std::sync::Arc<__nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_c_5374617465>, mut access: ()) -> ::std::result::Result<::nagi_runtime::http_server::Response, ::std::string::String> {
     return ::std::result::Result::Ok(::nagi_runtime::http_server::empty(::nagi_runtime::http_server::Status::OK));
 }
 #[allow(non_snake_case, arithmetic_overflow)]
 pub fn __nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_f_7365747570(mut state: __nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_c_5374617465) -> ::std::result::Result<::nagi_runtime::http_server::App<__nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_c_5374617465, ::nagi_runtime::Error>, ::nagi_runtime::Error> {
     let mut app: ::nagi_runtime::http_server::App<__nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_c_5374617465, ::nagi_runtime::Error> = ::nagi_runtime::http_server::app::<__nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_c_5374617465, ::nagi_runtime::Error>(state, crate::__nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_f_6d61705f6275696c74696e);
-    return ::nagi_runtime::http_server::route_mapped(app, ::nagi_runtime::http_server::Method::GET, "/probe", crate::__nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_f_68616e646c6572, crate::__nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_f_6d61705f74657874);
+    return ::nagi_runtime::http_server::route_mapped(app, ::nagi_runtime::http_server::Method::GET, "/probe", ::nagi_runtime::http_server::public_policy::<__nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_c_5374617465>(), crate::__nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_f_68616e646c6572, crate::__nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_f_6d61705f74657874);
 }
 #[allow(unused_imports)]
 pub use crate::__nagi_def_2f6e6167692d676f6c64656e2f687474702d626f72726f772d6d6170706572732f6d61696e2e6e616769_c_5374617465 as State;
@@ -83,6 +83,8 @@ pub mod http {
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::App as App;
     #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::Policy as Policy;
+    #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::status as status;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::method as method;
@@ -92,8 +94,6 @@ pub mod http {
     pub use ::nagi_runtime::http_server::empty as empty;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::text as text;
-    #[allow(unused_imports)]
-    pub use ::nagi_runtime::http_server::html as html;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::bytes as bytes;
     #[allow(unused_imports)]
@@ -122,6 +122,14 @@ pub mod http {
     pub use ::nagi_runtime::http_server::header_limits as header_limits;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::send_timeout as send_timeout;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::public_policy as public_policy;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::authenticated_policy as authenticated_policy;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::authorized_policy as authorized_policy;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::security_timeout as security_timeout;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::app as app;
     #[allow(unused_imports)]

@@ -63,7 +63,7 @@ A module name exposes functions, classes, and enums defined in that file. Import
 
 Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted imports select registered modules such as `std.http.server`, `std.actor`, and `std.result`. Nagi 0.1.11 and later also provide the registered modules `std.auth`, `std.ownership`, and `std.task`. Confirm the installed compiler version. General package discovery and visibility declarations are unsupported.
 
-The experimental `std.auth` API targets Nagi 0.1.11 and provides an authenticated `Principal` and a consumed `Grant[P]`. Check the official release record to confirm availability. The [authentication and authorization example](../../test-nagi-code/application-examples/auth-boundary/README.en.md) connects Rust verification with a custom Nagi policy. It uses fixed credentials; it does not implement JWS verification or check authorization across every route.
+Unreleased 0.2.0 SF01 uses request-bound `AuthScope` and `Grant[P]` in `std.auth`. Principal and indefinite issuers are removed. See [authentication and authorization](security.md) for type, lease and trusted-adapter duties, and [migration](migration-0.2.0.md) for changes. The [example](../../test-nagi-code/application-examples/auth-boundary/README.en.md) uses standard Policy with bounded fixture credentials; it does not implement production cryptographic verification or durable Sessions.
 
 ### Use the same definition in Low and Rust
 

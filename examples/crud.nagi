@@ -1,4 +1,6 @@
-# HTTP body -> CreateUser -> SQLバインド -> User -> JSON の実経路。
+# HTTP body -> CreateUser -> SQL bind -> User -> JSON using explicit routes.
+import std.http.server as http
+
 class User:
     id: i64
     name: str
@@ -8,47 +10,112 @@ class CreateUser:
     name: str
     age: i32
 
-@get("/small")
-async def small() -> Result[User, Error]:
-    return ok(User(id=1, name="alice", age=18))
+class State:
+    db: Db
 
-@get("/query")
-async def query_params(limit: i32, name: str) -> Result[User, Error]:
-    return ok(User(id=i64(limit), name=name, age=18))
+def path_i64(request: view[http.Request], prefix: view[str]) -> Result[i64, Error]:
+    path = request.path
+    if len(path) <= len(prefix):
+        return error("path value is missing")
+    value = try slice(path, len(prefix), len(path))
+    return parse_i64(value)
 
-@get("/users/{id}")
-async def get_user(db: Db, id: i64) -> Result[User?, Error]:
-    return await db_query[User](db, "SELECT id, name, age FROM users WHERE id = ?1", id)
+def query_user(request: view[http.Request]) -> Result[User, Error]:
+    match request.query:
+        case Some(query):
+            if len(query) < 12 or try slice(query, 0, 6) != "limit=":
+                return error("query must contain limit and name")
+            separator = -1
+            index = 6
+            while separator < 0 and index + 6 <= len(query):
+                part = try slice(query, index, index + 6)
+                if part == "&name=":
+                    separator = index
+                else:
+                    index += 1
+            if separator < 0:
+                return error("query must contain limit and name")
+            limit = try parse_i64(try slice(query, 6, separator))
+            name = try slice(query, separator + 6, len(query))
+            if len(name) == 0:
+                return error("name is required")
+            return ok(User(id=limit, name=copy(name), age=18))
+        case None:
+            return error("query must contain limit and name")
 
-@get("/users")
-async def list_users(db: Db) -> Result[List[User], Error]:
-    return await db_all[User](db, "SELECT id, name, age FROM users ORDER BY id")
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, "ok"))
 
-@post("/users")
-async def create_user(db: Db, req: CreateUser) -> Result[User, Error]:
-    # nameはDB workerへmove。ageはnative i32のまま渡す。
-    return await db_insert[User](db, "INSERT INTO users(name, age) VALUES (?1, ?2) RETURNING id, name, age", req.name, req.age)
+async def small(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    user = User(id=1, name="alice", age=18)
+    return http.json[User](http.Status.OK, user)
 
-@put("/users/{id}")
-async def update_user(db: Db, id: i64, req: CreateUser) -> Result[User, Error]:
-    return await db_update[User](db, "UPDATE users SET name = ?2, age = ?3 WHERE id = ?1 RETURNING id, name, age", id, req.name, req.age)
+async def query_params(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    user = try query_user(view(request))
+    return http.json[User](http.Status.OK, user)
 
-@delete("/users/{id}")
-async def delete_user(db: Db, id: i64) -> Result[i64, Error]:
-    return await db_write(db, "DELETE FROM users WHERE id = ?1", id)
+async def get_user(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    id = try path_i64(view(request), view("/users/"))
+    match await db_query[User](state.db, "SELECT id, name, age FROM users WHERE id = ?1", id):
+        case Ok(found):
+            match found:
+                case Some(user):
+                    return http.json[User](http.Status.OK, user)
+                case None:
+                    return ok(http.empty(http.Status.NOT_FOUND))
+        case Err(problem):
+            return fail(problem)
 
-@post("/echo")
-async def echo(body: view[bytes]) -> Result[CreateUser, Error]:
-    # body自体はHTTP受信Bytesを借用。文字列フィールドの所有化は別のコスト。
-    return json_decode[CreateUser](body)
+async def list_users(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    users = try await db_all[User](state.db, "SELECT id, name, age FROM users ORDER BY id")
+    return http.json[List[User]](http.Status.OK, users)
 
-@get("/wait/{id}")
-async def wait_ms(id: i64) -> Result[i64, Error]:
-    await sleep(id)
-    return ok(id)
+async def create_user(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    input = try json_decode[CreateUser](request.body)
+    user = try await db_insert[User](state.db, "INSERT INTO users(name, age) VALUES (?1, ?2) RETURNING id, name, age", input.name, input.age)
+    return http.json[User](http.Status.OK, user)
+
+async def update_user(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    id = try path_i64(view(request), view("/users/"))
+    input = try json_decode[CreateUser](request.body)
+    user = try await db_update[User](state.db, "UPDATE users SET name = ?2, age = ?3 WHERE id = ?1 RETURNING id, name, age", id, input.name, input.age)
+    return http.json[User](http.Status.OK, user)
+
+async def delete_user(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    id = try path_i64(view(request), view("/users/"))
+    deleted = try await db_write(state.db, "DELETE FROM users WHERE id = ?1", id)
+    return http.json[i64](http.Status.OK, deleted)
+
+async def echo(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    input = try json_decode[CreateUser](request.body)
+    return http.json[CreateUser](http.Status.OK, input)
+
+async def wait_ms(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    duration = try path_i64(view(request), view("/wait/"))
+    await sleep(duration)
+    return http.json[i64](http.Status.OK, duration)
+
+async def bounded_bytes(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    source = http.text(http.Status.OK, "chunk:0\nchunk:1\nchunk:2\nchunk:3\nchunk:4\n")
+    return ok(http.bytes(http.Status.OK, source.body))
 
 async def main() -> Result[unit, Error]:
     path = env("NAGI_DB", ":memory:")
     db = try await db_open(path)
     try await db_exec(db, "CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT NOT NULL, age INTEGER NOT NULL)")
-    return await serve(db, 8080)
+    app = http.app_default[State](State(db=db))
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    app = try http.route(app, http.Method.GET, "/small", http.public_policy[State](), small)
+    app = try http.route(app, http.Method.GET, "/query", http.public_policy[State](), query_params)
+    app = try http.route(app, http.Method.GET, "/users/{id}", http.public_policy[State](), get_user)
+    app = try http.route(app, http.Method.GET, "/users", http.public_policy[State](), list_users)
+    app = try http.route(app, http.Method.POST, "/users", http.public_policy[State](), create_user)
+    app = try http.route(app, http.Method.PUT, "/users/{id}", http.public_policy[State](), update_user)
+    app = try http.route(app, http.Method.DELETE, "/users/{id}", http.public_policy[State](), delete_user)
+    app = try http.route(app, http.Method.POST, "/echo", http.public_policy[State](), echo)
+    app = try http.route(app, http.Method.GET, "/wait/{id}", http.public_policy[State](), wait_ms)
+    app = try http.route(app, http.Method.GET, "/stream", http.public_policy[State](), bounded_bytes)
+    limits = try http.options(1048576, 10000, 2000, 10000)
+    limits = try http.capacity(limits, 1024, 256)
+    port = 8080
+    return await http.serve(app, port, limits)

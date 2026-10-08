@@ -63,7 +63,9 @@ pub(crate) fn contains_auth_proof(
     payload_any(ty, classes, enums, true, false, |resource| {
         matches!(
             resource,
-            crate::stdlib::Resource::Principal | crate::stdlib::Resource::Grant
+            crate::stdlib::Resource::Principal
+                | crate::stdlib::Resource::AuthScope
+                | crate::stdlib::Resource::Grant
         )
     })
 }
@@ -550,6 +552,7 @@ mod tests {
                 R::Actor => [&[], &[], &[0, 1, 2], &[], &[]],
                 R::Turn => [&[0, 1, 2], &[], &[], &[], &[]],
                 R::Grant => [&[], &[], &[], &[], &[0]],
+                R::HttpPolicy => [&[], &[], &[0], &[1], &[]],
                 R::Task => [&[], &[], &[0], &[], &[]],
                 _ => [&[], &[], &[], &[], &[]],
             };

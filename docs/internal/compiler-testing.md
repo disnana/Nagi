@@ -14,7 +14,7 @@ Nagi 0.1 betaの既知不具合再発を小さな再現sourceと段階別oracle�
 | High-Low | 保存Lowと手書きLowの受理・観測同値 | compiler/tests/frontend_contracts.rs, view_flow_completion.rs, conformance.rs |
 | Backend | emit成功後の実rustc/Cargo build | compiler/tests/codegen.rs, http_entrypoint.rs, conformance.rs |
 | Runtime | 値・byte列・Drop・panic unwind | compiler/tests/literal_contracts.rs, view_container_drop.rs |
-| Integration | 実Cargo/extern/socket/SQLiteとNagi位置 | compiler/tests/shared_field_moves.rs, static_callback_views.rs, sql_check.rs; runtime/src/http/panic_tests.rs |
+| Integration | 実Cargo/extern/socket/SQLiteとNagi位置 | compiler/tests/shared_field_moves.rs, static_callback_views.rs, sql_check.rs; runtime/src/http_server/security_tests.rs |
 | Build artifact identity | 同じcacheの別アプリを取り違えない。Cargo終了後に別buildを挟む決定的barrier、既定・明示共有、等価source/outと別out | compiler/tests/shared_target.rs, project.rs; [ADR 005](adr/005-native-artifact-identity.md) |
 | Build generations | 同一outのOS lock・待機通知、旧exe継続、成功snapshot/latest、Cargo/投影/置換失敗、孤児Cargo、各世代を読むreader。Windowsのrename失敗を別に観測 | compiler/tests/build_generations.rs; [ADR 007](adr/007-build-generations.md) |
 | Artifact consumers | metadata不正・消失・未公開世代でcacheへ逃げず、成功artifactを選ぶ。旧世代方式より前の成果物だけlegacy fallbackを維持 | scripts/test_native_artifacts.py |

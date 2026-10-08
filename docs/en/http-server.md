@@ -1,5 +1,7 @@
 # HTTP API reference
 
+These are unreleased 0.2.0 SF01 APIs. See [migration](migration-0.2.0.md) and [authentication and authorization](security.md).
+
 ```nagi
 import std.http.server as http
 from std.http.server import Status as Code
@@ -50,28 +52,29 @@ Header names are case-insensitive. Single-header getters reject duplicates; `hea
 | Function | Return type |
 |---|---|
 | `empty(status)` | `Response` |
-| `text(status, text)`, `html(status, text)` | `Response` |
+| `text(status, text)` | `Response` |
 | `bytes(status, body)` | `Response` |
 | `json[T](status, value)` | `Result[Response, Error]` |
 | `append_header(response, name, value: view[bytes])` | `Result[Response, Error]` |
 | `append_header_text(response, name, value: view[str])` | `Result[Response, Error]` |
 
-`text`, `html`, and `bytes` copy borrowed input into a body owned by the Response. `json` borrows its value, so it does not move the original. String literals can be passed directly to view parameters; borrow variables with `view(value)`.
+`text` and `bytes` copy borrowed input into a body owned by the Response. `json` borrows its value, so it does not move the original. String literals can be passed directly to view parameters; borrow variables with `view(value)`.
 
-Header append consumes and returns the response. It preserves duplicate Set-Cookie values and rejects invalid names, line breaks, and explicit Content-Length/Transfer-Encoding. HEAD omits the body while retaining its GET-equivalent length. 204, 205, and 304 omit the body. Successful CONNECT tunnels are unsupported: the server returns 501 and closes the connection.
+Header append consumes and returns the response. It preserves duplicate nonreserved headers such as X-Trace. It rejects Content-Length, Transfer-Encoding, Content-Type, Set-Cookie, WWW-Authenticate, Cache-Control, Vary, CORS, CSP, nosniff, and other security-managed headers. Cookie/Session issuance remains unimplemented until SF02. HEAD omits the body while retaining its GET-equivalent length. 204, 205, and 304 omit the body. Successful CONNECT tunnels are unsupported: the server returns 501 and closes the connection.
 
 ## App and routes
 
 ```nagi
 app = http.app[State, AuthError](state, map_error)
-app = try http.route(app, http.Method.GET, "/", handle)
-app = try http.route_mapped(app, http.Method.POST, "/login", login, map_login_error)
+app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), handle)
+app = try http.route_mapped(app, http.Method.POST, "/login", http.public_policy[State](), login, map_login_error)
 return await http.serve(app, 8080, http.default_options())
 ```
 
 - `app[S, E](state, mapper)` owns the state and uses `fn(E) -> Response` as its default error mapper.
 - `app_default[S](state)` uses the default mapper for `Error`.
-- A handler has the signature `async def handle(request: Request, state: shared[S]) -> Result[Response, E]`. The state itself is not copied per request. Rust requires bounds such as `Send + Sync` on state and `Send` on the handler future; build performs the final validation.
+- Policy is created by `public_policy[S]()`, `authenticated_policy[S](verifier)` or `authorized_policy[S,P](verifier, authorizer)`. Its output A is respectively unit, AuthScope or Grant[P]. The compiler checks S and A against the handler; old arities receive migration diagnostics.
+- A handler has the signature `async def handle(request: Request, state: shared[S], access: A) -> Result[Response, E]`. The state itself is not copied per request. Rust requires bounds such as `Send + Sync` on state and `Send` on the handler future; build performs the final validation.
 - `route_mapped` accepts a handler with its own error type and a matching mapper.
 - GET routes automatically accept HEAD unless an explicit HEAD route takes precedence. A different method on an existing path returns 405 with Allow.
 
@@ -88,11 +91,14 @@ When an error response needs a request ID, retain the validated ID in the handle
 | Body size | 1 MiB | `options(body_bytes, body_ms, handler_ms, shutdown_ms)` |
 | Body deadline | 10 seconds | `options(...)` |
 | Handler deadline | 2 seconds | `options(...)` |
+| Shared verifier + authorizer deadline | 2 seconds | `security_timeout(options, milliseconds)` |
 | Shutdown deadline | 10 seconds | `options(...)` |
 | Connections / concurrent requests | 1024 / 256 | `capacity(options, connections, requests)` |
 | Headers / next request wait | 10 seconds | `header_timeout(options, milliseconds)` |
 | Response send deadline | 10 seconds | `send_timeout(options, milliseconds)` |
 | Header buffer / count | 32 KiB / 100 | `header_limits(options, bytes, count)` |
+
+The security deadline is one absolute budget shared by verifier and authorizer. `security_timeout` accepts positive milliseconds; zero or negative values cannot select an unlimited deadline. Body and handler keep their separate deadlines after authentication. An identity that expires earlier is checked again before entering the handler.
 
 Every setter returns `Result[Options, Error]`. Connection and request limits control admission, not thread counts. Ctrl+C stops admission and waits for active connections. The server aborts and joins remaining connection tasks after the shutdown deadline. Already running blocking work cannot be forcibly stopped.
 

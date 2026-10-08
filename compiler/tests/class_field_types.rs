@@ -9,13 +9,7 @@ use std::{
 
 #[test]
 fn unsupported_resource_and_function_fields_fail_at_the_field_line() {
-    for ty in [
-        "fn[i64, i64]",
-        "List[fn[i64]]",
-        "Option[fn[i64]]",
-        "Html",
-        "shared[Html]",
-    ] {
+    for ty in ["fn[i64, i64]", "List[fn[i64]]", "Option[fn[i64]]"] {
         for (source, high) in [
             (
                 format!("class Payload:\n    value: i64\n    unsupported: {ty}\n"),

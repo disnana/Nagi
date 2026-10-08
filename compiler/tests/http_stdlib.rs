@@ -182,7 +182,7 @@ def copied_owned_status(code: view[owned[Code]]) -> owned[Code]:
     return copy(code)
 def owned_status_value(code: view[owned[Code]]) -> i64:
     return copied_owned_status(code).value
-async def handler(request: Input, state: shared[State]) -> Result[Output, Failure]:
+async def handler(request: Input, state: shared[State], authority: unit) -> Result[Output, Failure]:
     await sleep(1)
     assert_true(request.method == http.Method.GET)
     assert_true(request.is_get)
@@ -193,13 +193,13 @@ def json_then_store(request: Input) -> Result[StoredRequest, Error]:
     matches = try http.is_json_content_type(view(request))
     print(matches)
     return ok(StoredRequest(input=request))
-async def independent_error(request: Input, state: shared[State]) -> Result[Output, str]:
+async def independent_error(request: Input, state: shared[State], authority: unit) -> Result[Output, str]:
     return fail("private error")
 async def main() -> Result[unit, Error]:
     app = http.app[State, Failure](State(label="first", count=7), default_error)
-    app = try http.route(app, http.Method.GET, "/", handler)
+    app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), handler)
     selected = independent_error
-    app = try http.route_mapped(app, http.Method.POST, "/special", selected, route_error)
+    app = try http.route_mapped(app, http.Method.POST, "/special", http.public_policy[State](), selected, route_error)
     other = http.app_default[State](State(label="second", count=9))
     return ok(print("HTTP application checked"))
 def constant_method_name() -> view[str]:
@@ -395,21 +395,36 @@ fn status_method_and_db_free_app_execute_from_high_and_saved_low() {
 #[test]
 fn handlers_require_exact_async_request_shared_state_and_error_contracts() {
     let f = Fixture::new();
-    for changed in [
-        APP.replace("async def handler(", "def handler("),
-        APP.replace(
-            "request: Input, state: shared[State]",
-            "request: Input, state: State",
+    for (changed, expected) in [
+        (
+            APP.replace("async def handler(", "def handler("),
+            "名前付きasync関数",
         ),
-        APP.replace(
-            "request: Input, state: shared[State]",
-            "request: view[Input], state: shared[State]",
+        (
+            APP.replace(
+                "request: Input, state: shared[State]",
+                "request: Input, state: State",
+            ),
+            "expected shared[",
         ),
-        APP.replace(
-            "http.Method.GET, \"/\", handler",
-            "http.Method.GET, \"/\", independent_error",
+        (
+            APP.replace(
+                "request: Input, state: shared[State]",
+                "request: view[Input], state: shared[State]",
+            ),
+            "got view[stdlib:std.http.server::Request]",
         ),
-        APP.replace("selected, route_error", "selected, default_error"),
+        (
+            APP.replace(
+                "http.Method.GET, \"/\", http.public_policy[State](), handler",
+                "http.Method.GET, \"/\", http.public_policy[State](), independent_error",
+            ),
+            "got str",
+        ),
+        (
+            APP.replace("selected, route_error", "selected, default_error"),
+            "expected fn[str, stdlib:std.http.server::Response]",
+        ),
     ] {
         // A sync function must not fail merely because its body still awaits.
         let changed = if changed.contains("def handler(") && !changed.contains("async def handler(")
@@ -420,10 +435,8 @@ fn handlers_require_exact_async_request_shared_state_and_error_contracts() {
         };
         f.write("main.nagi", &changed);
         let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
-        assert!(
-            check::check(&mut loaded.program).is_err(),
-            "accepted wrong handler:\n{changed}"
-        );
+        let error = check::check(&mut loaded.program).expect_err("accepted wrong handler");
+        assert!(error.contains(expected), "{error}\n{changed}");
     }
 }
 

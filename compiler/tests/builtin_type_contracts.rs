@@ -29,9 +29,7 @@ fn json_rejects_definitely_non_serializable_types_at_the_call() {
         "fn[i64]",
         "Error",
         "Db",
-        "Html",
         "List[fn[i64]]",
-        "shared[Html]",
         "Result[i64, Error]",
         "owned[Db]",
         "Map[str, List[Error]]",
@@ -129,7 +127,6 @@ fn all_database_row_builtins_reject_scalar_or_foreign_container_targets() {
             "timestamp",
             "Error",
             "Db",
-            "Html",
             "List[Row]",
             "Option[Row]",
             "shared[Row]",
@@ -163,7 +160,7 @@ fn user_functions_with_json_builtin_names_keep_their_own_contracts() {
 
 #[test]
 fn same_named_classes_keep_the_emitted_json_and_database_contracts() {
-    for name in ["Error", "Db", "Html", "UUID", "i64", "f64"] {
+    for name in ["Error", "Db", "UUID", "i64", "f64"] {
         let source = format!("class {name}:\n    value: bool\ndef encode() -> Result[str, Error]:\n    return json_encode({name}(value=True))\n");
         let high = checked(&source);
         let mut low = parser::parse(&emit::low(&high), false).unwrap();
@@ -173,22 +170,13 @@ fn same_named_classes_keep_the_emitted_json_and_database_contracts() {
     }
     // These names are fully qualified/aliased by rust_type; their local
     // classes cannot supply FromRow for the actual database type argument.
-    for name in [
-        "str",
-        "bytes",
-        "unit",
-        "Error",
-        "Db",
-        "Html",
-        "UUID",
-        "timestamp",
-    ] {
+    for name in ["str", "bytes", "unit", "Error", "Db", "UUID", "timestamp"] {
         rejects_high_and_low(
             &format!("class {name}:\n    value: bool\nasync def read(db: Db) -> Result[List[{name}], Error]:\n    return await db_all[{name}](db, \"rows\")\n"),
             "db_all", 4,
         );
     }
-    for name in ["Error", "Db", "Html"] {
+    for name in ["Error", "Db"] {
         rejects_high_and_low(
             &format!("class {name}:\n    value: bool\ndef decode(text: view[str]) -> Result[{name}, Error]:\n    return json_decode[{name}](text)\n"),
             "json_decode", 4,
@@ -210,7 +198,7 @@ fn same_named_classes_keep_the_emitted_json_and_database_contracts() {
 
 #[test]
 fn encoded_runtime_values_are_rejected_even_when_a_same_named_class_exists() {
-    for name in ["Error", "Db", "Html"] {
+    for name in ["Error", "Db"] {
         rejects_high_and_low(
             &format!("class {name}:\n    value: bool\ndef encode(value: {name}) -> Result[str, Error]:\n    return json_encode(value)\n"),
             "json_encode", 4,
@@ -262,5 +250,22 @@ fn json_encoding_rejects_unawaited_futures_and_inferred_future_containers() {
             "json_encode",
             2,
         );
+    }
+}
+
+// Html is now a retired builtin, so its migration rejection must not count
+// as a JSON/DB serialization-contract success. Keep the stages distinct.
+#[test]
+fn retired_html_annotations_report_migration_before_json_or_db_contracts() {
+    for text in [
+        "def encode(value: Html) -> Result[str, Error]:\n    return json_encode(value)\n",
+        "def decode(value: view[str]) -> Result[shared[Html], Error]:\n    return json_decode[shared[Html]](value)\n",
+        "class Html:\n    value: bool\ndef encode(value: Html) -> Result[str, Error]:\n    return json_encode(value)\n",
+    ] {
+        let line = if text.starts_with("class") { 3 } else { 1 };
+        rejects_high_and_low(text, "SF01 migration", line);
+    }
+    for builtin in ["db_all", "db_query", "db_insert", "db_update"] {
+        rejects_high_and_low(&database_source(builtin, "Html"), "SF01 migration", 8);
     }
 }

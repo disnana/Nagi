@@ -1,49 +1,78 @@
-# 画面もJSON APIも同じNagiサーバーから提供する、小さなタスク管理。
+# API routes remain available while the former raw-HTML UI waits for typed HTML.
 import "models.nagi"
 import "validation.nagi"
+import std.http.server as http
 
-@get("/")
-async def home() -> Result[Html, Error]:
-    # このHTMLはコンパイル時に埋め込まれる。配布先にHTMLは不要。
-    return ok(html(include_text("index.html")))
+class State:
+    db: Db
 
-@get("/api/tasks")
-async def list_tasks(db: Db) -> Result[List[Task], Error]:
-    return await db_all[Task](db, "SELECT id, title, done FROM demo_tasks ORDER BY id DESC LIMIT 100")
+def task_id(request: view[http.Request]) -> Result[i64, Error]:
+    if len(request.path) <= 11:
+        return error("id must be positive")
+    return parse_i64(try slice(request.path, 11, len(request.path)))
 
-@get("/api/tasks/{id}")
-async def get_task(db: Db, id: i64) -> Result[Task?, Error]:
+async def home(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, "Task JSON API is available at /api/tasks."))
+
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, "ok"))
+
+async def list_tasks(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    rows = try await db_all[Task](state.db, "SELECT id, title, done FROM demo_tasks ORDER BY id DESC LIMIT 100")
+    return http.json[List[Task]](http.Status.OK, rows)
+
+async def get_task(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    id = try task_id(view(request))
     if id < 1:
         return error("id must be positive")
-    return await db_query[Task](db, "SELECT id, title, done FROM demo_tasks WHERE id = ?1", id)
+    match await db_query[Task](state.db, "SELECT id, title, done FROM demo_tasks WHERE id = ?1", id):
+        case Ok(found):
+            match found:
+                case Some(task):
+                    return http.json[Task](http.Status.OK, task)
+                case None:
+                    return ok(http.empty(http.Status.NOT_FOUND))
+        case Err(problem):
+            return fail(problem)
 
-@post("/api/tasks")
-async def create_task(db: Db, req: SaveTask) -> Result[Task, Error]:
-    try validate_task(view(req.title))
-    state: i32 = 0
-    if req.done:
-        state = 1
-    return await db_insert[Task](db, "INSERT INTO demo_tasks(title, done) VALUES (?1, ?2) RETURNING id, title, done", req.title, state)
+async def create_task(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    input = try json_decode[SaveTask](request.body)
+    try validate_task(view(input.title))
+    done: i32 = 0
+    if input.done:
+        done = 1
+    task = try await db_insert[Task](state.db, "INSERT INTO demo_tasks(title, done) VALUES (?1, ?2) RETURNING id, title, done", input.title, done)
+    return http.json[Task](http.Status.OK, task)
 
-@put("/api/tasks/{id}")
-async def update_task(db: Db, id: i64, req: SaveTask) -> Result[Task, Error]:
+async def update_task(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    id = try task_id(view(request))
     if id < 1:
         return error("id must be positive")
-    try validate_task(view(req.title))
-    state: i32 = 0
-    if req.done:
-        state = 1
-    return await db_update[Task](db, "UPDATE demo_tasks SET title = ?2, done = ?3 WHERE id = ?1 RETURNING id, title, done", id, req.title, state)
+    input = try json_decode[SaveTask](request.body)
+    try validate_task(view(input.title))
+    done: i32 = 0
+    if input.done:
+        done = 1
+    task = try await db_update[Task](state.db, "UPDATE demo_tasks SET title = ?2, done = ?3 WHERE id = ?1 RETURNING id, title, done", id, input.title, done)
+    return http.json[Task](http.Status.OK, task)
 
-@delete("/api/tasks/{id}")
-async def delete_task(db: Db, id: i64) -> Result[i64, Error]:
+async def delete_task(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    id = try task_id(view(request))
     if id < 1:
         return error("id must be positive")
-    return await db_write(db, "DELETE FROM demo_tasks WHERE id = ?1", id)
+    deleted = try await db_write(state.db, "DELETE FROM demo_tasks WHERE id = ?1", id)
+    return http.json[i64](http.Status.OK, deleted)
 
-@get("/api/stats")
-async def stats(db: Db) -> Result[TaskStats?, Error]:
-    return await db_query[TaskStats](db, "SELECT COUNT(*) AS total, COALESCE(SUM(done), 0) AS completed FROM demo_tasks WHERE id > ?1", 0)
+async def stats(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    match await db_query[TaskStats](state.db, "SELECT COUNT(*) AS total, COALESCE(SUM(done), 0) AS completed FROM demo_tasks WHERE id > ?1", 0):
+        case Ok(found):
+            match found:
+                case Some(value):
+                    return http.json[TaskStats](http.Status.OK, value)
+                case None:
+                    return ok(http.empty(http.Status.NOT_FOUND))
+        case Err(problem):
+            return fail(problem)
 
 async def main() -> Result[unit, Error]:
     port = try parse_i64(env("NAGI_PORT", "8091"))
@@ -51,5 +80,14 @@ async def main() -> Result[unit, Error]:
         return error("NAGI_PORT must be between 1 and 65535")
     db = try await db_open(env("NAGI_DB", "nagi-tasks.sqlite"))
     try await db_exec(db, "CREATE TABLE IF NOT EXISTS demo_tasks(id INTEGER PRIMARY KEY, title TEXT NOT NULL CHECK(length(CAST(title AS BLOB)) BETWEEN 1 AND 240), done INTEGER NOT NULL CHECK(done IN (0, 1)))")
-    print("Nagi Tasks: open the URL below in your browser.")
-    return await serve(db, port)
+    app = http.app_default[State](State(db=db))
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), home)
+    app = try http.route(app, http.Method.GET, "/api/tasks", http.public_policy[State](), list_tasks)
+    app = try http.route(app, http.Method.GET, "/api/tasks/{id}", http.public_policy[State](), get_task)
+    app = try http.route(app, http.Method.POST, "/api/tasks", http.public_policy[State](), create_task)
+    app = try http.route(app, http.Method.PUT, "/api/tasks/{id}", http.public_policy[State](), update_task)
+    app = try http.route(app, http.Method.DELETE, "/api/tasks/{id}", http.public_policy[State](), delete_task)
+    app = try http.route(app, http.Method.GET, "/api/stats", http.public_policy[State](), stats)
+    print("Task JSON API ready on 127.0.0.1")
+    return await http.serve(app, port, http.default_options())

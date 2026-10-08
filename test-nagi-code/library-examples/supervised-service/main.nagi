@@ -70,17 +70,17 @@ async def execute(counter: view[actor.Actor[Message, i64, CounterError]], messag
         case Err(_):
             return fail(WebError.Unavailable)
 
-async def read_counter(request: http.Request, state: shared[WebState]) -> Result[http.Response, WebError]:
+async def read_counter(request: http.Request, state: shared[WebState], authority: unit) -> Result[http.Response, WebError]:
     return await execute(view(state.counter), Message.Read)
 
-async def increment(request: http.Request, state: shared[WebState]) -> Result[http.Response, WebError]:
+async def increment(request: http.Request, state: shared[WebState], authority: unit) -> Result[http.Response, WebError]:
     match json_decode[i64](request.body):
         case Ok(amount):
             return await execute(view(state.counter), Message.Add(amount))
         case Err(_):
             return fail(WebError.InvalidInput)
 
-async def stop_counter(request: http.Request, state: shared[WebState]) -> Result[http.Response, WebError]:
+async def stop_counter(request: http.Request, state: shared[WebState], authority: unit) -> Result[http.Response, WebError]:
     match await actor.shutdown(view(state.control)):
         case Ok(_):
             return ok(http.empty(http.Status.NO_CONTENT))
@@ -108,9 +108,9 @@ async def main() -> Result[unit, Error]:
     control = actor.control(view(group))
     server_control = actor.clone_control(view(control))
     app = http.app[WebState, WebError](WebState(counter=counter, control=control), web_error)
-    app = try http.route(app, http.Method.GET, "/counter", read_counter)
-    app = try http.route(app, http.Method.POST, "/counter", increment)
-    app = try http.route(app, http.Method.POST, "/shutdown", stop_counter)
+    app = try http.route(app, http.Method.GET, "/counter", http.public_policy[WebState](), read_counter)
+    app = try http.route(app, http.Method.POST, "/counter", http.public_policy[WebState](), increment)
+    app = try http.route(app, http.Method.POST, "/shutdown", http.public_policy[WebState](), stop_counter)
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8090"))
     async with scope:
         monitor_task = spawn monitor(group)

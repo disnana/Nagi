@@ -1,0 +1,22 @@
+# Migrating to 0.2.0 SF01 (unreleased)
+
+This describes SF01 development-source changes. Neither all of Security Foundation nor formal 0.2.0 is released. Published 0.1.x binaries do not provide the new Policy APIs. The change avoids preserving policy-free standard HTTP and indefinite issuers through legacy coexistence.
+
+| Retired API/behavior | Diagnostic and migration | Equivalent business verification |
+|---|---|---|
+| `@get/@post/@put/@delete` | `SF01 migration`; register method/path/explicit Policy/handler in App | http_entrypoint, http_route_conflicts, error_routes, Python route/CRUD integration |
+| `serve(Db, port)` | `SF01 migration`; use `http.serve(app,port,options)` without requiring a DB | High/saved-Low native startup, invalid port and error handling |
+| Old 4-argument route / 5-argument route_mapped | `SF01 migration`; add Policy before handler, and unit/AuthScope/Grant as its third argument | Existing HTTP checker/native and all three security_sf01_native paths |
+| Principal, bare-subject issuers, unchecked parts | `SF01 migration` / removed Rust API; verifier→dispatcher AuthScope→authorizer Grant→native submit | Authorization example, lease invalidation, permit ordering, nominal permission/actual target/single consume |
+| Implicit `/health` | Register explicitly with public policy; unregistered path is 404 | High/Low native and socket tests |
+| Implicit `/stream` and `/ws` | Removed; complete bounded bytes require explicit registration. General streaming/WS remain unimplemented | No implicit route; equivalent WS business remains outstanding |
+| Raw `html`/`Html`/`http.html` | Standard entry rejected; text displays notation, active HTML awaits SF04 typed migration | Raw-entry rejection, octet-stream/text and nosniff. Equivalent HTML screen migration remains outstanding |
+| Arbitrary Set-Cookie/CORS/CSP/cache/challenge/framing headers | append returns Invalid; dedicated later security layers own them | Managed-header and wire regressions; Cookie/CSRF/CORS features remain outstanding |
+
+Handlers have `async (http.Request,shared[S],A)->Result[http.Response,E]`. Replace automatic body/query/path extraction with explicit parsing/decoding and `http.json` responses. Existing CRUD and Result behavior is mapped to migrated native tests. Registration remains fallible: duplicate method/path and ambiguous capture patterns return runtime registration Err before startup. Dynamic paths remain part of the existing standard API; decorator-specific static path checking is not replaced with a new string-inference language specification.
+
+Owned local Option/Result and same-task async calls remain available for AuthScope/Grant. Owned delegation into another Task or Actor is a breaking change rejected by SameTask. Long-running work needs independently authorized business commands rather than a retained request proof queued for future use. Protected operations issue a permit under the invalidation gate after capacity wait. Cancellation/rollback of already admitted commands is not guaranteed.
+
+[Minimal HTTP](http.md) · [Authentication and failure table](security.md) · [API reference](http-server.md) · [Migration test map](../internal/security-foundation/sf01-compiler-migration-map.md)
+
+Move, Task/spawn semantics and SQLite Pool/Tx acquisition budgets, close, actual join and Outcome are preserved. Unifying old Db/dynamic SQL belongs to SF05. Custom Rust/Axum hosts remain explicit trusted boundaries outside the standard dispatcher guarantee; no compatibility layer automatically falls back to them.

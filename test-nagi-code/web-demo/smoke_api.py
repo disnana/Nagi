@@ -31,7 +31,10 @@ def main():
         code, headers, content = request(method, path, payload, raw)
         if code != status:
             raise AssertionError(f"{label}: {code} {content}")
-        result = json.loads(content)
+        if content and headers.get_content_type() == "application/json":
+            result = json.loads(content)
+        else:
+            result = content
         if body is not None and result != body:
             raise AssertionError(f"{label}: {result!r} != {body!r}")
         passed.append(label)
@@ -39,8 +42,8 @@ def main():
 
     try:
         code, headers, page = request("GET", "/")
-        assert code == 200 and headers.get_content_type() == "text/html" and '<html lang="ja">' in page
-        passed.append("embedded HTML page")
+        assert code == 200 and headers.get_content_type() == "text/plain" and page == "Task JSON API is available at /api/tasks."
+        passed.append("plain-text API landing route")
         baseline = expect("initial stats", "GET", "/api/stats")
         task = expect("create", "POST", "/api/tasks", payload={"title": "APIテスト専用", "done": False})
         created.append(task["id"])
