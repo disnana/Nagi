@@ -110,12 +110,12 @@ jobs:
             product_code: IC
             channel: stable
             platform_version: '2025.1.1'
-            minimum_platform_version: '2024.3.7'
+            minimum_platform_version: '2025.1'
           - product: PyCharm
             product_code: PC
             channel: stable
             platform_version: '2025.1.1'
-            minimum_platform_version: '2024.3.6'
+            minimum_platform_version: '2025.1'
           - product: IntelliJ IDEA
             product_code: IC
             channel: EAP

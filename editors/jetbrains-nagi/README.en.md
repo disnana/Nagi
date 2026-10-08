@@ -42,7 +42,7 @@ cd editors/jetbrains-nagi
 ./gradlew test buildPlugin
 ```
 
-On Windows, use `gradlew.bat`. The wrapper pins Gradle 9.4.0, IntelliJ Platform Gradle Plugin 2.14.0, and IntelliJ IDEA Community 2025.1.1 as the default SDK. The first build downloads the SDK and dependencies.
+On Windows, use `gradlew.bat`. The wrapper pins Gradle 9.4.0, IntelliJ Platform Gradle Plugin 2.15.0, and IntelliJ IDEA Community 2025.1.1 as the default SDK. The first build downloads the SDK and dependencies.
 
 The same code can be checked against the PyCharm SDK:
 
@@ -54,8 +54,12 @@ Use `-PlocalPlatformPath=/path/to/ide` to build against a local IDE. `runIde` st
 
 Tests cover scanning, folding, indentation, CLI argument boundaries, diagnostic locations, and real IntelliJ Platform editor fixtures for file types, Enter, comments, paired brackets, and save failures. A real process also tests cancellation during startup. Set `NAGI_TEST_COMPILER` to a `nagic` executable to check High, Low, and project commands with the compiler. JetBrains CI builds the compiler from the same commit and runs this integration test for both IDEA and PyCharm.
 
-The primary 2025.1.1 target is an existing supported baseline. CI first builds one common ZIP candidate against stable IDEA, then runs the IDE tests and Plugin Verifier against that same candidate on four paths: stable 2025.1.1 and EAP for both IDEA and PyCharm. The minimum IDEA 2024.3.7 and PyCharm 2024.3.6 targets (build 243) are checked by Plugin Verifier only; CI does not run IDE tests on those minimum versions. Only after all four paths pass does CI promote the original candidate ZIP to the distribution artifact. The two ZIPs attached to the published 0.1.1 release are historical product-specific assets, separate from this future common ZIP. These checks are separate from interacting with the complete IDE.
+The primary 2025.1.1 target is an existing supported baseline. CI first builds one common ZIP candidate against stable IDEA. It runs IDE tests from the same source on four SDKs—stable 2025.1.1 and EAP for both IDEA and PyCharm—and passes the same candidate ZIP to each Plugin Verifier. The minimum IDEA/PyCharm 2025.1 targets (build 251) are checked by Plugin Verifier; stable IDE tests run on 2025.1.1. Only after all four IDE tests and verifiers pass does CI promote the original candidate ZIP to the distribution artifact. The two ZIPs attached to the published 0.1.1 release are historical product-specific assets, separate from this future common ZIP. Marketplace UI installation and full IDE interaction are not covered by these checks.
 
-Run `./gradlew test buildPlugin verifyPlugin` for compatibility checks. The verifier mutes only the `TemplateWordInPluginName` lint for the required display name; API compatibility, deprecated, and experimental findings remain active. Add `-PminimumPlatformVersion=2024.3.7` for IDEA, or `-PplatformType=PC -PminimumPlatformVersion=2024.3.6` for PyCharm, to check the minimum target too. Use `-PplatformVersion=LATEST-EAP-SNAPSHOT` to check the latest EAP. With `-PlocalPlatformPath`, only that local SDK is verified.
+Run `./gradlew test buildPlugin verifyPlugin` for compatibility checks. The verifier mutes only the `TemplateWordInPluginName` lint for the required display name; API compatibility, deprecated, and experimental findings remain active. Add `-PminimumPlatformVersion=2025.1` for IDEA, or `-PplatformType=PC -PminimumPlatformVersion=2025.1` for PyCharm, to check the minimum target too. Use `-PplatformVersion=LATEST-EAP-SNAPSHOT` to check the latest EAP. With `-PlocalPlatformPath`, only that local SDK is verified.
 
 Official references: [Plugin SDK](https://plugins.jetbrains.com/docs/intellij/developing-plugins.html), [Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html). Licensed under [MIT](LICENSE).
+
+## Minimum IDE for the next version
+
+The common plugin under development targets IntelliJ IDEA and PyCharm 2025.1 or later (build 251). The next version drops 2024.3 support so command execution from untrusted projects can be rejected through the public trust API. Users on 2024.3 can keep the published 0.1.1; upgrade the IDE to 2025.1 or later before updating the plugin. The ID `com.disnana.nagi` and existing Marketplace page remain unchanged. This support change is unreleased.

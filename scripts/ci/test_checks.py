@@ -364,7 +364,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         wrapper = (self.repo / "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.properties").read_text(encoding="utf-8")
         workflow = (self.repo / ".github/workflows/jetbrains.yml").read_text(encoding="utf-8")
 
-        self.assertIn('id("org.jetbrains.intellij.platform") version "2.14.0"', build)
+        self.assertIn('id("org.jetbrains.intellij.platform") version "2.15.0"', build)
         self.assertIn('version = "0.1.1"', build)
         self.assertIn("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.0-bin.zip", wrapper)
         self.assertIn("distributionSha256Sum=60ea723356d81263e8002fec0fcf9e2b0eee0c0850c7a3d7ab0a63f2ccc601f3", wrapper)
@@ -626,6 +626,8 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         verify_body = verify.group("body")
         package_body = package.group("body")
 
+        self.assertIn('sinceBuild = "251"', build)
+        self.assertNotIn('sinceBuild = "243"', build)
         self.assertEqual(candidate_body.count("buildPlugin"), 1)
         self.assertIn("-PplatformType=IC", candidate_body)
         self.assertIn("-PplatformVersion=2025.1.1", candidate_body)
@@ -636,8 +638,8 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         self.assertEqual(verify_body.count("channel: stable"), 2)
         self.assertEqual(verify_body.count("channel: EAP"), 2)
         for target in (
-            "product_code: IC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2024.3.7'",
-            "product_code: PC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2024.3.6'",
+            "product_code: IC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2025.1'",
+            "product_code: PC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2025.1'",
             "product_code: IC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT",
             "product_code: PC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT",
         ):
