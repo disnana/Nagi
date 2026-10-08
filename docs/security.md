@@ -26,6 +26,8 @@ async def main() -> Result[unit, Error]:
 
 Policyは非Copy・非sharedの設定値です。routeへmoveし、再利用する場合は新しいPolicyを作ります。型検査はPolicyのState・出力型とhandlerの3引数を照合します。publicを選ぶとproofを要求するhandlerは接続できません。明示publicの選択が業務上正しいか、verifier/authorizerの内容が正しいかまでは証明しません。
 
+Policy・VerifiedIdentity・auth.Failureは既知の非Clone・非shared資源です。Option/List/classに包んでもcopyや共有はできません。関数ポインターをコピーする操作は、その戻り値を複製する操作ではありません。Copy値の代入と、明示copyが使うClone能力は区別します。利用者classの手書きRust Cloneの適合は従来どおり最終buildで確認します。
+
 ## verifierとauthorizer
 
 verifierは名前付きasync関数またはそのローカルaliasで、`(http.Request, shared[S]) -> Result[auth.VerifiedIdentity, auth.Failure]`です。authorizerは`(auth.AuthScope, http.Request, shared[S]) -> Result[auth.Grant[P], auth.Failure]`です。両者が見るRequestは有限のmethod/path/query/headerを持ち、bodyは空です。handlerはbody制限後に元のRequestを受け取ります。

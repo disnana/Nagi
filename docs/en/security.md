@@ -26,6 +26,8 @@ Save this as `server.nagi` in your working directory and run `nagic run server.n
 
 Policy is nonCopy/nonshared configuration moved into a route; create another policy for another registration. The checker matches Policy state/output against the three handler arguments. Public policy cannot connect a proof-requiring handler. It does not prove that choosing public is appropriate for the business or that verifier/authorizer logic is correct.
 
+Policy, VerifiedIdentity and auth.Failure are known nonClone/nonshared resources. Wrapping them in Option/List/classes does not allow copying or sharing. Copying a function pointer does not copy its return value. Copy-value assignment and the Clone capability required by explicit copy are separate. Final Rust build still checks user-provided Clone adapters for user classes.
+
 ## Verifiers and authorizers
 
 Use named async functions or their local aliases. A verifier has `(http.Request, shared[S]) -> Result[auth.VerifiedIdentity, auth.Failure]`; an authorizer has `(auth.AuthScope, http.Request, shared[S]) -> Result[auth.Grant[P], auth.Failure]`. They see a bounded method/path/query/header snapshot with an empty body. The handler receives the original Request after body limits.

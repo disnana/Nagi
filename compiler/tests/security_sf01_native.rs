@@ -46,7 +46,14 @@ def setup() -> Result[http.App[State, Error], Error]:
     app = http.app_default[State](State(value=42))
     policy = http.authorized_policy[State, Read](verify, authorize)
     return http.route(app, http.Method.GET, "/answer", policy, handler)
+def deny_factory() -> auth.Failure:
+    return auth.denied()
 async def main() -> Result[unit, Error]:
+    factories = [deny_factory]
+    duplicates = copy(view(factories))
+    factory = duplicates[0]
+    problem = factory()
+    assert_true(auth.kind(view(problem)) == auth.FailureKind.DENIED)
     app = try setup()
     try await exercise(app)
     return ok(print("SF01 native ready"))
@@ -74,7 +81,13 @@ fn setup() -> Result[http.App[State, Error], Error] {
     let policy = http.authorized_policy[State, Read](verify, authorize);
     return http.route(app, http.Method.GET, "/answer", policy, handler);
 }
+fn deny_factory() -> auth.Failure { return auth.denied(); }
 async fn main() -> Result[unit, Error] {
+    let factories = [deny_factory];
+    let duplicates = copy(view(factories));
+    let factory = duplicates[0];
+    let problem = factory();
+    assert_true(auth.kind(view(problem)) == auth.FailureKind.DENIED);
     let app = try setup();
     try await exercise(app);
     return ok(print("SF01 native ready"));

@@ -1990,6 +1990,16 @@ impl Checker {
                         "SQLiteの非共有resourceを内部shared state/contextへ格納できません",
                     ));
                 }
+                if crate::capabilities::contains_security_nonshared(
+                    &t.1[*index],
+                    &self.classes,
+                    &self.enums,
+                ) {
+                    return Err(error(
+                        line,
+                        "非共有 security resourceを内部shared state/contextへ格納できません",
+                    ));
+                }
                 if crate::capabilities::contains_auth_proof(
                     &t.1[*index],
                     &self.classes,
@@ -2057,6 +2067,14 @@ impl Checker {
                 return Err(error(
                     line,
                     "auth proofをsharedへ格納できません（nested wrapperを含みます）",
+                ));
+            }
+            if t.0 == "shared"
+                && crate::capabilities::contains_security_nonshared(t, &self.classes, &self.enums)
+            {
+                return Err(error(
+                    line,
+                    "非共有 security resourceをsharedへ格納できません（nested payloadを含みます）",
                 ));
             }
             if t.1.len() != n {
@@ -4305,6 +4323,16 @@ impl Checker {
                         "非Copy auth proofはcopyできません（nested wrapperを含みます）",
                     ));
                 }
+                if crate::capabilities::contains_security_nonclone(
+                    &types[0],
+                    &self.classes,
+                    &self.enums,
+                ) {
+                    return Err(error(
+                        line,
+                        "非Clone security resourceはcopyできません（nested payloadを含みます）",
+                    ));
+                }
                 if !types[0].is_view() {
                     return Err(error(line, "copyの対象はviewです"));
                 }
@@ -4343,6 +4371,13 @@ impl Checker {
                         line,
                         "auth proofをsharedへ変換できません（nested wrapperを含みます）",
                     ));
+                }
+                if crate::capabilities::contains_security_nonshared(
+                    &types[0],
+                    &self.classes,
+                    &self.enums,
+                ) {
+                    return Err(error(line, "非共有 security resourceをsharedへ変換できません（nested payloadを含みます）"));
                 }
                 if self
                     .resource(&types[0].0)

@@ -122,6 +122,45 @@ pub(crate) fn contains_sqlite_noncopy(
     })
 }
 
+// These foreign SF01 resources have an explicit native non-Clone contract.
+// This is deliberately independent of Rust Copy: user records may provide a
+// manual Clone adapter, and copying Arc handles does not clone their payload.
+fn security_nonclone(resource: crate::stdlib::Resource) -> bool {
+    matches!(
+        resource,
+        crate::stdlib::Resource::HttpPolicy
+            | crate::stdlib::Resource::VerifiedIdentity
+            | crate::stdlib::Resource::AuthFailure
+    )
+}
+
+pub(crate) fn contains_security_nonclone(
+    ty: &Type,
+    classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
+) -> bool {
+    // A native type's own Clone is its contract, not the Clone of its protocol
+    // or private shared state. Follow owned language wrappers/record fields.
+    payload_any(ty, classes, enums, false, true, security_nonclone)
+}
+
+pub(crate) fn contains_security_nonshared(
+    ty: &Type,
+    classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
+) -> bool {
+    // Sharing really retains inline/native shared payloads. Callback signatures
+    // and nominal markers are excluded by the registry's purpose-specific roles.
+    payload_any(ty, classes, enums, true, false, |resource| {
+        matches!(
+            resource,
+            crate::stdlib::Resource::HttpPolicy
+                | crate::stdlib::Resource::VerifiedIdentity
+                | crate::stdlib::Resource::AuthFailure
+        ) && !crate::stdlib::resource_info(resource).shared
+    })
+}
+
 pub(crate) fn contains_same_task_resource(
     ty: &Type,
     classes: &HashMap<String, Class>,
@@ -637,6 +676,41 @@ mod tests {
         // Actor's indirect protocol data is validated separately; it is not
         // phantom merely because this particular walk doesn't traverse it.
         assert!(charge_type_supported(&principal, &classes, &enums).is_err());
+    }
+
+    #[test]
+    fn security_clone_and_share_walks_follow_payload_work() {
+        use crate::stdlib::{resource_type as native, Resource as R};
+        let failure = native(R::AuthFailure, vec![]);
+        let classes = HashMap::from([("Holder".into(), class("Holder", vec![failure.clone()]))]);
+        let enums = HashMap::new();
+        for ty in [
+            failure.clone(),
+            Type::named("Holder"),
+            Type::generic("Option", vec![failure.clone()]),
+        ] {
+            assert!(contains_security_nonclone(&ty, &classes, &enums));
+            assert!(contains_security_nonshared(&ty, &classes, &enums));
+        }
+        let shared = Type::generic("shared", vec![failure.clone()]);
+        assert!(!contains_security_nonclone(&shared, &classes, &enums));
+        assert!(contains_security_nonshared(&shared, &classes, &enums));
+        for ty in [
+            Type::generic("fn", vec![failure.clone()]),
+            native(R::Grant, vec![failure.clone()]),
+            native(
+                R::Actor,
+                vec![failure.clone(), failure.clone(), failure.clone()],
+            ),
+            native(R::AuthFailureKind, vec![]),
+        ] {
+            assert!(!contains_security_nonclone(&ty, &classes, &enums), "{ty}");
+            assert!(!contains_security_nonshared(&ty, &classes, &enums), "{ty}");
+        }
+        // App's private Arc state is a retention boundary, but not Clone work.
+        let app = native(R::App, vec![Type::named("Holder"), Type::named("unit")]);
+        assert!(!contains_security_nonclone(&app, &classes, &enums));
+        assert!(contains_security_nonshared(&app, &classes, &enums));
     }
 
     #[test]

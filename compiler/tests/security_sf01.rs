@@ -179,6 +179,8 @@ async def guarded(value: Identity) -> Result[unit, Error]:
   ("@replace generated::setup\nfn changed() -> Result[http.App[i64, Error], Error] {\n let app = http.app_default[i64](7);\n return http.route(app,http.Method.GET,\"/\",handler);\n}\n","SF01 migration",4),
   ("@replace generated::handler\nasync fn changed(r: http.Request, s: shared[i64], a: auth.AuthScope) -> Result[http.Response, Error] { return ok(http.empty(http.Status.OK)); }\n","一致しません",2),
   ("@replace generated::guarded\nasync fn changed(value: Identity) -> Result[unit, Error] {\n scope { spawn use_scope(value); }\n return ok(print(0));\n}\n","SameTask",3),
+  ("@replace generated::setup\nfn changed() -> Result[http.App[i64, Error], Error] {\n let values = [some(http.public_policy[i64]())];\n let copied = copy(view(values));\n let app = http.app_default[i64](7);\n return http.route(app,http.Method.GET,\"/\",http.public_policy[i64](),handler);\n}\n","非Clone security resource",4),
+  ("@replace generated::setup\nfn changed() -> Result[http.App[i64, Error], Error] {\n let invalid = share(some(http.public_policy[i64]()));\n let app = http.app_default[i64](7);\n return http.route(app,http.Method.GET,\"/\",http.public_policy[i64](),handler);\n}\n","非共有 security resource",3),
  ] {
   fs::write(fixture.0.join("replace.low"),replacement).unwrap();
   for source in ["main.nagi","saved.low"] {for command in ["check","build"] {
@@ -186,4 +188,56 @@ async def guarded(value: Identity) -> Result[unit, Error]:
    assert!(!output.status.success(),"{replacement}");assert!(error.contains(reason),"{source}/{command}: {error}");assert!(error.contains(&format!("replace.low:{line}\n")),"{error}");assert!(!error.contains("Cargoが見つかりません") && !error.contains("internal compiler error"),"{error}");
   }}
  }
+}
+
+#[test]
+fn security_nonclone_payloads_are_rejected_at_copy_in_high_and_saved_low() {
+    for (source, line) in [
+        ("import std.http.server as http\ndef main():\n    values = [some(http.public_policy[i64]())]\n    duplicate = copy(view(values))\n    print(len(duplicate))\n", 4),
+        ("import std.auth as auth\ndef main():\n    values = [some(auth.denied())]\n    duplicate = copy(view(values))\n    print(len(duplicate))\n", 4),
+        ("import std.auth as auth\n@rust(\"native::identity\")\nextern def identity() -> auth.VerifiedIdentity\ndef main():\n    values = [some(identity())]\n    duplicate = copy(view(values))\n    print(len(duplicate))\n", 6),
+        ("import std.http.server as http\nclass Holder:\n    policy: http.Policy[i64, unit]\ndef main():\n    values = [Holder(policy=http.public_policy[i64]())]\n    duplicate = copy(view(values))\n    print(len(duplicate))\n", 6),
+    ] {
+        Fixture::new().reject(source, "非Clone security resource", line, "copy(");
+    }
+}
+
+#[test]
+fn security_nonshared_payloads_are_rejected_through_wrappers_and_fields() {
+    for (source, line, anchor) in [
+        ("import std.http.server as http\ndef accept(value: shared[http.Policy[i64,unit]]):\n    print(0)\n", 2, "fn "),
+        ("import std.http.server as http\ndef main():\n    shared_policy = share(some(http.public_policy[i64]()))\n", 3, "share("),
+        ("import std.http.server as http\nclass Holder:\n    policy: http.Policy[i64,unit]\ndef main():\n    shared_policy = share(Holder(policy=http.public_policy[i64]()))\n", 5, "share("),
+        ("import std.auth as auth\ndef main():\n    shared_failure = share(some(auth.denied()))\n", 3, "share("),
+        ("import std.auth as auth\n@rust(\"native::identity\")\nextern def identity() -> auth.VerifiedIdentity\ndef main():\n    shared_identity = share(some(identity()))\n", 5, "share("),
+        ("import std.http.server as http\nclass Holder:\n    policy: http.Policy[i64,unit]\ndef accept(value: shared[Holder]):\n    print(0)\n", 4, "fn "),
+        ("import std.http.server as http\nclass Holder:\n    policy: http.Policy[i64,unit]\ndef main():\n    app = http.app_default[Holder](Holder(policy=http.public_policy[i64]()))\n", 5, "app = "),
+    ] {
+        Fixture::new().reject(source, "非共有 security resource", line, anchor);
+    }
+}
+
+#[test]
+fn handwritten_low_rejects_security_clone_and_share_before_cargo() {
+    use std::process::Command;
+    for (text, reason, line) in [
+        ("import std.http.server as http;\nfn main() {\n let values = [some(http.public_policy[i64]())];\n let duplicate = copy(view(values));\n print(len(duplicate));\n}\n", "非Clone security resource", 4),
+        ("import std.auth as auth;\nfn main() {\n let values = [some(auth.denied())];\n let duplicate = copy(view(values));\n print(len(duplicate));\n}\n", "非Clone security resource", 4),
+        ("import std.http.server as http;\nfn accept(value: shared[http.Policy[i64,unit]]) { print(0); }\n", "非共有 security resource", 2),
+        ("import std.http.server as http;\nrecord Holder { policy: http.Policy[i64,unit]; }\nfn main() {\n let invalid = share(Holder(policy=http.public_policy[i64]()));\n}\n", "非共有 security resource", 4),
+    ] {
+        let fixture = Fixture::new();
+        let path = fixture.0.join("manual.low");
+        fs::write(&path, text).unwrap();
+        source::load(&path, false).expect("Low must parse and resolve");
+        for command in ["check", "build"] {
+            let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+                .current_dir(&fixture.0).args([command, "manual.low", "--no-project"]).env("PATH", "").output().unwrap();
+            let error = String::from_utf8_lossy(&output.stderr);
+            assert!(!output.status.success(), "{text}");
+            assert!(error.contains(reason), "{error}");
+            assert!(error.contains(&format!("manual.low:{line}\n")), "{error}");
+            assert!(!error.contains("Cargoが見つかりません") && !error.contains("internal compiler error"), "{error}");
+        }
+    }
 }

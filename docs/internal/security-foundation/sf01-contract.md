@@ -1,6 +1,6 @@
 # SF01: 公開APIと境界契約
 
-[RFC](rfc.md)・[確定判断/移行](decisions-and-migration.md)を基準とする。SF00のhead `a97c7fbd1cd32a40806e21e0d9a6f07a04073dbd`はchecks37753183787/37753178468・website37753183429・merge gate37753180262成功、独立SF-R01–06再確認済み。PR #100はready・未マージ。SF01 branchはそのheadをbaseとする別Draftで、最終反映先はmain。以下は実装対象の契約で、GREEN/native/4 OSの証拠が揃うまで完成と記載しない。
+[RFC](rfc.md)・[確定判断/移行](decisions-and-migration.md)を基準とする。SF00のhead `a97c7fbd1cd32a40806e21e0d9a6f07a04073dbd`はchecks37753183787/37753178468・website37753183429・merge gate37753180262成功、独立SF-R01–06再確認済み。PR #100はユーザー承認でmainへマージ済み（10655ea7299d775235ab6585e5ab8e321f121593、treeはa97と同一）。SF01のPR #101はmain向けDraft。以下は実装対象の契約で、GREEN/native/4 OSの証拠が揃うまで完成と記載しない。
 
 ## 公開API
 
@@ -48,3 +48,11 @@ Sol High独立レビューは失効/permit発行の同Mutex、Policy protocol me
 旧decoratorの静的path競合は、標準Appのfallible dynamic登録ではmatchitの登録Errになる。pathを変数/分岐で作る既存標準APIを維持し、checkerに文字列/名前推測による別routing仕様を追加しない。曖昧routerを起動しない同等業務をnativeで確認する。
 
 レビュー候補だったnon-yielding verifierの期限後Errについて、小さい20ms/5ms fixtureで403対504のREDを保存した。共通deadline判定をOk/Err/panic全結果へ適用した。同期処理の強制停止や副作用rollbackは保証しない。Bearer security401ではWWW-Authenticateをframeworkが所有し、Failureの安定messageを返す。アプリの通常Result Errはmapper、security Failureはhandlerに入る前の固定分類で分離する。
+
+## 最終独立レビューで見つかった実装欠陥
+
+- P1: Policy/VerifiedIdentity/Failureをnested copyしてcheckを通過するとforeign型Clone不足でRustが拒否する。コピーの作業対象をたどる用途別能力検査へ修正。Copy boolをCloneと同一視せず、所有wrapper/record fieldだけをたどり、Arc handle・関数署名・native protocol/phantomを複製対象としない。利用者classの手書きCloneは従来どおりrustc責務。
+- P2: Policyのwrapper/field/shared型注釈とApp shared state経由が宣言したnonsharedと不一致。認証proof検査へPolicyを混ぜず、既知の新nonshared資源をphysical retention境界で別検査する。
+- P1: TaskのHTTP native oracleに旧Rust route arityが5箇所残った。public Policyとunit handler引数へ移行し、業務Err・terminal故障・actual shutdown/parent Dropの元assertionsを維持する。
+
+copy/shareは先行REDを保存後、High/保存Lowのcheck診断＋両元行、手書きLowのcheck/build（PATH空でCargoへ進まない）、native @replaceを追加した。fn-pointer出力をClone payloadと誤扱いしない正例も3経路nativeで検証。最終独立再確認と最新source headのCIを結果資料へ別記録する。
