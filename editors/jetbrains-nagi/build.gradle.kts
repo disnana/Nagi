@@ -6,7 +6,7 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 plugins {
     java
-    id("org.jetbrains.intellij.platform") version "2.15.0"
+    id("org.jetbrains.intellij.platform") version "2.17.0"
 }
 
 group = "com.disnana.nagi"

@@ -42,7 +42,7 @@ cd editors/jetbrains-nagi
 ./gradlew test buildPlugin
 ```
 
-Windowsでは`gradlew.bat`を使います。Gradle Wrapperは9.4.0、IntelliJ Platform Gradle Pluginは2.15.0、既定のSDKはIntelliJ IDEA Community 2025.1.1です。初回はSDKと依存関係を取得します。
+Windowsでは`gradlew.bat`を使います。Gradle Wrapperは9.4.0、IntelliJ Platform Gradle Pluginは2.17.0、既定のSDKはIntelliJ IDEA Community 2025.1.1です。初回はSDKと依存関係を取得します。
 
 PyCharm用SDKでも同じコードを検証できます。
 
