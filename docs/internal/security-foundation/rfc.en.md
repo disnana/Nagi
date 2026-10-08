@@ -2,7 +2,7 @@
 
 [日本語](rfc.md) · [Baseline audit (Japanese)](baseline-audit.md) · [Implementation plan](implementation-plan.en.md)
 
-Status: 2026-10-08 JST. **Revised implementation direction: security before compatibility.** The latest user instruction supersedes the coexistence recommendations D1–D3. [Decisions and migration](decisions-and-migration.en.md) govern implementation. No 0.2.0 feature is implemented or released; existing 0.1.x conditions are not retroactively changed. Preserve Task/spawn, Tx lifecycle, and High/Low fundamentals.
+Status: 2026-10-08 JST. **Revised implementation direction: security before compatibility.** The latest user instruction supersedes the coexistence recommendations D1–D3. [Decisions and migration](decisions-and-migration.en.md) govern implementation. SF01 is connected in a separate development draft; see its [contract](sf01-contract.md) and result log. SF02–SF08 and the formal 0.2.0 release remain incomplete; existing 0.1.x conditions are not retroactively changed. Preserve Task/spawn, Tx lifecycle, and High/Low fundamentals.
 
 ## Purpose and scope
 

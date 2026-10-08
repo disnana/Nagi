@@ -1,5 +1,7 @@
 # HTTP
 
+This page describes unreleased 0.2.0 SF01 development source. For published 0.1.x code, see the [migration guide](migration-0.2.0.md). Every route, including public routes, requires an explicit Policy.
+
 Use `std.http.server` to build an HTTP server without a database. Define async handlers, shared state, and error responses in Nagi.
 
 ## A minimal server
@@ -12,12 +14,12 @@ import std.http.server as http
 class State:
     greeting: str
 
-async def hello(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def hello(request: http.Request, state: shared[State], access: unit) -> Result[http.Response, Error]:
     return ok(http.text(http.Status.OK, view(state.greeting)))
 
 async def main() -> Result[unit, Error]:
     app = http.app_default[State](State(greeting="Hello, Nagi!"))
-    app = try http.route(app, http.Method.GET, "/", hello)
+    app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), hello)
     return await http.serve(app, 8080, http.default_options())
 ```
 
@@ -36,7 +38,7 @@ Open [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to see `Hello, Nagi!`. Pre
 | Borrow the body | `request.body` |
 | Read a header | `http.header_text(view(request), "Authorization")` |
 | Return text | `http.text(http.Status.OK, "hello")` |
-| Return HTML | `http.html(http.Status.OK, "<h1>Hello</h1>")` |
+| Display HTML notation as text | `http.text(http.Status.OK, "<h1>Hello</h1>")`; active HTML awaits SF04 |
 | Return JSON | `http.json[User](http.Status.CREATED, user)` |
 | Return no body | `http.empty(http.Status.NO_CONTENT)` |
 
@@ -53,7 +55,7 @@ The [authentication example](../../test-nagi-code/library-examples/http-auth/REA
 - [HTTP API reference](http-server.md): Status, headers, routes, and limits
 - [Standard HTTP measurements](http-stdlib-performance.md): latency, memory, and continuous load
 - [JSON](json.md): decoding a body into a class
-- [Existing HTTP attributes](http-legacy.md): code using `@get`/`@post` and `serve(Db, port)`
+- [Retired HTTP APIs](http-legacy.md): migrate legacy decorators and serve
 
 The standard server currently serves HTTP/1.1 on loopback. Use a reverse proxy for TLS and external access. Peer IP access, streaming, WebSocket, and HTTP/2 APIs are not implemented. A standard HTTP client for calling external APIs is also not implemented.
 

@@ -1,0 +1,47 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf01/compiler)
+    Finished `test` profile [unoptimized] target(s) in 12.12s
+     Running tests/security_sf01.rs (/workspace/nagi-sf01-target/debug/deps/security_sf01-4f55148d3dc7aafd)
+
+running 10 tests
+test legacy_decorator_is_a_checker_migration_diagnostic ... ok
+test legacy_global_serve_is_a_checker_migration_diagnostic ... ok
+test legacy_principal_is_a_checker_migration_diagnostic ... ok
+test handwritten_low_cannot_use_retired_or_policy_free_entrypoints ... ok
+test policy_free_route_is_a_checker_migration_diagnostic ... ok
+test security_nonclone_payloads_are_rejected_at_copy_in_high_and_saved_low ... ok
+test handwritten_low_rejects_security_clone_and_share_before_cargo ... ok
+test security_nonshared_payloads_are_rejected_through_wrappers_and_fields ... ok
+test policy_output_state_and_callback_contracts_are_checked ... ok
+test native_replacements_and_aliases_cannot_downgrade_security_contracts ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.12s
+
+     Running tests/security_sf01_native.rs (/workspace/nagi-sf01-target/debug/deps/security_sf01_native-9ff5e4ae1b4a33de)
+
+running 1 test
+test policies_and_nominal_request_proofs_execute_in_all_three_paths ... FAILED
+
+failures:
+
+---- policies_and_nominal_request_proofs_execute_in_all_three_paths stdout ----
+
+thread 'policies_and_nominal_request_proofs_execute_in_all_three_paths' (528283) panicked at compiler/tests/security_sf01_native.rs:152:9:
+main.nagi:      Locking 105 packages to highest compatible versions
+   Compiling nagi-main-c7e585817cd27449 v0.1.0 (/tmp/nagi-sf01-native-528282-0/build-main.nagi/.nagi/apps/nagi-main-c7e585817cd27449/generations/.staging-g-80f9c-18dc8b935e739a20-0)
+    Finished `release` profile [optimized] target(s) in 6.56s
+native: /tmp/nagi-sf01-native-528282-0/build-main.nagi/.nagi/apps/nagi-main-c7e585817cd27449/generations/g-80f9c-18dc8b935e739a20-0/nagi-c7e585817cd27449-g-80f9c-18dc8b935e739a20-0
+
+thread 'main' (528314) panicked at /tmp/nagi-sf01-native-528282-0/native.rs:16:54:
+called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+program exited: exit status: 101
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    policies_and_nominal_request_proofs_execute_in_all_three_paths
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.86s
+
+error: test failed, to rerun pass `-p nagic --test security_sf01_native`

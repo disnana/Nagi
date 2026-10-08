@@ -2,7 +2,7 @@
 
 [RFC](rfc.en.md) · [日本語](implementation-plan.md) · [Baseline audit](baseline-audit.md)
 
-2026-10-08 JST. **Planned work, not completed implementation.** [Revised D1–D3 decisions](decisions-and-migration.en.md) govern implementation under the latest user instruction; previous compatibility deferrals do not require renewed approval. Fix feature signatures/contracts before RED tests. Independent internal investigations, dependency comparisons, and harness design can proceed. IDs below are candidate units, not assigned GitHub PR numbers.
+2026-10-08 JST. **Plan, not whole-Foundation completion.** SF00 is merged in #100; SF01 is implemented and under validation in separate main-targeted Draft #101. Later stages remain incomplete. [Revised D1–D3 decisions](decisions-and-migration.en.md) govern implementation under the latest user instruction; previous compatibility deferrals do not require renewed approval. Fix feature signatures/contracts before RED tests. Independent internal investigations, dependency comparisons, and harness design can proceed. IDs below are candidate units, not assigned GitHub PR numbers.
 
 ## PR boundaries and dependencies
 

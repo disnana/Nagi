@@ -1,8 +1,7 @@
-"""実ソケット経由のCRUD、validation、keep-alive、stream、WS、timeout。"""
+"""実ソケット経由のCRUD、validation、keep-alive、bounded bytes、timeout。"""
 import asyncio,json,os,signal,subprocess,sys,time
 from pathlib import Path
 import aiohttp
-import websockets
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'scripts'))
 from native_artifacts import native_executable
@@ -43,10 +42,9 @@ async def main():
             status,_,_=await request('POST','/echo',data=b'x'*1048577);check('body_limit',status==413)
             status,body,_=await request('POST','/echo',json={'name':'alice','age':18});check('json_echo',status==200 and json.loads(body)=={'name':'alice','age':18})
             status,body,_=await request('POST','/users',json={'name':"x'); DROP TABLE users;--",'age':18});check('sql_bound_params',status==200 and json.loads(body)['id']==2)
-            status,body,_=await request('GET','/stream');check('stream',status==200 and body=='chunk:0\nchunk:1\nchunk:2\nchunk:3\nchunk:4\n')
-            async with websockets.connect('ws://127.0.0.1:8080/ws') as ws:
-                await ws.send('alice');check('ws_text',await ws.recv()=='alice');await ws.send(b'abc');check('ws_binary',await ws.recv()==b'abc')
-            status,_,_=await request('GET','/wait/2500');check('timeout',status==408)
+            status,body,h=await request('GET','/stream');check('bounded_bytes',status==200 and body=='chunk:0\nchunk:1\nchunk:2\nchunk:3\nchunk:4\n' and h['Content-Type']=='application/octet-stream')
+            status,_,_=await request('GET','/ws');check('websocket_route_removed',status==404)
+            status,_,_=await request('GET','/wait/2500');check('handler_timeout',status==504)
             status,_,_=await request('GET','/health');check('alive_after_timeout',status==200)
             status,body,_=await request('DELETE','/users/1');check('delete',status==200 and json.loads(body)==1)
             status,_,_=await request('GET','/users/1');check('gone_after_delete',status==404)

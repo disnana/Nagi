@@ -62,7 +62,6 @@ The success type T comes from the surrounding Result type. Without context, `fai
 |---|---|---|---|
 | `json_decode[User](input)` | str / bytes / view[str] / view[bytes] | `Result[User, Error]` | Reads a typed class from str/bytes or their views |
 | `json_encode(value)` | JSON-encodable type ([details](json.md)) | `Result[str, Error]` | Encodes a JSON string; no type argument |
-| `html(text)` | str | `Html` | Takes ownership of str for an HTML response |
 | `include_text("index.html")` | String literal | `str` | Embeds a neighboring UTF-8 file at compile time |
 
 `[User]` is a type argument: write `json_decode[User](input)`, not `json_decode(User, input)`. The include_text path must be a string literal. See [JSON](json.md) and [HTTP](http.md).
@@ -75,7 +74,6 @@ These functions are asynchronous. The table lists types **after awaiting**. Extr
 |---|---|---|---|
 | `sleep(milliseconds)` | i64 | `unit` | Waits for an i64 number of milliseconds |
 | `db_open(path)` | str / view[str] | `Result[Db, Error]` | Opens SQLite; `:memory:` uses memory |
-| `serve(db, port)` | Db, i64 | `Result[unit, Error]` | Starts a loopback HTTP server; takes ownership of Db |
 | `db_exec(db, sql)` | Db, str / view[str] | `Result[i64, Error]` | Executes SQL and returns affected row count |
 | `db_all[User](db, sql)` | Db, str / view[str] | `Result[List[User], Error]` | Reads multiple rows; currently no bind arguments |
 | `db_query[User](db, sql, id)` | Db, str / view[str], i64 | `Result[User?, Error]` | Reads one row with one i64 bind argument |
@@ -123,3 +121,5 @@ The following functions are synchronous.
 | `bench_scalar(name, count, kernel)` | str, i64, a function taking i64 and returning i64 | `unit` | Measures integer processing without a list |
 
 Pass a synchronous function as `kernel`. See [reading benchmarks](performance.md) for methods and units, and the [CPU test](../../examples/cpu.nagi) for an example.
+
+Retired `html`/`serve(Db,port)` receive migration diagnostics in unreleased SF01. See [migration](migration-0.2.0.md).

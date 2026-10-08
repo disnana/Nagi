@@ -1,7 +1,7 @@
 use crate::ast::*;
 use crate::checked::{
     BlockPlan, CheckedProgram, CompareRead, CopyRead, EmissionPlan, ExpressionKey, ExpressionPlan,
-    FunctionPlan, IteratorRead, MainError, RouteInput, RouteOutput, StaticRead, ViewRead,
+    FunctionPlan, IteratorRead, MainError, StaticRead, ViewRead,
 };
 use crate::diagnostics::Generated;
 use std::{
@@ -734,7 +734,6 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 "print" => format!("println!(\"{{}}\", {})", string_or_value(&a[0], types)),
                 "write" => format!("print!(\"{{}}\", {})", string_or_value(&a[0], types)),
                 "read_line" => "::nagi_runtime::read_line()".into(),
-                "html" => format!("::nagi_runtime::axum::response::Html({})", args[0]),
                 "include_text" => format!("include_str!({}).to_owned()", string_arg(&a[0], types)),
                 "assert_true" => format!("assert!({})", args[0]),
                 "view" => {
@@ -781,7 +780,6 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                 "fail" => format!("::std::result::Result::Err({})", args[0]),
                 "error_kind" => format!("::nagi_runtime::error_kind(&({})).to_owned()", args[0]),
                 "error_message" => format!("({}).message.clone()", args[0]),
-                "serve" => format!("__nagi_serve({}, {})", args[0], args[1]),
                 "env" => format!(
                     // Source try/await must stay in its lexical error/async
                     // context. Match also keeps the fallback lazy and retains
@@ -1579,87 +1577,6 @@ pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
                 }
                 out.push_str("}\n");
             }
-        }
-    }
-    let routes = &plan.routes;
-    if plan.needs_server {
-        out.push_str("async fn __nagi_serve(db: ::nagi_runtime::Db,port: ::std::primitive::i64) -> ::std::result::Result<(),::nagi_runtime::Error> {\nlet router= ::nagi_runtime::axum::Router::new()\n");
-        let mut paths = std::collections::BTreeMap::<String, Vec<(String, usize)>>::new();
-        for (i, route) in routes.iter().enumerate() {
-            paths
-                .entry(route.path.clone())
-                .or_default()
-                .push((route.method.clone(), i));
-        }
-        for (path, methods) in paths {
-            let mut it = methods.iter();
-            let (m, i) = it.next().unwrap();
-            out.push_str(&format!(
-                ".route({}, ::nagi_runtime::axum::routing::{m}(__route_{i})",
-                quote(&path)
-            ));
-            for (m, i) in it {
-                out.push_str(&format!(".{m}(__route_{i})"));
-            }
-            out.push_str(")\n");
-        }
-        out.push_str(".with_state(db); ::nagi_runtime::serve(router,port).await\n}\n");
-        for (i, route) in routes.iter().enumerate() {
-            let f = &p.functions[route.function];
-            out.function_lineage(Some(plan.functions[route.function].origin.clone()));
-            out.origin(::std::option::Option::Some(f.line));
-            let mut extracts = vec![];
-            let mut call = vec![];
-            let mut pre = String::new();
-            let mut query_fields = vec![];
-            for (parameter_index, (n, t)) in f.params.iter().enumerate() {
-                if route.inputs[parameter_index] == RouteInput::State {
-                    extracts.push(format!(
-                        "::nagi_runtime::axum::extract::State({n}): ::nagi_runtime::axum::extract::State<::nagi_runtime::Db>"
-                    ));
-                    call.push(n.clone());
-                } else if route.inputs[parameter_index] == RouteInput::Capture {
-                    extracts.push("::nagi_runtime::axum::extract::Path(id): ::nagi_runtime::axum::extract::Path<::std::primitive::i64>".into());
-                    call.push(n.clone());
-                } else if route.inputs[parameter_index] == RouteInput::Bytes {
-                    extracts.push(format!("{n}: ::nagi_runtime::axum::body::Bytes"));
-                    call.push(format!("&{n}"));
-                } else if route.inputs[parameter_index] == RouteInput::Body {
-                    extracts.push(format!(
-                        "__body_{parameter_index}: ::nagi_runtime::axum::body::Bytes"
-                    ));
-                    pre.push_str(&format!("let {n}: {} = match ::nagi_runtime::decode(&__body_{parameter_index}) {{::std::result::Result::Ok(x)=>x,::std::result::Result::Err(e)=>return ::nagi_runtime::error_response(e)}};\n",types.ty(t)));
-                    call.push(n.clone());
-                } else if route.inputs[parameter_index] == RouteInput::Query {
-                    query_fields.push((n.clone(), t.clone()));
-                    pre.push_str(&format!("let {n}=__query.{n};\n"));
-                    call.push(n.clone());
-                } else {
-                    return ::std::result::Result::Err(format!(
-                        "route parameter {n}: {t} は未対応です"
-                    ));
-                }
-            }
-            if !query_fields.is_empty() {
-                out.push_str(&format!("#[derive(::nagi_runtime::serde::Deserialize)]\n#[serde(crate=\"::nagi_runtime::serde\")]\nstruct __NagiQuery{i} {{ {} }}\n",query_fields.iter().map(|(n,t)|format!("#[serde(rename = {})] {n}: {}",quote(names.original(n)),types.ty(t))).collect::<Vec<_>>().join(",")));
-                extracts.push(format!(
-                    "::nagi_runtime::axum::extract::Query(__query): ::nagi_runtime::axum::extract::Query<__NagiQuery{i}>"
-                ));
-            }
-            // Body extractorはAxumの規則に従い最後。引数の順序は元の関数を維持する。
-            extracts.sort_by_key(|s| s.contains("body::Bytes"));
-            let invocation = format!("crate::{}({}).await", f.name, call.join(", "));
-            let response = if route.output == RouteOutput::Html {
-                format!("match {invocation} {{ ::std::result::Result::Ok(v)=>::nagi_runtime::axum::response::IntoResponse::into_response(v),::std::result::Result::Err(e)=>::nagi_runtime::error_response(e) }}")
-            } else if route.output == RouteOutput::Optional {
-                format!("match {invocation} {{ ::std::result::Result::Ok(::std::option::Option::Some(v))=>::nagi_runtime::response(::std::result::Result::Ok(v)), ::std::result::Result::Ok(::std::option::Option::None)=>::nagi_runtime::error_response(::nagi_runtime::Error::not_found()),::std::result::Result::Err(e)=>::nagi_runtime::error_response(e) }}")
-            } else {
-                format!("::nagi_runtime::response({invocation})")
-            };
-            out.push_str(&format!(
-                "async fn __route_{i}({}) -> ::nagi_runtime::axum::response::Response {{\n{pre}{response}\n}}\n",
-                extracts.join(", ")
-            ));
         }
     }
     out.origin(::std::option::Option::None);

@@ -2,7 +2,7 @@
 
 [RFC](rfc.md) · [English plan](implementation-plan.en.md) · [現行調査](baseline-audit.md)
 
-2026-10-08 JST。**計画であり実装完了記録ではない。** 現時点ではRFC・調査だけ。最新ユーザー指示に従う[D1–D3判断・移行](decisions-and-migration.md)を実装基準とし、旧資料の互換性保留を再承認待ちにしない。各featureの公開signature/contractはRED追加前に固定する。意味論が一意な内部調査、依存比較、test harness設計は並行して進められる。
+2026-10-08 JST。**計画であり実装完了記録ではない。** SF00はPR #100で完了し、ユーザー承認でmainへマージ済み。SF01はmain向け独立Draft #101へ実装接続し検証中で、[専用契約](sf01-contract.md)と結果を分けて記録する。後続工程の完了を意味しない。最新ユーザー指示に従う[D1–D3判断・移行](decisions-and-migration.md)を実装基準とし、旧資料の互換性保留を再承認待ちにしない。各featureの公開signature/contractはRED追加前に固定する。意味論が一意な内部調査、依存比較、test harness設計は並行して進められる。
 
 ## 実装の分割と依存
 

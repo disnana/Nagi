@@ -1,0 +1,17 @@
+    Finished `test` profile [unoptimized] target(s) in 0.09s
+     Running unittests src/lib.rs (/workspace/nagi-sf01-target/debug/deps/nagi_runtime-869e41f629d9bcdc)
+
+running 11 tests
+test http_server::tests::security_tests::authorizer_cannot_return_a_grant_from_another_request ... ok
+test http_server::tests::security_tests::credentials_fail_closed_without_running_verifier_or_handler ... ok
+test http_server::tests::security_tests::dropping_unpolled_prepared_handler_cannot_reactivate_proof ... ok
+test http_server::tests::security_tests::head_inherits_get_policy_and_no_implicit_options_or_health ... ok
+test http_server::tests::security_tests::all_security_failure_kinds_have_stable_wire_status ... ok
+test http_server::tests::security_tests::mapper_panic_invalidates_the_same_request_proof ... ok
+test http_server::tests::security_tests::authorizer_timeout_shares_budget_and_invalidates_intermediate_scope ... ok
+test http_server::tests::security_tests::verifier_and_authorizer_constructor_and_poll_panics_fail_closed ... ok
+test http_server::tests::security_tests::late_verifier_failure_uses_the_exhausted_security_budget ... ok
+test http_server::tests::security_tests::normal_err_panic_timeout_and_shutdown_invalidate_escaped_rust_scope ... ok
+test http_server::tests::security_tests::credential_expiry_during_body_receive_prevents_handler_admission ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 221 filtered out; finished in 0.09s

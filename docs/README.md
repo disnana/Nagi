@@ -11,7 +11,7 @@
 1. [準備と最初の実行](getting-started.md)でcompilerを用意し、Hello Worldを動かす。
 2. [コードを書きながら学ぶ](language-guide.md)で値・関数・配列・borrow・Resultを試す。
 3. [最初の小さなCLIアプリ](first-app.md)で、入力・型付きの失敗・境界値の手動確認を一続きで行う。
-4. [HTTPとHTML](http.md)でAPIを作り、[SQLite](database.md)でデータを保存する。
+4. [HTTP](http.md)でAPIを作り、[SQLite](database.md)でデータを保存する。
 
 [VS Codeの使い方](editor.md)と[JetBrains版の導入・Release ZIPの選び方](../editors/jetbrains-nagi/README.md)も確認できます。
 
@@ -82,3 +82,5 @@
 `std.actor`はNagi 0.1.8から使える標準ライブラリです。[サンプル](../test-nagi-code/library-examples/supervised-service/README.md)で登録・呼び出し・停止を試せます。旧actor／Supervisorの組み込み関数と[キュー](queue.md)は検証用APIです。性能を調べる場合は、[測定方法](performance.md)、[測定結果](../PERFORMANCE.md)、[通信の負荷試験](http-capacity.md)を確認してください。
 
 現在のソースと0.1系が対象です。版ごとの変更は[変更履歴](../CHANGELOG.md)、未対応の機能は各ページに記載しています。
+
+- [認証・認可（未リリースSF01）](security.md)と[0.2.0移行](migration-0.2.0.md)

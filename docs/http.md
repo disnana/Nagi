@@ -1,5 +1,7 @@
 # HTTP
 
+このページは未リリースの0.2.0 SF01開発source向けです。公開済み0.1.xのコードは[移行ガイド](migration-0.2.0.md)を確認してください。routeはpublicを含めて明示Policyが必要です。
+
 `std.http.server`でHTTPサーバーを作れます。DBは不要です。asyncのhandler、共有する状態、失敗時の応答をNagiで定義します。
 
 ## 最小のサーバー
@@ -12,12 +14,12 @@ import std.http.server as http
 class State:
     greeting: str
 
-async def hello(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def hello(request: http.Request, state: shared[State], access: unit) -> Result[http.Response, Error]:
     return ok(http.text(http.Status.OK, view(state.greeting)))
 
 async def main() -> Result[unit, Error]:
     app = http.app_default[State](State(greeting="Hello, Nagi!"))
-    app = try http.route(app, http.Method.GET, "/", hello)
+    app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), hello)
     return await http.serve(app, 8080, http.default_options())
 ```
 
@@ -36,7 +38,7 @@ nagic run server.nagi
 | bodyを借りる | `request.body` |
 | ヘッダーを読む | `http.header_text(view(request), "Authorization")` |
 | 文字列を返す | `http.text(http.Status.OK, "hello")` |
-| HTMLを返す | `http.html(http.Status.OK, "<h1>Hello</h1>")` |
+| 文字列としてHTML記法を表示 | `http.text(http.Status.OK, "<h1>Hello</h1>")`。active HTMLはSF04まで未対応 |
 | JSONを返す | `http.json[User](http.Status.CREATED, user)` |
 | bodyのない応答 | `http.empty(http.Status.NO_CONTENT)` |
 
@@ -53,7 +55,7 @@ nagic run server.nagi
 - [HTTP APIリファレンス](http-server.md)：Status、ヘッダー、route、制限の設定
 - [標準HTTPの測定結果](http-stdlib-performance.md)：応答速度、メモリ、連続負荷
 - [JSON](json.md)：bodyをclassへ変換する
-- [既存のHTTP属性](http-legacy.md)：`@get`／`@post`と`serve(Db, port)`を使うコード
+- [廃止したHTTP API](http-legacy.md)：旧decorator／serveの移行
 
 現在の標準サーバーはloopbackのHTTP/1.1に対応します。TLSや外部公開にはリバースプロキシを使います。接続元IPの取得、ストリーミング、WebSocket、HTTP/2の公開APIはありません。外部APIへリクエストを送る標準HTTP clientも未実装です。
 

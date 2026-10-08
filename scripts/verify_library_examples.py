@@ -173,9 +173,9 @@ def check_http_auth(executable, env, output):
         try:
             wait_for_health(port, process, b"ok")
             status, body, headers = response(port, "/me")
-            assert (status, body) == (401, b"authentication required")
+            assert (status, body) == (401, b"invalid credential")
             assert {name.lower(): value for name, value in headers.items()}["www-authenticate"] == "Bearer"
-            assert response(port, "/me", headers={"Authorization": "Bearer incorrect"})[:2] == (401, b"invalid credentials")
+            assert response(port, "/me", headers={"Authorization": "Bearer incorrect"})[:2] == (401, b"invalid credential")
             assert response(port, "/me", headers={"Authorization": authorization})[:2] == (200, b"Hello, Nagi!")
             assert response(port, "/restricted")[:2] == (403, b"access denied")
         finally:

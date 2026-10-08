@@ -1,0 +1,228 @@
+{
+  "recorded_date_utc": "2026-10-08",
+  "preservation_method": "Copied from already executed tool outputs retained in the independent reviewer conversation; no tests or checks rerun to create this directory. This is transcript-derived preservation, not original shell redirection.",
+  "reviewer": "/root/sf01_boundary_review",
+  "source_heads": {
+    "sf01": "f9ec01d431d7650f33cd9fe729881b4ce8a5d6b3"
+  },
+  "limits": [
+    "No exact original execution timestamps recorded; only tool chunks/session completion and reported durations retained.",
+    "No whole-workspace or remote CI independently executed/read back in this final review.",
+    "Benchmark measured historical d127; dirty result docs/runner reviewed separately, runner modified by authorized worker during review.",
+    "Some logs are explicitly named/described as excerpts. No omitted content has been invented."
+  ],
+  "commands": [
+    {
+      "id": "auth-invocation-error",
+      "command": "env PATH=/workspace/toolchains/cargo/bin:/usr/local/bin:/usr/bin:/bin CARGO_HOME=/workspace/toolchains/cargo RUSTUP_HOME=/workspace/toolchains/rustup CARGO_TARGET_DIR=/workspace/nagi-sf01-target NAGI_NATIVE_TARGET_DIR=/workspace/nagi-sf01-native-target CARGO_NET_OFFLINE=true CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 NAGI_THREADS=1 cargo test --locked -p nagi_runtime auth::tests -- --nocapture",
+      "cwd": "/workspace/Nagi-security-sf01",
+      "exit_code": 101,
+      "log": "runtime-auth-wrong-package.log",
+      "tool_chunk_ids": [
+        "fa28c0"
+      ],
+      "sandbox_permissions": "use_default",
+      "additional_network_enabled": false,
+      "notes": [
+        "Reviewer invocation typo, corrected before any auth test execution."
+      ]
+    },
+    {
+      "id": "auth-9",
+      "command": "env PATH=/workspace/toolchains/cargo/bin:/usr/local/bin:/usr/bin:/bin CARGO_HOME=/workspace/toolchains/cargo RUSTUP_HOME=/workspace/toolchains/rustup CARGO_TARGET_DIR=/workspace/nagi-sf01-target NAGI_NATIVE_TARGET_DIR=/workspace/nagi-sf01-native-target CARGO_NET_OFFLINE=true CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 NAGI_THREADS=1 cargo test --locked -p nagi-runtime auth::tests -- --nocapture",
+      "cwd": "/workspace/Nagi-security-sf01",
+      "exit_code": 0,
+      "log": "runtime-auth-9.log",
+      "tool_chunk_ids": [
+        "f16ef7",
+        "25a4c0"
+      ],
+      "sandbox_permissions": "use_default",
+      "additional_network_enabled": false,
+      "notes": []
+    },
+    {
+      "id": "http-security-sandbox",
+      "command": "env PATH=/workspace/toolchains/cargo/bin:/usr/local/bin:/usr/bin:/bin CARGO_HOME=/workspace/toolchains/cargo RUSTUP_HOME=/workspace/toolchains/rustup CARGO_TARGET_DIR=/workspace/nagi-sf01-target NAGI_NATIVE_TARGET_DIR=/workspace/nagi-sf01-native-target CARGO_NET_OFFLINE=true CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 NAGI_THREADS=1 cargo test --locked -p nagi-runtime --lib http_server::tests::security_tests",
+      "cwd": "/workspace/Nagi-security-sf01",
+      "exit_code": 101,
+      "log": "runtime-http-security-sandbox-bind-excerpt.log",
+      "tool_chunk_ids": [
+        "d95d25"
+      ],
+      "sandbox_permissions": "use_default",
+      "additional_network_enabled": false,
+      "notes": [
+        "Infra socket bind PermissionDenied, 1 non-socket test pass/10 bind failures; excerpt preserves test-status list, one bind error and final result. Repeated identical bind error blocks/final failure-name list omitted."
+      ]
+    },
+    {
+      "id": "http-security-11",
+      "command": "env PATH=/workspace/toolchains/cargo/bin:/usr/local/bin:/usr/bin:/bin CARGO_HOME=/workspace/toolchains/cargo RUSTUP_HOME=/workspace/toolchains/rustup CARGO_TARGET_DIR=/workspace/nagi-sf01-target NAGI_NATIVE_TARGET_DIR=/workspace/nagi-sf01-native-target CARGO_NET_OFFLINE=true CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 NAGI_THREADS=1 cargo test --locked -p nagi-runtime --lib http_server::tests::security_tests",
+      "cwd": "/workspace/Nagi-security-sf01",
+      "exit_code": 0,
+      "log": "runtime-http-security-11.log",
+      "tool_chunk_ids": [
+        "d069ca"
+      ],
+      "sandbox_permissions": "with_additional_permissions",
+      "additional_network_enabled": true,
+      "notes": []
+    },
+    {
+      "id": "compiler-security-and-sandbox-native",
+      "command": "env PATH=/workspace/toolchains/cargo/bin:/usr/local/bin:/usr/bin:/bin CARGO_HOME=/workspace/toolchains/cargo RUSTUP_HOME=/workspace/toolchains/rustup CARGO_TARGET_DIR=/workspace/nagi-sf01-target NAGI_NATIVE_TARGET_DIR=/workspace/nagi-sf01-native-target CARGO_NET_OFFLINE=true CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 NAGI_THREADS=1 cargo test --locked -p nagic --test security_sf01 --test security_sf01_native --test task_handles",
+      "cwd": "/workspace/Nagi-security-sf01",
+      "exit_code": 101,
+      "log": "compiler-security-10-and-native-sandbox-bind.log",
+      "tool_chunk_ids": [
+        "5d82f8",
+        "1e88d8"
+      ],
+      "sandbox_permissions": "use_default",
+      "additional_network_enabled": false,
+      "notes": [
+        "Compiler 10/10 pass; native test build success, execution blocked by sandbox socket bind. Cargo stops here; task_handles not executed in this invocation."
+      ]
+    },
+    {
+      "id": "native-task-manualclone",
+      "command": "env PATH=/workspace/toolchains/cargo/bin:/usr/local/bin:/usr/bin:/bin CARGO_HOME=/workspace/toolchains/cargo RUSTUP_HOME=/workspace/toolchains/rustup CARGO_TARGET_DIR=/workspace/nagi-sf01-target NAGI_NATIVE_TARGET_DIR=/workspace/nagi-sf01-native-target CARGO_NET_OFFLINE=true CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 NAGI_THREADS=1 cargo test --locked -p nagic --test security_sf01_native --test task_handles --test copy_capabilities",
+      "cwd": "/workspace/Nagi-security-sf01",
+      "exit_code": 0,
+      "log": "compiler-native-task-manualclone.log",
+      "tool_chunk_ids": [
+        "22dddd",
+        "986399"
+      ],
+      "sandbox_permissions": "with_additional_permissions",
+      "additional_network_enabled": true,
+      "notes": []
+    },
+    {
+      "id": "capability-unit",
+      "command": "env PATH=/workspace/toolchains/cargo/bin:/usr/local/bin:/usr/bin:/bin CARGO_HOME=/workspace/toolchains/cargo RUSTUP_HOME=/workspace/toolchains/rustup CARGO_TARGET_DIR=/workspace/nagi-sf01-target NAGI_NATIVE_TARGET_DIR=/workspace/nagi-sf01-native-target CARGO_NET_OFFLINE=true CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 NAGI_THREADS=1 cargo test --locked -p nagic --lib capabilities::tests::security_clone_and_share_walks_follow_payload_work",
+      "cwd": "/workspace/Nagi-security-sf01",
+      "exit_code": 0,
+      "log": "compiler-capability-unit.log",
+      "tool_chunk_ids": [
+        "02df5b",
+        "b35621"
+      ],
+      "sandbox_permissions": "use_default",
+      "additional_network_enabled": false,
+      "notes": []
+    },
+    {
+      "id": "original-fixtures-latest",
+      "command": "python3 - <<'PY'\nfrom pathlib import Path\nimport subprocess\nroot=Path('/workspace/Nagi-security-sf01')\na=root/'benchmarks/results/security-sf01-validation-2026-10-08/independent-review-d127b28'\ncompiler='/workspace/nagi-sf01-target/debug/nagic'\nfor name in ['p1-policy.nagi', 'p1-policy-saved.low', 'p1-policy-manual.low', 'p1-failure.nagi', 'p1-failure-saved.low', 'p1-failure-manual.low', 'p2-policy.nagi']:\n p=subprocess.run([compiler,'check',str(a/name),'--no-project'],capture_output=True,text=True,cwd=root)\n print(name,p.returncode,p.stderr.strip().replace('\\n',' | '))\nPY",
+      "cwd": "/workspace/Nagi-security-sf01",
+      "exit_code": 0,
+      "log": "original-fixtures-latest-check.log",
+      "tool_chunk_ids": [
+        "ef1021"
+      ],
+      "sandbox_permissions": "use_default",
+      "additional_network_enabled": false,
+      "notes": [
+        "Outer Python exits 0; all seven nagic check child commands exit 1 with intended Nagi diagnostic. stderr was flattened by the original command, not by artifact preservation."
+      ],
+      "child_commands": [
+        {
+          "command": [
+            "/workspace/nagi-sf01-target/debug/nagic",
+            "check",
+            "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-validation-2026-10-08/independent-review-d127b28/p1-policy.nagi",
+            "--no-project"
+          ],
+          "exit_code": 1
+        },
+        {
+          "command": [
+            "/workspace/nagi-sf01-target/debug/nagic",
+            "check",
+            "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-validation-2026-10-08/independent-review-d127b28/p1-policy-saved.low",
+            "--no-project"
+          ],
+          "exit_code": 1
+        },
+        {
+          "command": [
+            "/workspace/nagi-sf01-target/debug/nagic",
+            "check",
+            "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-validation-2026-10-08/independent-review-d127b28/p1-policy-manual.low",
+            "--no-project"
+          ],
+          "exit_code": 1
+        },
+        {
+          "command": [
+            "/workspace/nagi-sf01-target/debug/nagic",
+            "check",
+            "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-validation-2026-10-08/independent-review-d127b28/p1-failure.nagi",
+            "--no-project"
+          ],
+          "exit_code": 1
+        },
+        {
+          "command": [
+            "/workspace/nagi-sf01-target/debug/nagic",
+            "check",
+            "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-validation-2026-10-08/independent-review-d127b28/p1-failure-saved.low",
+            "--no-project"
+          ],
+          "exit_code": 1
+        },
+        {
+          "command": [
+            "/workspace/nagi-sf01-target/debug/nagic",
+            "check",
+            "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-validation-2026-10-08/independent-review-d127b28/p1-failure-manual.low",
+            "--no-project"
+          ],
+          "exit_code": 1
+        },
+        {
+          "command": [
+            "/workspace/nagi-sf01-target/debug/nagic",
+            "check",
+            "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-validation-2026-10-08/independent-review-d127b28/p2-policy.nagi",
+            "--no-project"
+          ],
+          "exit_code": 1
+        }
+      ]
+    },
+    {
+      "id": "cost-recalculation",
+      "command": "python3 - <<'PY'\nimport json,hashlib,statistics\nfrom pathlib import Path\nr=Path('benchmarks/results/security-sf01-2026-10-08')\ne=json.loads((r/'environment.json').read_text());m=json.loads((r/'measurement.json').read_text());b=json.loads((r/'build-results.json').read_text());p=json.loads(Path('benchmarks/results/security-sf01-validation-2026-10-08/provenance.json').read_text())\nprint('fixture_hashes_match',all(hashlib.sha256(Path(f).read_bytes()).hexdigest()==h for f,h in e['source_sha256'].items()))\nprint('validation_source_hashes_match',all(hashlib.sha256(Path(f).read_bytes()).hexdigest()==h for f,h in p['source_sha256'].items()))\nprint('measurement_status',m['status'],'requests',m['request_budget'])\nfor build,run in zip(b,m['runtime_runs']):\n s=run['normal_latency_ns']['samples'];print(build['mode'],'build_median',statistics.median(x['wall_seconds'] for x in build['build_rows']),'size',build['executable_bytes'],'requestcount',run['http_requests'],'median',statistics.median(s),'p95',sorted(s)[int((len(s)-1)*.95)],'checks',run['denial_checks'])\nPY",
+      "cwd": "/workspace/Nagi-security-sf01",
+      "exit_code": 0,
+      "log": "cost-recalculation.log",
+      "tool_chunk_ids": [
+        "919b55"
+      ],
+      "sandbox_permissions": "use_default",
+      "additional_network_enabled": false,
+      "notes": [
+        "fixture_hashes_match False was separately isolated to the authorized post-measurement runner hard-cap change. All actual fixture hashes and validation source hashes matched; historical measurement hash was not rewritten."
+      ]
+    },
+    {
+      "id": "cost-hash-difference",
+      "command": "sed -n '123,220p' benchmarks/security-sf01/run_security_sf01.py; sed -n '350,383p' benchmarks/security-sf01/run_security_sf01.py; python3 - <<'PY'\nimport json,hashlib\nfrom pathlib import Path\nj=json.loads(Path('benchmarks/results/security-sf01-2026-10-08/environment.json').read_text())\nfor f,h in j['source_sha256'].items():\n v=hashlib.sha256(Path(f).read_bytes()).hexdigest()\n if v!=h: print(f,'recorded',h,'current',v)\nPY",
+      "cwd": "/workspace/Nagi-security-sf01",
+      "exit_code": 0,
+      "log": "cost-hash-difference.log",
+      "tool_chunk_ids": [
+        "2a1314"
+      ],
+      "sandbox_permissions": "use_default",
+      "additional_network_enabled": false,
+      "notes": [
+        "Verbatim hash-output excerpt; source-read output omitted."
+      ]
+    }
+  ],
+  "preservation_scope": "Only SF01 entries are selected from the original combined independent review transcript; other independent work is recorded with its own PR."
+}

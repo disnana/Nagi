@@ -130,7 +130,7 @@ def quote_response(request: http.Request, config: shared[Config]) -> Result[http
     value = try calculate(input, config)
     return result.map_error(http.json[Quote](http.Status.OK, value), response_error)
 
-async def quote(request: http.Request, config: shared[Config]) -> Result[http.Response, ApiFailure]:
+async def quote(request: http.Request, config: shared[Config], authority: unit) -> Result[http.Response, ApiFailure]:
     request_id = try read_request_id(view(request))
     match quote_response(request, config):
         case Ok(response):
@@ -142,7 +142,7 @@ async def quote(request: http.Request, config: shared[Config]) -> Result[http.Re
         case Err(problem):
             return fail(ApiFailure(problem=problem, request_id=request_id))
 
-async def health(request: http.Request, config: shared[Config]) -> Result[http.Response, Error]:
+async def health(request: http.Request, config: shared[Config], authority: unit) -> Result[http.Response, Error]:
     value = Health(status="ok", currency=copy(view(config.currency)), maximum_quantity=config.maximum_quantity)
     return http.json[Health](http.Status.OK, value)
 
@@ -152,8 +152,8 @@ async def main() -> Result[unit, Error]:
         return error("NAGI_SAMPLE_MAX_QUANTITY must be between 1 and 1000")
     config = Config(currency="USD", unit_price_minor=1250, shipping_minor=500, free_shipping_quantity=5, maximum_quantity=maximum)
     app = http.app[Config, ApiFailure](config, api_failure)
-    app = try http.route(app, http.Method.POST, "/quotes", quote)
-    app = try http.route_mapped(app, http.Method.GET, "/health", health, health_failure)
+    app = try http.route(app, http.Method.POST, "/quotes", http.public_policy[Config](), quote)
+    app = try http.route_mapped(app, http.Method.GET, "/health", http.public_policy[Config](), health, health_failure)
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8092"))
     limits = try http.options(4096, 5000, 2000, 1000)
     return await http.serve(app, port, limits)

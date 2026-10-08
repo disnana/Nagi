@@ -22,6 +22,8 @@ curl -i -X POST http://127.0.0.1:8090/shutdown
 
 順に`0`、`5`、409、`5`、204を返します。加算は1〜1000、合計は1000000までです。JSONが整数でなければ400、actorの受付が満杯・停止中なら503です。更新は自動で再送しません。タイムアウト後も加算済みの場合があります。このAPIには要求IDによる重複排除がなく、現在値だけでは個々の加算が成功したかを判定できません。
 
+`/counter`と`/shutdown`は標準HTTPのrouteとして明示登録し、各routeにpublic policyを指定しています。このsampleに認証はありません。既定の`/health` routeなどを暗黙には追加しません。
+
 `/shutdown`はactorを停止します。HTTPはその後も起動しており、カウンターの要求には503を返します。HTTPの停止はCtrl+Cです。ポートは`NAGI_SAMPLE_PORT`で変えられます。
 
 SupervisorとHTTPは同じscopeに起動します。`monitor_task = spawn monitor(group)`は`Task[Result[unit, Error]]`を作り、`await monitor_task`が`Result[Result[unit, Error], TaskFailure]`を返します。親は`await monitor_task`の`Ok(inner)`を`try inner`で処理し、Supervisorのterminal Errをbody Errとして伝えます。これによりHTTPへ取消を要求し、scopeの直接の子を実joinしてから元Errorを返します。HTTPは旧statement spawnを維持し、HTTP自体のErrもscope故障になります。正常な`/shutdown`ではinnerはOkとなり、HTTPを止めません。TaskFailureを表示してもscope故障は残ります。

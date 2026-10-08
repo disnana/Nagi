@@ -190,12 +190,27 @@ fn method_status_and_shared_state_inspection_allocate_nothing() {
     assert_eq!(count.reallocations, 0);
 }
 
-#[test]
-fn heterogeneous_route_erasure_adds_exactly_one_future_allocation() {
-    let app = route(app_default("state".to_owned()), Method::GET, "/", hello).unwrap();
+#[tokio::test]
+async fn heterogeneous_route_erasure_adds_exactly_one_future_allocation() {
+    let app = route(
+        app_default("state".to_owned()),
+        Method::GET,
+        "/",
+        public_policy(),
+        hello,
+    )
+    .unwrap();
+    let owner = LeaseOwner::new(Instant::now() + Duration::from_secs(30)).unwrap();
+    let route = &app.routes["/"][0];
+    let prepared = (route.prepare)(
+        basic_request().security_snapshot(),
+        Arc::clone(&app.state),
+        Arc::clone(&owner.lease),
+    )
+    .await
+    .unwrap();
     let request = basic_request();
-    let (future, count) =
-        crate::metrics::measure(|| (app.routes["/"][0].handler)(request, Arc::clone(&app.state)));
+    let (future, count) = crate::metrics::measure(|| prepared(request, Arc::clone(&app.state)));
     assert_eq!(count.allocations, 1);
     assert_eq!(count.reallocations, 0);
     assert!(count.allocated_bytes > 0);
@@ -423,19 +438,31 @@ fn borrowed_lookup_validation_agrees_with_native_token_rules_and_length_limits()
 }
 
 #[test]
-fn response_headers_reject_injection_and_user_framing_and_keep_cookie_lines() {
+fn response_headers_reject_managed_values_and_keep_ordinary_duplicates() {
     for (name, value) in [
         ("bad name", b"v".as_slice()),
         ("valid", b"a\r\nb"),
         ("Content-Length", b"100"),
         ("TRANSFER-ENCODING", b"chunked"),
+        ("Content-Type", b"text/html"),
+        ("Set-Cookie", b"session=active"),
+        ("Cache-Control", b"public"),
+        ("Vary", b"Origin"),
+        ("Access-Control-Allow-Origin", b"*"),
+        ("Content-Security-Policy", b"default-src 'self'"),
+        ("X-Content-Type-Options", b"nosniff"),
     ] {
         assert!(append_header(empty(Status::OK), name, value).is_err());
     }
     assert!(append_header_text(empty(Status::OK), "x-value", "a\r\nb").is_err());
+    // SF01 intentionally removes the raw-HTML activation path and user-managed
+    // Set-Cookie output. HTML bytes remain an inert binary representation;
+    // ordinary duplicate application headers remain available.
+    let inactive_html = bytes(Status::CREATED, b"<p>ok</p>");
+    assert!(append_header_text(inactive_html, "Content-Type", "text/html").is_err());
     let result = append_header(
-        append_header(text(Status::CREATED, "ok"), "set-cookie", b"a=1").unwrap(),
-        "Set-Cookie",
+        append_header(bytes(Status::CREATED, b"ok"), "X-Trace", b"a=1").unwrap(),
+        "X-Trace",
         b"b=2",
     )
     .unwrap()
@@ -443,13 +470,17 @@ fn response_headers_reject_injection_and_user_framing_and_keep_cookie_lines() {
     assert_eq!(
         result
             .headers()
-            .get_all(names::SET_COOKIE)
+            .get_all("x-trace")
             .iter()
             .map(HeaderValue::as_bytes)
             .collect::<Vec<_>>(),
         [b"a=1".as_slice(), b"b=2".as_slice()]
     );
     assert_eq!(result.status(), 201);
+    assert_eq!(
+        result.headers()[names::CONTENT_TYPE],
+        "application/octet-stream"
+    );
     assert!(!result.headers().contains_key(names::CONTENT_LENGTH));
 }
 
@@ -511,7 +542,7 @@ fn options_validate_capacity_deadlines_and_leave_state_out_of_debug() {
     assert!(!format!("{:?}", app_default("very secret state")).contains("secret"));
 }
 
-async fn hello(_: Request, state: Arc<String>) -> Result<Response, Error> {
+async fn hello(_: Request, state: Arc<String>, _: ()) -> Result<Response, Error> {
     Ok(text(Status::OK, &state))
 }
 #[test]
@@ -526,7 +557,14 @@ fn route_validation_returns_errors_without_panicking_and_supports_templates() {
         "/bad/{}}",
     ] {
         assert!(
-            route(app_default(String::new()), Method::GET, path, hello).is_err(),
+            route(
+                app_default(String::new()),
+                Method::GET,
+                path,
+                public_policy(),
+                hello
+            )
+            .is_err(),
             "{path}"
         );
     }
@@ -534,12 +572,20 @@ fn route_validation_returns_errors_without_panicking_and_supports_templates() {
         app_default(String::new()),
         Method::GET,
         "/users/{id}",
+        public_policy(),
         hello,
     )
     .unwrap();
-    assert!(route(app, Method::GET, "/users/{name}", hello).is_err());
-    let app = route(app_default(String::new()), Method::GET, "/", hello).unwrap();
-    assert!(route(app, Method::GET, "/", hello).is_err());
+    assert!(route(app, Method::GET, "/users/{name}", public_policy(), hello).is_err());
+    let app = route(
+        app_default(String::new()),
+        Method::GET,
+        "/",
+        public_policy(),
+        hello,
+    )
+    .unwrap();
+    assert!(route(app, Method::GET, "/", public_policy(), hello).is_err());
 }
 
 #[tokio::test]
@@ -598,16 +644,25 @@ async fn apps_are_db_free_independent_and_support_native_extended_methods_and_te
         app_default("first".to_owned()),
         Method::GET,
         "/users/{id}",
+        public_policy(),
         hello,
     )
     .unwrap();
-    let app = route(app, method("CUSTOM").unwrap(), "/users/{id}", hello).unwrap();
+    let app = route(
+        app,
+        method("CUSTOM").unwrap(),
+        "/users/{id}",
+        public_policy(),
+        hello,
+    )
+    .unwrap();
     let first = Server::new(app, default_options()).await;
     let second = Server::new(
         route(
             app_default("second".to_owned()),
             Method::GET,
             "/users/{id}",
+            public_policy(),
             hello,
         )
         .unwrap(),
@@ -639,6 +694,7 @@ async fn successful_connect_is_rejected_instead_of_establishing_an_unowned_tunne
         app_default("cannot become a tunnel".to_owned()),
         Method::CONNECT,
         "/",
+        public_policy(),
         hello,
     )
     .unwrap();
@@ -658,7 +714,14 @@ async fn successful_connect_is_rejected_instead_of_establishing_an_unowned_tunne
 
 #[tokio::test]
 async fn oversized_headers_and_header_counts_are_rejected_without_reusing_the_connection() {
-    let app = route(app_default("ok".to_owned()), Method::GET, "/", hello).unwrap();
+    let app = route(
+        app_default("ok".to_owned()),
+        Method::GET,
+        "/",
+        public_policy(),
+        hello,
+    )
+    .unwrap();
     let server = Server::new(app, header_limits(default_options(), 8192, 4).unwrap()).await;
     let mut socket = server.connect().await;
     let request = format!(
@@ -678,7 +741,14 @@ async fn oversized_headers_and_header_counts_are_rejected_without_reusing_the_co
     assert_eq!(response(&mut socket, false).await.status, 431);
     assert!(closed(&mut socket).await.is_empty());
     server.stop().await;
-    let app = route(app_default("ok".to_owned()), Method::GET, "/", hello).unwrap();
+    let app = route(
+        app_default("ok".to_owned()),
+        Method::GET,
+        "/",
+        public_policy(),
+        hello,
+    )
+    .unwrap();
     let server = Server::new(app, default_options()).await;
     let mut socket = server.connect().await;
     for (additional, expected) in [(99, 200), (100, 431)] {
@@ -697,12 +767,19 @@ async fn oversized_headers_and_header_counts_are_rejected_without_reusing_the_co
 
 #[tokio::test]
 async fn head_uses_get_representation_length_explicit_head_wins_and_allow_is_correct() {
-    async fn head_only(_: Request, _: Arc<String>) -> Result<Response, Error> {
+    async fn head_only(_: Request, _: Arc<String>, _: ()) -> Result<Response, Error> {
         Ok(text(Status::CREATED, "explicit"))
     }
-    let app = route(app_default("hello".to_owned()), Method::GET, "/", hello).unwrap();
-    let app = route(app, Method::GET, "/explicit", hello).unwrap();
-    let app = route(app, Method::HEAD, "/explicit", head_only).unwrap();
+    let app = route(
+        app_default("hello".to_owned()),
+        Method::GET,
+        "/",
+        public_policy(),
+        hello,
+    )
+    .unwrap();
+    let app = route(app, Method::GET, "/explicit", public_policy(), hello).unwrap();
+    let app = route(app, Method::HEAD, "/explicit", public_policy(), head_only).unwrap();
     let server = Server::new(app, default_options()).await;
     let mut socket = server.connect().await;
     send(&mut socket, b"HEAD / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;
@@ -757,32 +834,63 @@ fn override_business(_: Business) -> Response {
 }
 #[tokio::test]
 async fn async_handlers_use_app_mapping_route_override_and_leave_success_alone() {
-    async fn auth(_: Request, _: Arc<()>) -> Result<Response, Business> {
+    async fn auth(_: Request, _: Arc<()>, _: ()) -> Result<Response, Business> {
         tokio::task::yield_now().await;
         Err(Business::Auth)
     }
-    async fn conflict(_: Request, _: Arc<()>) -> Result<Response, Business> {
+    async fn conflict(_: Request, _: Arc<()>, _: ()) -> Result<Response, Business> {
         Err(Business::Conflict)
     }
-    async fn limited(_: Request, _: Arc<()>) -> Result<Response, Business> {
+    async fn limited(_: Request, _: Arc<()>, _: ()) -> Result<Response, Business> {
         Err(Business::Limited)
     }
-    async fn success(_: Request, _: Arc<()>) -> Result<Response, Business> {
+    async fn success(_: Request, _: Arc<()>, _: ()) -> Result<Response, Business> {
         Ok(text(Status::CREATED, "created"))
     }
-    async fn independent(_: Request, _: Arc<()>) -> Result<Response, i64> {
+    async fn independent(_: Request, _: Arc<()>, _: ()) -> Result<Response, i64> {
         Err(42)
     }
     fn map_number(error: i64) -> Response {
         assert_eq!(error, 42);
         text(Status::CONFLICT, "independent")
     }
-    let app = route(app((), business), Method::GET, "/auth", auth).unwrap();
-    let app = route_mapped(app, Method::GET, "/override", auth, override_business).unwrap();
-    let app = route(app, Method::GET, "/conflict", conflict).unwrap();
-    let app = route(app, Method::GET, "/limited", limited).unwrap();
-    let app = route_mapped(app, Method::GET, "/success", success, override_business).unwrap();
-    let app = route_mapped(app, Method::GET, "/independent", independent, map_number).unwrap();
+    let app = route(
+        app((), business),
+        Method::GET,
+        "/auth",
+        public_policy(),
+        auth,
+    )
+    .unwrap();
+    let app = route_mapped(
+        app,
+        Method::GET,
+        "/override",
+        public_policy(),
+        auth,
+        override_business,
+    )
+    .unwrap();
+    let app = route(app, Method::GET, "/conflict", public_policy(), conflict).unwrap();
+    let app = route(app, Method::GET, "/limited", public_policy(), limited).unwrap();
+    let app = route_mapped(
+        app,
+        Method::GET,
+        "/success",
+        public_policy(),
+        success,
+        override_business,
+    )
+    .unwrap();
+    let app = route_mapped(
+        app,
+        Method::GET,
+        "/independent",
+        public_policy(),
+        independent,
+        map_number,
+    )
+    .unwrap();
     let server = Server::new(app, default_options()).await;
     let mut socket = server.connect().await;
     for (path, status, expected) in [
@@ -807,13 +915,20 @@ async fn async_handlers_use_app_mapping_route_override_and_leave_success_alone()
 
 #[tokio::test]
 async fn forbidden_response_bodies_do_not_desynchronize_keepalive() {
-    async fn suppress(request: Request, _: Arc<()>) -> Result<Response, Error> {
+    async fn suppress(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         let code: i64 = request.path().trim_start_matches('/').parse().unwrap();
         Ok(text(status(code).unwrap(), "must not be transmitted"))
     }
     let mut app = app_default(());
     for code in [204, 205, 304] {
-        app = route(app, Method::GET, &format!("/{code}"), suppress).unwrap();
+        app = route(
+            app,
+            Method::GET,
+            &format!("/{code}"),
+            public_policy(),
+            suppress,
+        )
+        .unwrap();
     }
     let server = Server::new(app, default_options()).await;
     let mut socket = server.connect().await;
@@ -837,21 +952,21 @@ async fn forbidden_response_bodies_do_not_desynchronize_keepalive() {
 }
 
 #[tokio::test]
-async fn sockets_preserve_raw_duplicate_headers_cookies_and_strict_authorization() {
-    async fn inspect(request: Request, _: Arc<()>) -> Result<Response, Error> {
+async fn sockets_preserve_raw_duplicate_headers_and_strict_authorization() {
+    async fn inspect(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         if header_text(&request, "authorization")?.is_none() {
             return Ok(empty(Status::UNAUTHORIZED));
         }
         let raw = headers(&request, "x-many")?;
         let result = bytes(Status::OK, &raw.concat());
         append_header_text(
-            append_header_text(result, "set-cookie", "a=1")?,
-            "set-cookie",
+            append_header_text(result, "x-trace", "a=1")?,
+            "x-trace",
             "b=2",
         )
     }
     let server = Server::new(
-        route(app_default(()), Method::GET, "/", inspect).unwrap(),
+        route(app_default(()), Method::GET, "/", public_policy(), inspect).unwrap(),
         default_options(),
     )
     .await;
@@ -859,7 +974,7 @@ async fn sockets_preserve_raw_duplicate_headers_cookies_and_strict_authorization
     send(&mut socket, b"GET / HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer ok\r\nX-Many: one\r\nX-Many: two\r\n\r\n").await;
     let result = response(&mut socket, false).await;
     assert_eq!(result.body, b"onetwo");
-    assert_eq!(result.all("set-cookie"), ["a=1", "b=2"]);
+    assert_eq!(result.all("x-trace"), ["a=1", "b=2"]);
     send(
         &mut socket,
         b"GET / HTTP/1.1\r\nHost: localhost\r\nAuthorization: a\r\nAuthorization: b\r\n\r\n",
@@ -879,11 +994,11 @@ async fn sockets_preserve_raw_duplicate_headers_cookies_and_strict_authorization
 
 #[tokio::test]
 async fn actual_chunk_sizes_and_absolute_body_deadlines_are_bounded() {
-    async fn echo(request: Request, _: Arc<()>) -> Result<Response, Error> {
+    async fn echo(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         Ok(bytes(Status::OK, request.body()))
     }
     let server = Server::new(
-        route(app_default(()), Method::POST, "/", echo).unwrap(),
+        route(app_default(()), Method::POST, "/", public_policy(), echo).unwrap(),
         options(4, 100, 1000, 1000).unwrap(),
     )
     .await;
@@ -923,7 +1038,7 @@ struct OversizedBodyState {
 }
 
 async fn oversized_body_server() -> (Server, Arc<AtomicUsize>) {
-    async fn counted(_: Request, state: Arc<OversizedBodyState>) -> Result<Response, Error> {
+    async fn counted(_: Request, state: Arc<OversizedBodyState>, _: ()) -> Result<Response, Error> {
         state.calls.fetch_add(1, Ordering::SeqCst);
         Ok(text(Status::OK, "accepted"))
     }
@@ -931,8 +1046,15 @@ async fn oversized_body_server() -> (Server, Arc<AtomicUsize>) {
     let state = OversizedBodyState {
         calls: Arc::clone(&calls),
     };
-    let app = route(app_default(state), Method::POST, "/", counted).unwrap();
-    let app = route(app, Method::GET, "/", counted).unwrap();
+    let app = route(
+        app_default(state),
+        Method::POST,
+        "/",
+        public_policy(),
+        counted,
+    )
+    .unwrap();
+    let app = route(app, Method::GET, "/", public_policy(), counted).unwrap();
     let server = Server::new(
         app,
         capacity(options(4096, 200, 1000, 1000).unwrap(), 1, 1).unwrap(),
@@ -1098,7 +1220,7 @@ impl Drop for Dropped {
         self.0.fetch_add(1, Ordering::SeqCst);
     }
 }
-async fn wait(_: Request, state: Arc<Gate>) -> Result<Response, Error> {
+async fn wait(_: Request, state: Arc<Gate>, _: ()) -> Result<Response, Error> {
     let _dropped = Dropped(Arc::clone(&state.cancelled));
     state.started.notify_one();
     state.released.notified().await;
@@ -1123,7 +1245,7 @@ fn gate() -> (Gate, Arc<Notify>, Arc<Notify>, Arc<AtomicUsize>) {
 #[tokio::test]
 async fn request_capacity_rejects_unread_bodies_then_releases_admission() {
     let (state, started, released, cancelled) = gate();
-    let app = route(app_default(state), Method::POST, "/", wait).unwrap();
+    let app = route(app_default(state), Method::POST, "/", public_policy(), wait).unwrap();
     let server = Server::new(app, capacity(default_options(), 4, 1).unwrap()).await;
     let mut first = server.connect().await;
     send(&mut first, b"POST / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;
@@ -1153,7 +1275,7 @@ async fn request_capacity_rejects_unread_bodies_then_releases_admission() {
 #[tokio::test]
 async fn handler_timeout_cancels_future_and_releases_request_capacity() {
     let (state, started, released, cancelled) = gate();
-    let app = route(app_default(state), Method::GET, "/", wait).unwrap();
+    let app = route(app_default(state), Method::GET, "/", public_policy(), wait).unwrap();
     let server = Server::new(
         app,
         capacity(options(1024, 1000, 100, 1000).unwrap(), 4, 1).unwrap(),
@@ -1175,17 +1297,17 @@ async fn handler_timeout_cancels_future_and_releases_request_capacity() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn handler_timeout_rejects_a_ready_response_after_blocking_poll() {
-    async fn slow(_: Request, _: Arc<()>) -> Result<Response, Error> {
+    async fn slow(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         // A timer cannot preempt this poll. Once it returns, the server must
         // still reject a response completed after the handler deadline.
         std::thread::sleep(Duration::from_millis(80));
         Ok(text(Status::OK, "late"))
     }
-    async fn fast(_: Request, _: Arc<()>) -> Result<Response, Error> {
+    async fn fast(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         Ok(text(Status::OK, "fast"))
     }
-    let app = route(app_default(()), Method::GET, "/slow", slow).unwrap();
-    let app = route(app, Method::GET, "/fast", fast).unwrap();
+    let app = route(app_default(()), Method::GET, "/slow", public_policy(), slow).unwrap();
+    let app = route(app, Method::GET, "/fast", public_policy(), fast).unwrap();
     let server = Server::new(
         app,
         capacity(options(1024, 1000, 10, 1000).unwrap(), 1, 1).unwrap(),
@@ -1211,18 +1333,25 @@ async fn handler_timeout_rejects_a_ready_response_after_blocking_poll() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn handler_panic_after_deadline_returns_500_and_releases_admission() {
-    async fn late_panic(_: Request, _: Arc<()>) -> Result<Response, Error> {
+    async fn late_panic(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         // This poll cannot be preempted. If it unwinds after the deadline,
         // preserve the panic boundary (500 and close), rather than the 504
         // used for a response that completed too late.
         std::thread::sleep(Duration::from_millis(80));
         panic!("private late handler failure");
     }
-    async fn healthy(_: Request, _: Arc<()>) -> Result<Response, Error> {
+    async fn healthy(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         Ok(text(Status::OK, "healthy"))
     }
-    let app = route(app_default(()), Method::GET, "/panic", late_panic).unwrap();
-    let app = route(app, Method::GET, "/healthy", healthy).unwrap();
+    let app = route(
+        app_default(()),
+        Method::GET,
+        "/panic",
+        public_policy(),
+        late_panic,
+    )
+    .unwrap();
+    let app = route(app, Method::GET, "/healthy", public_policy(), healthy).unwrap();
     let server = Server::new(
         app,
         capacity(options(1024, 1000, 10, 1000).unwrap(), 1, 1).unwrap(),
@@ -1255,7 +1384,7 @@ async fn handler_panic_after_deadline_returns_500_and_releases_admission() {
 #[tokio::test]
 async fn connection_capacity_and_shutdown_deadline_leave_no_handler_tasks() {
     let (state, started, _, cancelled) = gate();
-    let app = route(app_default(state), Method::GET, "/", wait).unwrap();
+    let app = route(app_default(state), Method::GET, "/", public_policy(), wait).unwrap();
     let server = Server::new(
         app,
         capacity(options(1024, 1000, 2000, 80).unwrap(), 1, 1).unwrap(),
@@ -1278,7 +1407,7 @@ async fn connection_capacity_and_shutdown_deadline_leave_no_handler_tasks() {
 #[tokio::test]
 async fn graceful_shutdown_finishes_an_in_flight_handler_and_response() {
     let (state, started, released, dropped) = gate();
-    let app = route(app_default(state), Method::GET, "/", wait).unwrap();
+    let app = route(app_default(state), Method::GET, "/", public_policy(), wait).unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let (stop, stopping) = oneshot::channel();
@@ -1328,7 +1457,14 @@ async fn graceful_shutdown_finishes_an_in_flight_handler_and_response() {
 #[tokio::test]
 async fn header_idle_deadline_is_independent_of_send_deadline_after_flush() {
     let server = Server::new(
-        route(app_default("ok".to_owned()), Method::GET, "/", hello).unwrap(),
+        route(
+            app_default("ok".to_owned()),
+            Method::GET,
+            "/",
+            public_policy(),
+            hello,
+        )
+        .unwrap(),
         send_timeout(header_timeout(default_options(), 400).unwrap(), 60).unwrap(),
     )
     .await;
@@ -1344,12 +1480,105 @@ async fn header_idle_deadline_is_independent_of_send_deadline_after_flush() {
 }
 
 #[tokio::test]
+async fn header_deadline_expires_silent_dripped_and_buffered_partial_requests() {
+    let app = route(
+        app_default("ok".to_owned()),
+        Method::GET,
+        "/",
+        public_policy(),
+        hello,
+    )
+    .unwrap();
+    let server = Server::new(app, header_timeout(default_options(), 400).unwrap()).await;
+
+    let mut silent = server.connect().await;
+    let expired = tokio::time::timeout(Duration::from_secs(2), closed(&mut silent))
+        .await
+        .unwrap();
+    assert!(
+        expired.is_empty() || expired.starts_with(b"HTTP/1.1 408"),
+        "{expired:?}"
+    );
+
+    let mut dripped = server.connect().await;
+    send(&mut dripped, b"GET / HTTP/1.1\r\nHost:").await;
+    for _ in 0..3 {
+        tokio::time::sleep(Duration::from_millis(70)).await;
+        send(&mut dripped, b"x").await;
+    }
+    // The deadline is absolute: drips do not grant a fresh interval. If each
+    // byte reset the timer, this read would still be waiting after 300ms.
+    let expired = tokio::time::timeout(Duration::from_millis(300), closed(&mut dripped))
+        .await
+        .unwrap();
+    assert!(
+        expired.is_empty() || expired.starts_with(b"HTTP/1.1 408"),
+        "{expired:?}"
+    );
+
+    let mut buffered = server.connect().await;
+    send(
+        &mut buffered,
+        b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\nGET / HTTP/1.1\r\nHost: localhost\r\n\r\nGET / HTTP/1.1\r\nHost:",
+    )
+    .await;
+    for _ in 0..2 {
+        let result = response(&mut buffered, false).await;
+        assert_eq!(result.status, 200);
+        assert_eq!(result.body, b"ok");
+    }
+    let expired = tokio::time::timeout(Duration::from_secs(2), closed(&mut buffered))
+        .await
+        .unwrap();
+    assert!(
+        expired.is_empty() || expired.starts_with(b"HTTP/1.1 408"),
+        "{expired:?}"
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn connection_capacity_supports_more_than_128_idle_sockets_and_shutdown_closes_them() {
+    let app = route(
+        app_default("ok".to_owned()),
+        Method::GET,
+        "/",
+        public_policy(),
+        hello,
+    )
+    .unwrap();
+    let server = Server::new(app, capacity(default_options(), 160, 1).unwrap()).await;
+    let mut idle = Vec::with_capacity(129);
+    for _ in 0..129 {
+        idle.push(server.connect().await);
+    }
+
+    let mut active = server.connect().await;
+    send(&mut active, b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;
+    let result = response(&mut active, false).await;
+    assert_eq!(result.status, 200);
+    assert_eq!(result.body, b"ok");
+
+    server.stop().await;
+    for socket in &mut idle {
+        assert!(closed(socket).await.is_empty());
+    }
+}
+
+#[tokio::test]
 async fn stalled_response_send_expires_and_releases_connection_permit() {
-    async fn large(_: Request, _: Arc<String>) -> Result<Response, Error> {
+    async fn large(_: Request, _: Arc<String>, _: ()) -> Result<Response, Error> {
         Ok(bytes(Status::OK, &vec![b'x'; 16 * 1024 * 1024]))
     }
-    let app = route(app_default("ok".to_owned()), Method::GET, "/large", large).unwrap();
-    let app = route(app, Method::GET, "/", hello).unwrap();
+    let app = route(
+        app_default("ok".to_owned()),
+        Method::GET,
+        "/large",
+        public_policy(),
+        large,
+    )
+    .unwrap();
+    let app = route(app, Method::GET, "/", public_policy(), hello).unwrap();
     let server = Server::new(
         app,
         send_timeout(capacity(default_options(), 1, 1).unwrap(), 80).unwrap(),
@@ -1372,10 +1601,10 @@ async fn stalled_response_send_expires_and_releases_connection_permit() {
 #[tokio::test]
 async fn graceful_shutdown_preserves_stalled_response_send_deadline() {
     const BODY_LENGTH: usize = 16 * 1024 * 1024;
-    async fn large(_: Request, _: Arc<()>) -> Result<Response, Error> {
+    async fn large(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         Ok(bytes(Status::OK, &vec![b'x'; BODY_LENGTH]))
     }
-    let app = route(app_default(()), Method::GET, "/", large).unwrap();
+    let app = route(app_default(()), Method::GET, "/", public_policy(), large).unwrap();
     let mut server = Server::new(
         app,
         send_timeout(options(1024, 1000, 1000, 1200).unwrap(), 150).unwrap(),
@@ -1417,3 +1646,6 @@ async fn graceful_shutdown_preserves_stalled_response_send_deadline() {
         .unwrap();
     assert!(closed(&mut blocked).await.len() < BODY_LENGTH);
 }
+
+#[path = "security_tests.rs"]
+mod security_tests;

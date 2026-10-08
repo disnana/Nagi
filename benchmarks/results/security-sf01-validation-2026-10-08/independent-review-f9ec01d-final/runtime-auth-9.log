@@ -1,0 +1,38 @@
+   Compiling nagi-runtime v0.1.11 (/workspace/Nagi-security-sf01/runtime)
+    Finished `test` profile [unoptimized] target(s) in 18.37s
+     Running unittests src/lib.rs (/workspace/nagi-sf01-target/debug/deps/nagi_runtime-869e41f629d9bcdc)
+
+running 9 tests
+test auth::tests::admitted_operation_can_complete_after_invalidation ... ok
+test auth::tests::end_rejects_grant_issue ... ok
+test auth::tests::expired_identity_and_request_are_rejected ... ok
+test auth::tests::end_rejects_native_admission_and_drops_reservation ... ok
+test auth::tests::invalidation_wins_a_contended_gate_without_native_admission ... ok
+test auth::tests::permit_wins_before_concurrent_owner_drop_and_admits_once ... ok
+test auth::tests::invalidation_during_capacity_wait_prevents_submission ... ok
+
+thread '<unnamed>' (527976) panicked at runtime/src/auth.rs:379:13:
+fixture
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test auth::tests::wrong_request_is_distinct ... ok
+test auth::tests::poisoned_gate_fails_closed ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 223 filtered out; finished in 0.00s
+
+     Running tests/security_sf01.rs (/workspace/nagi-sf01-target/debug/deps/security_sf01-008723780fa1a967)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/sqlite_public_api.rs (/workspace/nagi-sf01-target/debug/deps/sqlite_public_api-b6d626dac877fd6f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/task_handles.rs (/workspace/nagi-sf01-target/debug/deps/task_handles-5fc6bcc4d0e37c1a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s

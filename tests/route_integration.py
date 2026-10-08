@@ -19,26 +19,49 @@ def verify(compiler: Path, target: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="nagi routes 凪 ") as temporary:
         folder = Path(temporary)
         source = folder / "routes.nagi"
-        source.write_text('''@get("/lookup")
-async def lookup(id: i64) -> Result[i64, Error]:
-    return ok(id)
+        source.write_text('''import std.http.server as http
 
-@get("/values/{id}")
-async def value(id: i64) -> Result[i64, Error]:
-    return ok(id)
+class State:
+    ready: bool
 
-@get("/legacy/{key}")
-async def legacy(id: i64) -> Result[i64, Error]:
-    return ok(id)
+def query_id(request: view[http.Request]) -> Result[i64, Error]:
+    match request.query:
+        case Some(query):
+            if len(query) < 4 or try slice(query, 0, 3) != "id=":
+                return error("query must contain id")
+            return parse_i64(try slice(query, 3, len(query)))
+        case None:
+            return error("query must contain id")
 
-@get("/literal/{{id}}")
-async def literal(id: i64) -> Result[i64, Error]:
-    return ok(id)
+def path_id(request: view[http.Request], prefix: view[str]) -> Result[i64, Error]:
+    if len(request.path) <= len(prefix):
+        return error("path value is missing")
+    return parse_i64(try slice(request.path, len(prefix), len(request.path)))
+
+async def lookup(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return http.json[i64](http.Status.OK, try query_id(view(request)))
+
+async def value(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return http.json[i64](http.Status.OK, try path_id(view(request), view("/values/")))
+
+async def legacy(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return http.json[i64](http.Status.OK, try path_id(view(request), view("/legacy/")))
+
+async def literal(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return http.json[i64](http.Status.OK, try query_id(view(request)))
+
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, "ok"))
 
 async def main() -> Result[unit, Error]:
-    db = try await db_open(":memory:")
+    app = http.app_default[State](State(ready=true))
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    app = try http.route(app, http.Method.GET, "/lookup", http.public_policy[State](), lookup)
+    app = try http.route(app, http.Method.GET, "/values/{id}", http.public_policy[State](), value)
+    app = try http.route(app, http.Method.GET, "/legacy/{key}", http.public_policy[State](), legacy)
+    app = try http.route(app, http.Method.GET, "/literal/%7Bid%7D", http.public_policy[State](), literal)
     port = try parse_i64(env("NAGI_TEST_PORT", "0"))
-    return await serve(db, port)
+    return await http.serve(app, port, http.default_options())
 ''', encoding="utf-8")
         environment = {**os.environ, "NAGI_NATIVE_TARGET_DIR": str(target)}
         environment.pop("NAGI_ROOT", None)
@@ -71,11 +94,12 @@ async def main() -> Result[unit, Error]:
                     except urllib.error.URLError:
                         time.sleep(0.05)
                 else:
-                    raise AssertionError("server did not start")
+                    log.seek(0)
+                    raise AssertionError("server did not start: " + log.read())
                 cases = [("/lookup?id=42", 200, 42), ("/lookup?id=bad", 400, None),
                          ("/lookup", 400, None), ("/values/7?id=99", 200, 7),
                          ("/values/bad", 400, None), ("/legacy/8", 200, 8),
-                         ("/literal/{id}?id=9", 200, 9)]
+                         ("/literal/%7Bid%7D?id=9", 200, 9)]
                 for path, status, value in cases:
                     try:
                         response = opener.open(base + path, timeout=5)

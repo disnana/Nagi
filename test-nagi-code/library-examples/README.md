@@ -1,6 +1,6 @@
 # ライブラリとRust連携のサンプル
 
-10のプロジェクトで、共通コードのimport、独自エラー、Rust crate、標準HTTP、自作Axumサーバー、Supervisor、Lowの関数差し替えを試します。
+10のプロジェクトで、共通コードのimport、独自エラー、Rust crate、明示policy付き標準HTTP、自作Axum host、Supervisor、Lowの関数差し替えを試します。標準HTTP例は各routeにpublicまたはauthenticated policyを指定し、自作Axum例は別のtrusted host境界です。
 
 [一覧と起動手順](../../docs/library-examples.md) · [共通コードの構成](../../docs/libraries.md) · [English](README.en.md)
 

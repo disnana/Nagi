@@ -1,0 +1,14 @@
+{
+  "README.md": "9c37a6bad043f36d3653316b63d789fee16d9cbc91e6ab57ae64e4ae7ac502c6",
+  "commands-and-exits.json": "62382732694275c5b6c922e9999ebb0e986269018433f4fcf51b489fc206a431",
+  "compiler-capability-unit.log": "041567ce2355433940edc0c800148b21c24d8f843f6064f46f9baec0885db247",
+  "compiler-native-task-manualclone.log": "d06a16d0c5f8251d4ed134a783d6918c648233e1c729c1bca18c347d898fe3ea",
+  "compiler-security-10-and-native-sandbox-bind.log": "3c18460c675aa0c5a6254dec3f1105d9cd050556be88a8c6ee803c20f5fe9940",
+  "cost-hash-difference.log": "c1f6db65b0ffeeadd43259b73d9e954ac537721ff4cd2e54d6f903c79f443b0b",
+  "cost-recalculation.log": "8cc8adcddd252e368b2fb382bd895c49a14a013e63730c359de440ca27af2647",
+  "original-fixtures-latest-check.log": "5a4fb2ab82abaa460370ac785855914b14cdb83b4572b34cb8eef7c03ae33580",
+  "runtime-auth-9.log": "6bd678ed75ebd94ef22741ecbee8799508d19c47492a47202516f707afa44955",
+  "runtime-auth-wrong-package.log": "2dc586a1c8bc7d9e1329b3af23227e48bc324a9ebe1598e09259b4d556aeeeb9",
+  "runtime-http-security-11.log": "14e3e06233164de03279078f11595054dcb9d4e5b1cbe6929de88291f47bceab",
+  "runtime-http-security-sandbox-bind-excerpt.log": "08766ac951bf9a234094f2fd7da7ccdf486bc5c3c889aba6382c2263c6b48648"
+}

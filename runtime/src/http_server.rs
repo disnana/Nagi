@@ -1,4 +1,5 @@
-//! Typed HTTP server resources. The compatibility router remains independent.
+//! Policy-required HTTP resources and one request lifecycle boundary.
+use crate::auth::{AuthScope, Failure, FailureKind, Grant, Lease, LeaseOwner, VerifiedIdentity};
 use crate::{Error, ErrorKind};
 use axum::{
     body::Bytes,
@@ -336,6 +337,10 @@ impl Response {
         &self.body
     }
     fn into_http(mut self, head: bool) -> axum::http::Response<BufferedBody> {
+        self.headers.insert(
+            HeaderName::from_static("x-content-type-options"),
+            HeaderValue::from_static("nosniff"),
+        );
         // User framing headers are forbidden. Set framing from the exact
         // representation we own, preserving duplicate application headers.
         let code = self.status.0;
@@ -427,13 +432,6 @@ pub fn text(status: Status, body: &str) -> Response {
         Bytes::copy_from_slice(body.as_bytes()),
     )
 }
-pub fn html(status: Status, body: &str) -> Response {
-    representation(
-        status,
-        "text/html; charset=utf-8",
-        Bytes::copy_from_slice(body.as_bytes()),
-    )
-}
 pub fn bytes(status: Status, body: &[u8]) -> Response {
     representation(
         status,
@@ -451,9 +449,28 @@ pub fn json<T: Serialize + ?Sized>(status: Status, body: &T) -> Result<Response,
 }
 pub fn append_header(mut response: Response, name: &str, value: &[u8]) -> Result<Response, Error> {
     let name = header_name(name)?;
-    if matches!(name, names::CONTENT_LENGTH | names::TRANSFER_ENCODING) {
+    if matches!(
+        name,
+        names::CONTENT_LENGTH
+            | names::TRANSFER_ENCODING
+            | names::CONTENT_TYPE
+            | names::SET_COOKIE
+            | names::CACHE_CONTROL
+            | names::VARY
+            | names::WWW_AUTHENTICATE
+    ) || name.as_str().starts_with("access-control-")
+        || matches!(
+            name.as_str(),
+            "content-security-policy"
+                | "content-security-policy-report-only"
+                | "x-content-type-options"
+                | "x-frame-options"
+                | "strict-transport-security"
+                | "clear-site-data"
+        )
+    {
         return Err(Error::invalid(
-            "response framing headers are managed by the server",
+            "response framing and security headers are managed by the server",
         ));
     }
     let value =
@@ -470,6 +487,7 @@ pub struct Options {
     body_bytes: usize,
     body_deadline: Duration,
     handler_deadline: Duration,
+    security_deadline: Duration,
     header_deadline: Duration,
     header_bytes: usize,
     header_count: usize,
@@ -484,6 +502,7 @@ impl Default for Options {
             body_bytes: 1024 * 1024,
             body_deadline: Duration::from_secs(10),
             handler_deadline: Duration::from_secs(2),
+            security_deadline: Duration::from_secs(2),
             header_deadline: Duration::from_secs(10),
             header_bytes: 32 * 1024,
             header_count: 100,
@@ -555,10 +574,129 @@ pub fn send_timeout(mut options: Options, milliseconds_value: i64) -> Result<Opt
 }
 
 type ResponseFuture = Pin<Box<dyn Future<Output = Response> + Send>>;
-type RouteHandler<S> = Box<dyn Fn(Request, Arc<S>) -> ResponseFuture + Send + Sync>;
+type PolicyFuture<A> = Pin<Box<dyn Future<Output = Result<A, Failure>> + Send>>;
+type PolicyFactory<S, A> = dyn Fn(Request, Arc<S>, Arc<Lease>) -> PolicyFuture<A> + Send + Sync;
+/// A sealed route policy. A is its callback output, not a stored proof.
+pub struct Policy<S, A> {
+    factory: Arc<PolicyFactory<S, A>>,
+}
+impl<S, A> fmt::Debug for Policy<S, A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Policy { .. }")
+    }
+}
+pub fn public_policy<S: Send + Sync + 'static>() -> Policy<S, ()> {
+    Policy {
+        factory: Arc::new(|_, _, _| Box::pin(async { Ok(()) })),
+    }
+}
+fn security_response(failure: Failure) -> Response {
+    let status = match failure.kind() {
+        FailureKind::InvalidCredential | FailureKind::Expired => Status::UNAUTHORIZED,
+        FailureKind::Denied => Status::FORBIDDEN,
+        FailureKind::InvalidRequest => Status::BAD_REQUEST,
+        FailureKind::Unavailable => Status::SERVICE_UNAVAILABLE,
+        FailureKind::Internal => Status::INTERNAL_SERVER_ERROR,
+    };
+    let mut response = text(status, failure.message());
+    if status == Status::UNAUTHORIZED {
+        response
+            .headers
+            .insert(names::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
+    }
+    response
+}
+fn bearer_headers(request: &Request) -> Result<(), Failure> {
+    let mut credentials = request.headers.get_all(names::AUTHORIZATION).iter();
+    let value = credentials.next().ok_or_else(Failure::invalid_credential)?;
+    if credentials.next().is_some() || request.headers.contains_key(names::COOKIE) {
+        return Err(Failure::invalid_request());
+    }
+    let value = value.to_str().map_err(|_| Failure::invalid_request())?;
+    let (scheme, token) = value
+        .split_once(' ')
+        .ok_or_else(Failure::invalid_credential)?;
+    if !scheme.eq_ignore_ascii_case("Bearer")
+        || token.is_empty()
+        || token.bytes().any(|b| b <= b' ' || b == 127)
+    {
+        return Err(Failure::invalid_credential());
+    }
+    Ok(())
+}
+pub fn authenticated_policy<S, H, Fut>(verifier: H) -> Policy<S, AuthScope>
+where
+    S: Send + Sync + 'static,
+    H: Fn(Request, Arc<S>) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<VerifiedIdentity, Failure>> + Send + 'static,
+{
+    let verifier = Arc::new(verifier);
+    Policy {
+        factory: Arc::new(move |head, state, lease| {
+            let verifier = Arc::clone(&verifier);
+            Box::pin(async move {
+                bearer_headers(&head)?;
+                let identity = verifier(head, state).await?;
+                let scope = AuthScope::bind(identity, Arc::clone(&lease))?;
+                if !scope.belongs_to(&lease) {
+                    return Err(Failure::invalid_request());
+                }
+                scope.validate()?;
+                Ok(scope)
+            })
+        }),
+    }
+}
+pub fn authorized_policy<S, P, H, V, A, Fut>(verifier: H, authorizer: A) -> Policy<S, Grant<P>>
+where
+    S: Send + Sync + 'static,
+    P: 'static,
+    H: Fn(Request, Arc<S>) -> V + Send + Sync + 'static,
+    V: Future<Output = Result<VerifiedIdentity, Failure>> + Send + 'static,
+    A: Fn(AuthScope, Request, Arc<S>) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<Grant<P>, Failure>> + Send + 'static,
+{
+    let verifier = Arc::new(verifier);
+    let authorizer = Arc::new(authorizer);
+    Policy {
+        factory: Arc::new(move |head, state, lease| {
+            let verifier = Arc::clone(&verifier);
+            let authorizer = Arc::clone(&authorizer);
+            Box::pin(async move {
+                bearer_headers(&head)?;
+                let authorization_head = head.security_snapshot();
+                let identity = verifier(head, Arc::clone(&state)).await?;
+                let scope = AuthScope::bind(identity, Arc::clone(&lease))?;
+                let grant = authorizer(scope, authorization_head, state).await?;
+                if !grant.belongs_to(&lease) {
+                    return Err(Failure::invalid_request());
+                }
+                grant.validate()?;
+                Ok(grant)
+            })
+        }),
+    }
+}
+pub fn security_timeout(mut options: Options, ms: i64) -> Result<Options, Error> {
+    options.security_deadline = milliseconds(ms)?;
+    Ok(options)
+}
+impl Request {
+    fn security_snapshot(&self) -> Self {
+        Self {
+            method: self.method.clone(),
+            uri: self.uri.clone(),
+            headers: self.headers.clone(),
+            body: Bytes::new(),
+        }
+    }
+}
+type PreparedHandler<S> = Box<dyn FnOnce(Request, Arc<S>) -> ResponseFuture + Send>;
+type PrepareFuture<S> = Pin<Box<dyn Future<Output = Result<PreparedHandler<S>, Failure>> + Send>>;
+type RoutePrepare<S> = Box<dyn Fn(Request, Arc<S>, Arc<Lease>) -> PrepareFuture<S> + Send + Sync>;
 struct Route<S> {
     method: Method,
-    handler: RouteHandler<S>,
+    prepare: RoutePrepare<S>,
 }
 pub struct App<S, E> {
     state: Arc<S>,
@@ -600,32 +738,36 @@ fn default_error(error: Error) -> Response {
 pub fn app_default<S>(state: S) -> App<S, Error> {
     app(state, default_error)
 }
-pub fn route<S, E, H, Fut>(
+pub fn route<S, E, A, H, Fut>(
     app: App<S, E>,
     method: Method,
     path: &str,
+    policy: Policy<S, A>,
     handler: H,
 ) -> Result<App<S, E>, Error>
 where
     S: Send + Sync + 'static,
     E: 'static,
-    H: Fn(Request, Arc<S>) -> Fut + Send + Sync + 'static,
+    A: Send + 'static,
+    H: Fn(Request, Arc<S>, A) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Result<Response, E>> + Send + 'static,
 {
     let mapper = app.mapper;
-    route_mapped(app, method, path, handler, mapper)
+    route_mapped(app, method, path, policy, handler, mapper)
 }
-pub fn route_mapped<S, E, F, H, Fut>(
+pub fn route_mapped<S, E, F, A, H, Fut>(
     mut app: App<S, E>,
     method: Method,
     path: &str,
+    policy: Policy<S, A>,
     handler: H,
     mapper: fn(F) -> Response,
 ) -> Result<App<S, E>, Error>
 where
     S: Send + Sync + 'static,
     F: 'static,
-    H: Fn(Request, Arc<S>) -> Fut + Send + Sync + 'static,
+    A: Send + 'static,
+    H: Fn(Request, Arc<S>, A) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Result<Response, F>> + Send + 'static,
 {
     if !path.starts_with('/')
@@ -648,17 +790,26 @@ where
             "HTTP method and route path are already registered",
         ));
     }
+    let handler = Arc::new(handler);
     routes.push(Route {
         method,
-        handler: Box::new(move |request, state| {
-            let future = handler(request, state);
-            // Only the heterogeneous runtime route table erases its future.
-            // The generated Nagi async function passes directly as H/Fut.
+        prepare: Box::new(move |head, state, lease| {
+            let handler = Arc::clone(&handler);
+            let factory = Arc::clone(&policy.factory);
             Box::pin(async move {
-                match future.await {
-                    Ok(response) => response,
-                    Err(error) => mapper(error),
-                }
+                let authority = factory(head, state, Arc::clone(&lease)).await?;
+                let prepared: PreparedHandler<S> = Box::new(move |request, state| {
+                    Box::pin(async move {
+                        if let Err(failure) = lease.validate() {
+                            return security_response(failure);
+                        }
+                        match handler(request, state, authority).await {
+                            Ok(response) => response,
+                            Err(error) => mapper(error),
+                        }
+                    })
+                });
+                Ok(prepared)
             })
         }),
     });
@@ -774,6 +925,43 @@ where
         }
     }
     let (parts, body) = request.into_parts();
+    let total = options
+        .security_deadline
+        .checked_add(options.body_deadline)
+        .and_then(|t| t.checked_add(options.handler_deadline));
+    let Some(deadline) = total.and_then(|t| Instant::now().checked_add(t)) else {
+        return Ok(transport(Status::SERVICE_UNAVAILABLE, head, true));
+    };
+    let owner = match LeaseOwner::new(deadline) {
+        Ok(owner) => owner,
+        Err(_) => return Ok(transport(Status::SERVICE_UNAVAILABLE, head, true)),
+    };
+    let snapshot = Request {
+        method: parts.method.clone(),
+        uri: parts.uri.clone(),
+        headers: parts.headers.clone(),
+        body: Bytes::new(),
+    };
+    let security_started = Instant::now();
+    let prepare = AssertUnwindSafe(async {
+        (route.prepare)(snapshot, Arc::clone(&app.state), Arc::clone(&owner.lease)).await
+    })
+    .catch_unwind();
+    let prepared = match tokio::time::timeout(options.security_deadline, prepare).await {
+        Ok(_) if security_started.elapsed() >= options.security_deadline => {
+            return Ok(transport(Status::GATEWAY_TIMEOUT, head, true))
+        }
+        Ok(Ok(Ok(prepared))) => prepared,
+        Ok(Ok(Err(error))) => {
+            let mut response = security_response(error).into_http(head);
+            response
+                .headers_mut()
+                .insert(names::CONNECTION, HeaderValue::from_static("close"));
+            return Ok(response);
+        }
+        Ok(Err(_)) => return Ok(transport(Status::INTERNAL_SERVER_ERROR, head, true)),
+        Err(_) => return Ok(transport(Status::GATEWAY_TIMEOUT, head, true)),
+    };
     let body = match tokio::time::timeout(
         options.body_deadline,
         receive_body(body, options.body_bytes),
@@ -796,8 +984,8 @@ where
     // The constructor is synchronous for Rust hosts; both it and subsequent
     // handler/error-mapper polling form one request failure boundary. Catching
     // an unwind does not roll back application state or repair poisoned locks.
-    let future = AssertUnwindSafe(async { (route.handler)(request, Arc::clone(&app.state)).await })
-        .catch_unwind();
+    let future =
+        AssertUnwindSafe(async { prepared(request, Arc::clone(&app.state)).await }).catch_unwind();
     let handler_started = tokio::time::Instant::now();
     let response = match tokio::time::timeout(options.handler_deadline, future).await {
         // Tokio polls the operation before its timer. A non-yielding poll can

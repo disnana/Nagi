@@ -1,0 +1,175 @@
+2026-10-08T11:52:54.0329460Z ##[group]Run cargo test --locked -p nagic --test security_sf01 --test security_sf01_native
+2026-10-08T11:52:54.0329970Z [36;1mcargo test --locked -p nagic --test security_sf01 --test security_sf01_native[0m
+2026-10-08T11:52:54.0372430Z shell: /bin/bash -e {0}
+2026-10-08T11:52:54.0372610Z env:
+2026-10-08T11:52:54.0372850Z   NAGI_FAILURE_DIR: /Users/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-08T11:52:54.0373160Z   CARGO_HOME: /Users/runner/.cargo
+2026-10-08T11:52:54.0373410Z   CARGO_INCREMENTAL: 0
+2026-10-08T11:52:54.0373570Z   CARGO_TERM_COLOR: always
+2026-10-08T11:52:54.0373830Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-10-08T11:52:54.0374240Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.12.10/arm64/lib/pkgconfig
+2026-10-08T11:52:54.0374650Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-10-08T11:52:54.0375010Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-10-08T11:52:54.0375530Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-10-08T11:52:54.0375810Z ##[endgroup]
+2026-10-08T11:52:54.1151890Z [1m[92m   Compiling[0m nagic v0.1.11 (/Users/runner/work/Nagi/Nagi/compiler)
+2026-10-08T11:52:54.5408550Z [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.46s
+2026-10-08T11:52:54.5435050Z [1m[92m     Running[0m tests/security_sf01.rs (target/debug/deps/security_sf01-de03cb349c53fd34)
+2026-10-08T11:52:54.5480750Z 
+2026-10-08T11:52:54.5513990Z running 10 tests
+2026-10-08T11:52:54.5568560Z test legacy_decorator_is_a_checker_migration_diagnostic ... ok
+2026-10-08T11:52:54.5624020Z test legacy_global_serve_is_a_checker_migration_diagnostic ... ok
+2026-10-08T11:52:54.5723730Z test legacy_principal_is_a_checker_migration_diagnostic ... ok
+2026-10-08T11:52:54.5807690Z test handwritten_low_cannot_use_retired_or_policy_free_entrypoints ... ok
+2026-10-08T11:52:54.8922680Z test policy_free_route_is_a_checker_migration_diagnostic ... ok
+2026-10-08T11:52:55.4427290Z test handwritten_low_rejects_security_clone_and_share_before_cargo ... ok
+2026-10-08T11:52:56.0027990Z test security_nonclone_payloads_are_rejected_at_copy_in_high_and_saved_low ... ok
+2026-10-08T11:52:56.4379450Z test policy_output_state_and_callback_contracts_are_checked ... ok
+2026-10-08T11:52:57.3872580Z test security_nonshared_payloads_are_rejected_through_wrappers_and_fields ... ok
+2026-10-08T11:53:02.3851140Z test native_replacements_and_aliases_cannot_downgrade_security_contracts ... ok
+2026-10-08T11:53:02.3951930Z [1m[92m     Running[0m tests/security_sf01_native.rs (target/debug/deps/security_sf01_native-09848b37d0924328)
+2026-10-08T11:53:02.3952330Z 
+2026-10-08T11:53:02.4052930Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.84s
+2026-10-08T11:53:02.4153790Z 
+2026-10-08T11:53:02.4254290Z 
+2026-10-08T11:53:02.4311320Z running 1 test
+2026-10-08T11:53:49.1581390Z test policies_and_nominal_request_proofs_execute_in_all_three_paths ... ok
+2026-10-08T11:53:49.1581710Z 
+2026-10-08T11:53:49.1584340Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 46.77s
+2026-10-08T11:53:49.1584720Z 
+2026-10-08T11:53:49.1634130Z ##[group]Run set -o pipefail
+2026-10-08T11:53:49.1634400Z [36;1mset -o pipefail[0m
+2026-10-08T11:53:49.1634670Z [36;1mcargo test --locked -p nagi-runtime --test security_sf01[0m
+2026-10-08T11:53:49.1635160Z [36;1mcargo test --locked -p nagi-runtime --lib auth::tests:: 2>&1 | tee "$RUNNER_TEMP/sf01-auth.log"[0m
+2026-10-08T11:53:49.1635780Z [36;1mcargo test --locked -p nagi-runtime --lib http_server::tests::security_tests:: 2>&1 | tee "$RUNNER_TEMP/sf01-http.log"[0m
+2026-10-08T11:53:49.1636890Z [36;1mpython -c 'import pathlib,re,os; root=pathlib.Path(os.environ["RUNNER_TEMP"]); counts={"sf01-auth.log":9,"sf01-http.log":11}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'[0m
+2026-10-08T11:53:49.1781720Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-08T11:53:49.1782020Z env:
+2026-10-08T11:53:49.1782340Z   NAGI_FAILURE_DIR: /Users/runner/work/Nagi/Nagi/build/compiler-failures
+2026-10-08T11:53:49.1782660Z   CARGO_HOME: /Users/runner/.cargo
+2026-10-08T11:53:49.1782870Z   CARGO_INCREMENTAL: 0
+2026-10-08T11:53:49.1783060Z   CARGO_TERM_COLOR: always
+2026-10-08T11:53:49.1783360Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-10-08T11:53:49.1783780Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.12.10/arm64/lib/pkgconfig
+2026-10-08T11:53:49.1784210Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-10-08T11:53:49.1784590Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-10-08T11:53:49.1784970Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-10-08T11:53:49.1785270Z ##[endgroup]
+2026-10-08T11:53:49.2862390Z [1m[92m   Compiling[0m proc-macro2 v1.0.107
+2026-10-08T11:53:49.2862960Z [1m[92m   Compiling[0m libc v0.2.189
+2026-10-08T11:53:49.2863370Z [1m[92m   Compiling[0m unicode-ident v1.0.26
+2026-10-08T11:53:49.3314310Z [1m[92m   Compiling[0m quote v1.0.47
+2026-10-08T11:53:49.4943350Z [1m[92m   Compiling[0m bytes v1.12.1
+2026-10-08T11:53:49.8432860Z [1m[92m   Compiling[0m pin-project-lite v0.2.17
+2026-10-08T11:53:49.8504260Z [1m[92m   Compiling[0m version_check v0.9.5
+2026-10-08T11:53:49.8821270Z [1m[92m   Compiling[0m futures-core v0.3.34
+2026-10-08T11:53:49.9269970Z [1m[92m   Compiling[0m syn v3.0.6
+2026-10-08T11:53:49.9374250Z [1m[92m   Compiling[0m http v1.5.0
+2026-10-08T11:53:49.9851080Z [1m[92m   Compiling[0m generic-array v0.14.7
+2026-10-08T11:53:50.1139750Z [1m[92m   Compiling[0m cfg-if v1.0.5
+2026-10-08T11:53:50.1381780Z [1m[92m   Compiling[0m zerocopy v0.8.59
+2026-10-08T11:53:50.3402240Z [1m[92m   Compiling[0m typenum v1.20.1
+2026-10-08T11:53:50.5683240Z [1m[92m   Compiling[0m getrandom v0.3.4
+2026-10-08T11:53:50.7430920Z [1m[92m   Compiling[0m errno v0.3.14
+2026-10-08T11:53:50.8027090Z [1m[92m   Compiling[0m httparse v1.10.1
+2026-10-08T11:53:50.9646220Z [1m[92m   Compiling[0m serde_core v1.0.229
+2026-10-08T11:53:51.0545820Z [1m[92m   Compiling[0m signal-hook-registry v1.4.8
+2026-10-08T11:53:51.2723680Z [1m[92m   Compiling[0m mio v1.2.3
+2026-10-08T11:53:51.6076920Z [1m[92m   Compiling[0m socket2 v0.6.5
+2026-10-08T11:53:51.8836010Z [1m[92m   Compiling[0m log v0.4.34
+2026-10-08T11:53:51.9362130Z [1m[92m   Compiling[0m tokio-macros v2.7.2
+2026-10-08T11:53:51.9808850Z [1m[92m   Compiling[0m rand_core v0.9.5
+2026-10-08T11:53:52.3155340Z [1m[92m   Compiling[0m tokio v1.53.1
+2026-10-08T11:53:53.5921850Z [1m[92m   Compiling[0m ppv-lite86 v0.2.21
+2026-10-08T11:53:53.6795120Z [1m[92m   Compiling[0m block-buffer v0.10.4
+2026-10-08T11:53:53.7132210Z [1m[92m   Compiling[0m crypto-common v0.1.7
+2026-10-08T11:53:53.7699040Z [1m[92m   Compiling[0m http-body v1.1.0
+2026-10-08T11:53:53.7722230Z [1m[92m   Compiling[0m once_cell v1.21.4
+2026-10-08T11:53:53.8263050Z [1m[92m   Compiling[0m thiserror v2.0.21
+2026-10-08T11:53:53.8617840Z [1m[92m   Compiling[0m tracing-core v0.1.36
+2026-10-08T11:53:54.0617570Z [1m[92m   Compiling[0m digest v0.10.7
+2026-10-08T11:53:54.1408070Z [1m[92m   Compiling[0m rand_chacha v0.9.0
+2026-10-08T11:53:54.2113850Z [1m[92m   Compiling[0m thiserror-impl v2.0.21
+2026-10-08T11:53:54.3984730Z [1m[92m   Compiling[0m futures-macro v0.3.34
+2026-10-08T11:53:54.7450750Z [1m[92m   Compiling[0m cpufeatures v0.2.17
+2026-10-08T11:53:54.7929390Z [1m[92m   Compiling[0m futures-sink v0.3.34
+2026-10-08T11:53:54.8460190Z [1m[92m   Compiling[0m tower-service v0.3.3
+2026-10-08T11:53:54.8510810Z [1m[92m   Compiling[0m slab v0.4.12
+2026-10-08T11:53:54.8770610Z [1m[92m   Compiling[0m serde v1.0.229
+2026-10-08T11:53:54.9271760Z [1m[92m   Compiling[0m futures-task v0.3.34
+2026-10-08T11:53:54.9935940Z [1m[92m   Compiling[0m smallvec v1.16.2
+2026-10-08T11:53:55.0505990Z [1m[92m   Compiling[0m futures-util v0.3.34
+2026-10-08T11:53:55.1300770Z [1m[92m   Compiling[0m sha1 v0.10.7
+2026-10-08T11:53:55.1979940Z [1m[92m   Compiling[0m rand v0.9.5
+2026-10-08T11:53:55.5233210Z [1m[92m   Compiling[0m tracing v0.1.44
+2026-10-08T11:53:55.6442840Z [1m[92m   Compiling[0m serde_derive v1.0.229
+2026-10-08T11:53:55.7124660Z [1m[92m   Compiling[0m futures-channel v0.3.34
+2026-10-08T11:53:55.8067210Z [1m[92m   Compiling[0m serde_json v1.0.151
+2026-10-08T11:53:55.9096030Z [1m[92m   Compiling[0m data-encoding v2.11.1
+2026-10-08T11:53:56.2831050Z [1m[92m   Compiling[0m sync_wrapper v1.0.2
+2026-10-08T11:53:56.3136980Z [1m[92m   Compiling[0m httpdate v1.0.3
+2026-10-08T11:53:56.4137810Z [1m[92m   Compiling[0m atomic-waker v1.1.2
+2026-10-08T11:53:56.4177500Z [1m[92m   Compiling[0m percent-encoding v2.3.2
+2026-10-08T11:53:56.4556570Z [1m[92m   Compiling[0m tower-layer v0.3.3
+2026-10-08T11:53:56.4938860Z [1m[92m   Compiling[0m form_urlencoded v1.2.2
+2026-10-08T11:53:56.5266540Z [1m[92m   Compiling[0m hyper v1.11.1
+2026-10-08T11:53:56.5623080Z [1m[92m   Compiling[0m tungstenite v0.29.0
+2026-10-08T11:53:57.2480550Z [1m[92m   Compiling[0m http-body-util v0.1.5
+2026-10-08T11:53:57.2709220Z [1m[92m   Compiling[0m mime v0.3.17
+2026-10-08T11:53:57.3709200Z [1m[92m   Compiling[0m ryu v1.0.23
+2026-10-08T11:53:57.3972310Z [1m[92m   Compiling[0m memchr v2.8.3
+2026-10-08T11:53:57.4436960Z [1m[92m   Compiling[0m serde_urlencoded v0.7.1
+2026-10-08T11:53:57.4592160Z [1m[92m   Compiling[0m axum-core v0.5.6
+2026-10-08T11:53:57.5699370Z [1m[92m   Compiling[0m hyper-util v0.1.21
+2026-10-08T11:53:57.7256780Z [1m[92m   Compiling[0m tokio-tungstenite v0.29.0
+2026-10-08T11:53:57.8504370Z [1m[92m   Compiling[0m tower v0.5.3
+2026-10-08T11:53:58.0512650Z [1m[92m   Compiling[0m serde_path_to_error v0.1.20
+2026-10-08T11:53:58.2319900Z [1m[92m   Compiling[0m base64 v0.22.1
+2026-10-08T11:53:58.3328380Z [1m[92m   Compiling[0m matchit v0.8.4
+2026-10-08T11:53:58.4011210Z [1m[92m   Compiling[0m rusqlite v0.40.2
+2026-10-08T11:53:58.4492650Z [1m[92m   Compiling[0m axum v0.8.9
+2026-10-08T11:53:58.5212790Z [1m[92m   Compiling[0m bumpalo v3.20.3
+2026-10-08T11:54:00.5725990Z [1m[92m   Compiling[0m nagi-runtime v0.1.11 (/Users/runner/work/Nagi/Nagi/runtime)
+2026-10-08T11:54:02.7828910Z [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 13.55s
+2026-10-08T11:54:02.7853830Z [1m[92m     Running[0m tests/security_sf01.rs (target/debug/deps/security_sf01-3544b5b59611b8a4)
+2026-10-08T11:54:02.7882780Z 
+2026-10-08T11:54:02.7883390Z running 1 test
+2026-10-08T11:54:02.7897900Z test request_end_invalidates_retained_rust_proofs ... ok
+2026-10-08T11:54:02.7898210Z 
+2026-10-08T11:54:02.7898700Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+2026-10-08T11:54:02.7899070Z 
+2026-10-08T11:54:02.8503470Z [1m[92m   Compiling[0m nagi-runtime v0.1.11 (/Users/runner/work/Nagi/Nagi/runtime)
+2026-10-08T11:54:12.1592910Z [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 9.35s
+2026-10-08T11:54:12.1621610Z [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nagi_runtime-869729a3bbbc9b82)
+2026-10-08T11:54:12.1664460Z 
+2026-10-08T11:54:12.1666520Z running 9 tests
+2026-10-08T11:54:12.1669720Z test auth::tests::end_rejects_native_admission_and_drops_reservation ... ok
+2026-10-08T11:54:12.1671580Z test auth::tests::admitted_operation_can_complete_after_invalidation ... ok
+2026-10-08T11:54:12.1672090Z test auth::tests::end_rejects_grant_issue ... ok
+2026-10-08T11:54:12.1672510Z test auth::tests::expired_identity_and_request_are_rejected ... ok
+2026-10-08T11:54:12.1676340Z test auth::tests::invalidation_wins_a_contended_gate_without_native_admission ... ok
+2026-10-08T11:54:12.1678980Z test auth::tests::permit_wins_before_concurrent_owner_drop_and_admits_once ... ok
+2026-10-08T11:54:12.1679430Z test auth::tests::wrong_request_is_distinct ... ok
+2026-10-08T11:54:12.1685530Z test auth::tests::poisoned_gate_fails_closed ... ok
+2026-10-08T11:54:12.1686390Z test auth::tests::invalidation_during_capacity_wait_prevents_submission ... ok
+2026-10-08T11:54:12.1686700Z 
+2026-10-08T11:54:12.1687070Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 223 filtered out; finished in 0.00s
+2026-10-08T11:54:12.1687360Z 
+2026-10-08T11:54:12.2535170Z [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+2026-10-08T11:54:12.2552840Z [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/nagi_runtime-869729a3bbbc9b82)
+2026-10-08T11:54:12.2586630Z 
+2026-10-08T11:54:12.2615700Z running 11 tests
+2026-10-08T11:54:12.2616620Z test http_server::tests::security_tests::authorizer_cannot_return_a_grant_from_another_request ... ok
+2026-10-08T11:54:12.2623180Z test http_server::tests::security_tests::all_security_failure_kinds_have_stable_wire_status ... ok
+2026-10-08T11:54:12.2634110Z test http_server::tests::security_tests::credentials_fail_closed_without_running_verifier_or_handler ... ok
+2026-10-08T11:54:12.2635470Z test http_server::tests::security_tests::dropping_unpolled_prepared_handler_cannot_reactivate_proof ... ok
+2026-10-08T11:54:12.2642740Z test http_server::tests::security_tests::head_inherits_get_policy_and_no_implicit_options_or_health ... ok
+2026-10-08T11:54:12.2846430Z test http_server::tests::security_tests::authorizer_timeout_shares_budget_and_invalidates_intermediate_scope ... ok
+2026-10-08T11:54:12.2854570Z test http_server::tests::security_tests::mapper_panic_invalidates_the_same_request_proof ... ok
+2026-10-08T11:54:12.3351790Z test http_server::tests::security_tests::normal_err_panic_timeout_and_shutdown_invalidate_escaped_rust_scope ... ok
+2026-10-08T11:54:12.3378080Z test http_server::tests::security_tests::verifier_and_authorizer_constructor_and_poll_panics_fail_closed ... ok
+2026-10-08T11:54:12.3442020Z test http_server::tests::security_tests::credential_expiry_during_body_receive_prevents_handler_admission ... ok
+2026-10-08T11:54:12.3652880Z test http_server::tests::security_tests::late_verifier_failure_uses_the_exhausted_security_budget ... ok
+2026-10-08T11:54:12.3653250Z 
+2026-10-08T11:54:12.3653830Z test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 221 filtered out; finished in 0.11s
+2026-10-08T11:54:12.3654160Z 

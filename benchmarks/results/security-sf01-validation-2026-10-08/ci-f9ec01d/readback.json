@@ -1,0 +1,2257 @@
+{
+  "readback_date": "2026-10-08",
+  "run": {
+    "id": 37771932580,
+    "name": "Nagi checks",
+    "node_id": "WFR_kwLOU01mu88AAAAIy2HzpA",
+    "head_branch": "feat/security-foundation-sf01",
+    "head_sha": "f9ec01d431d7650f33cd9fe729881b4ce8a5d6b3",
+    "path": ".github/workflows/ci.yml",
+    "display_title": "SF01: request-bound権限とpolicy必須HTTP",
+    "run_number": 471,
+    "event": "pull_request",
+    "status": "completed",
+    "conclusion": "success",
+    "workflow_id": 371030817,
+    "check_suite_id": 102330062241,
+    "check_suite_node_id": "CS_kwDOU01mu88AAAAX01jVoQ",
+    "url": "https://api.github.com/repos/disnana/Nagi/actions/runs/37771932580",
+    "html_url": "https://github.com/disnana/Nagi/actions/runs/37771932580",
+    "pull_requests": [
+      {
+        "url": "https://api.github.com/repos/disnana/Nagi/pulls/101",
+        "id": 4785717645,
+        "number": 101,
+        "head": {
+          "ref": "feat/security-foundation-sf01",
+          "sha": "f9ec01d431d7650f33cd9fe729881b4ce8a5d6b3",
+          "repo": {
+            "id": 1397581499,
+            "url": "https://api.github.com/repos/disnana/Nagi",
+            "name": "Nagi"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "sha": "10655ea7299d775235ab6585e5ab8e321f121593",
+          "repo": {
+            "id": 1397581499,
+            "url": "https://api.github.com/repos/disnana/Nagi",
+            "name": "Nagi"
+          }
+        }
+      }
+    ],
+    "created_at": "2026-10-08T11:43:24Z",
+    "updated_at": "2026-10-08T12:10:57Z",
+    "actor": {
+      "login": "tp-li-dev",
+      "id": 318574833,
+      "node_id": "U_kgDOEv0Q8Q",
+      "avatar_url": "https://avatars.githubusercontent.com/u/318574833?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/tp-li-dev",
+      "html_url": "https://github.com/tp-li-dev",
+      "followers_url": "https://api.github.com/users/tp-li-dev/followers",
+      "following_url": "https://api.github.com/users/tp-li-dev/following{/other_user}",
+      "gists_url": "https://api.github.com/users/tp-li-dev/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/tp-li-dev/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/tp-li-dev/subscriptions",
+      "organizations_url": "https://api.github.com/users/tp-li-dev/orgs",
+      "repos_url": "https://api.github.com/users/tp-li-dev/repos",
+      "events_url": "https://api.github.com/users/tp-li-dev/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/tp-li-dev/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "run_attempt": 1,
+    "referenced_workflows": [
+      {
+        "path": "disnana/Nagi/.github/workflows/jetbrains.yml@6d2478dbed23e634851a8001c023e5c37113648c",
+        "sha": "6d2478dbed23e634851a8001c023e5c37113648c",
+        "ref": "refs/pull/101/merge"
+      }
+    ],
+    "run_started_at": "2026-10-08T11:43:24Z",
+    "triggering_actor": {
+      "login": "tp-li-dev",
+      "id": 318574833,
+      "node_id": "U_kgDOEv0Q8Q",
+      "avatar_url": "https://avatars.githubusercontent.com/u/318574833?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/tp-li-dev",
+      "html_url": "https://github.com/tp-li-dev",
+      "followers_url": "https://api.github.com/users/tp-li-dev/followers",
+      "following_url": "https://api.github.com/users/tp-li-dev/following{/other_user}",
+      "gists_url": "https://api.github.com/users/tp-li-dev/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/tp-li-dev/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/tp-li-dev/subscriptions",
+      "organizations_url": "https://api.github.com/users/tp-li-dev/orgs",
+      "repos_url": "https://api.github.com/users/tp-li-dev/repos",
+      "events_url": "https://api.github.com/users/tp-li-dev/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/tp-li-dev/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "jobs_url": "https://api.github.com/repos/disnana/Nagi/actions/runs/37771932580/jobs",
+    "logs_url": "https://api.github.com/repos/disnana/Nagi/actions/runs/37771932580/logs",
+    "check_suite_url": "https://api.github.com/repos/disnana/Nagi/check-suites/102330062241",
+    "artifacts_url": "https://api.github.com/repos/disnana/Nagi/actions/runs/37771932580/artifacts",
+    "cancel_url": "https://api.github.com/repos/disnana/Nagi/actions/runs/37771932580/cancel",
+    "rerun_url": "https://api.github.com/repos/disnana/Nagi/actions/runs/37771932580/rerun",
+    "previous_attempt_url": null,
+    "workflow_url": "https://api.github.com/repos/disnana/Nagi/actions/workflows/371030817",
+    "head_commit": {
+      "id": "f9ec01d431d7650f33cd9fe729881b4ce8a5d6b3",
+      "tree_id": "32871164da3c9e53e0515beae56187773fe9d36b",
+      "message": "SF01のHTTP Policy契約へVS Codeスニペットと標準型期待を移行",
+      "timestamp": "2026-10-08T11:43:12Z",
+      "author": {
+        "name": "Disnana",
+        "email": "disnana.developper@gmail.com"
+      },
+      "committer": {
+        "name": "Disnana",
+        "email": "disnana.developper@gmail.com"
+      }
+    },
+    "repository": {
+      "id": 1397581499,
+      "node_id": "R_kgDOU01muw",
+      "name": "Nagi",
+      "full_name": "disnana/Nagi",
+      "private": false,
+      "owner": {
+        "login": "disnana",
+        "id": 149747105,
+        "node_id": "O_kgDOCOz1oQ",
+        "avatar_url": "https://avatars.githubusercontent.com/u/149747105?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/disnana",
+        "html_url": "https://github.com/disnana",
+        "followers_url": "https://api.github.com/users/disnana/followers",
+        "following_url": "https://api.github.com/users/disnana/following{/other_user}",
+        "gists_url": "https://api.github.com/users/disnana/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/disnana/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/disnana/subscriptions",
+        "organizations_url": "https://api.github.com/users/disnana/orgs",
+        "repos_url": "https://api.github.com/users/disnana/repos",
+        "events_url": "https://api.github.com/users/disnana/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/disnana/received_events",
+        "type": "Organization",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "html_url": "https://github.com/disnana/Nagi",
+      "description": null,
+      "fork": false,
+      "url": "https://api.github.com/repos/disnana/Nagi",
+      "forks_url": "https://api.github.com/repos/disnana/Nagi/forks",
+      "keys_url": "https://api.github.com/repos/disnana/Nagi/keys{/key_id}",
+      "collaborators_url": "https://api.github.com/repos/disnana/Nagi/collaborators{/collaborator}",
+      "teams_url": "https://api.github.com/repos/disnana/Nagi/teams",
+      "hooks_url": "https://api.github.com/repos/disnana/Nagi/hooks",
+      "issue_events_url": "https://api.github.com/repos/disnana/Nagi/issues/events{/number}",
+      "events_url": "https://api.github.com/repos/disnana/Nagi/events",
+      "assignees_url": "https://api.github.com/repos/disnana/Nagi/assignees{/user}",
+      "branches_url": "https://api.github.com/repos/disnana/Nagi/branches{/branch}",
+      "tags_url": "https://api.github.com/repos/disnana/Nagi/tags",
+      "blobs_url": "https://api.github.com/repos/disnana/Nagi/git/blobs{/sha}",
+      "git_tags_url": "https://api.github.com/repos/disnana/Nagi/git/tags{/sha}",
+      "git_refs_url": "https://api.github.com/repos/disnana/Nagi/git/refs{/sha}",
+      "trees_url": "https://api.github.com/repos/disnana/Nagi/git/trees{/sha}",
+      "statuses_url": "https://api.github.com/repos/disnana/Nagi/statuses/{sha}",
+      "languages_url": "https://api.github.com/repos/disnana/Nagi/languages",
+      "stargazers_url": "https://api.github.com/repos/disnana/Nagi/stargazers",
+      "contributors_url": "https://api.github.com/repos/disnana/Nagi/contributors",
+      "subscribers_url": "https://api.github.com/repos/disnana/Nagi/subscribers",
+      "subscription_url": "https://api.github.com/repos/disnana/Nagi/subscription",
+      "commits_url": "https://api.github.com/repos/disnana/Nagi/commits{/sha}",
+      "git_commits_url": "https://api.github.com/repos/disnana/Nagi/git/commits{/sha}",
+      "comments_url": "https://api.github.com/repos/disnana/Nagi/comments{/number}",
+      "issue_comment_url": "https://api.github.com/repos/disnana/Nagi/issues/comments{/number}",
+      "contents_url": "https://api.github.com/repos/disnana/Nagi/contents/{+path}",
+      "compare_url": "https://api.github.com/repos/disnana/Nagi/compare/{base}...{head}",
+      "merges_url": "https://api.github.com/repos/disnana/Nagi/merges",
+      "archive_url": "https://api.github.com/repos/disnana/Nagi/{archive_format}{/ref}",
+      "downloads_url": "https://api.github.com/repos/disnana/Nagi/downloads",
+      "issues_url": "https://api.github.com/repos/disnana/Nagi/issues{/number}",
+      "pulls_url": "https://api.github.com/repos/disnana/Nagi/pulls{/number}",
+      "milestones_url": "https://api.github.com/repos/disnana/Nagi/milestones{/number}",
+      "notifications_url": "https://api.github.com/repos/disnana/Nagi/notifications{?since,all,participating}",
+      "labels_url": "https://api.github.com/repos/disnana/Nagi/labels{/name}",
+      "releases_url": "https://api.github.com/repos/disnana/Nagi/releases{/id}",
+      "deployments_url": "https://api.github.com/repos/disnana/Nagi/deployments"
+    },
+    "head_repository": {
+      "id": 1397581499,
+      "node_id": "R_kgDOU01muw",
+      "name": "Nagi",
+      "full_name": "disnana/Nagi",
+      "private": false,
+      "owner": {
+        "login": "disnana",
+        "id": 149747105,
+        "node_id": "O_kgDOCOz1oQ",
+        "avatar_url": "https://avatars.githubusercontent.com/u/149747105?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/disnana",
+        "html_url": "https://github.com/disnana",
+        "followers_url": "https://api.github.com/users/disnana/followers",
+        "following_url": "https://api.github.com/users/disnana/following{/other_user}",
+        "gists_url": "https://api.github.com/users/disnana/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/disnana/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/disnana/subscriptions",
+        "organizations_url": "https://api.github.com/users/disnana/orgs",
+        "repos_url": "https://api.github.com/users/disnana/repos",
+        "events_url": "https://api.github.com/users/disnana/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/disnana/received_events",
+        "type": "Organization",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "html_url": "https://github.com/disnana/Nagi",
+      "description": null,
+      "fork": false,
+      "url": "https://api.github.com/repos/disnana/Nagi",
+      "forks_url": "https://api.github.com/repos/disnana/Nagi/forks",
+      "keys_url": "https://api.github.com/repos/disnana/Nagi/keys{/key_id}",
+      "collaborators_url": "https://api.github.com/repos/disnana/Nagi/collaborators{/collaborator}",
+      "teams_url": "https://api.github.com/repos/disnana/Nagi/teams",
+      "hooks_url": "https://api.github.com/repos/disnana/Nagi/hooks",
+      "issue_events_url": "https://api.github.com/repos/disnana/Nagi/issues/events{/number}",
+      "events_url": "https://api.github.com/repos/disnana/Nagi/events",
+      "assignees_url": "https://api.github.com/repos/disnana/Nagi/assignees{/user}",
+      "branches_url": "https://api.github.com/repos/disnana/Nagi/branches{/branch}",
+      "tags_url": "https://api.github.com/repos/disnana/Nagi/tags",
+      "blobs_url": "https://api.github.com/repos/disnana/Nagi/git/blobs{/sha}",
+      "git_tags_url": "https://api.github.com/repos/disnana/Nagi/git/tags{/sha}",
+      "git_refs_url": "https://api.github.com/repos/disnana/Nagi/git/refs{/sha}",
+      "trees_url": "https://api.github.com/repos/disnana/Nagi/git/trees{/sha}",
+      "statuses_url": "https://api.github.com/repos/disnana/Nagi/statuses/{sha}",
+      "languages_url": "https://api.github.com/repos/disnana/Nagi/languages",
+      "stargazers_url": "https://api.github.com/repos/disnana/Nagi/stargazers",
+      "contributors_url": "https://api.github.com/repos/disnana/Nagi/contributors",
+      "subscribers_url": "https://api.github.com/repos/disnana/Nagi/subscribers",
+      "subscription_url": "https://api.github.com/repos/disnana/Nagi/subscription",
+      "commits_url": "https://api.github.com/repos/disnana/Nagi/commits{/sha}",
+      "git_commits_url": "https://api.github.com/repos/disnana/Nagi/git/commits{/sha}",
+      "comments_url": "https://api.github.com/repos/disnana/Nagi/comments{/number}",
+      "issue_comment_url": "https://api.github.com/repos/disnana/Nagi/issues/comments{/number}",
+      "contents_url": "https://api.github.com/repos/disnana/Nagi/contents/{+path}",
+      "compare_url": "https://api.github.com/repos/disnana/Nagi/compare/{base}...{head}",
+      "merges_url": "https://api.github.com/repos/disnana/Nagi/merges",
+      "archive_url": "https://api.github.com/repos/disnana/Nagi/{archive_format}{/ref}",
+      "downloads_url": "https://api.github.com/repos/disnana/Nagi/downloads",
+      "issues_url": "https://api.github.com/repos/disnana/Nagi/issues{/number}",
+      "pulls_url": "https://api.github.com/repos/disnana/Nagi/pulls{/number}",
+      "milestones_url": "https://api.github.com/repos/disnana/Nagi/milestones{/number}",
+      "notifications_url": "https://api.github.com/repos/disnana/Nagi/notifications{?since,all,participating}",
+      "labels_url": "https://api.github.com/repos/disnana/Nagi/labels{/name}",
+      "releases_url": "https://api.github.com/repos/disnana/Nagi/releases{/id}",
+      "deployments_url": "https://api.github.com/repos/disnana/Nagi/deployments"
+    }
+  },
+  "jobs": [
+    {
+      "id": 113293370853,
+      "name": "changes",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 37771932580,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Check change detection and merge gating",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Compare the complete push or PR",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        }
+      ]
+    },
+    {
+      "id": 113293371112,
+      "name": "release-plan",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 37771932580,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Check release planning, notes, and immutable publication safeguards",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Compare versions across the complete push or PR",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        }
+      ]
+    },
+    {
+      "id": 113293459542,
+      "name": "linux",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 37771932580,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Cache Rust checks and sample builds",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Run cargo fmt --all -- --check",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Run cargo clippy --all-targets -- -D warnings",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Check conformance corpus and regression harness registration",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Check Task contract input registration",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Check Task contract runner distinguishes parse rejection from checker evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Check SQLite runner stage and source-location oracles",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Check SQLite ownership contracts and original diagnostic lines",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Check Task ownership contracts and original diagnostic lines",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Run cargo test --locked",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Check a compiler without the SQL validation engine",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16
+        },
+        {
+          "name": "Run cargo build --release --examples --bins --locked",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17
+        },
+        {
+          "name": "Verify bilingual SQLite tutorial through High and independent saved Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18
+        },
+        {
+          "name": "Run node --test editors/vscode-nagi/test/*.test.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        },
+        {
+          "name": "Run node --test scripts/test_graph_html_viewport.mjs",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Run python -m unittest discover -s scripts -p 'test_native_artifacts.py'",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        },
+        {
+          "name": "Run python -m unittest discover -s scripts -p 'test_application_native_tests.py'",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 22
+        },
+        {
+          "name": "Run python scripts/build_examples.py",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23
+        },
+        {
+          "name": "Verify bilingual first-app tutorial in High and saved Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24
+        },
+        {
+          "name": "Run pip install -r tests/requirements.txt",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25
+        },
+        {
+          "name": "Run python tests/http_integration.py",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26
+        },
+        {
+          "name": "Run python tests/route_integration.py",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27
+        },
+        {
+          "name": "Run python tests/http_stdlib_integration.py",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 28
+        },
+        {
+          "name": "Run ./target/release/examples/fuzz-smoke",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 29
+        },
+        {
+          "name": "Preserve compiler failure reproductions",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 30
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 57
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 58
+        },
+        {
+          "name": "Post Cache Rust checks and sample builds",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 59
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 60
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 61
+        }
+      ]
+    },
+    {
+      "id": 113293470083,
+      "name": "vscode-package",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 37771932580,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run python editors/vscode-nagi/scripts/package_vsix.py",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Verify and checksum the VSIX",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        }
+      ]
+    },
+    {
+      "id": 113293470150,
+      "name": "nagi-package (windows-latest, windows-x86_64, nagic.exe, x86_64-pc-windows-msvc)",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 37771932580,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Cache the target platform's Rust build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Verify the compiler host architecture",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Fetch locked runtime dependencies before offline tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Run cargo build --release --locked -p nagic",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Check CLI, installation, ownership, and diagnostics on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Check editor behavior on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Check generated output protection and native expression behavior",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Check SF01 High, saved Low, handwritten Low and native policy contracts",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Check SF01 request lease and permit lifecycle through the public runtime",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Check SQLite High and handwritten Low contract registration",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Verify bilingual first-app tutorial in High and saved Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16
+        },
+        {
+          "name": "Check planned SQLite runner stage and source-location oracles",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17
+        },
+        {
+          "name": "Check SQLite contracts and native High, saved Low and handwritten Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18
+        },
+        {
+          "name": "Check public Task bridge lifecycle on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        },
+        {
+          "name": "Check Task checker contracts on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Check Task examples in High, saved Low and handwritten Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        },
+        {
+          "name": "Check typed monitor and HTTP service in all three forms",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 22
+        },
+        {
+          "name": "Check successful application artifact selection",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23
+        },
+        {
+          "name": "Check Axum native test execution and result validation",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24
+        },
+        {
+          "name": "Check oversized HTTP bodies and connection recovery on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25
+        },
+        {
+          "name": "Check HTTP panic recovery on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26
+        },
+        {
+          "name": "Check HTTP handler deadlines on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27
+        },
+        {
+          "name": "Check demo packaging with Windows PowerShell",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 28
+        },
+        {
+          "name": "Check demo packaging with PowerShell 7",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 29
+        },
+        {
+          "name": "Package tracked source and the compiler",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 30
+        },
+        {
+          "name": "Verify an extracted distribution outside the checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 31
+        },
+        {
+          "name": "Check HTTP route parameters on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 32
+        },
+        {
+          "name": "Check standard HTTP High and saved Low on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 33
+        },
+        {
+          "name": "Check scoped task captures on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 34
+        },
+        {
+          "name": "Check actor lifecycle and supervisor cancellation on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 35
+        },
+        {
+          "name": "Check SQLite row counts on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 36
+        },
+        {
+          "name": "Check public SQLite session cleanup, cancellation and close on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 37
+        },
+        {
+          "name": "Verify bilingual SQLite tutorial through High and independent saved Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 38
+        },
+        {
+          "name": "Verify High, saved Low, and standalone Low applications",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 39
+        },
+        {
+          "name": "Verify the PowerShell installer and User PATH",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 40
+        },
+        {
+          "name": "Verify Windows PowerShell 5.1 installation and upgrades",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 41
+        },
+        {
+          "name": "Verify uninstallation with PowerShell 7",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 42
+        },
+        {
+          "name": "Verify uninstallation with Windows PowerShell 5.1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 43
+        },
+        {
+          "name": "Verify the shell installer",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 44
+        },
+        {
+          "name": "Verify the shell uninstaller",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 45
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 46
+        },
+        {
+          "name": "Preserve target-platform compiler failure reproductions",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 47
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 91
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 92
+        },
+        {
+          "name": "Post Cache the target platform's Rust build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 93
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 94
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 95
+        }
+      ]
+    },
+    {
+      "id": 113293470171,
+      "name": "nagi-package (ubuntu-latest, linux-x86_64, nagic, x86_64-unknown-linux-gnu)",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 37771932580,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Cache the target platform's Rust build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Verify the compiler host architecture",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Fetch locked runtime dependencies before offline tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Run cargo build --release --locked -p nagic",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Check CLI, installation, ownership, and diagnostics on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Check editor behavior on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Check generated output protection and native expression behavior",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Check SF01 High, saved Low, handwritten Low and native policy contracts",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Check SF01 request lease and permit lifecycle through the public runtime",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Check SQLite High and handwritten Low contract registration",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Verify bilingual first-app tutorial in High and saved Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16
+        },
+        {
+          "name": "Check planned SQLite runner stage and source-location oracles",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17
+        },
+        {
+          "name": "Check SQLite contracts and native High, saved Low and handwritten Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18
+        },
+        {
+          "name": "Check public Task bridge lifecycle on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        },
+        {
+          "name": "Check Task checker contracts on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Check Task examples in High, saved Low and handwritten Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        },
+        {
+          "name": "Check typed monitor and HTTP service in all three forms",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 22
+        },
+        {
+          "name": "Check successful application artifact selection",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23
+        },
+        {
+          "name": "Check Axum native test execution and result validation",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24
+        },
+        {
+          "name": "Check oversized HTTP bodies and connection recovery on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25
+        },
+        {
+          "name": "Check HTTP panic recovery on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26
+        },
+        {
+          "name": "Check HTTP handler deadlines on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27
+        },
+        {
+          "name": "Check demo packaging with Windows PowerShell",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 28
+        },
+        {
+          "name": "Check demo packaging with PowerShell 7",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 29
+        },
+        {
+          "name": "Package tracked source and the compiler",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 30
+        },
+        {
+          "name": "Verify an extracted distribution outside the checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 31
+        },
+        {
+          "name": "Check HTTP route parameters on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 32
+        },
+        {
+          "name": "Check standard HTTP High and saved Low on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 33
+        },
+        {
+          "name": "Check scoped task captures on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 34
+        },
+        {
+          "name": "Check actor lifecycle and supervisor cancellation on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 35
+        },
+        {
+          "name": "Check SQLite row counts on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 36
+        },
+        {
+          "name": "Check public SQLite session cleanup, cancellation and close on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 37
+        },
+        {
+          "name": "Verify bilingual SQLite tutorial through High and independent saved Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 38
+        },
+        {
+          "name": "Verify High, saved Low, and standalone Low applications",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 39
+        },
+        {
+          "name": "Verify the PowerShell installer and User PATH",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 40
+        },
+        {
+          "name": "Verify Windows PowerShell 5.1 installation and upgrades",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 41
+        },
+        {
+          "name": "Verify uninstallation with PowerShell 7",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 42
+        },
+        {
+          "name": "Verify uninstallation with Windows PowerShell 5.1",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 43
+        },
+        {
+          "name": "Verify the shell installer",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 44
+        },
+        {
+          "name": "Verify the shell uninstaller",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 45
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 46
+        },
+        {
+          "name": "Preserve target-platform compiler failure reproductions",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 47
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 91
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 92
+        },
+        {
+          "name": "Post Cache the target platform's Rust build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 93
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 94
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 95
+        }
+      ]
+    },
+    {
+      "id": 113293470202,
+      "name": "nagi-package (macos-15, macos-arm64, nagic, aarch64-apple-darwin)",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 37771932580,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Cache the target platform's Rust build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Verify the compiler host architecture",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Fetch locked runtime dependencies before offline tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Run cargo build --release --locked -p nagic",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Check CLI, installation, ownership, and diagnostics on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Check editor behavior on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Check generated output protection and native expression behavior",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Check SF01 High, saved Low, handwritten Low and native policy contracts",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Check SF01 request lease and permit lifecycle through the public runtime",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Check SQLite High and handwritten Low contract registration",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Verify bilingual first-app tutorial in High and saved Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16
+        },
+        {
+          "name": "Check planned SQLite runner stage and source-location oracles",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17
+        },
+        {
+          "name": "Check SQLite contracts and native High, saved Low and handwritten Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18
+        },
+        {
+          "name": "Check public Task bridge lifecycle on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        },
+        {
+          "name": "Check Task checker contracts on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Check Task examples in High, saved Low and handwritten Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        },
+        {
+          "name": "Check typed monitor and HTTP service in all three forms",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 22
+        },
+        {
+          "name": "Check successful application artifact selection",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23
+        },
+        {
+          "name": "Check Axum native test execution and result validation",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24
+        },
+        {
+          "name": "Check oversized HTTP bodies and connection recovery on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25
+        },
+        {
+          "name": "Check HTTP panic recovery on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26
+        },
+        {
+          "name": "Check HTTP handler deadlines on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27
+        },
+        {
+          "name": "Check demo packaging with Windows PowerShell",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 28
+        },
+        {
+          "name": "Check demo packaging with PowerShell 7",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 29
+        },
+        {
+          "name": "Package tracked source and the compiler",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 30
+        },
+        {
+          "name": "Verify an extracted distribution outside the checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 31
+        },
+        {
+          "name": "Check HTTP route parameters on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 32
+        },
+        {
+          "name": "Check standard HTTP High and saved Low on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 33
+        },
+        {
+          "name": "Check scoped task captures on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 34
+        },
+        {
+          "name": "Check actor lifecycle and supervisor cancellation on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 35
+        },
+        {
+          "name": "Check SQLite row counts on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 36
+        },
+        {
+          "name": "Check public SQLite session cleanup, cancellation and close on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 37
+        },
+        {
+          "name": "Verify bilingual SQLite tutorial through High and independent saved Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 38
+        },
+        {
+          "name": "Verify High, saved Low, and standalone Low applications",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 39
+        },
+        {
+          "name": "Verify the PowerShell installer and User PATH",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 40
+        },
+        {
+          "name": "Verify Windows PowerShell 5.1 installation and upgrades",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 41
+        },
+        {
+          "name": "Verify uninstallation with PowerShell 7",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 42
+        },
+        {
+          "name": "Verify uninstallation with Windows PowerShell 5.1",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 43
+        },
+        {
+          "name": "Verify the shell installer",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 44
+        },
+        {
+          "name": "Verify the shell uninstaller",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 45
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 46
+        },
+        {
+          "name": "Preserve target-platform compiler failure reproductions",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 47
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 91
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 92
+        },
+        {
+          "name": "Post Cache the target platform's Rust build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 93
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 94
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 95
+        }
+      ]
+    },
+    {
+      "id": 113293470365,
+      "name": "jetbrains / JetBrains (PyCharm)",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 37771932580,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Resolve the expected JetBrains plugin version",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Cache the compiler for integration checks",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Build the current compiler for integration checks",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Test, package, and verify the selected IDE",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Verify the ZIP descriptor and prepare release assets",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Upload the verified plugin and checksum",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Upload test and compatibility reports",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Post Cache the compiler for integration checks",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 22
+        },
+        {
+          "name": "Post Run gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24
+        },
+        {
+          "name": "Post Run actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25
+        },
+        {
+          "name": "Post Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27
+        }
+      ]
+    },
+    {
+      "id": 113293470555,
+      "name": "nagi-package (macos-15-intel, macos-x86_64, nagic, x86_64-apple-darwin)",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 37771932580,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Cache the target platform's Rust build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Verify the compiler host architecture",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Fetch locked runtime dependencies before offline tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Run cargo build --release --locked -p nagic",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Check CLI, installation, ownership, and diagnostics on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Check editor behavior on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Check generated output protection and native expression behavior",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Check SF01 High, saved Low, handwritten Low and native policy contracts",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Check SF01 request lease and permit lifecycle through the public runtime",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Check SQLite High and handwritten Low contract registration",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Verify bilingual first-app tutorial in High and saved Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16
+        },
+        {
+          "name": "Check planned SQLite runner stage and source-location oracles",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17
+        },
+        {
+          "name": "Check SQLite contracts and native High, saved Low and handwritten Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18
+        },
+        {
+          "name": "Check public Task bridge lifecycle on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        },
+        {
+          "name": "Check Task checker contracts on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Check Task examples in High, saved Low and handwritten Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        },
+        {
+          "name": "Check typed monitor and HTTP service in all three forms",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 22
+        },
+        {
+          "name": "Check successful application artifact selection",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23
+        },
+        {
+          "name": "Check Axum native test execution and result validation",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24
+        },
+        {
+          "name": "Check oversized HTTP bodies and connection recovery on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25
+        },
+        {
+          "name": "Check HTTP panic recovery on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26
+        },
+        {
+          "name": "Check HTTP handler deadlines on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27
+        },
+        {
+          "name": "Check demo packaging with Windows PowerShell",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 28
+        },
+        {
+          "name": "Check demo packaging with PowerShell 7",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 29
+        },
+        {
+          "name": "Package tracked source and the compiler",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 30
+        },
+        {
+          "name": "Verify an extracted distribution outside the checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 31
+        },
+        {
+          "name": "Check HTTP route parameters on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 32
+        },
+        {
+          "name": "Check standard HTTP High and saved Low on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 33
+        },
+        {
+          "name": "Check scoped task captures on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 34
+        },
+        {
+          "name": "Check actor lifecycle and supervisor cancellation on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 35
+        },
+        {
+          "name": "Check SQLite row counts on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 36
+        },
+        {
+          "name": "Check public SQLite session cleanup, cancellation and close on the target platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 37
+        },
+        {
+          "name": "Verify bilingual SQLite tutorial through High and independent saved Low",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 38
+        },
+        {
+          "name": "Verify High, saved Low, and standalone Low applications",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 39
+        },
+        {
+          "name": "Verify the PowerShell installer and User PATH",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 40
+        },
+        {
+          "name": "Verify Windows PowerShell 5.1 installation and upgrades",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 41
+        },
+        {
+          "name": "Verify uninstallation with PowerShell 7",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 42
+        },
+        {
+          "name": "Verify uninstallation with Windows PowerShell 5.1",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 43
+        },
+        {
+          "name": "Verify the shell installer",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 44
+        },
+        {
+          "name": "Verify the shell uninstaller",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 45
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 46
+        },
+        {
+          "name": "Preserve target-platform compiler failure reproductions",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 47
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 91
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 92
+        },
+        {
+          "name": "Post Cache the target platform's Rust build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 93
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 94
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 95
+        }
+      ]
+    },
+    {
+      "id": 113293471149,
+      "name": "jetbrains / JetBrains (IntelliJ IDEA)",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 37771932580,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Resolve the expected JetBrains plugin version",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Cache the compiler for integration checks",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Build the current compiler for integration checks",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Test, package, and verify the selected IDE",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Verify the ZIP descriptor and prepare release assets",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Upload the verified plugin and checksum",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Upload test and compatibility reports",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Post Cache the compiler for integration checks",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 22
+        },
+        {
+          "name": "Post Run gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24
+        },
+        {
+          "name": "Post Run actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25
+        },
+        {
+          "name": "Post Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27
+        }
+      ]
+    },
+    {
+      "id": 113303676720,
+      "name": "Ready to merge",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 37771932580,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Require checks and planned packages to succeed",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        }
+      ]
+    },
+    {
+      "id": 113303678966,
+      "name": "publish-release",
+      "status": "completed",
+      "conclusion": "skipped",
+      "run_id": 37771932580,
+      "logs_url": null,
+      "steps": null
+    }
+  ],
+  "log_excerpt_note": "CI log excerpts retain only the two SF01 steps (compiler/native and runtime lifecycle), with line endings converted to LF. Other job conclusions come from GitHub job readback. No skipped publishing or past head is counted as execution."
+}

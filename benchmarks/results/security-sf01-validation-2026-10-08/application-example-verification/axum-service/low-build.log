@@ -1,0 +1,9 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+     Locking 105 packages to highest compatible versions
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+   Compiling nagi-generated-adbced325ce435a3 v0.1.0 (/workspace/Nagi-security-sf01/build/application-example-verification/axum-service/low/.nagi/apps/nagi-generated-adbced325ce435a3/generations/.staging-g-688d0-18dc87cfbe921907-0)
+    Finished `release` profile [optimized] target(s) in 9.50s
+native: /workspace/Nagi-security-sf01/build/application-example-verification/axum-service/low/.nagi/apps/nagi-generated-adbced325ce435a3/generations/g-688d0-18dc87cfbe921907-0/nagi-adbced325ce435a3-g-688d0-18dc87cfbe921907-0

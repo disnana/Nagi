@@ -1,0 +1,4 @@
+     Locking 105 packages to highest compatible versions
+   Compiling nagi-serde-record-ad9fa71a9c998ac9 v0.1.0 (/workspace/Nagi-security-sf01/test-nagi-code/library-examples/rust-json/build/serde-record/.nagi/apps/nagi-serde-record-ad9fa71a9c998ac9/generations/.staging-g-69227-18dc880d435566e2-0)
+    Finished `release` profile [optimized] target(s) in 0.79s
+native: /workspace/Nagi-security-sf01/test-nagi-code/library-examples/rust-json/build/serde-record/.nagi/apps/nagi-serde-record-ad9fa71a9c998ac9/generations/g-69227-18dc880d435566e2-0/nagi-ad9fa71a9c998ac9-g-69227-18dc880d435566e2-0

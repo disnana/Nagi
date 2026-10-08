@@ -1,3 +1,8 @@
+//! Benchmark-only custom Axum host reference, outside the standard HTTP dispatcher.
+//!
+//! This uses Axum's listener directly. It does not reproduce the retired
+//! `rt::serve` wrapper's bind behavior, hidden endpoints, body bounds, or
+//! lifecycle policy, and its old measurements are not SF01-equivalent data.
 use nagi_runtime as rt;
 use rt::axum::{
     body::Bytes,
@@ -34,6 +39,9 @@ fn main() {
                 "/echo",
                 post(|body: Bytes| async move { rt::response(rt::decode::<CreateUser>(&body)) }),
             );
-        rt::serve(router, 8082).await.unwrap();
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 8082))
+            .await
+            .unwrap();
+        axum::serve(listener, router).await.unwrap();
     });
 }

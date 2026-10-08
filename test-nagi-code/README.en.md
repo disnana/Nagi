@@ -23,9 +23,9 @@ Shared verification commands are in the [application index](application-examples
 
 The [Result API](../docs/en/result-api.md) uses integer parsing and a single-row SQLite query to distinguish invalid input, missing data, database failures, and fallback data with `match`.
 
-## Browser task manager
+## Task management JSON API
 
-[Nagi Tasks](../docs/en/web-demo.md) adds, edits, completes, and deletes tasks in a browser. Nagi defines the API and input validation; the runtime handles HTTP and SQLite. The executable embeds the HTML/CSS/JavaScript interface.
+[Nagi Tasks](web-demo/README.md) adds, edits, completes, deletes, and aggregates tasks through a JSON API. Nagi defines standard HTTP routes and input validation; the runtime handles HTTP and SQLite. `GET /` returns a plain-text API landing message. The browser UI remains unconnected while typed HTML responses are pending.
 
 ## Use Rust libraries
 

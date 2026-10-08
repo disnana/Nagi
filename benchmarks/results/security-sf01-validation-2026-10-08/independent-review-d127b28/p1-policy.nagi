@@ -1,0 +1,5 @@
+import std.http.server as http
+def main():
+    values = [some(http.public_policy[i64]())]
+    duplicate = copy(view(values))
+    print(len(duplicate))

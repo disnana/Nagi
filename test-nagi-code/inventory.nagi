@@ -1,5 +1,6 @@
-# 小さな在庫管理API。HTTP -> 型付きclass -> SQLite -> JSONを一通り使う。
-# 現行のDB APIの引数形式(str, i32)に合わせ、商品名と在庫数を保存する。
+# Small inventory API: explicit HTTP routes -> typed class -> SQLite -> JSON.
+import std.http.server as http
+
 class Item:
     id: i64
     name: str
@@ -18,8 +19,9 @@ class DeleteResult:
     id: i64
     deleted: bool
 
-# viewで名前を借用し、検証のためだけの文字列コピーを避ける。
-# len(str)は文字数ではなくUTF-8のbyte数。
+class State:
+    db: Db
+
 def validate_item(name: view[str], quantity: i32) -> Result[bool, Error]:
     if len(name) == 0 or len(name) > 120:
         return error("name must be between 1 and 120 UTF-8 bytes")
@@ -32,41 +34,61 @@ def validate_id(id: i64) -> Result[bool, Error]:
         return error("id must be positive")
     return ok(true)
 
-# 一覧は最新100件まで。全件の集計は別のendpointでSQLに任せる。
-@get("/items")
-async def list_items(db: Db) -> Result[List[Item], Error]:
-    return await db_all[Item](db, "SELECT id, name, quantity FROM sample_inventory_items ORDER BY id DESC LIMIT 100")
+def item_id(request: view[http.Request]) -> Result[i64, Error]:
+    if len(request.path) <= 7:
+        return error("item id is missing")
+    return parse_i64(try slice(request.path, 7, len(request.path)))
 
-@get("/items/{id}")
-async def get_item(db: Db, id: i64) -> Result[Item?, Error]:
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, "ok"))
+
+async def list_items(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    rows = try await db_all[Item](state.db, "SELECT id, name, quantity FROM sample_inventory_items ORDER BY id DESC LIMIT 100")
+    return http.json[List[Item]](http.Status.OK, rows)
+
+async def get_item(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    id = try item_id(view(request))
     try validate_id(id)
-    # 見つからなければNone。HTTP層が404に変換する。
-    return await db_query[Item](db, "SELECT id, name, quantity FROM sample_inventory_items WHERE id = ?1", id)
+    match await db_query[Item](state.db, "SELECT id, name, quantity FROM sample_inventory_items WHERE id = ?1", id):
+        case Ok(found):
+            match found:
+                case Some(item):
+                    return http.json[Item](http.Status.OK, item)
+                case None:
+                    return ok(http.empty(http.Status.NOT_FOUND))
+        case Err(problem):
+            return fail(problem)
 
-@post("/items")
-async def create_item(db: Db, req: SaveItem) -> Result[Item, Error]:
-    try validate_item(view(req.name), req.quantity)
-    # 値はSQLへ連結せずbindする。名前の所有権をDB workerへ渡す。
-    return await db_insert[Item](db, "INSERT INTO sample_inventory_items(name, quantity) VALUES (?1, ?2) RETURNING id, name, quantity", req.name, req.quantity)
+async def create_item(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    input = try json_decode[SaveItem](request.body)
+    try validate_item(view(input.name), input.quantity)
+    item = try await db_insert[Item](state.db, "INSERT INTO sample_inventory_items(name, quantity) VALUES (?1, ?2) RETURNING id, name, quantity", input.name, input.quantity)
+    return http.json[Item](http.Status.OK, item)
 
-@put("/items/{id}")
-async def update_item(db: Db, id: i64, req: SaveItem) -> Result[Item, Error]:
+async def update_item(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    id = try item_id(view(request))
+    input = try json_decode[SaveItem](request.body)
     try validate_id(id)
-    try validate_item(view(req.name), req.quantity)
-    # 商品名と在庫数を両方指定する置換更新。存在しないIDは404。
-    return await db_update[Item](db, "UPDATE sample_inventory_items SET name = ?2, quantity = ?3 WHERE id = ?1 RETURNING id, name, quantity", id, req.name, req.quantity)
+    try validate_item(view(input.name), input.quantity)
+    item = try await db_update[Item](state.db, "UPDATE sample_inventory_items SET name = ?2, quantity = ?3 WHERE id = ?1 RETURNING id, name, quantity", id, input.name, input.quantity)
+    return http.json[Item](http.Status.OK, item)
 
-@delete("/items/{id}")
-async def delete_item(db: Db, id: i64) -> Result[DeleteResult, Error]:
+async def delete_item(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    id = try item_id(view(request))
     try validate_id(id)
-    affected = try await db_write(db, "DELETE FROM sample_inventory_items WHERE id = ?1", id)
-    # 再度削除しても200。deleted=falseで既に存在しなかったことを示す。
-    return ok(DeleteResult(id=id, deleted=affected > 0))
+    affected = try await db_write(state.db, "DELETE FROM sample_inventory_items WHERE id = ?1", id)
+    return http.json[DeleteResult](http.Status.OK, DeleteResult(id=id, deleted=affected > 0))
 
-@get("/inventory/summary")
-async def inventory_summary(db: Db) -> Result[InventorySummary?, Error]:
-    # 空のDBでもSUMを0へ変換。集計は一覧の100件制限に影響されない。
-    return await db_query[InventorySummary](db, "SELECT COUNT(*) AS item_count, COALESCE(SUM(quantity), 0) AS total_quantity, COALESCE(SUM(CASE WHEN quantity = 0 THEN 1 ELSE 0 END), 0) AS out_of_stock FROM sample_inventory_items WHERE id > ?1", 0)
+async def inventory_summary(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    match await db_query[InventorySummary](state.db, "SELECT COUNT(*) AS item_count, COALESCE(SUM(quantity), 0) AS total_quantity, COALESCE(SUM(CASE WHEN quantity = 0 THEN 1 ELSE 0 END), 0) AS out_of_stock FROM sample_inventory_items WHERE id > ?1", 0):
+        case Ok(found):
+            match found:
+                case Some(summary):
+                    return http.json[InventorySummary](http.Status.OK, summary)
+                case None:
+                    return ok(http.empty(http.Status.NOT_FOUND))
+        case Err(problem):
+            return fail(problem)
 
 async def main() -> Result[unit, Error]:
     path = env("NAGI_DB", ":memory:")
@@ -74,8 +96,15 @@ async def main() -> Result[unit, Error]:
     if port < 1 or port > 65535:
         return error("NAGI_PORT must be between 1 and 65535")
     db = try await db_open(path)
-    # Highの検証だけでなくDBにも制約を持たせる。
     try await db_exec(db, "CREATE TABLE IF NOT EXISTS sample_inventory_items(id INTEGER PRIMARY KEY, name TEXT NOT NULL CHECK(length(CAST(name AS BLOB)) BETWEEN 1 AND 120), quantity INTEGER NOT NULL CHECK(quantity BETWEEN 0 AND 1000000))")
     print("Inventory API ready on 127.0.0.1")
     print(port)
-    return await serve(db, port)
+    app = http.app_default[State](State(db=db))
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    app = try http.route(app, http.Method.GET, "/items", http.public_policy[State](), list_items)
+    app = try http.route(app, http.Method.GET, "/items/{id}", http.public_policy[State](), get_item)
+    app = try http.route(app, http.Method.POST, "/items", http.public_policy[State](), create_item)
+    app = try http.route(app, http.Method.PUT, "/items/{id}", http.public_policy[State](), update_item)
+    app = try http.route(app, http.Method.DELETE, "/items/{id}", http.public_policy[State](), delete_item)
+    app = try http.route(app, http.Method.GET, "/inventory/summary", http.public_policy[State](), inventory_summary)
+    return await http.serve(app, port, http.default_options())

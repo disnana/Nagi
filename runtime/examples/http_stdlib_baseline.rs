@@ -20,10 +20,10 @@ struct State {
     _ready: bool,
 }
 
-async fn health(_: http::Request, _: Arc<State>) -> Result<http::Response, rt::Error> {
+async fn health(_: http::Request, _: Arc<State>, _: ()) -> Result<http::Response, rt::Error> {
     Ok(http::text(http::Status::OK, "ok"))
 }
-async fn small(_: http::Request, _: Arc<State>) -> Result<http::Response, rt::Error> {
+async fn small(_: http::Request, _: Arc<State>, _: ()) -> Result<http::Response, rt::Error> {
     let user = User {
         id: 1,
         name: "alice".into(),
@@ -31,16 +31,34 @@ async fn small(_: http::Request, _: Arc<State>) -> Result<http::Response, rt::Er
     };
     http::json(http::Status::OK, &user)
 }
-async fn echo(request: http::Request, _: Arc<State>) -> Result<http::Response, rt::Error> {
+async fn echo(request: http::Request, _: Arc<State>, _: ()) -> Result<http::Response, rt::Error> {
     let user: CreateUser = rt::decode(request.body())?;
     http::json(http::Status::OK, &user)
 }
 fn main() {
     rt::block_on(async {
         let app = http::app_default(State { _ready: true });
-        let app = http::route(app, http::Method::GET, "/health", health)?;
-        let app = http::route(app, http::Method::GET, "/small", small)?;
-        let app = http::route(app, http::Method::POST, "/echo", echo)?;
+        let app = http::route(
+            app,
+            http::Method::GET,
+            "/health",
+            http::public_policy(),
+            health,
+        )?;
+        let app = http::route(
+            app,
+            http::Method::GET,
+            "/small",
+            http::public_policy(),
+            small,
+        )?;
+        let app = http::route(
+            app,
+            http::Method::POST,
+            "/echo",
+            http::public_policy(),
+            echo,
+        )?;
         let port =
             rt::parse_i64(&std::env::var("NAGI_SAMPLE_PORT").unwrap_or_else(|_| "8086".into()))?;
         http::serve(app, port, http::default_options()).await

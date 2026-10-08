@@ -1,0 +1,1186 @@
+TAP version 13
+# Subtest: Actor and Turn snippets preserve all three registered type parameters
+ok 1 - Actor and Turn snippets preserve all three registered type parameters
+  ---
+  duration_ms: 11.709181
+  type: 'test'
+  ...
+# Subtest: same-name standard options retain their owning namespace and return type
+ok 2 - same-name standard options retain their owning namespace and return type
+  ---
+  duration_ms: 8.579849
+  type: 'test'
+  ...
+# Subtest: both module catalogs complete imports without merging their members
+ok 3 - both module catalogs complete imports without merging their members
+  ---
+  duration_ms: 3.160201
+  type: 'test'
+  ...
+# Subtest: real nagi actor symbols separate modules and preserve three-parameter handles
+ok 4 - real nagi actor symbols separate modules and preserve three-parameter handles
+  ---
+  duration_ms: 3050.255899
+  type: 'test'
+  ...
+# Subtest: real low actor symbols separate modules and preserve three-parameter handles
+ok 5 - real low actor symbols separate modules and preserve three-parameter handles
+  ---
+  duration_ms: 2327.82777
+  type: 'test'
+  ...
+# Subtest: unsaved actor dependency constants keep their own source without writing or building
+ok 6 - unsaved actor dependency constants keep their own source without writing or building
+  ---
+  duration_ms: 681.411817
+  type: 'test'
+  ...
+# Subtest: nagi borrowed loop locals keep their declared type and bare insertion
+ok 7 - nagi borrowed loop locals keep their declared type and bare insertion
+  ---
+  duration_ms: 9.608423
+  type: 'test'
+  ...
+# Subtest: nagi owned and read-only-only locals retain their existing presentation
+ok 8 - nagi owned and read-only-only locals retain their existing presentation
+  ---
+  duration_ms: 1.234682
+  type: 'test'
+  ...
+# Subtest: nagi borrowed receiver fields preserve the compiler read-only contract
+ok 9 - nagi borrowed receiver fields preserve the compiler read-only contract
+  ---
+  duration_ms: 1.216226
+  type: 'test'
+  ...
+# Subtest: low borrowed loop locals keep their declared type and bare insertion
+ok 10 - low borrowed loop locals keep their declared type and bare insertion
+  ---
+  duration_ms: 1.042185
+  type: 'test'
+  ...
+# Subtest: low owned and read-only-only locals retain their existing presentation
+ok 11 - low owned and read-only-only locals retain their existing presentation
+  ---
+  duration_ms: 0.759295
+  type: 'test'
+  ...
+# Subtest: low borrowed receiver fields preserve the compiler read-only contract
+ok 12 - low borrowed receiver fields preserve the compiler read-only contract
+  ---
+  duration_ms: 0.552709
+  type: 'test'
+  ...
+# Subtest: Windows diagnostics preserve the drive and convert to zero-based line
+ok 13 - Windows diagnostics preserve the drive and convert to zero-based line
+  ---
+  duration_ms: 2.48287
+  type: 'test'
+  ...
+# Subtest: symbol positions use UTF-16 ranges and exclude whitespace and other files
+ok 14 - symbol positions use UTF-16 ranges and exclude whitespace and other files
+  ---
+  duration_ms: 1.126167
+  type: 'test'
+  ...
+# Subtest: Low integration errors and process errors have usable fallback locations
+ok 15 - Low integration errors and process errors have usable fallback locations
+  ---
+  duration_ms: 0.34276
+  type: 'test'
+  ...
+# Subtest: Rust arguments remain separate and long Windows paths normalize
+ok 16 - Rust arguments remain separate and long Windows paths normalize
+  ---
+  duration_ms: 0.338188
+  type: 'test'
+  ...
+# Subtest: diagnostic file identities resolve symlinks and Windows path spelling
+ok 17 - diagnostic file identities resolve symlinks and Windows path spelling
+  ---
+  duration_ms: 4.821581
+  type: 'test'
+  ...
+# Subtest: task matcher accepts Nagi frontend and mapped backend positions only
+ok 18 - task matcher accepts Nagi frontend and mapped backend positions only
+  ---
+  duration_ms: 1.594238
+  type: 'test'
+  ...
+# Subtest: files and native paths are individual arguments with isolated check output
+ok 19 - files and native paths are individual arguments with isolated check output
+  ---
+  duration_ms: 1.990899
+  type: 'test'
+  ...
+# Subtest: configured compiler paths are workspace relative; PATH remains a fallback
+ok 20 - configured compiler paths are workspace relative; PATH remains a fallback
+  ---
+  duration_ms: 0.644929
+  type: 'test'
+  ...
+# Subtest: compiler execution does not interpret shell metacharacters
+ok 21 - compiler execution does not interpret shell metacharacters
+  ---
+  duration_ms: 74.171885
+  type: 'test'
+  ...
+# Subtest: real Nagi checker diagnoses a source error
+ok 22 - real Nagi checker diagnoses a source error
+  ---
+  duration_ms: 10.565289
+  type: 'test'
+  ...
+# Subtest: missing compiler is reported as an execution problem
+ok 23 - missing compiler is reported as an execution problem
+  ---
+  duration_ms: 2.531518
+  type: 'test'
+  ...
+# Subtest: timed out checker is reported as an execution problem
+ok 24 - timed out checker is reported as an execution problem
+  ---
+  duration_ms: 255.094298
+  type: 'test'
+  ...
+# Subtest: nearest manifest wins and project arguments delegate entry selection to nagic
+ok 25 - nearest manifest wins and project arguments delegate entry selection to nagic
+  ---
+  duration_ms: 1.351943
+  type: 'test'
+  ...
+# Subtest: real checker resolves a helper through its manifest entry rather than checking it alone
+ok 26 - real checker resolves a helper through its manifest entry rather than checking it alone
+  ---
+  duration_ms: 15.717573
+  type: 'test'
+  ...
+# Subtest: real symbol query navigates from a helper to its entry-defined function
+ok 27 - real symbol query navigates from a helper to its entry-defined function
+  ---
+  duration_ms: 439.25864
+  type: 'test'
+  ...
+# Subtest: enum completion includes own/imported type namespaces and never bare variants
+ok 28 - enum completion includes own/imported type namespaces and never bare variants
+  ---
+  duration_ms: 10.539462
+  type: 'test'
+  ...
+# Subtest: enum type positions offer enum types and exclude variant values
+ok 29 - enum type positions offer enum types and exclude variant values
+  ---
+  duration_ms: 2.536122
+  type: 'test'
+  ...
+# Subtest: unit/payload variant hover and payload signatures preserve alias-qualified spelling
+ok 30 - unit/payload variant hover and payload signatures preserve alias-qualified spelling
+  ---
+  duration_ms: 2.952506
+  type: 'test'
+  ...
+# Subtest: nested variant declaration references resolve hover and F12 without exporting names
+ok 31 - nested variant declaration references resolve hover and F12 without exporting names
+  ---
+  duration_ms: 1.066932
+  type: 'test'
+  ...
+# Subtest: lexical values that shadow enum/module roots suppress type namespaces
+ok 32 - lexical values that shadow enum/module roots suppress type namespaces
+  ---
+  duration_ms: 10.116927
+  type: 'test'
+  ...
+# Subtest: typed failure help exposes an error value without requiring builtin Error
+ok 33 - typed failure help exposes an error value without requiring builtin Error
+  ---
+  duration_ms: 0.833599
+  type: 'test'
+  ...
+# Subtest: Result patterns have completion hover and argument help only after case
+ok 34 - Result patterns have completion hover and argument help only after case
+  ---
+  duration_ms: 2.853437
+  type: 'test'
+  ...
+# Subtest: real nagi enum symbols preserve aliases, payload help and declaration targets
+ok 35 - real nagi enum symbols preserve aliases, payload help and declaration targets
+  ---
+  duration_ms: 795.852901
+  type: 'test'
+  ...
+# Subtest: real low enum symbols preserve aliases, payload help and declaration targets
+ok 36 - real low enum symbols preserve aliases, payload help and declaration targets
+  ---
+  duration_ms: 1156.856108
+  type: 'test'
+  ...
+# Subtest: unsaved enum changes update payloads and F12 without writing source or building
+ok 37 - unsaved enum changes update payloads and F12 without writing source or building
+  ---
+  duration_ms: 393.425143
+  type: 'test'
+  ...
+# Subtest: hover preserves declared async/nullable types and class fields but skips locals, members and comments
+ok 38 - hover preserves declared async/nullable types and class fields but skips locals, members and comments
+  ---
+  duration_ms: 8.560733
+  type: 'test'
+  ...
+# Subtest: completion works on incomplete prefixes and inserts positional calls or named class fields
+ok 39 - completion works on incomplete prefixes and inserts positional calls or named class fields
+  ---
+  duration_ms: 2.346402
+  type: 'test'
+  ...
+# Subtest: type positions offer classes and type constructors rather than value calls
+ok 40 - type positions offer classes and type constructors rather than value calls
+  ---
+  duration_ms: 3.051597
+  type: 'test'
+  ...
+# Subtest: a class named Future completes as its declared type rather than a generic builtin
+ok 41 - a class named Future completes as its declared type rather than a generic builtin
+  ---
+  duration_ms: 0.750238
+  type: 'test'
+  ...
+# Subtest: signature argument tracking ignores nested calls, strings, arrays and generic arguments
+ok 42 - signature argument tracking ignores nested calls, strings, arrays and generic arguments
+  ---
+  duration_ms: 1.874891
+  type: 'test'
+  ...
+# Subtest: local hovers use the exact UTF-16 occurrence and file rather than a shared name
+ok 43 - local hovers use the exact UTF-16 occurrence and file rather than a shared name
+  ---
+  duration_ms: 1.153497
+  type: 'test'
+  ...
+# Subtest: member analysis masks just the edited member and preserves UTF-16 and CRLF positions
+ok 44 - member analysis masks just the edited member and preserves UTF-16 and CRLF positions
+  ---
+  duration_ms: 0.695621
+  type: 'test'
+  ...
+# Subtest: field candidates come from the receiver occurrence and never from saved or other-file types
+ok 45 - field candidates come from the receiver occurrence and never from saved or other-file types
+  ---
+  duration_ms: 3.178153
+  type: 'test'
+  ...
+# Subtest: a trailing member binds inside try/await unless the receiver is parenthesized
+ok 46 - a trailing member binds inside try/await unless the receiver is parenthesized
+  ---
+  duration_ms: 0.336442
+  type: 'test'
+  ...
+# Subtest: builtin completion catalog matches compiler arities and required type arguments
+ok 47 - builtin completion catalog matches compiler arities and required type arguments
+  ---
+  duration_ms: 3.187198
+  type: 'test'
+  ...
+# Subtest: builtin help preserves conversion, SQLite, async and callback contracts
+ok 48 - builtin help preserves conversion, SQLite, async and callback contracts
+  ---
+  duration_ms: 0.430996
+  type: 'test'
+  ...
+# Subtest: function and nullable types complete inside all supported generic builtin contexts
+ok 49 - function and nullable types complete inside all supported generic builtin contexts
+  ---
+  duration_ms: 1.048007
+  type: 'test'
+  ...
+# Subtest: completion preserves existing generic arguments and call parentheses
+ok 50 - completion preserves existing generic arguments and call parentheses
+  ---
+  duration_ms: 0.825169
+  type: 'test'
+  ...
+# Subtest: unindented Low fn, record and enum bodies keep their closing braces visible
+ok 51 - unindented Low fn, record and enum bodies keep their closing braces visible
+  ---
+  duration_ms: 2.469219
+  type: 'test'
+  ...
+# Subtest: nested match, case, scope and branch bodies fold at each opening line
+ok 52 - nested match, case, scope and branch bodies fold at each opening line
+  ---
+  duration_ms: 0.334208
+  type: 'test'
+  ...
+# Subtest: multiline fn and async fn draft headers join their body in one fold
+ok 53 - multiline fn and async fn draft headers join their body in one fold
+  ---
+  duration_ms: 1.672429
+  type: 'test'
+  ...
+# Subtest: strings and comments do not create or close folds
+ok 54 - strings and comments do not create or close folds
+  ---
+  duration_ms: 0.263167
+  type: 'test'
+  ...
+# Subtest: crossed, stray and unclosed delimiters cannot invent brace folds
+ok 55 - crossed, stray and unclosed delimiters cannot invent brace folds
+  ---
+  duration_ms: 0.247337
+  type: 'test'
+  ...
+# Subtest: matched call and list continuations guard bodies without separate folds
+ok 56 - matched call and list continuations guard bodies without separate folds
+  ---
+  duration_ms: 0.259064
+  type: 'test'
+  ...
+# Subtest: completed declarations and unrelated lines do not donate a header to another body
+ok 57 - completed declarations and unrelated lines do not donate a header to another body
+  ---
+  duration_ms: 0.220162
+  type: 'test'
+  ...
+# Subtest: single-line and empty bodies are omitted and each start line has one fold
+ok 58 - single-line and empty bodies are omitted and each start line has one fold
+  ---
+  duration_ms: 0.118538
+  type: 'test'
+  ...
+# Subtest: inline closing braces fold the final statement while delimiter-only closers stay visible
+ok 59 - inline closing braces fold the final statement while delimiter-only closers stay visible
+  ---
+  duration_ms: 0.279315
+  type: 'test'
+  ...
+# Subtest: High Function snippet defaults compile in their declared context
+ok 60 - High Function snippet defaults compile in their declared context
+  ---
+  duration_ms: 17.451927
+  type: 'test'
+  ...
+# Subtest: High Class snippet defaults compile in their declared context
+ok 61 - High Class snippet defaults compile in their declared context
+  ---
+  duration_ms: 11.702135
+  type: 'test'
+  ...
+# Subtest: High Enum snippet defaults compile in their declared context
+ok 62 - High Enum snippet defaults compile in their declared context
+  ---
+  duration_ms: 9.717397
+  type: 'test'
+  ...
+# Subtest: High Main snippet defaults compile in their declared context
+ok 63 - High Main snippet defaults compile in their declared context
+  ---
+  duration_ms: 6.401915
+  type: 'test'
+  ...
+# Subtest: High Async main snippet defaults compile in their declared context
+ok 64 - High Async main snippet defaults compile in their declared context
+  ---
+  duration_ms: 9.346588
+  type: 'test'
+  ...
+# Subtest: High HTTP server snippet defaults compile in their declared context
+ok 65 - High HTTP server snippet defaults compile in their declared context
+  ---
+  duration_ms: 994.965129
+  type: 'test'
+  ...
+# Subtest: High GET handler snippet defaults compile in their declared context
+ok 66 - High GET handler snippet defaults compile in their declared context
+  ---
+  duration_ms: 507.205303
+  type: 'test'
+  ...
+# Subtest: High POST handler snippet defaults compile in their declared context
+ok 67 - High POST handler snippet defaults compile in their declared context
+  ---
+  duration_ms: 527.395427
+  type: 'test'
+  ...
+# Subtest: High Loop snippet defaults compile in their declared context
+ok 68 - High Loop snippet defaults compile in their declared context
+  ---
+  duration_ms: 8.112973
+  type: 'test'
+  ...
+# Subtest: High Borrowed array snippet defaults compile in their declared context
+ok 69 - High Borrowed array snippet defaults compile in their declared context
+  ---
+  duration_ms: 12.467031
+  type: 'test'
+  ...
+# Subtest: High Result match snippet defaults compile in their declared context
+ok 70 - High Result match snippet defaults compile in their declared context
+  ---
+  duration_ms: 7.89936
+  type: 'test'
+  ...
+# Subtest: High Nullable match snippet defaults compile in their declared context
+ok 71 - High Nullable match snippet defaults compile in their declared context
+  ---
+  duration_ms: 7.318672
+  type: 'test'
+  ...
+# Subtest: real High quoted imports complete class enum and function names without calls
+ok 72 - real High quoted imports complete class enum and function names without calls
+  ---
+  duration_ms: 454.569208
+  type: 'test'
+  ...
+# Subtest: real High quoted imports complete class enum and function names without calls through a directory alias
+ok 73 - real High quoted imports complete class enum and function names without calls through a directory alias
+  ---
+  duration_ms: 733.40246
+  type: 'test'
+  ...
+# Subtest: real Low quoted imports complete class enum and function names without calls
+ok 74 - real Low quoted imports complete class enum and function names without calls
+  ---
+  duration_ms: 696.373083
+  type: 'test'
+  ...
+# Subtest: real Low quoted imports complete class enum and function names without calls through a directory alias
+ok 75 - real Low quoted imports complete class enum and function names without calls through a directory alias
+  ---
+  duration_ms: 703.001641
+  type: 'test'
+  ...
+# Subtest: canonical source aliases share one identity per request and refresh after a symlink changes
+ok 76 - canonical source aliases share one identity per request and refresh after a symlink changes
+  ---
+  duration_ms: 7.186906
+  type: 'test'
+  ...
+# Subtest: standard source identities remain logical IDs without filesystem lookups
+ok 77 - standard source identities remain logical IDs without filesystem lookups
+  ---
+  duration_ms: 2.826273
+  type: 'test'
+  ...
+# Subtest: High block headers indent one level, including main, async, match and case
+ok 78 - High block headers indent one level, including main, async, match and case
+  ---
+  duration_ms: 4.607397
+  type: 'test'
+  ...
+# Subtest: else uses the matching if indentation after nested bodies and comments
+ok 79 - else uses the matching if indentation after nested bodies and comments
+  ---
+  duration_ms: 0.487852
+  type: 'test'
+  ...
+# Subtest: first and following cases align under their nearest match
+ok 80 - first and following cases align under their nearest match
+  ---
+  duration_ms: 0.730986
+  type: 'test'
+  ...
+# Subtest: immediate Enter after else/case aligns the branch and its new body together
+ok 81 - immediate Enter after else/case aligns the branch and its new body together
+  ---
+  duration_ms: 0.235746
+  type: 'test'
+  ...
+# Subtest: explicitly dedented outer branches keep their matching outer block
+ok 82 - explicitly dedented outer branches keep their matching outer block
+  ---
+  duration_ms: 0.728347
+  type: 'test'
+  ...
+# Subtest: multiline case headers move together when colon is typed or Enter cancels it
+ok 83 - multiline case headers move together when colon is typed or Enter cancels it
+  ---
+  duration_ms: 0.501647
+  type: 'test'
+  ...
+# Subtest: multiline calls, lists and nested delimiters indent and align closing lines
+ok 84 - multiline calls, lists and nested delimiters indent and align closing lines
+  ---
+  duration_ms: 0.317469
+  type: 'test'
+  ...
+# Subtest: strings, escapes and comments never create fake blocks or brackets
+ok 85 - strings, escapes and comments never create fake blocks or brackets
+  ---
+  duration_ms: 0.49388
+  type: 'test'
+  ...
+# Subtest: an unfinished string on an earlier line does not disable later indentation
+ok 86 - an unfinished string on an earlier line does not disable later indentation
+  ---
+  duration_ms: 0.571223
+  type: 'test'
+  ...
+# Subtest: indentation respects two spaces, tabs, CRLF and Low brace blocks
+ok 87 - indentation respects two spaces, tabs, CRLF and Low brace blocks
+  ---
+  duration_ms: 0.395741
+  type: 'test'
+  ...
+# Subtest: Low native indentation rules ignore braces in comments and escaped strings
+ok 88 - Low native indentation rules ignore braces in comments and escaped strings
+  ---
+  duration_ms: 1.158588
+  type: 'test'
+  ...
+# Subtest: real checker completes arguments, inferred locals, chains, calls, index receivers and match payloads
+ok 89 - real checker completes arguments, inferred locals, chains, calls, index receivers and match payloads
+  ---
+  duration_ms: 4357.780172
+  type: 'test'
+  ...
+# Subtest: real checker suppresses fields for unknown, moved, out-of-scope and wrapped values
+ok 90 - real checker suppresses fields for unknown, moved, out-of-scope and wrapped values
+  ---
+  duration_ms: 4121.474294
+  type: 'test'
+  ...
+# Subtest: real unsaved High/Low imports supply local hovers and fields with UTF-16 positions
+ok 91 - real unsaved High/Low imports supply local hovers and fields with UTF-16 positions
+  ---
+  duration_ms: 1223.34374
+  type: 'test'
+  ...
+# Subtest: real Low completion isolates same-line scopes, restores outer loop variables and handles CRLF
+ok 92 - real Low completion isolates same-line scopes, restores outer loop variables and handles CRLF
+  ---
+  duration_ms: 2495.231226
+  type: 'test'
+  ...
+# Subtest: checked local values replace same-name class and builtin call insertions
+ok 93 - checked local values replace same-name class and builtin call insertions
+  ---
+  duration_ms: 5.831724
+  type: 'test'
+  ...
+# Subtest: lexical references without local types never insert an unrelated global call
+ok 94 - lexical references without local types never insert an unrelated global call
+  ---
+  duration_ms: 1.030497
+  type: 'test'
+  ...
+# Subtest: partial and saved occurrences keep global names without guessing local scopes
+ok 95 - partial and saved occurrences keep global names without guessing local scopes
+  ---
+  duration_ms: 2.135654
+  type: 'test'
+  ...
+# Subtest: a resolved global constructor remains available outside the shadowing function
+ok 96 - a resolved global constructor remains available outside the shadowing function
+  ---
+  duration_ms: 0.92967
+  type: 'test'
+  ...
+# Subtest: binding hints distinguish declaration tokens, masked text, and real value binders
+ok 97 - binding hints distinguish declaration tokens, masked text, and real value binders
+  ---
+  duration_ms: 2.133569
+  type: 'test'
+  ...
+# Subtest: real High local and parameter completions stay bare while types and constructors remain usable
+ok 98 - real High local and parameter completions stay bare while types and constructors remain usable
+  ---
+  duration_ms: 1214.256024
+  type: 'test'
+  ...
+# Subtest: real Low local and parameter completions stay bare while types and constructors remain usable
+ok 99 - real Low local and parameter completions stay bare while types and constructors remain usable
+  ---
+  duration_ms: 1080.216591
+  type: 'test'
+  ...
+# Subtest: Low Main snippet defaults compile in their declared context
+ok 100 - Low Main snippet defaults compile in their declared context
+  ---
+  duration_ms: 14.411176
+  type: 'test'
+  ...
+# Subtest: Low File import snippet defaults compile in their declared context
+ok 101 - Low File import snippet defaults compile in their declared context
+  ---
+  duration_ms: 13.585968
+  type: 'test'
+  ...
+# Subtest: Low From import snippet defaults compile in their declared context
+ok 102 - Low From import snippet defaults compile in their declared context
+  ---
+  duration_ms: 16.044853
+  type: 'test'
+  ...
+# Subtest: Low Standard import snippet defaults compile in their declared context
+ok 103 - Low Standard import snippet defaults compile in their declared context
+  ---
+  duration_ms: 524.757706
+  type: 'test'
+  ...
+# Subtest: Low Function snippet defaults compile in their declared context
+ok 104 - Low Function snippet defaults compile in their declared context
+  ---
+  duration_ms: 18.007238
+  type: 'test'
+  ...
+# Subtest: Low Record snippet defaults compile in their declared context
+ok 105 - Low Record snippet defaults compile in their declared context
+  ---
+  duration_ms: 21.562772
+  type: 'test'
+  ...
+# Subtest: Low Enum snippet defaults compile in their declared context
+ok 106 - Low Enum snippet defaults compile in their declared context
+  ---
+  duration_ms: 16.853902
+  type: 'test'
+  ...
+# Subtest: Low Replace snippet defaults compile in their declared context
+ok 107 - Low Replace snippet defaults compile in their declared context
+  ---
+  duration_ms: 19.144859
+  type: 'test'
+  ...
+# Subtest: Low Result match snippet defaults compile in their declared context
+ok 108 - Low Result match snippet defaults compile in their declared context
+  ---
+  duration_ms: 13.061187
+  type: 'test'
+  ...
+# Subtest: Low Nullable match snippet defaults compile in their declared context
+ok 109 - Low Nullable match snippet defaults compile in their declared context
+  ---
+  duration_ms: 10.120266
+  type: 'test'
+  ...
+# Subtest: module member completion exposes functions/classes and type positions insert only classes
+ok 110 - module member completion exposes functions/classes and type positions insert only classes
+  ---
+  duration_ms: 6.693645
+  type: 'test'
+  ...
+# Subtest: qualified and renamed declarations retain structured hover/signature help
+ok 111 - qualified and renamed declarations retain structured hover/signature help
+  ---
+  duration_ms: 1.525967
+  type: 'test'
+  ...
+# Subtest: lexical alias shadowing switches completion to fields and prevents module help
+ok 112 - lexical alias shadowing switches completion to fields and prevents module help
+  ---
+  duration_ms: 1.159339
+  type: 'test'
+  ...
+# Subtest: spaced field chains do not borrow a module namespace
+ok 113 - spaced field chains do not borrow a module namespace
+  ---
+  duration_ms: 0.657285
+  type: 'test'
+  ...
+# Subtest: imported class and module binding tokens keep their resolved hover
+ok 114 - imported class and module binding tokens keep their resolved hover
+  ---
+  duration_ms: 0.758098
+  type: 'test'
+  ...
+# Subtest: quoted from imports insert names only and preserve aliases and comma-separated lists
+ok 115 - quoted from imports insert names only and preserve aliases and comma-separated lists
+  ---
+  duration_ms: 1.429182
+  type: 'test'
+  ...
+# Subtest: unresolved and changed fallback import targets never offer expression completions
+ok 116 - unresolved and changed fallback import targets never offer expression completions
+  ---
+  duration_ms: 0.492601
+  type: 'test'
+  ...
+# Subtest: Low quoted imports after a same-line declaration or semicolon retain name-only insertion
+ok 117 - Low quoted imports after a same-line declaration or semicolon retain name-only insertion
+  ---
+  duration_ms: 0.369367
+  type: 'test'
+  ...
+# Subtest: real compiler navigation uses edited source and target positions across imports
+ok 118 - real compiler navigation uses edited source and target positions across imports
+  ---
+  duration_ms: 490.253901
+  type: 'test'
+  ...
+# Subtest: real Low navigation keeps reassignments at their original binding and restores loop shadowing
+ok 119 - real Low navigation keeps reassignments at their original binding and restores loop shadowing
+  ---
+  duration_ms: 512.88904
+  type: 'test'
+  ...
+# Subtest: unsaved canonical import diagnostics use the open alias and UTF-16 source range
+ok 120 - unsaved canonical import diagnostics use the open alias and UTF-16 source range
+  ---
+  duration_ms: 17.407521
+  type: 'test'
+  ...
+# Subtest: closing a checked import overlay refreshes its owners and keeps unrelated errors
+ok 121 - closing a checked import overlay refreshes its owners and keeps unrelated errors
+  ---
+  duration_ms: 11.802871
+  type: 'test'
+  ...
+# Subtest: closing an in-flight import overlay rejects its stale result
+ok 122 - closing an in-flight import overlay rejects its stale result
+  ---
+  duration_ms: 3.782736
+  type: 'test'
+  ...
+# Subtest: lower build and run tasks use the registered source diagnostic matcher
+ok 123 - lower build and run tasks use the registered source diagnostic matcher
+  ---
+  duration_ms: 5.576326
+  type: 'test'
+  ...
+# Subtest: standalone tasks save imported changes and leave unrelated dirty buffers untouched
+ok 124 - standalone tasks save imported changes and leave unrelated dirty buffers untouched
+  ---
+  duration_ms: 11.433631
+  type: 'test'
+  ...
+# Subtest: project tasks save imported changes and leave unrelated dirty buffers untouched
+ok 125 - project tasks save imported changes and leave unrelated dirty buffers untouched
+  ---
+  duration_ms: 8.000424
+  type: 'test'
+  ...
+# Subtest: task execution stops when an imported buffer cannot be saved
+ok 126 - task execution stops when an imported buffer cannot be saved
+  ---
+  duration_ms: 3.826781
+  type: 'test'
+  ...
+# Subtest: task execution stops when dirty imports cannot be resolved
+ok 127 - task execution stops when dirty imports cannot be resolved
+  ---
+  duration_ms: 3.060274
+  type: 'test'
+  ...
+# Subtest: saving an imported file refreshes its changed imports before launching the task
+ok 128 - saving an imported file refreshes its changed imports before launching the task
+  ---
+  duration_ms: 6.591367
+  type: 'test'
+  ...
+# Subtest: conflicting imported aliases are not saved over one another
+ok 129 - conflicting imported aliases are not saved over one another
+  ---
+  duration_ms: 4.592911
+  type: 'test'
+  ...
+# Subtest: standalone source without imports launches normally despite unrelated dirty buffers
+ok 130 - standalone source without imports launches normally despite unrelated dirty buffers
+  ---
+  duration_ms: 2.288865
+  type: 'test'
+  ...
+# Subtest: task execution stops if the entry buffer changes while an import is saved
+ok 131 - task execution stops if the entry buffer changes while an import is saved
+  ---
+  duration_ms: 2.940201
+  type: 'test'
+  ...
+# Subtest: task execution stops if the entry changes while its own project helper is saved
+ok 132 - task execution stops if the entry changes while its own project helper is saved
+  ---
+  duration_ms: 2.51417
+  type: 'test'
+  ...
+# Subtest: task execution stops if its source closes during project saving
+ok 133 - task execution stops if its source closes during project saving
+  ---
+  duration_ms: 2.21933
+  type: 'test'
+  ...
+# Subtest: task execution stops if a later project save changes the dirty manifest
+ok 134 - task execution stops if a later project save changes the dirty manifest
+  ---
+  duration_ms: 2.239347
+  type: 'test'
+  ...
+# Subtest: task execution stops if a later project save changes the already-saved manifest
+ok 135 - task execution stops if a later project save changes the already-saved manifest
+  ---
+  duration_ms: 1.9462
+  type: 'test'
+  ...
+# Subtest: task execution stops if an already-saved Rust input changes during a later project save
+ok 136 - task execution stops if an already-saved Rust input changes during a later project save
+  ---
+  duration_ms: 2.165356
+  type: 'test'
+  ...
+# Subtest: task execution stops if workspace trust changes during project saving
+ok 137 - task execution stops if workspace trust changes during project saving
+  ---
+  duration_ms: 4.403022
+  type: 'test'
+  ...
+# Subtest: task execution stops if the nearest project changes while an import is saved
+ok 138 - task execution stops if the nearest project changes while an import is saved
+  ---
+  duration_ms: 2.683245
+  type: 'test'
+  ...
+# Subtest: tasks suppress only the matching automatic scope and checks resume when the task ends
+ok 139 - tasks suppress only the matching automatic scope and checks resume when the task ends
+  ---
+  duration_ms: 3.671669
+  type: 'test'
+  ...
+# Subtest: task launch failure releases live check suppression
+ok 140 - task launch failure releases live check suppression
+  ---
+  duration_ms: 3.815923
+  type: 'test'
+  ...
+# Subtest: project task clears checks from its helper while preserving another project
+ok 141 - project task clears checks from its helper while preserving another project
+  ---
+  duration_ms: 4.162194
+  type: 'test'
+  ...
+# Subtest: a long task permits checks of new source without reacting to other project edits
+ok 142 - a long task permits checks of new source without reacting to other project edits
+  ---
+  duration_ms: 5.455655
+  type: 'test'
+  ...
+# Subtest: failed task diagnostics are replaced by checks and removed by source edits
+ok 143 - failed task diagnostics are replaced by checks and removed by source edits
+  ---
+  duration_ms: 4.442352
+  type: 'test'
+  ...
+# Subtest: manual checks inspect dirty imports outside the running task project
+ok 144 - manual checks inspect dirty imports outside the running task project
+  ---
+  duration_ms: 3.656917
+  type: 'test'
+  ...
+# Subtest: editing and closing imported aliases remove only their canonical task markers
+ok 145 - editing and closing imported aliases remove only their canonical task markers
+  ---
+  duration_ms: 3.015757
+  type: 'test'
+  ...
+# Subtest: typing invalidates snapshots without launching save-only checks per keystroke
+ok 146 - typing invalidates snapshots without launching save-only checks per keystroke
+  ---
+  duration_ms: 4.511324
+  type: 'test'
+  ...
+# Subtest: known unrelated diagnostics survive repeated edits while unknown and project inputs stay conservative
+ok 147 - known unrelated diagnostics survive repeated edits while unknown and project inputs stay conservative
+  ---
+  duration_ms: 6.521708
+  type: 'test'
+  ...
+# Subtest: known unrelated pending checks finish during edits and same-scope changes reject stale callbacks
+ok 148 - known unrelated pending checks finish during edits and same-scope changes reject stale callbacks
+  ---
+  duration_ms: 5.558562
+  type: 'test'
+  ...
+# Subtest: shared imports and stale dependency snapshots still invalidate diagnosed projects
+ok 149 - shared imports and stale dependency snapshots still invalidate diagnosed projects
+  ---
+  duration_ms: 4.580329
+  type: 'test'
+  ...
+# Subtest: failed symbols queries still supply static builtin help without erasing source diagnostics
+ok 150 - failed symbols queries still supply static builtin help without erasing source diagnostics
+  ---
+  duration_ms: 9.176903
+  type: 'test'
+  ...
+# Subtest: missing compiler keeps prefix completion, hover and signatures available
+ok 151 - missing compiler keeps prefix completion, hover and signatures available
+  ---
+  duration_ms: 10.062086
+  type: 'test'
+  ...
+# Subtest: borrowed local providers annotate hover and detail while keeping variable kind and insertion
+ok 152 - borrowed local providers annotate hover and detail while keeping variable kind and insertion
+  ---
+  duration_ms: 7.233473
+  type: 'test'
+  ...
+# Subtest: untrusted and untitled assistance executes no compiler and retains High/Low selectors
+ok 153 - untrusted and untitled assistance executes no compiler and retains High/Low selectors
+  ---
+  duration_ms: 8.260664
+  type: 'test'
+  ...
+# Subtest: Low builtin help uses fn and record in hover, completion and signatures without a compiler
+ok 154 - Low builtin help uses fn and record in hover, completion and signatures without a compiler
+  ---
+  duration_ms: 5.585446
+  type: 'test'
+  ...
+# Subtest: Low declaration and standard-operation help displays braces while retaining compiler kinds and call shapes
+ok 155 - Low declaration and standard-operation help displays braces while retaining compiler kinds and call shapes
+  ---
+  duration_ms: 4.54572
+  type: 'test'
+  ...
+# Subtest: Low enum declaration help removes namespace prefixes only from variant names
+ok 156 - Low enum declaration help removes namespace prefixes only from variant names
+  ---
+  duration_ms: 5.103242
+  type: 'test'
+  ...
+# Subtest: Low folding is available without trust or a compiler and honors cancellation
+ok 157 - Low folding is available without trust or a compiler and honors cancellation
+  ---
+  duration_ms: 2.409608
+  type: 'test'
+  ...
+# Subtest: cancelled, closed and changed documents cannot receive static fallback from failed queries
+ok 158 - cancelled, closed and changed documents cannot receive static fallback from failed queries
+  ---
+  duration_ms: 2.340476
+  type: 'test'
+  ...
+# Subtest: registered providers render enum/member kinds and payload signature parameters
+ok 159 - registered providers render enum/member kinds and payload signature parameters
+  ---
+  duration_ms: 3.65345
+  type: 'test'
+  ...
+# Subtest: standard F12 targets open compiler registry text through a read-only virtual document
+ok 160 - standard F12 targets open compiler registry text through a read-only virtual document
+  ---
+  duration_ms: 3.317341
+  type: 'test'
+  ...
+# Subtest: standard F12 keeps each project compiler registry text when another compiler is queried
+ok 161 - standard F12 keeps each project compiler registry text when another compiler is queried
+  ---
+  duration_ms: 7.055439
+  type: 'test'
+  ...
+# Subtest: keyword completion covers existing syntax in High and Low without leaking into types or members
+ok 162 - keyword completion covers existing syntax in High and Low without leaking into types or members
+  ---
+  duration_ms: 7.389801
+  type: 'test'
+  ...
+# Subtest: static builtin help works with incomplete syntax without an index
+ok 163 - static builtin help works with incomplete syntax without an index
+  ---
+  duration_ms: 1.569846
+  type: 'test'
+  ...
+# Subtest: static builtin fallback avoids declarations, parameters and local bindings that shadow the name
+ok 164 - static builtin fallback avoids declarations, parameters and local bindings that shadow the name
+  ---
+  duration_ms: 5.534214
+  type: 'test'
+  ...
+# Subtest: unresolved imports suppress guessed builtins but retain syntax and types; checked declarations win
+ok 165 - unresolved imports suppress guessed builtins but retain syntax and types; checked declarations win
+  ---
+  duration_ms: 1.597365
+  type: 'test'
+  ...
+# Subtest: signature help does not replace a compiler-resolved local function with builtin metadata
+ok 166 - signature help does not replace a compiler-resolved local function with builtin metadata
+  ---
+  duration_ms: 0.701061
+  type: 'test'
+  ...
+# Subtest: lexical references prevent guessed signatures when a type error removes local types
+ok 167 - lexical references prevent guessed signatures when a type error removes local types
+  ---
+  duration_ms: 0.500749
+  type: 'test'
+  ...
+# Subtest: unfinished line strings do not hide later assistance and preserve UTF-16 CRLF ranges
+ok 168 - unfinished line strings do not hide later assistance and preserve UTF-16 CRLF ranges
+  ---
+  duration_ms: 1.416866
+  type: 'test'
+  ...
+# Subtest: registered resources and constants keep namespaces and never create constructor snippets
+ok 169 - registered resources and constants keep namespaces and never create constructor snippets
+  ---
+  duration_ms: 10.821531
+  type: 'test'
+  ...
+# Subtest: standard operation and aliased constants preserve hover and argument help
+ok 170 - standard operation and aliased constants preserve hover and argument help
+  ---
+  duration_ms: 1.279298
+  type: 'test'
+  ...
+# Subtest: typed resource fields are read-only and do not expose type constants on values
+ok 171 - typed resource fields are read-only and do not expose type constants on values
+  ---
+  duration_ms: 1.14518
+  type: 'test'
+  ...
+# Subtest: virtual source identifiers cannot navigate to project paths or URLs
+ok 172 - virtual source identifiers cannot navigate to project paths or URLs
+  ---
+  duration_ms: 1.157916
+  type: 'test'
+  ...
+# Subtest: virtual registry revisions keep module paths and accept only a source hash
+ok 173 - virtual registry revisions keep module paths and accept only a source hash
+  ---
+  duration_ms: 0.522695
+  type: 'test'
+  ...
+# Subtest: Some and None are pattern assistance, not general value constructors
+ok 174 - Some and None are pattern assistance, not general value constructors
+  ---
+  duration_ms: 1.561004
+  type: 'test'
+  ...
+# Subtest: standard import completion uses the compiler catalog and replaces the full dotted path
+ok 175 - standard import completion uses the compiler catalog and replaces the full dotted path
+  ---
+  duration_ms: 1.544342
+  type: 'test'
+  ...
+# Subtest: Low standard imports can follow another declaration or import on the same line
+ok 176 - Low standard imports can follow another declaration or import on the same line
+  ---
+  duration_ms: 0.702898
+  type: 'test'
+  ...
+# Subtest: real nagi standard symbols keep resource identity, virtual sources and UTF-16 targets
+ok 177 - real nagi standard symbols keep resource identity, virtual sources and UTF-16 targets
+  ---
+  duration_ms: 2212.441646
+  type: 'test'
+  ...
+# Subtest: real low standard symbols keep resource identity, virtual sources and UTF-16 targets
+ok 178 - real low standard symbols keep resource identity, virtual sources and UTF-16 targets
+  ---
+  duration_ms: 2135.150578
+  type: 'test'
+  ...
+# Subtest: unsaved dependency standard aliases update sources without saving or building
+ok 179 - unsaved dependency standard aliases update sources without saving or building
+  ---
+  duration_ms: 1949.195387
+  type: 'test'
+  ...
+# Subtest: an incomplete initial standard import uses the registry catalog from a saved snapshot
+ok 180 - an incomplete initial standard import uses the registry catalog from a saved snapshot
+  ---
+  duration_ms: 387.712443
+  type: 'test'
+  ...
+# Subtest: shared receiver fields are read-only regardless of each field type
+ok 181 - shared receiver fields are read-only regardless of each field type
+  ---
+  duration_ms: 410.282043
+  type: 'test'
+  ...
+# Subtest: nagi saved snapshots complete new modules and from-import names before imports are checked
+ok 182 - nagi saved snapshots complete new modules and from-import names before imports are checked
+  ---
+  duration_ms: 6.601235
+  type: 'test'
+  ...
+# Subtest: nagi readiness and wait resources preserve namespaces and do not offer constructors
+ok 183 - nagi readiness and wait resources preserve namespaces and do not offer constructors
+  ---
+  duration_ms: 7.230619
+  type: 'test'
+  ...
+# Subtest: nagi WaitError value fields keep borrowed payload types and read-only status
+ok 184 - nagi WaitError value fields keep borrowed payload types and read-only status
+  ---
+  duration_ms: 1.206765
+  type: 'test'
+  ...
+# Subtest: nagi inferred standard operations insert positional calls and retain exact callback and Future contracts
+ok 185 - nagi inferred standard operations insert positional calls and retain exact callback and Future contracts
+  ---
+  duration_ms: 4.449925
+  type: 'test'
+  ...
+# Subtest: low saved snapshots complete new modules and from-import names before imports are checked
+ok 186 - low saved snapshots complete new modules and from-import names before imports are checked
+  ---
+  duration_ms: 0.926766
+  type: 'test'
+  ...
+# Subtest: low readiness and wait resources preserve namespaces and do not offer constructors
+ok 187 - low readiness and wait resources preserve namespaces and do not offer constructors
+  ---
+  duration_ms: 2.999475
+  type: 'test'
+  ...
+# Subtest: low WaitError value fields keep borrowed payload types and read-only status
+ok 188 - low WaitError value fields keep borrowed payload types and read-only status
+  ---
+  duration_ms: 0.519625
+  type: 'test'
+  ...
+# Subtest: low inferred standard operations insert positional calls and retain exact callback and Future contracts
+ok 189 - low inferred standard operations insert positional calls and retain exact callback and Future contracts
+  ---
+  duration_ms: 24.402216
+  type: 'test'
+  ...
+# Subtest: new operations and constants navigate to compiler standard sources with UTF-16 locations
+ok 190 - new operations and constants navigate to compiler standard sources with UTF-16 locations
+  ---
+  duration_ms: 5.141452
+  type: 'test'
+  ...
+# Subtest: real nagi borrowed list locals and nested fields keep read-only metadata in editor assistance
+ok 191 - real nagi borrowed list locals and nested fields keep read-only metadata in editor assistance
+  ---
+  duration_ms: 698.190925
+  type: 'test'
+  ...
+# Subtest: real low borrowed list locals and nested fields keep read-only metadata in editor assistance
+ok 192 - real low borrowed list locals and nested fields keep read-only metadata in editor assistance
+  ---
+  duration_ms: 739.377516
+  type: 'test'
+  ...
+# Subtest: real nagi map_error aliases retain inferred generics and standard virtual navigation
+ok 193 - real nagi map_error aliases retain inferred generics and standard virtual navigation
+  ---
+  duration_ms: 717.941648
+  type: 'test'
+  ...
+# Subtest: real low map_error aliases retain inferred generics and standard virtual navigation
+ok 194 - real low map_error aliases retain inferred generics and standard virtual navigation
+  ---
+  duration_ms: 494.222196
+  type: 'test'
+  ...
+# Subtest: real nagi readiness and deadline API assistance keeps resource aliases and read-only fields
+ok 195 - real nagi readiness and deadline API assistance keeps resource aliases and read-only fields
+  ---
+  duration_ms: 1171.532015
+  type: 'test'
+  ...
+# Subtest: real low readiness and deadline API assistance keeps resource aliases and read-only fields
+ok 196 - real low readiness and deadline API assistance keeps resource aliases and read-only fields
+  ---
+  duration_ms: 754.324605
+  type: 'test'
+  ...
+1..196
+# tests 196
+# suites 0
+# pass 196
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 15925.47911

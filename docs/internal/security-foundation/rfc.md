@@ -2,7 +2,7 @@
 
 [English](rfc.en.md) · [現行調査](baseline-audit.md) · [PR/検証計画](implementation-plan.md)
 
-状態: **安全性優先の実装方針へ改訂**。2026-10-08 JST。ユーザーの最新指示に基づき、D1–D3の互換性優先案を見直した。[判断と移行](decisions-and-migration.md)を実装の基準にする。0.2.0機能は未実装・未リリースで、現行0.1.xの利用条件を遡及変更しない。Task/spawn・Tx・High/Lowの基本契約は維持する。
+状態: **安全性優先の実装方針へ改訂**。2026-10-08 JST。ユーザーの最新指示に基づき、D1–D3の互換性優先案を見直した。[判断と移行](decisions-and-migration.md)を実装の基準にする。SF01は別Draftの開発sourceへ接続中です。[SF01契約](sf01-contract.md)・結果台帳を参照してください。後続SF02–SF08と正式0.2.0は未完成・未リリースで、現行0.1.xの利用条件を遡及変更しない。Task/spawn・Tx・High/Lowの基本契約は維持する。
 
 ## 目的と範囲
 
@@ -186,4 +186,4 @@ rate limitingはauth主体/route等のbounded identityと明示policyで提供�
 
 参照: OWASP [Authentication](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)、[Authorization](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html)、[CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)、[XSS](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)、[SQLi](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)、[SSRF](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html)、[Session](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)、[DoS](https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html)、[WHATWG Fetch/CORS](https://fetch.spec.whatwg.org/#http-cors-protocol)、[RFC6265](https://www.rfc-editor.org/rfc/rfc6265)、[RFC9110](https://www.rfc-editor.org/rfc/rfc9110)、[RFC8725 JWT BCP](https://www.rfc-editor.org/rfc/rfc8725)。SameSite/prefixはRFC6265だけの保証ではなく現代browserの検証が必要。[取得記録](reference-retrieval.json)。
 
-このRFCはsecurity certificationではない。runtime未実装、依存比較・browser/proxy/実DNS/TLS・migration手順の実行は今後のacceptance。無関係な最高難度modelの重複調査、汎用攻撃自動化、第三者への検証、無制限資源実験は実装計画へ含めない。
+このRFCはsecurity certificationではない。全機能統合、依存比較・browser/proxy/実DNS/TLSは今後のacceptance。SF01の実装・移行検証は専用結果記録で区別する。無関係な最高難度modelの重複調査、汎用攻撃自動化、第三者への検証、無制限資源実験は実装計画へ含めない。

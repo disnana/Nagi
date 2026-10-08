@@ -34,7 +34,7 @@ impl Drop for Fixture {
     }
 }
 
-const DECLARATIONS: &str = "import std.auth as auth\nenum Read:\n    Permission\nenum Write:\n    Permission\n@rust(\"native::principal\")\nextern def principal(subject: i64) -> auth.Principal\n@rust(\"native::grant\")\nextern def grant(principal: view[auth.Principal], resource: i64) -> auth.Grant[Read]\n@rust(\"native::write_grant\")\nextern def write_grant(principal: view[auth.Principal], resource: i64) -> auth.Grant[Write]\n@rust(\"native::read\")\nextern def read(grant: auth.Grant[Read]) -> i64\n";
+const DECLARATIONS: &str = "import std.auth as auth\nenum Read:\n    Permission\nenum Write:\n    Permission\n@rust(\"native::grant\")\nextern def grant(scope: auth.AuthScope, resource: i64) -> auth.Grant[Read]\n@rust(\"native::write_grant\")\nextern def write_grant(scope: auth.AuthScope, resource: i64) -> auth.Grant[Write]\n@rust(\"native::read\")\nextern def read(grant: auth.Grant[Read]) -> i64\n";
 
 fn rejects(body: &str, reason: &str) {
     let fixture = Fixture::new();
@@ -61,11 +61,11 @@ fn missing_principal_grant_wrong_permission_and_reuse_are_rejected() {
     rejects("def main():\n    grant(9)\n", "引数");
     rejects("def main():\n    grant(42, 9)\n", "型");
     rejects(
-        "def main():\n    p = principal(42)\n    g = write_grant(view(p), 9)\n    read(g)\n",
+        "def consume(p: auth.AuthScope):\n    g = write_grant(p, 9)\n    read(g)\n",
         "型",
     );
     rejects(
-        "def main():\n    p = principal(42)\n    g = grant(view(p), 9)\n    read(g)\n    read(g)\n",
+        "def consume(p: auth.AuthScope):\n    g = grant(p, 9)\n    read(g)\n    read(g)\n",
         "move",
     );
     rejects(
@@ -76,9 +76,9 @@ fn missing_principal_grant_wrong_permission_and_reuse_are_rejected() {
 
 #[test]
 fn indirect_arc_state_cannot_share_a_proof() {
-    rejects("import std.http.server as http\ndef main():\n    app = http.app_default[auth.Principal](principal(42))\n", "shared");
-    rejects("import std.actor as actor\ndef main():\n    group = actor.supervisor[Option[auth.Principal]](some(principal(42)), actor.default_options())\n", "shared");
-    rejects("import std.http.server as http\ndef invalid(app: http.App[auth.Principal, Error]):\n    print(0)\n", "shared");
+    rejects("import std.http.server as http\ndef consume(p: auth.AuthScope):\n    app = http.app_default[auth.AuthScope](p)\n", "shared");
+    rejects("import std.actor as actor\ndef consume(p: auth.AuthScope):\n    group = actor.supervisor[Option[auth.AuthScope]](some(p), actor.default_options())\n", "shared");
+    rejects("import std.http.server as http\ndef invalid(app: http.App[auth.AuthScope, Error]):\n    print(0)\n", "shared");
 }
 
 #[test]
@@ -101,19 +101,19 @@ import std.http.server as http
 enum Read:
     Permission
 class Holder:
-    principal_app: http.App[i64, auth.Principal]
+    principal_app: http.App[i64, auth.AuthScope]
     grant_app: http.App[i64, auth.Grant[Read]]
     callback_app: http.App[i64, fn[auth.Grant[Read], i64]]
 @rust("native::verify")
 extern def verify(value: Holder) -> unit
-def principal_error(proof: auth.Principal) -> http.Response:
+def principal_error(proof: auth.AuthScope) -> http.Response:
     return http.empty(http.Status.UNAUTHORIZED)
 def grant_error(proof: auth.Grant[Read]) -> http.Response:
     return http.empty(http.Status.FORBIDDEN)
 def callback_error(callback: fn[auth.Grant[Read], i64]) -> http.Response:
     return http.empty(http.Status.INTERNAL_SERVER_ERROR)
 def main():
-    value = Holder(principal_app=http.app[i64, auth.Principal](1, principal_error), grant_app=http.app[i64, auth.Grant[Read]](2, grant_error), callback_app=http.app[i64, fn[auth.Grant[Read], i64]](3, callback_error))
+    value = Holder(principal_app=http.app[i64, auth.AuthScope](1, principal_error), grant_app=http.app[i64, auth.Grant[Read]](2, grant_error), callback_app=http.app[i64, fn[auth.Grant[Read], i64]](3, callback_error))
     verify(value)
 "#;
     let high = fixture.checked(text, true).unwrap();
@@ -123,7 +123,7 @@ def main():
     // rather than only asserting that the generated text mentions these types.
     fs::write(
         fixture.0.join("native.rs"),
-        "pub fn verify(value: super::Holder) {\n    let _: nagi_runtime::http_server::App<i64, nagi_runtime::auth::Principal> = value.principal_app;\n    let _: nagi_runtime::http_server::App<i64, nagi_runtime::auth::Grant<super::Read>> = value.grant_app;\n    let _: nagi_runtime::http_server::App<i64, fn(nagi_runtime::auth::Grant<super::Read>) -> i64> = value.callback_app;\n}\n",
+        "pub fn verify(value: super::Holder) {\n    let _: nagi_runtime::http_server::App<i64, nagi_runtime::auth::AuthScope> = value.principal_app;\n    let _: nagi_runtime::http_server::App<i64, nagi_runtime::auth::Grant<super::Read>> = value.grant_app;\n    let _: nagi_runtime::http_server::App<i64, fn(nagi_runtime::auth::Grant<super::Read>) -> i64> = value.callback_app;\n}\n",
     )
     .unwrap();
     for (name, text) in [("main.nagi", text.to_owned()), ("saved.low", low)] {
@@ -147,65 +147,47 @@ def main():
     }
     // The state/context is an actual retained Arc payload. Turn's state is
     // inline, so it must still obey the owned-field storage restriction.
-    rejects("import std.http.server as http\nclass Invalid:\n    app: http.App[auth.Principal, Error]\n", "shared");
+    rejects("import std.http.server as http\nclass Invalid:\n    app: http.App[auth.AuthScope, Error]\n", "shared");
     rejects("import std.actor as actor\nclass Invalid:\n    group: actor.Supervisor[Option[auth.Grant[Read]]]\n", "shared");
-    rejects("import std.actor as actor\nclass Invalid:\n    turn: actor.Turn[Option[auth.Principal], i64, Error]\n", "field");
+    rejects("import std.actor as actor\nclass Invalid:\n    turn: actor.Turn[Option[auth.AuthScope], i64, Error]\n", "field");
 }
 
 #[test]
 fn opaque_main_errors_fail_without_a_debug_bound_or_proof_payload() {
     let fixture = Fixture::new();
-    fs::write(fixture.0.join("native.rs"), "pub fn principal(subject:i64)->nagi_runtime::auth::Principal { nagi_runtime::auth::Principal::from_verified_subject(subject) }\npub fn grant(principal:&nagi_runtime::auth::Principal, resource:i64)->nagi_runtime::auth::Grant<super::Read> { nagi_runtime::auth::Grant::from_authorized(principal,resource) }\npub fn write_grant(principal:&nagi_runtime::auth::Principal, resource:i64)->nagi_runtime::auth::Grant<super::Write> { nagi_runtime::auth::Grant::from_authorized(principal,resource) }\npub fn read(grant:nagi_runtime::auth::Grant<super::Read>)->i64 { let (subject,resource)=grant.into_authorized_parts(); subject+resource }\n").unwrap();
-    for (index, (error_type, value)) in [
-        ("auth.Principal", "principal(918273)"),
-        ("Option[auth.Principal]", "some(principal(918273))"),
-        ("auth.Grant[Read]", "grant(view(p), 876543)"),
-    ]
-    .iter()
-    .enumerate()
-    {
-        let text = format!("{DECLARATIONS}def main() -> Result[unit, {error_type}]:\n    p = principal(918273)\n    return fail({value})\n");
-        let high = fixture.checked(&text, true).unwrap();
-        for (name, source) in [
-            (format!("main-{index}.nagi"), text),
-            (format!("saved-{index}.low"), emit::low(&high)),
-        ] {
-            let path = fixture.0.join(&name);
-            fs::write(&path, source).unwrap();
-            let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
-                .arg("run")
-                .arg(&path)
-                .arg("--no-project")
-                .arg("--rust")
-                .arg(fixture.0.join("native.rs"))
-                .arg("--out")
-                .arg(fixture.0.join(format!("build-{name}")))
-                .output()
-                .unwrap();
-            let error = String::from_utf8_lossy(&output.stderr);
-            assert_eq!(output.status.code(), Some(1), "{name}: {error}");
-            assert!(
-                error.contains("NagiのmainがErrを返しました"),
-                "{name}: {error}"
-            );
-            assert!(
-                !error.contains("918273") && !error.contains("876543"),
-                "{name}: {error}"
-            );
-            assert!(
-                !error.contains("E0277") && !error.contains("Build failed"),
-                "{name}: {error}"
-            );
-        }
+    // A CLI cannot mint a live HTTP request proof. An empty owned wrapper still
+    // exercises main's opaque-error path without reintroducing an issuer.
+    let text = "import std.auth as auth\ndef main() -> Result[unit, Option[auth.AuthScope]]:\n    return fail(None)\n";
+    let high = fixture.checked(text, true).unwrap();
+    for (name, text) in [
+        ("main.nagi", text.to_owned()),
+        ("saved.low", emit::low(&high)),
+    ] {
+        let path = fixture.0.join(name);
+        fs::write(&path, text).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .args(["run", "--no-project"])
+            .arg(&path)
+            .arg("--out")
+            .arg(fixture.0.join(format!("build-{name}")))
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{stderr}");
+        assert!(stderr.contains("NagiのmainがErrを返しました"), "{stderr}");
+        assert!(
+            !stderr.contains("Build failed") && !stderr.contains("E0277"),
+            "{stderr}"
+        );
     }
 }
 
 #[test]
 fn opaque_proofs_cannot_be_constructed_decoded_copied_or_shared() {
-    rejects("def main():\n    auth.Principal()\n", "resource");
+    rejects("def main():\n    auth.AuthScope()\n", "resource");
     rejects("def main():\n    auth.Grant[Read]()\n", "resource");
     rejects(
-        "def main():\n    value = json_decode[auth.Principal](\"{}\")\n",
+        "def main():\n    value = json_decode[auth.AuthScope](\"{}\")\n",
         "JSON",
     );
     rejects(
@@ -213,19 +195,16 @@ fn opaque_proofs_cannot_be_constructed_decoded_copied_or_shared() {
         "JSON",
     );
     rejects(
-        "def main():\n    p = principal(1)\n    copy(view(p))\n",
+        "def consume(p: auth.AuthScope):\n    copy(view(p))\n",
         "Copy",
     );
+    rejects("def consume(p: auth.AuthScope):\n    share(p)\n", "shared");
     rejects(
-        "def main():\n    p = principal(1)\n    share(p)\n",
+        "def consume(p: auth.AuthScope):\n    share(some(p))\n",
         "shared",
     );
     rejects(
-        "def main():\n    p = principal(1)\n    share(some(p))\n",
-        "shared",
-    );
-    rejects(
-        "def invalid(value: shared[Option[auth.Principal]]):\n    print(0)\n",
+        "def invalid(value: shared[Option[auth.AuthScope]]):\n    print(0)\n",
         "shared",
     );
     rejects(
@@ -233,7 +212,7 @@ fn opaque_proofs_cannot_be_constructed_decoded_copied_or_shared() {
         "field",
     );
     rejects(
-        "enum Box:\n    Proof(value: auth.Principal)\ndef main():\n    print(0)\n",
+        "enum Box:\n    Proof(value: auth.AuthScope)\ndef main():\n    print(0)\n",
         "field",
     );
     rejects(
@@ -249,7 +228,7 @@ fn opaque_proofs_cannot_be_constructed_decoded_copied_or_shared() {
 #[test]
 fn aliases_option_result_and_async_delegation_preserve_proof_identity() {
     let fixture = Fixture::new();
-    let text = format!("{DECLARATIONS}from std.auth import Principal as Identity, Grant as Permit\nasync def delegate(value: Permit[Read]) -> i64:\n    await sleep(1)\n    return read(value)\nasync def main():\n    p: Identity = principal(42)\n    g: Option[Permit[Read]] = some(grant(view(p), 9))\n    match g:\n        case Some(proof):\n            print(await delegate(proof))\n        case None:\n            print(0)\n");
+    let text = format!("{DECLARATIONS}from std.auth import AuthScope as Identity, Grant as Permit\nasync def delegate(value: Permit[Read]) -> i64:\n    await sleep(1)\n    return read(value)\nasync def consume(p: Identity):\n    g: Option[Permit[Read]] = some(grant(p, 9))\n    match g:\n        case Some(proof):\n            print(await delegate(proof))\n        case None:\n            print(0)\n");
     let high = fixture.checked(&text, true).unwrap();
     let low = fixture.checked(&emit::low(&high), false).unwrap();
     assert_eq!(
@@ -264,7 +243,7 @@ fn aliases_option_result_and_async_delegation_preserve_proof_identity() {
 #[test]
 fn handwritten_low_and_owned_local_containers_keep_nominal_marker_identity() {
     let fixture = Fixture::new();
-    let low = "import std.auth as auth;\nenum Read { Permission; }\n@rust(\"native::principal\")\nextern fn principal(subject: i64) -> auth.Principal;\n@rust(\"native::grant\")\nextern fn grant(principal: view[auth.Principal], resource: i64) -> auth.Grant[Read];\nfn main() -> unit { let p: auth.Principal = principal(1); let grants: List[auth.Grant[Read]] = [grant(view(p), 9)]; print(len(grants)); }\n";
+    let low = "import std.auth as auth;\nenum Read { Permission; }\n@rust(\"native::grant\")\nextern fn grant(scope: auth.AuthScope, resource: i64) -> auth.Grant[Read];\nfn consume(p: auth.AuthScope) -> unit { let grants: List[auth.Grant[Read]] = [grant(p, 9)]; print(len(grants)); }\n";
     let checked = fixture.checked(low, false).unwrap();
     assert!(emit::rust(&checked_emission::seal(&checked))
         .unwrap()
@@ -278,30 +257,7 @@ fn handwritten_low_and_owned_local_containers_keep_nominal_marker_identity() {
 }
 
 #[test]
-fn proof_move_and_nominal_marker_build_and_run_against_real_runtime() {
-    let fixture = Fixture::new();
-    let text = format!("{DECLARATIONS}async def delegate(value: auth.Grant[Read]) -> i64:\n    await sleep(1)\n    return read(value)\nasync def main():\n    p = principal(42)\n    g = grant(view(p), 9)\n    print(await delegate(g))\n    grants = [grant(view(p), 9)]\n    print(len(grants))\n");
-    let high = fixture.checked(&text, true).unwrap();
-    let low = emit::low(&high);
-    fs::write(fixture.0.join("native.rs"), "pub fn principal(subject:i64)->nagi_runtime::auth::Principal { nagi_runtime::auth::Principal::from_verified_subject(subject) }\npub fn grant(principal:&nagi_runtime::auth::Principal, resource:i64)->nagi_runtime::auth::Grant<super::Read> { nagi_runtime::auth::Grant::from_authorized(principal,resource) }\npub fn write_grant(principal:&nagi_runtime::auth::Principal, resource:i64)->nagi_runtime::auth::Grant<super::Write> { nagi_runtime::auth::Grant::from_authorized(principal,resource) }\npub fn read(grant:nagi_runtime::auth::Grant<super::Read>)->i64 { let (subject,resource)=grant.into_authorized_parts(); subject+resource }\n").unwrap();
-    for (name, text) in [("main.nagi", text), ("saved.low", low)] {
-        let path = fixture.0.join(name);
-        fs::write(&path, text).unwrap();
-        let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
-            .arg("run")
-            .arg(&path)
-            .arg("--no-project")
-            .arg("--rust")
-            .arg(fixture.0.join("native.rs"))
-            .arg("--out")
-            .arg(fixture.0.join(format!("build-{name}")))
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{name}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "51\n1");
-    }
+fn task_transfer_of_captured_and_returned_proofs_is_rejected() {
+    rejects("async def use_scope(value: auth.AuthScope):\n    print(auth.subject(view(value)))\nasync def consume(value: auth.AuthScope) -> Result[unit, Error]:\n    async with scope:\n        spawn use_scope(value)\n    return ok(print(0))\n", "SameTask");
+    rejects("@rust(\"native::produce\")\nextern async def produce() -> auth.Grant[Read]\nasync def consume() -> Result[unit, Error]:\n    async with scope:\n        task = spawn produce()\n        result = await task\n    return ok(print(0))\n", "SameTask");
 }

@@ -1,0 +1,10 @@
+{
+  "reason": "Only source, provenance and original logs are stored in Git. Locally executed binary copies were hashed and omitted; this is not a new execution.",
+  "omitted": [
+    {
+      "path": "independent-review-d127b28/p2-out/.nagi/apps/nagi-p2-policy-35ccc66b490314f2/generations/g-72cb6-18dc89522477954b-0/nagi-35ccc66b490314f2-g-72cb6-18dc89522477954b-0",
+      "bytes": 540816,
+      "sha256": "42d68072735b4ae4b161571d829be348bc0545d03c050154ade69d0a99dbe4ce"
+    }
+  ]
+}

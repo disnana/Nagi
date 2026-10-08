@@ -25,7 +25,7 @@ for (const [name, snippet] of Object.entries(snippets)) {
     t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
     let text = expand(snippet);
     if (name === 'GET handler' || name === 'POST handler') {
-      text = 'class Item:\n    id: i64\n    name: str\n    age: i32\nclass CreateItem:\n    name: str\n    age: i32\n' + text;
+      text = 'class State:\n    greeting: str\n' + text;
     }
     if (['Loop', 'Result match', 'Nullable match'].includes(name)) {
       const setup = name === 'Result match' ? '    result = parse_i64("7")\n'

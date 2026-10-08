@@ -1,0 +1,9 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf01/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.26s
+     Running tests/security_sf01_native.rs (/workspace/nagi-sf01-target/debug/deps/security_sf01_native-9ff5e4ae1b4a33de)
+
+running 1 test
+test policies_and_nominal_request_proofs_execute_in_all_three_paths ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.14s
+

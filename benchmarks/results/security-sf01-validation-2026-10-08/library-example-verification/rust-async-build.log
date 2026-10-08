@@ -1,0 +1,4 @@
+     Locking 105 packages to highest compatible versions
+   Compiling nagi-tokio-timer-fce6d9ca95f2d025 v0.1.0 (/workspace/Nagi-security-sf01/test-nagi-code/library-examples/rust-async/build/tokio-timer/.nagi/apps/nagi-tokio-timer-fce6d9ca95f2d025/generations/.staging-g-69242-18dc880d78e8449b-0)
+    Finished `release` profile [optimized] target(s) in 0.87s
+native: /workspace/Nagi-security-sf01/test-nagi-code/library-examples/rust-async/build/tokio-timer/.nagi/apps/nagi-tokio-timer-fce6d9ca95f2d025/generations/g-69242-18dc880d78e8449b-0/nagi-fce6d9ca95f2d025-g-69242-18dc880d78e8449b-0

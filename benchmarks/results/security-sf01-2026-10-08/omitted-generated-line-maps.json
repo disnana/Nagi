@@ -1,0 +1,47 @@
+{
+  "reason": "Derived per-generation Rust diagnostic line maps are omitted from Git after hashing to avoid repeated generated metadata. Original commands/logs, generated Rust and Low, and source/environment provenance remain; no source hash or measurement is rewritten. These archived generations are evidence, not directly executable distributions.",
+  "files": [
+    {
+      "path": "nagi-policy/generated-app/.nagi/apps/nagi-main-561df82d96b0251d/generations/g-71a98-18dc89263347e899-0/provenance.json",
+      "bytes": 182092,
+      "sha256": "e18a0c517ba264609fe11dd66c4bc179dfc944e009102a3944235c53e3f04ce2",
+      "schema_version": 1,
+      "rust_line_map_entries": 238
+    },
+    {
+      "path": "nagi-policy/generated-app/.nagi/apps/nagi-main-561df82d96b0251d/generations/g-71aec-18dc892a01cc86da-0/provenance.json",
+      "bytes": 182092,
+      "sha256": "e18a0c517ba264609fe11dd66c4bc179dfc944e009102a3944235c53e3f04ce2",
+      "schema_version": 1,
+      "rust_line_map_entries": 238
+    },
+    {
+      "path": "nagi-policy/generated-app/.nagi/apps/nagi-main-561df82d96b0251d/generations/g-71b44-18dc892d7b26c2f6-0/provenance.json",
+      "bytes": 182092,
+      "sha256": "e18a0c517ba264609fe11dd66c4bc179dfc944e009102a3944235c53e3f04ce2",
+      "schema_version": 1,
+      "rust_line_map_entries": 238
+    },
+    {
+      "path": "rust-policy/generated-app/.nagi/apps/nagi-main-04b4b7b019932244/generations/g-71f50-18dc893314d15dd8-0/provenance.json",
+      "bytes": 157742,
+      "sha256": "2816c0ce900a0a672831d3f9677a430a86812ccfad5d0780a2dcdcee832b8853",
+      "schema_version": 1,
+      "rust_line_map_entries": 221
+    },
+    {
+      "path": "rust-policy/generated-app/.nagi/apps/nagi-main-04b4b7b019932244/generations/g-71bb3-18dc89315bfd2e74-0/provenance.json",
+      "bytes": 157742,
+      "sha256": "2816c0ce900a0a672831d3f9677a430a86812ccfad5d0780a2dcdcee832b8853",
+      "schema_version": 1,
+      "rust_line_map_entries": 221
+    },
+    {
+      "path": "rust-policy/generated-app/.nagi/apps/nagi-main-04b4b7b019932244/generations/g-7208f-18dc8934cf831746-0/provenance.json",
+      "bytes": 157742,
+      "sha256": "2816c0ce900a0a672831d3f9677a430a86812ccfad5d0780a2dcdcee832b8853",
+      "schema_version": 1,
+      "rust_line_map_entries": 221
+    }
+  ]
+}

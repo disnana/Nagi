@@ -1,0 +1,29 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf01/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.51s
+     Running tests/security_sf01.rs (/workspace/nagi-sf01-target/debug/deps/security_sf01-4f55148d3dc7aafd)
+
+running 2 tests
+test security_nonshared_payloads_are_rejected_through_wrappers_and_fields ... FAILED
+test security_nonclone_payloads_are_rejected_at_copy_in_high_and_saved_low ... FAILED
+
+failures:
+
+---- security_nonshared_payloads_are_rejected_through_wrappers_and_fields stdout ----
+
+thread 'security_nonshared_payloads_are_rejected_through_wrappers_and_fields' (470375) panicked at compiler/tests/security_sf01.rs:38:51:
+legacy security entry accepted: ()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- security_nonclone_payloads_are_rejected_at_copy_in_high_and_saved_low stdout ----
+
+thread 'security_nonclone_payloads_are_rejected_at_copy_in_high_and_saved_low' (470374) panicked at compiler/tests/security_sf01.rs:38:51:
+legacy security entry accepted: ()
+
+
+failures:
+    security_nonclone_payloads_are_rejected_at_copy_in_high_and_saved_low
+    security_nonshared_payloads_are_rejected_through_wrappers_and_fields
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.29s
+
+error: test failed, to rerun pass `-p nagic --test security_sf01`

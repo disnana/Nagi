@@ -1,4 +1,5 @@
 pub(crate) mod checked;
+mod security;
 mod sqlite;
 
 use crate::ast::{block_returns as returns, *};
@@ -1084,7 +1085,13 @@ impl Checker {
         }
         Ok(())
     }
-    fn handler_error(&self, handler: &Expr, state: &Type, line: usize) -> Result<Type, String> {
+    fn handler_error(
+        &self,
+        handler: &Expr,
+        state: &Type,
+        authority: &Type,
+        line: usize,
+    ) -> Result<Type, String> {
         let named = match (&handler.kind, handler.resolution) {
             (E::Name(name), Some(NameResolution::Function)) => {
                 self.functions.get(name).is_some_and(|f| f.asynchronous)
@@ -1102,10 +1109,10 @@ impl Checker {
             ));
         }
         let ty = handler.ty.as_ref().expect("checked callback");
-        if ty.0 != "fn" || ty.1.len() != 3 || !ty.1[2].is_future() {
+        if ty.0 != "fn" || ty.1.len() != 4 || !ty.1[3].is_future() {
             return Err(error(
                 line,
-                "HTTP handlerはasync (Request, shared[State])->Result[Response,E]が必要です",
+                "HTTP handlerはasync (Request, shared[State], Policyの出力型)->Result[Response,E]が必要です",
             ));
         }
         self.demand(
@@ -1118,7 +1125,8 @@ impl Checker {
             &Type::generic("shared", vec![state.clone()]),
             line,
         )?;
-        let output = ty.1[2].inner();
+        self.demand(&ty.1[2], authority, line)?;
+        let output = ty.1[3].inner();
         if output.0 != "Result" || output.1.len() != 2 {
             return Err(error(
                 line,
@@ -1149,6 +1157,20 @@ impl Checker {
     ) -> Result<Type, String> {
         use crate::stdlib::{Operation as O, Passing, Resource as R};
         let info = crate::stdlib::operation_info(operation);
+        if info.module == crate::stdlib::StandardModule::Auth
+            || matches!(
+                operation,
+                O::PublicPolicy | O::AuthenticatedPolicy | O::AuthorizedPolicy | O::SecurityTimeout
+            )
+        {
+            return self.security_standard(operation, types, args, line);
+        }
+        if operation == O::Html {
+            return Err(error(line, "SF01 migration: raw HTMLは廃止しました。text/bytesを使用し、typed HTMLはSF04の移行契約を参照してください"));
+        }
+        if matches!(operation, O::Route | O::RouteMapped) && args.len() + 1 == info.arity {
+            return Err(error(line, "SF01 migration: routeには明示Policyと第3引数を取るhandlerが必要です。public_policy/authenticated_policy/authorized_policyを指定してください"));
+        }
         if info.module == crate::stdlib::StandardModule::Sqlite {
             return self.sqlite_standard(operation, types, args, line);
         }
@@ -1345,11 +1367,16 @@ impl Checker {
                 if operation == O::Serve {
                     future(result(Type::named("unit")))
                 } else {
-                    let failure = self.handler_error(&args[3], &app.1[0], line)?;
+                    let policy = &arguments[3];
+                    if self.resource(&policy.0) != Some(R::HttpPolicy) || policy.1.len() != 2 {
+                        return Err(error(line, "HTTP routeには標準Policy[State,A]が必要です"));
+                    }
+                    self.demand(&policy.1[0], &app.1[0], line)?;
+                    let failure = self.handler_error(&args[4], &app.1[0], &policy.1[1], line)?;
                     if operation == O::Route {
                         self.demand(&failure, &app.1[1], line)?;
                     } else {
-                        self.mapper(&arguments[4], &failure, line)?;
+                        self.mapper(&arguments[5], &failure, line)?;
                     }
                     result(app.clone())
                 }
@@ -1892,6 +1919,9 @@ impl Checker {
         visit(t, &self.classes, &self.enums, &self.registered, 0)
     }
     fn valid(&self, t: &Type, line: usize) -> Result<(), String> {
+        if t.0 == "Html" {
+            return Err(error(line, "SF01 migration: 旧Html型は廃止しました。text/bytesを使用し、typed HTMLはSF04へ移行してください"));
+        }
         if let Some(alias) = t.0.strip_prefix(crate::modules::NAMESPACE_PREFIX) {
             return Err(error(
                 line,
@@ -1899,6 +1929,9 @@ impl Checker {
             ));
         }
         if let Some(resource) = self.resource(&t.0) {
+            if resource == crate::stdlib::Resource::Principal {
+                return Err(error(line, "SF01 migration: Principalは廃止しました。request内ではAuthScopeまたはGrant[P]を使用してください"));
+            }
             let arity = crate::stdlib::resource_info(resource).arity;
             if t.1.len() != arity {
                 return Err(error(line, format!("{t}の型引数は{arity}個です")));
@@ -1921,6 +1954,20 @@ impl Checker {
                     ),
                 ));
             }
+            if resource == crate::stdlib::Resource::HttpPolicy {
+                let authority = &t.1[1];
+                if authority != &Type::named("unit")
+                    && !matches!(
+                        self.resource(&authority.0),
+                        Some(crate::stdlib::Resource::AuthScope | crate::stdlib::Resource::Grant)
+                    )
+                {
+                    return Err(error(
+                        line,
+                        "HTTP Policyの出力型はunit/AuthScope/Grant[P]に限ります",
+                    ));
+                }
+            }
             if resource == crate::stdlib::Resource::Grant {
                 let marker = &t.1[0];
                 if !marker.1.is_empty()
@@ -1941,6 +1988,16 @@ impl Checker {
                     return Err(error(
                         line,
                         "SQLiteの非共有resourceを内部shared state/contextへ格納できません",
+                    ));
+                }
+                if crate::capabilities::contains_security_nonshared(
+                    &t.1[*index],
+                    &self.classes,
+                    &self.enums,
+                ) {
+                    return Err(error(
+                        line,
+                        "非共有 security resourceを内部shared state/contextへ格納できません",
                     ));
                 }
                 if crate::capabilities::contains_auth_proof(
@@ -2010,6 +2067,14 @@ impl Checker {
                 return Err(error(
                     line,
                     "auth proofをsharedへ格納できません（nested wrapperを含みます）",
+                ));
+            }
+            if t.0 == "shared"
+                && crate::capabilities::contains_security_nonshared(t, &self.classes, &self.enums)
+            {
+                return Err(error(
+                    line,
+                    "非共有 security resourceをsharedへ格納できません（nested payloadを含みます）",
                 ));
             }
             if t.1.len() != n {
@@ -3440,7 +3505,12 @@ impl Checker {
         {
             return Err(error(
                 e.line,
-                "SQLite Txの実payloadをTaskの結果として別taskへ渡せません",
+                if crate::capabilities::contains_auth_proof(&t.inner(), &self.classes, &self.enums)
+                {
+                    "SameTask auth proofの実payloadをTaskの結果として別taskへ渡せません"
+                } else {
+                    "SQLite Txの実payloadをTaskの結果として別taskへ渡せません"
+                },
             ));
         }
         if !legacy {
@@ -3463,7 +3533,15 @@ impl Checker {
             ) {
                 return Err(error(
                     e.line,
-                    "SQLite Txの実payloadを別taskへ渡せません。同taskでawaitしてください",
+                    if crate::capabilities::contains_auth_proof(
+                        &argument.ty,
+                        &self.classes,
+                        &self.enums,
+                    ) {
+                        "SameTask auth proofの実payloadを別taskへ渡せません。同taskでawaitしてください"
+                    } else {
+                        "SQLite Txの実payloadを別taskへ渡せません。同taskでawaitしてください"
+                    },
                 ));
             }
             if argument.ty.contains_view()
@@ -3847,7 +3925,13 @@ impl Checker {
             E::Record(n, fields) => {
                 if matches!(
                     self.resource(n),
-                    Some(crate::stdlib::Resource::Principal | crate::stdlib::Resource::Grant)
+                    Some(
+                        crate::stdlib::Resource::Principal
+                            | crate::stdlib::Resource::AuthScope
+                            | crate::stdlib::Resource::VerifiedIdentity
+                            | crate::stdlib::Resource::HttpPolicy
+                            | crate::stdlib::Resource::Grant
+                    )
                 ) {
                     return Err(error(line, "auth proof resourceは構築できません。trusted Rust issuerを使用してください"));
                 }
@@ -3975,7 +4059,13 @@ impl Checker {
                 }
                 if matches!(
                     self.resource(n),
-                    Some(crate::stdlib::Resource::Principal | crate::stdlib::Resource::Grant)
+                    Some(
+                        crate::stdlib::Resource::Principal
+                            | crate::stdlib::Resource::AuthScope
+                            | crate::stdlib::Resource::VerifiedIdentity
+                            | crate::stdlib::Resource::HttpPolicy
+                            | crate::stdlib::Resource::Grant
+                    )
                 ) {
                     return Err(error(line, "auth proof resourceは構築できません。trusted Rust issuerを使用してください"));
                 }
@@ -4044,6 +4134,9 @@ impl Checker {
         expected: Option<&Type>,
         line: usize,
     ) -> Result<Type, String> {
+        if matches!(n, "serve" | "html") {
+            return Err(error(line, "SF01 migration: 旧serve/htmlは廃止しました。std.http.serverの明示Policy付きrouteとserveを使用してください。raw HTMLはSF04のtyped HTMLへ移行してください"));
+        }
         let arity = match n {
             "clock_ns" | "supervisor_demo" | "read_line" => 0,
             "size_of" => 0,
@@ -4230,6 +4323,16 @@ impl Checker {
                         "非Copy auth proofはcopyできません（nested wrapperを含みます）",
                     ));
                 }
+                if crate::capabilities::contains_security_nonclone(
+                    &types[0],
+                    &self.classes,
+                    &self.enums,
+                ) {
+                    return Err(error(
+                        line,
+                        "非Clone security resourceはcopyできません（nested payloadを含みます）",
+                    ));
+                }
                 if !types[0].is_view() {
                     return Err(error(line, "copyの対象はviewです"));
                 }
@@ -4268,6 +4371,13 @@ impl Checker {
                         line,
                         "auth proofをsharedへ変換できません（nested wrapperを含みます）",
                     ));
+                }
+                if crate::capabilities::contains_security_nonshared(
+                    &types[0],
+                    &self.classes,
+                    &self.enums,
+                ) {
+                    return Err(error(line, "非共有 security resourceをsharedへ変換できません（nested payloadを含みます）"));
                 }
                 if self
                     .resource(&types[0].0)

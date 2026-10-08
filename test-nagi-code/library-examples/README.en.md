@@ -1,6 +1,6 @@
 # Library and Rust integration examples
 
-Ten projects demonstrate shared code, custom errors, Rust crates, standard HTTP, a custom Axum server, Supervisors, and Low function replacement.
+Ten projects demonstrate shared code, custom errors, Rust crates, standard HTTP with explicit policies, a custom Axum host, Supervisors, and Low function replacement. Standard HTTP samples declare a public or authenticated policy on each route; the custom Axum sample is a separate trusted host boundary.
 
 [Projects and run instructions](../../docs/en/library-examples.md) · [Shared code structure](../../docs/en/libraries.md) · [日本語](README.md)
 

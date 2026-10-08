@@ -192,7 +192,7 @@ This program prints `Done` after both sleeps finish. Normal scope exit waits for
 | Import standard HTTP | `import std.http.server as http` | Use `http.Request` and `http.Status.OK`; `as` is required |
 | Select standard types | `from std.http.server import Request, Response, Status as Code` | [Standard imports](modules-and-rust.md#import-the-standard-http-library) |
 | Define a GET handler | `@get("/users/{id}")` before a function | [HTTP](http.md); post/put/delete also available |
-| Return HTML | `return ok(html("<h1>Hello</h1>"))` | Return type `Result[Html, Error]` |
+| HTTP exposure policy | `http.public_policy[State]()` | Explicit Policy for every route; active HTML awaits SF04 |
 | Embed text | `include_text("index.html")` | Relative to source; embedded at compile time |
 | Declare a Rust function | `@rust("native::crc32")`, then `extern def crc32(text: view[str]) -> i64` | [Rust integration](modules-and-rust.md); no body or trailing colon |
 

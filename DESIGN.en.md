@@ -107,13 +107,14 @@ Mapped Rust type errors report the corresponding Nagi file and statement line. `
 
 Adapter reuse across applications and ownership, sharing, and resource cleanup still need evaluation. User-defined opaque resource types, general async callbacks, and generated declarations remain unimplemented.
 
-### A minimal authentication and authorization experiment
+### Request-bound authentication and authorization
 
-The experimental `std.auth` module targets Nagi 0.1.11 and carries an authenticated `Principal` and a `Grant[P]` bound to a permission type and resource. Check the official release record to confirm published availability. Ordinary classes remain useful for inputs and claims, but construction and JSON decoding cannot establish successful verification. Nagi cannot construct, JSON-decode, copy, or share these proofs; protected APIs consume them by move.
+Unreleased 0.2.0 SF01 binds `std.auth.AuthScope` and one `Grant[P]` to standard requests. Published 0.1.11 Principal/indefinite issuers are migration targets; coexistence does not preserve a downgrade. P is a nominal class/enum, the actual target is i64. Proofs are opaque, nonCopy/Clone/Serde/shared/field and SameTask. Owned same-task arguments, returns, Option/Result and async delegation remain available; Task/Actor transfer is rejected. Ordinary classes and subject IDs are not proofs.
 
-Rust libraries verify credentials; custom authorization and business rules can also live in Nagi. The example's Axum adapter calls a named Nagi async policy and issues a Grant only on success. A JWS verifier can replace the credential verifier. The example's fixed credentials are not a production authentication scheme.
+Every standard route requires explicit Policy. The checker matches Policy[S,A] against handler(Request,shared[S],A): public supplies unit, authenticated AuthScope, authorized Grant[P]. Verifiers and authorizers remain trusted callbacks; cryptography, expiry assertions and business permission logic are not statically proven. The dispatcher privately owns a finite lease invalidated by request end/cancellation/Drop. After native capacity wait, one private execution permit is issued under the same short gate as invalidation, checking active state and current time. Later cancellation does not roll back admitted operations. Synchronous enqueue and bound-target use remain trusted adapter obligations.
 
-Check verifies that declared protected APIs receive the required proof type and that a moved proof is not reused. It does not prove signature, expiry, or policy correctness, authentication on every route, absence of Rust/SQL bypasses, or absence of confidential response data. The Rust issuer and Nagi policy remain application trust boundaries. See [ADR 001](docs/internal/adr/001-backend-boundaries.md).
+[ADR 013](docs/internal/adr/013-request-bound-auth-and-http-policy.md), the [public contract](docs/en/security.md) and [migration](docs/en/migration-0.2.0.md) describe APIs and limits. This is not a sandbox proving arbitrary Rust/SQL tenant restrictions, DTO secrecy or all business policies. Retired decorators/global serve/raw HTML/unchecked issuers are removed from standard paths. Typed HTML, durable Sessions, CSRF/CORS, Query and outbound HTTP remain later SF steps.
+
 
 Evidence: [Rust dependency loading](compiler/src/project.rs), [extern checking](compiler/src/check.rs), [Rust generation](compiler/src/emit.rs), [dependency regressions](compiler/tests/rust_dependencies.rs), and [application verification](scripts/verify_application_examples.py). See [Rust integration](docs/en/modules-and-rust.md) for usage and supported types.
 
@@ -152,7 +153,7 @@ Standard HTTP exposes typed requests, responses, shared state, and async handler
 
 Axum/Tower adoption requires comparison with the same API, connection capacity, deadlines, body limits, panic responses, and shutdown conditions. Since Axum also uses Hyper, Router/middleware evaluation and listener changes should be separate. Existing benchmarks with different conditions do not establish an adoption decision.
 
-Evidence: [dependencies](runtime/Cargo.toml), [standard HTTP](runtime/src/http_server.rs), [legacy HTTP](runtime/src/http.rs), [SQLite](runtime/src/database.rs), [SQL checking](compiler/src/sql_check/mod.rs) and its [tests](compiler/tests/sql_check.rs), and [HTTP integration tests](tests/http_stdlib_integration.py).
+Evidence: [dependencies](runtime/Cargo.toml), [standard HTTP](runtime/src/http_server.rs), [SQLite](runtime/src/database.rs), [SQL checking](compiler/src/sql_check/mod.rs) and its [tests](compiler/tests/sql_check.rs), and [HTTP integration tests](tests/http_stdlib_integration.py).
 
 ## Failures and concurrency boundaries
 
@@ -206,4 +207,4 @@ When a proposal becomes implemented, add implementation and test references. Do 
 
 ## 0.2.0 Security Foundation design stage
 
-The [Security Foundation RFC](docs/internal/security-foundation/rfc.en.md) records current-main investigation, AuthScope/CSRF/XSS/SQL injection/SSRF/CORS/Cookie/Session/DoS proposals, static/runtime boundaries, migration, feature PRs, and completion gates. The latest instruction establishes [security-first D1–D3 decisions and migration](docs/internal/security-foundation/decisions-and-migration.en.md) as the implementation direction: mandatory policy across standard HTTP, one request-bound Grant, and durable Sessions, replacing legacy coexistence. New APIs remain unimplemented and do not retroactively apply to 0.1.x. Preserve move/Task/spawn, High/Low and SQLite native lifecycle. Formal 0.2.0 publication and tags require separate explicit approval.
+The [Security Foundation RFC](docs/internal/security-foundation/rfc.en.md) records current-main investigation, AuthScope/CSRF/XSS/SQL injection/SSRF/CORS/Cookie/Session/DoS proposals, static/runtime boundaries, migration, feature PRs, and completion gates. The latest instruction establishes [security-first D1–D3 decisions and migration](docs/internal/security-foundation/decisions-and-migration.en.md) as the implementation direction: mandatory policy across standard HTTP, one request-bound Grant, and durable Sessions, replacing legacy coexistence. SF01 is connected in development source; SF02–SF08 remain unimplemented. Formal 0.2.0 is unreleased and does not retroactively apply to 0.1.x. Preserve move/Task/spawn, High/Low and SQLite native lifecycle. Formal 0.2.0 publication and tags require separate explicit approval.

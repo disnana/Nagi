@@ -17,17 +17,17 @@ def summarize(data: view[bytes]) -> Summary:
         first = some(i64(data[0]))
     return Summary(length=len(data), total=total, first=first)
 
-async def health(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     return ok(http.text(http.Status.OK, view(state.description)))
 
-async def inspect(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def inspect(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     value = summarize(request.body)
     return http.json[Summary](http.Status.OK, value)
 
 async def main() -> Result[unit, Error]:
     app = http.app_default[State](State(description="byte inspector"))
-    app = try http.route(app, http.Method.GET, "/health", health)
-    app = try http.route(app, http.Method.POST, "/bytes", inspect)
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    app = try http.route(app, http.Method.POST, "/bytes", http.public_policy[State](), inspect)
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8096"))
     limits = try http.options(4096, 5000, 2000, 1000)
     return await http.serve(app, port, limits)

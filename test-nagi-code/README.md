@@ -23,9 +23,9 @@ CLI、HTTP API、SQLite、actor、Rust連携の例です。Nagiで書く処理�
 
 [Result API](result-api/README.md)は、数値変換とSQLiteの1件取得を使い、入力不正・対象なし・DB失敗・代替データを`match`で書き分けます。
 
-## 画面付きのタスク管理
+## タスク管理JSON API
 
-[Nagi Tasks](web-demo/README.md)は、ブラウザーからタスクを追加・編集・完了・削除する例です。NagiがAPIと入力検証を担当し、ランタイムがHTTPとSQLiteを扱います。画面のHTML/CSS/JavaScriptは実行ファイルへ埋め込みます。
+[Nagi Tasks](web-demo/README.md)は、タスクの追加・編集・完了・削除と集計を行うJSON APIです。Nagiが標準HTTP routeと入力検証を担当し、ランタイムがHTTPとSQLiteを扱います。`GET /`はplain-text案内を返します。ブラウザーUIはtyped HTML応答が整うまで未接続です。
 
 ## Rustライブラリを使う
 

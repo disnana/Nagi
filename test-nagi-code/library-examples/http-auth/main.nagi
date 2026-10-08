@@ -1,62 +1,42 @@
+import std.auth as auth
 import std.http.server as http
 
 class State:
     authorization: str
     greeting: str
+    subject: i64
 
 enum AuthError:
-    MissingCredentials
-    InvalidCredentials
-    InvalidHeader
+    Denied
 
-def unauthorized(message: str) -> http.Response:
-    response = http.text(http.Status.UNAUTHORIZED, message)
-    match http.append_header_text(response, "WWW-Authenticate", "Bearer"):
-        case Ok(output):
-            return output
-        case Err(_):
-            return http.empty(http.Status.INTERNAL_SERVER_ERROR)
+@rust("native::verify")
+extern async def verify(request: http.Request, state: shared[State]) -> Result[auth.VerifiedIdentity, auth.Failure]
 
 def auth_error(problem: AuthError) -> http.Response:
     match problem:
-        case AuthError.MissingCredentials:
-            return unauthorized("authentication required")
-        case AuthError.InvalidCredentials:
-            return unauthorized("invalid credentials")
-        case AuthError.InvalidHeader:
-            return http.text(http.Status.BAD_REQUEST, "invalid authorization header")
+        case AuthError.Denied:
+            return http.text(http.Status.FORBIDDEN, "access denied")
 
-def forbidden(problem: AuthError) -> http.Response:
-    return http.text(http.Status.FORBIDDEN, "access denied")
-
-async def health(request: http.Request, state: shared[State]) -> Result[http.Response, AuthError]:
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
     return ok(http.text(http.Status.OK, "ok"))
 
-async def profile(request: http.Request, state: shared[State]) -> Result[http.Response, AuthError]:
-    match http.header_text(view(request), "Authorization"):
-        case Ok(header):
-            match header:
-                case Some(value):
-                    if value != view(state.authorization):
-                        return fail(AuthError.InvalidCredentials)
-                    await sleep(1)
-                    return ok(http.text(http.Status.OK, view(state.greeting)))
-                case None:
-                    return fail(AuthError.MissingCredentials)
-        case Err(_):
-            return fail(AuthError.InvalidHeader)
+async def profile(request: http.Request, state: shared[State], scope: auth.AuthScope) -> Result[http.Response, AuthError]:
+    if auth.subject(view(scope)) != state.subject:
+        return fail(AuthError.Denied)
+    await sleep(1)
+    return ok(http.text(http.Status.OK, view(state.greeting)))
 
-async def restricted(request: http.Request, state: shared[State]) -> Result[http.Response, AuthError]:
-    return fail(AuthError.MissingCredentials)
+async def restricted(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
+    return fail(AuthError.Denied)
 
 async def main() -> Result[unit, Error]:
     authorization = env("NAGI_DEMO_AUTHORIZATION", "")
     if len(view(authorization)) == 0:
         return error("Set NAGI_DEMO_AUTHORIZATION to a demo Bearer value before starting")
-    state = State(authorization=authorization, greeting="Hello, Nagi!")
+    state = State(authorization=authorization, greeting="Hello, Nagi!", subject=1)
     app = http.app[State, AuthError](state, auth_error)
-    app = try http.route(app, http.Method.GET, "/health", health)
-    app = try http.route(app, http.Method.GET, "/me", profile)
-    app = try http.route_mapped(app, http.Method.GET, "/restricted", restricted, forbidden)
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    app = try http.route(app, http.Method.GET, "/me", http.authenticated_policy[State](verify), profile)
+    app = try http.route(app, http.Method.GET, "/restricted", http.public_policy[State](), restricted)
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8089"))
     return await http.serve(app, port, http.default_options())

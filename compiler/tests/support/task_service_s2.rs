@@ -199,19 +199,19 @@ mod native {
                 state.stopped.take().unwrap(), state.events.clone())
         };
         let _guard=HttpGuard(events.clone());
-        let app=web::route(web::app_default(counter), web::Method::GET, "/counter", |_, counter| async move {
+        let app=web::route(web::app_default(counter), web::Method::GET, "/counter", web::public_policy(), |_, counter, ()| async move {
             Ok(match actor::call(&counter, 0, 0, 1000).await {
                 Ok(Ok(value))=>web::text(web::Status::OK, &value.to_string()),
                 _=>web::text(web::Status::SERVICE_UNAVAILABLE, "stopped"),
             })
         }).unwrap();
-        let app=web::route(app, web::Method::GET, "/business", |_, counter| async move {
+        let app=web::route(app, web::Method::GET, "/business", web::public_policy(), |_, counter, ()| async move {
             let reply=actor::call(&counter, -1, 0, 1000).await.unwrap();
             assert_eq!(reply, Err("business sentinel".to_owned()));
             Ok(web::text(web::Status::CONFLICT, "business sentinel"))
         }).unwrap();
         let held=events.clone();
-        let app=web::route(app, web::Method::GET, "/hold", move |_, _| {
+        let app=web::route(app, web::Method::GET, "/hold", web::public_policy(), move |_, _, ()| {
             let held=held.clone(); async move {
                 let _guard=HandlerGuard(held.clone());
                 held.handler_started.store(true, Ordering::Release); held.changed.notify_waiters();

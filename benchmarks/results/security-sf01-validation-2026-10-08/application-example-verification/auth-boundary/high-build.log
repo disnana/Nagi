@@ -1,0 +1,4 @@
+     Locking 105 packages to highest compatible versions
+   Compiling nagi-main-337d3f9b511f3240 v0.1.0 (/workspace/Nagi-security-sf01/build/application-example-verification/auth-boundary/high/.nagi/apps/nagi-main-337d3f9b511f3240/generations/.staging-g-68fb3-18dc87d3b32a4b08-0)
+    Finished `release` profile [optimized] target(s) in 8.89s
+native: /workspace/Nagi-security-sf01/build/application-example-verification/auth-boundary/high/.nagi/apps/nagi-main-337d3f9b511f3240/generations/g-68fb3-18dc87d3b32a4b08-0/nagi-337d3f9b511f3240-g-68fb3-18dc87d3b32a4b08-0

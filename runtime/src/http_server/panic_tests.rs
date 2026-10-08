@@ -1,11 +1,11 @@
 use super::*;
 
-async fn healthy(_: Request, _: Arc<()>) -> Result<Response, Error> {
+async fn healthy(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
     Ok(text(Status::OK, "still serving"))
 }
 
 async fn assert_failed_request_isolated(app: App<(), Error>, head: bool) {
-    let app = route(app, Method::GET, "/healthy", healthy).unwrap();
+    let app = route(app, Method::GET, "/healthy", public_policy(), healthy).unwrap();
     let server = Server::new(app, capacity(default_options(), 4, 1).unwrap()).await;
     let mut socket = server.connect().await;
     let method = if head { "HEAD" } else { "GET" };
@@ -18,6 +18,7 @@ async fn assert_failed_request_isolated(app: App<(), Error>, head: bool) {
     assert_eq!(failed.status, 500);
     assert_eq!(failed.all("connection"), ["close"]);
     if head {
+        assert_eq!(failed.all("content-length"), ["21"]);
         assert!(failed.body.is_empty());
     } else {
         assert_eq!(failed.body, b"Internal Server Error");
@@ -47,34 +48,53 @@ async fn assert_failed_request_isolated(app: App<(), Error>, head: bool) {
 
 #[tokio::test]
 async fn http_handler_out_of_bounds_returns_500_and_server_keeps_serving() {
-    let app = route(app_default(()), Method::GET, "/panic", |_, _| async {
-        let values = [1_i64];
-        let index = std::hint::black_box(4_usize);
-        let _ = values[index];
-        Ok(text(Status::OK, "unreachable"))
-    })
+    let app = route(
+        app_default(()),
+        Method::GET,
+        "/panic",
+        public_policy(),
+        |_, _, _| async {
+            let values = [1_i64];
+            let index = std::hint::black_box(4_usize);
+            let _ = values[index];
+            Ok(text(Status::OK, "unreachable"))
+        },
+    )
     .unwrap();
     assert_failed_request_isolated(app, false).await;
 }
 
 #[tokio::test]
 async fn http_handler_division_by_zero_returns_500_and_server_keeps_serving() {
-    let app = route(app_default(()), Method::GET, "/panic", |_, _| async {
-        let zero = std::hint::black_box(0_i64);
-        let _ = 10_i64 / zero;
-        Ok(text(Status::OK, "unreachable"))
-    })
+    let app = route(
+        app_default(()),
+        Method::GET,
+        "/panic",
+        public_policy(),
+        |_, _, _| async {
+            let zero = std::hint::black_box(0_i64);
+            let _ = 10_i64 / zero;
+            Ok(text(Status::OK, "unreachable"))
+        },
+    )
     .unwrap();
     assert_failed_request_isolated(app, false).await;
 }
 
 #[tokio::test]
 async fn http_handler_panic_after_await_returns_500_without_exposing_payload() {
-    async fn handler(_: Request, _: Arc<()>) -> Result<Response, Error> {
+    async fn handler(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         tokio::task::yield_now().await;
         panic!("private handler crash: password=not-for-clients");
     }
-    let app = route(app_default(()), Method::GET, "/panic", handler).unwrap();
+    let app = route(
+        app_default(()),
+        Method::GET,
+        "/panic",
+        public_policy(),
+        handler,
+    )
+    .unwrap();
     assert_failed_request_isolated(app, false).await;
 }
 
@@ -84,7 +104,8 @@ async fn http_handler_constructor_panic_returns_500() {
         app_default(()),
         Method::GET,
         "/panic",
-        |_, _| -> std::future::Ready<Result<Response, Error>> {
+        public_policy(),
+        |_, _, _| -> std::future::Ready<Result<Response, Error>> {
             panic!("private native future-construction failure")
         },
     )
@@ -102,7 +123,8 @@ async fn http_error_mapper_panic_returns_500() {
         app_default(()),
         Method::GET,
         "/panic",
-        |_, _| async { Err(Error::invalid("expected business error")) },
+        public_policy(),
+        |_, _, _| async { Err(Error::invalid("expected business error")) },
         failing_mapper,
     )
     .unwrap();
@@ -115,7 +137,8 @@ async fn http_handler_panic_head_response_has_no_body() {
         app_default(()),
         Method::GET,
         "/panic",
-        |_, _| -> std::future::Ready<Result<Response, Error>> {
+        public_policy(),
+        |_, _, _| -> std::future::Ready<Result<Response, Error>> {
             panic!("private HEAD handler crash")
         },
     )

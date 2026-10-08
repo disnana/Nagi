@@ -1,0 +1,115 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling libc v0.2.189
+   Compiling syn v3.0.6
+   Compiling bytes v1.12.1
+   Compiling version_check v0.9.5
+   Compiling pin-project-lite v0.2.17
+   Compiling generic-array v0.14.7
+   Compiling futures-core v0.3.34
+   Compiling http v1.5.0
+   Compiling zerocopy v0.8.59
+   Compiling cfg-if v1.0.5
+   Compiling getrandom v0.3.4
+   Compiling typenum v1.20.1
+   Compiling errno v0.3.14
+   Compiling httparse v1.10.1
+   Compiling serde_core v1.0.229
+   Compiling signal-hook-registry v1.4.8
+   Compiling tokio-macros v2.7.2
+   Compiling mio v1.2.3
+   Compiling socket2 v0.6.5
+   Compiling log v0.4.34
+   Compiling tokio v1.53.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling rand_core v0.9.5
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling http-body v1.1.0
+   Compiling thiserror v2.0.21
+   Compiling once_cell v1.21.4
+   Compiling tracing-core v0.1.36
+   Compiling digest v0.10.7
+   Compiling rand_chacha v0.9.0
+   Compiling thiserror-impl v2.0.21
+   Compiling futures-macro v0.3.34
+   Compiling futures-task v0.3.34
+   Compiling cpufeatures v0.2.17
+   Compiling slab v0.4.12
+   Compiling tower-service v0.3.3
+   Compiling serde v1.0.229
+   Compiling smallvec v1.16.2
+   Compiling futures-sink v0.3.34
+   Compiling futures-util v0.3.34
+   Compiling sha1 v0.10.7
+   Compiling tracing v0.1.44
+   Compiling rand v0.9.5
+   Compiling serde_derive v1.0.229
+   Compiling futures-channel v0.3.34
+   Compiling atomic-waker v1.1.2
+   Compiling data-encoding v2.11.1
+   Compiling sync_wrapper v1.0.2
+   Compiling httpdate v1.0.3
+   Compiling serde_json v1.0.151
+   Compiling tower-layer v0.3.3
+   Compiling percent-encoding v2.3.2
+   Compiling form_urlencoded v1.2.2
+   Compiling hyper v1.11.1
+   Compiling tungstenite v0.29.0
+   Compiling http-body-util v0.1.5
+   Compiling ryu v1.0.23
+   Compiling memchr v2.8.3
+   Compiling mime v0.3.17
+   Compiling axum-core v0.5.6
+   Compiling tokio-tungstenite v0.29.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling hyper-util v0.1.21
+   Compiling tower v0.5.3
+   Compiling serde_path_to_error v0.1.20
+   Compiling matchit v0.8.4
+   Compiling base64 v0.22.1
+   Compiling rusqlite v0.40.2
+   Compiling axum v0.8.9
+   Compiling bumpalo v3.20.3
+   Compiling nagi-runtime v0.1.11 (/workspace/Nagi-security-sf01/runtime)
+error[E0432]: unresolved imports `nagi_runtime::auth::AuthScope`, `nagi_runtime::auth::Failure`, `nagi_runtime::auth::VerifiedIdentity`
+ --> runtime/tests/security_sf01.rs:1:27
+  |
+1 | use nagi_runtime::{auth::{AuthScope, Grant, Failure, VerifiedIdentity}, http_server as http, Error};
+  |                           ^^^^^^^^^         ^^^^^^^  ^^^^^^^^^^^^^^^^ no `VerifiedIdentity` in `auth`
+  |                           |                 |
+  |                           |                 no `Failure` in `auth`
+  |                           no `AuthScope` in `auth`
+
+error[E0425]: cannot find function `authenticated_policy` in module `http`
+  --> runtime/tests/security_sf01.rs:19:54
+   |
+19 |  let app=http::route(app,http::Method::GET,"/",http::authenticated_policy(verify_shared),handle_shared).unwrap();
+   |                                                      ^^^^^^^^^^^^^^^^^^^^ not found in `http`
+
+error[E0061]: this function takes 4 arguments but 5 arguments were supplied
+   --> runtime/tests/security_sf01.rs:19:10
+    |
+ 19 |  let app=http::route(app,http::Method::GET,"/",http::authenticated_policy(verify_shared),handle_shared).unwrap();
+    |          ^^^^^^^^^^^                           ----------------------------------------- unexpected argument #4
+    |
+note: function defined here
+   --> runtime/src/http_server.rs:603:8
+    |
+603 | pub fn route<S, E, H, Fut>(
+    |        ^^^^^
+help: remove the extra argument
+    |
+ 19 -  let app=http::route(app,http::Method::GET,"/",http::authenticated_policy(verify_shared),handle_shared).unwrap();
+ 19 +  let app=http::route(app,http::Method::GET,"/",handle_shared).unwrap();
+    |
+
+error[E0599]: no method named `is_err` found for struct `Grant<P>` in the current scope
+  --> runtime/tests/security_sf01.rs:24:105
+   |
+24 |  let scope=state.observed.lock().unwrap().take().unwrap();assert!(Grant::<()>::from_authorized(scope,9).is_err());
+   |                                                                                                         ^^^^^^ method not found in `Grant<()>`
+
+Some errors have detailed explanations: E0061, E0425, E0432, E0599.
+For more information about an error, try `rustc --explain E0061`.
+error: could not compile `nagi-runtime` (test "security_sf01") due to 4 previous errors

@@ -290,28 +290,6 @@ pub(crate) struct FunctionPlan {
     pub body: BlockPlan,
     pub expressions: BTreeMap<ExpressionKey, ExpressionPlan>,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum RouteInput {
-    State,
-    Capture,
-    Bytes,
-    Body,
-    Query,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum RouteOutput {
-    Html,
-    Optional,
-    Json,
-}
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct RoutePlan {
-    pub function: usize,
-    pub method: String,
-    pub path: String,
-    pub inputs: Vec<RouteInput>,
-    pub output: RouteOutput,
-}
 pub(crate) struct EmissionPlan {
     pub program: Program,
     pub rust_types: BTreeMap<Type, String>,
@@ -322,8 +300,6 @@ pub(crate) struct EmissionPlan {
     pub functions: Vec<FunctionPlan>,
     pub native_paths: BTreeMap<String, String>,
     pub native_reexports: BTreeSet<String>,
-    pub routes: Vec<RoutePlan>,
-    pub needs_server: bool,
     pub main_error: MainError,
 }
 
@@ -1433,7 +1409,10 @@ impl EmissionPlan {
         let mut native_reexports = BTreeSet::new();
         for d in &p.modules.definitions {
             if let Some(r) = registered_resource(&d.symbol, &p.modules) {
-                native_reexports.insert(d.symbol.clone());
+                // Deprecated symbols remain resolvable only for migration diagnostics.
+                if r != crate::stdlib::Resource::Principal {
+                    native_reexports.insert(d.symbol.clone());
+                }
                 native_paths.insert(
                     d.symbol.clone(),
                     crate::stdlib::resource_info(r).rust_path.into(),
@@ -1453,7 +1432,8 @@ impl EmissionPlan {
                     // associated methods cannot be reexported with `pub use`.
                     if !matches!(
                         op,
-                        crate::stdlib::Operation::TaskDiscard
+                        crate::stdlib::Operation::Html
+                            | crate::stdlib::Operation::TaskDiscard
                             | crate::stdlib::Operation::TaskKind
                             | crate::stdlib::Operation::TaskMessage
                     ) {
@@ -1551,54 +1531,6 @@ impl EmissionPlan {
             );
             rust_types.insert(t, text);
         }
-        let mut routes = Vec::new();
-        for (index, f) in p.functions.iter().enumerate() {
-            let Some((method, path)) = crate::routes::attribute(f) else {
-                continue;
-            };
-            let mut inputs = Vec::new();
-            for (n, t) in &f.params {
-                inputs.push(if t.0 == "Db" {
-                    RouteInput::State
-                } else if n == "id" && t.0 == "i64" && crate::routes::has_capture(path) {
-                    RouteInput::Capture
-                } else if t == &Type::generic("view", vec![Type::named("bytes")]) {
-                    RouteInput::Bytes
-                } else if p.classes.iter().any(|c| c.name == t.0) {
-                    RouteInput::Body
-                } else if ["str", "i64", "i32", "u64", "bool", "f64"].contains(&t.0.as_str()) {
-                    RouteInput::Query
-                } else {
-                    return Err(format!("unsupported checked route parameter {n}: {t}"));
-                });
-            }
-            routes.push(RoutePlan {
-                function: index,
-                method: method.into(),
-                path: path.into(),
-                inputs,
-                output: if f.ret.inner().0 == "Html" {
-                    RouteOutput::Html
-                } else if f.ret.inner().0 == "Option" {
-                    RouteOutput::Optional
-                } else {
-                    RouteOutput::Json
-                },
-            });
-        }
-        fn serve(body: &[Stmt]) -> bool {
-            let mut found = false;
-            let _ = visit_expressions(body, &mut |e| {
-                if matches!(&e.kind,E::Call(n,_,_) if n=="serve")
-                    && e.resolution == Some(NameResolution::Builtin)
-                {
-                    found = true;
-                }
-                Ok(())
-            });
-            found
-        }
-        let needs_server = !routes.is_empty() || p.functions.iter().any(|f| serve(&f.body));
         let main_error =
             p.functions
                 .iter()
@@ -1636,8 +1568,6 @@ impl EmissionPlan {
             functions,
             native_paths,
             native_reexports,
-            routes,
-            needs_server,
             main_error,
         })
     }
