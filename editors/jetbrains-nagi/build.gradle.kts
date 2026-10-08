@@ -2,6 +2,8 @@ import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.gradle.api.GradleException
 import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.api.tasks.testing.logging.TestLogEvent
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 plugins {
@@ -154,4 +156,13 @@ providers.gradleProperty("verificationArchive").orNull?.let { archivePath ->
     }
 }
 
-tasks.test { systemProperty("java.awt.headless", "true") }
+tasks.test {
+    systemProperty("java.awt.headless", "true")
+    testLogging {
+        events = setOf(TestLogEvent.PASSED, TestLogEvent.FAILED, TestLogEvent.SKIPPED)
+        exceptionFormat = TestExceptionFormat.FULL
+        showCauses = true
+        showExceptions = true
+        showStackTraces = true
+    }
+}
