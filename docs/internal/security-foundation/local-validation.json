@@ -41,7 +41,7 @@
     "git_diff_check": "passed",
     "maintained_markdown_paths": {
       "markdown_files": 248,
-      "local_links_and_images": 2570,
+      "local_links_and_images": 2571,
       "missing": [],
       "scope": "maintained Markdown outside archived benchmarks/results; paths only, not external URLs/anchors"
     },

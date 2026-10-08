@@ -44,6 +44,8 @@
 | SF-R05/Medium | 生存session数/行サイズだけではexpired/revoked情報を含む保存総量がboundedにならない | 生存数/保存総行数/行bytesを個別制限、cleanup未完insert拒否、失効情報有限保持/不在ID拒否。論理recordsとphysical page/WALを分離、journal_size_limitをhard cap扱いしない。少数反復/遅延cleanupのSF02 oracleを追加 | 独立再確認済み |
 | SF-R06/Low | 同Txのsession世代predicateに同file配置前提がない。現行authorizerはATTACH禁止 | Session表/対象データを同SQLite file/Txへ置く前提、別file/store lookupで代替不可、ATTACH禁止維持を日英に追加 | 独立再確認済み |
 
-改訂の文書検証: website98ページのlocal links/anchors/assets成功、onboarding/SQLite日英source一致（docs-only）、CI policy59成功、maintained Markdown248ファイル/2570 path欠落0（最終値はlocal-validation.json）、固定main source hash25一致、runtime/compiler/Cargo差分0。link script初回のregexはNagiのgeneric呼出しをリンクとして誤検出したため、Markdown parserで実リンクのみを検査した。契約テストの成功ではない。
+改訂の文書検証: website98ページのlocal links/anchors/assets成功、onboarding/SQLite日英source一致（docs-only）、CI policy59成功、maintained Markdown248ファイル/2571 path欠落0（最終値はlocal-validation.json）、固定main source hash25一致、runtime/compiler/Cargo差分0。link script初回のregexはNagiのgeneric呼出しをリンクとして誤検出したため、Markdown parserで実リンクのみを検査した。契約テストの成功ではない。
 
 先行head `56da8684a7c18d6331203e43f02dd4c0fde88b5b` checks37746386753/website37746386400はsuccess。Linux fullのlocked workspace tests、SQL/Task stage/location、High/保存Lowチュートリアル、HTTP integrations、examples、fuzz-smoke実step成功を読戻した。4 OS/package/JetBrains/releaseはskipで、新機能の実行証拠にしない。改訂head CIは別にreadbackする。
+
+最終同期でbaseline-auditの旧Grant delegation維持案を調査開始時の履歴と明示し、最新の単一request-bound契約へ参照を接続した。固定source hashや現行mainの挙動を改変したものではない。

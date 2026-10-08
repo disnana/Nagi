@@ -18,7 +18,7 @@
 | 境界 | 現在の実装・契約と一次根拠 | 0.2.0で解決する不足 |
 |---|---|---|
 | Principal/Grant | [auth.rs](../../../runtime/src/auth.rs):27,55,63,84、[登録](../../../compiler/src/stdlib.rs):611,631。private field、非Copy/Clone/Serde/shared、nominal permission。Rust issuerはpublicでtrusted | credential verifier/policyの正しさ、expiry/revocation、requestの有効期間は未実装。Rust factoryがprivateなNagi constructorと同じ保証だとは説明しない |
-| Auth Scope | [既存計画](../compiler-rust-boundary-plan.md):163–180。対象の実値を持つ`Grant<Permission, Scope>`は将来方向。既存Grantの置換・arity変更は未承認、request region/effectは追加しない | 実対象とrequest lifecycleを区別した追加設計。旧owned async delegationを維持 |
+| Auth Scope | [既存計画](../compiler-rust-boundary-plan.md):163–180。対象の実値を持つ`Grant<Permission, Scope>`は将来方向。調査開始時の旧計画では既存Grant置換・arity変更を承認待ちとしていた。request region/effectは追加しない | 最新指示後は[安全性優先の判断](decisions-and-migration.md)が実装基準。単一request-bound Grantへ置換し、旧owned delegationは0.2.0で廃止。現行mainの受理とは区別 |
 | route | [routes.rs](../../../compiler/src/routes.rs):4,26,54、[HTTP](../../../runtime/src/http_server.rs):596,610,716。legacy decoratorと標準Appは別経路。route/route_mappedの引数にauth policyなし | 全登録経路・dynamic path・HEAD fallback・OPTIONS・404/405・組込routeのpolicy網羅。関数名から認可を推測しない |
 | credentials/header | [HTTP](../../../runtime/src/http_server.rs):215–238。単一headerは重複拒否、UTF-8検査。trailerはbody収集で認証headerにしない | Cookie解析、credential sourceの混在/優先順位、proxyからの外部origin/peerの信頼契約 |
 | response/XSS | [HTTP](../../../runtime/src/http_server.rs):422–466。textはplain、htmlは文字列をそのままHTML bodyへcopy。header name/valueとframingはnative検証。legacy Htmlも生文字列 | 文脈別HTML生成、URL attribute、active content、CSP。htmlという型名だけではXSS防御にならない。raw APIの存在自体を確認済み脆弱性とは扱わない |
