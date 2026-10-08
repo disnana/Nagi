@@ -33,4 +33,4 @@
 - baseline source hash25件は固定mainの`git show`と一致。JSON台帳をparse確認。compiler/runtime/Cargo/公開API/版の差分0。
 - 初回websiteはPython依存不足、二回目は`--out`が既存build-directory guardにより拒否。専用venvへ既存requirementsのpinを導入し、正規build配下で成功。失敗を新機能の契約RED/GREENに数えない。
 
-現行main CI結果は[baseline.json](baseline.json)で、この差分の新CI成功と数えない。設計PRの最新head/ChecksはPR本文とGitHubを読む。文書だけでskipしたRust/4 OSは今回実行したとは報告しない。
+現行main CI結果は[baseline.json](baseline.json)で、この差分の新CI成功と数えない。設計PR [#100](https://github.com/disnana/Nagi/pull/100)の最新head/ChecksはPR本文とGitHubを読む。文書だけでskipしたRust/4 OSは今回実行したとは報告しない。

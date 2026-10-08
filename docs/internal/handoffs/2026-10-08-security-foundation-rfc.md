@@ -5,6 +5,7 @@
 ## 現在の状態
 
 - 基点main `62bbda9e8e8a9b07b0b2c1fd92057a9751c36fe3`、tree `a1bc0e601ea0f06a1d92940bc1c87da28a885ace`。#99は外部でマージ済み。確認時open PR0。0.1.11 tagは`003a594de086383100016b7c75466da37705646c`で、SQLite公開APIは未収録。
+- 設計PR [#100](https://github.com/disnana/Nagi/pull/100)はmain向けdraft・未マージ。D1–D3採用判断と後続実装を別に扱う。
 - branch `docs/security-foundation-020`、worktree `/workspace/Nagi-security-foundation`。調査/RFC/計画・日英DESIGN/roadmapの現状同期だけ。compiler/runtime/Cargo/公開API/版は変更していない。
 - AuthScope/CSRF/XSS/SQLi/SSRF/CORS/Cookie/Session/DoSの静的/runtime/trusted契約、High/Low/sealed境界、移行とSF00–SF08の依存/検証/全体acceptanceを作成した。0.2.0実装済みという意味ではない。
 - 独立Luna MaxのDocs/tests/build/editor棚卸しと親のruntime/compiler調査を実施。独立Sol Highの設計reviewでCritical/High0、Medium2（失効/admission順序、session/token cache禁止）、Low2（日英CI現状不一致、CheckedProgram公開版の旧表記）。4件とも修正し、独立Solで再確認済み。未修正レビュー所見0。具体的な根拠はreview台帳を正とする。
