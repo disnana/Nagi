@@ -361,9 +361,15 @@ class JetBrainsBuildContractTests(unittest.TestCase):
 
     def test_eap_descriptor_parser_upgrade_keeps_plugin_version_and_verifier_checks(self):
         build = (self.repo / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
+        settings = (self.repo / "editors/jetbrains-nagi/settings.gradle.kts").read_text(encoding="utf-8")
         wrapper = (self.repo / "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.properties").read_text(encoding="utf-8")
         workflow = (self.repo / ".github/workflows/jetbrains.yml").read_text(encoding="utf-8")
+        plugin_repositories = re.search(
+            r"(?ms)^pluginManagement\s*\{\s*repositories\s*\{(?P<body>.*?)^\s*}\s*}", settings)
 
+        self.assertIsNotNone(plugin_repositories)
+        self.assertIn("gradlePluginPortal()", plugin_repositories.group("body"))
+        self.assertIn("mavenCentral()", plugin_repositories.group("body"))
         self.assertIn('id("org.jetbrains.intellij.platform") version "2.15.0"', build)
         self.assertIn('version = "0.1.1"', build)
         self.assertIn("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.0-bin.zip", wrapper)
