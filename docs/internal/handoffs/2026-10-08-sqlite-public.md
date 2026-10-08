@@ -40,4 +40,6 @@ head `e86a9419fbcc547e937a13f0c0bf3927f98053b8`の[checks 37706126168](https://g
 
 macOS Intelの初回はeditorのHigh/Low symbol取得2件が既存5秒期限でSIGTERMとなった。同一head・期限・並列設定の一度の再実行では201/201成功。原因は未特定であり、再実行を原因解決や安定性の証明としない。通常fixtureのLinux逐次比較ではsymbol取得が約0.43–0.46秒から約0.56–0.60秒へ増加した。後続候補はsymbol/catalog経路のprofilingとCI時間変動の調査であり、任意のtimeout拡張や公開SQLite契約変更はしていない。
 
-この記録以後の変更はDocs・検証artifactのみ。最終PR headのCIは本文とChecksへ記録し、上記固定headの成功と区別する。
+後続のd723961も全4 OS/全回帰/websiteに一度で成功した。main保護ルールが最新mainの履歴を要求したため、作業branchへ履歴だけを統合したb4c8f83はd723961と同じtreeだった。公開PR/mainへのmergeは行っていない。
+
+そのpush CIで既存Actor回帰の同期不足を観測し、旧世代のmailbox閉鎖を待ってから既存ready/assertへ進むtest-only修正を行った。[RED・独立source review・修正・local検証](../../../benchmarks/results/sqlite-public-2026-10-08/actor-ci-sync.md)を参照。元assert・期限・並列設定、Actor/SQLiteのproduction契約は維持した。以降の最終PR headのCIは本文とChecksへ記録し、過去headの成功と区別する。これを新しいActor仕様や一般的なready後のcall成功保証と解釈しない。

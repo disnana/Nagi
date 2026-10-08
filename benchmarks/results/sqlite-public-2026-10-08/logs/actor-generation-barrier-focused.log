@@ -1,0 +1,9 @@
+   Compiling nagi-runtime v0.1.11 (/workspace/Nagi-sqlite-public/runtime)
+    Finished `test` profile [unoptimized] target(s) in 17.52s
+     Running unittests src/lib.rs (/workspace/nagi-build-cache/check/debug/deps/nagi_runtime-869e41f629d9bcdc)
+
+running 1 test
+test actor::tests::business_error_preserves_owned_state_and_restart_is_one_for_one ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 219 filtered out; finished in 0.01s
+

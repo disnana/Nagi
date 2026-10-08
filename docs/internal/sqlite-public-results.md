@@ -4,6 +4,8 @@
 
 ## 初回source記録時点の状態
 
+最終CIの追記: d723961は4 OS・全回帰・website・CodeQLまで一度で成功。mainのstrict up-to-dateルールに従った履歴統合b4c8f83も同じtreeだったが、push側で既存Actor回帰の同期不足が顕在化した。公開runtimeやassertを変更せず、旧世代mailboxの閉鎖を待つtest-only修正を行い、独立reviewとruntime全体を再確認した。[詳細と原ログ](../../benchmarks/results/sqlite-public-2026-10-08/actor-ci-sync.md)。最終headのCIはPR本文とChecksを参照する。
+
 対象はmain 676576724829e45b077b58628bfe2417e6cf3673をbaseとするPR #99、source head e3e0ea3962bd847a9ffdaef4fdabb7598844459f、tree e6d986d13345743465b74dfeb34f005a66a4c924。履歴は契約runner追加、runtime公開化、compiler接続、SQL alias借用修正、日英Docs/CIの5 commit。PR #99はdraftで、e3e0ea3のinitial checksが進行中だが最終readbackはまだない。merge・release・版更新は行っていない。sourceから作ったlocal archiveは0.1.11名でbuild/verifyしたが、既存の公開Nagi 0.1.11へ差し替えたりGitHub releaseへ公開していない。公開版0.1.11には新APIは含まれない。
 
 関連する導入DocsのPR #98は別branch・別PRで、head bc6a76b、baseは同じmain。PR #98は4 OS、Linux回帰、IDE/package/gate、website checksを確認してreadyになったが未merge。[checks run 37701060949](https://github.com/disnana/Nagi/actions/runs/37701060949)、[website run 37701060552](https://github.com/disnana/Nagi/actions/runs/37701060552)。4つのOS raw job logには各1行ずつ「Onboarding: bilingual code matches; High/saved Low check and build; 10 native cases passed」がある。これらはPR #98の証拠であり、PR #99のCI結果として数えない。抜粋とraw log hashは[関連Docs PRの記録](../../benchmarks/results/sqlite-public-2026-10-08/logs/related-docs-pr98-evidence.md)を参照。

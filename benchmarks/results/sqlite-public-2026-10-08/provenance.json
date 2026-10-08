@@ -377,7 +377,8 @@
     ]
   },
   "repo_evidence_sha256": {
-    "README.md": "eb26ffe26c46782b6027f1cb1c07e6b053a1168b75089bd7d828c006b214d5f5",
+    "README.md": "b921481deacb216efe597d980eca2b489b27961637b71da0417535b23cbcb479",
+    "actor-ci-sync.md": "685f3c1ba2981c6c7ba2de9f8cca37ffea709a4b5dbda7a3b47bd1d4b5a68416",
     "ci-raw-log-hashes.json": "b607f18ab9cb5a145047647f099537f736083c9eff8ffb6c43b849c9589dace0",
     "ci-readback.md": "65969045b36c71c13958ad8e6d20500ea369e05ba00bf3eb0d37585683f5f06e",
     "contracts-check.json": "b1169b7977b6c0499cac835e1ff66d803c2e14f49b5f4e834dee87d9238b0927",
@@ -386,10 +387,14 @@
     "cost-measurement-note.md": "922cb5ac9401932c37fc1b23cecfbd4af5dbb6e6877a608346e4a4d9e01735c0",
     "cost-summary.json": "c1353d473aa1bb03e1ecf542e0632a7feea7916407cba7c266e131a9848fc289",
     "independent-preparation-review-snapshot.json": "2228b89d90690bdbdd08b229af38924ba899ea375932a7acab242bb4ea18c879",
+    "logs/actor-generation-barrier-clippy.log": "0b5d99fa732984d8a4307b38a242cca3115a5615b0f681f4f6b629df7bb06d4e",
+    "logs/actor-generation-barrier-focused.log": "b6d131217d183658a8b77dad70f66a27ea1379afa468ea38c704a1bc0932334c",
+    "logs/actor-generation-barrier-runtime.log": "35eb49bf587f721d0b6e56fb9ea1f03d1587d92fc04aa71924dcfa1c491a4c5e",
     "logs/archive-package.log": "ca5b16fcace3e02524795d734205c53b7dda203861d6b2670f3baedd0b520ce9",
     "logs/archive-verify.log": "f4bd011b5f17059136d379dc9c4f152612855fb950fa56fbeee484aa3dac6604",
     "logs/checkout-docs-check.log": "6ba5e568c745b02685c968f13b9b5522111573938f673f48a22ee2098e5bc8b0",
     "logs/checkout-website-check.log": "565939dbb22bc7de7df98c6569d0b23e87a51564db3bf0d8370510511f132d5e",
+    "logs/ci-b4-113107859076-push-failure.log.gz": "30c4b6a980daa912b8ff0a64dc4eb47ea84a32ed0477499bf3b88d37c4c3b3bc",
     "logs/ci-e86-113081255940.log.gz": "392c0b5434eef2776e009d3fc54cee2a015ee5408b008489b0ddc46b18757506",
     "logs/ci-e86-113081297039.log.gz": "4e6c0af8fd974079ffaaae49eb2d5e3314223099f3956bffb67652da8afa17a3",
     "logs/ci-e86-113081297043.log.gz": "b84b3933a4a3f7396839796552c3bd1c5839da5ab74f39416361fcde0f7a93ed",
@@ -425,6 +430,7 @@
     "logs/examples-final.log": "5405defd735e14ed1aeaf10fe340ec48294026e16674894dc824bb1e9f475bce",
     "logs/examples-results-final.json": "c5b08431b96aad2307d13ad4ee49580409ad8b812985f1b8b1fe8cadfa153b9a",
     "logs/fuzz-final.log": "25ec36641b4f4995e668007567950e939d9c4bca32c42afce355cf7fb72671ee",
+    "logs/independent-actor-ci-review.md": "7d552c6f0ff7e2c407a6af0d786dbf2be54635bcc864377e94ba3872cb2549d6",
     "logs/independent-compiler-review.md": "ff2b8418280797e48b69c7702f56e039efada891acdece51d2e93ef45664e66b",
     "logs/independent-preparation-review.md": "a035e9c597cd1473415b60391850d2afca6602f63a74cf120f25d0b9b5060e58",
     "logs/independent-runtime-review.md": "aaf8e3eba186ce0d5f0f0f6509b4f04c8b2ed359db77f331ceec2f850490e574",
@@ -505,5 +511,20 @@
     "agent_did_merge": false,
     "pr99_base": "main",
     "note": "Same tree as prior Docs base bc6a76b; no production rebase needed."
+  },
+  "actor_ci_test_sync": {
+    "red_source": "b4c8f83f39a7ff608a5fe623545819e06ea7571b",
+    "push_run": 37714512662,
+    "failed_job": 113107859076,
+    "record": "actor-ci-sync.md",
+    "test_file": "runtime/src/actor/tests.rs",
+    "test_file_sha256": "86dc7a3a87b60f23dabaadcc1a972cf2b656598cb613302c00786fc6dc69f7b9",
+    "production_change": false,
+    "deadline_or_parallelism_relaxed": false,
+    "failure_raw_sha256": "716c1a6b369e4b5c118b7e0d501aef04ba5d58e10f4514a47cb4841c63f0d6c3",
+    "raw_stored_as": "logs/ci-b4-113107859076-push-failure.log.gz",
+    "local": "focused1; runtime219+consumer1+Task3+doctests10, existing ignored1; fmt; all-target clippy",
+    "independent_review": "logs/independent-actor-ci-review.md",
+    "final_ci": "Read actual final PR99 head and Checks."
   }
 }
