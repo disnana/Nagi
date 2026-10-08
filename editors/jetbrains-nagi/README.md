@@ -54,7 +54,7 @@ PyCharm用SDKでも同じコードを検証できます。
 
 テストには字句解析・折りたたみ・インデント・CLI引数・診断位置の検証と、IntelliJ Platformの実エディターfixtureを使ったファイル種別・改行・コメント・括弧補完・保存失敗の検証があります。実プロセスを使った起動中止の検証も含みます。`NAGI_TEST_COMPILER`に`nagic`のパスを設定すると、High・Low・プロジェクトの実型検査も確認します。JetBrains CIは同じコミットからコンパイラをビルドし、IDEAとPyCharmの双方でこの連携テストを実行します。
 
-主対象はIDEA・PyCharmの2025.1.1、最低対象APIはbuild 243です。CIはIDEAとPyCharmのそれぞれでstable（2025.1.1と最低対象SDK）と最新EAPを別々にテスト・Plugin Verifierにかけます。四つすべての成功後に、stable IDEA向けにビルドした共通ZIPを作ります。公開中の0.1.1に付属する二つのZIPは以前の配布物であり、今後の共通ZIPとは別です。これらのチェックはIDE全体を操作するテストとは異なります。
+主対象の2025.1.1は既存の対応対象です。CIはstable IDEA向けの共通ZIP候補を先に1回だけビルドし、IDEA/PyCharmのstable（2025.1.1）とEAPの計4経路で同一候補のIDE testとPlugin Verifierを実行します。最低対象のIDEA 2024.3.7とPyCharm 2024.3.6（build 243）はPlugin Verifierのみで確認し、そこでIDE testは行いません。四経路すべてが成功した後にだけ、元の候補ZIPを配布artifactへ昇格します。公開中の0.1.1に付属する二つのZIPは以前の配布物であり、今後の共通ZIPとは別です。これらのチェックはIDE全体を操作するテストとは異なります。
 
 通常の互換性確認は`./gradlew test buildPlugin verifyPlugin`を実行します。最低対象も確認するには、IDEAでは`-PminimumPlatformVersion=2024.3.7`、PyCharmでは`-PplatformType=PC -PminimumPlatformVersion=2024.3.6`を追加します。最新EAPの検査では`-PplatformVersion=LATEST-EAP-SNAPSHOT`を指定します。`-PlocalPlatformPath`を指定した場合は、そのローカルSDKだけを検証します。
 
