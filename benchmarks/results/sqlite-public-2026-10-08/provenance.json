@@ -377,7 +377,9 @@
     ]
   },
   "repo_evidence_sha256": {
-    "README.md": "fa1346639fb62a93104f667fe287bdd782eae10a8c424e812b6afc947b80d5f1",
+    "README.md": "eb26ffe26c46782b6027f1cb1c07e6b053a1168b75089bd7d828c006b214d5f5",
+    "ci-raw-log-hashes.json": "b607f18ab9cb5a145047647f099537f736083c9eff8ffb6c43b849c9589dace0",
+    "ci-readback.md": "65969045b36c71c13958ad8e6d20500ea369e05ba00bf3eb0d37585683f5f06e",
     "contracts-check.json": "b1169b7977b6c0499cac835e1ff66d803c2e14f49b5f4e834dee87d9238b0927",
     "contracts-final.json": "b1169b7977b6c0499cac835e1ff66d803c2e14f49b5f4e834dee87d9238b0927",
     "contracts-initial-red.json": "ad6155e7d6c41d0d914bf6b0ea37892ec6a0e27193a00a423807f12c3eb49b99",
@@ -388,6 +390,13 @@
     "logs/archive-verify.log": "f4bd011b5f17059136d379dc9c4f152612855fb950fa56fbeee484aa3dac6604",
     "logs/checkout-docs-check.log": "6ba5e568c745b02685c968f13b9b5522111573938f673f48a22ee2098e5bc8b0",
     "logs/checkout-website-check.log": "565939dbb22bc7de7df98c6569d0b23e87a51564db3bf0d8370510511f132d5e",
+    "logs/ci-e86-113081255940.log.gz": "392c0b5434eef2776e009d3fc54cee2a015ee5408b008489b0ddc46b18757506",
+    "logs/ci-e86-113081297039.log.gz": "4e6c0af8fd974079ffaaae49eb2d5e3314223099f3956bffb67652da8afa17a3",
+    "logs/ci-e86-113081297043.log.gz": "b84b3933a4a3f7396839796552c3bd1c5839da5ab74f39416361fcde0f7a93ed",
+    "logs/ci-e86-113081297091-failure.log.gz": "f2796be70367876b401d23ac38a6e99eb3ce189ecd4e50db09b08bb1c513eba6",
+    "logs/ci-e86-113081297118.log.gz": "44038a24470935f347a0968ce179660cd19a2b6b89797b251166c432df712fdb",
+    "logs/ci-e86-113090439243.log.gz": "5ed4f285d5503838ee1acee74b7bae47d3b617fef8d5dce5c12602d795b69dbc",
+    "logs/ci-e86-final-readback.json": "ba708a6070d17fb43a84c8c6cf73c5425efd4f3010a4b324e507f859167079d7",
     "logs/compiler-clippy.log": "d527ea2381d5e7541effa6764e5c65871a6d85fb2b4584fe2d60bc47326f5332",
     "logs/compiler-final-focused.log": "5491a05ef519736fd8797faacc03d4f18975ce552e79f47264202894d1e98c13",
     "logs/compiler-review-oracles/parent-sql-alias-red.json": "e4798eb290b00aef4d094814dac9c89348eef564b7409cb516cc40885d676dea",
@@ -405,6 +414,14 @@
     "logs/distribution-gate-oracles.log": "64f2b0a0fd56af32d9e648eb7f595ea183ee6360aab25a5501d92cf6a093cc0c",
     "logs/distribution-projection-tests.log": "898035a6b8ad921b24cd037d6dc0322db32cbe2858e86173e6fa890893f7bbfa",
     "logs/docs-code-final.log": "6ba5e568c745b02685c968f13b9b5522111573938f673f48a22ee2098e5bc8b0",
+    "logs/editor-main-baseline-build.log": "eb1224e622992a74caad614ade52dbe336aaf1ddedf809af757574b0a6dd27cf",
+    "logs/editor-symbols-comparison.json": "1190ca9aef85794a83b7a49a74dad17f05052979b66e536f948bc9c7fe6fa374",
+    "logs/editor-symbols-probe.log": "97e57846e2334e79411187ea2f4c666be9ecc42d54ef6cd9ea559bb4927d8f96",
+    "logs/editor-symbols-probe.rs": "d63e8167e68ed814e483a05179a1a96190c464f43a0f90854850444e40e1d9e8",
+    "logs/editor-timeout-investigation.md": "249f43c7b853611d3b79ca38895d715f721ac7627c5db2a2abd4cfcfa2da4bda",
+    "logs/editor-timeout-local-focused-corrected.log": "5d872fe068604d50d47c02b5ea0c1cb6b64cb9b64aeb7977389a9d62dff753ae",
+    "logs/editor-timeout-local-focused-tap.log": "a8459ec201ba132620072327bd25fe2c93e5a39614d2f43b3de6e2f38b01af94",
+    "logs/editor-timeout-local-focused.log": "93a90e0b1a9bf3fee12813ebfea015b80b97a4df4a96ae837b445c9a3bf69d26",
     "logs/examples-final.log": "5405defd735e14ed1aeaf10fe340ec48294026e16674894dc824bb1e9f475bce",
     "logs/examples-results-final.json": "c5b08431b96aad2307d13ad4ee49580409ad8b812985f1b8b1fe8cadfa153b9a",
     "logs/fuzz-final.log": "25ec36641b4f4995e668007567950e939d9c4bca32c42afce355cf7fb72671ee",
@@ -468,5 +485,25 @@
     "production_diff_from_tested_source": "none in compiler/runtime/Cargo.lock/SQLite distribution gates/cost harness",
     "local_results": "website98pages, first-app10native, SQLitebilingualcode, CIpolicy59pass",
     "final_ci": "Read actual PR #99 head and checks; not claimed at capture."
+  },
+  "ci_readback_after_integration": {
+    "head": "e86a9419fbcc547e937a13f0c0bf3927f98053b8",
+    "checks_run": 37706126168,
+    "attempt": 2,
+    "conclusion": "success",
+    "website_run": 37706125992,
+    "push_run": 37706121800,
+    "record": "ci-readback.md",
+    "readback": "logs/ci-e86-final-readback.json",
+    "raw_logs": "ci-raw-log-hashes.json",
+    "note": "Only failed macOS Intel job was re-executed; first timeout is preserved. Later Docs/evidence-only head checks are recorded on PR99."
+  },
+  "main_after_external_docs_merge": {
+    "commit": "2d87d8354808b221d537a8b1555ca39d2b95ef89",
+    "tree": "4d72a7d39ccd164400ce6a0e1353437b637f0ce7",
+    "pr": 98,
+    "agent_did_merge": false,
+    "pr99_base": "main",
+    "note": "Same tree as prior Docs base bc6a76b; no production rebase needed."
   }
 }

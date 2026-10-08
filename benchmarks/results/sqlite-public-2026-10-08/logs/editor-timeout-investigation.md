@@ -1,0 +1,11 @@
+# macOS x86_64 CIのeditor期限失敗
+
+対象HEAD e86a9419fbcc547e937a13f0c0bf3927f98053b8、run37706126168 attempt1、job113081297091。compiler/CLI統合stepは成功。その後のNode editor201 testsのうち、stdlib-navigation.test.jsのHigh/Low標準symbol2件が5秒でSIGTERM(killed=true/code=null)。nativeのSQLite契約stepへは進んでいない。原ログ ci-e86-113081297091-failure.logを保持する。
+
+同じ5秒のhelperを変更せずLinuxで当該fileを再確認し成功。初回ローカル確認はcompilerをPATHへ追加しておらず失敗したため、NAGIC変数ではなくPATHを正しく指定した結果だけを使う。期限、test並列数、assert、code、モデルを変更していない。製品extensionの既定は15秒で、このpositive fixtureのhelperだけが5秒。
+
+通常の同じHigh/Low fixtureにsymbols --editor-inputを逐次3回ずつ実行した。比較baseline bc6a76bはDocsのみのcommitで、compiler/runtimeはmain6765767と同一。両release binaryのhashとwall/child CPU/JSON bytesはeditor-symbols-comparison.json。main約0.43–0.46秒、今回約0.56–0.60秒、JSONは約218KB→233KB。これはLinuxの小さい観測で、macOSの原因特定や性能保証ではない。新しいfinalization replayへsymbols経路は入らず、既存editor_types/check_mode経路を使う。catalog追加に伴う費用は残る観測点で、今後のprofiling候補。
+
+Windows等の先行job終了後に、同一HEADの失敗したmacOS jobだけを再実行した。途中のrerun API403はworkflowがまだ実行中という状態条件で、権限不足/承認拒否ではない。attempt2の結果は別に確認し、初回失敗を成功へ読み替えない。
+
+通常High fixtureの分割観測（外部harness、製品sourceは変更なし）はload約9.5ms、symbols::index約553ms、JSON serialization約1.1msだった。各moduleのdefinitionsを一度ずつ生成する合計は約2.4ms。従って単一のsource loadや出力serializationだけでは差を説明できない。index内部の反復・type enrichment・catalog描画はまだprofilingで分離しておらず、特定関数を確定hotspotとしない。harnessとraw outputはeditor-symbols-probe.rs / .log。

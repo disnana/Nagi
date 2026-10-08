@@ -1,0 +1,105 @@
+{
+  "conditions": "Linux ordinary existing High/Low editor fixture; 3 sequential runs each; 5-second deadline unchanged; cached release compilers. Not macOS performance or workload/stress measurement.",
+  "binaries": {
+    "main_core_docs_bc6": "c28b2cf8fe3a3af59dce79677b951cff0ad12e21e1ce47496dd58b42239a8ff8",
+    "sqlite_e86": "4b86115cfb75535c223551a4907f8569b58a27a482ca47e1d7755b014d606d97"
+  },
+  "samples": [
+    {
+      "source": "main_core_docs_bc6",
+      "form": "nagi",
+      "n": 0,
+      "wall_ms": 448.23717800318263,
+      "child_cpu_ms": 444.22499999999997,
+      "json_bytes": 218314
+    },
+    {
+      "source": "main_core_docs_bc6",
+      "form": "nagi",
+      "n": 1,
+      "wall_ms": 434.7666759858839,
+      "child_cpu_ms": 430.597,
+      "json_bytes": 218314
+    },
+    {
+      "source": "main_core_docs_bc6",
+      "form": "nagi",
+      "n": 2,
+      "wall_ms": 450.2483480027877,
+      "child_cpu_ms": 445.5480000000001,
+      "json_bytes": 218314
+    },
+    {
+      "source": "main_core_docs_bc6",
+      "form": "low",
+      "n": 0,
+      "wall_ms": 459.90677901136223,
+      "child_cpu_ms": 457.13800000000003,
+      "json_bytes": 218132
+    },
+    {
+      "source": "main_core_docs_bc6",
+      "form": "low",
+      "n": 1,
+      "wall_ms": 448.14059299824294,
+      "child_cpu_ms": 443.5019999999996,
+      "json_bytes": 218132
+    },
+    {
+      "source": "main_core_docs_bc6",
+      "form": "low",
+      "n": 2,
+      "wall_ms": 427.60712100425735,
+      "child_cpu_ms": 424.694,
+      "json_bytes": 218132
+    },
+    {
+      "source": "sqlite_e86",
+      "form": "nagi",
+      "n": 0,
+      "wall_ms": 588.6544810055057,
+      "child_cpu_ms": 584.3649999999999,
+      "json_bytes": 232813
+    },
+    {
+      "source": "sqlite_e86",
+      "form": "nagi",
+      "n": 1,
+      "wall_ms": 596.9102880044375,
+      "child_cpu_ms": 592.5690000000001,
+      "json_bytes": 232813
+    },
+    {
+      "source": "sqlite_e86",
+      "form": "nagi",
+      "n": 2,
+      "wall_ms": 557.9702959948918,
+      "child_cpu_ms": 553.2629999999999,
+      "json_bytes": 232813
+    },
+    {
+      "source": "sqlite_e86",
+      "form": "low",
+      "n": 0,
+      "wall_ms": 601.6442399995867,
+      "child_cpu_ms": 600.8849999999995,
+      "json_bytes": 232631
+    },
+    {
+      "source": "sqlite_e86",
+      "form": "low",
+      "n": 1,
+      "wall_ms": 602.831968004466,
+      "child_cpu_ms": 600.2880000000008,
+      "json_bytes": 232631
+    },
+    {
+      "source": "sqlite_e86",
+      "form": "low",
+      "n": 2,
+      "wall_ms": 597.6114299992332,
+      "child_cpu_ms": 594.879,
+      "json_bytes": 232631
+    }
+  ]
+}

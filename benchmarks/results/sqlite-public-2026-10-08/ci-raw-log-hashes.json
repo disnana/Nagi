@@ -1,0 +1,44 @@
+{
+  "ci-e86-113081255940.log": {
+    "sha256": "dafcf882654ae5293788bb1cc9d82fd8a270ffa687c4d6ee262948697f8fd4ae",
+    "bytes": 303980,
+    "stored_as": "logs/ci-e86-113081255940.log.gz",
+    "stored_sha256": "392c0b5434eef2776e009d3fc54cee2a015ee5408b008489b0ddc46b18757506",
+    "normalization": "GitHub decoded UTF-8 log; CRLF normalized to LF."
+  },
+  "ci-e86-113081297043.log": {
+    "sha256": "9406363ee8068db6ebfcccb905d5feed6f065ca8e02206ab6e407fe617449436",
+    "bytes": 300240,
+    "stored_as": "logs/ci-e86-113081297043.log.gz",
+    "stored_sha256": "b84b3933a4a3f7396839796552c3bd1c5839da5ab74f39416361fcde0f7a93ed",
+    "normalization": "GitHub decoded UTF-8 log; CRLF normalized to LF."
+  },
+  "ci-e86-113081297039.log": {
+    "sha256": "2f260859f69da7827c900575633511924a8e83775677c94b6579e783cb394455",
+    "bytes": 405735,
+    "stored_as": "logs/ci-e86-113081297039.log.gz",
+    "stored_sha256": "4e6c0af8fd974079ffaaae49eb2d5e3314223099f3956bffb67652da8afa17a3",
+    "normalization": "GitHub decoded UTF-8 log; CRLF normalized to LF."
+  },
+  "ci-e86-113081297118.log": {
+    "sha256": "c0246a2981c5c4a31ccd4fdfb17a319f6a876182e125d391250350fcf750414b",
+    "bytes": 298831,
+    "stored_as": "logs/ci-e86-113081297118.log.gz",
+    "stored_sha256": "44038a24470935f347a0968ce179660cd19a2b6b89797b251166c432df712fdb",
+    "normalization": "GitHub decoded UTF-8 log; CRLF normalized to LF."
+  },
+  "ci-e86-113081297091-failure.log": {
+    "sha256": "a4123c0b57da756cb1c8dbbaaa377dd0cd4f4826debc202bf258568fb6b6e5a0",
+    "bytes": 222461,
+    "stored_as": "logs/ci-e86-113081297091-failure.log.gz",
+    "stored_sha256": "f2796be70367876b401d23ac38a6e99eb3ce189ecd4e50db09b08bb1c513eba6",
+    "normalization": "GitHub decoded UTF-8 log; CRLF normalized to LF."
+  },
+  "ci-e86-113090439243.log": {
+    "sha256": "fbec6ddc8375f85a68281050dc19ffd6e05537b759e96a290060872f3bf1af13",
+    "bytes": 302453,
+    "stored_as": "logs/ci-e86-113090439243.log.gz",
+    "stored_sha256": "5ed4f285d5503838ee1acee74b7bae47d3b617fef8d5dce5c12602d795b69dbc",
+    "normalization": "GitHub decoded UTF-8 log; CRLF normalized to LF."
+  }
+}

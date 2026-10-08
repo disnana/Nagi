@@ -1,5 +1,7 @@
 # SQLite public API: selected evidence
 
+Final integration update: PR #98 was merged externally as `2d87d8354808b221d537a8b1555ca39d2b95ef89`; PR #99 now targets main. Fixed source `e86a941` passed four OS, Linux regression, IDE/package, website and merge gate. [CI readback](ci-readback.md) preserves successful raw logs and the initial macOS Intel timeout followed by one unchanged retry. The paragraphs below describe the earlier artifact capture, not the current PR state. Later documentation/evidence-only head checks are recorded in PR #99. No merge/release/version operation was performed by this agent.
+
 This folder records the staged review and verification for [PR #99](https://github.com/disnana/Nagi/pull/99), based on main 676576724829e45b077b58628bfe2417e6cf3673 and source head e3e0ea3962bd847a9ffdaef4fdabb7598844459f. PR #99 is a draft; its initial checks are running and latest-head CI has not been read back here. Local Linux release build, examples, seeded fuzz smoke, SQLite native sample, extracted local archive verification, and a narrow generated-versus-manual cost sample are recorded. The API is not in Nagi 0.1.11.
 
 See [the internal results record](../../../docs/internal/sqlite-public-results.md) for scope, counts, limitations, and pending work, and [the handoff](../../../docs/internal/handoffs/2026-10-08-sqlite-public.md) for the next owner. Machine-readable [provenance](provenance.json) records changed source file hashes, evidence hashes, source stage per run, cache reuse, and recorded command scope.

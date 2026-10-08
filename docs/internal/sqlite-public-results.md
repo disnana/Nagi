@@ -1,6 +1,8 @@
 # SQLite公開APIの検証結果
 
-## 現在の状態
+最新の整理: PR #98はmain `2d87d8354808b221d537a8b1555ca39d2b95ef89`へ外部でmerge済み。PR #99はmain向けに変更済みで、このagentはmerge/release/version bumpを行っていない。固定source `e86a941`の4 OS・Linux全回帰・IDE・website・merge gateは成功を読み戻した。[CI原ログと初回失敗](../../benchmarks/results/sqlite-public-2026-10-08/ci-readback.md)、[更新済み引継ぎ](handoffs/2026-10-08-sqlite-public.md)を参照。以下の初回captureと途中追記は履歴であり、現在のpending状態を表さない。後続のDocs/artifactだけのheadと最終ChecksはPR本文で確認する。
+
+## 初回source記録時点の状態
 
 対象はmain 676576724829e45b077b58628bfe2417e6cf3673をbaseとするPR #99、source head e3e0ea3962bd847a9ffdaef4fdabb7598844459f、tree e6d986d13345743465b74dfeb34f005a66a4c924。履歴は契約runner追加、runtime公開化、compiler接続、SQL alias借用修正、日英Docs/CIの5 commit。PR #99はdraftで、e3e0ea3のinitial checksが進行中だが最終readbackはまだない。merge・release・版更新は行っていない。sourceから作ったlocal archiveは0.1.11名でbuild/verifyしたが、既存の公開Nagi 0.1.11へ差し替えたりGitHub releaseへ公開していない。公開版0.1.11には新APIは含まれない。
 
@@ -30,7 +32,7 @@ Q002/Q004の承認範囲でstd.db.sqlite Pool/Tx APIを開発sourceへ追加し�
 
 runtimeの独立レビューはe78f35aを対象とし、P0/P1/P2 blockerを報告していない。logical FIFO waitにのみFIFOを限定すること、retired=falseをhealthyの証明としないこと、ReplyLost/UNKNOWNからretry/rollback safetyを推論しないことをDocsへ明記した。compilerの独立reviewは0f9dd79のP2 SQL-loan過剰保持を特定し、0bebcd0のargument-1-only materialization fixを追跡確認した。レビュー範囲では解消後に確認済みP0/P1/P2は残っていないが、これは最新headの全回帰/CI合格の代用ではない。Docs独立reviewのP2指摘は修正済みで、[review record](../../benchmarks/results/sqlite-public-2026-10-08/logs/independent-sqlite-docs-review.md)に記録する。
 
-## 未確認・次の作業
+## 初回source記録時点の未確認・次の作業
 
 - PR #99 e3e0ea3 checks are running; 4 OS/latest-head status has not been read back. Local Linux workspace regression, format check, clippy, examples, seeded fuzz, native example, and extracted local archive verification passed but do not substitute for PR CI.
 - The generated-versus-manual cost sample is complete, with the narrow scope and allocation outlier recorded above. runtime-public-cost.json remains a separate small debug snapshot; neither measurement is a performance threshold or production-performance claim.

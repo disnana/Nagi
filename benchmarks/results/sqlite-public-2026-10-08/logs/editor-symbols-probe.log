@@ -1,0 +1,8 @@
+load_us=9492 index_us=553344 json_us=1125 bytes=232812
+module=std.http.server definitions=31 definitions_us=1268
+module=std.actor definitions=35 definitions_us=770
+module=std.result definitions=1 definitions_us=8
+module=std.auth definitions=2 definitions_us=9
+module=std.ownership definitions=1 definitions_us=7
+module=std.task definitions=6 definitions_us=17
+module=std.db.sqlite definitions=26 definitions_us=320
