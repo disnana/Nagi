@@ -294,4 +294,4 @@ It prints `Waited 10 milliseconds`, then `Done`. Python’s `asyncio.sleep` take
 
 A bare `sleep(10)` is rejected because it is not awaited; use `await sleep(10)`. Awaiting does not itself create another task. Use await to wait for a result. Try `spawn` for concurrent work and scopes for managing its lifetime in [async](async.md).
 
-Continue to [HTTP and HTML](http.md) to build an API you can call from a browser. Use the [syntax reference](syntax.md) for notation and [built-in functions](builtins.md) for arguments.
+Continue with [Your first small CLI app](first-app.md) to validate input and try boundary values. Then build an API you can call from a browser with [HTTP and HTML](http.md). Use the [syntax reference](syntax.md) for notation and [built-in functions](builtins.md) for arguments.

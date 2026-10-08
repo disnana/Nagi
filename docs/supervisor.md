@@ -26,6 +26,14 @@ async def main() -> Result[unit, Error]:
 
 よくある間違いは、`PERMANENT`を「故障したときだけ再起動する」と読むことです。正常完了後も再起動します。一度だけ実行するなら`TEMPORARY`、故障時の再起動なら`TRANSIENT`を選び、次の表で違いを確認してください。
 
+たとえば一度処理して正常終了するworkerを登録する場合、次の設定は文法上有効ですが、正常終了後も繰り返し起動するため意図と合いません。
+
+```nagi
+try actor.task(view(group), "once", worker, actor.RestartPolicy.PERMANENT)
+```
+
+一度だけ実行するなら`TEMPORARY`へ変更します。正常完了では止め、Errorやpanicのときだけ再起動する場合は`TRANSIENT`を使います。Supervisorが何も起動していないと終了し、`run`が戻ります。
+
 **一言でいうと：Supervisorが子を所有し、方針に従って再起動と停止を管理する。** 登録・監視・停止のAPIは[リファレンス](actor-reference.md)にあります。
 
 ## 再起動方針

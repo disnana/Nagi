@@ -1,0 +1,59 @@
+Temporary < experiment: input 1000 produced over budget; restored <= and boundary cases passed.
+
+$ /workspace/nagi-build-cache/check/debug/nagic check first_app.nagi
+exit=0
+checked /workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/first_app.nagi
+
+$ /workspace/nagi-build-cache/check/debug/nagic run first_app.nagi << '700\n'
+exit=0
+     Locking 107 packages to highest compatible versions
+   Compiling nagi-first-app-8a85ab417f498d33 v0.1.0 (/workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/build/first_app/.nagi/apps/nagi-first-app-8a85ab417f498d33/generations/.staging-g-4f51e-18dc615691286e85-0)
+    Finished `release` profile [optimized] target(s) in 0.84s
+native: /workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/build/first_app/.nagi/apps/nagi-first-app-8a85ab417f498d33/generations/g-4f51e-18dc615691286e85-0/nagi-8a85ab417f498d33-g-4f51e-18dc615691286e85-0
+Enter a whole-number amount:
+within budget
+done
+
+$ /workspace/nagi-build-cache/check/debug/nagic check first_app.nagi
+exit=0
+checked /workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/first_app.nagi
+
+$ /workspace/nagi-build-cache/check/debug/nagic run first_app.nagi << '1000\n'
+exit=0
+   Compiling nagi-first-app-8a85ab417f498d33 v0.1.0 (/workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/build/first_app/.nagi/apps/nagi-first-app-8a85ab417f498d33/generations/.staging-g-4f5d4-18dc6156d1a4ef87-0)
+    Finished `release` profile [optimized] target(s) in 0.35s
+native: /workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/build/first_app/.nagi/apps/nagi-first-app-8a85ab417f498d33/generations/g-4f5d4-18dc6156d1a4ef87-0/nagi-8a85ab417f498d33-g-4f5d4-18dc6156d1a4ef87-0
+Enter a whole-number amount:
+over budget
+done
+
+$ /workspace/nagi-build-cache/check/debug/nagic check first_app.nagi
+exit=0
+checked /workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/first_app.nagi
+
+$ /workspace/nagi-build-cache/check/debug/nagic run first_app.nagi << '700\n'
+exit=0
+   Compiling nagi-first-app-8a85ab417f498d33 v0.1.0 (/workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/build/first_app/.nagi/apps/nagi-first-app-8a85ab417f498d33/generations/.staging-g-4f5ef-18dc6156ef447971-0)
+    Finished `release` profile [optimized] target(s) in 0.58s
+native: /workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/build/first_app/.nagi/apps/nagi-first-app-8a85ab417f498d33/generations/g-4f5ef-18dc6156ef447971-0/nagi-8a85ab417f498d33-g-4f5ef-18dc6156ef447971-0
+Enter a whole-number amount:
+within budget
+done
+
+$ /workspace/nagi-build-cache/check/debug/nagic run first_app.nagi << '1000\n'
+exit=0
+   Compiling nagi-first-app-8a85ab417f498d33 v0.1.0 (/workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/build/first_app/.nagi/apps/nagi-first-app-8a85ab417f498d33/generations/.staging-g-4f66c-18dc615717490bed-0)
+    Finished `release` profile [optimized] target(s) in 0.42s
+native: /workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/build/first_app/.nagi/apps/nagi-first-app-8a85ab417f498d33/generations/g-4f66c-18dc615717490bed-0/nagi-8a85ab417f498d33-g-4f66c-18dc615717490bed-0
+Enter a whole-number amount:
+within budget
+done
+
+$ /workspace/nagi-build-cache/check/debug/nagic run first_app.nagi << '1001\n'
+exit=0
+   Compiling nagi-first-app-8a85ab417f498d33 v0.1.0 (/workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/build/first_app/.nagi/apps/nagi-first-app-8a85ab417f498d33/generations/.staging-g-4f686-18dc615736c2fd91-0)
+    Finished `release` profile [optimized] target(s) in 0.22s
+native: /workspace/nagi-docs-onboarding-2026-10-08/nagi-budget-review/build/first_app/.nagi/apps/nagi-first-app-8a85ab417f498d33/generations/g-4f686-18dc615736c2fd91-0/nagi-8a85ab417f498d33-g-4f686-18dc615736c2fd91-0
+Enter a whole-number amount:
+over budget
+done

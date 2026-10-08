@@ -26,6 +26,20 @@ async def main() -> Result[unit, Error]:
 
 Task is non-Copy, non-Clone, and non-shared for every result type. It belongs to a local in its creating scope. Await or discard is required before normal binding exits, scope exits, and loop continuation. Both branches must satisfy this obligation. With `from std.ownership import move`, `alias = move(task)` transfers the handle and obligation. A bare `move(task)` cannot abandon it.
 
+If a Task reaches scope exit without await or discard, `check` rejects the normal exit because the Task is still unhandled.
+
+```nagi
+async def answer() -> i64:
+    return 42
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn answer()
+    return ok(print("done"))
+```
+
+If you need the value, write `result = await task` and handle the result. If you do not need it, import `discard` from `std.task` and call `discard(task)`. The scope waits for the child to finish in either case.
+
 The right side of short-circuit `and`/`or` can be skipped, and an `env` fallback is skipped when a value exists. Awaiting or discarding only there does not satisfy the normal-exit obligation. The checker does not waive this obligation based on constant conditions. Receive the Task first, then use its ordinary Result conditionally. Receipt in an always-evaluated position, such as the left operand or the `env` key, remains valid.
 
 A Task cannot escape through a function argument or return, a field, a List, an Option or Result wrapper, or another task. An inner scope cannot receive an outer scope's Task. Receive it in its original scope after the inner scope finishes. Return inside a scope remains unsupported.
@@ -33,6 +47,30 @@ A Task cannot escape through a function argument or return, a field, a List, an 
 ## Business results and task faults
 
 When a child returns `Result[T, E]`, receiving yields `Result[Result[T, E], TaskFailure]`. An inner business Err alone does not stop siblings. Panic, unexpected cancellation, an Err from a legacy spawn in the same scope, and bridge protocol faults are outer failures.
+
+Treating the outer and inner Err as one case confuses a Task fault with a business rejection. To inspect the business result, match the inner Result inside the outer `Ok`:
+
+```nagi
+async def save() -> Result[i64, Error]:
+    return error("rejected")
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn save()
+        received = await task
+        match received:
+            case Ok(operation_result):
+                match operation_result:
+                    case Ok(value):
+                        print(value)
+                    case Err(problem):
+                        print("business operation rejected")
+            case Err(failure):
+                print("task failed")
+    return ok(print("done"))
+```
+
+This example handles the inner Err and continues to print `done`. Receiving an outer `Err(TaskFailure)` leaves the scope failed, so scope exit returns Err.
 
 Import `kind`, `message`, and `TaskFailureKind` from `std.task` to inspect a failure. `kind(failure)` returns a Copy enum with `Panicked`, `Cancelled`, `LegacyError`, and `Internal` constants. `message(failure)` returns `view[str]` borrowed from the failure. The failure cannot move while this borrow remains live. TaskFailure is an opaque non-Copy, non-Clone, non-shared value, with no implicit conversion to Error. Arbitrary panic payload text is not guaranteed to survive.
 

@@ -16,6 +16,14 @@ async def main() -> Result[unit, Error]:
 
 A common mistake is to store the return value as `pending = sleep(10)` and await it later. Future storage is not currently supported. Write `await sleep(10)` to await the call directly.
 
+```nagi
+async def main():
+    pending = sleep(10)  # check rejects storing this Future
+    await pending
+```
+
+This form cannot put the Future in a local variable for later awaiting. Write `await sleep(10)` as in the valid example above; the message is printed once the wait finishes.
+
 **In one sentence: await waits for a result.** See [Error handling](error-handling.md) for calls that also return Result.
 
 ## Let other work proceed while waiting

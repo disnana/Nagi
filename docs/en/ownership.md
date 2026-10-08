@@ -18,6 +18,22 @@ This complete program prints `alice`. After the call, the original `name` cannot
 
 Uncommenting `print(name)` makes `check` reject use after move. If the function only reads, accept `view[str]` and pass `view(name)`. If it needs an independent string, pass `copy(view(name))`. See the [runnable borrowing example](language-guide.md#4-borrow-with-view-when-you-only-need-to-read).
 
+Here is a common mistake and two fixes:
+
+```nagi
+from std.ownership import move
+
+def show(name: view[str]):
+    print(name)
+
+def main():
+    name = "Nagi"
+    destination = move(name)
+    print(name)  # check rejects this: name no longer owns a value
+```
+
+If `destination` should own the value, use `print(destination)` instead. If both names should remain usable, make an explicit copy with `destination = copy(view(name))`, or borrow with `show(view(name))` and keep using `name`. Moving does not make the original variable usable again.
+
 ## Assignment and explicit move
 
 The explicit move and assignment rules below are published in Nagi 0.1.11. Confirm that the installed compiler is version 0.1.11 or later. Python assignment keeps another reference to the same value. Nagi uses ordinary assignment for Copy values, such as numbers and bools. To transfer an existing non-Copy local, use `move`; ordinary `destination = name` is rejected.
@@ -38,7 +54,7 @@ def main():
     print(name)
 ```
 
-Output: `4`, `Nagi`, `new`. `destination = move(name)` transfers the string and cleanup responsibility. The move operation itself does not clone, allocate, or add a shared owner.
+Output: `4`, `Nagi`, `new`. `destination = move(name)` transfers ownership and cleanup responsibility. At the source level, this requests a transfer rather than a clone or another shared handle; Nagi does not promise that a transfer has zero runtime cost.
 
 Reading `name` after the move and before reassignment is rejected. The variable name is still available: assigning a new value allows reuse. To keep the original string too, replace the move assignment above with `destination = copy(view(name))`. To read without owning, use `view(name)`; to retain the same value in several places, use `share` and `clone_shared`.
 

@@ -2,7 +2,7 @@
 
 [English](CONTRIBUTING.en.md)
 
-不具合の報告、コードの修正、Docsや翻訳の改善を受け付けます。IssueとPRは日本語・英語のどちらでも構いません。書き方と実装範囲は[Docs](docs/README.md)、今後の予定は[roadmap](docs/roadmap.md)で確認できます。
+不具合の報告、コードの修正、Docsや翻訳の改善を受け付けます。IssueとPRは日本語・英語のどちらでも構いません。書き方と実装範囲は[Docs](docs/README.md)、今後の予定は[roadmap](docs/roadmap.md)で確認できます。初めて本体のfileを探して変更する場合は、[貢献の実践ガイド](docs/contributing.md)で環境構築から対象testとPRまで進められます。
 
 ## 変更を判断する基準
 

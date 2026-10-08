@@ -1,0 +1,9 @@
+   Compiling nagic v0.1.11 (/workspace/nagi-docs-contrib-scratch/compiler)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.85s
+     Running tests/conformance.rs (/workspace/nagi-build-cache/check/debug/deps/conformance-10b6bcd826e5d300)
+
+running 1 test
+test corpus_and_bounded_generated_contracts_reach_native_execution ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.65s
+

@@ -4,7 +4,7 @@ Compiler and runtime changes follow the [language contracts](docs/internal/langu
 
 [日本語](CONTRIBUTING.md)
 
-Bug reports, code fixes, documentation, and translations are welcome. Issues and PRs may be written in Japanese or English. See the [Docs](docs/en/README.md) for the language and implementation scope, and the [roadmap](docs/en/roadmap.md) for planned work.
+Bug reports, code fixes, documentation, and translations are welcome. Issues and PRs may be written in Japanese or English. See the [Docs](docs/en/README.md) for the language and implementation scope, the [roadmap](docs/en/roadmap.md) for planned work, and the [first contribution walkthrough](docs/en/contributing.md) for environment setup, repository navigation, focused tests, and a PR.
 
 ## How changes are evaluated
 
@@ -58,7 +58,7 @@ Run additional checks for the affected component. Python scripts use Python 3.12
 | VS Code extension | `node --test editors/vscode-nagi/test/*.test.js` |
 | JetBrains plugin | Follow the [plugin checks](editors/jetbrains-nagi/README.en.md#build-and-verification); distinguish real-compiler integration from IDE compatibility checks |
 | Release scripts | `python -m unittest discover -s scripts/releases -p 'test_*.py'` |
-| Published website or Docs | Build and check links using the [site instructions](website/README.md#手元で確認する) (Japanese) |
+| Published website or Docs | Build and check links using the [site instructions](website/README.en.md#local-preview) |
 
 Documentation-only changes do not require the full Rust test suite. Check links, matching translations, and any runnable examples you changed. The [CI workflow](.github/workflows/ci.yml) contains the automated checks.
 

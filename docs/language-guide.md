@@ -294,4 +294,4 @@ async def main() -> Result[unit, Error]:
 
 `sleep(10)`だけでは待っていないため`check`が拒否します。`await sleep(10)`に直します。awaitしただけで別taskが作られるわけではありません。一言でいうと、awaitで結果を待ちます。複数の処理を進める`spawn`と、その寿命を管理するscopeは[async](async.md)で試せます。
 
-次は[HTTPとHTML](http.md)で、ブラウザーから呼べるAPIを作ってください。書式だけ調べたいときは[文法の早見表](syntax.md)、関数の引数を調べたいときは[組み込み関数](builtins.md)を使えます。
+次は[最初の小さなCLIアプリ](first-app.md)で、入力を検査し境界値を試してください。その後[HTTPとHTML](http.md)でブラウザーから呼べるAPIを作れます。書式だけ調べたいときは[文法の早見表](syntax.md)、関数の引数を調べたいときは[組み込み関数](builtins.md)を使えます。

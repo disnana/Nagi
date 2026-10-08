@@ -16,7 +16,7 @@ ROOT_DOCS = {
     "AGENTS.md",
 }
 SITE_FILES = {
-    "website/README.md", "website/build.py", "website/requirements.txt",
+    "website/README.md", "website/README.en.md", "website/build.py", "website/requirements.txt",
     "website/CNAME", ".github/workflows/pages.yml",
 }
 ASSET_SUFFIXES = {".css", ".js", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2"}

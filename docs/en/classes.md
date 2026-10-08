@@ -18,6 +18,8 @@ def main():
 
 Save this as `point.nagi` and run `nagic run point.nagi`. It prints `3` and `25`. Read a field with `point.x`. Define functions that process the value outside the class.
 
+Positional construction such as `Point(3.0, 4.0)` is not supported. Name each field as in `Point(x=3.0, y=4.0)`. Use an [enum instead of a class](types.md#distinguish-variants-with-an-enum) when a value is one of several alternatives rather than a group of fields.
+
 ## Passing values
 
 Classes containing only copyable values, such as numbers, can be used repeatedly. `Point` above is one example. You can also read elements of `List[Point]` in a `for` loop.

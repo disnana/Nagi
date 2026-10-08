@@ -1,0 +1,15 @@
+def within_budget(amount_text: view[str], limit: i64) -> Result[bool, Error]:
+    amount = try parse_i64(amount_text)
+    if amount < 0:
+        return error("amount must be non-negative")
+    return ok(amount <= limit)
+
+def main() -> Result[unit, Error]:
+    print("Enter a whole-number amount:")
+    text = try read_line()
+    fits = try within_budget(view(text), 1000)
+    if fits:
+        print("within budget")
+    else:
+        print("over budget")
+    return ok(print("done"))

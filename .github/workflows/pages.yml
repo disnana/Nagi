@@ -25,6 +25,8 @@ jobs:
           cache: pip
           cache-dependency-path: website/requirements.txt
       - run: python -m pip install -r website/requirements.txt
+      - name: Check tutorial code even when Rust jobs are skipped for Docs-only changes
+        run: python scripts/verify_onboarding_examples.py --docs-only
       - name: Build and check links
         env:
           SITE_REPOSITORY: ${{ github.repository }}

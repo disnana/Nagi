@@ -18,6 +18,22 @@ def main():
 
 コメントを外して`print(name)`を追加すると、move後の使用として`check`が拒否します。読むだけなら、引数を`view[str]`にして`view(name)`を渡します。独立した文字列が必要なら`copy(view(name))`を渡します。[入門の実行例](language-guide.md#4-読むだけならviewで借りる)で試せます。
 
+よくある誤りと二つの直し方を、短い例で確認します。
+
+```nagi
+from std.ownership import move
+
+def show(name: view[str]):
+    print(name)
+
+def main():
+    name = "Nagi"
+    destination = move(name)
+    print(name)  # checkはnameに値がないため拒否
+```
+
+`destination`へ渡した値を使うなら`print(destination)`に直します。両方の名前を使いたい場合は`destination = copy(view(name))`で明示的に複製するか、`show(view(name))`で借用してから`name`を使います。move後に元のbindingが再び値を持つわけではありません。
+
 ## 代入と明示move
 
 以下の明示moveと代入規則はNagi 0.1.11で公開済みです。利用するcompilerが0.1.11以降であることを確認してください。Pythonの代入は同じ値への参照を増やします。Nagiでは、数値やboolなどCopyとして扱う値は通常代入できます。既存の非Copyローカルを渡す場合は`move`を使い、裸の`destination = name`は拒否します。
@@ -38,7 +54,7 @@ def main():
     print(name)
 ```
 
-出力は`4`、`Nagi`、`new`です。`destination = move(name)`は文字列と後片付けの責任を渡します。move操作自体はclone、allocation、shared所有者の追加を行いません。
+出力は`4`、`Nagi`、`new`です。`destination = move(name)`は所有権と後片付けの責任を渡します。ソース上ではcloneやshared handleの追加を要求しませんが、転送が実行時コストゼロであるとは保証されません。
 
 move後、再代入前に`name`を読むと拒否されます。変数名自体が使えなくなるのではなく、新しい値を受け取った後なら再利用できます。元の文字列も残したい場合は、上のmove代入を`destination = copy(view(name))`へ置き換えます。読むだけなら`view(name)`、同じ値を複数の場所で持つなら`share`と`clone_shared`を使います。
 

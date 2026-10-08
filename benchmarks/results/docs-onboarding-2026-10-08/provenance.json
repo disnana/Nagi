@@ -1,0 +1,341 @@
+{
+  "recorded_at": "2026-10-08",
+  "repository": "disnana/Nagi",
+  "branch": "docs/first-app-and-contributing",
+  "base_commit": "676576724829e45b077b58628bfe2417e6cf3673",
+  "recorded_head_commit": "2bae879a950e51ba9d3e38f4c515b0234f04b894",
+  "pull_request": {
+    "number": 98,
+    "url": "https://github.com/disnana/Nagi/pull/98",
+    "state_at_recording": "draft; latest-head review/CI not complete",
+    "working_tree_contains_changes_after_recorded_head": true
+  },
+  "verified_source_sha256": {
+    ".github/workflows/ci.yml": {
+      "sha256": "4e76016f69e8feb6f2ddeedaab7e5ee1211a9e3ded005d529cdbe59d87f9fb92",
+      "state": "committed at recorded HEAD"
+    },
+    ".github/workflows/pages.yml": {
+      "sha256": "6b0757065f466059801f290a9070b30fcbc59917b7684b86ee1b243a6af48f4b",
+      "state": "modified working-tree file"
+    },
+    "CONTRIBUTING.en.md": {
+      "sha256": "199ed179cee6a98dc80e87e5b8a63364717e722210e92a04574a01108b52a2b3",
+      "state": "committed at recorded HEAD"
+    },
+    "CONTRIBUTING.md": {
+      "sha256": "d88023eadb559aa263109bf0b8c3f28831591b27797d52f8af28904eadfaae79",
+      "state": "committed at recorded HEAD"
+    },
+    "README.en.md": {
+      "sha256": "003ae899f2c258d18172638e2271ef9347660fe6671bdcaa62be19066d7c1bf7",
+      "state": "committed at recorded HEAD"
+    },
+    "README.md": {
+      "sha256": "cf4706fb49bf1008a77d6a3b4da55c7fbc9c6e148b5d1b7a6cb27cc5208722d9",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/README.md": {
+      "sha256": "cf118bda102bbc6202d143c40e8bab740c9681f0c877be514d7f2e522e27e967",
+      "state": "modified working-tree file"
+    },
+    "docs/actor.md": {
+      "sha256": "a2fe107bc64d266c34c3187d3d64b5e436de8bad74b9f528790cb3978844a90b",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/async.md": {
+      "sha256": "bba8875a7c9dcbbc67087a3929bbcb51b7c4be478d58eb82534dadbee54b3f38",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/classes.md": {
+      "sha256": "a755dc59308e99d07a2606f477ed361498f193ab1d61a6c2f85b5614f5c48534",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/contributing.md": {
+      "sha256": "e7f381f3aef397ddc8325047a19ed83561dbc69a96220eab7ed695b18f30d4a5",
+      "state": "modified working-tree file"
+    },
+    "docs/en/README.md": {
+      "sha256": "b745f0b9b17f03dc12fe2d828738673857ddb3a6e2168e4497ec79104820e02b",
+      "state": "modified working-tree file"
+    },
+    "docs/en/actor.md": {
+      "sha256": "ee06f56c14c4ef6a8f7fc736e6c7ba5a12b426ed169b0f5cf0c5ad6c8831074e",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/en/async.md": {
+      "sha256": "d152a15798bc4ee15de65045ea674943615c63271e78cbee5faf72f9833674eb",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/en/classes.md": {
+      "sha256": "def0b0ae86d03be495d1592683c2114b512c2837102c44da08bd105ec67a8ec5",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/en/contributing.md": {
+      "sha256": "66eacff85ed7ea87599e7c86428e5f65d87e09c36f1c40b0681e05faea63ab0a",
+      "state": "modified working-tree file"
+    },
+    "docs/en/error-handling.md": {
+      "sha256": "0f8e8156d0d91a2a6c031fb93862847d93fa994e371458f9433d93c1e9682252",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/en/first-app.md": {
+      "sha256": "77d16bf30c0467786d97d5ac02ef51289cb13ffbd1bced70019da5a35ced3831",
+      "state": "modified working-tree file"
+    },
+    "docs/en/getting-started.md": {
+      "sha256": "2706510582e48f92247c0000f61373647c54421c2583e8ea8c2845342097dd46",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/en/language-guide.md": {
+      "sha256": "7e2b8408345c35ffd18a7a2139b6f85f6c22d708bfc741743836d5cac01edac4",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/en/ownership.md": {
+      "sha256": "21c515ef00605bb79e4387f3df834b66194800795a80081c769eff2031f378ae",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/en/supervisor.md": {
+      "sha256": "0136d79b997b03f8b07ef439f5b01355df5b436b0ec0f47d59d1ab3350e62a24",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/en/task-handles.md": {
+      "sha256": "aaf6c4e1dcf0d80231cb203d572f84a5f12c0b9d0c080c2c196713ed1608c00d",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/error-handling.md": {
+      "sha256": "a3ed6e5eb4637d8c8ae6f328bfc49829c2689f34137cdda2cf8fbbf7e63a79a2",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/first-app.md": {
+      "sha256": "2268cef2728e39cfedc0ffc6974dae5b8e28fe25ac185bc41b11c9f3141daa3a",
+      "state": "modified working-tree file"
+    },
+    "docs/getting-started.md": {
+      "sha256": "545e037edbdbc0cfbb6f398e8184bcbc0bb55450d023ada4e6932ff38dab6642",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/internal/docs-onboarding-audit.md": {
+      "sha256": "0f1d44313653853973c38f40108b1426a415329319220c96a82d1a8798e2776c",
+      "state": "modified working-tree file"
+    },
+    "docs/internal/handoffs/2026-10-08-docs-onboarding.md": {
+      "sha256": "08974355f936030a91b083ed70b6d03c4e13b6f504c0caa06170d1cf3fedc8a2",
+      "state": "untracked working-tree file"
+    },
+    "docs/language-guide.md": {
+      "sha256": "6e9ec1d84020d2f4b55d621f781a646ab99b809b2e425a8a054f075853609daa",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/ownership.md": {
+      "sha256": "7dce3819f667564a3f69b878d1cc9ca35083d6ec22d798a851cfb31a64c8a885",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/supervisor.md": {
+      "sha256": "e48b581f58ad0fd20749feed5b8f173389fc9ff7f4dc812f5381cf9bf13a9089",
+      "state": "committed at recorded HEAD"
+    },
+    "docs/task-handles.md": {
+      "sha256": "6e3afa4243cb652574b8fe938325143d617c6adbecfd0f42ed39f38ec4a971f2",
+      "state": "committed at recorded HEAD"
+    },
+    "examples/tutorial/first_app.nagi": {
+      "sha256": "a46bde3ff633c092b72e10a0ac9c175125728df5c91b26aacc5ddcb76fdb262c",
+      "state": "committed at recorded HEAD"
+    },
+    "scripts/ci/changes.py": {
+      "sha256": "10e65caaedbc62b50cc83315fc510163088cbe82c5c19597df2204a2c44b1a5c",
+      "state": "modified working-tree file"
+    },
+    "scripts/verify_onboarding_examples.py": {
+      "sha256": "39b58b19cd06097117e84d9934cf31dc37e5f08de674fe7862aa47a905ba619d",
+      "state": "modified working-tree file"
+    },
+    "website/README.en.md": {
+      "sha256": "62d5de5f78b6651db5b52b945b0a65ba50f91f101bd33987aba9c753e1e812b3",
+      "state": "committed at recorded HEAD"
+    },
+    "website/build.py": {
+      "sha256": "5f532c2a89d5bc2a9e11869ccedc15a9986fd0b7fda93f940ddbdab1f397cba7",
+      "state": "committed at recorded HEAD"
+    },
+    "website/templates/home.en.html": {
+      "sha256": "6dcd2009e10af880e4cf7f110f90740374148a96c430447f5c4e0bab3653e40b",
+      "state": "committed at recorded HEAD"
+    },
+    "website/templates/home.html": {
+      "sha256": "a927642ef2f4fbf7b1ea21c7bc8c02a3d5daa0f7409e7a1fc9fa1236d2b2392d",
+      "state": "committed at recorded HEAD"
+    }
+  },
+  "tutorial_exact_code_block_sha256": {
+    "examples/tutorial/first_app.nagi": "e29f07c271d8da6b95721ce4623aece700230201d85f14bcba0f91a8edf84794",
+    "docs/first-app.md": "e29f07c271d8da6b95721ce4623aece700230201d85f14bcba0f91a8edf84794",
+    "docs/en/first-app.md": "e29f07c271d8da6b95721ce4623aece700230201d85f14bcba0f91a8edf84794",
+    "exact_match": true
+  },
+  "scratch_conformance_source_sha256": {
+    "tests/conformance/nullable_default.nagi (temporary worktree; removed)": "9efd25f47ebb1edf2ee08e4ed710c98461e220087582db6d1b377991cb26f608",
+    "corpus_case_canonical_json_payload": "c49c326932b1b03ff99862e6ff329fcdf2a795156f2b8a88b47b7313b439feeb",
+    "persisted_in_PR_branch": false
+  },
+  "commands_and_results": [
+    {
+      "command": "cargo build --locked -p nagic",
+      "result": "success",
+      "log": "logs/compiler-build-cache.log",
+      "scope": "Current Docs checkout compiler build using existing Cargo target cache; not a clean build."
+    },
+    {
+      "command": "env PATH=\"/workspace/toolchains/cargo/bin:$PATH\" RUSTUP_HOME=/workspace/toolchains/rustup CARGO_HOME=/workspace/toolchains/cargo CARGO_TARGET_DIR=/workspace/nagi-build-cache/check NAGI_NATIVE_TARGET_DIR=/workspace/nagi-build-cache/native NAGI_ROOT=/workspace/Nagi-docs-onboarding DEBUG=0 CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true python3 scripts/verify_onboarding_examples.py --compiler /workspace/nagi-build-cache/check/debug/nagic",
+      "result": "success; High and saved Low each passed check/build; 5 inputs each, 10 native runs total.",
+      "log": "logs/onboarding-harness-rerun.log",
+      "results": "native10-results.json",
+      "cache": "Existing Rust/Cargo and native target caches were reused; no clean build."
+    },
+    {
+      "command": "python3 scripts/verify_onboarding_examples.py --docs-only",
+      "result": "success; Japanese and English tutorial code blocks exactly match the native-tested example.",
+      "log": "logs/docs-only-verifier.log"
+    },
+    {
+      "command": "Python subprocess scratch runner: check/run with amount <= limit; replace <= by < and check/run input 1000; restore <= and check/run 700, 1000, 1001.",
+      "result": "success; temporary strict comparison printed over budget at 1000; restored comparison produced all expected boundary results.",
+      "log": "logs/boundary-regression-review.log"
+    },
+    {
+      "command": "cargo test --locked -p nagic --test conformance corpus_and_bounded_generated_contracts_reach_native_execution -- --exact",
+      "result": "success; 1 passed in a temporary worktree after adding nullable_default fixture and corpus case.",
+      "logs": [
+        "logs/contribution-scratch-check.log",
+        "logs/contribution-scratch-conformance-test.log",
+        "logs/contribution-scratch-diff.log"
+      ]
+    },
+    {
+      "command": "/tmp/nagi-static-site-venv/bin/python website/build.py --base-path / --out build/website-preview",
+      "result": "success; 96 pages generated and local routes, links, anchors, and assets checked.",
+      "log": "logs/website-build.log"
+    },
+    {
+      "command": "git diff --check",
+      "result": "success",
+      "log": "logs/diff-check.log"
+    },
+    {
+      "command": "Changed Markdown local-link/trailing-whitespace scan",
+      "result": "success; 11 changed Markdown files and 420 relative local links checked.",
+      "log": "logs/relative-link-check.log"
+    }
+  ],
+  "preliminary_infrastructure_failures": [
+    {
+      "log": "logs/tutorial-online-network-failure.log",
+      "result": "Initial online Cargo attempt could not fetch crates.io and stopped before app execution. The logged runtime path points to a sibling SQLite worktree, so this is infrastructure context only, not current-checkout source evidence.",
+      "later_current_checkout_evidence": [
+        "logs/tutorial-current-tree-run-700.log",
+        "logs/onboarding-high-saved-low-success.log"
+      ]
+    },
+    {
+      "log": "logs/onboarding-project-mode-failure.log",
+      "result": "Initial project-mode harness invocation had no nagi.toml in its temporary directory; superseded by the successful standalone-file harness."
+    }
+  ],
+  "prior_only_evidence": {
+    "logs/ci-routing-tests-prior-run.log": "59 tests recorded in the independent-review scratch; read during review, not rerun for the latest working diff."
+  },
+  "latest_head_four_os_ci": "unverified; awaiting parent check and separate record",
+  "not_verified": [
+    "Windows/macOS manual commands",
+    "IDE UI and installer operations",
+    "Actual fork push and PR creation flow in the tutorial",
+    "All existing API sample programs",
+    "Clean build without shared caches",
+    "Latest-head four-OS CI"
+  ],
+  "raw_log_copy_sha256": {
+    "logs/compiler-build-cache.log": {
+      "origin_log_name": "compiler-build-cache.log",
+      "sha256": "17427c6fa7620ecbc0b5ebdaf65d3ba4211e0758bfba5f71f6f1d0c6214f0241"
+    },
+    "logs/tutorial-online-network-failure.log": {
+      "origin_log_name": "tutorial-run-700.log",
+      "sha256": "0be8781e592fa071995ffea08aedb4c306b62a6bd01ae482ec0adbe6a96e5c2b"
+    },
+    "logs/tutorial-current-tree-run-700.log": {
+      "origin_log_name": "tutorial-run-700-branch-build-cache.log",
+      "sha256": "61600097761a006445700f7bb2bc6fda37902a6fdc132c4d5645c90e9b79a44f"
+    },
+    "logs/onboarding-project-mode-failure.log": {
+      "origin_log_name": "onboarding-script.log",
+      "sha256": "347fa8a9b3b1a84cf252dcad7be12cef0e7952e3d14a77805b456456c2b031c8"
+    },
+    "logs/onboarding-high-saved-low-success.log": {
+      "origin_log_name": "onboarding-harness.log",
+      "sha256": "f7d099ac62854d9c30a55fee8f61dffe6c6d95ed5486eaaacaaae7fb07257dfa"
+    },
+    "logs/boundary-regression-review.log": {
+      "origin_log_name": "boundary-regression-review.log",
+      "sha256": "0337488f15b09f369e843267f62b92857425101eb946bef7aaba506fddaff968"
+    },
+    "logs/check-fixtures.log": {
+      "origin_log_name": "check-fixtures.log",
+      "sha256": "169303e1125b23687ba2759e348bd7e2d5e31a56082c1291c1131b335ddf28c9"
+    },
+    "logs/contribution-scratch-build.log": {
+      "origin_log_name": "contribution-scratch-build.log",
+      "sha256": "89809d9db3ef5fc841b963d4f8b37dfdefaab1dc3e4765a50c7f6c381f8364de"
+    },
+    "logs/contribution-scratch-check.log": {
+      "origin_log_name": "contribution-scratch-check.log",
+      "sha256": "8c39c5d1149fcf42d303de57c69dadacfc225d1af56f6f7fedf7a070fa20bd08"
+    },
+    "logs/contribution-scratch-conformance-test.log": {
+      "origin_log_name": "contribution-scratch-conformance-test.log",
+      "sha256": "ce6aa2fee9d143588b1a04f4d3b6fd99011b6766c326037fb673d3487d144fe2"
+    },
+    "logs/contribution-scratch-diff.log": {
+      "origin_log_name": "contribution-scratch-diff.log",
+      "sha256": "08a1fc374c46bf8de080e83e102393b2fcb44085dc7b285b1948af8c2258eaaa"
+    },
+    "logs/ci-routing-tests-prior-run.log": {
+      "origin_log_name": "ci-routing-tests.log",
+      "sha256": "b10d634008a47af78e6956d9ab5ec207c48a526da5f62df73ba55c0520a42165"
+    },
+    "logs/independent-newcomer-review.md": {
+      "origin_log_name": "independent-newcomer-review.md",
+      "sha256": "e1da8cce322ba83554a1dfaad8cf02d2a965d0335ffe18c5f9af35d3293467ed"
+    },
+    "logs/independent-newcomer-review-followup.md": {
+      "origin_log_name": "independent-newcomer-review-followup.md",
+      "sha256": "c65f83e1c102d63a67bcd3b29b3edc42f346a4ebf9e5826b692ef5b6b8a57ce2"
+    }
+  },
+  "evidence_sha256": {
+    "benchmarks/results/docs-onboarding-2026-10-08/README.md": "3f596947119ee783fbc330774c7b17a7b01b5420cf840586c3a1aa5457c9a9d8",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/boundary-regression-review.log": "0337488f15b09f369e843267f62b92857425101eb946bef7aaba506fddaff968",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/check-fixtures.log": "169303e1125b23687ba2759e348bd7e2d5e31a56082c1291c1131b335ddf28c9",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/ci-routing-tests-prior-run.log": "b10d634008a47af78e6956d9ab5ec207c48a526da5f62df73ba55c0520a42165",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/compiler-build-cache.log": "17427c6fa7620ecbc0b5ebdaf65d3ba4211e0758bfba5f71f6f1d0c6214f0241",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/contribution-scratch-build.log": "89809d9db3ef5fc841b963d4f8b37dfdefaab1dc3e4765a50c7f6c381f8364de",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/contribution-scratch-check.log": "8c39c5d1149fcf42d303de57c69dadacfc225d1af56f6f7fedf7a070fa20bd08",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/contribution-scratch-conformance-test.log": "ce6aa2fee9d143588b1a04f4d3b6fd99011b6766c326037fb673d3487d144fe2",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/contribution-scratch-diff.log": "08a1fc374c46bf8de080e83e102393b2fcb44085dc7b285b1948af8c2258eaaa",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/diff-check.log": "31cbc7f6640f67db087c6e5aa939e60853dca2e6f513aa512be87c2347b865e9",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/docs-only-verifier.log": "4baac9bd6f2ae796a47afe308d8d85f35ec06a8485aaef4c3a16327c6e3fe31a",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/independent-newcomer-review-followup.md": "c65f83e1c102d63a67bcd3b29b3edc42f346a4ebf9e5826b692ef5b6b8a57ce2",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/independent-newcomer-review.md": "e1da8cce322ba83554a1dfaad8cf02d2a965d0335ffe18c5f9af35d3293467ed",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/onboarding-harness-rerun.log": "f7d099ac62854d9c30a55fee8f61dffe6c6d95ed5486eaaacaaae7fb07257dfa",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/onboarding-high-saved-low-success.log": "f7d099ac62854d9c30a55fee8f61dffe6c6d95ed5486eaaacaaae7fb07257dfa",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/onboarding-project-mode-failure.log": "347fa8a9b3b1a84cf252dcad7be12cef0e7952e3d14a77805b456456c2b031c8",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/relative-link-check.log": "f9280e944dfa973b48e9e48692a3cee31f542ee3c69bdaab7d3dc2e9da5da4a4",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/tutorial-current-tree-run-700.log": "61600097761a006445700f7bb2bc6fda37902a6fdc132c4d5645c90e9b79a44f",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/tutorial-online-network-failure.log": "0be8781e592fa071995ffea08aedb4c306b62a6bd01ae482ec0adbe6a96e5c2b",
+    "benchmarks/results/docs-onboarding-2026-10-08/logs/website-build.log": "e1e03847cb348b52b4c5ae15c7ba903922c8ec34c65d938e473030914c3b63e6",
+    "benchmarks/results/docs-onboarding-2026-10-08/native10-results.json": "1830ec84f7ed1d67b43ae529d66452c916dff4b4d891f6205487694b1aa4dafc",
+    "docs/internal/docs-onboarding-audit.md": "0f1d44313653853973c38f40108b1426a415329319220c96a82d1a8798e2776c",
+    "docs/internal/handoffs/2026-10-08-docs-onboarding.md": "08974355f936030a91b083ed70b6d03c4e13b6f504c0caa06170d1cf3fedc8a2"
+  },
+  "hash_scope_note": "Digests cover source files changed since the base, retained evidence files, README, audit, and handoff. This provenance.json is self-excluded to avoid a recursive digest."
+}

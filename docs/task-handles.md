@@ -26,6 +26,20 @@ async def main() -> Result[unit, Error]:
 
 Taskは結果の型にかかわらず非Copy・非Clone・非sharedです。作成したscope内のローカルに限り、正常なbinding出口・scope出口・loop継続までにawaitかdiscardが必要です。両方の分岐で義務を満たしてください。`from std.ownership import move`の`alias = move(task)`はhandleと義務を移します。裸の`move(task)`で放棄はできません。
 
+awaitもdiscardもしないままscopeを出ると、正常終了経路に未処理のTaskが残るため`check`が拒否します。
+
+```nagi
+async def answer() -> i64:
+    return 42
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn answer()
+    return ok(print("done"))
+```
+
+値を使うなら`result = await task`にして返却値を処理します。結果が不要なら`from std.task import discard`して`discard(task)`を呼びます。どちらも子の終了をscopeが待つ点は同じです。
+
 短絡`and`/`or`の右辺は評価が省略されることがあり、値が存在する場合の`env` fallbackは評価されません。その中だけでawait/discardしても、正常出口の義務を満たしません。checkerは条件の定数値でこの義務を省略しないため、先にTaskを受け取り、得た通常のResultを条件付きで使ってください。左辺や`env`のkeyのように必ず評価する位置での受取は有効です。
 
 Taskを関数の引数や戻り値、field、List、Option、Resultなどのwrapper、他taskへ渡すことはできません。内側の別scopeで外側のTaskを受け取ることもできません。内側のscopeが終わってから、元のscopeで受け取ってください。scope内のreturnは引き続き未対応です。
@@ -33,6 +47,30 @@ Taskを関数の引数や戻り値、field、List、Option、Resultなどのwrap
 ## 業務結果とtask故障
 
 子が`Result[T, E]`を返すと、受取型は`Result[Result[T, E], TaskFailure]`です。内側の業務Errだけでは兄弟を停止しません。panic、予期しない取消、同じscope内の旧spawnのErr、bridgeのprotocol故障は外側の故障になります。
+
+外側と内側を一つの`Err`として扱うと、Taskの故障と業務上の拒否を混同します。業務Errも取り出すには、外側の`Ok`で内側のResultをもう一度matchします。
+
+```nagi
+async def save() -> Result[i64, Error]:
+    return error("rejected")
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        task = spawn save()
+        received = await task
+        match received:
+            case Ok(operation_result):
+                match operation_result:
+                    case Ok(value):
+                        print(value)
+                    case Err(problem):
+                        print("business operation rejected")
+            case Err(failure):
+                print("task failed")
+    return ok(print("done"))
+```
+
+この例は内側のErrを処理して`done`まで進みます。外側の`Err(TaskFailure)`を受け取った場合は、scope故障も残り、scope出口でErrになります。
 
 `from std.task import kind, message, TaskFailureKind`で故障を調べられます。`kind(failure)`はCopyなenumで、定数は`Panicked`、`Cancelled`、`LegacyError`、`Internal`です。`message(failure)`はfailureを借用元とする`view[str]`です。借用が残る間、failureをmoveできません。TaskFailureはopaqueな非Copy・非Clone・非shared値で、Errorへの暗黙変換はありません。panic payloadの任意の文字列を保持する保証もありません。
 

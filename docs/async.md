@@ -16,6 +16,14 @@ async def main() -> Result[unit, Error]:
 
 よくある間違いは、`pending = sleep(10)`と戻り値を保存してから待つことです。現在はFutureの保存に対応していません。`await sleep(10)`と呼び出しを直接待ってください。
 
+```nagi
+async def main():
+    pending = sleep(10)  # check rejects storing this Future
+    await pending
+```
+
+この例ではFutureをローカル変数にできないため、後から`await`する形は使えません。上の有効な例のように`await sleep(10)`と書くと、待機後にメッセージが一度表示されます。
+
 **一言でいうと：awaitで結果を待つ。** Resultも返す呼び出しの扱いは[エラー処理](error-handling.md)を参照してください。
 
 ## 待っている間に、別の処理も進めたい
