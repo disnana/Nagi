@@ -44,3 +44,5 @@ Evidence file SHA-256と変更source pathのhashは[provenance.json](../../bench
 rebase直後の`f4166ee` push runでは`release-plan`が旧`event.before=e3e0ea3`をfresh checkoutから解決できず失敗した（[原ログ](../../benchmarks/results/sqlite-public-2026-10-08/logs/stack-release-plan-failure.log)）。同headのPR runではbaseが到達可能なためrelease-planは成功した。release意味論を変更せず、次の通常pushで到達可能な親commitを比較させる。これはCI取得条件の失敗であり、SQLite契約GREENや4 OS成功には数えない。
 
 統合後の[独立Docs/evidenceレビュー](../../benchmarks/results/sqlite-public-2026-10-08/logs/independent-stack-evidence-review.md)でも追加指摘なし。両方の導線・CI、Task公開済み表記、70 evidence/68 source hashes、統合前後のproduction差分0を照合した。最終CIの成否はこの静的レビューとは別にPR本文へ記録する。
+
+最終の初心者導線確認で、SQLiteページがソースcheckoutの取得方法を示していないP2を追記した。日英の前提節に作業用source folderの定義、sample/APIの存在条件、source-build手順へのリンク、main未収録時の開発branchを明記し、独立reviewで解消確認した。code blockは変更せず、日英sample一致とwebsite98pagesのlinks/anchors/assetsを再確認した。原結果は[Docs check](../../benchmarks/results/sqlite-public-2026-10-08/logs/checkout-docs-check.log) / [site check](../../benchmarks/results/sqlite-public-2026-10-08/logs/checkout-website-check.log)。

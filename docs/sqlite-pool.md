@@ -17,8 +17,10 @@ Rustからcompilerの標準module/resource/operation metadata enumを網羅match
 ### 必要なもの
 
 - Rust toolchain（`rustc` と `cargo`）とRust crateをビルドできるC toolchain。
-- Nagi repositoryのこのworktree。手順はrepository rootで実行します。
+- このページと`examples/sqlite_pool.nagi`、未リリースの`std.db.sqlite` APIを含むNagiのソースcheckout（取得したソースの作業用フォルダー）。手順はrepository rootで実行します。
 - SQLiteのコマンドラインツールは不要です。SQLiteはNagi runtimeに同梱されます。
+
+ソースの取得方法は[ソースからcompilerをbuildする手順](getting-started.md#ソースからビルドする場合)を参照してください。`main`にまだこのsampleとAPIがない場合は、それらを含む開発branchのcheckoutを使います。配布版0.1.11のbinaryだけでは、この手順は実行できません。
 
 `cargo build` がnative dependencyで止まる場合は、Rust toolchainに加えてOS向けC compiler/linkerが使えることを確認してください。`nagic` が見つからない場合は、下のrelease binaryを直接実行するか `target/release` をPATHへ追加します。
 

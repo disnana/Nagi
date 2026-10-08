@@ -17,8 +17,10 @@ This is a separate API from `db_open`, `db_exec`, `db_query`, and related functi
 ### Prerequisites
 
 - A Rust toolchain (`rustc` and `cargo`) and a C toolchain that can build Rust crates with native dependencies.
-- This Nagi repository worktree. Run the commands from the repository root.
+- A Nagi source checkout (a local working folder of the source) containing this page, `examples/sqlite_pool.nagi`, and the unreleased `std.db.sqlite` API. Run the commands from the repository root.
 - No SQLite command-line tool is needed. SQLite is bundled with the Nagi runtime.
+
+See [how to obtain the source and build the compiler](getting-started.md#build-the-compiler-from-source). If `main` does not yet contain this sample and API, use a checkout of a development branch that does. The published 0.1.11 binary alone cannot run this walkthrough.
 
 If `cargo build` fails while compiling a native dependency, check that an OS C compiler and linker are available as well as Rust. If `nagic` is not found, invoke the release binary below or add `target/release` to PATH.
 
