@@ -405,8 +405,10 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         assertions = (
             "TrustedProjects.setProjectTrusted(getProject(), false);",
             'assertTrue(com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().isDocumentUnsaved(document));',
+            'assertTrue("the untrusted fixture must be an eligible local Nagi source",',
             'assertFalse("the fixture must exercise actual untrusted-project handling",',
             "new NagiCompilerAction.Run().execute(getProject(), file.getVirtualFile());",
+            'assertEquals(List.of("Trust this project before executing the Nagi compiler."), denialMessages);',
             'assertTrue("untrusted action must not save input before returning",',
             "PlatformTestUtil.waitForAllBackgroundActivityToCalmDown();",
             'assertFalse("untrusted project started the compiler", Files.exists(captured));',

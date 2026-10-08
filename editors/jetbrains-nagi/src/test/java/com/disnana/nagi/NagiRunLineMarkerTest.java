@@ -117,9 +117,17 @@ public class NagiRunLineMarkerTest extends BasePlatformTestCase {
             WriteCommandAction.runWriteCommandAction(getProject(), () -> document.insertString(document.getTextLength(), "# unsaved\n"));
             assertTrue(com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().isDocumentUnsaved(document));
 
+            assertTrue("the untrusted fixture must be an eligible local Nagi source",
+                    NagiCompilerAction.isSourceFile(file.getVirtualFile()));
             assertFalse("the fixture must exercise actual untrusted-project handling",
                     com.intellij.ide.trustedProjects.TrustedProjects.isProjectTrusted(getProject()));
+            var denialMessages = new java.util.ArrayList<String>();
+            com.intellij.openapi.ui.TestDialogManager.setTestDialog(message -> {
+                denialMessages.add(message);
+                return com.intellij.openapi.ui.TestDialog.OK.show(message);
+            });
             new NagiCompilerAction.Run().execute(getProject(), file.getVirtualFile());
+            assertEquals(List.of("Trust this project before executing the Nagi compiler."), denialMessages);
             assertTrue("untrusted action must not save input before returning",
                     com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().isDocumentUnsaved(document));
             com.intellij.testFramework.PlatformTestUtil.waitForAllBackgroundActivityToCalmDown();

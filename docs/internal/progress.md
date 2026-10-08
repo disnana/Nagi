@@ -1,5 +1,11 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-09 JST: JetBrains共通ZIPと互換性の完了確認
+
+[#102](https://github.com/disnana/Nagi/pull/102)はユーザーによる#101 merge後のmain `c3e5fc7`に同期し、Nagi for JetBrains・既存ID・一つのcommon ZIPを維持する。次版minimumはIDEA/PyCharm2025.1.1の公開trust APIを持つbuildに限定。ProcessListener/public trust API、2.19公式test classpath、Java21 target/EAP javac25、四IDE gateを接続した。source `52177e8`のchecks37802356248とwebsite37802355936が成功し、Linux全回帰・四native platform・四IDE各40/40/Verifier・元ZIP昇格・Ready to mergeを読戻した。最後の負例はsource eligibility/denial dialogまで追加assertして単独GREEN。文書を含む最新HEADのCIはPR Checksを別確認する。
+
+[最終結果と原ログ](jetbrains-pr102-validation/final-2.19/README.md)・[引継ぎ](handoffs/2026-10-09-jetbrains-unification.md)を正本とする。公開済み0.1.1の二つの歴史的ZIPは保持し、次版common ZIPは未公開。manual GUI/Marketplace renderingとinner ZIP hashの直接読戻しは未確認。compiler意味解析由来の補完/navigation/編集中診断は別worktreeに保存し、配布統合PRへ追加しない。merge/版/tag/release/Marketplace uploadは実行していない。
+
 ## 2026-10-08: SF00マージとSF01実装
 
 ユーザー承認で#100をmain10655eaへマージした実態をAPI/treeで読戻した。rootによるmergeは行っていない。SF01は[#101](https://github.com/disnana/Nagi/pull/101) main向けDraftで、[結果](security-foundation-sf01-results.md)・[review台帳](security-foundation/sf01-review-log.md)へ正本を置く。request-bound AuthScope/Grant/Policy、High/Low/sealed/runtime、移行とnativeは実装接続済み。独立reviewのnested copy/shared不一致とTask native HTTP署名取り残しを修正、対象回帰は成功。全workspaceはexit 0、最終Sol High独立再確認で指摘を閉鎖。source f9ec01dの4 OS/全必須CI成功を読戻した。後続artifact/文書headのChecksとsource hashは別に確認する。SF02–08、0.2.0公開は未完。merge/版/tag/releaseは別承認まで行わない。
