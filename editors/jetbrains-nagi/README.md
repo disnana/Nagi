@@ -19,6 +19,8 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは[�
 
 ## インストール
 
+PR #102のGUI検証・Marketplace提出用ビルドは**0.1.2**です。`release-jetbrains` artifact内の`nagi-jetbrains-0.1.2.zip`を、IDEA/PyCharm共通で使います。既存ID `com.disnana.nagi`を維持し、公開済み0.1.1と版で区別します。0.1.2のMarketplaceアップロードはリポジトリ所有者が行い、このPRからは公開しません。GUI検証完了までは未マージです。
+
 `jetbrains-v0.1.1`には、IDEA用`nagi-jetbrains-IC-0.1.1.zip`とPyCharm用`nagi-jetbrains-PC-0.1.1.zip`があり、それぞれ`.sha256`も添付されています。
 
 GitHub ReleasesのZIPを使う場合は、IDEの **Settings → Plugins → ⚙ → Install Plugin from Disk** で選び、IDEを再起動します。PRの動作確認用ZIPは、IDEA/PyCharmのstable/EAP検証がすべて成功した **Actions → Nagi checks** の`release-jetbrains` artifactから取得できます。自己ビルドした場合は`build/distributions/`にあるZIPを使います。

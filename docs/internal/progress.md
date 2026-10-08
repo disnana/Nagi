@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-09 JST: JetBrains 0.1.2の提出用ZIP
+
+ユーザーが「自分がアップロードするので0.1.2として発行」と指示したため、JetBrainsのGradle版を0.1.2へ更新する。#102の検証済みsource `6c23761`を基準とし、プラグイン実装・ID・minimum・toolchain・compiler/runtimeは変更しない。共通ZIPを四SDKのIDE test/VerifierとCI gateで検証し、Artifactsで渡す。Marketplaceアップロードはユーザー担当。GUI検証完了待ちとして#102はDraft・未mergeを維持し、tag/GitHub Releaseを実行しない。[提出引継ぎ](jetbrains-0.1.2-upload-handoff.md)に対象と検証先を保存する。旧版の成功CIは0.1.2の実行成功として数えない。
+
 ## 2026-10-09 JST: JetBrains共通ZIPと互換性の完了確認
 
 [#102](https://github.com/disnana/Nagi/pull/102)はユーザーによる#101 merge後のmain `c3e5fc7`に同期し、Nagi for JetBrains・既存ID・一つのcommon ZIPを維持する。次版minimumはIDEA/PyCharm2025.1.1の公開trust APIを持つbuildに限定。ProcessListener/public trust API、2.19公式test classpath、Java21 target/EAP javac25、四IDE gateを接続した。source `52177e8`のchecks37802356248とwebsite37802355936が成功し、Linux全回帰・四native platform・四IDE各40/40/Verifier・元ZIP昇格・Ready to mergeを読戻した。最後の負例はsource eligibility/denial dialogまで追加assertして単独GREEN。文書を含む最新HEADのCIはPR Checksを別確認する。

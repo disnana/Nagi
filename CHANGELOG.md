@@ -2,11 +2,16 @@
 
 ## Unreleased
 
-- Unify the next JetBrains plugin as Nagi for JetBrains with one IDEA/PyCharm ZIP, preserving plugin ID com.disnana.nagi and the existing Marketplace listing. Require all stable/EAP tests and verifiers before promoting that exact ZIP. The next plugin version requires IDEA 2025.1.1 build 251.25410.109 or PyCharm 2025.1.1 build 251.25410.122 because the initial 2025.1 builds do not resolve the public project-trust API; users on older builds can retain published 0.1.1 or upgrade their IDE. No new plugin version is published by this change.
-
 - Add the unreleased `std.db.sqlite` Pool and affine Tx API with typed owned Parameters, explicit transaction boundaries, structured failure outcomes, and observed close. Keep the existing `db_*` API unchanged; the new API is not included in Nagi 0.1.11.
 - Extend opt-in SQLite SQL checks to literal `std.db.sqlite` query/all/exec operations in the development source. Check schema and row shape, prepare new exec DDL without executing it, and report Parameters bind counts as unchecked.
 - Replace the private deadpool prototype with the existing Tokio semaphore and a lazy adapter; remove deadpool/deadpool-runtime without adding dependencies. Distinguish recoverable reservation failures as ALLOCATION without promising universal OOM recovery. Rust compiler embedding users must handle the added SQLite variants of public standard-module/resource/operation enums; existing Nagi APIs and syntax remain unchanged.
+
+## JetBrains 0.1.2
+
+- Prepare Nagi for JetBrains as one common IntelliJ IDEA/PyCharm ZIP, preserving plugin ID com.disnana.nagi and the existing Marketplace listing. Use version 0.1.2 so GUI testers and Marketplace can distinguish it from published 0.1.1; the repository owner performs Marketplace upload. This PR does not publish the package.
+- Require IDEA 2025.1.1 build 251.25410.109 or PyCharm 2025.1.1 build 251.25410.122 for the public project-trust API. Older IDE users can retain published 0.1.1 or upgrade their IDE. Replace deprecated ProcessAdapter and project-trust calls while keeping untrusted-project execution blocked.
+- Verify the same candidate ZIP with independent stable/EAP tests and Plugin Verifier for both IDEs, then promote those exact bytes to the CI distribution artifact. Resolve EAP test dependencies with the official Gradle plugin and keep the common plugin's Java API and bytecode at 21.
+- Keep the English/Japanese Marketplace Description in plugin.xml and unify README, documentation, and website installation guidance. The compiler remains a separate installation; compiler-backed completion, definition navigation, and live diagnostics belong to the next PR.
 
 ## JetBrains 0.1.1 — 2026-10-08
 

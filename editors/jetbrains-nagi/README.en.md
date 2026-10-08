@@ -19,6 +19,8 @@ Whole-file formatting, semantic completion, go to definition, and automatic chec
 
 ## Installation
 
+The PR #102 build for GUI testing and Marketplace submission is **0.1.2**. Use the common `nagi-jetbrains-0.1.2.zip` from the `release-jetbrains` artifact in either IDEA or PyCharm. It preserves `com.disnana.nagi` and distinguishes the build from published 0.1.1. The repository owner handles Marketplace upload; this PR does not publish it and remains unmerged until GUI testing is complete.
+
 The `jetbrains-v0.1.1` release contains `nagi-jetbrains-IC-0.1.1.zip` for IDEA and `nagi-jetbrains-PC-0.1.1.zip` for PyCharm, each with a matching `.sha256` file.
 
 To install a GitHub Release ZIP, select it in **Settings → Plugins → ⚙ → Install Plugin from Disk**, then restart the IDE. A PR build is available as the `release-jetbrains` artifact only after all IDEA/PyCharm stable/EAP checks pass in **Actions → Nagi checks**. For a local build, use the ZIP in `build/distributions/`.

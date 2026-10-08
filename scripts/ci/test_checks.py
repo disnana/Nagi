@@ -371,7 +371,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIn("gradlePluginPortal()", plugin_repositories.group("body"))
         self.assertIn("mavenCentral()", plugin_repositories.group("body"))
         self.assertIn('id("org.jetbrains.intellij.platform") version "2.19.0"', build)
-        self.assertIn('version = "0.1.1"', build)
+        self.assertIn('version = "0.1.2"', build)
         self.assertIn("options.release.set(21)", build)
         self.assertIn('sinceBuild = "251.25410.109"', build)
         self.assertIn("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.0-bin.zip", wrapper)
