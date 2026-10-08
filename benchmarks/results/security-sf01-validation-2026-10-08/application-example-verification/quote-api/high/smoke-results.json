@@ -1,0 +1,257 @@
+[
+  {
+    "configuration_maximum": 1000,
+    "case": "health",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "head-health",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "one-item",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "configured-maximum",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "over-configured-maximum",
+    "status": 422
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "below-free-shipping",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "free-shipping",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "no-request-id",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "canonical-request-id",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "escaped-owned-string",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "zero-quantity",
+    "status": 422
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "negative-quantity",
+    "status": 422
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "unknown-sku",
+    "status": 422
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "malformed-json",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "missing-field",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "extra-field",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "string-quantity",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "boolean-quantity",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "float-quantity",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "out-of-i64-range",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "duplicate-json-field",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "invalid-utf8-json",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "missing-content-type",
+    "status": 415
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "text-content-type",
+    "status": 415
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "suffix-content-type",
+    "status": 415
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "parameterized-content-type",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "case-insensitive-content-type",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "whitespace-content-type",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "quoted-parameter-content-type",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "charset-does-not-select-decoder",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "comma-content-type",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "missing-subtype-content-type",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "invalid-parameter-content-type",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "unclosed-parameter-content-type",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "charset-still-requires-utf8-json",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "duplicate-content-type",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "invalid-content-type-text",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "invalid-request-id",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "duplicate-request-id",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "invalid-request-id-text",
+    "status": 400
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "method-not-allowed",
+    "status": 405
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "missing-route",
+    "status": 404
+  },
+  {
+    "configuration_maximum": 1000,
+    "case": "body-limit",
+    "status": 413
+  },
+  {
+    "configuration_maximum": 3,
+    "case": "health",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 3,
+    "case": "head-health",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 3,
+    "case": "one-item",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 3,
+    "case": "configured-maximum",
+    "status": 200
+  },
+  {
+    "configuration_maximum": 3,
+    "case": "over-configured-maximum",
+    "status": 422
+  },
+  {
+    "case": "invalid-configuration",
+    "maximum": "0",
+    "status": "rejected"
+  },
+  {
+    "case": "invalid-configuration",
+    "maximum": "1001",
+    "status": "rejected"
+  },
+  {
+    "case": "invalid-configuration",
+    "maximum": "not-a-number",
+    "status": "rejected"
+  }
+]

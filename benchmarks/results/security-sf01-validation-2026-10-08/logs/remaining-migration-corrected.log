@@ -1,0 +1,67 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf01/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.37s
+     Running tests/class_field_types.rs (/workspace/nagi-sf01-target/debug/deps/class_field_types-6045ba18af69a85c)
+
+running 5 tests
+test map_keys_with_missing_equality_or_hashing_fail_before_derivation ... ok
+test nested_data_fields_and_bridge_defined_key_traits_remain_available ... ok
+test unsupported_resource_and_function_fields_fail_at_the_field_line ... ok
+test owned_database_fields_are_private_state_and_keep_high_low_emission_valid ... ok
+test native_database_debug_hides_connection_details_inside_shared_state ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.58s
+
+     Running tests/list_ownership_inference.rs (/workspace/nagi-sf01-target/debug/deps/list_ownership_inference-be038c13b54b85e1)
+
+running 4 tests
+test inferred_lists_still_reject_second_moves_and_mixed_element_types ... ok
+test inferred_list_first_elements_can_move_owned_inputs_once ... ok
+test explicit_list_element_types_still_contextualize_the_first_literal ... ok
+test record_list_iteration_accepts_copy_values_and_readonly_noncopy_borrows ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/ownership.rs (/workspace/nagi-sf01-target/debug/deps/ownership-a01dcc3a4ea7f008)
+
+running 14 tests
+test copy_record_fields_can_be_used_repeatedly ... ok
+test assigning_a_new_record_restores_its_fields ... ok
+test a_partially_moved_record_cannot_be_used_as_a_whole ... ok
+test field_moves_are_merged_from_async_scopes ... ok
+test field_names_are_compared_as_path_segments ... ok
+test field_access_after_moving_the_whole_record_is_still_rejected ... ok
+test field_moves_are_merged_from_branches_match_arms_and_loops ... ok
+test reading_borrowing_and_copying_do_not_move_a_field ... ok
+test repeated_field_move_is_rejected_at_the_second_assignment ... ok
+test standalone_low_checks_field_moves ... ok
+test a_borrowed_field_cannot_be_moved_but_copy_fields_can_be_read ... ok
+test nested_moves_block_the_moved_path_and_its_ancestors_and_children ... ok
+test unrelated_owned_fields_and_copy_fields_remain_available ... ok
+test fields_are_consumed_in_calls_records_lists_and_owned_wrappers ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+     Running tests/scoped_tasks.rs (/workspace/nagi-sf01-target/debug/deps/scoped_tasks-99ae268039dab537)
+
+running 5 tests
+test moving_an_owned_argument_still_consumes_it_before_later_parent_work ... ok
+test scope_rejects_known_foreign_error_types_and_preserves_local_error_adapters ... ok
+test copied_views_and_values_computed_from_views_can_enter_tasks ... ok
+test futures_that_still_hold_views_are_rejected_after_copying_containers ... ok
+test spawn_evaluates_owned_arguments_before_parent_continues_and_keeps_sources ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+     Running tests/security_sf01.rs (/workspace/nagi-sf01-target/debug/deps/security_sf01-4f55148d3dc7aafd)
+
+running 7 tests
+test legacy_decorator_is_a_checker_migration_diagnostic ... ok
+test legacy_global_serve_is_a_checker_migration_diagnostic ... ok
+test legacy_principal_is_a_checker_migration_diagnostic ... ok
+test handwritten_low_cannot_use_retired_or_policy_free_entrypoints ... ok
+test policy_free_route_is_a_checker_migration_diagnostic ... ok
+test policy_output_state_and_callback_contracts_are_checked ... ok
+test native_replacements_and_aliases_cannot_downgrade_security_contracts ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.64s
+

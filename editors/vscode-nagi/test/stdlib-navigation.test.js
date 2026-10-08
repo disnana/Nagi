@@ -37,7 +37,7 @@ for (const [suffix, text] of fixtures) {
     assert.ok(index.standard_modules[0].members.some(item => item.name === 'append_header_text'));
     assert.ok(index.standard_modules[0].members.some(item => item.name === 'is_json_content_type'));
     assert.ok(!index.files.includes(virtual), 'standard library is not a writable project file');
-    assert.deepEqual(index.definitions.filter(item => item.kind === 'resource').map(item => item.name), ['Request', 'Response', 'Method', 'Status', 'Options', 'App']);
+    assert.deepEqual(index.definitions.filter(item => item.kind === 'resource').map(item => item.name), ['Request', 'Response', 'Method', 'Status', 'Options', 'App', 'Policy']);
     assert.ok(!index.definitions.some(item => item.name === 'UNAUTHORIZED'));
     for (const spelling of ['std.http.server', 'Code.UNAUTHORIZED', 'http.text', 'http.is_json_content_type']) {
       const start = text.indexOf(spelling) + (spelling === 'std.http.server' ? 2 : spelling.lastIndexOf('.') + 1);

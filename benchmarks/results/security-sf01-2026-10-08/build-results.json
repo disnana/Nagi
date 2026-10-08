@@ -1,0 +1,104 @@
+[
+  {
+    "mode": "nagi-policy",
+    "project": "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/nagi-policy/project",
+    "check_exit_status": 0,
+    "build_rows": [
+      {
+        "run": 0,
+        "exit_status": 0,
+        "wall_seconds": 15.622754345007706,
+        "child_user_seconds": 7.744305000000001,
+        "child_sys_seconds": 0.36056,
+        "executable": "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/nagi-policy/generated-app/.nagi/apps/nagi-main-561df82d96b0251d/generations/g-71a98-18dc89263347e899-0/nagi-561df82d96b0251d-g-71a98-18dc89263347e899-0",
+        "executable_bytes": 1524160,
+        "executable_sha256": "377d184999dd3ad2243b6315ee57f4cb3e73ca70bd554ec5e66e6c195394c5c3",
+        "executable_copy_retained": false,
+        "binary_removal_note": "Executable removed after measurement; recorded size and SHA-256 retained."
+      },
+      {
+        "run": 1,
+        "exit_status": 0,
+        "wall_seconds": 15.484092074999353,
+        "child_user_seconds": 9.555394999999999,
+        "child_sys_seconds": 0.5013799999999999,
+        "executable": "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/nagi-policy/generated-app/.nagi/apps/nagi-main-561df82d96b0251d/generations/g-71aec-18dc892a01cc86da-0/nagi-561df82d96b0251d-g-71aec-18dc892a01cc86da-0",
+        "executable_bytes": 1524160,
+        "executable_sha256": "a3bf8e4a47a8019819a6592b6a6d7a9d1c2f78a71db1ad2488784715c13baad1",
+        "executable_copy_retained": false,
+        "binary_removal_note": "Executable removed after measurement; recorded size and SHA-256 retained."
+      },
+      {
+        "run": 2,
+        "exit_status": 0,
+        "wall_seconds": 15.677180723985657,
+        "child_user_seconds": 7.714538000000001,
+        "child_sys_seconds": 0.560778,
+        "executable": "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/nagi-policy/generated-app/.nagi/apps/nagi-main-561df82d96b0251d/generations/g-71b44-18dc892d7b26c2f6-0/nagi-561df82d96b0251d-g-71b44-18dc892d7b26c2f6-0",
+        "executable_bytes": 1524160,
+        "executable_sha256": "74a9032149f4dbf969953101521061eec90d1d3f1b14996a67c5d1b6e7418cd1",
+        "executable_copy_retained": false,
+        "binary_removal_note": "Executable removed after measurement; recorded size and SHA-256 retained."
+      }
+    ],
+    "executable": "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/nagi-policy/generated-app/.nagi/apps/nagi-main-561df82d96b0251d/generations/g-71b44-18dc892d7b26c2f6-0/nagi-561df82d96b0251d-g-71b44-18dc892d7b26c2f6-0",
+    "executable_bytes": 1524160,
+    "executable_sha256": "74a9032149f4dbf969953101521061eec90d1d3f1b14996a67c5d1b6e7418cd1",
+    "generated_main_sha256": "61faaed591d49c67b76978d410d99602af7cb1bd3b4f57f5102f9687dd04ae74",
+    "generated_native_sha256": "fbb4785fce148221212cef24be8ea8cd19937b2fb3db34d00182b679ef033a21",
+    "cargo_lock_sha256": "23d06c150980d71fb4c32aa730bdd3ca14bff1ce0659843086db6c2826b25094",
+    "executable_copy_retained": false,
+    "binary_removal_note": "Executable removed after measurement; recorded size and SHA-256 retained."
+  },
+  {
+    "mode": "rust-policy",
+    "project": "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/rust-policy/project",
+    "check_exit_status": 0,
+    "build_rows": [
+      {
+        "run": 0,
+        "exit_status": 0,
+        "wall_seconds": 7.499188528017839,
+        "child_user_seconds": 6.818767000000001,
+        "child_sys_seconds": 0.6030709999999999,
+        "executable": "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/rust-policy/generated-app/.nagi/apps/nagi-main-04b4b7b019932244/generations/g-71bb3-18dc89315bfd2e74-0/nagi-04b4b7b019932244-g-71bb3-18dc89315bfd2e74-0",
+        "executable_bytes": 1523960,
+        "executable_sha256": "91dc90e3290343c50d51b29717bd91baf34993dca0adf5f057a8114944ddfe88",
+        "executable_copy_retained": false,
+        "binary_removal_note": "Executable removed after measurement; recorded size and SHA-256 retained."
+      },
+      {
+        "run": 1,
+        "exit_status": 0,
+        "wall_seconds": 7.503692766011227,
+        "child_user_seconds": 6.7516979999999975,
+        "child_sys_seconds": 0.37639400000000034,
+        "executable": "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/rust-policy/generated-app/.nagi/apps/nagi-main-04b4b7b019932244/generations/g-71f50-18dc893314d15dd8-0/nagi-04b4b7b019932244-g-71f50-18dc893314d15dd8-0",
+        "executable_bytes": 1523960,
+        "executable_sha256": "f484c385d2198bab1d57d957b25e7011373975ba5b037a22a36b5f901925b3f5",
+        "executable_copy_retained": false,
+        "binary_removal_note": "Executable removed after measurement; recorded size and SHA-256 retained."
+      },
+      {
+        "run": 2,
+        "exit_status": 0,
+        "wall_seconds": 7.245405869005481,
+        "child_user_seconds": 6.943534,
+        "child_sys_seconds": 0.2893199999999996,
+        "executable": "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/rust-policy/generated-app/.nagi/apps/nagi-main-04b4b7b019932244/generations/g-7208f-18dc8934cf831746-0/nagi-04b4b7b019932244-g-7208f-18dc8934cf831746-0",
+        "executable_bytes": 1523960,
+        "executable_sha256": "e07bb358418e164a1c4af1c56a52de3156d748856c5ef85840a9e7fb002eeaa3",
+        "executable_copy_retained": false,
+        "binary_removal_note": "Executable removed after measurement; recorded size and SHA-256 retained."
+      }
+    ],
+    "executable": "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/rust-policy/generated-app/.nagi/apps/nagi-main-04b4b7b019932244/generations/g-7208f-18dc8934cf831746-0/nagi-04b4b7b019932244-g-7208f-18dc8934cf831746-0",
+    "executable_bytes": 1523960,
+    "executable_sha256": "e07bb358418e164a1c4af1c56a52de3156d748856c5ef85840a9e7fb002eeaa3",
+    "generated_main_sha256": "940e4e2f849c31585dd10ed6b95968ad72c70268b15543ccf12a38b0ed3d64eb",
+    "generated_native_sha256": "facef24cd0ad976e39c27049e96bb6c62f5c6aaca9f55adb7ecadf129616bfb2",
+    "cargo_lock_sha256": "c850462461e7d58becb338c51d78a5928fb61f56d821747c85b4c9f01a7d2f5b",
+    "executable_copy_retained": false,
+    "binary_removal_note": "Executable removed after measurement; recorded size and SHA-256 retained."
+  }
+]

@@ -101,14 +101,14 @@ mod native {
             let service = slot.as_mut().unwrap();
             (service.listener.take().unwrap(), actor::clone_actor(&service.counter), service.stopped.take().unwrap())
         };
-        let app = web::route(web::app_default(counter), web::Method::GET, "/counter",
-            |_, counter| async move {
+        let app = web::route(web::app_default(counter), web::Method::GET, "/counter", web::public_policy(),
+            |_, counter, ()| async move {
                 Ok(match actor::call(&counter, 0, 0, 1000).await {
                     Ok(Ok(value)) => web::text(web::Status::OK, &value.to_string()),
                     _ => web::text(web::Status::SERVICE_UNAVAILABLE, "stopped"),
                 })
             }).unwrap();
-        let app = web::route(app, web::Method::GET, "/business", |_, counter| async move {
+        let app = web::route(app, web::Method::GET, "/business", web::public_policy(), |_, counter, ()| async move {
             let reply = actor::call(&counter, -1, 0, 1000).await.unwrap();
             assert_eq!(reply, Err("business sentinel".to_owned()));
             Ok(web::text(web::Status::CONFLICT, "business sentinel"))

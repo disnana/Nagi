@@ -61,9 +61,9 @@ def main():
 
 module名で見えるのは、そのファイル自身が定義した関数・class・enumです。importした名前は自動で再公開しません。`from "orders.nagi" import Order`のように別名を省略することもできます。複数の定義は`from "orders.nagi" import Order as SavedOrder, score`のように`,`で選べます。末尾の余分な`,`は付けません。`from`と`as`はimportの文脈だけで解釈し、関数や変数の名前にも使えます。関数内でmodule名と同じローカル名を使った場合は、現在のローカル変数の規則に従います。classのmethod呼び出しには対応していません。
 
-同じ実ファイルは、複数のmodule名・fromの別名・従来のimportを使っても1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在はエラーです。存在しない定義のfrom importや、同じ場所で異なる定義を同じ名前にするimportは、そのimport文でエラーになります。引用符なしのimportは登録済みの`std.http.server`、`std.actor`、`std.result`等を対象にします。Nagi 0.1.11以降では`std.auth`、`std.ownership`、`std.task`も利用できます。利用するcompilerの版を確認してください。一般packageの探索と公開範囲の指定は未対応です。
+同じ実ファイルは、複数のmodule名・fromの別名・従来のimportを使っても1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在はエラーです。存在しない定義のfrom importや、同じ場所で異なる定義を同じ名前にするimportは、そのimport文でエラーになります。引用符なしのimportは登録済みの`std.http.server`、`std.actor`、`std.result`等を対象にします。
 
-`std.auth`のexperimental APIはNagi 0.1.11への導入対象で、認証済みの`Principal`と消費型の`Grant[P]`を扱います。公開配布での利用可否はRelease記録で確認してください。Rustの検証処理とNagiの独自policyをつなぐ例は[認証・認可サンプル](../test-nagi-code/application-examples/auth-boundary/README.md)にあります。固定credentialの実験で、JWS検証や全routeの認可チェックを提供するものではありません。
+未リリース0.2.0 SF01の`std.auth`はrequest-bound `AuthScope`と`Grant[P]`を使います。旧Principalと無期限issuerは廃止しました。[認証・認可](security.md)に型・lease・trusted adapterの責務、[移行](migration-0.2.0.md)に差分があります。[サンプル](../test-nagi-code/application-examples/auth-boundary/README.md)は標準Policy経路を使う有限credentialの検証例で、productionの暗号検証や永続Sessionを実装したとは扱いません。
 
 ### LowとRustで同じ定義を使う
 

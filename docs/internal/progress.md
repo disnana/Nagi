@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-08: SF00マージとSF01実装
+
+ユーザー承認で#100をmain10655eaへマージした実態をAPI/treeで読戻した。rootによるmergeは行っていない。SF01は[#101](https://github.com/disnana/Nagi/pull/101) main向けDraftで、[結果](security-foundation-sf01-results.md)・[review台帳](security-foundation/sf01-review-log.md)へ正本を置く。request-bound AuthScope/Grant/Policy、High/Low/sealed/runtime、移行とnativeは実装接続済み。独立reviewのnested copy/shared不一致とTask native HTTP署名取り残しを修正、対象回帰は成功。全workspaceはexit 0、最終Sol High独立再確認で指摘を閉鎖。source f9ec01dの4 OS/全必須CI成功を読戻した。後続artifact/文書headのChecksとsource hashは別に確認する。SF02–08、0.2.0公開は未完。merge/版/tag/releaseは別承認まで行わない。
+
 ## 2026-10-08: Security Foundationの調査/RFC
 
 現在mainは#99 merge後の`62bbda9`、SQLite公開APIを含む4 OS/Linux/site CIをreadback済み。公開0.1.11は`003a594`でSQLite公開API未収録。確認時open PR0。過去のdraft/pending記述は履歴で、最新状態はこのmainとGitHubを正とする。

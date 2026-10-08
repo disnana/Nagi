@@ -12,11 +12,11 @@
 | [監督付きworker](supervised-worker/README.md) | actorの再起動、taskのpanic回復、停止と後片付け |
 | [バイト列API](byte-inspector/README.md) | 本文を借りて読む、u8の反復・index、nullableとJSON応答 |
 | [Axum見積API](axum-service/README.md) | RustのHTTP層からNagiのasync業務処理を呼び、Resultを応答へ変換 |
-| [認証・認可の型境界](auth-boundary/README.md) | Rustの認証、Nagiの独自policy、消費型の許可証を使うDB操作。0.1.11導入対象の実験API |
+| [認証・認可の型境界](auth-boundary/README.md) | 標準HTTP policy、dispatcher生成AuthScope、Nagi policyと消費型Grantを使うDB操作 |
 
 手書きLowから始める場合は、[注文見積もりCLI](../low-examples/order-quote/README.md)を使ってください。Low同士のimport、型付きJSON、入力検証と整数の価格計算を試せます。
 
-バイト列APIにはNagi 0.1.10以降が必要で、Axum見積APIは0.1.10で検証しています。認証・認可の例は0.1.11への導入対象で、引き続きexperimentalです。その他の既存例はNagi 0.1.9でも動きます。新APIの公開配布での利用可否は公式Release記録を確認してください。サンプルはリポジトリ一式を取得し、そのルートで各フォルダの`nagi.toml`を指定して実行してください。Rust/CargoとOSごとのビルド環境は[セットアップ](../../docs/getting-started.md)で確認できます。
+バイト列APIにはNagi 0.1.10以降が必要で、Axum見積APIは0.1.10で検証しています。認証例はこのbranchの標準HTTP request-bound auth APIを使います。その他の既存例はNagi 0.1.9でも動きます。新APIの公開配布での利用可否は公式Release記録を確認してください。サンプルはリポジトリ一式を取得し、そのルートで各フォルダの`nagi.toml`を指定して実行してください。Rust/CargoとOSごとのビルド環境は[セットアップ](../../docs/getting-started.md)で確認できます。
 
 ```sh
 nagic run --project test-nagi-code/application-examples/stock-report

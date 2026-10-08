@@ -1,16 +1,33 @@
 #[path = "support/checked_emission.rs"]
 mod checked_emission;
-use nagic::{check, emit, parser};
-use std::{fs, path::PathBuf, process::Command};
+use nagic::{check, emit, parser, source};
+use std::{
+    fs,
+    path::PathBuf,
+    process::Command,
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+static SOURCE_ID: AtomicU64 = AtomicU64::new(0);
 
 fn checked(source: &str, high: bool) -> nagic::ast::Program {
-    let mut program = parser::parse(source, high).unwrap();
-    check::check(&mut program).unwrap_or_else(|error| panic!("{error}\n{source}"));
-    program
+    let extension = if high { "nagi" } else { "low" };
+    let path = std::env::temp_dir().join(format!(
+        "nagi-http-entrypoint-check-{}-{}.{}",
+        std::process::id(),
+        SOURCE_ID.fetch_add(1, Ordering::Relaxed),
+        extension,
+    ));
+    fs::write(&path, source).unwrap();
+    let mut loaded = source::load(&path, high).unwrap();
+    check::check(&mut loaded.program)
+        .unwrap_or_else(|error| panic!("{}\n{source}", loaded.diagnostic(&error)));
+    let _ = fs::remove_file(path);
+    loaded.program
 }
 
 #[test]
-fn zero_route_entrypoint_follows_builtin_calls_in_nested_high_and_low() {
+fn legacy_global_serve_calls_in_nested_high_and_saved_low_report_migration() {
     let bodies = [
         "    db = try await db_open(\":memory:\")\n    return await serve(db, -1)\n",
         "    db = try await db_open(\":memory:\")\n    result = await serve(db, -1)\n    return result\n",
@@ -25,15 +42,23 @@ fn zero_route_entrypoint_follows_builtin_calls_in_nested_high_and_low() {
         "    db = try await db_open(\":memory:\")\n    results: List[Result[unit, Error]] = [await serve(db, -1)]\n    return ok(print(1))\n",
     ];
     for body in bodies {
-        let high = checked(
-            &format!("async def start() -> Result[unit, Error]:\n{body}"),
-            true,
-        );
-        let low = checked(&emit::low(&high), false);
-        for program in [&high, &low] {
-            let rust = emit::rust(&checked_emission::seal(program)).unwrap();
-            assert!(rust.contains("async fn __nagi_serve("), "{body}");
-            assert!(!rust.contains("async fn __route_"), "{body}");
+        let source = format!("async def start() -> Result[unit, Error]:\n{body}");
+        let parsed = parser::parse(&source, true).unwrap();
+        let saved_low = emit::low(&parsed);
+        for (text, high) in [(&source, true), (&saved_low, false)] {
+            let mut program = parser::parse(text, high).unwrap();
+            let error = check::check(&mut program).unwrap_err();
+            assert!(error.contains("SF01 migration"), "{error}\n{text}");
+            assert!(error.contains("旧serve/html"), "{error}\n{text}");
+            let serve_line = text
+                .lines()
+                .position(|line| line.contains("serve("))
+                .unwrap()
+                + 1;
+            assert!(
+                error.contains(&format!("line {serve_line}:")),
+                "{error}\n{text}"
+            );
         }
     }
 }
@@ -57,14 +82,26 @@ fn shadowed_serve_calls_and_non_http_programs_do_not_emit_http_glue() {
 }
 
 #[test]
-fn routes_without_a_serve_call_still_emit_http_glue() {
-    let program = checked(
-        "@get(\"/answer\")\nasync def answer() -> Result[i64, Error]:\n    return ok(42)\n",
-        true,
-    );
-    let rust = emit::rust(&checked_emission::seal(&program)).unwrap();
-    assert!(rust.contains("async fn __nagi_serve("));
-    assert!(rust.contains("async fn __route_0("));
+fn explicit_routes_without_serve_do_not_synthesize_an_entrypoint() {
+    let source = "import std.http.server as http\nclass State:\n    value: i64\nasync def answer(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:\n    return ok(http.text(http.Status.OK, \"42\"))\ndef setup() -> Result[http.App[State, Error], Error]:\n    app = http.app_default[State](State(value=0))\n    return http.route(app, http.Method.GET, view(\"/answer\"), http.public_policy[State](), answer)\n";
+    let high = checked(source, true);
+    let low = checked(&emit::low(&high), false);
+    let handler = high
+        .modules
+        .resolve_root_path("answer")
+        .unwrap()
+        .symbol
+        .clone();
+    for program in [&high, &low] {
+        let rust = emit::rust(&checked_emission::seal(program)).unwrap();
+        assert!(!rust.contains("async fn __nagi_serve("));
+        assert!(rust.contains("::nagi_runtime::http_server::route("));
+        assert!(
+            rust.contains("::nagi_runtime::http_server::public_policy"),
+            "{rust}"
+        );
+        assert!(rust.contains(&format!("crate::{handler}")), "{rust}");
+    }
 }
 
 struct Fixture(PathBuf);
@@ -75,10 +112,10 @@ impl Drop for Fixture {
 }
 
 #[test]
-fn zero_route_servers_build_and_return_runtime_errors_in_high_and_low() {
-    // An invalid port exercises the real generated entrypoint without opening
-    // a socket or leaving a long-running server behind.
-    let source = "def forward(result: Result[unit, Error]) -> Result[unit, Error]:\n    return result\nasync def main() -> Result[unit, Error]:\n    db = try await db_open(\":memory:\")\n    if True:\n        match forward(await serve(db, -1)):\n            case Ok(_):\n                return error(\"invalid port accepted\")\n            case Err(problem):\n                assert_true(error_kind(problem) == \"invalid\")\n                return ok(print(\"invalid port handled\"))\n    else:\n        return error(\"wrong branch\")\n";
+fn explicit_http_server_builds_and_returns_invalid_port_in_high_and_low() {
+    // An invalid port exercises explicit App/route/serve through the real
+    // generated entrypoint without opening a socket or leaving a server live.
+    let source = "import std.http.server as http\nclass State:\n    value: i64\nasync def handler(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:\n    return ok(http.empty(http.Status.OK))\nasync def main() -> Result[unit, Error]:\n    app = http.app_default[State](State(value=0))\n    app = try http.route(app, http.Method.GET, view(\"/\"), http.public_policy[State](), handler)\n    if True:\n        match await http.serve(app, -1, http.default_options()):\n            case Ok(_):\n                return error(\"invalid port accepted\")\n            case Err(problem):\n                assert_true(error_kind(problem) == \"invalid\")\n                return ok(print(\"invalid port handled\"))\n    else:\n        return error(\"wrong branch\")\n";
     let high = checked(source, true);
     let fixture = Fixture(std::env::temp_dir().join(format!(
         "nagi-http-entrypoint-{}-{}",

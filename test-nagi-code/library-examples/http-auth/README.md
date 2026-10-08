@@ -1,6 +1,8 @@
-# Nagiでヘッダーと認証エラーを扱う
+# 標準HTTP policyでBearer認証する
 
-標準HTTP APIだけで動く、小さなBearer認証の例です。RustのadapterやDBは使いません。共有状態にデモ用の値を置き、非同期handlerで`Authorization`を読みます。
+[English](README.en.md)
+
+標準HTTP dispatcherがRust verifierを呼び、認証済み`AuthScope`だけを`/me` handlerへ渡す小さな例です。`/health`と`/restricted`は、それぞれ明示したpublic routeです。
 
 このディレクトリで実行してください。
 
@@ -28,13 +30,11 @@ curl -i http://127.0.0.1:8089/restricted
 | route | 応答 |
 |---|---|
 | `/health` | 200、`ok` |
-| `/me`、ヘッダーなし・値が違う | 401 |
+| `/me`、ヘッダーなし・値が違う | 同じ401、`invalid credential`、`WWW-Authenticate: Bearer` |
 | `/me`、設定した値と一致 | 200、`Hello, Nagi!` |
-| `/me`、同じ名前のヘッダーが複数・不正なUTF-8 | 400 |
-| `/restricted` | route専用の処理が共通処理を上書きし、403 |
+| `/me`、同名ヘッダーが複数・不正なUTF-8 | 400、`invalid security request` |
+| `/restricted` | public handlerが業務上の403、`access denied` |
 
-401には`WWW-Authenticate: Bearer`を付けます。応答には認証用の値や内部エラーを含めません。未設定なら起動時にエラーになります。ポートは`NAGI_SAMPLE_PORT`で変更でき、停止はCtrl+Cです。
+401/400は標準policyの失敗応答です。`/restricted`は認証policyの拒否ではなく、handlerが返す独自の業務応答です。`NAGI_DEMO_AUTHORIZATION`が空なら起動時にエラーになります。ポートは`NAGI_SAMPLE_PORT`で変更でき、停止はCtrl+Cです。
 
-固定値の比較はHTTP APIを試すためのデモです。本番向けのユーザー管理、トークン発行・失効、安全な認証方式は実装していません。
-
-[English](README.en.md)
+Rustの`native.rs` verifierは設定した文字列と一つのdemo credentialを比較し、subject 1の`VerifiedIdentity`を有限期限付きで返します。認証境界の配線例であり、本番token format、署名、audience、期限検査、失効照会、ユーザー管理を実装していません。実運用には審査済みtoken verifierが必要です。

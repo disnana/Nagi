@@ -1,6 +1,7 @@
 //! Compiler-owned standard definitions. Serialized Low names this registry;
 //! it cannot choose native paths, capabilities, or callback contracts.
 use crate::ast::*;
+mod security;
 mod sqlite;
 
 pub const MODULE_NAME: &str = "std.http.server";
@@ -105,6 +106,11 @@ pub enum Resource {
     WaitKind,
     WaitError,
     Principal,
+    AuthScope,
+    VerifiedIdentity,
+    AuthFailure,
+    AuthFailureKind,
+    HttpPolicy,
     Grant,
     Task,
     TaskFailure,
@@ -145,6 +151,19 @@ pub enum Operation {
     Route,
     RouteMapped,
     Serve,
+    PublicPolicy,
+    AuthenticatedPolicy,
+    AuthorizedPolicy,
+    SecurityTimeout,
+    AuthSubject,
+    AuthKind,
+    AuthMessage,
+    AuthInvalidCredential,
+    AuthDenied,
+    AuthExpired,
+    AuthInvalidRequest,
+    AuthUnavailable,
+    AuthInternal,
     ActorDefaultOptions,
     ActorOptions,
     ActorDefaultActorOptions,
@@ -316,6 +335,11 @@ pub const RESOURCES: &[Resource] = &[
     Resource::WaitKind,
     Resource::WaitError,
     Resource::Principal,
+    Resource::AuthScope,
+    Resource::VerifiedIdentity,
+    Resource::AuthFailure,
+    Resource::AuthFailureKind,
+    Resource::HttpPolicy,
     Resource::Grant,
     Resource::Task,
     Resource::TaskFailure,
@@ -350,6 +374,19 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::HeaderTimeout,
     Operation::HeaderLimits,
     Operation::SendTimeout,
+    Operation::PublicPolicy,
+    Operation::AuthenticatedPolicy,
+    Operation::AuthorizedPolicy,
+    Operation::SecurityTimeout,
+    Operation::AuthSubject,
+    Operation::AuthKind,
+    Operation::AuthMessage,
+    Operation::AuthInvalidCredential,
+    Operation::AuthDenied,
+    Operation::AuthExpired,
+    Operation::AuthInvalidRequest,
+    Operation::AuthUnavailable,
+    Operation::AuthInternal,
     Operation::App,
     Operation::AppDefault,
     Operation::Route,
@@ -648,7 +685,8 @@ static CONTRACT_GRANT: ResourceContract = ResourceContract::new(
     &[],
     &[],
     &[0],
-);
+)
+.with_lifecycle(ResourceLifecycle::SameTask);
 
 static CONTRACT_REQUEST: ResourceContract = ResourceContract::new(
     ResourceInfo {
@@ -1052,6 +1090,11 @@ static CONTRACT_EVENT: ResourceContract = ResourceContract::new(
 
 fn resource_contract(resource: Resource) -> &'static ResourceContract {
     match resource {
+        Resource::AuthScope
+        | Resource::VerifiedIdentity
+        | Resource::AuthFailure
+        | Resource::AuthFailureKind
+        | Resource::HttpPolicy => security::resource_contract(resource),
         Resource::SqlitePool
         | Resource::SqliteTx
         | Resource::SqliteParameters
@@ -1112,6 +1155,7 @@ pub(crate) fn native_serde_supported(resource: Resource) -> bool {
 
 pub fn operation_info(operation: Operation) -> &'static OperationInfo {
     match operation {
+        Operation::PublicPolicy | Operation::AuthenticatedPolicy | Operation::AuthorizedPolicy | Operation::SecurityTimeout | Operation::AuthSubject | Operation::AuthKind | Operation::AuthMessage | Operation::AuthInvalidCredential | Operation::AuthDenied | Operation::AuthExpired | Operation::AuthInvalidRequest | Operation::AuthUnavailable | Operation::AuthInternal => security::operation_info(operation),
         Operation::SqliteOptions
         | Operation::SqliteOpen
         | Operation::SqliteClonePool
@@ -1155,8 +1199,8 @@ pub fn operation_info(operation: Operation) -> &'static OperationInfo {
  Operation::SendTimeout => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "send_timeout", rust_path: "::nagi_runtime::http_server::send_timeout", arity: 2, generic_arity: 0, parameters: &[Passing::Move, Passing::Move], borrow_owner: None, signature: "(options: Options, milliseconds: i64) -> Result[Options, Error]" },
  Operation::App => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &["S", "E"], asynchronous: false, emit_type_arguments: true, name: "app", rust_path: "::nagi_runtime::http_server::app", arity: 2, generic_arity: 2, parameters: &[Passing::Move, Passing::Mapper], borrow_owner: None, signature: "[S, E](state: S, mapper: fn[E, Response]) -> App[S, E]" },
  Operation::AppDefault => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &["S"], asynchronous: false, emit_type_arguments: true, name: "app_default", rust_path: "::nagi_runtime::http_server::app_default", arity: 1, generic_arity: 1, parameters: &[Passing::Move], borrow_owner: None, signature: "[S](state: S) -> App[S, Error]" },
- Operation::Route => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: false, name: "route", rust_path: "::nagi_runtime::http_server::route", arity: 4, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Reference, Passing::Handler], borrow_owner: None, signature: "(app: App[S, E], method: Method, path: view[str], handler: fn[Request, shared[S], Future[Result[Response, E]]]) -> Result[App[S, E], Error]" },
- Operation::RouteMapped => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: false, name: "route_mapped", rust_path: "::nagi_runtime::http_server::route_mapped", arity: 5, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Reference, Passing::Handler, Passing::Mapper], borrow_owner: None, signature: "(app: App[S, E], method: Method, path: view[str], handler: fn[Request, shared[S], Future[Result[Response, F]]], mapper: fn[F, Response]) -> Result[App[S, E], Error]" },
+ Operation::Route => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: false, name: "route", rust_path: "::nagi_runtime::http_server::route", arity: 5, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Reference, Passing::Move, Passing::Handler], borrow_owner: None, signature: "(app: App[S, E], method: Method, path: view[str], policy: Policy[S, A], handler: fn[Request, shared[S], A, Future[Result[Response, E]]]) -> Result[App[S, E], Error]" },
+ Operation::RouteMapped => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: false, name: "route_mapped", rust_path: "::nagi_runtime::http_server::route_mapped", arity: 6, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Reference, Passing::Move, Passing::Handler, Passing::Mapper], borrow_owner: None, signature: "(app: App[S, E], method: Method, path: view[str], policy: Policy[S, A], handler: fn[Request, shared[S], A, Future[Result[Response, F]]], mapper: fn[F, Response]) -> Result[App[S, E], Error]" },
  Operation::Serve => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: true, emit_type_arguments: true, name: "serve", rust_path: "::nagi_runtime::http_server::serve", arity: 3, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Move], borrow_owner: None, signature: "(app: App[S, E], port: i64, options: Options) -> Future[Result[unit, Error]]" },
         Operation::ActorDefaultOptions => &OperationInfo { module: StandardModule::Actor, name: "default_options", rust_path: "::nagi_runtime::actor::default_options", arity: 0, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: true, parameters: &[], borrow_owner: None, signature: "() -> Options" },
         Operation::ActorOptions => &OperationInfo { module: StandardModule::Actor, name: "options", rust_path: "::nagi_runtime::actor::options", arity: 5, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: true, parameters: &[Passing::Move, Passing::Move, Passing::Move, Passing::Move, Passing::Move], borrow_owner: None, signature: "(children: i64, events: i64, restarts: i64, window_ms: i64, shutdown_ms: i64) -> Result[Options, Error]" },
@@ -1650,6 +1694,10 @@ const EVENT_KIND_CONSTANTS: &[ConstantInfo] = &[
     },
 ];
 pub fn constants(resource: Resource) -> &'static [ConstantInfo] {
+    if resource == Resource::AuthFailureKind {
+        return security::FAILURE_CONSTANTS;
+    }
+
     match resource {
         Resource::SqliteBeginMode | Resource::SqliteFailureKind | Resource::SqliteOutcome => {
             sqlite::constants(resource)
@@ -1990,6 +2038,7 @@ mod resource_contract_tests {
                 Resource::Turn => &[InlinePayload, InlinePayload, InlinePayload],
                 Resource::Grant => &[NominalPhantom],
                 Resource::Task => &[IndirectProtocol],
+                Resource::HttpPolicy => &[IndirectProtocol, CallbackSignature],
                 _ => &[],
             };
             let contract = resource_contract(resource);
@@ -2005,7 +2054,10 @@ mod resource_contract_tests {
             assert_eq!(contract.role_at(usize::MAX), None, "{resource:?}");
             assert_eq!(
                 matches!(contract.lifecycle, ResourceLifecycle::SameTask),
-                resource == Resource::SqliteTx
+                matches!(
+                    resource,
+                    Resource::SqliteTx | Resource::AuthScope | Resource::Grant
+                )
             );
         }
     }

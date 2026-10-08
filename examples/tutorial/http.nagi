@@ -1,22 +1,33 @@
-# SQLiteへの書き込みなしで、HTMLとJSONの応答を試す。
+# A small explicit HTTP app with JSON responses and no database writes.
+# Typed HTML is a later API; the root route returns plain UTF-8 text meanwhile.
+import std.http.server as http
+
+class State:
+    greeting: str
+
 class Greeting:
     id: i64
     name: str
 
-@get("/")
-async def home() -> Result[Html, Error]:
-    return ok(html("<!doctype html><html lang=\"ja\"><meta charset=\"utf-8\"><title>Nagi</title><h1>Hello, Nagi!</h1><a href=\"/greet/1\">JSONを見る</a></html>"))
+async def home(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, view(state.greeting)))
 
-@get("/greet/{id}")
-async def greet(id: i64) -> Result[Greeting, Error]:
+async def greet(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    id_text = try slice(request.path, 7, len(request.path))
+    id = try parse_i64(id_text)
     if id < 1:
         return error("id must be positive")
-    return ok(Greeting(id=id, name="Nagi"))
+    value = Greeting(id=id, name="Nagi")
+    return http.json[Greeting](http.Status.OK, value)
 
-@post("/echo")
-async def echo(req: Greeting) -> Result[Greeting, Error]:
-    return ok(req)
+async def echo(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    value = try json_decode[Greeting](request.body)
+    return http.json[Greeting](http.Status.OK, value)
 
 async def main() -> Result[unit, Error]:
-    db = try await db_open(":memory:")
-    return await serve(db, 8094)
+    app = http.app_default[State](State(greeting="Hello, Nagi!"))
+    app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), home)
+    app = try http.route(app, http.Method.GET, "/greet/{id}", http.public_policy[State](), greet)
+    app = try http.route(app, http.Method.POST, "/echo", http.public_policy[State](), echo)
+    limits = http.default_options()
+    return await http.serve(app, 8094, limits)

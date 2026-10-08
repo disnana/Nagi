@@ -37,11 +37,9 @@ fn rust_extern_interface_and_low_roundtrip() {
 }
 
 #[test]
-fn html_route_is_not_encoded_as_json() {
-    let p = high("@get(\"/\")\nasync def home() -> Result[Html, Error]:\n    return ok(html(\"<h1>Hello</h1>\"))\n").unwrap();
-    let code = emit::rust(&checked_emission::seal(&p)).unwrap();
-    assert!(code.contains("IntoResponse::into_response(v)"));
-    assert!(high("def main():\n    html(123)\n").is_err());
+fn removed_raw_html_is_a_migration_diagnostic() {
+    let error = high("def main():\n    html(\"<h1>Hello</h1>\")\n").unwrap_err();
+    assert!(error.contains("SF01 migration"), "{error}");
     assert!(
         high("def main():\n    path = \"index.html\"\n    print(include_text(path))\n").is_err()
     );

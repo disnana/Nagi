@@ -41,6 +41,21 @@ fn independent_low(program: &Program) -> Program {
     saved
 }
 
+fn explicit_policy_source(source: &str) -> String {
+    let source = source.replace(
+        "async def handler(request: http.Request, state: shared[State])",
+        "async def handler(request: http.Request, state: shared[State], authority: unit)",
+    );
+    let source = source.replace(
+        "http.route(app, http.Method.GET, view(\"/probe\"), handler)",
+        "http.route(app, http.Method.GET, view(\"/probe\"), http.public_policy[State](), handler)",
+    );
+    source.replace(
+        "http.route_mapped(app, http.Method.GET, view(\"/probe\"), handler, map_text)",
+        "http.route_mapped(app, http.Method.GET, view(\"/probe\"), http.public_policy[State](), handler, map_text)",
+    )
+}
+
 // This whole handler reads native request/header/body views and shared state.
 // It needs no owned string construction, state clone, or adapter allocation.
 // Response construction and the heterogeneous runtime route table have their
@@ -49,7 +64,7 @@ const AUTH: &str = include_str!("fixtures/resource-contract/http-inspection.nagi
 
 #[test]
 fn borrowed_http_inspection_and_async_registration_add_no_owned_adapter_work() {
-    let (_fixture, program) = Fixture::checked(AUTH);
+    let (_fixture, program) = Fixture::checked(&explicit_policy_source(AUTH));
     let saved = independent_low(&program);
     let high_rust = emit::rust(&checked_emission::seal(&program)).unwrap();
     let low_rust = emit::rust(&checked_emission::seal(&saved)).unwrap();
@@ -100,7 +115,7 @@ const BORROW_MAPPERS: &str = include_str!("fixtures/resource-contract/http-borro
 
 #[test]
 fn borrow_and_named_mappers_preserve_high_low_codegen() {
-    let (_fixture, program) = Fixture::checked(BORROW_MAPPERS);
+    let (_fixture, program) = Fixture::checked(&explicit_policy_source(BORROW_MAPPERS));
     let high_rust = emit::rust(&checked_emission::seal(&program)).unwrap();
     let low_rust = emit::rust(&checked_emission::seal(&independent_low(&program))).unwrap();
     assert_eq!(
@@ -130,7 +145,7 @@ fn borrow_and_named_mapper_registration_execute_native_adapters() {
     use std::process::Command;
     // Execute json/Borrow and app/route_mapped registration, not mapper bodies
     // or HTTP dispatch. Existing socket tests cover the runtime request path.
-    let source = format!("{BORROW_MAPPERS}\n@rust(\"native::probe\")\nextern def probe() -> Result[unit, Error]\ndef main() -> Result[unit, Error]:\n    return probe()\n");
+    let source = format!("{}\n@rust(\"native::probe\")\nextern def probe() -> Result[unit, Error]\ndef main() -> Result[unit, Error]:\n    return probe()\n", explicit_policy_source(BORROW_MAPPERS));
     let (fixture, program) = Fixture::checked(&source);
     fs::write(fixture.0.join("saved.low"), emit::low(&program)).unwrap();
     fs::write(

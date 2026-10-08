@@ -250,6 +250,16 @@ jobs:
         run: node --test editors/vscode-nagi/test/*.test.js scripts/test_graph_html_viewport.mjs
       - name: Check generated output protection and native expression behavior
         run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test explicit_moves --test task_handles --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
+      - name: Check SF01 High, saved Low, handwritten Low and native policy contracts
+        run: cargo test --locked -p nagic --test security_sf01 --test security_sf01_native
+      - name: Check SF01 request lease and permit lifecycle through the public runtime
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked -p nagi-runtime --test security_sf01
+          cargo test --locked -p nagi-runtime --lib auth::tests:: 2>&1 | tee "$RUNNER_TEMP/sf01-auth.log"
+          cargo test --locked -p nagi-runtime --lib http_server::tests::security_tests:: 2>&1 | tee "$RUNNER_TEMP/sf01-http.log"
+          python -c 'import pathlib,re,os; root=pathlib.Path(os.environ["RUNNER_TEMP"]); counts={"sf01-auth.log":9,"sf01-http.log":11}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'
       - name: Check SQLite High and handwritten Low contract registration
         run: cargo test --locked -p nagic --test sqlite_contract_inputs
       - name: Verify bilingual first-app tutorial in High and saved Low

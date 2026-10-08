@@ -41,7 +41,7 @@
 
 buildには外部環境が必要なため「check成功ならどんな環境でもbuild成功」とは保証しない。未対応のNagi構文・型の組合せは早い段階で明示的に拒否する。現時点では全受理プログラムのbackend conformanceを証明できておらず、未知の不一致は残り得る。
 
-登録resourceのCopy/shared/field storage/Debugと型引数の保持関係は、[ADR 008](adr/008-resource-contracts.md)の単一根拠へ集約する。inline/shared payload、Actorの間接protocol、callback署名、nominal phantomを区別し、全capabilityへ同じ遍歴を使わない。Phase 3ではlifecycleをUnspecifiedに留めた。未リリースのSQLite公開対応ではcanonical TxだけにSameTaskを登録し、実payloadとFutureの実引数を検査する。任意Rustのlifecycleやtraitを推論する仕組みへ拡張しない。
+登録resourceのCopy/shared/field storage/Debugと型引数の保持関係は、[ADR 008](adr/008-resource-contracts.md)の単一根拠へ集約する。inline/shared payload、Actorの間接protocol、callback署名、nominal phantomを区別し、全capabilityへ同じ遍歴を使わない。Phase 3ではlifecycleをUnspecifiedに留めた。未リリースのSQLite公開対応ではcanonical TxにSameTaskを登録し、未リリースSF01ではAuthScope/Grantも同じlifecycleとして扱い、実payloadとFutureの実引数を検査する。任意Rustのlifecycleやtraitを推論する仕組みへ拡張しない。
 
 ## 所有権・借用
 
@@ -80,13 +80,13 @@ buildには外部環境が必要なため「check成功ならどんな環境で�
 
 ## 認証・認可の最小境界
 
-Nagi 0.1.11で公開した実験機能。`std.auth.Principal`と`Grant[P]`は登録済みopaque resourceで、通常classの構築・JSON復元とは分ける。`P`は解決済みclass/enumのnominal IDで、型引数を持たない。proofはnonCopy/nonClone/nonSerdeで、nested wrapperからもcopy/shared化できない。class/enum fieldへの格納も拒否する。localの所有Option/Resultによる移動とasyncへのowned delegationは許す。
+未リリース0.2.0 SF01は`AuthScope`/単一`Grant[P]`をrequest leaseへ結び付ける。[ADR 013](adr/013-request-bound-auth-and-http-policy.md)と[SF01 contract](security-foundation/sf01-contract.md)がAPI・Failure・移行を定義する。公開済み0.1.11 Principalはmigration診断のtombstoneで、無期限factoryやunchecked partsを維持しない。Pはnominal class/enum、実対象はi64。opaque proofを構築/Copy/Clone/Serde/shared/fieldへ格納できない。同task owned引数/return/local Option/Result/async delegationを許し、Task capture/結果・Actor・captured Future transferを拒否する。phantom/関数署名は実proof payloadではない。
 
-保護externの署名がGrant[P]を要求する場合、その権限型の値を渡し、move後に再利用しないことをcheckする。保護adapterは消費したGrantのresource IDで処理し、別のbare IDへ権限を付け替えない。署名を実際に守ること、verifierとNagi/Rust policyの正しさ、expiry/revocation/DB競合への対応はtrusted adapterとアプリの責任である。
+標準routeは明示Policy[S,A]必須で、handler(Request,shared[S],A)のAとStateを一致させる。request ownerの有限leaseは正常/Err/panic/timeout/cancel/Drop/shutdownで失効する。capacity予約はadmissionではなく、失効と同gateで現在時刻/activeを検査したexecution permit発行が線形化点である。permit後の取消はrollbackを保証しない。native adapterはbound対象へ同期enqueueし、任意Rust内部の署名/permission/crypto/副作用を型モデルで証明したとは扱わない。
 
-全routeの保護、任意SQLのtenant制約、DTO流出、任意Rustの迂回はこの型モデルでは証明しない。普通のclassは入力・claims・errorとして有効だが、存在だけでは認証の根拠にならない。JWSの暗号処理を独自に実装せず、既存Rust verifierを接続する。初回の固定credentialデモはJWS verifierを実装していない。
+旧decorator/global serve/raw HTMLの標準入口を除去し、alias/保存Low/手書きLow/native最終統合もcheckerで拒否する。動的routeの競合はruntime登録Errで、曖昧routerを起動しない。Session/CSRF/CORS/typed HTML/Query/outbound等は後続で、SF01をFoundation全完成と報告しない。move/Task/SQLite Txの採用契約を変えない。
 
-根拠: `runtime/src/auth.rs`, `compiler/src/stdlib.rs`, `capabilities.rs`, `compiler/tests/auth_boundaries.rs`。[ADR 001](adr/001-backend-boundaries.md)に実験の範囲と信頼境界を記す。
+根拠: `runtime/src/auth.rs`, `http_server.rs`, `compiler/src/stdlib/security.rs`, `check/security.rs`, `capabilities.rs`, `compiler/tests/security_sf01.rs`, `security_sf01_native.rs`, `auth_boundaries.rs`。
 
 ## async・runtime
 
@@ -123,7 +123,7 @@ TaskFailureはopaque・非Copy・非Clone・非shared、kind()はCopyな四値en
 | SQL static check | `check --sql-schema … --sql-dialect sqlite`の指定時だけ、対象builtinとcanonical SQLite operationの直接literalをprepareする。新Parametersの個数は静的に証明せずbind未検査を表示する。query/execを実行してschemaを変更しない。旧Dbの固定bind検査を維持 | `compiler/src/sql_check/mod.rs`, `compiler/tests/sql_check.rs` |
 | schema assumptions | 1つの指定schemaが検査対象DBに一致することを利用者が管理する。アプリのmigrationや複数Dbからschemaを推測しない。schema処理の権限・入力・時間を制限する | `sql_check.rs` tests、[公開リファレンス](../sql-check.md) |
 | NULL / type mismatch | 必要列があっても値型・範囲・NULL・実DBの状態は実行時まで分からない。nullableフィールドのNoneと非nullableの読み取り失敗を区別する | `runtime/src/database.rs`, `compiler/tests/nullable_database.rs`, `owned_database.rs` |
-| legacy transaction | 共有Dbへ複数のBEGIN/query/COMMITを送っても、呼出し間の排他所有は保証しない。新Txへ機械置換しない | `runtime/src/database.rs`; [DB制約](../database.md#実装と制約) |
+| legacy transaction | 共有Dbへ複数のBEGIN/query/COMMITを送っても、呼出し間の排他所有は保証しない。新Txへ機械置換しない | `runtime/src/database.rs`; [DB制約](../database.md#従来apiの実装と制約) |
 | legacy cancellation | 送信待ちと受理後を区別する。受理済みSQLite jobはcallerの取消後にも完了・commitし得る。最後のDb所有者のDropはworker終了を待ち、即時終了ではない | `database.rs::call`, `Inner::drop`; database tests、公開DB制約 |
 | SQLite Pool/Tx（未リリース） | `std.db.sqlite`は専有Tx、owned Parameters、明示終端を公開。Txの同task委譲は許すがtask転送・owned field・sharedを拒否。SQL/Parametersと終端Futureの所有をchecker/私有planへ固定 | `compiler/src/check/sqlite.rs`, `check/checked.rs`, `runtime/src/sqlite`; [公開リファレンス](../sqlite-pool.md) |
 
@@ -146,8 +146,8 @@ statement Errから「変更0」や「rollback済み」を推論しない。SQLi
 | 項目 | 契約・境界 | 実装と検査 |
 |---|---|---|
 | handler Result / mapper | Okをresponseへ、ErrをAppの既定mapperまたはroute mapperへ渡す。業務Errをpanicと同一視しない | `runtime/src/http_server.rs::route_mapped`, `compiler/tests/error_routes.rs`, `tests/http_stdlib_integration.py` |
-| panic | handler生成・poll・mapperのunwindをレスポンス開始前の境界で捕捉し、payloadを含まない500を返す。共有状態・DB・lockは巻き戻さない | `runtime/src/http_server/panic_tests.rs`, `runtime/src/http/panic_tests.rs`, `compiler/tests/http_entrypoint.rs` |
-| malformed / limits | Hyperのprotocol解析とNagiのbody/header/capacity/deadline制限を区別する。全不正TCP入力に整形式HTTP応答が届く保証はない。過大本文は無制限drainせずclose戦略を使う | `runtime/src/http_server/tests.rs`, `runtime/src/http/tests.rs`, `runtime/src/http.rs` |
+| panic | handler生成・poll・mapperのunwindをレスポンス開始前の境界で捕捉し、payloadを含まない500を返す。共有状態・DB・lockは巻き戻さない | `runtime/src/http_server/panic_tests.rs`, `runtime/src/http_server/security_tests.rs`, `compiler/tests/http_entrypoint.rs` |
+| malformed / limits | Hyperのprotocol解析とNagiのbody/header/capacity/deadline制限を区別する。全不正TCP入力に整形式HTTP応答が届く保証はない。過大本文は無制限drainせずclose戦略を使う | `runtime/src/http_server/tests.rs` |
 | timeout | body待機、handler、sendを分ける。handler期限切れはFutureを破棄してcapacityを解放する。non-yielding pollは期限を越え得るが、後で返ったReadyを正常responseとして採用しない | `http_server/tests.rs::handler_timeout_*` |
 | response開始後 | 標準responseはbuffered。送信開始後のsocket失敗は接続終了になり得る。二度目の500や、送信済みbyteの取消は保証しない。streaming/upgradeは未対応 | `http_server.rs::BufferedBody`, `TimedIo`; shutdown/send tests |
 | cleanup / shutdown | request permit、handler Future、connection taskを期限とshutdownで解放する。graceful shutdownの完了とdeadline超過によるabortを分ける | `http_server/tests.rs::graceful_shutdown_*`, `connection_capacity_and_shutdown_deadline_leave_no_handler_tasks` |

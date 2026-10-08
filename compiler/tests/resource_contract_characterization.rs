@@ -278,6 +278,46 @@ const RESOURCES: &[ResourceExpected] = &[
         [false, false, false, false, false],
         &[],
     ),
+    (
+        R::AuthScope,
+        M::Auth,
+        "AuthScope",
+        &[],
+        [false, false, false, false, false],
+        &[],
+    ),
+    (
+        R::VerifiedIdentity,
+        M::Auth,
+        "VerifiedIdentity",
+        &[],
+        [false, false, false, false, false],
+        &[],
+    ),
+    (
+        R::AuthFailure,
+        M::Auth,
+        "Failure",
+        &[],
+        [false, false, true, false, true],
+        &[],
+    ),
+    (
+        R::AuthFailureKind,
+        M::Auth,
+        "FailureKind",
+        &[],
+        [true, true, true, true, true],
+        &[],
+    ),
+    (
+        R::HttpPolicy,
+        M::HttpServer,
+        "Policy",
+        &["S", "A"],
+        [false, false, true, false, true],
+        &[],
+    ),
 ];
 fn module(module: M) -> (&'static str, &'static str, &'static str) {
     match module {
@@ -316,8 +356,8 @@ fn registered_resources_match_the_independent_inventory() {
         shared: false,
         debug: false,
     };
-    assert_eq!(RESOURCES.len(), 33);
-    assert_eq!(stdlib::RESOURCES.len(), 33);
+    assert_eq!(RESOURCES.len(), 38);
+    assert_eq!(stdlib::RESOURCES.len(), 38);
     assert_eq!(
         stdlib::RESOURCES.iter().copied().collect::<HashSet<_>>(),
         RESOURCES.iter().map(|r| r.0).collect()
@@ -396,6 +436,20 @@ macro_rules! op {
     };
 }
 const OPERATIONS: &[OperationExpected] = &[
+    op!(PublicPolicy,HttpServer,"public_policy",0,&["S"],"",None,false,true,"[S]() -> Policy[S, unit]"),
+    op!(AuthenticatedPolicy,HttpServer,"authenticated_policy",1,&["S"],"H",None,false,false,"[S](verifier: fn[Request, shared[S], Future[Result[VerifiedIdentity, Failure]]]) -> Policy[S, AuthScope]"),
+    op!(AuthorizedPolicy,HttpServer,"authorized_policy",2,&["S","P"],"HH",None,false,false,"[S, P](verifier: fn[Request, shared[S], Future[Result[VerifiedIdentity, Failure]]], authorizer: fn[AuthScope, Request, shared[S], Future[Result[Grant[P], Failure]]]) -> Policy[S, Grant[P]]"),
+    op!(SecurityTimeout,HttpServer,"security_timeout",2,&[],"MM",None,false,true,"(options: Options, ms: i64) -> Result[Options, Error]"),
+    op!(AuthSubject,Auth,"subject",1,&[],"R",None,false,true,"(scope: view[AuthScope]) -> i64"),
+    op!(AuthKind,Auth,"kind",1,&[],"R",None,false,true,"(failure: view[Failure]) -> FailureKind"),
+    op!(AuthMessage,Auth,"message",1,&[],"R",Some(0),false,true,"(failure: view[Failure]) -> view[str]"),
+    op!(AuthInvalidCredential,Auth,"invalid_credential",0,&[],"",None,false,true,"() -> Failure"),
+    op!(AuthDenied,Auth,"denied",0,&[],"",None,false,true,"() -> Failure"),
+    op!(AuthExpired,Auth,"expired",0,&[],"",None,false,true,"() -> Failure"),
+    op!(AuthInvalidRequest,Auth,"invalid_request",0,&[],"",None,false,true,"() -> Failure"),
+    op!(AuthUnavailable,Auth,"unavailable",0,&[],"",None,false,true,"() -> Failure"),
+    op!(AuthInternal,Auth,"internal",0,&[],"",None,false,true,"() -> Failure"),
+
     op!(SqliteOptions,Sqlite,"options",4,&[],"MMMM",None,false,false,"(connections: i64, queue_capacity: i64, acquire_ms: i64, busy_ms: i64) -> Result[Options, Error]"),
     op!(SqliteOpen,Sqlite,"open",2,&[],"RM",None,true,false,"(path: view[str], options: Options) -> Future[Result[Pool, Failure]]"),
     op!(SqliteClonePool,Sqlite,"clone_pool",1,&[],"R",None,false,false,"(pool: view[Pool]) -> Pool"),
@@ -439,8 +493,8 @@ const OPERATIONS: &[OperationExpected] = &[
     op!(SendTimeout,HttpServer,"send_timeout",2,&[],"MM",None,false,true,"(options: Options, milliseconds: i64) -> Result[Options, Error]"),
     op!(App,HttpServer,"app",2,&["S","E"],"MP",None,false,true,"[S, E](state: S, mapper: fn[E, Response]) -> App[S, E]"),
     op!(AppDefault,HttpServer,"app_default",1,&["S"],"M",None,false,true,"[S](state: S) -> App[S, Error]"),
-    op!(Route,HttpServer,"route",4,&[],"MMRH",None,false,false,"(app: App[S, E], method: Method, path: view[str], handler: fn[Request, shared[S], Future[Result[Response, E]]]) -> Result[App[S, E], Error]"),
-    op!(RouteMapped,HttpServer,"route_mapped",5,&[],"MMRHP",None,false,false,"(app: App[S, E], method: Method, path: view[str], handler: fn[Request, shared[S], Future[Result[Response, F]]], mapper: fn[F, Response]) -> Result[App[S, E], Error]"),
+    op!(Route,HttpServer,"route",5,&[],"MMRMH",None,false,false,"(app: App[S, E], method: Method, path: view[str], policy: Policy[S, A], handler: fn[Request, shared[S], A, Future[Result[Response, E]]]) -> Result[App[S, E], Error]"),
+    op!(RouteMapped,HttpServer,"route_mapped",6,&[],"MMRMHP",None,false,false,"(app: App[S, E], method: Method, path: view[str], policy: Policy[S, A], handler: fn[Request, shared[S], A, Future[Result[Response, F]]], mapper: fn[F, Response]) -> Result[App[S, E], Error]"),
     op!(Serve,HttpServer,"serve",3,&[],"MMM",None,true,true,"(app: App[S, E], port: i64, options: Options) -> Future[Result[unit, Error]]"),
     op!(ActorDefaultOptions,Actor,"default_options",0,&[],"",None,false,true,"() -> Options"),
     op!(ActorOptions,Actor,"options",5,&[],"MMMMM",None,false,true,"(children: i64, events: i64, restarts: i64, window_ms: i64, shutdown_ms: i64) -> Result[Options, Error]"),
@@ -468,8 +522,8 @@ const OPERATIONS: &[OperationExpected] = &[
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 69);
-    assert_eq!(stdlib::OPERATIONS.len(), 69);
+    assert_eq!(OPERATIONS.len(), 82);
+    assert_eq!(stdlib::OPERATIONS.len(), 82);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()
@@ -661,6 +715,7 @@ fn registered_accessors_match_the_complete_inventory() {
 }
 
 const CONSTANTS: &[(R, &str)] = &[
+    (R::AuthFailureKind,"INVALID_CREDENTIAL DENIED EXPIRED INVALID_REQUEST UNAVAILABLE INTERNAL"),
     (R::SqliteBeginMode,"DEFERRED IMMEDIATE EXCLUSIVE"),
     (R::SqliteFailureKind,"INVALID CLOSED ACQUIRE_TIMEOUT BUSY SQL BIND DECODE ABORTED CLEANUP WORKER REPLY_LOST CLOSE_TIMEOUT ALLOCATION"),
     (R::SqliteOutcome,"NOT_APPLICABLE ACTIVE COMMITTED ROLLED_BACK UNKNOWN"),
@@ -674,7 +729,7 @@ const CONSTANTS: &[(R, &str)] = &[
 ];
 #[test]
 fn registered_constants_match_the_complete_inventory() {
-    assert_eq!(CONSTANTS.len(), 10);
+    assert_eq!(CONSTANTS.len(), 11);
     for &(resource, ..) in RESOURCES {
         let names = CONSTANTS
             .iter()

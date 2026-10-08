@@ -40,11 +40,13 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
                 finally:
                     connection.close()
 
-            def check(name, method, path, status, *, credential=None, body=None, expected=None, extra=()):
+            def check(name, method, path, status, *, credential=None, body=None, expected=None, expected_text=None, extra=()):
                 actual, headers, output = request(method, path, body, credential, extra)
                 assert actual == status, (mode, name, actual, output)
                 if expected is not None:
                     assert json.loads(output) == expected, (mode, name, output)
+                if expected_text is not None:
+                    assert output == expected_text, (mode, name, output)
                 if status == 401:
                     assert headers.get("www-authenticate") == "Bearer", (mode, name, headers)
                 if status in (401, 403):
@@ -63,12 +65,12 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
                     assert time.monotonic() < deadline, "server did not become ready"
                     time.sleep(0.05)
                 check("public", "GET", "/health", 200)
-                check("missing-auth", "GET", "/me", 401, expected={"code": "authentication_required"})
-                check("invalid-auth", "GET", "/me", 401, credential="Bearer invalid")
-                check("expired-fixture-invalid", "GET", "/me", 401, credential="Bearer demo-expired")
+                check("missing-auth", "GET", "/me", 401, expected_text=b"invalid credential")
+                check("invalid-auth", "GET", "/me", 401, credential="Bearer invalid", expected_text=b"invalid credential")
+                check("expired-fixture", "GET", "/me", 401, credential="Bearer demo-expired", expected_text=b"authority expired")
                 check("authenticated", "GET", "/me", 200, credential="Bearer demo-alice", expected={"subject": 1})
-                check("duplicate-header", "GET", "/me", 400, credential="Bearer demo-alice", extra=(("Authorization", "Bearer demo-bob"),))
-                check("invalid-header", "GET", "/me", 400, credential=b"Bearer \xff")
+                check("duplicate-header", "GET", "/me", 400, credential="Bearer demo-alice", expected_text=b"invalid security request", extra=(("Authorization", "Bearer demo-bob"),))
+                check("invalid-header", "GET", "/me", 400, credential=b"Bearer \xff", expected_text=b"invalid security request")
                 check("missing-principal", "GET", "/documents/1", 401)
                 check("alice-own", "GET", "/documents/1", 200, credential="Bearer demo-alice", expected={"id": 1, "title": "Alice document"})
                 check("bob-own", "GET", "/documents/2", 200, credential="Bearer demo-bob", expected={"id": 2, "title": "Bob document"})
@@ -78,7 +80,7 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
                 check("not-found", "GET", "/documents/9", 404, credential="Bearer demo-alice")
                 check("typed-validation", "GET", "/documents/not-integer", 400, credential="Bearer demo-alice")
                 check("json-success", "POST", "/documents/read", 200, credential="Bearer demo-alice", body=b'{"document_id":1}', expected={"id": 1, "title": "Alice document"})
-                check("auth-before-body", "POST", "/documents/read", 401, body=b"{")
+                check("auth-before-body", "POST", "/documents/read", 401, body=b"{", expected_text=b"invalid credential")
                 check("malformed-json", "POST", "/documents/read", 400, credential="Bearer demo-alice", body=b"{")
                 check("wrong-field-type", "POST", "/documents/read", 422, credential="Bearer demo-alice", body=b'{"document_id":"1"}')
                 check("no-bool-proof", "POST", "/documents/read", 422, credential="Bearer demo-alice", body=b'{"document_id":2,"authorized":true}')
@@ -91,9 +93,9 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
                     slow.sendall(b"POST /documents/read HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer demo-alice\r\nContent-Type: application/json\r\nContent-Length: 128\r\n\r\n{")
                     response = http.client.HTTPResponse(slow)
                     response.begin()
-                    assert response.status == 504, (mode, "slow-body", response.status, response.read())
+                    assert response.status == 408, (mode, "slow-body", response.status, response.read())
                     response.read()
-                    results.append({"mode": mode, "case": "slow-body-timeout", "status": 504})
+                    results.append({"mode": mode, "case": "slow-body-timeout", "status": 408})
                 check("recovery", "GET", "/documents/1", 200, credential="Bearer demo-alice")
             finally:
                 if process.poll() is None:

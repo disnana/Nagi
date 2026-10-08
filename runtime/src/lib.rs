@@ -6,17 +6,14 @@ pub mod actor;
 pub mod auth;
 mod concurrent;
 mod database;
-mod http;
 pub mod http_server;
 pub mod metrics;
 pub mod result;
 pub mod sqlite;
 mod task;
 use axum::{
-    body::Body,
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    Router,
 };
 pub use concurrent::*;
 pub use database::indices as database_indices;
@@ -234,69 +231,6 @@ pub fn error_response(e: Error) -> Response {
         serde_json::to_vec(&ErrorBody { error: msg }).unwrap(),
     )
         .into_response()
-}
-fn http_router(router: Router) -> Router {
-    router
-        .route("/health", axum::routing::get(|| async { "ok" }))
-        .route(
-            "/stream",
-            axum::routing::get(|| async {
-                let s = futures_util::stream::iter(
-                    (0..5).map(|i| Ok::<_, std::io::Error>(format!("chunk:{i}\n"))),
-                );
-                Response::new(Body::from_stream(s))
-            }),
-        )
-        .route("/ws", axum::routing::get(ws_handler))
-        .layer(axum::extract::DefaultBodyLimit::max(1_048_576))
-        .layer(axum::middleware::from_fn(
-            |req: axum::extract::Request, next: axum::middleware::Next| async move {
-                match tokio::time::timeout(Duration::from_secs(2), next.run(req)).await {
-                    Ok(r) => r,
-                    Err(_) => (StatusCode::REQUEST_TIMEOUT, "timeout").into_response(),
-                }
-            },
-        ))
-}
-pub async fn serve(router: Router, port: i64) -> Result<(), Error> {
-    let port = u16::try_from(port).map_err(|_| Error::invalid("port out of range"))?;
-    let request_wait = http::request_wait_timeout()?;
-    let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port))
-        .await
-        .map_err(|e| Error::internal(e.to_string()))?;
-    println!("Nagi listening http://127.0.0.1:{port}");
-    http::serve(listener, http_router(router), request_wait, async {
-        let _ = tokio::signal::ctrl_c().await;
-    })
-    .await;
-    Ok(())
-}
-async fn ws_handler(ws: axum::extract::ws::WebSocketUpgrade) -> Response {
-    ws.max_message_size(1_048_576)
-        .on_upgrade(|mut socket| async move {
-            use axum::extract::ws::Message;
-            while let Some(Ok(msg)) = socket.recv().await {
-                match msg {
-                    Message::Close(_) => break,
-                    Message::Text(t) => {
-                        if socket.send(Message::Text(t)).await.is_err() {
-                            break;
-                        }
-                    }
-                    Message::Binary(b) => {
-                        if socket.send(Message::Binary(b)).await.is_err() {
-                            break;
-                        }
-                    }
-                    Message::Ping(p) => {
-                        if socket.send(Message::Pong(p)).await.is_err() {
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        })
 }
 
 pub fn bench_i64(name: &str, n: i64, f: fn(&[i64]) -> i64) {

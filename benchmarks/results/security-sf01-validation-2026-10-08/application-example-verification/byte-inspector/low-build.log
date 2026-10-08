@@ -1,0 +1,5 @@
+     Locking 105 packages to highest compatible versions
+    Blocking waiting for file lock on build directory
+   Compiling nagi-generated-428eeb5192e2aaa4 v0.1.0 (/workspace/Nagi-security-sf01/build/application-example-verification/byte-inspector/low/.nagi/apps/nagi-generated-428eeb5192e2aaa4/generations/.staging-g-687a0-18dc87ca3844b5cf-0)
+    Finished `release` profile [optimized] target(s) in 5.83s
+native: /workspace/Nagi-security-sf01/build/application-example-verification/byte-inspector/low/.nagi/apps/nagi-generated-428eeb5192e2aaa4/generations/g-687a0-18dc87ca3844b5cf-0/nagi-428eeb5192e2aaa4-g-687a0-18dc87ca3844b5cf-0

@@ -1,6 +1,8 @@
-# Nagi Tasks — ブラウザーから使う小さなタスク管理
+# Nagi Tasks JSON API
 
-HTML/CSS/JavaScriptを埋め込み、NagiのJSON APIとSQLiteで動くサンプルです。追加・編集・完了・削除、絞り込み、全件の集計を備えています。ブラウザー側のUIライブラリやCDNは使いません。HTTPとDBの処理はNagiランタイム内のRustライブラリを使います。
+[English](README.en.md)
+
+NagiとSQLiteで動く、タスク管理JSON APIの例です。作成・編集・完了・削除、集計を備えています。HTTP routeは標準APIで明示登録し、それぞれpublic policyを指定しています。ブラウザーUIと認証は含みません。
 
 ## 起動
 
@@ -11,7 +13,9 @@ cargo build --release --locked -p nagic
 .\target\release\nagic.exe run --project test-nagi-code/web-demo
 ```
 
-ブラウザーで [http://127.0.0.1:8091](http://127.0.0.1:8091) を開いてください。`NAGI_PORT`でポートを、`NAGI_DB`でDBパスを変えられます。プロジェクトとして起動した場合、初期設定では`test-nagi-code/web-demo/nagi-tasks.sqlite`を作り、再起動後も保存内容を使います。以前の`run tasks.nagi`形式やexeの直接実行では、起動時の作業フォルダーが基準になります。既存DBを引き継ぐ場合は`NAGI_DB`にその絶対パスを指定してください。
+既定のURLは[http://127.0.0.1:8091](http://127.0.0.1:8091)です。`NAGI_PORT`でportを、`NAGI_DB`でDB pathを変えられます。プロジェクトとして起動すると、既定で`test-nagi-code/web-demo/nagi-tasks.sqlite`を使い、再起動後も保存内容を読みます。既存DBを引き継ぐ場合は`NAGI_DB`に絶対pathを指定してください。
+
+`GET /`はJSON APIの案内をplain textで返します。以前のraw HTML UIは標準HTTP routeから配信しません。`index.html`は型付きHTML応答が利用可能になるまで未接続の資料です。HTML markupをplain text responseとして扱わず、APIはJSONのまま提供します。
 
 Windows x64の配布用exeを作る場合：
 
@@ -20,26 +24,36 @@ Windows x64の配布用exeを作る場合：
 .\build\distribution\nagi-tasks.exe
 ```
 
-依存がキャッシュ済みなら`-Offline`を付けられます。HTMLとSQLite・VC++ランタイムはexeに組み込まれるため、配布するファイルはexeひとつです。実行後の保存データは別のSQLiteファイルになります。Rust・Nagi・Pythonは配布先には不要です。停止はターミナルでCtrl+Cを押してください。
+依存がキャッシュ済みなら`-Offline`を付けられます。配布exeとSQLite・VC++ runtimeの構成はbuild scriptを参照してください。実行後の保存データは別のSQLite fileになります。停止はターミナルでCtrl+Cを押してください。
+
+## API
+
+| メソッド・path | 内容 |
+|---|---|
+| `GET /health` | `ok`を返す明示public route |
+| `GET /api/tasks` | 最新100件を一覧 |
+| `GET /api/tasks/{id}` | 1件取得 |
+| `POST /api/tasks` | `{"title":"やること","done":false}`を登録 |
+| `PUT /api/tasks/{id}` | titleとdoneを置換 |
+| `DELETE /api/tasks/{id}` | 削除し、削除件数を返す |
+| `GET /api/stats` | 全件の件数と完了件数 |
+
+タイトルはUTF-8で1〜240 byteです。SQLite tableにも制約があります。認証、browser UI、taskの優先度や期限は含みません。
 
 ## コードを読む
 
 | ファイル | 内容 |
 |---|---|
-| `nagi.toml` | 入口ファイルの指定。CLIとVS Codeで共通 |
-| `tasks.nagi` | HTTP handlerと起動 |
+| `nagi.toml` | CLIとVS Codeで共通の入口 |
+| `tasks.nagi` | 標準HTTP App、public policy付きroute、HTTP handler |
 | `models.nagi` | JSONとDBの型 |
 | `validation.nagi` | 入力検証 |
-| `index.html` | ブラウザー画面とAPI呼び出し |
+| `index.html` | SF04 typed HTML対応まで未接続の旧UI案 |
 
-画面は`GET /`、APIは`GET/POST /api/tasks`、`GET/PUT/DELETE /api/tasks/{id}`、`GET /api/stats`です。登録・更新bodyは`{"title":"やること","done":false}`です。タイトルはUTF-8で1〜240 byte、一覧は最新100件まで、集計は全件です。
-
-このサンプルはloopbackで動くローカルアプリです。認証や本番公開の構成は含めていません。
-
-## 起動済みのサーバーを確認
+## 起動済みのserverを確認
 
 ```powershell
 python test-nagi-code/web-demo/smoke_api.py --base-url http://127.0.0.1:8091
 ```
 
-PythonはHTTPリクエストと応答の照合だけを行います。自分で登録したテストデータはAPI経由で削除し、既存のタスクを残します。サーバーの起動・停止やDBファイルの操作は行いません。
+PythonはHTTP request/responseの照合だけを行います。自分で登録したtest dataをAPI経由で削除し、既存のtaskを残します。serverの起動・停止やDB fileの操作は行いません。

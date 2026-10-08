@@ -1,0 +1,5 @@
+     Locking 105 packages to highest compatible versions
+    Blocking waiting for file lock on build directory
+   Compiling nagi-main-71b4bfa55d7c422a v0.1.0 (/workspace/Nagi-security-sf01/build/application-example-verification/axum-service/high/.nagi/apps/nagi-main-71b4bfa55d7c422a/generations/.staging-g-687d9-18dc87cba3fc54d7-0)
+    Finished `release` profile [optimized] target(s) in 9.43s
+native: /workspace/Nagi-security-sf01/build/application-example-verification/axum-service/high/.nagi/apps/nagi-main-71b4bfa55d7c422a/generations/g-687d9-18dc87cba3fc54d7-0/nagi-71b4bfa55d7c422a-g-687d9-18dc87cba3fc54d7-0

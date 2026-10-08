@@ -107,13 +107,14 @@ Rust側で作ったHTTPサーバーには、そのアダプターの制限・停
 
 同じアダプターを別のアプリで再利用できるか、資源の所有・共有・終了をどちらが担当するかは、引き続き検証します。利用者が定義する不透明な資源型、汎用async callback、宣言の自動生成は未実装です。
 
-### 認証・認可の最小実験
+### request-bound認証・認可
 
-`std.auth`のexperimental APIはNagi 0.1.11への導入対象で、認証済みの`Principal`と権限型・対象に結び付いた`Grant[P]`を扱います。公開配布での利用可否は公式Release記録で確認してください。通常のclassは入力やclaimsを表す型として使えますが、構築やJSON復元ができるため、認証成功の証明にはしません。proofはNagiから構築・JSON復元・copy・shared化できず、保護APIへmoveして渡します。
+未リリース0.2.0 SF01では`std.auth.AuthScope`と一つの`Grant[P]`を標準requestに結び付けます。公開済み0.1.11のPrincipal/無期限issuerは移行対象で、併存によるdowngradeを残しません。Pはnominal class/enum、実対象はi64です。proofはopaque・非Copy/Clone/Serde/shared/field・SameTaskで、同task owned引数/return/Option/Result/async delegationを維持します。別Task/Actorへのtransferは拒否します。通常classやsubject i64は認証証明ではありません。
 
-credentialの検証はRustライブラリ、独自の認可や業務ルールはNagiにも置けます。サンプルではAxumのRustアダプターが名前付きNagi async policyを呼び、成功時だけGrantを発行します。JWSの検証はこのverifierを差し替える用途です。サンプルの固定credentialを本番の認証方式とは扱いません。
+全標準HTTPのrouteへ明示Policyを要求し、Policy[S,A]のstate/出力とhandler(Request,shared[S],A)をcheckします。publicはunit、authenticatedはAuthScope、authorizedはGrant[P]です。verifier/authorizerはtrusted callbackで、署名/期限/権限内容の正しさを静的に証明しません。dispatcherが有限leaseを私有し、request終了/取消/Dropで失効します。native capacity待機後、失効と同じ短いgateで現在時刻/activeを検査して一回execution permitを発行します。発行後の取消は受理済みoperationをrollbackしません。native callbackの同期enqueueと対象保持はtrusted adapter責務です。
 
-checkが保証するのは、宣言された保護APIへ必要な権限型のproofを渡し、move後に再利用しないことです。署名・期限・policyの正しさ、全routeへの認証設定、任意RustやSQLによる迂回、responseへの機密情報流出は証明しません。Rust issuerとNagi policyの内容はアプリ側の信頼境界です。詳細は[ADR 001](docs/internal/adr/001-backend-boundaries.md)に記します。
+[ADR 013](docs/internal/adr/013-request-bound-auth-and-http-policy.md)、[公開契約](docs/security.md)、[移行](docs/migration-0.2.0.md)にAPIと限界を記します。任意Rust/SQLのtenant制約、DTOの機密性、全業務policyの正しさを証明する言語sandboxではありません。旧decorator/global serve/raw HTML/unchecked issuerは標準経路から除去します。typed HTML、永続Session、CSRF/CORS、Query、送信HTTPは後続SF工程です。
+
 
 根拠: [Rust依存の読み込み](compiler/src/project.rs)、[externの検査](compiler/src/check.rs)、[Rust生成](compiler/src/emit.rs)、[Rust依存の回帰テスト](compiler/tests/rust_dependencies.rs)、[アプリの検証](scripts/verify_application_examples.py)。手順と対応型は[Rust連携](docs/modules-and-rust.md)を参照してください。
 
@@ -144,7 +145,7 @@ Highの別実装、ASTの表示、Rustアダプターも比較対象にします
 
 ## ライブラリへ任せる部分とNagiが決める部分
 
-標準HTTPの輸送にはHyper、旧HTTP APIにはAxum、非同期実行にはTokio、JSONにはSerde、SQLiteにはrusqliteを使っています。HTTPやDBを独自実装すること自体を目的にはしません。
+標準HTTPの輸送にはHyper、標準外のtrusted Rust hostではAxum、非同期実行にはTokio、JSONにはSerde、SQLiteにはrusqliteを使っています。HTTPやDBを独自実装すること自体を目的にはしません。
 
 既存ライブラリを使っても、Nagi側の責任は残ります。どの型を公開するか、引数をmoveするか借りるか、どの失敗をResultへ返すか、取消とcloseで何が終わるかを決める必要があります。Rustの型を単に隠しても、扱いやすいNagi APIになるとは限りません。
 
@@ -152,7 +153,7 @@ Highの別実装、ASTの表示、Rustアダプターも比較対象にします
 
 Axum／Towerを採用するかは、同じAPI、接続容量、期限、本文上限、panic応答、停止条件で比べてから判断します。AxumもHyperを使うため、Router／middlewareの比較とlistenerの変更を分けます。既存の異なる条件のベンチマークを、採用の根拠にはしません。
 
-根拠: [依存](runtime/Cargo.toml)、[標準HTTP](runtime/src/http_server.rs)、[旧HTTP](runtime/src/http.rs)、[SQLite](runtime/src/database.rs)、[SQL検査](compiler/src/sql_check/mod.rs)と[テスト](compiler/tests/sql_check.rs)、[HTTPの実通信テスト](tests/http_stdlib_integration.py)。
+根拠: [依存](runtime/Cargo.toml)、[標準HTTP](runtime/src/http_server.rs)、[SQLite](runtime/src/database.rs)、[SQL検査](compiler/src/sql_check/mod.rs)と[テスト](compiler/tests/sql_check.rs)、[HTTPの実通信テスト](tests/http_stdlib_integration.py)。
 
 ## 失敗と並行処理の境界
 
@@ -206,4 +207,4 @@ Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しま
 
 ## 0.2.0 Security Foundationの設計段階
 
-[Security Foundation RFC](docs/internal/security-foundation/rfc.md)に現行mainの調査、AuthScope・CSRF・XSS・SQL Injection・SSRF・CORS・Cookie/Session・DoSの提案、静的/実行時境界、移行・機能別PR・全体完了条件をまとめています。最新指示に基づく[安全性優先のD1–D3判断と移行](docs/internal/security-foundation/decisions-and-migration.md)を実装基準にしています。全標準HTTPのpolicy必須化、request-boundの単一Grant、永続Sessionを推奨し、旧入口併存は撤回しました。新APIは未実装で、現行0.1.xへ遡及適用しません。move/Task/spawn、High/Low、SQLiteのnative lifecycleは維持します。正式0.2.0リリースとtagには別途明示承認が必要です。
+[Security Foundation RFC](docs/internal/security-foundation/rfc.md)に現行mainの調査、AuthScope・CSRF・XSS・SQL Injection・SSRF・CORS・Cookie/Session・DoSの提案、静的/実行時境界、移行・機能別PR・全体完了条件をまとめています。最新指示に基づく[安全性優先のD1–D3判断と移行](docs/internal/security-foundation/decisions-and-migration.md)を実装基準にしています。全標準HTTPのpolicy必須化、request-boundの単一Grant、永続Sessionを推奨し、旧入口併存は撤回しました。SF01は開発sourceへ接続し、後続SF02–SF08は未実装です。正式0.2.0は未リリースで、現行0.1.xへ遡及適用しません。move/Task/spawn、High/Low、SQLiteのnative lifecycleは維持します。正式0.2.0リリースとtagには別途明示承認が必要です。

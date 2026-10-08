@@ -1,0 +1,6 @@
+COMMAND ['/workspace/nagi-sf01-target/debug/nagic', 'check', '/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p1-policy.nagi', '--no-project']
+EXIT 0
+STDOUT
+
+STDERR
+checked /workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p1-policy.nagi

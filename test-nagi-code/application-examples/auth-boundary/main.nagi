@@ -1,15 +1,18 @@
 import std.auth as auth
+import std.http.server as http
 
 enum Read:
     Permission
 
 enum AuthError:
-    MissingCredentials
-    InvalidCredentials
-    InvalidHeader
+    InvalidRequest
+    Unprocessable
     Denied
     NotFound
     Internal
+
+class State:
+    use_rust_policy: bool
 
 class DocumentAccess:
     document_id: i64
@@ -20,36 +23,133 @@ class Document:
     id: i64
     title: str
 
-@rust("native::principal_subject")
-extern def principal_subject(principal: view[auth.Principal]) -> i64
+class ReadInput:
+    document_id: i64
 
-@rust("native::policy_pause")
-extern async def policy_pause() -> unit
+class Subject:
+    subject: i64
+
+class ErrorBody:
+    code: str
+
+@rust("native::verify")
+extern async def verify(request: http.Request, state: shared[State]) -> Result[auth.VerifiedIdentity, auth.Failure]
 
 @rust("native::authorize_read")
-extern async def authorize_read(principal: view[auth.Principal], document_id: i64) -> Result[auth.Grant[Read], AuthError]
+extern async def authorize_read(scope: auth.AuthScope, document_id: i64, state: shared[State]) -> Result[auth.Grant[Read], AuthError]
 
 @rust("native::read_document")
 extern async def read_document(grant: auth.Grant[Read]) -> Result[Document, AuthError]
 
-@rust("native::run_server")
-extern async def run_server(port: i64) -> Result[unit, Error]
+@rust("native::decode_read_input")
+extern def decode_read_input(body: view[bytes]) -> Result[ReadInput, AuthError]
 
-# The adapter awaits this known named policy before issuing a sealed Grant.
-# The compiler checks its types; the policy author owns the permission logic.
-async def read_policy(principal: view[auth.Principal], access: DocumentAccess) -> Result[unit, AuthError]:
-    if principal_subject(principal) != access.owner_subject:
-        return fail(AuthError.Denied)
-    if access.blocked:
+@rust("native::initialize")
+extern async def initialize() -> Result[unit, Error]
+
+@rust("native::policy_pause")
+extern async def policy_pause() -> unit
+
+def api_error(status: http.Status, code: str) -> http.Response:
+    payload = ErrorBody(code=code)
+    match http.json[ErrorBody](status, payload):
+        case Ok(response):
+            return response
+        case Err(_):
+            return http.empty(http.Status.INTERNAL_SERVER_ERROR)
+
+def auth_error(problem: AuthError) -> http.Response:
+    match problem:
+        case AuthError.InvalidRequest:
+            return api_error(http.Status.BAD_REQUEST, "invalid_request")
+        case AuthError.Unprocessable:
+            return api_error(http.Status.UNPROCESSABLE_CONTENT, "invalid_input")
+        case AuthError.Denied:
+            return api_error(http.Status.FORBIDDEN, "access_denied")
+        case AuthError.NotFound:
+            return api_error(http.Status.NOT_FOUND, "not_found")
+        case AuthError.Internal:
+            return api_error(http.Status.INTERNAL_SERVER_ERROR, "internal_error")
+
+def subject_response(value: Subject) -> Result[http.Response, AuthError]:
+    match http.json[Subject](http.Status.OK, value):
+        case Ok(response):
+            return ok(response)
+        case Err(_):
+            return fail(AuthError.Internal)
+
+def document_response(value: Document) -> Result[http.Response, AuthError]:
+    match http.json[Document](http.Status.OK, value):
+        case Ok(response):
+            return ok(response)
+        case Err(_):
+            return fail(AuthError.Internal)
+
+async def read_policy(scope: view[auth.AuthScope], access: DocumentAccess) -> Result[unit, AuthError]:
+    if auth.subject(scope) != access.owner_subject or access.blocked:
         return fail(AuthError.Denied)
     if access.document_id < 1 or access.document_id > 3:
         return fail(AuthError.Denied)
-    return ok(await policy_pause())
+    await policy_pause()
+    return ok(assert_true(true))
 
-async def load_document(principal: auth.Principal, document_id: i64) -> Result[Document, AuthError]:
-    grant = try await authorize_read(view(principal), document_id)
-    return await read_document(grant)
+def path_document_id(request: view[http.Request]) -> Result[i64, AuthError]:
+    match slice(request.path, 11, len(request.path)):
+        case Ok(value):
+            match parse_i64(value):
+                case Ok(document_id):
+                    return ok(document_id)
+                case Err(_):
+                    return fail(AuthError.InvalidRequest)
+        case Err(_):
+            return fail(AuthError.InvalidRequest)
+
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
+    return ok(http.text(http.Status.OK, "ok\n"))
+
+async def authenticated(request: http.Request, state: shared[State], scope: auth.AuthScope) -> Result[http.Response, AuthError]:
+    payload = Subject(subject=auth.subject(view(scope)))
+    return subject_response(payload)
+
+async def document(request: http.Request, state: shared[State], scope: auth.AuthScope) -> Result[http.Response, AuthError]:
+    document_id = try path_document_id(view(request))
+    grant = try await authorize_read(scope, document_id, state)
+    value = try await read_document(grant)
+    return document_response(value)
+
+async def read_input(request: http.Request, state: shared[State], scope: auth.AuthScope) -> Result[http.Response, AuthError]:
+    input = try decode_read_input(request.body)
+    grant = try await authorize_read(scope, input.document_id, state)
+    value = try await read_document(grant)
+    return document_response(value)
+
+async def probe_panic(request: http.Request, state: shared[State], scope: auth.AuthScope) -> Result[http.Response, AuthError]:
+    assert_true(false)
+    return ok(http.text(http.Status.OK, "unreachable"))
+
+async def probe_timeout(request: http.Request, state: shared[State], scope: auth.AuthScope) -> Result[http.Response, AuthError]:
+    await sleep(2000)
+    return ok(http.text(http.Status.OK, "late"))
 
 async def main() -> Result[unit, Error]:
+    mode = env("NAGI_AUTH_POLICY_MODE", "nagi")
+    use_rust_policy = false
+    if mode == "rust":
+        use_rust_policy = true
+    else:
+        if mode != "nagi":
+            return error("policy mode must be nagi or rust")
+    try await initialize()
+    app = http.app[State, AuthError](State(use_rust_policy=use_rust_policy), auth_error)
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    app = try http.route(app, http.Method.GET, "/me", http.authenticated_policy[State](verify), authenticated)
+    app = try http.route(app, http.Method.GET, "/documents/{id}", http.authenticated_policy[State](verify), document)
+    app = try http.route(app, http.Method.POST, "/documents/read", http.authenticated_policy[State](verify), read_input)
+    if env("NAGI_AUTH_PROBES", "0") == "1":
+        app = try http.route(app, http.Method.GET, "/probe/panic", http.authenticated_policy[State](verify), probe_panic)
+        app = try http.route(app, http.Method.GET, "/probe/timeout", http.authenticated_policy[State](verify), probe_timeout)
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8098"))
-    return await run_server(port)
+    limits = try http.options(4096, 1000, 1000, 5000)
+    limits = try http.capacity(limits, 64, 32)
+    limits = try http.security_timeout(limits, 1000)
+    return await http.serve(app, port, limits)

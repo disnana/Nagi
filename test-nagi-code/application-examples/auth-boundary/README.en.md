@@ -1,37 +1,24 @@
-# Typed auth boundary and a custom Nagi policy
+# Authentication and authorization through standard HTTP policies
 
 [日本語](README.md)
 
-This example uses the experimental `std.auth` API targeted for Nagi 0.1.11. Check the official release record to confirm published availability. Rust/Axum owns HTTP and credential verification, Nagi owns a custom authorization policy, and a trusted Rust adapter issues a sealed grant and reads SQLite. Ordinary classes are DTOs; `Principal` and `Grant[Read]` cannot be constructed, JSON-decoded, cloned, or shared by Nagi.
+The standard HTTP dispatcher verifies credentials and creates an `AuthScope`; a Nagi policy authorizes access to a document; and a native adapter consumes a target-bound `Grant[Read]` to read SQLite. The dispatcher does not call a handler before authentication, and Nagi cannot construct an `AuthScope` or `Grant`.
 
 ```sh
 nagic run --project test-nagi-code/application-examples/auth-boundary
-curl -H 'Authorization: Bearer demo-alice' http://127.0.0.1:8098/documents/1
-curl -H 'Authorization: Bearer demo-alice' http://127.0.0.1:8098/documents/2
+curl -i http://127.0.0.1:8098/health
+curl -i -H 'Authorization: Bearer demo-alice' http://127.0.0.1:8098/documents/1
+curl -i -H 'Authorization: Bearer demo-alice' http://127.0.0.1:8098/documents/2
 ```
 
-The first request returns Alice's document with 200; the second returns 403. `/health` is public, `/me` requires authentication, and `/documents/{id}` plus `POST /documents/read` require resource authorization. Bob uses `Bearer demo-bob` for document 2. Document 3 is denied by the additional Nagi blocked condition.
+`/health` is an explicitly public route. `/me`, `/documents/{id}`, and `POST /documents/read` use `authenticated_policy`. Alice can read document 1 and Bob can read document 2. Another subject's document and blocked document 3 return 403; a missing document returns 404. Invalid JSON syntax returns 400 and a type error returns 422.
 
-Rust `authorize_read` awaits the known named Nagi `read_policy` before issuing `Grant[Read]`. `read_document` consumes that grant and binds its internal subject/resource into SQL, which rechecks owner/blocked conditions. There is no second bare resource ID parameter. Adding `authorized: true` to JSON is rejected by the input DTO.
+`verify` receives the `Request` and application state from the standard dispatcher and returns a `VerifiedIdentity` or a finite-lived `Failure`. The dispatcher supplies `AuthScope` to the policy. Either the named Nagi `read_policy` (the default) or a handwritten Rust policy checks the target; only then does the adapter create `Grant::from_authorized(scope, document_id)`. The adapter awaits bounded semaphore capacity before issuing a synchronous SQLite command bound to the grant's subject and target. The query rechecks mutable owner/blocked state. There is no read path authorized by a bare subject or ID.
 
-```mermaid
-flowchart LR
-    HTTP[HTTP credentials] --> Verify[Rust verifier]
-    Verify --> Principal[opaque Principal]
-    Principal --> Policy[named Nagi read_policy]
-    Policy -->|Ok| Issue[Rust issuer]
-    Issue --> Grant[owned Grant Read]
-    Grant -->|move consume| SQL[protected SQL operation]
-    SQL --> DTO[Document DTO]
-    DTO --> Response[JSON response]
-    Verify -->|Err| Deny[401 or 400]
-    Policy -->|Err| Forbidden[403]
-```
+`NAGI_AUTH_POLICY_MODE=nagi` (default) and `rust` use the same standard HTTP router, database, payload, native verifier, and Grant-consuming operation. They select only the policy implementation. Set `NAGI_AUTH_PROBES=1` to enable authenticated panic and timeout routes. The body limit is 4096 bytes; security, body, and handler deadlines are each 1000 ms; HTTP admission is 32; and up to 8 database reads can be admitted at once. Body timeout returns 408, handler timeout 504, and a post-response panic is mapped to 500.
 
-This is a manual diagram of the sample, not an automatic map or a proof of all response information flow.
+Authentication failures from standard policies use secret-free fixed messages, and Bearer failures include `WWW-Authenticate: Bearer`. Missing and incorrect credentials share the same 401 body, `invalid credential`. The expired fixture returns `authority expired`; a duplicate or invalid Authorization header returns 400 with `invalid security request`. Business responses from Nagi handlers are separate.
 
-Fixed credentials are demo fixtures. This is not JWS signature, expiry, issuer/audience, issuance, or revocation verification. Replace `authenticate` with a reviewed existing Rust verification crate before issuing a production Principal. Policy logic and Rust issuer correctness remain trusted. The compiler does not prove every route protected, prevent every DTO leak, or bind owned proofs to a request lifetime; owned async delegation is allowed.
+The native verifier's `demo-alice`, `demo-bob`, and `demo-expired` values are credential fixtures. These strings are not built-in usernames; the verifier decides their subject mapping. The example does not verify JWT signatures, issuer/audience, revocation, or token issuance. Connect a reviewed existing verifier for production use. The compiler does not prove the correctness of the Nagi/Rust policy or the design of every route. SQLite serves small demonstration queries; this is not a generic pool or transaction API, and cancellation does not promise rollback. The server uses loopback HTTP/1 and does not provide TLS, HTTP/2, or connection admission limits.
 
-Both modes use a 4096-byte body limit, 1000-ms extraction/handler deadline, 32 concurrent requests, and a fixed 500 for pre-response unwinding. The listener is loopback HTTP/1 with Ctrl+C shutdown. TLS, HTTP/2, connection admission limits, and independent header/send/shutdown deadlines are absent. Standard HTTP settings are not inherited. Small SQLite queries use a synchronous mutex; this is not a generic pool/transaction API. Cancellation or panic is not rollback.
-
-`NAGI_AUTH_POLICY_MODE=nagi` (default) or `rust` uses the same executable, router, database, and payload. It selects the generated Nagi `load_document` plus Nagi policy, or handwritten Rust with the same Result/await/validation/policy. Rust mode calls no Nagi functions from its handler and connects to the shared Rust verifier/protected DB operation. Both modes reuse the generated DTO and permission marker. This is not a language-wide performance comparison. `smoke.py` exercises both modes over real sockets.
+This sample replaces the former Axum glue and `Principal` factory with the standard HTTP request-bound auth API. The separate [custom Axum service](../axum-service/README.en.md) remains an independent trusted host boundary that does not bypass standard HTTP policies.

@@ -1,0 +1,394 @@
+{
+  "status": "passed",
+  "request_budget": {
+    "used": 62,
+    "maximum": 64
+  },
+  "comparison": "generated Nagi policy versus handwritten Rust policy through the same standard authorized_policy dispatcher, verifier, AuthScope binding, Grant issuance, bounded reservation, and Grant.submit target-bound operation",
+  "input": {
+    "method": "GET",
+    "valid_path": "/documents/1",
+    "valid_authorization": "Bearer sf01-fixture",
+    "valid_response": "{\"id\":1,\"title\":\"authorized fixture\"}",
+    "owner_subject": 7,
+    "document_target": 1,
+    "body_bytes": 0
+  },
+  "request_pattern": {
+    "per_variant": "one explicit public /health readiness request, one valid warmup, 27 sequential valid keep-alive requests, one valid-credential wrong-target denial, one missing-credential denial",
+    "concurrency": 1,
+    "normal_latency_samples_per_variant": 27,
+    "no_load_sweep_or_capacity_exhaustion": true
+  },
+  "limits": {
+    "scope_heap_allocation_and_refcount": "not observable through the public API; not measured",
+    "scope_retention": "only authorizer-entry-to-grant-mint interval is visible and measured; dispatcher time before authorizer is not",
+    "grant_retention": "grant-mint-to-handler-native-entry and grant-mint-to-submit intervals are measured; no heap/refcount probe",
+    "future_sizes": "inner verifier, inner policy, inner native read operation, and user callback futures are measured; private outer dispatcher future contents are not",
+    "allocation_counts": "calling-thread Future::poll allocation windows and synchronous Grant::from_authorized window, via the runtime metrics allocator; the future itself is not heap allocated by the probe",
+    "processing_time": "sequential loopback HTTP/1 keep-alive round trip, instrumented build, 27 small normal requests per variant; not a production SLO or backend comparison",
+    "operation": "bounded in-memory fixture read after Grant.submit; not SQLite or general application throughput"
+  },
+  "runtime_runs": [
+    {
+      "mode": "nagi-policy",
+      "exit_status": 0,
+      "http_requests": 31,
+      "normal_requests_measured": 27,
+      "sequential_one_connection": true,
+      "normal_latency_ns": {
+        "samples": [
+          222927,
+          195314,
+          161877,
+          151659,
+          198107,
+          159913,
+          129578,
+          150331,
+          124557,
+          129857,
+          124964,
+          122867,
+          121842,
+          122869,
+          120724,
+          144253,
+          118418,
+          1680825,
+          279056,
+          168155,
+          138293,
+          205698,
+          251420,
+          176779,
+          146321,
+          127826,
+          124355
+        ],
+        "min": 118418,
+        "median": 146321,
+        "p95_nearest_lower_rank": 251420,
+        "max": 1680825
+      },
+      "denial_checks": {
+        "wrong_resource": {
+          "status": 403,
+          "body": "permission denied"
+        },
+        "missing_credential": {
+          "status": 401,
+          "body": "invalid credential",
+          "www_authenticate": "Bearer"
+        }
+      },
+      "native_measurements": {
+        "allocations": {
+          "grant_mint_synchronous": {
+            "allocated_bytes": 0,
+            "allocations": 0,
+            "calls": 28,
+            "deallocations": 0,
+            "reallocations": 0,
+            "scope": "synchronous call on calling thread"
+          },
+          "policy_future_poll": {
+            "allocation_scope": "calling thread during Future::poll only; excludes Future object storage",
+            "calls": 29,
+            "mean_future_bytes": 88.0,
+            "poll_allocated_bytes": 64,
+            "poll_allocations": 1,
+            "poll_deallocations": 0,
+            "poll_reallocations": 0,
+            "polls": 58
+          },
+          "read_future_poll": {
+            "allocation_scope": "calling thread during Future::poll only; excludes Future object storage",
+            "calls": 28,
+            "mean_future_bytes": 288.0,
+            "poll_allocated_bytes": 504,
+            "poll_allocations": 28,
+            "poll_deallocations": 0,
+            "poll_reallocations": 0,
+            "polls": 28
+          }
+        },
+        "futures": {
+          "authorize_callback": {
+            "count": 29,
+            "max": 1232,
+            "mean": 1232.0
+          },
+          "outer_dispatcher_policy_future_measured": false,
+          "policy_callback": {
+            "count": 29,
+            "max": 88,
+            "mean": 88.0
+          },
+          "policy_inner": {
+            "allocation_scope": "calling thread during Future::poll only; excludes Future object storage",
+            "calls": 29,
+            "mean_future_bytes": 88.0,
+            "poll_allocated_bytes": 64,
+            "poll_allocations": 1,
+            "poll_deallocations": 0,
+            "poll_reallocations": 0,
+            "polls": 58
+          },
+          "read_callback": {
+            "count": 28,
+            "max": 1288,
+            "mean": 1288.0
+          },
+          "read_inner": {
+            "allocation_scope": "calling thread during Future::poll only; excludes Future object storage",
+            "calls": 28,
+            "mean_future_bytes": 288.0,
+            "poll_allocated_bytes": 504,
+            "poll_allocations": 28,
+            "poll_deallocations": 0,
+            "poll_reallocations": 0,
+            "polls": 28
+          },
+          "verifier_callback": {
+            "count": 29,
+            "max": 1160,
+            "mean": 1160.0
+          },
+          "verifier_inner": {
+            "allocation_scope": "calling thread during Future::poll only; excludes Future object storage",
+            "calls": 29,
+            "mean_future_bytes": 256.0,
+            "poll_allocated_bytes": 0,
+            "poll_allocations": 0,
+            "poll_deallocations": 58,
+            "poll_reallocations": 0,
+            "polls": 29
+          }
+        },
+        "measurements": {
+          "loopback_only": true,
+          "max_simultaneous_requests": 1,
+          "no_lease_refcount_or_full_request_lifetime_probe": true,
+          "policy_future_polls_use_runtime_metrics_measure": true
+        },
+        "mode": "nagi-generated-policy",
+        "objects": {
+          "auth_scope_bytes": 16,
+          "erased_dispatcher_policy_future_handle_bytes": 16,
+          "grant_bytes": 24,
+          "lease_heap_bytes_measured": false,
+          "verified_identity_bytes": 24
+        },
+        "visible_lifetimes_ns": {
+          "grant_mint_to_read_adapter_entry": {
+            "count": 28,
+            "max": 4103,
+            "mean": 2184.4285714285716
+          },
+          "grant_mint_to_submit": {
+            "count": 28,
+            "max": 5271,
+            "mean": 2943.214285714286
+          },
+          "grant_submit_call": {
+            "count": 28,
+            "max": 421,
+            "mean": 251.39285714285714
+          },
+          "read_adapter_entry_to_submit": {
+            "count": 28,
+            "max": 1191,
+            "mean": 748.0
+          },
+          "scope_from_authorizer_entry_to_grant_mint": {
+            "count": 28,
+            "max": 8248,
+            "mean": 4094.035714285714
+          }
+        }
+      },
+      "server_log": "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/nagi-policy/server.log"
+    },
+    {
+      "mode": "rust-policy",
+      "exit_status": 0,
+      "http_requests": 31,
+      "normal_requests_measured": 27,
+      "sequential_one_connection": true,
+      "normal_latency_ns": {
+        "samples": [
+          187596,
+          160300,
+          163460,
+          128340,
+          118642,
+          118912,
+          122319,
+          125558,
+          332513,
+          308033,
+          151160,
+          122338,
+          119992,
+          307617,
+          182237,
+          155614,
+          161863,
+          133468,
+          123597,
+          215504,
+          133507,
+          133818,
+          118815,
+          142711,
+          337008,
+          179756,
+          121960
+        ],
+        "min": 118642,
+        "median": 142711,
+        "p95_nearest_lower_rank": 308033,
+        "max": 337008
+      },
+      "denial_checks": {
+        "wrong_resource": {
+          "status": 403,
+          "body": "permission denied"
+        },
+        "missing_credential": {
+          "status": 401,
+          "body": "invalid credential",
+          "www_authenticate": "Bearer"
+        }
+      },
+      "native_measurements": {
+        "allocations": {
+          "grant_mint_synchronous": {
+            "allocated_bytes": 0,
+            "allocations": 0,
+            "calls": 28,
+            "deallocations": 0,
+            "reallocations": 0,
+            "scope": "synchronous call on calling thread"
+          },
+          "policy_future_poll": {
+            "allocation_scope": "calling thread during Future::poll only; excludes Future object storage",
+            "calls": 29,
+            "mean_future_bytes": 80.0,
+            "poll_allocated_bytes": 64,
+            "poll_allocations": 1,
+            "poll_deallocations": 0,
+            "poll_reallocations": 0,
+            "polls": 58
+          },
+          "read_future_poll": {
+            "allocation_scope": "calling thread during Future::poll only; excludes Future object storage",
+            "calls": 28,
+            "mean_future_bytes": 288.0,
+            "poll_allocated_bytes": 504,
+            "poll_allocations": 28,
+            "poll_deallocations": 0,
+            "poll_reallocations": 0,
+            "polls": 28
+          }
+        },
+        "futures": {
+          "authorize_callback": {
+            "count": 29,
+            "max": 1184,
+            "mean": 1184.0
+          },
+          "outer_dispatcher_policy_future_measured": false,
+          "policy_callback": {
+            "count": 29,
+            "max": 80,
+            "mean": 80.0
+          },
+          "policy_inner": {
+            "allocation_scope": "calling thread during Future::poll only; excludes Future object storage",
+            "calls": 29,
+            "mean_future_bytes": 80.0,
+            "poll_allocated_bytes": 64,
+            "poll_allocations": 1,
+            "poll_deallocations": 0,
+            "poll_reallocations": 0,
+            "polls": 58
+          },
+          "read_callback": {
+            "count": 28,
+            "max": 1288,
+            "mean": 1288.0
+          },
+          "read_inner": {
+            "allocation_scope": "calling thread during Future::poll only; excludes Future object storage",
+            "calls": 28,
+            "mean_future_bytes": 288.0,
+            "poll_allocated_bytes": 504,
+            "poll_allocations": 28,
+            "poll_deallocations": 0,
+            "poll_reallocations": 0,
+            "polls": 28
+          },
+          "verifier_callback": {
+            "count": 29,
+            "max": 1160,
+            "mean": 1160.0
+          },
+          "verifier_inner": {
+            "allocation_scope": "calling thread during Future::poll only; excludes Future object storage",
+            "calls": 29,
+            "mean_future_bytes": 256.0,
+            "poll_allocated_bytes": 0,
+            "poll_allocations": 0,
+            "poll_deallocations": 58,
+            "poll_reallocations": 0,
+            "polls": 29
+          }
+        },
+        "measurements": {
+          "loopback_only": true,
+          "max_simultaneous_requests": 1,
+          "no_lease_refcount_or_full_request_lifetime_probe": true,
+          "policy_future_polls_use_runtime_metrics_measure": true
+        },
+        "mode": "handwritten-rust-policy",
+        "objects": {
+          "auth_scope_bytes": 16,
+          "erased_dispatcher_policy_future_handle_bytes": 16,
+          "grant_bytes": 24,
+          "lease_heap_bytes_measured": false,
+          "verified_identity_bytes": 24
+        },
+        "visible_lifetimes_ns": {
+          "grant_mint_to_read_adapter_entry": {
+            "count": 28,
+            "max": 7711,
+            "mean": 2429.785714285714
+          },
+          "grant_mint_to_submit": {
+            "count": 28,
+            "max": 8407,
+            "mean": 3241.1428571428573
+          },
+          "grant_submit_call": {
+            "count": 28,
+            "max": 669,
+            "mean": 254.17857142857142
+          },
+          "read_adapter_entry_to_submit": {
+            "count": 28,
+            "max": 1816,
+            "mean": 804.9642857142857
+          },
+          "scope_from_authorizer_entry_to_grant_mint": {
+            "count": 28,
+            "max": 8474,
+            "mean": 3958.0
+          }
+        }
+      },
+      "server_log": "/workspace/Nagi-security-sf01/benchmarks/results/security-sf01-2026-10-08/rust-policy/server.log"
+    }
+  ]
+}

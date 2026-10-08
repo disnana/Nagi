@@ -1,0 +1,49 @@
+import std.auth as auth
+import std.http.server as http
+
+enum Read:
+    Permission
+
+class State:
+    owner_subject: i64
+    blocked: bool
+
+class Document:
+    id: i64
+    title: str
+
+@rust("native::verify")
+extern async def verify(request: http.Request, state: shared[State]) -> Result[auth.VerifiedIdentity, auth.Failure]
+
+@rust("native::authorize_read")
+extern async def authorize_read(scope: auth.AuthScope, request: http.Request, state: shared[State]) -> Result[auth.Grant[Read], auth.Failure]
+
+@rust("native::read_document")
+extern async def read_document(grant: auth.Grant[Read]) -> Result[Document, auth.Failure]
+
+@rust("native::report")
+extern def report() -> unit
+
+@rust("native::initialize")
+extern def initialize() -> unit
+
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return ok(http.text(http.Status.OK, "ok"))
+
+async def show_document(request: http.Request, state: shared[State], grant: auth.Grant[Read]) -> Result[http.Response, Error]:
+    match await read_document(grant):
+        case Ok(document):
+            return http.json[Document](http.Status.OK, document)
+        case Err(problem):
+            return ok(http.text(http.Status.INTERNAL_SERVER_ERROR, auth.message(view(problem))))
+
+async def main() -> Result[unit, Error]:
+    initialize()
+    app = http.app_default[State](State(owner_subject=7, blocked=false))
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    policy = http.authorized_policy[State, Read](verify, authorize_read)
+    app = try http.route(app, http.Method.GET, "/documents/{id}", policy, show_document)
+    port = try parse_i64(env("NAGI_SAMPLE_PORT", "8098"))
+    outcome = await http.serve(app, port, http.default_options())
+    report()
+    return outcome

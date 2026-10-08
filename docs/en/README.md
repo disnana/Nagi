@@ -82,3 +82,5 @@ Follow the [first contribution walkthrough](contributing.md) to locate a source 
 `std.actor` is a standard library available from Nagi 0.1.8. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) covers registration, calls, and shutdown. The older actor/Supervisor built-ins and [queues](queue.md) remain test APIs. For performance, read the [measurement methods](performance.md), [results](measurements.md), and [HTTP load tests](http-capacity.md).
 
 These pages cover the current source and Nagi 0.1. See the [change log](../../CHANGELOG.md) for changes by version. Unsupported features are listed on each page.
+
+- [Authentication/authorization (unreleased SF01)](security.md) and [0.2.0 migration](migration-0.2.0.md)

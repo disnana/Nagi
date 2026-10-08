@@ -1,0 +1,81 @@
+[
+  {
+    "project": "typed-errors",
+    "check_build_run": "passed"
+  },
+  {
+    "project": "module-imports",
+    "check_build_run": "passed"
+  },
+  {
+    "project": "low-kernel",
+    "check_build_run": "passed"
+  },
+  {
+    "project": "rust-json",
+    "check_build_run": "passed"
+  },
+  {
+    "project": "rust-async",
+    "check_build_run": "passed"
+  },
+  {
+    "project": "foundation-cli",
+    "engines": [
+      "nagi",
+      "rust"
+    ],
+    "check_build_run": "passed"
+  },
+  {
+    "project": "foundation-report",
+    "engines": [
+      "nagi",
+      "rust"
+    ],
+    "check_build_run": "passed"
+  },
+  {
+    "project": "custom-http",
+    "check_build_run": "passed",
+    "shutdown": "graceful"
+  },
+  {
+    "project": "http-auth",
+    "check_build_run": "passed",
+    "shutdown": "graceful"
+  },
+  {
+    "project": "supervised-service",
+    "form": "high",
+    "check_build_run": "passed",
+    "shutdown": "graceful"
+  },
+  {
+    "project": "supervised-service",
+    "form": "saved-low",
+    "check_build_run": "passed",
+    "shutdown": "graceful"
+  },
+  {
+    "project": "supervised-service",
+    "form": "handwritten-low",
+    "check_build_run": "passed",
+    "shutdown": "graceful"
+  },
+  {
+    "project": "task-results",
+    "form": "high",
+    "check_build_run": "passed"
+  },
+  {
+    "project": "task-results",
+    "form": "saved-low",
+    "check_build_run": "passed"
+  },
+  {
+    "project": "task-results",
+    "form": "handwritten-low",
+    "check_build_run": "passed"
+  }
+]

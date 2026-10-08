@@ -1,0 +1,10 @@
+COMMAND ['/workspace/nagi-sf01-target/debug/nagic', 'run', '/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p2-policy.nagi', '--no-project', '--out', '/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p2-out']
+EXIT 0
+STDOUT
+7
+
+STDERR
+     Locking 105 packages to highest compatible versions
+   Compiling nagi-p2-policy-35ccc66b490314f2 v0.1.0 (/workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p2-out/.nagi/apps/nagi-p2-policy-35ccc66b490314f2/generations/.staging-g-72cb6-18dc89522477954b-0)
+    Finished `release` profile [optimized] target(s) in 0.36s
+native: /workspace/nagi-sf01-artifacts/independent-review-d127b28-a523g63b/p2-out/.nagi/apps/nagi-p2-policy-35ccc66b490314f2/generations/g-72cb6-18dc89522477954b-0/nagi-35ccc66b490314f2-g-72cb6-18dc89522477954b-0

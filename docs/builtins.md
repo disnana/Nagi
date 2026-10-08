@@ -62,7 +62,6 @@ sliceの位置はi64です。str / bytesの位置はbyte単位、Listの位置�
 |---|---|---|---|
 | `json_decode[User](input)` | str・bytes・view[str]・view[bytes] | `Result[User, Error]` | 型付きclassへ読む。入力はstr / bytesとそのview |
 | `json_encode(value)` | JSONに変換できる型（[詳細](json.md)） | `Result[str, Error]` | JSON文字列へ変換。型引数は付けない |
-| `html(text)` | str | `Html` | strをHTML応答用にする。入力文字列の所有権を受け取る |
 | `include_text("index.html")` | 文字列リテラル | `str` | ソースに隣接するUTF-8ファイルをコンパイル時に埋め込む |
 
 `json_decode`の`[User]`は型引数です。`json_decode(User, input)`ではありません。include_textのパスは文字列リテラルで指定します。詳細は[JSON](json.md)と[HTTP](http.md)にあります。
@@ -75,7 +74,6 @@ sliceの位置はi64です。str / bytesの位置はbyte単位、Listの位置�
 |---|---|---|---|
 | `sleep(milliseconds)` | i64 | `unit` | i64のミリ秒数だけ待つ |
 | `db_open(path)` | str・view[str] | `Result[Db, Error]` | SQLiteを開く。`:memory:`ならメモリ内 |
-| `serve(db, port)` | Db、i64 | `Result[unit, Error]` | loopbackのHTTPサーバーを起動。Dbの所有権を受け取る |
 | `db_exec(db, sql)` | Db、str・view[str] | `Result[i64, Error]` | SQLを実行、影響した行数 |
 | `db_all[User](db, sql)` | Db、str・view[str] | `Result[List[User], Error]` | 複数行を読む。現在はbind引数なし |
 | `db_query[User](db, sql, id)` | Db、str・view[str]、i64 | `Result[User?, Error]` | 1行を読む。i64のbind引数を1つ |
@@ -123,3 +121,5 @@ SQLとpathはstr / view[str]です。portはi64。insert / updateのtextは所�
 | `bench_scalar(name, count, kernel)` | str、i64、i64を受けてi64を返す関数 | `unit` | 配列を使わない整数処理を測定する |
 
 `kernel`には同期関数を渡します。測定方法と数値の単位は[性能の読み方](performance.md)、実行例は[CPU試験](../examples/cpu.nagi)にあります。
+
+旧`html`/`serve(Db,port)`は未リリースSF01でmigration診断になります。[移行](migration-0.2.0.md)を参照してください。

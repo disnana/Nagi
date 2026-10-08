@@ -9,7 +9,8 @@ const MODEL: &str =
     "from std.ownership import move\nclass Person:\n    name: str\n    note: str\n    age: i64\n\n\
     class Group:\n    person: Person\n    title: str\n\n\
     def take(text: str):\n    print(text)\n\n\
-    def take_person(person: Person):\n    print(person.age)\n\n";
+    def take_person(person: Person):\n    print(person.age)\n\n\
+    def make_page(value: str) -> str:\n    return value\n\n";
 
 fn program(body: &str) -> String {
     format!("{MODEL}def main():\n{body}")
@@ -73,7 +74,7 @@ fn fields_are_consumed_in_calls_records_lists_and_owned_wrappers() {
         "wrapped = ok(person.name)",
         "wrapped = some(person.name)",
         "shared_name = share(person.name)",
-        "page = html(person.name)",
+        "page = make_page(person.name)",
     ] {
         rejects(
             &format!("    person = Person(name=\"Nagi\", note=\"note\", age=1)\n    {use_field}\n    print(person.name)\n"),
