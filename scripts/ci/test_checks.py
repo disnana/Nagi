@@ -372,6 +372,8 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIn("mavenCentral()", plugin_repositories.group("body"))
         self.assertIn('id("org.jetbrains.intellij.platform") version "2.15.0"', build)
         self.assertIn('version = "0.1.1"', build)
+        self.assertIn("options.release.set(21)", build)
+        self.assertIn('sinceBuild = "251.25410.109"', build)
         self.assertIn("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.0-bin.zip", wrapper)
         self.assertIn("distributionSha256Sum=60ea723356d81263e8002fec0fcf9e2b0eee0c0850c7a3d7ab0a63f2ccc601f3", wrapper)
         self.assertIn("create(type, version) { useInstaller.set(false) }", build)
@@ -382,6 +384,9 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIn("Verify candidate on ${{ matrix.product }} ${{ matrix.channel }}", workflow)
         self.assertIn("Record the resolved IDE build from product-info.json", workflow)
         self.assertIn("resolvedBuildNumber", workflow)
+        self.assertIn("MATRIX_JAVA_VERSION: ${{ matrix.java_version }}", workflow)
+        self.assertIn('descriptor.get("minRequiredJavaVersion")', workflow)
+        self.assertIn('"javaRuntimeMajor": runtime_java_major', workflow)
         self.assertIn("editors/jetbrains-nagi/build/verification-metadata/", workflow)
 
     def test_published_marketplace_destination_and_release_zip_fallback(self):
@@ -632,8 +637,10 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         verify_body = verify.group("body")
         package_body = package.group("body")
 
-        self.assertIn('sinceBuild = "251"', build)
+        self.assertIn('sinceBuild = "251.25410.109"', build)
         self.assertNotIn('sinceBuild = "243"', build)
+        self.assertIn("java-version: '21'", candidate_body)
+        self.assertIn("java-version: ${{ matrix.java_version }}", verify_body)
         self.assertEqual(candidate_body.count("buildPlugin"), 1)
         self.assertIn("-PplatformType=IC", candidate_body)
         self.assertIn("-PplatformVersion=2025.1.1", candidate_body)
@@ -644,12 +651,14 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         self.assertEqual(verify_body.count("channel: stable"), 2)
         self.assertEqual(verify_body.count("channel: EAP"), 2)
         for target in (
-            "product_code: IC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2025.1'",
-            "product_code: PC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2025.1'",
-            "product_code: IC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT",
-            "product_code: PC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT",
+            "product_code: IC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2025.1.1'\n            java_version: '21'",
+            "product_code: PC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2025.1.1'\n            java_version: '21'",
+            "product_code: IC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT\n            minimum_platform_version: ''\n            java_version: '25'",
+            "product_code: PC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT\n            minimum_platform_version: ''\n            java_version: '25'",
         ):
             self.assertIn(target, verify_body)
+        self.assertIn("matrix requested JDK", verify_body)
+        self.assertIn("requires JDK", verify_body)
         self.assertIn("needs: candidate", verify_body)
         self.assertIn("name: jetbrains-common-candidate", verify_body)
         self.assertIn("Check candidate checksum and embedded descriptor", verify_body)

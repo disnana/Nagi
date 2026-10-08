@@ -30,9 +30,9 @@ Sol 6.1 Highの実装担当から独立したread-onlyレビューで、公開�
 
 最新版Release APIの読戻しは[この記録](jetbrains-release-assets-readback-2026-10-08.json)を参照。公開済み`jetbrains-v0.1.1`は`nagi-jetbrains-IC-0.1.1.zip`と`nagi-jetbrains-PC-0.1.1.zip`を持つ。これらはその版の実在配布物として保持し、統合済みZIPと呼ばない。JetBrains Marketplaceの0.1.1も公開済みであり、新しいcommon ZIP candidateは公開済み配布物と混同しない。新しい版から`nagi-jetbrains-X.Y.Z.zip`ひとつを候補にし、IDEA/PyCharmのstable/EAP四経路すべてで同じsourceを検証できた後にだけ`release-jetbrains`配布artifactを作る。Marketplace登録と`com.disnana.nagi` IDを保持する。版は0.1.1のまま、tag・Release・Marketplace送信を行わない。
 
-修正前のsourceは`TrustedProjects.isProjectTrusted(Project)`を呼びながらminimum build 243を宣言しており、Plugin Verifierは両製品の243でmethod未解決とInternal class利用を報告した。ユーザーは最低対応2025.1を採用したため、`sinceBuild=251`へ更新し、旧APIへのfallbackを追加しない。決定と移行影響は[API互換性比較](jetbrains-trust-api-compatibility.md)に記録する。`ProcessAdapter`は`ProcessListener`へ移行し、従来の`com.intellij.ide.impl.TrustedProjects.isTrusted` APIは新コードから参照しない。CIは一つの候補ZIPをartifactで渡し、IntelliJ IDEA/PyCharmのstable/EAPごとに分かれた四つのmatrix jobで、同じcommit sourceから各SDK向けのIDE testを実行し、各Plugin Verifierには同一の候補ZIPを渡す。`fail-fast: false`で他のmatrix jobを継続し、各jobのVerifierもIDE test失敗後に試す。失敗したjobや未実行のtargetを成功扱いせず、四つすべてが成功した後だけ元候補ZIPを`release-jetbrains` artifactとして再アップロードする。
+修正前のsourceは`TrustedProjects.isProjectTrusted(Project)`を呼びながらminimum build 243を宣言しており、Plugin Verifierは両製品の243でmethod未解決とInternal class利用を報告した。当初はユーザーが選択した2025.1をbranch `251`に対応させたが、その後の製品別Verifierで2025.1初期buildが同じpublic APIを持たないと判明したため、最終minimumを2025.1.1の製品別buildへ絞った。決定と移行影響は[API互換性比較](jetbrains-trust-api-compatibility.md)に記録する。`ProcessAdapter`は`ProcessListener`へ移行し、従来の`com.intellij.ide.impl.TrustedProjects.isTrusted` APIは新コードから参照しない。CIは一つの候補ZIPをartifactで渡し、IntelliJ IDEA/PyCharmのstable/EAPごとに分かれた四つのmatrix jobで、同じcommit sourceから各SDK向けのIDE testを実行し、各Plugin Verifierには同一の候補ZIPを渡す。`fail-fast: false`で他のmatrix jobを継続し、各jobのVerifierもIDE test失敗後に試す。失敗したjobや未実行のtargetを成功扱いせず、四つすべてが成功した後だけ元候補ZIPを`release-jetbrains` artifactとして再アップロードする。
 
-stableの2025.1.1は既存JetBrains workflowとビルド説明が使ってきた対応対象であり、「最新IDE」として選んでいない。stableのIDE testはこの対応対象を維持し、Plugin Verifierでは両製品の最低対象2025.1（build 251）も確認する。2024.3は次版の対象外であり、公開済み0.1.1は維持する。EAPは両製品ともGradle IntelliJ Platform Pluginの`LATEST-EAP-SNAPSHOT`指定で解決する。各matrix jobはGradle cacheのSDK `product-info.json`を読み、実際に解決した版・build番号と元JSONを検証report artifactへ保存する。`LATEST-EAP-SNAPSHOT`という指定だけを解決済みのIDE版として扱わない。
+stableの2025.1.1は既存JetBrains workflowとビルド説明が使ってきた対応対象であり、「最新IDE」として選んでいない。stableのIDE testとminimum Plugin Verifierは両製品の2025.1.1 buildを使う。最初の2025.1 buildは実Verifierで未解決methodを報告したため、branch全体をminimumとして扱わない。2024.3と初期2025.1 buildは次版の対象外であり、公開済み0.1.1は維持する。EAPは両製品ともGradle IntelliJ Platform Pluginの`LATEST-EAP-SNAPSHOT`指定で解決する。各matrix jobはGradle cacheのSDK `product-info.json`を読み、実際に解決した版・build番号と元JSONを検証report artifactへ保存する。`LATEST-EAP-SNAPSHOT`という指定だけを解決済みのIDE版として扱わない。
 
 JetBrains IntelliJ Community source snapshot `f793c25de80113f355c0041aec24cd14a6a5174c`は[`TrustedProjects.isProjectTrusted`](https://github.com/JetBrains/intellij-community/blob/f793c25de80113f355c0041aec24cd14a6a5174c/platform/platform-impl/src/com/intellij/ide/trustedProjects/TrustedProjects.kt)を定義する。旧[`ProcessAdapter`](https://github.com/JetBrains/intellij-community/blob/f793c25de80113f355c0041aec24cd14a6a5174c/platform/util/src/com/intellij/execution/process/ProcessAdapter.java)は`@Deprecated`で「ProcessListenerを直接使う」と記載され、[`ProcessListener`](https://github.com/JetBrains/intellij-community/blob/f793c25de80113f355c0041aec24cd14a6a5174c/platform/util/src/com/intellij/execution/process/ProcessListener.java)の`processTerminated`はdefault methodである。これらsource確認は、選択SDKに対するPlugin Verifier完了の代替ではない。
 
@@ -70,4 +70,23 @@ JetBrainsの[Plugin recommendations](https://plugins.jetbrains.com/docs/marketpl
 
 ## 最低対応版の決定
 
-ユーザーが2025.1（build 251）への引上げを承認した。新public trust APIを直接利用し、旧Experimental APIへのadapterは作らない。`sinceBuild`、両製品の最低Verifier対象、日英Docsを同期した。2024.3では公開済み0.1.1を維持し、新版へはIDE更新後に移行する。ID・Marketplace登録・既存Releaseは維持し、この変更は未リリース。上の243不適合と2.14 EAP失敗は修正前の観測であり、新HEAD成功へ数えない。
+ユーザーは最低対応を2025.1へ上げ、公開trust APIを直接使う方針を選んだ。製品別のVerifier readbackを受け、未解決methodを持つ初期251 buildsを含めないminimumへ絞った。新public trust APIを直接利用し、旧Experimental APIへのadapterは作らない。`sinceBuild`、両製品の最低Verifier対象、日英Docsを同期した。2024.3と初期2025.1では公開済み0.1.1を維持し、新版へは対応buildへIDE更新後に移行する。ID・Marketplace登録・既存Releaseは維持し、この変更は未リリース。上の243および初期251の不適合、2.14 EAP失敗は修正前の観測であり、新HEAD成功へ数えない。
+
+## 安定IDE minimumとEAP JDKのCI readback（2026-10-08）
+
+### 2025.1初期buildのVerifier判定
+
+2.15.0 sourceのPR candidate `c7c1775a5ad79c3a4b370c1b1126c981a722858f`、run [37780661641](https://github.com/disnana/Nagi/actions/runs/37780661641)で最低Verifierの各IDE targetを別々に読み戻した。候補artifact `11552022289`内の`nagi-jetbrains-0.1.1.zip.sha256`は`5fe606915a42f5146de66e275acd4e77d88ff5d51f061d2e5f8dd43b87eeada2`を記録する。
+
+- IntelliJ IDEA `IC-251.23774.435`は2026-10-08 13:05:59.8338867 UTC、PyCharm `PC-251.23774.444`は13:06:09.2894757 UTCにそれぞれ失敗した。両方が`NagiCompilerAction.execute(Project, VirtualFile)`の`invokestatic TrustedProjects.isProjectTrusted(Project): boolean`を未解決とし、実行時`NoSuchMethodError`の可能性を1件、`TrustedProjects` internal class使用を1件ずつ報告した。
+- 同じVerifier runで、IDEA `IC-251.25410.109`とPyCharm `PC-251.25410.122`は個別に`Compatible`だった。
+
+このため`sinceBuild=251`と最低`2025.1` aliasでは、公開trust APIを持たない初期buildまで許容してしまう。次版の最低対象は初期buildを含むbranch全体ではなく、readbackで確認できた2025.1.1 build `251.25410.109` (IC) と`251.25410.122` (PC)に限定する。`sinceBuild=251.25410.109`にし、両製品のstable test/最低Verifier targetを2025.1.1へ合わせた。既存public APIの使用は維持し、旧Experimental APIへのadapterもPlugin Verifier警告muteも追加しない。2025.1初期buildでは公開済み0.1.1を使うか、上記supported build以降へ更新する必要がある。
+
+### SDKごとのJava runtime
+
+2.15.0 candidate run 37780661641のIDEA/PyCharm EAP testはTemurin 21上で失敗した。`javac`はEAP SDKのclass file major `69.0`を読み込めず、JDK 21が扱うmajor `65.0`との不一致を報告した。PC EAPのreadback artifact `11551858292`が保存した`product-info.json`は、2026.3 build `263.6259.38`と`minRequiredJavaVersion: 25`を記録し、原JSON SHA-256は`90fc426a1401e8b8d80c63ca6ade4e7fbc6e5f9f297c30af316767f853f85a23`。
+
+この差は、[JetBrains API changes 2026](https://plugins.jetbrains.com/docs/intellij/api-changes-list-2026.html)の「2026.2以降はJava 25をtargetにする」案内、[Gradle Java compatibility matrix](https://docs.gradle.org/current/userguide/compatibility.html)でJava 25がGradle 9.1.0以降のGradle runtimeとして対応することと整合する。wrapperは9.4.0のままでJava 25でGradleを動かせる。Gradleの[`options.release`](https://docs.gradle.org/current/userguide/building_java_projects.html)を21に固定すると、JDK 25を使うEAP compileもJava 21のAPI surface/class targetになる。
+
+共通候補のbuildとstable testはTemurin 21を維持し、EAPのIDE test/verifier jobだけTemurin 25で実行する。JavaCompile全体に`options.release=21`を指定してプラグインのJava targetを上げず、matrix jobのmetadata記録では選択JDKと実際の`java -version`が一致すること、かつSDK `minRequiredJavaVersion`が存在する場合にその値以上であることをguardする。`product-info.json`、解決SDK build、runtime Java majorをartifactへ保存する。2026-10-08の手元ログでは2.15.0 Gradle buildをJDK 25で直接実行できていないため、この対応は新HEADのCIで確認する。

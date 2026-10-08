@@ -33,10 +33,14 @@ java {
     targetCompatibility = JavaVersion.VERSION_21
 }
 
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(21)
+}
+
 intellijPlatform {
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "251"
+            sinceBuild = "251.25410.109"
         }
     }
     pluginVerification {

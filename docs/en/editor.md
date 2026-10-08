@@ -4,7 +4,7 @@
 
 Install the VS Code extension from the Marketplace or a VSIX on GitHub Releases. [Nagi for JetBrains](https://github.com/disnana/Nagi/blob/main/editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm is available from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) or [GitHub Releases](https://github.com/disnana/Nagi/releases). Install it directly from Marketplace in a compatible IDE, or install a Release ZIP manually. See the [setup guide](getting-started.md) for the current asset names.
 
-The next plugin version under development requires IDEA/PyCharm 2025.1 or later (build 251). Users on 2024.3 can keep published 0.1.1 or upgrade their IDE before updating. This support change is unreleased.
+The next plugin version under development requires IntelliJ IDEA 2025.1.1 build 251.25410.109 or later and PyCharm 2025.1.1 build 251.25410.122 or later. The public API used by the trust check is unavailable in the initial 2025.1 builds, so they cannot safely reject execution in untrusted projects. Users on 2024.3 or an initial 2025.1 build can keep the published 0.1.1 or upgrade the IDE before updating. This support change is unreleased.
 
 Use Nagi extension 0.1.13 and `nagic` 0.1.11 after its availability is confirmed in the official 0.1.11 release record. This guide targets the 0.1.11 release. Open the repository in VS Code, or save the example below in your own folder.
 
