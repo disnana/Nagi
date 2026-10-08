@@ -1,6 +1,6 @@
 <idea-plugin>
     <id>com.disnana.nagi</id>
-    <name>Nagi</name>
+    <name>Nagi for JetBrains</name>
     <vendor url="https://nagi.disnana.com">Disnana</vendor>
     <description><![CDATA[
         Nagi High and Low language support: highlighting, folding, indentation,

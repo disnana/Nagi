@@ -129,7 +129,7 @@ class ReleaseNotesTests(unittest.TestCase):
     def test_jetbrains_notes_use_the_jetbrains_entry_and_previous_plugin_release(self):
         self.write_changelog(
             "# Changelog\n\n## Unreleased\n\n- Future work.\n\n"
-            "## JetBrains 0.1.8 — 2026-10-07\n\n- Ship compatible IDEA and PyCharm ZIPs.\n\n"
+            "## JetBrains 0.1.8 — 2026-10-07\n\n- Ship one common ZIP for IDEA and PyCharm.\n\n"
             "## JetBrains 0.1.7\n\n- Previous plugin changes.\n"
         )
         self.sha = self.commit()
@@ -138,8 +138,8 @@ class ReleaseNotesTests(unittest.TestCase):
              previous("jetbrains-v0.1.9", draft=True)],
             {"jetbrains-v0.1.7": "b" * 40},
         )
-        body = notes.release_notes(client, "jetbrains", "0.1.8", self.sha, "Install the IDEA or PyCharm ZIP.")
-        self.assertIn("Ship compatible IDEA and PyCharm ZIPs", body)
+        body = notes.release_notes(client, "jetbrains", "0.1.8", self.sha, "Install the common JetBrains ZIP.")
+        self.assertIn("Ship one common ZIP for IDEA and PyCharm", body)
         self.assertNotIn("Future work", body)
         self.assertIn("[Previous tag → released commit]", body)
         self.assertIn("/compare/jetbrains-v0.1.7...", body)

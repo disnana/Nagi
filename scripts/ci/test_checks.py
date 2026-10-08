@@ -525,6 +525,56 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         self.assertIn("NAGI_TEST_COMPILER:", text)
         self.assertIn("scripts/releases/jetbrains.py", text)
 
+    def test_one_candidate_archive_passes_all_four_matrix_checks_before_package_upload(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / ".github/workflows/jetbrains.yml").read_text(encoding="utf-8")
+        build = (root / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
+        candidate = re.search(r"(?ms)^  candidate:\n(?P<body>.*?)(?=^  [a-z][a-z0-9_-]*:\n|\Z)", workflow)
+        verify = re.search(r"(?ms)^  verify:\n(?P<body>.*?)(?=^  [a-z][a-z0-9_-]*:\n|\Z)", workflow)
+        package = re.search(r"(?ms)^  package:\n(?P<body>.*)\Z", workflow)
+        self.assertIsNotNone(candidate)
+        self.assertIsNotNone(verify)
+        self.assertIsNotNone(package)
+        candidate_body = candidate.group("body")
+        verify_body = verify.group("body")
+        package_body = package.group("body")
+
+        self.assertEqual(candidate_body.count("buildPlugin"), 1)
+        self.assertIn("-PplatformType=IC", candidate_body)
+        self.assertIn("-PplatformVersion=2025.1.1", candidate_body)
+        self.assertIn("name: jetbrains-common-candidate", candidate_body)
+        self.assertNotIn("name: release-jetbrains", candidate_body)
+        self.assertIn("strategy:\n      fail-fast: false", verify_body)
+        self.assertEqual(verify_body.count("product_code:"), 4)
+        self.assertEqual(verify_body.count("channel: stable"), 2)
+        self.assertEqual(verify_body.count("channel: EAP"), 2)
+        for target in (
+            "product_code: IC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2024.3.7'",
+            "product_code: PC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2024.3.6'",
+            "product_code: IC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT",
+            "product_code: PC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT",
+        ):
+            self.assertIn(target, verify_body)
+        self.assertIn("needs: candidate", verify_body)
+        self.assertIn("name: jetbrains-common-candidate", verify_body)
+        self.assertIn("Check candidate checksum and embedded descriptor", verify_body)
+        self.assertIn("name: Test ${{ matrix.product }} ${{ matrix.channel }}", verify_body)
+        self.assertIn("./gradlew --no-daemon --stacktrace test", verify_body)
+        self.assertIn("name: Verify candidate on ${{ matrix.product }} ${{ matrix.channel }}", verify_body)
+        self.assertIn("if: ${{ !cancelled() }}", verify_body)
+        self.assertIn("verifyPlugin", verify_body)
+        self.assertIn("-PverificationArchive=$PWD/build/release-assets/nagi-jetbrains-$RELEASE_VERSION.zip", verify_body)
+        self.assertIn('tasks.named<VerifyPluginTask>("verifyPlugin")', build)
+        self.assertIn("archiveFile.set(file(archivePath))", build)
+
+        self.assertIn("needs: [candidate, verify]", package_body)
+        self.assertIn("name: jetbrains-common-candidate", package_body)
+        self.assertIn("Recheck the exact candidate bytes before release upload", package_body)
+        self.assertNotIn("buildPlugin", package_body)
+        self.assertIn("name: release-jetbrains", package_body)
+        self.assertNotIn("release-jetbrains-IC", workflow)
+        self.assertNotIn("release-jetbrains-PC", workflow)
+
     def test_existing_pr_merge_gate_waits_for_the_reusable_plugin_workflow(self):
         workflow = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
         text = workflow.read_text(encoding="utf-8")

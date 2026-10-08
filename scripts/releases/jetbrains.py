@@ -12,14 +12,11 @@ from zipfile import BadZipFile, ZipFile
 from plan import version_tuple
 
 PLUGIN_ID = "com.disnana.nagi"
-PLATFORM_TYPES = ("IC", "PC")
 
 
-def archive_name(platform_type: str, version: str) -> str:
-    if platform_type not in PLATFORM_TYPES:
-        raise ValueError(f"Unknown JetBrains product type: {platform_type}")
+def archive_name(version: str) -> str:
     version_tuple(version)
-    return f"nagi-jetbrains-{platform_type}-{version}.zip"
+    return f"nagi-jetbrains-{version}.zip"
 
 
 def _descriptor_version(data: bytes, archive: Path) -> tuple[str, str]:
@@ -39,9 +36,9 @@ def _descriptor_version(data: bytes, archive: Path) -> tuple[str, str]:
     return values["id"], values["version"]
 
 
-def verify_archive(path: Path, platform_type: str, version: str) -> None:
+def verify_archive(path: Path, version: str) -> None:
     """Check the packaged descriptor from the plugin JAR, not Gradle source."""
-    archive_name(platform_type, version)
+    archive_name(version)
     try:
         with ZipFile(path) as distribution:
             bad_entry = distribution.testzip()
@@ -73,10 +70,10 @@ def verify_archive(path: Path, platform_type: str, version: str) -> None:
         raise ValueError(f"JetBrains plugin version mismatch in {path}: {plugin_version!r} != {version!r}")
 
 
-def prepare_archive(source: Path, output: Path, platform_type: str, version: str) -> tuple[Path, Path]:
-    verify_archive(source, platform_type, version)
+def prepare_archive(source: Path, output: Path, version: str) -> tuple[Path, Path]:
+    verify_archive(source, version)
     output.mkdir(parents=True, exist_ok=True)
-    destination = output / archive_name(platform_type, version)
+    destination = output / archive_name(version)
     if source.resolve() != destination.resolve():
         shutil.copyfile(source, destination)
     digest = hashlib.sha256(destination.read_bytes()).hexdigest()
@@ -89,10 +86,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--platform-type", choices=PLATFORM_TYPES, required=True)
     parser.add_argument("--version", required=True)
     args = parser.parse_args()
-    for path in prepare_archive(args.archive, args.output, args.platform_type, args.version):
+    for path in prepare_archive(args.archive, args.output, args.version):
         print(path)
 
 

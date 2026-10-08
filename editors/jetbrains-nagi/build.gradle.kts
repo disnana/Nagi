@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 
 plugins {
     java
@@ -51,6 +52,12 @@ intellijPlatform {
                 if (minimum != null && minimum != version) ide(type, minimum, useInstaller = false)
             }
         }
+    }
+}
+
+providers.gradleProperty("verificationArchive").orNull?.let { archivePath ->
+    tasks.named<VerifyPluginTask>("verifyPlugin") {
+        archiveFile.set(file(archivePath))
     }
 }
 
