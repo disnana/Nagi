@@ -3,12 +3,12 @@ package com.disnana.nagi;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.OSProcessHandler;
-import com.intellij.execution.process.ProcessAdapter;
 import com.intellij.execution.process.ProcessEvent;
+import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.process.ProcessOutputTypes;
 import com.intellij.execution.process.ProcessTerminatedListener;
 import com.intellij.execution.RunContentExecutor;
-import com.intellij.ide.impl.TrustedProjects;
+import com.intellij.ide.trustedProjects.TrustedProjects;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -44,7 +44,7 @@ public abstract class NagiCompilerAction extends AnAction implements DumbAware {
     }
     final void execute(Project project, VirtualFile file) {
         if (project == null || project.isDisposed() || !isSourceFile(file)) return;
-        if (!TrustedProjects.isTrusted(project)) {
+        if (!TrustedProjects.isProjectTrusted(project)) {
             Messages.showWarningDialog(project, "Trust this project before executing the Nagi compiler.", "Nagi");
             return;
         }
@@ -81,7 +81,7 @@ public abstract class NagiCompilerAction extends AnAction implements DumbAware {
                                     handler.destroyProcess();
                                 }
                             }, timeout, TimeUnit.SECONDS);
-                            handler.addProcessListener(new ProcessAdapter() {
+                            handler.addProcessListener(new ProcessListener() {
                                 @Override public void processTerminated(@NotNull ProcessEvent event) { deadline.cancel(false); }
                             });
                         }

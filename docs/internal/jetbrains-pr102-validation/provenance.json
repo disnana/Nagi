@@ -1,0 +1,59 @@
+{
+  "recordedDateUtc": "2026-10-08",
+  "sourceHead": "2fb6116007a50f1baf4b533ded96fb296e4c2dfc",
+  "independentSourceReview": {
+    "result": "no blocking findings",
+    "nonBlockingFinding": "The Japanese and English README phrasing could imply the common candidate was created only after all four verifications.",
+    "correctedAt": "fe316f118a06b5c3dfa6d486f3927d3e92b922a3",
+    "reviewScope": "read-only source review; does not establish Gradle, IDE test, or Plugin Verifier execution success"
+  },
+  "commandOutputs": [
+    {
+      "id": "jetbrains-release-python-tests",
+      "command": "rg --files editors/jetbrains-nagi | rg 'NagiCompilerAction|plugin.xml$'; python -m unittest discover -s scripts/releases -p 'test_*.py'",
+      "workingDirectory": "/workspace/Nagi-jetbrains-unified",
+      "exitCode": 0,
+      "result": "116 tests passed",
+      "preservedOutput": "jetbrains-release-116.log",
+      "captureNote": "verbatim final-result excerpt from the retained tool output; initial rg paths, unittest progress, and publisher output were omitted; not captured by shell redirection"
+    },
+    {
+      "id": "jetbrains-ci-python-tests",
+      "command": "python -m unittest discover -s scripts/ci -p 'test_*.py'",
+      "workingDirectory": "/workspace/Nagi-jetbrains-unified",
+      "exitCode": 0,
+      "result": "60 tests passed",
+      "preservedOutput": "jetbrains-ci-60.log",
+      "captureNote": "verbatim final-result excerpt from the retained tool output; unittest progress was omitted; not captured by shell redirection"
+    }
+  ],
+  "currentWorktreeChecks": {
+    "sourceHeadBeforeCurrentChanges": "fe316f118a06b5c3dfa6d486f3927d3e92b922a3",
+    "releaseTests": {
+      "command": "python -m unittest discover -s scripts/releases -p 'test_*.py' -q",
+      "exitCode": 0,
+      "result": "116 tests passed"
+    },
+    "ciTests": {
+      "command": "python -m unittest discover -s scripts/ci -p 'test_*.py'",
+      "exitCode": 0,
+      "result": "62 tests passed"
+    },
+    "websiteBuild": {
+      "command": "/workspace/nagi-jetbrains-website-venv/bin/python website/build.py --base-path / --out build/website-preview",
+      "exitCode": 0,
+      "result": "98 pages built; local links, anchors, and assets verified"
+    },
+    "gradleWrapper": {
+      "command": "GRADLE_USER_HOME=/workspace/.gradle-user-home-nagi-jb ./gradlew --no-daemon --stacktrace --version",
+      "networkPermission": "enabled",
+      "exitCode": 1,
+      "result": "Connection refused while downloading Gradle 9.0.0 from services.gradle.org"
+    }
+  },
+  "limits": [
+    "The preserved commands and outputs describe the initial source head and predate the README correction at fe316f1.",
+    "They do not verify the later Gradle IntelliJ Platform plugin 2.12.0 upgrade, Gradle 9.0.0 wrapper, or resolved SDK metadata step.",
+    "The preserved outputs are transcript-derived excerpts, not complete process logs."
+  ]
+}

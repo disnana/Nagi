@@ -4,7 +4,7 @@
 
 Nagi support for IntelliJ IDEA and PyCharm. [Install the compiler separately](https://nagi.disnana.com/en/docs/getting-started/).
 
-The plugin version is managed in `build.gradle.kts`. User ZIPs are published to GitHub Releases only when a new plugin version reaches main. Adding the publication pipeline does not create a release for the current version. The plugin is not published to the Marketplace.
+The plugin version is managed in `build.gradle.kts`. The published version is 0.1.1. Install it directly from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) in a compatible IDE, or download an IDE-specific ZIP from [GitHub Releases](https://github.com/disnana/Nagi/releases).
 
 ## Features
 
@@ -19,9 +19,11 @@ Whole-file formatting, semantic completion, go to definition, and automatic chec
 
 ## Installation
 
-Download a formal build from [GitHub Releases](https://github.com/disnana/Nagi/releases). Choose `nagi-jetbrains-IC-X.Y.Z.zip` for IDEA or `nagi-jetbrains-PC-X.Y.Z.zip` for PyCharm. Each ZIP has a matching `.sha256` file.
+The PR #102 build for GUI testing and Marketplace submission is **0.1.2**. Use the common `nagi-jetbrains-0.1.2.zip` from the `release-jetbrains` artifact in either IDEA or PyCharm. It preserves `com.disnana.nagi` and distinguishes the build from published 0.1.1. The repository owner handles Marketplace upload; this PR does not publish it and remains unmerged until GUI testing is complete.
 
-Select the ZIP in **Settings → Plugins → ⚙ → Install Plugin from Disk**, then restart the IDE. To try a PR build, use the `release-jetbrains-IC` or `release-jetbrains-PC` artifact from a successful **Actions → Nagi checks** run. For a local build, use the ZIP in `build/distributions/`.
+The `jetbrains-v0.1.1` release contains `nagi-jetbrains-IC-0.1.1.zip` for IDEA and `nagi-jetbrains-PC-0.1.1.zip` for PyCharm, each with a matching `.sha256` file.
+
+To install a GitHub Release ZIP, select it in **Settings → Plugins → ⚙ → Install Plugin from Disk**, then restart the IDE. A PR build is available as the `release-jetbrains` artifact only after all IDEA/PyCharm stable/EAP checks pass in **Actions → Nagi checks**. For a local build, use the ZIP in `build/distributions/`.
 
 Set the compiler executable in **Settings → Languages & Frameworks → Nagi**. An empty value uses `nagic` from `PATH`. Relative paths resolve from the IDE project root.
 
@@ -35,14 +37,14 @@ Building and running Nagi applications also requires Rust/Cargo and the build to
 
 ## Build and verification
 
-Use JDK 21.
+Use JDK 21 for stable SDK checks and the common ZIP candidate build. EAP checks use the JDK required by the resolved SDK. The current 2026.3 EAP requires JDK 25, so EAP verification needs JDK 25. The Gradle JVM and Java compiler toolchain follow the IDE SDK: 21 for stable and 25 for the current EAP. The plugin Java API and class-file target remain fixed at `options.release=21` even when verification runs on JDK 25.
 
 ```sh
 cd editors/jetbrains-nagi
 ./gradlew test buildPlugin
 ```
 
-On Windows, use `gradlew.bat`. The wrapper pins Gradle 8.13, IntelliJ Platform Gradle Plugin 2.3.0, and IntelliJ IDEA Community 2025.1.1 as the default SDK. The first build downloads the SDK and dependencies.
+On Windows, use `gradlew.bat`. The wrapper pins Gradle 9.4.0, IntelliJ Platform Gradle Plugin 2.19.0, and IntelliJ IDEA Community 2025.1.1 as the default SDK. The first build downloads the SDK and dependencies.
 
 The same code can be checked against the PyCharm SDK:
 
@@ -54,8 +56,12 @@ Use `-PlocalPlatformPath=/path/to/ide` to build against a local IDE. `runIde` st
 
 Tests cover scanning, folding, indentation, CLI argument boundaries, diagnostic locations, and real IntelliJ Platform editor fixtures for file types, Enter, comments, paired brackets, and save failures. A real process also tests cancellation during startup. Set `NAGI_TEST_COMPILER` to a `nagic` executable to check High, Low, and project commands with the compiler. JetBrains CI builds the compiler from the same commit and runs this integration test for both IDEA and PyCharm.
 
-The primary targets are IDEA and PyCharm 2025.1.1, with build 243 as the minimum API. CI tests and packages against both products' 2025.1.1 SDKs, then verifies the same ZIP against 2025.1.1 and the minimum SDK (IDEA 2024.3.7 or PyCharm 2024.3.6). These checks are separate from interacting with the complete IDE.
+The minimum target for the next version is 2025.1.1: IDEA build `251.25410.109` and PyCharm build `251.25410.122` were verified. The initial 2025.1 builds (`251.23774`) do not expose the public API used by the trusted-project check; Plugin Verifier reports an unresolved method, so those builds are excluded. CI first builds one common ZIP candidate against stable IDEA on JDK 21. It runs IDE tests from the same source on four SDKs—stable 2025.1.1 and EAP for both IDEA and PyCharm—and passes the same candidate ZIP to each Plugin Verifier. Stable tests use the Java 21 compiler toolchain; EAP tests use the toolchain required by each resolved SDK (currently JDK 25). The minimum IDEA/PyCharm 2025.1.1 targets are also checked by Plugin Verifier. Only after all four IDE tests and verifiers pass does CI promote the original candidate ZIP to the distribution artifact. The two ZIPs attached to the published 0.1.1 release are historical product-specific assets, separate from this future common ZIP. Marketplace UI installation and full IDE interaction are not covered by these checks.
 
-Run `./gradlew test buildPlugin verifyPlugin` for compatibility checks. Add `-PminimumPlatformVersion=2024.3.7` for IDEA, or `-PplatformType=PC -PminimumPlatformVersion=2024.3.6` for PyCharm, to check the minimum target too. With `-PlocalPlatformPath`, only that local SDK is verified.
+Run `./gradlew test buildPlugin verifyPlugin` with JDK 21 for stable compatibility checks. When an EAP SDK requires JDK 25, start Gradle with JDK 25 and pass `-PnagiJavaToolchainVersion=25` to the EAP test (the stable default is 21). `options.release=21` keeps the plugin's compile target and Java API surface at 21 on either JDK. The verifier mutes only the `TemplateWordInPluginName` lint for the required display name; API compatibility, deprecated, and experimental findings remain active. Add `-PminimumPlatformVersion=2025.1.1` for IDEA/PyCharm to check the minimum target too. Use `-PplatformVersion=LATEST-EAP-SNAPSHOT` to check the latest EAP. With `-PlocalPlatformPath`, only that local SDK is verified.
 
 Official references: [Plugin SDK](https://plugins.jetbrains.com/docs/intellij/developing-plugins.html), [Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html). Licensed under [MIT](LICENSE).
+
+## Minimum IDE for the next version
+
+The common plugin under development targets IntelliJ IDEA 2025.1.1 build 251.25410.109 or later and PyCharm 2025.1.1 build 251.25410.122 or later. The initial 2025.1 builds do not resolve the public trust API used to reject commands in untrusted projects. The next version drops 2024.3 and those initial builds. Users on excluded IDE builds can keep the published 0.1.1; upgrade to the supported build before updating the plugin. The ID `com.disnana.nagi` and existing Marketplace page remain unchanged. This support change is unreleased.

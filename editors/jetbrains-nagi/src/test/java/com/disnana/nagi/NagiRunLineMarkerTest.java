@@ -97,6 +97,53 @@ public class NagiRunLineMarkerTest extends BasePlatformTestCase {
         new NagiCompilerAction.Run().execute(preview.getProject(), preview.getVirtualFile());
         // Must return before trust dialogs, saves, or process startup.
     }
+    public void testUntrustedProjectCannotInvokeCompiler() throws Exception {
+        org.junit.Assume.assumeFalse("The recorder uses a POSIX executable", com.intellij.openapi.util.SystemInfo.isWindows);
+        Path temporary = Files.createTempDirectory("nagi untrusted gutter ");
+        var settings = NagiSettings.getInstance().getState();
+        String previousCompiler = settings.compilerPath;
+        boolean previousTrust = com.intellij.ide.trustedProjects.TrustedProjects.isProjectTrusted(getProject());
+        var previousDialog = com.intellij.openapi.ui.TestDialogManager.getTestImplementation();
+        try {
+            Path captured = temporary.resolve("arguments.txt");
+            Path compiler = temporary.resolve("nagic");
+            Files.writeString(compiler, "#!/bin/sh\nprintf '%s\\n' \"$@\" > '" + captured.toString().replace("'", "'\"'\"'") + "'\n");
+            assertTrue(compiler.toFile().setExecutable(true));
+            settings.compilerPath = compiler.toString();
+            com.intellij.ide.trustedProjects.TrustedProjects.setProjectTrusted(getProject(), false);
+            com.intellij.openapi.ui.TestDialogManager.setTestDialog(com.intellij.openapi.ui.TestDialog.OK);
+            var file = configureSource("untrusted.nagi", "def main():\n    print(1)\n");
+            var document = myFixture.getEditor().getDocument();
+            WriteCommandAction.runWriteCommandAction(getProject(), () -> document.insertString(document.getTextLength(), "# unsaved\n"));
+            assertTrue(com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().isDocumentUnsaved(document));
+
+            assertTrue("the untrusted fixture must be an eligible local Nagi source",
+                    NagiCompilerAction.isSourceFile(file.getVirtualFile()));
+            assertFalse("the fixture must exercise actual untrusted-project handling",
+                    com.intellij.ide.trustedProjects.TrustedProjects.isProjectTrusted(getProject()));
+            var denialMessages = new java.util.ArrayList<String>();
+            com.intellij.openapi.ui.TestDialogManager.setTestDialog(message -> {
+                denialMessages.add(message);
+                return com.intellij.openapi.ui.TestDialog.OK.show(message);
+            });
+            new NagiCompilerAction.Run().execute(getProject(), file.getVirtualFile());
+            assertEquals(List.of("Trust this project before executing the Nagi compiler."), denialMessages);
+            assertTrue("untrusted action must not save input before returning",
+                    com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().isDocumentUnsaved(document));
+            com.intellij.testFramework.PlatformTestUtil.waitForAllBackgroundActivityToCalmDown();
+
+            assertFalse("untrusted project started the compiler", Files.exists(captured));
+            assertTrue("untrusted project input should remain unsaved",
+                    com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().isDocumentUnsaved(document));
+        } finally {
+            com.intellij.openapi.ui.TestDialogManager.setTestDialog(previousDialog);
+            com.intellij.ide.trustedProjects.TrustedProjects.setProjectTrusted(getProject(), previousTrust);
+            settings.compilerPath = previousCompiler;
+            try (var paths = Files.walk(temporary)) {
+                for (var path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
+            }
+        }
+    }
     public void testHighGutterClickInvokesTheCompilerWithItsSavedFile() throws Exception { invokeRun(false, false); }
     public void testLowGutterClickInvokesTheCompilerWithItsSavedFile() throws Exception { invokeRun(true, false); }
     public void testGutterClickKeepsNearestProjectSelection() throws Exception { invokeRun(false, true); }
@@ -113,7 +160,7 @@ public class NagiRunLineMarkerTest extends BasePlatformTestCase {
             Files.writeString(compiler, "#!/bin/sh\nprintf '%s\\n' \"$@\" > '" + captured.toString().replace("'", "'\"'\"'") + "'\n");
             assertTrue(compiler.toFile().setExecutable(true));
             settings.compilerPath = compiler.toString();
-            com.intellij.ide.impl.TrustedProjects.setTrusted(getProject(), true);
+            com.intellij.ide.trustedProjects.TrustedProjects.setProjectTrusted(getProject(), true);
             Path source = temporary.resolve(low ? "main.low" : "main.nagi");
             Files.writeString(source, low ? "fn main() { print(1); }\n" : "def main():\n    print(1)\n");
             var virtual = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByNioFile(source);

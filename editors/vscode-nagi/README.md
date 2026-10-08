@@ -19,7 +19,7 @@ Nagiの`.nagi`（High）と`.low`（Low）を編集・検査・実行する拡�
 code --install-extension Disnana.nagi-lang
 ```
 
-古いIDの`nagi-local.nagi-language`・`Disnana.nagi-language`がある場合は無効化するか削除してください。[GitHub Releases](https://github.com/disnana/Nagi/releases)の`nagi-language-VERSION.vsix`は、**拡張機能: VSIXからのインストール**でも導入できます。
+古いIDの`nagi-local.nagi-language`・`Disnana.nagi-language`がある場合は無効化するか削除してください。[GitHub Releases](https://github.com/disnana/Nagi/releases)から取得する場合、確認時点の公開ファイルは`nagi-language-0.1.13.vsix`と対応する`.sha256`です。VS Codeの**拡張機能: VSIXからのインストール**で選びます。
 
 コンパイラは含まれません。[Nagiのインストール](https://nagi.disnana.com/docs/getting-started/)後、VS Codeを再起動してください。型検査には`nagic`、build・runにはRust/CargoとOSのビルド環境も必要です。
 

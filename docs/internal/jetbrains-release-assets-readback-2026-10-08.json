@@ -1,0 +1,162 @@
+{
+  "retrieved_at_utc": "2026-10-08",
+  "repository": "disnana/Nagi",
+  "api_sources": [
+    "https://api.github.com/repos/disnana/Nagi/releases/latest",
+    "https://api.github.com/repos/disnana/Nagi/releases?per_page=20",
+    "https://api.github.com/repos/disnana/Nagi/releases/tags/jetbrains-v0.1.1",
+    "https://api.github.com/repos/disnana/Nagi/releases/tags/vscode-v0.1.13"
+  ],
+  "selection_note": "The latest core/compiler release and the latest separate editor-plugin releases are listed independently. The core latest endpoint is nagi-v0.1.11; the latest JetBrains and VS Code entries in the release collection are jetbrains-v0.1.1 and vscode-v0.1.13.",
+  "releases": [
+    {
+      "source_url": "https://api.github.com/repos/disnana/Nagi/releases/latest",
+      "html_url": "https://github.com/disnana/Nagi/releases/tag/nagi-v0.1.11",
+      "id": 405305095,
+      "tag_name": "nagi-v0.1.11",
+      "name": "Nagi 0.1.11",
+      "target_commitish": "003a594de086383100016b7c75466da37705646c",
+      "published_at": "2026-10-07T02:11:53Z",
+      "prerelease": false,
+      "draft": false,
+      "assets": [
+        {
+          "name": "nagi-0.1.11-linux-x86_64.tar.gz",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 2570585,
+          "digest": "sha256:74ba38a62439e8f5d4fff5402aaa67efa3575441647985cbcfb9b38459c5c60b",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-linux-x86_64.tar.gz"
+        },
+        {
+          "name": "nagi-0.1.11-linux-x86_64.tar.gz.sha256",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 98,
+          "digest": "sha256:16b26af432194b19aa9407b9c19257893e277d032de9d3f000c2dcc85ea2e3bc",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-linux-x86_64.tar.gz.sha256"
+        },
+        {
+          "name": "nagi-0.1.11-macos-arm64.tar.gz",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 2285214,
+          "digest": "sha256:9b15baebdb6b1f5e02146fcd303cf377ef127b39fd44948160c54e7716af4992",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-macos-arm64.tar.gz"
+        },
+        {
+          "name": "nagi-0.1.11-macos-arm64.tar.gz.sha256",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 97,
+          "digest": "sha256:19ff91b288937abe89126e5c16c39790ba575e6ab6a518319fc9b3fd7336b034",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-macos-arm64.tar.gz.sha256"
+        },
+        {
+          "name": "nagi-0.1.11-macos-x86_64.tar.gz",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 2445042,
+          "digest": "sha256:b190f2695a3ae87f5eb388d78bf1fafb47785076456d562a82ba35eda3f2c439",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-macos-x86_64.tar.gz"
+        },
+        {
+          "name": "nagi-0.1.11-macos-x86_64.tar.gz.sha256",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 98,
+          "digest": "sha256:7f4ef9afc75181104d77b599f91bfede80398ae75805c41805c14ae8c874034e",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-macos-x86_64.tar.gz.sha256"
+        },
+        {
+          "name": "nagi-0.1.11-windows-x86_64.zip",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 2306520,
+          "digest": "sha256:a3b088adee61f7f20782ce3528db6e4e4d3a0e6080cac45cf54edfeb74aeb68d",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-windows-x86_64.zip"
+        },
+        {
+          "name": "nagi-0.1.11-windows-x86_64.zip.sha256",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 98,
+          "digest": "sha256:7a95c106bef7d7ba1089444ccc9a447a98f02bafc5ead72a3fabeb397239f144",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/nagi-v0.1.11/nagi-0.1.11-windows-x86_64.zip.sha256"
+        }
+      ]
+    },
+    {
+      "html_url": "https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.1",
+      "id": 405927213,
+      "tag_name": "jetbrains-v0.1.1",
+      "name": "Nagi for JetBrains IDEs 0.1.1",
+      "target_commitish": "676576724829e45b077b58628bfe2417e6cf3673",
+      "published_at": "2026-10-07T15:55:17Z",
+      "prerelease": false,
+      "draft": false,
+      "assets": [
+        {
+          "name": "nagi-jetbrains-IC-0.1.1.zip",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 56584,
+          "digest": "sha256:eb133a159631c6a9efb9ad40bfa97106bfdf1f675964394dcd14ba7ec40abf8f",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/jetbrains-v0.1.1/nagi-jetbrains-IC-0.1.1.zip"
+        },
+        {
+          "name": "nagi-jetbrains-IC-0.1.1.zip.sha256",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 94,
+          "digest": "sha256:7a5f4a590e50981eddd530ac41970904f49583b1fe8813148aacd6479d02f1ed",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/jetbrains-v0.1.1/nagi-jetbrains-IC-0.1.1.zip.sha256"
+        },
+        {
+          "name": "nagi-jetbrains-PC-0.1.1.zip",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 56566,
+          "digest": "sha256:3610d8e1d23436a654bd4bd2f32498ca26d645e1baa0b969a17d39f6e0212a22",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/jetbrains-v0.1.1/nagi-jetbrains-PC-0.1.1.zip"
+        },
+        {
+          "name": "nagi-jetbrains-PC-0.1.1.zip.sha256",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 94,
+          "digest": "sha256:d21939dc1af2c6bdacf1c6b26cc1b554088ab66036b21c972e3d2757c77289ee",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/jetbrains-v0.1.1/nagi-jetbrains-PC-0.1.1.zip.sha256"
+        }
+      ]
+    },
+    {
+      "html_url": "https://github.com/disnana/Nagi/releases/tag/vscode-v0.1.13",
+      "id": 403120551,
+      "tag_name": "vscode-v0.1.13",
+      "name": "Nagi Language for VS Code 0.1.13",
+      "target_commitish": "815b7d554dba3ac6b11ddad2089b782cbed46eb1",
+      "published_at": "2026-10-04T17:07:58Z",
+      "prerelease": false,
+      "draft": false,
+      "assets": [
+        {
+          "name": "nagi-language-0.1.13.vsix",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 36107,
+          "digest": "sha256:86f64f16c913f3af60a0a877d65b0c83a295c45339bb505d1ff2485bb979043f",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/vscode-v0.1.13/nagi-language-0.1.13.vsix"
+        },
+        {
+          "name": "nagi-language-0.1.13.vsix.sha256",
+          "content_type": "application/octet-stream",
+          "state": "uploaded",
+          "size": 92,
+          "digest": "sha256:585fac0091c0abb346d26ca94d2bbe2472e5fcdf612f0dbd11f21c722d5eacf1",
+          "browser_download_url": "https://github.com/disnana/Nagi/releases/download/vscode-v0.1.13/nagi-language-0.1.13.vsix.sha256"
+        }
+      ]
+    }
+  ]
+}

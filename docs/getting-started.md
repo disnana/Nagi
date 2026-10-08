@@ -33,6 +33,12 @@ nagic --help
 
 2026-10-07に公開したcompilerでは`nagic 0.1.11`と表示されます。`nagic -V`と`nagic version`でも確認できます。実際にインストールした版は`nagic --version`で確かめてください。版とヘルプの表示にはRustやプロジェクト設定は必要ありません。
 
+### エディター拡張をインストールする
+
+VS Code拡張は[Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)から、または[GitHub Releases](https://github.com/disnana/Nagi/releases)の`nagi-language-0.1.13.vsix`と対応する`.sha256`から入手できます。VSIXはVS Codeの**拡張機能: VSIXからのインストール**で選びます。
+
+IntelliJ IDEA・PyCharm向けの**Nagi for JetBrains**は[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)または[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。Marketplaceから対応IDEへ直接インストールするか、GitHub ReleasesからZIPを取得してください。公開中の0.1.1 releaseには、IDEA用`nagi-jetbrains-IC-0.1.1.zip`とPyCharm用`nagi-jetbrains-PC-0.1.1.zip`があります。Release ZIPはIDEで**Settings → Plugins → ⚙ → Install Plugin from Disk**を選び、ZIPを指定してインストールします。どちらの拡張にもコンパイラは含まれません。
+
 ### アプリのビルドに必要なもの
 
 Rust / Cargoに加えて、次のビルド環境を使います。導入済みならそのまま使えます。

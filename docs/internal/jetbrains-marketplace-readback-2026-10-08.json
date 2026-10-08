@@ -1,0 +1,17 @@
+{
+  "readAtUtc": "2026-10-08",
+  "listingUrl": "https://plugins.jetbrains.com/plugin/34891-nagi",
+  "metadataUrl": "https://plugins.jetbrains.com/api/plugins/34891",
+  "source": "public read-only Marketplace API response",
+  "metadata": {
+    "id": 34891,
+    "name": "Nagi",
+    "xmlId": "com.disnana.nagi",
+    "approve": false,
+    "hasUnapprovedUpdate": true,
+    "isHidden": false,
+    "isBlocked": false,
+    "downloads": 0
+  },
+  "interpretation": "The Marketplace API identifies the existing listing and its plugin XML ID. The page remains under review; this readback does not claim a public approved release. Current manual installation remains through GitHub Releases."
+}

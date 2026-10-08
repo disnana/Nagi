@@ -1,11 +1,14 @@
 """Exercise complete Git ranges and the required-check result contract."""
 import copy
+import json
 import os
 import re
 import subprocess
 import tempfile
 import unittest
+from html.parser import HTMLParser
 from pathlib import Path
+from xml.etree import ElementTree as ET
 from unittest.mock import patch
 
 import changes
@@ -353,6 +356,129 @@ class ChangeTests(unittest.TestCase):
                          "existing=value\nfull_checks=false\njetbrains_checks=true\n")
 
 
+class JetBrainsBuildContractTests(unittest.TestCase):
+    repo = Path(__file__).resolve().parents[2]
+
+    def test_eap_descriptor_and_home_path_fixes_keep_plugin_version_and_verifier_checks(self):
+        build = (self.repo / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
+        settings = (self.repo / "editors/jetbrains-nagi/settings.gradle.kts").read_text(encoding="utf-8")
+        wrapper = (self.repo / "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.properties").read_text(encoding="utf-8")
+        workflow = (self.repo / ".github/workflows/jetbrains.yml").read_text(encoding="utf-8")
+        plugin_repositories = re.search(
+            r"(?ms)^pluginManagement\s*\{\s*repositories\s*\{(?P<body>.*?)^\s*}\s*}", settings)
+
+        self.assertIsNotNone(plugin_repositories)
+        self.assertIn("gradlePluginPortal()", plugin_repositories.group("body"))
+        self.assertIn("mavenCentral()", plugin_repositories.group("body"))
+        self.assertIn('id("org.jetbrains.intellij.platform") version "2.19.0"', build)
+        self.assertIn('version = "0.1.2"', build)
+        self.assertIn("options.release.set(21)", build)
+        self.assertIn('sinceBuild = "251.25410.109"', build)
+        self.assertIn("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.0-bin.zip", wrapper)
+        self.assertIn("distributionSha256Sum=60ea723356d81263e8002fec0fcf9e2b0eee0c0850c7a3d7ab0a63f2ccc601f3", wrapper)
+        self.assertIn("create(type, version) { useInstaller.set(false) }", build)
+        self.assertNotIn("useInstaller = false", build)
+        self.assertNotIn("ide(type, version, useInstaller", build)
+        self.assertIn('freeArgs.addAll(listOf("-mute", "TemplateWordInPluginName"))', build)
+        self.assertNotIn('freeArgs.addAll(listOf("-mute", "PluginCompatibility"))', build)
+        self.assertIn("Verify candidate on ${{ matrix.product }} ${{ matrix.channel }}", workflow)
+        self.assertIn("Record the resolved IDE build from product-info.json", workflow)
+        self.assertIn("resolvedBuildNumber", workflow)
+        self.assertIn("MATRIX_JAVA_VERSION: ${{ matrix.java_version }}", workflow)
+        self.assertIn('descriptor.get("minRequiredJavaVersion")', workflow)
+        self.assertIn('"javaRuntimeMajor": runtime_java_major', workflow)
+        self.assertIn("editors/jetbrains-nagi/build/verification-metadata/", workflow)
+
+    def test_untrusted_project_fixture_disables_headless_trust_shortcut(self):
+        build = (self.repo / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
+        test_source = (self.repo / "editors/jetbrains-nagi/src/test/java/com/disnana/nagi/NagiRunLineMarkerTest.java").read_text(encoding="utf-8")
+        property_line = 'systemProperty("idea.trust.headless.disabled", "false")'
+        test_task = re.search(r"(?ms)^tasks\.test\s*\{(?P<body>.*?)^\}", build)
+
+        self.assertIsNotNone(test_task)
+        self.assertEqual(build.count(property_line), 1)
+        self.assertIn(property_line, test_task.group("body"))
+
+        method_start = test_source.index("public void testUntrustedProjectCannotInvokeCompiler()")
+        method_end = test_source.find("\n    public void ", method_start + 1)
+        method = test_source[method_start:method_end if method_end >= 0 else len(test_source)]
+        assertions = (
+            "TrustedProjects.setProjectTrusted(getProject(), false);",
+            'assertTrue(com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().isDocumentUnsaved(document));',
+            'assertTrue("the untrusted fixture must be an eligible local Nagi source",',
+            'assertFalse("the fixture must exercise actual untrusted-project handling",',
+            "new NagiCompilerAction.Run().execute(getProject(), file.getVirtualFile());",
+            'assertEquals(List.of("Trust this project before executing the Nagi compiler."), denialMessages);',
+            'assertTrue("untrusted action must not save input before returning",',
+            "PlatformTestUtil.waitForAllBackgroundActivityToCalmDown();",
+            'assertFalse("untrusted project started the compiler", Files.exists(captured));',
+            'assertTrue("untrusted project input should remain unsaved",',
+        )
+        positions = [method.index(assertion) for assertion in assertions]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_published_marketplace_destination_and_release_zip_fallback(self):
+        marketplace_url = "https://plugins.jetbrains.com/plugin/34891-nagi"
+        release_url = "https://github.com/disnana/Nagi/releases"
+        install_guides = (
+            "README.md", "README.en.md", "docs/getting-started.md", "docs/en/getting-started.md",
+            "docs/editor.md", "docs/en/editor.md", "website/templates/home.html",
+            "website/templates/home.en.html", "editors/jetbrains-nagi/README.md",
+            "editors/jetbrains-nagi/README.en.md",
+        )
+        for relative_path in install_guides:
+            with self.subTest(path=relative_path):
+                content = (self.repo / relative_path).read_text(encoding="utf-8")
+                self.assertIn(marketplace_url, content)
+                self.assertIn(release_url, content)
+                self.assertNotIn("審査中", content)
+                self.assertNotIn("under review", content.lower())
+                self.assertNotIn("coming soon", content.lower())
+
+        descriptor_path = self.repo / "editors/jetbrains-nagi/src/main/resources/META-INF/plugin.xml"
+        descriptor = ET.parse(descriptor_path).getroot()
+        description = descriptor.findtext("description") or ""
+        self.assertEqual(descriptor.findtext("id"), "com.disnana.nagi")
+        self.assertLess(description.index("Nagi language support"), description.index("IntelliJ IDEA・PyCharm"))
+        self.assertIn("nagi.toml", description)
+        self.assertIn("not bundled", description)
+
+        class DescriptionTags(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.tags = []
+                self.links = []
+                self.attributes = []
+
+            def handle_starttag(self, tag, attrs):
+                self.tags.append(tag)
+                self.attributes.append((tag, attrs))
+                if tag == "a":
+                    self.links.extend(value for name, value in attrs if name == "href")
+
+        parser = DescriptionTags()
+        parser.feed(description)
+        # Keep the descriptor to tags confirmed in the Marketplace UI readback.
+        # This local check does not claim to reproduce Marketplace rendering.
+        self.assertTrue(set(parser.tags) <= {"p", "h3", "h4", "a", "hr"})
+        self.assertEqual(parser.links, [release_url, release_url])
+        for tag, attributes in parser.attributes:
+            if tag == "a":
+                self.assertEqual(attributes, [("href", release_url)])
+            else:
+                self.assertEqual(attributes, [])
+
+        historical = json.loads((self.repo / "docs/internal/jetbrains-marketplace-readback-2026-10-08.json").read_text(encoding="utf-8"))
+        current = json.loads((self.repo / "docs/internal/jetbrains-marketplace-current-readback-2026-10-08-122229Z.json").read_text(encoding="utf-8"))
+        self.assertEqual(historical["listingUrl"], marketplace_url)
+        self.assertTrue(historical["metadata"]["hasUnapprovedUpdate"])
+        self.assertEqual(current["availability"].split(",")[0], "PubliclyAvailable")
+        self.assertEqual(current["stableVersion"], "0.1.1")
+        self.assertEqual(current["apiFieldsReadBack"]["xmlId"], "com.disnana.nagi")
+        self.assertFalse(current["apiFieldsReadBack"]["hasUnapprovedUpdate"])
+        self.assertIn("previous English-only description", current["interpretation"])
+
+
 class ResourceCharacterizationWorkflowTests(unittest.TestCase):
     def test_four_platform_job_runs_registry_and_native_resource_oracles(self):
         workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
@@ -524,6 +650,62 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         self.assertIn("github.ref == 'refs/heads/main' && github.sha", text)
         self.assertIn("NAGI_TEST_COMPILER:", text)
         self.assertIn("scripts/releases/jetbrains.py", text)
+
+    def test_one_candidate_archive_passes_all_four_matrix_checks_before_package_upload(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / ".github/workflows/jetbrains.yml").read_text(encoding="utf-8")
+        build = (root / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
+        candidate = re.search(r"(?ms)^  candidate:\n(?P<body>.*?)(?=^  [a-z][a-z0-9_-]*:\n|\Z)", workflow)
+        verify = re.search(r"(?ms)^  verify:\n(?P<body>.*?)(?=^  [a-z][a-z0-9_-]*:\n|\Z)", workflow)
+        package = re.search(r"(?ms)^  package:\n(?P<body>.*)\Z", workflow)
+        self.assertIsNotNone(candidate)
+        self.assertIsNotNone(verify)
+        self.assertIsNotNone(package)
+        candidate_body = candidate.group("body")
+        verify_body = verify.group("body")
+        package_body = package.group("body")
+
+        self.assertIn('sinceBuild = "251.25410.109"', build)
+        self.assertNotIn('sinceBuild = "243"', build)
+        self.assertIn("java-version: '21'", candidate_body)
+        self.assertIn("java-version: ${{ matrix.java_version }}", verify_body)
+        self.assertEqual(candidate_body.count("buildPlugin"), 1)
+        self.assertIn("-PplatformType=IC", candidate_body)
+        self.assertIn("-PplatformVersion=2025.1.1", candidate_body)
+        self.assertIn("name: jetbrains-common-candidate", candidate_body)
+        self.assertNotIn("name: release-jetbrains", candidate_body)
+        self.assertIn("strategy:\n      fail-fast: false", verify_body)
+        self.assertEqual(len(re.findall(r"(?m)^            product_code:", verify_body)), 4)
+        self.assertEqual(verify_body.count("channel: stable"), 2)
+        self.assertEqual(verify_body.count("channel: EAP"), 2)
+        for target in (
+            "product_code: IC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2025.1.1'\n            java_version: '21'",
+            "product_code: PC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2025.1.1'\n            java_version: '21'",
+            "product_code: IC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT\n            minimum_platform_version: ''\n            java_version: '25'",
+            "product_code: PC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT\n            minimum_platform_version: ''\n            java_version: '25'",
+        ):
+            self.assertIn(target, verify_body)
+        self.assertIn("matrix requested JDK", verify_body)
+        self.assertIn("requires JDK", verify_body)
+        self.assertIn("needs: candidate", verify_body)
+        self.assertIn("name: jetbrains-common-candidate", verify_body)
+        self.assertIn("Check candidate checksum and embedded descriptor", verify_body)
+        self.assertIn("name: Test ${{ matrix.product }} ${{ matrix.channel }}", verify_body)
+        self.assertIn("./gradlew --no-daemon --stacktrace test", verify_body)
+        self.assertIn("name: Verify candidate on ${{ matrix.product }} ${{ matrix.channel }}", verify_body)
+        self.assertIn("if: ${{ !cancelled() }}", verify_body)
+        self.assertIn("verifyPlugin", verify_body)
+        self.assertIn("-PverificationArchive=$PWD/build/release-assets/nagi-jetbrains-$RELEASE_VERSION.zip", verify_body)
+        self.assertIn('tasks.named<VerifyPluginTask>("verifyPlugin")', build)
+        self.assertIn("archiveFile.set(file(archivePath))", build)
+
+        self.assertIn("needs: [candidate, verify]", package_body)
+        self.assertIn("name: jetbrains-common-candidate", package_body)
+        self.assertIn("Recheck the exact candidate bytes before release upload", package_body)
+        self.assertNotIn("buildPlugin", package_body)
+        self.assertIn("name: release-jetbrains", package_body)
+        self.assertNotIn("release-jetbrains-IC", workflow)
+        self.assertNotIn("release-jetbrains-PC", workflow)
 
     def test_existing_pr_merge_gate_waits_for_the_reusable_plugin_workflow(self):
         workflow = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"

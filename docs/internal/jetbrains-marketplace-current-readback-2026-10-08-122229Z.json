@@ -1,0 +1,34 @@
+{
+  "readAtUtc": "2026-10-08T12:22:29Z",
+  "listingUrl": "https://plugins.jetbrains.com/plugin/34891-nagi",
+  "approvedVersionPageUrl": "https://plugins.jetbrains.com/plugin/34891-nagi/versions/stable/1189472",
+  "stableVersion": "0.1.1",
+  "availability": "PubliclyAvailable, per the latest user update; the stable version page was read-only fetched",
+  "apiUrl": "https://plugins.jetbrains.com/api/plugins/34891",
+  "apiFieldsReadBack": {
+    "id": 34891,
+    "name": "Nagi",
+    "xmlId": "com.disnana.nagi",
+    "approve": false,
+    "hasUnapprovedUpdate": false,
+    "isHidden": false,
+    "isBlocked": false,
+    "downloads": 0
+  },
+  "apiDescriptionReadBackExact": "Nagi High and Low language support: highlighting, folding, indentation,\n        and explicit compiler checks and project execution. Requires a separate Nagi compiler.",
+  "apiGettingStartedReadBack": {
+    "directMarketplaceInstallLink": true,
+    "githubReleasesZipFallback": true,
+    "compilerIsSeparate": true,
+    "englishHeadingPrecedesJapaneseHeading": true,
+    "observedHtmlTags": ["h3", "h4", "p", "a"]
+  },
+  "stableVersionPageReadBack": {
+    "httpStatus": 200,
+    "finalUrl": "https://plugins.jetbrains.com/plugin/34891-nagi/versions/stable/1189472",
+    "title": "Nagi - IntelliJ IDEs Plugin | Marketplace",
+    "openGraphUrl": "https://plugins.jetbrains.com:443/plugin/34891-nagi/versions/stable/1189472",
+    "htmlSha256": "1195ee8c509e3ea36027bb0df0d0502ce093a7378045fa517f42a8c7d0d3bbed"
+  },
+  "interpretation": "The latest user statement is the source of truth for the approved 0.1.1 listing. The API reports no unapproved update and its Getting Started HTML directs users to Marketplace or GitHub Releases. The API still returns the previous English-only description at this read time; the repository plugin.xml description has not been uploaded, so its Marketplace rendering is unverified. The raw approve=false API field is retained without interpreting it as availability. The earlier same-day pending-state readback is preserved separately as historical."
+}

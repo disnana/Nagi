@@ -22,22 +22,12 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  verify:
-    name: JetBrains (${{ matrix.product }})
+  candidate:
+    name: Build one common plugin candidate
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - product: IntelliJ IDEA
-            platformType: IC
-            platformVersion: '2025.1.1'
-            minimumPlatformVersion: '2024.3.7'
-          - product: PyCharm
-            platformType: PC
-            platformVersion: '2025.1.1'
-            minimumPlatformVersion: '2024.3.6'
+    timeout-minutes: 90
+    outputs:
+      version: ${{ steps.release-version.outputs.version }}
     defaults:
       run:
         working-directory: editors/jetbrains-nagi
@@ -86,39 +76,310 @@ jobs:
       - name: Build the current compiler for integration checks
         working-directory: .
         run: cargo build --locked -p nagic
-      - name: Test, package, and verify the selected IDE
-        env:
-          NAGI_TEST_COMPILER: ${{ github.workspace }}/target/debug/nagic
-        run: >-
-          ./gradlew --no-daemon --stacktrace test buildPlugin verifyPlugin
-          -PplatformType=${{ matrix.platformType }}
-          -PplatformVersion=${{ matrix.platformVersion }}
-          -PminimumPlatformVersion=${{ matrix.minimumPlatformVersion }}
-      - name: Verify the ZIP descriptor and prepare release assets
+      - name: Build the common archive once against stable IDEA
         env:
           RELEASE_VERSION: ${{ steps.release-version.outputs.version }}
-          PLATFORM_TYPE: ${{ matrix.platformType }}
+        run: >-
+          ./gradlew --no-daemon --stacktrace buildPlugin
+          -PplatformType=IC -PplatformVersion=2025.1.1 -PnagiJavaToolchainVersion=21
+      - name: Verify the common ZIP descriptor and checksum
+        env:
+          RELEASE_VERSION: ${{ steps.release-version.outputs.version }}
         run: >-
           python ../../scripts/releases/jetbrains.py
           --archive "build/distributions/nagi-jetbrains-$RELEASE_VERSION.zip"
-          --output ../../build/release-assets
-          --platform-type "$PLATFORM_TYPE"
+          --output build/release-assets
           --version "$RELEASE_VERSION"
-      - name: Upload the verified plugin and checksum
+      - name: Upload the candidate ZIP and checksum for independent verification
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-jetbrains-${{ matrix.platformType }}
+          name: jetbrains-common-candidate
           path: |
-            build/release-assets/nagi-jetbrains-${{ matrix.platformType }}-*.zip
-            build/release-assets/nagi-jetbrains-${{ matrix.platformType }}-*.zip.sha256
+            editors/jetbrains-nagi/build/release-assets/nagi-jetbrains-*.zip
+            editors/jetbrains-nagi/build/release-assets/nagi-jetbrains-*.zip.sha256
           if-no-files-found: error
-      - name: Upload test and compatibility reports
+
+  verify:
+    name: ${{ matrix.product }} ${{ matrix.channel }} test and verifier
+    needs: candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - product: IntelliJ IDEA
+            product_code: IC
+            channel: stable
+            platform_version: '2025.1.1'
+            minimum_platform_version: '2025.1.1'
+            java_version: '21'
+          - product: PyCharm
+            product_code: PC
+            channel: stable
+            platform_version: '2025.1.1'
+            minimum_platform_version: '2025.1.1'
+            java_version: '21'
+          - product: IntelliJ IDEA
+            product_code: IC
+            channel: EAP
+            platform_version: LATEST-EAP-SNAPSHOT
+            minimum_platform_version: ''
+            java_version: '25'
+          - product: PyCharm
+            product_code: PC
+            channel: EAP
+            platform_version: LATEST-EAP-SNAPSHOT
+            minimum_platform_version: ''
+            java_version: '25'
+    defaults:
+      run:
+        working-directory: editors/jetbrains-nagi
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java_version }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        id: rust
+      - name: Cache the compiler for integration checks
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: nagi-jetbrains-compiler-${{ runner.os }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'compiler/**', 'runtime/**') }}
+          restore-keys: |
+            nagi-jetbrains-compiler-${{ runner.os }}-${{ steps.rust.outputs.cachekey }}-
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
+        with:
+          name: jetbrains-common-candidate
+          path: editors/jetbrains-nagi/build/release-assets
+      - name: Check candidate checksum and embedded descriptor
+        env:
+          RELEASE_VERSION: ${{ needs.candidate.outputs.version }}
+        run: |
+          python - <<'PY'
+          import hashlib, os, sys
+          from pathlib import Path
+          sys.path.insert(0, '../../scripts/releases')
+          from jetbrains import archive_name, verify_archive
+          archive = Path('build/release-assets') / archive_name(os.environ['RELEASE_VERSION'])
+          checksum = archive.with_name(archive.name + '.sha256')
+          expected, name = checksum.read_text(encoding='utf-8').strip().split(maxsplit=1)
+          if name != archive.name:
+              raise SystemExit(f'checksum names {name!r}, expected {archive.name!r}')
+          actual = hashlib.sha256(archive.read_bytes()).hexdigest()
+          if actual != expected:
+              raise SystemExit(f'candidate checksum mismatch: {actual} != {expected}')
+          verify_archive(archive, os.environ['RELEASE_VERSION'])
+          PY
+      - name: Build the current compiler for integration checks
+        working-directory: .
+        run: cargo build --locked -p nagic
+      - name: Verify the selected Java compiler toolchain
+        env:
+          MATRIX_JAVA_VERSION: ${{ matrix.java_version }}
+        run: >-
+          ./gradlew --no-daemon --stacktrace verifyNagiJavaToolchain
+          -PnagiJavaToolchainVersion="$MATRIX_JAVA_VERSION"
+      - name: Test ${{ matrix.product }} ${{ matrix.channel }}
+        env:
+          NAGI_TEST_COMPILER: ${{ github.workspace }}/target/debug/nagic
+          PLATFORM_TYPE: ${{ matrix.product_code }}
+          PLATFORM_VERSION: ${{ matrix.platform_version }}
+          MATRIX_JAVA_VERSION: ${{ matrix.java_version }}
+        run: >-
+          ./gradlew --no-daemon --stacktrace test
+          -PplatformType="$PLATFORM_TYPE" -PplatformVersion="$PLATFORM_VERSION"
+          -PnagiJavaToolchainVersion="$MATRIX_JAVA_VERSION"
+      - name: Verify candidate on ${{ matrix.product }} ${{ matrix.channel }}
+        if: ${{ !cancelled() }}
+        env:
+          RELEASE_VERSION: ${{ needs.candidate.outputs.version }}
+          PLATFORM_TYPE: ${{ matrix.product_code }}
+          PLATFORM_VERSION: ${{ matrix.platform_version }}
+          MINIMUM_PLATFORM_VERSION: ${{ matrix.minimum_platform_version }}
+          MATRIX_JAVA_VERSION: ${{ matrix.java_version }}
+        run: |
+          args=(--no-daemon --stacktrace verifyPlugin \
+            "-PverificationArchive=$PWD/build/release-assets/nagi-jetbrains-$RELEASE_VERSION.zip" \
+            "-PplatformType=$PLATFORM_TYPE" "-PplatformVersion=$PLATFORM_VERSION" \
+            "-PnagiJavaToolchainVersion=$MATRIX_JAVA_VERSION")
+          if [ -n "$MINIMUM_PLATFORM_VERSION" ]; then
+            args+=("-PminimumPlatformVersion=$MINIMUM_PLATFORM_VERSION")
+          fi
+          ./gradlew "${args[@]}"
+      - name: Record the resolved IDE build from product-info.json
+        if: always()
+        env:
+          PLATFORM_TYPE: ${{ matrix.product_code }}
+          PLATFORM_VERSION: ${{ matrix.platform_version }}
+          PLATFORM_CHANNEL: ${{ matrix.channel }}
+          MATRIX_JAVA_VERSION: ${{ matrix.java_version }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import shutil
+          import subprocess
+          from pathlib import Path
+
+          platform_type = os.environ["PLATFORM_TYPE"]
+          requested_version = os.environ["PLATFORM_VERSION"]
+          channel = os.environ["PLATFORM_CHANNEL"]
+          expected_java_major = int(os.environ["MATRIX_JAVA_VERSION"])
+          java_version_output = subprocess.check_output(
+              ["java", "-version"], stderr=subprocess.STDOUT, text=True
+          )
+          java_version_match = re.search(r'version "(\d+)', java_version_output)
+          if java_version_match is None:
+              raise SystemExit(f"could not parse java -version output: {java_version_output}")
+          runtime_java_major = int(java_version_match.group(1))
+          if runtime_java_major != expected_java_major:
+              raise SystemExit(
+                  f"matrix requested JDK {expected_java_major}, but java runs as "
+                  f"JDK {runtime_java_major}"
+              )
+          compiler_record_path = Path("build/verification-metadata/nagi-java-toolchain.json")
+          if not compiler_record_path.is_file():
+              raise SystemExit("the selected Java compiler toolchain record is missing")
+          compiler_record = json.loads(compiler_record_path.read_text(encoding="utf-8"))
+          if compiler_record.get("expectedCompilerMajor") != expected_java_major:
+              raise SystemExit(f"compiler toolchain expectation does not match the matrix: {compiler_record}")
+          if compiler_record.get("selectedCompilerMajor") != expected_java_major:
+              raise SystemExit(f"Gradle selected the wrong javac toolchain: {compiler_record}")
+          if compiler_record.get("release") != 21:
+              raise SystemExit(f"the common plugin compiler release changed: {compiler_record}")
+          compile_tasks = compiler_record.get("compileTasks")
+          if not isinstance(compile_tasks, list) or not compile_tasks:
+              raise SystemExit(f"JavaCompile task evidence is missing: {compiler_record}")
+          for compile_task in compile_tasks:
+              if compile_task.get("selectedCompilerMajor") != expected_java_major or compile_task.get("release") != 21:
+                  raise SystemExit(f"a JavaCompile task selected an unexpected compiler or release: {compile_task}")
+          distribution = {
+              "IC": "ideaIC",
+              "PC": "pycharmPC",
+          }.get(platform_type)
+          if distribution is None:
+              raise SystemExit(f"unsupported IntelliJ platform type: {platform_type}")
+
+          artifact_directory = f"{distribution}-{requested_version}"
+          cache_root = Path.home() / ".gradle" / "caches"
+          candidates = sorted(
+              path for path in cache_root.rglob("product-info.json")
+              if artifact_directory in path.parts
+          )
+          if not candidates:
+              raise SystemExit(
+                  f"no product-info.json found below Gradle cache artifact {artifact_directory!r}"
+              )
+
+          resolved = []
+          for path in candidates:
+              descriptor = json.loads(path.read_text(encoding="utf-8"))
+              version = descriptor.get("version")
+              build_number = descriptor.get("buildNumber")
+              product_code = descriptor.get("productCode")
+              if not version or not build_number or not product_code:
+                  raise SystemExit(f"incomplete product-info.json: {path}")
+              identity = (version, build_number, product_code)
+              resolved.append((identity, path, descriptor))
+
+          identities = {item[0] for item in resolved}
+          if len(identities) != 1:
+              raise SystemExit(
+                  f"ambiguous SDK metadata for {artifact_directory}: {sorted(identities)}"
+              )
+
+          (version, build_number, product_code), source, descriptor = resolved[0]
+          raw_minimum_java = descriptor.get("minRequiredJavaVersion")
+          minimum_java_major = int(raw_minimum_java) if raw_minimum_java is not None else None
+          if minimum_java_major is not None and runtime_java_major < minimum_java_major:
+              raise SystemExit(
+                  f"{platform_type} {version} build {build_number} requires JDK "
+                  f"{minimum_java_major}, but this matrix job runs JDK {runtime_java_major}"
+              )
+          destination_dir = Path("build/verification-metadata")
+          destination_dir.mkdir(parents=True, exist_ok=True)
+          stem = f"{platform_type.lower()}-{channel}"
+          raw_destination = destination_dir / f"{stem}-product-info.json"
+          shutil.copyfile(source, raw_destination)
+          raw_sha256 = hashlib.sha256(raw_destination.read_bytes()).hexdigest()
+          record = {
+              "requestedPlatformVersion": requested_version,
+              "resolvedPlatformVersion": version,
+              "resolvedBuildNumber": build_number,
+              "resolvedProductCode": product_code,
+              "matrixJavaVersion": expected_java_major,
+              "javaRuntimeMajor": runtime_java_major,
+              "compilerToolchainMajor": compiler_record["selectedCompilerMajor"],
+              "compilerRelease": compiler_record["release"],
+              "sdkMinimumJavaVersion": minimum_java_major,
+              "productType": platform_type,
+              "channel": channel,
+              "gradleArtifactDirectory": artifact_directory,
+              "productInfoPathWithinGradleCache": source.relative_to(cache_root).as_posix(),
+              "productInfoSha256": raw_sha256,
+          }
+          (destination_dir / f"{stem}-resolved-platform.json").write_text(
+              json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(
+                  f"- {platform_type} {channel}: requested `{requested_version}`, "
+                  f"resolved `{version}` build `{build_number}` (`{product_code}`); "
+                  f"Gradle/JVM `{runtime_java_major}`, javac `{compiler_record['selectedCompilerMajor']}` "
+                  f"with bytecode release `{compiler_record['release']}` "
+                  f"(SDK minimum `{minimum_java_major}`).\n"
+              )
+          print(json.dumps(record, indent=2, sort_keys=True))
+          PY
+      - name: Upload IDE and compatibility reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: nagi-jetbrains-reports-${{ matrix.platformType }}
+          name: nagi-jetbrains-reports-${{ matrix.product_code }}-${{ matrix.channel }}
           path: |
             editors/jetbrains-nagi/build/reports/tests/
             editors/jetbrains-nagi/build/test-results/
             editors/jetbrains-nagi/build/reports/pluginVerifier/
+            editors/jetbrains-nagi/build/verification-metadata/
           if-no-files-found: warn
+
+  package:
+    name: Package verified common plugin ZIP
+    needs: [candidate, verify]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
+        with:
+          name: jetbrains-common-candidate
+          path: editors/jetbrains-nagi/build/release-assets
+      - name: Recheck the exact candidate bytes before release upload
+        env:
+          RELEASE_VERSION: ${{ needs.candidate.outputs.version }}
+        run: |
+          archive="editors/jetbrains-nagi/build/release-assets/nagi-jetbrains-$RELEASE_VERSION.zip"
+          (cd "$(dirname "$archive")" && sha256sum -c "$(basename "$archive").sha256")
+      - name: Upload the verified common plugin ZIP and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-jetbrains
+          path: |
+            editors/jetbrains-nagi/build/release-assets/nagi-jetbrains-${{ needs.candidate.outputs.version }}.zip
+            editors/jetbrains-nagi/build/release-assets/nagi-jetbrains-${{ needs.candidate.outputs.version }}.zip.sha256
+          if-no-files-found: error

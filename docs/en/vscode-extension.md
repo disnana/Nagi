@@ -19,7 +19,7 @@ Install from the [Marketplace](https://marketplace.visualstudio.com/items?itemNa
 code --install-extension Disnana.nagi-lang
 ```
 
-Disable or remove the old `nagi-local.nagi-language` or `Disnana.nagi-language` extensions. You can also install `nagi-language-VERSION.vsix` from [GitHub Releases](https://github.com/disnana/Nagi/releases) using **Extensions: Install from VSIX**.
+Disable or remove the old `nagi-local.nagi-language` or `Disnana.nagi-language` extensions. The current public asset verified in GitHub Releases is `nagi-language-0.1.13.vsix`, with a matching `.sha256` file. In VS Code, choose **Extensions: Install from VSIX** and select the downloaded file.
 
 The extension does not include the compiler. [Install Nagi](getting-started.md), then restart VS Code. Type checking needs `nagic`; building and running also need Rust/Cargo and your OS build tools.
 

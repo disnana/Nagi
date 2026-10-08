@@ -33,6 +33,12 @@ nagic --help
 
 The compiler released on 2026-10-07 reports `nagic 0.1.11`. You can also use `nagic -V` or `nagic version`. Verify the installed compiler with `nagic --version`. Version and help work without Rust or project configuration.
 
+### Install an editor extension
+
+Get the VS Code extension from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang) or download `nagi-language-0.1.13.vsix` and its `.sha256` from [GitHub Releases](https://github.com/disnana/Nagi/releases). In VS Code, use **Extensions: Install from VSIX** and select the file.
+
+**Nagi for JetBrains** for IntelliJ IDEA and PyCharm is available from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) or [GitHub Releases](https://github.com/disnana/Nagi/releases). Install directly from Marketplace in a compatible IDE, or download a ZIP from GitHub Releases. The published 0.1.1 release has `nagi-jetbrains-IC-0.1.1.zip` for IDEA and `nagi-jetbrains-PC-0.1.1.zip` for PyCharm. To install a Release ZIP, choose **Settings → Plugins → ⚙ → Install Plugin from Disk**, select the ZIP, then restart. Neither editor extension includes the compiler.
+
 ### Tools for building applications
 
 Along with Rust / Cargo, use the tools below. Your existing installation is fine.

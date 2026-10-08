@@ -39,7 +39,7 @@ nagic --version
 nagic --help
 ```
 
-A [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang) and an [IntelliJ IDEA/PyCharm plugin with Release ZIP installation instructions](editors/jetbrains-nagi/README.en.md) are available. See the [editor guide](docs/en/editor.md).
+The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang) is available from the Marketplace or [GitHub Releases](https://github.com/disnana/Nagi/releases). [Nagi for JetBrains](editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm is available from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) or [GitHub Releases](https://github.com/disnana/Nagi/releases). The published 0.1.1 release has separate `nagi-jetbrains-IC-0.1.1.zip` for IDEA and `nagi-jetbrains-PC-0.1.1.zip` for PyCharm, each with a matching `.sha256` file. Marketplace installs directly to the compatible IDE; Release ZIPs are installed manually. See the [editor guide](docs/en/editor.md).
 
 The installer comes from main; the compiler comes from a published Release. These examples target Nagi 0.1.11, officially released on 2026-10-07. Verify your installed compiler with `nagic --version`. See [CHANGELOG](CHANGELOG.md) for changes and the [0.1.11 migration guide](docs/en/migration-0.1.11.md) for compatibility notes.
 
