@@ -1,0 +1,78 @@
+{
+  "retrieved_date_jst": "2026-10-08",
+  "purpose": "RFC design guidance; no scanner or exploit execution",
+  "references": [
+    {
+      "name": "Authentication",
+      "url": "https://raw.githubusercontent.com/OWASP/CheatSheetSeries/master/cheatsheets/Authentication_Cheat_Sheet.md",
+      "bytes": 41242,
+      "sha256": "92f7483b28548679917a329c7b9be1824f33e934d9eed670aaf3e9a1e7b37e83"
+    },
+    {
+      "name": "Authorization",
+      "url": "https://raw.githubusercontent.com/OWASP/CheatSheetSeries/master/cheatsheets/Authorization_Cheat_Sheet.md",
+      "bytes": 31019,
+      "sha256": "2888ab0932fdb423d4bd683cb2a0f36e173192f127ed7ab3950269d27bb7ef46"
+    },
+    {
+      "name": "Cross-Site_Request_Forgery_Prevention",
+      "url": "https://raw.githubusercontent.com/OWASP/CheatSheetSeries/master/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.md",
+      "bytes": 60491,
+      "sha256": "816bf0b004eab70953697ba937b51a1ef7d4b2ff36757078274ca0bdd33b359a"
+    },
+    {
+      "name": "Cross_Site_Scripting_Prevention",
+      "url": "https://raw.githubusercontent.com/OWASP/CheatSheetSeries/master/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.md",
+      "bytes": 29851,
+      "sha256": "9f18289480d6a25d4750a3f1f3cfa820bf63d4e5d5e2307a69a6755609f34e91"
+    },
+    {
+      "name": "SQL_Injection_Prevention",
+      "url": "https://raw.githubusercontent.com/OWASP/CheatSheetSeries/master/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.md",
+      "bytes": 17871,
+      "sha256": "0c00c87970eceb404ec4061a30b0fbe3390d870244f3d0802465e20c39178bbb"
+    },
+    {
+      "name": "Server_Side_Request_Forgery_Prevention",
+      "url": "https://raw.githubusercontent.com/OWASP/CheatSheetSeries/master/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.md",
+      "bytes": 29588,
+      "sha256": "3ae2f474449eceadd74cc2c28edfdc405d935166550b2bd67965729b7d707652"
+    },
+    {
+      "name": "Session_Management",
+      "url": "https://raw.githubusercontent.com/OWASP/CheatSheetSeries/master/cheatsheets/Session_Management_Cheat_Sheet.md",
+      "bytes": 56989,
+      "sha256": "3c38656e2be6188be4fc31d8c1fadafaaa6f37accc27e411e3345c235d44c051"
+    },
+    {
+      "name": "Denial_of_Service",
+      "url": "https://raw.githubusercontent.com/OWASP/CheatSheetSeries/master/cheatsheets/Denial_of_Service_Cheat_Sheet.md",
+      "bytes": 15228,
+      "sha256": "429d4f36078a9b26e6d897c911571111bda3d0a7e9bda79dd7bc442935dc3382"
+    },
+    {
+      "name": "Fetch",
+      "url": "https://fetch.spec.whatwg.org/",
+      "bytes": 1931474,
+      "sha256": "81b021244f1b9a2c3e4b8dfd55721bb79f1ac54f5529119db166ff9f8dfa8be9"
+    },
+    {
+      "name": "RFC6265",
+      "url": "https://www.rfc-editor.org/rfc/rfc6265.txt",
+      "bytes": 79724,
+      "sha256": "dc4177094813e85a44a7897b892b76bc09160b3a03aea44f0f511f3a98f91933"
+    },
+    {
+      "name": "RFC9110",
+      "url": "https://www.rfc-editor.org/rfc/rfc9110.txt",
+      "bytes": 502941,
+      "sha256": "21c1cdce6ab0e5509b04d84a28000836c7a087cf786efe6f04877ebfff47232a"
+    },
+    {
+      "name": "RFC8725",
+      "url": "https://www.rfc-editor.org/rfc/rfc8725.txt",
+      "bytes": 30793,
+      "sha256": "737b7013a2495dcfd5481cf4c57c87e2455d537c4cec1140c9096a71fcef0812"
+    }
+  ]
+}

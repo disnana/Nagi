@@ -1,0 +1,46 @@
+{
+  "date_jst": "2026-10-08",
+  "baseline_main": "62bbda9e8e8a9b07b0b2c1fd92057a9751c36fe3",
+  "change_scope": "documentation only; no compiler/runtime/Cargo/version changes",
+  "independent_review": {
+    "model": "gpt-6.1-sol",
+    "reasoning": "high",
+    "resolved": [
+      "SF-R01",
+      "SF-R02",
+      "SF-R03",
+      "SF-R04"
+    ],
+    "unresolved": []
+  },
+  "checks": {
+    "website": {
+      "pages": 98,
+      "local_links_anchors_assets": "passed"
+    },
+    "onboarding_docs_only": "passed; code matches existing native-tested source, no new native run",
+    "sqlite_docs_only": "passed; bilingual code matches executable source",
+    "ci_policy_unittest": {
+      "tests": 59,
+      "result": "passed"
+    },
+    "git_diff_check": "passed",
+    "maintained_markdown_paths": {
+      "markdown_files": 246,
+      "local_links_and_images": 2531,
+      "missing": [],
+      "scope": "maintained Markdown outside archived benchmarks/results; local paths only, not external URLs/anchors"
+    },
+    "baseline_source_hashes": {
+      "files": 25,
+      "result": "match fixed main via git show"
+    }
+  },
+  "limits": [
+    "No new Rust/runtime/native or browser tests for this documentation-only RFC",
+    "Baseline full/four-platform CI is separate from RFC-head CI",
+    "Historical partial artifact links (145 in 12 unchanged files) were separated; artifacts were not rewritten",
+    "Public D1-D3 decisions remain unadopted",
+    "Dependency choices, actual browser/proxy/TLS/client integration, budgets, performance and migrations remain future acceptance"
+  ]
+}

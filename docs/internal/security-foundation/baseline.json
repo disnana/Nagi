@@ -1,0 +1,48 @@
+{
+  "main_commit": "62bbda9e8e8a9b07b0b2c1fd92057a9751c36fe3",
+  "main_tree": "a1bc0e601ea0f06a1d92940bc1c87da28a885ace",
+  "release_tag": "nagi-v0.1.11",
+  "release_commit": "003a594de086383100016b7c75466da37705646c",
+  "open_prs": [],
+  "observation_date_jst": "2026-10-08",
+  "ci": {
+    "checks_run": 37722308221,
+    "website_run": 37722307935,
+    "conclusion": "success",
+    "linux_job": 113132591789,
+    "native_jobs": {
+      "linux-x86_64": 113132606370,
+      "windows-x86_64": 113132606394,
+      "macos-arm64": 113132606442,
+      "macos-x86_64": 113132606451
+    },
+    "evidence": "GitHub run and job step readback, not local execution; release job skipped"
+  },
+  "source_sha256": {
+    "AGENTS.md": "9f9e9f11165ea1f93235c679eb686c679ce4b487fb6b862e8489c0081e2609a6",
+    "SECURITY.md": "346acf9db8c7504176d8cf8ba12d1c004962c58e3fe48bb00734d5a51b18fb85",
+    "SECURITY.en.md": "44eb39541ffd50add25a8ad876952602b6dbc1548fd71367193cd5860acbcca8",
+    "DESIGN.md": "c13e8c9c43fefdef47f4e503d86e323161a58296631ccf5761a1e6abf904c326",
+    "DESIGN.en.md": "8f04a90ab6d4559b656d5cd6f4346c7b53ae0d7f8da9de89ab4d38f6cfe3d855",
+    "compiler/src/parser.rs": "c52d5be1efe31863f9e714fb9f73fb49beb1672366cd35de133f535530c15440",
+    "compiler/src/source.rs": "97760d2bbeaa2b758f42442ee1987dc251daab2f433c7ec1c24ed4fcfbb95323",
+    "compiler/src/routes.rs": "35abbd527210e373a3442fa3b706c775abef76db7b3bcb3d99c00558774997c9",
+    "compiler/src/stdlib.rs": "c739a2f8ca64c8dc2a840267c3764a41a4d4885effbefc4813e259fa66333eff",
+    "compiler/src/capabilities.rs": "33fbed903f08ef35098e118237b2e3d194fb757913e2a1cd832c85d5011f31a3",
+    "compiler/src/check/checked.rs": "bc3fd3b60905df5083e11963422b77380c0d2932c13ddf5414ddf0a6fc4a6fdc",
+    "compiler/tests/auth_boundaries.rs": "c7cb72bb31e5414f9ac2052f5020fa1944cef18ec6c8714e896d63b662acf09b",
+    "runtime/src/auth.rs": "9324b87a9baa7d429f1418592658d628ef2f6e9d64bce7de7d378ccd6f752f86",
+    "runtime/src/http_server.rs": "b9d081eea566f26806436945620a329b95ca8a766029c1910e286a0fdd6751d8",
+    "runtime/src/http_server/tests.rs": "f1ca9cd884c68f54197d60a86592dc32ed758f5fa6ff3d653ee3996cb032438b",
+    "runtime/src/database.rs": "ce60cfa34428b00ad36a51b41ec8bf4d541a3e452fefa4140907744cf26beced",
+    "runtime/src/sqlite/mod.rs": "662958b509a9f0de5509a47a5a3fcc2d51e6128017eabac217af0ca5faede854",
+    "runtime/src/sqlite/session.rs": "e0fefe12fc7c25fc47b053e6cda36a3d18f048327d5e33cc7377c1f203cab7df",
+    "docs/internal/adr/001-backend-boundaries.md": "f41b1fc98407e897e21b618f3df20d5e6ad618f8171c872e4d09d51f7de801d1",
+    "docs/internal/adr/006-sealed-codegen-input.md": "9e338d403a73f3867a4d111b2f36f938ea8e23ba466c59f0bafe7cbc69d15369",
+    "docs/internal/adr/008-resource-contracts.md": "26b0335abe37abdf7aa948444e8b9f564e29391a5fe0ccabb6fd43ef7c974815",
+    "docs/internal/adr/010-sqlite-transaction-boundary.md": "6826a4b48926cd6f2fa2bf833e0ada747d3786dc75c4877c16ced749b368da41",
+    "docs/internal/adr/012-task-result-handles.md": "1283e2c2f4b982dda07f9dde670b5907db623098144ec5e162b166977e591539",
+    "docs/internal/compiler-rust-boundary-plan.md": "9deea49c47ce15e2f4aebb1709531ad60b387604e2c7be7601972bdca74e32de",
+    ".github/workflows/ci.yml": "1f1f995c2d459c5109981ac7be92dafe0594ce0787d2da20079ebd32f8b30062"
+  }
+}
