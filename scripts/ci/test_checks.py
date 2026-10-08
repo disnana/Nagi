@@ -370,7 +370,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIsNotNone(plugin_repositories)
         self.assertIn("gradlePluginPortal()", plugin_repositories.group("body"))
         self.assertIn("mavenCentral()", plugin_repositories.group("body"))
-        self.assertIn('id("org.jetbrains.intellij.platform") version "2.17.0"', build)
+        self.assertIn('id("org.jetbrains.intellij.platform") version "2.19.0"', build)
         self.assertIn('version = "0.1.1"', build)
         self.assertIn("options.release.set(21)", build)
         self.assertIn('sinceBuild = "251.25410.109"', build)
@@ -388,6 +388,32 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIn('descriptor.get("minRequiredJavaVersion")', workflow)
         self.assertIn('"javaRuntimeMajor": runtime_java_major', workflow)
         self.assertIn("editors/jetbrains-nagi/build/verification-metadata/", workflow)
+
+    def test_untrusted_project_fixture_disables_headless_trust_shortcut(self):
+        build = (self.repo / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
+        test_source = (self.repo / "editors/jetbrains-nagi/src/test/java/com/disnana/nagi/NagiRunLineMarkerTest.java").read_text(encoding="utf-8")
+        property_line = 'systemProperty("idea.trust.headless.disabled", "false")'
+        test_task = re.search(r"(?ms)^tasks\.test\s*\{(?P<body>.*?)^\}", build)
+
+        self.assertIsNotNone(test_task)
+        self.assertEqual(build.count(property_line), 1)
+        self.assertIn(property_line, test_task.group("body"))
+
+        method_start = test_source.index("public void testUntrustedProjectCannotInvokeCompiler()")
+        method_end = test_source.find("\n    public void ", method_start + 1)
+        method = test_source[method_start:method_end if method_end >= 0 else len(test_source)]
+        assertions = (
+            "TrustedProjects.setProjectTrusted(getProject(), false);",
+            'assertTrue(com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().isDocumentUnsaved(document));',
+            'assertFalse("the fixture must exercise actual untrusted-project handling",',
+            "new NagiCompilerAction.Run().execute(getProject(), file.getVirtualFile());",
+            'assertTrue("untrusted action must not save input before returning",',
+            "PlatformTestUtil.waitForAllBackgroundActivityToCalmDown();",
+            'assertFalse("untrusted project started the compiler", Files.exists(captured));',
+            'assertTrue("untrusted project input should remain unsaved",',
+        )
+        positions = [method.index(assertion) for assertion in assertions]
+        self.assertEqual(positions, sorted(positions))
 
     def test_published_marketplace_destination_and_release_zip_fallback(self):
         marketplace_url = "https://plugins.jetbrains.com/plugin/34891-nagi"

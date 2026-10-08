@@ -8,7 +8,7 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 plugins {
     java
-    id("org.jetbrains.intellij.platform") version "2.17.0"
+    id("org.jetbrains.intellij.platform") version "2.19.0"
 }
 
 group = "com.disnana.nagi"
@@ -158,6 +158,9 @@ providers.gradleProperty("verificationArchive").orNull?.let { archivePath ->
 
 tasks.test {
     systemProperty("java.awt.headless", "true")
+    // EAP 263 otherwise treats all headless/unit-test projects as trusted.
+    // Exercise the real trust gate; this property is limited to the test JVM.
+    systemProperty("idea.trust.headless.disabled", "false")
     testLogging {
         events = setOf(TestLogEvent.PASSED, TestLogEvent.FAILED, TestLogEvent.SKIPPED)
         exceptionFormat = TestExceptionFormat.FULL
