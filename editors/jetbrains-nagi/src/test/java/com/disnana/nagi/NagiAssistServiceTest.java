@@ -60,6 +60,13 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
                         new NagiAssistProtocol.Location(file, 2, 5, name.length()), false, "read")),
                 List.of(), List.of(file));
     }
+
+    public void testRustVerbatimWindowsSourcePathsHaveTheSameIdeIdentity() {
+        assertEquals(NagiAssistService.normalizePath("C:\\work\\main.nagi"),
+                NagiAssistService.normalizePath("\\\\?\\C:\\work\\main.nagi"));
+        assertEquals(NagiAssistService.normalizePath("\\\\server\\share\\main.low"),
+                NagiAssistService.normalizePath("\\\\?\\UNC\\server\\share\\main.low"));
+    }
     private void waitUntil(BooleanSupplier done) throws Exception {
         long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
         while (!done.getAsBoolean() && System.nanoTime() < deadline) {

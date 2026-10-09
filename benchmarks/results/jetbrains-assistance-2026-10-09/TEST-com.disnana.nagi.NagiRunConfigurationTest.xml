@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.disnana.nagi.NagiRunConfigurationTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-09T10:55:14.387Z" hostname="0cfdc6610e26" time="0.677">
+  <properties/>
+  <testcase name="testProducerCreatesConfigurationsForHighAndLowFilesOnly" classname="com.disnana.nagi.NagiRunConfigurationTest" time="0.15"/>
+  <testcase name="testRunConfigurationPersistsAndCopiesItsSourcePath" classname="com.disnana.nagi.NagiRunConfigurationTest" time="0.116"/>
+  <testcase name="testUntrustedProjectDoesNotSaveInputsOrCreateRunState" classname="com.disnana.nagi.NagiRunConfigurationTest" time="0.097"/>
+  <testcase name="testRunStateSavesInputsUsesProjectArgumentsAndCanStopTheCompiler" classname="com.disnana.nagi.NagiRunConfigurationTest" time="0.314"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

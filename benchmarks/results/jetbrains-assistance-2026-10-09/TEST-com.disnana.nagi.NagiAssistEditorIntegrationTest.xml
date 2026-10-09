@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.disnana.nagi.NagiAssistEditorIntegrationTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-09T10:55:03.505Z" hostname="0cfdc6610e26" time="6.722">
+  <properties/>
+  <testcase name="testRegisteredReferencesNavigateHighLowAndImportedFiles" classname="com.disnana.nagi.NagiAssistEditorIntegrationTest" time="4.529"/>
+  <testcase name="testRegisteredCompletionAndDiagnosticsUseUnsavedCompilerInput" classname="com.disnana.nagi.NagiAssistEditorIntegrationTest" time="1.632"/>
+  <testcase name="testMissingImportDiagnosticIsDisplayedWithoutInventingALocalSpan" classname="com.disnana.nagi.NagiAssistEditorIntegrationTest" time="0.56"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

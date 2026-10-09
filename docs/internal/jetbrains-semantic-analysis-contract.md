@@ -199,3 +199,10 @@ VS Codeのcompletion providerをこのPRで入れ替えてはいない。両IDE�
 性能目標はcache hitでprocess launchとdisk I/Oを増やさないこと、無効化されたsnapshotを再利用しないことを先に固定する。
 release常駐protocolの数百msという観測をもとに350ms diagnostic/80ms completion debounceを設定したが、
 入力から描画までの数値SLAはWindows GUI測定後に決める。これは性能より正確性を優先する境界である。
+
+最終retry指摘は `05460bc`で解消しSol Highが再確認した。single workerのfinally後にEDT callbackを投入し、
+未知dependencyに対する明示要求一回だけで自動再解析が完了するfixtureへ変更した。
+最終4 targeted tests/buildPluginは成功。cache 500 lookupは初回mean約0.157 ms、最新全69件時は約0.133 ms、追加launch0（Platform fixture、実GUIではない）。
+再回帰は99 result blocks/1012 passed/0 failed/1既存ignored、全workspace clippy/fmt成功。
+WindowsのRust canonical verbatim drive/UNC pathとIDE VFS pathは同じsource identityへ正規化し、
+navigationはcompiler targetをcanonical map経由で解決する。これはWindows実GUI試用の代用ではない。

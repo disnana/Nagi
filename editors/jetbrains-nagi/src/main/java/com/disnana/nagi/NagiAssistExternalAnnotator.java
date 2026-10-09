@@ -73,7 +73,8 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
             if (message == null || message.isBlank() || message.length() > 4096) continue;
             // Unloaded/missing modules and virtual stdlib origins retain the
             // compiler's message, but never acquire a guessed local range.
-            if (diagnostic.file() != null && !diagnostic.file().equals(file.getVirtualFile().getPath())) {
+            if (diagnostic.file() != null && !result.service().diagnosticOriginMatchesFile(
+                    result.response(), file.getVirtualFile(), diagnostic.file())) {
                 holder.newAnnotation(HighlightSeverity.ERROR, message).fileLevel().create();
                 continue;
             }

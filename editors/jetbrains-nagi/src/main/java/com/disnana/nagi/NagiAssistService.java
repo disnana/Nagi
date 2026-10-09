@@ -263,6 +263,11 @@ public final class NagiAssistService implements Disposable {
                     && samePath(response.snapshot.focusPath.toString(), canonical));
     }
 
+    public boolean diagnosticOriginMatchesFile(CachedResponse response, VirtualFile file, String diagnosticPath) {
+        return response != null && file != null && diagnosticPath != null
+                && samePath(diagnosticPath, canonicalPathFor(response.snapshot, file));
+    }
+
     /** Exact compiler reference lookup; PSI token shape never determines ownership or target. */
     public NagiAssistProtocol.Location referenceTarget(PsiFile file, PsiElement element) {
         CachedResponse response = fresh(file);
@@ -300,7 +305,9 @@ public final class NagiAssistService implements Disposable {
             return importedFile;
         }
         if (target.length() < 1) return null;
-        VirtualFile virtualFile = LocalFileSystem.getInstance().findFileByPath(target.file());
+        String targetPath = response.snapshot.canonicalPaths.get(path);
+        if (targetPath == null) return null;
+        VirtualFile virtualFile = LocalFileSystem.getInstance().findFileByPath(targetPath);
         if (virtualFile == null || !virtualFile.isValid() || !virtualFile.isInLocalFileSystem()) return null;
         PsiFile targetFile = PsiManager.getInstance(project).findFile(virtualFile);
         if (targetFile == null || !targetFile.isValid() || !responseContainsFile(response, virtualFile)) return null;
@@ -582,7 +589,7 @@ public final class NagiAssistService implements Disposable {
         diskPaths.add(focusPath);
         diskPaths.add(manifest == null ? source : manifest);
         for (String dependency : knownDependencies) {
-            Path dependencyPath = Path.of(dependency);
+            Path dependencyPath = Path.of(NagiAssistProtocol.physicalPath(dependency));
             // Removed imports are rediscovered from the new compiler graph.
             if (Files.isRegularFile(dependencyPath)) diskPaths.add(dependencyPath);
         }
@@ -603,7 +610,7 @@ public final class NagiAssistService implements Disposable {
         for (String source : response.sourceFiles()) if (!source.startsWith("stdlib:")) dependencies.add(source);
         for (NagiAssistProtocol.Diagnostic diagnostic : response.diagnostics()) {
             if (diagnostic.file() != null && !diagnostic.file().isBlank() && !diagnostic.file().startsWith("stdlib:")
-                    && Files.isRegularFile(Path.of(diagnostic.file())))
+                    && Files.isRegularFile(Path.of(NagiAssistProtocol.physicalPath(diagnostic.file()))))
                 dependencies.add(diagnostic.file());
         }
         knownDependencies = Set.copyOf(dependencies);
@@ -618,7 +625,7 @@ public final class NagiAssistService implements Disposable {
         for (String source : response.sourceFiles()) addCompilerSource(snapshot, stamps, canonicalPaths, seen, source);
         for (NagiAssistProtocol.Diagnostic diagnostic : response.diagnostics()) {
             if (diagnostic.file() != null && !diagnostic.file().isBlank()
-                    && !diagnostic.file().startsWith("stdlib:") && Files.isRegularFile(Path.of(diagnostic.file()))) {
+                    && !diagnostic.file().startsWith("stdlib:") && Files.isRegularFile(Path.of(NagiAssistProtocol.physicalPath(diagnostic.file())))) {
                 addCompilerSource(snapshot, stamps, canonicalPaths, seen, diagnostic.file());
             }
         }
@@ -633,7 +640,7 @@ public final class NagiAssistService implements Disposable {
                                           Set<String> seen, String source) throws SnapshotBlockedException {
         if (source.startsWith("stdlib:")) return;
         Path actual;
-        try { actual = canonicalExisting(Path.of(source), false); }
+        try { actual = canonicalExisting(Path.of(NagiAssistProtocol.physicalPath(source)), false); }
         catch (InvalidPathException exception) {
             throw new SnapshotBlockedException(State.STALE, "The compiler returned an invalid source path; its response was discarded.");
         }
@@ -898,7 +905,7 @@ public final class NagiAssistService implements Disposable {
         String base = project.getBasePath();
         if (base != null && pathUnder(path, normalizePath(base))) return true;
         return knownSourcePaths.stream().filter(known -> !known.startsWith("stdlib:"))
-                .map(known -> Path.of(known).getParent())
+                .map(known -> Path.of(NagiAssistProtocol.physicalPath(known)).getParent())
                 .filter(Objects::nonNull)
                 .anyMatch(parent -> pathUnder(path, normalizePath(parent.toString())));
     }
@@ -1080,8 +1087,8 @@ public final class NagiAssistService implements Disposable {
     private static boolean isManifest(VirtualFile file) {
         return file != null && file.isValid() && "nagi.toml".equalsIgnoreCase(file.getName());
     }
-    private static String normalizePath(String path) {
-        String value = path.replace('\\', '/');
+    static String normalizePath(String path) {
+        String value = NagiAssistProtocol.physicalPath(path).replace('\\', '/');
         return SystemInfo.isWindows ? value.toLowerCase(Locale.ROOT) : value;
     }
     private static boolean samePath(String left, String right) {

@@ -272,6 +272,17 @@ public final class NagiAssistProtocol {
     private static void requireProtocolPath(String value, boolean allowStandardSource) {
         if (value == null || value.isBlank() || value.indexOf('\0') >= 0) throw new IllegalArgumentException("invalid source path");
         if (allowStandardSource && value.startsWith("stdlib:")) return;
-        if (!Path.of(value).isAbsolute()) throw new IllegalArgumentException("source paths must be absolute");
+        if (!Path.of(physicalPath(value)).isAbsolute()) throw new IllegalArgumentException("source paths must be absolute");
+    }
+
+    /** Rust canonical Windows paths use verbatim drive/UNC prefixes. IDEA's
+     * VFS uses the equivalent ordinary absolute spelling; preserve source identity. */
+    static String physicalPath(String value) {
+        String slashes = value.replace('\\', '/');
+        if (slashes.regionMatches(true, 0, "//?/UNC/", 0, 8)) return "//" + slashes.substring(8);
+        if (slashes.startsWith("//?/") && slashes.length() >= 7
+                && Character.isLetter(slashes.charAt(4)) && slashes.charAt(5) == ':' && slashes.charAt(6) == '/')
+            return slashes.substring(4);
+        return value;
     }
 }

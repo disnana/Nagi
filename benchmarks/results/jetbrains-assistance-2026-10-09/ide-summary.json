@@ -1,0 +1,12 @@
+{
+  "tests": 69,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "cache_lookups": 500,
+  "cache_mean_ms": 0.133018374,
+  "cache_additional_launches": 0,
+  "IDE": "IC EAP 2026.3",
+  "JDK": "25/release21",
+  "gui_trial": false
+}

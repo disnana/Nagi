@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-09: JetBrains意味解析と標準Runの候補PR
+
+[#104](https://github.com/disnana/Nagi/pull/104)をmain `3b8da226`向けDraftで作成した。compiler正本の補完・definition navigation・live diagnostics、project常駐process/workerとsnapshot、標準右クリックRun/上部Run/Stopを実装。0.1.3は公開前候補で、公開0.1.2と既存IDを維持する。compiler17、IDE69/0skip/buildPlugin、workspace1012 passed/0 failed/1既存Task cost ignored、fmt/clippy/fuzz/Docsを確認。Sol High独立reviewのP2 3件を修正しRED/GREENを保存。Windows source keyの追加差分と最終HEAD CIはPR本文/Checksで読戻し、GUI trialはユーザーが実施する。matching Windows compilerを同HEAD artifactで用意し、merge/tag/正式release/Marketplace uploadはしていない。[結果](jetbrains-semantic-assistance-results.md)・[引継ぎ](handoffs/2026-10-09-jetbrains-semantic-assistance.md)へ現行境界/次順序を記録した。Security Foundationの#100/#101はmerge済み、再開順は別PRのSF05→SF02→SF03である。
+
 ## 2026-10-09: Nagi for JetBrains 0.1.2の正式GitHub公開
 
 ユーザーの「合格したのでリリース許可」を受け、#102の最終head `4bafb285`をmain `2202623`へマージした。tree一致、最終PRの4 OS・四SDK・website成功を読戻し、main checks37861515646の全必須検証・publish-release成功、website37861515402成功を確認。[jetbrains-v0.1.2](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.2)は2026-10-09T00:28:08Zに正式公開。IDEA/PyCharm共通ZIP一つとSHA-256だけを配布し、公開ファイルの実取得・内側descriptor・checksumを確認した。既存ID/Marketplaceページを維持し、本体0.1.11・VS Code0.1.13の版とReleaseは変更していない。Marketplace提出はユーザー担当、個別GUI操作結果や0.1.2のMarketplace公開状態は推測しない。
