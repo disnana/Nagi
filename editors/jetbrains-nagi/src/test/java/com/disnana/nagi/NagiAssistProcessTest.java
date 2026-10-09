@@ -77,7 +77,10 @@ public final class NagiAssistProcessTest {
         public static void main(String[] args) throws Exception {
             var input = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
             if (input.readLine() == null) return;
-            java.nio.file.Files.writeString(Path.of(args[0]), Long.toString(ProcessHandle.current().pid()));
+            Path marker = Path.of(args[0]);
+            Path pending = marker.resolveSibling("pending.pid");
+            java.nio.file.Files.writeString(pending, Long.toString(ProcessHandle.current().pid()));
+            java.nio.file.Files.move(pending, marker, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
             // Keep the request pending until the parent terminates this peer.
             input.readLine();
         }
