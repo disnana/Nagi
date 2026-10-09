@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, HashSet},
-    io::Read,
+    io::{BufRead, Read, Write},
     path::{Path, PathBuf},
 };
 
@@ -25,6 +25,40 @@ pub(crate) struct Query {
 pub(crate) struct Request {
     pub files: HashMap<PathBuf, String>,
     pub query: Option<Query>,
+}
+
+/// Serialized, bounded requests on a long-lived process. Every request owns its
+/// overlays and reloads the project configuration; no stale AST/facts survive.
+pub(crate) fn serve(
+    mut input: impl BufRead,
+    mut output: impl Write,
+    args: &[String],
+    cwd: &Path,
+) -> Result<(), String> {
+    loop {
+        let mut frame = Vec::new();
+        let count = input
+            .by_ref()
+            .take(16_000_002)
+            .read_until(b'\n', &mut frame)
+            .map_err(|e| e.to_string())?;
+        if count == 0 {
+            return Ok(());
+        }
+        if frame.len() > 16_000_001 || frame.last() != Some(&b'\n') {
+            return Err("assist frame requires newline and at most 16 MB".into());
+        }
+        frame.pop();
+        let request = read_request(frame.as_slice(), cwd)?;
+        let options = crate::project::resolve(args, cwd)?;
+        let response = analyze(&options.source, &options.native, request)?.to_string();
+        if response.len() > 8_000_000 {
+            return Err("assist response exceeds 8 MB".into());
+        }
+        writeln!(output, "{response}")
+            .and_then(|_| output.flush())
+            .map_err(|e| e.to_string())?;
+    }
 }
 pub(crate) fn read_request(input: impl Read, cwd: &Path) -> Result<Request, String> {
     #[derive(Deserialize)]

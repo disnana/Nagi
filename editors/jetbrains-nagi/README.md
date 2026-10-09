@@ -6,7 +6,7 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは[�
 
 プラグインの版は`build.gradle.kts`で管理します。GitHub Releasesの共通ZIPは0.1.2です。Marketplaceの対応版は既存ページで確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
 
-## できること
+## 0.1.2でできること
 
 - `.nagi`（High）と`.low`（Low）の色分け。
 - 行コメント、括弧の対応・補完、ブロックの折りたたみ。
@@ -15,7 +15,15 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは[�
 - `def main()`・`async def main()`・Lowの`fn main()`の左にある▶からも実行できます。
 - コンパイラ出力のファイル位置をクリックしてソースへ移動。
 
-全体の自動整形、型に基づく補完、定義への移動、自動型検査は未対応です。型検査は手動でNagiコンパイラを呼び出します。
+ここに記した機能は公開済み0.1.2のものです。0.1.2では全体の自動整形、型に基づく補完、定義への移動、自動型検査は未対応です。型検査は手動でNagiコンパイラを呼び出します。
+
+## 0.1.3候補（未リリース）
+
+別の未リリース候補では、コンパイラを使ったHigh/Lowの補完、構造化診断、コンパイラが正確な参照先を返す場合の定義への移動と、IDE標準のNagi Run Configurationを追加しています。一度保存したローカル`.nagi`・`.low`の開いている未保存bufferは解析用snapshotに含めます。新規未保存fileは対象外です。候補は現在のsource・open buffers・compiler設定が変わると古い応答を破棄します。
+
+semantic assistanceには**同じsource commitから作った対応版`nagic`**が必要です。公開済みcompilerや別commitのcompilerはassist protocolに対応しません。解析はエディター向けの部分解析で、完全なbuild成功を保証せず、診断もcompilerが最初に返すエラーに限られます。project内では、対象sourceがentryからのimportまたはnative graphに含まれている必要があります。構文やcheckerがその位置でread可能と認めない候補は表示されず、候補が表示されても編集後の代入・move・callの妥当性を保証しません。record fieldの宣言先などcompilerが正確なsource spanを返さない参照には移動できません。`nagi.toml`に未保存の変更がある場合は、保存するまでsemantic assistanceを実行しません。
+
+IDE標準のRun Configurationは、既存のローカル`.nagi`または`.low`を開いてNagi設定を作り、通常のRun/Stop操作でコンパイラを起動します。近くに`nagi.toml`があればそのentryを使い、実行前に未保存ファイルを保存し、信頼されていないprojectでは起動を拒否します。これらは0.1.3候補の未リリース機能で、公開済み0.1.2には含まれません。候補版はActionsの検証artifactであり、GitHub ReleaseやMarketplaceへの公開版ではありません。
 
 ## インストール
 
@@ -29,7 +37,7 @@ GitHub ReleasesのZIPを使う場合は、IDEの **Settings → Plugins → ⚙ 
 
 Nagiファイルを開き、右クリックまたはToolsメニューから **Nagi: Check** / **Nagi: Run** を選びます。実行前に開いているファイルを保存します。信頼していないプロジェクトではコンパイラを起動しません。
 
-`main`の左の▶は同じ **Nagi: Run** を起動します。IDE上部で選ばれているPythonなどの実行設定は使いません。近くに`nagi.toml`がある場合は、そのプロジェクトのentryを実行します。
+0.1.2では`main`の左の▶が **Nagi: Run** を起動します。IDE上部で選ばれているPythonなどの実行設定は使いません。近くに`nagi.toml`がある場合は、そのプロジェクトのentryを実行します。次版候補では同じNagi実行をIDE標準のRun ConfigurationからRun/Stopできます。
 
 出力はRunウィンドウに表示します。型検査の制限時間は既定で30秒、設定で1〜300秒に変更できます。サーバーなどのRunには時間制限を設けず、RunウィンドウのStopで終了します。生成物はIDEのsystemディレクトリ内の`nagi`に置きます。
 

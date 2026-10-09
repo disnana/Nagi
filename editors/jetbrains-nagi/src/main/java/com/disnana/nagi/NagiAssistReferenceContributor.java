@@ -17,7 +17,8 @@ public final class NagiAssistReferenceContributor extends PsiReferenceContributo
             @Override public PsiReference @NotNull [] getReferencesByElement(@NotNull PsiElement element,
                                                                               @NotNull ProcessingContext context) {
                 PsiFile file = element.getContainingFile();
-                if (file == null || !NagiCompilerAction.isSourceFile(file.getVirtualFile()) || !isNameToken(element)) {
+                if (file == null || !NagiCompilerAction.isSourceFile(file.getVirtualFile())
+                        || !(element instanceof NagiParserDefinition.ReferenceElement)) {
                     return PsiReference.EMPTY_ARRAY;
                 }
                 NagiAssistService service = file.getProject().getService(NagiAssistService.class);
@@ -34,10 +35,4 @@ public final class NagiAssistReferenceContributor extends PsiReferenceContributo
         });
     }
 
-    private static boolean isNameToken(PsiElement element) {
-        var token = element.getNode().getElementType();
-        return token == NagiTokens.get(NagiTokenScanner.Kind.IDENTIFIER)
-                || token == NagiTokens.get(NagiTokenScanner.Kind.TYPE)
-                || token == NagiTokens.get(NagiTokenScanner.Kind.KEYWORD);
-    }
 }

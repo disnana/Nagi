@@ -133,7 +133,15 @@ fn iterator_member_candidates_preserve_borrowed_receiver_metadata() {
     let text = "class Item:\n    text: str\n    count: i64\ndef inspect(items: List[Item]):\n    for item in items:\n        item.\n";
     let v = f.analyze(text, "item.");
     assert_eq!(names(&v), ["count", "text"]);
-    assert!(v["completion"]["items"].as_array().unwrap().iter().all(|item| item["borrowed"] == true && item["access"] == "read"), "{}", v["completion"]);
+    assert!(
+        v["completion"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item["borrowed"] == true && item["access"] == "read"),
+        "{}",
+        v["completion"]
+    );
 }
 #[test]
 fn nested_member_candidates_preserve_shared_ancestors_and_owned_counterexample() {
@@ -143,7 +151,11 @@ fn nested_member_candidates_preserve_shared_ancestors_and_owned_counterexample()
         let text = format!("class Inner:\n    text: str\nclass Outer:\n    inner: Inner\ndef inspect(item: {receiver}):\n    item.inner.\n");
         let v = f.analyze(&text, "item.inner.");
         assert_eq!(names(&v), ["text"], "{receiver}");
-        assert_eq!(v["completion"]["items"][0]["borrowed"], borrowed, "{receiver}: {}", v["completion"]);
+        assert_eq!(
+            v["completion"]["items"][0]["borrowed"], borrowed,
+            "{receiver}: {}",
+            v["completion"]
+        );
         assert_eq!(v["completion"]["items"][0]["access"], "read");
     }
 }
@@ -330,4 +342,119 @@ fn inherited_limits_and_invalid_surrogate_positions_do_not_fall_back_to_saved_co
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("128"));
     assert!(output.stdout.is_empty());
+}
+
+#[test]
+fn persistent_assistance_reuses_process_without_reusing_old_overlay_facts() {
+    use std::io::{BufRead, BufReader};
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    saved = 1\n");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .args(["assist", "main.nagi", "--editor-input", "--serve"])
+        .current_dir(&f.0)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut input = child.stdin.take().unwrap();
+    let mut output = BufReader::new(child.stdout.take().unwrap());
+    for name in ["fresh", "latest"] {
+        let request = serde_json::json!({"files":[{"file":"main.nagi","text":format!("def main():\n    {name} = True\n    la\n")}],"query":{"file":"main.nagi","line":3,"column":7}});
+        writeln!(input, "{request}").unwrap();
+        input.flush().unwrap();
+        let mut line = String::new();
+        assert_ne!(
+            output.read_line(&mut line).unwrap(),
+            0,
+            "server exited before response"
+        );
+        let response: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert!(names(&response).contains(&name));
+        assert!(!names(&response).contains(&"saved"));
+        if name == "latest" {
+            assert!(!names(&response).contains(&"fresh"));
+        }
+        assert_eq!(response["full_compile_checked"], false);
+    }
+    drop(input);
+    assert!(child.wait().unwrap().success());
+}
+
+#[test]
+fn frontend_acceptance_matches_normal_check_for_high_saved_and_handwritten_low() {
+    let f = Fixture::new();
+    let high = "def main():\n    number = 7\n    print(number)\n";
+    f.write("main.nagi", high);
+    let response = f.request(serde_json::json!({"files":[]}));
+    assert_eq!(response["frontend_accepted"], true);
+    assert!(response["diagnostics"].as_array().unwrap().is_empty());
+    let lower = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .current_dir(&f.0)
+        .args(["lower", "main.nagi", "--out", "generated"])
+        .output()
+        .unwrap();
+    assert!(
+        lower.status.success(),
+        "{}",
+        String::from_utf8_lossy(&lower.stderr)
+    );
+    f.write(
+        "manual.low",
+        "fn main() { let number = 7; print(number); }\n",
+    );
+    for path in ["main.nagi", "generated/generated.low", "manual.low"] {
+        let checked = Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .current_dir(&f.0)
+            .args(["check", path])
+            .output()
+            .unwrap();
+        assert!(
+            checked.status.success(),
+            "{path}: {}",
+            String::from_utf8_lossy(&checked.stderr)
+        );
+        let mut child = Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .current_dir(&f.0)
+            .args(["assist", path, "--editor-input"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"{\"files\":[]}")
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(output.status.success());
+        let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(response["frontend_accepted"], true, "{path}: {response}");
+        assert_eq!(response["full_compile_checked"], false);
+    }
+}
+
+#[test]
+fn persistent_protocol_refuses_malformed_frame_without_fallback() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(1)\n");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .current_dir(&f.0)
+        .args(["assist", "main.nagi", "--editor-input", "--serve"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"{\"files\":[],\"unknown\":true}\n{\"files\":[]}\n")
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unknown field"));
 }

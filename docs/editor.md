@@ -2,9 +2,11 @@
 
 [目次](README.md) · [準備と最初の実行](getting-started.md) · [拡張のインストールと設定](../editors/vscode-nagi/README.md)
 
-VS Code拡張はMarketplaceまたはGitHub ReleasesのVSIXから導入できます。IntelliJ IDEA・PyCharm向け[Nagi for JetBrains](https://github.com/disnana/Nagi/blob/main/editors/jetbrains-nagi/README.md)は[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)または[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。Marketplaceから対応IDEへ直接インストールするか、GitHub ReleasesのZIPを手動で入れてください。公開ファイル名は[導入ガイド](getting-started.md)を参照してください。
+VS Code拡張はMarketplaceまたはGitHub ReleasesのVSIXから導入できます。IntelliJ IDEA・PyCharm向け[Nagi for JetBrains](https://github.com/disnana/Nagi/blob/main/editors/jetbrains-nagi/README.md)の公開済み0.1.2は[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)または[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。Marketplaceから対応IDEへ直接インストールするか、GitHub ReleasesのZIPを手動で入れてください。公開ファイル名は[導入ガイド](getting-started.md)を参照してください。
 
 JetBrainsプラグイン0.1.2はIntelliJ IDEA 2025.1.1 build 251.25410.109以降、PyCharm 2025.1.1 build 251.25410.122以降を対象とします。2025.1 branch初期buildでは0.1.2のtrust checkが使う公開APIが解決されないため、この版の対象外です。2024.3または2025.1初期buildの利用者は公開済み0.1.1を保持するか、対応buildへIDE更新後に新版へ移行してください。GitHub Releasesの0.1.2では、両IDE共通のZIPを使います。
+
+0.1.3候補（未リリース）では、matching compilerが返す情報に基づくHigh/Lowの補完・診断・一部の定義への移動と、IDE標準のRun Configurationを開発中です。semantic assistanceには同じsource commitから作成した`nagic`が必要です。部分解析のため完全なbuild成功を保証せず、診断はcompilerが最初に返すエラーに限られます。project内のsourceはentryからのimport/native graphに含まれている必要があります。`nagi.toml`の未保存変更がある間は止まり、参照先の正確なsource spanがない場合は定義へ移動できません。この候補機能は公開済み0.1.2には含まれず、0.1.3のCI検証artifactとして扱い、GitHub ReleaseやMarketplaceには公開していません。詳しい制約は[JetBrains導入ガイド](../editors/jetbrains-nagi/README.md)を参照してください。
 
 Nagi拡張0.1.13と、0.1.11の公開記録で入手可能と確認できた`nagic` 0.1.11を使って、型ホバー・フィールド補完・定義への移動を試します。この文書は0.1.11リリース対象です。リポジトリをVS Codeで開くか、以下のコードを自分のフォルダーへ保存してください。
 

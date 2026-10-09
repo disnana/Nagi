@@ -31,6 +31,7 @@ Options:
   --cost-report           Write an allocation/copy cost report
   --rust-diagnostics      Include generated Rust diagnostic details (build/run)
   --editor-input          Read editor buffers from stdin (check/symbols/assist)
+  --serve                 Reuse assist process (one JSON request/response per line)
   --sql-schema FILE       Check literal SQL against an offline DDL snapshot (check)
   --sql-dialect sqlite    Required with --sql-schema; SQLite only
   --format FORMAT         Map output: mermaid (default), d2, json, html, svg, png
@@ -45,7 +46,7 @@ Options:
 Map notes:
   SVG/PNG require --output with a matching .svg/.png extension and local D2.
   Available layouts depend on the installed D2 version.
-  architecture, dataflow, trace, cost, and --serve are not implemented.";
+  architecture, dataflow, trace, cost, and map --serve are not implemented.";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -126,6 +127,8 @@ pub struct Options {
     pub rust_diagnostics: bool,
     /// Read editor buffers from stdin for symbols/assist or an in-memory check.
     pub editor_input: bool,
+    /// Internal assist transport only; does not execute user/native code.
+    pub editor_serve: bool,
     pub sql_schema: Option<PathBuf>,
     /// Set only when a project is selected. Plain SOURCE commands keep their cwd.
     pub project_root: Option<PathBuf>,
@@ -449,6 +452,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let mut cost = false;
     let mut rust_diagnostics = false;
     let mut editor_input = false;
+    let mut editor_serve = false;
     let mut sql_schema = None;
     let mut sql_dialect = None;
     let mut i = 1;
@@ -510,6 +514,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
                 }
                 editor_input = true;
             }
+            "--serve" if command == "assist" && !editor_serve => editor_serve = true,
             x if x.starts_with('-') => return Err(format!("unknown option: {x}")),
             x => {
                 if source.replace(cwd.join(x)).is_some() {
@@ -520,6 +525,9 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         i += 1;
     }
     validate_dependencies(&dependencies)?;
+    if editor_serve && !editor_input {
+        return Err("assist --serve requires --editor-input".into());
+    }
     if rust_diagnostics && !matches!(command.as_str(), "build" | "run") {
         return Err("--rust-diagnostics is supported only by build/run".into());
     }
@@ -605,6 +613,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         cost,
         rust_diagnostics,
         editor_input,
+        editor_serve,
         sql_schema,
         project_root,
         manifest_path,

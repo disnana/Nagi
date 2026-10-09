@@ -111,13 +111,13 @@ IDEは後者やJSON/version不一致でresultを破棄し、saved sourceや独�
 
 ## IDE側の世代・trust・performance
 
-compiler protocolはepochを保存しないone-shot。IDEがlaunch時にproject、全buffer version/content、
+compiler protocolはepochを保存しない。one-shotと `assist --serve`（改行区切りJSON）を提供し、IDEはproject/command plan単位の常駐processを再利用する。requestは直列化し、取消・timeout・protocol失敗はprocessを停止して次requestのresponse混同を防ぐ。各requestのframeは16 MB、responseは8 MBに制限し、requestごとにmanifest/overlay/sourceを読み直す。IDEがlaunch時にproject、全buffer version/content、
 query、compiler executable/config/native/import identityをcaptureする。どれか変化すれば結果を捨てる。
 diagnostics/completion/navigationとも同じsnapshotに属する。project switch/dispose/cancelはprocessを
 kill/reapし、古いsnapshotを新bufferへ適用しない。project trust承認前はcompilerをlaunchしない。
 これらはJava project serviceの責任でありcompiler responseの受信だけでは保証しない。
 
-debounce/cancellation/cacheはIDE側。compilerはsourceの再parse/checkを行いincrementalとは呼ばない。
+debounce/cancellation/cacheはIDE側。同じsnapshotの解析失敗も記録し、annotatorの再実行で同一失敗processを起動し続けない。変更後は新snapshotとして再解析する。利用不可・未信頼・未保存manifest・上限・失敗の理由はcodeのcompiler errorと分け、file-level editor noticeで示す。compilerはsourceの再parse/checkを行いincrementalとは呼ばない。
 query取得済みtyped programをsymbols serializationへ再利用し、binding位置はfileごとに1回lexして
 引く。candidateごとのfile再lexとloop intersectionの二重全走査を避ける。
 実測条件/latency/候補数/失敗入力をartifactsに保存し、最終IDE latencyはJava fixtureで別検証する。
@@ -136,7 +136,7 @@ surrogate中間、original module line-only error、cycle/tab/input limit、bran
 record member completionのtargetはnullで、完全なrecord-field Go To Definitionには追加の正確な
 parser field spanまたは曖昧でない検証済みdeclaration token lookupが必要。resource fieldは既存registry位置を使う。
 
-最終targeted検証: assist12、symbols21、module_symbols5、project12、conformance6、
+初期試作のtargeted検証: assist12、symbols21、module_symbols5、project12、conformance6、
 explicit_moves9、frontend_contracts13、shared_field_moves4、view_flow_completion3、view_origins10はpass。
 `clippy --locked -p nagic --all-targets -- -D warnings`、fmt check、diff checkもpass。
 通常frontend native実行は初回registry/proxy接続でinfra failure。
@@ -146,5 +146,26 @@ warm targetを使ったnative成功をclean build成功とは扱わない。
 debug one-shotの10/100/500 local benchmarkは、候補数/診断をassertして測定した。
 同時native build中のp50は約1.10/1.35/1.61秒、最大4.07秒。
 別のwarm build中のCPU付き測定はp50約1.03/1.37/1.39秒、最大5.48秒。
-release build/optimized benchmarkはparentへ引き継ぎ、IDE end-to-end latencyは未確認。
+この初期試作時点ではoptimized benchmarkを引継ぎ、IDE end-to-end latencyは未確認だった。
 raw JSONと再現scriptはartifactsのperformance-debug*.json / measure_assistance.py。
+
+## 2026-10-09 継続検証（公開前候補）
+
+main `3b8da226eb26c27187f3b0bc4fa39639abe4ac57`へ保全した試作をrebaseした。
+0.1.3は候補versionであり、公開0.1.2の説明へ混ぜない。
+compiler契約は17件成功（High・保存Low・手書きLowの通常frontend判定、常駐processのoverlay更新、invalid frame拒否を含む）。
+workspace全体は101 result blocks・1012 passed・0 failed・1 ignored。ignoredは既存Task cost測定。
+このworkspace実行時点のassistは15件で、その後追加した2件はtargeted 17件として実行した。
+fmt、workspace all-targets clippy、bounded fuzz-smoke（text1000/native16、panic0）、release scripts116件、CI scripts63件、website102ページも成功。
+
+optimized release compilerの常駐protocol測定は、7回ずつ10/100/500 local、p50約166/182/318 ms、最大186/188/363 ms。
+compiler処理とtransportを含み、IDE debounce・PSI・描画・cache hitは含まない。同時Gradle検証中の共有Linux環境、warm build/cacheでの値。
+同条件の独立one-shot測定p50約211/447/647 msは別の測定時刻・競合状態のため、比率を高速化の保証にしない。
+再現scriptは `benchmarks/editor-assistance/measure.py`、原JSONは `/workspace/nagi-jetbrains-semantics-artifacts/performance-*-release*.json`。
+process再利用はincremental checkerではなく、毎requestのsource graphを再checkする。
+
+標準Run Configurationは既存run command planを再利用し、project entry/native設定、trust gate、明示run前保存、Stop時process tree終了を維持する。
+左上RunはNagi configurationを選択後、gutter/contextからのRunはそのconfigurationを生成する。
+Windows実GUI、入力から表示までのlatency、利用者GUI試験は未確認。
+4 OSおよび4 IDE SDK/Plugin Verifierは今回候補HEADのCIで別に確認し、過去0.1.2結果を代用しない。
+GUIチェックリストは [試用手順](jetbrains-semantic-assistance-gui-checklist.md)。

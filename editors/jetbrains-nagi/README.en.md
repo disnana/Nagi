@@ -6,7 +6,7 @@ Nagi support for IntelliJ IDEA and PyCharm. [Install the compiler separately](ht
 
 The plugin version is managed in `build.gradle.kts`. The common ZIP on GitHub Releases is version 0.1.2. Check the existing Marketplace page for the versions available there. Install it directly from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) in a compatible IDE, or download one common ZIP for both IDEs from [GitHub Releases](https://github.com/disnana/Nagi/releases).
 
-## Features
+## Features in 0.1.2
 
 - Syntax highlighting for High (`.nagi`) and Low (`.low`).
 - Line comments, matching and paired brackets, and block folding.
@@ -15,7 +15,15 @@ The plugin version is managed in `build.gradle.kts`. The common ZIP on GitHub Re
 - A run button beside top-level `def main()`, `async def main()`, and Low `fn main()` declarations.
 - Click compiler source locations in the Run console to open the file.
 
-Whole-file formatting, semantic completion, go to definition, and automatic checks are not supported. Type checking invokes the Nagi compiler manually.
+These features describe the published 0.1.2 release. It does not support whole-file formatting, semantic completion, go to definition, or automatic type checks. Type checking invokes the Nagi compiler manually.
+
+## 0.1.3 candidate (unreleased)
+
+A separate unreleased candidate adds compiler-backed completion for High and Low, structured diagnostics, go to definition when the compiler provides an exact source target, and a standard IDE Nagi Run Configuration. Unsaved buffers of previously saved local `.nagi` and `.low` files are included in analysis snapshots; new unsaved files are not supported. The candidate discards responses when the current source, open buffers, or compiler settings change.
+
+Semantic assistance requires a **matching `nagic` built from the same source commit**. Published compiler releases and a compiler from another commit do not implement its assist protocol. Analysis is partial editor analysis, not proof that a full build succeeds, and diagnostics are limited to the first compiler error returned. In a project, the source file must be in the entry's import or native graph. Candidates are omitted when the compiler cannot validate a read at that context; a suggestion does not guarantee that a later assignment, move, or call use is valid. Navigation is unavailable for references without an exact source span, including record-field declarations in the current compiler response. Semantic assistance is blocked until changes to `nagi.toml` are saved.
+
+The standard Run Configuration can be created from an existing local `.nagi` or `.low` file and uses the IDE's normal Run/Stop controls. It runs the nearest project's `nagi.toml` entry when present, saves open files first, and refuses to start in an untrusted project. These are unreleased 0.1.3 candidate features and are not part of the published 0.1.2 release. The candidate is available only as a CI test artifact, not as a GitHub Release or Marketplace release.
 
 ## Installation
 
@@ -29,7 +37,7 @@ Set the compiler executable in **Settings → Languages & Frameworks → Nagi**.
 
 Open a Nagi file and choose **Nagi: Check** or **Nagi: Run** in its context menu or the Tools menu. These actions save open files before execution. The compiler does not run in untrusted projects.
 
-The button beside `main` invokes the same **Nagi: Run** action. It does not use the Python or other run configuration selected in the top toolbar. When a nearby `nagi.toml` exists, it runs that project's entry point.
+In 0.1.2, the button beside `main` invokes the same **Nagi: Run** action. It does not use the Python or other run configuration selected in the top toolbar. When a nearby `nagi.toml` exists, it runs that project's entry point. The next-version candidate also exposes this Nagi run through a standard IDE Run Configuration with normal Run/Stop controls.
 
 Output appears in the Run window. Check has a 30-second timeout, configurable from 1 to 300 seconds. Run has no timeout, so servers can keep running; use Stop in the Run window to end the process. Generated files are stored under `nagi` in the IDE system directory.
 

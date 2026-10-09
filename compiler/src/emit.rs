@@ -1733,6 +1733,14 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         if !options.editor_input {
             return Err("assist requires --editor-input".into());
         }
+        if options.editor_serve {
+            return crate::editor::serve(
+                std::io::stdin().lock(),
+                std::io::stdout().lock(),
+                &args,
+                &cwd,
+            );
+        }
         let request = crate::editor::read_request(std::io::stdin().lock(), &cwd)?;
         println!(
             "{}",

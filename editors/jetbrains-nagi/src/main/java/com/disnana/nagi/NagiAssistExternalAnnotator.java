@@ -17,7 +17,13 @@ import org.jetbrains.annotations.Nullable;
 /** Renders only structured diagnostics from a fresh compiler response. */
 public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAssistExternalAnnotator.Work, NagiAssistExternalAnnotator.Work>
         implements DumbAware {
-    record Work(PsiFile file, NagiAssistService service, NagiAssistService.CachedResponse response) {}
+    record Work(PsiFile file, NagiAssistService service, NagiAssistService.CachedResponse response,
+                NagiAssistService.State state, String message, long documentStamp) {}
+
+    private static Work work(PsiFile file, NagiAssistService service, NagiAssistService.CachedResponse response) {
+        Document document = PsiDocumentManager.getInstance(file.getProject()).getDocument(file);
+        return document == null ? null : new Work(file, service, response, service.state(), service.statusMessage(), document.getModificationStamp());
+    }
 
     @Override public @Nullable Work collectInformation(@NotNull PsiFile file) {
         if (!NagiCompilerAction.isSourceFile(file.getVirtualFile())) return null;
@@ -26,9 +32,8 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
         NagiAssistService.CachedResponse response = service.fresh(file);
         if (response == null) {
             service.requestBaseline(file);
-            return null;
         }
-        return new Work(file, service, response);
+        return work(file, service, response);
     }
 
     @Override public @Nullable Work collectInformation(@NotNull PsiFile file, @NotNull Editor editor, boolean hasErrors) {
@@ -38,20 +43,32 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
         NagiAssistService.CachedResponse response = service.fresh(file);
         if (response == null) {
             service.requestBaseline(file, editor);
-            return null;
         }
-        return new Work(file, service, response);
+        return work(file, service, response);
     }
 
     @Override public @Nullable Work doAnnotate(Work collectedInfo) { return collectedInfo; }
 
     @Override public void apply(@NotNull PsiFile file, Work result, @NotNull AnnotationHolder holder) {
-        if (result == null || result.file() != file || !file.isValid()
-                || !result.service().isCurrent(file, result.response())) return;
+        if (result == null || result.file() != file || !file.isValid()) return;
         Document document = PsiDocumentManager.getInstance(file.getProject()).getDocument(file);
         if (document == null) return;
+        if (result.response() == null) {
+            if (document.getModificationStamp() != result.documentStamp()
+                    || result.service().state() != result.state()
+                    || !result.service().statusMessage().equals(result.message())) return;
+            switch (result.state()) {
+                case UNTRUSTED, UNSAVED_MANIFEST, LIMIT, COMPILER_UNAVAILABLE, FAILED -> {
+                    holder.newAnnotation(HighlightSeverity.WEAK_WARNING,
+                            "Nagi editor assistance: " + result.message()).fileLevel().create();
+                }
+                default -> { }
+            }
+            return;
+        }
+        if (!result.service().isCurrent(file, result.response())) return;
         for (NagiAssistProtocol.Diagnostic diagnostic : result.response().response().diagnostics()) {
-            if (!result.service().diagnosticTargetsFile(result.response(), file, diagnostic.file())) continue;
+            if (!result.service().diagnosticTargetsFile(result.response(), file.getVirtualFile(), diagnostic.file())) continue;
             String message = diagnostic.message();
             if (message == null || message.isBlank() || message.length() > 4096) continue;
             NagiAssistProtocol.Location point = diagnostic.range();

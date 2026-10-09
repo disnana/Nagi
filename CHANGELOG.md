@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 未リリース / Unreleased
+
+### JetBrains 0.1.3候補 / JetBrains 0.1.3 candidate
+
+- IntelliJ IDEA / PyCharm共通の補完・定義ジャンプ・編集中診断を、同じsource commitのコンパイラ解析へ接続。既存0.1.11配布コンパイラには新しい解析commandがないため、試用にはCIの対応コンパイラを使用する。
+- IDE標準のNagi Run Configurationを追加。通常のRun/Stopから実行でき、未信頼プロジェクトではコンパイラを起動しない。
+- Compiler-backed completion, navigation and live diagnostics for both IDEs require the matching compiler build. Standard Nagi Run/Stop configurations are available. This candidate is not a published release; desktop GUI verification is pending.
+
+### SQLite
 
 - Add the unreleased `std.db.sqlite` Pool and affine Tx API with typed owned Parameters, explicit transaction boundaries, structured failure outcomes, and observed close. Keep the existing `db_*` API unchanged; the new API is not included in Nagi 0.1.11.
 - Extend opt-in SQLite SQL checks to literal `std.db.sqlite` query/all/exec operations in the development source. Check schema and row shape, prepare new exec DDL without executing it, and report Parameters bind counts as unchecked.

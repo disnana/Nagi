@@ -118,20 +118,28 @@ public final class NagiAssistService implements Disposable {
     private final IdentityHashMap<Document, ListenerRecord> documentListeners = new IdentityHashMap<>();
     private final LinkedHashSet<String> popupScheduled = new LinkedHashSet<>();
     private final NagiAssistProcess.Runner runner;
+    private NagiAssistProcess.Session session;
     private volatile State state = State.IDLE;
     private volatile String statusMessage = "";
     private volatile CachedResponse cached;
     private volatile Set<String> knownSourcePaths = Set.of();
+    private volatile VirtualFile lastFocusFile;
     private ScheduledFuture<?> pending;
     private ScheduledFuture<?> activeFuture;
     private NagiAssistProcess.Cancellation activeCancellation;
     private String activeKey;
     private String pendingKey;
+    private String failedKey;
     private List<PopupWaiter> pendingWaiters = List.of();
     private List<PopupWaiter> activeWaiters = List.of();
     private volatile boolean disposed;
 
-    public NagiAssistService(Project project) { this(project, NagiAssistProcess::run); }
+    public NagiAssistService(Project project) { this(project, new NagiAssistProcess.Session()); }
+
+    private NagiAssistService(Project project, NagiAssistProcess.Session session) {
+        this(project, session::run);
+        this.session = session;
+    }
 
     NagiAssistService(Project project, NagiAssistProcess.Runner runner) {
         this.project = project;
@@ -147,11 +155,12 @@ public final class NagiAssistService implements Disposable {
             @Override public void fileOpened(@NotNull FileEditorManager source, @NotNull VirtualFile file) {
                 if (isTrackedSource(file) || isManifest(file)) {
                     invalidate(State.STALE, "An Nagi source or manifest changed its open state.");
-                    enqueue(() -> { attachOpenDocuments(); restartOpenSources(); });
+                    enqueue(() -> { attachOpenDocuments(); restartOpenSourcesLater(); });
                 }
             }
             @Override public void fileClosed(@NotNull FileEditorManager source, @NotNull VirtualFile file) {
                 if (isTrackedSource(file) || isManifest(file)) {
+                    if (lastFocusFile == file) lastFocusFile = null;
                     detachDocument(file);
                     invalidate(State.STALE, "An Nagi source or manifest changed its open state.");
                     enqueue(NagiAssistService.this::attachOpenDocuments);
@@ -315,6 +324,7 @@ public final class NagiAssistService implements Disposable {
             setState(State.STALE, "Open an existing local .nagi or .low file for compiler assistance.");
             return;
         }
+        lastFocusFile = file.getVirtualFile();
         if (!trustedForCompiler()) {
             invalidate(State.UNTRUSTED, "Project trust is required before the Nagi compiler can run.");
             return;
@@ -334,6 +344,7 @@ public final class NagiAssistService implements Disposable {
         if (intent.position() == null && current != null && snapshotCurrent(current.snapshot) && appliesToFile(current, file)) return;
         synchronized (lock) {
             if (disposed || project.isDisposed()) return;
+            if (intent.key().equals(failedKey)) return;
             String sourcePrefix = normalizePath(intent.file().getPath()) + ":" + intent.documentStamp() + ":" + intent.epoch() + ":";
             if (intent.position() == null
                     && ((activeKey != null && activeKey.startsWith(sourcePrefix))
@@ -357,7 +368,7 @@ public final class NagiAssistService implements Disposable {
     }
 
     private Intent makeIntent(PsiFile file, Editor editor) {
-        return ReadAction.compute(() -> {
+        return NagiPlatform.read(() -> {
             if (project.isDisposed() || !file.isValid()) return null;
             VirtualFile virtualFile = file.getVirtualFile();
             Document document = PsiDocumentManager.getInstance(project).getDocument(file);
@@ -383,7 +394,10 @@ public final class NagiAssistService implements Disposable {
             pendingWaiters = List.of();
         }
         try {
-            if (intent.epoch() != epoch.get()) return;
+            if (intent.epoch() != epoch.get()) {
+                restartOpenSourcesLater();
+                return;
+            }
             if (!trustedForCompiler()) {
                 invalidate(State.UNTRUSTED, "Project trust is required before the Nagi compiler can run.");
                 return;
@@ -429,10 +443,16 @@ public final class NagiAssistService implements Disposable {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             setStateForActive(key, State.STALE, "The previous Nagi analysis was cancelled.");
+        } catch (com.intellij.openapi.progress.ProcessCanceledException cancelled) {
+            setStateForActive(key, State.STALE, "The Nagi source snapshot was cancelled by a new editor write.");
+            restartOpenSourcesLater();
         } catch (SnapshotBlockedException exception) {
             setStateForActive(key, exception.state, exception.getMessage());
         } catch (Exception exception) {
             setStateForActive(key, State.FAILED, safeMessage(exception));
+        } catch (AssertionError failure) {
+            setStateForActive(key, State.FAILED, safeMessage(failure));
+            com.intellij.openapi.diagnostic.Logger.getInstance(NagiAssistService.class).warn("Nagi editor assistance failed", failure);
         } finally {
             synchronized (lock) {
                 if (key.equals(activeKey)) {
@@ -449,7 +469,7 @@ public final class NagiAssistService implements Disposable {
     }
 
     private Snapshot buildSnapshot(Intent intent, String requestKey) throws SnapshotBlockedException {
-        RawCapture raw = ReadAction.compute(() -> captureRaw(intent));
+        RawCapture raw = NagiPlatform.read(() -> captureRaw(intent));
         if (raw == null) throw new SnapshotBlockedException(State.STALE, "The Nagi source changed before its snapshot was captured.");
 
         Path source = canonicalExisting(Path.of(raw.activePath()), false);
@@ -500,7 +520,7 @@ public final class NagiAssistService implements Disposable {
         boolean focusUnsaved = raw.files().stream().anyMatch(file -> file.document() == raw.focusDocument() && file.unsaved());
         if (focusUnsaved
                 && overlays.stream().noneMatch(overlay -> samePath(overlay.file(), focusPath.toString()))) {
-            String text = ReadAction.compute(raw.focusDocument()::getText);
+            String text = NagiPlatform.read(raw.focusDocument()::getText);
             overlays.add(new NagiAssistProtocol.Overlay(focusPath.toString(), text));
         }
 
@@ -513,7 +533,7 @@ public final class NagiAssistService implements Disposable {
                 }
             }
             VirtualFile manifestFile = LocalFileSystem.getInstance().findFileByIoFile(manifest.toFile());
-            ManifestState manifestState = manifestFile == null ? null : ReadAction.compute(() -> {
+            ManifestState manifestState = manifestFile == null ? null : NagiPlatform.read(() -> {
                 Document document = FileDocumentManager.getInstance().getDocument(manifestFile);
                 return document == null ? null : new ManifestState(document,
                         FileDocumentManager.getInstance().isDocumentUnsaved(document), document.getModificationStamp(), manifestFile.getModificationStamp());
@@ -538,7 +558,7 @@ public final class NagiAssistService implements Disposable {
         ExecutableStamp executableStamp;
         try {
             executable = resolveCompiler(raw.compilerSetting(), workspace);
-            VirtualFile compilerFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(executable.toString());
+            VirtualFile compilerFile = LocalFileSystem.getInstance().findFileByPath(executable.toString());
             BasicFileAttributes attributes = Files.readAttributes(executable, BasicFileAttributes.class);
             executableStamp = new ExecutableStamp(compilerFile,
                     compilerFile == null ? -1 : compilerFile.getModificationStamp(), attributes.size(),
@@ -564,10 +584,10 @@ public final class NagiAssistService implements Disposable {
         List<FileStamp> stamps = new ArrayList<>(snapshot.files());
         Map<String, String> canonicalPaths = new HashMap<>(snapshot.canonicalPaths());
         LinkedHashSet<String> seen = new LinkedHashSet<>();
-        for (String source : response.sourceFiles()) addCompilerSource(stamps, canonicalPaths, seen, source);
+        for (String source : response.sourceFiles()) addCompilerSource(snapshot, stamps, canonicalPaths, seen, source);
         for (NagiAssistProtocol.Diagnostic diagnostic : response.diagnostics()) {
             if (diagnostic.file() != null && !diagnostic.file().isBlank()) {
-                addCompilerSource(stamps, canonicalPaths, seen, diagnostic.file());
+                addCompilerSource(snapshot, stamps, canonicalPaths, seen, diagnostic.file());
             }
         }
         return new Snapshot(snapshot.epoch(), snapshot.requestKey(), snapshot.compilerSetting(), snapshot.timeout(),
@@ -577,7 +597,7 @@ public final class NagiAssistService implements Disposable {
                 snapshot.focusDocumentStamp(), snapshot.focusFile(), snapshot.focusFileStamp(), snapshot.editor(), snapshot.caretOffset());
     }
 
-    private static void addCompilerSource(List<FileStamp> stamps, Map<String, String> canonicalPaths,
+    private void addCompilerSource(Snapshot snapshot, List<FileStamp> stamps, Map<String, String> canonicalPaths,
                                           Set<String> seen, String source) throws SnapshotBlockedException {
         if (source.startsWith("stdlib:")) return;
         Path actual;
@@ -588,7 +608,23 @@ public final class NagiAssistService implements Disposable {
         if (!isNagiSource(actual)) return;
         String canonical = actual.toString();
         if (!seen.add(normalizePath(canonical))) return;
-        VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByPath(canonical);
+        VirtualFile file = LocalFileSystem.getInstance().findFileByPath(canonical);
+        if (file == null) {
+            // A synchronous refresh from this worker can wait for an EDT write
+            // while editor readers wait for assistance. Discover just the
+            // missing source asynchronously, discard this response, and then
+            // capture a new complete snapshot rather than caching unstamped facts.
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (disposed || project.isDisposed()) return;
+                LocalFileSystem.getInstance().refreshNioFiles(List.of(actual), true, false, () ->
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (disposed || project.isDisposed() || !snapshot.focusFile().isValid()) return;
+                        PsiFile focus = NagiPlatform.read(() -> PsiManager.getInstance(project).findFile(snapshot.focusFile()));
+                        if (focus != null) requestBaseline(focus, snapshot.editor());
+                    }));
+            });
+            throw new SnapshotBlockedException(State.STALE, "An imported Nagi source is being discovered asynchronously; its response was discarded.");
+        }
         if (file == null || !file.isValid() || !file.isInLocalFileSystem()) {
             throw new SnapshotBlockedException(State.STALE, "A compiler source file changed while assistance was running.");
         }
@@ -603,7 +639,7 @@ public final class NagiAssistService implements Disposable {
         long overlayCharacters = 0;
         boolean exceedsOverlayLimit = false;
         boolean exceedsTrackedFileLimit = false;
-        List<VirtualFile> openFiles = new ArrayList<>(FileEditorManager.getInstance(project).getOpenFiles());
+        List<VirtualFile> openFiles = new ArrayList<>(java.util.Arrays.asList(FileEditorManager.getInstance(project).getOpenFiles()));
         openFiles.sort(Comparator.comparing((VirtualFile file) -> !isManifest(file)).thenComparing(VirtualFile::getPath));
         for (VirtualFile file : openFiles) {
             if (!isTrackedSource(file) && !isManifest(file)) continue;
@@ -657,7 +693,7 @@ public final class NagiAssistService implements Disposable {
                 || settings.checkTimeoutSeconds != snapshot.timeout
                 || !Objects.equals(project.getBasePath(), snapshot.projectBase)) return false;
         try {
-            boolean current = ReadAction.compute(() -> {
+            boolean current = NagiPlatform.read(() -> {
                 for (DocumentStamp stamp : snapshot.documents) {
                     if (stamp.document().getModificationStamp() != stamp.stamp()) return false;
                 }
@@ -690,8 +726,8 @@ public final class NagiAssistService implements Disposable {
             if (disposed || project.isDisposed() || !snapshotCurrent(response.snapshot)) return;
             for (VirtualFile source : response.snapshot.openSources) {
                 if (!source.isValid()) continue;
-                PsiFile psi = PsiManager.getInstance(project).findFile(source);
-                if (psi != null) DaemonCodeAnalyzer.getInstance(project).restart(psi);
+                PsiFile psi = NagiPlatform.read(() -> PsiManager.getInstance(project).findFile(source));
+                if (psi != null) NagiPlatform.restart(psi);
             }
             for (PopupWaiter waiter : waiters) {
                 if (!isPopupFresh(response, waiter)) continue;
@@ -732,16 +768,18 @@ public final class NagiAssistService implements Disposable {
 
     private void restartOpenSources() {
         if (disposed || project.isDisposed()) return;
-        for (VirtualFile file : FileEditorManager.getInstance(project).getOpenFiles()) {
+        var sources = new LinkedHashSet<VirtualFile>(java.util.Arrays.asList(FileEditorManager.getInstance(project).getOpenFiles()));
+        if (lastFocusFile != null) sources.add(lastFocusFile);
+        for (VirtualFile file : sources) {
             if (!isTrackedSource(file)) continue;
-            PsiFile psi = PsiManager.getInstance(project).findFile(file);
-            if (psi != null) DaemonCodeAnalyzer.getInstance(project).restart(psi);
+            PsiFile psi = NagiPlatform.read(() -> PsiManager.getInstance(project).findFile(file));
+            if (psi != null) NagiPlatform.restart(psi);
         }
     }
 
     private void attachOpenDocuments() {
         if (disposed || project.isDisposed()) return;
-        List<RawFile> open = ReadAction.compute(() -> {
+        List<RawFile> open = NagiPlatform.read(() -> {
             List<RawFile> files = new ArrayList<>();
             FileDocumentManager manager = FileDocumentManager.getInstance();
             for (VirtualFile file : FileEditorManager.getInstance(project).getOpenFiles()) {
@@ -802,6 +840,7 @@ public final class NagiAssistService implements Disposable {
         epoch.incrementAndGet();
         cached = null;
         synchronized (lock) {
+            failedKey = null;
             if (pending != null) pending.cancel(false);
             pending = null;
             pendingKey = null;
@@ -835,7 +874,7 @@ public final class NagiAssistService implements Disposable {
         if (existing.size() >= 8 || editor.isDisposed()) return;
         List<PopupWaiter> changed = new ArrayList<>(existing);
         PopupWaiter waiter = waiter(intent, editor);
-        if (changed.stream().noneMatch(existing -> existing.editor() == editor)) changed.add(waiter);
+        if (changed.stream().noneMatch(candidate -> candidate.editor() == editor)) changed.add(waiter);
         if (intent.key().equals(activeKey)) activeWaiters = List.copyOf(changed);
         else pendingWaiters = List.copyOf(changed);
     }
@@ -901,7 +940,7 @@ public final class NagiAssistService implements Disposable {
         return Set.copyOf(paths);
     }
 
-    private static String safeMessage(Exception exception) {
+    private static String safeMessage(Throwable exception) {
         String message = exception.getMessage();
         if (message == null || message.isBlank()) return "Nagi compiler assistance failed; no cached or saved facts were used.";
         if (message.length() > 240) message = message.substring(0, 240);
@@ -920,7 +959,14 @@ public final class NagiAssistService implements Disposable {
 
     private void setStateForActive(String key, State state, String message) {
         synchronized (lock) {
-            if (key.equals(activeKey)) setState(state, message);
+            if (key.equals(activeKey)) {
+                setState(state, message);
+                if (state == State.FAILED || state == State.COMPILER_UNAVAILABLE
+                        || state == State.UNSAVED_MANIFEST || state == State.LIMIT) {
+                    failedKey = key;
+                    restartOpenSourcesLater();
+                }
+            }
         }
     }
 
@@ -932,7 +978,7 @@ public final class NagiAssistService implements Disposable {
             }
             return real;
         } catch (IOException exception) {
-            throw new SnapshotBlockedException(State.STALE, "An editor source path must exist before compiler assistance can run.");
+            throw new SnapshotBlockedException(State.STALE, "An editor source path must exist before compiler assistance can run: " + path);
         }
     }
 
@@ -980,6 +1026,7 @@ public final class NagiAssistService implements Disposable {
 
     @Override public void dispose() {
         disposed = true;
+        if (session != null) session.close();
         setState(State.CLOSED, "Project is closed.");
         synchronized (lock) { cancelPendingAndActiveLocked(); }
         synchronized (documentListeners) {

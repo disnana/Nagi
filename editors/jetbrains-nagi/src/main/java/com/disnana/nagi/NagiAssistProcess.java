@@ -1,6 +1,7 @@
 package com.disnana.nagi;
 
 import java.io.ByteArrayOutputStream;
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -41,6 +42,95 @@ public final class NagiAssistProcess {
             if (active != null && active.isAlive()) active.destroyForcibly();
         }
         public void detach(Process candidate) { if (process == candidate) process = null; }
+    }
+
+    /** One compiler per project/command plan, with serialized newline frames.
+     * Cancellation kills and reaps the whole session: no old response can be
+     * confused with the next request. This is transport reuse, not incremental
+     * type checking. The compiler reloads immutable input for every request. */
+    public static final class Session implements AutoCloseable {
+        private volatile Process process;
+        private NagiAssistCommandPlan plan;
+        private BufferedInputStream output;
+        private CompletableFuture<byte[]> errors;
+        private volatile boolean closed;
+        private int launches;
+
+        public synchronized NagiAssistProtocol.Response run(NagiAssistCommandPlan requested, byte[] input,
+                int timeoutSeconds, Cancellation cancellation, BooleanSupplier mayLaunch) throws Exception {
+            if (closed || cancellation.isCancelled()) throw new InterruptedException("editor assistance cancelled before launch");
+            if (!mayLaunch.getAsBoolean()) { stop(); throw new IOException("editor assistance launch guard rejected the request"); }
+            if (input.length > NagiAssistProtocol.MAX_INPUT_BYTES) throw new IOException("editor input exceeds its limit");
+            if (process == null || !process.isAlive() || !requested.equals(plan)) {
+                stop();
+                List<String> command = new ArrayList<>();
+                command.add(requested.executable());
+                command.addAll(requested.arguments());
+                command.add("--serve");
+                process = new ProcessBuilder(command).directory(requested.directory().toFile()).start();
+                launches++;
+                plan = requested;
+                output = new BufferedInputStream(process.getInputStream());
+                errors = readBounded(process.getErrorStream(), MAX_STDERR_BYTES, process);
+            }
+            Process current = process;
+            cancellation.attach(current);
+            try {
+                if (closed || cancellation.isCancelled() || !mayLaunch.getAsBoolean())
+                    throw new InterruptedException("editor assistance cancelled before request");
+                BufferedInputStream frames = output;
+                CompletableFuture<byte[]> response = new CompletableFuture<>();
+                Thread.ofVirtual().name("nagi-assist-frame").start(() -> {
+                    try {
+                        // A request may be larger than the pipe capacity. Write
+                        // and response read are bounded by the same deadline.
+                        current.getOutputStream().write(input);
+                        current.getOutputStream().write('\n');
+                        current.getOutputStream().flush();
+                        var frame = new ByteArrayOutputStream();
+                        for (int next; (next = frames.read()) != -1;) {
+                            if (next == '\n') { response.complete(frame.toByteArray()); return; }
+                            if (frame.size() == NagiAssistProtocol.MAX_OUTPUT_BYTES)
+                                throw new IOException("editor response exceeds its limit");
+                            frame.write(next);
+                        }
+                        throw new IOException("Nagi assistance process ended before response. Install the compiler from the same test build as this plugin.");
+                    } catch (Throwable failure) { response.completeExceptionally(failure); }
+                });
+                byte[] frame = response.get(Math.max(1, Math.min(300, timeoutSeconds)), TimeUnit.SECONDS);
+                if (closed || cancellation.isCancelled() || !mayLaunch.getAsBoolean())
+                    throw new InterruptedException("editor assistance cancelled after request");
+                if (errors.isCompletedExceptionally()) errors.get();
+                return NagiAssistProtocol.decode(frame);
+            } catch (java.util.concurrent.TimeoutException failure) {
+                stop();
+                throw new IOException("Nagi editor assistance timed out", failure);
+            } catch (Exception | LinkageError failure) {
+                stop();
+                throw failure;
+            } finally { cancellation.detach(current); }
+        }
+
+        synchronized int launches() { return launches; }
+
+        private void stop() {
+            Process previous = process;
+            process = null;
+            plan = null;
+            output = null;
+            if (previous != null) terminate(previous);
+        }
+
+        @Override public void close() {
+            // Called from project disposal on EDT; never wait here. Worker owns
+            // reaping. closed prevents a startup race from retaining a process.
+            closed = true;
+            Process current = process;
+            if (current != null && current.isAlive()) {
+                current.destroyForcibly();
+                Thread.ofVirtual().name("nagi-assist-reap").start(() -> terminate(current));
+            }
+        }
     }
 
     public static NagiAssistProtocol.Response run(NagiAssistCommandPlan plan, byte[] input, int timeoutSeconds,
