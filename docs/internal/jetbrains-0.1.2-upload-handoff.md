@@ -1,5 +1,7 @@
 # Nagi for JetBrains 0.1.2の提出用ZIP
 
+この文書は提出用ビルドを準備した時点の履歴。後続のユーザー承認・マージ・GitHub公開は[0.1.2公開引継ぎ](handoffs/2026-10-09-jetbrains-0.1.2-release.md)と実際のPR/Releaseを正とする。
+
 記録日: 2026-10-09 JST。ユーザー指示は「自分がアップロードするので0.1.2として発行」。JetBrainsプラグインの版更新とCI成果物の提供を実行する。Marketplaceアップロードはユーザーが行う。GUI検証完了まで#102をDraft・未mergeに保ち、tag/GitHub Release/自動Marketplace送信を行わない。
 
 ## 固定する入力と契約

@@ -1,5 +1,11 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-09: Nagi for JetBrains 0.1.2の正式GitHub公開
+
+ユーザーの「合格したのでリリース許可」を受け、#102の最終head `4bafb285`をmain `2202623`へマージした。tree一致、最終PRの4 OS・四SDK・website成功を読戻し、main checks37861515646の全必須検証・publish-release成功、website37861515402成功を確認。[jetbrains-v0.1.2](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.2)は2026-10-09T00:28:08Zに正式公開。IDEA/PyCharm共通ZIP一つとSHA-256だけを配布し、公開ファイルの実取得・内側descriptor・checksumを確認した。既存ID/Marketplaceページを維持し、本体0.1.11・VS Code0.1.13の版とReleaseは変更していない。Marketplace提出はユーザー担当、個別GUI操作結果や0.1.2のMarketplace公開状態は推測しない。
+
+公開後のREADME・日英Docs・公式サイトを共通ZIPへ同期し、過去の提出/統合記録は履歴として保存する。[公開引継ぎ](handoffs/2026-10-09-jetbrains-0.1.2-release.md)に固定commit・公開assetのhash・実測target・独立review・制約・次工程の既存WIPを記録した。型補完/navigation/編集中診断は別PRで継続し、この0.1.2公開承認を将来の版・Marketplace操作へ拡張しない。
+
 ## 2026-10-09 JST: JetBrains 0.1.2の提出用ZIP
 
 ユーザーが「自分がアップロードするので0.1.2として発行」と指示したため、JetBrainsのGradle版を0.1.2へ更新する。#102の検証済みsource `6c23761`を基準とし、プラグイン実装・ID・minimum・toolchain・compiler/runtimeは変更しない。共通ZIPを四SDKのIDE test/VerifierとCI gateで検証し、Artifactsで渡す。Marketplaceアップロードはユーザー担当。GUI検証完了待ちとして#102はDraft・未mergeを維持し、tag/GitHub Releaseを実行しない。[提出引継ぎ](jetbrains-0.1.2-upload-handoff.md)に対象と検証先を保存する。旧版の成功CIは0.1.2の実行成功として数えない。

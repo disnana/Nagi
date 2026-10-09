@@ -1,5 +1,7 @@
 # JetBrains統合PR #102の引継ぎ
 
+この文書は統合・互換性検証時の履歴。0.1.2への版更新と後続のリリース承認・main反映・GitHub公開は[0.1.2公開引継ぎ](2026-10-09-jetbrains-0.1.2-release.md)を参照する。以下の当時の未承認・未公開記述を最新状態へ読み替えない。
+
 記録日: 2026-10-09 JST（観測時刻はUTCを併記する）。対象は[PR #102](https://github.com/disnana/Nagi/pull/102)。mainの#101 mergeを取り込み、baseは `c3e5fc7a795d66c8f6408ac12b480230dd3a8973`。プラグイン版0.1.1、既存ID `com.disnana.nagi`、Marketplace34891を維持する。merge・版更新・tag・release・Marketplace uploadは未実施、別途明示承認が必要。
 
 ## 完成した設計と実装
