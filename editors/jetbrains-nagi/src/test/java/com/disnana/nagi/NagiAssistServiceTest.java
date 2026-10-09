@@ -182,7 +182,8 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             return new NagiAssistProtocol.Response(facts.semanticStatus(), true, false, false, "names", List.of(),
                     facts.completions(), List.of(), List.of(file.getVirtualFile().getPath(), helper.toString()));
         });
-        waitUntil(() -> { service.requestNavigation(file); return service.fresh(file) != null; });
+        service.requestNavigation(file);
+        waitUntil(() -> service.fresh(file) != null);
         assertTrue("unknown dependency must be snapshotted before re-analysis", calls.get() >= 2);
         assertEquals("current", service.fresh(file).response().completions().getFirst().name());
     }

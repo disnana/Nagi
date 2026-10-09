@@ -647,12 +647,8 @@ public final class NagiAssistService implements Disposable {
             // capture a new complete snapshot rather than caching unstamped facts.
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (disposed || project.isDisposed()) return;
-                LocalFileSystem.getInstance().refreshNioFiles(List.of(actual), true, false, () ->
-                    ApplicationManager.getApplication().invokeLater(() -> {
-                        if (disposed || project.isDisposed() || !snapshot.focusFile().isValid()) return;
-                        PsiFile focus = NagiPlatform.read(() -> PsiManager.getInstance(project).findFile(snapshot.focusFile()));
-                        if (focus != null) requestBaseline(focus, snapshot.editor());
-                    }));
+                LocalFileSystem.getInstance().refreshNioFiles(List.of(actual), true, false,
+                        () -> retrySnapshotLater(snapshot));
             });
             throw new SnapshotBlockedException(State.STALE, "An imported Nagi source is being discovered asynchronously; its response was discarded.");
         }
@@ -664,11 +660,13 @@ public final class NagiAssistService implements Disposable {
     }
 
     private void retrySnapshotLater(Snapshot snapshot) {
-        ApplicationManager.getApplication().invokeLater(() -> {
+        // This serial worker task necessarily follows execute's finally. A
+        // direct EDT callback could race activeKey cleanup and lose the retry.
+        enqueue(() -> ApplicationManager.getApplication().invokeLater(() -> {
             if (disposed || project.isDisposed() || !snapshot.focusFile().isValid()) return;
             PsiFile focus = NagiPlatform.read(() -> PsiManager.getInstance(project).findFile(snapshot.focusFile()));
             if (focus != null) requestBaseline(focus, snapshot.editor());
-        });
+        }));
     }
 
     private static List<DiskStamp> readDiskSnapshot(Set<Path> paths) throws SnapshotBlockedException {
