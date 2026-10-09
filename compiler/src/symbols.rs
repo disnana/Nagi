@@ -563,7 +563,7 @@ impl Types<'_, '_> {
 
 // Render types through the source file's namespace while retaining canonical
 // class identity for inference and field lookup.
-fn display_type(ty: &Type, file: &str, metadata: &ModuleMetadata) -> String {
+pub(crate) fn display_type(ty: &Type, file: &str, metadata: &ModuleMetadata) -> String {
     let definition = metadata.definitions.iter().find(|d| d.symbol == ty.0);
     let name = definition
         .map(|d| {
@@ -841,6 +841,23 @@ fn reference_locations(
 }
 
 pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Value, String> {
+    index_impl(sources, programs, true, None)
+}
+/// Reuse the typed program obtained by the assistance query; avoid checking it
+/// again merely to serialize navigation/type facts.
+pub(crate) fn index_with_types(
+    sources: &Sources,
+    programs: &[&Program],
+    typed: Option<&Program>,
+) -> Result<serde_json::Value, String> {
+    index_impl(sources, programs, false, typed)
+}
+fn index_impl(
+    sources: &Sources,
+    programs: &[&Program],
+    analyze: bool,
+    typed: Option<&Program>,
+) -> Result<serde_json::Value, String> {
     let module_files = sources.module_files().collect::<HashMap<_, _>>();
     let files = sources
         .files()
@@ -1350,19 +1367,19 @@ pub fn index(sources: &Sources, programs: &[&Program]) -> Result<serde_json::Val
         dest.functions.extend(p.functions.clone());
         dest.modules.merge_native(p.modules.clone())?;
     }
-    let typed = crate::check::editor_types(&primary, &native);
+    let owned_types = analyze
+        .then(|| crate::check::editor_types(&primary, &native))
+        .flatten();
+    let typed = typed.or(owned_types.as_ref());
     let mut types = Types {
         files: &files,
-        classes: typed
-            .as_ref()
-            .map(|p| p.classes.as_slice())
-            .unwrap_or_default(),
+        classes: typed.map(|p| p.classes.as_slice()).unwrap_or_default(),
         metadata: &metadata,
         locals: vec![],
         expressions: vec![],
         references: vec![],
     };
-    if let Some(p) = &typed {
+    if let Some(p) = typed {
         for f in &p.functions {
             for ((name, ty), span) in f.params.iter().zip(&f.parameter_spans) {
                 types.binding(f.line, *span, name, ty, false);

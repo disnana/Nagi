@@ -33,7 +33,7 @@ public final class NagiConfigurable implements Configurable {
         constraints.gridx = 1;
         panel.add(timeout, constraints);
         constraints.gridy++; constraints.weighty = 1;
-        panel.add(new JLabel("Check and Run save open files. The compiler runs only when you choose an action."), constraints);
+        panel.add(new JLabel("Check and Run save open files. Editor assistance reads current buffers and never saves them."), constraints);
         reset();
         return panel;
     }
@@ -42,9 +42,7 @@ public final class NagiConfigurable implements Configurable {
         return !compilerPath.getText().equals(settings.compilerPath) || ((Number)timeout.getValue()).intValue() != settings.checkTimeoutSeconds;
     }
     @Override public void apply() {
-        var values = NagiSettings.getInstance().getState();
-        values.compilerPath = compilerPath.getText();
-        values.checkTimeoutSeconds = ((Number)timeout.getValue()).intValue();
+        NagiSettings.update(compilerPath.getText(), ((Number)timeout.getValue()).intValue());
     }
     @Override public void reset() {
         var values = NagiSettings.getInstance().getState();

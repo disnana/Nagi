@@ -39,6 +39,28 @@ struct TaskObligation {
     scope: ScopeId,
     pending: bool,
 }
+/// An editor query is an exact original-file token span, with loaded-source line.
+#[derive(Clone, Copy)]
+pub(crate) struct EditorQuery {
+    pub line: usize,
+    pub span: Span,
+    pub members: bool,
+}
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct EditorCandidate {
+    pub name: String,
+    pub ty: Type,
+    pub binding: Option<BindingId>,
+    pub borrowed: bool,
+}
+#[derive(Default)]
+pub(crate) struct EditorFacts {
+    pub items: Vec<EditorCandidate>,
+    pub shadowed: HashMap<String, BindingId>,
+    pub verified_globals: HashSet<String>,
+    pub observed: bool,
+    pub valid_context: bool,
+}
 struct Checker {
     classes: HashMap<String, Class>,
     enums: HashMap<String, Enum>,
@@ -52,6 +74,9 @@ struct Checker {
     task_bridges: Vec<bool>,
     task_uses: Vec<TaskUse>,
     editor: bool,
+    editor_query: Option<EditorQuery>,
+    editor_facts: EditorFacts,
+    editor_tainted: bool,
     collect_view_flow: bool,
     view_flow_names: HashSet<String>,
     view_content_mutations: Vec<FlowContentMutation>,
@@ -418,6 +443,14 @@ pub fn check(p: &mut Program) -> Result<(), String> {
 /// Uses the same type and ownership rules as compilation. Failed statements
 /// cannot introduce bindings or change the environment used by later statements.
 pub(crate) fn editor_types(primary: &Program, native: &Program) -> Option<Program> {
+    editor_analysis(primary, native, None).map(|(program, _)| program)
+}
+
+pub(crate) fn editor_analysis(
+    primary: &Program,
+    native: &Program,
+    query: Option<EditorQuery>,
+) -> Option<(Program, EditorFacts)> {
     let mut p = primary.clone();
     let mut native = native.clone();
     crate::modules::rebind_native(&mut p, &mut native).ok()?;
@@ -437,7 +470,7 @@ pub(crate) fn editor_types(primary: &Program, native: &Program) -> Option<Progra
     crate::modules::synchronize(&mut visible_native);
     p.modules.merge_native(visible_native.modules).ok()?;
     crate::modules::synchronize(&mut p);
-    check_mode(&mut p, true).ok()?;
+    let (_, mut editor_facts) = check_mode_with_query(&mut p, true, query).ok()?;
     let replacement_lines: HashSet<_> = native
         .functions
         .iter()
@@ -447,6 +480,15 @@ pub(crate) fn editor_types(primary: &Program, native: &Program) -> Option<Progra
     if !replacement_lines.is_empty() {
         let mut replaced = primary.clone();
         if integrate_mode(&mut replaced, native.clone(), true).is_ok() {
+            if query.is_some() {
+                if let Ok((_, replacement_facts)) =
+                    check_mode_with_query(&mut replaced, true, query)
+                {
+                    if replacement_facts.observed {
+                        editor_facts = replacement_facts;
+                    }
+                }
+            }
             p.functions.extend(
                 replaced
                     .functions
@@ -455,10 +497,17 @@ pub(crate) fn editor_types(primary: &Program, native: &Program) -> Option<Progra
             );
         }
     }
-    Some(p)
+    Some((p, editor_facts))
 }
 
 fn check_mode(p: &mut Program, editor: bool) -> Result<checked::FinalCheckFacts, String> {
+    check_mode_with_query(p, editor, None).map(|(facts, _)| facts)
+}
+fn check_mode_with_query(
+    p: &mut Program,
+    editor: bool,
+    editor_query: Option<EditorQuery>,
+) -> Result<(checked::FinalCheckFacts, EditorFacts), String> {
     let mut facts = checked::FinalCheckFacts::default();
     let mut next_scope = 0;
     for function in &mut p.functions {
@@ -523,6 +572,9 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<checked::FinalCheckFacts,
         task_bridges: vec![],
         task_uses: vec![],
         editor,
+        editor_query,
+        editor_facts: EditorFacts::default(),
+        editor_tainted: false,
         collect_view_flow: false,
         view_flow_names: HashSet::new(),
         view_content_mutations: Vec::new(),
@@ -685,6 +737,7 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<checked::FinalCheckFacts,
     }
     for f in &mut p.functions {
         c.vars.clear();
+        c.editor_tainted = false;
         c.parameter_views.clear();
         c.iterators.clear();
         c.expression_loans.clear();
@@ -783,9 +836,141 @@ fn check_mode(p: &mut Program, editor: bool) -> Result<checked::FinalCheckFacts,
         }
         crate::routes::validate(p)?;
     }
-    Ok(facts)
+    if c.editor_facts.observed && c.editor_facts.valid_context {
+        c.editor_facts
+            .verified_globals
+            .extend(c.functions.keys().cloned());
+        c.editor_facts
+            .verified_globals
+            .extend(c.classes.keys().cloned());
+        c.editor_facts
+            .verified_globals
+            .extend(c.enums.keys().cloned());
+        c.editor_facts
+            .verified_globals
+            .extend(c.registered.iter().cloned());
+    }
+    Ok((facts, c.editor_facts))
 }
 impl Checker {
+    // Presentation metadata follows the checked receiver chain. A nested
+    // projection can have an owned-looking type while still reading through a
+    // shared/view parent or a borrowed List element.
+    fn editor_borrowed_receiver(&self, expression: &Expr) -> bool {
+        expression.resolution == Some(NameResolution::BorrowedLocal)
+            || expression.ty.as_ref().is_some_and(|ty| {
+                let ty = unowned(ty);
+                ty.is_view() || ty.0 == "shared" || self.native_resource_view(ty).is_some()
+            })
+            || matches!(&expression.kind, E::Field(parent, _) if self.editor_borrowed_receiver(parent))
+    }
+    fn editor_capture(&mut self, expression: &Expr) {
+        let Some(query) = self.editor_query else {
+            return;
+        };
+        if expression.line != query.line || expression.span != query.span {
+            return;
+        }
+        // Failed preceding statements can have unknown ownership effects. Their
+        // rollback is useful for type hints, but cannot authorize completion.
+        let mut items = vec![];
+        let shadowed = self
+            .vars
+            .iter()
+            .map(|(name, var)| (name.clone(), var.binding))
+            .collect();
+        if !self.editor_tainted {
+            // Name/field probes use the normal expression checker. They are
+            // reads, not promises that consuming or assigning this value is legal.
+            self.editor_query = None;
+            if query.members {
+                let mut receiver = expression.clone();
+                if let Ok(ty) = self.expr_mode(&mut receiver, None, true) {
+                    let owner = self.field_owner(&ty);
+                    let fields: Vec<String> = if let Some(resource) = self.resource(&owner.0) {
+                        crate::stdlib::fields(resource)
+                            .into_iter()
+                            .map(|(name, _)| name.to_owned())
+                            .collect()
+                    } else {
+                        self.classes
+                            .get(&owner.0)
+                            .map(|class| {
+                                class.fields.iter().map(|(name, _)| name.clone()).collect()
+                            })
+                            .unwrap_or_default()
+                    };
+                    for name in fields {
+                        let mut field = Expr {
+                            kind: E::Field(Box::new(receiver.clone()), name.clone()),
+                            line: expression.line,
+                            ty: None,
+                            resolution: None,
+                            span: expression.span,
+                        };
+                        if let Ok(ty) = self.expr(&mut field, None) {
+                            items.push(EditorCandidate {
+                                name,
+                                borrowed: ty.contains_view()
+                                    || self.editor_borrowed_receiver(&receiver),
+                                ty,
+                                binding: None,
+                            });
+                        }
+                    }
+                }
+            } else {
+                let vars: Vec<_> = self
+                    .vars
+                    .iter()
+                    .map(|(name, var)| {
+                        (
+                            name.clone(),
+                            var.binding,
+                            var.borrowed_element || var.ty.contains_view(),
+                        )
+                    })
+                    .collect();
+                for (name, binding, borrowed) in vars {
+                    let mut probe = Expr {
+                        kind: E::Name(name.clone()),
+                        line: expression.line,
+                        ty: None,
+                        resolution: None,
+                        span: expression.span,
+                    };
+                    if let Ok(ty) = self.expr(&mut probe, None) {
+                        items.push(EditorCandidate {
+                            name,
+                            ty,
+                            binding: Some(binding),
+                            borrowed,
+                        });
+                    }
+                }
+            }
+            self.editor_query = Some(query);
+        }
+        if self.editor_facts.observed {
+            self.editor_facts.valid_context &= !self.editor_tainted;
+            // Loop checking can revisit a source expression at a stronger
+            // fixed point. Keep only facts valid at every observed evaluation.
+            let items = items
+                .into_iter()
+                .map(|item| ((item.name.clone(), item.binding), item))
+                .collect::<std::collections::BTreeMap<_, _>>();
+            self.editor_facts
+                .items
+                .retain(|item| items.get(&(item.name.clone(), item.binding)) == Some(item));
+            self.editor_facts.shadowed.extend(shadowed);
+        } else {
+            self.editor_facts.items = items;
+            self.editor_facts.shadowed = shadowed;
+            self.editor_facts.observed = true;
+            self.editor_facts.valid_context = !self.editor_tainted;
+        }
+    }
+
     fn is_task(&self, t: &Type) -> bool {
         self.resource(&t.0) == Some(crate::stdlib::Resource::Task)
     }
@@ -2837,6 +3022,7 @@ impl Checker {
                 let before = self.vars.clone();
                 let scope = self.scope;
                 if self.statement(s).is_err() {
+                    self.editor_tainted = true;
                     self.vars = before;
                     self.scope = scope;
                 }
@@ -3648,6 +3834,7 @@ impl Checker {
         expected: Option<&Type>,
         projection: bool,
     ) -> Result<Type, String> {
+        self.editor_capture(e);
         let line = e.line;
         let expression = ExprUseId::of(e);
         if e.resolution == Some(NameResolution::Module) {

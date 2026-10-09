@@ -15,6 +15,15 @@
     ]]></description>
     <depends>com.intellij.modules.platform</depends>
     <extensions defaultExtensionNs="com.intellij">
+        <lang.ast.factory language="Nagi" implementationClass="com.disnana.nagi.NagiASTFactory"/>
+        <lang.ast.factory language="NagiLow" implementationClass="com.disnana.nagi.NagiASTFactory"/>
+        <projectService serviceImplementation="com.disnana.nagi.NagiAssistService"/>
+        <completion.contributor language="Nagi" implementationClass="com.disnana.nagi.NagiCompletionContributor"/>
+        <completion.contributor language="NagiLow" implementationClass="com.disnana.nagi.NagiCompletionContributor"/>
+        <psi.referenceContributor language="Nagi" implementation="com.disnana.nagi.NagiReferenceContributor"/>
+        <psi.referenceContributor language="NagiLow" implementation="com.disnana.nagi.NagiReferenceContributor"/>
+        <externalAnnotator language="Nagi" implementationClass="com.disnana.nagi.NagiExternalAnnotator"/>
+        <externalAnnotator language="NagiLow" implementationClass="com.disnana.nagi.NagiExternalAnnotator"/>
         <fileType name="Nagi" language="Nagi" extensions="nagi"
                   implementationClass="com.disnana.nagi.NagiFileType" fieldName="HIGH"/>
         <fileType name="Nagi Low" language="NagiLow" extensions="low"
@@ -23,6 +32,12 @@
         <lang.parserDefinition language="NagiLow" implementationClass="com.disnana.nagi.NagiParserDefinition$Low"/>
         <lang.syntaxHighlighterFactory language="Nagi" implementationClass="com.disnana.nagi.NagiSyntaxHighlighter$Factory"/>
         <lang.syntaxHighlighterFactory language="NagiLow" implementationClass="com.disnana.nagi.NagiSyntaxHighlighter$LowFactory"/>
+        <projectService serviceImplementation="com.disnana.nagi.NagiAssistService"/>
+        <completion.contributor language="Nagi" implementationClass="com.disnana.nagi.NagiAssistCompletionContributor"/>
+        <completion.contributor language="NagiLow" implementationClass="com.disnana.nagi.NagiAssistCompletionContributor"/>
+        <psi.referenceContributor implementation="com.disnana.nagi.NagiAssistReferenceContributor"/>
+        <externalAnnotator language="Nagi" implementationClass="com.disnana.nagi.NagiAssistExternalAnnotator"/>
+        <externalAnnotator language="NagiLow" implementationClass="com.disnana.nagi.NagiAssistExternalAnnotator"/>
         <lang.commenter language="Nagi" implementationClass="com.disnana.nagi.NagiCommenter"/>
         <lang.commenter language="NagiLow" implementationClass="com.disnana.nagi.NagiCommenter"/>
         <lang.braceMatcher language="Nagi" implementationClass="com.disnana.nagi.NagiBraceMatcher"/>

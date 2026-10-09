@@ -1707,7 +1707,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         args.first().map(String::as_str),
         Some("help" | "--help" | "-h")
     ) || args.first().is_some_and(|command| {
-        ["check", "lower", "build", "run", "symbols", "map"].contains(&command.as_str())
+        ["check", "lower", "build", "run", "symbols", "assist", "map"].contains(&command.as_str())
             && args[1..].iter().any(|arg| arg == "--help" || arg == "-h")
     });
     if help {
@@ -1729,6 +1729,17 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let cmd = options.command.as_str();
     let path = options.source;
     let high = path.extension().is_none_or(|x| x != "low");
+    if cmd == "assist" {
+        if !options.editor_input {
+            return Err("assist requires --editor-input".into());
+        }
+        let request = crate::editor::read_request(std::io::stdin().lock(), &cwd)?;
+        println!(
+            "{}",
+            crate::editor::analyze(&path, &options.native, request)?
+        );
+        return Ok(());
+    }
     let overlays = if options.editor_input {
         crate::symbols::read_overlays(std::io::stdin().lock(), &cwd)?
     } else {

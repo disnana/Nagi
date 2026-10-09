@@ -7,7 +7,7 @@ use std::{
 };
 
 pub const USAGE: &str = "Usage:
-  nagic <check|lower|build|run|symbols> [SOURCE] [OPTIONS]
+  nagic <check|lower|build|run|symbols|assist> [SOURCE] [OPTIONS]
   nagic map [types|modules|calls] [SOURCE] [OPTIONS]
   nagic version
 
@@ -17,6 +17,7 @@ Commands:
   build    Build a native executable
   run      Build and run a program
   symbols  Print type and definition information as JSON
+  assist   Print compiler-authoritative editor assistance as JSON (internal)
   map      Map checked source types, modules, or calls (default: types)
   version  Print the compiler version
 
@@ -29,7 +30,7 @@ Options:
   --out DIR               Select the generated-source directory
   --cost-report           Write an allocation/copy cost report
   --rust-diagnostics      Include generated Rust diagnostic details (build/run)
-  --editor-input          Read editor buffers from stdin (check/symbols)
+  --editor-input          Read editor buffers from stdin (check/symbols/assist)
   --sql-schema FILE       Check literal SQL against an offline DDL snapshot (check)
   --sql-dialect sqlite    Required with --sql-schema; SQLite only
   --format FORMAT         Map output: mermaid (default), d2, json, html, svg, png
@@ -123,7 +124,7 @@ pub struct Options {
     pub cost: bool,
     /// Include raw generated Rust details after a mapped Nagi diagnostic.
     pub rust_diagnostics: bool,
-    /// Read editor buffers from stdin for symbols or an in-memory check.
+    /// Read editor buffers from stdin for symbols/assist or an in-memory check.
     pub editor_input: bool,
     pub sql_schema: Option<PathBuf>,
     /// Set only when a project is selected. Plain SOURCE commands keep their cwd.
@@ -291,7 +292,7 @@ pub fn resolve_map(args: &[String], cwd: &Path) -> Result<(Options, MapOptions),
                     .into(),
             ),
             "--editor-input" => {
-                return Err("--editor-input is supported only by check/symbols".into())
+                return Err("--editor-input is supported only by check/symbols/assist".into())
             }
             "--serve" => return Err("map --serve is not implemented".into()),
             _ => input.push(args[i].clone()),
@@ -435,7 +436,7 @@ fn read_manifest(path: &Path) -> Result<Manifest, String> {
 /// With no SOURCE, search upward from cwd for the nearest nagi.toml.
 pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let command = args.first().ok_or(USAGE)?;
-    if !["check", "lower", "build", "run", "symbols"].contains(&command.as_str()) {
+    if !["check", "lower", "build", "run", "symbols", "assist"].contains(&command.as_str()) {
         return Err(format!("unknown command: {command}\n{USAGE}"));
     }
     let mut source = None;
@@ -504,8 +505,8 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
             "--cost-report" => cost = true,
             "--rust-diagnostics" => rust_diagnostics = true,
             "--editor-input" => {
-                if !matches!(command.as_str(), "symbols" | "check") || editor_input {
-                    return Err("--editor-inputはcheck/symbolsに1回だけ指定できます".into());
+                if !matches!(command.as_str(), "symbols" | "check" | "assist") || editor_input {
+                    return Err("--editor-inputはcheck/symbols/assistに1回だけ指定できます".into());
                 }
                 editor_input = true;
             }
