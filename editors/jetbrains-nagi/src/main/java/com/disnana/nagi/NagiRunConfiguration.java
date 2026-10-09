@@ -180,7 +180,8 @@ public final class NagiRunConfiguration extends RunConfigurationBase<NagiRunConf
             var commandLine = new GeneralCommandLine(plan.executable())
                     .withParameters(plan.arguments())
                     .withWorkDirectory(plan.directory().toFile())
-                    .withCharset(StandardCharsets.UTF_8);
+                    .withCharset(StandardCharsets.UTF_8)
+                    .withEnvironment("NAGI_RUN_RETENTION", "latest");
             var handler = new OSProcessHandler(commandLine);
             handler.setShouldDestroyProcessRecursively(true);
             ProcessTerminatedListener.attach(handler);

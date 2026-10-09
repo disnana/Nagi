@@ -104,7 +104,7 @@ public final class NagiAssistProcess {
                                 throw new IOException("editor response exceeds its limit");
                             frame.write(next);
                         }
-                        throw new IOException("Nagi assistance process ended before response. Install the compiler from the same test build as this plugin.");
+                        throw new IOException("Nagi assistance ended before responding (startup failure or unsupported protocol). Published nagic 0.1.11 supports normal Check/Run; completion, diagnostics, and navigation require the matching compiler artifact built from this PR source.");
                     } catch (Throwable failure) { response.completeExceptionally(failure); }
                 });
                 byte[] frame = response.get(Math.max(1, Math.min(300, timeoutSeconds)), TimeUnit.SECONDS);

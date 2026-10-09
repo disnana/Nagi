@@ -1,0 +1,22 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-run-retention/compiler)
+    Finished `test` profile [unoptimized] target(s) in 13.40s
+     Running tests/build_generations.rs (/workspace/nagi-assist-target/debug/deps/build_generations-9abc7d8c3bb0bd97)
+
+running 1 test
+test managed_successful_runs_retire_old_generations_but_default_builds_keep_theirs ... FAILED
+
+failures:
+
+---- managed_successful_runs_retire_old_generations_but_default_builds_keep_theirs stdout ----
+
+thread 'managed_successful_runs_retire_old_generations_but_default_builds_keep_theirs' (825966) panicked at compiler/tests/build_generations.rs:509:5:
+a completed managed run must be retired after the next successful run
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    managed_successful_runs_retire_old_generations_but_default_builds_keep_theirs
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.63s
+
+error: test failed, to rerun pass `-p nagic --test build_generations`

@@ -1,10 +1,10 @@
-# Nagi for JetBrains
+# Nagi
 
 [English](README.en.md)
 
-IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
+IntelliJ IDEA・PyCharm向けのNagiプラグインです。次回更新候補では表示名を**Nagi**に統一します。Marketplaceの現行表示名は、その更新が公開されるまで変わりません。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
 
-プラグインの版は`build.gradle.kts`で管理します。GitHub Releasesの共通ZIPは0.1.2です。Marketplaceの対応版は既存ページで確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
+プラグインの版は`build.gradle.kts`で管理します。GitHub Releasesの共通ZIPは0.1.2です。Marketplaceから入れる場合は既存ページのVersionsで利用可能な版とIDE対応を確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
 
 ## 0.1.2でできること
 
@@ -21,9 +21,15 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。コンパイラは[�
 
 別の未リリース候補では、コンパイラを使ったHigh/Lowの補完、構造化診断、コンパイラが正確な参照先を返す場合の定義への移動と、IDE標準のNagi Run Configurationを追加しています。一度保存したローカル`.nagi`・`.low`の開いている未保存bufferは解析用snapshotに含めます。新規未保存fileは対象外です。候補は現在のsource・open buffers・compiler設定が変わると古い応答を破棄します。
 
-semantic assistanceには**同じsource commitから作った対応版`nagic`**が必要です。公開済みcompilerや別commitのcompilerはassist protocolに対応しません。解析はエディター向けの部分解析で、完全なbuild成功を保証せず、診断もcompilerが最初に返すエラーに限られます。project内では、対象sourceがentryからのimportまたはnative graphに含まれている必要があります。構文やcheckerがその位置でread可能と認めない候補は表示されず、候補が表示されても編集後の代入・move・callの妥当性を保証しません。record fieldの宣言先などcompilerが正確なsource spanを返さない参照には移動できません。`nagi.toml`に未保存の変更がある場合は、保存するまでsemantic assistanceを実行しません。
+プラグインのHigh/Low syntax highlightingはcompilerに依存せず、公開済み`nagic` 0.1.11は手動のCheck/Runと通常のRun Configurationによる実行に引き続き使えます。completion・diagnostics・definition navigationのsemantic assistanceには**同じPR source commitから作った開発版`nagic`**が必要です。公開済み0.1.11にはassist protocolがないため、補完などを使う場合はmatching compiler CI artifactを設定してください。解析はエディター向けの部分解析で、完全なbuild成功を保証せず、診断もcompilerが最初に返すエラーに限られます。project内では、対象sourceがentryからのimportまたはnative graphに含まれている必要があります。構文やcheckerがその位置でread可能と認めない候補は表示されず、候補が表示されても編集後の代入・move・callの妥当性を保証しません。record fieldの宣言先などcompilerが正確なsource spanを返さない参照には移動できません。`nagi.toml`に未保存の変更がある場合は、保存するまでsemantic assistanceを実行しません。
 
-IDE標準のRun Configurationは、既存のローカル`.nagi`または`.low`を開いてNagi設定を作り、通常のRun/Stop操作でコンパイラを起動します。近くに`nagi.toml`があればそのentryを使い、実行前に未保存ファイルを保存し、信頼されていないprojectでは起動を拒否します。これらは0.1.3候補の未リリース機能で、公開済み0.1.2には含まれません。候補版はActionsの検証artifactであり、GitHub ReleaseやMarketplaceへの公開版ではありません。
+IDE標準のRun Configurationは、既存のローカル`.nagi`または`.low`を開いてNagi設定を作り、通常のRun/Stop操作でコンパイラを起動します。近くに`nagi.toml`があればそのentryを使い、実行前に未保存ファイルを保存し、信頼されていないprojectでは起動を拒否します。Nagi 0.1.11のcompilerで通常実行できます。これらは公開済み0.1.2に含まれない0.1.3候補の機能です。候補pluginとassist用compilerはPR CI検証artifactで、GitHub ReleaseやMarketplaceにはまだ公開していません。
+
+この候補では、IDEが管理するNagi Runに限って`NAGI_RUN_RETENTION=latest`を設定する世代保持modeも、同じPR sourceから作った開発compilerと検証中です。公開compiler 0.1.11は通常のCheck/Runに使えますが、このmodeを実装しておらず、CLI実行の成功世代を自動削除しません。通常のCLI世代はimmutableで、世代cleanupはCargo共有cache（`build/native-target/`または`NAGI_NATIVE_TARGET_DIR`）にも適用されません。候補modeはnative run成功を記録したlatest、実行中・すべてのappの入力snapshotが必要とする世代、失敗後のlast-goodを保護します。compile成功だけではrun成功とみなさず、managed世代の入力metadataが不明なら回収しません。入力snapshotは成功した通常buildも含み、namespace参照とfile identityを記録するため、non-latest run・別appが必要とする世代を保護します。外部hardlink inputのidentityがrun leaseと一致する場合も、そのleaseとgenerationを保持します。依存元を回収しても参照先が次のsuccessful sweepまで残ることがあり、総世代数や容量に厳密な上限はありません。unknown file、link/reparse point、failed stagingも削除しません。generation tree外のrecovery journalは次のplugin管理runで検査します。unknownまたはoversized recordは保持し、正常recordの回収は続けます。これはまだ検証中で、通常CLI向けのcleanup commandやpower-loss durability保証ではありません。
+
+明示path crateも入力として保護します。別のoutへ入力として渡した世代は通常CLIのimmutable成果物と同様に保持し、自動回収しません。leaseにhardlinkが残る場合も保持します。任意Rust includeやbuild scriptの依存をNagiが網羅する保証はありません。
+
+compiler 0.1.12の一時候補は中止され、公開artifactはありません。JetBrains plugin 0.1.3と同じPR sourceのmatching development compilerは、未リリース候補として検証中です。
 
 ## インストール
 
@@ -66,7 +72,7 @@ PyCharm用SDKでも同じコードを検証できます。
 
 0.1.2の最低対象は2025.1.1です。IDEAではbuild `251.25410.109`、PyCharmではbuild `251.25410.122`を確認しています。2025.1 branchの初期build `251.23774`は、実行時のtrusted-project checkが呼ぶ公開APIを持たず、Plugin Verifierが未解決methodを報告したため対象に含めません。CIはstable IDEA/JDK 21向けの共通ZIP候補を先に1回だけビルドします。IDEA/PyCharmのstable（2025.1.1）とEAPの計4 SDKで、同じsourceからIDE testを実行し、各Verifierには同一の候補ZIPを渡します。stable testはJava 21 compiler toolchain、EAP testは各EAP SDKが要求するtoolchainを使います。現在のEAPはJDK 25です。最低対象のIDEA/PyCharm 2025.1.1もPlugin Verifierで確認します。四経路すべてのtestとVerifierが成功した後にだけ、元の候補ZIPを配布artifactへ昇格します。0.1.1に付属する二つのZIPは以前の配布物として保持し、0.1.2の共通ZIPとは別です。MarketplaceのUIインストールやIDE全体の操作は検証対象ではありません。
 
-通常のstable互換性確認は`./gradlew test buildPlugin verifyPlugin`をJDK 21で実行します。EAP SDKがJDK 25を要求する場合は、JDK 25でGradleを起動し、EAP testに`-PnagiJavaToolchainVersion=25`を指定します（stableの既定値は21です）。`options.release=21`により、いずれのJDKでもプラグインのcompile targetと参照可能なJava APIは21です。Verifierでは要求された表示名に関する`TemplateWordInPluginName` lintだけをmuteし、API互換性・deprecated・experimentalの警告はmuteしません。最低対象も確認するには、IDEA/PyCharmで`-PminimumPlatformVersion=2025.1.1`を指定します。最新EAPの検査では`-PplatformVersion=LATEST-EAP-SNAPSHOT`を指定します。`-PlocalPlatformPath`を指定した場合は、そのローカルSDKだけを検証します。
+通常のstable互換性確認は`./gradlew test buildPlugin verifyPlugin`をJDK 21で実行します。EAP SDKがJDK 25を要求する場合は、JDK 25でGradleを起動し、EAP testに`-PnagiJavaToolchainVersion=25`を指定します（stableの既定値は21です）。`options.release=21`により、いずれのJDKでもプラグインのcompile targetと参照可能なJava APIは21です。Verifierの警告はmuteせず、API互換性・deprecated・experimentalを含む診断を確認します。最低対象も確認するには、IDEA/PyCharmで`-PminimumPlatformVersion=2025.1.1`を指定します。最新EAPの検査では`-PplatformVersion=LATEST-EAP-SNAPSHOT`を指定します。`-PlocalPlatformPath`を指定した場合は、そのローカルSDKだけを検証します。
 
 公式資料: [Plugin SDK](https://plugins.jetbrains.com/docs/intellij/developing-plugins.html)、[Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html)。ライセンスは[MIT](LICENSE)です。
 

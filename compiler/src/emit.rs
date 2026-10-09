@@ -1239,6 +1239,15 @@ fn charge_fields(out: &mut Generated, fields: impl Iterator<Item = String>, inde
 }
 
 pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
+    rust_with_entry_guard(checked, None)
+}
+
+/// Artifact lifecycle is separate from the sealed language emission plan.
+/// Public embedding and ordinary builds do not emit the temporary-run guard.
+fn rust_with_entry_guard(
+    checked: &CheckedProgram,
+    entry_guard: Option<&str>,
+) -> Result<Generated, String> {
     checked.validate_for_emission()?;
     let plan = &checked.emission;
     let names = &plan.names;
@@ -1585,7 +1594,13 @@ pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
         if !f.params.is_empty() {
             return ::std::result::Result::Err("mainは引数を取りません".into());
         }
-        if f.asynchronous {
+        if let Some(guard) = entry_guard {
+            out.push_str("fn main() {\n");
+            out.push_str(guard);
+            if f.asynchronous {
+                out.push_str("::nagi_runtime::block_on(async {\n");
+            }
+        } else if f.asynchronous {
             out.push_str("fn main() { ::nagi_runtime::block_on(async {\n");
         } else {
             out.push_str("fn main() {\n");
@@ -1611,7 +1626,13 @@ pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
         }
         out.push_str(if f.asynchronous { "}); }\n" } else { "}\n" });
     } else {
-        out.push_str("fn main() {}\n");
+        if let Some(guard) = entry_guard {
+            out.push_str("fn main() {\n");
+            out.push_str(guard);
+            out.push_str("}\n");
+        } else {
+            out.push_str("fn main() {}\n");
+        }
     }
     ::std::result::Result::Ok(out)
 }
@@ -1841,6 +1862,19 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         .chain(sql_schema.iter().cloned())
         .chain(crate::output::assets(&resolution))
         .chain(crate::output::assets(&all))
+        // These explicit roots are known; discovering arbitrary Rust/include or
+        // Cargo build-script inputs remains Cargo's responsibility.
+        .chain(rust_deps.values().filter_map(|dependency| {
+            if let crate::project::RustDependency::Detailed(table) = dependency {
+                table
+                    .path
+                    .as_ref()
+                    .map(|root| root.join("Cargo.toml"))
+                    .filter(|manifest| manifest.is_file())
+            } else {
+                None
+            }
+        }))
         .collect();
     inputs.sort();
     inputs.dedup();
@@ -1997,13 +2031,20 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     if cmd != "build" && cmd != "run" {
         return Err(format!("unknown command: {cmd}"));
     }
+    let temporary_run = cmd == "run"
+        && std::env::var_os("NAGI_RUN_RETENTION").is_some_and(|value| value == "latest");
     let binary = (|| -> Result<PathBuf, String> {
     let root = crate::installation::root()?;
     fs::create_dir_all(out.join("src")).map_err(|e| e.to_string())?;
     if p.functions.iter().any(|f| f.external) && rust_file.is_none() {
         return Err("extern関数のビルドには--rust FILE.rsが必要です".into());
     }
-    let mut generated_rust = rust_with_lines(&checked)?;
+    let generated_directory = &output_lock.as_ref().expect("build owns output lock").directory;
+    let _export_pins = crate::generation::preserve_exported_inputs(generated_directory, &inputs)?;
+    let package = crate::generation::application_name(&path, generated_directory)?;
+    let mut generation = crate::generation::BuildGeneration::create(generated_directory, &package)?;
+    let entry_guard = if temporary_run { Some(generation.temporary_run_guard()?) } else { None };
+    let mut generated_rust = rust_with_entry_guard(&checked, entry_guard.as_deref())?;
     if let Some(file) = &rust_file {
         generated_rust.origin(None);
         generated_rust.push_str(&format!(
@@ -2012,12 +2053,6 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         ));
     }
     fs::write(out.join("src/main.rs"), &generated_rust.text).map_err(|e| e.to_string())?;
-    let generated_directory = &output_lock
-        .as_ref()
-        .expect("build owns output lock")
-        .directory;
-    let package = crate::generation::application_name(&path, generated_directory)?;
-    let generation = crate::generation::BuildGeneration::create(generated_directory, &package)?;
     let compatibility_manifest = cargo_manifest(
         &package,
         &generation.bin,
@@ -2106,15 +2141,49 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     ));
     generation.finish(&cached_binary, generated_directory, high, &inputs, &compatibility_manifest)
     })().map_err(partial_projection)?;
+    // Pin before unlocking. The native entry obtains its independent shared
+    // lease before user code; OS process exit releases even an orphan's lease.
+    let activity = if temporary_run {
+        Some(crate::generation::RunActivity::begin(
+            &binary,
+            &output_lock
+                .as_ref()
+                .expect("run owns output lock")
+                .directory,
+        )?)
+    } else {
+        None
+    };
     // Retain this chosen success path; never re-read latest after unlocking.
     drop(output_lock);
     eprintln!("native: {}", binary.display());
     if cmd == "run" {
         let mut process = Command::new(binary);
+        // This is an editor/compiler cache policy, not application environment.
+        if temporary_run {
+            process.env_remove("NAGI_RUN_RETENTION");
+        }
         if let Some(root) = options.project_root {
             process.current_dir(root);
         }
-        let status = process.status().map_err(|e| e.to_string())?;
+        let mut child = match process.spawn() {
+            Ok(child) => child,
+            Err(error) => {
+                if let Some(activity) = activity {
+                    if let Err(cleanup) = activity.complete(false, &inputs) {
+                        eprintln!("Nagi run cleanup warning: {cleanup}");
+                    }
+                }
+                return Err(error.to_string());
+            }
+        };
+        // A wait error does not imply exit. The native still owns its lease.
+        let status = child.wait().map_err(|e| e.to_string())?;
+        if let Some(activity) = activity {
+            if let Err(cleanup) = activity.complete(status.success(), &inputs) {
+                eprintln!("Nagi run cleanup warning: {cleanup}");
+            }
+        }
         if !status.success() {
             return Err(format!("program exited: {status}"));
         }

@@ -1,0 +1,18 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running tests/build_generations.rs (/workspace/nagi-assist-target/debug/deps/build_generations-ac5dca774a107787)
+
+running 1 test
+
+thread 'another_output_root_preserves_an_exported_managed_generation' (866930) panicked at compiler/tests/build_generations.rs:1391:5:
+an export consumed from another output root must keep its owner immutable
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test another_output_root_preserves_an_exported_managed_generation ... FAILED
+
+failures:
+
+failures:
+    another_output_root_preserves_an_exported_managed_generation
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 47 filtered out; finished in 1.17s
+
+error: test failed, to rerun pass `-p nagic --test build_generations`

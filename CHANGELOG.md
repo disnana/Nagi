@@ -4,9 +4,9 @@
 
 ### JetBrains 0.1.3候補 / JetBrains 0.1.3 candidate
 
-- IntelliJ IDEA / PyCharm共通の補完・定義ジャンプ・編集中診断を、同じsource commitのコンパイラ解析へ接続。既存0.1.11配布コンパイラには新しい解析commandがないため、試用にはCIの対応コンパイラを使用する。
-- IDE標準のNagi Run Configurationを追加。通常のRun/Stopから実行でき、未信頼プロジェクトではコンパイラを起動しない。
-- Compiler-backed completion, navigation and live diagnostics for both IDEs require the matching compiler build. Standard Nagi Run/Stop configurations are available. This candidate is not a published release; desktop GUI verification is pending.
+- IntelliJ IDEA / PyCharm共通の補完・定義ジャンプ・編集中診断は同じPR source commitの開発版compilerに接続。プラグインのsyntax highlightingはcompilerに依存せず、公開済み0.1.11は手動Check/Runと通常のRun Configuration実行に対応するが、assist protocolは含まない。
+- IDE標準のNagi Run Configurationは通常のRun/Stopから実行でき、未信頼プロジェクトでは起動しない。0.1.3は未公開候補。matching compilerとplugin ZIPはPR CI検証artifactであり、正式公開版ではない。
+- Compiler-backed completion, navigation and live diagnostics require the matching development compiler built from the same PR source commit. Plugin syntax highlighting is independent of the compiler; published 0.1.11 supports ordinary Check/Run but lacks the assist protocol. The 0.1.3 plugin and matching compiler are PR validation artifacts, not releases.
 
 ### SQLite
 

@@ -1,0 +1,56 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-run-retention/compiler)
+    Finished `test` profile [unoptimized] target(s) in 11.87s
+     Running tests/build_generations.rs (/workspace/nagi-assist-target/debug/deps/build_generations-9abc7d8c3bb0bd97)
+
+running 48 tests
+test a_running_old_executable_is_not_replaced_by_a_new_build ... ok
+test async_native_entry_guard_runs_before_block_on_even_without_environment_opt_in ... ok
+test cargo_cache_keeps_a_preexisting_default_package_binary_unchanged ... ok
+test another_output_root_preserves_an_exported_managed_generation ... ok
+test cargo_failure_retains_latest_and_inherited_lockfile ... ok
+test another_apps_successful_snapshot_keeps_a_referenced_generation_until_later_sweep ... ok
+test invalid_input_does_not_create_output_or_its_lock ... ok
+test compatibility_outputs_cannot_alias_previous_latest_metadata ... ok
+test latest_metadata_used_as_an_input_cannot_be_overwritten_by_rebuild ... ok
+test direct_native_launch_without_retention_environment_is_pinned_until_exit ... ok
+test lock_is_permanent_and_input_protection_is_rechecked_after_waiting ... ok
+test external_hardlink_input_identity_protects_its_run_lease_until_owner_is_collected ... ok
+test long_basename_accepted_by_the_previous_cache_scheme_uses_a_short_generation_bin ... ok
+test killed_parent_keeps_native_lease_through_tls_destructor_and_os_exit ... ok
+test latest_temp_failure_keeps_old_metadata_and_does_not_run_new_generation ... ok
+test managed_cleanup_preserves_native_inputs_inside_an_older_generation ... ok
+test managed_concurrent_run_keeps_an_older_executable_until_actual_exit ... ok
+test managed_cleanup_skips_links_and_does_not_touch_other_apps_or_staging ... ok
+test managed_cleanup_preserves_unknown_or_oversized_retention_metadata ... ok
+test managed_kernel_lease_preserves_then_reclaims_without_pid_guessing ... ok
+test managed_older_success_after_newer_failure_keeps_last_good ... ok
+test managed_older_completion_preserves_newer_latest_native_inputs ... ok
+test managed_low_runs_and_failed_builds_keep_the_last_good_generation ... ok
+test managed_oversized_record_does_not_stop_normal_reclamation ... ok
+test managed_parent_termination_does_not_claim_the_native_child_finished ... ok
+test managed_path_dependency_records_its_known_root_and_preserves_crate_sources ... ok
+test managed_saved_low_runs_use_the_same_retention_contract ... ok
+test native_entry_waiter_observes_tombstone_before_running_user_code ... ok
+test missing_inputs_metadata_on_ready_managed_generation_stops_reclamation ... ok
+test nonwriting_low_check_and_lower_do_not_wait_for_the_output_writer_lock ... ok
+test managed_program_failure_does_not_retire_old_successes ... ok
+test managed_successful_runs_retire_old_generations_but_default_builds_keep_theirs ... ok
+test orphan_cargo_uses_an_immutable_snapshot_and_cannot_replace_next_generation ... ok
+test projection_failure_keeps_old_latest_and_reports_partial_projection ... ok
+test published_manifest_runtime_reference_resolves_from_the_published_location ... ok
+test parallel_latest_readers_observe_only_complete_published_generations ... ok
+test rebuild_publishes_new_generation_and_preserves_old_executable_and_snapshot ... ok
+test nonlatest_active_run_keeps_its_native_input_after_a_newer_latest_succeeds ... ok
+test source_snapshot_retains_raw_non_utf8_canonical_path_without_rejecting_old_accepted_input ... ok
+test run_releases_output_lock_before_waiting_for_the_selected_executable ... ok
+test synthetic_no_main_native_entry_still_rejects_a_retired_generation ... ok
+test user_low_snapshot_comes_from_this_input_instead_of_a_stale_high_projection ... ok
+test writing_cost_report_cannot_alias_previous_latest ... ok
+test writing_high_check_cannot_alias_previous_latest ... ok
+test same_and_different_apps_with_equivalent_output_paths_wait_for_one_output_writer ... ok
+test tombstone_journal_recovers_partial_and_already_removed_generation_trees ... ok
+test writing_high_lower_cannot_alias_previous_latest ... ok
+test writing_check_lower_and_cost_wait_while_build_owns_the_output_lock ... ok
+
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.30s
+

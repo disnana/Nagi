@@ -86,6 +86,41 @@ public final class NagiAssistProcessTest {
         }
     }
 
+    /** Local protocol peer that accepts a request and closes stdout without a response. */
+    public static final class EofPeer {
+        public static void main(String[] args) throws Exception {
+            try (var input = new java.io.BufferedReader(new java.io.InputStreamReader(System.in))) {
+                input.readLine();
+            }
+        }
+    }
+
+    @Test public void eofBeforeResponseExplainsProtocolPossibilityAndMatchingCompiler() throws Exception {
+        Path directory = java.nio.file.Files.createTempDirectory("nagi eof assistance ");
+        String javaExecutable = Path.of(System.getProperty("java.home"), "bin", "java").toString();
+        var resource = EofPeer.class.getResource("NagiAssistProcessTest$EofPeer.class");
+        org.junit.Assert.assertNotNull(resource);
+        Path classesPath = Path.of(resource.toURI());
+        for (int part = 0; part < EofPeer.class.getName().split("\\.").length; part++) classesPath = classesPath.getParent();
+        var plan = new NagiAssistCommandPlan(javaExecutable,
+                List.of("-cp", classesPath.toString(), EofPeer.class.getName()), directory);
+        var session = new NagiAssistProcess.Session();
+        try {
+            Exception failure = assertThrows(Exception.class, () -> session.run(plan, "{}".getBytes(), 5,
+                    new NagiAssistProcess.Cancellation(), () -> true));
+            Throwable eof = failure;
+            while (eof.getCause() != null) eof = eof.getCause();
+            assertTrue("expected an EOF transport failure, got " + eof,
+                    eof instanceof IOException && eof.getMessage().contains("ended before responding"));
+            assertTrue(eof.getMessage(), eof.getMessage().contains("startup failure or unsupported protocol"));
+            assertTrue(eof.getMessage(), eof.getMessage().contains("Published nagic 0.1.11 supports normal Check/Run"));
+            assertTrue(eof.getMessage(), eof.getMessage().contains("matching compiler artifact built from this PR source"));
+        } finally {
+            session.close();
+            java.nio.file.Files.deleteIfExists(directory);
+        }
+    }
+
     @Test public void cancellationTerminatesAndReapsPendingSession() throws Exception {
         pendingSession(false);
     }

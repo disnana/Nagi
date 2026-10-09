@@ -106,8 +106,8 @@ def publish(client, component: str, version: str, sha: str, directory: Path) -> 
         notes = "Archives include the prebuilt compiler and the matching runtime sources, license, and installation notes. Extract the whole archive and add its root folder to PATH. Run `nagic --version` to verify the installed version. The compiler finds the bundled runtime automatically; NAGI_ROOT is normally unnecessary. Building Nagi applications still requires Rust/Cargo and a C build environment. Linux x86_64, Windows x64, macOS Apple Silicon (arm64), and macOS Intel (x86_64) are included. macOS archives are verified on macOS 15.\n"
     elif component == "jetbrains":
         filenames = [jetbrains_archive_name(version)]
-        title = f"Nagi for JetBrains IDEs {version}"
-        notes = "Download the Nagi for JetBrains ZIP, then use Settings/Preferences → Plugins → Install Plugin from Disk. Restart the IDE afterward. Install the Nagi compiler separately for check and run commands.\n"
+        title = f"Nagi {version}"
+        notes = "Download the Nagi ZIP, then use Settings/Preferences → Plugins → Install Plugin from Disk. Restart the IDE afterward. Install the Nagi compiler separately for check and run commands.\n"
     else:
         raise ValueError(f"Unknown release component: {component}")
     assets = []

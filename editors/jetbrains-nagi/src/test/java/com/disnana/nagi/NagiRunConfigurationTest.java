@@ -94,7 +94,8 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
             Path capturedDirectory = root.resolve("directory.txt");
             Path compiler = root.resolve("nagic");
             Files.writeString(compiler, "#!/bin/sh\nprintf '%s\\n' \"$@\" > '" + shellQuote(capturedArguments)
-                    + "'\npwd > '" + shellQuote(capturedDirectory) + "'\nexec sleep 300\n");
+                    + "'\npwd > '" + shellQuote(capturedDirectory) + "'\nprintf '%s' \"$NAGI_RUN_RETENTION\" > '"
+                    + shellQuote(root.resolve("retention")) + "'\nexec sleep 300\n");
             assertTrue(compiler.toFile().setExecutable(true));
             settings.compilerPath = compiler.toString();
             TrustedProjects.setProjectTrusted(getProject(), true);
@@ -127,6 +128,7 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
             Path expectedOutputRoot = Path.of(com.intellij.openapi.application.PathManager.getSystemPath(), "nagi", "run");
             assertTrue(Path.of(arguments.get(4)).startsWith(expectedOutputRoot));
             assertEquals(root.toString(), Files.readString(capturedDirectory).strip());
+            assertEquals("latest", Files.readString(root.resolve("retention")));
             assertTrue(Files.readString(source).endsWith("# written before run\n"));
             assertFalse(FileDocumentManager.getInstance().isDocumentUnsaved(document));
 

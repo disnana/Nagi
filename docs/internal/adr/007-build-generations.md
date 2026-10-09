@@ -28,9 +28,21 @@ Cargo成功後、exeをコピーし、stagingを新しい公開generationへrena
 
 script helperのlegacy cache lookupは、generation namespaceがない旧出力に限って維持する。namespaceがあるのにlatestがない、不正、または参照exeがない場合は失敗とする。初回build失敗を古いcache exeの成功へ読み替えない。
 
+## IDE管理runの世代保持（0.1.3候補）
+
+通常のCLI build/runは成功generationをimmutableに保ち、自動削除・世代数上限を設けない。`NAGI_RUN_RETENTION=latest`は公開CLIの設定ではなく、JetBrains候補が自分で起動するNagi runにだけ設定するopt-inである。手動CLI runと公開`nagic` 0.1.11のrunはこのmodeを使わない。IDE管理runの保持拡張はプラグイン0.1.3候補と同じPR sourceからbuildした開発compilerで検証中であり、compiler 0.1.12の一時候補は中止され、公開artifactはない。
+
+`latest`は世代を一律に一つへ減らす意味ではない。回収前にOSのshared leaseとnative entry guardで使用中の世代を保護し、current latest、現在の入力に対応する世代、実行中の世代、失敗後のlast-good世代は保持する。新しいrunが失敗しても以前の成功世代を削除しない。compile成功でlatestになっただけではnative run成功とみなさず、latestに整合するrun-success recordがなければ旧成功世代を回収しない。managedなready generationに入力metadataが欠けていれば依存なしと解釈せずsweepを止めて保持し、X tombstoneの部分削除generationは外部journalで回収を再開できる。unknown entry、symbolic link、Windows reparse point、failed stagingは保留する。
+
+成功してpublishされた全generationは`generation-inputs.json`にcanonical namespace参照と入力file identityを記録する。通常buildのgenerationも対象であり、回収は同一・別appの残存snapshotとnon-latestで実行中のrunが必要とするgenerationを保護する。入力identityが外部hardlink経由でrun leaseと一致する場合は、そのleaseとgenerationをtombstone化しない。依存ownerが消えた後も順序依存を避けるため、参照先が追加のsuccessful sweepまで残ることがある。これは厳密な総generation数・disk容量上限を設けない。依存を共有するCargo target cache（`build/native-target/`または`NAGI_NATIVE_TARGET_DIR`）はこの回収の対象外である。
+
+cleanup journalはgeneration treeの外、`out/.nagi/apps/{app}/run-retention/{generation}.lease`に置く。private recordのheaderは`R:NAGI-RUN-2:<app-id>:<generation-id>`から`X:NAGI-RUN-2:<app-id>:<generation-id>`へ遷移し、次回のIDE管理runは正確に照合した外部X recordとexclusive leaseを使って、generation metadataが部分削除された状態から回収を再開できる。headerの未知形式や許容サイズを超えるrecordは保持し、他の正常recordの回収は続ける。journalから未確認のpathを削除対象として推測しない。このpath・headerは実装用のprivate layoutであり、公開APIとして固定しない。通常CLIにcleanup commandや自動pruneは追加しない。回収が安全と確認できない場合は余分なfileを残す。
+
+入力にはcompilerが既知のRust path依存の`Cargo.toml`も含め、そのcrate rootが所属するgeneration全体を保護する。Cargoの任意source layout、module/include、build script、transitive dependencyはNagiで重複解析しない。別outのbuild/runへmanaged generationを入力として渡す場合は、所有generationのshared leaseと正確なR headerの下で、外部journal横へ永続的な`{generation}.exported` recordを作る。GCはexclusive取得後にもその存在を確認する。この世代は通常CLIのimmutable artifactと同様に自動回収対象から外れる。export先の所有者を推測するglobal GCや期限は加えない。leaseに外部hardlinkが残る間もtombstone化しない。別out exportやaliasのため余分に残る世代は、厳密な容量上限の保証外である。
+
 ## 固定しない範囲
 
-外部Rust、path crate、runtimeの参照先全体はsnapshotしない。任意Rustのmodule/includeを自動でコピーする仕組みは作らない。協調しない外部Cargo、悪意あるdirectory差し替え、OS crashへの耐久性、複数互換ファイル全体のatomic置換は保証しない。advisory lockはsandboxではない。
+外部Rust、path crate、runtimeの参照先全体はsnapshotしない。任意Rustのmodule/includeを自動でコピーする仕組みは作らない。協調しない外部Cargo、悪意あるdirectory差し替え、OS crashへの耐久性、複数互換ファイル全体のatomic置換は保証しない。retention journalの電源断後回復は実験・検証しておらず、次回回収は電源断後の耐久性を保証しない。すべてのfilesystemに対するfsync耐久やOOM時のcleanup完了も保証しない。advisory lockはsandboxではない。
 
 ## テストの変更と観測
 

@@ -1,8 +1,27 @@
 # コンパイラ・Rust境界の進捗
 
-## 2026-10-09: JetBrains意味解析と標準Runの候補PR
+## 2026-10-09: JetBrains意味解析と標準Runの候補PR（初回snapshot）
 
 [#104](https://github.com/disnana/Nagi/pull/104)をmain `3b8da226`向けDraftで作成した。compiler正本の補完・definition navigation・live diagnostics、project常駐process/workerとsnapshot、標準右クリックRun/上部Run/Stopを実装。0.1.3は公開前候補で、公開0.1.2と既存IDを維持する。compiler17、IDE69/0skip/buildPlugin、workspace1012 passed/0 failed/1既存Task cost ignored、fmt/clippy/fuzz/Docsを確認。Sol High独立reviewのP2 3件を修正しRED/GREENを保存。Windows source keyの追加差分と最終HEAD CIはPR本文/Checksで読戻し、GUI trialはユーザーが実施する。matching Windows compilerを同HEAD artifactで用意し、merge/tag/正式release/Marketplace uploadはしていない。[結果](jetbrains-semantic-assistance-results.md)・[引継ぎ](handoffs/2026-10-09-jetbrains-semantic-assistance.md)へ現行境界/次順序を記録した。Security Foundationの#100/#101はmerge済み、再開順は別PRのSF05→SF02→SF03である。
+[初回候補snapshot]。compiler正本の補完/definition navigation/live diagnostics、project常駐process/workerとsnapshot、標準右クリックRun/上部Run/Stopを実装。0.1.3は公開前候補で、公開0.1.2と既存IDを維持する。compiler17、IDE69/0skip/buildPlugin、workspace1012 passed/0 failed/1既存Task cost ignored、fmt/clippy/fuzz/Docsを確認。Sol High独立reviewのP2 3件を修正しRED/GREENを保存。当時のPR/CI/artifact/GUI stateはこのsnapshotに限り、統合後の現在状態ではない。merge/tag/正式release/Marketplace uploadはしていない。[結果](jetbrains-semantic-assistance-results.md)・[引継ぎ](handoffs/2026-10-09-jetbrains-semantic-assistance.md)へcurrent boundary/next orderを記録した。Security Foundationの#100/#101はmerge済み、再開順は別PRのSF05→SF02→SF03である。
+
+上のIDE69/workspace1012はgeneration-retention統合前の初回snapshotで、後続の統合結果と合算しない。現在値は次の項目を参照。
+
+## 2026-10-09: JetBrains generation-retention統合と公開案内
+
+production/test source `3a044fb4e93a56fb3de93afbc7b8f05ad6306a1a` にIDE-managed run世代回収とnative guard回帰を統合した。後続 `f4bc1620a18422d57394e5a4b3af9946e0388e26` と今回の記録commitはDocs/evidenceのみであり、source/test identityは`3a044fb`のまま。詳細は[統合結果](jetbrains-semantic-assistance-results.md)、[handoff](handoffs/2026-10-09-jetbrains-semantic-assistance.md)、[raw evidence](../../benchmarks/results/jetbrains-assistance-2026-10-09/run-retention/README.md)へ保存する。
+
+Linux generation-retention native48件が成功。Java70 tests/0 failure/0 skipとbuildPluginが、matching compiler SHA-256 `3f278636d81197acf35d320019975e438602e2ea2071d8e7082e965da0800744`、IC EAP build `263.6259.32`、JDK25/release21で成功した。全workspaceはexit0、raw101 result blocks/1039 pass/0 fail/1既存ignored（subprocess重複を含みunique testsではない）。all-target compiler clippy/fmtも成功。Sol High独立reviewはgeneration回収の5件修正後に承認した。Windows testはnightly-only file identityをstable namespace refs/native bytes oracleへ置換したが、Windows runと4 OS/4 IDE/Verifierは統合後の最新HEADでCI pending。`feafba8`以前のCIは今回の結果へ流用しない。
+
+website buildは102 pagesとlocal links/anchors/assetsに成功。CI policy63 testsの初回は、公開案内の修正でGitHub Releases URLを一時除いて既存policy assertion2件が失敗した。generic URLを保持するよう戻し、最終63 tests pass。release tests116もpass。失敗試行と修正後passを含む原ログはrun-retention artifactに保存し、test expectation/muteを緩めていない。
+
+GUIはユーザー画面のHigh run output/exit0、上部Nagi構成、右クリック標準Run項目表示までのpartial confirmation。実際の右クリック実行の因果、IDE/compiler exact source identityは不明。Low/completion/navigation/live diagnostics/Stop/trust/project-switch GUIは未確認。0.1.12 compiler候補は中止、public 0.1.11は通常Check/Runのままで、0.1.3候補assistにはmatching development compilerが必要。0.2.0完成前のcompiler formal releaseはない。
+
+Marketplace public update API/feedは現時点で0.1.1を返すが、ownerからの0.1.2 approval通知を撤回する根拠ではない。GitHub `jetbrains-v0.1.2` Releaseのcommon ZIPとSHA-256はpublic API/asset endpointでHTTP200を確認した。案内DocsはMarketplaceの取得版を断定せず、existing listing ID34891とVersionsでの対応IDE確認を維持する。0.1.3 approvalは推測しない。
+
+RetentionはIDE-managed runに限定し、foreign-out exportのimmutable input、latest-success/active/current-input/last-good、unknown metadata、link/reparse/failed stagingを保持する。shared Cargo cacheは別領域で自動削除しない。strict generation/size cap、arbitrary Rust include/build-script dependency discovery、power-loss/universal fsync/OOM保証はない。
+
+Security Foundationは別PRで進行中。`/workspace/Nagi-security-sf05` / `feat/security-foundation-sf05` の既存worktreeをSol High担当が継続しており、base `3b8da226`で保存済み全workspace raw1011 passとruntime79の最近結果がある。次担当はそれを作り直したりreset/cleanしたりせず、現在の担当とworktreeを引き継ぐ。SF01を再実装しない。
 
 ## 2026-10-09: Nagi for JetBrains 0.1.2の正式GitHub公開
 

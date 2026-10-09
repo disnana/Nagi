@@ -3,7 +3,27 @@
 2026-10-09 JST。[PR #104](https://github.com/disnana/Nagi/pull/104)はmain向けDraft。
 baseは `3b8da226eb26c27187f3b0bc4fa39639abe4ac57`。候補version 0.1.3、ID `com.disnana.nagi`。
 公開0.1.2のZIP/更新経路は変更していない。merge、tag、正式release、Marketplace uploadは未実施。
-Windows GUI試用はユーザーが実施する。
+ユーザーによるGUI試用は一部のHigh Run/標準Run表示まで確認済みで、全体の受入確認は未完了。範囲は統合検証の現在値に記録する。
+
+## 2026-10-09 統合検証の現在値
+
+production/test sourceは `3a044fb4e93a56fb3de93afbc7b8f05ad6306a1a`。後続のMarketplace案内commit `f4bc1620a18422d57394e5a4b3af9946e0388e26`はDocs-onlyである。さらにこの結果・handoff追記もDocs/evidenceのみで、Rust/Java sourceやtestsには触れていない。CI/Plugin Verifierの最終対象は統合後の最新PR HEADで再確認する。
+
+| 検査 | 統合sourceでの結果/境界 |
+|---|---|
+| Linux generation-retention native | 48 tests成功。通常CLI/foreign-out exportの保持、native entry/lease guard、X journal再開、current-input/last-good競合、unknown/oversized recordなどを実プロセス・native bytesで検査。原ログは[run-retention/native-48.log](../../benchmarks/results/jetbrains-assistance-2026-10-09/run-retention/native-48.log) |
+| JetBrains | IC EAP 2026.3 build `263.6259.32`、JDK 25/Java release 21で70 tests・0 failures/errors/skips、`buildPlugin`成功。matching compiler test binary SHA-256 `3f278636d81197acf35d320019975e438602e2ea2071d8e7082e965da0800744`。JUnit/XML、ZIP descriptor、command、offline環境は[readback](../../benchmarks/results/jetbrains-assistance-2026-10-09/run-retention/java-readback.json) |
+| 全workspace | exit 0、raw 101 result blocks/1039 passed/0 failed/1既存ignored。subprocess再実行を含む集計でunique test数ではない。[workspace.log](../../benchmarks/results/jetbrains-assistance-2026-10-09/run-retention/workspace.log) |
+| compiler lint/format | all-target compiler clippyとfmt check成功。[clippy log](../../benchmarks/results/jetbrains-assistance-2026-10-09/run-retention/compiler-clippy.log) |
+| website・policy/release tests | website 102 pages、local links/anchors/assets成功。CI policy 63 testsとrelease 116 tests成功。詳細は[証拠README](../../benchmarks/results/jetbrains-assistance-2026-10-09/run-retention/README.md) |
+
+Native実装は独立Sol High reviewで指摘された5件の保持/依存境界を修正した後に承認された。Windowsではnightly-only file identity APIを使わず、stableのnamespace参照とnative output bytes oracleを使う。Linuxの48件がWindows junction testを実行したことにはならず、そのWindows実行と全4 OS・4 IDE/Plugin Verifierは最新HEAD CI待ちである。過去`feafba8`のCIはこの統合HEADの成功へ移し替えない。
+
+GUIではユーザー共有の画面でHighの `Point/f64 1.5 + 2.5` 実行、`Hello, Nagi!`/`4`、exit 0、上部Nagi Run構成および右クリックの標準Nagi Run項目を確認した。画面から実際に右クリック項目を押してこの実行を開始した因果、IDE build、導入compilerのexact source identityは確認できない。Low、補完、navigation、live diagnostics、Stop、trust拒否、project切替のGUI試用は未確認であり、CI fixtureだけで完了扱いにしない。
+
+公開compiler 0.1.11は通常のCheck/Runに対応するがassist protocolを持たない。compiler 0.1.12候補は中止されており、0.1.3候補のsemantic assistanceには同じPR sourceの開発compilerが必要。0.2.0完成前の正式compiler releaseは行わない。GitHub `jetbrains-v0.1.2` Releaseの共通ZIPとchecksumはpublic API/asset URLで確認した。一方、Marketplaceのpublic update API/build feedは現在0.1.1のみを返し、ownerからの0.1.2 approval通知とは異なる。public endpointではowner review stateを判定できないため、その通知の撤回とは扱わない。公開DocsではMarketplaceの現行版を断定せず、listingのVersionsで対応IDE版を確認する案内にした。
+
+RetentionはIDE-managed runに限定する。foreign-outへexportしたmanaged generationはimmutable CLI成果物同様に保護し、unknown metadata、link/reparse、failed staging、shared Cargo cacheを回収しない。通常CLI世代はimmutableで、任意Rust include/build script依存を全探索する契約ではない。世代数/総容量の厳密な上限、電源断耐久、普遍fsync、OOM回復保証はない。各OS filesystemや電源断での全条件試験も行っていない。
 
 ## 実装
 
@@ -22,7 +42,9 @@ Rust Windows canonical pathのverbatim drive/UNC prefixをIDE VFSと同じsource
 近くの`nagi.toml`ではmanifest entry/native設定を維持し、明示Run前にsourceを保存する。
 未信頼projectを拒否し、launch直前にもtrustを確認する。Stopはprocess treeを終了し、外部副作用をrollbackする保証ではない。
 
-## ローカル観測
+## 初回意味解析のみのローカル観測（統合GC前の履歴）
+
+以下は統合GC前の初回snapshotの値で、上の現在値と合算・置換しない。
 
 | 検査 | 結果/保証範囲 |
 |---|---|

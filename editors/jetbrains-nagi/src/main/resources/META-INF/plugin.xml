@@ -1,19 +1,19 @@
 <idea-plugin>
     <id>com.disnana.nagi</id>
-    <name>Nagi for JetBrains</name>
+    <name>Nagi</name>
     <vendor url="https://nagi.disnana.com">Disnana</vendor>
     <description><![CDATA[
         <p>Nagi language support for IntelliJ IDEA and PyCharm. This is an unreleased 0.1.3 candidate, not a published release; full IDE GUI verification is pending.</p>
         <p>Provides syntax highlighting for High (.nagi) and Low (.low) files, code folding, indentation support, compiler-backed completion and current-snapshot diagnostics, source navigation when the compiler returns an exact target, and a standard Nagi Run Configuration with the IDE's Run and Stop controls.</p>
-        <p>Semantic assistance is partial editor analysis, not a full build check; diagnostics report only the first compiler error returned. It requires nagic built from the exact same PR source commit as this plugin candidate. Published compiler release 0.1.11 does not provide the matching assist protocol; use the matching compiler CI artifact.</p>
+        <p>The plugin's High/Low syntax highlighting does not require a compiler; published nagic 0.1.11 continues to support manual Check/Run and normal Run Configuration execution. Semantic assistance is partial editor analysis, not a full build check; diagnostics report only the first compiler error returned. Completion, diagnostics, and navigation require a development compiler built from the same PR source commit. Published 0.1.11 does not provide the assist protocol; use the matching compiler CI artifact.</p>
         <p>Nagi: Check and Nagi: Run remain available for a Nagi file or the nearest project containing nagi.toml. Commands and Run Configurations require a trusted project and save open files before starting.</p>
-        <p>The compiler is installed separately and is not bundled with the plugin. Published compiler releases are available from <a href="https://github.com/disnana/Nagi/releases">GitHub Releases</a>. The matching compiler for this unreleased candidate is a PR CI artifact, not a formal release.</p>
+        <p>The compiler is installed separately and is not bundled with the plugin. Published compiler releases are available from <a href="https://github.com/disnana/Nagi/releases">GitHub Releases</a>. The matching compiler for semantic assistance in this unreleased candidate is a PR CI artifact, not a formal release. The candidate plugin itself is not yet published to GitHub Releases or Marketplace.</p>
         <h3>日本語</h3>
         <p>IntelliJ IDEA・PyCharm向けのNagi言語サポートです。未公開の0.1.3候補であり、正式公開版ではありません。IDE全体のGUI検証は未完了です。</p>
         <p>High（.nagi）・Low（.low）のシンタックスハイライト、コードの折りたたみ、インデント支援、コンパイラによる補完と現在のsnapshotに基づく診断、正確な参照先が返された場合の定義への移動、IDE標準のRun/Stopを使うNagi Run Configurationを提供します。</p>
-        <p>semantic assistanceはエディター向けの部分解析で、完全なbuild検査ではありません。診断にはcompilerが最初に返すエラーだけが表示されます。この候補と同じPR source commitから作成したnagicが必要です。公開済みcompiler 0.1.11には対応するassist protocolがないため、PRのmatching compiler CI artifactを使用してください。</p>
+        <p>プラグインのHigh/Low syntax highlightingはcompilerに依存せず、公開済みnagic 0.1.11は手動のCheck/Runと通常のRun Configuration実行に引き続き使えます。semantic assistanceはエディター向けの部分解析で、完全なbuild検査ではなく、診断にはcompilerが最初に返すエラーだけが表示されます。補完・診断・定義への移動には同じPR source commitから作成した開発版compilerが必要です。公開済み0.1.11にassist protocolはないため、PRのmatching compiler CI artifactを使用してください。</p>
         <p>Nagi: Check / Nagi: Runに加えて、Nagiファイルまたは最寄りのnagi.tomlを含むプロジェクトを標準Run Configurationから実行できます。各操作にはproject trustが必要で、起動前に開いているfileを保存します。</p>
-        <p>コンパイラは別途インストールしてください。プラグインには同梱されていません。公開済みcompilerは<a href="https://github.com/disnana/Nagi/releases">GitHub Releases</a>から取得できます。この未公開候補に対応するcompilerはPRのCI artifactで、正式releaseではありません。</p>
+        <p>コンパイラは別途インストールしてください。プラグインには同梱されていません。公開済みcompilerは<a href="https://github.com/disnana/Nagi/releases">GitHub Releases</a>から取得できます。semantic assistanceに対応するcompilerはPRのCI artifactで、正式releaseではありません。この候補pluginはGitHub ReleaseやMarketplaceへまだ公開していません。</p>
     ]]></description>
     <depends>com.intellij.modules.platform</depends>
     <extensions defaultExtensionNs="com.intellij">

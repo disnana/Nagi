@@ -143,6 +143,11 @@ impl Running {
                     Ok(0) => break,
                     Ok(_) => {
                         captured.lock().unwrap().extend_from_slice(&line);
+                        if line.starts_with(b"waiting for Nagi run lease: ") {
+                            if let Some(path) = &marker {
+                                let _ = fs::write(path.join("lease-waiting"), "");
+                            }
+                        }
                         if line.starts_with(b"waiting for output lock: ") {
                             if let Some(path) = &marker {
                                 let _ = fs::write(path.join("waiting"), "");
@@ -489,6 +494,1122 @@ fn a_running_old_executable_is_not_replaced_by_a_new_build() {
     let output = old.output();
     success(&output);
     assert_eq!(String::from_utf8(output.stdout).unwrap().trim(), "old");
+}
+
+#[test]
+fn managed_successful_runs_retire_old_generations_but_default_builds_keep_theirs() {
+    let f = Fixture::new();
+    let default = f.build();
+    let managed_run = || {
+        let mut command = f.cli("run", "main.nagi", "out");
+        command.env("NAGI_RUN_RETENTION", "latest");
+        let output = bounded_output(command);
+        let executable = native(&output);
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "old");
+        executable
+    };
+    let first = managed_run();
+    let second = managed_run();
+    assert_ne!(first, second);
+    assert!(
+        !first.parent().unwrap().exists(),
+        "a completed managed run must be retired after the next successful run"
+    );
+    assert!(second.is_file(), "the latest generation must stay runnable");
+    assert!(
+        default.is_file(),
+        "ordinary CLI build artifacts are not an IDE-owned cache"
+    );
+    assert_eq!(run(&default), "old");
+}
+
+fn managed_command(f: &Fixture, source: &str) -> Command {
+    managed_command_at(f, source, "out")
+}
+
+fn managed_command_at(f: &Fixture, source: &str, out: &str) -> Command {
+    let mut command = f.cli("run", source, out);
+    command.env("NAGI_RUN_RETENTION", "latest");
+    command
+}
+
+fn managed_project_command(f: &Fixture, project: &str, out: &str) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_nagic"));
+    command
+        .current_dir(&f.0)
+        .args(["run", "--project", project, "--out", out])
+        .env("NAGI_ROOT", &f.0)
+        .env("CARGO_NET_OFFLINE", "true")
+        .env("NAGI_NATIVE_TARGET_DIR", f.0.join("cache"))
+        .env("NAGI_RUN_RETENTION", "latest");
+    command
+}
+
+fn run_lease(binary: &Path) -> PathBuf {
+    let generation = binary.parent().unwrap();
+    generation
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("run-retention")
+        .join(format!(
+            "{}.lease",
+            generation.file_name().unwrap().to_str().unwrap()
+        ))
+}
+
+#[cfg(unix)]
+fn test_file_identity(path: &Path) -> [u64; 2] {
+    let metadata = fs::metadata(path).unwrap();
+    use std::os::unix::fs::MetadataExt;
+    [metadata.dev(), metadata.ino()]
+}
+
+fn app_for(binary: &Path) -> &Path {
+    binary
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::parent)
+        .expect("native executable is inside an application generation")
+}
+
+fn lease_header(binary: &Path, state: &str) -> String {
+    let generation = binary.parent().unwrap();
+    let app = app_for(binary);
+    format!(
+        "{state}:NAGI-RUN-2:{}:{}\n",
+        app.file_name().unwrap().to_str().unwrap(),
+        generation.file_name().unwrap().to_str().unwrap()
+    )
+}
+
+fn retire_lease(binary: &Path) {
+    use std::io::{Seek, SeekFrom, Write};
+
+    let mut lease = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(run_lease(binary))
+        .unwrap();
+    lease.lock().unwrap();
+    lease.set_len(0).unwrap();
+    lease.seek(SeekFrom::Start(0)).unwrap();
+    lease
+        .write_all(lease_header(binary, "X").as_bytes())
+        .unwrap();
+    lease.sync_all().unwrap();
+}
+
+#[test]
+fn managed_low_runs_and_failed_builds_keep_the_last_good_generation() {
+    for text in [
+        "fn main() {\n    print(\"old\");\n}\n",
+        "def main():\n    print(\"old\")\n",
+    ] {
+        let f = Fixture::new();
+        let source = if text.contains('{') {
+            "main.low"
+        } else {
+            "main.nagi"
+        };
+        f.write(source, text);
+        let first = native(&bounded_output(managed_command(&f, source)));
+        let latest = f.latest("out").0;
+        let wrapper = f.wrapper();
+        let mut failure = f.wrapped(&wrapper, "run", source, "out", "failure", "fail");
+        failure.env("NAGI_RUN_RETENTION", "latest");
+        let failure = bounded_output(failure);
+        assert!(!failure.status.success());
+        assert!(String::from_utf8_lossy(&failure.stderr).contains("Build failed."));
+        assert_eq!(f.latest("out").0, latest);
+        assert!(first.is_file());
+        let second = native(&bounded_output(managed_command(&f, source)));
+        assert!(!first.parent().unwrap().exists());
+        assert_eq!(run(&second), "old");
+    }
+}
+
+#[test]
+fn managed_program_failure_does_not_retire_old_successes() {
+    let f = Fixture::new();
+    let first = native(&bounded_output(managed_command(&f, "main.nagi")));
+    f.write("bridge.rs", "pub fn fail() { std::process::exit(7); }\n");
+    f.write(
+        "main.nagi",
+        "@rust(\"native::fail\")\nextern def fail()\ndef main():\n    fail()\n",
+    );
+    let mut failure = managed_command(&f, "main.nagi");
+    failure.args(["--rust", "bridge.rs"]);
+    let failure = bounded_output(failure);
+    assert!(!failure.status.success());
+    assert!(String::from_utf8_lossy(&failure.stderr).contains("program exited:"));
+    assert!(first.is_file());
+    let (_, failed) = f.latest("out");
+    let failed = f.app("out").join(failed["executable"].as_str().unwrap());
+    let lease = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(run_lease(&failed))
+        .unwrap();
+    assert!(
+        lease.try_lock().is_ok(),
+        "process::exit must release the native kernel lease"
+    );
+    drop(lease);
+    f.source("main.nagi", "recovered");
+    let recovered = native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(!first.parent().unwrap().exists());
+    assert_eq!(run(&recovered), "recovered");
+}
+
+const HOLD_RUN: &str = r#"pub fn hold() {
+    let dir = std::path::PathBuf::from(std::env::var_os("NAGI_TEST_SIGNALS").unwrap());
+    std::fs::write(dir.join("entered"), "").unwrap();
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !dir.join("release").exists() {
+        assert!(std::time::Instant::now() < until);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    std::fs::write(dir.join("done"), "").unwrap();
+}"#;
+
+#[test]
+fn managed_concurrent_run_keeps_an_older_executable_until_actual_exit() {
+    let f = Fixture::new();
+    f.write("bridge.rs", HOLD_RUN);
+    f.write("main.nagi", "@rust(\"native::hold\")\nextern def hold()\ndef main():\n    print(\"held\")\n    hold()\n");
+    let signals = f.0.join("running");
+    let mut held = managed_command(&f, "main.nagi");
+    held.args(["--rust", "bridge.rs"])
+        .env("NAGI_TEST_SIGNALS", &signals);
+    let mut held = Running::spawn(held, signals);
+    held.wait_for("entered");
+    let (_, metadata) = f.latest("out");
+    let first = f.app("out").join(metadata["executable"].as_str().unwrap());
+    let bytes = fs::read(&first).unwrap();
+    f.source("main.nagi", "new");
+    let latest = native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert_eq!(fs::read(&first).unwrap(), bytes);
+    held.release();
+    success(&held.output());
+    assert!(!first.parent().unwrap().exists());
+    assert!(
+        latest.is_file(),
+        "the newer latest must survive an older run completing last"
+    );
+}
+
+#[test]
+fn managed_kernel_lease_preserves_then_reclaims_without_pid_guessing() {
+    let f = Fixture::new();
+    let first = native(&bounded_output(managed_command(&f, "main.nagi")));
+    let pin = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(run_lease(&first))
+        .unwrap();
+    pin.lock_shared().unwrap();
+    let second = native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(first.is_file());
+    assert!(second.is_file());
+    drop(pin);
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(!first.parent().unwrap().exists());
+    assert!(!run_lease(&first).exists());
+}
+
+#[test]
+fn native_entry_waiter_observes_tombstone_before_running_user_code() {
+    let f = Fixture::new();
+    let old = native(&bounded_output(managed_command(&f, "main.nagi")));
+    let lease_path = run_lease(&old);
+    let mut lease = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&lease_path)
+        .unwrap();
+    lease.lock().unwrap();
+
+    let signals = f.0.join("retired-entry");
+    let mut direct = Command::new(&old);
+    direct.env("NAGI_TEST_SIGNALS", &signals);
+    direct.env_remove("NAGI_RUN_RETENTION");
+    let mut direct = Running::spawn(direct, signals);
+    direct.wait_for("lease-waiting");
+
+    use std::io::{Seek, SeekFrom, Write};
+    lease.set_len(0).unwrap();
+    lease.seek(SeekFrom::Start(0)).unwrap();
+    lease.write_all(lease_header(&old, "X").as_bytes()).unwrap();
+    lease.sync_all().unwrap();
+    drop(lease);
+
+    let output = direct.output();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty(), "retired native code must not run");
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("temporary run generation is retired or its lease is invalid"));
+}
+
+#[test]
+fn tombstone_journal_recovers_partial_and_already_removed_generation_trees() {
+    for remove_whole_tree in [false, true] {
+        let f = Fixture::new();
+        let old = native(&bounded_output(managed_command(&f, "main.nagi")));
+        let generation = old.parent().unwrap().to_owned();
+        let journal = run_lease(&old);
+        retire_lease(&old);
+        if remove_whole_tree {
+            fs::remove_dir_all(&generation).unwrap();
+        } else {
+            // A tombstone is sufficient to resume a partially deleted tree
+            // whose dependency metadata has already gone.
+            fs::remove_file(generation.join("generation-inputs.json")).unwrap();
+        }
+
+        f.source("main.nagi", "replacement");
+        let next = native(&bounded_output(managed_command(&f, "main.nagi")));
+        assert_eq!(run(&next), "replacement");
+        assert!(
+            !generation.exists(),
+            "recovery must finish the old tree removal"
+        );
+        assert!(
+            !journal.exists(),
+            "recovery must remove the external X journal"
+        );
+    }
+}
+
+#[test]
+fn missing_inputs_metadata_on_ready_managed_generation_stops_reclamation() {
+    let f = Fixture::new();
+    let old = native(&bounded_output(managed_command(&f, "main.nagi")));
+    let generation = old.parent().unwrap().to_owned();
+    fs::remove_file(generation.join("generation-inputs.json")).unwrap();
+
+    f.source("main.nagi", "replacement");
+    let next = native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert_eq!(run(&next), "replacement");
+    assert!(
+        generation.is_dir(),
+        "unknown managed dependencies must be retained"
+    );
+    assert!(run_lease(&old).is_file());
+}
+
+#[test]
+fn direct_native_launch_without_retention_environment_is_pinned_until_exit() {
+    let f = Fixture::new();
+    f.write(
+        "bridge.rs",
+        r#"pub fn hold() {
+    let Some(signals) = std::env::var_os("NAGI_TEST_SIGNALS") else { return; };
+    let dir = std::path::PathBuf::from(signals);
+    std::fs::write(dir.join("entered"), "").unwrap();
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !dir.join("release").exists() {
+        assert!(std::time::Instant::now() < until);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    std::fs::write(dir.join("done"), "").unwrap();
+}"#,
+    );
+    f.write(
+        "main.nagi",
+        "@rust(\"native::hold\")\nextern def hold()\ndef main():\n    hold()\n",
+    );
+    let old = native(&bounded_output({
+        let mut command = managed_command(&f, "main.nagi");
+        command.arg("--rust").arg("bridge.rs");
+        command
+    }));
+
+    let signals = f.0.join("direct-native");
+    let mut command = Command::new(&old);
+    command.env("NAGI_TEST_SIGNALS", &signals);
+    command.env_remove("NAGI_RUN_RETENTION");
+    let mut direct = Running::spawn(command, signals);
+    direct.wait_for("entered");
+
+    f.source("main.nagi", "new latest");
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(
+        old.is_file(),
+        "direct native launch must hold its kernel lease"
+    );
+    direct.release();
+    success(&direct.output());
+
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(!old.parent().unwrap().exists());
+    assert!(!run_lease(&old).exists());
+}
+
+#[test]
+fn killed_parent_keeps_native_lease_through_tls_destructor_and_os_exit() {
+    let f = Fixture::new();
+    f.write(
+        "bridge.rs",
+        r#"struct ExitBarrier;
+impl Drop for ExitBarrier {
+    fn drop(&mut self) {
+        let dir = std::path::PathBuf::from(std::env::var_os("NAGI_TEST_SIGNALS").unwrap());
+        std::fs::write(dir.join("tls-entered"), "").unwrap();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while !dir.join("release").exists() {
+            assert!(std::time::Instant::now() < until);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        std::fs::write(dir.join("tls-done"), "").unwrap();
+    }
+}
+thread_local! { static ON_EXIT: ExitBarrier = ExitBarrier; }
+pub fn touch_exit_barrier() { ON_EXIT.with(|_| {}); }"#,
+    );
+    f.write(
+        "main.nagi",
+        "@rust(\"native::touch_exit_barrier\")\nextern def touch_exit_barrier()\ndef main():\n    touch_exit_barrier()\n",
+    );
+    let signals = f.0.join("tls-native");
+    let mut command = managed_command(&f, "main.nagi");
+    command
+        .arg("--rust")
+        .arg("bridge.rs")
+        .env("NAGI_TEST_SIGNALS", &signals);
+    let mut parent = Running::spawn(command, signals);
+    parent.wait_for("tls-entered");
+    let old = native_path_from_latest(&f, "out");
+    let lease_path = run_lease(&old);
+
+    parent.kill_parent();
+    let lease = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&lease_path)
+        .unwrap();
+    assert!(
+        matches!(lease.try_lock(), Err(fs::TryLockError::WouldBlock)),
+        "native TLS teardown still owns the OS lease after its parent is killed"
+    );
+    f.source("main.nagi", "new latest");
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(old.is_file(), "a live orphan remains pinned");
+
+    parent.release();
+    let until = Instant::now() + DEADLINE;
+    while !parent.signals().join("tls-done").exists() {
+        assert!(
+            Instant::now() < until,
+            "native TLS destructor must leave its barrier"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(!parent.output().status.success());
+    let until = Instant::now() + DEADLINE;
+    loop {
+        match lease.try_lock() {
+            Ok(()) => break,
+            Err(fs::TryLockError::WouldBlock) => {
+                assert!(
+                    Instant::now() < until,
+                    "kernel lease must remain until the native process exits"
+                );
+                thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) => panic!("cannot observe native lease release: {error:?}"),
+        }
+    }
+    drop(lease);
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(!old.parent().unwrap().exists());
+    assert!(!lease_path.exists());
+}
+
+fn native_path_from_latest(f: &Fixture, out: &str) -> PathBuf {
+    let (_, metadata) = f.latest(out);
+    f.app(out).join(metadata["executable"].as_str().unwrap())
+}
+
+#[test]
+fn async_native_entry_guard_runs_before_block_on_even_without_environment_opt_in() {
+    let f = Fixture::new();
+    // This minimal executor is only an entry-order oracle. It does not assert
+    // behavior or guarantees of the production Tokio executor.
+    f.write(
+        "runtime/src/lib.rs",
+        r#"use std::future::Future;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+struct Noop;
+impl Wake for Noop { fn wake(self: Arc<Self>) {} }
+pub fn block_on<F: Future>(future: F) -> F::Output {
+    if let Some(dir) = std::env::var_os("NAGI_TEST_SIGNALS") {
+        std::fs::write(std::path::PathBuf::from(dir).join("block-on"), "").unwrap();
+    }
+    let waker = Waker::from(Arc::new(Noop));
+    let mut context = Context::from_waker(&waker);
+    let mut future = Box::pin(future);
+    match future.as_mut().poll(&mut context) {
+        Poll::Ready(value) => value,
+        Poll::Pending => panic!("ordering fixture does not support pending futures"),
+    }
+}"#,
+    );
+    f.write(
+        "bridge.rs",
+        r#"pub fn user_code() {
+    let dir = std::path::PathBuf::from(std::env::var_os("NAGI_TEST_SIGNALS").unwrap());
+    std::fs::write(dir.join("user-code"), "").unwrap();
+}"#,
+    );
+    f.write(
+        "main.nagi",
+        "@rust(\"native::user_code\")\nextern def user_code()\nasync def main():\n    user_code()\n",
+    );
+    let initial_signals = f.0.join("async-initial");
+    fs::create_dir_all(&initial_signals).unwrap();
+    let mut initial = managed_command(&f, "main.nagi");
+    initial
+        .arg("--rust")
+        .arg("bridge.rs")
+        .env("NAGI_TEST_SIGNALS", &initial_signals);
+    let output = bounded_output(initial);
+    success(&output);
+    let old = native(&output);
+    assert!(initial_signals.join("block-on").is_file());
+    assert!(initial_signals.join("user-code").is_file());
+
+    let lease_path = run_lease(&old);
+    let mut lease = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&lease_path)
+        .unwrap();
+    lease.lock().unwrap();
+    let refused_signals = f.0.join("async-refused");
+    let mut direct = Command::new(&old);
+    direct.env("NAGI_TEST_SIGNALS", &refused_signals);
+    direct.env_remove("NAGI_RUN_RETENTION");
+    let mut direct = Running::spawn(direct, refused_signals.clone());
+    direct.wait_for("lease-waiting");
+
+    use std::io::{Seek, SeekFrom, Write};
+    lease.set_len(0).unwrap();
+    lease.seek(SeekFrom::Start(0)).unwrap();
+    lease.write_all(lease_header(&old, "X").as_bytes()).unwrap();
+    lease.sync_all().unwrap();
+    drop(lease);
+
+    let output = direct.output();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(!refused_signals.join("block-on").exists());
+    assert!(!refused_signals.join("user-code").exists());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("temporary run generation is retired or its lease is invalid"));
+}
+
+#[test]
+fn synthetic_no_main_native_entry_still_rejects_a_retired_generation() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def helper():\n    print(\"USER_SENTINEL\")\n");
+    let old = native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert_eq!(run(&old), "");
+
+    let lease_path = run_lease(&old);
+    let mut lease = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&lease_path)
+        .unwrap();
+    lease.lock().unwrap();
+    let signals = f.0.join("no-main-refused");
+    let mut direct = Command::new(&old);
+    direct.env("NAGI_TEST_SIGNALS", &signals);
+    direct.env_remove("NAGI_RUN_RETENTION");
+    let mut direct = Running::spawn(direct, signals);
+    direct.wait_for("lease-waiting");
+
+    use std::io::{Seek, SeekFrom, Write};
+    lease.set_len(0).unwrap();
+    lease.seek(SeekFrom::Start(0)).unwrap();
+    lease.write_all(lease_header(&old, "X").as_bytes()).unwrap();
+    lease.sync_all().unwrap();
+    drop(lease);
+    let output = direct.output();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("temporary run generation is retired or its lease is invalid"));
+}
+
+#[test]
+fn managed_parent_termination_does_not_claim_the_native_child_finished() {
+    let f = Fixture::new();
+    f.write("bridge.rs", HOLD_RUN);
+    f.write(
+        "main.nagi",
+        "@rust(\"native::hold\")\nextern def hold()\ndef main():\n    hold()\n",
+    );
+    let signals = f.0.join("orphan-native");
+    let mut command = managed_command(&f, "main.nagi");
+    command
+        .args(["--rust", "bridge.rs"])
+        .env("NAGI_TEST_SIGNALS", &signals);
+    let mut parent = Running::spawn(command, signals);
+    parent.wait_for("entered");
+    let (_, metadata) = f.latest("out");
+    let old = f.app("out").join(metadata["executable"].as_str().unwrap());
+    parent.kill_parent();
+    f.source("main.nagi", "new");
+    let new = native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(
+        old.is_file(),
+        "parent termination is not actual native child join"
+    );
+    assert!(new.is_file());
+    parent.release();
+    let until = Instant::now() + DEADLINE;
+    while !parent.signals().join("done").exists() {
+        assert!(
+            Instant::now() < until,
+            "orphan native child must finish at its barrier"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(!parent.output().status.success());
+    let lease = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(run_lease(&old))
+        .unwrap();
+    let until = Instant::now() + DEADLINE;
+    loop {
+        match lease.try_lock() {
+            Ok(()) => break,
+            Err(fs::TryLockError::WouldBlock) => {
+                assert!(
+                    Instant::now() < until,
+                    "native OS exit must release its lease"
+                );
+                thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) => panic!("cannot observe native lease release: {error:?}"),
+        }
+    }
+    drop(lease);
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(
+        !old.parent().unwrap().exists(),
+        "next successful run reclaims a crashed compiler's completed native generation"
+    );
+    assert!(!run_lease(&old).exists());
+}
+
+#[test]
+fn managed_cleanup_preserves_native_inputs_inside_an_older_generation() {
+    let f = Fixture::new();
+    let old = native(&bounded_output(managed_command(&f, "main.nagi")));
+    let bridge = old.parent().unwrap().join("bridge.rs");
+    fs::write(&bridge, "pub fn value() -> i64 { 42 }\n").unwrap();
+    f.write(
+        "main.nagi",
+        "@rust(\"native::value\")\nextern def value() -> i64\ndef main():\n    print(value())\n",
+    );
+    let mut command = managed_command(&f, "main.nagi");
+    command.arg("--rust").arg(&bridge);
+    let output = bounded_output(command);
+    let new = native(&output);
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+    assert!(old.is_file());
+    assert!(
+        bridge.is_file(),
+        "a native input must not be removed with an old snapshot"
+    );
+    assert!(new.is_file());
+}
+
+#[test]
+fn nonlatest_active_run_keeps_its_native_input_after_a_newer_latest_succeeds() {
+    let f = Fixture::new();
+    let input_owner = native(&bounded_output(managed_command(&f, "main.nagi")));
+    let input_generation = input_owner.parent().unwrap().to_owned();
+    let bridge = input_generation.join("bridge.rs");
+    fs::write(
+        &bridge,
+        format!("{}\npub fn value() -> i64 {{ 42 }}\n", HOLD_RUN),
+    )
+    .unwrap();
+    f.write(
+        "main.nagi",
+        "@rust(\"native::value\")\nextern def value() -> i64\n@rust(\"native::hold\")\nextern def hold()\ndef main():\n    print(value())\n    hold()\n",
+    );
+    let signals = f.0.join("nonlatest-active");
+    let mut command = managed_command(&f, "main.nagi");
+    command
+        .arg("--rust")
+        .arg(&bridge)
+        .env("NAGI_TEST_SIGNALS", &signals);
+    let mut active = Running::spawn(command, signals);
+    active.wait_for("entered");
+    let active_binary = native_path_from_latest(&f, "out");
+    assert_ne!(active_binary, input_owner);
+
+    f.source("main.nagi", "new latest");
+    let latest = native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert_ne!(latest, active_binary);
+    assert!(
+        active_binary.is_file(),
+        "the active native process remains pinned after it is no longer latest"
+    );
+    assert!(
+        bridge.is_file(),
+        "a non-latest active run's input generation must remain intact"
+    );
+
+    active.release();
+    let output = active.output();
+    success(&output);
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+    assert!(
+        input_generation.exists(),
+        "the active dependency owner is collected before its input"
+    );
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(!input_generation.exists());
+}
+
+#[test]
+fn another_apps_successful_snapshot_keeps_a_referenced_generation_until_later_sweep() {
+    let f = Fixture::new();
+    let input_owner = native(&bounded_output(managed_command(&f, "main.nagi")));
+    let input_generation = input_owner.parent().unwrap().to_owned();
+    let input_app = app_for(&input_owner)
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let input_generation_id = input_generation
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let bridge = input_generation.join("bridge.rs");
+    fs::write(&bridge, "pub fn value() -> i64 { 42 }\n").unwrap();
+    f.write(
+        "other.nagi",
+        "@rust(\"native::value\")\nextern def value() -> i64\ndef main():\n    print(value())\n",
+    );
+    let mut other = managed_command(&f, "other.nagi");
+    other.arg("--rust").arg(&bridge);
+    let other_first = native(&bounded_output(other));
+    let inputs: serde_json::Value = serde_json::from_slice(
+        &fs::read(other_first.parent().unwrap().join("generation-inputs.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(inputs["references"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|entry| entry[0] == input_app && entry[1] == input_generation_id));
+
+    f.source("main.nagi", "new main");
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(
+        bridge.is_file(),
+        "another app's retained snapshot protects its input"
+    );
+
+    f.source("other.nagi", "new other without the native input");
+    native(&bounded_output(managed_command(&f, "other.nagi")));
+    assert!(
+        input_generation.exists(),
+        "the previous dependency owner is collected during this sweep"
+    );
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(!input_generation.exists());
+}
+
+#[test]
+fn external_hardlink_input_identity_protects_its_run_lease_until_owner_is_collected() {
+    let f = Fixture::new();
+    let old = native(&bounded_output(managed_command(&f, "main.nagi")));
+    let old_generation = old.parent().unwrap().to_owned();
+    let lease = run_lease(&old);
+    let alias = f.0.join("external-lease-input.rs");
+
+    // Use a structurally valid external Rust input on the same inode as the
+    // lease, then have its native function restore the ready record before
+    // cleanup. This exercises identity protection for a hard-linked lease;
+    // ordinary source files cannot naturally contain the private lease header.
+    fs::write(
+        &lease,
+        r#"pub fn restore_lease() {
+    let path = std::path::PathBuf::from(std::env::var_os("NAGI_TEST_LEASE").unwrap());
+    let header = std::env::var("NAGI_TEST_READY_HEADER").unwrap();
+    std::fs::write(path, header).unwrap();
+}"#,
+    )
+    .unwrap();
+    fs::hard_link(&lease, &alias).unwrap();
+    f.write(
+        "main.nagi",
+        "@rust(\"native::restore_lease\")\nextern def restore_lease()\ndef main():\n    restore_lease()\n",
+    );
+    let mut command = managed_command(&f, "main.nagi");
+    command
+        .arg("--rust")
+        .arg(&alias)
+        .env("NAGI_TEST_LEASE", &lease)
+        .env("NAGI_TEST_READY_HEADER", lease_header(&old, "R"));
+    let linked_input_run = native(&bounded_output(command));
+    assert_ne!(linked_input_run, old);
+    assert_eq!(fs::read_to_string(&lease).unwrap(), lease_header(&old, "R"));
+    assert!(
+        old_generation.exists(),
+        "input identity must preserve the journal and its generation"
+    );
+
+    f.source("main.nagi", "without linked input");
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(
+        old_generation.exists(),
+        "the hard-link owner's snapshot is collected before its lease"
+    );
+    fs::remove_file(&alias).unwrap();
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(!old_generation.exists());
+    assert!(!lease.exists());
+}
+
+#[test]
+fn managed_path_dependency_records_its_known_root_and_preserves_crate_sources() {
+    let f = Fixture::new();
+    let old = native(&bounded_output(managed_command_at(
+        &f,
+        "main.nagi",
+        "out-a",
+    )));
+    let old_generation = old.parent().unwrap().to_owned();
+    let old_app = app_for(&old)
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let old_id = old_generation
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let crate_root = old_generation.join("support-crate");
+    fs::create_dir_all(crate_root.join("src")).unwrap();
+    fs::write(
+        crate_root.join("Cargo.toml"),
+        "[package]\nname='support_crate'\nversion='0.1.0'\nedition='2021'\n[lib]\npath='src/lib.rs'\n[workspace]\n",
+    )
+    .unwrap();
+    fs::write(
+        crate_root.join("src/lib.rs"),
+        "pub fn value() -> i64 { 73 }\n",
+    )
+    .unwrap();
+
+    f.write(
+        "consumer/main.nagi",
+        "@rust(\"native::value\")\nextern def value() -> i64\ndef main():\n    print(value())\n",
+    );
+    f.write(
+        "consumer/native.rs",
+        "pub fn value() -> i64 { support_crate::value() }\n",
+    );
+    let crate_path = serde_json::to_string(&crate_root.to_string_lossy()).unwrap();
+    f.write(
+        "consumer/nagi.toml",
+        &format!(
+            "entry='main.nagi'\n[rust]\nfile='native.rs'\n[rust.dependencies]\nsupport_crate={{path={crate_path}}}\n"
+        ),
+    );
+    let consumer = native(&bounded_output(managed_project_command(
+        &f, "consumer", "out-a",
+    )));
+    assert_eq!(run(&consumer), "73");
+    let input_snapshot: serde_json::Value = serde_json::from_slice(
+        &fs::read(consumer.parent().unwrap().join("generation-inputs.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        input_snapshot["references"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry[0] == old_app && entry[1] == old_id),
+        "path dependency manifest and crate root inside an older generation must be recorded"
+    );
+    // Unix offers a stable independent inode oracle. Windows checks the same
+    // root reference and observable native/bytes behavior below; its by-handle
+    // MetadataExt IDs are nightly-only. Production uses the existing Win32
+    // identity boundary, not a public API or a test-only nightly feature.
+    #[cfg(unix)]
+    {
+        let identities = input_snapshot["identities"].as_array().unwrap();
+        let manifest = crate_root.join("Cargo.toml");
+        let identity = serde_json::json!(test_file_identity(&manifest));
+        assert!(
+            identities.contains(&identity),
+            "the explicitly known crate manifest identity must be recorded"
+        );
+    }
+
+    f.source("main.nagi", "replace old owner latest");
+    native(&bounded_output(managed_command_at(
+        &f,
+        "main.nagi",
+        "out-a",
+    )));
+    assert!(
+        crate_root.join("Cargo.toml").is_file(),
+        "the managed dependency owner cannot reclaim its path crate"
+    );
+    assert!(
+        crate_root.join("src/lib.rs").is_file(),
+        "the managed dependency owner cannot remove the crate source"
+    );
+}
+
+#[test]
+fn another_output_root_preserves_an_exported_managed_generation() {
+    let f = Fixture::new();
+    let old = native(&bounded_output(managed_command_at(
+        &f,
+        "main.nagi",
+        "out-a",
+    )));
+    let old_generation = old.parent().unwrap().to_owned();
+    let bridge = old_generation.join("bridge.rs");
+    let saved_low = old_generation.join("generated.low");
+    fs::write(&bridge, "pub fn value() -> i64 { 84 }\n").unwrap();
+    fs::write(
+        &saved_low,
+        "@rust(\"native::value\")\nextern fn value() -> i64;\nfn main() -> unit {\n    print(value());\n}\n",
+    )
+    .unwrap();
+
+    let mut external = f.cli("run", saved_low.to_str().unwrap(), "out-b");
+    external
+        .arg("--rust")
+        .arg(&bridge)
+        .env("NAGI_RUN_RETENTION", "latest");
+    let consumer = native(&bounded_output(external));
+    assert_eq!(run(&consumer), "84");
+
+    f.source("main.nagi", "replace exported owner latest");
+    native(&bounded_output(managed_command_at(
+        &f,
+        "main.nagi",
+        "out-a",
+    )));
+    assert!(
+        old_generation.is_dir(),
+        "an export consumed from another output root must keep its owner immutable"
+    );
+    assert!(bridge.is_file());
+    assert!(saved_low.is_file());
+}
+
+#[test]
+fn managed_older_completion_preserves_newer_latest_native_inputs() {
+    let f = Fixture::new();
+    let old = native(&bounded_output(managed_command(&f, "main.nagi")));
+    let input = old.parent().unwrap().join("bridge.rs");
+    fs::write(&input, "pub fn value() -> i64 { 42 }\n").unwrap();
+    f.write("hold.rs", HOLD_RUN);
+    f.write(
+        "main.nagi",
+        "@rust(\"native::hold\")\nextern def hold()\ndef main():\n    hold()\n",
+    );
+    let signals = f.0.join("older-finish");
+    let mut command = managed_command(&f, "main.nagi");
+    command
+        .arg("--rust")
+        .arg("hold.rs")
+        .env("NAGI_TEST_SIGNALS", &signals);
+    let mut held = Running::spawn(command, signals);
+    held.wait_for("entered");
+    f.write(
+        "main.nagi",
+        "@rust(\"native::value\")\nextern def value() -> i64\ndef main():\n    print(value())\n",
+    );
+    let mut newer = managed_command(&f, "main.nagi");
+    newer.arg("--rust").arg(&input);
+    let output = bounded_output(newer);
+    let latest = native(&output);
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+    assert!(input.is_file(), "newer completion preserves its input");
+    held.release();
+    success(&held.output());
+    assert!(latest.is_file());
+    assert!(
+        input.is_file(),
+        "an older completion must preserve the newer latest's native input"
+    );
+    assert!(old.is_file());
+}
+
+#[test]
+fn managed_older_success_after_newer_failure_keeps_last_good() {
+    let f = Fixture::new();
+    f.write("hold.rs", HOLD_RUN);
+    f.write(
+        "main.nagi",
+        "@rust(\"native::hold\")\nextern def hold()\ndef main():\n    hold()\n",
+    );
+    let signals = f.0.join("older-success");
+    let mut command = managed_command(&f, "main.nagi");
+    command
+        .arg("--rust")
+        .arg("hold.rs")
+        .env("NAGI_TEST_SIGNALS", &signals);
+    let mut held = Running::spawn(command, signals);
+    held.wait_for("entered");
+    let (_, metadata) = f.latest("out");
+    let good = f.app("out").join(metadata["executable"].as_str().unwrap());
+    f.write("fail.rs", "pub fn fail() { std::process::exit(7); }\n");
+    f.write(
+        "main.nagi",
+        "@rust(\"native::fail\")\nextern def fail()\ndef main():\n    fail()\n",
+    );
+    let mut command = managed_command(&f, "main.nagi");
+    command.args(["--rust", "fail.rs"]);
+    let failure = bounded_output(command);
+    assert!(!failure.status.success());
+    assert!(String::from_utf8_lossy(&failure.stderr).contains("program exited:"));
+    assert!(good.is_file());
+    held.release();
+    success(&held.output());
+    assert!(
+        good.is_file(),
+        "an older success must not discard the last good run after the latest run failed"
+    );
+    let (_, failed) = f.latest("out");
+    assert!(f
+        .app("out")
+        .join(failed["executable"].as_str().unwrap())
+        .is_file());
+}
+
+#[test]
+fn managed_oversized_record_does_not_stop_normal_reclamation() {
+    let f = Fixture::new();
+    let unknown = native(&bounded_output(managed_command(&f, "main.nagi")));
+    fs::write(run_lease(&unknown), " ".repeat(4097)).unwrap();
+    let normal_output = bounded_output(managed_command(&f, "main.nagi"));
+    let normal = native(&normal_output);
+    let final_output = bounded_output(managed_command(&f, "main.nagi"));
+    native(&final_output);
+    assert!(unknown.is_file());
+    assert!(
+        !normal.parent().unwrap().exists(),
+        "an unknown lease must not prevent reclamation of normal completed generations"
+    );
+    for output in [normal_output, final_output] {
+        assert!(
+            !String::from_utf8_lossy(&output.stderr).contains("cleanup warning"),
+            "unknown individual records are held rather than aborting the sweep"
+        );
+    }
+}
+
+#[test]
+fn managed_saved_low_runs_use_the_same_retention_contract() {
+    let f = Fixture::new();
+    success(&bounded_output(f.cli("lower", "main.nagi", "lowered")));
+    fs::copy(f.0.join("lowered/generated.low"), f.0.join("saved.low")).unwrap();
+    let old = native(&bounded_output(managed_command(&f, "saved.low")));
+    let new = native(&bounded_output(managed_command(&f, "saved.low")));
+    assert!(!old.parent().unwrap().exists());
+    assert_eq!(run(&new), "old");
+}
+
+#[test]
+fn managed_cleanup_preserves_unknown_or_oversized_retention_metadata() {
+    for marker in ["{}".to_owned(), " ".repeat(65537)] {
+        let f = Fixture::new();
+        let old = native(&bounded_output(managed_command(&f, "main.nagi")));
+        fs::write(run_lease(&old), marker).unwrap();
+        native(&bounded_output(managed_command(&f, "main.nagi")));
+        assert!(old.is_file());
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn managed_cleanup_skips_links_and_does_not_touch_other_apps_or_staging() {
+    use std::os::unix::fs::symlink;
+    let f = Fixture::new();
+    let first = native(&bounded_output(managed_command(&f, "main.nagi")));
+    let app = f.app("out");
+    let external = f.0.join("user-data");
+    fs::create_dir(&external).unwrap();
+    fs::write(external.join("keep"), "user data").unwrap();
+    symlink(&external, first.parent().unwrap().join("unexpected-link")).unwrap();
+    let staging = app.join("generations/.staging-g-1-2-3");
+    fs::create_dir(&staging).unwrap();
+    fs::write(staging.join("evidence"), "failed build").unwrap();
+    f.source("other.nagi", "other app");
+    let other = native(&bounded_output(managed_command(&f, "other.nagi")));
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(first.is_file());
+    assert_eq!(
+        fs::read_to_string(external.join("keep")).unwrap(),
+        "user data"
+    );
+    assert!(other.is_file());
+    assert!(staging.join("evidence").is_file());
+}
+
+#[cfg(windows)]
+#[test]
+fn managed_cleanup_preserves_a_standard_junction_reparse_point() {
+    use std::os::windows::fs::MetadataExt;
+
+    let f = Fixture::new();
+    let old = native(&bounded_output(managed_command(&f, "main.nagi")));
+    let generation = old.parent().unwrap().to_owned();
+    let target = f.0.join("junction-target");
+    fs::create_dir_all(&target).unwrap();
+    fs::write(target.join("keep"), "caller data").unwrap();
+    let junction = generation.join("caller-junction");
+    let result = Command::new("cmd.exe")
+        .args(["/d", "/c", "mklink", "/J"])
+        .arg(&junction)
+        .arg(&target)
+        .output()
+        .expect("Windows cmd.exe must be available");
+    assert!(
+        result.status.success(),
+        "mklink /J must create the ordinary reparse-point fixture: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let metadata = fs::symlink_metadata(&junction).unwrap();
+    assert_ne!(
+        metadata.file_attributes() & 0x400,
+        0,
+        "the fixture must be an actual Windows reparse point"
+    );
+
+    f.source("main.nagi", "replacement");
+    native(&bounded_output(managed_command(&f, "main.nagi")));
+    assert!(
+        generation.is_dir(),
+        "cleanup must leave a generation containing a junction"
+    );
+    assert_eq!(
+        fs::read_to_string(target.join("keep")).unwrap(),
+        "caller data"
+    );
+    assert!(junction.exists());
 }
 
 #[test]

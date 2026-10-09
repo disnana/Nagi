@@ -71,6 +71,7 @@ public abstract class NagiCompilerAction extends AnAction implements DumbAware {
                     try {
                         var line = new GeneralCommandLine(plan.executable()).withParameters(plan.arguments())
                                 .withWorkDirectory(plan.directory().toFile()).withCharset(StandardCharsets.UTF_8);
+                        if (command.equals("run")) line.withEnvironment("NAGI_RUN_RETENTION", "latest");
                         var handler = new OSProcessHandler(line);
                         handler.setShouldDestroyProcessRecursively(true);
                         ProcessTerminatedListener.attach(handler);

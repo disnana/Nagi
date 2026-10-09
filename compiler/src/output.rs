@@ -78,15 +78,19 @@ pub(crate) fn protect(outputs: &[PathBuf], inputs: &[PathBuf], kind: &str) -> Re
     Ok(())
 }
 
+pub(crate) fn identity(file: &File) -> std::io::Result<(u64, u64)> {
+    identity_and_links(file).map(|(volume, index, _)| (volume, index))
+}
+
 #[cfg(unix)]
-fn identity(file: &File) -> std::io::Result<(u64, u64)> {
+pub(crate) fn identity_and_links(file: &File) -> std::io::Result<(u64, u64, u64)> {
     use std::os::unix::fs::MetadataExt;
     let metadata = file.metadata()?;
-    Ok((metadata.dev(), metadata.ino()))
+    Ok((metadata.dev(), metadata.ino(), metadata.nlink()))
 }
 
 #[cfg(windows)]
-fn identity(file: &File) -> std::io::Result<(u64, u64)> {
+pub(crate) fn identity_and_links(file: &File) -> std::io::Result<(u64, u64, u64)> {
     use std::{ffi::c_void, os::windows::io::AsRawHandle};
 
     #[repr(C)]
@@ -119,11 +123,12 @@ fn identity(file: &File) -> std::io::Result<(u64, u64)> {
     Ok((
         u64::from(information.volume),
         (u64::from(information.index_high) << 32) | u64::from(information.index_low),
+        u64::from(information.links),
     ))
 }
 
 #[cfg(not(any(unix, windows)))]
-fn identity(_file: &File) -> std::io::Result<(u64, u64)> {
+pub(crate) fn identity_and_links(_file: &File) -> std::io::Result<(u64, u64, u64)> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "file identity is unavailable on this platform",
