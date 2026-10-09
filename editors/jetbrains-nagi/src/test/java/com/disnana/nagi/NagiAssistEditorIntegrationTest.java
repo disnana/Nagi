@@ -108,7 +108,9 @@ public class NagiAssistEditorIntegrationTest extends BasePlatformTestCase {
         var file = myFixture.getFile();
         var service = getProject().getService(NagiAssistService.class);
         service.requestBaseline(file);
-        waitFor(() -> service.fresh(file) != null);
+        // A newly discovered import emits a VFS event and invalidates the first
+        // request. Model the editor's subsequent navigation/annotator queries.
+        waitFor(() -> { service.requestNavigation(file); return service.fresh(file) != null; });
         var reference = file.findReferenceAt(file.getText().lastIndexOf("helper"));
         assertNotNull(reference);
         assertEquals("helper.nagi", reference.resolve().getContainingFile().getName());

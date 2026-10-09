@@ -95,7 +95,12 @@ public final class NagiAssistProcessTest {
         Path directory = java.nio.file.Files.createTempDirectory("nagi pending assistance ");
         Path marker = directory.resolve("started.pid");
         String javaExecutable = Path.of(System.getProperty("java.home"), "bin", "java").toString();
-        String classes = Path.of(NagiAssistProcessTest.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toString();
+        var resource = PendingPeer.class.getResource("NagiAssistProcessTest$PendingPeer.class");
+        org.junit.Assert.assertNotNull(resource);
+        Path classesPath = Path.of(resource.toURI());
+        // IDEA's isolated test loader does not publish a CodeSource location.
+        for (int part = 0; part < PendingPeer.class.getName().split("\\.").length; part++) classesPath = classesPath.getParent();
+        String classes = classesPath.toString();
         var plan = new NagiAssistCommandPlan(javaExecutable, List.of("-cp", classes, PendingPeer.class.getName(), marker.toString()), directory);
         var session = new NagiAssistProcess.Session();
         var cancellation = new NagiAssistProcess.Cancellation();
