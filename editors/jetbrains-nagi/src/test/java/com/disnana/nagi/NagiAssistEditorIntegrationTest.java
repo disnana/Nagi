@@ -118,4 +118,15 @@ public class NagiAssistEditorIntegrationTest extends BasePlatformTestCase {
         assertNotNull(importReference);
         assertEquals("helper.nagi", importReference.resolve().getContainingFile().getName());
     }
+
+    public void testMissingImportDiagnosticIsDisplayedWithoutInventingALocalSpan() throws Exception {
+        open("missing-import.nagi", "import \"absent.nagi\"\ndef main():\n    print(1)\n");
+        var file = myFixture.getFile();
+        var service = getProject().getService(NagiAssistService.class);
+        waitFor(() -> { service.requestNavigation(file); return service.fresh(file) != null; });
+        var diagnostics = service.fresh(file).response().diagnostics();
+        assertFalse(diagnostics.isEmpty());
+        assertTrue(myFixture.doHighlighting().stream().anyMatch(info -> info.getDescription() != null
+                && info.getDescription().contains(diagnostics.getFirst().message())));
+    }
 }

@@ -129,4 +129,29 @@ public final class NagiAssistProcessTest {
             java.nio.file.Files.deleteIfExists(directory);
         }
     }
+
+    @Test public void replacingIdleExecutableAtTheSamePathStartsANewSession() throws Exception {
+        org.junit.Assume.assumeFalse("local POSIX protocol peer", com.intellij.openapi.util.SystemInfo.isWindows);
+        Path directory = java.nio.file.Files.createTempDirectory("nagi replaced assistance ");
+        Path executable = directory.resolve("peer");
+        var session = new NagiAssistProcess.Session();
+        try {
+            var plan = new NagiAssistCommandPlan(executable.toString(), List.of(), directory);
+            for (String name : List.of("previous", "updated")) {
+                String response = "{\"format\":\"nagi-assist-v1\",\"semantic_status\":\"editor-partial\",\"frontend_checked\":true,\"frontend_accepted\":false,\"full_compile_checked\":false,\"recovered\":false,\"diagnostics\":[],\"completion\":{\"kind\":\"names\",\"access\":\"read\",\"items\":[{\"name\":\"" + name + "\",\"kind\":\"function\",\"access\":\"read\"}]}}";
+                Path replacement = directory.resolve("replacement");
+                java.nio.file.Files.writeString(replacement, "#!/bin/sh\nwhile IFS= read -r input; do\n printf '%s\\n' '" + response + "'\ndone\n");
+                assertTrue(replacement.toFile().setExecutable(true));
+                java.nio.file.Files.move(replacement, executable, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                var value = session.run(plan, "{}".getBytes(), 5, new NagiAssistProcess.Cancellation(), () -> true);
+                org.junit.Assert.assertEquals(name, value.completions().getFirst().name());
+            }
+            org.junit.Assert.assertEquals(2, session.launches());
+        } finally {
+            session.close();
+            java.nio.file.Files.deleteIfExists(executable);
+            java.nio.file.Files.deleteIfExists(directory);
+        }
+    }
 }

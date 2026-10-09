@@ -51,17 +51,25 @@ public final class NagiAssistProcess {
     public static final class Session implements AutoCloseable {
         private volatile Process process;
         private NagiAssistCommandPlan plan;
+        private ExecutableIdentity executableIdentity;
         private BufferedInputStream output;
         private CompletableFuture<byte[]> errors;
         private volatile boolean closed;
         private int launches;
+        private record ExecutableIdentity(long size, java.nio.file.attribute.FileTime modified, Object key) {
+            static ExecutableIdentity read(String path) throws IOException {
+                var attributes = java.nio.file.Files.readAttributes(java.nio.file.Path.of(path), java.nio.file.attribute.BasicFileAttributes.class);
+                return new ExecutableIdentity(attributes.size(), attributes.lastModifiedTime(), attributes.fileKey());
+            }
+        }
 
         public synchronized NagiAssistProtocol.Response run(NagiAssistCommandPlan requested, byte[] input,
                 int timeoutSeconds, Cancellation cancellation, BooleanSupplier mayLaunch) throws Exception {
             if (closed || cancellation.isCancelled()) throw new InterruptedException("editor assistance cancelled before launch");
             if (!mayLaunch.getAsBoolean()) { stop(); throw new IOException("editor assistance launch guard rejected the request"); }
             if (input.length > NagiAssistProtocol.MAX_INPUT_BYTES) throw new IOException("editor input exceeds its limit");
-            if (process == null || !process.isAlive() || !requested.equals(plan)) {
+            ExecutableIdentity identity = ExecutableIdentity.read(requested.executable());
+            if (process == null || !process.isAlive() || !requested.equals(plan) || !identity.equals(executableIdentity)) {
                 stop();
                 List<String> command = new ArrayList<>();
                 command.add(requested.executable());
@@ -70,13 +78,15 @@ public final class NagiAssistProcess {
                 process = new ProcessBuilder(command).directory(requested.directory().toFile()).start();
                 launches++;
                 plan = requested;
+                executableIdentity = identity;
                 output = new BufferedInputStream(process.getInputStream());
                 errors = readBounded(process.getErrorStream(), MAX_STDERR_BYTES, process);
             }
             Process current = process;
             cancellation.attach(current);
             try {
-                if (closed || cancellation.isCancelled() || !mayLaunch.getAsBoolean())
+                if (closed || cancellation.isCancelled() || !mayLaunch.getAsBoolean()
+                        || !identity.equals(ExecutableIdentity.read(requested.executable())))
                     throw new InterruptedException("editor assistance cancelled before request");
                 BufferedInputStream frames = output;
                 CompletableFuture<byte[]> response = new CompletableFuture<>();
@@ -98,7 +108,8 @@ public final class NagiAssistProcess {
                     } catch (Throwable failure) { response.completeExceptionally(failure); }
                 });
                 byte[] frame = response.get(Math.max(1, Math.min(300, timeoutSeconds)), TimeUnit.SECONDS);
-                if (closed || cancellation.isCancelled() || !mayLaunch.getAsBoolean())
+                if (closed || cancellation.isCancelled() || !mayLaunch.getAsBoolean()
+                        || !identity.equals(ExecutableIdentity.read(requested.executable())))
                     throw new InterruptedException("editor assistance cancelled after request");
                 if (errors.isCompletedExceptionally()) errors.get();
                 return NagiAssistProtocol.decode(frame);
@@ -117,6 +128,7 @@ public final class NagiAssistProcess {
             Process previous = process;
             process = null;
             plan = null;
+            executableIdentity = null;
             output = null;
             if (previous != null) terminate(previous);
         }

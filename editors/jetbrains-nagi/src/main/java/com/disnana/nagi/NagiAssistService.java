@@ -96,6 +96,7 @@ public final class NagiAssistService implements Disposable {
                               boolean exceedsTrackedFileLimit) {}
     private record DocumentStamp(Document document, long stamp) {}
     private record FileStamp(VirtualFile file, long stamp) {}
+    private record DiskStamp(Path path, byte[] contents) {}
     private record ExecutableStamp(VirtualFile file, long virtualStamp, long size,
                                    long modifiedMillis, String fileKey) {}
     private record ReferenceKey(String file, int line, int column, int length) {}
@@ -103,7 +104,7 @@ public final class NagiAssistService implements Disposable {
                            String projectBase, Path scopePath, Path focusPath, Path executable,
                            ExecutableStamp executableStamp, NagiAssistCommandPlan plan,
                            NagiAssistProtocol.Query query, byte[] input,
-                           List<DocumentStamp> documents, List<FileStamp> files,
+                           List<DocumentStamp> documents, List<FileStamp> files, List<DiskStamp> disks,
                            Map<String, String> canonicalPaths, List<VirtualFile> openSources,
                            Document focusDocument, long focusDocumentStamp, VirtualFile focusFile,
                            long focusFileStamp, Editor editor, long caretOffset) {
@@ -123,6 +124,7 @@ public final class NagiAssistService implements Disposable {
     private volatile String statusMessage = "";
     private volatile CachedResponse cached;
     private volatile Set<String> knownSourcePaths = Set.of();
+    private volatile Set<String> knownDependencies = Set.of();
     private volatile VirtualFile lastFocusFile;
     private ScheduledFuture<?> pending;
     private ScheduledFuture<?> activeFuture;
@@ -256,7 +258,9 @@ public final class NagiAssistService implements Disposable {
             return samePath(response.snapshot.focusPath.toString(), canonicalPathFor(response.snapshot, file));
         }
         String canonical = canonicalPathFor(response.snapshot, file);
-        return samePath(diagnosticPath, canonical);
+        return samePath(diagnosticPath, canonical)
+                || (!response.snapshot.canonicalPaths.containsKey(normalizePath(diagnosticPath))
+                    && samePath(response.snapshot.focusPath.toString(), canonical));
     }
 
     /** Exact compiler reference lookup; PSI token shape never determines ownership or target. */
@@ -404,7 +408,7 @@ public final class NagiAssistService implements Disposable {
             }
             attachOpenDocuments();
             Snapshot snapshot = buildSnapshot(intent, key);
-            if (snapshot == null || !snapshotCurrent(snapshot)) {
+            if (snapshot == null || !snapshotCurrent(snapshot) || !diskSnapshotCurrent(snapshot)) {
                 setStateForActive(key, State.STALE, "The Nagi source snapshot changed before compiler analysis.");
                 return;
             }
@@ -421,8 +425,10 @@ public final class NagiAssistService implements Disposable {
             NagiAssistProtocol.Response response = runner.run(snapshot.plan, snapshot.input, snapshot.timeout,
                     cancellation, () -> !cancellation.isCancelled() && trustedForCompiler()
                             && snapshotCurrent(snapshot) && executableIdentityCurrent(snapshot));
-            if (cancellation.isCancelled() || !snapshotCurrent(snapshot) || !executableIdentityCurrent(snapshot)) {
+            if (cancellation.isCancelled() || !snapshotCurrent(snapshot) || !executableIdentityCurrent(snapshot)
+                    || !diskSnapshotCurrent(snapshot)) {
                 setStateForActive(key, State.STALE, "The Nagi compiler response belongs to an outdated editor snapshot and was discarded.");
+                retrySnapshotLater(snapshot);
                 return;
             }
             Snapshot responseSnapshot = withCompilerSources(snapshot, response);
@@ -572,10 +578,19 @@ public final class NagiAssistService implements Disposable {
             if (manifestFile != null) fileStamps.add(new FileStamp(manifestFile, manifestFile.getModificationStamp()));
         }
         fileStamps.add(new FileStamp(raw.focusFile(), raw.focusFileStamp()));
+        LinkedHashSet<Path> diskPaths = new LinkedHashSet<>();
+        diskPaths.add(focusPath);
+        diskPaths.add(manifest == null ? source : manifest);
+        for (String dependency : knownDependencies) {
+            Path dependencyPath = Path.of(dependency);
+            // Removed imports are rediscovered from the new compiler graph.
+            if (Files.isRegularFile(dependencyPath)) diskPaths.add(dependencyPath);
+        }
+        List<DiskStamp> diskStamps = readDiskSnapshot(diskPaths);
         NagiAssistCommandPlan plan = NagiAssistCommandPlan.create(executable.toString(), source, manifest, workspace, SystemInfo.isWindows);
         return new Snapshot(raw.epoch(), requestKey, raw.compilerSetting(), raw.timeout(), raw.projectBase(),
                 manifest == null ? source : manifest, focusPath, executable, executableStamp, plan, query, input,
-                distinctDocuments(documentStamps), distinctFiles(fileStamps), Map.copyOf(canonicalPaths),
+                distinctDocuments(documentStamps), distinctFiles(fileStamps), diskStamps, Map.copyOf(canonicalPaths),
                 List.copyOf(new LinkedHashSet<>(openSources)), raw.focusDocument(), raw.focusStamp(),
                 raw.focusFile(), raw.focusFileStamp(), raw.editor(), raw.position() == null ? -1 : raw.position().offset());
     }
@@ -584,16 +599,33 @@ public final class NagiAssistService implements Disposable {
         List<FileStamp> stamps = new ArrayList<>(snapshot.files());
         Map<String, String> canonicalPaths = new HashMap<>(snapshot.canonicalPaths());
         LinkedHashSet<String> seen = new LinkedHashSet<>();
+        LinkedHashSet<String> dependencies = new LinkedHashSet<>();
+        for (String source : response.sourceFiles()) if (!source.startsWith("stdlib:")) dependencies.add(source);
+        for (NagiAssistProtocol.Diagnostic diagnostic : response.diagnostics()) {
+            if (diagnostic.file() != null && !diagnostic.file().isBlank() && !diagnostic.file().startsWith("stdlib:")
+                    && Files.isRegularFile(Path.of(diagnostic.file())))
+                dependencies.add(diagnostic.file());
+        }
+        knownDependencies = Set.copyOf(dependencies);
+        boolean discovered = dependencies.stream().anyMatch(source -> snapshot.disks().stream()
+                .noneMatch(stamp -> samePath(stamp.path().toString(), source)));
+        if (discovered) {
+            // A graph first reported after analysis was not captured before it.
+            // Never associate those facts with post-hoc dependency stamps.
+            retrySnapshotLater(snapshot);
+            throw new SnapshotBlockedException(State.STALE, "New compiler dependencies require a fresh disk snapshot; the response was discarded.");
+        }
         for (String source : response.sourceFiles()) addCompilerSource(snapshot, stamps, canonicalPaths, seen, source);
         for (NagiAssistProtocol.Diagnostic diagnostic : response.diagnostics()) {
-            if (diagnostic.file() != null && !diagnostic.file().isBlank()) {
+            if (diagnostic.file() != null && !diagnostic.file().isBlank()
+                    && !diagnostic.file().startsWith("stdlib:") && Files.isRegularFile(Path.of(diagnostic.file()))) {
                 addCompilerSource(snapshot, stamps, canonicalPaths, seen, diagnostic.file());
             }
         }
         return new Snapshot(snapshot.epoch(), snapshot.requestKey(), snapshot.compilerSetting(), snapshot.timeout(),
                 snapshot.projectBase(), snapshot.scopePath(), snapshot.focusPath(), snapshot.executable(),
                 snapshot.executableStamp(), snapshot.plan(), snapshot.query(), snapshot.input(), snapshot.documents(),
-                distinctFiles(stamps), Map.copyOf(canonicalPaths), snapshot.openSources(), snapshot.focusDocument(),
+                distinctFiles(stamps), snapshot.disks(), Map.copyOf(canonicalPaths), snapshot.openSources(), snapshot.focusDocument(),
                 snapshot.focusDocumentStamp(), snapshot.focusFile(), snapshot.focusFileStamp(), snapshot.editor(), snapshot.caretOffset());
     }
 
@@ -605,7 +637,6 @@ public final class NagiAssistService implements Disposable {
         catch (InvalidPathException exception) {
             throw new SnapshotBlockedException(State.STALE, "The compiler returned an invalid source path; its response was discarded.");
         }
-        if (!isNagiSource(actual)) return;
         String canonical = actual.toString();
         if (!seen.add(normalizePath(canonical))) return;
         VirtualFile file = LocalFileSystem.getInstance().findFileByPath(canonical);
@@ -630,6 +661,44 @@ public final class NagiAssistService implements Disposable {
         }
         canonicalPaths.put(normalizePath(source), canonical);
         stamps.add(new FileStamp(file, file.getModificationStamp()));
+    }
+
+    private void retrySnapshotLater(Snapshot snapshot) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (disposed || project.isDisposed() || !snapshot.focusFile().isValid()) return;
+            PsiFile focus = NagiPlatform.read(() -> PsiManager.getInstance(project).findFile(snapshot.focusFile()));
+            if (focus != null) requestBaseline(focus, snapshot.editor());
+        });
+    }
+
+    private static List<DiskStamp> readDiskSnapshot(Set<Path> paths) throws SnapshotBlockedException {
+        if (paths.size() > NagiAssistProtocol.MAX_FILES + 1)
+            throw new SnapshotBlockedException(State.LIMIT, "Too many dependency files for a bounded editor snapshot.");
+        List<DiskStamp> stamps = new ArrayList<>();
+        long bytes = 0;
+        for (Path path : paths) {
+            try (var input = Files.newInputStream(path)) {
+                byte[] contents = input.readNBytes(NagiAssistProtocol.MAX_OVERLAY_BYTES + 1);
+                bytes += contents.length;
+                if (bytes > NagiAssistProtocol.MAX_OVERLAY_BYTES)
+                    throw new SnapshotBlockedException(State.LIMIT, "Dependency disk snapshot exceeds 8 MB.");
+                stamps.add(new DiskStamp(path, contents));
+            } catch (IOException exception) {
+                throw new SnapshotBlockedException(State.STALE, "A compiler input changed while its disk snapshot was captured.");
+            }
+        }
+        return List.copyOf(stamps);
+    }
+
+    /** Worker-only content comparison, including closed imports and arbitrary native file extensions. */
+    private static boolean diskSnapshotCurrent(Snapshot snapshot) {
+        for (DiskStamp stamp : snapshot.disks()) {
+            try (var input = Files.newInputStream(stamp.path())) {
+                byte[] contents = input.readNBytes(stamp.contents().length + 1);
+                if (!java.util.Arrays.equals(contents, stamp.contents())) return false;
+            } catch (IOException exception) { return false; }
+        }
+        return true;
     }
 
     private RawCapture captureRaw(Intent intent) {

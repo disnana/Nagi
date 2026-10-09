@@ -73,3 +73,5 @@ PyCharm用SDKでも同じコードを検証できます。
 ## 0.1.2の最低対応IDE
 
 0.1.2の共通プラグインはIntelliJ IDEA 2025.1.1 build 251.25410.109以降、PyCharm 2025.1.1 build 251.25410.122以降を対象とします。2025.1 branchの初期buildでは未信頼プロジェクトを判定する公開trust APIが解決されないため対象外です。公開trust APIで未信頼プロジェクトからの実行を拒否するため、0.1.2から2024.3と2025.1初期buildは対象外です。対象外IDEでは既存の公開済み0.1.1を引き続き利用でき、新版へ更新するには対応build以降へ更新してください。ID `com.disnana.nagi`と既存Marketplaceページは維持します。この対応範囲はGitHubの0.1.2 Releaseに適用します。
+
+標準ライブラリの仮想sourceとrecord field宣言へのジャンプは未対応です。

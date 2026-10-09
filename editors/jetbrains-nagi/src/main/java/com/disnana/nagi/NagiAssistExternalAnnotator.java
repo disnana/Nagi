@@ -71,6 +71,12 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
             if (!result.service().diagnosticTargetsFile(result.response(), file.getVirtualFile(), diagnostic.file())) continue;
             String message = diagnostic.message();
             if (message == null || message.isBlank() || message.length() > 4096) continue;
+            // Unloaded/missing modules and virtual stdlib origins retain the
+            // compiler's message, but never acquire a guessed local range.
+            if (diagnostic.file() != null && !diagnostic.file().equals(file.getVirtualFile().getPath())) {
+                holder.newAnnotation(HighlightSeverity.ERROR, message).fileLevel().create();
+                continue;
+            }
             NagiAssistProtocol.Location point = diagnostic.range();
             if (point != null) {
                 int start = lineColumnToOffset(document, point.line(), point.column());

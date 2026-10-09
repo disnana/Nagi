@@ -89,6 +89,12 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         assertTrue(Files.readString(root.resolve("main.nagi")).contains("saved"));
         service.requestCompletion(file, myFixture.getEditor());
         assertEquals(1, calls.get());
+        var cached = service.fresh(file, myFixture.getEditor());
+        long started = System.nanoTime();
+        for (int query = 0; query < 500; query++) assertSame(cached, service.fresh(file, myFixture.getEditor()));
+        System.out.println("NagiAssistCache: 500 current lookups, mean_ms="
+                + ((System.nanoTime() - started) / 500_000_000.0) + ", additional_launches=" + (calls.get() - 1));
+        assertEquals("cache hits must never launch a process", 1, calls.get());
         myFixture.getEditor().getCaretModel().moveToOffset(0);
         assertNull(service.fresh(file, myFixture.getEditor()));
     }
@@ -162,5 +168,55 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         for (int i = 0; i < 20; i++) service.requestBaseline(file);
         assertEquals(1, calls.get());
         assertEquals(NagiAssistService.State.FAILED, service.state());
+    }
+
+    public void testPreviouslyUnknownClosedDependencyRequiresANewDiskSnapshot() throws Exception {
+        PsiFile file = source("main.nagi", "def main():\n    print(1)\n");
+        Path helper = Files.writeString(root.resolve("helper.low"), "fn helper() { print(1); }\n");
+        assertNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(helper));
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            int call = calls.incrementAndGet();
+            if (call == 1) Files.writeString(helper, "fn helper() { print(2); }\n"); // no VFS refresh
+            var facts = response(file.getVirtualFile().getPath(), call == 1 ? "obsolete" : "current");
+            return new NagiAssistProtocol.Response(facts.semanticStatus(), true, false, false, "names", List.of(),
+                    facts.completions(), List.of(), List.of(file.getVirtualFile().getPath(), helper.toString()));
+        });
+        waitUntil(() -> { service.requestNavigation(file); return service.fresh(file) != null; });
+        assertTrue("unknown dependency must be snapshotted before re-analysis", calls.get() >= 2);
+        assertEquals("current", service.fresh(file).response().completions().getFirst().name());
+    }
+
+    public void testKnownNativeDependencyDiskChangeWithoutVfsRefreshRejectsResponse() throws Exception {
+        PsiFile file = source("main.nagi", "def main():\n    print(1)\n");
+        Path helper = Files.writeString(root.resolve("native.backend"), "fn helper() { print(1); }\n");
+        assertNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(helper));
+        var armed = new java.util.concurrent.atomic.AtomicBoolean();
+        var entered = new java.util.concurrent.atomic.AtomicBoolean();
+        var finish = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            calls.incrementAndGet();
+            boolean pending = armed.compareAndSet(true, false);
+            if (pending) { entered.set(true); finish.await(); }
+            var facts = response(file.getVirtualFile().getPath(), pending ? "obsolete" : "current");
+            return new NagiAssistProtocol.Response(facts.semanticStatus(), true, false, false, "names", List.of(),
+                    facts.completions(), List.of(), List.of(file.getVirtualFile().getPath(), helper.toString()));
+        });
+        waitUntil(() -> { service.requestNavigation(file); return service.fresh(file) != null; });
+        int warmCalls = calls.get();
+        armed.set(true);
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> myFixture.getEditor().getDocument().insertString(0, "# edit\n"));
+        service.requestBaseline(file);
+        waitUntil(entered::get);
+        try {
+            Files.writeString(helper, "fn helper() { print(2); }\n"); // same size, no VFS event
+        } finally { finish.countDown(); }
+        waitUntil(() -> {
+            var current = service.fresh(file);
+            if (current != null) assertEquals("a changed native dependency cannot publish obsolete facts", "current", current.response().completions().getFirst().name());
+            return current != null;
+        });
+        assertTrue("changed dependency must be re-analysed", calls.get() >= warmCalls + 2);
     }
 }

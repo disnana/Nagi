@@ -73,3 +73,5 @@ Official references: [Plugin SDK](https://plugins.jetbrains.com/docs/intellij/de
 ## Minimum IDE for 0.1.2
 
 The common 0.1.2 plugin targets IntelliJ IDEA 2025.1.1 build 251.25410.109 or later and PyCharm 2025.1.1 build 251.25410.122 or later. The initial 2025.1 builds do not resolve the public trust API used to reject commands in untrusted projects. Version 0.1.2 drops 2024.3 and those initial builds. Users on excluded IDE builds can keep the published 0.1.1; upgrade to the supported build before updating the plugin. The ID `com.disnana.nagi` and existing Marketplace page remain unchanged. This support range applies to the GitHub 0.1.2 release.
+
+Definition navigation to virtual standard-library sources and record-field declarations is not supported yet.

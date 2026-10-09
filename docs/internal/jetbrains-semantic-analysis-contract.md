@@ -169,3 +169,33 @@ process再利用はincremental checkerではなく、毎requestのsource graph�
 Windows実GUI、入力から表示までのlatency、利用者GUI試験は未確認。
 4 OSおよび4 IDE SDK/Plugin Verifierは今回候補HEADのCIで別に確認し、過去0.1.2結果を代用しない。
 GUIチェックリストは [試用手順](jetbrains-semantic-assistance-gui-checklist.md)。
+
+## 独立reviewの修正記録
+
+`e2538b9`をSol Highが独立read-only reviewし、2件のP2を指摘した。
+closed import/nativeの返答後VFS stamp追加だけでは、disk→VFS通知遅延中の変更を見逃す。
+未知graphを含む最初のresponseを捨て、known graphのbounded disk contentをworkerでpre/post照合してからpublishする。
+上限は128 dependency files＋manifest、合計8 MB。snapshot内容保持とpost比較用bufferにmemoryが必要。
+nativeは拡張子にかかわらずstampする。IDE側のVFS/doc epoch検査は引き続きEDTでI/Oせず行う。
+これは同時外部writerに対するatomic filesystem transactionではなく、READY cacheの外部変更通知はIDE VFSへ依存する。
+
+同pathでcompiler executableが更新されたときは、Sessionのreuse keyにsize・mtime（FileTime）・file keyを含め、旧常駐processを終了・reapして起動し直す。
+request前後も同identityを照合する。これは信頼したcompiler自体の完全性を暗号学的に証明するものではない。
+REDは未知closed dependencyの古いcandidateがREADYとなるassertionと、旧peerのresponseが新版更新後も返るassertion。
+追加のknown native `.backend`同size内容変更fixtureは、VFS通知なしのpending responseを拒否して再解析する。
+
+CIの全workspace回帰で既存SQLite Busy fixtureにも非決定的失敗を観測した。
+0ms acquireはcheckout返却を待たず、rollback確認replyはcallback ownerのDropより先に送られる。
+既存observerの`wait_returned(2)`を明示barrierとして用い、native Busy確認後のidle再取得を検査する。
+取得timeoutの期待値・0ms契約・公開SQL API・runtime意味論は変えない。
+
+navigationはphysical `.nagi`/`.low`上のlocals/functions/types/import先を優先する。
+`stdlib:`仮想sourceへのdefinition jump、record field declarationの精密targetは未対応。
+元sourceへ対応できないcompiler diagnosticは、messageを保ったfile-level表示にし、focus上のrangeを推測しない。
+
+VS Codeは既存`symbols`/`check --editor-input`を使用する。新assistは同じoverlay schemaとsymbols payloadを再利用するが、
+VS Codeのcompletion providerをこのPRで入れ替えてはいない。両IDEの候補機能が同等になったとは扱わず、VS Codeのassist移行は別PR候補。
+
+性能目標はcache hitでprocess launchとdisk I/Oを増やさないこと、無効化されたsnapshotを再利用しないことを先に固定する。
+release常駐protocolの数百msという観測をもとに350ms diagnostic/80ms completion debounceを設定したが、
+入力から描画までの数値SLAはWindows GUI測定後に決める。これは性能より正確性を優先する境界である。
