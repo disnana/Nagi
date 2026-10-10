@@ -74,7 +74,7 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
       - name: Check HTTP registry emission before the workspace regression
-        run: cargo test --locked -p nagic --test http_codegen --test resource_contract_characterization
+        run: cargo test --locked -p nagic --test http_codegen --test resource_contract_characterization --test security_sf05_native
       - name: Check conformance corpus and regression harness registration
         run: python scripts/verify_compiler_contracts.py
       - name: Check Task contract input registration
@@ -250,7 +250,7 @@ jobs:
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
       - run: cargo build --release --locked -p nagic
       - name: Check HTTP registry emission before the platform regression
-        run: cargo test --locked -p nagic --test http_codegen --test resource_contract_characterization
+        run: cargo test --locked -p nagic --test http_codegen --test resource_contract_characterization --test security_sf05_native
       - name: Check CLI, installation, ownership, and diagnostics on the target platform
         run: cargo test --locked -p nagic --lib --test cli --test installation --test codegen --test loop_ownership --test ownership_calls --test ownership_boundaries --test comparison_ownership --test owned_copy_codegen --test build_diagnostics --test rust_dependencies --test expression_contracts --test frontend_contracts --test source_read_retention --test literal_contracts --test http_route_conflicts --test symbols --test editor_assistance --test modules --test module_parser --test module_emission --test module_symbols --test enum_parser --test enum_modules --test enum_emission --test enum_patterns --test nullable_database --test nullable_roundtrip --test owned_database --test borrow_free_returns --test static_callback_views --test view_iteration --test view_parameter_rebinding --test sql_check --test typed_errors --test error_routes --test class_field_types --test resource_contract_characterization --test stdlib_imports --test option_match --test http_stdlib --test http_codegen --test actor_stdlib --test actor_codegen --test graph_types --test graph_relations --test graph_render --test graph_html --test map_cli --test low_multiline --test list_ownership_inference --test list_borrow_iteration --test result_stdlib
       - name: Check editor behavior on the target platform
