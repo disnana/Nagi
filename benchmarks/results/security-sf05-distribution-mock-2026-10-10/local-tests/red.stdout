@@ -1,0 +1,2 @@
+Verified SQLite Pool/Tx: extracted runtime, High and independent saved Low, typed parameters, commit/rollback/close
+Verified Task handles: extracted compiler/runtime, High/saved Low/handwritten Low, receive/discard, nested business Err, early ownership diagnostics

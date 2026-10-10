@@ -1,6 +1,14 @@
 # SF05 実装と検証結果
 
-2026-10-09。base main `3b8da226eb26c27187f3b0bc4fa39639abe4ac57`、作業branch `feat/security-foundation-sf05`。SF00 #100 / SF01 #101の採用設計が前提。[契約](security-foundation/sf05-contract.md)・[ADR 014](adr/014-literal-query-and-sqlite-admission.md)・[移行inventory日英](security-foundation/sf05-migration-inventory.md)を参照。独立review/最新headの4 OSはこれから確認する。merge/版/tag/release/公開は実行していない。
+2026-10-09。base main `3b8da226eb26c27187f3b0bc4fa39639abe4ac57`、作業branch `feat/security-foundation-sf05`。SF00 #100 / SF01 #101の採用設計が前提。[契約](security-foundation/sf05-contract.md)・[ADR 014](adr/014-literal-query-and-sqlite-admission.md)・[移行inventory日英](security-foundation/sf05-migration-inventory.md)を参照。source/Docsの独立reviewは下記の再確認で完了し、Draft PR #106へ送信済み。最新修正headの4 OS CIは未完了。merge/版/tag/正式releaseは実行していない。
+
+## PR #106 release-plan mock の追加記録（2026-10-10 UTC）
+
+PR #106はDraftのままで、公開headは `5e992b6cd775912b6886c0b6763a4364642c5132` / tree `17a53331a7fb31532042f0c01419134ed788ef83`。run #525の `release-plan` はPython suite 116件中3件で失敗した。3件とも `SQL checked 1 literal queries; 0 runtime/unsupported sites` というmock応答を受理したことが直接の失敗原因で、`changes` は成功。2026-10-10 06:46:23 UTCのjob readbackではLinux jobが `cargo test --locked` 中、3つのpackage jobはskipだった。これは公開PR headの実行結果である。
+
+公開headに対する追加差分は `scripts/releases/test_verify.py` だけのtest-mock補正と、その結果・原ログの保存である。固定行番号を仮定せずsource内の `sqlite.literal(` 行とその行番号を見つけ、gate fixtureの二つの匿名 `?` と一つの `bind_i64` を認識する。これはこのfixture向けのmockであり、一般SQL parserではない。17個すべての `test_*` method ASTは元sourceと同一で、`scripts/releases/verify.py` は変更されていない。保存済みのlocal REDは17件中14成功・3失敗、補正後GREENは17成功・0失敗・0 ignored。元のlocalログに実行コマンド記録はない。別の新しい確認実行ではargv・cwd・時刻・exit・source/raw hashを保存し、17件成功を確認した。元の記録不足を後から埋めたことにはしない。
+
+この追記時点では補正を含む公開CI runはない。元の公開runの失敗は解消扱いにしない。2026-10-10 07:13 UTCのreadbackで元headのLinux jobは成功、package/IDE jobsはskip、Ready gateは失敗だった。[test-only mock artifact](../../benchmarks/results/security-sf05-distribution-mock-2026-10-10/README.md) に元/補正後source、patch、local raw logs、公開job raw logと当時のreadbackを保存した。[独立reviewと別の記録付き確認](../../benchmarks/results/security-sf05-distribution-mock-review-2026-10-10/README.md) は原packetを変更せず保存し、必須指摘なし。これらのmock検査を実compiler・SQL engine・native配布検証の成功へ数えない。
 
 ## 変更と保証境界
 
@@ -34,7 +42,7 @@ literal/Query自体はtenant認可の証明ではなく、任意Rust adapterの�
 
 ## 完了前の残検査
 
-独立review、最新head4 OS CIを残す。三構文最終native9群のsource/Rust/build/run原出力216filesは補完済み。結果を取得するまで完成・merge-readyとは報告しない。
+source/Docsとtest-mock追加差分の独立reviewは完了し、最新修正head4 OS CIを残す。三構文最終native9群のsource/Rust/build/run原出力216filesは補完済み。結果を取得するまで完成・merge-readyとは報告しない。
 
 実装者からの[引継ぎ](handoffs/2026-10-09-security-foundation-sf05.md)と[証跡索引](../../benchmarks/results/security-sf05-validation-2026-10-09/README.md)に、source一致の確認方法と未確認targetを記録する。
 

@@ -1,0 +1,53 @@
+{
+  "repository": "disnana/Nagi",
+  "captured_at_utc": "2026-10-10T06:46:23Z",
+  "local_head": "47dfc09ab36e553e45f8b49b1b3eba5ee16ddc7b",
+  "remote_pr": {
+    "number": 106,
+    "draft": true,
+    "head_commit": "5e992b6cd775912b6886c0b6763a4364642c5132",
+    "tree": "17a53331a7fb31532042f0c01419134ed788ef83"
+  },
+  "parent_wip_source_change_before_this_evidence_and_docs": [
+    "scripts/releases/test_verify.py"
+  ],
+  "test_source": {
+    "base_sha256": "15c9524d8e304546256195aafa71edcf4ef54c2f516ac0b1d26cdf97dc098987",
+    "fixed_sha256": "d75c9a3a27eaeac11214a870226c59655fbb9266ca529cfbd0a2e7508149da37",
+    "patch_sha256": "87d71f8f5d956531858442e5b6801423251dacb5671de501d7087c8a871dc27c",
+    "base_git_blob": "460736938133d31666d57009a124b68995cc2644",
+    "fixed_git_blob": "10c7874ab41934a0c5bf0eeddc6a3ffcb691c671"
+  },
+  "production_source": {
+    "path": "scripts/releases/verify.py",
+    "head_sha256": "93552c44d84ee958d7bd2ec382268cee2d083380da95d9778f42e883be292cb3",
+    "worktree_sha256": "93552c44d84ee958d7bd2ec382268cee2d083380da95d9778f42e883be292cb3",
+    "unchanged": true
+  },
+  "original_test_assertions": {
+    "test_method_count": 17,
+    "method_ast_identical": true
+  },
+  "parent_raw_test_records": "Copied byte-for-byte from /tmp/nagi-sf05-distribution-mock-fix/; no rerun during packet preparation.",
+  "public_ci": {
+    "run_id": 38031503012,
+    "run_number": 525,
+    "release_plan_job_id": 114153222296,
+    "remote_head": "5e992b6cd775912b6886c0b6763a4364642c5132",
+    "latest_jobs_readback_at_utc": "2026-10-10 06:46:23 UTC",
+    "readback": "public-ci/ci-jobs-latest.json",
+    "raw_log": "public-ci/run-38031503012-release-plan-job-114153222296.raw.log",
+    "updated_local_mock_fix_in_remote_pr": false,
+    "ci_for_mock_fix": "not run"
+  },
+  "docs": {
+    "docs/internal/security-foundation-sf05-results.md": {
+      "head_sha256": "e37d2489f1e590750ef7a5d92a962a8d4688ed60addd58032c34f1674019b722",
+      "worktree_sha256": "4f7ecacef9900eaa9abea843baf191ea0eeac5691c0cfa27d957cb2baa06becf"
+    },
+    "docs/internal/security-foundation-sf05-results.en.md": {
+      "head_sha256": "62d282b8c558201dfee685b74fe1c3d887fd1bf3975cd66ef8d42e4fe1669998",
+      "worktree_sha256": "898a359f0f7507f89946d0119c6f146e9d981b720646bb92dc674728ece9e651"
+    }
+  }
+}
