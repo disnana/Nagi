@@ -544,21 +544,10 @@ fn check_query(
     if statement.is_explain() != 0 {
         return Err("EXPLAIN is not a supported database operation".to_owned());
     }
-    let actions = actions
-        .lock()
-        .map_err(|_| "SQL authorizer state is unavailable".to_owned())?;
+    // Authorizer failures were checked during prepare; the canonical operation
+    // shape depends on SQLite readonly and returned columns, not legacy DML tags.
     let columns = statement.column_count();
     match query.operation {
-        Operation::All | Operation::Query => {
-            if !statement.readonly() || actions.writes || !actions.selects || columns == 0 {
-                return Err("db_all/db_query require a read-only SELECT statement".to_owned());
-            }
-        }
-        Operation::Insert | Operation::Update => {
-            if statement.readonly() || !actions.writes || columns == 0 {
-                return Err("db_insert/db_update require DML with RETURNING columns".to_owned());
-            }
-        }
         Operation::SqliteRows => {
             if !statement.readonly() || columns == 0 {
                 return Err(
@@ -570,11 +559,6 @@ fn check_query(
         Operation::SqliteExec => {
             if columns != 0 {
                 return Err("sqlite.exec requires a statement without returned columns".into());
-            }
-        }
-        Operation::Write => {
-            if statement.readonly() || !actions.writes || columns != 0 {
-                return Err("db_write requires DML without returned columns".to_owned());
             }
         }
     }
@@ -714,33 +698,33 @@ mod tests {
     }
 
     #[test]
-    fn columns_aliases_and_sqlite_parameter_numbering() {
+    fn columns_aliases_and_anonymous_parameter_counts() {
         assert_ok(query(
-            Operation::All,
+            Operation::SqliteRows,
             "SELECT name, age, id FROM users",
             0,
             &["id", "name"],
         ));
         assert_ok(query(
-            Operation::Query,
-            "SELECT id AS ID, name FROM users WHERE id=?1 OR age=?1",
-            1,
+            Operation::SqliteRows,
+            "SELECT id AS ID, name FROM users WHERE id=? OR age=?",
+            2,
             &["id", "name"],
         ));
         assert_ok(query(
-            Operation::Query,
-            "SELECT id FROM users WHERE id=?5",
+            Operation::SqliteRows,
+            "SELECT id FROM users WHERE id=? AND age=? AND id=? AND age=? AND id=?",
             5,
             &["id"],
         ));
         assert_ok(query(
-            Operation::All,
+            Operation::SqliteRows,
             "WITH named AS (SELECT name FROM users) SELECT name FROM named",
             0,
             &["name"],
         ));
         assert_ok(query(
-            Operation::All,
+            Operation::SqliteRows,
             "SELECT ';' AS name FROM users; -- trailing SQL comment\n /* ; */",
             0,
             &["name"],
@@ -748,16 +732,26 @@ mod tests {
         let response = result(
             SCHEMA,
             vec![
-                query(Operation::All, "SELECT naem FROM users", 0, &["name"]),
-                query(Operation::All, "SELECT id FROM users", 0, &["id", "name"]),
                 query(
-                    Operation::Query,
-                    "SELECT id FROM users WHERE id=?5",
+                    Operation::SqliteRows,
+                    "SELECT naem FROM users",
+                    0,
+                    &["name"],
+                ),
+                query(
+                    Operation::SqliteRows,
+                    "SELECT id FROM users",
+                    0,
+                    &["id", "name"],
+                ),
+                query(
+                    Operation::SqliteRows,
+                    "SELECT id FROM users WHERE id=? AND age=? AND id=? AND age=? AND id=?",
                     1,
                     &["id"],
                 ),
                 query(
-                    Operation::All,
+                    Operation::SqliteRows,
                     "SELECT id FROM users; SELECT id FROM users",
                     0,
                     &["id"],
@@ -780,23 +774,28 @@ mod tests {
         let catalog = load_schema(&connection, SCHEMA, deadline).unwrap();
         for query in [
             query(
-                Operation::Insert,
-                "INSERT INTO users(name,age) VALUES(?1,?2) RETURNING id,name,age",
+                Operation::SqliteExec,
+                "INSERT INTO users(name,age) VALUES(?,?)",
                 2,
-                &["id", "name", "age"],
+                &[],
             ),
             query(
-                Operation::Update,
-                "UPDATE users SET name=?2,age=?3 WHERE id=?1 RETURNING id,name,age",
+                Operation::SqliteExec,
+                "UPDATE users SET name=?,age=? WHERE id=?",
                 3,
-                &["id", "name", "age"],
+                &[],
             ),
-            query(Operation::Write, "DELETE FROM users WHERE id=?1", 1, &[]),
             query(
-                Operation::Update,
-                "DELETE FROM users WHERE id=?1 RETURNING id",
+                Operation::SqliteExec,
+                "DELETE FROM users WHERE id=?",
                 1,
-                &["id"],
+                &[],
+            ),
+            query(
+                Operation::SqliteExec,
+                "DELETE FROM users WHERE id=?",
+                1,
+                &[],
             ),
         ] {
             check_query(&connection, &query, deadline, &catalog).unwrap();
@@ -813,27 +812,42 @@ mod tests {
         let response = result(
             SCHEMA,
             vec![
-                query(Operation::All, "DELETE FROM users RETURNING id", 0, &["id"]),
-                query(Operation::Write, "SELECT id FROM users WHERE id=?1", 1, &[]),
                 query(
-                    Operation::Write,
+                    Operation::SqliteRows,
+                    "DELETE FROM users RETURNING id",
+                    0,
+                    &["id"],
+                ),
+                query(
+                    Operation::SqliteExec,
+                    "SELECT id FROM users WHERE id=?1",
+                    1,
+                    &[],
+                ),
+                query(
+                    Operation::SqliteExec,
                     "DELETE FROM users WHERE id=?1 RETURNING id",
                     1,
                     &[],
                 ),
                 query(
-                    Operation::Insert,
-                    "INSERT INTO users(name) VALUES(?1)",
+                    Operation::SqliteExec,
+                    "INSERT INTO users(name) VALUES(?) RETURNING id",
                     1,
                     &["id"],
                 ),
                 query(
-                    Operation::Update,
+                    Operation::SqliteExec,
                     "SELECT id FROM users WHERE id=?1",
                     1,
                     &["id"],
                 ),
-                query(Operation::All, "EXPLAIN SELECT id FROM users", 0, &["id"]),
+                query(
+                    Operation::SqliteRows,
+                    "EXPLAIN SELECT id FROM users",
+                    0,
+                    &["id"],
+                ),
             ],
         );
         for query in &response.queries {
@@ -847,7 +861,7 @@ mod tests {
         let response = result(
             schema,
             vec![query(
-                Operation::All,
+                Operation::SqliteRows,
                 "SELECT id, upper(name) AS name FROM names_view",
                 0,
                 &["id", "name"],
@@ -920,7 +934,7 @@ mod tests {
                 result(&sql, vec![]).schema_error.is_some(),
                 "schema accepted {sql}"
             );
-            let response = result(SCHEMA, vec![query(Operation::All, &sql, 0, &["id"])]);
+            let response = result(SCHEMA, vec![query(Operation::SqliteRows, &sql, 0, &["id"])]);
             assert!(response.queries[0].error.is_some(), "query accepted {sql}");
         }
         assert_eq!(before, std::fs::read(&existing).unwrap());
@@ -933,7 +947,7 @@ mod tests {
         let response = result(
             "CREATE VIEW unsafe_view AS SELECT load_extension('missing') AS id;",
             vec![query(
-                Operation::All,
+                Operation::SqliteRows,
                 "SELECT id FROM unsafe_view",
                 0,
                 &["id"],
@@ -949,15 +963,15 @@ mod tests {
         let response = result(
             SCHEMA,
             vec![
-                query(Operation::All, "PRAGMA table_info(users)", 0, &[]),
-                query(Operation::All, "SELECT random() AS id", 0, &["id"]),
+                query(Operation::SqliteRows, "PRAGMA table_info(users)", 0, &[]),
+                query(Operation::SqliteRows, "SELECT random() AS id", 0, &["id"]),
                 query(
-                    Operation::All,
+                    Operation::SqliteRows,
                     "SELECT name FROM pragma_table_info('users')",
                     0,
                     &["name"],
                 ),
-                query(Operation::All, "DETACH main", 0, &[]),
+                query(Operation::SqliteRows, "DETACH main", 0, &[]),
             ],
         );
         for query in &response.queries {
@@ -966,7 +980,7 @@ mod tests {
         let response = result(
             "CREATE TABLE pragma_table_info(name TEXT);",
             vec![query(
-                Operation::All,
+                Operation::SqliteRows,
                 "SELECT name FROM pragma_table_info",
                 0,
                 &["name"],
@@ -1001,7 +1015,7 @@ mod tests {
         check_query(
             &connection,
             &query(
-                Operation::All,
+                Operation::SqliteRows,
                 "SELECT id, name, value FROM \"weird\"\";table\"",
                 0,
                 &["id", "name", "value"],
@@ -1084,7 +1098,7 @@ mod tests {
         let response = result(
             SCHEMA,
             vec![query(
-                Operation::All,
+                Operation::SqliteRows,
                 &" ".repeat(MAX_SQL_BYTES + 1),
                 0,
                 &[],
@@ -1101,15 +1115,15 @@ mod tests {
         let response = result(
             SCHEMA,
             vec![
-                query(Operation::All, "SELECT ?4097 AS id", 4097, &["id"]),
+                query(Operation::SqliteRows, "SELECT ?4097 AS id", 4097, &["id"]),
                 query(
-                    Operation::All,
+                    Operation::SqliteRows,
                     &format!("SELECT {}1{} AS id", "(".repeat(300), ")".repeat(300)),
                     0,
                     &["id"],
                 ),
                 query(
-                    Operation::All,
+                    Operation::SqliteRows,
                     &(0..65)
                         .map(|_| "SELECT 1 AS id")
                         .collect::<Vec<_>>()
@@ -1127,7 +1141,7 @@ mod tests {
             .contains("time limit"));
         assert!(check_query(
             &connection,
-            &query(Operation::All, "SELECT 1", 0, &[]),
+            &query(Operation::SqliteRows, "SELECT 1", 0, &[]),
             deadline,
             &Arc::new(HashSet::new())
         )

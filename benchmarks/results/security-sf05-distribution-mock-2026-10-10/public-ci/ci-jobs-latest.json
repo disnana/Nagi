@@ -1,0 +1,66 @@
+{
+  "repository": "disnana/Nagi",
+  "pr_number": 106,
+  "pr_head_sha": "5e992b6cd775912b6886c0b6763a4364642c5132",
+  "pr_tree_sha": "17a53331a7fb31532042f0c01419134ed788ef83",
+  "run_id": 38031503012,
+  "run_number": 525,
+  "readback_at_utc": "2026-10-10 06:46:23 UTC",
+  "read_only": true,
+  "jobs": [
+    {
+      "id": 114153222296,
+      "name": "release-plan",
+      "status": "completed",
+      "conclusion": "failure",
+      "steps": [
+        {
+          "name": "Check release planning, notes, and immutable publication safeguards",
+          "status": "completed",
+          "conclusion": "failure"
+        }
+      ]
+    },
+    {
+      "id": 114153222415,
+      "name": "changes",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": []
+    },
+    {
+      "id": 114153251173,
+      "name": "linux",
+      "status": "in_progress",
+      "conclusion": null,
+      "steps": [
+        {
+          "name": "Run cargo test --locked",
+          "status": "in_progress",
+          "conclusion": null
+        }
+      ]
+    },
+    {
+      "id": 114153265589,
+      "name": "vscode-package",
+      "status": "completed",
+      "conclusion": "skipped",
+      "steps": []
+    },
+    {
+      "id": 114153265696,
+      "name": "jetbrains",
+      "status": "completed",
+      "conclusion": "skipped",
+      "steps": []
+    },
+    {
+      "id": 114153265699,
+      "name": "nagi-package",
+      "status": "completed",
+      "conclusion": "skipped",
+      "steps": []
+    }
+  ]
+}

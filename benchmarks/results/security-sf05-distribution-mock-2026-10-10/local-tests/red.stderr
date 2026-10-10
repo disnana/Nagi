@@ -1,0 +1,66 @@
+test_a_backend_error_cannot_replace_a_nagi_query_diagnostic (test_verify.SqlDistributionVerificationTests.test_a_backend_error_cannot_replace_a_nagi_query_diagnostic) ... FAIL
+test_a_checker_that_accepts_the_bad_query_cannot_pass (test_verify.SqlDistributionVerificationTests.test_a_checker_that_accepts_the_bad_query_cannot_pass) ... ok
+test_a_checker_that_misses_bind_count_mismatches_cannot_pass (test_verify.SqlDistributionVerificationTests.test_a_checker_that_misses_bind_count_mismatches_cannot_pass) ... FAIL
+test_a_compiler_without_the_engine_cannot_pass_distribution_verification (test_verify.SqlDistributionVerificationTests.test_a_compiler_without_the_engine_cannot_pass_distribution_verification) ... ok
+test_success_without_an_inspected_query_is_not_verification (test_verify.SqlDistributionVerificationTests.test_success_without_an_inspected_query_is_not_verification) ... ok
+test_valid_engine_checks_the_schema_and_preserves_environment (test_verify.SqlDistributionVerificationTests.test_valid_engine_checks_the_schema_and_preserves_environment) ... FAIL
+test_both_forms_use_the_bundled_runtime_after_high_removal (test_verify.SqlitePoolDistributionVerificationTests.test_both_forms_use_the_bundled_runtime_after_high_removal) ... ok
+test_checkout_runtime_is_not_distribution_evidence (test_verify.SqlitePoolDistributionVerificationTests.test_checkout_runtime_is_not_distribution_evidence) ... ok
+test_missing_native_effect_is_not_success (test_verify.SqlitePoolDistributionVerificationTests.test_missing_native_effect_is_not_success) ... ok
+test_a_checker_accepting_pending_tasks_cannot_pass (test_verify.TaskDistributionVerificationTests.test_a_checker_accepting_pending_tasks_cannot_pass) ... ok
+test_archive_task_gate_checks_three_source_forms_and_early_negatives (test_verify.TaskDistributionVerificationTests.test_archive_task_gate_checks_three_source_forms_and_early_negatives) ... ok
+test_backend_rejection_cannot_replace_task_checker_evidence (test_verify.TaskDistributionVerificationTests.test_backend_rejection_cannot_replace_task_checker_evidence) ... ok
+test_checkout_runtime_cannot_replace_the_bundled_task_runtime (test_verify.TaskDistributionVerificationTests.test_checkout_runtime_cannot_replace_the_bundled_task_runtime) ... ok
+test_discarded_child_must_finish_before_scope_exit (test_verify.TaskDistributionVerificationTests.test_discarded_child_must_finish_before_scope_exit) ... ok
+test_missing_business_result_is_not_a_successful_native_task_run (test_verify.TaskDistributionVerificationTests.test_missing_business_result_is_not_a_successful_native_task_run) ... ok
+test_parser_rejection_does_not_prove_task_ownership (test_verify.TaskDistributionVerificationTests.test_parser_rejection_does_not_prove_task_ownership) ... ok
+test_wrong_primary_line_does_not_prove_task_ownership (test_verify.TaskDistributionVerificationTests.test_wrong_primary_line_does_not_prove_task_ownership) ... ok
+
+======================================================================
+FAIL: test_a_backend_error_cannot_replace_a_nagi_query_diagnostic (test_verify.SqlDistributionVerificationTests.test_a_backend_error_cannot_replace_a_nagi_query_diagnostic)
+----------------------------------------------------------------------
+AssertionError: SQL column error was accepted: SQL checked 1 literal queries; 0 runtime/unsupported sites
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/workspace/Nagi-security-sf05/scripts/releases/test_verify.py", line 92, in test_a_backend_error_cannot_replace_a_nagi_query_diagnostic
+    with self.assertRaisesRegex(AssertionError, "Cargo missing"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "Cargo missing" does not match "SQL column error was accepted: SQL checked 1 literal queries; 0 runtime/unsupported sites
+"
+
+======================================================================
+FAIL: test_a_checker_that_misses_bind_count_mismatches_cannot_pass (test_verify.SqlDistributionVerificationTests.test_a_checker_that_misses_bind_count_mismatches_cannot_pass)
+----------------------------------------------------------------------
+AssertionError: SQL column error was accepted: SQL checked 1 literal queries; 0 runtime/unsupported sites
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/workspace/Nagi-security-sf05/scripts/releases/test_verify.py", line 83, in test_a_checker_that_misses_bind_count_mismatches_cannot_pass
+    with self.assertRaisesRegex(AssertionError, "bind error was accepted"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "bind error was accepted" does not match "SQL column error was accepted: SQL checked 1 literal queries; 0 runtime/unsupported sites
+"
+
+======================================================================
+FAIL: test_valid_engine_checks_the_schema_and_preserves_environment (test_verify.SqlDistributionVerificationTests.test_valid_engine_checks_the_schema_and_preserves_environment)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Nagi-security-sf05/scripts/releases/test_verify.py", line 49, in test_valid_engine_checks_the_schema_and_preserves_environment
+    self.check(self.answer)
+  File "/workspace/Nagi-security-sf05/scripts/releases/test_verify.py", line 44, in check
+    verify.verify_sql(self.compiler, self.root, self.environment)
+  File "/workspace/Nagi-security-sf05/scripts/releases/verify.py", line 394, in verify_sql
+    assert result.returncode != 0, f"SQL {name} error was accepted: {result.stderr}"
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: SQL column error was accepted: SQL checked 1 literal queries; 0 runtime/unsupported sites
+
+
+----------------------------------------------------------------------
+Ran 17 tests in 0.048s
+
+FAILED (failures=3)

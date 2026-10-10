@@ -1,0 +1,64 @@
+diff --git a/docs/internal/security-foundation-sf05-results.en.md b/docs/internal/security-foundation-sf05-results.en.md
+index e00bbfd..226e6f1 100644
+--- a/docs/internal/security-foundation-sf05-results.en.md
++++ b/docs/internal/security-foundation-sf05-results.en.md
+@@ -2,6 +2,14 @@
+ 
+ 2026-10-09 UTC. Base main `3b8da226eb26c27187f3b0bc4fa39639abe4ac57`, branch `feat/security-foundation-sf05`. SF00 #100 and SF01 #101 are merged. [日本語](security-foundation-sf05-results.md), [contract](security-foundation/sf05-contract.en.md), [migration inventory](security-foundation/sf05-migration-inventory.en.md), [ADR 014](adr/014-literal-query-and-sqlite-admission.md). Independent review and four-OS CI at the latest head remain pending. No merge/version/tag/release/publishing action was performed.
+ 
++## PR #106 release-plan mock note (2026-10-10 UTC)
++
++PR #106 remains a draft at public head `5e992b6cd775912b6886c0b6763a4364642c5132`, tree `17a53331a7fb31532042f0c01419134ed788ef83`. Run #525's `release-plan` job failed three of 116 Python tests. Each failure arose because the test mock returned `SQL checked 1 literal queries; 0 runtime/unsupported sites` where the fixture expected a source diagnostic. The `changes` job succeeded. At the 2026-10-10 06:46:23 UTC job readback, Linux was still running `cargo test --locked`, while the three package jobs were skipped. These results describe the public PR head.
++
++The parent's unpublished, uncommitted correction changes only `scripts/releases/test_verify.py`, updating the test mock to locate the source row containing `sqlite.literal(` and its line number, and to recognize the fixed gate fixture's two anonymous `?` placeholders and one `bind_i64`. This is a mock for that fixture, not a general SQL parser. All 17 `test_*` method ASTs are identical to the original file, and `scripts/releases/verify.py` is unchanged. The preserved local RED output shows 14 passed / 3 failed; the corrected mock's local GREEN output shows 17 passed / 0 failed / 0 ignored. The local command was not retained, and this documentation/evidence task did not rerun the tests.
++
++The correction is not on PR #106 and has no public CI run yet. Updated CI on the corrected head and independent review remain pending; the original public failure is not treated as resolved. The [test-only mock artifact](../../benchmarks/results/security-sf05-distribution-mock-2026-10-10/README.md) contains the original and corrected source, patch, local raw logs, and the public job log and readbacks.
++
+ Canonical sqlite.literal accepts direct literals and emits opaque Copy Query through a sealed payload plan. query/all/exec require Query. Old Db/db_* execution and public runtime Db/Sql are removed, retaining concrete checker migration diagnostics. Unrelated user definitions retain their own identities. Regular check stays independent of the SQL engine; opt-in uses the existing SQLite prepare/authorizer boundary, collecting direct Query and Parameters builders without claiming static knowledge of variables.
+ 
+ The reviewed native adapter binds actual Grant subject/target into owner/id predicates in the same SQLite transaction. Real bounded queue capacity is reserved before Grant.submit; admission linearizes at the private one-time permit issued under the SF01 gate. The synchronous callback enqueues once, then only the reply is awaited. Invalidation before issuance produces zero enqueues. Invalidation after issuance, even before the callback sends, leaves the operation admitted. Tests also cover enqueue-before-SQL invalidation, finite capacity waiting and unused reservation release.
+diff --git a/docs/internal/security-foundation-sf05-results.md b/docs/internal/security-foundation-sf05-results.md
+index 76ac263..a0bf51b 100644
+--- a/docs/internal/security-foundation-sf05-results.md
++++ b/docs/internal/security-foundation-sf05-results.md
+@@ -2,6 +2,14 @@
+ 
+ 2026-10-09。base main `3b8da226eb26c27187f3b0bc4fa39639abe4ac57`、作業branch `feat/security-foundation-sf05`。SF00 #100 / SF01 #101の採用設計が前提。[契約](security-foundation/sf05-contract.md)・[ADR 014](adr/014-literal-query-and-sqlite-admission.md)・[移行inventory日英](security-foundation/sf05-migration-inventory.md)を参照。独立review/最新headの4 OSはこれから確認する。merge/版/tag/release/公開は実行していない。
+ 
++## PR #106 release-plan mock の追加記録（2026-10-10 UTC）
++
++PR #106はDraftのままで、公開headは `5e992b6cd775912b6886c0b6763a4364642c5132` / tree `17a53331a7fb31532042f0c01419134ed788ef83`。run #525の `release-plan` はPython suite 116件中3件で失敗した。3件とも `SQL checked 1 literal queries; 0 runtime/unsupported sites` というmock応答を受理したことが直接の失敗原因で、`changes` は成功。2026-10-10 06:46:23 UTCのjob readbackではLinux jobが `cargo test --locked` 中、3つのpackage jobはskipだった。これは公開PR headの実行結果である。
++
++親の未公開・未commit作業には `scripts/releases/test_verify.py` だけのtest-mock補正がある。固定行番号を仮定せずsource内の `sqlite.literal(` 行とその行番号を見つけ、gate fixtureの二つの匿名 `?` と一つの `bind_i64` を認識する。これはこのfixture向けのmockであり、一般SQL parserではない。17個すべての `test_*` method ASTは元sourceと同一で、`scripts/releases/verify.py` は変更されていない。保存済みのlocal REDは17件中14成功・3失敗、補正後GREENは17成功・0失敗・0 ignored。これらのlocalログに実行コマンド記録はなく、この追記作業では再実行していない。
++
++補正はまだPR #106へ送られておらず、この補正を含む公開CI runはない。PRに載る更新CIと独立reviewは未完了で、元の公開runの失敗は解消扱いにしない。[test-only mock artifact](../../benchmarks/results/security-sf05-distribution-mock-2026-10-10/README.md) に元/補正後source、patch、local raw logs、公開job raw logとreadbackを保存した。
++
+ ## 変更と保証境界
+ 
+ canonical std.db.sqlite.literalの直接literal constructorとopaque Copy Queryをsealed planへ接続した。標準query/all/execはQuery必須。旧Db/db_*とruntime public Db/Sqlは実行経路ごと削除し、checkerだけに具体migration診断を残す。ユーザー同名定義はcanonical identityで区別する。通常checkにSQL parser/engine依存を増やさず、opt-inの既存SQLite engineがshape・必要列・直接builderのbind数をprepare-onlyで検査する。
+diff --git a/scripts/releases/test_verify.py b/scripts/releases/test_verify.py
+index 4607369..10c7874 100644
+--- a/scripts/releases/test_verify.py
++++ b/scripts/releases/test_verify.py
+@@ -31,11 +31,17 @@ class SqlDistributionVerificationTests(unittest.TestCase):
+         source = Path(command[2])
+         schema = self.root / command[command.index("--sql-schema") + 1]
+         self.assertTrue(schema.is_file())
+-        query = source.read_text(encoding="utf-8").splitlines()[4]
++        line_number, query = next(
++            (number, line)
++            for number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1)
++            if "sqlite.literal(" in line
++        )
+         if "naem" in query:
+-            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:5: no such column: naem\n")
+-        if "?2" in query:
+-            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:5: bind count mismatch\n")
++            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:{line_number}: no such column: naem\n")
++        # The gate's fixed bind fixture has two anonymous placeholders and
++        # one bind_i64 parameter; this mock does not parse arbitrary SQL.
++        if query.count("?") == 2:
++            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:{line_number}: bind count mismatch\n")
+         return subprocess.CompletedProcess(command, 0, "", "SQL checked 1 literal queries; 0 runtime/unsupported sites\n")
+ 
+     def check(self, answer):

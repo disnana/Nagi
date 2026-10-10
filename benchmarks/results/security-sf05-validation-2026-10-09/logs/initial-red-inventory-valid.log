@@ -1,0 +1,43 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.35s
+     Running tests/security_sf05.rs (/workspace/nagi-sf01-target/debug/deps/security_sf05-36fde3811faf2d69)
+
+running 4 tests
+source.nagi: legacy checker acceptance (expected SF05 migration)
+saved.low: legacy checker acceptance (expected SF05 migration)
+manual.low: legacy checker acceptance (expected SF05 migration)
+
+thread 'retired_db_type_has_checker_migration_and_original_line' (781183) panicked at compiler/tests/security_sf05.rs:38:9:
+legacy SQL accepted in ["source.nagi", "saved.low", "manual.low"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test retired_db_type_has_checker_migration_and_original_line ... FAILED
+source.nagi: legacy checker acceptance (expected SF05 migration)
+saved.low: legacy checker acceptance (expected SF05 migration)
+
+thread 'every_retired_builtin_execution_entry_reports_migration' (781181) panicked at compiler/tests/security_sf05.rs:32:13:
+source.nagi: line 4: Resultを無視できません。tryで伝播するか変数へ受けてください
+test every_retired_builtin_execution_entry_reports_migration ... FAILED
+manual.low: legacy checker acceptance (expected SF05 migration)
+
+thread 'retired_db_execution_has_checker_migration_and_original_line' (781182) panicked at compiler/tests/security_sf05.rs:38:9:
+legacy SQL accepted in ["source.nagi", "saved.low", "manual.low"]
+test retired_db_execution_has_checker_migration_and_original_line ... FAILED
+source.nagi: legacy checker acceptance (expected SF05 migration)
+saved.low: legacy checker acceptance (expected SF05 migration)
+manual.low: legacy checker acceptance (expected SF05 migration)
+
+thread 'sqlite_string_execution_cannot_downgrade_to_dynamic_sql' (781184) panicked at compiler/tests/security_sf05.rs:38:9:
+legacy SQL accepted in ["source.nagi", "saved.low", "manual.low"]
+test sqlite_string_execution_cannot_downgrade_to_dynamic_sql ... FAILED
+
+failures:
+
+failures:
+    every_retired_builtin_execution_entry_reports_migration
+    retired_db_execution_has_checker_migration_and_original_line
+    retired_db_type_has_checker_migration_and_original_line
+    sqlite_string_execution_cannot_downgrade_to_dynamic_sql
+
+test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+error: test failed, to rerun pass `-p nagic --test security_sf05`

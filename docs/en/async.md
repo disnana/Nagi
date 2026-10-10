@@ -12,7 +12,7 @@ async def main() -> Result[unit, Error]:
     return ok(print("Finished waiting"))
 ```
 
-`sleep` takes milliseconds. This program prints after the wait. For an operation that can fail, use `try await db_open(...)` to handle its Result as well.
+`sleep` takes milliseconds. This program prints after the wait. For an operation that can fail, use `try await sqlite.open(path, config)` to handle its Result as well.
 
 A common mistake is to store the return value as `pending = sleep(10)` and await it later. Future storage is not currently supported. Write `await sleep(10)` to await the call directly.
 

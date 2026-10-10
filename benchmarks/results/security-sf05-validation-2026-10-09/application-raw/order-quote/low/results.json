@@ -1,0 +1,140 @@
+[
+  {
+    "case": "small order",
+    "exit_code": 0,
+    "stdout": "{\"customer\":\"north\",\"lines\":1,\"units\":2,\"subtotal_cents\":2500,\"discount_cents\":0,\"total_cents\":2500}\n",
+    "stderr": ""
+  },
+  {
+    "case": "unicode and discount",
+    "exit_code": 0,
+    "stdout": "{\"customer\":\"東京\",\"lines\":2,\"units\":8,\"subtotal_cents\":10000,\"discount_cents\":500,\"total_cents\":9500}\n",
+    "stderr": ""
+  },
+  {
+    "case": "below discount threshold",
+    "exit_code": 0,
+    "stdout": "{\"customer\":\"north\",\"lines\":1,\"units\":1,\"subtotal_cents\":9999,\"discount_cents\":0,\"total_cents\":9999}\n",
+    "stderr": ""
+  },
+  {
+    "case": "discount rounds down",
+    "exit_code": 0,
+    "stdout": "{\"customer\":\"north\",\"lines\":1,\"units\":1,\"subtotal_cents\":10019,\"discount_cents\":500,\"total_cents\":9519}\n",
+    "stderr": ""
+  },
+  {
+    "case": "free item",
+    "exit_code": 0,
+    "stdout": "{\"customer\":\"north\",\"lines\":1,\"units\":1,\"subtotal_cents\":0,\"discount_cents\":0,\"total_cents\":0}\n",
+    "stderr": ""
+  },
+  {
+    "case": "repeated product ID counts as separate lines",
+    "exit_code": 0,
+    "stdout": "{\"customer\":\"north\",\"lines\":2,\"units\":3,\"subtotal_cents\":3750,\"discount_cents\":0,\"total_cents\":3750}\n",
+    "stderr": ""
+  },
+  {
+    "case": "maximum supported order",
+    "exit_code": 0,
+    "stdout": "{\"customer\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"lines\":1000,\"units\":1000000,\"subtotal_cents\":1000000000000,\"discount_cents\":50000000000,\"total_cents\":950000000000}\n",
+    "stderr": ""
+  },
+  {
+    "case": "escaped customer name",
+    "exit_code": 0,
+    "stdout": "{\"customer\":\"A\\nB\\\"C\",\"lines\":1,\"units\":2,\"subtotal_cents\":2500,\"discount_cents\":0,\"total_cents\":2500}\n",
+    "stderr": ""
+  },
+  {
+    "case": "empty items",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: items must contain 1 to 1000 lines\n"
+  },
+  {
+    "case": "too many lines",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: items must contain 1 to 1000 lines\n"
+  },
+  {
+    "case": "blank customer",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: customer must contain 1 to 80 UTF-8 bytes\n"
+  },
+  {
+    "case": "UTF-8 customer byte limit",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: customer must contain 1 to 80 UTF-8 bytes\n"
+  },
+  {
+    "case": "zero product ID",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: product_id must be positive\n"
+  },
+  {
+    "case": "negative product ID",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: product_id must be positive\n"
+  },
+  {
+    "case": "zero quantity",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: quantity must be between 1 and 1000\n"
+  },
+  {
+    "case": "negative quantity",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: quantity must be between 1 and 1000\n"
+  },
+  {
+    "case": "quantity exceeds limit",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: quantity must be between 1 and 1000\n"
+  },
+  {
+    "case": "negative price",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: unit_price_cents must be between 0 and 1000000\n"
+  },
+  {
+    "case": "price exceeds limit",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: unit_price_cents must be between 0 and 1000000\n"
+  },
+  {
+    "case": "invalid JSON",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: input must contain customer and items with product_id, quantity and unit_price_cents\n"
+  },
+  {
+    "case": "missing field",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: input must contain customer and items with product_id, quantity and unit_price_cents\n"
+  },
+  {
+    "case": "incorrect numeric type",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: input must contain customer and items with product_id, quantity and unit_price_cents\n"
+  },
+  {
+    "case": "fractional quantity",
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: input must contain customer and items with product_id, quantity and unit_price_cents\n"
+  }
+]

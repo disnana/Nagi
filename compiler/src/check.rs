@@ -287,7 +287,7 @@ fn json_type_supported(
     if t.is_future() {
         return false;
     }
-    if t.0 == "fn" && !t.1.is_empty() || matches!(t.0.as_str(), "Error" | "Db" | "Html") {
+    if t.0 == "fn" && !t.1.is_empty() || matches!(t.0.as_str(), "Error" | "Html") {
         return false;
     }
     if decoding && t.0 == "view" {
@@ -609,7 +609,6 @@ fn check_mode_with_query(
                     | "bytes"
                     | "unit"
                     | "Error"
-                    | "Db"
                     | "Html"
                     | "UUID"
                     | "timestamp"
@@ -2074,7 +2073,7 @@ impl Checker {
             }
             // These raw heads emit their intrinsic owned representation even
             // when a direct-AST caller also declares a same-spelled record.
-            if matches!(t.0.as_str(), "str" | "bytes" | "Error" | "Db" | "Html") {
+            if matches!(t.0.as_str(), "str" | "bytes" | "Error" | "Html") {
                 return false;
             }
             if registered.contains(&t.0) {
@@ -2104,6 +2103,9 @@ impl Checker {
         visit(t, &self.classes, &self.enums, &self.registered, 0)
     }
     fn valid(&self, t: &Type, line: usize) -> Result<(), String> {
+        if t.0 == "Db" {
+            return Err(error(line, "SF05 migration: 旧Db型は廃止しました。std.db.sqlite.Poolとexplicit Options、同taskのTx、literal QueryとParametersへ移行してください。DDL/bootstrapはtrusted host管理処理へ分離してください"));
+        }
         if t.0 == "Html" {
             return Err(error(line, "SF01 migration: 旧Html型は廃止しました。text/bytesを使用し、typed HTMLはSF04へ移行してください"));
         }
@@ -2294,7 +2296,6 @@ impl Checker {
                 "bytes",
                 "unit",
                 "Error",
-                "Db",
                 "Html",
                 "UUID",
                 "timestamp",
@@ -3643,7 +3644,7 @@ impl Checker {
                     && (!failure.1.is_empty()
                         || matches!(
                             failure.0.as_str(),
-                            "str" | "bytes" | "unit" | "Db" | "Html" | "UUID" | "timestamp"
+                            "str" | "bytes" | "unit" | "Html" | "UUID" | "timestamp"
                         )
                         || !self.classes.contains_key(&failure.0)
                             && !self.enums.contains_key(&failure.0))
@@ -3930,6 +3931,11 @@ impl Checker {
                 .cloned()
                 .ok_or_else(|| error(line, "Noneにはnullableの型注釈が必要です"))?,
             E::Name(n) => {
+                if self.registered.contains(n)
+                    && crate::stdlib::operation(n) == Some(crate::stdlib::Operation::SqliteLiteral)
+                {
+                    return Err(error(line, "SF05 literal Query: literal constructorは直接文字列literalで呼び出してください。関数値へ変換できません"));
+                }
                 if let Some(v) = self.vars.get(n) {
                     e.resolution = Some(if v.borrowed_element {
                         NameResolution::BorrowedLocal
@@ -4069,7 +4075,7 @@ impl Checker {
                 let ix = self.expr(i, Some(&Type::named("i64")))?;
                 self.demand(&ix, &Type::named("i64"), line)?;
                 if let Some(a) = sequence_element(&t) {
-                    // A metadata-free record named Error/Db/Html can be built
+                    // A metadata-free record named Error/Html can be built
                     // directly even though its typed head emits the intrinsic
                     // runtime type. Preserve known literal-record provenance,
                     // without making runtime values or cause fields Copy.
@@ -4110,6 +4116,9 @@ impl Checker {
                 Type::generic("List", vec![elem])
             }
             E::Record(n, fields) => {
+                if self.resource(n) == Some(crate::stdlib::Resource::SqliteQueryValue) {
+                    return Err(error(line, "SF05 literal Query: Queryはopaqueです。sqlite.literalに直接文字列literalを指定してください"));
+                }
                 if matches!(
                     self.resource(n),
                     Some(
@@ -4244,6 +4253,9 @@ impl Checker {
                         return Ok(ty);
                     }
                 }
+                if self.resource(n) == Some(crate::stdlib::Resource::SqliteQueryValue) {
+                    return Err(error(line, "SF05 literal Query: Queryはopaqueです。sqlite.literalに直接文字列literalを指定してください"));
+                }
                 if matches!(
                     self.resource(n),
                     Some(
@@ -4321,6 +4333,12 @@ impl Checker {
         expected: Option<&Type>,
         line: usize,
     ) -> Result<Type, String> {
+        if matches!(
+            n,
+            "db_open" | "db_exec" | "db_all" | "db_query" | "db_insert" | "db_update" | "db_write"
+        ) {
+            return Err(error(line, format!("SF05 migration: 旧{name}は廃止しました。std.db.sqliteのopen(Pool/explicit Options)、Tx、literal Query、Parameters、query/all/exec、commit/rollback/closeへ移行してください。DDL/bootstrapはtrusted host管理処理へ分離してください", name=n)));
+        }
         if matches!(n, "serve" | "html") {
             return Err(error(line, "SF01 migration: 旧serve/htmlは廃止しました。std.http.serverの明示Policy付きrouteとserveを使用してください。raw HTMLはSF04のtyped HTMLへ移行してください"));
         }
@@ -4328,38 +4346,21 @@ impl Checker {
             "clock_ns" | "supervisor_demo" | "read_line" => 0,
             "size_of" => 0,
             "print" | "write" | "html" | "include_text" | "view" | "copy" | "share"
-            | "clone_shared" | "len" | "range" | "sleep" | "db_open" | "json_decode"
-            | "json_encode" | "ok" | "some" | "error" | "not_found" | "internal_error" | "fail"
-            | "error_kind" | "error_message" | "assert_true" | "parse_i64" | "parse_f64"
-            | "make_ints" | "actor_demo" | "actor_pair_demo" | "queue_demo" | "task_demo"
-            | "cpu_sum" | "i64" | "i32" | "uuid_parse" | "uuid_format" => 1,
-            "db_exec" | "db_all" | "append" | "serve" | "env" => 2,
-            "db_query" | "db_write" | "slice" | "bench_i64" | "bench_f64" | "bench_scalar" => 3,
-            "db_insert" => 4,
-            "db_update" => 5,
+            | "clone_shared" | "len" | "range" | "sleep" | "json_decode" | "json_encode" | "ok"
+            | "some" | "error" | "not_found" | "internal_error" | "fail" | "error_kind"
+            | "error_message" | "assert_true" | "parse_i64" | "parse_f64" | "make_ints"
+            | "actor_demo" | "actor_pair_demo" | "queue_demo" | "task_demo" | "cpu_sum" | "i64"
+            | "i32" | "uuid_parse" | "uuid_format" => 1,
+            "append" | "env" => 2,
+            "slice" | "bench_i64" | "bench_f64" | "bench_scalar" => 3,
             _ => return Err(error(line, format!("未定義の関数: {n}"))),
         };
         if arity != args.len() {
             return Err(error(line, format!("{n} は{arity}引数です")));
         }
-        let generic = matches!(
-            n,
-            "json_decode" | "db_query" | "db_insert" | "db_update" | "db_all" | "size_of"
-        );
+        let generic = matches!(n, "json_decode" | "size_of");
         if generic && ts.len() != 1 || !generic && !ts.is_empty() {
             return Err(error(line, "型引数の数が一致しません"));
-        }
-        if matches!(n, "db_all" | "db_query" | "db_insert" | "db_update") {
-            let row = unowned(&ts[0]);
-            if !row.1.is_empty()
-                || matches!(
-                    row.0.as_str(),
-                    "str" | "bytes" | "unit" | "Error" | "Db" | "Html" | "UUID" | "timestamp"
-                )
-                || !self.classes.contains_key(&row.0)
-            {
-                return Err(error(line, format!("{n}の型引数 {} は行に使用できません。classを指定してください（FromRowは生成コードまたはRust連携で実装します）", ts[0])));
-            }
         }
         if n == "json_decode" && !json_type_supported(&ts[0], true, &self.classes, &self.enums) {
             return Err(error(line, format!("json_decodeの型引数 {} はJSONの読み取りに対応していません（Deserializeが必要です）", ts[0])));
@@ -4372,8 +4373,6 @@ impl Checker {
                 "fail" => expected
                     .filter(|t| t.0 == "Result" && t.1.len() == 2)
                     .map(|t| t.1[1].clone()),
-                "db_insert" if i == 3 => Some(Type::named("i32")),
-                "db_update" if i == 4 => Some(Type::named("i32")),
                 _ => None,
             };
             let ty = if n == "env" && i == 1 {
@@ -4387,30 +4386,10 @@ impl Checker {
                     "Taskはawait/discard/move以外の操作へ渡せません",
                 ));
             }
-            // DB SQL is copied into Sql::Owned before later arguments are
-            // evaluated; env finishes its key lookup before the fallback.
-            // Their input views do not remain borrowed for the enclosing call.
-            let materialized = n == "env"
-                || i == 1
-                    && matches!(
-                        n,
-                        "db_exec" | "db_all" | "db_query" | "db_insert" | "db_update" | "db_write"
-                    );
-            if !materialized {
-                let implicit_borrow = i == 0
-                    && matches!(
-                        n,
-                        "append"
-                            | "db_exec"
-                            | "db_all"
-                            | "db_query"
-                            | "db_insert"
-                            | "db_update"
-                            | "db_write"
-                            | "bench_i64"
-                            | "bench_f64"
-                            | "bench_scalar"
-                    );
+            // env completes the key lookup before evaluating the fallback.
+            if n != "env" {
+                let implicit_borrow =
+                    i == 0 && matches!(n, "append" | "bench_i64" | "bench_f64" | "bench_scalar");
                 self.hold_value(a, implicit_borrow);
             }
             types.push(ty);
@@ -4601,48 +4580,10 @@ impl Checker {
                 require(0, Type::named("i64"))?;
                 Ok(future(Type::named("unit")))
             }
-            "serve" => {
-                require(0, Type::named("Db"))?;
-                require(1, Type::named("i64"))?;
-                self.consume(&args[0])?;
-                Ok(future(result(Type::named("unit"))))
-            }
             "env" => {
                 require(0, Type::named("str"))?;
                 require(1, Type::named("str"))?;
                 Ok(Type::named("str"))
-            }
-            "db_open" => {
-                if !is_string(&types[0]) {
-                    return Err(error(line, "db_openはパス文字列を取ります"));
-                }
-                Ok(future(result(Type::named("Db"))))
-            }
-            "db_exec" | "db_all" | "db_query" | "db_insert" | "db_update" | "db_write" => {
-                require(0, Type::named("Db"))?;
-                if !is_string(&types[1]) {
-                    return Err(error(line, "SQLは文字列です"));
-                }
-                if n == "db_query" || n == "db_write" || n == "db_update" {
-                    require(2, Type::named("i64"))?;
-                }
-                if n == "db_insert" {
-                    require(2, Type::named("str"))?;
-                    require(3, Type::named("i32"))?;
-                    self.consume(&args[2])?;
-                }
-                if n == "db_update" {
-                    require(3, Type::named("str"))?;
-                    require(4, Type::named("i32"))?;
-                    self.consume(&args[3])?;
-                }
-                let ret = match n {
-                    "db_exec" | "db_write" => Type::named("i64"),
-                    "db_all" => Type::generic("List", vec![ts[0].clone()]),
-                    "db_query" => Type::generic("Option", vec![ts[0].clone()]),
-                    _ => ts[0].clone(),
-                };
-                Ok(future(result(ret)))
             }
             "json_decode" => {
                 if !is_string(&types[0])

@@ -39,14 +39,6 @@ const builtinRows = [
   ['include_text', 'path: str', 'str', '文字列リテラルの相対パスをコンパイル時に埋め込みます。'],
   ['read_line', '', 'Result[str, Error]', 'コンソールから同期的に1行読みます。'],
   ['sleep', 'milliseconds: i64', 'unit', 'ミリ秒単位で待ちます。', true],
-  ['db_open', 'path: str | view[str]', 'Result[Db, Error]', 'SQLiteを開きます。', true],
-  ['serve', 'db: Db, port: i64', 'Result[unit, Error]', 'loopbackでHTTPサーバーを起動します。', true],
-  ['db_exec', 'db: Db, sql: str | view[str]', 'Result[i64, Error]', 'SQLを実行して影響した行数を返します。', true],
-  ['db_all', 'db: Db, sql: str | view[str]', 'Result[List[T], Error]', '複数行を指定classへ読みます。', true],
-  ['db_query', 'db: Db, sql: str | view[str], id: i64', 'Result[T?, Error]', '1行を読みます。値がなければNoneです。', true],
-  ['db_write', 'db: Db, sql: str | view[str], id: i64', 'Result[i64, Error]', 'bind引数1つでSQLを実行します。', true],
-  ['db_insert', 'db: Db, sql: str | view[str], text: str, number: i32', 'Result[T, Error]', 'strとi32をbindして挿入します。RETURNINGで指定classの列を返してください。', true],
-  ['db_update', 'db: Db, sql: str | view[str], id: i64, text: str, number: i32', 'Result[T, Error]', 'i64、str、i32をbindして更新します。RETURNINGで指定classの列を返してください。', true],
   ['json_decode', 'input: str | bytes | view[str] | view[bytes]', 'Result[T, Error]', 'JSONを指定classへ読みます。'],
   ['json_encode', 'value: T', 'Result[str, Error]', '値をJSON文字列にします。'],
   ['slice', 'borrowed: view[T], start: i64, end: i64', 'Result[view[T], Error]', '終端を含まない区間を借ります。範囲とUTF-8境界を検査します。'],
@@ -63,7 +55,7 @@ const builtinRows = [
   ['cpu_sum', 'count: i64', 'Result[i64, Error]', 'CPU処理を別の処理枠で実行するランタイム試験です。', true],
   ['supervisor_demo', '', 'Result[i64, Error]', 'panicしたworkerを再起動するランタイム試験です。', true],
 ];
-const genericBuiltins = new Set(['db_all', 'db_query', 'db_insert', 'db_update', 'json_decode', 'size_of']);
+const genericBuiltins = new Set(['json_decode', 'size_of']);
 
 function builtinParameters(args) {
   const parts = [];
@@ -83,7 +75,7 @@ const builtins = builtinRows.map(([name, args, result, description, asynchronous
   parameters: builtinParameters(args),
   return_type: result, asynchronous, description, builtin: true,
 }));
-const types = ['i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64', 'bool', 'str', 'bytes', 'unit', 'Error', 'Db', 'Html', 'UUID', 'timestamp', 'List', 'Result', 'view', 'shared', 'Option', 'fn'];
+const types = ['i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64', 'bool', 'str', 'bytes', 'unit', 'Error', 'Html', 'UUID', 'timestamp', 'List', 'Result', 'view', 'shared', 'Option', 'fn'];
 const typeInsertions = {
   List: 'List[${1:T}]', Result: 'Result[${1:T}, ${2:Error}]', view: 'view[${1:str}]', shared: 'shared[${1:T}]',
   Option: 'Option[${1:T}]', fn: 'fn[${1:i64}, ${2:i64}]',

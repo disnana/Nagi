@@ -1,0 +1,117 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `test` profile [unoptimized] target(s) in 9.94s
+     Running tests/class_field_types.rs (/workspace/nagi-sf01-target/debug/deps/class_field_types-6045ba18af69a85c)
+
+running 5 tests
+test map_keys_with_missing_equality_or_hashing_fail_before_derivation ... ok
+test unsupported_resource_and_function_fields_fail_at_the_field_line ... ok
+test nested_data_fields_and_bridge_defined_key_traits_remain_available ... ok
+test owned_database_fields_are_private_state_and_keep_high_low_emission_valid ... ok
+test native_database_debug_hides_connection_details_inside_shared_state ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.05s
+
+     Running tests/graph_relations.rs (/workspace/nagi-sf01-target/debug/deps/graph_relations-fdb5c3c595a6327e)
+
+running 9 tests
+test calls_resolve_named_aliases_without_guessing_local_function_values ... ok
+test module_imports_are_read_from_loaded_overlay_text ... ok
+test native_replacements_keep_the_generated_id_and_low_ffi_locations ... ok
+test checked_standard_and_database_operations_are_boundaries_not_routing_or_table_guesses ... ok
+test module_edges_use_exact_identities_and_recover_empty_flat_imports ... ok
+test one_line_low_import_references_do_not_hide_body_uses ... ok
+test saved_low_keeps_definition_ids_without_mapping_foreign_modules_to_its_file ... ok
+test all_views_use_shortest_unique_physical_suffixes_before_filtering ... ok
+test nested_calls_are_visited_but_class_and_enum_constructors_are_not_calls ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/http_entrypoint.rs (/workspace/nagi-sf01-target/debug/deps/http_entrypoint-0fdac4d81e106d28)
+
+running 4 tests
+test legacy_global_serve_calls_in_nested_high_and_saved_low_report_migration ... ok
+test shadowed_serve_calls_and_non_http_programs_do_not_emit_http_glue ... ok
+test explicit_routes_without_serve_do_not_synthesize_an_entrypoint ... ok
+test explicit_http_server_builds_and_returns_invalid_port_in_high_and_low ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.30s
+
+     Running tests/list_ownership_inference.rs (/workspace/nagi-sf01-target/debug/deps/list_ownership_inference-be038c13b54b85e1)
+
+running 4 tests
+test explicit_list_element_types_still_contextualize_the_first_literal ... ok
+test inferred_lists_still_reject_second_moves_and_mixed_element_types ... ok
+test inferred_list_first_elements_can_move_owned_inputs_once ... ok
+test record_list_iteration_accepts_copy_values_and_readonly_noncopy_borrows ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/modules.rs (/workspace/nagi-sf01-target/debug/deps/modules-d155de6b35b3a567)
+
+running 32 tests
+test alias_imports_keep_cycle_relative_path_and_language_guards ... ok
+test conflicting_import_bindings_report_the_import_statement ... ok
+test corrupted_low_identity_metadata_cannot_rename_or_invent_definitions ... ok
+test aliases_keep_original_source_diagnostics_and_embedded_asset_paths ... ok
+test aliases_of_one_function_cannot_be_replaced_twice_across_native_files ... ok
+test edited_saved_low_body_resolves_original_aliases_and_maps_only_its_physical_root ... ok
+test flat_imported_main_remains_an_entry_but_namespace_imported_main_does_not ... ok
+test foreign_functions_keep_their_builtin_scope_when_root_aliases_use_builtin_names ... ok
+test high_and_native_modules_can_use_the_same_private_namespace_spelling ... ok
+test imported_bindings_are_private_but_own_definitions_can_use_them ... ok
+test guessed_internal_symbols_cannot_bypass_private_imports_in_raw_source ... ok
+test aliases_from_imports_and_flat_imports_share_the_canonical_class ... ok
+test every_explicit_native_root_gets_high_aliases_without_overwriting_own_or_dependency_scopes ... ok
+test imported_names_cannot_silently_fall_back_to_builtins_of_a_different_kind ... ok
+test local_fields_and_function_values_shadow_imports_only_in_their_scope ... ok
+test legacy_classes_constructors_and_intrinsic_types_keep_their_original_namespaces ... ok
+test legacy_flat_helpers_can_call_root_definitions_without_inheriting_private_aliases ... ok
+test native_main_replacement_keeps_the_generated_identity_and_recursive_target ... ok
+test native_import_aliases_remain_local_while_own_functions_are_available_to_high ... ok
+test low_alias_syntax_resolves_qualified_record_and_generic_types ... ok
+test old_flat_imports_keep_transitive_names_and_diamond_deduplication ... ok
+test namespace_imports_preserve_depth_file_count_and_total_byte_limits ... ok
+test omitted_unit_returns_keep_builtin_identity_while_explicit_namespace_types_are_rejected ... ok
+test renamed_local_main_diagnostics_keep_source_spelling_after_program_is_taken ... ok
+test saved_generated_low_can_be_imported_without_reidentifying_its_main ... ok
+test same_named_classes_from_different_files_are_distinct_in_all_type_positions ... ok
+test qualified_replacements_compare_definition_identity_and_report_low_sources ... ok
+test the_checker_rejects_parser_only_alias_imports_until_the_source_loader_resolves_them ... ok
+test unsaved_overlays_change_imported_definitions_and_keep_disk_sources_unchanged ... ok
+test separate_native_files_can_reuse_a_replacement_declaration_name ... ok
+test project_aliases_cross_low_replacement_and_rust_record_bridges_from_an_external_cwd ... ok
+test saved_low_flat_and_from_imports_promote_the_original_definition_to_entry ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.56s
+
+     Running tests/nullable_database.rs (/workspace/nagi-sf01-target/debug/deps/nullable_database-1f499d6a6779378b)
+
+running 4 tests
+test unsupported_nullable_payloads_keep_manual_from_row_eligibility ... ok
+test raw_numeric_and_bool_field_shadows_keep_manual_row_implementations ... ok
+test raw_nullable_classes_can_supply_a_native_sqlite_row_bridge ... ok
+test nullable_scalars_read_sqlite_null_and_non_null_rows_in_high_and_saved_low ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.22s
+
+     Running tests/owned_database.rs (/workspace/nagi-sf01-target/debug/deps/owned_database-cebbb31e784237cc)
+
+running 2 tests
+test owned_scalars_decode_sqlite_rows_in_high_and_independent_saved_low ... FAILED
+test owned_wrappers_preserve_unsupported_fields_and_manual_row_eligibility ... ok
+
+failures:
+
+---- owned_scalars_decode_sqlite_rows_in_high_and_independent_saved_low stdout ----
+
+thread 'owned_scalars_decode_sqlite_rows_in_high_and_independent_saved_low' (789855) panicked at compiler/tests/owned_database.rs:132:37:
+called `Result::unwrap()` on an `Err` value: "line 33: 型が一致しません: expected view[stdlib:std.db.sqlite::Tx], got stdlib:std.db.sqlite::Tx。変換は明示してください"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    owned_scalars_decode_sqlite_rows_in_high_and_independent_saved_low
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+error: test failed, to rerun pass `-p nagic --test owned_database`

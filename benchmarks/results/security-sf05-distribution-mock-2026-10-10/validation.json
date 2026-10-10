@@ -1,0 +1,16 @@
+{
+  "checks": {
+    "original_snapshot_equals_HEAD": true,
+    "fixed_snapshot_equals_parent_worktree": true,
+    "test_method_count": 17,
+    "test_method_asts_identical": true,
+    "local_red_log_reports_17_and_3_failures": true,
+    "local_green_log_reports_17_pass": true,
+    "public_log_reports_116_and_3_failures": true,
+    "latest_jobs_statuses_consistent": true,
+    "docs_relative_artifact_link_exists": true,
+    "git_diff_check_exit": 0
+  },
+  "behavioral_test_rerun_this_task": false,
+  "note": "Only preserved parent-provided local outputs and read-only public CI log/readback were verified."
+}

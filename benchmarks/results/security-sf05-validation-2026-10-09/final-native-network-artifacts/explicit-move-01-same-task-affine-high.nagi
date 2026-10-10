@@ -1,0 +1,12 @@
+import std.db.sqlite as sqlite
+async def finish(tx: sqlite.Tx) -> Result[unit, sqlite.Failure]:
+    return await sqlite.commit(tx)
+async def local(tx: sqlite.Tx) -> Result[unit, sqlite.Failure]:
+    boxed: Option[sqlite.Tx] = some(tx)
+    match boxed:
+        case Some(inner):
+            wrapped: Result[sqlite.Tx, sqlite.Failure] = ok(inner)
+            delegated = try wrapped
+            return await finish(delegated)
+        case None:
+            return ok(print(0))

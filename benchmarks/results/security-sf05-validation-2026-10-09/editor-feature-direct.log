@@ -1,0 +1,21 @@
+✔ hover preserves declared async/nullable types and class fields but skips locals, members and comments (4.83538ms)
+✔ completion works on incomplete prefixes and inserts positional calls or named class fields (2.493076ms)
+✔ type positions offer classes and type constructors rather than value calls (1.698906ms)
+✔ a class named Future completes as its declared type rather than a generic builtin (1.186607ms)
+✔ signature argument tracking ignores nested calls, strings, arrays and generic arguments (2.5584ms)
+✔ local hovers use the exact UTF-16 occurrence and file rather than a shared name (1.167566ms)
+✔ member analysis masks just the edited member and preserves UTF-16 and CRLF positions (0.276338ms)
+✔ field candidates come from the receiver occurrence and never from saved or other-file types (1.676403ms)
+✔ a trailing member binds inside try/await unless the receiver is parenthesized (0.425341ms)
+✔ builtin completion catalog matches compiler arities and required type arguments (4.927694ms)
+✔ builtin help preserves conversion, SQLite, async and callback contracts (0.501442ms)
+✔ function and nullable types complete inside all supported generic builtin contexts (0.772164ms)
+✔ completion preserves existing generic arguments and call parentheses (0.387286ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 35.854171

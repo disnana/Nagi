@@ -1,0 +1,181 @@
+{
+  "format": "nagi-http105-windows-ci-investigation-v1",
+  "fixed_at_utc": "2026-10-10T06:25:58.727528+00:00",
+  "status": "read-only investigation complete; Windows job failure, original HTTP413 issue remains open",
+  "repository": "disnana/Nagi",
+  "pr": 105,
+  "pr_state": "open draft",
+  "head": "f7d9a571ce65d094fe9e87633e85de1f99bf6b03",
+  "head_tree": "8e67371137e1cb3b74bf776f875e7c1a6b58de78",
+  "local_head": "55e54d2693b2acd345220d709872f1e7bd03acb5",
+  "local_tree_same": true,
+  "base": "3b8da226eb26c27187f3b0bc4fa39639abe4ac57",
+  "run": 38029125681,
+  "run_attempt": 1,
+  "run_status_at_read": "in_progress; macOS Intel job still running; overall conclusion null",
+  "job": 114146219494,
+  "job_status": "completed failure",
+  "website": {
+    "run": 38029125464,
+    "head": "f7d9a571ce65d094fe9e87633e85de1f99bf6b03",
+    "conclusion": "success; separate workflow, does not close Windows/HTTP acceptance"
+  },
+  "failure": {
+    "priority": "P2 blocking Windows CI",
+    "confidence": "high",
+    "step_number": 24,
+    "step": "Check Axum native test execution and result validation",
+    "command": "python -m unittest discover -s scripts -p test_application_native_tests.py",
+    "result": "9tests8pass1FAIL; exit1",
+    "test": "ApplicationFailureEvidenceTests.test_receive_failure_records_live_child_before_cleanup_and_propagates",
+    "file": "scripts/test_application_native_tests.py",
+    "line": 55,
+    "timestamp": "2026-10-10T06:16:56.2786129Z",
+    "exception": "AssertionError: owned child stdout\\r\\n != owned child stdout\\n",
+    "condition": "Mock Popen.start writes strings through real stdout/stderr TextIOWrapper opened with default newline handling. On Windows LF is translated to CRLF; production failure_log reads rb and retains CRLF.",
+    "impact": "Platform-specific fixture mismatch stops packaging workflow before nativeHTTP/body test and application smoke; no actual HTTP receive failure occurs in this unit.",
+    "recommended_fix": "Make mock child writes explicit LF bytes through stdout/stderr buffer, retaining exact raw-LF assertion. Add independent small rawCRLF preservation oracle. Preserve binary-reading diagnostic contract; do not normalize real captured child output or weaken original HTTP/assertions."
+  },
+  "diagnostic_observability": {
+    "executed": "New mocked receive-failure capture path ran and JSON report contained CRLF tail; preceding child live-returncode/request stage/exception propagation assertions passed before failing tail assertion. Other8unit tests passed according to9test1failure result.",
+    "unexecuted": [
+      {
+        "number": 25,
+        "name": "Check oversized HTTP bodies and connection recovery on the target platform"
+      },
+      {
+        "number": 26,
+        "name": "Check HTTP panic recovery on the target platform"
+      },
+      {
+        "number": 27,
+        "name": "Check HTTP handler deadlines on the target platform"
+      },
+      {
+        "number": 28,
+        "name": "Check demo packaging with Windows PowerShell"
+      },
+      {
+        "number": 29,
+        "name": "Check demo packaging with PowerShell 7"
+      },
+      {
+        "number": 30,
+        "name": "Package tracked source and the compiler"
+      },
+      {
+        "number": 31,
+        "name": "Verify an extracted distribution outside the checkout"
+      },
+      {
+        "number": 32,
+        "name": "Check HTTP route parameters on the target platform"
+      },
+      {
+        "number": 33,
+        "name": "Check standard HTTP High and saved Low on the target platform"
+      },
+      {
+        "number": 34,
+        "name": "Check scoped task captures on the target platform"
+      },
+      {
+        "number": 35,
+        "name": "Check actor lifecycle and supervisor cancellation on the target platform"
+      },
+      {
+        "number": 36,
+        "name": "Check SQLite row counts on the target platform"
+      },
+      {
+        "number": 37,
+        "name": "Check public SQLite session cleanup, cancellation and close on the target platform"
+      },
+      {
+        "number": 38,
+        "name": "Verify bilingual SQLite tutorial through High and independent saved Low"
+      },
+      {
+        "number": 39,
+        "name": "Verify High, saved Low, and standalone Low applications"
+      },
+      {
+        "number": 40,
+        "name": "Verify the PowerShell installer and User PATH"
+      },
+      {
+        "number": 41,
+        "name": "Verify Windows PowerShell 5.1 installation and upgrades"
+      },
+      {
+        "number": 42,
+        "name": "Verify uninstallation with PowerShell 7"
+      },
+      {
+        "number": 43,
+        "name": "Verify uninstallation with Windows PowerShell 5.1"
+      },
+      {
+        "number": 44,
+        "name": "Verify the shell installer"
+      },
+      {
+        "number": 45,
+        "name": "Verify the shell uninstaller"
+      }
+    ],
+    "upload_steps": [
+      {
+        "number": 47,
+        "status": "success action with no upload",
+        "log": "No files ... build/compiler-failures/http413-nodelay-*.json"
+      },
+      {
+        "number": 48,
+        "status": "success action with no upload",
+        "log": "No files ... build/compiler-failures/"
+      }
+    ],
+    "windows_artifact_present": false,
+    "artifact_listing_count": 11,
+    "artifact_downloads": 0,
+    "reason": "Unit artifacts live in owned TemporaryDirectory cleaned by test; actual native/application steps skipped. No Windows diagnostic archive to download. Existing Linux/macos-arm64 observation archives size552B listed, not downloaded or interpreted as Windows evidence."
+  },
+  "comparison_pr104": {
+    "run": 37974822219,
+    "job": 113970438542,
+    "raw_path": "/workspace/nagi-jetbrains-final-ci-2026-10-09/pr-104-windows-job-113970438542.full.log",
+    "raw_sha256": "fc40e7a28af585f12b29982983c4eb40a5ea44381615f628368f1310bafffd70",
+    "exception": "ConnectionAbortedError WinError10053 in real savedLow quote-api Python HTTPConnection.getresponse before status",
+    "body_case": "4097-byte Content-Length body against4096 limit; old traceback references expected413 check",
+    "pr105_difference": "Earlier mocked-child log-tail newline assertion, not network/getresponse exception. Real oversized_body_ tests, quoteHigh/savedLow smoke and old413 receipt oracle all skipped.",
+    "original_status": "open; neither new Windows failure nor website/Linux/macos successes resolves or reproduces originalWinError10053"
+  },
+  "retrieval": {
+    "GitHub_app_GET_only": true,
+    "full_job_log_bytes": 276458,
+    "original_received_UTF8_text_exactly_preserved": true,
+    "raw_transport_HTTP_bytes": "Connector returns decoded log content; no claim of untouched wire encoding beyond returned UTF8 text.",
+    "job_generic_fetch": "actions/jobs endpoint rejected as unsupported400; succeeded using job steps/run jobs/log wrappers. No automatic approval rejection.",
+    "artifact_size_first": "Listed11artifact sizes/digests before considering download; no Windows artifacts and no archive downloaded.",
+    "job_log_size_limit": "No size metadata exposed by available job-log wrapper before GET; returned bounded276456characters and was retained without downloading run ZIP or binaries.",
+    "no_signed_redirects_or_tokens_displayed": true
+  },
+  "operations_not_done": [
+    "source edits",
+    "test/Cargo/native/browser execution",
+    "CI rerun",
+    "commit/push/remote writes",
+    "new HTTP requests to tested app",
+    "attack/PoC/load",
+    "large downloads"
+  ],
+  "unverified": [
+    "Windows fixed mock rerun or subsequent HTTP native/application steps",
+    "PR105 overall run completion after metadata snapshot",
+    "macOSIntel final result",
+    "remote final fourOS acceptance",
+    "originalHTTP413 receipt root cause and remediation"
+  ],
+  "high_status": "stopped"
+}

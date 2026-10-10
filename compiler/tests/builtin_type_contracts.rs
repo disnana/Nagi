@@ -2,16 +2,34 @@
 mod checked_emission;
 use nagic::{check, emit, parser};
 
+fn parsed(text: &str, high: bool) -> nagic::ast::Program {
+    if !text.contains("import std.") {
+        return parser::parse(text, high).unwrap();
+    }
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let path = std::env::temp_dir().join(format!(
+        "nagi-builtin-contract-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    std::fs::create_dir(&path).unwrap();
+    let file = path.join(if high { "main.nagi" } else { "main.low" });
+    std::fs::write(&file, text).unwrap();
+    let program = nagic::source::load(&file, high).unwrap().program;
+    std::fs::remove_dir_all(path).unwrap();
+    program
+}
+
 fn checked(source: &str) -> nagic::ast::Program {
-    let mut program = parser::parse(source, true).unwrap();
+    let mut program = parsed(source, true);
     check::check(&mut program).unwrap_or_else(|error| panic!("{error}\n{source}"));
     program
 }
 
 fn rejects_high_and_low(source: &str, builtin: &str, expected_line: usize) {
-    let high = parser::parse(source, true).unwrap();
+    let high = parsed(source, true);
     for (source, mode) in [(source.to_owned(), true), (emit::low(&high), false)] {
-        let mut program = parser::parse(&source, mode).unwrap();
+        let mut program = parsed(&source, mode);
         let error = check::check(&mut program).unwrap_err();
         assert!(error.contains(builtin), "{error}\n{source}");
         if mode {
@@ -28,10 +46,8 @@ fn json_rejects_definitely_non_serializable_types_at_the_call() {
     for ty in [
         "fn[i64]",
         "Error",
-        "Db",
         "List[fn[i64]]",
         "Result[i64, Error]",
-        "owned[Db]",
         "Map[str, List[Error]]",
     ] {
         rejects_high_and_low(
@@ -103,20 +119,13 @@ fn json_keeps_data_classes_shared_values_and_borrowed_strings_or_bytes() {
     checked("def encode(value: view[i64]) -> Result[str, Error]:\n    return json_encode(value)\n");
 }
 
-fn database_source(builtin: &str, ty: &str) -> String {
-    let args = match builtin {
-        "db_all" => "db, \"SELECT id FROM rows\"",
-        "db_query" => "db, \"SELECT id FROM rows WHERE id=?1\", 1",
-        "db_insert" => "db, \"INSERT\", \"name\", 1",
-        "db_update" => "db, \"UPDATE\", 1, \"name\", 1",
-        _ => unreachable!(),
-    };
-    format!("class Row:\n    id: i64\nclass Manual:\n    values: List[i64]\nclass fn:\n    id: i64\nasync def read(db: Db) -> Result[unit, Error]:\n    value = try await {builtin}[{ty}]({args})\n    return ok(print(1))\n")
+fn database_source(operation: &str, ty: &str) -> String {
+    format!("import std.db.sqlite as sqlite\nclass Row:\n    id: i64\nclass Manual:\n    values: List[i64]\nclass fn:\n    id: i64\nasync def read(db: view[sqlite.Tx]) -> Result[unit, sqlite.Failure]:\n    value = try await sqlite.{operation}[{ty}](db, sqlite.literal(\"SELECT id FROM rows\"), sqlite.parameters())\n    return ok(print(1))\n")
 }
 
 #[test]
-fn all_database_row_builtins_reject_scalar_or_foreign_container_targets() {
-    for builtin in ["db_all", "db_query", "db_insert", "db_update"] {
+fn sqlite_row_operations_reject_scalar_or_foreign_container_targets() {
+    for operation in ["all", "query"] {
         for ty in [
             "i64",
             "str",
@@ -126,30 +135,52 @@ fn all_database_row_builtins_reject_scalar_or_foreign_container_targets() {
             "UUID",
             "timestamp",
             "Error",
-            "Db",
+            "sqlite.Pool",
             "List[Row]",
             "Option[Row]",
             "shared[Row]",
             "Result[Row, str]",
             "fn[i64]",
             "owned[i64]",
+            "Manual",
+            "owned[Row]",
+            "owned[owned[Manual]]",
         ] {
-            rejects_high_and_low(&database_source(builtin, ty), builtin, 8);
+            rejects_high_and_low(&database_source(operation, ty), "SQLite行型", 9);
         }
     }
 }
 
 #[test]
-fn database_rows_keep_generated_and_manual_bridge_implementations() {
-    for builtin in ["db_all", "db_query", "db_insert", "db_update"] {
-        for ty in ["Row", "Manual", "fn", "owned[Row]", "owned[owned[Manual]]"] {
-            let high = checked(&database_source(builtin, ty));
+fn sqlite_rows_keep_generated_scalars_and_native_manual_bridge_boundary() {
+    for operation in ["all", "query"] {
+        for ty in ["Row", "fn"] {
+            let high = checked(&database_source(operation, ty));
             let mut low = parser::parse(&emit::low(&high), false).unwrap();
             check::check(&mut low).unwrap();
             let rust = emit::rust(&checked_emission::seal(&low)).unwrap();
-            assert!(rust.contains("impl ::nagi_runtime::FromRow for Row"));
-            assert!(!rust.contains("impl ::nagi_runtime::FromRow for Manual"));
+            assert!(rust.contains("impl ::nagi_runtime::FromRow"));
+            // A non-scalar class remains valid data but receives no automatic
+            // FromRow. owned_database exercises its trusted native adapter.
+            let manual = high
+                .modules
+                .definitions
+                .iter()
+                .find(|d| d.id.name == "Manual")
+                .unwrap();
+            assert!(!rust.contains(&format!(
+                "impl ::nagi_runtime::FromRow for {}",
+                manual.symbol
+            )));
         }
+    }
+}
+
+#[test]
+fn sqlite_resource_json_contracts_reject_at_the_call() {
+    for ty in ["sqlite.Pool", "owned[sqlite.Pool]", "sqlite.Query"] {
+        rejects_high_and_low(&format!("import std.db.sqlite as sqlite\ndef encode(value: {ty}) -> Result[str, Error]:\n    return json_encode(value)\n"), "json_encode", 3);
+        rejects_high_and_low(&format!("import std.db.sqlite as sqlite\ndef decode(text: view[str]) -> Result[{ty}, Error]:\n    return json_decode[{ty}](text)\n"), "json_decode", 3);
     }
 }
 
@@ -160,7 +191,7 @@ fn user_functions_with_json_builtin_names_keep_their_own_contracts() {
 
 #[test]
 fn same_named_classes_keep_the_emitted_json_and_database_contracts() {
-    for name in ["Error", "Db", "UUID", "i64", "f64"] {
+    for name in ["Error", "UUID", "i64", "f64"] {
         let source = format!("class {name}:\n    value: bool\ndef encode() -> Result[str, Error]:\n    return json_encode({name}(value=True))\n");
         let high = checked(&source);
         let mut low = parser::parse(&emit::low(&high), false).unwrap();
@@ -168,29 +199,29 @@ fn same_named_classes_keep_the_emitted_json_and_database_contracts() {
         let rust = emit::rust(&checked_emission::seal(&low)).unwrap();
         assert!(rust.contains(&format!("::nagi_runtime::encode(&{name} {{")));
     }
-    // These names are fully qualified/aliased by rust_type; their local
-    // classes cannot supply FromRow for the actual database type argument.
-    for name in ["str", "bytes", "unit", "Error", "Db", "UUID", "timestamp"] {
-        rejects_high_and_low(
-            &format!("class {name}:\n    value: bool\nasync def read(db: Db) -> Result[List[{name}], Error]:\n    return await db_all[{name}](db, \"rows\")\n"),
-            "db_all", 4,
-        );
-    }
-    for name in ["Error", "Db"] {
-        rejects_high_and_low(
-            &format!("class {name}:\n    value: bool\ndef decode(text: view[str]) -> Result[{name}, Error]:\n    return json_decode[{name}](text)\n"),
-            "json_decode", 4,
-        );
-    }
-    // Rust resolves an unqualified primitive name to a local struct. Do not
-    // reject such row classes merely because Type::is_copy knows the name.
-    for name in ["i64", "f64"] {
-        let source = format!("class {name}:\n    value: bool\nasync def read(db: Db) -> Result[List[{name}], Error]:\n    return await db_all[{name}](db, \"rows\")\n");
-        let high = checked(&source);
+    for name in [
+        "i64",
+        "f64",
+        "Db",
+        "str",
+        "bytes",
+        "unit",
+        "Error",
+        "UUID",
+        "timestamp",
+    ] {
+        let high = checked(&format!("import std.db.sqlite as sqlite\nclass {name}:\n    value: bool\nasync def read(db: view[sqlite.Tx]) -> Result[List[{name}], sqlite.Failure]:\n    return await sqlite.all[{name}](db, sqlite.literal(\"SELECT value FROM rows\"), sqlite.parameters())\n"));
         let rust = emit::rust(&checked_emission::seal(&high)).unwrap();
-        assert!(rust.contains(&format!("impl ::nagi_runtime::FromRow for {name}")));
-        assert!(rust.contains(&format!("all::<{name}>")));
+        let row = high
+            .modules
+            .definitions
+            .iter()
+            .find(|d| d.id.name == name)
+            .unwrap();
+        assert!(rust.contains(&format!("impl ::nagi_runtime::FromRow for {}", row.symbol)));
+        assert!(rust.contains(&format!("all::<{}>", row.symbol)));
     }
+    rejects_high_and_low("class Error:\n    value: bool\ndef decode(text: view[str]) -> Result[Error, Error]:\n    return json_decode[Error](text)\n", "json_decode", 4);
     // A user bridge can implement Eq/Hash for a local f64 record, while the
     // runtime UUID/Timestamp types still cannot acquire those foreign traits.
     checked("class f64:\n    value: bool\ndef decode(text: view[str]) -> Result[Map[f64, str], Error]:\n    return json_decode[Map[f64, str]](text)\n");
@@ -198,7 +229,7 @@ fn same_named_classes_keep_the_emitted_json_and_database_contracts() {
 
 #[test]
 fn encoded_runtime_values_are_rejected_even_when_a_same_named_class_exists() {
-    for name in ["Error", "Db"] {
+    for name in ["Error"] {
         rejects_high_and_low(
             &format!("class {name}:\n    value: bool\ndef encode(value: {name}) -> Result[str, Error]:\n    return json_encode(value)\n"),
             "json_encode", 4,
@@ -265,7 +296,7 @@ fn retired_html_annotations_report_migration_before_json_or_db_contracts() {
         let line = if text.starts_with("class") { 3 } else { 1 };
         rejects_high_and_low(text, "SF01 migration", line);
     }
-    for builtin in ["db_all", "db_query", "db_insert", "db_update"] {
-        rejects_high_and_low(&database_source(builtin, "Html"), "SF01 migration", 8);
+    for operation in ["all", "query"] {
+        rejects_high_and_low(&database_source(operation, "Html"), "SF01 migration", 9);
     }
 }

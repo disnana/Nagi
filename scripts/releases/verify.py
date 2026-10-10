@@ -96,7 +96,7 @@ def main():
         invalid_sources = {
             "temporary.nagi": ('def main():\n    saved = view("text")\n    print(saved)\n', 2),
             "json.nagi": ('def main():\n    result = json_decode[Error]("{}")\n', 2),
-            "rows.nagi": ('async def rows(db: Db):\n    result = await db_all[i64](db, "select 1")\n', 2),
+            "rows.nagi": ('import std.db.sqlite as sqlite\nasync def rows(tx: view[sqlite.Tx]) -> Result[List[i64], sqlite.Failure]:\n    return await sqlite.all[i64](tx, sqlite.literal("SELECT 1"), sqlite.parameters())\n', 3),
             "borrow.nagi": ('def main() -> Result[unit, Error]:\n    text = "\\\"Nagi\\\""\n    saved = try json_decode[view[str]](text)\n    text = "other"\n    return ok(print(saved))\n', 4),
         }
         # Invalid Nagi programs must fail before looking for Cargo or runtime.
@@ -109,6 +109,8 @@ def main():
                                         capture_output=True, text=True, encoding="utf-8")
                 assert result.returncode != 0, (filename, command, result.stdout)
                 assert f"{filename}:{line}" in result.stderr, result.stderr
+                if filename == "rows.nagi":
+                    assert "SQLite行型" in result.stderr, result.stderr
                 assert "Rust backend" not in result.stderr and "Cargo" not in result.stderr, result.stderr
                 assert not (folder / "build" / path.stem / "src" / "main.rs").exists()
         verify_sql(exe, folder, environment)
@@ -367,16 +369,16 @@ def verify_sql(exe: Path, folder: Path, environment: dict) -> None:
     schema.write_text("CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT NOT NULL);\n", encoding="utf-8")
     isolated = {**environment, "PATH": "", "NAGI_ROOT": str(folder / "missing runtime")}
     cases = {
-        "good": ("SELECT name, id FROM users WHERE id = ?1", None),
-        "column": ("SELECT id, naem AS name FROM users WHERE id = ?1", "naem"),
-        "bind": ("SELECT id, name FROM users WHERE id = ?1 OR id = ?2", "bind"),
+        "good": ("SELECT name, id FROM users WHERE id = ?", None),
+        "column": ("SELECT id, naem AS name FROM users WHERE id = ?", "naem"),
+        "bind": ("SELECT id, name FROM users WHERE id = ? OR id = ?", "bind"),
     }
     for name, (sql, expected) in cases.items():
         source = project / f"{name}.nagi"
         source.write_text(
-            "class User:\n    id: i64\n    name: str\n"
-            "async def find(db: Db, id: i64) -> Result[User?, Error]:\n"
-            f"    return await db_query[User](db, {json.dumps(sql)}, id)\n", encoding="utf-8")
+            "import std.db.sqlite as sqlite\nclass User:\n    id: i64\n    name: str\n"
+            "async def find(tx: view[sqlite.Tx], id: i64) -> Result[User?, sqlite.Failure]:\n"
+            f"    return await sqlite.query[User](tx, sqlite.literal({json.dumps(sql)}), sqlite.bind_i64(sqlite.parameters(), id))\n", encoding="utf-8")
         command = [str(exe), "check", str(source), "--no-project", "--out", str(project / name)]
         ordinary = subprocess.run(command, cwd=folder, env=isolated, capture_output=True,
                                   text=True, encoding="utf-8", timeout=15)
@@ -390,7 +392,7 @@ def verify_sql(exe: Path, folder: Path, environment: dict) -> None:
             assert "SQL checked 1 literal queries" in result.stderr, result.stderr
         else:
             assert result.returncode != 0, f"SQL {name} error was accepted: {result.stderr}"
-            assert f"{source.name}:5" in result.stderr and expected in result.stderr, result.stderr
+            assert f"{source.name}:6" in result.stderr and expected in result.stderr, result.stderr
         assert "Cargo" not in result.stderr and "Rust backend" not in result.stderr, result.stderr
         assert not (project / name / "src/main.rs").exists(), "SQL check generated native Rust"
     print("Verified SQL engine: extracted compiler, offline schema, bad columns/binds, Nagi locations, no Cargo/runtime")

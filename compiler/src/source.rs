@@ -3,6 +3,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::path::PathBuf;
 
+mod disk;
+
 struct SourceFile {
     path: PathBuf,
     module: ModuleId,
@@ -358,6 +360,19 @@ pub fn load(path: &Path, high: bool) -> Result<Sources, String> {
     load_with_overlays(path, high, &HashMap::new())
 }
 
+fn source_after_read(
+    path: &Path,
+    source: Option<String>,
+    read_bytes: usize,
+    total_bytes: &mut usize,
+) -> Result<String, String> {
+    *total_bytes = total_bytes.saturating_add(read_bytes);
+    if *total_bytes > 8_000_000 {
+        return Err("importを含むソースの合計は8 MBまでです".into());
+    }
+    source.ok_or_else(|| diagnostic(path, "", crate::parser::SOURCE_LIMIT_ERROR))
+}
+
 /// Overlays use canonical existing file paths and never alter files on disk.
 pub fn load_with_overlays(
     path: &Path,
@@ -383,15 +398,16 @@ pub fn load_with_overlays(
         if stack.len() >= 64 || seen.len() + stack.len() >= 128 {
             return Err("importの深さまたはファイル数の上限を超えました".into());
         }
-        let source = if let Some(text) = overlays.get(&path) {
-            text.clone()
+        let (source, read_bytes) = if let Some(text) = overlays.get(&path) {
+            (Some(text.clone()), text.len())
         } else {
-            std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?
+            let mut file =
+                std::fs::File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            let source = disk::read_source(&mut file, crate::parser::SOURCE_LIMIT)
+                .map_err(|e| format!("{}: {e}", path.display()))?;
+            (source.text, source.bytes)
         };
-        out.bytes += source.len();
-        if out.bytes > 8_000_000 {
-            return Err("importを含むソースの合計は8 MBまでです".into());
-        }
+        let source = source_after_read(&path, source, read_bytes, &mut out.bytes)?;
         let mut program =
             crate::parser::parse(&source, high).map_err(|e| diagnostic(&path, &source, &e))?;
         stack.insert(path.clone());
@@ -670,4 +686,35 @@ pub fn resolve_assets(program: &mut Program, source: &Path) -> Result<(), String
         block(&mut function.body, source)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod disk_budget_tests {
+    use super::*;
+
+    #[test]
+    fn aggregate_error_precedes_discarded_file_size_error() {
+        let mut total = 8_000_000 - 2;
+        let error = source_after_read(Path::new("root.low"), None, 4, &mut total).unwrap_err();
+        assert_eq!(error, "importを含むソースの合計は8 MBまでです");
+    }
+
+    #[test]
+    fn discarded_oversize_text_keeps_existing_file_diagnostic() {
+        let path = Path::new("root.low");
+        let mut total = 0;
+        let error = source_after_read(path, None, 4, &mut total).unwrap_err();
+        let parser_error = diagnostic(path, "", crate::parser::SOURCE_LIMIT_ERROR);
+        assert_eq!(error, parser_error);
+        assert_eq!(error, "error: source limit: 2 MB\n --> root.low");
+    }
+
+    #[test]
+    fn exact_aggregate_boundary_preserves_small_source_text() {
+        let mut total = 8_000_000 - 3;
+        let text =
+            source_after_read(Path::new("root.nagi"), Some("abc".into()), 3, &mut total).unwrap();
+        assert_eq!(text, "abc");
+        assert_eq!(total, 8_000_000);
+    }
 }

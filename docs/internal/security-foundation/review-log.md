@@ -49,3 +49,17 @@
 先行head `56da8684a7c18d6331203e43f02dd4c0fde88b5b` checks37746386753/website37746386400はsuccess。Linux fullのlocked workspace tests、SQL/Task stage/location、High/保存Lowチュートリアル、HTTP integrations、examples、fuzz-smoke実step成功を読戻した。4 OS/package/JetBrains/releaseはskipで、新機能の実行証拠にしない。改訂head CIは別にreadbackする。
 
 最終同期でbaseline-auditの旧Grant delegation維持案を調査開始時の履歴と明示し、最新の単一request-bound契約へ参照を接続した。固定source hashや現行mainの挙動を改変したものではない。
+
+
+## SF05 実装の独立レビュー（2026-10-09 UTC）
+
+対象はlocal `c33e8c9be51b0e1b37ee6e8aebc540c9dba7289b`、base main `3b8da226`。実装者終了後の別Sol Highがread-onlyでsource/runtime・契約・保存原ログを確認した。source/runtime blockerは未発見だが、以下のDocs修正と再確認、最新headの4 OS CIを完了判断に必要とする。SF02–SF08未実装をSF05欠陥として数えない。
+
+| ID/優先度 | 根拠と指摘 | 修正 | 状態 |
+|---|---|---|---|
+| SF05-R01/P2 | database日英とDESIGN日本語はenqueueをGrant gate内と誤記。auth.rsとADR014はgate内permit発行後、解放して同期callbackを呼ぶ | 日英Docs/DESIGNをpermit発行→gate解放→同期enqueue→reply awaitへ統一。permit後・enqueue前の失効も受理済みと明記 | 845d938で独立再確認済み・閉鎖 |
+| SF05-R02/P3 | DESIGN英語に旧Db/db_*不変・8/18・SF05未実装の説明が残る | 旧実行入口削除、Query/literalの9/19、直接Parameters builder bind検査、SF05と未実装工程を日本語へ同期 | 845d938で独立再確認済み・閉鎖 |
+
+Reviewerは最終入力1063件・compiler/runtime236件・artifact756件のSHAとfull原ログ1011/0/既存ignored1、production後差分0を独立照合した。checker12とnative admission6を既存warm executableで再確認し、alias＋native replacementのHigh/High削除後保存Low check/build四経路が目的診断とreplace.low元行で拒否されることを確認した。独立検査の原ログは親の保存・照合後に結果へ対応付ける。今回の修正は文書だけでsource/test/公開API/依存/版を変更しない。
+
+845d938の限定再確認で両指摘を閉鎖し、source/Docsは承認相当とした。compiler/runtime236files不変を別途照合した。独立追加testのraw fileは保存されておらず、会話内tool出力のみなので、実装者保存artifactを独立再実行の原ログとは扱わない。最新headの4 OSは依然未確認である。

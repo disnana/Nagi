@@ -1,0 +1,80 @@
+
+> nagi-lang@0.1.13 test
+> node --test test/*.test.js
+
+✔ test/actor-features.test.js (130.436169ms)
+✖ test/actor-navigation.test.js (320.400172ms)
+✔ test/borrowed-locals.test.js (167.699807ms)
+✖ test/compiler.test.js (533.003462ms)
+✔ test/enum-features.test.js (251.387371ms)
+✖ test/enum-navigation.test.js (182.155773ms)
+✔ test/features.test.js (208.550216ms)
+✔ test/folding.test.js (108.399319ms)
+✖ test/high-snippets.test.js (245.551695ms)
+✖ test/import-navigation.test.js (403.090215ms)
+✔ test/indentation.test.js (128.63703ms)
+✖ test/inferred-types.test.js (146.853138ms)
+✖ test/local-shadow.test.js (252.887425ms)
+✖ test/low-snippets.test.js (197.591403ms)
+✔ test/module-features.test.js (183.611943ms)
+✖ test/navigation.test.js (149.321784ms)
+✔ test/providers.test.js (705.576962ms)
+✔ test/static-assistance.test.js (153.085545ms)
+✔ test/stdlib-features.test.js (192.803304ms)
+✖ test/stdlib-navigation.test.js (223.555851ms)
+✔ test/usability-catalog.test.js (186.413397ms)
+✖ test/usability-navigation.test.js (183.088754ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 11
+ℹ fail 11
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1864.928575
+
+✖ failing tests:
+
+test at test/actor-navigation.test.js:1:1
+✖ test/actor-navigation.test.js (320.400172ms)
+  'test failed'
+
+test at test/compiler.test.js:1:1
+✖ test/compiler.test.js (533.003462ms)
+  'test failed'
+
+test at test/enum-navigation.test.js:1:1
+✖ test/enum-navigation.test.js (182.155773ms)
+  'test failed'
+
+test at test/high-snippets.test.js:1:1
+✖ test/high-snippets.test.js (245.551695ms)
+  'test failed'
+
+test at test/import-navigation.test.js:1:1
+✖ test/import-navigation.test.js (403.090215ms)
+  'test failed'
+
+test at test/inferred-types.test.js:1:1
+✖ test/inferred-types.test.js (146.853138ms)
+  'test failed'
+
+test at test/local-shadow.test.js:1:1
+✖ test/local-shadow.test.js (252.887425ms)
+  'test failed'
+
+test at test/low-snippets.test.js:1:1
+✖ test/low-snippets.test.js (197.591403ms)
+  'test failed'
+
+test at test/navigation.test.js:1:1
+✖ test/navigation.test.js (149.321784ms)
+  'test failed'
+
+test at test/stdlib-navigation.test.js:1:1
+✖ test/stdlib-navigation.test.js (223.555851ms)
+  'test failed'
+
+test at test/usability-navigation.test.js:1:1
+✖ test/usability-navigation.test.js (183.088754ms)
+  'test failed'

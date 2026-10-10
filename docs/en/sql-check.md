@@ -1,76 +1,59 @@
-# SQL checks
+# SQL Preflight Checks
 
-Supply a schema to `check` to validate names, result columns, and bind counts in literal SQL passed to the existing SQLite `db_*` API. Ordinary `check`, `build`, and `run` do not enable this automatically. In the development source, the unreleased `std.db.sqlite` `query` / `all` / `exec` operations are also checked. The new API's Parameters bind counts and value types are not statically known, so they remain runtime checks and are reported as `bind unchecked`. The new API is not included in Nagi 0.1.11. See the [Changelog](../../CHANGELOG.md) for versioned changes.
+Development-source `std.db.sqlite` requires a Query created from a direct literal during ordinary check. SQL syntax and schema validation are a separate stage enabled by explicit options. SF05 is unreleased; it is neither formal 0.2.0 nor a retroactive feature of published 0.1.x. See [SQLite](sqlite-pool.md) and [migration](migration-0.2.0.md).
 
 ## Usage
 
-Save the application's table definitions in `schema.sql`:
+Save a DDL snapshot of the deployed schema in `schema.sql`.
 
 ```sql
-CREATE TABLE users (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL
-);
+CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
 ```
 
-Put the row type and SQL in `app.nagi`:
+Direct Query constructors in `app.nagi` allow checks of schema names, returned columns, and bind counts.
 
 ```nagi
+import std.db.sqlite as sqlite
 class User:
     id: i64
     name: str
-
-async def main() -> Result[unit, Error]:
-    db = try await db_open(":memory:")
-    try await db_exec(db, "CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
-    users = try await db_all[User](db, "SELECT id, name FROM users")
-    for user in users:
-        print(user.name)
-    return ok(print("Done"))
+async def find(tx: view[sqlite.Tx], id: i64) -> Result[User?, sqlite.Failure]:
+    return await sqlite.query[User](tx, sqlite.literal("SELECT id, name FROM users WHERE id = ?"), sqlite.bind_i64(sqlite.parameters(), id))
 ```
 
 ```sh
 nagic check app.nagi --sql-schema schema.sql --sql-dialect sqlite
 ```
 
-`SELECT id, naem FROM users` fails because the column does not exist. `SELECT id FROM users` fails because User requires a name column. Diagnostics identify the Nagi or Low file and line containing the query.
-
-For a project, use `nagic check --project ./app --sql-schema ./app/schema.sql --sql-dialect sqlite`. Relative schema paths use the command's working directory. Supply both SQL options together; they apply only to `check`. Configuration in nagi.toml and automatic editor checks are unsupported.
+`naem` is rejected as an unknown column; `SELECT id` lacks User's name field. Diagnostics retain the original Nagi/Low module and line. For projects use `nagic check --project ./app --sql-schema ./app/schema.sql --sql-dialect sqlite`. Relative schema paths use the working directory. Both options are required together and apply only to check. Automatic nagi.toml/editor configuration is unsupported.
 
 ## What is checked
 
-| Target | Checks |
+| Input | Checks |
 |---|---|
-| `db_all`, `db_query` | A single statement, table/column names, fixed API argument count, required row-class columns |
-| `db_insert`, `db_update` | A single write statement, fixed API argument count, required `RETURNING` columns |
-| `db_write` | A single statement without returned rows, fixed API argument count |
-| `sqlite.query`, `sqlite.all` in the development source | One readonly row-producing statement, table/column names, and required class columns. Parameters bind count is unchecked |
-| `sqlite.exec` in the development source | One rowless statement shape and schema references. DDL is prepare-only and never executed. Parameters bind count is unchecked |
+| Direct literal Query in `sqlite.query/all` | One readonly statement, table/column names, required row fields |
+| Direct literal Query in `sqlite.exec` | One statement without returned columns and schema references; DDL is prepared without execution |
+| Direct `parameters()` / `bind_*` builder chain | Count matches anonymous `?` placeholders |
+| Query/Parameters structure hidden behind variables/functions | Report that site for runtime checks; do not count it as statically validated |
 
-Checks apply to string literals passed directly to calls resolved as standard database operations. A user function with the same name is not a target. Changed column order, correct aliases, and extra result columns are allowed. Placeholder counts for the existing `db_*` API follow SQLite's rules; reusing the same `?1` does not add a bind. The new `sqlite.*` API uses anonymous `?` placeholders and owned `Parameters`, so the checker cannot verify its bind count or value types.
+Only calls resolved to canonical `stdlib:std.db.sqlite` are collected. Same-named user functions are not inferred as SQL. Changed column order, aliases, and additional columns are allowed. Numbered `?1` and named placeholders are rejected by the standard API. The checker does not duplicate an SQL parser; the opt-in engine and runtime use SQLite's authorizer and prepare metadata to validate shape.
 
-Handwritten Rust `FromRow` bodies are not analyzed. For the new API, class field names are treated as required result columns, so use suitable SQL aliases. Ordinary `check`, `build`, and Rust row decoding remain unchanged.
+Query variables created from literals pass ordinary check, but this collector does not infer their SQL through dataflow. Even a direct constructor with a Parameters variable reports `bind unchecked`. Actual value types, NULL, and numeric ranges always remain runtime checks. For example, `'oops' AS id` supplies the column without guaranteeing successful i64 decoding. Native handwritten FromRow bodies are not analyzed.
 
-SQL stored in a variable or built in Rust remains subject to runtime checks. The existing `db_exec`, including batches and schema changes, is excluded. New `sqlite.exec` calls are prepared only to check a single statement's shape; DDL is never executed and the application schema is not inferred from it. The checker does not execute application queries or schema changes. New API Parameters bind count and value types remain unchecked. Results show the count of inspected literals and the count, locations, and reasons for calls left to runtime checks.
+DDL/bootstrap belongs to trusted management code. The checker does not execute queries to infer a schema or update the check schema from exec's CREATE TABLE. There is no request-facing dynamic string factory. Legacy Db/db_* entry points receive concrete migration diagnostics before SQL preflight.
 
-## Schema and runtime boundaries
+## Safety and limits
 
-The checker builds the supplied schema in a new in-memory database and prepares SQL to inspect names, columns, and bind metadata. It does not execute application queries or `sqlite.exec` DDL, connect to the application's database, or invoke Cargo. Ordinary `check` creates no SQL connection or worker. Generated Rust and the application's database execution path are unchanged.
+The engine uses a separate worker with an in-memory SQLite database. It loads a DDL snapshot of ordinary CREATE TABLE, INDEX, and VIEW statements. It rejects arbitrary migrations, ATTACH/DETACH, PRAGMA, external file operations, extensions, TEMP/virtual tables, triggers, transactions, and CREATE TABLE AS SELECT. A function allowlist excludes random/time functions and DEFAULT CURRENT_TIMESTAMP.
 
-Use ordinary CREATE TABLE, INDEX, and VIEW statements in the schema. This is not a migration runner. ATTACH/DETACH, PRAGMA, external database or file writes, extension loading, TEMP/virtual tables, triggers, transactions, and CREATE TABLE AS SELECT are rejected. Functions use an allowlist; random and date/time functions, including `DEFAULT CURRENT_TIMESTAMP`, are unsupported.
+The schema is limited to 2 MiB and 1024 statements, each SQL to 256 KiB, with limits for columns and expression depth. A separate worker process has a five-second deadline; violations return check errors. All sites use one explicit schema. The check does not guarantee deployment targets of multiple Pools, authorization, tenant predicates, or actual database state.
 
-The schema is limited to 2 MiB and 1024 statements, and each SQL string to 256 KiB. Column counts, expression depth, and other SQLite limits are bounded. A parent monitors a separate worker process with a five-second deadline; exceeding a limit or deadline fails the check.
+## Build without SQLite in the compiler
 
-Each check validates all target SQL against one supplied schema. It does not infer connections for multiple Db values. Keep the deployed database schema consistent with the supplied schema.
-
-The check does not guarantee value types, integer ranges, NULL behavior, query results, permissions, or the state of a deployed database. New API Parameters bind counts are also unchecked statically. For example, `SELECT 'oops' AS id, 'Nagi' AS name FROM users` provides the required columns, so this check alone cannot detect the id type mismatch. Row decoding, bind values, and dynamic SQL still use runtime Result errors. See [existing SQLite limits](database.md) and [new API limits](sqlite-pool.md).
-
-## Build a compiler without SQLite
-
-The validation engine is included in the default Cargo feature `sql-check`. To omit it when building from source:
+The opt-in engine belongs to the default Cargo feature `sql-check`.
 
 ```sh
 cargo build --release --locked -p nagic --no-default-features
 ```
 
-This compiler still supports ordinary checks and builds. SQL-check options fail with an error explaining that the feature is required. This setting is separate from the application's SQLite runtime.
+Ordinary literal Query checks and builds remain available without the engine. SQL preflight options report that the feature is required. Application-side SQLite runtime is configured separately.

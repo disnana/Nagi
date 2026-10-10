@@ -1,0 +1,11 @@
+import std.db.sqlite as sqlite;
+record Row { value: str; }
+async fn insert(tx: view[sqlite.Tx], sql: str) -> Result[i64, sqlite.Failure] {
+    return await sqlite.exec(tx, sqlite.literal("INSERT INTO data VALUES (?)"), sqlite.bind_text(sqlite.parameters(), sql));
+}
+async fn one(tx: view[sqlite.Tx], sql: str) -> Result[Row?, sqlite.Failure] {
+    return await sqlite.query[Row](tx, sqlite.literal("SELECT ? AS value"), sqlite.bind_text(sqlite.parameters(), sql));
+}
+async fn many(tx: view[sqlite.Tx], sql: str) -> Result[List[Row], sqlite.Failure] {
+    return await sqlite.all[Row](tx, sqlite.literal("SELECT ? AS value FROM data"), sqlite.bind_text(sqlite.parameters(), sql));
+}

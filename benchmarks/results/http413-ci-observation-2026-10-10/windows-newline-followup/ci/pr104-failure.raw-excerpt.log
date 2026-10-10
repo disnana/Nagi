@@ -1,0 +1,26 @@
+2026-10-09T19:01:24.7141164Z Traceback (most recent call last):
+2026-10-09T19:01:24.7142174Z   File "D:\a\Nagi\Nagi\scripts\verify_application_examples.py", line 133, in <module>
+2026-10-09T19:01:24.7143643Z     main()
+2026-10-09T19:01:24.7281161Z   File "D:\a\Nagi\Nagi\scripts\verify_application_examples.py", line 121, in main
+2026-10-09T19:01:24.7283362Z     facts = verify(executable, env, directory)
+2026-10-09T19:01:24.7283987Z             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-09T19:01:24.7284769Z   File "D:\a\Nagi\Nagi\test-nagi-code\application-examples\quote-api\smoke.py", line 181, in verify
+2026-10-09T19:01:24.7286558Z     check("body-limit", "POST", "/quotes", 413, body=b" " * 4097, headers=json_headers)
+2026-10-09T19:01:24.7287443Z   File "D:\a\Nagi\Nagi\test-nagi-code\application-examples\quote-api\smoke.py", line 59, in check
+2026-10-09T19:01:24.7288538Z     status, output_headers, output = request(method, path, body, headers)
+2026-10-09T19:01:24.7289158Z                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-09T19:01:24.7289931Z   File "D:\a\Nagi\Nagi\test-nagi-code\application-examples\quote-api\smoke.py", line 53, in request
+2026-10-09T19:01:24.7290665Z     response = connection.getresponse()
+2026-10-09T19:01:24.7291217Z                ^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-09T19:01:24.7292007Z   File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\http\client.py", line 1430, in getresponse
+2026-10-09T19:01:24.7609737Z     response.begin()
+2026-10-09T19:01:24.7610249Z   File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\http\client.py", line 331, in begin
+2026-10-09T19:01:24.7612611Z     version, status, reason = self._read_status()
+2026-10-09T19:01:24.7612939Z                               ^^^^^^^^^^^^^^^^^^^
+2026-10-09T19:01:24.7613350Z   File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\http\client.py", line 292, in _read_status
+2026-10-09T19:01:24.7615229Z     line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+2026-10-09T19:01:24.7615662Z                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-09T19:01:24.7616056Z   File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\socket.py", line 720, in readinto
+2026-10-09T19:01:24.7802404Z     return self._sock.recv_into(b)
+2026-10-09T19:01:24.7802692Z            ^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-09T19:01:24.7968489Z ConnectionAbortedError: [WinError 10053] An established connection was aborted by the software in your host machine

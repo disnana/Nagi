@@ -10,7 +10,7 @@ Nagi distinguishes values that own their data from views that borrow it. High an
 | shared | Shares data; it is released after the last reference is gone |
 | Tasks, channels, and database jobs | The runtime allocates storage; cancelling a waiter does not necessarily end the work or release its resources immediately |
 
-Ordinary values do not all carry reference counts. `shared[T]` uses Rust's `Arc` to track references. Runtime resources such as Db may also use reference counting internally. `shared` does not collect reference cycles or automatically provide mutation or thread safety for its contents.
+Ordinary values do not all carry reference counts. `shared[T]` uses Rust's `Arc` to track references. Runtime resources such as sqlite.Pool may also use reference counting internally. `shared` does not collect reference cycles or automatically provide mutation or thread safety for its contents.
 
 If you stop waiting for async work, a job already sent to a DB worker or a blocking Rust operation may continue. Cancellation does not imply rollback. See [ownership](ownership.md), [views](view-and-zero-copy.md), and [databases](database.md) for examples and limits.
 

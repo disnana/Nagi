@@ -1,0 +1,49 @@
+{"method": "GET", "path": "/users", "status": 200, "body": []}
+{"method": "GET", "path": "/users/999", "status": 404, "body": ""}
+{"method": "POST", "path": "/users", "status": 200, "body": {"id": 1, "name": "small fixture", "age": 18}}
+{"method": "GET", "path": "/users/1", "status": 200, "body": {"id": 1, "name": "small fixture", "age": 18}}
+{"method": "PUT", "path": "/users/1", "status": 200, "body": {"id": 1, "name": "変更済み", "age": 19}}
+{"method": "PUT", "path": "/users/999", "status": 404, "body": "database row not found"}
+{"method": "DELETE", "path": "/users/1", "status": 200, "body": 1}
+{"method": "GET", "path": "/users/1", "status": 404, "body": ""}
+{"method": "GET", "path": "/users", "status": 200, "body": []}
+Passed: crud (high), 9 business HTTP checks
+{"method": "GET", "path": "/users", "status": 200, "body": []}
+{"method": "GET", "path": "/users/999", "status": 404, "body": ""}
+{"method": "POST", "path": "/users", "status": 200, "body": {"id": 1, "name": "small fixture", "age": 18}}
+{"method": "GET", "path": "/users/1", "status": 200, "body": {"id": 1, "name": "small fixture", "age": 18}}
+{"method": "PUT", "path": "/users/1", "status": 200, "body": {"id": 1, "name": "変更済み", "age": 19}}
+{"method": "PUT", "path": "/users/999", "status": 404, "body": "database row not found"}
+{"method": "DELETE", "path": "/users/1", "status": 200, "body": 1}
+{"method": "GET", "path": "/users/1", "status": 404, "body": ""}
+{"method": "GET", "path": "/users", "status": 200, "body": []}
+Passed: crud (saved-low), 9 business HTTP checks
+{"method": "GET", "path": "/items", "status": 200, "body": []}
+{"method": "GET", "path": "/items/999", "status": 404, "body": ""}
+{"method": "POST", "path": "/items", "status": 200, "body": {"id": 1, "name": "small fixture", "quantity": 18}}
+{"method": "GET", "path": "/items/1", "status": 200, "body": {"id": 1, "name": "small fixture", "quantity": 18}}
+{"method": "PUT", "path": "/items/1", "status": 200, "body": {"id": 1, "name": "変更済み", "quantity": 19}}
+{"method": "PUT", "path": "/items/999", "status": 404, "body": "database row not found"}
+{"method": "DELETE", "path": "/items/1", "status": 200, "body": {"id": 1, "deleted": true}}
+{"method": "GET", "path": "/items/1", "status": 404, "body": ""}
+{"method": "GET", "path": "/items", "status": 200, "body": []}
+Passed: inventory (high), 9 business HTTP checks
+{"method": "GET", "path": "/items", "status": 200, "body": []}
+{"method": "GET", "path": "/items/999", "status": 404, "body": ""}
+{"method": "POST", "path": "/items", "status": 200, "body": {"id": 1, "name": "small fixture", "quantity": 18}}
+{"method": "GET", "path": "/items/1", "status": 200, "body": {"id": 1, "name": "small fixture", "quantity": 18}}
+{"method": "PUT", "path": "/items/1", "status": 200, "body": {"id": 1, "name": "変更済み", "quantity": 19}}
+{"method": "PUT", "path": "/items/999", "status": 404, "body": "database row not found"}
+{"method": "DELETE", "path": "/items/1", "status": 200, "body": {"id": 1, "deleted": true}}
+{"method": "GET", "path": "/items/1", "status": 404, "body": ""}
+{"method": "GET", "path": "/items", "status": 200, "body": []}
+Passed: inventory (saved-low), 9 business HTTP checks
+Traceback (most recent call last):
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/http_examples.py", line 147, in <module>
+    main()
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/http_examples.py", line 92, in main
+    run([str(COMPILER), "lower", str(high), "--no-project", "--out", str(lowered)], project, "lower")
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/http_examples.py", line 29, in run
+    assert result.returncode == 0, (command, result.stdout, result.stderr)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (['/workspace/nagi-sf01-target/debug/nagic', 'lower', '/workspace/Nagi-security-sf05/build/sf05-http-examples-complete/tasks-lq0bg7v0/tasks.nagi', '--no-project', '--out', '/workspace/Nagi-security-sf05/build/sf05-http-examples-complete/tasks-lq0bg7v0/lowered'], '', 'error: line 4: /workspace/Nagi-security-sf05/build/sf05-http-examples-complete/tasks-lq0bg7v0/models.nagi: No such file or directory (os error 2)\n --> /workspace/Nagi-security-sf05/build/sf05-http-examples-complete/tasks-lq0bg7v0/tasks.nagi:4\n 4 | import "models.nagi"\n')

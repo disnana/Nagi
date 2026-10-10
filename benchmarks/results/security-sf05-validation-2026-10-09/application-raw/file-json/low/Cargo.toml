@@ -1,0 +1,20 @@
+[package]
+name = "nagi-generated-151867aa230ce977"
+version = "0.1.0"
+edition = "2021"
+autobins = false
+
+[[bin]]
+name = "nagi-151867aa230ce977-g-e0642-18dce7c9cf5e1b8d-0"
+path = "src/main.rs"
+
+[workspace]
+
+[dependencies.nagi-runtime]
+path = "../../../../runtime"
+
+[profile.release]
+opt-level = 3
+lto = false
+codegen-units = 1
+panic = "unwind"

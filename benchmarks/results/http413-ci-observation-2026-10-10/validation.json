@@ -1,0 +1,57 @@
+{
+  "base": "3b8da226eb26c27187f3b0bc4fa39639abe4ac57",
+  "platform": "linux",
+  "cargo_target_dir": "/workspace/nagi-sf01-target",
+  "cargo_profile_dev_debug": "0",
+  "cargo_profile_test_debug": "0",
+  "offline": true,
+  "full_workspace_tests_run": false,
+  "native_targets_unconfirmed": [
+    "windows-x86_64",
+    "macos-aarch64",
+    "macos-x86_64"
+  ],
+  "original_windows_full_log": {
+    "path": "/workspace/nagi-jetbrains-final-ci-2026-10-09/pr-104-windows-job-113970438542.full.log",
+    "sha256": "fc40e7a28af585f12b29982983c4eb40a5ea44381615f628368f1310bafffd70"
+  },
+  "selected_artifacts": {
+    "ci-policy-final.log": "c31834843132af175711b2b638430066d20434625d7c82dce3e2ba6433907e0c",
+    "clippy-final.log": "0de79c535f2cc55680124ace960cc9566a529c45bb4c2421f720debb09d9eb8b",
+    "native-final.json": "03f4d1c147443c8bc77d3fa22f00abcda4fa84a250e422ce6953aa01cfe900c1",
+    "native-first.log": "c60c9a44cca3a024e47409ab9468e146a6e976c1bb98e08b90f0e94d35630b09",
+    "python-capture-final.log": "25d5a3d11f3463861bdd9a732f0e69df7af71a4ab11d16d13e36d2aa40764244",
+    "quote-reused-binaries.json": "58606144af5e82ea1216c2d340a435bd4bcb859742ff41237f51b1f5dccc4df8",
+    "runtime-lib-final.log": "c3d508b1defaab81f6eba4bc98672f020d499f87757782c398925dec7f4ac320",
+    "verify_existing_quote.py": "4a9050c25809e3afe82acb0cd8156377c09b0a0db4cce06b78521878d094dcf2"
+  },
+  "modified_source_sha256": {
+    ".github/workflows/ci.yml": "8d3f01020b76ec02ab4382e22ecd9186532f332d35503192eee1a5b0e0ae042a",
+    "docs/internal/compiler-testing.md": "f4f111e78c3bfd2871c66b1ff6a2d2e0b9884b4aec95005782361a88962d2407",
+    "docs/internal/progress.md": "9c27cbb2c777247e5f12eca31758507b2aefd55d0bf0d8652ec9849a0e3295f2",
+    "runtime/src/http_server/tests.rs": "131bb8a02cd61a313571a63f23a7b5ca98b599d772e6f3eb017cb060238aa7df",
+    "scripts/test_application_native_tests.py": "c75afb237d6eba3f97a88152f699f7efe736d2c10cf3865ed06089c1827c3add",
+    "scripts/verify_application_examples.py": "2aeaa1a5c5821e7efe9e96bb10ed2eec583c070c83174a7794b99fb6a8e3f1f9",
+    "test-nagi-code/application-examples/quote-api/smoke.py": "eaeb4c6346e3b739fa6ae649b9ad25355ec06f7f4ebb63543611596b732a63d8"
+  },
+  "unchanged_production_sha256": {
+    "runtime/src/http_server.rs": "5828f57bb43fd8f84001ff08cc8053cbf739933e47d9c682d64b6d8c4d17ea2d",
+    "Cargo.toml": "5fa413bc2e39cc024bc6b00ead0baae5b91f69ec6eca5299328376d64b65c1e6",
+    "Cargo.lock": "25cb43cbe7bfbcd411ad0235b6527bc0e5d6349e5a2d436cea2ae1d3300b0496",
+    "test-nagi-code/application-examples/quote-api/main.nagi": "188a6cecdaab58d4aa19b5b84f89cfae36af0f4a75a4af2946abd978747feadb",
+    "test-nagi-code/application-examples/quote-api/nagi.toml": "53a3b52851fc11c54926de1fab1677f5ca0e92095f683bbcb2c7100af52e4f63",
+    "docs/http-server.md": "a4473a02c14450224c33406f40b865134b20690302b317b20dfab1870bde5444",
+    "docs/en/http-server.md": "61794da7ef08f1005d399d890178d367ec7c7ac50b59de25d2c048f401403dfe",
+    "docs/internal/language-invariants.md": "e02dd8cdad700fb6d7130600550038a2c6d45681c6f3992892c4749450b822a5"
+  },
+  "runtime_test_binary": {
+    "path": "/workspace/nagi-sf01-target/debug/deps/nagi_runtime-869e41f629d9bcdc",
+    "sha256": "8f1f662b289ee18cd3c7e460072de60f0cc9ef6a649ff1930148c1dbbf475c25"
+  },
+  "rustc_version": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "raw_runtime_log": {
+    "path": "/workspace/nagi-http413-ci-evidence/runtime-lib-final.log",
+    "sha256": "73707716b064224102cf3f3b249575d99d4e08df897f194e97cf905635ecb52a",
+    "selected_copy_normalization": "remove trailing blank line only"
+  }
+}

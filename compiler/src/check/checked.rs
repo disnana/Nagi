@@ -178,15 +178,10 @@ pub(crate) enum OperationPlan {
     /// View origins remain checked facts; the operand's place is not preserved.
     IdentityTransfer { argument: usize },
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum SqlRepresentation {
-    Static,
-    Owned,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SqlArgumentPlan {
     pub index: usize,
-    pub representation: SqlRepresentation,
+    pub literal: String,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum FieldRead {
@@ -209,7 +204,6 @@ pub(crate) struct ExpressionPlan {
     pub copy: CopyRead,
     pub json_string: bool,
     pub slice_string: bool,
-    pub sql_static: bool,
     pub argument_resolution: Option<NameResolution>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -345,7 +339,6 @@ fn render_type_at(
         "unit" => "()".into(),
         "Error" => "::nagi_runtime::Error".into(),
         "Html" => "::nagi_runtime::axum::response::Html<::std::string::String>".into(),
-        "Db" => "::nagi_runtime::Db".into(),
         "UUID" => "::nagi_runtime::Uuid".into(),
         "timestamp" => "::nagi_runtime::Timestamp".into(),
         "fn" if !t.1.is_empty() => {
@@ -487,7 +480,7 @@ fn copy_type(t: &Type, p: &Program, depth: usize) -> bool {
     if let Some(resource) = registered_resource(&t.0, &p.modules) {
         return crate::stdlib::resource_info(resource).copy;
     }
-    if depth > 64 || matches!(t.0.as_str(), "str" | "bytes" | "Error" | "Db" | "Html") {
+    if depth > 64 || matches!(t.0.as_str(), "str" | "bytes" | "Error" | "Html") {
         false
     } else if let Some(enumeration) = p.enums.iter().find(|d| d.name == t.0) {
         enumeration
@@ -574,7 +567,6 @@ fn expression_plan(e: &Expr, p: &Program) -> Result<ExpressionPlan, String> {
         copy: CopyRead::Owned,
         json_string: false,
         slice_string: false,
-        sql_static: false,
         argument_resolution: e.resolution,
     };
     if e.resolution == Some(NameResolution::Standard) {
@@ -591,29 +583,22 @@ fn expression_plan(e: &Expr, p: &Program) -> Result<ExpressionPlan, String> {
                 return Err("invalid checked standard operation identity".into());
             }
             let info = crate::stdlib::operation_info(op);
-            let sql = if matches!(
-                op,
-                crate::stdlib::Operation::SqliteQuery
-                    | crate::stdlib::Operation::SqliteAll
-                    | crate::stdlib::Operation::SqliteExec
-            ) {
+            let sql = if op == crate::stdlib::Operation::SqliteLiteral {
                 let E::Call(_, _, args) = &e.kind else {
-                    return Err("missing checked SQL call".into());
+                    return Err("missing checked literal Query call".into());
                 };
-                let argument = args.get(1).ok_or("missing checked SQL argument")?;
-                if !argument.ty.as_ref().is_some_and(|ty| {
-                    ty == &Type::named("str")
-                        || ty == &Type::generic("view", vec![Type::named("str")])
-                }) {
-                    return Err("invalid checked SQL argument type".into());
+                let argument = args
+                    .first()
+                    .ok_or("missing checked literal Query argument")?;
+                let E::Str(literal) = &argument.kind else {
+                    return Err("invalid checked literal Query structure".into());
+                };
+                if argument.ty.as_ref() != Some(&Type::named("str")) {
+                    return Err("invalid checked literal Query argument type".into());
                 }
                 Some(SqlArgumentPlan {
-                    index: 1,
-                    representation: if matches!(argument.kind, E::Str(_)) {
-                        SqlRepresentation::Static
-                    } else {
-                        SqlRepresentation::Owned
-                    },
+                    index: 0,
+                    literal: literal.clone(),
                 })
             } else {
                 None
@@ -741,7 +726,6 @@ fn expression_plan(e: &Expr, p: &Program) -> Result<ExpressionPlan, String> {
                 .first()
                 .and_then(|a| a.ty.as_ref())
                 .is_some_and(|t| t.inner().0 == "str");
-            plan.sql_static = args.get(1).is_some_and(|a| matches!(a.kind, E::Str(_)));
         }
         _ => {}
     }

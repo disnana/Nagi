@@ -1,0 +1,27 @@
+{
+  "source_head": "47dfc09ab36e553e45f8b49b1b3eba5ee16ddc7b",
+  "baseline_test_source_sha256": "15c9524d8e304546256195aafa71edcf4ef54c2f516ac0b1d26cdf97dc098987",
+  "fixed_test_source_sha256": "d75c9a3a27eaeac11214a870226c59655fbb9266ca529cfbd0a2e7508149da37",
+  "test_methods": 17,
+  "test_method_ast_unchanged": true,
+  "red": {
+    "tests_run": 17,
+    "passed": 14,
+    "failed": 3,
+    "ignored": 0,
+    "exit_code": 1,
+    "raw_stdout_sha256": "09a4037ce184410e3bca38fbb60329c694643bfd20229c0e4d5ae2df77693fb4",
+    "raw_stderr_sha256": "d52c1560580895c314eb5879c5233a2c131379e7faac6a97f1af2edda7730dd3"
+  },
+  "green": {
+    "tests_run": 17,
+    "passed": 17,
+    "failed": 0,
+    "ignored": 0,
+    "exit_code": 0,
+    "raw_stdout_sha256": "b2020c7747125eb1e10bb2c4f5b0314c1b070ac11f9875b027793e2f83ddb563",
+    "raw_stderr_sha256": "9c1e21383379f9e326c6fca45afd93c48775c6477ab4c47c50fea275f5d2d166"
+  },
+  "local_command": "not present in the preserved RED/GREEN command records; results were supplied as raw stdout/stderr",
+  "scope": "test mock only; not a SQL parser or production validation result"
+}

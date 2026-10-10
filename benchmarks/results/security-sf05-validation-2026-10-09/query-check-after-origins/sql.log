@@ -1,0 +1,102 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.32s
+     Running tests/sql_check.rs (/workspace/nagi-sf01-target/debug/deps/sql_check-819a7e9cf4d406fb)
+
+running 14 tests
+test enabled::aliases_case_reordering_extra_columns_and_reused_numbered_bind_are_valid ... FAILED
+test enabled::dynamic_sql_and_db_exec_are_reported_as_runtime_checks ... FAILED
+test enabled::helper_statement_kind_and_single_statement_contracts_are_checked ... FAILED
+test enabled::explicit_project_schema_path_is_relative_to_invocation_directory ... FAILED
+test enabled::a_user_function_named_db_all_is_not_a_builtin_sql_query ... ok
+test enabled::imported_queries_report_the_original_module_file_and_line ... FAILED
+test enabled::literal_insert_update_delete_are_prepared_without_executing_queries ... FAILED
+test enabled::literal_queries_cannot_change_schema_or_access_external_functions ... FAILED
+test enabled::missing_return_columns_and_wrong_bind_count_use_query_source_lines ... FAILED
+test enabled::bounded_schema_and_query_inputs_fail_before_sql_preparation ... FAILED
+test enabled::schema_check_is_opt_in_and_reports_bad_columns_in_high_and_saved_low ... FAILED
+test enabled::sqlite_public_literal_shape_columns_and_unknown_bind_count_use_source_origins ... FAILED
+test enabled::schema_and_dialect_are_paired_check_only_options ... ok
+test enabled::unsafe_schema_operations_cannot_create_or_modify_external_files ... ok
+
+failures:
+
+---- enabled::aliases_case_reordering_extra_columns_and_reused_numbered_bind_are_valid stdout ----
+
+thread 'enabled::aliases_case_reordering_extra_columns_and_reused_numbered_bind_are_valid' (784262) panicked at compiler/tests/sql_check.rs:114:43:
+called `Result::unwrap()` on an `Err` value: "line 5: SF05 migration: 旧Db型は廃止しました。std.db.sqlite.Poolとexplicit Options、同taskのTx、literal QueryとParametersへ移行してください。DDL/bootstrapはtrusted host管理処理へ分離してください"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- enabled::dynamic_sql_and_db_exec_are_reported_as_runtime_checks stdout ----
+
+thread 'enabled::dynamic_sql_and_db_exec_are_reported_as_runtime_checks' (784264) panicked at compiler/tests/sql_check.rs:114:43:
+called `Result::unwrap()` on an `Err` value: "line 5: SF05 migration: 旧Db型は廃止しました。std.db.sqlite.Poolとexplicit Options、同taskのTx、literal QueryとParametersへ移行してください。DDL/bootstrapはtrusted host管理処理へ分離してください"
+
+---- enabled::helper_statement_kind_and_single_statement_contracts_are_checked stdout ----
+
+thread 'enabled::helper_statement_kind_and_single_statement_contracts_are_checked' (784276) panicked at compiler/tests/sql_check.rs:114:43:
+called `Result::unwrap()` on an `Err` value: "line 5: SF05 migration: 旧Db型は廃止しました。std.db.sqlite.Poolとexplicit Options、同taskのTx、literal QueryとParametersへ移行してください。DDL/bootstrapはtrusted host管理処理へ分離してください"
+
+---- enabled::explicit_project_schema_path_is_relative_to_invocation_directory stdout ----
+
+thread 'enabled::explicit_project_schema_path_is_relative_to_invocation_directory' (784273) panicked at compiler/tests/sql_check.rs:76:5:
+stdout: 
+stderr: error: line 5: SF05 migration: 旧Db型は廃止しました。std.db.sqlite.Poolとexplicit Options、同taskのTx、literal QueryとParametersへ移行してください。DDL/bootstrapはtrusted host管理処理へ分離してください
+ --> /tmp/nagi sql check 784260 4/app/src/main.nagi:5
+ 5 | async def query(db: Db) -> Result[unit, Error]:
+
+
+---- enabled::imported_queries_report_the_original_module_file_and_line stdout ----
+
+thread 'enabled::imported_queries_report_the_original_module_file_and_line' (784279) panicked at compiler/tests/sql_check.rs:130:9:
+SQL error must point to the query in queries.nagi:4: error: line 3: SF05 migration: 旧Db型は廃止しました。std.db.sqlite.Poolとexplicit Options、同taskのTx、literal QueryとParametersへ移行してください。DDL/bootstrapはtrusted host管理処理へ分離してください
+ --> /tmp/nagi sql check 784260 6/queries.nagi:3
+ 3 | async def users(db: Db) -> Result[List[Row], Error]:
+
+
+---- enabled::literal_insert_update_delete_are_prepared_without_executing_queries stdout ----
+
+thread 'enabled::literal_insert_update_delete_are_prepared_without_executing_queries' (784281) panicked at compiler/tests/sql_check.rs:114:43:
+called `Result::unwrap()` on an `Err` value: "line 5: SF05 migration: 旧Db型は廃止しました。std.db.sqlite.Poolとexplicit Options、同taskのTx、literal QueryとParametersへ移行してください。DDL/bootstrapはtrusted host管理処理へ分離してください"
+
+---- enabled::literal_queries_cannot_change_schema_or_access_external_functions stdout ----
+
+thread 'enabled::literal_queries_cannot_change_schema_or_access_external_functions' (784289) panicked at compiler/tests/sql_check.rs:114:43:
+called `Result::unwrap()` on an `Err` value: "line 5: SF05 migration: 旧Db型は廃止しました。std.db.sqlite.Poolとexplicit Options、同taskのTx、literal QueryとParametersへ移行してください。DDL/bootstrapはtrusted host管理処理へ分離してください"
+
+---- enabled::missing_return_columns_and_wrong_bind_count_use_query_source_lines stdout ----
+
+thread 'enabled::missing_return_columns_and_wrong_bind_count_use_query_source_lines' (784290) panicked at compiler/tests/sql_check.rs:114:43:
+called `Result::unwrap()` on an `Err` value: "line 5: SF05 migration: 旧Db型は廃止しました。std.db.sqlite.Poolとexplicit Options、同taskのTx、literal QueryとParametersへ移行してください。DDL/bootstrapはtrusted host管理処理へ分離してください"
+
+---- enabled::bounded_schema_and_query_inputs_fail_before_sql_preparation stdout ----
+
+thread 'enabled::bounded_schema_and_query_inputs_fail_before_sql_preparation' (784263) panicked at compiler/tests/sql_check.rs:114:43:
+called `Result::unwrap()` on an `Err` value: "line 5: SF05 migration: 旧Db型は廃止しました。std.db.sqlite.Poolとexplicit Options、同taskのTx、literal QueryとParametersへ移行してください。DDL/bootstrapはtrusted host管理処理へ分離してください"
+
+---- enabled::schema_check_is_opt_in_and_reports_bad_columns_in_high_and_saved_low stdout ----
+
+thread 'enabled::schema_check_is_opt_in_and_reports_bad_columns_in_high_and_saved_low' (784293) panicked at compiler/tests/sql_check.rs:114:43:
+called `Result::unwrap()` on an `Err` value: "line 5: SF05 migration: 旧Db型は廃止しました。std.db.sqlite.Poolとexplicit Options、同taskのTx、literal QueryとParametersへ移行してください。DDL/bootstrapはtrusted host管理処理へ分離してください"
+
+---- enabled::sqlite_public_literal_shape_columns_and_unknown_bind_count_use_source_origins stdout ----
+
+thread 'enabled::sqlite_public_literal_shape_columns_and_unknown_bind_count_use_source_origins' (784296) panicked at compiler/tests/sql_check.rs:114:43:
+called `Result::unwrap()` on an `Err` value: "line 6: SF05 migration: SQLite query/all/execはQueryが必須です。直接literalをsqlite.literal(\"…\")で封印し、値をParametersへbindしてください。動的SQL/旧Dbはtrusted host管理処理へ分離してください"
+
+
+failures:
+    enabled::aliases_case_reordering_extra_columns_and_reused_numbered_bind_are_valid
+    enabled::bounded_schema_and_query_inputs_fail_before_sql_preparation
+    enabled::dynamic_sql_and_db_exec_are_reported_as_runtime_checks
+    enabled::explicit_project_schema_path_is_relative_to_invocation_directory
+    enabled::helper_statement_kind_and_single_statement_contracts_are_checked
+    enabled::imported_queries_report_the_original_module_file_and_line
+    enabled::literal_insert_update_delete_are_prepared_without_executing_queries
+    enabled::literal_queries_cannot_change_schema_or_access_external_functions
+    enabled::missing_return_columns_and_wrong_bind_count_use_query_source_lines
+    enabled::schema_check_is_opt_in_and_reports_bad_columns_in_high_and_saved_low
+    enabled::sqlite_public_literal_shape_columns_and_unknown_bind_count_use_source_origins
+
+test result: FAILED. 3 passed; 11 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+error: test failed, to rerun pass `-p nagic --test sql_check`

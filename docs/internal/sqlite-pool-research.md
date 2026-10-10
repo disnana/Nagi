@@ -1,5 +1,7 @@
 # Phase 4 Pool／affine Tx: 実装前の判断案
 
+> SQL表現・旧API併存に関する記述は当時の記録。SF00 #100の採用設計に基づき、SF05では旧Db/db_*とpublic Sqlを削除し、literal Queryへ統一する。現在の契約は[SF05契約](security-foundation/sf05-contract.md)、維持するPool/Tx lifecycleは[公開リファレンス](../sqlite-pool.md)を参照。過去の測定をSF05の検証結果として扱わない。
+
 2026-10-05時点の判断前調査。公開API・SQL制限・終了契約とruntime hooksは2026-10-06のQ002で承認された。現在の採用範囲は[ADR 010](adr/010-sqlite-transaction-boundary.md)を参照。追加wrapperの比較試作とcapability初版値はQ004で別に承認された。過去の判断前調査と現在の採用範囲を分ける。#80 test-only head `ca9362e5`の4 OS CI待ち中に、既存`sqlite-pool-proposal.md`を具体化した読み取り設計。repository変更・Cargo・prototype実行・追加agentなし。Phase 3 acceptance後に判断する資料であり、公開API・policy・依存featureを採用したとは扱わない。
 
 ## 推奨する一案と承認が必要な範囲

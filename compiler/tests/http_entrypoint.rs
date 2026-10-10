@@ -29,17 +29,17 @@ fn checked(source: &str, high: bool) -> nagic::ast::Program {
 #[test]
 fn legacy_global_serve_calls_in_nested_high_and_saved_low_report_migration() {
     let bodies = [
-        "    db = try await db_open(\":memory:\")\n    return await serve(db, -1)\n",
-        "    db = try await db_open(\":memory:\")\n    result = await serve(db, -1)\n    return result\n",
-        "    db = try await db_open(\":memory:\")\n    return ok(try await serve(db, -1))\n",
-        "    db = try await db_open(\":memory:\")\n    try await serve(db, -1)\n    return ok(print(1))\n",
-        "    db = try await db_open(\":memory:\")\n    if True:\n        return await serve(db, -1)\n    else:\n        return ok(print(1))\n",
-        "    db = try await db_open(\":memory:\")\n    if False:\n        return ok(print(1))\n    else:\n        return await serve(db, -1)\n",
-        "    db = try await db_open(\":memory:\")\n    match parse_i64(\"1\"):\n        case Ok(_):\n            return await serve(db, -1)\n        case Err(problem):\n            return fail(problem)\n",
-        "    while False:\n        db = try await db_open(\":memory:\")\n        try await serve(db, -1)\n    return ok(print(1))\n",
-        "    for port in range(1):\n        db = try await db_open(\":memory:\")\n        try await serve(db, port)\n    return ok(print(1))\n",
-        "    db = try await db_open(\":memory:\")\n    async with scope:\n        spawn serve(db, -1)\n    return ok(print(1))\n",
-        "    db = try await db_open(\":memory:\")\n    results: List[Result[unit, Error]] = [await serve(db, -1)]\n    return ok(print(1))\n",
+        "    db = 0\n    return await serve(db, -1)\n",
+        "    db = 0\n    result = await serve(db, -1)\n    return result\n",
+        "    db = 0\n    return ok(try await serve(db, -1))\n",
+        "    db = 0\n    try await serve(db, -1)\n    return ok(print(1))\n",
+        "    db = 0\n    if True:\n        return await serve(db, -1)\n    else:\n        return ok(print(1))\n",
+        "    db = 0\n    if False:\n        return ok(print(1))\n    else:\n        return await serve(db, -1)\n",
+        "    db = 0\n    match parse_i64(\"1\"):\n        case Ok(_):\n            return await serve(db, -1)\n        case Err(problem):\n            return fail(problem)\n",
+        "    while False:\n        db = 0\n        try await serve(db, -1)\n    return ok(print(1))\n",
+        "    for port in range(1):\n        db = 0\n        try await serve(db, port)\n    return ok(print(1))\n",
+        "    db = 0\n    async with scope:\n        spawn serve(db, -1)\n    return ok(print(1))\n",
+        "    db = 0\n    results: List[Result[unit, Error]] = [await serve(db, -1)]\n    return ok(print(1))\n",
     ];
     for body in bodies {
         let source = format!("async def start() -> Result[unit, Error]:\n{body}");

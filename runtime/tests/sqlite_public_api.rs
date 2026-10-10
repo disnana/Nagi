@@ -1,5 +1,5 @@
 //! Uses only the published Rust boundary; cfg(test) session seams are unavailable.
-use nagi_runtime::{sqlite as db, ErrorKind, FromRow, Sql};
+use nagi_runtime::{sqlite as db, ErrorKind, FromRow};
 use rusqlite::Row;
 
 #[derive(Debug, PartialEq)]
@@ -30,24 +30,20 @@ async fn published_sqlite_pool_api_builds_without_test_seams() {
     let pool = db::open(":memory:", config).await.unwrap();
     let clone = db::clone_pool(&pool);
     let tx = db::begin(&pool, db::BeginMode::Deferred).await.unwrap();
-    db::exec(&tx, Sql::Static("CREATE TABLE data(n)"), db::parameters())
+    db::exec(&tx, db::literal("CREATE TABLE data(n)"), db::parameters())
         .await
         .unwrap();
     db::exec(
         &tx,
-        Sql::Static("INSERT INTO data VALUES (?)"),
+        db::literal("INSERT INTO data VALUES (?)"),
         db::bind_i64(db::parameters(), 7),
     )
     .await
     .unwrap();
     assert_eq!(
-        db::query::<Number>(
-            &tx,
-            Sql::Owned("SELECT n FROM data".into()),
-            db::parameters()
-        )
-        .await
-        .unwrap(),
+        db::query::<Number>(&tx, db::literal("SELECT n FROM data"), db::parameters())
+            .await
+            .unwrap(),
         Some(Number { n: 7 })
     );
     assert_eq!(
@@ -57,7 +53,7 @@ async fn published_sqlite_pool_api_builds_without_test_seams() {
     let problem = failed(
         db::exec(
             &tx,
-            Sql::Static("PRAGMA journal_mode=WAL"),
+            db::literal("PRAGMA journal_mode=WAL"),
             db::parameters(),
         )
         .await,
@@ -72,7 +68,7 @@ async fn published_sqlite_pool_api_builds_without_test_seams() {
     db::commit(tx).await.unwrap();
     let tx = db::begin(&clone, db::BeginMode::Immediate).await.unwrap();
     assert_eq!(
-        db::all::<Number>(&tx, Sql::Static("SELECT n FROM data"), db::parameters())
+        db::all::<Number>(&tx, db::literal("SELECT n FROM data"), db::parameters())
             .await
             .unwrap(),
         vec![Number { n: 7 }]

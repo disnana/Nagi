@@ -1,0 +1,43 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+warning: unused variable: `actions`
+   --> compiler/src/sql_check/engine.rs:547:9
+    |
+547 |     let actions = actions
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_actions`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `nagic` (lib test) generated 1 warning (run `cargo fix --lib -p nagic --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized] target(s) in 7.05s
+     Running unittests src/lib.rs (/workspace/nagi-sf01-target/debug/deps/nagic-834fc7e7ecda3b99)
+
+running 26 tests
+test sql_check::collect::tests::conditional_loop_and_match_bodies_are_collected_once ... ok
+test sql_check::collect::tests::aliased_row_classes_use_canonical_identity_and_original_field_names ... ok
+test sql_check::collect::tests::integrated_native_replacements_only_collect_the_final_function_body ... ok
+test sql_check::collect::tests::checked_high_and_saved_low_preserve_supported_operations_and_source_fields ... ok
+test sql_check::collect::tests::nested_value_expressions_returns_and_scope_spawn_keep_each_actual_call ... ok
+test sql_check::collect::tests::query_values_remain_visible_as_sites_with_unavailable_static_structure ... ok
+test sql_check::collect::tests::same_named_user_function_and_local_function_value_are_not_sql_calls ... ok
+test sql_check::engine::tests::columns_aliases_and_anonymous_parameter_counts ... ok
+test sql_check::engine::tests::every_default_expression_uses_the_function_allowlist_even_when_unused ... ok
+test sql_check::engine::tests::external_files_and_extension_paths_are_never_opened_or_modified ... ok
+test sql_check::collect::tests::sqlite_canonical_calls_and_saved_low_keep_unknown_bind_metadata ... ok
+test sql_check::engine::tests::ordinary_tables_indexes_views_and_pure_functions_are_supported ... ok
+test sql_check::engine::tests::prepare_authorizer_also_rejects_unsafe_view_functions ... ok
+test sql_check::engine::tests::prepare_only_dml_does_not_write_application_rows ... ok
+test sql_check::engine::tests::rejects_operation_shape_mismatches ... ok
+test sql_check::engine::tests::schema_is_ddl_snapshot_not_migration_or_arbitrary_sql ... ok
+test sql_check::engine::tests::sqlite_identifier_defaults_remain_literals_without_hiding_function_terms ... ok
+test sql_check::engine::tests::sqlite_parameters_shape_and_prepare_only_ddl_preserve_snapshot ... ok
+test sql_check::tests::bounded_input_does_not_accept_a_truncated_prefix ... ok
+test sql_check::engine::tests::finite_limits_reject_large_and_deep_inputs ... ok
+test sql_check::tests::deadline_kills_and_reaps_a_worker_with_blocked_input ... ok
+test sql_check::tests::terminating_a_worker_returns_its_reaped_exit_status ... ok
+test sql_check::tests::worker_fixture ... ok
+test sql_check::tests::encoded_metadata_is_bounded_including_json_escaping ... ok
+test sql_check::collect::tests::repeated_row_metadata_is_bounded_before_building_the_worker_request ... ok
+test sql_check::collect::tests::collection_rejects_excessive_sites_at_the_first_over_limit_call ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 102 filtered out; finished in 8.05s
+

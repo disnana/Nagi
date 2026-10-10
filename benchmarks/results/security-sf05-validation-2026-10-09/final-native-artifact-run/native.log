@@ -1,0 +1,37 @@
+    Finished `test` profile [unoptimized] target(s) in 0.07s
+     Running tests/security_sf05_native.rs (/workspace/nagi-sf01-target/debug/deps/security_sf05_native-ba7f0927ad3e47a4)
+
+running 1 test
+test query_parameters_and_protected_predicate_execute_high_saved_and_handwritten_low ... FAILED
+
+failures:
+
+---- query_parameters_and_protected_predicate_execute_high_saved_and_handwritten_low stdout ----
+
+thread 'query_parameters_and_protected_predicate_execute_high_saved_and_handwritten_low' (905510) panicked at compiler/tests/support/native_triple.rs:221:13:
+high backend run:
+
+running 1 test
+test real_sqlite_and_request_bound_predicate ... FAILED
+
+failures:
+
+failures:
+    real_sqlite_and_request_bound_predicate
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+thread 'real_sqlite_and_request_bound_predicate' (905572) panicked at high.rs:329:65:
+called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    query_parameters_and_protected_predicate_execute_high_saved_and_handwritten_low
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.60s
+
+error: test failed, to rerun pass `-p nagic --test security_sf05_native`

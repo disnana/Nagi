@@ -73,15 +73,8 @@ sliceの位置はi64です。str / bytesの位置はbyte単位、Listの位置�
 | 呼び出し | 引数の型（順番どおり） | await後の型 | 用途 |
 |---|---|---|---|
 | `sleep(milliseconds)` | i64 | `unit` | i64のミリ秒数だけ待つ |
-| `db_open(path)` | str・view[str] | `Result[Db, Error]` | SQLiteを開く。`:memory:`ならメモリ内 |
-| `db_exec(db, sql)` | Db、str・view[str] | `Result[i64, Error]` | SQLを実行、影響した行数 |
-| `db_all[User](db, sql)` | Db、str・view[str] | `Result[List[User], Error]` | 複数行を読む。現在はbind引数なし |
-| `db_query[User](db, sql, id)` | Db、str・view[str]、i64 | `Result[User?, Error]` | 1行を読む。i64のbind引数を1つ |
-| `db_write(db, sql, id)` | Db、str・view[str]、i64 | `Result[i64, Error]` | i64のbind引数を1つ、影響した行数 |
-| `db_insert[User](db, sql, text, number)` | Db、str・view[str]、str、i32 | `Result[User, Error]` | bind引数はstr、i32の2つ |
-| `db_update[User](db, sql, id, text, number)` | Db、str・view[str]、i64、str、i32 | `Result[User, Error]` | bind引数はi64、str、i32の3つ |
 
-SQLとpathはstr / view[str]です。portはi64。insert / updateのtextは所有strで、workerへmoveします。insert / updateのSQLには`RETURNING`を付け、指定classに合う列を返してください。SQLのAPIは現時点では固定の引数形です。詳細は[SQLite](database.md)を参照してください。
+未リリースSF05では旧Db/db_*を廃止し、`SF05 migration`診断にします。標準SQLiteは `std.db.sqlite` のliteral Query、Parameters、Pool/Txへ移行してください。[SQLite](database.md)と[移行](migration-0.2.0.md)を参照してください。
 
 ## 共有と型のサイズ
 

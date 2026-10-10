@@ -1,0 +1,9 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.21s
+     Running tests/sql_check.rs (/workspace/nagi-sf01-target/debug/deps/sql_check-93ad38332ae369a8)
+
+running 1 test
+test compiler_without_sql_engine_preserves_regular_check_and_reports_feature_requirement ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

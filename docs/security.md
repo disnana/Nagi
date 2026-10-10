@@ -62,3 +62,13 @@ leaseの期限は有限security/body/handler予算とverified identityの絶対�
 finalizerがContent-Typeとnosniff、reserved security/framing headersを所有します。raw HTML・Set-Cookie・CORS/CSP・任意cache/challengeの追加による迂回は拒否します。panic=abort、OOM、non-yielding処理の強制停止、任意Rustの二重panic、外部副作用のrollbackは保証しません。標準HTTP外のcustom Rust hostは明示したtrusted境界で、このPolicy保証を自動適用しません。
 
 [移行](migration-0.2.0.md) · [move](ownership.md) · [Task](task-handles.md) · [SQLite](sqlite-pool.md) · [採用契約](internal/security-foundation/sf01-contract.md)
+
+## 保護SQLite操作
+
+未リリースSF05は、Queryを直接literalから作り、実値をParametersへbindする標準入口へ統一します。QueryはSQL構造の出所を制限する型です。Grantやtenant制約を内包する型ではありません。
+
+保護された操作はreview済みtrusted adapterに固定SQLと所有者predicateを置き、`Grant.submit` が渡す**実subjectと実target**を `WHERE owner=? AND id=?` などへbindします。任意queryにGrantを追加するだけでは対象の制限を証明できません。保護対象のsession/owner条件が可変なら、同じTxのpredicateまたは同じTxでの再確認が必要です。永続Session・世代管理はSF02の後続であり、SF05の完了保証へ数えません。
+
+trusted Rust hostはTxのopaque `reserve_exec` でbounded queueの容量を待ち、予約後に `Grant.submit` の同期callback内で `reservation.enqueue(Query, Parameters)` を呼びます。容量予約は受理ではありません。admissionはgate内の一回permit発行で順序化します。発行前の失効ならnative enqueueは0、発行後の失効ならcallbackの同期enqueue前でも受理済みで、後の失効やHTTP取消は取り消し・rollbackを保証しません。callbackはFutureを返して後からenqueueする形にせず、同期で実queueへ送ります。
+
+DDL/bootstrapはrequestと分離したtrusted管理処理です。Rust hostの固定SQL factoryや手書きFromRowはreview対象です。動的文字列factoryをrequestへ再exportして標準literal契約を迂回しません。[SQLite](sqlite-pool.md) · [移行](migration-0.2.0.md) · [SF05契約](internal/security-foundation/sf05-contract.md)

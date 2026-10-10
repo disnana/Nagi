@@ -108,6 +108,10 @@ Phase 3では、登録資源の独立inventory、用途別capability、4例のLo
 - [Csmith](https://embed.cs.utah.edu/csmith/): 未定義挙動を除く生成と独立oracleを採用。C言語generator自体は非採用。Nagiに独立compilerがないことを明記する。
 - [Crater](https://rustc-dev-guide.rust-lang.org/tests/crater.html): check/build/runのコスト分離を採用。小corpusの成功を全言語/全platform保証と解釈しない。
 
+## 標準HTTPの413受信観測
+
+標準HTTPのquote-api本文上限については、元のrequest/413 assertを維持し、停止前child状態とbounded logをCI failure artifactへ保存する。NODELAY・別writeのnative観測は413受信と必須のclose/handler非呼出し/capacity回復を分ける。[HTTP 413の診断方針と限界](http413-ci-observation.md)を参照。
+
 ## Axum連携サンプルのnative回帰
 
 [ADR 009](adr/009-axum-rejected-body.md)のContent-Type欠落時のpolicyは、sampleのnative unitと元clientの実HTTPで分けて検査する。共通application runnerは、成功世代のmanifest・唯一のbinを使ってHigh/保存Lowそれぞれの`native::tests::`を実行する。0件・ignore・Cargo失敗は成功にならない。`test_application_native_tests.py`の5回帰もLinuxと4 OSのCIへ接続した。
@@ -123,3 +127,8 @@ Phase 3では、登録資源の独立inventory、用途別capability、4例のLo
 `tests/task-handles/contracts.json` のHigh/Low対は `cargo run --locked -p nagic --example task-contract-red -- --report /tmp/task-contracts.json` でchecker段階、diagnostic fragment、primary元行まで照合する。parse/import拒否、ICE、違う行の拒否をnegative成功にしない。runner自身のoracleは `cargo test --locked -p nagic --example task-contract-red`。登録検査だけで意味論の成功を保証しない。
 
 `cargo test --locked -p nagic --test task_handles` は全positiveのHigh・保存Low・手書きLowを実Cargo build/runし、barrierによる業務Err・sticky fault・body/legacy元Err・Drop/actual joinと固定seed16経路も実行する。`cargo test --locked -p nagi-runtime --lib task::tests::` は17native oracle。CIの4 OSに双方を含め、filterで0件を実行したログを成功として報告しない。費用のignored unitは明示実行だけを測定に数え、production-layoutの手書き/生成Rust比較は `compiler/examples/task-handles-cost.rs` と `benchmarks/task-handles-s1/` を使う。原ログ/hash/範囲は[接続結果](task-handles-s1-results.md)へ。
+
+
+### resource goldenの採用設計による更新
+
+登録資源や生成先を承認済み設計で変更した場合、`NAGI_GOLDEN_CAPTURE_DIR`に新しい専用directoryを指定して`cargo test --locked -p nagic --lib tests::resource_contract_goldens::`を実行すると、直接Highと独立保存Lowの生成結果の一致を検査してからLow/Rustを保存する。既存goldenとのassertは無効にならず、差があればそのrunは失敗する。保存した出力と元fixtureの意味論・採用理由を確認してgoldenへ反映し、環境変数なしの再検査を行う。生成Rustを手編集しない。SF05では削除済みDb fieldを標準sqlite.Poolへ移し、metadata Debugの意味とstable logical IDを維持した。

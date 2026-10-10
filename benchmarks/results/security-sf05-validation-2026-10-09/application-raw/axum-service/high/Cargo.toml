@@ -1,0 +1,24 @@
+[package]
+name = "nagi-main-5831edbc6a0d20ad"
+version = "0.1.0"
+edition = "2021"
+autobins = false
+
+[[bin]]
+name = "nagi-5831edbc6a0d20ad-g-e078c-18dce7d45bbf3778-0"
+path = "src/main.rs"
+
+[workspace]
+
+[dependencies]
+axum = "0.8"
+tokio = "1.48"
+
+[dependencies.nagi-runtime]
+path = "../../../../runtime"
+
+[profile.release]
+opt-level = 3
+lto = false
+codegen-units = 1
+panic = "unwind"

@@ -1,5 +1,7 @@
 # SQLite compiler境界: 公開縦切りの実装と検証
 
+> SQL表現・旧API併存に関する記述は当時の記録。SF00 #100の採用設計に基づき、SF05では旧Db/db_*とpublic Sqlを削除し、literal Queryへ統一する。現在の契約は[SF05契約](security-foundation/sf05-contract.md)、維持するPool/Tx lifecycleは[公開リファレンス](../sqlite-pool.md)を参照。過去の測定をSF05の検証結果として扱わない。
+
 2026-10-08。[ADR 010](adr/010-sqlite-transaction-boundary.md)、[API契約](sqlite-pool-proposal.md)、[runtime実装判断](sqlite-public-runtime-decision.md)に従い、`std.db.sqlite`のpublic runtimeとcompilerを接続した。未リリースの実装であり、merge／release／version変更はこの作業に含めない。本書の2026-10-06版は配線前の計画であり、現在の実装・実行結果と区別する。
 
 ## canonical identityと用途別capability

@@ -67,7 +67,6 @@ fn scope_rejects_known_foreign_error_types_and_preserves_local_error_adapters() 
         "bytes",
         "i64",
         "unit",
-        "Db",
         "UUID",
         "timestamp",
         "List[i64]",

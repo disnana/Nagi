@@ -1,0 +1,488 @@
+#![allow(unused_mut, unused_parens, unused_variables, dead_code)]
+#[allow(non_camel_case_types, non_snake_case)]
+#[derive(::nagi_runtime::serde::Serialize, ::nagi_runtime::serde::Deserialize)]
+#[serde(crate = "::nagi_runtime::serde", deny_unknown_fields)]
+pub struct __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b {
+    pub id: ::std::primitive::i64,
+    pub title: ::std::string::String,
+    pub done: ::std::primitive::bool,
+}
+impl ::std::fmt::Debug for __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b {
+    fn fmt(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        formatter.debug_struct("Task").field("id", &self.id).field("title", &self.title).field("done", &self.done).finish()
+    }
+}
+impl ::nagi_runtime::FromRow for __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b {
+ fn columns() -> &'static [&'static ::std::primitive::str] { &["id","title","done"] }
+ fn read(row: &::nagi_runtime::rusqlite::Row<'_>, ix: &[::std::primitive::usize]) -> ::nagi_runtime::rusqlite::Result<Self> { ::std::result::Result::Ok(Self {
+id: row.get(ix[0])?,
+title: row.get(ix[1])?,
+done: row.get(ix[2])?,
+}) }
+}
+#[allow(non_camel_case_types, non_snake_case)]
+#[derive(::nagi_runtime::serde::Serialize, ::nagi_runtime::serde::Deserialize)]
+#[serde(crate = "::nagi_runtime::serde", deny_unknown_fields)]
+pub struct __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_536176655461736b {
+    pub title: ::std::string::String,
+    pub done: ::std::primitive::bool,
+}
+impl ::std::fmt::Debug for __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_536176655461736b {
+    fn fmt(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        formatter.debug_struct("SaveTask").field("title", &self.title).field("done", &self.done).finish()
+    }
+}
+impl ::nagi_runtime::FromRow for __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_536176655461736b {
+ fn columns() -> &'static [&'static ::std::primitive::str] { &["title","done"] }
+ fn read(row: &::nagi_runtime::rusqlite::Row<'_>, ix: &[::std::primitive::usize]) -> ::nagi_runtime::rusqlite::Result<Self> { ::std::result::Result::Ok(Self {
+title: row.get(ix[0])?,
+done: row.get(ix[1])?,
+}) }
+}
+#[allow(non_camel_case_types, non_snake_case)]
+#[derive(::nagi_runtime::serde::Serialize, ::nagi_runtime::serde::Deserialize, Clone, Copy)]
+#[serde(crate = "::nagi_runtime::serde", deny_unknown_fields)]
+pub struct __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b5374617473 {
+    pub total: ::std::primitive::i64,
+    pub completed: ::std::primitive::i64,
+}
+impl ::std::fmt::Debug for __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b5374617473 {
+    fn fmt(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        formatter.debug_struct("TaskStats").field("total", &self.total).field("completed", &self.completed).finish()
+    }
+}
+impl ::nagi_runtime::FromRow for __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b5374617473 {
+ fn columns() -> &'static [&'static ::std::primitive::str] { &["total","completed"] }
+ fn read(row: &::nagi_runtime::rusqlite::Row<'_>, ix: &[::std::primitive::usize]) -> ::nagi_runtime::rusqlite::Result<Self> { ::std::result::Result::Ok(Self {
+total: row.get(ix[0])?,
+completed: row.get(ix[1])?,
+}) }
+}
+#[allow(non_camel_case_types, non_snake_case)]
+pub struct __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465 {
+    pub db: ::nagi_runtime::sqlite::Pool,
+}
+impl ::std::fmt::Debug for __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465 {
+    fn fmt(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        formatter.debug_struct("State").field("db", &self.db).finish()
+    }
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f76616c69646174696f6e2e6e616769_f_76616c69646174655f7461736b<'a>(mut title: &'a ::std::primitive::str) -> ::std::result::Result<::std::primitive::bool, ::nagi_runtime::Error> {
+    let mut title: &::std::primitive::str = title;
+    if ((((title).len() as ::std::primitive::i64) == 0i64) || (((title).len() as ::std::primitive::i64) > 240i64)) {
+        return ::std::result::Result::Err(::nagi_runtime::Error::invalid(::std::string::String::from("title must be between 1 and 240 UTF-8 bytes")));
+    }
+    return ::std::result::Result::Ok(true);
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_7461736b5f6964<'a>(mut request: &'a ::nagi_runtime::http_server::Request) -> ::std::result::Result<::std::primitive::i64, ::nagi_runtime::Error> {
+    let mut request: &::nagi_runtime::http_server::Request = request;
+    if ((((request).path()).len() as ::std::primitive::i64) <= 11i64) {
+        return ::std::result::Result::Err(::nagi_runtime::Error::invalid(::std::string::String::from("id must be positive")));
+    }
+    return ::nagi_runtime::parse_i64(&((::nagi_runtime::slice_str((request).path(), 11i64, (((request).path()).len() as ::std::primitive::i64)))?));
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_686f6d65(mut request: ::nagi_runtime::http_server::Request, mut state: ::std::sync::Arc<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>, mut authority: ()) -> ::std::result::Result<::nagi_runtime::http_server::Response, ::nagi_runtime::Error> {
+    return ::std::result::Result::Ok(::nagi_runtime::http_server::text(::nagi_runtime::http_server::Status::OK, "Task JSON API is available at /api/tasks."));
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6865616c7468(mut request: ::nagi_runtime::http_server::Request, mut state: ::std::sync::Arc<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>, mut authority: ()) -> ::std::result::Result<::nagi_runtime::http_server::Response, ::nagi_runtime::Error> {
+    return ::std::result::Result::Ok(::nagi_runtime::http_server::text(::nagi_runtime::http_server::Status::OK, "ok"));
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6c6973745f7461736b73(mut request: ::nagi_runtime::http_server::Request, mut state: ::std::sync::Arc<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>, mut authority: ()) -> ::std::result::Result<::nagi_runtime::http_server::Response, ::nagi_runtime::Error> {
+    let mut rows: ::std::vec::Vec<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b> = ((crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f6c6973745f7461736b73(&((state).db))).await)?;
+    return ::nagi_runtime::http_server::json::<::std::vec::Vec<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b>>(::nagi_runtime::http_server::Status::OK, &(rows));
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6765745f7461736b(mut request: ::nagi_runtime::http_server::Request, mut state: ::std::sync::Arc<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>, mut authority: ()) -> ::std::result::Result<::nagi_runtime::http_server::Response, ::nagi_runtime::Error> {
+    let mut id: ::std::primitive::i64 = (crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_7461736b5f6964(&(request)))?;
+    if (id < 1i64) {
+        return ::std::result::Result::Err(::nagi_runtime::Error::invalid(::std::string::String::from("id must be positive")));
+    }
+    match (crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f6765745f7461736b(&((state).db), id)).await {
+        ::std::result::Result::Ok(mut found) => {
+            match found {
+                ::std::option::Option::Some(mut task) => {
+                    return ::nagi_runtime::http_server::json::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b>(::nagi_runtime::http_server::Status::OK, &(task));
+                },
+                ::std::option::Option::None => {
+                    return ::std::result::Result::Ok(::nagi_runtime::http_server::empty(::nagi_runtime::http_server::Status::NOT_FOUND));
+                },
+            }
+        },
+        ::std::result::Result::Err(mut problem) => {
+            return ::std::result::Result::Err(problem);
+        },
+    }
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6372656174655f7461736b(mut request: ::nagi_runtime::http_server::Request, mut state: ::std::sync::Arc<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>, mut authority: ()) -> ::std::result::Result<::nagi_runtime::http_server::Response, ::nagi_runtime::Error> {
+    let mut input: __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_536176655461736b = (::nagi_runtime::decode::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_536176655461736b>(&((request).body())))?;
+    (crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f76616c69646174696f6e2e6e616769_f_76616c69646174655f7461736b(((input).title).as_str()))?;
+    let mut done: ::std::primitive::i32 = 0i32;
+    if (input).done {
+        done = 1i32;
+    }
+    let mut task: __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b = ((crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f6372656174655f7461736b(&((state).db), (input).title, done)).await)?;
+    return ::nagi_runtime::http_server::json::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b>(::nagi_runtime::http_server::Status::OK, &(task));
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_7570646174655f7461736b(mut request: ::nagi_runtime::http_server::Request, mut state: ::std::sync::Arc<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>, mut authority: ()) -> ::std::result::Result<::nagi_runtime::http_server::Response, ::nagi_runtime::Error> {
+    let mut id: ::std::primitive::i64 = (crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_7461736b5f6964(&(request)))?;
+    if (id < 1i64) {
+        return ::std::result::Result::Err(::nagi_runtime::Error::invalid(::std::string::String::from("id must be positive")));
+    }
+    let mut input: __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_536176655461736b = (::nagi_runtime::decode::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_536176655461736b>(&((request).body())))?;
+    (crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f76616c69646174696f6e2e6e616769_f_76616c69646174655f7461736b(((input).title).as_str()))?;
+    let mut done: ::std::primitive::i32 = 0i32;
+    if (input).done {
+        done = 1i32;
+    }
+    let mut task: __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b = ((crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f7570646174655f7461736b(&((state).db), id, (input).title, done)).await)?;
+    return ::nagi_runtime::http_server::json::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b>(::nagi_runtime::http_server::Status::OK, &(task));
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_64656c6574655f7461736b(mut request: ::nagi_runtime::http_server::Request, mut state: ::std::sync::Arc<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>, mut authority: ()) -> ::std::result::Result<::nagi_runtime::http_server::Response, ::nagi_runtime::Error> {
+    let mut id: ::std::primitive::i64 = (crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_7461736b5f6964(&(request)))?;
+    if (id < 1i64) {
+        return ::std::result::Result::Err(::nagi_runtime::Error::invalid(::std::string::String::from("id must be positive")));
+    }
+    let mut deleted: ::std::primitive::i64 = ((crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f64656c6574655f7461736b(&((state).db), id)).await)?;
+    return ::nagi_runtime::http_server::json::<::std::primitive::i64>(::nagi_runtime::http_server::Status::OK, &(deleted));
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_7374617473(mut request: ::nagi_runtime::http_server::Request, mut state: ::std::sync::Arc<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>, mut authority: ()) -> ::std::result::Result<::nagi_runtime::http_server::Response, ::nagi_runtime::Error> {
+    match (crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f7461736b5f7374617473(&((state).db), 0i64)).await {
+        ::std::result::Result::Ok(mut found) => {
+            match found {
+                ::std::option::Option::Some(mut value) => {
+                    return ::nagi_runtime::http_server::json::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b5374617473>(::nagi_runtime::http_server::Status::OK, &(value));
+                },
+                ::std::option::Option::None => {
+                    return ::std::result::Result::Ok(::nagi_runtime::http_server::empty(::nagi_runtime::http_server::Status::NOT_FOUND));
+                },
+            }
+        },
+        ::std::result::Result::Err(mut problem) => {
+            return ::std::result::Result::Err(problem);
+        },
+    }
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_main() -> ::std::result::Result<(), ::nagi_runtime::Error> {
+    let mut port: ::std::primitive::i64 = (::nagi_runtime::parse_i64(&(match ::std::env::var("NAGI_PORT") { ::std::result::Result::Ok(__nagi_env_value) => __nagi_env_value, ::std::result::Result::Err(_) => ("8091").to_owned() })))?;
+    if ((port < 1i64) || (port > 65535i64)) {
+        return ::std::result::Result::Err(::nagi_runtime::Error::invalid(::std::string::String::from("NAGI_PORT must be between 1 and 65535")));
+    }
+    let mut db: ::nagi_runtime::sqlite::Pool = ((crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6f70656e5f6461746162617365((match ::std::env::var("NAGI_DB") { ::std::result::Result::Ok(__nagi_env_value) => __nagi_env_value, ::std::result::Result::Err(_) => ("nagi-tasks.sqlite").to_owned() }).as_str())).await)?;
+    ((crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_626f6f7473747261705f7461736b73(&(db))).await)?;
+    let mut app: ::nagi_runtime::http_server::App<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465, ::nagi_runtime::Error> = ::nagi_runtime::http_server::app_default::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>(__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465 { db: db });
+    app = (::nagi_runtime::http_server::route(app, ::nagi_runtime::http_server::Method::GET, "/health", ::nagi_runtime::http_server::public_policy::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>(), crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6865616c7468))?;
+    app = (::nagi_runtime::http_server::route(app, ::nagi_runtime::http_server::Method::GET, "/", ::nagi_runtime::http_server::public_policy::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>(), crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_686f6d65))?;
+    app = (::nagi_runtime::http_server::route(app, ::nagi_runtime::http_server::Method::GET, "/api/tasks", ::nagi_runtime::http_server::public_policy::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>(), crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6c6973745f7461736b73))?;
+    app = (::nagi_runtime::http_server::route(app, ::nagi_runtime::http_server::Method::GET, "/api/tasks/{id}", ::nagi_runtime::http_server::public_policy::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>(), crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6765745f7461736b))?;
+    app = (::nagi_runtime::http_server::route(app, ::nagi_runtime::http_server::Method::POST, "/api/tasks", ::nagi_runtime::http_server::public_policy::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>(), crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6372656174655f7461736b))?;
+    app = (::nagi_runtime::http_server::route(app, ::nagi_runtime::http_server::Method::PUT, "/api/tasks/{id}", ::nagi_runtime::http_server::public_policy::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>(), crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_7570646174655f7461736b))?;
+    app = (::nagi_runtime::http_server::route(app, ::nagi_runtime::http_server::Method::DELETE, "/api/tasks/{id}", ::nagi_runtime::http_server::public_policy::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>(), crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_64656c6574655f7461736b))?;
+    app = (::nagi_runtime::http_server::route(app, ::nagi_runtime::http_server::Method::GET, "/api/stats", ::nagi_runtime::http_server::public_policy::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465>(), crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_7374617473))?;
+    println!("{}", "Task JSON API ready on 127.0.0.1");
+    return (::nagi_runtime::http_server::serve(app, port, ::nagi_runtime::http_server::default_options())).await;
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72(mut problem: ::nagi_runtime::sqlite::Failure) -> ::nagi_runtime::Error {
+    match ::nagi_runtime::sqlite::copy_primary_error(&(problem)) {
+        ::std::option::Option::Some(mut cause) => {
+            return cause;
+        },
+        ::std::option::Option::None => {
+            let mut fallback: ::std::result::Result<::nagi_runtime::Error, ::nagi_runtime::Error> = ::std::result::Result::Err(::nagi_runtime::Error::internal(::std::string::String::from("SQLite operation failed")));
+            match fallback {
+                ::std::result::Result::Ok(mut cause) => {
+                    return cause;
+                },
+                ::std::result::Result::Err(mut cause) => {
+                    return cause;
+                },
+            }
+        },
+    }
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6f70656e5f6461746162617365<'a>(mut path: &'a ::std::primitive::str) -> ::std::result::Result<::nagi_runtime::sqlite::Pool, ::nagi_runtime::Error> {
+    let mut path: &::std::primitive::str = path;
+    let mut config: ::nagi_runtime::sqlite::Options = (::nagi_runtime::sqlite::options(1i64, 2i64, 1000i64, 0i64))?;
+    return ::nagi_runtime::result::map_error((::nagi_runtime::sqlite::open(path, config)).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72);
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f6c6973745f7461736b73<'a>(mut pool: &'a ::nagi_runtime::sqlite::Pool) -> ::std::result::Result<::std::vec::Vec<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b>, ::nagi_runtime::Error> {
+    let mut pool: &::nagi_runtime::sqlite::Pool = pool;
+    let mut tx: ::nagi_runtime::sqlite::Tx = (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::begin(pool, ::nagi_runtime::sqlite::BeginMode::Deferred)).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    let mut work: ::std::result::Result<::std::vec::Vec<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b>, ::nagi_runtime::sqlite::Failure> = (::nagi_runtime::sqlite::all::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b>(&(tx), ::nagi_runtime::sqlite::literal("SELECT id, title, done FROM demo_tasks ORDER BY id DESC LIMIT 100"), ::nagi_runtime::sqlite::parameters())).await;
+    let mut ending: ::std::result::Result<(), ::nagi_runtime::sqlite::Failure> = (::nagi_runtime::sqlite::rollback(tx)).await;
+    let mut value: ::std::vec::Vec<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b> = (::nagi_runtime::result::map_error(work, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    (::nagi_runtime::result::map_error(ending, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    return ::std::result::Result::Ok(value);
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f6765745f7461736b<'a>(mut pool: &'a ::nagi_runtime::sqlite::Pool, mut value0: ::std::primitive::i64) -> ::std::result::Result<::std::option::Option<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b>, ::nagi_runtime::Error> {
+    let mut pool: &::nagi_runtime::sqlite::Pool = pool;
+    let mut tx: ::nagi_runtime::sqlite::Tx = (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::begin(pool, ::nagi_runtime::sqlite::BeginMode::Deferred)).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    let mut work: ::std::result::Result<::std::option::Option<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b>, ::nagi_runtime::sqlite::Failure> = (::nagi_runtime::sqlite::query::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b>(&(tx), ::nagi_runtime::sqlite::literal("SELECT id, title, done FROM demo_tasks WHERE id = ?"), ::nagi_runtime::sqlite::bind_i64(::nagi_runtime::sqlite::parameters(), value0))).await;
+    let mut ending: ::std::result::Result<(), ::nagi_runtime::sqlite::Failure> = (::nagi_runtime::sqlite::rollback(tx)).await;
+    let mut value: ::std::option::Option<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b> = (::nagi_runtime::result::map_error(work, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    (::nagi_runtime::result::map_error(ending, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    return ::std::result::Result::Ok(value);
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f6372656174655f7461736b<'a>(mut pool: &'a ::nagi_runtime::sqlite::Pool, mut value0: ::std::string::String, mut value1: ::std::primitive::i32) -> ::std::result::Result<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b, ::nagi_runtime::Error> {
+    let mut pool: &::nagi_runtime::sqlite::Pool = pool;
+    let mut tx: ::nagi_runtime::sqlite::Tx = (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::begin(pool, ::nagi_runtime::sqlite::BeginMode::Immediate)).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::exec(&(tx), ::nagi_runtime::sqlite::literal("INSERT INTO demo_tasks(title, done) VALUES (?, ?)"), ::nagi_runtime::sqlite::bind_i64(::nagi_runtime::sqlite::bind_text(::nagi_runtime::sqlite::parameters(), value0), ::std::primitive::i64::from(value1)))).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    let mut found: ::std::option::Option<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b> = (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::query::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b>(&(tx), ::nagi_runtime::sqlite::literal("SELECT id, title, done FROM demo_tasks WHERE id = last_insert_rowid()"), ::nagi_runtime::sqlite::parameters())).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    match found {
+        ::std::option::Option::Some(mut value) => {
+            (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::commit(tx)).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+            return ::std::result::Result::Ok(value);
+        },
+        ::std::option::Option::None => {
+            (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::rollback(tx)).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+            return ::std::result::Result::Err(::nagi_runtime::Error { kind: ::nagi_runtime::ErrorKind::NotFound, message: ::std::string::String::from("database row not found") });
+        },
+    }
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f7570646174655f7461736b<'a>(mut pool: &'a ::nagi_runtime::sqlite::Pool, mut value0: ::std::primitive::i64, mut value1: ::std::string::String, mut value2: ::std::primitive::i32) -> ::std::result::Result<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b, ::nagi_runtime::Error> {
+    let mut pool: &::nagi_runtime::sqlite::Pool = pool;
+    let mut tx: ::nagi_runtime::sqlite::Tx = (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::begin(pool, ::nagi_runtime::sqlite::BeginMode::Immediate)).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::exec(&(tx), ::nagi_runtime::sqlite::literal("UPDATE demo_tasks SET title = ?, done = ? WHERE id = ?"), ::nagi_runtime::sqlite::bind_i64(::nagi_runtime::sqlite::bind_i64(::nagi_runtime::sqlite::bind_text(::nagi_runtime::sqlite::parameters(), value1), ::std::primitive::i64::from(value2)), value0))).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    let mut found: ::std::option::Option<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b> = (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::query::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b>(&(tx), ::nagi_runtime::sqlite::literal("SELECT id, title, done FROM demo_tasks WHERE id = ?"), ::nagi_runtime::sqlite::bind_i64(::nagi_runtime::sqlite::parameters(), value0))).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    match found {
+        ::std::option::Option::Some(mut value) => {
+            (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::commit(tx)).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+            return ::std::result::Result::Ok(value);
+        },
+        ::std::option::Option::None => {
+            (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::rollback(tx)).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+            return ::std::result::Result::Err(::nagi_runtime::Error { kind: ::nagi_runtime::ErrorKind::NotFound, message: ::std::string::String::from("database row not found") });
+        },
+    }
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f64656c6574655f7461736b<'a>(mut pool: &'a ::nagi_runtime::sqlite::Pool, mut value0: ::std::primitive::i64) -> ::std::result::Result<::std::primitive::i64, ::nagi_runtime::Error> {
+    let mut pool: &::nagi_runtime::sqlite::Pool = pool;
+    let mut tx: ::nagi_runtime::sqlite::Tx = (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::begin(pool, ::nagi_runtime::sqlite::BeginMode::Immediate)).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    let mut work: ::std::result::Result<::std::primitive::i64, ::nagi_runtime::sqlite::Failure> = (::nagi_runtime::sqlite::exec(&(tx), ::nagi_runtime::sqlite::literal("DELETE FROM demo_tasks WHERE id = ?"), ::nagi_runtime::sqlite::bind_i64(::nagi_runtime::sqlite::parameters(), value0))).await;
+    let mut ending: ::std::result::Result<(), ::nagi_runtime::sqlite::Failure> = (::nagi_runtime::sqlite::commit(tx)).await;
+    let mut value: ::std::primitive::i64 = (::nagi_runtime::result::map_error(work, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    (::nagi_runtime::result::map_error(ending, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    return ::std::result::Result::Ok(value);
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f7461736b5f7374617473<'a>(mut pool: &'a ::nagi_runtime::sqlite::Pool, mut value0: ::std::primitive::i64) -> ::std::result::Result<::std::option::Option<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b5374617473>, ::nagi_runtime::Error> {
+    let mut pool: &::nagi_runtime::sqlite::Pool = pool;
+    let mut tx: ::nagi_runtime::sqlite::Tx = (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::begin(pool, ::nagi_runtime::sqlite::BeginMode::Deferred)).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    let mut work: ::std::result::Result<::std::option::Option<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b5374617473>, ::nagi_runtime::sqlite::Failure> = (::nagi_runtime::sqlite::query::<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b5374617473>(&(tx), ::nagi_runtime::sqlite::literal("SELECT COUNT(*) AS total, COALESCE(SUM(done), 0) AS completed FROM demo_tasks WHERE id > ?"), ::nagi_runtime::sqlite::bind_i64(::nagi_runtime::sqlite::parameters(), value0))).await;
+    let mut ending: ::std::result::Result<(), ::nagi_runtime::sqlite::Failure> = (::nagi_runtime::sqlite::rollback(tx)).await;
+    let mut value: ::std::option::Option<__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b5374617473> = (::nagi_runtime::result::map_error(work, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    (::nagi_runtime::result::map_error(ending, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    return ::std::result::Result::Ok(value);
+}
+#[allow(non_snake_case, arithmetic_overflow)]
+pub async fn __nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_626f6f7473747261705f7461736b73<'a>(mut pool: &'a ::nagi_runtime::sqlite::Pool) -> ::std::result::Result<::std::primitive::i64, ::nagi_runtime::Error> {
+    let mut pool: &::nagi_runtime::sqlite::Pool = pool;
+    let mut tx: ::nagi_runtime::sqlite::Tx = (::nagi_runtime::result::map_error((::nagi_runtime::sqlite::begin(pool, ::nagi_runtime::sqlite::BeginMode::Immediate)).await, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    let mut work: ::std::result::Result<::std::primitive::i64, ::nagi_runtime::sqlite::Failure> = (::nagi_runtime::sqlite::exec(&(tx), ::nagi_runtime::sqlite::literal("CREATE TABLE IF NOT EXISTS demo_tasks(id INTEGER PRIMARY KEY, title TEXT NOT NULL CHECK(length(CAST(title AS BLOB)) BETWEEN 1 AND 240), done INTEGER NOT NULL CHECK(done IN (0, 1)))"), ::nagi_runtime::sqlite::parameters())).await;
+    let mut ending: ::std::result::Result<(), ::nagi_runtime::sqlite::Failure> = (::nagi_runtime::sqlite::commit(tx)).await;
+    let mut value: ::std::primitive::i64 = (::nagi_runtime::result::map_error(work, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    (::nagi_runtime::result::map_error(ending, crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72))?;
+    return ::std::result::Result::Ok(value);
+}
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_c_5374617465 as State;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_7461736b5f6964 as task_id;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_686f6d65 as home;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6865616c7468 as health;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6c6973745f7461736b73 as list_tasks;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6765745f7461736b as get_task;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6372656174655f7461736b as create_task;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_7570646174655f7461736b as update_task;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_64656c6574655f7461736b as delete_task;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_7374617473 as stats;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73716c6974655f6572726f72 as sqlite_error;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_6f70656e5f6461746162617365 as open_database;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f6c6973745f7461736b73 as storage_list_tasks;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f6765745f7461736b as storage_get_task;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f6372656174655f7461736b as storage_create_task;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f7570646174655f7461736b as storage_update_task;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f64656c6574655f7461736b as storage_delete_task;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_73746f726167655f7461736b5f7374617473 as storage_task_stats;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f7461736b732e6e616769_f_626f6f7473747261705f7461736b73 as bootstrap_tasks;
+#[allow(non_snake_case)]
+pub mod sqlite {
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::Pool as Pool;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::Tx as Tx;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::Query as Query;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::Parameters as Parameters;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::Options as Options;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::BeginMode as BeginMode;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::Failure as Failure;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::FailureKind as FailureKind;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::Outcome as Outcome;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::literal as literal;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::options as options;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::open as open;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::clone_pool as clone_pool;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::begin as begin;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::parameters as parameters;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::bind_i64 as bind_i64;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::bind_f64 as bind_f64;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::bind_text as bind_text;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::bind_bytes as bind_bytes;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::bind_null as bind_null;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::query as query;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::all as all;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::exec as exec;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::commit as commit;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::rollback as rollback;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::close as close;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::copy_primary_error as copy_primary_error;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::sqlite::copy_cleanup_error as copy_cleanup_error;
+}
+#[allow(non_snake_case)]
+pub mod result {
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::result::map_error as map_error;
+}
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b as Task;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_536176655461736b as SaveTask;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f6d6f64656c732e6e616769_c_5461736b5374617473 as TaskStats;
+#[allow(unused_imports)]
+pub use crate::__nagi_def_2f776f726b73706163652f4e6167692d73656375726974792d736630352f6275696c642f736630352d687474702d6578616d706c65732d66696e616c2d636c6f737572652f7461736b732d73337367676e315f2f76616c69646174696f6e2e6e616769_f_76616c69646174655f7461736b as validate_task;
+#[allow(non_snake_case)]
+pub mod http {
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::Request as Request;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::Response as Response;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::Method as Method;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::Status as Status;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::Options as Options;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::App as App;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::Policy as Policy;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::status as status;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::method as method;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::method_name as method_name;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::empty as empty;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::text as text;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::bytes as bytes;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::json as json;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::append_header as append_header;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::append_header_text as append_header_text;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::header as header;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::header_text as header_text;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::headers as headers;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::is_json_content_type as is_json_content_type;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::default_options as default_options;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::options as options;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::capacity as capacity;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::header_timeout as header_timeout;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::header_limits as header_limits;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::send_timeout as send_timeout;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::public_policy as public_policy;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::authenticated_policy as authenticated_policy;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::authorized_policy as authorized_policy;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::security_timeout as security_timeout;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::app as app;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::app_default as app_default;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::route as route;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::route_mapped as route_mapped;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::serve as serve;
+}
+fn main() { ::nagi_runtime::block_on(async {
+if let ::std::result::Result::Err(e) = __nagi_main().await { eprintln!("{}",e); ::std::process::exit(1); }
+}); }

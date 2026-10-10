@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/http_examples.py", line 154, in <module>
+    main()
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/http_examples.py", line 96, in main
+    run([str(COMPILER), "lower", str(high), "--no-project", "--out", str(lowered)], project, "lower")
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/http_examples.py", line 29, in run
+    assert result.returncode == 0, (command, result.stdout, result.stderr)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (['/workspace/nagi-sf01-target/debug/nagic', 'lower', '/workspace/Nagi-security-sf05/build/sf05-http-examples-remaining/tasks-cvkjqy0x/tasks.nagi', '--no-project', '--out', '/workspace/Nagi-security-sf05/build/sf05-http-examples-remaining/tasks-cvkjqy0x/lowered'], '', 'error: line 5: /workspace/Nagi-security-sf05/build/sf05-http-examples-remaining/tasks-cvkjqy0x/validation.nagi: No such file or directory (os error 2)\n --> /workspace/Nagi-security-sf05/build/sf05-http-examples-remaining/tasks-cvkjqy0x/tasks.nagi:5\n 5 | import "validation.nagi"\n')

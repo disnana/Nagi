@@ -16,12 +16,12 @@ def database_error(cause: sqlite.Failure) -> AppFailure:
 
 async def write_and_read(pool: view[sqlite.Pool]) -> Result[i64, sqlite.Failure]:
     tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
-    try await sqlite.exec(tx, "CREATE TABLE IF NOT EXISTS amounts(amount INTEGER NOT NULL)", sqlite.parameters())
+    try await sqlite.exec(tx, sqlite.literal("CREATE TABLE IF NOT EXISTS amounts(amount INTEGER NOT NULL)"), sqlite.parameters())
     values = sqlite.bind_i64(sqlite.parameters(), 7)
-    try await sqlite.exec(tx, "INSERT INTO amounts VALUES (?)", values)
+    try await sqlite.exec(tx, sqlite.literal("INSERT INTO amounts VALUES (?)"), values)
     try await sqlite.commit(tx)
     tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
-    row = try await sqlite.query[Total](tx, "SELECT amount FROM amounts", sqlite.parameters())
+    row = try await sqlite.query[Total](tx, sqlite.literal("SELECT amount FROM amounts"), sqlite.parameters())
     try await sqlite.rollback(tx)
     match row:
         case Some(total):

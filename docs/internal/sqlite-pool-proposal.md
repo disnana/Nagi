@@ -1,5 +1,7 @@
 # Phase 4: SQLite Pool・affine Txの初版契約
 
+> SQL表現・旧API併存に関する記述は当時の記録。SF00 #100の採用設計に基づき、SF05では旧Db/db_*とpublic Sqlを削除し、literal Queryへ統一する。現在の契約は[SF05契約](security-foundation/sf05-contract.md)、維持するPool/Tx lifecycleは[公開リファレンス](../sqlite-pool.md)を参照。過去の測定をSF05の検証結果として扱わない。
+
 2026-10-05の提案を、2026-10-06にQ002の選択1として承認。**公開API・SQL制限・終了policyとruntime rusqlite hooksを採用済み。実装・検証の完了ではない。** [ADR 010](adr/010-sqlite-transaction-boundary.md)に判断を固定した。詳細根拠は[decision proposal](sqlite-pool-research.md)。同日のprivate一接続prototypeとローカル検証は[結果](sqlite-session-results.md)へ記録した。公開runtimeは2026-10-08に実装し、compiler縦切りと4 OSのacceptanceは別に検証する。一接続のprivate wrapper adapterは[比較結果](sqlite-adapter-results.md)へ分けて記録した。Phase 3 acceptanceは#80のCI成功とmain反映で満たした。
 
 第一候補は新module `std.db.sqlite`（canonical ID `stdlib:std.db.sqlite`）、runtime namespace `nagi_runtime::sqlite`。既存Db、db_*、FromRow、Sql、Error、標準HTTP/Actor Optionsを変更・削除しない。新APIへ固定id/name/age bindを継承しない。新言語syntax、reflection、ToParams derive、generic trait solverは導入しない。

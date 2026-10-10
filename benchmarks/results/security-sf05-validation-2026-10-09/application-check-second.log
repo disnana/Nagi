@@ -1,0 +1,18 @@
+examples/crud.nagi exit=0
+checked /workspace/Nagi-security-sf05/examples/crud.nagi
+
+test-nagi-code/inventory.nagi exit=0
+checked /workspace/Nagi-security-sf05/test-nagi-code/inventory.nagi
+
+test-nagi-code/web-demo/tasks.nagi exit=0
+checked /workspace/Nagi-security-sf05/test-nagi-code/web-demo/tasks.nagi
+
+test-nagi-code/result-api/server.nagi exit=0
+checked /workspace/Nagi-security-sf05/test-nagi-code/result-api/server.nagi
+
+test-nagi-code/result-api/storage.nagi exit=0
+checked /workspace/Nagi-security-sf05/test-nagi-code/result-api/storage.nagi
+
+test-nagi-code/application-examples/device-settings/main.nagi exit=0
+checked /workspace/Nagi-security-sf05/test-nagi-code/application-examples/device-settings/main.nagi
+

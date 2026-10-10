@@ -1,0 +1,87 @@
+{
+  "format": "nagi-sf05-distribution-mock-independent-review-v1",
+  "status": "no required findings in minimal testmock+result-docs scope",
+  "reviewed_at_utc": "2026-10-10T06:51:15.979578+00:00",
+  "target": {
+    "local_head": "47dfc09ab36e553e45f8b49b1b3eba5ee16ddc7b",
+    "tree": "17a53331a7fb31532042f0c01419134ed788ef83",
+    "uncommitted_paths": [
+      "scripts/releases/test_verify.py",
+      "docs/internal/security-foundation-sf05-results.md",
+      "docs/internal/security-foundation-sf05-results.en.md"
+    ],
+    "evidence_manifest_sha256": "571bb061fe724776d2ad7e2e009f95579f828947f616853373b2b742b622dd3f",
+    "test_fixed_sha256": "d75c9a3a27eaeac11214a870226c59655fbb9266ca529cfbd0a2e7508149da37",
+    "test_original_sha256": "15c9524d8e304546256195aafa71edcf4ef54c2f516ac0b1d26cdf97dc098987",
+    "test_patch_sha256": "87d71f8f5d956531858442e5b6801423251dacb5671de501d7087c8a871dc27c"
+  },
+  "checks": {
+    "all14manifest_files_85707bytes_match": true,
+    "original_snapshot_exact_HEAD_blob": true,
+    "fixed_snapshot_exact_working_file": true,
+    "saved_test_patch_exact_actual_diff": true,
+    "17test_method_ASTs_exact_original": true,
+    "testmethod_duplicate_names": 0,
+    "production_verify_exact_HEAD_bytes": true,
+    "only3tracked_wip_paths": true,
+    "JA_EN_docs_head_and_working_hashes_match_provenance": true,
+    "JA_EN_relative_artifact_links_exist": true,
+    "4local_raw_logs_and_original_source_exact_prepacket_tmp_originals": true
+  },
+  "reasoning": {
+    "source": "scripts/releases/test_verify.py",
+    "line": 34,
+    "original_failure": "Oldmock splitlines[4] reads fifth line async function declaration, not SQLreturn on line6, so neither naem nor old?2 branch fires. Three public/local tests encounter false SQLsuccess at badcolumn fixture before intendedbackend/bind classification.",
+    "correction": "Find current sqlite.literal line and report its1-basedline; current generatedfixture has exactlyone literal call on primaryline6. Good and badcolumnSQL each contain1anonymous?, bindfixture contains2anonymous? and a fixedsinglebind_i64 call. Counting?==2 models exactlythis fixture, not genericplaceholder grammar.",
+    "normal_vs_optin": "Ordinary check mock still returns checkedsource when --sql-schema absent. Actual verify_sql still performs ordinarycheck first, then optin --sql-schema/--sql-dialect sqlite, requires positive inspected-query summary, badcolumn/bind nonzero and sourceprimaryline6, and rejectsCargo/Rustbackend/nativeoutput. Mock unit pass does not exercise actualcompiler/SQLiteengine.",
+    "preserved_defenses": "All17methods ASTunchanged: badqueryacceptance, bindacceptance, engineabsent, zeroliteralinspection, backenddiagnostic replacement, envpreservation and existingTask/Pool/Tx source/runtime/primaryline/business-output checks unchanged. Other helpermethods unchanged except SQLanswer. No publicSQL strings, verifier flags, workflow or productionAPI edits.",
+    "falsepositive_scope": "Questionmarkcount would misclassify some arbitrary SQL/comment/string forms or futurefixture shapes; no genericSQL guarantee claimed in code/JA/EN. Current known threeSQL literals containonly intended placeholders, sourceUser? type is onpreviousline and notcounted. A missingliteral producesStopIteration/testerror ratherthan GREEN; no skipped/duplicatecases."
+  },
+  "saved_results": {
+    "local_RED": "17run14pass3FAIL0ERROR; names match public3failures.",
+    "local_GREEN": "17run17pass0FAIL0ERROR, unchangedmethodset; stdout VerifiedSQL/Task/Pool messages result from mockedverifier and are not native/engine proof.",
+    "local_command_provenance": "Original localcommand/launchreceipt absent from14-filepacket, explicitly stated in README/testresults/JA/EN. Future toolhistory reconstruction must be separate, labeledreconstructed, not retroactive originalreceipt or rerun.",
+    "public_original": "PR106 Drafthead5e992b6cd775912b6886c0b6763a4364642c5132/sametree17a, run38031503012 release-plan114153222296 rawlog116tests3failures exit1; changespass. Latest saved06:46:23UTC Linuxcargo test running, package3skip. Earlier06:36 readback clippy matches distinctsnapshot time.",
+    "corrected_public_run": "none; correction unpublished and uncommitted atreview. No currentremoteGET or rerun byreviewer."
+  },
+  "findings": [],
+  "scope_limits": [
+    "No actualSQLengine/compiler/extracteddistribution/native/E2E build/run verified by these17mocktests.",
+    "No correctedpublicCI/fourOS/releasesecurity acceptance; originalpublicrelease-plan failure remains failedhistory until correctedheadCI.",
+    "Savedrawcommand provenance incomplete; classification honest and notamandatorycodefix.",
+    "This independentreport closes narrowreview only; frozenJA/ENpacket still truthfullyrecords independentreviewpending atpreparationtime and shouldnotbe rewrittenas contemporaneous proof."
+  ],
+  "APIrefs": [
+    "https://github.com/disnana/Nagi/pull/106",
+    "https://github.com/disnana/Nagi/actions/runs/38031503012/job/114153222296",
+    "https://api.github.com/repos/disnana/Nagi/actions/runs/38031503012/jobs"
+  ],
+  "source_links": [
+    {
+      "path": "/workspace/Nagi-security-sf05/scripts/releases/test_verify.py",
+      "line": 34
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/scripts/releases/test_verify.py",
+      "line": 43
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/scripts/releases/verify.py",
+      "line": 367
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/scripts/releases/verify.py",
+      "line": 395
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/docs/internal/security-foundation-sf05-results.md",
+      "line": 5
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/docs/internal/security-foundation-sf05-results.en.md",
+      "line": 5
+    }
+  ],
+  "operations": "Staticsource/AST/diff/recordhash/log/bilingual/link review only. No tests/helper/build/Cargo/compiler/network/remote mutation/repoedit/subagents.",
+  "high_status": "stopped"
+}

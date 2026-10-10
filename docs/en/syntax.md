@@ -95,7 +95,7 @@ The table runs from highest to lowest precedence. Binary operators on the same l
 | Precedence | Operator | Example |
 |---|---|---|
 | Highest | Call, field, index | `add(1, 2)`, `point.x`, `values[0]` |
-| ↓ | Unary `-`, `not`, `try`, `await` | `-count`, `not enabled`, `try await db_open(...)` |
+| ↓ | Unary `-`, `not`, `try`, `await` | `-count`, `not enabled`, `try await sqlite.open(path, config)` |
 | ↓ | `*`, `/`, `%` | `count * 2` |
 | ↓ | `+`, `-` | `count + 1` |
 | ↓ | `<`, `>`, `<=`, `>=` | `count < 10` |
@@ -154,7 +154,7 @@ Passing owned strings/lists to user-defined functions moves them. For read-only 
 | `value = try parse_i64("42")` | Extracts a value or returns failure to the caller |
 | `async def work():` | Defines an async function |
 | `await sleep(10)` | Waits for 10 milliseconds |
-| `db = try await db_open(":memory:")` | Waits and propagates Result failure |
+| `pool = try await sqlite.open(":memory:", config)` | Waits and propagates Result failure |
 
 Use `try` in functions returning Result with the same error type, and `await` in async functions. `try` extracts success or returns Err to the caller; it does not catch Python-style exceptions. Handle Result locally with both cases. This is a function-body fragment:
 
