@@ -44,7 +44,7 @@ fn independent_low(program: &Program) -> Program {
 #[test]
 fn checked_authority_configuration_uses_registry_in_high_saved_and_handwritten_low() {
     let high = "import std.http.server as http\ndef configure() -> Result[http.Options, Error]:\n    limits = http.default_options()\n    limits = try http.authority(limits, \"https://localhost\", [\"localhost\", \"localhost:443\"], 4, 256)\n    return http.trusted_proxy(limits, [\"127.0.0.1\"])\n";
-    let low = "import std.http.server as http;\nfn configure() -> Result[http.Options, Error] {\n    let limits = http.default_options();\n    let limits = try http.authority(limits, \"https://localhost\", [\"localhost\", \"localhost:443\"], 4, 256);\n    return http.trusted_proxy(limits, [\"127.0.0.1\"]);\n}\n";
+    let low = "import std.http.server as http;\nfn configure() -> Result[http.Options, Error] {\n    let limits = http.default_options();\n    limits = try http.authority(limits, \"https://localhost\", [\"localhost\", \"localhost:443\"], 4, 256);\n    return http.trusted_proxy(limits, [\"127.0.0.1\"]);\n}\n";
     let (fixture, program) = Fixture::checked(high);
     let hand_path = fixture.0.join("hand.low");
     fs::write(&hand_path, low).unwrap();
