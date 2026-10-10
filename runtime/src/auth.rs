@@ -1,5 +1,7 @@
 //! Request-bound proofs for trusted credential and policy adapters.
 //! Verifier assertions remain trusted; only the dispatcher creates leases.
+#[path = "auth/session.rs"]
+pub mod session;
 use std::{
     marker::PhantomData,
     sync::{
@@ -83,10 +85,22 @@ impl std::fmt::Display for Failure {
 }
 impl std::error::Error for Failure {}
 
+// Private immutable credential data. Neither the source nor the original deadline
+// is a new proof or public conversion. The live request lease remains separate.
+struct CredentialMetadata {
+    original_expires_at: Instant,
+    source: CredentialSource,
+}
+enum CredentialSource {
+    Bearer,
+    Session(session::Snapshot),
+}
+
 /// Trusted verifier output, not an authorization proof. No Nagi factory.
 pub struct VerifiedIdentity {
     subject: i64,
     expires_at: Instant,
+    credential: CredentialMetadata,
 }
 impl VerifiedIdentity {
     /// The adapter must first verify credentials, audience, expiry and revocation.
@@ -98,6 +112,10 @@ impl VerifiedIdentity {
         Ok(Self {
             subject,
             expires_at,
+            credential: CredentialMetadata {
+                original_expires_at: expires_at,
+                source: CredentialSource::Bearer,
+            },
         })
     }
 }
@@ -108,9 +126,11 @@ struct Gate {
 pub(crate) struct Lease {
     gate: Mutex<Gate>,
     id: u64,
+    delivery: session::delivery::DeliveryWeak,
 }
 pub(crate) struct LeaseOwner {
     pub(crate) lease: Arc<Lease>,
+    delivery: session::delivery::DeliveryOwner,
 }
 static NEXT_REQUEST: AtomicU64 = AtomicU64::new(1);
 impl LeaseOwner {
@@ -127,6 +147,9 @@ impl LeaseOwner {
         if expires_at <= Instant::now() {
             return Err(Failure::expired());
         }
+        let delivery =
+            session::delivery::DeliveryOwner::new(id).map_err(|_| Failure::unavailable())?;
+        let weak = delivery.downgrade();
         Ok(Self {
             lease: Arc::new(Lease {
                 gate: Mutex::new(Gate {
@@ -134,16 +157,28 @@ impl LeaseOwner {
                     expires_at,
                 }),
                 id,
+                delivery: weak,
             }),
+            delivery,
         })
+    }
+    // Closed synchronous operations only; this is not a host callback gateway.
+    fn checked_delivery<'a>(
+        &'a self,
+        lease: &'a Arc<Lease>,
+    ) -> Result<session::delivery::CheckedDelivery<'a>, Failure> {
+        session::delivery::CheckedDelivery::for_lease(self, lease)
     }
 }
 impl Drop for LeaseOwner {
     fn drop(&mut self) {
-        match self.lease.gate.lock() {
-            Ok(mut g) => g.active = false,
-            Err(e) => e.into_inner().active = false,
-        }
+        let mut gate = match self.lease.gate.lock() {
+            Ok(value) => value,
+            Err(error) => error.into_inner(),
+        };
+        gate.active = false;
+        // Keep the gate held through secret disposal: gate -> cell, no await.
+        self.delivery.clear();
     }
 }
 impl Lease {
@@ -167,6 +202,7 @@ impl Lease {
 pub struct AuthScope {
     subject: i64,
     lease: Arc<Lease>,
+    credential: CredentialMetadata,
 }
 impl AuthScope {
     pub(crate) fn bind(identity: VerifiedIdentity, lease: Arc<Lease>) -> Result<Self, Failure> {
@@ -180,6 +216,7 @@ impl AuthScope {
         Ok(Self {
             subject: identity.subject,
             lease,
+            credential: identity.credential,
         })
     }
     pub fn subject(&self) -> i64 {
@@ -205,6 +242,7 @@ pub struct Grant<P> {
     subject: i64,
     resource: i64,
     lease: Arc<Lease>,
+    credential: CredentialMetadata,
     permission: PhantomData<fn() -> P>,
 }
 struct ExecutionPermit<P, R> {
@@ -222,6 +260,7 @@ impl<P> Grant<P> {
             subject: scope.subject,
             resource,
             lease: scope.lease,
+            credential: scope.credential,
             permission: PhantomData,
         })
     }
@@ -432,3 +471,7 @@ mod tests {
         assert_eq!(worker.join().unwrap().unwrap(), (7, 9, 17));
     }
 }
+
+#[cfg(test)]
+#[path = "auth/credential_metadata_tests.rs"]
+mod credential_metadata_tests;

@@ -331,11 +331,19 @@ fn media_type(value: &[u8]) -> Option<(&[u8], &[u8])> {
 }
 
 pub struct Response {
+    session_seal: Option<crate::auth::session::ResponseSeal>,
     status: Status,
     headers: HeaderMap,
     body: Bytes,
 }
 impl Response {
+    pub(crate) fn has_session_seal(&self) -> bool {
+        self.session_seal.is_some()
+    }
+    pub(crate) fn with_session_seal(mut self, seal: crate::auth::session::ResponseSeal) -> Self {
+        self.session_seal = Some(seal);
+        self
+    }
     pub fn status(&self) -> Status {
         self.status
     }
@@ -418,6 +426,7 @@ impl fmt::Debug for Response {
 }
 pub fn empty(status: Status) -> Response {
     Response {
+        session_seal: None,
         status,
         headers: HeaderMap::new(),
         body: Bytes::new(),
@@ -581,11 +590,31 @@ pub fn send_timeout(mut options: Options, milliseconds_value: i64) -> Result<Opt
     Ok(options)
 }
 
-type ResponseFuture = Pin<Box<dyn Future<Output = Response> + Send>>;
+// Completion origin is private dispatcher metadata, never a public Response
+// property. A mapper cannot promote its output to handler success.
+enum PreparedCompletion {
+    HandlerOk(Response),
+    Replacement(Response),
+}
+impl PreparedCompletion {
+    fn is_success(&self) -> bool {
+        match self {
+            Self::HandlerOk(response) | Self::Replacement(response) => response.status.is_success(),
+        }
+    }
+}
+type ResponseFuture = Pin<Box<dyn Future<Output = PreparedCompletion> + Send>>;
 type PolicyFuture<A> = Pin<Box<dyn Future<Output = Result<A, Failure>> + Send>>;
 type PolicyFactory<S, A> = dyn Fn(Request, Arc<S>, Arc<Lease>) -> PolicyFuture<A> + Send + Sync;
 /// A sealed route policy. A is its callback output, not a stored proof.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PolicySource {
+    Public,
+    Bearer,
+    Session,
+}
 pub struct Policy<S, A> {
+    source: PolicySource,
     factory: Arc<PolicyFactory<S, A>>,
 }
 impl<S, A> fmt::Debug for Policy<S, A> {
@@ -595,10 +624,11 @@ impl<S, A> fmt::Debug for Policy<S, A> {
 }
 pub fn public_policy<S: Send + Sync + 'static>() -> Policy<S, ()> {
     Policy {
+        source: PolicySource::Public,
         factory: Arc::new(|_, _, _| Box::pin(async { Ok(()) })),
     }
 }
-fn security_response(failure: Failure) -> Response {
+fn security_response(failure: Failure, source: PolicySource) -> Response {
     let status = match failure.kind() {
         FailureKind::InvalidCredential | FailureKind::Expired => Status::UNAUTHORIZED,
         FailureKind::Denied => Status::FORBIDDEN,
@@ -608,9 +638,13 @@ fn security_response(failure: Failure) -> Response {
     };
     let mut response = text(status, failure.message());
     if status == Status::UNAUTHORIZED {
-        response
-            .headers
-            .insert(names::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
+        response.headers.insert(
+            names::WWW_AUTHENTICATE,
+            HeaderValue::from_static(match source {
+                PolicySource::Session => "Session",
+                _ => "Bearer",
+            }),
+        );
     }
     response
 }
@@ -640,6 +674,7 @@ where
 {
     let verifier = Arc::new(verifier);
     Policy {
+        source: PolicySource::Bearer,
         factory: Arc::new(move |head, state, lease| {
             let verifier = Arc::clone(&verifier);
             Box::pin(async move {
@@ -667,6 +702,7 @@ where
     let verifier = Arc::new(verifier);
     let authorizer = Arc::new(authorizer);
     Policy {
+        source: PolicySource::Bearer,
         factory: Arc::new(move |head, state, lease| {
             let verifier = Arc::clone(&verifier);
             let authorizer = Arc::clone(&authorizer);
@@ -676,6 +712,57 @@ where
                 let identity = verifier(head, Arc::clone(&state)).await?;
                 let scope = AuthScope::bind(identity, Arc::clone(&lease))?;
                 let grant = authorizer(scope, authorization_head, state).await?;
+                if !grant.belongs_to(&lease) {
+                    return Err(Failure::invalid_request());
+                }
+                grant.validate()?;
+                Ok(grant)
+            })
+        }),
+    }
+}
+/// Fixed Session source over a checked persistent Store; no verifier fallback.
+pub fn session_authenticated_policy<S: Send + Sync + 'static>(
+    store: crate::auth::session::Store,
+) -> Policy<S, AuthScope> {
+    let store = Arc::new(store);
+    Policy {
+        source: PolicySource::Session,
+        factory: Arc::new(move |head, _, lease| {
+            let store = Arc::clone(&store);
+            Box::pin(async move {
+                let identity = store.lookup_http_identity(&head.headers).await?;
+                let scope = AuthScope::bind(identity, Arc::clone(&lease))?;
+                if !scope.belongs_to(&lease) {
+                    return Err(Failure::invalid_request());
+                }
+                scope.validate()?;
+                Ok(scope)
+            })
+        }),
+    }
+}
+pub fn session_authorized_policy<S, P, A, Fut>(
+    store: crate::auth::session::Store,
+    authorizer: A,
+) -> Policy<S, Grant<P>>
+where
+    S: Send + Sync + 'static,
+    P: 'static,
+    A: Fn(AuthScope, Request, Arc<S>) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<Grant<P>, Failure>> + Send + 'static,
+{
+    let store = Arc::new(store);
+    let authorizer = Arc::new(authorizer);
+    Policy {
+        source: PolicySource::Session,
+        factory: Arc::new(move |head, state, lease| {
+            let store = Arc::clone(&store);
+            let authorizer = Arc::clone(&authorizer);
+            Box::pin(async move {
+                let identity = store.lookup_http_identity(&head.headers).await?;
+                let scope = AuthScope::bind(identity, Arc::clone(&lease))?;
+                let grant = authorizer(scope, head, state).await?;
                 if !grant.belongs_to(&lease) {
                     return Err(Failure::invalid_request());
                 }
@@ -703,6 +790,7 @@ type PreparedHandler<S> = Box<dyn FnOnce(Request, Arc<S>) -> ResponseFuture + Se
 type PrepareFuture<S> = Pin<Box<dyn Future<Output = Result<PreparedHandler<S>, Failure>> + Send>>;
 type RoutePrepare<S> = Box<dyn Fn(Request, Arc<S>, Arc<Lease>) -> PrepareFuture<S> + Send + Sync>;
 struct Route<S> {
+    source: PolicySource,
     method: Method,
     prepare: RoutePrepare<S>,
 }
@@ -799,7 +887,9 @@ where
         ));
     }
     let handler = Arc::new(handler);
+    let source = policy.source;
     routes.push(Route {
+        source,
         method,
         prepare: Box::new(move |head, state, lease| {
             let handler = Arc::clone(&handler);
@@ -809,11 +899,13 @@ where
                 let prepared: PreparedHandler<S> = Box::new(move |request, state| {
                     Box::pin(async move {
                         if let Err(failure) = lease.validate() {
-                            return security_response(failure);
+                            return PreparedCompletion::Replacement(security_response(
+                                failure, source,
+                            ));
                         }
                         match handler(request, state, authority).await {
-                            Ok(response) => response,
-                            Err(error) => mapper(error),
+                            Ok(response) => PreparedCompletion::HandlerOk(response),
+                            Err(error) => PreparedCompletion::Replacement(mapper(error)),
                         }
                     })
                 });
@@ -869,6 +961,9 @@ where
 }
 fn transport(status: Status, head: bool, close: bool) -> axum::http::Response<BufferedBody> {
     let mut response = text(status, status.phrase()).into_http(head);
+    response
+        .headers_mut()
+        .insert(names::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     if close {
         response
             .headers_mut()
@@ -882,6 +977,100 @@ fn authority_rejection(status: Status, head: bool) -> axum::http::Response<Buffe
         .headers_mut()
         .insert(names::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
+}
+// Managed authenticated headers are shared by successful delivery and all
+// terminal replacements; secret take is confined to the success boundary below.
+fn finalize_authenticated(
+    mut response: axum::http::Response<BufferedBody>,
+    source: PolicySource,
+    head: bool,
+) -> axum::http::Response<BufferedBody> {
+    if source == PolicySource::Public {
+        return response;
+    }
+    if response.status() == StatusCode::NOT_MODIFIED
+        || response
+            .headers()
+            .get_all(names::CACHE_CONTROL)
+            .iter()
+            .any(|value| value.as_bytes() != b"no-store")
+    {
+        response = transport(Status::INTERNAL_SERVER_ERROR, head, true);
+    }
+    response
+        .headers_mut()
+        .insert(names::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    // Managed existing Vary can include the issuance dimension. Public user
+    // setters for Vary are forbidden; final cookie insertion extends it below.
+    if !response.headers().contains_key(names::VARY) {
+        response.headers_mut().insert(
+            names::VARY,
+            HeaderValue::from_static(match source {
+                PolicySource::Session => "Cookie",
+                _ => "Authorization",
+            }),
+        );
+    }
+    response
+}
+// A response can retain only a nonsecret seal; the unique request owner supplies
+// the material through the checked, destructive take. No field move from a Drop
+// owner, secret clone, callback or await occurs in this terminal boundary.
+fn finalize_session_response(
+    mut response: Response,
+    owner: &LeaseOwner,
+    source: PolicySource,
+    head: bool,
+) -> axum::http::Response<BufferedBody> {
+    let has_seal = response.session_seal.is_some();
+    let effective_source = if has_seal && source == PolicySource::Public {
+        PolicySource::Session
+    } else {
+        source
+    };
+    if has_seal
+        && (response.status.0 == StatusCode::NOT_MODIFIED
+            || response
+                .headers
+                .get_all(names::CACHE_CONTROL)
+                .iter()
+                .any(|value| value.as_bytes() != b"no-store"))
+    {
+        crate::auth::session::retire_http_delivery(owner);
+        return finalize_authenticated(
+            transport(Status::INTERNAL_SERVER_ERROR, head, true),
+            effective_source,
+            head,
+        );
+    }
+    let cookie = match response.session_seal.take() {
+        Some(seal) => match crate::auth::session::take_http_cookie(owner, seal) {
+            Ok(cookie) => Some(cookie),
+            Err(()) => {
+                crate::auth::session::retire_http_delivery(owner);
+                return finalize_authenticated(
+                    transport(Status::INTERNAL_SERVER_ERROR, head, true),
+                    effective_source,
+                    head,
+                );
+            }
+        },
+        None => {
+            crate::auth::session::retire_http_delivery(owner);
+            None
+        }
+    };
+    let mut wire = finalize_authenticated(response.into_http(head), effective_source, head);
+    if let Some(cookie) = cookie {
+        wire.headers_mut().insert(names::SET_COOKIE, cookie);
+        if source == PolicySource::Bearer {
+            wire.headers_mut().insert(
+                names::VARY,
+                HeaderValue::from_static("Cookie, Authorization"),
+            );
+        }
+    }
+    wire
 }
 async fn dispatch<S, E>(
     app: Arc<App<S, E>>,
@@ -934,8 +1123,9 @@ where
         }
         return Ok(response);
     };
+    let finish = |response| finalize_authenticated(response, route.source, head);
     let Ok(_permit) = requests.try_acquire_owned() else {
-        return Ok(transport(Status::SERVICE_UNAVAILABLE, head, true));
+        return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true)));
     };
     if let Some(length) = request.headers().get(names::CONTENT_LENGTH) {
         if length
@@ -944,7 +1134,7 @@ where
             .and_then(|length| length.parse::<u64>().ok())
             .is_some_and(|length| length > options.body_bytes as u64)
         {
-            return Ok(transport(Status::CONTENT_TOO_LARGE, head, true));
+            return Ok(finish(transport(Status::CONTENT_TOO_LARGE, head, true)));
         }
     }
     let (parts, body) = request.into_parts();
@@ -953,11 +1143,17 @@ where
         .checked_add(options.body_deadline)
         .and_then(|t| t.checked_add(options.handler_deadline));
     let Some(deadline) = total.and_then(|t| Instant::now().checked_add(t)) else {
-        return Ok(transport(Status::SERVICE_UNAVAILABLE, head, true));
+        return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true)));
     };
     let owner = match LeaseOwner::new(deadline) {
         Ok(owner) => owner,
-        Err(_) => return Ok(transport(Status::SERVICE_UNAVAILABLE, head, true)),
+        Err(_) => return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true))),
+    };
+    // All terminal replacements discard the slot, including pending/ready/
+    // applied material; accepted SQL effects are not rolled back by this Drop.
+    let finish = |response| {
+        crate::auth::session::retire_http_delivery(&owner);
+        finalize_authenticated(response, route.source, head)
     };
     let snapshot = Request {
         method: parts.method.clone(),
@@ -972,18 +1168,18 @@ where
     .catch_unwind();
     let prepared = match tokio::time::timeout(options.security_deadline, prepare).await {
         Ok(_) if security_started.elapsed() >= options.security_deadline => {
-            return Ok(transport(Status::GATEWAY_TIMEOUT, head, true))
+            return Ok(finish(transport(Status::GATEWAY_TIMEOUT, head, true)))
         }
         Ok(Ok(Ok(prepared))) => prepared,
         Ok(Ok(Err(error))) => {
-            let mut response = security_response(error).into_http(head);
+            let mut response = security_response(error, route.source).into_http(head);
             response
                 .headers_mut()
                 .insert(names::CONNECTION, HeaderValue::from_static("close"));
-            return Ok(response);
+            return Ok(finish(response));
         }
-        Ok(Err(_)) => return Ok(transport(Status::INTERNAL_SERVER_ERROR, head, true)),
-        Err(_) => return Ok(transport(Status::GATEWAY_TIMEOUT, head, true)),
+        Ok(Err(_)) => return Ok(finish(transport(Status::INTERNAL_SERVER_ERROR, head, true))),
+        Err(_) => return Ok(finish(transport(Status::GATEWAY_TIMEOUT, head, true))),
     };
     let body = match tokio::time::timeout(
         options.body_deadline,
@@ -993,10 +1189,12 @@ where
     {
         Ok(Ok(body)) => body,
         Ok(Err(BodyFailure::TooLarge)) => {
-            return Ok(transport(Status::CONTENT_TOO_LARGE, head, true))
+            return Ok(finish(transport(Status::CONTENT_TOO_LARGE, head, true)))
         }
-        Ok(Err(BodyFailure::Invalid)) => return Ok(transport(Status::BAD_REQUEST, head, true)),
-        Err(_) => return Ok(transport(Status::REQUEST_TIMEOUT, head, true)),
+        Ok(Err(BodyFailure::Invalid)) => {
+            return Ok(finish(transport(Status::BAD_REQUEST, head, true)))
+        }
+        Err(_) => return Ok(finish(transport(Status::REQUEST_TIMEOUT, head, true))),
     };
     let request = Request {
         method: parts.method,
@@ -1018,14 +1216,28 @@ where
         }
         // A successful CONNECT changes the connection into a byte tunnel.
         // This resource API has no tunnel operation or upgrade owner.
-        Ok(Ok(response)) if connect && response.status.is_success() => {
+        Ok(Ok(completion)) if connect && completion.is_success() => {
             transport(Status::NOT_IMPLEMENTED, head, true)
         }
-        Ok(Ok(response)) => response.into_http(head),
+        Ok(Ok(PreparedCompletion::HandlerOk(response))) => {
+            finalize_session_response(response, &owner, route.source, head)
+        }
+        Ok(Ok(PreparedCompletion::Replacement(response))) => {
+            // Retire before conversion/mapping output reaches any wire path.
+            // The mapped status/body remain ordinary response data, but a
+            // same-request valid seal cannot make handler Err deliver a cookie.
+            crate::auth::session::retire_http_delivery(&owner);
+            let source = if response.has_session_seal() && route.source == PolicySource::Public {
+                PolicySource::Session
+            } else {
+                route.source
+            };
+            finalize_authenticated(response.into_http(head), source, head)
+        }
         Ok(Err(_)) => transport(Status::INTERNAL_SERVER_ERROR, head, true),
         Err(_) => transport(Status::GATEWAY_TIMEOUT, head, false),
     };
-    Ok(response)
+    Ok(finish(response))
 }
 
 // All responses in this API contain one complete Bytes frame. Hyper calls
@@ -1203,3 +1415,12 @@ where
 
 #[cfg(test)]
 mod tests;
+
+// Finite private impossible-state oracle; no production header setter/getter.
+#[cfg(test)]
+pub(crate) fn conflicting_cache_for_test(mut response: Response) -> Response {
+    response
+        .headers
+        .insert(names::CACHE_CONTROL, HeaderValue::from_static("public"));
+    response
+}

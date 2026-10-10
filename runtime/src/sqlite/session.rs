@@ -520,6 +520,8 @@ enum Command {
 /// fn expose(tx: &nagi_runtime::sqlite::Tx) { println!("{tx:?}"); }
 /// ```
 pub struct Tx {
+    // Native main database metadata, not a path/identity/durability proof.
+    persistent_main: bool,
     sender: mpsc::Sender<Command>,
     #[cfg(test)]
     enqueues: Arc<std::sync::atomic::AtomicUsize>,
@@ -564,6 +566,11 @@ impl ExecReservation<'_> {
     }
 }
 impl Tx {
+    // Internal Store prerequisite only. No filename or borrowed Connection
+    // escapes; the actual native transaction's main DB supplied this value.
+    pub(crate) fn has_persistent_main(&self) -> bool {
+        self.persistent_main
+    }
     /// Trusted Rust adapter only; Nagi exposes no generic Grant-aware query.
     /// Waiting for finite queue capacity is not native admission. Drop releases
     /// an unused reservation. Use Grant.submit after this await and enqueue in
@@ -577,7 +584,7 @@ impl Tx {
         })
     }
     #[cfg(test)]
-    pub(super) fn enqueued_execs(&self) -> usize {
+    pub(crate) fn enqueued_execs(&self) -> usize {
         self.enqueues.load(Ordering::SeqCst)
     }
     #[cfg(test)]
@@ -858,6 +865,7 @@ fn run_session(
             gate.block_once();
         }
         let _ = request.reply.send(Ok(Tx {
+            persistent_main: native.path().is_some_and(|name| !name.is_empty()),
             sender,
             #[cfg(test)]
             enqueues: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
