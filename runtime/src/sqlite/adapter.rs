@@ -184,6 +184,8 @@ pub(super) struct AdapterSeams {
     pub fail_native_spawn: bool,
     pub fail_native_reserve: bool,
     pub fail_idle_reserve: bool,
+    #[cfg(test)]
+    pub returning: Option<Arc<Gate>>,
 }
 impl AdapterSeams {
     fn applies(&self, ordinal: usize) -> bool {
@@ -691,12 +693,18 @@ impl NativeManager {
 // Checkoutはnative workerのBeginRequest内へ移動し、cleanupのscope末尾でだけ返す。
 // ledgerはTx/session senderを保持しない。Tokio task Dropで早期返却する経路もない。
 struct CheckoutOwner {
+    #[cfg(test)]
+    returning: Option<Arc<Gate>>,
     object: Option<Checkout>,
     ledger: Arc<Ledger>,
     state: Arc<State>,
 }
 impl Drop for CheckoutOwner {
     fn drop(&mut self) {
+        #[cfg(test)]
+        if let Some(gate) = &self.returning {
+            gate.block_once();
+        }
         if let Some(error) = self.state.error() {
             self.ledger.fail(error);
         }
@@ -799,6 +807,8 @@ impl Adapter {
         let state = Arc::clone(&object.state);
         let (reply, receiver) = oneshot::channel();
         let owner = CheckoutOwner {
+            #[cfg(test)]
+            returning: self.0.seams.returning.clone(),
             object: Some(object),
             ledger: Arc::clone(&self.0.ledger),
             state,

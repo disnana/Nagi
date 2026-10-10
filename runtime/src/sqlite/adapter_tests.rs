@@ -1213,3 +1213,59 @@ async fn multi_native_spawn_failure_keeps_cause_without_native_b_or_fake_join() 
     assert_eq!(done.joined + done.start_failed, done.created);
     assert_eq!(done.pending_workers, 0);
 }
+
+// Finish success includes logical checkout return, not merely native COMMIT.
+#[tokio::test]
+async fn finish_reply_waits_for_checkout_return_before_immediate_reacquire() {
+    for operation in [Finish::Commit, Finish::Rollback] {
+        let gate = Arc::new(Gate::new());
+        let adapter = Adapter::new(
+            Config {
+                seed: "CREATE TABLE items(n)",
+                ..Config::default()
+            },
+            AdapterSeams {
+                returning: Some(Arc::clone(&gate)),
+                ..AdapterSeams::default()
+            },
+        );
+        let observer = adapter.observer();
+        let tx = adapter.begin().await.unwrap();
+        tx.exec("INSERT INTO items VALUES (1)", vec![])
+            .await
+            .unwrap();
+        let mut finish = Box::pin(tx.finish(operation));
+        assert!(futures_util::poll!(&mut finish).is_pending());
+        gate.wait().await;
+        let early = futures_util::poll!(&mut finish);
+        assert_eq!(observer.snapshot().returned, 0);
+        assert_eq!(adapter.available(), 0);
+        // Release even on the old implementation's failing assertion.
+        gate.release();
+        let was_pending = early.is_pending();
+        if was_pending {
+            finish.await.unwrap();
+            assert_eq!(observer.snapshot().returned, 1);
+            let next = adapter
+                .begin_with_budget(super::adapter::AcquireBudget::Immediate)
+                .await
+                .unwrap();
+            let expected = if matches!(operation, Finish::Commit) {
+                1
+            } else {
+                0
+            };
+            assert_eq!(
+                next.query::<Number>("SELECT count(*) AS n FROM items", vec![])
+                    .await
+                    .unwrap(),
+                Some(Number(expected))
+            );
+            next.finish(Finish::Rollback).await.unwrap();
+        } else if let std::task::Poll::Ready(result) = early {
+            result.unwrap();
+        }
+        adapter.close(DEADLINE).await.unwrap();
+        assert!(was_pending, "finish replied before checkout/permit return");
+    }
+}

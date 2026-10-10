@@ -823,7 +823,7 @@ fn observe_finalization<T>(
 
 fn run_session(
     conn: &mut Connection,
-    request: BeginRequest,
+    mut request: BeginRequest,
     config: &Config,
     state: &Arc<State>,
 ) -> bool {
@@ -1007,6 +1007,9 @@ fn run_session(
     }
     state.update(|stats| stats.settled += 1);
     let reusable = state.failure.lock().unwrap().is_none();
+    // Return the cleaned native checkout and logical permit before completing
+    // finish. An immediate next begin must not race the request's lexical Drop.
+    drop(request._owner.take());
     if let Some(reply) = terminal_reply {
         let _ = reply.send(result);
     }
