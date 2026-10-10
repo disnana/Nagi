@@ -567,62 +567,7 @@ pub(in crate::auth::session) async fn complete_write(
     };
     super::finish_ready(store, tx, result, progress).await
 }
-// Trusted foundation entrypoints share the same fixed recipes, after-reserve
-// sample and actual finish. They never manufacture AuthScope or request proof.
-async fn primitive(
-    store: &Foundation,
-    operation: Operation,
-    digest: [u8; 32],
-) -> Result<Snapshot, Failure> {
-    let (tx, c, m) = store.transaction().await?;
-    let mut progress = Progress {
-        wall: c.ceil_ms.max(m.last_wall),
-        sent: false,
-    };
-    let result = async {
-        let rows = read_rows(store, &tx, &operation, &mut progress).await?;
-        if collision(&tx, digest).await? {
-            return Err(Failure::unavailable());
-        }
-        let reservation = tx.reserve_exec().await.map_err(Failure::database)?;
-        let (statement, completion) = fresh_plan(store, &operation, digest, rows, &mut progress)?;
-        let (query, params) = statement.into_native();
-        let reply = reservation.enqueue(query, params);
-        progress.sent = true;
-        finish_written(store, &tx, Box::pin(reply), completion).await
-    }
-    .await;
-    let result = match exec(
-        &tx,
-        "UPDATE __nagi_session_meta SET last_wall=MAX(last_wall,?) WHERE id=1",
-        sqlite::bind_i64(sqlite::parameters(), progress.wall),
-    )
-    .await
-    {
-        Ok(_) => result,
-        Err(e) => Err(e),
-    };
-    finish(tx, result, progress.sent.then_some((store, progress.wall))).await
-}
-pub(in crate::auth::session) async fn insert_primitive(
-    store: &Foundation,
-    subject: i64,
-    digest: [u8; 32],
-    original: Instant,
-) -> Result<Snapshot, Failure> {
-    primitive(store, Operation::Issue { subject, original }, digest).await
-}
-pub(in crate::auth::session) async fn rotate_primitive(
-    store: &Foundation,
-    old: &Snapshot,
-    digest: [u8; 32],
-) -> Result<Snapshot, Failure> {
-    primitive(
-        store,
-        Operation::Rotate {
-            old: old.private_copy(),
-        },
-        digest,
-    )
-    .await
-}
+
+#[cfg(test)]
+#[path = "mutation_fixtures.rs"]
+pub(in crate::auth::session) mod fixtures;

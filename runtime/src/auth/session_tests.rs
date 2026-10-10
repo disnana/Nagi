@@ -568,3 +568,41 @@ mod mutation_tests;
 
 #[path = "session/mutation_write_tests.rs"]
 mod mutation_write_tests;
+
+// Fixture methods are available only in this test module; the production
+// Foundation exposes only checked public-mutation paths and lookup.
+impl Foundation {
+    pub(super) async fn insert(
+        &self,
+        subject: i64,
+        digest: [u8; 32],
+        credential_expires: Instant,
+    ) -> Result<Snapshot, Failure> {
+        mutation::write::fixtures::insert_primitive(self, subject, digest, credential_expires).await
+    }
+    pub(super) async fn rotate(
+        &self,
+        old: &Snapshot,
+        digest: [u8; 32],
+    ) -> Result<Snapshot, Failure> {
+        mutation::write::fixtures::rotate_primitive(self, old, digest).await
+    }
+    async fn logout(&self, old: &Snapshot) -> Result<(), Failure> {
+        mutation::write::fixtures::logout(self, old).await
+    }
+}
+impl Snapshot {
+    pub(super) fn private_copy(&self) -> Self {
+        Self {
+            incarnation: self.incarnation,
+            lineage: self.lineage,
+            subject: self.subject,
+            digest: self.digest,
+            generation: self.generation,
+            idle_ms: self.idle_ms,
+            absolute_ms: self.absolute_ms,
+            expires_at: self.expires_at,
+            absolute_expires_at: self.absolute_expires_at,
+        }
+    }
+}

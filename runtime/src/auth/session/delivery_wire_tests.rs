@@ -329,8 +329,8 @@ async fn real_rotate_and_logout_deliver_once_and_old_lookup_never_reactivates() 
     f.stop().await;
 }
 #[tokio::test]
-async fn real_commit_survives_dropped_intent_mapper_panic_and_timeout_without_cookie() {
-    for (mode, status) in [(0, 200), (1, 400), (2, 500), (3, 504)] {
+async fn real_commit_survives_dropped_intent_mapper_and_panic_without_cookie() {
+    for (mode, status) in [(0, 200), (1, 400), (2, 500)] {
         let f = Fixture::new().await;
         let app = route(
             app_default(session::clone_store(&f.store)),
@@ -345,17 +345,23 @@ async fn real_commit_survives_dropped_intent_mapper_panic_and_timeout_without_co
                 }
                 let owned = session::apply(text(Status::OK, "owned"), intent).unwrap();
                 match mode {
-                    1 => Err(Error::invalid("owned mapper replacement")),
-                    2 => panic!("owned applied handler panic"),
-                    _ => {
-                        std::future::pending::<()>().await;
-                        Ok(owned)
+                    1 => {
+                        drop(owned);
+                        Err(Error::invalid("owned mapper replacement"))
                     }
+                    2 => {
+                        drop(owned);
+                        panic!("owned applied handler panic")
+                    }
+                    _ => unreachable!("normal completion fixture mode"),
                 }
             },
         )
         .unwrap();
-        let server = Server::new(app, options(64, 1000, 100, 1000).unwrap()).await;
+        // These are ordinary completed handlers, not the timeout fixture.
+        // Preserve the public default handler deadline; test timeout separately
+        // with commit observation and controlled Tokio time below.
+        let server = Server::new(app, Options::default()).await;
         let reply = request(&server, "Authorization: Bearer owned\r\n").await;
         assert_eq!(reply.status, status);
         assert!(reply.all("set-cookie").is_empty());
@@ -365,6 +371,111 @@ async fn real_commit_survives_dropped_intent_mapper_panic_and_timeout_without_co
         f.stop().await;
     }
 }
+
+#[tokio::test]
+async fn real_commit_then_controlled_handler_timeout_drops_future_without_cookie() {
+    use std::sync::{atomic::AtomicUsize, Mutex};
+    let f = Fixture::new().await;
+    let (committed, received) = oneshot::channel();
+    let committed = Arc::new(Mutex::new(Some(committed)));
+    let future_dropped = Arc::new(AtomicUsize::new(0));
+    let retained_lease = Arc::new(Mutex::new(None));
+    struct ObservedDrop(Arc<AtomicUsize>);
+    impl Drop for ObservedDrop {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    let dropped = Arc::clone(&future_dropped);
+    let observed = Arc::clone(&retained_lease);
+    let app = route(
+        app_default(session::clone_store(&f.store)),
+        Method::POST,
+        "/owned",
+        authenticated_policy(verifier),
+        move |_, store, scope| {
+            let committed = Arc::clone(&committed);
+            let dropped = Arc::clone(&dropped);
+            let observed = Arc::clone(&observed);
+            async move {
+                *observed.lock().unwrap() = Some(Arc::downgrade(&scope.lease));
+                let intent = session::issue(&store, scope).await.unwrap();
+                let owned = session::apply(text(Status::OK, "owned"), intent).unwrap();
+                let _owned_future_drop = ObservedDrop(dropped);
+                // Public issue returned only after real reply and full finish;
+                // no bool or synthetic SQL result is used as commit proof.
+                committed.lock().unwrap().take().unwrap().send(()).unwrap();
+                std::future::pending::<()>().await;
+                Ok(owned)
+            }
+        },
+    )
+    .unwrap();
+    // Keep the intentional timer exactly 100ms. Freeze only Tokio's clock,
+    // not the LeaseOwner/Session std::time::Instant authority clock.
+    let server = Server::new(app, options(64, 1000, 100, 1000).unwrap()).await;
+    tokio::time::pause();
+    struct Resume;
+    impl Drop for Resume {
+        fn drop(&mut self) {
+            tokio::time::resume();
+        }
+    }
+    let resume = Resume;
+    let tick = tokio::time::Instant::now();
+    let wall = Instant::now();
+    let mut committed = Box::pin(received);
+    let mut reply = Box::pin(request(&server, "Authorization: Bearer owned\r\n"));
+    // Direct yield_now keeps this coordinator runnable, preventing paused
+    // Tokio's idle auto-advance while actual socket/SQLite workers are waiting.
+    // This finite wall guard fails explicitly if native work stalls; no retry.
+    loop {
+        if let std::task::Poll::Ready(signal) = futures_util::poll!(committed.as_mut()) {
+            signal.unwrap();
+            break;
+        }
+        assert!(
+            futures_util::poll!(reply.as_mut()).is_pending(),
+            "response preceded real commit"
+        );
+        assert!(
+            wall.elapsed() < Duration::from_secs(2),
+            "owned commit wall guard elapsed"
+        );
+        assert!(
+            tokio::time::Instant::now() == tick,
+            "clock advanced before real commit"
+        );
+        tokio::task::yield_now().await;
+    }
+    assert!(future_dropped.load(Ordering::SeqCst) == 0);
+    assert!(tokio::time::Instant::now() == tick);
+    tokio::time::advance(Duration::from_millis(100)).await;
+    let response = loop {
+        if let std::task::Poll::Ready(response) = futures_util::poll!(reply.as_mut()) {
+            break response;
+        }
+        assert!(
+            wall.elapsed() < Duration::from_secs(2),
+            "owned response wall guard elapsed"
+        );
+        assert!(tokio::time::Instant::now() == tick + Duration::from_millis(100));
+        tokio::task::yield_now().await;
+    };
+    drop(reply);
+    drop(resume);
+    assert_eq!(response.status, 504);
+    assert!(response.all("set-cookie").is_empty());
+    assert_eq!(response.all("cache-control"), vec!["no-store"]);
+    assert!(future_dropped.load(Ordering::SeqCst) == 1);
+    if let Some(lease) = retained_lease.lock().unwrap().as_ref().unwrap().upgrade() {
+        assert!(lease.validate().is_err());
+    }
+    assert_eq!(f.count().await, 1);
+    server.stop().await;
+    f.stop().await;
+}
+
 #[tokio::test]
 async fn expiry_after_real_commit_retires_applied_material_without_cookie() {
     let f = Fixture::new().await;

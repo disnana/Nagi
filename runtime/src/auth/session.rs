@@ -107,6 +107,10 @@ pub struct Options {
     touch_ms: i64,
     collision_attempts: i64,
 }
+#[expect(
+    clippy::too_many_arguments,
+    reason = "adopted Session options signature has eight explicit finite budgets"
+)]
 pub fn options(
     max_live: i64,
     max_stored: i64,
@@ -284,7 +288,7 @@ pub(super) fn wall_clock() -> Result<ClockSample, Failure> {
     })
 }
 // No Debug/Clone/Serde or public digest/lineage parts. Only a private DB-layer
-// copy supports concurrent oracle inputs; this is not an AuthScope/Grant copy.
+// fixture copy supports concurrent oracle inputs; no production copy method exists.
 pub(super) struct Snapshot {
     incarnation: [u8; 32],
     lineage: i64,
@@ -297,19 +301,21 @@ pub(super) struct Snapshot {
     absolute_expires_at: Instant,
 }
 impl Snapshot {
-    fn private_copy(&self) -> Self {
-        Self {
-            incarnation: self.incarnation,
-            lineage: self.lineage,
-            subject: self.subject,
-            digest: self.digest,
-            generation: self.generation,
-            idle_ms: self.idle_ms,
-            absolute_ms: self.absolute_ms,
-            expires_at: self.expires_at,
-            absolute_expires_at: self.absolute_expires_at,
+    // Closed admission validation; parent receives no raw metadata or digest.
+    pub(super) fn validate_admission(
+        &self,
+        original_expires_at: Instant,
+        now: Instant,
+    ) -> Result<(), super::Failure> {
+        if self.expires_at <= now || self.absolute_expires_at <= now {
+            return Err(super::Failure::expired());
         }
+        if self.absolute_expires_at != original_expires_at {
+            return Err(super::Failure::internal());
+        }
+        Ok(())
     }
+
     // Only an actual checked DB snapshot can reach this parent-private bridge.
     // Effective idle expiry bounds request admission; absolute authority stays
     // immutable metadata and is never reconstructed from the shorter request gate.
@@ -713,14 +719,6 @@ impl Foundation {
             absolute_expires_at,
         })
     }
-    pub(super) async fn insert(
-        &self,
-        subject: i64,
-        digest: [u8; 32],
-        credential_expires: Instant,
-    ) -> Result<Snapshot, Failure> {
-        mutation::write::insert_primitive(self, subject, digest, credential_expires).await
-    }
 
     pub(super) async fn lookup(&self, digest: [u8; 32]) -> Result<Snapshot, Failure> {
         let (tx, c, _) = self.transaction().await?;
@@ -735,51 +733,6 @@ impl Foundation {
             }
             Ok(snapshot) // preserve the pre-touch authority of this lookup.
         }.await;
-        finish(tx, result, None).await
-    }
-    pub(super) async fn rotate(
-        &self,
-        old: &Snapshot,
-        digest: [u8; 32],
-    ) -> Result<Snapshot, Failure> {
-        mutation::write::rotate_primitive(self, old, digest).await
-    }
-
-    pub(super) async fn logout(&self, old: &Snapshot) -> Result<(), Failure> {
-        let (tx, _, _) = self.transaction().await?;
-        let result = async {
-            if old.incarnation != self.incarnation {
-                return Err(Failure::denied());
-            }
-            let present = sqlite::query::<Count>(
-                &tx,
-                sqlite::literal(
-                    "SELECT count(*) AS n FROM __nagi_session_rows WHERE lineage=? AND subject<>?",
-                ),
-                sqlite::bind_i64(
-                    sqlite::bind_i64(sqlite::parameters(), old.lineage),
-                    old.subject,
-                ),
-            )
-            .await
-            .map_err(Failure::database)?
-            .ok_or_else(Failure::unavailable)?
-            .0;
-            if present != 0 {
-                return Err(Failure::denied());
-            }
-            exec(
-                &tx,
-                "DELETE FROM __nagi_session_rows WHERE lineage=? AND subject=?",
-                sqlite::bind_i64(
-                    sqlite::bind_i64(sqlite::parameters(), old.lineage),
-                    old.subject,
-                ),
-            )
-            .await?;
-            Ok(()) // only returned after finish confirms this same Tx commit.
-        }
-        .await;
         finish(tx, result, None).await
     }
 }

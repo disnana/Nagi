@@ -90,7 +90,7 @@ jobs:
           python - <<'PY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {'sf02-delivery-wire.log': 10, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 6, 'sf02-public-api.log': 4, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
+          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 6, 'sf02-public-api.log': 4, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
           for name, count in expected.items():
               text = (root / name).read_text(encoding="utf-8")
               pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored;"
@@ -293,7 +293,7 @@ jobs:
           python - <<'PY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {'sf02-delivery-wire.log': 10, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 6, 'sf02-public-api.log': 4, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
+          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 6, 'sf02-public-api.log': 4, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
           for name, count in expected.items():
               text = (root / name).read_text(encoding="utf-8")
               pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored;"

@@ -160,10 +160,12 @@ async fn issue_unadmitted_future_drop_releases_reservations_before_pool_join() {
     } = s.prepare_issue(scope).await.unwrap();
     let (reached, resume) = context.pause_before_reserve();
     {
-        let attempt = enqueue_write(&s, &tx, context, &mut progress);
-        tokio::pin!(attempt);
+        let mut attempt = Box::pin(enqueue_write(&s, &tx, context, &mut progress));
         let hold = hold_queue(&tx, attempt.as_mut(), reached, resume).await;
         drop(attempt);
+        // Check before dropping the held permits or leaving this scope: this
+        // is destruction of the owned Future, not a Pin<&mut Future> handle.
+        assert!(tx.enqueued_execs() == 0 && status(&owner).0 && !status(&owner).3);
         drop(hold);
     }
     assert!(tx.enqueued_execs() == 0 && status(&owner).0 && !status(&owner).3);

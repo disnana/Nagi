@@ -109,10 +109,14 @@ async fn drop_owned_pending_future_before_enqueue_discards_without_admission() {
     } = store.prepare_logout(scope).await.unwrap();
     let (reached, resume) = context.pause_before_reserve();
     {
-        let attempt = enqueue_logout(&store, &tx, context, &mut progress);
-        tokio::pin!(attempt);
+        let mut attempt = Box::pin(enqueue_logout(&store, &tx, context, &mut progress));
         let hold = hold_queue_until_reserve(&tx, attempt.as_mut(), reached, resume).await;
         drop(attempt);
+        // Check before dropping the held permits or leaving this scope: this
+        // is destruction of the owned Future, not a Pin<&mut Future> handle.
+        assert!(tx.enqueued_execs() == 0);
+        let (vacant, admitted, ready, material) = slot(&owner.lease);
+        assert!(vacant && !admitted && !ready && !material);
         drop(hold);
     }
     assert!(tx.enqueued_execs() == 0);

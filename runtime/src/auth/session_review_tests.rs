@@ -114,7 +114,7 @@ async fn rotate_snapshot_failure_preserves_original_digest_and_generation() {
 
     let row = row_by_lineage(&store, old.lineage).await.unwrap();
     assert!(
-        row.digest.as_slice() == &[32; 32],
+        row.digest.as_slice() == [32; 32],
         "failed rotation preserves the old digest"
     );
     assert_eq!(

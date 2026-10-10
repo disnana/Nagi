@@ -22,16 +22,17 @@ fn checked_owner_uses_existing_unique_request_identity() {
     assert!(second.delivery.cell.lock().unwrap().request_id == second.lease.id);
     assert!(first.lease.delivery.belongs_to(&first.delivery));
     assert!(!first.lease.delivery.belongs_to(&second.delivery));
-    let checked = first.checked_delivery(&first.lease).unwrap();
+    let checked = LeaseDelivery::for_lease(&first.lease).unwrap();
     assert!(matches!(
         first.lease.gate.try_lock(),
         Err(std::sync::TryLockError::WouldBlock)
     ));
     let pending = checked.stage(material()).unwrap();
-    let admitted = checked.admit(pending).unwrap();
-    let ready = checked.confirm_commit(admitted).unwrap();
-    let _seal = checked.apply(ready).unwrap();
-    checked.retire();
+    let admitted = pending.admit().unwrap();
+    let ready = checked.confirm_committed(admitted).unwrap();
+    let _seal = checked.apply_ready(ready).unwrap();
+    drop(checked);
+    first.delivery.clear();
     assert!(first.delivery.cell.lock().unwrap().material.is_none());
 }
 #[test]
@@ -50,8 +51,7 @@ fn retained_scope_and_grant_do_not_keep_delivery_alive() {
     .unwrap();
     let grant = Grant::<()>::from_authorized(grant_scope, 9).unwrap();
     let weak = Arc::downgrade(&owner.delivery.cell);
-    let pending = owner
-        .checked_delivery(&owner.lease)
+    let pending = LeaseDelivery::for_lease(&owner.lease)
         .unwrap()
         .stage(material())
         .unwrap();
@@ -88,9 +88,9 @@ fn owner_end_clears_ready_even_with_poison() {
     for poison in 0..3 {
         let owner = owner();
         let ready = {
-            let checked = owner.checked_delivery(&owner.lease).unwrap();
-            let admitted = checked.admit(checked.stage(material()).unwrap()).unwrap();
-            checked.confirm_commit(admitted).unwrap()
+            let checked = LeaseDelivery::for_lease(&owner.lease).unwrap();
+            let admitted = checked.stage(material()).unwrap().admit().unwrap();
+            checked.confirm_committed(admitted).unwrap()
         };
         // Test-only strong observer; production Lease/Scope/Grant keep Weak only.
         let observed = Arc::clone(&owner.delivery.cell);
@@ -128,8 +128,7 @@ fn owner_end_clears_ready_even_with_poison() {
 fn delayed_pending_drop_cannot_reopen_ended_owner() {
     let owner = owner();
     let observed = Arc::clone(&owner.delivery.cell);
-    let pending = owner
-        .checked_delivery(&owner.lease)
+    let pending = LeaseDelivery::for_lease(&owner.lease)
         .unwrap()
         .stage(material())
         .unwrap();
@@ -142,29 +141,29 @@ fn delayed_pending_drop_cannot_reopen_ended_owner() {
 fn closed_admit_and_confirm_reject_foreign_claims() {
     let first = owner();
     let second = owner();
-    let pending = first
-        .checked_delivery(&first.lease)
+    let pending = LeaseDelivery::for_lease(&first.lease)
         .unwrap()
         .stage(material())
         .unwrap();
-    assert!(second
-        .checked_delivery(&second.lease)
-        .unwrap()
-        .admit(pending)
-        .is_err());
+    {
+        let access = LeaseDelivery::for_lease(&second.lease).unwrap();
+        // This is the production pre-enqueue predicate, not a state-only
+        // admission surrogate. No native send may precede this rejection.
+        assert!(check_pending(&access.cell, &pending).is_err());
+    }
+    drop(pending);
     assert!(first.delivery.cell.lock().unwrap().phase == Phase::Vacant);
-    assert!(second.delivery.cell.lock().unwrap().phase == Phase::Terminal);
+    assert!(second.delivery.cell.lock().unwrap().phase == Phase::Vacant);
     let third = owner();
     let fourth = owner();
     let admitted = {
-        let checked = third.checked_delivery(&third.lease).unwrap();
-        checked.admit(checked.stage(material()).unwrap()).unwrap()
+        let checked = LeaseDelivery::for_lease(&third.lease).unwrap();
+        checked.stage(material()).unwrap().admit().unwrap()
     };
-    assert!(fourth
-        .checked_delivery(&fourth.lease)
+    assert!(LeaseDelivery::for_lease(&fourth.lease)
         .unwrap()
-        .confirm_commit(admitted)
+        .confirm_committed(admitted)
         .is_err());
     assert!(third.delivery.cell.lock().unwrap().phase == Phase::Terminal);
-    assert!(fourth.delivery.cell.lock().unwrap().phase == Phase::Terminal);
+    assert!(fourth.delivery.cell.lock().unwrap().phase == Phase::Vacant);
 }

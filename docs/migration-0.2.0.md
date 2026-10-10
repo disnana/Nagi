@@ -17,6 +17,20 @@
 
 Host変更は未リリースSF03 sliceです。旧任意Host、末尾dot、特殊port表記、proxy内部Hostは明示登録/書換えへ移行します。設定setterはmove＋Resultで、先のOptionsを失敗時に復活させません。新APIは既resource registry/checked facts/sealed emissionを通り、High・保存Low・手書きLowで同じ契約を使います。
 
+ローカル例ではlistener portとwire Hostを同じ値に設定します。既定supervised-serviceは`8090`と`localhost:8090`を使います。portを変える場合は`NAGI_HTTP_AUTHORITY`も合わせます。`NAGI_HTTP_AUTHORITY`は一つのHTTP Host authorityで、HTTPS external originとは別です。Unix:
+
+```sh
+NAGI_SAMPLE_PORT=8090 NAGI_HTTP_AUTHORITY=localhost:8090 nagic run --project test-nagi-code/library-examples/supervised-service
+```
+
+PowerShell:
+
+```powershell
+$env:NAGI_SAMPLE_PORT = '8090'
+$env:NAGI_HTTP_AUTHORITY = 'localhost:8090'
+nagic run --project test-nagi-code/library-examples/supervised-service
+```
+
 HTTPS originとbackend Hostは別の起動情報です。`serve`の平文loopback HTTPだけでbrowser認証を完成と呼びません。ローカルTLS frontendならorigin `https://localhost:8443`、wire `localhost:8080`、実peer `127.0.0.1`を設定し、証明書のtrust・Forwarded除去・HTTP/1.1終端を配置側で確認します。Secure Cookie例外やHost一致によるCSRF免除はありません。Origin/CSRF/pre-login本体はこの変更の保証外です。
 
 handlerは常に`async (http.Request,shared[S],A)->Result[http.Response,E]`です。旧自動body/query/path抽出はhandlerで明示的にparse/decodeし、JSON応答を`http.json`へ変換します。既存CRUD/Resultの業務動作は移行後のnativeテストへ対応付けています。ルート登録はfallibleです。重複method/pathや曖昧なcapture patternはruntime登録Errになり、起動しません。動的pathの既存標準APIを維持し、旧decorator専用の静的path検査を新しい文字列推論仕様へ置き換えません。

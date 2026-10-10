@@ -95,6 +95,20 @@ enum CredentialSource {
     Bearer,
     Session(session::Snapshot),
 }
+impl CredentialMetadata {
+    // Admission keeps the original credential ceiling even when the request
+    // lease has a shorter budget. No clock/authority extension or public getter.
+    fn validate(&self) -> Result<(), Failure> {
+        let now = Instant::now();
+        if self.original_expires_at <= now {
+            return Err(Failure::expired());
+        }
+        if let CredentialSource::Session(snapshot) = &self.source {
+            snapshot.validate_admission(self.original_expires_at, now)?;
+        }
+        Ok(())
+    }
+}
 
 /// Trusted verifier output, not an authorization proof. No Nagi factory.
 pub struct VerifiedIdentity {
@@ -268,8 +282,8 @@ impl<P> Grant<P> {
         self.lease.id == lease.id && Arc::ptr_eq(&self.lease, lease)
     }
     pub(crate) fn validate(&self) -> Result<(), Failure> {
-        drop(self.lease.checked_gate()?);
-        Ok(())
+        let _gate = self.lease.checked_gate()?;
+        self.credential.validate()
     }
     /// Call AFTER awaiting bounded native capacity. Issuance under the lease gate
     /// is admission; merely reserving a slot is not. The reservation is consumed.
@@ -284,6 +298,7 @@ impl<P> Grant<P> {
     ) -> Result<T, Failure> {
         let permit = {
             let _gate = self.lease.checked_gate()?;
+            self.credential.validate()?;
             ExecutionPermit::<P, R> {
                 subject: self.subject,
                 resource: self.resource,

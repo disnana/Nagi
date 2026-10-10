@@ -78,32 +78,8 @@ impl<'a> CheckedDelivery<'a> {
             owner: &owner.delivery,
         })
     }
-    pub(super) fn stage(&self, material: SetCookie) -> Result<Pending, Error> {
-        self.owner.stage(material)
-    }
-    pub(super) fn admit(&self, pending: Pending) -> Result<Admitted, Error> {
-        if !Weak::ptr_eq(&pending.0.cell, &Arc::downgrade(&self.owner.cell)) {
-            self.owner.clear();
-            return Err(Error::InvalidBinding);
-        }
-        pending.admit()
-    }
-    // State mark only: a later caller must confirm the actual Tx commit first.
-    pub(super) fn confirm_commit(&self, admitted: Admitted) -> Result<ReadyClaim, Error> {
-        if !Weak::ptr_eq(&admitted.0.cell, &Arc::downgrade(&self.owner.cell)) {
-            self.owner.clear();
-            return Err(Error::InvalidBinding);
-        }
-        admitted.confirm_commit()
-    }
-    pub(super) fn apply(&self, right: ReadyClaim) -> Result<Seal, Error> {
-        self.owner.apply(right)
-    }
     pub(super) fn take_applied(&self, seal: Seal) -> Result<SetCookie, Error> {
         self.owner.take_applied(seal)
-    }
-    pub(super) fn retire(&self) {
-        self.owner.clear();
     }
 }
 fn stage_cell(owner: &Arc<Mutex<Cell>>, material: SetCookie) -> Result<Pending, Error> {
@@ -124,6 +100,18 @@ fn stage_cell(owner: &Arc<Mutex<Cell>>, material: SetCookie) -> Result<Pending, 
         request_id: cell.request_id,
         serial,
     }))
+}
+
+// Shared closed pre-enqueue check; the guard ends before native send or Drop.
+fn check_pending(owner: &Arc<Mutex<Cell>>, pending: &Pending) -> Result<(), Error> {
+    let cell = checked(owner)?;
+    if !Weak::ptr_eq(&pending.0.cell, &Arc::downgrade(owner))
+        || !cell.matches(&pending.0)
+        || cell.phase != Phase::Pending
+    {
+        return Err(Error::InvalidBinding);
+    }
+    Ok(())
 }
 
 // The dispatcher remains the only enduring strong owner. This upgrade exists
@@ -174,15 +162,7 @@ impl<'a> LeaseDelivery<'a> {
     ) -> Result<(Admitted, super::mutation::Reply), Error> {
         // Reject foreign/stale claims before business admission. Never hold the
         // cell lock while sending or dropping a claim (Drop locks that cell).
-        {
-            let cell = checked(&self.cell)?;
-            if !Weak::ptr_eq(&pending.0.cell, &Arc::downgrade(&self.cell))
-                || !cell.matches(&pending.0)
-                || cell.phase != Phase::Pending
-            {
-                return Err(Error::InvalidBinding);
-            }
-        }
+        check_pending(&self.cell, &pending)?;
         let (query, parameters) = plan.into_native();
         let reply = reservation.enqueue(query, parameters);
         *sent = true; // bookkeeping for rollback; not a commit/delivery proof
@@ -262,18 +242,14 @@ impl DeliveryOwner {
             })),
         })
     }
-    fn stage(&self, material: SetCookie) -> Result<Pending, Error> {
-        stage_cell(&self.cell, material)
-    }
+
     pub(in crate::auth) fn clear(&self) {
         match self.cell.lock() {
             Ok(mut value) => value.retire(),
             Err(error) => error.into_inner().retire(),
         }
     }
-    fn apply(&self, right: ReadyClaim) -> Result<Seal, Error> {
-        apply_cell(&self.cell, right)
-    }
+
     // Destructive one-use terminal bridge, never a borrowed/raw secret getter.
     // A later checked finalizer may consume it into the native wire response.
     fn take_applied(&self, seal: Seal) -> Result<SetCookie, Error> {
@@ -343,9 +319,6 @@ impl Pending {
         self.0.transition(Phase::Pending, Phase::Admitted)?;
         Ok(Admitted(self.0))
     }
-    fn abort(self) {
-        drop(self);
-    }
 }
 impl Admitted {
     // Only a later confirmed Tx finish may invoke this private transition.
@@ -370,8 +343,7 @@ mod tests {
         }
     }
     fn ready(owner: &DeliveryOwner) -> ReadyClaim {
-        owner
-            .stage(material())
+        stage_cell(&owner.cell, material())
             .unwrap()
             .admit()
             .unwrap()
@@ -386,30 +358,33 @@ mod tests {
     #[test]
     fn one_pending_pre_admission_abort_and_stale_drop() {
         let owner = DeliveryOwner::new(1).unwrap();
-        let first = owner.stage(material()).unwrap();
+        let first = stage_cell(&owner.cell, material()).unwrap();
         state(&owner, Phase::Pending, true);
-        assert!(owner.stage(material()).is_err());
+        assert!(stage_cell(&owner.cell, material()).is_err());
         let stale = Claim {
             cell: first.0.cell.clone(),
             request_id: first.0.request_id,
             serial: first.0.serial,
         };
-        first.abort();
+        drop(first);
         state(&owner, Phase::Vacant, false);
-        let replacement = owner.stage(material()).unwrap();
+        let replacement = stage_cell(&owner.cell, material()).unwrap();
         drop(stale);
         state(&owner, Phase::Pending, true);
-        replacement.abort();
+        drop(replacement);
         state(&owner, Phase::Vacant, false);
     }
     #[test]
     fn admitted_abort_is_terminal_without_reuse() {
         let owner = DeliveryOwner::new(1).unwrap();
-        let admitted = owner.stage(material()).unwrap().admit().unwrap();
+        let admitted = stage_cell(&owner.cell, material())
+            .unwrap()
+            .admit()
+            .unwrap();
         state(&owner, Phase::Admitted, true);
         drop(admitted);
         state(&owner, Phase::Terminal, false);
-        assert!(owner.stage(material()).is_err());
+        assert!(stage_cell(&owner.cell, material()).is_err());
     }
     #[test]
     fn ready_claim_drop_discards_without_reuse() {
@@ -418,14 +393,14 @@ mod tests {
         state(&owner, Phase::Ready, true);
         drop(right);
         state(&owner, Phase::Terminal, false);
-        assert!(owner.stage(material()).is_err());
+        assert!(stage_cell(&owner.cell, material()).is_err());
     }
     #[test]
     fn one_use_apply_and_destructive_terminal_bridge() {
         let owner = DeliveryOwner::new(1).unwrap();
-        let seal = owner.apply(ready(&owner)).unwrap();
+        let seal = apply_cell(&owner.cell, ready(&owner)).unwrap();
         state(&owner, Phase::Applied, true);
-        assert!(owner.stage(material()).is_err());
+        assert!(stage_cell(&owner.cell, material()).is_err());
         let observer = Arc::clone(&owner.cell);
         let wire = owner.take_applied(seal).unwrap();
         let value = observer.lock().unwrap();
@@ -447,8 +422,8 @@ mod tests {
             request_id: right.0.request_id,
             serial: right.0.serial,
         });
-        let seal = owner.apply(right).unwrap();
-        assert!(owner.apply(stale).is_err());
+        let seal = apply_cell(&owner.cell, right).unwrap();
+        assert!(apply_cell(&owner.cell, stale).is_err());
         state(&owner, Phase::Terminal, false);
         assert!(owner.take_applied(seal).is_err());
     }
@@ -456,8 +431,8 @@ mod tests {
     fn different_cells_even_with_same_id_reject_claim_and_clear_both() {
         let source = DeliveryOwner::new(1).unwrap();
         let other = DeliveryOwner::new(1).unwrap();
-        let pending_other = other.stage(material()).unwrap();
-        assert!(other.apply(ready(&source)).is_err());
+        let pending_other = stage_cell(&other.cell, material()).unwrap();
+        assert!(apply_cell(&other.cell, ready(&source)).is_err());
         state(&source, Phase::Terminal, false);
         state(&other, Phase::Terminal, false);
         drop(pending_other);
@@ -466,27 +441,29 @@ mod tests {
     #[test]
     fn mismatched_origin_seal_discards_current_material() {
         let owner = DeliveryOwner::new(1).unwrap();
-        let original_seal = owner.apply(ready(&owner)).unwrap();
+        let original_seal = apply_cell(&owner.cell, ready(&owner)).unwrap();
         let observer = Arc::clone(&owner.cell);
         assert!(owner.take_applied(Seal(2)).is_err());
         let value = observer.lock().unwrap();
         assert!(value.phase == Phase::Terminal && value.material.is_none());
         drop(value);
-        drop(original_seal);
+        let _ = original_seal;
     }
     #[test]
     fn explicit_clear_retains_no_secret_in_every_active_phase() {
         for phase in 0..4 {
             let owner = DeliveryOwner::new(1).unwrap();
-            let pending = owner.stage(material()).unwrap();
+            let pending = stage_cell(&owner.cell, material()).unwrap();
             let held: Box<dyn std::any::Any> = match phase {
                 0 => Box::new(pending),
                 1 => Box::new(pending.admit().unwrap()),
                 2 => Box::new(pending.admit().unwrap().confirm_commit().unwrap()),
                 _ => Box::new(
-                    owner
-                        .apply(pending.admit().unwrap().confirm_commit().unwrap())
-                        .unwrap(),
+                    apply_cell(
+                        &owner.cell,
+                        pending.admit().unwrap().confirm_commit().unwrap(),
+                    )
+                    .unwrap(),
                 ),
             };
             owner.clear();
@@ -505,20 +482,20 @@ mod tests {
             panic!("owned poison fixture");
         }))
         .is_err());
-        assert!(owner.apply(right).is_err());
+        assert!(apply_cell(&owner.cell, right).is_err());
         let value = match cell.lock() {
             Err(error) => error.into_inner(),
             Ok(_) => panic!("owned poison must remain observable"),
         };
         assert!(value.phase == Phase::Terminal && value.material.is_none());
         drop(value);
-        assert!(owner.stage(material()).is_err());
+        assert!(stage_cell(&owner.cell, material()).is_err());
         owner.clear();
     }
     #[test]
     fn owner_drop_releases_material_and_weak_claim() {
         let owner = DeliveryOwner::new(1).unwrap();
-        let pending = owner.stage(material()).unwrap();
+        let pending = stage_cell(&owner.cell, material()).unwrap();
         let weak = Arc::downgrade(&owner.cell);
         drop(owner);
         assert!(weak.upgrade().is_none());
@@ -529,7 +506,7 @@ mod tests {
         assert!(DeliveryOwner::new(0).is_err());
         let owner = DeliveryOwner::new(1).unwrap();
         owner.cell.lock().unwrap().next_serial = u64::MAX;
-        assert!(owner.stage(material()).is_err());
+        assert!(stage_cell(&owner.cell, material()).is_err());
         state(&owner, Phase::Terminal, false);
     }
 }
