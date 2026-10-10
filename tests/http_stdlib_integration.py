@@ -162,13 +162,12 @@ async def comparisons(request: http.Request, state: shared[State], authority: un
     assert_true(owned != empty)
     return ok(http.bytes(http.Status.OK, view(owned)))
 
-async def launch(app: http.App[State, AuthError], port: i64) -> Result[unit, Error]:
-    port_text = try json_encode(port)
+async def launch(app: http.App[State, AuthError], port: i64, wire_authority: str) -> Result[unit, Error]:
     options = try http.authority(
         http.default_options(),
         "https://localhost",
-        ["localhost", view("localhost:") + view(port_text), view("127.0.0.1:") + view(port_text)],
-        3,
+        [wire_authority],
+        1,
         256
     )
     return await http.serve(app, port, options)
@@ -203,9 +202,11 @@ async def main() -> Result[unit, Error]:
     second = try http.route(second, http.Method.GET, "/me", http.authenticated_policy[State](verify), profile)
     port = try parse_i64(env("NAGI_TEST_PORT", "0"))
     second_port = try parse_i64(env("NAGI_SECOND_PORT", "0"))
+    wire_authority = env("NAGI_HTTP_AUTHORITY", "127.0.0.1:8080")
+    second_wire_authority = env("NAGI_SECOND_HTTP_AUTHORITY", "127.0.0.1:8081")
     async with scope:
-        spawn launch(app, port)
-        spawn launch(second, second_port)
+        spawn launch(app, port, wire_authority)
+        spawn launch(second, second_port, second_wire_authority)
     return ok(assert_true(True))
 '''
 
@@ -237,7 +238,7 @@ def invalid_utf8_header(port: int):
     # The HTTP auth policy rejects malformed credentials before the verifier
     # or application handler receives them.
     with socket.create_connection(("127.0.0.1", port), timeout=5) as connection:
-        connection.sendall(b"GET /me HTTP/1.1\r\nHost: localhost\r\nAuthorization: \xff\r\nConnection: close\r\n\r\n")
+        connection.sendall(f"GET /me HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n".encode("ascii") + b"Authorization: \xff\r\nConnection: close\r\n\r\n")
         response = http.client.HTTPResponse(connection)
         response.begin()
         return response.status, response.read()
@@ -248,7 +249,7 @@ def panic_response(port: int, method: str, path: str):
     # request's connection closes. A server-side panic must not produce EOF
     # in place of the status, headers or promised response body.
     with socket.create_connection(("127.0.0.1", port), timeout=5) as connection:
-        connection.sendall(f"{method} {path} HTTP/1.1\r\nHost: localhost\r\n\r\n".encode())
+        connection.sendall(f"{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n".encode())
         deadline = time.monotonic() + 5
         wire = bytearray()
         while True:
@@ -300,6 +301,8 @@ def free_ports():
 def check_server(executable: Path, folder: Path, environment: dict[str, str], source: str) -> int:
     first, second = free_ports()
     environment = dict(environment, NAGI_TEST_PORT=str(first), NAGI_SECOND_PORT=str(second),
+                       NAGI_HTTP_AUTHORITY=f"127.0.0.1:{first}",
+                       NAGI_SECOND_HTTP_AUTHORITY=f"127.0.0.1:{second}",
                        NAGI_DEMO_AUTHORIZATION="Bearer first-fixture-value",
                        NAGI_SECOND_AUTHORIZATION="Bearer second-fixture-value")
     log_path = folder / (source + "-server.log")

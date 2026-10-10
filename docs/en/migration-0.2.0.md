@@ -17,6 +17,20 @@ This describes SF01/SF05 development-source changes. Neither all of Security Fou
 
 The Host change is an unreleased SF03 slice. Migrate arbitrary Hosts, trailing dots, special port spellings and internal proxy Hosts to explicit registration/rewriting. Setters use move and Result; failure cannot revive earlier Options. APIs use the existing resource registry, checked facts and sealed emission, with the same contract for High, saved Low and handwritten Low.
 
+Local examples set the listener port and wire Host to the same value. The default supervised-service uses port `8090` and `localhost:8090`. If you change the port, update `NAGI_HTTP_AUTHORITY` too. This variable is one HTTP Host authority, separate from the HTTPS external origin. Unix:
+
+```sh
+NAGI_SAMPLE_PORT=8090 NAGI_HTTP_AUTHORITY=localhost:8090 nagic run --project test-nagi-code/library-examples/supervised-service
+```
+
+PowerShell:
+
+```powershell
+$env:NAGI_SAMPLE_PORT = '8090'
+$env:NAGI_HTTP_AUTHORITY = 'localhost:8090'
+nagic run --project test-nagi-code/library-examples/supervised-service
+```
+
 HTTPS origin and backend Host are separate startup facts. Plaintext loopback `serve` alone does not complete browser authentication. A local TLS frontend can use origin `https://localhost:8443`, wire `localhost:8080`, real peer `127.0.0.1`; verify certificate trust, Forwarded stripping and HTTP/1.1 termination in deployment. No Secure Cookie exception or Host-based CSRF exemption is provided. Origin/CSRF/pre-login implementation is outside this change.
 
 Handlers have `async (http.Request,shared[S],A)->Result[http.Response,E]`. Replace automatic body/query/path extraction with explicit parsing/decoding and `http.json` responses. Existing CRUD and Result behavior is mapped to migrated native tests. Registration remains fallible: duplicate method/path and ambiguous capture patterns return runtime registration Err before startup. Dynamic paths remain part of the existing standard API; decorator-specific static path checking is not replaced with a new string-inference language specification.

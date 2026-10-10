@@ -61,12 +61,12 @@ async def main() -> Result[unit, Error]:
     app = try http.route(app, http.Method.GET, "/legacy/{key}", http.public_policy[State](), legacy)
     app = try http.route(app, http.Method.GET, "/literal/%7Bid%7D", http.public_policy[State](), literal)
     port = try parse_i64(env("NAGI_TEST_PORT", "0"))
-    port_text = try json_encode(port)
+    wire_authority = env("NAGI_HTTP_AUTHORITY", "127.0.0.1:8080")
     options = try http.authority(
         http.default_options(),
         "https://localhost",
-        ["localhost", view("localhost:") + view(port_text), view("127.0.0.1:") + view(port_text)],
-        3,
+        [wire_authority],
+        1,
         256
     )
     return await http.serve(app, port, options)
@@ -80,6 +80,7 @@ async def main() -> Result[unit, Error]:
         with socket.socket() as available:
             available.bind(("127.0.0.1", 0))
             environment["NAGI_TEST_PORT"] = str(available.getsockname()[1])
+            environment["NAGI_HTTP_AUTHORITY"] = "127.0.0.1:" + environment["NAGI_TEST_PORT"]
         base = "http://127.0.0.1:" + environment["NAGI_TEST_PORT"]
         native = [line.removeprefix("native: ").strip()
                   for line in (build.stdout + "\n" + build.stderr).splitlines()

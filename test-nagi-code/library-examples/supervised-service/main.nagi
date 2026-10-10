@@ -103,12 +103,12 @@ async def serve_web(app: http.App[WebState, WebError], ready: actor.Actor[Messag
 
 async def main() -> Result[unit, Error]:
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8090"))
-    port_text = try json_encode(port)
+    wire_authority = env("NAGI_HTTP_AUTHORITY", "localhost:8090")
     options = try http.authority(
         http.default_options(),
         "https://localhost",
-        ["localhost", view("localhost:") + view(port_text), view("127.0.0.1:") + view(port_text)],
-        3,
+        [wire_authority],
+        1,
         256
     )
     group = actor.supervisor[Context](Context(initial=0), actor.default_options())
