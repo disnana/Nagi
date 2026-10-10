@@ -470,10 +470,10 @@ fn final_future_capture_facts_reject_identity_argument_owner_and_span_tampering(
 }
 
 #[test]
-fn sqlite_sql_argument_plan_rejects_missing_index_and_representation_tampering() {
+fn sqlite_literal_plan_rejects_missing_index_and_payload_tampering() {
     let fixture = Files::new();
     let path = fixture.0.join("sqlite.nagi");
-    std::fs::write(&path, "import std.db.sqlite as sqlite\nasync def work(tx: sqlite.Tx) -> Result[i64, sqlite.Failure]:\n    return await sqlite.exec(tx, \"DELETE FROM items\", sqlite.parameters())\n").unwrap();
+    std::fs::write(&path, "import std.db.sqlite as sqlite\nasync def work(tx: sqlite.Tx) -> Result[i64, sqlite.Failure]:\n    return await sqlite.exec(tx, sqlite.literal(\"DELETE FROM items\"), sqlite.parameters())\n").unwrap();
     let loaded = crate::source::load(&path, true).unwrap();
     let provenance = loaded.provenance();
     let checked = crate::check::finalize(loaded.program, Program::default(), provenance).unwrap();
@@ -495,7 +495,7 @@ fn sqlite_sql_argument_plan_rejects_missing_index_and_representation_tampering()
         match mutation {
             0 => *sql = None,
             1 => sql.as_mut().unwrap().index = 2,
-            2 => sql.as_mut().unwrap().representation = SqlRepresentation::Owned,
+            2 => sql.as_mut().unwrap().literal = "DELETE FROM other_items".into(),
             _ => unreachable!(),
         }
         assert!(emission

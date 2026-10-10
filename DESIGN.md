@@ -149,11 +149,11 @@ Highの別実装、ASTの表示、Rustアダプターも比較対象にします
 
 既存ライブラリを使っても、Nagi側の責任は残ります。どの型を公開するか、引数をmoveするか借りるか、どの失敗をResultへ返すか、取消とcloseで何が終わるかを決める必要があります。Rustの型を単に隠しても、扱いやすいNagi APIになるとは限りません。
 
-現在の標準HTTPは型付きrequest・response・共有state・async handlerを提供します。従来のSQLite `db_*` APIはclassへの行変換と固定bind形を持ちます。Nagi 0.1.10以降のschema指定[SQL事前検査](docs/sql-check.md)は、名前・必要な返却列・従来APIのbind数を検査し、実値型やNULL可否は検査しません。開発sourceには未リリースの`std.db.sqlite` Pool/Tx APIがあり、任意個数のtyped Parametersと明示transactionを提供します。新APIのSQL検査はParametersのbind数・値型を未検査としてruntimeに残します。[SQLite Pool/Tx reference](docs/sqlite-pool.md)を参照してください。このAPIはNagi 0.1.11には含まれず、4 OSの最新head CIは確認中です。PostgreSQLの標準APIはありません。
+現在の標準HTTPは型付きrequest・response・共有state・async handlerを提供します。開発sourceの標準SQLiteは `std.db.sqlite` のPool/Tx・opaque literal Query・typed Parametersへ統一します。SF05で旧Db/db_*とruntime public Db/Sqlを削除し、元位置付きmigration診断を返します。通常checkは直接literal境界・型・所有権を検査し、SQL engineを起動しません。schema指定の[SQL事前検査](docs/sql-check.md)はcanonical直接Queryのshape・名前・必要列と直接Parameters builderのbind数をprepare-onlyで検査し、不明構造・値型・NULLをruntimeへ残します。[SQLite reference](docs/sqlite-pool.md)を参照してください。0.2.0は未リリースで、0.1.11の機能へ遡及適用しません。PostgreSQLの標準APIはありません。
 
 Axum／Towerを採用するかは、同じAPI、接続容量、期限、本文上限、panic応答、停止条件で比べてから判断します。AxumもHyperを使うため、Router／middlewareの比較とlistenerの変更を分けます。既存の異なる条件のベンチマークを、採用の根拠にはしません。
 
-根拠: [依存](runtime/Cargo.toml)、[標準HTTP](runtime/src/http_server.rs)、[SQLite](runtime/src/database.rs)、[SQL検査](compiler/src/sql_check/mod.rs)と[テスト](compiler/tests/sql_check.rs)、[HTTPの実通信テスト](tests/http_stdlib_integration.py)。
+根拠: [依存](runtime/Cargo.toml)、[標準HTTP](runtime/src/http_server.rs)、[SQLite](runtime/src/sqlite/mod.rs)、[SQL検査](compiler/src/sql_check/mod.rs)と[テスト](compiler/tests/sql_check.rs)、[HTTPの実通信テスト](tests/http_stdlib_integration.py)。
 
 ## 失敗と並行処理の境界
 
@@ -195,7 +195,7 @@ Phase 2の開発差分では、アプリIDと成功世代を分けます。同�
 
 Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しました。Nagi 0.1.11への導入対象で、公開版での利用可否はRelease記録で確認してください。Phase 3の先行テストも4 OSで成功しました。開発差分では、登録資源の型引数の役割とcapabilityの根拠を私有descriptorへ集め、公開ResourceInfoはその一部を参照します。型引数の範囲・重複・欠落を登録時に検査し、用途別の判定と既存APIを保ちます。資源のlifecycle保証はまだ追加しません。[ADR 008](docs/internal/adr/008-resource-contracts.md)に構造と検証の順序を記録しました。集約後の#80は4 OS・editor・site・merge gate CIが成功し、mainへ反映しました。その後のSQLite Pool/Tx APIは開発sourceに実装され、[公開reference](docs/sqlite-pool.md)へ使い方と制約を記載しています。Nagi 0.1.11には含まれません。#99としてmainへ反映済みで、main 62bbda9の4 OS CI成功を確認しています。[判断記録](docs/internal/open-questions.md)と[進捗](docs/internal/progress.md)はmain・公開版・開発sourceの状況を区別します。
 
-2026-10-06にQ002でSQLite API・SQL制限・終了契約とruntime rusqlite hooksを承認しました。続く実装では、当初のdeadpool比較試作から既存Tokio Semaphore＋lazy専用adapterへ変更し、deadpool/deadpool-runtimeを削除しました。新crateやTokio/rusqliteの版追加はありません。公開`std.db.sqlite`は8 resourceと18 operationからなり、従来`db_*` APIは変更していません。現sourceでの使い方、failure/outcome、SQL・ownership・close境界は[SQLite PoolとTransaction](docs/sqlite-pool.md)を参照してください。APIはNagi 0.1.11には含まれません。compiler/runtimeは#99としてmainへ反映済みで、main 62bbda9の4 OS CI成功を確認しています。新APIの正式リリース配布はまだ行っていません。
+2026-10-06にQ002でSQLite API・SQL制限・終了契約とruntime rusqlite hooksを承認しました。続く実装では、当初のdeadpool比較試作から既存Tokio Semaphore＋lazy専用adapterへ変更し、deadpool/deadpool-runtimeを削除しました。新crateやTokio/rusqliteの版追加はありません。初期公開`std.db.sqlite`は8 resource/18 operationでした。独立SF05はQuery/literalを追加して9 resource/19 operationとし、旧Db/db_*を削除します。現sourceでの使い方、failure/outcome、SQL・ownership・close境界は[SQLite PoolとTransaction](docs/sqlite-pool.md)を参照してください。APIはNagi 0.1.11には含まれません。compiler/runtimeは#99としてmainへ反映済みで、main 62bbda9の4 OS CI成功を確認しています。新APIの正式リリース配布はまだ行っていません。
 
 初期のprivate transaction/SQL回帰は現在の[SQLite session](runtime/src/sqlite/session.rs)と[SQLite tests](runtime/src/sqlite/tests.rs)にあります。SQL Errだけで変更が戻ったとは扱いません。adapterのclose/capacity/join回帰は[adapter tests](runtime/src/sqlite/adapter_tests.rs)、公開API回帰は[public tests](runtime/src/sqlite/public_tests.rs)へ移っています。初期private試作とdeadpool比較の歴史は、現在の公開APIがその依存を使うという意味ではありません。
 
@@ -207,4 +207,6 @@ Phase 2のPR #79は4 OS・editor/package CIまで成功し、mainへ反映しま
 
 ## 0.2.0 Security Foundationの設計段階
 
-[Security Foundation RFC](docs/internal/security-foundation/rfc.md)に現行mainの調査、AuthScope・CSRF・XSS・SQL Injection・SSRF・CORS・Cookie/Session・DoSの提案、静的/実行時境界、移行・機能別PR・全体完了条件をまとめています。最新指示に基づく[安全性優先のD1–D3判断と移行](docs/internal/security-foundation/decisions-and-migration.md)を実装基準にしています。全標準HTTPのpolicy必須化、request-boundの単一Grant、永続Sessionを推奨し、旧入口併存は撤回しました。SF01は開発sourceへ接続し、後続SF02–SF08は未実装です。正式0.2.0は未リリースで、現行0.1.xへ遡及適用しません。move/Task/spawn、High/Low、SQLiteのnative lifecycleは維持します。正式0.2.0リリースとtagには別途明示承認が必要です。
+[Security Foundation RFC](docs/internal/security-foundation/rfc.md)に現行mainの調査、AuthScope・CSRF・XSS・SQL Injection・SSRF・CORS・Cookie/Session・DoSの提案、静的/実行時境界、移行・機能別PR・全体完了条件をまとめています。最新指示に基づく[安全性優先のD1–D3判断と移行](docs/internal/security-foundation/decisions-and-migration.md)を実装基準にしています。全標準HTTPのpolicy必須化、request-boundの単一Grant、永続Sessionを推奨し、旧入口併存は撤回しました。SF01は開発sourceへ接続し、SF05を独立実装・検証中で、SF02/SF03とSF04/SF06–SF08は未実装です。正式0.2.0は未リリースで、現行0.1.xへ遡及適用しません。move/Task/spawn、High/Low、SQLiteのnative lifecycleは維持します。正式0.2.0リリースとtagには別途明示承認が必要です。
+
+SF05のQueryはSQL構造の出所を制限し、tenant権限を内包しません。保護DBはtrusted reviewed adapterでGrantの実subject/targetをowner/tenant predicateへbindします。容量予約後にGrant.submitの同期gateで有効性を検査して一回のexecution permitを発行し、gate解放後の同期callbackで実SQLite queueへenqueueします。permit発行前の失効はenqueue0、発行後の失効はenqueue前でも受理済みです。replyのawaitをgateへ追加しません。mutable session/permissionの同Tx predicate/再確認とSF02永続Sessionは別の保証です。[ADR 014](docs/internal/adr/014-literal-query-and-sqlite-admission.md)と[SF05契約](docs/internal/security-foundation/sf05-contract.md)を参照してください。

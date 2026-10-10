@@ -66,7 +66,7 @@ async def add(state: Counter, amount: i64) -> Result[actor.Turn[Counter, i64, Er
 
 `call`の待ち時間は、受け入れ前の`mailbox_ms`と受け入れ後の`reply_ms`に分かれます。返信が時間切れになっても、受け入れ済みの更新は続く場合があります。二重更新を防ぐキーや結果確認を用意してから再試行してください。
 
-メッセージ・返信にはMap、view、shared、native resourceを使えません。共通データとactorの状態には、必要な所有権とRustの`Send`／`Sync`条件を満たすDbなども使えます。任意のRust資源型をNagiへ登録する公開APIは未実装です。
+メッセージ・返信にはMap、view、shared、native resourceを使えません。共通データとactorの状態には、必要な所有権とRustの`Send`／`Sync`条件を満たすsqlite.Poolなども使えます。任意のRust資源型をNagiへ登録する公開APIは未実装です。
 
 条件を満たすshared messageを将来許す方向は採用していますが、現行の受理範囲ではありません。thread安全性・容量計算・保持する資源・返信への流出を確認する詳細設計が必要です。actor自身の状態と、明示的に共有したDBなどの外部資源の状態は区別します。設計の境界は[DESIGN](../DESIGN.md)を参照してください。
 

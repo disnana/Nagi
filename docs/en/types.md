@@ -64,7 +64,7 @@ A view of a registered HTTP resource, such as `view[Request]`, refers to the val
 
 Resource views do not support `len`, `slice`, indexing, or `for`. You can index or iterate a `List[Status]` directly, but creating a view from a List of resources is currently unsupported.
 
-An App handler receives Request by move and reads state through `shared[State]`. Copy fields can be read, but non-Copy fields such as str cannot be moved out of shared state. Borrow them with `view(state.label)`. State fields may contain Db; classes containing Db or HTTP resources do not support JSON conversion. App's State and E type arguments cannot retain views. See [HTTP](http.md) and [standard imports](modules-and-rust.md#import-the-standard-http-library).
+An App handler receives Request by move and reads state through `shared[State]`. Copy fields can be read, but non-Copy fields such as str cannot be moved out of shared state. Borrow them with `view(state.label)`. State fields may contain sqlite.Pool; classes containing sqlite.Pool or HTTP resources do not support JSON conversion. App's State and E type arguments cannot retain views. See [HTTP](http.md) and [standard imports](modules-and-rust.md#import-the-standard-http-library).
 
 ## Pass a function as a value
 

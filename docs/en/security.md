@@ -62,3 +62,13 @@ Read failures with `auth.kind(view(failure))` and `auth.message(view(failure))`;
 The finalizer owns Content-Type, nosniff and reserved framing/security headers. Raw HTML, Set-Cookie, CORS/CSP, arbitrary cache and authentication-challenge headers cannot bypass this boundary. There is no guarantee of recovery from panic=abort, OOM, forced stopping of non-yielding work, arbitrary Rust double panic, or rollback of external side effects. Custom Rust HTTP hosts outside standard HTTP remain an explicit trusted boundary and do not inherit Policy guarantees automatically.
 
 [Migration](migration-0.2.0.md) · [Ownership](ownership.md) · [Task](task-handles.md) · [SQLite](sqlite-pool.md) · [Adopted contract](../internal/security-foundation/sf01-contract.md)
+
+## Protected SQLite operations
+
+Unreleased SF05 unifies the standard entry point around Query from a direct literal and actual values bound through Parameters. Query restricts the origin of SQL structure; it contains no Grant or tenant predicate.
+
+A reviewed trusted adapter holds fixed SQL and ownership predicates. Bind the **actual subject and target** supplied by `Grant.submit` into a predicate such as `WHERE owner=? AND id=?`. Adding a Grant to an arbitrary query cannot prove target isolation. Mutable session/owner conditions need a predicate or recheck in the same Tx. Durable Session and generation management remain SF02 work and are not counted as SF05 guarantees.
+
+A trusted Rust host waits for bounded queue capacity using Tx's opaque `reserve_exec`, then invokes `reservation.enqueue(Query, Parameters)` inside `Grant.submit`'s synchronous callback. Capacity reservation is not admission. Admission linearizes at single-use permit issuance under the gate. Revocation before issuance means zero native enqueues; invalidation after issuance leaves the operation admitted even before the callback synchronously enqueues. Later revocation or HTTP cancellation does not promise cancellation or rollback. The callback must synchronously send to the actual queue rather than return a Future that enqueues later.
+
+DDL/bootstrap belongs to trusted management code separate from requests. Fixed Rust SQL factories and handwritten FromRow adapters require review. Do not reexport a dynamic string factory to requests and bypass the standard literal contract. [SQLite](sqlite-pool.md) · [Migration](migration-0.2.0.md) · [SF05 contract](../internal/security-foundation/sf05-contract.en.md)

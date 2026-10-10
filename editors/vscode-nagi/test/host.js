@@ -205,7 +205,7 @@ async function run() {
 
 async function checkBuiltinCompletion(folder) {
   const file = path.join(folder, 'builtin-completion.nagi');
-  const text = 'class Item:\n    id: i64\nasync def load(db: Db) -> Result[unit, Error]:\n    items = try await db_all[Item](db, "SELECT 1 AS id")\n    print(len(items))\n    return ok(print(0))\ndef main():\n    print(0)\n';
+  const text = 'import std.db.sqlite as sqlite\nclass Item:\n    id: i64\nasync def load(tx: view[sqlite.Tx]) -> Result[unit, sqlite.Failure]:\n    items = try await sqlite.all[Item](tx, sqlite.literal("SELECT 1 AS id"), sqlite.parameters())\n    print(len(items))\n    return ok(print(0))\ndef main():\n    print(0)\n';
   fs.writeFileSync(file, text);
   const document = await vscode.workspace.openTextDocument(file);
   await vscode.window.showTextDocument(document);
@@ -213,10 +213,10 @@ async function checkBuiltinCompletion(folder) {
     return vscode.commands.executeCommand('vscode.executeCompletionItemProvider', document.uri,
       document.positionAt(document.getText().indexOf(needle) + delta));
   }
-  const existing = await candidates('db_all', 6);
-  assert.equal(existing.items.find(item => item.label === 'db_all').insertText.value, 'db_all', 'existing [Item] and arguments stay intact');
+  const existing = await candidates('sqlite.all', 10);
+  assert.equal(existing.items.find(item => item.label === 'all').insertText.value, 'all', 'existing [Item] and arguments stay intact');
   const globals = await candidates('print(len', 2);
-  assert.ok(globals.items.some(item => item.label === 'db_insert'), 'SQLite insertion is offered');
+  assert.ok(!globals.items.some(item => /^db_/.test(item.label)), 'retired SQLite builtins are absent');
   assert.ok(globals.items.some(item => item.label === 'uuid_parse'), 'UUID conversion is offered');
   const change = new vscode.WorkspaceEdit();
   change.insert(document.uri, document.positionAt(document.getText().length), '\n    ben');

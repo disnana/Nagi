@@ -290,7 +290,7 @@ async def main() -> Result[unit, Error]:
     return ok(print("完了"))
 ```
 
-`10ミリ秒待った`、`完了`の順で表示します。Pythonの`asyncio.sleep`は秒、Nagiの`sleep`はミリ秒です。`sleep`は`unit`を返すので`await`だけ、失敗し得るDB関数などは`try await db_open(...)`のように書きます。`await`は非同期処理を待ち、`try`は待った結果の失敗を伝えます。
+`10ミリ秒待った`、`完了`の順で表示します。Pythonの`asyncio.sleep`は秒、Nagiの`sleep`はミリ秒です。`sleep`は`unit`を返すので`await`だけ、失敗し得るDB関数などは`try await sqlite.open(path, config)`のように書きます。`await`は非同期処理を待ち、`try`は待った結果の失敗を伝えます。
 
 `sleep(10)`だけでは待っていないため`check`が拒否します。`await sleep(10)`に直します。awaitしただけで別taskが作られるわけではありません。一言でいうと、awaitで結果を待ちます。複数の処理を進める`spawn`と、その寿命を管理するscopeは[async](async.md)で試せます。
 

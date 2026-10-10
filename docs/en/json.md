@@ -20,7 +20,7 @@ Save this as `json.nagi` and run `nagic run json.nagi`. It prints `Nagi` and JSO
 
 ## Types and borrowing
 
-Besides classes, you can use JSON-compatible numbers, bool, str, List, and other data types. Functions, Error, enums, Db, and Html cannot be encoded or decoded. `check` also rejects them inside classes or containers such as List and Result.
+Besides classes, you can use JSON-compatible numbers, bool, str, List, and other data types. Functions, Error, enums, sqlite.Pool, and Html cannot be encoded or decoded. `check` also rejects them inside classes or containers such as List and Result.
 
 `json_decode[view[str]](text)` borrows a JSON string from the input. If you store the result, keep the input in a variable and do not move or replace it while borrowed. Use `json_decode[str](text)` when you need an independent owned string.
 

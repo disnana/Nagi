@@ -31,6 +31,14 @@ const RESOURCES: &[ResourceExpected] = &[
         &[],
     ),
     (
+        R::SqliteQueryValue,
+        M::Sqlite,
+        "Query",
+        &[],
+        [true, false, true, true, true],
+        &[],
+    ),
+    (
         R::SqliteParameters,
         M::Sqlite,
         "Parameters",
@@ -356,8 +364,8 @@ fn registered_resources_match_the_independent_inventory() {
         shared: false,
         debug: false,
     };
-    assert_eq!(RESOURCES.len(), 38);
-    assert_eq!(stdlib::RESOURCES.len(), 38);
+    assert_eq!(RESOURCES.len(), 39);
+    assert_eq!(stdlib::RESOURCES.len(), 39);
     assert_eq!(
         stdlib::RESOURCES.iter().copied().collect::<HashSet<_>>(),
         RESOURCES.iter().map(|r| r.0).collect()
@@ -450,6 +458,7 @@ const OPERATIONS: &[OperationExpected] = &[
     op!(AuthUnavailable,Auth,"unavailable",0,&[],"",None,false,true,"() -> Failure"),
     op!(AuthInternal,Auth,"internal",0,&[],"",None,false,true,"() -> Failure"),
 
+    op!(SqliteLiteral,Sqlite,"literal",1,&[],"M",None,false,false,"(sql: str) -> Query"),
     op!(SqliteOptions,Sqlite,"options",4,&[],"MMMM",None,false,false,"(connections: i64, queue_capacity: i64, acquire_ms: i64, busy_ms: i64) -> Result[Options, Error]"),
     op!(SqliteOpen,Sqlite,"open",2,&[],"RM",None,true,false,"(path: view[str], options: Options) -> Future[Result[Pool, Failure]]"),
     op!(SqliteClonePool,Sqlite,"clone_pool",1,&[],"R",None,false,false,"(pool: view[Pool]) -> Pool"),
@@ -460,9 +469,9 @@ const OPERATIONS: &[OperationExpected] = &[
     op!(SqliteBindText,Sqlite,"bind_text",2,&[],"MM",None,false,false,"(parameters: Parameters, value: str) -> Parameters"),
     op!(SqliteBindBytes,Sqlite,"bind_bytes",2,&[],"MM",None,false,false,"(parameters: Parameters, value: bytes) -> Parameters"),
     op!(SqliteBindNull,Sqlite,"bind_null",1,&[],"M",None,false,false,"(parameters: Parameters) -> Parameters"),
-    op!(SqliteQuery,Sqlite,"query",3,&["T"],"RRM",None,true,true,"[T](tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[Option[T], Failure]]"),
-    op!(SqliteAll,Sqlite,"all",3,&["T"],"RRM",None,true,true,"[T](tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[List[T], Failure]]"),
-    op!(SqliteExec,Sqlite,"exec",3,&[],"RRM",None,true,false,"(tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[i64, Failure]]"),
+    op!(SqliteQuery,Sqlite,"query",3,&["T"],"RMM",None,true,true,"[T](tx: view[Tx], query: Query, parameters: Parameters) -> Future[Result[Option[T], Failure]]"),
+    op!(SqliteAll,Sqlite,"all",3,&["T"],"RMM",None,true,true,"[T](tx: view[Tx], query: Query, parameters: Parameters) -> Future[Result[List[T], Failure]]"),
+    op!(SqliteExec,Sqlite,"exec",3,&[],"RMM",None,true,false,"(tx: view[Tx], query: Query, parameters: Parameters) -> Future[Result[i64, Failure]]"),
     op!(SqliteCommit,Sqlite,"commit",1,&[],"M",None,true,false,"(tx: Tx) -> Future[Result[unit, Failure]]"),
     op!(SqliteRollback,Sqlite,"rollback",1,&[],"M",None,true,false,"(tx: Tx) -> Future[Result[unit, Failure]]"),
     op!(SqliteClose,Sqlite,"close",2,&[],"RM",None,true,false,"(pool: view[Pool], timeout_ms: i64) -> Future[Result[unit, Failure]]"),
@@ -522,8 +531,8 @@ const OPERATIONS: &[OperationExpected] = &[
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 82);
-    assert_eq!(stdlib::OPERATIONS.len(), 82);
+    assert_eq!(OPERATIONS.len(), 83);
+    assert_eq!(stdlib::OPERATIONS.len(), 83);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()

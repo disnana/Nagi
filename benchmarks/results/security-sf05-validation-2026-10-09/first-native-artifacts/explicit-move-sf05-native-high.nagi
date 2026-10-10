@@ -1,0 +1,29 @@
+import std.auth as auth
+import std.http.server as http
+import std.db.sqlite as sqlite
+enum Edit:
+    Allowed
+class State:
+    pool: sqlite.Pool
+    subject: i64
+    target: i64
+class ValueRow:
+    value: i64
+@rust("native::verify")
+extern async def verify(request: http.Request, state: shared[State]) -> Result[auth.VerifiedIdentity, auth.Failure]
+@rust("native::authorize")
+extern async def authorize(scope: auth.AuthScope, request: http.Request, state: shared[State]) -> Result[auth.Grant[Edit], auth.Failure]
+@rust("native::protected_update")
+extern async def protected_update(pool: view[sqlite.Pool], grant: auth.Grant[Edit], value: i64) -> Result[i64, Error]
+async def handler(request: http.Request, state: shared[State], grant: auth.Grant[Edit]) -> Result[http.Response, Error]:
+    changed = try await protected_update(view(state.pool), grant, 101)
+    return http.json[i64](http.Status.OK, changed)
+def setup(pool: sqlite.Pool, subject: i64, target: i64) -> Result[http.App[State, Error], Error]:
+    app = http.app_default[State](State(pool=pool, subject=subject, target=target))
+    policy = http.authorized_policy[State, Edit](verify, authorize)
+    return http.route(app, http.Method.POST, "/update", policy, handler)
+def selected_query() -> sqlite.Query:
+    return sqlite.literal("SELECT value FROM protected WHERE id=?")
+async def read_value(tx: view[sqlite.Tx], id: i64) -> Result[ValueRow?, sqlite.Failure]:
+    query = selected_query()
+    return await sqlite.query[ValueRow](tx, query, sqlite.bind_i64(sqlite.parameters(), id))

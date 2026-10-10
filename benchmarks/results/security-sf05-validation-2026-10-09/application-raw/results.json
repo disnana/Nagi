@@ -1,0 +1,181 @@
+[
+  {
+    "project": "stock-report",
+    "source": "high",
+    "status": "passed",
+    "cases": 12,
+    "result": "passed"
+  },
+  {
+    "project": "stock-report",
+    "source": "low",
+    "status": "passed",
+    "cases": 12,
+    "result": "passed"
+  },
+  {
+    "project": "device-settings",
+    "source": "high",
+    "status": "passed",
+    "cases": 12,
+    "starts": 2,
+    "result": "passed"
+  },
+  {
+    "project": "device-settings",
+    "source": "low",
+    "status": "passed",
+    "cases": 12,
+    "starts": 2,
+    "result": "passed"
+  },
+  {
+    "project": "seat-reservations",
+    "source": "high",
+    "status": "passed",
+    "cases": 1,
+    "result": "passed"
+  },
+  {
+    "project": "seat-reservations",
+    "source": "low",
+    "status": "passed",
+    "cases": 1,
+    "result": "passed"
+  },
+  {
+    "project": "file-json",
+    "source": "high",
+    "status": "passed",
+    "cases": 4,
+    "result": "passed"
+  },
+  {
+    "project": "file-json",
+    "source": "low",
+    "status": "passed",
+    "cases": 4,
+    "result": "passed"
+  },
+  {
+    "project": "quote-api",
+    "source": "high",
+    "status": "passed",
+    "cases": 51,
+    "starts": 2,
+    "invalid_configurations": 3,
+    "result": "passed"
+  },
+  {
+    "project": "quote-api",
+    "source": "low",
+    "status": "passed",
+    "cases": 51,
+    "starts": 2,
+    "invalid_configurations": 3,
+    "result": "passed"
+  },
+  {
+    "project": "supervised-worker",
+    "source": "high",
+    "status": "passed",
+    "cases": 12,
+    "starts": 1,
+    "result": "passed"
+  },
+  {
+    "project": "supervised-worker",
+    "source": "low",
+    "status": "passed",
+    "cases": 12,
+    "starts": 1,
+    "result": "passed"
+  },
+  {
+    "project": "byte-inspector",
+    "source": "high",
+    "status": "passed",
+    "cases": 10,
+    "checks": [
+      "empty",
+      "ascii",
+      "zero-and-high-bytes",
+      "all-byte-values",
+      "utf8",
+      "invalid-utf8",
+      "maximum-body",
+      "head",
+      "method",
+      "missing-route"
+    ]
+  },
+  {
+    "project": "byte-inspector",
+    "source": "low",
+    "status": "passed",
+    "cases": 10,
+    "checks": [
+      "empty",
+      "ascii",
+      "zero-and-high-bytes",
+      "all-byte-values",
+      "utf8",
+      "invalid-utf8",
+      "maximum-body",
+      "head",
+      "method",
+      "missing-route"
+    ]
+  },
+  {
+    "project": "axum-service",
+    "source": "high",
+    "status": "passed",
+    "cases": 22,
+    "starts": 1,
+    "invalid_configurations": 3,
+    "result": "passed",
+    "native_tests": {
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  {
+    "project": "axum-service",
+    "source": "low",
+    "status": "passed",
+    "cases": 22,
+    "starts": 1,
+    "invalid_configurations": 3,
+    "result": "passed",
+    "native_tests": {
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  {
+    "project": "auth-boundary",
+    "source": "high",
+    "status": "passed",
+    "cases": 52,
+    "starts": 2,
+    "result": "passed"
+  },
+  {
+    "project": "auth-boundary",
+    "source": "low",
+    "status": "passed",
+    "cases": 52,
+    "starts": 2,
+    "result": "passed"
+  },
+  {
+    "project": "order-quote",
+    "source": "low",
+    "status": "passed",
+    "cases": 23,
+    "result": "passed"
+  }
+]

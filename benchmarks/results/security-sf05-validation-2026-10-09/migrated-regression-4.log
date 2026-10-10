@@ -1,0 +1,23 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.55s
+     Running tests/owned_database.rs (/workspace/nagi-sf01-target/debug/deps/owned_database-cebbb31e784237cc)
+
+running 2 tests
+test owned_scalars_decode_sqlite_rows_in_high_and_independent_saved_low ... FAILED
+test owned_wrappers_preserve_unsupported_fields_and_manual_row_eligibility ... ok
+
+failures:
+
+---- owned_scalars_decode_sqlite_rows_in_high_and_independent_saved_low stdout ----
+
+thread 'owned_scalars_decode_sqlite_rows_in_high_and_independent_saved_low' (790024) panicked at compiler/tests/owned_database.rs:132:37:
+called `Result::unwrap()` on an `Err` value: "line 33: 型が一致しません: expected view[stdlib:std.db.sqlite::Tx], got stdlib:std.db.sqlite::Tx。変換は明示してください"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    owned_scalars_decode_sqlite_rows_in_high_and_independent_saved_low
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+error: test failed, to rerun pass `-p nagic --test owned_database`

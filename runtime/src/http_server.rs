@@ -23,6 +23,9 @@ use std::{
 };
 use tokio::{net::TcpListener, sync::Semaphore, task::JoinSet};
 
+mod closing_io;
+use closing_io::ClosingIo;
+
 pub use axum::http::Method;
 
 /// A validated final response status. Informational responses use a different
@@ -1009,9 +1012,14 @@ where
 // the underlying flush only after its pending headers/body buffers have been
 // written, so clearing the deadline here leaves idle keep-alive timing to its
 // independent header timer. Sending bytes does not reset the absolute limit.
+#[derive(Clone, Copy, Default)]
+struct Sending {
+    deadline: Option<tokio::time::Instant>,
+    discard_remaining: bool,
+}
 struct TimedIo<T> {
     inner: T,
-    sending: tokio::sync::watch::Sender<Option<tokio::time::Instant>>,
+    sending: tokio::sync::watch::Sender<Sending>,
 }
 impl<T: hyper::rt::Read + Unpin> hyper::rt::Read for TimedIo<T> {
     fn poll_read(
@@ -1042,8 +1050,8 @@ impl<T: hyper::rt::Write + Unpin> hyper::rt::Write for TimedIo<T> {
     }
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         let result = Pin::new(&mut self.inner).poll_flush(cx);
-        if matches!(result, Poll::Ready(Ok(()))) && self.sending.borrow().is_some() {
-            self.sending.send_replace(None);
+        if matches!(result, Poll::Ready(Ok(()))) && self.sending.borrow().deadline.is_some() {
+            self.sending.send_modify(|state| state.deadline = None);
         }
         result
     }
@@ -1115,26 +1123,31 @@ where
                 let app = Arc::clone(&app);
                 let options = Arc::clone(&options);
                 let requests = Arc::clone(&requests);
-                let (sending, mut sent) = tokio::sync::watch::channel(None);
+                let (sending, mut sent) = tokio::sync::watch::channel(Sending::default());
                 let send_deadline = options.send_deadline;
+                let close_deadline = options.body_deadline;
                 let service_sending = sending.clone();
                 let service = service_fn(move |request| {
+                    let may_have_body = !hyper::body::Body::is_end_stream(request.body());
                     let future = dispatch(Arc::clone(&app), request, Arc::clone(&options), Arc::clone(&requests));
                     let sending = service_sending.clone();
                     async move {
                         let response = future.await;
-                        sending.send_replace(Some(tokio::time::Instant::now() + send_deadline));
+                        let discard_remaining = may_have_body && response.as_ref().is_ok_and(|response| {
+                            response.headers().get(names::CONNECTION).is_some_and(|value| value == "close")
+                        });
+                        sending.send_replace(Sending { deadline: Some(tokio::time::Instant::now() + send_deadline), discard_remaining });
                         response
                     }
                 });
-                let connection = builder.serve_connection(TimedIo { inner: TokioIo::new(stream), sending }, service);
+                let connection = builder.serve_connection(TimedIo { inner: ClosingIo::new(TokioIo::new(stream), close_deadline, sent.clone()), sending }, service);
                 let mut stopped = shutdown.subscribe();
                 tasks.spawn(async move {
                     let _permit = permit;
                     tokio::pin!(connection);
                     let mut stopping = false;
                     loop {
-                        let deadline = *sent.borrow_and_update();
+                        let deadline = sent.borrow_and_update().deadline;
                         let expires = async {
                             match deadline { Some(deadline) => tokio::time::sleep_until(deadline).await, None => std::future::pending::<()>().await }
                         };

@@ -1,0 +1,4 @@
+     Locking 105 packages to highest compatible versions
+   Compiling nagi-sqlite-pool-80440f0ed20f6ac1 v0.1.0 (/workspace/Nagi-security-sf05/build/sqlite-example-verification/sqlite-6av_kq26/high-build/.nagi/apps/nagi-sqlite-pool-80440f0ed20f6ac1/generations/.staging-g-e091c-18dce7ebcd69f662-0)
+    Finished `release` profile [optimized] target(s) in 2.82s
+native: /workspace/Nagi-security-sf05/build/sqlite-example-verification/sqlite-6av_kq26/high-build/.nagi/apps/nagi-sqlite-pool-80440f0ed20f6ac1/generations/g-e091c-18dce7ebcd69f662-0/nagi-80440f0ed20f6ac1-g-e091c-18dce7ebcd69f662-0

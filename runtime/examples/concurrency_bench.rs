@@ -59,14 +59,24 @@ async fn main() {
         json!({"name":"queue","stats":rt::queue_test(1000).await.unwrap(),"rss_kib":rss_kib()})
     );
     // 非同期DB workerの生成と破棄を反復し、native thread/connectionを残さない。
-    let baseline = rt::Db::live_workers();
     for _ in 0..100 {
-        let db = rt::Db::open(":memory:").await.unwrap();
-        db.exec("SELECT 1").await.unwrap();
-        drop(db);
+        use rt::sqlite as db;
+        let pool = db::open(":memory:", db::options(1, 2, 1000, 0).unwrap())
+            .await
+            .unwrap();
+        let tx = db::begin(&pool, db::BeginMode::Deferred).await.unwrap();
+        db::exec(
+            &tx,
+            db::literal("CREATE TABLE lifecycle(n)"),
+            db::parameters(),
+        )
+        .await
+        .unwrap();
+        db::rollback(tx).await.unwrap();
+        db::close(&pool, 1000).await.unwrap();
     }
     println!(
         "{}",
-        json!({"name":"db_worker_lifecycle","opened_closed":100,"before":baseline,"after":rt::Db::live_workers()})
+        json!({"name":"sqlite_pool_lifecycle","opened_closed":100,"close":"actual native close/join awaited"})
     );
 }

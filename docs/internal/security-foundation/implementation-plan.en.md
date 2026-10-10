@@ -2,7 +2,7 @@
 
 [RFC](rfc.en.md) · [日本語](implementation-plan.md) · [Baseline audit](baseline-audit.md)
 
-2026-10-08 JST. **Plan, not whole-Foundation completion.** SF00 is merged in #100; SF01 is implemented and under validation in separate main-targeted Draft #101. Later stages remain incomplete. [Revised D1–D3 decisions](decisions-and-migration.en.md) govern implementation under the latest user instruction; previous compatibility deferrals do not require renewed approval. Fix feature signatures/contracts before RED tests. Independent internal investigations, dependency comparisons, and harness design can proceed. IDs below are candidate units, not assigned GitHub PR numbers.
+2026-10-09 UTC. **Plan, not whole-Foundation completion.** SF00 #100 and SF01 #101 are merged into main. SF05 is being implemented and verified independently from base main `3b8da226`; its [contract](sf05-contract.en.md) and [evidence/remaining checks](../security-foundation-sf05-results.md) are separate records. Independent SF05 review and four-OS evidence at the latest head remain to be checked. Later stages and the whole Foundation remain incomplete. [Revised D1–D3 decisions](decisions-and-migration.en.md) govern implementation under the latest user instruction; previous compatibility deferrals do not require renewed approval. Fix feature signatures/contracts before RED tests. Independent internal investigations, dependency comparisons, and harness design can proceed. IDs below are candidate units, not assigned GitHub PR numbers.
 
 ## PR boundaries and dependencies
 

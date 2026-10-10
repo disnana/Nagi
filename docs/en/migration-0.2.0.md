@@ -1,6 +1,6 @@
-# Migrating to 0.2.0 SF01 (unreleased)
+# Migrating to 0.2.0 SF01/SF05 (unreleased)
 
-This describes SF01 development-source changes. Neither all of Security Foundation nor formal 0.2.0 is released. Published 0.1.x binaries do not provide the new Policy APIs. The change avoids preserving policy-free standard HTTP and indefinite issuers through legacy coexistence.
+This describes SF01/SF05 development-source changes. Neither all of Security Foundation nor formal 0.2.0 is released. Published 0.1.x binaries do not provide the new Policy APIs. The change avoids preserving policy-free standard HTTP and indefinite issuers through legacy coexistence.
 
 | Retired API/behavior | Diagnostic and migration | Equivalent business verification |
 |---|---|---|
@@ -20,3 +20,17 @@ Owned local Option/Result and same-task async calls remain available for AuthSco
 [Minimal HTTP](http.md) · [Authentication and failure table](security.md) · [API reference](http-server.md) · [Migration test map](../internal/security-foundation/sf01-compiler-migration-map.md)
 
 Move, Task/spawn semantics and SQLite Pool/Tx acquisition budgets, close, actual join and Outcome are preserved. Unifying old Db/dynamic SQL belongs to SF05. Custom Rust/Axum hosts remain explicit trusted boundaries outside the standard dispatcher guarantee; no compatibility layer automatically falls back to them.
+
+## SQLite SF05
+
+| Old entry | Checker/Rust migration | Equivalent business verification |
+|---|---|---|
+| Db, db_open/exec/all/query/insert/update/write | SF05 migration; remove public runtime Db/Sql. Explicit Options, Pool/Tx, literal Query, Parameters | Original High/saved-Low/handwritten-Low positions and native NULL/owned/manual rows |
+| string/view in query/all/exec | Require Query returned by direct `sqlite.literal("...")` | Query storage/selection/return and native binds |
+| Variables/concatenation/formatting/dynamic str in constructor | Reject at argument; bind values and select reviewed finite Queries | Aliases, direct imports, unrelated user names, positive/negative paths |
+| INSERT/UPDATE RETURNING, multi-statement exec | exec+readonly query in the same Tx; anonymous ? in SQL occurrence order; trusted fixed bootstrap | Native CRUD/inventory/task/device-settings/result API |
+| Protected SQL | Bind actual Grant subject/target into owner/tenant predicate; reserve then synchronously enqueue inside Grant.submit | Other tenant/target affects zero; earlier revoke enqueues zero; admitted work executes; revoke while waiting capacity |
+
+Ordinary check needs no SQL engine. Opt-in checks prepare direct Query and Parameters builder chains, leaving unknown structure and actual types/NULL to runtime. FromRow and fixed Rust SQL remain trusted adapter boundaries, without reexporting request-facing dynamic factories. Session generation checks in the same Tx remain SF02 work. Adding a Grant to a generic query cannot promise tenant isolation.
+
+[SQLite](sqlite-pool.md) · [Protected operations](security.md#protected-sqlite-operations) · [SF05 contract](../internal/security-foundation/sf05-contract.en.md)

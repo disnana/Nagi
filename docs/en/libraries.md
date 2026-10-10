@@ -31,9 +31,9 @@ Nagi's `check` validates declarations and calls. A `build` checks that the Rust 
 
 A synchronous function type lets Nagi pass a function to Rust. The [custom HTTP foundation](../../test-nagi-code/library-examples/custom-http/README.en.md) uses this approach.
 
-Axum/Tokio handles accepting HTTP requests and stopping the server; a Nagi function produces the response. The example uses a Rust foundation without calling Nagi's built-in `serve` or passing a Db.
+Axum/Tokio handles accepting HTTP requests and stopping the server; a Nagi function produces the response. The example uses a Rust foundation without calling Nagi's built-in `serve` or passing a sqlite.Pool.
 
-Nagi's built-in HTTP server limits do not automatically apply to this server. The sample README lists the limits it sets. Generated applications still depend on the common runtime, so SQLite remains a build dependency even if the application never uses Db.
+Nagi's built-in HTTP server limits do not automatically apply to this server. The sample README lists the limits it sets. Generated applications still depend on the common runtime, so SQLite remains a build dependency even if the application never uses sqlite.Pool.
 
 ## Replace High code with Low
 

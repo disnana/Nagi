@@ -1,0 +1,50 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `test` profile [unoptimized] target(s) in 10.22s
+     Running tests/builtin_type_contracts.rs (/workspace/nagi-sf01-target/debug/deps/builtin_type_contracts-1050d6e9a2c96fa4)
+
+running 12 tests
+test borrowed_byte_decoding_requires_builtin_u8_in_generated_slices ... ok
+test json_decoder_checks_borrowed_slices_and_builtin_map_key_traits ... ok
+test json_rejects_definitely_non_serializable_types_at_the_call ... ok
+test json_encoding_rejects_unawaited_futures_and_inferred_future_containers ... ok
+test encoded_runtime_values_are_rejected_even_when_a_same_named_class_exists ... ok
+test retired_html_annotations_report_migration_before_json_or_db_contracts ... ok
+test same_named_classes_keep_the_emitted_json_and_database_contracts ... FAILED
+test sqlite_row_operations_reject_scalar_or_foreign_container_targets ... FAILED
+test user_functions_with_json_builtin_names_keep_their_own_contracts ... ok
+test json_keeps_data_classes_shared_values_and_borrowed_strings_or_bytes ... ok
+test sqlite_resource_json_contracts_reject_at_the_call ... ok
+test sqlite_rows_keep_generated_scalars_and_native_manual_bridge_boundary ... ok
+
+failures:
+
+---- same_named_classes_keep_the_emitted_json_and_database_contracts stdout ----
+
+thread 'same_named_classes_keep_the_emitted_json_and_database_contracts' (788978) panicked at compiler/tests/builtin_type_contracts.rs:27:48:
+called `Result::unwrap_err()` on an `Ok` value: ()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- sqlite_row_operations_reject_scalar_or_foreign_container_targets stdout ----
+
+thread 'sqlite_row_operations_reject_scalar_or_foreign_container_targets' (788980) panicked at compiler/tests/builtin_type_contracts.rs:28:9:
+line 9: SQLite行型には標準FromRow生成に対応するscalar fieldのclassを指定してください
+import std.db.sqlite as sqlite
+class Row:
+    id: i64
+class Manual:
+    values: List[i64]
+class fn:
+    id: i64
+async def read(db: view[sqlite.Tx]) -> Result[unit, sqlite.Failure]:
+    value = try await sqlite.all[i64](db, sqlite.literal("SELECT id FROM rows"), sqlite.parameters())
+    return ok(print(1))
+
+
+
+failures:
+    same_named_classes_keep_the_emitted_json_and_database_contracts
+    sqlite_row_operations_reject_scalar_or_foreign_container_targets
+
+test result: FAILED. 10 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+error: test failed, to rerun pass `-p nagic --test builtin_type_contracts`

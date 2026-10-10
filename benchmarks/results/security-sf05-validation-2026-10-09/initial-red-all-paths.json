@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "nagic",
+    "--test",
+    "security_sf05",
+    "--",
+    "--nocapture"
+  ],
+  "exit": 101,
+  "seconds": 0.5003771781921387,
+  "source_head": "3b8da226eb26c27187f3b0bc4fa39639abe4ac57",
+  "cache": "/workspace/nagi-sf01-target (warm)",
+  "paths": "High, saved Low without High on disk, handwritten Low: all parse/resolve then legacy check acceptance",
+  "tests": 3
+}

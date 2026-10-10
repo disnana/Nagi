@@ -79,12 +79,12 @@ async fn path_validation_and_owned_open_future() {
 }
 
 #[tokio::test]
-async fn public_owned_parameters_static_and_dynamic_sql_round_trip() {
+async fn public_owned_parameters_literal_query_round_trip() {
     let pool = memory().await;
     let tx = begin(&pool, BeginMode::Deferred).await.unwrap();
     exec(
         &tx,
-        Sql::Static("CREATE TABLE data(n,text,bytes,nullable,real)"),
+        literal("CREATE TABLE data(n,text,bytes,nullable,real)"),
         parameters(),
     )
     .await
@@ -100,13 +100,9 @@ async fn public_owned_parameters_static_and_dynamic_sql_round_trip() {
     )
     .unwrap();
     assert_eq!(
-        exec(
-            &tx,
-            Sql::Owned("INSERT INTO data VALUES (?,?,?,?,?)".to_owned()),
-            params
-        )
-        .await
-        .unwrap(),
+        exec(&tx, literal("INSERT INTO data VALUES (?,?,?,?,?)"), params)
+            .await
+            .unwrap(),
         1
     );
     let value = Payload {
@@ -117,29 +113,21 @@ async fn public_owned_parameters_static_and_dynamic_sql_round_trip() {
         real: 1.5,
     };
     assert_eq!(
-        query::<Payload>(&tx, Sql::Static("SELECT * FROM data"), parameters())
+        query::<Payload>(&tx, literal("SELECT * FROM data"), parameters())
             .await
             .unwrap(),
         Some(value)
     );
     assert_eq!(
-        all::<Payload>(
-            &tx,
-            Sql::Static("SELECT * FROM data WHERE n=0"),
-            parameters()
-        )
-        .await
-        .unwrap(),
+        all::<Payload>(&tx, literal("SELECT * FROM data WHERE n=0"), parameters())
+            .await
+            .unwrap(),
         vec![]
     );
     assert_eq!(
-        query::<Payload>(
-            &tx,
-            Sql::Static("SELECT * FROM data WHERE n=0"),
-            parameters()
-        )
-        .await
-        .unwrap(),
+        query::<Payload>(&tx, literal("SELECT * FROM data WHERE n=0"), parameters())
+            .await
+            .unwrap(),
         None
     );
     commit(tx).await.unwrap();
@@ -150,7 +138,7 @@ async fn public_owned_parameters_static_and_dynamic_sql_round_trip() {
 async fn public_failures_preserve_causes_and_metadata_debug() {
     let pool = memory().await;
     let tx = begin(&pool, BeginMode::Deferred).await.unwrap();
-    let bind = query::<Payload>(&tx, Sql::Static("SELECT ? AS n"), parameters())
+    let bind = query::<Payload>(&tx, literal("SELECT ? AS n"), parameters())
         .await
         .unwrap_err();
     assert_eq!(bind.kind, FailureKind::Bind);
@@ -161,7 +149,7 @@ async fn public_failures_preserve_causes_and_metadata_debug() {
     assert!(copy_cleanup_error(&bind).is_none());
     let sql = exec(
         &tx,
-        Sql::Static("INSERT INTO secret_table VALUES(42)"),
+        literal("INSERT INTO secret_table VALUES(42)"),
         parameters(),
     )
     .await

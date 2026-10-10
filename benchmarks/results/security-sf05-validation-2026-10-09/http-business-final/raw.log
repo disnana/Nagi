@@ -1,0 +1,16 @@
+{"method": "GET", "path": "/users", "status": 200, "body": []}
+{"method": "GET", "path": "/users/999", "status": 404, "body": ""}
+{"method": "POST", "path": "/users", "status": 200, "body": {"id": 1, "name": "small fixture", "age": 18}}
+{"method": "GET", "path": "/users/1", "status": 200, "body": {"id": 1, "name": "small fixture", "age": 18}}
+{"method": "PUT", "path": "/users/1", "status": 200, "body": {"id": 1, "name": "変更済み", "age": 19}}
+{"method": "PUT", "path": "/users/999", "status": 404, "body": "database row not found"}
+{"method": "DELETE", "path": "/users/1", "status": 200, "body": 1}
+{"method": "GET", "path": "/users/1", "status": 404, "body": ""}
+{"method": "GET", "path": "/users", "status": 200, "body": []}
+Passed: crud (high), 9 business HTTP checks
+Traceback (most recent call last):
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/http_examples.py", line 143, in <module>
+    main()
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/http_examples.py", line 101, in main
+    probe.bind(("127.0.0.1", fixed_port or 0))
+OSError: [Errno 98] Address already in use

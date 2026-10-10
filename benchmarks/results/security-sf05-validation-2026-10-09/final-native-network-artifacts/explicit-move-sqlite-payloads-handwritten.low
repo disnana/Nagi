@@ -1,0 +1,24 @@
+import std.db.sqlite as sqlite;
+fn local_list(tx: sqlite.Tx) -> List[sqlite.Tx] { return [tx]; }
+fn local_map(values: Map[str, sqlite.Tx]) -> Map[str, sqlite.Tx] { return values; }
+fn duplicate(values: view[Option[shared[sqlite.Failure]]]) -> List[Option[shared[sqlite.Failure]]] { return copy(values); }
+fn message(problem: sqlite.Failure) -> str { return copy(problem.message); }
+record State { pool: sqlite.Pool; }
+record FailureState { failure: sqlite.Failure; }
+async fn begin_shared(state: shared[State]) -> Result[sqlite.Tx, sqlite.Failure] { return await sqlite.begin(state.pool, sqlite.BeginMode.DEFERRED); }
+fn inspect_shared(state: shared[FailureState]) -> str { return copy(state.failure.message); }
+fn classify(problem: view[sqlite.Failure]) -> sqlite.FailureKind { return problem.kind; }
+fn outcome(problem: view[sqlite.Failure]) -> sqlite.Outcome { return problem.outcome; }
+fn retired(problem: view[sqlite.Failure]) -> bool { return problem.retired; }
+async fn child(value: unit) { print(0); }
+async fn completed(tx: sqlite.Tx) -> Result[unit, Error] {
+    let result = await sqlite.commit(tx);
+    match result {
+        case Ok(done) { return ok(done); }
+        case Err(problem) { return error("commit failed"); }
+    }
+}
+async fn launch_completed(tx: sqlite.Tx) -> Result[unit, Error] {
+    scope { spawn child(try await completed(tx)); }
+    return ok(print(0));
+}

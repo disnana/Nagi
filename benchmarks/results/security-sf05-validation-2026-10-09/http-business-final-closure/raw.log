@@ -1,0 +1,23 @@
+{"method": "GET", "path": "/api/tasks", "status": 200, "body": []}
+{"method": "GET", "path": "/api/tasks/999", "status": 404, "body": ""}
+{"method": "POST", "path": "/api/tasks", "status": 200, "body": {"id": 1, "title": "small fixture", "done": false}}
+{"method": "GET", "path": "/api/tasks/1", "status": 200, "body": {"id": 1, "title": "small fixture", "done": false}}
+{"method": "PUT", "path": "/api/tasks/1", "status": 200, "body": {"id": 1, "title": "変更済み", "done": true}}
+{"method": "PUT", "path": "/api/tasks/999", "status": 404, "body": "database row not found"}
+{"method": "DELETE", "path": "/api/tasks/1", "status": 200, "body": 1}
+{"method": "GET", "path": "/api/tasks/1", "status": 404, "body": ""}
+{"method": "GET", "path": "/api/tasks", "status": 200, "body": []}
+Passed: tasks (high), 9 business HTTP checks
+{"method": "GET", "path": "/api/tasks", "status": 200, "body": []}
+{"method": "GET", "path": "/api/tasks/999", "status": 404, "body": ""}
+{"method": "POST", "path": "/api/tasks", "status": 200, "body": {"id": 1, "title": "small fixture", "done": false}}
+{"method": "GET", "path": "/api/tasks/1", "status": 200, "body": {"id": 1, "title": "small fixture", "done": false}}
+{"method": "PUT", "path": "/api/tasks/1", "status": 200, "body": {"id": 1, "title": "変更済み", "done": true}}
+{"method": "PUT", "path": "/api/tasks/999", "status": 404, "body": "database row not found"}
+{"method": "DELETE", "path": "/api/tasks/1", "status": 200, "body": 1}
+{"method": "GET", "path": "/api/tasks/1", "status": 404, "body": ""}
+{"method": "GET", "path": "/api/tasks", "status": 200, "body": []}
+Passed: tasks (saved-low), 9 business HTTP checks
+Passed: result-api (high), 15 business HTTP checks
+Passed: result-api (saved-low), 15 business HTTP checks
+HTTP examples: 4 native runs, 48 business checks, 0 failures

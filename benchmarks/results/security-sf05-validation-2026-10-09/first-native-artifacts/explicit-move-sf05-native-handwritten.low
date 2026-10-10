@@ -1,0 +1,26 @@
+import std.auth as auth;
+import std.http.server as http;
+import std.db.sqlite as sqlite;
+enum Edit { Allowed; }
+record State { pool: sqlite.Pool; subject: i64; target: i64; }
+record ValueRow { value: i64; }
+@rust("native::verify")
+extern async fn verify(request: http.Request, state: shared[State]) -> Result[auth.VerifiedIdentity, auth.Failure];
+@rust("native::authorize")
+extern async fn authorize(scope: auth.AuthScope, request: http.Request, state: shared[State]) -> Result[auth.Grant[Edit], auth.Failure];
+@rust("native::protected_update")
+extern async fn protected_update(pool: view[sqlite.Pool], grant: auth.Grant[Edit], value: i64) -> Result[i64, Error];
+async fn handler(request: http.Request, state: shared[State], grant: auth.Grant[Edit]) -> Result[http.Response, Error] {
+    let changed = try await protected_update(view(state.pool), grant, 101);
+    return http.json[i64](http.Status.OK, changed);
+}
+fn setup(pool: sqlite.Pool, subject: i64, target: i64) -> Result[http.App[State, Error], Error] {
+    let app = http.app_default[State](State(pool=pool, subject=subject, target=target));
+    let policy = http.authorized_policy[State, Edit](verify, authorize);
+    return http.route(app, http.Method.POST, "/update", policy, handler);
+}
+fn selected_query() -> sqlite.Query { return sqlite.literal("SELECT value FROM protected WHERE id=?"); }
+async fn read_value(tx: view[sqlite.Tx], id: i64) -> Result[ValueRow?, sqlite.Failure] {
+    let query = selected_query();
+    return await sqlite.query[ValueRow](tx, query, sqlite.bind_i64(sqlite.parameters(), id));
+}

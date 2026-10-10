@@ -1,0 +1,45 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.57s
+     Running tests/builtin_type_contracts.rs (/workspace/nagi-sf01-target/debug/deps/builtin_type_contracts-1050d6e9a2c96fa4)
+
+running 12 tests
+test borrowed_byte_decoding_requires_builtin_u8_in_generated_slices ... ok
+test encoded_runtime_values_are_rejected_even_when_a_same_named_class_exists ... ok
+test json_rejects_definitely_non_serializable_types_at_the_call ... ok
+test json_decoder_checks_borrowed_slices_and_builtin_map_key_traits ... ok
+test json_encoding_rejects_unawaited_futures_and_inferred_future_containers ... ok
+test retired_html_annotations_report_migration_before_json_or_db_contracts ... ok
+test json_keeps_data_classes_shared_values_and_borrowed_strings_or_bytes ... ok
+test sqlite_resource_json_contracts_reject_at_the_call ... ok
+test user_functions_with_json_builtin_names_keep_their_own_contracts ... ok
+test sqlite_rows_keep_generated_scalars_and_native_manual_bridge_boundary ... ok
+test same_named_classes_keep_the_emitted_json_and_database_contracts ... ok
+test sqlite_row_operations_reject_scalar_or_foreign_container_targets ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.19s
+
+     Running tests/class_field_types.rs (/workspace/nagi-sf01-target/debug/deps/class_field_types-6045ba18af69a85c)
+
+running 5 tests
+test map_keys_with_missing_equality_or_hashing_fail_before_derivation ... ok
+test unsupported_resource_and_function_fields_fail_at_the_field_line ... ok
+test nested_data_fields_and_bridge_defined_key_traits_remain_available ... ok
+test owned_database_fields_are_private_state_and_keep_high_low_emission_valid ... ok
+test native_database_debug_hides_connection_details_inside_shared_state ... FAILED
+
+failures:
+
+---- native_database_debug_hides_connection_details_inside_shared_state stdout ----
+
+thread 'native_database_debug_hides_connection_details_inside_shared_state' (789129) panicked at compiler/tests/class_field_types.rs:122:5:
+DatabaseState { database: Pool { closing: false }, label: "visible" }
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    native_database_debug_hides_connection_details_inside_shared_state
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.61s
+
+error: test failed, to rerun pass `-p nagic --test class_field_types`

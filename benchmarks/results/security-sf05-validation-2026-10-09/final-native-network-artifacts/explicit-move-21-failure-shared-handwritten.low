@@ -1,0 +1,17 @@
+import std.db.sqlite as sqlite;
+record Holder {
+    failure: sqlite.Failure;
+}
+fn publish(problem: sqlite.Failure) -> shared[Holder] {
+    return share(Holder(failure=problem));
+}
+fn publish_direct(problem: sqlite.Failure) -> shared[sqlite.Failure] {
+    return share(problem);
+}
+fn publish_option(problem: sqlite.Failure) -> shared[Option[sqlite.Failure]] {
+    return share(some(problem));
+}
+fn publish_result(problem: sqlite.Failure) -> shared[Result[i64, sqlite.Failure]] {
+    let wrapped: Result[i64, sqlite.Failure] = fail(problem);
+    return share(wrapped);
+}

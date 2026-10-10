@@ -1,0 +1,15 @@
+import std.db.sqlite as sqlite;
+record Row { id: i64; tiny: u8; label: Option[str]; data: bytes; enabled: bool; }
+@rust("native::sql")
+extern fn sql() -> sqlite.Query;
+@rust("native::params")
+extern fn params() -> sqlite.Parameters;
+@rust("native::fallible_sql")
+extern fn fallible_sql() -> Result[sqlite.Query, Error];
+@rust("native::panic_sql")
+extern fn panic_sql() -> sqlite.Query;
+async fn ordered(tx: view[sqlite.Tx]) -> Result[i64, sqlite.Failure] { return await sqlite.exec(tx, sql(), params()); }
+async fn failed(tx: view[sqlite.Tx]) -> Result[unit, Error] { let result = await sqlite.exec(tx, try fallible_sql(), params()); return ok(print(0)); }
+async fn panicked(tx: view[sqlite.Tx]) -> Result[i64, sqlite.Failure] { return await sqlite.exec(tx, panic_sql(), params()); }
+async fn decoded(tx: view[sqlite.Tx]) -> Result[List[Row], sqlite.Failure] { return await sqlite.all[Row](tx, sqlite.literal("SELECT 7 AS id, 255 AS tiny, NULL AS label, x'0102' AS data, 1 AS enabled"), sqlite.parameters()); }
+async fn invalid_decode(tx: view[sqlite.Tx]) -> Result[List[Row], sqlite.Failure] { return await sqlite.all[Row](tx, sqlite.literal("SELECT 7 AS id, 256 AS tiny, NULL AS label, x'0102' AS data, 1 AS enabled"), sqlite.parameters()); }

@@ -1,0 +1,20 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.62s
+     Running tests/security_sf05.rs (/workspace/nagi-sf01-target/debug/deps/security_sf05-36fde3811faf2d69)
+
+running 12 tests
+test retired_db_all ... ok
+test retired_db_exec ... ok
+test retired_db_execution_has_checker_migration_and_original_line ... ok
+test retired_db_query ... ok
+test retired_db_type_has_checker_migration_and_original_line ... ok
+test retired_db_insert ... ok
+test retired_db_update ... ok
+test retired_db_write ... ok
+test unrelated_user_literal_and_legacy_names_remain_available ... ok
+test sqlite_string_execution_cannot_downgrade_to_dynamic_sql ... ok
+test aliased_literal_constructor_and_opaque_query_cannot_be_forged ... ok
+test literal_constructor_rejects_dynamic_inputs_at_the_argument_source_line ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+

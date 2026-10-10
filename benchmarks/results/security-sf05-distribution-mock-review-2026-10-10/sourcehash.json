@@ -1,0 +1,116 @@
+{
+  "format": "nagi-sf05-distribution-mock-independent-sourcehash-v1",
+  "self_hash_excluded": true,
+  "files": [
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/README.md",
+      "bytes": 2251,
+      "sha256": "800f50042ac9ca2f8ccc944dfcbc8e38fd60486b61a145b8bd2ca2a290a5fb8c"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/local-tests/green.stderr",
+      "bytes": 3018,
+      "sha256": "9c1e21383379f9e326c6fca45afd93c48775c6477ab4c47c50fea275f5d2d166"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/local-tests/green.stdout",
+      "bytes": 374,
+      "sha256": "b2020c7747125eb1e10bb2c4f5b0314c1b070ac11f9875b027793e2f83ddb563"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/local-tests/red.stderr",
+      "bytes": 5962,
+      "sha256": "d52c1560580895c314eb5879c5233a2c131379e7faac6a97f1af2edda7730dd3"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/local-tests/red.stdout",
+      "bytes": 265,
+      "sha256": "09a4037ce184410e3bca38fbb60329c694643bfd20229c0e4d5ae2df77693fb4"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/local-tests/test-results.json",
+      "bytes": 1114,
+      "sha256": "275abb38e0504eb1e24c0cae1d7c74f4529beed096f3ad45b514b2e33c305ad4"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/provenance.json",
+      "bytes": 2309,
+      "sha256": "c8e8d9be19911f9ec72a414671ea2ecf3459bf0180eb09899ce85fbccd9225a5"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/public-ci/ci-jobs-latest.json",
+      "bytes": 1493,
+      "sha256": "c2273a85e16237b0cc2a8c129a7b1a5fac8498fc5e12cce382f04b84584f6f02"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/public-ci/ci-readback-initial.json",
+      "bytes": 1643,
+      "sha256": "952af07e314affc0263d3335cd3aafcd4c4dfd801100ed58d76312c18a41cb6d"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/public-ci/run-38031503012-release-plan-job-114153222296.raw.log",
+      "bytes": 34562,
+      "sha256": "7048af4ba742d619714d9ded70ae45363b349ff960417221bbeca09f71eeb44e"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/source/fixed-test_verify.py",
+      "bytes": 15440,
+      "sha256": "d75c9a3a27eaeac11214a870226c59655fbb9266ca529cfbd0a2e7508149da37"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/source/original-test_verify.py",
+      "bytes": 15119,
+      "sha256": "15c9524d8e304546256195aafa71edcf4ef54c2f516ac0b1d26cdf97dc098987"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/source/test_verify.patch",
+      "bytes": 1547,
+      "sha256": "87d71f8f5d956531858442e5b6801423251dacb5671de501d7087c8a871dc27c"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/validation.json",
+      "bytes": 610,
+      "sha256": "abd1418df2def673e283c777bb52685cda94ade28ba973ad6a643069c15f3eee"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/benchmarks/results/security-sf05-distribution-mock-2026-10-10/manifest.json",
+      "bytes": 2397,
+      "sha256": "571bb061fe724776d2ad7e2e009f95579f828947f616853373b2b742b622dd3f"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/AGENTS.md",
+      "bytes": 13624,
+      "sha256": "9f9e9f11165ea1f93235c679eb686c679ce4b487fb6b862e8489c0081e2609a6"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/scripts/releases/test_verify.py",
+      "bytes": 15440,
+      "sha256": "d75c9a3a27eaeac11214a870226c59655fbb9266ca529cfbd0a2e7508149da37"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/scripts/releases/verify.py",
+      "bytes": 23755,
+      "sha256": "93552c44d84ee958d7bd2ec382268cee2d083380da95d9778f42e883be292cb3"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/docs/internal/security-foundation-sf05-results.md",
+      "bytes": 8828,
+      "sha256": "4f7ecacef9900eaa9abea843baf191ea0eeac5691c0cfa27d957cb2baa06becf"
+    },
+    {
+      "path": "/workspace/Nagi-security-sf05/docs/internal/security-foundation-sf05-results.en.md",
+      "bytes": 8084,
+      "sha256": "898a359f0f7507f89946d0119c6f146e9d981b720646bb92dc674728ece9e651"
+    },
+    {
+      "path": "/tmp/nagi-sf05-distribution-mock-independent-review/reviewed.patch",
+      "bytes": 8178,
+      "sha256": "820762703d2755eb198982699d4d0c949735838eff3d910a0a685e8b46f5b179"
+    },
+    {
+      "path": "/tmp/nagi-sf05-distribution-mock-independent-review/report.json",
+      "bytes": 6002,
+      "sha256": "e3886b00eadcfd86e1ace33422618de638585b15ad80b41b39fb7e46754bd134"
+    }
+  ]
+}

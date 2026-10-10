@@ -1,0 +1,93 @@
+[
+  {
+    "case": "health",
+    "status": 200
+  },
+  {
+    "case": "quantity-1",
+    "status": 200
+  },
+  {
+    "case": "quantity-2",
+    "status": 200
+  },
+  {
+    "case": "quantity-100",
+    "status": 200
+  },
+  {
+    "case": "invalid-quantity-0",
+    "status": 422
+  },
+  {
+    "case": "invalid-quantity--1",
+    "status": 422
+  },
+  {
+    "case": "invalid-quantity-101",
+    "status": 422
+  },
+  {
+    "case": "invalid-quantity-9223372036854775807",
+    "status": 422
+  },
+  {
+    "case": "missing-field",
+    "status": 422
+  },
+  {
+    "case": "extra-field",
+    "status": 422
+  },
+  {
+    "case": "wrong-type",
+    "status": 422
+  },
+  {
+    "case": "outside-i64",
+    "status": 422
+  },
+  {
+    "case": "malformed-json",
+    "status": 400
+  },
+  {
+    "case": "missing-content-type",
+    "status": 415
+  },
+  {
+    "case": "split-missing-content-type",
+    "status": 415
+  },
+  {
+    "case": "json-body-limit",
+    "status": 413
+  },
+  {
+    "case": "method-not-allowed",
+    "status": 405
+  },
+  {
+    "case": "missing-route",
+    "status": 404
+  },
+  {
+    "case": "server-remains-usable",
+    "status": 200
+  },
+  {
+    "case": "invalid-port",
+    "value": "0",
+    "status": "rejected"
+  },
+  {
+    "case": "invalid-port",
+    "value": "65536",
+    "status": "rejected"
+  },
+  {
+    "case": "invalid-port",
+    "value": "not-a-number",
+    "status": "rejected"
+  }
+]

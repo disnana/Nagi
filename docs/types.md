@@ -64,7 +64,7 @@ classと同じく、ファイルをimportして使えます。enumの型引数�
 
 resourceのviewには`len`・`slice`・index取得・`for`を使えません。`List[Status]`は直接index取得や反復ができますが、resourceのListからviewを作る操作は未対応です。
 
-AppのhandlerはRequestをmoveで受け取り、stateは`shared[State]`で読みます。共有stateのCopy fieldは読み出せますが、strなどの非Copy fieldはmoveできません。`view(state.label)`で借用してください。StateのfieldにはDbを含められますが、DbやHTTP resourceを含むclassはJSON変換に対応しません。AppのState・E型引数にはviewを保持できません。詳しくは[HTTP](http.md)と[標準import](modules-and-rust.md#標準http-libraryを読み込む)を参照してください。
+AppのhandlerはRequestをmoveで受け取り、stateは`shared[State]`で読みます。共有stateのCopy fieldは読み出せますが、strなどの非Copy fieldはmoveできません。`view(state.label)`で借用してください。Stateのfieldにはsqlite.Poolを含められますが、sqlite.PoolやHTTP resourceを含むclassはJSON変換に対応しません。AppのState・E型引数にはviewを保持できません。詳しくは[HTTP](http.md)と[標準import](modules-and-rust.md#標準http-libraryを読み込む)を参照してください。
 
 ## 関数を値として渡す
 

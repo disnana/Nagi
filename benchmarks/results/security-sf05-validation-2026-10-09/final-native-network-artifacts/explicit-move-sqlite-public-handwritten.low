@@ -1,0 +1,23 @@
+import std.db.sqlite as sqlite;
+record Total { total: i64; }
+fn configuration() -> Result[sqlite.Options, Error] {
+    return sqlite.options(1, 2, 1000, 0);
+}
+async fn exercise(config: sqlite.Options) -> Result[i64, sqlite.Failure] {
+    let pool = try await sqlite.open(":memory:", config);
+    let alias = sqlite.clone_pool(pool);
+    let tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED);
+    try await sqlite.exec(tx, sqlite.literal("CREATE TABLE amounts(amount INTEGER NOT NULL)"), sqlite.parameters());
+    let params = sqlite.bind_i64(sqlite.parameters(), 7);
+    try await sqlite.exec(tx, sqlite.literal("INSERT INTO amounts VALUES (?)"), params);
+    try await sqlite.commit(tx);
+    tx = try await sqlite.begin(alias, sqlite.BeginMode.DEFERRED);
+    let sql = sqlite.literal("SELECT SUM(amount) AS total FROM amounts");
+    let row = try await sqlite.query[Total](tx, sql, sqlite.parameters());
+    try await sqlite.rollback(tx);
+    try await sqlite.close(alias, 1000);
+    match row {
+        case Some(value) { return ok(value.total); }
+        case None { return ok(0); }
+    }
+}

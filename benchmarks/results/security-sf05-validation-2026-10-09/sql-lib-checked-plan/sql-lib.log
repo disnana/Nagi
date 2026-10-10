@@ -1,0 +1,53 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `test` profile [unoptimized] target(s) in 8.98s
+     Running unittests src/lib.rs (/workspace/nagi-sf01-target/debug/deps/nagic-834fc7e7ecda3b99)
+
+running 26 tests
+test sql_check::collect::tests::conditional_loop_and_match_bodies_are_collected_once ... ok
+test sql_check::collect::tests::aliased_row_classes_use_canonical_identity_and_original_field_names ... ok
+test sql_check::collect::tests::integrated_native_replacements_only_collect_the_final_function_body ... FAILED
+test sql_check::collect::tests::query_values_remain_visible_as_sites_with_unavailable_static_structure ... ok
+test sql_check::collect::tests::nested_value_expressions_returns_and_scope_spawn_keep_each_actual_call ... FAILED
+test sql_check::collect::tests::checked_high_and_saved_low_preserve_supported_operations_and_source_fields ... ok
+test sql_check::collect::tests::same_named_user_function_and_local_function_value_are_not_sql_calls ... ok
+test sql_check::engine::tests::columns_aliases_and_sqlite_parameter_numbering ... ok
+test sql_check::engine::tests::every_default_expression_uses_the_function_allowlist_even_when_unused ... ok
+test sql_check::engine::tests::external_files_and_extension_paths_are_never_opened_or_modified ... ok
+test sql_check::collect::tests::sqlite_canonical_calls_and_saved_low_keep_unknown_bind_metadata ... ok
+test sql_check::engine::tests::ordinary_tables_indexes_views_and_pure_functions_are_supported ... ok
+test sql_check::engine::tests::prepare_authorizer_also_rejects_unsafe_view_functions ... ok
+test sql_check::engine::tests::prepare_only_dml_does_not_write_application_rows ... ok
+test sql_check::engine::tests::rejects_operation_shape_mismatches ... ok
+test sql_check::engine::tests::schema_is_ddl_snapshot_not_migration_or_arbitrary_sql ... ok
+test sql_check::engine::tests::sqlite_identifier_defaults_remain_literals_without_hiding_function_terms ... ok
+test sql_check::engine::tests::sqlite_parameters_shape_and_prepare_only_ddl_preserve_snapshot ... ok
+test sql_check::tests::bounded_input_does_not_accept_a_truncated_prefix ... ok
+test sql_check::engine::tests::finite_limits_reject_large_and_deep_inputs ... ok
+test sql_check::tests::deadline_kills_and_reaps_a_worker_with_blocked_input ... ok
+test sql_check::tests::terminating_a_worker_returns_its_reaped_exit_status ... ok
+test sql_check::tests::worker_fixture ... ok
+test sql_check::tests::encoded_metadata_is_bounded_including_json_escaping ... ok
+test sql_check::collect::tests::repeated_row_metadata_is_bounded_before_building_the_worker_request ... ok
+test sql_check::collect::tests::collection_rejects_excessive_sites_at_the_first_over_limit_call ... ok
+
+failures:
+
+---- sql_check::collect::tests::integrated_native_replacements_only_collect_the_final_function_body stdout ----
+
+thread 'sql_check::collect::tests::integrated_native_replacements_only_collect_the_final_function_body' (785505) panicked at compiler/src/sql_check/collect.rs:334:48:
+called `Result::unwrap()` on an `Err` value: "line 3: replaceの引数・戻り値・async指定が一致しません"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- sql_check::collect::tests::nested_value_expressions_returns_and_scope_spawn_keep_each_actual_call stdout ----
+
+thread 'sql_check::collect::tests::nested_value_expressions_returns_and_scope_spawn_keep_each_actual_call' (785506) panicked at compiler/src/sql_check/collect.rs:195:43:
+called `Result::unwrap()` on an `Err` value: "line 13: scopeの失敗はErrorです。戻り値のエラー型 stdlib:std.db.sqlite::Failure へ変換できません。ErrorまたはRust連携でFrom<Error>を実装したclassまたはenumを使用してください"
+
+
+failures:
+    sql_check::collect::tests::integrated_native_replacements_only_collect_the_final_function_body
+    sql_check::collect::tests::nested_value_expressions_returns_and_scope_spawn_keep_each_actual_call
+
+test result: FAILED. 24 passed; 2 failed; 0 ignored; 0 measured; 102 filtered out; finished in 8.45s
+
+error: test failed, to rerun pass `-p nagic --lib`

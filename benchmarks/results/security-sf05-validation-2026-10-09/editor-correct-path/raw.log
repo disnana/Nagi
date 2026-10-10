@@ -1,0 +1,409 @@
+✔ Actor and Turn snippets preserve all three registered type parameters (5.1241ms)
+✔ same-name standard options retain their owning namespace and return type (4.064237ms)
+✔ both module catalogs complete imports without merging their members (3.667998ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22.114633
+
+✔ real nagi actor symbols separate modules and preserve three-parameter handles (3136.150846ms)
+✔ real low actor symbols separate modules and preserve three-parameter handles (2007.714277ms)
+✔ unsaved actor dependency constants keep their own source without writing or building (797.578207ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5948.621012
+
+✔ nagi borrowed loop locals keep their declared type and bare insertion (6.473391ms)
+✔ nagi owned and read-only-only locals retain their existing presentation (1.260297ms)
+✔ nagi borrowed receiver fields preserve the compiler read-only contract (1.162207ms)
+✔ low borrowed loop locals keep their declared type and bare insertion (0.873ms)
+✔ low owned and read-only-only locals retain their existing presentation (0.358258ms)
+✔ low borrowed receiver fields preserve the compiler read-only contract (0.538863ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 17.373144
+
+✔ Windows diagnostics preserve the drive and convert to zero-based line (2.153234ms)
+✔ symbol positions use UTF-16 ranges and exclude whitespace and other files (1.249658ms)
+✔ Low integration errors and process errors have usable fallback locations (0.328501ms)
+✔ Rust arguments remain separate and long Windows paths normalize (0.266759ms)
+✔ diagnostic file identities resolve symlinks and Windows path spelling (1.437266ms)
+✔ task matcher accepts Nagi frontend and mapped backend positions only (2.548257ms)
+✔ files and native paths are individual arguments with isolated check output (2.066712ms)
+✔ configured compiler paths are workspace relative; PATH remains a fallback (0.793036ms)
+✔ compiler execution does not interpret shell metacharacters (53.283061ms)
+✔ real Nagi checker diagnoses a source error (10.596049ms)
+✔ missing compiler is reported as an execution problem (3.335033ms)
+✔ timed out checker is reported as an execution problem (256.358424ms)
+✔ nearest manifest wins and project arguments delegate entry selection to nagic (2.114279ms)
+✔ real checker resolves a helper through its manifest entry rather than checking it alone (24.809839ms)
+✔ real symbol query navigates from a helper to its entry-defined function (493.970911ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 864.732553
+
+✔ enum completion includes own/imported type namespaces and never bare variants (10.476437ms)
+✔ enum type positions offer enum types and exclude variant values (1.823615ms)
+✔ unit/payload variant hover and payload signatures preserve alias-qualified spelling (2.807656ms)
+✔ nested variant declaration references resolve hover and F12 without exporting names (2.117429ms)
+✔ lexical values that shadow enum/module roots suppress type namespaces (9.887455ms)
+✔ typed failure help exposes an error value without requiring builtin Error (0.872047ms)
+✔ Result patterns have completion hover and argument help only after case (3.211562ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 42.167061
+
+✔ real nagi enum symbols preserve aliases, payload help and declaration targets (566.265835ms)
+✔ real low enum symbols preserve aliases, payload help and declaration targets (453.238172ms)
+✔ unsaved enum changes update payloads and F12 without writing source or building (488.228576ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1517.345836
+
+✔ hover preserves declared async/nullable types and class fields but skips locals, members and comments (5.564252ms)
+✔ completion works on incomplete prefixes and inserts positional calls or named class fields (2.403592ms)
+✔ type positions offer classes and type constructors rather than value calls (2.941625ms)
+✔ a class named Future completes as its declared type rather than a generic builtin (2.163641ms)
+✔ signature argument tracking ignores nested calls, strings, arrays and generic arguments (1.741807ms)
+✔ local hovers use the exact UTF-16 occurrence and file rather than a shared name (1.264015ms)
+✔ member analysis masks just the edited member and preserves UTF-16 and CRLF positions (0.206705ms)
+✔ field candidates come from the receiver occurrence and never from saved or other-file types (0.660015ms)
+✔ a trailing member binds inside try/await unless the receiver is parenthesized (0.866258ms)
+✔ builtin completion catalog matches compiler arities and required type arguments (3.665298ms)
+✔ builtin help preserves conversion, SQLite, async and callback contracts (0.470026ms)
+✔ function and nullable types complete inside all supported generic builtin contexts (0.766094ms)
+✔ completion preserves existing generic arguments and call parentheses (0.348976ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 32.237036
+
+✔ unindented Low fn, record and enum bodies keep their closing braces visible (3.119536ms)
+✔ nested match, case, scope and branch bodies fold at each opening line (0.359753ms)
+✔ multiline fn and async fn draft headers join their body in one fold (0.356234ms)
+✔ strings and comments do not create or close folds (0.389806ms)
+✔ crossed, stray and unclosed delimiters cannot invent brace folds (0.350233ms)
+✔ matched call and list continuations guard bodies without separate folds (0.16993ms)
+✔ completed declarations and unrelated lines do not donate a header to another body (0.205575ms)
+✔ single-line and empty bodies are omitted and each start line has one fold (0.118829ms)
+✔ inline closing braces fold the final statement while delimiter-only closers stay visible (0.311356ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 17.461639
+
+✖ High Function snippet defaults compile in their declared context (19.617591ms)
+✖ High Class snippet defaults compile in their declared context (19.083679ms)
+✖ High Enum snippet defaults compile in their declared context (14.378377ms)
+✖ High Main snippet defaults compile in their declared context (13.692396ms)
+✖ High Async main snippet defaults compile in their declared context (12.034425ms)
+✖ High HTTP server snippet defaults compile in their declared context (608.530465ms)
+✖ High GET handler snippet defaults compile in their declared context (578.521042ms)
+✖ High POST handler snippet defaults compile in their declared context (577.642147ms)
+✖ High Loop snippet defaults compile in their declared context (31.725579ms)
+✖ High Borrowed array snippet defaults compile in their declared context (13.977772ms)
+✖ High Result match snippet defaults compile in their declared context (13.385798ms)
+✖ High Nullable match snippet defaults compile in their declared context (14.253601ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 0
+ℹ fail 12
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1931.3775
+
+✖ failing tests:
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Function snippet defaults compile in their declared context (19.617591ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic EPERM
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Class snippet defaults compile in their declared context (19.083679ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic EPERM
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Enum snippet defaults compile in their declared context (14.378377ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic EPERM
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Main snippet defaults compile in their declared context (13.692396ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic EPERM
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Async main snippet defaults compile in their declared context (12.034425ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic EPERM
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High HTTP server snippet defaults compile in their declared context (608.530465ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic EPERM
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High GET handler snippet defaults compile in their declared context (578.521042ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic EPERM
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High POST handler snippet defaults compile in their declared context (577.642147ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic EPERM
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Loop snippet defaults compile in their declared context (31.725579ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic EPERM
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Borrowed array snippet defaults compile in their declared context (13.977772ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic EPERM
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Result match snippet defaults compile in their declared context (13.385798ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic EPERM
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Nullable match snippet defaults compile in their declared context (14.253601ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic EPERM
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+Traceback (most recent call last):
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/editor_checks.py", line 17, in <module>
+    assert result.returncode == 0 and passed and int(passed[1]) > 0, file
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: /workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js

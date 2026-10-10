@@ -1,0 +1,30 @@
+[
+  {
+    "example": "tasks",
+    "form": "high",
+    "checks": 9,
+    "high_removed": false,
+    "status": "passed"
+  },
+  {
+    "example": "tasks",
+    "form": "saved-low",
+    "checks": 9,
+    "high_removed": true,
+    "status": "passed"
+  },
+  {
+    "example": "result-api",
+    "form": "high",
+    "checks": 15,
+    "high_removed": false,
+    "status": "passed"
+  },
+  {
+    "example": "result-api",
+    "form": "saved-low",
+    "checks": 15,
+    "high_removed": true,
+    "status": "passed"
+  }
+]

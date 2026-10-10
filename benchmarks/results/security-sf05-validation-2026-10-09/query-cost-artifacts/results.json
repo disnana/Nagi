@@ -1,0 +1,1232 @@
+{
+  "generated": {
+    "binary_sha256": "1f69b1a937a6d06909b4d747ce9c1f247704ab656aa94682f258ee6fccb54295",
+    "measurements": [
+      {
+        "allocation_scope": "calling thread only; native SQLite, worker and observer allocations excluded",
+        "arch": "x86_64",
+        "lazy_open_allocation": {
+          "allocated_bytes": 688,
+          "allocations": 7,
+          "deallocations": 0,
+          "reallocations": 0
+        },
+        "literal_future_bytes": 392,
+        "name": "future_and_open",
+        "selected_future_bytes": 408
+      },
+      {
+        "conditions": "release, one active transaction, 4 warmup + 32 measured inserts; no throughput or performance threshold",
+        "name": "literal",
+        "samples": [
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27761
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 68273
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 41092
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27699
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 51464
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27156
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26921
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27087
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 28546
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 112155
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 28556
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26974
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26665
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26312
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27083
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26349
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 28373
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26054
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 25770
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26162
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 103137
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27323
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26458
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26745
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26531
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26434
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26265
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 1848,
+              "allocations": 3,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27325
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26247
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26056
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 25686
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26068
+          }
+        ]
+      },
+      {
+        "conditions": "release, one active transaction, 4 warmup + 32 measured inserts; no throughput or performance threshold",
+        "name": "selected",
+        "samples": [
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27494
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27118
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26890
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26342
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 515646
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 38983
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 98482
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 177505
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 28108
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26420
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26896
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26839
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27722
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27121
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26596
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26337
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26574
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26501
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26501
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26271
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26555
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26254
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26132
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26959
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26438
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26194
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26581
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26423
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26477
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26296
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26377
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26023
+          }
+        ]
+      },
+      {
+        "allocation": {
+          "allocated_bytes": 0,
+          "allocations": 0,
+          "deallocations": 1,
+          "reallocations": 0
+        },
+        "name": "close_after_rollback"
+      }
+    ]
+  },
+  "manual": {
+    "binary_sha256": "0dd6a6858b75c4b91be44239e482b3b78c64c5da2e56f18a8751f478f05d3c53",
+    "measurements": [
+      {
+        "allocation_scope": "calling thread only; native SQLite, worker and observer allocations excluded",
+        "arch": "x86_64",
+        "lazy_open_allocation": {
+          "allocated_bytes": 688,
+          "allocations": 7,
+          "deallocations": 0,
+          "reallocations": 0
+        },
+        "literal_future_bytes": 392,
+        "name": "future_and_open",
+        "selected_future_bytes": 408
+      },
+      {
+        "conditions": "release, one active transaction, 4 warmup + 32 measured inserts; no throughput or performance threshold",
+        "name": "literal",
+        "samples": [
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 28027
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26472
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26317
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27303
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 30674
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 90655
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27338
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26493
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 30681
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26442
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26686
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26691
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26319
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26054
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26164
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 25824
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 53859
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27321
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26620
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27245
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26235
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 61087
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27357
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26375
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26418
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26318
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26121
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 1848,
+              "allocations": 3,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27265
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26165
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27162
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 25935
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26331
+          }
+        ]
+      },
+      {
+        "conditions": "release, one active transaction, 4 warmup + 32 measured inserts; no throughput or performance threshold",
+        "name": "selected",
+        "samples": [
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27287
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26702
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26771
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 51069
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27188
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27141
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26889
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26736
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26433
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26492
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 25807
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 167200
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 44926
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27500
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27104
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26336
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26681
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 61114
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26920
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26850
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27053
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26703
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27090
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27062
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 124149
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27845
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26296
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 52986
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 27628
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26996
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26674
+          },
+          {
+            "allocation": {
+              "allocated_bytes": 280,
+              "allocations": 2,
+              "deallocations": 1,
+              "reallocations": 0
+            },
+            "ns": 26445
+          }
+        ]
+      },
+      {
+        "allocation": {
+          "allocated_bytes": 0,
+          "allocations": 0,
+          "deallocations": 1,
+          "reallocations": 0
+        },
+        "name": "close_after_rollback"
+      }
+    ]
+  }
+}

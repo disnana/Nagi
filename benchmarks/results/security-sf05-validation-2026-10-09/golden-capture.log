@@ -1,0 +1,22 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `test` profile [unoptimized] target(s) in 13.26s
+     Running unittests src/lib.rs (/workspace/nagi-sf01-target/debug/deps/nagic-834fc7e7ecda3b99)
+
+running 1 test
+test tests::resource_contract_goldens::data_derives_golden ... FAILED
+
+failures:
+
+---- tests::resource_contract_goldens::data_derives_golden stdout ----
+
+thread 'tests::resource_contract_goldens::data_derives_golden' (788654) panicked at compiler/src/tests/resource_contract_goldens.rs:72:5:
+/nagi-golden/data-derives/main.nagi: full Low golden mismatch
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::resource_contract_goldens::data_derives_golden
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 127 filtered out; finished in 0.17s
+
+error: test failed, to rerun pass `-p nagic --lib`
