@@ -1536,9 +1536,7 @@ impl Checker {
             | O::HeaderLimits
             | O::SendTimeout
             | O::Authority
-            | O::TrustedProxy => {
-                result(resource(R::Options))
-            }
+            | O::TrustedProxy => result(resource(R::Options)),
             O::App | O::AppDefault => {
                 let state = &arguments[0];
                 if state.contains_view() {

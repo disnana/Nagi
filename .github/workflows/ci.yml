@@ -44,6 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
+      NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -204,6 +205,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
+      NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
     steps:
       - uses: actions/checkout@v4
         with:
