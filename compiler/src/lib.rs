@@ -4,6 +4,7 @@ pub mod check;
 pub mod checked;
 mod constant_eval;
 pub mod diagnostics;
+pub(crate) mod editor;
 pub mod emit;
 mod generation;
 pub mod graph;

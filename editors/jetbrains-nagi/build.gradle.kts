@@ -12,7 +12,7 @@ plugins {
 }
 
 group = "com.disnana.nagi"
-version = "0.1.2"
+version = "0.1.3"
 
 repositories {
     mavenCentral()
@@ -125,6 +125,7 @@ tasks.withType<JavaCompile>().configureEach {
 
 intellijPlatform {
     pluginConfiguration {
+        name.set("Nagi")
         ideaVersion {
             sinceBuild = "251.25410.109"
         }
@@ -144,10 +145,6 @@ intellijPlatform {
             }
         }
     }
-}
-
-tasks.named<VerifyPluginTask>("verifyPlugin") {
-    freeArgs.addAll(listOf("-mute", "TemplateWordInPluginName"))
 }
 
 providers.gradleProperty("verificationArchive").orNull?.let { archivePath ->

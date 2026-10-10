@@ -1,0 +1,48 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/workspace/nagi-jetbrains-local-gradle/wrapper/dists/gradle-9.4.0-bin/lcvyxq3t37f6mx9miaydrrgs/gradle-9.4.0/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Task :verifyNagiJavaToolchain
+Nagi Java compiler toolchain: task=compileJava expected=25 selected=25 source=21 target=21 release=21
+Nagi Java compiler toolchain: task=compileTestJava expected=25 selected=25 source=21 target=21 release=21
+
+> Task :compileJava
+> Task :initializeIntellijPlatformPlugin
+> Task :patchPluginXml UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :generateManifest UP-TO-DATE
+> Task :jar
+> Task :compileTestJava UP-TO-DATE
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses UP-TO-DATE
+> Task :instrumentTestCode UP-TO-DATE
+> Task :instrumentCode
+> Task :instrumentedJar
+> Task :composedJar
+> Task :prepareTestSandbox
+> Task :prepareTest
+
+> Task :test
+
+NagiAssistEditorIntegrationTest > testRegisteredReferencesNavigateHighLowAndImportedFiles PASSED
+
+NagiAssistEditorIntegrationTest > testRegisteredCompletionAndDiagnosticsUseUnsavedCompilerInput PASSED
+
+NagiAssistEditorIntegrationTest > testMissingImportDiagnosticIsDisplayedWithoutInventingALocalSpan PASSED
+
+NagiAssistServiceTest > testPreviouslyUnknownClosedDependencyRequiresANewDiskSnapshot PASSED
+
+> Task :prepareSandbox
+> Task :buildSearchableOptions UP-TO-DATE
+> Task :prepareJarSearchableOptions
+> Task :jarSearchableOptions UP-TO-DATE
+> Task :buildPlugin
+
+BUILD SUCCESSFUL in 38s
+20 actionable tasks: 12 executed, 8 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.4.0/userguide/configuration_cache_enabling.html

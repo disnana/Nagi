@@ -39,7 +39,7 @@ nagic --version
 nagic --help
 ```
 
-[VS Code拡張](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)はMarketplaceまたは[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。IntelliJ IDEA・PyCharm向けの[Nagi for JetBrains](editors/jetbrains-nagi/README.md)は[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)または[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。GitHubの0.1.2 Releaseには、両IDE共通の`nagi-jetbrains-0.1.2.zip`と`.sha256`があります。最低対応はIntelliJ IDEA 2025.1.1 build 251.25410.109、PyCharm 2025.1.1 build 251.25410.122です。Marketplaceからは対応IDEへ直接インストールでき、Release ZIPは手動インストールします。操作は[エディターの案内](docs/editor.md)を参照してください。
+[VS Code拡張](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)はMarketplaceまたは[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。IntelliJ IDEA・PyCharm向けの[Nagi](editors/jetbrains-nagi/README.md)は[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)または[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。Marketplaceから入れる場合は、一覧のVersionsで利用可能な版とIDE対応を確認してください。GitHubの公開済み0.1.2 Releaseには、両IDE共通の`nagi-jetbrains-0.1.2.zip`と`.sha256`があります。このZIPの最低対応はIntelliJ IDEA 2025.1.1 build 251.25410.109、PyCharm 2025.1.1 build 251.25410.122です。Marketplaceからは対応IDEへ直接インストールでき、Release ZIPは手動インストールします。0.1.3は未公開候補です。公開済みcompiler 0.1.11は通常のCheck/Runに使えますが、候補の補完・診断・定義移動には同じPR sourceから作ったcompiler CI artifactが必要です。操作は[エディターの案内](docs/editor.md)を参照してください。
 
 インストーラーはmainから、コンパイラは公開Releaseから取得します。このREADMEの例は、2026-10-07に公開したNagi 0.1.11を対象にしています。インストールした版は`nagic --version`で確かめてください。変更内容は[CHANGELOG](CHANGELOG.md)、互換性の変更は[0.1.11移行ガイド](docs/migration-0.1.11.md)を参照してください。
 

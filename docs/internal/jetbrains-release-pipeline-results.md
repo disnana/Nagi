@@ -56,6 +56,10 @@ JetBrains 2.15.0 releaseの[公式wrapper](https://github.com/JetBrains/intellij
 
 Plugin Verifierには、明示要求されたplugin display nameを維持したまま`TemplateWordInPluginName`だけを`-mute`する。deprecated/experimental/API互換性の診断はmuteしない。2.15.0の`VerifyPluginTask` sourceで`archiveFile`と`freeArgs`が存在することを確認し、同一候補ZIPの四経路検査を維持する。
 
+## 表示名更新候補（2026-10-09）
+
+上記は旧表示名を使っていた時点の判断。次回更新候補ではplugin display nameを`Nagi`にし、Plugin Verifierの警告はmuteせず出力する。公開済み0.1.2のdescriptor/readbackは変更せず、候補のVerifier結果も実行後に別途確認する。
+
 Stable/EAP各matrix jobは検査終了後にも必ずGradle cacheの該当SDK `product-info.json`を探す。aliasと一致するSDK artifact directoryのJSONが一つの版/build/product identityに定まらない場合はjobを失敗させる。元JSON、SHA-256、要求alias、解決したversion/build number/product codeを`nagi-jetbrains-reports-<product>-<channel>` artifactへ保存し、step summaryにも実解決値を表示する。このworkflow変更のEAP実行結果は未確認であり、修正後のPlugin Verifier互換性成功を示すものではない。
 
 ## Marketplace listingとIDE内recommendation（2026-10-08）

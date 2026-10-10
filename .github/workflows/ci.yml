@@ -206,6 +206,8 @@ jobs:
       NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
         id: rust
       - name: Cache the target platform's Rust build
@@ -244,7 +246,7 @@ jobs:
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
       - run: cargo build --release --locked -p nagic
       - name: Check CLI, installation, ownership, and diagnostics on the target platform
-        run: cargo test --locked -p nagic --lib --test cli --test installation --test codegen --test loop_ownership --test ownership_calls --test ownership_boundaries --test comparison_ownership --test owned_copy_codegen --test build_diagnostics --test rust_dependencies --test expression_contracts --test frontend_contracts --test source_read_retention --test literal_contracts --test http_route_conflicts --test symbols --test modules --test module_parser --test module_emission --test module_symbols --test enum_parser --test enum_modules --test enum_emission --test enum_patterns --test nullable_database --test nullable_roundtrip --test owned_database --test borrow_free_returns --test static_callback_views --test view_iteration --test view_parameter_rebinding --test sql_check --test typed_errors --test error_routes --test class_field_types --test resource_contract_characterization --test stdlib_imports --test option_match --test http_stdlib --test http_codegen --test actor_stdlib --test actor_codegen --test graph_types --test graph_relations --test graph_render --test graph_html --test map_cli --test low_multiline --test list_ownership_inference --test list_borrow_iteration --test result_stdlib
+        run: cargo test --locked -p nagic --lib --test cli --test installation --test codegen --test loop_ownership --test ownership_calls --test ownership_boundaries --test comparison_ownership --test owned_copy_codegen --test build_diagnostics --test rust_dependencies --test expression_contracts --test frontend_contracts --test source_read_retention --test literal_contracts --test http_route_conflicts --test symbols --test editor_assistance --test modules --test module_parser --test module_emission --test module_symbols --test enum_parser --test enum_modules --test enum_emission --test enum_patterns --test nullable_database --test nullable_roundtrip --test owned_database --test borrow_free_returns --test static_callback_views --test view_iteration --test view_parameter_rebinding --test sql_check --test typed_errors --test error_routes --test class_field_types --test resource_contract_characterization --test stdlib_imports --test option_match --test http_stdlib --test http_codegen --test actor_stdlib --test actor_codegen --test graph_types --test graph_relations --test graph_render --test graph_html --test map_cli --test low_multiline --test list_ownership_inference --test list_borrow_iteration --test result_stdlib
       - name: Check editor behavior on the target platform
         shell: bash
         run: node --test editors/vscode-nagi/test/*.test.js scripts/test_graph_html_viewport.mjs

@@ -361,6 +361,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
 
     def test_eap_descriptor_and_home_path_fixes_keep_plugin_version_and_verifier_checks(self):
         build = (self.repo / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
+        plugin_xml = (self.repo / "editors/jetbrains-nagi/src/main/resources/META-INF/plugin.xml").read_text(encoding="utf-8")
         settings = (self.repo / "editors/jetbrains-nagi/settings.gradle.kts").read_text(encoding="utf-8")
         wrapper = (self.repo / "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.properties").read_text(encoding="utf-8")
         workflow = (self.repo / ".github/workflows/jetbrains.yml").read_text(encoding="utf-8")
@@ -371,7 +372,10 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIn("gradlePluginPortal()", plugin_repositories.group("body"))
         self.assertIn("mavenCentral()", plugin_repositories.group("body"))
         self.assertIn('id("org.jetbrains.intellij.platform") version "2.19.0"', build)
-        self.assertIn('version = "0.1.2"', build)
+        self.assertIn('version = "0.1.3"', build)
+        self.assertIn('name.set("Nagi")', build)
+        self.assertIn("<id>com.disnana.nagi</id>", plugin_xml)
+        self.assertIn("<name>Nagi</name>", plugin_xml)
         self.assertIn("options.release.set(21)", build)
         self.assertIn('sinceBuild = "251.25410.109"', build)
         self.assertIn("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.0-bin.zip", wrapper)
@@ -379,7 +383,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIn("create(type, version) { useInstaller.set(false) }", build)
         self.assertNotIn("useInstaller = false", build)
         self.assertNotIn("ide(type, version, useInstaller", build)
-        self.assertIn('freeArgs.addAll(listOf("-mute", "TemplateWordInPluginName"))', build)
+        self.assertNotIn("TemplateWordInPluginName", build)
         self.assertNotIn('freeArgs.addAll(listOf("-mute", "PluginCompatibility"))', build)
         self.assertIn("Verify candidate on ${{ matrix.product }} ${{ matrix.channel }}", workflow)
         self.assertIn("Record the resolved IDE build from product-info.json", workflow)

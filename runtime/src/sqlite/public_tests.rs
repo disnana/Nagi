@@ -296,6 +296,16 @@ async fn begin_modes_use_native_busy_and_preserve_busy_error_kind() {
         ErrorKind::Busy
     ));
     rollback(first).await.unwrap();
+    // A 0ms acquire never waits for logical checkout return. ROLLBACK's
+    // completion reply precedes the callback owner's final Drop, so observe
+    // both returns explicitly before testing a new idle acquisition. This
+    // test concerns native BEGIN/busy, not the zero-budget admission race.
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        pool.adapter.observer().wait_returned(2),
+    )
+    .await
+    .unwrap();
     let second = begin(&pool, BeginMode::Exclusive).await.unwrap();
     rollback(second).await.unwrap();
     close(&pool, 2_000).await.unwrap();

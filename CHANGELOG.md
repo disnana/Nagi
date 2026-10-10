@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 未リリース / Unreleased
+
+### JetBrains 0.1.3候補 / JetBrains 0.1.3 candidate
+
+- IntelliJ IDEA / PyCharm共通の補完・定義ジャンプ・編集中診断は同じPR source commitの開発版compilerに接続。プラグインのsyntax highlightingはcompilerに依存せず、公開済み0.1.11は手動Check/Runと通常のRun Configuration実行に対応するが、assist protocolは含まない。
+- IDE標準のNagi Run Configurationは通常のRun/Stopから実行でき、未信頼プロジェクトでは起動しない。0.1.3は未公開候補。matching compilerとplugin ZIPはPR CI検証artifactであり、正式公開版ではない。
+- Compiler-backed completion, navigation and live diagnostics require the matching development compiler built from the same PR source commit. Plugin syntax highlighting is independent of the compiler; published 0.1.11 supports ordinary Check/Run but lacks the assist protocol. The 0.1.3 plugin and matching compiler are PR validation artifacts, not releases.
+
+### SQLite
 
 - Implement SF05's canonical opaque `std.db.sqlite.Query` and direct-literal constructor. Require Query/Parameters for query/all/exec; reject dynamic constructors with original-source checker diagnostics. Remove legacy Db/db_* execution and public runtime Db/Sql without a compatibility fallback. Preserve unrelated user definitions by canonical identity.
 - Connect trusted protected database adapters to actual bounded SQLite queue admission through an opaque reservation and synchronous enqueue inside Grant.submit. Bind actual subject/target into reviewed owner/tenant predicates; distinguish earlier revocation (zero enqueue) from admitted work. Preserve transaction, cancellation, Failure/Outcome, cleanup, and actual close. Durable Session generation remains SF02 work.

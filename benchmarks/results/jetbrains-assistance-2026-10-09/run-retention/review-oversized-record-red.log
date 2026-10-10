@@ -1,0 +1,21 @@
+    Finished `test` profile [unoptimized] target(s) in 0.06s
+     Running tests/build_generations.rs (/workspace/nagi-assist-target/debug/deps/build_generations-9abc7d8c3bb0bd97)
+
+running 1 test
+test managed_oversized_record_does_not_stop_normal_reclamation ... FAILED
+
+failures:
+
+---- managed_oversized_record_does_not_stop_normal_reclamation stdout ----
+
+thread 'managed_oversized_record_does_not_stop_normal_reclamation' (851384) panicked at compiler/tests/build_generations.rs:816:9:
+unknown individual records are held rather than aborting the sweep
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    managed_oversized_record_does_not_stop_normal_reclamation
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 35 filtered out; finished in 0.79s
+
+error: test failed, to rerun pass `-p nagic --test build_generations`

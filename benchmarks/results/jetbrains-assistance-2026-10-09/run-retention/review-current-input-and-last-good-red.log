@@ -1,0 +1,29 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-run-retention/compiler)
+    Finished `test` profile [unoptimized] target(s) in 2.10s
+     Running tests/build_generations.rs (/workspace/nagi-assist-target/debug/deps/build_generations-9abc7d8c3bb0bd97)
+
+running 2 tests
+test managed_older_success_after_newer_failure_keeps_last_good ... FAILED
+test managed_older_completion_preserves_newer_latest_native_inputs ... FAILED
+
+failures:
+
+---- managed_older_success_after_newer_failure_keeps_last_good stdout ----
+
+thread 'managed_older_success_after_newer_failure_keeps_last_good' (851164) panicked at compiler/tests/build_generations.rs:799:5:
+an older success must not discard the last good run after the latest run failed
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- managed_older_completion_preserves_newer_latest_native_inputs stdout ----
+
+thread 'managed_older_completion_preserves_newer_latest_native_inputs' (851163) panicked at compiler/tests/build_generations.rs:773:5:
+an older completion must preserve the newer latest's native input
+
+
+failures:
+    managed_older_completion_preserves_newer_latest_native_inputs
+    managed_older_success_after_newer_failure_keeps_last_good
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 34 filtered out; finished in 1.03s
+
+error: test failed, to rerun pass `-p nagic --test build_generations`

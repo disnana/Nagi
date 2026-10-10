@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.disnana.nagi.NagiAssistServiceTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-09T10:54:47.514Z" hostname="0cfdc6610e26" time="15.959">
+  <properties/>
+  <testcase name="testKnownNativeDependencyDiskChangeWithoutVfsRefreshRejectsResponse" classname="com.disnana.nagi.NagiAssistServiceTest" time="11.108"/>
+  <testcase name="testUnsavedSnapshotIsDebouncedAndCurrentResponseIsCached" classname="com.disnana.nagi.NagiAssistServiceTest" time="0.544"/>
+  <testcase name="testFailedSnapshotDoesNotRestartForEveryAnnotatorRequest" classname="com.disnana.nagi.NagiAssistServiceTest" time="0.647"/>
+  <testcase name="testPreviouslyUnknownClosedDependencyRequiresANewDiskSnapshot" classname="com.disnana.nagi.NagiAssistServiceTest" time="1.065"/>
+  <testcase name="testRustVerbatimWindowsSourcePathsHaveTheSameIdeIdentity" classname="com.disnana.nagi.NagiAssistServiceTest" time="0.233"/>
+  <testcase name="testDisposeInvalidatesPreviouslyCurrentResponse" classname="com.disnana.nagi.NagiAssistServiceTest" time="0.635"/>
+  <testcase name="testUntrustedProjectAndUnsavedManifestNeverLaunchCompiler" classname="com.disnana.nagi.NagiAssistServiceTest" time="0.796"/>
+  <testcase name="testEditingCancelsOldRequestAndRejectsLateResponse" classname="com.disnana.nagi.NagiAssistServiceTest" time="0.919"/>
+  <system-out><![CDATA[NagiAssistCache: 500 current lookups, mean_ms=0.133018374, additional_launches=0
+]]></system-out>
+  <system-err><![CDATA[[   1151]   WARN - #c.i.p.instanceContainer - InstanceNotOverridableException: Incorrect override for com.intellij.openapi.project.impl.ProjectStoreFactory: com.intellij.configurationScript.providers.ConfigurationScriptProjectStoreFactory overrides com.intellij.configurationStore.PlatformLangProjectStoreFactory even though the existing implementation is not overridable (not declared as 'open=true')
+[   3147]   WARN - java.util.prefs - Couldn't create user preferences directory. User preferences are unusable.
+[   3149]   WARN - java.util.prefs - java.io.IOException: No such file or directory
+[   3972]   WARN - #c.i.w.i.i.WorkspaceModelMessageDeliveryListener - Long WSM event processing. Topic=WorkspaceModelChangeListener, offender=class com.intellij.workspaceModel.ide.impl.legacyBridge.module.LegacyProjectModelListenersBridge, message=changed, time=423ms
+]]></system-err>
+</testsuite>

@@ -1,0 +1,184 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/workspace/nagi-jetbrains-local-gradle/wrapper/dists/gradle-9.4.0-bin/lcvyxq3t37f6mx9miaydrrgs/gradle-9.4.0/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Task :verifyNagiJavaToolchain
+Nagi Java compiler toolchain: task=compileJava expected=25 selected=25 source=21 target=21 release=21
+Nagi Java compiler toolchain: task=compileTestJava expected=25 selected=25 source=21 target=21 release=21
+
+> Task :compileJava
+> Task :initializeIntellijPlatformPlugin
+> Task :patchPluginXml UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :generateManifest UP-TO-DATE
+> Task :jar
+
+> Task :compileTestJava
+/workspace/Nagi-jetbrains-assistance/editors/jetbrains-nagi/src/test/java/com/disnana/nagi/NagiRunLineMarkerTest.java:202: warning: [deprecation] isDisposed(@org.jetbrains.annotations.NotNull Disposable) in Disposer has been deprecated
+                if (!com.intellij.openapi.util.Disposer.isDisposed(descriptor)) com.intellij.openapi.util.Disposer.dispose(descriptor);
+                                                       ^
+1 warning
+
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses
+> Task :instrumentTestCode
+> Task :instrumentCode
+> Task :instrumentedJar
+> Task :composedJar
+> Task :prepareTestSandbox
+> Task :prepareTest
+
+> Task :test
+
+NagiAssistCommandPlanTest > emptyCompilerSettingUsesPlatformExecutableName PASSED
+
+NagiAssistCommandPlanTest > projectInvocationPreservesManifestEntryAndNativeConfiguration PASSED
+
+NagiAssistCommandPlanTest > standaloneInvocationKeepsSourceAsOneArgumentAndUsesNoProjectMode PASSED
+
+NagiAssistEditorIntegrationTest > testRegisteredReferencesNavigateHighLowAndImportedFiles PASSED
+
+NagiAssistEditorIntegrationTest > testRegisteredCompletionAndDiagnosticsUseUnsavedCompilerInput PASSED
+
+NagiAssistEditorIntegrationTest > testMissingImportDiagnosticIsDisplayedWithoutInventingALocalSpan PASSED
+
+NagiAssistProcessTest > deniedLaunchGuardRejectsBeforeStartingAnExecutable PASSED
+
+NagiAssistProcessTest > persistentTransportReusesCompilerAndNeverReusesOverlayFacts PASSED
+
+NagiAssistProcessTest > replacingIdleExecutableAtTheSamePathStartsANewSession PASSED
+
+NagiAssistProcessTest > cancellationBeforeLaunchNeverEvaluatesTheLaunchGuard PASSED
+
+NagiAssistProcessTest > timeoutTerminatesAndReapsPendingSession PASSED
+
+NagiAssistProcessTest > cancellationTerminatesAndReapsPendingSession PASSED
+
+NagiAssistProtocolTest > rejectsInventedDiagnosticSpansAndNonIntegralCoordinates PASSED
+
+NagiAssistProtocolTest > decodesOnlyCompilerCompletionAndExactNavigationFacts PASSED
+
+NagiAssistProtocolTest > rejectsRelativeCompilerPathsInsteadOfResolvingAgainstTheIdeWorkingDirectory PASSED
+
+NagiAssistProtocolTest > rejectsFullCompileClaimsAndCandidatesFromAnEmptySemanticResult PASSED
+
+NagiAssistProtocolTest > rejectsMalformedUtf8AndOversizedOrDuplicateOverlays PASSED
+
+NagiAssistServiceTest > testKnownNativeDependencyDiskChangeWithoutVfsRefreshRejectsResponse PASSED
+
+NagiAssistServiceTest > testUnsavedSnapshotIsDebouncedAndCurrentResponseIsCached PASSED
+
+NagiAssistServiceTest > testFailedSnapshotDoesNotRestartForEveryAnnotatorRequest PASSED
+
+NagiAssistServiceTest > testPreviouslyUnknownClosedDependencyRequiresANewDiskSnapshot PASSED
+
+NagiAssistServiceTest > testDisposeInvalidatesPreviouslyCurrentResponse PASSED
+
+NagiAssistServiceTest > testUntrustedProjectAndUnsavedManifestNeverLaunchCompiler PASSED
+
+NagiAssistServiceTest > testEditingCancelsOldRequestAndRejectsLateResponse PASSED
+
+NagiCompilerIntegrationTest > commandPlanChecksHighLowAndProjectWithTheRealCompiler PASSED
+
+NagiCoreTest > enterSupportsMultilineCallsAndCustomIndentSize PASSED
+
+NagiCoreTest > libraryNamesAreNotKeywords PASSED
+
+NagiCoreTest > completedMultilineExpressionDedentsToItsOpeningLine PASSED
+
+NagiCoreTest > highFoldIgnoresIndentationInsideContinuations PASSED
+
+NagiCoreTest > scannerCoversEntireSourceAndIncrementalOffsets PASSED
+
+NagiCoreTest > stringsAndCommentsContainNoStructureTokens PASSED
+
+NagiCoreTest > enterUsesColonOrUnclosedLowBrace PASSED
+
+NagiCoreTest > looseFilesAndPathCompilerNeedNoManifest PASSED
+
+NagiCoreTest > highAndLowKeywordsStaySeparate PASSED
+
+NagiCoreTest > enterIgnoresPunctuationInCommentsAndStrings PASSED
+
+NagiCoreTest > lowFoldingKeepsStringAndCommentBracesOut PASSED
+
+NagiCoreTest > commandUsesNearestManifestAndPreservesArgumentBoundaries PASSED
+
+NagiCoreTest > unfinishedStringDoesNotHideNextLine PASSED
+
+NagiCoreTest > highFoldingUsesActualIndentedBodies PASSED
+
+NagiCoreTest > lowFoldCannotCrossMismatchedDelimiters PASSED
+
+NagiCoreTest > diagnosticsResolveUnixAndWindowsPaths PASSED
+
+NagiEditorTest > testHighEnterIndent PASSED
+
+NagiEditorTest > testCompletedMultilineCallReturnsToStatementIndent PASSED
+
+NagiEditorTest > testCommentAction PASSED
+
+NagiEditorTest > testLowEnterIndent PASSED
+
+NagiEditorTest > testBraceCompletion PASSED
+
+NagiEditorTest > testContinuationDoesNotAccumulateIndent PASSED
+
+NagiEditorTest > testFileTypesAndPsi PASSED
+
+NagiEditorTest > testLowCurlyBraceCompletion PASSED
+
+NagiEditorTest > testUnsavedManifestVetoStopsCompilerPreparation PASSED
+
+NagiProcessTest > cancelledStartupStopsARealProcessWithoutAConsole PASSED
+
+NagiRunConfigurationTest > testProducerCreatesConfigurationsForHighAndLowFilesOnly PASSED
+
+NagiRunConfigurationTest > testRunConfigurationPersistsAndCopiesItsSourcePath PASSED
+
+NagiRunConfigurationTest > testUntrustedProjectDoesNotSaveInputsOrCreateRunState PASSED
+
+NagiRunConfigurationTest > testRunStateSavesInputsUsesProjectArgumentsAndCanStopTheCompiler PASSED
+
+NagiRunLineMarkerTest > testMarkerTargetsItsFileEvenAfterAnotherEditorOpens PASSED
+
+NagiRunLineMarkerTest > testGutterClickKeepsNearestProjectSelection PASSED
+
+NagiRunLineMarkerTest > testFakeNestedAndIncompleteLowMainHaveNoGutters PASSED
+
+NagiRunLineMarkerTest > testHighEntryPointsHaveGutters PASSED
+
+NagiRunLineMarkerTest > testLowGutterClickInvokesTheCompilerWithItsSavedFile PASSED
+
+NagiRunLineMarkerTest > testHighGutterClickInvokesTheCompilerWithItsSavedFile PASSED
+
+NagiRunLineMarkerTest > testVirtualPreviewCannotInvokeRun PASSED
+
+NagiRunLineMarkerTest > testLowEntryPointsHaveGutters PASSED
+
+NagiRunLineMarkerTest > testFakeNestedAndIncompleteHighMainHaveNoGutters PASSED
+
+NagiRunLineMarkerTest > testLowCommentsAndStringsDoNotChangeTopLevel PASSED
+
+NagiRunLineMarkerTest > testUntrustedProjectCannotInvokeCompiler PASSED
+
+NagiRunLineMarkerTest > testProviderIsRegisteredForBothLanguagesOnly PASSED
+
+NagiRunLineMarkerTest > testEntryPointCacheIsInvalidatedWhenDeclarationChanges PASSED
+
+> Task :prepareSandbox
+> Task :buildSearchableOptions UP-TO-DATE
+> Task :prepareJarSearchableOptions
+> Task :jarSearchableOptions UP-TO-DATE
+> Task :buildPlugin
+
+[Incubating] Problems report is available at: file:///workspace/Nagi-jetbrains-assistance/editors/jetbrains-nagi/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 1m 12s
+20 actionable tasks: 14 executed, 6 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.4.0/userguide/configuration_cache_enabling.html

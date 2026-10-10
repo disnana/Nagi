@@ -1,0 +1,19 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-run-retention/compiler)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.37s
+     Running tests/build_generations.rs (/workspace/nagi-assist-target/debug/deps/build_generations-ac5dca774a107787)
+
+running 1 test
+
+thread 'managed_path_dependency_records_manifest_and_source_inside_its_generation' (867133) panicked at compiler/tests/build_generations.rs:1356:5:
+path dependency manifest and crate root inside an older generation must be recorded
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test managed_path_dependency_records_manifest_and_source_inside_its_generation ... FAILED
+
+failures:
+
+failures:
+    managed_path_dependency_records_manifest_and_source_inside_its_generation
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 47 filtered out; finished in 0.78s
+
+error: test failed, to rerun pass `-p nagic --test build_generations`

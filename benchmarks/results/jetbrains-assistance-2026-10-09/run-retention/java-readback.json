@@ -1,0 +1,459 @@
+{
+  "recordedAt": "2026-10-09T15:25:24.052006+00:00",
+  "repository": "/workspace/Nagi-jetbrains-assistance",
+  "branch": "feat/jetbrains-semantic-assistance",
+  "sourceCommit": "3a044fb4e93a56fb3de93afbc7b8f05ad6306a1a",
+  "sourceCommitTime": "2026-10-09T15:21:15Z",
+  "workingTreeClean": true,
+  "environment": {
+    "javaHome": "/workspace/nagi-jetbrains-local-jdk25/jdk-25.0.4.1+1",
+    "gradleUserHome": "/workspace/nagi-jetbrains-local-gradle",
+    "gradleVersion": "9.4.0",
+    "platformType": "IC",
+    "platformVersion": "LATEST-EAP-SNAPSHOT",
+    "cachedPlatformBuild": "263.6259.32",
+    "offline": true,
+    "nagiJavaToolchainVersion": 25,
+    "compilerPath": "/workspace/nagi-run-retention-artifacts/nagic-assist-test",
+    "compilerSha256": "3f278636d81197acf35d320019975e438602e2ea2071d8e7082e965da0800744",
+    "toolchainReport": "/workspace/Nagi-jetbrains-assistance/editors/jetbrains-nagi/build/verification-metadata/nagi-java-toolchain.json",
+    "toolchainReportText": "{\n  \"expectedCompilerMajor\": 25,\n  \"selectedCompilerMajor\": 25,\n  \"sourceCompatibility\": \"21\",\n  \"targetCompatibility\": \"21\",\n  \"release\": 21,\n  \"compileTasks\": [\n    {\"task\": \"compileJava\", \"selectedCompilerMajor\": 25, \"release\": 21},\n    {\"task\": \"compileTestJava\", \"selectedCompilerMajor\": 25, \"release\": 21}\n  ]\n}\n"
+  },
+  "command": "./gradlew --offline --no-daemon --stacktrace test buildPlugin -PplatformType=IC -PplatformVersion=LATEST-EAP-SNAPSHOT -PnagiJavaToolchainVersion=25",
+  "outcome": "BUILD SUCCESSFUL; `test` executed; `buildPlugin` executed for integrated HEAD. Network permission only enabled Gradle local socket/interface initialization; Gradle dependency resolution remained explicitly offline.",
+  "gradleLog": "/workspace/nagi-run-retention-artifacts/23-jetbrains-combined-final-test-build.log",
+  "junit": {
+    "totalTests": 70,
+    "totalFailures": 0,
+    "totalSkipped": 0,
+    "suites": [
+      {
+        "suite": "com.disnana.nagi.NagiAssistCommandPlanTest",
+        "xml": "/workspace/nagi-run-retention-artifacts/combined-3a044fb/TEST-com.disnana.nagi.NagiAssistCommandPlanTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "name": "emptyCompilerSettingUsesPlatformExecutableName",
+            "status": "passed"
+          },
+          {
+            "name": "projectInvocationPreservesManifestEntryAndNativeConfiguration",
+            "status": "passed"
+          },
+          {
+            "name": "standaloneInvocationKeepsSourceAsOneArgumentAndUsesNoProjectMode",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "suite": "com.disnana.nagi.NagiAssistEditorIntegrationTest",
+        "xml": "/workspace/nagi-run-retention-artifacts/combined-3a044fb/TEST-com.disnana.nagi.NagiAssistEditorIntegrationTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "name": "testRegisteredReferencesNavigateHighLowAndImportedFiles",
+            "status": "passed"
+          },
+          {
+            "name": "testRegisteredCompletionAndDiagnosticsUseUnsavedCompilerInput",
+            "status": "passed"
+          },
+          {
+            "name": "testMissingImportDiagnosticIsDisplayedWithoutInventingALocalSpan",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "suite": "com.disnana.nagi.NagiAssistProcessTest",
+        "xml": "/workspace/nagi-run-retention-artifacts/combined-3a044fb/TEST-com.disnana.nagi.NagiAssistProcessTest.xml",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "name": "deniedLaunchGuardRejectsBeforeStartingAnExecutable",
+            "status": "passed"
+          },
+          {
+            "name": "persistentTransportReusesCompilerAndNeverReusesOverlayFacts",
+            "status": "passed"
+          },
+          {
+            "name": "eofBeforeResponseExplainsProtocolPossibilityAndMatchingCompiler",
+            "status": "passed"
+          },
+          {
+            "name": "replacingIdleExecutableAtTheSamePathStartsANewSession",
+            "status": "passed"
+          },
+          {
+            "name": "cancellationBeforeLaunchNeverEvaluatesTheLaunchGuard",
+            "status": "passed"
+          },
+          {
+            "name": "timeoutTerminatesAndReapsPendingSession",
+            "status": "passed"
+          },
+          {
+            "name": "cancellationTerminatesAndReapsPendingSession",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "suite": "com.disnana.nagi.NagiAssistProtocolTest",
+        "xml": "/workspace/nagi-run-retention-artifacts/combined-3a044fb/TEST-com.disnana.nagi.NagiAssistProtocolTest.xml",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "name": "rejectsInventedDiagnosticSpansAndNonIntegralCoordinates",
+            "status": "passed"
+          },
+          {
+            "name": "decodesOnlyCompilerCompletionAndExactNavigationFacts",
+            "status": "passed"
+          },
+          {
+            "name": "rejectsRelativeCompilerPathsInsteadOfResolvingAgainstTheIdeWorkingDirectory",
+            "status": "passed"
+          },
+          {
+            "name": "rejectsFullCompileClaimsAndCandidatesFromAnEmptySemanticResult",
+            "status": "passed"
+          },
+          {
+            "name": "rejectsMalformedUtf8AndOversizedOrDuplicateOverlays",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "suite": "com.disnana.nagi.NagiAssistServiceTest",
+        "xml": "/workspace/nagi-run-retention-artifacts/combined-3a044fb/TEST-com.disnana.nagi.NagiAssistServiceTest.xml",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "name": "testKnownNativeDependencyDiskChangeWithoutVfsRefreshRejectsResponse",
+            "status": "passed"
+          },
+          {
+            "name": "testUnsavedSnapshotIsDebouncedAndCurrentResponseIsCached",
+            "status": "passed"
+          },
+          {
+            "name": "testFailedSnapshotDoesNotRestartForEveryAnnotatorRequest",
+            "status": "passed"
+          },
+          {
+            "name": "testPreviouslyUnknownClosedDependencyRequiresANewDiskSnapshot",
+            "status": "passed"
+          },
+          {
+            "name": "testRustVerbatimWindowsSourcePathsHaveTheSameIdeIdentity",
+            "status": "passed"
+          },
+          {
+            "name": "testDisposeInvalidatesPreviouslyCurrentResponse",
+            "status": "passed"
+          },
+          {
+            "name": "testUntrustedProjectAndUnsavedManifestNeverLaunchCompiler",
+            "status": "passed"
+          },
+          {
+            "name": "testEditingCancelsOldRequestAndRejectsLateResponse",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "suite": "com.disnana.nagi.NagiCompilerIntegrationTest",
+        "xml": "/workspace/nagi-run-retention-artifacts/combined-3a044fb/TEST-com.disnana.nagi.NagiCompilerIntegrationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "name": "commandPlanChecksHighLowAndProjectWithTheRealCompiler",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "suite": "com.disnana.nagi.NagiCoreTest",
+        "xml": "/workspace/nagi-run-retention-artifacts/combined-3a044fb/TEST-com.disnana.nagi.NagiCoreTest.xml",
+        "tests": 16,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "name": "enterSupportsMultilineCallsAndCustomIndentSize",
+            "status": "passed"
+          },
+          {
+            "name": "libraryNamesAreNotKeywords",
+            "status": "passed"
+          },
+          {
+            "name": "completedMultilineExpressionDedentsToItsOpeningLine",
+            "status": "passed"
+          },
+          {
+            "name": "highFoldIgnoresIndentationInsideContinuations",
+            "status": "passed"
+          },
+          {
+            "name": "scannerCoversEntireSourceAndIncrementalOffsets",
+            "status": "passed"
+          },
+          {
+            "name": "stringsAndCommentsContainNoStructureTokens",
+            "status": "passed"
+          },
+          {
+            "name": "enterUsesColonOrUnclosedLowBrace",
+            "status": "passed"
+          },
+          {
+            "name": "looseFilesAndPathCompilerNeedNoManifest",
+            "status": "passed"
+          },
+          {
+            "name": "highAndLowKeywordsStaySeparate",
+            "status": "passed"
+          },
+          {
+            "name": "enterIgnoresPunctuationInCommentsAndStrings",
+            "status": "passed"
+          },
+          {
+            "name": "lowFoldingKeepsStringAndCommentBracesOut",
+            "status": "passed"
+          },
+          {
+            "name": "commandUsesNearestManifestAndPreservesArgumentBoundaries",
+            "status": "passed"
+          },
+          {
+            "name": "unfinishedStringDoesNotHideNextLine",
+            "status": "passed"
+          },
+          {
+            "name": "highFoldingUsesActualIndentedBodies",
+            "status": "passed"
+          },
+          {
+            "name": "lowFoldCannotCrossMismatchedDelimiters",
+            "status": "passed"
+          },
+          {
+            "name": "diagnosticsResolveUnixAndWindowsPaths",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "suite": "com.disnana.nagi.NagiEditorTest",
+        "xml": "/workspace/nagi-run-retention-artifacts/combined-3a044fb/TEST-com.disnana.nagi.NagiEditorTest.xml",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "name": "testHighEnterIndent",
+            "status": "passed"
+          },
+          {
+            "name": "testCompletedMultilineCallReturnsToStatementIndent",
+            "status": "passed"
+          },
+          {
+            "name": "testCommentAction",
+            "status": "passed"
+          },
+          {
+            "name": "testLowEnterIndent",
+            "status": "passed"
+          },
+          {
+            "name": "testBraceCompletion",
+            "status": "passed"
+          },
+          {
+            "name": "testContinuationDoesNotAccumulateIndent",
+            "status": "passed"
+          },
+          {
+            "name": "testFileTypesAndPsi",
+            "status": "passed"
+          },
+          {
+            "name": "testLowCurlyBraceCompletion",
+            "status": "passed"
+          },
+          {
+            "name": "testUnsavedManifestVetoStopsCompilerPreparation",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "suite": "com.disnana.nagi.NagiProcessTest",
+        "xml": "/workspace/nagi-run-retention-artifacts/combined-3a044fb/TEST-com.disnana.nagi.NagiProcessTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "name": "cancelledStartupStopsARealProcessWithoutAConsole",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "suite": "com.disnana.nagi.NagiRunConfigurationTest",
+        "xml": "/workspace/nagi-run-retention-artifacts/combined-3a044fb/TEST-com.disnana.nagi.NagiRunConfigurationTest.xml",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "name": "testProducerCreatesConfigurationsForHighAndLowFilesOnly",
+            "status": "passed"
+          },
+          {
+            "name": "testRunConfigurationPersistsAndCopiesItsSourcePath",
+            "status": "passed"
+          },
+          {
+            "name": "testUntrustedProjectDoesNotSaveInputsOrCreateRunState",
+            "status": "passed"
+          },
+          {
+            "name": "testRunStateSavesInputsUsesProjectArgumentsAndCanStopTheCompiler",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "suite": "com.disnana.nagi.NagiRunLineMarkerTest",
+        "xml": "/workspace/nagi-run-retention-artifacts/combined-3a044fb/TEST-com.disnana.nagi.NagiRunLineMarkerTest.xml",
+        "tests": 13,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "name": "testMarkerTargetsItsFileEvenAfterAnotherEditorOpens",
+            "status": "passed"
+          },
+          {
+            "name": "testGutterClickKeepsNearestProjectSelection",
+            "status": "passed"
+          },
+          {
+            "name": "testFakeNestedAndIncompleteLowMainHaveNoGutters",
+            "status": "passed"
+          },
+          {
+            "name": "testHighEntryPointsHaveGutters",
+            "status": "passed"
+          },
+          {
+            "name": "testLowGutterClickInvokesTheCompilerWithItsSavedFile",
+            "status": "passed"
+          },
+          {
+            "name": "testHighGutterClickInvokesTheCompilerWithItsSavedFile",
+            "status": "passed"
+          },
+          {
+            "name": "testVirtualPreviewCannotInvokeRun",
+            "status": "passed"
+          },
+          {
+            "name": "testLowEntryPointsHaveGutters",
+            "status": "passed"
+          },
+          {
+            "name": "testFakeNestedAndIncompleteHighMainHaveNoGutters",
+            "status": "passed"
+          },
+          {
+            "name": "testLowCommentsAndStringsDoNotChangeTopLevel",
+            "status": "passed"
+          },
+          {
+            "name": "testUntrustedProjectCannotInvokeCompiler",
+            "status": "passed"
+          },
+          {
+            "name": "testProviderIsRegisteredForBothLanguagesOnly",
+            "status": "passed"
+          },
+          {
+            "name": "testEntryPointCacheIsInvalidatedWhenDeclarationChanges",
+            "status": "passed"
+          }
+        ]
+      }
+    ]
+  },
+  "pluginArchive": {
+    "path": "/workspace/Nagi-jetbrains-assistance/editors/jetbrains-nagi/build/distributions/nagi-jetbrains-0.1.3.zip",
+    "sha256": "bd2b1bb51cd2c1bdabe56a131d210f2693477d5f92eafa862838ac36999a6911",
+    "sizeBytes": 164375,
+    "modifiedAtUtc": "2026-10-09T15:25:02.405334+00:00",
+    "entries": [
+      {
+        "name": "nagi-jetbrains/",
+        "sizeBytes": 0
+      },
+      {
+        "name": "nagi-jetbrains/lib/",
+        "sizeBytes": 0
+      },
+      {
+        "name": "nagi-jetbrains/lib/nagi-jetbrains-0.1.3-searchableOptions.jar",
+        "sizeBytes": 755
+      },
+      {
+        "name": "nagi-jetbrains/lib/nagi-jetbrains-0.1.3.jar",
+        "sizeBytes": 174594
+      }
+    ],
+    "readbackPluginDescriptors": [
+      {
+        "outerEntry": "nagi-jetbrains/lib/nagi-jetbrains-0.1.3.jar",
+        "innerEntry": "META-INF/plugin.xml",
+        "id": "com.disnana.nagi",
+        "name": "Nagi",
+        "version": "0.1.3",
+        "sinceBuild": "251.25410.109",
+        "untilBuild": null
+      }
+    ],
+    "containsReleaseJson": false,
+    "releaseJsonEntries": []
+  }
+}

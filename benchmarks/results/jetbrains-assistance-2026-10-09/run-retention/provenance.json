@@ -1,0 +1,100 @@
+{
+  "production_and_tests_head": "3a044fb4e93a56fb3de93afbc7b8f05ad6306a1a",
+  "docs_head_before_results": "f4bc1620a18422d57394e5a4b3af9946e0388e26",
+  "source_sha256": {
+    "compiler/src/generation.rs": "8032447b9b77ca56b2d7a88ad75ca3506066a9c1856841df38c42fab4d633058",
+    "compiler/src/generation_guard.rs.inc": "d26ed47dcc61a7d0066042962ccae7dc6198120773d2dd284145a3de98f68693",
+    "compiler/src/output.rs": "3cf851e90cf700aae6d3ecf8b9a0399dcc360ea7ab3373c25e0f805d72ebdf07",
+    "compiler/src/emit.rs": "3492533e8daa4470717757c3dd50460305212d226788273139bcfc07fff49af4",
+    "compiler/tests/build_generations.rs": "4496e30a04c80631d415d1e62c5ace539be4b69841519bf56c163c883fc9363c",
+    "editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiCompilerAction.java": "09aedd7a1c8c79b8523642922513d7d576d49ba104888a17371858ecf6b3406a",
+    "editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiRunConfiguration.java": "4b732aad9b8c116c9a152f1233c18ee599623c9e514e8dc9f8e5bc1cd7cb88af",
+    "editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiAssistProcess.java": "27e983cf2487e6d9037b4581db12823b65f337e92698f558e8db949022cbd45e",
+    "editors/jetbrains-nagi/src/test/java/com/disnana/nagi/NagiRunConfigurationTest.java": "b52ccaf1f825c0f3be7292e1d6737ee9a4ce50b8bfd78f4350ce772b6b46ae80",
+    "editors/jetbrains-nagi/src/test/java/com/disnana/nagi/NagiAssistProcessTest.java": "83caf3c610af05b0c518200b39488f7874df414a7cfb7019a4eb684496939f8d",
+    "editors/jetbrains-nagi/src/test/java/com/disnana/nagi/NagiAssistServiceTest.java": "e0378efe55cebd4199a3fe7972365fc569763758dbc0255a7ccfbc51184bc19b"
+  },
+  "linux_native_tests": 48,
+  "java_tests": 70,
+  "workspace_exit": 0,
+  "workspace_raw_result_blocks": 101,
+  "workspace_raw_passed": 1039,
+  "workspace_raw_failed": 0,
+  "workspace_raw_ignored": 1,
+  "raw_count_is_not_unique_test_count": true,
+  "clean_build_claim": false,
+  "windows_ci": "pending on latest integrated PR HEAD",
+  "four_ide_ci": "pending on latest integrated PR HEAD",
+  "gui_verified_scope": "User screenshots show High native run output/exit0, top Nagi Run configuration, and standard right-click Run item. Exact right-click invocation causality, IDE build, and plugin/compiler source identity are unknown. Completion/navigation/live diagnostics/Low/Stop/trust/project-switch GUI remain unverified.",
+  "guarantees_not_claimed": [
+    "power cycling",
+    "universal fsync durability",
+    "global cross-output GC",
+    "all arbitrary Rust include/build-script dependencies",
+    "shared Cargo target pruning",
+    "OOM recovery"
+  ],
+  "artifact_sha256": {
+    "distribution-readback.json": "1bfe03e2006f1fea68051a926a7d87ccd1dae84d0c94b0b570a0d1be6560e5eb",
+    "compiler-clippy.log": "d5341bdb88d9fcaabcef01a398d82fc3c7431a1d74a0846be9ca616df4a6164e",
+    "java-readback.json": "fada61c7379ab3830df43693531fcc3209fce44b0c03070e2f588947ee38981b",
+    "java-70.log": "822c03984c537033a130a7b4c65e817ef73c1a4bb088347d2d58c2b407eccb15",
+    "review-cross-output-red.log": "09ef1f9365d73e28a85ed1ef223827d081b3374acb00916e61a8307aaf572a19",
+    "initial-red.log": "f54d2c2aac067ec5248d322939aa01c9e8eb68128417579c604013d8b985c399",
+    "review-current-input-and-last-good-red.log": "ca1148d8c5f5a85d623fd90f971b3c57a1ce81bfb2737676bf2038b593b5d7e4",
+    "review-path-input-red.log": "bc40bf0ce4227be645dcd4d0ee67f9b9e3806bbac6ea0b1927a3c92f745e36a6",
+    "review-oversized-record-red.log": "71312aab23d7ba1999b65db46515a9973dc90737da3dbd2d568d154051986b8c",
+    "workspace.log": "061bb48c817aba19db80392f18de7b0dfb4b5a182a547bde9ec8962c23901584",
+    "native-48.log": "89f46a79c0868c67a3db67cee7b3b3c2c6fd43237701d354c1ea3ccbebba1991",
+    "site-build.log": "43667c569828ac00b1f6fde33156cdb77a92d410191a8949a0163916e2fbc5da",
+    "ci-policy.log": "3eebf859bdb4dcbc6970a963407864675b0b0fff3445ea05ad7ffb9be5bad5cb",
+    "ci-policy-pass.log": "6bbf6dc4f8cb591a17e687dcdec6ea5da2043d8f6256a1b6433a8165a701cbd2",
+    "release-unit.log": "9de0dc734a7fab4c87e6d0f7fad50cd309f40dddce4b5332fbf69962c05b5dac"
+  },
+  "recordedAt": "2026-10-09T16:00:20.502341+00:00",
+  "docs_only_commits": [
+    "f4bc1620a18422d57394e5a4b3af9946e0388e26"
+  ],
+  "latest_integrated_head_ci": "pending; require latest PR HEAD; do not reuse feafba8 CI",
+  "independent_sol_high_review": {
+    "production_status": "approved after five generation-retention findings were fixed",
+    "windows_test_api": "nightly-only file identity APIs removed; stable namespace references and native output-byte oracle retained"
+  },
+  "marketplace_and_release": {
+    "marketplace_public_readback": "Public update/list/build-feed endpoints currently expose only 0.1.1; this does not retract the owner-reported 0.1.2 approval notification because owner review state is not exposed.",
+    "github_jetbrains_v012": "Published non-draft release with common ZIP and SHA-256 sidecar confirmed by public API/asset HTTP 200.",
+    "public_docs": "Numeric listing ID 34891 retained; Marketplace version guidance is neutral and directs users to Versions view.",
+    "nagic_versions": "0.1.12 candidate cancelled; public compiler remains 0.1.11; candidate semantic assistance requires matching development compiler from the same PR source; no formal 0.2.0 release."
+  },
+  "retention_limits": [
+    "IDE-managed runs only; foreign-output managed exports are preserved like immutable CLI outputs.",
+    "Unknown metadata, links/reparse points, failed staging, and shared Cargo cache are retained.",
+    "No strict generation count or total size cap; no exhaustive arbitrary Rust include/build-script dependency discovery.",
+    "No power-loss durability, universal fsync, or OOM-recovery guarantee."
+  ],
+  "documentation_checks": {
+    "website": {
+      "command": "/workspace/nagi-jetbrains-website-venv/bin/python website/build.py --out build/jetbrains-assistance-retention-records",
+      "exitCode": 0,
+      "pages": 102,
+      "localLinksAnchorsAssets": "passed",
+      "log": "site-build.log"
+    },
+    "ciPolicy": {
+      "command": "python -m unittest discover -s scripts/ci -p 'test_*.py' -v",
+      "finalExitCode": 0,
+      "tests": 63,
+      "failures": 0,
+      "log": "ci-policy-pass.log",
+      "initialAttempt": "two existing URL contract assertions failed after GitHub Releases link was temporarily omitted; link was restored and test expectations were not changed",
+      "initialLog": "ci-policy.log"
+    },
+    "releaseUnit": {
+      "command": "python -m unittest discover -s scripts/releases -p 'test_*.py' -v",
+      "exitCode": 0,
+      "tests": 116,
+      "failures": 0,
+      "log": "release-unit.log"
+    }
+  }
+}

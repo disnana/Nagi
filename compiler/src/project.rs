@@ -7,7 +7,7 @@ use std::{
 };
 
 pub const USAGE: &str = "Usage:
-  nagic <check|lower|build|run|symbols> [SOURCE] [OPTIONS]
+  nagic <check|lower|build|run|symbols|assist> [SOURCE] [OPTIONS]
   nagic map [types|modules|calls] [SOURCE] [OPTIONS]
   nagic version
 
@@ -17,6 +17,7 @@ Commands:
   build    Build a native executable
   run      Build and run a program
   symbols  Print type and definition information as JSON
+  assist   Print compiler-authoritative editor assistance as JSON (internal)
   map      Map checked source types, modules, or calls (default: types)
   version  Print the compiler version
 
@@ -29,7 +30,8 @@ Options:
   --out DIR               Select the generated-source directory
   --cost-report           Write an allocation/copy cost report
   --rust-diagnostics      Include generated Rust diagnostic details (build/run)
-  --editor-input          Read editor buffers from stdin (check/symbols)
+  --editor-input          Read editor buffers from stdin (check/symbols/assist)
+  --serve                 Reuse assist process (one JSON request/response per line)
   --sql-schema FILE       Check literal SQL against an offline DDL snapshot (check)
   --sql-dialect sqlite    Required with --sql-schema; SQLite only
   --format FORMAT         Map output: mermaid (default), d2, json, html, svg, png
@@ -44,7 +46,7 @@ Options:
 Map notes:
   SVG/PNG require --output with a matching .svg/.png extension and local D2.
   Available layouts depend on the installed D2 version.
-  architecture, dataflow, trace, cost, and --serve are not implemented.";
+  architecture, dataflow, trace, cost, and map --serve are not implemented.";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -123,8 +125,10 @@ pub struct Options {
     pub cost: bool,
     /// Include raw generated Rust details after a mapped Nagi diagnostic.
     pub rust_diagnostics: bool,
-    /// Read editor buffers from stdin for symbols or an in-memory check.
+    /// Read editor buffers from stdin for symbols/assist or an in-memory check.
     pub editor_input: bool,
+    /// Internal assist transport only; does not execute user/native code.
+    pub editor_serve: bool,
     pub sql_schema: Option<PathBuf>,
     /// Set only when a project is selected. Plain SOURCE commands keep their cwd.
     pub project_root: Option<PathBuf>,
@@ -291,7 +295,7 @@ pub fn resolve_map(args: &[String], cwd: &Path) -> Result<(Options, MapOptions),
                     .into(),
             ),
             "--editor-input" => {
-                return Err("--editor-input is supported only by check/symbols".into())
+                return Err("--editor-input is supported only by check/symbols/assist".into())
             }
             "--serve" => return Err("map --serve is not implemented".into()),
             _ => input.push(args[i].clone()),
@@ -435,7 +439,7 @@ fn read_manifest(path: &Path) -> Result<Manifest, String> {
 /// With no SOURCE, search upward from cwd for the nearest nagi.toml.
 pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let command = args.first().ok_or(USAGE)?;
-    if !["check", "lower", "build", "run", "symbols"].contains(&command.as_str()) {
+    if !["check", "lower", "build", "run", "symbols", "assist"].contains(&command.as_str()) {
         return Err(format!("unknown command: {command}\n{USAGE}"));
     }
     let mut source = None;
@@ -448,6 +452,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let mut cost = false;
     let mut rust_diagnostics = false;
     let mut editor_input = false;
+    let mut editor_serve = false;
     let mut sql_schema = None;
     let mut sql_dialect = None;
     let mut i = 1;
@@ -504,11 +509,12 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
             "--cost-report" => cost = true,
             "--rust-diagnostics" => rust_diagnostics = true,
             "--editor-input" => {
-                if !matches!(command.as_str(), "symbols" | "check") || editor_input {
-                    return Err("--editor-inputはcheck/symbolsに1回だけ指定できます".into());
+                if !matches!(command.as_str(), "symbols" | "check" | "assist") || editor_input {
+                    return Err("--editor-inputはcheck/symbols/assistに1回だけ指定できます".into());
                 }
                 editor_input = true;
             }
+            "--serve" if command == "assist" && !editor_serve => editor_serve = true,
             x if x.starts_with('-') => return Err(format!("unknown option: {x}")),
             x => {
                 if source.replace(cwd.join(x)).is_some() {
@@ -519,6 +525,9 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         i += 1;
     }
     validate_dependencies(&dependencies)?;
+    if editor_serve && !editor_input {
+        return Err("assist --serve requires --editor-input".into());
+    }
     if rust_diagnostics && !matches!(command.as_str(), "build" | "run") {
         return Err("--rust-diagnostics is supported only by build/run".into());
     }
@@ -604,6 +613,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         cost,
         rust_diagnostics,
         editor_input,
+        editor_serve,
         sql_schema,
         project_root,
         manifest_path,
