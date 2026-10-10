@@ -253,8 +253,7 @@ async fn foreign_slot_rejects_before_actual_send() {
         .remove()
         .unwrap_or_else(|_| panic!("owned material"));
     context.replace_pending_for_test(
-        foreign
-            .checked_delivery(&foreign.lease)
+        super::super::delivery::LeaseDelivery::for_lease(&foreign.lease)
             .unwrap()
             .stage(material)
             .unwrap(),
