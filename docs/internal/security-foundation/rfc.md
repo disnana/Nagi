@@ -2,7 +2,7 @@
 
 [English](rfc.en.md) · [現行調査](baseline-audit.md) · [PR/検証計画](implementation-plan.md)
 
-状態: **安全性優先の実装方針へ改訂**。2026-10-08 JST。ユーザーの最新指示に基づき、D1–D3の互換性優先案を見直した。[判断と移行](decisions-and-migration.md)を実装の基準にする。SF01は別Draftの開発sourceへ接続中です。[SF01契約](sf01-contract.md)・結果台帳を参照してください。後続SF02–SF08と正式0.2.0は未完成・未リリースで、現行0.1.xの利用条件を遡及変更しない。Task/spawn・Tx・High/Lowの基本契約は維持する。
+状態: **D1–D3採用済みの実装基準**。2026-10-10 UTC。GitHub main `e609aba158921226a632f16d41eb8b0f4ad5aebd`にはSF00 (#100)とSF01 (#101)がmerge済みで、#101は現在Draftではない。開発mainには`std.auth`/明示PolicyとSF05の標準Query/Parameters実装が統合されている。SF02/SF03/SF04/SF06は未完了、SF07の横断budget acceptanceとSF08も未完了で、正式0.2.0は未リリース。公開0.1.11の契約は遡及変更しない。このRFCは採用基準と残るacceptanceを記録し、Foundation全体の完成やsecurity certificationを示さない。[判断と移行](decisions-and-migration.md)を基準とし、Task/spawn・Tx・High/Lowの基本契約を維持する。
 
 ## 目的と範囲
 
@@ -10,11 +10,11 @@
 
 対象はAuthScope、HTTP route方針、CSRF、HTML出力/XSS、SQL構造とbind、policy付き送信HTTP/SSRF、CORS、Cookie/Session、資源予算/DoS。OAuth/OIDC provider、password database、MFA、汎用taint/effect/region体系、PostgreSQL、独自暗号、HTTP全面置換、VM/GC/sandboxは今回追加しない。credentialsを検証する既存Rustライブラリ/adapterと、レビューするNagi policyを使う。
 
-## 現行の基点
+## RFC作成時の基点（歴史的スナップショット）
 
-main `62bbda9`（#99込み）、公開0.1.11 `003a594`、調査開始時open PR0、現在設計PR #100。詳細とsource hashは[調査](baseline-audit.md)。現行Principal/Grant[P]はopaqueでNagiから偽造・copy/shared/JSON復元できないが、request終了・expiry・失効に連動しない。owned async delegationは許される。標準routeに認証方針引数はなく、htmlは生文字列、Cookie/Session/CSRF/CORSの標準契約と送信HTTPはない。
+RFC設計開始時（2026-10-08）のmain `62bbda9`（#99込み）、公開0.1.11 `003a594`、調査開始時open PR 0、設計PR #100は歴史的baselineであり、現在のmain状態を示さない。current mainは`e609aba158921226a632f16d41eb8b0f4ad5aebd`。詳細と当時のsource hashは[調査](baseline-audit.md)を参照する。以下のbaseline記述も設計開始時点の状態として読む。
 
-SQLite Parametersの値bindとnative authorizerは実装済み。SQL/schema preflightはopt-inで、動的SQLの出所やtenant policyを証明しない。HTTPにはbody/header/同時処理/各期限があり、frontendには入力/深さ制限がある。これを再実装しない。
+設計開始時点ですでにSQLite Parametersの値bindとnative authorizerは実装済みだった。SQL/schema preflightはopt-inで、動的SQLの出所やtenant policyを証明しない。既存HTTPにはbody/header/同時処理/各期限があり、frontendには入力/深さ制限があった。これらは当時のbaseline記録であり、現在の機能状況はmainの該当契約とCHANGELOGで確認する。
 
 ## 信頼境界と脅威モデル
 
@@ -34,7 +34,7 @@ Webセキュリティの型はproofの偽造/誤用を狭めるもので、攻�
 
 ## 静的保証と実行時責務
 
-以下はすべて**追加予定**。採用後、各項目のpositive/negative/native oracleがGREENになるまで現行保証へ格上げしない。
+以下は採用済み方針と、mainへ統合済みの実装・後続featureのacceptanceを並べた表である。SF00/SF01/SF05とSF07 bounded readerはmainにあるが、SF02/SF03/SF04/SF06/SF08とSF07横断budget acceptanceは未完了。方針の採用や一部実装だけで全acceptanceを完了扱いしない。
 
 | 項目 | Nagi checkerで固定する契約 | runtime/配置で確認する事項 | 証明しないこと |
 |---|---|---|---|
@@ -102,7 +102,7 @@ Sessionはbrowser用host-only cookieのopaque IDを基点にserver側のbounded 
 
 標準Session発行/rotation/認証状態を含む応答とCSRF token配布応答は、標準appのfinalizerが`Cache-Control: no-store`を所有する。Set-Cookieだけでcache禁止と扱わない。handlerがpublic/max-age等の競合cache headerを加えた場合は拒否し、304/共有cacheによるtoken/session応答再利用をしない。発行/token応答には明示したcookie/credential source/認証依存のVaryを併用するが、Varyをno-storeの代わりにしない。普通のDTOの機密性・cache policyを自動推論したとは説明せず、app作者が別途指定する。
 
-session IDはOS CSPRNGから少なくとも128bitの推測不能性を持つopaque値。secretのDebug/Serde/response echoを提供しない。login/権限変更時にrotationし、atomicに旧ID無効化と新ID発行を行う。idleとabsolute expiry、logout/失効、同時request/rotation、clock rollbackの挙動を定義する。cookie削除はserver失効の代用ではない。storeの停止/応答喪失を認証成功へ変換しない。
+session IDにはOS CSPRNGで生成した256bitのentropy（推測不能性）を持つopaque値を使う。secretのDebug/Serde/response echoを提供しない。login/権限変更時にrotationし、atomicに旧ID無効化と新ID発行を行う。idleとabsolute expiry、logout/失効、同時request/rotation、clock rollbackの挙動を定義する。cookie削除はserver失効の代用ではない。storeの停止/応答喪失を認証成功へ変換しない。
 
 D3の標準は既存SQLite Pool/Transactionを使う**永続server Session store**。lookup/rotate/revoke、世代compare-and-swap、capacity/expiry cleanupをnative Txでatomicにする。メモリstoreのproduction fallbackとstateless signed cookieは提供しない。小さなtest doubleは非公開test-onlyで同じstore contractを検査する。DB file/ディレクトリの権限、共有fileのlock/時刻、backup/復元を配置条件に含め、分散store保証を付けない。
 

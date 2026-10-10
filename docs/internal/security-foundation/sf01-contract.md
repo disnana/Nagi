@@ -1,6 +1,6 @@
 # SF01: 公開APIと境界契約
 
-[RFC](rfc.md)・[確定判断/移行](decisions-and-migration.md)を基準とする。SF00のhead `a97c7fbd1cd32a40806e21e0d9a6f07a04073dbd`はchecks37753183787/37753178468・website37753183429・merge gate37753180262成功、独立SF-R01–06再確認済み。PR #100はユーザー承認でmainへマージ済み（10655ea7299d775235ab6585e5ab8e321f121593、treeはa97と同一）。SF01のPR #101はmain向けDraft。以下は実装対象の契約で、GREEN/native/4 OSの証拠が揃うまで完成と記載しない。
+[RFC](rfc.md)・[確定判断/移行](decisions-and-migration.md)を基準とする。SF00 head `a97c7fbd1cd32a40806e21e0d9a6f07a04073dbd`のchecks37753183787/37753178468・website37753183429・merge gate37753180262と独立SF-R01–06は当時のSF00証拠である。PR #100はmainへmerge済み（10655ea7299d775235ab6585e5ab8e321f121593、treeはa97と同一）。PR #101は当時Draftだったが、その後マージされ、現在のmain `e609aba158921226a632f16d41eb8b0f4ad5aebd`にも含まれる。以下はSF01のAPI境界契約を記録し、正式0.2.0や後続Foundation機能の完成を意味しない。
 
 ## 公開API
 

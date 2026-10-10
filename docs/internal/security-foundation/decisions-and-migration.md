@@ -2,11 +2,11 @@
 
 [English](decisions-and-migration.en.md) · [RFC](rfc.md) · [実装計画](implementation-plan.md)
 
-2026-10-08 JST。**実装基準・未実装**。最新のユーザー指示「正式化前に安全性と長期的な土台を優先する」に基づく。PR #100は設計PRで、現行main `62bbda9`と公開0.1.11を変更済みという意味ではない。以下の必要なbreaking changeについて、旧資料の互換性保留を理由に同じ承認を再質問しない。公開signature、native oracle、依存選定は各実装PRで具体化し、重大な追加リスクや矛盾が見つかれば記録して再評価する。
+2026-10-08 JST（判断時点、状態更新2026-10-10）。**D1–D3は採用済みの実装基準であり、Foundation全体の実装完了ではない。** この文書の初期snapshotではPR #100は設計PR、main `62bbda9`だった。以後PR #100/#101はmainへmergeされ、main `e609aba158921226a632f16d41eb8b0f4ad5aebd`にはSF01とSF05の実装がある。SF02/SF03/SF04/SF06、SF07横断budget acceptance、SF08は未完了。公開0.1.11を変更せず、正式0.2.0も未リリース。以下の必要なbreaking changeについて、旧資料の互換性保留を理由に同じ承認を再質問しない。公開signature、native oracle、依存選定は各実装PRで具体化し、重大な追加リスクや矛盾が見つかれば記録して再評価する。
 
-## 根拠と選択基準
+## 設計時baselineと選択基準
 
-現行[route/route_mapped](../../../runtime/src/http_server.rs):596はpolicyなし、[legacy serve](../../../runtime/src/lib.rs):240は別dispatcherと組込endpointを持つ。[Principal/Grant](../../../runtime/src/auth.rs):29のRust factoryとconsumeはleaseを要求せず、[旧ADR 001](../adr/001-backend-boundaries.md)はowned delegationを最小実験として許す。[raw HTML](../../../runtime/src/http_server.rs):430と[Db.exec](../../../runtime/src/database.rs):120も標準入口にある。これらは存在だけで脆弱性と断定しないが、追加された安全な入口をアプリが使わなくても実行できる設計になる。
+設計時main `62bbda9`の[route/route_mapped](../../../runtime/src/http_server.rs):596はpolicyなし、[legacy serve](../../../runtime/src/lib.rs):240は別dispatcherと組込endpointを持つ。[Principal/Grant](../../../runtime/src/auth.rs):29のRust factoryとconsumeはleaseを要求せず、[旧ADR 001](../adr/001-backend-boundaries.md)はowned delegationを最小実験として許す。[raw HTML](../../../runtime/src/http_server.rs):430と[Db.exec](../../../runtime/src/database.rs):120もその時点の標準入口だった。これらは存在だけで脆弱性と断定しないが、当時の設計では追加された安全な入口を使わず実行できた。
 
 採用基準は、標準入口の網羅、失敗時に拒否すること、同じ契約を一度だけ実装すること、有限資源、実行時の観測可能性。削除の大きさを成果にしない。Hyper/Tokio/rusqlite、既存resource registry・sealed plan・Pool/Tx・Taskは使い続ける。HTTP transportやDB schedulerの全面交換、汎用taint/region、任意Rustのsecurity解析は不要。
 
