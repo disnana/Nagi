@@ -2,6 +2,7 @@
 //! Fixed row/read/clock/CAS/snapshot/rollback semantics are the parent's actual
 //! read_rows, fresh_plan, finish_written and finish; no request proof is minted.
 use super::*;
+use crate::auth::session::finish;
 // Trusted foundation entrypoints share the same fixed recipes, after-reserve
 // sample and actual finish. They never manufacture AuthScope or request proof.
 async fn primitive(

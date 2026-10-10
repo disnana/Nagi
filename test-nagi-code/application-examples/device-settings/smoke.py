@@ -28,7 +28,8 @@ def verify(executable: Path, env: dict, output: Path) -> dict:
             with socket.socket() as available:
                 available.bind(("127.0.0.1", 0))
                 port = available.getsockname()[1]
-            child_env = dict(env, NAGI_SAMPLE_DB=str(database), NAGI_SAMPLE_PORT=str(port))
+            child_env = dict(env, NAGI_SAMPLE_DB=str(database), NAGI_SAMPLE_PORT=str(port),
+                             NAGI_HTTP_AUTHORITY=f"127.0.0.1:{port}")
             stdout_path = output / f"server-{run_number}.stdout"
             stderr_path = output / f"server-{run_number}.stderr"
             with stdout_path.open("w", encoding="utf-8") as stdout, stderr_path.open("w", encoding="utf-8") as stderr:
