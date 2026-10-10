@@ -1,6 +1,6 @@
 # Nagi・VS Code拡張・JetBrainsプラグインの正式リリース
 
-mainで対象のバージョンを上げたとき、同じ`Nagi checks` run内の必須検証成功後にGitHub Releasesへ正式版を公開します。Nagi、VS Code拡張、JetBrainsプラグインは別々に判定します。Docsだけの変更や、バージョンを変えないコード更新ではリリースしません。JetBrains単独版の更新では両IDE製品の検証を必須とし、NagiまたはVS Codeも同時に公開する場合は既存のLinux・配布物検証も必須です。
+mainで対象のバージョンと正式なCHANGELOG項目が揃ったとき、同じ`Nagi checks` run内の必須検証成功後にGitHub Releasesへ正式版を公開します。Nagi、VS Code拡張、JetBrainsプラグインは別々に判定します。通常のDocs変更や同版のコード更新ではリリースしません。ただし、先に候補版を取り込んだ後、同じ版の正式な非空CHANGELOG項目を初めて追加する変更は、正式公開を開始します。この変更は公開承認を得た後だけ行ってください。JetBrains単独版の更新では両IDE製品の検証を必須とし、NagiまたはVS Codeも同時に公開する場合は既存のLinux・配布物検証も必須です。
 
 ## バージョンを更新する
 
@@ -14,9 +14,9 @@ mainで対象のバージョンを上げたとき、同じ`Nagi checks` run内�
 | VS Code拡張 | `editors/vscode-nagi/package.json`の`version` | `vscode-vX.Y.Z` | VSIXとSHA-256 |
 | JetBrainsプラグイン | `editors/jetbrains-nagi/build.gradle.kts`の`version` | `jetbrains-vX.Y.Z` | IntelliJ IDEAとPyCharm共通のZIPとSHA-256 |
 
-正式版のバージョンは`X.Y.Z`です。現在の値より大きい値を使います。Nagiのバージョンを更新したら`cargo check --locked`を確認し、lockfileの更新が必要なら`cargo check`で更新してから`cargo check --locked`を行います。Docsの現在バージョンとインストール例も合わせて更新します。
+正式版のバージョンは`X.Y.Z`です。版を変更するときは現在の値より大きい値を使い、候補版も巻き戻しません。候補の版更新だけでは、対応する正式な非空CHANGELOG項目がない限り公開せず、検証用の配布物を生成します。候補から正式版へ進める場合は、版を再度上げず、承認済みの同じ版の正式項目を追加できます。既に正式項目がある同版の追記は新しい公開対象にしません。正式見出しを宣言したのに空または重複している場合は、判定時にエラーにします。Nagiのバージョンを更新したら`cargo check --locked`を確認し、lockfileの更新が必要なら`cargo check`で更新してから`cargo check --locked`を行います。Docsの現在バージョンとインストール例も合わせて更新します。
 
-PRをmainへマージすると、push前後のコミット全体を比較します。バージョン更新の後にDocsのコミットが続く複数コミットのpushも判定できます。main以外へのpush、PR、手動のCI実行では正式版を公開しません。最初のpushや、この仕組みを追加しただけで、変えていないコンポーネントの初回リリースを作ることもありません。JetBrainsの正式配布は、将来の版更新がmainへ反映された後に始まります。
+PRをmainへマージすると、push前後のコミット全体で版とCHANGELOGを比較します。版更新の後に正式項目を追加する複数コミットのpushと、先行した候補を後のpushで正式化する変更を判定できます。main以外へのpush、PR、手動のCI実行では正式版を公開しません。最初のpushや、この仕組みを追加しただけで、変えていないコンポーネントの初回リリースを作ることもありません。JetBrainsも、版更新と正式項目が揃うか、候補の正式項目が初めてmainへ追加された後に公開対象となります。
 
 ## リリース画面の変更内容と差分
 
@@ -28,17 +28,17 @@ GitHub Releasesの本文には、配布物のインストール案内、対象�
 
 ## 検証と公開の流れ
 
-1. バージョン差分を判定する。同時にLinuxで既存の型・所有権・ランタイム・HTTP・エディターの検証と、リリース条件の回帰テストを実行する。
+1. バージョン差分と正式CHANGELOG項目の追加を判定する。同時にLinuxで既存の型・所有権・ランタイム・HTTP・エディターの検証と、リリース条件の回帰テストを実行する。
 2. 判定が終わった対象の配布物を、Linuxの検証と並行してビルドする。NagiはWindows x64、Linux x86_64、macOS Apple Silicon、macOS IntelでCLI・配布先から外部プロジェクトを使うテスト・エディターテストを確認する。Rustのhost architectureを確認し、別のCPU向けとして誤って配布しない。JetBrainsはIntelliJ IDEAとPyCharmのstable・EAPそれぞれでコンパイラ連携テスト・build・Plugin Verifierを独立に実行する。四つの検証がすべて成功した後で、共通ZIP内のplugin JARから`META-INF/plugin.xml`のIDと版を検査し、ひとつの配布物を作る。
 3. Nagiのアーカイブをチェックアウト外に展開し、版・ヘルプをビルド環境なしで表示する。展開フォルダーをPATHに追加し、同梱物と別の場所にあるプロジェクトをビルド・実行する。WindowsではPowerShell版、Linux/macOSではbash版のインストーラーも検証する。
 4. SHA-256を作り、Actionsの成果物へ保存する。
-5. 対象に必要な検証がすべて成功したmainのバージョン更新時だけ、検証したコミットに新しいタグを作り、draft releaseへファイルをアップロードする。NagiまたはVS Codeを公開する場合はLinux検証も必須です。JetBrains単独の版更新ではIDEA/PyCharmのstable/EAP四経路がすべて公開条件です。内容を読み直してSHA-256を照合した後、正式版として公開します。
+5. 対象に必要な検証がすべて成功したmainで、版更新と正式項目が揃うか、同版候補の正式項目を初めて追加したときだけ、検証したコミットに新しいタグを作り、draft releaseへファイルをアップロードする。NagiまたはVS Codeを公開する場合はLinux検証も必須です。JetBrains単独の版更新ではIDEA/PyCharmのstable/EAP四経路がすべて公開条件です。内容を読み直してSHA-256を照合した後、正式版として公開します。
 
 PRでもバージョンを更新した対象の配布物を検査します。リリーススクリプト・インストーラー・CI定義を変更した場合は、バージョンを変えていない配布物も検査用に生成します。この検査だけではGitHub Releasesへ公開しません。
 
 拡張のコード・発行者・パッケージ構成を変更した場合も、検証用VSIXを`release-vscode`成果物へ保存します。READMEやテストだけの変更では生成しません。発行者、拡張名、バージョンがVSIXのXMLとpackage.jsonで一致することを検査します。
 
-JetBrainsプラグインのコード・ビルド設定を変更した場合は、IDEA/PyCharmのstable/EAP四つの検証ジョブを実行し、すべての成功後に共通`release-jetbrains`成果物をひとつ作ります。PR上のZIPは検証用です。正式公開は`build.gradle.kts`の版を上げたmain pushだけで行います。ZIPは`nagi-jetbrains-X.Y.Z.zip`とし、内包JARのplugin id `com.disnana.nagi`と期待版を読み出して検証します。このworkflowはMarketplaceへ送信しません。公開済み0.1.1 ReleaseにあるIC/PCの二つのZIPは履歴として保持し、書き換えません。
+JetBrainsプラグインのコード・ビルド設定を変更した場合は、IDEA/PyCharmのstable/EAP四つの検証ジョブを実行し、すべての成功後に共通`release-jetbrains`成果物をひとつ作ります。PR上のZIPは検証用です。正式公開は`build.gradle.kts`の版と正式CHANGELOG項目が揃ったmain pushで行います。候補版を先に取り込んだ場合は、同じ版の正式項目を初めて追加するmain pushが公開対象です。ZIPは`nagi-jetbrains-X.Y.Z.zip`とし、内包JARのplugin id `com.disnana.nagi`と期待版を読み出して検証します。このworkflowはMarketplaceへ送信しません。公開済み0.1.1 ReleaseにあるIC/PCの二つのZIPは履歴として保持し、書き換えません。
 
 公開用ジョブだけが`contents: write`を持ち、GitHub Actionsの組み込みtokenを使います。追加の公開tokenやMarketplaceアカウントは不要です。GitHub Pagesの自動公開は別の`Nagi website`ワークフローです。
 
@@ -94,4 +94,4 @@ ActionsまたはGitHub Releasesから取得した場合は、そのVSIXの保存
 python -m unittest discover -s scripts/releases -p 'test_*.py'
 ```
 
-このテストはインストーラーの正常動作・再実行・チェックサム不一致・アーカイブ経路・既存コマンドの保護、Docsだけの更新、独立したバージョン更新、複数コミットのpush、公開済みタグと本文の保護、draftの再開、Git管理外ファイルの除外を確認します。ノートの検査では、コミット済みCHANGELOG、componentごとの比較範囲、初回公開、変更操作前の失敗、draft本文の読み戻しも確認します。実際のGitHubへの公開は行いません。
+このテストはインストーラーの正常動作・再実行・チェックサム不一致・アーカイブ経路・既存コマンドの保護、Docsだけの更新、独立したバージョン更新、候補の検証用packaging、正式項目追加による候補の一回公開、空・重複項目の拒否、複数コミットのpush、公開済みタグと本文の保護、draftの再開、Git管理外ファイルの除外を確認します。ノートの検査では、コミット済みCHANGELOG、componentごとの比較範囲、初回公開、変更操作前の失敗、draft本文の読み戻しも確認します。実際のGitHubへの公開は行いません。

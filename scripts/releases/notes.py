@@ -6,14 +6,10 @@ import subprocess
 from pathlib import Path
 from urllib.parse import quote
 
+from _release_changelog import changelog_entry_from_text
 from plan import VERSION, version_tuple
 
 ROOT = Path(__file__).resolve().parents[2]
-HEADING = re.compile(
-    rf"## (?:(?:Nagi (?P<nagi>{VERSION.pattern}))(?: / VS Code (?P<vscode>{VERSION.pattern}))?"
-    rf"|VS Code (?P<extension>{VERSION.pattern})|JetBrains (?P<jetbrains>{VERSION.pattern}))"
-    rf"(?: — [0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})?"
-)
 
 
 def changelog_entry(sha: str, component: str, version: str) -> str:
@@ -28,35 +24,7 @@ def changelog_entry(sha: str, component: str, version: str) -> str:
     if result.returncode:
         raise RuntimeError(f"Could not read CHANGELOG.md at release commit {sha}")
     text = result.stdout.decode("utf-8")
-    sections = []
-    lines = text.splitlines()
-    fence = None
-    headings = []
-    for index, line in enumerate(lines):
-        marker = re.match(r"^\s{0,3}(`{3,}|~{3,})", line)
-        if marker:
-            run = marker.group(1)
-            if fence is None:
-                fence = run
-            elif run[0] == fence[0] and len(run) >= len(fence) and not line[marker.end():].strip(" \t"):
-                fence = None
-        elif fence is None and line.startswith("## "):
-            headings.append((index, line))
-    for position, (start, heading) in enumerate(headings):
-        match = HEADING.fullmatch(heading)
-        if not match:
-            continue
-        selected = {
-            "nagi": match.group("nagi"),
-            "vscode": match.group("vscode") or match.group("extension"),
-            "jetbrains": match.group("jetbrains"),
-        }[component]
-        if selected == version:
-            end = headings[position + 1][0] if position + 1 < len(headings) else len(lines)
-            sections.append("\n".join(lines[start + 1:end]).strip())
-    if len(sections) != 1 or not sections[0]:
-        raise ValueError(f"CHANGELOG.md at {sha} must contain exactly one nonempty {component} {version} entry")
-    return sections[0]
+    return changelog_entry_from_text(text, component, version, sha)
 
 
 def tag_commit(client, tag: str) -> str | None:

@@ -98,6 +98,12 @@ class ReleasePlanTests(unittest.TestCase):
         self.change("editors/jetbrains-nagi/build.gradle.kts", 'group = "com.disnana.nagi"\nversion = "0.1.1"\n')
         self.commit()
         self.change("docs/example.md", "Docs follow the version bump")
+        self.change(
+            "CHANGELOG.md",
+            "# Changelog\n\n## Nagi 0.1.1 / VS Code 0.1.6\n\n"
+            "- Compiler and extension updates.\n\n## JetBrains 0.1.1\n\n"
+            "- Plugin update.\n",
+        )
         result = plan.plan(self.first, self.commit())
         self.assertEqual(result["release_nagi"], "true")
         self.assertEqual(result["release_vscode"], "true")
@@ -105,6 +111,7 @@ class ReleasePlanTests(unittest.TestCase):
 
     def test_extension_version_does_not_release_compiler(self):
         self.change("editors/vscode-nagi/package.json", '{"version":"0.1.6"}\n')
+        self.change("CHANGELOG.md", "## VS Code 0.1.6\n\n- Extension update.\n")
         result = plan.plan(self.first, self.commit())
         self.assertEqual(result["release_vscode"], "true")
         self.assertEqual(result["release_nagi"], "false")
@@ -119,8 +126,73 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertEqual(result["package_nagi"], "false")
         self.assertEqual(result["package_vscode"], "false")
 
+    def test_valid_entry_added_after_invalid_base_is_first_release(self):
+        self.change("editors/jetbrains-nagi/build.gradle.kts",
+                    'group = "com.disnana.nagi"\nversion = "0.1.1"\n')
+        self.change("CHANGELOG.md", "## JetBrains 0.1.1\n\n")
+        invalid_base = self.commit()
+
+        self.change("CHANGELOG.md", "## JetBrains 0.1.1\n\n- Corrected formal notes.\n")
+        fixed_head = self.commit()
+        result = plan.plan(invalid_base, fixed_head)
+        self.assertEqual(result["package_jetbrains"], "true")
+        self.assertEqual(result["release_jetbrains"], "true")
+
+    def test_formal_changelog_added_after_candidate_is_released_once(self):
+        self.change("editors/jetbrains-nagi/build.gradle.kts",
+                    'group = "com.disnana.nagi"\nversion = "0.1.1"\n')
+        self.change("CHANGELOG.md",
+                    "# Changelog\n\n## Unreleased\n\n### JetBrains 0.1.1 candidate\n\n- Candidate notes.\n")
+        candidate = self.commit()
+        result = plan.plan(self.first, candidate)
+        self.assertEqual(result["package_jetbrains"], "true")
+        self.assertEqual(result["release_jetbrains"], "false")
+
+        self.change("CHANGELOG.md", "## JetBrains 0.1.1\n\n- Formal release notes.\n")
+        promoted = self.commit()
+        result = plan.plan(candidate, promoted)
+        self.assertEqual(result["package_jetbrains"], "true")
+        self.assertEqual(result["release_jetbrains"], "true")
+
+        self.change("CHANGELOG.md", "## JetBrains 0.1.1\n\n- Updated reviewed notes.\n")
+        followup = self.commit()
+        result = plan.plan(promoted, followup)
+        self.assertEqual(result["release_jetbrains"], "false")
+
+    def test_jetbrains_release_gate_distinguishes_missing_from_invalid_notes(self):
+        cases = [
+            ("Unreleased candidate", "# Changelog\n\n## Unreleased\n\n### JetBrains 0.1.1 candidate\n\n- Work in progress.\n"),
+            ("missing formal entry", "# Changelog\n\n## Unreleased\n\n- Work in progress.\n"),
+            ("wrong formal version", "## JetBrains 0.1.0\n\n- Older entry.\n"),
+        ]
+        for label, changelog in cases:
+            with self.subTest(label=label):
+                self.change("editors/jetbrains-nagi/build.gradle.kts",
+                            'group = "com.disnana.nagi"\nversion = "0.1.1"\n')
+                self.change("CHANGELOG.md", changelog)
+                head = self.commit()
+                result = plan.plan(self.first, head)
+                self.assertEqual(result["package_jetbrains"], "true")
+                self.assertEqual(result["release_jetbrains"], "false")
+
+        invalid_cases = [
+            ("empty formal entry", "## JetBrains 0.1.1\n\n"),
+            ("duplicate formal entry",
+             "## JetBrains 0.1.1\n\n- First.\n\n## JetBrains 0.1.1\n\n- Second.\n"),
+        ]
+        for label, changelog in invalid_cases:
+            with self.subTest(label=label):
+                self.change("editors/jetbrains-nagi/build.gradle.kts",
+                            'group = "com.disnana.nagi"\nversion = "0.1.1"\n')
+                self.change("CHANGELOG.md", changelog)
+                head = self.commit()
+                with self.assertRaisesRegex(ValueError, "exactly one nonempty"):
+                    plan.plan(self.first, head)
+
+
     def test_jetbrains_version_bump_plans_only_the_jetbrains_release(self):
         self.change("editors/jetbrains-nagi/build.gradle.kts", 'group = "com.disnana.nagi"\nversion = "0.1.1"\n')
+        self.change("CHANGELOG.md", "## JetBrains 0.1.1\n\n- Plugin release.\n")
         result = plan.plan(self.first, self.commit())
         self.assertEqual(result["release_jetbrains"], "true")
         self.assertEqual(result["package_jetbrains"], "true")
