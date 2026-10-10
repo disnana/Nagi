@@ -144,5 +144,7 @@ pub mod http {
     pub use ::nagi_runtime::http_server::route_mapped as route_mapped;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::serve as serve;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::html_response as html_response;
 }
 fn main() {}

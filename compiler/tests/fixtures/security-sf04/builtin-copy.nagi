@@ -1,0 +1,4 @@
+import std.html as html
+
+def duplicate_with_generic_copy(fragment: html.HtmlFragment) -> html.HtmlFragment:
+    return copy(view(fragment))

@@ -6,6 +6,7 @@ pub mod actor;
 pub mod auth;
 mod concurrent;
 mod database;
+pub mod html;
 pub mod http_server;
 pub mod metrics;
 pub mod result;
@@ -17,7 +18,7 @@ use axum::{
 };
 pub use concurrent::*;
 pub use database::indices as database_indices;
-pub use database::FromRow;
+pub use database::{Db, FromRow, Sql};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,

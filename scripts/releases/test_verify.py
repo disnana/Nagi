@@ -1,4 +1,7 @@
 """Keep distribution gates from accepting missing or ineffective compiler features."""
+import contextlib
+import hashlib
+import io
 import json
 import os
 import subprocess
@@ -6,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from zipfile import ZipFile
 
 import verify
 
@@ -31,17 +35,11 @@ class SqlDistributionVerificationTests(unittest.TestCase):
         source = Path(command[2])
         schema = self.root / command[command.index("--sql-schema") + 1]
         self.assertTrue(schema.is_file())
-        line_number, query = next(
-            (number, line)
-            for number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1)
-            if "sqlite.literal(" in line
-        )
+        query = source.read_text(encoding="utf-8").splitlines()[4]
         if "naem" in query:
-            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:{line_number}: no such column: naem\n")
-        # The gate's fixed bind fixture has two anonymous placeholders and
-        # one bind_i64 parameter; this mock does not parse arbitrary SQL.
-        if query.count("?") == 2:
-            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:{line_number}: bind count mismatch\n")
+            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:5: no such column: naem\n")
+        if "?2" in query:
+            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:5: bind count mismatch\n")
         return subprocess.CompletedProcess(command, 0, "", "SQL checked 1 literal queries; 0 runtime/unsupported sites\n")
 
     def check(self, answer):
@@ -297,6 +295,71 @@ class SqlitePoolDistributionVerificationTests(unittest.TestCase):
             return result
         with self.assertRaisesRegex(AssertionError, "SQLite native output"):
             self.check(no_native_effect)
+
+
+class StandardVerifierEnvironmentTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="nagi standard verifier env ")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.archive = self.root / "nagi-fixture-linux-x86_64.zip"
+        with ZipFile(self.archive, "w") as package:
+            package.writestr(
+                "nagi-0.1.11-linux-x86_64/release.json",
+                json.dumps({"version": "0.1.11", "platform": "linux-x86_64"}),
+            )
+        digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        self.archive.with_name(self.archive.name + ".sha256").write_text(
+            f"{digest}  {self.archive.name}\n", encoding="utf-8")
+
+    def test_standard_verifier_unsets_only_icu_data_for_extracted_children(self):
+        cases = [(False, None), (True, ""), (True, "fixture-custom-data-path")]
+        target = self.root / "native cache"
+        for present, override in cases:
+            with self.subTest(parent_key_present=present, parent_value_is_empty=override == ""):
+                parent = {
+                    "PATH": "fixture path",
+                    "CARGO_HOME": "fixture cargo home",
+                    "RUSTUP_HOME": "fixture rustup home",
+                    "RUSTFLAGS": "fixture rust flags",
+                    "NAGI_ROOT": "fixture root",
+                    "NAGI_NATIVE_TARGET_DIR": "fixture native target",
+                }
+                if present:
+                    parent["ICU4X_DATA_DIR"] = override
+
+                class StopAfterFirstChild(Exception):
+                    pass
+
+                captured = {}
+
+                def stop_after_first_child(command, **kwargs):
+                    captured["environment"] = dict(kwargs["env"])
+                    raise StopAfterFirstChild
+
+                output = io.StringIO()
+                with patch.dict(os.environ, parent, clear=True):
+                    parent_before = dict(os.environ)
+                    with patch.object(verify.subprocess, "run", side_effect=stop_after_first_child):
+                        with contextlib.redirect_stdout(output):
+                            with self.assertRaises(StopAfterFirstChild):
+                                verify.verify(self.archive, "0.1.11", "linux-x86_64", target)
+                    self.assertEqual(dict(os.environ), parent_before)
+
+                child = captured["environment"]
+                self.assertEqual(child["CARGO_HOME"], parent["CARGO_HOME"])
+                self.assertEqual(child["RUSTUP_HOME"], parent["RUSTUP_HOME"])
+                self.assertEqual(child["RUSTFLAGS"], parent["RUSTFLAGS"])
+                self.assertEqual(child["PATH"], "")
+                self.assertNotIn("NAGI_ROOT", child)
+                self.assertEqual(child["NAGI_NATIVE_TARGET_DIR"], str(target.resolve()))
+                self.assertNotIn("ICU4X_DATA_DIR", child)
+                self.assertIn(
+                    f"ICU4X_DATA_DIR host_present={str(present).lower()} child_present=false",
+                    output.getvalue(),
+                )
+                if override:
+                    self.assertNotIn(override, output.getvalue())
 
 
 if __name__ == "__main__":

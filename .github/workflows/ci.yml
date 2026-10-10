@@ -454,6 +454,35 @@ jobs:
           cargo test --locked -p nagi-runtime --lib sqlite:: 2>&1 | tee "$RUNNER_TEMP/sqlite-runtime.log"
           python -c 'import pathlib,re,os; text=pathlib.Path(os.environ["RUNNER_TEMP"],"sqlite-runtime.log").read_text(); assert re.search(r"test result: ok\. 80 passed; 0 failed; 0 ignored;",text),text'
           cargo test --locked -p nagi-runtime --test sqlite_public_api
+      - name: Check SF04 HTML core, finalizer, and public runtime API on the target platform
+        shell: bash
+        run: |
+          set -o pipefail
+          if [[ ${ICU4X_DATA_DIR+x} ]]; then
+            echo "ICU4X_DATA_DIR_PRESENT=true"
+          else
+            echo "ICU4X_DATA_DIR_PRESENT=false"
+          fi
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib html::tests:: 2>&1 | tee "$RUNNER_TEMP/sf04-html-core.log"
+          cargo test --locked -p nagi-runtime --lib http_server::finalizer_ 2>&1 | tee "$RUNNER_TEMP/sf04-html-finalizer.log"
+          cargo test --locked -p nagi-runtime --test html_core_api 2>&1 | tee "$RUNNER_TEMP/sf04-html-api.log"
+          NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf04-native-artifacts" cargo test --locked -p nagic --test security_sf04 2>&1 | tee "$RUNNER_TEMP/sf04-native-contracts.log"
+          python - <<'PY'
+          import os, re
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"])
+          expected = {
+              "sf04-html-core.log": 20,
+              "sf04-html-finalizer.log": 9,
+              "sf04-html-api.log": 1,
+              "sf04-native-contracts.log": 4,
+          }
+          for filename, count in expected.items():
+              text = (root / filename).read_text(encoding="utf-8")
+              pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out;"
+              assert re.search(pattern, text), f"expected exactly {count} passing tests in {filename}; got:\n{text}"
+          PY
       - name: Verify bilingual SQLite tutorial through High and independent saved Low
         run: python scripts/verify_sqlite_example.py
       - name: Verify High, saved Low, and standalone Low applications

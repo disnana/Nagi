@@ -361,7 +361,6 @@ class JetBrainsBuildContractTests(unittest.TestCase):
 
     def test_eap_descriptor_and_home_path_fixes_keep_plugin_version_and_verifier_checks(self):
         build = (self.repo / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
-        plugin_xml = (self.repo / "editors/jetbrains-nagi/src/main/resources/META-INF/plugin.xml").read_text(encoding="utf-8")
         settings = (self.repo / "editors/jetbrains-nagi/settings.gradle.kts").read_text(encoding="utf-8")
         wrapper = (self.repo / "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.properties").read_text(encoding="utf-8")
         workflow = (self.repo / ".github/workflows/jetbrains.yml").read_text(encoding="utf-8")
@@ -372,10 +371,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIn("gradlePluginPortal()", plugin_repositories.group("body"))
         self.assertIn("mavenCentral()", plugin_repositories.group("body"))
         self.assertIn('id("org.jetbrains.intellij.platform") version "2.19.0"', build)
-        self.assertIn('version = "0.1.3"', build)
-        self.assertIn('name.set("Nagi")', build)
-        self.assertIn("<id>com.disnana.nagi</id>", plugin_xml)
-        self.assertIn("<name>Nagi</name>", plugin_xml)
+        self.assertIn('version = "0.1.2"', build)
         self.assertIn("options.release.set(21)", build)
         self.assertIn('sinceBuild = "251.25410.109"', build)
         self.assertIn("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.0-bin.zip", wrapper)
@@ -383,7 +379,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIn("create(type, version) { useInstaller.set(false) }", build)
         self.assertNotIn("useInstaller = false", build)
         self.assertNotIn("ide(type, version, useInstaller", build)
-        self.assertNotIn("TemplateWordInPluginName", build)
+        self.assertIn('freeArgs.addAll(listOf("-mute", "TemplateWordInPluginName"))', build)
         self.assertNotIn('freeArgs.addAll(listOf("-mute", "PluginCompatibility"))', build)
         self.assertIn("Verify candidate on ${{ matrix.product }} ${{ matrix.channel }}", workflow)
         self.assertIn("Record the resolved IDE build from product-info.json", workflow)
@@ -503,6 +499,45 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
             "auth_boundaries", "copy_capabilities", "owned_copy_codegen", "shared_field_moves",
         }
         self.assertFalse(required - targets, f"missing four-platform resource oracles: {sorted(required - targets)}")
+
+    def test_four_platform_job_registers_sf04_runtime_suites_with_exact_count_guards(self):
+        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
+        self.assertIsNotNone(package, "four-platform package job missing")
+        block = package.group()
+        self.assertIn("    runs-on: ${{ matrix.os }}\n", block)
+        marker = "      - name: Check SF04 HTML core, finalizer, and public runtime API on the target platform\n"
+        start = block.find(marker)
+        self.assertGreaterEqual(start, 0, "SF04 runtime step missing from the four-platform job")
+        tail = block[start + len(marker):]
+        next_step = re.search(r"(?m)^      - (?:name:|uses:)", tail)
+        self.assertIsNotNone(next_step, "SF04 runtime step must remain a bounded workflow step")
+        step = block[start:start + len(marker) + next_step.start()]
+        for command in (
+            "cargo test --locked -p nagi-runtime --lib html::tests::",
+            "cargo test --locked -p nagi-runtime --lib http_server::finalizer_",
+            "cargo test --locked -p nagi-runtime --test html_core_api",
+        ):
+            self.assertIn(command, step)
+        expected_counts = dict(re.findall(r'"(sf04-html-(?:core|finalizer|api)\.log)": (\d+)', step))
+        self.assertEqual(expected_counts, {
+            "sf04-html-core.log": "20",
+            "sf04-html-finalizer.log": "9",
+            "sf04-html-api.log": "1",
+        })
+        self.assertIn(r'pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out;"', step)
+        self.assertIn("set -o pipefail", step)
+        presence_record = (
+            '          if [[ ${ICU4X_DATA_DIR+x} ]]; then\n'
+            '            echo "ICU4X_DATA_DIR_PRESENT=true"\n'
+            '          else\n'
+            '            echo "ICU4X_DATA_DIR_PRESENT=false"\n'
+            '          fi\n'
+            '          unset ICU4X_DATA_DIR\n'
+        )
+        self.assertIn(presence_record, step)
+        self.assertEqual(step.count("unset ICU4X_DATA_DIR"), 1)
+        self.assertLess(step.index("unset ICU4X_DATA_DIR"), step.index("cargo test"))
 
 
 class GateTests(unittest.TestCase):

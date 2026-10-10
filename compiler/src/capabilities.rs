@@ -144,6 +144,19 @@ pub(crate) fn contains_security_nonclone(
     payload_any(ty, classes, enums, false, true, security_nonclone)
 }
 
+/// SF04 opaque values have no native Clone. Stop at an Arc handle and at
+/// function signatures: neither clones the immutable HTML data it mentions.
+pub(crate) fn contains_html_nonclone(
+    ty: &Type,
+    classes: &HashMap<String, Class>,
+    enums: &HashMap<String, Enum>,
+) -> bool {
+    payload_any(ty, classes, enums, false, true, |resource| {
+        let info = crate::stdlib::resource_info(resource);
+        info.module == crate::stdlib::StandardModule::Html && !info.copy
+    })
+}
+
 pub(crate) fn contains_security_nonshared(
     ty: &Type,
     classes: &HashMap<String, Class>,
@@ -369,7 +382,7 @@ pub(crate) fn serde_type(
         }
         // These names always emit the intrinsic representation, including for
         // direct parser/check callers without canonical module identities.
-        if matches!(ty.0.as_str(), "Error" | "Html")
+        if matches!(ty.0.as_str(), "Error" | "Db" | "Html")
             || ty.0 == "fn" && !ty.1.is_empty()
             || ty.is_future()
         {
@@ -777,6 +790,7 @@ mod tests {
             (Type::named("Private"), false, true, false),
             (Type::named("Storage"), false, false, false),
             (Type::named("Choice"), false, true, true),
+            (Type::named("Db"), false, false, false),
         ] {
             assert_eq!(serde_type(&ty, &classes, &enums), serde, "{ty:?}");
             assert_eq!(
