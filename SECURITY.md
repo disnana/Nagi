@@ -18,12 +18,14 @@ HTTP・JSONなどの外部入力による情報漏えい、意図しない実行
 
 ## 利用時の前提と制限
 
-Nagiは開発中の0.1系です。`nagic build/run`やRust連携には、コードを隔離して実行する機能はありません。信頼できないソース、`nagi.toml`、Rust依存を試すときは、秘密情報や大事なファイルのない隔離環境を使ってください。
+最新の正式公開版はNagi 0.1.11です。GitHub main `e609aba158921226a632f16d41eb8b0f4ad5aebd`は開発sourceで、正式0.2.0は未リリースです。公開0.1.11の配布物と契約は変更されません。`nagic build/run`やRust連携には、コードを隔離して実行する機能はありません。信頼できないソース、`nagi.toml`、Rust依存を試すときは、秘密情報や大事なファイルのない隔離環境を使ってください。
+
+公開0.1.11には開発mainのrequest-bound `std.auth`契約、routeごとの明示`std.http.Policy`必須化、`std.db.sqlite.Query`/`Parameters`の新しい標準契約は含まれません。開発mainでは`AuthScope`/`Grant`をrequestへ結び、標準routeには明示Policyを要求します（`public`は明示的な匿名許可です）。標準SQLite経路はcanonical literal QueryとParametersによる構造/値bind境界を使います。これらは該当する標準API経路の制約であり、アプリpolicyの正しさ、tenant認可、任意Rust、全アプリの安全性を証明しません。SF02/SF03/SF04/SF06とSF07の横断budget acceptance、SF08は未完了で、正式0.2.0のreleaseもありません。
 
 VS Codeはワークスペース、JetBrainsはプロジェクトの信頼設定を確認してからコンパイラを起動します。起動したプログラムは、通常のアプリと同じ権限で動きます。
 
-HTTPサーバーは標準で`127.0.0.1`にbindします。現在はheader・keep-alive待機、本文受信、handlerの期限と本文上限を設けています。標準の`std.http.server`は接続・処理容量、送信・停止の期限も設定できます。旧`serve(Db, port)`とは設定と制限が異なるため、[標準HTTPの制限](docs/http-server.md)と[旧APIの負荷試験](docs/http-capacity.md)を確認してください。
+開発mainの標準`std.http.server`は`127.0.0.1`にbindし、header・keep-alive待機、本文受信、handlerの期限と本文上限を設けます。接続・処理容量、送信・停止の期限も設定できます。公開0.1.11の旧`serve(Db, port)`とはAPI/設定/制限が異なります。各版の説明は[標準HTTPの制限](docs/http-server.md)と[旧APIの負荷試験](docs/http-capacity.md)を確認してください。
 
-これらの制限は、アプリの認証・認可や処理の巻き戻しを提供しません。取消しても受理済みのDB書き込み等が完了する場合があります。公開版とmainの差は[CHANGELOG](CHANGELOG.md)に記載しています。
+これらの制限は、アプリの認証・認可や処理の巻き戻しを提供しません。取消しても受理済みのDB書き込み等が完了する場合があります。開発mainの採用範囲と未完の作業は[RFC](docs/internal/security-foundation/rfc.md)と[実装計画](docs/internal/security-foundation/implementation-plan.md)、公開版との差は[CHANGELOG](CHANGELOG.md)に記載しています。
 
 外部へ公開する場合は、前段のプロキシなどでTLS、接続数、header・idleの期限、流量を管理し、アプリの認証・認可を実装してください。回線を圧迫するDDoSには、ホスティング事業者やCDN側の対策も必要です。

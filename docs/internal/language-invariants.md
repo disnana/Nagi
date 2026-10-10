@@ -6,7 +6,7 @@
 
 ## 採用方針と現行契約の区別
 
-2026-10-06の引継ぎを[ADR 011](adr/011-language-behavior-and-docs.md)へ取り込んだ。2026-10-07時点で各節の現行契約表はmainの実装を表す。S1のTask契約は別節に分け、旧Scopeへ上書きしない。OWN-04は追加の承認を受け実装・main反映済みで、Nagi 0.1.11に含まれる。spawn結果handleと子業務Errの扱いを変えるASYNC-03/04は[ADR 012](adr/012-task-result-handles.md)に沿ってS1/S2をmainへ反映し、Nagi 0.1.11として公開済み。条件付きshared messageのACTOR-01は方向のみ採用で、ACTOR-01は現在有効な受理規則ではない。
+2026-10-06の引継ぎを[ADR 011](adr/011-language-behavior-and-docs.md)へ取り込んだ。2026-10-10時点の現行契約表はGitHub main `e609aba158921226a632f16d41eb8b0f4ad5aebd`の開発sourceを表し、公開0.1.11とは区別する。SF00 (#100)・SF01 (#101)・SF05の実装とSF07のbounded reader変更はmainに統合済みだが、SF02/SF03/SF04/SF06/SF08とSF07の横断budget acceptanceは未完了で、正式0.2.0は未リリース。S1のTask契約は別節に分け、旧Scopeへ上書きしない。OWN-04はNagi 0.1.11に含まれ、spawn結果handleと子業務Errの扱いを変えるASYNC-03/04は[ADR 012](adr/012-task-result-handles.md)に沿ってS1/S2をNagi 0.1.11として公開済み。条件付きshared messageのACTOR-01は方向のみ採用で、現在有効な受理規則ではない。
 
 変更する際はbefore/after、互換性と対象版、High/Low、診断位置、生成Rust、実runtimeの成功・失敗・取消を検査する。移行前の暗黙代入moveは監査記録に残し、未変更の引数・return等のconsumeとScope子Errの契約を保つ。Supervisorのterminal failureをHTTP停止へ伝える接続も保つ。未決の細部は[Q-005〜007](open-questions.md#q-005-既存所有値の代入を明示する範囲)にまとめる。
 
@@ -80,11 +80,11 @@ buildには外部環境が必要なため「check成功ならどんな環境で�
 
 ## 認証・認可の最小境界
 
-未リリース0.2.0 SF01は`AuthScope`/単一`Grant[P]`をrequest leaseへ結び付ける。[ADR 013](adr/013-request-bound-auth-and-http-policy.md)と[SF01 contract](security-foundation/sf01-contract.md)がAPI・Failure・移行を定義する。公開済み0.1.11 Principalはmigration診断のtombstoneで、無期限factoryやunchecked partsを維持しない。Pはnominal class/enum、実対象はi64。opaque proofを構築/Copy/Clone/Serde/shared/fieldへ格納できない。同task owned引数/return/local Option/Result/async delegationを許し、Task capture/結果・Actor・captured Future transferを拒否する。phantom/関数署名は実proof payloadではない。
+開発mainに統合済みのSF01（正式0.2.0未リリース）は`AuthScope`/単一`Grant[P]`をrequest leaseへ結び付ける。[ADR 013](adr/013-request-bound-auth-and-http-policy.md)と[SF01 contract](security-foundation/sf01-contract.md)がAPI・Failure・移行を定義する。公開済み0.1.11 Principalはmigration診断のtombstoneで、無期限factoryやunchecked partsを維持しない。Pはnominal class/enum、実対象はi64。opaque proofを構築/Copy/Clone/Serde/shared/fieldへ格納できない。同task owned引数/return/local Option/Result/async delegationを許し、Task capture/結果・Actor・captured Future transferを拒否する。phantom/関数署名は実proof payloadではない。
 
 標準routeは明示Policy[S,A]必須で、handler(Request,shared[S],A)のAとStateを一致させる。request ownerの有限leaseは正常/Err/panic/timeout/cancel/Drop/shutdownで失効する。capacity予約はadmissionではなく、失効と同gateで現在時刻/activeを検査したexecution permit発行が線形化点である。permit後の取消はrollbackを保証しない。native adapterはbound対象へ同期enqueueし、任意Rust内部の署名/permission/crypto/副作用を型モデルで証明したとは扱わない。
 
-旧decorator/global serve/raw HTMLの標準入口を除去し、alias/保存Low/手書きLow/native最終統合もcheckerで拒否する。動的routeの競合はruntime登録Errで、曖昧routerを起動しない。Session/CSRF/CORS/typed HTML/Query/outbound等は後続で、SF01をFoundation全完成と報告しない。move/Task/SQLite Txの採用契約を変えない。
+旧decorator/global serve/raw HTMLの標準入口を除去し、alias/保存Low/手書きLow/native最終統合もcheckerで拒否する。動的routeの競合はruntime登録Errで、曖昧routerを起動しない。Session/CSRF/CORS/typed HTML/outbound等は後続で、canonical Query/ParametersはSF05として開発mainに統合済み。SF01/SF05の存在をFoundation全完成と報告しない。move/Task/SQLite Txの採用契約を変えない。
 
 根拠: `runtime/src/auth.rs`, `http_server.rs`, `compiler/src/stdlib/security.rs`, `check/security.rs`, `capabilities.rs`, `compiler/tests/security_sf01.rs`, `security_sf01_native.rs`, `auth_boundaries.rs`。
 
@@ -118,22 +118,24 @@ TaskFailureはopaque・非Copy・非Clone・非shared、kind()はCopyな四値en
 
 ## DB
 
+この節は公開0.1.11のlegacy Database契約と開発mainの標準SQLite契約を区別する。GitHub main `e609aba158921226a632f16d41eb8b0f4ad5aebd`にはSF05のcanonical `std.db.sqlite` Query/Parameters経路が統合済みで、旧`Db`/`db_*`標準入口とpublic runtime `Db`/`Sql`は削除されている。この新APIは0.1.11には含まれず、正式0.2.0も未リリース。以下のlegacy行は公開0.1.11の歴史であり、mainの標準APIとして扱わない。
+
 | 項目 | 契約・境界 | 実装と検査 |
 |---|---|---|
-| SQL static check | `check --sql-schema … --sql-dialect sqlite`の指定時だけ、対象builtinとcanonical SQLite operationの直接literalをprepareする。新Parametersの個数は静的に証明せずbind未検査を表示する。query/execを実行してschemaを変更しない。旧Dbの固定bind検査を維持 | `compiler/src/sql_check/mod.rs`, `compiler/tests/sql_check.rs` |
+| SQL static check | `check --sql-schema … --sql-dialect sqlite`はopt-inで、canonical SQLite operationの直接literal `Query`をprepareする。Parametersのbind数は静的に分からない場合があり、未検査として報告する。SQL preflightはprepareだけを行い、アプリのquery/execを実行したりDB schemaを変更したりしない。公開0.1.11の旧Db固定bind検査をmainの標準API契約として維持しない | `compiler/src/sql_check/mod.rs`, `compiler/tests/sql_check.rs` |
 | schema assumptions | 1つの指定schemaが検査対象DBに一致することを利用者が管理する。アプリのmigrationや複数Dbからschemaを推測しない。schema処理の権限・入力・時間を制限する | `sql_check.rs` tests、[公開リファレンス](../sql-check.md) |
 | NULL / type mismatch | 必要列があっても値型・範囲・NULL・実DBの状態は実行時まで分からない。nullableフィールドのNoneと非nullableの読み取り失敗を区別する | `runtime/src/database.rs`, `compiler/tests/nullable_database.rs`, `owned_database.rs` |
-| legacy transaction | 共有Dbへ複数のBEGIN/query/COMMITを送っても、呼出し間の排他所有は保証しない。新Txへ機械置換しない | `runtime/src/database.rs`; [DB制約](../database.md#従来apiの実装と制約) |
-| legacy cancellation | 送信待ちと受理後を区別する。受理済みSQLite jobはcallerの取消後にも完了・commitし得る。最後のDb所有者のDropはworker終了を待ち、即時終了ではない | `database.rs::call`, `Inner::drop`; database tests、公開DB制約 |
-| SQLite Pool/Tx（未リリース） | `std.db.sqlite`は専有Tx、owned Parameters、明示終端を公開。Txの同task委譲は許すがtask転送・owned field・sharedを拒否。SQL/Parametersと終端Futureの所有をchecker/私有planへ固定 | `compiler/src/check/sqlite.rs`, `check/checked.rs`, `runtime/src/sqlite`; [公開リファレンス](../sqlite-pool.md) |
+| legacy transaction（0.1.11） | 共有Dbへ複数のBEGIN/query/COMMITを送っても、呼出し間の排他所有は保証しない。新Txへ機械置換しない | `runtime/src/database.rs`; [DB制約](../database.md#従来apiの実装と制約) |
+| legacy cancellation（0.1.11） | 送信待ちと受理後を区別する。受理済みSQLite jobはcallerの取消後にも完了・commitし得る。最後のDb所有者のDropはworker終了を待ち、即時終了ではない | `database.rs::call`, `Inner::drop`; database tests、公開DB制約 |
+| SQLite Pool/Tx（開発main、0.2.0未リリース） | `std.db.sqlite`は専有Tx、owned Parameters、明示終端を公開。Txの同task委譲は許すがtask転送・owned field・sharedを拒否。SQL/Parametersと終端Futureの所有をchecker/私有planへ固定 | `compiler/src/check/sqlite.rs`, `check/checked.rs`, `runtime/src/sqlite`; [公開リファレンス](../sqlite-pool.md) |
 
-PostgreSQLは未実装。新SQLiteの型別Parameters builderは可変長bindを扱う。旧Dbの固定bind形を変更せず、任意のRust型や自動ToParamsを標準機能の保証へ加えない。
+PostgreSQLは未実装。公開0.1.11の旧Db固定bind仕様はその配布版の歴史であり、開発mainではcanonical `std.db.sqlite`のQuery/literalとtyped Parametersを使う。旧Db standard entrypointはmainで廃止され、任意のRust型や自動ToParamsを標準機能の保証へ加えない。
 
-### Phase 4のSQLite公開契約（未リリース）
+### SQLite公開契約（開発main、正式0.2.0未リリース）
 
-[ADR 010](adr/010-sqlite-transaction-boundary.md)と[API契約](sqlite-pool-proposal.md)は2026-10-06に承認済み。旧Dbの契約を変えない。TxのnonCopy／nonshared／field保存・task転送禁止、終端consume、cleanup確認前の再利用禁止、結果不明とcleanup failureの分離、close後のclosing維持を採る。関数pointer署名と実捕捉、native Dropとrollback成功、close通知とworker joinを区別する。SQLiteのSQL解析・native Txはrusqliteへ委譲する。private試作の成功を標準APIの保証へ広げず、public checker／生成／実DB／4 OS acceptanceまで未検証範囲を記録する。
+[ADR 010](adr/010-sqlite-transaction-boundary.md)のPool/Tx lifecycle判断と[ADR 014](adr/014-literal-query-and-sqlite-admission.md)、[SF05 contract](security-foundation/sf05-contract.md)が現在のSQLite Query/admission契約を定義する。mainのSF05は旧`Db`/`db_*`とpublic runtime `Db`/`Sql`を削除し、0.1.11に対するbreaking migrationを行う。0.1.11の配布契約は当該releaseに残るが、mainの標準APIには旧Db契約を維持しない。TxのnonCopy／nonshared／field保存・task転送禁止、終端consume、cleanup確認前の再利用禁止、結果不明とcleanup failureの分離、close後のclosing維持を採る。関数pointer署名と実捕捉、native Dropとrollback成功、close通知とworker joinを区別する。SQLiteのSQL解析・native Txはrusqliteへ委譲する。SF05のmain source/test/validation範囲は結果記録を参照し、SF02 Sessionの完成や正式0.2.0 releaseは意味しない。
 
-Q004で[capability初版表](sqlite-pool-adapter-decision.md#registry配線前に固定するcapability)を採用した。Poolは明示clone、Tx／ParametersはnonClone。Tx／ParametersのDebugは禁止し、Pool／FailureのDebugは状態のみ。Failureと小さいenumはshared可、全新resourceのSerdeと新Actor Charge対応は不可。関数署名やmarkerを実payloadと混同せず、Txの永続格納・task転送禁止をnative inline stateにも適用する。これらは公開配線時の契約で、private試作がcheckerで保証したという意味ではない。
+Q004で[capability初版表](sqlite-pool-adapter-decision.md#registry配線前に固定するcapability)を採用した。Poolは明示clone、Tx／ParametersはnonClone。Tx／ParametersのDebugは禁止し、Pool／FailureのDebugは状態のみ。Failureと小さいenumはshared可、全新resourceのSerdeと新Actor Charge対応は不可。関数署名やmarkerを実payloadと混同せず、Txの永続格納・task転送禁止をnative inline stateにも適用する。これらは開発mainのSF05 metadata/checker/runtime契約であり、実検査の範囲はSF05のtest・結果記録に従う。Session機能の完成や正式0.2.0 releaseを意味しない。
 
 statement Errから「変更0」や「rollback済み」を推論しない。SQLiteの`OR FAIL`やAFTER triggerでのstep失敗は先行効果をactive Txへ残し得る。禁止actionの拒否とTx rollback成功を別oracleで検査する。普通のErrでの継続可という採用契約を、暗黙savepointや全Err自動abortへ変更しない。
 

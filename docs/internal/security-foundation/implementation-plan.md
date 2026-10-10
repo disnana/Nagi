@@ -2,7 +2,9 @@
 
 [RFC](rfc.md) · [English plan](implementation-plan.en.md) · [現行調査](baseline-audit.md)
 
-2026-10-09 UTC。**計画であり実装完了記録ではない。** SF00 #100とSF01 #101はmainへマージ済み。SF01の[専用契約](sf01-contract.md)と結果は別に保持する。現在はbase main `3b8da226`から独立したSF05を実装・検証中で、[SF05契約](sf05-contract.md)・[結果](../security-foundation-sf05-results.md)に証拠と未確認範囲を記録する。SF05の独立review/最新head4 OS、後続工程とFoundation全体の完了を意味しない。最新ユーザー指示に従う[D1–D3判断・移行](decisions-and-migration.md)を実装基準とし、旧資料の互換性保留を再承認待ちにしない。各featureの公開signature/contractはRED追加前に固定する。意味論が一意な内部調査、依存比較、test harness設計は並行して進められる。
+2026-10-10 UTC。**計画でありFoundation全体の完了記録ではない。** GitHub main `e609aba158921226a632f16d41eb8b0f4ad5aebd`にはSF00 #100とSF01 #101がmerge済みで、SF05のcanonical Query/Parameters実装とSF07 bounded reader変更も開発sourceに統合済み。SF02/SF03/SF04/SF06は未完了、SF07の横断budget acceptanceとSF08も未完了。正式0.2.0は未リリースで、公開0.1.11は変更されない。統合済みコードだけでは他のacceptance完了を意味しない。SF01[専用契約](sf01-contract.md)と結果、SF05[契約](sf05-contract.md)・[結果](../security-foundation-sf05-results.md)で個別の確認範囲と制限を記録する。最新ユーザー指示に従う[D1–D3判断・移行](decisions-and-migration.md)を基準とし、旧資料の互換性保留を再承認待ちにしない。各featureの公開signature/contractはRED追加前に固定する。意味論が一意な内部調査、依存比較、test harness設計は並行して進められる。
+
+2026-10-10 14:04 UTCのGitHub readbackでは、main checks `38055073417` のLinux、4 OS package、4つのIDE Stable/EAP、common ZIPが成功し、websiteも成功した。`publish-release`はCHANGELOGに必要な `## JetBrains 0.1.3` 見出しがなく失敗し、0.1.3のtag/Releaseは作成されていない。公開処理の再実行は承認まで行わない。CodeQL run `38055084000`はC/C++ extractionで `Extraction failed: No source files found` と報告した。全check成功とは扱わない。
 
 ## 実装の分割と依存
 

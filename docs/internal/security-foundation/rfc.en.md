@@ -2,7 +2,7 @@
 
 [日本語](rfc.md) · [Baseline audit (Japanese)](baseline-audit.md) · [Implementation plan](implementation-plan.en.md)
 
-Status: 2026-10-08 JST. **Revised implementation direction: security before compatibility.** The latest user instruction supersedes the coexistence recommendations D1–D3. [Decisions and migration](decisions-and-migration.en.md) govern implementation. SF01 is connected in a separate development draft; see its [contract](sf01-contract.md) and result log. SF02–SF08 and the formal 0.2.0 release remain incomplete; existing 0.1.x conditions are not retroactively changed. Preserve Task/spawn, Tx lifecycle, and High/Low fundamentals.
+Status: **D1–D3 are adopted implementation decisions.** Updated 2026-10-10 UTC. GitHub main `e609aba158921226a632f16d41eb8b0f4ad5aebd` includes merged SF00 (#100) and SF01 (#101); #101 is no longer a Draft. Development main includes `std.auth`/explicit Policy and SF05's standard Query/Parameters implementation. SF02/SF03/SF04/SF06 remain incomplete; SF07 cross-cutting budget acceptance and SF08 remain incomplete. Formal 0.2.0 is unreleased, and published 0.1.11 contracts are unchanged. This RFC records adopted decisions and remaining acceptance, not whole-Foundation completion or security certification. See [decisions and migration](decisions-and-migration.en.md). Preserve Task/spawn, Tx lifecycle, and High/Low fundamentals.
 
 ## Purpose and scope
 
@@ -10,9 +10,9 @@ Preserve 0.1.x types, ownership, structured concurrency, SQLite, and HTTP stabil
 
 Scope: AuthScope, HTTP route policy, CSRF, HTML output/XSS, SQL structure/binding, policy-constrained outbound HTTP/SSRF, CORS, Cookie/Session, and bounded resources/DoS. Exclude OAuth/OIDC providers, password databases, MFA, general taint/effect/region systems, PostgreSQL, custom cryptography, a wholesale HTTP replacement, VM/GC, and sandboxing. Reuse reviewed Rust credential-verification libraries/adapters and application authorization policies.
 
-## Baseline
+## Historical design baseline
 
-Main `62bbda9` includes merged SQLite PR #99; released 0.1.11 is `003a594`; open PR count was zero at the initial baseline; design PR #100 is now open. See [evidence and limitations](baseline-audit.md) and [source hashes](baseline.json). Principal/Grant[P] cannot be constructed, copied, shared, or decoded from JSON in Nagi, but are not request-bound and do not enforce expiry/revocation. Owned async delegation is allowed. Standard route registration has no authentication policy argument; HTML is raw text; standard Cookie/Session/CSRF/CORS and an outbound client are absent.
+The RFC's initial baseline (2026-10-08) was main `62bbda9` including SQLite PR #99, published 0.1.11 `003a594`, zero open PRs, and design PR #100. This is historical context, not current-main status: current main is `e609aba158921226a632f16d41eb8b0f4ad5aebd`. See [historical evidence and limitations](baseline-audit.md) and [source hashes](baseline.json). At that baseline, Principal/Grant[P] could not be constructed, copied, shared, or decoded from JSON in Nagi, but were not request-bound and did not enforce expiry/revocation; owned async delegation was allowed; standard routes had no auth policy; HTML was raw text; standard Cookie/Session/CSRF/CORS and outbound client were absent.
 
 SQLite Parameters bind values and native authorizer checks exist. Opt-in literal schema preflight does not establish dynamic SQL provenance or tenant isolation. Existing HTTP and frontend limits remain in force.
 
@@ -34,7 +34,7 @@ Security types restrict forgery and misuse; naming an incoming string “verifie
 
 ## Static and runtime contracts
 
-All following guarantees are **proposed**. Do not promote them to current guarantees until positive/negative/native oracles pass.
+The table below combines adopted design decisions, implementation present in development main, and later acceptance work. SF00/SF01/SF05 and the bounded SF07 reader are in main; SF02/SF03/SF04/SF06/SF08 and SF07's cross-cutting budget acceptance remain incomplete. Adoption or partial implementation alone does not complete the relevant acceptance.
 
 | Feature | Nagi checker | Runtime/deployment | Not proven |
 |---|---|---|---|
@@ -102,7 +102,7 @@ Recommend opaque host-only session IDs with a server-side bounded store for subj
 
 For standard session issuance/rotation/authentication-state responses and CSRF-token delivery, the standard-app finalizer owns `Cache-Control: no-store`. Set-Cookie alone does not prohibit caching. Reject conflicting public/max-age headers and do not use 304/shared-cache reuse for token/session responses. Add explicit cookie/credential-source/authentication-dependent Vary where required, without substituting Vary for no-store. Do not claim automatic confidentiality/cache classification for ordinary DTOs; applications specify that separately.
 
-IDs use OS CSPRNG with at least 128 bits of unpredictability, without secret Debug/Serde/response echo. Rotate on login/privilege changes, atomically invalidating old IDs. Specify idle/absolute expiry, logout/revocation, concurrent rotation, and clock rollback. Cookie removal is not server revocation. Store failure/reply loss never implies authentication success.
+Session IDs are opaque values with 256 bits of entropy, generated by the OS CSPRNG, without secret Debug/Serde/response echo. Rotate on login/privilege changes, atomically invalidating old IDs. Specify idle/absolute expiry, logout/revocation, concurrent rotation, and clock rollback. Cookie removal is not server revocation. Store failure/reply loss never implies authentication success.
 
 D3 standardizes a **durable SQLite server session store** using existing Pool/Transaction. Native transactions make lookup/rotate/revoke, generation compare-and-swap, capacity and cleanup atomic. No production memory fallback or stateless signed-cookie mode. Private test doubles exercise the same contract. File permissions, shared-file locking/clocks and backup/restore are deployment requirements; distributed availability is not promised.
 
