@@ -12,7 +12,7 @@ async def main() -> Result[unit, Error]:
     return ok(print("待ち終わりました"))
 ```
 
-`sleep`の引数はミリ秒です。上のコードは待ち終わってからメッセージを表示します。失敗する可能性のある処理では、`try await db_open(...)`のように結果のエラーも扱います。
+`sleep`の引数はミリ秒です。上のコードは待ち終わってからメッセージを表示します。失敗する可能性のある処理では、`try await sqlite.open(path, config)`のように結果のエラーも扱います。
 
 よくある間違いは、`pending = sleep(10)`と戻り値を保存してから待つことです。現在はFutureの保存に対応していません。`await sleep(10)`と呼び出しを直接待ってください。
 

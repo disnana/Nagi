@@ -1,0 +1,35 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.65s
+     Running tests/resource_contract_characterization.rs (/workspace/nagi-sf01-target/debug/deps/resource_contract_characterization-186096c763b6b56c)
+
+running 4 tests
+test registered_operations_match_signatures_and_passing ... FAILED
+test registered_resources_match_the_independent_inventory ... FAILED
+test registered_accessors_match_the_complete_inventory ... ok
+test registered_constants_match_the_complete_inventory ... ok
+
+failures:
+
+---- registered_operations_match_signatures_and_passing stdout ----
+
+thread 'registered_operations_match_signatures_and_passing' (781864) panicked at compiler/tests/resource_contract_characterization.rs:527:5:
+assertion `left == right` failed
+  left: 83
+ right: 82
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- registered_resources_match_the_independent_inventory stdout ----
+
+thread 'registered_resources_match_the_independent_inventory' (781865) panicked at compiler/tests/resource_contract_characterization.rs:360:5:
+assertion `left == right` failed
+  left: 39
+ right: 38
+
+
+failures:
+    registered_operations_match_signatures_and_passing
+    registered_resources_match_the_independent_inventory
+
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p nagic --test resource_contract_characterization`

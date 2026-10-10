@@ -1,0 +1,64 @@
+{
+  "compiler_sha256": "1d9483a78e783dc335908ffbb01b7d5fb4d3d9bc2766760889f154aaa01a8b09",
+  "source_sha256": {
+    "examples/crud.nagi": "e88b0af363eaa063d073e4d34c0765fe7c81d1af690aa57f2f81673273d393e0",
+    "test-nagi-code/inventory.nagi": "e8abda1dbea54b7f0ccf72053014059cc74f46c3451079f2c5938103700d3501",
+    "test-nagi-code/web-demo/tasks.nagi": "89a284679f69204c3ecf8d0970ee0e606caa07022a0b5d44f16b8c64fc922f0d",
+    "test-nagi-code/result-api/server.nagi": "bf426b2722a1fe07787efd37a6cab374cbe045106e63e9419c44cee539e840a9",
+    "test-nagi-code/result-api/models.nagi": "673440b2305441771f1a983c2b4ee4e27ebec3216acfd3d523cbcaa2cf0224d3",
+    "test-nagi-code/web-demo/models.nagi": "b9e890870220a6976c930d417ee57a6bafa9f5e9d15f0c326e6ba3717e00c7df",
+    "test-nagi-code/web-demo/validation.nagi": "32b7cf8e244c519dc525f0d257f480ca91bfc39ee949d201697ebddf221028d9"
+  },
+  "runs": [
+    {
+      "example": "crud",
+      "form": "high",
+      "checks": 9,
+      "raw_log": "http-business-complete/raw.log"
+    },
+    {
+      "example": "crud",
+      "form": "saved-low",
+      "checks": 9,
+      "raw_log": "http-business-complete/raw.log"
+    },
+    {
+      "example": "inventory",
+      "form": "high",
+      "checks": 9,
+      "raw_log": "http-business-complete/raw.log"
+    },
+    {
+      "example": "inventory",
+      "form": "saved-low",
+      "checks": 9,
+      "raw_log": "http-business-complete/raw.log"
+    },
+    {
+      "example": "tasks",
+      "form": "high",
+      "checks": 9,
+      "raw_log": "http-business-final-closure/raw.log"
+    },
+    {
+      "example": "tasks",
+      "form": "saved-low",
+      "checks": 9,
+      "raw_log": "http-business-final-closure/raw.log"
+    },
+    {
+      "example": "result-api",
+      "form": "high",
+      "checks": 15,
+      "raw_log": "http-business-final-closure/raw.log"
+    },
+    {
+      "example": "result-api",
+      "form": "saved-low",
+      "checks": 15,
+      "raw_log": "http-business-final-closure/raw.log"
+    }
+  ],
+  "aggregate_completed": true,
+  "partial_run_caveat": "first command exited1 after four successful runs due to incomplete task fixture import closure; those success markers and raw outputs remain distinct from later successful task/Result command"
+}

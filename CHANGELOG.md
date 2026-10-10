@@ -2,9 +2,13 @@
 
 ## Unreleased
 
-- Add the unreleased `std.db.sqlite` Pool and affine Tx API with typed owned Parameters, explicit transaction boundaries, structured failure outcomes, and observed close. Keep the existing `db_*` API unchanged; the new API is not included in Nagi 0.1.11.
-- Extend opt-in SQLite SQL checks to literal `std.db.sqlite` query/all/exec operations in the development source. Check schema and row shape, prepare new exec DDL without executing it, and report Parameters bind counts as unchecked.
-- Replace the private deadpool prototype with the existing Tokio semaphore and a lazy adapter; remove deadpool/deadpool-runtime without adding dependencies. Distinguish recoverable reservation failures as ALLOCATION without promising universal OOM recovery. Rust compiler embedding users must handle the added SQLite variants of public standard-module/resource/operation enums; existing Nagi APIs and syntax remain unchanged.
+- Implement SF05's canonical opaque `std.db.sqlite.Query` and direct-literal constructor. Require Query/Parameters for query/all/exec; reject dynamic constructors with original-source checker diagnostics. Remove legacy Db/db_* execution and public runtime Db/Sql without a compatibility fallback. Preserve unrelated user definitions by canonical identity.
+- Connect trusted protected database adapters to actual bounded SQLite queue admission through an opaque reservation and synchronous enqueue inside Grant.submit. Bind actual subject/target into reviewed owner/tenant predicates; distinguish earlier revocation (zero enqueue) from admitted work. Preserve transaction, cancellation, Failure/Outcome, cleanup, and actual close. Durable Session generation remains SF02 work.
+- Migrate CRUD, inventory, tasks, settings, Result examples, editor suggestions, row bridges, and SQL checks. Use exec plus readonly query in the same Tx for former RETURNING workflows, with explicit Options and trusted fixed bootstrap. This change does not publish formal 0.2.0, a version, tag, or release.
+
+- Add the unreleased `std.db.sqlite` Pool and affine Tx API with typed owned Parameters, explicit transaction boundaries, structured failure outcomes, and observed close. The API is not included in Nagi 0.1.11; see [SF05 migration](docs/en/migration-0.2.0.md).
+- Extend opt-in SQLite SQL checks to literal `std.db.sqlite` query/all/exec operations in the development source. Check schema and row shape, prepare new exec DDL without executing it, and compare direct Parameters builder counts, reporting unavailable Query/Parameters structure for runtime checks.
+- Replace the private deadpool prototype with the existing Tokio semaphore and a lazy adapter; remove deadpool/deadpool-runtime without adding dependencies. Distinguish recoverable reservation failures as ALLOCATION without promising universal OOM recovery. Rust compiler embedding users must handle the added SQLite variants of public standard-module/resource/operation enums; this runtime change retains transaction/lifecycle contracts.
 
 ## JetBrains 0.1.2
 

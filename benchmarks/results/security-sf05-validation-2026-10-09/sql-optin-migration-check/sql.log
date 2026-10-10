@@ -1,0 +1,47 @@
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `test` profile [unoptimized] target(s) in 0.39s
+     Running tests/sql_check.rs (/workspace/nagi-sf01-target/debug/deps/sql_check-819a7e9cf4d406fb)
+
+running 14 tests
+test enabled::a_user_function_named_db_all_is_not_a_builtin_sql_query ... ok
+test enabled::explicit_project_schema_path_is_relative_to_invocation_directory ... ok
+test enabled::bounded_schema_and_query_inputs_fail_before_sql_preparation ... ok
+test enabled::imported_queries_report_the_original_module_file_and_line ... ok
+test enabled::aliases_case_reordering_extra_columns_and_repeated_bound_values_are_valid ... FAILED
+test enabled::literal_insert_update_delete_are_prepared_without_executing_queries ... ok
+test enabled::missing_return_columns_and_wrong_bind_count_use_query_source_lines ... FAILED
+test enabled::schema_and_dialect_are_paired_check_only_options ... ok
+test enabled::query_values_are_reported_as_runtime_structure_checks ... ok
+test enabled::literal_queries_cannot_change_schema_or_access_external_functions ... ok
+test enabled::schema_check_is_opt_in_and_reports_bad_columns_in_high_and_saved_low ... ok
+test enabled::unsafe_schema_operations_cannot_create_or_modify_external_files ... ok
+test enabled::helper_statement_kind_and_single_statement_contracts_are_checked ... ok
+test enabled::sqlite_public_literal_shape_columns_and_unknown_bind_count_use_source_origins ... ok
+
+failures:
+
+---- enabled::aliases_case_reordering_extra_columns_and_repeated_bound_values_are_valid stdout ----
+
+thread 'enabled::aliases_case_reordering_extra_columns_and_repeated_bound_values_are_valid' (784619) panicked at compiler/tests/sql_check.rs:76:5:
+stdout: 
+stderr: SQL checked 1 literal queries; 0 runtime/unsupported sites
+error: line 7: SQL sqlite.query: SQL requires 2 bind parameters, but this operation supplies 1
+ --> /tmp/nagi sql check 784617 6/main.nagi:7
+ 7 |     row = try await sqlite.query[User](db, sqlite.literal("SELECT name, id FROM users WHERE id = ? OR age = ?"), sqlite.bind_i64(sqlite.parameters(), 7))
+Compatibility projection may be partial; prior latest unchanged.
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- enabled::missing_return_columns_and_wrong_bind_count_use_query_source_lines stdout ----
+
+thread 'enabled::missing_return_columns_and_wrong_bind_count_use_query_source_lines' (784699) panicked at compiler/tests/sql_check.rs:87:5:
+Output { status: ExitStatus(unix_wait_status(0)), stdout: "", stderr: "SQL checked 1 literal queries; 0 runtime/unsupported sites\nchecked /tmp/nagi sql check 784617 16/main.nagi\n" }
+
+
+failures:
+    enabled::aliases_case_reordering_extra_columns_and_repeated_bound_values_are_valid
+    enabled::missing_return_columns_and_wrong_bind_count_use_query_source_lines
+
+test result: FAILED. 12 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.37s
+
+error: test failed, to rerun pass `-p nagic --test sql_check`

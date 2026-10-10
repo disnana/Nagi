@@ -1,0 +1,9 @@
+import std.db.sqlite as sqlite
+class Row:
+    value: str
+async def insert(tx: view[sqlite.Tx], sql: str) -> Result[i64, sqlite.Failure]:
+    return await sqlite.exec(tx, sqlite.literal("INSERT INTO data VALUES (?)"), sqlite.bind_text(sqlite.parameters(), sql))
+async def one(tx: view[sqlite.Tx], sql: str) -> Result[Row?, sqlite.Failure]:
+    return await sqlite.query[Row](tx, sqlite.literal("SELECT ? AS value"), sqlite.bind_text(sqlite.parameters(), sql))
+async def many(tx: view[sqlite.Tx], sql: str) -> Result[List[Row], sqlite.Failure]:
+    return await sqlite.all[Row](tx, sqlite.literal("SELECT ? AS value FROM data"), sqlite.bind_text(sqlite.parameters(), sql))

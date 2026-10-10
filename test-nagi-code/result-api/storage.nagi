@@ -1,8 +1,46 @@
+import std.db.sqlite as sqlite
+import std.result as result
 import "models.nagi"
 
 # optional_itemsは意図的に作らない。DB失敗時の分岐を再現するための例。
-async def read_optional(db: Db) -> Result[Item?, Error]:
-    return await db_query[Item](db, "SELECT id, name FROM optional_items WHERE id = ?1", 1)
+async def read_optional(db: view[sqlite.Pool]) -> Result[Item?, Error]:
+    return await storage_read_optional(db, 1)
 
-async def read_item(db: Db, id: i64) -> Result[Item?, Error]:
-    return await db_query[Item](db, "SELECT id, name FROM sample_items WHERE id = ?1", id)
+async def read_item(db: view[sqlite.Pool], id: i64) -> Result[Item?, Error]:
+    return await storage_read_item(db, id)
+
+# This HTTP-facing projection preserves the primary Error. The SQLite Failure
+# (outcome, cleanup and retired metadata) stays observable in database APIs.
+def sqlite_error(problem: sqlite.Failure) -> Error:
+    match sqlite.copy_primary_error(view(problem)):
+        case Some(cause):
+            return cause
+        case None:
+            fallback: Result[Error, Error] = internal_error("SQLite operation failed")
+            match fallback:
+                case Ok(cause):
+                    return cause
+                case Err(cause):
+                    return cause
+
+async def open_database(path: view[str]) -> Result[sqlite.Pool, Error]:
+    # Explicit example limits: one connection, two queued Tx commands,
+    # 1000 ms acquisition and no native busy wait.
+    config = try sqlite.options(1, 2, 1000, 0)
+    return result.map_error(await sqlite.open(path, config), sqlite_error)
+
+async def storage_read_optional(pool: view[sqlite.Pool], value0: i64) -> Result[Item?, Error]:
+    tx = try result.map_error(await sqlite.begin(pool, sqlite.BeginMode.DEFERRED), sqlite_error)
+    work = await sqlite.query[Item](tx, sqlite.literal("SELECT id, name FROM optional_items WHERE id = ?"), sqlite.bind_i64(sqlite.parameters(), value0))
+    ending = await sqlite.rollback(tx)
+    value = try result.map_error(work, sqlite_error)
+    try result.map_error(ending, sqlite_error)
+    return ok(value)
+
+async def storage_read_item(pool: view[sqlite.Pool], value0: i64) -> Result[Item?, Error]:
+    tx = try result.map_error(await sqlite.begin(pool, sqlite.BeginMode.DEFERRED), sqlite_error)
+    work = await sqlite.query[Item](tx, sqlite.literal("SELECT id, name FROM sample_items WHERE id = ?"), sqlite.bind_i64(sqlite.parameters(), value0))
+    ending = await sqlite.rollback(tx)
+    value = try result.map_error(work, sqlite_error)
+    try result.map_error(ending, sqlite_error)
+    return ok(value)

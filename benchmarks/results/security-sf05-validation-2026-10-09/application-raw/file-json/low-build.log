@@ -1,0 +1,4 @@
+     Locking 105 packages to highest compatible versions
+   Compiling nagi-generated-151867aa230ce977 v0.1.0 (/workspace/Nagi-security-sf05/build/application-example-verification/file-json/low/.nagi/apps/nagi-generated-151867aa230ce977/generations/.staging-g-e0642-18dce7c9cf5e1b8d-0)
+    Finished `release` profile [optimized] target(s) in 2.41s
+native: /workspace/Nagi-security-sf05/build/application-example-verification/file-json/low/.nagi/apps/nagi-generated-151867aa230ce977/generations/g-e0642-18dce7c9cf5e1b8d-0/nagi-151867aa230ce977-g-e0642-18dce7c9cf5e1b8d-0

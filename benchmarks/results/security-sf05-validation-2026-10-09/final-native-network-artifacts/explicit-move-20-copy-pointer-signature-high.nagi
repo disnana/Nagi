@@ -1,0 +1,3 @@
+import std.db.sqlite as sqlite
+def duplicate(callbacks: view[fn[sqlite.Tx, unit]]) -> List[fn[sqlite.Tx, unit]]:
+    return copy(callbacks)

@@ -1,0 +1,14 @@
+import std.db.sqlite as sqlite;
+fn discard(tx: sqlite.Tx) -> unit {
+    print(0);
+}
+async fn accept(callback: fn[sqlite.Tx, unit]) -> unit {
+    print(1);
+}
+async fn launch() -> Result[unit, Error] {
+    let callback: fn[sqlite.Tx, unit] = discard;
+    scope {
+        spawn accept(callback);
+    }
+    return ok(print(2));
+}

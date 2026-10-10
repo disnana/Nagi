@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/http_examples.py", line 141, in <module>
+    main()
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/http_examples.py", line 121, in main
+    count = business(base, name)
+            ^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/http_examples.py", line 63, in business
+    request(base, "PUT", collection + "/999", 404, original)
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/http_examples.py", line 45, in request
+    return json.loads(text) if text else None
+           ^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/json/decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/json/decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)

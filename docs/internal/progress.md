@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-09: SF05 literal Query / SQLite移行
+
+SF00 #100 / SF01 #101 merge済みのbase main `3b8da226`から独立branchで実装。literal QueryとParametersへ標準SQLiteを統一し、旧Db/db_* / public Sql実行入口を具体migration診断と共に削除した。実Grant subject/target predicateと実bounded queueへの一回permit admissionを接続した。[契約/移行](security-foundation/sf05-contract.md)・[検証結果](security-foundation-sf05-results.md)へ原ログ/source SHA/cacheと未確認範囲を記録する。保存workspaceはexit0/1011成功/failed0、追加SQLiteケースは79件GREEN。アプリ19runs・HTTP業務8runs/84checks・チュートリアルと小さいQuery費用比較も完了。production source hashは保存fullと一致し、差分test2filesはscopedで確認。独立reviewと最新source4 OSの残検査中。SF02以降やSecurity Foundation全体、正式0.2.0の完成とは扱わない。merge/版/tag/release/公開なし。
+
 ## 2026-10-09: Nagi for JetBrains 0.1.2の正式GitHub公開
 
 ユーザーの「合格したのでリリース許可」を受け、#102の最終head `4bafb285`をmain `2202623`へマージした。tree一致、最終PRの4 OS・四SDK・website成功を読戻し、main checks37861515646の全必須検証・publish-release成功、website37861515402成功を確認。[jetbrains-v0.1.2](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.2)は2026-10-09T00:28:08Zに正式公開。IDEA/PyCharm共通ZIP一つとSHA-256だけを配布し、公開ファイルの実取得・内側descriptor・checksumを確認した。既存ID/Marketplaceページを維持し、本体0.1.11・VS Code0.1.13の版とReleaseは変更していない。Marketplace提出はユーザー担当、個別GUI操作結果や0.1.2のMarketplace公開状態は推測しない。

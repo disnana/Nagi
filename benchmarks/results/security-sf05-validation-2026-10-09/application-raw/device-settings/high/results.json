@@ -1,0 +1,66 @@
+[
+  {
+    "run": 1,
+    "rows": [
+      {
+        "id": 1,
+        "enabled": true,
+        "gain": 1.25,
+        "label": null,
+        "calibration": [
+          0,
+          1,
+          255
+        ]
+      },
+      {
+        "id": 2,
+        "enabled": null,
+        "gain": null,
+        "label": "front-door",
+        "calibration": null
+      },
+      {
+        "id": 3,
+        "enabled": false,
+        "gain": 0.5,
+        "label": "side-door",
+        "calibration": []
+      }
+    ],
+    "missing_id": 404,
+    "invalid_id": 400
+  },
+  {
+    "run": 2,
+    "rows": [
+      {
+        "id": 1,
+        "enabled": false,
+        "gain": 2.5,
+        "label": "東京",
+        "calibration": [
+          255,
+          0,
+          128
+        ]
+      },
+      {
+        "id": 2,
+        "enabled": null,
+        "gain": null,
+        "label": "front-door",
+        "calibration": null
+      },
+      {
+        "id": 3,
+        "enabled": false,
+        "gain": 0.5,
+        "label": "side-door",
+        "calibration": []
+      }
+    ],
+    "missing_id": 404,
+    "invalid_id": 400
+  }
+]

@@ -19,7 +19,7 @@ impl Fixture {
             std::process::id(),
             FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
         ));
-        fs::create_dir_all(&path).unwrap();
+        fs::create_dir(&path).unwrap();
         Self(path)
     }
 
@@ -34,7 +34,8 @@ impl Drop for Fixture {
     }
 }
 
-const PROGRAM: &str = r#"class NullableRow:
+const PROGRAM: &str = r#"import std.db.sqlite as sqlite
+class NullableRow:
     id: i64
     signed8: i8?
     signed16: i16?
@@ -52,15 +53,35 @@ const PROGRAM: &str = r#"class NullableRow:
 @rust("native::verify")
 extern def verify(rows: List[NullableRow])
 
-async def main() -> Result[i64, Error]:
-    db = try await db_open(":memory:")
-    try await db_exec(db, "CREATE TABLE readings(id INTEGER PRIMARY KEY, signed8 INTEGER, signed16 INTEGER, signed32 INTEGER, signed64 INTEGER, unsigned8 INTEGER, unsigned16 INTEGER, unsigned32 INTEGER, real32 REAL, real64 REAL, enabled INTEGER, type TEXT, payload BLOB); INSERT INTO readings VALUES (1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), (2, -128, -32768, -2147483648, -9223372036854775808, 255, 65535, 4294967295, 1.25, -2.5, 1, '凪', X'007FFF'), (3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, '', X'');")
-    rows = try await db_all[NullableRow](db, "SELECT payload, type, enabled, real64, real32, unsigned32, unsigned16, unsigned8, signed64, signed32, signed16, signed8, id FROM readings ORDER BY id")
+@rust("native::open")
+extern async def open() -> Result[sqlite.Pool, sqlite.Failure]
+
+async def read(pool: view[sqlite.Pool]) -> Result[i64, sqlite.Failure]:
+    tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
+    rows = try await sqlite.all[NullableRow](tx, sqlite.literal("SELECT payload, type, enabled, real64, real32, unsigned32, unsigned16, unsigned8, signed64, signed32, signed16, signed8, id FROM readings ORDER BY id"), sqlite.parameters())
+    try await sqlite.rollback(tx)
     verify(rows)
     return ok(0)
+
+async def main() -> Result[i64, sqlite.Failure]:
+    pool = try await open()
+    work = await read(view(pool))
+    ending = await sqlite.close(pool, 1000)
+    value = try work
+    try ending
+    return ok(value)
 "#;
 
-const BRIDGE: &str = r#"pub fn verify(rows: Vec<super::NullableRow>) {
+const BRIDGE: &str = r#"pub async fn open() -> Result<nagi_runtime::sqlite::Pool, nagi_runtime::sqlite::Failure> {
+    use nagi_runtime::sqlite as db;
+    let pool = db::open(":memory:", db::options(1, 2, 1000, 0).unwrap()).await?;
+    let tx = db::begin(&pool, db::BeginMode::Deferred).await?;
+    db::exec(&tx, db::literal("CREATE TABLE readings(id INTEGER PRIMARY KEY, signed8 INTEGER, signed16 INTEGER, signed32 INTEGER, signed64 INTEGER, unsigned8 INTEGER, unsigned16 INTEGER, unsigned32 INTEGER, real32 REAL, real64 REAL, enabled INTEGER, type TEXT, payload BLOB)"), db::parameters()).await?;
+    db::exec(&tx, db::literal("INSERT INTO readings VALUES (1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), (2, -128, -32768, -2147483648, -9223372036854775808, 255, 65535, 4294967295, 1.25, -2.5, 1, '凪', X'007FFF'), (3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, '', X'')"), db::parameters()).await?;
+    db::commit(tx).await?;
+    Ok(pool)
+}
+pub fn verify(rows: Vec<super::NullableRow>) {
     assert_eq!(<super::NullableRow as nagi_runtime::FromRow>::columns(), &[
         "id", "signed8", "signed16", "signed32", "signed64", "unsigned8",
         "unsigned16", "unsigned32", "real32", "real64", "enabled", "type", "payload"

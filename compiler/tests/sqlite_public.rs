@@ -16,13 +16,13 @@ async def exercise(config: sqlite.Options) -> Result[i64, sqlite.Failure]:
     pool = try await sqlite.open(":memory:", config)
     alias = sqlite.clone_pool(pool)
     tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
-    try await sqlite.exec(tx, "CREATE TABLE amounts(amount INTEGER NOT NULL)", sqlite.parameters())
+    try await sqlite.exec(tx, sqlite.literal("CREATE TABLE amounts(amount INTEGER NOT NULL)"), sqlite.parameters())
     params = sqlite.bind_i64(sqlite.parameters(), 7)
-    try await sqlite.exec(tx, "INSERT INTO amounts VALUES (?)", params)
+    try await sqlite.exec(tx, sqlite.literal("INSERT INTO amounts VALUES (?)"), params)
     try await sqlite.commit(tx)
     tx = try await sqlite.begin(alias, sqlite.BeginMode.DEFERRED)
-    sql = "SELECT SUM(amount) AS total FROM amounts"
-    row = try await sqlite.query[Total](tx, view(sql), sqlite.parameters())
+    sql = sqlite.literal("SELECT SUM(amount) AS total FROM amounts")
+    row = try await sqlite.query[Total](tx, sql, sqlite.parameters())
     try await sqlite.rollback(tx)
     try await sqlite.close(alias, 1000)
     match row:
@@ -40,13 +40,13 @@ async fn exercise(config: sqlite.Options) -> Result[i64, sqlite.Failure] {
     let pool = try await sqlite.open(":memory:", config);
     let alias = sqlite.clone_pool(pool);
     let tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED);
-    try await sqlite.exec(tx, "CREATE TABLE amounts(amount INTEGER NOT NULL)", sqlite.parameters());
+    try await sqlite.exec(tx, sqlite.literal("CREATE TABLE amounts(amount INTEGER NOT NULL)"), sqlite.parameters());
     let params = sqlite.bind_i64(sqlite.parameters(), 7);
-    try await sqlite.exec(tx, "INSERT INTO amounts VALUES (?)", params);
+    try await sqlite.exec(tx, sqlite.literal("INSERT INTO amounts VALUES (?)"), params);
     try await sqlite.commit(tx);
     tx = try await sqlite.begin(alias, sqlite.BeginMode.DEFERRED);
-    let sql = "SELECT SUM(amount) AS total FROM amounts";
-    let row = try await sqlite.query[Total](tx, view(sql), sqlite.parameters());
+    let sql = sqlite.literal("SELECT SUM(amount) AS total FROM amounts");
+    let row = try await sqlite.query[Total](tx, sql, sqlite.parameters());
     try await sqlite.rollback(tx);
     try await sqlite.close(alias, 1000);
     match row {
@@ -93,9 +93,9 @@ fn matrix_positive_pairs_execute_high_saved_and_handwritten_low() {
         let pool = sqlite::open(":memory:", sqlite::options(1,2,1000,0).unwrap()).await.unwrap();
         let published = publish(sqlite::clone_pool(&pool));
         let tx = sqlite::begin(&pool, sqlite::BeginMode::Deferred).await.unwrap();
-        sqlite::exec(&tx, nagi_runtime::Sql::Static("CREATE TABLE items(id INTEGER, label TEXT, data BLOB, enabled INTEGER)"), sqlite::parameters()).await.unwrap();
-        sqlite::exec(&tx, nagi_runtime::Sql::Static("INSERT INTO items VALUES (1,NULL,x'0102',1)"), sqlite::parameters()).await.unwrap();
-        read(tx, "SELECT id,label,data,enabled FROM items".into(), sqlite::bind_i64(sqlite::parameters(),1)).await.unwrap();
+        sqlite::exec(&tx, sqlite::literal("CREATE TABLE items(id INTEGER, label TEXT, data BLOB, enabled INTEGER)"), sqlite::parameters()).await.unwrap();
+        sqlite::exec(&tx, sqlite::literal("INSERT INTO items VALUES (1,NULL,x'0102',1)"), sqlite::parameters()).await.unwrap();
+        read(tx, sqlite::literal("SELECT id,label,data,enabled FROM items"), sqlite::bind_i64(sqlite::parameters(),1)).await.unwrap();
         drop(published);
         sqlite::close(&pool,1000).await.unwrap();
     });
@@ -445,13 +445,13 @@ class Row:
     data: bytes
     enabled: bool
 @rust("native::sql")
-extern def sql() -> str
+extern def sql() -> sqlite.Query
 @rust("native::params")
 extern def params() -> sqlite.Parameters
 @rust("native::fallible_sql")
-extern def fallible_sql() -> Result[str, Error]
+extern def fallible_sql() -> Result[sqlite.Query, Error]
 @rust("native::panic_sql")
-extern def panic_sql() -> str
+extern def panic_sql() -> sqlite.Query
 async def ordered(tx: view[sqlite.Tx]) -> Result[i64, sqlite.Failure]:
     return await sqlite.exec(tx, sql(), params())
 async def failed(tx: view[sqlite.Tx]) -> Result[unit, Error]:
@@ -460,34 +460,34 @@ async def failed(tx: view[sqlite.Tx]) -> Result[unit, Error]:
 async def panicked(tx: view[sqlite.Tx]) -> Result[i64, sqlite.Failure]:
     return await sqlite.exec(tx, panic_sql(), params())
 async def decoded(tx: view[sqlite.Tx]) -> Result[List[Row], sqlite.Failure]:
-    return await sqlite.all[Row](tx, "SELECT 7 AS id, 255 AS tiny, NULL AS label, x'0102' AS data, 1 AS enabled", sqlite.parameters())
+    return await sqlite.all[Row](tx, sqlite.literal("SELECT 7 AS id, 255 AS tiny, NULL AS label, x'0102' AS data, 1 AS enabled"), sqlite.parameters())
 async def invalid_decode(tx: view[sqlite.Tx]) -> Result[List[Row], sqlite.Failure]:
-    return await sqlite.all[Row](tx, "SELECT 7 AS id, 256 AS tiny, NULL AS label, x'0102' AS data, 1 AS enabled", sqlite.parameters())
+    return await sqlite.all[Row](tx, sqlite.literal("SELECT 7 AS id, 256 AS tiny, NULL AS label, x'0102' AS data, 1 AS enabled"), sqlite.parameters())
 "#, r#"import std.db.sqlite as sqlite;
 record Row { id: i64; tiny: u8; label: Option[str]; data: bytes; enabled: bool; }
 @rust("native::sql")
-extern fn sql() -> str;
+extern fn sql() -> sqlite.Query;
 @rust("native::params")
 extern fn params() -> sqlite.Parameters;
 @rust("native::fallible_sql")
-extern fn fallible_sql() -> Result[str, Error];
+extern fn fallible_sql() -> Result[sqlite.Query, Error];
 @rust("native::panic_sql")
-extern fn panic_sql() -> str;
+extern fn panic_sql() -> sqlite.Query;
 async fn ordered(tx: view[sqlite.Tx]) -> Result[i64, sqlite.Failure] { return await sqlite.exec(tx, sql(), params()); }
 async fn failed(tx: view[sqlite.Tx]) -> Result[unit, Error] { let result = await sqlite.exec(tx, try fallible_sql(), params()); return ok(print(0)); }
 async fn panicked(tx: view[sqlite.Tx]) -> Result[i64, sqlite.Failure] { return await sqlite.exec(tx, panic_sql(), params()); }
-async fn decoded(tx: view[sqlite.Tx]) -> Result[List[Row], sqlite.Failure] { return await sqlite.all[Row](tx, "SELECT 7 AS id, 255 AS tiny, NULL AS label, x'0102' AS data, 1 AS enabled", sqlite.parameters()); }
-async fn invalid_decode(tx: view[sqlite.Tx]) -> Result[List[Row], sqlite.Failure] { return await sqlite.all[Row](tx, "SELECT 7 AS id, 256 AS tiny, NULL AS label, x'0102' AS data, 1 AS enabled", sqlite.parameters()); }
+async fn decoded(tx: view[sqlite.Tx]) -> Result[List[Row], sqlite.Failure] { return await sqlite.all[Row](tx, sqlite.literal("SELECT 7 AS id, 255 AS tiny, NULL AS label, x'0102' AS data, 1 AS enabled"), sqlite.parameters()); }
+async fn invalid_decode(tx: view[sqlite.Tx]) -> Result[List[Row], sqlite.Failure] { return await sqlite.all[Row](tx, sqlite.literal("SELECT 7 AS id, 256 AS tiny, NULL AS label, x'0102' AS data, 1 AS enabled"), sqlite.parameters()); }
 "#, r#"
 mod native {
     pub static EVENTS: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
-    pub fn sql() -> String { EVENTS.lock().unwrap().push("sql"); "DELETE FROM items".into() }
+    pub fn sql() -> nagi_runtime::sqlite::Query { EVENTS.lock().unwrap().push("sql"); nagi_runtime::sqlite::literal("DELETE FROM items") }
     pub fn params() -> nagi_runtime::sqlite::Parameters { EVENTS.lock().unwrap().push("params"); nagi_runtime::sqlite::parameters() }
-    pub fn fallible_sql() -> Result<String,nagi_runtime::Error> {
+    pub fn fallible_sql() -> Result<nagi_runtime::sqlite::Query,nagi_runtime::Error> {
         EVENTS.lock().unwrap().push("error_sql");
         Err(nagi_runtime::Error { kind: nagi_runtime::ErrorKind::Invalid, message: "expected error".into() })
     }
-    pub fn panic_sql() -> String { EVENTS.lock().unwrap().push("panic_sql"); panic!("expected SQL panic") }
+    pub fn panic_sql() -> nagi_runtime::sqlite::Query { EVENTS.lock().unwrap().push("panic_sql"); panic!("expected SQL panic") }
 }
 "#, r#"
 #[test] fn evaluation_and_decode() {
@@ -496,7 +496,7 @@ mod native {
     let (pool, tx) = rt.block_on(async {
         let pool = sqlite::open(":memory:",sqlite::options(1,2,1000,0).unwrap()).await.unwrap();
         let tx = sqlite::begin(&pool,sqlite::BeginMode::Deferred).await.unwrap();
-        sqlite::exec(&tx,nagi_runtime::Sql::Static("CREATE TABLE items(id INTEGER)"),sqlite::parameters()).await.unwrap();
+        sqlite::exec(&tx,sqlite::literal("CREATE TABLE items(id INTEGER)"),sqlite::parameters()).await.unwrap();
         assert_eq!(ordered(&tx).await.unwrap(),0);
         assert_eq!(*native::EVENTS.lock().unwrap(),["sql","params"]);
         native::EVENTS.lock().unwrap().clear();
@@ -526,40 +526,40 @@ mod native {
 }
 
 #[test]
-fn materialized_sql_allows_later_parameter_move_of_the_same_string() {
+fn literal_query_allows_owned_text_parameter_move() {
     Fixture::new().run_three(
         "sqlite-sql-alias",
         r#"import std.db.sqlite as sqlite
 class Row:
     value: str
 async def insert(tx: view[sqlite.Tx], sql: str) -> Result[i64, sqlite.Failure]:
-    return await sqlite.exec(tx, view(sql), sqlite.bind_text(sqlite.parameters(), sql))
+    return await sqlite.exec(tx, sqlite.literal("INSERT INTO data VALUES (?)"), sqlite.bind_text(sqlite.parameters(), sql))
 async def one(tx: view[sqlite.Tx], sql: str) -> Result[Row?, sqlite.Failure]:
-    return await sqlite.query[Row](tx, view(sql), sqlite.bind_text(sqlite.parameters(), sql))
+    return await sqlite.query[Row](tx, sqlite.literal("SELECT ? AS value"), sqlite.bind_text(sqlite.parameters(), sql))
 async def many(tx: view[sqlite.Tx], sql: str) -> Result[List[Row], sqlite.Failure]:
-    return await sqlite.all[Row](tx, view(sql), sqlite.bind_text(sqlite.parameters(), sql))
+    return await sqlite.all[Row](tx, sqlite.literal("SELECT ? AS value FROM data"), sqlite.bind_text(sqlite.parameters(), sql))
 "#,
         r#"import std.db.sqlite as sqlite;
 record Row { value: str; }
 async fn insert(tx: view[sqlite.Tx], sql: str) -> Result[i64, sqlite.Failure] {
-    return await sqlite.exec(tx, view(sql), sqlite.bind_text(sqlite.parameters(), sql));
+    return await sqlite.exec(tx, sqlite.literal("INSERT INTO data VALUES (?)"), sqlite.bind_text(sqlite.parameters(), sql));
 }
 async fn one(tx: view[sqlite.Tx], sql: str) -> Result[Row?, sqlite.Failure] {
-    return await sqlite.query[Row](tx, view(sql), sqlite.bind_text(sqlite.parameters(), sql));
+    return await sqlite.query[Row](tx, sqlite.literal("SELECT ? AS value"), sqlite.bind_text(sqlite.parameters(), sql));
 }
 async fn many(tx: view[sqlite.Tx], sql: str) -> Result[List[Row], sqlite.Failure] {
-    return await sqlite.all[Row](tx, view(sql), sqlite.bind_text(sqlite.parameters(), sql));
+    return await sqlite.all[Row](tx, sqlite.literal("SELECT ? AS value FROM data"), sqlite.bind_text(sqlite.parameters(), sql));
 }
 "#,
         "",
         r#"
 #[test]
 fn own_sql_before_parameter_move() {
-    use nagi_runtime::{sqlite as db,Sql};
+    use nagi_runtime::{sqlite as db};
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         let pool=db::open(":memory:",db::options(1,2,1000,0).unwrap()).await.unwrap();
         let tx=db::begin(&pool,db::BeginMode::Deferred).await.unwrap();
-        db::exec(&tx,Sql::Static("CREATE TABLE data(value TEXT)"),db::parameters()).await.unwrap();
+        db::exec(&tx,db::literal("CREATE TABLE data(value TEXT)"),db::parameters()).await.unwrap();
         let insert_sql="INSERT INTO data VALUES (?)";
         assert_eq!(insert(&tx,insert_sql.into()).await.unwrap(),1);
         let stored=one(&tx,"SELECT ? AS value".into()).await.unwrap().unwrap();
@@ -576,19 +576,19 @@ fn own_sql_before_parameter_move() {
 }
 
 #[test]
-fn sql_materialization_does_not_release_the_transaction_borrow() {
+fn literal_query_does_not_release_the_transaction_borrow() {
     Fixture::new().reject(
         r#"import std.db.sqlite as sqlite
 def consume(tx: sqlite.Tx) -> sqlite.Parameters:
     return sqlite.parameters()
 async def invalid(tx: sqlite.Tx) -> Result[i64, sqlite.Failure]:
-    return await sqlite.exec(tx, "DELETE FROM data", consume(tx))
+    return await sqlite.exec(tx, sqlite.literal("DELETE FROM data"), consume(tx))
 "#,
         r#"import std.db.sqlite as sqlite;
 fn consume(tx: sqlite.Tx) -> sqlite.Parameters { return sqlite.parameters(); }
 # The Tx loan still lasts through the async SQL operation.
 async fn invalid(tx: sqlite.Tx) -> Result[i64, sqlite.Failure] {
-    return await sqlite.exec(tx, "DELETE FROM data", consume(tx));
+    return await sqlite.exec(tx, sqlite.literal("DELETE FROM data"), consume(tx));
 }
 "#,
         5,

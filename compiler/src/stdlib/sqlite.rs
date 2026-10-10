@@ -42,6 +42,26 @@ static CONTRACT_TX: ResourceContract = ResourceContract::new(
 )
 .with_lifecycle(ResourceLifecycle::SameTask);
 
+static CONTRACT_QUERY: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::Sqlite,
+        name: "Query",
+        arity: 0,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        rust_path: "::nagi_runtime::sqlite::Query",
+        copy: true,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
 static CONTRACT_PARAMETERS: ResourceContract = ResourceContract::new(
     ResourceInfo {
         module: StandardModule::Sqlite,
@@ -166,6 +186,7 @@ pub(super) fn resource_contract(resource: Resource) -> &'static ResourceContract
     match resource {
         Resource::SqlitePool => &CONTRACT_POOL,
         Resource::SqliteTx => &CONTRACT_TX,
+        Resource::SqliteQueryValue => &CONTRACT_QUERY,
         Resource::SqliteParameters => &CONTRACT_PARAMETERS,
         Resource::SqliteOptions => &CONTRACT_OPTIONS,
         Resource::SqliteBeginMode => &CONTRACT_BEGINMODE,
@@ -178,6 +199,11 @@ pub(super) fn resource_contract(resource: Resource) -> &'static ResourceContract
 
 pub(super) fn operation_info(operation: Operation) -> &'static OperationInfo {
     match operation {
+ Operation::SqliteLiteral => &OperationInfo { module: StandardModule::Sqlite,
+ name: "literal", rust_path: "::nagi_runtime::sqlite::literal", arity: 1, generic_arity: 0,
+ type_parameters: &[], asynchronous: false, emit_type_arguments: false,
+ parameters: &[Passing::Move], borrow_owner: None,
+ signature: "(sql: str) -> Query" },
  Operation::SqliteOptions => &OperationInfo { module: StandardModule::Sqlite,
  name: "options", rust_path: "::nagi_runtime::sqlite::options", arity: 4, generic_arity: 0,
  type_parameters: &[], asynchronous: false, emit_type_arguments: false,
@@ -231,18 +257,18 @@ pub(super) fn operation_info(operation: Operation) -> &'static OperationInfo {
  Operation::SqliteQuery => &OperationInfo { module: StandardModule::Sqlite,
  name: "query", rust_path: "::nagi_runtime::sqlite::query", arity: 3, generic_arity: 1,
  type_parameters: &["T"], asynchronous: true, emit_type_arguments: true,
- parameters: &[Passing::Reference, Passing::Reference, Passing::Move], borrow_owner: None,
- signature: "[T](tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[Option[T], Failure]]" },
+ parameters: &[Passing::Reference, Passing::Move, Passing::Move], borrow_owner: None,
+ signature: "[T](tx: view[Tx], query: Query, parameters: Parameters) -> Future[Result[Option[T], Failure]]" },
  Operation::SqliteAll => &OperationInfo { module: StandardModule::Sqlite,
  name: "all", rust_path: "::nagi_runtime::sqlite::all", arity: 3, generic_arity: 1,
  type_parameters: &["T"], asynchronous: true, emit_type_arguments: true,
- parameters: &[Passing::Reference, Passing::Reference, Passing::Move], borrow_owner: None,
- signature: "[T](tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[List[T], Failure]]" },
+ parameters: &[Passing::Reference, Passing::Move, Passing::Move], borrow_owner: None,
+ signature: "[T](tx: view[Tx], query: Query, parameters: Parameters) -> Future[Result[List[T], Failure]]" },
  Operation::SqliteExec => &OperationInfo { module: StandardModule::Sqlite,
  name: "exec", rust_path: "::nagi_runtime::sqlite::exec", arity: 3, generic_arity: 0,
  type_parameters: &[], asynchronous: true, emit_type_arguments: false,
- parameters: &[Passing::Reference, Passing::Reference, Passing::Move], borrow_owner: None,
- signature: "(tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[i64, Failure]]" },
+ parameters: &[Passing::Reference, Passing::Move, Passing::Move], borrow_owner: None,
+ signature: "(tx: view[Tx], query: Query, parameters: Parameters) -> Future[Result[i64, Failure]]" },
  Operation::SqliteCommit => &OperationInfo { module: StandardModule::Sqlite,
  name: "commit", rust_path: "::nagi_runtime::sqlite::commit", arity: 1, generic_arity: 0,
  type_parameters: &[], asynchronous: true, emit_type_arguments: false,

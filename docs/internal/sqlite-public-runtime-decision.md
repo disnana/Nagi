@@ -1,5 +1,7 @@
 # SQLite公開runtime: 採用実装と検証
 
+> SQL表現・旧API併存に関する記述は当時の記録。SF00 #100の採用設計に基づき、SF05では旧Db/db_*とpublic Sqlを削除し、literal Queryへ統一する。現在の契約は[SF05契約](security-foundation/sf05-contract.md)、維持するPool/Tx lifecycleは[公開リファレンス](../sqlite-pool.md)を参照。過去の測定をSF05の検証結果として扱わない。
+
 2026-10-08。正式化前の長期的妥当性を優先するユーザー承認に基づく実装判断。対象baseは`676576724829e45b077b58628bfe2417e6cf3673`。commit、push、release、版変更を行っていない。compiler/三構文/46入力/4 OSのacceptanceは別の検証で、以下のruntime成功だけでは完成扱いしない。
 
 ## Pool選択と保守責任

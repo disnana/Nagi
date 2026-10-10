@@ -1,0 +1,1932 @@
+[
+  {
+    "artifact": "application-examples/provenance.json",
+    "command": [
+      "python",
+      "scripts/verify_application_examples.py",
+      "--compiler",
+      "/workspace/nagi-sf01-target/debug/nagic"
+    ],
+    "exit": 0,
+    "accepted": true,
+    "seconds": 163.561516701011,
+    "markers": {
+      "\"runs\": 19": true
+    },
+    "raw_log_sha256": "d04d916e2289a47691e556804d294dfec205e890a4a4d258dff979b764e4fb88"
+  },
+  {
+    "artifact": "editor-correct-path/provenance.json",
+    "command": [
+      "python",
+      "benchmarks/security-sf05/editor_checks.py"
+    ],
+    "exit": 1,
+    "accepted": false,
+    "seconds": 11.332287072960753,
+    "markers": {
+      "0 skipped": false
+    },
+    "raw_log_sha256": "f1fc2f50f7a365ef41c816e4f0cca33552fcdd4df88939f306a90daff4ac9c73"
+  },
+  {
+    "artifact": "editor-final/provenance.json",
+    "command": [
+      "python",
+      "benchmarks/security-sf05/editor_checks.py"
+    ],
+    "exit": 0,
+    "accepted": true,
+    "seconds": 45.11540214699926,
+    "markers": {
+      "0 skipped": true
+    },
+    "raw_log_sha256": "4fe62167052d7a5b395445aadbe0de66903be2e28398ee86f418dbf870a87cf4"
+  },
+  {
+    "artifact": "engine-free/provenance.json",
+    "stage": "engine-free",
+    "commands": [
+      {
+        "label": "security",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--no-default-features",
+          "--test",
+          "security_sf05"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 12,
+        "observed_test_blocks": [
+          [
+            12,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 8.909045648993924,
+        "raw_log_sha256": "68b8d869599369dcde20058bc546e1755057f037d05b2616c969e249b1a24b86"
+      },
+      {
+        "label": "registry",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--no-default-features",
+          "--test",
+          "resource_contract_characterization"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 4,
+        "observed_test_blocks": [
+          [
+            4,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 0.4831942419987172,
+        "raw_log_sha256": "ea82866f5f0bf9a45deae5e633f20ba7cbd56701923e2ad1238a6ef65dc2dbbe"
+      },
+      {
+        "label": "sql-disabled",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--no-default-features",
+          "--test",
+          "sql_check"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 1,
+        "observed_test_blocks": [
+          [
+            1,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 0.2547117760113906,
+        "raw_log_sha256": "299a009fa63a74e41dd6f682ef780825a237cefb9fa79c7b091bbfd2bf24ef77"
+      },
+      {
+        "label": "restore-default-compiler",
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "-p",
+          "nagic"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 0,
+        "observed_test_blocks": [],
+        "accepted": true,
+        "seconds": 0.06511760602006689,
+        "raw_log_sha256": "af1d2cf35aacaf94dd1c8a40bb1eb81981171b00ae7b6668106f5acb3a38e60c"
+      }
+    ]
+  },
+  {
+    "artifact": "final-admission/provenance.json",
+    "stage": "runtime",
+    "commands": [
+      {
+        "label": "runtime",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagi-runtime",
+          "--lib",
+          "sqlite::"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 79,
+        "observed_test_blocks": [
+          [
+            79,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 21.65987078298349,
+        "raw_log_sha256": "9b3aea6af89bdb5b7370929020c40fbbef4bc0126a7c26c8f794b3c1d077bd33"
+      },
+      {
+        "label": "public",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagi-runtime",
+          "--test",
+          "sqlite_public_api"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 1,
+        "observed_test_blocks": [
+          [
+            1,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 3.1684776680194773,
+        "raw_log_sha256": "727892c1fbf8e5c6afe5908dd285d2e88744d5c73b5a129f4b8b352995158754"
+      }
+    ]
+  },
+  {
+    "artifact": "final-full-offline/provenance.json",
+    "stage": "full",
+    "commands": [
+      {
+        "label": "workspace",
+        "command": [
+          "cargo",
+          "test",
+          "--locked"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 1011,
+        "observed_test_blocks": [
+          [
+            230,
+            0,
+            1
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            128,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            12,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            6,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ],
+          [
+            30,
+            0,
+            0
+          ],
+          [
+            23,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            12,
+            0,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ],
+          [
+            7,
+            0,
+            0
+          ],
+          [
+            16,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            6,
+            0,
+            0
+          ],
+          [
+            10,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            8,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            13,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            7,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            15,
+            0,
+            0
+          ],
+          [
+            6,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ],
+          [
+            6,
+            0,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            13,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            8,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ],
+          [
+            32,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ],
+          [
+            10,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            14,
+            0,
+            0
+          ],
+          [
+            7,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            12,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            11,
+            0,
+            0
+          ],
+          [
+            6,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ],
+          [
+            10,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            12,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            14,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            8,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            12,
+            0,
+            0
+          ],
+          [
+            21,
+            0,
+            0
+          ],
+          [
+            8,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            15,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            10,
+            0,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 528.8611694889842,
+        "raw_log_sha256": "e756ecbad789b133d05b94c3410a92f88ce24ea97b143a4eb100ddc3547c0f59"
+      }
+    ]
+  },
+  {
+    "artifact": "final-native-artifact-run/provenance.json",
+    "stage": "native",
+    "commands": [
+      {
+        "label": "native",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "sqlite_public",
+          "--test",
+          "security_sf05_native"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 2,
+        "observed_test_blocks": [
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ]
+        ],
+        "accepted": false,
+        "seconds": 4.715649486985058,
+        "raw_log_sha256": "60f4f7f7c3c54ac28b91cfc63509029fa099ef226d11620f1cef65f53fdb2f9c"
+      }
+    ]
+  },
+  {
+    "artifact": "final-native-network/provenance.json",
+    "stage": "native",
+    "commands": [
+      {
+        "label": "native",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "sqlite_public",
+          "--test",
+          "security_sf05_native"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 9,
+        "observed_test_blocks": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            8,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 26.10354926495347,
+        "raw_log_sha256": "a0af1dbb0213e2b2b7fc92bb65eb07bdef3cc23c5f8775e9666904b844dceef8"
+      }
+    ]
+  },
+  {
+    "artifact": "final-native-query/provenance.json",
+    "stage": "native",
+    "commands": [
+      {
+        "label": "native",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "sqlite_public",
+          "--test",
+          "security_sf05_native"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 9,
+        "observed_test_blocks": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            8,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 35.09210974900634,
+        "raw_log_sha256": "16db6a165cc8833f3a5f90102ae1b81a82c96398f4de06738cf8983c375e6a9b"
+      }
+    ]
+  },
+  {
+    "artifact": "final-scoped/provenance.json",
+    "stage": "scoped",
+    "commands": [
+      {
+        "label": "constructor-delta",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "security_sf05"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 12,
+        "observed_test_blocks": [
+          [
+            12,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 1.3354328210116364,
+        "raw_log_sha256": "f8782893fe75c1f61ce2ac3e479c1e23d3ab398ff0bbd291446c595712a7eb6a"
+      },
+      {
+        "label": "constructor-engine-free",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--no-default-features",
+          "--test",
+          "security_sf05"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 12,
+        "observed_test_blocks": [
+          [
+            12,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 1.2348970530438237,
+        "raw_log_sha256": "81657bdff17dc2446c156f667bebf3202e7f0eeb016d48d18da5d8c66616a23e"
+      },
+      {
+        "label": "restore-default-compiler",
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "-p",
+          "nagic"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 0,
+        "observed_test_blocks": [],
+        "accepted": true,
+        "seconds": 0.10462509200442582,
+        "raw_log_sha256": "9ddcb7a97f3589835ba8f354c41d25b0a805bd5f85ddbccaff009e6f6dc7236c"
+      },
+      {
+        "label": "fmt",
+        "command": [
+          "cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 0,
+        "observed_test_blocks": [],
+        "accepted": true,
+        "seconds": 1.727541811997071,
+        "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ]
+  },
+  {
+    "artifact": "first-compiler-green/provenance.json",
+    "stage": "compiler",
+    "commands": [
+      {
+        "label": "compiler",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "security_sf05",
+          "--test",
+          "resource_contract_characterization",
+          "--test",
+          "sql_check"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 4,
+        "observed_test_blocks": [
+          [
+            2,
+            2,
+            0
+          ]
+        ],
+        "accepted": false,
+        "seconds": 10.269979990000138,
+        "raw_log_sha256": "f617554445e3471e0eac8772db66acc217996545b2c45fd09029e4a6fb0afd48"
+      }
+    ]
+  },
+  {
+    "artifact": "first-native-check/provenance.json",
+    "stage": "native",
+    "commands": [
+      {
+        "label": "native",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "sqlite_public",
+          "--test",
+          "security_sf05_native"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 9,
+        "observed_test_blocks": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            7,
+            1,
+            0
+          ]
+        ],
+        "accepted": false,
+        "seconds": 22.91959091401077,
+        "raw_log_sha256": "7f5ae241f42b661ea449ccb76f460a3add44b803ac1d3bef02e8527606a28174"
+      }
+    ]
+  },
+  {
+    "artifact": "full-canonical-regression/provenance.json",
+    "stage": "full",
+    "commands": [
+      {
+        "label": "workspace",
+        "command": [
+          "cargo",
+          "test",
+          "--locked"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 565,
+        "observed_test_blocks": [
+          [
+            230,
+            0,
+            1
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            128,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            12,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            6,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ],
+          [
+            30,
+            0,
+            0
+          ],
+          [
+            23,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            12,
+            0,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ],
+          [
+            7,
+            0,
+            0
+          ],
+          [
+            16,
+            0,
+            0
+          ],
+          [
+            4,
+            0,
+            0
+          ],
+          [
+            6,
+            0,
+            0
+          ],
+          [
+            10,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            8,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            12,
+            1,
+            0
+          ]
+        ],
+        "accepted": false,
+        "seconds": 378.9575493349985,
+        "raw_log_sha256": "8d34efa58e5c1a4e79ff7ae8bacbd383f47423f0f2af97dca75519b704dffe25"
+      }
+    ]
+  },
+  {
+    "artifact": "full-inventory-pass/provenance.json",
+    "stage": "full",
+    "commands": [
+      {
+        "label": "workspace",
+        "command": [
+          "cargo",
+          "test",
+          "--locked"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 363,
+        "observed_test_blocks": [
+          [
+            230,
+            0,
+            1
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            3,
+            0,
+            0
+          ],
+          [
+            127,
+            1,
+            0
+          ]
+        ],
+        "accepted": false,
+        "seconds": 60.89949916099431,
+        "raw_log_sha256": "2ad0868a192e3c2c2f245273daf0e3eb4b5dc92365c5c8f931ade399607825f7"
+      }
+    ]
+  },
+  {
+    "artifact": "http-business/provenance.json",
+    "command": [
+      "python",
+      "benchmarks/security-sf05/http_examples.py"
+    ],
+    "exit": 1,
+    "accepted": false,
+    "seconds": 17.886135744978674,
+    "markers": {
+      "84 business checks": false
+    },
+    "raw_log_sha256": "21a43bbac7ad48750f14306d78d442a4c7be075d1a74d7c478bd8d0e6b3f904e"
+  },
+  {
+    "artifact": "http-business-complete/provenance.json",
+    "command": [
+      "python",
+      "benchmarks/security-sf05/http_examples.py",
+      "--out",
+      "build/sf05-http-examples-complete"
+    ],
+    "exit": 1,
+    "accepted": false,
+    "seconds": 58.12790847098222,
+    "markers": {
+      "84 business checks": false
+    },
+    "raw_log_sha256": "d35d5af22c791992d9291ea6497dd87bb64fc6d3f730886d96e9b7ef1e554242"
+  },
+  {
+    "artifact": "http-business-final/provenance.json",
+    "command": [
+      "python",
+      "benchmarks/security-sf05/http_examples.py"
+    ],
+    "exit": 1,
+    "accepted": false,
+    "seconds": 28.02033556503011,
+    "markers": {
+      "84 business checks": false
+    },
+    "raw_log_sha256": "dce6de8b79696334e30e4341bac1f9cdbd3dcc80c43b329c8b3d94fa6eae182d"
+  },
+  {
+    "artifact": "http-business-final-closure/provenance.json",
+    "command": [
+      "python",
+      "benchmarks/security-sf05/http_examples.py",
+      "--only",
+      "tasks",
+      "result-api",
+      "--out",
+      "build/sf05-http-examples-final-closure"
+    ],
+    "exit": 0,
+    "accepted": true,
+    "seconds": 57.27201154100476,
+    "markers": {
+      "48 business checks": true
+    },
+    "raw_log_sha256": "52e8aadedb5fe2c70e290add685d5e81867d79d82c9f99aa79c1ade3f22e7024"
+  },
+  {
+    "artifact": "http-business-import-closure/provenance.json",
+    "command": [
+      "python",
+      "benchmarks/security-sf05/http_examples.py",
+      "--only",
+      "tasks",
+      "result-api",
+      "--out",
+      "build/sf05-http-examples-import-closure"
+    ],
+    "exit": 1,
+    "accepted": false,
+    "seconds": 16.263511414988898,
+    "markers": {
+      "48 business checks": false
+    },
+    "raw_log_sha256": "d587c584d493e20d18524a6a7822480ab6433e6088bc4a52222455a1952460b8"
+  },
+  {
+    "artifact": "http-business-remaining/provenance.json",
+    "command": [
+      "python",
+      "benchmarks/security-sf05/http_examples.py",
+      "--only",
+      "tasks",
+      "result-api",
+      "--out",
+      "build/sf05-http-examples-remaining"
+    ],
+    "exit": 1,
+    "accepted": false,
+    "seconds": 0.1351835560053587,
+    "markers": {
+      "48 business checks": false
+    },
+    "raw_log_sha256": "a6a04006c16a50a918b423e365e83ddef7e0a29aee289e8dfd8442758a921b3f"
+  },
+  {
+    "artifact": "initial-red-provenance/provenance.json",
+    "stage": "red",
+    "commands": [
+      {
+        "label": "compiler-red",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "security_sf05",
+          "--",
+          "--nocapture"
+        ],
+        "exit": 101,
+        "expected_exit": 101,
+        "executed_tests": 4,
+        "observed_test_blocks": [
+          [
+            0,
+            4,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 0.16687230800744146,
+        "raw_log_sha256": "e958e327ec00ae19a376f6f2c4c0731fc79de23ba3e636e0fcb39c8c11d3d968"
+      }
+    ]
+  },
+  {
+    "artifact": "isolated-sql/provenance.json",
+    "command": [
+      "python",
+      "benchmarks/security-sf05/isolated_check.py"
+    ],
+    "exit": 0,
+    "accepted": true,
+    "seconds": 1.1977274949895218,
+    "markers": {
+      "no Cargo/runtime": true
+    },
+    "raw_log_sha256": "3631987403e72ee2767df0c310b0992fc969ce1c7ff7521227a89f85f0ed2a4e"
+  },
+  {
+    "artifact": "native-admission-check/provenance.json",
+    "stage": "runtime",
+    "commands": [
+      {
+        "label": "runtime",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagi-runtime",
+          "--lib",
+          "sqlite::"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 78,
+        "observed_test_blocks": [
+          [
+            78,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 15.504112239985261,
+        "raw_log_sha256": "3bca71903dbc34436f3eb972ccadede726503a81c6be6859f1ea2c7aa4b7fea6"
+      },
+      {
+        "label": "public",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagi-runtime",
+          "--test",
+          "sqlite_public_api"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 1,
+        "observed_test_blocks": [
+          [
+            1,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 2.7305298629798926,
+        "raw_log_sha256": "aad96e936879d30563d35bba73aeeef12980634ec806fbcae229514a0bd8c863"
+      }
+    ]
+  },
+  {
+    "artifact": "quality/provenance.json",
+    "stage": "quality",
+    "commands": [
+      {
+        "label": "fmt",
+        "command": [
+          "cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 0,
+        "observed_test_blocks": [],
+        "accepted": true,
+        "seconds": 1.2024487430171575,
+        "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "clippy",
+        "command": [
+          "cargo",
+          "clippy",
+          "--locked",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 0,
+        "observed_test_blocks": [],
+        "accepted": true,
+        "seconds": 20.20625387498876,
+        "raw_log_sha256": "d78d183971904c1f00b3b24fab139be2f696e364b9ec52ed8e6d9dc84f295b5c"
+      },
+      {
+        "label": "fuzz",
+        "command": [
+          "cargo",
+          "run",
+          "--locked",
+          "-p",
+          "nagic",
+          "--example",
+          "fuzz-smoke"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 0,
+        "observed_test_blocks": [],
+        "accepted": true,
+        "seconds": 2.7926217149943113,
+        "raw_log_sha256": "779ca505aae2d5a00b49890c4ca3d88f5db67d9665693e6c525dac046b7a2b0f"
+      }
+    ]
+  },
+  {
+    "artifact": "query-check-after-origins/provenance.json",
+    "stage": "compiler",
+    "commands": [
+      {
+        "label": "security",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "security_sf05"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 12,
+        "observed_test_blocks": [
+          [
+            11,
+            1,
+            0
+          ]
+        ],
+        "accepted": false,
+        "seconds": 8.565909900004044,
+        "raw_log_sha256": "b2bd483499f82d0475718bb17fce336b394453e429fbba1ad977969058d58e4a"
+      },
+      {
+        "label": "registry",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "resource_contract_characterization"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 4,
+        "observed_test_blocks": [
+          [
+            4,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 0.43910916399909183,
+        "raw_log_sha256": "7ff07550c5551d4e1c3775f1468cbfef73015e15beedb9fdd8c3d1abd725504a"
+      },
+      {
+        "label": "sql",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "sql_check"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 14,
+        "observed_test_blocks": [
+          [
+            3,
+            11,
+            0
+          ]
+        ],
+        "accepted": false,
+        "seconds": 0.569296999979997,
+        "raw_log_sha256": "c1c954d40b108ee8ad35cb415b2e3730e544e865dfe5102cd24937b4c00842f4"
+      }
+    ]
+  },
+  {
+    "artifact": "query-compiler-check/provenance.json",
+    "stage": "compiler",
+    "commands": [
+      {
+        "label": "security",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "security_sf05"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 12,
+        "observed_test_blocks": [
+          [
+            11,
+            1,
+            0
+          ]
+        ],
+        "accepted": false,
+        "seconds": 0.45014205199549906,
+        "raw_log_sha256": "06ce91c9c50122cd03b15c9e1fd0dc6c85135cba2fa271a9e27e042b7c97977a"
+      },
+      {
+        "label": "registry",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "resource_contract_characterization"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 4,
+        "observed_test_blocks": [
+          [
+            2,
+            2,
+            0
+          ]
+        ],
+        "accepted": false,
+        "seconds": 0.792947567999363,
+        "raw_log_sha256": "02bd2cc6d83daa1f24f1dd4a8c6c8898c7f02a68e55b16f9b26814c2d0ea8790"
+      },
+      {
+        "label": "sql",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "sql_check"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 14,
+        "observed_test_blocks": [
+          [
+            3,
+            11,
+            0
+          ]
+        ],
+        "accepted": false,
+        "seconds": 0.32800792198395357,
+        "raw_log_sha256": "d7b71bb259af48fe503f9817d897e5a0e8f8552447372e7a6cabaf209f9b116a"
+      }
+    ]
+  },
+  {
+    "artifact": "query-cost/provenance.json",
+    "command": [
+      "python",
+      "benchmarks/security-sf05/cost_check.py"
+    ],
+    "exit": 1,
+    "accepted": false,
+    "seconds": 1.2497979800100438,
+    "markers": {
+      "no performance threshold": false
+    },
+    "raw_log_sha256": "d34f447b2842cefb4e13fe07bc0ece418c21603cd0fb6e057d53dff56db18aab"
+  },
+  {
+    "artifact": "query-cost-outside/provenance.json",
+    "command": [
+      "python",
+      "benchmarks/security-sf05/cost_check.py"
+    ],
+    "exit": 0,
+    "accepted": true,
+    "seconds": 142.90331922098994,
+    "markers": {
+      "no performance threshold": true
+    },
+    "raw_log_sha256": "8125970edd00e349a05a3465eaa041f11a4de0737a1a86cbc5ad447b4fc38748"
+  },
+  {
+    "artifact": "runtime-query-check/provenance.json",
+    "stage": "runtime",
+    "commands": [
+      {
+        "label": "runtime",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagi-runtime",
+          "--lib",
+          "sqlite::"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 73,
+        "observed_test_blocks": [
+          [
+            73,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 16.999319819995435,
+        "raw_log_sha256": "bad9e068b09248452faa708bc4c9c1986bec1ccef73f78e56b4492ef596b69d2"
+      },
+      {
+        "label": "public",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagi-runtime",
+          "--test",
+          "sqlite_public_api"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 1,
+        "observed_test_blocks": [
+          [
+            1,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 3.0250792689912487,
+        "raw_log_sha256": "f10c53c161d472cf314d260c8aa8effe4858d1d8cc6af3fca72e4dae0ef33680"
+      }
+    ]
+  },
+  {
+    "artifact": "sql-lib-canonical-only/provenance.json",
+    "stage": "sql-lib",
+    "commands": [
+      {
+        "label": "sql-lib",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--lib",
+          "sql_check::"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 26,
+        "observed_test_blocks": [
+          [
+            26,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 15.130862503981916,
+        "raw_log_sha256": "de873ff30dd95e7a6d502550e85252033d3604bc151a7f82757509ed72162e5e"
+      }
+    ]
+  },
+  {
+    "artifact": "sql-lib-checked-plan/provenance.json",
+    "stage": "sql-lib",
+    "commands": [
+      {
+        "label": "sql-lib",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--lib",
+          "sql_check::"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 26,
+        "observed_test_blocks": [
+          [
+            24,
+            2,
+            0
+          ]
+        ],
+        "accepted": false,
+        "seconds": 17.46467361599207,
+        "raw_log_sha256": "e551a3cbd6d2cdccf2f1665e8edf9753ce2dabb203e781748f0ac861cc83554e"
+      }
+    ]
+  },
+  {
+    "artifact": "sql-lib-migration-check/provenance.json",
+    "stage": "sql-lib",
+    "commands": [
+      {
+        "label": "sql-lib",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--lib",
+          "sql_check::"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 0,
+        "observed_test_blocks": [],
+        "accepted": false,
+        "seconds": 4.420283979998203,
+        "raw_log_sha256": "d943cc65e12ea931679db1bbb8090e42ebdce753b39bde41bd65872479fdfafb"
+      }
+    ]
+  },
+  {
+    "artifact": "sql-optin-migration-check/provenance.json",
+    "stage": "compiler",
+    "commands": [
+      {
+        "label": "security",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "security_sf05"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 12,
+        "observed_test_blocks": [
+          [
+            12,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 8.52731095100171,
+        "raw_log_sha256": "862555e50c3c301d250d9abc14d8d720a8cdfad6bc8d3f45d658a60c2afffcb0"
+      },
+      {
+        "label": "registry",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "resource_contract_characterization"
+        ],
+        "exit": 0,
+        "expected_exit": 0,
+        "executed_tests": 4,
+        "observed_test_blocks": [
+          [
+            4,
+            0,
+            0
+          ]
+        ],
+        "accepted": true,
+        "seconds": 0.43594645100529306,
+        "raw_log_sha256": "0953f6a0df0fdfdd2a7146dd690d0394769d4aaf3b2059e1e911811dfde0a489"
+      },
+      {
+        "label": "sql",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nagic",
+          "--test",
+          "sql_check"
+        ],
+        "exit": 101,
+        "expected_exit": 0,
+        "executed_tests": 14,
+        "observed_test_blocks": [
+          [
+            12,
+            2,
+            0
+          ]
+        ],
+        "accepted": false,
+        "seconds": 5.793834014009917,
+        "raw_log_sha256": "d4953082d32e91a970eefe724dfe1d123576aa39686085ebcb4690beaea12cea"
+      }
+    ]
+  },
+  {
+    "artifact": "sqlite-tutorial/provenance.json",
+    "command": [
+      "python",
+      "scripts/verify_sqlite_example.py",
+      "--compiler",
+      "/workspace/nagi-sf01-target/debug/nagic"
+    ],
+    "exit": 0,
+    "accepted": true,
+    "seconds": 8.241375840036198,
+    "markers": {
+      "independent saved Low check/build/native passed": true
+    },
+    "raw_log_sha256": "e247f1beb189e3925e67c29ca1fef3a0ab9605c9314c19718a55ef6bff4ccc37"
+  }
+]

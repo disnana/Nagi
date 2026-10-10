@@ -66,7 +66,7 @@ An actor defaults to 64 accepted messages, including work in progress, and a 1Mi
 
 `call` has a `mailbox_ms` admission deadline and a `reply_ms` deadline after acceptance. An accepted update may continue after its reply times out. Use idempotency keys or query the outcome before retrying a write.
 
-Message and reply types cannot contain Map, views, shared values, or native resources. Initialization data and actor state can contain resources such as Db when ownership and Rust `Send`/`Sync` requirements are met. A public API for registering arbitrary Rust resource types in Nagi is not implemented.
+Message and reply types cannot contain Map, views, shared values, or native resources. Initialization data and actor state can contain resources such as sqlite.Pool when ownership and Rust `Send`/`Sync` requirements are met. A public API for registering arbitrary Rust resource types in Nagi is not implemented.
 
 Allowing shared messages that meet explicit conditions is an adopted future direction, not part of the current accepted types. Detailed design must cover thread safety, capacity charging, retained resources, and values escaping through replies. Distinguish the actor's own state from explicitly shared external resources such as a database. See [DESIGN](../../DESIGN.en.md) for the boundaries.
 

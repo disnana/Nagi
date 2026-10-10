@@ -31,9 +31,9 @@ Nagiの`check`が検査するのは宣言と呼び出しです。Rustの関数�
 
 引数に同期関数の型を宣言すると、Nagiの関数をRustへ渡せます。[自作HTTP基盤](../test-nagi-code/library-examples/custom-http/README.md)はこの方法を使います。
 
-HTTPの受付と停止はRustのAxum/Tokio、応答を作る関数はNagiが担当します。Nagiの組み込み`serve`やDbを使わずに、Rust側の基盤にアプリの処理を渡す例です。
+HTTPの受付と停止はRustのAxum/Tokio、応答を作る関数はNagiが担当します。Nagiの組み込み`serve`やsqlite.Poolを使わずに、Rust側の基盤にアプリの処理を渡す例です。
 
-このサーバーには、Nagiの組み込みHTTPサーバーの制限が自動で適用されません。サンプルが設定する上限はREADMEに記載しています。また、現在の生成アプリは共通ランタイムへ依存するため、Dbを呼ばないプログラムでもビルド時のSQLite依存は残ります。
+このサーバーには、Nagiの組み込みHTTPサーバーの制限が自動で適用されません。サンプルが設定する上限はREADMEに記載しています。また、現在の生成アプリは共通ランタイムへ依存するため、sqlite.Poolを呼ばないプログラムでもビルド時のSQLite依存は残ります。
 
 ## Highの実装をLowへ置き換える
 

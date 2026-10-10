@@ -1,5 +1,11 @@
 //! Public lexical native session core; test-only Driver reuses this same implementation.
-use crate::{database::indices, FromRow, Sql};
+use crate::{database::indices, FromRow};
+
+pub(super) enum Sql {
+    Static(&'static str),
+    #[cfg(test)]
+    Owned(String),
+}
 use rusqlite::{
     hooks::{AuthAction, AuthContext, Authorization},
     params_from_iter,
@@ -515,6 +521,8 @@ enum Command {
 /// ```
 pub struct Tx {
     sender: mpsc::Sender<Command>,
+    #[cfg(test)]
+    enqueues: Arc<std::sync::atomic::AtomicUsize>,
 }
 #[cfg(test)]
 impl std::fmt::Debug for Tx {
@@ -525,7 +533,53 @@ impl std::fmt::Debug for Tx {
 fn reply_lost() -> Failure {
     Failure::primary(Kind::ReplyLost, Outcome::Unknown, "session reply lost")
 }
+/// Rust host boundary for a reviewed protected-operation adapter. Capacity is
+/// reserved before Grant.submit checks its request lease. This value is neither
+/// an authorization proof nor a guarantee that the chosen SQL has a predicate.
+/// It borrows the affine transaction and cannot be cloned.
+pub struct ExecReservation<'a> {
+    permit: mpsc::Permit<'a, Command>,
+    #[cfg(test)]
+    enqueues: Arc<std::sync::atomic::AtomicUsize>,
+}
+impl ExecReservation<'_> {
+    /// Synchronously enqueue exactly once, then return only the reply future.
+    /// In a protected adapter call this inside Grant.submit using its supplied
+    /// subject/target as bound values of the reviewed owner/tenant predicate.
+    /// Later cancellation cannot undo the admitted SQL command.
+    pub fn enqueue(
+        self,
+        query: super::Query,
+        parameters: super::Parameters,
+    ) -> impl std::future::Future<Output = Result<i64, Failure>> + Send + 'static {
+        let (reply, receiver) = oneshot::channel();
+        self.permit.send(Command::Exec {
+            sql: Sql::Static(query.0),
+            values: parameters.0,
+            reply,
+        });
+        #[cfg(test)]
+        self.enqueues.fetch_add(1, Ordering::SeqCst);
+        async move { receiver.await.map_err(|_| reply_lost())? }
+    }
+}
 impl Tx {
+    /// Trusted Rust adapter only; Nagi exposes no generic Grant-aware query.
+    /// Waiting for finite queue capacity is not native admission. Drop releases
+    /// an unused reservation. Use Grant.submit after this await and enqueue in
+    /// its synchronous callback, rather than returning deferred submission.
+    pub async fn reserve_exec(&self) -> Result<ExecReservation<'_>, Failure> {
+        let permit = self.sender.reserve().await.map_err(|_| reply_lost())?;
+        Ok(ExecReservation {
+            permit,
+            #[cfg(test)]
+            enqueues: Arc::clone(&self.enqueues),
+        })
+    }
+    #[cfg(test)]
+    pub(super) fn enqueued_execs(&self) -> usize {
+        self.enqueues.load(Ordering::SeqCst)
+    }
     #[cfg(test)]
     pub(super) async fn exec(&self, sql: &str, values: Vec<Value>) -> Result<i64, Failure> {
         self.exec_sql(Sql::Owned(sql.to_owned()), values).await
@@ -624,6 +678,7 @@ impl Tx {
 fn sql_ref(sql: &Sql) -> &str {
     match sql {
         Sql::Static(s) => s,
+        #[cfg(test)]
         Sql::Owned(s) => s,
     }
 }
@@ -802,7 +857,11 @@ fn run_session(
         if let Some(gate) = &config.begin_gate {
             gate.block_once();
         }
-        let _ = request.reply.send(Ok(Tx { sender }));
+        let _ = request.reply.send(Ok(Tx {
+            sender,
+            #[cfg(test)]
+            enqueues: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        }));
         let mut terminal_reply = None;
         let mut outcome = Outcome::Active;
         let result = catch_unwind(AssertUnwindSafe(|| {

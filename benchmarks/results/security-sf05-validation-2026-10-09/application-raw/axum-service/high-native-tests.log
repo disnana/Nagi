@@ -1,0 +1,16 @@
+
+running 8 tests
+test native::tests::cancelling_missing_content_type_drops_pending_read ... ok
+test native::tests::missing_content_type_handler_applies_the_read_limit_and_original_rejection ... ok
+test native::tests::missing_content_type_keeps_415_on_read_error_and_drops_read ... ok
+test native::tests::missing_content_type_keeps_415_on_size_limit_and_drops_read ... ok
+test native::tests::missing_content_type_reads_eof_and_4096_without_forcing_close ... ok
+test native::tests::missing_content_type_waits_for_eof_before_returning_415 ... ok
+test native::tests::present_content_type_retains_json_and_business_responses ... ok
+test native::tests::missing_content_type_deadline_keeps_415_and_drops_pending_read ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s
+
+   Compiling nagi-main-5831edbc6a0d20ad v0.1.0 (/workspace/Nagi-security-sf05/build/application-example-verification/axum-service/high/.nagi/apps/nagi-main-5831edbc6a0d20ad/generations/g-e078c-18dce7d45bbf3778-0)
+    Finished `release` profile [optimized] target(s) in 4.22s
+     Running unittests src/main.rs (/workspace/nagi-sf01-native-target/release/deps/nagi_5831edbc6a0d20ad_g_e078c_18dce7d45bbf3778_0-0e11e27f0ebb79e0)

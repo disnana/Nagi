@@ -1,11 +1,11 @@
 import std.db.sqlite as sqlite;
 record Nested { id: i64; }
 record Row { child: Nested; }
-async fn legacy(db: Db) -> Result[unit, Error] {
-    let rows: List[Row] = try await db_all[Row](db, "SELECT child FROM items");
-    return ok(print(0));
-}
+# Previous Db manual-row entry is retired in SF05.
+# Previous Db manual-row entry is retired in SF05.
+# Previous Db manual-row entry is retired in SF05.
+# Previous Db manual-row entry is retired in SF05.
 async fn invalid(tx: sqlite.Tx) -> Result[unit, sqlite.Failure] {
-    let rows: List[Row] = try await sqlite.all[Row](tx, "SELECT child FROM items", sqlite.parameters());
+    let rows: List[Row] = try await sqlite.all[Row](tx, sqlite.literal("SELECT child FROM items"), sqlite.parameters());
     return await sqlite.rollback(tx);
 }

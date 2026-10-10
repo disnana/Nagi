@@ -1,0 +1,16 @@
+[package]
+name = "nagi-sqlite-cost-manual"
+version = "0.0.0"
+edition = "2021"
+[lib]
+name = "sqlite_cost"
+path = "lib.rs"
+[[bin]]
+name = "sqlite-cost-manual"
+path = "main.rs"
+[dependencies]
+nagi-runtime = { path = "/workspace/Nagi-security-sf05/runtime" }
+tokio = { version = "1.48", features = ["rt-multi-thread", "time", "sync"] }
+serde_json = "1.0"
+[profile.release]
+debug = 0

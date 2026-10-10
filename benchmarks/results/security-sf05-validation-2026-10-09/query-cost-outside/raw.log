@@ -1,0 +1,7 @@
+/tmp/nagi-sf05-query-cost
+    Finished `dev` profile [unoptimized] target(s) in 0.06s
+     Running `/workspace/nagi-sf01-target/debug/examples/sqlite-public-cost /tmp/nagi-sf05-query-cost`
+
+generated: 32 literal + 32 selected samples; rollback and actual close passed
+manual: 32 literal + 32 selected samples; rollback and actual close passed
+Cost: generated and manual Query measurements passed; no performance threshold

@@ -1,0 +1,12 @@
+import std.db.sqlite as sqlite
+class Holder:
+    failure: sqlite.Failure
+def publish(problem: sqlite.Failure) -> shared[Holder]:
+    return share(Holder(failure=problem))
+def publish_direct(problem: sqlite.Failure) -> shared[sqlite.Failure]:
+    return share(problem)
+def publish_option(problem: sqlite.Failure) -> shared[Option[sqlite.Failure]]:
+    return share(some(problem))
+def publish_result(problem: sqlite.Failure) -> shared[Result[i64, sqlite.Failure]]:
+    wrapped: Result[i64, sqlite.Failure] = fail(problem)
+    return share(wrapped)

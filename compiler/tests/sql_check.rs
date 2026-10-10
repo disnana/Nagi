@@ -104,7 +104,7 @@ mod enabled {
 
     fn row_program(body: &str) -> String {
         format!(
-            "class User:\n    id: i64\n    name: str\n\nasync def query(db: Db) -> Result[unit, Error]:\n{body}\n    return ok(print(1))\n\ndef main():\n    print(0)\n"
+            "import std.db.sqlite as sqlite\nclass User:\n    id: i64\n    name: str\n\nasync def query(db: view[sqlite.Tx]) -> Result[unit, sqlite.Failure]:\n{body}\n    return ok(print(1))\n\ndef main():\n    print(0)\n"
         )
     }
 
@@ -136,7 +136,7 @@ mod enabled {
     #[test]
     fn sqlite_public_literal_shape_columns_and_unknown_bind_count_use_source_origins() {
         let fixture = Fixture::new();
-        let good = "import std.db.sqlite as sqlite\nclass Row:\n    id: i64\n    name: str\nasync def read(tx: sqlite.Tx, sql: str) -> Result[unit, sqlite.Failure]:\n    row = try await sqlite.query[Row](tx, \"SELECT id,name FROM users WHERE id=?\", sqlite.parameters())\n    rows = try await sqlite.all[Row](tx, sql, sqlite.parameters())\n    count = try await sqlite.exec(tx, \"CREATE TABLE prepared_only(id INTEGER)\", sqlite.parameters())\n    return await sqlite.rollback(tx)\n";
+        let good = "import std.db.sqlite as sqlite\nclass Row:\n    id: i64\n    name: str\nasync def read(tx: sqlite.Tx, sql: sqlite.Query, params: sqlite.Parameters) -> Result[unit, sqlite.Failure]:\n    row = try await sqlite.query[Row](tx, sqlite.literal(\"SELECT id,name FROM users WHERE id=?\"), params)\n    rows = try await sqlite.all[Row](tx, sql, sqlite.parameters())\n    count = try await sqlite.exec(tx, sqlite.literal(\"CREATE TABLE prepared_only(id INTEGER)\"), sqlite.parameters())\n    return await sqlite.rollback(tx)\n";
         write_high_and_independent_low(&fixture, good);
         for source in ["main.nagi", "saved.low"] {
             let output = fixture.sql_check(source);
@@ -152,7 +152,7 @@ mod enabled {
                 "{diagnostic}"
             );
             assert!(
-                diagnostic.contains("dynamic SQL is checked at runtime"),
+                diagnostic.contains("Query structure is not statically available"),
                 "{diagnostic}"
             );
         }
@@ -199,7 +199,7 @@ mod enabled {
     fn schema_check_is_opt_in_and_reports_bad_columns_in_high_and_saved_low() {
         let fixture = Fixture::new();
         let high = row_program(
-            "    rows = try await db_all[User](db, \"SELECT id, naem AS name FROM users\")",
+            "    rows = try await sqlite.all[User](db, sqlite.literal(\"SELECT id, naem AS name FROM users\"), sqlite.parameters())",
         );
         let low = write_high_and_independent_low(&fixture, &high);
         for (name, text) in [("main.nagi", &high), ("saved.low", &low)] {
@@ -218,15 +218,15 @@ mod enabled {
     fn missing_return_columns_and_wrong_bind_count_use_query_source_lines() {
         for (body, needle) in [
             (
-                "    rows = try await db_all[User](db, \"SELECT id FROM users\")",
+                "    rows = try await sqlite.all[User](db, sqlite.literal(\"SELECT id FROM users\"), sqlite.parameters())",
                 "name",
             ),
             (
-                "    row = try await db_query[User](db, \"SELECT id, name FROM users\", 7)",
+                "    row = try await sqlite.query[User](db, sqlite.literal(\"SELECT id, name FROM users\"), sqlite.bind_i64(sqlite.parameters(), 7))",
                 "bind",
             ),
             (
-                "    row = try await db_query[User](db, \"SELECT id, name FROM users WHERE id = ?5\", 7)",
+                "    row = try await sqlite.query[User](db, sqlite.literal(\"SELECT id, name FROM users WHERE id = ? OR age = ?\"), sqlite.bind_i64(sqlite.parameters(), 7))",
                 "bind",
             ),
         ] {
@@ -242,10 +242,10 @@ mod enabled {
     }
 
     #[test]
-    fn aliases_case_reordering_extra_columns_and_reused_numbered_bind_are_valid() {
+    fn aliases_case_reordering_extra_columns_and_repeated_bound_values_are_valid() {
         for body in [
-            "    rows = try await db_all[User](db, \"SELECT upper(name) AS NAME, id AS ID, age FROM users\")",
-            "    row = try await db_query[User](db, \"SELECT name, id FROM users WHERE id = ?1 OR age = ?1\", 7)",
+            "    rows = try await sqlite.all[User](db, sqlite.literal(\"SELECT upper(name) AS NAME, id AS ID, age FROM users\"), sqlite.parameters())",
+            "    row = try await sqlite.query[User](db, sqlite.literal(\"SELECT name, id FROM users WHERE id = ? OR age = ?\"), sqlite.bind_i64(sqlite.bind_i64(sqlite.parameters(), 7), 7))",
         ] {
             let fixture = Fixture::new();
             let high = row_program(body);
@@ -266,7 +266,7 @@ mod enabled {
             "CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT NOT NULL, age INTEGER, CHECK(0));\n",
         );
         let high = row_program(
-            "    inserted = try await db_insert[User](db, \"INSERT INTO users(name, age) VALUES (?1, ?2) RETURNING name, id\", \"alice\", 18)\n    updated = try await db_update[User](db, \"UPDATE users SET name = ?2, age = ?3 WHERE id = ?1 RETURNING id, name\", 1, \"bob\", 20)\n    deleted = try await db_write(db, \"DELETE FROM users WHERE id = ?1\", 1)",
+            "    inserted = try await sqlite.exec(db, sqlite.literal(\"INSERT INTO users(name, age) VALUES (?, ?)\"), sqlite.bind_i64(sqlite.bind_text(sqlite.parameters(), \"alice\"), 18))\n    updated = try await sqlite.exec(db, sqlite.literal(\"UPDATE users SET name = ?, age = ? WHERE id = ?\"), sqlite.bind_i64(sqlite.bind_text(sqlite.bind_i64(sqlite.parameters(), 1), \"bob\"), 20))\n    deleted = try await sqlite.exec(db, sqlite.literal(\"DELETE FROM users WHERE id = ?\"), sqlite.bind_i64(sqlite.parameters(), 1))",
         );
         write_high_and_independent_low(&fixture, &high);
         for name in ["main.nagi", "saved.low"] {
@@ -280,11 +280,11 @@ mod enabled {
     #[test]
     fn helper_statement_kind_and_single_statement_contracts_are_checked() {
         for body in [
-            "    inserted = try await db_insert[User](db, \"SELECT 1 AS id, ?1 AS name, ?2 AS age\", \"alice\", 18)",
-            "    updated = try await db_update[User](db, \"SELECT ?1 AS id, ?2 AS name, ?3 AS age\", 1, \"bob\", 18)",
-            "    rows = try await db_all[User](db, \"SELECT id, name FROM users; SELECT id, name FROM users\")",
-            "    deleted = try await db_write(db, \"DELETE FROM users WHERE id = ?1 RETURNING id\", 1)",
-            "    deleted = try await db_write(db, \"SELECT ?1\", 1)",
+            "    inserted = try await sqlite.exec(db, sqlite.literal(\"SELECT 1 AS id, ? AS name, ? AS age\"), sqlite.bind_i64(sqlite.bind_text(sqlite.parameters(), \"alice\"), 18))",
+            "    updated = try await sqlite.exec(db, sqlite.literal(\"SELECT ? AS id, ? AS name, ? AS age\"), sqlite.bind_i64(sqlite.bind_text(sqlite.bind_i64(sqlite.parameters(), 1), \"bob\"), 18))",
+            "    rows = try await sqlite.all[User](db, sqlite.literal(\"SELECT id, name FROM users; SELECT id, name FROM users\"), sqlite.parameters())",
+            "    deleted = try await sqlite.exec(db, sqlite.literal(\"DELETE FROM users WHERE id = ? RETURNING id\"), sqlite.bind_i64(sqlite.parameters(), 1))",
+            "    deleted = try await sqlite.exec(db, sqlite.literal(\"SELECT ?\"), sqlite.bind_i64(sqlite.parameters(), 1))",
         ] {
             let fixture = Fixture::new();
             let high = row_program(body);
@@ -297,19 +297,15 @@ mod enabled {
     }
 
     #[test]
-    fn dynamic_sql_and_db_exec_are_reported_as_runtime_checks() {
+    fn query_values_are_reported_as_runtime_structure_checks() {
         let fixture = Fixture::new();
-        let high = row_program(
-            "    sql = \"SELECT id, name FROM users\"\n    rows = try await db_all[User](db, sql)\n    changed = try await db_exec(db, \"CREATE TABLE local_table(id INTEGER); DELETE FROM users\")\n    literal = try await db_all[User](db, \"SELECT id, name FROM users\")",
-        );
+        let high=row_program("    selected = sqlite.literal(\"SELECT id, name FROM users\")\n    rows = try await sqlite.all[User](db, selected, sqlite.parameters())\n    changed = try await sqlite.exec(db, sqlite.literal(\"CREATE TABLE local_table(id INTEGER)\"), sqlite.parameters())\n    literal = try await sqlite.all[User](db, sqlite.literal(\"SELECT id, name FROM users\"), sqlite.parameters())");
         let low = write_high_and_independent_low(&fixture, &high);
         for (name, text) in [("main.nagi", &high), ("saved.low", &low)] {
             let report = success(fixture.sql_check(name));
-            assert!(report.contains("SQL checked 1"), "{report}");
-            assert!(report.contains("2 runtime"), "{report}");
-            // Saved Low serializes the row's canonical module-qualified name.
-            diagnostic_on(&report, name, query_line(text, "](db, sql)"));
-            diagnostic_on(&report, name, query_line(text, "db_exec"));
+            assert!(report.contains("SQL checked 2"), "{report}");
+            assert!(report.contains("1 runtime"), "{report}");
+            diagnostic_on(&report, name, query_line(text, "(db, selected"));
         }
     }
 
@@ -330,14 +326,14 @@ mod enabled {
         let fixture = Fixture::new();
         fixture.write(
             "queries.nagi",
-            "class Row:\n    id: i64\nasync def users(db: Db) -> Result[List[Row], Error]:\n    return await db_all[Row](db, \"SELECT typo FROM users\")\n",
+            "import std.db.sqlite as sqlite\nclass Row:\n    id: i64\nasync def users(db: view[sqlite.Tx]) -> Result[List[Row], sqlite.Failure]:\n    return await sqlite.all[Row](db, sqlite.literal(\"SELECT typo FROM users\"), sqlite.parameters())\n",
         );
         fixture.write(
             "main.nagi",
             "import \"queries.nagi\" as queries\ndef main():\n    print(0)\n",
         );
         let diagnostic = failure(fixture.sql_check("main.nagi"));
-        diagnostic_on(&diagnostic, "queries.nagi", 4);
+        diagnostic_on(&diagnostic, "queries.nagi", 5);
         assert!(diagnostic.contains("typo"), "{diagnostic}");
     }
 
@@ -404,7 +400,7 @@ mod enabled {
         fixture.write("app/nagi.toml", "entry = 'src/main.nagi'\n");
         fixture.write(
             "app/src/main.nagi",
-            &row_program("    rows = try await db_all[User](db, \"SELECT id, name FROM users\")"),
+            &row_program("    rows = try await sqlite.all[User](db, sqlite.literal(\"SELECT id, name FROM users\"), sqlite.parameters())"),
         );
         fixture.write("app/schema.sql", "CREATE TABLE users(wrong INTEGER);\n");
         let report = success(fixture.run(&[
@@ -471,7 +467,7 @@ mod enabled {
             "SELECT readfile('outside.db') AS id, 'alice' AS name",
         ] {
             let fixture = Fixture::new();
-            let high = row_program(&format!("    rows = try await db_all[User](db, \"{sql}\")"));
+            let high = row_program(&format!("    rows = try await sqlite.all[User](db, sqlite.literal(\"{sql}\"), sqlite.parameters())"));
             write_high_and_independent_low(&fixture, &high);
             for name in ["main.nagi", "saved.low"] {
                 failure(fixture.sql_check(name));
@@ -488,7 +484,7 @@ mod enabled {
         assert!(diagnostic.contains("schema.sql"), "{diagnostic}");
         fixture.write("schema.sql", SCHEMA);
         let sql = format!("SELECT id, name FROM users /*{}*/", "x".repeat(256 * 1024));
-        let high = row_program(&format!("    rows = try await db_all[User](db, \"{sql}\")"));
+        let high = row_program(&format!("    rows = try await sqlite.all[User](db, sqlite.literal(\"{sql}\"), sqlite.parameters())"));
         write_high_and_independent_low(&fixture, &high);
         let diagnostic = failure(fixture.sql_check("main.nagi"));
         diagnostic_on(&diagnostic, "main.nagi", query_line(&high, "SELECT"));

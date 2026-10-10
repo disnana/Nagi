@@ -1,6 +1,6 @@
-# 0.2.0 SF01への移行（未リリース）
+# 0.2.0 SF01/SF05への移行（未リリース）
 
-このページは開発sourceのSF01差分です。Security Foundation全体や正式0.2.0は未リリースです。0.1.xのバイナリで新Policyを利用できるとは扱いません。変更理由は、旧HTTP/issuerの併存によるpolicy省略・無期限proofの維持を避けることです。
+このページは開発sourceのSF01/SF05差分です。Security Foundation全体や正式0.2.0は未リリースです。0.1.xのバイナリで新Policyを利用できるとは扱いません。変更理由は、旧HTTP/issuerの併存によるpolicy省略・無期限proofの維持を避けることです。
 
 | 旧API/動作 | checker診断と移行 | 同等業務の検証 |
 |---|---|---|
@@ -19,4 +19,18 @@ AuthScope/Grantの所有Option/Resultと同task async呼出しは維持します
 
 [最小HTTP](http.md) · [認証・認可と失敗表](security.md) · [API reference](http-server.md) · [移行テスト対応表](internal/security-foundation/sf01-compiler-migration-map.md)
 
-move/Task/spawnの意味論、SQLite Pool/Txの取得予算・close・actual join・Outcomeを変更しません。旧Db/dynamic SQLの一本化はSF05で、SF01へ混ぜていません。custom Rust/Axum hostは標準dispatcherの保証外のtrusted境界として残す理由を明記します。旧standard入口をそこへ自動fallbackする互換層はありません。
+move/Task/spawnの意味論、SQLite Pool/Txの取得予算・close・actual join・Outcomeを変更しません。旧Db/dynamic SQLの一本化は独立SF05で行います。custom Rust/Axum hostは標準dispatcherの保証外のtrusted境界として残す理由を明記します。旧standard入口をそこへ自動fallbackする互換層はありません。
+
+## SQLite SF05
+
+| 旧入口 | checker/Rust APIと移行 | 同等業務の検証 |
+|---|---|---|
+| Db、db_open/exec/all/query/insert/update/write | SF05 migration。runtime public Db/Sql削除。explicit Options、Pool/Tx、literal Query、Parametersへ | security_sf05のHigh/保存Low/手書きLow元位置、native NULL/owned/manual row |
+| query/all/execへstring/view | 直接literalの `sqlite.literal("...")` が返すQueryを渡す | Query保存/選択/関数返却とnative bind |
+| constructorへ変数・連結・format・動的str | 引数の元位置で拒否。値はbind、構造はreview済み有限Queryから選ぶ | alias/直接import/同名ユーザー関数の拒否・positive |
+| INSERT/UPDATE RETURNING、複数文exec | 同Txのexec＋readonly query。匿名?のSQL出現順へParametersを並べる。bootstrapはtrusted固定管理処理へ | CRUD/inventory/task/device-settings/result API native |
+| protected SQL | 実Grant subject/targetをowner/tenant predicateへbind。予約後Grant.submitで実queueへ同期enqueue | 別tenant/target0、失効先行enqueue0、受理先行の実SQL、capacity待ち中失効 |
+
+通常checkへSQL engineを必須にしません。opt-in SQLは直接QueryとParameters builder列をprepare-onlyで検査し、不明構造と実値型/NULLはruntimeへ残します。FromRowとRust固定SQLはtrusted adapter境界で、request用動的factoryを再exportしません。Session世代の同Tx検証はSF02の後続です。汎用queryへGrantを足すだけのtenant保証はありません。
+
+[SQLite](sqlite-pool.md) · [保護操作](security.md#保護sqlite操作) · [SF05契約](internal/security-foundation/sf05-contract.md)

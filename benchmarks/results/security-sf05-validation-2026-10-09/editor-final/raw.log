@@ -1,0 +1,395 @@
+✔ Actor and Turn snippets preserve all three registered type parameters (4.717758ms)
+✔ same-name standard options retain their owning namespace and return type (3.970636ms)
+✔ both module catalogs complete imports without merging their members (1.96868ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 24.310145
+
+✔ real nagi actor symbols separate modules and preserve three-parameter handles (3769.98868ms)
+✔ real low actor symbols separate modules and preserve three-parameter handles (3143.234276ms)
+✔ unsaved actor dependency constants keep their own source without writing or building (1044.607766ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7980.926626
+
+✔ nagi borrowed loop locals keep their declared type and bare insertion (6.820902ms)
+✔ nagi owned and read-only-only locals retain their existing presentation (0.726698ms)
+✔ nagi borrowed receiver fields preserve the compiler read-only contract (0.959352ms)
+✔ low borrowed loop locals keep their declared type and bare insertion (1.054661ms)
+✔ low owned and read-only-only locals retain their existing presentation (1.266027ms)
+✔ low borrowed receiver fields preserve the compiler read-only contract (0.720666ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 18.499223
+
+✔ Windows diagnostics preserve the drive and convert to zero-based line (2.123881ms)
+✔ symbol positions use UTF-16 ranges and exclude whitespace and other files (0.958919ms)
+✔ Low integration errors and process errors have usable fallback locations (0.279192ms)
+✔ Rust arguments remain separate and long Windows paths normalize (0.387274ms)
+✔ diagnostic file identities resolve symlinks and Windows path spelling (2.135522ms)
+✔ task matcher accepts Nagi frontend and mapped backend positions only (3.163297ms)
+✔ files and native paths are individual arguments with isolated check output (2.054004ms)
+✔ configured compiler paths are workspace relative; PATH remains a fallback (0.700452ms)
+✔ compiler execution does not interpret shell metacharacters (55.238885ms)
+✔ real Nagi checker diagnoses a source error (10.216547ms)
+✔ missing compiler is reported as an execution problem (2.83686ms)
+✔ timed out checker is reported as an execution problem (259.653039ms)
+✔ nearest manifest wins and project arguments delegate entry selection to nagic (4.339703ms)
+✔ real checker resolves a helper through its manifest entry rather than checking it alone (16.861777ms)
+✔ real symbol query navigates from a helper to its entry-defined function (418.001089ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 787.601298
+
+✔ enum completion includes own/imported type namespaces and never bare variants (8.345736ms)
+✔ enum type positions offer enum types and exclude variant values (1.766382ms)
+✔ unit/payload variant hover and payload signatures preserve alias-qualified spelling (2.501984ms)
+✔ nested variant declaration references resolve hover and F12 without exporting names (1.138392ms)
+✔ lexical values that shadow enum/module roots suppress type namespaces (5.431074ms)
+✔ typed failure help exposes an error value without requiring builtin Error (0.895124ms)
+✔ Result patterns have completion hover and argument help only after case (4.489263ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 32.616931
+
+✔ real nagi enum symbols preserve aliases, payload help and declaration targets (516.631869ms)
+✔ real low enum symbols preserve aliases, payload help and declaration targets (522.075134ms)
+✔ unsaved enum changes update payloads and F12 without writing source or building (429.172132ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1503.681408
+
+✔ hover preserves declared async/nullable types and class fields but skips locals, members and comments (4.670553ms)
+✔ completion works on incomplete prefixes and inserts positional calls or named class fields (1.705418ms)
+✔ type positions offer classes and type constructors rather than value calls (1.575648ms)
+✔ a class named Future completes as its declared type rather than a generic builtin (0.779106ms)
+✔ signature argument tracking ignores nested calls, strings, arrays and generic arguments (1.283408ms)
+✔ local hovers use the exact UTF-16 occurrence and file rather than a shared name (1.358494ms)
+✔ member analysis masks just the edited member and preserves UTF-16 and CRLF positions (0.211418ms)
+✔ field candidates come from the receiver occurrence and never from saved or other-file types (0.680819ms)
+✔ a trailing member binds inside try/await unless the receiver is parenthesized (0.246286ms)
+✔ builtin completion catalog matches compiler arities and required type arguments (2.452303ms)
+✔ builtin help preserves conversion, SQLite, async and callback contracts (0.415573ms)
+✔ function and nullable types complete inside all supported generic builtin contexts (0.631101ms)
+✔ completion preserves existing generic arguments and call parentheses (0.316027ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 25.318404
+
+✔ unindented Low fn, record and enum bodies keep their closing braces visible (2.478ms)
+✔ nested match, case, scope and branch bodies fold at each opening line (0.346377ms)
+✔ multiline fn and async fn draft headers join their body in one fold (2.017695ms)
+✔ strings and comments do not create or close folds (0.274838ms)
+✔ crossed, stray and unclosed delimiters cannot invent brace folds (0.203095ms)
+✔ matched call and list continuations guard bodies without separate folds (0.155589ms)
+✔ completed declarations and unrelated lines do not donate a header to another body (0.204337ms)
+✔ single-line and empty bodies are omitted and each start line has one fold (0.274668ms)
+✔ inline closing braces fold the final statement while delimiter-only closers stay visible (0.313473ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14.670004
+
+✔ High Function snippet defaults compile in their declared context (16.686833ms)
+✔ High Class snippet defaults compile in their declared context (20.743233ms)
+✔ High Enum snippet defaults compile in their declared context (13.783538ms)
+✔ High Main snippet defaults compile in their declared context (7.374383ms)
+✔ High Async main snippet defaults compile in their declared context (18.517683ms)
+✔ High HTTP server snippet defaults compile in their declared context (896.296089ms)
+✔ High GET handler snippet defaults compile in their declared context (543.684334ms)
+✔ High POST handler snippet defaults compile in their declared context (812.394048ms)
+✔ High Loop snippet defaults compile in their declared context (11.210134ms)
+✔ High Borrowed array snippet defaults compile in their declared context (14.562067ms)
+✔ High Result match snippet defaults compile in their declared context (11.794292ms)
+✔ High Nullable match snippet defaults compile in their declared context (17.143471ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2395.981218
+
+✔ real High quoted imports complete class enum and function names without calls (550.201437ms)
+✔ real High quoted imports complete class enum and function names without calls through a directory alias (478.673021ms)
+✔ real Low quoted imports complete class enum and function names without calls (461.901729ms)
+✔ real Low quoted imports complete class enum and function names without calls through a directory alias (675.524032ms)
+✔ canonical source aliases share one identity per request and refresh after a symlink changes (4.337949ms)
+✔ standard source identities remain logical IDs without filesystem lookups (2.129047ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2181.690495
+
+✔ High block headers indent one level, including main, async, match and case (6.23524ms)
+✔ else uses the matching if indentation after nested bodies and comments (0.393666ms)
+✔ first and following cases align under their nearest match (0.346203ms)
+✔ immediate Enter after else/case aligns the branch and its new body together (0.280217ms)
+✔ explicitly dedented outer branches keep their matching outer block (0.681232ms)
+✔ multiline case headers move together when colon is typed or Enter cancels it (0.311537ms)
+✔ multiline calls, lists and nested delimiters indent and align closing lines (0.332316ms)
+✔ strings, escapes and comments never create fake blocks or brackets (0.376261ms)
+✔ an unfinished string on an earlier line does not disable later indentation (0.510511ms)
+✔ indentation respects two spaces, tabs, CRLF and Low brace blocks (0.395043ms)
+✔ Low native indentation rules ignore braces in comments and escaped strings (0.97975ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 24.918395
+
+✔ real checker completes arguments, inferred locals, chains, calls, index receivers and match payloads (4778.467291ms)
+✔ real checker suppresses fields for unknown, moved, out-of-scope and wrapped values (4812.541596ms)
+✔ real unsaved High/Low imports supply local hovers and fields with UTF-16 positions (1199.926925ms)
+✔ real Low completion isolates same-line scopes, restores outer loop variables and handles CRLF (3140.52401ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13938.086421
+
+✔ checked local values replace same-name class and builtin call insertions (5.903391ms)
+✔ lexical references without local types never insert an unrelated global call (3.056835ms)
+✔ partial and saved occurrences keep global names without guessing local scopes (1.303365ms)
+✔ a resolved global constructor remains available outside the shadowing function (0.921763ms)
+✔ binding hints distinguish declaration tokens, masked text, and real value binders (2.793424ms)
+✔ real High local and parameter completions stay bare while types and constructors remain usable (992.662317ms)
+✔ real Low local and parameter completions stay bare while types and constructors remain usable (1002.301435ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2018.071741
+
+✔ Low Main snippet defaults compile in their declared context (12.469244ms)
+✔ Low File import snippet defaults compile in their declared context (9.441503ms)
+✔ Low From import snippet defaults compile in their declared context (13.100294ms)
+✔ Low Standard import snippet defaults compile in their declared context (410.516991ms)
+✔ Low Function snippet defaults compile in their declared context (14.43401ms)
+✔ Low Record snippet defaults compile in their declared context (16.136347ms)
+✔ Low Enum snippet defaults compile in their declared context (10.300706ms)
+✔ Low Replace snippet defaults compile in their declared context (11.269568ms)
+✔ Low Result match snippet defaults compile in their declared context (10.258361ms)
+✔ Low Nullable match snippet defaults compile in their declared context (12.281582ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 529.134071
+
+✔ module member completion exposes functions/classes and type positions insert only classes (8.195927ms)
+✔ qualified and renamed declarations retain structured hover/signature help (1.680396ms)
+✔ lexical alias shadowing switches completion to fields and prevents module help (1.082703ms)
+✔ spaced field chains do not borrow a module namespace (0.66665ms)
+✔ imported class and module binding tokens keep their resolved hover (1.973861ms)
+✔ quoted from imports insert names only and preserve aliases and comma-separated lists (2.596815ms)
+✔ unresolved and changed fallback import targets never offer expression completions (0.371386ms)
+✔ Low quoted imports after a same-line declaration or semicolon retain name-only insertion (0.296815ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 26.861738
+
+✔ real compiler navigation uses edited source and target positions across imports (414.824939ms)
+✔ real Low navigation keeps reassignments at their original binding and restores loop shadowing (410.505286ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 831.407731
+
+✔ unsaved canonical import diagnostics use the open alias and UTF-16 source range (37.122464ms)
+✔ closing a checked import overlay refreshes its owners and keeps unrelated errors (10.766642ms)
+✔ closing an in-flight import overlay rejects its stale result (6.520645ms)
+✔ lower build and run tasks use the registered source diagnostic matcher (9.150652ms)
+✔ standalone tasks save imported changes and leave unrelated dirty buffers untouched (20.477009ms)
+✔ project tasks save imported changes and leave unrelated dirty buffers untouched (6.952896ms)
+✔ task execution stops when an imported buffer cannot be saved (3.686844ms)
+✔ task execution stops when dirty imports cannot be resolved (3.792089ms)
+✔ saving an imported file refreshes its changed imports before launching the task (6.850295ms)
+✔ conflicting imported aliases are not saved over one another (5.968626ms)
+✔ standalone source without imports launches normally despite unrelated dirty buffers (3.893594ms)
+✔ task execution stops if the entry buffer changes while an import is saved (2.011534ms)
+✔ task execution stops if the entry changes while its own project helper is saved (2.773904ms)
+✔ task execution stops if its source closes during project saving (3.028217ms)
+✔ task execution stops if a later project save changes the dirty manifest (3.085318ms)
+✔ task execution stops if a later project save changes the already-saved manifest (3.200003ms)
+✔ task execution stops if an already-saved Rust input changes during a later project save (2.772586ms)
+✔ task execution stops if workspace trust changes during project saving (5.41948ms)
+✔ task execution stops if the nearest project changes while an import is saved (4.743761ms)
+✔ tasks suppress only the matching automatic scope and checks resume when the task ends (6.571383ms)
+✔ task launch failure releases live check suppression (5.647937ms)
+✔ project task clears checks from its helper while preserving another project (7.395642ms)
+✔ a long task permits checks of new source without reacting to other project edits (9.871602ms)
+✔ failed task diagnostics are replaced by checks and removed by source edits (8.220704ms)
+✔ manual checks inspect dirty imports outside the running task project (4.144559ms)
+✔ editing and closing imported aliases remove only their canonical task markers (3.842088ms)
+✔ typing invalidates snapshots without launching save-only checks per keystroke (8.030076ms)
+✔ known unrelated diagnostics survive repeated edits while unknown and project inputs stay conservative (10.842283ms)
+✔ known unrelated pending checks finish during edits and same-scope changes reject stale callbacks (10.268041ms)
+✔ shared imports and stale dependency snapshots still invalidate diagnosed projects (6.785601ms)
+✔ failed symbols queries still supply static builtin help without erasing source diagnostics (12.263341ms)
+✔ missing compiler keeps prefix completion, hover and signatures available (7.365049ms)
+✔ borrowed local providers annotate hover and detail while keeping variable kind and insertion (18.075172ms)
+✔ untrusted and untitled assistance executes no compiler and retains High/Low selectors (18.100197ms)
+✔ Low builtin help uses fn and record in hover, completion and signatures without a compiler (10.265949ms)
+✔ Low declaration and standard-operation help displays braces while retaining compiler kinds and call shapes (8.406603ms)
+✔ Low enum declaration help removes namespace prefixes only from variant names (11.550389ms)
+✔ Low folding is available without trust or a compiler and honors cancellation (3.605789ms)
+✔ cancelled, closed and changed documents cannot receive static fallback from failed queries (1.826353ms)
+✔ registered providers render enum/member kinds and payload signature parameters (3.228208ms)
+✔ standard F12 targets open compiler registry text through a read-only virtual document (3.529966ms)
+✔ standard F12 keeps each project compiler registry text when another compiler is queried (5.997952ms)
+ℹ tests 42
+ℹ suites 0
+ℹ pass 42
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 363.183628
+
+✔ keyword completion covers existing syntax in High and Low without leaking into types or members (5.471673ms)
+✔ static builtin help works with incomplete syntax without an index (1.68938ms)
+✔ static builtin fallback avoids declarations, parameters and local bindings that shadow the name (5.438402ms)
+✔ unresolved imports suppress guessed builtins but retain syntax and types; checked declarations win (1.083845ms)
+✔ signature help does not replace a compiler-resolved local function with builtin metadata (0.651228ms)
+✔ lexical references prevent guessed signatures when a type error removes local types (0.552223ms)
+✔ unfinished line strings do not hide later assistance and preserve UTF-16 CRLF ranges (1.287332ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 24.660066
+
+✔ registered resources and constants keep namespaces and never create constructor snippets (8.608285ms)
+✔ standard operation and aliased constants preserve hover and argument help (1.209725ms)
+✔ typed resource fields are read-only and do not expose type constants on values (1.170656ms)
+✔ virtual source identifiers cannot navigate to project paths or URLs (0.704364ms)
+✔ virtual registry revisions keep module paths and accept only a source hash (0.360283ms)
+✔ Some and None are pattern assistance, not general value constructors (2.006973ms)
+✔ standard import completion uses the compiler catalog and replaces the full dotted path (1.322433ms)
+✔ Low standard imports can follow another declaration or import on the same line (0.54622ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 25.265345
+
+✔ real nagi standard symbols keep resource identity, virtual sources and UTF-16 targets (2251.730313ms)
+✔ real low standard symbols keep resource identity, virtual sources and UTF-16 targets (1824.273956ms)
+✔ unsaved dependency standard aliases update sources without saving or building (1657.579839ms)
+✔ an incomplete initial standard import uses the registry catalog from a saved snapshot (389.503435ms)
+✔ shared receiver fields are read-only regardless of each field type (493.627942ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6634.712928
+
+✔ nagi saved snapshots complete new modules and from-import names before imports are checked (12.75693ms)
+✔ nagi readiness and wait resources preserve namespaces and do not offer constructors (19.719882ms)
+✔ nagi WaitError value fields keep borrowed payload types and read-only status (1.324665ms)
+✔ nagi inferred standard operations insert positional calls and retain exact callback and Future contracts (11.095334ms)
+✔ low saved snapshots complete new modules and from-import names before imports are checked (0.909487ms)
+✔ low readiness and wait resources preserve namespaces and do not offer constructors (4.498917ms)
+✔ low WaitError value fields keep borrowed payload types and read-only status (0.388996ms)
+✔ low inferred standard operations insert positional calls and retain exact callback and Future contracts (4.927937ms)
+✔ new operations and constants navigate to compiler standard sources with UTF-16 locations (1.914004ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 72.307365
+
+✔ real nagi borrowed list locals and nested fields keep read-only metadata in editor assistance (491.600904ms)
+✔ real low borrowed list locals and nested fields keep read-only metadata in editor assistance (496.74945ms)
+✔ real nagi map_error aliases retain inferred generics and standard virtual navigation (497.352857ms)
+✔ real low map_error aliases retain inferred generics and standard virtual navigation (439.786481ms)
+✔ real nagi readiness and deadline API assistance keeps resource aliases and read-only fields (906.777873ms)
+✔ real low readiness and deadline API assistance keeps resource aliases and read-only fields (908.060228ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3747.114131
+
+Editor: 22 files, 196 tests executed, 0 failed, 0 skipped

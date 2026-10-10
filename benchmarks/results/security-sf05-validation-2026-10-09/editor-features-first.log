@@ -1,0 +1,73 @@
+✔ hover preserves declared async/nullable types and class fields but skips locals, members and comments (5.932975ms)
+✖ completion works on incomplete prefixes and inserts positional calls or named class fields (2.91771ms)
+✔ type positions offer classes and type constructors rather than value calls (2.044364ms)
+✔ a class named Future completes as its declared type rather than a generic builtin (1.004406ms)
+✖ signature argument tracking ignores nested calls, strings, arrays and generic arguments (2.403071ms)
+✔ local hovers use the exact UTF-16 occurrence and file rather than a shared name (1.266073ms)
+✔ member analysis masks just the edited member and preserves UTF-16 and CRLF positions (0.212389ms)
+✔ field candidates come from the receiver occurrence and never from saved or other-file types (1.036806ms)
+✔ a trailing member binds inside try/await unless the receiver is parenthesized (0.421282ms)
+✔ builtin completion catalog matches compiler arities and required type arguments (6.233012ms)
+✔ builtin help preserves conversion, SQLite, async and callback contracts (0.814618ms)
+✔ function and nullable types complete inside all supported generic builtin contexts (0.951592ms)
+✔ completion preserves existing generic arguments and call parentheses (0.474102ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 11
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 308.642516
+
+✖ failing tests:
+
+test at editors/vscode-nagi/test/features.test.js:20:1
+✖ completion works on incomplete prefixes and inserts positional calls or named class fields (2.91771ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'read_item(${1:pool}, ${2:id})'
+  - 'read_item(${1:db}, ${2:id})'
+                   ^
+  
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/features.test.js:23:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'read_item(${1:pool}, ${2:id})',
+    expected: 'read_item(${1:db}, ${2:id})',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/features.test.js:71:1
+✖ signature argument tracking ignores nested calls, strings, arrays and generic arguments (2.403071ms)
+  AssertionError [ERR_ASSERTION]: sqlite.query[Item](tx, sqlite.literal("sql"), 
+  + actual - expected
+  
+  + undefined
+  - {
+  -   argument: 2,
+  -   name: 'sqlite.query'
+  - }
+  
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/features.test.js:81:13)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { name: 'sqlite.query', argument: 2 },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

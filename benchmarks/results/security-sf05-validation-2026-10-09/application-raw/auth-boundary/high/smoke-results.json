@@ -1,0 +1,262 @@
+[
+  {
+    "mode": "nagi",
+    "case": "public",
+    "status": 200
+  },
+  {
+    "mode": "nagi",
+    "case": "missing-auth",
+    "status": 401
+  },
+  {
+    "mode": "nagi",
+    "case": "invalid-auth",
+    "status": 401
+  },
+  {
+    "mode": "nagi",
+    "case": "expired-fixture",
+    "status": 401
+  },
+  {
+    "mode": "nagi",
+    "case": "authenticated",
+    "status": 200
+  },
+  {
+    "mode": "nagi",
+    "case": "duplicate-header",
+    "status": 400
+  },
+  {
+    "mode": "nagi",
+    "case": "invalid-header",
+    "status": 400
+  },
+  {
+    "mode": "nagi",
+    "case": "missing-principal",
+    "status": 401
+  },
+  {
+    "mode": "nagi",
+    "case": "alice-own",
+    "status": 200
+  },
+  {
+    "mode": "nagi",
+    "case": "bob-own",
+    "status": 200
+  },
+  {
+    "mode": "nagi",
+    "case": "resource-substitution",
+    "status": 403
+  },
+  {
+    "mode": "nagi",
+    "case": "other-subject",
+    "status": 403
+  },
+  {
+    "mode": "nagi",
+    "case": "custom-nagi-block-policy",
+    "status": 403
+  },
+  {
+    "mode": "nagi",
+    "case": "not-found",
+    "status": 404
+  },
+  {
+    "mode": "nagi",
+    "case": "typed-validation",
+    "status": 400
+  },
+  {
+    "mode": "nagi",
+    "case": "json-success",
+    "status": 200
+  },
+  {
+    "mode": "nagi",
+    "case": "auth-before-body",
+    "status": 401
+  },
+  {
+    "mode": "nagi",
+    "case": "malformed-json",
+    "status": 400
+  },
+  {
+    "mode": "nagi",
+    "case": "wrong-field-type",
+    "status": 422
+  },
+  {
+    "mode": "nagi",
+    "case": "no-bool-proof",
+    "status": 422
+  },
+  {
+    "mode": "nagi",
+    "case": "body-limit-accepted",
+    "status": 200
+  },
+  {
+    "mode": "nagi",
+    "case": "body-limit-rejected",
+    "status": 413
+  },
+  {
+    "mode": "nagi",
+    "case": "handler-panic",
+    "status": 500
+  },
+  {
+    "mode": "nagi",
+    "case": "handler-timeout",
+    "status": 504
+  },
+  {
+    "mode": "nagi",
+    "case": "slow-body-timeout",
+    "status": 408
+  },
+  {
+    "mode": "nagi",
+    "case": "recovery",
+    "status": 200
+  },
+  {
+    "mode": "rust",
+    "case": "public",
+    "status": 200
+  },
+  {
+    "mode": "rust",
+    "case": "missing-auth",
+    "status": 401
+  },
+  {
+    "mode": "rust",
+    "case": "invalid-auth",
+    "status": 401
+  },
+  {
+    "mode": "rust",
+    "case": "expired-fixture",
+    "status": 401
+  },
+  {
+    "mode": "rust",
+    "case": "authenticated",
+    "status": 200
+  },
+  {
+    "mode": "rust",
+    "case": "duplicate-header",
+    "status": 400
+  },
+  {
+    "mode": "rust",
+    "case": "invalid-header",
+    "status": 400
+  },
+  {
+    "mode": "rust",
+    "case": "missing-principal",
+    "status": 401
+  },
+  {
+    "mode": "rust",
+    "case": "alice-own",
+    "status": 200
+  },
+  {
+    "mode": "rust",
+    "case": "bob-own",
+    "status": 200
+  },
+  {
+    "mode": "rust",
+    "case": "resource-substitution",
+    "status": 403
+  },
+  {
+    "mode": "rust",
+    "case": "other-subject",
+    "status": 403
+  },
+  {
+    "mode": "rust",
+    "case": "custom-nagi-block-policy",
+    "status": 403
+  },
+  {
+    "mode": "rust",
+    "case": "not-found",
+    "status": 404
+  },
+  {
+    "mode": "rust",
+    "case": "typed-validation",
+    "status": 400
+  },
+  {
+    "mode": "rust",
+    "case": "json-success",
+    "status": 200
+  },
+  {
+    "mode": "rust",
+    "case": "auth-before-body",
+    "status": 401
+  },
+  {
+    "mode": "rust",
+    "case": "malformed-json",
+    "status": 400
+  },
+  {
+    "mode": "rust",
+    "case": "wrong-field-type",
+    "status": 422
+  },
+  {
+    "mode": "rust",
+    "case": "no-bool-proof",
+    "status": 422
+  },
+  {
+    "mode": "rust",
+    "case": "body-limit-accepted",
+    "status": 200
+  },
+  {
+    "mode": "rust",
+    "case": "body-limit-rejected",
+    "status": 413
+  },
+  {
+    "mode": "rust",
+    "case": "handler-panic",
+    "status": 500
+  },
+  {
+    "mode": "rust",
+    "case": "handler-timeout",
+    "status": 504
+  },
+  {
+    "mode": "rust",
+    "case": "slow-body-timeout",
+    "status": 408
+  },
+  {
+    "mode": "rust",
+    "case": "recovery",
+    "status": 200
+  }
+]

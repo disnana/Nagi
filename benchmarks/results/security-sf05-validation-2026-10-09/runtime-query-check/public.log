@@ -1,0 +1,9 @@
+   Compiling nagi-runtime v0.1.11 (/workspace/Nagi-security-sf05/runtime)
+    Finished `test` profile [unoptimized] target(s) in 2.99s
+     Running tests/sqlite_public_api.rs (/workspace/nagi-sf01-target/debug/deps/sqlite_public_api-b6d626dac877fd6f)
+
+running 1 test
+test published_sqlite_pool_api_builds_without_test_seams ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -23,6 +23,9 @@ impl Checker {
                 format!("{}の型引数は{}個です", info.name, info.generic_arity),
             ));
         }
+        if operation == O::SqliteLiteral && !matches!(args[0].kind, E::Str(_)) {
+            return Err(error(args[0].line, "SF05 literal Query: sqlite.literalには直接文字列literalを指定してください。変数/連結/format/動的SQLは不可です。値はParametersへbindし、構造はレビュー済みliteral Queryから選んでください"));
+        }
         for ty in types {
             self.valid(ty, line)?;
             self.emittable(ty, line, false)?;
@@ -31,11 +34,13 @@ impl Checker {
         let view = |ty| Type::generic("view", vec![ty]);
         let failure = |ty| Type::generic("Result", vec![ty, resource(R::SqliteFailure)]);
         let parameters = resource(R::SqliteParameters);
+        let query = resource(R::SqliteQueryValue);
         let tx = resource(R::SqliteTx);
         let pool = resource(R::SqlitePool);
         let i64_ty = Type::named("i64");
         let unit = Type::named("unit");
         let (hints, output) = match operation {
+            O::SqliteLiteral => (vec![Type::named("str")], query.clone()),
             O::SqliteOptions => (vec![i64_ty.clone(); 4], result(resource(R::SqliteOptions))),
             O::SqliteOpen => (
                 vec![view(Type::named("str")), resource(R::SqliteOptions)],
@@ -74,20 +79,12 @@ impl Checker {
                     "List"
                 };
                 (
-                    vec![
-                        view(tx.clone()),
-                        view(Type::named("str")),
-                        parameters.clone(),
-                    ],
+                    vec![view(tx.clone()), query.clone(), parameters.clone()],
                     failure(Type::generic(collection, vec![row.clone()])),
                 )
             }
             O::SqliteExec => (
-                vec![
-                    view(tx.clone()),
-                    view(Type::named("str")),
-                    parameters.clone(),
-                ],
+                vec![view(tx.clone()), query.clone(), parameters.clone()],
                 failure(i64_ty.clone()),
             ),
             O::SqliteCommit | O::SqliteRollback => (vec![tx], failure(unit.clone())),
@@ -100,6 +97,12 @@ impl Checker {
         };
         for (index, arg) in args.iter_mut().enumerate() {
             let ty = self.expr(arg, Some(&hints[index]))?;
+            if index == 1
+                && matches!(operation, O::SqliteQuery | O::SqliteAll | O::SqliteExec)
+                && (ty == Type::named("str") || ty == view(Type::named("str")))
+            {
+                return Err(error(arg.line, "SF05 migration: SQLite query/all/execはQueryが必須です。直接literalをsqlite.literal(\"…\")で封印し、値をParametersへbindしてください。動的SQL/旧Dbはtrusted host管理処理へ分離してください"));
+            }
             if info.parameters[index] == Passing::Reference {
                 self.reference(&ty, &hints[index], arg.line)?;
                 self.available(arg, false)?;
@@ -107,14 +110,7 @@ impl Checker {
                 self.demand(&ty, &hints[index], arg.line)?;
                 self.consume(arg)?;
             }
-            // The sealed SQL plan owns argument 1 before evaluating Parameters.
-            // Its temporary input loan ends there, unlike the Tx loan retained
-            // by the async operation. Keep persistent local-view loans intact.
-            let materialized_sql =
-                index == 1 && matches!(operation, O::SqliteQuery | O::SqliteAll | O::SqliteExec);
-            if !materialized_sql {
-                self.hold_value(arg, info.parameters[index] == Passing::Reference);
-            }
+            self.hold_value(arg, info.parameters[index] == Passing::Reference);
         }
         Ok(if info.asynchronous {
             future(output)

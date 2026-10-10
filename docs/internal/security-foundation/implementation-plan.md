@@ -2,7 +2,7 @@
 
 [RFC](rfc.md) · [English plan](implementation-plan.en.md) · [現行調査](baseline-audit.md)
 
-2026-10-08 JST。**計画であり実装完了記録ではない。** SF00はPR #100で完了し、ユーザー承認でmainへマージ済み。SF01はmain向け独立Draft #101へ実装接続し検証中で、[専用契約](sf01-contract.md)と結果を分けて記録する。後続工程の完了を意味しない。最新ユーザー指示に従う[D1–D3判断・移行](decisions-and-migration.md)を実装基準とし、旧資料の互換性保留を再承認待ちにしない。各featureの公開signature/contractはRED追加前に固定する。意味論が一意な内部調査、依存比較、test harness設計は並行して進められる。
+2026-10-09 UTC。**計画であり実装完了記録ではない。** SF00 #100とSF01 #101はmainへマージ済み。SF01の[専用契約](sf01-contract.md)と結果は別に保持する。現在はbase main `3b8da226`から独立したSF05を実装・検証中で、[SF05契約](sf05-contract.md)・[結果](../security-foundation-sf05-results.md)に証拠と未確認範囲を記録する。SF05の独立review/最新head4 OS、後続工程とFoundation全体の完了を意味しない。最新ユーザー指示に従う[D1–D3判断・移行](decisions-and-migration.md)を実装基準とし、旧資料の互換性保留を再承認待ちにしない。各featureの公開signature/contractはRED追加前に固定する。意味論が一意な内部調査、依存比較、test harness設計は並行して進められる。
 
 ## 実装の分割と依存
 
