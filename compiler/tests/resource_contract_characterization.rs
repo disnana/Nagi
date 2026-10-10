@@ -533,8 +533,8 @@ const OPERATIONS: &[OperationExpected] = &[
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 83);
-    assert_eq!(stdlib::OPERATIONS.len(), 83);
+    assert_eq!(OPERATIONS.len(), 85);
+    assert_eq!(stdlib::OPERATIONS.len(), 85);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()
