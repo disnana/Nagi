@@ -1,8 +1,8 @@
 //! Shared fixed SQLite issue/rotation recipes. Request proofs are consumed only
 //! at the real AuthScope entrypoints; trusted private primitives create no proof.
 use super::{
-    delivery, exec, finish, metadata, secrets, Failure, Foundation, Intent, NativePlan, Progress,
-    Reply, Snapshot,
+    delivery, exec, metadata, secrets, Failure, Foundation, Intent, NativePlan, Progress, Reply,
+    Snapshot,
 };
 use crate::{auth, sqlite};
 use std::{sync::Arc, time::Instant};
