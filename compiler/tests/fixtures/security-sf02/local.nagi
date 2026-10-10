@@ -1,0 +1,20 @@
+import std.auth.session as session
+import std.auth as auth
+import std.http.server as http
+def relay(intent: session.SessionResponse) -> Option[session.SessionResponse]:
+    return some(intent)
+async def delegate(intent: session.SessionResponse) -> session.SessionResponse:
+    await sleep(1)
+    return intent
+async def local(intent: session.SessionResponse) -> Result[Option[session.SessionResponse], session.Failure]:
+    return ok(relay(await delegate(intent)))
+async def issue(store: view[session.Store], scope: auth.AuthScope) -> Result[session.SessionResponse, session.Failure]:
+    return await session.issue(store, scope)
+async def rotate(store: view[session.Store], scope: auth.AuthScope) -> Result[session.SessionResponse, session.Failure]:
+    return await session.rotate(store, scope)
+async def logout(store: view[session.Store], scope: auth.AuthScope) -> Result[session.SessionResponse, session.Failure]:
+    return await session.logout(store, scope)
+def apply(response: http.Response, intent: session.SessionResponse) -> Result[http.Response, session.Failure]:
+    return session.apply(response, intent)
+def main():
+    print(0)

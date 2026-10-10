@@ -97,8 +97,79 @@ impl Checker {
             self.valid(&output, line)?;
             return Ok(output);
         }
+        if matches!(
+            op,
+            O::SessionAuthenticatedPolicy | O::SessionAuthorizedPolicy
+        ) {
+            let store = self.expr(&mut args[0], Some(&resource(R::SessionStore)))?;
+            self.demand(&store, &resource(R::SessionStore), args[0].line)?;
+            self.consume(&args[0])?;
+            self.hold_value(&args[0], false);
+            let authority = if op == O::SessionAuthorizedPolicy {
+                let grant = crate::stdlib::resource_type(R::Grant, vec![types[1].clone()]);
+                self.valid(&grant, line)?;
+                let expected = Type::generic(
+                    "fn",
+                    vec![
+                        resource(R::AuthScope),
+                        resource(R::Request),
+                        Type::generic("shared", vec![types[0].clone()]),
+                        future(Type::generic("Result", vec![grant.clone(), failure])),
+                    ],
+                );
+                let authorizer = self.security_callback(&mut args[1], line)?;
+                self.demand(&authorizer, &expected, line)?;
+                grant
+            } else {
+                resource(R::AuthScope)
+            };
+            let output = policy(types[0].clone(), authority);
+            self.valid(&output, line)?;
+            return Ok(output);
+        }
+        let session_result = |ty| Type::generic("Result", vec![ty, resource(R::SessionFailure)]);
         let view = |ty| Type::generic("view", vec![ty]);
         let (hints, output) = match op {
+            O::SessionOptions => (
+                vec![Type::named("i64"); 8],
+                session_result(resource(R::SessionOptions)),
+            ),
+            O::SessionCookieOptions => (
+                vec![view(Type::named("str")), resource(R::SessionSameSite)],
+                session_result(resource(R::SessionCookieOptions)),
+            ),
+            O::SessionOpen => (
+                vec![
+                    view(resource(R::SqlitePool)),
+                    resource(R::SessionOptions),
+                    resource(R::SessionCookieOptions),
+                ],
+                session_result(resource(R::SessionStore)),
+            ),
+            O::SessionCloneStore => (
+                vec![view(resource(R::SessionStore))],
+                resource(R::SessionStore),
+            ),
+            O::SessionIssue | O::SessionRotate | O::SessionLogout => (
+                vec![view(resource(R::SessionStore)), resource(R::AuthScope)],
+                session_result(resource(R::SessionResponse)),
+            ),
+            O::SessionApply => (
+                vec![resource(R::Response), resource(R::SessionResponse)],
+                session_result(resource(R::Response)),
+            ),
+            O::SessionKind => (
+                vec![view(resource(R::SessionFailure))],
+                resource(R::AuthFailureKind),
+            ),
+            O::SessionMessage => (
+                vec![view(resource(R::SessionFailure))],
+                view(Type::named("str")),
+            ),
+            O::SessionOutcome => (
+                vec![view(resource(R::SessionFailure))],
+                resource(R::SqliteOutcome),
+            ),
             O::SecurityTimeout => (
                 vec![resource(R::Options), Type::named("i64")],
                 result(resource(R::Options)),
@@ -125,6 +196,10 @@ impl Checker {
             }
             self.hold_value(arg, info.parameters[i] == Passing::Reference);
         }
-        Ok(output)
+        Ok(if info.asynchronous {
+            future(output)
+        } else {
+            output
+        })
     }
 }

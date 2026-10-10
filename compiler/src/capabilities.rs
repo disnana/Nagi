@@ -66,6 +66,7 @@ pub(crate) fn contains_auth_proof(
             crate::stdlib::Resource::Principal
                 | crate::stdlib::Resource::AuthScope
                 | crate::stdlib::Resource::Grant
+                | crate::stdlib::Resource::SessionResponse
         )
     })
 }
@@ -131,6 +132,11 @@ fn security_nonclone(resource: crate::stdlib::Resource) -> bool {
         crate::stdlib::Resource::HttpPolicy
             | crate::stdlib::Resource::VerifiedIdentity
             | crate::stdlib::Resource::AuthFailure
+            | crate::stdlib::Resource::SessionOptions
+            | crate::stdlib::Resource::SessionCookieOptions
+            | crate::stdlib::Resource::SessionStore
+            | crate::stdlib::Resource::SessionFailure
+            | crate::stdlib::Resource::SessionResponse
     )
 }
 
@@ -157,6 +163,7 @@ pub(crate) fn contains_security_nonshared(
             crate::stdlib::Resource::HttpPolicy
                 | crate::stdlib::Resource::VerifiedIdentity
                 | crate::stdlib::Resource::AuthFailure
+                | crate::stdlib::Resource::SessionFailure
         ) && !crate::stdlib::resource_info(resource).shared
     })
 }

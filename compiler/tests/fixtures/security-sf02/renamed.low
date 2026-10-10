@@ -1,0 +1,6 @@
+from std.auth.session import SessionResponse as Delivery, Store as Registry, clone_store as clone_registry;
+record SessionResponse { count: i64; }
+fn plain(value: SessionResponse) -> shared[SessionResponse] { return share(value); }
+fn forward(value: Delivery) -> Delivery { return value; }
+fn share_registry(value: view[Registry]) -> shared[Registry] { return share(clone_registry(value)); }
+fn main() -> unit { print(0); }

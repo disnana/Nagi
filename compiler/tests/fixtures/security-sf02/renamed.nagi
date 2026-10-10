@@ -1,0 +1,11 @@
+from std.auth.session import SessionResponse as Delivery, Store as Registry, clone_store as clone_registry
+class SessionResponse:
+    count: i64
+def plain(value: SessionResponse) -> shared[SessionResponse]:
+    return share(value)
+def forward(value: Delivery) -> Delivery:
+    return value
+def share_registry(value: view[Registry]) -> shared[Registry]:
+    return share(clone_registry(value))
+def main():
+    print(0)

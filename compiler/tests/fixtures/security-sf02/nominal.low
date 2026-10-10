@@ -1,0 +1,7 @@
+import std.auth.session as session;
+import std.auth as auth;
+import std.http.server as http;
+record SessionResponse { count: i64; }
+fn reject(response: http.Response,value: SessionResponse) -> Result[http.Response,session.Failure] {
+ return session.apply(response,value);
+}
