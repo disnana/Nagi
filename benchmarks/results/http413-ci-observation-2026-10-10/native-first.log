@@ -1,0 +1,15 @@
+Command: cargo test --offline --locked -p nagi-runtime --lib oversized_body_ -- --test-threads=1 --nocapture
+Initial compile output: Compiling nagi-runtime v0.1.11 (/workspace/Nagi-http-limit-ci/runtime)
+    Finished `test` profile [unoptimized] target(s) in 16.38s
+     Running unittests src/lib.rs (/workspace/nagi-sf01-target/debug/deps/nagi_runtime-869e41f629d9bcdc)
+
+running 6 tests
+test http_server::tests::oversized_body_boundary_accepts_4096_and_incomplete_upload_keeps_body_deadline ... ok
+test http_server::tests::oversized_body_chunked_delivers_413_with_or_without_final_chunk ... ok
+test http_server::tests::oversized_body_content_length_delivers_413_without_calling_handler ... ok
+test http_server::tests::oversized_body_declared_length_rejects_headers_and_incomplete_upload_promptly ... ok
+test http_server::tests::oversized_body_nodelay_split_writes_observes_receipt_and_recovery ... HTTP split-write receipt observation: {"body_bytes":4097,"body_limit":4096,"case":"oversized_body_nodelay_split_writes","close_result":"Ok(Ok(()))","complete_headers_received":true,"complete_response_received":true,"elapsed_ms":0,"handler_calls_before_recovery":0,"nodelay":true,"os":"linux","received_bytes":201,"send_result":"Ok(Ok(()))","separate_writes":true,"wire":"HTTP/1.1 413 Payload Too Large\r\ncontent-type: text/plain; charset=utf-8\r\nx-content-type-options: nosniff\r\nconnection: close\r\ncontent-length: 17\r\ndate: Sat, 10 Oct 2026 00:20:46 GMT\r\n\r\nPayload Too Large"}; artifact: /workspace/nagi-http413-ci-evidence/native/http413-nodelay-943925-1791591646793262245.json
+ok
+test http_server::tests::oversized_body_rejects_keep_alive_upload_and_never_dispatches_pipeline ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 227 filtered out; finished in 0.23s

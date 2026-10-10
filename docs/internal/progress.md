@@ -444,3 +444,9 @@ PR #99 sourceのLinux workspace final testsはexit0。raw logの単純集計は9
 PR #99のe3e0ea3 initial checksは実行中で、latest-head 4 OS/websiteのreadbackは未確認。generated-versus-manual cost sampleはLinux x86_64で完了し、32回/条件のraw samples・per-sample allocation分布・共有host/キャッシュ条件を記録した。sampleは小さく性能差の有意性やthroughputを示さない。debug public-cost snapshot、distribution mock gates、source projection testを性能・配布済archive受入の証拠として扱わない。次担当はこのhandoffとresultsを起点にCIを追記し、PRのdraft/merge/release判断を別に行う。
 
 2026-10-08 統合追記: PR #98のhead `bc6a76b`へPR #99をrebaseし、#98をbaseとする依存PRへ整理した。最終反映先はmain。双方の目次・CIを保持し、compiler/runtime/Cargo.lock・SQLite配布gate・費用harnessは検証済み`e3e0ea3`から差分なし。統合source `fbfebd3`でwebsite 98 pages、初アプリHigh/保存Low native 10件、SQLite日英コード一致、CI policy 59 testsを確認した。以降の公開headと必須CIの最終結果は[PR #99](https://github.com/disnana/Nagi/pull/99)の本文とChecksを正とし、この文書の作成時点のCI pendingを現在状態と読み替えない。
+
+## 2026-10-10: quote-apiのHTTP 413診断とnative観測
+
+main base `3b8da22`で元quote-apiのrequest/413 assertと既存native5件を維持し、失敗段階・停止前child状態・bounded stdout/stderrをCI artifactへ保存する。NODELAY=true・別writeの4097 bytes nativeは413受信を別に記録し、handler非呼出し・bounded close・次GET/capacity回復を要求する。公開制限から新たな413必達保証を導かず、runtime実装・依存・版を変更しない。
+
+Linuxはnative6件、runtime library232 passed/既存ignored1、Clippy/fmt、Python診断9件、CI policy59件、再利用High/保存Lowの元51 cases/形式が成功。Windows/macOS・remote CI・独立reviewは未確認で、元Windows resetのnative REDはない。[観測方針と次の判断](http413-ci-observation.md)、[有限な検査artifact](../../benchmarks/results/http413-ci-observation-2026-10-10/README.md)を参照。
