@@ -450,7 +450,14 @@ async fn real_commit_then_controlled_handler_timeout_drops_future_without_cookie
     }
     assert!(future_dropped.load(Ordering::SeqCst) == 0);
     assert!(tokio::time::Instant::now() == tick);
-    tokio::time::advance(Duration::from_millis(100)).await;
+    // The handler deadline remains 100ms. Tokio 1.53.1 rounds timer
+    // deadlines up to the next 1ms driver tick (runtime/time/source.rs).
+    // Check a point strictly before it, then cross that rounding quantum.
+    tokio::time::advance(Duration::from_millis(99)).await;
+    assert!(futures_util::poll!(reply.as_mut()).is_pending());
+    assert!(future_dropped.load(Ordering::SeqCst) == 0);
+    assert!(tokio::time::Instant::now() == tick + Duration::from_millis(99));
+    tokio::time::advance(Duration::from_millis(2)).await;
     let response = loop {
         if let std::task::Poll::Ready(response) = futures_util::poll!(reply.as_mut()) {
             break response;
@@ -459,7 +466,7 @@ async fn real_commit_then_controlled_handler_timeout_drops_future_without_cookie
             wall.elapsed() < Duration::from_secs(2),
             "owned response wall guard elapsed"
         );
-        assert!(tokio::time::Instant::now() == tick + Duration::from_millis(100));
+        assert!(tokio::time::Instant::now() == tick + Duration::from_millis(101));
         tokio::task::yield_now().await;
     };
     drop(reply);
