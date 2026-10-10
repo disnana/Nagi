@@ -294,7 +294,7 @@ jobs:
       - name: Check Axum native test execution and result validation
         run: python -m unittest discover -s scripts -p 'test_application_native_tests.py'
       - name: Check oversized HTTP bodies and connection recovery on the target platform
-        run: cargo test --locked -p nagi-runtime oversized_body_ -- --test-threads=1
+        run: cargo test --locked -p nagi-runtime oversized_body_ -- --test-threads=1 --nocapture
       - name: Check HTTP panic recovery on the target platform
         run: cargo test --locked -p nagi-runtime panic_ -- --test-threads=1
       - name: Check HTTP handler deadlines on the target platform
@@ -396,6 +396,13 @@ jobs:
             build/distribution/nagi-*.tar.gz
             build/distribution/nagi-*.sha256
           if-no-files-found: error
+      - name: Preserve target-platform HTTP receipt observation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: http413-observation-${{ matrix.platform }}
+          path: build/compiler-failures/http413-nodelay-*.json
+          if-no-files-found: ignore
       - name: Preserve target-platform compiler failure reproductions
         if: failure()
         uses: actions/upload-artifact@v4

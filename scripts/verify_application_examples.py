@@ -11,6 +11,7 @@ import shutil
 import signal
 import subprocess
 import tomllib
+import traceback
 from native_artifacts import native_executable
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,6 +57,34 @@ def verifier(project):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.verify
+
+
+def verify_smoke(verify, executable, env, directory, name, mode):
+    try:
+        return verify(executable, env, directory)
+    except Exception as error:
+        report = {
+            "project": name, "source": mode, "executable": str(executable),
+            "exception_type": type(error).__name__, "exception": str(error)[:4096],
+            "traceback": traceback.format_exc()[-16384:],
+        }
+        try:
+            details = directory / "smoke-failure.json"
+            if details.exists():
+                with details.open("rb") as source:
+                    # quote-api's bounded log tails fit this evidence budget.
+                    content = source.read(512 * 1024 + 1)
+                if len(content) > 512 * 1024:
+                    raise ValueError("smoke evidence exceeds 512 KiB")
+                report["smoke"] = json.loads(content)
+            failure_directory = Path(env.get("NAGI_FAILURE_DIR", ROOT / "build/compiler-failures"))
+            failure_directory.mkdir(parents=True, exist_ok=True)
+            (failure_directory / f"application-{name}-{mode}.json").write_text(
+                json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
+            )
+        except (OSError, ValueError) as capture_error:
+            error.add_note(f"Unable to save application failure evidence: {capture_error}")
+        raise
 
 
 def verify_axum_native_tests(published, target, env, log):
@@ -118,7 +147,7 @@ def main():
                 native_tests = verify_axum_native_tests(
                     published, target, env, generated / f"{mode}-native-tests.log",
                 )
-            facts = verify(executable, env, directory)
+            facts = verify_smoke(verify, executable, env, directory, name, mode)
             if native_tests is not None:
                 facts["native_tests"] = native_tests
             rows.append({"project": name, "source": mode, "status": "passed", **facts})
