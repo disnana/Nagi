@@ -1,0 +1,26 @@
+[
+  {
+    "source": "high",
+    "executable": "/workspace/Nagi-security-sf05/build/application-example-verification/quote-api/high/nagi-b0d6b1d2345b6f51-g-e0668-18dce7cb14d41665-0",
+    "executable_sha256": "00d2a93eb6fa2fd5895b0fae5110cb70d91aefcd28561855b6704b073c3cd940",
+    "source_and_runtime_match": true,
+    "original_request_and_asserts_match": true,
+    "reused_binary_without_rebuild": true,
+    "cases": 51,
+    "starts": 2,
+    "invalid_configurations": 3,
+    "result": "passed"
+  },
+  {
+    "source": "low",
+    "executable": "/workspace/Nagi-security-sf05/build/application-example-verification/quote-api/low/nagi-a7e8585e68817ad2-g-e06a6-18dce7cd3f12c28e-0",
+    "executable_sha256": "bb24f747207473d033d3714d3b2242ca5ea79f56187cdcbda2de50da36632d63",
+    "source_and_runtime_match": true,
+    "original_request_and_asserts_match": true,
+    "reused_binary_without_rebuild": true,
+    "cases": 51,
+    "starts": 2,
+    "invalid_configurations": 3,
+    "result": "passed"
+  }
+]

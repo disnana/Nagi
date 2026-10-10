@@ -108,6 +108,10 @@ Phase 3では、登録資源の独立inventory、用途別capability、4例のLo
 - [Csmith](https://embed.cs.utah.edu/csmith/): 未定義挙動を除く生成と独立oracleを採用。C言語generator自体は非採用。Nagiに独立compilerがないことを明記する。
 - [Crater](https://rustc-dev-guide.rust-lang.org/tests/crater.html): check/build/runのコスト分離を採用。小corpusの成功を全言語/全platform保証と解釈しない。
 
+## 標準HTTPの413受信観測
+
+標準HTTPのquote-api本文上限については、元のrequest/413 assertを維持し、停止前child状態とbounded logをCI failure artifactへ保存する。NODELAY・別writeのnative観測は413受信と必須のclose/handler非呼出し/capacity回復を分ける。[HTTP 413の診断方針と限界](http413-ci-observation.md)を参照。
+
 ## Axum連携サンプルのnative回帰
 
 [ADR 009](adr/009-axum-rejected-body.md)のContent-Type欠落時のpolicyは、sampleのnative unitと元clientの実HTTPで分けて検査する。共通application runnerは、成功世代のmanifest・唯一のbinを使ってHigh/保存Lowそれぞれの`native::tests::`を実行する。0件・ignore・Cargo失敗は成功にならない。`test_application_native_tests.py`の5回帰もLinuxと4 OSのCIへ接続した。

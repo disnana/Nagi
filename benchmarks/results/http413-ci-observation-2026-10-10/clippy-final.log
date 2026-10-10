@@ -1,0 +1,3 @@
+    Blocking waiting for file lock on build directory
+    Checking nagi-runtime v0.1.11 (/workspace/Nagi-http-limit-ci/runtime)
+    Finished `dev` profile [unoptimized] target(s) in 9.65s

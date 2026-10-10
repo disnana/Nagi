@@ -1,0 +1,30 @@
+2026-10-10T06:16:56.2780713Z ======================================================================
+2026-10-10T06:16:56.2781924Z FAIL: test_receive_failure_records_live_child_before_cleanup_and_propagates (test_application_native_tests.ApplicationFailureEvidenceTests.test_receive_failure_records_live_child_before_cleanup_and_propagates)
+2026-10-10T06:16:56.2783067Z ----------------------------------------------------------------------
+2026-10-10T06:16:56.2783749Z Traceback (most recent call last):
+2026-10-10T06:16:56.2784597Z   File "D:\a\Nagi\Nagi\scripts\test_application_native_tests.py", line 55, in test_receive_failure_records_live_child_before_cleanup_and_propagates
+2026-10-10T06:16:56.2785464Z     self.assertEqual(report["stdout"]["tail"], "owned child stdout\n")
+2026-10-10T06:16:56.2786129Z AssertionError: 'owned child stdout\r\n' != 'owned child stdout\n'
+2026-10-10T06:16:56.2786537Z - owned child stdout
+2026-10-10T06:16:56.2786690Z 
+2026-10-10T06:16:56.2787012Z ?                   -
+2026-10-10T06:16:56.2787288Z + owned child stdout
+2026-10-10T06:16:56.2787458Z 
+2026-10-10T06:16:56.2787464Z 
+2026-10-10T06:16:56.2787709Z ----------------------------------------------------------------------
+2026-10-10T06:16:56.2788730Z Ran 9 tests in 0.057s
+2026-10-10T06:16:56.2788875Z 
+2026-10-10T06:16:56.2789021Z FAILED (failures=1)
+2026-10-10T06:16:56.3890927Z ##[error]Process completed with exit code 1.
+2026-10-10T06:16:56.4159037Z ##[group]Run actions/upload-artifact@v4
+2026-10-10T06:16:56.4159418Z with:
+2026-10-10T06:16:56.4159704Z   name: http413-observation-windows-x86_64
+2026-10-10T06:16:56.4160085Z   path: build/compiler-failures/http413-nodelay-*.json
+2026-10-10T06:16:56.4160445Z   if-no-files-found: ignore
+2026-10-10T06:16:56.4160739Z   compression-level: 6
+2026-10-10T06:16:56.4161001Z   overwrite: false
+2026-10-10T06:16:56.4161267Z   include-hidden-files: false
+2026-10-10T06:16:56.4161544Z env:
+2026-10-10T06:16:56.4161839Z   NAGI_FAILURE_DIR: D:\a\Nagi\Nagi/build/compiler-failures
+2026-10-10T06:16:56.4162239Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-10T06:16:56.4162548Z   CARGO_INCREMENTAL: 0

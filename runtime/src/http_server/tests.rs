@@ -1127,6 +1127,131 @@ async fn oversized_body_content_length_delivers_413_without_calling_handler() {
     }
 }
 
+// This upload mirrors http.client's separate header/body writes with NODELAY.
+// The public close-without-drain contract permits a reset before a full 413;
+// record receipt separately from the required rejection and capacity recovery.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn oversized_body_nodelay_split_writes_observes_receipt_and_recovery() {
+    let (server, calls) = oversized_body_server().await;
+    let mut socket = server.connect().await;
+    socket.get_mut().set_nodelay(true).unwrap();
+    let began = Instant::now();
+    send(
+        &mut socket,
+        b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 4097\r\n\r\n",
+    )
+    .await;
+    let sending = tokio::time::timeout(
+        Duration::from_secs(3),
+        socket.get_mut().write_all(&[b' '; 4097]),
+    )
+    .await;
+    let mut wire = Vec::new();
+    let closing = tokio::time::timeout(Duration::from_secs(3), async {
+        let mut chunk = [0; 1024];
+        loop {
+            let length = socket.read(&mut chunk).await?;
+            if length == 0 {
+                return Ok::<_, std::io::Error>(());
+            }
+            if wire.len() + length > 8192 {
+                return Err(std::io::Error::other("HTTP observation exceeds 8192 bytes"));
+            }
+            wire.extend_from_slice(&chunk[..length]);
+        }
+    })
+    .await;
+    let headers_end = wire.windows(4).position(|part| part == b"\r\n\r\n");
+    let complete_response = headers_end.is_some_and(|end| wire.len() >= end + 4 + 17);
+    let mut report = serde_json::json!({
+        "case": "oversized_body_nodelay_split_writes",
+        "os": std::env::consts::OS,
+        "body_bytes": 4097,
+        "body_limit": 4096,
+        "nodelay": true,
+        "separate_writes": true,
+        "send_result": format!("{sending:?}"),
+        "close_result": format!("{closing:?}"),
+        "elapsed_ms": began.elapsed().as_millis(),
+        "complete_headers_received": headers_end.is_some(),
+        "complete_response_received": complete_response,
+        "received_bytes": wire.len(),
+        "wire": String::from_utf8_lossy(&wire),
+        "handler_calls_before_recovery": calls.load(Ordering::SeqCst),
+        "recovery_verified": false,
+    });
+    let directory = std::env::var_os("NAGI_FAILURE_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("nagi-http-observations"));
+    std::fs::create_dir_all(&directory).unwrap();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let path = directory.join(format!(
+        "http413-nodelay-{}-{timestamp}.json",
+        std::process::id()
+    ));
+    let mut artifact = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .unwrap();
+    std::io::Write::write_all(
+        &mut artifact,
+        serde_json::to_string_pretty(&report).unwrap().as_bytes(),
+    )
+    .unwrap();
+    println!(
+        "HTTP split-write receipt observation: {report}; artifact: {}",
+        path.display()
+    );
+
+    let sending = sending.expect("bounded oversized write timed out");
+    if let Err(error) = sending {
+        assert!(matches!(
+            error.kind(),
+            std::io::ErrorKind::ConnectionReset
+                | std::io::ErrorKind::ConnectionAborted
+                | std::io::ErrorKind::BrokenPipe
+        ));
+    }
+    if let Err(error) = closing.expect("rejected split-write connection did not close") {
+        assert!(matches!(
+            error.kind(),
+            std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted
+        ));
+    }
+    // Complete received fields retain their strict oracle. A partial response
+    // is observable evidence, not proof of successful 413 delivery.
+    if let Some(end) = wire.windows(2).position(|part| part == b"\r\n") {
+        assert_eq!(
+            std::str::from_utf8(&wire[..end])
+                .unwrap()
+                .split_whitespace()
+                .nth(1),
+            Some("413")
+        );
+    }
+    if let Some(end) = headers_end {
+        let headers = std::str::from_utf8(&wire[..end])
+            .unwrap()
+            .to_ascii_lowercase();
+        assert!(headers.lines().any(|line| line == "connection: close"));
+        assert!(headers.lines().any(|line| line == "content-length: 17"));
+        let body = &wire[end + 4..];
+        assert!(b"Payload Too Large".starts_with(body));
+        if complete_response {
+            assert_eq!(body, b"Payload Too Large");
+        }
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    oversized_body_assert_capacity_released(&server, &calls).await;
+    server.stop().await;
+    report["recovery_verified"] = serde_json::json!(true);
+    std::fs::write(&path, serde_json::to_string_pretty(&report).unwrap()).unwrap();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn oversized_body_declared_length_rejects_headers_and_incomplete_upload_promptly() {
     for body in [b"".as_slice(), b"unfinished"] {
