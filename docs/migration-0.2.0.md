@@ -12,6 +12,12 @@
 | 組み込み`/stream`・`/ws` | 暗黙注入を廃止。有限bytes応答は明示route。一般streaming/WSは未実装 | 暗黙routeがない検査。WS同等業務は未完了 |
 | raw `html`/`Html`/`http.html` | 標準入口を拒否。文字列表示はtext、active HTMLはSF04のtyped移行を待つ | raw入口拒否、octet-stream/text・nosniff。HTML画面の同等移行は未完了 |
 | 任意Set-Cookie/CORS/CSP/cache/challenge/framing header | appendでInvalid。専用の後続security層が所有する | managed-header/wire回帰。Cookie/CSRF/CORS機能は未完了 |
+| 任意Host／未設定Optionsでの起動 | 起動前に`try http.authority(options, https_origin, wire_list, count_limit, byte_limit)`。未設定・重複canonical・不正設定は起動Err。設定とproxy ACLの再上書きもErr | parser/config、全route前拒否と実socket/peerのHost slice。全Cargo/4 OS・TLS/browser受入は別 |
+| HTTP/1.0・absolute/authority-form・`*`・Forwarded解釈 | HTTP/1.1 origin-formへ。省略portと明示portを別登録し、proxyはForwarded系を除去し`trusted_proxy`へ実peer IPを登録。runtime拒否400、1.0は505。404/405より先 | 有限通常requestのHost/port/IPv6/重複/peer負例と次の正常requestの容量復帰 |
+
+Host変更は未リリースSF03 sliceです。旧任意Host、末尾dot、特殊port表記、proxy内部Hostは明示登録/書換えへ移行します。設定setterはmove＋Resultで、先のOptionsを失敗時に復活させません。新APIは既resource registry/checked facts/sealed emissionを通り、High・保存Low・手書きLowで同じ契約を使います。
+
+HTTPS originとbackend Hostは別の起動情報です。`serve`の平文loopback HTTPだけでbrowser認証を完成と呼びません。ローカルTLS frontendならorigin `https://localhost:8443`、wire `localhost:8080`、実peer `127.0.0.1`を設定し、証明書のtrust・Forwarded除去・HTTP/1.1終端を配置側で確認します。Secure Cookie例外やHost一致によるCSRF免除はありません。Origin/CSRF/pre-login本体はこの変更の保証外です。
 
 handlerは常に`async (http.Request,shared[S],A)->Result[http.Response,E]`です。旧自動body/query/path抽出はhandlerで明示的にparse/decodeし、JSON応答を`http.json`へ変換します。既存CRUD/Resultの業務動作は移行後のnativeテストへ対応付けています。ルート登録はfallibleです。重複method/pathや曖昧なcapture patternはruntime登録Errになり、起動しません。動的pathの既存標準APIを維持し、旧decorator専用の静的path検査を新しい文字列推論仕様へ置き換えません。
 

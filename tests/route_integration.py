@@ -61,7 +61,15 @@ async def main() -> Result[unit, Error]:
     app = try http.route(app, http.Method.GET, "/legacy/{key}", http.public_policy[State](), legacy)
     app = try http.route(app, http.Method.GET, "/literal/%7Bid%7D", http.public_policy[State](), literal)
     port = try parse_i64(env("NAGI_TEST_PORT", "0"))
-    return await http.serve(app, port, http.default_options())
+    port_text = try json_encode(port)
+    options = try http.authority(
+        http.default_options(),
+        "https://localhost",
+        ["localhost", view("localhost:") + view(port_text), view("127.0.0.1:") + view(port_text)],
+        3,
+        256
+    )
+    return await http.serve(app, port, options)
 ''', encoding="utf-8")
         environment = {**os.environ, "NAGI_NATIVE_TARGET_DIR": str(target)}
         environment.pop("NAGI_ROOT", None)

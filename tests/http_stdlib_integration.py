@@ -163,7 +163,15 @@ async def comparisons(request: http.Request, state: shared[State], authority: un
     return ok(http.bytes(http.Status.OK, view(owned)))
 
 async def launch(app: http.App[State, AuthError], port: i64) -> Result[unit, Error]:
-    return await http.serve(app, port, http.default_options())
+    port_text = try json_encode(port)
+    options = try http.authority(
+        http.default_options(),
+        "https://localhost",
+        ["localhost", view("localhost:") + view(port_text), view("127.0.0.1:") + view(port_text)],
+        3,
+        256
+    )
+    return await http.serve(app, port, options)
 
 async def main() -> Result[unit, Error]:
     state = State(authorization=env("NAGI_DEMO_AUTHORIZATION", ""), greeting="first app", subject=1)

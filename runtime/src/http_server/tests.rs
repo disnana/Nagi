@@ -7,6 +7,8 @@ use tokio::{
     sync::{oneshot, Notify},
 };
 
+#[path = "authority_tests.rs"]
+mod authority_tests;
 #[path = "panic_tests.rs"]
 mod panic_tests;
 
@@ -21,6 +23,20 @@ impl Server {
         S: Send + Sync + 'static,
         E: 'static,
     {
+        // Existing lifecycle fixtures explicitly accept their localhost Host;
+        // public serve/serve_listener do not supply an authority default.
+        let options = if options.authority.is_none() {
+            authority(
+                options,
+                "https://localhost",
+                vec!["localhost".to_owned()],
+                1,
+                128,
+            )
+            .unwrap()
+        } else {
+            options
+        };
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let (stopped, shutdown) = oneshot::channel();
@@ -1540,7 +1556,14 @@ async fn graceful_shutdown_finishes_an_in_flight_handler_and_response() {
     let task = tokio::spawn(serve_listener(
         listener,
         app,
-        options(1024, 1000, 1000, 1200).unwrap(),
+        authority(
+            options(1024, 1000, 1000, 1200).unwrap(),
+            "https://localhost",
+            vec!["localhost".to_owned()],
+            1,
+            128,
+        )
+        .unwrap(),
         async {
             stopping.await.unwrap();
             observed.send(()).unwrap();

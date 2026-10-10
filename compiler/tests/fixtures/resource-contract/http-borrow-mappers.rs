@@ -123,6 +123,10 @@ pub mod http {
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::send_timeout as send_timeout;
     #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::authority as authority;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::trusted_proxy as trusted_proxy;
+    #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::public_policy as public_policy;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::authenticated_policy as authenticated_policy;

@@ -60,7 +60,7 @@ Header names are case-insensitive. Single-header getters reject duplicates; `hea
 
 `text` and `bytes` copy borrowed input into a body owned by the Response. `json` borrows its value, so it does not move the original. String literals can be passed directly to view parameters; borrow variables with `view(value)`.
 
-Header append consumes and returns the response. It preserves duplicate nonreserved headers such as X-Trace. It rejects Content-Length, Transfer-Encoding, Content-Type, Set-Cookie, WWW-Authenticate, Cache-Control, Vary, CORS, CSP, nosniff, and other security-managed headers. Cookie/Session issuance remains unimplemented until SF02. HEAD omits the body while retaining its GET-equivalent length. 204, 205, and 304 omit the body. Successful CONNECT tunnels are unsupported: the server returns 501 and closes the connection.
+Header append consumes and returns the response. It preserves duplicate nonreserved headers such as X-Trace. It rejects Content-Length, Transfer-Encoding, Content-Type, Set-Cookie, WWW-Authenticate, Cache-Control, Vary, CORS, CSP, nosniff, and other security-managed headers. Cookie/Session issuance remains unimplemented until SF02. HEAD omits the body while retaining its GET-equivalent length. 204, 205, and 304 omit the body. Authority-form CONNECT returns 400 at the startup-configuration gate below. If an origin-form CONNECT handler returns success, tunnels remain unsupported: the server returns 501 and closes the connection.
 
 ## App and routes
 
@@ -68,7 +68,8 @@ Header append consumes and returns the response. It preserves duplicate nonreser
 app = http.app[State, AuthError](state, map_error)
 app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), handle)
 app = try http.route_mapped(app, http.Method.POST, "/login", http.public_policy[State](), login, map_login_error)
-return await http.serve(app, 8080, http.default_options())
+limits = try http.authority(http.default_options(), "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
+return await http.serve(app, 8080, limits)
 ```
 
 - `app[S, E](state, mapper)` owns the state and uses `fn(E) -> Response` as its default error mapper.
@@ -85,6 +86,23 @@ In Nagi 0.1.10, an unwinding panic in a handler or mapper before the response st
 When an error response needs a request ID, retain the validated ID in the handler and move it into a custom error only on failure. The [quote API example](../../test-nagi-code/application-examples/quote-api/README.en.md) passes its ID to a shared mapper this way.
 
 ## Limits and shutdown
+
+The 0.2.0 development source requires checked authority configuration for `serve` and Rust `serve_listener`. Bare `default_options()`/`options(...)` fails startup.
+
+| Startup setting | Contract |
+|---|---|
+| `authority(options, external_origin, authorities: List[str], entry_limit, byte_limit)` | Checks an HTTPS origin and a finite accepted wire-authority set; returns `Result[Options, Error]`. Limits are positive finite counts/bytes. Empty sets, canonical duplicates, invalid origin/authority and exceeded limits fail |
+| `trusted_proxy(options, peer_ips: List[str])` | Requires configured authority; sets a real TCP peer IP ACL under the same finite count/byte limits. Empty, invalid, unspecified/multicast and duplicate canonical peers fail. Exact IPs, not CIDR/DNS |
+
+Origin is only `https://host[:port]`, without path/userinfo/query/fragment. Omitted and explicit wire ports such as `:443` are separate entries. DNS ASCII case is normalized; IPs use the standard IP parser. IPv6 needs brackets. A host made only of digits and dots is rejected unless the standard IPv4 parser accepts it. Ports are canonical decimal 1–65535; leading zeros, userinfo, `%`/zones, trailing dots, Unicode and comma lists are rejected. Configure pre-canonical ASCII IDNA A-labels; runtime performs no Unicode conversion or IDNA-equivalence guarantee. Proxy peers alone normalize IPv4-mapped IPv6 to IPv4 with standard IP types and reject resulting duplicates.
+
+Reconfiguring authority or overwriting a proxy ACL fails. Setters move Options; pass only a successful Result into startup. Failure never falls back to an earlier configuration.
+
+Before every route, 404/405, body reception, verifier and proof issuance, the gate checks HTTP/1.1 origin-form and exactly one nonempty Host. Malformed/missing/duplicate/nonallowlisted authority, absolute-form/authority-form/`*`, and any Forwarded or X-Forwarded-* presence return 400; HTTP/1.0 returns 505. These runtime rejections use no-store and close. HTTP syntax rejected by Hyper before service invocation, including HTTP/2 prefaces, is delegated to its official parser and reaches no handler/proof. The standard listener is HTTP/1 only.
+
+Direct/proxy profiles are fixed at startup. Proxies must strip Forwarded headers before backend transmission and use a registered internal or pass-through Host. Only the real peer returned by `accept` selects ACL admission; headers never choose trust or origin. A loopback ACL does not authenticate other processes on the same host. Host matching does not waive Origin/CSRF/CORS; this Host slice does not implement those SF03 features.
+
+`serve` provides plaintext loopback HTTP; configuring an origin does not add TLS. Public local response checks and browser authentication have separate requirements. Use a TLS frontend with a browser-trusted certificate, for example external origin `https://localhost:8443`, backend wire `localhost:8080`, peer `127.0.0.1`. HTTP/2 frontends must terminate to HTTP/1.1. Secure Cookies have no localhost exception. Actual TLS/browser and four-OS verification are separate acceptance gates.
 
 | Setting | Default | Setter |
 |---|---|---|
@@ -112,6 +130,7 @@ Example:
 limits = try http.options(1048576, 10000, 2000, 10000)
 limits = try http.capacity(limits, 2048, 512)
 limits = try http.header_limits(limits, 32768, 100)
+limits = try http.authority(limits, "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
 return await http.serve(app, 8080, limits)
 ```
 

@@ -30,4 +30,5 @@ async def main() -> Result[unit, Error]:
     app = try http.route(app, http.Method.GET, "/greet/{id}", http.public_policy[State](), greet)
     app = try http.route(app, http.Method.POST, "/echo", http.public_policy[State](), echo)
     limits = http.default_options()
+    limits = try http.authority(limits, "https://localhost", ["localhost:8094", "127.0.0.1:8094"], 2, 256)
     return await http.serve(app, 8094, limits)

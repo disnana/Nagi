@@ -19,10 +19,13 @@ async def hello(request: http.Request, state: shared[State], access: unit) -> Re
 async def main() -> Result[unit, Error]:
     app = http.app_default[State](State(greeting="Hello, Nagi!"))
     app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), hello)
-    return await http.serve(app, 8080, http.default_options())
+    limits = try http.authority(http.default_options(), "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
+    return await http.serve(app, 8080, limits)
 ```
 
 Save this as `server.nagi` in your working directory and run `nagic run server.nagi` there with the development compiler. In another terminal, `curl http://127.0.0.1:8080/` returns `Hello, Nagi!`. Stop with Ctrl+C. Choose another port if occupied. See [setup](getting-started.md) and the [HTTP reference](http-server.md) for installation, limits and diagnostics.
+
+This checks a public response over plaintext loopback HTTP. An HTTPS origin setting does not add TLS or complete browser authentication, Secure Cookies or Origin/CSRF. Migrate TLS frontend and actual peer/proxy deployment through [authority configuration](http-server.md#limits-and-shutdown).
 
 Policy is nonCopy/nonshared configuration moved into a route; create another policy for another registration. The checker matches Policy state/output against the three handler arguments. Public policy cannot connect a proof-requiring handler. It does not prove that choosing public is appropriate for the business or that verifier/authorizer logic is correct.
 

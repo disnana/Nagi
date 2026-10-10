@@ -120,6 +120,7 @@ async def main() -> Result[unit, Error]:
     limits = try http.options(1048576, 10000, 2000, 10000)
     limits = try http.capacity(limits, 1024, 256)
     port = 8080
+    limits = try http.authority(limits, "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
     return await http.serve(app, port, limits)
 
 # This HTTP-facing projection preserves the primary Error. The SQLite Failure

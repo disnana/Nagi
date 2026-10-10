@@ -25,6 +25,9 @@ use tokio::{net::TcpListener, sync::Semaphore, task::JoinSet};
 
 mod closing_io;
 use closing_io::ClosingIo;
+mod authority;
+use authority::require_authority;
+pub use authority::{authority, trusted_proxy};
 
 pub use axum::http::Method;
 
@@ -487,6 +490,7 @@ pub fn append_header_text(response: Response, name: &str, value: &str) -> Result
 
 #[derive(Debug)]
 pub struct Options {
+    authority: Option<authority::Config>,
     body_bytes: usize,
     body_deadline: Duration,
     handler_deadline: Duration,
@@ -502,6 +506,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            authority: None,
             body_bytes: 1024 * 1024,
             body_deadline: Duration::from_secs(10),
             handler_deadline: Duration::from_secs(2),
@@ -871,17 +876,32 @@ fn transport(status: Status, head: bool, close: bool) -> axum::http::Response<Bu
     }
     response
 }
+fn authority_rejection(status: Status, head: bool) -> axum::http::Response<BufferedBody> {
+    let mut response = transport(status, head, true);
+    response
+        .headers_mut()
+        .insert(names::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
 async fn dispatch<S, E>(
     app: Arc<App<S, E>>,
     request: axum::http::Request<hyper::body::Incoming>,
     options: Arc<Options>,
     requests: Arc<Semaphore>,
+    peer: std::net::IpAddr,
 ) -> Result<axum::http::Response<BufferedBody>, Infallible>
 where
     S: Send + Sync + 'static,
     E: 'static,
 {
     let head = request.method() == Method::HEAD;
+    let Some(authority) = options.authority.as_ref() else {
+        return Ok(authority_rejection(Status::INTERNAL_SERVER_ERROR, head));
+    };
+    if let Err(status) = authority.check(request.version(), request.uri(), request.headers(), peer)
+    {
+        return Ok(authority_rejection(status, head));
+    }
     let connect = request.method() == Method::CONNECT;
     let Ok(matched) = app.paths.at(request.uri().path()) else {
         return Ok(transport(Status::NOT_FOUND, head, true));
@@ -1065,6 +1085,7 @@ where
     S: Send + Sync + 'static,
     E: 'static,
 {
+    require_authority(&options)?;
     let port = u16::try_from(port)
         .ok()
         .filter(|port| *port != 0)
@@ -1089,6 +1110,7 @@ where
     S: Send + Sync + 'static,
     E: 'static,
 {
+    require_authority(&options)?;
     let app = Arc::new(app);
     let options = Arc::new(options);
     let connections = Arc::new(Semaphore::new(options.connections));
@@ -1112,7 +1134,7 @@ where
             _ = &mut shutdown_signal => break,
             result = tasks.join_next(), if !tasks.is_empty() => { let _ = result; }
             accepted = listener.accept() => {
-                let (stream, _) = match accepted {
+                let (stream, peer) = match accepted {
                     Ok(accepted) => accepted,
                     Err(_) => {
                         tokio::select! { _ = &mut shutdown_signal => break, _ = tokio::time::sleep(Duration::from_millis(100)) => {} }
@@ -1129,7 +1151,7 @@ where
                 let service_sending = sending.clone();
                 let service = service_fn(move |request| {
                     let may_have_body = !hyper::body::Body::is_end_stream(request.body());
-                    let future = dispatch(Arc::clone(&app), request, Arc::clone(&options), Arc::clone(&requests));
+                    let future = dispatch(Arc::clone(&app), request, Arc::clone(&options), Arc::clone(&requests), peer.ip());
                     let sending = service_sending.clone();
                     async move {
                         let response = future.await;
