@@ -8,6 +8,12 @@ import subprocess
 import tomllib
 from pathlib import Path
 
+from _release_changelog import (
+    InvalidChangelogEntryError,
+    MissingChangelogEntryError,
+    changelog_entry_from_text,
+)
+
 ROOT = Path(__file__).resolve().parents[2]
 VERSION = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
 GRADLE_VERSION = re.compile(r'^version\s*=\s*["\']([^"\']+)["\']\s*$', re.MULTILINE)
@@ -34,6 +40,18 @@ def versions(ref: str) -> dict[str, str]:
         "vscode": json.loads(git("show", f"{ref}:editors/vscode-nagi/package.json"))["version"],
         "jetbrains": matches[0],
     }
+
+
+def has_formal_changelog_entry(ref: str, component: str, version: str) -> bool:
+    paths = git("ls-tree", "--name-only", ref, "CHANGELOG.md").splitlines()
+    if paths != ["CHANGELOG.md"]:
+        return False
+    text = git("show", f"{ref}:CHANGELOG.md")
+    try:
+        changelog_entry_from_text(text, component, version, ref)
+    except MissingChangelogEntryError:
+        return False
+    return True
 
 
 def plan(base: str, head: str) -> dict[str, str]:
@@ -67,12 +85,24 @@ def plan(base: str, head: str) -> dict[str, str]:
     for component, value in current.items():
         new = version_tuple(value)
         old = version_tuple(previous[component])
-        release = value != previous[component]
-        if release and new <= old:
+        version_changed = value != previous[component]
+        if version_changed and new <= old:
             raise ValueError(f"{component} version must increase: {previous[component]} → {value}")
+        release = False
+        if version_changed or "CHANGELOG.md" in changed:
+            head_has_entry = has_formal_changelog_entry(head, component, value)
+            if head_has_entry:
+                if version_changed:
+                    release = True
+                else:
+                    try:
+                        base_has_entry = has_formal_changelog_entry(base, component, value)
+                    except InvalidChangelogEntryError:
+                        base_has_entry = False
+                    release = not base_has_entry
         result[f"{component}_version"] = value
         result[f"release_{component}"] = str(release).lower()
-        package = (release or packaging_changed
+        package = (version_changed or release or packaging_changed
                    or (component == "nagi" and nagi_changed)
                    or (component == "vscode" and extension_changed)
                    or (component == "jetbrains" and (jetbrains_artifact_changed or jetbrains_pipeline_changed)))
