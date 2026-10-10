@@ -46,7 +46,7 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
             port = available.getsockname()[1]
         stdout_path = directory / f"server-{maximum}.stdout"
         stderr_path = directory / f"server-{maximum}.stderr"
-        child_env = dict(env, NAGI_SAMPLE_PORT=str(port), NAGI_SAMPLE_MAX_QUANTITY=str(maximum))
+        child_env = dict(env, NAGI_SAMPLE_PORT=str(port), NAGI_HTTP_AUTHORITY=f"127.0.0.1:{port}", NAGI_SAMPLE_MAX_QUANTITY=str(maximum))
         with stdout_path.open("w", encoding="utf-8") as stdout, stderr_path.open("w", encoding="utf-8") as stderr:
             process = subprocess.Popen(
                 [str(executable)], cwd=directory, env=child_env,

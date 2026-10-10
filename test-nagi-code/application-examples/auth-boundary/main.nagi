@@ -152,4 +152,6 @@ async def main() -> Result[unit, Error]:
     limits = try http.options(4096, 1000, 1000, 5000)
     limits = try http.capacity(limits, 64, 32)
     limits = try http.security_timeout(limits, 1000)
+    wire_authority = env("NAGI_HTTP_AUTHORITY", "127.0.0.1:8098")
+    limits = try http.authority(limits, "https://localhost", [wire_authority], 1, 256)
     return await http.serve(app, port, limits)
