@@ -78,11 +78,17 @@ def main():
     rec = next(r['stats'] for r in concurrency if r['name'] == 'supervisor_recovery')
     loop = next(r['stats'] for r in concurrency if r['name'] == 'supervisor_crash_loop')
     queue = next(r['stats'] for r in concurrency if r['name'] == 'queue')
-    lifecycle = next(r for r in concurrency if r['name'] == 'db_worker_lifecycle')
+    lifecycle = next(r for r in concurrency if r['name'] in ('db_worker_lifecycle', 'sqlite_pool_lifecycle'))
     assert rec['restarts'] == 3 and not rec['stopped_by_intensity'] and rec['unaffected_iterations'] > 0
     assert loop['restarts'] == 2 and loop['stopped_by_intensity']
     assert queue['completed'] + queue['dead_letter'] == 1000 and queue['peak_in_flight'] <= 8
-    assert lifecycle['before'] == lifecycle['after'] == 0
+    if lifecycle['name'] == 'db_worker_lifecycle':
+        assert lifecycle['before'] == lifecycle['after'] == 0
+    else:
+        assert lifecycle['opened_closed'] == 100
+        assert lifecycle['close'] == 'actual native close/join awaited'
+        # New measurements observe the close contract; they do not expose or
+        # claim the retired Db global worker counter.
     assert tested['passed'] == 29 and fuzz['panics'] == 0 and len(samples) == 12
     assert all(r['requested'] == r['held'] and r['error_count'] == 0 and r['after']['fds'] <= r['before']['fds'] + 1 for r in connections)
     conn_rows = [[r['requested'], r['held'], f"{r['seconds_to_open_and_reply']:.3f}", f"{r['held_stats']['VmRSS']/1024:.2f}", f"{r['after']['VmRSS']/1024:.2f}", r['before']['fds'], r['held_stats']['fds'], r['after']['fds'], r['error_count']] for r in connections]

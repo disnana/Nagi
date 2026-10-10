@@ -1,0 +1,4 @@
+import std.db.sqlite as sqlite;
+fn duplicate(callbacks: view[fn[sqlite.Tx, unit]]) -> List[fn[sqlite.Tx, unit]] {
+    return copy(callbacks);
+}

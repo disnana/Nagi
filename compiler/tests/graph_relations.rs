@@ -524,7 +524,7 @@ fn all_views_use_shortest_unique_physical_suffixes_before_filtering() {
 #[test]
 fn checked_standard_and_database_operations_are_boundaries_not_routing_or_table_guesses() {
     let f = Fixture::new();
-    f.write("main.nagi", "import std.http.server as http\nimport std.actor as actor\nasync def handler(request: http.Request, state: shared[i64], access: unit) -> Result[http.Response, Error]:\n    return ok(http.empty(http.Status.OK))\ndef main():\n    app = http.app_default[i64](1)\n    result = http.route(app, http.Method.GET, \"/items\", http.public_policy[i64](), handler)\nasync def database() -> Result[unit, Error]:\n    database = try await db_open(\":memory:\")\n    try await db_exec(database, \"CREATE TABLE items(value INTEGER)\")\n    await actor.yield_now()\n    return ok(print(0))\n");
+    f.write("main.nagi", "import std.http.server as http\nimport std.actor as actor\nimport std.db.sqlite as sqlite\nasync def handler(request: http.Request, state: shared[i64], access: unit) -> Result[http.Response, Error]:\n    return ok(http.empty(http.Status.OK))\ndef main():\n    app = http.app_default[i64](1)\n    result = http.route(app, http.Method.GET, \"/items\", http.public_policy[i64](), handler)\nasync def database(tx: view[sqlite.Tx]) -> Result[unit, sqlite.Failure]:\n    try await sqlite.exec(tx, sqlite.literal(\"CREATE TABLE items(value INTEGER)\"), sqlite.parameters())\n    await actor.yield_now()\n    return ok(print(0))\n");
     let sources = f.load("main.nagi");
     let graph = graph::calls(&sources.program, &sources);
     let http = nagic::stdlib::module("std.http.server").unwrap();
@@ -549,8 +549,12 @@ fn checked_standard_and_database_operations_are_boundaries_not_routing_or_table_
         assert!(node(&graph, &id).label.contains("Rust API"));
         assert!(node(&graph, &id).source.is_none());
     }
-    for name in ["db_open", "db_exec"] {
-        let id = format!("builtin:{name}");
+    for name in ["exec", "literal", "parameters"] {
+        let id = graph::definition_id(&DefId {
+            module: nagic::stdlib::module("std.db.sqlite").unwrap(),
+            kind: DefKind::Function,
+            name: name.into(),
+        });
         assert!(edge(
             &graph,
             &f.definition("main.nagi", "database"),

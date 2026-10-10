@@ -73,15 +73,8 @@ These functions are asynchronous. The table lists types **after awaiting**. Extr
 | Call | Argument types, in order | Type after await | Purpose |
 |---|---|---|---|
 | `sleep(milliseconds)` | i64 | `unit` | Waits for an i64 number of milliseconds |
-| `db_open(path)` | str / view[str] | `Result[Db, Error]` | Opens SQLite; `:memory:` uses memory |
-| `db_exec(db, sql)` | Db, str / view[str] | `Result[i64, Error]` | Executes SQL and returns affected row count |
-| `db_all[User](db, sql)` | Db, str / view[str] | `Result[List[User], Error]` | Reads multiple rows; currently no bind arguments |
-| `db_query[User](db, sql, id)` | Db, str / view[str], i64 | `Result[User?, Error]` | Reads one row with one i64 bind argument |
-| `db_write(db, sql, id)` | Db, str / view[str], i64 | `Result[i64, Error]` | One i64 bind argument; returns affected row count |
-| `db_insert[User](db, sql, text, number)` | Db, str / view[str], str, i32 | `Result[User, Error]` | Bind arguments are str and i32 |
-| `db_update[User](db, sql, id, text, number)` | Db, str / view[str], i64, str, i32 | `Result[User, Error]` | Bind arguments are i64, str, and i32 |
 
-SQL and path accept str/view[str]. Port is i64. Insert/update text is an owned str moved to the worker. Their SQL must use `RETURNING` with columns matching the specified class. The SQL API currently has fixed argument shapes. See [SQLite](database.md).
+Unreleased SF05 removes Db/db_* with concrete `SF05 migration` diagnostics. Use literal Query, Parameters, and Pool/Tx from `std.db.sqlite`; see [SQLite](database.md) and [migration](migration-0.2.0.md).
 
 ## Sharing and type sizes
 

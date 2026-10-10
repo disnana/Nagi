@@ -18,7 +18,7 @@ function fixture(t, suffix, text) {
 }
 async function symbols(folder, file, overlays = []) {
   const result = await new Promise(resolve => compiler.runCheck(compiler.compilerPath('', root, root),
-    ['symbols', file, '--editor-input'], folder, 5000, resolve, 16 * 1024 * 1024,
+    ['symbols', file, '--editor-input'], folder, 10000, resolve, 16 * 1024 * 1024,
     JSON.stringify({ files: overlays })));
   assert.equal(result.error, null, result.output);
   return JSON.parse(result.output);

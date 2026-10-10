@@ -1,0 +1,18 @@
+[
+  {
+    "form": "high",
+    "check": "passed",
+    "build": "passed",
+    "exit": 0,
+    "stdout": "7\nclosed\n",
+    "stderr": ""
+  },
+  {
+    "form": "saved-low",
+    "check": "passed",
+    "build": "passed",
+    "exit": 0,
+    "stdout": "7\nclosed\n",
+    "stderr": ""
+  }
+]

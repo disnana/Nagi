@@ -1,0 +1,64 @@
+{
+  "source_url": "https://api.github.com/repos/disnana/Nagi/actions/runs/38031503012/jobs?per_page=100",
+  "recorded_at_utc": "2026-10-10 07:15:53 UTC",
+  "head_sha": "5e992b6cd775912b6886c0b6763a4364642c5132",
+  "jobs": [
+    {
+      "name": "release-plan",
+      "status": "completed",
+      "conclusion": "failure",
+      "id": 114153222296,
+      "head_sha": "5e992b6cd775912b6886c0b6763a4364642c5132"
+    },
+    {
+      "name": "changes",
+      "status": "completed",
+      "conclusion": "success",
+      "id": 114153222415,
+      "head_sha": "5e992b6cd775912b6886c0b6763a4364642c5132"
+    },
+    {
+      "name": "linux",
+      "status": "completed",
+      "conclusion": "success",
+      "id": 114153251173,
+      "head_sha": "5e992b6cd775912b6886c0b6763a4364642c5132"
+    },
+    {
+      "name": "vscode-package",
+      "status": "completed",
+      "conclusion": "skipped",
+      "id": 114153265589,
+      "head_sha": "5e992b6cd775912b6886c0b6763a4364642c5132"
+    },
+    {
+      "name": "jetbrains",
+      "status": "completed",
+      "conclusion": "skipped",
+      "id": 114153265696,
+      "head_sha": "5e992b6cd775912b6886c0b6763a4364642c5132"
+    },
+    {
+      "name": "nagi-package",
+      "status": "completed",
+      "conclusion": "skipped",
+      "id": 114153265699,
+      "head_sha": "5e992b6cd775912b6886c0b6763a4364642c5132"
+    },
+    {
+      "name": "Ready to merge",
+      "status": "completed",
+      "conclusion": "failure",
+      "id": 114155924676,
+      "head_sha": "5e992b6cd775912b6886c0b6763a4364642c5132"
+    },
+    {
+      "name": "publish-release",
+      "status": "completed",
+      "conclusion": "skipped",
+      "id": 114155925580,
+      "head_sha": "5e992b6cd775912b6886c0b6763a4364642c5132"
+    }
+  ],
+  "limitation": "Readback of the original public head; not a corrected-head CI result."
+}

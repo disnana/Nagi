@@ -1,0 +1,26 @@
+{
+  "format": "nagi-recorded-confirmation-v1",
+  "started_utc": "2026-10-10T07:14:27.212405+00:00",
+  "finished_utc": "2026-10-10T07:14:27.491387+00:00",
+  "argv": [
+    "python3",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "scripts/releases",
+    "-p",
+    "test_verify.py",
+    "-v"
+  ],
+  "cwd": "/workspace/Nagi-security-sf05",
+  "exit_code": 0,
+  "elapsed_seconds": 0.27899586595594883,
+  "purpose": "A new recorded confirmation of the already reviewed test-only mock fix because original command receipt was not retained. Original RED/GREEN files remain unchanged.",
+  "source_sha256_before": "d75c9a3a27eaeac11214a870226c59655fbb9266ca529cfbd0a2e7508149da37",
+  "source_sha256_after": "d75c9a3a27eaeac11214a870226c59655fbb9266ca529cfbd0a2e7508149da37",
+  "original_packet_manifest_sha256": "571bb061fe724776d2ad7e2e009f95579f828947f616853373b2b742b622dd3f",
+  "stdout_sha256": "b2020c7747125eb1e10bb2c4f5b0314c1b070ac11f9875b027793e2f83ddb563",
+  "stderr_sha256": "276730aa1f0e92e4052db517ffb5298e83ed83bce8199cce96c5e1bab5b9f1e5",
+  "scope": "17 mocked Python verifier tests; not an actual compiler, SQL engine, native distribution or four-OS execution."
+}

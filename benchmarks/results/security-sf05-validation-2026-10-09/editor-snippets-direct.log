@@ -1,0 +1,272 @@
+✖ High Function snippet defaults compile in their declared context (11.381806ms)
+✖ High Class snippet defaults compile in their declared context (2.65512ms)
+✖ High Enum snippet defaults compile in their declared context (8.578652ms)
+✖ High Main snippet defaults compile in their declared context (2.320232ms)
+✖ High Async main snippet defaults compile in their declared context (2.536788ms)
+✖ High HTTP server snippet defaults compile in their declared context (2.407325ms)
+✖ High GET handler snippet defaults compile in their declared context (1.918395ms)
+✖ High POST handler snippet defaults compile in their declared context (1.939347ms)
+✖ High Loop snippet defaults compile in their declared context (2.474171ms)
+✖ High Borrowed array snippet defaults compile in their declared context (3.090699ms)
+✖ High Result match snippet defaults compile in their declared context (2.261298ms)
+✖ High Nullable match snippet defaults compile in their declared context (2.728293ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 0
+ℹ fail 12
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 54.193638
+
+✖ failing tests:
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Function snippet defaults compile in their declared context (11.381806ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic ENOENT
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Class snippet defaults compile in their declared context (2.65512ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic ENOENT
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Enum snippet defaults compile in their declared context (8.578652ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic ENOENT
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Main snippet defaults compile in their declared context (2.320232ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic ENOENT
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Async main snippet defaults compile in their declared context (2.536788ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic ENOENT
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High HTTP server snippet defaults compile in their declared context (2.407325ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic ENOENT
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High GET handler snippet defaults compile in their declared context (1.918395ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic ENOENT
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High POST handler snippet defaults compile in their declared context (1.939347ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic ENOENT
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Loop snippet defaults compile in their declared context (2.474171ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic ENOENT
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Borrowed array snippet defaults compile in their declared context (3.090699ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic ENOENT
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Result match snippet defaults compile in their declared context (2.261298ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic ENOENT
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }
+
+test at editors/vscode-nagi/test/high-snippets.test.js:23:3
+✖ High Nullable match snippet defaults compile in their declared context (2.728293ms)
+  AssertionError [ERR_ASSERTION]: ifError got unwanted exception: spawnSync nagic ENOENT
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:41:12)
+      at Object.spawnSync (node:internal/child_process:1160:20)
+      at spawnSync (node:child_process:928:24)
+      at TestContext.<anonymous> (/workspace/Nagi-security-sf05/editors/vscode-nagi/test/high-snippets.test.js:39:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Error],
+    expected: null,
+    operator: 'ifError',
+    diff: 'simple'
+  }

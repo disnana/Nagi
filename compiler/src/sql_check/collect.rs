@@ -29,24 +29,16 @@ pub(super) fn collect(program: &Program) -> Result<Vec<Site>, String> {
             } else {
                 None
             };
-            let (operation, bind_count) = match standard {
+            let operation = match standard {
                 Some(
                     crate::stdlib::Operation::SqliteQuery | crate::stdlib::Operation::SqliteAll,
-                ) => (Some(Operation::SqliteRows), None),
-                Some(crate::stdlib::Operation::SqliteExec) => (Some(Operation::SqliteExec), None),
-                _ if expression.resolution == Some(NameResolution::Builtin) => {
-                    match name.as_str() {
-                        "db_all" => (Some(Operation::All), Some(0)),
-                        "db_query" => (Some(Operation::Query), Some(1)),
-                        "db_insert" => (Some(Operation::Insert), Some(2)),
-                        "db_update" => (Some(Operation::Update), Some(3)),
-                        "db_write" => (Some(Operation::Write), Some(1)),
-                        "db_exec" => (None, Some(0)),
-                        _ => return,
-                    }
-                }
+                ) => Some(Operation::SqliteRows),
+                Some(crate::stdlib::Operation::SqliteExec) => Some(Operation::SqliteExec),
                 _ => return,
             };
+            let bind_count = arguments
+                .get(2)
+                .and_then(|arg| parameter_count(program, arg));
             if sites.len() >= MAX_QUERIES {
                 failure = Some(format!(
                     "line {}: SQL check exceeds the {MAX_QUERIES} call-site limit",
@@ -55,7 +47,14 @@ pub(super) fn collect(program: &Program) -> Result<Vec<Site>, String> {
                 return;
             }
             let sql = arguments.get(1).and_then(|argument| {
-                if let E::Str(sql) = &argument.kind {
+                let E::Call(_, _, args) = &argument.kind else {
+                    return None;
+                };
+                if standard_call(program, argument) != Some(crate::stdlib::Operation::SqliteLiteral)
+                {
+                    return None;
+                }
+                if let E::Str(sql) = &args.first()?.kind {
                     Some(sql.as_str())
                 } else {
                     None
@@ -67,10 +66,8 @@ pub(super) fn collect(program: &Program) -> Result<Vec<Site>, String> {
                 .and_then(|row| classes.get(row.0.as_str()))
                 .map(|class| class.fields.as_slice())
                 .unwrap_or_default();
-            let reason = if operation.is_none() {
-                Some("db_exec scripts are checked at runtime")
-            } else if sql.is_none() {
-                Some("dynamic SQL is checked at runtime")
+            let reason = if sql.is_none() {
+                Some("Query structure is not statically available; checked at runtime")
             } else if bind_count.is_none() {
                 Some("Parameters bind count is unknown; checked at runtime")
             } else {
@@ -113,6 +110,39 @@ pub(super) fn collect(program: &Program) -> Result<Vec<Site>, String> {
         }
     }
     Ok(sites)
+}
+
+fn standard_call(program: &Program, expression: &Expr) -> Option<crate::stdlib::Operation> {
+    let E::Call(name, _, _) = &expression.kind else {
+        return None;
+    };
+    if expression.resolution != Some(NameResolution::Standard) {
+        return None;
+    }
+    let operation = crate::stdlib::operation(name)?;
+    (program.modules.definition(name).map(|d| &d.id)
+        == Some(&crate::stdlib::function_id(operation)))
+    .then_some(operation)
+}
+// Count only canonical, checked constructor chains. No SQL parser or folding
+// of arbitrary user functions/variables; unknown values retain runtime checks.
+fn parameter_count(program: &Program, expression: &Expr) -> Option<usize> {
+    use crate::stdlib::Operation as O;
+    if let E::Try(inner) = &expression.kind {
+        return parameter_count(program, inner);
+    }
+    let E::Call(_, _, args) = &expression.kind else {
+        return None;
+    };
+    match standard_call(program, expression)? {
+        O::SqliteParameters => Some(0),
+        O::SqliteBindI64
+        | O::SqliteBindF64
+        | O::SqliteBindText
+        | O::SqliteBindBytes
+        | O::SqliteBindNull => parameter_count(program, args.first()?)?.checked_add(1),
+        _ => None,
+    }
 }
 
 fn unowned(mut ty: &Type) -> &Type {
@@ -188,21 +218,24 @@ mod tests {
         sync::atomic::{AtomicU64, Ordering},
     };
 
-    fn checked(source: &str) -> Program {
-        let mut program = parser::parse(source, true).unwrap();
-        check::check(&mut program).unwrap();
-        program
+    fn checked(text: &str) -> Program {
+        let fixture = Fixture::new();
+        fixture.write("main.nagi", text);
+        let mut loaded = source::load(&fixture.0.join("main.nagi"), true).unwrap();
+        check::check(&mut loaded.program).unwrap();
+        loaded.program
     }
 
-    const OPERATIONS: &str = r#"class Row:
+    const OPERATIONS: &str = r#"import std.db.sqlite as sqlite
+class Row:
     id: i64
     type: str
-async def read(db: Db) -> Result[unit, Error]:
-    rows = try await db_all[Row](db, "SELECT id, type FROM items")
-    row = try await db_query[Row](db, "SELECT id, type FROM items WHERE id = ?", 1)
-    inserted = try await db_insert[Row](db, "INSERT INTO items(type, id) VALUES (?, ?) RETURNING id, type", "name", 1)
-    updated = try await db_update[Row](db, "UPDATE items SET type = ?, id = ? WHERE id = ? RETURNING id, type", 1, "name", 2)
-    changed = try await db_write(db, "DELETE FROM items WHERE id = ?", 1)
+async def read(db: view[sqlite.Tx]) -> Result[unit, sqlite.Failure]:
+    rows = try await sqlite.all[Row](db, sqlite.literal("SELECT id, type FROM items"), sqlite.parameters())
+    row = try await sqlite.query[Row](db, sqlite.literal("SELECT id, type FROM items WHERE id = ?"), sqlite.bind_i64(sqlite.parameters(),1))
+    inserted = try await sqlite.exec(db, sqlite.literal("INSERT INTO items(type, id) VALUES (?, ?)"), sqlite.bind_i64(sqlite.bind_text(sqlite.parameters(),"name"),1))
+    updated = try await sqlite.exec(db, sqlite.literal("UPDATE items SET type = ?, id = ? WHERE id = ?"), sqlite.bind_i64(sqlite.bind_i64(sqlite.bind_text(sqlite.parameters(),"name"),2),1))
+    changed = try await sqlite.exec(db, sqlite.literal("DELETE FROM items WHERE id = ?"), sqlite.bind_i64(sqlite.parameters(),1))
     return ok(print(changed))
 "#;
 
@@ -215,11 +248,11 @@ async def read(db: Db) -> Result[unit, Error]:
             let sites = collect(program).unwrap();
             assert_eq!(sites.len(), 5);
             for (index, (operation, binds)) in [
-                (Operation::All, 0),
-                (Operation::Query, 1),
-                (Operation::Insert, 2),
-                (Operation::Update, 3),
-                (Operation::Write, 1),
+                (Operation::SqliteRows, 0),
+                (Operation::SqliteRows, 1),
+                (Operation::SqliteExec, 2),
+                (Operation::SqliteExec, 3),
+                (Operation::SqliteExec, 1),
             ]
             .into_iter()
             .enumerate()
@@ -230,7 +263,7 @@ async def read(db: Db) -> Result[unit, Error]:
                 assert!(sites[index].reason.is_none());
                 assert_eq!(
                     sites[index].fields,
-                    if index == 4 {
+                    if index >= 2 {
                         Vec::<String>::new()
                     } else {
                         vec!["id".into(), "type".into()]
@@ -244,42 +277,40 @@ async def read(db: Db) -> Result[unit, Error]:
                 .iter()
                 .map(|site| site.line)
                 .collect::<Vec<_>>(),
-            vec![5, 6, 7, 8, 9]
+            vec![6, 7, 8, 9, 10]
         );
     }
 
     #[test]
     fn same_named_user_function_and_local_function_value_are_not_sql_calls() {
         let functions = checked(
-            "def db_all(db: Db, sql: str) -> i64:\n    return 1\ndef read(db: Db) -> i64:\n    return db_all(db, \"this is not SQL\")\n",
+            "def db_all(db: i64, sql: str) -> i64:\n    return 1\ndef read(db: i64) -> i64:\n    return db_all(db, \"this is not SQL\")\n",
         );
         assert!(collect(&functions).unwrap().is_empty());
         let locals = checked(
-            "def fake(db: Db, sql: str) -> i64:\n    return 1\ndef read(db: Db) -> i64:\n    db_all = fake\n    return db_all(db, \"this is not SQL\")\n",
+            "def fake(db: i64, sql: str) -> i64:\n    return 1\ndef read(db: i64) -> i64:\n    db_all = fake\n    return db_all(db, \"this is not SQL\")\n",
         );
         assert!(collect(&locals).unwrap().is_empty());
     }
 
     #[test]
-    fn dynamic_sql_and_exec_scripts_remain_visible_as_excluded_sites() {
-        let program = checked(
-            "class Row:\n    id: i64\nasync def read(db: Db, sql: str) -> Result[unit, Error]:\n    rows = try await db_all[Row](db, sql)\n    borrowed = try await db_all[Row](db, view(\"SELECT id FROM items\"))\n    changed = try await db_exec(db, \"CREATE TABLE items(id INTEGER); DELETE FROM items\")\n    return ok(print(changed))\n",
-        );
+    fn query_values_remain_visible_as_sites_with_unavailable_static_structure() {
+        let program=checked("import std.db.sqlite as sqlite\nclass Row:\n    id: i64\nasync def read(db: view[sqlite.Tx], query: sqlite.Query) -> Result[unit, sqlite.Failure]:\n    rows = try await sqlite.all[Row](db, query, sqlite.parameters())\n    selected = sqlite.literal(\"SELECT id FROM items\")\n    borrowed = try await sqlite.all[Row](db, selected, sqlite.parameters())\n    changed = try await sqlite.exec(db, sqlite.literal(\"CREATE TABLE items(id INTEGER)\"), sqlite.parameters())\n    return ok(print(changed))\n");
         let sites = collect(&program).unwrap();
         assert_eq!(sites.len(), 3);
         assert!(sites[..2]
             .iter()
-            .all(|site| site.sql.is_none() && site.reason.is_some()));
-        assert!(sites[2].operation.is_none());
-        assert_eq!(sites[2].operation_name, "db_exec");
+            .all(|site| site.sql.is_none() && site.reason.as_ref().unwrap().contains("structure")));
+        assert_eq!(sites[2].operation, Some(Operation::SqliteExec));
+        assert_eq!(sites[2].operation_name, "sqlite.exec");
         assert!(sites[2].sql.as_ref().unwrap().contains("CREATE TABLE"));
-        assert!(sites[2].reason.as_ref().unwrap().contains("scripts"));
+        assert!(sites[2].reason.is_none());
     }
 
     #[test]
     fn conditional_loop_and_match_bodies_are_collected_once() {
         let program = checked(
-            "class Row:\n    id: i64\nasync def read(db: Db) -> Result[unit, Error]:\n    if true:\n        rows = try await db_all[Row](db, \"SELECT id FROM first\")\n    else:\n        rows = try await db_all[Row](db, \"SELECT id FROM second\")\n    for index in range(2):\n        rows = try await db_all[Row](db, \"SELECT id FROM looped\")\n    while false:\n        rows = try await db_all[Row](db, \"SELECT id FROM waited\")\n    result = await db_all[Row](db, \"SELECT id FROM matched\")\n    match result:\n        case Ok(rows):\n            print(len(view(rows)))\n        case Err(error):\n            rows = try await db_all[Row](db, \"SELECT id FROM failed\")\n    return ok(print(1))\n",
+            "import std.db.sqlite as sqlite\nclass Row:\n    id: i64\nasync def read(db: view[sqlite.Tx]) -> Result[unit, sqlite.Failure]:\n    if true:\n        rows = try await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM first\"), sqlite.parameters())\n    else:\n        rows = try await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM second\"), sqlite.parameters())\n    for index in range(2):\n        rows = try await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM looped\"), sqlite.parameters())\n    while false:\n        rows = try await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM waited\"), sqlite.parameters())\n    result = await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM matched\"), sqlite.parameters())\n    match result:\n        case Ok(rows):\n            print(len(view(rows)))\n        case Err(error):\n            rows = try await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM failed\"), sqlite.parameters())\n    return ok(print(1))\n",
         );
         let sites = collect(&program).unwrap();
         assert_eq!(sites.len(), 6);
@@ -303,7 +334,7 @@ async def read(db: Db) -> Result[unit, Error]:
     #[test]
     fn nested_value_expressions_returns_and_scope_spawn_keep_each_actual_call() {
         let program = checked(
-            "class Row:\n    id: i64\nclass Batch:\n    rows: List[Row]\nasync def work(count: i64):\n    print(count)\nasync def read(db: Db) -> Result[i64, Error]:\n    batch = Batch(rows=try await db_all[Row](db, \"SELECT id FROM records\"))\n    batches = [try await db_all[Row](db, \"SELECT id FROM lists\")]\n    total = (try await db_all[Row](db, \"SELECT id FROM indexed\"))[0].id + len(view(try await db_all[Row](db, \"SELECT id FROM counted\")))\n    negative = -(try await db_all[Row](db, \"SELECT id FROM negated\"))[0].id\n    async with scope:\n        spawn work(try await db_write(db, \"DELETE FROM spawned WHERE id = ?\", 1))\n    return await db_write(db, \"DELETE FROM returned WHERE id = ?\", 1)\n",
+            "import std.db.sqlite as sqlite\nclass Row:\n    id: i64\nclass Batch:\n    rows: List[Row]\nasync def work(count: Result[i64, sqlite.Failure]):\n    print(1)\nasync def read(db: view[sqlite.Tx]) -> Result[i64, sqlite.Failure]:\n    batch = Batch(rows=try await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM records\"), sqlite.parameters()))\n    batches = [try await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM lists\"), sqlite.parameters())]\n    total = (try await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM indexed\"), sqlite.parameters()))[0].id + len(view(try await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM counted\"), sqlite.parameters())))\n    negative = -(try await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM negated\"), sqlite.parameters()))[0].id\n    return await sqlite.exec(db, sqlite.literal(\"DELETE FROM returned WHERE id = ?\"), sqlite.bind_i64(sqlite.parameters(), 1))\nasync def scoped(db: view[sqlite.Tx]) -> Result[unit, Error]:\n    async with scope:\n        spawn work(await sqlite.exec(db, sqlite.literal(\"DELETE FROM spawned WHERE id = ?\"), sqlite.bind_i64(sqlite.parameters(), 1)))\n    return ok(print(1))\n",
         );
         let sites = collect(&program).unwrap();
         assert_eq!(sites.len(), 7);
@@ -318,8 +349,8 @@ async def read(db: Db) -> Result[unit, Error]:
                 "SELECT id FROM indexed",
                 "SELECT id FROM counted",
                 "SELECT id FROM negated",
-                "DELETE FROM spawned WHERE id = ?",
                 "DELETE FROM returned WHERE id = ?",
+                "DELETE FROM spawned WHERE id = ?",
             ]
         );
     }
@@ -327,25 +358,25 @@ async def read(db: Db) -> Result[unit, Error]:
     #[test]
     fn integrated_native_replacements_only_collect_the_final_function_body() {
         let mut program = checked(
-            "class Row:\n    id: i64\nasync def read(db: Db) -> Result[List[Row], Error]:\n    return await db_all[Row](db, \"SELECT id FROM discarded\")\n",
+            "import std.db.sqlite as sqlite\nclass Row:\n    id: i64\nasync def read(db: view[sqlite.Tx]) -> Result[List[Row], sqlite.Failure]:\n    return await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM discarded\"), sqlite.parameters())\n",
         );
-        let native = parser::parse(
-            "@replace generated::read\nasync fn read(db: Db) -> Result[List[Row], Error] { return await db_all[Row](db, \"SELECT id FROM actual\"); }\n",
-            false,
-        )
-        .unwrap();
+        let fixture = Fixture::new();
+        fixture.write("replacement.low", "import std.db.sqlite as sqlite;\n@replace generated::read\nasync fn read(db: view[sqlite.Tx]) -> Result[List[Row], sqlite.Failure] { return await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM actual\"), sqlite.parameters()); }\n");
+        let native = source::load(&fixture.0.join("replacement.low"), false)
+            .unwrap()
+            .program;
         check::integrate(&mut program, native).unwrap();
         let sites = collect(&program).unwrap();
         assert_eq!(sites.len(), 1);
         assert_eq!(sites[0].sql.as_deref(), Some("SELECT id FROM actual"));
         assert_eq!(sites[0].fields, ["id"]);
-        assert_eq!(sites[0].line, 2);
+        assert_eq!(sites[0].line, 3);
     }
 
     #[test]
     fn repeated_row_metadata_is_bounded_before_building_the_worker_request() {
         let mut program = checked(
-            "class Row:\n    id: i64\nasync def read(db: Db) -> Result[List[Row], Error]:\n    return await db_all[Row](db, \"SELECT id FROM users\")\n",
+            "import std.db.sqlite as sqlite\nclass Row:\n    id: i64\nasync def read(db: view[sqlite.Tx]) -> Result[List[Row], sqlite.Failure]:\n    return await sqlite.all[Row](db, sqlite.literal(\"SELECT id FROM users\"), sqlite.parameters())\n",
         );
         // The declaration and calls together are small. Expanding each call's
         // required-field metadata would exceed the request's memory budget.
@@ -362,19 +393,19 @@ async def read(db: Db) -> Result[unit, Error]:
         let error = collect(&program)
             .err()
             .expect("repeated fields must be bounded");
-        assert!(error.starts_with("line 4:"), "{error}");
+        assert!(error.starts_with("line 5:"), "{error}");
         assert!(error.contains("metadata/input limit"), "{error}");
     }
 
     #[test]
     fn collection_rejects_excessive_sites_at_the_first_over_limit_call() {
         let mut program = checked(
-            "async def read(db: Db) -> Result[i64, Error]:\n    return await db_write(db, \"DELETE FROM users WHERE id = ?\", 1)\n",
+            "import std.db.sqlite as sqlite\nasync def read(db: view[sqlite.Tx]) -> Result[i64, sqlite.Failure]:\n    return await sqlite.exec(db, sqlite.literal(\"DELETE FROM users WHERE id = ?\"), sqlite.bind_i64(sqlite.parameters(), 1))\n",
         );
         let statement = program.functions[0].body[0].clone();
         program.functions[0].body = vec![statement; MAX_QUERIES + 1];
         let error = collect(&program).err().expect("too many sites must fail");
-        assert!(error.starts_with("line 2:"), "{error}");
+        assert!(error.starts_with("line 3:"), "{error}");
         assert!(error.contains("call-site limit"), "{error}");
     }
 
@@ -403,7 +434,7 @@ async def read(db: Db) -> Result[unit, Error]:
     #[test]
     fn sqlite_canonical_calls_and_saved_low_keep_unknown_bind_metadata() {
         let fixture = Fixture::new();
-        fixture.write("main.nagi", "import std.db.sqlite as sqlite\nclass Row:\n    id: i64\nasync def read(tx: sqlite.Tx, sql: str) -> Result[unit, sqlite.Failure]:\n    row = try await sqlite.query[Row](tx, \"SELECT id FROM users WHERE id=?\", sqlite.parameters())\n    rows = try await sqlite.all[Row](tx, sql, sqlite.parameters())\n    count = try await sqlite.exec(tx, \"CREATE TABLE new_table(id INTEGER)\", sqlite.parameters())\n    return await sqlite.rollback(tx)\n");
+        fixture.write("main.nagi", "import std.db.sqlite as sqlite\nclass Row:\n    id: i64\nasync def read(tx: sqlite.Tx, sql: sqlite.Query, params: sqlite.Parameters) -> Result[unit, sqlite.Failure]:\n    row = try await sqlite.query[Row](tx, sqlite.literal(\"SELECT id FROM users WHERE id=?\"), params)\n    rows = try await sqlite.all[Row](tx, sql, sqlite.parameters())\n    count = try await sqlite.exec(tx, sqlite.literal(\"CREATE TABLE new_table(id INTEGER)\"), sqlite.parameters())\n    return await sqlite.rollback(tx)\n");
         let mut loaded = source::load(&fixture.0.join("main.nagi"), true).unwrap();
         check::check(&mut loaded.program).unwrap();
         let mut low = parser::parse(&emit::low(&loaded.program), false).unwrap();
@@ -413,7 +444,10 @@ async def read(db: Db) -> Result[unit, Error]:
             assert_eq!(sites.len(), 3);
             assert_eq!(sites[0].operation, Some(Operation::SqliteRows));
             assert_eq!(sites[2].operation, Some(Operation::SqliteExec));
-            assert!(sites.iter().all(|s| s.bind_count.is_none()));
+            assert_eq!(
+                sites.iter().map(|s| s.bind_count).collect::<Vec<_>>(),
+                [None, Some(0), Some(0)]
+            );
             assert_eq!(sites[0].fields, ["id"]);
             assert!(sites[0].reason.as_ref().unwrap().contains("unknown"));
             assert!(sites[1].sql.is_none());
@@ -431,10 +465,10 @@ async def read(db: Db) -> Result[unit, Error]:
             "left.nagi",
             "class Row:\n    id: owned[i64]\n    type: str\n",
         );
-        fixture.write("right.nagi", "class Row:\n    other: u64\n");
+        fixture.write("right.nagi", "class Row:\n    other: i64\n");
         fixture.write(
             "main.nagi",
-            "import \"left.nagi\" as left\nfrom \"right.nagi\" import Row as Other\nasync def read(db: Db) -> Result[unit, Error]:\n    rows = try await db_all[owned[owned[left.Row]]](db, \"SELECT id, type FROM left_rows\")\n    others = try await db_all[Other](db, \"SELECT other FROM right_rows\")\n    return ok(print(1))\n",
+            "import std.db.sqlite as sqlite\nimport \"left.nagi\" as left\nfrom \"right.nagi\" import Row as Other\nasync def read(db: view[sqlite.Tx]) -> Result[unit, sqlite.Failure]:\n    rows = try await sqlite.all[left.Row](db, sqlite.literal(\"SELECT id, type FROM left_rows\"), sqlite.parameters())\n    others = try await sqlite.all[Other](db, sqlite.literal(\"SELECT other FROM right_rows\"), sqlite.parameters())\n    return ok(print(1))\n",
         );
         let mut loaded = source::load(&fixture.0.join("main.nagi"), true).unwrap();
         check::check(&mut loaded.program).unwrap();
@@ -444,8 +478,7 @@ async def read(db: Db) -> Result[unit, Error]:
             let sites = collect(program).unwrap();
             assert_eq!(sites.len(), 2);
             assert_eq!(sites[0].fields, ["id", "type"]);
-            // Unsupported auto-FromRow fields can still have a Rust impl;
-            // collection must not reject that existing escape hatch.
+            // Same-named row classes retain distinct canonical field shapes.
             assert_eq!(sites[1].fields, ["other"]);
         }
     }

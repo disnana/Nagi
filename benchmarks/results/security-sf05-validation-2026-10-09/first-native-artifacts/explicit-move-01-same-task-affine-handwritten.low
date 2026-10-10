@@ -1,0 +1,17 @@
+import std.db.sqlite as sqlite;
+async fn finish(tx: sqlite.Tx) -> Result[unit, sqlite.Failure] {
+    return await sqlite.commit(tx);
+}
+async fn local(tx: sqlite.Tx) -> Result[unit, sqlite.Failure] {
+    let boxed: Option[sqlite.Tx] = some(tx);
+    match boxed {
+        case Some(inner) {
+            let wrapped: Result[sqlite.Tx, sqlite.Failure] = ok(inner);
+            let delegated: sqlite.Tx = try wrapped;
+            return await finish(delegated);
+        }
+        case None {
+            return ok(print(0));
+        }
+    }
+}

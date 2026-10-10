@@ -1,0 +1,22 @@
+[
+  {
+    "exit_code": 0,
+    "stdout": "{\"site\":\"東京\",\"enabled\":true,\"retries\":3}\n/workspace/Nagi-security-sf05/build/application-example-verification/file-json/low/JSON 設定 d_z6bfi_/倉庫 settings.json\nfile-json: OK\n",
+    "stderr": ""
+  },
+  {
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: File exists (os error 17)\n"
+  },
+  {
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: File exists (os error 17)\n"
+  },
+  {
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Invalid: File exists (os error 17)\n"
+  }
+]

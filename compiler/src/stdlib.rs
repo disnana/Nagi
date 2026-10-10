@@ -117,6 +117,7 @@ pub enum Resource {
     TaskFailureKind,
     SqlitePool,
     SqliteTx,
+    SqliteQueryValue,
     SqliteParameters,
     SqliteOptions,
     SqliteBeginMode,
@@ -190,6 +191,7 @@ pub enum Operation {
     TaskDiscard,
     TaskKind,
     TaskMessage,
+    SqliteLiteral,
     SqliteOptions,
     SqliteOpen,
     SqliteClonePool,
@@ -346,6 +348,7 @@ pub const RESOURCES: &[Resource] = &[
     Resource::TaskFailureKind,
     Resource::SqlitePool,
     Resource::SqliteTx,
+    Resource::SqliteQueryValue,
     Resource::SqliteParameters,
     Resource::SqliteOptions,
     Resource::SqliteBeginMode,
@@ -418,6 +421,7 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::TaskDiscard,
     Operation::TaskKind,
     Operation::TaskMessage,
+    Operation::SqliteLiteral,
     Operation::SqliteOptions,
     Operation::SqliteOpen,
     Operation::SqliteClonePool,
@@ -1097,6 +1101,7 @@ fn resource_contract(resource: Resource) -> &'static ResourceContract {
         | Resource::HttpPolicy => security::resource_contract(resource),
         Resource::SqlitePool
         | Resource::SqliteTx
+        | Resource::SqliteQueryValue
         | Resource::SqliteParameters
         | Resource::SqliteOptions
         | Resource::SqliteBeginMode
@@ -1156,7 +1161,8 @@ pub(crate) fn native_serde_supported(resource: Resource) -> bool {
 pub fn operation_info(operation: Operation) -> &'static OperationInfo {
     match operation {
         Operation::PublicPolicy | Operation::AuthenticatedPolicy | Operation::AuthorizedPolicy | Operation::SecurityTimeout | Operation::AuthSubject | Operation::AuthKind | Operation::AuthMessage | Operation::AuthInvalidCredential | Operation::AuthDenied | Operation::AuthExpired | Operation::AuthInvalidRequest | Operation::AuthUnavailable | Operation::AuthInternal => security::operation_info(operation),
-        Operation::SqliteOptions
+        Operation::SqliteLiteral
+        | Operation::SqliteOptions
         | Operation::SqliteOpen
         | Operation::SqliteClonePool
         | Operation::SqliteBegin

@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "nagic",
+    "--test",
+    "security_sf05",
+    "--",
+    "--nocapture"
+  ],
+  "exit": 101,
+  "seconds": 0.5829317569732666,
+  "baseline": "3b8da226eb26c27187f3b0bc4fa39639abe4ac57",
+  "cache": "/workspace/nagi-sf01-target (warm)",
+  "correction": "try await unwraps Result[Db,Error]; previous inventory variants are unrelated type mismatches, not purpose evidence"
+}

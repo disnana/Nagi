@@ -1,3 +1,5 @@
+import std.db.sqlite as sqlite
+import std.result as result
 import std.http.server as http
 
 class DeviceSettings:
@@ -8,7 +10,7 @@ class DeviceSettings:
     calibration: bytes?
 
 class State:
-    db: Db
+    db: sqlite.Pool
 
 class ErrorBody:
     error: str
@@ -26,7 +28,7 @@ async def health(request: http.Request, state: shared[State], authority: unit) -
 
 async def find_device(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     id = try device_id(view(request))
-    match await db_query[DeviceSettings](state.db, "SELECT id, enabled, gain, label, calibration FROM devices WHERE id = ?1", id):
+    match await storage_find_device(view(state.db), id):
         case Ok(found):
             match found:
                 case Some(device):
@@ -37,17 +39,73 @@ async def find_device(request: http.Request, state: shared[State], authority: un
             return fail(problem)
 
 async def devices(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    rows = try await db_all[DeviceSettings](state.db, "SELECT id, enabled, gain, label, calibration FROM devices ORDER BY id")
+    rows = try await storage_list_devices(view(state.db))
     return http.json[List[DeviceSettings]](http.Status.OK, rows)
 
 async def main() -> Result[unit, Error]:
     path = env("NAGI_SAMPLE_DB", "settings.sqlite")
-    db = try await db_open(path)
-    try await db_exec(db, "CREATE TABLE IF NOT EXISTS devices(id INTEGER PRIMARY KEY, enabled INTEGER, gain REAL, label TEXT, calibration BLOB)")
-    try await db_exec(db, "INSERT OR IGNORE INTO devices VALUES (1, 1, 1.25, NULL, X'0001FF'), (2, NULL, NULL, 'front-door', NULL), (3, 0, 0.5, 'side-door', X'')")
+    db = try await open_database(view(path))
+    try await bootstrap_devices(view(db))
+    try await seed_devices(view(db))
     app = http.app_default[State](State(db=db))
     app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
     app = try http.route(app, http.Method.GET, "/devices", http.public_policy[State](), devices)
     app = try http.route(app, http.Method.GET, "/devices/{id}", http.public_policy[State](), find_device)
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8091"))
     return await http.serve(app, port, http.default_options())
+
+# This HTTP-facing projection preserves the primary Error. The SQLite Failure
+# (outcome, cleanup and retired metadata) stays observable in database APIs.
+def sqlite_error(problem: sqlite.Failure) -> Error:
+    match sqlite.copy_primary_error(view(problem)):
+        case Some(cause):
+            return cause
+        case None:
+            fallback: Result[Error, Error] = internal_error("SQLite operation failed")
+            match fallback:
+                case Ok(cause):
+                    return cause
+                case Err(cause):
+                    return cause
+
+async def open_database(path: view[str]) -> Result[sqlite.Pool, Error]:
+    # Explicit example limits: one connection, two queued Tx commands,
+    # 1000 ms acquisition and no native busy wait.
+    config = try sqlite.options(1, 2, 1000, 0)
+    return result.map_error(await sqlite.open(path, config), sqlite_error)
+
+async def storage_find_device(pool: view[sqlite.Pool], value0: i64) -> Result[DeviceSettings?, Error]:
+    tx = try result.map_error(await sqlite.begin(pool, sqlite.BeginMode.DEFERRED), sqlite_error)
+    work = await sqlite.query[DeviceSettings](tx, sqlite.literal("SELECT id, enabled, gain, label, calibration FROM devices WHERE id = ?"), sqlite.bind_i64(sqlite.parameters(), value0))
+    ending = await sqlite.rollback(tx)
+    value = try result.map_error(work, sqlite_error)
+    try result.map_error(ending, sqlite_error)
+    return ok(value)
+
+async def storage_list_devices(pool: view[sqlite.Pool]) -> Result[List[DeviceSettings], Error]:
+    tx = try result.map_error(await sqlite.begin(pool, sqlite.BeginMode.DEFERRED), sqlite_error)
+    work = await sqlite.all[DeviceSettings](tx, sqlite.literal("SELECT id, enabled, gain, label, calibration FROM devices ORDER BY id"), sqlite.parameters())
+    ending = await sqlite.rollback(tx)
+    value = try result.map_error(work, sqlite_error)
+    try result.map_error(ending, sqlite_error)
+    return ok(value)
+
+# Trusted startup management: fixed reviewed SQL, called only before HTTP registration.
+# No request SQL string or dynamic Query factory is exposed.
+async def bootstrap_devices(pool: view[sqlite.Pool]) -> Result[i64, Error]:
+    tx = try result.map_error(await sqlite.begin(pool, sqlite.BeginMode.IMMEDIATE), sqlite_error)
+    work = await sqlite.exec(tx, sqlite.literal("CREATE TABLE IF NOT EXISTS devices(id INTEGER PRIMARY KEY, enabled INTEGER, gain REAL, label TEXT, calibration BLOB)"), sqlite.parameters())
+    ending = await sqlite.commit(tx)
+    value = try result.map_error(work, sqlite_error)
+    try result.map_error(ending, sqlite_error)
+    return ok(value)
+
+# Trusted startup management: fixed reviewed SQL, called only before HTTP registration.
+# No request SQL string or dynamic Query factory is exposed.
+async def seed_devices(pool: view[sqlite.Pool]) -> Result[i64, Error]:
+    tx = try result.map_error(await sqlite.begin(pool, sqlite.BeginMode.IMMEDIATE), sqlite_error)
+    work = await sqlite.exec(tx, sqlite.literal("INSERT OR IGNORE INTO devices VALUES (1, 1, 1.25, NULL, X'0001FF'), (2, NULL, NULL, 'front-door', NULL), (3, 0, 0.5, 'side-door', X'')"), sqlite.parameters())
+    ending = await sqlite.commit(tx)
+    value = try result.map_error(work, sqlite_error)
+    try result.map_error(ending, sqlite_error)
+    return ok(value)

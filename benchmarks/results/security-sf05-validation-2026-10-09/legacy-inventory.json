@@ -1,0 +1,210 @@
+{
+  "baseline": "3b8da226eb26c27187f3b0bc4fa39639abe4ac57",
+  "paths": [
+    {
+      "path": "runtime/tests/sqlite_public_api.rs",
+      "sha256": "017aac61e7a002bab8c480a2312771cd710261118e7e8f85dc2000540cd4858b"
+    },
+    {
+      "path": "runtime/examples/concurrency_bench.rs",
+      "sha256": "00781f110e1d144a7c85720eae3de656650d08ccc401421e7c4abf0e19f1e0cd"
+    },
+    {
+      "path": "runtime/src/database.rs",
+      "sha256": "ce60cfa34428b00ad36a51b41ec8bf4d541a3e452fefa4140907744cf26beced"
+    },
+    {
+      "path": "examples/crud.nagi",
+      "sha256": "6cad112b6f9b11ecbb3a52f654b57dfffe0a361cdbe394986464c8998f59150c"
+    },
+    {
+      "path": "runtime/src/lib.rs",
+      "sha256": "897d79d459b473698c8c936e7150f2dcd745a6679403c3e59dc429ca9500c083"
+    },
+    {
+      "path": "runtime/src/actor/lifecycle.rs",
+      "sha256": "db34427f6d643fbece84e9fc773583c906c1509b9b5e34bdea508627eb1340ac"
+    },
+    {
+      "path": "compiler/src/check.rs",
+      "sha256": "bb550a6712033efab45734523486193f42703a68d06c5bb935147a2d90f175bf"
+    },
+    {
+      "path": "runtime/src/sqlite/session.rs",
+      "sha256": "e0fefe12fc7c25fc47b053e6cda36a3d18f048327d5e33cc7377c1f203cab7df"
+    },
+    {
+      "path": "compiler/tests/resource_contract_characterization.rs",
+      "sha256": "9d8e5231b6371bb9b41bcb312c4fadbbc6b4520d5c831e6ad8b5aa491ff64fa4"
+    },
+    {
+      "path": "runtime/src/sqlite/tests.rs",
+      "sha256": "51d4ce2ba268db58ff419c180853196d7194ad3f6f13721837b986b197ca00db"
+    },
+    {
+      "path": "runtime/src/sqlite/public_tests.rs",
+      "sha256": "3693c4e7a00c9166deb36ced968e86a1826e1ef1072ed8b9575c7fc510bde37c"
+    },
+    {
+      "path": "compiler/src/sql_check/collect.rs",
+      "sha256": "96009fe62ecfcc618b29870d641a6d1acd873c9a7c768cc700058d9f4cb8a7b1"
+    },
+    {
+      "path": "compiler/tests/sql_check.rs",
+      "sha256": "517badc8402a0bc07581519156c3face1d3b5820d4c64f499995aee4961e4742"
+    },
+    {
+      "path": "compiler/src/sql_check/engine.rs",
+      "sha256": "1b30bcf1a2d9875610697e1311f81c2e67b47c4d85f866f57e90beb90587e570"
+    },
+    {
+      "path": "runtime/src/sqlite/mod.rs",
+      "sha256": "662958b509a9f0de5509a47a5a3fcc2d51e6128017eabac217af0ca5faede854"
+    },
+    {
+      "path": "compiler/src/check/checked.rs",
+      "sha256": "096e7351795c8fe75dcad9b7f9c90890223b75101c90675b1a78ea2677cadec9"
+    },
+    {
+      "path": "compiler/tests/list_ownership_inference.rs",
+      "sha256": "4171ac8607b73f9f542b5d349dbe05675325355bb92226de71979b5c6dc72130"
+    },
+    {
+      "path": "benchmarks/sqlite-public/main.rs",
+      "sha256": "8f7a1a3ec2c0993d0855950f025e719f658ffddd298173f56aca38f07e24bd73"
+    },
+    {
+      "path": "benchmarks/sqlite-public/manual.rs",
+      "sha256": "56a5112ab6fbfece3f4bda9af77f6044c3bab6dba411d449116b1efa84fc10fe"
+    },
+    {
+      "path": "compiler/src/stdlib/sqlite.rs",
+      "sha256": "fc4f8e628021b7a7d8090ab737461fb781a8afed50da826347c70173a5038d42"
+    },
+    {
+      "path": "compiler/tests/security_sf01.rs",
+      "sha256": "4002044af0ef954c6d3264f0273d8ddb9a0d8c1e24b2484c6aa757d5471e80ef"
+    },
+    {
+      "path": "compiler/src/modules.rs",
+      "sha256": "42d07557fb4186739d8819da9881f871a8f5e485f160003d8fc619d212909525"
+    },
+    {
+      "path": "compiler/tests/class_field_types.rs",
+      "sha256": "897b72a677314091e60aa69c435d28990f63448604a8eb1d10524a60ad59964e"
+    },
+    {
+      "path": "compiler/tests/fixtures/sqlite-contract/15-new-row-restriction.low",
+      "sha256": "f499f0b5c3f1511692430d4d967e1fe3888ec4af34cffde610cb02c7084737c8"
+    },
+    {
+      "path": "compiler/src/graph/calls.rs",
+      "sha256": "daeeb8e28ea58f5f1fcec3dac77b65d6c3aeeb327adf8d9ad65be1a20d774336"
+    },
+    {
+      "path": "compiler/src/emit.rs",
+      "sha256": "d7b254cd1f6999d6bb59914b452d4d9f5276fb37dde843aa616210deb9876f2c"
+    },
+    {
+      "path": "compiler/src/capabilities.rs",
+      "sha256": "216956eec73aa7b98d3f3e269e37dea1dfd4b9e6247c482faad72ef016080de8"
+    },
+    {
+      "path": "compiler/tests/fixtures/sqlite-contract/15-new-row-restriction.nagi",
+      "sha256": "6893ed7f379d9d9aca73141a565d566b937b546e0222606d47bdbae1885d0fef"
+    },
+    {
+      "path": "compiler/tests/sqlite_public.rs",
+      "sha256": "a00c975e0683a510123aa67ede67270ec67884c47266a56aa820b6e6044887d5"
+    },
+    {
+      "path": "test-nagi-code/web-demo/tasks.nagi",
+      "sha256": "1b3ee1b47942c421b83ec00243d00dbecb03da7420d9cb4c5c44869893412080"
+    },
+    {
+      "path": "compiler/tests/modules.rs",
+      "sha256": "aa8b63884ca79d2cda3e0dece765affccaa3122157a25f234eb120e27632e3c0"
+    },
+    {
+      "path": "compiler/tests/fixtures/resource-contract/data-derives.nagi",
+      "sha256": "2db43d36e92e3d7da22e024833802ca53154f282bdeec8007ac6429014f06041"
+    },
+    {
+      "path": "test-nagi-code/inventory.nagi",
+      "sha256": "17105a0f0abcb4bd89377d00ea176b1fb1fd70bf19ec495bd6acd5e890b24514"
+    },
+    {
+      "path": "compiler/tests/fixtures/resource-contract/data-derives.low",
+      "sha256": "c83e38205cd6fbb4947a48579872ec3a126a6ad578138e676197eb49f29168d7"
+    },
+    {
+      "path": "compiler/tests/http_entrypoint.rs",
+      "sha256": "53f0aeda42aa6960eb96cf2fee0cd1b513b57ea29f93a4f4bdee229d44b2901a"
+    },
+    {
+      "path": "compiler/tests/fixtures/resource-contract/data-derives.rs",
+      "sha256": "92f7fd4dccf95d72fb1ccd7b8a4e985306567ddac3fa54507f11beaeb510f9c3"
+    },
+    {
+      "path": "compiler/tests/builtin_type_contracts.rs",
+      "sha256": "1b5ee762e49be85d05c72758590f0c9c718a86501bb981c69c252f508034caa8"
+    },
+    {
+      "path": "compiler/tests/owned_database.rs",
+      "sha256": "72d978d590eada3b6c8c7ead9940957eb081379be560cfa8bb8bbb25905aabde"
+    },
+    {
+      "path": "test-nagi-code/library-examples/custom-http/README.md",
+      "sha256": "ebbac1a3e81303c71e8991b9e1d2dbba8cc00b2ee65cf210401dd35b371f3473"
+    },
+    {
+      "path": "compiler/tests/graph_relations.rs",
+      "sha256": "17935f14d17f063c0ebe2fbc1218ee47c5f3e2bf07079d58700dccf1166d44b2"
+    },
+    {
+      "path": "test-nagi-code/library-examples/custom-http/README.en.md",
+      "sha256": "4cf8933a0a0a640b51da49cc512902d467209710b2ca101ace9ee9d58a52d18e"
+    },
+    {
+      "path": "compiler/tests/ownership_calls.rs",
+      "sha256": "ba4ab0844e4f24ab9099defa7b8e8f86016009c922368d336ddfa33ff54f6c9a"
+    },
+    {
+      "path": "compiler/tests/security_sf05.rs",
+      "sha256": "f58277f38fe2cf3a43c445d60a460837e22381bc1307004c16c31cb16bed21f2"
+    },
+    {
+      "path": "compiler/tests/nullable_database.rs",
+      "sha256": "0d307192882a5433c4e6a99ee2401915299ad9d219f728cd978637c55f62ee8b"
+    },
+    {
+      "path": "compiler/tests/scoped_tasks.rs",
+      "sha256": "ee7067cdc713c2ce53da84e94efa6d08745cd974c502056ae47c9a75257e7180"
+    },
+    {
+      "path": "test-nagi-code/result-api/server.nagi",
+      "sha256": "697c024f5257261bfa6d06356244cfb64cfe0f504ec642794d4dda3eb3c5957d"
+    },
+    {
+      "path": "test-nagi-code/result-api/storage.nagi",
+      "sha256": "cc159feb6797e27fb62e74bbf4773f6cb8a21656541d227cfd20e3a384034698"
+    },
+    {
+      "path": "scripts/http_capacity.py",
+      "sha256": "90c5040f8d3a58a0e8bc176b5b80ee3e3459addc05a87bf12495a5dcce73f5c2"
+    },
+    {
+      "path": "test-nagi-code/application-examples/device-settings/main.nagi",
+      "sha256": "c67a8784cc625224240c510ffad7e3714de78dc2724de8af83f4033ef9554dec"
+    },
+    {
+      "path": "scripts/releases/verify.py",
+      "sha256": "d53a6e24319846cf42d884383315f8f99f92e8d40713ed1a2d1a4db994135028"
+    },
+    {
+      "path": "scripts/http_capacity_report.py",
+      "sha256": "3eb7247b06383a33bf632840592042de21a1766e209fcbb98874079dcb3ac224"
+    }
+  ],
+  "historical_artifacts_excluded": true
+}

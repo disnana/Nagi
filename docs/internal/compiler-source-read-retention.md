@@ -51,4 +51,4 @@ native runは生成binaryのbuildまたはcache再利用後に実行する経路
 
 ## 引継ぎ
 
-source、CI登録、JA/EN Docsをこの専用branchへ保存し、詳細な証跡は元の検証記録にローカル保全する。初回HTTP失敗は既存mainのruntime targetで発生した。PR #105は観測・診断を整備し、PR #104・#106は共通の接続終了修正を検証中である。このreader差分をHTTP修正へ拡大せず、各PRのsource headと最新CIを分けて確認する。依存先へ反映する際はこの改善のbase/tree/sourcehashを確認し、異なる古いmain refを最新として扱わない。SF07全体のDoS対策完了とは呼ばない。
+source、CI登録、JA/EN Docsをこの専用branchへ保存し、詳細な証跡は元の検証記録にローカル保全する。初回HTTP ConnectionResetは歴史的な失敗として保持し、統合reader headでの新しいCI結果が出るまで解消済みとしない。main snapshot `b85656478ea0db3bb27e398c91c228cc3847f074` にはPR #105/#106で統合されたHTTP観測・共通接続修正がある。今回のreader統合候補は既存のtarget-platform compiler commandへ `--test source_read_retention` を加え、現行HTTP/SF05のCI stepを維持するが、この統合候補のCI結果はまだない。現mainのeditor symbol helperはchild processを10,000msで打ち切る。失敗した#107 headの期限は5,000msで、`nagi`/`low` の2 symbol testが約5.02/5.01秒でSIGTERMになった。これはtest専用deadlineであり、製品の`checkTimeoutMs`既定15,000msとは別である。入力、assert、16MiB出力上限は変わらない。統合reader headの4 OS結果、64MB実境界、perf/RSS、allocation failure、変更中fileは未確認。SF07全体のDoS対策完了とは呼ばない。

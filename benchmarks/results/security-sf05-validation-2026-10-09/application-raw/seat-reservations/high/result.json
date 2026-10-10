@@ -1,0 +1,5 @@
+{
+  "exit_code": 0,
+  "stdout": "reservations: validated duplicates, capacity, restart and sibling isolation\n",
+  "stderr": ""
+}

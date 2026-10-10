@@ -651,19 +651,8 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                     .zip(parameters)
                     .enumerate()
                     .map(|(index, (argument, passing))| {
-                        if let Some(sql) = sql.filter(|sql| sql.index == index) {
-                            return match sql.representation {
-                                crate::check::checked::SqlRepresentation::Static => {
-                                    let E::Str(value) = &argument.kind else {
-                                        unreachable!("sealed static SQL")
-                                    };
-                                    format!("::nagi_runtime::Sql::Static({})", quote(value))
-                                }
-                                crate::check::checked::SqlRepresentation::Owned => format!(
-                                    "::nagi_runtime::Sql::Owned(<::std::primitive::str as ::std::borrow::ToOwned>::to_owned({}))",
-                                    string_arg(argument, types)
-                                ),
-                            };
+                        if let Some(sql) = sql.as_ref().filter(|sql| sql.index == index) {
+                            return quote(&sql.literal);
                         }
                         match passing {
                             crate::stdlib::Passing::Reference => reference_arg(argument, types),
@@ -789,24 +778,6 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                     string_arg(&a[1], types)
                 ),
                 "sleep" => format!("::nagi_runtime::sleep({})", args[0]),
-                "db_open" => format!("::nagi_runtime::Db::open({})", string_arg(&a[0], types)),
-                "db_exec" | "db_all" | "db_query" | "db_write" | "db_insert" | "db_update" => {
-                    format!(
-                        "{}.{}{}({})",
-                        args[0],
-                        n.trim_start_matches("db_"),
-                        g,
-                        std::iter::once(if types.expression(e).sql_static {
-                            let E::Str(s) = &a[1].kind else { unreachable!("sealed static SQL") };
-                            format!("::nagi_runtime::Sql::Static({})", quote(s))
-                        } else {
-                            format!("::nagi_runtime::Sql::Owned(({}).to_owned())", string_arg(&a[1], types))
-                        })
-                        .chain(args.iter().skip(2).cloned())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                    )
-                }
                 "json_decode" => {
                     let input = if types.expression(e).json_string {
                         format!("({}).as_bytes()", string_arg(&a[0], types))
@@ -2108,7 +2079,7 @@ pub fn cost_report(p: &Program) -> serde_json::Value {
         match &e.kind{
         E::Str(_)=>a.push(serde_json::json!({"line":e.line,"kind":"owned_string_literal","cost":"allocation/copy unless borrowed by intrinsic/codegen"})),
         E::List(xs)=>{a.push(serde_json::json!({"line":e.line,"kind":"contiguous_list","cost":"heap allocation; element boxing 0"}));for e in xs{walk(e,a);}},
-        E::Call(n,_,xs)=>{if e.resolution == Some(NameResolution::Builtin) && ["copy","share","clone_shared","json_decode","json_encode","db_query","db_all","db_insert","db_update"].contains(&n.as_str()){a.push(serde_json::json!({"line":e.line,"kind":n,"cost":"runtime/input dependent; measure allocation counters"}));}for e in xs{walk(e,a);}},E::Binary(ae,_,b)=>{walk(ae,a);walk(b,a)},E::Unary(_,e)|E::Try(e)|E::Await(e)|E::Field(e,_)=>walk(e,a),E::Record(_,fs)=>for(_,e)in fs{walk(e,a)},E::Index(e,i)=>{walk(e,a);walk(i,a)},_=>{}}
+        E::Call(n,_,xs)=>{if e.resolution == Some(NameResolution::Builtin) && ["copy","share","clone_shared","json_decode","json_encode"].contains(&n.as_str()){a.push(serde_json::json!({"line":e.line,"kind":n,"cost":"runtime/input dependent; measure allocation counters"}));}for e in xs{walk(e,a);}},E::Binary(ae,_,b)=>{walk(ae,a);walk(b,a)},E::Unary(_,e)|E::Try(e)|E::Await(e)|E::Field(e,_)=>walk(e,a),E::Record(_,fs)=>for(_,e)in fs{walk(e,a)},E::Index(e,i)=>{walk(e,a);walk(i,a)},_=>{}}
     }
     fn stmts(ss: &[Stmt], a: &mut Vec<serde_json::Value>) {
         for s in ss {

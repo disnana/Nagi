@@ -59,6 +59,20 @@ fn golden(text: &str, identity: &str, expected_low: &str, expected_rust: &str) {
         rust.as_bytes() == saved_rust.as_bytes(),
         "{identity}: direct/independent Low Rust mismatch"
     );
+    // Capture checked generator output for a deliberate source-contract update.
+    // Assertions remain enabled; capture never counts a changed golden as pass.
+    if let Some(directory) = std::env::var_os("NAGI_GOLDEN_CAPTURE_DIR") {
+        let directory = std::path::PathBuf::from(directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let name = std::path::Path::new(identity)
+            .parent()
+            .unwrap()
+            .file_name()
+            .unwrap();
+        let target = directory.join(name);
+        std::fs::write(target.with_extension("low"), &low).unwrap();
+        std::fs::write(target.with_extension("rs"), &rust).unwrap();
+    }
     assert!(
         low.as_bytes() == expected_low.as_bytes(),
         "{identity}: full Low golden mismatch"

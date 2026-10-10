@@ -19,7 +19,7 @@ impl Fixture {
             std::process::id(),
             FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
         ));
-        fs::create_dir_all(&path).unwrap();
+        fs::create_dir(&path).unwrap();
         Self(path)
     }
 
@@ -34,7 +34,8 @@ impl Drop for Fixture {
     }
 }
 
-const PROGRAM: &str = r#"class OwnedRow:
+const PROGRAM: &str = r#"import std.db.sqlite as sqlite
+class OwnedRow:
     id: owned[i64]
     repeated: owned[owned[i64]]
     optional_owned: Option[owned[i64]]
@@ -57,15 +58,41 @@ class ManualRow:
 @rust("native::verify")
 extern def verify(rows: List[OwnedRow], manual: List[ManualRow])
 
-async def main() -> Result[unit, Error]:
-    db = try await db_open(":memory:")
-    try await db_exec(db, "CREATE TABLE readings(id INTEGER, repeated INTEGER, optional_owned INTEGER, owned_optional INTEGER, both INTEGER, label TEXT, text TEXT, enabled INTEGER, ratio REAL, payload BLOB, narrow INTEGER, unsigned INTEGER); INSERT INTO readings VALUES (1, 11, NULL, NULL, NULL, 'one', NULL, NULL, NULL, NULL, NULL, NULL), (2, 22, -7, 7, 9, 'two', '凪', 1, 1.25, X'007FFF', -128, 4294967295), (3, 33, 0, 0, 0, '', '', 0, 0, X'', 0, 0);")
-    rows = try await db_all[OwnedRow](db, "SELECT unsigned, narrow, payload, ratio, enabled, text, label, both, owned_optional, optional_owned, repeated, id FROM readings ORDER BY id")
-    manual = try await db_all[ManualRow](db, "SELECT 7 AS id UNION ALL SELECT 9 AS id")
+@rust("native::open")
+extern async def open() -> Result[sqlite.Pool, sqlite.Failure]
+@rust("native::manual_rows")
+extern async def manual_rows(tx: view[sqlite.Tx]) -> Result[List[ManualRow], sqlite.Failure]
+
+async def read(pool: view[sqlite.Pool]) -> Result[unit, sqlite.Failure]:
+    tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
+    rows = try await sqlite.all[OwnedRow](tx, sqlite.literal("SELECT unsigned, narrow, payload, ratio, enabled, text, label, both, owned_optional, optional_owned, repeated, id FROM readings ORDER BY id"), sqlite.parameters())
+    manual = try await manual_rows(view(tx))
+    try await sqlite.rollback(tx)
     return ok(verify(rows, manual))
+
+async def main() -> Result[unit, sqlite.Failure]:
+    pool = try await open()
+    work = await read(view(pool))
+    ending = await sqlite.close(pool, 1000)
+    value = try work
+    try ending
+    return ok(value)
 "#;
 
-const BRIDGE: &str = r#"impl nagi_runtime::FromRow for super::ManualRow {
+const BRIDGE: &str = r#"pub async fn open() -> Result<nagi_runtime::sqlite::Pool, nagi_runtime::sqlite::Failure> {
+    use nagi_runtime::sqlite as db;
+    let pool = db::open(":memory:", db::options(1, 2, 1000, 0).unwrap()).await?;
+    let tx = db::begin(&pool, db::BeginMode::Deferred).await?;
+    db::exec(&tx, db::literal("CREATE TABLE readings(id INTEGER, repeated INTEGER, optional_owned INTEGER, owned_optional INTEGER, both INTEGER, label TEXT, text TEXT, enabled INTEGER, ratio REAL, payload BLOB, narrow INTEGER, unsigned INTEGER)"), db::parameters()).await?;
+    db::exec(&tx, db::literal("INSERT INTO readings VALUES (1, 11, NULL, NULL, NULL, 'one', NULL, NULL, NULL, NULL, NULL, NULL), (2, 22, -7, 7, 9, 'two', '凪', 1, 1.25, X'007FFF', -128, 4294967295), (3, 33, 0, 0, 0, '', '', 0, 0, X'', 0, 0)"), db::parameters()).await?;
+    db::commit(tx).await?;
+    Ok(pool)
+}
+pub async fn manual_rows(tx: &nagi_runtime::sqlite::Tx) -> Result<Vec<super::ManualRow>, nagi_runtime::sqlite::Failure> {
+    use nagi_runtime::sqlite as db;
+    db::all(tx, db::literal("SELECT 7 AS id UNION ALL SELECT 9 AS id"), db::parameters()).await
+}
+impl nagi_runtime::FromRow for super::ManualRow {
     fn columns() -> &'static [&'static str] { &["id"] }
     fn read(row: &nagi_runtime::rusqlite::Row<'_>, indices: &[usize]) -> nagi_runtime::rusqlite::Result<Self> {
         Ok(Self { value: super::Inner { id: row.get(indices[0])? } })
@@ -144,7 +171,7 @@ fn owned_scalars_decode_sqlite_rows_in_high_and_independent_saved_low() {
 #[test]
 fn owned_wrappers_preserve_unsupported_fields_and_manual_row_eligibility() {
     let mut high = parser::parse(
-        "class Custom:\n    value: i64\nclass Wide:\n    value: owned[u64]\nclass Nested:\n    value: owned[Option[owned[Option[i64]]]]\nclass Sequence:\n    value: owned[Option[owned[List[i64]]]]\nclass Nominal:\n    value: owned[Custom]\nclass Resource:\n    value: owned[Db]\nclass Shared:\n    value: owned[shared[i64]]\nclass i64:\n    label: str\nclass Shadowed:\n    value: owned[Option[owned[i64]]]\nclass Text:\n    value: owned[Option[owned[str]]]\n",
+        "class Custom:\n    value: i64\nclass Wide:\n    value: owned[u64]\nclass Nested:\n    value: owned[Option[owned[Option[i64]]]]\nclass Sequence:\n    value: owned[Option[owned[List[i64]]]]\nclass Nominal:\n    value: owned[Custom]\nclass Resource:\n    value: owned[Error]\nclass Shared:\n    value: owned[shared[i64]]\nclass i64:\n    label: str\nclass Shadowed:\n    value: owned[Option[owned[i64]]]\nclass Text:\n    value: owned[Option[owned[str]]]\n",
         true,
     )
     .unwrap();

@@ -1,0 +1,48 @@
+{
+  "format": "sha256-file-manifest-v1",
+  "manifest_excludes_itself": true,
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 1380,
+      "sha256": "f9f35a4c0c0bcd990e59094c681a4c608e72137075382d6680283854dd056997"
+    },
+    {
+      "path": "confirmation-command.json",
+      "bytes": 1178,
+      "sha256": "bbe5791867b21d56df55ac6a45e386b518db052bd55664c3c93bc3594f59b217"
+    },
+    {
+      "path": "confirmation.stderr",
+      "bytes": 3018,
+      "sha256": "276730aa1f0e92e4052db517ffb5298e83ed83bce8199cce96c5e1bab5b9f1e5"
+    },
+    {
+      "path": "confirmation.stdout",
+      "bytes": 374,
+      "sha256": "b2020c7747125eb1e10bb2c4f5b0314c1b070ac11f9875b027793e2f83ddb563"
+    },
+    {
+      "path": "public-ci-original-finished.json",
+      "bytes": 1830,
+      "sha256": "db8441596797521e8f50a65fc7a4d64a76e3556d2abf20d2e122162b0aba7ba0"
+    },
+    {
+      "path": "report.json",
+      "bytes": 6002,
+      "sha256": "e3886b00eadcfd86e1ace33422618de638585b15ad80b41b39fb7e46754bd134"
+    },
+    {
+      "path": "reviewed.patch",
+      "bytes": 8178,
+      "sha256": "820762703d2755eb198982699d4d0c949735838eff3d910a0a685e8b46f5b179"
+    },
+    {
+      "path": "sourcehash.json",
+      "bytes": 5298,
+      "sha256": "0f1fdcc46a0b489889cebb7618a16f0eb8dc80f3d71fb42ff9d9f34e110ad949"
+    }
+  ],
+  "total_files": 8,
+  "total_bytes": 27258
+}

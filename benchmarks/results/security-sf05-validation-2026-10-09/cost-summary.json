@@ -1,0 +1,78 @@
+{
+  "generated": {
+    "future_and_open": {
+      "future_bytes": {
+        "literal_future_bytes": 392,
+        "selected_future_bytes": 408
+      }
+    },
+    "literal": {
+      "sample_count": 32,
+      "median_ns": 26947.5,
+      "allocations": [
+        2,
+        3
+      ],
+      "allocated_bytes": [
+        280,
+        1848
+      ]
+    },
+    "selected": {
+      "sample_count": 32,
+      "median_ns": 26564.5,
+      "allocations": [
+        2
+      ],
+      "allocated_bytes": [
+        280
+      ]
+    },
+    "close_after_rollback": {
+      "allocation": {
+        "allocated_bytes": 0,
+        "allocations": 0,
+        "deallocations": 1,
+        "reallocations": 0
+      }
+    }
+  },
+  "manual": {
+    "future_and_open": {
+      "future_bytes": {
+        "literal_future_bytes": 392,
+        "selected_future_bytes": 408
+      }
+    },
+    "literal": {
+      "sample_count": 32,
+      "median_ns": 26556.5,
+      "allocations": [
+        2,
+        3
+      ],
+      "allocated_bytes": [
+        280,
+        1848
+      ]
+    },
+    "selected": {
+      "sample_count": 32,
+      "median_ns": 27024.5,
+      "allocations": [
+        2
+      ],
+      "allocated_bytes": [
+        280
+      ]
+    },
+    "close_after_rollback": {
+      "allocation": {
+        "allocated_bytes": 0,
+        "allocations": 0,
+        "deallocations": 1,
+        "reallocations": 0
+      }
+    }
+  }
+}

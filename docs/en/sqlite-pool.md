@@ -1,23 +1,20 @@
 # SQLite Pools and Transactions
 
-> `std.db.sqlite` is an unreleased API in the current development source. It is not included in Nagi 0.1.11. Users of published releases should continue with the existing [`db_*` API](database.md).
+> `std.db.sqlite` is an unreleased API in the current development source. It is not included in Nagi 0.1.11. SF05 removes Db/db_* in development source; see [migration](migration-0.2.0.md) before adopting it.
 
-[Docs index](README.md) · [Existing SQLite API](database.md) · [SQL preflight checks](sql-check.md)
+[Docs index](README.md) · [SQLite and migration](database.md) · [SQL preflight checks](sql-check.md)
 
-Rust embedding code that exhaustively matches the compiler's public standard-module, resource, or operation metadata enums must handle the new SQLite variants. Existing Nagi syntax and `db_*` signatures are unchanged. Applications that do not adopt the new API need no migration.
+Rust embedding code that exhaustively matches standard-module/resource/operation metadata enums must handle the new Query/literal variants.
 
 ## What this API provides
 
-This module provides a `Pool` that manages multiple SQLite connections and a `Tx` that reserves one connection for a transaction session. A `Pool` is the shared entry point for acquiring a connection. A `Tx` owns that connection session until it commits, rolls back, or is cleaned up. SQL values go through typed, owned `Parameters`.
-
-This is a separate API from `db_open`, `db_exec`, `db_query`, and related functions. The old API keeps its fixed bind arguments, multi-statement behavior, row counts, statement cache, and row-type support. Do not mechanically replace existing calls. The [existing SQLite page](database.md) explains its behavior and helps choose between the two APIs.
+`Pool` manages SQLite connections and `Tx` reserves one connection. SQL structure uses opaque `Query`; actual values use typed owned `Parameters`. SF05 removes the legacy Db/db_* entry points, public runtime Db/Sql, and dynamic string factories. Old Nagi entry points produce concrete migration diagnostics, with no fallback to a parallel legacy API.
 
 ## Run the example
 
 ### Prerequisites
 
 - A Rust toolchain (`rustc` and `cargo`) and a C toolchain that can build Rust crates with native dependencies.
-- A Nagi source checkout (a local working folder of the source) containing this page, `examples/sqlite_pool.nagi`, and the unreleased `std.db.sqlite` API. Run the commands from the repository root.
 - No SQLite command-line tool is needed. SQLite is bundled with the Nagi runtime.
 
 See [how to obtain the source and build the compiler](getting-started.md#build-the-compiler-from-source). If `main` does not yet contain this sample and API, use a checkout of a development branch that does. The published 0.1.11 binary alone cannot run this walkthrough.
@@ -72,12 +69,12 @@ def database_error(cause: sqlite.Failure) -> AppFailure:
 
 async def write_and_read(pool: view[sqlite.Pool]) -> Result[i64, sqlite.Failure]:
     tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
-    try await sqlite.exec(tx, "CREATE TABLE IF NOT EXISTS amounts(amount INTEGER NOT NULL)", sqlite.parameters())
+    try await sqlite.exec(tx, sqlite.literal("CREATE TABLE IF NOT EXISTS amounts(amount INTEGER NOT NULL)"), sqlite.parameters())
     values = sqlite.bind_i64(sqlite.parameters(), 7)
-    try await sqlite.exec(tx, "INSERT INTO amounts VALUES (?)", values)
+    try await sqlite.exec(tx, sqlite.literal("INSERT INTO amounts VALUES (?)"), values)
     try await sqlite.commit(tx)
     tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
-    row = try await sqlite.query[Total](tx, "SELECT amount FROM amounts", sqlite.parameters())
+    row = try await sqlite.query[Total](tx, sqlite.literal("SELECT amount FROM amounts"), sqlite.parameters())
     try await sqlite.rollback(tx)
     match row:
         case Some(total):
@@ -114,6 +111,7 @@ Even if `write_and_read` fails, `main` awaits close before returning the work er
 | Type | Role and main constraints |
 |---|---|
 | `Options` | Holds connection count, per-worker queue capacity, acquisition timeout, and SQLite busy timeout. Supply every constructor argument |
+| `Query` | Opaque Copy value from a direct literal; storage/share/Debug allowed, no Eq/JSON |
 | `Pool` | Manages acquisition and close. `clone_pool` creates a handle that shares close and failure state |
 | `Tx` | A transaction session on one connection. Non-Copy, same-task only, and cannot be stored in a field or shared value |
 | `Parameters` | An owned list of SQL bind values. Each builder consumes it and returns the next `Parameters` value |
@@ -140,6 +138,8 @@ All four arguments to `options(connections, queue_capacity, acquire_ms, busy_ms)
 Capacity overflow, negative values, and time values outside the native range return `Error` from `options`. A timeout of 0ms means “do not wait,” not “always fail”: it can succeed if the condition already holds.
 
 `open(path, options)` rejects an empty path and `file:` URIs. `:memory:` works only with one connection because each connection would otherwise have a separate database. Other paths must be ordinary filesystem paths; relative paths use the process's current working directory. `open` owns the path when its Future is created, but creates native connections lazily when `begin` is called. Therefore, a filesystem or native open error may first appear as a `WORKER` failure from the first `begin`. URI interpretation, shared-memory URIs, and automatic WAL setup are not provided.
+
+`sqlite.literal("SELECT id FROM items WHERE id = ?")` accepts a direct literal by canonical identity. Variables, views, concatenation, formatting, and returned strings are rejected at their source positions; unrelated user functions with the same name remain available. Query is Copy and supports local/field storage and return values, but exposes no SQL text, JSON, equality, or direct construction. `query/all/exec` require Query. Ordinary check contains no SQL parser; runtime or explicit SQL preflight validates SQL shape.
 
 ### Typed parameters and SQL shape
 
@@ -169,10 +169,11 @@ A write with `RETURNING` returns columns, so it is neither readonly for `query` 
 
 ## Public types and operation signatures
 
-The module exposes eight types and 18 operations. `view[T]` borrows a value, `Future[T]` is asynchronous work to `await`, and `Result[T, E]` contains either a value or an error. `try` propagates Err from the current function. See [views](view-and-zero-copy.md), [async](async.md), and [error handling](error-handling.md) for the language rules.
+The module exposes nine types and 19 operations. `view[T]` borrows a value, `Future[T]` is asynchronous work to `await`, and `Result[T, E]` contains either a value or an error. `try` propagates Err from the current function. See [views](view-and-zero-copy.md), [async](async.md), and [error handling](error-handling.md) for the language rules.
 
 | Type | Copy / field storage / shared / debug | Meaning |
 |---|---|---|
+| `Query` | Copy / storable, shared, Debug; no Eq/JSON | Fixed structure from a direct literal |
 | `Pool` | non-Copy / storable / shared / Debug | `clone_pool` makes a handle to the same pool |
 | `Tx` | non-Copy / not storable / not shared / no Debug | Affine transaction handle bound to the same task |
 | `Parameters` | non-Copy / storable / not shared / no Debug | Builders consume and extend owned bind values |
@@ -184,6 +185,7 @@ The module exposes eight types and 18 operations. `view[T]` borrows a value, `Fu
 
 | Operation | Signature | Use and return |
 |---|---|---|
+| `literal` | `(sql: str) -> Query` | Checker accepts a direct string literal only |
 | `options` | `(connections: i64, queue_capacity: i64, acquire_ms: i64, busy_ms: i64) -> Result[Options, Error]` | Set all values and validate their ranges |
 | `open` | `(path: view[str], options: Options) -> Future[Result[Pool, Failure]]` | Own the path and create a Pool; native connections are lazy |
 | `clone_pool` | `(pool: view[Pool]) -> Pool` | Create a handle sharing close/failure state |
@@ -194,9 +196,9 @@ The module exposes eight types and 18 operations. `view[T]` borrows a value, `Fu
 | `bind_text` | `(parameters: Parameters, value: str) -> Parameters` | Add owned text |
 | `bind_bytes` | `(parameters: Parameters, value: bytes) -> Parameters` | Add owned bytes |
 | `bind_null` | `(parameters: Parameters) -> Parameters` | Add plain SQLite NULL |
-| `query[T]` | `[T](tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[Option[T], Failure]]` | First row of readonly row-producing SQL |
-| `all[T]` | `[T](tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[List[T], Failure]]` | All rows of readonly row-producing SQL |
-| `exec` | `(tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[i64, Failure]]` | One statement with no result columns |
+| `query[T]` | `[T](tx: view[Tx], sql: Query, parameters: Parameters) -> Future[Result[Option[T], Failure]]` | First row of readonly row-producing SQL |
+| `all[T]` | `[T](tx: view[Tx], sql: Query, parameters: Parameters) -> Future[Result[List[T], Failure]]` | All rows of readonly row-producing SQL |
+| `exec` | `(tx: view[Tx], sql: Query, parameters: Parameters) -> Future[Result[i64, Failure]]` | One statement with no result columns |
 | `commit` | `(tx: Tx) -> Future[Result[unit, Failure]]` | End the transaction with commit |
 | `rollback` | `(tx: Tx) -> Future[Result[unit, Failure]]` | End the transaction with rollback |
 | `close` | `(pool: view[Pool], timeout_ms: i64) -> Future[Result[unit, Failure]]` | Start closing and wait for worker joins |
@@ -225,7 +227,7 @@ The values bind in order to anonymous `?` placeholders. To use values in another
 
 ```nagi
 async def read_all(tx: view[sqlite.Tx]) -> Result[List[Total], sqlite.Failure]:
-    return await sqlite.all[Total](tx, "SELECT amount FROM amounts ORDER BY amount", sqlite.parameters())
+    return await sqlite.all[Total](tx, sqlite.literal("SELECT amount FROM amounts ORDER BY amount"), sqlite.parameters())
 ```
 
 Choose `query` for the first row and `all` to iterate through every row. Use `exec` for DDL or writes that return no columns. Runtime rejects a mismatch between the operation and SQL shape, multiple statements, and named or numbered placeholders.
@@ -235,7 +237,7 @@ Choose `query` for the first row and `all` to iterate through every row. Use `ex
 | Mistake | Stage and reason | Fix |
 |---|---|---|
 | `sqlite.query[i64](tx, ...)` | Rejected by `check`. The new API needs a class handled by generated FromRow | Define a class with an `amount: i64` field and use `query[Amount]` |
-| `sqlite.exec(tx, "DELETE FROM items WHERE id = ?1", params)` | Runtime SQL failure: the new API accepts anonymous `?` only | Use `?` and build Parameters in that order |
+| `sqlite.exec(tx, sqlite.literal("DELETE FROM items WHERE id = ?1"), params)` | Runtime SQL failure: the new API accepts anonymous `?` only | Use `?` and build Parameters in that order |
 | Reuse `values` after `sqlite.all[Row](tx, sql, values)` | `all` consumes `Parameters` | Build separate Parameters for each SQL statement |
 | Use `tx` after `try await sqlite.commit(tx)` | `commit` consumes `Tx` when its Future is created | Call `begin` for a new transaction |
 | Save `Tx` in a class field or move it to a child task | Rejected by `check`; Tx cannot cross storage, sharing, or task boundaries | Finish it in the same task, or call `begin` inside the child task |
@@ -245,7 +247,7 @@ An application helper can borrow a Tx and use it in the same task:
 
 ```nagi
 async def read_total(tx: view[sqlite.Tx]) -> Result[Total?, sqlite.Failure]:
-    return await sqlite.query[Total](tx, "SELECT amount FROM amounts", sqlite.parameters())
+    return await sqlite.query[Total](tx, sqlite.literal("SELECT amount FROM amounts"), sqlite.parameters())
 
 async def call_read_total(tx: sqlite.Tx) -> Result[Total?, sqlite.Failure]:
     return await read_total(view(tx))
@@ -305,12 +307,8 @@ Dropping the last `Pool` handle only requests shutdown. It does not confirm asyn
 
 ## SQL preflight checks
 
-`check --sql-schema FILE --sql-dialect sqlite` is an explicit offline check. For the new API, it can inspect literal SQL passed directly to `query`, `all`, and `exec`. It checks the supplied schema, table/column names, required row fields, and operation SQL shape. DDL passed to `exec` is prepared only; the checker does not execute or modify it.
-
-Dynamic SQL is not checked. The number and types of values in `Parameters` are not statically known, so the checker reports **bind unchecked** and leaves those checks to runtime. The [SQL preflight page](sql-check.md) documents how the feature applies to both the old `db_*` functions and the new API.
+Ordinary check validates the Query literal boundary, types, ownership, and row fields without starting SQLite. Opt-in checks with an explicit schema prepare direct Query constructors, validating SQL shape, schema, and required columns. Direct Parameters builder chains provide known bind counts; Query structure or Parameters counts hidden by variables/functions are reported for runtime checks. Actual value types, NULL, numeric ranges, and database data remain runtime checks. See [SQL preflight](sql-check.md).
 
 ## Choosing an API and related pages
 
-- Use this API for typed, variable-length parameters, explicit transactions across statements, multiple connections, and controlled close. It is available only from a compiler built from source that includes this unreleased API.
-- Existing applications that run on the published release should keep using the [`db_*` API](database.md). Its SQL uses numbered `?1` placeholders and fixed bind shapes/operations.
 - For schema-based offline checks, see [SQL preflight checks](sql-check.md). For Nagi `Result`, `try`, nullable values, `view`, and ownership, see [error handling](error-handling.md), [Option and nullable types](types.md), [ownership](ownership.md), [views](view-and-zero-copy.md), and [async](async.md).

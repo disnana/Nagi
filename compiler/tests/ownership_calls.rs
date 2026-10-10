@@ -133,10 +133,9 @@ fn implicit_standard_references_hold_the_owner_through_later_arguments() {
 }
 
 #[test]
-fn database_receiver_is_borrowed_but_materialized_sql_does_not_extend_its_loan() {
-    rejects("class Row:\n    value: str\ndef consume(database: Db) -> str:\n    return \"name\"\nasync def insert(database: Db) -> Result[unit, Error]:\n    result = try await db_insert[Row](database, \"table\", consume(database), 1)\n    return ok(print(0))\n", true, 6, "同じ式で先に参照");
-    accepts("class Row:\n    value: str\nasync def insert(database: Db) -> Result[unit, Error]:\n    sql = \"table\"\n    result = try await db_insert[Row](database, view(sql), sql, 1)\n    return ok(print(0))\n");
-    accepts("def consume(text: str) -> str:\n    return text\ndef main():\n    key = \"NAGI_NO_SUCH_ENV\"\n    print(env(key, consume(key)))\n");
+fn sqlite_receiver_holds_its_loan_through_parameters_evaluation() {
+    Fixture::new("import std.db.sqlite as sqlite\ndef consume(tx: sqlite.Tx) -> sqlite.Parameters:\n    return sqlite.parameters()\nasync def remove(tx: sqlite.Tx) -> Result[unit, sqlite.Failure]:\n    count = try await sqlite.exec(tx, sqlite.literal(\"DELETE FROM rows\"), consume(tx))\n    return ok(print(count))\n").rejected(5);
+    Fixture::new("import std.db.sqlite as sqlite\nasync def insert(tx: view[sqlite.Tx]) -> Result[unit, sqlite.Failure]:\n    text = \"owned payload\"\n    count = try await sqlite.exec(tx, sqlite.literal(\"INSERT INTO rows VALUES (?)\"), sqlite.bind_text(sqlite.parameters(), text))\n    return ok(print(count))\n").accepts();
 }
 
 #[test]

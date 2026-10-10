@@ -1,0 +1,34 @@
+    Finished `test` profile [unoptimized] target(s) in 0.06s
+     Running tests/security_sf05.rs (/workspace/nagi-sf01-target/debug/deps/security_sf05-36fde3811faf2d69)
+
+running 12 tests
+test retired_db_exec ... ok
+test retired_db_all ... ok
+test retired_db_execution_has_checker_migration_and_original_line ... ok
+test retired_db_insert ... ok
+test retired_db_type_has_checker_migration_and_original_line ... ok
+test retired_db_query ... ok
+test retired_db_update ... ok
+test retired_db_write ... ok
+test unrelated_user_literal_and_legacy_names_remain_available ... ok
+test aliased_literal_constructor_and_opaque_query_cannot_be_forged ... FAILED
+test sqlite_string_execution_cannot_downgrade_to_dynamic_sql ... ok
+test literal_constructor_rejects_dynamic_inputs_at_the_argument_source_line ... ok
+
+failures:
+
+---- aliased_literal_constructor_and_opaque_query_cannot_be_forged stdout ----
+
+thread 'aliased_literal_constructor_and_opaque_query_cannot_be_forged' (781824) panicked at compiler/tests/security_sf05.rs:34:13:
+error: line 4: SF05 literal Query: literal constructorは直接文字列literalで呼び出してください。関数値へ変換できません
+ --> /tmp/nagi-sf05-781823-1/saved.low:4
+ 4 |     factory = __nagi_def_7374646c69623a7374642e64622e73716c697465_f_6c69746572616c;
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    aliased_literal_constructor_and_opaque_query_cannot_be_forged
+
+test result: FAILED. 11 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+error: test failed, to rerun pass `-p nagic --test security_sf05`

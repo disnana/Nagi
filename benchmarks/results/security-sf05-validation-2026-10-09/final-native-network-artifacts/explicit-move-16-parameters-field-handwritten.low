@@ -1,0 +1,14 @@
+import std.db.sqlite as sqlite;
+record Holder {
+    params: sqlite.Parameters;
+}
+enum Envelope {
+    Empty;
+    Data(params: sqlite.Parameters);
+}
+fn hold(params: sqlite.Parameters) -> Holder {
+    return Holder(params=params);
+}
+fn wrap(params: sqlite.Parameters) -> Envelope {
+    return Envelope.Data(params);
+}

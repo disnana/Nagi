@@ -1,0 +1,30 @@
+examples/crud.nagi exit=1
+error: line 106: 型が一致しません: expected view[str], got str。変換は明示してください
+ --> /workspace/Nagi-security-sf05/examples/crud.nagi:106
+ 106 |     db = try await open_database(path)
+
+test-nagi-code/inventory.nagi exit=1
+error: line 100: 型が一致しません: expected view[str], got str。変換は明示してください
+ --> /workspace/Nagi-security-sf05/test-nagi-code/inventory.nagi:100
+ 100 |     db = try await open_database(path)
+
+test-nagi-code/web-demo/tasks.nagi exit=1
+error: line 83: 型が一致しません: expected view[str], got str。変換は明示してください
+ --> /workspace/Nagi-security-sf05/test-nagi-code/web-demo/tasks.nagi:83
+ 83 |     db = try await open_database(env("NAGI_DB", "nagi-tasks.sqlite"))
+
+test-nagi-code/result-api/server.nagi exit=1
+error: line 107: 型が一致しません: expected view[str], got str。変換は明示してください
+ --> /workspace/Nagi-security-sf05/test-nagi-code/result-api/server.nagi:107
+ 107 |     db = try await open_database(":memory:")
+
+test-nagi-code/result-api/storage.nagi exit=1
+error: line 7: viewにはstr/bytes/Listの所有値が必要です
+ --> /workspace/Nagi-security-sf05/test-nagi-code/result-api/storage.nagi:7
+ 7 |     return await database_operation_1(view(db), 1)
+
+test-nagi-code/application-examples/device-settings/main.nagi exit=1
+error: line 47: 型が一致しません: expected view[str], got str。変換は明示してください
+ --> /workspace/Nagi-security-sf05/test-nagi-code/application-examples/device-settings/main.nagi:47
+ 47 |     db = try await open_database(path)
+

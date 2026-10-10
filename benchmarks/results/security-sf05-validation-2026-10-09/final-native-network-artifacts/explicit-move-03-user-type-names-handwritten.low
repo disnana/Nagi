@@ -1,0 +1,17 @@
+import std.db.sqlite as sqlite;
+record Pool { id: i64; }
+record Tx { id: i64; }
+record Options { id: i64; }
+record Failure { id: i64; }
+record Holder {
+    pool: Pool;
+    tx: Tx;
+    options: Options;
+    failure: Failure;
+}
+fn publish(tx: Tx) -> shared[Tx] {
+    return share(tx);
+}
+fn native_identity(pool: sqlite.Pool) -> sqlite.Pool {
+    return sqlite.clone_pool(pool);
+}

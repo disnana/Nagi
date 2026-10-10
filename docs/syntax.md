@@ -95,7 +95,7 @@ while count < 3:
 | 優先順位 | 演算子 | 例 |
 |---|---|---|
 | 高 | 呼び出し、フィールド、index | `add(1, 2)`、`point.x`、`values[0]` |
-| ↓ | `-`（単項）、`not`、`try`、`await` | `-count`、`not enabled`、`try await db_open(...)` |
+| ↓ | `-`（単項）、`not`、`try`、`await` | `-count`、`not enabled`、`try await sqlite.open(path, config)` |
 | ↓ | `*`、`/`、`%` | `count * 2` |
 | ↓ | `+`、`-` | `count + 1` |
 | ↓ | `<`、`>`、`<=`、`>=` | `count < 10` |
@@ -154,7 +154,7 @@ classは全フィールドを名前付きで指定します。フィールド・
 | `value = try parse_i64("42")` | 値を取り出す。失敗なら呼び出し元へ返す |
 | `async def work():` | 非同期関数を定義する |
 | `await sleep(10)` | 非同期処理を待つ。単位はミリ秒 |
-| `db = try await db_open(":memory:")` | 非同期処理を待ち、Resultの失敗も伝える |
+| `pool = try await sqlite.open(":memory:", config)` | 非同期処理を待ち、Resultの失敗も伝える |
 
 `try`は同じエラー型のResultを返す関数内、`await`はasync関数内で使います。`try`はPythonの例外捕捉ではなく、成功値を取り出し、Errを呼び出し元へ返します。その場でResultの成功・失敗を処理する場合は、次のように両方のcaseを書きます。これは関数内の断片です。
 

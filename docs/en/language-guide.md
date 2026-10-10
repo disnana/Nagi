@@ -290,7 +290,7 @@ async def main() -> Result[unit, Error]:
     return ok(print("Done"))
 ```
 
-It prints `Waited 10 milliseconds`, then `Done`. Python’s `asyncio.sleep` takes seconds; Nagi’s `sleep` takes milliseconds. `sleep` returns `unit` and needs only `await`. Fallible database calls use forms such as `try await db_open(...)`. `await` waits for the operation; `try` propagates a failure in the returned result.
+It prints `Waited 10 milliseconds`, then `Done`. Python’s `asyncio.sleep` takes seconds; Nagi’s `sleep` takes milliseconds. `sleep` returns `unit` and needs only `await`. Fallible database calls use forms such as `try await sqlite.open(path, config)`. `await` waits for the operation; `try` propagates a failure in the returned result.
 
 A bare `sleep(10)` is rejected because it is not awaited; use `await sleep(10)`. Awaiting does not itself create another task. Use await to wait for a result. Try `spawn` for concurrent work and scopes for managing its lifetime in [async](async.md).
 

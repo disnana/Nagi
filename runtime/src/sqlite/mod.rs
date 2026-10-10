@@ -8,14 +8,17 @@ mod adapter_tests;
 mod comparison;
 #[cfg(test)]
 mod public_tests;
+#[cfg(test)]
+mod security_sf05_tests;
 mod session;
 #[cfg(test)]
 mod tests;
-use crate::{Error, ErrorKind, FromRow, Sql};
+use crate::{Error, ErrorKind, FromRow};
 use rusqlite::types::Value;
-pub use session::Tx;
+use session::Sql;
 #[cfg(test)]
 use session::*;
+pub use session::{ExecReservation, Tx};
 use std::{fmt, time::Duration};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -266,18 +269,42 @@ pub fn bind_null(mut parameters: Parameters) -> Parameters {
     parameters.0.push(Value::Null);
     parameters
 }
+/// Fixed SQL structure. Values belong in Parameters. Construction from a
+/// dynamic owned string and public field access are deliberately unavailable.
+/// Trusted Rust adapters must use reviewed static statements.
+/// ```compile_fail
+/// let dynamic = String::from("SELECT 1");
+/// nagi_runtime::sqlite::literal(&dynamic);
+/// ```
+#[derive(Clone, Copy)]
+pub struct Query(&'static str);
+impl fmt::Debug for Query {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Query").finish_non_exhaustive()
+    }
+}
+/// Nagi's canonical checker requires a direct string literal at this operation.
+/// Rust host callers are a trusted boundary; SQL semantics/authorization remain
+/// checked by SQLite and the reviewed adapter's predicates, respectively.
+pub fn literal(sql: &'static str) -> Query {
+    Query(sql)
+}
 pub async fn query<T: FromRow>(
     tx: &Tx,
-    sql: Sql,
+    query: Query,
     parameters: Parameters,
 ) -> Result<Option<T>, Failure> {
-    tx.query_sql(sql, parameters.0).await
+    tx.query_sql(Sql::Static(query.0), parameters.0).await
 }
-pub async fn all<T: FromRow>(tx: &Tx, sql: Sql, parameters: Parameters) -> Result<Vec<T>, Failure> {
-    tx.all_sql(sql, parameters.0).await
+pub async fn all<T: FromRow>(
+    tx: &Tx,
+    query: Query,
+    parameters: Parameters,
+) -> Result<Vec<T>, Failure> {
+    tx.all_sql(Sql::Static(query.0), parameters.0).await
 }
-pub async fn exec(tx: &Tx, sql: Sql, parameters: Parameters) -> Result<i64, Failure> {
-    tx.exec_sql(sql, parameters.0).await
+pub async fn exec(tx: &Tx, query: Query, parameters: Parameters) -> Result<i64, Failure> {
+    tx.exec_sql(Sql::Static(query.0), parameters.0).await
 }
 pub async fn commit(tx: Tx) -> Result<(), Failure> {
     tx.finish(session::Finish::Commit).await

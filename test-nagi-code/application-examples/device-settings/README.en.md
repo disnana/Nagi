@@ -2,7 +2,7 @@
 
 Read SQLite settings into a typed class and return them as JSON. Startup inserts three sample rows containing NULL, booleans, floating-point numbers, text, and BLOBs. Existing rows are preserved.
 
-Use Nagi 0.1.9 and run from the repository root. The 0.1.8 release cannot read this example's `bool?`, `f64?`, and `bytes?` fields from SQLite rows.
+Build the compiler from unreleased development source with SF05 Query/Pool/Tx and run from the repository root. Published 0.1.x binaries do not provide these APIs.
 
 ```sh
 nagic run --project test-nagi-code/application-examples/device-settings/nagi.toml

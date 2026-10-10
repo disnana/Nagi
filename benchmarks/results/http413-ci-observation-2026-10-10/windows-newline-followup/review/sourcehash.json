@@ -1,0 +1,91 @@
+{
+  "format": "nagi-http105-windows-newline-independent-sourcehash-v1",
+  "files": [
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/fix.patch",
+      "bytes": 2252,
+      "sha256": "8cc7c2d3a228f6580785ad24d66172911e4ab64e081c3369f4bf2d3e8b170a0b"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/fixed-test_application_native_tests.py",
+      "bytes": 10034,
+      "sha256": "0e5036a3f65c5c48e69ce0028520458c3e528b50724d54a0774267d87059607c"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/green-native-linux.stderr",
+      "bytes": 1825,
+      "sha256": "c68b57effe84a71d07dfa18d45d70317ea60876b548cba26130f78cbd8d1599f"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/green-native-linux.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/green-simulated.stderr",
+      "bytes": 1825,
+      "sha256": "c68b57effe84a71d07dfa18d45d70317ea60876b548cba26130f78cbd8d1599f"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/green-simulated.stdout",
+      "bytes": 130,
+      "sha256": "09c669af34e2c479b60256c7425e8fc12536798e20b00090e52fa7bbfcc7d808"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/original-test_application_native_tests.py",
+      "bytes": 9081,
+      "sha256": "c75afb237d6eba3f97a88152f699f7efe736d2c10cf3865ed06089c1827c3add"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/red-network.stderr",
+      "bytes": 1082,
+      "sha256": "6c08bdcc95fceab62e9f9cd7c5447c1e938057904a2e4320e1a1541b5d5ea4e2"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/red-network.stdout",
+      "bytes": 129,
+      "sha256": "0acd2ac1de0ba59c2487627152464d457ab71002d22922b91d6d20f0340e5b9d"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/red-stage-note.json",
+      "bytes": 202,
+      "sha256": "595ddd0a6f0ae4bb3eea1dbbd00f4739403ae075ed768341083746108c27f458"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/red.stderr",
+      "bytes": 1360,
+      "sha256": "406fa7ed8a1664ab8b2e2c17fcf25e8129a20e1c94a3f212aaa597ef5cd34431"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/red.stdout",
+      "bytes": 129,
+      "sha256": "94cbe78f432be703df9c9af0059d8996a9ccf1e5d16ed0cdfcb48f635e941ea4"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/simulate-windows-text-newline.py",
+      "bytes": 1146,
+      "sha256": "6a6d99bb90de7b7dc167f3beae7463ce34d8af9753b207b1a681024d78ba5fef"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-fix/report.json",
+      "bytes": 3372,
+      "sha256": "873763cb514037220e4d349ea8ed1ae6b3bfdd7d8fc8cece757cb5b5a1126da1"
+    },
+    {
+      "path": "/workspace/Nagi-http-limit-ci/scripts/test_application_native_tests.py",
+      "bytes": 10034,
+      "sha256": "0e5036a3f65c5c48e69ce0028520458c3e528b50724d54a0774267d87059607c"
+    },
+    {
+      "path": "/workspace/Nagi-http-limit-ci/test-nagi-code/application-examples/quote-api/smoke.py",
+      "bytes": 15726,
+      "sha256": "eaeb4c6346e3b739fa6ae649b9ad25355ec06f7f4ebb63543611596b732a63d8"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-newline-independent-review/report.json",
+      "bytes": 3835,
+      "sha256": "6483e4d994135238cddd3ea65f30e66b5357082428c1eb73a1b517de216f2c3e"
+    }
+  ],
+  "self_hash_excluded": true
+}

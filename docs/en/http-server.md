@@ -104,7 +104,7 @@ Every setter returns `Result[Options, Error]`. Connection and request limits con
 
 In Nagi 0.1.10, a handler that completes normally after its deadline returns 504, including when it did not yield. The deadline cannot forcibly stop synchronous work: the response waits for control to return, and completed state changes are not rolled back.
 
-An oversized body is rejected with 413 and `Connection: close`, without calling the handler. The server does not drain the remaining body. Closing with unread data can cause a TCP reset; receipt of the 413 is not guaranteed for every OS, client, or upload pattern.
+An oversized body is rejected with 413 and `Connection: close`, without calling the handler. In the 0.2.0 development version, after sending the response, the server discards at most 8 KiB of remaining input for the shorter of 100 ms and the body deadline, then closes the write side. It retains the connection slot during cleanup and never dispatches discarded input. Normal responses and idle keep-alive do not enter this cleanup path. It does not drain the whole remaining body: a deadline, byte limit or cancellation ends cleanup. Closing with unread data can still cause a TCP reset; receipt of the 413 is not guaranteed for every OS, client, or upload pattern.
 
 Example:
 

@@ -1,3 +1,4 @@
+import std.db.sqlite as sqlite
 class Inline:
     value: owned[i64]
 class Owned:
@@ -5,7 +6,7 @@ class Owned:
     values: List[Inline]
 class Private:
     cause: Error
-    database: Db
+    database: sqlite.Pool
 enum CopyChoice:
     Empty
     Number(value: Option[owned[i64]])

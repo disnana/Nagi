@@ -984,7 +984,7 @@ fn imported_names_cannot_silently_fall_back_to_builtins_of_a_different_kind() {
 #[test]
 fn legacy_classes_constructors_and_intrinsic_types_keep_their_original_namespaces() {
     let f = Fixture::new();
-    f.write("main.nagi", "class some:\n    value: i64\nclass Foo:\n    value: i64\ndef Db() -> i64:\n    return 7\ndef inspect(db: Db) -> i64:\n    return Db()\ndef main():\n    option: i64? = some(1)\n    item = some(value=2)\n    Foo = 1\n    record = Foo(value=2)\n    print(item.value + record.value + Foo + Db())\n");
+    f.write("main.nagi", "class some:\n    value: i64\nclass Foo:\n    value: i64\ndef Db() -> i64:\n    return 7\ndef inspect(db: i64) -> i64:\n    return Db()\ndef main():\n    option: i64? = some(1)\n    item = some(value=2)\n    Foo = 1\n    record = Foo(value=2)\n    print(item.value + record.value + Foo + Db())\n");
     let loaded = f.checked("main.nagi");
     let definition = loaded
         .program
@@ -1000,8 +1000,8 @@ fn legacy_classes_constructors_and_intrinsic_types_keep_their_original_namespace
         .find(|function| function.name == definition.symbol)
         .unwrap();
     assert_eq!(
-        function.params[0].1 .0, "Db",
-        "the parameter must retain the intrinsic database type despite the function named Db"
+        function.params[0].1 .0, "i64",
+        "an unrelated user function named Db remains callable after the intrinsic Db retirement"
     );
     f.write("legacy.low", &emit::low(&loaded.program));
     f.checked("legacy.low");

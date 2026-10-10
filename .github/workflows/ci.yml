@@ -104,7 +104,7 @@ jobs:
       - run: python tests/route_integration.py
       - run: python tests/http_stdlib_integration.py
       - run: ./target/release/examples/fuzz-smoke
-      - name: Preserve compiler failure reproductions
+      - name: Preserve compiler and application failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -260,6 +260,26 @@ jobs:
           cargo test --locked -p nagi-runtime --lib auth::tests:: 2>&1 | tee "$RUNNER_TEMP/sf01-auth.log"
           cargo test --locked -p nagi-runtime --lib http_server::tests::security_tests:: 2>&1 | tee "$RUNNER_TEMP/sf01-http.log"
           python -c 'import pathlib,re,os; root=pathlib.Path(os.environ["RUNNER_TEMP"]); counts={"sf01-auth.log":9,"sf01-http.log":11}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'
+      - name: Check SF05 Query migration and protected native SQL on the target platform
+        shell: bash
+        env:
+          NAGI_TEST_ARTIFACT_DIR: ${{ github.workspace }}/build/security-sf05/native
+          SF05_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -o pipefail
+          mkdir -p build/security-sf05
+          cargo test --locked -p nagic --test security_sf05 2>&1 | tee "build/security-sf05/sf05-checker.log"
+          cargo test --locked -p nagic --test security_sf05_native 2>&1 | tee "build/security-sf05/sf05-native.log"
+          cargo test --locked -p nagi-runtime --lib sqlite::security_sf05_tests:: 2>&1 | tee "build/security-sf05/sf05-admission.log"
+          python -c 'import pathlib,re,os; root=pathlib.Path("build/security-sf05"); counts={"sf05-checker.log":12,"sf05-native.log":1,"sf05-admission.log":6}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'
+          python benchmarks/security-sf05/ci_provenance.py build/security-sf05
+      - name: Preserve SF05 source identity and native evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-sf05-${{ matrix.platform }}
+          path: build/security-sf05/
+          if-no-files-found: warn
       - name: Check SQLite High and handwritten Low contract registration
         run: cargo test --locked -p nagic --test sqlite_contract_inputs
       - name: Verify bilingual first-app tutorial in High and saved Low
@@ -292,7 +312,7 @@ jobs:
       - name: Check Axum native test execution and result validation
         run: python -m unittest discover -s scripts -p 'test_application_native_tests.py'
       - name: Check oversized HTTP bodies and connection recovery on the target platform
-        run: cargo test --locked -p nagi-runtime oversized_body_ -- --test-threads=1
+        run: cargo test --locked -p nagi-runtime oversized_body_ -- --test-threads=1 --nocapture
       - name: Check HTTP panic recovery on the target platform
         run: cargo test --locked -p nagi-runtime panic_ -- --test-threads=1
       - name: Check HTTP handler deadlines on the target platform
@@ -354,7 +374,7 @@ jobs:
         run: |
           set -o pipefail
           cargo test --locked -p nagi-runtime --lib sqlite:: 2>&1 | tee "$RUNNER_TEMP/sqlite-runtime.log"
-          python -c 'import pathlib,re,os; text=pathlib.Path(os.environ["RUNNER_TEMP"],"sqlite-runtime.log").read_text(); assert re.search(r"test result: ok\. 73 passed; 0 failed; 0 ignored;",text),text'
+          python -c 'import pathlib,re,os; text=pathlib.Path(os.environ["RUNNER_TEMP"],"sqlite-runtime.log").read_text(); assert re.search(r"test result: ok\. 79 passed; 0 failed; 0 ignored;",text),text'
           cargo test --locked -p nagi-runtime --test sqlite_public_api
       - name: Verify bilingual SQLite tutorial through High and independent saved Low
         run: python scripts/verify_sqlite_example.py
@@ -394,7 +414,14 @@ jobs:
             build/distribution/nagi-*.tar.gz
             build/distribution/nagi-*.sha256
           if-no-files-found: error
-      - name: Preserve target-platform compiler failure reproductions
+      - name: Preserve target-platform HTTP receipt observation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: http413-observation-${{ matrix.platform }}
+          path: build/compiler-failures/http413-nodelay-*.json
+          if-no-files-found: ignore
+      - name: Preserve target-platform compiler, application, and HTTP observation evidence
         if: failure()
         uses: actions/upload-artifact@v4
         with:

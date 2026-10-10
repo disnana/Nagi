@@ -1,79 +1,41 @@
 # SQLite
 
-[目次](README.md) · 前：[HTTPとHTML](http.md) · 関数の引数：[組み込み関数](builtins.md)
+[目次](README.md) · [SQLite PoolとTransaction](sqlite-pool.md) · [SQLの事前検査](sql-check.md)
 
-## 最初の読み書き
+開発sourceの標準SQLite入口は `std.db.sqlite` です。SF05で旧 `Db` と `db_open/db_exec/db_all/db_query/db_insert/db_update/db_write` を廃止し、checkerで具体的な移行診断を返します。正式0.2.0は未リリースで、公開済み0.1.xのbinaryへ遡及適用しません。
 
-このページは従来の標準DB API `db_*` を説明します。保存する型をclassで定義し、`db_open`でDBを開き、`db_exec`でテーブルを作ります。失敗し得る非同期操作なので、`try await`で結果を扱います。PostgreSQLなど、別のDBには現在Rust連携が必要です。
-
-> 開発sourceには別の `std.db.sqlite` Pool/Transaction APIがありますが、Nagi 0.1.11には未収録です。新APIの使用法は[SQLite PoolとTransaction](sqlite-pool.md)、この旧APIの制約は以下を参照してください。
-
-次のコードを`database.nagi`として保存し、`nagic run database.nagi`で実行します。メモリ内のDBへ1件追加し、保存した名前を表示します。
+`Pool` を明示 `Options` で開き、`Tx` が一つの接続を専有します。SQL構造は直接文字列literalから `sqlite.literal(...)` で作る opaque `Query`、実値は `Parameters` で渡します。文字列変数、連結、format、動的文字列からQueryを作る入口はありません。Query自体の保存・選択・関数返却はできます。
 
 ```nagi
+import std.db.sqlite as sqlite
+
 class User:
     id: i64
     name: str
-    age: i32
 
-async def main() -> Result[unit, Error]:
-    db = try await db_open(":memory:")
-    try await db_exec(db, "CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT NOT NULL, age INTEGER NOT NULL)")
-    user = try await db_insert[User](db, "INSERT INTO users(name, age) VALUES (?1, ?2) RETURNING id, name, age", "Nagi", 18)
-    print(user.name)
-    return ok(print("保存できた"))
+async def find(tx: view[sqlite.Tx], id: i64) -> Result[User?, sqlite.Failure]:
+    sql = sqlite.literal("SELECT id, name FROM users WHERE id = ?")
+    values = sqlite.bind_i64(sqlite.parameters(), id)
+    return await sqlite.query[User](tx, sql, values)
 ```
 
-ファイルに保存するなら`db_open("app.sqlite")`にします。相対DBパスはプログラムを実行したディレクトリが基準です。ソースを基準にするimportやinclude_textとは異なります。
+メモリDBの作成・保存・読込・終了を含む実行例は [sqlite_pool.nagi](../examples/sqlite_pool.nagi) と[実行手順](sqlite-pool.md#まず動かす)を参照してください。相対DBパスは実行時current working directoryを基準にします。PostgreSQLなどはtrusted Rust連携が必要です。
 
-`db_insert[User]`の`[User]`は返したい型です。`RETURNING`の列名と型をclassに合わせます。値は`?1`などへbindし、SQL文字列へ連結しないでください。
+| 旧操作 | 移行 |
+|---|---|
+| `db_open` | `sqlite.options` と `sqlite.open`、明示的な `begin` |
+| `db_all` / `db_query` | `sqlite.all[T]` / `sqlite.query[T]`、QueryとParameters |
+| `db_exec` / `db_write` | 一文の `sqlite.exec`。複数文は明示Tx内で分ける |
+| `db_insert` / `db_update` の RETURNING | 同一Tx内のexecとreadonly query。INSERTは `last_insert_rowid()`、UPDATEは実idをbindして再読込する |
 
-行を返す関数の型引数にはclassを指定します。`db_all[i64]`や`db_query[str]`は使えず、`check`でエラーになります。1列だけ読む場合も、その列を持つclassを定義してください。
+新APIは匿名 `?` のみを受け付け、`exec` は返却列のない文、`query/all` はreadonlyで列を返す文です。DDL/bootstrapはrequestから分離したtrusted管理処理に置きます。request由来のSQL構造を受け取るfactoryは再exportしません。[CRUD](../examples/crud.nagi)、[inventory](../test-nagi-code/inventory.nagi)、[タスクAPI](../test-nagi-code/web-demo/tasks.nagi)は明示的なpublic policyのデモです。
 
-標準の行読み取りは、`i8`・`i16`・`i32`・`i64`・`u8`・`u16`・`u32`・`f32`・`f64`・`bool`・`str`・`bytes`のフィールドに対応します。各型を`T?`にするとSQLのNULLを受け取れます。boolやfloat、bytesのnullable対応はNagi 0.1.9以降です。[設定APIの例](../test-nagi-code/application-examples/device-settings/README.md)で確認できます。
+行classは対応scalar field、そのOptionとowned wrapperを読み取ります。実データの値型、NULL、数値範囲はruntimeのResultで検査します。対応外の手書きFromRowはtrusted native adapterから利用し、標準Nagi APIのscalar行制約を迂回しません。`all` の配列は非Copy行を複製せず読み取り専用で反復できます。
 
-Nagi 0.1.10以降では、これらの型を`owned[...]`で包んだフィールドにも行の読み取り実装を自動生成します。`owned[str]`や`owned[i64?]`に手書きの`FromRow`は不要です。以前の回避策として追加していた場合は、重複する実装を削除してください。対応外のフィールドは、Rust側の読み取り実装や型変換を使います。
+通常checkはliteral境界・型・所有権を検査し、SQLエンジンを起動しません。schemaを明示したopt-in SQL検査はSQL構造と必要列をprepare-onlyで確認し、直接Parameters builder列のbind数も照合します。Query変数やParameters変数を静的に追跡できない場合はruntime検査として表示します。
 
-| 操作 | 書き方 | await後の戻り値 |
-|---|---|---|
-| テーブル作成など | `db_exec(db, sql)` | `Result[i64, Error]` |
-| 全行読む | `db_all[User](db, sql)` | `Result[List[User], Error]` |
-| 1行読む | `db_query[User](db, sql, id)` | `Result[User?, Error]` |
-| 追加 | `db_insert[User](db, sql, name, age)` | `Result[User, Error]` |
-| 更新 | `db_update[User](db, sql, id, name, age)` | `Result[User, Error]` |
-| 削除など | `db_write(db, sql, id)` | `Result[i64, Error]` |
+DB操作は `sqlite.Failure` を返し、`Error` へ暗黙変換しません。HTTPデモはprimary Errorを明示的に投影し、FailureのOutcome・cleanup・retired情報をHTTPエラー型に自動追加しません。業務で必要なら独自error型へ保持してください。
 
-`db_exec`の行数は、その呼び出しで実行したSQL全体の変更件数です。テーブル作成やSELECTだけなら0を返します。複数の文の変更を合計し、トリガーや外部キー制約による変更もSQLiteの集計に従って含めます。
+保護データはreview済みadapterでGrantの実subject/targetをtenant/owner predicateにbindします。汎用queryへGrantを渡すだけのtenant保証はありません。容量を予約してから `Grant.submit` の同期gateで有効性を検査し、一回のexecution permitを発行します。gateを解放した後、同期callbackで実SQLite queueへenqueueし、replyをawaitします。permit発行より失効が先ならenqueueは0です。permit発行後の失効はenqueue前でも受理済み操作を取り消しません。HTTP取消も受理済みcommandのrollbackを保証しません。[保護DB境界](security.md#保護sqlite操作)を参照してください。
 
-現時点ではbind引数の形が固定です。query / writeはi64が1つ、allはなし、insertはstrとi32、updateはi64・str・i32です。name / ageという列名は必須ではなく、同じ引数型を持つ別のテーブルにも使えます。
-
-## APIから読む
-
-SQLの値は引数として渡します。文字列を連結してSQLを組み立てる必要はありません。読み込んだ行は、指定したclassのフィールドへ入ります。
-
-次は上のUser型を使ったhandlerの断片です。
-
-```nagi
-async def get_user(db: Db, id: i64) -> Result[User?, Error]:
-    return await db_query[User](db, "SELECT id, name, age FROM users WHERE id = ?1", id)
-```
-
-`db_all[User]`で得た配列は、`for user in users`で読み取り専用に走査できます。Userが持つ文字列を反復のためにコピーしません。借用の制約は[所有権](ownership.md)を参照してください。HTTP handlerで`return await db_all[User](...)`と返してJSON配列にすることはできます。完成例は[CRUD API](../examples/crud.nagi)や[タスク管理](../test-nagi-code/web-demo/tasks.nagi)を参照してください。
-
-## 従来APIの実装と制約
-
-この節は従来の `Db` / `db_*` APIだけを説明します。Nagiは型付き呼び出しとclassへの行変換を提供し、SQLの実行・保存・制約の検査はrusqliteとSQLiteが担います。SQLiteはruntimeに同梱されます。
-
-このAPIでは開いたDbごとに専用スレッドで操作を順に実行します。待ち行列は64件までで、満杯なら送信側が待ちます。Nagi側は結果を非同期に待ちますが、SQLiteの読み書き自体は同期処理です。Dbの最後の所有者が解放される際はworkerの終了を待つため、即時に戻る保証はありません。新しいPool APIのworkerとqueue条件は[別ページ](sqlite-pool.md)にあります。
-
-このAPIはSQLの準備結果をキャッシュします。列名は呼び出しごとに解決し、`db_all`では同じ結果の各行にその列位置を使います。文字列やバイト列を返すときは、行の処理が終わったあとも保持できるよう、所有する値を作ります。
-
-通常の`check`はNagiの引数型と、行を返す型がclassであることを検査します。SQL文字列の構文、schema、列名、bind数、SQLのNULLとclassの対応は検査しません。
-
-Nagi 0.1.10以降では、[SQLの事前検査](sql-check.md)を明示的に指定すると、SQLiteの文字列リテラルの構文・名前・必要な返却列・bind数を確認できます。動的SQL、従来APIの`db_exec`、実データの型・NULL・値の範囲は対象外で、対応するフィールド型では実行時のResultで扱います。未対応の行フィールドなど、Rustの変換要件を満たさない型はbuildで失敗する場合もあります。開発sourceの新APIでは`query` / `all` / `exec`のliteral SQLも検査し、Parametersのbind数と値型は未検査としてruntimeに残します。詳細は[SQL事前検査](sql-check.md)を参照してください。
-
-従来の`db_*` APIでは任意個数のSQL引数、複数呼び出しを専有するtransaction、connection poolは未対応です。SQLでBEGIN／COMMITを書いても複数呼び出しを専有しないため、共有Dbの他の操作が間へ入る可能性があります。開発sourceの新APIには明示TxとPoolがありますが、0.1.11には含まれません。
-
-HTTPの待機期限が切れても、すでに受け付けたDB操作が完了し、書き込みが保存される場合があります。呼び出し元のキャンセルで、書き込みが取り消される保証はありません。
-
-従来APIの実装は[DB runtime](../runtime/src/database.rs)と[classの行変換生成](../compiler/src/emit.rs)、確認用のコードは[CRUDサンプル](../examples/crud.nagi)と[DBのテスト](../runtime/src/database.rs)にあります。新APIの使い方は[SQLite PoolとTransaction](sqlite-pool.md)を、SQLite／PostgreSQLの別型と共通操作規則の設計は[ライブラリ設計案](library-design.md)を参照してください。
+取得予算、authorizer、取消後のcleanup、Outcome、0ms acquire、actual close/joinの契約は[SQLite reference](sqlite-pool.md)にあります。SQLのErrをtransactionのrollbackや「変更なし」と解釈しないでください。

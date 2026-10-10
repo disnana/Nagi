@@ -1,0 +1,28 @@
+{
+  "review_source_head": "c33e8c9be51b0e1b37ee6e8aebc540c9dba7289b",
+  "review_findings": [
+    "SF05-R01",
+    "SF05-R02"
+  ],
+  "compiler_runtime_files": 236,
+  "compiler_runtime_changed": [],
+  "docs_delta_sha256": {
+    "DESIGN.en.md": "552ef4af2c88610eb913ca28605303fed12244e46432b83414b7773efa38e010",
+    "DESIGN.md": "13b32e73bfcfb50473a5e59e88934f23b022a70e5e7da6bb2832edee083189cd",
+    "docs/database.md": "d529d8812550c4f0a3e3a07e8ec9ef419a4a6944ceb0e1cd4cbcfafca319c9d4",
+    "docs/en/database.md": "c04f66168f443502e6bde15f3955380e4546a3a4eab8f962dc0d34fbe74c3df1",
+    "docs/internal/handoffs/2026-10-09-security-foundation-sf05.md": "6770386c087f1c54012d4f8d81efe7f6854ee63aa21c29c35ee17b490dbcbcd7",
+    "docs/internal/security-foundation-sf05-results.en.md": "62d282b8c558201dfee685b74fe1c3d887fd1bf3975cd66ef8d42e4fe1669998",
+    "docs/internal/security-foundation-sf05-results.md": "e37d2489f1e590750ef7a5d92a962a8d4688ed60addd58032c34f1674019b722",
+    "docs/internal/security-foundation/review-log.md": "5d48ea7bfb2ae529849b0d0445dbb2dad342d97ec9f34d69e28d22d312babe9c"
+  },
+  "verification": "website/diff and independent docs recheck; no source or test change",
+  "latest_head_4_os": "pending",
+  "original_snapshot_is_historical": true,
+  "independent_docs_review_head": "845d9384e55b3f95cad19d4515bcf9d299bf1280",
+  "independent_findings_closed": [
+    "SF05-R01",
+    "SF05-R02"
+  ],
+  "independent_additional_test_raw_files": "not retained; tool conversation only"
+}

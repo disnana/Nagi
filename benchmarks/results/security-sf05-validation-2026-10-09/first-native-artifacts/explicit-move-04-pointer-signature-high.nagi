@@ -1,0 +1,10 @@
+import std.db.sqlite as sqlite
+def discard(tx: sqlite.Tx):
+    print(0)
+async def accept(callback: fn[sqlite.Tx, unit]):
+    print(1)
+async def launch() -> Result[unit, Error]:
+    callback = discard
+    async with scope:
+        spawn accept(callback)
+    return ok(print(2))

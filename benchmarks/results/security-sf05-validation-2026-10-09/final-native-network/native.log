@@ -1,0 +1,22 @@
+    Finished `test` profile [unoptimized] target(s) in 0.07s
+     Running tests/security_sf05_native.rs (/workspace/nagi-sf01-target/debug/deps/security_sf05_native-ba7f0927ad3e47a4)
+
+running 1 test
+test query_parameters_and_protected_predicate_execute_high_saved_and_handwritten_low ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.21s
+
+     Running tests/sqlite_public.rs (/workspace/nagi-sf01-target/debug/deps/sqlite_public-74b9292058dabfcd)
+
+running 8 tests
+test literal_query_does_not_release_the_transaction_borrow ... ok
+test matrix_checker_rejections_keep_stage_raw_cause_and_original_line ... ok
+test literal_query_allows_owned_text_parameter_move ... ok
+test local_containers_shared_copy_and_failure_accessor_execute ... ok
+test sqlite_task_result_nested_actual_capture_and_actor_state_reject_in_checker ... ok
+test public_sqlite_high_saved_low_and_handwritten_low_execute_real_transactions ... ok
+test sqlite_sql_evaluation_order_and_row_decode_execute ... ok
+test matrix_positive_pairs_execute_high_saved_and_handwritten_low ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.78s
+

@@ -1,0 +1,18 @@
+import std.db.sqlite as sqlite
+class Pool:
+    id: i64
+class Tx:
+    id: i64
+class Options:
+    id: i64
+class Failure:
+    id: i64
+class Holder:
+    pool: Pool
+    tx: Tx
+    options: Options
+    failure: Failure
+def publish(tx: Tx) -> shared[Tx]:
+    return share(tx)
+def native_identity(pool: sqlite.Pool) -> sqlite.Pool:
+    return sqlite.clone_pool(pool)

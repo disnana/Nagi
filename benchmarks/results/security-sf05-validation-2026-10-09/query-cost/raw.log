@@ -1,0 +1,16 @@
+/workspace/Nagi-security-sf05/build/sf05-sqlite-cost
+   Compiling nagic v0.1.11 (/workspace/Nagi-security-sf05/compiler)
+    Finished `dev` profile [unoptimized] target(s) in 0.58s
+     Running `/workspace/nagi-sf01-target/debug/examples/sqlite-public-cost /workspace/Nagi-security-sf05/build/sf05-sqlite-cost`
+
+Traceback (most recent call last):
+  File "/workspace/Nagi-security-sf05/benchmarks/security-sf05/cost_check.py", line 25, in <module>
+    assert result.returncode == 0 and "warning:" not in result.stderr, result.stdout + result.stderr
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: error: current package believes it's in a workspace when it's not:
+current:   /workspace/Nagi-security-sf05/build/sf05-sqlite-cost/generated/Cargo.toml
+workspace: /workspace/Nagi-security-sf05/Cargo.toml
+
+this may be fixable by adding `build/sf05-sqlite-cost/generated` to the `workspace.members` array of the manifest located at: /workspace/Nagi-security-sf05/Cargo.toml
+Alternatively, to keep it out of the workspace, add the package to the `workspace.exclude` array, or add an empty `[workspace]` table to the package's manifest.
+

@@ -1,0 +1,14 @@
+{
+  "packing_total": 4,
+  "audit_total": 9,
+  "packing_starts": 2,
+  "audit_starts": 1,
+  "connector_starts": 2,
+  "failed_events": 1,
+  "panicked_events": 1,
+  "restarts": 2,
+  "stopped_children": 3,
+  "shutdown_events": 1,
+  "connector_active": 0,
+  "connector_cleanups": 2
+}

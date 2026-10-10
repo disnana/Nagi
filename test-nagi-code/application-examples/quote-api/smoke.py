@@ -12,12 +12,24 @@ import time
 
 
 REQUEST_ID = "123e4567-e89b-12d3-a456-426614174000"
+FAILURE_LOG_BYTES = 32768
+
+
+def failure_log(path):
+    # Keep the tail of each owned child's log without loading an unbounded file.
+    with path.open("rb") as source:
+        size = source.seek(0, os.SEEK_END)
+        source.seek(max(0, size - FAILURE_LOG_BYTES))
+        return {"bytes": size, "truncated": size > FAILURE_LOG_BYTES,
+                "tail": source.read(FAILURE_LOG_BYTES).decode("utf-8", errors="replace")}
 
 
 def verify(executable: Path, env: dict, directory: Path) -> dict:
     executable = executable.resolve()
     directory = directory.resolve()
     directory.mkdir(parents=True, exist_ok=True)
+    failure_path = directory / "smoke-failure.json"
+    failure_path.unlink(missing_ok=True)
     results = []
 
     def expected_quote(quantity):
@@ -40,8 +52,10 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
                 [str(executable)], cwd=directory, env=child_env,
                 stdout=stdout, stderr=stderr,
             )
+            request_context = {"case": "readiness"}
 
             def request(method, path, body=b"", headers=()):
+                request_context.update(method=method, path=path, body_bytes=len(body), stage="prepare-headers")
                 connection = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
                 try:
                     # putheader preserves duplicate fields for the error cases.
@@ -49,13 +63,21 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
                     for name, value in headers:
                         connection.putheader(name, value)
                     connection.putheader("Content-Length", str(len(body)))
+                    request_context["stage"] = "send-headers-and-body"
                     connection.endheaders(body)
+                    request_context["stage"] = "response-status-and-headers"
                     response = connection.getresponse()
-                    return response.status, dict((name.lower(), value) for name, value in response.getheaders()), response.read()
+                    output_headers = dict((name.lower(), value) for name, value in response.getheaders())
+                    request_context.update(stage="response-body", status=response.status)
+                    output = response.read()
+                    request_context["stage"] = "response-assertions"
+                    return response.status, output_headers, output
                 finally:
                     connection.close()
 
             def check(name, method, path, expected_status, *, body=b"", headers=(), expected=None, request_id=None):
+                request_context.clear()
+                request_context.update(case=name, expected_status=expected_status)
                 status, output_headers, output = request(method, path, body, headers)
                 assert status == expected_status, (name, status, output)
                 assert output_headers.get("x-request-id") == request_id, (name, output_headers)
@@ -179,6 +201,26 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
                     assert headers.get("allow") == "POST", headers
                     check("missing-route", "GET", "/missing", 404)
                     check("body-limit", "POST", "/quotes", 413, body=b" " * 4097, headers=json_headers)
+            except Exception as error:
+                # Observe before finally stops the child; a receive failure
+                # must not be mistaken for a child failure or a successful 413.
+                try:
+                    stdout.flush()
+                    stderr.flush()
+                    failure = {
+                        "configuration_maximum": maximum,
+                        "request": dict(request_context),
+                        "child_pid": process.pid,
+                        "child_returncode_before_cleanup": process.poll(),
+                        "exception_type": type(error).__name__,
+                        "exception": str(error)[:4096],
+                        "stdout": failure_log(stdout_path),
+                        "stderr": failure_log(stderr_path),
+                    }
+                    failure_path.write_text(json.dumps(failure, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                except OSError as capture_error:
+                    error.add_note(f"Unable to save quote API failure evidence: {capture_error}")
+                raise
             finally:
                 if process.poll() is None:
                     if os.name == "nt":

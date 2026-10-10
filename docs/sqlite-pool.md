@@ -1,16 +1,14 @@
 # SQLite PoolとTransaction
 
-> `std.db.sqlite` は現在の開発ソースにある未リリースAPIです。Nagi 0.1.11には含まれていません。配布版の利用者は従来の [`db_*` API](database.md) を使ってください。
+> `std.db.sqlite` は現在の開発ソースにある未リリースAPIです。Nagi 0.1.11には含まれていません。SF05で旧Db/db_*を廃止するため、開発sourceへ移行する際は[移行](migration-0.2.0.md)を参照してください。
 
-[Docs目次](README.md) · [従来のSQLite API](database.md) · [SQLの事前検査](sql-check.md)
+[Docs目次](README.md) · [SQLiteと移行](database.md) · [SQLの事前検査](sql-check.md)
 
-Rustからcompilerの標準module/resource/operation metadata enumを網羅matchする組込み利用者は、新しいSQLite variantへの対応が必要です。Nagiアプリの既存syntaxや`db_*`の署名は変わりません。新APIを導入しないアプリの移行作業は不要です。
+Rustからcompilerの標準module/resource/operation metadata enumを網羅matchする組込み利用者は、新しいQuery/literal variantへの対応が必要です。
 
 ## 何ができるか
 
-このmoduleは、複数のSQLite接続を管理する `Pool` と、1接続を専有して複数の文をまとめる `Tx` を提供します。`Pool` は接続を共有して借りる入口、`Tx` は開始後の接続とtransactionを専有する値です。SQLの値は `Parameters` に型付きで追加して渡します。
-
-既存の `db_open` / `db_exec` / `db_query` などとは別APIです。旧APIの固定bind引数、複数文の扱い、行数、statement cache、行型対応は変わりません。既存アプリを機械的に置換しないでください。二つのAPIを選ぶ基準と旧APIの動作は[従来のSQLiteページ](database.md)を参照してください。
+`Pool` は複数のSQLite接続を管理し、`Tx` は一つの接続を専有します。SQL構造はopaque `Query`、実値はtyped owned `Parameters`で渡します。旧Db/db_*、runtime public Db/Sql、動的文字列factoryは削除し、旧Nagi入口はSF05 migration診断にします。旧APIとの併走fallbackはありません。
 
 ## まず動かす
 
@@ -72,12 +70,12 @@ def database_error(cause: sqlite.Failure) -> AppFailure:
 
 async def write_and_read(pool: view[sqlite.Pool]) -> Result[i64, sqlite.Failure]:
     tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
-    try await sqlite.exec(tx, "CREATE TABLE IF NOT EXISTS amounts(amount INTEGER NOT NULL)", sqlite.parameters())
+    try await sqlite.exec(tx, sqlite.literal("CREATE TABLE IF NOT EXISTS amounts(amount INTEGER NOT NULL)"), sqlite.parameters())
     values = sqlite.bind_i64(sqlite.parameters(), 7)
-    try await sqlite.exec(tx, "INSERT INTO amounts VALUES (?)", values)
+    try await sqlite.exec(tx, sqlite.literal("INSERT INTO amounts VALUES (?)"), values)
     try await sqlite.commit(tx)
     tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
-    row = try await sqlite.query[Total](tx, "SELECT amount FROM amounts", sqlite.parameters())
+    row = try await sqlite.query[Total](tx, sqlite.literal("SELECT amount FROM amounts"), sqlite.parameters())
     try await sqlite.rollback(tx)
     match row:
         case Some(total):
@@ -114,6 +112,7 @@ async def main() -> Result[unit, AppFailure]:
 | 型 | 役割・主な条件 |
 |---|---|
 | `Options` | 接続数、各workerのqueue capacity、acquire timeout、SQLite busy timeoutを保持する。constructorで全値を指定する |
+| `Query` | 直接literal由来のopaque Copy値。保存・共有・Debug可、Eq/JSON不可 |
 | `Pool` | 接続の取得とcloseを管理する。`clone_pool` が同じclose/failure状態を共有するhandleを作る |
 | `Tx` | 1接続のtransaction session。非Copyで、同じtaskの中だけで使う。fieldやshared値に格納できない |
 | `Parameters` | SQL bind値のowned list。各bind builderは受け取った値をconsumeして新しい `Parameters` を返す |
@@ -140,6 +139,8 @@ async def main() -> Result[unit, AppFailure]:
 capacity超過、負数、時間変換範囲外は `options` の `Error` です。0msは「必ずtimeout」ではなく待たない指定です。要求時点で条件が満たされていれば成功します。
 
 `open(path, options)` は空pathと `file:` URIを拒否します。`:memory:` はconnectionごとに別DBになるため、`connections` は1だけです。それ以外は通常のfilesystem pathを使い、相対pathは実行時current working directoryを基準にします。`open` はpathをFuture作成時に所有しますが、native connectionはlazyに `begin` 時に作ります。したがってfilesystem/native openの失敗が `open` ではなく最初の `begin` の `WORKER` failureとして返る場合があります。自動WAL、URI解釈、共有memory URIはありません。
+
+`sqlite.literal("SELECT id FROM items WHERE id = ?")` はcanonical identityにより直接literalだけを受理します。変数・view・連結・format・関数返却strは元位置付きで拒否します。同名のユーザー関数は占有しません。QueryはCopyでlocal/field/返却値に使えますが、SQL文字列を取り出せず、JSON・Eq・直接構築はできません。`query/all/exec`はQuery必須です。通常checkはSQL parserを持たず、SQLのshapeはruntimeまたは明示SQL事前検査が確認します。
 
 ### 型付き引数とSQLの形
 
@@ -169,10 +170,11 @@ capacity超過、負数、時間変換範囲外は `options` の `Error` です�
 
 ### Public typesと操作一覧
 
-このmoduleは8型と18操作を公開します。`view[T]` は値をborrowする型、`Future[T]` は`await`する非同期処理、`Result[T, E]` は成功値かerrorのどちらかです。`try`は現在のfunctionからErrを返します。より詳しい言語規則は[view](view-and-zero-copy.md)、[async](async.md)、[Result](error-handling.md)を参照してください。
+このmoduleは9型と19操作を公開します。`view[T]` は値をborrowする型、`Future[T]` は`await`する非同期処理、`Result[T, E]` は成功値かerrorのどちらかです。`try`は現在のfunctionからErrを返します。より詳しい言語規則は[view](view-and-zero-copy.md)、[async](async.md)、[Result](error-handling.md)を参照してください。
 
 | 型 | Copy / field保存 / shared / debug | 意味 |
 |---|---|---|
+| `Query` | Copy / storage・shared・Debug可、Eq/JSON不可 | 直接literal由来の固定構造 |
 | `Pool` | non-Copy / storage可 / shared可 / Debug可 | `clone_pool`で同じpoolのhandleを増やす |
 | `Tx` | non-Copy / storage不可 / shared不可 / Debug不可 | 同じtaskでのみ使うaffine transaction handle |
 | `Parameters` | non-Copy / storage可 / shared不可 / Debug不可 | owned bind値をbuilderで積む |
@@ -184,6 +186,7 @@ capacity超過、負数、時間変換範囲外は `options` の `Error` です�
 
 | 操作 | signature | 使い方と戻り値 |
 |---|---|---|
+| `literal` | `(sql: str) -> Query` | 直接文字列literalのみをcheckerで受理 |
 | `options` | `(connections: i64, queue_capacity: i64, acquire_ms: i64, busy_ms: i64) -> Result[Options, Error]` | 全値を明示し範囲を検証 |
 | `open` | `(path: view[str], options: Options) -> Future[Result[Pool, Failure]]` | pathを所有しPoolを作る。native connectionはlazy |
 | `clone_pool` | `(pool: view[Pool]) -> Pool` | close/failure状態を共有するhandle |
@@ -194,9 +197,9 @@ capacity超過、負数、時間変換範囲外は `options` の `Error` です�
 | `bind_text` | `(parameters: Parameters, value: str) -> Parameters` | owned textを追加 |
 | `bind_bytes` | `(parameters: Parameters, value: bytes) -> Parameters` | owned bytesを追加 |
 | `bind_null` | `(parameters: Parameters) -> Parameters` | plain SQLite NULLを追加 |
-| `query[T]` | `[T](tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[Option[T], Failure]]` | row-producing readonly SQLの先頭行 |
-| `all[T]` | `[T](tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[List[T], Failure]]` | row-producing readonly SQLの全行 |
-| `exec` | `(tx: view[Tx], sql: view[str], parameters: Parameters) -> Future[Result[i64, Failure]]` | columnを返さない一文 |
+| `query[T]` | `[T](tx: view[Tx], sql: Query, parameters: Parameters) -> Future[Result[Option[T], Failure]]` | row-producing readonly SQLの先頭行 |
+| `all[T]` | `[T](tx: view[Tx], sql: Query, parameters: Parameters) -> Future[Result[List[T], Failure]]` | row-producing readonly SQLの全行 |
+| `exec` | `(tx: view[Tx], sql: Query, parameters: Parameters) -> Future[Result[i64, Failure]]` | columnを返さない一文 |
 | `commit` | `(tx: Tx) -> Future[Result[unit, Failure]]` | transactionを終端してcommit |
 | `rollback` | `(tx: Tx) -> Future[Result[unit, Failure]]` | transactionを終端してrollback |
 | `close` | `(pool: view[Pool], timeout_ms: i64) -> Future[Result[unit, Failure]]` | closingを開始し、worker joinを待つ |
@@ -225,7 +228,7 @@ def make_values() -> sqlite.Parameters:
 
 ```nagi
 async def read_all(tx: view[sqlite.Tx]) -> Result[List[Total], sqlite.Failure]:
-    return await sqlite.all[Total](tx, "SELECT amount FROM amounts ORDER BY amount", sqlite.parameters())
+    return await sqlite.all[Total](tx, sqlite.literal("SELECT amount FROM amounts ORDER BY amount"), sqlite.parameters())
 ```
 
 `query`は最初の1行だけ、`all`は全行です。readonly SQLの結果を1件だけ扱うなら`query`、複数件を走査するなら`all`を選びます。`exec`はrow結果を返さないDDLやwrite向けです。operation形の誤り、複数文、named/numbered placeholderはruntimeで拒否されます。
@@ -235,7 +238,7 @@ async def read_all(tx: view[sqlite.Tx]) -> Result[List[Total], sqlite.Failure]:
 | 間違い | 段階と理由 | 修正 |
 |---|---|---|
 | `sqlite.query[i64](tx, ...)` | `check`で拒否。新APIは標準FromRow生成を行うclassが必要 | `amount: i64` fieldを持つclassを作って`query[Amount]`を使う |
-| `sqlite.exec(tx, "DELETE FROM items WHERE id = ?1", params)` | 実行時にSQL failure。新APIは匿名`?`だけ | `?`を使い、Parametersを同じ順にbuilderで作る |
+| `sqlite.exec(tx, sqlite.literal("DELETE FROM items WHERE id = ?1"), params)` | 実行時にSQL failure。新APIは匿名`?`だけ | `?`を使い、Parametersを同じ順にbuilderで作る |
 | `sqlite.all[Row](tx, sql, values)`の後も`values`を使う | `all`が`Parameters`をconsumeする | 各SQL用に別のParametersを作る |
 | `try await sqlite.commit(tx)`の後で同じ`tx`を再利用 | `commit`はFuture作成時から`Tx`をconsume | 次のSQLは新しい`begin`後のTxで実行 |
 | `Tx`をclass fieldへ保存、またはchild taskへmove | `check`で拒否。Txはstorage/shared/task境界を越えない | task内で終端するか、child task内で新しく`begin`する |
@@ -245,7 +248,7 @@ async def read_all(tx: view[sqlite.Tx]) -> Result[List[Total], sqlite.Failure]:
 
 ```nagi
 async def read_total(tx: view[sqlite.Tx]) -> Result[Total?, sqlite.Failure]:
-    return await sqlite.query[Total](tx, "SELECT amount FROM amounts", sqlite.parameters())
+    return await sqlite.query[Total](tx, sqlite.literal("SELECT amount FROM amounts"), sqlite.parameters())
 
 async def call_read_total(tx: sqlite.Tx) -> Result[Total?, sqlite.Failure]:
     return await read_total(view(tx))
@@ -305,10 +308,9 @@ Failureの分類とtransaction結果を分けて読みます。`outcome` は観�
 
 ## SQLの事前検査
 
-`check --sql-schema FILE --sql-dialect sqlite` は明示したoffline検査です。新APIではliteral SQLを直接渡す `query` / `all` / `exec` を対象にできます。schema・table/column・必要row field・operationのSQL shapeを検査します。`exec` のDDLはprepare-onlyで、対象SQLを実行・変更しません。dynamic SQLは未検査です。`Parameters` の個数と値型は静的に分からないため **bind unchecked** と表示し、runtimeでも検査します。旧 `db_*` の検査対象・bind規則は[SQL事前検査のページ](sql-check.md)を参照してください。
+通常checkはQueryのliteral境界、型・所有権・行fieldを検査し、SQLiteエンジンを起動しません。明示schemaによるopt-in検査は直接Query constructorのSQL形・schema・必要列をprepare-onlyで確認します。直接Parameters builder列のbind個数は照合し、変数/関数経由のQuery構造やParameters個数はruntime検査として表示します。実値型・NULL・数値範囲・DB内データはruntimeで確認します。[SQL事前検査](sql-check.md)を参照してください。
 
 ## 使い分けと関連ページ
 
 - 汎用typed parameters、複数文を跨ぐ明示Tx、複数接続とclose制御が必要なら、この新APIを選びます（使えるのはこのAPIを含む開発sourceからbuildしたcompiler）。
-- 現行releaseで動く旧アプリは[`db_*` API](database.md)を使います。旧SQLはnumbered `?1`、bind形とoperationが固定です。
 - API shapeをschemaと照合するoffline checkは[SQL事前検査](sql-check.md)。Nagi `Result`、`try`、nullable、`view`、ownershipの規則は[エラー処理](error-handling.md)、[Optionとnullable](types.md)、[所有権](ownership.md)、[view](view-and-zero-copy.md)、[async](async.md)を参照してください。

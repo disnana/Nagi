@@ -94,6 +94,15 @@ pub fn calls(program: &Program, sources: &Sources) -> Graph {
                                 target.id.name,
                                 target.id.module.0.trim_start_matches("stdlib:")
                             );
+                            if target.id.module.0 == "stdlib:std.db.sqlite" {
+                                node.kind = NodeKind::Database;
+                                node.label.push_str("\nDatabase operation");
+                                graph.add_group(Group {
+                                    id: "boundary:database".into(),
+                                    label: "Database operations".into(),
+                                    nodes: vec![node.id.clone()],
+                                });
+                            }
                             groups
                                 .entry(target.id.module.0.clone())
                                 .or_default()
@@ -117,30 +126,7 @@ pub fn calls(program: &Program, sources: &Sources) -> Graph {
                         position(sources, expression.line),
                     sources.diagnostic(name)
                     )),
-                    Some(NameResolution::Builtin) => {
-                        if database_builtin(name) {
-                            let id = format!("builtin:{name}");
-                            graph.add_node(Node {
-                                id: id.clone(),
-                                kind: NodeKind::Database,
-                                label: format!("{name}\nDatabase operation"),
-                                qualified_name: format!("builtin::{name}"),
-                                module: None,
-                                source: None,
-                            });
-                            graph.add_edge(Edge {
-                                from: caller.clone(),
-                                to: id.clone(),
-                                kind: EdgeKind::Calls,
-                                label: Some("database builtin".into()),
-                            });
-                            graph.add_group(Group {
-                                id: "boundary:database".into(),
-                                label: "Database operations".into(),
-                                nodes: vec![id],
-                            });
-                        }
-                    }
+                    Some(NameResolution::Builtin) => {}
                     Some(NameResolution::Enum) => {}
                     _ => graph.warnings.push(format!(
                         "{}: unresolved call target {}; no edge inferred",
@@ -223,13 +209,6 @@ fn position(sources: &Sources, line: usize) -> String {
         .location(line)
         .map(|location| format!("{}:{}", location.path.display(), location.line))
         .unwrap_or_else(|| format!("line {line}"))
-}
-
-fn database_builtin(name: &str) -> bool {
-    matches!(
-        name,
-        "db_open" | "db_exec" | "db_all" | "db_query" | "db_write" | "db_insert" | "db_update"
-    )
 }
 
 pub(super) fn statements(body: &[Stmt], visit: &mut impl FnMut(&Expr)) {

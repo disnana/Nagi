@@ -52,7 +52,7 @@
       "id": "02-pool-row-sql",
       "status": "validated_public_slice",
       "expected_after_public_vertical_slice": "pass",
-      "contract": "Pool owned/shared storage; scalar row; literal versus dynamic SQL; unknown bind count",
+      "contract": "Pool owned/shared storage; scalar row; literal Query construction and Query value selection; unknown bind count",
       "inputs": {
         "high": "02-pool-row-sql.nagi",
         "user_low": "02-pool-row-sql.low"
@@ -78,24 +78,24 @@
       "sql_plan": [
         {
           "operation": "query",
-          "sql": "Static",
+          "sql": "direct literal Query",
           "bind": "unknown: Parameters function argument",
           "schema": "check required columns; report bind unchecked"
         },
         {
           "operation": "all",
-          "sql": "Owned",
+          "sql": "Query value",
           "bind": "known empty builder may be proven separately",
-          "schema": "dynamic SQL unchecked"
+          "schema": "Query structure unavailable to opt-in preflight"
         },
         {
           "operation": "exec",
-          "sql": "Static",
+          "sql": "direct literal Query",
           "bind": "empty builder may be proven separately",
           "schema": "one statement, no returned columns"
         }
       ],
-      "native_requirement": "build + SQL ownership before params move; same-task await does not retain SQL view across worker boundary",
+      "native_requirement": "build + Query by-value before Parameters move; same-task Tx loan and evaluation order remain explicit",
       "variants": [
         "share(Failure), share(Option[Failure]), and share(Result[i64, Failure]) are capability pass cases; not yet executed",
         "shared[State] owned Pool field borrowed by begin/clone_pool; no implicit shared[Pool] to view[Pool] conversion",

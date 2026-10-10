@@ -1,0 +1,17 @@
+{
+  "body_bytes": 4097,
+  "body_limit": 4096,
+  "case": "oversized_body_nodelay_split_writes",
+  "close_result": "Ok(Ok(()))",
+  "complete_headers_received": true,
+  "complete_response_received": true,
+  "elapsed_ms": 0,
+  "handler_calls_before_recovery": 0,
+  "nodelay": true,
+  "os": "linux",
+  "received_bytes": 201,
+  "recovery_verified": true,
+  "send_result": "Ok(Ok(()))",
+  "separate_writes": true,
+  "wire": "HTTP/1.1 413 Payload Too Large\r\ncontent-type: text/plain; charset=utf-8\r\nx-content-type-options: nosniff\r\nconnection: close\r\ncontent-length: 17\r\ndate: Sat, 10 Oct 2026 00:22:14 GMT\r\n\r\nPayload Too Large"
+}

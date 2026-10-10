@@ -1,0 +1,16 @@
+{
+  "baseline_full_provenance": "final-full-offline/provenance.json",
+  "paths_compared": 236,
+  "changed": {
+    "compiler/tests/security_sf05.rs": {
+      "recorded": "acd5fc121b3404cfcbf7b7335019ed55c18a186316dcfb47b7edef1dde1d3172",
+      "current": "1239ec3c87c307b8d2dd260d0a6749eff8a9f36637d88e7c6ae77b0323654a48"
+    },
+    "runtime/src/sqlite/security_sf05_tests.rs": {
+      "recorded": "282161ccf73476c9a397623f9f4a3a74b2c2432056b217c26888a7929e952910",
+      "current": "ea1efa2c606ddd6f8ccdbc4d1cb694075380dce2032090376fe829fd429c7bea"
+    }
+  },
+  "production_changed": false,
+  "needed_regression": "Complete: final-scoped default/no-engine each12 groups; final-admission SQLite79/public1; final-native-network9 groups with216 raw artifacts; final application/tutorial/HTTP/cost results retained."
+}

@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-09: SF05 literal Query / SQLite移行
+
+SF00 #100 / SF01 #101 merge済みのbase main `3b8da226`から独立branchで実装。literal QueryとParametersへ標準SQLiteを統一し、旧Db/db_* / public Sql実行入口を具体migration診断と共に削除した。実Grant subject/target predicateと実bounded queueへの一回permit admissionを接続した。[契約/移行](security-foundation/sf05-contract.md)・[検証結果](security-foundation-sf05-results.md)へ原ログ/source SHA/cacheと未確認範囲を記録する。保存workspaceはexit0/1011成功/failed0、追加SQLiteケースは79件GREEN。アプリ19runs・HTTP業務8runs/84checks・チュートリアルと小さいQuery費用比較も完了。production source hashは保存fullと一致し、差分test2filesはscopedで確認。独立reviewと最新source4 OSの残検査中。SF02以降やSecurity Foundation全体、正式0.2.0の完成とは扱わない。merge/版/tag/release/公開なし。
+
 ## 2026-10-09: Nagi for JetBrains 0.1.2の正式GitHub公開
 
 ユーザーの「合格したのでリリース許可」を受け、#102の最終head `4bafb285`をmain `2202623`へマージした。tree一致、最終PRの4 OS・四SDK・website成功を読戻し、main checks37861515646の全必須検証・publish-release成功、website37861515402成功を確認。[jetbrains-v0.1.2](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.2)は2026-10-09T00:28:08Zに正式公開。IDEA/PyCharm共通ZIP一つとSHA-256だけを配布し、公開ファイルの実取得・内側descriptor・checksumを確認した。既存ID/Marketplaceページを維持し、本体0.1.11・VS Code0.1.13の版とReleaseは変更していない。Marketplace提出はユーザー担当、個別GUI操作結果や0.1.2のMarketplace公開状態は推測しない。
@@ -444,3 +448,9 @@ PR #99 sourceのLinux workspace final testsはexit0。raw logの単純集計は9
 PR #99のe3e0ea3 initial checksは実行中で、latest-head 4 OS/websiteのreadbackは未確認。generated-versus-manual cost sampleはLinux x86_64で完了し、32回/条件のraw samples・per-sample allocation分布・共有host/キャッシュ条件を記録した。sampleは小さく性能差の有意性やthroughputを示さない。debug public-cost snapshot、distribution mock gates、source projection testを性能・配布済archive受入の証拠として扱わない。次担当はこのhandoffとresultsを起点にCIを追記し、PRのdraft/merge/release判断を別に行う。
 
 2026-10-08 統合追記: PR #98のhead `bc6a76b`へPR #99をrebaseし、#98をbaseとする依存PRへ整理した。最終反映先はmain。双方の目次・CIを保持し、compiler/runtime/Cargo.lock・SQLite配布gate・費用harnessは検証済み`e3e0ea3`から差分なし。統合source `fbfebd3`でwebsite 98 pages、初アプリHigh/保存Low native 10件、SQLite日英コード一致、CI policy 59 testsを確認した。以降の公開headと必須CIの最終結果は[PR #99](https://github.com/disnana/Nagi/pull/99)の本文とChecksを正とし、この文書の作成時点のCI pendingを現在状態と読み替えない。
+
+## 2026-10-10: quote-apiのHTTP 413診断とnative観測
+
+main base `3b8da22`で元quote-apiのrequest/413 assertと既存native5件を維持し、失敗段階・停止前child状態・bounded stdout/stderrをCI artifactへ保存する。NODELAY=true・別writeの4097 bytes nativeは413受信を別に記録し、handler非呼出し・bounded close・次GET/capacity回復を要求する。公開制限から新たな413必達保証を導かず、runtime実装・依存・版を変更しない。
+
+Linuxはnative6件、runtime library232 passed/既存ignored1、Clippy/fmt、Python診断9件、CI policy59件、再利用High/保存Lowの元51 cases/形式が成功。Windows/macOS・remote CI・独立reviewは未確認で、元Windows resetのnative REDはない。[観測方針と次の判断](http413-ci-observation.md)、[有限な検査artifact](../../benchmarks/results/http413-ci-observation-2026-10-10/README.md)を参照。

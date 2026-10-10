@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "nagic",
+    "--test",
+    "security_sf05",
+    "--",
+    "--nocapture"
+  ],
+  "exit": 101,
+  "seconds": 0.4216959476470947,
+  "source_head": "3b8da226eb26c27187f3b0bc4fa39639abe4ac57",
+  "cache": "/workspace/nagi-sf01-target (warm)",
+  "purpose": "retired Db and every legacy entry, direct canonical string execution",
+  "note": "all-entries test stops at first RED; all-entry green validation follows implementation"
+}

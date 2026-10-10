@@ -61,7 +61,7 @@ fn legacy_decorator_is_a_checker_migration_diagnostic() {
 }
 #[test]
 fn legacy_global_serve_is_a_checker_migration_diagnostic() {
-    Fixture::new().reject("async def main() -> Result[unit, Error]:\n    db = try await db_open(\":memory:\")\n    try await serve(db, 0)\n    return ok(print(0))\n", "SF01 migration",3,"await serve");
+    Fixture::new().reject("async def main() -> Result[unit, Error]:\n    db = 0\n    try await serve(db, 0)\n    return ok(print(0))\n", "SF01 migration",3,"await serve");
 }
 #[test]
 fn legacy_principal_is_a_checker_migration_diagnostic() {
@@ -82,7 +82,7 @@ fn handwritten_low_cannot_use_retired_or_policy_free_entrypoints() {
     for (text,line) in [
   ("@get(\"/answer\")\nasync fn handler() -> Result[i64, Error] { return ok(7); }\n",2),
   ("import std.auth as auth;\n@rust(\"native::old\")\nextern fn old() -> auth.Principal;\n",3),
-  ("async fn main() -> Result[unit, Error] {\n let db = try await db_open(\":memory:\");\n try await serve(db,0);\n return ok(print(0));\n}\n",3),
+  ("async fn main() -> Result[unit, Error] {\n let db = 0;\n try await serve(db,0);\n return ok(print(0));\n}\n",3),
   ("import std.http.server as http;\nasync fn handler(r: http.Request, s: shared[i64]) -> Result[http.Response, Error] { return ok(http.empty(http.Status.OK)); }\nfn setup() -> Result[http.App[i64, Error], Error] {\n let app = http.app_default[i64](7);\n return http.route(app,http.Method.GET,\"/\",handler);\n}\n",5),
  ] {
   let fixture=Fixture::new();let path=fixture.0.join("manual.low");fs::write(&path,text).unwrap();let mut loaded=source::load(&path,false).unwrap();let e=check::check(&mut loaded.program).expect_err(text);assert!(e.contains("SF01 migration"),"{e}");let d=loaded.diagnostic(&e);assert!(d.contains(&format!("manual.low:{line}\n")),"{d}");
