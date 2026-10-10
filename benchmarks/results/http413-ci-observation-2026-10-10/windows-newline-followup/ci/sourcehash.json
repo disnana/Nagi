@@ -1,0 +1,96 @@
+{
+  "format": "nagi-http105-investigation-sourcehash-v1",
+  "self_hash_excluded": true,
+  "files": [
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/artifacts.raw.json",
+      "bytes": 7729,
+      "sha256": "19f6e0ec61ebe203c7ee3036f80371fd1f798275e9338b56ad4175b688caf939"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/headcommit.raw.json",
+      "bytes": 1086,
+      "sha256": "84f20c7e9a61858c839d6fd01f3caf867f831bc21d830f78373078f00bd8e0a3"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/job.tool-result.json",
+      "bytes": 401,
+      "sha256": "32f9807a1c18edaabdae37a922a9c94684927f67e0a209d2443f7b2030a895f2"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/jobs.tool-result.json",
+      "bytes": 76610,
+      "sha256": "6fb9e1e660dfa27823c1f8c7c05ddcc15dd3f1a51994684c0a5ba46e7ad118d9"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/logs.tool-result.json",
+      "bytes": 291349,
+      "sha256": "ac61b2419a9742cfb74cb9d4ce35ff3853ad065cdce015fe8156563dea195c67"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/pr.raw.json",
+      "bytes": 16436,
+      "sha256": "354a9546ab71cc380c1e34402225c187088795d466bcf8c3cd78b4838289576f"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/pr104-failure.raw-excerpt.log",
+      "bytes": 2504,
+      "sha256": "eb6f55705fd278ffbe39fd27abe315d9015bd16cead07160356154ee896cf1e7"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/pr105-failure.raw-excerpt.log",
+      "bytes": 2142,
+      "sha256": "eb4143c57945eafe491f975ecb421cae66867a9c43457be7c8060fb36c884546"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/report.json",
+      "bytes": 7844,
+      "sha256": "41241730bc270c13a11286a870f4508d7d3eda3e797e532ea9655e96fc5f9a57"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/run.raw.json",
+      "bytes": 11980,
+      "sha256": "f7ff01a0bcace3c7a5364097fe5dec911b23ecda375f09e7e0c2e7a3e239f042"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/steps.tool-result.json",
+      "bytes": 9177,
+      "sha256": "befe67e77d353c528d15b96a1dd53d313888427afafaab0087e0b97762924c8f"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/website.raw.json",
+      "bytes": 11814,
+      "sha256": "12cfc736e330a092a7543517a92329bfb468d9a990cdf381522e6e0ce4b7e5af"
+    },
+    {
+      "path": "/tmp/nagi-http105-windows-ci-investigation/windows-job.raw.log",
+      "bytes": 276458,
+      "sha256": "f5ad75eadd1fad6ca83be5503ae02158678161db6ddefae548d5a978a3b51892"
+    },
+    {
+      "path": "/workspace/Nagi-http-limit-ci/AGENTS.md",
+      "bytes": 13624,
+      "sha256": "9f9e9f11165ea1f93235c679eb686c679ce4b487fb6b862e8489c0081e2609a6"
+    },
+    {
+      "path": "/workspace/Nagi-http-limit-ci/scripts/test_application_native_tests.py",
+      "bytes": 10034,
+      "sha256": "0e5036a3f65c5c48e69ce0028520458c3e528b50724d54a0774267d87059607c"
+    },
+    {
+      "path": "/workspace/Nagi-http-limit-ci/test-nagi-code/application-examples/quote-api/smoke.py",
+      "bytes": 15726,
+      "sha256": "eaeb4c6346e3b739fa6ae649b9ad25355ec06f7f4ebb63543611596b732a63d8"
+    },
+    {
+      "path": "/workspace/Nagi-http-limit-ci/.github/workflows/ci.yml",
+      "bytes": 26082,
+      "sha256": "8d3f01020b76ec02ab4382e22ecd9186532f332d35503192eee1a5b0e0ae042a"
+    },
+    {
+      "path": "/workspace/Nagi-http-limit-ci/benchmarks/results/http413-ci-observation-2026-10-10/validation.json",
+      "bytes": 3580,
+      "sha256": "ea45c058ed392dc31eb59bd14b49e7de1b8c48f0c633fab9950bab4858da30af"
+    }
+  ]
+}

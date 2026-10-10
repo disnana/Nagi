@@ -1,0 +1,19 @@
+test_receive_failure_records_live_child_before_cleanup_and_propagates (test_application_native_tests.ApplicationFailureEvidenceTests.test_receive_failure_records_live_child_before_cleanup_and_propagates) ... ERROR
+
+======================================================================
+ERROR: test_receive_failure_records_live_child_before_cleanup_and_propagates (test_application_native_tests.ApplicationFailureEvidenceTests.test_receive_failure_records_live_child_before_cleanup_and_propagates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Nagi-http-limit-ci/scripts/test_application_native_tests.py", line 47, in test_receive_failure_records_live_child_before_cleanup_and_propagates
+    quote_smoke.verify(directory / "unused-executable", {}, directory)
+  File "/workspace/Nagi-http-limit-ci/test-nagi-code/application-examples/quote-api/smoke.py", line 44, in verify
+    with socket.socket() as available:
+         ^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/socket.py", line 233, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+PermissionError: [Errno 1] Operation not permitted
+
+----------------------------------------------------------------------
+Ran 1 test in 0.002s
+
+FAILED (errors=1)

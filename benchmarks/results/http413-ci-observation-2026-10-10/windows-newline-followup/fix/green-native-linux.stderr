@@ -1,0 +1,15 @@
+test_capture_io_failure_does_not_replace_original_failure (test_application_native_tests.ApplicationFailureEvidenceTests.test_capture_io_failure_does_not_replace_original_failure) ... ok
+test_log_capture_bounds_bytes_and_marks_truncation (test_application_native_tests.ApplicationFailureEvidenceTests.test_log_capture_bounds_bytes_and_marks_truncation) ... ok
+test_log_capture_preserves_child_lf_and_crlf_bytes (test_application_native_tests.ApplicationFailureEvidenceTests.test_log_capture_preserves_child_lf_and_crlf_bytes) ... ok
+test_main_retains_smoke_failure_in_existing_ci_artifact_directory (test_application_native_tests.ApplicationFailureEvidenceTests.test_main_retains_smoke_failure_in_existing_ci_artifact_directory) ... ok
+test_receive_failure_records_live_child_before_cleanup_and_propagates (test_application_native_tests.ApplicationFailureEvidenceTests.test_receive_failure_records_live_child_before_cleanup_and_propagates) ... ok
+test_command_failure_propagates (test_application_native_tests.AxumNativeTests.test_command_failure_propagates) ... ok
+test_missing_generation_manifest_is_not_replaced_by_projection (test_application_native_tests.AxumNativeTests.test_missing_generation_manifest_is_not_replaced_by_projection) ... ok
+test_rejects_missing_or_multiple_bins (test_application_native_tests.AxumNativeTests.test_rejects_missing_or_multiple_bins) ... ok
+test_rejects_zero_ignored_failed_missing_and_ambiguous_results (test_application_native_tests.AxumNativeTests.test_rejects_zero_ignored_failed_missing_and_ambiguous_results) ... ok
+test_uses_successful_generation_manifest_and_actual_bin (test_application_native_tests.AxumNativeTests.test_uses_successful_generation_manifest_and_actual_bin) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.012s
+
+OK

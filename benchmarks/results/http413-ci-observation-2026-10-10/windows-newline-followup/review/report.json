@@ -1,0 +1,54 @@
+{
+  "format": "nagi-http105-windows-newline-independent-review-v1",
+  "status": "no required findings; narrow test-only fix approved for review scope",
+  "reviewed_at_utc": "2026-10-10T06:28:49.353177+00:00",
+  "target": {
+    "unchanged_head": "55e54d2693b2acd345220d709872f1e7bd03acb5",
+    "published_head_before_fix": "f7d9a571ce65d094fe9e87633e85de1f99bf6b03",
+    "working_change": "scripts/test_application_native_tests.py only,17insertions2deletions, uncommitted",
+    "fixed_source_sha256": "0e5036a3f65c5c48e69ce0028520458c3e528b50724d54a0774267d87059607c",
+    "fix_patch_sha256": "8cc7c2d3a228f6580785ad24d66172911e4ab64e081c3369f4bf2d3e8b170a0b",
+    "author_report_sha256": "873763cb514037220e4d349ea8ed1ae6b3bfdd7d8fc8cece757cb5b5a1126da1"
+  },
+  "checks": {
+    "all_13_author_record_hashes_match": true,
+    "original_snapshot_exact_HEAD_blob": true,
+    "fixed_snapshot_exact_current_WIP": true,
+    "saved_patch_exact_actual_git_diff": true,
+    "all_old_assert_calls_retained": true,
+    "new_methods_exactly_one_LF_CRLF_preservation_oracle": true,
+    "production_smoke_same_prior_investigation_hash": true,
+    "git_diff_changed_paths_exactly_one_test_file": true,
+    "other_old_methods_AST_unchanged_count": 10
+  },
+  "correctness": {
+    "file": "scripts/test_application_native_tests.py",
+    "lines": [
+      35,
+      37,
+      38,
+      59,
+      60,
+      63
+    ],
+    "mock_change": "Mock Popen child writes explicit LF bytes through parent stream buffer. Real Popen passes fileno to child; parent TextIOWrapper does not translate actual child bytes. This corrects mock fidelity without claiming real child always emitsLF.",
+    "flush_order": "Unchanged smoke catch stdout.flush/stderr.flush lines208/209 flush underlying buffer before failure_log reads rb. Raw LF expectation and new bytecount assertions remain exact.",
+    "byte_preservation": "New tiny write_bytes LF and CRLF cases each assert decoded tail equality, full byte count and nontruncation. Production failure_log binary tail read/UTF8 replacement decoding unchanged; no newline normalization.",
+    "failure_contract": "Original exception identity, live child precleanup returncode, request stage/type, cleanup wait, truncation limit and existing artifact/error-capture assertions preserved."
+  },
+  "saved_validation": {
+    "ordinary_Linux": "10/10 raw test names+summary OK",
+    "forced_CRLF_writer": "10/10 raw names+summary OK; simulator modifies only matching server*.stdout/stderr text open newline toCRLF; HTTP connection mocked but port-bind still real",
+    "valid_original_RED": "red-network.stderr:one exact LF/CRLF AssertionError, noerrors; red-network.stdout reports1test1failure0errors0skipped. Filename does not imply external connect; only local readiness bind.",
+    "earlier_infrastructure": "red.stderr:socket construction PermissionError,1ERROR; explicitly notsemanticRED; raw retained",
+    "source_stage_limit": "Saved simulator imports repo module; snapshots/hash/diff support fixedstage identity, but reviewer did not rerun or validate actualWindows."
+  },
+  "findings": [],
+  "remaining_gates": [
+    "Real Windows execution of this fixedtest is unperformed. CRLF writer simulation covers newline translation, not fullWindows runtime/process semantics.",
+    "Current PR105 Windows failed before real HTTPbody6/native observation and application smoke. New diagnostic run result is not yet available.",
+    "Original PR104 savedLow quote-api getresponse WinError10053 remains unresolved; this test-only fixture correction does not change runtime limits, request/asserts, receipt behavior or public guarantees."
+  ],
+  "operations": "Read-only source/diff/AST/raw/hash review only; no tests/helpers/Cargo/native/network/remote mutations executed and no repository files edited.",
+  "high_status": "stopped"
+}

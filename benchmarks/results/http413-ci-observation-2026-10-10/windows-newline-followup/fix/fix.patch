@@ -1,0 +1,39 @@
+diff --git a/scripts/test_application_native_tests.py b/scripts/test_application_native_tests.py
+index 061e27b..cbe6cc2 100644
+--- a/scripts/test_application_native_tests.py
++++ b/scripts/test_application_native_tests.py
+@@ -32,8 +32,10 @@ class ApplicationFailureEvidenceTests(unittest.TestCase):
+             child.wait.side_effect = stop
+ 
+             def start(*args, **kwargs):
+-                kwargs["stdout"].write("owned child stdout\n")
+-                kwargs["stderr"].write("owned child stderr\n")
++                # Popen passes file descriptors; children emit raw bytes without
++                # the parent's TextIOWrapper translating LF to CRLF on Windows.
++                kwargs["stdout"].buffer.write(b"owned child stdout\n")
++                kwargs["stderr"].buffer.write(b"owned child stderr\n")
+                 return child
+ 
+             ready = unittest.mock.Mock(status=200)
+@@ -54,8 +56,21 @@ class ApplicationFailureEvidenceTests(unittest.TestCase):
+             self.assertEqual(report["exception_type"], "ConnectionAbortedError")
+             self.assertEqual(report["stdout"]["tail"], "owned child stdout\n")
+             self.assertEqual(report["stderr"]["tail"], "owned child stderr\n")
++            self.assertEqual(report["stdout"]["bytes"], len(b"owned child stdout\n"))
++            self.assertEqual(report["stderr"]["bytes"], len(b"owned child stderr\n"))
+             self.assertFalse(report["stdout"]["truncated"])
+ 
++    def test_log_capture_preserves_child_lf_and_crlf_bytes(self):
++        with tempfile.TemporaryDirectory() as temporary:
++            path = Path(temporary) / "child.stdout"
++            for payload in (b"owned child\n", b"owned child\r\n"):
++                with self.subTest(payload=payload):
++                    path.write_bytes(payload)
++                    report = quote_smoke.failure_log(path)
++                    self.assertEqual(report["tail"], payload.decode("utf-8"))
++                    self.assertEqual(report["bytes"], len(payload))
++                    self.assertFalse(report["truncated"])
++
+     def test_log_capture_bounds_bytes_and_marks_truncation(self):
+         with tempfile.TemporaryDirectory() as temporary:
+             path = Path(temporary) / "child.stdout"

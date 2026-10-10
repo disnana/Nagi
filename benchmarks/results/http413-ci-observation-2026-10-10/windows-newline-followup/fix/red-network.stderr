@@ -1,0 +1,18 @@
+test_receive_failure_records_live_child_before_cleanup_and_propagates (test_application_native_tests.ApplicationFailureEvidenceTests.test_receive_failure_records_live_child_before_cleanup_and_propagates) ... FAIL
+
+======================================================================
+FAIL: test_receive_failure_records_live_child_before_cleanup_and_propagates (test_application_native_tests.ApplicationFailureEvidenceTests.test_receive_failure_records_live_child_before_cleanup_and_propagates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Nagi-http-limit-ci/scripts/test_application_native_tests.py", line 55, in test_receive_failure_records_live_child_before_cleanup_and_propagates
+    self.assertEqual(report["stdout"]["tail"], "owned child stdout\n")
+AssertionError: 'owned child stdout\r\n' != 'owned child stdout\n'
+- owned child stdout
+?                   -
++ owned child stdout
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.003s
+
+FAILED (failures=1)
