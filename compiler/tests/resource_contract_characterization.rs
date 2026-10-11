@@ -15,6 +15,54 @@ type ResourceExpected = (
 );
 const RESOURCES: &[ResourceExpected] = &[
     (
+        R::SessionOptions,
+        M::AuthSession,
+        "Options",
+        &[],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::SessionCookieOptions,
+        M::AuthSession,
+        "CookieOptions",
+        &[],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::SessionStore,
+        M::AuthSession,
+        "Store",
+        &[],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::SessionFailure,
+        M::AuthSession,
+        "Failure",
+        &[],
+        [false, false, true, false, true],
+        &[],
+    ),
+    (
+        R::SessionResponse,
+        M::AuthSession,
+        "SessionResponse",
+        &[],
+        [false, false, false, false, false],
+        &[],
+    ),
+    (
+        R::SessionSameSite,
+        M::AuthSession,
+        "SameSite",
+        &[],
+        [true, true, true, true, true],
+        &[],
+    ),
+    (
         R::SqlitePool,
         M::Sqlite,
         "Pool",
@@ -336,6 +384,11 @@ fn module(module: M) -> (&'static str, &'static str, &'static str) {
         ),
         M::Actor => ("std.actor", "stdlib:std.actor", "::nagi_runtime::actor"),
         M::Result => ("std.result", "stdlib:std.result", "::nagi_runtime::result"),
+        M::AuthSession => (
+            "std.auth.session",
+            "stdlib:std.auth.session",
+            "::nagi_runtime::auth::session",
+        ),
         M::Auth => ("std.auth", "stdlib:std.auth", "::nagi_runtime::auth"),
         M::Ownership => ("std.ownership", "stdlib:std.ownership", "::std::convert"),
         M::Task => ("std.task", "stdlib:std.task", "::nagi_runtime"),
@@ -364,8 +417,8 @@ fn registered_resources_match_the_independent_inventory() {
         shared: false,
         debug: false,
     };
-    assert_eq!(RESOURCES.len(), 39);
-    assert_eq!(stdlib::RESOURCES.len(), 39);
+    assert_eq!(RESOURCES.len(), 45);
+    assert_eq!(stdlib::RESOURCES.len(), 45);
     assert_eq!(
         stdlib::RESOURCES.iter().copied().collect::<HashSet<_>>(),
         RESOURCES.iter().map(|r| r.0).collect()
@@ -444,6 +497,19 @@ macro_rules! op {
     };
 }
 const OPERATIONS: &[OperationExpected] = &[
+    op!(SessionOptions,AuthSession,"options",8,&[],"MMMMMMMM",None,false,false,"(max_live: i64, max_stored: i64, max_row_bytes: i64, cleanup_batch: i64, idle_ms: i64, absolute_ms: i64, touch_ms: i64, collision_attempts: i64) -> Result[Options, Failure]"),
+    op!(SessionCookieOptions,AuthSession,"cookie_options",2,&[],"RM",None,false,false,"(name: view[str], same_site: SameSite) -> Result[CookieOptions, Failure]"),
+    op!(SessionOpen,AuthSession,"open",3,&[],"RMM",None,true,false,"(pool: view[Pool], options: Options, cookie: CookieOptions) -> Future[Result[Store, Failure]]"),
+    op!(SessionCloneStore,AuthSession,"clone_store",1,&[],"R",None,false,false,"(store: view[Store]) -> Store"),
+    op!(SessionIssue,AuthSession,"issue",2,&[],"RM",None,true,false,"(store: view[Store], scope: AuthScope) -> Future[Result[SessionResponse, Failure]]"),
+    op!(SessionRotate,AuthSession,"rotate",2,&[],"RM",None,true,false,"(store: view[Store], scope: AuthScope) -> Future[Result[SessionResponse, Failure]]"),
+    op!(SessionLogout,AuthSession,"logout",2,&[],"RM",None,true,false,"(store: view[Store], scope: AuthScope) -> Future[Result[SessionResponse, Failure]]"),
+    op!(SessionApply,AuthSession,"apply",2,&[],"MM",None,false,false,"(response: Response, intent: SessionResponse) -> Result[Response, Failure]"),
+    op!(SessionKind,AuthSession,"kind",1,&[],"R",None,false,false,"(failure: view[Failure]) -> FailureKind"),
+    op!(SessionMessage,AuthSession,"message",1,&[],"R",Some(0),false,false,"(failure: view[Failure]) -> view[str]"),
+    op!(SessionOutcome,AuthSession,"outcome",1,&[],"R",None,false,false,"(failure: view[Failure]) -> Outcome"),
+    op!(SessionAuthenticatedPolicy,HttpServer,"session_authenticated_policy",1,&["S"],"M",None,false,true,"[S](store: Store) -> Policy[S, AuthScope]"),
+    op!(SessionAuthorizedPolicy,HttpServer,"session_authorized_policy",2,&["S","P"],"MH",None,false,false,"[S, P](store: Store, authorizer: fn[AuthScope, Request, shared[S], Future[Result[Grant[P], Failure]]]) -> Policy[S, Grant[P]]"),
     op!(PublicPolicy,HttpServer,"public_policy",0,&["S"],"",None,false,true,"[S]() -> Policy[S, unit]"),
     op!(AuthenticatedPolicy,HttpServer,"authenticated_policy",1,&["S"],"H",None,false,false,"[S](verifier: fn[Request, shared[S], Future[Result[VerifiedIdentity, Failure]]]) -> Policy[S, AuthScope]"),
     op!(AuthorizedPolicy,HttpServer,"authorized_policy",2,&["S","P"],"HH",None,false,false,"[S, P](verifier: fn[Request, shared[S], Future[Result[VerifiedIdentity, Failure]]], authorizer: fn[AuthScope, Request, shared[S], Future[Result[Grant[P], Failure]]]) -> Policy[S, Grant[P]]"),
@@ -533,8 +599,8 @@ const OPERATIONS: &[OperationExpected] = &[
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 85);
-    assert_eq!(stdlib::OPERATIONS.len(), 85);
+    assert_eq!(OPERATIONS.len(), 98);
+    assert_eq!(stdlib::OPERATIONS.len(), 98);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()
@@ -726,6 +792,7 @@ fn registered_accessors_match_the_complete_inventory() {
 }
 
 const CONSTANTS: &[(R, &str)] = &[
+    (R::SessionSameSite,"LAX NONE STRICT"),
     (R::AuthFailureKind,"INVALID_CREDENTIAL DENIED EXPIRED INVALID_REQUEST UNAVAILABLE INTERNAL"),
     (R::SqliteBeginMode,"DEFERRED IMMEDIATE EXCLUSIVE"),
     (R::SqliteFailureKind,"INVALID CLOSED ACQUIRE_TIMEOUT BUSY SQL BIND DECODE ABORTED CLEANUP WORKER REPLY_LOST CLOSE_TIMEOUT ALLOCATION"),
@@ -740,7 +807,7 @@ const CONSTANTS: &[(R, &str)] = &[
 ];
 #[test]
 fn registered_constants_match_the_complete_inventory() {
-    assert_eq!(CONSTANTS.len(), 11);
+    assert_eq!(CONSTANTS.len(), 12);
     for &(resource, ..) in RESOURCES {
         let names = CONSTANTS
             .iter()
@@ -757,6 +824,9 @@ fn registered_constants_match_the_complete_inventory() {
         assert_eq!(actual.len(), expected.len());
         for name in expected {
             let native = match (resource, name) {
+                (R::SessionSameSite, "LAX") => "Lax",
+                (R::SessionSameSite, "NONE") => "None",
+                (R::SessionSameSite, "STRICT") => "Strict",
                 (R::SqliteBeginMode, "DEFERRED") => "Deferred",
                 (R::SqliteBeginMode, "IMMEDIATE") => "Immediate",
                 (R::SqliteBeginMode, "EXCLUSIVE") => "Exclusive",

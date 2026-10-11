@@ -1,0 +1,8 @@
+import std.auth.session as session;
+import std.auth as auth;
+import std.http.server as http;
+import std.actor as actor;
+record Bad {
+ actor: actor.Supervisor[Option[session.SessionResponse]];
+}
+fn main() -> unit { print(0); }

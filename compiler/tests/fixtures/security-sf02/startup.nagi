@@ -1,0 +1,25 @@
+import std.auth.session as session
+import std.auth as auth
+import std.http.server as http
+import std.db.sqlite as sqlite
+class State:
+    store: session.Store
+async def startup(pool: view[sqlite.Pool]) -> Result[session.Store, session.Failure]:
+    options = try session.options(4, 5, 72, 1, 10000, 100000, 5000, 2)
+    cookie = try session.cookie_options("__Host-owned", session.SameSite.STRICT)
+    return await session.open(pool, options, cookie)
+def shared_state(store: view[session.Store]) -> shared[State]:
+    return share(State(store=session.clone_store(store)))
+def main():
+    print(0)
+
+async def inspect(request: http.Request, state: shared[State], scope: auth.AuthScope) -> Result[http.Response, Error]:
+    return ok(http.empty(http.Status.OK))
+def read_registration(store: view[session.Store]) -> Result[http.App[State, Error], Error]:
+    app = http.app_default[State](State(store=session.clone_store(store)))
+    policy = http.session_authenticated_policy[State](session.clone_store(store))
+    return http.route(app, http.Method.GET, "/owned", policy, inspect)
+def unsafe_registration(store: view[session.Store]) -> Result[http.App[State, Error], Error]:
+    app = http.app_default[State](State(store=session.clone_store(store)))
+    policy = http.session_authenticated_policy[State](session.clone_store(store))
+    return http.route(app, http.Method.POST, "/owned", policy, inspect)

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 // 承認済みの狭い所有代入移行。型・move・origin拒否と実生成Rustを別に観測する。
 #[path = "checked_emission.rs"]
-mod checked_emission;
+pub(crate) mod checked_emission;
 use nagic::{check, emit, source};
 use std::{
     collections::HashSet,
@@ -75,6 +75,16 @@ impl Fixture {
         adapter: &str,
         assertions: &str,
     ) {
+        self.run_three_with_assertions(case, high, low, adapter, |_| assertions.to_owned());
+    }
+    pub(crate) fn run_three_with_assertions(
+        &self,
+        case: &str,
+        high: &str,
+        low: &str,
+        adapter: &str,
+        assertions: impl Fn(&nagic::ast::Program) -> String,
+    ) {
         self.write("main.nagi", high);
         let program = self
             .checked("main.nagi")
@@ -121,7 +131,18 @@ impl Fixture {
         ] {
             let generated =
                 emit::rust(&checked_emission::seal(&program)).expect("sealed Rust emission");
+            if let Some(directory) = std::env::var_os("NAGI_TEST_ARTIFACT_DIR") {
+                let directory = PathBuf::from(directory);
+                fs::create_dir_all(&directory).unwrap();
+                // Preserve unedited checked output separately from adapter/assertions.
+                fs::write(
+                    directory.join(format!("explicit-move-{case}-{name}-generated.rs")),
+                    generated.as_bytes(),
+                )
+                .unwrap();
+            }
             let rust = self.0.join(format!("{name}.rs"));
+            let assertions = assertions(&program);
             fs::write(&rust, format!("{generated}\n{adapter}\n{assertions}")).unwrap();
             let package = self.0.file_name().unwrap().to_str().unwrap();
             let runtime = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

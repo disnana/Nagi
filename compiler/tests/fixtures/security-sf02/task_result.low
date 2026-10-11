@@ -1,0 +1,10 @@
+import std.auth.session as session;
+import std.auth as auth;
+import std.http.server as http;
+async fn relay(intent: session.SessionResponse) -> session.SessionResponse { return intent; }
+async fn reject(intent: session.SessionResponse) -> Result[unit, Error] {
+ scope {
+ let task = spawn relay(intent);
+ }
+ return ok(print(0));
+}
