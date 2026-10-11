@@ -2134,8 +2134,12 @@ mod resource_contract_tests {
                 matches!(contract.lifecycle, ResourceLifecycle::SameTask),
                 matches!(
                     resource,
-                    Resource::SqliteTx | Resource::AuthScope | Resource::Grant
-                )
+                    Resource::SqliteTx
+                        | Resource::AuthScope
+                        | Resource::Grant
+                        | Resource::SessionResponse
+                ),
+                "{resource:?}"
             );
         }
     }
