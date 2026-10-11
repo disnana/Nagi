@@ -504,6 +504,22 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
         }
         self.assertFalse(required - targets, f"missing four-platform resource oracles: {sorted(required - targets)}")
 
+    def test_four_platform_job_uses_platform_exact_sqlite_count_guard(self):
+        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
+        self.assertIsNotNone(package, "four-platform package job missing")
+        block = package.group()
+        marker = "      - name: Check public SQLite session cleanup, cancellation and close on the target platform\n"
+        start = block.find(marker)
+        self.assertGreaterEqual(start, 0, "SQLite runtime step missing")
+        tail = block[start + len(marker):]
+        next_step = re.search(r"(?m)^      - (?:name:|uses:)", tail)
+        self.assertIsNotNone(next_step, "SQLite step must remain bounded")
+        step = tail[:next_step.start()]
+        self.assertIn("cargo test --locked -p nagi-runtime --lib sqlite::", step)
+        self.assertIn('python scripts/ci/assert_sqlite_test_summary.py "$RUNNER_TEMP/sqlite-runtime.log"', step)
+        self.assertNotIn("80 passed", step)
+
     def test_four_platform_job_registers_sf04_runtime_suites_with_exact_count_guards(self):
         workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)

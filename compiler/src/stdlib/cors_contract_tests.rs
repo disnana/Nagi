@@ -96,7 +96,10 @@ fn cors_operations_keep_owned_config_borrowed_pattern_and_app_generic_roles() {
             OperationEmission::NativeCall
         );
     }
-    assert_eq!(resource_info(Resource::App).inline_type_arguments, &[]);
+    assert_eq!(
+        resource_info(Resource::App).inline_type_arguments,
+        &[] as &[usize]
+    );
     assert_eq!(
         type_argument_positions(Resource::App, TypeArgumentRole::SharedPayload),
         &[0]
