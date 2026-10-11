@@ -777,9 +777,26 @@ async fn guarded_partial_body_uses_original_common_deadline_and_strict_body_prec
         let mut stream = TcpStream::connect(s.address).await.unwrap();
         let h=format!("POST /pending HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 5\r\n{}\r\nov",guarded(&cookie,&token));
         stream.write_all(h.as_bytes()).await.unwrap();
-        tokio::time::timeout(Duration::from_secs(2), s.state.authorized.notified())
-            .await
-            .unwrap();
+        // Observe the actual wire refusal as well as the authorization barrier.
+        // A short original security budget can expire before preparation reaches
+        // the authorizer; report that phase instead of an opaque observer timeout.
+        // This does not extend a deadline or accept an early refusal as a pass.
+        let mut early_response = [0_u8; 256];
+        let early = tokio::time::timeout(Duration::from_secs(2), async {
+            tokio::select! {
+                biased;
+                _ = s.state.authorized.notified() => None,
+                bytes = stream.peek(&mut early_response) => Some(bytes.unwrap()),
+            }
+        })
+        .await
+        .expect("neither authorization nor a wire response was observed");
+        if let Some(bytes) = early {
+            panic!(
+                "request ended before authorization barrier: {:?}",
+                std::str::from_utf8(&early_response[..bytes])
+            );
+        }
         assert!(s.state.calls.load(Ordering::SeqCst) == 0);
         let mut raw = Vec::new();
         tokio::time::timeout(
