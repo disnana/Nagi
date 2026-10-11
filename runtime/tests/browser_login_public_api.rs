@@ -300,7 +300,10 @@ impl Reply {
     }
     fn guarded(&self) {
         assert!(self.values("cache-control") == vec!["no-store"]);
-        assert!(self.values("vary") == vec!["Cookie, Authorization, Origin"]);
+        assert!(
+            self.values("vary")
+                == vec!["Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"]
+        );
     }
     fn material(&self) -> (String, String) {
         assert!(self.status == 200);

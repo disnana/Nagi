@@ -60,7 +60,7 @@ leaseの期限は有限security/body/handler予算とverified identityの絶対�
 
 `auth.kind(view(failure))`と`auth.message(view(failure))`で読みます。messageのviewはFailureの借用として扱います。security予算の超過は504、unwind panicは詳細を伏せた500です。handlerの業務Result Errは既定/route mapperが扱い、security Failureとflattenしません。
 
-`security_timeout(options, positive_ms)`はverifierとauthorizer共通の絶対予算を設定します。待機ごとにリセットしません。HEAD fallbackはGET policyを使い、明示HEAD/OPTIONSもPolicyが必要です。404/405はproofとhandlerを発行しません。CORS preflightはSF03まで未実装です。
+`security_timeout(options, positive_ms)`はverifierとauthorizer共通の絶対予算を設定します。待機ごとにリセットしません。HEAD fallbackはGET policyを使い、明示HEAD/OPTIONSもPolicyが必要です。404/405はproofとhandlerを発行しません。未リリースSF03 CORS候補はmetadata専用preflightを追加します。[HTTP CORS](http-server.md)を参照してください。認証・CSRFを免除しません。
 
 finalizerがContent-Typeとnosniff、reserved security/framing headersを所有します。raw HTML・Set-Cookie・CORS/CSP・任意cache/challengeの追加による迂回は拒否します。panic=abort、OOM、non-yielding処理の強制停止、任意Rustの二重panic、外部副作用のrollbackは保証しません。標準HTTP外のcustom Rust hostは明示したtrusted境界で、このPolicy保証を自動適用しません。
 

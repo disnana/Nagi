@@ -306,7 +306,7 @@ async fn real_direct_rotate_logout_finalize_once_and_old_lookup_never_reactivate
     let server = issue_server(&f).await;
     let first = request(&server, "Authorization: Bearer owned\r\n").await;
     assert_cookie_policy(&first);
-    assert_eq!(first.all("vary"), vec!["Cookie, Authorization"]);
+    assert_eq!(first.all("vary"), vec!["Authorization, Cookie"]);
     let old_cookie = cookie_pair(&first);
     server.stop().await;
     let (owner, scope) = bound_scope(&f.store, &old_cookie).await;
@@ -315,7 +315,7 @@ async fn real_direct_rotate_logout_finalize_once_and_old_lookup_never_reactivate
     let rotated = direct_delivery(response, &owner);
     assert_eq!(rotated.status, 200);
     assert_cookie_policy(&rotated);
-    assert_eq!(rotated.all("vary"), vec!["Cookie"]);
+    assert_eq!(rotated.all("vary"), vec!["Authorization, Cookie"]);
     let new_cookie = cookie_pair(&rotated);
     assert!(old_cookie != new_cookie);
     assert_eq!(f.count().await, 1);
@@ -592,7 +592,7 @@ async fn head_applied_response_transfers_cookie_once_without_body() {
     assert_eq!(reply.status, 200);
     assert!(reply.body.is_empty());
     assert_cookie_policy(&reply);
-    assert_eq!(reply.all("vary"), vec!["Cookie, Authorization"]);
+    assert_eq!(reply.all("vary"), vec!["Authorization, Cookie"]);
     assert_eq!(f.count().await, 1);
     server.stop().await;
     f.stop().await;

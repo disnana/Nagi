@@ -354,6 +354,29 @@ impl Server {
             },
         )
         .unwrap();
+        for (method, path) in [
+            (http::Method::GET, "/csrf"),
+            (http::Method::HEAD, "/csrf"),
+            (http::Method::POST, "/write"),
+            (http::Method::POST, "/pending"),
+            (http::Method::POST, "/deadline"),
+        ] {
+            let config = http::cors_policy(
+                vec![
+                    "https://app.example.invalid".into(),
+                    "https://localhost".into(),
+                ],
+                vec!["content-type".into(), "x-csrf-token".into()],
+                http::CorsCredentials::ALLOW,
+                0,
+                2,
+                128,
+                2,
+                64,
+            )
+            .unwrap();
+            app = http::cors_route(app, method, path, config).unwrap();
+        }
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let (stop, shutdown) = oneshot::channel();
@@ -499,8 +522,40 @@ async fn tokens_are_authenticated_reusable_and_preserve_bounded_ledger() {
     assert!(a != b);
     assert!(
         one.values("cache-control") == vec!["no-store"]
-            && one.values("vary") == vec!["Cookie, Authorization, Origin"]
+            && one.values("vary") == vec!["Authorization, Cookie, Origin"]
     );
+    // Isolate CORS from actual unsafe Origin binding with an owned valid cookie/token.
+    let preflight=request(&s,"OPTIONS","/write","Origin: https://app.example.invalid\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: x-csrf-token\r\n",b"").await;
+    assert_eq!(preflight.status, 204);
+    assert_eq!(
+        preflight.values("access-control-allow-origin"),
+        vec!["https://app.example.invalid"]
+    );
+    assert_eq!(
+        preflight.values("vary"),
+        vec!["Access-Control-Request-Headers, Access-Control-Request-Method, Origin"]
+    );
+    assert_eq!(s.state.calls.load(Ordering::SeqCst), 0);
+    let cross = request(
+        &s,
+        "POST",
+        "/write",
+        &format!(
+            "Cookie: {cookie}\r\nOrigin: https://app.example.invalid\r\nX-CSRF-Token: {a}\r\n"
+        ),
+        b"owned",
+    )
+    .await;
+    assert_eq!(cross.status, 403);
+    assert_eq!(
+        cross.values("access-control-allow-origin"),
+        vec!["https://app.example.invalid"]
+    );
+    assert_eq!(
+        cross.values("access-control-allow-credentials"),
+        vec!["true"]
+    );
+    assert_eq!(s.state.calls.load(Ordering::SeqCst), 0);
     let expiry = number(
         &f.pool,
         "SELECT sum(expiry_ms) AS n FROM __nagi_csrf_tokens",
@@ -511,7 +566,7 @@ async fn tokens_are_authenticated_reusable_and_preserve_bounded_ledger() {
         assert!(
             r.status == 200
                 && r.body == b"owned"
-                && r.values("vary") == vec!["Cookie, Authorization, Origin, X-CSRF-Token"]
+                && r.values("vary") == vec!["Authorization, Cookie, Origin, X-CSRF-Token"]
         );
     }
     assert!(
@@ -680,7 +735,7 @@ async fn finite_origin_and_header_refusals_preserve_existing_token_and_capacity(
         assert!(
             r.status == status
                 && r.values("set-cookie").is_empty()
-                && r.values("vary") == vec!["Cookie, Authorization, Origin, X-CSRF-Token"]
+                && r.values("vary") == vec!["Authorization, Cookie, Origin, X-CSRF-Token"]
         );
     }
     let large = request(
@@ -694,7 +749,7 @@ async fn finite_origin_and_header_refusals_preserve_existing_token_and_capacity(
     assert!(
         large.status == 413
             && large.values("set-cookie").is_empty()
-            && large.values("vary") == vec!["Cookie, Authorization, Origin, X-CSRF-Token"]
+            && large.values("vary") == vec!["Authorization, Cookie, Origin, X-CSRF-Token"]
     );
     assert!(s.state.calls.load(Ordering::SeqCst) == 0);
     assert!(
@@ -820,7 +875,7 @@ async fn guarded_partial_body_preparation_uses_original_security_deadline() {
             .unwrap()
             .to_ascii_lowercase();
         assert!(headers.contains("cache-control: no-store"));
-        assert!(headers.contains("vary: cookie, authorization, origin, x-csrf-token"));
+        assert!(headers.contains("vary: authorization, cookie, origin, x-csrf-token"));
         assert!(!headers.contains("set-cookie:") && !headers.contains("www-authenticate:"));
         sqlite::rollback(held).await.unwrap();
         assert!(number(&f.pool, "SELECT count(*) AS n FROM __nagi_csrf_tokens").await == 1);
@@ -941,10 +996,15 @@ async fn pending_guarded_authorizer_expires_at_bound_session_and_recovers_permit
             .unwrap()
     };
     assert_eq!(reply.status, 504);
+    assert_eq!(
+        reply.values("access-control-allow-origin"),
+        ["https://localhost"]
+    );
+    assert_eq!(reply.values("access-control-allow-credentials"), ["true"]);
     assert!(reply.values("set-cookie").is_empty());
     assert_eq!(
         reply.values("vary"),
-        ["Cookie, Authorization, Origin, X-CSRF-Token"]
+        ["Authorization, Cookie, Origin, X-CSRF-Token"]
     );
     assert_eq!(s.state.deadline_cancelled.load(Ordering::SeqCst), 1);
     assert_eq!(s.state.calls.load(Ordering::SeqCst), 0);
@@ -954,6 +1014,11 @@ async fn pending_guarded_authorizer_expires_at_bound_session_and_recovers_permit
     );
     let expired = request(&s, "POST", "/deadline", &header, &[]).await;
     assert_eq!(expired.status, 401);
+    assert_eq!(
+        expired.values("access-control-allow-origin"),
+        ["https://localhost"]
+    );
+    assert_eq!(expired.values("access-control-allow-credentials"), ["true"]);
     assert!(expired.values("set-cookie").is_empty());
     assert_eq!(s.state.deadline_cancelled.load(Ordering::SeqCst), 1);
     // Capacity is one: a complete fresh guarded exchange proves actual recovery.

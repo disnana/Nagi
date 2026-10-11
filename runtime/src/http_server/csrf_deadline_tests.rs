@@ -272,11 +272,11 @@ async fn guarded_body_wire_preserves_absolute_deadline_and_strict_precedence() {
                             Ok(_) => panic!("incomplete Content-Length body must not complete"),
                             Err(status) => status,
                         };
-                        Ok::<_, std::convert::Infallible>(managed(
+                        Ok::<_, std::convert::Infallible>(vary::finish(managed(
                             transport(status, false, true),
                             false,
                             true,
-                        ))
+                        )))
                     }
                 },
             );
@@ -302,7 +302,7 @@ async fn guarded_body_wire_preserves_absolute_deadline_and_strict_precedence() {
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         let headers = wire.split("\r\n\r\n").next().unwrap().to_ascii_lowercase();
         assert!(headers.contains("cache-control: no-store"));
-        assert!(headers.contains("vary: cookie, authorization, origin, x-csrf-token"));
+        assert!(headers.contains("vary: authorization, cookie, origin, x-csrf-token"));
         assert!(!headers.contains("set-cookie:") && !headers.contains("www-authenticate:"));
         tokio::time::timeout(Duration::from_secs(2), connection)
             .await

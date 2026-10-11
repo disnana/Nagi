@@ -15,6 +15,22 @@ type ResourceExpected = (
 );
 const RESOURCES: &[ResourceExpected] = &[
     (
+        R::CorsPolicy,
+        M::HttpServer,
+        "CorsPolicy",
+        &[],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::CorsCredentials,
+        M::HttpServer,
+        "CorsCredentials",
+        &[],
+        [true, true, true, true, true],
+        &[],
+    ),
+    (
         R::CsrfOptions,
         M::AuthCsrf,
         "Options",
@@ -495,8 +511,8 @@ fn registered_resources_match_the_independent_inventory() {
         shared: false,
         debug: false,
     };
-    assert_eq!(RESOURCES.len(), 54);
-    assert_eq!(stdlib::RESOURCES.len(), 54);
+    assert_eq!(RESOURCES.len(), 56);
+    assert_eq!(stdlib::RESOURCES.len(), 56);
     assert_eq!(
         stdlib::RESOURCES.iter().copied().collect::<HashSet<_>>(),
         RESOURCES.iter().map(|r| r.0).collect()
@@ -575,6 +591,8 @@ macro_rules! op {
     };
 }
 const OPERATIONS: &[OperationExpected] = &[
+    op!(CorsPolicy,HttpServer,"cors_policy",8,&[],"MMMMMMMM",None,false,false,"(origins: List[str], request_headers: List[str], credentials: CorsCredentials, max_age_seconds: i64, max_origins: i64, max_origin_bytes: i64, max_headers: i64, max_header_bytes: i64) -> Result[CorsPolicy, Error]"),
+    op!(CorsRoute,HttpServer,"cors_route",4,&["S","E"],"MMRM",None,false,false,"[S, E](app: App[S, E], method: Method, registered_path: view[str], cors: CorsPolicy) -> Result[App[S, E], Error]"),
     op!(CsrfOptions,AuthCsrf,"options",5,&[],"MMMMM",None,false,false,"(max_stored: i64, max_payload_bytes: i64, cleanup_batch: i64, ttl_ms: i64, collision_attempts: i64) -> Result[Options, Failure]"),
     op!(CsrfOpen,AuthCsrf,"open",3,&[],"RMR",None,true,false,"(store: view[Store], options: Options, http: view[HttpOptions]) -> Future[Result[CsrfStore, Failure]]"),
     op!(CsrfCloneStore,AuthCsrf,"clone_store",1,&[],"R",None,false,false,"(store: view[CsrfStore]) -> CsrfStore"),
@@ -698,8 +716,8 @@ const OPERATIONS: &[OperationExpected] = &[
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 119);
-    assert_eq!(stdlib::OPERATIONS.len(), 119);
+    assert_eq!(OPERATIONS.len(), 121);
+    assert_eq!(stdlib::OPERATIONS.len(), 121);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()
@@ -891,6 +909,7 @@ fn registered_accessors_match_the_complete_inventory() {
 }
 
 const CONSTANTS: &[(R, &str)] = &[
+    (R::CorsCredentials,"OMIT ALLOW"),
     (R::HtmlTag,"DIV SPAN P H1 H2 STRONG EM UL OL LI A BR"),
     (R::SessionSameSite,"LAX NONE STRICT"),
     (R::AuthFailureKind,"INVALID_CREDENTIAL DENIED EXPIRED INVALID_REQUEST UNAVAILABLE INTERNAL"),
@@ -907,7 +926,7 @@ const CONSTANTS: &[(R, &str)] = &[
 ];
 #[test]
 fn registered_constants_match_the_complete_inventory() {
-    assert_eq!(CONSTANTS.len(), 13);
+    assert_eq!(CONSTANTS.len(), 14);
     for &(resource, ..) in RESOURCES {
         let names = CONSTANTS
             .iter()

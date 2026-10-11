@@ -60,7 +60,7 @@ A protected adapter first obtains bounded native capacity. Reserving capacity is
 
 Read failures with `auth.kind(view(failure))` and `auth.message(view(failure))`; the message view borrows its Failure. An exhausted security budget returns 504, and an unwinding panic returns a generic 500. Business Result Err is handled by the app/route mapper and is not flattened into security Failure.
 
-`security_timeout(options, positive_ms)` sets one absolute budget shared by verification and authorization. It is not reset at each wait. HEAD fallback inherits GET policy; explicit HEAD and OPTIONS also require Policy. 404/405 issue no proof and invoke no handler. CORS preflight remains unimplemented until SF03.
+`security_timeout(options, positive_ms)` sets one absolute budget shared by verification and authorization. It is not reset at each wait. HEAD fallback inherits GET policy; explicit HEAD and OPTIONS also require Policy. 404/405 issue no proof and invoke no handler. The unreleased SF03 CORS candidate adds metadata-only preflight; see [HTTP CORS](http-server.md#explicit-cors-route-metadata-unreleased-sf03-candidate). It does not waive authentication or CSRF.
 
 The finalizer owns Content-Type, nosniff and reserved framing/security headers. Raw HTML, Set-Cookie, CORS/CSP, arbitrary cache and authentication-challenge headers cannot bypass this boundary. There is no guarantee of recovery from panic=abort, OOM, forced stopping of non-yielding work, arbitrary Rust double panic, or rollback of external side effects. Custom Rust HTTP hosts outside standard HTTP remain an explicit trusted boundary and do not inherit Policy guarantees automatically.
 

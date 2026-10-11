@@ -1,103 +1,16 @@
 //! Checked startup authority and transport-peer configuration. Header values
 //! never choose a trust profile or an external origin.
+use super::origin::{Origin, WireAuthority};
 use super::{positive_size, Error, HeaderMap, Options, Status, Uri};
-use axum::http::{uri::Authority, Version};
+use axum::http::Version;
 use std::{collections::HashSet, fmt, net::IpAddr};
 
-#[derive(Debug, PartialEq, Eq, Hash)]
-enum Host {
-    Dns(String),
-    Ip(IpAddr),
-}
-#[derive(Debug, PartialEq, Eq, Hash)]
-struct WireAuthority {
-    host: Host,
-    port: Option<u16>,
-}
-impl WireAuthority {
-    fn checked(input: &str) -> Result<Self, Error> {
-        if input.is_empty()
-            || !input.is_ascii()
-            || input
-                .bytes()
-                .any(|b| b <= b' ' || matches!(b, 127 | b'@' | b'%' | b','))
-        {
-            return Err(Error::invalid("invalid HTTP authority"));
-        }
-        let parsed: Authority = input
-            .parse()
-            .map_err(|_| Error::invalid("invalid HTTP authority"))?;
-        let host = parsed.host();
-        // Authority permits userinfo, and port() treats some malformed ports
-        // as absent. Check the entire suffix instead of accepting that loss.
-        let suffix = input
-            .strip_prefix(host)
-            .ok_or_else(|| Error::invalid("invalid HTTP authority"))?;
-        let port = if suffix.is_empty() {
-            None
-        } else {
-            let text = suffix
-                .strip_prefix(':')
-                .ok_or_else(|| Error::invalid("invalid HTTP authority port"))?;
-            let port = text
-                .parse::<u16>()
-                .ok()
-                .filter(|p| *p != 0 && p.to_string() == text)
-                .ok_or_else(|| Error::invalid("invalid HTTP authority port"))?;
-            if parsed.port_u16() != Some(port) {
-                return Err(Error::invalid("invalid HTTP authority port"));
-            }
-            Some(port)
-        };
-        let host = if let Some(ip) = host.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-            Host::Ip(IpAddr::V6(
-                ip.parse()
-                    .map_err(|_| Error::invalid("invalid IPv6 authority"))?,
-            ))
-        } else if let Ok(ip) = host.parse::<std::net::Ipv4Addr>() {
-            Host::Ip(IpAddr::V4(ip))
-        } else {
-            // ASCII DNS labels only. IDNA equivalence/Unicode conversion is
-            // deliberately delegated to deployment tooling, not reimplemented.
-            if host.len() > 253
-                || host.bytes().all(|b| b.is_ascii_digit() || b == b'.')
-                || !host.split('.').all(|label| {
-                    !label.is_empty()
-                        && label.len() <= 63
-                        && label.as_bytes()[0].is_ascii_alphanumeric()
-                        && label.as_bytes()[label.len() - 1].is_ascii_alphanumeric()
-                        && label
-                            .bytes()
-                            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
-                })
-            {
-                return Err(Error::invalid("invalid ASCII DNS authority"));
-            }
-            Host::Dns(host.to_ascii_lowercase())
-        };
-        Ok(Self { host, port })
-    }
-}
-
-// Distinct from wire authority: origin has an effective HTTPS port, whereas
-// omitted and explicit wire ports are separate allowlist entries.
+// HTTPS-only security origin wrapper. CORS cannot weaken this invariant.
 #[derive(PartialEq, Eq)]
-pub(crate) struct ExternalOrigin {
-    _host: Host,
-    _effective_port: u16,
-}
+pub(crate) struct ExternalOrigin(Origin);
 impl ExternalOrigin {
     fn serialized(&self) -> Result<String, Error> {
-        let host = match &self._host {
-            Host::Dns(name) => name.clone(),
-            Host::Ip(IpAddr::V4(ip)) => ip.to_string(),
-            Host::Ip(IpAddr::V6(ip)) => format!("[{ip}]"),
-        };
-        let value = if self._effective_port == 443 {
-            format!("https://{host}")
-        } else {
-            format!("https://{host}:{}", self._effective_port)
-        };
+        let value = self.0.serialized();
         if !self.matches(&value) {
             return Err(Error::invalid(
                 "checked external origin could not be serialized",
@@ -115,24 +28,11 @@ impl ExternalOrigin {
         Self::checked(input).is_ok_and(|other| other == *self)
     }
     fn checked(input: &str) -> Result<Self, Error> {
-        let uri: Uri = input
-            .parse()
-            .map_err(|_| Error::invalid("invalid external HTTPS origin"))?;
-        let authority = uri
-            .authority()
-            .ok_or_else(|| Error::invalid("invalid external HTTPS origin"))?;
-        if uri.scheme_str() != Some("https")
-            || input.strip_prefix("https://") != Some(authority.as_str())
-        {
-            return Err(Error::invalid(
-                "external HTTPS origin must not contain a path or other components",
-            ));
+        let origin = Origin::checked(input)?;
+        if !origin.is_https() {
+            return Err(Error::invalid("external origin requires HTTPS"));
         }
-        let wire = WireAuthority::checked(authority.as_str())?;
-        Ok(Self {
-            _host: wire.host,
-            _effective_port: wire.port.unwrap_or(443),
-        })
+        Ok(Self(origin))
     }
 }
 

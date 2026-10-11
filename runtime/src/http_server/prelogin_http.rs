@@ -37,6 +37,7 @@ pub(super) fn register_prelogin_bootstrap<S, E>(
     let routes = app.routes.entry(path.to_owned()).or_default();
     for method in [Method::GET, Method::HEAD] {
         routes.push(Route {
+            cors: None,
             source: PolicySource::Prelogin,
             method,
             kind: RouteKind::Bootstrap(Arc::clone(&pool)),

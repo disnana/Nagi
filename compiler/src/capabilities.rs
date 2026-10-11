@@ -130,6 +130,7 @@ fn security_nonclone(resource: crate::stdlib::Resource) -> bool {
     matches!(
         resource,
         crate::stdlib::Resource::HttpPolicy
+            | crate::stdlib::Resource::CorsPolicy
             | crate::stdlib::Resource::VerifiedIdentity
             | crate::stdlib::Resource::AuthFailure
             | crate::stdlib::Resource::CsrfOptions

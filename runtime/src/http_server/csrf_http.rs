@@ -41,6 +41,7 @@ pub(super) fn register<S, E>(
     let routes = app.routes.entry(path.to_owned()).or_default();
     for method in [Method::GET, Method::HEAD] {
         routes.push(Route {
+            cors: None,
             source: PolicySource::Session,
             method,
             kind: RouteKind::CsrfTokens(Arc::clone(&store)),
@@ -73,13 +74,13 @@ fn managed(
     guarded: bool,
 ) -> axum::http::Response<BufferedBody> {
     response = finalize_authenticated(response, PolicySource::Session, head);
-    response.headers_mut().insert(
-        names::VARY,
-        HeaderValue::from_static(if guarded {
-            "Cookie, Authorization, Origin, X-CSRF-Token"
+    vary::add(
+        &mut response,
+        if guarded {
+            vary::Dependencies::GUARDED
         } else {
-            "Cookie, Authorization, Origin"
-        }),
+            vary::Dependencies::LOGIN
+        },
     );
     response
 }

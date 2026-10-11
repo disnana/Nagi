@@ -138,6 +138,41 @@ jobs:
           if len(generated)!=3 or any(not p.read_bytes() for p in generated):
               raise AssertionError(f"expected three unmodified generated Rust artifacts, found {generated}")
           PYCODE
+      - name: Check SF03 CORS runtime metadata socket and native compiler contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf03-cors-evidence"
+          cargo test --locked -p nagi-runtime --lib http_server::cors::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-cors-runtime.log"
+          cargo test --locked -p nagi-runtime --test cors_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-cors-socket.log"
+          cargo test --locked -p nagic --lib stdlib::cors_contract_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-cors-metadata.log"
+          cargo test --locked -p nagic --test security_sf03_cors 2>&1 | tee "$RUNNER_TEMP/sf03-cors-compiler.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name,count in {'sf03-cors-runtime.log': 6, 'sf03-cors-socket.log': 7, 'sf03-cors-metadata.log': 2, 'sf03-cors-compiler.log': 5}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: positive exact selected cases required")
+          generated=list((root/'sf03-cors-evidence').glob('*sf03-cors-*-generated.rs'))
+          if len(generated)!=6 or any(not path.read_bytes() for path in generated):
+              raise AssertionError("expected six unmodified generated Rust artifacts")
+          PYCODE
+      - name: Capture current compiler resource goldens with assertions enabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAGI_GOLDEN_CAPTURE_DIR="$RUNNER_TEMP/sf03-cors-goldens" cargo test --locked -p nagic --lib resource_contract_goldens::
+      - name: Retain CORS native and actual golden capture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf03-cors-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            ${{ runner.temp }}/sf03-cors-*.log
+            ${{ runner.temp }}/sf03-cors-evidence/
+            ${{ runner.temp }}/sf03-cors-goldens/
+          if-no-files-found: ignore
       - name: Check canonical Session metadata and High Low native contracts
         shell: bash
         run: |
@@ -392,6 +427,41 @@ jobs:
           if len(generated)!=3 or any(not p.read_bytes() for p in generated):
               raise AssertionError(f"expected three unmodified generated Rust artifacts, found {generated}")
           PYCODE
+      - name: Check SF03 CORS runtime metadata socket and native compiler contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf03-cors-evidence"
+          cargo test --locked -p nagi-runtime --lib http_server::cors::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-cors-runtime.log"
+          cargo test --locked -p nagi-runtime --test cors_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-cors-socket.log"
+          cargo test --locked -p nagic --lib stdlib::cors_contract_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-cors-metadata.log"
+          cargo test --locked -p nagic --test security_sf03_cors 2>&1 | tee "$RUNNER_TEMP/sf03-cors-compiler.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name,count in {'sf03-cors-runtime.log': 6, 'sf03-cors-socket.log': 7, 'sf03-cors-metadata.log': 2, 'sf03-cors-compiler.log': 5}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: positive exact selected cases required")
+          generated=list((root/'sf03-cors-evidence').glob('*sf03-cors-*-generated.rs'))
+          if len(generated)!=6 or any(not path.read_bytes() for path in generated):
+              raise AssertionError("expected six unmodified generated Rust artifacts")
+          PYCODE
+      - name: Capture current compiler resource goldens with assertions enabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAGI_GOLDEN_CAPTURE_DIR="$RUNNER_TEMP/sf03-cors-goldens" cargo test --locked -p nagic --lib resource_contract_goldens::
+      - name: Retain CORS native and actual golden capture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf03-cors-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            ${{ runner.temp }}/sf03-cors-*.log
+            ${{ runner.temp }}/sf03-cors-evidence/
+            ${{ runner.temp }}/sf03-cors-goldens/
+          if-no-files-found: ignore
       - name: Check canonical Session metadata and High Low native contracts
         shell: bash
         run: |

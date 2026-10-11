@@ -100,7 +100,7 @@ Reconfiguring authority or overwriting a proxy ACL fails. Setters move Options; 
 
 Before every route, 404/405, body reception, verifier and proof issuance, the gate checks HTTP/1.1 origin-form and exactly one nonempty Host. Malformed/missing/duplicate/nonallowlisted authority, absolute-form/authority-form/`*`, and any Forwarded or X-Forwarded-* presence return 400; HTTP/1.0 returns 505. These runtime rejections use no-store and close. HTTP syntax rejected by Hyper before service invocation, including HTTP/2 prefaces, is delegated to its official parser and reaches no handler/proof. The standard listener is HTTP/1 only.
 
-Direct/proxy profiles are fixed at startup. Proxies must strip Forwarded headers before backend transmission and use a registered internal or pass-through Host. Only the real peer returned by `accept` selects ACL admission; headers never choose trust or origin. A loopback ACL does not authenticate other processes on the same host. Host matching does not waive Origin/CSRF/CORS; this Host slice does not implement those SF03 features.
+Direct/proxy profiles are fixed at startup. Proxies must strip Forwarded headers before backend transmission and use a registered internal or pass-through Host. Only the real peer returned by `accept` selects ACL admission; headers never choose trust or origin. A loopback ACL does not authenticate other processes on the same host. Host matching does not waive Origin/CSRF/CORS; the unreleased SF03 candidate defines these separately below.
 
 `serve` provides plaintext loopback HTTP; configuring an origin does not add TLS. Public local response checks and browser authentication have separate requirements. Use a TLS frontend with a browser-trusted certificate, for example external origin `https://localhost:8443`, backend wire `localhost:8080`, peer `127.0.0.1`. HTTP/2 frontends must terminate to HTTP/1.1. Secure Cookies have no localhost exception. Actual TLS/browser and four-OS verification are separate acceptance gates.
 
@@ -139,3 +139,20 @@ return await http.serve(app, 8080, limits)
 The API is implemented in the [standard module registry](../../compiler/src/stdlib.rs) and [HTTP runtime](../../runtime/src/http_server.rs). Hyper handles HTTP/1 transport, Tokio manages async work and connection tasks, matchit matches paths, and Serde converts JSON. The implementation uses Axum HTTP types, but its routes do not run through Axum Router.
 
 [HTTP runtime tests](../../runtime/src/http_server/tests.rs) use real sockets to check responses, limits, deadlines, and connection closure. [Rust integration](modules-and-rust.md) can provide a custom server, but these limits and failure handling do not apply to it automatically.
+
+## Explicit CORS route metadata (unreleased SF03 candidate)
+
+`CorsPolicy` is opaque, owned configuration; it is not an authentication proof. `CorsCredentials.OMIT` omits Allow-Credentials; `ALLOW` emits `true`. Neither mode removes credentials or waives Policy/CSRF. Construct it with `cors_policy(origins: List[str], request_headers: List[str], credentials: CorsCredentials, max_age_seconds: i64, max_origins: i64, max_origin_bytes: i64, max_headers: i64, max_header_bytes: i64) -> Result[CorsPolicy, Error]`. All count/byte ceilings must be positive native sizes; lists may be empty. Max-age is explicitly 0..4294967295 seconds, and zero has no positive preflight lifetime. There is no server preflight cache.
+
+`cors_route[S,E](app: App[S,E], method: Method, registered_path: view[str], cors: CorsPolicy) -> Result[App[S,E], Error]` consumes app/config and attaches once to that exact existing method/pattern record. Unknown record or repeated attachment fails. GET fallback HEAD inherits GET; explicit HEAD and OPTIONS are separate records. Omitted CORS denies cross-origin reads. Wildcard origins/headers and CORS methods `*`, CONNECT, TRACE and TRACK are rejected. CORS applies to ordinary and framework-managed routes alike.
+
+```nagi
+cors = try http.cors_policy(["https://app.example.invalid"], ["content-type"], http.CorsCredentials.ALLOW, 0, 2, 128, 2, 64)
+app = try http.cors_route[State, Error](app, http.Method.GET, "/items/{id}", cors)
+```
+
+Origins use exact canonical http/https scheme, ASCII host and effective port. DNS case, default ports and equivalent IP spelling normalize; null, wildcard, userinfo, Unicode, trailing DNS dot, whitespace, percent, path/query/fragment and multiple Origins do not. Startup external security origins remain HTTPS-only. CORS grants reflect the configured canonical value, not raw request text.
+
+OPTIONS with Access-Control-Request-Method or Access-Control-Request-Headers uses only target route metadata: success is empty 204, requested method/header allow metadata and explicit Max-Age, no-store, and no verifier/handler/proof/Session/DB work. Ordinary OPTIONS requires its own normal Policy. Unknown paths/methods retain 404/405 and no grant. Duplicate/malformed metadata fails 400; a valid unlisted origin/header or default-deny record fails 403. Admission and declared-body errors keep 503/413 precedence; preflight bodies fail 400 and close.
+
+On actual requests an unlisted/malformed/missing Origin receives no CORS grant while normal authentication, CSRF, status and handler behavior remain. Allowlisted cross-origin preflight does not permit unsafe Session POST: the existing exact external HTTPS Origin and token binding still apply. The outer finalizer preserves Cookie delivery, no-store, CSP, nosniff, challenge and framing, and unions finite typed Vary dependencies even on selected early errors. Authenticated/Session 304 still becomes secret-free 500; public DTO 304 retains its status. These source APIs do not establish native/four-OS or real TLS/browser acceptance; this candidate is unreleased and depends on B1.
