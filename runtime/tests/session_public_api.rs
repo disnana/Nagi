@@ -1,5 +1,6 @@
-//! External normal-library Session API oracle; this candidate is not locally run.
+//! External normal-library Session API oracle; real I/O, controlled handler time.
 //! Real cookies stay in process memory and never appear in assertions/artifacts.
+use futures_util::FutureExt;
 use nagi_runtime::{
     auth::{session, VerifiedIdentity},
     http_server as http, sqlite, Error, FromRow,
@@ -146,8 +147,41 @@ impl Received {
         values[0].split(';').next().unwrap().to_owned()
     }
 }
+// The successful public-API sequence is not a one-second storage benchmark.
+// Keep production HTTP/SQLite/authority budgets intact. Only Tokio's test clock
+// is held fixed; std::time authority clocks and actual socket/DB work remain real.
+// A runnable coordinator prevents paused-time idle auto-advance. The independent
+// wall guard bounds a stalled test without retrying or extending runtime limits.
+async fn without_handler_clock_advance<T>(future: impl std::future::Future<Output = T>) -> T {
+    tokio::time::pause();
+    struct Resume;
+    impl Drop for Resume {
+        fn drop(&mut self) {
+            tokio::time::resume();
+        }
+    }
+    let _resume = Resume;
+    let tick = tokio::time::Instant::now();
+    let wall = Instant::now();
+    let mut future = std::pin::pin!(future);
+    loop {
+        assert!(
+            wall.elapsed() < Duration::from_secs(3),
+            "public Session I/O wall guard elapsed"
+        );
+        let result = futures_util::poll!(future.as_mut());
+        assert!(
+            tokio::time::Instant::now() == tick,
+            "public Session clock advanced during real I/O"
+        );
+        if let std::task::Poll::Ready(value) = result {
+            return value;
+        }
+        tokio::task::yield_now().await;
+    }
+}
 async fn request(address: std::net::SocketAddr, path: &str, credential: &str) -> Received {
-    tokio::time::timeout(Duration::from_secs(3), async {
+    without_handler_clock_advance(async {
         let mut socket = TcpStream::connect(address).await.unwrap();
         let owned = format!("POST {path} HTTP/1.1\r\nHost: localhost\r\n{credential}Content-Length: 0\r\nConnection: close\r\n\r\n");
         socket.write_all(owned.as_bytes()).await.unwrap();
@@ -160,7 +194,7 @@ async fn request(address: std::net::SocketAddr, path: &str, credential: &str) ->
         let status = lines.next().unwrap().split_whitespace().nth(1).unwrap().parse().unwrap();
         let headers = lines.map(|line| { let (k, v) = line.split_once(':').unwrap(); (k.to_owned(), v.trim().to_owned()) }).collect();
         Received { status, headers }
-    }).await.unwrap()
+    }).await
 }
 async fn verifier(
     _: http::Request,
@@ -226,45 +260,56 @@ async fn published_issue_rotate_logout_transfer_cookie_once_after_real_commit() 
     )
     .unwrap();
     let (stop, shutdown) = oneshot::channel();
-    let worker = tokio::spawn(http::serve_listener(listener, app, options, async {
+    let mut worker = tokio::spawn(http::serve_listener(listener, app, options, async {
         let _ = shutdown.await;
     }));
-    let issued = request(address, "/issue", "Authorization: Bearer owned\r\n").await;
-    assert_eq!(issued.status, 200);
-    assert_eq!(issued.values("cache-control"), vec!["no-store"]);
-    assert_eq!(issued.values("vary"), vec!["Cookie, Authorization"]);
-    assert_eq!(
-        count(&pool, "SELECT count(*) AS n FROM __nagi_session_rows").await,
-        1
-    );
-    let old = issued.cookie();
-    let rotated = request(address, "/rotate", &format!("Cookie: {old}\r\n")).await;
-    assert_eq!(rotated.status, 200);
-    assert_eq!(rotated.values("vary"), vec!["Cookie"]);
-    let new = rotated.cookie();
-    assert!(old != new);
-    let stale = request(address, "/rotate", &format!("Cookie: {old}\r\n")).await;
-    assert_eq!(stale.status, 401);
-    assert!(stale.values("set-cookie").is_empty());
-    let logged_out = request(address, "/logout", &format!("Cookie: {new}\r\n")).await;
-    assert_eq!(logged_out.status, 200);
-    assert_eq!(logged_out.values("set-cookie").len(), 1);
-    let deletion = cookie::Cookie::parse(logged_out.values("set-cookie")[0]).unwrap();
-    assert!(deletion.value().is_empty());
-    assert!(deletion.max_age() == Some(cookie::time::Duration::ZERO));
-    assert_eq!(
-        count(&pool, "SELECT count(*) AS n FROM __nagi_session_rows").await,
-        0
-    );
-    let absent = request(address, "/logout", &format!("Cookie: {new}\r\n")).await;
-    assert_eq!(absent.status, 401);
-    assert!(absent.values("set-cookie").is_empty());
-    stop.send(()).unwrap();
-    tokio::time::timeout(Duration::from_secs(3), worker)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
+    let outcome = std::panic::AssertUnwindSafe(async {
+        let issued = request(address, "/issue", "Authorization: Bearer owned\r\n").await;
+        assert_eq!(issued.status, 200);
+        assert_eq!(issued.values("cache-control"), vec!["no-store"]);
+        assert_eq!(issued.values("vary"), vec!["Cookie, Authorization"]);
+        assert_eq!(
+            count(&pool, "SELECT count(*) AS n FROM __nagi_session_rows").await,
+            1
+        );
+        let old = issued.cookie();
+        let rotated = request(address, "/rotate", &format!("Cookie: {old}\r\n")).await;
+        assert_eq!(rotated.status, 200);
+        assert_eq!(rotated.values("vary"), vec!["Cookie"]);
+        let new = rotated.cookie();
+        assert!(old != new);
+        let stale = request(address, "/rotate", &format!("Cookie: {old}\r\n")).await;
+        assert_eq!(stale.status, 401);
+        assert!(stale.values("set-cookie").is_empty());
+        let logged_out = request(address, "/logout", &format!("Cookie: {new}\r\n")).await;
+        assert_eq!(logged_out.status, 200);
+        assert_eq!(logged_out.values("set-cookie").len(), 1);
+        let deletion = cookie::Cookie::parse(logged_out.values("set-cookie")[0]).unwrap();
+        assert!(deletion.value().is_empty());
+        assert!(deletion.max_age() == Some(cookie::time::Duration::ZERO));
+        assert_eq!(
+            count(&pool, "SELECT count(*) AS n FROM __nagi_session_rows").await,
+            0
+        );
+        let absent = request(address, "/logout", &format!("Cookie: {new}\r\n")).await;
+        assert_eq!(absent.status, 401);
+        assert!(absent.values("set-cookie").is_empty());
+    })
+    .catch_unwind()
+    .await;
+    // Always attempt bounded shutdown and actual pool close before reporting a
+    // failed assertion. Directory Drop alone is not worker/connection completion.
+    let _ = stop.send(());
+    let stopped = tokio::time::timeout(Duration::from_secs(3), &mut worker).await;
+    if stopped.is_err() {
+        worker.abort();
+        let _ = worker.await;
+    }
     drop(store);
-    sqlite::close(&pool, 2000).await.unwrap();
+    let closed = sqlite::close(&pool, 2000).await;
+    if let Err(payload) = outcome {
+        std::panic::resume_unwind(payload);
+    }
+    stopped.unwrap().unwrap().unwrap();
+    closed.unwrap();
 }

@@ -349,7 +349,7 @@ jobs:
           cargo test --locked -p nagic --test security_sf05 2>&1 | tee "build/security-sf05/sf05-checker.log"
           cargo test --locked -p nagic --test security_sf05_native 2>&1 | tee "build/security-sf05/sf05-native.log"
           cargo test --locked -p nagi-runtime --lib sqlite::security_sf05_tests:: 2>&1 | tee "build/security-sf05/sf05-admission.log"
-          python -c 'import pathlib,re,os; root=pathlib.Path("build/security-sf05"); counts={"sf05-checker.log":12,"sf05-native.log":1,"sf05-admission.log":6}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'
+          python -c 'import pathlib,re,os; root=pathlib.Path("build/security-sf05"); counts={"sf05-checker.log":13,"sf05-native.log":1,"sf05-admission.log":6}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'
           python benchmarks/security-sf05/ci_provenance.py build/security-sf05
       - name: Preserve SF05 source identity and native evidence
         if: always()
