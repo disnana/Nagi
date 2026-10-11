@@ -3,6 +3,9 @@ use nagi_runtime::auth::{AuthScope, Failure, FailureKind, VerifiedIdentity};
 use nagi_runtime::http_server::{authenticated_policy, Policy, Request};
 use std::{sync::Arc, time::Duration};
 
+type PrepareVerifier =
+    fn(String, String, Vec<(String, [u8; 32])>, Limits) -> Result<Arc<Verifier>, Failure>;
+
 fn trusted_named_native_adapter(verifier: Arc<Verifier>) -> Policy<(), AuthScope> {
     authenticated_policy(move |request: Request, _state: Arc<()>| {
         let verifier = Arc::clone(&verifier);
@@ -13,12 +16,7 @@ fn trusted_named_native_adapter(verifier: Arc<Verifier>) -> Policy<(), AuthScope
 #[test]
 fn trusted_adapter_facade_has_fixed_key_shape_and_finite_limits() {
     let _: fn(Arc<Verifier>) -> Policy<(), AuthScope> = trusted_named_native_adapter;
-    let prepare: fn(
-        String,
-        String,
-        Vec<(String, [u8; 32])>,
-        Limits,
-    ) -> Result<Arc<Verifier>, Failure> = Verifier::checked;
+    let prepare: PrepareVerifier = Verifier::checked;
     let verify: fn(&Verifier, &Request) -> Result<VerifiedIdentity, Failure> =
         Verifier::verify_request;
     let _: fn(&Verifier, &Request) -> Result<VerifiedIdentity, Failure> = verify;
