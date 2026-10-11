@@ -108,3 +108,14 @@ socket/Cargo依存を用意し、infra失敗と契約失敗を別記録。文書
 通常実装/fixture/DocsはまずLuna Maxを検討し、security/compiler/runtime境界はSol High。独立reviewもSol Highを実装者終了後に起動する。設計上Highで解けない点だけSol xHighへ昇格する。Max/Astra常用、同問題の競争、重複reviewをしない。親を含む通常上限3、同model/tier同時1。
 
 指摘台帳にはID、優先度、source/contract根拠、変更/不採用理由、検証、reviewer再確認、残blockerを記録する。[review-log](review-log.md)をこの段階の正本とし、実装PRでは専用artifactへ分ける。進捗とhandoffはsource head/採用判断/完了PR/未完了/次順序/保証外を残し、過去snapshotを書き換えない。
+
+### SF06-COMP-021: HTTP応答のcontent decoding（0.2.1計画）
+
+**状態: 登録済み・未着手。実装/受入完了は0件。** SF06の送信HTTP基盤が依存するURL・接続先・TLS・予算契約と、0.2.0のidentity-only方針に依存する。SF06 Q1で採用済みのTCP failoverは有限回、TTL=0は一操作のみというtransport規則を維持する。これはcontent decoding失敗時の再送許可ではない。
+
+0.2.0の採用設計ではidentity encodingだけを受理し、identity以外の`Content-Encoding`はbodyを暗黙展開せず失敗させる。encoded bytesの検査をdecoded bytesへ置き換えること、上限の迂回、失敗後の自動retryは認めない。この方針は未リリースの設計であり、公開0.1.xの挙動や実装済みHTTP clientを示さない。既存の公開API signatureと採用済み安全契約は後続でも維持する。
+
+0.2.1では独立した依存・脅威・性能reviewの後に対応codecを選ぶ。選定した実装ごとにencoded size、decoded size、memory、processing-timeの各上限を別々に定義し、値と適用境界を明記する。具体値、codec一覧、全OS共通のstrict CPU時間保証は未選定・未承認である。破損/不正入力と取消時は安全に停止し、workerを実際にjoinしてからbuffer・decoder資源を解放する。timeout通知や取消要求だけを終了扱いしない。既存API signatureを変えず、拒否/失敗時に部分展開結果を成功として返さない。
+
+**受入:** encoded/decoded boundary±1とoverflow、破損stream、memory/time予算、取消中worker barrierを小さいowned fixtureで検証する。取消後のactual join・資源解放・次の正常requestを確認する。Unsupported encodingは展開もretryもせず失敗し、identity経路の既存安全検査を保持する。4 OS/対象依存の実測、独立review、日英Docsとwebsite生成を完了記録へ結び付ける。実装と独立reviewは未着手。website/CI実行も未確認。
+
