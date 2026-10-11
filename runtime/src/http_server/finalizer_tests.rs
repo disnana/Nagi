@@ -101,20 +101,39 @@ fn builtins_and_ordinary_error_mapper_use_the_same_finalizer() {
             "text/plain; charset=utf-8"
         );
     }
-    for failure in [
-        Failure::invalid_credential(),
-        Failure::expired(),
-        Failure::denied(),
-        Failure::invalid_request(),
-        Failure::unavailable(),
-        Failure::internal(),
+    for (source, challenge, vary) in [
+        (PolicySource::Bearer, "Bearer", "Authorization"),
+        (PolicySource::Session, "Session", "Cookie"),
     ] {
-        let response = security_response(failure).into_http(false);
-        managed(&response);
-        assert_eq!(
-            response.headers()[names::CONTENT_TYPE],
-            "text/plain; charset=utf-8"
-        );
+        for (failure, status) in [
+            (Failure::invalid_credential(), Status::UNAUTHORIZED),
+            (Failure::expired(), Status::UNAUTHORIZED),
+            (Failure::denied(), Status::FORBIDDEN),
+            (Failure::invalid_request(), Status::BAD_REQUEST),
+            (Failure::unavailable(), Status::SERVICE_UNAVAILABLE),
+            (Failure::internal(), Status::INTERNAL_SERVER_ERROR),
+        ] {
+            let response = finalize_authenticated(
+                security_response(failure, source).into_http(false),
+                source,
+                false,
+            );
+            managed(&response);
+            assert_eq!(response.status(), status.0);
+            assert_eq!(response.headers()[names::CACHE_CONTROL], "no-store");
+            assert_eq!(response.headers()[names::VARY], vary);
+            assert_eq!(
+                response.headers()[names::CONTENT_TYPE],
+                "text/plain; charset=utf-8"
+            );
+            assert_eq!(
+                response
+                    .headers()
+                    .get(names::WWW_AUTHENTICATE)
+                    .map(|value| value.to_str().unwrap()),
+                (status == Status::UNAUTHORIZED).then_some(challenge)
+            );
+        }
     }
     let response = default_error(Error::internal("private detail")).into_http(false);
     managed(&response);
