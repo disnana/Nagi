@@ -714,7 +714,18 @@ class JetBrainsWorkflowTests(unittest.TestCase):
     def test_existing_pr_merge_gate_waits_for_the_reusable_plugin_workflow(self):
         workflow = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
         text = workflow.read_text(encoding="utf-8")
-        self.assertIn("on: [push, pull_request, workflow_dispatch]\n", text)
+        trigger = re.search(r"(?ms)^on:\n(?P<events>.*?)(?=^permissions:\n)", text)
+        self.assertIsNotNone(trigger)
+        self.assertEqual(
+            trigger.group("events"),
+            "  push:\n"
+            "    branches:\n"
+            "      - main\n"
+            "    tags:\n"
+            "      - '**'\n"
+            "  pull_request:\n"
+            "  workflow_dispatch:\n",
+        )
         self.assertIn("      jetbrains_checks: ${{ steps.changes.outputs.jetbrains_checks }}\n", text)
         job = re.search(r"^  jetbrains:\n((?: {4}[^\n]*\n|\n)+)", text, re.MULTILINE)
         self.assertIsNotNone(job)
