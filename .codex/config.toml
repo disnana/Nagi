@@ -1,5 +1,6 @@
 [agents]
 # This setting limits spawned child threads; the parent agent is the third session.
+# Model/effort routing is in .codex/agents/*.toml; this file does not set service speed tiers.
 max_concurrent_threads_per_session = 2
 # V1 only; AGENTS.md also forbids nested sub-agent launches when V2 ignores this.
 max_depth = 1
