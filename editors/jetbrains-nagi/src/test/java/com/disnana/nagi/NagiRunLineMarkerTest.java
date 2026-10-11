@@ -147,22 +147,139 @@ public class NagiRunLineMarkerTest extends BasePlatformTestCase {
     public void testHighGutterClickInvokesTheCompilerWithItsSavedFile() throws Exception { invokeRun(false, false); }
     public void testLowGutterClickInvokesTheCompilerWithItsSavedFile() throws Exception { invokeRun(true, false); }
     public void testGutterClickKeepsNearestProjectSelection() throws Exception { invokeRun(false, true); }
+    public void testBackgroundBarrierPreventsAnEarlyCompilerStart() throws Exception { exerciseControlledBarrier(false, false); }
+    public void testFailedBarrierDoesNotStartTheCompiler() throws Exception { exerciseControlledBarrier(true, false); }
+    public void testTrustRevokedDuringBarrierDoesNotStartTheCompiler() throws Exception { exerciseControlledBarrier(false, true); }
+
+    private void exerciseControlledBarrier(boolean fail, boolean revokeTrust) throws Exception {
+        org.junit.Assume.assumeFalse("The recorder uses a POSIX executable", com.intellij.openapi.util.SystemInfo.isWindows);
+        Path temporary = Files.createTempDirectory("nagi controlled barrier ");
+        var settings = NagiSettings.getInstance().getState();
+        String previousCompiler = settings.compilerPath;
+        boolean previousTrust = com.intellij.ide.trustedProjects.TrustedProjects.isProjectTrusted(getProject());
+        var previousDialog = com.intellij.openapi.ui.TestDialogManager.getTestImplementation();
+        var editorsBeforeRun = java.util.Set.of(com.intellij.openapi.editor.EditorFactory.getInstance().getAllEditors());
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var errors = new java.util.concurrent.CopyOnWriteArrayList<String>();
+        var ranOnEdt = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var flushCompleted = new java.util.concurrent.atomic.AtomicBoolean(false);
+        String asyncProperty = "intellij.progress.task.ignoreHeadless";
+        String previousAsyncProperty = System.getProperty(asyncProperty);
+        try {
+            // Headless IntelliJ tests otherwise run Backgroundable.queue() synchronously.
+            System.setProperty(asyncProperty, "true");
+            Path captured = temporary.resolve("started.txt");
+            Path compiler = temporary.resolve("nagic");
+            Files.writeString(compiler, "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$$\" > "
+                    + shellQuote(temporary.resolve("started.tmp")) + "\nmv "
+                    + shellQuote(temporary.resolve("started.tmp")) + " " + shellQuote(captured) + "\n");
+            assertTrue(compiler.toFile().setExecutable(true));
+            settings.compilerPath = compiler.toString();
+            com.intellij.ide.trustedProjects.TrustedProjects.setProjectTrusted(getProject(), true);
+            com.intellij.openapi.ui.TestDialogManager.setTestDialog(message -> {
+                errors.add(message);
+                return com.intellij.openapi.ui.TestDialog.OK.show(message);
+            });
+            Path source = Files.writeString(temporary.resolve("main.nagi"), "def main():\n    print(1)\n");
+            var virtual = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByNioFile(source);
+            assertNotNull(virtual);
+            myFixture.configureFromExistingVirtualFile(virtual);
+            var document = myFixture.getEditor().getDocument();
+            WriteCommandAction.runWriteCommandAction(getProject(),
+                    () -> document.insertString(document.getTextLength(), "# save before external run\n"));
+            new NagiCompilerAction("run") {
+                @Override void flushInputs() throws java.io.IOException {
+                    ranOnEdt.set(com.intellij.openapi.application.ApplicationManager.getApplication().isDispatchThread());
+                    entered.countDown();
+                    try {
+                        if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                            throw new java.io.IOException("test barrier was not released");
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new java.io.IOException("test barrier was interrupted", interrupted);
+                    }
+                    if (fail) throw new java.io.IOException("injected disk write failure");
+                    NagiSaveBarrier.awaitDiskWrites();
+                    flushCompleted.set(true);
+                }
+            }.execute(getProject(), virtual);
+            com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching(
+                    "Nagi action did not reach its save barrier", () -> entered.getCount() == 0, 5);
+            assertFalse("save barrier must run off the EDT", ranOnEdt.get());
+            assertFalse("compiler started while disk writes were still pending", Files.exists(captured));
+            assertTrue("error reported before save barrier completed", errors.isEmpty());
+            if (revokeTrust) com.intellij.ide.trustedProjects.TrustedProjects.setProjectTrusted(getProject(), false);
+            release.countDown();
+            if (!fail && !revokeTrust) {
+                com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching(
+                        "compiler did not start after the save barrier", () -> Files.exists(captured), 5);
+                long recorderPid = Long.parseLong(Files.readString(captured).trim());
+                var recorder = ProcessHandle.of(recorderPid);
+                if (recorder.isPresent()) recorder.get().onExit().get(5, java.util.concurrent.TimeUnit.SECONDS);
+            } else if (fail) {
+                com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching(
+                        "save failure was not reported", () -> !errors.isEmpty(), 5);
+                assertTrue(errors.getFirst().contains("Could not finish saving Nagi inputs"));
+                assertTrue(errors.getFirst().contains("injected disk write failure"));
+            }
+            com.intellij.testFramework.PlatformTestUtil.waitForAllBackgroundActivityToCalmDown();
+            if (fail) assertFalse("failed flush was marked complete", flushCompleted.get());
+            else assertTrue("save-to-disk flush did not complete", flushCompleted.get());
+            if (revokeTrust) assertTrue("trust refusal was obscured by a save error", errors.isEmpty());
+            if (fail || revokeTrust) assertFalse("compiler started despite failed preparation", Files.exists(captured));
+        } finally {
+            release.countDown();
+            com.intellij.testFramework.PlatformTestUtil.waitForAllBackgroundActivityToCalmDown();
+            if (previousAsyncProperty == null) System.clearProperty(asyncProperty);
+            else System.setProperty(asyncProperty, previousAsyncProperty);
+            com.intellij.openapi.ui.TestDialogManager.setTestDialog(previousDialog);
+            com.intellij.ide.trustedProjects.TrustedProjects.setProjectTrusted(getProject(), previousTrust);
+            settings.compilerPath = previousCompiler;
+            var contents = com.intellij.execution.ui.RunContentManager.getInstance(getProject());
+            for (var descriptor : List.copyOf(contents.getAllDescriptors())) {
+                contents.removeRunContent(com.intellij.execution.executors.DefaultRunExecutor.getRunExecutorInstance(), descriptor);
+                if (!com.intellij.openapi.util.Disposer.isDisposed(descriptor)) com.intellij.openapi.util.Disposer.dispose(descriptor);
+            }
+            com.intellij.testFramework.PlatformTestUtil.dispatchAllEventsInIdeEventQueue();
+            var factory = com.intellij.openapi.editor.EditorFactory.getInstance();
+            for (var editor : factory.getAllEditors()) {
+                if (editor.isViewer() && !editorsBeforeRun.contains(editor)) factory.releaseEditor(editor);
+            }
+            flushBeforeDeletingSources();
+            try (var paths = Files.walk(temporary)) {
+                for (var path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
+            }
+        }
+    }
 
     private void invokeRun(boolean low, boolean projectMode) throws Exception {
         org.junit.Assume.assumeFalse("The recorder uses a POSIX executable", com.intellij.openapi.util.SystemInfo.isWindows);
         Path temporary = Files.createTempDirectory("nagi gutter run ");
         var settings = NagiSettings.getInstance().getState();
         String previousCompiler = settings.compilerPath;
+        boolean previousTrust = com.intellij.ide.trustedProjects.TrustedProjects.isProjectTrusted(getProject());
         var editorsBeforeRun = java.util.Set.of(com.intellij.openapi.editor.EditorFactory.getInstance().getAllEditors());
         try {
             Path captured = temporary.resolve("arguments.txt");
+            Path snapshot = temporary.resolve("source-at-start.txt");
+            Path completed = temporary.resolve("completed.txt");
             Path compiler = temporary.resolve("nagic");
-            Files.writeString(compiler, "#!/bin/sh\nprintf '%s\\n' \"$@\" > '" + captured.toString().replace("'", "'\"'\"'") + "'\n");
-            assertTrue(compiler.toFile().setExecutable(true));
-            settings.compilerPath = compiler.toString();
             com.intellij.ide.trustedProjects.TrustedProjects.setProjectTrusted(getProject(), true);
             Path source = temporary.resolve(low ? "main.low" : "main.nagi");
-            Files.writeString(source, low ? "fn main() { print(1); }\n" : "def main():\n    print(1)\n");
+            String initial = low ? "fn main() { print(1); }\n" : "def main():\n    print(1)\n";
+            String expected = initial + "# saved by gutter action\n";
+            Files.writeString(source, initial);
+            Files.writeString(compiler, "#!/bin/sh\nset -eu\n"
+                    + "printf '%s\\n' \"$@\" > " + shellQuote(temporary.resolve("arguments.tmp")) + "\n"
+                    + "cat " + shellQuote(source) + " > " + shellQuote(temporary.resolve("source.tmp")) + "\n"
+                    + "mv " + shellQuote(temporary.resolve("arguments.tmp")) + " " + shellQuote(captured) + "\n"
+                    + "mv " + shellQuote(temporary.resolve("source.tmp")) + " " + shellQuote(snapshot) + "\n"
+                    + "printf '%s\\n' \"$$\" > " + shellQuote(temporary.resolve("completed.tmp")) + "\n"
+                    + "mv " + shellQuote(temporary.resolve("completed.tmp")) + " " + shellQuote(completed) + "\n");
+            assertTrue(compiler.toFile().setExecutable(true));
+            settings.compilerPath = compiler.toString();
             var virtual = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByNioFile(source);
             assertNotNull(virtual);
             myFixture.configureFromExistingVirtualFile(virtual);
@@ -176,11 +293,14 @@ public class NagiRunLineMarkerTest extends BasePlatformTestCase {
             var document = myFixture.getEditor().getDocument();
             WriteCommandAction.runWriteCommandAction(getProject(), () -> document.insertString(document.getTextLength(), "# saved by gutter action\n"));
             configureSource("other.py", "print('not the gutter target')\n");
+            assertEquals(expected, document.getText());
             marker.getNavigationHandler().navigate(null, marker.getElement());
             com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("Nagi gutter did not start the compiler", () -> {
-                try { return Files.exists(captured) && Files.size(captured) > 0; }
-                catch (java.io.IOException ignored) { return false; }
+                return Files.exists(completed);
             }, 5);
+            long recorderPid = Long.parseLong(Files.readString(completed).trim());
+            var recorder = ProcessHandle.of(recorderPid);
+            if (recorder.isPresent()) recorder.get().onExit().get(5, java.util.concurrent.TimeUnit.SECONDS);
             var arguments = Files.readAllLines(captured);
             assertEquals("run", arguments.getFirst());
             if (projectMode) {
@@ -191,11 +311,13 @@ public class NagiRunLineMarkerTest extends BasePlatformTestCase {
                 assertEquals(source.toString(), arguments.get(1));
                 assertEquals("--out", arguments.get(2));
             }
-            assertTrue(Files.readString(source).endsWith("# saved by gutter action\n"));
+            assertEquals("compiler must read the edited bytes at process start", expected, Files.readString(snapshot));
+            assertEquals(expected, Files.readString(source));
             com.intellij.testFramework.PlatformTestUtil.waitForAllBackgroundActivityToCalmDown();
             com.intellij.testFramework.PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue();
         } finally {
             settings.compilerPath = previousCompiler;
+            com.intellij.ide.trustedProjects.TrustedProjects.setProjectTrusted(getProject(), previousTrust);
             var contents = com.intellij.execution.ui.RunContentManager.getInstance(getProject());
             for (var descriptor : List.copyOf(contents.getAllDescriptors())) {
                 contents.removeRunContent(com.intellij.execution.executors.DefaultRunExecutor.getRunExecutorInstance(), descriptor);
@@ -208,9 +330,27 @@ public class NagiRunLineMarkerTest extends BasePlatformTestCase {
             for (var editor : factory.getAllEditors()) {
                 if (editor.isViewer() && !editorsBeforeRun.contains(editor)) factory.releaseEditor(editor);
             }
+            flushBeforeDeletingSources();
             try (var paths = Files.walk(temporary)) {
                 for (var path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
             }
         }
+    }
+
+    private static String shellQuote(Path path) {
+        return "'" + path.toString().replace("'", "'\"'\"'") + "'";
+    }
+
+    private static void flushBeforeDeletingSources() throws Exception {
+        var flushed = java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                NagiSaveBarrier.awaitDiskWrites();
+            } catch (java.io.IOException failure) {
+                throw new java.util.concurrent.CompletionException(failure);
+            }
+        });
+        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching(
+                "pending IDE file writes did not finish", flushed::isDone, 5);
+        flushed.get();
     }
 }

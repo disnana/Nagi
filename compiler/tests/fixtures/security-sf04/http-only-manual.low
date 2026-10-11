@@ -1,0 +1,7 @@
+import std.http.server as web;
+record HtmlDocument { value: i64; }
+fn plain() -> web.Response {
+    let policy = web.public_policy[i64]();
+    return web.text(web.Status.OK, "plain");
+}
+fn user_value() -> i64 { return HtmlDocument(value=9).value; }

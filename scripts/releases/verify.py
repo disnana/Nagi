@@ -32,10 +32,17 @@ def verify(archive: Path, version: str, platform: str, target: Path | None = Non
         assert metadata["version"] == version and metadata["platform"] == platform, metadata
         exe = root / ("nagic.exe" if os.name == "nt" else "nagic")
         environment = dict(os.environ)
+        icu_data_dir_host_present = "ICU4X_DATA_DIR" in environment
+        environment.pop("ICU4X_DATA_DIR", None)
         environment.pop("NAGI_ROOT", None)
         environment.pop("NAGI_NATIVE_TARGET_DIR", None)
         if target is not None:
             environment["NAGI_NATIVE_TARGET_DIR"] = str(target)
+        print(
+            "ICU4X_DATA_DIR "
+            f"host_present={str(icu_data_dir_host_present).lower()} "
+            f"child_present={str('ICU4X_DATA_DIR' in environment).lower()}"
+        )
         for flag in ("--version", "-V", "version", "--help"):
             result = subprocess.run([str(exe), flag], cwd=folder, env={**environment, "PATH": ""},
                                     check=True, capture_output=True, text=True, encoding="utf-8")

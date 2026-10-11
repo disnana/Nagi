@@ -1,0 +1,5 @@
+import std.http.server as web
+class HtmlDocument:
+    value: i64
+def wrong(document: HtmlDocument) -> web.Response:
+    return web.html_response(web.Status.OK, document)
