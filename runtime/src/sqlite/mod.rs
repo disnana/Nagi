@@ -324,3 +324,27 @@ pub fn copy_primary_error(problem: &Failure) -> Option<Error> {
 pub fn copy_cleanup_error(problem: &Failure) -> Option<Error> {
     problem.cleanup.clone()
 }
+
+// Owned native fault fixtures only. Production Pool construction is unchanged.
+#[cfg(test)]
+#[derive(Clone, Copy)]
+pub(crate) enum LogoutTestFault {
+    Unknown,
+    CommittedCleanup,
+}
+#[cfg(test)]
+pub(crate) fn logout_test_pool(path: std::path::PathBuf, fault: LogoutTestFault) -> Pool {
+    let config = session::Config {
+        path: Some(path),
+        queue_capacity: Some(4),
+        busy: Duration::from_secs(1),
+        deny_commit: matches!(fault, LogoutTestFault::Unknown),
+        deny_rollback: matches!(fault, LogoutTestFault::Unknown),
+        fail_restore_check: matches!(fault, LogoutTestFault::CommittedCleanup),
+        ..Default::default()
+    };
+    Pool {
+        adapter: adapter::Adapter::with_capacity(config, Default::default(), 1),
+        acquire: Duration::from_secs(1),
+    }
+}

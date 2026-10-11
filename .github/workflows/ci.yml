@@ -71,6 +71,32 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Check SF02 public Session runtime and one-use delivery before other checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c 'import os; print("ICU4X_DATA_DIR present:", "ICU4X_DATA_DIR" in os.environ)'
+          unset ICU4X_DATA_DIR
+          cargo check --locked -p nagi-runtime --lib
+          cargo test --locked -p nagi-runtime --lib auth::session::http_bridge::delivery_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-delivery-wire.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::delivery::wire_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-delivery-cell.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::delivery::tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-delivery-core.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::http_bridge::tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-http-bridge.log"
+          cargo test --locked -p nagi-runtime --test session_public_api 2>&1 | tee "$RUNNER_TEMP/sf02-public-api.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-persistent-store.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::delivery::lease_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-lease-owner.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::secrets::tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-secret-components.log"
+          cargo test --locked -p nagi-runtime --lib auth::credential_metadata_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-credential-metadata.log"
+          python - <<'PY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 6, 'sf02-public-api.log': 4, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
+          for name, count in expected.items():
+              text = (root / name).read_text(encoding="utf-8")
+              pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored;"
+              if not re.search(pattern, text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PY
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
       - name: Check HTTP registry emission before the workspace regression
@@ -248,6 +274,32 @@ jobs:
           RELEASE_RUST_HOST: ${{ matrix.rust_host }}
         shell: bash
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
+      - name: Check SF02 public Session runtime and one-use delivery before other checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c 'import os; print("ICU4X_DATA_DIR present:", "ICU4X_DATA_DIR" in os.environ)'
+          unset ICU4X_DATA_DIR
+          cargo check --locked -p nagi-runtime --lib
+          cargo test --locked -p nagi-runtime --lib auth::session::http_bridge::delivery_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-delivery-wire.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::delivery::wire_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-delivery-cell.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::delivery::tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-delivery-core.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::http_bridge::tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-http-bridge.log"
+          cargo test --locked -p nagi-runtime --test session_public_api 2>&1 | tee "$RUNNER_TEMP/sf02-public-api.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-persistent-store.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::delivery::lease_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-lease-owner.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::secrets::tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-secret-components.log"
+          cargo test --locked -p nagi-runtime --lib auth::credential_metadata_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-credential-metadata.log"
+          python - <<'PY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 6, 'sf02-public-api.log': 4, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
+          for name, count in expected.items():
+              text = (root / name).read_text(encoding="utf-8")
+              pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored;"
+              if not re.search(pattern, text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PY
       - run: cargo build --release --locked -p nagic
       - name: Check HTTP registry emission before the platform regression
         run: cargo test --locked -p nagic --test http_codegen --test resource_contract_characterization --test security_sf05_native
@@ -297,7 +349,7 @@ jobs:
           cargo test --locked -p nagic --test security_sf05 2>&1 | tee "build/security-sf05/sf05-checker.log"
           cargo test --locked -p nagic --test security_sf05_native 2>&1 | tee "build/security-sf05/sf05-native.log"
           cargo test --locked -p nagi-runtime --lib sqlite::security_sf05_tests:: 2>&1 | tee "build/security-sf05/sf05-admission.log"
-          python -c 'import pathlib,re,os; root=pathlib.Path("build/security-sf05"); counts={"sf05-checker.log":12,"sf05-native.log":1,"sf05-admission.log":6}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'
+          python -c 'import pathlib,re,os; root=pathlib.Path("build/security-sf05"); counts={"sf05-checker.log":13,"sf05-native.log":1,"sf05-admission.log":6}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'
           python benchmarks/security-sf05/ci_provenance.py build/security-sf05
       - name: Preserve SF05 source identity and native evidence
         if: always()
