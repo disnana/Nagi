@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 // 承認済みの狭い所有代入移行。型・move・origin拒否と実生成Rustを別に観測する。
 #[path = "checked_emission.rs"]
-mod checked_emission;
+pub(crate) mod checked_emission;
 use nagic::{check, emit, source};
 use std::{
     collections::HashSet,

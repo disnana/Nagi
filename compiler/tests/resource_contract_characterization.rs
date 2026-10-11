@@ -792,6 +792,7 @@ fn registered_accessors_match_the_complete_inventory() {
 }
 
 const CONSTANTS: &[(R, &str)] = &[
+    (R::SessionSameSite,"LAX NONE STRICT"),
     (R::AuthFailureKind,"INVALID_CREDENTIAL DENIED EXPIRED INVALID_REQUEST UNAVAILABLE INTERNAL"),
     (R::SqliteBeginMode,"DEFERRED IMMEDIATE EXCLUSIVE"),
     (R::SqliteFailureKind,"INVALID CLOSED ACQUIRE_TIMEOUT BUSY SQL BIND DECODE ABORTED CLEANUP WORKER REPLY_LOST CLOSE_TIMEOUT ALLOCATION"),
@@ -806,7 +807,7 @@ const CONSTANTS: &[(R, &str)] = &[
 ];
 #[test]
 fn registered_constants_match_the_complete_inventory() {
-    assert_eq!(CONSTANTS.len(), 11);
+    assert_eq!(CONSTANTS.len(), 12);
     for &(resource, ..) in RESOURCES {
         let names = CONSTANTS
             .iter()
@@ -823,6 +824,9 @@ fn registered_constants_match_the_complete_inventory() {
         assert_eq!(actual.len(), expected.len());
         for name in expected {
             let native = match (resource, name) {
+                (R::SessionSameSite, "LAX") => "Lax",
+                (R::SessionSameSite, "NONE") => "None",
+                (R::SessionSameSite, "STRICT") => "Strict",
                 (R::SqliteBeginMode, "DEFERRED") => "Deferred",
                 (R::SqliteBeginMode, "IMMEDIATE") => "Immediate",
                 (R::SqliteBeginMode, "EXCLUSIVE") => "Exclusive",

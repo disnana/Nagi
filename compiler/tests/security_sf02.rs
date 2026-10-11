@@ -1,10 +1,9 @@
 //! Purpose expectations: load/parse, checker, sealed emission and native are distinct.
 //! No absent API or incidental parse failure counts as contract acceptance.
-#[path = "support/checked_emission.rs"]
-mod checked_emission;
 #[path = "support/native_triple.rs"]
 mod native_triple;
 use nagic::{check, emit, source};
+use native_triple::checked_emission;
 use std::{
     fs,
     path::{Path, PathBuf},
