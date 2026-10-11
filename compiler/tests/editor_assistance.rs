@@ -1,7 +1,7 @@
 use std::{
     fs,
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 static ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -603,15 +603,14 @@ fn call_member_saved_low_queries_use_low_file_positions_without_high_mapping() {
                 .any(|r| r["location"]["line"] == line
                     && r["location"]["file"]
                         .as_str()
-                        .is_some_and(|file| file.ends_with(entry))
+                        .is_some_and(|file| Path::new(file).ends_with(Path::new(entry)))
                     && r["target"]["file"]
                         .as_str()
-                        .is_some_and(|file| file.ends_with(entry))),
+                        .is_some_and(|file| Path::new(file).ends_with(Path::new(entry)))),
             "{v}"
         );
-        assert!(v["diagnostics"][0]["file"]
-            .as_str()
-            .unwrap()
-            .ends_with(entry));
+        assert!(
+            Path::new(v["diagnostics"][0]["file"].as_str().unwrap()).ends_with(Path::new(entry))
+        );
     }
 }
