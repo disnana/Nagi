@@ -265,27 +265,43 @@ fn cookie_pair(reply: &Received) -> String {
         .unwrap()
         .to_owned()
 }
-async fn session_server(f: &Fixture, mode: u8) -> Server {
-    let policy = session_authenticated_policy(session::clone_store(&f.store));
-    let app = route(
-        app_default(session::clone_store(&f.store)),
-        Method::POST,
-        "/owned",
-        policy,
-        move |_, store, scope| async move {
-            let intent = if mode == 0 {
-                session::rotate(&store, scope).await.unwrap()
-            } else {
-                session::logout(&store, scope).await.unwrap()
-            };
-            Ok(session::apply(text(Status::OK, "owned"), intent).unwrap())
-        },
-    )
-    .unwrap();
-    Server::new(app, options(64, 1000, 1000, 1000).unwrap()).await
+// These direct calls retain real public mutations and the real finalizer,
+// while guarded Session HTTP mutation success remains pending B1.
+async fn bound_scope(store: &Store, cookie: &str) -> (crate::auth::LeaseOwner, AuthScope) {
+    let mut headers = hyper::header::HeaderMap::new();
+    headers.insert(
+        hyper::header::COOKIE,
+        hyper::header::HeaderValue::from_str(cookie).unwrap(),
+    );
+    let identity = store.lookup_http_identity(&headers).await.unwrap();
+    let owner = crate::auth::LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap();
+    let scope = AuthScope::bind(identity, Arc::clone(&owner.lease)).unwrap();
+    (owner, scope)
+}
+fn direct_delivery(response: Response, owner: &crate::auth::LeaseOwner) -> Received {
+    let (status, headers) = crate::http_server::session_delivery_headers_for_test(response, owner);
+    Received {
+        status: status.as_u16(),
+        headers: headers
+            .iter()
+            .map(|(name, value)| (name.to_string(), value.to_str().unwrap().to_owned()))
+            .collect(),
+        body: Vec::new(),
+    }
+}
+async fn lookup_rejects(store: &Store, cookie: &str) {
+    let mut headers = hyper::header::HeaderMap::new();
+    headers.insert(
+        hyper::header::COOKIE,
+        hyper::header::HeaderValue::from_str(cookie).unwrap(),
+    );
+    let result = store.lookup_http_identity(&headers).await;
+    assert!(
+        matches!(result,Err(error) if error.kind()==crate::auth::FailureKind::InvalidCredential)
+    );
 }
 #[tokio::test]
-async fn real_rotate_and_logout_deliver_once_and_old_lookup_never_reactivates() {
+async fn real_direct_rotate_logout_finalize_once_and_old_lookup_never_reactivates() {
     let f = Fixture::new().await;
     let server = issue_server(&f).await;
     let first = request(&server, "Authorization: Bearer owned\r\n").await;
@@ -293,25 +309,34 @@ async fn real_rotate_and_logout_deliver_once_and_old_lookup_never_reactivates() 
     assert_eq!(first.all("vary"), vec!["Cookie, Authorization"]);
     let old_cookie = cookie_pair(&first);
     server.stop().await;
-    let server = session_server(&f, 0).await;
-    let rotated = request(&server, &format!("Cookie: {old_cookie}\r\n")).await;
+    let (owner, scope) = bound_scope(&f.store, &old_cookie).await;
+    let intent = session::rotate(&f.store, scope).await.unwrap();
+    let response = session::apply(text(Status::OK, "owned"), intent).unwrap();
+    let rotated = direct_delivery(response, &owner);
     assert_eq!(rotated.status, 200);
     assert_cookie_policy(&rotated);
     assert_eq!(rotated.all("vary"), vec!["Cookie"]);
     let new_cookie = cookie_pair(&rotated);
     assert!(old_cookie != new_cookie);
     assert_eq!(f.count().await, 1);
-    let old = request(&server, &format!("Cookie: {old_cookie}\r\n")).await;
-    assert_eq!(old.status, 401);
-    assert!(old.all("set-cookie").is_empty());
-    server.stop().await;
-    let server = session_server(&f, 1).await;
-    let logged_out = request(&server, &format!("Cookie: {new_cookie}\r\n")).await;
+    // Destructive take is the actual owner's finalizer, not a header clone
+    // standing in for a second delivery. Already drained material cannot recur.
+    let empty = direct_delivery(text(Status::OK, "owned"), &owner);
+    assert!(empty.all("set-cookie").is_empty());
+    drop(owner);
+    lookup_rejects(&f.store, &old_cookie).await;
+    let (owner, scope) = bound_scope(&f.store, &new_cookie).await;
+    let intent = session::logout(&f.store, scope).await.unwrap();
+    let logged_out = direct_delivery(
+        session::apply(text(Status::OK, "owned"), intent).unwrap(),
+        &owner,
+    );
     assert_eq!(logged_out.status, 200);
     assert_eq!(logged_out.all("set-cookie").len(), 1);
     let deletion = cookie::Cookie::parse(logged_out.all("set-cookie")[0]).unwrap();
-    assert!(deletion.value().is_empty());
-    assert!(deletion.max_age() == Some(cookie::time::Duration::ZERO));
+    assert!(
+        deletion.value().is_empty() && deletion.max_age() == Some(cookie::time::Duration::ZERO)
+    );
     assert!(deletion
         .expires_datetime()
         .is_some_and(|date| date <= cookie::time::OffsetDateTime::UNIX_EPOCH));
@@ -322,10 +347,10 @@ async fn real_rotate_and_logout_deliver_once_and_old_lookup_never_reactivates() 
             && deletion.domain().is_none()
     );
     assert_eq!(f.count().await, 0);
-    let absent = request(&server, &format!("Cookie: {new_cookie}\r\n")).await;
-    assert_eq!(absent.status, 401);
-    assert!(absent.all("set-cookie").is_empty());
-    server.stop().await;
+    let empty = direct_delivery(text(Status::OK, "owned"), &owner);
+    assert!(empty.all("set-cookie").is_empty());
+    drop(owner);
+    lookup_rejects(&f.store, &new_cookie).await;
     f.stop().await;
 }
 #[tokio::test]

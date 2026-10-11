@@ -1797,3 +1797,6 @@ async fn graceful_shutdown_preserves_stalled_response_send_deadline() {
 
 #[path = "security_tests.rs"]
 mod security_tests;
+
+#[path = "unsafe_session_tests.rs"]
+mod unsafe_session_tests;

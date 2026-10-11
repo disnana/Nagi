@@ -164,6 +164,14 @@ fn actual_persistent_store_startup_and_pool_close() {
         let path=owned.0.join("owned.sqlite");
         let pool=::nagi_runtime::sqlite::open(path.to_str().unwrap(),::nagi_runtime::sqlite::options(1,4,1000,1000).unwrap()).await.unwrap();
         let store=startup(&pool).await.unwrap();
+        // These sources pass checker/emission/build. Unsafe denial is the
+        // runtime registration Result, never an incidental compile rejection.
+        assert!(read_registration(&store).is_ok());
+        let rejected=unsafe_registration(&store);
+        match rejected {
+            Err(error)=>assert!(matches!(error.kind,::nagi_runtime::ErrorKind::Invalid) && error.message.contains("CSRF")),
+            Ok(_)=>panic!("unguarded unsafe Session registration succeeded"),
+        }
         let state=shared_state(&store);
         drop(state);drop(store);
         ::nagi_runtime::sqlite::close(&pool,2000).await.unwrap();
@@ -181,6 +189,14 @@ fn actual_persistent_store_startup_and_pool_close() {
                 .clone()
         };
         assertions
+            .replace(
+                "read_registration(&store)",
+                &format!("{}(&store)", resolve("read_registration")),
+            )
+            .replace(
+                "unsafe_registration(&store)",
+                &format!("{}(&store)", resolve("unsafe_registration")),
+            )
             .replace("startup(&pool)", &format!("{}(&pool)", resolve("startup")))
             .replace(
                 "shared_state(&store)",

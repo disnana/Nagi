@@ -10,3 +10,15 @@ async fn startup(pool: view[sqlite.Pool]) -> Result[session.Store, session.Failu
 }
 fn shared_state(store: view[session.Store]) -> shared[State] { return share(State(store = session.clone_store(store))); }
 fn main() -> unit { print(0); }
+
+async fn inspect(request: http.Request,state: shared[State],scope: auth.AuthScope) -> Result[http.Response,Error] { return ok(http.empty(http.Status.OK)); }
+fn read_registration(store: view[session.Store]) -> Result[http.App[State,Error],Error] {
+ let app = http.app_default[State](State(store = session.clone_store(store)));
+ let policy = http.session_authenticated_policy[State](session.clone_store(store));
+ return http.route(app,http.Method.GET,"/owned",policy,inspect);
+}
+fn unsafe_registration(store: view[session.Store]) -> Result[http.App[State,Error],Error] {
+ let app = http.app_default[State](State(store = session.clone_store(store)));
+ let policy = http.session_authenticated_policy[State](session.clone_store(store));
+ return http.route(app,http.Method.POST,"/owned",policy,inspect);
+}

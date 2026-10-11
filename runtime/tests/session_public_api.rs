@@ -181,9 +181,17 @@ async fn without_handler_clock_advance<T>(future: impl std::future::Future<Outpu
     }
 }
 async fn request(address: std::net::SocketAddr, path: &str, credential: &str) -> Received {
+    request_method(address, "POST", path, credential).await
+}
+async fn request_method(
+    address: std::net::SocketAddr,
+    method: &str,
+    path: &str,
+    credential: &str,
+) -> Received {
     without_handler_clock_advance(async {
         let mut socket = TcpStream::connect(address).await.unwrap();
-        let owned = format!("POST {path} HTTP/1.1\r\nHost: localhost\r\n{credential}Content-Length: 0\r\nConnection: close\r\n\r\n");
+        let owned = format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\n{credential}Content-Length: 0\r\nConnection: close\r\n\r\n");
         socket.write_all(owned.as_bytes()).await.unwrap();
         let mut raw = Vec::new();
         socket.take(4097).read_to_end(&mut raw).await.unwrap();
@@ -204,7 +212,7 @@ async fn verifier(
     VerifiedIdentity::from_verified(7, Instant::now() + Duration::from_secs(60))
 }
 #[tokio::test]
-async fn published_issue_rotate_logout_transfer_cookie_once_after_real_commit() {
+async fn published_bearer_issue_wire_and_safe_session_read_after_real_commit() {
     let dir = Directory::new();
     let pool = sqlite::open(
         dir.0.join("owned.sqlite").to_str().unwrap(),
@@ -226,25 +234,16 @@ async fn published_issue_rotate_logout_transfer_cookie_once_after_real_commit() 
         },
     )
     .unwrap();
+    // Session mutations remain native/direct until the guarded B1 HTTP
+    // profile exists. This GET is only a read of the bound identity.
     let app = http::route(
         app,
-        http::Method::POST,
-        "/rotate",
+        http::Method::GET,
+        "/read",
         http::session_authenticated_policy(session::clone_store(&store)),
-        |_, store, scope| async move {
-            let intent = session::rotate(&store, scope).await.unwrap();
-            Ok::<_, Error>(session::apply(http::empty(http::Status::OK), intent).unwrap())
-        },
-    )
-    .unwrap();
-    let app = http::route(
-        app,
-        http::Method::POST,
-        "/logout",
-        http::session_authenticated_policy(session::clone_store(&store)),
-        |_, store, scope| async move {
-            let intent = session::logout(&store, scope).await.unwrap();
-            Ok::<_, Error>(session::apply(http::empty(http::Status::OK), intent).unwrap())
+        |_, _, scope| async move {
+            assert!(scope.subject() == 7);
+            Ok::<_, Error>(http::empty(http::Status::OK))
         },
     )
     .unwrap();
@@ -272,28 +271,15 @@ async fn published_issue_rotate_logout_transfer_cookie_once_after_real_commit() 
             count(&pool, "SELECT count(*) AS n FROM __nagi_session_rows").await,
             1
         );
-        let old = issued.cookie();
-        let rotated = request(address, "/rotate", &format!("Cookie: {old}\r\n")).await;
-        assert_eq!(rotated.status, 200);
-        assert_eq!(rotated.values("vary"), vec!["Cookie"]);
-        let new = rotated.cookie();
-        assert!(old != new);
-        let stale = request(address, "/rotate", &format!("Cookie: {old}\r\n")).await;
-        assert_eq!(stale.status, 401);
-        assert!(stale.values("set-cookie").is_empty());
-        let logged_out = request(address, "/logout", &format!("Cookie: {new}\r\n")).await;
-        assert_eq!(logged_out.status, 200);
-        assert_eq!(logged_out.values("set-cookie").len(), 1);
-        let deletion = cookie::Cookie::parse(logged_out.values("set-cookie")[0]).unwrap();
-        assert!(deletion.value().is_empty());
-        assert!(deletion.max_age() == Some(cookie::time::Duration::ZERO));
+        let owned = issued.cookie();
+        let read = request_method(address, "GET", "/read", &format!("Cookie: {owned}\r\n")).await;
+        assert!(read.status == 200 && read.values("set-cookie").is_empty());
+        assert_eq!(read.values("cache-control"), vec!["no-store"]);
+        assert_eq!(read.values("vary"), vec!["Cookie"]);
         assert_eq!(
             count(&pool, "SELECT count(*) AS n FROM __nagi_session_rows").await,
-            0
+            1
         );
-        let absent = request(address, "/logout", &format!("Cookie: {new}\r\n")).await;
-        assert_eq!(absent.status, 401);
-        assert!(absent.values("set-cookie").is_empty());
     })
     .catch_unwind()
     .await;
@@ -312,4 +298,116 @@ async fn published_issue_rotate_logout_transfer_cookie_once_after_real_commit() 
     }
     stopped.unwrap().unwrap().unwrap();
     closed.unwrap();
+}
+
+fn mapped(_: Error) -> http::Response {
+    panic!("registration does not invoke mapper")
+}
+struct Permission;
+async fn authorize(
+    scope: nagi_runtime::auth::AuthScope,
+    _: http::Request,
+    _: Arc<()>,
+) -> Result<nagi_runtime::auth::Grant<Permission>, nagi_runtime::auth::Failure> {
+    nagi_runtime::auth::Grant::from_authorized(scope, 7)
+}
+async fn scoped_handler(
+    _: http::Request,
+    _: Arc<()>,
+    _: nagi_runtime::auth::AuthScope,
+) -> Result<http::Response, Error> {
+    panic!("registration does not invoke handler")
+}
+async fn granted_handler(
+    _: http::Request,
+    _: Arc<()>,
+    _: nagi_runtime::auth::Grant<Permission>,
+) -> Result<http::Response, Error> {
+    panic!("registration does not invoke handler")
+}
+fn assert_csrf_refusal<T>(result: Result<T, Error>) {
+    let error = match result {
+        Err(error) => error,
+        Ok(_) => panic!("unsafe Session route accepted"),
+    };
+    assert!(
+        matches!(error.kind, nagi_runtime::ErrorKind::Invalid) && error.message.contains("CSRF")
+    );
+}
+#[tokio::test]
+async fn published_session_policies_refuse_unsafe_methods_without_guard() {
+    let dir = Directory::new();
+    let pool = sqlite::open(
+        dir.0.join("owned.sqlite").to_str().unwrap(),
+        sqlite::options(2, 4, 1000, 1000).unwrap(),
+    )
+    .await
+    .unwrap();
+    let store = session::open(&pool, configuration(), cookie_policy())
+        .await
+        .unwrap();
+    for method in [
+        http::Method::POST,
+        http::Method::PUT,
+        http::Method::PATCH,
+        http::Method::DELETE,
+        http::Method::TRACE,
+        http::Method::CONNECT,
+        http::Method::from_bytes(b"PROPFIND").unwrap(),
+        http::Method::from_bytes(b"get").unwrap(),
+    ] {
+        assert_csrf_refusal(http::route(
+            http::app_default(()),
+            method.clone(),
+            "/owned",
+            http::session_authenticated_policy(session::clone_store(&store)),
+            scoped_handler,
+        ));
+        assert_csrf_refusal(http::route_mapped(
+            http::app_default(()),
+            method.clone(),
+            "/owned",
+            http::session_authenticated_policy(session::clone_store(&store)),
+            scoped_handler,
+            mapped,
+        ));
+        assert_csrf_refusal(http::route(
+            http::app_default(()),
+            method.clone(),
+            "/owned",
+            http::session_authorized_policy(session::clone_store(&store), authorize),
+            granted_handler,
+        ));
+        assert_csrf_refusal(http::route_mapped(
+            http::app_default(()),
+            method,
+            "/owned",
+            http::session_authorized_policy(session::clone_store(&store), authorize),
+            granted_handler,
+            mapped,
+        ));
+    }
+    for method in [http::Method::GET, http::Method::HEAD, http::Method::OPTIONS] {
+        assert!(http::route(
+            http::app_default(()),
+            method.clone(),
+            "/owned",
+            http::session_authenticated_policy(session::clone_store(&store)),
+            scoped_handler
+        )
+        .is_ok());
+        assert!(http::route(
+            http::app_default(()),
+            method,
+            "/owned",
+            http::session_authorized_policy(session::clone_store(&store), authorize),
+            granted_handler
+        )
+        .is_ok());
+    }
+    assert_eq!(
+        count(&pool, "SELECT count(*) AS n FROM __nagi_session_rows").await,
+        0
+    );
+    sqlite::close(&pool, 2000).await.unwrap();
 }

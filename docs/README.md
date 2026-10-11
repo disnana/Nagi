@@ -21,16 +21,16 @@
 
 | 機能 | 使いどころ・動かす例と結果 | 制約・よくある誤りと直し方 | 使い分けと詳細 |
 |---|---|---|---|
-| 値、型注釈、代入・再代入 | [入門 §1](language-guide.md#1-値と型)で数値を更新し`11`を表示 | 型は最初の値から決まり、別の型へは再代入できない | [型](types.md)、[値と変数](syntax.md#値と変数) |
-| 関数、引数、return、関数値 | [入門 §2](language-guide.md#2-関数を定義する)で`42`を返す | 引数と戻り値の型を書き、実行文は`main`から呼ぶ | [関数構文](syntax.md#関数とreturn)、[関数型](types.md#関数を値として渡す) |
-| if、match、for、while、演算子 | [入門 §3](language-guide.md#3-配列class分岐繰り返し)で`OK`と反復結果を表示 | bool以外を条件にできない。`break`、`continue`、`elif`は未対応 | [分岐・loop・演算子](syntax.md#分岐とループ)、[match](error-handling.md#成功と失敗を分ける) |
-| List、class、field、enum | [入門 §3](language-guide.md#3-配列class分岐繰り返し)と[class例](classes.md)で合計・field値を表示 | Listは要素型を揃える。classは名前付きfieldで作り、method・継承・field再代入は未対応 | [型とenum](types.md#enumで種類を分ける)、[class](classes.md) |
+| 値、型注釈、代入・再代入 | [入門 #1：値と型](language-guide.md#1-値と型)で数値を更新し`11`を表示 | 型は最初の値から決まり、別の型へは再代入できない | [型](types.md)、[値と変数](syntax.md#値と変数) |
+| 関数、引数、return、関数値 | [入門 #2：関数を定義する](language-guide.md#2-関数を定義する)で`42`を返す | 引数と戻り値の型を書き、実行文は`main`から呼ぶ | [関数構文](syntax.md#関数とreturn)、[関数型](types.md#関数を値として渡す) |
+| if、match、for、while、演算子 | [入門 #3：配列・class・分岐・繰り返し](language-guide.md#3-配列class分岐繰り返し)で`OK`と反復結果を表示 | bool以外を条件にできない。`break`、`continue`、`elif`は未対応 | [分岐・loop・演算子](syntax.md#分岐とループ)、[match](error-handling.md#成功と失敗を分ける) |
+| List、class、field、enum | [入門 #3：配列・class・分岐・繰り返し](language-guide.md#3-配列class分岐繰り返し)と[class例](classes.md)で合計・field値を表示 | Listは要素型を揃える。classは名前付きfieldで作り、method・継承・field再代入は未対応 | [型とenum](types.md#enumで種類を分ける)、[class](classes.md) |
 | nullable `T?` / `Option[T]` | [値がない場合の例](error-handling.md#値がない場合を扱う)で`Some`と`None`を処理 | 両方を`match`する。`unwrap`や`if value is not None`の型絞り込みはない | [型](types.md)、[match構文](syntax.md#resultasyncscope) |
-| `Result[T, E]`、`try`、`match`、独自Error | [最初のCLI](first-app.md)で入力失敗を伝え、[入門 §5](language-guide.md#5-失敗する処理はresultで返す)で回復例を読む | `try`はErrを呼出元へ返す。局所回復には`match`でOk/Err両方を書く | [失敗の種類と例](error-handling.md)、[組み込み関数](builtins.md#変換成功失敗) |
-| ownership、通常代入での明示move、copy | [入門 §4](language-guide.md#4-読むだけならviewで借りる)で受渡し後の出力を確認 | 非Copyローカルの通常代入は`move(...)`を使う。move後の元値は使えない | [代入・move・誤り](ownership.md#代入と明示move)、[移行](migration-0.1.11.md) |
+| `Result[T, E]`、`try`、`match`、独自Error | [最初のCLI](first-app.md)で入力失敗を伝え、[入門 #5：失敗をResultで返す](language-guide.md#5-失敗する処理はresultで返す)で回復例を読む | `try`はErrを呼出元へ返す。局所回復には`match`でOk/Err両方を書く | [失敗の種類と例](error-handling.md)、[組み込み関数](builtins.md#変換成功失敗) |
+| ownership、通常代入での明示move、copy | [入門 #4：viewで借りる](language-guide.md#4-読むだけならviewで借りる)で受渡し後の出力を確認 | 非Copyローカルの通常代入は`move(...)`を使う。move後の元値は使えない | [代入・move・誤り](ownership.md#代入と明示move)、[移行](migration-0.1.11.md) |
 | borrowと`view` | [view例](view-and-zero-copy.md)で文字列の一部を読み、copyした値と比較 | 元データより長く保存・返却できない。一時値のviewを保存しない | [borrowと検査範囲](ownership.md#借用と検査の範囲)、[view](view-and-zero-copy.md) |
 | `shared`、`owned`、Copy | [組み込み関数](builtins.md#共有と型のサイズ)のshare/clone例 | `shared`は任意の型を自動でthread-safeにはしない。`owned[T]`は未完成 | [型](types.md#未対応の型操作)、[メモリ](memory-model.md) |
-| ファイル、import、module alias | [入門 §6](language-guide.md#6-ファイルを分ける)で2ファイルから関数を使う | 相対パスと登録済みstd moduleが対象。循環importや一般package探索は未対応 | [module・Rust連携](modules-and-rust.md) |
+| ファイル、import、module alias | [入門 #6：ファイルを分ける](language-guide.md#6-ファイルを分ける)で2ファイルから関数を使う | 相対パスと登録済みstd moduleが対象。循環importや一般package探索は未対応 | [module・Rust連携](modules-and-rust.md) |
 | `async`関数、`await` | [async例](async.md#待ち終わった結果を使いたい)で待機後に表示 | `await`自体はtask/threadを作らない。Futureを変数へ保存する形式は未対応 | [async](async.md)、[CPU並行処理](concurrency.md) |
 | `scope`、`spawn`、Task結果handle | [scope例](async.md#待っている間に別の処理も進めたい)で子の終了を待つ | 正常出口には子の終了規則がある。Taskはscopeの外へescapeできず、受取は一度 | [Task結果・Err・故障](task-handles.md)、[scope](async.md) |
 | Actor、Supervisor | [監視付きservice](../test-nagi-code/library-examples/supervised-service/README.md)で登録・呼出・停止を試す | 同一process内のAPI。再起動、業務Err、call失敗、shutdownの条件を確認する | [actor](actor.md)、[Supervisor](supervisor.md)、[型API](actor-reference.md) |
