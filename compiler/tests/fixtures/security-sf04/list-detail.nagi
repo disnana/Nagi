@@ -1,0 +1,43 @@
+import std.html as html
+import std.http.server as http
+
+def transfer_fragment(fragment: html.HtmlFragment) -> html.HtmlFragment:
+    return fragment
+
+def build_page() -> Result[http.Response, Error]:
+    base_policy = try html.policy("https://example.invalid")
+    policy = try html.limits(base_policy, 65536, 16384, 1024, 16, 16, 2048)
+
+    label = try html.text(view(policy), "Café \"Daily\" & tea")
+    transferred = transfer_fragment(label)
+    copied_label = try html.copy_fragment(view(policy), view(transferred))
+    strong = try html.element(view(policy), html.HtmlTag.STRONG, html.attributes(view(policy)), transferred)
+    span = try html.element(view(policy), html.HtmlTag.SPAN, html.attributes(view(policy)), strong)
+    item_text = try html.join(view(policy), span, copied_label)
+    item_attributes = try html.title(html.attributes(view(policy)), "Row \"1\" & selected")
+    item = try html.element(view(policy), html.HtmlTag.LI, item_attributes, item_text)
+    items = try html.element(view(policy), html.HtmlTag.UL, html.attributes(view(policy)), item)
+
+    heading_text = try html.text(view(policy), "Café details")
+    heading = try html.element(view(policy), html.HtmlTag.H2, html.attributes(view(policy)), heading_text)
+    description_start = try html.text(view(policy), "Tea & pastries")
+    line_break = try html.element(view(policy), html.HtmlTag.BR, html.attributes(view(policy)), html.empty(view(policy)))
+    description_with_break = try html.join(view(policy), description_start, line_break)
+    description_tail = try html.text(view(policy), " served warm")
+    description_complete = try html.join(view(policy), description_with_break, description_tail)
+    navigation = try html.navigation(view(policy), "/items/7?view=details")
+    link_attributes = try html.href(html.attributes(view(policy)), navigation)
+    link_text = try html.text(view(policy), "Open item 7")
+    link = try html.element(view(policy), html.HtmlTag.A, link_attributes, link_text)
+    paragraph_contents = try html.join(view(policy), description_complete, link)
+    paragraph = try html.element(view(policy), html.HtmlTag.P, html.attributes(view(policy)), paragraph_contents)
+    detail = try html.join(view(policy), heading, paragraph)
+    content = try html.join(view(policy), items, detail)
+    page = try html.element(view(policy), html.HtmlTag.DIV, html.attributes(view(policy)), content)
+    document = try html.document(view(policy), "Items & details", page)
+    return ok(http.html_response(http.Status.OK, document))
+
+async def main() -> Result[unit, Error]:
+    response = try build_page()
+    assert_true(response.status.value == 200)
+    return ok(print("SF04 typed list/detail page built"))

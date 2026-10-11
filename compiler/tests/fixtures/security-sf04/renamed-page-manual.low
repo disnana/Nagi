@@ -1,0 +1,13 @@
+import std.html as markup;
+import std.http.server as web;
+record HtmlDocument { value: i64; }
+fn respond(document: markup.HtmlDocument) -> web.Response {
+    return web.html_response(web.Status.CREATED, document);
+}
+fn build_page() -> Result[web.Response, Error] {
+    let policy = try markup.policy("https://example.invalid");
+    let text = try markup.text(view(policy), "通常の café & tea");
+    let document = try markup.document(view(policy), "Renamed & checked", text);
+    return ok(respond(document));
+}
+fn user_value() -> i64 { return HtmlDocument(value=7).value; }

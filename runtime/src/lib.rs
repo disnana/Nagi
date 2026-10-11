@@ -6,6 +6,7 @@ pub mod actor;
 pub mod auth;
 mod concurrent;
 mod database;
+pub mod html;
 pub mod http_server;
 pub mod metrics;
 pub mod result;

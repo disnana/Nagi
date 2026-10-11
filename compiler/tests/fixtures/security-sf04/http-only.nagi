@@ -1,0 +1,8 @@
+import std.http.server as web
+class HtmlDocument:
+    value: i64
+def plain() -> web.Response:
+    policy = web.public_policy[i64]()
+    return web.text(web.Status.OK, "plain")
+def user_value() -> i64:
+    return HtmlDocument(value=9).value

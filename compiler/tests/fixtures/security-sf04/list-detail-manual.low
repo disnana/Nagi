@@ -1,0 +1,44 @@
+import std.html as html;
+import std.http.server as http;
+
+fn transfer_fragment(fragment: html.HtmlFragment) -> html.HtmlFragment {
+    return fragment;
+}
+fn build_page() -> Result[http.Response, Error] {
+    let base_policy = try html.policy("https://example.invalid");
+    let policy = try html.limits(base_policy, 65536, 16384, 1024, 16, 16, 2048);
+
+    let label = try html.text(view(policy), "Café \"Daily\" & tea");
+    let transferred = transfer_fragment(label);
+    let copied_label = try html.copy_fragment(view(policy), view(transferred));
+    let strong = try html.element(view(policy), html.HtmlTag.STRONG, html.attributes(view(policy)), transferred);
+    let span = try html.element(view(policy), html.HtmlTag.SPAN, html.attributes(view(policy)), strong);
+    let item_text = try html.join(view(policy), span, copied_label);
+    let item_attributes = try html.title(html.attributes(view(policy)), "Row \"1\" & selected");
+    let item = try html.element(view(policy), html.HtmlTag.LI, item_attributes, item_text);
+    let items = try html.element(view(policy), html.HtmlTag.UL, html.attributes(view(policy)), item);
+
+    let heading_text = try html.text(view(policy), "Café details");
+    let heading = try html.element(view(policy), html.HtmlTag.H2, html.attributes(view(policy)), heading_text);
+    let description_start = try html.text(view(policy), "Tea & pastries");
+    let line_break = try html.element(view(policy), html.HtmlTag.BR, html.attributes(view(policy)), html.empty(view(policy)));
+    let description_with_break = try html.join(view(policy), description_start, line_break);
+    let description_tail = try html.text(view(policy), " served warm");
+    let description_complete = try html.join(view(policy), description_with_break, description_tail);
+    let navigation = try html.navigation(view(policy), "/items/7?view=details");
+    let link_attributes = try html.href(html.attributes(view(policy)), navigation);
+    let link_text = try html.text(view(policy), "Open item 7");
+    let link = try html.element(view(policy), html.HtmlTag.A, link_attributes, link_text);
+    let paragraph_contents = try html.join(view(policy), description_complete, link);
+    let paragraph = try html.element(view(policy), html.HtmlTag.P, html.attributes(view(policy)), paragraph_contents);
+    let detail = try html.join(view(policy), heading, paragraph);
+    let content = try html.join(view(policy), items, detail);
+    let page = try html.element(view(policy), html.HtmlTag.DIV, html.attributes(view(policy)), content);
+    let document = try html.document(view(policy), "Items & details", page);
+    return ok(http.html_response(http.Status.OK, document));
+}
+async fn main() -> Result[unit, Error] {
+    let response = try build_page();
+    assert_true(response.status.value == 200);
+    return ok(print("SF04 typed list/detail page built"));
+}

@@ -504,6 +504,45 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
         }
         self.assertFalse(required - targets, f"missing four-platform resource oracles: {sorted(required - targets)}")
 
+    def test_four_platform_job_registers_sf04_runtime_suites_with_exact_count_guards(self):
+        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
+        self.assertIsNotNone(package, "four-platform package job missing")
+        block = package.group()
+        self.assertIn("    runs-on: ${{ matrix.os }}\n", block)
+        marker = "      - name: Check SF04 HTML core, finalizer, and public runtime API on the target platform\n"
+        start = block.find(marker)
+        self.assertGreaterEqual(start, 0, "SF04 runtime step missing from the four-platform job")
+        tail = block[start + len(marker):]
+        next_step = re.search(r"(?m)^      - (?:name:|uses:)", tail)
+        self.assertIsNotNone(next_step, "SF04 runtime step must remain a bounded workflow step")
+        step = block[start:start + len(marker) + next_step.start()]
+        for command in (
+            "cargo test --locked -p nagi-runtime --lib html::tests::",
+            "cargo test --locked -p nagi-runtime --lib http_server::finalizer_",
+            "cargo test --locked -p nagi-runtime --test html_core_api",
+        ):
+            self.assertIn(command, step)
+        expected_counts = dict(re.findall(r'"(sf04-html-(?:core|finalizer|api)\.log)": (\d+)', step))
+        self.assertEqual(expected_counts, {
+            "sf04-html-core.log": "20",
+            "sf04-html-finalizer.log": "9",
+            "sf04-html-api.log": "1",
+        })
+        self.assertIn(r'pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out;"', step)
+        self.assertIn("set -o pipefail", step)
+        presence_record = (
+            '          if [[ ${ICU4X_DATA_DIR+x} ]]; then\n'
+            '            echo "ICU4X_DATA_DIR_PRESENT=true"\n'
+            '          else\n'
+            '            echo "ICU4X_DATA_DIR_PRESENT=false"\n'
+            '          fi\n'
+            '          unset ICU4X_DATA_DIR\n'
+        )
+        self.assertIn(presence_record, step)
+        self.assertEqual(step.count("unset ICU4X_DATA_DIR"), 1)
+        self.assertLess(step.index("unset ICU4X_DATA_DIR"), step.index("cargo test"))
+
 
 class GateTests(unittest.TestCase):
     def needs(self, full="true", package_nagi="false", package_vscode="false",

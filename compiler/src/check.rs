@@ -1413,6 +1413,50 @@ impl Checker {
         let view = |ty| Type::generic("view", vec![ty]);
         let mut hints: Vec<Option<Type>> = vec![None; args.len()];
         match operation {
+            O::HtmlPolicy => hints[0] = Some(view(Type::named("str"))),
+            O::HtmlLimits => {
+                hints.fill(Some(Type::named("i64")));
+                hints[0] = Some(resource(R::HtmlPolicy));
+            }
+            O::HtmlEmpty | O::HtmlAttributes => hints[0] = Some(view(resource(R::HtmlPolicy))),
+            O::HtmlText | O::HtmlNavigation => {
+                hints[0] = Some(view(resource(R::HtmlPolicy)));
+                hints[1] = Some(view(Type::named("str")));
+            }
+            O::HtmlTitle => {
+                hints[0] = Some(resource(R::HtmlAttributes));
+                hints[1] = Some(view(Type::named("str")));
+            }
+            O::HtmlHref => {
+                hints[0] = Some(resource(R::HtmlAttributes));
+                hints[1] = Some(resource(R::NavigationUrl));
+            }
+            O::HtmlElement => {
+                hints[0] = Some(view(resource(R::HtmlPolicy)));
+                hints[1] = Some(resource(R::HtmlTag));
+                hints[2] = Some(resource(R::HtmlAttributes));
+                hints[3] = Some(resource(R::HtmlFragment));
+            }
+            O::HtmlJoin => {
+                hints[0] = Some(view(resource(R::HtmlPolicy)));
+                hints[1] = Some(resource(R::HtmlFragment));
+                hints[2] = Some(resource(R::HtmlFragment));
+            }
+            O::HtmlCopyFragment => {
+                hints[0] = Some(view(resource(R::HtmlPolicy)));
+                hints[1] = Some(view(resource(R::HtmlFragment)));
+            }
+            O::HtmlDocument => {
+                hints[0] = Some(view(resource(R::HtmlPolicy)));
+                hints[1] = Some(view(Type::named("str")));
+                hints[2] = Some(resource(R::HtmlFragment));
+            }
+            O::HttpHtmlResponse => {
+                hints[0] = Some(resource(R::Status));
+                // Cross-module identity is compiler-owned, independent of the
+                // user's imports or a user declaration named HtmlDocument.
+                hints[1] = Some(resource(R::HtmlDocument));
+            }
             O::Status => hints[0] = Some(Type::named("i64")),
             O::Method => hints[0] = Some(view(Type::named("str"))),
             O::MethodName => hints[0] = Some(view(resource(R::Method))),
@@ -1505,6 +1549,16 @@ impl Checker {
             arguments.push(ty);
         }
         let output = match operation {
+            O::HtmlPolicy | O::HtmlLimits => result(resource(R::HtmlPolicy)),
+            O::HtmlEmpty => resource(R::HtmlFragment),
+            O::HtmlAttributes => resource(R::HtmlAttributes),
+            O::HtmlText | O::HtmlElement | O::HtmlJoin | O::HtmlCopyFragment => {
+                result(resource(R::HtmlFragment))
+            }
+            O::HtmlTitle | O::HtmlHref => result(resource(R::HtmlAttributes)),
+            O::HtmlNavigation => result(resource(R::NavigationUrl)),
+            O::HtmlDocument => result(resource(R::HtmlDocument)),
+            O::HttpHtmlResponse => resource(R::Response),
             O::Status => result(resource(R::Status)),
             O::Method => result(resource(R::Method)),
             O::MethodName => view(Type::named("str")),
@@ -4513,6 +4567,13 @@ impl Checker {
                         line,
                         "非Clone security resourceはcopyできません（nested payloadを含みます）",
                     ));
+                }
+                if crate::capabilities::contains_html_nonclone(
+                    &types[0],
+                    &self.classes,
+                    &self.enums,
+                ) {
+                    return Err(error(line, "非Clone typed HTML resourceはcopyできません（owned nested payloadを含みます）。copy_fragmentを使用してください"));
                 }
                 if !types[0].is_view() {
                     return Err(error(line, "copyの対象はviewです"));

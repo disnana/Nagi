@@ -1,0 +1,7 @@
+import std.html as html
+
+def bad_reuse() -> Result[html.HtmlFragment, Error]:
+    policy = try html.policy("https://example.invalid")
+    fragment = try html.text(view(policy), "one")
+    consumed = try html.element(view(policy), html.HtmlTag.P, html.attributes(view(policy)), fragment)
+    return html.join(view(policy), fragment, html.empty(view(policy)))

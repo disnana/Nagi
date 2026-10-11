@@ -1,8 +1,16 @@
 //! Compiler-owned standard definitions. Serialized Low names this registry;
 //! it cannot choose native paths, capabilities, or callback contracts.
 use crate::ast::*;
+mod html;
+#[cfg(test)]
+mod html_contract_tests;
+#[cfg(test)]
+mod html_semantic_tests;
 mod security;
 mod sqlite;
+
+pub const HTML_MODULE_NAME: &str = "std.html";
+pub const HTML_MODULE_ID: &str = "stdlib:std.html";
 
 pub const MODULE_NAME: &str = "std.http.server";
 pub const MODULE_ID: &str = "stdlib:std.http.server";
@@ -28,6 +36,7 @@ pub enum StandardModule {
     Ownership,
     Task,
     Sqlite,
+    Html,
 }
 pub struct StandardModuleInfo {
     pub name: &'static str,
@@ -42,9 +51,15 @@ pub const MODULES: &[StandardModule] = &[
     StandardModule::Ownership,
     StandardModule::Task,
     StandardModule::Sqlite,
+    StandardModule::Html,
 ];
 pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
     match module {
+        StandardModule::Html => &StandardModuleInfo {
+            name: HTML_MODULE_NAME,
+            id: HTML_MODULE_ID,
+            rust_namespace: "::nagi_runtime::html",
+        },
         StandardModule::HttpServer => &StandardModuleInfo {
             name: MODULE_NAME,
             id: MODULE_ID,
@@ -124,6 +139,12 @@ pub enum Resource {
     SqliteFailure,
     SqliteFailureKind,
     SqliteOutcome,
+    HtmlPolicy,
+    HtmlAttributes,
+    NavigationUrl,
+    HtmlFragment,
+    HtmlDocument,
+    HtmlTag,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Operation {
@@ -212,6 +233,19 @@ pub enum Operation {
     SqliteClose,
     SqliteCopyPrimaryError,
     SqliteCopyCleanupError,
+    HtmlPolicy,
+    HtmlLimits,
+    HtmlEmpty,
+    HtmlText,
+    HtmlAttributes,
+    HtmlTitle,
+    HtmlHref,
+    HtmlNavigation,
+    HtmlElement,
+    HtmlJoin,
+    HtmlCopyFragment,
+    HtmlDocument,
+    HttpHtmlResponse,
 }
 
 /// Compiler-owned operation behavior. Public declaration metadata remains a
@@ -357,6 +391,12 @@ pub const RESOURCES: &[Resource] = &[
     Resource::SqliteFailure,
     Resource::SqliteFailureKind,
     Resource::SqliteOutcome,
+    Resource::HtmlPolicy,
+    Resource::HtmlAttributes,
+    Resource::NavigationUrl,
+    Resource::HtmlFragment,
+    Resource::HtmlDocument,
+    Resource::HtmlTag,
 ];
 pub const OPERATIONS: &[Operation] = &[
     Operation::Status,
@@ -444,6 +484,19 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::SqliteClose,
     Operation::SqliteCopyPrimaryError,
     Operation::SqliteCopyCleanupError,
+    Operation::HtmlPolicy,
+    Operation::HtmlLimits,
+    Operation::HtmlEmpty,
+    Operation::HtmlText,
+    Operation::HtmlAttributes,
+    Operation::HtmlTitle,
+    Operation::HtmlHref,
+    Operation::HtmlNavigation,
+    Operation::HtmlElement,
+    Operation::HtmlJoin,
+    Operation::HtmlCopyFragment,
+    Operation::HtmlDocument,
+    Operation::HttpHtmlResponse,
 ];
 
 pub fn module(name: &str) -> Option<ModuleId> {
@@ -1098,6 +1151,12 @@ static CONTRACT_EVENT: ResourceContract = ResourceContract::new(
 
 fn resource_contract(resource: Resource) -> &'static ResourceContract {
     match resource {
+        Resource::HtmlPolicy
+        | Resource::HtmlAttributes
+        | Resource::NavigationUrl
+        | Resource::HtmlFragment
+        | Resource::HtmlDocument
+        | Resource::HtmlTag => html::resource_contract(resource),
         Resource::AuthScope
         | Resource::VerifiedIdentity
         | Resource::AuthFailure
@@ -1164,6 +1223,19 @@ pub(crate) fn native_serde_supported(resource: Resource) -> bool {
 
 pub fn operation_info(operation: Operation) -> &'static OperationInfo {
     match operation {
+        Operation::HtmlPolicy
+        | Operation::HtmlLimits
+        | Operation::HtmlEmpty
+        | Operation::HtmlText
+        | Operation::HtmlAttributes
+        | Operation::HtmlTitle
+        | Operation::HtmlHref
+        | Operation::HtmlNavigation
+        | Operation::HtmlElement
+        | Operation::HtmlJoin
+        | Operation::HtmlCopyFragment
+        | Operation::HtmlDocument
+        | Operation::HttpHtmlResponse => html::operation_info(operation),
         Operation::PublicPolicy | Operation::AuthenticatedPolicy | Operation::AuthorizedPolicy | Operation::SecurityTimeout | Operation::AuthSubject | Operation::AuthKind | Operation::AuthMessage | Operation::AuthInvalidCredential | Operation::AuthDenied | Operation::AuthExpired | Operation::AuthInvalidRequest | Operation::AuthUnavailable | Operation::AuthInternal => security::operation_info(operation),
         Operation::SqliteLiteral
         | Operation::SqliteOptions
@@ -1711,6 +1783,7 @@ pub fn constants(resource: Resource) -> &'static [ConstantInfo] {
     }
 
     match resource {
+        Resource::HtmlTag => html::TAG_CONSTANTS,
         Resource::SqliteBeginMode | Resource::SqliteFailureKind | Resource::SqliteOutcome => {
             sqlite::constants(resource)
         }

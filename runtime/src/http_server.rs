@@ -330,11 +330,33 @@ fn media_type(value: &[u8]) -> Option<(&[u8], &[u8])> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BodyKind {
+    Empty,
+    Text,
+    Binary,
+    Json,
+    Html,
+}
+impl BodyKind {
+    fn content_type(self) -> Option<&'static str> {
+        match self {
+            Self::Empty => None,
+            Self::Text => Some("text/plain; charset=utf-8"),
+            Self::Binary => Some("application/octet-stream"),
+            Self::Json => Some("application/json"),
+            Self::Html => Some("text/html; charset=utf-8"),
+        }
+    }
+}
+const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'none'; style-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
+
 pub struct Response {
     session_seal: Option<crate::auth::session::ResponseSeal>,
     status: Status,
     headers: HeaderMap,
     body: Bytes,
+    body_kind: BodyKind,
 }
 impl Response {
     pub(crate) fn has_session_seal(&self) -> bool {
@@ -351,6 +373,25 @@ impl Response {
         &self.body
     }
     fn into_http(mut self, head: bool) -> axum::http::Response<BufferedBody> {
+        // Public appending already rejects this for HTML. Recheck the private
+        // invariant before finalizing; incompatible internal state is a fixed
+        // safe error, never a differently interpreted HTML representation.
+        if self.body_kind == BodyKind::Html && self.headers.contains_key(names::CONTENT_ENCODING) {
+            self = text(Status::INTERNAL_SERVER_ERROR, "internal error");
+        }
+        match self.body_kind.content_type() {
+            Some(value) => {
+                self.headers
+                    .insert(names::CONTENT_TYPE, HeaderValue::from_static(value));
+            }
+            None => {
+                self.headers.remove(names::CONTENT_TYPE);
+            }
+        }
+        self.headers.insert(
+            HeaderName::from_static("content-security-policy"),
+            HeaderValue::from_static(CONTENT_SECURITY_POLICY),
+        );
         self.headers.insert(
             HeaderName::from_static("x-content-type-options"),
             HeaderValue::from_static("nosniff"),
@@ -430,40 +471,44 @@ pub fn empty(status: Status) -> Response {
         status,
         headers: HeaderMap::new(),
         body: Bytes::new(),
+        body_kind: BodyKind::Empty,
     }
 }
-fn representation(status: Status, content_type: &'static str, body: Bytes) -> Response {
+fn representation(status: Status, body_kind: BodyKind, body: Bytes) -> Response {
     let mut response = empty(status);
-    response
-        .headers
-        .insert(names::CONTENT_TYPE, HeaderValue::from_static(content_type));
+    if let Some(value) = body_kind.content_type() {
+        response
+            .headers
+            .insert(names::CONTENT_TYPE, HeaderValue::from_static(value));
+    }
     response.body = body;
+    response.body_kind = body_kind;
     response
 }
 pub fn text(status: Status, body: &str) -> Response {
     representation(
         status,
-        "text/plain; charset=utf-8",
+        BodyKind::Text,
         Bytes::copy_from_slice(body.as_bytes()),
     )
 }
 pub fn bytes(status: Status, body: &[u8]) -> Response {
-    representation(
-        status,
-        "application/octet-stream",
-        Bytes::copy_from_slice(body),
-    )
+    representation(status, BodyKind::Binary, Bytes::copy_from_slice(body))
 }
 pub fn json<T: Serialize + ?Sized>(status: Status, body: &T) -> Result<Response, Error> {
     let body = serde_json::to_vec(body).map_err(|error| Error::internal(error.to_string()))?;
-    Ok(representation(
-        status,
-        "application/json",
-        Bytes::from(body),
-    ))
+    Ok(representation(status, BodyKind::Json, Bytes::from(body)))
+}
+pub fn html_response(status: Status, document: crate::html::HtmlDocument) -> Response {
+    representation(status, BodyKind::Html, Bytes::from(document.into_encoded()))
 }
 pub fn append_header(mut response: Response, name: &str, value: &[u8]) -> Result<Response, Error> {
     let name = header_name(name)?;
+    if response.body_kind == BodyKind::Html && name == names::CONTENT_ENCODING {
+        return Err(Error::invalid(
+            "HTML representation encoding is managed by the server",
+        ));
+    }
     if matches!(
         name,
         names::CONTENT_LENGTH
@@ -1424,3 +1469,9 @@ pub(crate) fn conflicting_cache_for_test(mut response: Response) -> Response {
         .insert(names::CACHE_CONTROL, HeaderValue::from_static("public"));
     response
 }
+
+#[cfg(test)]
+mod finalizer_tests;
+
+#[cfg(test)]
+mod finalizer_html_tests;
