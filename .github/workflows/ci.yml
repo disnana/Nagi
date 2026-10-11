@@ -105,6 +105,39 @@ jobs:
               if not re.search(pattern, text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
+      - name: Check B1 Session CSRF runtime and public socket contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-core.log"
+          cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-deadline.log"
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-public.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf03-b1-csrf-core.log":12, "sf03-b1-csrf-deadline.log":3, "sf03-b1-csrf-public.log":10}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PYCODE
+      - name: Check B1 CSRF compiler metadata and High saved Low handwritten Low native
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf03-b1-compiler-evidence"
+          cargo test --locked -p nagic --lib stdlib::csrf_contract_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-metadata.log"
+          cargo test --locked -p nagic --test security_sf03_b1 2>&1 | tee "$RUNNER_TEMP/sf03-b1-compiler.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf03-b1-metadata.log":2, "sf03-b1-compiler.log":5}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          generated=list((root/'sf03-b1-compiler-evidence').glob('*sf03-b1-guarded*-generated.rs'))
+          if len(generated)!=3 or any(not p.read_bytes() for p in generated):
+              raise AssertionError(f"expected three unmodified generated Rust artifacts, found {generated}")
+          PYCODE
       - name: Check canonical Session metadata and High Low native contracts
         shell: bash
         run: |
@@ -326,6 +359,39 @@ jobs:
               if not re.search(pattern, text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
+      - name: Check B1 Session CSRF runtime and public socket contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-core.log"
+          cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-deadline.log"
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-public.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf03-b1-csrf-core.log":12, "sf03-b1-csrf-deadline.log":3, "sf03-b1-csrf-public.log":10}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PYCODE
+      - name: Check B1 CSRF compiler metadata and High saved Low handwritten Low native
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf03-b1-compiler-evidence"
+          cargo test --locked -p nagic --lib stdlib::csrf_contract_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-metadata.log"
+          cargo test --locked -p nagic --test security_sf03_b1 2>&1 | tee "$RUNNER_TEMP/sf03-b1-compiler.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf03-b1-metadata.log":2, "sf03-b1-compiler.log":5}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          generated=list((root/'sf03-b1-compiler-evidence').glob('*sf03-b1-guarded*-generated.rs'))
+          if len(generated)!=3 or any(not p.read_bytes() for p in generated):
+              raise AssertionError(f"expected three unmodified generated Rust artifacts, found {generated}")
+          PYCODE
       - name: Check canonical Session metadata and High Low native contracts
         shell: bash
         run: |

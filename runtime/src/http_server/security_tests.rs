@@ -421,10 +421,12 @@ async fn dropping_unpolled_prepared_handler_cannot_reactivate_proof() {
         headers,
         body: Bytes::new(),
     };
-    let prepared =
-        (app.routes["/secure"][0].prepare)(request, Arc::clone(&app.state), Arc::clone(&lease))
-            .await
-            .unwrap();
+    let RouteKind::Ordinary(prepare) = &app.routes["/secure"][0].kind else {
+        panic!("expected ordinary route");
+    };
+    let prepared = prepare(request, Arc::clone(&app.state), Arc::clone(&lease))
+        .await
+        .unwrap();
     let request = Request {
         method: Method::GET,
         uri: "/secure".parse().unwrap(),

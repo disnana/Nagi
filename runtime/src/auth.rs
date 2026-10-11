@@ -1,5 +1,7 @@
 //! Request-bound proofs for trusted credential and policy adapters.
 //! Verifier assertions remain trusted; only the dispatcher creates leases.
+#[path = "auth/csrf.rs"]
+pub mod csrf;
 #[path = "auth/session.rs"]
 pub mod session;
 use std::{
@@ -490,3 +492,6 @@ mod tests {
 #[cfg(test)]
 #[path = "auth/credential_metadata_tests.rs"]
 mod credential_metadata_tests;
+
+// Checked startup/bootstrap; BrowserLogin/CSRF/compiler remain deferred.
+pub mod prelogin;

@@ -15,6 +15,30 @@ type ResourceExpected = (
 );
 const RESOURCES: &[ResourceExpected] = &[
     (
+        R::CsrfOptions,
+        M::AuthCsrf,
+        "Options",
+        &[],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::CsrfStore,
+        M::AuthCsrf,
+        "CsrfStore",
+        &[],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::CsrfFailure,
+        M::AuthCsrf,
+        "Failure",
+        &[],
+        [false, false, true, false, true],
+        &[],
+    ),
+    (
         R::SessionOptions,
         M::AuthSession,
         "Options",
@@ -433,6 +457,11 @@ fn module(module: M) -> (&'static str, &'static str, &'static str) {
         ),
         M::Actor => ("std.actor", "stdlib:std.actor", "::nagi_runtime::actor"),
         M::Result => ("std.result", "stdlib:std.result", "::nagi_runtime::result"),
+        M::AuthCsrf => (
+            "std.auth.csrf",
+            "stdlib:std.auth.csrf",
+            "::nagi_runtime::auth::csrf",
+        ),
         M::AuthSession => (
             "std.auth.session",
             "stdlib:std.auth.session",
@@ -466,8 +495,8 @@ fn registered_resources_match_the_independent_inventory() {
         shared: false,
         debug: false,
     };
-    assert_eq!(RESOURCES.len(), 51);
-    assert_eq!(stdlib::RESOURCES.len(), 51);
+    assert_eq!(RESOURCES.len(), 54);
+    assert_eq!(stdlib::RESOURCES.len(), 54);
     assert_eq!(
         stdlib::RESOURCES.iter().copied().collect::<HashSet<_>>(),
         RESOURCES.iter().map(|r| r.0).collect()
@@ -546,6 +575,14 @@ macro_rules! op {
     };
 }
 const OPERATIONS: &[OperationExpected] = &[
+    op!(CsrfOptions,AuthCsrf,"options",5,&[],"MMMMM",None,false,false,"(max_stored: i64, max_payload_bytes: i64, cleanup_batch: i64, ttl_ms: i64, collision_attempts: i64) -> Result[Options, Failure]"),
+    op!(CsrfOpen,AuthCsrf,"open",3,&[],"RMR",None,true,false,"(store: view[Store], options: Options, http: view[HttpOptions]) -> Future[Result[CsrfStore, Failure]]"),
+    op!(CsrfCloneStore,AuthCsrf,"clone_store",1,&[],"R",None,false,false,"(store: view[CsrfStore]) -> CsrfStore"),
+    op!(CsrfKind,AuthCsrf,"kind",1,&[],"R",None,false,false,"(failure: view[Failure]) -> FailureKind"),
+    op!(CsrfMessage,AuthCsrf,"message",1,&[],"R",Some(0),false,false,"(failure: view[Failure]) -> view[str]"),
+    op!(CsrfOutcome,AuthCsrf,"outcome",1,&[],"R",None,false,false,"(failure: view[Failure]) -> Outcome"),
+    op!(SessionCsrfTokens,HttpServer,"session_csrf_tokens",3,&["S","E"],"MRM",None,false,false,"[S, E](app: App[S, E], path: view[str], store: CsrfStore) -> Result[App[S, E], Error]"),
+    op!(SessionCsrfPolicy,HttpServer,"session_csrf_policy",2,&["S","A"],"MM",None,false,false,"[S, A](policy: Policy[S, A], store: CsrfStore) -> Result[Policy[S, A], Error]"),
     op!(SessionOptions,AuthSession,"options",8,&[],"MMMMMMMM",None,false,false,"(max_live: i64, max_stored: i64, max_row_bytes: i64, cleanup_batch: i64, idle_ms: i64, absolute_ms: i64, touch_ms: i64, collision_attempts: i64) -> Result[Options, Failure]"),
     op!(SessionCookieOptions,AuthSession,"cookie_options",2,&[],"RM",None,false,false,"(name: view[str], same_site: SameSite) -> Result[CookieOptions, Failure]"),
     op!(SessionOpen,AuthSession,"open",3,&[],"RMM",None,true,false,"(pool: view[Pool], options: Options, cookie: CookieOptions) -> Future[Result[Store, Failure]]"),
@@ -661,8 +698,8 @@ const OPERATIONS: &[OperationExpected] = &[
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 111);
-    assert_eq!(stdlib::OPERATIONS.len(), 111);
+    assert_eq!(OPERATIONS.len(), 119);
+    assert_eq!(stdlib::OPERATIONS.len(), 119);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()

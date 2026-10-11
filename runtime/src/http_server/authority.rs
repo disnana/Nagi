@@ -81,11 +81,39 @@ impl WireAuthority {
 
 // Distinct from wire authority: origin has an effective HTTPS port, whereas
 // omitted and explicit wire ports are separate allowlist entries.
-struct ExternalOrigin {
+#[derive(PartialEq, Eq)]
+pub(crate) struct ExternalOrigin {
     _host: Host,
     _effective_port: u16,
 }
 impl ExternalOrigin {
+    fn serialized(&self) -> Result<String, Error> {
+        let host = match &self._host {
+            Host::Dns(name) => name.clone(),
+            Host::Ip(IpAddr::V4(ip)) => ip.to_string(),
+            Host::Ip(IpAddr::V6(ip)) => format!("[{ip}]"),
+        };
+        let value = if self._effective_port == 443 {
+            format!("https://{host}")
+        } else {
+            format!("https://{host}:{}", self._effective_port)
+        };
+        if !self.matches(&value) {
+            return Err(Error::invalid(
+                "checked external origin could not be serialized",
+            ));
+        }
+        Ok(value)
+    }
+    pub(crate) fn matches_serialized(bound: &str, input: &str) -> bool {
+        Self::checked(bound).is_ok_and(|origin| origin.matches(input))
+    }
+    pub(crate) fn is_canonical(input: &str) -> bool {
+        Self::checked(input).is_ok_and(|origin| origin.serialized().is_ok_and(|s| s == input))
+    }
+    pub(crate) fn matches(&self, input: &str) -> bool {
+        Self::checked(input).is_ok_and(|other| other == *self)
+    }
     fn checked(input: &str) -> Result<Self, Error> {
         let uri: Uri = input
             .parse()
@@ -209,6 +237,29 @@ fn canonical_peer(ip: IpAddr) -> IpAddr {
     }
 }
 impl Config {
+    pub(super) fn origin(&self) -> &ExternalOrigin {
+        &self._origin
+    }
+    pub(super) fn check_safe_origin(&self, headers: &HeaderMap) -> Result<(), Status> {
+        let mut origins = headers.get_all(axum::http::header::ORIGIN).iter();
+        let Some(origin) = origins.next() else {
+            return Ok(());
+        };
+        if origins.next().is_some() || origin.as_bytes().len() > self.byte_limit {
+            return Err(Status::FORBIDDEN);
+        }
+        let origin = origin.to_str().map_err(|_| Status::FORBIDDEN)?;
+        if !self._origin.matches(origin) {
+            return Err(Status::FORBIDDEN);
+        }
+        Ok(())
+    }
+    pub(super) fn check_unsafe_origin(&self, headers: &HeaderMap) -> Result<(), Status> {
+        if !headers.contains_key(axum::http::header::ORIGIN) {
+            return Err(Status::FORBIDDEN);
+        }
+        self.check_safe_origin(headers)
+    }
     pub(super) fn check(
         &self,
         version: Version,
@@ -254,4 +305,17 @@ pub(super) fn require_authority(options: &Options) -> Result<(), Error> {
         ));
     }
     Ok(())
+}
+
+// Closed nonsecret startup serialization; never returns a Pool, path, handle,
+// request credential or mutable authority profile.
+pub(crate) fn checked_prelogin_origin(options: &Options) -> Result<String, Error> {
+    options
+        .authority
+        .as_ref()
+        .ok_or_else(|| {
+            Error::invalid("HTTP authority must be explicitly configured before pre-login startup")
+        })?
+        ._origin
+        .serialized()
 }

@@ -218,7 +218,10 @@ async fn heterogeneous_route_erasure_adds_exactly_one_future_allocation() {
     .unwrap();
     let owner = LeaseOwner::new(Instant::now() + Duration::from_secs(30)).unwrap();
     let route = &app.routes["/"][0];
-    let prepared = (route.prepare)(
+    let RouteKind::Ordinary(prepare) = &route.kind else {
+        panic!("expected ordinary route");
+    };
+    let prepared = prepare(
         basic_request().security_snapshot(),
         Arc::clone(&app.state),
         Arc::clone(&owner.lease),

@@ -25,5 +25,12 @@ cookie = { version = "=0.18.2", default-features = false }
 # SF04 development adoption: exact reviewed URL/compiled ICU data graph.
 url = { version = "=2.5.8", default-features = true }
 
+# SF03 fixed digest equality; direct feature/profile adoption awaits normal Cargo.
+subtle = { version = "=2.6.1", default-features = false }
+
 [dev-dependencies]
 tokio = { version = "1.48", features = ["io-util", "test-util"] }
+
+# Candidate private native-main witness; official cached binding, no raw API.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }

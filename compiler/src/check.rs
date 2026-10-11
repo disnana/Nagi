@@ -1343,7 +1343,9 @@ impl Checker {
         let info = crate::stdlib::operation_info(operation);
         if matches!(
             info.module,
-            crate::stdlib::StandardModule::Auth | crate::stdlib::StandardModule::AuthSession
+            crate::stdlib::StandardModule::Auth
+                | crate::stdlib::StandardModule::AuthSession
+                | crate::stdlib::StandardModule::AuthCsrf
         ) || matches!(
             operation,
             O::PublicPolicy
@@ -1351,6 +1353,8 @@ impl Checker {
                 | O::AuthorizedPolicy
                 | O::SessionAuthenticatedPolicy
                 | O::SessionAuthorizedPolicy
+                | O::SessionCsrfTokens
+                | O::SessionCsrfPolicy
                 | O::SecurityTimeout
         ) {
             return self.security_standard(operation, types, args, line);
@@ -4193,6 +4197,15 @@ impl Checker {
             E::Record(n, fields) => {
                 if self.resource(n).is_some_and(|r| {
                     crate::stdlib::resource_info(r).module
+                        == crate::stdlib::StandardModule::AuthCsrf
+                }) {
+                    return Err(error(
+                        line,
+                        "CSRF resourceはopaqueです。checked CSRF操作を使用してください",
+                    ));
+                }
+                if self.resource(n).is_some_and(|r| {
+                    crate::stdlib::resource_info(r).module
                         == crate::stdlib::StandardModule::AuthSession
                 }) {
                     return Err(error(
@@ -4336,6 +4349,15 @@ impl Checker {
                         e.ty = Some(ty.clone());
                         return Ok(ty);
                     }
+                }
+                if self.resource(n).is_some_and(|r| {
+                    crate::stdlib::resource_info(r).module
+                        == crate::stdlib::StandardModule::AuthCsrf
+                }) {
+                    return Err(error(
+                        line,
+                        "CSRF resourceはopaqueです。checked CSRF操作を使用してください",
+                    ));
                 }
                 if self.resource(n).is_some_and(|r| {
                     crate::stdlib::resource_info(r).module

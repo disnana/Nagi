@@ -1,6 +1,7 @@
 //! Compiler-owned standard definitions. Serialized Low names this registry;
 //! it cannot choose native paths, capabilities, or callback contracts.
 use crate::ast::*;
+mod csrf;
 mod html;
 #[cfg(test)]
 mod html_contract_tests;
@@ -19,6 +20,8 @@ pub const ACTOR_MODULE_NAME: &str = "std.actor";
 pub const ACTOR_MODULE_ID: &str = "stdlib:std.actor";
 pub const RESULT_MODULE_NAME: &str = "std.result";
 pub const RESULT_MODULE_ID: &str = "stdlib:std.result";
+pub const AUTH_CSRF_MODULE_NAME: &str = "std.auth.csrf";
+pub const AUTH_CSRF_MODULE_ID: &str = "stdlib:std.auth.csrf";
 pub const AUTH_SESSION_MODULE_NAME: &str = "std.auth.session";
 pub const AUTH_SESSION_MODULE_ID: &str = "stdlib:std.auth.session";
 pub const AUTH_MODULE_NAME: &str = "std.auth";
@@ -37,6 +40,7 @@ pub enum StandardModule {
     Result,
     Auth,
     AuthSession,
+    AuthCsrf,
     Ownership,
     Task,
     Sqlite,
@@ -53,6 +57,7 @@ pub const MODULES: &[StandardModule] = &[
     StandardModule::Result,
     StandardModule::Auth,
     StandardModule::AuthSession,
+    StandardModule::AuthCsrf,
     StandardModule::Ownership,
     StandardModule::Task,
     StandardModule::Sqlite,
@@ -89,6 +94,11 @@ pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
             name: AUTH_SESSION_MODULE_NAME,
             id: AUTH_SESSION_MODULE_ID,
             rust_namespace: "::nagi_runtime::auth::session",
+        },
+        StandardModule::AuthCsrf => &StandardModuleInfo {
+            name: AUTH_CSRF_MODULE_NAME,
+            id: AUTH_CSRF_MODULE_ID,
+            rust_namespace: "::nagi_runtime::auth::csrf",
         },
         StandardModule::Ownership => &StandardModuleInfo {
             name: OWNERSHIP_MODULE_NAME,
@@ -142,6 +152,9 @@ pub enum Resource {
     SessionFailure,
     SessionResponse,
     SessionSameSite,
+    CsrfOptions,
+    CsrfStore,
+    CsrfFailure,
     Grant,
     Task,
     TaskFailure,
@@ -196,6 +209,14 @@ pub enum Operation {
     AuthorizedPolicy,
     SessionAuthenticatedPolicy,
     SessionAuthorizedPolicy,
+    SessionCsrfTokens,
+    SessionCsrfPolicy,
+    CsrfOptions,
+    CsrfOpen,
+    CsrfCloneStore,
+    CsrfKind,
+    CsrfMessage,
+    CsrfOutcome,
     SessionOptions,
     SessionCookieOptions,
     SessionOpen,
@@ -413,6 +434,9 @@ pub const RESOURCES: &[Resource] = &[
     Resource::SessionFailure,
     Resource::SessionResponse,
     Resource::SessionSameSite,
+    Resource::CsrfOptions,
+    Resource::CsrfStore,
+    Resource::CsrfFailure,
     Resource::Grant,
     Resource::Task,
     Resource::TaskFailure,
@@ -461,6 +485,14 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::AuthorizedPolicy,
     Operation::SessionAuthenticatedPolicy,
     Operation::SessionAuthorizedPolicy,
+    Operation::SessionCsrfTokens,
+    Operation::SessionCsrfPolicy,
+    Operation::CsrfOptions,
+    Operation::CsrfOpen,
+    Operation::CsrfCloneStore,
+    Operation::CsrfKind,
+    Operation::CsrfMessage,
+    Operation::CsrfOutcome,
     Operation::SessionOptions,
     Operation::SessionCookieOptions,
     Operation::SessionOpen,
@@ -1216,6 +1248,9 @@ fn resource_contract(resource: Resource) -> &'static ResourceContract {
         | Resource::SessionFailure
         | Resource::SessionResponse
         | Resource::SessionSameSite => session::resource_contract(resource),
+        Resource::CsrfOptions | Resource::CsrfStore | Resource::CsrfFailure => {
+            csrf::resource_contract(resource)
+        }
         Resource::SqlitePool
         | Resource::SqliteTx
         | Resource::SqliteQueryValue
@@ -1291,6 +1326,7 @@ pub fn operation_info(operation: Operation) -> &'static OperationInfo {
         | Operation::HtmlDocument
         | Operation::HttpHtmlResponse => html::operation_info(operation),
         Operation::PublicPolicy | Operation::AuthenticatedPolicy | Operation::AuthorizedPolicy | Operation::SessionAuthenticatedPolicy | Operation::SessionAuthorizedPolicy | Operation::SecurityTimeout | Operation::AuthSubject | Operation::AuthKind | Operation::AuthMessage | Operation::AuthInvalidCredential | Operation::AuthDenied | Operation::AuthExpired | Operation::AuthInvalidRequest | Operation::AuthUnavailable | Operation::AuthInternal => security::operation_info(operation),
+        Operation::CsrfOptions | Operation::CsrfOpen | Operation::CsrfCloneStore | Operation::CsrfKind | Operation::CsrfMessage | Operation::CsrfOutcome | Operation::SessionCsrfTokens | Operation::SessionCsrfPolicy => csrf::operation_info(operation),
         Operation::SessionOptions
         | Operation::SessionCookieOptions
         | Operation::SessionOpen
@@ -2270,6 +2306,9 @@ mod resource_contract_tests {
     }
 }
 
+#[cfg(test)]
+#[path = "stdlib/csrf_contract_tests.rs"]
+mod csrf_contract_tests;
 #[cfg(test)]
 #[path = "stdlib/session_contract_tests.rs"]
 mod session_contract_tests;
