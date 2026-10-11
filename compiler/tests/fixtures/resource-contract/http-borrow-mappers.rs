@@ -133,6 +133,10 @@ pub mod http {
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::authorized_policy as authorized_policy;
     #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::session_authenticated_policy as session_authenticated_policy;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::session_authorized_policy as session_authorized_policy;
+    #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::security_timeout as security_timeout;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::app as app;

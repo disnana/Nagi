@@ -1,0 +1,7 @@
+import std.auth.session as session
+import std.auth as auth
+import std.http.server as http
+class Bad:
+    intent: Option[session.SessionResponse]
+def main():
+    print(0)

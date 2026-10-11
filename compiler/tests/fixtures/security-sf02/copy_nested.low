@@ -1,0 +1,6 @@
+import std.auth.session as session;
+import std.auth as auth;
+import std.http.server as http;
+fn reject(value: Option[session.SessionResponse]) -> unit {
+ let result = copy(value);
+}
