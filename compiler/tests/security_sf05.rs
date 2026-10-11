@@ -1,9 +1,17 @@
 use nagic::{check, emit, source};
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
-        for n in 0u64.. {
+        loop {
+            // Never reuse a retired name: Windows may still be completing deletion.
+            let n = NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed);
             let path = std::env::temp_dir().join(format!("nagi-sf05-{}-{n}", std::process::id()));
             match fs::create_dir(&path) {
                 Ok(()) => return Self(path),
@@ -11,7 +19,6 @@ impl Fixture {
                 Err(e) => panic!("{e}"),
             }
         }
-        unreachable!()
     }
     fn reject(&self, high: &str, low: &str, line: usize, reason: &str, anchor: &str) {
         let high_path = self.0.join("source.nagi");
@@ -151,4 +158,16 @@ fn unrelated_user_literal_and_legacy_names_remain_available() {
         ("user.nagi","def literal(value: str) -> str:\n    return value\ndef db_open(value: i64) -> i64:\n    return value\ndef main():\n    sql = \"SELECT 1\"\n    print(literal(sql))\n    print(db_open(7))\n",true),
         ("user.low","fn literal(value: str) -> str { return value; }\nfn db_open(value: i64) -> i64 { return value; }\nfn main() { let sql = \"SELECT 1\"; print(literal(sql)); print(db_open(7)); }\n",false),
     ] { let path=f.0.join(name);fs::write(&path,text).unwrap();let mut loaded=source::load(&path,high).unwrap();check::check(&mut loaded.program).unwrap(); }
+}
+
+#[test]
+fn fixture_names_are_not_reused_after_owner_drop() {
+    let first = Fixture::new();
+    let old = first.0.clone();
+    drop(first);
+    let second = Fixture::new();
+    assert_ne!(
+        old, second.0,
+        "retired fixture names must not be reclaimed by a different test"
+    );
 }
