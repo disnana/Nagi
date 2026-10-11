@@ -52,7 +52,15 @@ async def main() -> Result[unit, Error]:
     app = try http.route(app, http.Method.GET, "/devices", http.public_policy[State](), devices)
     app = try http.route(app, http.Method.GET, "/devices/{id}", http.public_policy[State](), find_device)
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8091"))
-    return await http.serve(app, port, http.default_options())
+    wire_authority = env("NAGI_HTTP_AUTHORITY", "127.0.0.1:8091")
+    options = try http.authority(
+        http.default_options(),
+        "https://localhost",
+        [wire_authority],
+        1,
+        256
+    )
+    return await http.serve(app, port, options)
 
 # This HTTP-facing projection preserves the primary Error. The SQLite Failure
 # (outcome, cleanup and retired metadata) stays observable in database APIs.

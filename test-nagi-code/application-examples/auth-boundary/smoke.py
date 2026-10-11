@@ -21,7 +21,7 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
         stdout_path = directory / f"{mode}.stdout"
         stderr_path = directory / f"{mode}.stderr"
         with stdout_path.open("w") as stdout, stderr_path.open("w") as stderr:
-            process = subprocess.Popen([str(executable.resolve())], env=dict(env, NAGI_SAMPLE_PORT=str(port), NAGI_AUTH_POLICY_MODE=mode, NAGI_AUTH_PROBES="1"), stdout=stdout, stderr=stderr)
+            process = subprocess.Popen([str(executable.resolve())], env=dict(env, NAGI_SAMPLE_PORT=str(port), NAGI_HTTP_AUTHORITY=f"127.0.0.1:{port}", NAGI_AUTH_POLICY_MODE=mode, NAGI_AUTH_PROBES="1"), stdout=stdout, stderr=stderr)
 
             def request(method, path, body=None, credential=None, extra=()):
                 connection = http.client.HTTPConnection("127.0.0.1", port, timeout=4)
@@ -90,7 +90,11 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
                 check("handler-panic", "GET", "/probe/panic", 500, credential="Bearer demo-alice")
                 check("handler-timeout", "GET", "/probe/timeout", 504, credential="Bearer demo-alice")
                 with socket.create_connection(("127.0.0.1", port), timeout=4) as slow:
-                    slow.sendall(b"POST /documents/read HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer demo-alice\r\nContent-Type: application/json\r\nContent-Length: 128\r\n\r\n{")
+                    slow.sendall(
+                        b"POST /documents/read HTTP/1.1\r\nHost: 127.0.0.1:"
+                        + str(port).encode("ascii")
+                        + b"\r\nAuthorization: Bearer demo-alice\r\nContent-Type: application/json\r\nContent-Length: 128\r\n\r\n{"
+                    )
                     response = http.client.HTTPResponse(slow)
                     response.begin()
                     assert response.status == 408, (mode, "slow-body", response.status, response.read())

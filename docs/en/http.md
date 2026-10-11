@@ -20,7 +20,8 @@ async def hello(request: http.Request, state: shared[State], access: unit) -> Re
 async def main() -> Result[unit, Error]:
     app = http.app_default[State](State(greeting="Hello, Nagi!"))
     app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), hello)
-    return await http.serve(app, 8080, http.default_options())
+    limits = try http.authority(http.default_options(), "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
+    return await http.serve(app, 8080, limits)
 ```
 
 ```sh

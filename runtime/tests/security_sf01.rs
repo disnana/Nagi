@@ -44,7 +44,14 @@ async fn request_end_invalidates_retained_rust_proofs() {
     let server = tokio::spawn(http::serve_listener(
         listener,
         app,
-        http::default_options(),
+        http::authority(
+            http::default_options(),
+            "https://localhost",
+            vec!["localhost".to_owned()],
+            1,
+            128,
+        )
+        .unwrap(),
         async {
             let _ = done.await;
         },

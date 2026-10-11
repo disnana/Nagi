@@ -39,4 +39,12 @@ async def main() -> Result[unit, Error]:
     app = try http.route(app, http.Method.GET, "/me", http.authenticated_policy[State](verify), profile)
     app = try http.route(app, http.Method.GET, "/restricted", http.public_policy[State](), restricted)
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8089"))
-    return await http.serve(app, port, http.default_options())
+    wire_authority = env("NAGI_HTTP_AUTHORITY", "localhost:8089")
+    options = try http.authority(
+        http.default_options(),
+        "https://localhost",
+        [wire_authority],
+        1,
+        256
+    )
+    return await http.serve(app, port, options)

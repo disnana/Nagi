@@ -61,7 +61,18 @@ fn main() {
         )?;
         let port =
             rt::parse_i64(&std::env::var("NAGI_SAMPLE_PORT").unwrap_or_else(|_| "8086".into()))?;
-        http::serve(app, port, http::default_options()).await
+        let limits = http::authority(
+            http::default_options(),
+            "https://localhost",
+            vec![
+                "localhost".to_owned(),
+                format!("localhost:{port}"),
+                format!("127.0.0.1:{port}"),
+            ],
+            3,
+            256,
+        )?;
+        http::serve(app, port, limits).await
     })
     .unwrap();
 }

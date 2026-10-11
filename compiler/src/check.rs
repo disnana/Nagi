@@ -1451,6 +1451,17 @@ impl Checker {
                 hints.fill(Some(Type::named("i64")));
                 hints[0] = Some(resource(R::Options));
             }
+            O::Authority => {
+                hints[0] = Some(resource(R::Options));
+                hints[1] = Some(view(Type::named("str")));
+                hints[2] = Some(Type::generic("List", vec![Type::named("str")]));
+                hints[3] = Some(Type::named("i64"));
+                hints[4] = Some(Type::named("i64"));
+            }
+            O::TrustedProxy => {
+                hints[0] = Some(resource(R::Options));
+                hints[1] = Some(Type::generic("List", vec![Type::named("str")]));
+            }
             O::App => {
                 if types.len() == 2 {
                     hints[0] = Some(types[0].clone());
@@ -1519,9 +1530,13 @@ impl Checker {
             O::Headers => result(Type::generic("List", vec![view(Type::named("bytes"))])),
             O::IsJsonContentType => result(Type::named("bool")),
             O::DefaultOptions => resource(R::Options),
-            O::Options | O::Capacity | O::HeaderTimeout | O::HeaderLimits | O::SendTimeout => {
-                result(resource(R::Options))
-            }
+            O::Options
+            | O::Capacity
+            | O::HeaderTimeout
+            | O::HeaderLimits
+            | O::SendTimeout
+            | O::Authority
+            | O::TrustedProxy => result(resource(R::Options)),
             O::App | O::AppDefault => {
                 let state = &arguments[0];
                 if state.contains_view() {

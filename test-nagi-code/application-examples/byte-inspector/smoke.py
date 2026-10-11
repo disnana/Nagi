@@ -21,7 +21,7 @@ def verify(executable: Path, env: dict, directory: Path) -> dict:
     with (directory / "server.stdout").open("w", encoding="utf-8") as stdout, errors.open("w", encoding="utf-8") as stderr:
         process = subprocess.Popen(
             [str(executable.resolve())], cwd=directory,
-            env=dict(env, NAGI_SAMPLE_PORT=str(port)), stdout=stdout, stderr=stderr,
+            env=dict(env, NAGI_SAMPLE_PORT=str(port), NAGI_HTTP_AUTHORITY=f"127.0.0.1:{port}"), stdout=stdout, stderr=stderr,
         )
 
         def request(method, path, body=b""):

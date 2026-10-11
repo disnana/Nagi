@@ -210,6 +210,14 @@ def viewed_constant_method_name() -> view[str]:
 "#;
 
 #[test]
+fn authority_configuration_preserves_option_move_and_list_types_before_backend() {
+    let f = Fixture::new();
+    f.rejected("import std.http.server as http\ndef setup() -> Result[http.Options, Error]:\n    limits = http.default_options()\n    checked = try http.authority(limits, \"https://localhost\", [\"localhost\"], 2, 128)\n    return http.trusted_proxy(limits, [\"127.0.0.1\"])\n", 5);
+    f.rejected("import std.http.server as http\ndef setup() -> Result[http.Options, Error]:\n    return http.authority(http.default_options(), \"https://localhost\", [1], 2, 128)\n", 3);
+    f.rejected("import std.http.server as http\ndef setup() -> Result[http.Options, Error]:\n    return http.trusted_proxy(http.default_options(), [1])\n", 3);
+}
+
+#[test]
 fn standard_aliases_are_registry_resources_and_roundtrip_independently() {
     let f = Fixture::new();
     f.write("main.nagi", APP);

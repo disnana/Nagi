@@ -52,7 +52,7 @@ async def main():
             # ClientSessionの接続poolとは独立し、同じTCP接続へ2回送る。
             reader,writer=await asyncio.open_connection('127.0.0.1',8080)
             for _ in range(2):
-                writer.write(b'GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n');await writer.drain()
+                writer.write(b'GET /health HTTP/1.1\r\nHost: 127.0.0.1:8080\r\nConnection: keep-alive\r\n\r\n');await writer.drain()
                 head=await reader.readuntil(b'\r\n\r\n');size=int(next(x.split(b':',1)[1] for x in head.split(b'\r\n') if x.lower().startswith(b'content-length:')))
                 check('keepalive_request',head.startswith(b'HTTP/1.1 200') and await reader.readexactly(size)==b'ok')
             writer.close();await writer.wait_closed()

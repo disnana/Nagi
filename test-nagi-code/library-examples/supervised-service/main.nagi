@@ -90,18 +90,27 @@ async def stop_counter(request: http.Request, state: shared[WebState], authority
 async def monitor(group: actor.Supervisor[Context]) -> Result[unit, Error]:
     return await actor.run(group)
 
-async def serve_web(app: http.App[WebState, WebError], ready: actor.Actor[Message, i64, CounterError], control: actor.Control, port: i64) -> Result[unit, Error]:
+async def serve_web(app: http.App[WebState, WebError], ready: actor.Actor[Message, i64, CounterError], control: actor.Control, port: i64, options: http.Options) -> Result[unit, Error]:
     match await actor.ready(view(ready), 5000):
         case Ok(_):
             assert_true(True)
         case Err(_):
             try await actor.shutdown(view(control))
             return error("counter did not start")
-    outcome = await http.serve(app, port, http.default_options())
+    outcome = await http.serve(app, port, options)
     try await actor.shutdown(view(control))
     return outcome
 
 async def main() -> Result[unit, Error]:
+    port = try parse_i64(env("NAGI_SAMPLE_PORT", "8090"))
+    wire_authority = env("NAGI_HTTP_AUTHORITY", "localhost:8090")
+    options = try http.authority(
+        http.default_options(),
+        "https://localhost",
+        [wire_authority],
+        1,
+        256
+    )
     group = actor.supervisor[Context](Context(initial=0), actor.default_options())
     counter = try actor.register[CounterState, Message, i64, CounterError](view(group), "counter", create_counter, update_counter, actor.default_actor_options())
     ready = actor.clone_actor(view(counter))
@@ -111,10 +120,9 @@ async def main() -> Result[unit, Error]:
     app = try http.route(app, http.Method.GET, "/counter", http.public_policy[WebState](), read_counter)
     app = try http.route(app, http.Method.POST, "/counter", http.public_policy[WebState](), increment)
     app = try http.route(app, http.Method.POST, "/shutdown", http.public_policy[WebState](), stop_counter)
-    port = try parse_i64(env("NAGI_SAMPLE_PORT", "8090"))
     async with scope:
         monitor_task = spawn monitor(group)
-        spawn serve_web(app, ready, server_control, port)
+        spawn serve_web(app, ready, server_control, port, options)
         received = await monitor_task
         match received:
             case Ok(inner):
