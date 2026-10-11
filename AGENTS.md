@@ -14,30 +14,38 @@ Stop対象のtest期待は、公開言語意味論・CLI/API利用者契約・Hi
 
 ## sub-agent / model 運用
 
-sub-agentは担当を独立して切り出せるときだけ起動する。通常はまずFast / Workerで処理できるか判断する。短い修正、親agentがすぐ終えられる作業、同じファイルを同時編集する作業、単なる念のための重複調査には起動しない。探索、互いに依存しない検証、実装と独立reviewなど、成果物と責任範囲が明確な場合に限る。起動時は対象、期待成果、編集範囲、必要な検証を指定する。sub-agentにさらにsub-agentを起動させない。
+sub-agentは担当を独立して切り出せる場合だけ起動する。親agentが数行で安全に完了できる変更、短いDocs修正、同じfileを同時編集する作業、単なる念のための重複調査には起動しない。探索、独立した検証、実装と最終reviewなど、成果物と責任範囲が明確な場合に限る。起動時は対象、期待成果、編集範囲、必要な検証を指定する。子agentからの追加spawnは禁止する。
 
-| role | model ID / reasoning | 用途 |
+| role | model ID / reasoning effort | 用途 |
 |---|---|---|
-| Fast / Worker | `gpt-6-luna` / `max` | 仕様が明確な通常実装、既存パターンの機能追加、単純bug fix、テスト・fixture・Docs、rename/cleanup、明確なCI修正、小規模refactor。まずこのroleで十分か判断する |
-| Deep / Engineer | `gpt-6.1-sol` / `high` | 複数module、compiler/runtime境界、原因不明bug、non-trivial refactor、async/concurrency/ownership/lifecycle、API contract、重要なDB/storage/security変更、Fastで詰まった問題 |
-| Independent Reviewer | `gpt-6.1-sol` / `high` | 重大な変更を実装者から分離してreviewする。contract、regression、lifecycle、error handling、concurrency、security、backward compatibility、test coverageを確認する。通常の独立reviewはこちらを使い、変更は行わない |
-| Architect | `gpt-6.1-sol` / `xhigh` | 言語仕様・意味論、architecture/backward compatibility設計、案の比較、subtle correctness、race/lifecycle/resource ownership、release前の重要設計review。明確な理由を親が記録して起動する |
-| Critical Reviewer | `gpt-6.1-sol` / `max` | release直前、High/xHighで未解決の難問、migration失敗の最終解析、誤判断コストが極めて高いsecurity/correctness変更。常用せず、独立review専用とする |
-| Astra Final Verifier | `gpt-6-astra` / `max` | Sol Maxで解決できない最高難度、または誤判断コストが極めて高い独立最終検証だけに使う。日常開発・通常reviewには使わない |
+| Light Worker | `gpt-6-luna` / `medium` | 範囲が狭く、contract判断を含まないDocs、機械的rename、読み取り調査。曖昧な仕様や重要なcode correctnessが出たら親へ事実を返す |
+| Fast / Worker | `gpt-6-luna` / `max` | 仕様が明確なroutine実装、feature/test fixture、明確なCI修正、単純bug fix、小規模refactor。既存契約に沿い、対象に必要な検証を最後まで行う |
+| Balanced Engineer | `gpt-6-sol` / `max` | 契約が明確な通常実装・複数fileの修正・調査で、Lunaの手戻りを減らしたい場合の有力候補。重要な意味論の判断と最終監査は別のSol 6.1へ渡す |
+| Deep / Engineer | `gpt-6.1-sol` / `high` | 重要・難度の高いcode、複数moduleやcompiler/runtime境界、原因不明bug、async/concurrency/ownership/lifecycle、API contract、重要なDB/storage/security変更 |
+| Independent Reviewer | `gpt-6.1-sol` / `high` | 実装・必要な実行検証後の独立した最終audit。contract、回帰、ownership/lifecycle、error、concurrency、security、compatibility、test evidenceを確認し、編集しない |
+| Architect | `gpt-6.1-sol` / `xhigh` | Highで決められない言語意味論・architecture・compatibility、subtle correctness、race/lifecycle設計。未解決の判断を絞り、案と保証を示す |
+| Critical Reviewer | `gpt-6.1-sol` / `max` | High/xHighで未解決の難問、release直前または誤判断コストが極めて高い変更の独立最終review。通常開発には使わない |
+| Astra Final Verifier | `gpt-6-astra` / `max` | GPT-6.1 Sol Maxでも解けない問題、または誤判断コストが極めて高い独立最終検証。日常開発・通常reviewでは使わない |
 
-昇格は原則 `Luna Max → Sol High → Sol xHigh → Sol Max → Astra`。初手からHigh/xHighでなければ扱えない言語意味論・architectureの課題は、その根拠を示して開始してよい。各段階の成果、根拠、未解決点を次のroleに渡し、調査を繰り返させない。High/xHighの通常開発で解けた課題をMaxやAstraへ送らない。
+taskの種類ごとに、正しさと必要なaudit証拠を満たす完了までの見込み費用が最小のroleを選ぶ。contractが明確な実装/fixtureはFast / Worker、通常実装の範囲・手戻り見込みによってはBalanced Engineer（GPT-6 Sol Max）を選び、重要・難度の高い実装はSol 6.1 High、狭いDocs/rename/read-onlyはLight Workerを使う。数行の作業は親が行う。実際のmodel時間、test/CI実行時間、queue/wait、手戻りは測れた場合に別々に記録し、体感を測定値として扱わない。下位roleの失敗や見込み時間・品質・総費用の改善が見られないなら、同じ試行を繰り返さず具体的根拠で方針を見直す。
 
-同時に進行するagentは親agentを含めて最大3体とする。Codexの`agents.max_concurrent_threads_per_session`はspawnされた子thread数を数えるため2に設定し、親1体と子2体までにする。同一model IDとreasoning effortの組合せは、同時に推論・作業するagent全体で最大1体とする。親が作業を子へ渡して待つ間は、同じ問題を並行推論しない。通常は親+子1体で足りると考え、親+子2体は明確に独立した仕事がある場合だけ使う。
+昇格は `Luna Medium → Luna Max → GPT-6 Sol Max または GPT-6.1 Sol High → GPT-6.1 Sol xHigh → GPT-6.1 Sol Max → Astra` を目安とするが、順番に試す必要はない。GPT-6 Sol MaxとGPT-6.1 Sol Highは用途に応じた選択肢で、一律の性能順位ではない。High/xHighでないと扱えない課題は初手からそのroleに割り当てる。具体的に未解決のcontract、再現、diagnostic、ownership、race境界が見つかったとき、または同じ原因の対象試行が2回続けて失敗したときに止め、証拠と未解決点を適切なroleへ渡す。既に得た調査を次のroleに渡し、同じ探索や全suiteを繰り返さない。失敗原因をAI modelだけに帰属させず、実際に通したstage、未実施の検査、fixture/sourceの不備を分けて記録する。
 
-Deep EngineerとIndependent ReviewerはどちらもSol Highなので相互排他とする。独立reviewはEngineerの作業終了後に開始する。同じ課題で同時に許すのは実装者と独立reviewerの二系統だけだが、model+tierが一致する場合は順番に実行する。Sol Max Reviewerも同tierで同時1体まで。Astraはreasoning effortにかかわらず全体で同時1体までとする。同じ課題を複数agentに競わせない。
+同時に進行するagentは親を含め最大3体とする。Codexの`agents.max_concurrent_threads_per_session`はspawnした子threadを数えるため2に設定する。同一model IDとreasoning effortの組合せは同時に1体とし、Deep EngineerとIndependent ReviewerはともにSol Highなので順番に実行する。重要なcodeの独立reviewは必要な実装検証後に行う。親+2子は互いに依存しない成果物が明確な場合だけ使う。GPT-6 Sol MaxとGPT-6.1 Sol Maxは異なるmodelである。それぞれ同一model/effortのagentは並行させず、Astraはeffortに関係なく全体で1体までとする。同じ課題を複数agentに競わせない。モデル選定方針の再評価では、下記の限定した独立意見と相互検討を行える。
 
-security、public contract、migration、ownership/lifecycle、concurrencyやcorrectnessに重大な影響がある変更は、実装者の自己reviewだけで完了にしない。実装後にIndependent Reviewerが差分と検証根拠を独立して確認する。Sol Highを使う実装者や親agentの同tier作業が終わる前にHigh Reviewerを並行起動しない。
+認証/認可、秘密、整合性、concurrency、破壊的変更では、実装前にSol 6.1 Highで承認済みdesignと必須failure/regression casesを確認する。未決の意味論・代替案・race/lifecycle設計がある場合だけSol 6.1 xHigh Architectへ上げる。実装・必要検証後は別のSol 6.1 High Independent Reviewerが最終auditし、最終diffを仕様・実行結果へ直接照合して関連regressionを確認する。指摘修正後は対象testを再実行し、更新diffと結果を再reviewしてから完了する。その他のsecurity/public contract/migration/ownership/lifecycle/correctness重要変更も、実装者の自己reviewだけで完了にせずIndependent Reviewerを使う。source-only reviewをparse/check/build/native/CIの代わりとして扱わない。Sol Highを使う実装者や親agentの同tier作業が終わるまでHigh Reviewerを並行起動しない。
 
-`.codex/agents/*.toml` はCodexがroleファイルとして自動検出し、別のrole登録表は不要。各ファイルのtop-level `name`、`description`、model設定とdeveloper instructionsを保持する。`.codex/config.toml` は子threadの並列上限を設定する。
+`Fast Worker`はrole名で、pricing画面のservice tier `Fast`とは別である。`.codex/agents/*.toml`はmodel IDとreasoning effortだけを指定し、現在のagent実行interfaceにもservice-tier/speed指定がない。未対応の`service_tier` fieldを追加しない。既存の明示承認は`gpt-6-luna` / `max`のFast tierに限り、runtimeが明示的に提供するとき利用できる。他modelのFast、追加購入/pay-as-you-go/plan/add-on、または現在の承認を越える課金を伴う変更は事前確認する。通常taskに必要な範囲のmodel/effort選択やSolへの昇格は、追加購入を発生させない限り確認待ちにしない。表示価格のFast倍率が2倍でも速度が2倍とは推定しない。`max` reasoning effortもservice tierや速度を表さない。
 
-起動前に利用するCodex実行環境のmodel catalog/APIでmodel IDとreasoning effortを確認する。未対応または確認できないIDは起動せず、実行環境と確認根拠を親agentへ報告する。似たIDを同一modelの別名と推測して置換しない。
+`.codex/agents/*.toml`はCodexがrole fileとして自動検出し、別のrole登録表は不要。各roleにtop-level `name`、`description`、`model`、`model_reasoning_effort`、`developer_instructions`を設定する。`.codex/config.toml`は子thread上限を設定する。起動前に実行環境のmodel catalogとeffortを確認し、未対応または未確認のIDは使わず、別IDへ暗黙fallbackしない。
 
-設定仕様と環境ごとの検証範囲は[agent構成の記録](docs/internal/agent-routing.md)に残す。
+2026年10月11日のユーザー所感「GPT-6 Sol Maxはコストと速度のバランスに優れる」を通常開発での選定材料に加える。ただし実測とは区別する。提供料金表ではGPT-6 SolとGPT-6.1 SolのStandard入力/出力単価は同じで、キャッシュ入力はGPT-6.1の方が低い。GPT-6 Sol Maxを単価だけで安い・速いと断定せず、完了時間、手戻り、独立監査の修正量、観測できる利用量で再評価する。GPT-6 Sol Maxの通常開発利用と、例外的なGPT-6.1 Sol Max監査を混同しない。
+
+設定仕様、価格/benchmark evidenceと未確認範囲は[agent構成の記録](docs/internal/agent-routing.md)に残す。同文書の観測・再評価欄へ、主要な区切りや問題発生時だけ短い代表例を追記する。用途、対象HEAD、model/effort/速度設定可否、指示・文脈・環境、測れた時間/利用量、修正往復、独立監査と検証段階を記録する。指示不足、担当範囲、古いsource、fixture、cache、容量、network、難度差も原因候補として比較し、AIのせいと即断しない。不明は不明、体感と実測は別とし、巨大な会話ログや秘密情報を蓄積しない。
+
+routing方針の重要な変更や観測に基づく再評価では、LunaとSol 6.1へ同じ証拠と問いを渡して独立意見を得た後、互いの論点を1往復検討する。modelの格で発言を優先せず、根拠・反例・保証の限界で判断し、親が採用/不採用/未決と理由を同文書へ残す。AI間の合意は品質の証拠にならない。毎taskの担当決定に会議を設けず、通常は既定表で直ちに進める。並列枠と共有fileの所有者を守り、独立した開発を継続する。
+
+2026年10月11日時点のrouting判断は、ユーザー提供のcompiled report（2026-10-11版は「Business/Enterprise」quota creditsを主張、発行元/primary URL未確認。2026-10-08版はArena値を主張）、このsessionのagent tool catalog、および2026-10-06にpinしたCodex role/config schemaを参照する。API USD料金、Codex quota credits、Fast倍率、実測速度は別指標として扱い、未確認値は未確認のまま残す。reportに記載された値とmodel別の限界は[agent構成の記録](docs/internal/agent-routing.md)を参照する。
 
 ## 作業手順
 
@@ -64,6 +72,7 @@ security、public contract、migration、ownership/lifecycle、concurrencyやcor
 | 変更 | 必要な観測 |
 |---|---|
 | ownership / lifetime / 型 | positiveとnegative、拒否段階と元位置、High check、保存Low check、関係する手書きLow、生成Rust build。分岐・loop・function value・nested Resultが関係するなら組合せも確認 |
+| compiler behavior / conformance fixture | High/Lowの入力parse、positive/negative check、negative reasonとprimary source line、生成Rust buildを別々に確認する。emission/backend経路に関わる変更は最小native例まで実行する。source-only reviewはこれらの代わりにならない。必要な検証が実行できない場合は未確認として残し、exact-head CI前にReadyと報告しない |
 | resource metadata / capability | registryの独立した手書き期待と集合完全性、generic roleのindex範囲・重複・欠落、operation Passing/borrow_owner、field accessorを確認。用途別遍歴とnative Debug/Chargeを同一solverへ潰さない。未正規化High/保存Low一致、stable logical IDの全文golden、実Cargo/native・negative元位置を維持。新targetの4 OS実行を確認し、harness登録だけを実行成功と数えない。Phase 3はtest-only CI成功後に集約する |
 | storage / lowering | 値・評価順、RHS Err/panic、旧値Drop panic、正常/Err/unwindの破棄位置。asyncなら未poll・pending・再開・取消、scopeならjoin/兄弟取消。allocation/clone/Futureサイズを測り条件を報告 |
 | parser / diagnostics | 不正・上限入力、High/Low、文字/byte/UTF-16位置、元module位置。対応のないRust spanを推測変換しない |
@@ -91,6 +100,14 @@ python scripts/verify_application_examples.py
 ```
 
 対象の検査から始め、処理系/runtime変更の最終確認では`cargo test --locked`も実行する。HTTPとscope統合にはsocket、Rust/Cargoとruntime依存が必要。コマンド失敗をネットワーク・toolchainなどのinfra失敗と契約違反に分ける。定期生成・失敗artifactの設定はテスト文書を参照。
+
+## PRのDraft解除
+
+PRごとの採用済み範囲が完了し、最新HEADの必須CI・必要な回帰テスト・独立レビューと指摘修正後の再確認が成功し、対象baseとの競合・未解決の依存・必要なGUI/利用者受入が残っていなければ、親agentがDraftを解除してReady for reviewにする。ユーザーによるこの運用の承認があるため、条件達成のたびに再確認しない。CI成功だけや実装者の完了報告だけでは解除しない。
+
+解除直前にPRのHEAD、base、チェック結果、レビュー対象との差分、mergeability、未解決指摘を読み戻す。mergeabilityが未確定の場合も解除しない。依存PRが未完のstacked PR、特定PRへの明示的な保留、必須検証の未実行・失敗があればDraftを維持し、理由を記録する。対象外の公開stepのskipは必須検証成功と混同しない。解除後はGitHub上のdraft=falseを確認して、PR番号・HEAD・根拠を報告する。HEAD更新や回帰で条件を失った場合はReady判定を取り消し、操作可能ならDraftへ戻して理由を記録する。操作toolが使えない場合は解除済みと報告しない。
+
+Draft解除はマージ・版更新・タグ・release・Marketplace公開の許可ではない。既存の各操作の承認条件を維持する。
 
 ## 文書と完了条件
 
