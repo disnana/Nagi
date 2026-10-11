@@ -35,11 +35,17 @@ class SqlDistributionVerificationTests(unittest.TestCase):
         source = Path(command[2])
         schema = self.root / command[command.index("--sql-schema") + 1]
         self.assertTrue(schema.is_file())
-        query = source.read_text(encoding="utf-8").splitlines()[4]
+        line_number, query = next(
+            (number, line)
+            for number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1)
+            if "sqlite.literal(" in line
+        )
         if "naem" in query:
-            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:5: no such column: naem\n")
-        if "?2" in query:
-            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:5: bind count mismatch\n")
+            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:{line_number}: no such column: naem\n")
+        # The gate's fixed bind fixture has two anonymous placeholders and
+        # one bind_i64 parameter; this mock does not parse arbitrary SQL.
+        if query.count("?") == 2:
+            return subprocess.CompletedProcess(command, 1, "", f"{source.name}:{line_number}: bind count mismatch\n")
         return subprocess.CompletedProcess(command, 0, "", "SQL checked 1 literal queries; 0 runtime/unsupported sites\n")
 
     def check(self, answer):
