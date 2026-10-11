@@ -392,7 +392,7 @@ async fn actual_allow_deny_omit_and_head_record_selection_preserve_execution() {
     s.stop().await;
 }
 #[tokio::test]
-async fn successful_preflight_is_metadata_only_and_ordinary_OPTIONS_remains_distinct() {
+async fn successful_preflight_is_metadata_only_and_ordinary_options_remains_distinct() {
     let s = Server::new(2, 1000).await;
     let r = request(
         &s,
