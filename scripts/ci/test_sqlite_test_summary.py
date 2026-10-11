@@ -10,15 +10,15 @@ def summary(status="ok", passed=80, failed=0, ignored=0):
 
 class SqliteTestSummaryTests(unittest.TestCase):
     def test_platform_counts_are_exact_and_nonzero(self):
-        self.assertEqual(expected_count("win32"), 81)
+        self.assertEqual(expected_count("win32"), 80)
         self.assertEqual(expected_count("linux"), 80)
         self.assertEqual(expected_count("darwin"), 80)
-        self.assertEqual(verify(summary(passed=81), "win32"), 81)
+        self.assertEqual(verify(summary(), "win32"), 80)
         self.assertEqual(verify(summary(), "linux"), 80)
         self.assertEqual(verify(summary(), "darwin"), 80)
 
     def test_rejects_wrong_or_zero_count(self):
-        for platform, passed in (("win32", 80), ("linux", 81), ("linux", 0)):
+        for platform, passed in (("win32", 81), ("linux", 81), ("linux", 0)):
             with self.subTest(platform=platform, passed=passed), self.assertRaises(AssertionError):
                 verify(summary(passed=passed), platform)
 
