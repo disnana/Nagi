@@ -490,7 +490,7 @@ async fn preflight_grammar_denials_and_lookup_status_are_exact() {
     s.stop().await;
 }
 #[tokio::test]
-async fn selected_early_auth_handler_replacements_and_public304_keep_CORS() {
+async fn selected_early_auth_handler_replacements_and_public304_keep_cors() {
     let s = Server::new(2, 1000).await;
     let origin = format!("Origin: {UI}\r\n");
     let auth = request(
