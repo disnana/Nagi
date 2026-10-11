@@ -166,7 +166,8 @@ def check_http_auth(executable, env, output):
         port = probe.getsockname()[1]
     # This is an ephemeral test fixture, not a credential for a deployed app.
     authorization = "Bearer library-example-fixture"
-    server_env = dict(env, NAGI_SAMPLE_PORT=str(port), NAGI_DEMO_AUTHORIZATION=authorization)
+    server_env = dict(env, NAGI_SAMPLE_PORT=str(port), NAGI_HTTP_AUTHORITY=f"127.0.0.1:{port}",
+                      NAGI_DEMO_AUTHORIZATION=authorization)
     with (output / "http-auth.log").open("w", encoding="utf-8") as log:
         process = subprocess.Popen([str(executable)], cwd=PROJECTS / "http-auth",
                                    env=server_env, stdin=subprocess.DEVNULL, stdout=log, stderr=log)
@@ -200,7 +201,7 @@ def check_supervised_service(executable, env, output):
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
-    server_env = dict(env, NAGI_SAMPLE_PORT=str(port))
+    server_env = dict(env, NAGI_SAMPLE_PORT=str(port), NAGI_HTTP_AUTHORITY=f"127.0.0.1:{port}")
     with (output / "supervised-service.log").open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
             [str(executable)], cwd=PROJECTS / "supervised-service", env=server_env,

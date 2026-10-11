@@ -109,7 +109,8 @@ pub fn read(grant:Grant<super::Read>)->Result<i64,Failure>{grant.submit((),|subj
 pub async fn exercise(app:http::App<super::State,Error>)->Result<(),Error>{
  use tokio::{net::{TcpListener,TcpStream},io::{AsyncReadExt,AsyncWriteExt},sync::oneshot};
  let listener=TcpListener::bind("127.0.0.1:0").await.unwrap();let address=listener.local_addr().unwrap();
- let (stop,done)=oneshot::channel();let task=tokio::spawn(http::serve_listener(listener,app,http::default_options(),async{let _=done.await;}));
+ let options=http::authority(http::default_options(),"https://localhost",vec!["localhost".to_owned()],1,128).unwrap();
+ let (stop,done)=oneshot::channel();let task=tokio::spawn(http::serve_listener(listener,app,options,async{let _=done.await;}));
  for (credentials,status,body) in [("Authorization: Bearer fixture\r\n",200,"51"),("",401,"invalid credential"),("Authorization: Bearer rejected\r\n",401,"invalid credential")] {
   let mut stream=TcpStream::connect(address).await.unwrap();let request=format!("GET /answer HTTP/1.1\r\nHost: localhost\r\n{credentials}Connection: close\r\n\r\n");stream.write_all(request.as_bytes()).await.unwrap();
   let mut output=String::new();tokio::time::timeout(Duration::from_secs(3),stream.read_to_string(&mut output)).await.unwrap().unwrap();

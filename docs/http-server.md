@@ -60,7 +60,7 @@ Statusは数値を保持するコピー可能な値です。文字列への変�
 
 `text`、`bytes`は借りた入力をコピーして、Responseが所有するbodyを作ります。`json`は値を借用してJSONを作るため、元の値をmoveしません。文字列リテラルはview引数へ直接渡せます。変数から借りる場合は`view(value)`を使います。
 
-ヘッダー追加は応答を受け取り、新しい応答を返します。非reservedの同名ヘッダー（X-Traceなど）は重複を保持します。Content-Length/Transfer-Encoding/Content-Type/Set-Cookie/WWW-Authenticate/Cache-Control/Vary、CORS/CSP/nosniff等のsecurity-managedヘッダーは拒否します。Cookie/Session発行はSF02まで未実装です。HEADではbodyを送らず、GET相当の長さを保持します。204・205・304ではbodyを送信しません。成功CONNECTのtunnelは未対応で、501で接続を閉じます。
+ヘッダー追加は応答を受け取り、新しい応答を返します。非reservedの同名ヘッダー（X-Traceなど）は重複を保持します。Content-Length/Transfer-Encoding/Content-Type/Set-Cookie/WWW-Authenticate/Cache-Control/Vary、CORS/CSP/nosniff等のsecurity-managedヘッダーは拒否します。Cookie/Session発行はSF02まで未実装です。HEADではbodyを送らず、GET相当の長さを保持します。204・205・304ではbodyを送信しません。authority-form CONNECTは起動設定節のgateで400になります。origin-form CONNECTのhandlerが成功応答を返した場合もtunnelは未対応で、501で接続を閉じます。
 
 ## Appとroute
 
@@ -68,7 +68,8 @@ Statusは数値を保持するコピー可能な値です。文字列への変�
 app = http.app[State, AuthError](state, map_error)
 app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), handle)
 app = try http.route_mapped(app, http.Method.POST, "/login", http.public_policy[State](), login, map_login_error)
-return await http.serve(app, 8080, http.default_options())
+limits = try http.authority(http.default_options(), "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
+return await http.serve(app, 8080, limits)
 ```
 
 - `app[S, E](state, mapper)`は状態を所有し、`fn(E) -> Response`を既定のエラー処理にします。
@@ -85,6 +86,23 @@ Nagi 0.1.10以降では、応答開始前のhandlerやmapperでunwindするpanic
 エラー応答にリクエストIDなどが必要なら、handlerで検証した値を保持し、失敗時に独自エラー型へmoveできます。[見積APIの例](../test-nagi-code/application-examples/quote-api/README.md)では、この方法で共通mapperへIDを渡しています。
 
 ## 制限と停止
+
+0.2.0開発sourceでは、`serve`とRustの`serve_listener`にchecked authority設定が必要です。未設定の`default_options()`/`options(...)`だけでは起動Errになります。
+
+| 起動設定 | 契約 |
+|---|---|
+| `authority(options, external_origin, authorities: List[str], entry_limit, byte_limit)` | HTTPS originと受理wire authorityの有限集合を検査し、`Result[Options, Error]`を返す。件数・bytesは正の有限値。空集合・canonical重複・不正origin/authority・上限超過はErr |
+| `trusted_proxy(options, peer_ips: List[str])` | authority設定後だけ、同じ有限件数・bytes上限の実TCP peer IP ACLを設定。空・不正・unspecified/multicast・canonical重複はErr。CIDR/DNSではなく正確IP集合 |
+
+originは`https://host[:port]`のみで、path/userinfo/query/fragmentは認めません。wire側のport省略と明示`:443`等は別entryです。DNSはASCIIの大小文字を正規化し、IPは標準IP parserを使います。IPv6はbracketが必要です。標準IPv4として解釈できない数字とdotだけのhostも拒否します。portはcanonical十進の1〜65535で、leading zero、userinfo、`%`/zone、末尾dot、Unicode、comma listを拒否します。IDNAは事前canonical ASCII A-labelを設定し、runtimeでUnicode変換やIDNA同値性の保証はしません。proxy peerだけは標準IP型でIPv4-mapped IPv6をIPv4へ正規化し、重複を拒否します。
+
+authorityの再設定やproxy ACLの上書きはErrです。setterはOptionsをmoveし、成功Resultだけを起動へ渡します。失敗後に先の設定へ自動fallbackしません。
+
+全route・404/405・body受信・verifier・proof発行より前に、HTTP/1.1のorigin-formと一個の非空Hostを検査します。不正・欠落・重複・非allowlist、absolute-form/authority-form/`*`、ForwardedまたはX-Forwarded-*のpresenceは400、HTTP/1.0は505です。これらruntime拒否はno-storeとcloseです。Hyper自身がservice前に拒否する不正HTTP構文・HTTP/2 prefaceは公式parserへ委譲し、handler/proofには届きません。標準listenerはHTTP/1のみです。
+
+direct/proxyのprofileは起動時に固定します。proxyでもForwarded系はbackendへ送る前に除去し、Hostは登録済み内部値または登録済みpass-through値にします。ACLは`accept`が返す実peerだけで判定し、headerからtrustやoriginを選びません。loopback ACLは同hostの別processを認証しません。Host一致はOrigin/CSRF/CORSを免除せず、それらのSF03機能はこのHost sliceでは未実装です。
+
+`serve`はloopbackの平文HTTPで、origin設定はTLSを実装しません。ローカルのpublic応答確認とbrowser認証を区別してください。browser用は信頼された証明書のTLS frontendを置き、たとえばexternal origin `https://localhost:8443`、backend wire `localhost:8080`、peer `127.0.0.1`を明示します。HTTP/2 frontendもHTTP/1.1へ終端します。Secure Cookieにlocalhost例外はありません。実TLS/browser・4 OSの検証は別の受入条件です。
 
 | 設定 | 既定値 | 変更する関数 |
 |---|---|---|
@@ -112,6 +130,7 @@ Nagi 0.1.10以降では、handlerの応答生成が正常に完了した時点�
 limits = try http.options(1048576, 10000, 2000, 10000)
 limits = try http.capacity(limits, 2048, 512)
 limits = try http.header_limits(limits, 32768, 100)
+limits = try http.authority(limits, "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
 return await http.serve(app, 8080, limits)
 ```
 

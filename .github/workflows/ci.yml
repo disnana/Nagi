@@ -44,6 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
+      NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -72,6 +73,8 @@ jobs:
           node-version: '22'
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
+      - name: Check HTTP registry emission before the workspace regression
+        run: cargo test --locked -p nagic --test http_codegen --test resource_contract_characterization --test security_sf05_native
       - name: Check conformance corpus and regression harness registration
         run: python scripts/verify_compiler_contracts.py
       - name: Check Task contract input registration
@@ -204,6 +207,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
+      NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
     steps:
       - uses: actions/checkout@v4
         with:
@@ -245,6 +249,8 @@ jobs:
         shell: bash
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
       - run: cargo build --release --locked -p nagic
+      - name: Check HTTP registry emission before the platform regression
+        run: cargo test --locked -p nagic --test http_codegen --test resource_contract_characterization --test security_sf05_native
       - name: Check CLI, installation, ownership, and diagnostics on the target platform
         run: cargo test --locked -p nagic --lib --test cli --test installation --test codegen --test loop_ownership --test ownership_calls --test ownership_boundaries --test comparison_ownership --test owned_copy_codegen --test build_diagnostics --test rust_dependencies --test expression_contracts --test frontend_contracts --test source_read_retention --test literal_contracts --test http_route_conflicts --test symbols --test editor_assistance --test modules --test module_parser --test module_emission --test module_symbols --test enum_parser --test enum_modules --test enum_emission --test enum_patterns --test nullable_database --test nullable_roundtrip --test owned_database --test borrow_free_returns --test static_callback_views --test view_iteration --test view_parameter_rebinding --test sql_check --test typed_errors --test error_routes --test class_field_types --test resource_contract_characterization --test stdlib_imports --test option_match --test http_stdlib --test http_codegen --test actor_stdlib --test actor_codegen --test graph_types --test graph_relations --test graph_render --test graph_html --test map_cli --test low_multiline --test list_ownership_inference --test list_borrow_iteration --test result_stdlib
       - name: Check editor behavior on the target platform
@@ -262,6 +268,24 @@ jobs:
           cargo test --locked -p nagi-runtime --lib auth::tests:: 2>&1 | tee "$RUNNER_TEMP/sf01-auth.log"
           cargo test --locked -p nagi-runtime --lib http_server::tests::security_tests:: 2>&1 | tee "$RUNNER_TEMP/sf01-http.log"
           python -c 'import pathlib,re,os; root=pathlib.Path(os.environ["RUNNER_TEMP"]); counts={"sf01-auth.log":9,"sf01-http.log":11}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'
+      - name: Check Host authority and HTTP entrypoint contracts on the target platform
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked -p nagi-runtime --lib http_server::tests::authority_tests:: 2>&1 | tee "$RUNNER_TEMP/host-authority.log"
+          cargo test --locked -p nagic --test http_entrypoint 2>&1 | tee "$RUNNER_TEMP/host-http-entrypoint.log"
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          expected = {"host-authority.log": 5, "host-http-entrypoint.log": 4}
+          for name, count in expected.items():
+              text = (root / name).read_text(encoding="utf-8")
+              pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored;"
+              if not re.search(pattern, text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PY
       - name: Check SF05 Query migration and protected native SQL on the target platform
         shell: bash
         env:

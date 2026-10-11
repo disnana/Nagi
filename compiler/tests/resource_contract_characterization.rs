@@ -500,6 +500,8 @@ const OPERATIONS: &[OperationExpected] = &[
     op!(HeaderTimeout,HttpServer,"header_timeout",2,&[],"MM",None,false,true,"(options: Options, milliseconds: i64) -> Result[Options, Error]"),
     op!(HeaderLimits,HttpServer,"header_limits",3,&[],"MMM",None,false,true,"(options: Options, bytes: i64, count: i64) -> Result[Options, Error]"),
     op!(SendTimeout,HttpServer,"send_timeout",2,&[],"MM",None,false,true,"(options: Options, milliseconds: i64) -> Result[Options, Error]"),
+    op!(Authority,HttpServer,"authority",5,&[],"MRMMM",None,false,true,"(options: Options, external_origin: view[str], authorities: List[str], entry_limit: i64, byte_limit: i64) -> Result[Options, Error]"),
+    op!(TrustedProxy,HttpServer,"trusted_proxy",2,&[],"MM",None,false,true,"(options: Options, peer_ips: List[str]) -> Result[Options, Error]"),
     op!(App,HttpServer,"app",2,&["S","E"],"MP",None,false,true,"[S, E](state: S, mapper: fn[E, Response]) -> App[S, E]"),
     op!(AppDefault,HttpServer,"app_default",1,&["S"],"M",None,false,true,"[S](state: S) -> App[S, Error]"),
     op!(Route,HttpServer,"route",5,&[],"MMRMH",None,false,false,"(app: App[S, E], method: Method, path: view[str], policy: Policy[S, A], handler: fn[Request, shared[S], A, Future[Result[Response, E]]]) -> Result[App[S, E], Error]"),
@@ -531,8 +533,8 @@ const OPERATIONS: &[OperationExpected] = &[
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 83);
-    assert_eq!(stdlib::OPERATIONS.len(), 83);
+    assert_eq!(OPERATIONS.len(), 85);
+    assert_eq!(stdlib::OPERATIONS.len(), 85);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()

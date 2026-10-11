@@ -126,7 +126,8 @@ fn real_sqlite_and_request_bound_predicate() {
             let app=setup(sqlite::clone_pool(&pool),subject,target).unwrap();
             let listener=TcpListener::bind("127.0.0.1:0").await.unwrap();let address=listener.local_addr().unwrap();
             let (stop,done)=oneshot::channel();
-            let task=tokio::spawn(http::serve_listener(listener,app,http::default_options(),async{let _=done.await;}));
+            let options=http::authority(http::default_options(),"https://localhost",vec!["localhost".into()],1,256).unwrap();
+            let task=tokio::spawn(http::serve_listener(listener,app,options,async{let _=done.await;}));
             for (credentials,status,expected) in [("Authorization: Bearer fixture\r\n",200,body),("",401,"invalid credential")] {
                 let mut stream=TcpStream::connect(address).await.unwrap();
                 stream.write_all(format!("POST /update HTTP/1.1\r\nHost: localhost\r\n{credentials}Content-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).await.unwrap();

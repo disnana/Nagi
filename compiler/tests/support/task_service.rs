@@ -113,7 +113,8 @@ mod native {
             assert_eq!(reply, Err("business sentinel".to_owned()));
             Ok(web::text(web::Status::CONFLICT, "business sentinel"))
         }).unwrap();
-        web::serve_listener(listener, app, web::default_options(), async { let _ = stopped.await; }).await
+        let options = web::authority(web::default_options(), "https://localhost", vec!["localhost".to_owned()], 1, 128)?;
+        web::serve_listener(listener, app, options, async { let _ = stopped.await; }).await
     }
     async fn request(path: &str) -> Vec<u8> {
         let address = SERVICE.lock().unwrap().as_ref().unwrap().address;

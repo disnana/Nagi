@@ -19,10 +19,13 @@ async def hello(request: http.Request, state: shared[State], access: unit) -> Re
 async def main() -> Result[unit, Error]:
     app = http.app_default[State](State(greeting="Hello, Nagi!"))
     app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), hello)
-    return await http.serve(app, 8080, http.default_options())
+    limits = try http.authority(http.default_options(), "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
+    return await http.serve(app, 8080, limits)
 ```
 
 開発compilerで作業フォルダーの`server.nagi`へ保存し、同じ場所で`nagic run server.nagi`を実行します。別ターミナルで`curl http://127.0.0.1:8080/`を実行すると`Hello, Nagi!`です。終了はCtrl+C。port使用中なら別portを選び、compiler導入は[準備](getting-started.md)、制限と診断は[HTTP reference](http-server.md)を確認してください。
+
+これはpublic応答の平文loopback確認です。HTTPS origin設定はTLSを追加せず、browser認証・Secure Cookie・Origin/CSRFを完成させません。TLS frontendと実peer/proxy配置は[authority設定](http-server.md#制限と停止)へ移行してください。
 
 Policyは非Copy・非sharedの設定値です。routeへmoveし、再利用する場合は新しいPolicyを作ります。型検査はPolicyのState・出力型とhandlerの3引数を照合します。publicを選ぶとproofを要求するhandlerは接続できません。明示publicの選択が業務上正しいか、verifier/authorizerの内容が正しいかまでは証明しません。
 
