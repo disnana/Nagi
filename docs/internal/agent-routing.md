@@ -65,7 +65,7 @@ The user-provided compiled report dated 2026-10-11 claims “Business/Enterprise
 | GPT-6.1 Sol | Standard / Fast | 50 / 2.5 / 250; 100 / 5 / 500 |
 | GPT-6 Astra | Standard / Fast | 250 / 25 / 1,250; 500 / 50 / 2,500 |
 | GPT-6 Sol | Standard / Fast | 50 / 5 / 250; 100 / 10 / 500 |
-| GPT-5.6 Sol | Standard; Fast if offered | 100 / 5 / 500; 2× Standard multiplier shown, exact Fast rates unverified |
+| GPT-5.6 Sol | Standard; Fast if offered | 100 / 10 / 500; 2× Standard multiplier shown, exact Fast rates unverified |
 | GPT-5.6 Terra (report label only) | Standard | 50 / 5 / 300 |
 | GPT-5.6 Luna | Standard | 5 / 0.5 / 30 |
 
