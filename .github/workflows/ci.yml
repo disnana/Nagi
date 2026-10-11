@@ -109,7 +109,7 @@ jobs:
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf02-session-metadata.log":3, "sf02-session-compiler.log":3}.items():
+          for name, count in {"sf02-session-metadata.log":3, "sf02-session-compiler.log":4}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
@@ -329,7 +329,7 @@ jobs:
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf02-session-metadata.log":3, "sf02-session-compiler.log":3}.items():
+          for name, count in {"sf02-session-metadata.log":3, "sf02-session-compiler.log":4}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")

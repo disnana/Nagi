@@ -658,6 +658,18 @@ pub(crate) fn register_standard_module(
     if !crate::stdlib::is_registered_module(id) {
         return Err("未登録のstd moduleです".into());
     }
+    // Cross-module types in standard signatures must survive saved Low without
+    // requiring applications to import those modules just to infer a result.
+    // These are canonical module definitions, not aliases in the user's scope.
+    if id.0 == crate::stdlib::AUTH_SESSION_MODULE_ID {
+        for dependency in [
+            crate::stdlib::AUTH_MODULE_ID,
+            crate::stdlib::MODULE_ID,
+            crate::stdlib::SQLITE_MODULE_ID,
+        ] {
+            register_standard_module(metadata, &ModuleId(dependency.into()))?;
+        }
+    }
     let definitions = crate::stdlib::definitions(id);
     let bindings = definitions
         .iter()

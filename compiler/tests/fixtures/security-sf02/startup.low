@@ -8,5 +8,5 @@ async fn startup(pool: view[sqlite.Pool]) -> Result[session.Store, session.Failu
  let cookie = try session.cookie_options("__Host-owned",session.SameSite.STRICT);
  return await session.open(pool,options,cookie);
 }
-fn shared_state(store: view[session.Store]) -> shared[State] { return share(State {store: session.clone_store(store)}); }
+fn shared_state(store: view[session.Store]) -> shared[State] { return share(State(store = session.clone_store(store))); }
 fn main() -> unit { print(0); }

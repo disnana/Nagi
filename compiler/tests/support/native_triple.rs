@@ -75,6 +75,16 @@ impl Fixture {
         adapter: &str,
         assertions: &str,
     ) {
+        self.run_three_with_assertions(case, high, low, adapter, |_| assertions.to_owned());
+    }
+    pub(crate) fn run_three_with_assertions(
+        &self,
+        case: &str,
+        high: &str,
+        low: &str,
+        adapter: &str,
+        assertions: impl Fn(&nagic::ast::Program) -> String,
+    ) {
         self.write("main.nagi", high);
         let program = self
             .checked("main.nagi")
@@ -132,6 +142,7 @@ impl Fixture {
                 .unwrap();
             }
             let rust = self.0.join(format!("{name}.rs"));
+            let assertions = assertions(&program);
             fs::write(&rust, format!("{generated}\n{adapter}\n{assertions}")).unwrap();
             let package = self.0.file_name().unwrap().to_str().unwrap();
             let runtime = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

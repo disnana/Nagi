@@ -1,5 +1,5 @@
 //! Purpose expectations: load/parse, checker, sealed emission and native are distinct.
-//! This candidate has not been run locally; no absent API/parse failure is acceptance.
+//! No absent API or incidental parse failure counts as contract acceptance.
 #[path = "support/checked_emission.rs"]
 mod checked_emission;
 #[path = "support/native_triple.rs"]
@@ -20,7 +20,11 @@ fn rejection(path: &Path, high: bool, reason: &str, expected_line: usize) {
     let mut loaded =
         source::load(path, high).expect("load/parse must succeed before purpose rejection");
     let error = check::check(&mut loaded.program).expect_err("Session contract rejection required");
-    assert!(error.contains(reason), "{error}");
+    assert!(
+        error.contains(reason),
+        "{}: expected diagnostic containing {reason:?}; got {error}",
+        path.display()
+    );
     assert!(!error.contains("internal compiler error"), "{error}");
     let diagnostic = loaded.diagnostic(&error);
     let name = path.file_name().unwrap().to_str().unwrap();
@@ -53,7 +57,7 @@ fn session_positive_high_independent_saved_and_handwritten_low_emit() {
         fs::remove_file(fixture.0.join("positive.nagi")).unwrap();
         let saved = fixture
             .checked("saved.low")
-            .expect("saved Low independent check");
+            .unwrap_or_else(|error| panic!("{name}: saved Low independent check: {error}"));
         let manual = fixture
             .checked("manual.low")
             .expect("manual Low independent check");
@@ -63,6 +67,35 @@ fn session_positive_high_independent_saved_and_handwritten_low_emit() {
             emit::rust(&checked_emission::seal(&manual)).expect("sealed manual emission");
         assert!(rust.contains("::nagi_runtime::auth::session::") || name == "renamed");
         assert!(manual_rust.contains("::nagi_runtime::auth::session::") || name == "renamed");
+    }
+}
+#[test]
+fn session_inferred_foreign_types_survive_low_without_importing_names() {
+    let fixture = native_triple::Fixture::new();
+    fixture.write("main.nagi", "import std.auth.session as session\ndef inspect(failure: view[session.Failure]) -> i64:\n    kind = session.kind(failure)\n    outcome = session.outcome(failure)\n    return 0\ndef main():\n    print(0)\n");
+    let high = fixture.checked("main.nagi").expect("Session-only import");
+    fixture.write("saved.low", &emit::low(&high));
+    fs::remove_file(fixture.0.join("main.nagi")).unwrap();
+    let saved = fixture
+        .checked("saved.low")
+        .expect("foreign inferred types persist");
+    for program in [&high, &saved] {
+        for absent in [
+            "Outcome",
+            "Pool",
+            "FailureKind",
+            "AuthScope",
+            "Response",
+            "sqlite",
+            "auth",
+            "http",
+        ] {
+            assert!(
+                program.modules.resolve_root_path(absent).is_none(),
+                "implicit user binding {absent}"
+            );
+        }
+        emit::rust(&checked_emission::seal(program)).expect("canonical foreign type emission");
     }
 }
 #[test]
@@ -111,22 +144,6 @@ fn session_startup_and_explicit_shared_store_are_native_in_three_forms() {
     let fixture = native_triple::Fixture::new();
     let high = fs::read_to_string(fixtures().join("startup.nagi")).unwrap();
     let low = fs::read_to_string(fixtures().join("startup.low")).unwrap();
-    fixture.write("main.nagi", &high);
-    let checked = fixture
-        .checked("main.nagi")
-        .expect("native High source check first");
-    let startup_symbol = checked
-        .modules
-        .resolve_root_path("startup")
-        .expect("canonical fixture startup definition")
-        .symbol
-        .clone();
-    let shared_symbol = checked
-        .modules
-        .resolve_root_path("shared_state")
-        .expect("canonical fixture shared_state definition")
-        .symbol
-        .clone();
     let assertions = r#"
 #[test]
 fn actual_persistent_store_startup_and_pool_close() {
@@ -155,8 +172,20 @@ fn actual_persistent_store_startup_and_pool_close() {
     });
 }
 "#;
-    let assertions = assertions
-        .replace("startup(&pool)", &format!("{startup_symbol}(&pool)"))
-        .replace("shared_state(&store)", &format!("{shared_symbol}(&store)"));
-    fixture.run_three("sf02-startup", &high, &low, "", &assertions);
+    fixture.run_three_with_assertions("sf02-startup", &high, &low, "", |program| {
+        let resolve = |name| {
+            program
+                .modules
+                .resolve_root_path(name)
+                .expect("canonical definition in this source form")
+                .symbol
+                .clone()
+        };
+        assertions
+            .replace("startup(&pool)", &format!("{}(&pool)", resolve("startup")))
+            .replace(
+                "shared_state(&store)",
+                &format!("{}(&store)", resolve("shared_state")),
+            )
+    });
 }
