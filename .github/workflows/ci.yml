@@ -78,6 +78,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Diagnose G3 generation-token failure before crypto checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api guarded_rotation_and_logout_invalidate_old_generation_tokens -- --exact 2>&1 | tee "$RUNNER_TEMP/g3-generation-target.log"
+          python - <<'PY'
+          import os, pathlib, re
+          text = (pathlib.Path(os.environ["RUNNER_TEMP"]) / "g3-generation-target.log").read_text(encoding="utf-8")
+          summaries = re.findall(r"test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;", text)
+          if summaries != [("ok", "1", "0", "0")]:
+              raise AssertionError(f"expected exactly one passing focused test (1 passed, 0 failed, 0 ignored), got {summaries}")
+          PY
       - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
         shell: bash
         run: |
@@ -347,6 +359,18 @@ jobs:
           RELEASE_RUST_HOST: ${{ matrix.rust_host }}
         shell: bash
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
+      - name: Diagnose G3 generation-token failure before crypto checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api guarded_rotation_and_logout_invalidate_old_generation_tokens -- --exact 2>&1 | tee "$RUNNER_TEMP/g3-generation-target.log"
+          python - <<'PY'
+          import os, pathlib, re
+          text = (pathlib.Path(os.environ["RUNNER_TEMP"]) / "g3-generation-target.log").read_text(encoding="utf-8")
+          summaries = re.findall(r"test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;", text)
+          if summaries != [("ok", "1", "0", "0")]:
+              raise AssertionError(f"expected exactly one passing focused test (1 passed, 0 failed, 0 ignored), got {summaries}")
+          PY
       - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
         shell: bash
         run: |

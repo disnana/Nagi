@@ -402,8 +402,15 @@ impl Reply {
         assert!(c.len() == 1);
         c[0].split(';').next().unwrap().to_owned()
     }
+    #[track_caller]
     fn token(&self) -> String {
-        assert!(self.status == 200 && self.body.len() == 60);
+        assert!(
+            self.status == 200 && self.body.len() == 60,
+            "token response status {}, body length {}, declared length {:?}",
+            self.status,
+            self.body.len(),
+            self.values("content-length")
+        );
         assert!(self.values("set-cookie").is_empty());
         let v: nagi_runtime::serde_json::Value =
             nagi_runtime::serde_json::from_slice(&self.body).unwrap();
