@@ -1341,12 +1341,18 @@ impl Checker {
     ) -> Result<Type, String> {
         use crate::stdlib::{Operation as O, Passing, Resource as R};
         let info = crate::stdlib::operation_info(operation);
-        if info.module == crate::stdlib::StandardModule::Auth
-            || matches!(
-                operation,
-                O::PublicPolicy | O::AuthenticatedPolicy | O::AuthorizedPolicy | O::SecurityTimeout
-            )
-        {
+        if matches!(
+            info.module,
+            crate::stdlib::StandardModule::Auth | crate::stdlib::StandardModule::AuthSession
+        ) || matches!(
+            operation,
+            O::PublicPolicy
+                | O::AuthenticatedPolicy
+                | O::AuthorizedPolicy
+                | O::SessionAuthenticatedPolicy
+                | O::SessionAuthorizedPolicy
+                | O::SecurityTimeout
+        ) {
             return self.security_standard(operation, types, args, line);
         }
         if operation == O::Html {
@@ -4131,6 +4137,15 @@ impl Checker {
                 Type::generic("List", vec![elem])
             }
             E::Record(n, fields) => {
+                if self.resource(n).is_some_and(|r| {
+                    crate::stdlib::resource_info(r).module
+                        == crate::stdlib::StandardModule::AuthSession
+                }) {
+                    return Err(error(
+                        line,
+                        "Session resourceはopaqueです。checked Session操作を使用してください",
+                    ));
+                }
                 if self.resource(n) == Some(crate::stdlib::Resource::SqliteQueryValue) {
                     return Err(error(line, "SF05 literal Query: Queryはopaqueです。sqlite.literalに直接文字列literalを指定してください"));
                 }
@@ -4267,6 +4282,15 @@ impl Checker {
                         e.ty = Some(ty.clone());
                         return Ok(ty);
                     }
+                }
+                if self.resource(n).is_some_and(|r| {
+                    crate::stdlib::resource_info(r).module
+                        == crate::stdlib::StandardModule::AuthSession
+                }) {
+                    return Err(error(
+                        line,
+                        "Session resourceはopaqueです。checked Session操作を使用してください",
+                    ));
                 }
                 if self.resource(n) == Some(crate::stdlib::Resource::SqliteQueryValue) {
                     return Err(error(line, "SF05 literal Query: Queryはopaqueです。sqlite.literalに直接文字列literalを指定してください"));

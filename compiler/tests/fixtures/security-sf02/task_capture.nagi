@@ -1,0 +1,9 @@
+import std.auth.session as session
+import std.auth as auth
+import std.http.server as http
+async def consume(intent: session.SessionResponse):
+    print(0)
+async def reject(intent: session.SessionResponse) -> Result[unit, Error]:
+    async with scope:
+        spawn consume(intent)
+    return ok(print(0))

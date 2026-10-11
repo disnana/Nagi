@@ -1,0 +1,5 @@
+import std.auth.session as session
+import std.auth as auth
+import std.http.server as http
+def reject(value: session.Store):
+    other = copy(view(value))

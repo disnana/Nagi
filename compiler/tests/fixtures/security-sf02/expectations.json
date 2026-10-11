@@ -1,0 +1,175 @@
+[
+  {
+    "name": "startup",
+    "status": "check-emit-accept",
+    "reason": null,
+    "high_marker": null,
+    "manual_marker": null
+  },
+  {
+    "name": "local",
+    "status": "check-emit-accept",
+    "reason": null,
+    "high_marker": null,
+    "manual_marker": null
+  },
+  {
+    "name": "renamed",
+    "status": "check-emit-accept",
+    "reason": null,
+    "high_marker": null,
+    "manual_marker": null
+  },
+  {
+    "name": "policies",
+    "status": "check-emit-accept",
+    "reason": null,
+    "high_marker": null,
+    "manual_marker": null
+  },
+  {
+    "name": "field",
+    "status": "checker-reject",
+    "reason": "field",
+    "high_marker": "intent:",
+    "manual_marker": "intent:",
+    "high_line": 5,
+    "manual_line": 5
+  },
+  {
+    "name": "copy",
+    "status": "checker-reject",
+    "reason": "非Copy",
+    "high_marker": "copy(",
+    "manual_marker": "copy(",
+    "high_line": 5,
+    "manual_line": 5
+  },
+  {
+    "name": "copy_nested",
+    "status": "checker-reject",
+    "reason": "非Copy",
+    "high_marker": "copy(",
+    "manual_marker": "copy(",
+    "high_line": 5,
+    "manual_line": 5
+  },
+  {
+    "name": "debug",
+    "status": "checker-reject",
+    "reason": "printに",
+    "high_marker": "print(",
+    "manual_marker": "print(",
+    "high_line": 5,
+    "manual_line": 5,
+    "claim": "primitive print rejection only; Debug proved separately by canonical metadata/capability oracle, native trait proof still pending"
+  },
+  {
+    "name": "shared",
+    "status": "checker-reject",
+    "reason": "shared",
+    "high_marker": "share(",
+    "manual_marker": "share(",
+    "high_line": 5,
+    "manual_line": 5
+  },
+  {
+    "name": "serde",
+    "status": "checker-reject",
+    "reason": "JSON",
+    "high_marker": "json_decode[",
+    "manual_marker": "json_decode[",
+    "high_line": 5,
+    "manual_line": 5
+  },
+  {
+    "name": "task_capture",
+    "status": "checker-reject",
+    "reason": "SameTask",
+    "high_marker": "spawn consume",
+    "manual_marker": "spawn consume",
+    "high_line": 8,
+    "manual_line": 7
+  },
+  {
+    "name": "actor",
+    "status": "checker-reject",
+    "reason": "shared",
+    "high_marker": "actor:",
+    "manual_marker": "actor:",
+    "high_line": 6,
+    "manual_line": 6
+  },
+  {
+    "name": "nominal",
+    "status": "checker-reject",
+    "reason": "型",
+    "high_marker": "return session.apply",
+    "manual_marker": "return session.apply",
+    "high_line": 7,
+    "manual_line": 6
+  },
+  {
+    "name": "reused",
+    "status": "checker-reject",
+    "reason": "move",
+    "high_marker": "return session.apply",
+    "manual_marker": "return session.apply",
+    "high_line": 6,
+    "manual_line": 6
+  },
+  {
+    "name": "borrowed_apply",
+    "status": "checker-reject",
+    "reason": "型",
+    "high_marker": "return session.apply",
+    "manual_marker": "return session.apply",
+    "high_line": 5,
+    "manual_line": 5
+  },
+  {
+    "name": "opaque",
+    "status": "checker-reject",
+    "reason": "opaque",
+    "high_marker": "session.Store()",
+    "manual_marker": "session.Store()",
+    "high_line": 5,
+    "manual_line": 5
+  },
+  {
+    "name": "message_escape",
+    "status": "checker-reject",
+    "reason": "escapes",
+    "high_marker": "return session.message",
+    "manual_marker": "return session.message",
+    "high_line": 5,
+    "manual_line": 5
+  },
+  {
+    "name": "store_copy",
+    "status": "checker-reject",
+    "reason": "非Clone",
+    "high_marker": "copy(",
+    "manual_marker": "copy(",
+    "high_line": 5,
+    "manual_line": 5
+  },
+  {
+    "name": "future_escape",
+    "status": "checker-reject",
+    "reason": "非同期",
+    "high_marker": "saved =",
+    "manual_marker": "saved =",
+    "high_line": 7,
+    "manual_line": 6
+  },
+  {
+    "name": "task_result",
+    "status": "checker-reject",
+    "reason": "SameTask",
+    "high_marker": "task = spawn",
+    "manual_marker": "task = spawn",
+    "high_line": 8,
+    "manual_line": 7
+  }
+]

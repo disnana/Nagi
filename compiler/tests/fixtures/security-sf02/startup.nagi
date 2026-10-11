@@ -1,0 +1,14 @@
+import std.auth.session as session
+import std.auth as auth
+import std.http.server as http
+import std.db.sqlite as sqlite
+class State:
+    store: session.Store
+async def startup(pool: view[sqlite.Pool]) -> Result[session.Store, session.Failure]:
+    options = try session.options(4, 5, 72, 1, 10000, 100000, 5000, 2)
+    cookie = try session.cookie_options("__Host-owned", session.SameSite.STRICT)
+    return await session.open(pool, options, cookie)
+def shared_state(store: view[session.Store]) -> shared[State]:
+    return share(State(store=session.clone_store(store)))
+def main():
+    print(0)

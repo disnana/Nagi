@@ -1,0 +1,11 @@
+import std.auth.session as session;
+import std.auth as auth;
+import std.http.server as http;
+record State { count: i64; }
+enum Read { Allowed; }
+async fn authorize(scope: auth.AuthScope,request: http.Request,state: shared[State]) -> Result[auth.Grant[Read], auth.Failure] { return fail(auth.denied()); }
+fn policies(store: view[session.Store]) -> http.Policy[State, auth.AuthScope] { return http.session_authenticated_policy[State](session.clone_store(store)); }
+fn authorized(store: view[session.Store]) -> http.Policy[State, auth.Grant[Read]] { return http.session_authorized_policy[State,Read](session.clone_store(store),authorize); }
+fn message(failure: view[session.Failure]) -> view[str] { return session.message(failure); }
+fn outcome(failure: view[session.Failure]) -> i64 { let classification = session.kind(failure); let completed = session.outcome(failure); return 0; }
+fn main() -> unit { print(0); }

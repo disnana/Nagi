@@ -1,0 +1,11 @@
+import std.auth.session as session;
+import std.auth as auth;
+import std.http.server as http;
+fn relay(intent: session.SessionResponse) -> Option[session.SessionResponse] { return some(intent); }
+async fn delegate(intent: session.SessionResponse) -> session.SessionResponse { await sleep(1); return intent; }
+async fn local(intent: session.SessionResponse) -> Result[Option[session.SessionResponse], session.Failure] { return ok(relay(await delegate(intent))); }
+async fn issue(store: view[session.Store], scope: auth.AuthScope) -> Result[session.SessionResponse, session.Failure] { return await session.issue(store,scope); }
+async fn rotate(store: view[session.Store], scope: auth.AuthScope) -> Result[session.SessionResponse, session.Failure] { return await session.rotate(store,scope); }
+async fn logout(store: view[session.Store], scope: auth.AuthScope) -> Result[session.SessionResponse, session.Failure] { return await session.logout(store,scope); }
+fn apply(response: http.Response,intent: session.SessionResponse) -> Result[http.Response, session.Failure] { return session.apply(response,intent); }
+fn main() -> unit { print(0); }

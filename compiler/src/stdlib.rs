@@ -2,6 +2,7 @@
 //! it cannot choose native paths, capabilities, or callback contracts.
 use crate::ast::*;
 mod security;
+mod session;
 mod sqlite;
 
 pub const MODULE_NAME: &str = "std.http.server";
@@ -10,6 +11,8 @@ pub const ACTOR_MODULE_NAME: &str = "std.actor";
 pub const ACTOR_MODULE_ID: &str = "stdlib:std.actor";
 pub const RESULT_MODULE_NAME: &str = "std.result";
 pub const RESULT_MODULE_ID: &str = "stdlib:std.result";
+pub const AUTH_SESSION_MODULE_NAME: &str = "std.auth.session";
+pub const AUTH_SESSION_MODULE_ID: &str = "stdlib:std.auth.session";
 pub const AUTH_MODULE_NAME: &str = "std.auth";
 pub const AUTH_MODULE_ID: &str = "stdlib:std.auth";
 pub const OWNERSHIP_MODULE_NAME: &str = "std.ownership";
@@ -25,6 +28,7 @@ pub enum StandardModule {
     Actor,
     Result,
     Auth,
+    AuthSession,
     Ownership,
     Task,
     Sqlite,
@@ -39,6 +43,7 @@ pub const MODULES: &[StandardModule] = &[
     StandardModule::Actor,
     StandardModule::Result,
     StandardModule::Auth,
+    StandardModule::AuthSession,
     StandardModule::Ownership,
     StandardModule::Task,
     StandardModule::Sqlite,
@@ -64,6 +69,11 @@ pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
             name: AUTH_MODULE_NAME,
             id: AUTH_MODULE_ID,
             rust_namespace: "::nagi_runtime::auth",
+        },
+        StandardModule::AuthSession => &StandardModuleInfo {
+            name: AUTH_SESSION_MODULE_NAME,
+            id: AUTH_SESSION_MODULE_ID,
+            rust_namespace: "::nagi_runtime::auth::session",
         },
         StandardModule::Ownership => &StandardModuleInfo {
             name: OWNERSHIP_MODULE_NAME,
@@ -111,6 +121,12 @@ pub enum Resource {
     AuthFailure,
     AuthFailureKind,
     HttpPolicy,
+    SessionOptions,
+    SessionCookieOptions,
+    SessionStore,
+    SessionFailure,
+    SessionResponse,
+    SessionSameSite,
     Grant,
     Task,
     TaskFailure,
@@ -157,6 +173,19 @@ pub enum Operation {
     PublicPolicy,
     AuthenticatedPolicy,
     AuthorizedPolicy,
+    SessionAuthenticatedPolicy,
+    SessionAuthorizedPolicy,
+    SessionOptions,
+    SessionCookieOptions,
+    SessionOpen,
+    SessionCloneStore,
+    SessionIssue,
+    SessionRotate,
+    SessionLogout,
+    SessionApply,
+    SessionKind,
+    SessionMessage,
+    SessionOutcome,
     SecurityTimeout,
     AuthSubject,
     AuthKind,
@@ -344,6 +373,12 @@ pub const RESOURCES: &[Resource] = &[
     Resource::AuthFailure,
     Resource::AuthFailureKind,
     Resource::HttpPolicy,
+    Resource::SessionOptions,
+    Resource::SessionCookieOptions,
+    Resource::SessionStore,
+    Resource::SessionFailure,
+    Resource::SessionResponse,
+    Resource::SessionSameSite,
     Resource::Grant,
     Resource::Task,
     Resource::TaskFailure,
@@ -384,6 +419,19 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::PublicPolicy,
     Operation::AuthenticatedPolicy,
     Operation::AuthorizedPolicy,
+    Operation::SessionAuthenticatedPolicy,
+    Operation::SessionAuthorizedPolicy,
+    Operation::SessionOptions,
+    Operation::SessionCookieOptions,
+    Operation::SessionOpen,
+    Operation::SessionCloneStore,
+    Operation::SessionIssue,
+    Operation::SessionRotate,
+    Operation::SessionLogout,
+    Operation::SessionApply,
+    Operation::SessionKind,
+    Operation::SessionMessage,
+    Operation::SessionOutcome,
     Operation::SecurityTimeout,
     Operation::AuthSubject,
     Operation::AuthKind,
@@ -1103,6 +1151,12 @@ fn resource_contract(resource: Resource) -> &'static ResourceContract {
         | Resource::AuthFailure
         | Resource::AuthFailureKind
         | Resource::HttpPolicy => security::resource_contract(resource),
+        Resource::SessionOptions
+        | Resource::SessionCookieOptions
+        | Resource::SessionStore
+        | Resource::SessionFailure
+        | Resource::SessionResponse
+        | Resource::SessionSameSite => session::resource_contract(resource),
         Resource::SqlitePool
         | Resource::SqliteTx
         | Resource::SqliteQueryValue
@@ -1164,7 +1218,18 @@ pub(crate) fn native_serde_supported(resource: Resource) -> bool {
 
 pub fn operation_info(operation: Operation) -> &'static OperationInfo {
     match operation {
-        Operation::PublicPolicy | Operation::AuthenticatedPolicy | Operation::AuthorizedPolicy | Operation::SecurityTimeout | Operation::AuthSubject | Operation::AuthKind | Operation::AuthMessage | Operation::AuthInvalidCredential | Operation::AuthDenied | Operation::AuthExpired | Operation::AuthInvalidRequest | Operation::AuthUnavailable | Operation::AuthInternal => security::operation_info(operation),
+        Operation::PublicPolicy | Operation::AuthenticatedPolicy | Operation::AuthorizedPolicy | Operation::SessionAuthenticatedPolicy | Operation::SessionAuthorizedPolicy | Operation::SecurityTimeout | Operation::AuthSubject | Operation::AuthKind | Operation::AuthMessage | Operation::AuthInvalidCredential | Operation::AuthDenied | Operation::AuthExpired | Operation::AuthInvalidRequest | Operation::AuthUnavailable | Operation::AuthInternal => security::operation_info(operation),
+        Operation::SessionOptions
+        | Operation::SessionCookieOptions
+        | Operation::SessionOpen
+        | Operation::SessionCloneStore
+        | Operation::SessionIssue
+        | Operation::SessionRotate
+        | Operation::SessionLogout
+        | Operation::SessionApply
+        | Operation::SessionKind
+        | Operation::SessionMessage
+        | Operation::SessionOutcome => session::operation_info(operation),
         Operation::SqliteLiteral
         | Operation::SqliteOptions
         | Operation::SqliteOpen
@@ -1732,6 +1797,7 @@ pub fn constants(resource: Resource) -> &'static [ConstantInfo] {
                 native_name: "Internal",
             },
         ],
+        Resource::SessionSameSite => session::SAME_SITE_CONSTANTS,
         Resource::Method => METHOD_CONSTANTS,
         Resource::Status => STATUS_CONSTANTS,
         Resource::RestartPolicy => RESTART_POLICY_CONSTANTS,
@@ -2068,8 +2134,12 @@ mod resource_contract_tests {
                 matches!(contract.lifecycle, ResourceLifecycle::SameTask),
                 matches!(
                     resource,
-                    Resource::SqliteTx | Resource::AuthScope | Resource::Grant
-                )
+                    Resource::SqliteTx
+                        | Resource::AuthScope
+                        | Resource::Grant
+                        | Resource::SessionResponse
+                ),
+                "{resource:?}"
             );
         }
     }
@@ -2126,3 +2196,7 @@ mod resource_contract_tests {
         let _ = ResourceContract::new(info(2, &["T"], &[0, 1]), &[], &[], &[], &[]);
     }
 }
+
+#[cfg(test)]
+#[path = "stdlib/session_contract_tests.rs"]
+mod session_contract_tests;
