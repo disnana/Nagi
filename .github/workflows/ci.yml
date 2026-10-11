@@ -561,7 +561,7 @@ jobs:
         run: |
           set -o pipefail
           cargo test --locked -p nagi-runtime --lib sqlite:: 2>&1 | tee "$RUNNER_TEMP/sqlite-runtime.log"
-          python -c 'import pathlib,re,os; text=pathlib.Path(os.environ["RUNNER_TEMP"],"sqlite-runtime.log").read_text(); assert re.search(r"test result: ok\. 80 passed; 0 failed; 0 ignored;",text),text'
+          python scripts/ci/assert_sqlite_test_summary.py "$RUNNER_TEMP/sqlite-runtime.log"
           cargo test --locked -p nagi-runtime --test sqlite_public_api
       - name: Check SF04 HTML core, finalizer, and public runtime API on the target platform
         shell: bash
