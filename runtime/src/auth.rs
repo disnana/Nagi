@@ -4,6 +4,9 @@
 pub mod csrf;
 #[path = "auth/session.rs"]
 pub mod session;
+#[path = "auth/ed25519.rs"]
+pub mod ed25519;
+
 use std::{
     marker::PhantomData,
     sync::{

@@ -78,6 +78,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib auth::ed25519:: 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-core.log"
+          cargo test --locked -p nagi-runtime --test ed25519_public_api 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-public.log"
+          python - <<'PY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf02-ed25519-core.log": 14, "sf02-ed25519-public.log": 1}.items():
+              text = (root / name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;", text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PY
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -332,6 +347,21 @@ jobs:
           RELEASE_RUST_HOST: ${{ matrix.rust_host }}
         shell: bash
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
+      - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib auth::ed25519:: 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-core.log"
+          cargo test --locked -p nagi-runtime --test ed25519_public_api 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-public.log"
+          python - <<'PY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf02-ed25519-core.log": 14, "sf02-ed25519-public.log": 1}.items():
+              text = (root / name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;", text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PY
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
