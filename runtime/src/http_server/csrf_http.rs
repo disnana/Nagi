@@ -2,6 +2,10 @@
 use super::*;
 use crate::auth::{csrf, session::CsrfBinding};
 
+#[path = "csrf_body_deadline.rs"]
+mod body_deadline;
+use body_deadline::select_body_deadline;
+
 pub(super) fn strip_credentials(headers: &mut HeaderMap) {
     headers.remove(names::COOKIE);
     headers.remove("x-csrf-token");
@@ -264,6 +268,38 @@ pub(super) async fn dispatch_tokens(
         Err(_) => token_terminal(&owner, Status::GATEWAY_TIMEOUT, head),
     }
 }
+// Use the original common bound after preparation; body timing never renews it.
+async fn receive_guarded_body<B>(
+    body: B,
+    maximum: usize,
+    common: Instant,
+    body_started: Instant,
+    body_budget: Duration,
+) -> Result<Bytes, Status>
+where
+    B: hyper::body::Body<Data = Bytes> + Unpin,
+{
+    let deadline = select_body_deadline(common, body_started, body_budget)
+        .ok_or(Status::SERVICE_UNAVAILABLE)?;
+    let status = if deadline.body_first {
+        Status::REQUEST_TIMEOUT
+    } else {
+        Status::GATEWAY_TIMEOUT
+    };
+    match tokio::time::timeout_at(
+        tokio::time::Instant::from_std(deadline.until),
+        receive_body(body, maximum),
+    )
+    .await
+    {
+        Ok(_) if Instant::now() >= deadline.until => Err(status),
+        Ok(Ok(body)) => Ok(body),
+        Ok(Err(BodyFailure::TooLarge)) => Err(Status::CONTENT_TOO_LARGE),
+        Ok(Err(BodyFailure::Invalid)) => Err(Status::BAD_REQUEST),
+        Err(_) => Err(status),
+    }
+}
+
 #[expect(
     clippy::too_many_arguments,
     reason = "closed guarded dispatch retains the actual route, body, options and request owner"
@@ -314,7 +350,7 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
                 security_response(e, PolicySource::Session).into_http(head),
                 head,
                 true,
-            )
+            );
         }
         Ok(Err(_)) => return terminal(&owner, Status::INTERNAL_SERVER_ERROR, head, true),
         Err(status) => return terminal(&owner, status, head, true),
@@ -323,29 +359,17 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
         Ok(d) => d,
         Err(s) => return terminal(&owner, s, head, true),
     };
-    let Some(body_until) = Instant::now().checked_add(options.body_deadline) else {
-        return terminal(&owner, Status::SERVICE_UNAVAILABLE, head, true);
-    };
-    let body_status = if body_until < common {
-        Status::REQUEST_TIMEOUT
-    } else {
-        Status::GATEWAY_TIMEOUT
-    };
-    let body = match tokio::time::timeout_at(
-        tokio::time::Instant::from_std(body_until.min(common)),
-        receive_body(body, options.body_bytes),
+    let body = match receive_guarded_body(
+        body,
+        options.body_bytes,
+        common,
+        Instant::now(),
+        options.body_deadline,
     )
     .await
     {
-        Ok(_) if Instant::now() >= body_until.min(common) => {
-            return terminal(&owner, body_status, head, true)
-        }
-        Ok(Ok(b)) => b,
-        Ok(Err(BodyFailure::TooLarge)) => {
-            return terminal(&owner, Status::CONTENT_TOO_LARGE, head, true)
-        }
-        Ok(Err(BodyFailure::Invalid)) => return terminal(&owner, Status::BAD_REQUEST, head, true),
-        Err(_) => return terminal(&owner, body_status, head, true),
+        Ok(body) => body,
+        Err(status) => return terminal(&owner, status, head, true),
     };
     let common = match live_until(&owner, until) {
         Ok(d) => d,
@@ -358,7 +382,7 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
     .await;
     match checkpoint {
         Ok(_) if Instant::now() >= common => {
-            return terminal(&owner, Status::GATEWAY_TIMEOUT, head, true)
+            return terminal(&owner, Status::GATEWAY_TIMEOUT, head, true);
         }
         Ok(Ok(Ok(()))) => {}
         Ok(Ok(Err(e))) => return terminal(&owner, e.http_status(), head, true),
@@ -389,10 +413,10 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
     .await;
     let response = match completion {
         Ok(_) if Instant::now() >= handler_until || owner.lease.validate().is_err() => {
-            return terminal(&owner, Status::GATEWAY_TIMEOUT, head, true)
+            return terminal(&owner, Status::GATEWAY_TIMEOUT, head, true);
         }
         Ok(Ok(completion)) if connect && completion.is_success() => {
-            return terminal(&owner, Status::NOT_IMPLEMENTED, head, true)
+            return terminal(&owner, Status::NOT_IMPLEMENTED, head, true);
         }
         Ok(Ok(PreparedCompletion::HandlerOk(response))) => {
             finalize_session_response(response, &owner, PolicySource::Session, head)

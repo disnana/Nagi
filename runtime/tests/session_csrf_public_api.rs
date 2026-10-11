@@ -78,6 +78,7 @@ struct Observations {
     calls: AtomicUsize,
     sanitized: AtomicUsize,
     authorized: tokio::sync::Notify,
+    authorizer_entered: AtomicUsize,
     authorizer_sanitized: AtomicUsize,
     parallel: tokio::sync::Barrier,
     deadline_bound: tokio::sync::Notify,
@@ -148,6 +149,7 @@ async fn authorize(
     request: http::Request,
     state: Arc<State>,
 ) -> Result<auth::Grant<()>, auth::Failure> {
+    state.authorizer_entered.fetch_add(1, Ordering::SeqCst);
     let grant = auth::Grant::from_authorized(scope, 7)?;
     if http::header(&request, "cookie").unwrap().is_none()
         && http::header(&request, "x-csrf-token").unwrap().is_none()
@@ -212,6 +214,7 @@ impl Server {
             calls: AtomicUsize::new(0),
             sanitized: AtomicUsize::new(0),
             authorized: tokio::sync::Notify::new(),
+            authorizer_entered: AtomicUsize::new(0),
             authorizer_sanitized: AtomicUsize::new(0),
             parallel: tokio::sync::Barrier::new(2),
             deadline_bound: tokio::sync::Notify::new(),
@@ -586,7 +589,10 @@ async fn body_checkpoint_rejects_generation_changed_after_actual_authorization()
         .await
         .token();
     let mut stream = TcpStream::connect(s.address).await.unwrap();
-    let h = format!("POST /pending HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 5\r\n{}\r\nov", guarded(&cookie, &token));
+    let h = format!(
+        "POST /pending HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 5\r\n{}\r\nov",
+        guarded(&cookie, &token)
+    );
     stream.write_all(h.as_bytes()).await.unwrap();
     tokio::time::timeout(Duration::from_secs(2), s.state.authorized.notified())
         .await
@@ -738,8 +744,12 @@ async fn one_reusable_token_admits_two_distinct_actual_requests() {
     f.stop().await;
 }
 #[tokio::test]
-async fn guarded_partial_body_uses_original_common_deadline_and_strict_body_precedence() {
-    for (body_ms, security_ms, status) in [(80, 240, 408), (240, 80, 504), (100, 100, 504)] {
+async fn guarded_partial_body_preparation_uses_original_security_deadline() {
+    // Post-preparation body precedence is exercised by the production body wait
+    // with real Hyper Incoming in the private deadline wire fixture. Here a real
+    // SQLite transaction keeps Session preparation pending, independently of
+    // Windows preparation throughput. Security includes that preparation wait.
+    for (body_ms, security_ms) in [(80, 240), (240, 80), (100, 100)] {
         let f = Fixture::new(2, 176).await;
         let bootstrap = Server::new(&f).await;
         let cookie = request(
@@ -774,30 +784,15 @@ async fn guarded_partial_body_uses_original_common_deadline_and_strict_body_prec
         )
         .unwrap();
         let s = Server::new_with_options(&f, options).await;
+        let held = sqlite::begin(&f.pool, sqlite::BeginMode::Immediate)
+            .await
+            .unwrap();
         let mut stream = TcpStream::connect(s.address).await.unwrap();
-        let h=format!("POST /pending HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 5\r\n{}\r\nov",guarded(&cookie,&token));
+        let h = format!(
+            "POST /pending HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 5\r\n{}\r\nov",
+            guarded(&cookie, &token)
+        );
         stream.write_all(h.as_bytes()).await.unwrap();
-        // Observe the actual wire refusal as well as the authorization barrier.
-        // A short original security budget can expire before preparation reaches
-        // the authorizer; report that phase instead of an opaque observer timeout.
-        // This does not extend a deadline or accept an early refusal as a pass.
-        let mut early_response = [0_u8; 256];
-        let early = tokio::time::timeout(Duration::from_secs(2), async {
-            tokio::select! {
-                biased;
-                _ = s.state.authorized.notified() => None,
-                bytes = stream.peek(&mut early_response) => Some(bytes.unwrap()),
-            }
-        })
-        .await
-        .expect("neither authorization nor a wire response was observed");
-        if let Some(bytes) = early {
-            panic!(
-                "request ended before authorization barrier: {:?}",
-                std::str::from_utf8(&early_response[..bytes])
-            );
-        }
-        assert!(s.state.calls.load(Ordering::SeqCst) == 0);
         let mut raw = Vec::new();
         tokio::time::timeout(
             Duration::from_secs(2),
@@ -814,7 +809,20 @@ async fn guarded_partial_body_uses_original_common_deadline_and_strict_body_prec
             .unwrap()
             .parse()
             .unwrap();
-        assert!(status_seen == status && s.state.calls.load(Ordering::SeqCst) == 0);
+        assert_eq!(status_seen, 504);
+        assert_eq!(s.state.calls.load(Ordering::SeqCst), 0);
+        assert_eq!(s.state.authorizer_entered.load(Ordering::SeqCst), 0);
+        assert_eq!(s.state.authorizer_sanitized.load(Ordering::SeqCst), 0);
+        let headers = std::str::from_utf8(&raw)
+            .unwrap()
+            .split("\r\n\r\n")
+            .next()
+            .unwrap()
+            .to_ascii_lowercase();
+        assert!(headers.contains("cache-control: no-store"));
+        assert!(headers.contains("vary: cookie, authorization, origin, x-csrf-token"));
+        assert!(!headers.contains("set-cookie:") && !headers.contains("www-authenticate:"));
+        sqlite::rollback(held).await.unwrap();
         assert!(number(&f.pool, "SELECT count(*) AS n FROM __nagi_csrf_tokens").await == 1);
         s.stop().await;
         f.stop().await;

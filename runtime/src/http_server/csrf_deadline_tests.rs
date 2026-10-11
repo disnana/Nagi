@@ -4,6 +4,10 @@ use crate::{auth::session, sqlite};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use tokio::sync::Notify;
 
+// Keep these in the existing SF03 deadline CI filter on every target.
+#[path = "csrf_body_deadline_tests.rs"]
+mod body_selection_tests;
+
 static NEXT: AtomicU64 = AtomicU64::new(0);
 struct Fixture {
     dir: std::path::PathBuf,
@@ -225,4 +229,84 @@ async fn guarded_preparation_initially_expired_session_still_challenges_401() {
     assert!(owner.lease.validate().is_ok());
     assert_eq!(state.completed.load(Ordering::SeqCst), 0);
     f.stop().await;
+}
+
+// Exercise the same production body wait with real Hyper Incoming and socket
+// framing. Session/SQLite preparation has its own public wire oracle, so these
+// short body windows do not assume a bound on database or scheduler throughput.
+#[tokio::test]
+async fn guarded_body_wire_preserves_absolute_deadline_and_strict_precedence() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    for (body_ms, security_ms, spent_ms, expected) in [
+        (80, 240, 0, 408),
+        (240, 80, 0, 504),
+        (100, 100, 0, 504),
+        (80, 240, 200, 504),
+    ] {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&calls);
+        let connection = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            let service = hyper::service::service_fn(
+                move |request: hyper::Request<hyper::body::Incoming>| {
+                    let observed = Arc::clone(&observed);
+                    async move {
+                        observed.fetch_add(1, Ordering::SeqCst);
+                        assert_eq!(request.headers().get(names::CONTENT_LENGTH).unwrap(), "5");
+                        let body_started = Instant::now();
+                        // Synthetic spent preparation isolates the absolute-bound
+                        // contract, without sleeping or replacing either clock.
+                        let admitted = body_started - Duration::from_millis(spent_ms);
+                        let common = admitted + Duration::from_millis(security_ms);
+                        let status = match receive_guarded_body(
+                            request.into_body(),
+                            256,
+                            common,
+                            body_started,
+                            Duration::from_millis(body_ms),
+                        )
+                        .await
+                        {
+                            Ok(_) => panic!("incomplete Content-Length body must not complete"),
+                            Err(status) => status,
+                        };
+                        Ok::<_, std::convert::Infallible>(managed(
+                            transport(status, false, true),
+                            false,
+                            true,
+                        ))
+                    }
+                },
+            );
+            hyper::server::conn::http1::Builder::new()
+                .serve_connection(hyper_util::rt::TokioIo::new(socket), service)
+                .await
+                .unwrap();
+        });
+        let mut socket = tokio::net::TcpStream::connect(address).await.unwrap();
+        socket.write_all(b"POST /pending HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 5\r\n\r\nov").await.unwrap();
+        let mut raw = Vec::new();
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            (&mut socket).take(8193).read_to_end(&mut raw),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert!(raw.len() <= 8192);
+        let wire = std::str::from_utf8(&raw).unwrap();
+        let status: u16 = wire.split_whitespace().nth(1).unwrap().parse().unwrap();
+        assert_eq!(status, expected);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let headers = wire.split("\r\n\r\n").next().unwrap().to_ascii_lowercase();
+        assert!(headers.contains("cache-control: no-store"));
+        assert!(headers.contains("vary: cookie, authorization, origin, x-csrf-token"));
+        assert!(!headers.contains("set-cookie:") && !headers.contains("www-authenticate:"));
+        tokio::time::timeout(Duration::from_secs(2), connection)
+            .await
+            .unwrap()
+            .unwrap();
+    }
 }
