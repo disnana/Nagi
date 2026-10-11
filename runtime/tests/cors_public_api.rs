@@ -357,7 +357,7 @@ fn preflight(method: &str, extra: &str) -> String {
     format!("Origin: {UI}\r\nAccess-Control-Request-Method: {method}\r\n{extra}")
 }
 #[tokio::test]
-async fn actual_allow_deny_omit_and_HEAD_record_selection_preserve_execution() {
+async fn actual_allow_deny_omit_and_head_record_selection_preserve_execution() {
     let s = Server::new(2, 1000).await;
     let origin = format!("Origin: {UI}\r\n");
     let ok = request(&s, "GET", "/items/7", &origin, b"").await;

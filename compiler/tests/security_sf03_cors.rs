@@ -67,14 +67,20 @@ fn cors_dynamic_registration_and_owned_socket_are_native_in_three_forms() {
         include_str!("fixtures/security-sf03-cors/config-manual.low"),
     );
 }
+fn alias_std_http_server(source: &str) -> String {
+    let (import, body) = source
+        .split_once('\n')
+        .expect("CORS fixture starts with its standard-module import");
+    assert!(import.starts_with("import std.http.server as http"));
+    let import = import.replacen(" as http", " as web", 1);
+    format!("{import}\n{}", body.replace("http.", "web."))
+}
 #[test]
 fn aliases_and_user_shadow_type_keep_canonical_identity_in_three_forms() {
-    let high = include_str!("fixtures/security-sf03-cors/config.nagi")
-        .replace("as http", "as web")
-        .replace("http.", "web.");
-    let low = include_str!("fixtures/security-sf03-cors/config-manual.low")
-        .replace("as http", "as web")
-        .replace("http.", "web.");
+    let high = alias_std_http_server(include_str!("fixtures/security-sf03-cors/config.nagi"));
+    let low = alias_std_http_server(include_str!(
+        "fixtures/security-sf03-cors/config-manual.low"
+    ));
     native("sf03-cors-alias", &high, &low);
 }
 fn reject_three(
