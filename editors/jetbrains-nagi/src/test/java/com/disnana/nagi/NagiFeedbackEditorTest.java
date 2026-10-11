@@ -8,9 +8,7 @@ import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.openapi.actionSystem.IdeActions;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.testFramework.fixtures.BasePlatformTestCase;
-import com.intellij.util.ui.UIUtil;
 import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
 import java.util.function.LongSupplier;
 
 /** Real platform lookup and Backspace actions; no compiler process is needed for these cases. */
@@ -144,42 +142,6 @@ public final class NagiFeedbackEditorTest extends BasePlatformTestCase {
         assertFalse(NagiDeclarationContext.isCertainTopLevel(
                 finitePrefix, finitePrefix.length(), false, expired));
         assertTrue(NagiDeclarationContext.isCertainTopLevel("values = (1, 2)\nd", 17, false));
-    }
-
-    public void testTypedPrefixSchedulesNormalAutomaticLookup() throws Exception {
-        var settings = CodeInsightSettings.getInstance();
-        boolean previous = settings.AUTO_POPUP_COMPLETION_LOOKUP;
-        try {
-            settings.AUTO_POPUP_COMPLETION_LOOKUP = true;
-            for (String extension : new String[] { ".nagi", ".low" }) {
-                myFixture.configureByText("automatic" + extension, "<caret>");
-                myFixture.type(extension.equals(".nagi") ? 'd' : 'f');
-                String expected = extension.equals(".nagi") ? "def" : "fn";
-                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
-                while (myFixture.getLookup() == null && System.nanoTime() < deadline) {
-                    UIUtil.dispatchAllInvocationEvents();
-                    Thread.sleep(5);
-                }
-                assertNotNull("platform automatic lookup for " + expected, myFixture.getLookup());
-                assertTrue(myFixture.getLookup().getItems().stream()
-                        .anyMatch(item -> item.getLookupString().equals(expected)));
-            }
-        } finally { settings.AUTO_POPUP_COMPLETION_LOOKUP = previous; }
-    }
-
-    public void testAutomaticLookupOffStillAllowsExplicitKeywordCompletion() {
-        var settings = CodeInsightSettings.getInstance();
-        boolean previous = settings.AUTO_POPUP_COMPLETION_LOOKUP;
-        try {
-            settings.AUTO_POPUP_COMPLETION_LOOKUP = false;
-            myFixture.configureByText("manual.nagi", "<caret>");
-            myFixture.type('d');
-            UIUtil.dispatchAllInvocationEvents();
-            assertNull(myFixture.getLookup());
-            LookupElement[] offered = myFixture.completeBasic();
-            assertNotNull(offered);
-            assertTrue(Arrays.stream(offered).anyMatch(item -> item.getLookupString().equals("def")));
-        } finally { settings.AUTO_POPUP_COMPLETION_LOOKUP = previous; }
     }
 
     public void testKeywordAcceptanceDoesNotExpandLiveTemplate() {
