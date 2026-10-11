@@ -1,6 +1,6 @@
 # Authentication and authorization (unreleased 0.2.0 SF01)
 
-Authentication verifies who a caller is; authorization checks whether that caller may perform a particular operation on its actual target. SF01 provides explicit standard HTTP Policy, request-bound proofs and invalidation at request end. Durable Sessions, Cookie issuance, CSRF/CORS, cryptographic verifiers, typed HTML and outbound HTTP remain later steps. This does not establish completion of Security Foundation or retroactively change published 0.1.x.
+Authentication verifies who a caller is; authorization checks whether that caller may perform a particular operation on its actual target. SF01 provides explicit standard HTTP Policy, request-bound proofs and invalidation at request end. SF02 durable Sessions and Cookie issuance are partially implemented; CSRF/CORS, cryptographic verifiers, typed HTML and outbound HTTP remain later steps. This does not establish completion of Security Foundation or retroactively change published 0.1.x.
 
 ## Choose a policy for every route
 
@@ -75,3 +75,11 @@ A reviewed trusted adapter holds fixed SQL and ownership predicates. Bind the **
 A trusted Rust host waits for bounded queue capacity using Tx's opaque `reserve_exec`, then invokes `reservation.enqueue(Query, Parameters)` inside `Grant.submit`'s synchronous callback. Capacity reservation is not admission. Admission linearizes at single-use permit issuance under the gate. Revocation before issuance means zero native enqueues; invalidation after issuance leaves the operation admitted even before the callback synchronously enqueues. Later revocation or HTTP cancellation does not promise cancellation or rollback. The callback must synchronously send to the actual queue rather than return a Future that enqueues later.
 
 DDL/bootstrap belongs to trusted management code separate from requests. Fixed Rust SQL factories and handwritten FromRow adapters require review. Do not reexport a dynamic string factory to requests and bypass the standard literal contract. [SQLite](sqlite-pool.md) · [Migration](migration-0.2.0.md) · [SF05 contract](../internal/security-foundation/sf05-contract.en.md)
+
+## Interim Session policy restriction (unreleased SF02)
+
+The standard runtime rejects registration of unsafe methods using `session_authenticated_policy` or `session_authorized_policy` without a CSRF guard. Only GET, HEAD and OPTIONS are accepted. POST, PUT, PATCH, DELETE and every other method are rejected with an Invalid `Error`. This applies to both `route` and `route_mapped`; `serve` and `serve_listener` also recheck every route before binding or accepting connections. Ordinary Bearer policies continue to reject every Cookie. There is no exemption boolean or authentication-source fallback.
+
+This is an interim restriction that closes unsafe Session routes. The authenticated CSRF token endpoint/guard (B1), successful guarded POST rotate/logout, CORS and actual TLS/browser validation remain pending. The checker does not prove that GET/HEAD/OPTIONS handlers have no side effects. Do not move mutations to GET to bypass the restriction.
+
+The Session issue/rotate/logout/apply APIs remain. This restriction changes route registration conditions and does not remove native DB mutations or the delivery protocol. Internal direct tests do not establish successful guarded Session HTTP. Cancellation does not guarantee rollback of admitted DB operations.

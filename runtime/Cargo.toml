@@ -16,5 +16,11 @@ hyper = { version = "1.11", features = ["http1", "server"] }
 hyper-util = { version = "0.1.21", features = ["tokio", "service"] }
 matchit = "0.8.4"
 
+# D3 Session primitives; JWT verification dependencies are a separate milestone.
+getrandom = "=0.3.4"
+base64 = "=0.22.1"
+sha2 = "=0.10.9"
+cookie = { version = "=0.18.2", default-features = false }
+
 [dev-dependencies]
-tokio = { version = "1.48", features = ["io-util"] }
+tokio = { version = "1.48", features = ["io-util", "test-util"] }
