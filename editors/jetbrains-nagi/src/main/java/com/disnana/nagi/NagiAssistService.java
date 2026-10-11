@@ -1,7 +1,9 @@
 package com.disnana.nagi;
 
 import com.intellij.codeInsight.AutoPopupController;
+import com.intellij.codeInsight.CodeInsightSettings;
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
+import com.intellij.codeInsight.hint.ShowParameterInfoHandler;
 import com.intellij.ide.trustedProjects.TrustedProjects;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
@@ -60,6 +62,7 @@ public final class NagiAssistService implements Disposable {
         private final NagiAssistProtocol.Response response;
         private final Set<String> sourceFileKeys;
         private final Map<ReferenceKey, NagiAssistProtocol.Location> referenceTargets;
+        private final NagiSemanticIndex semanticIndex;
         private CachedResponse(Snapshot snapshot, NagiAssistProtocol.Response response) {
             this.snapshot = snapshot;
             this.response = response;
@@ -75,6 +78,7 @@ public final class NagiAssistService implements Disposable {
                 references.put(new ReferenceKey(normalizePath(location.file()), location.line(), location.column(), location.length()), reference.target());
             }
             referenceTargets = Map.copyOf(references);
+            semanticIndex = new NagiSemanticIndex(response);
         }
         public NagiAssistProtocol.Response response() { return response; }
     }
@@ -110,7 +114,9 @@ public final class NagiAssistService implements Disposable {
                            long focusFileStamp, Editor editor, long caretOffset) {
         private Snapshot { input = input.clone(); }
     }
-    private record PopupWaiter(Editor editor, Document document, VirtualFile file, long stamp, long offset) {}
+    private enum PopupKind { COMPLETION, PARAMETERS }
+    private record PopupWaiter(Editor editor, Document document, VirtualFile file, long stamp, long offset,
+                               PopupKind kind, boolean respectParameterSetting) {}
 
     private final Project project;
     private final ScheduledThreadPoolExecutor worker;
@@ -245,6 +251,12 @@ public final class NagiAssistService implements Disposable {
         request(file, editor, editor, COMPLETION_DEBOUNCE_MS);
     }
 
+    /** Resume the platform's already requested hint, using the same bounded snapshot worker. */
+    public void requestParameterInfo(PsiFile file, Editor editor) {
+        if (editor == null || editor.isDisposed()) return;
+        request(file, editor, editor, COMPLETION_DEBOUNCE_MS, PopupKind.PARAMETERS);
+    }
+
     public boolean responseContainsFile(CachedResponse response, VirtualFile file) {
         if (response == null || file == null || !snapshotCurrent(response.snapshot)) return false;
         String canonical = canonicalPathFor(response.snapshot, file);
@@ -281,6 +293,25 @@ public final class NagiAssistService implements Disposable {
         int column = start - document.getLineStartOffset(line);
         String path = canonicalPathFor(response.snapshot, file.getVirtualFile());
         return response.referenceTargets.get(new ReferenceKey(normalizePath(path), line + 1, column + 1, end - start));
+    }
+
+    public NagiAssistProtocol.Definition functionDefinition(PsiFile file, PsiElement callee) {
+        CachedResponse response = fresh(file);
+        if (response == null || callee == null || !callee.isValid()) return null;
+        Document document = PsiDocumentManager.getInstance(project).getDocument(file);
+        if (document == null) return null;
+        int start = callee.getTextRange().getStartOffset();
+        int end = callee.getTextRange().getEndOffset();
+        if (start < 0 || end <= start || end > document.getTextLength()) return null;
+        int line = document.getLineNumber(start);
+        String path = canonicalPathFor(response.snapshot, file.getVirtualFile());
+        return response.semanticIndex.function(path, line + 1,
+                start - document.getLineStartOffset(line) + 1, end - start);
+    }
+
+    public List<NagiSemanticIndex.Color> semanticColors(PsiFile file, CachedResponse response) {
+        if (!isCurrent(file, response)) return List.of();
+        return response.semanticIndex.colors(canonicalPathFor(response.snapshot, file.getVirtualFile()));
     }
 
     /** Resolve only a compiler-provided path and range in the same loaded source graph. */
@@ -330,6 +361,10 @@ public final class NagiAssistService implements Disposable {
     }
 
     private void request(PsiFile file, Editor queryEditor, Editor popupEditor, long delayMillis) {
+        request(file, queryEditor, popupEditor, delayMillis, PopupKind.COMPLETION);
+    }
+
+    private void request(PsiFile file, Editor queryEditor, Editor popupEditor, long delayMillis, PopupKind kind) {
         if (disposed || project.isDisposed()) { setState(State.CLOSED, "Project is closed."); return; }
         if (file == null || !file.isValid() || !NagiCompilerAction.isSourceFile(file.getVirtualFile())) {
             setState(State.STALE, "Open an existing local .nagi or .low file for compiler assistance.");
@@ -361,12 +396,12 @@ public final class NagiAssistService implements Disposable {
                     && ((activeKey != null && activeKey.startsWith(sourcePrefix))
                     || (pendingKey != null && pendingKey.startsWith(sourcePrefix)))) return;
             if (intent.key().equals(pendingKey) || intent.key().equals(activeKey)) {
-                if (popupEditor != null) addPopupWaiter(intent, popupEditor);
+                if (popupEditor != null) addPopupWaiter(intent, popupEditor, kind);
                 return;
             }
             cancelPendingAndActiveLocked();
             pendingKey = intent.key();
-            pendingWaiters = popupEditor == null ? List.of() : List.of(waiter(intent, popupEditor));
+            pendingWaiters = popupEditor == null ? List.of() : List.of(waiter(intent, popupEditor, kind));
             setState(State.WAITING, "Waiting for a stable Nagi source snapshot.");
             try {
                 pending = worker.schedule(() -> execute(intent), delayMillis, TimeUnit.MILLISECONDS);
@@ -805,13 +840,21 @@ public final class NagiAssistService implements Disposable {
             }
             for (PopupWaiter waiter : waiters) {
                 if (!isPopupFresh(response, waiter)) continue;
-                String key = response.snapshot.requestKey;
+                if (waiter.kind() == PopupKind.PARAMETERS && waiter.respectParameterSetting()
+                        && !CodeInsightSettings.getInstance().AUTO_POPUP_PARAMETER_INFO) continue;
+                String key = response.snapshot.requestKey + ":" + waiter.kind();
                 synchronized (lock) {
                     if (popupScheduled.contains(key)) continue;
                     popupScheduled.add(key);
                     while (popupScheduled.size() > 32) popupScheduled.remove(popupScheduled.iterator().next());
                 }
-                AutoPopupController.getInstance(project).scheduleAutoPopup(waiter.editor());
+                if (waiter.kind() == PopupKind.PARAMETERS) {
+                    VirtualFile[] selected = FileEditorManager.getInstance(project).getSelectedFiles();
+                    if (selected.length > 0 && java.util.Arrays.stream(selected).noneMatch(file -> file == waiter.file())) continue;
+                    PsiFile file = PsiManager.getInstance(project).findFile(waiter.file());
+                    if (file != null && NagiParameterInfoHandler.callAt(file, waiter.editor(), (int) waiter.offset()) != null)
+                        new ShowParameterInfoHandler().invoke(project, waiter.editor(), file);
+                } else AutoPopupController.getInstance(project).scheduleAutoPopup(waiter.editor());
             }
         });
     }
@@ -943,12 +986,12 @@ public final class NagiAssistService implements Disposable {
         activeWaiters = List.of();
     }
 
-    private void addPopupWaiter(Intent intent, Editor editor) {
+    private void addPopupWaiter(Intent intent, Editor editor, PopupKind kind) {
         List<PopupWaiter> existing = intent.key().equals(activeKey) ? activeWaiters : pendingWaiters;
         if (existing.size() >= 8 || editor.isDisposed()) return;
         List<PopupWaiter> changed = new ArrayList<>(existing);
-        PopupWaiter waiter = waiter(intent, editor);
-        if (changed.stream().noneMatch(candidate -> candidate.editor() == editor)) changed.add(waiter);
+        PopupWaiter waiter = waiter(intent, editor, kind);
+        if (changed.stream().noneMatch(candidate -> candidate.editor() == editor && candidate.kind() == kind)) changed.add(waiter);
         if (intent.key().equals(activeKey)) activeWaiters = List.copyOf(changed);
         else pendingWaiters = List.copyOf(changed);
     }
@@ -957,9 +1000,10 @@ public final class NagiAssistService implements Disposable {
         synchronized (lock) { return key.equals(activeKey) ? activeWaiters : List.of(); }
     }
 
-    private static PopupWaiter waiter(Intent intent, Editor editor) {
+    private static PopupWaiter waiter(Intent intent, Editor editor, PopupKind kind) {
         return new PopupWaiter(editor, intent.document(), intent.file(), intent.documentStamp(),
-                intent.position() == null ? -1 : intent.position().offset());
+                intent.position() == null ? -1 : intent.position().offset(), kind,
+                kind == PopupKind.PARAMETERS && CodeInsightSettings.getInstance().AUTO_POPUP_PARAMETER_INFO);
     }
 
     private static Position position(Editor editor) {

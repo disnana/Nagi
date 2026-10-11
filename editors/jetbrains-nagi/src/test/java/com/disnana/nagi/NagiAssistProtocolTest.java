@@ -85,6 +85,34 @@ public final class NagiAssistProtocolTest {
                 () -> new NagiAssistProtocol.Overlay("main.nagi", "source"));
     }
 
+    @Test public void decodesAdditiveCompilerSignaturesAndRolesWithBoundedDetails() {
+        var root = com.google.gson.JsonParser.parseString(VALID).getAsJsonObject();
+        var symbols = root.getAsJsonObject("symbols");
+        symbols.add("definitions", com.google.gson.JsonParser.parseString("""
+                [{"name":"add","kind":"function","location":{"file":"__TEST_PATH__","line":1,"column":5,"length":3},
+                  "signature":"def add(x: i64) -> i64","parameters":[{"name":"x","type":"i64"}]}]
+                """.replace("__TEST_PATH__", JSON_TEST_PATH)));
+        symbols.add("locals", com.google.gson.JsonParser.parseString("""
+                [{"name":"x","type":"i64","kind":"parameter","location":{"file":"__TEST_PATH__","line":1,"column":9,"length":1}}]
+                """.replace("__TEST_PATH__", JSON_TEST_PATH)));
+        symbols.add("roles", com.google.gson.JsonParser.parseString("""
+                [{"kind":"field","location":{"file":"__TEST_PATH__","line":4,"column":7,"length":5}}]
+                """.replace("__TEST_PATH__", JSON_TEST_PATH)));
+        var response = NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8));
+        assertEquals("i64", response.definitions().getFirst().parameters().getFirst().type());
+        assertEquals("parameter", response.locals().getFirst().kind());
+        assertEquals("field", response.roles().getFirst().kind());
+        var local = symbols.getAsJsonArray("locals").get(0).getAsJsonObject();
+        local.remove("kind");
+        assertEquals("local", NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8)).locals().getFirst().kind());
+        local.addProperty("kind", "guessed");
+        assertThrows(IllegalArgumentException.class, () -> NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8)));
+        local.addProperty("kind", "local");
+        var definition = symbols.getAsJsonArray("definitions").get(0).getAsJsonObject();
+        definition.addProperty("signature", "x".repeat(8193));
+        assertThrows(IllegalArgumentException.class, () -> NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8)));
+    }
+
     private static String escapeJson(String value) {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }

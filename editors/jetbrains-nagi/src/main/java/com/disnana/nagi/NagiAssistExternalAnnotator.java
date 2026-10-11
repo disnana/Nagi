@@ -14,7 +14,7 @@ import java.util.List;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-/** Renders only structured diagnostics from a fresh compiler response. */
+/** Renders structured diagnostics and resolved symbol roles from a fresh compiler response. */
 public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAssistExternalAnnotator.Work, NagiAssistExternalAnnotator.Work>
         implements DumbAware {
     record Work(PsiFile file, NagiAssistService service, NagiAssistService.CachedResponse response,
@@ -67,6 +67,23 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
             return;
         }
         if (!result.service().isCurrent(file, result.response())) return;
+        for (NagiSemanticIndex.Color color : result.service().semanticColors(file, result.response())) {
+            com.intellij.openapi.progress.ProgressManager.checkCanceled();
+            var point = color.location();
+            int start = lineColumnToOffset(document, point.line(), point.column());
+            if (start < 0 || point.length() < 1 || point.length() > document.getTextLength() - start) continue;
+            int end = start + point.length();
+            if (end > document.getLineEndOffset(point.line() - 1)
+                    || splitsSurrogatePair(document, start) || splitsSurrogatePair(document, end)) continue;
+            var token = file.findElementAt(start);
+            if (token == null || token.getTextRange().getStartOffset() != start
+                    || token.getTextRange().getEndOffset() != end) continue;
+            var kind = token.getNode().getElementType();
+            if (kind != NagiTokens.get(NagiTokenScanner.Kind.IDENTIFIER)
+                    && kind != NagiTokens.get(NagiTokenScanner.Kind.TYPE)) continue;
+            holder.newSilentAnnotation(HighlightSeverity.INFORMATION).range(new TextRange(start, end))
+                    .textAttributes(color.attributes()).create();
+        }
         for (NagiAssistProtocol.Diagnostic diagnostic : result.response().response().diagnostics()) {
             if (!result.service().diagnosticTargetsFile(result.response(), file.getVirtualFile(), diagnostic.file())) continue;
             String message = diagnostic.message();

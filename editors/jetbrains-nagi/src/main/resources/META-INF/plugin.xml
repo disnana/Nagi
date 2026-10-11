@@ -30,6 +30,8 @@
         <projectService serviceImplementation="com.disnana.nagi.NagiAssistService"/>
         <completion.contributor language="Nagi" implementationClass="com.disnana.nagi.NagiAssistCompletionContributor"/>
         <completion.contributor language="NagiLow" implementationClass="com.disnana.nagi.NagiAssistCompletionContributor"/>
+        <codeInsight.parameterInfo language="Nagi" implementationClass="com.disnana.nagi.NagiParameterInfoHandler"/>
+        <codeInsight.parameterInfo language="NagiLow" implementationClass="com.disnana.nagi.NagiParameterInfoHandler"/>
         <psi.referenceContributor implementation="com.disnana.nagi.NagiAssistReferenceContributor"/>
         <externalAnnotator language="Nagi" implementationClass="com.disnana.nagi.NagiAssistExternalAnnotator"/>
         <externalAnnotator language="NagiLow" implementationClass="com.disnana.nagi.NagiAssistExternalAnnotator"/>
@@ -37,6 +39,12 @@
         <lang.commenter language="NagiLow" implementationClass="com.disnana.nagi.NagiCommenter"/>
         <lang.braceMatcher language="Nagi" implementationClass="com.disnana.nagi.NagiBraceMatcher"/>
         <lang.braceMatcher language="NagiLow" implementationClass="com.disnana.nagi.NagiBraceMatcher$Low"/>
+        <quoteHandler fileType="Nagi" className="com.disnana.nagi.NagiQuoteHandler"/>
+        <quoteHandler fileType="Nagi Low" className="com.disnana.nagi.NagiQuoteHandler"/>
+        <defaultLiveTemplates file="liveTemplates/Nagi"/>
+        <liveTemplateMacro implementation="com.disnana.nagi.NagiIndentMacro"/>
+        <liveTemplateContext contextId="NAGI_HIGH_DECLARATION" implementation="com.disnana.nagi.NagiTemplateContext"/>
+        <liveTemplateContext contextId="NAGI_LOW_DECLARATION" implementation="com.disnana.nagi.NagiTemplateContext$Low"/>
         <lang.foldingBuilder language="Nagi" implementationClass="com.disnana.nagi.NagiFoldingBuilder"/>
         <lang.foldingBuilder language="NagiLow" implementationClass="com.disnana.nagi.NagiFoldingBuilder"/>
         <codeInsight.lineMarkerProvider language="Nagi" implementationClass="com.disnana.nagi.NagiRunLineMarker"/>
@@ -46,8 +54,16 @@
         <applicationService serviceImplementation="com.disnana.nagi.NagiSettings"/>
         <langCodeStyleSettingsProvider implementation="com.disnana.nagi.NagiCodeStyleSettings"/>
         <langCodeStyleSettingsProvider implementation="com.disnana.nagi.NagiCodeStyleSettings$Low"/>
+        <fileIndentOptionsProvider implementation="com.disnana.nagi.NagiIndentOptionsProvider" order="first"/>
+        <editorFactoryListener implementation="com.disnana.nagi.NagiEditorSettingsListener"/>
         <enterHandlerDelegate implementation="com.disnana.nagi.NagiEnterHandler"/>
     </extensions>
+    <applicationListeners>
+        <listener class="com.disnana.nagi.NagiEditorSettingsListener" topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+    </applicationListeners>
+    <projectListeners>
+        <listener class="com.disnana.nagi.NagiEditorSettingsListener" topic="com.intellij.psi.codeStyle.CodeStyleSettingsListener"/>
+    </projectListeners>
     <actions>
         <action id="Nagi.Check" class="com.disnana.nagi.NagiCompilerAction$Check" text="Nagi: Check"
                 description="Save files and check the nearest Nagi project or selected Nagi file">
