@@ -1,0 +1,7 @@
+import std.html as html;
+fn bad_reuse() -> Result[html.HtmlFragment, Error] {
+    let policy = try html.policy("https://example.invalid");
+    let fragment = try html.text(view(policy), "one");
+    let consumed = try html.element(view(policy), html.HtmlTag.P, html.attributes(view(policy)), fragment);
+    return html.join(view(policy), fragment, html.empty(view(policy)));
+}

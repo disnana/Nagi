@@ -1,0 +1,4 @@
+import std.html as html
+import std.http.server as web
+def wrong(document: html.HtmlDocument) -> web.Response:
+    return web.html_response(web.Status.OK, view(document))

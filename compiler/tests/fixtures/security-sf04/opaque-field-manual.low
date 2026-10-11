@@ -1,0 +1,4 @@
+import std.html as html;
+fn read_private(fragment: html.HtmlFragment) -> str {
+    return fragment.encoded;
+}

@@ -1,5 +1,5 @@
 //! Independent, hand-reviewed pre-refactor inventory. Expectations are not regenerated
-//! from the registry. This characterizes legacy behavior, not a new resource policy.
+//! from the registry. SF04 additions follow the separately frozen contract.
 use nagic::ast::{ModuleId, Type};
 use nagic::stdlib::{self, Operation as O, Passing, Resource as R, StandardModule as M};
 use std::collections::HashSet;
@@ -374,9 +374,58 @@ const RESOURCES: &[ResourceExpected] = &[
         [false, false, true, false, true],
         &[],
     ),
+    (
+        R::HtmlPolicy,
+        M::Html,
+        "HtmlPolicy",
+        &[],
+        [false, false, true, true, false],
+        &[],
+    ),
+    (
+        R::HtmlAttributes,
+        M::Html,
+        "HtmlAttributes",
+        &[],
+        [false, false, true, true, false],
+        &[],
+    ),
+    (
+        R::NavigationUrl,
+        M::Html,
+        "NavigationUrl",
+        &[],
+        [false, false, true, true, false],
+        &[],
+    ),
+    (
+        R::HtmlFragment,
+        M::Html,
+        "HtmlFragment",
+        &[],
+        [false, false, true, true, false],
+        &[],
+    ),
+    (
+        R::HtmlDocument,
+        M::Html,
+        "HtmlDocument",
+        &[],
+        [false, false, true, true, false],
+        &[],
+    ),
+    (
+        R::HtmlTag,
+        M::Html,
+        "HtmlTag",
+        &[],
+        [true, true, true, true, true],
+        &[],
+    ),
 ];
 fn module(module: M) -> (&'static str, &'static str, &'static str) {
     match module {
+        M::Html => ("std.html", "stdlib:std.html", "::nagi_runtime::html"),
         M::HttpServer => (
             "std.http.server",
             "stdlib:std.http.server",
@@ -417,8 +466,8 @@ fn registered_resources_match_the_independent_inventory() {
         shared: false,
         debug: false,
     };
-    assert_eq!(RESOURCES.len(), 45);
-    assert_eq!(stdlib::RESOURCES.len(), 45);
+    assert_eq!(RESOURCES.len(), 51);
+    assert_eq!(stdlib::RESOURCES.len(), 51);
     assert_eq!(
         stdlib::RESOURCES.iter().copied().collect::<HashSet<_>>(),
         RESOURCES.iter().map(|r| r.0).collect()
@@ -596,11 +645,24 @@ const OPERATIONS: &[OperationExpected] = &[
     op!(ActorYieldNow,Actor,"yield_now",0,&[],"",None,true,true,"() -> Future[unit]"),
     op!(OwnershipMove,Ownership,"move",1,&[],"M",None,false,false,"(value: T) -> T"),
     op!(ResultMapError,Result,"map_error",2,&[],"MP",None,false,false,"(value: Result[T, E], mapper: fn[E, F]) -> Result[T, F]"),
+    op!(HtmlPolicy,Html,"policy",1,&[],"R",None,false,false,"(base_origin: view[str]) -> Result[HtmlPolicy, Error]"),
+    op!(HtmlLimits,Html,"limits",7,&[],"MMMMMMM",None,false,false,"(policy: HtmlPolicy, output_bytes: i64, input_bytes: i64, nodes: i64, depth: i64, urls: i64, url_bytes: i64) -> Result[HtmlPolicy, Error]"),
+    op!(HtmlEmpty,Html,"empty",1,&[],"R",None,false,false,"(policy: view[HtmlPolicy]) -> HtmlFragment"),
+    op!(HtmlText,Html,"text",2,&[],"RR",None,false,false,"(policy: view[HtmlPolicy], value: view[str]) -> Result[HtmlFragment, Error]"),
+    op!(HtmlAttributes,Html,"attributes",1,&[],"R",None,false,false,"(policy: view[HtmlPolicy]) -> HtmlAttributes"),
+    op!(HtmlTitle,Html,"title",2,&[],"MR",None,false,false,"(attributes: HtmlAttributes, value: view[str]) -> Result[HtmlAttributes, Error]"),
+    op!(HtmlHref,Html,"href",2,&[],"MM",None,false,false,"(attributes: HtmlAttributes, value: NavigationUrl) -> Result[HtmlAttributes, Error]"),
+    op!(HtmlNavigation,Html,"navigation",2,&[],"RR",None,false,false,"(policy: view[HtmlPolicy], value: view[str]) -> Result[NavigationUrl, Error]"),
+    op!(HtmlElement,Html,"element",4,&[],"RMMM",None,false,false,"(policy: view[HtmlPolicy], tag: HtmlTag, attributes: HtmlAttributes, children: HtmlFragment) -> Result[HtmlFragment, Error]"),
+    op!(HtmlJoin,Html,"join",3,&[],"RMM",None,false,false,"(policy: view[HtmlPolicy], left: HtmlFragment, right: HtmlFragment) -> Result[HtmlFragment, Error]"),
+    op!(HtmlCopyFragment,Html,"copy_fragment",2,&[],"RR",None,false,false,"(policy: view[HtmlPolicy], fragment: view[HtmlFragment]) -> Result[HtmlFragment, Error]"),
+    op!(HtmlDocument,Html,"document",3,&[],"RRM",None,false,false,"(policy: view[HtmlPolicy], title: view[str], body: HtmlFragment) -> Result[HtmlDocument, Error]"),
+    op!(HttpHtmlResponse,HttpServer,"html_response",2,&[],"MM",None,false,false,"(status: Status, document: HtmlDocument) -> Response"),
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 98);
-    assert_eq!(stdlib::OPERATIONS.len(), 98);
+    assert_eq!(OPERATIONS.len(), 111);
+    assert_eq!(stdlib::OPERATIONS.len(), 111);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()
@@ -792,6 +854,7 @@ fn registered_accessors_match_the_complete_inventory() {
 }
 
 const CONSTANTS: &[(R, &str)] = &[
+    (R::HtmlTag,"DIV SPAN P H1 H2 STRONG EM UL OL LI A BR"),
     (R::SessionSameSite,"LAX NONE STRICT"),
     (R::AuthFailureKind,"INVALID_CREDENTIAL DENIED EXPIRED INVALID_REQUEST UNAVAILABLE INTERNAL"),
     (R::SqliteBeginMode,"DEFERRED IMMEDIATE EXCLUSIVE"),
@@ -807,7 +870,7 @@ const CONSTANTS: &[(R, &str)] = &[
 ];
 #[test]
 fn registered_constants_match_the_complete_inventory() {
-    assert_eq!(CONSTANTS.len(), 12);
+    assert_eq!(CONSTANTS.len(), 13);
     for &(resource, ..) in RESOURCES {
         let names = CONSTANTS
             .iter()
