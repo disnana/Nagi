@@ -613,6 +613,18 @@ enum PolicySource {
     Bearer,
     Session,
 }
+fn require_session_csrf(source: PolicySource, method: &Method) -> Result<(), Error> {
+    if source == PolicySource::Session
+        && method != Method::GET
+        && method != Method::HEAD
+        && method != Method::OPTIONS
+    {
+        return Err(Error::invalid(
+            "unsafe Session routes require a CSRF-protected policy",
+        ));
+    }
+    Ok(())
+}
 pub struct Policy<S, A> {
     source: PolicySource,
     factory: Arc<PolicyFactory<S, A>>,
@@ -834,6 +846,12 @@ fn default_error(error: Error) -> Response {
 pub fn app_default<S>(state: S) -> App<S, Error> {
     app(state, default_error)
 }
+fn require_route_policies<S, E>(app: &App<S, E>) -> Result<(), Error> {
+    for route in app.routes.values().flatten() {
+        require_session_csrf(route.source, &route.method)?;
+    }
+    Ok(())
+}
 pub fn route<S, E, A, H, Fut>(
     app: App<S, E>,
     method: Method,
@@ -866,6 +884,7 @@ where
     H: Fn(Request, Arc<S>, A) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Result<Response, F>> + Send + 'static,
 {
+    require_session_csrf(policy.source, &method)?;
     if !path.starts_with('/')
         || path
             .bytes()
@@ -1298,6 +1317,7 @@ where
     E: 'static,
 {
     require_authority(&options)?;
+    require_route_policies(&app)?;
     let port = u16::try_from(port)
         .ok()
         .filter(|port| *port != 0)
@@ -1323,6 +1343,7 @@ where
     E: 'static,
 {
     require_authority(&options)?;
+    require_route_policies(&app)?;
     let app = Arc::new(app);
     let options = Arc::new(options);
     let connections = Arc::new(Semaphore::new(options.connections));
@@ -1423,4 +1444,15 @@ pub(crate) fn conflicting_cache_for_test(mut response: Response) -> Response {
         .headers
         .insert(names::CACHE_CONTROL, HeaderValue::from_static("public"));
     response
+}
+
+// Unit-only view of the actual destructive finalizer. No public route, policy
+// bypass, authority mint or transport success is supplied by this adapter.
+#[cfg(test)]
+pub(crate) fn session_delivery_headers_for_test(
+    response: Response,
+    owner: &LeaseOwner,
+) -> (StatusCode, axum::http::HeaderMap) {
+    let wire = finalize_session_response(response, owner, PolicySource::Session, false);
+    (wire.status(), wire.into_parts().0.headers)
 }

@@ -255,10 +255,12 @@ fn assert_private(reply: &Received, expected: u16) {
     assert_eq!(reply.all("vary"), vec!["Cookie"]);
     assert!(reply.all("set-cookie").is_empty());
 }
+// These handlers inspect identity/grant or terminal behavior; they perform
+// no Session/business mutation. Use safe GET while B1 unsafe guard is pending.
 async fn session_server(f: &CookieFixture, calls: Arc<AtomicUsize>) -> Server {
     let app = route(
         app_default(()),
-        Method::POST,
+        Method::GET,
         "/owned",
         session_authenticated_policy(session::clone_store(&f.store)),
         move |_, _, scope| {
@@ -278,26 +280,26 @@ async fn session_real_lookup_binds_request_and_classifies_all_credentials() {
     let calls = Arc::new(AtomicUsize::new(0));
     let server = session_server(&fixture, Arc::clone(&calls)).await;
     let valid = format!("Cookie: {}\r\n", fixture.cookie);
-    assert_private(&cookie_request(&server, "POST", &valid, "").await, 200);
-    let missing = cookie_request(&server, "POST", "", "").await;
+    assert_private(&cookie_request(&server, "GET", &valid, "").await, 200);
+    let missing = cookie_request(&server, "GET", "", "").await;
     assert_private(&missing, 401);
     assert_eq!(missing.all("www-authenticate"), vec!["Session"]);
     assert_private(
-        &cookie_request(&server, "POST", "Cookie: __Host-owned=\r\n", "").await,
+        &cookie_request(&server, "GET", "Cookie: __Host-owned=\r\n", "").await,
         401,
     );
     assert_private(
-        &cookie_request(&server, "POST", "Cookie: __Host-owned=ordinary\r\n", "").await,
+        &cookie_request(&server, "GET", "Cookie: __Host-owned=ordinary\r\n", "").await,
         401,
     );
     assert_private(
-        &cookie_request(&server, "POST", &format!("{valid}{valid}"), "").await,
+        &cookie_request(&server, "GET", &format!("{valid}{valid}"), "").await,
         400,
     );
     assert_private(
         &cookie_request(
             &server,
-            "POST",
+            "GET",
             &format!("{valid}Authorization: Bearer owned\r\n"),
             "",
         )
@@ -305,17 +307,11 @@ async fn session_real_lookup_binds_request_and_classifies_all_credentials() {
         400,
     );
     assert_private(
-        &cookie_request(
-            &server,
-            "POST",
-            &format!("{valid}Cookie: malformed\r\n"),
-            "",
-        )
-        .await,
+        &cookie_request(&server, "GET", &format!("{valid}Cookie: malformed\r\n"), "").await,
         400,
     );
-    assert_private(&cookie_request(&server, "POST", &valid, "small").await, 413);
-    assert_private(&cookie_request(&server, "POST", &valid, "").await, 200);
+    assert_private(&cookie_request(&server, "GET", &valid, "small").await, 413);
+    assert_private(&cookie_request(&server, "GET", &valid, "").await, 200);
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     server.stop().await;
     fixture.stop().await;
@@ -326,7 +322,7 @@ async fn session_authorizer_receives_real_metadata_and_foreign_grant_is_refused(
     let fixture = CookieFixture::new().await;
     let app = route(
         app_default(()),
-        Method::POST,
+        Method::GET,
         "/owned",
         session_authorized_policy(session::clone_store(&fixture.store), |scope, _, _| async {
             assert_eq!(scope.subject(), 7);
@@ -348,13 +344,13 @@ async fn session_authorizer_receives_real_metadata_and_foreign_grant_is_refused(
     .unwrap();
     let server = Server::new(app, options(4, 1000, 1000, 1000).unwrap()).await;
     let valid = format!("Cookie: {}\r\n", fixture.cookie);
-    assert_private(&cookie_request(&server, "POST", &valid, "").await, 200);
+    assert_private(&cookie_request(&server, "GET", &valid, "").await, 200);
     server.stop().await;
     let foreign_owner = Arc::new(LeaseOwner::new(Instant::now() + Duration::from_secs(5)).unwrap());
     let retained = Arc::clone(&foreign_owner);
     let app = route(
         app_default(()),
-        Method::POST,
+        Method::GET,
         "/owned",
         session_authorized_policy(session::clone_store(&fixture.store), move |_, _, _| {
             let owner = Arc::clone(&retained);
@@ -376,7 +372,7 @@ async fn session_authorizer_receives_real_metadata_and_foreign_grant_is_refused(
     )
     .unwrap();
     let server = Server::new(app, options(4, 1000, 1000, 1000).unwrap()).await;
-    assert_private(&cookie_request(&server, "POST", &valid, "").await, 400);
+    assert_private(&cookie_request(&server, "GET", &valid, "").await, 400);
     server.stop().await;
     drop(foreign_owner);
     fixture.stop().await;
@@ -401,7 +397,7 @@ async fn session_head_mapper_panic_timeout_and_304_use_managed_finalizer() {
     for (mode, status) in [(0, 400), (1, 500), (2, 504), (3, 500)] {
         let app = route(
             app_default(()),
-            Method::POST,
+            Method::GET,
             "/owned",
             session_authenticated_policy(session::clone_store(&fixture.store)),
             move |_, _, _| async move {
@@ -415,7 +411,7 @@ async fn session_head_mapper_panic_timeout_and_304_use_managed_finalizer() {
         )
         .unwrap();
         let server = Server::new(app, options(4, 1000, 20, 1000).unwrap()).await;
-        assert_private(&cookie_request(&server, "POST", &valid, "").await, status);
+        assert_private(&cookie_request(&server, "GET", &valid, "").await, status);
         server.stop().await;
     }
     fixture.stop().await;
@@ -430,13 +426,13 @@ async fn session_bad_host_precedes_closed_pool_lookup_and_cookie_bounds_are_fini
     sqlite::close(&fixture.pool, 2000).await.unwrap();
     let mut socket = server.connect().await;
     let raw =
-        format!("POST /owned HTTP/1.1\r\nHost: other.invalid\r\n{valid}Content-Length: 0\r\n\r\n");
+        format!("GET /owned HTTP/1.1\r\nHost: other.invalid\r\n{valid}Content-Length: 0\r\n\r\n");
     send(&mut socket, raw.as_bytes()).await;
     let reply = response(&mut socket, false).await;
     assert_eq!(reply.status, 400);
     assert_eq!(reply.all("cache-control"), vec!["no-store"]);
     assert!(reply.all("set-cookie").is_empty());
-    assert_private(&cookie_request(&server, "POST", &valid, "").await, 503);
+    assert_private(&cookie_request(&server, "GET", &valid, "").await, 503);
     assert_eq!(calls.load(Ordering::SeqCst), 0);
     server.stop().await;
     fixture.stop().await;

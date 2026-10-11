@@ -1,6 +1,6 @@
 # 認証・認可（未リリース0.2.0 SF01）
 
-認証は「誰か」を確認し、認可は「この対象へこの操作をしてよいか」を確認します。SF01は標準HTTPの明示Policy、requestに結び付いたproofと終了時の失効を提供します。永続Session・Cookie発行・CSRF/CORS・暗号verifier・typed HTML・送信HTTPは後続工程で、Security Foundation全体が完成したとは扱いません。公開済み0.1.xへ遡及適用しません。
+認証は「誰か」を確認し、認可は「この対象へこの操作をしてよいか」を確認します。SF01は標準HTTPの明示Policy、requestに結び付いたproofと終了時の失効を提供します。SF02の永続Session・Cookie発行は部分実装で、CSRF/CORS・暗号verifier・typed HTML・送信HTTPは後続工程です。Security Foundation全体が完成したとは扱いません。公開済み0.1.xへ遡及適用しません。
 
 ## すべてのrouteで方針を選ぶ
 
@@ -75,3 +75,11 @@ finalizerがContent-Typeとnosniff、reserved security/framing headersを所有�
 trusted Rust hostはTxのopaque `reserve_exec` でbounded queueの容量を待ち、予約後に `Grant.submit` の同期callback内で `reservation.enqueue(Query, Parameters)` を呼びます。容量予約は受理ではありません。admissionはgate内の一回permit発行で順序化します。発行前の失効ならnative enqueueは0、発行後の失効ならcallbackの同期enqueue前でも受理済みで、後の失効やHTTP取消は取り消し・rollbackを保証しません。callbackはFutureを返して後からenqueueする形にせず、同期で実queueへ送ります。
 
 DDL/bootstrapはrequestと分離したtrusted管理処理です。Rust hostの固定SQL factoryや手書きFromRowはreview対象です。動的文字列factoryをrequestへ再exportして標準literal契約を迂回しません。[SQLite](sqlite-pool.md) · [移行](migration-0.2.0.md) · [SF05契約](internal/security-foundation/sf05-contract.md)
+
+## Session policy の暫定制限（未リリース SF02）
+
+標準 runtime の `session_authenticated_policy` と `session_authorized_policy` は、CSRF guard のない unsafe method を登録時に拒否します。許可する method は GET・HEAD・OPTIONS だけで、POST・PUT・PATCH・DELETE とその他の method は `Error` の Invalid として拒否します。`route` と `route_mapped` の両方に適用し、`serve`／`serve_listener` も bind／accept 前に全 route を再検査します。通常の Bearer policy は引き続き全 Cookie を拒否します。免除 boolean や認証 source の fallback はありません。
+
+これは unsafe Session route を閉じる先行制限です。認証済 CSRF の token endpoint／guard（B1）、guarded POST の rotate／logout 成功、CORS、実 TLS／browser 検証は未完了です。GET／HEAD／OPTIONS の handler に副作用がないことを checker は証明しません。mutation を GET に移して制限を回避しないでください。
+
+Session の issue／rotate／logout／apply API は存続します。この先行制限は route の登録条件であり、native DB mutation や配送 protocol を削除しません。内部の直接検証を guarded Session HTTP 成功とは数えません。取消は受理済 DB 操作の rollback を保証しません。
