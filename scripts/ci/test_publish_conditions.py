@@ -337,6 +337,11 @@ class PublishConditionTests(unittest.TestCase):
                 False,
             ),
             (
+                "tag pushes never publish",
+                fixture(ref="refs/tags/nagi-v0.1.0", releases=COMPONENTS),
+                False,
+            ),
+            (
                 "non-main pushes never publish",
                 fixture(ref="refs/heads/feature", releases=COMPONENTS),
                 False,
