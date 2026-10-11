@@ -3,7 +3,7 @@
 use crate::{
     ast::*,
     check::EditorQuery,
-    lexer::{lex, K},
+    lexer::{lex, Token, K},
     source::Sources,
 };
 use serde::Deserialize;
@@ -231,20 +231,103 @@ struct Cursor {
     members: bool,
     recovered: Option<String>,
 }
-/// Recover only a cursor-ending, simple expression statement or dotted place.
-/// Recovery is explicitly bounded to a single line. All other syntax failures
-/// return the original diagnostic without semantic facts.
+/// A dotted recovery must be entirely lexer-recognized code. Raw ASCII text
+/// alone would also match dots inside strings or comments.
+fn member_chain_is_code(tokens: &[Token], line: usize, start: usize, caret: usize) -> bool {
+    let mut expected = start;
+    for token in tokens
+        .iter()
+        .filter(|t| t.line == line && t.col >= start && t.col < caret)
+    {
+        if token.col != expected {
+            return false;
+        }
+        expected += match &token.kind {
+            K::Id(name) => name.chars().count(),
+            K::Sym(symbol) if symbol == "." => 1,
+            _ => return false,
+        };
+    }
+    expected == caret
+}
+
+/// Admit only same-line closing punctuation matched to lexer-recognized opens.
+/// Low may terminate the expression before closing its enclosing block. The
+/// recovered input still goes through the normal parser/checker; this is neither
+/// a grammar repair nor a type/scope checker.
+fn closing_tail_is_valid(
+    tokens: &[Token],
+    line: usize,
+    caret: usize,
+    tail: &str,
+    high: bool,
+) -> bool {
+    let mut opens = Vec::new();
+    for token in tokens
+        .iter()
+        .take_while(|t| t.line < line || t.line == line && t.col < caret)
+    {
+        let K::Sym(symbol) = &token.kind else {
+            continue;
+        };
+        match symbol.as_str() {
+            "(" => opens.push('('),
+            "[" => opens.push('['),
+            "{" => opens.push('{'),
+            ")" | "]" | "}" => {
+                let expected = match symbol.as_str() {
+                    ")" => '(',
+                    "]" => '[',
+                    _ => '{',
+                };
+                if opens.pop() != Some(expected) {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut closed = false;
+    let mut terminated = false;
+    for ch in tail.chars().filter(|ch| !ch.is_whitespace()) {
+        let expected = match ch {
+            ')' if !terminated => '(',
+            ']' if !terminated => '[',
+            '}' => '{',
+            ';' if !high && closed && !terminated => {
+                terminated = true;
+                continue;
+            }
+            _ => return false,
+        };
+        if opens.pop() != Some(expected) {
+            return false;
+        }
+        closed = true;
+    }
+    closed
+}
+
+/// Recover only a simple dotted place at a safe line tail, or the existing
+/// cursor-ending name/empty-line recovery. All other syntax failures return the
+/// original diagnostic without fabricated semantic facts.
 fn cursor(query: &Query, text: &str, high: bool) -> Option<Cursor> {
     let (line_byte, line) = line_at(text, query.line)?;
     let caret = byte_column(line, query.column)?;
     let before = &line[..caret];
-    let tail_empty = line[caret..].trim().is_empty();
+    let tail = &line[caret..];
+    let tail_empty = tail.trim().is_empty();
     let tokens = lex(text, high).ok();
+    let scalar_caret = before.chars().count() + 1;
+    let member_tail = tail_empty
+        || tokens.as_ref().is_some_and(|tokens| {
+            closing_tail_is_valid(tokens, query.line, scalar_caret, tail, high)
+        });
     let mut recovered = None;
     let mut members = false;
     let mut start = caret;
     let mut end = caret;
-    if tail_empty {
+    if member_tail {
         // A simple dotted name may occur as an RHS, return value or argument.
         // It cannot contain calls/indexes, and only the final dot/prefix changes.
         let mut chain_start = caret;
@@ -267,6 +350,14 @@ fn cursor(query: &Query, text: &str, high: bool) -> Option<Cursor> {
                     && chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
             });
             if names_valid
+                && tokens.as_ref().is_some_and(|tokens| {
+                    member_chain_is_code(
+                        tokens,
+                        query.line,
+                        before[..chain_start].chars().count() + 1,
+                        scalar_caret,
+                    )
+                })
                 && suffix
                     .chars()
                     .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
@@ -281,7 +372,7 @@ fn cursor(query: &Query, text: &str, high: bool) -> Option<Cursor> {
                 changed.replace_range(line_byte + end..line_byte + caret, &erased);
                 recovered = Some(changed);
             }
-        } else if tokens.is_none() || before.trim().is_empty() {
+        } else if tail_empty && (tokens.is_none() || before.trim().is_empty()) {
             let trimmed = before.trim_start();
             let mut chars = trimmed.chars();
             let identifier = chars
