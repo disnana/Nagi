@@ -24,6 +24,7 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -67,8 +68,12 @@ public abstract class NagiCompilerAction extends AnAction implements DumbAware {
             int timeout = values.checkTimeoutSeconds;
             new Task.Backgroundable(project, "Starting Nagi " + command, true) {
                 @Override public void run(@NotNull ProgressIndicator indicator) {
-                    if (indicator.isCanceled() || project.isDisposed()) return;
+                    if (indicator.isCanceled() || project.isDisposed() || !TrustedProjects.isProjectTrusted(project)) return;
                     try {
+                        // saveAllDocuments() can finish before EAP VFS writes reach disk.
+                        // The compiler reads ordinary paths, so wait off the EDT before spawning it.
+                        flushInputs();
+                        if (indicator.isCanceled() || project.isDisposed() || !TrustedProjects.isProjectTrusted(project)) return;
                         var line = new GeneralCommandLine(plan.executable()).withParameters(plan.arguments())
                                 .withWorkDirectory(plan.directory().toFile()).withCharset(StandardCharsets.UTF_8);
                         if (command.equals("run")) line.withEnvironment("NAGI_RUN_RETENTION", "latest");
@@ -92,6 +97,11 @@ public abstract class NagiCompilerAction extends AnAction implements DumbAware {
                                     .withFilter(new NagiDiagnosticFilter(project, plan.directory()))
                                     .withStop(handler::destroyProcess, () -> !handler.isProcessTerminated()).run();
                         });
+                    } catch (IOException exception) {
+                        ApplicationManager.getApplication().invokeLater(() -> {
+                            if (!project.isDisposed()) Messages.showErrorDialog(project,
+                                    "Could not finish saving Nagi inputs before starting the compiler.\n\n" + exception.getMessage(), "Nagi");
+                        });
                     } catch (ExecutionException exception) {
                         ApplicationManager.getApplication().invokeLater(() -> {
                             if (!project.isDisposed()) Messages.showErrorDialog(project,
@@ -112,6 +122,9 @@ public abstract class NagiCompilerAction extends AnAction implements DumbAware {
         var documents = FileDocumentManager.getInstance();
         documents.saveAllDocuments();
         return documents.getUnsavedDocuments().length == 0;
+    }
+    void flushInputs() throws IOException {
+        NagiSaveBarrier.awaitDiskWrites();
     }
     static void stopBeforeConsole(OSProcessHandler handler) {
         // destroyProcess is deferred by the platform until startNotify. The console
