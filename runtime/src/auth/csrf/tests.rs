@@ -145,7 +145,11 @@ impl Fixture {
 
 #[tokio::test]
 async fn same_queue_reopen_reuses_data_context_without_refreshing_token_expiry() {
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    let observer = crate::auth::stage_observer::Guard::new(1);
     let f = Fixture::new(2, 176).await;
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    observer.attach(&f.inner.stage_slot);
     assert!(f.inner.native.same_private_queue(&f.pool));
     let (o, b, digest, expiry) = f.issue().await;
     let reopened = session::open(
@@ -159,6 +163,8 @@ async fn same_queue_reopen_reuses_data_context_without_refreshing_token_expiry()
         .await
         .unwrap();
     assert!(data.matches_store(&f.store));
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    observer.attach(&data.inner.stage_slot);
     data.inner
         .checkpoint(&o.lease.lease, &b, digest)
         .await
@@ -177,6 +183,8 @@ async fn same_queue_reopen_reuses_data_context_without_refreshing_token_expiry()
     sqlite::rollback(tx).await.unwrap();
     drop(o);
     f.stop().await;
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    observer.emit();
 }
 #[tokio::test]
 async fn bytes_limit_is_independent_and_expired_cleanup_spends_one_batch() {

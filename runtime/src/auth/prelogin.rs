@@ -1,6 +1,8 @@
 //! Checked pre-login startup, closed bootstrap and BrowserLogin HTTP dispatch.
 //! Compiler integration remains deferred.
 //! Secrets have one request owner; only digests cross asynchronous database waits.
+#[cfg(all(test, nagi_auth_stage_diag))]
+use super::stage_observer::{Event, Op, Stage, Trace};
 use super::{session, CredentialSource, FailureKind, Lease, LeaseOwner, VerifiedIdentity};
 use crate::{sqlite, FromRow};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
@@ -256,6 +258,8 @@ pub(crate) struct Pool {
     incarnation: [u8; 32],
     config: String,
     origin: String,
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    stage_slot: std::sync::atomic::AtomicU8,
     #[cfg(test)]
     business_enqueues: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
@@ -461,6 +465,7 @@ async fn open_bound(
         ;
         Ok(Pool {
             native:sqlite::clone_pool(&native),context,options,cookie,incarnation,config,origin:origin.to_owned(),
+            #[cfg(all(test, nagi_auth_stage_diag))] stage_slot:std::sync::atomic::AtomicU8::new(0),
             #[cfg(test)] business_enqueues:std::sync::atomic::AtomicUsize::new(0),
             #[cfg(test)] postcommit_wait:None,
             #[cfg(test)] preconsume_wait:None,
@@ -871,6 +876,10 @@ impl Pool {
         }
     }
     async fn bootstrap(&self, owner: &RequestOwner, old: Option<Previous>) -> Result<(), Failure> {
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        let mut trace = Trace::new(&self.stage_slot, Op::Bootstrap);
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.record(Stage::Entry, Event::Seen, None, None);
         // Async laziness means an unpolled bootstrap performs no entropy/SQL.
         owner.lease.lease.validate().map_err(Failure::authority)?;
         #[cfg(test)]
@@ -882,6 +891,8 @@ impl Pool {
         let tx = sqlite::begin(&self.native, sqlite::BeginMode::Immediate)
             .await
             .map_err(Failure::database)?;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.record(Stage::BeginAck, Event::Passed, None, None);
         let mut wall = None;
         let result = async {
             let m=self.check(&tx,&mut wall).await?;
@@ -919,6 +930,8 @@ impl Pool {
             }
             let expiry=c.floor_ms.checked_add(self.options.ttl_ms).ok_or_else(Failure::unavailable)?;
             let deadline=bootstrap_deadline(&c,expiry)?;
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(Stage::Expiry, Event::Nominal, Some((expiry,c.ceil_ms)), Some((deadline,c.monotonic)));
             let mut inserted=false;
 
             for attempt in 0..self.options.collision_attempts {
@@ -934,8 +947,12 @@ impl Pool {
                 let fresh=self.clock(&mut wall)?;
 
                 if fresh.ceil_ms>=expiry{
+                    #[cfg(all(test, nagi_auth_stage_diag))]
+                    trace.record(Stage::Precommit, Event::Refused, Some((expiry,fresh.ceil_ms)), Some((deadline,fresh.monotonic)));
                     return Err(Failure::unavailable());
                 }
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                trace.record(Stage::Precommit, Event::Passed, Some((expiry,fresh.ceil_ms)), Some((deadline,fresh.monotonic)));
                 let p=sqlite::bind_bytes(sqlite::parameters(),input.handle.to_vec());
                 let p=sqlite::bind_bytes(p,input.token.to_vec());
                 let p=sqlite::bind_i64(p,expiry);
@@ -963,15 +980,73 @@ impl Pool {
             sqlite::exec(&tx,sqlite::literal("UPDATE __nagi_prelogin_meta SET window_start=?,issued=?,last_wall=max(last_wall,?) WHERE id=1"),p).await.map_err(Failure::database)?;
             let final_sample=self.clock(&mut wall)?;
             if expiry<=final_sample.ceil_ms{
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                trace.record(Stage::Precommit, Event::Refused, Some((expiry,final_sample.ceil_ms)), Some((deadline,final_sample.monotonic)));
                 return Err(Failure::unavailable());
             }
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(Stage::Precommit, Event::Passed, Some((expiry,final_sample.ceil_ms)), Some((deadline,final_sample.monotonic)));
             self.maintenance(&tx,wall.ok_or_else(Failure::unavailable)?).await?;
             Ok((expiry,deadline))
         }
         .await;
-        let (expiry, deadline) = self.finish(tx, result, &mut wall).await?;
-        self.postcommit(&mut wall).await?;
+        let finished = self.finish(tx, result, &mut wall).await;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        {
+            trace.record(
+                Stage::FinishAck,
+                if finished.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                None,
+                None,
+            );
+            if let Err(e) = &finished {
+                trace.returned(Some((e.kind, e.outcome)), None, None);
+            }
+        }
+        let (expiry, deadline) = finished?;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.record(
+            Stage::PostcommitBefore,
+            Event::Seen,
+            wall.map(|w| (expiry, w)),
+            None,
+        );
+        let maintenance = self.postcommit(&mut wall).await;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        {
+            trace.record(
+                Stage::PostcommitAck,
+                if maintenance.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                wall.map(|w| (expiry, w)),
+                None,
+            );
+            if let Err(e) = &maintenance {
+                trace.returned(Some((e.kind, e.outcome)), wall.map(|w| (expiry, w)), None);
+            }
+        }
+        maintenance?;
         if wall.is_some_and(|v| v >= expiry) {
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::Gate,
+                Event::WallExpired,
+                wall.map(|w| (expiry, w)),
+                None,
+            );
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.returned(
+                Some((FailureKind::Unavailable, sqlite::Outcome::Committed)),
+                wall.map(|w| (expiry, w)),
+                None,
+            );
             return Err(Failure::unavailable().after_commit());
         }
         owner
@@ -983,13 +1058,21 @@ impl Pool {
             )
             .map_err(Failure::after_commit)?;
         pending.armed = false;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.returned(None, wall.map(|w| (expiry, w)), None);
         Ok(())
     }
     async fn claim(&self, owner: &RequestOwner, input: ClaimInput) -> Result<Consumed, Failure> {
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        let mut trace = Trace::new(&self.stage_slot, Op::Claim);
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.record(Stage::Entry, Event::Seen, None, None);
         owner.lease.lease.validate().map_err(Failure::authority)?;
         let tx = sqlite::begin(&self.native, sqlite::BeginMode::Immediate)
             .await
             .map_err(Failure::database)?;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.record(Stage::BeginAck, Event::Passed, None, None);
         let mut wall = None;
         let result = async {
             self.check(&tx, &mut wall).await?;
@@ -1010,8 +1093,17 @@ impl Pool {
             if !bool::from(handle.ct_eq(&input.handle) & token.ct_eq(&input.token))
                 || c.ceil_ms >= row.expiry
             {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                trace.record(Stage::Row, Event::Miss, Some((row.expiry, c.ceil_ms)), None);
                 return Err(Failure::denied());
             }
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::Row,
+                Event::Match,
+                Some((row.expiry, c.ceil_ms)),
+                None,
+            );
             let remaining = u64::try_from(
                 row.expiry
                     .checked_sub(c.ceil_ms)
@@ -1022,6 +1114,13 @@ impl Pool {
                 .monotonic
                 .checked_add(Duration::from_millis(remaining))
                 .ok_or_else(Failure::unavailable)?;
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::Expiry,
+                Event::Nominal,
+                Some((row.expiry, c.ceil_ms)),
+                Some((deadline, c.monotonic)),
+            );
             {
                 let mut gate = owner
                     .lease
@@ -1055,8 +1154,22 @@ impl Pool {
             let fresh = self.clock(&mut wall)?;
 
             if fresh.ceil_ms >= row.expiry || deadline <= Instant::now() {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                trace.record(
+                    Stage::Precommit,
+                    Event::Refused,
+                    Some((row.expiry, fresh.ceil_ms)),
+                    Some((deadline, fresh.monotonic)),
+                );
                 return Err(Failure::denied());
             }
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::Precommit,
+                Event::Passed,
+                Some((row.expiry, fresh.ceil_ms)),
+                Some((deadline, fresh.monotonic)),
+            );
             let p = sqlite::bind_bytes(sqlite::parameters(), input.handle.to_vec());
             let p = sqlite::bind_i64(p, fresh.ceil_ms);
             let reply = {
@@ -1081,8 +1194,22 @@ impl Pool {
             }
             let final_sample = self.clock(&mut wall)?;
             if final_sample.ceil_ms >= row.expiry || deadline <= Instant::now() {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                trace.record(
+                    Stage::Precommit,
+                    Event::Refused,
+                    Some((row.expiry, final_sample.ceil_ms)),
+                    Some((deadline, final_sample.monotonic)),
+                );
                 return Err(Failure::denied());
             }
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::Precommit,
+                Event::Passed,
+                Some((row.expiry, final_sample.ceil_ms)),
+                Some((deadline, final_sample.monotonic)),
+            );
             self.maintenance(&tx, wall.ok_or_else(Failure::unavailable)?)
                 .await?;
             Ok((deadline, row.expiry))
@@ -1091,30 +1218,90 @@ impl Pool {
         let (deadline, expiry) = match self.finish(tx, result, &mut wall).await {
             Ok(value) => {
                 owner.mark_consumed();
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                trace.record(Stage::FinishAck, Event::Passed, None, None);
                 value
             }
             Err(error) => {
                 if error.business_committed {
                     owner.mark_consumed();
                 }
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                {
+                    trace.record(Stage::FinishAck, Event::Refused, None, None);
+                    trace.returned(Some((error.kind, error.outcome)), None, None);
+                }
                 return Err(error);
             }
         };
-        self.postcommit(&mut wall).await?;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.record(
+            Stage::PostcommitBefore,
+            Event::Seen,
+            wall.map(|w| (expiry, w)),
+            None,
+        );
+        let maintenance = self.postcommit(&mut wall).await;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        {
+            trace.record(
+                Stage::PostcommitAck,
+                if maintenance.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                wall.map(|w| (expiry, w)),
+                None,
+            );
+            if let Err(e) = &maintenance {
+                trace.returned(Some((e.kind, e.outcome)), wall.map(|w| (expiry, w)), None);
+            }
+        }
+        maintenance?;
         if wall.is_some_and(|v| v >= expiry) {
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            {
+                trace.record(
+                    Stage::Gate,
+                    Event::WallExpired,
+                    wall.map(|w| (expiry, w)),
+                    None,
+                );
+                trace.returned(
+                    Some((FailureKind::Expired, sqlite::Outcome::Committed)),
+                    wall.map(|w| (expiry, w)),
+                    None,
+                );
+            }
             return Err(Failure::expired().after_commit());
         }
         {
-            let _gate = owner
+            let gate_result = owner
                 .lease
                 .lease
                 .checked_gate()
                 .map_err(Failure::authority)
-                .map_err(Failure::after_commit)?;
+                .map_err(Failure::after_commit);
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            if let Err(e) = &gate_result {
+                trace.record(
+                    Stage::Gate,
+                    Event::GateExpiredOrEnded,
+                    wall.map(|w| (expiry, w)),
+                    None,
+                );
+                trace.returned(Some((e.kind, e.outcome)), wall.map(|w| (expiry, w)), None);
+            }
+            let _gate = gate_result?;
             if deadline <= Instant::now() {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                trace.mono_expired_local(wall.map(|w| (expiry, w)));
                 return Err(Failure::expired().after_commit());
             }
         }
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.returned(None, wall.map(|w| (expiry, w)), None);
         Ok(Consumed {
             lease: Arc::clone(&owner.lease.lease),
             deadline,

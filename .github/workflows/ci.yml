@@ -105,6 +105,32 @@ jobs:
               if not re.search(pattern, text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
+      - name: Capture bounded Session auth stages before broad checks
+        id: auth_stage_diag
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-csrf.raw" 2>&1
+          csrf_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-prelogin.raw" 2>&1
+          prelogin_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
+          broad_rc=$?
+          python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc"
+          sanitize_rc=$?
+          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw"
+          exit "$sanitize_rc"
+      - name: Preserve bounded Session auth-stage traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-stage-linux
+          path: |
+            ${{ runner.temp }}/auth-stage-csrf.trace
+            ${{ runner.temp }}/auth-stage-prelogin.trace
+            ${{ runner.temp }}/auth-stage-broad.trace
+          if-no-files-found: ignore
       - name: Check B1 Session CSRF runtime and public socket contracts
         shell: bash
         run: |
@@ -226,6 +252,10 @@ jobs:
       - run: python tests/route_integration.py
       - run: python tests/http_stdlib_integration.py
       - run: ./target/release/examples/fuzz-smoke
+      - name: Enforce Session auth-stage supplement after normal checks
+        if: always() && steps.auth_stage_diag.outcome != 'skipped'
+        shell: bash
+        run: test '${{ steps.auth_stage_diag.outcome }}' = success
       - name: Preserve compiler and application failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
@@ -394,6 +424,32 @@ jobs:
               if not re.search(pattern, text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
+      - name: Capture bounded Session auth stages before broad checks
+        id: auth_stage_diag
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-csrf.raw" 2>&1
+          csrf_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-prelogin.raw" 2>&1
+          prelogin_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
+          broad_rc=$?
+          python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc"
+          sanitize_rc=$?
+          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw"
+          exit "$sanitize_rc"
+      - name: Preserve bounded Session auth-stage traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-stage-${{ matrix.platform }}
+          path: |
+            ${{ runner.temp }}/auth-stage-csrf.trace
+            ${{ runner.temp }}/auth-stage-prelogin.trace
+            ${{ runner.temp }}/auth-stage-broad.trace
+          if-no-files-found: ignore
       - name: Check B1 Session CSRF runtime and public socket contracts
         shell: bash
         run: |
@@ -707,6 +763,10 @@ jobs:
           name: http413-observation-${{ matrix.platform }}
           path: build/compiler-failures/http413-nodelay-*.json
           if-no-files-found: ignore
+      - name: Enforce Session auth-stage supplement after normal checks
+        if: always() && steps.auth_stage_diag.outcome != 'skipped'
+        shell: bash
+        run: test '${{ steps.auth_stage_diag.outcome }}' = success
       - name: Preserve target-platform compiler, application, and HTTP observation evidence
         if: failure()
         uses: actions/upload-artifact@v4
