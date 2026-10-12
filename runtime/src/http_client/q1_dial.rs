@@ -327,6 +327,7 @@ impl DialAttempt {
 
 #[derive(Debug)]
 pub(crate) struct HttpEnqueueTicket {
+    plan: Arc<DialPlanBrand>,
     operation_id: u64,
 }
 
@@ -551,12 +552,17 @@ impl DialPlan {
         }
         self.enqueue_issued = true;
         Ok(HttpEnqueueTicket {
+            plan: Arc::clone(&self.brand),
             operation_id: self.ticket.operation_id(),
         })
     }
 
     pub(crate) fn finish_http(&mut self, ticket: HttpEnqueueTicket) -> Result<(), Q1Error> {
-        if !self.enqueue_issued || ticket.operation_id != self.ticket.operation_id() {
+        if self.finished
+            || !self.enqueue_issued
+            || !Arc::ptr_eq(&self.brand, &ticket.plan)
+            || ticket.operation_id != self.ticket.operation_id()
+        {
             self.finished = true;
             return Err(Q1Error::PlanFinished);
         }

@@ -1113,3 +1113,147 @@ fn review_q1_tls_and_enqueue_stages_observe_original_operation_end() {
         Q1Error::PlanStopped(PlanStop::OperationExpired),
     );
 }
+fn ready_http_plan(now: Instant) -> DialPlan {
+    let control = AttemptControl::default();
+    let mut plan = one_plan(now);
+    let attempt = plan.next_attempt(now, &control).unwrap();
+    plan.connected_after_peer_check(attempt, now + Duration::from_secs(1), &control)
+        .unwrap();
+    plan.start_tls(now + Duration::from_secs(2), &control)
+        .unwrap();
+    plan.finish_tls(now + Duration::from_secs(3), &control)
+        .unwrap();
+    plan
+}
+
+#[test]
+fn review_enqueue_foreign_same_numeric_id_is_terminal() {
+    let now = Instant::now();
+    let control = AttemptControl::default();
+    let mut first = ready_http_plan(now);
+    let mut second = ready_http_plan(now);
+    assert_eq!(
+        first.operation_id_for_test(),
+        second.operation_id_for_test()
+    );
+    assert_eq!(first.identity_for_test(), second.identity_for_test());
+    let first_ticket = first
+        .take_http_enqueue_ticket(now + Duration::from_secs(4), &control)
+        .unwrap();
+    let second_ticket = second
+        .take_http_enqueue_ticket(now + Duration::from_secs(4), &control)
+        .unwrap();
+    expect_q1(first.finish_http(second_ticket), Q1Error::PlanFinished);
+    expect_q1(second.finish_http(first_ticket), Q1Error::PlanFinished);
+    expect_q1(
+        first.take_http_enqueue_ticket(now + Duration::from_secs(5), &control),
+        Q1Error::NotConnected,
+    );
+}
+
+#[test]
+fn review_enqueue_ticket_after_terminal_stop_cannot_finish() {
+    let now = Instant::now();
+    let mut plan = ready_http_plan(now);
+    let mut control = AttemptControl::default();
+    let ticket = plan
+        .take_http_enqueue_ticket(now + Duration::from_secs(4), &control)
+        .unwrap();
+    control.cancel();
+    expect_q1(
+        plan.take_http_enqueue_ticket(now + Duration::from_secs(5), &control),
+        Q1Error::PlanStopped(PlanStop::Cancelled),
+    );
+    expect_q1(plan.finish_http(ticket), Q1Error::PlanFinished);
+    expect_q1(
+        plan.take_http_enqueue_ticket(now + Duration::from_secs(6), &control),
+        Q1Error::NotConnected,
+    );
+}
+
+#[test]
+fn review_enqueue_own_ticket_control_succeeds_once() {
+    let now = Instant::now();
+    let control = AttemptControl::default();
+    let mut plan = ready_http_plan(now);
+    let ticket = plan
+        .take_http_enqueue_ticket(now + Duration::from_secs(4), &control)
+        .unwrap();
+    plan.finish_http(ticket).unwrap();
+    expect_q1(
+        plan.take_http_enqueue_ticket(now + Duration::from_secs(5), &control),
+        Q1Error::NotConnected,
+    );
+}
+#[test]
+fn review_enqueue_wrong_numeric_id_and_unissued_plan_fail_closed() {
+    let now = Instant::now();
+    let control = AttemptControl::default();
+    let mut owner = ready_http_plan(now);
+    let mut foreign = ready_http_plan(now);
+    let foreign_ticket = foreign
+        .take_http_enqueue_ticket(now + Duration::from_secs(4), &control)
+        .unwrap();
+    expect_q1(owner.finish_http(foreign_ticket), Q1Error::PlanFinished);
+    expect_q1(
+        owner.take_http_enqueue_ticket(now + Duration::from_secs(5), &control),
+        Q1Error::NotConnected,
+    );
+    let mut own = ready_http_plan(now);
+    let own_ticket = own
+        .take_http_enqueue_ticket(now + Duration::from_secs(4), &control)
+        .unwrap();
+    let wrong_id = HttpEnqueueTicket {
+        plan: Arc::clone(&own.brand),
+        operation_id: own_ticket.operation_id() + 1,
+    };
+    expect_q1(own.finish_http(wrong_id), Q1Error::PlanFinished);
+    drop(own_ticket);
+}
+
+#[test]
+fn review_enqueue_success_then_private_duplicate_is_terminal() {
+    let now = Instant::now();
+    let control = AttemptControl::default();
+    let mut plan = ready_http_plan(now);
+    let ticket = plan
+        .take_http_enqueue_ticket(now + Duration::from_secs(4), &control)
+        .unwrap();
+    // Test-private duplicate exercises the defensive guard; the ticket API is move-only.
+    let duplicate = HttpEnqueueTicket {
+        plan: Arc::clone(&ticket.plan),
+        operation_id: ticket.operation_id(),
+    };
+    plan.finish_http(ticket).unwrap();
+    expect_q1(plan.finish_http(duplicate), Q1Error::PlanFinished);
+}
+
+#[test]
+fn review_enqueue_dropped_ticket_cannot_reopen_or_reset_issuance() {
+    let now = Instant::now();
+    let control = AttemptControl::default();
+    let mut plan = ready_http_plan(now);
+    let ticket = plan
+        .take_http_enqueue_ticket(now + Duration::from_secs(4), &control)
+        .unwrap();
+    drop(ticket);
+    expect_q1(
+        plan.take_http_enqueue_ticket(now + Duration::from_secs(5), &control),
+        Q1Error::EnqueueAlreadyIssued,
+    );
+}
+
+#[test]
+fn review_enqueue_brand_survives_plan_drop_until_ticket_drop() {
+    let now = Instant::now();
+    let control = AttemptControl::default();
+    let mut plan = ready_http_plan(now);
+    let ticket = plan
+        .take_http_enqueue_ticket(now + Duration::from_secs(4), &control)
+        .unwrap();
+    let brand = Arc::downgrade(&plan.brand);
+    drop(plan);
+    assert!(brand.upgrade().is_some());
+    drop(ticket);
+    assert!(brand.upgrade().is_none());
+}
