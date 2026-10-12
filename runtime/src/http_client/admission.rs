@@ -1,4 +1,5 @@
 //! Closed one-use Auth admission into the parent's bounded retained ledger.
+use super::parent_drain::RunnerOwnerHandle;
 use super::*;
 use crate::auth;
 use std::time::Instant;
@@ -6,6 +7,7 @@ use std::time::Instant;
 #[derive(Debug)]
 pub(super) struct Command {
     pub(super) id: u64,
+    pub(super) key: JobKey,
     pub(super) subject: i64,
     pub(super) resource: i64,
     pub(super) end: Instant,
@@ -19,13 +21,13 @@ pub(crate) enum AdmissionError {
 }
 
 struct Reservation {
-    id: u64,
+    key: JobKey,
     payload: Vec<u8>,
     tasks: Vec<TrackedTask>,
 }
 
 impl Owner {
-    fn reserve_command(&mut self, bytes: usize) -> Result<(u64, Vec<TrackedTask>), LedgerError> {
+    fn reserve_command(&mut self, bytes: usize) -> Result<(JobKey, Vec<TrackedTask>), LedgerError> {
         if self.is_closing() {
             return Err(LedgerError::Closing);
         }
@@ -60,19 +62,46 @@ impl Owner {
                     + self.limits.http_drivers,
             )
             .map_err(|_| LedgerError::Allocation)?;
-        Ok((self.next_job_id, tasks))
+        Ok((
+            JobKey {
+                id: self.next_job_id,
+                seal: Arc::new(JobSeal::new()),
+            },
+            tasks,
+        ))
     }
     fn enqueue(
         &mut self,
         subject: i64,
         resource: i64,
         end: Instant,
-        reservation: Reservation,
-    ) -> u64 {
-        let Reservation { id, payload, tasks } = reservation;
+        reservation: &mut std::cell::OnceCell<Reservation>,
+    ) -> Result<JobKey, LedgerError> {
+        self.enqueue_with_after_entry(subject, resource, end, reservation, || {})
+    }
+
+    // The closure is a closed deterministic race hook in tests. The normal
+    // adapter monomorphizes it to a no-op after the successful CAS.
+    fn enqueue_with_after_entry(
+        &mut self,
+        subject: i64,
+        resource: i64,
+        end: Instant,
+        reservation: &mut std::cell::OnceCell<Reservation>,
+        after_entry: impl FnOnce(),
+    ) -> Result<JobKey, LedgerError> {
+        let _entry = self.shared.begin_enqueue()?;
+        after_entry();
+        let Reservation {
+            key,
+            payload,
+            tasks,
+        } = reservation.take().expect("reserved command");
+        let id = key.id;
         let bytes = payload.len();
         self.jobs.push(JobRecord {
             id,
+            seal: Arc::clone(&key.seal),
             tasks,
             dns_frozen: false,
             cancel_requested: false,
@@ -82,6 +111,7 @@ impl Owner {
             started: false,
             queued: Some(Command {
                 id,
+                key: key.clone(),
                 subject,
                 resource,
                 end,
@@ -94,7 +124,27 @@ impl Owner {
         self.reserved_roots[1] += 1;
         self.retained_job_bytes += bytes; // checked by reserve_command
         self.shared.notify();
-        id
+        Ok(key)
+    }
+
+    fn take_command(&mut self) -> Result<Option<Command>, LedgerError> {
+        if self.is_closing() {
+            return Err(LedgerError::Closing);
+        }
+        if self.fault().is_some() {
+            return Err(LedgerError::Faulted);
+        }
+        for job in &mut self.jobs {
+            if job.cancel_requested || job.end.is_some_and(|end| end <= Instant::now()) {
+                continue;
+            }
+            if let Some(command) = job.queued.take() {
+                // The retained record keeps capacity until actual registration
+                // and joins, even after the runner owns the command.
+                return Ok(Some(command));
+            }
+        }
+        Ok(None)
     }
 }
 
@@ -139,6 +189,9 @@ impl ClientSender {
         loop {
             // No lease check is extracted as a bool. The actual consumed Grant
             // issues its permit and captures min(original ceilings) under Lease gate.
+            // This holder precedes the Owner guard in declaration order, so an
+            // Auth or callback unwind drops Owner before any rejected payload.
+            let mut reservation = std::cell::OnceCell::<Reservation>::new();
             {
                 let mut state = owner
                     .lock()
@@ -159,7 +212,7 @@ impl ClientSender {
                         .ok_or(AdmissionError::Ledger(LedgerError::Closing))?
                 };
                 match state.reserve_command(bytes) {
-                    Ok((id, tasks)) => {
+                    Ok((key, tasks)) => {
                         let payload = {
                             let mut book = self
                                 .shared
@@ -175,18 +228,29 @@ impl ClientSender {
                             book.bytes -= record.payload.len();
                             record.payload
                         };
-                        let reservation = Reservation { id, payload, tasks };
+                        reservation.get_or_init(|| Reservation {
+                            key,
+                            payload,
+                            tasks,
+                        });
                         // Lease guard is released by auth before this synchronous
                         // closed enqueue callback; client gate remains held throughout.
-                        return grant
-                            .submit_private(
-                                reservation,
-                                whole_end,
-                                |subject, resource, end, reservation| {
-                                    state.enqueue(subject, resource, end, reservation)
-                                },
-                            )
-                            .map_err(AdmissionError::Auth);
+                        let issued = grant.submit_private(
+                            &mut reservation,
+                            whole_end,
+                            |subject, resource, end, reservation| {
+                                state.enqueue(subject, resource, end, reservation)
+                            },
+                        );
+                        // On Auth refusal or a losing STOP CAS, the owned
+                        // reservation is still here and is dropped after Owner.
+                        drop(state);
+                        drop(reservation);
+                        return match issued {
+                            Ok(Ok(key)) => Ok(key.id()),
+                            Ok(Err(error)) => Err(AdmissionError::Ledger(error)),
+                            Err(error) => Err(AdmissionError::Auth(error)),
+                        };
                     }
                     Err(LedgerError::Capacity) => {}
                     Err(error) => return Err(AdmissionError::Ledger(error)),
@@ -204,30 +268,13 @@ impl ClientSender {
     }
     // Only the private reviewed runner receives a queued bound command. There
     // is no public callback or raw proof-return path. Native IO is a later adapter.
+    #[cfg(test)]
     pub(super) fn take_command(&self) -> Result<Option<Command>, LedgerError> {
         let owner = self.owner.as_ref().ok_or(LedgerError::Closing)?;
         let mut state = owner.lock().map_err(|_| LedgerError::Faulted)?;
-        if state.is_closing() {
-            return Err(LedgerError::Closing);
-        }
-        if state.fault().is_some() {
-            return Err(LedgerError::Faulted);
-        }
-        for job in &mut state.jobs {
-            if job.cancel_requested {
-                continue;
-            }
-            if job.end.is_some_and(|end| end <= Instant::now()) {
-                continue;
-            }
-            if let Some(command) = job.queued.take() {
-                // Reservation remains live across the command-to-first-spawn
-                // gap. Only an actual registered task marks the job started.
-                return Ok(Some(command));
-            }
-        }
-        Ok(None)
+        state.take_command()
     }
+    #[cfg(test)]
     pub(super) fn spawn<F: Future<Output = ()> + Send + 'static>(
         &self,
         id: u64,
@@ -242,6 +289,7 @@ impl ClientSender {
         };
         state.try_spawn(id, kind, future)
     }
+    #[cfg(test)]
     pub(super) fn cancel(&self, id: u64) -> Result<(), LedgerError> {
         self.owner
             .as_ref()
@@ -252,6 +300,7 @@ impl ClientSender {
     }
     // The native adapters must use only a short primitive-specific synchronous
     // callback here. Whole root/lookup futures are never polled under this gate.
+    #[cfg(test)]
     pub(super) fn phase<T>(
         &self,
         id: u64,
@@ -280,6 +329,78 @@ impl ClientSender {
         if job.end.is_none_or(|end| end <= Instant::now()) {
             return Err(LedgerError::Expired);
         }
+        Ok(operation())
+    }
+}
+
+impl RunnerOwnerHandle {
+    pub(super) fn take_command(&self) -> Result<Option<Command>, LedgerError> {
+        self.owner
+            .lock()
+            .map_err(|_| LedgerError::Faulted)?
+            .take_command()
+    }
+
+    // The seal is checked under the same Owner gate as the indexed ledger
+    // transition. The rejected future is returned for Drop outside this gate.
+    pub(super) fn spawn<F: Future<Output = ()> + Send + 'static>(
+        &self,
+        key: &JobKey,
+        kind: TaskKind,
+        future: F,
+    ) -> Result<(), (LedgerError, F)> {
+        let Ok(mut state) = self.owner.lock() else {
+            return Err((LedgerError::Faulted, future));
+        };
+        let index = match state.key_index(key) {
+            Ok(index) => index,
+            Err(error) => return Err((error, future)),
+        };
+        if state.jobs[index].queued.is_some()
+            || (kind == TaskKind::JobRoot && key.seal.root_registered())
+            || (kind == TaskKind::HttpDriver && key.seal.driver_registered())
+            || (kind != TaskKind::JobRoot && !key.seal.root_registered())
+        {
+            return Err((LedgerError::PhaseClosed, future));
+        }
+        let shared = Arc::clone(&state.shared);
+        let _entry = match shared.begin_enqueue() {
+            Ok(entry) => entry,
+            Err(error) => return Err((error, future)),
+        };
+        state.try_spawn_impl(key.id, kind, future, true)
+    }
+
+    pub(super) fn cancel(&self, key: &JobKey) -> Result<(), LedgerError> {
+        let mut state = self.owner.lock().map_err(|_| LedgerError::Faulted)?;
+        state.key_index(key)?;
+        state.request_cancel(key.id)
+    }
+
+    // For a primitive gate only: never poll a resolver, TLS handshake, root,
+    // or HTTP driver Future inside this synchronous Owner-held closure.
+    pub(super) fn phase<T>(
+        &self,
+        key: &JobKey,
+        operation: impl FnOnce() -> T,
+    ) -> Result<T, LedgerError> {
+        let state = self.owner.lock().map_err(|_| LedgerError::Faulted)?;
+        let index = state.key_index(key)?;
+        if state.is_closing() {
+            return Err(LedgerError::Closing);
+        }
+        if state.fault().is_some() {
+            return Err(LedgerError::Faulted);
+        }
+        let job = &state.jobs[index];
+        if job.cancel_requested || !key.seal.root_registered() {
+            return Err(LedgerError::PhaseClosed);
+        }
+        if job.end.is_none_or(|end| end <= Instant::now()) {
+            return Err(LedgerError::Expired);
+        }
+        let shared = Arc::clone(&state.shared);
+        let _entry = shared.begin_enqueue()?;
         Ok(operation())
     }
 }

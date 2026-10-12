@@ -21,6 +21,7 @@ enum ParentFault {
 pub(super) struct DrainRecord {
     pub(super) id: u64,
     pub(super) owner: Arc<Mutex<Owner>>,
+    shared: Arc<Shared>,
     pub(super) monitor: Option<JoinHandle<Option<Fault>>>,
     monitor_cancel_requested: bool,
     monitor_fault: Option<ParentFault>,
@@ -31,6 +32,12 @@ pub(crate) struct ParentDrain {
     next_id: u64,
     closing: bool,
     first_fault: Option<ParentFault>,
+}
+
+// Runner authority is the admitted JobKey, not this non-counted owner handle.
+// Holding a runner cannot keep the last ClientSender EOF open.
+pub(super) struct RunnerOwnerHandle {
+    pub(super) owner: Arc<Mutex<Owner>>,
 }
 
 fn lock_owner(owner: &Mutex<Owner>) -> std::sync::MutexGuard<'_, Owner> {
@@ -45,8 +52,15 @@ fn lock_owner(owner: &Mutex<Owner>) -> std::sync::MutexGuard<'_, Owner> {
     }
 }
 
-async fn monitor(owner: Arc<Mutex<Owner>>, mut events: watch::Receiver<bool>) -> Option<Fault> {
+async fn monitor(
+    owner: Arc<Mutex<Owner>>,
+    shared: Arc<Shared>,
+    mut events: watch::Receiver<bool>,
+) -> Option<Fault> {
     loop {
+        let stopped = shared.stop_notify.notified();
+        tokio::pin!(stopped);
+        stopped.as_mut().enable();
         #[cfg(test)]
         if lock_owner(&owner)
             .shared
@@ -60,6 +74,7 @@ async fn monitor(owner: Arc<Mutex<Owner>>, mut events: watch::Receiver<bool>) ->
             _ = std::future::poll_fn(|cx| lock_owner(&owner).poll_parent(cx)) => {
                 return lock_owner(&owner).fault();
             }
+            _ = stopped => {}
             changed = events.changed() => {
                 if changed.is_err() { lock_owner(&owner).close(); }
             }
@@ -115,14 +130,21 @@ impl ParentDrain {
         self.records.push(DrainRecord {
             id,
             owner: Arc::clone(&retained),
+            shared: Arc::clone(&sender.shared),
             monitor: None,
             monitor_cancel_requested: false,
             monitor_fault: None,
         });
         self.next_id = next;
-        let task = runtime.spawn(monitor(retained, events));
+        let task = runtime.spawn(monitor(retained, Arc::clone(&sender.shared), events));
         self.records.last_mut().expect("registered record").monitor = Some(task);
         Ok((id, sender))
+    }
+    pub(super) fn runner_owner(&self, id: u64) -> Result<RunnerOwnerHandle, ParentError> {
+        let index = self.index(id)?;
+        Ok(RunnerOwnerHandle {
+            owner: Arc::clone(&self.records[index].owner),
+        })
     }
     fn index(&self, id: u64) -> Result<usize, ParentError> {
         self.records
@@ -219,12 +241,10 @@ impl ParentDrain {
 impl Drop for ParentDrain {
     fn drop(&mut self) {
         for record in &self.records {
-            lock_owner(&record.owner).close();
-            if let Some(handle) = &record.monitor {
-                handle.abort();
-            }
+            record.shared.request_stop();
         }
-        // No synchronous actual-join promise. Trusted caller must await shutdown.
+        // This only posts stop. A trusted caller must await shutdown for an
+        // actual monitor join; detached records cannot prove publication.
     }
 }
 

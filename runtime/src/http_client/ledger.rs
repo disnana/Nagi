@@ -10,10 +10,15 @@ use std::{
     },
     task::{Context, Poll, Waker},
 };
-use tokio::{sync::watch, task::JoinHandle};
+use tokio::{
+    sync::{watch, Notify},
+    task::JoinHandle,
+};
 
 const MAX_SLOTS: usize = 64;
 const MAX_WAITER_BYTES: usize = 1024 * 1024;
+const STOP_REQUESTED: u8 = 1;
+const ENQUEUE_ACCEPTED: u8 = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct Limits {
@@ -113,8 +118,8 @@ struct WaiterBook {
 #[derive(Debug)]
 struct Shared {
     senders: AtomicUsize,
-    closing: AtomicBool,
-    closed_tx: watch::Sender<bool>,
+    stop_admit: AtomicU8,
+    stop_notify: Notify,
     waiters: Mutex<WaiterBook>,
     limits: Limits,
     events_tx: watch::Sender<bool>,
@@ -123,24 +128,60 @@ struct Shared {
 }
 
 impl Shared {
-    // All waiter admission and close transitions use this short synchronous gate.
+    // A synchronous destructor only posts stop. The retained monitor performs
+    // the authoritative Owner -> waiter cleanup after taking the Owner gate.
     fn notify(&self) {
         self.events_tx.send_modify(|value| *value = !*value);
     }
-    fn mark_closing(&self) {
-        {
-            let mut book = self
-                .waiters
-                .lock()
-                .unwrap_or_else(|poison| poison.into_inner());
-            if self.closing.swap(true, Ordering::AcqRel) {
-                return;
-            }
-            book.records.clear();
-            book.bytes = 0;
+    fn request_stop(&self) {
+        let old = self.stop_admit.fetch_or(STOP_REQUESTED, Ordering::AcqRel);
+        // No caller-owned Owner, waiter, or watch value lock is taken in Drop.
+        // Every listener registers before checking the atomic stop bit.
+        if old & STOP_REQUESTED == 0 {
+            self.stop_notify.notify_waiters();
         }
-        self.closed_tx.send_replace(true);
-        self.notify();
+    }
+    fn is_stopping(&self) -> bool {
+        self.stop_admit.load(Ordering::Acquire) & STOP_REQUESTED != 0
+    }
+    // The successful CAS is admission's linearization point relative to a
+    // concurrent nonblocking stop request. The Owner gate excludes a second
+    // enqueue until this reservation and record transition is complete.
+    fn begin_enqueue(&self) -> Result<EntryGuard<'_>, LedgerError> {
+        self.stop_admit
+            .compare_exchange(0, ENQUEUE_ACCEPTED, Ordering::AcqRel, Ordering::Acquire)
+            .map(|_| EntryGuard { shared: self })
+            .map_err(|state| {
+                if state & STOP_REQUESTED != 0 {
+                    LedgerError::Closing
+                } else {
+                    LedgerError::Faulted
+                }
+            })
+    }
+    fn clear_waiters(&self) {
+        let mut book = self
+            .waiters
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        book.records.clear();
+        book.bytes = 0;
+    }
+}
+
+// The entry is a short synchronous primitive. A stop request after its CAS
+// cannot revoke the winner, and clearing BUSY must never clear STOP.
+struct EntryGuard<'a> {
+    shared: &'a Shared,
+}
+impl Drop for EntryGuard<'_> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.shared.request_stop();
+        }
+        self.shared
+            .stop_admit
+            .fetch_and(!ENQUEUE_ACCEPTED, Ordering::AcqRel);
     }
 }
 
@@ -153,7 +194,7 @@ pub(crate) struct ClientSender {
 impl ClientSender {
     fn try_clone(&self) -> Result<Self, LedgerError> {
         loop {
-            if self.shared.closing.load(Ordering::Acquire) {
+            if self.shared.is_stopping() {
                 return Err(LedgerError::Closing);
             }
             let count = self.shared.senders.load(Ordering::Acquire);
@@ -166,7 +207,7 @@ impl ClientSender {
                 .compare_exchange_weak(count, count + 1, Ordering::AcqRel, Ordering::Acquire)
                 .is_ok()
             {
-                if self.shared.closing.load(Ordering::Acquire) {
+                if self.shared.is_stopping() {
                     self.shared.senders.fetch_sub(1, Ordering::AcqRel);
                     return Err(LedgerError::Closing);
                 }
@@ -182,7 +223,7 @@ impl ClientSender {
 impl Drop for ClientSender {
     fn drop(&mut self) {
         if self.shared.senders.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.shared.mark_closing();
+            self.shared.request_stop();
         }
     }
 }
@@ -191,24 +232,22 @@ impl Drop for ClientSender {
 struct WaiterTicket {
     id: u64,
     shared: Arc<Shared>,
-    closed_rx: watch::Receiver<bool>,
 }
 
 impl WaiterTicket {
     async fn wait_closed(&mut self) {
         loop {
-            if *self.closed_rx.borrow_and_update() {
+            let notified = self.shared.stop_notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if self.shared.is_stopping() {
+                self.release_registration();
                 return;
             }
-            if self.closed_rx.changed().await.is_err() {
-                return;
-            }
+            notified.await;
         }
     }
-}
-
-impl Drop for WaiterTicket {
-    fn drop(&mut self) {
+    fn release_registration(&self) {
         let mut book = self
             .shared
             .waiters
@@ -220,6 +259,11 @@ impl Drop for WaiterTicket {
         }
     }
 }
+impl Drop for WaiterTicket {
+    fn drop(&mut self) {
+        self.release_registration();
+    }
+}
 
 #[derive(Debug)]
 struct TrackedTask {
@@ -227,6 +271,61 @@ struct TrackedTask {
     handle: Option<JoinHandle<()>>,
     root_signal: Option<Arc<RootSignal>>,
     root_fault_seen: bool,
+}
+
+const ROOT_REGISTERED: u8 = 1;
+const ROOT_ACTUAL_JOINED: u8 = 2;
+const DRIVER_REGISTERED: u8 = 4;
+const DRIVER_ACTUAL_JOINED: u8 = 8;
+
+// Fixed completion storage is allocated before the Auth permit is consumed.
+// Registration and actual join are distinct; neither a reported result nor
+// JoinHandle::is_finished can set an actual-join bit.
+#[derive(Debug)]
+struct JobSeal {
+    completion: AtomicU8,
+}
+impl JobSeal {
+    fn new() -> Self {
+        Self {
+            completion: AtomicU8::new(0),
+        }
+    }
+    fn registered(&self, kind: TaskKind) {
+        let bit = match kind {
+            TaskKind::JobRoot => ROOT_REGISTERED,
+            TaskKind::HttpDriver => DRIVER_REGISTERED,
+            _ => return,
+        };
+        self.completion.fetch_or(bit, Ordering::Release);
+    }
+    fn joined(&self, kind: TaskKind) {
+        let bit = match kind {
+            TaskKind::JobRoot => ROOT_ACTUAL_JOINED,
+            TaskKind::HttpDriver => DRIVER_ACTUAL_JOINED,
+            _ => return,
+        };
+        self.completion.fetch_or(bit, Ordering::Release);
+    }
+    fn root_registered(&self) -> bool {
+        self.completion.load(Ordering::Acquire) & ROOT_REGISTERED != 0
+    }
+    fn driver_registered(&self) -> bool {
+        self.completion.load(Ordering::Acquire) & DRIVER_REGISTERED != 0
+    }
+}
+
+/// An opaque identity for one admitted job. The number is only an index into
+/// the owner's retained records; the Arc identity authorizes a runner port.
+#[derive(Clone, Debug)]
+pub(super) struct JobKey {
+    id: u64,
+    seal: Arc<JobSeal>,
+}
+impl JobKey {
+    pub(super) fn id(&self) -> u64 {
+        self.id
+    }
 }
 
 const ROOT_RUNNING: u8 = 0;
@@ -354,6 +453,7 @@ impl<F> Drop for ObservedFuture<F> {
 #[derive(Debug)]
 struct JobRecord {
     id: u64,
+    seal: Arc<JobSeal>,
     tasks: Vec<TrackedTask>,
     dns_frozen: bool,
     cancel_requested: bool,
@@ -376,6 +476,7 @@ struct Owner {
     reserved_roots: [usize; 2],
     retained_job_bytes: usize,
     job_byte_limit: usize,
+    close_applied: bool,
 }
 
 impl Owner {
@@ -390,12 +491,11 @@ impl Owner {
         waiter_records
             .try_reserve_exact(limits.waiters)
             .map_err(|_| LedgerError::Allocation)?;
-        let (closed_tx, _) = watch::channel(false);
         let (events_tx, _) = watch::channel(false);
         let shared = Arc::new(Shared {
             senders: AtomicUsize::new(1),
-            closing: AtomicBool::new(false),
-            closed_tx,
+            stop_admit: AtomicU8::new(0),
+            stop_notify: Notify::new(),
             waiters: Mutex::new(WaiterBook {
                 records: waiter_records,
                 bytes: 0,
@@ -422,6 +522,7 @@ impl Owner {
                 reserved_roots: [0; 2],
                 retained_job_bytes: 0,
                 job_byte_limit: MAX_WAITER_BYTES,
+                close_applied: false,
             },
             sender,
         ))
@@ -443,9 +544,11 @@ impl Owner {
             .try_reserve(1)
             .map_err(|_| LedgerError::Allocation)?;
         let id = self.next_job_id;
+        let seal = Arc::new(JobSeal::new());
         self.next_job_id = id.checked_add(1).ok_or(LedgerError::Capacity)?;
         self.jobs.push(JobRecord {
             id,
+            seal,
             tasks: Vec::new(),
             dns_frozen: false,
             cancel_requested: false,
@@ -459,6 +562,13 @@ impl Owner {
         Ok(id)
     }
 
+    fn key_index(&self, key: &JobKey) -> Result<usize, LedgerError> {
+        self.jobs
+            .iter()
+            .position(|job| job.id == key.id && Arc::ptr_eq(&job.seal, &key.seal))
+            .ok_or(LedgerError::UnknownJob)
+    }
+
     // Synchronous check/spawn/register with exclusive owner access; no await and
     // no native task on denial. The rejected future is returned to the caller.
     fn try_spawn<F: Future<Output = ()> + Send + 'static>(
@@ -467,7 +577,19 @@ impl Owner {
         kind: TaskKind,
         future: F,
     ) -> Result<(), (LedgerError, F)> {
-        if self.is_closing() {
+        self.try_spawn_impl(id, kind, future, false)
+    }
+
+    // accepted_entry is true only for the branded port after winning the
+    // OPEN -> BUSY CAS. A later STOP cannot revoke that winning primitive.
+    fn try_spawn_impl<F: Future<Output = ()> + Send + 'static>(
+        &mut self,
+        id: u64,
+        kind: TaskKind,
+        future: F,
+        accepted_entry: bool,
+    ) -> Result<(), (LedgerError, F)> {
+        if !accepted_entry && self.is_closing() {
             return Err((LedgerError::Closing, future));
         }
         if self.first_fault.is_some() {
@@ -544,6 +666,7 @@ impl Owner {
             self.reserved_roots[kind.index()] -= 1;
         }
         self.jobs[index].started = true; // actual handle is stored under this gate
+        self.jobs[index].seal.registered(kind);
         self.used_tasks[kind.index()] += 1;
         self.shared.notify();
         Ok(())
@@ -666,6 +789,7 @@ impl Owner {
             };
             let kind = self.jobs[job_index].tasks[task_index].kind;
             self.jobs[job_index].tasks[task_index].handle = None;
+            self.jobs[job_index].seal.joined(kind);
             self.used_tasks[kind.index()] -= 1;
             if let Err(join_error) = result {
                 let unexpected = !self.jobs[job_index].cancel_requested;
@@ -723,7 +847,11 @@ impl Owner {
     }
 
     fn close(&mut self) {
-        self.shared.mark_closing();
+        self.shared.request_stop();
+        if self.close_applied {
+            return;
+        }
+        self.shared.clear_waiters();
         for job in &mut self.jobs {
             job.cancel_requested = true;
             job.queued = None;
@@ -733,6 +861,8 @@ impl Owner {
                 }
             }
         }
+        self.close_applied = true;
+        self.shared.notify();
     }
 
     fn try_register_waiter(
@@ -766,7 +896,6 @@ impl Owner {
         Ok(WaiterTicket {
             id,
             shared: Arc::clone(&self.shared),
-            closed_rx: self.shared.closed_tx.subscribe(),
         })
     }
 
@@ -802,7 +931,7 @@ impl Owner {
             })
     }
     fn is_closing(&self) -> bool {
-        self.shared.closing.load(Ordering::Acquire)
+        self.shared.is_stopping()
     }
     fn latch_fault(&mut self, fault: Fault) {
         self.first_fault.get_or_insert(fault);
@@ -856,6 +985,7 @@ impl Owner {
                 if let Some(handle) = &mut task.handle {
                     if let Poll::Ready(result) = Pin::new(handle).poll(cx) {
                         task.handle = None;
+                        job.seal.joined(task.kind);
                         self.used_tasks[task.kind.index()] -= 1;
                         if let Err(error) = result {
                             if error.is_panic() {
@@ -892,8 +1022,15 @@ impl Owner {
 impl Drop for Owner {
     fn drop(&mut self) {
         // Abort is only a request. A trusted parent must retain this owner and
-        // await close_and_drain; synchronous Drop is not a join oracle.
-        self.close();
+        // observe actual joins. No destructor takes a waiter or watch lock.
+        self.shared.request_stop();
+        for job in &self.jobs {
+            for task in &job.tasks {
+                if let Some(handle) = task.handle.as_ref() {
+                    handle.abort();
+                }
+            }
+        }
     }
 }
 

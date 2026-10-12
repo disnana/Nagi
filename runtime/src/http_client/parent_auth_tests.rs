@@ -542,3 +542,454 @@ fn popped_command_retains_reservations_until_first_actual_task_registration() {
         assert_eq!(owner(&sender).lock().unwrap().used_jobs(), 0);
     });
 }
+
+#[test]
+fn branded_runner_rejects_foreign_same_id_at_every_port() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(2).unwrap();
+        let (a, sender_a) = parent.register(limits(), 16).unwrap();
+        let (b, sender_b) = parent.register(limits(), 16).unwrap();
+        let (_lease_a, id_a) = admit(&sender_a).await;
+        let (_lease_b, id_b) = admit(&sender_b).await;
+        assert_eq!(id_a, id_b);
+        let runner_a = parent.runner_owner(a).unwrap();
+        let runner_b = parent.runner_owner(b).unwrap();
+        let key_a = runner_a.take_command().unwrap().unwrap().key;
+        let key_b = runner_b.take_command().unwrap().unwrap().key;
+        assert!(matches!(
+            runner_a.spawn(&key_b, TaskKind::JobRoot, async {}),
+            Err((LedgerError::UnknownJob, _))
+        ));
+        assert_eq!(
+            owner(&sender_a)
+                .lock()
+                .unwrap()
+                .used_tasks(TaskKind::JobRoot),
+            0
+        );
+        let starts = AtomicUsize::new(0);
+        assert_eq!(
+            runner_a.phase(&key_b, || starts.fetch_add(1, Ordering::SeqCst)),
+            Err(LedgerError::UnknownJob)
+        );
+        assert_eq!(runner_a.cancel(&key_b), Err(LedgerError::UnknownJob));
+        assert_eq!(starts.load(Ordering::SeqCst), 0);
+        assert!(runner_a
+            .spawn(&key_a, TaskKind::JobRoot, pending::<()>())
+            .is_ok());
+        assert_eq!(
+            runner_a.phase(&key_a, || starts.fetch_add(1, Ordering::SeqCst)),
+            Ok(0)
+        );
+        runner_a.cancel(&key_a).unwrap();
+        runner_b.cancel(&key_b).unwrap();
+        parent.shutdown().await;
+    });
+}
+
+#[test]
+fn old_key_cannot_authorize_reused_numeric_slot() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 16).unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let (_lease, first) = admit(&sender).await;
+        let old = runner.take_command().unwrap().unwrap().key;
+        assert_eq!(old.id(), first);
+        runner.cancel(&old).unwrap();
+        {
+            let mut state = owner(&sender).lock().unwrap();
+            state.release_finished_jobs();
+            assert_eq!(state.used_jobs(), 0);
+            state.next_job_id = first; // Private ABA fixture; production never resets IDs.
+        }
+        let (_lease, second) = admit(&sender).await;
+        assert_eq!(first, second);
+        let fresh = runner.take_command().unwrap().unwrap().key;
+        assert!(matches!(
+            runner.spawn(&old, TaskKind::JobRoot, async {}),
+            Err((LedgerError::UnknownJob, _))
+        ));
+        assert_eq!(runner.phase(&old, || ()), Err(LedgerError::UnknownJob));
+        assert_eq!(runner.cancel(&old), Err(LedgerError::UnknownJob));
+        assert_eq!(
+            owner(&sender).lock().unwrap().used_tasks(TaskKind::JobRoot),
+            0
+        );
+        assert!(runner
+            .spawn(&fresh, TaskKind::JobRoot, pending::<()>())
+            .is_ok());
+        runner.cancel(&fresh).unwrap();
+        parent.shutdown().await;
+    });
+}
+
+#[test]
+fn runner_handle_is_not_counted_and_last_sender_closes_eof() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 16).unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        assert_eq!(sender.shared.senders.load(Ordering::Acquire), 1);
+        let (_lease, _) = admit(&sender).await;
+        let key = runner.take_command().unwrap().unwrap().key;
+        assert!(runner
+            .spawn(&key, TaskKind::JobRoot, pending::<()>())
+            .is_ok());
+        assert!(key.seal.root_registered());
+        assert_eq!(
+            key.seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
+            0
+        );
+        drop(sender);
+        assert_eq!(
+            runner
+                .owner
+                .lock()
+                .unwrap()
+                .shared
+                .senders
+                .load(Ordering::Acquire),
+            0
+        );
+        assert_eq!(runner.phase(&key, || ()), Err(LedgerError::Closing));
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), parent.reap_next())
+                .await
+                .unwrap(),
+            Some(client)
+        );
+        assert_ne!(
+            key.seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
+            0
+        );
+        assert_eq!(
+            runner.owner.lock().unwrap().used_tasks(TaskKind::JobRoot),
+            0
+        );
+        assert_eq!(runner.owner.lock().unwrap().used_jobs(), 0);
+    });
+}
+
+#[test]
+fn drop_posts_stop_without_owner_or_waiter_lock() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (_, sender) = parent.register(limits(), 16).unwrap();
+        let retained = Arc::clone(owner(&sender));
+        let shared = Arc::clone(&sender.shared);
+        let owner_gate = retained.lock().unwrap();
+        let waiter_gate = shared.waiters.lock().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            drop(sender);
+            tx.send(()).unwrap();
+        });
+        let timely = rx.recv_timeout(Duration::from_secs(1)).is_ok();
+        drop(waiter_gate);
+        drop(owner_gate);
+        thread.join().unwrap();
+        assert!(timely, "last Sender Drop blocked on Owner/waiter lock");
+        assert!(shared.is_stopping());
+        parent.shutdown().await;
+    });
+}
+
+#[test]
+fn parent_drop_posts_stop_and_pending_grant_cannot_enqueue() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (_, sender) = parent.register(limits(), 16).unwrap();
+        let (_first_lease, first) = admit(&sender).await;
+        let end = Instant::now() + Duration::from_secs(10);
+        let (_second_lease, grant) = make_grant(end);
+        let mut waiting = Box::pin(sender.submit(grant, vec![9], end));
+        assert!(waiting
+            .as_mut()
+            .poll(&mut Context::from_waker(Waker::noop()))
+            .is_pending());
+        let retained = Arc::clone(owner(&sender));
+        let gate = retained.lock().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            drop(parent);
+            tx.send(()).unwrap();
+        });
+        let timely = rx.recv_timeout(Duration::from_secs(1)).is_ok();
+        drop(gate);
+        thread.join().unwrap();
+        assert!(timely, "ParentDrain Drop blocked on Owner lock");
+        assert!(sender.shared.is_stopping());
+        assert!(matches!(
+            waiting.await,
+            Err(AdmissionError::Ledger(LedgerError::Closing))
+        ));
+        assert_eq!(retained.lock().unwrap().next_job_id, first + 1); // No second enqueue.
+        drop(sender);
+    });
+}
+
+#[test]
+fn stop_after_consumed_real_auth_permit_refuses_record_publication() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (_, sender) = parent.register(limits(), 16).unwrap();
+        let end = Instant::now() + Duration::from_secs(10);
+        let (_lease, grant) = make_grant(end);
+        let mut reservation = std::cell::OnceCell::new();
+        {
+            let mut state = owner(&sender).lock().unwrap();
+            let (key, tasks) = state.reserve_command(1).unwrap();
+            reservation.get_or_init(|| Reservation {
+                key,
+                payload: vec![4],
+                tasks,
+            });
+            let answer =
+                grant.submit_private(&mut reservation, end, |subject, resource, bound, slot| {
+                    state.shared.request_stop();
+                    state.enqueue(subject, resource, bound, slot)
+                });
+            assert!(matches!(answer, Ok(Err(LedgerError::Closing))));
+            assert!(reservation.get().is_some());
+            assert_eq!(state.used_jobs(), 0);
+            assert_eq!(state.used_queue, 0);
+            assert_eq!(state.reserved_roots, [0, 0]);
+        }
+        drop(reservation);
+        parent.shutdown().await;
+    });
+}
+
+#[test]
+fn last_sender_drop_does_not_wait_for_watch_value_borrow() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (_, sender) = parent.register(limits(), 16).unwrap();
+        let receiver = sender.shared.events_tx.subscribe();
+        let watch_guard = receiver.borrow();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            drop(sender);
+            tx.send(()).unwrap();
+        });
+        let completed_without_borrow = rx.recv_timeout(Duration::from_secs(1)).is_ok();
+        drop(watch_guard);
+        worker.join().unwrap();
+        parent.shutdown().await;
+        assert!(
+            completed_without_borrow,
+            "Sender Drop waited on watch borrow"
+        );
+    });
+}
+
+#[test]
+fn owner_destructor_posts_stop_without_waiting_for_waiter_gate() {
+    let (owner, sender) = Owner::checked(limits()).unwrap();
+    let shared = Arc::clone(&sender.shared);
+    let waiter_gate = shared.waiters.lock().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        drop(owner);
+        tx.send(()).unwrap();
+    });
+    let completed_without_gate = rx.recv_timeout(Duration::from_secs(1)).is_ok();
+    drop(waiter_gate);
+    worker.join().unwrap();
+    drop(sender);
+    assert!(completed_without_gate, "Owner Drop waited on waiter gate");
+    assert!(shared.is_stopping());
+}
+
+#[test]
+fn entry_guard_preserves_stop_after_a_winning_cas() {
+    let (owner, sender) = Owner::checked(limits()).unwrap();
+    let entry = owner.shared.begin_enqueue().unwrap();
+    owner.shared.request_stop();
+    assert_eq!(
+        owner.shared.stop_admit.load(Ordering::Acquire),
+        STOP_REQUESTED | ENQUEUE_ACCEPTED
+    );
+    drop(entry);
+    assert_eq!(
+        owner.shared.stop_admit.load(Ordering::Acquire),
+        STOP_REQUESTED
+    );
+    assert!(matches!(
+        owner.shared.begin_enqueue(),
+        Err(LedgerError::Closing)
+    ));
+    drop(sender);
+    drop(owner);
+}
+
+#[test]
+fn unwinding_entry_guard_closes_without_clearing_stop() {
+    let (owner, sender) = Owner::checked(limits()).unwrap();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _entry = owner.shared.begin_enqueue().unwrap();
+        panic!("fixture after accepted entry");
+    }));
+    assert!(result.is_err());
+    assert_eq!(
+        owner.shared.stop_admit.load(Ordering::Acquire),
+        STOP_REQUESTED
+    );
+    assert!(matches!(
+        owner.shared.begin_enqueue(),
+        Err(LedgerError::Closing)
+    ));
+    drop(sender);
+    drop(owner);
+}
+
+#[test]
+fn repeated_stop_has_no_self_wake_while_pending_root_is_joined() {
+    runtime().block_on(async {
+        let (mut owner, sender) = Owner::checked(limits()).unwrap();
+        let id = owner.fixture_admit().unwrap();
+        assert!(owner
+            .try_spawn(id, TaskKind::JobRoot, pending::<()>())
+            .is_ok());
+        let mut events = owner.shared.events_tx.subscribe();
+        owner.close();
+        assert!(events.has_changed().unwrap());
+        let _ = events.borrow_and_update();
+        owner.close();
+        owner.close();
+        assert!(!events.has_changed().unwrap());
+
+        let shared = Arc::clone(&owner.shared);
+        let stopped = shared.stop_notify.notified();
+        tokio::pin!(stopped);
+        stopped.as_mut().enable();
+        shared.request_stop();
+        assert!(tokio::time::timeout(Duration::from_millis(20), stopped)
+            .await
+            .is_err());
+        owner.drain_all().await;
+        assert_eq!(owner.used_tasks(TaskKind::JobRoot), 0);
+        assert_eq!(owner.used_jobs(), 0);
+        drop(sender);
+    });
+}
+
+#[test]
+fn auth_enqueue_winning_entry_retains_record_after_concurrent_stop() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (_, sender) = parent.register(limits(), 16).unwrap();
+        let end = Instant::now() + Duration::from_secs(10);
+        let (_lease, grant) = make_grant(end);
+        let mut reservation = std::cell::OnceCell::new();
+        {
+            let mut state = owner(&sender).lock().unwrap();
+            let (key, tasks) = state.reserve_command(1).unwrap();
+            reservation.get_or_init(|| Reservation {
+                key,
+                payload: vec![4],
+                tasks,
+            });
+            let shared = Arc::clone(&sender.shared);
+            let answer =
+                grant.submit_private(&mut reservation, end, |subject, resource, bound, slot| {
+                    state.enqueue_with_after_entry(subject, resource, bound, slot, || {
+                        shared.request_stop();
+                    })
+                });
+            assert!(matches!(answer, Ok(Ok(_))));
+            assert!(reservation.get().is_none());
+            assert_eq!(state.used_jobs(), 1);
+            assert_eq!(state.used_queue, 1);
+            assert!(shared.is_stopping());
+        }
+        drop(reservation);
+        parent.shutdown().await;
+        assert_eq!(owner(&sender).lock().unwrap().used_jobs(), 0);
+        drop(sender);
+    });
+}
+
+#[test]
+fn branded_phase_winner_finishes_once_then_stop_denies_next_entry() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 16).unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let (_lease, _) = admit(&sender).await;
+        let command = runner.take_command().unwrap().unwrap();
+        let key = command.key.clone();
+        drop(command);
+        assert!(runner
+            .spawn(&key, TaskKind::JobRoot, pending::<()>())
+            .is_ok());
+        let shared = Arc::clone(&sender.shared);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let witness = Arc::clone(&calls);
+        assert_eq!(
+            runner.phase(&key, || {
+                shared.request_stop();
+                witness.fetch_add(1, Ordering::SeqCst);
+                7
+            }),
+            Ok(7)
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(runner.phase(&key, || 9), Err(LedgerError::Closing));
+        assert_eq!(
+            key.seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
+            0
+        );
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), parent.reap_next())
+                .await
+                .unwrap(),
+            Some(client)
+        );
+        assert_ne!(
+            key.seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
+            0
+        );
+        assert_eq!(runner.owner.lock().unwrap().used_jobs(), 0);
+        drop(sender);
+    });
+}
+
+#[test]
+fn branded_driver_history_rejects_second_driver_after_first_actual_join() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 16).unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let (_lease, _) = admit(&sender).await;
+        let command = runner.take_command().unwrap().unwrap();
+        let key = command.key.clone();
+        drop(command);
+        assert!(runner
+            .spawn(&key, TaskKind::JobRoot, pending::<()>())
+            .is_ok());
+        let mut events = sender.shared.events_tx.subscribe();
+        assert!(runner.spawn(&key, TaskKind::HttpDriver, async {}).is_ok());
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while key.seal.completion.load(Ordering::Acquire) & DRIVER_ACTUAL_JOINED == 0 {
+                events
+                    .changed()
+                    .await
+                    .expect("retained monitor event stream");
+            }
+        })
+        .await
+        .expect("retained monitor actual driver join");
+        assert_ne!(
+            key.seal.completion.load(Ordering::Acquire) & DRIVER_ACTUAL_JOINED,
+            0
+        );
+        let rejected = runner.spawn(&key, TaskKind::HttpDriver, async {});
+        assert!(matches!(rejected, Err((LedgerError::PhaseClosed, _))));
+        drop(rejected);
+        runner.cancel(&key).unwrap();
+        parent.shutdown().await;
+        drop(sender);
+    });
+}

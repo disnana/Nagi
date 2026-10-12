@@ -106,13 +106,36 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 57, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 16, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 71, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 16, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
               results = re.findall(r"(?m)^test result: ok\. (\d+) passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in .+$", data)
               if running != [str(count)] or results != [str(count)]:
                   raise AssertionError(f"{name}: expected exactly {count} real, passing tests")
+          required_parent = {
+              'http_client::ledger::admission::tests::auth_enqueue_winning_entry_retains_record_after_concurrent_stop',
+              'http_client::ledger::admission::tests::branded_driver_history_rejects_second_driver_after_first_actual_join',
+              'http_client::ledger::admission::tests::branded_phase_winner_finishes_once_then_stop_denies_next_entry',
+              'http_client::ledger::admission::tests::branded_runner_rejects_foreign_same_id_at_every_port',
+              'http_client::ledger::admission::tests::drop_posts_stop_without_owner_or_waiter_lock',
+              'http_client::ledger::admission::tests::entry_guard_preserves_stop_after_a_winning_cas',
+              'http_client::ledger::admission::tests::last_sender_drop_does_not_wait_for_watch_value_borrow',
+              'http_client::ledger::admission::tests::old_key_cannot_authorize_reused_numeric_slot',
+              'http_client::ledger::admission::tests::owner_destructor_posts_stop_without_waiting_for_waiter_gate',
+              'http_client::ledger::admission::tests::parent_drop_posts_stop_and_pending_grant_cannot_enqueue',
+              'http_client::ledger::admission::tests::repeated_stop_has_no_self_wake_while_pending_root_is_joined',
+              'http_client::ledger::admission::tests::runner_handle_is_not_counted_and_last_sender_closes_eof',
+              'http_client::ledger::admission::tests::stop_after_consumed_real_auth_permit_refuses_record_publication',
+              'http_client::ledger::admission::tests::unwinding_entry_guard_closes_without_clearing_stop',
+          }
+          ledger_text = (root / "sf06-private-ledger.log").read_text(encoding="utf-8")
+          passed_parent = set(re.findall(
+              r"(?m)^test (http_client::ledger::admission::tests::[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          ))
+          if not required_parent.issubset(passed_parent):
+              raise AssertionError("SF06 branded parent test names missing or unsuccessful")
           PY_SUMMARY
       - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
         shell: bash
@@ -411,13 +434,36 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 57, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 16, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 71, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 16, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
               results = re.findall(r"(?m)^test result: ok\. (\d+) passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in .+$", data)
               if running != [str(count)] or results != [str(count)]:
                   raise AssertionError(f"{name}: expected exactly {count} real, passing tests")
+          required_parent = {
+              'http_client::ledger::admission::tests::auth_enqueue_winning_entry_retains_record_after_concurrent_stop',
+              'http_client::ledger::admission::tests::branded_driver_history_rejects_second_driver_after_first_actual_join',
+              'http_client::ledger::admission::tests::branded_phase_winner_finishes_once_then_stop_denies_next_entry',
+              'http_client::ledger::admission::tests::branded_runner_rejects_foreign_same_id_at_every_port',
+              'http_client::ledger::admission::tests::drop_posts_stop_without_owner_or_waiter_lock',
+              'http_client::ledger::admission::tests::entry_guard_preserves_stop_after_a_winning_cas',
+              'http_client::ledger::admission::tests::last_sender_drop_does_not_wait_for_watch_value_borrow',
+              'http_client::ledger::admission::tests::old_key_cannot_authorize_reused_numeric_slot',
+              'http_client::ledger::admission::tests::owner_destructor_posts_stop_without_waiting_for_waiter_gate',
+              'http_client::ledger::admission::tests::parent_drop_posts_stop_and_pending_grant_cannot_enqueue',
+              'http_client::ledger::admission::tests::repeated_stop_has_no_self_wake_while_pending_root_is_joined',
+              'http_client::ledger::admission::tests::runner_handle_is_not_counted_and_last_sender_closes_eof',
+              'http_client::ledger::admission::tests::stop_after_consumed_real_auth_permit_refuses_record_publication',
+              'http_client::ledger::admission::tests::unwinding_entry_guard_closes_without_clearing_stop',
+          }
+          ledger_text = (root / "sf06-private-ledger.log").read_text(encoding="utf-8")
+          passed_parent = set(re.findall(
+              r"(?m)^test (http_client::ledger::admission::tests::[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          ))
+          if not required_parent.issubset(passed_parent):
+              raise AssertionError("SF06 branded parent test names missing or unsuccessful")
           PY_SUMMARY
       - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
         shell: bash
