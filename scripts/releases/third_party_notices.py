@@ -111,7 +111,7 @@ def parse_cargo_tree(output: str) -> list[tuple[str, str]]:
 def cargo_tree(root: Path, package: str, target: str) -> list[tuple[str, str]]:
     if package not in ROOT_ROLES or target not in PLATFORM_TARGETS.values():
         raise NoticeError("Unsupported release root or target for notice graph")
-    command = ["cargo", "tree", "--locked", "--offline", "--manifest-path", str(root / "Cargo.toml"),
+    command = ["cargo", "--color", "never", "tree", "--locked", "--offline", "--manifest-path", str(root / "Cargo.toml"),
                "--package", package, "--edges", "normal,build", "--target", target,
                "--format", "{p}", "--prefix", "none", "--quiet"]
     try:
@@ -505,6 +505,23 @@ def _workspace_roots(metadata_by_id: Mapping[str, dict], workspace_members: set[
     return result
 
 
+def _byte_mismatch_details(left_name: str, left: bytes, right_name: str, right: bytes) -> str:
+    first_difference_kind = "identical"
+    for left_byte, right_byte in zip(left, right):
+        if left_byte != right_byte:
+            first_difference_kind = (
+                "line-ending-byte" if {left_byte, right_byte} == {10, 13} else "content-byte")
+            break
+    else:
+        if len(left) != len(right):
+            first_difference_kind = "length-only"
+    return (f"{left_name}_size={len(left)}; "
+            f"{left_name}_sha256={hashlib.sha256(left).hexdigest()}; "
+            f"{right_name}_size={len(right)}; "
+            f"{right_name}_sha256={hashlib.sha256(right).hexdigest()}; "
+            f"first_difference_kind={first_difference_kind}")
+
+
 def validate_workspace_inputs(root: Path, source_commit: str, metadata: dict, lock_data: bytes) -> None:
     """Require Cargo's local graph inputs to be the exact committed files."""
     if not COMMIT.fullmatch(source_commit):
@@ -543,8 +560,14 @@ def validate_workspace_inputs(root: Path, source_commit: str, metadata: dict, lo
                 ["git", "show", f"{source_commit}:{relative}"], cwd=root, stderr=subprocess.DEVNULL)
         except (OSError, subprocess.CalledProcessError) as error:
             raise NoticeError("Cargo graph input is absent from the selected source commit") from error
-        if current != committed or (relative == "Cargo.lock" and committed != lock_data):
-            raise NoticeError("Cargo graph input differs from the selected source commit")
+        if current != committed:
+            details = _byte_mismatch_details("worktree", current, "commit", committed)
+            raise NoticeError(
+                f"Cargo graph input differs from the selected source commit ({relative}; {details})")
+        if relative == "Cargo.lock" and committed != lock_data:
+            details = _byte_mismatch_details("commit", committed, "archive", lock_data)
+            raise NoticeError(
+                f"Cargo.lock differs from the archived release source ({details})")
 
 
 def _selected_registry_packages(lock_data: bytes, metadata: dict,

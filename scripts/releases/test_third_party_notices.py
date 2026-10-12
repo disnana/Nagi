@@ -430,5 +430,43 @@ class ThirdPartyNoticeTests(NoticeGraphFixture):
                                          TARGET, COMMIT, BINARY_SHA256)
 
 
+class CargoTreeCommandTests(unittest.TestCase):
+    def test_cargo_tree_disables_terminal_color_for_machine_output(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        output = ("nagic v0.1.11 (/workspace/Nagi/compiler)\n"
+                  "aws-lc-rs v1.18.1\n"
+                  "aws-lc-rs v1.18.1 (*)\n")
+        result = SimpleNamespace(returncode=0, stdout=output)
+        with patch.dict(os.environ, {"CARGO_TERM_COLOR": "always"}):
+            with patch.object(notices.subprocess, "run", return_value=result) as run:
+                packages = notices.cargo_tree(Path("/workspace/Nagi"), "nagic", TARGET)
+
+        command = run.call_args.args[0]
+        self.assertEqual(command[1:4], ["--color", "never", "tree"])
+        self.assertEqual(packages, [("nagic", "0.1.11"), ("aws-lc-rs", "1.18.1")])
+
+    def test_parser_rejects_ansi_styled_shared_marker(self):
+        colored_marker = "aws-lc-rs v1.18.1 \x1b[33m(*)\x1b[0m"
+        with self.assertRaisesRegex(ValueError, "unrecognized package row"):
+            notices.parse_cargo_tree("nagic v0.1.11\n" + colored_marker + "\n")
+
+
+class WorkspaceInputDiagnosticTests(unittest.TestCase):
+    def test_mismatch_diagnostic_reports_only_size_hash_and_difference_kind(self):
+        current = b"token=example\n"
+        committed = b"token=example\r\n"
+
+        details = notices._byte_mismatch_details("worktree", current, "commit", committed)
+
+        self.assertIn("worktree_size=14", details)
+        self.assertIn("commit_size=15", details)
+        self.assertIn(f"worktree_sha256={hashlib.sha256(current).hexdigest()}", details)
+        self.assertIn(f"commit_sha256={hashlib.sha256(committed).hexdigest()}", details)
+        self.assertIn("first_difference_kind=line-ending-byte", details)
+        self.assertNotIn("token=example", details)
+
+
 if __name__ == "__main__":
     unittest.main()
