@@ -110,6 +110,8 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
+          set -e
+          python scripts/tests/test_auth_stage_diagnostic.py
           set +e
           RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-csrf.raw" 2>&1
           csrf_rc=$?
@@ -117,9 +119,11 @@ jobs:
           prelogin_rc=$?
           RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
           broad_rc=$?
-          python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc"
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2>&1
+          cases_rc=$?
+          python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc" "$cases_rc"
           sanitize_rc=$?
-          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw"
+          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw" "$RUNNER_TEMP/auth-stage-cases.raw"
           exit "$sanitize_rc"
       - name: Preserve bounded Session auth-stage traces
         if: always()
@@ -429,6 +433,8 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
+          set -e
+          python scripts/tests/test_auth_stage_diagnostic.py
           set +e
           RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-csrf.raw" 2>&1
           csrf_rc=$?
@@ -436,9 +442,11 @@ jobs:
           prelogin_rc=$?
           RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
           broad_rc=$?
-          python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc"
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2>&1
+          cases_rc=$?
+          python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc" "$cases_rc"
           sanitize_rc=$?
-          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw"
+          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw" "$RUNNER_TEMP/auth-stage-cases.raw"
           exit "$sanitize_rc"
       - name: Preserve bounded Session auth-stage traces
         if: always()

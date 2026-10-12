@@ -20,15 +20,102 @@ BROAD_SUMMARY = re.compile(r"test result: ok\. [1-9][0-9]* passed; 0 failed; [0-
 EXPECTED_SLOTS = {"csrf": (1,), "prelogin": (2,), "broad": (1, 2)}
 
 
-def capture(name: str, root: pathlib.Path, exit_code: int) -> bool:
+# Exact cfg-identical libtest listing; raw failure names are never copied.
+IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
+QUALIFIED = rf"{IDENT}(?:::{IDENT})*"
+CASE_ENTRY = re.compile(rf"({QUALIFIED}): test\Z")
+CASE_FOOTER = re.compile(r"([0-9]{1,4}) tests, 0 benchmarks\Z")
+FAILED_ROW = re.compile(rf"test ({QUALIFIED}) \.\.\. FAILED\Z")
+FAILED_ITEM = re.compile(rf"    ({QUALIFIED})\Z")
+CASE_LIMIT = 1024
+CASE_NAME_LIMIT = 256
+FAILURE_LIMIT = 16
+
+
+def read_bounded(path: pathlib.Path):
+    try:
+        with path.open("rb") as stream:
+            raw = stream.read(RAW_LIMIT + 1)
+    except OSError:
+        return None, False
+    return (None, True) if len(raw) > RAW_LIMIT else (raw, False)
+
+
+def load_cases(root: pathlib.Path, exit_code: int):
+    if exit_code != 0:
+        return None
+    raw, oversize = read_bounded(root / "auth-stage-cases.raw")
+    if raw is None or oversize:
+        return None
+    names = {}
+    footer = []
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    for line in text.splitlines():
+        entry = CASE_ENTRY.fullmatch(line)
+        if entry:
+            name = entry.group(1)
+            if len(name) > CASE_NAME_LIMIT or name in names or len(names) >= CASE_LIMIT:
+                return None
+            names[name] = name
+        summary = CASE_FOOTER.fullmatch(line)
+        if summary:
+            footer.append(int(summary.group(1)))
+    if len(footer) != 1 or footer[0] == 0 or footer[0] != len(names):
+        return None
+    return names
+
+
+def failed_cases(text: str, cases):
+    if cases is None:
+        return ["failure_cases=unavailable"]
+    found = set()
+    unknown = False
+    section = False
+    for line in text.splitlines():
+        row = FAILED_ROW.fullmatch(line)
+        candidate = row.group(1) if row else None
+        if candidate is None and line.startswith("test ") and " ... FAILED" in line:
+            unknown = True
+        if line == "failures:":
+            section = True
+            continue
+        if section and line:
+            item = FAILED_ITEM.fullmatch(line)
+            if item:
+                candidate = item.group(1)
+            else:
+                unknown = True
+                section = False
+        if candidate is not None:
+            canonical = cases.get(candidate)
+            if canonical is None or len(candidate) > CASE_NAME_LIMIT:
+                unknown = True
+            else:
+                found.add(canonical)
+    lines = ["failed_case=" + name for name in sorted(found)[:FAILURE_LIMIT]]
+    if len(found) > FAILURE_LIMIT:
+        lines.append("failure_case_loss=observed")
+    if unknown or not found:
+        lines.append("failure_cases=unavailable")
+    return lines
+
+
+def capture(name: str, root: pathlib.Path, exit_code: int, cases=None) -> bool:
     raw_file = root / f"auth-stage-{name}.raw"
     trace_file = root / f"auth-stage-{name}.trace"
-    oversize = raw_file.stat().st_size > RAW_LIMIT
-    raw = raw_file.read_bytes() if not oversize else b""
-    text = raw.decode("utf-8", errors="replace")
+    raw, oversize = read_bounded(raw_file)
+    missing = raw is None and not oversize
+    text = (raw or b"").decode("utf-8", errors="replace")
     summary = BROAD_SUMMARY if name == "broad" else FOCUSED_SUMMARY
-    valid = exit_code == 0 and not oversize and bool(summary.search(text))
+    valid = exit_code == 0 and not oversize and not missing and bool(summary.search(text))
     lines = [f"test={name} cargo_exit={exit_code} inventory={'pass' if valid else 'fail'}"]
+    if exit_code != 0:
+        lines.extend(failed_cases(text, cases))
+    if missing:
+        lines.append("raw_file=unavailable")
     invalid_record = False
     expected_slots = set(EXPECTED_SLOTS[name])
     opened_slots = set()
@@ -87,10 +174,11 @@ def capture(name: str, root: pathlib.Path, exit_code: int) -> bool:
 
 
 def main() -> int:
-    if len(sys.argv) != 5:
+    if len(sys.argv) != 6:
         return 2
     root = pathlib.Path(sys.argv[1])
-    results = [capture(name, root, int(code)) for name, code in zip(("csrf", "prelogin", "broad"), sys.argv[2:])]
+    cases = load_cases(root, int(sys.argv[5]))
+    results = [capture(name, root, int(code), cases) for name, code in zip(("csrf", "prelogin", "broad"), sys.argv[2:5])]
     return 0 if all(results) else 1
 
 
