@@ -420,13 +420,43 @@ impl Reply {
             .map(|(_, v)| v.as_str())
             .collect()
     }
+    fn safe_reply_diag(&self, check: &'static str) {
+        let status_class = match self.status {
+            200..=299 => "success",
+            400 => "invalid_request",
+            401 => "invalid_or_expired",
+            403 => "denied",
+            500 => "internal",
+            503 => "unavailable",
+            504 => "deadline",
+            _ => "other",
+        };
+        eprintln!(
+            "safe_reply_diag check={} status={} class={} set_cookie_count={} body_bytes={}",
+            check,
+            self.status,
+            status_class,
+            self.values("set-cookie").len(),
+            self.body.len(),
+        );
+    }
     fn cookie(&self) -> String {
         let c = self.values("set-cookie");
+        if c.len() != 1 {
+            self.safe_reply_diag("cookie_count");
+        }
         assert!(c.len() == 1);
         c[0].split(';').next().unwrap().to_owned()
     }
     fn token(&self) -> String {
+        if self.status != 200 || self.body.len() != 60 {
+            self.safe_reply_diag("token_response");
+        }
         assert!(self.status == 200 && self.body.len() == 60);
+        let cookie_count = self.values("set-cookie").len();
+        if cookie_count != 0 {
+            self.safe_reply_diag("token_cookie");
+        }
         assert!(self.values("set-cookie").is_empty());
         let v: nagi_runtime::serde_json::Value =
             nagi_runtime::serde_json::from_slice(&self.body).unwrap();
