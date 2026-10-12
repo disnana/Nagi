@@ -70,6 +70,7 @@ pub(crate) struct Limits {
 pub(crate) enum StartupError {
     Invalid,
     Allocation,
+    Internal,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RateDecision {
@@ -150,13 +151,13 @@ pub(crate) struct RateOwner {
     brand: u64,
     rule_count: usize,
     retained_bytes: usize,
-    certificate: u64,
+    work_bound: u64,
 }
 
 // All work units are bounded semantic blocks, not machine instructions/time.
 // Every helper loop iteration/node/key read/journal write is charged. One unit
 // covers a constant-size primitive block (<=32 scalar operations); see WORK.md.
-fn certificate(height: usize) -> Option<u64> {
+fn work_bound(height: usize) -> Option<u64> {
     27u64
         .checked_mul(KEY_BITS as u64)?
         .checked_add(21u64.checked_mul(u64::try_from(height).ok()?)?)?
@@ -281,7 +282,7 @@ impl RateOwner {
                     .and_then(|v| v.checked_add(array_bytes::<Branch>(n - 1)?))
                     .and_then(|v| v.checked_add(array_bytes::<Summary>(total)?))
                     .ok_or(StartupError::Invalid)?;
-                max_work = max_work.max(certificate(h).ok_or(StartupError::Invalid)?);
+                max_work = max_work.max(work_bound(h).ok_or(StartupError::Invalid)?);
             }
         }
         if count > limits.count || bytes > limits.bytes || limits.work < max_work {
@@ -318,22 +319,28 @@ impl RateOwner {
             return Err(StartupError::Invalid);
         }
         let brand = fresh_brand(&NEXT_BRAND)?;
+        let state = Mutex::new(RateState {
+            rules: states,
+            brand,
+            last_now: None,
+            faulted: false,
+            clock_fault: false,
+            closing: false,
+            work_cap: limits.work,
+            last_work: 0,
+        });
+        // Initialize the platform mutex before a request can be measured.
+        match state.lock() {
+            Ok(guard) => drop(guard),
+            Err(_poisoned) => return Err(StartupError::Internal),
+        }
         Ok(Self {
-            state: Mutex::new(RateState {
-                rules: states,
-                brand,
-                last_now: None,
-                faulted: false,
-                clock_fault: false,
-                closing: false,
-                work_cap: limits.work,
-                last_work: 0,
-            }),
+            state,
             origin: Instant::now(),
             brand,
             rule_count: rules.len(),
             retained_bytes: actual,
-            certificate: max_work,
+            work_bound: max_work,
         })
     }
     pub(crate) fn rule_id(&self, index: usize) -> Option<RuleId> {

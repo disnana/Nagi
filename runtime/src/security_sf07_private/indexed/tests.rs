@@ -62,7 +62,7 @@ fn exact_count_bytes_work_and_native_overflow() {
     let exact = Limits {
         count: 4,
         bytes: o.retained_bytes,
-        work: o.certificate,
+        work: o.work_bound,
     };
     assert!(RateOwner::checked_rate(&r, exact).is_ok());
     for bad in [
@@ -427,7 +427,7 @@ fn all_eighty_patricia_positions_and_full_replacement() {
                 .count(),
             KEY_BITS
         );
-        assert!(s.last_work <= o.certificate);
+        assert!(s.last_work <= o.work_bound);
     }
     assert_eq!(
         o.charge_at_with_test_clock(id, FixedKey::subject(DomainId(u16::MAX), i64::MAX), 20),
