@@ -499,13 +499,16 @@ async fn input_and_strict_json_rejections_do_not_consume_or_call_verifier() {
 }
 #[tokio::test]
 async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
-    for (mode, status, security) in [
+    for (iteration, (mode, status, security)) in [
         (1, 401, 1000),
         (2, 500, 1000),
         (3, 504, 200),
         (4, 504, 200),
         (5, 401, 1000),
-    ] {
+    ]
+    .into_iter()
+    .enumerate()
+    {
         let f = Fixture::new(1000, 144).await;
         f.stats.mode.store(mode, Ordering::SeqCst);
         let s = Server::new(&f, 256, security).await;
@@ -523,6 +526,21 @@ async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
                 && f.stats.handler.load(Ordering::SeqCst) == 0
         );
         let retry = request(s.address, "POST", "/login", &h, b"{}").await;
+        // Bounded numeric failure shape only; response material remains unreported.
+        if !(retry.status == 403 && !retry.auth_cookie() && !retry.deletion()) {
+            eprintln!(
+                "browser_login_public_api_diag case=committed_claim_retry phase=retry_response iteration={} status={} body_bytes={} set_cookie_count={} auth_cookie={} deletion={} verifier_calls={} handler_calls={} claim_committed={}",
+                iteration,
+                retry.status,
+                retry.body.len(),
+                retry.values("set-cookie").len(),
+                retry.auth_cookie(),
+                retry.deletion(),
+                f.stats.verifier.load(Ordering::SeqCst),
+                f.stats.handler.load(Ordering::SeqCst),
+                f.stats.claim_committed.load(Ordering::SeqCst),
+            );
+        }
         assert!(retry.status == 403 && !retry.auth_cookie() && !retry.deletion());
         s.stop().await;
         f.stop().await;
@@ -548,7 +566,7 @@ async fn issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cook
 }
 #[tokio::test]
 async fn wire_body_cap_is_independent_of_db_quota_and_checked_before_claim() {
-    for quota in [144, 720] {
+    for (iteration, quota) in [144, 720].into_iter().enumerate() {
         let f = Fixture::new(1000, quota).await;
         let s = Server::new(&f, 192, 1000).await;
         let (c, t) = bootstrap(&s).await;
@@ -571,6 +589,20 @@ async fn wire_body_cap_is_independent_of_db_quota_and_checked_before_claim() {
         );
         r.guarded();
         let r = request(s.address, "POST", "/login", &h, &cap).await;
+        // Bounded numeric failure shape only; response body and cookie values stay private.
+        if !(r.status == 200 && r.body == cap && r.auth_cookie() && r.deletion()) {
+            eprintln!(
+                "browser_login_public_api_diag case=wire_body_cap phase=exact_body_response iteration={} status={} body_bytes={} expected_body_bytes={} body_matches={} set_cookie_count={} auth_cookie={} deletion={}",
+                iteration,
+                r.status,
+                r.body.len(),
+                cap.len(),
+                r.body == cap,
+                r.values("set-cookie").len(),
+                r.auth_cookie(),
+                r.deletion(),
+            );
+        }
         assert!(r.status == 200 && r.body == cap && r.auth_cookie() && r.deletion());
         s.stop().await;
         f.stop().await;
