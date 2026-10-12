@@ -36,3 +36,10 @@ S1 Task結果handleとS2 Supervisor/HTTP移行はNagi 0.1.11で公開済みで�
 ## 0.2.0 Security Foundation
 
 次工程の[設計RFC](internal/security-foundation/rfc.md)と[機能別PR/検証計画](internal/security-foundation/implementation-plan.md)を作成しました。認証・認可、CSRF、HTML出力、SQL構造/bind、送信先検証、CORS、Cookie/Session、資源上限の責務を分けます。現在は設計段階で、新機能を利用できるという案内ではありません。最新指示による[安全性優先の判断と移行](internal/security-foundation/decisions-and-migration.md)を基準に、全標準HTTP policy必須・単一request-bound Grant・永続Sessionを実装し、統合検証前に正式0.2.0を公開しません。
+
+### 0.2.1計画: HTTP応答の圧縮展開（SF06-COMP-021）
+
+これは0.2.1の計画で、未着手・実装0件です。0.2.0のHTTP client設計ではidentity encodingのみを受理し、それ以外の`Content-Encoding`を暗黙展開や再送なしで失敗させる設計です。公開0.1.xや現行実装の機能説明ではありません。
+
+0.2.1では依存の独立review後にcodecを選び、encoded/decoded size、memory、処理時間を別々に制限します。破損入力や取消では安全に停止し、workerの実join後に資源を解放する受入が必要です。codec、具体的な上限値、厳密な全OS CPU保証は未決です。既存API signatureと安全契約を保ちます。Q1の有限TCP failoverとTTL=0の一操作規則は維持し、decode失敗を自動retryしません。実装・review・website生成は未実行です。
+

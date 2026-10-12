@@ -108,3 +108,14 @@ Do not hide mandatory unimplemented features as mere “limitations”. Explicit
 Prefer Luna Max for routine implementation/fixtures/docs; use Sol High for difficult security/compiler/runtime boundaries and independent reviews after implementation. Escalate to xHigh only with unresolved architectural reasons. No routine Max/Astra, competing same-problem agents, or duplicate reviews. Usually at most three including parent, one active model/tier.
 
 [Review log](review-log.md) records IDs, priority, source/contract, disposition, evidence, recheck, and blockers. Feature PRs keep separate artifacts. Handoffs preserve source head/adopted decisions/completed PRs/unfinished work/order/limitations without rewriting historical snapshots.
+
+### SF06-COMP-021: HTTP response content decoding (planned for 0.2.1)
+
+**Status: registered, not started; completed implementation/acceptance items: 0.** This depends on the SF06 outbound HTTP URL, destination, TLS, and budget contracts and the 0.2.0 identity-only policy. Preserve adopted SF06 Q1 transport behavior: finite TCP failover, with TTL=0 allowing one operation. That transport rule does not authorize retry after content-decoding failure.
+
+For 0.2.0, accept identity encoding only and fail on non-identity `Content-Encoding` without implicit body decoding. Do not substitute decoded-byte checks for encoded-byte checks, bypass limits, or automatically retry failures. This is unreleased design policy; it does not describe published 0.1.x behavior or claim that an HTTP client is implemented. Preserve existing public API signatures and adopted safety contracts in the follow-up.
+
+For 0.2.1, select supported codecs only after independent dependency, threat, and performance review. Define separate encoded-size, decoded-size, memory, and processing-time limits for each selected implementation, including values and enforcement boundaries. Codec list, concrete values, and a universal strict CPU-time guarantee remain unselected and unapproved. Malformed input and cancellation must stop safely; join the worker to actual completion before freeing buffers and decoder resources. A timeout notification or cancellation request alone is not completion. Keep existing API signatures and never return partial decoded data as success after rejection or failure.
+
+**Acceptance:** test encoded/decoded limits at boundary±1 and overflow, malformed streams, memory/time budgets, and a small owned cancellation barrier. Verify actual join, resource release, and the next healthy request. Unsupported encodings fail without decoding or retry while identity-path safety checks remain intact. Link four-OS/dependency-specific evidence, independent review, bilingual docs, and generated website to completion. Implementation and independent review have not started. Website/CI generation has not run here.
+
