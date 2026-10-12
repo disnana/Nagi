@@ -454,10 +454,10 @@
       "runtime/tests/cors_public_api.rs"
     ],
     "test_names": [
-      "actual_allow_deny_omit_and_HEAD_record_selection_preserve_execution",
-      "successful_preflight_is_metadata_only_and_ordinary_OPTIONS_remains_distinct",
+      "actual_allow_deny_omit_and_head_record_selection_preserve_execution",
+      "successful_preflight_is_metadata_only_and_ordinary_options_remains_distinct",
       "preflight_grammar_denials_and_lookup_status_are_exact",
-      "selected_early_auth_handler_replacements_and_public304_keep_CORS",
+      "selected_early_auth_handler_replacements_and_public304_keep_cors",
       "preflight_body_and_admission_errors_do_not_create_proof_or_run_handler",
       "pending_timeout_and_cancel_release_capacity_without_delay_masking",
       "authority_and_route_less_errors_never_borrow_another_records_grant"
