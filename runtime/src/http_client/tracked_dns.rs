@@ -1,5 +1,6 @@
 //! Private tracked DNS phase nested below the existing retained ledger.
 //! Trusted parent retains/drains its monitor and JobRoot independently.
+use super::parent_drain::RunnerOwnerHandle;
 use super::*;
 use std::{io, net::SocketAddr, time::Instant};
 
@@ -33,8 +34,8 @@ struct Book {
     received: usize,
 }
 struct PhaseState {
-    owner: Arc<Mutex<Owner>>,
-    id: u64,
+    runner: RunnerOwnerHandle,
+    key: JobKey,
     end: Instant,
     started: Instant,
     endpoint: SocketAddr,
@@ -43,55 +44,42 @@ struct PhaseState {
 }
 #[derive(Clone)]
 pub(super) struct DnsPhase(Arc<PhaseState>);
-fn retained_owner(owner: &Mutex<Owner>) -> std::sync::MutexGuard<'_, Owner> {
-    match owner.lock() {
-        Ok(guard) => guard,
-        Err(poison) => {
-            let mut guard = poison.into_inner();
-            guard.latch_fault(Fault::PoisonedGate);
-            guard.close();
-            guard
-        }
-    }
+fn live_root(job: &JobRecord) -> bool {
+    job.seal.root_registered()
+        && job.tasks.iter().any(|task| {
+            task.kind == TaskKind::JobRoot
+                && task
+                    .handle
+                    .as_ref()
+                    .is_some_and(|handle| !handle.is_finished())
+                && task
+                    .root_signal
+                    .as_ref()
+                    .is_some_and(|signal| signal.state.load(Ordering::Acquire) == ROOT_RUNNING)
+        })
 }
 impl DnsPhase {
-    // Already admitted command only; no Grant/permit/proof constructor.
+    // A non-counted runner handle and the exact admitted seal travel together.
     fn for_job(
-        retained: &Arc<Mutex<Owner>>,
-        id: u64,
+        runner: &RunnerOwnerHandle,
+        key: &JobKey,
         resolve_end: Instant,
         endpoint: SocketAddr,
     ) -> Result<Self, DnsFailure> {
         if endpoint.port() == 0 || endpoint.ip().is_unspecified() || endpoint.ip().is_multicast() {
             return Err(DnsFailure::Configuration);
         }
-        // Internal roots retain the parent owner, never a counted sender. EOF
-        // must remain observable when the last external sender disappears.
-        let owner = retained.clone();
         let end = {
-            let state = owner.lock().map_err(|_| LedgerError::Faulted)?;
+            let state = runner.owner.lock().map_err(|_| LedgerError::Faulted)?;
+            let index = state.key_index(key)?;
             if state.is_closing() {
                 return Err(LedgerError::Closing.into());
             }
             if state.fault().is_some() {
                 return Err(LedgerError::Faulted.into());
             }
-            let job = state
-                .jobs
-                .iter()
-                .find(|job| job.id == id)
-                .ok_or(LedgerError::UnknownJob)?;
-            if job.cancel_requested || job.dns_frozen {
-                return Err(LedgerError::PhaseClosed.into());
-            }
-            if !job.reserved_roots[1] {
-                return Err(LedgerError::PhaseClosed.into());
-            }
-            if !job
-                .tasks
-                .iter()
-                .any(|task| task.kind == TaskKind::JobRoot && task.handle.is_some())
-            {
+            let job = &state.jobs[index];
+            if job.cancel_requested || job.dns_frozen || !job.reserved_roots[1] || !live_root(job) {
                 return Err(LedgerError::PhaseClosed.into());
             }
             let end = job.end.ok_or(LedgerError::Expired)?.min(resolve_end);
@@ -102,8 +90,10 @@ impl DnsPhase {
         };
         let (stop, _) = watch::channel(false);
         Ok(Self(Arc::new(PhaseState {
-            owner,
-            id,
+            runner: RunnerOwnerHandle {
+                owner: Arc::clone(&runner.owner),
+            },
+            key: key.clone(),
             end,
             started: Instant::now(),
             endpoint,
@@ -119,12 +109,42 @@ impl DnsPhase {
             stop,
         })))
     }
-    // Always owner then book; never poll whole root/resolver futures here.
-    fn gate<T>(
+    // Identity validation happens before any fault or fresh-record mutation.
+    // Receipt cleanup can still run after the bound root has stopped.
+    fn checked_owner(&self) -> Result<std::sync::MutexGuard<'_, Owner>, DnsFailure> {
+        let (mut owner, poisoned) = match self.0.runner.owner.lock() {
+            Ok(owner) => (owner, false),
+            Err(poison) => (poison.into_inner(), true),
+        };
+        owner.key_index(&self.0.key)?;
+        if poisoned {
+            owner.latch_fault(Fault::PoisonedGate);
+            owner.close();
+            return Err(LedgerError::Faulted.into());
+        }
+        Ok(owner)
+    }
+    // Owner -> Book -> OPEN/BUSY, with no await across the native primitive.
+    fn gate_with_after_entry<T>(
         &self,
-        operation: impl FnOnce(&mut Owner, &mut Book) -> Result<T, DnsFailure>,
+        after_entry: impl FnOnce(),
+        operation: impl FnOnce(&mut Owner, usize, &mut Book) -> Result<T, DnsFailure>,
     ) -> Result<T, DnsFailure> {
-        let mut owner = retained_owner(&self.0.owner);
+        let mut owner = self.checked_owner()?;
+        let index = owner.key_index(&self.0.key)?;
+        if owner.is_closing() {
+            return Err(LedgerError::Closing.into());
+        }
+        if owner.fault().is_some() {
+            return Err(LedgerError::Faulted.into());
+        }
+        let job = &owner.jobs[index];
+        if job.cancel_requested || job.dns_frozen || !live_root(job) {
+            return Err(LedgerError::PhaseClosed.into());
+        }
+        if self.0.end <= Instant::now() || job.end.is_none_or(|end| end <= Instant::now()) {
+            return Err(LedgerError::Expired.into());
+        }
         let mut book = match self.0.book.lock() {
             Ok(book) => book,
             Err(_) => {
@@ -133,36 +153,50 @@ impl DnsPhase {
                 return Err(LedgerError::Faulted.into());
             }
         };
-        if owner.is_closing() {
-            return Err(LedgerError::Closing.into());
+        if book.closed {
+            return Err(LedgerError::PhaseClosed.into());
         }
-        if owner.fault().is_some() {
-            return Err(LedgerError::Faulted.into());
-        }
-        let job = owner
-            .jobs
-            .iter()
-            .find(|job| job.id == self.0.id)
-            .ok_or(LedgerError::UnknownJob)?;
-        if book.closed || job.dns_frozen || job.cancel_requested {
+        let shared = Arc::clone(&owner.shared);
+        let _entry = shared.begin_enqueue()?;
+        after_entry();
+        // Root completion can race independently while Book is unavailable.
+        // This is the final entry observation, not a total order with later completion.
+        let job = &owner.jobs[index];
+        if !live_root(job) {
             return Err(LedgerError::PhaseClosed.into());
         }
         if self.0.end <= Instant::now() || job.end.is_none_or(|end| end <= Instant::now()) {
             return Err(LedgerError::Expired.into());
         }
-        operation(&mut owner, &mut book)
+        operation(&mut owner, index, &mut book)
+    }
+    fn gate<T>(
+        &self,
+        operation: impl FnOnce(&mut Owner, usize, &mut Book) -> Result<T, DnsFailure>,
+    ) -> Result<T, DnsFailure> {
+        self.gate_with_after_entry(|| {}, operation)
     }
     fn fail(&self) {
-        let mut owner = retained_owner(&self.0.owner);
+        let Ok(mut owner) = self.checked_owner() else {
+            return;
+        };
         owner.latch_fault(Fault::ProviderDenied);
         owner.shared.notify();
         drop(owner);
-        self.close();
+        let _ = self.close();
     }
     fn spawn<F: Future<Output = ()> + Send + 'static>(
         &self,
         kind: TaskKind,
         future: F,
+    ) -> Result<(), DnsFailure> {
+        self.spawn_with_after_entry(kind, future, || {})
+    }
+    fn spawn_with_after_entry<F: Future<Output = ()> + Send + 'static>(
+        &self,
+        kind: TaskKind,
+        future: F,
+        after_entry: impl FnOnce(),
     ) -> Result<(), DnsFailure> {
         if !kind.dns() {
             drop(future);
@@ -171,8 +205,6 @@ impl DnsPhase {
         let mut stop = self.0.stop.subscribe();
         let end = self.0.end;
         let wrapped = async move {
-            // Dispose inner native future before normal actual task completion.
-            // This stops DNS only; global cancellation would forbid later TCP.
             tokio::select! {
                 biased;
                 _=async {if !*stop.borrow() {let _=stop.changed().await;}}=>{}
@@ -181,20 +213,23 @@ impl DnsPhase {
             }
         };
         let mut pending = Some(wrapped);
-        let result = self.gate(|owner, book| {
-            if (kind == TaskKind::DnsRoot
-                && (book.root_started
-                    || !owner
-                        .jobs
-                        .iter()
-                        .find(|j| j.id == self.0.id)
-                        .expect("checked job")
-                        .reserved_roots[1]))
-                || (kind == TaskKind::DnsChild && !book.root_started)
+        let mut duplicate_root = false;
+        let result = self.gate_with_after_entry(after_entry, |owner, index, book| {
+            if kind == TaskKind::DnsRoot
+                && (book.root_started || !owner.jobs[index].reserved_roots[1])
             {
+                duplicate_root = true;
                 return Err(LedgerError::PhaseClosed.into());
             }
-            match owner.try_spawn(self.0.id, kind, pending.take().expect("one admission")) {
+            if kind == TaskKind::DnsChild && !book.root_started {
+                return Err(LedgerError::PhaseClosed.into());
+            }
+            match owner.try_spawn_impl(
+                self.0.key.id(),
+                kind,
+                pending.take().expect("one admission"),
+                true,
+            ) {
                 Ok(()) => {
                     if kind == TaskKind::DnsRoot {
                         book.root_started = true;
@@ -207,14 +242,21 @@ impl DnsPhase {
                 }
             }
         });
-        drop(pending); // Rejected future remains unpolled, dropped outside gates.
-        if result.is_err() {
+        drop(pending); // Rejected Future Drop is outside Owner, Book and EntryGuard.
+        if duplicate_root
+            || matches!(
+                result,
+                Err(DnsFailure::Ledger(
+                    LedgerError::Capacity | LedgerError::NoRuntime | LedgerError::Allocation
+                ))
+            )
+        {
             self.fail();
         }
         result
     }
     fn begin_io(&self) -> Result<IoTicket, DnsFailure> {
-        self.gate(|_, book| {
+        self.gate(|_, _, book| {
             if !book.root_started {
                 return Err(LedgerError::PhaseClosed.into());
             }
@@ -231,13 +273,13 @@ impl DnsPhase {
         &self,
         operation: impl FnOnce(&mut Book) -> Poll<io::Result<T>>,
     ) -> Poll<io::Result<T>> {
-        match self.gate(|_, book| Ok(operation(book))) {
+        match self.gate(|_, _, book| Ok(operation(book))) {
             Ok(polled) => polled,
             Err(_) => Poll::Ready(Err(io::Error::other("DNS phase unavailable"))),
         }
     }
-    fn close(&self) {
-        let mut owner = retained_owner(&self.0.owner);
+    fn close(&self) -> Result<(), DnsFailure> {
+        let mut owner = self.checked_owner()?;
         let mut book = match self.0.book.lock() {
             Ok(book) => book,
             Err(poison) => {
@@ -247,23 +289,28 @@ impl DnsPhase {
             }
         };
         book.closed = true;
-        let _ = owner.freeze_dns(self.0.id);
+        owner.freeze_dns(&self.0.key)?;
         owner.shared.notify();
         drop(book);
         drop(owner);
         self.0.stop.send_replace(true);
+        Ok(())
     }
     async fn finish(&self) -> Result<(), DnsFailure> {
-        let mut events = retained_owner(&self.0.owner).shared.events_tx.subscribe();
-        self.close();
+        let mut events = self.checked_owner()?.shared.events_tx.subscribe();
+        self.close()?;
         // Stored real joins remain parent-retained if this waiter is dropped.
         loop {
             let joined = std::future::poll_fn(|cx| {
-                let mut owner = retained_owner(&self.0.owner);
-                owner.observe_root_faults(self.0.id);
-                let Some(index) = owner.jobs.iter().position(|job| job.id == self.0.id) else {
-                    return Poll::Ready(Err(LedgerError::UnknownJob.into()));
+                let mut owner = match self.checked_owner() {
+                    Ok(owner) => owner,
+                    Err(error) => return Poll::Ready(Err(error)),
                 };
+                let index = match owner.key_index(&self.0.key) {
+                    Ok(index) => index,
+                    Err(error) => return Poll::Ready(Err(error.into())),
+                };
+                owner.observe_root_faults(self.0.key.id());
                 let expected_cancel = owner.jobs[index].cancel_requested;
                 let mut fault = None;
                 let mut pending = false;
@@ -352,20 +399,21 @@ impl Drop for IoTicket {
             book.io_live -= 1;
             book.io_closed += 1;
             drop(book);
-            // Raw IO/future was already disposed; starts do not reopen on receipt.
-            let mut owner = retained_owner(&phase.0.owner);
-            if poisoned {
-                owner.latch_fault(Fault::PoisonedGate);
-                owner.close();
+            // Receipt is posted only to the exact still-retained JobKey.
+            if let Ok(mut owner) = phase.checked_owner() {
+                if poisoned {
+                    owner.latch_fault(Fault::PoisonedGate);
+                    owner.close();
+                }
+                owner.shared.notify();
             }
-            owner.shared.notify();
         }
     }
 }
 struct StopOnDrop(DnsPhase);
 impl Drop for StopOnDrop {
     fn drop(&mut self) {
-        self.0.close();
+        let _ = self.0.close();
     }
 }
 #[cfg(test)]

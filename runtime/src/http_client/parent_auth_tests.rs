@@ -166,7 +166,7 @@ fn actual_grant_bound_target_and_minimum_original_end_survive_permitfirst_invali
             (job, 7, 91)
         );
         assert_eq!(command.end, whole);
-        assert_eq!(command.payload, [8]);
+        assert_eq!(command.payload(), [8]);
         let accepted = AtomicUsize::new(0);
         sender
             .phase(job, || {
@@ -181,6 +181,7 @@ fn actual_grant_bound_target_and_minimum_original_end_survive_permitfirst_invali
             })
             .is_err());
         assert_eq!(accepted.load(Ordering::SeqCst), 1);
+        drop(command);
         parent.shutdown().await;
     });
 }
@@ -538,6 +539,7 @@ fn popped_command_retains_reservations_until_first_actual_task_registration() {
             .spawn(job, TaskKind::JobRoot, pending::<()>())
             .is_ok());
         sender.cancel(job).unwrap();
+        drop(command);
         parent.shutdown().await;
         assert_eq!(owner(&sender).lock().unwrap().used_jobs(), 0);
     });
@@ -554,10 +556,12 @@ fn branded_runner_rejects_foreign_same_id_at_every_port() {
         assert_eq!(id_a, id_b);
         let runner_a = parent.runner_owner(a).unwrap();
         let runner_b = parent.runner_owner(b).unwrap();
-        let key_a = runner_a.take_command().unwrap().unwrap().key;
-        let key_b = runner_b.take_command().unwrap().unwrap().key;
+        let mut command_a = runner_a.take_command().unwrap().unwrap();
+        let mut command_b = runner_b.take_command().unwrap().unwrap();
+        let key_a = command_a.key().clone();
+        let key_b = command_b.key().clone();
         assert!(matches!(
-            runner_a.spawn(&key_b, TaskKind::JobRoot, async {}),
+            runner_a.spawn_root(&mut command_b, async {}),
             Err((LedgerError::UnknownJob, _))
         ));
         assert_eq!(
@@ -574,15 +578,15 @@ fn branded_runner_rejects_foreign_same_id_at_every_port() {
         );
         assert_eq!(runner_a.cancel(&key_b), Err(LedgerError::UnknownJob));
         assert_eq!(starts.load(Ordering::SeqCst), 0);
-        assert!(runner_a
-            .spawn(&key_a, TaskKind::JobRoot, pending::<()>())
-            .is_ok());
+        assert!(runner_a.spawn_root(&mut command_a, pending::<()>()).is_ok());
         assert_eq!(
             runner_a.phase(&key_a, || starts.fetch_add(1, Ordering::SeqCst)),
             Ok(0)
         );
         runner_a.cancel(&key_a).unwrap();
         runner_b.cancel(&key_b).unwrap();
+        drop(command_a);
+        drop(command_b);
         parent.shutdown().await;
     });
 }
@@ -594,9 +598,11 @@ fn old_key_cannot_authorize_reused_numeric_slot() {
         let (client, sender) = parent.register(limits(), 16).unwrap();
         let runner = parent.runner_owner(client).unwrap();
         let (_lease, first) = admit(&sender).await;
-        let old = runner.take_command().unwrap().unwrap().key;
+        let old_command = runner.take_command().unwrap().unwrap();
+        let old = old_command.key().clone();
         assert_eq!(old.id(), first);
         runner.cancel(&old).unwrap();
+        drop(old_command);
         {
             let mut state = owner(&sender).lock().unwrap();
             state.release_finished_jobs();
@@ -605,7 +611,8 @@ fn old_key_cannot_authorize_reused_numeric_slot() {
         }
         let (_lease, second) = admit(&sender).await;
         assert_eq!(first, second);
-        let fresh = runner.take_command().unwrap().unwrap().key;
+        let mut fresh_command = runner.take_command().unwrap().unwrap();
+        let fresh = fresh_command.key().clone();
         assert!(matches!(
             runner.spawn(&old, TaskKind::JobRoot, async {}),
             Err((LedgerError::UnknownJob, _))
@@ -617,9 +624,10 @@ fn old_key_cannot_authorize_reused_numeric_slot() {
             0
         );
         assert!(runner
-            .spawn(&fresh, TaskKind::JobRoot, pending::<()>())
+            .spawn_root(&mut fresh_command, pending::<()>())
             .is_ok());
         runner.cancel(&fresh).unwrap();
+        drop(fresh_command);
         parent.shutdown().await;
     });
 }
@@ -632,15 +640,15 @@ fn runner_handle_is_not_counted_and_last_sender_closes_eof() {
         let runner = parent.runner_owner(client).unwrap();
         assert_eq!(sender.shared.senders.load(Ordering::Acquire), 1);
         let (_lease, _) = admit(&sender).await;
-        let key = runner.take_command().unwrap().unwrap().key;
-        assert!(runner
-            .spawn(&key, TaskKind::JobRoot, pending::<()>())
-            .is_ok());
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        assert!(runner.spawn_root(&mut command, pending::<()>()).is_ok());
         assert!(key.seal.root_registered());
         assert_eq!(
             key.seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
             0
         );
+        drop(command);
         drop(sender);
         assert_eq!(
             runner
@@ -918,12 +926,10 @@ fn branded_phase_winner_finishes_once_then_stop_denies_next_entry() {
         let (client, sender) = parent.register(limits(), 16).unwrap();
         let runner = parent.runner_owner(client).unwrap();
         let (_lease, _) = admit(&sender).await;
-        let command = runner.take_command().unwrap().unwrap();
-        let key = command.key.clone();
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        assert!(runner.spawn_root(&mut command, pending::<()>()).is_ok());
         drop(command);
-        assert!(runner
-            .spawn(&key, TaskKind::JobRoot, pending::<()>())
-            .is_ok());
         let shared = Arc::clone(&sender.shared);
         let calls = Arc::new(AtomicUsize::new(0));
         let witness = Arc::clone(&calls);
@@ -963,12 +969,10 @@ fn branded_driver_history_rejects_second_driver_after_first_actual_join() {
         let (client, sender) = parent.register(limits(), 16).unwrap();
         let runner = parent.runner_owner(client).unwrap();
         let (_lease, _) = admit(&sender).await;
-        let command = runner.take_command().unwrap().unwrap();
-        let key = command.key.clone();
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        assert!(runner.spawn_root(&mut command, pending::<()>()).is_ok());
         drop(command);
-        assert!(runner
-            .spawn(&key, TaskKind::JobRoot, pending::<()>())
-            .is_ok());
         let mut events = sender.shared.events_tx.subscribe();
         assert!(runner.spawn(&key, TaskKind::HttpDriver, async {}).is_ok());
         tokio::time::timeout(Duration::from_secs(2), async {
@@ -991,5 +995,310 @@ fn branded_driver_history_rejects_second_driver_after_first_actual_join() {
         runner.cancel(&key).unwrap();
         parent.shutdown().await;
         drop(sender);
+    });
+}
+
+#[test]
+fn abandon_popped_unstarted_retires_without_parent_stop() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (_, sender) = parent.register(limits(), 16).unwrap();
+        let (_lease, _) = admit(&sender).await;
+        let command = parent
+            .runner_owner(1)
+            .unwrap()
+            .take_command()
+            .unwrap()
+            .unwrap();
+        let mut events = sender.shared.events_tx.subscribe();
+        assert_eq!(owner(&sender).lock().unwrap().used_jobs(), 1);
+        drop(command);
+        let retired = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if owner(&sender).lock().unwrap().used_jobs() == 0 {
+                    break;
+                }
+                events.changed().await.unwrap();
+            }
+        })
+        .await
+        .is_ok();
+        parent.shutdown().await;
+        assert!(retired, "popped command Drop left a retained unstarted job");
+    });
+}
+
+#[test]
+fn abandon_drop_under_owner_waiter_watch_gates_is_prompt_and_reaped() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (_, sender) = parent.register(limits(), 16).unwrap();
+        let (_lease, _) = admit(&sender).await;
+        let command = parent
+            .runner_owner(1)
+            .unwrap()
+            .take_command()
+            .unwrap()
+            .unwrap();
+        let mut events = sender.shared.events_tx.subscribe();
+        let watch = sender.shared.events_tx.subscribe();
+        let watch_guard = watch.borrow();
+        let owner_gate = owner(&sender).lock().unwrap();
+        let waiter_gate = sender.shared.waiters.lock().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            drop(command);
+            let _ = tx.send(());
+        });
+        let prompt = rx.recv_timeout(Duration::from_secs(1)).is_ok();
+        drop(waiter_gate);
+        drop(owner_gate);
+        drop(watch_guard);
+        worker.join().unwrap();
+        let retired = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if owner(&sender).lock().unwrap().used_jobs() == 0 {
+                    break;
+                }
+                events.changed().await.unwrap();
+            }
+        })
+        .await
+        .is_ok();
+        parent.shutdown().await;
+        assert!(
+            prompt,
+            "Command Drop waited for Owner, waiter, or watch gate"
+        );
+        assert!(retired, "monitor lost a popped-command abandon request");
+    });
+}
+
+#[test]
+fn abandon_unwind_before_root_registration_retires() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (_, sender) = parent.register(limits(), 16).unwrap();
+        let (_lease, _) = admit(&sender).await;
+        let command = parent
+            .runner_owner(1)
+            .unwrap()
+            .take_command()
+            .unwrap()
+            .unwrap();
+        let mut events = sender.shared.events_tx.subscribe();
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let _command = command;
+            panic!("private abandon oracle");
+        }))
+        .is_err();
+        let retired = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if owner(&sender).lock().unwrap().used_jobs() == 0 {
+                    break;
+                }
+                events.changed().await.unwrap();
+            }
+        })
+        .await
+        .is_ok();
+        parent.shutdown().await;
+        assert!(panicked && retired, "unwound command left retained quota");
+    });
+}
+
+#[test]
+fn abandon_cancel_keeps_popped_payload_until_drop() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (_, sender) = parent.register(limits(), 16).unwrap();
+        let (_lease, job) = admit(&sender).await;
+        let command = sender.take_command().unwrap().unwrap();
+        assert_eq!(command.id, job);
+        sender.cancel(job).unwrap();
+        let retained = {
+            let mut state = owner(&sender).lock().unwrap();
+            state.release_finished_jobs();
+            state.used_jobs() == 1 && state.retained_job_bytes == 2
+        };
+        drop(command);
+        parent.shutdown().await;
+        assert!(
+            retained,
+            "cancel refunded while the popped payload owner lived"
+        );
+        assert_eq!(owner(&sender).lock().unwrap().used_jobs(), 0);
+    });
+}
+
+#[test]
+fn borrowed_root_requires_command_and_keeps_join_distinct_from_payload_drop() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 16).unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let (_lease, _) = admit(&sender).await;
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        assert!(runner.spawn_root(&mut command, pending::<()>()).is_ok());
+        assert!(key.seal.root_registered());
+        assert!(matches!(
+            runner.spawn_root(&mut command, async {}),
+            Err((LedgerError::PhaseClosed, _))
+        ));
+        assert!(matches!(
+            runner.spawn(&key, TaskKind::JobRoot, async {}),
+            Err((LedgerError::PhaseClosed, _))
+        ));
+        runner.cancel(&key).unwrap();
+        {
+            let mut state = runner.owner.lock().unwrap();
+            state.release_finished_jobs();
+            assert_eq!(state.used_jobs(), 1);
+            assert!(key.seal.command_retained());
+        }
+        drop(command);
+        assert!(!key.seal.command_abandoned());
+        parent.shutdown().await;
+        assert_ne!(
+            key.seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
+            0
+        );
+        assert_eq!(runner.owner.lock().unwrap().used_jobs(), 0);
+    });
+}
+
+#[test]
+fn rejected_root_future_drops_outside_owner_and_command_remains_armed() {
+    use std::sync::atomic::AtomicBool;
+    struct DropCheck(Arc<Mutex<Owner>>, Arc<AtomicBool>);
+    impl Drop for DropCheck {
+        fn drop(&mut self) {
+            self.1.store(self.0.try_lock().is_ok(), Ordering::SeqCst);
+        }
+    }
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(2).unwrap();
+        let (a, sender_a) = parent.register(limits(), 16).unwrap();
+        let (_, sender_b) = parent.register(limits(), 16).unwrap();
+        let (_lease_a, _) = admit(&sender_a).await;
+        let (_lease_b, _) = admit(&sender_b).await;
+        let runner_a = parent.runner_owner(a).unwrap();
+        let mut foreign = sender_b.take_command().unwrap().unwrap();
+        let dropped_outside_owner = Arc::new(AtomicBool::new(false));
+        let check = DropCheck(
+            Arc::clone(owner(&sender_a)),
+            Arc::clone(&dropped_outside_owner),
+        );
+        let future = async move {
+            drop(check);
+        };
+        let rejected = runner_a.spawn_root(&mut foreign, future);
+        let Err((LedgerError::UnknownJob, future)) = rejected else {
+            panic!("foreign same-id command must be rejected");
+        };
+        assert!(foreign.armed);
+        drop(future);
+        assert!(dropped_outside_owner.load(Ordering::SeqCst));
+        let seal = Arc::clone(&foreign.key().seal);
+        drop(foreign);
+        assert!(seal.command_abandoned());
+        parent.shutdown().await;
+        assert_eq!(owner(&sender_b).lock().unwrap().used_jobs(), 0);
+    });
+}
+
+#[test]
+fn rejected_root_future_unwind_leaves_command_abandonment_reapable() {
+    struct PanicOnDrop;
+    impl Drop for PanicOnDrop {
+        fn drop(&mut self) {
+            panic!("closed future Drop oracle");
+        }
+    }
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 16).unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let (_lease, _) = admit(&sender).await;
+        let mut command = runner.take_command().unwrap().unwrap();
+        sender.shared.request_stop();
+        let dropper = PanicOnDrop;
+        let future = async move {
+            drop(dropper);
+        };
+        let Err((LedgerError::Closing, future)) = runner.spawn_root(&mut command, future) else {
+            panic!("STOP must refuse root registration");
+        };
+        assert!(!command.key().seal.root_registered());
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(future))).is_err());
+        drop(command);
+        parent.shutdown().await;
+        assert_eq!(runner.owner.lock().unwrap().used_jobs(), 0);
+    });
+}
+
+#[test]
+fn successful_root_completion_does_not_report_command_abandonment() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 16).unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let (_lease, _) = admit(&sender).await;
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        let mut events = sender.shared.events_tx.subscribe();
+        assert!(runner.spawn_root(&mut command, async {}).is_ok());
+        drop(command);
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if runner.owner.lock().unwrap().used_jobs() == 0 {
+                    break;
+                }
+                events.changed().await.unwrap();
+            }
+        })
+        .await
+        .unwrap();
+        assert!(!key.seal.command_abandoned());
+        assert_ne!(
+            key.seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
+            0
+        );
+        assert_eq!(runner.owner.lock().unwrap().fault(), None);
+        parent.shutdown().await;
+    });
+}
+
+#[test]
+fn unexpected_root_abort_retains_sticky_fault_not_abandonment() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 16).unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let (_lease, _) = admit(&sender).await;
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        assert!(runner.spawn_root(&mut command, pending::<()>()).is_ok());
+        drop(command);
+        {
+            let state = runner.owner.lock().unwrap();
+            state.jobs[0].tasks[0].handle.as_ref().unwrap().abort();
+        }
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), parent.reap_next())
+                .await
+                .unwrap(),
+            Some(client)
+        );
+        assert!(!key.seal.command_abandoned());
+        assert_ne!(
+            key.seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
+            0
+        );
+        assert_eq!(
+            runner.owner.lock().unwrap().fault(),
+            Some(Fault::UnexpectedCancel)
+        );
     });
 }

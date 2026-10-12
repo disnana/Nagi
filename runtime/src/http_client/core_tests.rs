@@ -33,10 +33,27 @@ pub(super) fn fixture() -> (Arc<Mutex<Owner>>, ClientSender, u64) {
     (owner, sender, id)
 }
 
-fn phase(sender: &ClientSender, id: u64) -> DnsPhase {
-    let phase = DnsPhase::for_job(
-        sender.owner.as_ref().unwrap(),
+pub(super) fn fixture_runner(owner: &Arc<Mutex<Owner>>) -> RunnerOwnerHandle {
+    RunnerOwnerHandle {
+        owner: Arc::clone(owner),
+    }
+}
+pub(super) fn fixture_key(owner: &Arc<Mutex<Owner>>, id: u64) -> JobKey {
+    let state = owner.lock().unwrap();
+    let job = state.jobs.iter().find(|job| job.id == id).unwrap();
+    JobKey {
         id,
+        seal: Arc::clone(&job.seal),
+    }
+}
+
+fn phase(sender: &ClientSender, id: u64) -> DnsPhase {
+    let owner = sender.owner.as_ref().unwrap();
+    let runner = fixture_runner(owner);
+    let key = fixture_key(owner, id);
+    let phase = DnsPhase::for_job(
+        &runner,
+        &key,
         Instant::now() + Duration::from_secs(1),
         "127.0.0.1:53".parse().unwrap(),
     )
@@ -117,7 +134,7 @@ async fn first_native_poll_is_zero_after_close_expiry_or_cancel() {
         let (owner, sender, id) = fixture();
         let phase = phase(&sender, id);
         match mode {
-            0 => phase.close(),
+            0 => phase.close().unwrap(),
             1 => {
                 owner
                     .lock()
@@ -237,16 +254,18 @@ async fn retained_io_ticket_prevents_success_without_close_receipt() {
 #[tokio::test]
 async fn one_original_dns_reservation_cannot_start_two_roots() {
     let (owner, sender, id) = fixture();
+    let runner = fixture_runner(&owner);
+    let key = fixture_key(&owner, id);
     let first = DnsPhase::for_job(
-        &owner,
-        id,
+        &runner,
+        &key,
         Instant::now() + Duration::from_secs(1),
         "127.0.0.1:53".parse().unwrap(),
     )
     .unwrap();
     let second = DnsPhase::for_job(
-        &owner,
-        id,
+        &runner,
+        &key,
         Instant::now() + Duration::from_secs(1),
         "127.0.0.1:53".parse().unwrap(),
     )
@@ -346,9 +365,11 @@ async fn owned_udp_primitive_gate_stops_sends_and_closes_before_join() {
         .unwrap();
     let endpoint = server.local_addr().unwrap();
     let (owner, sender, id) = fixture();
+    let runner = fixture_runner(&owner);
+    let key = fixture_key(&owner, id);
     let phase = DnsPhase::for_job(
-        &owner,
-        id,
+        &runner,
+        &key,
         Instant::now() + Duration::from_secs(1),
         endpoint,
     )
@@ -403,9 +424,11 @@ async fn stopped_dns_must_observe_actual_child_join_before_success() {
         }
     }
     let receipt = DropReceipt(dropped.clone());
+    let runner = fixture_runner(&owner);
+    let key = fixture_key(&owner, id);
     let phase = DnsPhase::for_job(
-        &owner,
-        id,
+        &runner,
+        &key,
         Instant::now() + Duration::from_secs(1),
         "127.0.0.1:53".parse().unwrap(),
     )
@@ -506,4 +529,722 @@ async fn followup_first_observed_panic_precedes_later_unexpected_abort() {
     assert_eq!(owner.lock().unwrap().fault(), Some(Fault::TaskPanic));
     cleanup(&owner).await;
     drop(sender);
+}
+
+#[cfg(test)]
+mod dns_brand_tests {
+    use super::super::super::admission::Command;
+    use super::super::super::parent_drain::RunnerOwnerHandle;
+    use super::*;
+    use crate::auth;
+    use std::time::Duration;
+
+    fn limits() -> Limits {
+        Limits {
+            jobs: 2,
+            queue: 2,
+            job_roots: 2,
+            dns_roots: 2,
+            dns_children: 2,
+            http_drivers: 2,
+            waiters: 2,
+            waiter_bytes: 32,
+            senders: 4,
+        }
+    }
+    fn grant(end: Instant) -> (auth::LeaseOwner, auth::Grant<()>) {
+        let lease = auth::LeaseOwner::new(end).unwrap();
+        let identity = auth::VerifiedIdentity::from_verified(7, end).unwrap();
+        let scope = auth::AuthScope::bind(identity, Arc::clone(&lease.lease)).unwrap();
+        (lease, auth::Grant::from_authorized(scope, 91).unwrap())
+    }
+    async fn admit(
+        parent: &ParentDrain,
+        client: u64,
+        sender: &ClientSender,
+    ) -> (RunnerOwnerHandle, Command, JobKey, auth::LeaseOwner) {
+        let end = Instant::now() + Duration::from_secs(10);
+        let (lease, authorized) = grant(end);
+        sender.submit(authorized, vec![1], end).await.unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        runner
+            .spawn_root(&mut command, std::future::pending())
+            .unwrap();
+        (runner, command, key, lease)
+    }
+    fn endpoint() -> SocketAddr {
+        "127.0.0.1:53".parse().unwrap()
+    }
+
+    #[tokio::test]
+    async fn dns_brand_foreign_same_numeric_id_must_not_construct() {
+        let mut parent = ParentDrain::new(2).unwrap();
+        let (a, sender_a) = parent.register(limits(), 32).unwrap();
+        let (b, sender_b) = parent.register(limits(), 32).unwrap();
+        let (runner_a, command_a, key_a, _lease_a) = admit(&parent, a, &sender_a).await;
+        let (_runner_b, command_b, key_b, _lease_b) = admit(&parent, b, &sender_b).await;
+        assert_eq!(key_a.id(), key_b.id());
+        let result = DnsPhase::for_job(
+            &runner_a,
+            &key_b,
+            Instant::now() + Duration::from_secs(1),
+            endpoint(),
+        );
+        assert!(matches!(
+            result,
+            Err(DnsFailure::Ledger(LedgerError::UnknownJob))
+        ));
+        let own = DnsPhase::for_job(
+            &runner_a,
+            &key_a,
+            Instant::now() + Duration::from_secs(1),
+            endpoint(),
+        )
+        .unwrap();
+        assert_eq!(
+            runner_a.owner.lock().unwrap().used_tasks(TaskKind::DnsRoot),
+            0
+        );
+        assert_eq!(runner_a.owner.lock().unwrap().fault(), None);
+        drop(own);
+        drop(command_a);
+        drop(command_b);
+        parent.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn dns_brand_stale_phase_fail_must_not_poison_reused_id() {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 32).unwrap();
+        let (runner, command, key, _lease) = admit(&parent, client, &sender).await;
+        let old = DnsPhase::for_job(
+            &runner,
+            &key,
+            Instant::now() + Duration::from_secs(1),
+            endpoint(),
+        )
+        .unwrap();
+        runner.cancel(&key).unwrap();
+        drop(command);
+        let owner = Arc::clone(&runner.owner);
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            std::future::poll_fn(|cx| {
+                let mut state = owner.lock().unwrap();
+                let _ = state.poll_parent(cx);
+                if state.jobs.is_empty() {
+                    Poll::Ready(())
+                } else {
+                    Poll::Pending
+                }
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(owner.lock().unwrap().fault().is_none());
+        {
+            let mut state = owner.lock().unwrap();
+            state.next_job_id = key.id(); // private ABA oracle only
+        }
+        let (runner_new, command_new, fresh, _lease_new) = admit(&parent, client, &sender).await;
+        assert_eq!(fresh.id(), key.id());
+        old.fail();
+        assert!(matches!(
+            DnsPhase::for_job(
+                &runner_new,
+                &key,
+                Instant::now() + Duration::from_secs(1),
+                endpoint()
+            ),
+            Err(DnsFailure::Ledger(LedgerError::UnknownJob))
+        ));
+        assert!(matches!(
+            old.spawn(TaskKind::DnsChild, std::future::pending()),
+            Err(DnsFailure::Ledger(LedgerError::UnknownJob))
+        ));
+        struct Rejected {
+            owner: Arc<Mutex<Owner>>,
+            phase: DnsPhase,
+            outside: Arc<AtomicBool>,
+            polled: Arc<AtomicBool>,
+        }
+        impl Future for Rejected {
+            type Output = ();
+            fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+                self.polled.store(true, Ordering::Release);
+                Poll::Pending
+            }
+        }
+        impl Drop for Rejected {
+            fn drop(&mut self) {
+                self.outside.store(
+                    self.owner.try_lock().is_ok() && self.phase.0.book.try_lock().is_ok(),
+                    Ordering::Release,
+                );
+            }
+        }
+        let outside = Arc::new(AtomicBool::new(false));
+        let polled = Arc::new(AtomicBool::new(false));
+        assert!(matches!(
+            old.spawn(
+                TaskKind::DnsChild,
+                Rejected {
+                    owner: Arc::clone(&runner_new.owner),
+                    phase: old.clone(),
+                    outside: Arc::clone(&outside),
+                    polled: Arc::clone(&polled),
+                }
+            ),
+            Err(DnsFailure::Ledger(LedgerError::UnknownJob))
+        ));
+        assert!(outside.load(Ordering::Acquire));
+        assert!(!polled.load(Ordering::Acquire));
+        assert!(matches!(
+            old.begin_io(),
+            Err(DnsFailure::Ledger(LedgerError::UnknownJob))
+        ));
+        let mut native_polls = 0;
+        assert!(matches!(
+            old.poll_io(|_| {
+                native_polls += 1;
+                Poll::Ready(Ok(()))
+            }),
+            Poll::Ready(Err(_))
+        ));
+        assert_eq!(native_polls, 0);
+        assert_eq!(
+            old.close(),
+            Err(DnsFailure::Ledger(LedgerError::UnknownJob))
+        );
+        assert_eq!(
+            old.finish().await,
+            Err(DnsFailure::Ledger(LedgerError::UnknownJob))
+        );
+        let (fault, dns_frozen) = {
+            let state = runner_new.owner.lock().unwrap();
+            let fault = state.fault();
+            let dns_frozen = state
+                .jobs
+                .iter()
+                .find(|j| j.id == fresh.id())
+                .unwrap()
+                .dns_frozen;
+            (fault, dns_frozen)
+        };
+        drop(command_new);
+        parent.shutdown().await;
+        assert_eq!(fault, None, "stale fail must not poison fresh seal");
+        assert!(!dns_frozen, "stale close must not freeze fresh DNS");
+        assert_eq!(
+            runner_new
+                .owner
+                .lock()
+                .unwrap()
+                .used_tasks(TaskKind::DnsRoot),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn dns_brand_native_poll_must_hold_busy_entry_through_stop() {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 32).unwrap();
+        let (runner, command, key, _lease) = admit(&parent, client, &sender).await;
+        let phase = DnsPhase::for_job(
+            &runner,
+            &key,
+            Instant::now() + Duration::from_secs(1),
+            endpoint(),
+        )
+        .unwrap();
+        phase
+            .spawn(TaskKind::DnsRoot, std::future::pending())
+            .unwrap();
+        let ticket = phase.begin_io().unwrap();
+        let shared = Arc::clone(&runner.owner.lock().unwrap().shared);
+        let mut observed = 0;
+        let first = phase.poll_io(|_| {
+            observed = shared.stop_admit.load(Ordering::Acquire);
+            shared.request_stop();
+            Poll::Ready(Ok(()))
+        });
+        let mut later_calls = 0;
+        let second = phase.poll_io(|_| {
+            later_calls += 1;
+            Poll::Ready(Ok(()))
+        });
+        drop(ticket);
+        drop(command);
+        parent.shutdown().await;
+        assert!(matches!(first, Poll::Ready(Ok(()))));
+        assert!(matches!(second, Poll::Ready(Err(_))));
+        assert_eq!(later_calls, 0);
+        assert_eq!(observed & ENQUEUE_ACCEPTED, ENQUEUE_ACCEPTED);
+    }
+}
+
+#[cfg(test)]
+mod dns_brand_extra_tests {
+    use super::super::super::admission::Command;
+    use super::super::super::parent_drain::RunnerOwnerHandle;
+    use super::*;
+    use crate::auth;
+    use std::time::Duration;
+
+    fn limits() -> Limits {
+        Limits {
+            jobs: 2,
+            queue: 2,
+            job_roots: 2,
+            dns_roots: 2,
+            dns_children: 2,
+            http_drivers: 2,
+            waiters: 2,
+            waiter_bytes: 32,
+            senders: 4,
+        }
+    }
+    fn grant(end: Instant) -> (auth::LeaseOwner, auth::Grant<()>) {
+        let lease = auth::LeaseOwner::new(end).unwrap();
+        let identity = auth::VerifiedIdentity::from_verified(7, end).unwrap();
+        let scope = auth::AuthScope::bind(identity, Arc::clone(&lease.lease)).unwrap();
+        (lease, auth::Grant::from_authorized(scope, 91).unwrap())
+    }
+    async fn admit(
+        parent: &ParentDrain,
+        client: u64,
+        sender: &ClientSender,
+    ) -> (RunnerOwnerHandle, Command, JobKey, auth::LeaseOwner) {
+        let end = Instant::now() + Duration::from_secs(10);
+        let (lease, authorized) = grant(end);
+        sender.submit(authorized, vec![1], end).await.unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        runner
+            .spawn_root(&mut command, std::future::pending())
+            .unwrap();
+        (runner, command, key, lease)
+    }
+    fn endpoint() -> SocketAddr {
+        "127.0.0.1:53".parse().unwrap()
+    }
+
+    #[tokio::test]
+    async fn dns_brand_unregistered_root_refuses_then_same_key_starts() {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 32).unwrap();
+        let end = Instant::now() + Duration::from_secs(10);
+        let (lease, authorized) = grant(end);
+        sender.submit(authorized, vec![1], end).await.unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        assert!(matches!(
+            DnsPhase::for_job(&runner, &key, end, endpoint()),
+            Err(DnsFailure::Ledger(LedgerError::PhaseClosed))
+        ));
+        assert_eq!(
+            runner.owner.lock().unwrap().used_tasks(TaskKind::DnsRoot),
+            0
+        );
+        runner
+            .spawn_root(&mut command, std::future::pending())
+            .unwrap();
+        let phase = DnsPhase::for_job(&runner, &key, end, endpoint()).unwrap();
+        phase
+            .spawn(TaskKind::DnsRoot, std::future::pending())
+            .unwrap();
+        drop(phase);
+        drop(command);
+        parent.shutdown().await;
+        assert_eq!(runner.owner.lock().unwrap().used_jobs(), 0);
+        assert_eq!(runner.owner.lock().unwrap().fault(), None);
+        drop(lease);
+    }
+
+    #[tokio::test]
+    async fn dns_brand_stop_before_entry_keeps_native_and_fault_zero() {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 32).unwrap();
+        let (runner, command, key, _lease) = admit(&parent, client, &sender).await;
+        let phase = DnsPhase::for_job(
+            &runner,
+            &key,
+            Instant::now() + Duration::from_secs(1),
+            endpoint(),
+        )
+        .unwrap();
+        phase
+            .spawn(TaskKind::DnsRoot, std::future::pending())
+            .unwrap();
+        let shared = Arc::clone(&runner.owner.lock().unwrap().shared);
+        shared.request_stop();
+        let mut native = 0;
+        assert!(matches!(
+            phase.spawn(TaskKind::DnsChild, std::future::pending()),
+            Err(DnsFailure::Ledger(LedgerError::Closing))
+        ));
+        assert!(matches!(
+            phase.begin_io(),
+            Err(DnsFailure::Ledger(LedgerError::Closing))
+        ));
+        assert!(matches!(
+            phase.poll_io(|_| {
+                native += 1;
+                Poll::Ready(Ok(()))
+            }),
+            Poll::Ready(Err(_))
+        ));
+        assert_eq!(native, 0);
+        assert_eq!(
+            runner.owner.lock().unwrap().used_tasks(TaskKind::DnsChild),
+            0
+        );
+        assert_eq!(runner.owner.lock().unwrap().fault(), None);
+        drop(command);
+        parent.shutdown().await;
+        assert_eq!(runner.owner.lock().unwrap().used_jobs(), 0);
+    }
+
+    #[tokio::test]
+    async fn dns_brand_entry_winner_registers_one_child_after_stop() {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 32).unwrap();
+        let (runner, command, key, _lease) = admit(&parent, client, &sender).await;
+        let phase = DnsPhase::for_job(
+            &runner,
+            &key,
+            Instant::now() + Duration::from_secs(1),
+            endpoint(),
+        )
+        .unwrap();
+        phase
+            .spawn(TaskKind::DnsRoot, std::future::pending())
+            .unwrap();
+        let shared = Arc::clone(&runner.owner.lock().unwrap().shared);
+        phase
+            .spawn_with_after_entry(TaskKind::DnsChild, std::future::pending(), || {
+                shared.request_stop()
+            })
+            .unwrap();
+        assert_eq!(
+            runner.owner.lock().unwrap().used_tasks(TaskKind::DnsChild),
+            1
+        );
+        assert!(matches!(
+            phase.spawn(TaskKind::DnsChild, std::future::pending()),
+            Err(DnsFailure::Ledger(LedgerError::Closing))
+        ));
+        assert_eq!(
+            runner.owner.lock().unwrap().used_tasks(TaskKind::DnsChild),
+            1
+        );
+        assert_eq!(runner.owner.lock().unwrap().fault(), None);
+        drop(command);
+        parent.shutdown().await;
+        assert_eq!(runner.owner.lock().unwrap().used_jobs(), 0);
+    }
+
+    #[tokio::test]
+    async fn dns_brand_cancelled_root_keeps_ticket_until_receipt_and_join() {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 32).unwrap();
+        let (runner, command, key, _lease) = admit(&parent, client, &sender).await;
+        let phase = DnsPhase::for_job(
+            &runner,
+            &key,
+            Instant::now() + Duration::from_secs(1),
+            endpoint(),
+        )
+        .unwrap();
+        phase
+            .spawn(TaskKind::DnsRoot, std::future::pending())
+            .unwrap();
+        let ticket = phase.begin_io().unwrap();
+        runner.cancel(&key).unwrap();
+        assert_eq!(runner.owner.lock().unwrap().used_jobs(), 1);
+        assert_eq!(phase.0.book.lock().unwrap().io_live, 1);
+        drop(ticket);
+        assert_eq!(phase.0.book.lock().unwrap().io_closed, 1);
+        assert_eq!(
+            phase.finish().await,
+            Err(DnsFailure::Ledger(LedgerError::Closing))
+        );
+        assert_eq!(
+            runner.owner.lock().unwrap().used_tasks(TaskKind::DnsRoot),
+            0
+        );
+        assert_eq!(runner.owner.lock().unwrap().fault(), None);
+        drop(command);
+        parent.shutdown().await;
+        assert_eq!(runner.owner.lock().unwrap().used_jobs(), 0);
+    }
+
+    #[tokio::test]
+    async fn dns_brand_joined_root_refuses_start_but_same_key_receipt_drains() {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 32).unwrap();
+        let end = Instant::now() + Duration::from_secs(10);
+        let (_lease, authorized) = grant(end);
+        sender.submit(authorized, vec![1], end).await.unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        assert!(runner
+            .spawn_root(&mut command, async move {
+                let _ = rx.await;
+            })
+            .is_ok());
+        let phase = DnsPhase::for_job(&runner, &key, end, endpoint()).unwrap();
+        phase
+            .spawn(TaskKind::DnsRoot, std::future::pending())
+            .unwrap();
+        let ticket = phase.begin_io().unwrap();
+        tx.send(()).unwrap();
+        let owner = Arc::clone(&runner.owner);
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            std::future::poll_fn(|cx| {
+                let mut state = owner.lock().unwrap();
+                let _ = state.poll_parent(cx);
+                let index = state
+                    .key_index(&key)
+                    .expect("popped command retains record");
+                if state.jobs[index]
+                    .tasks
+                    .iter()
+                    .any(|task| task.kind == TaskKind::JobRoot && task.handle.is_some())
+                {
+                    Poll::Pending
+                } else {
+                    Poll::Ready(())
+                }
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(matches!(
+            DnsPhase::for_job(&runner, &key, end, endpoint()),
+            Err(DnsFailure::Ledger(LedgerError::PhaseClosed))
+        ));
+        let mut native = 0;
+        assert!(matches!(
+            phase.poll_io(|_| {
+                native += 1;
+                Poll::Ready(Ok(()))
+            }),
+            Poll::Ready(Err(_))
+        ));
+        assert_eq!(native, 0);
+        assert_eq!(phase.0.book.lock().unwrap().io_live, 1);
+        drop(ticket);
+        assert_eq!(phase.0.book.lock().unwrap().io_closed, 1);
+        assert_eq!(phase.close(), Ok(()));
+        assert_eq!(phase.finish().await, Ok(()));
+        assert_eq!(owner.lock().unwrap().used_tasks(TaskKind::DnsRoot), 0);
+        assert_eq!(owner.lock().unwrap().fault(), None);
+        drop(command);
+        parent.shutdown().await;
+        assert_eq!(owner.lock().unwrap().used_jobs(), 0);
+    }
+
+    #[tokio::test]
+    async fn dns_brand_deadline_after_entry_skips_native_primitive() {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 32).unwrap();
+        let (runner, command, key, _lease) = admit(&parent, client, &sender).await;
+        // The original resolve end remains unchanged while the admitted entry waits.
+        // This one-second test bound is well inside the ten-second job lease.
+        let original_end = Instant::now() + Duration::from_secs(1);
+        let phase = DnsPhase::for_job(&runner, &key, original_end, endpoint()).unwrap();
+        assert_eq!(phase.0.end, original_end);
+        phase
+            .spawn(TaskKind::DnsRoot, std::future::pending())
+            .unwrap();
+        struct Rejected {
+            owner: Arc<Mutex<Owner>>,
+            phase: DnsPhase,
+            outside: Arc<AtomicBool>,
+            polled: Arc<AtomicBool>,
+        }
+        impl Future for Rejected {
+            type Output = ();
+            fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+                self.polled.store(true, Ordering::Release);
+                Poll::Pending
+            }
+        }
+        impl Drop for Rejected {
+            fn drop(&mut self) {
+                self.outside.store(
+                    self.owner.try_lock().is_ok() && self.phase.0.book.try_lock().is_ok(),
+                    Ordering::Release,
+                );
+            }
+        }
+        let outside = Arc::new(AtomicBool::new(false));
+        let polled = Arc::new(AtomicBool::new(false));
+        let job_original_end = runner
+            .owner
+            .lock()
+            .unwrap()
+            .jobs
+            .iter()
+            .find(|job| job.id == key.id())
+            .unwrap()
+            .end;
+        let shared = Arc::clone(&runner.owner.lock().unwrap().shared);
+        let mut entered = false;
+        let result = phase.spawn_with_after_entry(
+            TaskKind::DnsChild,
+            Rejected {
+                owner: Arc::clone(&runner.owner),
+                phase: phase.clone(),
+                outside: Arc::clone(&outside),
+                polled: Arc::clone(&polled),
+            },
+            || {
+                entered = shared.stop_admit.load(Ordering::Acquire) & ENQUEUE_ACCEPTED != 0;
+                let remaining = original_end.saturating_duration_since(Instant::now());
+                assert!(remaining <= Duration::from_secs(1));
+                std::thread::sleep(remaining + Duration::from_millis(5));
+                assert!(Instant::now() >= original_end);
+            },
+        );
+        assert!(entered, "CAS winner observed before original end passes");
+        assert_eq!(phase.0.end, original_end);
+        assert_eq!(
+            runner
+                .owner
+                .lock()
+                .unwrap()
+                .jobs
+                .iter()
+                .find(|job| job.id == key.id())
+                .unwrap()
+                .end,
+            job_original_end
+        );
+        assert_eq!(result, Err(DnsFailure::Ledger(LedgerError::Expired)));
+        assert!(
+            outside.load(Ordering::Acquire),
+            "rejected Future Drop outside both gates"
+        );
+        assert!(!polled.load(Ordering::Acquire));
+        assert_eq!(
+            runner.owner.lock().unwrap().used_tasks(TaskKind::DnsChild),
+            0
+        );
+        assert_eq!(runner.owner.lock().unwrap().fault(), None);
+        drop(command);
+        parent.shutdown().await;
+        assert_eq!(runner.owner.lock().unwrap().used_jobs(), 0);
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn dns_brand_root_finishes_during_book_wait_skips_io() {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 32).unwrap();
+        let end = Instant::now() + Duration::from_secs(10);
+        let (_lease, authorized) = grant(end);
+        sender.submit(authorized, vec![1], end).await.unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        let (root_release, root_wait) = tokio::sync::oneshot::channel::<()>();
+        assert!(runner
+            .spawn_root(&mut command, async move {
+                let _ = root_wait.await;
+            })
+            .is_ok());
+        let phase = DnsPhase::for_job(&runner, &key, end, endpoint()).unwrap();
+        phase
+            .spawn(TaskKind::DnsRoot, std::future::pending())
+            .unwrap();
+        let signal = {
+            let state = runner.owner.lock().unwrap();
+            let index = state.key_index(&key).unwrap();
+            Arc::clone(
+                state.jobs[index]
+                    .tasks
+                    .iter()
+                    .find(|task| task.kind == TaskKind::JobRoot)
+                    .unwrap()
+                    .root_signal
+                    .as_ref()
+                    .unwrap(),
+            )
+        };
+        let (held_tx, held_rx) = std::sync::mpsc::sync_channel::<()>(1);
+        let (release_book, release_rx) = std::sync::mpsc::sync_channel::<()>(1);
+        let held_phase = phase.clone();
+        let holder = std::thread::spawn(move || {
+            let book = held_phase.0.book.lock().unwrap();
+            let _ = held_tx.send(());
+            let _ = release_rx.recv_timeout(Duration::from_secs(5));
+            drop(book);
+        });
+        let book_held = held_rx.recv_timeout(Duration::from_secs(2)).is_ok();
+        let finished = Arc::new(AtomicBool::new(false));
+        let finished_in_attempt = Arc::clone(&finished);
+        let attempted_phase = phase.clone();
+        let attempt = std::thread::spawn(move || {
+            let result = attempted_phase.begin_io();
+            let refused = matches!(&result, Err(DnsFailure::Ledger(LedgerError::PhaseClosed)));
+            drop(result);
+            finished_in_attempt.store(true, Ordering::Release);
+            refused
+        });
+        let owner = Arc::clone(&runner.owner);
+        let blocked_at_book = if book_held {
+            tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    if owner.try_lock().is_err() && !finished.load(Ordering::Acquire) {
+                        tokio::time::sleep(Duration::from_millis(1)).await;
+                        if owner.try_lock().is_err() && !finished.load(Ordering::Acquire) {
+                            break true;
+                        }
+                    }
+                    if finished.load(Ordering::Acquire) {
+                        break false;
+                    }
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap_or(false)
+        } else {
+            false
+        };
+        let root_released = root_release.send(()).is_ok();
+        let root_completed = tokio::time::timeout(Duration::from_secs(2), async {
+            while signal.state.load(Ordering::Acquire) == ROOT_RUNNING {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .is_ok()
+            && signal.state.load(Ordering::Acquire) == ROOT_COMPLETED;
+        let _ = release_book.send(());
+        let holder_joined = holder.join().is_ok();
+        let refused = attempt.join().unwrap_or(false);
+        let io_started = phase.0.book.lock().unwrap().io_started;
+        let fault = runner.owner.lock().unwrap().fault();
+        drop(command);
+        parent.shutdown().await;
+        let used_jobs = runner.owner.lock().unwrap().used_jobs();
+        assert!(
+            book_held && blocked_at_book && root_released && root_completed,
+            "book_held={book_held} blocked_at_book={blocked_at_book} root_released={root_released} root_completed={root_completed} root_state={}",
+            signal.state.load(Ordering::Acquire)
+        );
+        assert!(holder_joined);
+        assert!(refused, "terminal JobRoot must refuse new native I/O");
+        assert_eq!(io_started, 0);
+        assert_eq!(fault, None);
+        assert_eq!(used_jobs, 0);
+    }
 }

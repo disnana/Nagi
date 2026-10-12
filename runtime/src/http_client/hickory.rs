@@ -403,12 +403,12 @@ fn classify(
 }
 
 pub(in super::super) async fn resolve(
-    owner: &Arc<Mutex<Owner>>,
-    id: u64,
+    runner: &RunnerOwnerHandle,
+    key: &JobKey,
     startup: &ResolverStartup,
     resolve_end: Instant,
 ) -> Result<DrainedResolution, DnsFailure> {
-    let phase = DnsPhase::for_job(owner, id, resolve_end, startup.endpoint)?;
+    let phase = DnsPhase::for_job(runner, key, resolve_end, startup.endpoint)?;
     let guard = StopOnDrop(phase.clone());
     let prepared = build(startup, phase.clone());
     let result = match prepared {

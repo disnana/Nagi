@@ -7,11 +7,37 @@ use std::time::Instant;
 #[derive(Debug)]
 pub(super) struct Command {
     pub(super) id: u64,
-    pub(super) key: JobKey,
+    key: JobKey,
     pub(super) subject: i64,
     pub(super) resource: i64,
     pub(super) end: Instant,
-    pub(super) payload: Vec<u8>,
+    payload: Vec<u8>,
+    shared: Arc<Shared>,
+    armed: bool,
+}
+
+impl Command {
+    pub(super) fn key(&self) -> &JobKey {
+        &self.key
+    }
+    pub(super) fn payload(&self) -> &[u8] {
+        &self.payload
+    }
+}
+
+impl Drop for Command {
+    fn drop(&mut self) {
+        // A monitor may retire immediately after this publication. The payload
+        // must be gone first, including on the no-root and cancelled paths.
+        drop(std::mem::take(&mut self.payload));
+        if self.key.seal.completion.load(Ordering::Acquire) & COMMAND_POPPED != 0 {
+            self.key
+                .seal
+                .command_disposed(self.armed && !self.key.seal.root_registered());
+            // Drop takes no Owner, waiter, or watch-value lock.
+            self.shared.stop_notify.notify_waiters();
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -116,6 +142,8 @@ impl Owner {
                 resource,
                 end,
                 payload,
+                shared: Arc::clone(&self.shared),
+                armed: false,
             }),
         });
         self.next_job_id = id + 1; // checked while the same client gate was held
@@ -138,9 +166,11 @@ impl Owner {
             if job.cancel_requested || job.end.is_some_and(|end| end <= Instant::now()) {
                 continue;
             }
-            if let Some(command) = job.queued.take() {
-                // The retained record keeps capacity until actual registration
-                // and joins, even after the runner owns the command.
+            if let Some(mut command) = job.queued.take() {
+                // The retained record also follows the caller-owned payload
+                // until Command::drop publishes disposal after payload Drop.
+                command.armed = true;
+                command.key.seal.command_popped();
                 return Ok(Some(command));
             }
         }
@@ -356,6 +386,11 @@ impl RunnerOwnerHandle {
             Ok(index) => index,
             Err(error) => return Err((error, future)),
         };
+        // A bare key is not authority to register the one JobRoot. Only the
+        // still-owned popped Command can cross that transition.
+        if kind == TaskKind::JobRoot {
+            return Err((LedgerError::PhaseClosed, future));
+        }
         if state.jobs[index].queued.is_some()
             || (kind == TaskKind::JobRoot && key.seal.root_registered())
             || (kind == TaskKind::HttpDriver && key.seal.driver_registered())
@@ -369,6 +404,45 @@ impl RunnerOwnerHandle {
             Err(error) => return Err((error, future)),
         };
         state.try_spawn_impl(key.id, kind, future, true)
+    }
+
+    // Command remains caller-owned until after the actual handle is registered.
+    // No payload or Command destructor is delegated to runtime.spawn while the
+    // Owner gate is held. The native payload-transfer port is a later slice.
+    pub(super) fn spawn_root<F: Future<Output = ()> + Send + 'static>(
+        &self,
+        command: &mut Command,
+        future: F,
+    ) -> Result<(), (LedgerError, F)> {
+        if !command.armed {
+            return Err((LedgerError::PhaseClosed, future));
+        }
+        let Ok(mut state) = self.owner.lock() else {
+            return Err((LedgerError::Faulted, future));
+        };
+        let index = match state.key_index(command.key()) {
+            Ok(index) => index,
+            Err(error) => return Err((error, future)),
+        };
+        if command.id != command.key.id
+            || state.jobs[index].queued.is_some()
+            || command.key.seal.root_registered()
+            || command.key.seal.command_abandoned()
+        {
+            return Err((LedgerError::PhaseClosed, future));
+        }
+        let shared = Arc::clone(&state.shared);
+        let _entry = match shared.begin_enqueue() {
+            Ok(entry) => entry,
+            Err(error) => return Err((error, future)),
+        };
+        match state.try_spawn_impl(command.id, TaskKind::JobRoot, future, true) {
+            Ok(()) => {
+                command.armed = false; // only after handle + ROOT_REGISTERED
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
     }
 
     pub(super) fn cancel(&self, key: &JobKey) -> Result<(), LedgerError> {

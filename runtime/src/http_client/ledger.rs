@@ -277,6 +277,9 @@ const ROOT_REGISTERED: u8 = 1;
 const ROOT_ACTUAL_JOINED: u8 = 2;
 const DRIVER_REGISTERED: u8 = 4;
 const DRIVER_ACTUAL_JOINED: u8 = 8;
+const COMMAND_POPPED: u8 = 16;
+const COMMAND_DISPOSED: u8 = 32;
+const COMMAND_ABANDONED: u8 = 64;
 
 // Fixed completion storage is allocated before the Auth permit is consumed.
 // Registration and actual join are distinct; neither a reported result nor
@@ -306,6 +309,20 @@ impl JobSeal {
             _ => return,
         };
         self.completion.fetch_or(bit, Ordering::Release);
+    }
+    fn command_popped(&self) {
+        self.completion.fetch_or(COMMAND_POPPED, Ordering::Release);
+    }
+    fn command_disposed(&self, abandoned: bool) {
+        let flags = COMMAND_DISPOSED | if abandoned { COMMAND_ABANDONED } else { 0 };
+        self.completion.fetch_or(flags, Ordering::Release);
+    }
+    fn command_retained(&self) -> bool {
+        let flags = self.completion.load(Ordering::Acquire);
+        flags & COMMAND_POPPED != 0 && flags & COMMAND_DISPOSED == 0
+    }
+    fn command_abandoned(&self) -> bool {
+        self.completion.load(Ordering::Acquire) & COMMAND_ABANDONED != 0
     }
     fn root_registered(&self) -> bool {
         self.completion.load(Ordering::Acquire) & ROOT_REGISTERED != 0
@@ -608,6 +625,9 @@ impl Owner {
         if self.jobs[index].cancel_requested {
             return Err((LedgerError::Closing, future));
         }
+        if self.jobs[index].seal.command_abandoned() {
+            return Err((LedgerError::PhaseClosed, future));
+        }
         if self.jobs[index].dns_frozen && kind.dns() {
             return Err((LedgerError::PhaseClosed, future));
         }
@@ -689,13 +709,9 @@ impl Owner {
         Ok(())
     }
 
-    fn freeze_dns(&mut self, id: u64) -> Result<(), LedgerError> {
-        let job = self
-            .jobs
-            .iter_mut()
-            .find(|job| job.id == id)
-            .ok_or(LedgerError::UnknownJob)?;
-        job.dns_frozen = true;
+    fn freeze_dns(&mut self, key: &JobKey) -> Result<(), LedgerError> {
+        let index = self.key_index(key)?;
+        self.jobs[index].dns_frozen = true;
         Ok(())
     }
 
@@ -948,6 +964,7 @@ impl Owner {
         for index in (0..self.jobs.len()).rev() {
             let job = &self.jobs[index];
             if job.tasks.iter().any(|task| task.handle.is_some())
+                || job.seal.command_retained()
                 || (!job.cancel_requested && (!job.started || job.queued.is_some()))
             {
                 continue;
@@ -972,6 +989,10 @@ impl Owner {
         }
         let now = std::time::Instant::now();
         for index in 0..self.jobs.len() {
+            if self.jobs[index].seal.command_abandoned() && !self.jobs[index].cancel_requested {
+                self.request_cancel(self.jobs[index].id)
+                    .expect("retained abandoned job");
+            }
             if !self.jobs[index].cancel_requested
                 && self.jobs[index].end.is_some_and(|end| end <= now)
             {

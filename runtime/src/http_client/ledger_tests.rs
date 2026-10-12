@@ -31,6 +31,14 @@ fn limits() -> Limits {
     }
 }
 
+fn fixture_key(owner: &Owner, id: u64) -> JobKey {
+    let job = owner.jobs.iter().find(|job| job.id == id).unwrap();
+    JobKey {
+        id,
+        seal: Arc::clone(&job.seal),
+    }
+}
+
 fn must_spawn<F: Future<Output = ()> + Send + 'static>(
     owner: &mut Owner,
     id: u64,
@@ -209,7 +217,8 @@ fn dns_drain_joins_dns_root_without_waiting_for_job_root() {
         let id = owner.fixture_admit().unwrap();
         must_spawn(&mut owner, id, TaskKind::JobRoot, pending::<()>());
         must_spawn(&mut owner, id, TaskKind::DnsRoot, async {});
-        owner.freeze_dns(id).unwrap();
+        let key = fixture_key(&owner, id);
+        owner.freeze_dns(&key).unwrap();
         owner.drain_dns(id).await.unwrap();
         assert_eq!(owner.used_tasks(TaskKind::DnsRoot), 0);
         assert_eq!(owner.used_tasks(TaskKind::JobRoot), 1);
@@ -241,7 +250,8 @@ fn dns_drain_observes_panicked_job_root_while_dns_child_is_pending() {
             panic!("DNS-stage job root panic fixture")
         });
         root_started_rx.await.unwrap();
-        owner.freeze_dns(id).unwrap();
+        let key = fixture_key(&owner, id);
+        owner.freeze_dns(&key).unwrap();
         let mut drain = Box::pin(owner.drain_dns(id));
         let mut cx = Context::from_waker(Waker::noop());
         assert!(matches!(drain.as_mut().poll(&mut cx), Poll::Pending));
@@ -285,7 +295,8 @@ fn dns_drain_observes_unexpected_job_root_cancel_while_dns_child_is_pending() {
             .as_ref()
             .unwrap()
             .abort_handle();
-        owner.freeze_dns(id).unwrap();
+        let key = fixture_key(&owner, id);
+        owner.freeze_dns(&key).unwrap();
         let mut drain = Box::pin(owner.drain_dns(id));
         let mut cx = Context::from_waker(Waker::noop());
         assert!(matches!(drain.as_mut().poll(&mut cx), Poll::Pending));
@@ -320,7 +331,8 @@ fn dns_drain_retains_healthy_completed_job_root_for_final_drain() {
             tokio::task::yield_now().await;
         }
         assert!(owner.task_is_finished(id, TaskKind::JobRoot));
-        owner.freeze_dns(id).unwrap();
+        let key = fixture_key(&owner, id);
+        owner.freeze_dns(&key).unwrap();
         release_tx.send(()).unwrap();
         assert_eq!(owner.drain_dns(id).await, Ok(()));
         assert_eq!(owner.fault(), None);
@@ -365,7 +377,8 @@ fn dns_drain_observes_job_root_future_drop_panic_after_ready() {
             TaskKind::JobRoot,
             ReadyThenPanicOnDrop(release_root_rx),
         );
-        owner.freeze_dns(id).unwrap();
+        let key = fixture_key(&owner, id);
+        owner.freeze_dns(&key).unwrap();
         let mut drain = Box::pin(owner.drain_dns(id));
         let mut cx = Context::from_waker(Waker::noop());
         assert!(matches!(drain.as_mut().poll(&mut cx), Poll::Pending));
@@ -470,7 +483,8 @@ fn joined_dns_record_is_reused_before_http_child_registration() {
         let id = owner.fixture_admit().unwrap();
         must_spawn(&mut owner, id, TaskKind::JobRoot, pending::<()>());
         must_spawn(&mut owner, id, TaskKind::DnsRoot, async {});
-        owner.freeze_dns(id).unwrap();
+        let key = fixture_key(&owner, id);
+        owner.freeze_dns(&key).unwrap();
         owner.drain_dns(id).await.unwrap();
         assert_eq!(owner.fixture_task_records(id), 2);
         must_spawn(&mut owner, id, TaskKind::HttpDriver, async {});

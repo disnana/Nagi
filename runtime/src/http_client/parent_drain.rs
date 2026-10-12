@@ -185,9 +185,20 @@ impl ParentDrain {
         }
     }
     async fn finish_record(&mut self, index: usize) {
-        // Never move handles into the waiting future or hold this lock over await.
-        lock_owner(&self.records[index].owner).close();
-        std::future::poll_fn(|cx| lock_owner(&self.records[index].owner).poll_parent(cx)).await;
+        // The monitor may already be gone while a caller still owns a popped
+        // Command. Subscribe before polling so its Drop cannot strand fallback.
+        let owner = Arc::clone(&self.records[index].owner);
+        let shared = Arc::clone(&self.records[index].shared);
+        lock_owner(&owner).close();
+        loop {
+            let stopped = shared.stop_notify.notified();
+            tokio::pin!(stopped);
+            stopped.as_mut().enable();
+            tokio::select! {
+                _ = std::future::poll_fn(|cx| lock_owner(&owner).poll_parent(cx)) => break,
+                _ = stopped => {}
+            }
+        }
         if let Some(fault) = lock_owner(&self.records[index].owner).fault() {
             self.first_fault.get_or_insert(ParentFault::Inner(fault));
             self.closing = true;
@@ -255,5 +266,121 @@ impl ParentDrain {
     }
     pub(super) fn closing_for_test(&self) -> bool {
         self.closing && self.first_fault.is_some()
+    }
+}
+
+#[cfg(test)]
+mod fallback_lost_wake_tests {
+    use super::*;
+    use crate::auth;
+    use std::{future::Future, time::Duration};
+
+    struct WakeCounter(AtomicUsize);
+    impl std::task::Wake for WakeCounter {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    fn limits() -> Limits {
+        Limits {
+            jobs: 1,
+            queue: 1,
+            job_roots: 1,
+            dns_roots: 1,
+            dns_children: 1,
+            http_drivers: 1,
+            waiters: 1,
+            waiter_bytes: 16,
+            senders: 3,
+        }
+    }
+
+    async fn fallback_after_outer_join(monitor_panics: bool) {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (id, sender) = parent.register(limits(), 16).unwrap();
+        let end = std::time::Instant::now() + Duration::from_secs(10);
+        let lease = auth::LeaseOwner::new(end).unwrap();
+        let identity = auth::VerifiedIdentity::from_verified(7, end).unwrap();
+        let scope = auth::AuthScope::bind(identity, Arc::clone(&lease.lease)).unwrap();
+        let grant: auth::Grant<()> = auth::Grant::from_authorized(scope, 91).unwrap();
+        sender.submit(grant, vec![1, 2], end).await.unwrap();
+        let runner = parent.runner_owner(id).unwrap();
+        let command = runner.take_command().unwrap().unwrap();
+        let retained = Arc::clone(&parent.records[0].owner);
+        assert_eq!(lock_owner(&retained).used_jobs(), 1);
+        if monitor_panics {
+            let owner = lock_owner(&retained);
+            owner.shared.monitor_panic.store(true, Ordering::Release);
+            owner.shared.notify();
+        } else {
+            parent.records[0].monitor.as_ref().unwrap().abort();
+        }
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            parent.records[0].monitor.as_mut().unwrap(),
+        )
+        .await
+        .unwrap();
+        parent.observe_outer(0, result);
+        let expected = if monitor_panics {
+            ParentFault::MonitorPanic
+        } else {
+            ParentFault::UnexpectedMonitorCancel
+        };
+        assert_eq!(parent.first_fault, Some(expected));
+        let mut drain = Box::pin(parent.reap_next());
+        let wake = Arc::new(WakeCounter(AtomicUsize::new(0)));
+        let waker = Waker::from(Arc::clone(&wake));
+        let mut cx = Context::from_waker(&waker);
+        let was_pending = drain.as_mut().poll(&mut cx).is_pending();
+        let retained_before = lock_owner(&retained).used_jobs() == 1;
+        wake.0.store(0, Ordering::SeqCst);
+        std::thread::spawn(move || drop(command)).join().unwrap();
+        // Check the synchronous Drop wake before any re-poll can mask its loss.
+        let wake_count = wake.0.load(Ordering::SeqCst);
+        if wake_count == 0 {
+            drop(drain);
+            tokio::time::timeout(Duration::from_secs(2), parent.shutdown())
+                .await
+                .unwrap();
+            assert!(parent.records.is_empty());
+            assert_eq!(lock_owner(&retained).used_jobs(), 0);
+            assert_eq!(parent.first_fault, Some(expected));
+            panic!("Command Drop did not wake pending fallback");
+        }
+        assert!(was_pending);
+        assert!(retained_before);
+        assert!(wake_count >= 1);
+        let completed = tokio::time::timeout(Duration::from_secs(2), &mut drain)
+            .await
+            .ok();
+        drop(drain);
+        assert_eq!(completed, Some(Some(id)));
+        assert!(parent.records.is_empty());
+        assert_eq!(lock_owner(&retained).used_jobs(), 0);
+        assert_eq!(parent.first_fault, Some(expected));
+        drop(sender);
+    }
+
+    #[test]
+    fn fallback_lost_wake_after_monitor_abort() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(fallback_after_outer_join(false));
+    }
+
+    #[test]
+    fn fallback_lost_wake_after_monitor_panic() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(fallback_after_outer_join(true));
     }
 }

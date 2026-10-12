@@ -137,10 +137,12 @@ async fn owned_udp_two_families_actual_tracked_resolver_and_join() {
         assert!(seen.contains(&RecordType::A) && seen.contains(&RecordType::AAAA));
     });
     let (owner, sender, id) = super::super::tests::fixture();
+    let runner = super::super::tests::fixture_runner(&owner);
+    let key = super::super::tests::fixture_key(&owner, id);
     let startup = ResolverStartup::checked("api.example.test", endpoint).unwrap();
     let result = resolve(
-        &owner,
-        id,
+        &runner,
+        &key,
         &startup,
         Instant::now() + Duration::from_secs(1),
     )
@@ -272,9 +274,11 @@ async fn owned_udp_cname_same_response_and_cross_response_keep_origin() {
             );
         });
         let (owner, sender, id) = super::super::tests::fixture();
+        let runner = super::super::tests::fixture_runner(&owner);
+        let key = super::super::tests::fixture_key(&owner, id);
         let startup = ResolverStartup::checked("api.example.test", endpoint).unwrap();
         let begun = Instant::now();
-        let result = resolve(&owner, id, &startup, begun + Duration::from_secs(1)).await;
+        let result = resolve(&runner, &key, &startup, begun + Duration::from_secs(1)).await;
         let actor_result = match tokio::time::timeout(Duration::from_secs(3), &mut actor).await {
             Ok(result) => result,
             Err(_) => {
