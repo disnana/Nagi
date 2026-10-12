@@ -8,6 +8,10 @@ mod concurrent;
 mod database;
 pub mod html;
 pub mod http_server;
+// Private native modules are compiled once for scoped Cargo tests only.
+#[cfg(test)]
+#[allow(dead_code, unused_imports)]
+mod http_client;
 pub mod metrics;
 pub mod result;
 pub mod sqlite;

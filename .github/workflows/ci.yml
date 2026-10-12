@@ -90,6 +90,30 @@ jobs:
           if summaries != [("ok", "1", "0", "0")]:
               raise AssertionError(f"expected exactly one passing focused test (1 passed, 0 failed, 0 ignored), got {summaries}")
           PY
+      - name: Check SF06 private native modules before broad runtime checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib http_client::ledger:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-ledger.log"
+          cargo test --locked -p nagi-runtime --lib http_client::address:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-transport.log"
+          cargo test --locked -p nagi-runtime --lib auth::admission_bridge_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-admission.log"
+          cargo test --locked -p nagi-runtime --lib auth::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-auth-core.log"
+          cargo test --locked -p nagi-runtime --lib auth::credential_metadata_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-credential.log"
+          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-core.log"
+          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::hickory::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-hickory.log"
+          cargo test --locked -p nagi-runtime --lib http_client::address::q1_dial::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-q1-pure.log"
+          python - <<'PY_SUMMARY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          expected = {"sf06-private-ledger.log": 57, "sf06-private-transport.log": 64, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 16, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 29}
+          for name, count in expected.items():
+              data = (root / name).read_text(encoding="utf-8")
+              running = re.findall(r"(?m)^running (\d+) tests?$", data)
+              results = re.findall(r"(?m)^test result: ok\. (\d+) passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in .+$", data)
+              if running != [str(count)] or results != [str(count)]:
+                  raise AssertionError(f"{name}: expected exactly {count} real, passing tests")
+          PY_SUMMARY
       - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
         shell: bash
         run: |
@@ -371,6 +395,30 @@ jobs:
           if summaries != [("ok", "1", "0", "0")]:
               raise AssertionError(f"expected exactly one passing focused test (1 passed, 0 failed, 0 ignored), got {summaries}")
           PY
+      - name: Check SF06 private native modules before broad runtime checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib http_client::ledger:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-ledger.log"
+          cargo test --locked -p nagi-runtime --lib http_client::address:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-transport.log"
+          cargo test --locked -p nagi-runtime --lib auth::admission_bridge_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-admission.log"
+          cargo test --locked -p nagi-runtime --lib auth::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-auth-core.log"
+          cargo test --locked -p nagi-runtime --lib auth::credential_metadata_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-credential.log"
+          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-core.log"
+          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::hickory::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-hickory.log"
+          cargo test --locked -p nagi-runtime --lib http_client::address::q1_dial::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-q1-pure.log"
+          python - <<'PY_SUMMARY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          expected = {"sf06-private-ledger.log": 57, "sf06-private-transport.log": 64, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 16, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 29}
+          for name, count in expected.items():
+              data = (root / name).read_text(encoding="utf-8")
+              running = re.findall(r"(?m)^running (\d+) tests?$", data)
+              results = re.findall(r"(?m)^test result: ok\. (\d+) passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in .+$", data)
+              if running != [str(count)] or results != [str(count)]:
+                  raise AssertionError(f"{name}: expected exactly {count} real, passing tests")
+          PY_SUMMARY
       - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
         shell: bash
         run: |
