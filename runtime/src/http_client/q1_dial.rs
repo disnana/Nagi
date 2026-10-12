@@ -165,7 +165,7 @@ impl SuccessfulLookup {
         if now >= self.original_resolve_end {
             return Err(Q1Error::Address(AddressError::Expired));
         }
-        let zero_ttl_in_chain = self.ttl_chain_seconds.iter().any(|ttl| *ttl == 0);
+        let zero_ttl_in_chain = self.ttl_chain_seconds.contains(&0);
         let (ticket, effective_expiry) = if zero_ttl_in_chain {
             (
                 ResolutionTicket::SingleOperation {

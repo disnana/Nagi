@@ -2,7 +2,7 @@ use super::*;
 use std::{
     future::pending,
     net::{IpAddr, Ipv4Addr},
-    task::{Context, Wake, Waker},
+    task::{Context, Waker},
     time::Duration,
 };
 use tokio::{io::AsyncReadExt, net::TcpListener};
@@ -176,13 +176,9 @@ fn close_and_deadline_drop_pending_dial_before_releasing_quota() {
             |_| pending::<std::io::Result<TcpStream>>(),
         );
         tokio::pin!(dial);
-        struct NoWake;
-        impl Wake for NoWake {
-            fn wake(self: Arc<Self>) {}
-        }
-        let waker = Waker::from(Arc::new(NoWake));
+        let waker = Waker::noop();
         assert!(matches!(
-            dial.as_mut().poll(&mut Context::from_waker(&waker)),
+            dial.as_mut().poll(&mut Context::from_waker(waker)),
             Poll::Pending
         ));
         assert_eq!(quota.used(), 1);
@@ -201,7 +197,7 @@ fn close_and_deadline_drop_pending_dial_before_releasing_quota() {
         );
         tokio::pin!(dial);
         assert!(matches!(
-            dial.as_mut().poll(&mut Context::from_waker(&waker)),
+            dial.as_mut().poll(&mut Context::from_waker(waker)),
             Poll::Pending
         ));
         assert_eq!(quota.used(), 1);
@@ -224,13 +220,9 @@ fn dropping_pending_connect_future_releases_its_slot() {
             &quota,
             |_| pending::<std::io::Result<TcpStream>>(),
         ));
-        struct NoWake;
-        impl Wake for NoWake {
-            fn wake(self: Arc<Self>) {}
-        }
-        let waker = Waker::from(Arc::new(NoWake));
+        let waker = Waker::noop();
         assert!(matches!(
-            dial.as_mut().poll(&mut Context::from_waker(&waker)),
+            dial.as_mut().poll(&mut Context::from_waker(waker)),
             Poll::Pending
         ));
         assert_eq!(quota.used(), 1);

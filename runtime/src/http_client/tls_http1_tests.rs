@@ -224,7 +224,7 @@ async fn trusted_ca_original_name_and_host_http1_then_driver_actual_join() {
         "driver owns the pinned socket after handshake"
     );
     // Test-only owner. Production driver creation must go through the parent JobLedger gate.
-    let driver_owner = tokio::spawn(async move { driver.await });
+    let driver_owner = tokio::spawn(driver);
     let request = WireRequest::checked(
         hyper::Method::GET,
         "/probe".parse().unwrap(),
@@ -521,7 +521,7 @@ async fn exact_hyper_dispatches_at_send_request_call_before_future_poll() {
     let (mut sender, driver) = http1::handshake::<_, RequestBody>(TokioIo::new(client_io))
         .await
         .unwrap();
-    let driver_owner = tokio::spawn(async move { driver.await });
+    let driver_owner = tokio::spawn(driver);
     let request = WireRequest::checked(
         hyper::Method::GET,
         "/probe".parse().unwrap(),

@@ -322,7 +322,7 @@ fn classify(
                 let aliases: Vec<_> = lookup
                     .answers()
                     .iter()
-                    .filter(|record| &record.name == &final_name)
+                    .filter(|record| record.name == final_name)
                     .filter_map(|record| {
                         if let RData::CNAME(cname) = &record.data {
                             Some(&cname.0)
@@ -345,7 +345,7 @@ fn classify(
             }
             if lookup.answers().iter().any(|r| {
                 matches!(&r.data, RData::CNAME(_))
-                    && (!seen.contains(&r.name) || &r.name == &final_name)
+                    && (!seen.contains(&r.name) || r.name == final_name)
             }) {
                 return Err(DnsFailure::Answer);
             }
@@ -374,14 +374,14 @@ fn classify(
                 match &record.data {
                     RData::A(a)
                         if kind == RecordType::A
-                            && &record.name == &final_name
+                            && record.name == final_name
                             && record.dns_class == DNSClass::IN =>
                     {
                         addresses.push(IpAddr::V4(a.0))
                     }
                     RData::AAAA(a)
                         if kind == RecordType::AAAA
-                            && &record.name == &final_name
+                            && record.name == final_name
                             && record.dns_class == DNSClass::IN =>
                     {
                         addresses.push(IpAddr::V6(a.0))

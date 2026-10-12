@@ -139,10 +139,14 @@ fn invalidation_during_real_capacity_wait_prevents_auth_enqueue() {
         sender.cancel(first).unwrap();
         let result = tokio::time::timeout(Duration::from_secs(2), wait).await.unwrap();
         assert!(matches!(result, Err(AdmissionError::Auth(ref e)) if e.kind() == auth::FailureKind::Expired));
-        let state = owner(&sender).lock().unwrap();
-        assert_eq!(state.used_jobs(), 0); assert_eq!(state.used_queue, 0);
-        assert_eq!(state.reserved_roots, [0, 0]); assert_eq!(state.registered_waiters(), (0, 0));
-        drop(state); parent.shutdown().await;
+        {
+            let state = owner(&sender).lock().unwrap();
+            assert_eq!(state.used_jobs(), 0);
+            assert_eq!(state.used_queue, 0);
+            assert_eq!(state.reserved_roots, [0, 0]);
+            assert_eq!(state.registered_waiters(), (0, 0));
+        }
+        parent.shutdown().await;
     });
 }
 
