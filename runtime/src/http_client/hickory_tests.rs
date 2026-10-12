@@ -299,7 +299,7 @@ async fn owned_udp_cname_same_response_and_cross_response_keep_origin() {
                         lookup
                             .answers()
                             .iter()
-                            .filter(|r| matches!(r.data(), RData::CNAME(_)))
+                            .filter(|r| matches!(&r.data, RData::CNAME(_)))
                             .count(),
                         1
                     );

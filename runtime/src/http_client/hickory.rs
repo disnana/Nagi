@@ -312,7 +312,7 @@ fn classify(
             if lookup
                 .answers()
                 .iter()
-                .any(|r| matches!(r.data(), RData::CNAME(_)) && r.dns_class() != DNSClass::IN)
+                .any(|r| matches!(&r.data, RData::CNAME(_)) && r.dns_class != DNSClass::IN)
             {
                 return Err(DnsFailure::Answer);
             }
@@ -322,9 +322,9 @@ fn classify(
                 let aliases: Vec<_> = lookup
                     .answers()
                     .iter()
-                    .filter(|record| record.name() == &final_name)
+                    .filter(|record| &record.name == &final_name)
                     .filter_map(|record| {
-                        if let RData::CNAME(cname) = record.data() {
+                        if let RData::CNAME(cname) = &record.data {
                             Some(&cname.0)
                         } else {
                             None
@@ -344,8 +344,8 @@ fn classify(
                 seen.push(final_name.clone());
             }
             if lookup.answers().iter().any(|r| {
-                matches!(r.data(), RData::CNAME(_))
-                    && (!seen.contains(r.name()) || r.name() == &final_name)
+                matches!(&r.data, RData::CNAME(_))
+                    && (!seen.contains(&r.name) || &r.name == &final_name)
             }) {
                 return Err(DnsFailure::Answer);
             }
@@ -359,10 +359,7 @@ fn classify(
             }
             let mut positive_until = lookup.valid_until();
             for record in lookup.answers() {
-                if matches!(
-                    record.data(),
-                    RData::CNAME(_) | RData::A(_) | RData::AAAA(_)
-                ) {
+                if matches!(&record.data, RData::CNAME(_) | RData::A(_) | RData::AAAA(_)) {
                     let bound = started
                         .checked_add(Duration::from_secs(u64::from(record.ttl)))
                         .ok_or(DnsFailure::Capacity)?;
@@ -374,18 +371,18 @@ fn classify(
                 .try_reserve_exact(RECORDS)
                 .map_err(|_| DnsFailure::Capacity)?;
             for record in lookup.answers() {
-                match record.data() {
+                match &record.data {
                     RData::A(a)
                         if kind == RecordType::A
-                            && record.name() == &final_name
-                            && record.dns_class() == DNSClass::IN =>
+                            && &record.name == &final_name
+                            && record.dns_class == DNSClass::IN =>
                     {
                         addresses.push(IpAddr::V4(a.0))
                     }
                     RData::AAAA(a)
                         if kind == RecordType::AAAA
-                            && record.name() == &final_name
-                            && record.dns_class() == DNSClass::IN =>
+                            && &record.name == &final_name
+                            && record.dns_class == DNSClass::IN =>
                     {
                         addresses.push(IpAddr::V6(a.0))
                     }
