@@ -14,6 +14,7 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 from plan import ROOT, version_tuple
+import third_party_notices
 
 
 PLATFORMS = ("linux-x86_64", "windows-x86_64", "macos-arm64", "macos-x86_64")
@@ -53,12 +54,14 @@ def readme(version: str, executable: str) -> bytes:
 runtime/を含むフォルダー構成を保って使います。NAGI_ROOTは通常不要です。
 アプリのビルドにはRust/CargoとCのビルド環境が必要です。
 使い方: {executable} run --project /path/to/nagi.toml
+Third-party notices: runtime/THIRD-PARTY-NOTICES/README.md
 Docs: https://nagi.disnana.com/
 
 Add this folder to PATH and run {executable} --version.
 Keep runtime/ beside the compiler. NAGI_ROOT is normally unnecessary.
 Building applications requires Rust/Cargo and a C build environment.
 Usage: {executable} run --project /path/to/nagi.toml
+Third-party notices: runtime/THIRD-PARTY-NOTICES/README.md
 Docs: https://nagi.disnana.com/en/
 Source: https://github.com/disnana/Nagi
 """.encode()
@@ -75,12 +78,26 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
     version_tuple(version)
     filename = archive_name(version, platform)
     sha = subprocess.check_output(["git", "rev-parse", "--verify", f"{commit}^{{commit}}"], cwd=ROOT).decode().strip()
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT).decode().strip()
+    if head != sha:
+        raise ValueError("Release package source and compiler binary must use the checked-out commit")
     manifest = subprocess.check_output(["git", "show", f"{sha}:Cargo.toml"], cwd=ROOT).decode()
     workspace = tomllib.loads(manifest)["workspace"]["package"]
     if workspace["version"] != version:
         raise ValueError("Archive version must match the tested commit's Cargo.toml")
-    source = subprocess.check_output(["git", "archive", "--format=tar", sha, "--", "runtime/Cargo.toml", "runtime/src", "LICENSE"], cwd=ROOT)
+    target = third_party_notices.PLATFORM_TARGETS[platform]
+    source = subprocess.check_output(
+        ["git", "archive", "--format=tar", sha, "--", "Cargo.toml", "Cargo.lock",
+         "runtime/Cargo.toml", "runtime/src", "LICENSE"], cwd=ROOT)
     binary_data = binary.read_bytes()
+    metadata = third_party_notices.cargo_metadata(ROOT, target)
+    third_party_notices.validate_workspace_inputs(ROOT, sha, metadata,
+                                                   _archive_member(source, "Cargo.lock"))
+    graphs = {name: third_party_notices.cargo_tree(ROOT, name, target)
+              for name in third_party_notices.ROOT_ROLES}
+    notice_files = third_party_notices.build_notice_payload(
+        _archive_member(source, "Cargo.lock"), metadata, graphs, target, sha,
+        hashlib.sha256(binary_data).hexdigest())
     output.mkdir(parents=True, exist_ok=True)
     stem = f"nagi-{version}-{platform}"
     executable = "nagic.exe" if platform == "windows-x86_64" else "nagic"
@@ -103,6 +120,8 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
                         archive.writestr(*zip_entry(f"{stem}/{member.name}", data, member.mode))
                     elif not member.isdir():
                         raise ValueError(f"Unsupported tracked source entry: {member.name}")
+                for name, data in notice_files.items():
+                    archive.writestr(*zip_entry(f"{stem}/{name}", data))
                 archive.writestr(*zip_entry(binary_path, binary_data, 0o755))
                 archive.writestr(*zip_entry(f"{stem}/release.json", provenance))
                 archive.writestr(*zip_entry(f"{stem}/README.txt", readme(version, executable)))
@@ -125,14 +144,55 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
                     member.size = len(data)
                     member.name = f"{stem}/{member.name}"
                     archive.addfile(member, io.BytesIO(data))
+                for name, data in notice_files.items():
+                    member = tarfile.TarInfo(f"{stem}/{name}")
+                    member.size = len(data)
+                    member.mode = 0o644
+                    archive.addfile(member, io.BytesIO(data))
                 for name, data, mode in ((binary_path, binary_data, 0o755), (f"{stem}/release.json", provenance, 0o644), (f"{stem}/README.txt", readme(version, executable), 0o644)):
                     member = tarfile.TarInfo(name)
                     member.size = len(data)
                     member.mode = mode
                     archive.addfile(member, io.BytesIO(data))
+    _verify_notice_archive(destination, platform, stem, notice_files,
+                           _archive_member(source, "Cargo.lock"), target, sha,
+                           hashlib.sha256(binary_data).hexdigest())
     checksum = hashlib.sha256(destination.read_bytes()).hexdigest()
     destination.with_name(destination.name + ".sha256").write_text(f"{checksum}  {destination.name}\n", encoding="utf-8")
     return destination
+
+
+def _archive_member(source: bytes, name: str) -> bytes:
+    try:
+        with tarfile.open(fileobj=io.BytesIO(source), mode="r:") as archive:
+            member = archive.getmember(name)
+            if not member.isfile():
+                raise ValueError("Cargo.lock archive member is not a file")
+            return archive.extractfile(member).read()
+    except (KeyError, OSError, tarfile.TarError) as error:
+        raise ValueError(f"Release source is missing {name}") from error
+
+
+def _verify_notice_archive(archive_path: Path, platform: str, stem: str,
+                           expected: dict[str, bytes], lock_data: bytes,
+                           target: str, commit: str, binary_sha256: str) -> None:
+    prefix = f"{stem}/"
+    notice_prefix = prefix + third_party_notices.NOTICE_ROOT + "/"
+    actual = {}
+    if platform == "windows-x86_64":
+        with ZipFile(archive_path) as archive:
+            for name in archive.namelist():
+                if name.startswith(notice_prefix):
+                    actual[name.removeprefix(prefix)] = archive.read(name)
+    else:
+        with tarfile.open(archive_path, mode="r:gz") as archive:
+            for member in archive.getmembers():
+                if member.isfile() and member.name.startswith(notice_prefix):
+                    actual[member.name.removeprefix(prefix)] = archive.extractfile(member).read()
+    if actual != expected:
+        raise ValueError("Release archive third-party notice files differ from the validated payload")
+    third_party_notices.validate_notice_payload(
+        actual, lock_data, target, commit, binary_sha256)
 
 
 def main() -> None:

@@ -353,7 +353,13 @@ jobs:
         run: node --test editors/vscode-nagi/test/*.test.js scripts/test_graph_html_viewport.mjs
       - name: Check generated output protection and native expression behavior
         run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test explicit_moves --test task_handles --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
+      - name: Check bounded SF01 diagnostic observer
+        env:
+          RUSTFLAGS: --cfg nagi_sf01_diagnostic --cfg nagi_sf01_diag_oracle --check-cfg=cfg(nagi_sf01_diagnostic) --check-cfg=cfg(nagi_sf01_diag_oracle)
+        run: cargo test --locked -p nagic --test security_sf01 sf01_diagnostic_observer_oracle -- --exact
       - name: Check SF01 High, saved Low, handwritten Low and native policy contracts
+        env:
+          RUSTFLAGS: --cfg nagi_sf01_diagnostic --check-cfg=cfg(nagi_sf01_diagnostic) --check-cfg=cfg(nagi_sf01_diag_oracle)
         run: cargo test --locked -p nagic --test security_sf01 --test security_sf01_native
       - name: Check SF01 request lease and permit lifecycle through the public runtime
         shell: bash
