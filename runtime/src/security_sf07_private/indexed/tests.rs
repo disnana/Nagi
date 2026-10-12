@@ -338,17 +338,56 @@ fn differential_semantic_decisions_and_retired_identities() {
 }
 #[test]
 fn request_transitions_allocate_zero_and_native_profiles_fit() {
+    eprintln!("SF07_DIAG phase=calibration_before");
     super::super::calibrate_allocation_meter();
+    eprintln!("SF07_DIAG phase=calibration_after");
+    let decision_label = |decision| match decision {
+        RateDecision::Charged => "charged",
+        RateDecision::Limited { .. } => "limited",
+        RateDecision::Capacity => "capacity",
+        RateDecision::Closing => "closing",
+        RateDecision::ClockFault => "clock_fault",
+        RateDecision::Fault => "fault",
+    };
     for n in [32, 128, 4096, 4097, 8192] {
+        eprintln!("SF07_DIAG phase=profile_start profile_n={n}");
         let o = owner(n, 2, 10, 1);
         for i in 0..4 {
             let (decision, allocs) = super::super::allocations_in(|| run(&o, i, 0));
+            if decision != RateDecision::Charged {
+                eprintln!(
+                    "SF07_DIAG phase=transition_decision profile_n={n} index={i} actual={} expected=charged",
+                    decision_label(decision)
+                );
+            }
             assert_eq!(decision, RateDecision::Charged);
+            if allocs != 0 {
+                eprintln!(
+                    "SF07_DIAG phase=transition_allocations profile_n={n} index={i} actual={allocs} expected=0"
+                );
+            }
             assert_eq!(allocs, 0);
         }
         let (decision, allocs) = super::super::allocations_in(|| run(&o, 0, 0));
+        if decision != RateDecision::Charged {
+            eprintln!(
+                "SF07_DIAG phase=repeat_decision profile_n={n} index=0 actual={} expected=charged",
+                decision_label(decision)
+            );
+        }
         assert_eq!(decision, RateDecision::Charged);
+        if allocs != 0 {
+            eprintln!(
+                "SF07_DIAG phase=repeat_allocations profile_n={n} index=0 actual={allocs} expected=0"
+            );
+        }
         assert_eq!(allocs, 0);
+        if o.retained_bytes >= 4 * 1024 * 1024 {
+            eprintln!(
+                "SF07_DIAG phase=native_profile_size profile_n={n} actual_bytes={} expected_upper_exclusive=4194304",
+                o.retained_bytes
+            );
+        }
         assert!(o.retained_bytes < 4 * 1024 * 1024);
     }
 }
