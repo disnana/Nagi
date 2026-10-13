@@ -1,6 +1,223 @@
 use super::*;
 use std::time::{Duration, Instant};
 
+#[test]
+fn sf06_paused_dns_delivery_retains_io_ticket_until_failed_send_drop() {
+    struct TicketFuture(IoTicket);
+    impl Future for TicketFuture {
+        type Output = ();
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+            let _ = &self.0;
+            Poll::Pending
+        }
+    }
+    let live = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let (owner, sender, phase) = live.block_on(async {
+        let (owner, sender, id) = fixture();
+        let phase = phase(&sender, id);
+        (owner, sender, phase)
+    });
+    let ticket = phase.begin_io().unwrap();
+    let (delivery, waiting) = GateFreeFuture::new(TicketFuture(ticket));
+    let closed_runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let closed = closed_runtime.handle().clone();
+    drop(closed_runtime);
+    let registered = {
+        let _entered = closed.enter();
+        phase.gate(|owner, _, _| {
+            owner
+                .try_spawn_delivery(
+                    phase.0.key.id(),
+                    TaskKind::DnsChild,
+                    waiting,
+                    &delivery,
+                    true,
+                )
+                .map_err(|(error, _)| error.into())
+        })
+    };
+    phase.close().unwrap();
+    live.block_on(async {
+        while !owner
+            .lock()
+            .unwrap()
+            .task_is_finished(phase.0.key.id(), TaskKind::DnsRoot)
+        {
+            tokio::task::yield_now().await;
+        }
+    });
+    let mut finishing = Box::pin(phase.finish());
+    let mut cx = Context::from_waker(Waker::noop());
+    let pre_result = finishing.as_mut().poll(&mut cx);
+    let before = {
+        let state = owner.lock().unwrap();
+        (
+            state.used_tasks(TaskKind::DnsChild),
+            state.fault(),
+            phase.0.book.lock().unwrap().io_live,
+        )
+    };
+    drop(finishing);
+    let registered = registered.map_err(|error| match error {
+        DnsFailure::Ledger(error) => error,
+        _ => LedgerError::PhaseClosed,
+    });
+    let delivered = delivery.finish(registered).is_ok();
+    live.block_on(cleanup(&owner));
+    let after = (
+        owner.lock().unwrap().used_jobs(),
+        phase.0.book.lock().unwrap().io_live,
+    );
+    drop(sender);
+    assert!(delivered);
+    assert_eq!(after, (0, 0));
+    assert_eq!(
+        before,
+        (1, None, 1),
+        "pre-ack DNS count/fault/raw-IO snapshot"
+    );
+    assert!(
+        pre_result.is_pending(),
+        "DNS finish returned before original IoTicket Drop: {pre_result:?}"
+    );
+}
+
+#[test]
+fn sf06_multiple_dns_waiters_and_cancelled_waiter_wake_on_delivery() {
+    struct Counter(AtomicUsize);
+    impl std::task::Wake for Counter {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    let live = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let (owner, sender, phase) = live.block_on(async {
+        let (owner, sender, id) = fixture();
+        let phase = phase(&sender, id);
+        (owner, sender, phase)
+    });
+    let dead = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let closed = dead.handle().clone();
+    drop(dead);
+    let (delivery, waiting) = GateFreeFuture::new(std::future::pending::<()>());
+    let receipt = Arc::clone(&delivery.receipt);
+    let registered = {
+        let _entered = closed.enter();
+        phase.gate(|owner, _, _| {
+            owner
+                .try_spawn_delivery(
+                    phase.0.key.id(),
+                    TaskKind::DnsChild,
+                    waiting,
+                    &delivery,
+                    true,
+                )
+                .map_err(|(error, _)| error.into())
+        })
+    };
+    phase.close().unwrap();
+    live.block_on(async {
+        while !owner
+            .lock()
+            .unwrap()
+            .task_is_finished(phase.0.key.id(), TaskKind::DnsRoot)
+        {
+            tokio::task::yield_now().await;
+        }
+    });
+    let counters: Vec<_> = (0..3)
+        .map(|_| Arc::new(Counter(AtomicUsize::new(0))))
+        .collect();
+    let wakers: Vec<_> = counters
+        .iter()
+        .map(|counter| Waker::from(Arc::clone(counter)))
+        .collect();
+    let mut cancelled = Box::pin(phase.finish());
+    let cancelled_pending = cancelled
+        .as_mut()
+        .poll(&mut Context::from_waker(Waker::noop()))
+        .is_pending();
+    drop(cancelled);
+    let mut first = Box::pin(phase.finish());
+    let mut second = Box::pin(phase.finish());
+    let first_pending = first
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[0]))
+        .is_pending();
+    let second_pending = second
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[1]))
+        .is_pending();
+    // The second waiter's initial close posts an event to the first. Consume
+    // that event and register both observers again before measuring settlement.
+    let first_registered = first
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[0]))
+        .is_pending();
+    let second_registered = second
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[1]))
+        .is_pending();
+    // A monitor/bare waiter replaces the receipt's single waker. Both DNS
+    // waiters still require the independent shared watch broadcast.
+    let monitor_pending = owner
+        .lock()
+        .unwrap()
+        .poll_parent(&mut Context::from_waker(&wakers[2]))
+        .is_pending();
+    for counter in &counters {
+        counter.0.store(0, Ordering::SeqCst);
+    }
+    let before = (
+        owner.lock().unwrap().used_tasks(TaskKind::DnsChild),
+        receipt.is_settled(),
+    );
+    let delivered = delivery
+        .finish(registered.map_err(|error| match error {
+            DnsFailure::Ledger(error) => error,
+            _ => LedgerError::PhaseClosed,
+        }))
+        .is_ok();
+    let woke: Vec<_> = counters
+        .iter()
+        .map(|counter| counter.0.load(Ordering::SeqCst))
+        .collect();
+    let results = live.block_on(async { (first.await, second.await) });
+    live.block_on(cleanup(&owner));
+    drop(sender);
+    assert!(
+        cancelled_pending
+            && first_pending
+            && second_pending
+            && first_registered
+            && second_registered
+            && monitor_pending
+            && delivered
+    );
+    assert_eq!(before, (1, false));
+    assert!(
+        woke.iter().all(|count| *count >= 1),
+        "delivery must wake every registered observer: {woke:?}"
+    );
+    assert!(results.0.is_err() && results.1.is_err());
+    assert_eq!(owner.lock().unwrap().used_jobs(), 0);
+}
+
 pub(super) fn fixture() -> (Arc<Mutex<Owner>>, ClientSender, u64) {
     let (mut owner, sender) = Owner::checked(Limits {
         jobs: 2,
@@ -1247,4 +1464,97 @@ mod dns_brand_extra_tests {
         assert_eq!(fault, None);
         assert_eq!(used_jobs, 0);
     }
+}
+
+// Append to runtime/src/http_client/core_tests.rs on #126 HEAD 37c47e1.
+// Test-only, not executed yet. No real IoTicket: its blocking Drop would hang
+// the vulnerable implementation. Probe observes all gates with try_lock only.
+#[test]
+fn sf06_closed_runtime_dns_drop_is_outside_owner_book_and_entry() {
+    struct Probe {
+        phase: DnsPhase,
+        shared: Arc<Shared>,
+        polls: Arc<AtomicUsize>,
+        drops: Arc<AtomicUsize>,
+        held: Arc<AtomicUsize>,
+    }
+    impl Future for Probe {
+        type Output = ();
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+            self.polls.fetch_add(1, Ordering::SeqCst);
+            Poll::Pending
+        }
+    }
+    impl Drop for Probe {
+        fn drop(&mut self) {
+            let owner = &self.phase.0.runner.owner;
+            let owner_held = matches!(owner.try_lock(), Err(std::sync::TryLockError::WouldBlock));
+            let book_held = matches!(
+                self.phase.0.book.try_lock(),
+                Err(std::sync::TryLockError::WouldBlock)
+            );
+            let entry_held =
+                usize::from(self.shared.stop_admit.load(Ordering::Acquire) & ENQUEUE_ACCEPTED != 0)
+                    * 4;
+            self.held.store(
+                usize::from(owner_held) + usize::from(book_held) * 2 + entry_held,
+                Ordering::SeqCst,
+            );
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    let live = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let (owner, sender, id, phase) = live.block_on(async {
+        let (owner, sender, id) = fixture();
+        let phase = phase(&sender, id);
+        (owner, sender, id, phase)
+    });
+    let dead_runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let dead_handle = dead_runtime.handle().clone();
+    drop(dead_runtime);
+    let polls = Arc::new(AtomicUsize::new(0));
+    let drops = Arc::new(AtomicUsize::new(0));
+    let held = Arc::new(AtomicUsize::new(0));
+    let answer = {
+        let _entered = dead_handle.enter();
+        phase.spawn(
+            TaskKind::DnsChild,
+            Probe {
+                phase: phase.clone(),
+                shared: Arc::clone(&sender.shared),
+                polls: Arc::clone(&polls),
+                drops: Arc::clone(&drops),
+                held: Arc::clone(&held),
+            },
+        )
+    };
+    let before = owner.lock().unwrap().used_tasks(TaskKind::DnsChild);
+    live.block_on(cleanup(&owner));
+    let after = owner.lock().unwrap().used_tasks(TaskKind::DnsChild);
+    let jobs = owner.lock().unwrap().used_jobs();
+    drop(sender);
+    assert!(answer.is_ok());
+    assert_eq!(polls.load(Ordering::SeqCst), 0);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        before, 1,
+        "closed runtime returned a retained actual handle"
+    );
+    assert_eq!(after, 0);
+    assert_eq!(
+        jobs, 0,
+        "cleanup polled all actual handles, including live roots"
+    );
+    assert_eq!(
+        held.load(Ordering::SeqCst),
+        0,
+        "F Drop ran under a lifecycle gate"
+    );
+    assert_eq!(owner.lock().unwrap().fixture_task_records(id), 0);
 }

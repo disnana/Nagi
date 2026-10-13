@@ -212,7 +212,8 @@ impl DnsPhase {
                 _=future=>{}
             }
         };
-        let mut pending = Some(wrapped);
+        let (delivery, waiting) = GateFreeFuture::new(wrapped);
+        let mut pending = Some(waiting);
         let mut duplicate_root = false;
         let result = self.gate_with_after_entry(after_entry, |owner, index, book| {
             if kind == TaskKind::DnsRoot
@@ -224,10 +225,11 @@ impl DnsPhase {
             if kind == TaskKind::DnsChild && !book.root_started {
                 return Err(LedgerError::PhaseClosed.into());
             }
-            match owner.try_spawn_impl(
+            match owner.try_spawn_delivery(
                 self.0.key.id(),
                 kind,
                 pending.take().expect("one admission"),
+                &delivery,
                 true,
             ) {
                 Ok(()) => {
@@ -242,7 +244,15 @@ impl DnsPhase {
                 }
             }
         });
-        drop(pending); // Rejected Future Drop is outside Owner, Book and EntryGuard.
+        drop(pending); // Only an empty receiver; all lifecycle guards are gone.
+        let delivery_result = match result {
+            Ok(()) => Ok(()),
+            Err(DnsFailure::Ledger(error)) => Err(error),
+            Err(_) => Err(LedgerError::PhaseClosed),
+        };
+        // Preserve the original DNS failure, and destroy/send the original
+        // wrapped Future only after Owner, Book and Entry have been released.
+        drop(delivery.finish(delivery_result));
         if duplicate_root
             || matches!(
                 result,
@@ -317,6 +327,10 @@ impl DnsPhase {
                 let mut observed = false;
                 for task in &mut owner.jobs[index].tasks {
                     if !task.kind.dns() {
+                        continue;
+                    }
+                    if !task.delivery_ready(cx) {
+                        pending = true;
                         continue;
                     }
                     if let Some(handle) = &mut task.handle {

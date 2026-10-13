@@ -311,13 +311,15 @@ impl ClientSender {
         kind: TaskKind,
         future: F,
     ) -> Result<(), (LedgerError, F)> {
-        let Some(owner) = &self.owner else {
-            return Err((LedgerError::Closing, future));
-        };
-        let Ok(mut state) = owner.lock() else {
-            return Err((LedgerError::Faulted, future));
-        };
-        state.try_spawn(id, kind, future)
+        let (delivery, waiting) = GateFreeFuture::new(future);
+        let registered = (|| {
+            let owner = self.owner.as_ref().ok_or(LedgerError::Closing)?;
+            let mut state = owner.lock().map_err(|_| LedgerError::Faulted)?;
+            state
+                .try_spawn_delivery(id, kind, waiting, &delivery, false)
+                .map_err(|(error, _)| error)
+        })();
+        delivery.finish(registered)
     }
     #[cfg(test)]
     pub(super) fn cancel(&self, id: u64) -> Result<(), LedgerError> {
@@ -379,31 +381,35 @@ impl RunnerOwnerHandle {
         kind: TaskKind,
         future: F,
     ) -> Result<(), (LedgerError, F)> {
-        let Ok(mut state) = self.owner.lock() else {
-            return Err((LedgerError::Faulted, future));
-        };
-        let index = match state.key_index(key) {
-            Ok(index) => index,
-            Err(error) => return Err((error, future)),
-        };
-        // A bare key is not authority to register the one JobRoot. Only the
-        // still-owned popped Command can cross that transition.
-        if kind == TaskKind::JobRoot {
-            return Err((LedgerError::PhaseClosed, future));
-        }
-        if state.jobs[index].queued.is_some()
-            || (kind == TaskKind::JobRoot && key.seal.root_registered())
-            || (kind == TaskKind::HttpDriver && key.seal.driver_registered())
-            || (kind != TaskKind::JobRoot && !key.seal.root_registered())
-        {
-            return Err((LedgerError::PhaseClosed, future));
-        }
-        let shared = Arc::clone(&state.shared);
-        let _entry = match shared.begin_enqueue() {
-            Ok(entry) => entry,
-            Err(error) => return Err((error, future)),
-        };
-        state.try_spawn_impl(key.id, kind, future, true)
+        let (delivery, waiting) = GateFreeFuture::new(future);
+        let registered = (|| {
+            let mut state = self.owner.lock().map_err(|_| LedgerError::Faulted)?;
+            let index = match state.key_index(key) {
+                Ok(index) => index,
+                Err(error) => return Err(error),
+            };
+            // A bare key is not authority to register the one JobRoot. Only the
+            // still-owned popped Command can cross that transition.
+            if kind == TaskKind::JobRoot {
+                return Err(LedgerError::PhaseClosed);
+            }
+            if state.jobs[index].queued.is_some()
+                || (kind == TaskKind::JobRoot && key.seal.root_registered())
+                || (kind == TaskKind::HttpDriver && key.seal.driver_registered())
+                || (kind != TaskKind::JobRoot && !key.seal.root_registered())
+            {
+                return Err(LedgerError::PhaseClosed);
+            }
+            let shared = Arc::clone(&state.shared);
+            let _entry = match shared.begin_enqueue() {
+                Ok(entry) => entry,
+                Err(error) => return Err(error),
+            };
+            state
+                .try_spawn_delivery(key.id, kind, waiting, &delivery, true)
+                .map_err(|(error, _)| error)
+        })();
+        delivery.finish(registered)
     }
 
     // Command remains caller-owned until after the actual handle is registered.
@@ -414,35 +420,38 @@ impl RunnerOwnerHandle {
         command: &mut Command,
         future: F,
     ) -> Result<(), (LedgerError, F)> {
-        if !command.armed {
-            return Err((LedgerError::PhaseClosed, future));
-        }
-        let Ok(mut state) = self.owner.lock() else {
-            return Err((LedgerError::Faulted, future));
-        };
-        let index = match state.key_index(command.key()) {
-            Ok(index) => index,
-            Err(error) => return Err((error, future)),
-        };
-        if command.id != command.key.id
-            || state.jobs[index].queued.is_some()
-            || command.key.seal.root_registered()
-            || command.key.seal.command_abandoned()
-        {
-            return Err((LedgerError::PhaseClosed, future));
-        }
-        let shared = Arc::clone(&state.shared);
-        let _entry = match shared.begin_enqueue() {
-            Ok(entry) => entry,
-            Err(error) => return Err((error, future)),
-        };
-        match state.try_spawn_impl(command.id, TaskKind::JobRoot, future, true) {
-            Ok(()) => {
-                command.armed = false; // only after handle + ROOT_REGISTERED
-                Ok(())
+        let (delivery, waiting) = GateFreeFuture::new(future);
+        let registered = (|| {
+            if !command.armed {
+                return Err(LedgerError::PhaseClosed);
             }
-            Err(error) => Err(error),
-        }
+            let mut state = self.owner.lock().map_err(|_| LedgerError::Faulted)?;
+            let index = match state.key_index(command.key()) {
+                Ok(index) => index,
+                Err(error) => return Err(error),
+            };
+            if command.id != command.key.id
+                || state.jobs[index].queued.is_some()
+                || command.key.seal.root_registered()
+                || command.key.seal.command_abandoned()
+            {
+                return Err(LedgerError::PhaseClosed);
+            }
+            let shared = Arc::clone(&state.shared);
+            let _entry = match shared.begin_enqueue() {
+                Ok(entry) => entry,
+                Err(error) => return Err(error),
+            };
+            match state.try_spawn_delivery(command.id, TaskKind::JobRoot, waiting, &delivery, true)
+            {
+                Ok(()) => {
+                    command.armed = false; // only after handle + ROOT_REGISTERED
+                    Ok(())
+                }
+                Err((error, _)) => Err(error),
+            }
+        })();
+        delivery.finish(registered)
     }
 
     pub(super) fn cancel(&self, key: &JobKey) -> Result<(), LedgerError> {

@@ -1302,3 +1302,131 @@ fn unexpected_root_abort_retains_sticky_fault_not_abandonment() {
         );
     });
 }
+
+// Append to runtime/src/http_client/parent_auth_tests.rs on #126 HEAD 37c47e1.
+// Test-only, not executed yet. Generic private-port probe, not a public Hickory PoC.
+// Drop never blocks and assertions follow actual retained-parent cleanup.
+struct Sf06ClosedSpawnProbe {
+    owner: Arc<Mutex<Owner>>,
+    shared: Arc<Shared>,
+    polls: Arc<AtomicUsize>,
+    drops: Arc<AtomicUsize>,
+    owner_busy: Arc<AtomicBool>,
+    entry_busy: Arc<AtomicBool>,
+}
+
+impl Future for Sf06ClosedSpawnProbe {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+        self.polls.fetch_add(1, Ordering::SeqCst);
+        Poll::Pending
+    }
+}
+
+impl Drop for Sf06ClosedSpawnProbe {
+    fn drop(&mut self) {
+        self.drops.fetch_add(1, Ordering::SeqCst);
+        self.owner_busy.store(
+            matches!(
+                self.owner.try_lock(),
+                Err(std::sync::TryLockError::WouldBlock)
+            ),
+            Ordering::SeqCst,
+        );
+        self.entry_busy.store(
+            self.shared.stop_admit.load(Ordering::Acquire) & ENQUEUE_ACCEPTED != 0,
+            Ordering::SeqCst,
+        );
+    }
+}
+
+fn sf06_closed_spawn_case(kind: TaskKind) {
+    let live = runtime();
+    let (mut parent, sender, runner, lease, mut command) = live.block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (client, sender) = parent.register(limits(), 16).unwrap();
+        let runner = parent.runner_owner(client).unwrap();
+        let (lease, _) = admit(&sender).await;
+        let command = runner.take_command().unwrap().unwrap();
+        (parent, sender, runner, lease, Some(command))
+    });
+    let key = command.as_ref().unwrap().key().clone();
+    if kind != TaskKind::JobRoot {
+        live.block_on(async {
+            assert!(runner
+                .spawn_root(command.as_mut().unwrap(), pending::<()>())
+                .is_ok());
+        });
+        drop(command.take());
+    }
+    let closed_runtime = runtime();
+    let closed = closed_runtime.handle().clone();
+    drop(closed_runtime);
+    let polls = Arc::new(AtomicUsize::new(0));
+    let drops = Arc::new(AtomicUsize::new(0));
+    let owner_busy = Arc::new(AtomicBool::new(false));
+    let entry_busy = Arc::new(AtomicBool::new(false));
+    let probe = Sf06ClosedSpawnProbe {
+        owner: Arc::clone(&runner.owner),
+        shared: Arc::clone(&sender.shared),
+        polls: Arc::clone(&polls),
+        drops: Arc::clone(&drops),
+        owner_busy: Arc::clone(&owner_busy),
+        entry_busy: Arc::clone(&entry_busy),
+    };
+    let accepted = {
+        let _entered = closed.enter();
+        let result = if kind == TaskKind::JobRoot {
+            runner.spawn_root(command.as_mut().unwrap(), probe)
+        } else {
+            runner.spawn(&key, kind, probe)
+        };
+        match result {
+            Ok(()) => true,
+            Err((_, rejected)) => {
+                drop(rejected);
+                false
+            }
+        }
+    };
+    // Inline future Drop / completed runtime task cannot refund unobserved join.
+    let retained_before_join = runner.owner.lock().unwrap().used_tasks(kind);
+    let root_joined_before = key.seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED;
+    drop(command);
+    live.block_on(parent.shutdown());
+    let retained_after_join = runner.owner.lock().unwrap().used_tasks(kind);
+    let jobs_after_join = runner.owner.lock().unwrap().used_jobs();
+    let root_joined_after = key.seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED;
+    drop(lease);
+    drop(sender);
+    assert!(
+        accepted,
+        "closed-runtime spawn returns a valid cancelled handle"
+    );
+    assert_eq!(polls.load(Ordering::SeqCst), 0);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+    assert_eq!(retained_before_join, 1, "Drop is not actual join");
+    assert_eq!(root_joined_before, 0);
+    assert_eq!(retained_after_join, 0);
+    assert_eq!(jobs_after_join, 0);
+    assert!(
+        parent.records.is_empty(),
+        "outer monitor was also actually joined"
+    );
+    assert_ne!(root_joined_after, 0);
+    assert!(!owner_busy.load(Ordering::SeqCst), "F Drop ran under Owner");
+    assert!(
+        !entry_busy.load(Ordering::SeqCst),
+        "F Drop ran inside Entry"
+    );
+}
+
+#[test]
+fn sf06_closed_runtime_root_drop_is_outside_owner_and_entry() {
+    sf06_closed_spawn_case(TaskKind::JobRoot);
+}
+
+#[test]
+fn sf06_closed_runtime_child_drop_is_outside_owner_and_entry() {
+    sf06_closed_spawn_case(TaskKind::DnsChild);
+}

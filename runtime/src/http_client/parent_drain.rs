@@ -299,6 +299,138 @@ mod fallback_lost_wake_tests {
         }
     }
 
+    async fn paused_external_child(mode: u8, closed: tokio::runtime::Handle) {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (id, sender) = parent.register(limits(), 16).unwrap();
+        let end = std::time::Instant::now() + Duration::from_secs(10);
+        let lease = auth::LeaseOwner::new(end).unwrap();
+        let identity = auth::VerifiedIdentity::from_verified(7, end).unwrap();
+        let scope = auth::AuthScope::bind(identity, Arc::clone(&lease.lease)).unwrap();
+        let grant: auth::Grant<()> = auth::Grant::from_authorized(scope, 91).unwrap();
+        sender.submit(grant, vec![1, 2], end).await.unwrap();
+        let runner = parent.runner_owner(id).unwrap();
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        assert!(runner
+            .spawn_root(&mut command, std::future::pending::<()>())
+            .is_ok());
+        drop(command);
+        // The caller is external to every retained root and owns no Command.
+        let (delivery, waiting) = GateFreeFuture::new(std::future::pending::<()>());
+        let receipt = Arc::clone(&delivery.receipt);
+        let registered = {
+            let _entered = closed.enter();
+            let mut owner = lock_owner(&runner.owner);
+            let shared = Arc::clone(&owner.shared);
+            let _entry = shared.begin_enqueue().unwrap();
+            owner
+                .try_spawn_delivery(key.id(), TaskKind::HttpDriver, waiting, &delivery, true)
+                .map_err(|(error, _)| error)
+        };
+        if mode == 1 {
+            parent.records[0].monitor.as_ref().unwrap().abort();
+            let result = parent.records[0].monitor.as_mut().unwrap().await;
+            parent.observe_outer(0, result);
+        } else if mode == 2 {
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _guard = runner.owner.lock().unwrap();
+                panic!("paused delivery gate poison fixture");
+            }));
+        }
+        parent.request_close(id).unwrap();
+        // Let the actual root cancellation finish. The child receipt still
+        // prevents monitor completion and parent record retirement.
+        while !lock_owner(&runner.owner).jobs[0]
+            .tasks
+            .iter()
+            .find(|task| task.kind == TaskKind::JobRoot)
+            .is_none_or(|task| task.handle.as_ref().is_none_or(JoinHandle::is_finished))
+        {
+            tokio::task::yield_now().await;
+        }
+        let wake = Arc::new(WakeCounter(AtomicUsize::new(0)));
+        let waker = Waker::from(Arc::clone(&wake));
+        let mut drain = Box::pin(parent.shutdown());
+        let pending = drain
+            .as_mut()
+            .poll(&mut Context::from_waker(&waker))
+            .is_pending();
+        drop(drain); // cancellation leaves both retained layers intact
+        let before = {
+            let owner = lock_owner(&runner.owner);
+            (
+                owner.used_jobs(),
+                owner.used_tasks(TaskKind::HttpDriver),
+                owner.jobs[0]
+                    .tasks
+                    .iter()
+                    .any(|task| task.kind == TaskKind::HttpDriver && task.handle.is_some()),
+                key.seal.completion.load(Ordering::Acquire) & DRIVER_ACTUAL_JOINED,
+                receipt.is_settled(),
+            )
+        };
+        let retained = parent.records.len();
+        let mut resumed = Box::pin(parent.shutdown());
+        let resumed_pending = resumed
+            .as_mut()
+            .poll(&mut Context::from_waker(&waker))
+            .is_pending();
+        // Displace the per-receipt waker: fallback must be woken independently
+        // by stop_notify, and the running monitor by its shared watch.
+        let other = Arc::new(WakeCounter(AtomicUsize::new(0)));
+        let other_waker = Waker::from(Arc::clone(&other));
+        let displaced = !receipt.ready(&Context::from_waker(&other_waker));
+        wake.0.store(0, Ordering::SeqCst);
+        let delivered = delivery.finish(registered).is_ok();
+        let fallback_wakes = wake.0.load(Ordering::SeqCst);
+        resumed.await;
+        drop(sender);
+        assert!(pending && resumed_pending && displaced && delivered);
+        assert_eq!(retained, 1);
+        assert_eq!(before, (1, 1, true, 0, false));
+        if mode == 1 {
+            assert!(
+                fallback_wakes >= 1,
+                "fallback must wake before re-poll after receipt waker replacement"
+            );
+        }
+        assert!(parent.records.is_empty());
+        assert_eq!(lock_owner(&runner.owner).used_jobs(), 0);
+        assert_ne!(
+            key.seal.completion.load(Ordering::Acquire) & DRIVER_ACTUAL_JOINED,
+            0
+        );
+        if mode == 2 {
+            assert_eq!(lock_owner(&runner.owner).fault(), Some(Fault::PoisonedGate));
+        }
+    }
+
+    fn paused_external_child_case(mode: u8) {
+        let dead = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let closed = dead.handle().clone();
+        drop(dead);
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(paused_external_child(mode, closed));
+    }
+    #[test]
+    fn sf06_monitor_retains_external_child_paused_delivery() {
+        paused_external_child_case(0);
+    }
+    #[test]
+    fn sf06_fallback_retains_external_child_and_wakes_after_cancelled_waiter() {
+        paused_external_child_case(1);
+    }
+    #[test]
+    fn sf06_poisoned_owner_retains_external_child_until_delivery() {
+        paused_external_child_case(2);
+    }
+
     async fn fallback_after_outer_join(monitor_panics: bool) {
         let mut parent = ParentDrain::new(1).unwrap();
         let (id, sender) = parent.register(limits(), 16).unwrap();

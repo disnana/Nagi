@@ -6,7 +6,7 @@ use std::{
     pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
     },
     task::{Context, Poll, Waker},
 };
@@ -271,6 +271,129 @@ struct TrackedTask {
     handle: Option<JoinHandle<()>>,
     root_signal: Option<Arc<RootSignal>>,
     root_fault_seen: bool,
+    delivery: Option<Arc<DeliveryReceipt>>,
+}
+
+// A returned empty-wrapper handle can join before the caller has transferred
+// or destroyed its original Future. This receipt holds that separate debt.
+// Allocation precedes the lifecycle gates; binding identifies the same Owner
+// as the exact stored task. The bare drain has one waker, while independent
+// monitor/DNS/fallback listeners use the existing shared broadcast channels.
+#[derive(Debug)]
+struct DeliveryReceipt {
+    settled: AtomicBool,
+    waker: Mutex<Option<Waker>>,
+    shared: OnceLock<Arc<Shared>>,
+}
+impl DeliveryReceipt {
+    fn new() -> Self {
+        Self {
+            settled: AtomicBool::new(false),
+            waker: Mutex::new(None),
+            shared: OnceLock::new(),
+        }
+    }
+    fn is_settled(&self) -> bool {
+        self.settled.load(Ordering::Acquire)
+    }
+    fn ready(&self, cx: &Context<'_>) -> bool {
+        self.ready_with_after_register(cx, || {})
+    }
+    fn ready_with_after_register(&self, cx: &Context<'_>, after_register: impl FnOnce()) -> bool {
+        if self.is_settled() {
+            return true;
+        }
+        {
+            let mut waker = self
+                .waker
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
+            // Settlement takes this same lock after publishing. Do not leave
+            // a newly registered waker behind a completed settlement.
+            if self.is_settled() {
+                return true;
+            }
+            if !waker.as_ref().is_some_and(|old| old.will_wake(cx.waker())) {
+                *waker = Some(cx.waker().clone());
+            }
+        }
+        after_register();
+        self.is_settled()
+    }
+    // Only GateFreeFuture::finish calls this in production, outside all caller
+    // gates and after send succeeds or rejected-Future Drop returns normally.
+    fn settle(&self) {
+        self.settled.store(true, Ordering::Release);
+        let waker = self
+            .waker
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .take();
+        if let Some(shared) = self.shared.get() {
+            shared.notify();
+            // Parent fallback listens independently of the monitor/watch.
+            shared.stop_notify.notify_waiters();
+        }
+        if let Some(waker) = waker {
+            waker.wake();
+        }
+    }
+}
+
+impl TrackedTask {
+    fn delivery_ready(&self, cx: &Context<'_>) -> bool {
+        self.delivery
+            .as_ref()
+            .is_none_or(|receipt| receipt.ready(cx))
+    }
+}
+
+// Keep the caller's Future out of runtime.spawn until its actual JoinHandle is
+// retained and every lifecycle gate has been released. A closed runtime may
+// synchronously drop the empty receiver, but cannot run the caller's destructor
+// under Owner/Book/Entry. This does not recover a spawn that unwinds without
+// returning a handle, and neither send nor Future Drop establishes actual join.
+struct GateFreeFuture<F> {
+    future: F,
+    sender: tokio::sync::oneshot::Sender<F>,
+    receipt: Arc<DeliveryReceipt>,
+}
+
+impl<F: Future<Output = ()> + Send + 'static> GateFreeFuture<F> {
+    fn new(future: F) -> (Self, impl Future<Output = ()> + Send + 'static) {
+        let (sender, receiver) = tokio::sync::oneshot::channel::<F>();
+        let waiting = async move {
+            if let Ok(future) = receiver.await {
+                future.await;
+            }
+        };
+        (
+            Self {
+                future,
+                sender,
+                receipt: Arc::new(DeliveryReceipt::new()),
+            },
+            waiting,
+        )
+    }
+
+    // The caller must invoke this only after dropping all lifecycle guards.
+    // Rejection returns the original unpolled Future; successful registration
+    // keeps the actual handle even when cancellation makes delivery fail.
+    fn finish(self, registered: Result<(), LedgerError>) -> Result<(), (LedgerError, F)> {
+        match registered {
+            Err(error) => Err((error, self.future)),
+            Ok(()) => {
+                if let Err(future) = self.sender.send(self.future) {
+                    // A panic here deliberately leaves unresolved delivery
+                    // debt. Arbitrary Rust Drop panic is not recovery/ack.
+                    drop(future);
+                }
+                self.receipt.settle();
+                Ok(())
+            }
+        }
+    }
 }
 
 const ROOT_REGISTERED: u8 = 1;
@@ -597,6 +720,24 @@ impl Owner {
         self.try_spawn_impl(id, kind, future, false)
     }
 
+    // The gate-free caller retains delivery until this registration returns.
+    fn try_spawn_delivery<F, G: Future<Output = ()> + Send + 'static>(
+        &mut self,
+        id: u64,
+        kind: TaskKind,
+        waiting: G,
+        delivery: &GateFreeFuture<F>,
+        accepted_entry: bool,
+    ) -> Result<(), (LedgerError, G)> {
+        self.try_spawn_record(
+            id,
+            kind,
+            waiting,
+            accepted_entry,
+            Some(Arc::clone(&delivery.receipt)),
+        )
+    }
+
     // accepted_entry is true only for the branded port after winning the
     // OPEN -> BUSY CAS. A later STOP cannot revoke that winning primitive.
     fn try_spawn_impl<F: Future<Output = ()> + Send + 'static>(
@@ -605,6 +746,17 @@ impl Owner {
         kind: TaskKind,
         future: F,
         accepted_entry: bool,
+    ) -> Result<(), (LedgerError, F)> {
+        self.try_spawn_record(id, kind, future, accepted_entry, None)
+    }
+
+    fn try_spawn_record<F: Future<Output = ()> + Send + 'static>(
+        &mut self,
+        id: u64,
+        kind: TaskKind,
+        future: F,
+        accepted_entry: bool,
+        delivery: Option<Arc<DeliveryReceipt>>,
     ) -> Result<(), (LedgerError, F)> {
         if !accepted_entry && self.is_closing() {
             return Err((LedgerError::Closing, future));
@@ -661,6 +813,12 @@ impl Owner {
         let Ok(runtime) = tokio::runtime::Handle::try_current() else {
             return Err((LedgerError::NoRuntime, future));
         };
+        if let Some(receipt) = &delivery {
+            receipt
+                .shared
+                .set(Arc::clone(&self.shared))
+                .expect("one delivery registration");
+        }
         let root_signal = (kind == TaskKind::JobRoot).then(|| Arc::new(RootSignal::new()));
         let handle = if let Some(signal) = &root_signal {
             runtime.spawn(ObservedFuture {
@@ -675,6 +833,7 @@ impl Owner {
             handle: Some(handle),
             root_signal,
             root_fault_seen: false,
+            delivery,
         };
         if let Some(slot) = reusable {
             self.jobs[index].tasks[slot] = tracked;
@@ -785,6 +944,9 @@ impl Owner {
                     }
                     for (task_index, task) in job.tasks.iter_mut().enumerate() {
                         if dns_only && !task.kind.dns() {
+                            continue;
+                        }
+                        if !task.delivery_ready(cx) {
                             continue;
                         }
                         if let Some(handle) = task.handle.as_mut() {
@@ -942,7 +1104,12 @@ impl Owner {
             .find(|job| job.id == id)
             .is_some_and(|job| {
                 job.tasks.iter().any(|task| {
-                    task.kind == kind && task.handle.as_ref().is_some_and(JoinHandle::is_finished)
+                    task.kind == kind
+                        && task
+                            .delivery
+                            .as_ref()
+                            .is_none_or(|receipt| receipt.is_settled())
+                        && task.handle.as_ref().is_some_and(JoinHandle::is_finished)
                 })
             })
     }
@@ -1003,6 +1170,9 @@ impl Owner {
         let mut fault = None;
         for job in &mut self.jobs {
             for task in &mut job.tasks {
+                if !task.delivery_ready(cx) {
+                    continue;
+                }
                 if let Some(handle) = &mut task.handle {
                     if let Poll::Ready(result) = Pin::new(handle).poll(cx) {
                         task.handle = None;

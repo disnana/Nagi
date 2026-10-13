@@ -10,6 +10,344 @@ use std::{
 };
 use tokio::sync::oneshot;
 
+struct DeliveryWakeCounter(AtomicUsize);
+impl std::task::Wake for DeliveryWakeCounter {
+    fn wake(self: Arc<Self>) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+    fn wake_by_ref(self: &Arc<Self>) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[test]
+fn sf06_paused_delivery_retains_actual_handle_quota_and_join_bit() {
+    struct DropProbe(Arc<AtomicUsize>);
+    impl Future for DropProbe {
+        type Output = ();
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+            Poll::Pending
+        }
+    }
+    impl Drop for DropProbe {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    let live = runtime();
+    let closed_runtime = runtime();
+    let closed = closed_runtime.handle().clone();
+    drop(closed_runtime);
+    let (mut owner, sender) = Owner::checked(limits()).unwrap();
+    let id = owner.fixture_admit().unwrap();
+    let seal = Arc::clone(&owner.jobs[0].seal);
+    let drops = Arc::new(AtomicUsize::new(0));
+    let (delivery, waiting) = GateFreeFuture::new(DropProbe(Arc::clone(&drops)));
+    let registered = {
+        let _entered = closed.enter();
+        owner
+            .try_spawn_delivery(id, TaskKind::JobRoot, waiting, &delivery, false)
+            .map_err(|(error, _)| error)
+    };
+    let wake = Arc::new(DeliveryWakeCounter(AtomicUsize::new(0)));
+    let waker = Waker::from(Arc::clone(&wake));
+    let mut cx = Context::from_waker(&waker);
+    let polled = owner.poll_parent(&mut cx);
+    let before = (
+        owner.used_tasks(TaskKind::JobRoot),
+        owner
+            .jobs
+            .first()
+            .is_some_and(|job| job.tasks[0].handle.is_some()),
+        seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
+        drops.load(Ordering::SeqCst),
+    );
+    let delivered = delivery.finish(registered).is_ok();
+    live.block_on(owner.close_and_drain());
+    let after = (owner.used_jobs(), drops.load(Ordering::SeqCst));
+    drop(sender);
+    assert!(delivered);
+    assert_eq!(after, (0, 1));
+    assert_eq!(
+        before,
+        (1, true, 0, 0),
+        "pre-ack handle/quota/join/drop snapshot"
+    );
+    assert!(polled.is_pending());
+}
+
+#[test]
+fn sf06_delivery_register_recheck_and_independent_broadcast_wakes() {
+    let receipt = DeliveryReceipt::new();
+    let recheck = Arc::new(DeliveryWakeCounter(AtomicUsize::new(0)));
+    let waker = Waker::from(Arc::clone(&recheck));
+    let cx = Context::from_waker(&waker);
+    assert!(receipt.ready_with_after_register(&cx, || receipt.settle()));
+    assert_eq!(recheck.0.load(Ordering::SeqCst), 1);
+
+    let (owner, sender) = Owner::checked(limits()).unwrap();
+    let receipt = DeliveryReceipt::new();
+    receipt.shared.set(Arc::clone(&owner.shared)).unwrap();
+    let counters: Vec<_> = (0..5)
+        .map(|_| Arc::new(DeliveryWakeCounter(AtomicUsize::new(0))))
+        .collect();
+    let wakers: Vec<_> = counters
+        .iter()
+        .map(|counter| Waker::from(Arc::clone(counter)))
+        .collect();
+    let mut events_a = owner.shared.events_tx.subscribe();
+    let mut events_b = owner.shared.events_tx.subscribe();
+    let mut events_cancelled = owner.shared.events_tx.subscribe();
+    let mut watch_a = Box::pin(events_a.changed());
+    let mut watch_b = Box::pin(events_b.changed());
+    let mut cancelled = Box::pin(events_cancelled.changed());
+    let mut stop_a = Box::pin(owner.shared.stop_notify.notified());
+    let mut stop_b = Box::pin(owner.shared.stop_notify.notified());
+    stop_a.as_mut().enable();
+    stop_b.as_mut().enable();
+    assert!(watch_a
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[0]))
+        .is_pending());
+    assert!(watch_b
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[1]))
+        .is_pending());
+    assert!(cancelled
+        .as_mut()
+        .poll(&mut Context::from_waker(Waker::noop()))
+        .is_pending());
+    drop(cancelled);
+    assert!(stop_a
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[2]))
+        .is_pending());
+    assert!(stop_b
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[3]))
+        .is_pending());
+    assert!(!receipt.ready(&Context::from_waker(Waker::noop())));
+    // Replace a cancelled bare waiter; broadcasts must remain independent.
+    assert!(!receipt.ready(&Context::from_waker(&wakers[4])));
+    receipt.settle();
+    assert!(counters
+        .iter()
+        .all(|counter| counter.0.load(Ordering::SeqCst) >= 1));
+    assert!(receipt.ready(&cx));
+    assert!(watch_a
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[0]))
+        .is_ready());
+    assert!(watch_b
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[1]))
+        .is_ready());
+    assert!(stop_a
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[2]))
+        .is_ready());
+    assert!(stop_b
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[3]))
+        .is_ready());
+    drop(sender);
+}
+
+#[test]
+fn sf06_failed_send_blocking_drop_retains_debt_and_cancelled_bare_drain() {
+    struct BlockingDrop {
+        entered: std::sync::mpsc::SyncSender<()>,
+        release: std::sync::mpsc::Receiver<()>,
+        drops: Arc<AtomicUsize>,
+    }
+    impl Future for BlockingDrop {
+        type Output = ();
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+            Poll::Pending
+        }
+    }
+    impl Drop for BlockingDrop {
+        fn drop(&mut self) {
+            let _ = self.entered.send(());
+            let _ = self.release.recv_timeout(std::time::Duration::from_secs(5));
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    let live = runtime();
+    let dead = runtime();
+    let closed = dead.handle().clone();
+    drop(dead);
+    let (mut owner, sender) = Owner::checked(limits()).unwrap();
+    let id = owner.fixture_admit().unwrap();
+    let seal = Arc::clone(&owner.jobs[0].seal);
+    let drops = Arc::new(AtomicUsize::new(0));
+    let (entered_tx, entered_rx) = std::sync::mpsc::sync_channel(1);
+    let (release_tx, release_rx) = std::sync::mpsc::sync_channel(1);
+    let (delivery, waiting) = GateFreeFuture::new(BlockingDrop {
+        entered: entered_tx,
+        release: release_rx,
+        drops: Arc::clone(&drops),
+    });
+    let receipt = Arc::clone(&delivery.receipt);
+    let registered = {
+        let _entered = closed.enter();
+        owner
+            .try_spawn_delivery(id, TaskKind::JobRoot, waiting, &delivery, false)
+            .map_err(|(error, _)| error)
+    };
+    let worker = std::thread::spawn(move || delivery.finish(registered).is_ok());
+    let entered = entered_rx
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .is_ok();
+    let wake = Arc::new(DeliveryWakeCounter(AtomicUsize::new(0)));
+    let waker = Waker::from(Arc::clone(&wake));
+    let mut cx = Context::from_waker(&waker);
+    let mut abandoned = Box::pin(owner.drain_all());
+    let first_pending = abandoned.as_mut().poll(&mut cx).is_pending();
+    drop(abandoned);
+    let before = (
+        owner.used_tasks(TaskKind::JobRoot),
+        owner
+            .jobs
+            .first()
+            .is_some_and(|job| job.tasks[0].handle.is_some()),
+        seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
+        drops.load(Ordering::SeqCst),
+        owner.task_is_finished(id, TaskKind::JobRoot),
+        receipt.is_settled(),
+    );
+    let mut resumed = Box::pin(owner.drain_all());
+    let resumed_pending = resumed.as_mut().poll(&mut cx).is_pending();
+    wake.0.store(0, Ordering::SeqCst);
+    let _ = release_tx.send(());
+    let delivered = worker.join().unwrap_or(false);
+    let wake_count = wake.0.load(Ordering::SeqCst);
+    live.block_on(resumed);
+    drop(sender);
+    assert!(entered && first_pending && resumed_pending && delivered);
+    assert_eq!(before, (1, true, 0, 0, false, false));
+    assert!(
+        wake_count >= 1,
+        "settlement must wake a resumed bare drain before re-poll"
+    );
+    assert_eq!(owner.used_jobs(), 0);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn sf06_delivery_drop_panic_does_not_acknowledge() {
+    struct PanicDrop;
+    impl Future for PanicDrop {
+        type Output = ();
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+            Poll::Pending
+        }
+    }
+    impl Drop for PanicDrop {
+        fn drop(&mut self) {
+            panic!("original Drop fixture panic");
+        }
+    }
+    let (delivery, waiting) = GateFreeFuture::new(PanicDrop);
+    let receipt = Arc::clone(&delivery.receipt);
+    drop(waiting);
+    let panicked =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| delivery.finish(Ok(())))).is_err();
+    assert!(panicked);
+    assert!(!receipt.is_settled());
+}
+
+#[test]
+fn sf06_stop_expiry_and_fault_cannot_join_before_delivery() {
+    let live = runtime();
+    let dead = runtime();
+    let closed = dead.handle().clone();
+    drop(dead);
+    let mut snapshots = Vec::new();
+    for condition in 0..3 {
+        let (mut owner, sender) = Owner::checked(limits()).unwrap();
+        let id = owner.fixture_admit().unwrap();
+        let seal = Arc::clone(&owner.jobs[0].seal);
+        let (delivery, waiting) = GateFreeFuture::new(pending::<()>());
+        let registered = {
+            let _entered = closed.enter();
+            owner
+                .try_spawn_delivery(id, TaskKind::JobRoot, waiting, &delivery, false)
+                .map_err(|(error, _)| error)
+        };
+        match condition {
+            0 => owner.shared.request_stop(),
+            1 => owner.jobs[0].end = Some(std::time::Instant::now()),
+            _ => {
+                owner.latch_fault(Fault::PoisonedGate);
+                owner.close();
+            }
+        }
+        let pending = owner
+            .poll_parent(&mut Context::from_waker(Waker::noop()))
+            .is_pending();
+        snapshots.push((
+            pending,
+            owner.used_tasks(TaskKind::JobRoot),
+            owner.jobs[0].tasks[0].handle.is_some(),
+            seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
+            owner.jobs[0].cancel_requested,
+        ));
+        let delivered = delivery.finish(registered).is_ok();
+        live.block_on(owner.close_and_drain());
+        drop(sender);
+        assert!(delivered);
+        assert_eq!(owner.used_jobs(), 0);
+    }
+    assert_eq!(snapshots, vec![(true, 1, true, 0, true); 3]);
+}
+
+#[test]
+fn sf06_receipt_tracks_exact_reused_task_slot() {
+    runtime().block_on(async {
+        let (mut owner, sender) = Owner::checked(limits()).unwrap();
+        let id = owner.fixture_admit().unwrap();
+        must_spawn(&mut owner, id, TaskKind::JobRoot, pending::<()>());
+        let (first, waiting) = GateFreeFuture::new(async {});
+        let old_receipt = Arc::clone(&first.receipt);
+        let registered = owner
+            .try_spawn_delivery(id, TaskKind::DnsChild, waiting, &first, false)
+            .map_err(|(error, _)| error);
+        let pending_before = owner
+            .poll_parent(&mut Context::from_waker(Waker::noop()))
+            .is_pending();
+        let denied = matches!(
+            owner.try_spawn(id, TaskKind::DnsChild, async {}),
+            Err((LedgerError::Capacity, _))
+        );
+        let first_delivered = first.finish(registered).is_ok();
+        owner.join_matching(Some(id), true).await;
+        let (second, waiting) = GateFreeFuture::new(async {});
+        let new_receipt = Arc::clone(&second.receipt);
+        let registered = owner
+            .try_spawn_delivery(id, TaskKind::DnsChild, waiting, &second, false)
+            .map_err(|(error, _)| error);
+        old_receipt.settle();
+        let _ = owner.poll_parent(&mut Context::from_waker(Waker::noop()));
+        let before = (
+            owner.used_tasks(TaskKind::DnsChild),
+            owner.jobs[0].tasks.len(),
+            owner.jobs[0].tasks[1].handle.is_some(),
+            Arc::ptr_eq(
+                owner.jobs[0].tasks[1].delivery.as_ref().unwrap(),
+                &new_receipt,
+            ),
+            new_receipt.is_settled(),
+        );
+        let second_delivered = second.finish(registered).is_ok();
+        owner.close_and_drain().await;
+        drop(sender);
+        assert!(pending_before && denied && first_delivered && second_delivered);
+        assert_eq!(before, (1, 2, true, true, false));
+        assert_eq!(owner.used_jobs(), 0);
+    });
+}
+
 fn runtime() -> tokio::runtime::Runtime {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()

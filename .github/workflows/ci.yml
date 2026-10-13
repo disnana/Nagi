@@ -106,7 +106,7 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 92, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 26, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 106, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 29, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
@@ -159,11 +159,29 @@ jobs:
               'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_deadline_after_entry_skips_native_primitive',
               'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_root_finishes_during_book_wait_skips_io',
           }
+          required_delivery = {
+              'http_client::ledger::admission::tests::sf06_closed_runtime_child_drop_is_outside_owner_and_entry',
+              'http_client::ledger::admission::tests::sf06_closed_runtime_root_drop_is_outside_owner_and_entry',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_fallback_retains_external_child_and_wakes_after_cancelled_waiter',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_monitor_retains_external_child_paused_delivery',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_poisoned_owner_retains_external_child_until_delivery',
+              'http_client::ledger::tests::sf06_delivery_drop_panic_does_not_acknowledge',
+              'http_client::ledger::tests::sf06_delivery_register_recheck_and_independent_broadcast_wakes',
+              'http_client::ledger::tests::sf06_failed_send_blocking_drop_retains_debt_and_cancelled_bare_drain',
+              'http_client::ledger::tests::sf06_paused_delivery_retains_actual_handle_quota_and_join_bit',
+              'http_client::ledger::tests::sf06_receipt_tracks_exact_reused_task_slot',
+              'http_client::ledger::tests::sf06_stop_expiry_and_fault_cannot_join_before_delivery',
+              'http_client::ledger::tracked_dns::tests::sf06_closed_runtime_dns_drop_is_outside_owner_book_and_entry',
+              'http_client::ledger::tracked_dns::tests::sf06_multiple_dns_waiters_and_cancelled_waiter_wake_on_delivery',
+              'http_client::ledger::tracked_dns::tests::sf06_paused_dns_delivery_retains_io_ticket_until_failed_send_drop',
+          }
           passed_ledger = set(re.findall(
               r"(?m)^test (http_client::ledger::[a-z0-9_:]+) \.\.\. ok$", ledger_text,
           ))
           if not required_added.issubset(passed_ledger):
               raise AssertionError("SF06 new lifecycle/DNS test names missing or unsuccessful")
+          if not required_delivery.issubset(passed_ledger):
+              raise AssertionError("SF06 returned-handle delivery test names missing or unsuccessful")
           PY_SUMMARY
       - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
         shell: bash
@@ -462,7 +480,7 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 92, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 26, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 106, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 29, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
@@ -515,11 +533,29 @@ jobs:
               'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_deadline_after_entry_skips_native_primitive',
               'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_root_finishes_during_book_wait_skips_io',
           }
+          required_delivery = {
+              'http_client::ledger::admission::tests::sf06_closed_runtime_child_drop_is_outside_owner_and_entry',
+              'http_client::ledger::admission::tests::sf06_closed_runtime_root_drop_is_outside_owner_and_entry',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_fallback_retains_external_child_and_wakes_after_cancelled_waiter',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_monitor_retains_external_child_paused_delivery',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_poisoned_owner_retains_external_child_until_delivery',
+              'http_client::ledger::tests::sf06_delivery_drop_panic_does_not_acknowledge',
+              'http_client::ledger::tests::sf06_delivery_register_recheck_and_independent_broadcast_wakes',
+              'http_client::ledger::tests::sf06_failed_send_blocking_drop_retains_debt_and_cancelled_bare_drain',
+              'http_client::ledger::tests::sf06_paused_delivery_retains_actual_handle_quota_and_join_bit',
+              'http_client::ledger::tests::sf06_receipt_tracks_exact_reused_task_slot',
+              'http_client::ledger::tests::sf06_stop_expiry_and_fault_cannot_join_before_delivery',
+              'http_client::ledger::tracked_dns::tests::sf06_closed_runtime_dns_drop_is_outside_owner_book_and_entry',
+              'http_client::ledger::tracked_dns::tests::sf06_multiple_dns_waiters_and_cancelled_waiter_wake_on_delivery',
+              'http_client::ledger::tracked_dns::tests::sf06_paused_dns_delivery_retains_io_ticket_until_failed_send_drop',
+          }
           passed_ledger = set(re.findall(
               r"(?m)^test (http_client::ledger::[a-z0-9_:]+) \.\.\. ok$", ledger_text,
           ))
           if not required_added.issubset(passed_ledger):
               raise AssertionError("SF06 new lifecycle/DNS test names missing or unsuccessful")
+          if not required_delivery.issubset(passed_ledger):
+              raise AssertionError("SF06 returned-handle delivery test names missing or unsuccessful")
           PY_SUMMARY
       - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
         shell: bash
