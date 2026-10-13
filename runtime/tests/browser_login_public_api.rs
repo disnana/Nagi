@@ -515,6 +515,20 @@ async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
         let (c, t) = bootstrap(&s).await;
         let h = login_headers(&c, &t);
         let r = request(s.address, "POST", "/login", &h, b"{}").await;
+        // Failure-only closed numeric/boolean shape; never print response material.
+        if !(r.status == status && !r.auth_cookie() && r.deletion()) {
+            eprintln!(
+                "browser_login_public_api_diag case=committed_claim_initial phase=initial_response iteration={} expected_status={} status={} auth_cookie={} deletion={} verifier_calls={} handler_calls={} claim_committed={}",
+                iteration,
+                status,
+                r.status,
+                r.auth_cookie(),
+                r.deletion(),
+                f.stats.verifier.load(Ordering::SeqCst),
+                f.stats.handler.load(Ordering::SeqCst),
+                f.stats.claim_committed.load(Ordering::SeqCst),
+            );
+        }
         assert!(r.status == status && !r.auth_cookie() && r.deletion());
         r.guarded();
         if status == 401 {
