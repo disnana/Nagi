@@ -8,7 +8,7 @@ use crate::{
 use axum::http::Method;
 use std::{
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
     time::{Duration, Instant},
@@ -215,6 +215,131 @@ async fn issue_handler(_: Request, store: Arc<Store>, scope: AuthScope) -> Resul
     let intent = session::issue(&store, scope).await.unwrap();
     Ok(session::apply(text(Status::OK, "owned"), intent).unwrap())
 }
+
+// Test-only observation of the four ordinary issue paths that have returned
+// unexpected 504s on CI. Each request owns its observer; no global slot, extra
+// query, await, deadline change, or credential/response bytes enter the record.
+// These timestamps perturb scheduling and locate a boundary, not a root cause.
+#[derive(Clone, Copy)]
+enum IssueCase {
+    Applied,
+    NotModified,
+    PrivateCache,
+    Head,
+}
+struct IssueObservation {
+    case: IssueCase,
+    started: Instant,
+    verifier_enter_us: AtomicU64,
+    verifier_return_us: AtomicU64,
+    handler_enter_us: AtomicU64,
+    issue_return_us: AtomicU64,
+    response_ready_us: AtomicU64,
+    handler_drop_us: AtomicU64,
+    issue_ok: AtomicBool,
+}
+impl IssueObservation {
+    fn new(case: IssueCase) -> Arc<Self> {
+        Arc::new(Self {
+            case,
+            started: Instant::now(),
+            verifier_enter_us: AtomicU64::new(u64::MAX),
+            verifier_return_us: AtomicU64::new(u64::MAX),
+            handler_enter_us: AtomicU64::new(u64::MAX),
+            issue_return_us: AtomicU64::new(u64::MAX),
+            response_ready_us: AtomicU64::new(u64::MAX),
+            handler_drop_us: AtomicU64::new(u64::MAX),
+            issue_ok: AtomicBool::new(false),
+        })
+    }
+    fn mark(&self, event: &AtomicU64) {
+        // MAX means unseen; clamp finite elapsed values below that sentinel.
+        let elapsed = self
+            .started
+            .elapsed()
+            .as_micros()
+            .min(u128::from(u64::MAX - 1));
+        event.store(elapsed as u64, Ordering::SeqCst);
+    }
+}
+impl std::fmt::Display for IssueObservation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let case = match self.case {
+            IssueCase::Applied => "applied",
+            IssueCase::NotModified => "not_modified",
+            IssueCase::PrivateCache => "private_cache",
+            IssueCase::Head => "head",
+        };
+        write!(
+            f,
+            "issue_observer case={case} test_only=true unseen_us={}",
+            u64::MAX
+        )?;
+        for (label, value) in [
+            ("verifier_enter_us", &self.verifier_enter_us),
+            ("verifier_return_us", &self.verifier_return_us),
+            ("handler_enter_us", &self.handler_enter_us),
+            ("issue_return_us", &self.issue_return_us),
+            ("response_ready_us", &self.response_ready_us),
+            ("handler_drop_us", &self.handler_drop_us),
+        ] {
+            write!(f, " {label}={}", value.load(Ordering::SeqCst))?;
+        }
+        write!(f, " issue_ok={}", self.issue_ok.load(Ordering::SeqCst))
+    }
+}
+struct IssueHandlerDrop(Arc<IssueObservation>);
+impl Drop for IssueHandlerDrop {
+    fn drop(&mut self) {
+        self.0.mark(&self.0.handler_drop_us);
+    }
+}
+fn observed_issue_app(
+    f: &Fixture,
+    method: Method,
+    observation: &Arc<IssueObservation>,
+) -> App<Store, Error> {
+    let verified = Arc::clone(observation);
+    let handled = Arc::clone(observation);
+    route(
+        app_default(session::clone_store(&f.store)),
+        method,
+        "/owned",
+        authenticated_policy(move |request, store| {
+            let observation = Arc::clone(&verified);
+            async move {
+                observation.mark(&observation.verifier_enter_us);
+                let identity = verifier(request, store).await;
+                observation.mark(&observation.verifier_return_us);
+                identity
+            }
+        }),
+        move |_, store, scope| {
+            let observation = Arc::clone(&handled);
+            async move {
+                let _drop_observer = IssueHandlerDrop(Arc::clone(&observation));
+                observation.mark(&observation.handler_enter_us);
+                let intent = session::issue(&store, scope).await;
+                observation.issue_ok.store(intent.is_ok(), Ordering::SeqCst);
+                observation.mark(&observation.issue_return_us);
+                let intent = intent.unwrap();
+                let response = match observation.case {
+                    IssueCase::NotModified => empty(crate::http_server::status(304).unwrap()),
+                    _ => text(Status::OK, "owned"),
+                };
+                let response = session::apply(response, intent).unwrap();
+                let response = if matches!(observation.case, IssueCase::PrivateCache) {
+                    crate::http_server::conflicting_cache_for_test(response)
+                } else {
+                    response
+                };
+                observation.mark(&observation.response_ready_us);
+                Ok(response)
+            }
+        },
+    )
+    .unwrap()
+}
 async fn issue_server(f: &Fixture) -> Server {
     let app = route(
         app_default(session::clone_store(&f.store)),
@@ -247,9 +372,11 @@ fn assert_cookie_policy(reply: &Received) {
 #[tokio::test]
 async fn applied_real_issue_commit_has_exactly_one_wire_cookie() {
     let f = Fixture::new().await;
-    let server = issue_server(&f).await;
+    let observation = IssueObservation::new(IssueCase::Applied);
+    let app = observed_issue_app(&f, Method::POST, &observation);
+    let server = Server::new(app, options(64, 1000, 1000, 1000).unwrap()).await;
     let reply = request(&server, "Authorization: Bearer owned\r\n").await;
-    assert_eq!(reply.status, 200);
+    assert_eq!(reply.status, 200, "{observation}");
     assert_eq!(f.count().await, 1); // real SQL visibility before the cookie assertion
     assert_eq!(reply.all("cache-control"), vec!["no-store"]);
     assert_cookie_policy(&reply);
@@ -539,30 +666,15 @@ async fn expiry_after_real_commit_retires_applied_material_without_cookie() {
 async fn applied_304_and_private_cache_conflict_are_fixed_no_cookie_500() {
     for conflict in [false, true] {
         let f = Fixture::new().await;
-        let app = route(
-            app_default(session::clone_store(&f.store)),
-            Method::POST,
-            "/owned",
-            authenticated_policy(verifier),
-            move |_, store, scope| async move {
-                let intent = session::issue(&store, scope).await.unwrap();
-                let response = if conflict {
-                    text(Status::OK, "owned")
-                } else {
-                    empty(crate::http_server::status(304).unwrap())
-                };
-                let response = session::apply(response, intent).unwrap();
-                Ok(if conflict {
-                    crate::http_server::conflicting_cache_for_test(response)
-                } else {
-                    response
-                })
-            },
-        )
-        .unwrap();
+        let observation = IssueObservation::new(if conflict {
+            IssueCase::PrivateCache
+        } else {
+            IssueCase::NotModified
+        });
+        let app = observed_issue_app(&f, Method::POST, &observation);
         let server = Server::new(app, options(64, 1000, 1000, 1000).unwrap()).await;
         let reply = request(&server, "Authorization: Bearer owned\r\n").await;
-        assert_eq!(reply.status, 500);
+        assert_eq!(reply.status, 500, "{observation}");
         assert!(reply.all("set-cookie").is_empty());
         assert_eq!(reply.all("cache-control"), vec!["no-store"]);
         assert_eq!(f.count().await, 1);
@@ -573,14 +685,8 @@ async fn applied_304_and_private_cache_conflict_are_fixed_no_cookie_500() {
 #[tokio::test]
 async fn head_applied_response_transfers_cookie_once_without_body() {
     let f = Fixture::new().await;
-    let app = route(
-        app_default(session::clone_store(&f.store)),
-        Method::GET,
-        "/owned",
-        authenticated_policy(verifier),
-        issue_handler,
-    )
-    .unwrap();
+    let observation = IssueObservation::new(IssueCase::Head);
+    let app = observed_issue_app(&f, Method::GET, &observation);
     let server = Server::new(app, options(64, 1000, 1000, 1000).unwrap()).await;
     let mut socket = server.connect().await;
     send(
@@ -589,7 +695,7 @@ async fn head_applied_response_transfers_cookie_once_without_body() {
     )
     .await;
     let reply = response(&mut socket, true).await;
-    assert_eq!(reply.status, 200);
+    assert_eq!(reply.status, 200, "{observation}");
     assert!(reply.body.is_empty());
     assert_cookie_policy(&reply);
     assert_eq!(reply.all("vary"), vec!["Cookie, Authorization"]);
