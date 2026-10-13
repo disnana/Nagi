@@ -84,13 +84,35 @@ impl Received {
             .collect()
     }
 }
+#[derive(Clone, Copy, Debug)]
+enum TestIoPhase {
+    RequestWrite,
+    ResponseStatus,
+    ResponseHeaders,
+    ResponseBody,
+    ConnectionEof,
+}
+fn test_io<T>(phase: TestIoPhase, result: std::io::Result<T>) -> T {
+    result.unwrap_or_else(|error| {
+        panic!(
+            "HTTP test I/O failed: phase={phase:?} kind={:?}",
+            error.kind()
+        )
+    })
+}
 async fn send(socket: &mut BufReader<TcpStream>, data: &[u8]) {
-    socket.get_mut().write_all(data).await.unwrap();
+    test_io(
+        TestIoPhase::RequestWrite,
+        socket.get_mut().write_all(data).await,
+    );
 }
 async fn response(socket: &mut BufReader<TcpStream>, head: bool) -> Received {
     tokio::time::timeout(Duration::from_secs(3), async {
         let mut line = String::new();
-        socket.read_line(&mut line).await.unwrap();
+        test_io(
+            TestIoPhase::ResponseStatus,
+            socket.read_line(&mut line).await,
+        );
         let status: u16 = line
             .split_whitespace()
             .nth(1)
@@ -102,7 +124,13 @@ async fn response(socket: &mut BufReader<TcpStream>, head: bool) -> Received {
         let mut chunked = false;
         loop {
             line.clear();
-            assert_ne!(socket.read_line(&mut line).await.unwrap(), 0);
+            assert_ne!(
+                test_io(
+                    TestIoPhase::ResponseHeaders,
+                    socket.read_line(&mut line).await
+                ),
+                0
+            );
             if line == "\r\n" {
                 break;
             }
@@ -121,22 +149,28 @@ async fn response(socket: &mut BufReader<TcpStream>, head: bool) -> Received {
             if chunked {
                 loop {
                     line.clear();
-                    socket.read_line(&mut line).await.unwrap();
+                    test_io(TestIoPhase::ResponseBody, socket.read_line(&mut line).await);
                     let length = usize::from_str_radix(line.trim(), 16).unwrap();
                     if length == 0 {
-                        socket.read_line(&mut line).await.unwrap();
+                        test_io(TestIoPhase::ResponseBody, socket.read_line(&mut line).await);
                         break;
                     }
                     let start = body.len();
                     body.resize(start + length, 0);
-                    socket.read_exact(&mut body[start..]).await.unwrap();
+                    test_io(
+                        TestIoPhase::ResponseBody,
+                        socket.read_exact(&mut body[start..]).await,
+                    );
                     let mut end = [0; 2];
-                    socket.read_exact(&mut end).await.unwrap();
+                    test_io(TestIoPhase::ResponseBody, socket.read_exact(&mut end).await);
                     assert_eq!(&end, b"\r\n");
                 }
             } else {
                 body.resize(length, 0);
-                socket.read_exact(&mut body).await.unwrap();
+                test_io(
+                    TestIoPhase::ResponseBody,
+                    socket.read_exact(&mut body).await,
+                );
             }
         }
         Received {
@@ -150,10 +184,12 @@ async fn response(socket: &mut BufReader<TcpStream>, head: bool) -> Received {
 }
 async fn closed(socket: &mut BufReader<TcpStream>) -> Vec<u8> {
     let mut rest = Vec::new();
-    tokio::time::timeout(Duration::from_secs(3), socket.read_to_end(&mut rest))
-        .await
-        .unwrap()
-        .unwrap();
+    test_io(
+        TestIoPhase::ConnectionEof,
+        tokio::time::timeout(Duration::from_secs(3), socket.read_to_end(&mut rest))
+            .await
+            .unwrap(),
+    );
     rest
 }
 fn basic_request() -> Request {
@@ -1768,12 +1804,21 @@ async fn graceful_shutdown_preserves_stalled_response_send_deadline() {
     // active. Keep the much larger body unread so socket backpressure remains.
     tokio::time::timeout(Duration::from_secs(2), async {
         let mut line = String::new();
-        blocked.read_line(&mut line).await.unwrap();
+        test_io(
+            TestIoPhase::ResponseStatus,
+            blocked.read_line(&mut line).await,
+        );
         assert!(line.starts_with("HTTP/1.1 200 "));
         let mut length = None;
         loop {
             line.clear();
-            assert_ne!(blocked.read_line(&mut line).await.unwrap(), 0);
+            assert_ne!(
+                test_io(
+                    TestIoPhase::ResponseHeaders,
+                    blocked.read_line(&mut line).await,
+                ),
+                0
+            );
             if line == "\r\n" {
                 break;
             }
