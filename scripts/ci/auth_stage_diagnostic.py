@@ -1,4 +1,4 @@
-"""Publish only bounded, closed-field auth-stage observations from three CI runs."""
+"""Publish bounded, closed-field auth-stage and HTTP test I/O observations."""
 import pathlib
 import re
 import sys
@@ -30,6 +30,22 @@ FAILED_ITEM = re.compile(rf"    ({QUALIFIED})\Z")
 CASE_LIMIT = 1024
 CASE_NAME_LIMIT = 256
 FAILURE_LIMIT = 16
+IO_PHASE = r"(?:RequestWrite|ResponseStatus|ResponseHeaders|ResponseBody|ConnectionEof)"
+IO_KIND = (
+    r"(?:NotFound|PermissionDenied|ConnectionRefused|ConnectionReset|HostUnreachable|"
+    r"NetworkUnreachable|ConnectionAborted|NotConnected|AddrInUse|AddrNotAvailable|"
+    r"NetworkDown|BrokenPipe|AlreadyExists|WouldBlock|NotADirectory|IsADirectory|"
+    r"DirectoryNotEmpty|ReadOnlyFilesystem|FilesystemLoop|StaleNetworkFileHandle|"
+    r"InvalidInput|InvalidData|TimedOut|WriteZero|StorageFull|NotSeekable|QuotaExceeded|"
+    r"FileTooLarge|ResourceBusy|ExecutableFileBusy|Deadlock|CrossesDevices|TooManyLinks|"
+    r"InvalidFilename|ArgumentListTooLong|Interrupted|Unsupported|UnexpectedEof|"
+    r"OutOfMemory|InProgress|Uncategorized|Other)"
+)
+TEST_IO_MARKER_PREFIX = "HTTP test I/O failed:"
+TEST_IO_MARKER = re.compile(
+    rf"{re.escape(TEST_IO_MARKER_PREFIX)} phase=({IO_PHASE}) kind=({IO_KIND})\Z"
+)
+TEST_IO_FAILURE_LIMIT = 16
 
 
 def read_bounded(path: pathlib.Path):
@@ -103,6 +119,28 @@ def failed_cases(text: str, cases):
     return lines
 
 
+def http_io_failures(text: str):
+    found = set()
+    invalid = False
+    for line in text.splitlines():
+        if TEST_IO_MARKER_PREFIX not in line:
+            continue
+        marker = TEST_IO_MARKER.fullmatch(line)
+        if marker is None:
+            invalid = True
+        else:
+            found.add(marker.groups())
+    lines = [
+        f"http_test_io=phase={phase} kind={kind}"
+        for phase, kind in sorted(found)[:TEST_IO_FAILURE_LIMIT]
+    ]
+    if len(found) > TEST_IO_FAILURE_LIMIT:
+        lines.append("http_test_io_loss=observed")
+    if invalid:
+        lines.append("http_test_io=unavailable")
+    return lines
+
+
 def capture(name: str, root: pathlib.Path, exit_code: int, cases=None) -> bool:
     raw_file = root / f"auth-stage-{name}.raw"
     trace_file = root / f"auth-stage-{name}.trace"
@@ -116,6 +154,12 @@ def capture(name: str, root: pathlib.Path, exit_code: int, cases=None) -> bool:
         lines.extend(failed_cases(text, cases))
     if missing:
         lines.append("raw_file=unavailable")
+    io_diagnostics = http_io_failures(text) if exit_code != 0 else []
+    lines.extend(io_diagnostics)
+    invalid_io_record = any(
+        line in ("http_test_io=unavailable", "http_test_io_loss=observed")
+        for line in io_diagnostics
+    )
     invalid_record = False
     expected_slots = set(EXPECTED_SLOTS[name])
     opened_slots = set()
@@ -170,7 +214,8 @@ def capture(name: str, root: pathlib.Path, exit_code: int, cases=None) -> bool:
         out.extend(b"lost=true\n")
     trace_file.write_bytes(out)
     sys.stdout.buffer.write(out)
-    return valid and not invalid_record and not truncated and slots_complete and not saw_loss
+    return (valid and not invalid_record and not invalid_io_record and not truncated
+            and slots_complete and not saw_loss)
 
 
 def main() -> int:

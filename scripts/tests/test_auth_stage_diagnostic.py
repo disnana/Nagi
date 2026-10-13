@@ -96,6 +96,53 @@ class DiagnosticCases(unittest.TestCase):
             accepted = diagnostic.capture(name, self.root, exit_code, cases)
         return accepted, (self.root / f"auth-stage-{name}.trace").read_bytes()
 
+    def test_http_io_marker_is_crlf_safe_and_preserves_broad_auth_trace(self):
+        event = ("op=Claim stage=Return event=Success elapsed_us=Some(1) "
+                 "utc_remaining_ms=Some(2) mono=Some(Before(3)) kind=None outcome=None\n")
+        raw = ("auth-stage slot=1 (test-only; scheduling perturbed)\n" + event * 27 +
+               "lost=false\n" +
+               "auth-stage slot=2 (test-only; scheduling perturbed)\n" + event * 19 +
+               "lost=false\n")
+        raw = (raw.replace("\n", "\r\n") +
+               "thread 'http_server::tests::case' panicked at /private/path:9:1:\r\n" +
+               "HTTP test I/O failed: phase=ResponseHeaders kind=UnexpectedEof\r\n" +
+               "note: run with RUST_BACKTRACE=1 environment variable to display a backtrace\r\n")
+        accepted, output = self.capture(raw, 101)
+        self.assertFalse(accepted)
+        self.assertIn(b"http_test_io=phase=ResponseHeaders kind=UnexpectedEof\n", output)
+        self.assertEqual(output.count(b"auth-stage slot="), 2)
+        self.assertEqual(output.count(b"op="), 46)
+        self.assertEqual(output.count(b"lost=false"), 2)
+        self.assertNotIn(b"\r", output)
+        self.assertNotIn(b"/private", output)
+        self.assertNotIn(b"RUST_BACKTRACE", output)
+
+    def test_http_io_marker_output_is_bounded(self):
+        phases = ["RequestWrite", "ResponseStatus", "ResponseHeaders", "ResponseBody",
+                  "ConnectionEof"]
+        kinds = ["ConnectionReset", "ConnectionAborted", "BrokenPipe", "WouldBlock",
+                 "UnexpectedEof"]
+        raw = "\n".join(
+            f"HTTP test I/O failed: phase={phase} kind={kind}"
+            for phase in phases for kind in kinds
+        )
+        output = diagnostic.http_io_failures(raw)
+        self.assertEqual(sum(line.startswith("http_test_io=phase=") for line in output), 16)
+        self.assertEqual(output[-1], "http_test_io_loss=observed")
+
+    def test_http_io_marker_rejects_unknown_fields_and_injected_data(self):
+        markers = [
+            "HTTP test I/O failed: phase=Unknown kind=UnexpectedEof\n",
+            "HTTP test I/O failed: phase=ResponseHeaders kind=Unknown\n",
+            "HTTP test I/O failed: phase=ResponseHeaders kind=ConnectionReset credential=secret\n",
+            "prefix HTTP test I/O failed: phase=ResponseHeaders kind=ConnectionReset\n",
+        ]
+        for marker in markers:
+            with self.subTest(marker=marker.split(" kind=")[0]):
+                output = diagnostic.http_io_failures(marker)
+                self.assertEqual(output, ["http_test_io=unavailable"])
+                self.assertNotIn("secret", "\n".join(output))
+
     def test_exit_101_remains_failure_with_known_identity(self):
         accepted, output = self.capture(self.raw() + "test auth::a ... FAILED\n", 101,
                                        {"auth::a": "auth::a"})
