@@ -157,7 +157,8 @@ pub(super) fn run_three(high: &str, low: &str) {
         }
         let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
             .or_else(|| std::env::var_os("CARGO_TARGET_DIR"))
-            .expect("native test cache must be explicit");
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| repo.join("target"));
         let mut build = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
         build
             .current_dir(&fixture.0)
@@ -170,7 +171,12 @@ pub(super) fn run_three(high: &str, low: &str) {
                 "--no-run",
                 "--message-format=json",
             ])
-            .env("CARGO_TARGET_DIR", &target);
+            .env("CARGO_TARGET_DIR", &target)
+            // Match the ordinary native-triple harness and share its profile.
+            // Keep the original finite build deadline and native oracle intact.
+            .env("CARGO_PROFILE_DEV_DEBUG", "0")
+            .env("CARGO_PROFILE_TEST_DEBUG", "0")
+            .env("CARGO_INCREMENTAL", "0");
         let compiled = conformance::bounded_process(
             &mut build,
             &format!("{label}-build"),
