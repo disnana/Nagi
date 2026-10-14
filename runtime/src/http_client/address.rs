@@ -14,7 +14,7 @@ mod iana_tables;
 #[path = "socket_pin.rs"]
 mod socket_pin;
 
-// Separate unadopted Q1 pure model; no native failover path is wired.
+// Private Q1 plan and test-only native adapter; production wiring is separate.
 #[path = "q1_dial.rs"]
 mod q1_dial;
 

@@ -106,7 +106,7 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 115, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 115, "sf06-private-transport.log": 79, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
@@ -199,6 +199,23 @@ jobs:
           )
           if set(passed_h0) != required_h0 or len(passed_h0) != len(required_h0):
               raise AssertionError("SF06 H0 test names missing, duplicated, or unsuccessful")
+          required_q1_native = {
+              'http_client::address::socket_pin::q1_native::tests::q1_native_attempt_cap_prevents_second_connector_and_releases_first_slot',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_closed_plan_starts_no_connector',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_close_during_pending_connect_does_not_attempt_second_address',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_terminal_connect_failure_does_not_try_another_candidate',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_cancelled_caller_is_joined_before_reusing_socket_quota',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_ttl_zero_is_usable_for_one_owned_operation_without_cache',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_refused_first_address_connects_only_checked_second_peer',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_expired_original_connect_end_does_not_reset_budget',
+          }
+          transport_text = (root / "sf06-private-transport.log").read_text(encoding="utf-8")
+          passed_q1_native = re.findall(
+              r"(?m)^test (http_client::address::socket_pin::q1_native::tests::q1_native_[a-z0-9_]+) \.\.\. ok$",
+              transport_text,
+          )
+          if set(passed_q1_native) != required_q1_native or len(passed_q1_native) != len(required_q1_native):
+              raise AssertionError("SF06 Q1 native test names missing, duplicated, unexpected, or unsuccessful")
           PY_SUMMARY
       - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
         shell: bash
@@ -497,7 +514,7 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 115, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 115, "sf06-private-transport.log": 79, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
@@ -590,6 +607,23 @@ jobs:
           )
           if set(passed_h0) != required_h0 or len(passed_h0) != len(required_h0):
               raise AssertionError("SF06 H0 test names missing, duplicated, or unsuccessful")
+          required_q1_native = {
+              'http_client::address::socket_pin::q1_native::tests::q1_native_attempt_cap_prevents_second_connector_and_releases_first_slot',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_closed_plan_starts_no_connector',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_close_during_pending_connect_does_not_attempt_second_address',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_terminal_connect_failure_does_not_try_another_candidate',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_cancelled_caller_is_joined_before_reusing_socket_quota',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_ttl_zero_is_usable_for_one_owned_operation_without_cache',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_refused_first_address_connects_only_checked_second_peer',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_expired_original_connect_end_does_not_reset_budget',
+          }
+          transport_text = (root / "sf06-private-transport.log").read_text(encoding="utf-8")
+          passed_q1_native = re.findall(
+              r"(?m)^test (http_client::address::socket_pin::q1_native::tests::q1_native_[a-z0-9_]+) \.\.\. ok$",
+              transport_text,
+          )
+          if set(passed_q1_native) != required_q1_native or len(passed_q1_native) != len(required_q1_native):
+              raise AssertionError("SF06 Q1 native test names missing, duplicated, unexpected, or unsuccessful")
           PY_SUMMARY
       - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
         shell: bash

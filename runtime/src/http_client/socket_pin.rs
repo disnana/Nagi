@@ -1,6 +1,6 @@
-//! Private numeric socket boundary. No DNS name, proxy, retry, TLS, or HTTP entry.
-//! Only the address module can supply a checked selection. Real client/auth and
-//! ledger ownership are not connected in this isolated prototype.
+//! Private numeric socket boundary, including checked Q1 TCP-only failover.
+//! Only the address module or its branded plan supplies a checked selection.
+//! Trusted client/auth/ledger production wiring remains a separate gate.
 
 use super::{AddressError, CheckedSnapshot, DialSelection, ServiceIdentity};
 use std::{
@@ -30,7 +30,7 @@ enum SocketError {
     Closing,
     Faulted,
     Deadline,
-    Connect,
+    Connect(std::io::ErrorKind),
     PeerObservation,
     PeerMismatch,
 }
@@ -249,6 +249,20 @@ where
     let selected = snapshot
         .begin_dial(Instant::now())
         .map_err(SocketError::Address)?;
+    connect_selection_inner(selected, connect_end, control, quota, make).await
+}
+
+async fn connect_selection_inner<F, Fut>(
+    selected: DialSelection,
+    connect_end: Instant,
+    control: &DialControl,
+    quota: &SocketQuota,
+    make: F,
+) -> Result<PinnedSocket, SocketError>
+where
+    F: FnOnce(SocketAddr) -> Fut,
+    Fut: Future<Output = std::io::Result<TcpStream>>,
+{
     let end = selected.operation_end.min(connect_end);
     if Instant::now() >= end {
         return Err(SocketError::Deadline);
@@ -284,14 +298,14 @@ where
     })
     .await?;
     let stream = match first {
-        Poll::Ready(result) => result.map_err(|_| SocketError::Connect)?,
+        Poll::Ready(result) => result.map_err(|error| SocketError::Connect(error.kind()))?,
         Poll::Pending => {
             tokio::select! {
                 biased;
                 reason = wait_stop(&mut stopped) => return Err(reason),
                 _ = tokio::time::sleep_until(end.into()) => return Err(SocketError::Deadline),
                 result = attempt.dial.as_mut().expect("pending dial").as_mut() => {
-                    result.map_err(|_| SocketError::Connect)?
+                    result.map_err(|error| SocketError::Connect(error.kind()))?
                 }
             }
         }
@@ -317,3 +331,6 @@ mod tests;
 // module remains unexported until trusted catalog/auth/ledger integration.
 #[path = "tls_http1.rs"]
 mod tls_http1;
+
+#[path = "q1_native.rs"]
+mod q1_native;

@@ -1,4 +1,4 @@
-//! Unregistered private Q1 model: finite sequential dial cursor and DNS validity ticket.
+//! Private Q1 plan: finite sequential dial cursor and DNS validity ticket.
 //! The caller must finish native disposal/actual child join before reporting an attempt failure.
 
 use super::{
@@ -406,6 +406,23 @@ impl DialPlan {
             tls_established: false,
             enqueue_issued: false,
             finished: false,
+        })
+    }
+
+    // Only the owning plan can turn its live branded attempt into the numeric
+    // socket authority. Preserve the original validity/operation ends unchanged.
+    pub(super) fn dial_selection(
+        &self,
+        attempt: &DialAttempt,
+    ) -> Result<super::DialSelection, PlanStop> {
+        if !self.owns_attempt(attempt) || self.finished || self.peer_checked {
+            return Err(PlanStop::InvalidState);
+        }
+        Ok(super::DialSelection {
+            identity: self.identity,
+            selected: attempt.address,
+            valid_until: self.ticket.boundary(),
+            operation_end: self.operation_end,
         })
     }
 
