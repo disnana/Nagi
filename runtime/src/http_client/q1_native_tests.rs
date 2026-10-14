@@ -4,7 +4,7 @@ use super::super::super::q1_dial::{
 use super::*;
 use std::{
     io::{Error, ErrorKind},
-    net::{IpAddr, Ipv4Addr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
     num::NonZeroU64,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -68,12 +68,48 @@ fn plan(port: u16, attempts: usize, ttl: u32, budget: Duration) -> DialPlan {
     .unwrap()
 }
 
+// Use both standard loopback interfaces; 127.0.0.2 is not assigned on macOS.
+fn mixed_loopback_plan(port: u16) -> DialPlan {
+    let now = Instant::now();
+    let end = now + Duration::from_secs(5);
+    let policy = super::super::super::InternalPolicy::checked(
+        identity(),
+        port,
+        2,
+        vec![
+            IpAddr::V4(Ipv4Addr::LOCALHOST),
+            IpAddr::V6(Ipv6Addr::LOCALHOST),
+        ],
+    )
+    .unwrap();
+    let checked = SuccessfulLookup::from_provider_results(
+        OperationBrand::from_admitted_operation(NonZeroU64::new(1).unwrap()),
+        Ok(vec![Ipv4Addr::LOCALHOST]),
+        Ok(vec![Ipv6Addr::LOCALHOST]),
+        vec![30],
+        Some(end),
+        end,
+        end,
+    )
+    .unwrap()
+    .check(&policy, identity(), now)
+    .unwrap();
+    DialPlan::checked(
+        checked,
+        AttemptOrder::Interleave {
+            preferred: PreferredFamily::V4,
+        },
+        2,
+        Duration::from_secs(3),
+        now,
+    )
+    .unwrap()
+}
+
 #[test]
 fn q1_native_refused_first_address_connects_only_checked_second_peer() {
     runtime().block_on(async {
-        let listener = TcpListener::bind((Ipv4Addr::new(127, 0, 0, 2), 0))
-            .await
-            .unwrap();
+        let listener = TcpListener::bind((Ipv6Addr::LOCALHOST, 0)).await.unwrap();
         let addr = listener.local_addr().unwrap();
         let first_guard = TcpSocket::new_v4().unwrap();
         first_guard
@@ -83,13 +119,9 @@ fn q1_native_refused_first_address_connects_only_checked_second_peer() {
         // reserved while the native connect receives refusal. No port race.
         let control = DialControl::new();
         let quota = SocketQuota::checked(1).unwrap();
-        let (socket, _) = connect_plan(
-            plan(addr.port(), 2, 30, Duration::from_secs(3)),
-            &control,
-            &quota,
-        )
-        .await
-        .unwrap();
+        let (socket, _) = connect_plan(mixed_loopback_plan(addr.port()), &control, &quota)
+            .await
+            .unwrap();
         let (mut peer, _) = listener.accept().await.unwrap();
         assert_eq!(socket.selected, addr);
         assert_eq!(socket.identity, identity());
