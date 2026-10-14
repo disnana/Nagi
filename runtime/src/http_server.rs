@@ -24,6 +24,8 @@ use std::{
 use tokio::{net::TcpListener, sync::Semaphore, task::JoinSet};
 
 mod closing_io;
+#[cfg(test)]
+mod lifecycle_probe;
 use closing_io::ClosingIo;
 mod authority;
 mod cors;
@@ -567,6 +569,8 @@ pub struct Options {
     shutdown_deadline: Duration,
     connections: usize,
     requests: usize,
+    #[cfg(test)]
+    lifecycle_probe: Option<Arc<lifecycle_probe::Probe>>,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -583,6 +587,8 @@ impl Default for Options {
             shutdown_deadline: Duration::from_secs(10),
             connections: 1024,
             requests: 256,
+            #[cfg(test)]
+            lifecycle_probe: None,
         }
     }
 }
@@ -1633,6 +1639,8 @@ struct Sending {
 struct TimedIo<T> {
     inner: T,
     sending: tokio::sync::watch::Sender<Sending>,
+    #[cfg(test)]
+    probe: Option<Arc<lifecycle_probe::Probe>>,
 }
 impl<T: hyper::rt::Read + Unpin> hyper::rt::Read for TimedIo<T> {
     fn poll_read(
@@ -1649,14 +1657,28 @@ impl<T: hyper::rt::Write + Unpin> hyper::rt::Write for TimedIo<T> {
         cx: &mut Context<'_>,
         buffer: &[u8],
     ) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.inner).poll_write(cx, buffer)
+        let result = Pin::new(&mut self.inner).poll_write(cx, buffer);
+        #[cfg(test)]
+        if result.is_pending() {
+            if let Some(probe) = &self.probe {
+                probe.pending(self.sending.borrow().deadline);
+            }
+        }
+        result
     }
     fn poll_write_vectored(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buffers: &[std::io::IoSlice<'_>],
     ) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.inner).poll_write_vectored(cx, buffers)
+        let result = Pin::new(&mut self.inner).poll_write_vectored(cx, buffers);
+        #[cfg(test)]
+        if result.is_pending() {
+            if let Some(probe) = &self.probe {
+                probe.pending(self.sending.borrow().deadline);
+            }
+        }
+        result
     }
     fn is_write_vectored(&self) -> bool {
         self.inner.is_write_vectored()
@@ -1745,7 +1767,13 @@ where
         tokio::select! {
             biased;
             _ = &mut shutdown_signal => break,
-            result = tasks.join_next(), if !tasks.is_empty() => { let _ = result; }
+            result = tasks.join_next(), if !tasks.is_empty() => {
+                #[cfg(test)]
+                if result.is_some() {
+                    if let Some(probe) = &options.lifecycle_probe { probe.joined(); }
+                }
+                let _ = result;
+            }
             accepted = listener.accept() => {
                 let (stream, peer) = match accepted {
                     Ok(accepted) => accepted,
@@ -1762,20 +1790,35 @@ where
                 let send_deadline = options.send_deadline;
                 let close_deadline = options.body_deadline;
                 let service_sending = sending.clone();
+                #[cfg(test)]
+                let probe = options.lifecycle_probe.clone();
+                #[cfg(test)]
+                let service_probe = probe.clone();
                 let service = service_fn(move |request| {
                     let may_have_body = !hyper::body::Body::is_end_stream(request.body());
                     let future = dispatch(Arc::clone(&app), request, Arc::clone(&options), Arc::clone(&requests), peer.ip());
                     let sending = service_sending.clone();
+                    #[cfg(test)]
+                    let probe = service_probe.clone();
                     async move {
                         let response = future.await;
                         let discard_remaining = may_have_body && response.as_ref().is_ok_and(|response| {
                             response.headers().get(names::CONNECTION).is_some_and(|value| value == "close")
                         });
-                        sending.send_replace(Sending { deadline: Some(tokio::time::Instant::now() + send_deadline), discard_remaining });
+                        let state = Sending { deadline: Some(tokio::time::Instant::now() + send_deadline), discard_remaining };
+                        #[cfg(test)]
+                        if let (Some(probe), Ok(response)) = (&probe, &response) {
+                            probe.arm(state.deadline.unwrap(), response.status().as_u16(), response.body().bytes.len());
+                        }
+                        sending.send_replace(state);
                         response
                     }
                 });
-                let connection = builder.serve_connection(TimedIo { inner: ClosingIo::new(TokioIo::new(stream), close_deadline, sent.clone()), sending }, service);
+                let connection = builder.serve_connection(TimedIo {
+                    inner: ClosingIo::new(TokioIo::new(stream), close_deadline, sent.clone()), sending,
+                    #[cfg(test)]
+                    probe: probe.clone(),
+                }, service);
                 let mut stopped = shutdown.subscribe();
                 tasks.spawn(async move {
                     let _permit = permit;
@@ -1790,11 +1833,17 @@ where
                             biased;
                             _ = stopped.changed(), if !stopping => {
                                 stopping = true;
+                                #[cfg(test)]
+                                if let Some(probe) = &probe { probe.graceful(deadline); }
                                 connection.as_mut().graceful_shutdown();
                             }
                             _ = &mut connection => break,
                             _ = sent.changed() => {}
-                            _ = expires => break,
+                            _ = expires => {
+                                #[cfg(test)]
+                                if let Some(probe) = &probe { probe.expired(deadline); }
+                                break;
+                            },
                         }
                     }
                 });
@@ -1802,14 +1851,28 @@ where
         }
     }
     drop(listener);
+    #[cfg(test)]
+    if let Some(probe) = &options.lifecycle_probe {
+        probe.listener_closed();
+    }
     let _ = shutdown.send(true);
     let drained = tokio::time::timeout(options.shutdown_deadline, async {
-        while tasks.join_next().await.is_some() {}
+        while tasks.join_next().await.is_some() {
+            #[cfg(test)]
+            if let Some(probe) = &options.lifecycle_probe {
+                probe.joined();
+            }
+        }
     })
     .await;
     if drained.is_err() {
         tasks.abort_all();
-        while tasks.join_next().await.is_some() {}
+        while tasks.join_next().await.is_some() {
+            #[cfg(test)]
+            if let Some(probe) = &options.lifecycle_probe {
+                probe.joined();
+            }
+        }
     }
     Ok(())
 }
