@@ -50,6 +50,7 @@ fn live_root(job: &JobRecord) -> bool {
             task.kind == TaskKind::JobRoot
                 && task
                     .handle
+                    .state()
                     .as_ref()
                     .is_some_and(|handle| !handle.is_finished())
                 && task
@@ -120,7 +121,6 @@ impl DnsPhase {
         if poisoned {
             owner.latch_fault(Fault::PoisonedGate);
             owner.close();
-            return Err(LedgerError::Faulted.into());
         }
         Ok(owner)
     }
@@ -214,6 +214,7 @@ impl DnsPhase {
         };
         let (delivery, waiting) = GateFreeFuture::new(wrapped);
         let mut pending = Some(waiting);
+        let prepared = PreparedLaunch::new(kind);
         let mut duplicate_root = false;
         let result = self.gate_with_after_entry(after_entry, |owner, index, book| {
             if kind == TaskKind::DnsRoot
@@ -225,24 +226,51 @@ impl DnsPhase {
             if kind == TaskKind::DnsChild && !book.root_started {
                 return Err(LedgerError::PhaseClosed.into());
             }
-            match owner.try_spawn_delivery(
+            match owner.stage(
                 self.0.key.id(),
                 kind,
                 pending.take().expect("one admission"),
-                &delivery,
                 true,
+                Some(Arc::clone(&delivery.receipt)),
+                prepared,
             ) {
-                Ok(()) => {
-                    if kind == TaskKind::DnsRoot {
-                        book.root_started = true;
-                    }
-                    Ok(())
-                }
+                Ok(staged) => Ok(staged),
                 Err((error, rejected)) => {
                     pending = Some(rejected);
                     Err(error.into())
                 }
             }
+        });
+        let result = result.map(|(launch, waiting)| {
+            let poisoned_slot = launch.launch(waiting);
+            let (cancel, poisoned) = {
+                let (mut owner, poisoned_owner) = match self.0.runner.owner.lock() {
+                    Ok(owner) => (owner, false),
+                    Err(poison) => (poison.into_inner(), true),
+                };
+                let mut cancel = launch.publish(&mut owner, poisoned_slot || poisoned_owner);
+                let (mut book, poisoned_book) = match self.0.book.lock() {
+                    Ok(book) => (book, false),
+                    Err(poison) => (poison.into_inner(), true),
+                };
+                if kind == TaskKind::DnsRoot {
+                    book.root_started = true;
+                }
+                if poisoned_book {
+                    owner.latch_fault(Fault::PoisonedGate);
+                    cancel = true;
+                }
+                (cancel, poisoned_slot || poisoned_owner || poisoned_book)
+            };
+            if poisoned {
+                launch.shared.request_stop();
+            }
+            if cancel {
+                if let Some(handle) = launch.slot.state().as_ref() {
+                    handle.abort();
+                }
+            }
+            launch.slot.wake(&launch.shared);
         });
         drop(pending); // Only an empty receiver; all lifecycle guards are gone.
         let delivery_result = match result {
@@ -333,12 +361,14 @@ impl DnsPhase {
                         pending = true;
                         continue;
                     }
-                    if let Some(handle) = &mut task.handle {
+                    task.handle.register(cx);
+                    let mut launch_state = task.handle.state();
+                    if let Some(handle) = launch_state.as_mut() {
                         match Pin::new(handle).poll(cx) {
                             Poll::Pending => pending = true,
                             Poll::Ready(result) => {
                                 observed = true;
-                                task.handle = None;
+                                *launch_state = Launch::ActualJoined;
                                 if let Err(error) = result {
                                     if error.is_panic() {
                                         fault.get_or_insert(Fault::TaskPanic);
@@ -348,6 +378,8 @@ impl DnsPhase {
                                 }
                             }
                         }
+                    } else if !launch_state.is_none() {
+                        pending = true;
                     }
                 }
                 for kind in [TaskKind::DnsRoot, TaskKind::DnsChild] {
@@ -355,7 +387,7 @@ impl DnsPhase {
                         .jobs
                         .iter()
                         .flat_map(|job| &job.tasks)
-                        .filter(|task| task.kind == kind && task.handle.is_some())
+                        .filter(|task| task.kind == kind && task.handle.outstanding())
                         .count();
                 }
                 if observed {

@@ -716,6 +716,7 @@ async fn followup_first_observed_panic_precedes_later_unexpected_abort() {
             .nth(1)
             .unwrap()
             .handle
+            .state()
             .as_ref()
             .unwrap()
             .abort();
@@ -732,7 +733,7 @@ async fn followup_first_observed_panic_precedes_later_unexpected_abort() {
                     .tasks
                     .iter()
                     .filter(|t| t.kind == TaskKind::DnsChild)
-                    .all(|t| t.handle.as_ref().unwrap().is_finished())
+                    .all(|t| t.handle.state().as_ref().unwrap().is_finished())
             };
             if ready {
                 break;
@@ -1557,4 +1558,93 @@ fn sf06_closed_runtime_dns_drop_is_outside_owner_book_and_entry() {
         "F Drop ran under a lifecycle gate"
     );
     assert_eq!(owner.lock().unwrap().fixture_task_records(id), 0);
+}
+
+#[test]
+fn sf06_h0_paused_dns_root_retains_quota_without_io_authority() {
+    for duplicate in [false, true] {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let (owner, sender, id) = fixture();
+                let runner = fixture_runner(&owner);
+                let key = fixture_key(&owner, id);
+                let phase = DnsPhase::for_job(
+                    &runner,
+                    &key,
+                    Instant::now() + Duration::from_secs(10),
+                    "127.0.0.1:53".parse().unwrap(),
+                )
+                .unwrap();
+                let pause = Arc::new(h0_launch_probe::Pause::default());
+                owner.lock().unwrap().h0_launch_probe =
+                    Some(Arc::new(Mutex::new(h0_launch_probe::Inner {
+                        pause: Some(Arc::clone(&pause)),
+                        ..Default::default()
+                    })));
+                let entered = tokio::runtime::Handle::current();
+                let launching = phase.clone();
+                let worker = std::thread::spawn(move || {
+                    let _entered = entered.enter();
+                    assert!(launching
+                        .spawn(TaskKind::DnsRoot, std::future::pending::<()>())
+                        .is_ok());
+                });
+                pause.wait();
+                let slot = {
+                    let owner = owner.lock().unwrap();
+                    assert_eq!(owner.used_tasks(TaskKind::DnsRoot), 1);
+                    assert_eq!(owner.reserved_roots[1], 0);
+                    assert_eq!(owner.shared.senders.load(Ordering::Acquire), 1);
+                    Arc::clone(
+                        &owner.jobs[0]
+                            .tasks
+                            .iter()
+                            .find(|task| task.kind == TaskKind::DnsRoot)
+                            .unwrap()
+                            .handle,
+                    )
+                };
+                assert!(matches!(*slot.state(), Launch::Starting));
+                assert!(!phase.0.book.lock().unwrap().root_started);
+                assert!(matches!(
+                    phase.begin_io(),
+                    Err(DnsFailure::Ledger(LedgerError::PhaseClosed))
+                ));
+                assert!(matches!(
+                    phase.spawn(TaskKind::DnsChild, std::future::pending::<()>()),
+                    Err(DnsFailure::Ledger(LedgerError::PhaseClosed))
+                ));
+                if duplicate {
+                    assert!(matches!(
+                        phase.spawn(TaskKind::DnsRoot, std::future::pending::<()>()),
+                        Err(DnsFailure::Ledger(LedgerError::PhaseClosed))
+                    ));
+                    assert_eq!(owner.lock().unwrap().fault(), Some(Fault::ProviderDenied));
+                    phase.close().unwrap();
+                    let mut cancelled = Box::pin(phase.finish());
+                    assert!(cancelled
+                        .as_mut()
+                        .poll(&mut Context::from_waker(Waker::noop()))
+                        .is_pending());
+                    drop(cancelled);
+                }
+                pause.release();
+                worker.join().unwrap();
+                assert!(slot.state().is_some());
+                assert!(phase.0.book.lock().unwrap().root_started);
+                if !duplicate {
+                    let ticket = phase.begin_io().unwrap();
+                    assert_eq!(phase.0.book.lock().unwrap().io_live, 1);
+                    drop(ticket);
+                    phase.finish().await.unwrap();
+                }
+                cleanup(&owner).await;
+                assert!(matches!(*slot.state(), Launch::ActualJoined));
+                assert_eq!(owner.lock().unwrap().used_tasks(TaskKind::DnsRoot), 0);
+                drop(sender);
+            });
+    }
 }

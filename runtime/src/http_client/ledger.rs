@@ -78,6 +78,7 @@ enum Fault {
     TaskPanic,
     UnexpectedCancel,
     PoisonedGate,
+    UnresolvedLaunch,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -120,6 +121,7 @@ struct Shared {
     senders: AtomicUsize,
     stop_admit: AtomicU8,
     stop_notify: Notify,
+    unresolved_launch: AtomicBool,
     waiters: Mutex<WaiterBook>,
     limits: Limits,
     events_tx: watch::Sender<bool>,
@@ -268,10 +270,223 @@ impl Drop for WaiterTicket {
 #[derive(Debug)]
 struct TrackedTask {
     kind: TaskKind,
-    handle: Option<JoinHandle<()>>,
+    handle: Arc<LaunchSlot>,
     root_signal: Option<Arc<RootSignal>>,
     root_fault_seen: bool,
     delivery: Option<Arc<DeliveryReceipt>>,
+}
+
+// Only polling the retained real handle Ready may produce ActualJoined.
+#[derive(Debug)]
+enum Launch<T> {
+    Starting,
+    Running(JoinHandle<T>),
+    Unresolved,
+    ActualJoined,
+}
+impl<T> Launch<T> {
+    fn as_ref(&self) -> Option<&JoinHandle<T>> {
+        if let Self::Running(handle) = self {
+            Some(handle)
+        } else {
+            None
+        }
+    }
+    fn as_mut(&mut self) -> Option<&mut JoinHandle<T>> {
+        if let Self::Running(handle) = self {
+            Some(handle)
+        } else {
+            None
+        }
+    }
+    fn is_some(&self) -> bool {
+        matches!(self, Self::Running(_))
+    }
+    fn is_none(&self) -> bool {
+        matches!(self, Self::ActualJoined)
+    }
+}
+#[derive(Debug)]
+struct LaunchIdentity {
+    key: JobKey,
+    generation: u64,
+}
+#[derive(Debug)]
+struct LaunchSlot {
+    identity: OnceLock<LaunchIdentity>,
+    state: Mutex<Launch<()>>,
+    waker: Mutex<Option<Waker>>,
+}
+impl LaunchSlot {
+    fn new() -> Self {
+        Self {
+            identity: OnceLock::new(),
+            state: Mutex::new(Launch::Starting),
+            waker: Mutex::new(None),
+        }
+    }
+    fn state(&self) -> std::sync::MutexGuard<'_, Launch<()>> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+    }
+    fn outstanding(&self) -> bool {
+        !self.state().is_none()
+    }
+    #[cfg(test)]
+    fn is_some(&self) -> bool {
+        self.state().is_some()
+    }
+    fn register(&self, cx: &Context<'_>) {
+        let mut waker = self
+            .waker
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        if !waker.as_ref().is_some_and(|old| old.will_wake(cx.waker())) {
+            *waker = Some(cx.waker().clone());
+        }
+    }
+    fn wake(&self, shared: &Shared) {
+        let waker = self
+            .waker
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .take();
+        shared.notify();
+        shared.stop_notify.notify_waiters();
+        if let Some(waker) = waker {
+            waker.wake();
+        }
+    }
+}
+// Direct slot identity survives STOP, expiry and poisoned/stale Owner lookups.
+// Each reuse allocates a fresh identity; a launch token can never target reuse.
+struct PreparedLaunch {
+    slot: Arc<LaunchSlot>,
+    root_signal: Option<Arc<RootSignal>>,
+    runtime: Result<tokio::runtime::Handle, LedgerError>,
+}
+impl PreparedLaunch {
+    fn new(kind: TaskKind) -> Self {
+        Self {
+            slot: Arc::new(LaunchSlot::new()),
+            root_signal: (kind == TaskKind::JobRoot).then(|| Arc::new(RootSignal::new())),
+            runtime: tokio::runtime::Handle::try_current().map_err(|_| LedgerError::NoRuntime),
+        }
+    }
+}
+struct StagedLaunch {
+    slot: Arc<LaunchSlot>,
+    shared: Arc<Shared>,
+    kind: TaskKind,
+    root_signal: Option<Arc<RootSignal>>,
+    runtime: tokio::runtime::Handle,
+    #[cfg(test)]
+    probe: Option<Arc<Mutex<h0_launch_probe::Inner>>>,
+}
+enum LaunchFuture<F> {
+    Root(ObservedFuture<F>),
+    Plain(F),
+}
+impl StagedLaunch {
+    fn launch<F: Future<Output = ()> + Send + 'static>(&self, waiting: F) -> bool {
+        // Prepare only the empty wrapper outside every lifecycle gate. Keep
+        // the original root/child native frame types and allocation count.
+        let future = if let Some(signal) = &self.root_signal {
+            LaunchFuture::Root(ObservedFuture {
+                inner: Some(Box::pin(waiting)),
+                root_signal: Arc::clone(signal),
+            })
+        } else {
+            LaunchFuture::Plain(waiting)
+        };
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            #[cfg(test)]
+            if self
+                .probe
+                .as_ref()
+                .is_some_and(|probe| probe.lock().unwrap().pre_bind)
+            {
+                panic!("injected pre-bind launch unwind");
+            }
+            let handle = match future {
+                LaunchFuture::Root(future) => self.runtime.spawn(future),
+                LaunchFuture::Plain(future) => self.runtime.spawn(future),
+            };
+            #[cfg(test)]
+            let handle = h0_launch_probe::after_inner_spawn(handle, self.probe.clone());
+            handle
+        }));
+        match result {
+            Ok(handle) => {
+                // No rejectable lookup, close/abort or external wake before storage.
+                let (mut state, poisoned) = match self.slot.state.lock() {
+                    Ok(state) => (state, false),
+                    Err(poison) => (poison.into_inner(), true),
+                };
+                *state = Launch::Running(handle);
+                drop(state);
+                poisoned
+            }
+            Err(payload) => {
+                *self.slot.state() = Launch::Unresolved;
+                self.shared.unresolved_launch.store(true, Ordering::Release);
+                self.shared.request_stop();
+                self.slot.wake(&self.shared);
+                std::panic::resume_unwind(payload)
+            }
+        }
+    }
+    fn publish(&self, owner: &mut Owner, poisoned: bool) -> bool {
+        let identity = self.slot.identity.get().expect("staged launch identity");
+        identity.key.seal.registered(self.kind);
+        if poisoned {
+            owner.latch_fault(Fault::PoisonedGate);
+        }
+        let stopping = owner.is_closing() || owner.fault().is_some();
+        // Debt prevents retirement, so the exact key necessarily remains.
+        let job = owner
+            .jobs
+            .iter_mut()
+            .find(|job| job.id == identity.key.id && Arc::ptr_eq(&job.seal, &identity.key.seal));
+        let cancel = if let Some(job) = job {
+            job.started = true;
+            job.cancel_requested
+                || stopping
+                || job.end.is_some_and(|end| end <= std::time::Instant::now())
+        } else {
+            return true;
+        };
+        if cancel {
+            // Storage is already authoritative. Apply the whole-job transition
+            // before the cancellation bit removes its deadline from the monitor.
+            owner
+                .request_cancel(identity.key.id)
+                .expect("retained staged job");
+        }
+        cancel
+    }
+
+    fn run<F: Future<Output = ()> + Send + 'static>(&self, owner: &Mutex<Owner>, waiting: F) {
+        let poisoned_slot = self.launch(waiting);
+        let (cancel, poisoned) = {
+            let (mut state, poisoned_owner) = match owner.lock() {
+                Ok(state) => (state, false),
+                Err(poison) => (poison.into_inner(), true),
+            };
+            let poisoned = poisoned_slot || poisoned_owner;
+            (self.publish(&mut state, poisoned), poisoned)
+        };
+        if poisoned {
+            self.shared.request_stop();
+        }
+        if cancel {
+            if let Some(handle) = self.slot.state().as_ref() {
+                handle.abort();
+            }
+        }
+        self.slot.wake(&self.shared);
+    }
 }
 
 // A returned empty-wrapper handle can join before the caller has transferred
@@ -410,12 +625,17 @@ const COMMAND_ABANDONED: u8 = 64;
 #[derive(Debug)]
 struct JobSeal {
     completion: AtomicU8,
+    stages: AtomicU8,
 }
 impl JobSeal {
     fn new() -> Self {
         Self {
             completion: AtomicU8::new(0),
+            stages: AtomicU8::new(0),
         }
+    }
+    fn staged(&self, kind: TaskKind) -> bool {
+        self.stages.load(Ordering::Acquire) & (1 << kind.index()) != 0
     }
     fn registered(&self, kind: TaskKind) {
         let bit = match kind {
@@ -449,9 +669,6 @@ impl JobSeal {
     }
     fn root_registered(&self) -> bool {
         self.completion.load(Ordering::Acquire) & ROOT_REGISTERED != 0
-    }
-    fn driver_registered(&self) -> bool {
-        self.completion.load(Ordering::Acquire) & DRIVER_REGISTERED != 0
     }
 }
 
@@ -612,11 +829,14 @@ struct Owner {
     used_queue: usize,
     used_tasks: [usize; 4],
     next_job_id: u64,
+    next_task_generation: u64,
     first_fault: Option<Fault>,
     reserved_roots: [usize; 2],
     retained_job_bytes: usize,
     job_byte_limit: usize,
     close_applied: bool,
+    #[cfg(test)]
+    h0_launch_probe: Option<Arc<Mutex<h0_launch_probe::Inner>>>,
 }
 
 impl Owner {
@@ -636,6 +856,7 @@ impl Owner {
             senders: AtomicUsize::new(1),
             stop_admit: AtomicU8::new(0),
             stop_notify: Notify::new(),
+            unresolved_launch: AtomicBool::new(false),
             waiters: Mutex::new(WaiterBook {
                 records: waiter_records,
                 bytes: 0,
@@ -658,11 +879,14 @@ impl Owner {
                 used_queue: 0,
                 used_tasks: [0; 4],
                 next_job_id: 1,
+                next_task_generation: 1,
                 first_fault: None,
                 reserved_roots: [0; 2],
                 retained_job_bytes: 0,
                 job_byte_limit: MAX_WAITER_BYTES,
                 close_applied: false,
+                #[cfg(test)]
+                h0_launch_probe: None,
             },
             sender,
         ))
@@ -709,55 +933,15 @@ impl Owner {
             .ok_or(LedgerError::UnknownJob)
     }
 
-    // Synchronous check/spawn/register with exclusive owner access; no await and
-    // no native task on denial. The rejected future is returned to the caller.
-    fn try_spawn<F: Future<Output = ()> + Send + 'static>(
-        &mut self,
-        id: u64,
-        kind: TaskKind,
-        future: F,
-    ) -> Result<(), (LedgerError, F)> {
-        self.try_spawn_impl(id, kind, future, false)
-    }
-
-    // The gate-free caller retains delivery until this registration returns.
-    fn try_spawn_delivery<F, G: Future<Output = ()> + Send + 'static>(
-        &mut self,
-        id: u64,
-        kind: TaskKind,
-        waiting: G,
-        delivery: &GateFreeFuture<F>,
-        accepted_entry: bool,
-    ) -> Result<(), (LedgerError, G)> {
-        self.try_spawn_record(
-            id,
-            kind,
-            waiting,
-            accepted_entry,
-            Some(Arc::clone(&delivery.receipt)),
-        )
-    }
-
-    // accepted_entry is true only for the branded port after winning the
-    // OPEN -> BUSY CAS. A later STOP cannot revoke that winning primitive.
-    fn try_spawn_impl<F: Future<Output = ()> + Send + 'static>(
-        &mut self,
-        id: u64,
-        kind: TaskKind,
-        future: F,
-        accepted_entry: bool,
-    ) -> Result<(), (LedgerError, F)> {
-        self.try_spawn_record(id, kind, future, accepted_entry, None)
-    }
-
-    fn try_spawn_record<F: Future<Output = ()> + Send + 'static>(
+    fn stage<F>(
         &mut self,
         id: u64,
         kind: TaskKind,
         future: F,
         accepted_entry: bool,
         delivery: Option<Arc<DeliveryReceipt>>,
-    ) -> Result<(), (LedgerError, F)> {
+        prepared: PreparedLaunch,
+    ) -> Result<(StagedLaunch, F), (LedgerError, F)> {
         if !accepted_entry && self.is_closing() {
             return Err((LedgerError::Closing, future));
         }
@@ -797,7 +981,7 @@ impl Owner {
         let reusable = self.jobs[index]
             .tasks
             .iter()
-            .position(|task| task.handle.is_none());
+            .position(|task| !task.handle.outstanding());
         if reusable.is_none() {
             let max_records = self.limits.job_roots
                 + self.limits.dns_roots
@@ -810,28 +994,36 @@ impl Owner {
                 return Err((LedgerError::Allocation, future));
             }
         }
-        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
-            return Err((LedgerError::NoRuntime, future));
+
+        let runtime = match prepared.runtime {
+            Ok(runtime) => runtime,
+            Err(error) => return Err((error, future)),
         };
+        let Some(next_generation) = self.next_task_generation.checked_add(1) else {
+            return Err((LedgerError::Capacity, future));
+        };
+        prepared
+            .slot
+            .identity
+            .set(LaunchIdentity {
+                key: JobKey {
+                    id,
+                    seal: Arc::clone(&self.jobs[index].seal),
+                },
+                generation: self.next_task_generation,
+            })
+            .expect("one immutable launch identity");
+        self.next_task_generation = next_generation;
         if let Some(receipt) = &delivery {
             receipt
                 .shared
                 .set(Arc::clone(&self.shared))
                 .expect("one delivery registration");
         }
-        let root_signal = (kind == TaskKind::JobRoot).then(|| Arc::new(RootSignal::new()));
-        let handle = if let Some(signal) = &root_signal {
-            runtime.spawn(ObservedFuture {
-                inner: Some(Box::pin(future)),
-                root_signal: Arc::clone(signal),
-            })
-        } else {
-            runtime.spawn(future)
-        };
         let tracked = TrackedTask {
             kind,
-            handle: Some(handle),
-            root_signal,
+            handle: Arc::clone(&prepared.slot),
+            root_signal: prepared.root_signal.clone(),
             root_fault_seen: false,
             delivery,
         };
@@ -844,10 +1036,70 @@ impl Owner {
             self.jobs[index].reserved_roots[kind.index()] = false;
             self.reserved_roots[kind.index()] -= 1;
         }
-        self.jobs[index].started = true; // actual handle is stored under this gate
-        self.jobs[index].seal.registered(kind);
         self.used_tasks[kind.index()] += 1;
-        self.shared.notify();
+        self.jobs[index]
+            .seal
+            .stages
+            .fetch_or(1 << kind.index(), Ordering::Release);
+        Ok((
+            StagedLaunch {
+                slot: prepared.slot,
+                root_signal: prepared.root_signal,
+                runtime,
+                shared: Arc::clone(&self.shared),
+                kind,
+                #[cfg(test)]
+                probe: self.h0_launch_probe.take(),
+            },
+            future,
+        ))
+    }
+    // Legacy bare-owner fixtures exercise the same slot transitions. Production
+    // stages under its gates and invokes StagedLaunch::run after releasing them.
+    #[cfg(test)]
+    fn try_spawn<F: Future<Output = ()> + Send + 'static>(
+        &mut self,
+        id: u64,
+        kind: TaskKind,
+        future: F,
+    ) -> Result<(), (LedgerError, F)> {
+        self.try_spawn_record(id, kind, future, false, None)
+    }
+    #[cfg(test)]
+    fn try_spawn_delivery<F, G: Future<Output = ()> + Send + 'static>(
+        &mut self,
+        id: u64,
+        kind: TaskKind,
+        waiting: G,
+        delivery: &GateFreeFuture<F>,
+        accepted_entry: bool,
+    ) -> Result<(), (LedgerError, G)> {
+        self.try_spawn_record(
+            id,
+            kind,
+            waiting,
+            accepted_entry,
+            Some(Arc::clone(&delivery.receipt)),
+        )
+    }
+    #[cfg(test)]
+    fn try_spawn_record<F: Future<Output = ()> + Send + 'static>(
+        &mut self,
+        id: u64,
+        kind: TaskKind,
+        future: F,
+        accepted_entry: bool,
+        delivery: Option<Arc<DeliveryReceipt>>,
+    ) -> Result<(), (LedgerError, F)> {
+        let prepared = PreparedLaunch::new(kind);
+        let (launch, waiting) = self.stage(id, kind, future, accepted_entry, delivery, prepared)?;
+        let poisoned = launch.launch(waiting);
+        if launch.publish(self, poisoned) {
+            if let Some(handle) = launch.slot.state().as_ref() {
+                handle.abort();
+            }
+        }
+        launch.slot.wake(&launch.shared);
         Ok(())
     }
 
@@ -860,7 +1112,7 @@ impl Owner {
         job.cancel_requested = true;
         job.queued = None;
         for task in &mut job.tasks {
-            if let Some(handle) = task.handle.as_ref() {
+            if let Some(handle) = task.handle.state().as_ref() {
                 handle.abort();
             }
         }
@@ -921,7 +1173,7 @@ impl Owner {
                 && job
                     .tasks
                     .iter()
-                    .any(|task| task.handle.is_some() && (!dns_only || task.kind.dns()))
+                    .any(|task| task.handle.outstanding() && (!dns_only || task.kind.dns()))
         }) {
             let joined = std::future::poll_fn(|cx| {
                 for (job_index, job) in self.jobs.iter_mut().enumerate() {
@@ -930,7 +1182,10 @@ impl Owner {
                     }
                     if dns_only {
                         for (task_index, task) in job.tasks.iter().enumerate() {
-                            if task.kind == TaskKind::JobRoot && !task.root_fault_seen {
+                            if task.kind == TaskKind::JobRoot
+                                && !task.root_fault_seen
+                                && task.handle.state().is_some()
+                            {
                                 if let Some(signal) = &task.root_signal {
                                     signal.register(cx);
                                     if let Some(fault) = signal.terminal_fault() {
@@ -946,10 +1201,11 @@ impl Owner {
                         if dns_only && !task.kind.dns() {
                             continue;
                         }
+                        task.handle.register(cx);
                         if !task.delivery_ready(cx) {
                             continue;
                         }
-                        if let Some(handle) = task.handle.as_mut() {
+                        if let Some(handle) = task.handle.state().as_mut() {
                             if let Poll::Ready(result) = Pin::new(handle).poll(cx) {
                                 return Poll::Ready(Joined::Task(job_index, task_index, result));
                             }
@@ -966,7 +1222,7 @@ impl Owner {
                 continue;
             };
             let kind = self.jobs[job_index].tasks[task_index].kind;
-            self.jobs[job_index].tasks[task_index].handle = None;
+            *self.jobs[job_index].tasks[task_index].handle.state() = Launch::ActualJoined;
             self.jobs[job_index].seal.joined(kind);
             self.used_tasks[kind.index()] -= 1;
             if let Err(join_error) = result {
@@ -979,7 +1235,7 @@ impl Owner {
                 if join_error.is_panic() || unexpected {
                     self.jobs[job_index].cancel_requested = true;
                     for sibling in &self.jobs[job_index].tasks {
-                        if let Some(handle) = sibling.handle.as_ref() {
+                        if let Some(handle) = sibling.handle.state().as_ref() {
                             handle.abort();
                         }
                     }
@@ -999,7 +1255,7 @@ impl Owner {
             self.latch_fault(fault);
             self.jobs[job_index].cancel_requested = true;
             for sibling in &self.jobs[job_index].tasks {
-                if let Some(handle) = sibling.handle.as_ref() {
+                if let Some(handle) = sibling.handle.state().as_ref() {
                     handle.abort();
                 }
             }
@@ -1012,7 +1268,10 @@ impl Owner {
         };
         for task_index in 0..self.jobs[job_index].tasks.len() {
             let task = &self.jobs[job_index].tasks[task_index];
-            if task.kind == TaskKind::JobRoot && !task.root_fault_seen {
+            if task.kind == TaskKind::JobRoot
+                && !task.root_fault_seen
+                && task.handle.state().is_some()
+            {
                 if let Some(fault) = task
                     .root_signal
                     .as_ref()
@@ -1034,7 +1293,7 @@ impl Owner {
             job.cancel_requested = true;
             job.queued = None;
             for task in &job.tasks {
-                if let Some(handle) = task.handle.as_ref() {
+                if let Some(handle) = task.handle.state().as_ref() {
                     handle.abort();
                 }
             }
@@ -1109,7 +1368,11 @@ impl Owner {
                             .delivery
                             .as_ref()
                             .is_none_or(|receipt| receipt.is_settled())
-                        && task.handle.as_ref().is_some_and(JoinHandle::is_finished)
+                        && task
+                            .handle
+                            .state()
+                            .as_ref()
+                            .is_some_and(JoinHandle::is_finished)
                 })
             })
     }
@@ -1120,7 +1383,12 @@ impl Owner {
         self.first_fault.get_or_insert(fault);
     }
     fn fault(&self) -> Option<Fault> {
-        self.first_fault
+        self.first_fault.or_else(|| {
+            self.shared
+                .unresolved_launch
+                .load(Ordering::Acquire)
+                .then_some(Fault::UnresolvedLaunch)
+        })
     }
 }
 
@@ -1130,7 +1398,7 @@ impl Owner {
     fn release_finished_jobs(&mut self) {
         for index in (0..self.jobs.len()).rev() {
             let job = &self.jobs[index];
-            if job.tasks.iter().any(|task| task.handle.is_some())
+            if job.tasks.iter().any(|task| task.handle.outstanding())
                 || job.seal.command_retained()
                 || (!job.cancel_requested && (!job.started || job.queued.is_some()))
             {
@@ -1151,6 +1419,9 @@ impl Owner {
     // The parent monitor polls stored Tokio joins, never an inner native future.
     // It may be cancelled; the same records and handles remain parent-retained.
     fn poll_parent(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        if self.shared.unresolved_launch.load(Ordering::Acquire) {
+            self.latch_fault(Fault::UnresolvedLaunch);
+        }
         if self.is_closing() {
             self.close();
         }
@@ -1173,9 +1444,11 @@ impl Owner {
                 if !task.delivery_ready(cx) {
                     continue;
                 }
-                if let Some(handle) = &mut task.handle {
+                task.handle.register(cx);
+                let mut launch_state = task.handle.state();
+                if let Some(handle) = launch_state.as_mut() {
                     if let Poll::Ready(result) = Pin::new(handle).poll(cx) {
-                        task.handle = None;
+                        *launch_state = Launch::ActualJoined;
                         job.seal.joined(task.kind);
                         self.used_tasks[task.kind.index()] -= 1;
                         if let Err(error) = result {
@@ -1217,7 +1490,7 @@ impl Drop for Owner {
         self.shared.request_stop();
         for job in &self.jobs {
             for task in &job.tasks {
-                if let Some(handle) = task.handle.as_ref() {
+                if let Some(handle) = task.handle.state().as_ref() {
                     handle.abort();
                 }
             }
@@ -1228,6 +1501,10 @@ impl Drop for Owner {
 #[cfg(test)]
 #[path = "ledger_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "h0_launch_probe.rs"]
+mod h0_launch_probe;
 
 // Only a retained ParentDrain can offer production registration. The ledger
 // constructor itself and the queue/command factories are not exported.

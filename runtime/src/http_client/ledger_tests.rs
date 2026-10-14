@@ -320,6 +320,8 @@ fn sf06_receipt_tracks_exact_reused_task_slot() {
             owner.try_spawn(id, TaskKind::DnsChild, async {}),
             Err((LedgerError::Capacity, _))
         );
+        let old_slot = Arc::clone(&owner.jobs[0].tasks[1].handle);
+        let old_generation = old_slot.identity.get().unwrap().generation;
         let first_delivered = first.finish(registered).is_ok();
         owner.join_matching(Some(id), true).await;
         let (second, waiting) = GateFreeFuture::new(async {});
@@ -327,6 +329,10 @@ fn sf06_receipt_tracks_exact_reused_task_slot() {
         let registered = owner
             .try_spawn_delivery(id, TaskKind::DnsChild, waiting, &second, false)
             .map_err(|(error, _)| error);
+        let current_slot = &owner.jobs[0].tasks[1].handle;
+        assert!(!Arc::ptr_eq(&old_slot, current_slot));
+        assert!(current_slot.identity.get().unwrap().generation > old_generation);
+        assert_eq!(current_slot.identity.get().unwrap().key.id, id);
         old_receipt.settle();
         let _ = owner.poll_parent(&mut Context::from_waker(Waker::noop()));
         let before = (
@@ -630,6 +636,7 @@ fn dns_drain_observes_unexpected_job_root_cancel_while_dns_child_is_pending() {
             .find(|task| task.kind == TaskKind::JobRoot)
             .unwrap()
             .handle
+            .state()
             .as_ref()
             .unwrap()
             .abort_handle();
@@ -846,4 +853,86 @@ fn finite_limits_and_sender_cap_are_checked() {
     drop(second);
     drop(sender);
     assert!(owner.is_closing());
+}
+
+#[test]
+fn sf06_h0_launch_publication_wakes_independent_waiters_and_retains_receipt() {
+    let live = runtime();
+    let closed_runtime = runtime();
+    let closed = closed_runtime.handle().clone();
+    drop(closed_runtime);
+    let (mut owner, sender) = Owner::checked(limits()).unwrap();
+    let job = owner.fixture_admit().unwrap();
+    let (delivery, waiting) = GateFreeFuture::new(pending::<()>());
+    let (launch, waiting) = {
+        let _entered = closed.enter();
+        owner
+            .stage(
+                job,
+                TaskKind::JobRoot,
+                waiting,
+                false,
+                Some(Arc::clone(&delivery.receipt)),
+                PreparedLaunch::new(TaskKind::JobRoot),
+            )
+            .unwrap_or_else(|_| panic!("stage fixture"))
+    };
+    let owner = Arc::new(Mutex::new(owner));
+    let counters: Vec<_> = (0..4)
+        .map(|_| Arc::new(DeliveryWakeCounter(AtomicUsize::new(0))))
+        .collect();
+    let wakers: Vec<_> = counters
+        .iter()
+        .map(|counter| Waker::from(Arc::clone(counter)))
+        .collect();
+    let mut events_a = launch.shared.events_tx.subscribe();
+    let mut events_b = launch.shared.events_tx.subscribe();
+    let mut watch_a = Box::pin(events_a.changed());
+    let mut watch_b = Box::pin(events_b.changed());
+    let mut stopped = Box::pin(launch.shared.stop_notify.notified());
+    stopped.as_mut().enable();
+    assert!(watch_a
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[0]))
+        .is_pending());
+    assert!(watch_b
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[1]))
+        .is_pending());
+    assert!(stopped
+        .as_mut()
+        .poll(&mut Context::from_waker(&wakers[2]))
+        .is_pending());
+    launch.slot.register(&Context::from_waker(Waker::noop()));
+    launch.slot.register(&Context::from_waker(&wakers[3]));
+    launch.run(&owner, waiting);
+    assert!(counters
+        .iter()
+        .all(|counter| counter.0.load(Ordering::SeqCst) > 0));
+    assert!(matches!(*launch.slot.state(), Launch::Running(_)));
+    assert!(!delivery.receipt.is_settled());
+    {
+        let mut owner = owner.lock().unwrap();
+        owner.close();
+        assert!(owner
+            .poll_parent(&mut Context::from_waker(Waker::noop()))
+            .is_pending());
+        assert_eq!(owner.used_tasks(TaskKind::JobRoot), 1);
+    }
+    // A cancelled waiter and its replacement retain the exact receipt debt.
+    let mut draining = Box::pin(std::future::poll_fn(|cx| {
+        owner.lock().unwrap().poll_parent(cx)
+    }));
+    assert!(draining
+        .as_mut()
+        .poll(&mut Context::from_waker(Waker::noop()))
+        .is_pending());
+    drop(draining);
+    assert!(delivery.finish(Ok(())).is_ok());
+    live.block_on(std::future::poll_fn(|cx| {
+        owner.lock().unwrap().poll_parent(cx)
+    }));
+    assert!(matches!(*launch.slot.state(), Launch::ActualJoined));
+    assert_eq!(owner.lock().unwrap().used_jobs(), 0);
+    drop(sender);
 }

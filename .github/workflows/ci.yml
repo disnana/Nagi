@@ -106,7 +106,7 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 106, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 29, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 115, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
@@ -182,6 +182,23 @@ jobs:
               raise AssertionError("SF06 new lifecycle/DNS test names missing or unsuccessful")
           if not required_delivery.issubset(passed_ledger):
               raise AssertionError("SF06 returned-handle delivery test names missing or unsuccessful")
+          required_h0 = {
+              'http_client::ledger::admission::tests::sf06_h0_expired_driver_publication_autonomously_joins_existing_siblings',
+              'http_client::ledger::admission::tests::sf06_h0_paused_driver_return_rejects_duplicate_without_registered_authority',
+              'http_client::ledger::admission::tests::sf06_h0_paused_root_return_preserves_stage_through_stop_expiry_and_poison',
+              'http_client::ledger::admission::tests::sf06_h0_pre_bind_unwind_retains_debt_and_original_payload',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_inner_unwind_retains_debt_and_reaps_known_client_fault',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_outer_unwind_cannot_retire_monitor_record_as_joined',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_unresolved_outer_drains_known_inner_without_retiring',
+              'http_client::ledger::tests::sf06_h0_launch_publication_wakes_independent_waiters_and_retains_receipt',
+              'http_client::ledger::tracked_dns::tests::sf06_h0_paused_dns_root_retains_quota_without_io_authority',
+          }
+          passed_h0 = re.findall(
+              r"(?m)^test ([a-z0-9_:]*::sf06_h0_[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          )
+          if set(passed_h0) != required_h0 or len(passed_h0) != len(required_h0):
+              raise AssertionError("SF06 H0 test names missing, duplicated, or unsuccessful")
           PY_SUMMARY
       - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
         shell: bash
@@ -480,7 +497,7 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 106, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 29, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 115, "sf06-private-transport.log": 71, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
@@ -556,6 +573,23 @@ jobs:
               raise AssertionError("SF06 new lifecycle/DNS test names missing or unsuccessful")
           if not required_delivery.issubset(passed_ledger):
               raise AssertionError("SF06 returned-handle delivery test names missing or unsuccessful")
+          required_h0 = {
+              'http_client::ledger::admission::tests::sf06_h0_expired_driver_publication_autonomously_joins_existing_siblings',
+              'http_client::ledger::admission::tests::sf06_h0_paused_driver_return_rejects_duplicate_without_registered_authority',
+              'http_client::ledger::admission::tests::sf06_h0_paused_root_return_preserves_stage_through_stop_expiry_and_poison',
+              'http_client::ledger::admission::tests::sf06_h0_pre_bind_unwind_retains_debt_and_original_payload',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_inner_unwind_retains_debt_and_reaps_known_client_fault',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_outer_unwind_cannot_retire_monitor_record_as_joined',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_unresolved_outer_drains_known_inner_without_retiring',
+              'http_client::ledger::tests::sf06_h0_launch_publication_wakes_independent_waiters_and_retains_receipt',
+              'http_client::ledger::tracked_dns::tests::sf06_h0_paused_dns_root_retains_quota_without_io_authority',
+          }
+          passed_h0 = re.findall(
+              r"(?m)^test ([a-z0-9_:]*::sf06_h0_[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          )
+          if set(passed_h0) != required_h0 or len(passed_h0) != len(required_h0):
+              raise AssertionError("SF06 H0 test names missing, duplicated, or unsuccessful")
           PY_SUMMARY
       - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
         shell: bash

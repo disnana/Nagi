@@ -17,12 +17,13 @@ enum ParentFault {
     MonitorPanic,
     UnexpectedMonitorCancel,
     Inner(Fault),
+    UnresolvedLaunch,
 }
 pub(super) struct DrainRecord {
     pub(super) id: u64,
     pub(super) owner: Arc<Mutex<Owner>>,
     shared: Arc<Shared>,
-    pub(super) monitor: Option<JoinHandle<Option<Fault>>>,
+    pub(super) monitor: Launch<Option<Fault>>,
     monitor_cancel_requested: bool,
     monitor_fault: Option<ParentFault>,
 }
@@ -32,6 +33,8 @@ pub(crate) struct ParentDrain {
     next_id: u64,
     closing: bool,
     first_fault: Option<ParentFault>,
+    #[cfg(test)]
+    h0_launch_probe: Option<Arc<Mutex<h0_launch_probe::Outer>>>,
 }
 
 // Runner authority is the admitted JobKey, not this non-counted owner handle.
@@ -102,6 +105,8 @@ impl ParentDrain {
             next_id: 1,
             closing: false,
             first_fault: None,
+            #[cfg(test)]
+            h0_launch_probe: None,
         })
     }
     pub(crate) fn register(
@@ -131,13 +136,31 @@ impl ParentDrain {
             id,
             owner: Arc::clone(&retained),
             shared: Arc::clone(&sender.shared),
-            monitor: None,
+            monitor: Launch::Starting,
             monitor_cancel_requested: false,
             monitor_fault: None,
         });
         self.next_id = next;
-        let task = runtime.spawn(monitor(retained, Arc::clone(&sender.shared), events));
-        self.records.last_mut().expect("registered record").monitor = Some(task);
+        let future = monitor(Arc::clone(&retained), Arc::clone(&sender.shared), events);
+        let launched = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let task = runtime.spawn(future);
+            #[cfg(test)]
+            let task =
+                h0_launch_probe::after_outer_spawn(task, self.h0_launch_probe.take(), &retained);
+            task
+        }));
+        match launched {
+            Ok(task) => {
+                self.records.last_mut().expect("registered record").monitor = Launch::Running(task)
+            }
+            Err(payload) => {
+                self.records.last_mut().expect("registered record").monitor = Launch::Unresolved;
+                self.first_fault
+                    .get_or_insert(ParentFault::UnresolvedLaunch);
+                self.request_close_all();
+                std::panic::resume_unwind(payload)
+            }
+        }
         Ok((id, sender))
     }
     pub(super) fn runner_owner(&self, id: u64) -> Result<RunnerOwnerHandle, ParentError> {
@@ -168,7 +191,7 @@ impl ParentDrain {
         index: usize,
         result: Result<Option<Fault>, tokio::task::JoinError>,
     ) {
-        self.records[index].monitor = None;
+        self.records[index].monitor = Launch::ActualJoined;
         let fault = match result {
             Ok(Some(fault)) => Some(ParentFault::Inner(fault)),
             Ok(None) => None,
@@ -184,65 +207,102 @@ impl ParentDrain {
             self.request_close_all();
         }
     }
-    async fn finish_record(&mut self, index: usize) {
-        // The monitor may already be gone while a caller still owns a popped
-        // Command. Subscribe before polling so its Drop cannot strand fallback.
-        let owner = Arc::clone(&self.records[index].owner);
-        let shared = Arc::clone(&self.records[index].shared);
-        lock_owner(&owner).close();
-        loop {
-            let stopped = shared.stop_notify.notified();
-            tokio::pin!(stopped);
-            stopped.as_mut().enable();
-            tokio::select! {
-                _ = std::future::poll_fn(|cx| lock_owner(&owner).poll_parent(cx)) => break,
-                _ = stopped => {}
-            }
-        }
-        if let Some(fault) = lock_owner(&self.records[index].owner).fault() {
-            self.first_fault.get_or_insert(ParentFault::Inner(fault));
-            self.closing = true;
-        }
-        if self.closing {
-            self.request_close_all();
-        }
-        self.records.swap_remove(index); // both actual join layers have completed
-    }
-    pub(crate) async fn drain_client(&mut self, id: u64) -> Result<(), ParentError> {
-        let index = self.index(id)?;
-        if let Some(handle) = &mut self.records[index].monitor {
-            let result = handle.await;
-            self.observe_outer(index, result);
-        }
-        self.finish_record(index).await;
-        Ok(())
-    }
-    // A trusted parent drives this bounded event loop. It scans all monitor
-    // joins rather than awaiting the oldest healthy client and hiding a fault.
-    pub(crate) async fn reap_next(&mut self) -> Option<u64> {
+    // Scan every retained record in each poll. An unresolved launch retains
+    // capacity, but must never hide another client's known join or fault.
+    async fn reap_matching(&mut self, only: Option<u64>) -> Option<u64> {
         if self.records.is_empty() {
             return None;
         }
-        let joined = std::future::poll_fn(|cx| {
-            for (index, record) in self.records.iter_mut().enumerate() {
-                if let Some(handle) = &mut record.monitor {
-                    if let Poll::Ready(result) = Pin::new(handle).poll(cx) {
-                        return Poll::Ready((index, result));
-                    }
-                } else {
-                    return Poll::Ready((index, Ok(None)));
-                }
+        let shared: Vec<_> = self
+            .records
+            .iter()
+            .map(|record| Arc::clone(&record.shared))
+            .collect();
+        let mut events: Vec<_> = shared
+            .iter()
+            .map(|shared| shared.events_tx.subscribe())
+            .collect();
+        loop {
+            let mut stopped: Vec<_> = shared
+                .iter()
+                .map(|shared| Box::pin(shared.stop_notify.notified()))
+                .collect();
+            for notification in &mut stopped {
+                notification.as_mut().enable();
             }
-            Poll::Pending
-        })
-        .await;
-        let id = self.records[joined.0].id;
-        // A prior cancelled drain may already have observed this monitor join.
-        if self.records[joined.0].monitor.is_some() {
-            self.observe_outer(joined.0, joined.1);
+            let mut changed: Vec<_> = events
+                .iter_mut()
+                .map(|events| Box::pin(events.changed()))
+                .collect();
+            let joined = std::future::poll_fn(|cx| {
+                // Register broadcast wake channels before checking the records.
+                let mut notified = false;
+                for notification in &mut stopped {
+                    notified |= notification.as_mut().poll(cx).is_ready();
+                }
+                for notification in &mut changed {
+                    notified |= notification.as_mut().poll(cx).is_ready();
+                }
+                let mut completed = None;
+                for index in 0..self.records.len() {
+                    if let Some(fault) = lock_owner(&self.records[index].owner).fault() {
+                        self.first_fault.get_or_insert(ParentFault::Inner(fault));
+                        self.closing = true;
+                    }
+                    let result = self.records[index].monitor.as_mut().and_then(|handle| {
+                        if let Poll::Ready(result) = Pin::new(handle).poll(cx) {
+                            Some(result)
+                        } else {
+                            None
+                        }
+                    });
+                    if let Some(result) = result {
+                        self.observe_outer(index, result);
+                    }
+                    // A known joined or uncertain monitor cannot drive the ledger
+                    // reliably. Fallback still observes every known inner handle.
+                    if !self.records[index].monitor.is_some() {
+                        let inner_done = {
+                            let mut owner = lock_owner(&self.records[index].owner);
+                            let done = owner.poll_parent(cx).is_ready();
+                            if let Some(fault) = owner.fault() {
+                                self.first_fault.get_or_insert(ParentFault::Inner(fault));
+                                self.closing = true;
+                            }
+                            done
+                        };
+                        if inner_done
+                            && self.records[index].monitor.is_none()
+                            && only.is_none_or(|id| id == self.records[index].id)
+                        {
+                            completed.get_or_insert(index);
+                        }
+                    }
+                }
+                if self.closing {
+                    self.request_close_all();
+                }
+                if let Some(index) = completed {
+                    Poll::Ready(Some(index))
+                } else if notified {
+                    Poll::Ready(None)
+                } else {
+                    Poll::Pending
+                }
+            })
+            .await;
+            if let Some(index) = joined {
+                return Some(self.records.swap_remove(index).id);
+            }
         }
-        self.finish_record(joined.0).await;
-        Some(id)
+    }
+    pub(crate) async fn drain_client(&mut self, id: u64) -> Result<(), ParentError> {
+        self.index(id)?;
+        self.reap_matching(Some(id)).await;
+        Ok(())
+    }
+    pub(crate) async fn reap_next(&mut self) -> Option<u64> {
+        self.reap_matching(None).await
     }
     pub(crate) async fn shutdown(&mut self) {
         self.request_close_all();
@@ -344,7 +404,12 @@ mod fallback_lost_wake_tests {
             .tasks
             .iter()
             .find(|task| task.kind == TaskKind::JobRoot)
-            .is_none_or(|task| task.handle.as_ref().is_none_or(JoinHandle::is_finished))
+            .is_none_or(|task| {
+                task.handle
+                    .state()
+                    .as_ref()
+                    .is_none_or(JoinHandle::is_finished)
+            })
         {
             tokio::task::yield_now().await;
         }
@@ -514,5 +579,215 @@ mod fallback_lost_wake_tests {
             .build()
             .unwrap()
             .block_on(fallback_after_outer_join(true));
+    }
+
+    // Teardown observes every known real native handle without asking the SUT
+    // to discharge an unknown launch. Escrow joins never acknowledge SUT debt.
+    async fn h0_fixture_drain_known(parent: &mut ParentDrain) -> usize {
+        parent.request_close_all();
+        for index in 0..parent.records.len() {
+            if let Some(handle) = parent.records[index].monitor.as_mut() {
+                handle.abort();
+                let result = handle.await;
+                parent.observe_outer(index, result);
+            }
+        }
+        for record in &parent.records {
+            std::future::poll_fn(|cx| {
+                let mut owner = lock_owner(&record.owner);
+                let _ = owner.poll_parent(cx);
+                if owner
+                    .jobs
+                    .iter()
+                    .flat_map(|job| &job.tasks)
+                    .any(|task| task.handle.is_some())
+                {
+                    Poll::Pending
+                } else {
+                    Poll::Ready(())
+                }
+            })
+            .await;
+        }
+        parent
+            .records
+            .iter()
+            .filter(|record| record.monitor.is_some())
+            .count()
+    }
+
+    #[test]
+    fn sf06_h0_inner_unwind_retains_debt_and_reaps_known_client_fault() {
+        struct Original {
+            owner: Arc<Mutex<Owner>>,
+            polls: Arc<AtomicUsize>,
+            drops: Arc<AtomicUsize>,
+            outside: Arc<AtomicBool>,
+        }
+        impl Future for Original {
+            type Output = ();
+            fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+                self.polls.fetch_add(1, Ordering::SeqCst);
+                Poll::Pending
+            }
+        }
+        impl Drop for Original {
+            fn drop(&mut self) {
+                self.outside.store(
+                    !matches!(
+                        self.owner.try_lock(),
+                        Err(std::sync::TryLockError::WouldBlock)
+                    ),
+                    Ordering::SeqCst,
+                );
+                self.drops.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
+            let mut parent = ParentDrain::new(2).unwrap();
+            let (first, sender_a) = parent.register(limits(), 16).unwrap();
+            let owner_a = Arc::clone(&parent.records[0].owner);
+            let (job, seal) = {
+                let mut owner = lock_owner(&owner_a);
+                let job = owner.fixture_admit().unwrap();
+                (job, Arc::clone(&owner.jobs[0].seal))
+            };
+            let probe = Arc::new(Mutex::new(h0_launch_probe::Inner::default()));
+            lock_owner(&owner_a).h0_launch_probe = Some(Arc::clone(&probe));
+            let polls = Arc::new(AtomicUsize::new(0));
+            let drops = Arc::new(AtomicUsize::new(0));
+            let outside = Arc::new(AtomicBool::new(false));
+            let (delivery, waiting) = GateFreeFuture::new(Original { owner: Arc::clone(&owner_a), polls: Arc::clone(&polls), drops: Arc::clone(&drops), outside: Arc::clone(&outside) });
+            // Native injection after real Tokio spawn, not a stock Tokio fault.
+            let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let registered = owner_a.lock().unwrap().try_spawn_delivery(job, TaskKind::HttpDriver, waiting, &delivery, false).map_err(|(error, _)| error);
+                drop(delivery.finish(registered));
+            })).is_err();
+            let escrow = probe.lock().unwrap().handle.take();
+            let had_real_handle = escrow.is_some();
+
+            // A distinct client has a known actual monitor and native fault.
+            // Unknown launch in first's fallback must not hide this client's join.
+            let (second, sender_b) = parent.register(limits(), 16).unwrap();
+            let owner_b = Arc::clone(&parent.records[1].owner);
+            {
+                let mut owner = lock_owner(&owner_b);
+                let job_b = owner.fixture_admit().unwrap();
+                let registered = owner.try_spawn(job_b, TaskKind::JobRoot, async { panic!("known second-client native fault fixture"); });
+                if let Err((error, future)) = registered { drop(future); panic!("known native fixture registration: {error:?}"); }
+            }
+            while !parent.records[1].monitor.as_ref().unwrap().is_finished() { tokio::task::yield_now().await; }
+            parent.records[0].monitor.as_ref().unwrap().abort();
+            let result = parent.records[0].monitor.as_mut().unwrap().await;
+            parent.observe_outer(0, result);
+            let before = {
+                let mut owner = lock_owner(&owner_a);
+                let pending = owner.poll_parent(&mut Context::from_waker(Waker::noop())).is_pending();
+                (pending, owner.used_tasks(TaskKind::HttpDriver), owner.used_jobs(), seal.completion.load(Ordering::Acquire) & DRIVER_ACTUAL_JOINED)
+            };
+            let known_fault = lock_owner(&owner_b).fault();
+            let wake = Arc::new(WakeCounter(AtomicUsize::new(0)));
+            let waker = Waker::from(Arc::clone(&wake));
+            let mut reaping = Box::pin(parent.reap_next());
+            let next = reaping.as_mut().poll(&mut Context::from_waker(&waker));
+            drop(reaping);
+            let first_retained = parent.records.iter().any(|record| record.id == first);
+
+            // Finish physical native teardown before any oracle assertions.
+            let escrow_joined = if let Some(handle) = escrow { handle.abort(); let _ = handle.await; true } else { false };
+            let known_left = h0_fixture_drain_known(&mut parent).await;
+            drop(parent);
+            drop(sender_a);
+            drop(sender_b);
+            eprintln!("H0 injected inner: before={before:?} next={next:?} first_retained={first_retained} known_fault={known_fault:?}; teardown escrow_joined={escrow_joined} known_monitor_handles_left={known_left} original_drops={}", drops.load(Ordering::SeqCst));
+            assert!(panicked && had_real_handle && escrow_joined);
+            assert_eq!(known_left, 0);
+            assert_eq!(polls.load(Ordering::SeqCst), 0);
+            assert_eq!(drops.load(Ordering::SeqCst), 1);
+            assert!(outside.load(Ordering::SeqCst));
+            assert_eq!(known_fault, Some(Fault::TaskPanic));
+            assert_eq!(before, (true, 1, 1, 0), "unknown inner launch must retain bounded quota/job and cannot prove join");
+            assert_eq!(next, Poll::Ready(Some(second)), "unresolved first-client fallback must not hide known second-client actual join/fault");
+            assert!(first_retained);
+        });
+    }
+
+    #[test]
+    fn sf06_h0_outer_unwind_cannot_retire_monitor_record_as_joined() {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
+            let mut parent = ParentDrain::new(1).unwrap();
+            let probe = Arc::new(Mutex::new(h0_launch_probe::Outer::default()));
+            parent.h0_launch_probe = Some(Arc::clone(&probe));
+            // Native injection after real Tokio spawn, not a stock Tokio fault.
+            let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(parent.register(limits(), 16)))).is_err();
+            let escrow = probe.lock().unwrap().handle.take();
+            let had_real_handle = escrow.is_some();
+            let owner = Arc::clone(&parent.records[0].owner);
+            let wake = Arc::new(WakeCounter(AtomicUsize::new(0)));
+            let waker = Waker::from(Arc::clone(&wake));
+            let mut shutdown = Box::pin(parent.shutdown());
+            let pending = shutdown.as_mut().poll(&mut Context::from_waker(&waker)).is_pending();
+            drop(shutdown);
+            let before = (pending, parent.records.len(), lock_owner(&owner).used_jobs());
+            // Finish physical native teardown before any oracle assertions.
+            let escrow_joined = if let Some(handle) = escrow { handle.abort(); let _ = handle.await; true } else { false };
+            let known_left = h0_fixture_drain_known(&mut parent).await;
+            drop(parent);
+            eprintln!("H0 injected outer: before={before:?}; teardown escrow_joined={escrow_joined} known_monitor_handles_left={known_left}");
+            assert!(panicked && had_real_handle && escrow_joined);
+            assert_eq!(known_left, 0);
+            assert_eq!(before, (true, 1, 0), "unknown outer launch is not an observed monitor join");
+        });
+    }
+    #[test]
+    fn sf06_h0_unresolved_outer_drains_known_inner_without_retiring() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let mut parent = ParentDrain::new(1).unwrap();
+                let probe = Arc::new(Mutex::new(h0_launch_probe::Outer {
+                    populate_inner: true,
+                    ..Default::default()
+                }));
+                parent.h0_launch_probe = Some(Arc::clone(&probe));
+                let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    parent.register(limits(), 16)
+                }));
+                assert!(panic.is_err());
+                let owner = Arc::clone(&parent.records[0].owner);
+                let handle = probe.lock().unwrap().handle.take().unwrap();
+                handle.abort();
+                assert_eq!(lock_owner(&owner).used_tasks(TaskKind::DnsChild), 1);
+                let slot = Arc::clone(&lock_owner(&owner).jobs[0].tasks[0].handle);
+                // Cancellation lets fallback observe a known physical join even
+                // though the independently missing outer handle is still debt.
+                while !slot.state().as_ref().unwrap().is_finished() {
+                    tokio::task::yield_now().await;
+                }
+                let mut shutdown = Box::pin(parent.shutdown());
+                assert!(shutdown
+                    .as_mut()
+                    .poll(&mut Context::from_waker(Waker::noop()))
+                    .is_pending());
+                drop(shutdown);
+                assert!(matches!(*slot.state(), Launch::ActualJoined));
+                assert_eq!(lock_owner(&owner).used_tasks(TaskKind::DnsChild), 0);
+                assert_eq!(parent.records.len(), 1);
+                assert!(matches!(parent.records[0].monitor, Launch::Unresolved));
+                let mut resumed = Box::pin(parent.shutdown());
+                assert!(resumed
+                    .as_mut()
+                    .poll(&mut Context::from_waker(Waker::noop()))
+                    .is_pending());
+                drop(resumed);
+                let _ = handle.await;
+                assert_eq!(
+                    parent.records.len(),
+                    1,
+                    "escrow teardown cannot discharge SUT uncertainty"
+                );
+            });
     }
 }

@@ -312,13 +312,24 @@ impl ClientSender {
         future: F,
     ) -> Result<(), (LedgerError, F)> {
         let (delivery, waiting) = GateFreeFuture::new(future);
+        let prepared = PreparedLaunch::new(kind);
         let registered = (|| {
             let owner = self.owner.as_ref().ok_or(LedgerError::Closing)?;
             let mut state = owner.lock().map_err(|_| LedgerError::Faulted)?;
             state
-                .try_spawn_delivery(id, kind, waiting, &delivery, false)
+                .stage(
+                    id,
+                    kind,
+                    waiting,
+                    false,
+                    Some(Arc::clone(&delivery.receipt)),
+                    prepared,
+                )
                 .map_err(|(error, _)| error)
         })();
+        let registered = registered.map(|(launch, waiting)| {
+            launch.run(self.owner.as_ref().expect("retained owner"), waiting);
+        });
         delivery.finish(registered)
     }
     #[cfg(test)]
@@ -382,6 +393,7 @@ impl RunnerOwnerHandle {
         future: F,
     ) -> Result<(), (LedgerError, F)> {
         let (delivery, waiting) = GateFreeFuture::new(future);
+        let prepared = PreparedLaunch::new(kind);
         let registered = (|| {
             let mut state = self.owner.lock().map_err(|_| LedgerError::Faulted)?;
             let index = match state.key_index(key) {
@@ -395,7 +407,7 @@ impl RunnerOwnerHandle {
             }
             if state.jobs[index].queued.is_some()
                 || (kind == TaskKind::JobRoot && key.seal.root_registered())
-                || (kind == TaskKind::HttpDriver && key.seal.driver_registered())
+                || (kind == TaskKind::HttpDriver && key.seal.staged(TaskKind::HttpDriver))
                 || (kind != TaskKind::JobRoot && !key.seal.root_registered())
             {
                 return Err(LedgerError::PhaseClosed);
@@ -406,9 +418,17 @@ impl RunnerOwnerHandle {
                 Err(error) => return Err(error),
             };
             state
-                .try_spawn_delivery(key.id, kind, waiting, &delivery, true)
+                .stage(
+                    key.id,
+                    kind,
+                    waiting,
+                    true,
+                    Some(Arc::clone(&delivery.receipt)),
+                    prepared,
+                )
                 .map_err(|(error, _)| error)
         })();
+        let registered = registered.map(|(launch, waiting)| launch.run(&self.owner, waiting));
         delivery.finish(registered)
     }
 
@@ -421,6 +441,7 @@ impl RunnerOwnerHandle {
         future: F,
     ) -> Result<(), (LedgerError, F)> {
         let (delivery, waiting) = GateFreeFuture::new(future);
+        let prepared = PreparedLaunch::new(TaskKind::JobRoot);
         let registered = (|| {
             if !command.armed {
                 return Err(LedgerError::PhaseClosed);
@@ -432,7 +453,7 @@ impl RunnerOwnerHandle {
             };
             if command.id != command.key.id
                 || state.jobs[index].queued.is_some()
-                || command.key.seal.root_registered()
+                || command.key.seal.staged(TaskKind::JobRoot)
                 || command.key.seal.command_abandoned()
             {
                 return Err(LedgerError::PhaseClosed);
@@ -442,15 +463,21 @@ impl RunnerOwnerHandle {
                 Ok(entry) => entry,
                 Err(error) => return Err(error),
             };
-            match state.try_spawn_delivery(command.id, TaskKind::JobRoot, waiting, &delivery, true)
-            {
-                Ok(()) => {
-                    command.armed = false; // only after handle + ROOT_REGISTERED
-                    Ok(())
-                }
-                Err((error, _)) => Err(error),
-            }
+            state
+                .stage(
+                    command.id,
+                    TaskKind::JobRoot,
+                    waiting,
+                    true,
+                    Some(Arc::clone(&delivery.receipt)),
+                    prepared,
+                )
+                .map_err(|(error, _)| error)
         })();
+        let registered = registered.map(|(launch, waiting)| {
+            launch.run(&self.owner, waiting);
+            command.armed = false;
+        });
         delivery.finish(registered)
     }
 

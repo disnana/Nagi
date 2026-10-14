@@ -1283,7 +1283,12 @@ fn unexpected_root_abort_retains_sticky_fault_not_abandonment() {
         drop(command);
         {
             let state = runner.owner.lock().unwrap();
-            state.jobs[0].tasks[0].handle.as_ref().unwrap().abort();
+            state.jobs[0].tasks[0]
+                .handle
+                .state()
+                .as_ref()
+                .unwrap()
+                .abort();
         }
         assert_eq!(
             tokio::time::timeout(Duration::from_secs(2), parent.reap_next())
@@ -1429,4 +1434,352 @@ fn sf06_closed_runtime_root_drop_is_outside_owner_and_entry() {
 #[test]
 fn sf06_closed_runtime_child_drop_is_outside_owner_and_entry() {
     sf06_closed_spawn_case(TaskKind::DnsChild);
+}
+
+#[test]
+fn sf06_h0_paused_root_return_preserves_stage_through_stop_expiry_and_poison() {
+    eprintln!("H0 native layout bytes: LaunchSlot={} LaunchInner={} TrackedTask={} PreparedLaunch={} StagedLaunch={} JobSeal={}",
+        std::mem::size_of::<LaunchSlot>(), std::mem::size_of::<Launch<()>>(),
+        std::mem::size_of::<TrackedTask>(), std::mem::size_of::<PreparedLaunch>(),
+        std::mem::size_of::<StagedLaunch>(), std::mem::size_of::<JobSeal>());
+    for mode in 0..3 {
+        runtime().block_on(async {
+            let mut parent = ParentDrain::new(1).unwrap();
+            let (id, sender) = parent.register(limits(), 16).unwrap();
+            let (_lease, _) = admit(&sender).await;
+            let runner = parent.runner_owner(id).unwrap();
+            let mut command = runner.take_command().unwrap().unwrap();
+            let key = command.key().clone();
+            let retained = Arc::clone(&runner.owner);
+            let pause = Arc::new(h0_launch_probe::Pause::default());
+            retained.lock().unwrap().h0_launch_probe =
+                Some(Arc::new(Mutex::new(h0_launch_probe::Inner {
+                    pause: Some(Arc::clone(&pause)),
+                    ..Default::default()
+                })));
+            let entered = tokio::runtime::Handle::current();
+            let worker = std::thread::spawn(move || {
+                let _entered = entered.enter();
+                let result = runner.spawn_root(&mut command, pending::<()>());
+                assert!(result.is_ok());
+                drop(command);
+            });
+            pause.wait();
+            let (slot, shared) = {
+                let owner = retained.lock().unwrap();
+                assert_eq!(owner.used_tasks(TaskKind::JobRoot), 1);
+                assert_eq!(owner.used_jobs(), 1);
+                assert_eq!(owner.reserved_roots[0], 0);
+                assert!(!key.seal.root_registered());
+                assert_eq!(
+                    key.seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
+                    0
+                );
+                assert_eq!(owner.shared.senders.load(Ordering::Acquire), 1);
+                (
+                    Arc::clone(&owner.jobs[0].tasks[0].handle),
+                    Arc::clone(&owner.shared),
+                )
+            };
+            assert!(matches!(*slot.state(), Launch::Starting));
+            // A duplicate Command cannot receive authority while the genuine
+            // admitted launch is staged; it remains armed and caller-owned.
+            let mut duplicate = Command {
+                id: key.id,
+                key: key.clone(),
+                subject: 7,
+                resource: 91,
+                end: Instant::now() + Duration::from_secs(10),
+                payload: Vec::new(),
+                shared: Arc::clone(&shared),
+                armed: true,
+            };
+            let other = parent.runner_owner(id).unwrap();
+            let denied = other.spawn_root(&mut duplicate, pending::<()>());
+            assert!(matches!(denied, Err((LedgerError::PhaseClosed, _))));
+            // Do not make this counterfeit fixture's Drop dispose the genuine Command.
+            duplicate.key = JobKey {
+                id: key.id,
+                seal: Arc::new(JobSeal::new()),
+            };
+            drop(duplicate);
+            let wake = Arc::new(H0WakeCounter(AtomicUsize::new(0)));
+            // Publication has a bare waiter independent of the monitor watch.
+            slot.register(&Context::from_waker(&Waker::from(Arc::clone(&wake))));
+            match mode {
+                0 => shared.request_stop(),
+                1 => retained.lock().unwrap().jobs[0].end = Some(Instant::now()),
+                _ => {
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let _owner = retained.lock().unwrap();
+                        panic!("paused returned-root real owner poison fixture");
+                    }));
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let _slot = slot.state.lock().unwrap();
+                        panic!("paused returned-root real publication-slot poison fixture");
+                    }));
+                }
+            }
+            pause.release();
+            worker.join().unwrap();
+            assert!(
+                slot.state().is_some(),
+                "returned handle retained even after concurrent close/expiry/poison"
+            );
+            assert!(key.seal.root_registered());
+            assert!(
+                retained
+                    .lock()
+                    .unwrap_or_else(|poison| poison.into_inner())
+                    .jobs[0]
+                    .cancel_requested,
+                "publication must record deliberate cancellation before abort"
+            );
+            assert!(wake.0.load(Ordering::SeqCst) > 0);
+            parent.shutdown().await;
+            assert!(matches!(*slot.state(), Launch::ActualJoined));
+            assert_ne!(
+                key.seal.completion.load(Ordering::Acquire) & ROOT_ACTUAL_JOINED,
+                0
+            );
+            assert!(parent.records.is_empty());
+            drop(sender);
+        });
+    }
+}
+
+struct H0WakeCounter(AtomicUsize);
+impl std::task::Wake for H0WakeCounter {
+    fn wake(self: Arc<Self>) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+    fn wake_by_ref(self: &Arc<Self>) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[test]
+fn sf06_h0_paused_driver_return_rejects_duplicate_without_registered_authority() {
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (id, sender) = parent.register(limits(), 16).unwrap();
+        let (_lease, _) = admit(&sender).await;
+        let runner = parent.runner_owner(id).unwrap();
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        assert!(runner.spawn_root(&mut command, pending::<()>()).is_ok());
+        drop(command);
+        let pause = Arc::new(h0_launch_probe::Pause::default());
+        runner.owner.lock().unwrap().h0_launch_probe =
+            Some(Arc::new(Mutex::new(h0_launch_probe::Inner {
+                pause: Some(Arc::clone(&pause)),
+                ..Default::default()
+            })));
+        let retained = Arc::clone(&runner.owner);
+        let worker_key = key.clone();
+        let entered = tokio::runtime::Handle::current();
+        let worker = std::thread::spawn(move || {
+            let _entered = entered.enter();
+            assert!(runner
+                .spawn(&worker_key, TaskKind::HttpDriver, pending::<()>())
+                .is_ok());
+        });
+        pause.wait();
+        let slot = {
+            let owner = retained.lock().unwrap();
+            assert_eq!(owner.used_tasks(TaskKind::HttpDriver), 1);
+            assert_eq!(
+                key.seal.completion.load(Ordering::Acquire) & DRIVER_REGISTERED,
+                0
+            );
+            Arc::clone(
+                &owner.jobs[0]
+                    .tasks
+                    .iter()
+                    .find(|task| task.kind == TaskKind::HttpDriver)
+                    .unwrap()
+                    .handle,
+            )
+        };
+        let other = parent.runner_owner(id).unwrap();
+        assert!(matches!(
+            other.spawn(&key, TaskKind::HttpDriver, pending::<()>()),
+            Err((LedgerError::PhaseClosed, _))
+        ));
+        parent.request_close(id).unwrap();
+        let mut cancelled = Box::pin(parent.shutdown());
+        assert!(cancelled
+            .as_mut()
+            .poll(&mut Context::from_waker(Waker::noop()))
+            .is_pending());
+        drop(cancelled);
+        assert!(matches!(*slot.state(), Launch::Starting));
+        assert_eq!(
+            key.seal.completion.load(Ordering::Acquire) & DRIVER_ACTUAL_JOINED,
+            0
+        );
+        pause.release();
+        worker.join().unwrap();
+        assert!(slot.state().is_some());
+        parent.shutdown().await;
+        assert!(matches!(*slot.state(), Launch::ActualJoined));
+        assert_ne!(
+            key.seal.completion.load(Ordering::Acquire) & DRIVER_ACTUAL_JOINED,
+            0
+        );
+        drop(sender);
+    });
+}
+
+#[test]
+fn sf06_h0_pre_bind_unwind_retains_debt_and_original_payload() {
+    struct Original(Arc<Mutex<Owner>>, Arc<AtomicBool>);
+    impl Future for Original {
+        type Output = ();
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+            panic!("original must remain unpolled");
+        }
+    }
+    impl Drop for Original {
+        fn drop(&mut self) {
+            self.1.store(self.0.try_lock().is_ok(), Ordering::SeqCst);
+        }
+    }
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (id, sender) = parent.register(limits(), 16).unwrap();
+        let (_lease, _) = admit(&sender).await;
+        let runner = parent.runner_owner(id).unwrap();
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        let retained = Arc::clone(&runner.owner);
+        retained.lock().unwrap().h0_launch_probe =
+            Some(Arc::new(Mutex::new(h0_launch_probe::Inner {
+                pre_bind: true,
+                ..Default::default()
+            })));
+        let outside = Arc::new(AtomicBool::new(false));
+        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = runner.spawn_root(
+                &mut command,
+                Original(Arc::clone(&retained), Arc::clone(&outside)),
+            );
+        }))
+        .unwrap_err();
+        assert_eq!(
+            panic.downcast_ref::<&str>(),
+            Some(&"injected pre-bind launch unwind")
+        );
+        assert!(outside.load(Ordering::SeqCst));
+        assert!(command.armed);
+        drop(command);
+        {
+            let owner = retained.lock().unwrap();
+            assert_eq!(owner.used_tasks(TaskKind::JobRoot), 1);
+            assert_eq!(owner.used_jobs(), 1);
+            assert_eq!(owner.fault(), Some(Fault::UnresolvedLaunch));
+            assert!(matches!(
+                *owner.jobs[0].tasks[0].handle.state(),
+                Launch::Unresolved
+            ));
+            assert_eq!(
+                key.seal.completion.load(Ordering::Acquire)
+                    & (ROOT_REGISTERED | ROOT_ACTUAL_JOINED),
+                0
+            );
+        }
+        let mut drain = Box::pin(parent.shutdown());
+        assert!(drain
+            .as_mut()
+            .poll(&mut Context::from_waker(Waker::noop()))
+            .is_pending());
+        drop(drain);
+        assert_eq!(parent.records.len(), 1);
+        // No native inner task was committed by this injection. Teardown still
+        // observes the real outer handle; this does not settle SUT launch debt.
+        parent.records[0].monitor.as_ref().unwrap().abort();
+        let _ = parent.records[0].monitor.as_mut().unwrap().await;
+        drop(sender);
+    });
+}
+
+#[test]
+fn sf06_h0_expired_driver_publication_autonomously_joins_existing_siblings() {
+    struct LivePending {
+        started: Option<tokio::sync::oneshot::Sender<()>>,
+        dropped: Arc<AtomicBool>,
+    }
+    impl Future for LivePending {
+        type Output = ();
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+            if let Some(started) = self.get_mut().started.take() {
+                let _ = started.send(());
+            }
+            Poll::Pending
+        }
+    }
+    impl Drop for LivePending {
+        fn drop(&mut self) {
+            self.dropped.store(true, Ordering::SeqCst);
+        }
+    }
+    runtime().block_on(async {
+        let mut parent = ParentDrain::new(1).unwrap();
+        let (id, sender) = parent.register(limits(), 16).unwrap();
+        let (_lease, _) = admit(&sender).await;
+        let runner = parent.runner_owner(id).unwrap();
+        let mut command = runner.take_command().unwrap().unwrap();
+        let key = command.key().clone();
+        let retained = Arc::clone(&runner.owner);
+        let root_dropped = Arc::new(AtomicBool::new(false));
+        let sibling_dropped = Arc::new(AtomicBool::new(false));
+        let (root_started, root_live) = tokio::sync::oneshot::channel();
+        assert!(runner.spawn_root(&mut command, LivePending {
+            started: Some(root_started), dropped: Arc::clone(&root_dropped),
+        }).is_ok());
+        drop(command);
+        root_live.await.unwrap();
+        let (sibling_started, sibling_live) = tokio::sync::oneshot::channel();
+        assert!(runner.spawn(&key, TaskKind::DnsChild, LivePending {
+            started: Some(sibling_started), dropped: Arc::clone(&sibling_dropped),
+        }).is_ok());
+        sibling_live.await.unwrap();
+        let pause = Arc::new(h0_launch_probe::Pause::default());
+        retained.lock().unwrap().h0_launch_probe = Some(Arc::new(Mutex::new(h0_launch_probe::Inner {
+            pause: Some(Arc::clone(&pause)), ..Default::default()
+        })));
+        let worker_key = key.clone();
+        let entered = tokio::runtime::Handle::current();
+        let worker = std::thread::spawn(move || {
+            let _entered = entered.enter();
+            assert!(runner.spawn(&worker_key, TaskKind::HttpDriver, pending::<()>()).is_ok());
+        });
+        pause.wait();
+        // The current-thread monitor cannot run between this forced original
+        // deadline expiry and returned-handle publication on the worker.
+        retained.lock().unwrap().jobs[0].end = Some(Instant::now());
+        pause.release();
+        worker.join().unwrap();
+        let autonomous = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if retained.lock().unwrap().used_jobs() == 0 { break; }
+                tokio::task::yield_now().await;
+            }
+        }).await.is_ok();
+        let before_forced_close = {
+            let owner = retained.lock().unwrap();
+            (owner.used_jobs(), owner.used_tasks(TaskKind::JobRoot),
+             owner.used_tasks(TaskKind::DnsChild), owner.used_tasks(TaskKind::HttpDriver),
+             root_dropped.load(Ordering::SeqCst), sibling_dropped.load(Ordering::SeqCst),
+             key.seal.completion.load(Ordering::Acquire) & (ROOT_ACTUAL_JOINED | DRIVER_ACTUAL_JOINED),
+             owner.fault())
+        };
+        // Always finish every physical native handle before reporting failure.
+        // This explicit close is teardown, never the autonomous-cleanup oracle.
+        parent.shutdown().await;
+        drop(sender);
+        assert!(autonomous, "expired publication must cancel existing root/siblings without a parent close: {before_forced_close:?}");
+        assert_eq!(before_forced_close, (0, 0, 0, 0, true, true,
+            ROOT_ACTUAL_JOINED | DRIVER_ACTUAL_JOINED, None));
+    });
 }
