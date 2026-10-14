@@ -46,6 +46,24 @@ TEST_IO_MARKER = re.compile(
     rf"{re.escape(TEST_IO_MARKER_PREFIX)} phase=({IO_PHASE}) kind=({IO_KIND})\Z"
 )
 TEST_IO_FAILURE_LIMIT = 16
+HTTP_STALLED_PREFIX = "http_stalled_fixture"
+HTTP_STALLED_CASES = {
+    "Capacity": "http_server::tests::stalled_response_send_expires_and_releases_connection_permit",
+    "Graceful": "http_server::tests::graceful_shutdown_preserves_stalled_response_send_deadline",
+}
+HTTP_STALLED_PHASE = (
+    r"(?:Setup|AwaitPending|ArmedStatus|ArmedBody|AwaitJoin|Expired|EndUnchanged|"
+    r"FreshConnect|FreshRequestWrite|FreshResponse|FreshStatus|FreshBody|StopJoin|"
+    r"ShutdownSignal|AwaitShutdown|GraceBeforeEnd|JoinCount|TerminalRead|TerminalPartial)"
+)
+HTTP_STALLED_MARKER = re.compile(
+    rf"http_stalled_fixture case=(Capacity|Graceful) phase=({HTTP_STALLED_PHASE}) "
+    r"armed=(true|false) pending=(true|false) expired=(true|false) "
+    r"grace_before_end=(true|false) joins=(None|Some\([0-9]{1,10}\)) "
+    r"status=(None|Some\([0-9]{1,5}\)) body_bytes=(None|Some\([0-9]{1,8}\)) "
+    r"end_changed=(None|Some\((?:true|false)\))\Z"
+)
+HTTP_STALLED_FAILURE_LIMIT = 2
 
 
 def read_bounded(path: pathlib.Path):
@@ -141,6 +159,80 @@ def http_io_failures(text: str):
     return lines
 
 
+def http_stalled_diagnostics(text: str, exit_code: int, cases):
+    """Return only complete, canonical records for the two fixed failed tests."""
+    marker_lines = [line for line in text.splitlines() if HTTP_STALLED_PREFIX in line]
+    failed = set()
+    in_failures = False
+    for line in text.splitlines():
+        if line == "failures:":
+            in_failures = True
+            continue
+        row = FAILED_ROW.fullmatch(line)
+        item = FAILED_ITEM.fullmatch(line) if in_failures and line else None
+        name = row.group(1) if row else item.group(1) if item else None
+        if name in HTTP_STALLED_CASES.values():
+            failed.add(name)
+        if in_failures and line and item is None:
+            in_failures = False
+
+    if not marker_lines:
+        if exit_code != 0 and failed:
+            return ["http_stalled=unavailable"], True
+        return [], False
+    if exit_code == 0 or len(marker_lines) > HTTP_STALLED_FAILURE_LIMIT:
+        return ["http_stalled=unavailable"], True
+
+    if not failed or cases is None or any(name not in cases for name in failed):
+        return ["http_stalled=unavailable"], True
+
+    parsed = {}
+    invalid = False
+    for line in marker_lines:
+        marker = HTTP_STALLED_MARKER.fullmatch(line)
+        if marker is None:
+            invalid = True
+            continue
+        (case, phase, armed, pending, expired, grace_before_end, joins,
+         status, body_bytes, end_changed) = marker.groups()
+        canonical = HTTP_STALLED_CASES[case]
+        if canonical not in failed or canonical in parsed:
+            invalid = True
+            continue
+
+        def bounded_option(value, maximum):
+            if value == "None":
+                return "None"
+            number = int(value[5:-1])
+            if number > maximum:
+                raise ValueError
+            return f"Some({number})"
+
+        try:
+            joins = bounded_option(joins, 2**32 - 1)
+            status = bounded_option(status, 65535)
+            body_bytes = bounded_option(body_bytes, 16 * 1024 * 1024)
+            if end_changed != "None":
+                value = end_changed[5:-1]
+                if value not in ("true", "false"):
+                    raise ValueError
+                end_changed = f"Some({value})"
+        except ValueError:
+            invalid = True
+            continue
+
+        parsed[canonical] = (
+            f"http_stalled=case={canonical} phase={phase} armed={armed} "
+            f"pending={pending} expired={expired} grace_before_end={grace_before_end} "
+            f"joins={joins} status={status} body_bytes={body_bytes} "
+            f"end_changed={end_changed}"
+        )
+
+    if invalid or set(parsed) != failed or len(parsed) != len(marker_lines):
+        return ["http_stalled=unavailable"], True
+    return [parsed[name] for name in sorted(parsed)], False
+
+
 def capture(name: str, root: pathlib.Path, exit_code: int, cases=None) -> bool:
     raw_file = root / f"auth-stage-{name}.raw"
     trace_file = root / f"auth-stage-{name}.trace"
@@ -160,6 +252,10 @@ def capture(name: str, root: pathlib.Path, exit_code: int, cases=None) -> bool:
         line in ("http_test_io=unavailable", "http_test_io_loss=observed")
         for line in io_diagnostics
     )
+    stalled_diagnostics, invalid_stalled_record = http_stalled_diagnostics(
+        text, exit_code, cases
+    )
+    lines.extend(stalled_diagnostics)
     invalid_record = False
     expected_slots = set(EXPECTED_SLOTS[name])
     opened_slots = set()
@@ -214,7 +310,7 @@ def capture(name: str, root: pathlib.Path, exit_code: int, cases=None) -> bool:
         out.extend(b"lost=true\n")
     trace_file.write_bytes(out)
     sys.stdout.buffer.write(out)
-    return (valid and not invalid_record and not invalid_io_record and not truncated
+    return (valid and not invalid_record and not invalid_io_record and not invalid_stalled_record and not truncated
             and slots_complete and not saw_loss)
 
 

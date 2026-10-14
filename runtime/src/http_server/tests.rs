@@ -1,5 +1,6 @@
 use super::*;
 use axum::body::Body;
+use std::io::Write as _;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
@@ -23,6 +24,17 @@ impl Server {
         S: Send + Sync + 'static,
         E: 'static,
     {
+        Self::new_with_send_buffer(app, options, None).await
+    }
+    async fn new_with_send_buffer<S, E>(
+        app: App<S, E>,
+        options: Options,
+        send_buffer_bytes: Option<u32>,
+    ) -> Self
+    where
+        S: Send + Sync + 'static,
+        E: 'static,
+    {
         // Existing lifecycle fixtures explicitly accept their localhost Host;
         // public serve/serve_listener do not supply an authority default.
         let options = if options.authority.is_none() {
@@ -37,7 +49,19 @@ impl Server {
         } else {
             options
         };
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listener = if let Some(bytes) = send_buffer_bytes {
+            // Only stalled-send fixtures constrain native buffering. The
+            // accepted socket inherits this listener setting; actual write
+            // Pending, expiry and join remain the evidence below.
+            let socket = tokio::net::TcpSocket::new_v4().unwrap();
+            #[cfg(not(windows))]
+            socket.set_reuseaddr(true).unwrap();
+            socket.set_send_buffer_size(bytes).unwrap();
+            socket.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+            socket.listen(128).unwrap()
+        } else {
+            TcpListener::bind("127.0.0.1:0").await.unwrap()
+        };
         let address = listener.local_addr().unwrap();
         let (stopped, shutdown) = oneshot::channel();
         let task = tokio::spawn(serve_listener(listener, app, options, async {
@@ -1782,6 +1806,121 @@ async fn connection_capacity_supports_more_than_128_idle_sockets_and_shutdown_cl
 }
 
 const STALLED_BODY_LENGTH: usize = 16 * 1024 * 1024;
+
+#[derive(Clone, Copy)]
+enum StalledFixtureCase {
+    Capacity,
+    Graceful,
+}
+impl StalledFixtureCase {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Capacity => "Capacity",
+            Self::Graceful => "Graceful",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum StalledFixturePhase {
+    Setup,
+    AwaitPending,
+    ArmedStatus,
+    ArmedBody,
+    AwaitJoin,
+    Expired,
+    EndUnchanged,
+    FreshConnect,
+    FreshRequestWrite,
+    FreshResponse,
+    FreshStatus,
+    FreshBody,
+    StopJoin,
+    ShutdownSignal,
+    AwaitShutdown,
+    GraceBeforeEnd,
+    JoinCount,
+    TerminalRead,
+    TerminalPartial,
+}
+impl StalledFixturePhase {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Setup => "Setup",
+            Self::AwaitPending => "AwaitPending",
+            Self::ArmedStatus => "ArmedStatus",
+            Self::ArmedBody => "ArmedBody",
+            Self::AwaitJoin => "AwaitJoin",
+            Self::Expired => "Expired",
+            Self::EndUnchanged => "EndUnchanged",
+            Self::FreshConnect => "FreshConnect",
+            Self::FreshRequestWrite => "FreshRequestWrite",
+            Self::FreshResponse => "FreshResponse",
+            Self::FreshStatus => "FreshStatus",
+            Self::FreshBody => "FreshBody",
+            Self::StopJoin => "StopJoin",
+            Self::ShutdownSignal => "ShutdownSignal",
+            Self::AwaitShutdown => "AwaitShutdown",
+            Self::GraceBeforeEnd => "GraceBeforeEnd",
+            Self::JoinCount => "JoinCount",
+            Self::TerminalRead => "TerminalRead",
+            Self::TerminalPartial => "TerminalPartial",
+        }
+    }
+}
+
+struct StalledFixtureFailureMarker {
+    case: StalledFixtureCase,
+    phase: StalledFixturePhase,
+    probe: Arc<lifecycle_probe::Probe>,
+    end_changed: Option<bool>,
+}
+impl StalledFixtureFailureMarker {
+    fn new(case: StalledFixtureCase, probe: Arc<lifecycle_probe::Probe>) -> Self {
+        Self {
+            case,
+            phase: StalledFixturePhase::Setup,
+            probe,
+            end_changed: None,
+        }
+    }
+
+    fn at(&mut self, phase: StalledFixturePhase) {
+        self.phase = phase;
+    }
+
+    fn end_changed(&mut self, changed: bool) {
+        self.end_changed = Some(changed);
+    }
+}
+impl Drop for StalledFixtureFailureMarker {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            return;
+        }
+        let armed = self.probe.first.get();
+        let status = armed.map(|value| value.status);
+        let body_bytes = armed
+            .filter(|value| value.body_bytes <= STALLED_BODY_LENGTH)
+            .map(|value| value.body_bytes);
+        let joins = u32::try_from(self.probe.joins.load(Ordering::SeqCst)).ok();
+        let _ = writeln!(
+            std::io::stderr().lock(),
+            "http_stalled_fixture case={} phase={} armed={} pending={} expired={} grace_before_end={} joins={:?} status={:?} body_bytes={:?} end_changed={:?}",
+            self.case.label(),
+            self.phase.label(),
+            armed.is_some(),
+            self.probe.pending.load(Ordering::SeqCst),
+            self.probe.expired.load(Ordering::SeqCst),
+            self.probe.graceful_before_end.load(Ordering::SeqCst),
+            joins,
+            status,
+            body_bytes,
+            self.end_changed,
+        );
+    }
+}
+
 struct PreparedLarge {
     body: Bytes,
 }
@@ -1818,6 +1957,9 @@ async fn backpressured_socket(server: &Server) -> BufReader<TcpStream> {
 
 #[tokio::test]
 async fn stalled_response_send_expires_and_releases_connection_permit() {
+    let probe = Arc::new(lifecycle_probe::Probe::default());
+    let mut failure_marker =
+        StalledFixtureFailureMarker::new(StalledFixtureCase::Capacity, Arc::clone(&probe));
     let app = route(
         app_default(prepared_large()),
         Method::GET,
@@ -1834,46 +1976,61 @@ async fn stalled_response_send_expires_and_releases_connection_permit() {
         prepared_healthy_response,
     )
     .unwrap();
-    let probe = Arc::new(lifecycle_probe::Probe::default());
     let mut config = send_timeout(capacity(default_options(), 1, 1).unwrap(), 80).unwrap();
     config.lifecycle_probe = Some(Arc::clone(&probe));
-    let server = Server::new(app, config).await;
+    let server = Server::new_with_send_buffer(app, config, Some(4096)).await;
     let mut blocked = backpressured_socket(&server).await;
     send(
         &mut blocked,
         b"GET /large HTTP/1.1\r\nHost: localhost\r\n\r\n",
     )
     .await;
+    failure_marker.at(StalledFixturePhase::AwaitPending);
     tokio::time::timeout(
         Duration::from_secs(2),
         probe.wait(|p| p.pending.load(Ordering::SeqCst)),
     )
     .await
     .unwrap();
+    failure_marker.at(StalledFixturePhase::ArmedStatus);
     let armed = *probe.first.get().unwrap();
     assert_eq!(armed.status, 200);
+    failure_marker.at(StalledFixturePhase::ArmedBody);
     assert_eq!(armed.body_bytes, STALLED_BODY_LENGTH);
     // Native write Pending proves backpressure. JoinSet observation, rather
     // than sleep or child Drop, proves the original socket task has finished.
+    failure_marker.at(StalledFixturePhase::AwaitJoin);
     tokio::time::timeout(
         Duration::from_secs(2),
         probe.wait(|p| p.joins.load(Ordering::SeqCst) == 1),
     )
     .await
     .unwrap();
+    failure_marker.at(StalledFixturePhase::Expired);
     assert!(probe.expired.load(Ordering::SeqCst));
+    failure_marker.at(StalledFixturePhase::EndUnchanged);
+    failure_marker.end_changed(probe.first.get().unwrap().end != armed.end);
     assert_eq!(probe.first.get().unwrap().end, armed.end);
+    failure_marker.at(StalledFixturePhase::FreshConnect);
     let mut next = server.connect().await;
+    failure_marker.at(StalledFixturePhase::FreshRequestWrite);
     send(&mut next, b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;
+    failure_marker.at(StalledFixturePhase::FreshResponse);
     let healthy = response(&mut next, false).await;
+    failure_marker.at(StalledFixturePhase::FreshStatus);
     assert_eq!(healthy.status, 200);
+    failure_marker.at(StalledFixturePhase::FreshBody);
     assert_eq!(healthy.body, b"ok");
     drop(blocked);
+    failure_marker.at(StalledFixturePhase::StopJoin);
     server.stop().await;
 }
 
 #[tokio::test]
 async fn graceful_shutdown_preserves_stalled_response_send_deadline() {
+    let probe = Arc::new(lifecycle_probe::Probe::default());
+    let mut failure_marker =
+        StalledFixtureFailureMarker::new(StalledFixtureCase::Graceful, Arc::clone(&probe));
     let app = route(
         app_default(prepared_large()),
         Method::GET,
@@ -1882,40 +2039,47 @@ async fn graceful_shutdown_preserves_stalled_response_send_deadline() {
         prepared_large_response,
     )
     .unwrap();
-    let probe = Arc::new(lifecycle_probe::Probe::default());
     let mut config = send_timeout(options(1024, 1000, 1000, 1200).unwrap(), 150).unwrap();
     config.lifecycle_probe = Some(Arc::clone(&probe));
-    let mut server = Server::new(app, config).await;
+    let mut server = Server::new_with_send_buffer(app, config, Some(4096)).await;
     let mut blocked = backpressured_socket(&server).await;
     send(&mut blocked, b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;
+    failure_marker.at(StalledFixturePhase::AwaitPending);
     tokio::time::timeout(
         Duration::from_secs(2),
         probe.wait(|p| p.pending.load(Ordering::SeqCst)),
     )
     .await
     .unwrap();
+    failure_marker.at(StalledFixturePhase::ArmedStatus);
     let armed = *probe.first.get().unwrap();
     assert_eq!(armed.status, 200);
+    failure_marker.at(StalledFixturePhase::ArmedBody);
     assert_eq!(armed.body_bytes, STALLED_BODY_LENGTH);
+    failure_marker.at(StalledFixturePhase::ShutdownSignal);
     server.stopped.take().unwrap().send(()).unwrap();
+    failure_marker.at(StalledFixturePhase::AwaitShutdown);
     tokio::time::timeout(Duration::from_millis(600), &mut server.task)
         .await
         .expect("graceful shutdown lost the stalled response send deadline")
         .unwrap()
         .unwrap();
+    failure_marker.at(StalledFixturePhase::GraceBeforeEnd);
     assert!(probe.graceful_before_end.load(Ordering::SeqCst));
+    failure_marker.at(StalledFixturePhase::Expired);
     assert!(probe.expired.load(Ordering::SeqCst));
+    failure_marker.at(StalledFixturePhase::EndUnchanged);
+    failure_marker.end_changed(probe.first.get().unwrap().end != armed.end);
     assert_eq!(probe.first.get().unwrap().end, armed.end);
+    failure_marker.at(StalledFixturePhase::JoinCount);
     assert_eq!(probe.joins.load(Ordering::SeqCst), 1);
     // An expired partial send cannot promise header delivery/FIN on every OS.
     // The complete healthy 200 remains asserted in the capacity and graceful
     // in-flight tests; this socket proves terminal partial-send disposition.
-    assert!(
-        terminal_close_after_abort(&mut blocked, STALLED_BODY_LENGTH - 1)
-            .await
-            .len()
-            < STALLED_BODY_LENGTH
-    );
+    failure_marker.at(StalledFixturePhase::TerminalRead);
+    let terminal = terminal_close_after_abort(&mut blocked, STALLED_BODY_LENGTH - 1).await;
+    failure_marker.at(StalledFixturePhase::TerminalPartial);
+    assert!(terminal.len() < STALLED_BODY_LENGTH);
 }
 
 #[path = "security_tests.rs"]

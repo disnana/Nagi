@@ -11,6 +11,9 @@ spec = importlib.util.spec_from_file_location("diagnostic", SCRIPT)
 diagnostic = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(diagnostic)
 
+STALLED_CAPACITY = diagnostic.HTTP_STALLED_CASES["Capacity"]
+STALLED_GRACEFUL = diagnostic.HTTP_STALLED_CASES["Graceful"]
+
 
 class DiagnosticCases(unittest.TestCase):
     def setUp(self):
@@ -142,6 +145,115 @@ class DiagnosticCases(unittest.TestCase):
                 output = diagnostic.http_io_failures(marker)
                 self.assertEqual(output, ["http_test_io=unavailable"])
                 self.assertNotIn("secret", "\n".join(output))
+
+    def stalled_marker(self, case="Capacity", **changes):
+        fields = {
+            "case": case,
+            "phase": "AwaitPending",
+            "armed": "true",
+            "pending": "true",
+            "expired": "false",
+            "grace_before_end": "false",
+            "joins": "Some(0)",
+            "status": "Some(200)",
+            "body_bytes": "Some(16777216)",
+            "end_changed": "None",
+        }
+        fields.update(changes)
+        return "http_stalled_fixture " + " ".join(
+            f"{key}={value}" for key, value in fields.items()
+        )
+
+    def test_stalled_markers_are_canonical_and_bound_to_both_failed_tests(self):
+        cases = {STALLED_CAPACITY: STALLED_CAPACITY, STALLED_GRACEFUL: STALLED_GRACEFUL}
+        raw = (
+            f"test {STALLED_CAPACITY} ... FAILED\n"
+            f"test {STALLED_GRACEFUL} ... FAILED\n"
+            "failures:\n\n"
+            f"    {STALLED_CAPACITY}\n    {STALLED_GRACEFUL}\n\n"
+            + self.stalled_marker("Capacity", phase="AwaitJoin", joins="Some(1)") + "\n"
+            + self.stalled_marker("Graceful", phase="AwaitShutdown",
+                                  grace_before_end="true", end_changed="Some(false)") + "\n"
+        ).replace("\n", "\r\n")
+        output, invalid = diagnostic.http_stalled_diagnostics(raw, 101, cases)
+        self.assertFalse(invalid)
+        self.assertEqual(len(output), 2)
+        capacity_line = next(line for line in output if f"case={STALLED_CAPACITY}" in line)
+        graceful_line = next(line for line in output if f"case={STALLED_GRACEFUL}" in line)
+        self.assertIn("phase=AwaitJoin", capacity_line)
+        self.assertIn("joins=Some(1)", capacity_line)
+        self.assertIn("grace_before_end=true", graceful_line)
+        self.assertIn("end_changed=Some(false)", graceful_line)
+
+    def test_stalled_markers_require_failed_identity_inventory_and_completeness(self):
+        cases = {STALLED_CAPACITY: STALLED_CAPACITY, STALLED_GRACEFUL: STALLED_GRACEFUL}
+        marker = self.stalled_marker()
+        variants = [
+            (f"test {STALLED_CAPACITY} ... FAILED\n", cases),
+            (marker + "\n", cases),
+            (f"test {STALLED_CAPACITY} ... FAILED\n{marker}\n", None),
+            (f"test {STALLED_CAPACITY} ... FAILED\ntest {STALLED_GRACEFUL} ... FAILED\n"
+             f"{marker}\n", cases),
+        ]
+        for text, inventory in variants:
+            with self.subTest(text=text[:60], inventory=inventory is not None):
+                output, invalid = diagnostic.http_stalled_diagnostics(text, 101, inventory)
+                self.assertTrue(invalid)
+                self.assertEqual(output, ["http_stalled=unavailable"])
+
+    def test_stalled_markers_reject_unknown_fields_and_private_suffixes(self):
+        cases = {STALLED_CAPACITY: STALLED_CAPACITY}
+        base = f"test {STALLED_CAPACITY} ... FAILED\n"
+        markers = [
+            self.stalled_marker(phase="Unknown"),
+            self.stalled_marker() + " token=wireSecret",
+            "panic text " + self.stalled_marker(),
+            self.stalled_marker("Other"),
+            self.stalled_marker() + " /private/path",
+        ]
+        for marker in markers:
+            with self.subTest(marker=marker[:70]):
+                output, invalid = diagnostic.http_stalled_diagnostics(base + marker + "\n", 101, cases)
+                self.assertTrue(invalid)
+                self.assertEqual(output, ["http_stalled=unavailable"])
+                self.assertNotIn("wireSecret", "\n".join(output))
+                self.assertNotIn("/private", "\n".join(output))
+
+    def test_stalled_markers_reject_duplicates_and_unbounded_numbers(self):
+        cases = {STALLED_CAPACITY: STALLED_CAPACITY}
+        base = f"test {STALLED_CAPACITY} ... FAILED\n"
+        invalid_markers = [
+            (self.stalled_marker() + "\n") * 2,
+            self.stalled_marker(joins="Some(4294967296)"),
+            self.stalled_marker(status="Some(65536)"),
+            self.stalled_marker(body_bytes="Some(16777217)"),
+        ]
+        for markers in invalid_markers:
+            with self.subTest(markers=markers[:80]):
+                output, invalid = diagnostic.http_stalled_diagnostics(base + markers, 101, cases)
+                self.assertTrue(invalid)
+                self.assertEqual(output, ["http_stalled=unavailable"])
+
+    def test_stalled_marker_never_turns_nonzero_test_exit_into_success(self):
+        cases = {STALLED_CAPACITY: STALLED_CAPACITY}
+        raw = (self.raw() + f"test {STALLED_CAPACITY} ... FAILED\n" +
+               self.stalled_marker() + "\n" +
+               "thread 'test' panicked at /private/path:1:1: wireSecret\n")
+        accepted, output = self.capture(raw, 101, cases)
+        self.assertFalse(accepted)
+        self.assertIn(b"cargo_exit=101 inventory=fail", output)
+        self.assertIn(f"http_stalled=case={STALLED_CAPACITY}".encode(), output)
+        self.assertNotIn(b"http_stalled_fixture", output)
+        self.assertNotIn(b"/private/path", output)
+        self.assertNotIn(b"wireSecret", output)
+
+    def test_successful_exit_with_stalled_failure_marker_is_invalid(self):
+        cases = {STALLED_CAPACITY: STALLED_CAPACITY}
+        output, invalid = diagnostic.http_stalled_diagnostics(
+            self.stalled_marker() + "\n", 0, cases
+        )
+        self.assertTrue(invalid)
+        self.assertEqual(output, ["http_stalled=unavailable"])
 
     def test_exit_101_remains_failure_with_known_identity(self):
         accepted, output = self.capture(self.raw() + "test auth::a ... FAILED\n", 101,
