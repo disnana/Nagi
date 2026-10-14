@@ -106,7 +106,7 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 115, "sf06-private-transport.log": 79, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 123, "sf06-private-transport.log": 79, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
@@ -182,6 +182,22 @@ jobs:
               raise AssertionError("SF06 new lifecycle/DNS test names missing or unsuccessful")
           if not required_delivery.issubset(passed_ledger):
               raise AssertionError("SF06 returned-handle delivery test names missing or unsuccessful")
+          required_operation = {
+              'http_client::ledger::operation::tests::adapter_panic_remains_fault_after_actual_root_join',
+              'http_client::ledger::operation::tests::dropped_execute_retains_cleanup_until_actual_native_joins',
+              'http_client::ledger::operation::tests::operation_withholds_real_https_response_until_actual_driver_join',
+              'http_client::ledger::operation::tests::owner_close_refuses_publish_after_actual_native_joins',
+              'http_client::ledger::operation::tests::unpolled_execute_starts_no_admission_or_native_resolution',
+              'http_client::ledger::operation::tests::original_deadline_survives_provisional_response_and_join_wait',
+              'http_client::ledger::operation::tests::unreceived_response_keeps_core_budget_after_actual_native_joins',
+              'http_client::ledger::operation::tests::unsupported_encoding_is_unknown_and_never_replayed',
+          }
+          passed_operation = re.findall(
+              r"(?m)^test (http_client::ledger::operation::tests::[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          )
+          if set(passed_operation) != required_operation or len(passed_operation) != len(required_operation):
+              raise AssertionError("SF06 operation test names missing, duplicated, or unsuccessful")
           required_h0 = {
               'http_client::ledger::admission::tests::sf06_h0_expired_driver_publication_autonomously_joins_existing_siblings',
               'http_client::ledger::admission::tests::sf06_h0_paused_driver_return_rejects_duplicate_without_registered_authority',
@@ -495,6 +511,7 @@ jobs:
           set -euo pipefail
           unset ICU4X_DATA_DIR
           cat > "$RUNNER_TEMP/sf06-http-client-guard.py" <<'PY'
+          import json
           import os
           import pathlib
           import re
@@ -540,6 +557,126 @@ jobs:
               r"0 measured; [0-9]+ filtered out; finished in [^\n]+$",
               re.M,
           )
+          RESULT = re.compile(
+              r"^test result: (ok|FAILED)\. ([0-9]+) passed; ([0-9]+) failed; "
+              r"([0-9]+) ignored; [0-9]+ measured; [0-9]+ filtered out; finished in [^\n]+$",
+              re.M,
+          )
+          NATIVE_FORM_CASE = re.compile(
+              r"(?m)^test (generated_operation_oracle::real_tls_and_grant) \.\.\. (ok|FAILED|ignored)$"
+          )
+
+          DIAGNOSTIC_RAW_LIMIT = 256 * 1024
+          DIAGNOSTIC_COUNT_LIMIT = 1023
+
+          def bounded_diagnostic_text(path):
+              try:
+                  with path.open("rb") as stream:
+                      raw = stream.read(DIAGNOSTIC_RAW_LIMIT + 1)
+                  if len(raw) > DIAGNOSTIC_RAW_LIMIT:
+                      return "", "oversize"
+                  return raw.decode("utf-8"), "ok"
+              except (OSError, UnicodeError):
+                  return "", "unreadable"
+
+          def marker_in_file(path, marker):
+              text, _ = bounded_diagnostic_text(path)
+              return marker in text
+
+          def record_native_diagnostic(status, text):
+              try:
+                  root = pathlib.Path(os.environ["NAGI_TEST_ARTIFACT_DIR"])
+                  root.mkdir(parents=True, exist_ok=True)
+              except (KeyError, OSError, ValueError):
+                  root = None
+              running = RUNNING.findall(text)
+              results = RESULT.findall(text)
+              rows = ROW.findall(text)
+              expected = SUITES["native"][1]
+              case_status = {}
+              for case in sorted(expected):
+                  seen = [result for name, result in rows if name == case]
+                  case_status[case] = seen[0] if len(seen) == 1 else ("duplicate" if seen else "not_observed")
+              error_codes = sorted(set("E" + code for code in re.findall(r"\berror\[E([0-9]{4})\]", text)))
+              forms = {}
+              for form in ("high", "saved-low", "manual-low"):
+                  stem = f"http-client-{form}"
+                  files = ({
+                      "generated_present": root / f"{stem}-generated.rs",
+                      "wrapper_present": root / f"{stem}-native-wrapper.rs",
+                      "build_stdout_present": root / f"{stem}-build.stdout",
+                      "build_stderr_present": root / f"{stem}-build.stderr",
+                      "native_stdout_present": root / f"{stem}-native.stdout",
+                      "native_stderr_present": root / f"{stem}-native.stderr",
+                  } if root else {})
+                  present = {key: path.is_file() for key, path in files.items()} if root else {
+                      "generated_present": False, "wrapper_present": False,
+                      "build_stdout_present": False, "build_stderr_present": False,
+                      "native_stdout_present": False, "native_stderr_present": False,
+                  }
+                  native_text, read_state = bounded_diagnostic_text(root / f"{stem}-native.stdout") if root else ("", "unreadable")
+                  native_rows = NATIVE_FORM_CASE.findall(native_text)
+                  form_status = (native_rows[0][1] if len(native_rows) == 1 else
+                                 ("duplicate" if native_rows else "not_observed")) if read_state == "ok" else read_state
+                  timeout_states = {}
+                  for stage in ("build", "native"):
+                      marker = f"{form}-{stage}-timeout"
+                      observed = marker in text
+                      if root:
+                          observed = observed or any(
+                              marker_in_file(root / f"{stem}-{stage}.{stream}", marker)
+                              for stream in ("stdout", "stderr")
+                          )
+                      timeout_states[f"{stage}_timeout"] = "observed" if observed else "not_observed"
+                  forms[form] = {**present, "native_test_status": form_status, **timeout_states}
+              result = results[0] if len(results) == 1 else None
+              record = {
+                  "schema": "sf06-http-client-native-diagnostic-v1",
+                  "cargo_exit": status if 0 <= status <= 255 else None,
+                  "running_count": min(DIAGNOSTIC_COUNT_LIMIT, int(running[0])) if len(running) == 1 else None,
+                  "result_kind": result[0] if result else ("multiple" if results else "missing"),
+                  "passed_count": min(DIAGNOSTIC_COUNT_LIMIT, int(result[1])) if result else None,
+                  "failed_count": min(DIAGNOSTIC_COUNT_LIMIT, int(result[2])) if result else None,
+                  "ignored_count": min(DIAGNOSTIC_COUNT_LIMIT, int(result[3])) if result else None,
+                  "rust_error_codes": error_codes[:16],
+                  "rust_error_code_loss": len(error_codes) > 16,
+                  "known_native_cases": case_status,
+                  "unknown_test_row_count": min(DIAGNOSTIC_COUNT_LIMIT, sum(name not in expected for name, _ in rows)),
+                  "forms": forms,
+              }
+              saved = False
+              try:
+                  if root:
+                      temporary = root / "sf06-native-diagnostic.json.tmp"
+                      temporary.write_text(json.dumps(record, sort_keys=True) + "\n", encoding="utf-8")
+                      temporary.replace(root / "sf06-native-diagnostic.json")
+                      saved = True
+              except OSError:
+                  pass
+              forms_complete = sum(all(values[key] for key in (
+                  "generated_present", "wrapper_present", "build_stdout_present",
+                  "build_stderr_present", "native_stdout_present", "native_stderr_present",
+              )) for values in forms.values())
+              timeout_markers = [
+                  f"{form}-{stage}-timeout"
+                  for form, values in forms.items()
+                  for stage in ("build", "native")
+                  if values[f"{stage}_timeout"] == "observed"
+              ]
+              if status != 0 or timeout_markers or not (running == ["2"] and len(results) == 1 and
+                                     result and result[0] == "ok" and result[2:] == ("0", "0")):
+                  print(
+                      f"sf06_http_client_native_diag=v1 cargo_exit={record['cargo_exit']} "
+                      f"result={record['result_kind']} running={record['running_count']} "
+                      f"passed={record['passed_count']} failed={record['failed_count']} "
+                      f"ignored={record['ignored_count']} rust_error_codes={','.join(error_codes[:16]) or 'none'} "
+                      f"timeout_markers={','.join(timeout_markers) or 'none'} "
+                      f"forms_complete={forms_complete}/3 artifact_saved={'true' if saved else 'false'}"
+                  )
+                  for case, outcome in case_status.items():
+                      if outcome != "ok":
+                          print(f"sf06_http_client_native_case={case} status={outcome}")
+              return record
 
           def fail(label):
               print(f"sf06_http_client_check={label} result=failed")
@@ -550,11 +687,22 @@ jobs:
               if suite is None:
                   fail("unknown")
               count, exact_names, required_names = suite
-              if status != 0:
+              if status != 0 and label != "native":
                   fail(label)
-              try:
-                  text = pathlib.Path(log_path).read_text(encoding="utf-8")
-              except (OSError, UnicodeError):
+              diagnostic_read_state = "ok"
+              if label == "native":
+                  text, diagnostic_read_state = bounded_diagnostic_text(pathlib.Path(log_path))
+              else:
+                  try:
+                      text = pathlib.Path(log_path).read_text(encoding="utf-8")
+                  except (OSError, UnicodeError):
+                      fail(label)
+              if label == "native":
+                  record_native_diagnostic(status, text)
+                  if diagnostic_read_state != "ok":
+                      print(f"sf06_http_client_native_raw={diagnostic_read_state}")
+                      fail(label)
+              if status != 0:
                   fail(label)
               rows = ROW.findall(text)
               names = [name for name, result in rows]
@@ -625,6 +773,13 @@ jobs:
           run_check contracts cargo test --locked -p nagic --test http_client_contracts
           run_check native cargo test --locked -p nagic --test http_client_native
           python "$RUNNER_TEMP/sf06-http-client-guard.py" native-forms 0 "$NAGI_TEST_ARTIFACT_DIR"
+      - name: Preserve closed SF06 native diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf06-http-client-native-${{ matrix.platform }}
+          path: ${{ runner.temp }}/sf06-http-client-native/sf06-native-diagnostic.json
+          if-no-files-found: ignore
       - name: Diagnose G3 generation-token failure before crypto checks
         shell: bash
         run: |
@@ -653,7 +808,7 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 115, "sf06-private-transport.log": 79, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 123, "sf06-private-transport.log": 79, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
@@ -729,6 +884,22 @@ jobs:
               raise AssertionError("SF06 new lifecycle/DNS test names missing or unsuccessful")
           if not required_delivery.issubset(passed_ledger):
               raise AssertionError("SF06 returned-handle delivery test names missing or unsuccessful")
+          required_operation = {
+              'http_client::ledger::operation::tests::adapter_panic_remains_fault_after_actual_root_join',
+              'http_client::ledger::operation::tests::dropped_execute_retains_cleanup_until_actual_native_joins',
+              'http_client::ledger::operation::tests::operation_withholds_real_https_response_until_actual_driver_join',
+              'http_client::ledger::operation::tests::owner_close_refuses_publish_after_actual_native_joins',
+              'http_client::ledger::operation::tests::unpolled_execute_starts_no_admission_or_native_resolution',
+              'http_client::ledger::operation::tests::original_deadline_survives_provisional_response_and_join_wait',
+              'http_client::ledger::operation::tests::unreceived_response_keeps_core_budget_after_actual_native_joins',
+              'http_client::ledger::operation::tests::unsupported_encoding_is_unknown_and_never_replayed',
+          }
+          passed_operation = re.findall(
+              r"(?m)^test (http_client::ledger::operation::tests::[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          )
+          if set(passed_operation) != required_operation or len(passed_operation) != len(required_operation):
+              raise AssertionError("SF06 operation test names missing, duplicated, or unsuccessful")
           required_h0 = {
               'http_client::ledger::admission::tests::sf06_h0_expired_driver_publication_autonomously_joins_existing_siblings',
               'http_client::ledger::admission::tests::sf06_h0_paused_driver_return_rejects_duplicate_without_registered_authority',
