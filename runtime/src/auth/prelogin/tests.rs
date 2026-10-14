@@ -500,3 +500,7 @@ mod clock_review_tests;
 
 #[path = "expiry_review_tests.rs"]
 mod expiry_review_tests;
+
+#[cfg(nagi_browser_login_diag)]
+#[path = "observer_tests.rs"]
+mod observer_tests;

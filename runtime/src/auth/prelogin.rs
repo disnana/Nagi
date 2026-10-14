@@ -814,27 +814,38 @@ impl Pool {
         self.maintenance(tx, wall).await
     }
     async fn restore(&self, wall: &mut Option<i64>) -> Result<(), Failure> {
-        let tx = sqlite::begin(&self.native, sqlite::BeginMode::Immediate)
-            .await
-            .map_err(Failure::database)?;
+        let tx = browser_observe!(
+            RestoreAcquire,
+            sqlite::begin(&self.native, sqlite::BeginMode::Immediate)
+        )
+        .map_err(Failure::database)?;
         let result = async {
-            self.check(&tx, wall).await?;
+            browser_observe!(RestoreCheck, self.check(&tx, wall))?;
             self.clock(wall)?;
             let observed = wall.ok_or_else(Failure::unavailable)?;
             #[cfg(test)]
             {
-                self.restoration_maintenance(&tx, observed).await
+                browser_observe!(
+                    RestoreMaintenance,
+                    self.restoration_maintenance(&tx, observed)
+                )
             }
             #[cfg(not(test))]
             {
-                self.maintenance(&tx, observed).await
+                browser_observe!(RestoreMaintenance, self.maintenance(&tx, observed))
             }
         }
         .await;
         match result {
-            Ok(()) => sqlite::commit(tx).await.map_err(Failure::database),
+            Ok(()) => {
+                browser_observe!(RestoreCommit, sqlite::commit(tx)).map_err(Failure::database)?;
+                #[cfg(nagi_browser_login_diag)]
+                super::browser_login_observer::restore_commit_ack();
+                Ok(())
+            }
             Err(mut e) => {
-                sqlite::rollback(tx).await.map_err(Failure::database)?;
+                browser_observe!(RestoreRollback, sqlite::rollback(tx))
+                    .map_err(Failure::database)?;
                 e.outcome = sqlite::Outcome::RolledBack;
                 Err(e)
             }
@@ -855,7 +866,7 @@ impl Pool {
     ) -> Result<T, Failure> {
         match result {
             Ok(v) => {
-                sqlite::commit(tx).await.map_err(|error| {
+                browser_observe!(BusinessCommit, sqlite::commit(tx)).map_err(|error| {
                     let e = Failure::database(error);
                     if e.outcome == sqlite::Outcome::Committed {
                         e.after_commit()
@@ -866,7 +877,10 @@ impl Pool {
                 Ok(v)
             }
             Err(mut e) => {
-                sqlite::rollback(tx).await.map_err(Failure::database)?;
+                browser_observe!(BusinessRollback, sqlite::rollback(tx))
+                    .map_err(Failure::database)?;
+                #[cfg(nagi_browser_login_diag)]
+                super::browser_login_observer::rollback_ack();
                 e.outcome = sqlite::Outcome::RolledBack;
                 if wall.is_some() {
                     self.restore(wall).await?;
@@ -1068,26 +1082,32 @@ impl Pool {
         #[cfg(all(test, nagi_auth_stage_diag))]
         trace.record(Stage::Entry, Event::Seen, None, None);
         owner.lease.lease.validate().map_err(Failure::authority)?;
-        let tx = sqlite::begin(&self.native, sqlite::BeginMode::Immediate)
-            .await
-            .map_err(Failure::database)?;
+        let tx = browser_observe!(
+            ClaimBegin,
+            sqlite::begin(&self.native, sqlite::BeginMode::Immediate)
+        )
+        .map_err(Failure::database)?;
         #[cfg(all(test, nagi_auth_stage_diag))]
         trace.record(Stage::BeginAck, Event::Passed, None, None);
         let mut wall = None;
         let result = async {
-            self.check(&tx, &mut wall).await?;
+            browser_observe!(ClaimCheck, self.check(&tx, &mut wall))?;
             let c = self.clock(&mut wall)?;
 
-            let row = sqlite::query::<Row>(
+            let row =
+                browser_observe!(ClaimRow, sqlite::query::<Row>(
                 &tx,
                 sqlite::literal(
                     "SELECT handle,token,expiry_ms FROM __nagi_prelogin_ready WHERE handle=?",
                 ),
                 sqlite::bind_bytes(sqlite::parameters(), input.handle.to_vec()),
-            )
-            .await
-            .map_err(Failure::database)?
-            .ok_or_else(Failure::denied)?;
+            ))
+                .map_err(Failure::database)?;
+            #[cfg(nagi_browser_login_diag)]
+            if row.is_none() {
+                super::browser_login_observer::row_missing();
+            }
+            let row = row.ok_or_else(Failure::denied)?;
             let handle: [u8; 32] = row.handle.try_into().map_err(|_| Failure::unavailable())?;
             let token: [u8; 32] = row.token.try_into().map_err(|_| Failure::unavailable())?;
             if !bool::from(handle.ct_eq(&input.handle) & token.ct_eq(&input.token))
@@ -1150,7 +1170,8 @@ impl Pool {
                 drop(second);
                 drop(reservation.await.map_err(Failure::database)?);
             }
-            let reserve = tx.reserve_exec().await.map_err(Failure::database)?;
+            let reserve =
+                browser_observe!(BusinessReserve, tx.reserve_exec()).map_err(Failure::database)?;
             let fresh = self.clock(&mut wall)?;
 
             if fresh.ceil_ms >= row.expiry || deadline <= Instant::now() {
@@ -1189,7 +1210,7 @@ impl Pool {
                     .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 reply
             };
-            if reply.await.map_err(Failure::database)? != 1 {
+            if browser_observe!(BusinessDelete, reply).map_err(Failure::database)? != 1 {
                 return Err(Failure::denied());
             }
             let final_sample = self.clock(&mut wall)?;
@@ -1210,8 +1231,10 @@ impl Pool {
                 Some((row.expiry, final_sample.ceil_ms)),
                 Some((deadline, final_sample.monotonic)),
             );
-            self.maintenance(&tx, wall.ok_or_else(Failure::unavailable)?)
-                .await?;
+            browser_observe!(
+                BusinessMaintenance,
+                self.maintenance(&tx, wall.ok_or_else(Failure::unavailable)?)
+            )?;
             Ok((deadline, row.expiry))
         }
         .await;

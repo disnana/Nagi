@@ -555,6 +555,24 @@ async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
                 f.stats.claim_committed.load(Ordering::SeqCst),
             );
         }
+        // Observe exclusion independently, even when the existing status guard fails.
+        let row_absent = f.rows().await == 0;
+        let verifier_unchanged = f.stats.verifier.load(Ordering::SeqCst) == 1;
+        let handler_unchanged = f.stats.handler.load(Ordering::SeqCst) == 0;
+        if !(retry.status == 403
+            && !retry.auth_cookie()
+            && !retry.deletion()
+            && row_absent
+            && verifier_unchanged
+            && handler_unchanged)
+        {
+            eprintln!(
+                "browser_login_public_api_diag case=committed_claim_replay_proof iteration={} row_absent={} verifier_unchanged={} handler_unchanged={}",
+                iteration, row_absent, verifier_unchanged, handler_unchanged,
+            );
+        }
+        retry.guarded();
+        assert!(row_absent && verifier_unchanged && handler_unchanged);
         assert!(retry.status == 403 && !retry.auth_cookie() && !retry.deletion());
         s.stop().await;
         f.stop().await;

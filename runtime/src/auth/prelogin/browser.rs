@@ -188,15 +188,23 @@ impl Pool {
             let until = match owner.request_until() {
                 Ok(until) => until,
                 Err(error) => {
+                    #[cfg(nagi_browser_login_diag)]
+                    super::super::browser_login_observer::exit(
+                        super::super::browser_login_observer::Exit::ActualGate,
+                    );
                     return std::task::Poll::Ready(Err(if owner.was_consumed() {
                         error.after_commit()
                     } else {
                         error
-                    }))
+                    }));
                 }
             };
             timer.as_mut().reset(tokio::time::Instant::from_std(until));
             if timer.as_mut().poll(cx).is_ready() {
+                #[cfg(nagi_browser_login_diag)]
+                super::super::browser_login_observer::exit(
+                    super::super::browser_login_observer::Exit::ActualGate,
+                );
                 let error = Failure::authority(super::super::expired());
                 return std::task::Poll::Ready(Err(if owner.was_consumed() {
                     error.after_commit()
