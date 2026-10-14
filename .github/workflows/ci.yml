@@ -504,6 +504,10 @@ jobs:
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
       - name: Check SF06 public HTTP client across package targets
         env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/native-target
+          CARGO_PROFILE_DEV_DEBUG: '0'
+          CARGO_PROFILE_TEST_DEBUG: '0'
+          CARGO_INCREMENTAL: '0'
           NAGI_NATIVE_TARGET_DIR: ${{ github.workspace }}/native-target
           NAGI_TEST_ARTIFACT_DIR: ${{ runner.temp }}/sf06-http-client-native
         shell: bash
