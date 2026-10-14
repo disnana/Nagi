@@ -75,16 +75,97 @@ FIELD_NAMES = (
     "consumed",
 )
 
+# These exact markers are emitted by the selected public test only on a
+# failure branch. Their phrases and booleans are closed source enums; no
+# arbitrary text, panic payload, response material, path, or token is parsed.
+MAX_PUBLIC_RECORDS = 15  # three fixed marker cases for each of five iterations
+PUBLIC_BOOL = r"(?:true|false)"
+PUBLIC_UINT = r"(?:0|[1-9][0-9]{0,4})"
+PUBLIC_MARKERS = {
+    "committed_claim_initial": (
+        "initial_response",
+        re.compile(
+            r"browser_login_public_api_diag case=committed_claim_initial phase=initial_response "
+            r"iteration=(?P<iteration>[0-4]) "
+            r"expected_status=(?P<expected_status>401|500|504) "
+            r"status=(?P<status>[1-5][0-9]{2}) "
+            rf"auth_cookie=(?P<auth_cookie>{PUBLIC_BOOL}) "
+            rf"deletion=(?P<deletion>{PUBLIC_BOOL}) "
+            rf"verifier_calls=(?P<verifier_calls>{PUBLIC_UINT}) "
+            rf"handler_calls=(?P<handler_calls>{PUBLIC_UINT}) "
+            rf"claim_committed=(?P<claim_committed>{PUBLIC_BOOL})\Z",
+            re.ASCII,
+        ),
+    ),
+    "committed_claim_retry": (
+        "retry_response",
+        re.compile(
+            r"browser_login_public_api_diag case=committed_claim_retry phase=retry_response "
+            r"iteration=(?P<iteration>[0-4]) "
+            r"status=(?P<status>[1-5][0-9]{2}) "
+            rf"body_bytes=(?P<body_bytes>{PUBLIC_UINT}) "
+            rf"set_cookie_count=(?P<set_cookie_count>{PUBLIC_UINT}) "
+            rf"auth_cookie=(?P<auth_cookie>{PUBLIC_BOOL}) "
+            rf"deletion=(?P<deletion>{PUBLIC_BOOL}) "
+            rf"verifier_calls=(?P<verifier_calls>{PUBLIC_UINT}) "
+            rf"handler_calls=(?P<handler_calls>{PUBLIC_UINT}) "
+            rf"claim_committed=(?P<claim_committed>{PUBLIC_BOOL})\Z",
+            re.ASCII,
+        ),
+    ),
+    "committed_claim_replay_proof": (
+        None,
+        re.compile(
+            r"browser_login_public_api_diag case=committed_claim_replay_proof "
+            r"iteration=(?P<iteration>[0-4]) "
+            rf"row_absent=(?P<row_absent>{PUBLIC_BOOL}) "
+            rf"verifier_unchanged=(?P<verifier_unchanged>{PUBLIC_BOOL}) "
+            rf"handler_unchanged=(?P<handler_unchanged>{PUBLIC_BOOL})\Z",
+            re.ASCII,
+        ),
+    ),
+}
+PUBLIC_BOOL_FIELDS = {
+    "auth_cookie",
+    "deletion",
+    "claim_committed",
+    "row_absent",
+    "verifier_unchanged",
+    "handler_unchanged",
+}
+
+
+def parse_public_record(line: str) -> dict | None:
+    for case, (phase, pattern) in PUBLIC_MARKERS.items():
+        match = pattern.fullmatch(line)
+        if match is None:
+            continue
+        raw_values = match.groupdict()
+        record = {"case": case}
+        if phase is not None:
+            record["phase"] = phase
+        for name, value in raw_values.items():
+            record[name] = value == "true" if name in PUBLIC_BOOL_FIELDS else int(value)
+        if not 0 <= record["iteration"] <= 4:
+            return None
+        if record.get("verifier_calls", 0) > 4 or record.get("handler_calls", 0) > 4:
+            return None
+        if record.get("body_bytes", 0) > 8192 or record.get("set_cookie_count", 0) > 16:
+            return None
+        return record
+    return None
+
 
 def empty_document(cargo_exit: int) -> dict:
     return {
-        "schema": "nagi-browser-login-phase-diagnostic-v1",
+        "schema": "nagi-browser-login-phase-diagnostic-v2",
         "case": CASE,
         "command": COMMAND,
         "cargo_exit": cargo_exit,
         "capture_valid": False,
         "test_summary": "unavailable",
         "records": [],
+        "public_api_records": [],
     }
 
 
@@ -100,6 +181,8 @@ def sanitize(raw: bytes | None, cargo_exit: int) -> tuple[dict, int]:
         return document, 1
 
     records: list[dict] = []
+    public_records: list[dict] = []
+    public_record_ids: set[tuple[str, int]] = set()
     request_ids: set[int] = set()
     summaries: list[str] = []
     case_rows: list[str] = []
@@ -116,6 +199,19 @@ def sanitize(raw: bytes | None, cargo_exit: int) -> tuple[dict, int]:
                 continue
             request_ids.add(values[0])
             records.append(dict(zip(FIELD_NAMES, values)))
+            continue
+
+        if "browser_login_public_api_diag" in line:
+            public_record = parse_public_record(line)
+            if public_record is None or len(public_records) >= MAX_PUBLIC_RECORDS:
+                invalid = True
+                continue
+            record_id = (public_record["case"], public_record["iteration"])
+            if record_id in public_record_ids:
+                invalid = True
+                continue
+            public_record_ids.add(record_id)
+            public_records.append(public_record)
             continue
 
         if line.startswith(SUMMARY_PREFIX):
@@ -153,16 +249,22 @@ def sanitize(raw: bytes | None, cargo_exit: int) -> tuple[dict, int]:
             invalid = True
     elif summary_status == "passed":
         invalid = True
+    if cargo_exit == 0 and public_records:
+        # The public-test markers are printed only immediately before an
+        # assertion failure in this exact source test.
+        invalid = True
 
     document["test_summary"] = summary_status or "unavailable"
     if not invalid:
         document["capture_valid"] = True
         document["records"] = records
+        document["public_api_records"] = public_records
         return document, 0 if cargo_exit == 0 else 1
 
     # Drop all event records if any candidate record was malformed or the
     # summary/case identity did not match the exact fixed test contract.
     document["records"] = []
+    document["public_api_records"] = []
     return document, 1
 
 
