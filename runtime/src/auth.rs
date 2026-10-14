@@ -4,6 +4,9 @@
 pub mod csrf;
 #[path = "auth/session.rs"]
 pub mod session;
+#[cfg(nagi_auth_stage_diag)]
+#[path = "auth/session_deadline_observer.rs"]
+pub(crate) mod session_deadline_observer;
 #[cfg(all(test, nagi_auth_stage_diag))]
 #[path = "auth/auth_stage_observer.rs"]
 mod stage_observer;

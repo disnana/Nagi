@@ -306,6 +306,21 @@ impl Reply {
         );
     }
     fn material(&self) -> (String, String) {
+        if self.status != 200 {
+            let class = match self.status {
+                400 => "request",
+                401 | 403 => "refusal",
+                500 => "internal",
+                503 => "unavailable",
+                504 => "deadline",
+                _ => "other",
+            };
+            eprintln!(
+                "browser_login_bootstrap_diag check=material status={} class={} set_cookie_count={} body_bytes={} auth_cookie={} deletion={}",
+                self.status, class, self.values("set-cookie").len().min(65),
+                self.body.len().min(8193), self.auth_cookie(), self.deletion(),
+            );
+        }
         assert!(self.status == 200);
         let c = self.values("set-cookie");
         assert!(c.len() == 1);
@@ -386,6 +401,16 @@ async fn public_login_claims_once_then_named_verifier_issue_and_appended_cookies
         request(s.address, "POST", "/login", &h, b"{}"),
         request(s.address, "POST", "/login", &h, b"{}")
     );
+    // Reuse the frozen closed concurrent witness, retaining the exact assertion.
+    if !((a.status == 200 && b.status == 403) || (a.status == 403 && b.status == 200)) {
+        eprintln!(
+            "browser_login_stock_cause case=concurrent_once a_status={} b_status={} a_auth_cookie={} b_auth_cookie={} a_deletion={} b_deletion={} verifier_calls={} handler_calls={} claim_committed={}",
+            a.status, b.status, a.auth_cookie(), b.auth_cookie(), a.deletion(), b.deletion(),
+            f.stats.verifier.load(Ordering::SeqCst).min(1023),
+            f.stats.handler.load(Ordering::SeqCst).min(1023),
+            f.stats.claim_committed.load(Ordering::SeqCst),
+        );
+    }
     assert!((a.status == 200 && b.status == 403) || (a.status == 403 && b.status == 200));
     let win = if a.status == 200 { &a } else { &b };
     win.guarded();
@@ -811,7 +836,18 @@ async fn json_value_nodes_and_container_depth_accept_exact_bounds() {
                 && f.stats.verifier.load(Ordering::SeqCst) == before
         );
         let r = request(s.address, "POST", "/login", &h, exact).await;
-        assert!(r.status == 200 && r.body == exact && f.rows().await == 0);
+        // Keep the original short-circuit row observation and failure gate.
+        let exact_ok = r.status == 200 && r.body == exact && f.rows().await == 0;
+        if !exact_ok {
+            eprintln!(
+                "browser_login_json_bound_diag phase=exact_bounds status={} body_bytes={} expected_body_bytes={} body_matches={} verifier_calls={} handler_calls={} claim_committed={}",
+                r.status, r.body.len().min(8193), exact.len().min(8193), r.body == exact,
+                f.stats.verifier.load(Ordering::SeqCst).min(1023),
+                f.stats.handler.load(Ordering::SeqCst).min(1023),
+                f.stats.claim_committed.load(Ordering::SeqCst),
+            );
+        }
+        assert!(exact_ok);
     }
     s.stop().await;
     f.stop().await;

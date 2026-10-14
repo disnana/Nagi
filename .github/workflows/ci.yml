@@ -135,6 +135,53 @@ jobs:
             ${{ runner.temp }}/auth-stage-prelogin.trace
             ${{ runner.temp }}/auth-stage-broad.trace
           if-no-files-found: ignore
+      - name: Capture bounded Session deadline public tests
+        id: session_deadline_diag
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/tests/test_session_deadline_diagnostic.py
+          set +e
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-session.raw"
+          pipeline_status=("${PIPESTATUS[@]}")
+          session_rc=${pipeline_status[0]}
+          if [ "${pipeline_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-session.raw"; fi
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test browser_login_public_api 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-browser.raw"
+          pipeline_status=("${PIPESTATUS[@]}")
+          browser_rc=${pipeline_status[0]}
+          if [ "${pipeline_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-browser.raw"; fi
+          python scripts/ci/session_deadline_diagnostic.py "$RUNNER_TEMP" "$session_rc" "$browser_rc" "$RUNNER_TEMP/session-deadline-diagnostic.json"
+          diagnose_rc=$?
+          rm -f "$RUNNER_TEMP/session-deadline-session.raw" "$RUNNER_TEMP/session-deadline-browser.raw"
+          exit "$diagnose_rc"
+      - name: Preserve sanitized Session deadline diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: session-deadline-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/session-deadline-diagnostic.json
+          if-no-files-found: ignore
       - name: Check B1 Session CSRF runtime and public socket contracts
         shell: bash
         run: |
@@ -269,6 +316,10 @@ jobs:
         if: always() && steps.auth_stage_diag.outcome != 'skipped'
         shell: bash
         run: test '${{ steps.auth_stage_diag.outcome }}' = success
+      - name: Enforce Session deadline diagnostic after normal checks
+        if: always() && steps.session_deadline_diag.outcome != 'skipped'
+        shell: bash
+        run: test '${{ steps.session_deadline_diag.outcome }}' = success
       - name: Preserve compiler and application failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
@@ -466,6 +517,53 @@ jobs:
             ${{ runner.temp }}/auth-stage-csrf.trace
             ${{ runner.temp }}/auth-stage-prelogin.trace
             ${{ runner.temp }}/auth-stage-broad.trace
+          if-no-files-found: ignore
+      - name: Capture bounded Session deadline public tests
+        id: session_deadline_diag
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/tests/test_session_deadline_diagnostic.py
+          set +e
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-session.raw"
+          pipeline_status=("${PIPESTATUS[@]}")
+          session_rc=${pipeline_status[0]}
+          if [ "${pipeline_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-session.raw"; fi
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test browser_login_public_api 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-browser.raw"
+          pipeline_status=("${PIPESTATUS[@]}")
+          browser_rc=${pipeline_status[0]}
+          if [ "${pipeline_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-browser.raw"; fi
+          python scripts/ci/session_deadline_diagnostic.py "$RUNNER_TEMP" "$session_rc" "$browser_rc" "$RUNNER_TEMP/session-deadline-diagnostic.json"
+          diagnose_rc=$?
+          rm -f "$RUNNER_TEMP/session-deadline-session.raw" "$RUNNER_TEMP/session-deadline-browser.raw"
+          exit "$diagnose_rc"
+      - name: Preserve sanitized Session deadline diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: session-deadline-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/session-deadline-diagnostic.json
           if-no-files-found: ignore
       - name: Check B1 Session CSRF runtime and public socket contracts
         shell: bash
@@ -814,6 +912,10 @@ jobs:
         if: always() && steps.auth_stage_diag.outcome != 'skipped'
         shell: bash
         run: test '${{ steps.auth_stage_diag.outcome }}' = success
+      - name: Enforce Session deadline diagnostic after normal checks
+        if: always() && steps.session_deadline_diag.outcome != 'skipped'
+        shell: bash
+        run: test '${{ steps.session_deadline_diag.outcome }}' = success
       - name: Preserve target-platform compiler, application, and HTTP observation evidence
         if: failure()
         uses: actions/upload-artifact@v4

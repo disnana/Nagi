@@ -478,6 +478,40 @@ fn guarded(cookie: &str, token: &str) -> String {
     format!("Cookie: {cookie}\r\nOrigin: https://localhost\r\nX-CSRF-Token: {token}\r\n")
 }
 
+// Diagnostic validation only: a real second checkout waits for the same-file
+// Immediate writer. The closed witness must report the actual native boundary;
+// this fixture is not evidence about the cause of a CI timeout.
+#[cfg(nagi_auth_stage_diag)]
+#[tokio::test]
+async fn controlled_same_file_writer_reports_native_token_identity_boundary() {
+    let f = Fixture::new(2, 176).await;
+    let setup = Server::new(&f).await;
+    let cookie = request(
+        &setup,
+        "POST",
+        "/issue",
+        "Authorization: Bearer owned\r\n",
+        &[],
+    )
+    .await
+    .cookie();
+    setup.stop().await;
+    let options = http::security_timeout(checked(), 20).unwrap();
+    let s = Server::new_with_options(&f, options).await;
+    let held = sqlite::begin(&f.pool, sqlite::BeginMode::Immediate)
+        .await
+        .unwrap();
+    let reply = request(&s, "GET", "/csrf", &format!("Cookie: {cookie}\r\n"), &[]).await;
+    assert_eq!(reply.status, 504);
+    assert!(reply.values("set-cookie").is_empty());
+    assert_eq!(s.state.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(s.state.authorizer_entered.load(Ordering::SeqCst), 0);
+    sqlite::rollback(held).await.unwrap();
+    s.stop().await;
+    // Actual worker close/join must complete after canceled acquisition cleanup.
+    f.stop().await;
+}
+
 #[tokio::test]
 async fn checked_profiles_reject_unsealed_or_incompatible_policy_sources() {
     for (count, bytes, cleanup, ttl, collision) in [
