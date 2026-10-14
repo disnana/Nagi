@@ -50,6 +50,7 @@ fn timed_io_writes_and_pending_flush_preserve_the_original_send_end() {
     let (sending, sent) = tokio::sync::watch::channel(Sending {
         deadline: Some(end),
         discard_remaining: true,
+        body_transferred: true,
     });
     let mut io = TimedIo {
         inner: Io { ready: false },

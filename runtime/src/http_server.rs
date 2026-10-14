@@ -434,7 +434,10 @@ impl Response {
             self.headers.insert(names::CONTENT_LENGTH, length);
         }
         let body = if head { Bytes::new() } else { self.body };
-        let mut response = axum::http::Response::new(BufferedBody { bytes: body });
+        let mut response = axum::http::Response::new(BufferedBody {
+            bytes: body,
+            sending: None,
+        });
         *response.status_mut() = code;
         *response.headers_mut() = self.headers;
         response
@@ -445,6 +448,7 @@ impl Response {
 /// representation avoids a dynamic body box on every response.
 struct BufferedBody {
     bytes: Bytes,
+    sending: Option<tokio::sync::watch::Sender<Sending>>,
 }
 impl hyper::body::Body for BufferedBody {
     type Data = Bytes;
@@ -457,9 +461,11 @@ impl hyper::body::Body for BufferedBody {
         if self.bytes.is_empty() {
             Poll::Ready(None)
         } else {
-            Poll::Ready(Some(Ok(hyper::body::Frame::data(std::mem::take(
-                &mut self.bytes,
-            )))))
+            let bytes = std::mem::take(&mut self.bytes);
+            if let Some(sending) = self.sending.take() {
+                sending.send_modify(|state| state.body_transferred = true);
+            }
+            Poll::Ready(Some(Ok(hyper::body::Frame::data(bytes))))
         }
     }
     fn is_end_stream(&self) -> bool {
@@ -1627,14 +1633,15 @@ where
     Ok(cors_context.finish(response))
 }
 
-// All responses in this API contain one complete Bytes frame. Hyper calls
-// the underlying flush only after its pending headers/body buffers have been
-// written, so clearing the deadline here leaves idle keep-alive timing to its
-// independent header timer. Sending bytes does not reset the absolute limit.
+// Hyper can flush headers before pulling the body's one buffered frame.
+// Clearing the original deadline requires both frame handoff and a successful
+// native flush. Idle keep-alive timing then uses its independent header timer.
+// Sending bytes and intermediate flushes do not reset the absolute limit.
 #[derive(Clone, Copy, Default)]
 struct Sending {
     deadline: Option<tokio::time::Instant>,
     discard_remaining: bool,
+    body_transferred: bool,
 }
 struct TimedIo<T> {
     inner: T,
@@ -1685,7 +1692,11 @@ impl<T: hyper::rt::Write + Unpin> hyper::rt::Write for TimedIo<T> {
     }
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         let result = Pin::new(&mut self.inner).poll_flush(cx);
-        if matches!(result, Poll::Ready(Ok(()))) && self.sending.borrow().deadline.is_some() {
+        let state = *self.sending.borrow();
+        if matches!(result, Poll::Ready(Ok(())))
+            && state.deadline.is_some()
+            && state.body_transferred
+        {
             self.sending.send_modify(|state| state.deadline = None);
         }
         result
@@ -1801,11 +1812,17 @@ where
                     #[cfg(test)]
                     let probe = service_probe.clone();
                     async move {
-                        let response = future.await;
+                        let mut response = future.await;
                         let discard_remaining = may_have_body && response.as_ref().is_ok_and(|response| {
                             response.headers().get(names::CONNECTION).is_some_and(|value| value == "close")
                         });
-                        let state = Sending { deadline: Some(tokio::time::Instant::now() + send_deadline), discard_remaining };
+                        let body_transferred = response.as_ref().is_ok_and(|response| response.body().bytes.is_empty());
+                        let state = Sending { deadline: Some(tokio::time::Instant::now() + send_deadline), discard_remaining, body_transferred };
+                        if let Ok(response) = &mut response {
+                            if !body_transferred {
+                                response.body_mut().sending = Some(sending.clone());
+                            }
+                        }
                         #[cfg(test)]
                         if let (Some(probe), Ok(response)) = (&probe, &response) {
                             probe.arm(state.deadline.unwrap(), response.status().as_u16(), response.body().bytes.len());

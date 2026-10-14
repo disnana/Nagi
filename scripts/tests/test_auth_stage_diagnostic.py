@@ -13,6 +13,8 @@ spec.loader.exec_module(diagnostic)
 
 STALLED_CAPACITY = diagnostic.HTTP_STALLED_CASES["Capacity"]
 STALLED_GRACEFUL = diagnostic.HTTP_STALLED_CASES["Graceful"]
+PUBLIC_REPLY_CASES = sorted(diagnostic.SAFE_REPLY_CASES)
+PUBLIC_WIRE_CASE = diagnostic.WIRE_BODY_FAILURE_CASE
 
 
 class DiagnosticCases(unittest.TestCase):
@@ -99,6 +101,45 @@ class DiagnosticCases(unittest.TestCase):
             accepted = diagnostic.capture(name, self.root, exit_code, cases)
         return accepted, (self.root / f"auth-stage-{name}.trace").read_bytes()
 
+    def public_failures(self, markers, cases=None):
+        failed = list(markers)
+        sections = []
+        for name, marker_lines in markers.items():
+            sections.append(f"---- {name} stdout ----\n" + "\n".join(marker_lines) + "\n")
+        rows = "".join(f"test {name} ... FAILED\n" for name in failed)
+        inventory = "failures:\n\n" + "".join(f"    {name}\n" for name in failed)
+        inventory_cases = cases if cases is not None else {name: name for name in failed}
+        return rows + "".join(sections) + inventory, inventory_cases
+
+    def safe_reply_marker(self, **changes):
+        fields = {
+            "check": "token_response",
+            "status": "504",
+            "class": "deadline",
+            "set_cookie_count": "0",
+            "body_bytes": "15",
+        }
+        fields.update(changes)
+        return "safe_reply_diag " + " ".join(f"{key}={value}" for key, value in fields.items())
+
+    def wire_body_marker(self, **changes):
+        fields = {
+            "case": "wire_body_cap",
+            "phase": "exact_body_response",
+            "iteration": "0",
+            "status": "504",
+            "body_bytes": "15",
+            "expected_body_bytes": "192",
+            "body_matches": "false",
+            "set_cookie_count": "0",
+            "auth_cookie": "false",
+            "deletion": "false",
+        }
+        fields.update(changes)
+        return "browser_login_public_api_diag " + " ".join(
+            f"{key}={value}" for key, value in fields.items()
+        )
+
     def test_http_io_marker_is_crlf_safe_and_preserves_broad_auth_trace(self):
         event = ("op=Claim stage=Return event=Success elapsed_us=Some(1) "
                  "utc_remaining_ms=Some(2) mono=Some(Before(3)) kind=None outcome=None\n")
@@ -145,6 +186,161 @@ class DiagnosticCases(unittest.TestCase):
                 output = diagnostic.http_io_failures(marker)
                 self.assertEqual(output, ["http_test_io=unavailable"])
                 self.assertNotIn("secret", "\n".join(output))
+
+    def test_00_public_reply_markers_reject_malformed_private_and_unbounded_values(self):
+        case = PUBLIC_REPLY_CASES[0]
+        base = self.safe_reply_marker()
+        invalid_markers = [
+            "safe_reply_diag check=token_response status=504 class=deadline set_cookie_count=0",
+            base + " token=wireSecret",
+            self.safe_reply_marker(check="unknown"),
+            self.safe_reply_marker(**{"class": "unknown"}),
+            self.safe_reply_marker(**{"class": "unavailable"}),
+            self.safe_reply_marker(status="65536", **{"class": "other"}),
+            self.safe_reply_marker(set_cookie_count="8193"),
+            self.safe_reply_marker(body_bytes="8193"),
+            base.replace("status=504", "status=504 status=504"),
+            base + " /private/path",
+            "panic text " + base,
+            self.safe_reply_marker(status="200", **{"class": "success"}, body_bytes="60"),
+        ]
+        for marker in invalid_markers:
+            raw, cases = self.public_failures({case: [marker]})
+            with self.subTest(marker_kind=marker.split()[1] if len(marker.split()) > 1 else "empty"):
+                output, invalid = diagnostic.public_test_diagnostics(raw, 101, cases)
+                self.assertTrue(invalid)
+                self.assertEqual(output, [f"session_reply=test={case} unavailable"])
+                rendered = "\n".join(output)
+                self.assertNotIn("wireSecret", rendered)
+                self.assertNotIn("/private", rendered)
+                self.assertNotIn("safe_reply_diag", rendered)
+
+        duplicate_raw, cases = self.public_failures({case: [base, base]})
+        output, invalid = diagnostic.public_test_diagnostics(duplicate_raw, 101, cases)
+        self.assertTrue(invalid)
+        self.assertEqual(output, [f"session_reply=test={case} unavailable"])
+
+        unknown_raw, cases = self.public_failures({"unknown_case": [base]})
+        output, invalid = diagnostic.public_test_diagnostics(unknown_raw, 101, cases)
+        self.assertTrue(invalid)
+        self.assertEqual(output, ["session_reply=unavailable"])
+
+        missing_inventory, _ = self.public_failures({case: [base]})
+        output, invalid = diagnostic.public_test_diagnostics(missing_inventory, 101, None)
+        self.assertTrue(invalid)
+        self.assertEqual(output, [f"session_reply=test={case} unavailable"])
+
+    def test_01_public_wire_markers_reject_unknown_duplicate_and_bad_bounds(self):
+        base = self.wire_body_marker()
+        invalid_markers = [
+            "browser_login_public_api_diag case=wire_body_cap phase=exact_body_response "
+            "iteration=0 status=504 body_bytes=15 expected_body_bytes=192 "
+            "body_matches=false set_cookie_count=0 auth_cookie=false",
+            base + " token=wireSecret",
+            self.wire_body_marker(case="unknown"),
+            self.wire_body_marker(phase="unknown"),
+            self.wire_body_marker(iteration="2"),
+            self.wire_body_marker(status="65536"),
+            self.wire_body_marker(body_bytes="8193"),
+            self.wire_body_marker(status="504", body_bytes="193",
+                                  **{"body_matches": "true"}),
+            self.wire_body_marker(expected_body_bytes="193"),
+            self.wire_body_marker(set_cookie_count="8193"),
+            self.wire_body_marker(**{"body_matches": "yes"}),
+            self.wire_body_marker(**{"body_matches": "true"}),
+            self.wire_body_marker(status="200", body_bytes="192",
+                                  **{"body_matches": "true", "auth_cookie": "true",
+                                     "deletion": "true"}),
+            base + " /private/path",
+            "panic text " + base,
+        ]
+        for marker in invalid_markers:
+            raw, cases = self.public_failures({PUBLIC_WIRE_CASE: [marker]})
+            with self.subTest(marker_kind=marker.split()[1] if len(marker.split()) > 1 else "empty"):
+                output, invalid = diagnostic.public_test_diagnostics(raw, 101, cases)
+                self.assertTrue(invalid)
+                self.assertEqual(output, [f"browser_wire=test={PUBLIC_WIRE_CASE} unavailable"])
+                rendered = "\n".join(output)
+                self.assertNotIn("wireSecret", rendered)
+                self.assertNotIn("/private", rendered)
+                self.assertNotIn("browser_login_public_api_diag", rendered)
+
+        duplicate_raw, cases = self.public_failures({PUBLIC_WIRE_CASE: [base, base]})
+        output, invalid = diagnostic.public_test_diagnostics(duplicate_raw, 101, cases)
+        self.assertTrue(invalid)
+        self.assertEqual(output, [f"browser_wire=test={PUBLIC_WIRE_CASE} unavailable"])
+
+    def test_02_public_markers_bind_to_failed_case_and_nonzero_exit(self):
+        case = PUBLIC_REPLY_CASES[0]
+        raw, cases = self.public_failures({case: []})
+        output, invalid = diagnostic.public_test_diagnostics(raw, 101, cases)
+        self.assertTrue(invalid)
+        self.assertEqual(output, [f"session_reply=test={case} unavailable"])
+
+        raw, cases = self.public_failures({case: [self.safe_reply_marker()]})
+        output, invalid = diagnostic.public_test_diagnostics(raw, 0, cases)
+        self.assertTrue(invalid)
+        self.assertEqual(output, [f"session_reply=test={case} unavailable"])
+
+        unrelated = "unrelated_failure"
+        raw, cases = self.public_failures({unrelated: [self.safe_reply_marker()]})
+        output, invalid = diagnostic.public_test_diagnostics(raw, 101, cases)
+        self.assertTrue(invalid)
+        self.assertEqual(output, ["session_reply=unavailable"])
+
+    def test_03_public_markers_capture_source_closed_records_without_hiding_failure(self):
+        markers = {
+            PUBLIC_REPLY_CASES[0]: [self.safe_reply_marker()],
+            PUBLIC_REPLY_CASES[1]: [self.safe_reply_marker()],
+            PUBLIC_REPLY_CASES[2]: [self.safe_reply_marker()],
+            PUBLIC_WIRE_CASE: [self.wire_body_marker()],
+        }
+        raw, cases = self.public_failures(markers)
+        output, invalid = diagnostic.public_test_diagnostics(raw, 101, cases)
+        self.assertFalse(invalid)
+        self.assertEqual(
+            output,
+            [
+                f"session_reply=test={name} check=token_response status=504 class=deadline "
+                "set_cookie_count=0 body_bytes=15"
+                for name in sorted(PUBLIC_REPLY_CASES)
+            ] + [
+                f"browser_wire=test={PUBLIC_WIRE_CASE} case=wire_body_cap "
+                "phase=exact_body_response iteration=0 status=504 body_bytes=15 "
+                "expected_body_bytes=192 body_matches=false set_cookie_count=0 "
+                "auth_cookie=false deletion=false"
+            ],
+        )
+
+        accepted, captured = self.capture(self.raw() + raw, 101, cases)
+        self.assertFalse(accepted)
+        self.assertIn(b"cargo_exit=101 inventory=fail\n", captured)
+        for name in sorted(PUBLIC_REPLY_CASES) + [PUBLIC_WIRE_CASE]:
+            self.assertIn(f"failed_case={name}\n".encode(), captured)
+        self.assertEqual(captured.count(b"session_reply=test="), 3)
+        self.assertEqual(captured.count(b"browser_wire=test="), 1)
+        self.assertNotIn(b"safe_reply_diag", captured)
+        self.assertNotIn(b"browser_login_public_api_diag", captured)
+
+    def test_04_public_wire_marker_accepts_same_length_content_mismatch(self):
+        marker = self.wire_body_marker(
+            status="200",
+            body_bytes="192",
+            **{"body_matches": "false", "set_cookie_count": "2",
+               "auth_cookie": "true", "deletion": "true"},
+        )
+        raw, cases = self.public_failures({PUBLIC_WIRE_CASE: [marker]})
+        output, invalid = diagnostic.public_test_diagnostics(raw, 101, cases)
+        self.assertFalse(invalid)
+        self.assertEqual(
+            output,
+            [
+                f"browser_wire=test={PUBLIC_WIRE_CASE} case=wire_body_cap "
+                "phase=exact_body_response iteration=0 status=200 body_bytes=192 "
+                "expected_body_bytes=192 body_matches=false set_cookie_count=2 "
+                "auth_cookie=true deletion=true"
+            ],
+        )
 
     def stalled_marker(self, case="Capacity", **changes):
         fields = {

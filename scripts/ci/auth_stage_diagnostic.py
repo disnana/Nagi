@@ -64,6 +64,39 @@ HTTP_STALLED_MARKER = re.compile(
     r"end_changed=(None|Some\((?:true|false)\))\Z"
 )
 HTTP_STALLED_FAILURE_LIMIT = 2
+SESSION_TOKEN_FAILURE_CASES = {
+    "finite_origin_and_header_refusals_preserve_existing_token_and_capacity":
+        "finite_origin_and_header_refusals_preserve_existing_token_and_capacity",
+    "failed_guarded_handler_never_finalizes_committed_rotation_cookie":
+        "failed_guarded_handler_never_finalizes_committed_rotation_cookie",
+    "body_checkpoint_rejects_generation_changed_after_actual_authorization":
+        "body_checkpoint_rejects_generation_changed_after_actual_authorization",
+}
+WIRE_BODY_FAILURE_CASE = "wire_body_cap_is_independent_of_db_quota_and_checked_before_claim"
+PUBLIC_TEST_STDOUT = re.compile(rf"---- ({QUALIFIED}) stdout ----\Z")
+PUBLIC_STATUS_CLASSES = (
+    r"(?:success|invalid_request|invalid_or_expired|denied|internal|unavailable|deadline|other)"
+)
+PUBLIC_DECIMAL = r"(?:0|[1-9][0-9]{0,4})"
+SAFE_REPLY_PREFIX = "safe_reply_diag"
+SAFE_REPLY_MARKER = re.compile(
+    rf"safe_reply_diag check=(cookie_count|token_response|token_cookie) "
+    rf"status=({PUBLIC_DECIMAL}) class=({PUBLIC_STATUS_CLASSES}) "
+    rf"set_cookie_count=({PUBLIC_DECIMAL}) body_bytes=({PUBLIC_DECIMAL})\Z"
+)
+WIRE_BODY_PREFIX = "browser_login_public_api_diag"
+WIRE_BODY_MARKER = re.compile(
+    rf"browser_login_public_api_diag case=wire_body_cap phase=exact_body_response "
+    rf"iteration=([01]) status=({PUBLIC_DECIMAL}) body_bytes=({PUBLIC_DECIMAL}) "
+    rf"expected_body_bytes=(192) body_matches=(true|false) "
+    rf"set_cookie_count=({PUBLIC_DECIMAL}) auth_cookie=(true|false) "
+    rf"deletion=(true|false)\Z"
+)
+TEST_RESPONSE_LIMIT = 8192
+TOKEN_RESPONSE_BYTES = 60
+WIRE_BODY_EXPECTED_BYTES = 192
+SAFE_REPLY_CASES = set(SESSION_TOKEN_FAILURE_CASES)
+PUBLIC_MARKER_LIMIT = len(SAFE_REPLY_CASES) + 1
 
 
 def read_bounded(path: pathlib.Path):
@@ -233,6 +266,168 @@ def http_stalled_diagnostics(text: str, exit_code: int, cases):
     return [parsed[name] for name in sorted(parsed)], False
 
 
+def _status_class(status: int) -> str:
+    if 200 <= status <= 299:
+        return "success"
+    return {
+        400: "invalid_request",
+        401: "invalid_or_expired",
+        403: "denied",
+        500: "internal",
+        503: "unavailable",
+        504: "deadline",
+    }.get(status, "other")
+
+
+def _failed_public_targets(text: str, cases):
+    targets = SAFE_REPLY_CASES | {WIRE_BODY_FAILURE_CASE}
+    found = set()
+    seen_rows = set()
+    seen_items = set()
+    invalid = cases is None
+    in_failures = False
+    for line in text.splitlines():
+        if line == "failures:":
+            in_failures = True
+            continue
+        row = FAILED_ROW.fullmatch(line)
+        item = FAILED_ITEM.fullmatch(line) if in_failures and line else None
+        candidate = row.group(1) if row else item.group(1) if item else None
+        if candidate in targets:
+            seen = seen_rows if row else seen_items
+            if candidate in seen or cases is None or cases.get(candidate) != candidate:
+                invalid = True
+            seen.add(candidate)
+            found.add(candidate)
+        if in_failures and line and item is None:
+            in_failures = False
+    return found, invalid
+
+
+def public_test_diagnostics(text: str, exit_code: int, cases):
+    """Publish only complete fixed records tied to their exact failed test."""
+    failed, invalid_inventory = _failed_public_targets(text, cases)
+    reply_expected = failed & SAFE_REPLY_CASES
+    wire_expected = failed & {WIRE_BODY_FAILURE_CASE}
+    reply_records = {}
+    wire_records = {}
+    reply_invalid = invalid_inventory
+    wire_invalid = invalid_inventory
+    saw_reply = False
+    saw_wire = False
+    current_test = None
+    reply_markers = 0
+    wire_markers = 0
+
+    for line in text.splitlines():
+        header = PUBLIC_TEST_STDOUT.fullmatch(line)
+        if header:
+            current_test = header.group(1)
+        elif line == "failures:" or line.startswith("test result:"):
+            current_test = None
+
+        if SAFE_REPLY_PREFIX in line:
+            saw_reply = True
+            reply_markers += 1
+            marker = SAFE_REPLY_MARKER.fullmatch(line)
+            if (marker is None or current_test not in SAFE_REPLY_CASES or
+                    current_test not in reply_expected or cases is None or
+                    cases.get(current_test) != current_test or
+                    current_test in reply_records):
+                reply_invalid = True
+                continue
+            check, status_text, status_class, count_text, body_text = marker.groups()
+            status, cookie_count, body_bytes = map(
+                int, (status_text, count_text, body_text)
+            )
+            if (status > 65535 or cookie_count > TEST_RESPONSE_LIMIT or
+                    body_bytes > TEST_RESPONSE_LIMIT or
+                    status_class != _status_class(status)):
+                reply_invalid = True
+                continue
+            if check == "token_response":
+                if status == 200 and body_bytes == TOKEN_RESPONSE_BYTES:
+                    reply_invalid = True
+                    continue
+            elif check == "cookie_count":
+                if cookie_count == 1:
+                    reply_invalid = True
+                    continue
+            elif check == "token_cookie":
+                if (status != 200 or body_bytes != TOKEN_RESPONSE_BYTES or
+                        cookie_count == 0):
+                    reply_invalid = True
+                    continue
+            reply_records[current_test] = (
+                f"session_reply=test={current_test} check={check} status={status} "
+                f"class={status_class} set_cookie_count={cookie_count} "
+                f"body_bytes={body_bytes}"
+            )
+
+        if WIRE_BODY_PREFIX in line:
+            saw_wire = True
+            wire_markers += 1
+            marker = WIRE_BODY_MARKER.fullmatch(line)
+            if (marker is None or current_test != WIRE_BODY_FAILURE_CASE or
+                    current_test not in wire_expected or cases is None or
+                    cases.get(current_test) != current_test or
+                    current_test in wire_records):
+                wire_invalid = True
+                continue
+            (iteration_text, status_text, body_text, expected_text, matches,
+             count_text, auth_cookie, deletion) = marker.groups()
+            iteration, status, body_bytes, expected_bytes, cookie_count = map(
+                int, (iteration_text, status_text, body_text, expected_text,
+                      count_text)
+            )
+            if (iteration not in (0, 1) or status > 65535 or
+                    body_bytes > TEST_RESPONSE_LIMIT or
+                    expected_bytes != WIRE_BODY_EXPECTED_BYTES or
+                    cookie_count > TEST_RESPONSE_LIMIT or
+                    (matches == "true" and body_bytes != expected_bytes) or
+                    (status == 200 and matches == "true" and
+                     auth_cookie == "true" and deletion == "true")):
+                wire_invalid = True
+                continue
+            wire_records[current_test] = (
+                f"browser_wire=test={current_test} case=wire_body_cap "
+                f"phase=exact_body_response iteration={iteration} status={status} "
+                f"body_bytes={body_bytes} expected_body_bytes={expected_bytes} "
+                f"body_matches={matches} set_cookie_count={cookie_count} "
+                f"auth_cookie={auth_cookie} deletion={deletion}"
+            )
+
+    if reply_markers > len(SAFE_REPLY_CASES) or wire_markers > 1:
+        reply_invalid |= reply_markers > len(SAFE_REPLY_CASES)
+        wire_invalid |= wire_markers > 1
+
+    reply_lines = []
+    if saw_reply or reply_expected:
+        if (exit_code == 0 or reply_invalid or
+                set(reply_records) != reply_expected):
+            reply_lines = ([f"session_reply=test={name} unavailable"
+                            for name in sorted(reply_expected)]
+                           or ["session_reply=unavailable"])
+            reply_invalid = True
+        else:
+            reply_lines = [reply_records[name] for name in sorted(reply_records)]
+
+    wire_lines = []
+    if saw_wire or wire_expected:
+        if (exit_code == 0 or wire_invalid or
+                set(wire_records) != wire_expected):
+            wire_lines = ([f"browser_wire=test={name} unavailable"
+                           for name in sorted(wire_expected)]
+                          or ["browser_wire=unavailable"])
+            wire_invalid = True
+        else:
+            wire_lines = [wire_records[name] for name in sorted(wire_records)]
+
+    return (reply_lines + wire_lines,
+            (reply_invalid and (saw_reply or bool(reply_expected))) or
+            (wire_invalid and (saw_wire or bool(wire_expected))))
+
+
 def capture(name: str, root: pathlib.Path, exit_code: int, cases=None) -> bool:
     raw_file = root / f"auth-stage-{name}.raw"
     trace_file = root / f"auth-stage-{name}.trace"
@@ -256,6 +451,10 @@ def capture(name: str, root: pathlib.Path, exit_code: int, cases=None) -> bool:
         text, exit_code, cases
     )
     lines.extend(stalled_diagnostics)
+    public_diagnostics, invalid_public_record = public_test_diagnostics(
+        text, exit_code, cases
+    )
+    lines.extend(public_diagnostics)
     invalid_record = False
     expected_slots = set(EXPECTED_SLOTS[name])
     opened_slots = set()
@@ -310,7 +509,8 @@ def capture(name: str, root: pathlib.Path, exit_code: int, cases=None) -> bool:
         out.extend(b"lost=true\n")
     trace_file.write_bytes(out)
     sys.stdout.buffer.write(out)
-    return (valid and not invalid_record and not invalid_io_record and not invalid_stalled_record and not truncated
+    return (valid and not invalid_record and not invalid_io_record and not invalid_stalled_record
+            and not invalid_public_record and not truncated
             and slots_complete and not saw_loss)
 
 

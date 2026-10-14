@@ -722,7 +722,10 @@ async fn buffered_native_response_body_is_unboxed_exact_and_moves_its_frame() {
     use hyper::body::Body as _;
     let bytes = Bytes::from(vec![1, 2, 3]);
     let pointer = bytes.as_ptr();
-    let (mut body, allocations) = crate::metrics::measure(|| BufferedBody { bytes });
+    let (mut body, allocations) = crate::metrics::measure(|| BufferedBody {
+        bytes,
+        sending: None,
+    });
     assert_eq!(allocations.allocations, 0);
     assert_eq!(allocations.reallocations, 0);
     assert_eq!(body.size_hint().exact(), Some(3));
@@ -2090,3 +2093,6 @@ mod unsafe_session_tests;
 
 #[path = "transport_lifecycle_tests.rs"]
 mod transport_lifecycle_tests;
+
+#[path = "send_deadline_tests.rs"]
+mod send_deadline_tests;
