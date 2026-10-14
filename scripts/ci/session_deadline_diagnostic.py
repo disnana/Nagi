@@ -53,6 +53,7 @@ DEC = r"(?:0|[1-9][0-9]{0,4})"
 STATUS = r"(?:[1-5][0-9]{2})"
 BOOL = r"(?:true|false)"
 SESSION_PREFIX = "session_deadline_diag"
+BOOTSTRAP_DEADLINE_PREFIX = "prelogin_bootstrap_deadline_diag"
 BOOTSTRAP_PREFIX = "browser_login_bootstrap_diag"
 PAIR_PREFIX = "browser_login_stock_cause"
 JSON_BOUND_PREFIX = "browser_login_json_bound_diag"
@@ -83,6 +84,10 @@ SESSION_MARKER = re.compile(
     r"commands=(0|[1-9][0-9]{0,3}) commits=(0|[1-9][0-9]{0,3}) "
     r"budget_ms=(0|[1-9][0-9]{0,4}) entry_remaining_ms=(0|[1-9][0-9]{0,4}) "
     r"phase_remaining_ms=(0|[1-9][0-9]{0,4}) exit_remaining_ms=(0|[1-9][0-9]{0,4})\Z"
+)
+BOOTSTRAP_DEADLINE_MARKER = re.compile(
+    SESSION_MARKER.pattern.replace(SESSION_PREFIX, BOOTSTRAP_DEADLINE_PREFIX).removesuffix(r"\Z")
+    + r" security_budget_ms=(0|[1-9][0-9]{0,4}) selected_end_kind=([01])\Z"
 )
 BOOTSTRAP_MARKER = re.compile(
     rf"browser_login_bootstrap_diag check=material status=({STATUS}) "
@@ -119,6 +124,7 @@ AUTH_WIRE_UNAVAILABLE = re.compile(rf"browser_wire=test=({IDENT}) unavailable\Z"
 HTTP_IO_LINE = re.compile(rf"http_test_io=phase=({auth_diag.IO_PHASE}) kind=({auth_diag.IO_KIND})\Z")
 KNOWN_MARKER_PREFIXES = (
     SESSION_PREFIX,
+    BOOTSTRAP_DEADLINE_PREFIX,
     BOOTSTRAP_PREFIX,
     PAIR_PREFIX,
     JSON_BOUND_PREFIX,
@@ -179,6 +185,32 @@ def parse_bootstrap_marker(line: str) -> dict | None:
         "set_cookie_count": cookie_count, "body_bytes": body_bytes,
         "auth_cookie": auth_cookie == "true", "deletion": deletion == "true",
     }
+
+
+def parse_bootstrap_deadline_marker(line: str) -> dict | None:
+    match = BOOTSTRAP_DEADLINE_MARKER.fullmatch(line)
+    if match is None:
+        return None
+    keys = (
+        "phase", "event", "db", "exit", "polls", "begins", "commands", "commits",
+        "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms",
+        "security_budget_ms", "selected_end_kind",
+    )
+    values = dict(zip(keys, map(int, match.groups())))
+    if (not 5 <= values["phase"] <= 8 or values["event"] > 2 or values["db"] > 14 or
+            values["exit"] > 4 or
+            max(values[k] for k in ("polls", "begins", "commands", "commits")) > 1023 or
+            max(values[k] for k in ("budget_ms", "entry_remaining_ms", "phase_remaining_ms",
+                                  "exit_remaining_ms", "security_budget_ms")) > 60000 or
+            values["commits"] > values["begins"] or
+            not (values["exit_remaining_ms"] <= values["phase_remaining_ms"] <=
+                 values["entry_remaining_ms"] <= values["budget_ms"] <= values["security_budget_ms"]) or
+            (values["exit"] in (1, 2) and values["exit_remaining_ms"] != 0) or
+            (values["selected_end_kind"] == 0 and values["budget_ms"] != values["security_budget_ms"])):
+        return None
+    # Kind 1 can have equal rounded/clamped ms values; it compares native Instants.
+    # This is a request snapshot in a failed test, not proof of that assertion's cause.
+    return {"status": 504, **values}
 
 
 def parse_pair_marker(line: str) -> dict | None:
@@ -431,6 +463,7 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                   cases: dict[str, str]) -> tuple[dict, int, bool]:
     facts = {
         "session_deadline": [], "bootstrap": [], "pair": [], "json_bound": [],
+        "bootstrap_deadline": [],
         "claim_initial": [], "claim_retry": [], "claim_replay_proof": [],
         "public": [], "http_test_io": [],
     }
@@ -461,7 +494,7 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                 continue
             prefix = mentions[0]
             exact_key = f"{test_name}\n{line}"
-            if exact_key in seen_exact:
+            if exact_key in seen_exact and prefix != BOOTSTRAP_DEADLINE_PREFIX:
                 invalid = True
                 continue
             seen_exact.add(exact_key)
@@ -475,6 +508,12 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                 key = ("session_deadline", test_name)
                 if parsed is not None:
                     parsed["test"] = test_name
+            elif prefix == BOOTSTRAP_DEADLINE_PREFIX:
+                if suite_name != "browser":
+                    invalid = True
+                    continue
+                parsed = parse_bootstrap_deadline_marker(line)
+                key = ("bootstrap_deadline", test_name)
             elif prefix == BOOTSTRAP_PREFIX:
                 if suite_name != "browser":
                     invalid = True
@@ -538,11 +577,11 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                 # Stalled-response markers belong to another fixed suite, not these APIs.
                 invalid = True
                 continue
-            if parsed is None or key is None or (key[0] != "session_deadline" and key in seen_case_kinds):
+            if parsed is None or key is None or (key[0] not in ("session_deadline", "bootstrap_deadline") and key in seen_case_kinds):
                 invalid = True
                 continue
             parsed["test"] = test_name
-            if key[0] != "session_deadline":
+            if key[0] not in ("session_deadline", "bootstrap_deadline"):
                 seen_case_kinds.add(key)
             facts[key[0]].append(parsed)
 

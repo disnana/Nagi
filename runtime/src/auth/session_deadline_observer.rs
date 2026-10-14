@@ -15,6 +15,10 @@ pub(crate) enum Phase {
     Issue,
     Seal,
     Wire,
+    Bootstrap,
+    Business,
+    Restore,
+    Delivery,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -53,6 +57,8 @@ pub(crate) enum Db {
 }
 #[derive(Clone, Copy)]
 struct Record {
+    until: Instant,
+    phase_at: Instant,
     phase: Phase,
     event: Event,
     db: Db,
@@ -66,7 +72,9 @@ struct Record {
     phase_remaining_ms: u16,
 }
 struct State {
-    until: Instant,
+    admitted: Instant,
+    entered: Instant,
+    security_until: Instant,
     record: Mutex<Record>,
 }
 #[derive(Clone)]
@@ -77,10 +85,15 @@ fn bounded_ms(duration: std::time::Duration) -> u16 {
 }
 impl Observer {
     pub(crate) fn new(admitted: Instant, until: Instant) -> Self {
-        let remaining = bounded_ms(until.saturating_duration_since(Instant::now()));
+        let entered = Instant::now();
+        let remaining = bounded_ms(until.saturating_duration_since(entered));
         Self(Arc::new(State {
-            until,
+            admitted,
+            entered,
+            security_until: until,
             record: Mutex::new(Record {
+                until,
+                phase_at: entered,
                 phase: Phase::Entry,
                 event: Event::Unpolled,
                 db: Db::None,
@@ -114,6 +127,16 @@ impl Observer {
             }
         });
     }
+    // Diagnostic-only mirror of the already selected production bound. It
+    // cannot renew either timer; no lease/native/cookie state is changed here.
+    fn select_until(&self, until: Instant) {
+        self.update(|r| {
+            r.until = r.until.min(until);
+            r.budget_ms = bounded_ms(r.until.saturating_duration_since(self.0.admitted));
+            r.entry_remaining_ms = bounded_ms(r.until.saturating_duration_since(self.0.entered));
+            r.phase_remaining_ms = bounded_ms(r.until.saturating_duration_since(r.phase_at));
+        });
+    }
     fn closed(&self, status: u16) -> Option<Closed> {
         if status != 504 {
             return None;
@@ -121,12 +144,30 @@ impl Observer {
         let record = *self.0.record.lock().ok()?;
         Some(Closed {
             record,
-            exit_remaining_ms: bounded_ms(self.0.until.saturating_duration_since(Instant::now())),
+            exit_remaining_ms: bounded_ms(record.until.saturating_duration_since(Instant::now())),
         })
     }
     pub(crate) fn emit(&self, status: u16) {
         if let Some(closed) = self.closed(status) {
             eprintln!("{closed}");
+        }
+    }
+    pub(crate) fn emit_bootstrap(&self, status: u16) {
+        if let Some(closed) = self.closed(status) {
+            let selected_end_kind = u8::from(closed.record.until < self.0.security_until);
+            let security_budget_ms = bounded_ms(
+                self.0
+                    .security_until
+                    .saturating_duration_since(self.0.admitted),
+            );
+            eprintln!(
+                "{}",
+                BootstrapClosed {
+                    closed,
+                    security_budget_ms,
+                    selected_end_kind
+                }
+            );
         }
     }
 }
@@ -135,13 +176,17 @@ pub(crate) fn current() -> Option<Observer> {
 }
 pub(crate) fn phase(phase: Phase) {
     let _ = ACTIVE.try_with(|o| {
-        let remaining = bounded_ms(o.0.until.saturating_duration_since(Instant::now()));
+        let now = Instant::now();
         o.update(|r| {
             r.phase = phase;
+            r.phase_at = now;
             r.event = Event::Unpolled;
-            r.phase_remaining_ms = remaining;
+            r.phase_remaining_ms = bounded_ms(r.until.saturating_duration_since(now));
         });
     });
+}
+pub(crate) fn select_until(until: Instant) {
+    let _ = ACTIVE.try_with(|o| o.select_until(until));
 }
 pub(crate) fn exit(exit: Exit) {
     let _ = ACTIVE.try_with(|o| o.update(|r| r.exit = exit));
@@ -176,11 +221,55 @@ impl fmt::Display for Closed {
             r.phase as u8,r.event as u8,r.db as u8,r.exit as u8,r.polls,r.begins,r.commands,r.commits,r.budget_ms,r.entry_remaining_ms,r.phase_remaining_ms,self.exit_remaining_ms)
     }
 }
+struct BootstrapClosed {
+    closed: Closed,
+    security_budget_ms: u16,
+    selected_end_kind: u8,
+}
+impl fmt::Display for BootstrapClosed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let r = self.closed.record;
+        write!(f, "prelogin_bootstrap_deadline_diag status=504 phase={} event={} db={} exit={} polls={} begins={} commands={} commits={} budget_ms={} entry_remaining_ms={} phase_remaining_ms={} exit_remaining_ms={} security_budget_ms={} selected_end_kind={}",
+            r.phase as u8, r.event as u8, r.db as u8, r.exit as u8,
+            r.polls, r.begins, r.commands, r.commits, r.budget_ms,
+            r.entry_remaining_ms, r.phase_remaining_ms, self.closed.exit_remaining_ms,
+            self.security_budget_ms, self.selected_end_kind)
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::{task::Poll, time::Duration};
+    #[test]
+    fn bootstrap_selected_bound_is_finite_and_never_renews_security() {
+        let admitted = Instant::now();
+        let security = admitted + Duration::from_secs(10);
+        let observer = Observer::new(admitted, security);
+        let handler = admitted + Duration::from_secs(2);
+        observer.select_until(handler);
+        observer.select_until(security + Duration::from_secs(10));
+        let record = *observer.0.record.lock().unwrap();
+        assert_eq!(record.until, handler);
+        assert_eq!(record.budget_ms, 2000);
+        assert!(record.phase_remaining_ms <= record.entry_remaining_ms);
+        assert!(record.entry_remaining_ms <= record.budget_ms);
+        assert!(observer.closed(200).is_none());
+        let output = BootstrapClosed {
+            closed: observer.closed(504).unwrap(),
+            security_budget_ms: 10000,
+            selected_end_kind: 1,
+        }
+        .to_string();
+        assert!(output.len() < 512);
+        assert!(output
+            .strip_prefix("prelogin_bootstrap_deadline_diag ")
+            .unwrap()
+            .split(' ')
+            .all(|field| field.split_once('=').is_some_and(
+                |(_, value)| !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit())
+            )));
+    }
     #[tokio::test]
     async fn pending_ready_and_bounded_closed_failure_only() {
         let admitted = Instant::now();

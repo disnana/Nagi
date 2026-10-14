@@ -136,6 +136,60 @@ impl Write for IoWitness {
     }
 }
 
+// Configure the live accepted socket without taking or rebuilding ownership.
+// Listener inheritance alone is not a measured accepted-socket premise.
+#[cfg(windows)]
+fn accepted_send_buffer(peer: &TcpStream) -> std::io::Result<(i32, i32)> {
+    use std::os::windows::io::AsRawSocket;
+    use windows_sys::Win32::Networking::WinSock::{
+        getsockopt, setsockopt, WSAGetLastError, SOCKET, SOCKET_ERROR, SOL_SOCKET, SO_SNDBUF,
+    };
+    fn read(socket: SOCKET) -> std::io::Result<i32> {
+        let mut value = 0_i32;
+        let mut length = std::mem::size_of_val(&value) as i32;
+        // SAFETY: the borrowed live socket is valid; value/length are writable
+        // for the indicated sizes and remain live for this synchronous call.
+        if unsafe {
+            getsockopt(
+                socket,
+                SOL_SOCKET,
+                SO_SNDBUF,
+                (&mut value as *mut i32).cast(),
+                &mut length,
+            )
+        } == SOCKET_ERROR
+        {
+            return Err(std::io::Error::from_raw_os_error(unsafe {
+                WSAGetLastError()
+            }));
+        }
+        if length != std::mem::size_of_val(&value) as i32 || value <= 0 {
+            return Err(std::io::ErrorKind::InvalidData.into());
+        }
+        Ok(value)
+    }
+    let socket = peer.as_raw_socket() as SOCKET;
+    let before = read(socket)?;
+    let requested = 4096_i32;
+    // SAFETY: peer retains socket ownership and the initialized option value
+    // remains live for this synchronous call; setsockopt retains no pointer.
+    if unsafe {
+        setsockopt(
+            socket,
+            SOL_SOCKET,
+            SO_SNDBUF,
+            (&requested as *const i32).cast(),
+            std::mem::size_of_val(&requested) as i32,
+        )
+    } == SOCKET_ERROR
+    {
+        return Err(std::io::Error::from_raw_os_error(unsafe {
+            WSAGetLastError()
+        }));
+    }
+    Ok((before, read(socket)?))
+}
+
 #[tokio::test]
 async fn header_flush_before_buffered_frame_keeps_original_send_end() {
     let socket = tokio::net::TcpSocket::new_v4().unwrap();
@@ -153,6 +207,14 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
             .unwrap(),
     );
     let (peer, _) = listener.accept().await.unwrap();
+    #[cfg(windows)]
+    let (accepted_send_before, accepted_send_after) = {
+        let values = accepted_send_buffer(&peer).unwrap();
+        assert_eq!(values.1, 4096, "accepted socket send buffer readback");
+        values
+    };
+    #[cfg(not(windows))]
+    let (accepted_send_before, accepted_send_after) = (0_i32, 0_i32);
     let reply = append_header(
         representation(
             Status::OK,
@@ -274,8 +336,9 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
             Ok(Err(_)) => 4,
         };
         eprintln!(
-            "send_deadline_native_diag phase={} outcome={} header_bytes={} listener_send={} client_recv={} accepted_send_verified=0 body_polls={} frame={} header_flush={} write_calls={} vectored_calls={} write_ready_bytes={} write_pending={} write_errors={} flush_ready={} flush_pending={} flush_errors={} native_pending={} end_state={} end_spent={} task_finished={} join={}",
+            "send_deadline_native_diag phase={} outcome={} header_bytes={} listener_send={} client_recv={} accepted_send_verified={} accepted_send_before={} accepted_send_after={} body_polls={} frame={} header_flush={} write_calls={} vectored_calls={} write_ready_bytes={} write_pending={} write_errors={} flush_ready={} flush_pending={} flush_errors={} native_pending={} end_state={} end_spent={} task_finished={} join={}",
             phase, outcome, header_bytes, listener_send, client_recv,
+            u8::from(cfg!(windows)), accepted_send_before.min(262145), accepted_send_after.min(262145),
             facts.body_polls.load(Ordering::SeqCst), u8::from(saw_frame), u8::from(saw_header_flush),
             facts.write_calls.load(Ordering::SeqCst), facts.vectored_calls.load(Ordering::SeqCst),
             facts.write_ready_bytes.load(Ordering::SeqCst), facts.write_pending.load(Ordering::SeqCst),

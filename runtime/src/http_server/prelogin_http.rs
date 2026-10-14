@@ -1,6 +1,8 @@
 //! Closed GET/explicitHEAD profile; fixed successful JSON bypasses public payloads.
 use super::*;
 use crate::auth::prelogin::{HttpOwner, HttpSeal, Pool};
+#[cfg(nagi_auth_stage_diag)]
+use crate::auth::session_deadline_observer::{self as diag, Exit, Observer, Phase};
 
 pub(super) enum PreloginCompletion {
     Ready(HttpSeal),
@@ -98,9 +100,15 @@ pub(super) fn finalize_prelogin(
                 drop(seal);
                 return terminal(pool, owner, Status::INTERNAL_SERVER_ERROR, head);
             }
+            #[cfg(nagi_auth_stage_diag)]
+            diag::phase(Phase::Delivery);
             let material = match pool.take_wire(owner, seal) {
                 Ok(material) => material,
-                Err(failure) => return terminal(pool, owner, failure.http_status(), head),
+                Err(failure) => {
+                    #[cfg(nagi_auth_stage_diag)]
+                    diag::exit(Exit::Wire);
+                    return terminal(pool, owner, failure.http_status(), head);
+                }
             };
             let mut response = empty(Status::OK).into_http(false);
             response.headers_mut().insert(
@@ -124,11 +132,36 @@ pub(super) async fn dispatch_bootstrap(
     head: bool,
     admitted: Instant,
 ) -> axum::http::Response<BufferedBody> {
+    #[cfg(nagi_auth_stage_diag)]
+    if let Some(until) = admitted.checked_add(options.security_deadline) {
+        let observer = Observer::new(admitted, until);
+        let response = observer
+            .scope(async {
+                diag::phase(Phase::Bootstrap);
+                dispatch_bootstrap_inner(pool, parts, body, options, lease, head, admitted).await
+            })
+            .await;
+        observer.emit_bootstrap(response.status().as_u16());
+        return response;
+    }
+    dispatch_bootstrap_inner(pool, parts, body, options, lease, head, admitted).await
+}
+async fn dispatch_bootstrap_inner(
+    pool: &Pool,
+    parts: axum::http::request::Parts,
+    body: hyper::body::Incoming,
+    options: &Options,
+    lease: LeaseOwner,
+    head: bool,
+    admitted: Instant,
+) -> axum::http::Response<BufferedBody> {
     let owner = HttpOwner::new(lease);
     let Some(until) = admitted.checked_add(options.security_deadline) else {
         return terminal(pool, &owner, Status::SERVICE_UNAVAILABLE, head);
     };
     if let Err(failure) = owner.constrain_until(until) {
+        #[cfg(nagi_auth_stage_diag)]
+        diag::exit(Exit::Gate);
         return terminal(pool, &owner, failure.http_status(), head);
     }
     // Body input is not part of this fixed safe profile. Refuse before any
@@ -163,7 +196,12 @@ pub(super) async fn dispatch_bootstrap(
         return finalize_authenticated(response, PolicySource::Prelogin, true);
     }
     let future = async {
-        pool.bootstrap_http(&owner, old).await?;
+        let work = pool.bootstrap_http(&owner, old);
+        #[cfg(nagi_auth_stage_diag)]
+        let work = diag::observe(Phase::Bootstrap, work);
+        work.await?;
+        #[cfg(nagi_auth_stage_diag)]
+        diag::phase(Phase::Delivery);
         owner.seal()
     };
     let Some(handler_until) = Instant::now().checked_add(options.handler_deadline) else {
@@ -179,16 +217,32 @@ pub(super) async fn complete_bootstrap(
     until: Instant,
     future: impl std::future::Future<Output = Result<HttpSeal, crate::auth::prelogin::Failure>>,
 ) -> axum::http::Response<BufferedBody> {
+    #[cfg(nagi_auth_stage_diag)]
+    diag::select_until(until);
     let result = tokio::time::timeout_at(
         tokio::time::Instant::from_std(until),
         AssertUnwindSafe(future).catch_unwind(),
     )
     .await;
     match result {
-        Ok(_) if Instant::now() >= until => terminal(pool, owner, Status::GATEWAY_TIMEOUT, false),
+        Ok(_) if Instant::now() >= until => {
+            #[cfg(nagi_auth_stage_diag)]
+            diag::exit(Exit::LateReady);
+            terminal(pool, owner, Status::GATEWAY_TIMEOUT, false)
+        }
         Ok(Ok(Ok(seal))) => finalize_prelogin(PreloginCompletion::Ready(seal), owner, false, pool),
-        Ok(Ok(Err(failure))) => terminal(pool, owner, failure.http_status(), false),
+        Ok(Ok(Err(failure))) => {
+            #[cfg(nagi_auth_stage_diag)]
+            if crate::auth::prelogin::kind(&failure) == crate::auth::FailureKind::Expired {
+                diag::exit(Exit::Gate);
+            }
+            terminal(pool, owner, failure.http_status(), false)
+        }
         Ok(Err(_)) => terminal(pool, owner, Status::INTERNAL_SERVER_ERROR, false),
-        Err(_) => terminal(pool, owner, Status::GATEWAY_TIMEOUT, false),
+        Err(_) => {
+            #[cfg(nagi_auth_stage_diag)]
+            diag::exit(Exit::Timer);
+            terminal(pool, owner, Status::GATEWAY_TIMEOUT, false)
+        }
     }
 }

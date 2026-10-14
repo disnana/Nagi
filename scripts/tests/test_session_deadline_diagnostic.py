@@ -56,6 +56,84 @@ def parse_both(session_raw=None, session_exit=0, browser_raw=None, browser_exit=
 
 
 class SessionDeadlineDiagnosticTests(unittest.TestCase):
+    BOOTSTRAP_DEADLINE = (
+        "prelogin_bootstrap_deadline_diag status=504 phase=5 event=1 db=4 exit=1 "
+        "polls=2 begins=1 commands=0 commits=0 budget_ms=20 entry_remaining_ms=20 "
+        "phase_remaining_ms=19 exit_remaining_ms=0 security_budget_ms=2000 selected_end_kind=1"
+    )
+
+    def test_bootstrap_selected_deadline_bounds_and_old_session_grammar(self):
+        good = self.BOOTSTRAP_DEADLINE
+        observed = diag.parse_bootstrap_deadline_marker(good)
+        self.assertEqual((observed["budget_ms"], observed["security_budget_ms"],
+                          observed["selected_end_kind"]), (20, 2000, 1))
+        self.assertIsNone(diag.parse_session_marker(good))
+        for phase in range(5, 9):
+            self.assertIsNotNone(diag.parse_bootstrap_deadline_marker(good.replace("phase=5", f"phase={phase}")))
+        security = good.replace("security_budget_ms=2000", "security_budget_ms=20").replace("selected_end_kind=1", "selected_end_kind=0")
+        self.assertIsNotNone(diag.parse_bootstrap_deadline_marker(security))
+        # Strict native Instant ordering can round to equal integer ms values.
+        self.assertIsNotNone(diag.parse_bootstrap_deadline_marker(security.replace("selected_end_kind=0", "selected_end_kind=1")))
+        malformed = [
+            good + " token=PRIVATE_SENTINEL", "prefix " + good, good + "\n",
+            good.replace("status=504", "status=200"), good.replace("phase=5", "phase=4"),
+            good.replace("phase=5", "phase=9"), good.replace("event=1", "event=3"),
+            good.replace("db=4", "db=15"), good.replace("db=4", "db=04"),
+            good.replace("exit=1", "exit=5"), good.replace("polls=2", "polls=1024"),
+            good.replace("commits=0", "commits=2"),
+            good.replace("exit_remaining_ms=0", "exit_remaining_ms=1"),
+            good.replace("phase_remaining_ms=19", "phase_remaining_ms=21"),
+            good.replace("security_budget_ms=2000", "security_budget_ms=19"),
+            good.replace("security_budget_ms=2000", "security_budget_ms=60001"),
+            good.replace("selected_end_kind=1", "selected_end_kind=0"),
+            good.replace("selected_end_kind=1", "selected_end_kind=2"),
+            good.replace("begins=1", "begins=1 begins=1"),
+        ]
+        for line in malformed:
+            with self.subTest(line=line):
+                self.assertIsNone(diag.parse_bootstrap_deadline_marker(line))
+
+    def test_bootstrap_deadline_multiplicity_stays_bound_to_failed_browser_test(self):
+        case = "committed_claim_stays_consumed_on_verifier_error_panic_and_deadline"
+        # A failed loop test can contain multiple earlier, intentional 504s.
+        raw = cargo_log(diag.BROWSER_CASES, failed={case}, markers={case: [self.BOOTSTRAP_DEADLINE] * 2})
+        record, status = parse_both(browser_raw=raw, browser_exit=101)
+        self.assertEqual(status, 1)
+        self.assertEqual(record["status"], "tests_failed")
+        self.assertEqual(record["marker_count"], 2)
+        facts = record["suites"]["browser"]["bootstrap_deadline"]
+        self.assertEqual(len(facts), 2)
+        self.assertTrue(all(fact["test"] == case for fact in facts))
+        self.assertNotIn("PRIVATE_SENTINEL", json.dumps(record))
+        for raw, session in [
+            (cargo_log(diag.BROWSER_CASES) + (self.BOOTSTRAP_DEADLINE + "\n").encode(), False),
+            (cargo_log(diag.BROWSER_CASES, failed={case}, markers={case: [self.BOOTSTRAP_DEADLINE] * 17}), False),
+            (cargo_log(diag.SESSION_CASES, failed={next(iter(diag.SESSION_CASES))},
+                       markers={next(iter(diag.SESSION_CASES)): [self.BOOTSTRAP_DEADLINE]}), True),
+        ]:
+            record, code = parse_both(session_raw=raw, session_exit=101) if session else parse_both(browser_raw=raw, browser_exit=101)
+            self.assertEqual(code, 1)
+            self.assertEqual(record["status"], "diagnostic_invalid")
+
+    def test_bootstrap_deadline_unknown_test_and_arbitrary_data_are_not_published(self):
+        case = "committed_claim_stays_consumed_on_verifier_error_panic_and_deadline"
+        secret_name = "secret_credential_identifier"
+        raw = cargo_log((set(diag.BROWSER_CASES) - {case}) | {secret_name},
+                        failed={secret_name}, markers={secret_name: [self.BOOTSTRAP_DEADLINE]})
+        record, code = parse_both(browser_raw=raw, browser_exit=101)
+        self.assertEqual(code, 1)
+        self.assertEqual(record["status"], "diagnostic_invalid")
+        self.assertEqual(record["suites"]["browser"]["bootstrap_deadline"], [])
+        self.assertNotIn(secret_name, json.dumps(record))
+        malformed = self.BOOTSTRAP_DEADLINE + " path=/private token=PRIVATE_SENTINEL"
+        raw = cargo_log(diag.BROWSER_CASES, failed={case}, markers={case: [malformed]})
+        record, code = parse_both(browser_raw=raw, browser_exit=101)
+        self.assertEqual(code, 1)
+        self.assertEqual(record["status"], "diagnostic_invalid")
+        self.assertEqual(record["suites"]["browser"]["bootstrap_deadline"], [])
+        self.assertNotIn("PRIVATE_SENTINEL", json.dumps(record))
+        self.assertNotIn("/private", json.dumps(record))
+
     def test_source_inventory_exactly_matches_closed_case_sets(self):
         self.assertEqual(
             source_cases("runtime/tests/session_csrf_public_api.rs"), diag.SESSION_CASES

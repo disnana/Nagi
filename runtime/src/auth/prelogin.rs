@@ -14,6 +14,24 @@ use std::{
     time::{Duration, Instant},
 };
 use subtle::ConstantTimeEq;
+// Coarse request/native observation reuses the existing observer. The separate
+// legacy Browser cfg retains its original detailed operation hooks.
+macro_rules! prelogin_observe {
+    ($phase:ident, $legacy:ident, $future:expr) => {{
+        #[cfg(nagi_auth_stage_diag)]
+        {
+            super::session_deadline_observer::observe(
+                super::session_deadline_observer::Phase::$phase,
+                async { browser_observe!($legacy, $future) },
+            )
+            .await
+        }
+        #[cfg(not(nagi_auth_stage_diag))]
+        {
+            browser_observe!($legacy, $future)
+        }
+    }};
+}
 mod browser;
 mod http_bridge;
 pub(crate) use browser::ClaimContext;
@@ -814,37 +832,40 @@ impl Pool {
         self.maintenance(tx, wall).await
     }
     async fn restore(&self, wall: &mut Option<i64>) -> Result<(), Failure> {
-        let tx = browser_observe!(
+        let tx = prelogin_observe!(
+            Restore,
             RestoreAcquire,
             sqlite::begin(&self.native, sqlite::BeginMode::Immediate)
         )
         .map_err(Failure::database)?;
         let result = async {
-            browser_observe!(RestoreCheck, self.check(&tx, wall))?;
+            prelogin_observe!(Restore, RestoreCheck, self.check(&tx, wall))?;
             self.clock(wall)?;
             let observed = wall.ok_or_else(Failure::unavailable)?;
             #[cfg(test)]
             {
-                browser_observe!(
+                prelogin_observe!(
+                    Restore,
                     RestoreMaintenance,
                     self.restoration_maintenance(&tx, observed)
                 )
             }
             #[cfg(not(test))]
             {
-                browser_observe!(RestoreMaintenance, self.maintenance(&tx, observed))
+                prelogin_observe!(Restore, RestoreMaintenance, self.maintenance(&tx, observed))
             }
         }
         .await;
         match result {
             Ok(()) => {
-                browser_observe!(RestoreCommit, sqlite::commit(tx)).map_err(Failure::database)?;
+                prelogin_observe!(Restore, RestoreCommit, sqlite::commit(tx))
+                    .map_err(Failure::database)?;
                 #[cfg(nagi_browser_login_diag)]
                 super::browser_login_observer::restore_commit_ack();
                 Ok(())
             }
             Err(mut e) => {
-                browser_observe!(RestoreRollback, sqlite::rollback(tx))
+                prelogin_observe!(Restore, RestoreRollback, sqlite::rollback(tx))
                     .map_err(Failure::database)?;
                 e.outcome = sqlite::Outcome::RolledBack;
                 Err(e)
@@ -866,18 +887,20 @@ impl Pool {
     ) -> Result<T, Failure> {
         match result {
             Ok(v) => {
-                browser_observe!(BusinessCommit, sqlite::commit(tx)).map_err(|error| {
-                    let e = Failure::database(error);
-                    if e.outcome == sqlite::Outcome::Committed {
-                        e.after_commit()
-                    } else {
-                        e
-                    }
-                })?;
+                prelogin_observe!(Business, BusinessCommit, sqlite::commit(tx)).map_err(
+                    |error| {
+                        let e = Failure::database(error);
+                        if e.outcome == sqlite::Outcome::Committed {
+                            e.after_commit()
+                        } else {
+                            e
+                        }
+                    },
+                )?;
                 Ok(v)
             }
             Err(mut e) => {
-                browser_observe!(BusinessRollback, sqlite::rollback(tx))
+                prelogin_observe!(Business, BusinessRollback, sqlite::rollback(tx))
                     .map_err(Failure::database)?;
                 #[cfg(nagi_browser_login_diag)]
                 super::browser_login_observer::rollback_ack();
@@ -1063,6 +1086,8 @@ impl Pool {
             );
             return Err(Failure::unavailable().after_commit());
         }
+        #[cfg(nagi_auth_stage_diag)]
+        super::session_deadline_observer::phase(super::session_deadline_observer::Phase::Delivery);
         owner
             .ready(
                 deadline,
