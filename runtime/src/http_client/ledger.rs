@@ -79,6 +79,7 @@ enum Fault {
     UnexpectedCancel,
     PoisonedGate,
     UnresolvedLaunch,
+    Invariant,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -619,6 +620,13 @@ const COMMAND_POPPED: u8 = 16;
 const COMMAND_DISPOSED: u8 = 32;
 const COMMAND_ABANDONED: u8 = 64;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RegisteredOperation {
+    service: crate::http_client::address::ServiceIdentity,
+    operation: u64,
+    explicit_public: bool,
+}
+
 // Fixed completion storage is allocated before the Auth permit is consumed.
 // Registration and actual join are distinct; neither a reported result nor
 // JoinHandle::is_finished can set an actual-join bit.
@@ -626,12 +634,28 @@ const COMMAND_ABANDONED: u8 = 64;
 struct JobSeal {
     completion: AtomicU8,
     stages: AtomicU8,
+    caller_cancel: AtomicBool,
+    cancelled: AtomicBool,
+    retired: AtomicBool,
+    cleanup_complete: AtomicBool,
+    publication_pending: AtomicBool,
+    explicit_public: AtomicBool,
+    admitted_end: OnceLock<std::time::Instant>,
+    operation: OnceLock<RegisteredOperation>,
 }
 impl JobSeal {
     fn new() -> Self {
         Self {
             completion: AtomicU8::new(0),
             stages: AtomicU8::new(0),
+            caller_cancel: AtomicBool::new(false),
+            cancelled: AtomicBool::new(false),
+            retired: AtomicBool::new(false),
+            cleanup_complete: AtomicBool::new(false),
+            publication_pending: AtomicBool::new(false),
+            explicit_public: AtomicBool::new(false),
+            admitted_end: OnceLock::new(),
+            operation: OnceLock::new(),
         }
     }
     fn staged(&self, kind: TaskKind) -> bool {
@@ -1110,6 +1134,7 @@ impl Owner {
             .find(|job| job.id == id)
             .ok_or(LedgerError::UnknownJob)?;
         job.cancel_requested = true;
+        job.seal.cancelled.store(true, Ordering::Release);
         job.queued = None;
         for task in &mut job.tasks {
             if let Some(handle) = task.handle.state().as_ref() {
@@ -1404,6 +1429,16 @@ impl Owner {
             {
                 continue;
             }
+            if !job.seal.cleanup_complete.swap(true, Ordering::AcqRel) {
+                self.shared.notify();
+            }
+            // A stopped caller can still own a buffered provisional result.
+            // Deadline/cancel alone does not release its byte reservation.
+            // Permanent client close permits retirement because this owner
+            // can never admit another job; outstanding envelopes remain owned.
+            if job.seal.publication_pending.load(Ordering::Acquire) && !self.is_closing() {
+                continue;
+            }
             let job = self.jobs.swap_remove(index);
             for kind in 0..2 {
                 if job.reserved_roots[kind] {
@@ -1412,6 +1447,7 @@ impl Owner {
             }
             self.retained_job_bytes -= job.payload_bytes;
             self.used_queue -= 1;
+            job.seal.retired.store(true, Ordering::Release);
             self.shared.notify();
         }
     }
@@ -1427,6 +1463,12 @@ impl Owner {
         }
         let now = std::time::Instant::now();
         for index in 0..self.jobs.len() {
+            if self.jobs[index].seal.caller_cancel.load(Ordering::Acquire)
+                && !self.jobs[index].cancel_requested
+            {
+                self.request_cancel(self.jobs[index].id)
+                    .expect("retained caller cancellation");
+            }
             if self.jobs[index].seal.command_abandoned() && !self.jobs[index].cancel_requested {
                 self.request_cancel(self.jobs[index].id)
                     .expect("retained abandoned job");
@@ -1516,3 +1558,57 @@ pub(crate) use parent_drain::ParentDrain;
 
 #[path = "tracked_dns.rs"]
 mod tracked_dns;
+
+#[path = "operation.rs"]
+pub(super) mod operation;
+
+// This opaque bridge orders each short native primitive against retained
+// Owner close/cancel/fault. It never polls a root, TLS, resolver or driver.
+pub(in crate::http_client) struct NativeGate {
+    owner: Arc<Mutex<Owner>>,
+    shared: Arc<Shared>,
+    key: JobKey,
+}
+pub(in crate::http_client) struct NativeGuard<'a> {
+    _entry: EntryGuard<'a>,
+    _owner: std::sync::MutexGuard<'a, Owner>,
+}
+impl NativeGate {
+    fn for_job(
+        runner: &parent_drain::RunnerOwnerHandle,
+        key: &JobKey,
+    ) -> Result<Self, LedgerError> {
+        let owner = runner.owner.lock().map_err(|_| LedgerError::Faulted)?;
+        owner.key_index(key)?;
+        Ok(Self {
+            owner: Arc::clone(&runner.owner),
+            shared: Arc::clone(&owner.shared),
+            key: key.clone(),
+        })
+    }
+    pub(in crate::http_client) fn enter(&self) -> Result<NativeGuard<'_>, LedgerError> {
+        let owner = self.owner.lock().map_err(|_| LedgerError::Faulted)?;
+        let index = owner.key_index(&self.key)?;
+        if owner.is_closing() {
+            return Err(LedgerError::Closing);
+        }
+        if owner.fault().is_some() {
+            return Err(LedgerError::Faulted);
+        }
+        let job = &owner.jobs[index];
+        if job.cancel_requested
+            || self.key.seal.caller_cancel.load(Ordering::Acquire)
+            || !self.key.seal.root_registered()
+        {
+            return Err(LedgerError::Closing);
+        }
+        if job.end.is_none_or(|end| end <= std::time::Instant::now()) {
+            return Err(LedgerError::Expired);
+        }
+        let entry = self.shared.begin_enqueue()?;
+        Ok(NativeGuard {
+            _entry: entry,
+            _owner: owner,
+        })
+    }
+}

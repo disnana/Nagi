@@ -35,7 +35,7 @@ const MAX_PATH_BYTES: usize = 4096;
 const MAX_HOST_BYTES: usize = 253;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct TransportLimits {
+pub(in crate::http_client) struct TransportLimits {
     max_headers: usize,
     max_header_bytes: usize,
     max_buf_size: usize,
@@ -45,7 +45,13 @@ struct TransportLimits {
 }
 
 impl TransportLimits {
-    fn checked(
+    pub(in crate::http_client) fn request_limit(&self) -> usize {
+        self.max_request_bytes
+    }
+    pub(in crate::http_client) fn path_limit(&self) -> usize {
+        self.max_path_bytes
+    }
+    pub(in crate::http_client) fn checked(
         max_headers: usize,
         max_header_bytes: usize,
         max_buf_size: usize,
@@ -74,7 +80,7 @@ impl TransportLimits {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TransportError {
+pub(in crate::http_client) enum TransportError {
     Socket(SocketError),
     InvalidProfile,
     IdentityMismatch,
@@ -94,7 +100,7 @@ impl From<SocketError> for TransportError {
     }
 }
 
-struct TlsProfile {
+pub(in crate::http_client) struct TlsProfile {
     identity: ServiceIdentity,
     server_name: ServerName<'static>,
     authority: hyper::header::HeaderValue,
@@ -108,7 +114,7 @@ struct TlsProfile {
 impl TlsProfile {
     // `original_host` and `roots` must come from a trusted, frozen catalog.
     // Fixture-specific roots are constructed only inside this file's tests.
-    fn checked(
+    pub(in crate::http_client) fn checked(
         identity: ServiceIdentity,
         original_host: Host<String>,
         port: u16,
@@ -178,16 +184,13 @@ impl TlsProfile {
     }
 }
 
-struct GatedIo {
+pub(in crate::http_client) struct GatedIo {
     socket: PinnedSocket,
     control: Arc<DialControl>,
     whole_end: Instant,
 }
 
-fn io_gate(
-    control: &DialControl,
-    whole_end: Instant,
-) -> io::Result<std::sync::MutexGuard<'_, StopState>> {
+fn io_gate(control: &DialControl, whole_end: Instant) -> io::Result<DialGuard<'_>> {
     let state = control
         .checked_state()
         .map_err(|_| io::Error::new(io::ErrorKind::ConnectionAborted, "private socket closed"))?;
@@ -262,7 +265,7 @@ impl AsyncWrite for GatedIo {
     }
 }
 
-struct RequestBody(Option<Bytes>);
+pub(in crate::http_client) struct RequestBody(Option<Bytes>);
 
 impl Body for RequestBody {
     type Data = Bytes;
@@ -280,20 +283,91 @@ impl Body for RequestBody {
     }
 }
 
-struct WireRequest {
+pub(in crate::http_client) struct WireRequest {
     method: Method,
     uri: Uri,
-    body: Vec<u8>,
+    pub(in crate::http_client) body: Vec<u8>,
+    fixed_headers: FixedHeaders,
+    limits: TransportLimits,
+}
+
+// An internal closed descriptor, never a caller-controlled header map.
+#[derive(Clone)]
+pub(in crate::http_client) struct FixedHeaders {
+    accept: Option<hyper::header::HeaderValue>,
+    content_type: Option<hyper::header::HeaderValue>,
+    authorization: Option<hyper::header::HeaderValue>,
+}
+impl FixedHeaders {
+    pub(in crate::http_client) fn empty() -> Self {
+        Self {
+            accept: None,
+            content_type: None,
+            authorization: None,
+        }
+    }
+    pub(in crate::http_client) fn checked(
+        accept: Option<Vec<u8>>,
+        content_type: Option<Vec<u8>>,
+        authorization: Option<hyper::header::HeaderValue>,
+    ) -> Result<Self, TransportError> {
+        let header = |bytes: Vec<u8>| {
+            hyper::header::HeaderValue::from_bytes(&bytes)
+                .map_err(|_| TransportError::InvalidProfile)
+        };
+        Ok(Self {
+            accept: accept.map(header).transpose()?,
+            content_type: content_type.map(header).transpose()?,
+            authorization,
+        })
+    }
+    pub(in crate::http_client) fn validate(
+        &self,
+        authority: &hyper::header::HeaderValue,
+        limits: &TransportLimits,
+    ) -> Result<(), TransportError> {
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, authority.clone());
+        headers.insert(CONNECTION, hyper::header::HeaderValue::from_static("close"));
+        headers.insert(
+            ACCEPT_ENCODING,
+            hyper::header::HeaderValue::from_static("identity"),
+        );
+        headers.insert(
+            CONTENT_LENGTH,
+            hyper::header::HeaderValue::from_str(&limits.max_request_bytes.to_string())
+                .map_err(|_| TransportError::InvalidProfile)?,
+        );
+        if let Some(value) = &self.accept {
+            headers.insert(hyper::header::ACCEPT, value.clone());
+        }
+        if let Some(value) = &self.content_type {
+            headers.insert(hyper::header::CONTENT_TYPE, value.clone());
+        }
+        if let Some(value) = &self.authorization {
+            headers.insert(hyper::header::AUTHORIZATION, value.clone());
+        }
+        count_headers(&headers, limits, &mut 0, &mut 0)
+    }
 }
 
 impl WireRequest {
     // `uri` is the already encoded origin-form URI of a trusted frozen
     // operation. This layer does not parse an untrusted URL or follow Location.
-    fn checked(
+    pub(in crate::http_client) fn checked(
         method: Method,
         uri: Uri,
         body: Vec<u8>,
         limits: &TransportLimits,
+    ) -> Result<Self, TransportError> {
+        Self::checked_with_headers(method, uri, body, limits, FixedHeaders::empty())
+    }
+    pub(in crate::http_client) fn checked_with_headers(
+        method: Method,
+        uri: Uri,
+        body: Vec<u8>,
+        limits: &TransportLimits,
+        fixed_headers: FixedHeaders,
     ) -> Result<Self, TransportError> {
         let path = uri
             .path_and_query()
@@ -304,10 +378,25 @@ impl WireRequest {
             || uri.scheme().is_some()
             || uri.authority().is_some()
             || body.len() > limits.max_request_bytes
+            || method == Method::CONNECT
         {
             return Err(TransportError::InvalidProfile);
         }
-        Ok(Self { method, uri, body })
+        // Adapter Vec spare capacity is outside its input contract. The core
+        // retains only a compact checked allocation, never that spare capacity.
+        let mut compact = Vec::new();
+        compact
+            .try_reserve_exact(body.len())
+            .map_err(|_| TransportError::Capacity)?;
+        compact.extend_from_slice(&body);
+        drop(body);
+        Ok(Self {
+            method,
+            uri,
+            body: compact,
+            fixed_headers,
+            limits: *limits,
+        })
     }
 
     fn into_hyper(
@@ -315,7 +404,7 @@ impl WireRequest {
         authority: hyper::header::HeaderValue,
     ) -> Result<Request<RequestBody>, TransportError> {
         let len = self.body.len();
-        Request::builder()
+        let mut request = Request::builder()
             .method(self.method)
             .uri(self.uri)
             .header(HOST, authority)
@@ -323,20 +412,32 @@ impl WireRequest {
             .header(ACCEPT_ENCODING, "identity")
             .header(CONTENT_LENGTH, len.to_string())
             .body(RequestBody(Some(Bytes::from(self.body))))
-            .map_err(|_| TransportError::InvalidProfile)
+            .map_err(|_| TransportError::InvalidProfile)?;
+        let headers = request.headers_mut();
+        if let Some(value) = self.fixed_headers.accept {
+            headers.insert(hyper::header::ACCEPT, value);
+        }
+        if let Some(value) = self.fixed_headers.content_type {
+            headers.insert(hyper::header::CONTENT_TYPE, value);
+        }
+        if let Some(value) = self.fixed_headers.authorization {
+            headers.insert(hyper::header::AUTHORIZATION, value);
+        }
+        count_headers(headers, &self.limits, &mut 0, &mut 0)?;
+        Ok(request)
     }
 }
 
-type RawDriver = Connection<TokioIo<TlsStream<GatedIo>>, RequestBody>;
+pub(in crate::http_client) type RawDriver = Connection<TokioIo<TlsStream<GatedIo>>, RequestBody>;
 
-struct Http1Parts {
-    client: Http1Client,
+pub(in crate::http_client) struct Http1Parts {
+    pub(in crate::http_client) client: Http1Client,
     // The caller must register/spawn this through its retained ledger gate and
     // observe the actual JoinHandle before publishing any provisional result.
-    driver: RawDriver,
+    pub(in crate::http_client) driver: RawDriver,
 }
 
-struct Http1Client {
+pub(in crate::http_client) struct Http1Client {
     sender: SendRequest<RequestBody>,
     control: Arc<DialControl>,
     authority: hyper::header::HeaderValue,
@@ -344,10 +445,10 @@ struct Http1Client {
     limits: TransportLimits,
 }
 
-struct BoundedResponse {
-    status: StatusCode,
-    headers: HeaderMap,
-    body: Vec<u8>,
+pub(in crate::http_client) struct BoundedResponse {
+    pub(in crate::http_client) status: StatusCode,
+    pub(in crate::http_client) headers: HeaderMap,
+    pub(in crate::http_client) body: Vec<u8>,
 }
 
 fn phase_gate(control: &DialControl, end: Instant) -> Result<(), TransportError> {
@@ -358,7 +459,7 @@ fn phase_gate(control: &DialControl, end: Instant) -> Result<(), TransportError>
     Ok(())
 }
 
-async fn establish(
+pub(in crate::http_client) async fn establish(
     pinned: PinnedSocket,
     profile: &TlsProfile,
     control: Arc<DialControl>,
@@ -462,9 +563,22 @@ async fn send_request_gated(
 }
 
 impl Http1Client {
-    // One request only; a 3xx Location is returned as metadata, never followed.
-    // Completion here is provisional until the retained parent joins `driver`.
-    async fn send_once(mut self, request: WireRequest) -> Result<BoundedResponse, TransportError> {
+    // The old scoped transport tests still exercise the same implementation.
+    pub(in crate::http_client) async fn send_once(
+        self,
+        request: WireRequest,
+    ) -> Result<BoundedResponse, TransportError> {
+        self.send_once_observed(request, Arc::new(std::sync::atomic::AtomicBool::new(false)))
+            .await
+    }
+
+    // The operation owns the irreversible submission observation. Setting it
+    // precedes Hyper's synchronous dispatch, under the existing transport gate.
+    pub(in crate::http_client) async fn send_once_observed(
+        mut self,
+        request: WireRequest,
+        submitted: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<BoundedResponse, TransportError> {
         phase_gate(&self.control, self.whole_end)?;
         let request = request.into_hyper(self.authority.clone())?;
         let mut stopped = self.control.changed.subscribe();
@@ -472,11 +586,20 @@ impl Http1Client {
             biased;
             reason = wait_stop(&mut stopped) => return Err(reason.into()),
             _ = tokio::time::sleep_until(self.whole_end.into()) => return Err(TransportError::Deadline),
-            result = send_request_gated(&mut self.sender, request, &self.control, self.whole_end) => result?,
+            result = async {
+                let response = enqueue_under_gate(&self.control, self.whole_end, || {
+                    submitted.store(true, std::sync::atomic::Ordering::Release);
+                    self.sender.send_request(request)
+                })?;
+                response.await.map_err(|_| TransportError::Http)
+            } => result?,
         };
         phase_gate(&self.control, self.whole_end)?;
         if response.status() == StatusCode::SWITCHING_PROTOCOLS {
             return Err(TransportError::Upgrade);
+        }
+        if response.status().is_informational() || response.status().as_u16() >= 600 {
+            return Err(TransportError::Http);
         }
         let (parts, incoming) = response.into_parts();
         tokio::pin!(incoming);
@@ -494,6 +617,8 @@ impl Http1Client {
             }
         }
         let mut body = Vec::new();
+        body.try_reserve_exact(self.limits.max_response_bytes)
+            .map_err(|_| TransportError::Capacity)?;
         loop {
             let next = tokio::select! {
                 biased;

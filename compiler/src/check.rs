@@ -1,4 +1,5 @@
 pub(crate) mod checked;
+mod client;
 mod security;
 mod sqlite;
 
@@ -1368,6 +1369,9 @@ impl Checker {
         if info.module == crate::stdlib::StandardModule::Sqlite {
             return self.sqlite_standard(operation, types, args, line);
         }
+        if info.module == crate::stdlib::StandardModule::HttpClient {
+            return self.client_standard(operation, types, args, line);
+        }
         if info.module == crate::stdlib::StandardModule::Task {
             return self.task_operation(operation, types, args, expression);
         }
@@ -2233,6 +2237,22 @@ impl Checker {
                         "HTTP Policyの出力型はunit/AuthScope/Grant[P]に限ります",
                     ));
                 }
+            }
+            if resource == crate::stdlib::Resource::ProtectedOperation {
+                self.valid(
+                    &crate::stdlib::resource_type(
+                        crate::stdlib::Resource::Grant,
+                        vec![t.1[1].clone()],
+                    ),
+                    line,
+                )?;
+            }
+            if matches!(
+                resource,
+                crate::stdlib::Resource::ProtectedOperation
+                    | crate::stdlib::Resource::PublicOperation
+            ) {
+                self.client_input(t.1.last().expect("validated client operation arity"), line)?;
             }
             if resource == crate::stdlib::Resource::Grant {
                 let marker = &t.1[0];

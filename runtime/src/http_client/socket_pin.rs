@@ -23,7 +23,7 @@ enum StopState {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SocketError {
+pub(in crate::http_client) enum SocketError {
     Address(AddressError),
     InvalidLimit,
     Capacity,
@@ -35,18 +35,31 @@ enum SocketError {
     PeerMismatch,
 }
 
-struct DialControl {
+pub(in crate::http_client) struct DialControl {
     state: Mutex<StopState>,
     changed: watch::Sender<StopState>,
+    native_gate: Option<crate::http_client::ledger::NativeGate>,
+}
+struct DialGuard<'a> {
+    _state: std::sync::MutexGuard<'a, StopState>,
+    _native: Option<crate::http_client::ledger::NativeGuard<'a>>,
 }
 
 impl DialControl {
-    fn new() -> Self {
+    pub(in crate::http_client) fn new() -> Self {
         let (changed, _) = watch::channel(StopState::Open);
         Self {
             state: Mutex::new(StopState::Open),
             changed,
+            native_gate: None,
         }
+    }
+    pub(in crate::http_client) fn for_operation(
+        gate: crate::http_client::ledger::NativeGate,
+    ) -> Self {
+        let mut control = Self::new();
+        control.native_gate = Some(gate);
+        control
     }
 
     fn transition(&self, next: StopState) {
@@ -60,25 +73,38 @@ impl DialControl {
         }
     }
 
-    fn close(&self) {
+    pub(in crate::http_client) fn close(&self) {
         self.transition(StopState::Closing);
     }
 
-    fn fault(&self) {
+    pub(in crate::http_client) fn fault(&self) {
         self.transition(StopState::Faulted);
     }
 
-    fn checked_state(&self) -> Result<std::sync::MutexGuard<'_, StopState>, SocketError> {
+    fn checked_state(&self) -> Result<DialGuard<'_>, SocketError> {
+        let native = self
+            .native_gate
+            .as_ref()
+            .map(|gate| gate.enter())
+            .transpose()
+            .map_err(|error| match error {
+                crate::http_client::ledger::LedgerError::Expired => SocketError::Deadline,
+                crate::http_client::ledger::LedgerError::Closing => SocketError::Closing,
+                _ => SocketError::Faulted,
+            })?;
         let state = self.state.lock().map_err(|_| SocketError::Faulted)?;
         match *state {
-            StopState::Open => Ok(state),
+            StopState::Open => Ok(DialGuard {
+                _state: state,
+                _native: native,
+            }),
             StopState::Closing => Err(SocketError::Closing),
             StopState::Faulted => Err(SocketError::Faulted),
         }
     }
 }
 
-struct SocketQuota {
+pub(in crate::http_client) struct SocketQuota {
     inner: Arc<Mutex<Quota>>,
 }
 
@@ -88,7 +114,7 @@ struct Quota {
 }
 
 impl SocketQuota {
-    fn checked(limit: usize) -> Result<Self, SocketError> {
+    pub(in crate::http_client) fn checked(limit: usize) -> Result<Self, SocketError> {
         if !(1..=MAX_NATIVE_SOCKETS).contains(&limit) {
             return Err(SocketError::InvalidLimit);
         }
@@ -108,7 +134,7 @@ impl SocketQuota {
         })
     }
 
-    fn used(&self) -> usize {
+    pub(in crate::http_client) fn used(&self) -> usize {
         self.inner
             .lock()
             .unwrap_or_else(|poison| poison.into_inner())
@@ -159,7 +185,7 @@ impl Drop for OwnedSocket {
     }
 }
 
-struct PinnedSocket {
+pub(in crate::http_client) struct PinnedSocket {
     owned: OwnedSocket,
     identity: ServiceIdentity,
     selected: SocketAddr,
@@ -330,7 +356,7 @@ mod tests;
 // The private transport consumes the entire pinned socket owner. The socket
 // module remains unexported until trusted catalog/auth/ledger integration.
 #[path = "tls_http1.rs"]
-mod tls_http1;
+pub(in crate::http_client) mod tls_http1;
 
 #[path = "q1_native.rs"]
-mod q1_native;
+pub(in crate::http_client) mod q1_native;

@@ -12,11 +12,11 @@ mod iana_tables;
 // This unadopted socket boundary is exercised with owned loopback tests only.
 // The trusted catalog/auth/ledger constructor is a separate integration gate.
 #[path = "socket_pin.rs"]
-mod socket_pin;
+pub(in crate::http_client) mod socket_pin;
 
 // Private Q1 plan and test-only native adapter; production wiring is separate.
 #[path = "q1_dial.rs"]
-mod q1_dial;
+pub(in crate::http_client) mod q1_dial;
 
 const MAX_CANDIDATES: usize = 1024;
 const MAX_EXCEPTIONS: usize = 64;
@@ -27,6 +27,24 @@ pub(crate) struct ServiceIdentity {
     purpose: u64,
     generation: u64,
     trust: u64,
+}
+impl ServiceIdentity {
+    pub(in crate::http_client) fn from_startup(
+        service: u64,
+        purpose: u64,
+        generation: u64,
+        trust: u64,
+    ) -> Result<Self, AddressError> {
+        if [service, purpose, generation, trust].contains(&0) {
+            return Err(AddressError::InvalidPolicy);
+        }
+        Ok(Self {
+            service,
+            purpose,
+            generation,
+            trust,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

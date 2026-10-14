@@ -17,11 +17,17 @@ pub(super) struct Command {
 }
 
 impl Command {
+    pub(super) fn is_public(&self) -> bool {
+        self.key.seal.explicit_public.load(Ordering::Acquire)
+    }
     pub(super) fn key(&self) -> &JobKey {
         &self.key
     }
     pub(super) fn payload(&self) -> &[u8] {
         &self.payload
+    }
+    pub(super) fn take_payload(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.payload)
     }
 }
 
@@ -125,6 +131,10 @@ impl Owner {
         } = reservation.take().expect("reserved command");
         let id = key.id;
         let bytes = payload.len();
+        key.seal
+            .admitted_end
+            .set(end)
+            .expect("one-use bound command deadline");
         self.jobs.push(JobRecord {
             id,
             seal: Arc::clone(&key.seal),
@@ -156,6 +166,9 @@ impl Owner {
     }
 
     fn take_command(&mut self) -> Result<Option<Command>, LedgerError> {
+        self.take_command_matching(None)
+    }
+    fn take_command_matching(&mut self, only: Option<u64>) -> Result<Option<Command>, LedgerError> {
         if self.is_closing() {
             return Err(LedgerError::Closing);
         }
@@ -163,6 +176,9 @@ impl Owner {
             return Err(LedgerError::Faulted);
         }
         for job in &mut self.jobs {
+            if only.is_some_and(|id| id != job.id) {
+                continue;
+            }
             if job.cancel_requested || job.end.is_some_and(|end| end <= Instant::now()) {
                 continue;
             }
@@ -181,41 +197,52 @@ impl Owner {
 impl ClientSender {
     // First polling owns only a finite registered waiter. The unpolled caller
     // input is not retained by the core; waiter Drop releases registered bytes.
+    #[cfg(test)]
     pub(crate) async fn submit<P>(
         &self,
         grant: auth::Grant<P>,
         payload: Vec<u8>,
         whole_end: Instant,
     ) -> Result<u64, AdmissionError> {
-        let owner = self
-            .owner
-            .as_ref()
-            .ok_or(AdmissionError::Ledger(LedgerError::Closing))?;
-        if whole_end <= Instant::now() {
-            return Err(AdmissionError::Ledger(LedgerError::Expired));
+        self.submit_key(grant, payload, whole_end)
+            .await
+            .map(|key| key.id())
+    }
+    #[cfg(test)]
+    pub(super) async fn submit_key<P>(
+        &self,
+        grant: auth::Grant<P>,
+        payload: Vec<u8>,
+        whole_end: Instant,
+    ) -> Result<JobKey, AdmissionError> {
+        self.submit_bound(grant, payload, whole_end, false, None)
+            .await
+    }
+    pub(super) async fn submit_operation<P>(
+        &self,
+        grant: auth::Grant<P>,
+        payload: Vec<u8>,
+        whole_end: Instant,
+        operation: RegisteredOperation,
+    ) -> Result<JobKey, AdmissionError> {
+        if operation.explicit_public {
+            return Err(AdmissionError::Ledger(LedgerError::InvalidLimits));
         }
-        // Freeze into a compact bounded core-owned allocation. A caller Vec may
-        // have huge spare capacity; retaining it by len alone is not a byte bound.
-        let job_byte_limit = owner
-            .lock()
-            .map_err(|_| AdmissionError::Ledger(LedgerError::Faulted))?
-            .job_byte_limit;
-        if payload.len() > self.shared.limits.waiter_bytes || payload.len() > job_byte_limit {
-            return Err(AdmissionError::Ledger(LedgerError::Capacity));
-        }
-        let mut frozen = Vec::new();
-        frozen
-            .try_reserve_exact(payload.len())
-            .map_err(|_| AdmissionError::Ledger(LedgerError::Allocation))?;
-        frozen.extend_from_slice(&payload);
-        drop(payload);
-        let payload = frozen;
+        self.submit_bound(grant, payload, whole_end, true, Some(operation))
+            .await
+    }
+    async fn submit_bound<P>(
+        &self,
+        grant: auth::Grant<P>,
+        payload: Vec<u8>,
+        whole_end: Instant,
+        retain_result: bool,
+        operation: Option<RegisteredOperation>,
+    ) -> Result<JobKey, AdmissionError> {
         let mut events = self.shared.events_tx.subscribe();
-        let ticket = owner
-            .lock()
-            .map_err(|_| AdmissionError::Ledger(LedgerError::Faulted))?
-            .try_register_waiter(payload)
-            .map_err(|(error, _)| AdmissionError::Ledger(error))?;
+        let (owner, ticket) = self
+            .compact_waiter(payload, whole_end)
+            .map_err(AdmissionError::Ledger)?;
         loop {
             // No lease check is extracted as a bool. The actual consumed Grant
             // issues its permit and captures min(original ceilings) under Lease gate.
@@ -229,40 +256,15 @@ impl ClientSender {
                 if whole_end <= Instant::now() {
                     return Err(AdmissionError::Ledger(LedgerError::Expired));
                 }
-                let bytes = {
-                    let book = self
-                        .shared
-                        .waiters
-                        .lock()
-                        .map_err(|_| AdmissionError::Ledger(LedgerError::Faulted))?;
-                    book.records
-                        .iter()
-                        .find(|record| record.id == ticket.id)
-                        .map(|record| record.payload.len())
-                        .ok_or(AdmissionError::Ledger(LedgerError::Closing))?
-                };
-                match state.reserve_command(bytes) {
-                    Ok((key, tasks)) => {
-                        let payload = {
-                            let mut book = self
-                                .shared
-                                .waiters
-                                .lock()
-                                .map_err(|_| AdmissionError::Ledger(LedgerError::Faulted))?;
-                            let index = book
-                                .records
-                                .iter()
-                                .position(|record| record.id == ticket.id)
-                                .ok_or(AdmissionError::Ledger(LedgerError::Closing))?;
-                            let record = book.records.swap_remove(index);
-                            book.bytes -= record.payload.len();
-                            record.payload
-                        };
-                        reservation.get_or_init(|| Reservation {
-                            key,
-                            payload,
-                            tasks,
-                        });
+                match self.reserve_waiter_command(
+                    &mut state,
+                    &ticket,
+                    retain_result,
+                    false,
+                    operation,
+                ) {
+                    Ok(reserved) => {
+                        reservation.get_or_init(|| reserved);
                         // Lease guard is released by auth before this synchronous
                         // closed enqueue callback; client gate remains held throughout.
                         let issued = grant.submit_private(
@@ -277,7 +279,7 @@ impl ClientSender {
                         drop(state);
                         drop(reservation);
                         return match issued {
-                            Ok(Ok(key)) => Ok(key.id()),
+                            Ok(Ok(key)) => Ok(key),
                             Ok(Err(error)) => Err(AdmissionError::Ledger(error)),
                             Err(error) => Err(AdmissionError::Auth(error)),
                         };
@@ -295,6 +297,116 @@ impl ClientSender {
                 }
             }
         }
+    }
+    // Independent grant-free admission. It never invokes protected submission
+    // or constructs a Grant/permit; the immutable registered public operation
+    // is its sole egress declaration. Both routes share only bounded bookkeeping.
+    pub(super) async fn submit_public_operation(
+        &self,
+        payload: Vec<u8>,
+        whole_end: Instant,
+        operation: RegisteredOperation,
+    ) -> Result<JobKey, LedgerError> {
+        if !operation.explicit_public {
+            return Err(LedgerError::InvalidLimits);
+        }
+        let mut events = self.shared.events_tx.subscribe();
+        let (owner, ticket) = self.compact_waiter(payload, whole_end)?;
+        loop {
+            let mut reservation = std::cell::OnceCell::new();
+            {
+                let mut state = owner.lock().map_err(|_| LedgerError::Faulted)?;
+                if whole_end <= Instant::now() {
+                    return Err(LedgerError::Expired);
+                }
+                match self.reserve_waiter_command(&mut state, &ticket, true, true, Some(operation))
+                {
+                    Ok(reserved) => {
+                        reservation.get_or_init(|| reserved);
+                        // These unused compatibility fields are not authority.
+                        // Public preparation receives no BoundValues or secret.
+                        let result = state.enqueue(0, 0, whole_end, &mut reservation);
+                        drop(state);
+                        drop(reservation);
+                        return result;
+                    }
+                    Err(LedgerError::Capacity) => {}
+                    Err(error) => return Err(error),
+                }
+            }
+            tokio::select! {
+                changed=events.changed() => { if changed.is_err() { return Err(LedgerError::Closing); } }
+                _=tokio::time::sleep_until(whole_end.into()) => return Err(LedgerError::Expired),
+            }
+        }
+    }
+    fn compact_waiter(
+        &self,
+        payload: Vec<u8>,
+        whole_end: Instant,
+    ) -> Result<(Arc<Mutex<Owner>>, WaiterTicket), LedgerError> {
+        let owner = Arc::clone(self.owner.as_ref().ok_or(LedgerError::Closing)?);
+        if whole_end <= Instant::now() {
+            return Err(LedgerError::Expired);
+        }
+        let job_limit = owner
+            .lock()
+            .map_err(|_| LedgerError::Faulted)?
+            .job_byte_limit;
+        if payload.len() > self.shared.limits.waiter_bytes || payload.len() > job_limit {
+            return Err(LedgerError::Capacity);
+        }
+        let mut frozen = Vec::new();
+        frozen
+            .try_reserve_exact(payload.len())
+            .map_err(|_| LedgerError::Allocation)?;
+        frozen.extend_from_slice(&payload);
+        drop(payload);
+        let ticket = owner
+            .lock()
+            .map_err(|_| LedgerError::Faulted)?
+            .try_register_waiter(frozen)
+            .map_err(|(error, _)| error)?;
+        Ok((owner, ticket))
+    }
+    fn reserve_waiter_command(
+        &self,
+        state: &mut Owner,
+        ticket: &WaiterTicket,
+        retain_result: bool,
+        explicit_public: bool,
+        operation: Option<RegisteredOperation>,
+    ) -> Result<Reservation, LedgerError> {
+        let mut book = self
+            .shared
+            .waiters
+            .lock()
+            .map_err(|_| LedgerError::Faulted)?;
+        let index = book
+            .records
+            .iter()
+            .position(|record| record.id == ticket.id)
+            .ok_or(LedgerError::Closing)?;
+        let (key, tasks) = state.reserve_command(book.records[index].payload.len())?;
+        key.seal
+            .publication_pending
+            .store(retain_result, Ordering::Release);
+        key.seal
+            .explicit_public
+            .store(explicit_public, Ordering::Release);
+        if let Some(operation) = operation {
+            key.seal
+                .operation
+                .set(operation)
+                .unwrap_or_else(|_| panic!("one-use registered operation"));
+        }
+        let record = book.records.swap_remove(index);
+        book.bytes -= record.payload.len();
+        Ok(Reservation {
+            key,
+            payload: record.payload,
+            tasks,
+        })
     }
     // Only the private reviewed runner receives a queued bound command. There
     // is no public callback or raw proof-return path. Native IO is a later adapter.
@@ -377,6 +489,12 @@ impl ClientSender {
 }
 
 impl RunnerOwnerHandle {
+    pub(super) fn take_command_for(&self, id: u64) -> Result<Option<Command>, LedgerError> {
+        self.owner
+            .lock()
+            .map_err(|_| LedgerError::Faulted)?
+            .take_command_matching(Some(id))
+    }
     pub(super) fn take_command(&self) -> Result<Option<Command>, LedgerError> {
         self.owner
             .lock()

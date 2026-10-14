@@ -486,6 +486,145 @@ jobs:
           RELEASE_RUST_HOST: ${{ matrix.rust_host }}
         shell: bash
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
+      - name: Check SF06 public HTTP client across package targets
+        env:
+          NAGI_NATIVE_TARGET_DIR: ${{ github.workspace }}/native-target
+          NAGI_TEST_ARTIFACT_DIR: ${{ runner.temp }}/sf06-http-client-native
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cat > "$RUNNER_TEMP/sf06-http-client-guard.py" <<'PY'
+          import os
+          import pathlib
+          import re
+          import sys
+
+          RUNTIME_CASES = {
+              "http_client::ledger::operation::tests::operation_withholds_real_https_response_until_actual_driver_join",
+              "http_client::ledger::tracked_dns::hickory::tests::owned_udp_two_families_actual_tracked_resolver_and_join",
+              "http_client::ledger::admission::tests::drop_posts_stop_without_owner_or_waiter_lock",
+          }
+          SUITES = {
+              "runtime-http-client": (206, None, RUNTIME_CASES),
+              "production-dns": (1, {
+                  "production_public_handle_rejects_loopback_before_tcp_or_http",
+              }, None),
+              "registry": (3, {
+                  "adopted_client_resource_inventory_has_owned_nonclone_and_distinct_operations",
+                  "adopted_client_passing_and_borrow_inventory",
+                  "adopted_client_failure_constants_keep_business_status_separate",
+              }, None),
+              "contracts": (11, {
+                  "owned_response_body_views_and_transfer_check_in_three_forms",
+                  "actual_grant_protected_operation_checks_in_three_forms",
+                  "explicit_public_operation_checks_without_grant_in_three_forms",
+                  "response_move_while_body_view_lives_rejects_at_checker_in_both_forms",
+                  "owned_response_wrapper_copy_is_rejected_but_shared_handle_copy_remains_valid",
+                  "protected_permission_mismatch_and_public_downgrade_are_checker_errors",
+                  "protocol_view_and_non_nominal_permission_are_rejected_at_declaration",
+                  "returned_header_views_do_not_borrow_lookup_name_in_three_forms",
+                  "security_kind_cross_module_metadata_survives_saved_low_without_auth_alias",
+                  "actual_future_grant_capture_cannot_be_delegated_to_spawn",
+                  "only_context_payload_is_shared_and_permission_is_nominal",
+              }, None),
+              "native": (2, {
+                  "public_signatures_and_failure_projections_build_and_run_in_three_forms",
+                  "generated_operations_execute_real_tls_and_grant_in_three_test_network_paths",
+              }, None),
+          }
+          ROW = re.compile(r"^test ([A-Za-z0-9_:]+) \.\.\. (ok|FAILED|ignored)$", re.M)
+          RUNNING = re.compile(r"^running ([0-9]+) tests?$", re.M)
+          SUMMARY = re.compile(
+              r"^test result: ok\. ([0-9]+) passed; 0 failed; 0 ignored; "
+              r"0 measured; [0-9]+ filtered out; finished in [^\n]+$",
+              re.M,
+          )
+
+          def fail(label):
+              print(f"sf06_http_client_check={label} result=failed")
+              raise SystemExit(1)
+
+          def check_suite(label, status, log_path):
+              suite = SUITES.get(label)
+              if suite is None:
+                  fail("unknown")
+              count, exact_names, required_names = suite
+              if status != 0:
+                  fail(label)
+              try:
+                  text = pathlib.Path(log_path).read_text(encoding="utf-8")
+              except (OSError, UnicodeError):
+                  fail(label)
+              rows = ROW.findall(text)
+              names = [name for name, result in rows]
+              passed = {name for name, result in rows if result == "ok"}
+              summaries = SUMMARY.findall(text)
+              running = RUNNING.findall(text)
+              if (running != [str(count)] or summaries != [str(count)] or
+                      len(rows) != count or len(set(names)) != count or
+                      len(passed) != count or
+                      (exact_names is not None and passed != exact_names) or
+                      (required_names is not None and
+                       not required_names.issubset(passed))):
+                  fail(label)
+              print(f"sf06_http_client_check={label} tests={count} result=ok")
+
+          def check_native_forms():
+              root = pathlib.Path(os.environ["NAGI_TEST_ARTIFACT_DIR"])
+              forms = ("high", "saved-low", "manual-low")
+              for form in forms:
+                  stem = f"http-client-{form}"
+                  generated = root / f"{stem}-generated.rs"
+                  wrapper = root / f"{stem}-native-wrapper.rs"
+                  if (not generated.is_file() or not generated.stat().st_size or
+                          not wrapper.is_file() or not wrapper.stat().st_size):
+                      fail("native-forms")
+                  for stage in ("build", "native"):
+                      for stream in ("stdout", "stderr"):
+                          if not (root / f"{stem}-{stage}.{stream}").is_file():
+                              fail("native-forms")
+                  try:
+                      output = (root / f"{stem}-native.stdout").read_text(encoding="utf-8")
+                  except (OSError, UnicodeError):
+                      fail("native-forms")
+                  rows = re.findall(
+                      r"(?m)^test (generated_operation_oracle::real_tls_and_grant) \.\.\. (ok|FAILED)$",
+                      output,
+                  )
+                  summaries = SUMMARY.findall(output)
+                  if rows != [("generated_operation_oracle::real_tls_and_grant", "ok")] or summaries != ["1"]:
+                      fail("native-forms")
+              print("sf06_http_client_native_forms=3 result=ok")
+
+          if len(sys.argv) != 4:
+              fail("arguments")
+          label, status_text, path = sys.argv[1:]
+          if label == "native-forms":
+              if status_text != "0":
+                  fail("native-forms")
+              check_native_forms()
+          else:
+              try:
+                  status = int(status_text)
+              except ValueError:
+                  fail("arguments")
+              check_suite(label, status, path)
+          PY
+          run_check() {
+            local label="$1"
+            shift
+            local log="$RUNNER_TEMP/sf06-${label}.log"
+            local status=0
+            "$@" > "$log" 2>&1 || status=$?
+            python "$RUNNER_TEMP/sf06-http-client-guard.py" "$label" "$status" "$log"
+          }
+          run_check runtime-http-client cargo test --locked -p nagi-runtime --lib http_client::
+          run_check production-dns cargo test --locked -p nagi-runtime --test http_client_operation_public_api production_public_handle_rejects_loopback_before_tcp_or_http -- --exact
+          run_check registry cargo test --locked -p nagic --test http_client_registry
+          run_check contracts cargo test --locked -p nagic --test http_client_contracts
+          run_check native cargo test --locked -p nagic --test http_client_native
+          python "$RUNNER_TEMP/sf06-http-client-guard.py" native-forms 0 "$NAGI_TEST_ARTIFACT_DIR"
       - name: Diagnose G3 generation-token failure before crypto checks
         shell: bash
         run: |

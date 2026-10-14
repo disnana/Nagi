@@ -3,12 +3,12 @@ use super::super::q1_dial::{AttemptCleanup, AttemptControl, AttemptFailure, Dial
 use super::*;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum FailoverError {
+pub(in crate::http_client) enum FailoverError {
     Plan(PlanStop),
     Socket(SocketError),
 }
 
-async fn connect_plan(
+pub(in crate::http_client) async fn connect_plan(
     plan: DialPlan,
     control: &DialControl,
     quota: &SocketQuota,

@@ -1,5 +1,5 @@
 //! Independent, hand-reviewed pre-refactor inventory. Expectations are not regenerated
-//! from the registry. SF04 additions follow the separately frozen contract.
+//! from the registry. SF04 and SF06 additions follow their separately adopted contracts.
 use nagic::ast::{ModuleId, Type};
 use nagic::stdlib::{self, Operation as O, Passing, Resource as R, StandardModule as M};
 use std::collections::HashSet;
@@ -14,6 +14,54 @@ type ResourceExpected = (
     &'static [usize],
 );
 const RESOURCES: &[ResourceExpected] = &[
+    (
+        R::ProtectedOperation,
+        M::HttpClient,
+        "ProtectedOperation",
+        &["C", "P", "I"],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::PublicOperation,
+        M::HttpClient,
+        "PublicOperation",
+        &["C", "I"],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::ClientResponse,
+        M::HttpClient,
+        "Response",
+        &[],
+        [false, false, true, true, false],
+        &[],
+    ),
+    (
+        R::ClientFailure,
+        M::HttpClient,
+        "Failure",
+        &[],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::ClientFailureKind,
+        M::HttpClient,
+        "FailureKind",
+        &[],
+        [true, true, true, true, true],
+        &[],
+    ),
+    (
+        R::ClientOutcome,
+        M::HttpClient,
+        "Outcome",
+        &[],
+        [true, true, true, true, true],
+        &[],
+    ),
     (
         R::CsrfOptions,
         M::AuthCsrf,
@@ -449,6 +497,11 @@ const RESOURCES: &[ResourceExpected] = &[
 ];
 fn module(module: M) -> (&'static str, &'static str, &'static str) {
     match module {
+        M::HttpClient => (
+            "std.http.client",
+            "stdlib:std.http.client",
+            "::nagi_runtime::http_client",
+        ),
         M::Html => ("std.html", "stdlib:std.html", "::nagi_runtime::html"),
         M::HttpServer => (
             "std.http.server",
@@ -495,8 +548,8 @@ fn registered_resources_match_the_independent_inventory() {
         shared: false,
         debug: false,
     };
-    assert_eq!(RESOURCES.len(), 54);
-    assert_eq!(stdlib::RESOURCES.len(), 54);
+    assert_eq!(RESOURCES.len(), 60);
+    assert_eq!(stdlib::RESOURCES.len(), 60);
     assert_eq!(
         stdlib::RESOURCES.iter().copied().collect::<HashSet<_>>(),
         RESOURCES.iter().map(|r| r.0).collect()
@@ -575,6 +628,16 @@ macro_rules! op {
     };
 }
 const OPERATIONS: &[OperationExpected] = &[
+    op!(ClientExecute,HttpClient,"execute",3,&["C","P","I"],"RMM",None,true,true,"[C, P, I](operation: view[ProtectedOperation[C, P, I]], grant: Grant[P], input: I) -> Future[Result[Response, Failure]]"),
+    op!(ClientExecutePublic,HttpClient,"execute_public",2,&["C","I"],"RM",None,true,true,"[C, I](operation: view[PublicOperation[C, I]], input: I) -> Future[Result[Response, Failure]]"),
+    op!(ClientStatus,HttpClient,"status",1,&[],"R",None,false,true,"(response: view[Response]) -> i64"),
+    op!(ClientHeaders,HttpClient,"headers",2,&[],"RR",Some(0),false,true,"(response: view[Response], name: view[str]) -> Result[List[view[bytes]], Error]"),
+    op!(ClientBody,HttpClient,"body",1,&[],"R",Some(0),false,true,"(response: view[Response]) -> view[bytes]"),
+    op!(ClientTakeBody,HttpClient,"take_body",1,&[],"M",None,false,true,"(response: Response) -> bytes"),
+    op!(ClientKind,HttpClient,"kind",1,&[],"R",None,false,true,"(failure: view[Failure]) -> FailureKind"),
+    op!(ClientMessage,HttpClient,"message",1,&[],"R",Some(0),false,true,"(failure: view[Failure]) -> view[str]"),
+    op!(ClientAuthKind,HttpClient,"auth_kind",1,&[],"R",None,false,true,"(failure: view[Failure]) -> Option[auth.FailureKind]"),
+    op!(ClientOutcome,HttpClient,"outcome",1,&[],"R",None,false,true,"(failure: view[Failure]) -> Outcome"),
     op!(CsrfOptions,AuthCsrf,"options",5,&[],"MMMMM",None,false,false,"(max_stored: i64, max_payload_bytes: i64, cleanup_batch: i64, ttl_ms: i64, collision_attempts: i64) -> Result[Options, Failure]"),
     op!(CsrfOpen,AuthCsrf,"open",3,&[],"RMR",None,true,false,"(store: view[Store], options: Options, http: view[HttpOptions]) -> Future[Result[CsrfStore, Failure]]"),
     op!(CsrfCloneStore,AuthCsrf,"clone_store",1,&[],"R",None,false,false,"(store: view[CsrfStore]) -> CsrfStore"),
@@ -698,8 +761,8 @@ const OPERATIONS: &[OperationExpected] = &[
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 119);
-    assert_eq!(stdlib::OPERATIONS.len(), 119);
+    assert_eq!(OPERATIONS.len(), 129);
+    assert_eq!(stdlib::OPERATIONS.len(), 129);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()
@@ -891,6 +954,8 @@ fn registered_accessors_match_the_complete_inventory() {
 }
 
 const CONSTANTS: &[(R, &str)] = &[
+    (R::ClientFailureKind,"INVALID_INPUT SECURITY DESTINATION_DENIED CAPACITY CLOSING DEADLINE DNS TCP TLS PROTOCOL RESPONSE_LIMIT UNSUPPORTED_ENCODING UNAVAILABLE INTERNAL"),
+    (R::ClientOutcome,"REQUEST_NOT_STARTED UNKNOWN"),
     (R::HtmlTag,"DIV SPAN P H1 H2 STRONG EM UL OL LI A BR"),
     (R::SessionSameSite,"LAX NONE STRICT"),
     (R::AuthFailureKind,"INVALID_CREDENTIAL DENIED EXPIRED INVALID_REQUEST UNAVAILABLE INTERNAL"),
@@ -907,7 +972,7 @@ const CONSTANTS: &[(R, &str)] = &[
 ];
 #[test]
 fn registered_constants_match_the_complete_inventory() {
-    assert_eq!(CONSTANTS.len(), 13);
+    assert_eq!(CONSTANTS.len(), 15);
     for &(resource, ..) in RESOURCES {
         let names = CONSTANTS
             .iter()
@@ -924,6 +989,22 @@ fn registered_constants_match_the_complete_inventory() {
         assert_eq!(actual.len(), expected.len());
         for name in expected {
             let native = match (resource, name) {
+                (R::ClientFailureKind, "INVALID_INPUT") => "InvalidInput",
+                (R::ClientFailureKind, "SECURITY") => "Security",
+                (R::ClientFailureKind, "DESTINATION_DENIED") => "DestinationDenied",
+                (R::ClientFailureKind, "CAPACITY") => "Capacity",
+                (R::ClientFailureKind, "CLOSING") => "Closing",
+                (R::ClientFailureKind, "DEADLINE") => "Deadline",
+                (R::ClientFailureKind, "DNS") => "Dns",
+                (R::ClientFailureKind, "TCP") => "Tcp",
+                (R::ClientFailureKind, "TLS") => "Tls",
+                (R::ClientFailureKind, "PROTOCOL") => "Protocol",
+                (R::ClientFailureKind, "RESPONSE_LIMIT") => "ResponseLimit",
+                (R::ClientFailureKind, "UNSUPPORTED_ENCODING") => "UnsupportedEncoding",
+                (R::ClientFailureKind, "UNAVAILABLE") => "Unavailable",
+                (R::ClientFailureKind, "INTERNAL") => "Internal",
+                (R::ClientOutcome, "REQUEST_NOT_STARTED") => "RequestNotStarted",
+                (R::ClientOutcome, "UNKNOWN") => "Unknown",
                 (R::SessionSameSite, "LAX") => "Lax",
                 (R::SessionSameSite, "NONE") => "None",
                 (R::SessionSameSite, "STRICT") => "Strict",

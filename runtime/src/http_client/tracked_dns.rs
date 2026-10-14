@@ -462,12 +462,10 @@ impl Drop for StopOnDrop {
         let _ = self.0.close();
     }
 }
-#[cfg(test)]
 #[path = "hickory.rs"]
 mod hickory;
 #[path = "tokio_io.rs"]
 mod tokio_io;
-#[cfg(test)]
 pub(super) use hickory::{resolve, DrainedResolution, FamilyOutcome, ResolverStartup};
 #[cfg(test)]
 #[path = "core_tests.rs"]
