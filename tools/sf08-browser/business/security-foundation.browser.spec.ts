@@ -12,6 +12,17 @@ const appOrigin = new URL(process.env.SF08_APP_ORIGIN!).origin;
 const uiOrigin = new URL(process.env.SF08_UI_ORIGIN!).origin;
 const deniedOrigin = new URL(process.env.SF08_DENIED_ORIGIN!).origin;
 
+test.beforeAll(async ({ browser, browserName }) => {
+  if (browserName === "firefox") {
+    // The owning stage overrides this with its fixed adjacent bound source.
+    // This suite is copied into a separate owned npm package before execution.
+    const helperURL = process.env.SF08_PREFLIGHT_MODULE;
+    if (!helperURL) throw new Error("SF08 Firefox CA readiness unavailable");
+    const { firefoxWorkerReadiness } = await import(helperURL);
+    await firefoxWorkerReadiness(browser, appOrigin);
+  }
+});
+
 function expectManaged(event: Observation, status: number): void {
   expect(event.method).toBe("GET");
   expect(event.path).toBe("/bootstrap");

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { stage, businessConfig, trustEnv } from './browser_stage.mjs';
 const IMAGE = 'sha256:bdfda2a8fdf48707c5e50a49bd3e06d8d0c759153dc8ee057d8a81c3450bb3e9';
 const home = '/run/nagi-sf08/trust-unit/home';
@@ -34,6 +35,7 @@ test('same trust context and original deadlines/devices pass from preflight to b
   assert.equal(f.calls.child.env.XDG_DATA_HOME, home + '/.local/share');
   assert.equal(f.calls.child.env.SF08_CONTROL_SOCKET, input().ready.control);
   assert.equal(f.calls.child.env.SF08_OBSERVATION_FILE, input().work + '/observations.json');
+  assert.equal(f.calls.child.env.SF08_PREFLIGHT_MODULE, new URL('./preflight.mjs', import.meta.url).href);
   const c = f.calls.config;
   assert.equal(c.timeout, 45000); assert.equal(c.retries, 0); assert.equal(c.workers, 1);
   assert.equal(c.use.ignoreHTTPSErrors, false); assert.equal(c.use.launchOptions.env.HOME, home);
@@ -41,6 +43,52 @@ test('same trust context and original deadlines/devices pass from preflight to b
   assert.equal(c.projects[1].use.launchOptions.firefoxUserPrefs['browser.policies.alternatePath'], input().provisioned.firefox_policy);
   assert.equal(c.projects[2].use.userAgent, 'unit-desktop-safari');
   assert.deepEqual(c.reporter, [['json', { outputFile: input().work + '/browser-report.json' }]]);
+});
+
+test('business helper import is fixed adjacent bound source, overriding inherited/caller input', async () => {
+  const previous = process.env.SF08_PREFLIGHT_MODULE;
+  process.env.SF08_PREFLIGHT_MODULE = 'data:text/javascript,throw%20new%20Error()';
+  try {
+    const value = input(); value.preflight_module = 'file:///unowned/caller.mjs';
+    const f = fake(); await stage(value, f.deps);
+    assert.equal(f.calls.child.env.SF08_PREFLIGHT_MODULE, new URL('./preflight.mjs', import.meta.url).href);
+  } finally {
+    if (previous === undefined) delete process.env.SF08_PREFLIGHT_MODULE;
+    else process.env.SF08_PREFLIGHT_MODULE = previous;
+  }
+});
+
+test('business beforeAll awaits readiness on its supplied worker Browser before per-test reset', { timeout: 1000 }, async () => {
+  const source = readFileSync(new URL('./business/security-foundation.browser.spec.ts', import.meta.url), 'utf8');
+  const start = source.indexOf('test.beforeAll(');
+  const end = source.indexOf('\n\nfunction expectManaged', start);
+  assert.ok(start >= 0 && end > start && end < source.indexOf('test.beforeEach('));
+  let hook;
+  Function('test', 'process', 'appOrigin', source.slice(start, end))(
+    { beforeAll(fn) { hook = fn; } },
+    { env: { SF08_PREFLIGHT_MODULE: new URL('./preflight.mjs', import.meta.url).href } }, input().ready.app);
+  const calls = [];
+  let arrived, release;
+  const entered = new Promise(resolve => { arrived = resolve; });
+  const held = new Promise(resolve => { release = resolve; });
+  const browser = { async newContext(options) {
+    assert.equal(this, browser);
+    assert.deepEqual(options, { ignoreHTTPSErrors: false, serviceWorkers: 'block' });
+    calls.push('context');
+    return { async newPage() { calls.push('page'); return {
+      async goto(url) { assert.equal(url, input().ready.app + '/'); calls.push('goto'); arrived(); await held; return { status: () => 200 }; },
+      async close() { calls.push('page-close'); },
+    }; }, async close() { calls.push('context-close'); } };
+  } };
+  let completed = false;
+  const operation = hook({ browser, browserName: 'firefox' }).then(() => { completed = true; });
+  await entered;
+  assert.equal(completed, false);
+  release(); await operation;
+  assert.deepEqual(calls, ['context', 'page', 'goto', 'page-close', 'context-close']);
+  calls.length = 0;
+  await hook({ browser, browserName: 'chromium' });
+  assert.deepEqual(calls, []);
 });
 test('failed native wrong CA blocks preflight and business', async () => {
   const f = fake({ nativeNegative: async () => { throw new Error('unit'); } });

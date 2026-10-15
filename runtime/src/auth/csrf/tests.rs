@@ -159,16 +159,27 @@ async fn same_queue_reopen_reuses_data_context_without_refreshing_token_expiry()
     )
     .await
     .unwrap();
-    let data = open(&reopened, options(2, 176, 1, 1000, 2).unwrap(), &checked())
+    let probe = Arc::new(same_queue_probe::Probe::new(expiry));
+    let mut data = open(&reopened, options(2, 176, 1, 1000, 2).unwrap(), &checked())
         .await
         .unwrap();
+    Arc::get_mut(&mut data.inner)
+        .expect("same_queue_probe_requires_unshared_reopened_data")
+        .checkpoint_probe = Some(Arc::clone(&probe));
     assert!(data.matches_store(&f.store));
     #[cfg(all(test, nagi_auth_stage_diag))]
     observer.attach(&data.inner.stage_slot);
-    data.inner
-        .checkpoint(&o.lease.lease, &b, digest)
-        .await
-        .unwrap();
+    let result = data.inner.checkpoint(&o.lease.lease, &b, digest).await;
+    if let Err(error) = &result {
+        let observed = probe.failure();
+        eprintln!(
+            "same_queue_checkpoint_diag phase={:?} refusal={:?} matched={:?} original_expiry_same={:?} sample_last_expired={:?} lease_last_valid={:?} actual_expired={:?} kind={:?} outcome={:?}",
+            observed.phase, observed.refusal, observed.matched, observed.original_expiry,
+            observed.sample_expired, observed.lease_valid, observed.actual_expired,
+            kind(error), outcome(error),
+        );
+    }
+    result.unwrap();
     let tx = sqlite::begin(&f.pool, sqlite::BeginMode::Immediate)
         .await
         .unwrap();

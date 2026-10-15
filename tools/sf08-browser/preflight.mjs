@@ -37,6 +37,56 @@ function positiveFailureStage(error, name, probeURL) {
   return 'engine_positive_unknown';
 }
 
+function readinessTimeout() {
+  const error = new Error(REFUSED);
+  error.name = 'TimeoutError';
+  throw error;
+}
+
+// Fresh credential-free page only, before any business operation. A successful
+// response is returned exactly once; only pre-HTTP certificate refusal retries.
+export async function firefoxCAReadiness(page, probeURL, timing = {}) {
+  const url = new URL(probeURL);
+  if (url.protocol !== 'https:' || url.hostname !== 'localhost' || url.username || url.password ||
+      url.pathname !== '/' || url.search || url.hash || url.origin + '/' !== probeURL ||
+      Number(url.port) < 1024 || Number(url.port) > 65535) refuse();
+  const now = timing.now ?? (() => performance.now());
+  const delay = timing.delay ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
+  const until = now() + 10000;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const remaining = until - now();
+    if (remaining < 1) readinessTimeout();
+    let response;
+    try {
+      response = await page.goto(probeURL, { waitUntil: 'load', timeout: Math.floor(remaining) });
+    } catch (error) {
+      if (error?.name !== 'Error' || !expectedTLSFailure(error, 'firefox', 'ca', probeURL)) throw error;
+      // No HTTP response was accepted, so this cannot replay a business action.
+      if (attempt === 19) throw error;
+      const left = until - now();
+      if (left < 1) readinessTimeout();
+      await delay(Math.min(500, left));
+      continue;
+    }
+    if (now() >= until) readinessTimeout();
+    return response; // Missing/non-200 responses are immediate refusal by caller.
+  }
+  refuse();
+}
+
+// The business runner launches a different Firefox profile. Prove readiness on
+// that actual worker Browser too, before its existing per-test reset and bodies.
+export async function firefoxWorkerReadiness(browser, origin, timing) {
+  const context = await browser.newContext({ ignoreHTTPSErrors: false, serviceWorkers: 'block' });
+  try {
+    const page = await context.newPage();
+    try {
+      const response = await firefoxCAReadiness(page, origin + '/', timing);
+      if (!response || response.status() !== 200) refuse();
+    } finally { await page.close(); }
+  } finally { await context.close(); }
+}
+
 function checkedSettings(provisioned, ready, negative) {
   const root = '/run/nagi-sf08/';
   if (provisioned.schema_version !== 1 || provisioned.stores_provisioned !== true ||
@@ -97,7 +147,7 @@ function nativeTLSGet(origin, ca) {
   });
 }
 
-export async function probeEngine(name, browserType, config, checkpoint = () => {}) {
+export async function probeEngine(name, browserType, config, checkpoint = () => {}, readinessTiming) {
   if (!Object.hasOwn(VERSIONS, name)) refuse();
   let browser;
   let failed = true;
@@ -113,12 +163,16 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
     const context = await browser.newContext({ ignoreHTTPSErrors: false, serviceWorkers: 'block' });
     try {
       checkpoint('engine_positive', name);
-      for (const origin of config.origins) {
+      for (const [index, origin] of config.origins.entries()) {
         const page = await context.newPage();
         const probeURL = origin + '/';
         try {
           let response;
-          try { response = await page.goto(probeURL, { waitUntil: 'load', timeout: 10000 }); }
+          try {
+            response = name === 'firefox' && index === 0
+              ? await firefoxCAReadiness(page, probeURL, readinessTiming)
+              : await page.goto(probeURL, { waitUntil: 'load', timeout: 10000 });
+          }
           catch (error) { checkpoint(positiveFailureStage(error, name, probeURL), name); refuse(); }
           if (!response) { checkpoint('engine_positive_response', name); refuse(); }
           let status;

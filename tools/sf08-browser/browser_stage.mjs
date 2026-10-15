@@ -76,6 +76,8 @@ export async function stage(input, deps = {}) {
   (deps.write ?? ((file, data) => fs.writeFileSync(file, data, { flag: 'wx', mode: 0o600 })))(
     configPath, 'export default ' + JSON.stringify(configValue) + ';\n');
   const env = trustEnv(config.home, { ...process.env, NODE_PATH: input.node_modules,
+    // Fixed adjacent, already-bound source; never a caller-supplied module URL.
+    SF08_PREFLIGHT_MODULE: new URL('./preflight.mjs', import.meta.url).href,
     SF08_WORK_DIR: input.work, SF08_CONTROL_SOCKET: input.ready.control,
     SF08_OBSERVATION_FILE: path.join(input.work, 'observations.json'),
     SF08_APP_ORIGIN: input.ready.app, SF08_UI_ORIGIN: input.ready.ui, SF08_DENIED_ORIGIN: input.ready.denied });
