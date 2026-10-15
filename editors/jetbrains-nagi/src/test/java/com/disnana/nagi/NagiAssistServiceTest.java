@@ -20,6 +20,7 @@ import java.util.function.BooleanSupplier;
 public class NagiAssistServiceTest extends BasePlatformTestCase {
     private Path root;
     private NagiAssistService service;
+    private com.intellij.openapi.Disposable serviceReplacement;
     private boolean originalTrust;
     private String originalCompiler;
     private int originalTimeout;
@@ -39,7 +40,8 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
     }
     @Override protected void tearDown() throws Exception {
         try {
-            if (service != null) service.dispose();
+            if (serviceReplacement != null) com.intellij.openapi.util.Disposer.dispose(serviceReplacement);
+            else if (service != null) service.dispose();
             NagiSettings.update(originalCompiler, originalTimeout);
             TrustedProjects.setProjectTrusted(getProject(), originalTrust);
             try (var files = Files.walk(root)) {
@@ -218,6 +220,14 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             return NagiAssistService.resolveCompiler(configured, workspace);
         });
 
+        // VFS invalidation restarts the registered annotator, which resolves the
+        // project service. Its automatic request must use this injected runner.
+        serviceReplacement = com.intellij.openapi.util.Disposer.newDisposable("Nagi assistance service replacement");
+        com.intellij.testFramework.ServiceContainerUtil.replaceService(
+                getProject(), NagiAssistService.class, service, serviceReplacement);
+        assertSame("annotator and fixture must share the injected service",
+                service, getProject().getService(NagiAssistService.class));
+
         service.requestBaseline(file);
         waitUntil(() -> service.state() == NagiAssistService.State.COMPILER_UNAVAILABLE && notices.get() == 1);
         assertEquals("initial resolution attempt", 1, compilerProbes.get());
@@ -241,33 +251,44 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             assertNull("missing compiler cannot reuse stale compiler facts", service.fresh(file));
         }
 
-        Files.writeString(missingCompiler, "owned test fixture; the injected runner never executes this file\n");
-        missingCompiler.toFile().setExecutable(true);
-        org.junit.Assume.assumeTrue("filesystem does not expose executable permission", Files.isExecutable(missingCompiler));
-        assertNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(missingCompiler));
+        var daemon = (com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl)
+                com.intellij.codeInsight.daemon.DaemonCodeAnalyzer.getInstance(getProject());
         try {
-            waitUntil(() -> oldEntered.getCount() == 0);
-            assertEquals("compiler appearance causes one fresh resolution attempt", 2, compilerProbes.get());
-            WriteCommandAction.runWriteCommandAction(getProject(), () -> document.setText(
-                    "def main():\n    newer = True\n    print(newer)\n"));
-            PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
-            service.requestBaseline(file);
-        } finally {
-            releaseOld.countDown();
-        }
+            // The light fixture disables timer-driven passes in prepareForTest.
+            // Enable only this VFS -> restart -> registered annotator interval.
+            daemon.setUpdateByTimerEnabled(true);
+            Files.writeString(missingCompiler, "owned test fixture; the injected runner never executes this file\n");
+            missingCompiler.toFile().setExecutable(true);
+            org.junit.Assume.assumeTrue("filesystem does not expose executable permission", Files.isExecutable(missingCompiler));
+            assertNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(missingCompiler));
+            try {
+                waitUntil(() -> oldEntered.getCount() == 0);
+                assertEquals("compiler appearance causes one fresh resolution attempt", 2, compilerProbes.get());
+                WriteCommandAction.runWriteCommandAction(getProject(), () -> document.setText(
+                        "def main():\n    newer = True\n    print(newer)\n"));
+                PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+                service.requestBaseline(file);
+            } finally {
+                releaseOld.countDown();
+            }
 
-        waitUntil(() -> {
-            var response = service.fresh(file);
-            return response != null && response.response().diagnostics().stream()
-                    .anyMatch(diagnostic -> diagnostic.message().equals("current compiler diagnostic"));
-        });
-        var current = service.fresh(file).response().diagnostics();
-        assertEquals(2, calls.get());
-        assertEquals(2, compilerProbes.get());
-        assertTrue("compiler input must include the latest edit", analyzedLatestText.get());
-        assertTrue(current.stream().anyMatch(diagnostic -> diagnostic.message().equals("current compiler diagnostic")));
-        assertFalse(current.stream().anyMatch(diagnostic -> diagnostic.message().equals("older compiler diagnostic")));
-        assertEquals("one quiet notice is retained after the configured executable appears", 1, notices.get());
+            waitUntil(() -> {
+                var response = service.fresh(file);
+                return response != null && response.response().diagnostics().stream()
+                        .anyMatch(diagnostic -> diagnostic.message().equals("current compiler diagnostic"));
+            });
+            var current = service.fresh(file).response().diagnostics();
+            assertEquals(2, calls.get());
+            assertEquals(2, compilerProbes.get());
+            assertTrue("compiler input must include the latest edit", analyzedLatestText.get());
+            assertTrue(current.stream().anyMatch(diagnostic -> diagnostic.message().equals("current compiler diagnostic")));
+            assertFalse(current.stream().anyMatch(diagnostic -> diagnostic.message().equals("older compiler diagnostic")));
+            assertEquals("one quiet notice is retained after the configured executable appears", 1, notices.get());
+        } finally {
+            // Stop automatic passes before tearDown removes the service replacement.
+            try { daemon.setUpdateByTimerEnabled(false); }
+            finally { releaseOld.countDown(); }
+        }
     }
 
     public void testCompilerUnavailableIsNotRenderedAsASourceWarning() {

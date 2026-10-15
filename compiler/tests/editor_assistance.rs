@@ -774,10 +774,7 @@ fn assert_point_member_candidates(value: &serde_json::Value, entry: &str) {
     assert!(!diagnostics.is_empty(), "{value}");
     assert_eq!(diagnostics[0]["stage"], "load", "{value}");
     assert!(
-        diagnostics[0]["file"]
-            .as_str()
-            .unwrap()
-            .ends_with(entry),
+        diagnostics[0]["file"].as_str().unwrap().ends_with(entry),
         "{value}"
     );
 
@@ -864,4 +861,3 @@ fn point_member_completion_does_not_invent_fields_for_unknown_receiver() {
         "{value}"
     );
 }
-

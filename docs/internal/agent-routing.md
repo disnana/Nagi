@@ -11,7 +11,7 @@ Choose the lowest-cost route likely to meet required correctness and audit evide
 | Few-line change | Parent does it directly | An independent deliverable appears |
 | Bounded docs, rename, read-only question | Luna Medium / Light Worker | Scope or contract decision expands |
 | Clear feature, fixture, ordinary test, obvious CI cause | Luna Max / Fast Worker | Same-cause targeted fix fails twice or code/contract boundary is unclear |
-| Clear multi-file implementation or investigation where Luna rework may dominate | GPT-6 Sol Max / Balanced Engineer | Unknown cause or important semantics need Sol 6.1 High; final important-code audit uses a separate Sol 6.1 agent |
+| Clear multi-file implementation or investigation where Luna rework may dominate | GPT-6.1 Sol High / Balanced Engineer | Unknown cause or important semantics need xHigh design review; final important-code audit uses a separate Sol 6.1 High agent |
 | Important or difficult code; multi-module investigation | Sol 6.1 High / Deep Engineer | Unresolved semantics, compatibility, race, or lifecycle design needs Architect |
 | Auth, authorization, secrets, integrity, concurrency, destructive change | Sol 6.1 High confirms approved design before implementation; xHigh only for unresolved semantics/race/alternatives; Sol 6.1 High implements | Independent Sol 6.1 High audit after checks; fix, rerun affected regressions, and re-review |
 | Independent final audit on important code | Sol 6.1 High / Independent Reviewer, after checks | Fix findings, rerun affected regressions, and return final diff/results for re-review |
@@ -19,9 +19,11 @@ Choose the lowest-cost route likely to meet required correctness and audit evide
 
 For high-risk work, Sol 6.1 confirms the approved design and failure/regression cases first; xHigh Architect is reserved for unresolved design. The independent reviewer then compares final diff, specification, results, and relevant regressions. Fixes require targeted reruns and a final re-review. Source-only review is not a substitute for execution.
 
+2026-10-13 JST: At the user’s direction, remove GPT-6 Sol from routine or planned assignments and move ongoing/planned GPT-6 Sol work to GPT-6.1 Sol. Balanced Engineer is GPT-6.1 Sol High; Light/Fast remain Luna Medium/Max. High is the routine ceiling; xHigh is for unresolved important design, Max/Astra exceptional. No GPT-6 Sol Fast or routine GPT-6.1 Sol Max. Current prices/speed remain unknown.
+
 For compiler changes, distinguish High/Low parse, checker outcome, negative reason and primary line, emitted Rust build, and a minimal native test where emission/runtime is affected. Mark blocked stages unverified and keep exact-head CI as a completion condition. When available, record model time, engineering time, test/CI runtime, CI wait, and rework separately; unavailable values stay unknown. Reuse results for the same source/head and rerun only for a relevant change or new evidence.
 
-On 2026-10-11 the user reported a favorable cost/speed balance for GPT-6 Sol Max. This is a reason to consider it for bounded development, not measured latency or total-cost evidence. The supplied Standard credit rates for GPT-6 Sol and GPT-6.1 Sol have equal input/output rates; GPT-6.1 has a lower cached-input rate. Reasoning use and rework can change whole-task cost, so do not claim GPT-6 Sol Max is cheaper from token rates alone. GPT-6 Sol Max is an alternative development route; GPT-6.1 Sol Max remains an exceptional reviewer, not the same role. Reassess using completion time, rework and independent audit findings. Existing extra-charge and Fast permissions are unchanged.
+The 2026-10-11 cost/speed impression and supplied prices, plus the 2026-10-08 benchmark below, are historical evidence only. The impression is subjective, not measured; no latest price, speed, or total-cost claim is implied. GPT-6 Sol is no longer a routing option. Existing extra-charge and Fast permissions are unchanged.
 
 ## Observations and joint reassessment
 
@@ -31,7 +33,7 @@ Consider unclear instructions, incomplete context, scope, stale sources, fixture
 
 For a material routing-policy change, give Luna and Sol 6.1 the same evidence and question independently, then exchange their arguments once. Each can disagree on equal terms; model prestige is not a tie-breaker. The parent records adopted/rejected/unresolved proposals and reasons. Agreement between models does not prove correctness or replace tests or independent code audit. Routine dispatch uses the defaults without a meeting. Keep independent development moving within the concurrency cap; only the designated owner edits shared policy files.
 
-### 2026-10-11 observations and decision
+### 2026-10-11 historical observations and decision
 
 | Evidence | Observation | Limits and action |
 |---|---|---|
@@ -39,7 +41,7 @@ For a material routing-policy change, give Luna and Sol 6.1 the same evidence an
 | PR [#115](https://github.com/disnana/Nagi/pull/115), source `070de14b40218a20ce267b93a2aac928aad4d535`, bounded two-file CI correction | GPT-6 Sol Max task interval reported as 00:33:30–00:38:40 UTC (5m10s); targeted Python run observed 60 passes in 6.502s, included in that interval; 22 pinned dependency blobs checked | Task interval includes tool/test/reasoning work and inherited investigation, not model-only latency. Speed setting unavailable; tokens, credits and USD unknown. Rust/4-OS execution and independent final audit were pending at this observation. One case does not demonstrate superiority |
 | PR [#114](https://github.com/disnana/Nagi/pull/114), source `0dd9cf1c651efb3a99c794ccdd516516f7a9374e`, [CI 38098161525](https://github.com/disnana/Nagi/actions/runs/38098161525) | Focused local Session tests passed, but CI found duplicate test-module loading and missing SessionSameSite constants in the independent inventory | Integration coverage was incomplete; broader local checks were also limited by disk capacity. Do not infer a model cause. Add the relevant inventory and harness checks to the next targeted validation; preserve the independent oracle |
 
-Luna Max and Sol 6.1 High independently recommended bounded GPT-6 Sol Max use, preserving strong design/audit gates and distinguishing subjective speed from measurement. After exchanging arguments, both supported a short record in this existing document and opposed per-task meetings or prestige-based ranking. The parent adopts these proposals. Blanket “Sol Max is cheaper/faster”, escalation by file count alone and AI consensus as quality evidence are rejected. Comparative completion cost/latency remains unresolved until sufficiently comparable observations exist. Existing payment, publication and safety constraints are unchanged.
+At that time, Luna Max and Sol 6.1 High independently recommended bounded GPT-6 Sol Max use, preserving design/audit gates and distinguishing subjective speed from measurement. After exchanging arguments, both supported a short record in this existing document and opposed per-task meetings or prestige-based ranking. The parent adopted those proposals then. Blanket “Sol Max is cheaper/faster”, escalation by file count alone and AI consensus as quality evidence were rejected. Comparative completion cost/latency remained unresolved. The 2026-10-13 user instruction supersedes the historical GPT-6 Sol route; earlier observations remain records, not current guidance.
 
 ## Ready for review
 
@@ -47,15 +49,15 @@ The parent removes Draft after the PR's accepted scope is complete and the lates
 
 ## Concurrency and escalation
 
-`.codex/config.toml` permits two child threads plus the parent (at most three agents); children do not spawn children. Spawn only for independent work with a defined result. Only one agent uses a given model ID plus reasoning effort at a time. Deep Engineer and Independent Reviewer both use Sol 6.1 High and therefore run sequentially.
+`.codex/config.toml` permits two child threads plus the parent (at most three agents); children do not spawn children. Spawn only for independent work with a defined result. Only one agent uses a given model ID plus reasoning effort at a time. Balanced Engineer, Deep Engineer and Independent Reviewer all use GPT-6.1 Sol High and therefore run sequentially.
 
-Luna Medium → Luna Max → GPT-6 Sol Max or GPT-6.1 Sol High → GPT-6.1 Sol xHigh → GPT-6.1 Sol Max → Astra is a possible path, not a required ladder. Start higher when risk warrants it. After two targeted failures from the same cause, or sooner on a specific contract/security uncertainty, stop repeating and pass the exact input, command, diagnostic, source line, and prior results forward. Do not blame the model without evidence. Reassess a route if time/quality/total cost fails to improve.
+Luna Medium → Luna Max → GPT-6.1 Sol High → GPT-6.1 Sol xHigh → GPT-6.1 Sol Max → Astra is a possible path, not a required ladder. Start higher when risk warrants it. After two targeted failures from the same cause, or sooner on a specific contract/security uncertainty, stop repeating and pass the exact input, command, diagnostic, source line, and prior results forward. Do not blame the model without evidence. Reassess a route if time/quality/total cost fails to improve.
 
 ## Active catalog and service tiers
 
-The current session agent tool catalog exposes `gpt-6-luna` Medium/Max, `gpt-6-sol` Max, `gpt-6.1-sol` High/xHigh/Max, and `gpt-6-astra` Max. Role TOML specifies model and reasoning effort; the current invocation interface has no speed/service-tier option. “Fast Worker” is a role name. Existing explicit approval covers only Luna Max Fast when the environment offers it. Fast for other models, additional purchase/pay-as-you-go/plan/add-on, or another charge beyond current approval requires confirmation. Ordinary task-driven model/effort selection and Sol escalation within current authorization should proceed without another approval stop. Do not add an unsupported service-tier key. Fast’s displayed usage multiplier and `max` reasoning effort do not promise a speed increase.
+The session tool catalog lists `gpt-6-luna` Medium/Max, `gpt-6-sol` Max, `gpt-6.1-sol` High/xHigh/Max, and `gpt-6-astra` Max. No role routes to `gpt-6-sol`. Role TOML stores model/effort; the invocation interface has no speed-tier option. “Fast Worker” is a role name. Only Luna Max Fast is explicitly approved when offered; other Fast tiers, new purchases/plans or charges beyond approval require confirmation. Ordinary model/effort selection and Sol 6.1 escalation proceed without approval if they add no charge. Do not add unsupported tier keys. Fast’s displayed multiplier and `max` effort do not promise speed.
 
-## Usage-credit evidence and limits
+## Historical usage-credit evidence and limits
 
 The user-provided compiled report dated 2026-10-11 claims “Business/Enterprise” credits per 1M tokens, ordered input / cached input / output. It is not a verified provider billing/model-price UI; its issuing product and primary URL were not verified. These values are not official API USD prices.
 
@@ -69,7 +71,7 @@ The user-provided compiled report dated 2026-10-11 claims “Business/Enterprise
 | GPT-5.6 Terra (report label only) | Standard | 50 / 5 / 300 |
 | GPT-5.6 Luna | Standard | 5 / 0.5 / 30 |
 
-The report’s Fast rows claim 2× usage credits for listed models, not 2× measured speed. API USD rates, total session bills, actual latency, and per-task costs were unavailable. Non-role rows above are observations only; verify the active ID/effort before routing to them.
+The report’s Fast rows claim 2× usage credits for listed models, not 2× measured speed. API USD rates, total session bills, actual latency, and per-task costs were unavailable. GPT-5.6 Sol, GPT-5.6 Terra, and GPT-5.6 Luna are historical report labels only; no configured agent role uses those models. Non-role rows above are observations only; verify the active ID/effort before routing to any model.
 
 A separate user-provided compiled report dated 2026-10-08 claims Arena values of Sol 6.1 Max Net Improvement +14.77% / median $1.10, Luna Max +2.77% / $0.10, and Astra Max +13.50% / $8.50. This uses another sample/configuration and displayed dollar metric; it is not comparable to quota credits. Net Improvement is not accuracy, and the rows do not establish causal quality-per-cost or speed. Max does not map to Ultra.
 

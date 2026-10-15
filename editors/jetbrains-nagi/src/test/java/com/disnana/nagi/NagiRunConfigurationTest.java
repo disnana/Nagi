@@ -116,6 +116,10 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
         String previousCompiler = settings.compilerPath;
         var project = getProject();
         boolean ownedProject = preparation == Preparation.DISPOSE_PROJECT || preparation == Preparation.CLOSE_PROJECT;
+        boolean createdOwnedProject = false;
+        Path ownedProjectPath = root.resolve("ide-project");
+        boolean previousOwnedPathTrust = preparation == Preparation.CLOSE_PROJECT
+                && TrustedProjects.isProjectTrusted(ownedProjectPath);
         boolean previousTrust = TrustedProjects.isProjectTrusted(project);
         var previousDialog = TestDialogManager.getTestImplementation();
         var barrier = new HeldBarrier(preparation);
@@ -126,12 +130,21 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
                 var manager = com.intellij.openapi.project.ex.ProjectManagerEx.getInstanceEx();
                 var options = com.intellij.ide.impl.OpenProjectTask.build().asNewProject()
                         .withForceOpenInNewFrame(true).withProjectName("Nagi close regression");
+                if (preparation == Preparation.CLOSE_PROJECT) {
+                    // Startup checks trust before openProject returns. Trust only
+                    // this owned path so the real open/close lifecycle can run.
+                    TrustedProjects.setProjectTrusted(ownedProjectPath, true);
+                    assertTrue(TrustedProjects.isProjectTrusted(ownedProjectPath));
+                }
                 var createdProject = preparation == Preparation.CLOSE_PROJECT
-                        ? manager.openProject(root.resolve("ide-project"), options)
-                        : manager.newProject(root.resolve("ide-project"), options);
+                        ? manager.openProject(ownedProjectPath, options)
+                        : manager.newProject(ownedProjectPath, options);
                 assertNotNull(createdProject);
                 project = createdProject;
+                createdOwnedProject = true;
                 assertEquals(preparation == Preparation.CLOSE_PROJECT, manager.isProjectOpened(project));
+                if (preparation == Preparation.CLOSE_PROJECT)
+                    assertTrue("The owned project must already be trusted at startup", TrustedProjects.isProjectTrusted(project));
                 previousTrust = TrustedProjects.isProjectTrusted(project);
             }
             Path manifest = Files.writeString(root.resolve("nagi.toml"), "entry = \"main.nagi\"\n");
@@ -296,12 +309,14 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
                     TestDialogManager.setTestDialog(previousDialog);
                     settings.compilerPath = previousCompiler;
                     if (!project.isDisposed()) TrustedProjects.setProjectTrusted(project, previousTrust);
+                    if (preparation == Preparation.CLOSE_PROJECT)
+                        TrustedProjects.setProjectTrusted(ownedProjectPath, previousOwnedPathTrust);
                 }
                 // The EDIT case deliberately leaves a dirty document. Save it before the final disk barrier.
                 FileDocumentManager.getInstance().saveAllDocuments();
                 assertEquals("Cleanup must not remove a file that the IDE still needs to save", 0,
                         FileDocumentManager.getInstance().getUnsavedDocuments().length);
-                if (ownedProject && !project.isDisposed()) {
+                if (createdOwnedProject && !project.isDisposed()) {
                     assertTrue("Cleanup must use the supported project close path",
                             com.intellij.openapi.project.ProjectManager.getInstance().closeAndDispose(project));
                     assertTrue(project.isDisposed());
