@@ -78,6 +78,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Check call_member_ recovery first with exact result on the target platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
+          python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -305,6 +311,12 @@ jobs:
           RELEASE_RUST_HOST: ${{ matrix.rust_host }}
         shell: bash
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
+      - name: Check call_member_ recovery first with exact result on the target platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
+          python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -513,7 +525,7 @@ jobs:
         run: |
           set -o pipefail
           cargo test --locked -p nagi-runtime --lib sqlite:: 2>&1 | tee "$RUNNER_TEMP/sqlite-runtime.log"
-          python -c 'import pathlib,re,os; text=pathlib.Path(os.environ["RUNNER_TEMP"],"sqlite-runtime.log").read_text(); assert re.search(r"test result: ok\. 80 passed; 0 failed; 0 ignored;",text),text'
+          python scripts/ci/assert_sqlite_test_summary.py "$RUNNER_TEMP/sqlite-runtime.log"
           cargo test --locked -p nagi-runtime --test sqlite_public_api
       - name: Check SF04 HTML core, finalizer, and public runtime API on the target platform
         shell: bash
