@@ -80,6 +80,158 @@ fn reference_at<'a>(
     })
 }
 
+#[test]
+fn compiler_symbol_roles_use_typed_fields_and_exact_high_low_positions() {
+    for (high, file, text) in [
+        (true, "main.nagi", "def value() -> i64:\n    return 2\nclass Point:\n    value: i64\ndef read(value: Point) -> i64:\n    return value.value\ndef main():\n    local = Point(value=1)\n    print(read(local))\n"),
+        (false, "main.low", "fn value() -> i64 { return 2; }\nrecord Point { value: i64; }\nfn read(value: Point) -> i64 { return value.value; }\nfn main() { let local = Point(value=1); print(read(local)); }\n"),
+    ] {
+        let f = Fixture::new();
+        f.write("nagi.toml", &format!("entry = '{file}'\n"));
+        f.write(file, text);
+        let mut parsed = nagic::parser::parse(text, high).unwrap();
+        nagic::check::check(&mut parsed).unwrap();
+        let index = f.symbols(serde_json::json!([]));
+        let field = reference_at(&index, file, text, "return value.value", 13).unwrap();
+        let declaration = index["roles"].as_array().unwrap().iter().find(|role| {
+            let offset = text.find("value: i64").unwrap();
+            let prefix = &text[..offset];
+            role["kind"] == "field"
+                && role["location"]["line"] == prefix.bytes().filter(|b| *b == b'\n').count() + 1
+                && role["location"]["column"] == prefix.rsplit('\n').next().unwrap().encode_utf16().count() + 1
+        }).unwrap();
+        assert_eq!(field["target"], declaration["location"]);
+        assert_eq!(index["references"].as_array().unwrap().iter().filter(|reference|
+            reference["location"] == field["location"]).count(), 1, "one exact field target, despite same-name function/parameter");
+        for (kind, needle, delta) in [
+            ("field", "value: i64", 0),
+            ("parameter", "read(value:", 5),
+            ("field", "return value.value", 13),
+        ] {
+            let offset = text.find(needle).unwrap() + delta;
+            let prefix = &text[..offset];
+            let line = prefix.bytes().filter(|b| *b == b'\n').count() + 1;
+            let column = prefix.rsplit('\n').next().unwrap().encode_utf16().count() + 1;
+            assert!(index["roles"].as_array().is_some_and(|roles| roles.iter().any(|role|
+                role["kind"] == kind && role["location"]["line"] == line
+                    && role["location"]["column"] == column && role["location"]["length"] == 5)),
+                "missing {kind} at {file}:{line}:{column}: {}", index["roles"]);
+        }
+        assert!(!index["locals"].as_array().unwrap().iter().any(|l| l["name"] == "value" && l["location"]["length"] != 5));
+    }
+}
+
+#[test]
+fn generated_saved_low_keeps_field_roles_and_navigation_without_high_source() {
+    let f = Fixture::new();
+    let high = "class Point:\n    value: i64\ndef read(point: Point) -> i64:\n    return point.value\ndef main():\n    point = Point(value=7)\n    print(read(point))\n";
+    f.write("main.nagi", high);
+    let mut parsed = nagic::parser::parse(high, true).expect("valid High syntax");
+    nagic::check::check(&mut parsed).expect("checked High source");
+
+    let lower = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .current_dir(&f.0)
+        .args(["lower", "main.nagi", "--out", "generated"])
+        .output()
+        .unwrap();
+    assert!(
+        lower.status.success(),
+        "High lowering failed: {}",
+        String::from_utf8_lossy(&lower.stderr)
+    );
+    let saved = fs::read_to_string(f.0.join("generated/generated.low")).unwrap();
+    assert!(saved.contains("return point.value;"));
+    f.write("saved.low", &saved);
+    fs::remove_file(f.0.join("main.nagi")).unwrap();
+    assert!(!f.0.join("main.nagi").exists());
+
+    let checked = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .current_dir(&f.0)
+        .args(["check", "saved.low", "--no-project"])
+        .output()
+        .unwrap();
+    assert!(
+        checked.status.success(),
+        "saved Low check failed: {}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .current_dir(&f.0)
+        .args(["assist", "saved.low", "--no-project", "--editor-input"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"{\"files\":[]}")
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "saved Low assist failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(response["frontend_accepted"], true, "{response}");
+    assert!(response["diagnostics"].as_array().unwrap().is_empty());
+    let index = &response["symbols"];
+    assert_eq!(index["format"], "nagi-symbols-v1");
+    assert_eq!(index["files"].as_array().unwrap().len(), 1);
+    assert!(index["files"][0].as_str().unwrap().ends_with("saved.low"));
+
+    let declaration_offset = saved.find("    value: i64;").unwrap();
+    let declaration_line = saved[..declaration_offset]
+        .bytes()
+        .filter(|b| *b == b'\n')
+        .count()
+        + 1;
+    let declaration = index["roles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|role| {
+            role["kind"] == "field"
+                && role["location"]["line"] == declaration_line
+                && role["location"]["column"] == 5
+                && role["location"]["length"] == 5
+        })
+        .expect("saved Low field declaration role");
+    assert!(declaration["location"]["file"]
+        .as_str()
+        .unwrap()
+        .ends_with("saved.low"));
+    let use_reference = reference_at(index, "saved.low", &saved, "return point.value", 13)
+        .expect("saved Low field reference");
+    assert_eq!(use_reference["target"], declaration["location"]);
+    assert!(index["roles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|role| { role["kind"] == "field" && role["location"] == use_reference["location"] }));
+}
+
+#[test]
+fn unknown_fields_never_receive_a_compiler_field_role() {
+    let f = Fixture::new();
+    let text = "class Point:\n    value: i64\ndef read(point: Point):\n    print(point.missing)\ndef main():\n    print(0)\n";
+    f.write("main.nagi", text);
+    let mut parsed = nagic::parser::parse(text, true).unwrap();
+    assert!(nagic::check::check(&mut parsed).is_err());
+    let index = f.symbols(serde_json::json!([]));
+    assert!(
+        !index["roles"].as_array().is_some_and(|roles| roles
+            .iter()
+            .any(|role| role["kind"] == "field" && role["location"]["line"] == 4)),
+        "{}",
+        index["roles"]
+    );
+}
+
 fn assert_target(
     index: &serde_json::Value,
     file: &str,

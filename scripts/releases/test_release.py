@@ -1,5 +1,6 @@
 """Regression tests for release selection, source isolation, and immutable assets."""
 import hashlib
+import io
 import json
 import subprocess
 import tarfile
@@ -42,6 +43,119 @@ class ReleasePlanTests(unittest.TestCase):
         subprocess.run(["git", "-c", "user.name=Release Test", "-c", "user.email=test@example.invalid",
                         "commit", "-qm", "test"], cwd=self.root, check=True)
         return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.root).decode().strip()
+
+    def add_notice_graph_fixture(self, missing_runtime_license=False):
+        registry = "registry+https://github.com/rust-lang/crates.io-index"
+        registry_id = "index.crates.io-test"
+        registry_src = f".cargo/registry/src/{registry_id}"
+        registry_cache = self.root / ".cargo" / "registry" / "cache" / registry_id
+        workspace = (
+            '[workspace]\nmembers = ["compiler", "runtime"]\n'
+            '[workspace.package]\nversion = "0.1.0"\nedition = "2021"\nlicense = "MIT"\n'
+        )
+        self.change("Cargo.toml", workspace)
+        self.change("compiler/Cargo.toml", '[package]\nname = "nagic"\nversion = "0.1.0"\nedition = "2021"\n')
+        self.change("runtime/Cargo.toml", '[package]\nname="nagi-runtime"\nversion.workspace=true\nedition.workspace=true\nlicense.workspace=true\n[dev-dependencies]\nunused="1"\n')
+        source_specs = (
+            ("compiler-dep", "1.0.0", "Apache-2.0 OR MIT",
+             {"LICENSE-APACHE": "Apache fixture text\n", "LICENSE-MIT": "MIT fixture text\n"}),
+            ("build-tool", "2.0.0", "MIT", {"LICENSE": "Build fixture text\n"}),
+            ("runtime-dep", "3.0.0", "ISC", {"LICENSE": "Runtime fixture text\n"}),
+            ("dev-only", "4.0.0", "LicenseRef-Unknown", {"LICENSE": "Dev fixture text\n"}),
+        )
+        archive_checksums = {}
+        for name, version, license_expression, texts in source_specs:
+            crate = f"{name}-{version}"
+            package_root = self.root / registry_src / crate
+            package_root.mkdir(parents=True, exist_ok=True)
+            cargo_toml = (f'[package]\nname = "{name}"\nversion = "{version}"\n'
+                          f'license = "{license_expression}"\n').encode("utf-8")
+            self.change(f"{registry_src}/{crate}/Cargo.toml", cargo_toml.decode("utf-8"))
+            archive_members = {"Cargo.toml": cargo_toml}
+            if not (missing_runtime_license and name == "runtime-dep"):
+                for filename, content in texts.items():
+                    data = content.encode("utf-8")
+                    self.change(f"{registry_src}/{crate}/{filename}", content)
+                    archive_members[filename] = data
+            archive_bytes = self.make_registry_crate_archive(name, version, archive_members)
+            archive_path = registry_cache / f"{crate}.crate"
+            archive_path.parent.mkdir(parents=True, exist_ok=True)
+            archive_path.write_bytes(archive_bytes)
+            archive_checksums[(name, version)] = hashlib.sha256(archive_bytes).hexdigest()
+
+        package_rows = [
+            ("nagic", "0.1.0", None, None),
+            ("nagi-runtime", "0.1.0", None, None),
+            ("compiler-dep", "1.0.0", registry, archive_checksums[("compiler-dep", "1.0.0")]),
+            ("build-tool", "2.0.0", registry, archive_checksums[("build-tool", "2.0.0")]),
+            ("runtime-dep", "3.0.0", registry, archive_checksums[("runtime-dep", "3.0.0")]),
+            ("dev-only", "4.0.0", registry, archive_checksums[("dev-only", "4.0.0")]),
+        ]
+        lock = ["version = 3\n"]
+        for name, version, source, checksum in package_rows:
+            lock.extend(["\n[[package]]\n", f'name = "{name}"\n', f'version = "{version}"\n'])
+            if source:
+                lock.extend([f'source = "{source}"\n', f'checksum = "{checksum}"\n'])
+        self.change("Cargo.lock", "".join(lock))
+
+        ids = {
+            "nagic": f"path+file://{self.root / 'compiler'}#nagic@0.1.0",
+            "nagi-runtime": f"path+file://{self.root / 'runtime'}#nagi-runtime@0.1.0",
+        }
+        packages = [
+            {"id": ids["nagic"], "name": "nagic", "version": "0.1.0", "source": None,
+             "manifest_path": str(self.root / "compiler/Cargo.toml"), "license": "MIT", "license_file": None},
+            {"id": ids["nagi-runtime"], "name": "nagi-runtime", "version": "0.1.0", "source": None,
+             "manifest_path": str(self.root / "runtime/Cargo.toml"), "license": "MIT", "license_file": None},
+        ]
+        for name, version, license_expression, _ in source_specs:
+            crate = f"{name}-{version}"
+            package_root = self.root / registry_src / crate
+            ids[name] = f"{registry}#{name}@{version}"
+            packages.append({"id": ids[name], "name": name, "version": version,
+                             "source": registry, "manifest_path": str(package_root / "Cargo.toml"),
+                             "license": license_expression, "license_file": None})
+        nodes = [
+            {"id": ids["nagic"], "deps": [
+                {"pkg": ids["compiler-dep"], "dep_kinds": [{"kind": None, "target": None}]},
+                {"pkg": ids["build-tool"], "dep_kinds": [{"kind": "build", "target": None}]},
+                {"pkg": ids["dev-only"], "dep_kinds": [{"kind": "dev", "target": None}]},
+            ]},
+            {"id": ids["nagi-runtime"], "deps": [
+                {"pkg": ids["compiler-dep"], "dep_kinds": [{"kind": None, "target": None}]},
+                {"pkg": ids["runtime-dep"], "dep_kinds": [{"kind": None, "target": None}]},
+            ]},
+            *[{"id": ids[name], "deps": []}
+              for name in ("compiler-dep", "build-tool", "runtime-dep", "dev-only")],
+        ]
+        metadata = {"workspace_root": str(self.root), "workspace_members": [ids["nagic"], ids["nagi-runtime"]],
+                    "packages": packages, "resolve": {"nodes": nodes}}
+        trees = {
+            "nagic": [("nagic", "0.1.0"), ("compiler-dep", "1.0.0"), ("build-tool", "2.0.0")],
+            "nagi-runtime": [("nagi-runtime", "0.1.0"), ("compiler-dep", "1.0.0"), ("runtime-dep", "3.0.0")],
+        }
+        return metadata, trees
+
+    @staticmethod
+    def make_registry_crate_archive(name, version, members):
+        output = io.BytesIO()
+        root = f"{name}-{version}"
+        with tarfile.open(fileobj=output, mode="w:gz") as archive:
+            directory = tarfile.TarInfo(root + "/")
+            directory.type = tarfile.DIRTYPE
+            archive.addfile(directory)
+            for member_name, data in members.items():
+                member = tarfile.TarInfo(f"{root}/{member_name}")
+                member.size = len(data)
+                archive.addfile(member, io.BytesIO(data))
+        return output.getvalue()
+
+    def patch_notice_graph(self, metadata, trees):
+        return (
+            patch.object(package.third_party_notices, "cargo_metadata", return_value=metadata),
+            patch.object(package.third_party_notices, "cargo_tree",
+                         side_effect=lambda root, name, target: trees[name]),
+        )
 
     def test_docs_only_does_not_package_or_release(self):
         self.change("docs/example.md", "Updated documentation")
@@ -296,6 +410,7 @@ class ReleasePlanTests(unittest.TestCase):
         self.change("runtime/examples/bench.rs", "// development benchmark\n")
         self.change("LICENSE", "MIT license fixture\n")
         self.change("compiler/Cargo.toml", '[package]\nname="nagic"\n')
+        metadata_fixture, graph_fixture = self.add_notice_graph_fixture()
         self.change("README.md", "Committed documentation")
         commit = self.commit()
         self.change("README.md", "Uncommitted private notes")
@@ -304,7 +419,8 @@ class ReleasePlanTests(unittest.TestCase):
         binary = self.root / "compiler-test"
         binary.write_bytes(b"prebuilt compiler fixture")
         output = self.root / "build/distribution"
-        with patch.object(package, "ROOT", self.root):
+        metadata_patch, graph_patch = self.patch_notice_graph(metadata_fixture, graph_fixture)
+        with patch.object(package, "ROOT", self.root), metadata_patch, graph_patch:
             for platform in ("linux-x86_64", "windows-x86_64", "macos-arm64", "macos-x86_64"):
                 archive = package.package(binary, "0.1.0", platform, output, commit)
                 if platform != "windows-x86_64":
@@ -327,10 +443,12 @@ class ReleasePlanTests(unittest.TestCase):
         self.change("runtime/Cargo.toml", '[package]\nname="nagi-runtime"\nversion.workspace=true\nedition.workspace=true\nlicense.workspace=true\n')
         self.change("runtime/src/lib.rs", "// committed runtime\n")
         self.change("LICENSE", "MIT license fixture\n")
+        metadata_fixture, graph_fixture = self.add_notice_graph_fixture()
         commit = self.commit()
         binary = self.root / "compiler-test"
         binary.write_bytes(b"prebuilt compiler fixture")
-        with patch.object(package, "ROOT", self.root):
+        metadata_patch, graph_patch = self.patch_notice_graph(metadata_fixture, graph_fixture)
+        with patch.object(package, "ROOT", self.root), metadata_patch, graph_patch:
             for platform in package.PLATFORMS:
                 with self.subTest(platform=platform):
                     with patch("gzip.time.time", return_value=1700000000):
@@ -351,10 +469,17 @@ class ReleasePlanTests(unittest.TestCase):
     def check_source(self, names, read, commit, platform):
         self.assertFalse(any(name.endswith("private-note.txt") or "/.git/" in name for name in names))
         prefix = f"nagi-0.1.0-{platform}/"
+        manifest_path = prefix + "runtime/THIRD-PARTY-NOTICES/manifest.json"
+        notice = json.loads(read(manifest_path))
+        notice_paths = {prefix + item["path"] for item in notice["files"]}
+        notice_paths |= {manifest_path, prefix + "runtime/THIRD-PARTY-NOTICES/README.md"}
         self.assertEqual(set(names), {prefix + name for name in (
             "nagic.exe" if platform == "windows-x86_64" else "nagic",
             "runtime/Cargo.toml", "runtime/src/lib.rs", "runtime/src/sqlite/mod.rs", "runtime/src/sqlite/adapter.rs",
-            "runtime/src/sqlite/session.rs", "LICENSE", "release.json", "README.txt")})
+            "runtime/src/sqlite/session.rs", "LICENSE", "release.json", "README.txt")} | notice_paths)
+        self.assertNotIn(prefix + "Cargo.lock", names)
+        self.assertNotIn(prefix + "Cargo.toml", names)
+        self.assertIn(b"runtime/THIRD-PARTY-NOTICES/README.md", read(prefix + "README.txt"))
         self.assertEqual(read(prefix + "runtime/src/lib.rs"), b"// committed runtime\n")
         manifest = tomllib.loads(read(prefix + "runtime/Cargo.toml").decode())
         self.assertEqual(manifest["package"], {"name": "nagi-runtime", "version": "0.1.0", "edition": "2021", "license": "MIT"})
@@ -362,6 +487,39 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertNotIn("dev-dependencies", manifest)
         metadata = json.loads(read(next(name for name in names if name.endswith("/release.json"))))
         self.assertEqual(metadata, {"commit": commit, "platform": platform, "version": "0.1.0"})
+        self.assertEqual(notice["snapshot"]["source_commit"], commit)
+        self.assertEqual(notice["snapshot"]["target"], package.third_party_notices.PLATFORM_TARGETS[platform])
+        self.assertEqual(notice["snapshot"]["compiler_binary_sha256"], hashlib.sha256(b"prebuilt compiler fixture").hexdigest())
+
+
+    def test_package_fails_before_output_when_selected_package_has_no_license_source(self):
+        self.change("runtime/src/lib.rs", "// committed runtime\n")
+        self.change("LICENSE", "MIT license fixture\n")
+        metadata_fixture, graph_fixture = self.add_notice_graph_fixture(missing_runtime_license=True)
+        commit = self.commit()
+        binary = self.root / "compiler-test"
+        binary.write_bytes(b"prebuilt compiler fixture")
+        output = self.root / "blocked-distribution"
+        metadata_patch, graph_patch = self.patch_notice_graph(metadata_fixture, graph_fixture)
+        with patch.object(package, "ROOT", self.root), metadata_patch, graph_patch:
+            with self.assertRaisesRegex(ValueError, "No license text source for runtime-dep@3.0.0"):
+                package.package(binary, "0.1.0", "linux-x86_64", output, commit)
+        self.assertFalse(output.exists())
+
+    def test_package_refuses_working_lock_different_from_release_commit(self):
+        self.change("runtime/src/lib.rs", "// committed runtime\n")
+        self.change("LICENSE", "MIT license fixture\n")
+        metadata_fixture, graph_fixture = self.add_notice_graph_fixture()
+        commit = self.commit()
+        self.change("Cargo.lock", "version = 3\n")
+        binary = self.root / "compiler-test"
+        binary.write_bytes(b"prebuilt compiler fixture")
+        output = self.root / "stale-graph-distribution"
+        metadata_patch, graph_patch = self.patch_notice_graph(metadata_fixture, graph_fixture)
+        with patch.object(package, "ROOT", self.root), metadata_patch, graph_patch:
+            with self.assertRaisesRegex(ValueError, "Current Cargo.lock differs"):
+                package.package(binary, "0.1.0", "linux-x86_64", output, commit)
+        self.assertFalse(output.exists())
 
 
 class FakeGitHub:

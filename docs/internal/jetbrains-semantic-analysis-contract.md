@@ -84,10 +84,12 @@ native Lowおよびreplacement bodyも同じcheckerでqueryする。
 その関数の後続queryは空候補を返す。navigation/declaration/type hintsは別契約で残せる。
 この保守性により、独立したtype error後も補完が空になることは既知の制約。
 
-回復はcursorで終わる単一行だけ。simple dotted placeの最後のdot/member prefixをspaceで消し、
-receiverのtoken spanをcheckerで検証する。blank expression statementはTrueに置換する。
-complete parserが扱えるidentifier prefixは元ASTを使う。call/index receiver、未閉鎖call、
-複数箇所のsyntax error、Lowのsemicolon前の未完memberなどは回復しない。
+回復は単一行のsimple dotted placeに限定する。最後のdot/member prefixをspaceで消し、
+receiverのtoken spanをcheckerで検証する。cursorの後ろは空白だけ、またはlexerで確認した
+開き括弧に対応する閉じ括弧だけを許す。Lowは式を閉じた後のsemicolonとblockの閉じ括弧も許す。
+文字列/comment内、operator、別argument、不一致の括弧はmember回復に使わない。
+blank expression statementは従来どおりTrueに置換し、complete parserが扱えるidentifier prefixは
+元ASTを使う。call/index receiver、未閉鎖call、複数箇所のsyntax errorは回復しない。
 回復した行のsynthetic tokenはnavigationに公開しない。他の行、receiver、元file位置を維持する。
 回復前original sourceの診断とfrontend判定だけを表示する。syntax拒否をcompiler受理へ変えない。
 
