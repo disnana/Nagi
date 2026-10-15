@@ -53,13 +53,31 @@ def check_scope():
         if len(data) > 262144:
             refuse()
         mounts = {}
+        base_mount_flags = None
         for line in data.decode("utf-8").splitlines():
             left, right = line.split(" - ", 1)
-            path = left.split()[4]
+            left_fields = left.split()
+            right_fields = right.split()
+            if len(left_fields) < 6 or len(right_fields) != 3:
+                refuse()
+            path = left_fields[4]
             # Reject ambiguous escaped mount paths instead of interpreting them.
             if "\\" in path:
                 refuse()
-            mounts[path] = right.split()[0]
+            if path in mounts:
+                refuse()
+            flags = left_fields[5].split(",")
+            if (not flags or any(not flag for flag in flags) or len(set(flags)) != len(flags)
+                    or ("ro" in flags) == ("rw" in flags)
+                    or ("exec" in flags and "noexec" in flags)):
+                refuse()
+            if path == str(BASE):
+                if "noexec" in flags:
+                    refuse()
+                base_mount_flags = flags
+            mounts[path] = right_fields[0]
+        if base_mount_flags is None:
+            refuse()
         validate_scope(os.environ, os.geteuid(), stat.S_ISREG(marker.st_mode) and marker.st_uid == 0,
                        mounts, stat.S_IMODE(base.st_mode), base.st_uid,
                        Path("/var/run/docker.sock").exists())

@@ -36,7 +36,7 @@ jobs:
           # Retain container on failure/success. No --rm or cleanup deletion.
           name="nagi-sf08-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker create --name "$name" --platform linux/amd64 --init \
-            --tmpfs /run/nagi-sf08:rw,nosuid,nodev,mode=0700,size=4g \
+            --tmpfs /run/nagi-sf08:rw,exec,nosuid,nodev,mode=0700,size=4g \
             --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/input,readonly" \
             --mount "type=bind,src=$rust_root,dst=/opt/rust,readonly" \
             --add-host app.example.invalid:127.0.0.1 \

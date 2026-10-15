@@ -609,4 +609,52 @@ class IntegrationTests(unittest.TestCase):
         self.assertTrue(record['actual_echild'])
 
 
+class ProvisionMountFlagsTests(unittest.TestCase):
+    def check_scope_with_mount_flags(self, base_flags, duplicate_base=False):
+        provision = ci.provision
+        io = __import__('io')
+        stat = __import__('stat')
+        base_line = f'2 1 0:2 / {provision.BASE} {base_flags} - tmpfs tmpfs rw,size=4g\n'
+        mountinfo = (
+            '1 0 0:1 / / rw,relatime - overlay overlay rw\n'
+            + base_line + (base_line if duplicate_base else '')
+        ).encode()
+
+        def fake_lstat(path):
+            if str(path) == '/.dockerenv':
+                return NS(st_mode=stat.S_IFREG | 0o600, st_uid=0)
+            if str(path) == str(provision.BASE):
+                return NS(st_mode=stat.S_IFDIR | 0o700, st_uid=0)
+            raise AssertionError('unexpected lstat path')
+
+        def fake_open(path, mode='r', *_args, **_kwargs):
+            if path != '/proc/self/mountinfo' or mode != 'rb':
+                raise AssertionError('unexpected file access')
+            return io.BytesIO(mountinfo)
+
+        env = {'GITHUB_ACTIONS': 'true', 'NAGI_SF08_EPHEMERAL': provision.IMAGE}
+        with patch.object(provision.os, 'uname', return_value=NS(sysname='Linux')), \
+             patch.object(provision.os, 'lstat', side_effect=fake_lstat), \
+             patch.object(provision.os, 'geteuid', return_value=0), \
+             patch.object(provision.os, 'environ', env), \
+             patch.object(provision.Path, 'exists', return_value=False), \
+             patch('builtins.open', side_effect=fake_open):
+            provision.check_scope()
+
+    def test_mountinfo_allows_exec_or_default_exec_mount(self):
+        self.check_scope_with_mount_flags('rw,exec,nosuid,nodev,relatime')
+        self.check_scope_with_mount_flags('rw,nosuid,nodev,relatime')
+
+    def test_mountinfo_refuses_noexec_before_provisioning(self):
+        with self.assertRaisesRegex(ci.provision.Refused, 'trust prerequisite refused'):
+            self.check_scope_with_mount_flags('rw,nosuid,nodev,noexec,relatime')
+
+    def test_mountinfo_refuses_ambiguous_or_malformed_exec_flags(self):
+        for flags in ('rw,exec,noexec,nosuid,nodev', 'rw,nosuid,,nodev,relatime'):
+            with self.subTest(flags=flags), self.assertRaises(ci.provision.Refused):
+                self.check_scope_with_mount_flags(flags)
+        with self.assertRaises(ci.provision.Refused):
+            self.check_scope_with_mount_flags('rw,nosuid,nodev,relatime', duplicate_base=True)
+
+
 if __name__=='__main__': unittest.main(verbosity=2)
