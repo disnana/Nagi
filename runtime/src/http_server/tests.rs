@@ -1981,6 +1981,10 @@ async fn stalled_response_send_expires_and_releases_connection_permit() {
     .unwrap();
     let mut config = send_timeout(capacity(default_options(), 1, 1).unwrap(), 80).unwrap();
     config.lifecycle_probe = Some(Arc::clone(&probe));
+    // Windows uses the reviewed bounded-prefix native schedule. Actual native
+    // Pending is still required; this is not a natural full-buffer OS premise.
+    #[cfg(windows)]
+    { config.windows_stalled_fixture = true; }
     let server = Server::new_with_send_buffer(app, config, Some(4096)).await;
     let mut blocked = backpressured_socket(&server).await;
     send(
@@ -2044,6 +2048,10 @@ async fn graceful_shutdown_preserves_stalled_response_send_deadline() {
     .unwrap();
     let mut config = send_timeout(options(1024, 1000, 1000, 1200).unwrap(), 150).unwrap();
     config.lifecycle_probe = Some(Arc::clone(&probe));
+    // Windows uses the reviewed bounded-prefix native schedule. Actual native
+    // Pending is still required; this is not a natural full-buffer OS premise.
+    #[cfg(windows)]
+    { config.windows_stalled_fixture = true; }
     let mut server = Server::new_with_send_buffer(app, config, Some(4096)).await;
     let mut blocked = backpressured_socket(&server).await;
     send(&mut blocked, b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;

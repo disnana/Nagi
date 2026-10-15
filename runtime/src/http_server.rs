@@ -26,6 +26,8 @@ use tokio::{net::TcpListener, sync::Semaphore, task::JoinSet};
 mod closing_io;
 #[cfg(test)]
 mod lifecycle_probe;
+#[cfg(all(test, windows))]
+mod windows_native_fixture;
 use closing_io::ClosingIo;
 mod authority;
 mod cors;
@@ -577,6 +579,9 @@ pub struct Options {
     requests: usize,
     #[cfg(test)]
     lifecycle_probe: Option<Arc<lifecycle_probe::Probe>>,
+    // Explicit protocol schedule for the two Windows stalled-send fixtures only.
+    #[cfg(all(test, windows))]
+    windows_stalled_fixture: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -595,6 +600,8 @@ impl Default for Options {
             requests: 256,
             #[cfg(test)]
             lifecycle_probe: None,
+            #[cfg(all(test, windows))]
+            windows_stalled_fixture: false,
         }
     }
 }
@@ -1648,6 +1655,8 @@ struct TimedIo<T> {
     sending: tokio::sync::watch::Sender<Sending>,
     #[cfg(test)]
     probe: Option<Arc<lifecycle_probe::Probe>>,
+    #[cfg(all(test, windows))]
+    windows_stalled_fixture: bool,
 }
 impl<T: hyper::rt::Read + Unpin> hyper::rt::Read for TimedIo<T> {
     fn poll_read(
@@ -1664,6 +1673,14 @@ impl<T: hyper::rt::Write + Unpin> hyper::rt::Write for TimedIo<T> {
         cx: &mut Context<'_>,
         buffer: &[u8],
     ) -> Poll<std::io::Result<usize>> {
+        #[cfg(all(test, windows))]
+        let result = if self.windows_stalled_fixture {
+            let transferred = self.sending.borrow().body_transferred;
+            windows_native_fixture::poll_windows_scalar_once(&mut self.inner, cx, buffer, transferred)
+        } else {
+            Pin::new(&mut self.inner).poll_write(cx, buffer)
+        };
+        #[cfg(not(all(test, windows)))]
         let result = Pin::new(&mut self.inner).poll_write(cx, buffer);
         #[cfg(test)]
         if result.is_pending() {
@@ -1678,6 +1695,14 @@ impl<T: hyper::rt::Write + Unpin> hyper::rt::Write for TimedIo<T> {
         cx: &mut Context<'_>,
         buffers: &[std::io::IoSlice<'_>],
     ) -> Poll<std::io::Result<usize>> {
+        #[cfg(all(test, windows))]
+        let result = if self.windows_stalled_fixture {
+            let transferred = self.sending.borrow().body_transferred;
+            windows_native_fixture::poll_windows_vectored_once(&mut self.inner, cx, buffers, transferred)
+        } else {
+            Pin::new(&mut self.inner).poll_write_vectored(cx, buffers)
+        };
+        #[cfg(not(all(test, windows)))]
         let result = Pin::new(&mut self.inner).poll_write_vectored(cx, buffers);
         #[cfg(test)]
         if result.is_pending() {
@@ -1794,6 +1819,14 @@ where
                     }
                 };
                 let Ok(permit) = Arc::clone(&connections).try_acquire_owned() else { drop(stream); continue; };
+                #[cfg(all(test, windows))]
+                let windows_stalled_fixture = options.windows_stalled_fixture;
+                #[cfg(all(test, windows))]
+                if windows_stalled_fixture {
+                    let (_, after) = windows_native_fixture::accepted_send_buffer(&stream)
+                        .expect("owned accepted-socket buffer configuration");
+                    assert_eq!(after, 4096, "owned accepted-socket buffer readback");
+                }
                 let app = Arc::clone(&app);
                 let options = Arc::clone(&options);
                 let requests = Arc::clone(&requests);
@@ -1835,6 +1868,8 @@ where
                     inner: ClosingIo::new(TokioIo::new(stream), close_deadline, sent.clone()), sending,
                     #[cfg(test)]
                     probe: probe.clone(),
+                    #[cfg(all(test, windows))]
+                    windows_stalled_fixture,
                 }, service);
                 let mut stopped = shutdown.subscribe();
                 tasks.spawn(async move {

@@ -5,6 +5,10 @@
 use super::*;
 use hyper::rt::{Read, Write};
 use std::sync::atomic::AtomicBool;
+#[cfg(windows)]
+use crate::http_server::windows_native_fixture::{
+    accepted_send_buffer, poll_windows_scalar_once, poll_windows_vectored_once,
+};
 
 // Closed native facts, not payloads or inferred socket readiness. Values are
 // saturated solely for diagnostics; every delegated IO result is unchanged.
@@ -121,75 +125,6 @@ struct IoWitness {
     sending: tokio::sync::watch::Receiver<Sending>,
     facts: Arc<NativeFacts>,
 }
-#[cfg(windows)]
-const WINDOWS_NATIVE_WRITE_LIMIT: usize = 4096;
-
-// Preserve full native header writes before the actual buffered-frame handoff.
-// After handoff, limit each Windows native write to one bounded prefix so body
-// backpressure is observable. Remove only the single poll's cooperative yield;
-// never manufacture an IO result. The separate Windows body gate controls only
-// frame availability until the observed native header flush.
-#[cfg(windows)]
-fn poll_windows_scalar_once(
-    inner: &mut TokioIo<TcpStream>,
-    cx: &mut Context<'_>,
-    bytes: &[u8],
-    body_transferred: bool,
-) -> Poll<std::io::Result<usize>> {
-    let prefix = if body_transferred {
-        &bytes[..bytes.len().min(WINDOWS_NATIVE_WRITE_LIMIT)]
-    } else {
-        bytes
-    };
-    assert!(!body_transferred || prefix.len() <= WINDOWS_NATIVE_WRITE_LIMIT);
-    let native = tokio::task::coop::unconstrained(std::future::poll_fn(|cx| {
-        Pin::new(&mut *inner).poll_write(cx, prefix)
-    }));
-    tokio::pin!(native);
-    native.as_mut().poll(cx)
-}
-
-#[cfg(windows)]
-fn poll_windows_vectored_native_once(
-    inner: &mut TokioIo<TcpStream>,
-    cx: &mut Context<'_>,
-    buffers: &[std::io::IoSlice<'_>],
-    body_transferred: bool,
-) -> Poll<std::io::Result<usize>> {
-    assert!(
-        !body_transferred
-            || (buffers
-                .iter()
-                .all(|buffer| buffer.len() <= WINDOWS_NATIVE_WRITE_LIMIT)
-                && (buffers.len() <= 1 || buffers.iter().all(|buffer| buffer.is_empty()))),
-        "post-frame Windows vectored native write must be a single bounded prefix"
-    );
-    let native = tokio::task::coop::unconstrained(std::future::poll_fn(|cx| {
-        Pin::new(&mut *inner).poll_write_vectored(cx, buffers)
-    }));
-    tokio::pin!(native);
-    native.as_mut().poll(cx)
-}
-
-#[cfg(windows)]
-fn poll_windows_vectored_once(
-    inner: &mut TokioIo<TcpStream>,
-    cx: &mut Context<'_>,
-    buffers: &[std::io::IoSlice<'_>],
-    body_transferred: bool,
-) -> Poll<std::io::Result<usize>> {
-    if !body_transferred {
-        return poll_windows_vectored_native_once(inner, cx, buffers, false);
-    }
-    let Some(first) = buffers.iter().find(|buffer| !buffer.is_empty()) else {
-        // Empty input delegates zero bytes and preserves the native empty-write result.
-        return poll_windows_vectored_native_once(inner, cx, buffers, true);
-    };
-    let prefix = &first[..first.len().min(WINDOWS_NATIVE_WRITE_LIMIT)];
-    let bounded = [std::io::IoSlice::new(prefix)];
-    poll_windows_vectored_native_once(inner, cx, &bounded, true)
-}
-
 impl Read for IoWitness {
     fn poll_read(
         mut self: Pin<&mut Self>,
@@ -259,60 +194,6 @@ impl Write for IoWitness {
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         Pin::new(&mut self.inner).poll_shutdown(cx)
     }
-}
-
-// Configure the live accepted socket without taking or rebuilding ownership.
-// Listener inheritance alone is not a measured accepted-socket premise.
-#[cfg(windows)]
-fn accepted_send_buffer(peer: &TcpStream) -> std::io::Result<(i32, i32)> {
-    use std::os::windows::io::AsRawSocket;
-    use windows_sys::Win32::Networking::WinSock::{
-        getsockopt, setsockopt, WSAGetLastError, SOCKET, SOCKET_ERROR, SOL_SOCKET, SO_SNDBUF,
-    };
-    fn read(socket: SOCKET) -> std::io::Result<i32> {
-        let mut value = 0_i32;
-        let mut length = std::mem::size_of_val(&value) as i32;
-        // SAFETY: the borrowed live socket is valid; value/length are writable
-        // for the indicated sizes and remain live for this synchronous call.
-        if unsafe {
-            getsockopt(
-                socket,
-                SOL_SOCKET,
-                SO_SNDBUF,
-                (&mut value as *mut i32).cast(),
-                &mut length,
-            )
-        } == SOCKET_ERROR
-        {
-            return Err(std::io::Error::from_raw_os_error(unsafe {
-                WSAGetLastError()
-            }));
-        }
-        if length != std::mem::size_of_val(&value) as i32 || value <= 0 {
-            return Err(std::io::ErrorKind::InvalidData.into());
-        }
-        Ok(value)
-    }
-    let socket = peer.as_raw_socket() as SOCKET;
-    let before = read(socket)?;
-    let requested = 4096_i32;
-    // SAFETY: peer retains socket ownership and the initialized option value
-    // remains live for this synchronous call; setsockopt retains no pointer.
-    if unsafe {
-        setsockopt(
-            socket,
-            SOL_SOCKET,
-            SO_SNDBUF,
-            (&requested as *const i32).cast(),
-            std::mem::size_of_val(&requested) as i32,
-        )
-    } == SOCKET_ERROR
-    {
-        return Err(std::io::Error::from_raw_os_error(unsafe {
-            WSAGetLastError()
-        }));
-    }
-    Ok((before, read(socket)?))
 }
 
 #[tokio::test]
@@ -395,6 +276,8 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
         },
         sending,
         probe: None,
+        #[cfg(windows)]
+        windows_stalled_fixture: false,
     };
     let mut builder = http1::Builder::new();
     builder.max_buf_size(8192);

@@ -468,14 +468,20 @@ jobs:
           set -euo pipefail
           python - <<'PYSOURCE'
           import hashlib, pathlib
-          source = pathlib.Path("runtime/src/http_server/send_deadline_tests.rs").read_bytes()
-          if b"\r" in source.replace(b"\r\n", b"\n"):
-              raise AssertionError("unexpected lone CR in native fixture source")
-          actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
-          expected = "8f9fcd420cf54ba19810f9074aec2ae1c847146b0c1018353a69815c96dbea3d"
-          if actual != expected:
-              raise AssertionError("reviewed native send-deadline fixture source differs")
-          print("native send-deadline fixture sha256=" + actual)
+          expected = {
+              'runtime/src/http_server.rs': '1ef3f25310917bf31bfe900ce8551d49e083d7948655ea388d2b8c12b17d291d',
+              'runtime/src/http_server/tests.rs': 'decb32fa3d2fa4d884c710be4a725ce7870f047b9ec23c58c1669f7bd309c427',
+              'runtime/src/http_server/send_deadline_tests.rs': 'a3edb3d5105f1cd0bfa617edf51b0b60b468bf06c3fcf31829c66ce110f0fa3b',
+              'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
+          }
+          for name, digest in expected.items():
+              source = pathlib.Path(name).read_bytes()
+              if b"\r" in source.replace(b"\r\n", b"\n"):
+                  raise AssertionError("unexpected lone CR in native fixture source")
+              actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
+              if actual != digest:
+                  raise AssertionError("reviewed native send fixture source differs: " + name)
+              print("native send fixture sha256=" + actual + " file=" + name)
           PYSOURCE
           cargo test --locked -p nagi-runtime --lib http_server::tests::send_deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/http-send-deadline.log"
           python - <<'PYCODE'
@@ -493,6 +499,27 @@ jobs:
               pattern=rf"(?m)^test http_server::tests::send_deadline_tests::{re.escape(name)} \.\.\. ok$"
               if len(re.findall(pattern,text))!=1:
                   raise AssertionError("native send-deadline case missing, duplicate or failed")
+          PYCODE
+      - name: Check stalled send permit release and graceful join early on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib stalled_response_send_ 2>&1 | tee "$RUNNER_TEMP/http-stalled-send.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"http-stalled-send.log").read_text(encoding="utf-8")
+          required={
+              "stalled_response_send_expires_and_releases_connection_permit",
+              "graceful_shutdown_preserves_stalled_response_send_deadline",
+          }
+          summaries=re.findall(r"(?m)^test result: ok\. 2 passed; 0 failed; 0 ignored;.*$",text)
+          if len(summaries)!=1:
+              raise AssertionError("two actual stalled-send lifecycle cases required")
+          for name in required:
+              pattern=rf"(?m)^test http_server::tests::{re.escape(name)} \.\.\. ok$"
+              if len(re.findall(pattern,text))!=1:
+                  raise AssertionError("stalled-send case missing, duplicate or failed")
           PYCODE
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
@@ -794,14 +821,20 @@ jobs:
           set -euo pipefail
           python - <<'PYSOURCE'
           import hashlib, pathlib
-          source = pathlib.Path("runtime/src/http_server/send_deadline_tests.rs").read_bytes()
-          if b"\r" in source.replace(b"\r\n", b"\n"):
-              raise AssertionError("unexpected lone CR in native fixture source")
-          actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
-          expected = "8f9fcd420cf54ba19810f9074aec2ae1c847146b0c1018353a69815c96dbea3d"
-          if actual != expected:
-              raise AssertionError("reviewed native send-deadline fixture source differs")
-          print("native send-deadline fixture sha256=" + actual)
+          expected = {
+              'runtime/src/http_server.rs': '1ef3f25310917bf31bfe900ce8551d49e083d7948655ea388d2b8c12b17d291d',
+              'runtime/src/http_server/tests.rs': 'decb32fa3d2fa4d884c710be4a725ce7870f047b9ec23c58c1669f7bd309c427',
+              'runtime/src/http_server/send_deadline_tests.rs': 'a3edb3d5105f1cd0bfa617edf51b0b60b468bf06c3fcf31829c66ce110f0fa3b',
+              'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
+          }
+          for name, digest in expected.items():
+              source = pathlib.Path(name).read_bytes()
+              if b"\r" in source.replace(b"\r\n", b"\n"):
+                  raise AssertionError("unexpected lone CR in native fixture source")
+              actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
+              if actual != digest:
+                  raise AssertionError("reviewed native send fixture source differs: " + name)
+              print("native send fixture sha256=" + actual + " file=" + name)
           PYSOURCE
           cargo test --locked -p nagi-runtime --lib http_server::tests::send_deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/http-send-deadline.log"
           python - <<'PYCODE'
