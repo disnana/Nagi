@@ -536,8 +536,16 @@ async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
     {
         let f = Fixture::new(1000, 144).await;
         f.stats.mode.store(mode, Ordering::SeqCst);
-        let s = Server::new(&f, 256, security).await;
-        let (c, t) = bootstrap(&s).await;
+        // Keep bootstrap under the normal profile; only the target login uses
+        // the deliberately short security budget. Join setup before starting it.
+        let setup = Server::new(&f, 256, 1000).await;
+        let (c, t) = bootstrap(&setup).await;
+        let s = if security == 1000 {
+            setup
+        } else {
+            setup.stop().await;
+            Server::new(&f, 256, security).await
+        };
         let h = login_headers(&c, &t);
         let r = request(s.address, "POST", "/login", &h, b"{}").await;
         // Failure-only closed numeric/boolean shape; never print response material.
@@ -608,8 +616,16 @@ async fn issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cook
     for (mode, status, security) in [(10, 500, 1000), (11, 500, 1000), (12, 504, 200)] {
         let f = Fixture::new(1000, 144).await;
         f.stats.mode.store(mode, Ordering::SeqCst);
-        let s = Server::new(&f, 256, security).await;
-        let (c, t) = bootstrap(&s).await;
+        // Keep bootstrap under the normal profile; only the target login uses
+        // the deliberately short security budget. Join setup before starting it.
+        let setup = Server::new(&f, 256, 1000).await;
+        let (c, t) = bootstrap(&setup).await;
+        let s = if security == 1000 {
+            setup
+        } else {
+            setup.stop().await;
+            Server::new(&f, 256, security).await
+        };
         let r = request(s.address, "POST", "/login", &login_headers(&c, &t), b"{}").await;
         assert!(r.status == status && !r.auth_cookie() && r.deletion());
         r.guarded();
