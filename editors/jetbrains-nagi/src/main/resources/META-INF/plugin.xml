@@ -5,18 +5,19 @@
     <description><![CDATA[
         <p>Nagi language support for IntelliJ IDEA and PyCharm. This is an unreleased 0.1.3 candidate, not a published release; full IDE GUI verification is pending.</p>
         <p>Provides syntax highlighting for High (.nagi) and Low (.low) files, code folding, indentation support, compiler-backed completion and current-snapshot diagnostics, source navigation when the compiler returns an exact target, and a standard Nagi Run Configuration with the IDE's Run and Stop controls.</p>
-        <p>The plugin's High/Low syntax highlighting does not require a compiler; published nagic 0.1.11 continues to support manual Check/Run and normal Run Configuration execution. Semantic assistance is partial editor analysis, not a full build check; diagnostics report only the first compiler error returned. Completion, diagnostics, and navigation require a development compiler built from the same PR source commit. Published 0.1.11 does not provide the assist protocol; use the matching compiler CI artifact.</p>
+        <p>The plugin's High/Low syntax highlighting does not require a compiler; published nagic 0.1.11 continues to support manual Check/Run and normal Run Configuration execution. Semantic assistance is partial editor analysis, not a full build check; diagnostics report only the first compiler error returned. Variable and member completion, diagnostics, and navigation require a development compiler built from the same candidate source commit. Top-level def/fn keyword lookup does not require the compiler. Published 0.1.11 does not provide the assist protocol; use the matching compiler CI artifact.</p>
         <p>Nagi: Check and Nagi: Run remain available for a Nagi file or the nearest project containing nagi.toml. Commands and Run Configurations require a trusted project and save open files before starting.</p>
         <p>The compiler is installed separately and is not bundled with the plugin. Published compiler releases are available from <a href="https://github.com/disnana/Nagi/releases">GitHub Releases</a>. The matching compiler for semantic assistance in this unreleased candidate is a PR CI artifact, not a formal release. The candidate plugin itself is not yet published to GitHub Releases or Marketplace.</p>
         <h3>日本語</h3>
         <p>IntelliJ IDEA・PyCharm向けのNagi言語サポートです。未公開の0.1.3候補であり、正式公開版ではありません。IDE全体のGUI検証は未完了です。</p>
         <p>High（.nagi）・Low（.low）のシンタックスハイライト、コードの折りたたみ、インデント支援、コンパイラによる補完と現在のsnapshotに基づく診断、正確な参照先が返された場合の定義への移動、IDE標準のRun/Stopを使うNagi Run Configurationを提供します。</p>
-        <p>プラグインのHigh/Low syntax highlightingはcompilerに依存せず、公開済みnagic 0.1.11は手動のCheck/Runと通常のRun Configuration実行に引き続き使えます。semantic assistanceはエディター向けの部分解析で、完全なbuild検査ではなく、診断にはcompilerが最初に返すエラーだけが表示されます。補完・診断・定義への移動には同じPR source commitから作成した開発版compilerが必要です。公開済み0.1.11にassist protocolはないため、PRのmatching compiler CI artifactを使用してください。</p>
+        <p>プラグインのHigh/Low syntax highlightingはcompilerに依存せず、公開済みnagic 0.1.11は手動のCheck/Runと通常のRun Configuration実行に引き続き使えます。semantic assistanceはエディター向けの部分解析で、完全なbuild検査ではなく、診断にはcompilerが最初に返すエラーだけが表示されます。変数名・memberの補完、診断、定義への移動には同じ候補source commitから作成した開発版compilerが必要です。最上位のdef・fn字句候補にはcompilerは不要です。公開済み0.1.11にassist protocolはないため、PRのmatching compiler CI artifactを使用してください。</p>
         <p>Nagi: Check / Nagi: Runに加えて、Nagiファイルまたは最寄りのnagi.tomlを含むプロジェクトを標準Run Configurationから実行できます。各操作にはproject trustが必要で、起動前に開いているfileを保存します。</p>
         <p>コンパイラは別途インストールしてください。プラグインには同梱されていません。公開済みcompilerは<a href="https://github.com/disnana/Nagi/releases">GitHub Releases</a>から取得できます。semantic assistanceに対応するcompilerはPRのCI artifactで、正式releaseではありません。この候補pluginはGitHub ReleaseやMarketplaceへまだ公開していません。</p>
     ]]></description>
     <depends>com.intellij.modules.platform</depends>
     <extensions defaultExtensionNs="com.intellij">
+        <programRunner implementation="com.disnana.nagi.NagiProgramRunner" order="first"/>
         <configurationType implementation="com.disnana.nagi.NagiRunConfigurationType"/>
         <runConfigurationProducer implementation="com.disnana.nagi.NagiRunConfigurationProducer"/>
         <fileType name="Nagi" language="Nagi" extensions="nagi"
@@ -28,8 +29,11 @@
         <lang.syntaxHighlighterFactory language="Nagi" implementationClass="com.disnana.nagi.NagiSyntaxHighlighter$Factory"/>
         <lang.syntaxHighlighterFactory language="NagiLow" implementationClass="com.disnana.nagi.NagiSyntaxHighlighter$LowFactory"/>
         <projectService serviceImplementation="com.disnana.nagi.NagiAssistService"/>
+        <notificationGroup id="Nagi compiler assistance" displayType="BALLOON" isLogByDefault="true"/>
         <completion.contributor language="Nagi" implementationClass="com.disnana.nagi.NagiAssistCompletionContributor"/>
         <completion.contributor language="NagiLow" implementationClass="com.disnana.nagi.NagiAssistCompletionContributor"/>
+        <codeInsight.parameterInfo language="Nagi" implementationClass="com.disnana.nagi.NagiParameterInfoHandler"/>
+        <codeInsight.parameterInfo language="NagiLow" implementationClass="com.disnana.nagi.NagiParameterInfoHandler"/>
         <psi.referenceContributor implementation="com.disnana.nagi.NagiAssistReferenceContributor"/>
         <externalAnnotator language="Nagi" implementationClass="com.disnana.nagi.NagiAssistExternalAnnotator"/>
         <externalAnnotator language="NagiLow" implementationClass="com.disnana.nagi.NagiAssistExternalAnnotator"/>
@@ -37,6 +41,12 @@
         <lang.commenter language="NagiLow" implementationClass="com.disnana.nagi.NagiCommenter"/>
         <lang.braceMatcher language="Nagi" implementationClass="com.disnana.nagi.NagiBraceMatcher"/>
         <lang.braceMatcher language="NagiLow" implementationClass="com.disnana.nagi.NagiBraceMatcher$Low"/>
+        <quoteHandler fileType="Nagi" className="com.disnana.nagi.NagiQuoteHandler"/>
+        <quoteHandler fileType="Nagi Low" className="com.disnana.nagi.NagiQuoteHandler"/>
+        <defaultLiveTemplates file="liveTemplates/Nagi"/>
+        <liveTemplateMacro implementation="com.disnana.nagi.NagiIndentMacro"/>
+        <liveTemplateContext contextId="NAGI_HIGH_DECLARATION" implementation="com.disnana.nagi.NagiTemplateContext"/>
+        <liveTemplateContext contextId="NAGI_LOW_DECLARATION" implementation="com.disnana.nagi.NagiTemplateContext$Low"/>
         <lang.foldingBuilder language="Nagi" implementationClass="com.disnana.nagi.NagiFoldingBuilder"/>
         <lang.foldingBuilder language="NagiLow" implementationClass="com.disnana.nagi.NagiFoldingBuilder"/>
         <codeInsight.lineMarkerProvider language="Nagi" implementationClass="com.disnana.nagi.NagiRunLineMarker"/>
@@ -46,8 +56,18 @@
         <applicationService serviceImplementation="com.disnana.nagi.NagiSettings"/>
         <langCodeStyleSettingsProvider implementation="com.disnana.nagi.NagiCodeStyleSettings"/>
         <langCodeStyleSettingsProvider implementation="com.disnana.nagi.NagiCodeStyleSettings$Low"/>
+        <fileIndentOptionsProvider implementation="com.disnana.nagi.NagiIndentOptionsProvider" order="first"/>
+        <editor.backspaceModeOverride language="Nagi" implementationClass="com.disnana.nagi.NagiBackspaceModeOverride"/>
+        <editor.backspaceModeOverride language="NagiLow" implementationClass="com.disnana.nagi.NagiBackspaceModeOverride"/>
+        <editorFactoryListener implementation="com.disnana.nagi.NagiEditorSettingsListener"/>
         <enterHandlerDelegate implementation="com.disnana.nagi.NagiEnterHandler"/>
     </extensions>
+    <applicationListeners>
+        <listener class="com.disnana.nagi.NagiEditorSettingsListener" topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+    </applicationListeners>
+    <projectListeners>
+        <listener class="com.disnana.nagi.NagiEditorSettingsListener" topic="com.intellij.psi.codeStyle.CodeStyleSettingsListener"/>
+    </projectListeners>
     <actions>
         <action id="Nagi.Check" class="com.disnana.nagi.NagiCompilerAction$Check" text="Nagi: Check"
                 description="Save files and check the nearest Nagi project or selected Nagi file">

@@ -71,6 +71,14 @@ struct Local {
     borrowed: bool,
 }
 
+// Additive presentation facts. They identify source tokens already resolved by
+// the compiler; editor clients do not need to reconstruct parameter/field roles.
+#[derive(Serialize)]
+struct SymbolRole {
+    kind: &'static str,
+    location: Location,
+}
+
 #[derive(Serialize)]
 struct TypedExpression {
     location: Location,
@@ -211,6 +219,21 @@ fn local_location(files: &[File<'_>], line: usize, span: Span) -> Option<(String
         name.clone(),
         file.location(token, name.encode_utf16().count()),
     ))
+}
+
+fn class_field_location(files: &[File<'_>], class: &Class, field: &str) -> Option<Location> {
+    let index = class.fields.iter().position(|(name, _)| name == field)?;
+    let line = *class.field_lines.get(index)?;
+    let file = files
+        .iter()
+        .find(|f| line >= f.start && line < f.start + f.lines.len().max(1))?;
+    let local_line = line - file.start + 1;
+    let start = file.tokens.partition_point(|token| token.line < local_line);
+    let token = file.tokens[start..]
+        .iter()
+        .take_while(|token| token.line == local_line)
+        .find(|token| matches!(&token.kind, K::Id(name) if name == field))?;
+    Some(file.location(token, file.token_length(token)))
 }
 
 // Resolve lexical bindings independently of type/ownership checking. Navigation
@@ -373,6 +396,7 @@ struct Types<'a, 'b> {
     locals: Vec<Local>,
     expressions: Vec<TypedExpression>,
     references: Vec<Reference>,
+    roles: Vec<SymbolRole>,
 }
 impl Types<'_, '_> {
     fn file(&self, line: usize) -> Option<&File<'_>> {
@@ -473,6 +497,39 @@ impl Types<'_, '_> {
                 } else {
                     ty
                 };
+                let class = self.classes.iter().find(|class| {
+                    class.name == resource_ty.0
+                        && resource_ty.1.is_empty()
+                        && class.fields.iter().any(|(field, _)| field == name)
+                });
+                let known_field = class.is_some()
+                    || crate::stdlib::resource(&resource_ty.0)
+                        .is_some_and(|resource| crate::stdlib::field(resource, name).is_some());
+                if e.ty.is_some() && known_field {
+                    if let Some(file) = self.file(e.line) {
+                        if let Some(token) = file
+                            .tokens
+                            .get(e.span.start..e.span.end)
+                            .and_then(|tokens| tokens.last())
+                        {
+                            if matches!(&token.kind, K::Id(value) if value == name) {
+                                let location = file.location(token, file.token_length(token));
+                                if let Some(target) = class
+                                    .and_then(|class| class_field_location(self.files, class, name))
+                                {
+                                    self.references.push(Reference {
+                                        location: location.clone(),
+                                        target,
+                                    });
+                                }
+                                self.roles.push(SymbolRole {
+                                    kind: "field",
+                                    location,
+                                });
+                            }
+                        }
+                    }
+                }
                 if let Some(resource) = crate::stdlib::resource(&resource_ty.0) {
                     if let (Some(line), Some(file)) = (
                         crate::stdlib::member_line(resource, name),
@@ -1378,11 +1435,28 @@ fn index_impl(
         locals: vec![],
         expressions: vec![],
         references: vec![],
+        roles: vec![],
     };
     if let Some(p) = typed {
+        for class in &p.classes {
+            for (name, _) in &class.fields {
+                if let Some(location) = class_field_location(&files, class, name) {
+                    types.roles.push(SymbolRole {
+                        kind: "field",
+                        location,
+                    });
+                }
+            }
+        }
         for f in &p.functions {
             for ((name, ty), span) in f.params.iter().zip(&f.parameter_spans) {
                 types.binding(f.line, *span, name, ty, false);
+                if let Some((_, location)) = local_location(&files, f.line, *span) {
+                    types.roles.push(SymbolRole {
+                        kind: "parameter",
+                        location,
+                    });
+                }
             }
             types.block(&f.body);
         }
@@ -1403,7 +1477,7 @@ fn index_impl(
         .collect::<Vec<_>>();
     Ok(
         serde_json::json!({"format":"nagi-symbols-v1","definitions":definitions,"bindings":namespace_bindings,
-        "references":references,"locals":types.locals,"expressions":types.expressions,
+        "references":references,"locals":types.locals,"expressions":types.expressions,"roles":types.roles,
         "files":files.iter().map(|f|f.path.display().to_string()).collect::<Vec<_>>(),"standard_sources":standard_sources,
         "standard_modules":standard_modules}),
     )

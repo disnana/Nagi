@@ -1,0 +1,29 @@
+<templateSet group="Nagi">
+    <template name="def" value="def $NAME$($PARAMETER$: $TYPE$) -&gt; $RESULT$:&#10;$INDENT$$BODY$&#10;$END$" description="High function with explicit parameter and result types" toReformat="true" toShortenFQNames="false">
+        <variable name="NAME" expression="" defaultValue="&quot;compute&quot;" alwaysStopAt="true"/>
+        <variable name="PARAMETER" expression="" defaultValue="&quot;value&quot;" alwaysStopAt="true"/>
+        <variable name="TYPE" expression="" defaultValue="&quot;i64&quot;" alwaysStopAt="true"/>
+        <variable name="RESULT" expression="" defaultValue="&quot;i64&quot;" alwaysStopAt="true"/>
+        <variable name="INDENT" expression="nagiIndent()" defaultValue="&quot;    &quot;" alwaysStopAt="false"/>
+        <variable name="BODY" expression="" defaultValue="&quot;return 0&quot;" alwaysStopAt="true"/>
+        <context><option name="NAGI_HIGH_DECLARATION" value="true"/></context>
+    </template>
+    <template name="adef" value="async def $NAME$($PARAMETER$: $TYPE$) -&gt; $RESULT$:&#10;$INDENT$$BODY$&#10;$END$" description="High async function with explicit parameter and result types" toReformat="true" toShortenFQNames="false">
+        <variable name="NAME" expression="" defaultValue="&quot;compute&quot;" alwaysStopAt="true"/>
+        <variable name="PARAMETER" expression="" defaultValue="&quot;value&quot;" alwaysStopAt="true"/>
+        <variable name="TYPE" expression="" defaultValue="&quot;i64&quot;" alwaysStopAt="true"/>
+        <variable name="RESULT" expression="" defaultValue="&quot;i64&quot;" alwaysStopAt="true"/>
+        <variable name="INDENT" expression="nagiIndent()" defaultValue="&quot;    &quot;" alwaysStopAt="false"/>
+        <variable name="BODY" expression="" defaultValue="&quot;return 0&quot;" alwaysStopAt="true"/>
+        <context><option name="NAGI_HIGH_DECLARATION" value="true"/></context>
+    </template>
+    <template name="fn" value="fn $NAME$($PARAMETER$: $TYPE$) -&gt; $RESULT$ {&#10;$INDENT$$BODY$&#10;}&#10;$END$" description="Low function with explicit parameter and result types" toReformat="true" toShortenFQNames="false">
+        <variable name="NAME" expression="" defaultValue="&quot;compute&quot;" alwaysStopAt="true"/>
+        <variable name="PARAMETER" expression="" defaultValue="&quot;value&quot;" alwaysStopAt="true"/>
+        <variable name="TYPE" expression="" defaultValue="&quot;i64&quot;" alwaysStopAt="true"/>
+        <variable name="RESULT" expression="" defaultValue="&quot;i64&quot;" alwaysStopAt="true"/>
+        <variable name="INDENT" expression="nagiIndent()" defaultValue="&quot;    &quot;" alwaysStopAt="false"/>
+        <variable name="BODY" expression="" defaultValue="&quot;return 0;&quot;" alwaysStopAt="true"/>
+        <context><option name="NAGI_LOW_DECLARATION" value="true"/></context>
+    </template>
+</templateSet>

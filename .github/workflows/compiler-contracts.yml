@@ -1,5 +1,8 @@
 name: Compiler contract exploration
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/compiler-contracts.yml'
   schedule:
     - cron: '17 3 * * 1'
   workflow_dispatch:
@@ -34,6 +37,12 @@ jobs:
             target
           key: nagi-contracts-v1-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'compiler/**', 'tests/conformance/**', 'fuzz/**') }}
           restore-keys: nagi-contracts-v1-${{ runner.os }}-
+      - name: Fetch locked native fixture dependencies
+        shell: bash
+        run: |
+          host="$(rustc -vV | sed -n 's/^host: //p')"
+          test -n "$host"
+          cargo fetch --locked --target "$host"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
