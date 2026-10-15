@@ -17,13 +17,17 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。次回更新候補�
 
 ここに記した機能は公開済み0.1.2のものです。0.1.2では全体の自動整形、型に基づく補完、定義への移動、自動型検査は未対応です。型検査は手動でNagiコンパイラを呼び出します。
 
+#120の元候補に限り、編集操作・semantic色分け・引数表示はIDEA 2026.3 EAP（263.6259.32、JDK 25）のheadless fixtureで117テストが成功し、同SDKのPlugin VerifierでCompatibleを確認しました。今回のBackspace・字句keyword候補の差分はまだ実行検証していません。PyCharmやIDEのGUI操作、IME、IDEA 2025.1（build 251）の新差分の動作、EditorConfig modifierと設定変更後の再読み込みは未確認です。headless fixtureの結果はGUI受け入れ確認を意味しません。
+
 ## 0.1.3候補（未リリース）
 
-別の未リリース候補では、コンパイラを使ったHigh/Lowの補完、構造化診断、コンパイラが正確な参照先を返す場合の定義への移動と、IDE標準のNagi Run Configurationを追加しています。一度保存したローカル`.nagi`・`.low`の開いている未保存bufferは解析用snapshotに含めます。新規未保存fileは対象外です。候補は現在のsource・open buffers・compiler設定が変わると古い応答を破棄します。
+関数の引数情報はIDE標準のParameter Info操作（通常Ctrl+P）で表示します。現在のsource snapshotについてコンパイラが関数を解決できた場合に、signatureと現在の引数位置を示します。初回解析は既存のdebounce付きバックグラウンド処理へまとめ、EDTでコンパイラを起動しません。古いsnapshotや移動後のカーソルには表示しません。自動表示はIDE設定に従い、明示操作は自動表示OFFでも利用できます。解決できない関数やmemberのsignatureをIDE側で推測しません。
 
-プラグインのHigh/Low syntax highlightingはcompilerに依存せず、公開済み`nagic` 0.1.11は手動のCheck/Runと通常のRun Configurationによる実行に引き続き使えます。completion・diagnostics・definition navigationのsemantic assistanceには**同じPR source commitから作った開発版`nagic`**が必要です。公開済み0.1.11にはassist protocolがないため、補完などを使う場合はmatching compiler CI artifactを設定してください。解析はエディター向けの部分解析で、完全なbuild成功を保証せず、診断もcompilerが最初に返すエラーに限られます。project内では、対象sourceがentryからのimportまたはnative graphに含まれている必要があります。構文やcheckerがその位置でread可能と認めない候補は表示されず、候補が表示されても編集後の代入・move・callの妥当性を保証しません。record fieldの宣言先などcompilerが正確なsource spanを返さない参照には移動できません。`nagi.toml`に未保存の変更がある場合は、保存するまでsemantic assistanceを実行しません。
+未リリースの0.1.3候補では、High/Lowの編集補助も更新しています。IDE標準の設定に従う括弧・引用符の補完、上限付きの改行インデント補助（有効な字下げ幅を使い、空白文字を挿入）、関数定義用の明示的なlive template（`def`・`async def`・Lowの`fn`と編集欄）を含みます。今回の差分では、IDEのsmart Backspace設定が有効な場合にHigh/Lowの字下げ幅を使う標準の段階削除へ接続し、OFF設定は維持します。行頭で`d`・`de`（High）または`f`（Low）を入力し、最上位の文脈だと確認できる場合に、それぞれ`def`・`fn`の字句候補を通常の補完に加えます。先頭から8 KiBを超える位置や、閉じていない括弧・文字列などで文脈が不明な場合は、この字句候補を抑制します。候補の確定はkeyword文字だけを挿入し、既存live templateは明示的な展開のままです。補完候補の通常確定では関数名だけを挿入し、`(`で確定した場合だけ呼び出しの括弧を補助します。コンパイラを使ったHigh/Low補完、構造化診断、コンパイラが正確な参照先を返す場合の定義への移動、IDE標準のNagi Run Configurationも候補です。一度保存したローカル`.nagi`・`.low`の開いている未保存bufferは解析用snapshotに含めます。新規未保存fileは対象外です。候補は現在のsource・open buffers・compiler設定が変わると古い応答を破棄します。
 
-IDE標準のRun Configurationは、既存のローカル`.nagi`または`.low`を開いてNagi設定を作り、通常のRun/Stop操作でコンパイラを起動します。近くに`nagi.toml`があればそのentryを使い、実行前に未保存ファイルを保存し、信頼されていないprojectでは起動を拒否します。Nagi 0.1.11のcompilerで通常実行できます。これらは公開済み0.1.2に含まれない0.1.3候補の機能です。候補pluginとassist用compilerはPR CI検証artifactで、GitHub ReleaseやMarketplaceにはまだ公開していません。
+プラグインのHigh/Low syntax highlightingはcompilerに依存せず、公開済み`nagic` 0.1.11は手動のCheck/Runと通常のRun Configurationによる実行に引き続き使えます。変数名・member補完、diagnostics、definition navigationのsemantic assistanceには**同じ候補source commitから作った開発版`nagic`**が必要です。確認できた最上位文脈の字句`def`・`fn`候補にはcompilerは不要です。公開済み0.1.11にはassist protocolがないため、semantic補完を使う場合はmatching compiler CI artifactを設定してください。解析はエディター向けの部分解析で、完全なbuild成功を保証せず、診断もcompilerが最初に返すエラーに限られます。project内では、対象sourceがentryからのimportまたはnative graphに含まれている必要があります。構文やcheckerがその位置でread可能と認めない候補は表示されず、候補が表示されても編集後の代入・move・callの妥当性を保証しません。compilerが正確なsource spanを返さない参照には移動できません。`nagi.toml`に未保存の変更がある場合は、保存するまでsemantic assistanceを実行しません。
+
+IDE標準のRun Configurationは、既存のローカル`.nagi`または`.low`を開いてNagi設定を作り、通常のRun/Stop操作でコンパイラを起動します。近くに`nagi.toml`があればそのentryを使い、実行前に未保存ファイルを保存し、信頼されていないprojectでは起動を拒否します。起動準備ではエディターを止めずに保存の完了を待ち、IDEのbackground taskから中止できます。待機後に開いているfileの未保存変更が残っていた場合は、保存してから再実行してください。Nagi 0.1.11のcompilerで通常実行できます。これらは公開済み0.1.2に含まれない0.1.3候補の機能です。候補pluginとassist用compilerはPR CI検証artifactで、GitHub ReleaseやMarketplaceにはまだ公開していません。
 
 この候補では、IDEが管理するNagi Runに限って`NAGI_RUN_RETENTION=latest`を設定する世代保持modeも、同じPR sourceから作った開発compilerと検証中です。公開compiler 0.1.11は通常のCheck/Runに使えますが、このmodeを実装しておらず、CLI実行の成功世代を自動削除しません。通常のCLI世代はimmutableで、世代cleanupはCargo共有cache（`build/native-target/`または`NAGI_NATIVE_TARGET_DIR`）にも適用されません。候補modeはnative run成功を記録したlatest、実行中・すべてのappの入力snapshotが必要とする世代、失敗後のlast-goodを保護します。compile成功だけではrun成功とみなさず、managed世代の入力metadataが不明なら回収しません。入力snapshotは成功した通常buildも含み、namespace参照とfile identityを記録するため、non-latest run・別appが必要とする世代を保護します。外部hardlink inputのidentityがrun leaseと一致する場合も、そのleaseとgenerationを保持します。依存元を回収しても参照先が次のsuccessful sweepまで残ることがあり、総世代数や容量に厳密な上限はありません。unknown file、link/reparse point、failed stagingも削除しません。generation tree外のrecovery journalは次のplugin管理runで検査します。unknownまたはoversized recordは保持し、正常recordの回収は続けます。これはまだ検証中で、通常CLI向けのcleanup commandやpower-loss durability保証ではありません。
 
@@ -80,4 +84,4 @@ PyCharm用SDKでも同じコードを検証できます。
 
 0.1.2の共通プラグインはIntelliJ IDEA 2025.1.1 build 251.25410.109以降、PyCharm 2025.1.1 build 251.25410.122以降を対象とします。2025.1 branchの初期buildでは未信頼プロジェクトを判定する公開trust APIが解決されないため対象外です。公開trust APIで未信頼プロジェクトからの実行を拒否するため、0.1.2から2024.3と2025.1初期buildは対象外です。対象外IDEでは既存の公開済み0.1.1を引き続き利用でき、新版へ更新するには対応build以降へ更新してください。ID `com.disnana.nagi`と既存Marketplaceページは維持します。この対応範囲はGitHubの0.1.2 Releaseに適用します。
 
-標準ライブラリの仮想sourceとrecord field宣言へのジャンプは未対応です。
+標準ライブラリの仮想sourceへのジャンプは未対応です。候補compilerが正確な宣言位置を返すrecord fieldは移動でき、位置を返さない参照は対象外です。

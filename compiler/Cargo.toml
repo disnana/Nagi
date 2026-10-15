@@ -18,3 +18,6 @@ rusqlite = { version = "0.40", optional = true, features = ["bundled", "hooks", 
 [[example]]
 name = "fuzz-smoke"
 path = "../fuzz/smoke.rs"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nagi_sf01_diagnostic)', 'cfg(nagi_sf01_diag_oracle)'] }

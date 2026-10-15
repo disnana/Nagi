@@ -520,6 +520,31 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
         self.assertIn('python scripts/ci/assert_sqlite_test_summary.py "$RUNNER_TEMP/sqlite-runtime.log"', step)
         self.assertNotIn("80 passed", step)
 
+    def test_member_call_recovery_is_target_first_on_linux_and_four_platform_jobs(self):
+        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        linux = re.search(r"(?ms)^  linux:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
+        package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
+        self.assertIsNotNone(linux, "Linux full-check job missing")
+        self.assertIsNotNone(package, "four-platform package job missing")
+        command = "cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1"
+        summary_guard = 'python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"'
+        for name, block in (("Linux", linux.group()), ("four-platform", package.group())):
+            with self.subTest(job=name):
+                self.assertEqual(block.count(command), 1, "member test command must run exactly once")
+                self.assertEqual(block.count(summary_guard), 1, "strict nonzero summary guard must run")
+                marker = "      - name: Check call_member_ recovery first with exact result on the target platform\n"
+                start = block.index(marker)
+                tail = block[start + len(marker):]
+                next_step = re.search(r"(?m)^      - (?:name:|uses:)", tail)
+                self.assertIsNotNone(next_step, "member test step must remain bounded")
+                step = tail[:next_step.start()]
+                self.assertIn("set -euo pipefail", step, "Cargo pipeline failures must propagate")
+                self.assertIn('2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"', step)
+                self.assertLess(block.index(command), block.index("Check SF02 public Session runtime"))
+                self.assertLess(start, block.index("Check SF02 public Session runtime"))
+        self.assertEqual(workflow.count(command), 2)
+        self.assertEqual(workflow.count(summary_guard), 2)
+
     def test_four_platform_job_registers_sf04_runtime_suites_with_exact_count_guards(self):
         workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)

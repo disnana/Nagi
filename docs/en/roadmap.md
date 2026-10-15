@@ -36,3 +36,10 @@ S1 Task result handles and the S2 Supervisor/HTTP migration are published in Nag
 ## 0.2.0 Security Foundation
 
 The [design RFC](../internal/security-foundation/rfc.en.md) and [feature PR/verification plan](../internal/security-foundation/implementation-plan.en.md) separate authentication/authorization, CSRF, HTML output, SQL structure/binding, outbound destinations, CORS, Cookie/Session, and resource bounds. This is design work, not an availability announcement. Implementation follows the [security-first decisions and migration](../internal/security-foundation/decisions-and-migration.en.md): mandatory policy across standard HTTP, one request-bound Grant, and durable Sessions. Formal 0.2.0 publication waits for integrated verification.
+
+### 0.2.1 plan: HTTP response decompression (SF06-COMP-021)
+
+This follow-up is planned and not started; implementation count is 0. The 0.2.0 HTTP client design accepts identity encoding only and fails on other `Content-Encoding` values without implicit decoding or retry. This is not a feature claim about published 0.1.x or current implementation.
+
+For 0.2.1, choose codecs after independent dependency review and separately bound encoded/decoded size, memory, and processing time. Acceptance must safely stop on corrupt input or cancellation and release resources only after the worker actually joins. Codec selection, concrete limits, and a universal strict CPU guarantee remain undecided. Preserve existing API signatures and safety contracts. Retain Q1's finite TCP failover and one-operation TTL=0 rule; do not automatically retry decode failures. Implementation, review, and website generation have not run.
+
