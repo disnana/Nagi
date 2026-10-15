@@ -73,7 +73,6 @@ struct Counters {
     cancelled: AtomicUsize,
     sanitized: AtomicBool,
     claim_committed: AtomicBool,
-    issue_committed: AtomicBool,
 }
 struct CancelSeen(Arc<Counters>);
 impl Drop for CancelSeen {
@@ -145,7 +144,6 @@ async fn login_handler(
             Error::internal("session issue refused")
         }
     })?;
-    state.stats.issue_committed.store(true, Ordering::SeqCst);
     let response = session::apply(response, intent).unwrap();
     match state.stats.mode.load(Ordering::SeqCst) {
         10 => Err(Error::internal("owned handler Err")),
@@ -302,27 +300,9 @@ impl Reply {
     }
     fn guarded(&self) {
         assert!(self.values("cache-control") == vec!["no-store"]);
-        assert!(
-            self.values("vary")
-                == vec!["Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"]
-        );
+        assert!(self.values("vary") == vec!["Cookie, Authorization, Origin"]);
     }
     fn material(&self) -> (String, String) {
-        if self.status != 200 {
-            let class = match self.status {
-                400 => "request",
-                401 | 403 => "refusal",
-                500 => "internal",
-                503 => "unavailable",
-                504 => "deadline",
-                _ => "other",
-            };
-            eprintln!(
-                "browser_login_bootstrap_diag check=material status={} class={} set_cookie_count={} body_bytes={} auth_cookie={} deletion={}",
-                self.status, class, self.values("set-cookie").len().min(65),
-                self.body.len().min(8193), self.auth_cookie(), self.deletion(),
-            );
-        }
         assert!(self.status == 200);
         let c = self.values("set-cookie");
         assert!(c.len() == 1);
@@ -392,25 +372,6 @@ async fn bootstrap(s: &Server) -> (String, String) {
 fn login_headers(cookie: &str, token: &str) -> String {
     format!("Origin: https://localhost\r\nAuthorization: Bearer owned\r\nCookie: {cookie}\r\nX-CSRF-Token: {token}\r\nContent-Type: application/json\r\n")
 }
-fn assertion_bool(value: Option<bool>) -> &'static str {
-    match value {
-        Some(true) => "true",
-        Some(false) => "false",
-        None => "unobserved",
-    }
-}
-fn assertion_diag(
-    case: &str,
-    mode: usize,
-    stage: &str,
-    expected_status: u16,
-    status: u16,
-    facts: &str,
-) {
-    eprintln!(
-        "browser_login_assertion_diag case={case} mode={mode} stage={stage} expected_status={expected_status} status={status} {facts}"
-    );
-}
 
 #[tokio::test]
 async fn public_login_claims_once_then_named_verifier_issue_and_appended_cookies() {
@@ -422,16 +383,6 @@ async fn public_login_claims_once_then_named_verifier_issue_and_appended_cookies
         request(s.address, "POST", "/login", &h, b"{}"),
         request(s.address, "POST", "/login", &h, b"{}")
     );
-    // Reuse the frozen closed concurrent witness, retaining the exact assertion.
-    if !((a.status == 200 && b.status == 403) || (a.status == 403 && b.status == 200)) {
-        eprintln!(
-            "browser_login_stock_cause case=concurrent_once a_status={} b_status={} a_auth_cookie={} b_auth_cookie={} a_deletion={} b_deletion={} verifier_calls={} handler_calls={} claim_committed={}",
-            a.status, b.status, a.auth_cookie(), b.auth_cookie(), a.deletion(), b.deletion(),
-            f.stats.verifier.load(Ordering::SeqCst).min(1023),
-            f.stats.handler.load(Ordering::SeqCst).min(1023),
-            f.stats.claim_committed.load(Ordering::SeqCst),
-        );
-    }
     assert!((a.status == 200 && b.status == 403) || (a.status == 403 && b.status == 200));
     let win = if a.status == 200 { &a } else { &b };
     win.guarded();
@@ -539,76 +490,19 @@ async fn input_and_strict_json_rejections_do_not_consume_or_call_verifier() {
         br#"{"n":1.25,"a":[true,null]}"#,
     )
     .await;
-    assert!(good.status == 200);
+    assert_eq!(good.status, 200, "input_rejection_preserves_login_claim");
     s.stop().await;
     f.stop().await;
 }
-// A socket timeout may precede the callback/issue stage. Prove the exact
-// externally observed state instead of assuming that native SQL fit the budget.
-// The mandatory broad native stage inventory separately exercises the completed
-// claim/verifier/issue faults; an early socket result cannot satisfy that guard.
-async fn assert_browser_deadline_state(f: &Fixture, r: &Reply) -> bool {
-    assert!(r.status == 504 && !r.auth_cookie());
-    r.guarded();
-    let prelogin_rows = f.rows().await;
-    let session_rows = number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await;
-    let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
-    let handler_calls = f.stats.handler.load(Ordering::SeqCst);
-    assert!((0..=1).contains(&prelogin_rows) && (0..=1).contains(&session_rows));
-    assert!(verifier_calls <= 1 && handler_calls <= verifier_calls);
-    if prelogin_rows == 1 {
-        // A cancelled claim may retain its original row. No trusted callback
-        // or Session issue can have run without the one-use claim completing.
-        assert!(verifier_calls == 0 && handler_calls == 0 && session_rows == 0);
-        assert!(!r.deletion());
-    }
-    if verifier_calls == 1 {
-        assert!(prelogin_rows == 0 && r.deletion());
-    }
-    if r.deletion() || f.stats.claim_committed.load(Ordering::SeqCst) {
-        assert!(prelogin_rows == 0);
-    }
-    if handler_calls == 0 {
-        assert!(session_rows == 0);
-    }
-    if session_rows == 1 {
-        assert!(handler_calls == 1 && verifier_calls == 1 && prelogin_rows == 0);
-        assert!(r.deletion());
-    }
-    if f.stats.issue_committed.load(Ordering::SeqCst) {
-        assert!(session_rows == 1 && handler_calls == 1);
-    }
-    prelogin_rows == 0
-}
-
-async fn assert_consumed_browser_replay(f: &Fixture, s: &Server, headers: &str) {
-    let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
-    let handler_calls = f.stats.handler.load(Ordering::SeqCst);
-    let session_rows = number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await;
-    let retry = request(s.address, "POST", "/login", headers, b"{}").await;
-    // A missing-row restoration may itself hit the unchanged security budget.
-    // The live403/expired504 native oracles are both mandatory in broad CI.
-    assert!(retry.status == 403 || retry.status == 504);
-    assert!(!retry.auth_cookie() && !retry.deletion());
-    retry.guarded();
-    assert!(f.rows().await == 0);
-    assert!(f.stats.verifier.load(Ordering::SeqCst) == verifier_calls);
-    assert!(f.stats.handler.load(Ordering::SeqCst) == handler_calls);
-    assert!(number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await == session_rows);
-}
-
 #[tokio::test]
 async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
-    for (iteration, (mode, status, security)) in [
+    for (mode, status, security) in [
         (1, 401, 1000),
         (2, 500, 1000),
         (3, 504, 200),
         (4, 504, 200),
         (5, 401, 1000),
-    ]
-    .into_iter()
-    .enumerate()
-    {
+    ] {
         let f = Fixture::new(1000, 144).await;
         f.stats.mode.store(mode, Ordering::SeqCst);
         // Keep bootstrap under the normal profile; only the target login uses
@@ -623,243 +517,19 @@ async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
         };
         let h = login_headers(&c, &t);
         let r = request(s.address, "POST", "/login", &h, b"{}").await;
-        if r.status == 504 {
-            let row_absent = assert_browser_deadline_state(&f, &r).await;
-            assert!(f.stats.handler.load(Ordering::SeqCst) == 0);
-            if row_absent {
-                assert_consumed_browser_replay(&f, &s, &h).await;
-            }
-            s.stop().await;
-            f.stop().await;
-            continue;
-        }
-        // Failure-only closed numeric/boolean shape; never print response material.
-        if !(r.status == status && !r.auth_cookie() && r.deletion()) {
-            eprintln!(
-                "browser_login_public_api_diag case=committed_claim_initial phase=initial_response iteration={} expected_status={} status={} auth_cookie={} deletion={} verifier_calls={} handler_calls={} claim_committed={}",
-                iteration,
-                status,
-                r.status,
-                r.auth_cookie(),
-                r.deletion(),
-                f.stats.verifier.load(Ordering::SeqCst),
-                f.stats.handler.load(Ordering::SeqCst),
-                f.stats.claim_committed.load(Ordering::SeqCst),
-            );
-        }
-        let response_status_ok = r.status == status;
-        let response_auth_cookie = if response_status_ok {
-            Some(r.auth_cookie())
-        } else {
-            None
-        };
-        let response_deletion = if response_status_ok && response_auth_cookie == Some(false) {
-            Some(r.deletion())
-        } else {
-            None
-        };
-        let response_ok = response_status_ok
-            && response_auth_cookie == Some(false)
-            && response_deletion == Some(true);
-        if !response_ok {
-            assertion_diag(
-                "committed_claim",
-                mode,
-                "initial_response",
-                status,
-                r.status,
-                &format!(
-                    "auth_cookie={} deletion={}",
-                    assertion_bool(response_auth_cookie),
-                    assertion_bool(response_deletion),
-                ),
-            );
-        }
-        assert!(response_ok);
-
-        let cache_no_store = r.values("cache-control") == vec!["no-store"];
-        if !cache_no_store {
-            assertion_diag(
-                "committed_claim",
-                mode,
-                "initial_headers",
-                status,
-                r.status,
-                "cache_no_store=false vary_match=unobserved",
-            );
-        }
-        assert!(cache_no_store);
-        let vary_match =
-            r.values("vary") == vec!["Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"];
-        if !vary_match {
-            assertion_diag(
-                "committed_claim",
-                mode,
-                "initial_headers",
-                status,
-                r.status,
-                "cache_no_store=true vary_match=false",
-            );
-        }
-        assert!(vary_match);
+        assert_eq!(r.status, status, "committed_claim_status mode={mode}");
+        assert!(!r.auth_cookie() && r.deletion());
+        r.guarded();
         if status == 401 {
-            let bearer_challenge = r.values("www-authenticate") == vec!["Bearer"];
-            if !bearer_challenge {
-                assertion_diag(
-                    "committed_claim",
-                    mode,
-                    "initial_challenge",
-                    status,
-                    r.status,
-                    "bearer_challenge=false",
-                );
-            }
-            assert!(bearer_challenge);
+            assert!(r.values("www-authenticate") == vec!["Bearer"]);
         }
-        let prelogin_rows_empty = f.rows().await == 0;
-        if !prelogin_rows_empty {
-            assertion_diag(
-                "committed_claim",
-                mode,
-                "initial_state",
-                status,
-                r.status,
-                "prelogin_rows_empty=false verifier_calls=unobserved handler_calls=unobserved",
-            );
-        }
-        assert!(prelogin_rows_empty);
-        let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
-        if verifier_calls != 1 {
-            assertion_diag(
-                "committed_claim", mode, "initial_state", status, r.status,
-                &format!(
-                    "prelogin_rows_empty=true verifier_calls={verifier_calls} handler_calls=unobserved"
-                ),
-            );
-        }
-        assert!(verifier_calls == 1);
-        let handler_calls = f.stats.handler.load(Ordering::SeqCst);
-        if handler_calls != 0 {
-            assertion_diag(
-                "committed_claim",
-                mode,
-                "initial_state",
-                status,
-                r.status,
-                &format!("prelogin_rows_empty=true verifier_calls=1 handler_calls={handler_calls}"),
-            );
-        }
-        assert!(handler_calls == 0);
+        assert!(
+            f.rows().await == 0
+                && f.stats.verifier.load(Ordering::SeqCst) == 1
+                && f.stats.handler.load(Ordering::SeqCst) == 0
+        );
         let retry = request(s.address, "POST", "/login", &h, b"{}").await;
-        if retry.status == 504 {
-            assert!(!retry.auth_cookie() && !retry.deletion());
-            retry.guarded();
-            assert!(f.rows().await == 0);
-            assert!(f.stats.verifier.load(Ordering::SeqCst) == 1);
-            assert!(f.stats.handler.load(Ordering::SeqCst) == 0);
-            s.stop().await;
-            f.stop().await;
-            continue;
-        }
-        // Bounded numeric failure shape only; response material remains unreported.
-        if !(retry.status == 403 && !retry.auth_cookie() && !retry.deletion()) {
-            eprintln!(
-                "browser_login_public_api_diag case=committed_claim_retry phase=retry_response iteration={} status={} body_bytes={} set_cookie_count={} auth_cookie={} deletion={} verifier_calls={} handler_calls={} claim_committed={}",
-                iteration,
-                retry.status,
-                retry.body.len(),
-                retry.values("set-cookie").len(),
-                retry.auth_cookie(),
-                retry.deletion(),
-                f.stats.verifier.load(Ordering::SeqCst),
-                f.stats.handler.load(Ordering::SeqCst),
-                f.stats.claim_committed.load(Ordering::SeqCst),
-            );
-        }
-        // Observe exclusion independently, even when the existing status guard fails.
-        let row_absent = f.rows().await == 0;
-        let verifier_unchanged = f.stats.verifier.load(Ordering::SeqCst) == 1;
-        let handler_unchanged = f.stats.handler.load(Ordering::SeqCst) == 0;
-        if !(retry.status == 403
-            && !retry.auth_cookie()
-            && !retry.deletion()
-            && row_absent
-            && verifier_unchanged
-            && handler_unchanged)
-        {
-            eprintln!(
-                "browser_login_public_api_diag case=committed_claim_replay_proof iteration={} row_absent={} verifier_unchanged={} handler_unchanged={}",
-                iteration, row_absent, verifier_unchanged, handler_unchanged,
-            );
-        }
-        let cache_no_store = retry.values("cache-control") == vec!["no-store"];
-        if !cache_no_store {
-            assertion_diag(
-                "committed_claim",
-                mode,
-                "retry_headers",
-                403,
-                retry.status,
-                "cache_no_store=false vary_match=unobserved",
-            );
-        }
-        assert!(cache_no_store);
-        let vary_match = retry.values("vary")
-            == vec!["Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"];
-        if !vary_match {
-            assertion_diag(
-                "committed_claim",
-                mode,
-                "retry_headers",
-                403,
-                retry.status,
-                "cache_no_store=true vary_match=false",
-            );
-        }
-        assert!(vary_match);
-        let replay_proof_ok = row_absent && verifier_unchanged && handler_unchanged;
-        if !replay_proof_ok {
-            assertion_diag(
-                "committed_claim",
-                mode,
-                "replay_proof",
-                403,
-                retry.status,
-                &format!(
-                    "row_absent={} verifier_unchanged={} handler_unchanged={}",
-                    row_absent, verifier_unchanged, handler_unchanged,
-                ),
-            );
-        }
-        assert!(replay_proof_ok);
-        let retry_status_ok = retry.status == 403;
-        let retry_auth_cookie = if retry_status_ok {
-            Some(retry.auth_cookie())
-        } else {
-            None
-        };
-        let retry_deletion = if retry_status_ok && retry_auth_cookie == Some(false) {
-            Some(retry.deletion())
-        } else {
-            None
-        };
-        let retry_response_ok =
-            retry_status_ok && retry_auth_cookie == Some(false) && retry_deletion == Some(false);
-        if !retry_response_ok {
-            assertion_diag(
-                "committed_claim",
-                mode,
-                "retry_response",
-                403,
-                retry.status,
-                &format!(
-                    "auth_cookie={} deletion={}",
-                    assertion_bool(retry_auth_cookie),
-                    assertion_bool(retry_deletion),
-                ),
-            );
-        }
-        assert!(retry_response_ok);
+        assert!(retry.status == 403 && !retry.auth_cookie() && !retry.deletion());
         s.stop().await;
         f.stop().await;
     }
@@ -880,99 +550,20 @@ async fn issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cook
             Server::new(&f, 256, security).await
         };
         let r = request(s.address, "POST", "/login", &login_headers(&c, &t), b"{}").await;
-        if r.status == 504 {
-            assert_browser_deadline_state(&f, &r).await;
-            s.stop().await;
-            f.stop().await;
-            continue;
-        }
-        let response_status_ok = r.status == status;
-        let response_auth_cookie = if response_status_ok {
-            Some(r.auth_cookie())
-        } else {
-            None
-        };
-        let response_deletion = if response_status_ok && response_auth_cookie == Some(false) {
-            Some(r.deletion())
-        } else {
-            None
-        };
-        let response_ok = response_status_ok
-            && response_auth_cookie == Some(false)
-            && response_deletion == Some(true);
-        if !response_ok {
-            assertion_diag(
-                "issue_commit",
-                mode,
-                "issue_response",
-                status,
-                r.status,
-                &format!(
-                    "auth_cookie={} deletion={}",
-                    assertion_bool(response_auth_cookie),
-                    assertion_bool(response_deletion),
-                ),
-            );
-        }
-        assert!(response_ok);
-
-        let cache_no_store = r.values("cache-control") == vec!["no-store"];
-        if !cache_no_store {
-            assertion_diag(
-                "issue_commit",
-                mode,
-                "issue_headers",
-                status,
-                r.status,
-                "cache_no_store=false vary_match=unobserved",
-            );
-        }
-        assert!(cache_no_store);
-        let vary_match =
-            r.values("vary") == vec!["Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"];
-        if !vary_match {
-            assertion_diag(
-                "issue_commit",
-                mode,
-                "issue_headers",
-                status,
-                r.status,
-                "cache_no_store=true vary_match=false",
-            );
-        }
-        assert!(vary_match);
-
-        let prelogin_rows_empty = f.rows().await == 0;
-        if !prelogin_rows_empty {
-            assertion_diag(
-                "issue_commit",
-                mode,
-                "issue_rows",
-                status,
-                r.status,
-                "prelogin_rows_empty=false session_rows=unobserved",
-            );
-        }
-        assert!(prelogin_rows_empty);
-        let session_rows = number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await;
-        if session_rows != 1 {
-            assertion_diag(
-                "issue_commit",
-                mode,
-                "issue_rows",
-                status,
-                r.status,
-                &format!("prelogin_rows_empty=true session_rows={session_rows}"),
-            );
-        }
-        assert!(session_rows == 1);
+        assert_eq!(r.status, status, "issue_commit_status mode={mode}");
+        assert!(!r.auth_cookie() && r.deletion());
+        r.guarded();
+        assert!(
+            f.rows().await == 0
+                && number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await == 1
+        );
         s.stop().await;
         f.stop().await;
     }
 }
 #[tokio::test]
 async fn wire_body_cap_is_independent_of_db_quota_and_checked_before_claim() {
-    for (iteration, quota) in [144, 720].into_iter().enumerate() {
+    for quota in [144, 720] {
         let f = Fixture::new(1000, quota).await;
         let s = Server::new(&f, 192, 1000).await;
         let (c, t) = bootstrap(&s).await;
@@ -995,20 +586,6 @@ async fn wire_body_cap_is_independent_of_db_quota_and_checked_before_claim() {
         );
         r.guarded();
         let r = request(s.address, "POST", "/login", &h, &cap).await;
-        // Bounded numeric failure shape only; response body and cookie values stay private.
-        if !(r.status == 200 && r.body == cap && r.auth_cookie() && r.deletion()) {
-            eprintln!(
-                "browser_login_public_api_diag case=wire_body_cap phase=exact_body_response iteration={} status={} body_bytes={} expected_body_bytes={} body_matches={} set_cookie_count={} auth_cookie={} deletion={}",
-                iteration,
-                r.status,
-                r.body.len(),
-                cap.len(),
-                r.body == cap,
-                r.values("set-cookie").len(),
-                r.auth_cookie(),
-                r.deletion(),
-            );
-        }
         assert!(r.status == 200 && r.body == cap && r.auth_cookie() && r.deletion());
         s.stop().await;
         f.stop().await;
@@ -1185,18 +762,7 @@ async fn json_value_nodes_and_container_depth_accept_exact_bounds() {
                 && f.stats.verifier.load(Ordering::SeqCst) == before
         );
         let r = request(s.address, "POST", "/login", &h, exact).await;
-        // Keep the original short-circuit row observation and failure gate.
-        let exact_ok = r.status == 200 && r.body == exact && f.rows().await == 0;
-        if !exact_ok {
-            eprintln!(
-                "browser_login_json_bound_diag phase=exact_bounds status={} body_bytes={} expected_body_bytes={} body_matches={} verifier_calls={} handler_calls={} claim_committed={}",
-                r.status, r.body.len().min(8193), exact.len().min(8193), r.body == exact,
-                f.stats.verifier.load(Ordering::SeqCst).min(1023),
-                f.stats.handler.load(Ordering::SeqCst).min(1023),
-                f.stats.claim_committed.load(Ordering::SeqCst),
-            );
-        }
-        assert!(exact_ok);
+        assert!(r.status == 200 && r.body == exact && f.rows().await == 0);
     }
     s.stop().await;
     f.stop().await;

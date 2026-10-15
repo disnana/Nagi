@@ -198,13 +198,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python -B scripts/tests/test_csrf_deadline_mutations.py
           cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-core.log"
           cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-deadline.log"
           cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-public.log"
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":13, "sf03-b1-csrf-deadline.log":9, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":13, "sf03-b1-csrf-deadline.log":12, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
@@ -218,6 +219,17 @@ jobs:
               if len(passed)!=1:
                   raise AssertionError("CSRF capacity oracle missing, duplicate, or unsuccessful")
           PYCODE
+          python -B scripts/ci/csrf_deadline_mutations.py --coverage "$RUNNER_TEMP/sf03-b1-csrf-deadline.log" 0 "$RUNNER_TEMP/csrf-deadline-coverage.json"
+      - name: Compile and run CSRF deadline semantic mutants
+        shell: bash
+        run: python -B scripts/ci/csrf_deadline_mutations.py . "$RUNNER_TEMP/csrf-deadline-mutations.json"
+      - name: Preserve closed CSRF deadline mutation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: csrf-deadline-compiled-mutations-linux
+          path: ${{ runner.temp }}/csrf-deadline-mutations.json
+          if-no-files-found: ignore
       - name: Check B1 CSRF compiler metadata and High saved Low handwritten Low native
         shell: bash
         run: |
@@ -660,13 +672,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python -B scripts/tests/test_csrf_deadline_mutations.py
           cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-core.log"
           cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-deadline.log"
           cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-public.log"
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":13, "sf03-b1-csrf-deadline.log":9, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":13, "sf03-b1-csrf-deadline.log":12, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
@@ -680,6 +693,7 @@ jobs:
               if len(passed)!=1:
                   raise AssertionError("CSRF capacity oracle missing, duplicate, or unsuccessful")
           PYCODE
+          python -B scripts/ci/csrf_deadline_mutations.py --coverage "$RUNNER_TEMP/sf03-b1-csrf-deadline.log" 0 "$RUNNER_TEMP/csrf-deadline-coverage.json"
       - name: Check B1 CSRF compiler metadata and High saved Low handwritten Low native
         shell: bash
         run: |
