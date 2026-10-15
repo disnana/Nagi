@@ -23,6 +23,7 @@ import com.intellij.openapi.fileEditor.FileEditorManagerEvent;
 import com.intellij.openapi.fileEditor.FileEditorManagerListener;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -954,6 +955,8 @@ public final class NagiAssistService implements Disposable {
 
     private void registerDocumentListeners(List<RawFile> files) {
         synchronized (documentListeners) {
+            // A worker may have captured these documents before disposal began.
+            if (disposed || project.isDisposed()) return;
             for (RawFile raw : files) {
                 if (documentListeners.containsKey(raw.document())) continue;
                 DocumentListener listener = new DocumentListener() {
@@ -961,8 +964,19 @@ public final class NagiAssistService implements Disposable {
                         invalidate(State.STALE, "An open Nagi source or manifest changed.");
                     }
                 };
-                raw.document().addDocumentListener(listener, this);
-                documentListeners.put(raw.document(), new ListenerRecord(raw.file(), listener));
+                // Complete the document subscription before publishing its
+                // token under the service: a closing parent must not dispose
+                // the token before Document has attached its cleanup child.
+                Disposable subscription = Disposer.newDisposable("Nagi document listener");
+                boolean retained = false;
+                try {
+                    raw.document().addDocumentListener(listener, subscription);
+                    if (!Disposer.tryRegister(this, subscription)) continue;
+                    documentListeners.put(raw.document(), new ListenerRecord(raw.file(), subscription));
+                    retained = true;
+                } finally {
+                    if (!retained) Disposer.dispose(subscription);
+                }
             }
         }
     }
@@ -974,7 +988,7 @@ public final class NagiAssistService implements Disposable {
                     .map(Map.Entry::getKey).toList();
             for (Document document : remove) {
                 ListenerRecord record = documentListeners.remove(document);
-                document.removeDocumentListener(record.listener());
+                Disposer.dispose(record.subscription());
             }
         }
     }
@@ -1284,14 +1298,14 @@ public final class NagiAssistService implements Disposable {
         synchronized (lock) { cancelPendingAndActiveLocked(); }
         synchronized (documentListeners) {
             for (Map.Entry<Document, ListenerRecord> entry : documentListeners.entrySet()) {
-                entry.getKey().removeDocumentListener(entry.getValue().listener());
+                Disposer.dispose(entry.getValue().subscription());
             }
             documentListeners.clear();
         }
         worker.shutdownNow();
     }
 
-    private record ListenerRecord(VirtualFile file, DocumentListener listener) {}
+    private record ListenerRecord(VirtualFile file, Disposable subscription) {}
     private record ManifestState(Document document, boolean unsaved, long documentStamp, long fileStamp) {}
     @FunctionalInterface
     interface CompilerUnavailablePresenter { void show(Project project, Runnable retry); }

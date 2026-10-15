@@ -44,7 +44,7 @@ public class NagiCompletionInsertionTest extends BasePlatformTestCase {
 
     @Override protected void tearDown() throws Exception {
         try {
-            if (service != null) service.dispose();
+            if (service != null) com.intellij.openapi.util.Disposer.dispose(service);
             NagiSettings.update(originalCompiler, originalTimeout);
             TrustedProjects.setProjectTrusted(getProject(), originalTrust);
             if (root != null) try (var files = Files.walk(root)) {

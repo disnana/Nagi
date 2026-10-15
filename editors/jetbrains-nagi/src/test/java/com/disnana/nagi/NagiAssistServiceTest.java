@@ -49,7 +49,7 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
     @Override protected void tearDown() throws Exception {
         try {
             if (serviceReplacement != null) com.intellij.openapi.util.Disposer.dispose(serviceReplacement);
-            else if (service != null) service.dispose();
+            else if (service != null) com.intellij.openapi.util.Disposer.dispose(service);
             NagiSettings.update(originalCompiler, originalTimeout);
             TrustedProjects.setProjectTrusted(getProject(), originalTrust);
             try (var files = Files.walk(root)) {
@@ -237,11 +237,198 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         service.requestBaseline(file);
         waitUntil(() -> service.fresh(file) != null);
         var result = service.fresh(file);
+        Runnable capturedAttach = capturedDocumentRegistration(service, file, myFixture.getEditor().getDocument());
         service.dispose();
         assertNull(service.fresh(file));
         assertFalse(service.isCurrent(file, result));
         assertEquals(NagiAssistService.State.CLOSED, service.state());
+        service.dispose();
+        // Simulate a queued snapshot captured before direct disposal. The
+        // registration boundary itself must refuse it, not just its caller.
+        capturedAttach.run();
+        assertEquals(0, trackedDocumentCount(service));
+        com.intellij.openapi.util.Disposer.dispose(service);
+        assertEquals(NagiAssistService.State.CLOSED, service.state());
     }
+
+    public void testParentDisposerReleasesOnlyOwnedDocumentListeners() throws Exception {
+        PsiFile file = source("owned.low", "fn main() { let value = true; value; }\n");
+        var document = myFixture.getEditor().getDocument();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) ->
+                response(file.getVirtualFile().getPath(), "value"));
+        NagiAssistService other = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) ->
+                response(file.getVirtualFile().getPath(), "other"));
+        // Project services are normally disposed as children of their owner.
+        Disposable lifetime = com.intellij.openapi.util.Disposer.newDisposable("owned service lifetime");
+        com.intellij.openapi.util.Disposer.register(getTestRootDisposable(), lifetime);
+        com.intellij.openapi.util.Disposer.register(lifetime, service);
+        com.intellij.openapi.util.Disposer.register(getTestRootDisposable(), other);
+        AtomicInteger independentChanges = new AtomicInteger();
+        document.addDocumentListener(new com.intellij.openapi.editor.event.DocumentListener() {
+            @Override public void documentChanged(com.intellij.openapi.editor.event.DocumentEvent event) {
+                independentChanges.incrementAndGet();
+            }
+        }, getTestRootDisposable());
+        try {
+            service.requestBaseline(file);
+            other.requestBaseline(file);
+            waitUntil(() -> service.fresh(file) != null && other.fresh(file) != null);
+            assertEquals(1, trackedDocumentCount(service));
+            assertEquals(1, trackedDocumentCount(other));
+            Disposable subscription = trackedSubscription(service, document);
+            AtomicInteger subscriptionCloses = new AtomicInteger();
+            com.intellij.openapi.util.Disposer.register(subscription, () -> subscriptionCloses.incrementAndGet());
+            com.intellij.openapi.util.Disposer.dispose(lifetime);
+            assertEquals(1, subscriptionCloses.get());
+            assertEquals(0, trackedDocumentCount(service));
+            assertEquals(1, trackedDocumentCount(other));
+            WriteCommandAction.runWriteCommandAction(getProject(), () ->
+                    document.insertString(document.getTextLength(), "// other listener remains\n"));
+            assertEquals(1, independentChanges.get());
+            assertEquals(NagiAssistService.State.CLOSED, service.state());
+            assertEquals(NagiAssistService.State.STALE, other.state());
+            com.intellij.openapi.util.Disposer.dispose(lifetime);
+            com.intellij.openapi.util.Disposer.dispose(service);
+            service.dispose();
+            assertEquals(1, subscriptionCloses.get());
+            assertEquals(0, trackedDocumentCount(service));
+        } finally {
+            com.intellij.openapi.util.Disposer.dispose(lifetime);
+            com.intellij.openapi.util.Disposer.dispose(other);
+        }
+    }
+
+    public void testDocumentCloseReopenKeepsOnlyCurrentListenerUntilDisposal() throws Exception {
+        PsiFile file = source("reopen.low", "fn main() { let value = true; value; }\n");
+        var virtualFile = file.getVirtualFile();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) ->
+                response(virtualFile.getPath(), "value"));
+        var editors = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(getProject());
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        for (int cycle = 0; cycle < 3; cycle++) {
+            assertEquals(1, trackedDocumentCount(service));
+            Disposable subscription = trackedSubscription(service, FileDocumentManager.getInstance().getDocument(virtualFile));
+            AtomicInteger subscriptionCloses = new AtomicInteger();
+            com.intellij.openapi.util.Disposer.register(subscription, () -> subscriptionCloses.incrementAndGet());
+            editors.closeFile(virtualFile);
+            waitUntil(() -> trackedDocumentCount(service) == 0);
+            assertEquals(1, subscriptionCloses.get());
+            com.intellij.openapi.util.Disposer.dispose(subscription);
+            assertEquals(1, subscriptionCloses.get());
+            assertFalse(editors.isFileOpen(virtualFile));
+            myFixture.configureFromExistingVirtualFile(virtualFile);
+            PsiFile reopened = myFixture.getFile();
+            service.requestBaseline(reopened);
+            waitUntil(() -> service.fresh(reopened) != null && trackedDocumentCount(service) == 1);
+        }
+        com.intellij.openapi.util.Disposer.dispose(service);
+        assertEquals(0, trackedDocumentCount(service));
+        assertEquals(NagiAssistService.State.CLOSED, service.state());
+    }
+
+    public void testUnpublishedDocumentSubscriptionIsReleasedOnParentRejectionOrAddFailure() throws Exception {
+        PsiFile file = source("rejected.low", "fn main() { let value = true; value; }\n");
+        var document = myFixture.getEditor().getDocument();
+        AtomicInteger independentChanges = new AtomicInteger();
+        document.addDocumentListener(new com.intellij.openapi.editor.event.DocumentListener() {
+            @Override public void documentChanged(com.intellij.openapi.editor.event.DocumentEvent event) {
+                independentChanges.incrementAndGet();
+            }
+        }, getTestRootDisposable());
+        for (boolean closeParent : new boolean[]{true, false}) {
+            service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) ->
+                    response(file.getVirtualFile().getPath(), "value"));
+            NagiAssistService target = service;
+            com.intellij.openapi.util.Disposer.register(getTestRootDisposable(), target);
+            AtomicReference<Disposable> subscription = new AtomicReference<>();
+            AtomicInteger subscriptionCloses = new AtomicInteger();
+            // Forward into a real Platform Document and real Disposer. The only
+            // injection is immediately after the official add has completed,
+            // while the subscription is still private to the registration.
+            var intercepted = (com.intellij.openapi.editor.Document) java.lang.reflect.Proxy.newProxyInstance(
+                    com.intellij.openapi.editor.Document.class.getClassLoader(),
+                    new Class<?>[]{com.intellij.openapi.editor.Document.class}, (proxy, method, args) -> {
+                        Object result;
+                        try { result = method.invoke(document, args); }
+                        catch (java.lang.reflect.InvocationTargetException failure) { throw failure.getTargetException(); }
+                        if (method.getName().equals("addDocumentListener") && method.getParameterCount() == 2) {
+                            Disposable token = (Disposable) args[1];
+                            subscription.set(token);
+                            com.intellij.openapi.util.Disposer.register(token, () -> subscriptionCloses.incrementAndGet());
+                            if (closeParent) com.intellij.openapi.util.Disposer.dispose(target);
+                            else throw new IllegalStateException("owned post-add failure");
+                        }
+                        return result;
+                    });
+            Runnable attach = capturedDocumentRegistration(target, file, intercepted);
+            try {
+                if (closeParent) attach.run();
+                else {
+                    boolean refused = false;
+                    try { attach.run(); }
+                    catch (AssertionError failure) {
+                        assertTrue(failure.getCause() instanceof java.lang.reflect.InvocationTargetException);
+                        assertTrue(failure.getCause().getCause() instanceof IllegalStateException);
+                        refused = true;
+                    }
+                    assertTrue("post-add failure must be propagated", refused);
+                }
+                assertNotNull(subscription.get());
+                assertEquals(1, subscriptionCloses.get());
+                assertEquals(0, trackedDocumentCount(target));
+                NagiAssistService.State beforeEdit = target.state();
+                int otherBefore = independentChanges.get();
+                WriteCommandAction.runWriteCommandAction(getProject(), () ->
+                        document.insertString(document.getTextLength(), "// only independent listener\n"));
+                assertEquals(otherBefore + 1, independentChanges.get());
+                assertEquals("released subscription must not invalidate its service", beforeEdit, target.state());
+                com.intellij.openapi.util.Disposer.dispose(subscription.get());
+                assertEquals(1, subscriptionCloses.get());
+            } finally { com.intellij.openapi.util.Disposer.dispose(target); }
+        }
+    }
+
+    private static Disposable trackedSubscription(NagiAssistService target,
+                                                  com.intellij.openapi.editor.Document document) throws Exception {
+        var field = NagiAssistService.class.getDeclaredField("documentListeners");
+        field.setAccessible(true);
+        var listeners = (java.util.Map<?, ?>) field.get(target);
+        synchronized (listeners) {
+            Object record = listeners.get(document);
+            assertNotNull(record);
+            var subscription = record.getClass().getDeclaredMethod("subscription");
+            subscription.setAccessible(true);
+            return (Disposable) subscription.invoke(record);
+        }
+    }
+
+    private static int trackedDocumentCount(NagiAssistService target) {
+        try {
+            var field = NagiAssistService.class.getDeclaredField("documentListeners");
+            field.setAccessible(true);
+            var listeners = (java.util.Map<?, ?>) field.get(target);
+            synchronized (listeners) { return listeners.size(); }
+        } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+    }
+
+    private static Runnable capturedDocumentRegistration(NagiAssistService target, PsiFile file,
+                                                          com.intellij.openapi.editor.Document document) throws Exception {
+        Class<?> rawFile = Class.forName(NagiAssistService.class.getName() + "$RawFile");
+        var constructor = rawFile.getDeclaredConstructor(com.intellij.openapi.vfs.VirtualFile.class,
+                com.intellij.openapi.editor.Document.class, String.class, long.class, long.class,
+                boolean.class, String.class);
+        constructor.setAccessible(true);
+        var raw = constructor.newInstance(file.getVirtualFile(), document, file.getVirtualFile().getPath(),
+                document.getModificationStamp(), file.getVirtualFile().getModificationStamp(), false, null);
+        var register = NagiAssistService.class.getDeclaredMethod("registerDocumentListeners", List.class);
+        register.setAccessible(true);
+        return () -> {
+            try { register.invoke(target, List.of(raw)); }
+            catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+        };
+    }
+
     public void testFailedSnapshotDoesNotRestartForEveryAnnotatorRequest() throws Exception {
         PsiFile file = source("main.nagi", "def main():\n    print(1)\n");
         AtomicInteger calls = new AtomicInteger();
