@@ -27,6 +27,16 @@ function expectedTLSFailure(error, name, reason, probeURL) {
     firstLine === 'page.goto: ' + token + ' at ' + probeURL;
 }
 
+function positiveFailureStage(error, name, probeURL) {
+  if (error instanceof Error && error.name === 'TimeoutError') return 'engine_positive_timeout';
+  const ca = expectedTLSFailure(error, name, 'ca', probeURL);
+  const host = expectedTLSFailure(error, name, 'host', probeURL);
+  if (ca && host) return 'engine_positive_tls_unknown';
+  if (ca) return 'engine_positive_ca';
+  if (host) return 'engine_positive_host';
+  return 'engine_positive_unknown';
+}
+
 function checkedSettings(provisioned, ready, negative) {
   const root = '/run/nagi-sf08/';
   if (provisioned.schema_version !== 1 || provisioned.stores_provisioned !== true ||
@@ -105,9 +115,16 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
       checkpoint('engine_positive', name);
       for (const origin of config.origins) {
         const page = await context.newPage();
+        const probeURL = origin + '/';
         try {
-          const response = await page.goto(origin + '/', { waitUntil: 'load', timeout: 10000 });
-          if (!response || response.status() !== 200) refuse();
+          let response;
+          try { response = await page.goto(probeURL, { waitUntil: 'load', timeout: 10000 }); }
+          catch (error) { checkpoint(positiveFailureStage(error, name, probeURL), name); refuse(); }
+          if (!response) { checkpoint('engine_positive_response', name); refuse(); }
+          let status;
+          try { status = response.status(); }
+          catch { checkpoint('engine_positive_response', name); refuse(); }
+          if (status !== 200) { checkpoint('engine_positive_response', name); refuse(); }
         } finally { await page.close(); }
       }
       for (const reason of ['ca', 'host']) {

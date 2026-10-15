@@ -3,6 +3,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 from types import SimpleNamespace as NS
 import unittest
@@ -28,8 +29,9 @@ def facts(resets=12):
 
 
 class Owner:
-    def __init__(self, work, fail_browser=False, resets=12, closure=True):
+    def __init__(self, work, fail_browser=False, resets=12, closure=True, failure_stage='engine_wrong_ca'):
         self.work,self.fail_browser,self.resets,self.closure = work,fail_browser,resets,closure
+        self.failure_stage = failure_stage
         self.cancelled = False
         self.leaders = {}
         self.calls = []
@@ -51,7 +53,7 @@ class Owner:
         elif name == 'browser':
             put(self.work/'preflight.json',PREFLIGHT)
             if self.fail_browser:
-                put(self.work/'stage-failure.json',{'schema_version':1,'stage':'engine_wrong_ca','engine':'firefox'})
+                put(self.work/'stage-failure.json',{'schema_version':1,'stage':self.failure_stage,'engine':'firefox'})
         return leader
     def peek(self, leader):
         return None if leader.name=='negative' else NS(si_code=os.CLD_EXITED,si_status=0)
@@ -70,8 +72,9 @@ class IntegrationTests(unittest.TestCase):
         # Retained owned fake data only; no real CA/key/DB or input deletion.
         self.work=Path(tempfile.mkdtemp(prefix='unit-',dir=os.environ.get('SF08_UNIT_ROOT','/tmp')))
 
-    def fake(self, fail_browser=False, bad_ack=False, resets=12, closure=True, cancel=False):
-        owner=Owner(self.work,fail_browser,resets,closure)
+    def fake(self, fail_browser=False, bad_ack=False, resets=12, closure=True, cancel=False,
+             failure_stage='engine_wrong_ca'):
+        owner=Owner(self.work,fail_browser,resets,closure,failure_stage)
         deps={**loaded,'owned_processes':NS(LinuxProcessOwner=NS(activate_in_dedicated_cli=lambda:owner))}
         files={n:{'path':'/unit/'+n} for n in ('protocol','budget','provision','fixture','negative','provision_worker','stage','spec','playwright_module','playwright_cli')}
         binding={'files':files,'binary':{'path':'/unit/binary'},'node_modules':'/unit/node_modules'}
@@ -104,6 +107,28 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(len(owner.calls[1][2]['pass_fds']),1)
         self.assertTrue(r['actual_echild'] and r['preflight_verified'])
         self.assertEqual((r['browser_executions_accepted'],r['resets_accepted'],owner.closed,stop.call_count,report.call_count),(12,12,1,1,1))
+
+    def test_js_python_failure_stage_whitelists_match_and_positive_stages_validate(self):
+        source=(Path(__file__).resolve().parent/'browser_stage.mjs').read_text(encoding='utf-8')
+        match=re.search(r'export const FAILURE_STAGES = \[(.*?)\];',source,re.S)
+        self.assertIsNotNone(match)
+        js_stages=set(re.findall(r"'([a-z_]+)'",match.group(1)))
+        self.assertEqual(js_stages,fc.STAGES)
+        positive={'engine_positive_ca','engine_positive_host','engine_positive_timeout',
+                  'engine_positive_response','engine_positive_tls_unknown','engine_positive_unknown'}
+        self.assertTrue(positive <= js_stages)
+        for stage in positive:
+            value={'schema_version':1,'stage':stage,'engine':'firefox'}
+            self.assertEqual(fc.validate(value),value)
+        with self.assertRaises(ValueError):
+            fc.validate({'schema_version':1,'stage':'engine_positive_private_path','engine':'firefox'})
+
+    def test_positive_failure_stage_survives_checkpoint_and_remains_failure(self):
+        r,code,owner,stop,report=self.fake(fail_browser=True,failure_stage='engine_positive_timeout')
+        self.assertEqual(code,1)
+        self.assertEqual((r['failure_stage'],r['failure_engine']),('engine_positive_timeout','firefox'))
+        self.assertTrue(r['actual_echild'])
+        self.assertEqual((stop.call_count,owner.closed,report.call_count),(1,1,0))
 
     def test_browser_failure_and_cancel_do_not_accept_report_but_stop_and_wait(self):
         for kwargs in ({'fail_browser':True},{'cancel':True}):

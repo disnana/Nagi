@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { settings, probeEngine } from './preflight.mjs';
+import { checkedFailure, FAILURE_STAGES } from './browser_stage.mjs';
 
 const CA = Buffer.from('unit-ca-only-not-a-certificate');
 const provisioned = { schema_version: 1, stores_provisioned: true, browser_trust_verified: false,
@@ -45,6 +46,22 @@ function fake(name, mode, fault) {
               if (mode === 'form:bare') throw new Error(token);
               if (mode === 'form:prefix') throw new Error('page.goto: ' + token);
               throw new Error('page.goto: ' + token + ' at ' + url);
+            }
+            if (fault?.positive) {
+              if (fault.positive === 'ca') throw new Error('page.goto: ' + messages[name][0] + ' at ' + url);
+              if (fault.positive === 'host') throw new Error('page.goto: ' + messages[name][1] + ' at ' + url);
+              if (fault.positive === 'extra-tls-text') throw new Error('page.goto: ' + messages[name][0] + ' trailing annotation');
+              if (fault.positive === 'timeout') {
+                const error = new Error('PRIVATE_SENTINEL https://private.invalid/secret');
+                error.name = 'TimeoutError';
+                throw error;
+              }
+              if (fault.positive === 'missing-response') return null;
+              if (fault.positive === 'bad-status') return { status: () => 503 };
+              if (fault.positive === 'status-error') return { status() {
+                throw new Error('page.goto: ' + messages[name][0] + ' at ' + url);
+              } };
+              if (fault.positive === 'unknown') throw new Error('PRIVATE_SENTINEL https://private.invalid/secret');
             }
             return { status: () => mode === 'status' ? 503 : 200 };
           } };
@@ -121,3 +138,38 @@ for (const name of Object.keys(versions)) {
     }
   }
 }
+
+test('positive preflight failures use only fixed checkpoint stages', () => {
+  const stages = ['engine_positive_ca', 'engine_positive_host', 'engine_positive_timeout',
+    'engine_positive_response', 'engine_positive_tls_unknown', 'engine_positive_unknown'];
+  for (const stage of stages) assert.ok(FAILURE_STAGES.includes(stage), stage);
+  for (const stage of stages) assert.deepEqual(checkedFailure(stage, 'firefox'),
+    { schema_version: 1, stage, engine: 'firefox' });
+  assert.throws(() => checkedFailure('engine_positive_private_path', 'firefox'),
+    /^Error: SF08 checkpoint refused$/);
+});
+
+test('positive navigation failures classify closed facts without leaking exception text', async () => {
+  const cases = [
+    { name: 'chromium', fault: 'ca', expected: 'engine_positive_ca' },
+    { name: 'firefox', fault: 'host', expected: 'engine_positive_host' },
+    { name: 'firefox', fault: 'timeout', expected: 'engine_positive_timeout' },
+    { name: 'chromium', fault: 'missing-response', expected: 'engine_positive_response' },
+    { name: 'webkit', fault: 'ca', expected: 'engine_positive_tls_unknown' },
+    { name: 'firefox', fault: 'extra-tls-text', expected: 'engine_positive_unknown' },
+    { name: 'chromium', fault: 'unknown', expected: 'engine_positive_unknown' },
+    { name: 'firefox', fault: 'bad-status', expected: 'engine_positive_response' },
+    { name: 'firefox', fault: 'status-error', expected: 'engine_positive_response' },
+  ];
+  for (const item of cases) {
+    const type = fake(item.name, undefined, { positive: item.fault });
+    const events = [];
+    await assert.rejects(probeEngine(item.name, type, settings(provisioned, ready, negative),
+      (stage, engine) => events.push({ stage, engine })),
+    /^Error: SF08 browser trust preflight refused$/);
+    assert.deepEqual(events[events.length - 1], { stage: item.expected, engine: item.name });
+    assert.equal(type.trace.pageClosed, 1);
+    assert.equal(type.trace.contextClosed && type.trace.closed, true);
+    assert.doesNotMatch(JSON.stringify(events), /PRIVATE_SENTINEL|private\.invalid|secret/);
+  }
+});
