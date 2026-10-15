@@ -639,5 +639,127 @@ class SessionDeadlineDiagnosticTests(unittest.TestCase):
                 self.assertLessEqual(output.stat().st_size, 128)
 
 
+    def test_browser_assertion_markers_are_closed_and_bind_to_failed_case(self):
+        issue_response_marker = "browser_login_assertion_diag case=issue_commit mode=12 stage=issue_response expected_status=504 status=503 auth_cookie=unobserved deletion=unobserved"
+        valid = (
+            "browser_login_assertion_diag case=committed_claim mode=3 stage=initial_response expected_status=504 status=500 auth_cookie=unobserved deletion=unobserved",
+            "browser_login_assertion_diag case=committed_claim mode=4 stage=initial_headers expected_status=504 status=504 cache_no_store=true vary_match=false",
+            "browser_login_assertion_diag case=committed_claim mode=4 stage=initial_state expected_status=504 status=504 prelogin_rows_empty=false verifier_calls=unobserved handler_calls=unobserved",
+            "browser_login_assertion_diag case=committed_claim mode=1 stage=initial_challenge expected_status=401 status=401 bearer_challenge=false",
+            "browser_login_assertion_diag case=committed_claim mode=5 stage=initial_challenge expected_status=401 status=401 bearer_challenge=false",
+            "browser_login_assertion_diag case=committed_claim mode=3 stage=retry_response expected_status=403 status=500 auth_cookie=unobserved deletion=unobserved",
+            "browser_login_assertion_diag case=committed_claim mode=3 stage=retry_headers expected_status=403 status=403 cache_no_store=false vary_match=unobserved",
+            "browser_login_assertion_diag case=committed_claim mode=3 stage=retry_headers expected_status=403 status=500 cache_no_store=false vary_match=unobserved",
+            "browser_login_assertion_diag case=committed_claim mode=3 stage=replay_proof expected_status=403 status=500 row_absent=true verifier_unchanged=false handler_unchanged=true",
+            issue_response_marker,
+            "browser_login_assertion_diag case=issue_commit mode=12 stage=issue_headers expected_status=504 status=504 cache_no_store=true vary_match=false",
+            "browser_login_assertion_diag case=issue_commit mode=12 stage=issue_rows expected_status=504 status=504 prelogin_rows_empty=true session_rows=2",
+        )
+        for marker in valid:
+            with self.subTest(marker=marker):
+                self.assertIsNotNone(diag.parse_assertion_marker(marker))
+        cookie_failure = "browser_login_assertion_diag case=issue_commit mode=12 stage=issue_response expected_status=504 status=504 auth_cookie=true deletion=unobserved"
+        self.assertIsNotNone(diag.parse_assertion_marker(cookie_failure))
+
+        issue_test = "issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cookie"
+        marker = issue_response_marker
+        raw = cargo_log(diag.BROWSER_CASES, failed={issue_test},
+                        markers={issue_test: [self.BROWSER_PHASE, marker]})
+        record, status = parse_both(browser_raw=raw, browser_exit=101)
+        self.assertEqual((status, record["status"]), (1, "tests_failed"))
+        facts = record["suites"]["browser"]["assertion"]
+        self.assertEqual(len(facts), 1)
+        self.assertEqual((facts[0]["test"], facts[0]["case"], facts[0]["mode"], facts[0]["stage"]),
+                         (issue_test, "issue_commit", 12, "issue_response"))
+        self.assertEqual((facts[0]["expected_status"], facts[0]["status"]), (504, 503))
+        self.assertEqual(record["suites"]["browser"]["browser_phase"][0]["phase"], 13)
+        self.assertNotIn("PRIVATE_SENTINEL", json.dumps(record))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "session-deadline-session.raw").write_bytes(cargo_log(diag.SESSION_CASES))
+            (root / "session-deadline-browser.raw").write_bytes(raw)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = diag.main(["diag", str(root), "0", "101", str(root / "result.json")])
+            self.assertEqual(code, 1)
+            self.assertIn("browser_login_assertion=", output.getvalue())
+            self.assertNotIn("PRIVATE_SENTINEL", output.getvalue())
+            serialized = output.getvalue().split("browser_login_assertion=", 1)[1].splitlines()[0]
+            self.assertEqual(json.loads(serialized)["stage"], "issue_response")
+
+    def test_browser_assertion_marker_rejects_bad_shapes_and_nonfailures(self):
+        good = "browser_login_assertion_diag case=issue_commit mode=12 stage=issue_response expected_status=504 status=503 auth_cookie=unobserved deletion=unobserved"
+        self.assertIsNotNone(diag.parse_assertion_marker(good))
+        impossible_challenge = "browser_login_assertion_diag case=committed_claim mode=3 stage=initial_challenge expected_status=504 status=504 bearer_challenge=false"
+        self.assertIsNone(diag.parse_assertion_marker(impossible_challenge))
+        rejected = (
+            good + " token=PRIVATE_SENTINEL",
+            "prefix " + good,
+            good.replace("case=issue_commit", "case=unknown"),
+            good.replace("mode=12", "mode=13"),
+            good.replace("stage=issue_response", "stage=initial_response"),
+            good.replace("expected_status=504", "expected_status=500"),
+            good.replace("status=503", "status=600"),
+            good.replace("auth_cookie=unobserved", "auth_cookie=0"),
+            good.replace("deletion=unobserved", "deletion=1"),
+            "browser_login_assertion_diag case=issue_commit mode=12 stage=issue_rows expected_status=504 status=504 prelogin_rows_empty=true session_rows=1024",
+            "browser_login_assertion_diag case=issue_commit mode=12 stage=issue_rows expected_status=504 status=504 prelogin_rows_empty=false session_rows=0",
+            "browser_login_assertion_diag case=issue_commit mode=12 stage=issue_rows expected_status=504 status=504 prelogin_rows_empty=true session_rows=unobserved",
+            "browser_login_assertion_diag case=committed_claim mode=4 stage=initial_state expected_status=504 status=504 prelogin_rows_empty=false verifier_calls=1 handler_calls=unobserved",
+            "browser_login_assertion_diag case=committed_claim mode=4 stage=initial_state expected_status=504 status=504 prelogin_rows_empty=true verifier_calls=0 handler_calls=0",
+            "browser_login_assertion_diag case=committed_claim mode=4 stage=initial_state expected_status=504 status=504 prelogin_rows_empty=true verifier_calls=1024 handler_calls=0",
+            "browser_login_assertion_diag case=committed_claim mode=4 stage=initial_response expected_status=504 status=504 auth_cookie=false deletion=true",
+            "browser_login_assertion_diag case=issue_commit mode=12 stage=issue_response expected_status=504 status=504 auth_cookie=false deletion=true",
+            good + "\n",
+            good + " raw/path=/private",
+            good + " " + ("x" * 513),
+        )
+        for marker in rejected:
+            with self.subTest(marker=marker[:100]):
+                self.assertIsNone(diag.parse_assertion_marker(marker))
+        legacy = "browser_login_assertion_diag case=issue_commit phase=issue_response status=504"
+        self.assertIsNone(diag.parse_assertion_marker(legacy))
+        issue_test = "issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cookie"
+        record, _ = parse_both(
+            browser_raw=cargo_log(diag.BROWSER_CASES, failed={issue_test},
+                                  markers={issue_test: [legacy]}),
+            browser_exit=101,
+        )
+        self.assertEqual(record["status"], "diagnostic_invalid")
+
+    def test_browser_assertion_markers_require_exact_failed_test_and_bounded_count(self):
+        issue_test = "issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cookie"
+        claim_test = diag.CLAIM_MARKER_TEST
+        issue = "browser_login_assertion_diag case=issue_commit mode=12 stage=issue_rows expected_status=504 status=504 prelogin_rows_empty=true session_rows=2"
+        claim = "browser_login_assertion_diag case=committed_claim mode=4 stage=initial_state expected_status=504 status=504 prelogin_rows_empty=false verifier_calls=unobserved handler_calls=unobserved"
+
+        record, _ = parse_both(browser_raw=cargo_log(diag.BROWSER_CASES, failed={issue_test}, markers={issue_test: [issue]}), browser_exit=101)
+        self.assertEqual(len(record["suites"]["browser"]["assertion"]), 1)
+        wrong_case = issue.replace("case=issue_commit", "case=committed_claim")
+        record, _ = parse_both(browser_raw=cargo_log(diag.BROWSER_CASES, failed={issue_test}, markers={issue_test: [wrong_case]}), browser_exit=101)
+        self.assertEqual(record["status"], "diagnostic_invalid")
+        record, _ = parse_both(browser_raw=cargo_log(diag.BROWSER_CASES, failed={claim_test}, markers={claim_test: [issue]}), browser_exit=101)
+        self.assertEqual(record["status"], "diagnostic_invalid")
+        record, _ = parse_both(browser_raw=cargo_log(diag.BROWSER_CASES, failed={issue_test}, markers={issue_test: [issue, issue]}), browser_exit=101)
+        self.assertEqual(record["status"], "diagnostic_invalid")
+        record, _ = parse_both(browser_raw=cargo_log(diag.BROWSER_CASES, failed={claim_test, issue_test}, markers={claim_test: [claim, claim], issue_test: [issue]}), browser_exit=101)
+        self.assertEqual(record["status"], "diagnostic_invalid")
+        third_test = "input_and_strict_json_rejections_do_not_consume_or_call_verifier"
+        with mock.patch.dict(diag.ASSERTION_TEST_CASES, {third_test: "committed_claim"}):
+            record, _ = parse_both(
+                browser_raw=cargo_log(
+                    diag.BROWSER_CASES,
+                    failed={claim_test, issue_test, third_test},
+                    markers={claim_test: [claim], issue_test: [issue], third_test: [claim]},
+                ),
+                browser_exit=101,
+            )
+        self.assertEqual(record["status"], "diagnostic_invalid")
+        zero = cargo_log(diag.BROWSER_CASES, failed={issue_test})
+        record, _ = parse_both(browser_raw=zero, browser_exit=101)
+        self.assertEqual(record["status"], "tests_failed")
+        self.assertEqual(record["suites"]["browser"]["assertion"], [])
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

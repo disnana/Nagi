@@ -390,6 +390,25 @@ async fn bootstrap(s: &Server) -> (String, String) {
 fn login_headers(cookie: &str, token: &str) -> String {
     format!("Origin: https://localhost\r\nAuthorization: Bearer owned\r\nCookie: {cookie}\r\nX-CSRF-Token: {token}\r\nContent-Type: application/json\r\n")
 }
+fn assertion_bool(value: Option<bool>) -> &'static str {
+    match value {
+        Some(true) => "true",
+        Some(false) => "false",
+        None => "unobserved",
+    }
+}
+fn assertion_diag(
+    case: &str,
+    mode: usize,
+    stage: &str,
+    expected_status: u16,
+    status: u16,
+    facts: &str,
+) {
+    eprintln!(
+        "browser_login_assertion_diag case={case} mode={mode} stage={stage} expected_status={expected_status} status={status} {facts}"
+    );
+}
 
 #[tokio::test]
 async fn public_login_claims_once_then_named_verifier_issue_and_appended_cookies() {
@@ -562,16 +581,109 @@ async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
                 f.stats.claim_committed.load(Ordering::SeqCst),
             );
         }
-        assert!(r.status == status && !r.auth_cookie() && r.deletion());
-        r.guarded();
-        if status == 401 {
-            assert!(r.values("www-authenticate") == vec!["Bearer"]);
+        let response_status_ok = r.status == status;
+        let response_auth_cookie = if response_status_ok {
+            Some(r.auth_cookie())
+        } else {
+            None
+        };
+        let response_deletion = if response_status_ok && response_auth_cookie == Some(false) {
+            Some(r.deletion())
+        } else {
+            None
+        };
+        let response_ok = response_status_ok
+            && response_auth_cookie == Some(false)
+            && response_deletion == Some(true);
+        if !response_ok {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "initial_response",
+                status,
+                r.status,
+                &format!(
+                    "auth_cookie={} deletion={}",
+                    assertion_bool(response_auth_cookie),
+                    assertion_bool(response_deletion),
+                ),
+            );
         }
-        assert!(
-            f.rows().await == 0
-                && f.stats.verifier.load(Ordering::SeqCst) == 1
-                && f.stats.handler.load(Ordering::SeqCst) == 0
-        );
+        assert!(response_ok);
+
+        let cache_no_store = r.values("cache-control") == vec!["no-store"];
+        if !cache_no_store {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "initial_headers",
+                status,
+                r.status,
+                "cache_no_store=false vary_match=unobserved",
+            );
+        }
+        assert!(cache_no_store);
+        let vary_match =
+            r.values("vary") == vec!["Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"];
+        if !vary_match {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "initial_headers",
+                status,
+                r.status,
+                "cache_no_store=true vary_match=false",
+            );
+        }
+        assert!(vary_match);
+        if status == 401 {
+            let bearer_challenge = r.values("www-authenticate") == vec!["Bearer"];
+            if !bearer_challenge {
+                assertion_diag(
+                    "committed_claim",
+                    mode,
+                    "initial_challenge",
+                    status,
+                    r.status,
+                    "bearer_challenge=false",
+                );
+            }
+            assert!(bearer_challenge);
+        }
+        let prelogin_rows_empty = f.rows().await == 0;
+        if !prelogin_rows_empty {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "initial_state",
+                status,
+                r.status,
+                "prelogin_rows_empty=false verifier_calls=unobserved handler_calls=unobserved",
+            );
+        }
+        assert!(prelogin_rows_empty);
+        let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
+        if verifier_calls != 1 {
+            assertion_diag(
+                "committed_claim", mode, "initial_state", status, r.status,
+                &format!(
+                    "prelogin_rows_empty=true verifier_calls={verifier_calls} handler_calls=unobserved"
+                ),
+            );
+        }
+        assert!(verifier_calls == 1);
+        let handler_calls = f.stats.handler.load(Ordering::SeqCst);
+        if handler_calls != 0 {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "initial_state",
+                status,
+                r.status,
+                &format!("prelogin_rows_empty=true verifier_calls=1 handler_calls={handler_calls}"),
+            );
+        }
+        assert!(handler_calls == 0);
         let retry = request(s.address, "POST", "/login", &h, b"{}").await;
         // Bounded numeric failure shape only; response material remains unreported.
         if !(retry.status == 403 && !retry.auth_cookie() && !retry.deletion()) {
@@ -604,9 +716,74 @@ async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
                 iteration, row_absent, verifier_unchanged, handler_unchanged,
             );
         }
-        retry.guarded();
-        assert!(row_absent && verifier_unchanged && handler_unchanged);
-        assert!(retry.status == 403 && !retry.auth_cookie() && !retry.deletion());
+        let cache_no_store = retry.values("cache-control") == vec!["no-store"];
+        if !cache_no_store {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "retry_headers",
+                403,
+                retry.status,
+                "cache_no_store=false vary_match=unobserved",
+            );
+        }
+        assert!(cache_no_store);
+        let vary_match = retry.values("vary")
+            == vec!["Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"];
+        if !vary_match {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "retry_headers",
+                403,
+                retry.status,
+                "cache_no_store=true vary_match=false",
+            );
+        }
+        assert!(vary_match);
+        let replay_proof_ok = row_absent && verifier_unchanged && handler_unchanged;
+        if !replay_proof_ok {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "replay_proof",
+                403,
+                retry.status,
+                &format!(
+                    "row_absent={} verifier_unchanged={} handler_unchanged={}",
+                    row_absent, verifier_unchanged, handler_unchanged,
+                ),
+            );
+        }
+        assert!(replay_proof_ok);
+        let retry_status_ok = retry.status == 403;
+        let retry_auth_cookie = if retry_status_ok {
+            Some(retry.auth_cookie())
+        } else {
+            None
+        };
+        let retry_deletion = if retry_status_ok && retry_auth_cookie == Some(false) {
+            Some(retry.deletion())
+        } else {
+            None
+        };
+        let retry_response_ok =
+            retry_status_ok && retry_auth_cookie == Some(false) && retry_deletion == Some(false);
+        if !retry_response_ok {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "retry_response",
+                403,
+                retry.status,
+                &format!(
+                    "auth_cookie={} deletion={}",
+                    assertion_bool(retry_auth_cookie),
+                    assertion_bool(retry_deletion),
+                ),
+            );
+        }
+        assert!(retry_response_ok);
         s.stop().await;
         f.stop().await;
     }
@@ -627,12 +804,86 @@ async fn issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cook
             Server::new(&f, 256, security).await
         };
         let r = request(s.address, "POST", "/login", &login_headers(&c, &t), b"{}").await;
-        assert!(r.status == status && !r.auth_cookie() && r.deletion());
-        r.guarded();
-        assert!(
-            f.rows().await == 0
-                && number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await == 1
-        );
+        let response_status_ok = r.status == status;
+        let response_auth_cookie = if response_status_ok {
+            Some(r.auth_cookie())
+        } else {
+            None
+        };
+        let response_deletion = if response_status_ok && response_auth_cookie == Some(false) {
+            Some(r.deletion())
+        } else {
+            None
+        };
+        let response_ok = response_status_ok
+            && response_auth_cookie == Some(false)
+            && response_deletion == Some(true);
+        if !response_ok {
+            assertion_diag(
+                "issue_commit",
+                mode,
+                "issue_response",
+                status,
+                r.status,
+                &format!(
+                    "auth_cookie={} deletion={}",
+                    assertion_bool(response_auth_cookie),
+                    assertion_bool(response_deletion),
+                ),
+            );
+        }
+        assert!(response_ok);
+
+        let cache_no_store = r.values("cache-control") == vec!["no-store"];
+        if !cache_no_store {
+            assertion_diag(
+                "issue_commit",
+                mode,
+                "issue_headers",
+                status,
+                r.status,
+                "cache_no_store=false vary_match=unobserved",
+            );
+        }
+        assert!(cache_no_store);
+        let vary_match =
+            r.values("vary") == vec!["Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"];
+        if !vary_match {
+            assertion_diag(
+                "issue_commit",
+                mode,
+                "issue_headers",
+                status,
+                r.status,
+                "cache_no_store=true vary_match=false",
+            );
+        }
+        assert!(vary_match);
+
+        let prelogin_rows_empty = f.rows().await == 0;
+        if !prelogin_rows_empty {
+            assertion_diag(
+                "issue_commit",
+                mode,
+                "issue_rows",
+                status,
+                r.status,
+                "prelogin_rows_empty=false session_rows=unobserved",
+            );
+        }
+        assert!(prelogin_rows_empty);
+        let session_rows = number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await;
+        if session_rows != 1 {
+            assertion_diag(
+                "issue_commit",
+                mode,
+                "issue_rows",
+                status,
+                r.status,
+                &format!("prelogin_rows_empty=true session_rows={session_rows}"),
+            );
+        }
+        assert!(session_rows == 1);
         s.stop().await;
         f.stop().await;
     }

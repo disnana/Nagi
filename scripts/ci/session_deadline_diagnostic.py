@@ -78,6 +78,57 @@ CLAIM_REPLAY_MARKER = re.compile(
     rf"iteration=([0-4]) row_absent=({BOOL}) verifier_unchanged=({BOOL}) "
     rf"handler_unchanged=({BOOL})\Z"
 )
+ASSERTION_PREFIX = "browser_login_assertion_diag"
+ASSERTION_MARKER_LIMIT = 2
+ASSERTION_CASE_TESTS = {
+    "committed_claim": CLAIM_MARKER_TEST,
+    "issue_commit": "issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cookie",
+}
+ASSERTION_TEST_CASES = {test: case for case, test in ASSERTION_CASE_TESTS.items()}
+ASSERTION_MODES = {
+    "committed_claim": {1: 401, 2: 500, 3: 504, 4: 504, 5: 401},
+    "issue_commit": {10: 500, 11: 500, 12: 504},
+}
+ASSERTION_STAGE_KIND = {
+    "initial_response": "response",
+    "initial_headers": "headers",
+    "initial_state": "initial_state",
+    "initial_challenge": "challenge",
+    "retry_response": "retry_response",
+    "retry_headers": "headers",
+    "replay_proof": "replay_proof",
+    "issue_response": "response",
+    "issue_headers": "headers",
+    "issue_rows": "issue_rows",
+}
+ASSERTION_CASE_STAGES = {
+    "committed_claim": frozenset({
+        "initial_response", "initial_headers", "initial_state", "initial_challenge",
+        "retry_response", "retry_headers", "replay_proof",
+    }),
+    "issue_commit": frozenset({"issue_response", "issue_headers", "issue_rows"}),
+}
+ASSERTION_HEAD = re.compile(
+    rf"{ASSERTION_PREFIX} case=(committed_claim|issue_commit) mode=(0|[1-9][0-9]?) "
+    rf"stage=([a-z_]+) expected_status=({STATUS}) status=({STATUS}) (.+)\Z"
+)
+ASSERTION_COUNT = r"(?:0|[1-9][0-9]{0,3})"
+ASSERTION_TAILS = {
+    "response": re.compile(rf"auth_cookie=(unobserved|{BOOL}) deletion=(unobserved|{BOOL})\Z"),
+    "headers": re.compile(rf"cache_no_store=({BOOL}) vary_match=(unobserved|{BOOL})\Z"),
+    "initial_state": re.compile(
+        rf"prelogin_rows_empty=({BOOL}) verifier_calls=(unobserved|{ASSERTION_COUNT}) "
+        rf"handler_calls=(unobserved|{ASSERTION_COUNT})\Z"
+    ),
+    "challenge": re.compile(rf"bearer_challenge=({BOOL})\Z"),
+    "retry_response": re.compile(rf"auth_cookie=(unobserved|{BOOL}) deletion=(unobserved|{BOOL})\Z"),
+    "replay_proof": re.compile(
+        rf"row_absent=({BOOL}) verifier_unchanged=({BOOL}) handler_unchanged=({BOOL})\Z"
+    ),
+    "issue_rows": re.compile(
+        rf"prelogin_rows_empty=({BOOL}) session_rows=(unobserved|{ASSERTION_COUNT})\Z"
+    ),
+}
 SESSION_MARKER = re.compile(
     r"session_deadline_diag status=504 phase=(0|[1-9][0-9]?) "
     r"event=(0|[1-9][0-9]?) db=(0|[1-9][0-9]?) exit=(0|[1-9][0-9]?) "
@@ -124,6 +175,7 @@ AUTH_WIRE_LINE = re.compile(
 AUTH_WIRE_UNAVAILABLE = re.compile(rf"browser_wire=test=({IDENT}) unavailable\Z")
 HTTP_IO_LINE = re.compile(rf"http_test_io=phase=({auth_diag.IO_PHASE}) kind=({auth_diag.IO_KIND})\Z")
 KNOWN_MARKER_PREFIXES = (
+    ASSERTION_PREFIX,
     BROWSER_PHASE_PREFIX,
     SESSION_PREFIX,
     BOOTSTRAP_DEADLINE_PREFIX,
@@ -329,6 +381,94 @@ def parse_claim_marker(line: str) -> tuple[str, dict] | None:
     return None
 
 
+def parse_assertion_marker(line: str) -> dict | None:
+    if not isinstance(line, str) or len(line) > 512:
+        return None
+    match = ASSERTION_HEAD.fullmatch(line)
+    if match is None:
+        return None
+    case, mode_text, stage, expected_text, status_text, tail = match.groups()
+    mode, expected, status = int(mode_text), int(expected_text), int(status_text)
+    expected_by_mode = ASSERTION_MODES.get(case, {})
+    if mode not in expected_by_mode or stage not in ASSERTION_CASE_STAGES[case]:
+        return None
+    if stage == "initial_challenge" and expected_by_mode[mode] != 401:
+        return None
+    required_status = 403 if stage in {"retry_response", "retry_headers", "replay_proof"} else expected_by_mode[mode]
+    if expected != required_status:
+        return None
+    kind = ASSERTION_STAGE_KIND[stage]
+    if (stage != "retry_headers" and
+            kind not in {"response", "retry_response", "replay_proof"} and status != expected):
+        return None
+    tail_match = ASSERTION_TAILS[kind].fullmatch(tail)
+    if tail_match is None:
+        return None
+    values = tail_match.groups()
+    result = {"case": case, "mode": mode, "stage": stage,
+              "expected_status": expected, "status": status}
+    if kind in {"response", "retry_response"}:
+        auth_text, deletion_text = values
+        auth_cookie = None if auth_text == "unobserved" else auth_text == "true"
+        deletion = None if deletion_text == "unobserved" else deletion_text == "true"
+        if status != expected:
+            if auth_cookie is not None or deletion is not None:
+                return None
+            failed = True
+        else:
+            if auth_cookie is None or ((auth_cookie is False) != (deletion is not None)):
+                return None
+            result.update({"auth_cookie": auth_cookie, "deletion": deletion})
+            failed = auth_cookie or deletion != (stage != "retry_response")
+        if status != expected:
+            result.update({"auth_cookie": None, "deletion": None})
+    elif kind == "headers":
+        cache_ok, vary_text = values
+        vary_ok = None if vary_text == "unobserved" else vary_text == "true"
+        if (cache_ok == "true") != (vary_ok is not None):
+            return None
+        result.update({"cache_no_store": cache_ok == "true", "vary_match": vary_ok})
+        failed = cache_ok != "true" or vary_ok is False
+    elif kind == "initial_state":
+        rows_empty, verifier_text, handler_text = values
+        verifier = None if verifier_text == "unobserved" else int(verifier_text)
+        handler = None if handler_text == "unobserved" else int(handler_text)
+        if ((verifier is not None and verifier > 1023) or
+                (handler is not None and handler > 1023) or
+                (rows_empty == "true") != (verifier is not None) or
+                (verifier == 1) != (handler is not None)):
+            return None
+        result.update({"prelogin_rows_empty": rows_empty == "true",
+                       "verifier_calls": verifier, "handler_calls": handler})
+        failed = rows_empty != "true" or verifier != 1 or handler != 0
+    elif kind == "challenge":
+        challenge, = values
+        result["bearer_challenge"] = challenge == "true"
+        failed = challenge != "true"
+    elif kind == "replay_proof":
+        row_absent, verifier_unchanged, handler_unchanged = values
+        result.update({"row_absent": row_absent == "true",
+                       "verifier_unchanged": verifier_unchanged == "true",
+                       "handler_unchanged": handler_unchanged == "true"})
+        failed = (row_absent != "true" or verifier_unchanged != "true" or
+                  handler_unchanged != "true")
+    else:
+        rows_empty, session_rows_text = values
+        if rows_empty == "true":
+            if session_rows_text == "unobserved":
+                return None
+            session_rows = int(session_rows_text)
+            if session_rows > 1023:
+                return None
+        else:
+            if session_rows_text != "unobserved":
+                return None
+            session_rows = None
+        result.update({"prelogin_rows_empty": rows_empty == "true", "session_rows": session_rows})
+        failed = rows_empty != "true" or session_rows != 1
+    return result if failed else None
+
+
 def _read_bounded(path: pathlib.Path) -> tuple[bytes | None, str]:
     try:
         with path.open("rb") as stream:
@@ -489,7 +629,7 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                   cases: dict[str, str]) -> tuple[dict, int, bool]:
     facts = {
         "session_deadline": [], "bootstrap": [], "pair": [], "json_bound": [],
-        "bootstrap_deadline": [], "browser_phase": [],
+        "bootstrap_deadline": [], "browser_phase": [], "assertion": [],
         "claim_initial": [], "claim_retry": [], "claim_replay_proof": [],
         "public": [], "http_test_io": [],
     }
@@ -504,6 +644,8 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
     seen_case_kinds: set[tuple[str, str]] = set()
     http_processed: set[str] = set()
     claim_order: list[tuple[str, dict]] = []
+    assertion_tests: set[str] = set()
+    assertion_marker_count = 0
     output_blocks = blocks
     for test_name, block in output_blocks.items():
         # A malformed inventory or an unknown stdout header may contain arbitrary
@@ -589,6 +731,20 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                     continue
                 # Existing canonical public-test parser validates and converts these below.
                 continue
+            elif prefix == ASSERTION_PREFIX:
+                assertion_marker_count += 1
+                if suite_name != "browser":
+                    invalid = True
+                    continue
+                parsed = parse_assertion_marker(line)
+                expected_case = ASSERTION_TEST_CASES.get(test_name)
+                if (assertion_marker_count > ASSERTION_MARKER_LIMIT or parsed is None or
+                        expected_case is None or parsed["case"] != expected_case or
+                        test_name in assertion_tests):
+                    invalid = True
+                    continue
+                assertion_tests.add(test_name)
+                key = ("assertion", test_name)
             elif prefix == auth_diag.TEST_IO_MARKER_PREFIX:
                 # Validate once per failed test with the existing closed HTTP-I/O vocabulary.
                 if test_name in http_processed:
@@ -736,6 +892,8 @@ def main(argv: list[str]) -> int:
     if record["status"] == "tests_failed":
         for fact in record["suites"]["browser"]["browser_phase"]:
             print("browser_login_phase=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
+        for fact in record["suites"]["browser"]["assertion"]:
+            print("browser_login_assertion=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
     return status
 
 
