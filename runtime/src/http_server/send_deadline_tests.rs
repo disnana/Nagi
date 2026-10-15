@@ -1,5 +1,7 @@
-//! Actual Hyper/native socket counterexample to treating a header flush as
-//! completion of the response's buffered body. Observers only delegate IO.
+//! Actual Hyper/native IO oracle for preserving the buffered response send end.
+//! Non-Windows uses the natural ready BufferedBody schedule. Windows deliberately
+//! withholds frame availability until an actual header-only native flush; it does
+//! not claim that an unwrapped Windows BufferedBody naturally reaches that order.
 use super::*;
 use hyper::rt::{Read, Write};
 use std::sync::atomic::AtomicBool;
@@ -42,8 +44,44 @@ impl NativeFacts {
     }
 }
 
+// A Windows-only protocol schedule, not a native IO simulator. The same mutex
+// orders readiness publication and task-waker registration, so opening before,
+// during or after registration cannot lose the wake. Wake outside the lock.
+#[cfg(windows)]
+#[derive(Default)]
+struct HeaderFlushGate {
+    state: std::sync::Mutex<(bool, Option<std::task::Waker>)>,
+}
+#[cfg(windows)]
+impl HeaderFlushGate {
+    fn is_open_or_register(&self, cx: &Context<'_>) -> bool {
+        let waiter = cx.waker().clone();
+        let previous = {
+            let mut state = self.state.lock().unwrap();
+            if state.0 {
+                return true;
+            }
+            state.1.replace(waiter)
+        };
+        drop(previous);
+        false
+    }
+    fn open(&self) {
+        let waiter = {
+            let mut state = self.state.lock().unwrap();
+            state.0 = true;
+            state.1.take()
+        };
+        if let Some(waiter) = waiter {
+            waiter.wake();
+        }
+    }
+}
+
 struct BodyWitness {
     inner: BufferedBody,
+    #[cfg(windows)]
+    header_gate: Arc<HeaderFlushGate>,
     transferred: Arc<AtomicBool>,
     facts: Arc<NativeFacts>,
 }
@@ -55,6 +93,10 @@ impl hyper::body::Body for BodyWitness {
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<hyper::body::Frame<Bytes>, Infallible>>> {
         NativeFacts::add(&self.facts.body_polls, 1, 65535);
+        #[cfg(windows)]
+        if !self.header_gate.is_open_or_register(cx) {
+            return Poll::Pending;
+        }
         let result = Pin::new(&mut self.inner).poll_frame(cx);
         if matches!(&result, Poll::Ready(Some(Ok(frame))) if frame.is_data()) {
             self.transferred.store(true, Ordering::SeqCst);
@@ -72,6 +114,8 @@ struct IoWitness {
     inner: TokioIo<TcpStream>,
     transferred: Arc<AtomicBool>,
     header_flush: Arc<AtomicBool>,
+    #[cfg(windows)]
+    header_gate: Arc<HeaderFlushGate>,
     pending: Arc<AtomicBool>,
     changed: Arc<Notify>,
     sending: tokio::sync::watch::Receiver<Sending>,
@@ -80,16 +124,24 @@ struct IoWitness {
 #[cfg(windows)]
 const WINDOWS_NATIVE_WRITE_LIMIT: usize = 4096;
 
-// Keep each Windows native poll to one bounded prefix and remove only Tokio's
-// cooperative-budget yield from that poll. Return the inner poll result as-is.
+// Preserve full native header writes before the actual buffered-frame handoff.
+// After handoff, limit each Windows native write to one bounded prefix so body
+// backpressure is observable. Remove only the single poll's cooperative yield;
+// never manufacture an IO result. The separate Windows body gate controls only
+// frame availability until the observed native header flush.
 #[cfg(windows)]
 fn poll_windows_scalar_once(
     inner: &mut TokioIo<TcpStream>,
     cx: &mut Context<'_>,
     bytes: &[u8],
+    body_transferred: bool,
 ) -> Poll<std::io::Result<usize>> {
-    let prefix = &bytes[..bytes.len().min(WINDOWS_NATIVE_WRITE_LIMIT)];
-    assert!(prefix.len() <= WINDOWS_NATIVE_WRITE_LIMIT);
+    let prefix = if body_transferred {
+        &bytes[..bytes.len().min(WINDOWS_NATIVE_WRITE_LIMIT)]
+    } else {
+        bytes
+    };
+    assert!(!body_transferred || prefix.len() <= WINDOWS_NATIVE_WRITE_LIMIT);
     let native = tokio::task::coop::unconstrained(std::future::poll_fn(|cx| {
         Pin::new(&mut *inner).poll_write(cx, prefix)
     }));
@@ -102,13 +154,15 @@ fn poll_windows_vectored_native_once(
     inner: &mut TokioIo<TcpStream>,
     cx: &mut Context<'_>,
     buffers: &[std::io::IoSlice<'_>],
+    body_transferred: bool,
 ) -> Poll<std::io::Result<usize>> {
     assert!(
-        buffers
-            .iter()
-            .all(|buffer| buffer.len() <= WINDOWS_NATIVE_WRITE_LIMIT)
-            && (buffers.len() <= 1 || buffers.iter().all(|buffer| buffer.is_empty())),
-        "Windows vectored native write must be a single bounded prefix"
+        !body_transferred
+            || (buffers
+                .iter()
+                .all(|buffer| buffer.len() <= WINDOWS_NATIVE_WRITE_LIMIT)
+                && (buffers.len() <= 1 || buffers.iter().all(|buffer| buffer.is_empty()))),
+        "post-frame Windows vectored native write must be a single bounded prefix"
     );
     let native = tokio::task::coop::unconstrained(std::future::poll_fn(|cx| {
         Pin::new(&mut *inner).poll_write_vectored(cx, buffers)
@@ -122,14 +176,18 @@ fn poll_windows_vectored_once(
     inner: &mut TokioIo<TcpStream>,
     cx: &mut Context<'_>,
     buffers: &[std::io::IoSlice<'_>],
+    body_transferred: bool,
 ) -> Poll<std::io::Result<usize>> {
+    if !body_transferred {
+        return poll_windows_vectored_native_once(inner, cx, buffers, false);
+    }
     let Some(first) = buffers.iter().find(|buffer| !buffer.is_empty()) else {
         // Empty input delegates zero bytes and preserves the native empty-write result.
-        return poll_windows_vectored_native_once(inner, cx, buffers);
+        return poll_windows_vectored_native_once(inner, cx, buffers, true);
     };
     let prefix = &first[..first.len().min(WINDOWS_NATIVE_WRITE_LIMIT)];
     let bounded = [std::io::IoSlice::new(prefix)];
-    poll_windows_vectored_native_once(inner, cx, &bounded)
+    poll_windows_vectored_native_once(inner, cx, &bounded, true)
 }
 
 impl Read for IoWitness {
@@ -148,7 +206,9 @@ impl Write for IoWitness {
         bytes: &[u8],
     ) -> Poll<std::io::Result<usize>> {
         #[cfg(windows)]
-        let result = poll_windows_scalar_once(&mut self.inner, cx, bytes);
+        let body_transferred = self.transferred.load(Ordering::SeqCst);
+        #[cfg(windows)]
+        let result = poll_windows_scalar_once(&mut self.inner, cx, bytes, body_transferred);
         #[cfg(not(windows))]
         let result = Pin::new(&mut self.inner).poll_write(cx, bytes);
         self.facts.write(&result, false);
@@ -164,7 +224,9 @@ impl Write for IoWitness {
         buffers: &[std::io::IoSlice<'_>],
     ) -> Poll<std::io::Result<usize>> {
         #[cfg(windows)]
-        let result = poll_windows_vectored_once(&mut self.inner, cx, buffers);
+        let body_transferred = self.transferred.load(Ordering::SeqCst);
+        #[cfg(windows)]
+        let result = poll_windows_vectored_once(&mut self.inner, cx, buffers, body_transferred);
         #[cfg(not(windows))]
         let result = Pin::new(&mut self.inner).poll_write_vectored(cx, buffers);
         self.facts.write(&result, true);
@@ -189,6 +251,8 @@ impl Write for IoWitness {
             && !self.transferred.load(Ordering::SeqCst)
         {
             self.header_flush.store(true, Ordering::SeqCst);
+            #[cfg(windows)]
+            self.header_gate.open();
         }
         result
     }
@@ -289,6 +353,8 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
     .into_http(false);
     let transferred = Arc::new(AtomicBool::new(false));
     let header_flush = Arc::new(AtomicBool::new(false));
+    #[cfg(windows)]
+    let header_gate = Arc::new(HeaderFlushGate::default());
     let pending = Arc::new(AtomicBool::new(false));
     let changed = Arc::new(Notify::new());
     let facts = Arc::new(NativeFacts::default());
@@ -297,6 +363,8 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
     let service_sending = sending.clone();
     let reply = std::sync::Mutex::new(Some(reply.map(|inner| BodyWitness {
         inner,
+        #[cfg(windows)]
+        header_gate: Arc::clone(&header_gate),
         transferred: Arc::clone(&transferred),
         facts: Arc::clone(&facts),
     })));
@@ -318,6 +386,8 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
             inner: TokioIo::new(peer),
             transferred: Arc::clone(&transferred),
             header_flush: Arc::clone(&header_flush),
+            #[cfg(windows)]
+            header_gate: Arc::clone(&header_gate),
             pending: Arc::clone(&pending),
             changed: Arc::clone(&changed),
             sending: sent.clone(),

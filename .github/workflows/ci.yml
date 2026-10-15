@@ -461,6 +461,39 @@ jobs:
           RELEASE_RUST_HOST: ${{ matrix.rust_host }}
         shell: bash
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
+      - name: Check native buffered send deadline and idle Keep-Alive early on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PYSOURCE'
+          import hashlib, pathlib
+          source = pathlib.Path("runtime/src/http_server/send_deadline_tests.rs").read_bytes()
+          if b"\r" in source.replace(b"\r\n", b"\n"):
+              raise AssertionError("unexpected lone CR in native fixture source")
+          actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
+          expected = "8f9fcd420cf54ba19810f9074aec2ae1c847146b0c1018353a69815c96dbea3d"
+          if actual != expected:
+              raise AssertionError("reviewed native send-deadline fixture source differs")
+          print("native send-deadline fixture sha256=" + actual)
+          PYSOURCE
+          cargo test --locked -p nagi-runtime --lib http_server::tests::send_deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/http-send-deadline.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"http-send-deadline.log").read_text(encoding="utf-8")
+          required={
+              "header_flush_before_buffered_frame_keeps_original_send_end",
+              "empty_response_completion_does_not_expire_idle_keep_alive",
+              "buffered_response_completion_does_not_expire_idle_keep_alive",
+          }
+          summaries=re.findall(r"(?m)^test result: ok\. 3 passed; 0 failed; 0 ignored;.*$",text)
+          if len(summaries)!=1:
+              raise AssertionError("three actual native send-deadline cases required")
+          for name in required:
+              pattern=rf"(?m)^test http_server::tests::send_deadline_tests::{re.escape(name)} \.\.\. ok$"
+              if len(re.findall(pattern,text))!=1:
+                  raise AssertionError("native send-deadline case missing, duplicate or failed")
+          PYCODE
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -755,9 +788,21 @@ jobs:
       - name: Check HTTP handler deadlines on the target platform
         run: cargo test --locked -p nagi-runtime handler_timeout_ -- --test-threads=1
       - name: Check native buffered send deadline and idle Keep-Alive on the target platform
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
+          python - <<'PYSOURCE'
+          import hashlib, pathlib
+          source = pathlib.Path("runtime/src/http_server/send_deadline_tests.rs").read_bytes()
+          if b"\r" in source.replace(b"\r\n", b"\n"):
+              raise AssertionError("unexpected lone CR in native fixture source")
+          actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
+          expected = "8f9fcd420cf54ba19810f9074aec2ae1c847146b0c1018353a69815c96dbea3d"
+          if actual != expected:
+              raise AssertionError("reviewed native send-deadline fixture source differs")
+          print("native send-deadline fixture sha256=" + actual)
+          PYSOURCE
           cargo test --locked -p nagi-runtime --lib http_server::tests::send_deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/http-send-deadline.log"
           python - <<'PYCODE'
           import os, pathlib, re
