@@ -256,8 +256,13 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         PsiFile file = source("main.nagi", "def main():\n    print(1)\n");
         Path missingCompiler = root.resolve("tools/" + (com.intellij.openapi.util.SystemInfo.isWindows ? "nagic.exe" : "nagic"));
         Files.createDirectories(missingCompiler.getParent());
-        assertNotNull("compiler parent must be known to the IDE VFS before executable creation",
-                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(missingCompiler.getParent()));
+        var compilerDirectory = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(missingCompiler.getParent());
+        assertNotNull("compiler parent must be known to the IDE VFS before executable creation", compilerDirectory);
+        // A first lookup can load an uncached child without a create event.
+        // Cache the empty snapshot before the later native creation and refresh.
+        ApplicationManager.getApplication().runReadAction(() ->
+                assertEquals("compiler directory must be cached while the executable is absent",
+                        0, compilerDirectory.getChildren().length));
         NagiSettings.update(missingCompiler.toString(), 5);
         AtomicInteger compilerProbes = new AtomicInteger();
         AtomicInteger calls = new AtomicInteger();
