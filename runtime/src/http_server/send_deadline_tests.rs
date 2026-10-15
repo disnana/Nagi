@@ -77,6 +77,61 @@ struct IoWitness {
     sending: tokio::sync::watch::Receiver<Sending>,
     facts: Arc<NativeFacts>,
 }
+#[cfg(windows)]
+const WINDOWS_NATIVE_WRITE_LIMIT: usize = 4096;
+
+// Keep each Windows native poll to one bounded prefix and remove only Tokio's
+// cooperative-budget yield from that poll. Return the inner poll result as-is.
+#[cfg(windows)]
+fn poll_windows_scalar_once(
+    inner: &mut TokioIo<TcpStream>,
+    cx: &mut Context<'_>,
+    bytes: &[u8],
+) -> Poll<std::io::Result<usize>> {
+    let prefix = &bytes[..bytes.len().min(WINDOWS_NATIVE_WRITE_LIMIT)];
+    assert!(prefix.len() <= WINDOWS_NATIVE_WRITE_LIMIT);
+    let native = tokio::task::coop::unconstrained(std::future::poll_fn(|cx| {
+        Pin::new(&mut *inner).poll_write(cx, prefix)
+    }));
+    tokio::pin!(native);
+    native.as_mut().poll(cx)
+}
+
+#[cfg(windows)]
+fn poll_windows_vectored_native_once(
+    inner: &mut TokioIo<TcpStream>,
+    cx: &mut Context<'_>,
+    buffers: &[std::io::IoSlice<'_>],
+) -> Poll<std::io::Result<usize>> {
+    assert!(
+        buffers
+            .iter()
+            .all(|buffer| buffer.len() <= WINDOWS_NATIVE_WRITE_LIMIT)
+            && (buffers.len() <= 1 || buffers.iter().all(|buffer| buffer.is_empty())),
+        "Windows vectored native write must be a single bounded prefix"
+    );
+    let native = tokio::task::coop::unconstrained(std::future::poll_fn(|cx| {
+        Pin::new(&mut *inner).poll_write_vectored(cx, buffers)
+    }));
+    tokio::pin!(native);
+    native.as_mut().poll(cx)
+}
+
+#[cfg(windows)]
+fn poll_windows_vectored_once(
+    inner: &mut TokioIo<TcpStream>,
+    cx: &mut Context<'_>,
+    buffers: &[std::io::IoSlice<'_>],
+) -> Poll<std::io::Result<usize>> {
+    let Some(first) = buffers.iter().find(|buffer| !buffer.is_empty()) else {
+        // Empty input delegates zero bytes and preserves the native empty-write result.
+        return poll_windows_vectored_native_once(inner, cx, buffers);
+    };
+    let prefix = &first[..first.len().min(WINDOWS_NATIVE_WRITE_LIMIT)];
+    let bounded = [std::io::IoSlice::new(prefix)];
+    poll_windows_vectored_native_once(inner, cx, &bounded)
+}
+
 impl Read for IoWitness {
     fn poll_read(
         mut self: Pin<&mut Self>,
@@ -92,6 +147,9 @@ impl Write for IoWitness {
         cx: &mut Context<'_>,
         bytes: &[u8],
     ) -> Poll<std::io::Result<usize>> {
+        #[cfg(windows)]
+        let result = poll_windows_scalar_once(&mut self.inner, cx, bytes);
+        #[cfg(not(windows))]
         let result = Pin::new(&mut self.inner).poll_write(cx, bytes);
         self.facts.write(&result, false);
         if result.is_pending() && self.transferred.load(Ordering::SeqCst) {
@@ -105,6 +163,9 @@ impl Write for IoWitness {
         cx: &mut Context<'_>,
         buffers: &[std::io::IoSlice<'_>],
     ) -> Poll<std::io::Result<usize>> {
+        #[cfg(windows)]
+        let result = poll_windows_vectored_once(&mut self.inner, cx, buffers);
+        #[cfg(not(windows))]
         let result = Pin::new(&mut self.inner).poll_write_vectored(cx, buffers);
         self.facts.write(&result, true);
         if result.is_pending() && self.transferred.load(Ordering::SeqCst) {

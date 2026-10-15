@@ -87,6 +87,7 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
         boolean previousTrust = TrustedProjects.isProjectTrusted(getProject());
         var previousDialog = TestDialogManager.getTestImplementation();
         OSProcessHandler handler = null;
+        Throwable primaryFailure = null;
         try {
             Path manifest = Files.writeString(root.resolve("nagi.toml"), "entry = \"main.nagi\"\n");
             Path source = Files.writeString(root.resolve("main.nagi"), "def main():\n    print(1)\n");
@@ -135,16 +136,26 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
             handler.destroyProcess();
             assertTrue("IDE Stop must terminate the compiler process", handler.waitFor(5000));
             assertFalse(handler.getProcess().isAlive());
+        } catch (Exception | Error failure) {
+            primaryFailure = failure;
+            throw failure;
         } finally {
-            if (handler != null && !handler.isProcessTerminated()) {
-                handler.startNotify();
-                handler.destroyProcess();
-                handler.waitFor(5000);
+            try {
+                if (handler != null && !handler.isProcessTerminated()) {
+                    handler.startNotify();
+                    handler.destroyProcess();
+                    handler.waitFor(5000);
+                }
+                TestDialogManager.setTestDialog(previousDialog);
+                TrustedProjects.setProjectTrusted(getProject(), previousTrust);
+                settings.compilerPath = previousCompiler;
+                // Keep owned files if pending IDE writes were not acknowledged.
+                flushBeforeDeletingSources();
+                deleteTree(root);
+            } catch (Exception | Error cleanupFailure) {
+                if (primaryFailure == null) throw cleanupFailure;
+                if (cleanupFailure != primaryFailure) primaryFailure.addSuppressed(cleanupFailure);
             }
-            TestDialogManager.setTestDialog(previousDialog);
-            TrustedProjects.setProjectTrusted(getProject(), previousTrust);
-            settings.compilerPath = previousCompiler;
-            deleteTree(root);
         }
     }
 
@@ -202,6 +213,19 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
 
     private static String shellQuote(Path path) {
         return path.toString().replace("'", "'\"'\"'");
+    }
+
+    private static void flushBeforeDeletingSources() throws Exception {
+        var flushed = java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                NagiSaveBarrier.awaitDiskWrites();
+            } catch (java.io.IOException failure) {
+                throw new java.util.concurrent.CompletionException(failure);
+            }
+        });
+        PlatformTestUtil.waitWithEventsDispatching(
+                "pending IDE file writes did not finish", flushed::isDone, 5);
+        flushed.get();
     }
 
     private static void deleteTree(Path root) throws Exception {
