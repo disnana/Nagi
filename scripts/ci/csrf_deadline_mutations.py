@@ -103,10 +103,26 @@ def semantic_red(raw: str, exit_code: int, case: str, marker: str) -> bool:
             and len(re.findall(marker_line, stdout, re.M)) == 1)
 
 
+def _newline_style(text: str) -> str:
+    crlf = text.count("\r\n")
+    bare_lf = text.count("\n") - crlf
+    bare_cr = text.count("\r") - crlf
+    if bare_cr or (crlf and bare_lf):
+        raise ValueError("mixed_source_newlines")
+    return "\r\n" if crlf else "\n"
+
+
 def replacement(source: str, old: str, new: str) -> str:
+    newline = _newline_style(source)
+    _newline_style(old)
+    _newline_style(new)
+    source = source.replace("\r\n", "\n")
+    old = old.replace("\r\n", "\n")
+    new = new.replace("\r\n", "\n")
     if source.count(old) != 1:
         raise ValueError("mutation_anchor_not_unique")
-    return source.replace(old, new, 1)
+    changed = source.replace(old, new, 1)
+    return changed.replace("\n", newline) if newline == "\r\n" else changed
 
 
 class ProcessRetentionRequired(RuntimeError):
@@ -326,7 +342,8 @@ def run_checkout(root: pathlib.Path, env: dict[str, str], control=None) -> dict:
         try:
             if control is not None:
                 control.check()
-            source.write_text(replacement(original.decode("utf-8"), old, new), encoding="utf-8")
+            changed = replacement(original.decode("utf-8"), old, new).encode("utf-8")
+            source.write_bytes(changed)
             binary, result["build"] = build(root, env, control)
             if binary is None:
                 continue

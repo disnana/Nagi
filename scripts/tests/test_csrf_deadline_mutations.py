@@ -29,6 +29,10 @@ class MutationEvidenceTests(unittest.TestCase):
         return ("running 12 tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(guard.REQUIRED))
                 + "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 500 filtered out; finished in 1.00s\n")
 
+    @staticmethod
+    def crlf(raw):
+        return raw.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+
     def red(self, case, marker):
         name = guard.BASE + case
         return ("running 1 test\n" + "test " + name + " ... FAILED\n"
@@ -86,6 +90,51 @@ class MutationEvidenceTests(unittest.TestCase):
                 self.assertNotEqual(source, guard.replacement(source, old, new))
                 with self.assertRaises(ValueError):
                     guard.replacement(source + old, old, new)
+
+    def test_replacement_preserves_crlf_and_rejects_mixed_newlines(self):
+        label, path, old, new, _, _ = guard.MUTANTS[0]
+        source = (ROOT / path).read_text()
+        crlf_source = source.replace("\n", "\r\n")
+        changed = guard.replacement(crlf_source, old, new)
+        self.assertNotEqual(changed, crlf_source)
+        self.assertNotIn("\n", changed.replace("\r\n", ""))
+        self.assertEqual(guard.replacement(source, old, new).count("\r\n"), 0)
+        with self.assertRaises(ValueError):
+            guard.replacement(crlf_source + "\n", old, new)
+
+    def test_crlf_mutation_restores_exact_original_bytes_after_process_exit(self):
+        label, path, old, new, case, marker = guard.MUTANTS[0]
+        original = self.crlf((ROOT / path).read_bytes())
+        fake = mock.Mock()
+        fake.read_bytes.return_value = original
+        with mock.patch.object(guard, "MUTANTS", ((label, path, old, new, case, marker),)), \
+                mock.patch.object(guard, "build", return_value=(ROOT / "native", "compiled")), \
+                mock.patch.object(guard, "command", side_effect=[
+                    (0, self.stock(), False), (101, self.red(case, marker), False)]), \
+                mock.patch.object(pathlib.Path, "__truediv__", return_value=fake):
+            guard.run_checkout(ROOT, {})
+        writes = fake.write_bytes.call_args_list
+        self.assertEqual(len(writes), 2)
+        mutated = writes[0].args[0]
+        self.assertNotEqual(mutated, original)
+        self.assertIn(b"\r\n", mutated)
+        self.assertNotIn(b"\n", mutated.replace(b"\r\n", b""))
+        self.assertEqual(writes[1].args[0], original)
+
+    def test_mixed_newline_source_fails_closed_before_mutant_build(self):
+        label, path, old, new, case, marker = guard.MUTANTS[0]
+        original = self.crlf((ROOT / path).read_bytes()) + b"\n"
+        fake = mock.Mock()
+        fake.read_bytes.return_value = original
+        with mock.patch.object(guard, "MUTANTS", ((label, path, old, new, case, marker),)), \
+                mock.patch.object(guard, "build", return_value=(ROOT / "native", "compiled")) as build, \
+                mock.patch.object(guard, "command", return_value=(0, self.stock(), False)) as command, \
+                mock.patch.object(pathlib.Path, "__truediv__", return_value=fake):
+            result = guard.run_checkout(ROOT, {})
+        build.assert_called_once()
+        command.assert_called_once()
+        fake.write_bytes.assert_called_once_with(original)
+        self.assertEqual(result["mutants"][label]["native"], "invalid_source_or_execution")
 
     def test_compiler_rejection_and_compile_watchdog_are_not_native_evidence(self):
         for outcome, expected in (((101, "error", False), "build_failed"),
@@ -154,8 +203,9 @@ class MutationEvidenceTests(unittest.TestCase):
                 mock.patch.object(pathlib.Path, "__truediv__", return_value=fake_source):
             with self.assertRaises(guard.ProcessRetentionRequired):
                 guard.run_checkout(ROOT, {})
-        fake_source.write_text.assert_called_once()
-        fake_source.write_bytes.assert_not_called()
+        fake_source.write_text.assert_not_called()
+        fake_source.write_bytes.assert_called_once()
+        self.assertNotEqual(fake_source.write_bytes.call_args.args[0], original.encode("utf-8"))
 
     def test_unconfirmed_group_refuses_worktree_remove_and_directory_delete(self):
         owner = guard.ProcessOwner()
@@ -318,20 +368,21 @@ class MutationEvidenceTests(unittest.TestCase):
     def test_cancelled_mutant_never_restores_source(self):
         label, path, old, new, case, marker = guard.MUTANTS[0]
         fake = mock.Mock()
-        fake.read_bytes.return_value = (ROOT / path).read_bytes()
+        fake.read_bytes.return_value = self.crlf((ROOT / path).read_bytes())
         with mock.patch.object(guard, "MUTANTS", ((label, path, old, new, case, marker),)), \
                 mock.patch.object(guard, "build", side_effect=[(ROOT / "native", "compiled"), KeyboardInterrupt()]), \
                 mock.patch.object(guard, "command", return_value=(0, self.stock(), False)), \
                 mock.patch.object(pathlib.Path, "__truediv__", return_value=fake):
             with self.assertRaises(KeyboardInterrupt):
                 guard.run_checkout(ROOT, {})
-        fake.write_bytes.assert_not_called()
+        self.assertEqual(fake.write_bytes.call_count, 1)
+        self.assertNotEqual(fake.write_bytes.call_args.args[0], fake.read_bytes.return_value)
 
     def test_recorded_signal_at_mutant_finally_never_restores_source(self):
         control = guard.Cancellation()
         label, path, old, new, case, marker = guard.MUTANTS[0]
         fake = mock.Mock()
-        fake.read_bytes.return_value = (ROOT / path).read_bytes()
+        fake.read_bytes.return_value = self.crlf((ROOT / path).read_bytes())
         native, builds = ROOT / "native", []
         def build(*_a):
             builds.append(None)
@@ -345,7 +396,8 @@ class MutationEvidenceTests(unittest.TestCase):
                 mock.patch.object(pathlib.Path, "__truediv__", return_value=fake):
             with self.assertRaises(guard.RunCancelled):
                 guard.run_checkout(ROOT, {}, control)
-        fake.write_bytes.assert_not_called()
+        self.assertEqual(fake.write_bytes.call_count, 1)
+        self.assertNotEqual(fake.write_bytes.call_args.args[0], fake.read_bytes.return_value)
 
 
 if __name__ == "__main__":
