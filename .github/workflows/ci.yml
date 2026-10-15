@@ -291,10 +291,19 @@ jobs:
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":12, "sf03-b1-csrf-deadline.log":9, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":13, "sf03-b1-csrf-deadline.log":9, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          required_csrf_capacity = {
+              "auth::csrf::tests::bytes_limit_is_independent_and_expired_cleanup_spends_one_batch",
+              "auth::csrf::tests::expired_token_reclaims_byte_capacity_without_relaxing_live_token_cap",
+          }
+          csrf_text=(root/"sf03-b1-csrf-core.log").read_text(encoding="utf-8")
+          for required in required_csrf_capacity:
+              passed=re.findall(rf"(?m)^test {re.escape(required)} \.\.\. ok$",csrf_text)
+              if len(passed)!=1:
+                  raise AssertionError("CSRF capacity oracle missing, duplicate, or unsuccessful")
           PYCODE
       - name: Check B1 CSRF compiler metadata and High saved Low handwritten Low native
         shell: bash
@@ -1009,10 +1018,19 @@ jobs:
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":12, "sf03-b1-csrf-deadline.log":9, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":13, "sf03-b1-csrf-deadline.log":9, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          required_csrf_capacity = {
+              "auth::csrf::tests::bytes_limit_is_independent_and_expired_cleanup_spends_one_batch",
+              "auth::csrf::tests::expired_token_reclaims_byte_capacity_without_relaxing_live_token_cap",
+          }
+          csrf_text=(root/"sf03-b1-csrf-core.log").read_text(encoding="utf-8")
+          for required in required_csrf_capacity:
+              passed=re.findall(rf"(?m)^test {re.escape(required)} \.\.\. ok$",csrf_text)
+              if len(passed)!=1:
+                  raise AssertionError("CSRF capacity oracle missing, duplicate, or unsuccessful")
           PYCODE
       - name: Check B1 CSRF compiler metadata and High saved Low handwritten Low native
         shell: bash

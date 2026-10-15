@@ -180,12 +180,23 @@ async fn same_queue_reopen_reuses_data_context_without_refreshing_token_expiry()
 }
 #[tokio::test]
 async fn bytes_limit_is_independent_and_expired_cleanup_spends_one_batch() {
-    let f = Fixture::new(2, 88).await;
-    let (o, _, _, _) = f.issue().await;
+    let mut f = Fixture::new(2, 88).await;
+    let o = TokenOwner::new(owner());
+    let first_binding = f.binding(&o.lease.lease).await;
     let other = TokenOwner::new(owner());
     let b = f.binding(&other.lease.lease).await;
+    // Finish both real Session lookups before fixing CSRF's private UTC samples:
+    // Session's persisted wall cannot advance past the controlled capacity premise.
+    let live_wall = f.inner.context.sample().unwrap().ceil_ms;
+    f.inner.context.set_test_clock_sequence(vec![live_wall; 16]);
+    f.inner.issue(&o, &first_binding).await.unwrap();
+    let original_expiry = o.cell.lock().unwrap().expiry.unwrap();
+    assert!(live_wall < original_expiry);
+    let before = f.inner.insert_enqueues.load(Ordering::SeqCst);
     assert!(f.inner.issue(&other, &b).await.is_err());
     assert!(f.count().await == 1 && other.cell.lock().unwrap().token.is_none());
+    assert!(f.inner.insert_enqueues.load(Ordering::SeqCst) == before);
+    assert!(o.cell.lock().unwrap().expiry == Some(original_expiry));
     drop(o);
     drop(other);
     f.stop().await;
@@ -204,6 +215,54 @@ async fn bytes_limit_is_independent_and_expired_cleanup_spends_one_batch() {
     drop(o);
     f.stop().await;
 }
+#[tokio::test]
+async fn expired_token_reclaims_byte_capacity_without_relaxing_live_token_cap() {
+    let mut f = Fixture::new(2, 88).await;
+    let first = TokenOwner::new(owner());
+    let first_binding = f.binding(&first.lease.lease).await;
+    let second = TokenOwner::new(owner());
+    let second_binding = f.binding(&second.lease.lease).await;
+    let live_wall = f.inner.context.sample().unwrap().ceil_ms;
+    f.inner.context.set_test_clock_sequence(vec![live_wall; 16]);
+    f.inner.issue(&first, &first_binding).await.unwrap();
+    let expiry = first.cell.lock().unwrap().expiry.unwrap();
+    assert!(live_wall < expiry);
+    let original_digest = {
+        let cell = first.cell.lock().unwrap();
+        let mut headers = hyper::HeaderMap::new();
+        headers.insert(
+            "x-csrf-token",
+            hyper::header::HeaderValue::from_str(cell.token.as_ref().unwrap()).unwrap(),
+        );
+        token_digest(&headers).unwrap()
+    };
+    let before = f.inner.insert_enqueues.load(Ordering::SeqCst);
+    // At the original expiry, one cleanup batch frees the one-row byte cap.
+    f.inner.context.set_test_clock_sequence(vec![expiry; 16]);
+    f.inner.issue(&second, &second_binding).await.unwrap();
+    assert!(f.count().await == 1);
+    assert!(f.inner.insert_enqueues.load(Ordering::SeqCst) == before + 1);
+    assert!(second.cell.lock().unwrap().token.is_some());
+    let tx = sqlite::begin(&f.pool, sqlite::BeginMode::Immediate)
+        .await
+        .unwrap();
+    let p = sqlite::bind_bytes(sqlite::parameters(), original_digest.to_vec());
+    let old_rows = sqlite::query::<Count>(
+        &tx,
+        sqlite::literal("SELECT count(*) AS n FROM __nagi_csrf_tokens WHERE digest=?"),
+        p,
+    )
+    .await
+    .unwrap()
+    .unwrap()
+    .0;
+    sqlite::rollback(tx).await.unwrap();
+    assert!(old_rows == 0);
+    drop(first);
+    drop(second);
+    f.stop().await;
+}
+
 #[tokio::test]
 async fn checkpoint_accepts_before_and_refuses_at_or_after_original_token_expiry() {
     for delta in [-1i64, 0, 1] {

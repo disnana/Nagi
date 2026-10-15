@@ -490,7 +490,7 @@ async fn input_and_strict_json_rejections_do_not_consume_or_call_verifier() {
         br#"{"n":1.25,"a":[true,null]}"#,
     )
     .await;
-    assert!(good.status == 200);
+    assert_eq!(good.status, 200, "input_rejection_preserves_login_claim");
     s.stop().await;
     f.stop().await;
 }
@@ -517,7 +517,8 @@ async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
         };
         let h = login_headers(&c, &t);
         let r = request(s.address, "POST", "/login", &h, b"{}").await;
-        assert!(r.status == status && !r.auth_cookie() && r.deletion());
+        assert_eq!(r.status, status, "committed_claim_status mode={mode}");
+        assert!(!r.auth_cookie() && r.deletion());
         r.guarded();
         if status == 401 {
             assert!(r.values("www-authenticate") == vec!["Bearer"]);
@@ -549,7 +550,8 @@ async fn issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cook
             Server::new(&f, 256, security).await
         };
         let r = request(s.address, "POST", "/login", &login_headers(&c, &t), b"{}").await;
-        assert!(r.status == status && !r.auth_cookie() && r.deletion());
+        assert_eq!(r.status, status, "issue_commit_status mode={mode}");
+        assert!(!r.auth_cookie() && r.deletion());
         r.guarded();
         assert!(
             f.rows().await == 0
