@@ -1,4 +1,5 @@
 import base64
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -197,6 +198,400 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn('await resetFixture()',spec)
         self.assertIn('originalCookieSnapshot',spec)
         self.assertIn('original_prelogin_unexpired',spec)
+
+    def test_ci_wait_failure_keeps_only_closed_waitid_facts(self):
+        class WaitOwner:
+            def __init__(self, status=None, cancelled=False, blocked=None):
+                self.status,self.cancelled,self.peek_calls=status,cancelled,0
+                self.blocked,self.drain_calls=blocked,0
+            def peek(self, _leader):
+                self.peek_calls+=1
+                return self.status
+            def drain_captured_stderr(self):
+                self.drain_calls+=1
+                return self.blocked
+
+        cases=(
+            (NS(si_code=os.CLD_EXITED,si_status=101),False,{'class':'child_exit','status':101}),
+            (NS(si_code=os.CLD_KILLED,si_status=9),False,{'class':'child_signal','status':9}),
+            (NS(si_code=os.CLD_DUMPED,si_status=11),False,{'class':'child_signal','status':11}),
+            (NS(si_code=999,si_status=0),False,{'class':'unknown'}),
+            (None,True,{'class':'cancelled'}),
+        )
+        for status,cancelled,expected in cases:
+            owner=WaitOwner(status,cancelled)
+            with patch.object(ci.time,'monotonic',side_effect=(0.0,0.01)):
+                with self.assertRaises(Exception) as caught:
+                    ci.await_zero(owner,NS(),1)
+            self.assertEqual(type(caught.exception).__name__,'ChildWaitFailure')
+            self.assertEqual(getattr(caught.exception,'detail',None),expected)
+            self.assertEqual(owner.peek_calls,0 if cancelled else 1)
+            self.assertEqual(owner.drain_calls,0 if cancelled else 1)
+
+        owner=WaitOwner(NS(si_code=os.CLD_EXITED,si_status=0))
+        with patch.object(ci.time,'monotonic',side_effect=(0.0,0.01)):
+            self.assertIsNone(ci.await_zero(owner,NS(),1))
+
+        owner=WaitOwner()
+        with patch.object(ci.time,'monotonic',side_effect=(0.0,2.0)):
+            with self.assertRaises(Exception) as caught:
+                ci.await_zero(owner,NS(),1)
+        self.assertEqual(type(caught.exception).__name__,'ChildWaitFailure')
+        self.assertEqual(getattr(caught.exception,'detail',None),{'class':'timeout'})
+
+        blocked=NS(name='build')
+        owner=WaitOwner(blocked=blocked)
+        with patch.object(ci.time,'monotonic',side_effect=(0.0,0.01)):
+            with self.assertRaises(Exception) as caught: ci.await_zero(owner,NS(),1)
+        self.assertEqual(getattr(caught.exception,'detail',None),{'class':'capture_refused'})
+        self.assertEqual((owner.peek_calls,owner.drain_calls),(0,1))
+
+    def test_cargo_error_codes_are_bounded_fixed_and_unknown_on_incomplete_input(self):
+        cases=(
+            (b'error[E0432]: fixed\nerror[E0599]: fixed\nerror[E0432]: duplicate\n',False,True,False,
+             {'class':'rustc_error','rust_codes':['E0432','E0599']}),
+            (b'error: linker refused',False,True,False,
+             {'class':'no_rustc_error_code','rust_codes':[]}),
+            (b'error[E12345]: invalid-width',False,True,False,
+             {'class':'unknown','rust_codes':[]}),
+            (b'error[E0432',False,True,False,
+             {'class':'unknown','rust_codes':[]}),
+            (b'error[E0432]: partial',True,True,False,
+             {'class':'unknown','rust_codes':[]}),
+            (b'error[E0432]: no-eof',False,False,False,
+             {'class':'unknown','rust_codes':[]}),
+            (b'\x1b[31merror[E0432]\x1b[0m',False,True,False,
+             {'class':'unknown','rust_codes':[]}),
+            (b'error[E0432]: invalid-\xff',False,True,False,
+             {'class':'unknown','rust_codes':[]}),
+            (b'error[E0432]: capture-error',False,True,True,
+             {'class':'unknown','rust_codes':[]}),
+            (b'x'*(ci.MAX_CARGO_DIAGNOSTIC_BYTES+1),False,True,False,
+             {'class':'unknown','rust_codes':[]}),
+            (b' '.join(f'error[E{i:04d}]'.encode() for i in range(9)),False,True,False,
+             {'class':'unknown','rust_codes':[]}),
+        )
+        for sample,truncated,eof,error,expected in cases:
+            self.assertEqual(ci.cargo_diagnostic(sample,truncated,eof,error),expected)
+
+    def test_owner_capture_is_nonblocking_bounded_and_registered_before_popen(self):
+        ops=loaded['owned_processes']
+        self.assertEqual(ops.STDERR_CAPTURE_BYTES,ci.MAX_CARGO_DIAGNOSTIC_BYTES)
+        owner=object.__new__(ops.LinuxProcessOwner)
+        owner.pid=os.getpid();owner.leaders={};owner._pending_stderr=[];owner.closing=False;owner.cancelled=False;owner.fault=''
+        payload=b'error[E0432]: unit-only diagnostic'
+        seen=[]
+        def fake_popen(_argv,**kwargs):
+            leader=owner.leaders.get('build')
+            self.assertIsNotNone(leader)
+            self.assertTrue(leader.capture_stderr)
+            self.assertIsNone(leader._process)
+            self.assertTrue(fcntl.fcntl(leader._stderr_reader.fileno(),fcntl.F_GETFL)&os.O_NONBLOCK)
+            self.assertFalse(fcntl.fcntl(kwargs['stderr'].fileno(),fcntl.F_GETFL)&os.O_NONBLOCK)
+            seen.append(kwargs['stderr'].fileno())
+            os.write(kwargs['stderr'].fileno(),payload)
+            return NS(pid=123,returncode=None)
+        with patch.object(ops.subprocess,'Popen',side_effect=fake_popen):
+            leader=owner.spawn('build',['/unit/cargo'],capture_stderr=True)
+        self.assertIs(owner.leaders['build'],leader)
+        self.assertEqual(len(seen),1)
+        with self.assertRaisesRegex(ops.OwnershipError,'^diagnostic_capture_scope$'):
+            owner.spawn('other',['/unit/other'],capture_stderr=True)
+        self.assertIsNone(owner.drain_captured_stderr())
+        self.assertEqual(owner.stderr_capture(leader),(payload,False,True,False))
+        owner._close_stderr();owner._close_stderr()
+        self.assertIsNone(leader._stderr_reader)
+        self.assertIsNone(leader._stderr_writer)
+
+        ordinary=object.__new__(ops.LinuxProcessOwner)
+        ordinary.pid=os.getpid();ordinary.leaders={};ordinary._pending_stderr=[];ordinary.closing=False;ordinary.cancelled=False;ordinary.fault=''
+        ordinary_calls=[]
+        def ordinary_popen(_argv,**kwargs):
+            ordinary_calls.append(kwargs)
+            return NS(pid=126,returncode=None)
+        with patch.object(ops.subprocess,'Popen',side_effect=ordinary_popen):
+            ordinary_leader=ordinary.spawn('npm',['/unit/npm'])
+        self.assertFalse(ordinary_leader.capture_stderr)
+        self.assertIs(ordinary_calls[0]['stderr'],ops.subprocess.DEVNULL)
+
+        failed=object.__new__(ops.LinuxProcessOwner)
+        failed.pid=os.getpid();failed.leaders={};failed._pending_stderr=[];failed.closing=False;failed.cancelled=False;failed.fault=''
+        with patch.object(ops.subprocess,'Popen',side_effect=OSError('fixed')):
+            with self.assertRaises(OSError): failed.spawn('build',['/unit/cargo'],capture_stderr=True)
+        self.assertEqual(failed.leaders,{})
+
+        post=object.__new__(ops.LinuxProcessOwner)
+        post.pid=os.getpid();post.leaders={};post._pending_stderr=[];post.closing=False;post.cancelled=False;post.fault=''
+        writers=[];first_close=[]
+        def post_popen(_argv,**kwargs):
+            self.assertIn('build',post.leaders)
+            writers.append(kwargs['stderr'])
+            return NS(pid=124,returncode=None)
+        close_capture=ops._close_capture_stream
+        def fail_one_close(stream):
+            if writers and stream is writers[0] and not first_close:
+                first_close.append(True)
+                return False
+            return close_capture(stream)
+        with patch.object(ops.subprocess,'Popen',side_effect=post_popen), \
+             patch.object(ops,'_close_capture_stream',side_effect=fail_one_close):
+            tracked=post.spawn('build',['/unit/cargo'],capture_stderr=True)
+            self.assertIs(post.drain_captured_stderr(),tracked)
+            self.assertIs(post.leaders['build'],tracked)
+            post._close_stderr()
+        self.assertIsNone(tracked._stderr_writer)
+
+    def test_failed_capture_setup_retains_bounded_stream_cleanup_ownership(self):
+        ops=loaded['owned_processes']
+        owner=object.__new__(ops.LinuxProcessOwner)
+        owner.pid=os.getpid();owner.leaders={};owner._pending_stderr=[]
+        owner.adopted={};owner.adopted_reaped=0
+        owner.closing=False;owner.closed=False;owner.in_cleanup=False
+        owner.cancelled=False;owner.fault=''
+        streams=[]
+        def refuse_close(stream):
+            if not any(item is stream for item in streams): streams.append(stream)
+            return False
+        try:
+            with patch.object(ops.subprocess,'Popen',side_effect=OSError('fixed')), \
+                 patch.object(ops,'_close_capture_stream',side_effect=refuse_close):
+                with self.assertRaises(OSError):
+                    owner.spawn('build',['/unit/cargo'],capture_stderr=True)
+                self.assertEqual(owner.leaders,{})
+                self.assertEqual(len(owner._pending_stderr),2)
+                self.assertTrue(all(not stream.closed for stream in streams))
+                owner._close_stderr()
+                self.assertEqual(len(owner._pending_stderr),2)
+                with self.assertRaises(ops.OwnershipError):
+                    owner.spawn('build',['/unit/cargo'],capture_stderr=True)
+                with patch.object(owner,'_finish_groups',return_value=True), \
+                     patch.object(owner,'_drain',return_value=True):
+                    first=owner.close_all(timeout=1)
+                self.assertTrue(first.closed and first.echild_observed)
+                self.assertEqual(len(owner._pending_stderr),2)
+            # Child closure is separate from stream cleanup: retry even after
+            # the fake child ledger already observed ECHILD.
+            second=owner.close_all(timeout=1)
+            self.assertTrue(second.closed and second.echild_observed)
+            self.assertEqual(owner._pending_stderr,[])
+            self.assertTrue(all(stream.closed for stream in streams))
+        finally:
+            for stream in streams: stream.close()
+
+    def test_owner_global_closure_drains_once_and_closes_capture_descriptors(self):
+        ops=loaded['owned_processes']
+        owner=object.__new__(ops.LinuxProcessOwner)
+        owner.pid=os.getpid();owner.leaders={};owner._pending_stderr=[];owner.adopted={};owner.adopted_reaped=0
+        owner.closing=False;owner.closed=False;owner.in_cleanup=False;owner.cancelled=False;owner.fault=''
+        read_fd,write_fd=os.pipe2(os.O_CLOEXEC)
+        flags=fcntl.fcntl(read_fd,fcntl.F_GETFL)
+        fcntl.fcntl(read_fd,fcntl.F_SETFL,flags|os.O_NONBLOCK)
+        reader=os.fdopen(read_fd,'rb',buffering=0)
+        writer=os.fdopen(write_fd,'wb',buffering=0)
+        payload=b'error[E0599]: final-buffer'
+        writer.write(payload)
+        writer.close()
+        leader=ops.Leader('build',NS(pid=125,returncode=None),capture_stderr=True,
+                          _stderr_reader=reader,_stderr_writer=None)
+        owner.leaders['build']=leader
+        with patch.object(owner,'_finish_groups',return_value=True),patch.object(owner,'_drain',return_value=True):
+            closed=owner.close_all(timeout=1)
+        self.assertTrue(closed.closed and closed.echild_observed)
+        self.assertEqual(owner.stderr_capture(leader),(payload,False,True,False))
+        self.assertIsNone(leader._stderr_reader)
+        self.assertTrue(owner.close_all(timeout=1).closed)
+
+    def test_owner_stop_failure_and_teardown_exception_close_capture_without_fake_echild(self):
+        ops=loaded['owned_processes']
+        owner=object.__new__(ops.LinuxProcessOwner)
+        owner.pid=os.getpid();owner.leaders={};owner._pending_stderr=[];owner.adopted={};owner.adopted_reaped=0
+        owner.closing=False;owner.closed=False;owner.in_cleanup=False;owner.cancelled=False;owner.fault=''
+        read_fd,write_fd=os.pipe2(os.O_CLOEXEC|os.O_NONBLOCK)
+        reader=os.fdopen(read_fd,'rb',buffering=0)
+        writer=os.fdopen(write_fd,'wb',buffering=0)
+        leader=ops.Leader('build',NS(pid=127,returncode=None),capture_stderr=True,
+                          _stderr_reader=reader,_stderr_writer=writer)
+        owner.leaders['build']=leader
+        with patch.object(owner,'_finish_groups',return_value=False):
+            self.assertFalse(owner.stop_group(leader,timeout=1))
+        self.assertIs(leader._stderr_reader,reader)
+        with patch.object(owner,'_finish_groups',side_effect=OSError('fixed')):
+            closure=owner.close_all(timeout=1)
+        self.assertFalse(closure.closed or closure.echild_observed)
+        self.assertIsNone(leader._stderr_reader)
+        self.assertIsNone(leader._stderr_writer)
+
+    def test_close_all_retries_idempotent_capture_close_after_owner_closed(self):
+        ops=loaded['owned_processes']
+        owner=object.__new__(ops.LinuxProcessOwner)
+        owner.pid=os.getpid();owner.leaders={};owner._pending_stderr=[];owner.adopted={};owner.adopted_reaped=0
+        owner.closing=False;owner.closed=False;owner.in_cleanup=False;owner.cancelled=False;owner.fault=''
+        read_fd,write_fd=os.pipe2(os.O_CLOEXEC|os.O_NONBLOCK)
+        reader=os.fdopen(read_fd,'rb',buffering=0)
+        os.close(write_fd)
+        leader=ops.Leader('build',NS(pid=128,returncode=None),capture_stderr=True,
+                          _stderr_reader=reader,_stderr_writer=None)
+        owner.leaders['build']=leader
+        close_capture=ops._close_capture_stream
+        failed=[]
+        def fail_first_close(stream):
+            if stream is reader and not failed:
+                failed.append(True)
+                return False
+            return close_capture(stream)
+        with patch.object(owner,'_finish_groups',return_value=True), \
+             patch.object(owner,'_drain',return_value=True), \
+             patch.object(ops,'_close_capture_stream',side_effect=fail_first_close):
+            first=owner.close_all(timeout=1)
+            self.assertTrue(first.closed and first.echild_observed)
+            self.assertIs(leader._stderr_reader,reader)
+            second=owner.close_all(timeout=1)
+        self.assertTrue(second.closed and second.echild_observed)
+        self.assertIsNone(leader._stderr_reader)
+
+    def test_ci_cancel_precedes_capture_drain_and_child_status(self):
+        class CancelOwner:
+            cancelled=True
+            drain_calls=peek_calls=0
+            def drain_captured_stderr(self): self.drain_calls+=1
+            def peek(self,_leader): self.peek_calls+=1
+        owner=CancelOwner()
+        with patch.object(ci.time,'monotonic',side_effect=(0.0,0.01)):
+            with self.assertRaises(Exception) as caught: ci.await_zero(owner,NS(),1)
+        self.assertEqual(getattr(caught.exception,'detail',None),{'class':'cancelled'})
+        self.assertEqual((owner.drain_calls,owner.peek_calls),(0,0))
+
+    def test_owner_capture_poll_and_total_read_work_have_hard_limits(self):
+        ops=loaded['owned_processes']
+        owner=object.__new__(ops.LinuxProcessOwner)
+        owner.pid=os.getpid();owner.leaders={};owner._pending_stderr=[];owner.closing=False;owner.cancelled=False;owner.fault=''
+        leader=ops.Leader('build',None,capture_stderr=True,_stderr_reader=NS(fileno=lambda:99))
+        owner.leaders['build']=leader
+        requests=[]
+        def flood(_fd,count):
+            requests.append(count)
+            return b'x'*count
+        with patch.object(ops.os,'read',side_effect=flood):
+            self.assertFalse(owner._drain_stderr(leader))
+            self.assertEqual(len(requests),ops.STDERR_READS_PER_POLL)
+            self.assertLessEqual(max(requests),ops.STDERR_READ_CHUNK)
+            self.assertEqual(sum(requests),ops.STDERR_BYTES_PER_POLL)
+            refused=None
+            while refused is None:
+                refused=owner.drain_captured_stderr()
+        self.assertIs(refused,leader)
+        self.assertEqual(leader._stderr_total,ops.STDERR_TOTAL_BYTES)
+        self.assertTrue(leader._stderr_truncated and leader._stderr_error)
+
+    def test_owner_capture_does_not_wait_for_inherited_writer_eof(self):
+        ops=loaded['owned_processes']
+        owner=object.__new__(ops.LinuxProcessOwner)
+        owner.pid=os.getpid();owner.leaders={};owner._pending_stderr=[];owner.closing=False;owner.cancelled=False;owner.fault=''
+        read_fd,write_fd=os.pipe2(os.O_CLOEXEC|os.O_NONBLOCK)
+        reader=os.fdopen(read_fd,'rb',buffering=0)
+        writer=os.fdopen(write_fd,'wb',buffering=0)
+        leader=ops.Leader('build',None,capture_stderr=True,_stderr_reader=reader,_stderr_writer=writer)
+        owner.leaders['build']=leader
+        writer.write(b'one-buffered-chunk')
+        self.assertFalse(owner._drain_stderr(leader))
+        sample,truncated,eof,error=owner.stderr_capture(leader)
+        self.assertEqual(sample,b'one-buffered-chunk')
+        self.assertFalse(truncated or eof or error)
+        owner._close_stderr()
+        self.assertIsNone(leader._stderr_reader)
+        self.assertIsNone(leader._stderr_writer)
+
+    def test_ci_entrypoint_emits_failure_facts_without_changing_failure_or_closure(self):
+        class RunOwner:
+            cancelled=False
+            def spawn(self,name,_argv,**_kwargs): return NS(name=name,capture_stderr=name=='build')
+            def peek(self,leader):
+                return NS(si_code=os.CLD_EXITED,si_status=101 if leader.name=='build' else 0)
+            def drain_captured_stderr(self): return None
+            def stderr_capture(self,_leader):
+                return (b'error[E0432]: /private/unit https://unit.invalid token=unit-secret',False,True,False)
+            def close_all(self,**_kwargs): return NS(closed=True,echild_observed=True)
+
+        class MissingDiagnosticRoot:
+            def __init__(self,_path): pass
+            def __enter__(self): return self
+            def __exit__(self,*_args): pass
+            def _read_json(self,_name): raise FileNotFoundError
+
+        owner=RunOwner()
+        run_root=self.work/'ci-run';run_root.mkdir(mode=0o700)
+        def load(name,_path):
+            if name=='owned_processes':
+                return NS(LinuxProcessOwner=NS(activate_in_dedicated_cli=lambda:owner))
+            if name=='owned_json': return NS(OwnedRoot=MissingDiagnosticRoot)
+            raise AssertionError('unexpected dynamic module')
+        def project(_checkout,target):
+            target.mkdir(mode=0o700)
+            return {'unit':'fixed'}
+
+        with patch.object(ci.provision,'check_scope'), \
+             patch.object(ci.tempfile,'mkdtemp',return_value=str(run_root)), \
+             patch.object(ci,'projection',side_effect=project), \
+             patch.object(ci.co,'load',side_effect=load), \
+             patch('builtins.print') as emitted:
+            ci.run(self.work)
+        record=json.loads(emitted.call_args.args[0])
+        self.assertEqual(record['code'],'build')
+        self.assertEqual(record['status'],'failed')
+        self.assertEqual(record['failure'],{'class':'child_exit','status':101,
+            'diagnostic':{'class':'rustc_error','rust_codes':['E0432']}})
+        self.assertNotIn('/private/unit',emitted.call_args.args[0])
+        self.assertNotIn('unit-secret',emitted.call_args.args[0])
+        self.assertEqual((record['browser_executions_accepted'],record['resets_accepted']), (0,0))
+        self.assertTrue(record['actual_echild'] and record['retain_data'])
+
+    def test_ci_capture_limit_refuses_instead_of_succeeding(self):
+        class RefusingOwner:
+            cancelled=False
+            drains=0
+            build=None
+            def spawn(self,name,_argv,**_kwargs):
+                leader=NS(name=name,capture_stderr=name=='build')
+                if name=='build': self.build=leader
+                return leader
+            def peek(self,leader):
+                return NS(si_code=os.CLD_EXITED,si_status=0)
+            def drain_captured_stderr(self):
+                self.drains+=1
+                return self.build if self.build is not None else None
+            def stderr_capture(self,_leader): return (b'',True,False,True)
+            def close_all(self,**_kwargs): return NS(closed=True,echild_observed=True)
+
+        class MissingDiagnosticRoot:
+            def __init__(self,_path): pass
+            def __enter__(self): return self
+            def __exit__(self,*_args): pass
+            def _read_json(self,_name): raise FileNotFoundError
+
+        owner=RefusingOwner()
+        run_root=self.work/'ci-capture-refused';run_root.mkdir(mode=0o700)
+        def load(name,_path):
+            if name=='owned_processes':
+                return NS(LinuxProcessOwner=NS(activate_in_dedicated_cli=lambda:owner))
+            if name=='owned_json': return NS(OwnedRoot=MissingDiagnosticRoot)
+            raise AssertionError('unexpected dynamic module')
+        def project(_checkout,target):
+            target.mkdir(mode=0o700)
+            return {'unit':'fixed'}
+
+        with patch.object(ci.provision,'check_scope'), \
+             patch.object(ci.tempfile,'mkdtemp',return_value=str(run_root)), \
+             patch.object(ci,'projection',side_effect=project), \
+             patch.object(ci.co,'load',side_effect=load), \
+             patch('builtins.print') as emitted:
+            ci.run(self.work)
+        record=json.loads(emitted.call_args.args[0])
+        self.assertEqual(record['status'],'failed')
+        self.assertEqual(record['code'],'build')
+        self.assertEqual(record['failure'],{'class':'capture_refused',
+            'diagnostic':{'class':'unknown','rust_codes':[]}})
+        self.assertEqual((record['browser_executions_accepted'],record['resets_accepted']), (0,0))
+        self.assertTrue(record['actual_echild'])
 
 
 if __name__=='__main__': unittest.main(verbosity=2)

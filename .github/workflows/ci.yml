@@ -78,6 +78,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Check call_member_ recovery first with exact result on the target platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
+          python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -117,12 +123,17 @@ jobs:
           csrf_rc=$?
           RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-prelogin.raw" 2>&1
           prelogin_rc=$?
-          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
           broad_rc=$?
-          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2>&1
+          python -B scripts/tests/test_browser_login_stage_coverage.py
+          stage_unit_rc=$?
+          python -B scripts/ci/browser_login_stage_coverage.py "$RUNNER_TEMP/auth-stage-broad.raw" "$broad_rc" "$RUNNER_TEMP/auth-stage-browser-native.json"
+          stage_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2>&1
           cases_rc=$?
           python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc" "$cases_rc"
           sanitize_rc=$?
+          if [ "$stage_unit_rc" -ne 0 ] || [ "$stage_rc" -ne 0 ]; then sanitize_rc=1; fi
           rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw" "$RUNNER_TEMP/auth-stage-cases.raw"
           exit "$sanitize_rc"
       - name: Preserve bounded Session auth-stage traces
@@ -134,6 +145,7 @@ jobs:
             ${{ runner.temp }}/auth-stage-csrf.trace
             ${{ runner.temp }}/auth-stage-prelogin.trace
             ${{ runner.temp }}/auth-stage-broad.trace
+            ${{ runner.temp }}/auth-stage-browser-native.json
           if-no-files-found: ignore
       - name: Capture bounded Session deadline public tests
         id: session_deadline_diag
@@ -276,6 +288,12 @@ jobs:
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PYCODE
+      - name: Check test-only SF07 indexed core and frozen reference inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"
+          python scripts/check_sf07_private_tests.py "$RUNNER_TEMP/sf07-private-core.log"
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
       - name: Check HTTP registry emission before the workspace regression
@@ -522,6 +540,12 @@ jobs:
               if len(re.findall(pattern,text))!=1:
                   raise AssertionError("stalled-send case missing, duplicate or failed")
           PYCODE
+      - name: Check call_member_ recovery first with exact result on the target platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
+          python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -561,12 +585,17 @@ jobs:
           csrf_rc=$?
           RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-prelogin.raw" 2>&1
           prelogin_rc=$?
-          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
           broad_rc=$?
-          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2>&1
+          python -B scripts/tests/test_browser_login_stage_coverage.py
+          stage_unit_rc=$?
+          python -B scripts/ci/browser_login_stage_coverage.py "$RUNNER_TEMP/auth-stage-broad.raw" "$broad_rc" "$RUNNER_TEMP/auth-stage-browser-native.json"
+          stage_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2>&1
           cases_rc=$?
           python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc" "$cases_rc"
           sanitize_rc=$?
+          if [ "$stage_unit_rc" -ne 0 ] || [ "$stage_rc" -ne 0 ]; then sanitize_rc=1; fi
           rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw" "$RUNNER_TEMP/auth-stage-cases.raw"
           exit "$sanitize_rc"
       - name: Preserve bounded Session auth-stage traces
@@ -578,6 +607,7 @@ jobs:
             ${{ runner.temp }}/auth-stage-csrf.trace
             ${{ runner.temp }}/auth-stage-prelogin.trace
             ${{ runner.temp }}/auth-stage-broad.trace
+            ${{ runner.temp }}/auth-stage-browser-native.json
           if-no-files-found: ignore
       - name: Capture bounded Session deadline public tests
         id: session_deadline_diag
@@ -720,6 +750,12 @@ jobs:
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PYCODE
+      - name: Check test-only SF07 indexed core and frozen reference inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"
+          python scripts/check_sf07_private_tests.py "$RUNNER_TEMP/sf07-private-core.log"
       - run: cargo build --release --locked -p nagic
       - name: Check HTTP registry emission before the platform regression
         run: cargo test --locked -p nagic --test http_codegen --test resource_contract_characterization --test security_sf05_native
@@ -730,7 +766,13 @@ jobs:
         run: node --test editors/vscode-nagi/test/*.test.js scripts/test_graph_html_viewport.mjs
       - name: Check generated output protection and native expression behavior
         run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test explicit_moves --test task_handles --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
+      - name: Check bounded SF01 diagnostic observer
+        env:
+          RUSTFLAGS: --cfg nagi_sf01_diagnostic --cfg nagi_sf01_diag_oracle --check-cfg=cfg(nagi_sf01_diagnostic) --check-cfg=cfg(nagi_sf01_diag_oracle)
+        run: cargo test --locked -p nagic --test security_sf01 sf01_diagnostic_observer_oracle -- --exact
       - name: Check SF01 High, saved Low, handwritten Low and native policy contracts
+        env:
+          RUSTFLAGS: --cfg nagi_sf01_diagnostic --check-cfg=cfg(nagi_sf01_diagnostic) --check-cfg=cfg(nagi_sf01_diag_oracle)
         run: cargo test --locked -p nagic --test security_sf01 --test security_sf01_native
       - name: Check SF01 request lease and permit lifecycle through the public runtime
         shell: bash

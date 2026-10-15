@@ -53,9 +53,16 @@ pub(crate) struct EditorCandidate {
     pub binding: Option<BindingId>,
     pub borrowed: bool,
 }
+#[derive(Clone, PartialEq, Eq)]
+/// Call-form metadata for builtins that are not first-class name values.
+pub(crate) struct EditorBuiltinCandidate {
+    pub name: &'static str,
+    pub signature: String,
+}
 #[derive(Default)]
 pub(crate) struct EditorFacts {
     pub items: Vec<EditorCandidate>,
+    pub builtin_candidates: Vec<EditorBuiltinCandidate>,
     pub shadowed: HashMap<String, BindingId>,
     pub verified_globals: HashSet<String>,
     pub observed: bool,
@@ -88,6 +95,45 @@ struct Checker {
 }
 fn error(line: usize, s: impl AsRef<str>) -> String {
     format!("line {line}: {}", s.as_ref())
+}
+// Shared by print/write type checking and the editor's display signature.
+const PRINT_VALUE_SCALARS: &[&str] = &[
+    "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "bool", "UUID",
+];
+fn print_value_type(ty: &Type) -> bool {
+    PRINT_VALUE_SCALARS.contains(&ty.0.as_str())
+        || ty.0 == "str"
+        || ty == &Type::generic("view", vec![Type::named("str")])
+}
+fn print_completion_signature() -> String {
+    let mut accepted = PRINT_VALUE_SCALARS.to_vec();
+    accepted.extend(["str", "view[str]"]);
+    format!("print(value) -> unit; accepts {}", accepted.join(", "))
+}
+// This is the same inventory used by Checker::builtin for normal call checking.
+fn builtin_arity(name: &str) -> Option<usize> {
+    Some(match name {
+        "clock_ns" | "supervisor_demo" | "read_line" => 0,
+        "size_of" => 0,
+        "print" | "write" | "html" | "include_text" | "view" | "copy" | "share"
+        | "clone_shared" | "len" | "range" | "sleep" | "json_decode" | "json_encode" | "ok"
+        | "some" | "error" | "not_found" | "internal_error" | "fail" | "error_kind"
+        | "error_message" | "assert_true" | "parse_i64" | "parse_f64" | "make_ints"
+        | "actor_demo" | "actor_pair_demo" | "queue_demo" | "task_demo" | "cpu_sum" | "i64"
+        | "i32" | "uuid_parse" | "uuid_format" => 1,
+        "append" | "env" => 2,
+        "slice" | "bench_i64" | "bench_f64" | "bench_scalar" => 3,
+        _ => return None,
+    })
+}
+fn editor_builtin_candidate(name: &str) -> Option<EditorBuiltinCandidate> {
+    if name != "print" || builtin_arity(name) != Some(1) {
+        return None;
+    }
+    Some(EditorBuiltinCandidate {
+        name: "print",
+        signature: print_completion_signature(),
+    })
 }
 fn result(t: Type) -> Type {
     Type::generic("Result", vec![t, Type::named("Error")])
@@ -950,6 +996,18 @@ impl Checker {
             }
             self.editor_query = Some(query);
         }
+        let builtin_candidates = if !query.members
+            && !self.editor_tainted
+            && !self.vars.contains_key("print")
+            && !self.functions.contains_key("print")
+            && !self.classes.contains_key("print")
+            && !self.enums.contains_key("print")
+            && !self.registered.contains("print")
+        {
+            editor_builtin_candidate("print").into_iter().collect()
+        } else {
+            Vec::new()
+        };
         if self.editor_facts.observed {
             self.editor_facts.valid_context &= !self.editor_tainted;
             // Loop checking can revisit a source expression at a stronger
@@ -961,9 +1019,13 @@ impl Checker {
             self.editor_facts
                 .items
                 .retain(|item| items.get(&(item.name.clone(), item.binding)) == Some(item));
+            self.editor_facts
+                .builtin_candidates
+                .retain(|item| builtin_candidates.contains(item));
             self.editor_facts.shadowed.extend(shadowed);
         } else {
             self.editor_facts.items = items;
+            self.editor_facts.builtin_candidates = builtin_candidates;
             self.editor_facts.shadowed = shadowed;
             self.editor_facts.observed = true;
             self.editor_facts.valid_context = !self.editor_tainted;
@@ -4494,19 +4556,7 @@ impl Checker {
         if matches!(n, "serve" | "html") {
             return Err(error(line, "SF01 migration: 旧serve/htmlは廃止しました。std.http.serverの明示Policy付きrouteとserveを使用してください。raw HTMLはSF04のtyped HTMLへ移行してください"));
         }
-        let arity = match n {
-            "clock_ns" | "supervisor_demo" | "read_line" => 0,
-            "size_of" => 0,
-            "print" | "write" | "html" | "include_text" | "view" | "copy" | "share"
-            | "clone_shared" | "len" | "range" | "sleep" | "json_decode" | "json_encode" | "ok"
-            | "some" | "error" | "not_found" | "internal_error" | "fail" | "error_kind"
-            | "error_message" | "assert_true" | "parse_i64" | "parse_f64" | "make_ints"
-            | "actor_demo" | "actor_pair_demo" | "queue_demo" | "task_demo" | "cpu_sum" | "i64"
-            | "i32" | "uuid_parse" | "uuid_format" => 1,
-            "append" | "env" => 2,
-            "slice" | "bench_i64" | "bench_f64" | "bench_scalar" => 3,
-            _ => return Err(error(line, format!("未定義の関数: {n}"))),
-        };
+        let arity = builtin_arity(n).ok_or_else(|| error(line, format!("未定義の関数: {n}")))?;
         if arity != args.len() {
             return Err(error(line, format!("{n} は{arity}引数です")));
         }
@@ -4560,22 +4610,7 @@ impl Checker {
             |t: &Type| t.0 == "str" || t == &Type::generic("view", vec![Type::named("str")]);
         match n {
             "print" | "write" => {
-                if !is_string(&types[0])
-                    && !matches!(
-                        types[0].0.as_str(),
-                        "i8" | "i16"
-                            | "i32"
-                            | "i64"
-                            | "u8"
-                            | "u16"
-                            | "u32"
-                            | "u64"
-                            | "f32"
-                            | "f64"
-                            | "bool"
-                            | "UUID"
-                    )
-                {
+                if !print_value_type(&types[0]) {
                     return Err(error(
                         line,
                         format!(

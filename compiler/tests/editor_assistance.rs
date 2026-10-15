@@ -1,7 +1,7 @@
 use std::{
     fs,
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 static ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -33,8 +33,11 @@ impl Fixture {
         self.request(serde_json::json!({"files":[{"file":"main.nagi","text":text}],"query":{"file":"main.nagi","line":line,"column":column}}))
     }
     fn request(&self, input: serde_json::Value) -> serde_json::Value {
+        self.request_entry("main.nagi", input)
+    }
+    fn request_entry(&self, entry: &str, input: serde_json::Value) -> serde_json::Value {
         let mut command = Command::new(env!("CARGO_BIN_EXE_nagic"));
-        command.args(["assist", "main.nagi", "--editor-input"]);
+        command.args(["assist", entry, "--editor-input"]);
         if self.0.join("nagi.toml").exists() {
             command.args(["--project", "nagi.toml"]);
         }
@@ -457,4 +460,404 @@ fn persistent_protocol_refuses_malformed_frame_without_fallback() {
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("unknown field"));
+}
+
+fn call_member_response(
+    fixture: &Fixture,
+    entry: &str,
+    text: &str,
+    needle: &str,
+) -> serde_json::Value {
+    let offset = text.rfind(needle).unwrap() + needle.len();
+    let before = &text[..offset];
+    let line = before.bytes().filter(|b| *b == b'\n').count() + 1;
+    let column = before.rsplit('\n').next().unwrap().encode_utf16().count() + 1;
+    let files = serde_json::json!([{"file":entry,"text":text}]);
+    let original = fixture.request_entry(entry, serde_json::json!({"files":files}));
+    let value = fixture.request_entry(
+        entry,
+        serde_json::json!({"files":files,"query":{"file":entry,"line":line,"column":column}}),
+    );
+    assert_eq!(value["diagnostics"], original["diagnostics"]);
+    assert_eq!(value["frontend_checked"], original["frontend_checked"]);
+    assert_eq!(value["frontend_accepted"], original["frontend_accepted"]);
+    value
+}
+
+fn call_name_response(
+    fixture: &Fixture,
+    entry: &str,
+    text: &str,
+    needle: &str,
+) -> serde_json::Value {
+    let offset = text.rfind(needle).unwrap() + needle.len();
+    let before = &text[..offset];
+    let line = before.bytes().filter(|b| *b == b'\n').count() + 1;
+    let column = before.rsplit('\n').next().unwrap().encode_utf16().count() + 1;
+    let files = serde_json::json!([{"file":entry,"text":text}]);
+    let original = fixture.request_entry(entry, serde_json::json!({"files":files}));
+    let value = fixture.request_entry(
+        entry,
+        serde_json::json!({"files":files,"query":{"file":entry,"line":line,"column":column}}),
+    );
+    assert_eq!(value["diagnostics"], original["diagnostics"]);
+    assert_eq!(value["frontend_checked"], original["frontend_checked"]);
+    assert_eq!(value["frontend_accepted"], original["frontend_accepted"]);
+    value
+}
+
+fn assert_print_candidate(value: &serde_json::Value) {
+    assert_eq!(value["completion"]["kind"], "names", "{value}");
+    assert_eq!(value["semantic_status"], "editor-partial", "{value}");
+    assert_eq!(value["frontend_checked"], true, "{value}");
+    assert_eq!(value["frontend_accepted"], false, "{value}");
+    let matches = value["completion"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|item| item["name"] == "print")
+        .collect::<Vec<_>>();
+    assert_eq!(matches.len(), 1, "{value}");
+    let candidate = matches[0];
+    assert_eq!(candidate["kind"], "function");
+    assert_eq!(
+        candidate["signature"],
+        "print(value) -> unit; accepts i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool, UUID, str, view[str]"
+    );
+    assert_eq!(candidate["access"], "read");
+    assert!(candidate.get("type").is_none());
+    assert!(candidate.get("target").is_none());
+}
+
+#[test]
+fn call_member_recovery_high_and_handwritten_low_preserves_original_diagnostics() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(0)\n");
+    f.write("manual.low", "fn main() { print(0); }\n");
+    for prefix in ["user.", "user.na"] {
+        for (entry, text) in [
+            ("main.nagi", format!("class User:\n    name: str\n    age: i64\ndef inspect(user: User):\n    print({prefix})\n")),
+            ("manual.low", format!("record User {{ name: str; age: i64; }}\nfn inspect(user: User) -> unit {{ print({prefix}); }}\n")),
+        ] {
+            let v = call_member_response(&f, entry, &text, prefix);
+            assert_eq!(names(&v), ["age", "name"], "{entry}: {v}");
+            assert_eq!(v["completion"]["kind"], "members");
+            assert_eq!(v["recovered"], true);
+            assert_eq!(v["semantic_status"], "editor-partial");
+            assert_eq!(v["frontend_accepted"], false);
+            assert!(!v["diagnostics"].as_array().unwrap().is_empty());
+            assert!(v["diagnostics"][0]["file"].as_str().unwrap().ends_with(entry));
+        }
+    }
+}
+
+#[test]
+fn call_member_nested_closes_unicode_crlf_keep_read_metadata_and_original_positions() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(0)\n");
+    for text in [
+        "class User:\n    name: str\n    age: i64\ndef inspect(user: shared[User]):\n    print(print(user.na))\n",
+        "class User:\r\n    name: str\r\n    age: i64\r\ndef inspect(user: shared[User]):\r\n    print(\"😀\"); print(user.na)\r\n",
+    ] {
+        let v = call_member_response(&f, "main.nagi", text, "user.na");
+        assert_eq!(names(&v), ["age", "name"], "{v}");
+        assert!(v["completion"]["items"].as_array().unwrap().iter().all(|item| item["access"] == "read" && item["borrowed"] == true));
+        let line = text.lines().nth(4).unwrap();
+        let column = line[..line.rfind("user.na").unwrap()].encode_utf16().count() + 1;
+        assert!(v["symbols"]["references"].as_array().unwrap().iter().any(|r| r["location"]["line"] == 5 && r["location"]["column"] == column && r["target"]["line"] == 4 && r["target"]["file"].as_str().is_some_and(|file| file.ends_with("main.nagi"))), "{v}");
+    }
+    let text = "class User:\n    name: str\n    age: i64\ndef inspect(user: User):\n    print(\"😀\"); print(user.na)\n";
+    for column in [13, 1000] {
+        let v=f.request(serde_json::json!({"files":[{"file":"main.nagi","text":text}],"query":{"file":"main.nagi","line":5,"column":column}}));
+        assert!(names(&v).is_empty());
+        assert_eq!(v["recovered"], false);
+    }
+}
+
+#[test]
+fn call_member_ownership_and_tainted_context_stay_checker_authoritative() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(0)\n");
+    let partial = "from std.ownership import move\nclass Pair:\n    first: str\n    second: i64\ndef inspect(pair: Pair):\n    taken = move(pair.first)\n    print(pair.)\n";
+    let v = call_member_response(&f, "main.nagi", partial, "pair.");
+    assert_eq!(names(&v), ["second"]);
+    for before in ["    gone = move(pair)\n", "    unknown(pair)\n"] {
+        let text = format!("from std.ownership import move\nclass Pair:\n    first: str\n    second: i64\ndef inspect(pair: Pair):\n{before}    print(pair.)\n");
+        let v = call_member_response(&f, "main.nagi", &text, "pair.");
+        assert!(names(&v).is_empty(), "{v}");
+        assert_eq!(v["frontend_accepted"], false);
+    }
+}
+
+#[test]
+fn call_member_unsafe_suffix_and_noncode_do_not_fabricate_members() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(0)\n");
+    for body in [
+        "print(user.na + 1)",
+        "print(user.na, 1)",
+        "print(user.na])",
+        "print(user.na))",
+        "print(\"user.na\")",
+        "# user.na",
+        "print(\"user.na",
+        "print(user.na) # comment",
+    ] {
+        let text = format!(
+            "class User:\n    name: str\n    age: i64\ndef inspect(user: User):\n    {body}\n"
+        );
+        let v = call_member_response(&f, "main.nagi", &text, "user.na");
+        assert!(names(&v).is_empty(), "{body}: {v}");
+        assert_ne!(v["completion"]["kind"], "members");
+    }
+}
+
+#[test]
+fn call_member_saved_low_queries_use_low_file_positions_without_high_mapping() {
+    let f = Fixture::new();
+    f.write("main.nagi", "class User:\n    name: str\n    age: i64\ndef inspect(user: shared[User]):\n    print(user.age)\ndef main():\n    print(0)\n");
+    let lower = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .current_dir(&f.0)
+        .args(["lower", "main.nagi", "--out", "generated"])
+        .output()
+        .unwrap();
+    assert!(
+        lower.status.success(),
+        "{}",
+        String::from_utf8_lossy(&lower.stderr)
+    );
+    let entry = "generated/generated.low";
+    let saved = fs::read_to_string(f.0.join(entry)).unwrap();
+    assert!(saved.contains("user.age"));
+    for prefix in ["user.", "user.na"] {
+        let text = saved.replace("user.age", prefix);
+        let v = call_member_response(&f, entry, &text, prefix);
+        assert_eq!(names(&v), ["age", "name"], "{v}");
+        assert_eq!(v["completion"]["kind"], "members");
+        assert_eq!(v["semantic_status"], "editor-partial");
+        let line = text[..text.rfind(prefix).unwrap()]
+            .bytes()
+            .filter(|b| *b == b'\n')
+            .count()
+            + 1;
+        assert!(
+            v["symbols"]["references"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|r| r["location"]["line"] == line
+                    && r["location"]["file"]
+                        .as_str()
+                        .is_some_and(|file| Path::new(file).ends_with(Path::new(entry)))
+                    && r["target"]["file"]
+                        .as_str()
+                        .is_some_and(|file| Path::new(file).ends_with(Path::new(entry)))),
+            "{v}"
+        );
+        assert!(
+            Path::new(v["diagnostics"][0]["file"].as_str().unwrap()).ends_with(Path::new(entry))
+        );
+    }
+}
+
+#[test]
+fn compiler_offers_print_for_intrinsic_name_prefixes_across_source_forms() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(0)\n");
+    for prefix in ["pr", "pri"] {
+        let text = format!("def inspect():\n    {prefix}\n");
+        let v = call_name_response(&f, "main.nagi", &text, prefix);
+        assert_print_candidate(&v);
+    }
+
+    f.write("manual.low", "fn inspect() { print(0); }\n");
+    let handwritten_low = "fn inspect() { pr; }\n";
+    let v = call_name_response(&f, "manual.low", handwritten_low, "pr");
+    assert_print_candidate(&v);
+
+    f.write("main.nagi", "def main():\n    print(0)\n");
+    let lower = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .current_dir(&f.0)
+        .args(["lower", "main.nagi", "--out", "generated"])
+        .output()
+        .unwrap();
+    assert!(
+        lower.status.success(),
+        "{}",
+        String::from_utf8_lossy(&lower.stderr)
+    );
+    let entry = "generated/generated.low";
+    let saved = fs::read_to_string(f.0.join(entry)).unwrap();
+    let saved_low = saved.replace("print(0)", "pr");
+    assert_ne!(saved_low, saved, "{saved}");
+    let v = call_name_response(&f, entry, &saved_low, "pr");
+    assert_print_candidate(&v);
+}
+
+#[test]
+fn local_print_is_the_only_print_candidate_when_it_shadows_the_intrinsic() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(0)\n");
+    let text = "def inspect():\n    print = 1\n    pri\n";
+    let v = call_name_response(&f, "main.nagi", text, "pri");
+    let matches = v["completion"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|item| item["name"] == "print")
+        .collect::<Vec<_>>();
+    assert_eq!(matches.len(), 1, "{}", v["completion"]);
+    assert_eq!(matches[0]["kind"], "local");
+    assert_eq!(matches[0]["type"], "i64");
+}
+
+#[test]
+fn user_print_function_shadows_the_intrinsic_completion_candidate() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(0)\n");
+    let text = "def print(value: i64) -> i64:\n    return value\ndef inspect():\n    pr\n";
+    let v = call_name_response(&f, "main.nagi", text, "pr");
+    let matches = v["completion"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|item| item["name"] == "print")
+        .collect::<Vec<_>>();
+    assert_eq!(matches.len(), 1, "{}", v["completion"]);
+    assert_eq!(matches[0]["kind"], "function");
+    assert_eq!(matches[0]["signature"], "def print(value: i64) -> i64");
+    assert_eq!(matches[0]["target"]["line"], 1);
+}
+
+#[test]
+fn invalid_prior_statement_does_not_authorize_intrinsic_completion() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(0)\n");
+    let text = "def inspect():\n    unknown_call()\n    pr\n";
+    let v = call_name_response(&f, "main.nagi", text, "pr");
+    assert_eq!(v["semantic_status"], "none", "{v}");
+    assert!(names(&v).is_empty(), "{v}");
+}
+
+#[test]
+fn local_point_parameter_shadowing_module_alias_keeps_field_candidates() {
+    let f = Fixture::new();
+    f.write(
+        "geometry.nagi",
+        "class Marker:\n    id: i64\ndef make() -> i64:\n    return 1\n",
+    );
+    f.write(
+        "main.nagi",
+        "import \"geometry.nagi\" as geo\ndef main():\n    print(0)\n",
+    );
+    let text = "import \"geometry.nagi\" as geo\nclass Point:\n    x: i64\n    y: i64\ndef inspect(geo: Point):\n    geo.\n";
+    let v = f.analyze(text, "    geo.");
+    assert_eq!(v["completion"]["kind"], "members", "{v}");
+    assert_eq!(v["recovered"], true, "{v}");
+    assert_eq!(names(&v), ["x", "y"], "{v}");
+    assert!(v["completion"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|item| item["kind"] == "field" && item["access"] == "read"));
+}
+
+fn assert_point_member_candidates(value: &serde_json::Value, entry: &str) {
+    assert_eq!(value["recovered"], true, "{value}");
+    assert_eq!(value["completion"]["kind"], "members", "{value}");
+    assert_eq!(value["semantic_status"], "editor-partial", "{value}");
+    assert_eq!(value["frontend_checked"], false, "{value}");
+    assert_eq!(value["frontend_accepted"], false, "{value}");
+    assert_eq!(names(value), ["x", "y"], "{value}");
+
+    let diagnostics = value["diagnostics"].as_array().unwrap();
+    assert!(!diagnostics.is_empty(), "{value}");
+    assert_eq!(diagnostics[0]["stage"], "load", "{value}");
+    assert!(
+        diagnostics[0]["file"].as_str().unwrap().ends_with(entry),
+        "{value}"
+    );
+
+    let files = value["symbols"]["files"].as_array().unwrap();
+    assert!(
+        files
+            .iter()
+            .any(|file| file.as_str().is_some_and(|path| path.ends_with(entry))),
+        "{value}"
+    );
+    let items = value["completion"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2, "{value}");
+    for item in items {
+        assert_eq!(item["kind"], "field", "{value}");
+        assert_eq!(item["type"], "f64", "{value}");
+        assert_eq!(item["borrowed"], false, "{value}");
+        assert_eq!(item["access"], "read", "{value}");
+    }
+}
+
+fn assert_no_point_member_candidates(value: &serde_json::Value, entry: &str) {
+    assert!(names(value).is_empty(), "{value}");
+    assert_eq!(value["recovered"], false, "{value}");
+    assert_eq!(value["semantic_status"], "none", "{value}");
+    assert_eq!(value["frontend_accepted"], false, "{value}");
+    assert!(
+        value["diagnostics"][0]["file"]
+            .as_str()
+            .unwrap()
+            .ends_with(entry),
+        "{value}"
+    );
+}
+
+#[test]
+fn point_member_completion_handles_right_closer_in_high_and_handwritten_low() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(0)\n");
+    f.write("manual.low", "fn main() { print(0); }\n");
+
+    let high = |call: &str| {
+        format!(
+            "class Point:\n    x: f64\n    y: f64\n\ndef consume(value: Point):\n    print(value.x)\ndef main():\n    p = Point(x = 1.5, y = 2.5)\n    {call}\n"
+        )
+    };
+    let low = |call: &str| {
+        format!(
+            "record Point {{ x: f64; y: f64; }}\nfn consume(value: Point) {{ print(value.x); }}\nfn main() {{ let p = Point(x = 1.5, y = 2.5); {call}; }}\n"
+        )
+    };
+
+    for (entry, source) in [
+        ("main.nagi", high("print(p.)")),
+        ("main.nagi", high("consume(p.)")),
+        ("manual.low", low("print(p.)")),
+        ("manual.low", low("consume(p.)")),
+    ] {
+        for (dot_cursor, after_closer) in [("p.", false), ("p.)", true)] {
+            let value = call_member_response(&f, entry, &source, dot_cursor);
+            if after_closer {
+                assert_no_point_member_candidates(&value, entry);
+            } else {
+                assert_point_member_candidates(&value, entry);
+            }
+        }
+    }
+}
+
+#[test]
+fn point_member_completion_does_not_invent_fields_for_unknown_receiver() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(0)\n");
+    let text = "class Point:\n    x: f64\n    y: f64\ndef main():\n    p = Point(x = 1.5, y = 2.5)\n    print(missing.)\n";
+    let value = call_member_response(&f, "main.nagi", text, "missing.");
+    assert_eq!(value["recovered"], true, "{value}");
+    assert_eq!(value["completion"]["kind"], "members", "{value}");
+    assert!(names(&value).is_empty(), "{value}");
+    assert_eq!(value["frontend_accepted"], false, "{value}");
+    assert!(
+        value["diagnostics"][0]["file"]
+            .as_str()
+            .unwrap()
+            .ends_with("main.nagi"),
+        "{value}"
+    );
 }

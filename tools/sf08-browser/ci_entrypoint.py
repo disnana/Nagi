@@ -9,7 +9,9 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
+import signal
 import sys
 import tempfile
 import time
@@ -21,6 +23,10 @@ ROOT_META = {'Cargo.toml', 'Cargo.lock', 'compiler/Cargo.toml', 'compiler/src/li
 CANONICAL_FILES = {'tools/sf08-fixture-runtime/Cargo.toml', 'tools/sf08-fixture-runtime/Cargo.lock',
            'tools/sf08-fixture-runtime/src/main.rs', 'tools/sf08-fixture-runtime/src/expiry.rs',
            'runtime/tests/support/browser_login.rs', 'runtime/tests/support/cors.rs'}
+MAX_CARGO_DIAGNOSTIC_BYTES = 64 * 1024
+MAX_RUST_ERROR_CODES = 8
+RUST_ERROR_PREFIX = re.compile(rb'error\[E')
+RUST_ERROR_CODE = re.compile(rb'error\[E([0-9]{4})\]')
 
 
 def item(path):
@@ -59,16 +65,73 @@ def projection(checkout, target):
     return observed
 
 
+class ChildWaitFailure(RuntimeError):
+    def __init__(self, detail, leader=None):
+        self.detail = detail
+        self.leader = leader
+        super().__init__(detail['class'])
+
+
+def wait_failure(status):
+    code = getattr(status, 'si_code', None)
+    value = getattr(status, 'si_status', None)
+    if type(code) is not int or type(value) is not int:
+        return {'class': 'unknown'}
+    if code == os.CLD_EXITED:
+        if not 0 <= value <= 255:
+            return {'class': 'unknown'}
+        return None if value == 0 else {'class': 'child_exit', 'status': value}
+    if code in (os.CLD_KILLED, os.CLD_DUMPED) and 1 <= value < signal.NSIG:
+        return {'class': 'child_signal', 'status': value}
+    return {'class': 'unknown'}
+
+
+def cargo_diagnostic(sample, truncated, eof, capture_error):
+    unknown = {'class': 'unknown', 'rust_codes': []}
+    if (type(sample) is not bytes or len(sample) > MAX_CARGO_DIAGNOSTIC_BYTES
+            or type(truncated) is not bool or truncated or type(eof) is not bool or not eof
+            or type(capture_error) is not bool or capture_error):
+        return unknown
+    try:
+        decoded = sample.decode('utf-8')
+    except UnicodeDecodeError:
+        return unknown
+    if any((ord(char) < 32 and char not in '\r\n\t') or ord(char) == 127 for char in decoded):
+        return unknown
+    codes = set()
+    cursor = 0
+    while True:
+        prefix = RUST_ERROR_PREFIX.search(sample, cursor)
+        if prefix is None:
+            break
+        match = RUST_ERROR_CODE.match(sample, prefix.start())
+        if match is None:
+            return unknown
+        codes.add('E' + match.group(1).decode('ascii'))
+        if len(codes) > MAX_RUST_ERROR_CODES:
+            return unknown
+        cursor = match.end()
+    ordered = sorted(codes)
+    return {'class': 'rustc_error' if ordered else 'no_rustc_error_code', 'rust_codes': ordered}
+
+
 def await_zero(owner, leader, seconds):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
-        co.require(not owner.cancelled)
+        if owner.cancelled:
+            raise ChildWaitFailure({'class': 'cancelled'}, leader)
+        drain = getattr(owner, 'drain_captured_stderr', None)
+        blocked = drain() if callable(drain) else None
+        if blocked is not None:
+            raise ChildWaitFailure({'class': 'capture_refused'}, blocked)
         state = owner.peek(leader)
         if state is not None:
-            co.require(state.si_code == os.CLD_EXITED and state.si_status == 0)
+            failure = wait_failure(state)
+            if failure is not None:
+                raise ChildWaitFailure(failure, leader)
             return
         time.sleep(.05)
-    co.require(False)
+    raise ChildWaitFailure({'class': 'timeout'}, leader)
 
 
 def binding(source, manifest, build, binary, modules):
@@ -89,6 +152,8 @@ def binding(source, manifest, build, binary, modules):
 def run(checkout):
     owner = closure = work = None
     diagnostic = None
+    failure = None
+    failure_leader = build_leader = None
     passed = False
     phase = 'scope'
     try:
@@ -113,9 +178,9 @@ def run(checkout):
         env = ['env', 'HOME='+str(home), 'CARGO_HOME='+str(work/'cargo-home'),
             'CARGO_TARGET_DIR='+str(work/'target'), 'CARGO_INCREMENTAL=0', 'RUSTFLAGS=-C debuginfo=0']
         phase = 'build'
-        leader = owner.spawn('build', env + ['cargo', 'build', '--locked', '--manifest-path',
-            str(source/'tools/sf08-fixture-runtime/Cargo.toml')])
-        await_zero(owner, leader, 1200)
+        build_leader = owner.spawn('build', env + ['cargo', 'build', '--locked', '--manifest-path',
+            str(source/'tools/sf08-fixture-runtime/Cargo.toml')], capture_stderr=True)
+        await_zero(owner, build_leader, 1200)
         co.require(co.tree(source) == before)
         binary = work/'target/debug/nagi-sf08-fixture-runtime'
         co.require(binary.is_file() and os.access(binary, os.X_OK))
@@ -155,8 +220,11 @@ def run(checkout):
         await_zero(owner, child, 1200)
         co.require(co.tree(source) == before and co.check_bindings(bindings, expected) == document)
         passed, phase = True, 'passed'
-    except BaseException:
+    except BaseException as error:
         passed = False
+        if isinstance(error, ChildWaitFailure):
+            failure = error.detail
+            failure_leader = error.leader
     finally:
         if owner is not None:
             try:
@@ -165,6 +233,24 @@ def run(checkout):
                 passed, phase = False, 'ownership'
         if closure is None or not closure.closed or not closure.echild_observed:
             passed, phase = False, 'ownership'
+    if passed and build_leader is not None:
+        try:
+            _sample, _truncated, _eof, capture_error = owner.stderr_capture(build_leader)
+        except BaseException:
+            capture_error = True
+        if capture_error:
+            passed, phase = False, 'build'
+            failure = {'class': 'capture_refused'}
+            failure_leader = build_leader
+    if failure is not None and failure_leader is not None and getattr(failure_leader, 'capture_stderr', False):
+        try:
+            sample, truncated, eof, capture_error = owner.stderr_capture(failure_leader)
+            cargo = cargo_diagnostic(sample, truncated, eof, capture_error)
+            if failure['class'] in ('timeout', 'cancelled', 'capture_refused'):
+                cargo = {'class': 'unknown', 'rust_codes': []}
+        except BaseException:
+            cargo = {'class': 'unknown', 'rust_codes': []}
+        failure = {**failure, 'diagnostic': cargo}
     if not passed and work is not None and closure and closure.closed:
         try:
             boundary = co.load('owned_json', HERE/'context/owned_json.py')
@@ -172,13 +258,16 @@ def run(checkout):
                 diagnostic = failure_checkpoint.validate(root._read_json('browser-failure.json'), outer=True)
         except BaseException:
             pass
-    print(json.dumps({'schema_version': 1, 'status': 'passed' if passed else 'failed', 'code': phase,
+    summary = {'schema_version': 1, 'status': 'passed' if passed else 'failed', 'code': phase,
         'actual_echild': bool(closure and closure.echild_observed),
         'browser_executions_accepted': 12 if passed else 0, 'resets_accepted': 12 if passed else 0,
         'failure_phase': diagnostic['phase'] if diagnostic else 'unavailable',
         'failure_stage': diagnostic['stage'] if diagnostic else 'unavailable',
         'failure_engine': diagnostic['engine'] if diagnostic else 'unavailable',
-        'retain_data': True}, separators=(',', ':')))
+        'retain_data': True}
+    if not passed:
+        summary['failure'] = failure or {'class': 'unknown'}
+    print(json.dumps(summary, separators=(',', ':')))
     return 0 if passed else 1
 
 

@@ -1,8 +1,15 @@
 package com.disnana.nagi;
 
 import com.intellij.codeInsight.AutoPopupController;
+import com.intellij.codeInsight.CodeInsightSettings;
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
+import com.intellij.codeInsight.hint.ShowParameterInfoHandler;
 import com.intellij.ide.trustedProjects.TrustedProjects;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationAction;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
+import com.intellij.notification.Notifications;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
@@ -14,7 +21,9 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent;
 import com.intellij.openapi.fileEditor.FileEditorManagerListener;
+import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -52,6 +61,9 @@ public final class NagiAssistService implements Disposable {
     private static final int MAX_TRACKED_FILES = 256;
     private static final long DIAGNOSTIC_DEBOUNCE_MS = 350;
     private static final long COMPLETION_DEBOUNCE_MS = 80;
+    private static final String COMPILER_UNAVAILABLE_MESSAGE =
+            "The configured Nagi compiler could not be resolved to an executable file.";
+    private static final String COMPILER_NOTIFICATION_GROUP = "Nagi compiler assistance";
 
     public enum State { IDLE, WAITING, RUNNING, READY, UNTRUSTED, UNSAVED_MANIFEST, LIMIT, COMPILER_UNAVAILABLE, FAILED, STALE, CLOSED }
 
@@ -60,6 +72,7 @@ public final class NagiAssistService implements Disposable {
         private final NagiAssistProtocol.Response response;
         private final Set<String> sourceFileKeys;
         private final Map<ReferenceKey, NagiAssistProtocol.Location> referenceTargets;
+        private final NagiSemanticIndex semanticIndex;
         private CachedResponse(Snapshot snapshot, NagiAssistProtocol.Response response) {
             this.snapshot = snapshot;
             this.response = response;
@@ -75,6 +88,7 @@ public final class NagiAssistService implements Disposable {
                 references.put(new ReferenceKey(normalizePath(location.file()), location.line(), location.column(), location.length()), reference.target());
             }
             referenceTargets = Map.copyOf(references);
+            semanticIndex = new NagiSemanticIndex(response);
         }
         public NagiAssistProtocol.Response response() { return response; }
     }
@@ -99,6 +113,8 @@ public final class NagiAssistService implements Disposable {
     private record DiskStamp(Path path, byte[] contents) {}
     private record ExecutableStamp(VirtualFile file, long virtualStamp, long size,
                                    long modifiedMillis, String fileKey) {}
+    private record CompilerSelection(String configuredPath, String projectBase) {}
+    private record CompilerUnavailable(CompilerSelection selection, Set<String> candidatePaths) {}
     private record ReferenceKey(String file, int line, int column, int length) {}
     private record Snapshot(long epoch, String requestKey, String compilerSetting, int timeout,
                            String projectBase, Path scopePath, Path focusPath, Path executable,
@@ -110,10 +126,14 @@ public final class NagiAssistService implements Disposable {
                            long focusFileStamp, Editor editor, long caretOffset) {
         private Snapshot { input = input.clone(); }
     }
-    private record PopupWaiter(Editor editor, Document document, VirtualFile file, long stamp, long offset) {}
+    private enum PopupKind { COMPLETION, PARAMETERS }
+    private record PopupWaiter(Editor editor, Document document, VirtualFile file, long stamp, long offset,
+                               PopupKind kind, boolean respectParameterSetting) {}
 
     private final Project project;
     private final ScheduledThreadPoolExecutor worker;
+    private final CompilerUnavailablePresenter compilerUnavailablePresenter;
+    private final CompilerResolver compilerResolver;
     private final AtomicLong epoch = new AtomicLong();
     private final Object lock = new Object();
     private final IdentityHashMap<Document, ListenerRecord> documentListeners = new IdentityHashMap<>();
@@ -132,6 +152,9 @@ public final class NagiAssistService implements Disposable {
     private String activeKey;
     private String pendingKey;
     private String failedKey;
+    private volatile CompilerSelection unavailableCompilerSelection;
+    private volatile CompilerSelection presentedUnavailableSelection;
+    private volatile Set<String> unavailableCompilerPaths = Set.of();
     private List<PopupWaiter> pendingWaiters = List.of();
     private List<PopupWaiter> activeWaiters = List.of();
     private volatile boolean disposed;
@@ -139,13 +162,26 @@ public final class NagiAssistService implements Disposable {
     public NagiAssistService(Project project) { this(project, new NagiAssistProcess.Session()); }
 
     private NagiAssistService(Project project, NagiAssistProcess.Session session) {
-        this(project, session::run);
+        this(project, session::run, NagiAssistService::showCompilerUnavailable);
         this.session = session;
     }
 
     NagiAssistService(Project project, NagiAssistProcess.Runner runner) {
+        this(project, runner, NagiAssistService::showCompilerUnavailable);
+    }
+
+    NagiAssistService(Project project, NagiAssistProcess.Runner runner,
+                      CompilerUnavailablePresenter compilerUnavailablePresenter) {
+        this(project, runner, compilerUnavailablePresenter, NagiAssistService::resolveCompiler);
+    }
+
+    NagiAssistService(Project project, NagiAssistProcess.Runner runner,
+                      CompilerUnavailablePresenter compilerUnavailablePresenter,
+                      CompilerResolver compilerResolver) {
         this.project = project;
         this.runner = runner;
+        this.compilerUnavailablePresenter = compilerUnavailablePresenter;
+        this.compilerResolver = compilerResolver;
         worker = new ScheduledThreadPoolExecutor(1, runnable -> {
             Thread thread = new Thread(runnable, "Nagi editor assistance");
             thread.setDaemon(true);
@@ -174,7 +210,9 @@ public final class NagiAssistService implements Disposable {
         });
         projectConnection.subscribe(VirtualFileManager.VFS_CHANGES, new BulkFileListener() {
             @Override public void after(@NotNull List<? extends VFileEvent> events) {
-                if (events.stream().anyMatch(NagiAssistService.this::isRelevantVfsEvent)) {
+                boolean compilerChanged = events.stream().anyMatch(NagiAssistService.this::isUnavailableCompilerVfsEvent);
+                if (compilerChanged) clearUnavailableCompiler();
+                if (compilerChanged || events.stream().anyMatch(NagiAssistService.this::isRelevantVfsEvent)) {
                     invalidate(State.STALE, "An Nagi source, project manifest, or compiler file changed.");
                     restartOpenSourcesLater();
                 }
@@ -182,6 +220,10 @@ public final class NagiAssistService implements Disposable {
         });
         ApplicationManager.getApplication().getMessageBus().connect(this)
                 .subscribe(NagiSettings.SETTINGS_CHANGED, () -> {
+                    CompilerSelection unavailable = unavailableCompilerSelection;
+                    if (unavailable != null && !unavailable.equals(currentCompilerSelection())) {
+                        clearUnavailableCompiler();
+                    }
                     invalidate(State.STALE, "Nagi compiler settings changed.");
                     restartOpenSourcesLater();
                 });
@@ -245,6 +287,12 @@ public final class NagiAssistService implements Disposable {
         request(file, editor, editor, COMPLETION_DEBOUNCE_MS);
     }
 
+    /** Resume the platform's already requested hint, using the same bounded snapshot worker. */
+    public void requestParameterInfo(PsiFile file, Editor editor) {
+        if (editor == null || editor.isDisposed()) return;
+        request(file, editor, editor, COMPLETION_DEBOUNCE_MS, PopupKind.PARAMETERS);
+    }
+
     public boolean responseContainsFile(CachedResponse response, VirtualFile file) {
         if (response == null || file == null || !snapshotCurrent(response.snapshot)) return false;
         String canonical = canonicalPathFor(response.snapshot, file);
@@ -281,6 +329,25 @@ public final class NagiAssistService implements Disposable {
         int column = start - document.getLineStartOffset(line);
         String path = canonicalPathFor(response.snapshot, file.getVirtualFile());
         return response.referenceTargets.get(new ReferenceKey(normalizePath(path), line + 1, column + 1, end - start));
+    }
+
+    public NagiAssistProtocol.Definition functionDefinition(PsiFile file, PsiElement callee) {
+        CachedResponse response = fresh(file);
+        if (response == null || callee == null || !callee.isValid()) return null;
+        Document document = PsiDocumentManager.getInstance(project).getDocument(file);
+        if (document == null) return null;
+        int start = callee.getTextRange().getStartOffset();
+        int end = callee.getTextRange().getEndOffset();
+        if (start < 0 || end <= start || end > document.getTextLength()) return null;
+        int line = document.getLineNumber(start);
+        String path = canonicalPathFor(response.snapshot, file.getVirtualFile());
+        return response.semanticIndex.function(path, line + 1,
+                start - document.getLineStartOffset(line) + 1, end - start);
+    }
+
+    public List<NagiSemanticIndex.Color> semanticColors(PsiFile file, CachedResponse response) {
+        if (!isCurrent(file, response)) return List.of();
+        return response.semanticIndex.colors(canonicalPathFor(response.snapshot, file.getVirtualFile()));
     }
 
     /** Resolve only a compiler-provided path and range in the same loaded source graph. */
@@ -330,6 +397,10 @@ public final class NagiAssistService implements Disposable {
     }
 
     private void request(PsiFile file, Editor queryEditor, Editor popupEditor, long delayMillis) {
+        request(file, queryEditor, popupEditor, delayMillis, PopupKind.COMPLETION);
+    }
+
+    private void request(PsiFile file, Editor queryEditor, Editor popupEditor, long delayMillis, PopupKind kind) {
         if (disposed || project.isDisposed()) { setState(State.CLOSED, "Project is closed."); return; }
         if (file == null || !file.isValid() || !NagiCompilerAction.isSourceFile(file.getVirtualFile())) {
             setState(State.STALE, "Open an existing local .nagi or .low file for compiler assistance.");
@@ -340,6 +411,7 @@ public final class NagiAssistService implements Disposable {
             invalidate(State.UNTRUSTED, "Project trust is required before the Nagi compiler can run.");
             return;
         }
+        if (compilerUnavailableForCurrentSelection()) return;
         Intent intent;
         try { intent = makeIntent(file, queryEditor); }
         catch (RuntimeException exception) {
@@ -361,12 +433,12 @@ public final class NagiAssistService implements Disposable {
                     && ((activeKey != null && activeKey.startsWith(sourcePrefix))
                     || (pendingKey != null && pendingKey.startsWith(sourcePrefix)))) return;
             if (intent.key().equals(pendingKey) || intent.key().equals(activeKey)) {
-                if (popupEditor != null) addPopupWaiter(intent, popupEditor);
+                if (popupEditor != null) addPopupWaiter(intent, popupEditor, kind);
                 return;
             }
             cancelPendingAndActiveLocked();
             pendingKey = intent.key();
-            pendingWaiters = popupEditor == null ? List.of() : List.of(waiter(intent, popupEditor));
+            pendingWaiters = popupEditor == null ? List.of() : List.of(waiter(intent, popupEditor, kind));
             setState(State.WAITING, "Waiting for a stable Nagi source snapshot.");
             try {
                 pending = worker.schedule(() -> execute(intent), delayMillis, TimeUnit.MILLISECONDS);
@@ -460,7 +532,11 @@ public final class NagiAssistService implements Disposable {
             setStateForActive(key, State.STALE, "The Nagi source snapshot was cancelled by a new editor write.");
             restartOpenSourcesLater();
         } catch (SnapshotBlockedException exception) {
-            setStateForActive(key, exception.state, exception.getMessage());
+            if (exception.compilerUnavailable != null) {
+                setCompilerUnavailableForActive(key, exception.compilerUnavailable, exception.getMessage());
+            } else {
+                setStateForActive(key, exception.state, exception.getMessage());
+            }
         } catch (Exception exception) {
             setStateForActive(key, State.FAILED, safeMessage(exception));
         } catch (AssertionError failure) {
@@ -570,15 +646,17 @@ public final class NagiAssistService implements Disposable {
         Path executable;
         ExecutableStamp executableStamp;
         try {
-            executable = resolveCompiler(raw.compilerSetting(), workspace);
+            executable = compilerResolver.resolve(raw.compilerSetting(), workspace);
             VirtualFile compilerFile = LocalFileSystem.getInstance().findFileByPath(executable.toString());
             BasicFileAttributes attributes = Files.readAttributes(executable, BasicFileAttributes.class);
             executableStamp = new ExecutableStamp(compilerFile,
                     compilerFile == null ? -1 : compilerFile.getModificationStamp(), attributes.size(),
                     attributes.lastModifiedTime().toMillis(), String.valueOf(attributes.fileKey()));
         } catch (IOException | RuntimeException exception) {
-            throw new SnapshotBlockedException(State.COMPILER_UNAVAILABLE,
-                    "The configured Nagi compiler could not be resolved to an executable file.");
+            var unavailable = new CompilerUnavailable(
+                    new CompilerSelection(raw.compilerSetting(), raw.projectBase() == null ? "" : raw.projectBase()),
+                    compilerSearchPaths(raw.compilerSetting(), workspace));
+            throw new SnapshotBlockedException(State.COMPILER_UNAVAILABLE, COMPILER_UNAVAILABLE_MESSAGE, unavailable);
         }
         if (manifest != null) {
             VirtualFile manifestFile = LocalFileSystem.getInstance().findFileByIoFile(manifest.toFile());
@@ -805,13 +883,21 @@ public final class NagiAssistService implements Disposable {
             }
             for (PopupWaiter waiter : waiters) {
                 if (!isPopupFresh(response, waiter)) continue;
-                String key = response.snapshot.requestKey;
+                if (waiter.kind() == PopupKind.PARAMETERS && waiter.respectParameterSetting()
+                        && !CodeInsightSettings.getInstance().AUTO_POPUP_PARAMETER_INFO) continue;
+                String key = response.snapshot.requestKey + ":" + waiter.kind();
                 synchronized (lock) {
                     if (popupScheduled.contains(key)) continue;
                     popupScheduled.add(key);
                     while (popupScheduled.size() > 32) popupScheduled.remove(popupScheduled.iterator().next());
                 }
-                AutoPopupController.getInstance(project).scheduleAutoPopup(waiter.editor());
+                if (waiter.kind() == PopupKind.PARAMETERS) {
+                    VirtualFile[] selected = FileEditorManager.getInstance(project).getSelectedFiles();
+                    if (selected.length > 0 && java.util.Arrays.stream(selected).noneMatch(file -> file == waiter.file())) continue;
+                    PsiFile file = PsiManager.getInstance(project).findFile(waiter.file());
+                    if (file != null && NagiParameterInfoHandler.callAt(file, waiter.editor(), (int) waiter.offset()) != null)
+                        new ShowParameterInfoHandler().invoke(project, waiter.editor(), file);
+                } else AutoPopupController.getInstance(project).scheduleAutoPopup(waiter.editor());
             }
         });
     }
@@ -869,6 +955,8 @@ public final class NagiAssistService implements Disposable {
 
     private void registerDocumentListeners(List<RawFile> files) {
         synchronized (documentListeners) {
+            // A worker may have captured these documents before disposal began.
+            if (disposed || project.isDisposed()) return;
             for (RawFile raw : files) {
                 if (documentListeners.containsKey(raw.document())) continue;
                 DocumentListener listener = new DocumentListener() {
@@ -876,8 +964,19 @@ public final class NagiAssistService implements Disposable {
                         invalidate(State.STALE, "An open Nagi source or manifest changed.");
                     }
                 };
-                raw.document().addDocumentListener(listener, this);
-                documentListeners.put(raw.document(), new ListenerRecord(raw.file(), listener));
+                // Complete the document subscription before publishing its
+                // token under the service: a closing parent must not dispose
+                // the token before Document has attached its cleanup child.
+                Disposable subscription = Disposer.newDisposable("Nagi document listener");
+                boolean retained = false;
+                try {
+                    raw.document().addDocumentListener(listener, subscription);
+                    if (!Disposer.tryRegister(this, subscription)) continue;
+                    documentListeners.put(raw.document(), new ListenerRecord(raw.file(), subscription));
+                    retained = true;
+                } finally {
+                    if (!retained) Disposer.dispose(subscription);
+                }
             }
         }
     }
@@ -889,7 +988,7 @@ public final class NagiAssistService implements Disposable {
                     .map(Map.Entry::getKey).toList();
             for (Document document : remove) {
                 ListenerRecord record = documentListeners.remove(document);
-                document.removeDocumentListener(record.listener());
+                Disposer.dispose(record.subscription());
             }
         }
     }
@@ -908,6 +1007,100 @@ public final class NagiAssistService implements Disposable {
                 .map(known -> Path.of(NagiAssistProtocol.physicalPath(known)).getParent())
                 .filter(Objects::nonNull)
                 .anyMatch(parent -> pathUnder(path, normalizePath(parent.toString())));
+    }
+
+    private boolean isUnavailableCompilerVfsEvent(VFileEvent event) {
+        return unavailableCompilerPaths.contains(normalizePath(event.getPath()));
+    }
+
+    private void clearUnavailableCompiler() {
+        synchronized (lock) {
+            unavailableCompilerSelection = null;
+            presentedUnavailableSelection = null;
+            unavailableCompilerPaths = Set.of();
+        }
+    }
+
+    private CompilerSelection currentCompilerSelection() {
+        NagiSettings.Values settings = NagiSettings.getInstance().getState();
+        return new CompilerSelection(settings.compilerPath == null ? "" : settings.compilerPath,
+                project.getBasePath() == null ? "" : project.getBasePath());
+    }
+
+    private boolean compilerUnavailableForCurrentSelection() {
+        CompilerSelection unavailable = unavailableCompilerSelection;
+        if (unavailable == null || !unavailable.equals(currentCompilerSelection())) return false;
+        setState(State.COMPILER_UNAVAILABLE, COMPILER_UNAVAILABLE_MESSAGE);
+        return true;
+    }
+
+    private void setCompilerUnavailableForActive(String key, CompilerUnavailable unavailable, String message) {
+        boolean present;
+        synchronized (lock) {
+            if (!key.equals(activeKey)) return;
+            unavailableCompilerSelection = unavailable.selection();
+            unavailableCompilerPaths = unavailable.candidatePaths();
+            setState(State.COMPILER_UNAVAILABLE, message);
+            present = !unavailable.selection().equals(presentedUnavailableSelection);
+            if (present) presentedUnavailableSelection = unavailable.selection();
+        }
+        if (!present) return;
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (disposed || project.isDisposed() || state != State.COMPILER_UNAVAILABLE
+                    || !unavailable.selection().equals(unavailableCompilerSelection)) return;
+            compilerUnavailablePresenter.show(project, () -> retryCompilerResolution(unavailable.selection()));
+        });
+    }
+
+    private void retryCompilerResolution(CompilerSelection expected) {
+        synchronized (lock) {
+            if (disposed || !expected.equals(unavailableCompilerSelection)) return;
+            unavailableCompilerSelection = null;
+            presentedUnavailableSelection = null;
+            unavailableCompilerPaths = Set.of();
+            setState(State.STALE, "Retrying Nagi compiler assistance.");
+        }
+        restartOpenSourcesLater();
+    }
+
+    private static void showCompilerUnavailable(Project project, Runnable retry) {
+        if (project.isDisposed()) return;
+        Notification notification = NotificationGroupManager.getInstance()
+                .getNotificationGroup(COMPILER_NOTIFICATION_GROUP)
+                .createNotification("Nagi editor assistance is unavailable",
+                        "Set the compiler executable in Settings | Tools | Nagi, or install nagic on PATH.",
+                        NotificationType.INFORMATION);
+        notification.addAction(NotificationAction.createSimple("Configure compiler", () ->
+                ShowSettingsUtil.getInstance().showSettingsDialog(project, NagiConfigurable.class)));
+        notification.addAction(NotificationAction.createSimple("Retry assistance", () -> {
+            notification.expire();
+            retry.run();
+        }));
+        Notifications.Bus.notify(notification, project);
+    }
+
+    private static Set<String> compilerSearchPaths(String configured, Path workspace) {
+        LinkedHashSet<String> paths = new LinkedHashSet<>();
+        String name = SystemInfo.isWindows ? "nagic.exe" : "nagic";
+        try {
+            if (configured != null && !configured.isBlank()) {
+                Path candidate = Path.of(configured.strip());
+                if (!candidate.isAbsolute()) candidate = workspace.resolve(candidate).normalize();
+                paths.add(normalizePath(candidate.toAbsolutePath().normalize().toString()));
+            } else {
+                String path = System.getenv("PATH");
+                if (path != null) {
+                    for (String entry : path.split(java.util.regex.Pattern.quote(SystemInfo.isWindows ? ";" : ":"), -1)) {
+                        Path directory = entry.isBlank() ? workspace : Path.of(entry);
+                        paths.add(normalizePath(directory.resolve(name).toAbsolutePath().normalize().toString()));
+                    }
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // Invalid compiler settings remain a quiet configuration failure;
+            // no path is watched until the setting is corrected.
+        }
+        return Set.copyOf(paths);
     }
 
     private void invalidate(State reason, String message) {
@@ -943,12 +1136,12 @@ public final class NagiAssistService implements Disposable {
         activeWaiters = List.of();
     }
 
-    private void addPopupWaiter(Intent intent, Editor editor) {
+    private void addPopupWaiter(Intent intent, Editor editor, PopupKind kind) {
         List<PopupWaiter> existing = intent.key().equals(activeKey) ? activeWaiters : pendingWaiters;
         if (existing.size() >= 8 || editor.isDisposed()) return;
         List<PopupWaiter> changed = new ArrayList<>(existing);
-        PopupWaiter waiter = waiter(intent, editor);
-        if (changed.stream().noneMatch(candidate -> candidate.editor() == editor)) changed.add(waiter);
+        PopupWaiter waiter = waiter(intent, editor, kind);
+        if (changed.stream().noneMatch(candidate -> candidate.editor() == editor && candidate.kind() == kind)) changed.add(waiter);
         if (intent.key().equals(activeKey)) activeWaiters = List.copyOf(changed);
         else pendingWaiters = List.copyOf(changed);
     }
@@ -957,9 +1150,10 @@ public final class NagiAssistService implements Disposable {
         synchronized (lock) { return key.equals(activeKey) ? activeWaiters : List.of(); }
     }
 
-    private static PopupWaiter waiter(Intent intent, Editor editor) {
+    private static PopupWaiter waiter(Intent intent, Editor editor, PopupKind kind) {
         return new PopupWaiter(editor, intent.document(), intent.file(), intent.documentStamp(),
-                intent.position() == null ? -1 : intent.position().offset());
+                intent.position() == null ? -1 : intent.position().offset(), kind,
+                kind == PopupKind.PARAMETERS && CodeInsightSettings.getInstance().AUTO_POPUP_PARAMETER_INFO);
     }
 
     private static Position position(Editor editor) {
@@ -1035,8 +1229,7 @@ public final class NagiAssistService implements Disposable {
         synchronized (lock) {
             if (key.equals(activeKey)) {
                 setState(state, message);
-                if (state == State.FAILED || state == State.COMPILER_UNAVAILABLE
-                        || state == State.UNSAVED_MANIFEST || state == State.LIMIT) {
+                if (state == State.FAILED || state == State.UNSAVED_MANIFEST || state == State.LIMIT) {
                     failedKey = key;
                     restartOpenSourcesLater();
                 }
@@ -1056,7 +1249,7 @@ public final class NagiAssistService implements Disposable {
         }
     }
 
-    private static Path resolveCompiler(String configured, Path workspace) throws IOException {
+    static Path resolveCompiler(String configured, Path workspace) throws IOException {
         String name = SystemInfo.isWindows ? "nagic.exe" : "nagic";
         Path executable;
         if (configured != null && !configured.isBlank()) {
@@ -1105,17 +1298,26 @@ public final class NagiAssistService implements Disposable {
         synchronized (lock) { cancelPendingAndActiveLocked(); }
         synchronized (documentListeners) {
             for (Map.Entry<Document, ListenerRecord> entry : documentListeners.entrySet()) {
-                entry.getKey().removeDocumentListener(entry.getValue().listener());
+                Disposer.dispose(entry.getValue().subscription());
             }
             documentListeners.clear();
         }
         worker.shutdownNow();
     }
 
-    private record ListenerRecord(VirtualFile file, DocumentListener listener) {}
+    private record ListenerRecord(VirtualFile file, Disposable subscription) {}
     private record ManifestState(Document document, boolean unsaved, long documentStamp, long fileStamp) {}
+    @FunctionalInterface
+    interface CompilerUnavailablePresenter { void show(Project project, Runnable retry); }
+    interface CompilerResolver { Path resolve(String configured, Path workspace) throws IOException; }
     private static final class SnapshotBlockedException extends Exception {
         private final State state;
-        private SnapshotBlockedException(State state, String message) { super(message); this.state = state; }
+        private final CompilerUnavailable compilerUnavailable;
+        private SnapshotBlockedException(State state, String message) { this(state, message, null); }
+        private SnapshotBlockedException(State state, String message, CompilerUnavailable compilerUnavailable) {
+            super(message);
+            this.state = state;
+            this.compilerUnavailable = compilerUnavailable;
+        }
     }
 }

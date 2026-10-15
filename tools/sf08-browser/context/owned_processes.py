@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import ctypes
 from dataclasses import dataclass, field
+import fcntl
+import io
 import math
 import os
 from pathlib import Path
@@ -15,6 +17,20 @@ import signal
 import subprocess
 import sys
 import time
+
+STDERR_READ_CHUNK = 4096
+STDERR_READS_PER_POLL = 8
+STDERR_BYTES_PER_POLL = 32 * 1024
+STDERR_CAPTURE_BYTES = 64 * 1024
+STDERR_TOTAL_BYTES = 1024 * 1024
+
+
+def _close_capture_stream(stream: io.FileIO) -> bool:
+    try:
+        stream.close()
+    except (OSError, ValueError):
+        return bool(stream.closed)
+    return bool(stream.closed)
 
 
 class Unsupported(RuntimeError):
@@ -92,11 +108,19 @@ def subreaper_state() -> int:
 @dataclass
 class Leader:
     name: str
-    _process: subprocess.Popen = field(repr=False)
+    _process: subprocess.Popen | None = field(repr=False)
     term_due: float | None = None
     kill_sent: bool = False
     reaped: bool = False
     reservation_lost: bool = False
+    capture_stderr: bool = False
+    _stderr_reader: io.FileIO | None = field(default=None, repr=False)
+    _stderr_writer: io.FileIO | None = field(default=None, repr=False)
+    _stderr_sample: bytearray = field(default_factory=bytearray, repr=False)
+    _stderr_total: int = 0
+    _stderr_truncated: bool = False
+    _stderr_eof: bool = False
+    _stderr_error: bool = False
 
     @property
     def pid(self) -> int:
@@ -104,7 +128,7 @@ class Leader:
 
     @property
     def returncode(self) -> int | None:
-        return self._process.returncode
+        return self._process.returncode if self._process is not None else None
 
 
 @dataclass
@@ -171,6 +195,7 @@ class LinuxProcessOwner:
         result = object.__new__(cls)
         result.pid = os.getpid()
         result.leaders: dict[str, Leader] = {}
+        result._pending_stderr: list[io.FileIO] = []
         result.adopted: dict[int, Adopted] = {}
         result.adopted_reaped = 0
         result.serial = 0
@@ -198,19 +223,146 @@ class LinuxProcessOwner:
         if not (math.isfinite(timeout) and 0 <= timeout <= 20 and math.isfinite(grace) and 0 <= grace <= 2):
             raise ValueError("cleanup_budget")
 
-    def spawn(self, name: str, argv: list[str], *, pass_fds: tuple[int, ...] = ()) -> Leader:
+    def spawn(self, name: str, argv: list[str], *, pass_fds: tuple[int, ...] = (),
+              capture_stderr: bool = False) -> Leader:
         self._context()
         if self.closing or self.cancelled or self.fault or name in self.leaders or len(self.leaders) >= 16:
             raise OwnershipError("admission_closed")
         if not argv or not all(isinstance(arg, str) and arg for arg in argv):
             raise ValueError("argv")
+        if type(capture_stderr) is not bool:
+            raise ValueError("capture_stderr")
+        if capture_stderr and self._pending_stderr:
+            raise OwnershipError("diagnostic_capture_cleanup_pending")
+        if capture_stderr and (name != 'build' or any(item.capture_stderr for item in self.leaders.values())):
+            raise OwnershipError("diagnostic_capture_scope")
         # Keep every Popen strongly referenced. Never context-manage, poll, or
         # communicate with these objects: those operations may reap the PID.
-        process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                   stderr=subprocess.DEVNULL, start_new_session=True, pass_fds=pass_fds)
-        leader = Leader(name, process)
-        self.leaders[name] = leader
-        return leader
+        if not capture_stderr:
+            process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL, start_new_session=True, pass_fds=pass_fds)
+            leader = Leader(name, process)
+            self.leaders[name] = leader
+            return leader
+
+        read_fd = write_fd = None
+        reader = writer = None
+        registered = False
+        try:
+            read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
+            flags = fcntl.fcntl(read_fd, fcntl.F_GETFL)
+            fcntl.fcntl(read_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+            reader = os.fdopen(read_fd, 'rb', buffering=0)
+            read_fd = None
+            writer = os.fdopen(write_fd, 'wb', buffering=0)
+            write_fd = None
+            leader = Leader(name, None, capture_stderr=True,
+                            _stderr_reader=reader, _stderr_writer=writer)
+            self.leaders[name] = leader
+            try:
+                process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                           stderr=writer, start_new_session=True, pass_fds=pass_fds)
+            except BaseException:
+                self.leaders.pop(name, None)
+                raise
+            leader._process = process
+            registered = True
+            if not _close_capture_stream(writer):
+                leader._stderr_error = True
+            else:
+                leader._stderr_writer = None
+            return leader
+        finally:
+            for fd in (read_fd, write_fd):
+                if fd is not None:
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
+            if not registered:
+                for stream in (writer, reader):
+                    if stream is not None and not _close_capture_stream(stream):
+                        # Failed setup has no live leader, but still owns its
+                        # at-most-two pipe streams until a later close succeeds.
+                        self._pending_stderr.append(stream)
+
+    def _drain_stderr(self, leader: Leader) -> bool:
+        if self.leaders.get(leader.name) is not leader or not leader.capture_stderr:
+            raise OwnershipError("leader_not_reserved")
+        if leader._stderr_error:
+            return True
+        if leader._stderr_eof:
+            return False
+        reader = leader._stderr_reader
+        if reader is None:
+            leader._stderr_error = True
+            return True
+        work = reads = 0
+        while reads < STDERR_READS_PER_POLL and work < STDERR_BYTES_PER_POLL:
+            remaining = STDERR_TOTAL_BYTES - leader._stderr_total
+            if remaining <= 0:
+                leader._stderr_error = True
+                leader._stderr_truncated = True
+                return True
+            count = min(STDERR_READ_CHUNK, STDERR_BYTES_PER_POLL - work, remaining)
+            try:
+                chunk = os.read(reader.fileno(), count)
+            except BlockingIOError:
+                return False
+            except InterruptedError:
+                reads += 1
+                continue
+            except (OSError, ValueError):
+                leader._stderr_error = True
+                leader._stderr_truncated = True
+                return True
+            reads += 1
+            if not chunk:
+                leader._stderr_eof = True
+                return False
+            if len(chunk) > count:
+                leader._stderr_error = True
+                leader._stderr_truncated = True
+                return True
+            work += len(chunk)
+            leader._stderr_total += len(chunk)
+            retained = min(len(chunk), STDERR_CAPTURE_BYTES - len(leader._stderr_sample))
+            if retained:
+                leader._stderr_sample.extend(chunk[:retained])
+            if retained < len(chunk):
+                leader._stderr_truncated = True
+            if leader._stderr_total >= STDERR_TOTAL_BYTES:
+                leader._stderr_error = True
+                leader._stderr_truncated = True
+                return True
+        return False
+
+    def drain_captured_stderr(self) -> Leader | None:
+        self._context()
+        for leader in self.leaders.values():
+            if leader.capture_stderr and self._drain_stderr(leader):
+                return leader
+        return None
+
+    def stderr_capture(self, leader: Leader) -> tuple[bytes, bool, bool, bool]:
+        self._context()
+        if self.leaders.get(leader.name) is not leader or not leader.capture_stderr:
+            raise OwnershipError("leader_not_reserved")
+        return (bytes(leader._stderr_sample), leader._stderr_truncated,
+                leader._stderr_eof, leader._stderr_error)
+
+    def _close_stderr(self):
+        self._pending_stderr = [stream for stream in self._pending_stderr
+                                if not _close_capture_stream(stream)]
+        for leader in self.leaders.values():
+            for field_name in ("_stderr_writer", "_stderr_reader"):
+                stream = getattr(leader, field_name)
+                if stream is None:
+                    continue
+                if not _close_capture_stream(stream):
+                    leader._stderr_error = True
+                else:
+                    setattr(leader, field_name, None)
 
     def peek(self, leader: Leader):
         self._context()
@@ -358,6 +510,7 @@ class LinuxProcessOwner:
         if os.getpid() != self.pid or not _single_thread():
             return Closure(False, True, "exclusive_cli_lost", 0, 0, False)
         if self.closed:
+            self._close_stderr()
             return self._result("closed")
         if self.in_cleanup:
             return self._result("cleanup_in_progress")
@@ -372,10 +525,14 @@ class LinuxProcessOwner:
                 return self._result("group_deadline")
             if not self._drain(deadline, grace):
                 return self._result("descendant_deadline")
+            for leader in self.leaders.values():
+                if leader.capture_stderr:
+                    self._drain_stderr(leader)  # One bounded, nonblocking final sample after ECHILD.
             self.closed = True
             return self._result("closed")
         except (OSError, OwnershipError, subprocess.TimeoutExpired) as error:
             # Keep all ownership records and live pidfds for a later bounded attempt.
             return self._result(type(error).__name__)
         finally:
+            self._close_stderr()
             self.in_cleanup = False
