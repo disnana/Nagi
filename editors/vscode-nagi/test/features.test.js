@@ -139,10 +139,16 @@ test('a trailing member binds inside try/await unless the receiver is parenthesi
   assert.deepEqual(f.completionCandidates(fields, text, text.length, false, { file: '/main.nagi' }), []);
 });
 
+function compilerBuiltinArityTable(source) {
+  const inline = source.match(/let\s+arity\s*=\s*match\s+n\s*\{([\s\S]*?)\n\s*\};/);
+  if (inline) return inline[1];
+  const helper = source.match(/fn\s+builtin_arity\s*\(\s*name\s*:\s*&str\s*\)\s*->\s*Option<usize>\s*\{\s*Some\s*\(\s*match\s+name\s*\{([\s\S]*?)\n\s*\}\s*\)\s*\}/);
+  return helper ? helper[1] : '';
+}
+
 test('builtin completion catalog matches compiler arities and required type arguments', () => {
   const source = require('node:fs').readFileSync(require('node:path').resolve(__dirname, '../../../compiler/src/check.rs'), 'utf8');
-  const arityStart = source.indexOf('let arity = match n {');
-  const arityTable = source.slice(arityStart, source.indexOf('};', arityStart));
+  const arityTable = compilerBuiltinArityTable(source);
   const expected = new Map();
   for (const row of arityTable.matchAll(/((?:"[a-z][a-z0-9_]*"\s*\|\s*)*"[a-z][a-z0-9_]*")\s*=>\s*(\d+)/g)) {
     for (const name of row[1].matchAll(/"([a-z][a-z0-9_]*)"/g)) expected.set(name[1], Number(row[2]));

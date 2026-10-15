@@ -15,7 +15,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Strict adapter for the compiler-owned, one-shot editor assistance protocol. */
+/** Strict adapter for responses from the compiler-owned editor assistance protocol. */
 public final class NagiAssistProtocol {
     public static final int MAX_FILES = 128;
     public static final int MAX_OVERLAY_BYTES = 8_000_000;
@@ -24,6 +24,7 @@ public final class NagiAssistProtocol {
     private static final int MAX_DIAGNOSTICS = 512;
     private static final int MAX_COMPLETIONS = 8192;
     private static final int MAX_REFERENCES = 20_000;
+    private static final int MAX_SYMBOLS = 20_000;
 
     private NagiAssistProtocol() {}
 
@@ -56,14 +57,38 @@ public final class NagiAssistProtocol {
     public record CompletionItem(String name, String kind, String type, String signature,
                                 Location target, boolean borrowed, String access) {}
     public record Reference(Location location, Location target) {}
+    public record Parameter(String name, String type) {}
+    public record Definition(String name, String kind, Location location, String signature,
+                             List<Parameter> parameters) {
+        public Definition { parameters = List.copyOf(parameters); }
+    }
+    public record Local(String name, String type, Location location, String kind) {}
+    public record SymbolRole(String kind, Location location) {}
     public record Response(String semanticStatus, boolean frontendChecked, boolean frontendAccepted,
                           boolean recovered, String completionKind, List<Diagnostic> diagnostics,
-                          List<CompletionItem> completions, List<Reference> references, List<String> sourceFiles) {
+                          List<CompletionItem> completions, List<Reference> references, List<String> sourceFiles,
+                          List<Definition> definitions, List<Local> locals, List<SymbolRole> roles) {
+        public Response(String semanticStatus, boolean frontendChecked, boolean frontendAccepted,
+                        boolean recovered, String completionKind, List<Diagnostic> diagnostics,
+                        List<CompletionItem> completions, List<Reference> references, List<String> sourceFiles) {
+            this(semanticStatus, frontendChecked, frontendAccepted, recovered, completionKind,
+                    diagnostics, completions, references, sourceFiles, List.of(), List.of(), List.of());
+        }
+        public Response(String semanticStatus, boolean frontendChecked, boolean frontendAccepted,
+                        boolean recovered, String completionKind, List<Diagnostic> diagnostics,
+                        List<CompletionItem> completions, List<Reference> references, List<String> sourceFiles,
+                        List<Definition> definitions, List<Local> locals) {
+            this(semanticStatus, frontendChecked, frontendAccepted, recovered, completionKind,
+                    diagnostics, completions, references, sourceFiles, definitions, locals, List.of());
+        }
         public Response {
             diagnostics = List.copyOf(diagnostics);
             completions = List.copyOf(completions);
             references = List.copyOf(references);
             sourceFiles = List.copyOf(sourceFiles);
+            definitions = List.copyOf(definitions);
+            locals = List.copyOf(locals);
+            roles = List.copyOf(roles);
         }
     }
 
@@ -165,6 +190,9 @@ public final class NagiAssistProtocol {
 
             List<Reference> references = new ArrayList<>();
             List<String> sourceFiles = new ArrayList<>();
+            List<Definition> definitions = new ArrayList<>();
+            List<Local> locals = new ArrayList<>();
+            List<SymbolRole> roles = new ArrayList<>();
             JsonElement symbolsElement = root.get("symbols");
             if (symbolsElement != null && !symbolsElement.isJsonNull()) {
                 JsonObject symbols = object(symbolsElement, "symbols");
@@ -187,10 +215,42 @@ public final class NagiAssistProtocol {
                     Location target = optionalLocation(reference.get("target"));
                     if (target != null) references.add(new Reference(location, target));
                 }
+                // Older matching compiler responses can omit these additive facts.
+                // Never derive a missing role, signature or type from IDE token text.
+                for (JsonElement element : optionalArray(symbols, "definitions")) {
+                    JsonObject item = object(element, "definition");
+                    String kind = boundedString(item, "kind", 32);
+                    if (!Set.of("function", "class", "resource", "enum").contains(kind)) {
+                        throw new IllegalArgumentException("invalid definition kind");
+                    }
+                    List<Parameter> parameters = new ArrayList<>();
+                    JsonArray parameterArray = array(item, "parameters");
+                    if (parameterArray.size() > 1024) throw new IllegalArgumentException("too many function parameters");
+                    for (JsonElement parameter : parameterArray) {
+                        JsonObject member = object(parameter, "parameter");
+                        parameters.add(new Parameter(boundedString(member, "name", 256), boundedString(member, "type", 2048)));
+                    }
+                    definitions.add(new Definition(boundedString(item, "name", 256), kind,
+                            requiredLocation(item, "location"), boundedString(item, "signature", 8192), parameters));
+                }
+                for (JsonElement element : optionalArray(symbols, "locals")) {
+                    JsonObject item = object(element, "local");
+                    String kind = optionalString(item, "kind");
+                    if (kind == null) kind = "local";
+                    if (!Set.of("local", "parameter", "field").contains(kind)) throw new IllegalArgumentException("invalid local role");
+                    locals.add(new Local(boundedString(item, "name", 256), boundedString(item, "type", 2048),
+                            requiredLocation(item, "location"), kind));
+                }
+                for (JsonElement element : optionalArray(symbols, "roles")) {
+                    JsonObject item = object(element, "symbol role");
+                    String kind = string(item, "kind");
+                    if (!Set.of("local", "parameter", "field").contains(kind)) throw new IllegalArgumentException("invalid symbol role");
+                    roles.add(new SymbolRole(kind, requiredLocation(item, "location")));
+                }
             }
             if (status.equals("none") && !completions.isEmpty()) throw new IllegalArgumentException("unverified candidates in empty semantic response");
             return new Response(status, frontendChecked, frontendAccepted, recovered, completionKind,
-                    diagnostics, completions, references, sourceFiles);
+                    diagnostics, completions, references, sourceFiles, definitions, locals, roles);
         } catch (IllegalStateException | NumberFormatException | ArithmeticException | CharacterCodingException | JsonParseException exception) {
             throw new IllegalArgumentException("malformed editor response", exception);
         }
@@ -209,6 +269,18 @@ public final class NagiAssistProtocol {
         JsonElement value = required(object, name);
         if (!value.isJsonArray()) throw new IllegalArgumentException("invalid " + name);
         return value.getAsJsonArray();
+    }
+    private static JsonArray optionalArray(JsonObject object, String name) {
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) return new JsonArray();
+        JsonArray result = array(object, name);
+        if (result.size() > MAX_SYMBOLS) throw new IllegalArgumentException("too many semantic symbols");
+        return result;
+    }
+    private static String boundedString(JsonObject object, String name, int maximum) {
+        String result = string(object, name);
+        if (result.length() > maximum || result.indexOf('\0') >= 0) throw new IllegalArgumentException("invalid " + name);
+        return result;
     }
     private static String string(JsonObject object, String name) {
         JsonElement value = required(object, name);

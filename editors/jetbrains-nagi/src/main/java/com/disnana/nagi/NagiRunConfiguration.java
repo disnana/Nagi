@@ -2,6 +2,8 @@ package com.disnana.nagi;
 
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.Executor;
+import com.intellij.execution.ExecutionResult;
+import com.intellij.execution.runners.ProgramRunner;
 import com.intellij.execution.configurations.ConfigurationFactory;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.configurations.RunConfigurationBase;
@@ -38,6 +40,8 @@ import com.intellij.openapi.options.SettingsEditor;
 
 /** A local, standard Run configuration that delegates argument construction to NagiCommandPlan. */
 public final class NagiRunConfiguration extends RunConfigurationBase<NagiRunConfigurationOptions> {
+    static final com.intellij.openapi.util.Key<java.util.function.BiConsumer<CommandLineState, OSProcessHandler>> PROCESS_STARTED =
+            com.intellij.openapi.util.Key.create("nagi.run.processStarted");
     public NagiRunConfiguration(@NotNull Project project, @NotNull ConfigurationFactory factory, @NotNull String name) {
         super(project, factory, name);
     }
@@ -97,6 +101,7 @@ public final class NagiRunConfiguration extends RunConfigurationBase<NagiRunConf
 
     @Override public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment environment)
             throws ExecutionException {
+        com.intellij.openapi.application.ApplicationManager.getApplication().assertIsDispatchThread();
         Project project = getProject();
         if (project.isDisposed()) throw new ExecutionException("The Nagi project is closed.");
         Path source;
@@ -108,11 +113,6 @@ public final class NagiRunConfiguration extends RunConfigurationBase<NagiRunConf
         if (!TrustedProjects.isProjectTrusted(project)) {
             Messages.showWarningDialog(project, "Trust this project before executing the Nagi compiler.", "Nagi");
             throw new ExecutionException("Trust this project before executing the Nagi compiler.");
-        }
-        if (!NagiCompilerAction.saveInputs()) {
-            Messages.showErrorDialog(project,
-                    "One or more open files could not be saved. Save them before running the compiler.", "Nagi");
-            throw new ExecutionException("One or more open files could not be saved. Save them before running the compiler.");
         }
 
         Path workspace;
@@ -160,32 +160,54 @@ public final class NagiRunConfiguration extends RunConfigurationBase<NagiRunConf
     }
 
     private static final class NagiCommandLineState extends CommandLineState {
-        private final Project project;
         private final NagiCommandPlan plan;
+        private OSProcessHandler startedHandler;
+        private com.intellij.execution.ui.ConsoleView startedConsole;
 
         private NagiCommandLineState(ExecutionEnvironment environment, NagiCommandPlan plan) {
             super(environment);
-            this.project = environment.getProject();
             this.plan = plan;
-            addConsoleFilters(new NagiDiagnosticFilter(project, plan.directory()));
+            addConsoleFilters(new NagiDiagnosticFilter(environment.getProject(), plan.directory()));
+        }
+
+        @Override public @NotNull ExecutionResult execute(@NotNull Executor executor, @NotNull ProgramRunner<?> runner)
+                throws ExecutionException {
+            try {
+                return super.execute(executor, runner);
+            } catch (ExecutionException | RuntimeException | Error failure) {
+                // CommandLineState does not clean up when console creation/attachment fails after startProcess.
+                if (startedHandler != null) NagiProgramRunner.stopAfterFailedStartup(startedHandler, failure);
+                if (startedConsole != null) {
+                    try {
+                        com.intellij.openapi.util.Disposer.dispose(startedConsole);
+                    } catch (RuntimeException | Error cleanupFailure) {
+                        if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+                    }
+                }
+                throw failure;
+            }
+        }
+
+        @Override protected com.intellij.execution.ui.ConsoleView createConsole(@NotNull Executor executor)
+                throws ExecutionException {
+            startedConsole = super.createConsole(executor);
+            return startedConsole;
         }
 
         @Override protected @NotNull ProcessHandler startProcess() throws ExecutionException {
-            try {
-                if (project.isDisposed() || !TrustedProjects.isProjectTrusted(project))
-                    throw new ExecutionException("Project trust is required before the Nagi compiler can run.");
-            } catch (LinkageError | RuntimeException failure) {
-                throw new ExecutionException("Project trust could not be confirmed; compiler execution was refused.", failure);
-            }
+            NagiProgramRunner.checkBeforeProcessStart(getEnvironment());
             var commandLine = new GeneralCommandLine(plan.executable())
                     .withParameters(plan.arguments())
                     .withWorkDirectory(plan.directory().toFile())
                     .withCharset(StandardCharsets.UTF_8)
                     .withEnvironment("NAGI_RUN_RETENTION", "latest");
-            var handler = new OSProcessHandler(commandLine);
-            handler.setShouldDestroyProcessRecursively(true);
-            ProcessTerminatedListener.attach(handler);
-            return handler;
+            NagiProgramRunner.checkBeforeProcessStart(getEnvironment());
+            startedHandler = new OSProcessHandler(commandLine);
+            startedHandler.setShouldDestroyProcessRecursively(true);
+            var observer = getEnvironment().getUserData(PROCESS_STARTED);
+            if (observer != null) observer.accept(this, startedHandler);
+            ProcessTerminatedListener.attach(startedHandler);
+            return startedHandler;
         }
     }
 }

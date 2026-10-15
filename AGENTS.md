@@ -20,18 +20,18 @@ sub-agentは担当を独立して切り出せる場合だけ起動する。親ag
 |---|---|---|
 | Light Worker | `gpt-6-luna` / `medium` | 範囲が狭く、contract判断を含まないDocs、機械的rename、読み取り調査。曖昧な仕様や重要なcode correctnessが出たら親へ事実を返す |
 | Fast / Worker | `gpt-6-luna` / `max` | 仕様が明確なroutine実装、feature/test fixture、明確なCI修正、単純bug fix、小規模refactor。既存契約に沿い、対象に必要な検証を最後まで行う |
-| Balanced Engineer | `gpt-6-sol` / `max` | 契約が明確な通常実装・複数fileの修正・調査で、Lunaの手戻りを減らしたい場合の有力候補。重要な意味論の判断と最終監査は別のSol 6.1へ渡す |
+| Balanced Engineer | `gpt-6.1-sol` / `high` | 契約が明確な通常実装・複数fileの修正・調査で、Lunaの手戻りが見込まれる場合。重要な設計判断と最終監査は別のSol 6.1へ渡す |
 | Deep / Engineer | `gpt-6.1-sol` / `high` | 重要・難度の高いcode、複数moduleやcompiler/runtime境界、原因不明bug、async/concurrency/ownership/lifecycle、API contract、重要なDB/storage/security変更 |
 | Independent Reviewer | `gpt-6.1-sol` / `high` | 実装・必要な実行検証後の独立した最終audit。contract、回帰、ownership/lifecycle、error、concurrency、security、compatibility、test evidenceを確認し、編集しない |
 | Architect | `gpt-6.1-sol` / `xhigh` | Highで決められない言語意味論・architecture・compatibility、subtle correctness、race/lifecycle設計。未解決の判断を絞り、案と保証を示す |
 | Critical Reviewer | `gpt-6.1-sol` / `max` | High/xHighで未解決の難問、release直前または誤判断コストが極めて高い変更の独立最終review。通常開発には使わない |
 | Astra Final Verifier | `gpt-6-astra` / `max` | GPT-6.1 Sol Maxでも解けない問題、または誤判断コストが極めて高い独立最終検証。日常開発・通常reviewでは使わない |
 
-taskの種類ごとに、正しさと必要なaudit証拠を満たす完了までの見込み費用が最小のroleを選ぶ。contractが明確な実装/fixtureはFast / Worker、通常実装の範囲・手戻り見込みによってはBalanced Engineer（GPT-6 Sol Max）を選び、重要・難度の高い実装はSol 6.1 High、狭いDocs/rename/read-onlyはLight Workerを使う。数行の作業は親が行う。実際のmodel時間、test/CI実行時間、queue/wait、手戻りは測れた場合に別々に記録し、体感を測定値として扱わない。下位roleの失敗や見込み時間・品質・総費用の改善が見られないなら、同じ試行を繰り返さず具体的根拠で方針を見直す。
+taskの種類ごとに、正しさと必要なaudit証拠を満たす完了までの見込み費用が最小のroleを選ぶ。contractが明確な実装/fixtureはFast / Worker、通常実装の範囲・手戻り見込みによってはBalanced Engineer（GPT-6.1 Sol High）を選び、重要・難度の高い実装はDeep Engineer（GPT-6.1 Sol High）、狭いDocs/rename/read-onlyはLight Workerを使う。数行の作業は親が行う。実際のmodel時間、test/CI実行時間、queue/wait、手戻りは測れた場合に別々に記録し、体感を測定値として扱わない。下位roleの失敗や見込み時間・品質・総費用の改善が見られないなら、同じ試行を繰り返さず具体的根拠で方針を見直す。
 
-昇格は `Luna Medium → Luna Max → GPT-6 Sol Max または GPT-6.1 Sol High → GPT-6.1 Sol xHigh → GPT-6.1 Sol Max → Astra` を目安とするが、順番に試す必要はない。GPT-6 Sol MaxとGPT-6.1 Sol Highは用途に応じた選択肢で、一律の性能順位ではない。High/xHighでないと扱えない課題は初手からそのroleに割り当てる。具体的に未解決のcontract、再現、diagnostic、ownership、race境界が見つかったとき、または同じ原因の対象試行が2回続けて失敗したときに止め、証拠と未解決点を適切なroleへ渡す。既に得た調査を次のroleに渡し、同じ探索や全suiteを繰り返さない。失敗原因をAI modelだけに帰属させず、実際に通したstage、未実施の検査、fixture/sourceの不備を分けて記録する。
+昇格は `Luna Medium → Luna Max → GPT-6.1 Sol High → GPT-6.1 Sol xHigh → GPT-6.1 Sol Max → Astra` を目安とするが、順番に試す必要はない。通常の上限はHighとし、未解決の重要設計だけxHighへ、High/xHighで解けない例外的な課題だけMaxまたはAstraへ渡す。具体的に未解決のcontract、再現、diagnostic、ownership、race境界が見つかったとき、または同じ原因の対象試行が2回続けて失敗したときに止め、証拠と未解決点を適切なroleへ渡す。既に得た調査を次のroleに渡し、同じ探索や全suiteを繰り返さない。失敗原因をAI modelだけに帰属させず、実際に通したstage、未実施の検査、fixture/sourceの不備を分けて記録する。
 
-同時に進行するagentは親を含め最大3体とする。Codexの`agents.max_concurrent_threads_per_session`はspawnした子threadを数えるため2に設定する。同一model IDとreasoning effortの組合せは同時に1体とし、Deep EngineerとIndependent ReviewerはともにSol Highなので順番に実行する。重要なcodeの独立reviewは必要な実装検証後に行う。親+2子は互いに依存しない成果物が明確な場合だけ使う。GPT-6 Sol MaxとGPT-6.1 Sol Maxは異なるmodelである。それぞれ同一model/effortのagentは並行させず、Astraはeffortに関係なく全体で1体までとする。同じ課題を複数agentに競わせない。モデル選定方針の再評価では、下記の限定した独立意見と相互検討を行える。
+同時に進行するagentは親を含め最大3体とする。Codexの`agents.max_concurrent_threads_per_session`はspawnした子threadを数えるため2に設定する。同一model IDとreasoning effortの組合せは同時に1体とする。Balanced Engineer、Deep Engineer、Independent ReviewerはすべてGPT-6.1 Sol Highなので、互いに順番に実行する。重要なcodeの独立reviewは必要な実装検証後に行う。親+2子は互いに依存しない成果物が明確な場合だけ使う。GPT-6.1 Sol Maxは例外用途に限り、Astraはeffortに関係なく全体で1体までとする。同じ課題を複数agentに競わせない。モデル選定方針の再評価では、下記の限定した独立意見と相互検討を行える。
 
 認証/認可、秘密、整合性、concurrency、破壊的変更では、実装前にSol 6.1 Highで承認済みdesignと必須failure/regression casesを確認する。未決の意味論・代替案・race/lifecycle設計がある場合だけSol 6.1 xHigh Architectへ上げる。実装・必要検証後は別のSol 6.1 High Independent Reviewerが最終auditし、最終diffを仕様・実行結果へ直接照合して関連regressionを確認する。指摘修正後は対象testを再実行し、更新diffと結果を再reviewしてから完了する。その他のsecurity/public contract/migration/ownership/lifecycle/correctness重要変更も、実装者の自己reviewだけで完了にせずIndependent Reviewerを使う。source-only reviewをparse/check/build/native/CIの代わりとして扱わない。Sol Highを使う実装者や親agentの同tier作業が終わるまでHigh Reviewerを並行起動しない。
 
@@ -39,13 +39,13 @@ taskの種類ごとに、正しさと必要なaudit証拠を満たす完了ま�
 
 `.codex/agents/*.toml`はCodexがrole fileとして自動検出し、別のrole登録表は不要。各roleにtop-level `name`、`description`、`model`、`model_reasoning_effort`、`developer_instructions`を設定する。`.codex/config.toml`は子thread上限を設定する。起動前に実行環境のmodel catalogとeffortを確認し、未対応または未確認のIDは使わず、別IDへ暗黙fallbackしない。
 
-2026年10月11日のユーザー所感「GPT-6 Sol Maxはコストと速度のバランスに優れる」を通常開発での選定材料に加える。ただし実測とは区別する。提供料金表ではGPT-6 SolとGPT-6.1 SolのStandard入力/出力単価は同じで、キャッシュ入力はGPT-6.1の方が低い。GPT-6 Sol Maxを単価だけで安い・速いと断定せず、完了時間、手戻り、独立監査の修正量、観測できる利用量で再評価する。GPT-6 Sol Maxの通常開発利用と、例外的なGPT-6.1 Sol Max監査を混同しない。
+2026年10月13日、ユーザーの指示により、GPT-6 Solを通常または予定の担当から外し、該当する作業をGPT-6.1 Solへ切り替えて続行する。これは現在の運用切替として適用する。Balanced EngineerはGPT-6.1 Sol Highとし、通常の上限はHigh、未解決の重要設計に限ってxHigh、Maxは例外用途に維持する。2026年10月11日の価格・benchmark資料と所感は当時の履歴として残し、最新の価格や速度は推測しない。GPT-6 Sol FastやGPT-6.1 Sol Maxをroutine設定にしない。
 
 設定仕様、価格/benchmark evidenceと未確認範囲は[agent構成の記録](docs/internal/agent-routing.md)に残す。同文書の観測・再評価欄へ、主要な区切りや問題発生時だけ短い代表例を追記する。用途、対象HEAD、model/effort/速度設定可否、指示・文脈・環境、測れた時間/利用量、修正往復、独立監査と検証段階を記録する。指示不足、担当範囲、古いsource、fixture、cache、容量、network、難度差も原因候補として比較し、AIのせいと即断しない。不明は不明、体感と実測は別とし、巨大な会話ログや秘密情報を蓄積しない。
 
 routing方針の重要な変更や観測に基づく再評価では、LunaとSol 6.1へ同じ証拠と問いを渡して独立意見を得た後、互いの論点を1往復検討する。modelの格で発言を優先せず、根拠・反例・保証の限界で判断し、親が採用/不採用/未決と理由を同文書へ残す。AI間の合意は品質の証拠にならない。毎taskの担当決定に会議を設けず、通常は既定表で直ちに進める。並列枠と共有fileの所有者を守り、独立した開発を継続する。
 
-2026年10月11日時点のrouting判断は、ユーザー提供のcompiled report（2026-10-11版は「Business/Enterprise」quota creditsを主張、発行元/primary URL未確認。2026-10-08版はArena値を主張）、このsessionのagent tool catalog、および2026-10-06にpinしたCodex role/config schemaを参照する。API USD料金、Codex quota credits、Fast倍率、実測速度は別指標として扱い、未確認値は未確認のまま残す。reportに記載された値とmodel別の限界は[agent構成の記録](docs/internal/agent-routing.md)を参照する。
+2026年10月11日時点の履歴資料は、ユーザー提供のcompiled report（2026-10-11版は「Business/Enterprise」quota creditsを主張、発行元/primary URL未確認。2026-10-08版はArena値を主張）、当時のagent tool catalog、および2026-10-06にpinしたCodex role/config schemaを参照する。API USD料金、Codex quota credits、Fast倍率、実測速度は別指標として扱い、未確認値は未確認のまま残す。reportに記載された値とmodel別の限界は[agent構成の記録](docs/internal/agent-routing.md)を参照する。
 
 ## 作業手順
 
