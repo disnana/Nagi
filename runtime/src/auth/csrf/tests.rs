@@ -291,7 +291,12 @@ async fn checkpoint_accepts_before_and_refuses_at_or_after_original_token_expiry
         f.inner.context.set_test_clock_sequence(values);
         let result = f.inner.checkpoint(&o.lease.lease, &b, digest).await;
         if delta < 0 {
-            assert!(result.is_ok());
+            assert!(
+                result.is_ok(),
+                "csrf_checkpoint_boundary phase=PositiveCheckpoint kind={:?} outcome={:?}",
+                result.as_ref().err().map(kind),
+                result.as_ref().err().map(outcome),
+            );
             assert!(f.count().await == 1);
         } else {
             assert!(result.is_err_and(|e| kind(&e) == FailureKind::Denied));

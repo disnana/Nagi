@@ -469,9 +469,9 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': '1ef3f25310917bf31bfe900ce8551d49e083d7948655ea388d2b8c12b17d291d',
-              'runtime/src/http_server/tests.rs': 'decb32fa3d2fa4d884c710be4a725ce7870f047b9ec23c58c1669f7bd309c427',
-              'runtime/src/http_server/send_deadline_tests.rs': 'a3edb3d5105f1cd0bfa617edf51b0b60b468bf06c3fcf31829c66ce110f0fa3b',
+              'runtime/src/http_server.rs': 'ef8c4d80d6e21ed9e2bb1fe043483eecf84f06dc4a0814ae263ca25ad0f7bebf',
+              'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
+              'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
               'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
           }
@@ -823,9 +823,9 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': '1ef3f25310917bf31bfe900ce8551d49e083d7948655ea388d2b8c12b17d291d',
-              'runtime/src/http_server/tests.rs': 'decb32fa3d2fa4d884c710be4a725ce7870f047b9ec23c58c1669f7bd309c427',
-              'runtime/src/http_server/send_deadline_tests.rs': 'a3edb3d5105f1cd0bfa617edf51b0b60b468bf06c3fcf31829c66ce110f0fa3b',
+              'runtime/src/http_server.rs': 'ef8c4d80d6e21ed9e2bb1fe043483eecf84f06dc4a0814ae263ca25ad0f7bebf',
+              'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
+              'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
               'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
           }

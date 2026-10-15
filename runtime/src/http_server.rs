@@ -1676,7 +1676,12 @@ impl<T: hyper::rt::Write + Unpin> hyper::rt::Write for TimedIo<T> {
         #[cfg(all(test, windows))]
         let result = if self.windows_stalled_fixture {
             let transferred = self.sending.borrow().body_transferred;
-            windows_native_fixture::poll_windows_scalar_once(&mut self.inner, cx, buffer, transferred)
+            windows_native_fixture::poll_windows_scalar_once(
+                &mut self.inner,
+                cx,
+                buffer,
+                transferred,
+            )
         } else {
             Pin::new(&mut self.inner).poll_write(cx, buffer)
         };
@@ -1698,7 +1703,12 @@ impl<T: hyper::rt::Write + Unpin> hyper::rt::Write for TimedIo<T> {
         #[cfg(all(test, windows))]
         let result = if self.windows_stalled_fixture {
             let transferred = self.sending.borrow().body_transferred;
-            windows_native_fixture::poll_windows_vectored_once(&mut self.inner, cx, buffers, transferred)
+            windows_native_fixture::poll_windows_vectored_once(
+                &mut self.inner,
+                cx,
+                buffers,
+                transferred,
+            )
         } else {
             Pin::new(&mut self.inner).poll_write_vectored(cx, buffers)
         };

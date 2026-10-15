@@ -3,12 +3,12 @@
 //! withholds frame availability until an actual header-only native flush; it does
 //! not claim that an unwrapped Windows BufferedBody naturally reaches that order.
 use super::*;
-use hyper::rt::{Read, Write};
-use std::sync::atomic::AtomicBool;
 #[cfg(windows)]
 use crate::http_server::windows_native_fixture::{
     accepted_send_buffer, poll_windows_scalar_once, poll_windows_vectored_once,
 };
+use hyper::rt::{Read, Write};
+use std::sync::atomic::AtomicBool;
 
 // Closed native facts, not payloads or inferred socket readiness. Values are
 // saturated solely for diagnostics; every delegated IO result is unchanged.
