@@ -56,6 +56,8 @@ fn timed_io_writes_and_pending_flush_preserve_the_original_send_end() {
         inner: Io { ready: false },
         sending,
         probe: None,
+        #[cfg(all(test, windows))]
+        windows_stalled_fixture: false,
     };
     let mut context = Context::from_waker(std::task::Waker::noop());
     assert!(matches!(
