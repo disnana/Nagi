@@ -256,6 +256,8 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         PsiFile file = source("main.nagi", "def main():\n    print(1)\n");
         Path missingCompiler = root.resolve("tools/" + (com.intellij.openapi.util.SystemInfo.isWindows ? "nagic.exe" : "nagic"));
         Files.createDirectories(missingCompiler.getParent());
+        assertNotNull("compiler parent must be known to the IDE VFS before executable creation",
+                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(missingCompiler.getParent()));
         NagiSettings.update(missingCompiler.toString(), 5);
         AtomicInteger compilerProbes = new AtomicInteger();
         AtomicInteger calls = new AtomicInteger();
@@ -337,6 +339,8 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             missingCompiler.toFile().setExecutable(true);
             org.junit.Assume.assumeTrue("filesystem does not expose executable permission", Files.isExecutable(missingCompiler));
             assertNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(missingCompiler));
+            assertTrue("compiler appearance must reach the project VFS listener",
+                    projectVfs.exactPathEvents.get() > 0);
             try {
                 waitUntil(() -> oldEntered.getCount() == 0, () ->
                         "automatic annotator wait expired; state=" + service.state()
