@@ -178,7 +178,18 @@ async fn guarded_preparation_expiry_precedes_late_grant_denial_and_panic() {
         tokio::pin!(wait);
         tokio::select! {
             _ = state.bound.notified() => {},
-            _ = &mut wait => panic!("preparation completed before barrier"),
+            result = &mut wait => match result {
+                Err(status) => panic!(
+                    "preparation completed before barrier: outer_status={}",
+                    status.value()
+                ),
+                Ok(Err(_)) => panic!("preparation completed before barrier: preparation_panicked"),
+                Ok(Ok(Err(error))) => panic!(
+                    "preparation completed before barrier: kind={:?}",
+                    error.kind()
+                ),
+                Ok(Ok(Ok(_))) => panic!("preparation completed before barrier: preparation_ready"),
+            },
         }
         let actual = csrf::live_deadline(&owner.lease).unwrap();
         // Stop polling preparation until the real gate expires, then make its
