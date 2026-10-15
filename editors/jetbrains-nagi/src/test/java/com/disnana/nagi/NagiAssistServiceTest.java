@@ -1,13 +1,20 @@
 package com.disnana.nagi;
 
 import com.intellij.ide.trustedProjects.TrustedProjects;
+import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFileManager;
+import com.intellij.openapi.vfs.newvfs.BulkFileListener;
+import com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent;
+import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
 import com.intellij.testFramework.fixtures.BasePlatformTestCase;
 import com.intellij.util.ui.UIUtil;
+import com.intellij.util.messages.MessageBus;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -15,6 +22,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /** Real Platform documents, background snapshots and deterministic cancellation gates. */
 public class NagiAssistServiceTest extends BasePlatformTestCase {
@@ -77,6 +85,67 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             Thread.sleep(5);
         }
         assertTrue("service state: " + service.state() + ": " + service.statusMessage(), done.getAsBoolean());
+    }
+    private void waitUntil(BooleanSupplier done, Supplier<String> failureMessage) throws Exception {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        while (!done.getAsBoolean() && System.nanoTime() < deadline) {
+            UIUtil.dispatchAllInvocationEvents();
+            Thread.sleep(5);
+        }
+        boolean complete = done.getAsBoolean();
+        assertTrue(complete ? "" : failureMessage.get(), complete);
+    }
+    private static final class CompilerVfsCounters {
+        private final String compilerPath;
+        private final AtomicInteger exactPathEvents = new AtomicInteger();
+        private final AtomicInteger ancestorDirectoryEvents = new AtomicInteger();
+
+        private CompilerVfsCounters(Path compilerPath) {
+            this.compilerPath = NagiAssistService.normalizePath(compilerPath.toString());
+        }
+
+        private void observe(List<? extends VFileEvent> events) {
+            for (VFileEvent event : events) {
+                try {
+                    String eventPath = NagiAssistService.normalizePath(event.getPath());
+                    if (compilerPath.equals(eventPath)) {
+                        exactPathEvents.incrementAndGet();
+                    } else if (isDirectoryEvent(event) && isStrictAncestor(eventPath, compilerPath)) {
+                        ancestorDirectoryEvents.incrementAndGet();
+                    }
+                } catch (RuntimeException ignored) {
+                    // Diagnostic observation must not affect the production event listener.
+                }
+            }
+        }
+
+        private static boolean isDirectoryEvent(VFileEvent event) {
+            if (event instanceof VFileCreateEvent createEvent) return createEvent.isDirectory();
+            var file = event.getFile();
+            return file != null && file.isDirectory();
+        }
+
+        private static boolean isStrictAncestor(String possibleAncestor, String path) {
+            try {
+                Path ancestor = Path.of(possibleAncestor).toAbsolutePath().normalize();
+                Path child = Path.of(path).toAbsolutePath().normalize();
+                return !ancestor.equals(child) && child.startsWith(ancestor);
+            } catch (RuntimeException ignored) {
+                return false;
+            }
+        }
+
+        private String counts(String prefix) {
+            return prefix + "Exact=" + exactPathEvents.get()
+                    + "," + prefix + "AncestorDirs=" + ancestorDirectoryEvents.get();
+        }
+    }
+    private static void observeCompilerVfs(Disposable parent, MessageBus bus, CompilerVfsCounters counters) {
+        var connection = bus.connect(parent);
+        connection.subscribe(VirtualFileManager.VFS_CHANGES, new BulkFileListener() {
+            @Override public void before(List<? extends VFileEvent> events) { }
+            @Override public void after(List<? extends VFileEvent> events) { counters.observe(events); }
+        });
     }
     public void testUnsavedSnapshotIsDebouncedAndCurrentResponseIsCached() throws Exception {
         PsiFile file = source("main.nagi", "def main():\n    saved = True\n    sa\n");
@@ -191,6 +260,7 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         AtomicInteger compilerProbes = new AtomicInteger();
         AtomicInteger calls = new AtomicInteger();
         AtomicInteger notices = new AtomicInteger();
+        AtomicReference<Boolean> lastCompilerResolved = new AtomicReference<>();
         AtomicReference<Runnable> retry = new AtomicReference<>();
         AtomicReference<Boolean> analyzedLatestText = new AtomicReference<>(false);
         CountDownLatch oldEntered = new CountDownLatch(1);
@@ -217,7 +287,9 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             retry.set(retryAction);
         }, (configured, workspace) -> {
             compilerProbes.incrementAndGet();
-            return NagiAssistService.resolveCompiler(configured, workspace);
+            Path resolved = NagiAssistService.resolveCompiler(configured, workspace);
+            lastCompilerResolved.set(resolved != null);
+            return resolved;
         });
 
         // VFS invalidation restarts the registered annotator, which resolves the
@@ -227,6 +299,10 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
                 getProject(), NagiAssistService.class, service, serviceReplacement);
         assertSame("annotator and fixture must share the injected service",
                 service, getProject().getService(NagiAssistService.class));
+        CompilerVfsCounters appVfs = new CompilerVfsCounters(missingCompiler);
+        CompilerVfsCounters projectVfs = new CompilerVfsCounters(missingCompiler);
+        observeCompilerVfs(serviceReplacement, ApplicationManager.getApplication().getMessageBus(), appVfs);
+        observeCompilerVfs(serviceReplacement, getProject().getMessageBus(), projectVfs);
 
         service.requestBaseline(file);
         waitUntil(() -> service.state() == NagiAssistService.State.COMPILER_UNAVAILABLE && notices.get() == 1);
@@ -262,7 +338,18 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             org.junit.Assume.assumeTrue("filesystem does not expose executable permission", Files.isExecutable(missingCompiler));
             assertNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(missingCompiler));
             try {
-                waitUntil(() -> oldEntered.getCount() == 0);
+                waitUntil(() -> oldEntered.getCount() == 0, () ->
+                        "automatic annotator wait expired; state=" + service.state()
+                                + "; compilerProbes=" + compilerProbes.get()
+                                + "; calls=" + calls.get()
+                                + "; notices=" + notices.get()
+                                + "; lastCompilerResolved=" + lastCompilerResolved.get()
+                                + "; " + appVfs.counts("appVfs")
+                                + "; " + projectVfs.counts("projectVfs")
+                                + "; registeredServiceMatches="
+                                + (getProject().getService(NagiAssistService.class) == service)
+                                + "; nagiHighLanguage=" + (file.getLanguage() == NagiLanguage.HIGH)
+                                + "; daemonHighlightingAvailable=" + daemon.isHighlightingAvailable(file));
                 assertEquals("compiler appearance causes one fresh resolution attempt", 2, compilerProbes.get());
                 WriteCommandAction.runWriteCommandAction(getProject(), () -> document.setText(
                         "def main():\n    newer = True\n    print(newer)\n"));
