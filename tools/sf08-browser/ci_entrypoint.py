@@ -27,6 +27,15 @@ MAX_CARGO_DIAGNOSTIC_BYTES = 64 * 1024
 MAX_RUST_ERROR_CODES = 8
 RUST_ERROR_PREFIX = re.compile(rb'error\[E')
 RUST_ERROR_CODE = re.compile(rb'error\[E([0-9]{4})\]')
+CARGO_CAUSE_MARKERS = {
+    'lockfile_stale': (b'lock file ', b'needs to be updated but --locked was passed to prevent this'),
+    'manifest_or_workspace': (b'failed to parse manifest at ', b'failed to load manifest for workspace member ',
+        b"current package believes it's in a workspace when it's not"),
+    'registry_or_transport': (b'failed to download from ', b'failed to fetch ', b'network failure',
+        b'could not resolve proxy', b'certificate verify failed', b'connection timed out'),
+    'toolchain': (b'could not execute process ', b'rustc is not installed'),
+    'native_toolchain_or_build_script': (b'failed to run custom build command',),
+}
 
 
 def item(path):
@@ -112,7 +121,26 @@ def cargo_diagnostic(sample, truncated, eof, capture_error):
             return unknown
         cursor = match.end()
     ordered = sorted(codes)
-    return {'class': 'rustc_error' if ordered else 'no_rustc_error_code', 'rust_codes': ordered}
+    if ordered:
+        return {'class': 'rustc_error', 'rust_codes': ordered}
+    lowered = sample.lower()
+    classes = set()
+    for name, markers in CARGO_CAUSE_MARKERS.items():
+        if name == 'lockfile_stale':
+            matched = all(marker in lowered for marker in markers)
+        elif name == 'toolchain':
+            matched = (b'could not execute process ' in lowered and b'rustc' in lowered
+                or any(marker in lowered for marker in markers[1:]))
+        elif name == 'native_toolchain_or_build_script':
+            matched = any(marker in lowered for marker in markers) or (
+                b'linking with ' in lowered and b' failed' in lowered) or (
+                b'linker ' in lowered and b' not found' in lowered)
+        else:
+            matched = any(marker in lowered for marker in markers)
+        if matched:
+            classes.add(name)
+    cause = next(iter(classes)) if len(classes) == 1 else 'unknown'
+    return {'class': cause, 'rust_codes': []}
 
 
 def await_zero(owner, leader, seconds):

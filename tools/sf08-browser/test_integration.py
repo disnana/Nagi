@@ -251,7 +251,7 @@ class IntegrationTests(unittest.TestCase):
             (b'error[E0432]: fixed\nerror[E0599]: fixed\nerror[E0432]: duplicate\n',False,True,False,
              {'class':'rustc_error','rust_codes':['E0432','E0599']}),
             (b'error: linker refused',False,True,False,
-             {'class':'no_rustc_error_code','rust_codes':[]}),
+             {'class':'unknown','rust_codes':[]}),
             (b'error[E12345]: invalid-width',False,True,False,
              {'class':'unknown','rust_codes':[]}),
             (b'error[E0432',False,True,False,
@@ -273,6 +273,21 @@ class IntegrationTests(unittest.TestCase):
         )
         for sample,truncated,eof,error,expected in cases:
             self.assertEqual(ci.cargo_diagnostic(sample,truncated,eof,error),expected)
+
+    def test_cargo_failure_classes_are_closed_and_never_echo_input(self):
+        cases=(
+            (b'error: the lock file /private/secret/Cargo.lock needs to be updated but --locked was passed to prevent this', 'lockfile_stale'),
+            (b"current package believes it's in a workspace when it's not /private", 'manifest_or_workspace'),
+            (b'error: failed to download from `https://private.invalid/token=secret`\nCaused by: Could not resolve proxy: private-secret', 'registry_or_transport'),
+            (b'error: could not execute process `/opt/private/rustc -vV` (never executed)', 'toolchain'),
+            (b'error: failed to run custom build command for `private-native`', 'native_toolchain_or_build_script'),
+            (b'error: lock file /private/Cargo.lock needs to be updated but --locked was passed to prevent this\nfailed to download from https://private.invalid', 'unknown'),
+        )
+        secrets=('/private','private.invalid','token=secret','private-secret')
+        for sample,expected in cases:
+            diagnostic=ci.cargo_diagnostic(sample,False,True,False)
+            self.assertEqual(diagnostic,{'class':expected,'rust_codes':[]})
+            self.assertFalse(any(secret in json.dumps(diagnostic) for secret in secrets))
 
     def test_owner_capture_is_nonblocking_bounded_and_registered_before_popen(self):
         ops=loaded['owned_processes']
