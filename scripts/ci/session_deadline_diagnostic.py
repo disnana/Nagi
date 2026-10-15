@@ -52,6 +52,7 @@ STDOUT_HEADER = re.compile(rf"---- ({IDENT}) stdout ----\Z")
 DEC = r"(?:0|[1-9][0-9]{0,4})"
 STATUS = r"(?:[1-5][0-9]{2})"
 BOOL = r"(?:true|false)"
+BROWSER_PHASE_PREFIX = "browser_login_phase_diag"
 SESSION_PREFIX = "session_deadline_diag"
 BOOTSTRAP_DEADLINE_PREFIX = "prelogin_bootstrap_deadline_diag"
 BOOTSTRAP_PREFIX = "browser_login_bootstrap_diag"
@@ -123,6 +124,7 @@ AUTH_WIRE_LINE = re.compile(
 AUTH_WIRE_UNAVAILABLE = re.compile(rf"browser_wire=test=({IDENT}) unavailable\Z")
 HTTP_IO_LINE = re.compile(rf"http_test_io=phase=({auth_diag.IO_PHASE}) kind=({auth_diag.IO_KIND})\Z")
 KNOWN_MARKER_PREFIXES = (
+    BROWSER_PHASE_PREFIX,
     SESSION_PREFIX,
     BOOTSTRAP_DEADLINE_PREFIX,
     BOOTSTRAP_PREFIX,
@@ -146,6 +148,30 @@ def _status_class(status: int) -> str:
         503: "unavailable",
         504: "deadline",
     }.get(status, "other")
+
+
+# Exact existing browser_login_observer.rs Display order and private enum ranges.
+BROWSER_PHASE_FIELDS = (
+    ("request", 18446744073709551615), ("status", 504),
+    ("phase", 16), ("event", 2), ("before_gate", 4), ("poll_gate", 4),
+    ("saw_pending", 1), ("pending_phase", 16), ("pending_gate", 4),
+    ("saw_live_pending", 1), ("live_pending_phase", 16), ("gate_refused", 1),
+    ("row_missing", 1), ("rollback_ack", 1), ("restore_commit_ack", 1),
+    ("exit", 9), ("exit_gate", 4), ("consumed", 1),
+)
+BROWSER_PHASE_MARKER = re.compile(BROWSER_PHASE_PREFIX + " " + " ".join(
+    rf"{name}=(0|[1-9][0-9]{{0,19}})" for name, _ in BROWSER_PHASE_FIELDS
+) + r"\Z")
+
+
+def parse_browser_phase_marker(line: str) -> dict | None:
+    match = BROWSER_PHASE_MARKER.fullmatch(line)
+    if match is None:
+        return None
+    values = {name: int(value) for (name, _), value in zip(BROWSER_PHASE_FIELDS, match.groups())}
+    if values["status"] != 504 or any(values[name] > limit for name, limit in BROWSER_PHASE_FIELDS):
+        return None
+    return values
 
 
 def parse_session_marker(line: str) -> dict | None:
@@ -463,7 +489,7 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                   cases: dict[str, str]) -> tuple[dict, int, bool]:
     facts = {
         "session_deadline": [], "bootstrap": [], "pair": [], "json_bound": [],
-        "bootstrap_deadline": [],
+        "bootstrap_deadline": [], "browser_phase": [],
         "claim_initial": [], "claim_retry": [], "claim_replay_proof": [],
         "public": [], "http_test_io": [],
     }
@@ -500,7 +526,17 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
             seen_exact.add(exact_key)
             key = None
             parsed = None
-            if prefix == SESSION_PREFIX:
+            if prefix == BROWSER_PHASE_PREFIX:
+                if suite_name != "browser":
+                    invalid = True
+                    continue
+                parsed = parse_browser_phase_marker(line)
+                key = ("browser_phase", test_name)
+                if parsed is not None and any(item["request"] == parsed["request"]
+                                              for item in facts["browser_phase"]):
+                    invalid = True
+                    continue
+            elif prefix == SESSION_PREFIX:
                 if suite_name != "session":
                     invalid = True
                     continue
@@ -577,11 +613,11 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                 # Stalled-response markers belong to another fixed suite, not these APIs.
                 invalid = True
                 continue
-            if parsed is None or key is None or (key[0] not in ("session_deadline", "bootstrap_deadline") and key in seen_case_kinds):
+            if parsed is None or key is None or (key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase") and key in seen_case_kinds):
                 invalid = True
                 continue
             parsed["test"] = test_name
-            if key[0] not in ("session_deadline", "bootstrap_deadline"):
+            if key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase"):
                 seen_case_kinds.add(key)
             facts[key[0]].append(parsed)
 
@@ -695,6 +731,11 @@ def main(argv: list[str]) -> int:
     record, status = diagnose(session_raw, session_status, session_exit, browser_raw, browser_status, browser_exit)
     if not _write_output(pathlib.Path(argv[4]), record):
         return 1
+    # Reconstruct only parsed numeric facts + source-whitelisted test identity.
+    # Never cat raw stdout/stderr or print an invalid sanitizer record.
+    if record["status"] == "tests_failed":
+        for fact in record["suites"]["browser"]["browser_phase"]:
+            print("browser_login_phase=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
     return status
 
 

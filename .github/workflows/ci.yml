@@ -157,7 +157,7 @@ jobs:
           pipeline_status=("${PIPESTATUS[@]}")
           session_rc=${pipeline_status[0]}
           if [ "${pipeline_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-session.raw"; fi
-          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test browser_login_public_api 2>&1 | python -c 'import sys
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --test browser_login_public_api 2>&1 | python -c 'import sys
           limit=256*1024+1
           remaining=limit
           while True:
@@ -601,7 +601,7 @@ jobs:
           pipeline_status=("${PIPESTATUS[@]}")
           session_rc=${pipeline_status[0]}
           if [ "${pipeline_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-session.raw"; fi
-          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test browser_login_public_api 2>&1 | python -c 'import sys
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --test browser_login_public_api 2>&1 | python -c 'import sys
           limit=256*1024+1
           remaining=limit
           while True:

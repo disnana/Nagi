@@ -62,6 +62,74 @@ class SessionDeadlineDiagnosticTests(unittest.TestCase):
         "phase_remaining_ms=19 exit_remaining_ms=0 security_budget_ms=2000 selected_end_kind=1"
     )
 
+    BROWSER_PHASE = (
+        "browser_login_phase_diag request=1 status=504 phase=13 event=1 before_gate=1 poll_gate=2 "
+        "saw_pending=1 pending_phase=13 pending_gate=1 saw_live_pending=1 live_pending_phase=13 "
+        "gate_refused=1 row_missing=0 rollback_ack=0 restore_commit_ack=0 exit=5 exit_gate=2 consumed=1"
+    )
+
+    def test_browser_phase_closed_grammar_and_bounds(self):
+        good = self.BROWSER_PHASE
+        self.assertEqual(diag.parse_browser_phase_marker(good)["phase"], 13)
+        self.assertIsNotNone(diag.parse_browser_phase_marker(good.replace("request=1", "request=18446744073709551615")))
+        for bad in (good + " token=PRIVATE_SENTINEL", "prefix " + good, good + "\n",
+                    good.replace("request=1", "request=18446744073709551616"),
+                    good.replace("request=1", "request=01"), good.replace("status=504", "status=200"),
+                    good.replace("phase=13 event", "phase=17 event"), good.replace("event=1", "event=3"),
+                    good.replace("before_gate=1", "before_gate=5"), good.replace("poll_gate=2", "poll_gate=5"),
+                    good.replace("pending_phase=13", "pending_phase=17"), good.replace("pending_gate=1", "pending_gate=5"),
+                    good.replace("live_pending_phase=13", "live_pending_phase=17"), good.replace("exit=5", "exit=10"),
+                    good.replace("exit_gate=2", "exit_gate=5"), good.replace("consumed=1", "consumed=true"),
+                    good.replace("saw_pending=1", "saw_pending=2")):
+            with self.subTest(bad=bad):
+                self.assertIsNone(diag.parse_browser_phase_marker(bad))
+
+    def test_browser_phase_multiplicity_bound_to_failed_test_and_request(self):
+        case = diag.CLAIM_MARKER_TEST
+        markers = [self.BROWSER_PHASE.replace("request=1", f"request={n}") for n in (1, 2, 3)]
+        record, status = parse_both(browser_raw=cargo_log(diag.BROWSER_CASES, failed={case}, markers={case: markers}), browser_exit=101)
+        self.assertEqual((status, record["status"]), (1, "tests_failed"))
+        self.assertEqual([x["request"] for x in record["suites"]["browser"]["browser_phase"]], [1, 2, 3])
+        self.assertTrue(all(x["test"] == case for x in record["suites"]["browser"]["browser_phase"]))
+        for markers in ([self.BROWSER_PHASE] * 2,
+                        [self.BROWSER_PHASE, self.BROWSER_PHASE.replace("phase=13 event", "phase=14 event")],
+                        [self.BROWSER_PHASE + " token=PRIVATE_SENTINEL"]):
+            record, status = parse_both(browser_raw=cargo_log(diag.BROWSER_CASES, failed={case}, markers={case: markers}), browser_exit=101)
+            self.assertEqual((status, record["status"]), (1, "diagnostic_invalid"))
+            self.assertNotIn("PRIVATE_SENTINEL", json.dumps(record))
+        session_case = sorted(diag.SESSION_CASES)[0]
+        record, _ = parse_both(session_raw=cargo_log(diag.SESSION_CASES, failed={session_case}, markers={session_case: [self.BROWSER_PHASE]}), session_exit=101)
+        self.assertEqual(record["status"], "diagnostic_invalid")
+        record, _ = parse_both(browser_raw=cargo_log(diag.BROWSER_CASES) + (self.BROWSER_PHASE + "\n").encode())
+        self.assertEqual(record["status"], "diagnostic_invalid")
+        too_many = [self.BROWSER_PHASE.replace("request=1", f"request={n}") for n in range(17)]
+        record, _ = parse_both(browser_raw=cargo_log(diag.BROWSER_CASES, failed={case}, markers={case: too_many}), browser_exit=101)
+        self.assertEqual(record["status"], "diagnostic_invalid")
+
+    def test_browser_phase_console_is_validated_failure_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "session-deadline-session.raw").write_bytes(cargo_log(diag.SESSION_CASES))
+            for valid in (True, False):
+                marker = self.BROWSER_PHASE + ("" if valid else " token=PRIVATE_SENTINEL")
+                (root / "session-deadline-browser.raw").write_bytes(cargo_log(diag.BROWSER_CASES, failed={diag.CLAIM_MARKER_TEST}, markers={diag.CLAIM_MARKER_TEST: [marker]}))
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    status = diag.main(["diag", str(root), "0", "101", str(root / "result.json")])
+                self.assertEqual(status, 1)
+                self.assertNotIn("PRIVATE_SENTINEL", output.getvalue())
+                if valid:
+                    self.assertTrue(output.getvalue().startswith("browser_login_phase="))
+                    parsed = json.loads(output.getvalue().split("=", 1)[1])
+                    self.assertEqual((parsed["request"], parsed["consumed"]), (1, 1))
+                else:
+                    self.assertEqual(output.getvalue(), "")
+            (root / "session-deadline-browser.raw").write_bytes(cargo_log(diag.BROWSER_CASES))
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                status = diag.main(["diag", str(root), "0", "0", str(root / "result.json")])
+            self.assertEqual((status, output.getvalue()), (0, ""))
+
     def test_bootstrap_selected_deadline_bounds_and_old_session_grammar(self):
         good = self.BOOTSTRAP_DEADLINE
         observed = diag.parse_bootstrap_deadline_marker(good)
