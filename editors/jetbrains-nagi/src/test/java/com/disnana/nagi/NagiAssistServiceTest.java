@@ -147,6 +147,13 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             @Override public void after(List<? extends VFileEvent> events) { counters.observe(events); }
         });
     }
+    private static java.lang.reflect.Method activeDaemonEditorSetter() throws NoSuchMethodException {
+        Class<?> trackerApi = com.intellij.codeInsight.daemon.impl.EditorTracker.class;
+        try { return trackerApi.getMethod("setActiveEditorsInTests", List.class); }
+        catch (NoSuchMethodException stable251) {
+            return trackerApi.getMethod("setActiveEditors", List.class);
+        }
+    }
     public void testUnsavedSnapshotIsDebouncedAndCurrentResponseIsCached() throws Exception {
         PsiFile file = source("main.nagi", "def main():\n    saved = True\n    sa\n");
         AtomicInteger calls = new AtomicInteger();
@@ -336,7 +343,19 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
 
         var daemon = (com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl)
                 com.intellij.codeInsight.daemon.DaemonCodeAnalyzer.getInstance(getProject());
+        var daemonEditors = com.intellij.codeInsight.daemon.impl.EditorTracker.getInstance(getProject());
+        var originalDaemonEditors = List.copyOf(daemonEditors.getActiveEditors());
+        var setActiveDaemonEditors = activeDaemonEditorSetter();
+        var textEditor = com.intellij.openapi.fileEditor.impl.text.TextEditorProvider.getInstance()
+                .getTextEditor(myFixture.getEditor());
         try {
+            // Headless fixtures have no showing window for the daemon's editor tracker.
+            // Use its test-only activation API; normal timer passes still run the annotator.
+            setActiveDaemonEditors.invoke(daemonEditors, List.of(myFixture.getEditor()));
+            assertEquals("only the fixture editor must be active for automatic daemon passes",
+                    1, daemonEditors.getActiveEditors().size());
+            assertSame("automatic daemon passes must use the fixture editor",
+                    myFixture.getEditor(), daemonEditors.getActiveEditors().getFirst());
             // The light fixture disables timer-driven passes in prepareForTest.
             // Enable only this VFS -> restart -> registered annotator interval.
             daemon.setUpdateByTimerEnabled(true);
@@ -349,6 +368,7 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             try {
                 waitUntil(() -> oldEntered.getCount() == 0, () ->
                         "automatic annotator wait expired; state=" + service.state()
+                                + "; status=" + service.statusMessage()
                                 + "; compilerProbes=" + compilerProbes.get()
                                 + "; calls=" + calls.get()
                                 + "; notices=" + notices.get()
@@ -358,7 +378,16 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
                                 + "; registeredServiceMatches="
                                 + (getProject().getService(NagiAssistService.class) == service)
                                 + "; nagiHighLanguage=" + (file.getLanguage() == NagiLanguage.HIGH)
-                                + "; daemonHighlightingAvailable=" + daemon.isHighlightingAvailable(file));
+                                + "; daemonHighlightingAvailable=" + daemon.isHighlightingAvailable(file)
+                                + "; fixtureEditorActive=" + daemonEditors.getActiveEditors().contains(myFixture.getEditor())
+                                + "; daemonActiveEditorCount=" + daemonEditors.getActiveEditors().size()
+                                + "; initialDaemonActiveEditorCount=" + originalDaemonEditors.size()
+                                + "; daemonRunningOrPending=" + daemon.isRunningOrPending()
+                                + "; editorLoaded=" + textEditor.isEditorLoaded()
+                                + "; backgroundHighlighterPresent=" + (textEditor.getBackgroundHighlighter() != null)
+                                + "; documentCommitted=" + PsiDocumentManager.getInstance(getProject()).isCommitted(document)
+                                + "; projectInitialized=" + getProject().isInitialized()
+                                + "; powerSaveMode=" + com.intellij.ide.PowerSaveMode.isEnabled());
                 assertEquals("compiler appearance causes one fresh resolution attempt", 2, compilerProbes.get());
                 WriteCommandAction.runWriteCommandAction(getProject(), () -> document.setText(
                         "def main():\n    newer = True\n    print(newer)\n"));
@@ -381,9 +410,12 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             assertFalse(current.stream().anyMatch(diagnostic -> diagnostic.message().equals("older compiler diagnostic")));
             assertEquals("one quiet notice is retained after the configured executable appears", 1, notices.get());
         } finally {
-            // Stop automatic passes before tearDown removes the service replacement.
+            // Stop automatic passes before restoring the active editors and service replacement.
             try { daemon.setUpdateByTimerEnabled(false); }
-            finally { releaseOld.countDown(); }
+            finally {
+                try { setActiveDaemonEditors.invoke(daemonEditors, originalDaemonEditors); }
+                finally { releaseOld.countDown(); }
+            }
         }
     }
 
