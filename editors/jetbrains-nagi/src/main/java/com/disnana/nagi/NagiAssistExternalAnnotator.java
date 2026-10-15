@@ -57,12 +57,9 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
             if (document.getModificationStamp() != result.documentStamp()
                     || result.service().state() != result.state()
                     || !result.service().statusMessage().equals(result.message())) return;
-            switch (result.state()) {
-                case UNTRUSTED, UNSAVED_MANIFEST, LIMIT, COMPILER_UNAVAILABLE, FAILED -> {
-                    holder.newAnnotation(HighlightSeverity.WEAK_WARNING,
-                            "Nagi editor assistance: " + result.message()).fileLevel().create();
-                }
-                default -> { }
+            if (shouldRenderFileLevelState(result.state())) {
+                holder.newAnnotation(HighlightSeverity.WEAK_WARNING,
+                        "Nagi editor assistance: " + result.message()).fileLevel().create();
             }
             return;
         }
@@ -124,6 +121,13 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
             if (start == end) annotation.afterEndOfLine().create();
             else annotation.range(new TextRange(start, end)).create();
         }
+    }
+
+    static boolean shouldRenderFileLevelState(NagiAssistService.State state) {
+        return switch (state) {
+            case UNTRUSTED, UNSAVED_MANIFEST, LIMIT, FAILED -> true;
+            default -> false;
+        };
     }
 
     private static int lineColumnToOffset(Document document, int line, int column) {

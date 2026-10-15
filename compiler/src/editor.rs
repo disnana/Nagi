@@ -677,6 +677,25 @@ pub(crate) fn analyze(
                 items.push(json!({"name":name,"kind":"module","signature":binding["signature"],"target":binding["target"],"access":"namespace"}));
             }
         }
+        for candidate in &facts.builtin_candidates {
+            let already_bound = index["bindings"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|binding| {
+                    binding["file"].as_str() == c.file.to_str()
+                        && binding["name"].as_str() == Some(candidate.name)
+                });
+            if shadowed.contains(candidate.name) || already_bound {
+                continue;
+            }
+            items.push(json!({
+                "name":candidate.name,
+                "kind":"function",
+                "signature":candidate.signature,
+                "access":"read"
+            }));
+        }
     }
     items.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
     response["completion"]["items"] = json!(items);

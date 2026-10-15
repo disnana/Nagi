@@ -17,6 +17,7 @@
     ]]></description>
     <depends>com.intellij.modules.platform</depends>
     <extensions defaultExtensionNs="com.intellij">
+        <programRunner implementation="com.disnana.nagi.NagiProgramRunner" order="first"/>
         <configurationType implementation="com.disnana.nagi.NagiRunConfigurationType"/>
         <runConfigurationProducer implementation="com.disnana.nagi.NagiRunConfigurationProducer"/>
         <fileType name="Nagi" language="Nagi" extensions="nagi"
@@ -28,6 +29,7 @@
         <lang.syntaxHighlighterFactory language="Nagi" implementationClass="com.disnana.nagi.NagiSyntaxHighlighter$Factory"/>
         <lang.syntaxHighlighterFactory language="NagiLow" implementationClass="com.disnana.nagi.NagiSyntaxHighlighter$LowFactory"/>
         <projectService serviceImplementation="com.disnana.nagi.NagiAssistService"/>
+        <notificationGroup id="Nagi compiler assistance" displayType="BALLOON" isLogByDefault="true"/>
         <completion.contributor language="Nagi" implementationClass="com.disnana.nagi.NagiAssistCompletionContributor"/>
         <completion.contributor language="NagiLow" implementationClass="com.disnana.nagi.NagiAssistCompletionContributor"/>
         <codeInsight.parameterInfo language="Nagi" implementationClass="com.disnana.nagi.NagiParameterInfoHandler"/>

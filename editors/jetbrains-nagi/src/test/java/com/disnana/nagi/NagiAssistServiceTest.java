@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 /** Real Platform documents, background snapshots and deterministic cancellation gates. */
@@ -178,6 +179,102 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         for (int i = 0; i < 20; i++) service.requestBaseline(file);
         assertEquals(1, calls.get());
         assertEquals(NagiAssistService.State.FAILED, service.state());
+    }
+
+    public void testMissingCompilerIsQuietUntilCompilerAppearsAndRejectsOlderResponse() throws Exception {
+        PsiFile file = source("main.nagi", "def main():\n    print(1)\n");
+        Path missingCompiler = root.resolve("tools/" + (com.intellij.openapi.util.SystemInfo.isWindows ? "nagic.exe" : "nagic"));
+        Files.createDirectories(missingCompiler.getParent());
+        NagiSettings.update(missingCompiler.toString(), 5);
+        AtomicInteger compilerProbes = new AtomicInteger();
+        AtomicInteger calls = new AtomicInteger();
+        AtomicInteger notices = new AtomicInteger();
+        AtomicReference<Runnable> retry = new AtomicReference<>();
+        AtomicReference<Boolean> analyzedLatestText = new AtomicReference<>(false);
+        CountDownLatch oldEntered = new CountDownLatch(1);
+        CountDownLatch releaseOld = new CountDownLatch(1);
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            int call = calls.incrementAndGet();
+            if (call == 1) {
+                oldEntered.countDown();
+                while (releaseOld.getCount() != 0) {
+                    try { releaseOld.await(); } catch (InterruptedException ignored) { }
+                }
+                return new NagiAssistProtocol.Response("editor-partial", true, false, false, "names",
+                        List.of(new NagiAssistProtocol.Diagnostic("older compiler diagnostic",
+                                file.getVirtualFile().getPath(), 2, null)), List.of(), List.of(),
+                        List.of(file.getVirtualFile().getPath()));
+            }
+            analyzedLatestText.set(new String(input, java.nio.charset.StandardCharsets.UTF_8).contains("newer"));
+            return new NagiAssistProtocol.Response("editor-partial", true, false, false, "names",
+                    List.of(new NagiAssistProtocol.Diagnostic("current compiler diagnostic",
+                            file.getVirtualFile().getPath(), 2, null)), List.of(), List.of(),
+                    List.of(file.getVirtualFile().getPath()));
+        }, (project, retryAction) -> {
+            notices.incrementAndGet();
+            retry.set(retryAction);
+        }, (configured, workspace) -> {
+            compilerProbes.incrementAndGet();
+            return NagiAssistService.resolveCompiler(configured, workspace);
+        });
+
+        service.requestBaseline(file);
+        waitUntil(() -> service.state() == NagiAssistService.State.COMPILER_UNAVAILABLE && notices.get() == 1);
+        assertEquals("initial resolution attempt", 1, compilerProbes.get());
+        assertEquals(0, calls.get());
+        assertNotNull(retry.get());
+        assertTrue(service.statusMessage().contains("could not be resolved"));
+        assertFalse(NagiAssistExternalAnnotator.shouldRenderFileLevelState(
+                NagiAssistService.State.COMPILER_UNAVAILABLE));
+        assertTrue(NagiAssistExternalAnnotator.shouldRenderFileLevelState(NagiAssistService.State.FAILED));
+
+        var document = myFixture.getEditor().getDocument();
+        for (int edit = 0; edit < 5; edit++) {
+            WriteCommandAction.runWriteCommandAction(getProject(), () ->
+                    document.insertString(document.getTextLength(), "# typing\n"));
+            PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+            service.requestBaseline(file);
+            waitUntil(() -> service.state() == NagiAssistService.State.COMPILER_UNAVAILABLE);
+            assertEquals("typing must not re-probe the unresolved compiler", 1, compilerProbes.get());
+            assertEquals(0, calls.get());
+            assertEquals("one quiet notice per compiler setting", 1, notices.get());
+            assertNull("missing compiler cannot reuse stale compiler facts", service.fresh(file));
+        }
+
+        Files.writeString(missingCompiler, "owned test fixture; the injected runner never executes this file\n");
+        missingCompiler.toFile().setExecutable(true);
+        org.junit.Assume.assumeTrue("filesystem does not expose executable permission", Files.isExecutable(missingCompiler));
+        assertNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(missingCompiler));
+        try {
+            waitUntil(() -> oldEntered.getCount() == 0);
+            assertEquals("compiler appearance causes one fresh resolution attempt", 2, compilerProbes.get());
+            WriteCommandAction.runWriteCommandAction(getProject(), () -> document.setText(
+                    "def main():\n    newer = True\n    print(newer)\n"));
+            PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+            service.requestBaseline(file);
+        } finally {
+            releaseOld.countDown();
+        }
+
+        waitUntil(() -> {
+            var response = service.fresh(file);
+            return response != null && response.response().diagnostics().stream()
+                    .anyMatch(diagnostic -> diagnostic.message().equals("current compiler diagnostic"));
+        });
+        var current = service.fresh(file).response().diagnostics();
+        assertEquals(2, calls.get());
+        assertEquals(2, compilerProbes.get());
+        assertTrue("compiler input must include the latest edit", analyzedLatestText.get());
+        assertTrue(current.stream().anyMatch(diagnostic -> diagnostic.message().equals("current compiler diagnostic")));
+        assertFalse(current.stream().anyMatch(diagnostic -> diagnostic.message().equals("older compiler diagnostic")));
+        assertEquals("one quiet notice is retained after the configured executable appears", 1, notices.get());
+    }
+
+    public void testCompilerUnavailableIsNotRenderedAsASourceWarning() {
+        assertFalse(NagiAssistExternalAnnotator.shouldRenderFileLevelState(
+                NagiAssistService.State.COMPILER_UNAVAILABLE));
+        assertTrue(NagiAssistExternalAnnotator.shouldRenderFileLevelState(NagiAssistService.State.UNTRUSTED));
+        assertTrue(NagiAssistExternalAnnotator.shouldRenderFileLevelState(NagiAssistService.State.FAILED));
     }
 
     public void testPreviouslyUnknownClosedDependencyRequiresANewDiskSnapshot() throws Exception {
