@@ -404,7 +404,8 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             });
             var current = service.fresh(file).response().diagnostics();
             assertEquals(2, calls.get());
-            assertEquals(2, compilerProbes.get());
+            assertEquals("one unavailable probe and one executable verification per analysis",
+                    3, compilerProbes.get());
             assertTrue("compiler input must include the latest edit", analyzedLatestText.get());
             assertTrue(current.stream().anyMatch(diagnostic -> diagnostic.message().equals("current compiler diagnostic")));
             assertFalse(current.stream().anyMatch(diagnostic -> diagnostic.message().equals("older compiler diagnostic")));
