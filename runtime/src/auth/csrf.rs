@@ -10,6 +10,11 @@ use std::{
     time::{Duration, Instant},
 };
 use subtle::{ConditionallySelectable, ConstantTimeEq};
+#[cfg(test)]
+#[path = "csrf/same_queue_probe.rs"]
+mod same_queue_probe;
+#[cfg(test)]
+use same_queue_probe::Phase as CheckpointPhase;
 
 const ROW_BYTES: i64 = 88;
 const META: &str = "CREATE TABLE __nagi_csrf_meta(id INTEGER PRIMARY KEY CHECK(id=1),version INTEGER NOT NULL,incarnation BLOB NOT NULL CHECK(length(incarnation)=32),session_incarnation BLOB NOT NULL CHECK(length(session_incarnation)=32),max_stored INTEGER NOT NULL,max_payload_bytes INTEGER NOT NULL,cleanup_batch INTEGER NOT NULL,ttl_ms INTEGER NOT NULL,collision_attempts INTEGER NOT NULL,origin TEXT NOT NULL,last_wall INTEGER NOT NULL CHECK(last_wall>=0)) STRICT";
@@ -170,6 +175,8 @@ pub(crate) struct Inner {
     postcommit_wait: Option<Arc<ReserveWait>>,
     #[cfg(test)]
     insert_enqueues: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    checkpoint_probe: Option<Arc<same_queue_probe::Probe>>,
 }
 #[cfg(test)]
 struct ReserveWait {
@@ -393,6 +400,8 @@ pub async fn open(
             postcommit_wait: None,
             #[cfg(test)]
             insert_enqueues: std::sync::atomic::AtomicUsize::new(0),
+            #[cfg(test)]
+            checkpoint_probe: None,
         }),
     })
 }
@@ -772,15 +781,32 @@ impl Inner {
         b: &session::CsrfBinding,
         digest: [u8; 32],
     ) -> Result<(), Failure> {
+        #[cfg(test)]
+        self.checkpoint_phase(CheckpointPhase::EntryLease);
         lease.validate().map_err(Failure::authority)?;
+        #[cfg(test)]
+        self.checkpoint_phase(CheckpointPhase::Begin);
         let tx = sqlite::begin(&self.native, sqlite::BeginMode::Immediate)
             .await
             .map_err(Failure::database)?;
         let mut wall = None;
         let result=async {
-            self.check(&tx,&mut wall).await?;let c=self.clock(&mut wall)?;
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::Check);
+            self.check(&tx,&mut wall).await?;
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::InitialSample);
+            let c=self.clock(&mut wall)?;
+            #[cfg(test)]
+            self.checkpoint_sample(c.ceil_ms);
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::Binding);
             self.context.verify_binding(&tx,b,&c,lease).await.map_err(Failure::session)?;
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::Cleanup);
             self.maintenance(&tx,c.ceil_ms,true).await?;
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::ReadTokens);
             let p=b.token_parameters(sqlite::parameters());let p=sqlite::bind_i64(p,self.options.max_stored.checked_add(1).ok_or_else(Failure::unavailable)?);
             let rows=sqlite::all::<TokenRow>(&tx,sqlite::literal("SELECT digest,expiry_ms FROM __nagi_csrf_tokens WHERE session_incarnation=? AND lineage=? AND generation=? ORDER BY digest LIMIT ?"),p).await.map_err(Failure::database)?;
             if rows.len()>usize::try_from(self.options.max_stored).map_err(|_|Failure::unavailable())? { return Err(Failure::unavailable()); }
@@ -790,23 +816,69 @@ impl Inner {
                 if row.expiry_ms<=0 || row.expiry_ms>b.absolute_ms() { return Err(Failure::unavailable()); }
                 let same=candidate.ct_eq(&digest);matched|=same;expiry=i64::conditional_select(&expiry,&row.expiry_ms,same);
             }
-            let fresh=self.clock(&mut wall)?; b.check_clock(&fresh,lease).map_err(Failure::session)?;lease.validate().map_err(Failure::authority)?;
+            #[cfg(test)]
+            self.checkpoint_match(bool::from(matched), expiry);
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::FreshSample);
+            let fresh=self.clock(&mut wall)?;
+            #[cfg(test)]
+            self.checkpoint_sample(fresh.ceil_ms);
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::FreshBinding);
+            b.check_clock(&fresh,lease).map_err(Failure::session)?;
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::FreshLease);
+            lease.validate().map_err(Failure::authority)?;
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::Matched);
             if !bool::from(matched) || fresh.ceil_ms>=expiry { return Err(Failure::denied()); }
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::Project);
             let deadline=project(&fresh,expiry)?.min(b.absolute_deadline());
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::Maintain);
             self.maintenance(&tx,wall.ok_or_else(Failure::unavailable)?,false).await?;
             Ok((expiry,deadline))
         }.await;
+        #[cfg(test)]
+        self.checkpoint_refusal(result.is_err());
+        #[cfg(test)]
+        self.checkpoint_phase(CheckpointPhase::Finish);
         let (expiry, deadline) = self.finish(tx, result, &mut wall).await?;
         let result = async {
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::PostSample);
             let sampled = self.clock(&mut wall);
+            #[cfg(test)]
+            self.checkpoint_sample_result(&sampled);
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::Restore);
             self.restore(&mut wall, false).await?;
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::PostSampleResult);
             sampled?;
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::FinalSample);
             let c = self.clock(&mut wall)?;
+            #[cfg(test)]
+            self.checkpoint_sample(c.ceil_ms);
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::FinalBinding);
             b.check_clock(&c, lease).map_err(Failure::session)?;
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::FinalLease);
             lease.validate().map_err(Failure::authority)?;
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::FinalExpiry);
             if c.ceil_ms >= expiry || Instant::now() >= deadline {
+                #[cfg(test)]
+                self.checkpoint_actual((c.ceil_ms < expiry).then_some(true));
                 return Err(Failure::denied());
             }
+            #[cfg(test)]
+            self.checkpoint_actual(Some(false));
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::Done);
             Ok(())
         }
         .await;
