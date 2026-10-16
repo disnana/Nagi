@@ -84,6 +84,18 @@ jobs:
           set -euo pipefail
           cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
           python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
+      - name: Check SF07 charged native wire checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_sf07_wire_source.py
+          cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -c 'import re,sys
+          raw=sys.stdin.buffer.read(65537)
+          try: text=raw.decode("utf-8",errors="strict") if len(raw)<=65536 else ""
+          except UnicodeError: text=""
+          ok=len(re.findall(r"(?m)^test result: ok\. 31 passed; 0 failed; 0 ignored;",text))==1 and len(re.findall(r"(?m)^test http_server::response_budget::wire::tests::[^ ]+ \.\.\. ok$",text))==12
+          print("sf07_wire_checkpoint native31="+("passed" if ok else "unavailable"))
+          raise SystemExit(0 if ok else 1)'
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -532,7 +544,7 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': '2941f52ab64ca0ef43612ff6cfdbfe14e0721bdaf86448598c5f52202e0dd755',
+              'runtime/src/http_server.rs': 'efcea096cc65f65ee9cab5799aadd2089861d24ee301783a0e64231304cccdc8',
               'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
               'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
@@ -591,6 +603,18 @@ jobs:
           set -euo pipefail
           cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
           python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
+      - name: Check SF07 charged native wire checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_sf07_wire_source.py
+          cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -c 'import re,sys
+          raw=sys.stdin.buffer.read(65537)
+          try: text=raw.decode("utf-8",errors="strict") if len(raw)<=65536 else ""
+          except UnicodeError: text=""
+          ok=len(re.findall(r"(?m)^test result: ok\. 31 passed; 0 failed; 0 ignored;",text))==1 and len(re.findall(r"(?m)^test http_server::response_budget::wire::tests::[^ ]+ \.\.\. ok$",text))==12
+          print("sf07_wire_checkpoint native31="+("passed" if ok else "unavailable"))
+          raise SystemExit(0 if ok else 1)'
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -956,7 +980,7 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': '2941f52ab64ca0ef43612ff6cfdbfe14e0721bdaf86448598c5f52202e0dd755',
+              'runtime/src/http_server.rs': 'efcea096cc65f65ee9cab5799aadd2089861d24ee301783a0e64231304cccdc8',
               'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
               'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',

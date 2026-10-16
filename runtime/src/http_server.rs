@@ -2044,3 +2044,7 @@ pub(crate) fn session_delivery_headers_for_test(
 #[cfg(all(test, nagi_auth_stage_diag))]
 #[path = "http_server/private_deadline_calibration.rs"]
 mod private_deadline_calibration;
+
+// First SF07 bridge checkpoint: production attachment is a separate gate.
+#[cfg(test)]
+mod response_budget;
