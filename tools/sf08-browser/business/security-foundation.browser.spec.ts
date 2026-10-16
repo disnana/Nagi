@@ -57,7 +57,7 @@ test("TLS bootstrap sets the strict prelogin cookie and managed response headers
   });
   expect(bootstrap.status).toBe(200);
   expect(bootstrap.cacheControl).toBe("no-store");
-  expect(bootstrap.vary).toBe("Authorization, Content-Type, Cookie, Origin, X-CSRF-Token");
+  expect(bootstrap.vary).toBe("Authorization, Cookie, Origin");
   const csrfToken = bootstrap.body.csrf_token;
   expect(typeof csrfToken === "string" && csrfToken.length > 0).toBe(true);
 
