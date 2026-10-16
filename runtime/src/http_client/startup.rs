@@ -82,8 +82,8 @@ impl ServiceSpec {
     }
 }
 
-// Explicit native test/development configuration. These private inherited caps
-// are not advertised public support limits and there is no Default impl.
+// Explicit finite startup limits; all values and cross-field checks are required.
+// Inherited native caps are the adopted initial support envelope, not defaults.
 pub struct OperationLimits {
     pub jobs: usize,
     pub queue: usize,

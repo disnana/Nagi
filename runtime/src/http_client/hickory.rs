@@ -1,4 +1,4 @@
-//! Exact Hickory 0.26.3 APIs; dependency union/typecheck/native execution pending.
+//! Exact Hickory 0.26.3 fixed-service resolver integration.
 use super::tokio_io::{TrackedTcp, TrackedUdp};
 use super::*;
 use hickory_resolver::{
@@ -44,21 +44,31 @@ impl ResolverStartup {
             || !canonical_host
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.')
+            || canonical_host.split('.').any(|label| {
+                label.is_empty()
+                    || label.len() > 63
+                    || label.starts_with('-')
+                    || label.ends_with('-')
+            })
             || canonical_host.parse::<IpAddr>().is_ok()
+            || !matches!(url::Host::parse(canonical_host),
+                Ok(url::Host::Domain(name)) if name == canonical_host)
+            || !matches!(rustls::pki_types::ServerName::try_from(canonical_host),
+                Ok(rustls::pki_types::ServerName::DnsName(name)) if name.as_ref() == canonical_host)
             || endpoint.port() == 0
             || endpoint.ip().is_unspecified()
             || endpoint.ip().is_multicast()
         {
             return Err(DnsFailure::Configuration);
         }
-        // Hickory has local/special-name shortcuts. This narrow private subset
+        // Hickory has local/special-name shortcuts. This fixed-service profile
         // rejects them at startup rather than pretending they made two queries.
         if special(canonical_host) {
             return Err(DnsFailure::Configuration);
         }
-        let name = Name::from_ascii(format!("{canonical_host}."))
-            .map_err(|_| DnsFailure::Configuration)?;
-        if !name.is_fqdn() {
+        let absolute = format!("{canonical_host}.");
+        let name = Name::from_ascii(&absolute).map_err(|_| DnsFailure::Configuration)?;
+        if !name.is_fqdn() || name.to_ascii() != absolute {
             return Err(DnsFailure::Configuration);
         }
         Ok(Self { name, endpoint })

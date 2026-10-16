@@ -48,7 +48,30 @@ async def public_call(operation: view[client.PublicOperation[State, bytes]], inp
 
 ## 登録と権限の境界
 
-操作ハンドルは型付きで不透明であり、登録後に操作定義を変更できません。`C` はホストが保持する共有状態、`P` はnominalな権限型、`I` は所有された型付き業務入力です。Nagi から操作やクライアントを作るコンストラクターはなく、標準 API に既定の接続先・数値上限もありません。信頼された Rust ホストが起動時に固定操作を登録し、`Owner` を独立して保持して実際の終了・joinを待つ必要があります。サポート対象となる本番 profile、受理するcanonical/address形式、既定値、数値上限はまだ確定していません。テスト用の値を本番設定として使わないでください。
+操作ハンドルは型付きで不透明であり、登録後に操作定義を変更できません。`C` はホストが保持する共有状態、`P` はnominalな権限型、`I` は所有された型付き業務入力です。Nagi から操作やクライアントを作るコンストラクターはありません。信頼された Rust ホストが起動時に固定操作と有限予算を明示し、`Owner` を独立して保持して実際の終了・joinを待つ必要があります。予算を呼出しごとに設定する方式ではなく、暗黙defaultもありません。
+
+### 起動profileと明示予算
+
+以下は2026年10月16日に採用した0.2.0初版仕様です。実装の全受入条件や4 OSの本番接続検証が完了したという記録ではありません。
+
+接続先は、小文字ASCIIのcanonical DNS名、明示port、明示resolver endpoint、明示TLS rootsで固定します。DNS labelは1〜63 bytes、全体は1〜253 bytesで、英数字と内部のハイフンだけを使います。Unicode、大文字、末尾dot、空label、IP literal、別形式の数値hostを自動正規化して受け入れません。DNS query、URL、Host、TLSのSNI／証明書名が同じidentityになることを起動時に検査します。HTTPS／HTTP1のみで、通常のTLS検証を使用します。
+
+標準profileに内部addressの例外はなく、private／loopback／link-local／metadata、mapped／translation形式、deprecated site-local／IPv4-compatible形式と、固定IANA拒否集合を検査します。`localhost`、`invalid`、`local`、`onion`、`arpa`と各subdomainも起動拒否です。IANA集合外であることは、Internet上の到達性や安全性全般の保証ではありません。
+
+| 起動設定 | 初版の有限支持範囲 |
+|---|---|
+| jobs、queue、job_roots、dns_roots、dns_children、http_drivers、waiters、senders、sockets | 各1〜64 |
+| waiter_bytes／input_bytes | 1〜1 MiB／1〜waiter_bytes |
+| max_request_bytes／max_response_bytes | 各1〜1 MiB |
+| max_headers／max_header_bytes | 1〜128／1〜64 KiB。必須・固定headerも同じ予算内 |
+| max_http_buffer_bytes／max_target_bytes | 8192〜65536 bytes／1〜4096 encoded bytes |
+| whole／connect | 各正のDuration。native Instant加算が成立すること |
+| attempts／catalog容量 | 1〜接続先の候補上限／1〜64操作 |
+| 接続先の候補上限 | 1〜1024。DNS側はA／AAAA合計128候補を超えると拒否 |
+
+全20個の`OperationLimits`値とcatalog／候補上限を起動adapterで指定します。値域に加え、input≤waiter_bytes、attempts≤候補上限、保持容量の積・和、期限の加算、固定headerの数・bytesをchecked検査します。表の最小値を機械的に組み合わせても、必要headerや容量を満たさず起動拒否になる場合があります。DNSにも累計IO 16回、送受信各128 KiB、records 128、CNAME hops 8などの有限な内部上限があります。これらは性能の推奨値やSLAではありません。
+
+設定・証明書の保持容量の対応付け、実測した小規模設定例、4 OSの本番constructor経路は受入作業として残っています。入力・応答のchecked式だけで全processのheap／RSSや実行時間を保証しません。未検証のテスト設定を本番推奨値として使わないでください。
 
 保護操作では `execute` が実際の `Grant[P]` を消費します。ホストのレビュー済み adapter は、その Grant から得た subject/target を実際の要求へ結び付けます。呼び出し側から任意の URL、method/path の組み合わせ、raw header map、Cookie や cookie jar を渡す API はありません。ヘッダーは登録時の固定 `Accept` / `Content-Type` 宣言と、保護操作に結び付いた任意の Bearer 認証情報に限られます。公開操作は別の型で登録され、Grant や認証情報を受け取りません。`ProtectedOperation` を `execute_public` に渡して認可を迂回することは、型検査で拒否します。
 
@@ -70,7 +93,7 @@ async def public_call(operation: view[client.PublicOperation[State, bytes]], inp
 
 ## 接続動作と現在の検証範囲
 
-DNS応答のA/AAAA候補をすべて検査します。危険な候補またはいずれかのfamilyのlookup errorがあれば拒否します。許可された候補は元の期限内で有限個を逐次試し、再試行するのは対象となるTCP接続失敗だけです。TTL 0 はその一回の解決操作だけに使い、cacheには保存しません。TLSの通常の証明書検証を行い、応答本文は上限付きです。圧縮応答は0.2.0では未対応で、0.2.1での対応が計画されています（#124）。
+DNS応答のA/AAAA候補をすべて検査します。危険な候補またはいずれかのfamilyのlookup errorがあれば拒否します。許可された候補は元の期限内で有限個を逐次試し、再試行するのは対象となるTCP接続失敗だけです。TTL 0 はその一回の解決操作だけに使い、cacheには保存しません。TLSの通常の証明書検証を行い、応答本文は上限付きです。要求は`Accept-Encoding: identity`を使います。0.2.0では`Content-Encoding`がない応答と`identity`だけを受け入れ、他のencodingは`UNSUPPORTED_ENCODING`として拒否し、暗黙展開しません。圧縮対応は0.2.1の#124で、圧縮前後のサイズ・メモリ・時間の上限、破損データ、取消後の停止・解放、独立レビューを含めて検証します。
 
 | 検証 | 結果と範囲 |
 |---|---|

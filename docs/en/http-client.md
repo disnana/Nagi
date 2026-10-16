@@ -48,7 +48,30 @@ async def public_call(operation: view[client.PublicOperation[State, bytes]], inp
 
 ## Registration and authority boundary
 
-Operation handles are typed, opaque, and immutable after registration. `C` is retained shared host state, `P` is a nominal permission type, and `I` is an owned typed business input. Nagi has no constructor for a client or operation, and the standard API supplies no default destinations or numeric limits. A trusted Rust host must register fixed operations at startup, retain an independent `Owner`, and await actual shutdown and joins. A supported production profile, accepted canonical/address forms, defaults, and numeric limits have not been selected. Do not use test-only values as production settings.
+Operation handles are typed, opaque, and immutable after registration. `C` is retained shared host state, `P` is a nominal permission type, and `I` is an owned typed business input. Nagi has no constructor for a client or operation. A trusted Rust host explicitly registers fixed operations and finite budgets at startup, retains an independent `Owner`, and awaits actual shutdown and joins. Budgets are configured once at startup rather than on every call; there are no implicit defaults.
+
+### Startup profile and explicit budgets
+
+The following is the initial 0.2.0 contract adopted on October 16, 2026. Adoption does not mean that implementation acceptance or production connection tests on all four OSes are complete.
+
+Destinations use a canonical lowercase ASCII DNS name, explicit port, explicit resolver endpoint, and explicit TLS roots. DNS labels contain 1–63 bytes, with 1–253 bytes overall, and use alphanumeric characters with internal hyphens only. Unicode, uppercase, a trailing dot, empty labels, IP literals, and alternate numeric hosts are rejected rather than normalized. Startup checks that the DNS query, URL, Host, and TLS SNI/certificate name identify the same destination. Only HTTPS/HTTP1 is supported, with normal TLS verification.
+
+The standard profile has no internal-address exceptions. It checks private, loopback, link-local and metadata destinations, mapped/translation forms, deprecated site-local/IPv4-compatible forms, and the pinned IANA deny set. `localhost`, `invalid`, `local`, `onion`, `arpa`, and their subdomains are also refused at startup. Being outside the pinned set does not establish Internet reachability or safety in general.
+
+| Startup setting | Initial finite support envelope |
+|---|---|
+| jobs, queue, job_roots, dns_roots, dns_children, http_drivers, waiters, senders, sockets | Each 1–64 |
+| waiter_bytes / input_bytes | 1–1 MiB / 1–waiter_bytes |
+| max_request_bytes / max_response_bytes | Each 1–1 MiB |
+| max_headers / max_header_bytes | 1–128 / 1–64 KiB, including required/fixed headers |
+| max_http_buffer_bytes / max_target_bytes | 8192–65536 bytes / 1–4096 encoded bytes |
+| whole / connect | Each a positive Duration with representable native Instant addition |
+| attempts / catalog capacity | 1–service candidate cap / 1–64 operations |
+| Service candidate cap | 1–1024; DNS refuses more than 128 A/AAAA addresses in total |
+
+The startup adapter supplies all 20 `OperationLimits` values and the catalog/candidate caps. In addition to individual ranges, checked validation covers input≤waiter_bytes, attempts≤candidate cap, retained-capacity products/sums, deadline addition, and fixed-header count/bytes. Arbitrary combinations of the table minima can fail startup when required headers or capacity do not fit. DNS also has finite internal ceilings, including 16 cumulative IO starts, 128 KiB sent and received each, 128 records, and eight CNAME hops. These are support limits, not performance recommendations or an SLA.
+
+Acceptance work remains for retained configuration/certificate budgets, measured small-configuration examples, and production-constructor execution on four OSes. The checked input/response formula does not bound the whole process heap/RSS or execution time. Do not use unverified test settings as recommended production values.
 
 `execute` consumes the actual `Grant[P]` for protected work. The reviewed host adapter binds the subject and target from that Grant into the actual request. Callers cannot supply an arbitrary URL, an arbitrary method/path combination, a raw header map, or a Cookie or cookie jar. Headers are limited to fixed registration-time `Accept` and `Content-Type` declarations and an optional Bearer credential bound to a protected operation. A public operation is registered under a separate type and accepts no Grant or credential. The checker rejects passing a `ProtectedOperation` to `execute_public` to bypass authorization.
 
@@ -70,7 +93,7 @@ The 14 `FailureKind` values are `INVALID_INPUT`, `SECURITY`, `DESTINATION_DENIED
 
 ## Connection behavior and validation status
 
-The client checks all A and AAAA candidates. It refuses a lookup if any candidate is unsafe or either address-family lookup fails. It tries permitted candidates sequentially under the original deadline, with a finite attempt count, and advances only for eligible TCP connection failures. TTL 0 is usable for that single resolution operation and is never cached. TLS certificate verification remains enabled and response bodies are bounded. Compressed responses are unsupported in 0.2.0; support is planned for 0.2.1 (#124).
+The client checks all A and AAAA candidates. It refuses a lookup if any candidate is unsafe or either address-family lookup fails. It tries permitted candidates sequentially under the original deadline, with a finite attempt count, and advances only for eligible TCP connection failures. TTL 0 is usable for that single resolution operation and is never cached. TLS certificate verification remains enabled and response bodies are bounded. Requests use `Accept-Encoding: identity`. In 0.2.0, responses without `Content-Encoding` or with only `identity` are accepted; other encodings fail as `UNSUPPORTED_ENCODING`, without implicit decompression. Compression remains a 0.2.1 task in #124, with bounds before/after decompression, memory/time limits, corrupt-input and cancellation/cleanup tests, and independent review.
 
 | Validation | Result and scope |
 |---|---|
