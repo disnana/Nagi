@@ -131,6 +131,15 @@ function webkitWrongCADiagnosticOutcome(error, probeURL) {
         return 'webkit_token_present';
       index = message.indexOf(token, index + 1);
     }
+    const cancelled = 'Operation was cancelled';
+    index = message.indexOf(cancelled);
+    while (index >= 0) {
+      const end = index + cancelled.length;
+      if ((index === 0 || !isASCIIIdentifierUnit(message.charCodeAt(index - 1))) &&
+          (end === message.length || !isASCIIIdentifierUnit(message.charCodeAt(end))))
+        return 'webkit_cancelled_present';
+      index = message.indexOf(cancelled, index + 1);
+    }
     return 'webkit_no_fixed_token';
   } catch {
     return 'webkit_shape_access_failed';
@@ -157,6 +166,7 @@ function wrongCAFailureStage(outcome) {
     case 'shape_access_failed': return 'engine_wrong_ca_shape_access_failed';
     case 'webkit_protocol_form': return 'engine_wrong_ca_webkit_protocol_form';
     case 'webkit_token_present': return 'engine_wrong_ca_webkit_token_present';
+    case 'webkit_cancelled_present': return 'engine_wrong_ca_webkit_cancelled_present';
     case 'webkit_no_fixed_token': return 'engine_wrong_ca_webkit_no_fixed_token';
     case 'webkit_shape_non_error': return 'engine_wrong_ca_webkit_shape_non_error';
     case 'webkit_shape_non_string': return 'engine_wrong_ca_webkit_shape_non_string';

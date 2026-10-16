@@ -612,7 +612,7 @@ test('WebKit wrong-CA diagnostics remain failure-only and emit fixed labels', as
 });
 
 test('new WebKit failure checkpoints refuse other engines', () => {
-  for (const suffix of ['webkit_protocol_form', 'webkit_token_present', 'webkit_no_fixed_token',
+  for (const suffix of ['webkit_protocol_form', 'webkit_token_present', 'webkit_no_fixed_token', 'webkit_cancelled_present',
     'webkit_shape_non_error', 'webkit_shape_non_string', 'webkit_shape_oversize', 'webkit_shape_access_failed']) {
     const stage = 'engine_wrong_ca_' + suffix;
     assert.equal(FAILURE_STAGES.includes(stage), true);
@@ -620,5 +620,22 @@ test('new WebKit failure checkpoints refuse other engines', () => {
     for (const engine of ['none', 'chromium', 'firefox']) {
       assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
     }
+  }
+});
+
+
+test('WebKit cancellation phrase is a failure-only lexical observation', async () => {
+  for (const message of ['page.goto: Operation was cancelled',
+    'page.goto: Protocol error (Playwright.navigate): Operation was cancelled',
+    'failure\nCall log: Operation was cancelled PRIVATE_SENTINEL']) {
+    const type = fake('webkit', undefined, { reason: 'ca', kind: 'raw-error', message });
+    const events = [];
+    await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
+      (stage, engine) => events.push({ stage, engine })), /^Error: SF08 browser trust preflight refused$/);
+    assert.deepEqual(events.at(-1), { stage: 'engine_wrong_ca_webkit_cancelled_present', engine: 'webkit' });
+    assert.deepEqual(checkedFailure(events.at(-1).stage, 'webkit'),
+      { schema_version: 1, stage: 'engine_wrong_ca_webkit_cancelled_present', engine: 'webkit' });
+    assert.equal(type.trace.contextClosed && type.trace.closed, true);
+    assert.doesNotMatch(JSON.stringify(events), /Operation|cancelled PRIVATE|PRIVATE_SENTINEL|Call log/);
   }
 });
