@@ -76,7 +76,21 @@ U2_NATIVE_LINES = (
 )
 
 
+SESSION_NATIVE_FINISH_ADDITIONS = ('          python -B scripts/tests/test_session_native_finish_diagnostic.py\n', '          python -B scripts/tests/test_session_native_finish_summary.py\n', '          CARGO_TERM_COLOR=never RUSTFLAGS=\'--cfg nagi_auth_stage_diag\' cargo test --locked -p nagi-runtime --lib native_finish 2>&1 | python -B scripts/ci/session_native_finish_summary.py\n          native_finish_status=("${PIPESTATUS[@]}")\n          if [ "${native_finish_status[0]}" -ne 0 ] || [ "${native_finish_status[1]}" -ne 0 ]; then diagnose_rc=1; fi\n')
+
+
+OWNED_STATE_CI_ADDITIONS = ('          python -B scripts/tests/test_sf07_owned_state_summary.py\n', '          cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock\n', '          cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners\n', '          cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send\n')
+
+
 def inverse_workflow(source):
+    for addition in OWNED_STATE_CI_ADDITIONS:
+        if source.count(addition) != 2:
+            raise ValueError('owned-state workflow registration mismatch')
+        source = source.replace(addition, '')
+    for addition in SESSION_NATIVE_FINISH_ADDITIONS:
+        if source.count(addition) != 2:
+            raise ValueError('Session native finish workflow registration mismatch')
+        source = source.replace(addition, '')
     for line in U2_NATIVE_LINES:
         if source.count(line) != 2:
             raise ValueError('U2 workflow registration mismatch')
@@ -119,7 +133,14 @@ def inverse_prelogin_wire(source):
     return source.replace(new, old).replace(converted, prior)
 
 
+SESSION_NATIVE_COLLECTOR_INVERSE = (('\nfrom collections import Counter\nimport hashlib\nimport importlib.util\nimport json\nimport os\nfrom pathlib import Path\n', '\nfrom collections import Counter\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\n'), ('import subprocess\nimport sys\nimport threading\n\n_NATIVE_SPEC = importlib.util.spec_from_file_location(\n    "session_native_finish_diagnostic", Path(__file__).with_name("session_native_finish_diagnostic.py"))\nnative_finish = importlib.util.module_from_spec(_NATIVE_SPEC)\n_NATIVE_SPEC.loader.exec_module(native_finish)\n\nPREFIX = "session_private_deadline_diag"\nRAW_LIMIT = 256 * 1024\n', 'import subprocess\nimport sys\nimport threading\n\nPREFIX = "session_private_deadline_diag"\nRAW_LIMIT = 256 * 1024\n'), ('def collect(case: str, raw: bytes, returncode: int, *, oversized: bool = False) -> dict:\n    # Unknown identity is never echoed. Callers cannot enlarge the native suite.\n    if case not in CASES:\n        return {"case": "unknown", "state": "invalid", "reason": 1, "facts": [], "native_finish": []}\n    result = {"case": case, "state": "invalid", "reason": 2, "facts": [], "native_finish": []}\n    if oversized or len(raw) > RAW_LIMIT:\n        return result\n    try:\n', 'def collect(case: str, raw: bytes, returncode: int, *, oversized: bool = False) -> dict:\n    # Unknown identity is never echoed. Callers cannot enlarge the native suite.\n    if case not in CASES:\n        return {"case": "unknown", "state": "invalid", "reason": 1, "facts": []}\n    result = {"case": case, "state": "invalid", "reason": 2, "facts": []}\n    if oversized or len(raw) > RAW_LIMIT:\n        return result\n    try:\n'), ('        result["reason"] = 3\n        return result\n    facts = []\n    native_facts = []\n    seen = set()\n    headings = [index for index, line in enumerate(lines)\n                if line.startswith("---- ") and line.endswith(" stdout ----")]\n', '        result["reason"] = 3\n        return result\n    facts = []\n    seen = set()\n    headings = [index for index, line in enumerate(lines)\n                if line.startswith("---- ") and line.endswith(" stdout ----")]\n'), ('    for index, line in enumerate(lines):\n        # Prefix embedded in an arbitrary tail, alternate shape, or truncation\n        # is invalid rather than silently ignored or rendered.\n        if native_finish.PREFIX in line:\n            value = native_finish.parse(line)\n            legacy = marker(lines[index - 1]) if index > 0 else None\n            if (not block_start < index < block_end or value is None\n                    or not native_finish.paired(value, legacy, 3)\n                    or line in seen or len(native_facts) >= MARKER_LIMIT):\n                result["reason"] = 4\n                return result\n            native_facts.append(value)\n            seen.add(line)\n            continue\n        if PREFIX not in line:\n            continue\n        if not block_start < index < block_end:\n', '    for index, line in enumerate(lines):\n        # Prefix embedded in an arbitrary tail, alternate shape, or truncation\n        # is invalid rather than silently ignored or rendered.\n        if PREFIX not in line:\n            continue\n        if not block_start < index < block_end:\n'), ('                item[key] != 0 for key in ("begins", "commands", "commits")) for item in facts):\n            result["reason"] = 6\n            return result\n    result.update(state="passed" if good else "tests_failed", reason=0, facts=facts, native_finish=native_facts)\n    if len(json.dumps(result, separators=(",", ":")).encode()) > JSON_LIMIT:\n        return {"case": case, "state": "invalid", "reason": 2, "facts": [], "native_finish": []}\n    return result\n\n\n', '                item[key] != 0 for key in ("begins", "commands", "commits")) for item in facts):\n            result["reason"] = 6\n            return result\n    result.update(state="passed" if good else "tests_failed", reason=0, facts=facts)\n    if len(json.dumps(result, separators=(",", ":")).encode()) > JSON_LIMIT:\n        return {"case": case, "state": "invalid", "reason": 2, "facts": []}\n    return result\n\n\n'), ('            raw, code, oversized = capture(native_command(name), env)\n            result = collect(case, raw, code, oversized=oversized)\n        except (OSError, ValueError, subprocess.SubprocessError):\n            result = {"case": case, "state": "unavailable", "reason":8, "facts": [], "native_finish": []}\n        failed |= result["state"] != "passed"\n        if name.startswith(CALIBRATION):\n            calibration_passed &= result["state"] == "passed"\n', '            raw, code, oversized = capture(native_command(name), env)\n            result = collect(case, raw, code, oversized=oversized)\n        except (OSError, ValueError, subprocess.SubprocessError):\n            result = {"case": case, "state": "unavailable", "reason":8, "facts": []}\n        failed |= result["state"] != "passed"\n        if name.startswith(CALIBRATION):\n            calibration_passed &= result["state"] == "passed"\n'))
+
+
 def inverse_collector(source):
+    for added, inherited in SESSION_NATIVE_COLLECTOR_INVERSE:
+        if source.count(added) != 1:
+            raise ValueError('Session native finish collector inverse mismatch')
+        source = source.replace(added, inherited, 1)
     if not HTTP_AFTER or source.count(HTTP_AFTER) != 1:
         raise ValueError('U1 collector binding mismatch')
     return source.replace(HTTP_AFTER, HTTP_BEFORE)
@@ -147,7 +168,17 @@ QUOTA_CFG_ADDITIONS = (
 )
 
 
+def inverse_quota_owned_state_lock(source):
+    alias = 'use super::OwnedStateLock as Mutex;\n'
+    current_arc = 'use std::sync::Arc;\n'
+    previous = 'use std::sync::{Arc, Mutex};\n'
+    if source.count(alias) != 1 or source.count(current_arc) != 1 or previous in source:
+        raise ValueError('owned-state quota import inverse mismatch')
+    return source.replace(alias, '', 1).replace(current_arc, previous, 1)
+
+
 def inverse_quota(source):
+    source = inverse_quota_owned_state_lock(source)
     # U2 extends the existing owner with a retained-catalog receipt. Remove
     # only that independently reviewed exact block, never arbitrary new code.
     start = '// SF07_U2_RETAINED_CATALOG_BEGIN'

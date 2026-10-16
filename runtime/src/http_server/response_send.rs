@@ -4,7 +4,7 @@
 pub(super) use super::request_headers::ReceivedHeaders;
 use super::response_budget::{wire::*, Diagnostic, Producer};
 use super::{ClosingIo, Sending, TimedIo};
-use crate::security_sf07_private::quota::Reservation;
+use crate::security_sf07_private::{quota::Reservation, OwnedStateLock};
 use axum::http::{Method, StatusCode, Uri};
 use hyper::{body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::{TokioIo, TokioTimer};
@@ -47,14 +47,14 @@ pub(super) struct SendState {
 pub(super) struct SendLedger {
     ordinary: Arc<Producer>,
     fallback: Arc<FallbackLedger>,
-    state: Mutex<SendState>,
+    state: OwnedStateLock<SendState>,
 }
 impl SendLedger {
     fn new(ordinary: Arc<Producer>, fallback: Arc<FallbackLedger>) -> Arc<Self> {
         Arc::new(Self {
             ordinary,
             fallback,
-            state: Mutex::new(SendState {
+            state: OwnedStateLock::new(SendState {
                 cached: None,
                 closed: false,
             }),
@@ -243,3 +243,6 @@ where
 
 #[path = "response_send_tests.rs"]
 mod tests;
+
+#[path = "response_send_owned_state_tests.rs"]
+mod owned_state_lock_tests;

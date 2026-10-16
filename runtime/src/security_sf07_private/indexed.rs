@@ -1,7 +1,7 @@
 //! Private finite indexed rate core. No public numbers/API or HTTP integration.
+use super::OwnedStateLock as Mutex;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 const KEY_BITS: usize = 80;

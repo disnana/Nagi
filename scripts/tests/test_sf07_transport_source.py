@@ -18,6 +18,19 @@ def text(path):
 
 
 class TransportSourceTests(unittest.TestCase):
+    def test_native_finish_ci_additions_have_strict_inverse_without_hash_replacement(self):
+        workflow = text(".github/workflows/ci.yml")
+        self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).encode()).hexdigest(),
+                         "5d7923afbefb4108ccfaedfb2441cf8832aea38d25a683fd6cc1d62400783eb7")
+        for addition in projection.SESSION_NATIVE_FINISH_ADDITIONS:
+            self.assertEqual(workflow.count(addition), 2)
+            for mutated in (workflow.replace(addition, "", 1), workflow.replace(addition, addition + addition, 1)):
+                with self.assertRaises(ValueError):
+                    projection.inverse_workflow(mutated)
+        self.assertEqual(hashlib.sha256(projection.inverse_collector(
+            text("scripts/ci/session_private_deadline_diagnostic.py")).encode()).hexdigest(),
+                         "1d0dd3c92e07c374de80d4f968c101141eb6290ba2b935bf9c06dcb85ac60913")
+
     def test_native_inventory_is_explicit_and_registered_in_both_required_steps(self):
         tests = text("runtime/src/http_server/response_send_tests.rs")
         names = re.findall(r"#\[tokio::test\]\s*async fn ([a-zA-Z0-9_]+)\(", tests)

@@ -7,6 +7,10 @@ use std::{
     time::Instant,
 };
 
+#[path = "session_native_finish.rs"]
+mod native_finish;
+pub(crate) use native_finish::NativeFinish;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub(crate) enum Phase {
@@ -95,6 +99,7 @@ struct Record {
     budget_ms: u16,
     entry_remaining_ms: u16,
     phase_remaining_ms: u16,
+    native: native_finish::Record,
 }
 struct State {
     admitted: Instant,
@@ -131,6 +136,7 @@ impl Observer {
                 budget_ms: bounded_ms(until.saturating_duration_since(admitted)),
                 entry_remaining_ms: remaining,
                 phase_remaining_ms: remaining,
+                native: native_finish::Record::new(),
             }),
         }))
     }
@@ -141,6 +147,18 @@ impl Observer {
         if let Ok(mut record) = self.0.record.lock() {
             action(&mut record);
         }
+    }
+    pub(crate) fn native_finish(&self) -> NativeFinish<'_> {
+        NativeFinish::start(self)
+    }
+    #[cfg(test)]
+    pub(crate) fn native_finish_for_test(&self) -> String {
+        native_finish::Closed::new(
+            self.closed(504).expect("unpoisoned test observer"),
+            native_finish::Origin::Session,
+            0,
+        )
+        .to_string()
     }
     pub(crate) fn db(&self, stage: Db) {
         self.update(|r| {
@@ -167,15 +185,21 @@ impl Observer {
         if status != 504 {
             return None;
         }
-        let record = *self.0.record.lock().ok()?;
+        let held = self.0.record.lock().ok()?;
+        let now = Instant::now();
+        let record = *held;
         Some(Closed {
             record,
-            exit_remaining_ms: bounded_ms(record.until.saturating_duration_since(Instant::now())),
+            exit_remaining_ms: bounded_ms(record.until.saturating_duration_since(now)),
+            selected_deadline_passed: now >= record.until,
         })
     }
     pub(crate) fn emit(&self, status: u16) {
         if let Some(closed) = self.closed(status) {
-            eprintln!("{closed}");
+            eprintln!(
+                "{closed}\n{}",
+                native_finish::Closed::new(closed, native_finish::Origin::Session, 0)
+            );
         }
     }
     #[cfg(test)]
@@ -183,12 +207,24 @@ impl Observer {
         // Copy the retained owner's record after selection. The scoped future
         // may already be dropped; ACTIVE is deliberately not consulted here.
         if let Some(closed) = self.closed(504) {
-            eprintln!("{}", PrivateClosed { closed, terminal });
+            eprintln!(
+                "{}\n{}",
+                PrivateClosed { closed, terminal },
+                native_finish::Closed::new(closed, native_finish::Origin::Private, terminal as u8)
+            );
         }
     }
     pub(crate) fn emit_token(&self, status: u16) {
         if let Some(closed) = self.closed(status) {
-            eprintln!("{}", TokenClosed(closed));
+            eprintln!(
+                "{}\n{}",
+                TokenClosed(closed),
+                native_finish::Closed::new(
+                    closed,
+                    native_finish::Origin::Token,
+                    closed.record.token_terminal as u8
+                )
+            );
         }
     }
     pub(crate) fn emit_bootstrap(&self, status: u16) {
@@ -200,12 +236,13 @@ impl Observer {
                     .saturating_duration_since(self.0.admitted),
             );
             eprintln!(
-                "{}",
+                "{}\n{}",
                 BootstrapClosed {
                     closed,
                     security_budget_ms,
                     selected_end_kind
-                }
+                },
+                native_finish::Closed::new(closed, native_finish::Origin::Bootstrap, 0)
             );
         }
     }
@@ -252,9 +289,11 @@ pub(crate) async fn observe<F: Future>(stage: Phase, future: F) -> F::Output {
     })
     .await
 }
+#[derive(Clone, Copy)]
 struct Closed {
     record: Record,
     exit_remaining_ms: u16,
+    selected_deadline_passed: bool,
 }
 impl fmt::Display for Closed {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

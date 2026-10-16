@@ -2,7 +2,9 @@
 import ast
 import hashlib
 import importlib.util
+import io
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -46,10 +48,15 @@ class RateSourceTests(unittest.TestCase):
         # two source lists while its fixed count still rejects the new suite.
         code = compile(tree, 'check_sf07_private_tests.py', 'exec')
         from unittest.mock import patch
-        text = ''.join('test ' + n + ' ... ok\n' for n in old + new + retained)
-        text += 'test result: ok. 70 passed; 0 failed; 0 ignored;\n'
-        with patch.object(Path, 'read_text', return_value=text), patch.object(sys, 'argv', ['checker', 'fixture']):
-            exec(code, {'__name__': '__main__'})
+        runner = {'linux': 'Linux', 'win32': 'Windows', 'darwin': 'macOS'}[sys.platform]
+        with patch.object(sys, 'path', [str(ROOT/'scripts')] + sys.path), patch.dict(os.environ, {'RUNNER_OS': runner}, clear=True):
+            from ci.sf07_owned_state_summary import expected
+            names = old + new + retained + sorted(expected('private'))
+            count = len(names)
+            text = f'running {count} tests\n' + ''.join('test ' + n + ' ... ok\n' for n in names)
+            text += f'test result: ok. {count} passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n'
+            with patch.object(Path, 'open', return_value=io.BytesIO(text.encode())), patch.object(sys, 'argv', ['checker', 'fixture']):
+                exec(code, {'__name__': '__main__'})
 
     def test_exact_twelve_native_cases_and_both_required_steps(self):
         source = (ROOT/'runtime/src/security_sf07_private/startup_rate_tests.rs').read_text()

@@ -2,9 +2,10 @@
 //!
 //! This file is deliberately unregistered and exposes no public Nagi API.
 
+use super::OwnedStateLock as Mutex;
 #[cfg(test)]
 use std::mem::size_of;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 const MAX_CLAIMS: usize = 8;
 #[cfg(test)]

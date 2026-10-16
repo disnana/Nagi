@@ -12,8 +12,13 @@ EXPECTED += ['security_sf07_private::startup_rate::tests::aggregate_rules_domain
 # U2 retained-catalog accounting adds three exact cases; prior67 stay unchanged.
 EXPECTED += ['security_sf07_private::quota::retained_catalog_tests::actual_resource_vector_excess_capacity_refused_before_publish', 'security_sf07_private::quota::retained_catalog_tests::receipt_covers_same_quota_mutex_and_actual_vector_capacity', 'security_sf07_private::quota::retained_catalog_tests::short_catalog_budget_refused_before_existing_constructor_allocates']
 
-text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
-summaries = re.findall(r"test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored;", text)
-assert summaries == [("70", "0", "0")], "expected exactly 70 passing private SF07 tests"
-observed = re.findall(r"^test (security_sf07_private::\S+) \.\.\. ok$", text, re.M)
-assert collections.Counter(observed) == collections.Counter(EXPECTED), "SF07 inventory mismatch"
+# Keep the frozen55 + startup12 + retained3 catalog separate and unchanged.
+from ci.sf07_owned_state_summary import MAX_BYTES, expected, matches
+
+added = expected("private")
+assert added is not None, "private SF07 native host configuration invalid"
+combined = EXPECTED + sorted(added)
+assert len(set(combined)) == len(combined), "private SF07 duplicate expected case"
+with pathlib.Path(sys.argv[1]).open("rb") as source:
+    raw = source.read(MAX_BYTES + 1)
+assert matches(raw, frozenset(combined)), "private SF07 exact bounded inventory mismatch"

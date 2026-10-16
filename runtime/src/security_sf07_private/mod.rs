@@ -3,9 +3,14 @@
 mod indexed;
 #[cfg(test)]
 mod legacy_rate;
+mod owned_state_lock;
+pub(crate) use owned_state_lock::OwnedStateLock;
 pub(crate) mod quota;
 #[cfg(test)]
 mod startup_rate;
+
+#[cfg(test)]
+mod owned_state_owner_tests;
 
 #[cfg(test)]
 fn allocations_in<T>(f: impl FnOnce() -> T) -> (T, u64) {

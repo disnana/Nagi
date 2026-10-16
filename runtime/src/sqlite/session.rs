@@ -855,9 +855,7 @@ fn run_session(
     #[cfg(nagi_auth_stage_diag)]
     let observer = request.diagnostic.clone();
     #[cfg(nagi_auth_stage_diag)]
-    if let Some(observer) = &observer {
-        observer.db(Db::BeginRunning);
-    }
+    let native_finish = observer.as_ref().map(Observer::native_finish);
     let mode = Arc::clone(&state.mode);
     let (result, mut outcome, terminal_reply) = {
         let begun = {
@@ -874,6 +872,10 @@ fn run_session(
                 #[cfg(nagi_auth_stage_diag)]
                 if let Some(observer) = &observer {
                     observer.db(Db::BeginReply);
+                }
+                #[cfg(nagi_auth_stage_diag)]
+                if let Some(finish) = &native_finish {
+                    finish.begin_failed();
                 }
                 let _ = request.reply.send(Err(Failure::primary_error(
                     Kind::Sql,
@@ -966,7 +968,18 @@ fn run_session(
                                 });
                             }
                             match operation {
-                                Finish::Commit => native.commit(),
+                                Finish::Commit => {
+                                    #[cfg(nagi_auth_stage_diag)]
+                                    if let Some(finish) = &native_finish {
+                                        finish.commit_enter();
+                                    }
+                                    let result = native.commit();
+                                    #[cfg(nagi_auth_stage_diag)]
+                                    if let Some(finish) = &native_finish {
+                                        finish.commit_return(result.is_ok());
+                                    }
+                                    result
+                                }
                                 Finish::Rollback => native.rollback(),
                             }
                         };
@@ -1013,7 +1026,16 @@ fn run_session(
             }
             let result = {
                 let _management = Management::enter(&mode);
-                native.rollback()
+                #[cfg(nagi_auth_stage_diag)]
+                if let Some(finish) = &native_finish {
+                    finish.cleanup_eof_enter();
+                }
+                let result = native.rollback();
+                #[cfg(nagi_auth_stage_diag)]
+                if let Some(finish) = &native_finish {
+                    finish.cleanup_return(result.is_ok());
+                }
+                result
             };
             if result.is_ok() {
                 outcome = Outcome::RolledBack;
@@ -1043,7 +1065,16 @@ fn run_session(
     } else if !matches!(&result, Err(error) if error.kind == Kind::Cleanup) {
         let cleanup = {
             let _management = Management::enter(&mode);
-            conn.execute_batch("ROLLBACK")
+            #[cfg(nagi_auth_stage_diag)]
+            if let Some(finish) = &native_finish {
+                finish.cleanup_after_finish_enter();
+            }
+            let result = conn.execute_batch("ROLLBACK");
+            #[cfg(nagi_auth_stage_diag)]
+            if let Some(finish) = &native_finish {
+                finish.cleanup_return(result.is_ok());
+            }
+            result
         };
         match cleanup {
             Ok(()) => outcome = Outcome::RolledBack,
@@ -1079,6 +1110,10 @@ fn run_session(
     // finish. An immediate next begin must not race the request's lexical Drop.
     drop(request._owner.take());
     #[cfg(nagi_auth_stage_diag)]
+    if let Some(finish) = &native_finish {
+        finish.checkout_returned();
+    }
+    #[cfg(nagi_auth_stage_diag)]
     if let Some(observer) = &observer {
         observer.db(Db::Settled);
     }
@@ -1087,3 +1122,7 @@ fn run_session(
     }
     reusable
 }
+
+#[cfg(all(test, nagi_auth_stage_diag))]
+#[path = "session_native_finish_tests.rs"]
+mod native_finish_tests;

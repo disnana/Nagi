@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import Counter
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -11,6 +12,11 @@ import signal
 import subprocess
 import sys
 import threading
+
+_NATIVE_SPEC = importlib.util.spec_from_file_location(
+    "session_native_finish_diagnostic", Path(__file__).with_name("session_native_finish_diagnostic.py"))
+native_finish = importlib.util.module_from_spec(_NATIVE_SPEC)
+_NATIVE_SPEC.loader.exec_module(native_finish)
 
 PREFIX = "session_private_deadline_diag"
 RAW_LIMIT = 256 * 1024
@@ -70,8 +76,8 @@ def marker(line: str) -> dict | None:
 def collect(case: str, raw: bytes, returncode: int, *, oversized: bool = False) -> dict:
     # Unknown identity is never echoed. Callers cannot enlarge the native suite.
     if case not in CASES:
-        return {"case": "unknown", "state": "invalid", "reason": 1, "facts": []}
-    result = {"case": case, "state": "invalid", "reason": 2, "facts": []}
+        return {"case": "unknown", "state": "invalid", "reason": 1, "facts": [], "native_finish": []}
+    result = {"case": case, "state": "invalid", "reason": 2, "facts": [], "native_finish": []}
     if oversized or len(raw) > RAW_LIMIT:
         return result
     try:
@@ -98,6 +104,7 @@ def collect(case: str, raw: bytes, returncode: int, *, oversized: bool = False) 
         result["reason"] = 3
         return result
     facts = []
+    native_facts = []
     seen = set()
     headings = [index for index, line in enumerate(lines)
                 if line.startswith("---- ") and line.endswith(" stdout ----")]
@@ -108,6 +115,17 @@ def collect(case: str, raw: bytes, returncode: int, *, oversized: bool = False) 
     for index, line in enumerate(lines):
         # Prefix embedded in an arbitrary tail, alternate shape, or truncation
         # is invalid rather than silently ignored or rendered.
+        if native_finish.PREFIX in line:
+            value = native_finish.parse(line)
+            legacy = marker(lines[index - 1]) if index > 0 else None
+            if (not block_start < index < block_end or value is None
+                    or not native_finish.paired(value, legacy, 3)
+                    or line in seen or len(native_facts) >= MARKER_LIMIT):
+                result["reason"] = 4
+                return result
+            native_facts.append(value)
+            seen.add(line)
+            continue
         if PREFIX not in line:
             continue
         if not block_start < index < block_end:
@@ -128,9 +146,9 @@ def collect(case: str, raw: bytes, returncode: int, *, oversized: bool = False) 
                 item[key] != 0 for key in ("begins", "commands", "commits")) for item in facts):
             result["reason"] = 6
             return result
-    result.update(state="passed" if good else "tests_failed", reason=0, facts=facts)
+    result.update(state="passed" if good else "tests_failed", reason=0, facts=facts, native_finish=native_facts)
     if len(json.dumps(result, separators=(",", ":")).encode()) > JSON_LIMIT:
-        return {"case": case, "state": "invalid", "reason": 2, "facts": []}
+        return {"case": case, "state": "invalid", "reason": 2, "facts": [], "native_finish": []}
     return result
 
 
@@ -262,7 +280,7 @@ def main() -> int:
             raw, code, oversized = capture(native_command(name), env)
             result = collect(case, raw, code, oversized=oversized)
         except (OSError, ValueError, subprocess.SubprocessError):
-            result = {"case": case, "state": "unavailable", "reason":8, "facts": []}
+            result = {"case": case, "state": "unavailable", "reason":8, "facts": [], "native_finish": []}
         failed |= result["state"] != "passed"
         if name.startswith(CALIBRATION):
             calibration_passed &= result["state"] == "passed"
