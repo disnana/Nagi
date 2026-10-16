@@ -1,5 +1,8 @@
 """Rate checkpoint registration and fake CI controls; never native evidence."""
+import ast
+import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import re
 import subprocess
@@ -20,6 +23,31 @@ def fixture():
 
 
 class RateSourceTests(unittest.TestCase):
+    def test_broad_inventory_retains_frozen_fifty_five_and_adds_exact_twelve(self):
+        tree = ast.parse((ROOT/'scripts/check_sf07_private_tests.py').read_text())
+        original = [n for n in tree.body if isinstance(n, ast.Assign)
+                    and any(isinstance(t, ast.Name) and t.id == 'EXPECTED' for t in n.targets)]
+        additions = [n for n in tree.body if isinstance(n, ast.AugAssign)
+                     and isinstance(n.target, ast.Name) and n.target.id == 'EXPECTED']
+        self.assertEqual(len(original), 1)
+        self.assertEqual(len(additions), 1)
+        old = ast.literal_eval(original[0].value)
+        new = ast.literal_eval(additions[0].value)
+        self.assertEqual(len(old), 55)
+        self.assertEqual(hashlib.sha256(json.dumps(old, separators=(',', ':')).encode()).hexdigest(),
+                         'a9494c0c4080e9bf75d4c631f23e873fd37380ada1dffdf908f87c571a9df985')
+        self.assertIsInstance(additions[0].op, ast.Add)
+        self.assertEqual(new, sorted(summary.EXPECTED['rate-startup']))
+        self.assertEqual(len(set(old + new)), 67)
+        # Run the actual broad checker: registration must not merely agree in
+        # two source lists while its fixed count still rejects the new suite.
+        code = compile(tree, 'check_sf07_private_tests.py', 'exec')
+        from unittest.mock import patch
+        text = ''.join('test ' + n + ' ... ok\n' for n in old + new)
+        text += 'test result: ok. 67 passed; 0 failed; 0 ignored;\n'
+        with patch.object(Path, 'read_text', return_value=text), patch.object(sys, 'argv', ['checker', 'fixture']):
+            exec(code, {'__name__': '__main__'})
+
     def test_exact_twelve_native_cases_and_both_required_steps(self):
         source = (ROOT/'runtime/src/security_sf07_private/startup_rate_tests.rs').read_text()
         names = re.findall(r'#\[test\]\s*fn (\w+)\(', source)
