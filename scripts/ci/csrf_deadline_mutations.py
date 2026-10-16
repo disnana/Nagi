@@ -149,6 +149,48 @@ MUTANTS = (
                 .ok_or_else(Failure::unavailable)?;""",
      AUTH_BASE + AUTH_CASES[0], "same_queue_fixture phase=OriginalDeliveryDeadlineDenied"),
 )
+SUMMARY_MUTANT_LABELS = tuple(item[0] for item in MUTANTS)
+
+
+def closed_summary(evidence: dict) -> tuple[str, ...]:
+    # Project only fixed labels and finite values. Never render source paths,
+    # assertion text, process output, unknown keys, or arbitrary exit integers.
+    def stage(value, allowed):
+        return value if type(value) is str and value in allowed else "unavailable"
+
+    stock = stage(evidence.get("stock"), (
+        "unavailable", "checkout_failed", "subreaper_unavailable",
+        "process_group_unconfirmed", "cancelled_or_execution_unavailable",
+        "compiled_native_green", "build_timeout", "build_failed", "build_artifact_missing",
+        "native_timeout", "native_inventory_failed",
+        "auth_fixture_native_timeout", "auth_fixture_native_inventory_failed",
+    ))
+    auth = stage(evidence.get("auth_fixture"), (
+        "unavailable", "compiled_native_green", "native_timeout", "native_inventory_failed",
+    ))
+    status = "passed" if evidence.get("status") == "passed" else "failed"
+    lines = ["csrf_deadline_compiled_mutations=" + status,
+             "csrf_deadline_mutation_stock=" + stock,
+             "csrf_deadline_mutation_auth_fixture=" + auth]
+    mutants = evidence.get("mutants")
+    mutants = mutants if type(mutants) is dict else {}
+    for label in SUMMARY_MUTANT_LABELS:
+        result = mutants.get(label)
+        result = result if type(result) is dict else {}
+        build_stage = stage(result.get("build"), (
+            "unavailable", "compiled", "build_timeout", "build_failed", "build_artifact_missing",
+        ))
+        native = stage(result.get("native"), (
+            "unavailable", "completed", "process_timeout", "invalid_source_or_execution",
+        ))
+        code = result.get("native_exit")
+        native_exit = (str(code) if code in (-1, 0, 101) else "other") if type(code) is int else "unavailable"
+        red = result.get("semantic_red")
+        semantic = ("true" if red else "false") if type(red) is bool else "unavailable"
+        lines.append("csrf_deadline_mutant=" + label + " build=" + build_stage
+                     + " native=" + native + " native_exit=" + native_exit
+                     + " semantic_red=" + semantic)
+    return tuple(lines)
 
 
 def test_name(case: str) -> str:
@@ -529,7 +571,7 @@ def execute(repo, output, control):
         evidence["status"] = "failed"
         evidence["cancelled"] = True
     output.write_text(json.dumps(evidence, sort_keys=True) + "\n", encoding="ascii")
-    print("csrf_deadline_compiled_mutations=" + evidence["status"])
+    print("\n".join(closed_summary(evidence)))
     return 0 if evidence["status"] == "passed" else 1
 
 
