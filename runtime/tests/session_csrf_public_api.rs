@@ -448,11 +448,18 @@ impl Reply {
         assert!(c.len() == 1);
         c[0].split(';').next().unwrap().to_owned()
     }
+    #[track_caller]
     fn token(&self) -> String {
         if self.status != 200 || self.body.len() != 60 {
             self.safe_reply_diag("token_response");
         }
-        assert!(self.status == 200 && self.body.len() == 60);
+        assert!(
+            self.status == 200 && self.body.len() == 60,
+            "csrf_public_assertion_diag phase=TokenReply status={} body_bytes={} set_cookie_count={}",
+            self.status,
+            self.body.len(),
+            self.values("set-cookie").len(),
+        );
         let cookie_count = self.values("set-cookie").len();
         if cookie_count != 0 {
             self.safe_reply_diag("token_cookie");
@@ -853,11 +860,29 @@ async fn one_reusable_token_admits_two_distinct_actual_requests() {
         request(&s, "POST", "/parallel", &headers, b""),
         request(&s, "POST", "/parallel", &headers, b"")
     );
+    // Preserve the original short-circuit order: do not add a row query when
+    // an earlier status/call assertion already failed. None means unobserved.
+    let mut checked_calls = None;
+    let mut checked_rows = None;
     assert!(
         one.status == 200
             && two.status == 200
-            && s.state.calls.load(Ordering::SeqCst) == 2
-            && number(&f.pool, "SELECT count(*) AS n FROM __nagi_csrf_tokens").await == 1
+            && {
+                let calls = s.state.calls.load(Ordering::SeqCst);
+                checked_calls = Some(calls);
+                calls == 2
+            }
+            && {
+                let rows = number(&f.pool, "SELECT count(*) AS n FROM __nagi_csrf_tokens").await;
+                checked_rows = Some(rows);
+                rows == 1
+            },
+        "csrf_public_assertion_diag phase=ParallelReplies status_one={} status_two={} checked_calls={:?} calls_at_failure={} checked_rows={:?}",
+        one.status,
+        two.status,
+        checked_calls,
+        s.state.calls.load(Ordering::SeqCst),
+        checked_rows,
     );
     s.stop().await;
     f.stop().await;
@@ -1051,7 +1076,25 @@ async fn pending_guarded_authorizer_expires_at_bound_session_and_recovers_permit
         tokio::pin!(pending);
         tokio::select! {
             _ = s.state.deadline_bound.notified() => {},
-            _ = &mut pending => panic!("authorizer did not reach actual binding barrier"),
+            early = &mut pending => {
+                // select is unbiased: completion and the stored notification
+                // can both be ready. Existing Drop count helps distinguish that
+                // case; this wall observation is not the runtime lookup sample.
+                let wall_expired_at_failure = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .ok()
+                    .and_then(|d| i64::try_from(d.as_millis()).ok())
+                    .map(|now| now >= expiry);
+                panic!(
+                    "authorizer did not reach actual binding barrier: csrf_public_assertion_diag phase=PendingSelectCompletion status={} body_bytes={} set_cookie_count={} deadline_cancelled={} calls={} wall_expired_at_failure={:?}",
+                    early.status,
+                    early.body.len(),
+                    early.values("set-cookie").len(),
+                    s.state.deadline_cancelled.load(Ordering::SeqCst),
+                    s.state.calls.load(Ordering::SeqCst),
+                    wall_expired_at_failure,
+                );
+            },
         }
         // This watchdog is earlier than fixed security2000 and later than the
         // real credential500. The barrier remains closed throughout the response.

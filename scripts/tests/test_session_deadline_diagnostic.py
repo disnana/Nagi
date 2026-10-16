@@ -13,6 +13,153 @@ sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 import session_deadline_diagnostic as diag
 
 
+class SessionDeliveryNativeDiagnosticTests(unittest.TestCase):
+    CASE = "auth::session::http_bridge::delivery_tests::applied_real_issue_commit_has_exactly_one_wire_cookie"
+    MARKER = (
+        "session_deadline_diag status=504 phase=6 event=1 db=4 exit=0 "
+        "polls=2 begins=1 commands=0 commits=0 budget_ms=1000 entry_remaining_ms=1000 "
+        "phase_remaining_ms=999 exit_remaining_ms=0"
+    )
+
+    def test_delivery_cli_closed_failed_fact(self):
+        # Baseline CLI returns usage=2: this regression fails at an actual
+        # expected-status assertion before reading any new parser API.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            raw, output = root / "raw", root / "result.json"
+            raw.write_bytes(cargo_log({self.CASE}, failed={self.CASE}, markers={self.CASE: [self.MARKER]}))
+            console = io.StringIO()
+            with contextlib.redirect_stdout(console):
+                status = diag.main(["diag", "--delivery", "applied", str(raw), "101", str(output)])
+            self.assertEqual(status, 1, "delivery_cli_requires_closed_native_mode")
+            record = json.loads(output.read_text())
+            self.assertEqual(record["status"], "tests_failed")
+            fact = record["suites"]["delivery"]["session_deadline"][0]
+            self.assertEqual((fact["test"], fact["phase"], fact["db"], fact["exit"]),
+                             (self.CASE, 6, 4, 0))
+            self.assertTrue(console.getvalue().startswith("session_delivery_native="))
+            self.assertNotIn("PRIVATE_SENTINEL", output.read_text() + console.getvalue())
+
+    def test_delivery_case_inventory_and_existing_normal_suite(self):
+        native = source_cases("runtime/src/auth/session/delivery_wire_tests.rs")
+        self.assertEqual(len(native), 11)
+        self.assertEqual(len(diag.DELIVERY_CASES), 4)
+        self.assertLessEqual({name.removeprefix(diag.DELIVERY_MODULE) for name in diag.DELIVERY_CASES.values()}, native)
+        bridge = (ROOT / "runtime/src/auth/session/http_bridge.rs").read_text()
+        self.assertIn('mod delivery_tests;', bridge)
+        self.assertIn('#[path = "delivery_wire_tests.rs"]', bridge)
+        for case, name in diag.DELIVERY_CASES.items():
+            with self.subTest(case=case):
+                passed, status = diag.diagnose_delivery(cargo_log({name}), "valid", 0, case)
+                self.assertEqual((status, passed["status"], passed["marker_count"]), (0, "passed", 0))
+                failed, status = diag.diagnose_delivery(
+                    cargo_log({name}, failed={name}, markers={name: [self.MARKER]}), "valid", 101, case)
+                self.assertEqual((status, failed["status"]), (1, "tests_failed"))
+                self.assertEqual(failed["suites"]["delivery"]["failed_cases"], [name])
+
+    def test_delivery_grammar_and_legacy_phase_guard(self):
+        good = self.MARKER
+        self.assertIsNotNone(diag.parse_delivery_marker(good))
+        self.assertIsNone(diag.parse_session_marker(good))
+        legacy = good.replace("phase=6", "phase=2").replace("exit=0", "exit=1")
+        self.assertIsNotNone(diag.parse_session_marker(legacy))
+        self.assertIsNone(diag.parse_delivery_marker(legacy))
+        unpolled = good.replace("phase=6", "phase=0").replace("event=1", "event=0")
+        unpolled = unpolled.replace("db=4", "db=0").replace("polls=2", "polls=0").replace("begins=1", "begins=0")
+        self.assertIsNotNone(diag.parse_delivery_marker(unpolled))
+        for bad in [good + " token=PRIVATE_SENTINEL", "prefix " + good, good + "\n",
+                    good.replace("phase=6", "phase=2"), good.replace("phase=6", "phase=7"),
+                    good.replace("phase=6", "phase=06"), good.replace("event=1", "event=0"),
+                    good.replace("polls=2", "polls=0"), good.replace("db=4", "db=15"),
+                    good.replace("polls=2", "polls=1024"), good.replace("begins=1", "begins=0").replace("commits=0", "commits=1"),
+                    good.replace("budget_ms=1000", "budget_ms=60001"),
+                    good.replace("phase_remaining_ms=999", "phase_remaining_ms=1001"),
+                    unpolled.replace("db=0", "db=4"),
+                    *[good.replace("exit=0", f"exit={exit}") for exit in range(1, 5)]]:
+            with self.subTest(bad=bad):
+                self.assertIsNone(diag.parse_delivery_marker(bad))
+
+    def test_delivery_rejects_other_inventory_infra_and_unbound_facts(self):
+        name = self.CASE
+        valid = cargo_log({name}, failed={name}, markers={name: [self.MARKER]})
+        others = [
+            (cargo_log(set()), 0),
+            (cargo_log({name}, statuses={name: "ignored"}), 0),
+            (cargo_log(set(diag.DELIVERY_CASES.values())), 0),
+            (cargo_log({diag.DELIVERY_CASES["head"]}), 0),
+            (valid, 0), (valid, 124), (valid, 137),
+            (cargo_log({name}) + (self.MARKER + "\n").encode(), 0),
+            (valid.replace(self.MARKER.encode(), (self.MARKER + " sql=PRIVATE_SENTINEL").encode()), 101),
+            (valid.replace(self.MARKER.encode(), (self.MARKER + "\n" + self.MARKER).encode()), 101),
+            (valid.replace(b"phase=6", b"phase=2"), 101),
+            (valid.replace(self.MARKER.encode(),
+                           ("---- arbitrary::PRIVATE_SENTINEL stdout ----\n" + self.MARKER).encode()), 101),
+        ]
+        for raw, exit in others:
+            with self.subTest(exit=exit, raw=raw[:32]):
+                record, status = diag.diagnose_delivery(raw, "valid", exit, "applied")
+                self.assertEqual((status, record["status"]), (1, "diagnostic_invalid"))
+                self.assertNotIn("PRIVATE_SENTINEL", json.dumps(record))
+        for raw, input_status in [(b"error: build PRIVATE_SENTINEL", "valid"), (None, "missing")]:
+            record, status = diag.diagnose_delivery(raw, input_status, 101, "applied")
+            self.assertEqual(status, 1)
+            self.assertNotEqual(record["status"], "tests_failed")
+            self.assertNotIn("PRIVATE_SENTINEL", json.dumps(record))
+
+    def test_delivery_cli_never_prints_invalid_or_success_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            raw, output = root / "raw", root / "result.json"
+            for payload, exit in [
+                (cargo_log({self.CASE}), 0),
+                (cargo_log({self.CASE}, failed={self.CASE}, markers={self.CASE: [self.MARKER + " cookie=PRIVATE_SENTINEL"]}), 101),
+                (b"error: build PRIVATE_SENTINEL", 101),
+            ]:
+                raw.write_bytes(payload)
+                console = io.StringIO()
+                with contextlib.redirect_stdout(console):
+                    status = diag.main(["diag", "--delivery", "applied", str(raw), str(exit), str(output)])
+                self.assertEqual(console.getvalue(), "")
+                self.assertNotIn("PRIVATE_SENTINEL", output.read_text())
+                self.assertEqual(status, 0 if exit == 0 else 1)
+            self.assertEqual(diag.main(["diag", "--delivery", "PRIVATE_SENTINEL", str(raw), "101", str(output)]), 2)
+
+    def test_broad_auth_does_not_reclassify_or_leak_native_markers(self):
+        lines = []
+        for slot, op in [(1, "CsrfIssue"), (2, "Bootstrap")]:
+            lines.extend([
+                f"auth-stage slot={slot} (test-only; scheduling perturbed)",
+                f"op={op} stage=Entry event=Seen elapsed_us=None utc_remaining_ms=None mono=None kind=None outcome=None",
+                "lost=false",
+            ])
+        lines.append("test result: ok. 1 passed; 0 failed; 0 ignored;")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            snapshots = []
+            for extra in ([], [self.MARKER], [self.MARKER + " sql=PRIVATE_SENTINEL"]):
+                (root / "auth-stage-broad.raw").write_text("\n".join(lines + extra) + "\n")
+                console = io.BytesIO()
+                with mock.patch.object(diag.auth_diag.sys, "stdout", mock.Mock(buffer=console)):
+                    self.assertTrue(diag.auth_diag.capture("broad", root, 0, {}))
+                snapshots.append((console.getvalue(), (root / "auth-stage-broad.trace").read_bytes()))
+            self.assertEqual(snapshots[0], snapshots[1])
+            self.assertEqual(snapshots[0], snapshots[2])
+            self.assertNotIn(b"PRIVATE_SENTINEL", snapshots[2][0])
+
+    def test_delivery_bounded_input_and_unknown_identity_fail_closed(self):
+        unknown = "arbitrary::PRIVATE_SENTINEL"
+        for raw, state, exit in [
+            (b"x" * (diag.RAW_LIMIT + 1), "valid", 101),
+            (b"\xffPRIVATE_SENTINEL", "valid", 101),
+            (cargo_log({unknown}, failed={unknown}), "valid", 101),
+            (cargo_log({self.CASE}), "valid", -1),
+            (cargo_log({self.CASE}), "valid", 256),
+        ]:
+            record, status = diag.diagnose_delivery(raw, state, exit, "applied")
+            self.assertEqual((status, record["status"]), (1, "diagnostic_invalid"))
+            self.assertNotIn("PRIVATE_SENTINEL", json.dumps(record))
+
+
 def source_cases(relative):
     text = (ROOT / relative).read_text(encoding="utf-8")
     return set(re.findall(r"#\[tokio::test\]\s+async fn ([A-Za-z_][A-Za-z0-9_]*)\s*\(", text))

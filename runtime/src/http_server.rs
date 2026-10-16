@@ -1604,6 +1604,29 @@ where
         let future = AssertUnwindSafe(async { prepared(request, Arc::clone(&app.state)).await })
             .catch_unwind();
         let handler_started = tokio::time::Instant::now();
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        let handler_observer = handler_started
+            .checked_add(options.handler_deadline)
+            .map(|until| {
+                crate::auth::session_deadline_observer::Observer::new(
+                    handler_started.into_std(),
+                    until.into_std(),
+                )
+            });
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        let future = async {
+            match &handler_observer {
+                Some(observer) => {
+                    observer
+                        .scope(crate::auth::session_deadline_observer::observe(
+                            crate::auth::session_deadline_observer::Phase::Business,
+                            future,
+                        ))
+                        .await
+                }
+                None => future.await,
+            }
+        };
         let response = match tokio::time::timeout(options.handler_deadline, future).await {
             // Tokio polls the operation before its timer. A non-yielding poll can
             // return Ready after the deadline; do not accept that late response.
@@ -1634,6 +1657,12 @@ where
             Ok(Err(_)) => transport(Status::INTERNAL_SERVER_ERROR, head, true),
             Err(_) => transport(Status::GATEWAY_TIMEOUT, head, false),
         };
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        if let Some(observer) = handler_observer {
+            // The last observed poll/native stage is not a timer classification,
+            // an upper reply receipt, or proof that the worker has joined.
+            observer.emit(response.status().as_u16());
+        }
         Ok::<_, Infallible>(finish(response))
     }
     .await?;

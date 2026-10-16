@@ -186,13 +186,44 @@ jobs:
           python scripts/ci/session_deadline_diagnostic.py "$RUNNER_TEMP" "$session_rc" "$browser_rc" "$RUNNER_TEMP/session-deadline-diagnostic.json"
           diagnose_rc=$?
           rm -f "$RUNNER_TEMP/session-deadline-session.raw" "$RUNNER_TEMP/session-deadline-browser.raw"
+          delivery_fail=0
+          while read -r delivery_label delivery_name; do
+            CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib "$delivery_name" -- --exact 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining>0:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"
+            delivery_status=("${PIPESTATUS[@]}")
+            delivery_rc=${delivery_status[0]}
+            if [ "${delivery_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"; fi
+            python -B scripts/ci/session_deadline_diagnostic.py --delivery "$delivery_label" "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw" "$delivery_rc" "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.json"
+            if [ "$?" -ne 0 ]; then delivery_fail=1; fi
+            rm -f "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"
+          done <<'DELIVERY_CASES'
+          applied auth::session::http_bridge::delivery_tests::applied_real_issue_commit_has_exactly_one_wire_cookie
+          not_modified auth::session::http_bridge::delivery_tests::applied_304_and_private_cache_conflict_are_fixed_no_cookie_500
+          head auth::session::http_bridge::delivery_tests::head_applied_response_transfers_cookie_once_without_body
+          expiry auth::session::http_bridge::delivery_tests::expiry_after_real_commit_retires_applied_material_without_cookie
+          DELIVERY_CASES
+          if [ "$delivery_fail" -ne 0 ]; then diagnose_rc=1; fi
           exit "$diagnose_rc"
       - name: Preserve sanitized Session deadline diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: session-deadline-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
-          path: ${{ runner.temp }}/session-deadline-diagnostic.json
+          path: |
+            ${{ runner.temp }}/session-deadline-diagnostic.json
+            ${{ runner.temp }}/session-deadline-delivery-applied.json
+            ${{ runner.temp }}/session-deadline-delivery-not_modified.json
+            ${{ runner.temp }}/session-deadline-delivery-head.json
+            ${{ runner.temp }}/session-deadline-delivery-expiry.json
           if-no-files-found: ignore
       - name: Check B1 Session CSRF runtime and public socket contracts
         shell: bash
@@ -662,13 +693,44 @@ jobs:
           python scripts/ci/session_deadline_diagnostic.py "$RUNNER_TEMP" "$session_rc" "$browser_rc" "$RUNNER_TEMP/session-deadline-diagnostic.json"
           diagnose_rc=$?
           rm -f "$RUNNER_TEMP/session-deadline-session.raw" "$RUNNER_TEMP/session-deadline-browser.raw"
+          delivery_fail=0
+          while read -r delivery_label delivery_name; do
+            CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib "$delivery_name" -- --exact 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining>0:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"
+            delivery_status=("${PIPESTATUS[@]}")
+            delivery_rc=${delivery_status[0]}
+            if [ "${delivery_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"; fi
+            python -B scripts/ci/session_deadline_diagnostic.py --delivery "$delivery_label" "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw" "$delivery_rc" "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.json"
+            if [ "$?" -ne 0 ]; then delivery_fail=1; fi
+            rm -f "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"
+          done <<'DELIVERY_CASES'
+          applied auth::session::http_bridge::delivery_tests::applied_real_issue_commit_has_exactly_one_wire_cookie
+          not_modified auth::session::http_bridge::delivery_tests::applied_304_and_private_cache_conflict_are_fixed_no_cookie_500
+          head auth::session::http_bridge::delivery_tests::head_applied_response_transfers_cookie_once_without_body
+          expiry auth::session::http_bridge::delivery_tests::expiry_after_real_commit_retires_applied_material_without_cookie
+          DELIVERY_CASES
+          if [ "$delivery_fail" -ne 0 ]; then diagnose_rc=1; fi
           exit "$diagnose_rc"
       - name: Preserve sanitized Session deadline diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: session-deadline-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
-          path: ${{ runner.temp }}/session-deadline-diagnostic.json
+          path: |
+            ${{ runner.temp }}/session-deadline-diagnostic.json
+            ${{ runner.temp }}/session-deadline-delivery-applied.json
+            ${{ runner.temp }}/session-deadline-delivery-not_modified.json
+            ${{ runner.temp }}/session-deadline-delivery-head.json
+            ${{ runner.temp }}/session-deadline-delivery-expiry.json
           if-no-files-found: ignore
       - name: Check B1 Session CSRF runtime and public socket contracts
         shell: bash

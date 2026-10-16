@@ -29,12 +29,16 @@ class MutationEvidenceTests(unittest.TestCase):
         return ("running 12 tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(guard.REQUIRED))
                 + "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 500 filtered out; finished in 1.00s\n")
 
+    def auth_stock(self):
+        return ("running 14 tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(guard.AUTH_REQUIRED))
+                + "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 500 filtered out; finished in 1.00s\n")
+
     @staticmethod
     def crlf(raw):
         return raw.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
 
     def red(self, case, marker):
-        name = guard.BASE + case
+        name = guard.test_name(case)
         return ("running 1 test\n" + "test " + name + " ... FAILED\n"
                 + "failures:\n---- " + name + " stdout ----\n"
                 + "thread '" + name + "' panicked at private/path.rs:1:1:\n" + marker + "\n"
@@ -50,9 +54,35 @@ class MutationEvidenceTests(unittest.TestCase):
         self.assertEqual(names, guard.REQUIRED)
         self.assertEqual(len(names), 12)
 
+    def test_auth_csrf_source_inventory_is_exact(self):
+        source = ROOT / "runtime/src/auth/csrf/tests.rs"
+        names = {guard.AUTH_BASE + name for name in
+                 re.findall(r"#\[(?:tokio::)?test\]\s*(?:async )?fn ([a-z0-9_]+)", source.read_text())}
+        self.assertEqual(names, guard.AUTH_REQUIRED)
+        self.assertEqual(len(names), 14)
+        self.assertIn("same_queue_reopen_reuses_data_context_without_refreshing_token_expiry",
+                      guard.AUTH_CASES)
+        self.assertIn("reopened_context_preserves_original_token_expiry_and_rejects_after_deadline",
+                      guard.AUTH_CASES)
+
+    def test_auth_inventory_refuses_missing_duplicate_ignored_wrong_group_and_nonzero(self):
+        raw = self.auth_stock()
+        first = "test " + sorted(guard.AUTH_REQUIRED)[0] + " ... ok\n"
+        for candidate, code in (
+            (raw.replace(first, ""), 0),
+            (raw + first, 0),
+            (raw.replace(first, first.replace("... ok", "... ignored")), 0),
+            (raw.replace(guard.AUTH_BASE, "other::"), 0),
+            (raw.replace("14 passed", "13 passed"), 0),
+            (raw, 101),
+        ):
+            self.assertFalse(guard.inventory(candidate, code, guard.AUTH_REQUIRED))
+
     def test_stock_green_and_crlf(self):
         self.assertTrue(guard.inventory(self.stock(), 0, guard.REQUIRED))
         self.assertTrue(guard.inventory(self.stock().replace("\n", "\r\n"), 0, guard.REQUIRED))
+        self.assertTrue(guard.inventory(self.auth_stock(), 0, guard.AUTH_REQUIRED))
+        self.assertTrue(guard.inventory(self.auth_stock().replace("\n", "\r\n"), 0, guard.AUTH_REQUIRED))
 
     def test_zero_missing_duplicate_ignored_other_stage_and_nonzero_fail(self):
         row = "test " + sorted(guard.REQUIRED)[0] + " ... ok\n"
@@ -82,6 +112,88 @@ class MutationEvidenceTests(unittest.TestCase):
             with self.subTest(code=code):
                 self.assertFalse(guard.semantic_red(raw, code, case, marker))
 
+    def test_auth_semantic_red_requires_exact_case_summary_and_unique_marker(self):
+        cases = [item for item in guard.MUTANTS if item[4].startswith(guard.AUTH_BASE)]
+        self.assertEqual(len(cases), 4)
+        for label, _, _, _, case, marker in cases:
+            with self.subTest(mutant=label):
+                good = self.red(case, marker)
+                self.assertTrue(guard.semantic_red(good, 101, case, marker))
+                for raw, code in (
+                    ("error: rustc rejected mutation\n", 101),
+                    (good.replace("running 1 test", "running 0 tests"), 101),
+                    (good.replace("... FAILED", "... ignored"), 101),
+                    (good.replace(case, "different::test"), 101),
+                    (good.replace(marker, "unrelated_assertion"), 101),
+                    (good + marker + "\n", 101),
+                    (marker + "\n" + good, 101),
+                    (good, 0),
+                    (good, 124),
+                ):
+                    self.assertFalse(guard.semantic_red(raw, code, case, marker))
+
+    def test_auth_fixture_stock_failure_stops_before_any_mutant(self):
+        with mock.patch.object(guard, "build", return_value=(ROOT / "native", "compiled")), \
+                mock.patch.object(guard, "command", side_effect=[
+                    (0, self.stock(), False), (0, "running 0 tests\n", False)]) as command:
+            record = guard.run_checkout(ROOT, {})
+        self.assertEqual(record["auth_fixture"], "native_inventory_failed")
+        self.assertEqual(record["stock"], "auth_fixture_native_inventory_failed")
+        self.assertEqual(record["mutants"], {})
+        self.assertEqual(command.call_count, 2)
+
+    def test_auth_mutant_runner_wiring_restores_source_and_uses_exact_target(self):
+        mutants = [item for item in guard.MUTANTS if item[4].startswith(guard.AUTH_BASE)]
+        for mutant in mutants:
+            label, path, old, new, case, marker = mutant
+            with self.subTest(mutant=label):
+                original = (ROOT / path).read_bytes()
+                fake_source = mock.Mock()
+                fake_source.read_bytes.return_value = original
+                calls = [(0, self.stock(), False), (0, self.auth_stock(), False),
+                         (101, self.red(case, marker), False)]
+                with mock.patch.object(guard, "MUTANTS", (mutant,)), \
+                        mock.patch.object(guard, "build", return_value=(ROOT / "native", "compiled")) as build, \
+                        mock.patch.object(guard, "command", side_effect=calls) as command, \
+                        mock.patch.object(pathlib.Path, "__truediv__", return_value=fake_source):
+                    record = guard.run_checkout(ROOT, {})
+                self.assertEqual(record["auth_fixture"], "compiled_native_green")
+                self.assertTrue(record["mutants"][label]["semantic_red"])
+                self.assertEqual(command.call_args_list[-1].args[0],
+                                 [str(ROOT / "native"), "--exact", case])
+                self.assertEqual(command.call_count, 3)
+                self.assertEqual(build.call_count, 2)
+                writes = fake_source.write_bytes.call_args_list
+                self.assertEqual(len(writes), 2)
+                self.assertNotEqual(writes[0].args[0], original)
+                self.assertEqual(writes[1].args[0], original)
+
+    def test_approved_auth_mutant_mapping_and_crlf_anchors(self):
+        expected = {
+            "csrf_compatible_checkpoint_always_denied":
+                (guard.AUTH_BASE + guard.AUTH_CASES[0],
+                 "same_queue_fixture phase=PositiveCheckpoint kind=Some(Denied) outcome=Some(RolledBack)"),
+            "csrf_reopen_refreshes_stored_expiry":
+                (guard.AUTH_BASE + guard.AUTH_CASES[1], "same_queue_fixture phase=OriginalRowUnchanged"),
+            "csrf_checkpoint_renews_expired_row":
+                (guard.AUTH_BASE + guard.AUTH_CASES[1], "same_queue_fixture phase=ExpiredCheckpointDeniedRolledBack"),
+            "csrf_delivery_refreshes_original_deadline":
+                (guard.AUTH_BASE + guard.AUTH_CASES[0], "same_queue_fixture phase=OriginalDeliveryDeadlineDenied"),
+        }
+        mutants = {label: (case, marker) for label, _, _, _, case, marker in guard.MUTANTS
+                   if case.startswith(guard.AUTH_BASE)}
+        self.assertEqual(mutants, expected)
+        for label, path, old, new, _, _ in guard.MUTANTS:
+            if not label.startswith("csrf_"):
+                continue
+            source = (ROOT / path).read_text(encoding="utf-8")
+            crlf = source.replace("\n", "\r\n")
+            changed = guard.replacement(crlf, old, new)
+            self.assertNotEqual(changed, crlf)
+            self.assertNotIn("\n", changed.replace("\r\n", ""))
+            with self.assertRaises(ValueError):
+                guard.replacement(crlf + "\n", old, new)
+
     def test_mutation_anchors_are_unique_and_all_sources_are_real(self):
         for _, path, old, new, _, _ in guard.MUTANTS:
             with self.subTest(path=path):
@@ -110,7 +222,8 @@ class MutationEvidenceTests(unittest.TestCase):
         with mock.patch.object(guard, "MUTANTS", ((label, path, old, new, case, marker),)), \
                 mock.patch.object(guard, "build", return_value=(ROOT / "native", "compiled")), \
                 mock.patch.object(guard, "command", side_effect=[
-                    (0, self.stock(), False), (101, self.red(case, marker), False)]), \
+                    (0, self.stock(), False), (0, self.auth_stock(), False),
+                    (101, self.red(case, marker), False)]), \
                 mock.patch.object(pathlib.Path, "__truediv__", return_value=fake):
             guard.run_checkout(ROOT, {})
         writes = fake.write_bytes.call_args_list
@@ -128,11 +241,12 @@ class MutationEvidenceTests(unittest.TestCase):
         fake.read_bytes.return_value = original
         with mock.patch.object(guard, "MUTANTS", ((label, path, old, new, case, marker),)), \
                 mock.patch.object(guard, "build", return_value=(ROOT / "native", "compiled")) as build, \
-                mock.patch.object(guard, "command", return_value=(0, self.stock(), False)) as command, \
+                mock.patch.object(guard, "command", side_effect=[
+                    (0, self.stock(), False), (0, self.auth_stock(), False)]) as command, \
                 mock.patch.object(pathlib.Path, "__truediv__", return_value=fake):
             result = guard.run_checkout(ROOT, {})
         build.assert_called_once()
-        command.assert_called_once()
+        self.assertEqual(command.call_count, 2)
         fake.write_bytes.assert_called_once_with(original)
         self.assertEqual(result["mutants"][label]["native"], "invalid_source_or_execution")
 
@@ -199,7 +313,8 @@ class MutationEvidenceTests(unittest.TestCase):
         fake_source.read_bytes.return_value = original.encode()
         with mock.patch.object(guard, "MUTANTS", ((label, path, old, new, case, marker),)), \
                 mock.patch.object(guard, "build", side_effect=[(ROOT / "native", "compiled"), failure.exception]), \
-                mock.patch.object(guard, "command", return_value=(0, self.stock(), False)), \
+                mock.patch.object(guard, "command", side_effect=[
+                    (0, self.stock(), False), (0, self.auth_stock(), False)]), \
                 mock.patch.object(pathlib.Path, "__truediv__", return_value=fake_source):
             with self.assertRaises(guard.ProcessRetentionRequired):
                 guard.run_checkout(ROOT, {})
@@ -371,7 +486,8 @@ class MutationEvidenceTests(unittest.TestCase):
         fake.read_bytes.return_value = self.crlf((ROOT / path).read_bytes())
         with mock.patch.object(guard, "MUTANTS", ((label, path, old, new, case, marker),)), \
                 mock.patch.object(guard, "build", side_effect=[(ROOT / "native", "compiled"), KeyboardInterrupt()]), \
-                mock.patch.object(guard, "command", return_value=(0, self.stock(), False)), \
+                mock.patch.object(guard, "command", side_effect=[
+                    (0, self.stock(), False), (0, self.auth_stock(), False)]), \
                 mock.patch.object(pathlib.Path, "__truediv__", return_value=fake):
             with self.assertRaises(KeyboardInterrupt):
                 guard.run_checkout(ROOT, {})
@@ -392,7 +508,8 @@ class MutationEvidenceTests(unittest.TestCase):
             return None, "build_failed"
         with mock.patch.object(guard, "MUTANTS", ((label, path, old, new, case, marker),)), \
                 mock.patch.object(guard, "build", side_effect=build), \
-                mock.patch.object(guard, "command", return_value=(0, self.stock(), False)), \
+                mock.patch.object(guard, "command", side_effect=[
+                    (0, self.stock(), False), (0, self.auth_stock(), False)]), \
                 mock.patch.object(pathlib.Path, "__truediv__", return_value=fake):
             with self.assertRaises(guard.RunCancelled):
                 guard.run_checkout(ROOT, {}, control)
