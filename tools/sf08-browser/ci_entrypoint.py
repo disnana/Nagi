@@ -162,6 +162,27 @@ def await_zero(owner, leader, seconds):
     raise ChildWaitFailure({'class': 'timeout'}, leader)
 
 
+def browser_report_diagnostic(failure, phase, closure, outer_diagnostic, work):
+    """Read the finite sidecar only for a failed, closed coordinator browser run."""
+    if (phase != 'browser' or type(failure) is not dict or failure.get('class') != 'child_exit'
+            or type(failure.get('status')) is not int or not 1 <= failure['status'] <= 255
+            or closure is None or closure.closed is not True or closure.echild_observed is not True
+            or type(outer_diagnostic) is not dict or outer_diagnostic.get('phase') not in ('browser', 'report')
+            or work is None):
+        return None
+    report_validator = None
+    try:
+        report_validator = co.load('sf08_ci_report_validator', HERE/'context/report_validator.py')
+        boundary = co.load('owned_json', HERE/'context/owned_json.py')
+        with boundary.OwnedRoot(work) as root:
+            raw_projection = root._read_json('browser-report-diagnostic.json')
+        return report_validator.validate_failure_projection(raw_projection)
+    except BaseException:
+        if report_validator is not None:
+            return report_validator.unavailable_failure_projection()
+        return None
+
+
 def binding(source, manifest, build, binary, modules):
     mapping = {'protocol': HERE/'protocol.py', 'budget': HERE/'browser_budget.py', 'fixture': HERE/'context/fixture.py',
         'coordinator': HERE/'browser_coordinator.py', 'stage': HERE/'browser_stage.mjs',
@@ -279,13 +300,16 @@ def run(checkout):
         except BaseException:
             cargo = {'class': 'unknown', 'rust_codes': []}
         failure = {**failure, 'diagnostic': cargo}
-    if not passed and work is not None and closure and closure.closed:
+    business_diagnostic = None
+    if not passed and work is not None and closure and closure.closed and closure.echild_observed:
         try:
             boundary = co.load('owned_json', HERE/'context/owned_json.py')
             with boundary.OwnedRoot(work) as root:
                 diagnostic = failure_checkpoint.validate(root._read_json('browser-failure.json'), outer=True)
         except BaseException:
             pass
+    if not passed:
+        business_diagnostic = browser_report_diagnostic(failure, phase, closure, diagnostic, work)
     summary = {'schema_version': 1, 'status': 'passed' if passed else 'failed', 'code': phase,
         'actual_echild': bool(closure and closure.echild_observed),
         'browser_executions_accepted': 12 if passed else 0, 'resets_accepted': 12 if passed else 0,
@@ -295,6 +319,8 @@ def run(checkout):
         'retain_data': True}
     if not passed:
         summary['failure'] = failure or {'class': 'unknown'}
+        if business_diagnostic is not None:
+            summary['browser_report_diagnostic'] = business_diagnostic
     print(json.dumps(summary, separators=(',', ':')))
     return 0 if passed else 1
 

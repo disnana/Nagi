@@ -11,7 +11,8 @@ import os
 import stat
 
 from owned_json import OwnedRoot
-from report_validator import validate_report, ReportValidationError
+from report_validator import (validate_report, project_failure,
+                              unavailable_failure_projection, ReportValidationError)
 
 
 REPORT_NAME = 'browser-report.json'
@@ -86,9 +87,9 @@ class FreshPlaywrightReport:
             _reject()
         _reject()
 
-    def accept(self):
+    def _read(self):
         # A failed attempt also consumes this arm; a later file may not turn a
-        # rejected/missing report into success for the same run.
+        # rejected/missing report into success or diagnostics for the same run.
         if self.consumed:
             _reject()
         self.consumed = True
@@ -113,9 +114,22 @@ class FreshPlaywrightReport:
             value = json.loads(data.decode('utf-8'), object_pairs_hook=_pairs,
                                parse_constant=_constant, parse_float=_float)
             _depth(value)
-            return validate_report(value)
-        except (OSError, ValueError, RecursionError, ReportValidationError):
+            return value
+        except (OSError, ValueError, RecursionError):
             _reject()
         finally:
             if fd is not None:
                 os.close(fd)
+
+    def accept(self):
+        try:
+            return validate_report(self._read())
+        except (OSError, ValueError, RecursionError, ReportValidationError):
+            _reject()
+
+    def failure_projection(self):
+        """Consume this armed file once and return only a fixed failure projection."""
+        try:
+            return project_failure(self._read())
+        except (OSError, ValueError, RecursionError, ReportValidationError):
+            return unavailable_failure_projection()

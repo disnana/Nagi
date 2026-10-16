@@ -223,3 +223,177 @@ def validate_report(report: Any) -> dict[str, int | bool]:
         "projects": len(PROJECTS),
         "executions": EXPECTED_EXECUTIONS,
     }
+
+
+FAILURE_RESULT_STATUSES = frozenset(("passed", "failed", "timedOut", "interrupted", "skipped"))
+FAILURE_TEST_STATUSES = {
+    "passed": "expected",
+    "failed": "unexpected",
+    "timedOut": "unexpected",
+    "interrupted": "unexpected",
+    "skipped": "skipped",
+}
+FAILURE_PROJECTION_KEYS = {"schema_version", "status", "rows"}
+FAILURE_ROW_KEYS = {"project_index", "case_index", "status", "count"}
+
+
+def unavailable_failure_projection() -> dict[str, Any]:
+    return {"schema_version": 1, "status": "unavailable", "rows": []}
+
+
+def validate_failure_projection(value: Any) -> dict[str, Any]:
+    """Validate and rebuild the closed, non-success diagnostic sidecar schema."""
+    root = _object(value, "failure_projection_shape")
+    if set(root) != FAILURE_PROJECTION_KEYS:
+        _reject("failure_projection_keys")
+    _counter(_field(root, "schema_version", "failure_projection_version_missing"), 1,
+             "failure_projection_version")
+    status = _string(_field(root, "status", "failure_projection_status_missing"),
+                     "failure_projection_status_shape")
+    rows = _array(_field(root, "rows", "failure_projection_rows_missing"),
+                  "failure_projection_rows_shape")
+    if status == "unavailable":
+        if rows:
+            _reject("failure_projection_unavailable_rows")
+        return unavailable_failure_projection()
+    if status != "available" or len(rows) != EXPECTED_EXECUTIONS:
+        _reject("failure_projection_status_or_count")
+
+    checked = []
+    failures = 0
+    for index, raw in enumerate(rows):
+        row = _object(raw, "failure_projection_row_shape")
+        if set(row) != FAILURE_ROW_KEYS:
+            _reject("failure_projection_row_keys")
+        project_index = _field(row, "project_index", "failure_projection_project_missing")
+        case_index = _field(row, "case_index", "failure_projection_case_missing")
+        if type(project_index) is not int or type(case_index) is not int:
+            _reject("failure_projection_index_shape")
+        expected_project, expected_case = divmod(index, len(CASES))
+        if (project_index, case_index) != (expected_project, expected_case):
+            _reject("failure_projection_index_order")
+        result_status = _string(_field(row, "status", "failure_projection_result_missing"),
+                                "failure_projection_result_shape")
+        if result_status not in FAILURE_RESULT_STATUSES:
+            _reject("failure_projection_result_unknown")
+        _counter(_field(row, "count", "failure_projection_count_missing"), 1,
+                 "failure_projection_count")
+        if result_status in ("failed", "timedOut", "interrupted"):
+            failures += 1
+        checked.append({"project_index": project_index, "case_index": case_index,
+                        "status": result_status, "count": 1})
+    if failures == 0:
+        _reject("failure_projection_no_failure")
+    return {"schema_version": 1, "status": "available", "rows": checked}
+
+
+def project_failure(report: Any) -> dict[str, Any]:
+    """Project only closed case/project indices and fixed result enums.
+
+    No TestError content, title, file name, path, or report string is copied to
+    the returned value. A pass-only report cannot become an available failure
+    diagnostic.
+    """
+    try:
+        root = _object(report, "failure_report_shape")
+        if _array(_field(root, "errors", "failure_global_errors_missing"),
+                  "failure_global_errors_shape"):
+            _reject("failure_global_errors_present")
+
+        stats = _object(_field(root, "stats", "failure_stats_missing"), "failure_stats_shape")
+        _string(_field(stats, "startTime", "failure_stats_start_missing"), "failure_stats_start_shape")
+        _finite_number(_field(stats, "duration", "failure_stats_duration_missing"),
+                       "failure_stats_duration_shape")
+
+        config = _object(_field(root, "config", "failure_config_missing"), "failure_config_shape")
+        project_ids = _validate_project_rows(config)
+        observed: dict[tuple[str, str], str] = {}
+
+        def visit_suite(raw_suite: Any) -> None:
+            suite = _object(raw_suite, "failure_suite_shape")
+            specs = _array(_field(suite, "specs", "failure_suite_specs_missing"),
+                           "failure_suite_specs_shape")
+            for raw_spec in specs:
+                spec = _object(raw_spec, "failure_spec_shape")
+                title = _string(_field(spec, "title", "failure_spec_title_missing"),
+                                "failure_spec_title_shape")
+                if title not in CASES:
+                    _reject("failure_spec_title_unknown")
+                tests = _array(_field(spec, "tests", "failure_spec_tests_missing"),
+                               "failure_spec_tests_shape")
+                if not tests:
+                    _reject("failure_spec_tests_empty")
+                spec_has_unexpected = False
+                for raw_test in tests:
+                    test = _object(raw_test, "failure_test_shape")
+                    if _string(_field(test, "expectedStatus", "failure_expected_missing"),
+                               "failure_expected_shape") != "passed":
+                        _reject("failure_expected_status")
+                    project_name = _string(_field(test, "projectName", "failure_project_missing"),
+                                           "failure_project_shape")
+                    project_id = _string(_field(test, "projectId", "failure_project_id_missing"),
+                                         "failure_project_id_shape")
+                    if project_name not in project_ids or project_ids[project_name] != project_id:
+                        _reject("failure_project_identity")
+                    pair = (project_name, title)
+                    if pair in observed:
+                        _reject("failure_duplicate_case_project")
+
+                    results = _array(_field(test, "results", "failure_results_missing"),
+                                     "failure_results_shape")
+                    if len(results) != 1:
+                        _reject("failure_result_count")
+                    result = _object(results[0], "failure_result_shape")
+                    result_status = _string(_field(result, "status", "failure_result_status_missing"),
+                                            "failure_result_status_shape")
+                    if result_status not in FAILURE_RESULT_STATUSES:
+                        _reject("failure_result_status_unknown")
+                    if _string(_field(test, "status", "failure_test_status_missing"),
+                               "failure_test_status_shape") != FAILURE_TEST_STATUSES[result_status]:
+                        _reject("failure_test_result_status_mismatch")
+                    _counter(_field(result, "retry", "failure_retry_missing"), 0,
+                             "failure_retry")
+                    errors = _array(_field(result, "errors", "failure_errors_missing"),
+                                    "failure_errors_shape")
+                    if result_status == "passed" and errors:
+                        _reject("failure_pass_has_errors")
+                    if result_status == "passed" and "error" in result:
+                        _reject("failure_pass_has_error")
+                    for key in ("stdout", "stderr", "attachments", "annotations"):
+                        _array(_field(result, key, "failure_result_" + key + "_missing"),
+                               "failure_result_" + key + "_shape")
+                    observed[pair] = result_status
+                    if result_status in ("failed", "timedOut", "interrupted"):
+                        spec_has_unexpected = True
+                spec_ok = _field(spec, "ok", "failure_spec_ok_missing")
+                if type(spec_ok) is not bool:
+                    _reject("failure_spec_ok_shape")
+                if spec_has_unexpected and spec_ok is not False:
+                    _reject("failure_spec_ok_mismatch")
+
+            for child in _array(suite.get("suites", []), "failure_suite_children_shape"):
+                visit_suite(child)
+
+        for suite in _array(_field(root, "suites", "failure_suites_missing"),
+                            "failure_suites_shape"):
+            visit_suite(suite)
+
+        expected_pairs = {(project, case) for project in PROJECTS for case in CASES}
+        if set(observed) != expected_pairs:
+            _reject("failure_execution_set")
+        passing = sum(status == "passed" for status in observed.values())
+        failing = sum(status in ("failed", "timedOut", "interrupted") for status in observed.values())
+        skipped = sum(status == "skipped" for status in observed.values())
+        for key, expected in (("expected", passing), ("unexpected", failing),
+                              ("flaky", 0), ("skipped", skipped)):
+            _counter(_field(stats, key, "failure_stats_" + key + "_missing"), expected,
+                     "failure_stats_" + key)
+
+        rows = []
+        for project_index, project in enumerate(PROJECTS):
+            for case_index, case in enumerate(CASES):
+                rows.append({"project_index": project_index, "case_index": case_index,
+                             "status": observed[(project, case)], "count": 1})
+        return validate_failure_projection({"schema_version": 1, "status": "available", "rows": rows})
+    except (ReportValidationError, RecursionError):
+        return unavailable_failure_projection()

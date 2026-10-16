@@ -143,10 +143,11 @@ def run(binding_path, binding_sha):
     owner = root = fixture = ready = closure = negative = browser = budget = None
     read_fd = write_fd = None
     stop_attempted = stopped = False
-    closed = report = None
+    closed = report = armed = None
     phase = code = 'binding'
     success = False
     preflight_ok = False
+    browser_exit_observed = False
     diagnostic = None
     value = loaded = core = resources = None
     try:
@@ -197,7 +198,20 @@ def run(binding_path, binding_sha):
         browser_temp.mkdir(mode=0o700)
         browser = owner.spawn('browser', ['env', 'TMPDIR=' + str(browser_temp), 'node', f['stage']['path'], str(work / 'browser-input.json')])
         # Harness-only budget, not a change to business/token/security deadlines.
-        core.wait_exit(owner, browser, time.monotonic() + 900, budget)
+        try:
+            core.wait_exit(owner, browser, time.monotonic() + 900, budget)
+            browser_exit_observed = True
+        except BaseException as error:
+            if type(error) is getattr(core, 'Rejected', None) and error.code == 'child_exit':
+                try:
+                    status = owner.peek(browser)
+                    browser_exit_observed = (status is not None
+                        and type(getattr(status, 'si_code', None)) is int
+                        and type(getattr(status, 'si_status', None)) is int
+                        and status.si_code == os.CLD_EXITED and 1 <= status.si_status <= 255)
+                except BaseException:
+                    browser_exit_observed = False
+            raise
         phase = 'report'
         preflight = root._read_json('preflight.json')
         require(preflight == {'schema_version': 1, 'engines': 3, 'positive_sans': 9,
@@ -261,6 +275,16 @@ def run(binding_path, binding_sha):
                 exclusive(destination,'browser-failure.json',json.dumps(diagnostic,separators=(',', ':')).encode())
         except BaseException:
             pass  # Parent uses fixed unavailable; original failure remains nonzero.
+        if (armed is not None and browser_exit_observed and closure and closure.closed
+                and closure.echild_observed and code in ('browser', 'report')):
+            try:
+                projection = armed.failure_projection()
+                require(loaded is not None)
+                with loaded['owned_json'].OwnedRoot(binding_path.parent) as destination:
+                    exclusive(destination, 'browser-report-diagnostic.json',
+                              json.dumps(projection, separators=(',', ':')).encode())
+            except BaseException:
+                pass  # Diagnostic capture never changes or hides the original failure.
     if root is not None:
         try:
             root.close()

@@ -31,9 +31,11 @@ def facts(resets=12):
 
 
 class Owner:
-    def __init__(self, work, fail_browser=False, resets=12, closure=True, failure_stage='engine_wrong_ca'):
+    def __init__(self, work, fail_browser=False, resets=12, closure=True, failure_stage='engine_wrong_ca',
+                 browser_status=0, browser_report=None):
         self.work,self.fail_browser,self.resets,self.closure = work,fail_browser,resets,closure
         self.failure_stage = failure_stage
+        self.browser_status,self.browser_report = browser_status,browser_report
         self.cancelled = False
         self.leaders = {}
         self.calls = []
@@ -54,11 +56,14 @@ class Owner:
                 stores_provisioned=True,browser_trust_verified=False))
         elif name == 'browser':
             put(self.work/'preflight.json',PREFLIGHT)
+            if self.browser_report is not None:
+                put(self.work/'browser-report.json',self.browser_report)
             if self.fail_browser:
                 put(self.work/'stage-failure.json',{'schema_version':1,'stage':self.failure_stage,'engine':'firefox'})
         return leader
     def peek(self, leader):
-        return None if leader.name=='negative' else NS(si_code=os.CLD_EXITED,si_status=0)
+        return None if leader.name=='negative' else NS(si_code=os.CLD_EXITED,
+            si_status=self.browser_status if leader.name=='browser' else 0)
     def close_all(self, **kwargs):
         self.closed+=1
         for leader in self.leaders.values(): leader.returncode=0
@@ -149,8 +154,8 @@ class IntegrationTests(unittest.TestCase):
         self.work=Path(tempfile.mkdtemp(prefix='unit-',dir=os.environ.get('SF08_UNIT_ROOT','/tmp')))
 
     def fake(self, fail_browser=False, bad_ack=False, resets=12, closure=True, cancel=False,
-             failure_stage='engine_wrong_ca'):
-        owner=Owner(self.work,fail_browser,resets,closure,failure_stage)
+             failure_stage='engine_wrong_ca',browser_status=0,browser_report=None,wait_error=None):
+        owner=Owner(self.work,fail_browser,resets,closure,failure_stage,browser_status,browser_report)
         deps={**loaded,'owned_processes':NS(LinuxProcessOwner=NS(activate_in_dedicated_cli=lambda:owner))}
         files={n:{'path':'/unit/'+n} for n in ('protocol','budget','provision','fixture','negative','provision_worker','stage','spec','playwright_module','playwright_cli')}
         binding={'files':files,'binary':{'path':'/unit/binary'},'node_modules':'/unit/node_modules'}
@@ -160,7 +165,7 @@ class IntegrationTests(unittest.TestCase):
         def wait(_owner,leader,*args,**kwargs):
             if leader.name=='browser' and (fail_browser or cancel):
                 owner.cancelled=cancel
-                raise ValueError('fixed unit failure')
+                raise wait_error if wait_error is not None else ValueError('fixed unit failure')
         budget=NS(check=lambda *args,**kwargs:None,add_trust=lambda *_:None)
         resources=NS(BrowserBudget=lambda *_:budget)
         with patch.object(c,'check_bindings',return_value=binding), \
@@ -224,6 +229,82 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual((r['browser_executions_accepted'],r['resets_accepted']), (0,0))
         self.assertTrue(r['actual_echild'])
         self.assertEqual((stop.call_count,owner.closed,report.call_count),(1,1,0))
+
+    def test_business_failure_projection_waits_for_browser_exit_and_echild(self):
+        from test_r2_regressions import business_failure_report
+        report_value=business_failure_report()
+        report_projection=loaded['report_validator'].project_failure(report_value)
+        record,code,owner,stop,accept=self.fake(fail_browser=True,browser_status=1,
+            browser_report=report_value,wait_error=core.Rejected('child_exit'))
+        self.assertEqual(code,1)
+        self.assertTrue(record['actual_echild'])
+        self.assertEqual((record['browser_executions_accepted'],record['resets_accepted']),(0,0))
+        self.assertEqual(json.loads((self.work/'browser-report-diagnostic.json').read_text()),report_projection)
+        self.assertNotIn('unit-private-sentinel',(self.work/'browser-report-diagnostic.json').read_text())
+        self.assertEqual((stop.call_count,owner.closed,accept.call_count),(1,1,0))
+
+        for kwargs in (
+            {'fail_browser':True,'browser_status':1,'browser_report':report_value},
+            {'fail_browser':True,'browser_status':1,'browser_report':report_value,
+             'wait_error':core.Rejected('child_exit'),'closure':False},
+            {'cancel':True,'browser_status':1,'browser_report':report_value},
+        ):
+            self.setUp()
+            record,code,owner,stop,accept=self.fake(**kwargs)
+            self.assertEqual(code,1)
+            self.assertFalse((self.work/'browser-report-diagnostic.json').exists())
+            self.assertEqual((record['browser_executions_accepted'],record['resets_accepted']),(0,0))
+
+    def test_ci_browser_diagnostic_is_closed_and_attaches_only_to_nonzero_closed_browser_failure(self):
+        from test_r2_regressions import business_failure_report
+        good=loaded['report_validator'].project_failure(business_failure_report())
+        reads=[]
+        class SidecarRoot:
+            def __init__(self,_path): pass
+            def __enter__(self): return self
+            def __exit__(self,*_args): pass
+            def _read_json(self,name):
+                reads.append(name)
+                if name=='browser-report-diagnostic.json':
+                    return self.value
+                raise FileNotFoundError
+        closure=NS(closed=True,echild_observed=True)
+        outer={'schema_version':1,'phase':'browser','stage':'business','engine':'none'}
+        failure={'class':'child_exit','status':1}
+        root_holder=SidecarRoot
+        def load(name,_path):
+            if name=='sf08_ci_report_validator': return loaded['report_validator']
+            if name=='owned_json': return NS(OwnedRoot=root_holder)
+            raise AssertionError('unexpected dynamic module')
+        with patch.object(ci.co,'load',side_effect=load):
+            SidecarRoot.value=good
+            self.assertEqual(ci.browser_report_diagnostic(failure,'browser',closure,outer,self.work),good)
+            self.assertEqual(reads,['browser-report-diagnostic.json'])
+            for rejected in (
+                ({'class':'child_exit','status':0},'browser',closure,outer),
+                ({'class':'child_exit','status':True},'browser',closure,outer),
+                (failure,'build',closure,outer),
+                (failure,'browser',NS(closed=False,echild_observed=False),outer),
+                (failure,'browser',closure,{'schema_version':1,'phase':'tls','stage':'none','engine':'none'}),
+            ):
+                before=len(reads)
+                self.assertIsNone(ci.browser_report_diagnostic(*rejected,self.work))
+                self.assertEqual(len(reads),before)
+            report_outer={'schema_version':1,'phase':'report','stage':'business','engine':'none'}
+            self.assertEqual(ci.browser_report_diagnostic(failure,'browser',closure,report_outer,self.work),good)
+
+            SidecarRoot.value={**good,'rows':[dict(good['rows'][0],count=True)] + good['rows'][1:]}
+            self.assertEqual(ci.browser_report_diagnostic(failure,'browser',closure,outer,self.work),
+                {'schema_version':1,'status':'unavailable','rows':[]})
+            SidecarRoot.value={'schema_version':1,'status':'available','rows':[
+                dict(good['rows'][0],extra='unit-private-sentinel')] + good['rows'][1:]}
+            sanitized=ci.browser_report_diagnostic(failure,'browser',closure,outer,self.work)
+            self.assertEqual(sanitized,{'schema_version':1,'status':'unavailable','rows':[]})
+            self.assertNotIn('unit-private-sentinel',json.dumps(sanitized))
+
+            SidecarRoot._read_json=lambda self,_name: (_ for _ in ()).throw(FileNotFoundError())
+            self.assertEqual(ci.browser_report_diagnostic(failure,'browser',closure,outer,self.work),
+                {'schema_version':1,'status':'unavailable','rows':[]})
 
     def test_bad_ack_is_not_retried_and_closed_is_not_pass(self):
         r,code,owner,stop,report=self.fake(bad_ack=True)
