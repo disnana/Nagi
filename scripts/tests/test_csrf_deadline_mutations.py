@@ -1,5 +1,8 @@
 """Strict native inventory and semantic RED classification negative controls."""
 import importlib.util
+import contextlib
+import io
+import json
 import pathlib
 import re
 import linecache
@@ -515,6 +518,109 @@ class MutationEvidenceTests(unittest.TestCase):
                 guard.run_checkout(ROOT, {}, control)
         self.assertEqual(fake.write_bytes.call_count, 1)
         self.assertNotEqual(fake.write_bytes.call_args.args[0], fake.read_bytes.return_value)
+
+    def summary_from_execute(self, evidence):
+        captured = io.StringIO()
+        with mock.patch.object(guard, "enable_subreaper", return_value=True), \
+                mock.patch.object(guard.tempfile, "mkdtemp", return_value="/owned-summary-test"), \
+                mock.patch.object(guard, "command", return_value=(0, "", False)) as command, \
+                mock.patch.object(guard, "run_checkout", return_value=evidence), \
+                mock.patch.object(guard.shutil, "rmtree"), \
+                mock.patch.object(pathlib.Path, "write_text") as write, \
+                contextlib.redirect_stdout(captured):
+            code = guard.execute(ROOT, pathlib.Path("/closed-summary.json"), guard.Cancellation())
+        self.assertEqual(command.call_count, 2)
+        self.assertEqual(json.loads(write.call_args.args[0]), evidence)
+        self.assertEqual(code, 0 if evidence["status"] == "passed" else 1)
+        summary = captured.getvalue()
+        self.assertEqual(len(summary.splitlines()), 3 + len(guard.MUTANTS))
+        self.assertLessEqual(len(summary.encode("ascii")), 2048)
+        return summary
+
+    def test_closed_summary_fake_compile_inventory_assertion_and_red_failures(self):
+        label = guard.MUTANTS[0][0]
+        for stock, auth, result in (
+            ("build_failed", "unavailable", None),
+            ("build_timeout", "unavailable", None),
+            ("build_artifact_missing", "unavailable", None),
+            ("native_inventory_failed", "unavailable", None),
+            ("native_timeout", "unavailable", None),
+            ("auth_fixture_native_inventory_failed", "native_inventory_failed", None),
+            ("auth_fixture_native_timeout", "native_timeout", None),
+            ("compiled_native_green", "compiled_native_green",
+             {"build": "build_failed", "native": "unavailable", "semantic_red": False}),
+            ("compiled_native_green", "compiled_native_green",
+             {"build": "unavailable", "native": "invalid_source_or_execution", "semantic_red": False}),
+            ("compiled_native_green", "compiled_native_green",
+             {"build": "compiled", "native": "completed", "native_exit": 101, "semantic_red": False}),
+            ("compiled_native_green", "compiled_native_green",
+             {"build": "compiled", "native": "process_timeout", "native_exit": -1, "semantic_red": False}),
+            ("compiled_native_green", "compiled_native_green",
+             {"build": "compiled", "native": "completed", "native_exit": 101, "semantic_red": True}),
+        ):
+            with self.subTest(stock=stock, result=result):
+                evidence = {"schema": "nagi-csrf-deadline-mutations-v1", "status": "failed",
+                            "stock": stock, "auth_fixture": auth,
+                            "mutants": {} if result is None else {label: result}}
+                summary = self.summary_from_execute(evidence)
+                self.assertTrue(summary.startswith("csrf_deadline_compiled_mutations=failed\n"))
+                self.assertIn("csrf_deadline_mutation_stock=" + stock + "\n", summary)
+                self.assertIn("csrf_deadline_mutation_auth_fixture=" + auth + "\n", summary)
+                expected = ("build=unavailable native=unavailable native_exit=unavailable semantic_red=unavailable"
+                            if result is None else
+                            "build=" + result["build"] + " native=" + result["native"]
+                            + " native_exit=" + str(result.get("native_exit", "unavailable"))
+                            + " semantic_red=" + str(result["semantic_red"]).lower())
+                self.assertIn("csrf_deadline_mutant=" + label + " " + expected + "\n", summary)
+
+    def test_closed_summary_success_preserves_passed_gate_and_all_mutant_rows(self):
+        result = {"build": "compiled", "native": "completed", "native_exit": 101, "semantic_red": True}
+        evidence = {"schema": "nagi-csrf-deadline-mutations-v1", "status": "passed",
+                    "stock": "compiled_native_green", "auth_fixture": "compiled_native_green",
+                    "mutants": {item[0]: dict(result) for item in guard.MUTANTS}}
+        summary = self.summary_from_execute(evidence)
+        self.assertTrue(summary.startswith("csrf_deadline_compiled_mutations=passed\n"))
+        self.assertEqual([line.split()[0] for line in summary.splitlines()[3:]],
+                         ["csrf_deadline_mutant=" + item[0] for item in guard.MUTANTS])
+        self.assertEqual(summary.count("semantic_red=true\n"), len(guard.MUTANTS))
+
+    def test_closed_summary_unknown_values_and_labels_never_reach_stdout(self):
+        payload = "private/path\\secret\n::error::" + "X" * 10000 + "\u2603"
+        for result in (payload, [], None,
+                       {"build": payload, "native": payload, "native_exit": payload, "semantic_red": payload},
+                       {"build": ["compiled"], "native": {"completed": True}, "native_exit": True, "semantic_red": 1}):
+            with self.subTest(kind=type(result).__name__):
+                evidence = {"status": "failed", "stock": payload, "auth_fixture": payload,
+                            "mutants": {payload: payload, guard.MUTANTS[0][0]: result}, "raw": payload}
+                summary = self.summary_from_execute(evidence)
+                self.assertNotIn("private", summary)
+                self.assertNotIn("::error::", summary)
+                self.assertNotIn("X", summary)
+                self.assertIn("csrf_deadline_mutation_stock=unavailable\n", summary)
+                self.assertIn("csrf_deadline_mutation_auth_fixture=unavailable\n", summary)
+                self.assertTrue(all(line.endswith("native_exit=unavailable semantic_red=unavailable")
+                                    for line in summary.splitlines()[3:]))
+
+    def test_closed_summary_native_exit_is_bounded_and_boolean_is_not_an_integer(self):
+        for code, expected in ((-1, "-1"), (0, "0"), (101, "101"), (124, "other"),
+                               (10 ** 100, "other"), (True, "unavailable")):
+            with self.subTest(code=code):
+                result = {"build": "compiled", "native": "completed", "native_exit": code, "semantic_red": False}
+                evidence = {"status": "failed", "stock": "compiled_native_green",
+                            "auth_fixture": "compiled_native_green", "mutants": {guard.MUTANTS[0][0]: result}}
+                summary = self.summary_from_execute(evidence)
+                self.assertIn("native_exit=" + expected + " semantic_red=false\n", summary)
+
+    def test_closed_summary_rejects_nonmapping_mutants_and_unexpected_aggregate_status(self):
+        for mutants in (None, [], "::error::private"):
+            evidence = {"status": "::error::private", "stock": ["build_failed"],
+                        "auth_fixture": {"native_timeout": True}, "mutants": mutants}
+            summary = self.summary_from_execute(evidence)
+            self.assertTrue(summary.startswith("csrf_deadline_compiled_mutations=failed\n"))
+            self.assertNotIn("private", summary)
+            self.assertNotIn("::error::", summary)
+            self.assertEqual(summary.count("build=unavailable native=unavailable native_exit=unavailable semantic_red=unavailable\n"),
+                             len(guard.MUTANTS))
 
 
 if __name__ == "__main__":
