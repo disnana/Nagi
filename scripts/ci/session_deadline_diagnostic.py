@@ -976,6 +976,257 @@ def _write_output(path: pathlib.Path, record: dict) -> bool:
     return ok
 
 
+VERDICT_LINE_LIMIT = 320
+DELIVERY_VERDICT_LINE_LIMIT = 192
+PUBLIC_SCHEMA = "nagi-session-deadline-public-diagnostic-v1"
+DELIVERY_SCHEMA = "nagi-session-delivery-native-diagnostic-v1"
+PUBLIC_STATUSES = frozenset({"diagnostic_invalid", "tests_failed", "passed", "tests_not_run_or_incomplete"})
+INPUT_STATUSES = frozenset({"valid", "missing", "oversize", "invalid_utf8"})
+INVENTORY_STATUSES = frozenset({
+    "unavailable", "input_unavailable", "invalid_exit_code", "no_test_execution",
+    "zero_tests", "invalid_running_count", "incomplete", "inventory_invalid",
+    "ignored_tests", "failed", "invalid_zero_exit_failure", "nonzero_after_passing_tests",
+    "passed",
+})
+FACT_LISTS = (
+    "session_deadline", "bootstrap", "pair", "json_bound", "bootstrap_deadline",
+    "browser_phase", "assertion", "token_deadline", "claim_initial", "claim_retry",
+    "claim_replay_proof", "public", "http_test_io",
+)
+SUITE_KEYS = frozenset({
+    "cargo_exit", "input_status", "inventory_status", "running_count", "passed_count",
+    "failed_count", "ignored_count", "failed_cases", "diagnostic_status", *FACT_LISTS,
+})
+RECORD_KEYS = frozenset({"schema", "source_inventory", "status", "marker_count", "suites"})
+DELIVERY_RECORD_KEYS = RECORD_KEYS | {"case"}
+FACT_KEYS = frozenset({
+    "status", "phase", "event", "db", "exit", "polls", "begins", "commands", "commits",
+    "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms", "terminal",
+    "security_budget_ms", "selected_end_kind", "check", "class", "set_cookie_count", "body_bytes",
+    "auth_cookie", "deletion", "case", "a_status", "b_status", "a_auth_cookie", "b_auth_cookie",
+    "a_deletion", "b_deletion", "verifier_calls", "handler_calls", "claim_committed",
+    "expected_body_bytes", "body_matches", "iteration", "row_absent", "verifier_unchanged",
+    "handler_unchanged", "mode", "stage", "expected_status", "cache_no_store", "vary_match",
+    "prelogin_rows_empty", "session_rows", "bearer_challenge", "kind", "test", "availability",
+    "request", "before_gate", "poll_gate", "saw_pending", "pending_phase", "pending_gate",
+    "saw_live_pending", "live_pending_phase", "gate_refused", "row_missing", "rollback_ack",
+    "restore_commit_ack", "exit_gate", "consumed", "check", "schema", "source_inventory",
+    "marker_count", "suites", "cargo_exit", "input_status", "inventory_status", "running_count",
+    "passed_count", "failed_count", "ignored_count", "failed_cases", "diagnostic_status",
+    "session_tests", "browser_tests", "delivery_tests", "session", "browser", "delivery",
+    *FACT_LISTS,
+})
+FACT_SHAPES = {
+    "session_deadline": frozenset({"status", "phase", "event", "db", "exit", "polls", "begins", "commands", "commits", "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms", "test"}),
+    "token_deadline": frozenset({"status", "phase", "event", "db", "exit", "polls", "begins", "commands", "commits", "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms", "terminal", "test"}),
+    "bootstrap_deadline": frozenset({"status", "phase", "event", "db", "exit", "polls", "begins", "commands", "commits", "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms", "security_budget_ms", "selected_end_kind", "test"}),
+    "bootstrap": frozenset({"check", "status", "class", "set_cookie_count", "body_bytes", "auth_cookie", "deletion", "test"}),
+    "pair": frozenset({"case", "a_status", "b_status", "a_auth_cookie", "b_auth_cookie", "a_deletion", "b_deletion", "verifier_calls", "handler_calls", "claim_committed", "test"}),
+    "json_bound": frozenset({"phase", "status", "body_bytes", "expected_body_bytes", "body_matches", "verifier_calls", "handler_calls", "claim_committed", "test"}),
+    "browser_phase": frozenset({"request", "status", "phase", "event", "before_gate", "poll_gate", "saw_pending", "pending_phase", "pending_gate", "saw_live_pending", "live_pending_phase", "gate_refused", "row_missing", "rollback_ack", "restore_commit_ack", "exit", "exit_gate", "consumed", "test"}),
+    "claim_initial": frozenset({"case", "phase", "iteration", "expected_status", "status", "auth_cookie", "deletion", "verifier_calls", "handler_calls", "claim_committed", "test"}),
+    "claim_retry": frozenset({"case", "phase", "iteration", "status", "body_bytes", "set_cookie_count", "auth_cookie", "deletion", "verifier_calls", "handler_calls", "claim_committed", "test"}),
+    "claim_replay_proof": frozenset({"case", "iteration", "row_absent", "verifier_unchanged", "handler_unchanged", "test"}),
+    "assertion": (
+        frozenset({"case", "mode", "stage", "expected_status", "status", "auth_cookie", "deletion", "test"}),
+        frozenset({"case", "mode", "stage", "expected_status", "status", "cache_no_store", "vary_match", "test"}),
+        frozenset({"case", "mode", "stage", "expected_status", "status", "prelogin_rows_empty", "verifier_calls", "handler_calls", "test"}),
+        frozenset({"case", "mode", "stage", "expected_status", "status", "bearer_challenge", "test"}),
+        frozenset({"case", "mode", "stage", "expected_status", "status", "row_absent", "verifier_unchanged", "handler_unchanged", "test"}),
+        frozenset({"case", "mode", "stage", "expected_status", "status", "prelogin_rows_empty", "session_rows", "test"}),
+    ),
+    "public": (
+        frozenset({"kind", "test", "check", "status", "class", "set_cookie_count", "body_bytes"}),
+        frozenset({"kind", "test", "availability"}),
+        frozenset({"kind", "availability"}),
+        frozenset({"kind", "test", "case", "phase", "iteration", "status", "body_bytes", "expected_body_bytes", "body_matches", "set_cookie_count", "auth_cookie", "deletion"}),
+    ),
+    "http_test_io": frozenset({"test", "phase", "kind"}),
+}
+FACT_VALUES = {
+    "diagnostic_status": frozenset({"valid", "invalid"}),
+    "input_status": INPUT_STATUSES,
+    "inventory_status": INVENTORY_STATUSES,
+    "class": frozenset({"request", "refusal", "internal", "unavailable", "deadline", "other", "success", "invalid_request", "invalid_or_expired", "denied"}),
+    "check": frozenset({"material", "cookie_count", "token_response", "token_cookie"}),
+    "case": frozenset({"applied", "not_modified", "head", "expiry", "concurrent_once", "wire_body_cap", "committed_claim_initial", "committed_claim_retry", "committed_claim_replay_proof", "committed_claim", "issue_commit"}),
+    "phase": frozenset({"exact_bounds", "initial_response", "retry_response", "exact_body_response", "initial_headers", "retry_headers", "initial_state", "initial_challenge", "replay_proof", "issue_response", "issue_headers", "issue_rows", "RequestWrite", "ResponseStatus", "ResponseHeaders", "ResponseBody", "ConnectionEof"}),
+    "stage": frozenset({"initial_response", "initial_headers", "initial_state", "initial_challenge", "retry_response", "retry_headers", "replay_proof", "issue_response", "issue_headers", "issue_rows"}),
+    "availability": frozenset({"unavailable"}),
+}
+ALL_TESTS = frozenset(SESSION_CASES | BROWSER_CASES | set(DELIVERY_CASES.values()))
+FACT_INT_KEYS = frozenset({
+    "status", "event", "db", "exit", "polls", "begins", "commands", "commits",
+    "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms", "terminal",
+    "security_budget_ms", "selected_end_kind", "set_cookie_count", "body_bytes", "a_status",
+    "b_status", "verifier_calls", "handler_calls", "expected_body_bytes", "iteration", "mode",
+    "expected_status", "session_rows", "request", "before_gate", "poll_gate", "pending_phase",
+    "pending_gate", "live_pending_phase", "exit_gate", "saw_pending", "saw_live_pending",
+    "gate_refused", "row_missing", "rollback_ack", "restore_commit_ack", "consumed",
+})
+FACT_BOOL_KEYS = frozenset({
+    "auth_cookie", "deletion", "a_auth_cookie", "b_auth_cookie", "a_deletion", "b_deletion",
+    "claim_committed", "body_matches", "row_absent", "verifier_unchanged", "handler_unchanged",
+    "cache_no_store", "vary_match", "prelogin_rows_empty", "bearer_challenge",
+})
+FACT_OPTIONAL_KEYS = frozenset({"auth_cookie", "deletion", "vary_match", "verifier_calls", "handler_calls", "session_rows"})
+
+
+def _closed_record_shape(record: object, delivery: bool) -> bool:
+    if not isinstance(record, dict) or set(record) != (DELIVERY_RECORD_KEYS if delivery else RECORD_KEYS):
+        return False
+    schema = DELIVERY_SCHEMA if delivery else PUBLIC_SCHEMA
+    allowed_statuses = PUBLIC_STATUSES
+    if type(record.get("schema")) is not str or record["schema"] != schema:
+        return False
+    if type(record.get("status")) is not str or record["status"] not in allowed_statuses:
+        return False
+    if type(record.get("marker_count")) is not int or not 0 <= record["marker_count"] <= RAW_LIMIT:
+        return False
+    source = record.get("source_inventory")
+    expected_source = {"delivery_tests": 1} if delivery else {"session_tests": len(SESSION_CASES), "browser_tests": len(BROWSER_CASES)}
+    if type(source) is not dict or set(source) != set(expected_source):
+        return False
+    if any(type(source[key]) is not int or source[key] != value for key, value in expected_source.items()):
+        return False
+    if delivery:
+        if type(record.get("case")) is not str or record["case"] not in DELIVERY_CASES:
+            return False
+        suite_names = {"delivery"}
+        allowed_tests = {DELIVERY_CASES[record["case"]]}
+    else:
+        suite_names = {"session", "browser"}
+        allowed_tests = {"session": SESSION_CASES, "browser": BROWSER_CASES}
+    suites = record.get("suites")
+    if type(suites) is not dict or set(suites) != suite_names:
+        return False
+
+    def bounded_tree(value: object, depth: int = 0) -> bool:
+        if depth > 8:
+            return False
+        if value is None or type(value) is bool:
+            return True
+        if type(value) is int:
+            return 0 <= value <= 18446744073709551615
+        if type(value) is str:
+            try:
+                return len(value.encode("ascii")) <= 256
+            except UnicodeEncodeError:
+                return False
+        if type(value) is list:
+            return len(value) <= 32 and all(bounded_tree(item, depth + 1) for item in value)
+        if type(value) is dict:
+            return len(value) <= 64 and all(
+                type(key) is str and key in FACT_KEYS and bounded_tree(item, depth + 1)
+                for key, item in value.items()
+            )
+        return False
+
+    try:
+        encoded = json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
+    except (TypeError, ValueError, RecursionError, UnicodeEncodeError):
+        return False
+    if len(encoded) > OUTPUT_LIMIT or not bounded_tree(record):
+        return False
+    for suite_name in suite_names:
+        suite = suites[suite_name]
+        if type(suite) is not dict or set(suite) != SUITE_KEYS:
+            return False
+        if type(suite.get("input_status")) is not str or suite["input_status"] not in INPUT_STATUSES:
+            return False
+        if type(suite.get("inventory_status")) is not str or suite["inventory_status"] not in INVENTORY_STATUSES:
+            return False
+        if type(suite.get("diagnostic_status")) is not str or suite["diagnostic_status"] not in {"valid", "invalid"}:
+            return False
+        for key in ("cargo_exit", "running_count", "passed_count", "failed_count", "ignored_count"):
+            value = suite[key]
+            if value is not None and (type(value) is not int or value < 0 or value > (255 if key == "cargo_exit" else 9999)):
+                return False
+        if type(suite["failed_cases"]) is not list or len(suite["failed_cases"]) > len(allowed_tests[suite_name] if not delivery else allowed_tests):
+            return False
+        test_names = allowed_tests if delivery else allowed_tests[suite_name]
+        if any(type(test) is not str or test not in test_names for test in suite["failed_cases"]):
+            return False
+        for fact_list in FACT_LISTS:
+            values = suite[fact_list]
+            if type(values) is not list or len(values) > 32:
+                return False
+            shapes = FACT_SHAPES[fact_list]
+            if isinstance(shapes, frozenset):
+                shapes = (shapes,)
+            for fact in values:
+                if type(fact) is not dict or frozenset(fact) not in shapes:
+                    return False
+                if any(type(key) is not str or key not in FACT_KEYS for key in fact):
+                    return False
+                if "test" in fact and (type(fact["test"]) is not str or fact["test"] not in test_names):
+                    return False
+                for key, value in fact.items():
+                    if value is None and key in FACT_OPTIONAL_KEYS:
+                        continue
+                    if key == "status" and (type(value) is not int or not 100 <= value <= 599):
+                        return False
+                    if key in FACT_BOOL_KEYS and type(value) is not bool:
+                        return False
+                    if key in FACT_INT_KEYS:
+                        if type(value) is not int:
+                            return False
+                    elif key == "phase":
+                        if type(value) is str and value not in FACT_VALUES["phase"]:
+                            return False
+                        if type(value) is not str and type(value) is not int:
+                            return False
+                    elif key in FACT_BOOL_KEYS:
+                        if type(value) is not bool:
+                            return False
+                    elif key in FACT_VALUES:
+                        if type(value) is not str or value not in FACT_VALUES[key]:
+                            return False
+                    elif key == "test":
+                        if type(value) is not str or value not in test_names:
+                            return False
+                    elif key == "kind":
+                        if type(value) is not str or not (
+                            value in {"session_reply", "browser_wire"} or
+                            re.fullmatch(auth_diag.IO_KIND, value)
+                        ):
+                            return False
+                    elif key == "availability":
+                        if value != "unavailable" or type(value) is not str:
+                            return False
+                    elif key in {"schema", "source_inventory", "marker_count", "suites", "cargo_exit", "input_status", "inventory_status", "running_count", "passed_count", "failed_count", "ignored_count", "failed_cases", "diagnostic_status"}:
+                        return False
+                    else:
+                        return False
+    return True
+
+
+def closed_verdict_line(record: object, delivery: bool = False) -> str:
+    """Render a fixed, bounded stdout projection without exposing fact payloads."""
+    unavailable = "session_delivery_verdict unavailable" if delivery else "session_deadline_verdict unavailable"
+    if not _closed_record_shape(record, delivery):
+        return unavailable
+    if delivery:
+        suite = record["suites"]["delivery"]
+        marker_text = str(record["marker_count"]) if record["marker_count"] <= MARKER_LIMIT else "over_limit"
+        line = (
+            f"session_delivery_verdict status={record['status']} input={suite['input_status']} "
+            f"inventory={suite['inventory_status']} diagnostic={suite['diagnostic_status']} "
+            f"markers={marker_text}"
+        )
+        return line if len(line.encode("ascii")) <= DELIVERY_VERDICT_LINE_LIMIT else unavailable
+    session, browser = record["suites"]["session"], record["suites"]["browser"]
+    marker_text = str(record["marker_count"]) if record["marker_count"] <= MARKER_LIMIT else "over_limit"
+    line = (
+        f"session_deadline_verdict status={record['status']} "
+        f"session_input={session['input_status']} session_inventory={session['inventory_status']} "
+        f"session_diagnostic={session['diagnostic_status']} "
+        f"browser_input={browser['input_status']} browser_inventory={browser['inventory_status']} "
+        f"browser_diagnostic={browser['diagnostic_status']} markers={marker_text}"
+    )
+    return line if len(line.encode("ascii")) <= VERDICT_LINE_LIMIT else unavailable
+
+
 def main(argv: list[str]) -> int:
     if len(argv) == 6 and argv[1] == "--delivery":
         case = argv[2]
@@ -988,7 +1239,9 @@ def main(argv: list[str]) -> int:
         raw, input_status = _read_bounded(pathlib.Path(argv[3]))
         record, status = diagnose_delivery(raw, input_status, cargo_exit, case)
         if not _write_output(pathlib.Path(argv[5]), record):
+            print("session_delivery_verdict unavailable")
             return 1
+        print(closed_verdict_line(record, delivery=True))
         if record["status"] == "tests_failed":
             for fact in record["suites"]["delivery"]["session_deadline"]:
                 print("session_delivery_native=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
@@ -1004,7 +1257,9 @@ def main(argv: list[str]) -> int:
     browser_raw, browser_status = _read_bounded(root / "session-deadline-browser.raw")
     record, status = diagnose(session_raw, session_status, session_exit, browser_raw, browser_status, browser_exit)
     if not _write_output(pathlib.Path(argv[4]), record):
+        print("session_deadline_verdict unavailable")
         return 1
+    print(closed_verdict_line(record))
     # Reconstruct only parsed numeric facts + source-whitelisted test identity.
     # Never cat raw stdout/stderr or print an invalid sanitizer record.
     if record["status"] == "tests_failed":
