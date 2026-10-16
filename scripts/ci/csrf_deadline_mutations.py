@@ -51,7 +51,12 @@ AUTH_CASES = (
     "issuance_caps_original_absolute_and_checkpoint_keeps_original_idle_boundary",
     "nondecreasing_clock_refusal_preserves_live_row_and_never_delivers",
 )
-AUTH_REQUIRED = frozenset(AUTH_BASE + name for name in AUTH_CASES)
+# The U2 actual issuer fixture is a nested Rust test module, kept separate from the frozen outer tuple.
+AUTH_ADDITIONAL = (
+    "fixed_wire_owner_tests::actual_csrf_wire_fixed_owner_outlives_issuer_until_last_bytes_clone",
+)
+AUTH_REQUIRED = (frozenset(AUTH_BASE + name for name in AUTH_CASES)
+                 | frozenset(AUTH_BASE + name for name in AUTH_ADDITIONAL))
 ROW = re.compile(r"^test ([A-Za-z_][A-Za-z0-9_:]*) \.\.\. (ok|FAILED|ignored)$", re.M)
 RUNNING = re.compile(r"^running ([0-9]+) tests?$", re.M)
 SUMMARY = re.compile(

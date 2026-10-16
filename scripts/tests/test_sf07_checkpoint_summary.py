@@ -158,5 +158,72 @@ class SummaryTests(unittest.TestCase):
             self.assertEqual(text.count(command), 2)
 
 
+
+class CatalogFailureDiagnosticTests(unittest.TestCase):
+    def failed(self, index):
+        raw = fixture("catalog-retained")
+        name = summary.EXPECTED["catalog-retained"][index].encode()
+        raw = raw.replace(b"test " + name + b" ... ok", b"test " + name + b" ... FAILED")
+        return raw.replace(b"ok. 3 passed; 0 failed", b"FAILED. 2 passed; 1 failed")
+
+    def test_each_fixed_case_and_crlf_project_without_acceptance(self):
+        for index in range(3):
+            expected = tuple("failed" if i == index else "passed" for i in range(3))
+            for raw in (self.failed(index), self.failed(index).replace(b"\n", b"\r\n")):
+                self.assertEqual(summary.catalog_failure_projection(raw), expected)
+                self.assertEqual(summary.classify(raw, "catalog-retained"), "test_failed")
+
+    def test_all_finite_failure_combinations_match_their_summary(self):
+        import itertools
+        for states in itertools.product(("ok", "FAILED"), repeat=3):
+            failures = states.count("FAILED")
+            if not failures:
+                continue
+            raw = fixture("catalog-retained")
+            for name, state in zip(summary.EXPECTED["catalog-retained"], states):
+                raw = raw.replace(("test " + name + " ... ok").encode(),
+                                  ("test " + name + " ... " + state).encode())
+            raw = raw.replace(b"ok. 3 passed; 0 failed",
+                              f"FAILED. {3-failures} passed; {failures} failed".encode())
+            expected = tuple("failed" if state == "FAILED" else "passed" for state in states)
+            self.assertEqual(summary.catalog_failure_projection(raw), expected)
+
+    def test_malformed_inventory_is_unavailable(self):
+        raw = self.failed(0)
+        first, second = (n.encode() for n in summary.EXPECTED["catalog-retained"][:2])
+        for bad in (raw.replace(second, first), raw.replace(first, b"foreign::secret"),
+                    raw.replace(b" ... FAILED", b" ... ignored"),
+                    raw.replace(b"2 passed", b"1 passed"),
+                    raw.replace(b"running 3", b"running 0"),
+                    raw + raw, raw + b"test malformed row\n"):
+            self.assertIsNone(summary.catalog_failure_projection(bad))
+
+    def test_private_text_is_never_projected(self):
+        raw = self.failed(1) + b"SECRET/path/sql/cookie arbitrary assertion\n"
+        self.assertEqual(summary.catalog_failure_projection(raw), ("passed", "failed", "passed"))
+        result = subprocess.run([sys.executable, "-B", str(SCRIPT), "catalog-retained"],
+                                input=raw, capture_output=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, b"")
+        self.assertEqual(normalize_cli_stdout(result.stdout),
+            b"sf07_checkpoint scope=catalog-retained state=test_failed\n"
+            b"sf07_catalog_diagnostic state=classified receipt=passed preallocation=failed excess_capacity=passed\n")
+
+    def test_no_projection_from_green_compile_or_oversize(self):
+        for bad in (fixture("catalog-retained"), b"error[E0382]: SECRET/path\n",
+                    self.failed(0) + b"\r", self.failed(0) + b"\xff", b"x" * 65537):
+            self.assertIsNone(summary.catalog_failure_projection(bad))
+
+    def test_cli_unavailable_is_fixed_and_stays_failure(self):
+        raw = self.failed(0).replace(b"running 3", b"running 2")
+        result = subprocess.run([sys.executable, "-B", str(SCRIPT), "catalog-retained"],
+                                input=raw, capture_output=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(normalize_cli_stdout(result.stdout),
+            b"sf07_checkpoint scope=catalog-retained state=test_failed\n"
+            b"sf07_catalog_diagnostic state=unavailable\n")
+        self.assertEqual(result.stderr, b"")
+
+
 if __name__ == "__main__":
     unittest.main()

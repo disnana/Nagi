@@ -128,12 +128,56 @@ def classify(raw, mode):
     return "passed"
 
 
+
+def catalog_failure_projection(raw):
+    """Render only three fixed case states after a complete failed inventory."""
+    if len(raw) > MAX_BYTES:
+        return None
+    raw = raw.replace(b"\r\n", b"\n")
+    if b"\r" in raw:
+        return None
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeError:
+        return None
+    expected = EXPECTED["catalog-retained"]
+    if re.findall(r"(?m)^running ([0-9]+) tests$", text) != ["3"]:
+        return None
+    rows = re.findall(r"(?m)^test ([^ \n]+) \.\.\. ([^\n]+)$", text)
+    test_lines = [line for line in text.splitlines()
+                  if line.startswith("test ") and not line.startswith("test result:")]
+    if len(rows) != 3 or len(test_lines) != 3:
+        return None
+    if {name for name, _ in rows} != set(expected):
+        return None
+    if any(state not in ("ok", "FAILED") for _, state in rows):
+        return None
+    failures = sum(state == "FAILED" for _, state in rows)
+    if failures == 0:
+        return None
+    summaries = re.findall(r"(?m)^test result: ([^\n]+)$", text)
+    pattern = (rf"FAILED\. {3-failures} passed; {failures} failed; 0 ignored; "
+               r"0 measured; [0-9]+ filtered out; finished in [0-9.]+s")
+    if len(summaries) != 1 or not re.fullmatch(pattern, summaries[0]):
+        return None
+    states = dict(rows)
+    return tuple("failed" if states[name] == "FAILED" else "passed" for name in expected)
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) == 2 else ""
-    state = classify(sys.stdin.buffer.read(MAX_BYTES + 1), mode)
+    raw = sys.stdin.buffer.read(MAX_BYTES + 1)
+    state = classify(raw, mode)
     # Both rendered fields are fixed enums, never values taken from the log.
     label = mode if mode in EXPECTED else "invalid"
     print("sf07_checkpoint scope=" + label + " state=" + state)
+    if mode == "catalog-retained" and state == "test_failed":
+        projection = catalog_failure_projection(raw)
+        if projection is None:
+            print("sf07_catalog_diagnostic state=unavailable")
+        else:
+            print("sf07_catalog_diagnostic state=classified receipt=" + projection[0]
+                  + " preallocation=" + projection[1] + " excess_capacity=" + projection[2])
     return 0 if state == "passed" else 1
 
 
