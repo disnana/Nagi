@@ -177,6 +177,8 @@ pub(crate) struct Inner {
     insert_enqueues: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     checkpoint_probe: Option<Arc<same_queue_probe::Probe>>,
+    #[cfg(test)]
+    checkpoint_comparison_now: Option<Instant>,
 }
 #[cfg(test)]
 struct ReserveWait {
@@ -402,6 +404,8 @@ pub async fn open(
             insert_enqueues: std::sync::atomic::AtomicUsize::new(0),
             #[cfg(test)]
             checkpoint_probe: None,
+            #[cfg(test)]
+            checkpoint_comparison_now: None,
         }),
     })
 }
@@ -609,6 +613,19 @@ impl Inner {
             0,
         )
         .map_err(Failure::session)
+    }
+    fn checkpoint_now(&self) -> Instant {
+        #[cfg(test)]
+        if let Some(now) = self.checkpoint_comparison_now {
+            return now;
+        }
+        Instant::now()
+    }
+    // The same predicate runs in production and scripted boundary tests. Only
+    // this token comparison's clock can be scripted; authority/lease guards,
+    // transaction work, restore and cancellation retain their real checks.
+    fn checkpoint_token_expired(&self, wall: i64, expiry: i64, deadline: Instant) -> bool {
+        wall >= expiry || self.checkpoint_now() >= deadline
     }
     async fn check(&self, tx: &sqlite::Tx, wall: &mut Option<i64>) -> Result<(), Failure> {
         let c = self
@@ -870,7 +887,7 @@ impl Inner {
             lease.validate().map_err(Failure::authority)?;
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::FinalExpiry);
-            if c.ceil_ms >= expiry || Instant::now() >= deadline {
+            if self.checkpoint_token_expired(c.ceil_ms, expiry, deadline) {
                 #[cfg(test)]
                 self.checkpoint_actual((c.ceil_ms < expiry).then_some(true));
                 return Err(Failure::denied());
