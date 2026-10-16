@@ -31,7 +31,16 @@ class ChangeTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def run_git(self, *args):
-        return subprocess.check_output(["git", *args], cwd=self.root, stderr=subprocess.PIPE).decode().strip()
+        return subprocess.check_output(
+            ["git", "-c", "gc.auto=0", "-c", "maintenance.auto=false", *args],
+            cwd=self.root, stderr=subprocess.PIPE,
+        ).decode().strip()
+
+    def test_run_git_disables_automatic_maintenance(self):
+        self.run_git("config", "gc.auto", "9999")
+        self.run_git("config", "maintenance.auto", "true")
+        self.assertEqual(self.run_git("config", "--get", "gc.auto"), "0")
+        self.assertEqual(self.run_git("config", "--get", "maintenance.auto"), "false")
 
     def write(self, name, text):
         path = self.root / name
