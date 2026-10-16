@@ -1529,6 +1529,20 @@ impl Checker {
                 // user's imports or a user declaration named HtmlDocument.
                 hints[1] = Some(resource(R::HtmlDocument));
             }
+            O::CorsPolicy => {
+                hints.fill(Some(Type::named("i64")));
+                hints[0] = Some(Type::generic("List", vec![Type::named("str")]));
+                hints[1] = Some(Type::generic("List", vec![Type::named("str")]));
+                hints[2] = Some(resource(R::CorsCredentials));
+            }
+            O::CorsRoute => {
+                if types.len() == 2 {
+                    hints[0] = Some(crate::stdlib::resource_type(R::App, types.to_vec()));
+                }
+                hints[1] = Some(resource(R::Method));
+                hints[2] = Some(view(Type::named("str")));
+                hints[3] = Some(resource(R::CorsPolicy));
+            }
             O::Status => hints[0] = Some(Type::named("i64")),
             O::Method => hints[0] = Some(view(Type::named("str"))),
             O::MethodName => hints[0] = Some(view(resource(R::Method))),
@@ -1631,6 +1645,17 @@ impl Checker {
             O::HtmlNavigation => result(resource(R::NavigationUrl)),
             O::HtmlDocument => result(resource(R::HtmlDocument)),
             O::HttpHtmlResponse => resource(R::Response),
+            O::CorsPolicy => result(resource(R::CorsPolicy)),
+            O::CorsRoute => {
+                let app = &arguments[0];
+                if self.resource(&app.0) != Some(R::App) || app.1.len() != 2 {
+                    return Err(error(
+                        args[0].line,
+                        "CORS attachmentには標準App[State,E]が必要です",
+                    ));
+                }
+                result(app.clone())
+            }
             O::Status => result(resource(R::Status)),
             O::Method => result(resource(R::Method)),
             O::MethodName => view(Type::named("str")),
@@ -4257,6 +4282,12 @@ impl Checker {
                 Type::generic("List", vec![elem])
             }
             E::Record(n, fields) => {
+                if self.resource(n) == Some(crate::stdlib::Resource::CorsPolicy) {
+                    return Err(error(
+                        line,
+                        "CorsPolicyはopaqueです。cors_policyを使用してください",
+                    ));
+                }
                 if self.resource(n).is_some_and(|r| {
                     crate::stdlib::resource_info(r).module
                         == crate::stdlib::StandardModule::AuthCsrf
@@ -4411,6 +4442,12 @@ impl Checker {
                         e.ty = Some(ty.clone());
                         return Ok(ty);
                     }
+                }
+                if self.resource(n) == Some(crate::stdlib::Resource::CorsPolicy) {
+                    return Err(error(
+                        line,
+                        "CorsPolicyはopaqueです。cors_policyを使用してください",
+                    ));
                 }
                 if self.resource(n).is_some_and(|r| {
                     crate::stdlib::resource_info(r).module

@@ -412,6 +412,7 @@ async fn check(mode: Mode, security: i64, expected: u16, issued: bool) {
     let mut managed = false;
     let mut challenge = false;
     if let Some(wire) = completed {
+        let wire = vary::finish(wire); // Ordinary dispatch's same final projection.
         status = Some(wire.status().as_u16());
         let cookies = wire
             .headers()
@@ -437,10 +438,9 @@ async fn check(mode: Mode, security: i64, expected: u16, issued: bool) {
             .headers()
             .get(names::CACHE_CONTROL)
             .is_some_and(|value| value == "no-store")
-            && wire
-                .headers()
-                .get(names::VARY)
-                .is_some_and(|value| value == "Cookie, Authorization, Origin");
+            && wire.headers().get(names::VARY).is_some_and(|value| {
+                value == "Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"
+            });
         challenge = wire
             .headers()
             .get(names::WWW_AUTHENTICATE)

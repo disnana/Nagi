@@ -102,8 +102,8 @@ fn builtins_and_ordinary_error_mapper_use_the_same_finalizer() {
         );
     }
     for (source, challenge, vary) in [
-        (PolicySource::Bearer, "Bearer", "Authorization"),
-        (PolicySource::Session, "Session", "Cookie"),
+        (PolicySource::Bearer, "Bearer", "Authorization, Cookie"),
+        (PolicySource::Session, "Session", "Authorization, Cookie"),
     ] {
         for (failure, status) in [
             (Failure::invalid_credential(), Status::UNAUTHORIZED),
@@ -113,11 +113,11 @@ fn builtins_and_ordinary_error_mapper_use_the_same_finalizer() {
             (Failure::unavailable(), Status::SERVICE_UNAVAILABLE),
             (Failure::internal(), Status::INTERNAL_SERVER_ERROR),
         ] {
-            let response = finalize_authenticated(
+            let response = vary::finish(finalize_authenticated(
                 security_response(failure, source).into_http(false),
                 source,
                 false,
-            );
+            ));
             managed(&response);
             assert_eq!(response.status(), status.0);
             assert_eq!(response.headers()[names::CACHE_CONTROL], "no-store");

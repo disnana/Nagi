@@ -1,5 +1,9 @@
 //! Closed authenticated token delivery and one-budget guarded Session dispatch.
 use super::*;
+#[cfg(nagi_auth_stage_diag)]
+use crate::auth::session_deadline_observer::{
+    self as deadline_observer, Exit, Observer, Phase, TokenTerminal,
+};
 use crate::auth::{csrf, session::CsrfBinding};
 
 #[path = "csrf_body_deadline.rs"]
@@ -41,6 +45,7 @@ pub(super) fn register<S, E>(
     let routes = app.routes.entry(path.to_owned()).or_default();
     for method in [Method::GET, Method::HEAD] {
         routes.push(Route {
+            cors: None,
             source: PolicySource::Session,
             method,
             kind: RouteKind::CsrfTokens(Arc::clone(&store)),
@@ -73,13 +78,13 @@ fn managed(
     guarded: bool,
 ) -> axum::http::Response<BufferedBody> {
     response = finalize_authenticated(response, PolicySource::Session, head);
-    response.headers_mut().insert(
-        names::VARY,
-        HeaderValue::from_static(if guarded {
-            "Cookie, Authorization, Origin, X-CSRF-Token"
+    vary::add(
+        &mut response,
+        if guarded {
+            vary::Dependencies::GUARDED
         } else {
-            "Cookie, Authorization, Origin"
-        }),
+            vary::Dependencies::LOGIN
+        },
     );
     response
 }
@@ -181,11 +186,37 @@ pub(super) async fn dispatch_tokens(
     head: bool,
     admitted: Instant,
 ) -> axum::http::Response<BufferedBody> {
+    #[cfg(nagi_auth_stage_diag)]
+    {
+        if let Some(until) = admitted.checked_add(options.security_deadline) {
+            let observer = Observer::new(admitted, until);
+            let response = observer
+                .scope(dispatch_tokens_inner(
+                    store, parts, body, options, lease, head, admitted,
+                ))
+                .await;
+            observer.emit_token(response.status().as_u16());
+            return response;
+        }
+    }
+    dispatch_tokens_inner(store, parts, body, options, lease, head, admitted).await
+}
+async fn dispatch_tokens_inner(
+    store: &csrf::Inner,
+    parts: axum::http::request::Parts,
+    body: hyper::body::Incoming,
+    options: &Options,
+    lease: LeaseOwner,
+    head: bool,
+    admitted: Instant,
+) -> axum::http::Response<BufferedBody> {
     let owner = csrf::TokenOwner::new(lease);
     let Some(until) = admitted.checked_add(options.security_deadline) else {
         return token_terminal(&owner, Status::SERVICE_UNAVAILABLE, head);
     };
     if let Err(e) = csrf::constrain(&owner.lease.lease, until) {
+        #[cfg(nagi_auth_stage_diag)]
+        deadline_observer::token_terminal(TokenTerminal::Constrain);
         return token_terminal(&owner, e.http_status(), head);
     }
     if !hyper::body::Body::is_end_stream(&body)
@@ -202,8 +233,10 @@ pub(super) async fn dispatch_tokens(
         return token_terminal(&owner, status, head);
     }
     let future = async {
-        let identity = store
-            .identity(&parts.headers)
+        let identity_future = store.identity(&parts.headers);
+        #[cfg(nagi_auth_stage_diag)]
+        let identity_future = deadline_observer::observe(Phase::Identity, identity_future);
+        let identity = identity_future
             .await
             .map_err(|e| security_response(e, PolicySource::Session))?;
         let binding = CsrfBinding::from_identity(&identity, &owner.lease.lease)
@@ -213,10 +246,14 @@ pub(super) async fn dispatch_tokens(
         if head {
             return Ok((binding, None));
         }
-        store
-            .issue(&owner, &binding)
+        let issue_future = store.issue(&owner, &binding);
+        #[cfg(nagi_auth_stage_diag)]
+        let issue_future = deadline_observer::observe(Phase::Issue, issue_future);
+        issue_future
             .await
             .map_err(|e| text(e.http_status(), csrf::message(&e)))?;
+        #[cfg(nagi_auth_stage_diag)]
+        deadline_observer::phase(Phase::Seal);
         let seal = owner
             .seal()
             .map_err(|e| text(e.http_status(), csrf::message(&e)))?;
@@ -228,18 +265,36 @@ pub(super) async fn dispatch_tokens(
     )
     .await;
     match result {
-        Ok(_) if Instant::now() >= until => token_terminal(&owner, Status::GATEWAY_TIMEOUT, head),
+        Ok(_) if Instant::now() >= until => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::exit(Exit::LateReady);
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::token_terminal(TokenTerminal::LateCompletion);
+            token_terminal(&owner, Status::GATEWAY_TIMEOUT, head)
+        }
         Ok(Ok(Ok((binding, seal)))) => {
             if let Err(status) = live_until(&owner.lease, until) {
+                #[cfg(nagi_auth_stage_diag)]
+                deadline_observer::exit(Exit::Gate);
+                #[cfg(nagi_auth_stage_diag)]
+                deadline_observer::token_terminal(TokenTerminal::LiveGate);
                 return token_terminal(&owner, status, head);
             }
             let body = if let Some(seal) = seal {
                 if head {
                     return token_terminal(&owner, Status::INTERNAL_SERVER_ERROR, true);
                 }
+                #[cfg(nagi_auth_stage_diag)]
+                deadline_observer::phase(Phase::Wire);
                 match store.take_wire(&owner, seal, &binding) {
                     Ok(body) => body,
-                    Err(e) => return token_terminal(&owner, e.http_status(), false),
+                    Err(e) => {
+                        #[cfg(nagi_auth_stage_diag)]
+                        deadline_observer::exit(Exit::Wire);
+                        #[cfg(nagi_auth_stage_diag)]
+                        deadline_observer::token_terminal(TokenTerminal::TakeWire);
+                        return token_terminal(&owner, e.http_status(), false);
+                    }
                 }
             } else {
                 Bytes::new()
@@ -261,11 +316,19 @@ pub(super) async fn dispatch_tokens(
             managed(response, head, false)
         }
         Ok(Ok(Err(response))) => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::token_terminal(TokenTerminal::InnerRefusal);
             owner.retire();
             managed(response.into_http(head), head, false)
         }
         Ok(Err(_)) => token_terminal(&owner, Status::INTERNAL_SERVER_ERROR, head),
-        Err(_) => token_terminal(&owner, Status::GATEWAY_TIMEOUT, head),
+        Err(_) => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::exit(Exit::Timer);
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::token_terminal(TokenTerminal::Timer);
+            token_terminal(&owner, Status::GATEWAY_TIMEOUT, head)
+        }
     }
 }
 // Use the original common bound after preparation; body timing never renews it.

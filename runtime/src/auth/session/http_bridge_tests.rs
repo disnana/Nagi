@@ -252,7 +252,7 @@ async fn cookie_request(server: &Server, method: &str, extra: &str, body: &str) 
 fn assert_private(reply: &Received, expected: u16) {
     assert_eq!(reply.status, expected);
     assert_eq!(reply.all("cache-control"), vec!["no-store"]);
-    assert_eq!(reply.all("vary"), vec!["Cookie"]);
+    assert_eq!(reply.all("vary"), vec!["Authorization, Cookie"]);
     assert!(reply.all("set-cookie").is_empty());
 }
 // These handlers inspect identity/grant or terminal behavior; they perform

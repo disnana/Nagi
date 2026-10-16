@@ -411,6 +411,8 @@ async fn dropping_owned_pending_bootstrap_retires_material_and_join_is_separate(
 }
 #[tokio::test]
 async fn consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling() {
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    let observer = crate::auth::stage_observer::Guard::new(2);
     let f = Fixture::new().await;
     let result = f.open(2, 3, 144).await;
     if !cfg!(any(unix, windows)) {
@@ -419,6 +421,8 @@ async fn consumed_bearer_identity_can_issue_session_without_replacing_original_c
         return;
     }
     let p = result.unwrap();
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    observer.attach(&p.stage_slot);
     let bootstrap = owner();
     p.bootstrap(&bootstrap, None).await.unwrap();
     let request = owner();
@@ -453,6 +457,8 @@ async fn consumed_bearer_identity_can_issue_session_without_replacing_original_c
     assert!(count(&p).await == 0);
     close(&p, 2000).await.unwrap();
     f.stop().await;
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    observer.emit();
 }
 
 #[tokio::test]
@@ -494,3 +500,7 @@ mod clock_review_tests;
 
 #[path = "expiry_review_tests.rs"]
 mod expiry_review_tests;
+
+#[cfg(nagi_browser_login_diag)]
+#[path = "observer_tests.rs"]
+mod observer_tests;

@@ -1,0 +1,566 @@
+import contextlib
+import importlib.util
+import io
+import os
+import pathlib
+import tempfile
+import unittest
+
+SCRIPT = pathlib.Path(__file__).parents[1] / "ci" / "auth_stage_diagnostic.py"
+spec = importlib.util.spec_from_file_location("diagnostic", SCRIPT)
+diagnostic = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(diagnostic)
+
+STALLED_CAPACITY = diagnostic.HTTP_STALLED_CASES["Capacity"]
+STALLED_GRACEFUL = diagnostic.HTTP_STALLED_CASES["Graceful"]
+PUBLIC_REPLY_CASES = sorted(diagnostic.SAFE_REPLY_CASES)
+PUBLIC_WIRE_CASE = diagnostic.WIRE_BODY_FAILURE_CASE
+
+
+class DiagnosticCases(unittest.TestCase):
+    def setUp(self):
+        self.owner = tempfile.TemporaryDirectory(dir=os.environ.get("NAGI_DIAGNOSTIC_TEST_TMP"))
+        self.root = pathlib.Path(self.owner.name)
+        self.addCleanup(self.owner.cleanup)
+
+    def catalogue(self, text, code=0):
+        (self.root / "auth-stage-cases.raw").write_bytes(text.encode("utf-8"))
+        return diagnostic.load_cases(self.root, code)
+
+    def test_exact_listing_and_unique_footer(self):
+        self.assertEqual(self.catalogue("auth::a: test\nhttp::b: test\n\n2 tests, 0 benchmarks\n"),
+                         {"auth::a": "auth::a", "http::b": "http::b"})
+
+    def test_duplicate_mismatched_and_zero_footer_reject(self):
+        for text in ["auth::a: test\nauth::a: test\n2 tests, 0 benchmarks\n",
+                     "auth::a: test\n2 tests, 0 benchmarks\n",
+                     "0 tests, 0 benchmarks\n",
+                     "auth::a: test\n1 tests, 0 benchmarks\n1 tests, 0 benchmarks\n"]:
+            self.assertIsNone(self.catalogue(text))
+
+    def test_listing_exit_io_utf8_and_byte_limit_reject(self):
+        self.assertIsNone(diagnostic.load_cases(self.root, 0))
+        self.assertIsNone(self.catalogue("auth::a: test\n1 tests, 0 benchmarks\n", 101))
+        (self.root / "auth-stage-cases.raw").write_bytes(b"\xff")
+        self.assertIsNone(diagnostic.load_cases(self.root, 0))
+        (self.root / "auth-stage-cases.raw").write_bytes(b"a" * (diagnostic.RAW_LIMIT + 1))
+        self.assertIsNone(diagnostic.load_cases(self.root, 0))
+
+    def test_listing_identifier_and_entry_limits(self):
+        long_name = "a" * (diagnostic.CASE_NAME_LIMIT + 1)
+        self.assertIsNone(self.catalogue(long_name + ": test\n1 tests, 0 benchmarks\n"))
+        lines = [f"case{i}: test" for i in range(diagnostic.CASE_LIMIT + 1)]
+        self.assertIsNone(self.catalogue("\n".join(lines) + "\n1025 tests, 0 benchmarks\n"))
+
+    def test_known_failure_is_canonical_and_deduplicated(self):
+        cases = {"auth::a": "auth::a", "http::b": "http::b"}
+        raw = "test auth::a ... FAILED\nfailures:\n\n    http::b\n    auth::a\n"
+        self.assertEqual(diagnostic.failed_cases(raw, cases),
+                         ["failed_case=auth::a", "failed_case=http::b"])
+
+    def test_qualified_secret_prefix_is_not_copied(self):
+        cases = {"auth::a": "auth::a"}
+        raw = "test secret_credential_value::a ... FAILED\n"
+        output = "\n".join(diagnostic.failed_cases(raw, cases))
+        self.assertEqual(output, "failure_cases=unavailable")
+        self.assertNotIn("secret_credential_value", output)
+
+    def test_unknown_wire_path_unicode_ansi_and_oversized_never_output(self):
+        cases = {"auth::a": "auth::a"}
+        for value in ["wireCookieSecret", "/private/path", "ユーザー秘密", "\x1b[31msecret",
+                      "a" * (diagnostic.CASE_NAME_LIMIT + 1)]:
+            output = "\n".join(diagnostic.failed_cases("test " + value + " ... FAILED\n", cases))
+            self.assertEqual(output, "failure_cases=unavailable")
+            self.assertNotIn(value, output)
+
+    def test_names_only_in_an_explicit_failure_section(self):
+        cases = {"auth::a": "auth::a"}
+        self.assertEqual(diagnostic.failed_cases("    auth::a\n", cases),
+                         ["failure_cases=unavailable"])
+        self.assertEqual(diagnostic.failed_cases("failures:\nother output\n    auth::a\n", cases),
+                         ["failure_cases=unavailable"])
+
+    def test_sixteen_case_output_is_bounded_and_reports_loss(self):
+        cases = {f"case{i}": f"case{i}" for i in range(17)}
+        raw = "".join(f"test {name} ... FAILED\n" for name in cases)
+        output = diagnostic.failed_cases(raw, cases)
+        self.assertEqual(sum(line.startswith("failed_case=") for line in output), 16)
+        self.assertIn("failure_case_loss=observed", output)
+
+    def raw(self, name="broad"):
+        slots = [1, 2] if name == "broad" else [1 if name == "csrf" else 2]
+        return "".join(f"auth-stage slot={slot} (test-only; scheduling perturbed)\n"
+                       "op=Claim stage=Return event=Success elapsed_us=Some(1) "
+                       "utc_remaining_ms=Some(2) mono=Some(Before(3)) kind=None outcome=None\n"
+                       "lost=false\n" for slot in slots)
+
+    def capture(self, text, exit_code, cases=None, name="broad"):
+        (self.root / f"auth-stage-{name}.raw").write_bytes(text.encode("utf-8"))
+        sink = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+        with contextlib.redirect_stdout(sink):
+            accepted = diagnostic.capture(name, self.root, exit_code, cases)
+        return accepted, (self.root / f"auth-stage-{name}.trace").read_bytes()
+
+    def public_failures(self, markers, cases=None):
+        failed = list(markers)
+        sections = []
+        for name, marker_lines in markers.items():
+            sections.append(f"---- {name} stdout ----\n" + "\n".join(marker_lines) + "\n")
+        rows = "".join(f"test {name} ... FAILED\n" for name in failed)
+        inventory = "failures:\n\n" + "".join(f"    {name}\n" for name in failed)
+        inventory_cases = cases if cases is not None else {name: name for name in failed}
+        return rows + "".join(sections) + inventory, inventory_cases
+
+    def safe_reply_marker(self, **changes):
+        fields = {
+            "check": "token_response",
+            "status": "504",
+            "class": "deadline",
+            "set_cookie_count": "0",
+            "body_bytes": "15",
+        }
+        fields.update(changes)
+        return "safe_reply_diag " + " ".join(f"{key}={value}" for key, value in fields.items())
+
+    def wire_body_marker(self, **changes):
+        fields = {
+            "case": "wire_body_cap",
+            "phase": "exact_body_response",
+            "iteration": "0",
+            "status": "504",
+            "body_bytes": "15",
+            "expected_body_bytes": "192",
+            "body_matches": "false",
+            "set_cookie_count": "0",
+            "auth_cookie": "false",
+            "deletion": "false",
+        }
+        fields.update(changes)
+        return "browser_login_public_api_diag " + " ".join(
+            f"{key}={value}" for key, value in fields.items()
+        )
+
+    def test_http_io_marker_is_crlf_safe_and_preserves_broad_auth_trace(self):
+        event = ("op=Claim stage=Return event=Success elapsed_us=Some(1) "
+                 "utc_remaining_ms=Some(2) mono=Some(Before(3)) kind=None outcome=None\n")
+        raw = ("auth-stage slot=1 (test-only; scheduling perturbed)\n" + event * 27 +
+               "lost=false\n" +
+               "auth-stage slot=2 (test-only; scheduling perturbed)\n" + event * 19 +
+               "lost=false\n")
+        raw = (raw.replace("\n", "\r\n") +
+               "thread 'http_server::tests::case' panicked at /private/path:9:1:\r\n" +
+               "HTTP test I/O failed: phase=ResponseHeaders kind=UnexpectedEof\r\n" +
+               "note: run with RUST_BACKTRACE=1 environment variable to display a backtrace\r\n")
+        accepted, output = self.capture(raw, 101)
+        self.assertFalse(accepted)
+        self.assertIn(b"http_test_io=phase=ResponseHeaders kind=UnexpectedEof\n", output)
+        self.assertEqual(output.count(b"auth-stage slot="), 2)
+        self.assertEqual(output.count(b"op="), 46)
+        self.assertEqual(output.count(b"lost=false"), 2)
+        self.assertNotIn(b"\r", output)
+        self.assertNotIn(b"/private", output)
+        self.assertNotIn(b"RUST_BACKTRACE", output)
+
+    def test_http_io_marker_output_is_bounded(self):
+        phases = ["RequestWrite", "ResponseStatus", "ResponseHeaders", "ResponseBody",
+                  "ConnectionEof"]
+        kinds = ["ConnectionReset", "ConnectionAborted", "BrokenPipe", "WouldBlock",
+                 "UnexpectedEof"]
+        raw = "\n".join(
+            f"HTTP test I/O failed: phase={phase} kind={kind}"
+            for phase in phases for kind in kinds
+        )
+        output = diagnostic.http_io_failures(raw)
+        self.assertEqual(sum(line.startswith("http_test_io=phase=") for line in output), 16)
+        self.assertEqual(output[-1], "http_test_io_loss=observed")
+
+    def test_http_io_marker_rejects_unknown_fields_and_injected_data(self):
+        markers = [
+            "HTTP test I/O failed: phase=Unknown kind=UnexpectedEof\n",
+            "HTTP test I/O failed: phase=ResponseHeaders kind=Unknown\n",
+            "HTTP test I/O failed: phase=ResponseHeaders kind=ConnectionReset credential=secret\n",
+            "prefix HTTP test I/O failed: phase=ResponseHeaders kind=ConnectionReset\n",
+        ]
+        for marker in markers:
+            with self.subTest(marker=marker.split(" kind=")[0]):
+                output = diagnostic.http_io_failures(marker)
+                self.assertEqual(output, ["http_test_io=unavailable"])
+                self.assertNotIn("secret", "\n".join(output))
+
+    def test_00_public_reply_markers_reject_malformed_private_and_unbounded_values(self):
+        case = PUBLIC_REPLY_CASES[0]
+        base = self.safe_reply_marker()
+        invalid_markers = [
+            "safe_reply_diag check=token_response status=504 class=deadline set_cookie_count=0",
+            base + " token=wireSecret",
+            self.safe_reply_marker(check="unknown"),
+            self.safe_reply_marker(**{"class": "unknown"}),
+            self.safe_reply_marker(**{"class": "unavailable"}),
+            self.safe_reply_marker(status="65536", **{"class": "other"}),
+            self.safe_reply_marker(set_cookie_count="8193"),
+            self.safe_reply_marker(body_bytes="8193"),
+            base.replace("status=504", "status=504 status=504"),
+            base + " /private/path",
+            "panic text " + base,
+            self.safe_reply_marker(status="200", **{"class": "success"}, body_bytes="60"),
+        ]
+        for marker in invalid_markers:
+            raw, cases = self.public_failures({case: [marker]})
+            with self.subTest(marker_kind=marker.split()[1] if len(marker.split()) > 1 else "empty"):
+                output, invalid = diagnostic.public_test_diagnostics(raw, 101, cases)
+                self.assertTrue(invalid)
+                self.assertEqual(output, [f"session_reply=test={case} unavailable"])
+                rendered = "\n".join(output)
+                self.assertNotIn("wireSecret", rendered)
+                self.assertNotIn("/private", rendered)
+                self.assertNotIn("safe_reply_diag", rendered)
+
+        duplicate_raw, cases = self.public_failures({case: [base, base]})
+        output, invalid = diagnostic.public_test_diagnostics(duplicate_raw, 101, cases)
+        self.assertTrue(invalid)
+        self.assertEqual(output, [f"session_reply=test={case} unavailable"])
+
+        unknown_raw, cases = self.public_failures({"unknown_case": [base]})
+        output, invalid = diagnostic.public_test_diagnostics(unknown_raw, 101, cases)
+        self.assertTrue(invalid)
+        self.assertEqual(output, ["session_reply=unavailable"])
+
+        missing_inventory, _ = self.public_failures({case: [base]})
+        output, invalid = diagnostic.public_test_diagnostics(missing_inventory, 101, None)
+        self.assertTrue(invalid)
+        self.assertEqual(output, [f"session_reply=test={case} unavailable"])
+
+    def test_01_public_wire_markers_reject_unknown_duplicate_and_bad_bounds(self):
+        base = self.wire_body_marker()
+        invalid_markers = [
+            "browser_login_public_api_diag case=wire_body_cap phase=exact_body_response "
+            "iteration=0 status=504 body_bytes=15 expected_body_bytes=192 "
+            "body_matches=false set_cookie_count=0 auth_cookie=false",
+            base + " token=wireSecret",
+            self.wire_body_marker(case="unknown"),
+            self.wire_body_marker(phase="unknown"),
+            self.wire_body_marker(iteration="2"),
+            self.wire_body_marker(status="65536"),
+            self.wire_body_marker(body_bytes="8193"),
+            self.wire_body_marker(status="504", body_bytes="193",
+                                  **{"body_matches": "true"}),
+            self.wire_body_marker(expected_body_bytes="193"),
+            self.wire_body_marker(set_cookie_count="8193"),
+            self.wire_body_marker(**{"body_matches": "yes"}),
+            self.wire_body_marker(**{"body_matches": "true"}),
+            self.wire_body_marker(status="200", body_bytes="192",
+                                  **{"body_matches": "true", "auth_cookie": "true",
+                                     "deletion": "true"}),
+            base + " /private/path",
+            "panic text " + base,
+        ]
+        for marker in invalid_markers:
+            raw, cases = self.public_failures({PUBLIC_WIRE_CASE: [marker]})
+            with self.subTest(marker_kind=marker.split()[1] if len(marker.split()) > 1 else "empty"):
+                output, invalid = diagnostic.public_test_diagnostics(raw, 101, cases)
+                self.assertTrue(invalid)
+                self.assertEqual(output, [f"browser_wire=test={PUBLIC_WIRE_CASE} unavailable"])
+                rendered = "\n".join(output)
+                self.assertNotIn("wireSecret", rendered)
+                self.assertNotIn("/private", rendered)
+                self.assertNotIn("browser_login_public_api_diag", rendered)
+
+        duplicate_raw, cases = self.public_failures({PUBLIC_WIRE_CASE: [base, base]})
+        output, invalid = diagnostic.public_test_diagnostics(duplicate_raw, 101, cases)
+        self.assertTrue(invalid)
+        self.assertEqual(output, [f"browser_wire=test={PUBLIC_WIRE_CASE} unavailable"])
+
+    def test_02_public_markers_bind_to_failed_case_and_nonzero_exit(self):
+        case = PUBLIC_REPLY_CASES[0]
+        raw, cases = self.public_failures({case: []})
+        output, invalid = diagnostic.public_test_diagnostics(raw, 101, cases)
+        self.assertTrue(invalid)
+        self.assertEqual(output, [f"session_reply=test={case} unavailable"])
+
+        raw, cases = self.public_failures({case: [self.safe_reply_marker()]})
+        output, invalid = diagnostic.public_test_diagnostics(raw, 0, cases)
+        self.assertTrue(invalid)
+        self.assertEqual(output, [f"session_reply=test={case} unavailable"])
+
+        unrelated = "unrelated_failure"
+        raw, cases = self.public_failures({unrelated: [self.safe_reply_marker()]})
+        output, invalid = diagnostic.public_test_diagnostics(raw, 101, cases)
+        self.assertTrue(invalid)
+        self.assertEqual(output, ["session_reply=unavailable"])
+
+    def test_03_public_markers_capture_source_closed_records_without_hiding_failure(self):
+        markers = {
+            PUBLIC_REPLY_CASES[0]: [self.safe_reply_marker()],
+            PUBLIC_REPLY_CASES[1]: [self.safe_reply_marker()],
+            PUBLIC_REPLY_CASES[2]: [self.safe_reply_marker()],
+            PUBLIC_WIRE_CASE: [self.wire_body_marker()],
+        }
+        raw, cases = self.public_failures(markers)
+        output, invalid = diagnostic.public_test_diagnostics(raw, 101, cases)
+        self.assertFalse(invalid)
+        self.assertEqual(
+            output,
+            [
+                f"session_reply=test={name} check=token_response status=504 class=deadline "
+                "set_cookie_count=0 body_bytes=15"
+                for name in sorted(PUBLIC_REPLY_CASES)
+            ] + [
+                f"browser_wire=test={PUBLIC_WIRE_CASE} case=wire_body_cap "
+                "phase=exact_body_response iteration=0 status=504 body_bytes=15 "
+                "expected_body_bytes=192 body_matches=false set_cookie_count=0 "
+                "auth_cookie=false deletion=false"
+            ],
+        )
+
+        accepted, captured = self.capture(self.raw() + raw, 101, cases)
+        self.assertFalse(accepted)
+        self.assertIn(b"cargo_exit=101 inventory=fail\n", captured)
+        for name in sorted(PUBLIC_REPLY_CASES) + [PUBLIC_WIRE_CASE]:
+            self.assertIn(f"failed_case={name}\n".encode(), captured)
+        self.assertEqual(captured.count(b"session_reply=test="), 3)
+        self.assertEqual(captured.count(b"browser_wire=test="), 1)
+        self.assertNotIn(b"safe_reply_diag", captured)
+        self.assertNotIn(b"browser_login_public_api_diag", captured)
+
+    def test_04_public_wire_marker_accepts_same_length_content_mismatch(self):
+        marker = self.wire_body_marker(
+            status="200",
+            body_bytes="192",
+            **{"body_matches": "false", "set_cookie_count": "2",
+               "auth_cookie": "true", "deletion": "true"},
+        )
+        raw, cases = self.public_failures({PUBLIC_WIRE_CASE: [marker]})
+        output, invalid = diagnostic.public_test_diagnostics(raw, 101, cases)
+        self.assertFalse(invalid)
+        self.assertEqual(
+            output,
+            [
+                f"browser_wire=test={PUBLIC_WIRE_CASE} case=wire_body_cap "
+                "phase=exact_body_response iteration=0 status=200 body_bytes=192 "
+                "expected_body_bytes=192 body_matches=false set_cookie_count=2 "
+                "auth_cookie=true deletion=true"
+            ],
+        )
+
+    def stalled_marker(self, case="Capacity", **changes):
+        fields = {
+            "case": case,
+            "phase": "AwaitPending",
+            "armed": "true",
+            "pending": "true",
+            "expired": "false",
+            "grace_before_end": "false",
+            "joins": "Some(0)",
+            "status": "Some(200)",
+            "body_bytes": "Some(16777216)",
+            "end_changed": "None",
+        }
+        fields.update(changes)
+        return "http_stalled_fixture " + " ".join(
+            f"{key}={value}" for key, value in fields.items()
+        )
+
+    def test_stalled_markers_are_canonical_and_bound_to_both_failed_tests(self):
+        cases = {STALLED_CAPACITY: STALLED_CAPACITY, STALLED_GRACEFUL: STALLED_GRACEFUL}
+        raw = (
+            f"test {STALLED_CAPACITY} ... FAILED\n"
+            f"test {STALLED_GRACEFUL} ... FAILED\n"
+            "failures:\n\n"
+            f"    {STALLED_CAPACITY}\n    {STALLED_GRACEFUL}\n\n"
+            + self.stalled_marker("Capacity", phase="AwaitJoin", joins="Some(1)") + "\n"
+            + self.stalled_marker("Graceful", phase="AwaitShutdown",
+                                  grace_before_end="true", end_changed="Some(false)") + "\n"
+        ).replace("\n", "\r\n")
+        output, invalid = diagnostic.http_stalled_diagnostics(raw, 101, cases)
+        self.assertFalse(invalid)
+        self.assertEqual(len(output), 2)
+        capacity_line = next(line for line in output if f"case={STALLED_CAPACITY}" in line)
+        graceful_line = next(line for line in output if f"case={STALLED_GRACEFUL}" in line)
+        self.assertIn("phase=AwaitJoin", capacity_line)
+        self.assertIn("joins=Some(1)", capacity_line)
+        self.assertIn("grace_before_end=true", graceful_line)
+        self.assertIn("end_changed=Some(false)", graceful_line)
+
+    def test_stalled_markers_require_failed_identity_inventory_and_completeness(self):
+        cases = {STALLED_CAPACITY: STALLED_CAPACITY, STALLED_GRACEFUL: STALLED_GRACEFUL}
+        marker = self.stalled_marker()
+        variants = [
+            (f"test {STALLED_CAPACITY} ... FAILED\n", cases),
+            (marker + "\n", cases),
+            (f"test {STALLED_CAPACITY} ... FAILED\n{marker}\n", None),
+            (f"test {STALLED_CAPACITY} ... FAILED\ntest {STALLED_GRACEFUL} ... FAILED\n"
+             f"{marker}\n", cases),
+        ]
+        for text, inventory in variants:
+            with self.subTest(text=text[:60], inventory=inventory is not None):
+                output, invalid = diagnostic.http_stalled_diagnostics(text, 101, inventory)
+                self.assertTrue(invalid)
+                self.assertEqual(output, ["http_stalled=unavailable"])
+
+    def test_stalled_markers_reject_unknown_fields_and_private_suffixes(self):
+        cases = {STALLED_CAPACITY: STALLED_CAPACITY}
+        base = f"test {STALLED_CAPACITY} ... FAILED\n"
+        markers = [
+            self.stalled_marker(phase="Unknown"),
+            self.stalled_marker() + " token=wireSecret",
+            "panic text " + self.stalled_marker(),
+            self.stalled_marker("Other"),
+            self.stalled_marker() + " /private/path",
+        ]
+        for marker in markers:
+            with self.subTest(marker=marker[:70]):
+                output, invalid = diagnostic.http_stalled_diagnostics(base + marker + "\n", 101, cases)
+                self.assertTrue(invalid)
+                self.assertEqual(output, ["http_stalled=unavailable"])
+                self.assertNotIn("wireSecret", "\n".join(output))
+                self.assertNotIn("/private", "\n".join(output))
+
+    def test_stalled_markers_reject_duplicates_and_unbounded_numbers(self):
+        cases = {STALLED_CAPACITY: STALLED_CAPACITY}
+        base = f"test {STALLED_CAPACITY} ... FAILED\n"
+        invalid_markers = [
+            (self.stalled_marker() + "\n") * 2,
+            self.stalled_marker(joins="Some(4294967296)"),
+            self.stalled_marker(status="Some(65536)"),
+            self.stalled_marker(body_bytes="Some(16777217)"),
+        ]
+        for markers in invalid_markers:
+            with self.subTest(markers=markers[:80]):
+                output, invalid = diagnostic.http_stalled_diagnostics(base + markers, 101, cases)
+                self.assertTrue(invalid)
+                self.assertEqual(output, ["http_stalled=unavailable"])
+
+    def test_stalled_marker_never_turns_nonzero_test_exit_into_success(self):
+        cases = {STALLED_CAPACITY: STALLED_CAPACITY}
+        raw = (self.raw() + f"test {STALLED_CAPACITY} ... FAILED\n" +
+               self.stalled_marker() + "\n" +
+               "thread 'test' panicked at /private/path:1:1: wireSecret\n")
+        accepted, output = self.capture(raw, 101, cases)
+        self.assertFalse(accepted)
+        self.assertIn(b"cargo_exit=101 inventory=fail", output)
+        self.assertIn(f"http_stalled=case={STALLED_CAPACITY}".encode(), output)
+        self.assertNotIn(b"http_stalled_fixture", output)
+        self.assertNotIn(b"/private/path", output)
+        self.assertNotIn(b"wireSecret", output)
+
+    def test_successful_exit_with_stalled_failure_marker_is_invalid(self):
+        cases = {STALLED_CAPACITY: STALLED_CAPACITY}
+        output, invalid = diagnostic.http_stalled_diagnostics(
+            self.stalled_marker() + "\n", 0, cases
+        )
+        self.assertTrue(invalid)
+        self.assertEqual(output, ["http_stalled=unavailable"])
+
+    def test_exit_101_remains_failure_with_known_identity(self):
+        accepted, output = self.capture(self.raw() + "test auth::a ... FAILED\n", 101,
+                                       {"auth::a": "auth::a"})
+        self.assertFalse(accepted)
+        self.assertIn(b"failed_case=auth::a", output)
+        self.assertIn(b"cargo_exit=101 inventory=fail", output)
+
+    def test_success_still_requires_exact_slots_and_summary(self):
+        accepted, output = self.capture(self.raw() + "test result: ok. 427 passed; 0 failed; 1 ignored;\n", 0)
+        self.assertTrue(accepted)
+        accepted, output = self.capture(self.raw("csrf") + "test result: ok. 427 passed; 0 failed; 1 ignored;\n", 0)
+        self.assertFalse(accepted)
+
+    def test_missing_and_oversized_raw_reject_without_private_echo(self):
+        sink = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+        with contextlib.redirect_stdout(sink):
+            self.assertFalse(diagnostic.capture("broad", self.root, 101))
+        output = (self.root / "auth-stage-broad.trace").read_bytes()
+        self.assertIn(b"raw_file=unavailable", output)
+        accepted, output = self.capture("wireSecret" * (diagnostic.RAW_LIMIT // 10 + 2), 101)
+        self.assertFalse(accepted)
+        self.assertIn(b"raw_limit=exceeded", output)
+        self.assertNotIn(b"wireSecret", output)
+
+    def test_known_plus_unknown_does_not_claim_full_inventory(self):
+        output = diagnostic.failed_cases("test auth::a ... FAILED\ntest private::secret ... FAILED\n",
+                                         {"auth::a": "auth::a"})
+        self.assertEqual(output, ["failed_case=auth::a", "failure_cases=unavailable"])
+
+
+    def test_malformed_failed_rows_mark_catalogue_unavailable_without_echo(self):
+        cases = {"auth::a": "auth::a"}
+        variants = [
+            "test auth::a ... FAILED\ntest auth::bad-name ... FAILED\n",
+            "test auth::a ... FAILED\ntest auth::a ... FAILED trailing\n",
+            "test auth::a ... FAILED\nfailures:\n\n    auth::a\n    auth::bad-name\n",
+        ]
+        for index, raw in enumerate(variants):
+            output = diagnostic.failed_cases(raw, cases)
+            self.assertEqual(output,
+                             ["failed_case=auth::a", "failure_cases=unavailable"],
+                             f"malformed case {index}")
+            self.assertNotIn("bad-name", "\n".join(output))
+            self.assertNotIn("trailing", "\n".join(output))
+
+    def test_mixed_known_and_invalid_utf8_failed_row_marks_unavailable(self):
+        raw = (self.raw().encode("ascii") +
+               b"test auth::a ... FAILED\n" +
+               b"test auth::bad\xff ... FAILED\n")
+        (self.root / "auth-stage-broad.raw").write_bytes(raw)
+        sink = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+        with contextlib.redirect_stdout(sink):
+            accepted = diagnostic.capture("broad", self.root, 101,
+                                          {"auth::a": "auth::a"})
+        output = (self.root / "auth-stage-broad.trace").read_bytes()
+        self.assertFalse(accepted)
+        self.assertIn(b"failed_case=auth::a", output)
+        self.assertIn(b"failure_cases=unavailable", output)
+        self.assertNotIn(b"bad", output)
+        self.assertNotIn(b"\xff", output)
+
+    def test_giant_digit_listing_footer_is_rejected_without_conversion(self):
+        digits = "9" * 10000
+        self.assertIsNone(self.catalogue("pkg::case: test\n" +
+                                         digits + " tests, 0 benchmarks\n"))
+
+    def test_raw_byte_limit_exact_boundary_and_plus_one(self):
+        base = (self.raw() +
+                "test result: ok. 427 passed; 0 failed; 1 ignored;\n")
+        padding = diagnostic.RAW_LIMIT - len(base.encode("ascii")) - 1
+        exact = "x" * padding + "\n" + base
+        self.assertEqual(len(exact.encode("ascii")), diagnostic.RAW_LIMIT)
+        accepted, output = self.capture(exact, 0)
+        self.assertTrue(accepted)
+        self.assertLess(len(output), diagnostic.OUTPUT_LIMIT["broad"])
+        self.assertNotIn(b"x" * 32, output)
+        over = exact + "x"
+        self.assertEqual(len(over.encode("ascii")), diagnostic.RAW_LIMIT + 1)
+        accepted, output = self.capture(over, 0)
+        self.assertFalse(accepted)
+        self.assertIn(b"raw_limit=exceeded", output)
+        self.assertNotIn(b"x" * 32, output)
+
+    def test_main_six_arguments_and_wrong_arity(self):
+        (self.root / "auth-stage-cases.raw").write_text(
+            "auth::a: test\n1 tests, 0 benchmarks\n")
+        for name in ("csrf", "prelogin", "broad"):
+            summary = ("test result: ok. 1 passed; 0 failed; 0 ignored;\n"
+                       if name != "broad" else
+                       "test result: ok. 427 passed; 0 failed; 1 ignored;\n")
+            (self.root / f"auth-stage-{name}.raw").write_text(self.raw(name) + summary)
+
+        class Sink:
+            def __init__(self):
+                self.buffer = io.BytesIO()
+
+        old_argv, old_stdout = diagnostic.sys.argv, diagnostic.sys.stdout
+        sink = Sink()
+        try:
+            diagnostic.sys.argv = ["diagnostic.py", str(self.root), "0", "0", "0", "0"]
+            diagnostic.sys.stdout = sink
+            six_argument_result = diagnostic.main()
+            diagnostic.sys.argv = ["diagnostic.py", str(self.root), "0", "0", "0"]
+            wrong_arity_result = diagnostic.main()
+        finally:
+            diagnostic.sys.argv, diagnostic.sys.stdout = old_argv, old_stdout
+        self.assertEqual(six_argument_result, 0)
+        self.assertEqual(wrong_arity_result, 2)
+        self.assertNotIn(b"/private", sink.buffer.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()

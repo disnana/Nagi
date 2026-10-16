@@ -100,7 +100,7 @@ authorityの再設定やproxy ACLの上書きはErrです。setterはOptionsをm
 
 全route・404/405・body受信・verifier・proof発行より前に、HTTP/1.1のorigin-formと一個の非空Hostを検査します。不正・欠落・重複・非allowlist、absolute-form/authority-form/`*`、ForwardedまたはX-Forwarded-*のpresenceは400、HTTP/1.0は505です。これらruntime拒否はno-storeとcloseです。Hyper自身がservice前に拒否する不正HTTP構文・HTTP/2 prefaceは公式parserへ委譲し、handler/proofには届きません。標準listenerはHTTP/1のみです。
 
-direct/proxyのprofileは起動時に固定します。proxyでもForwarded系はbackendへ送る前に除去し、Hostは登録済み内部値または登録済みpass-through値にします。ACLは`accept`が返す実peerだけで判定し、headerからtrustやoriginを選びません。loopback ACLは同hostの別processを認証しません。Host一致はOrigin/CSRF/CORSを免除せず、それらのSF03機能はこのHost sliceでは未実装です。
+direct/proxyのprofileは起動時に固定します。proxyでもForwarded系はbackendへ送る前に除去し、Hostは登録済み内部値または登録済みpass-through値にします。ACLは`accept`が返す実peerだけで判定し、headerからtrustやoriginを選びません。loopback ACLは同hostの別processを認証しません。Host一致はOrigin/CSRF/CORSを免除せず、未リリースSF03候補では下記の別契約として扱います。
 
 `serve`はloopbackの平文HTTPで、origin設定はTLSを実装しません。ローカルのpublic応答確認とbrowser認証を区別してください。browser用は信頼された証明書のTLS frontendを置き、たとえばexternal origin `https://localhost:8443`、backend wire `localhost:8080`、peer `127.0.0.1`を明示します。HTTP/2 frontendもHTTP/1.1へ終端します。Secure Cookieにlocalhost例外はありません。実TLS/browser・4 OSの検証は別の受入条件です。
 
@@ -139,3 +139,20 @@ return await http.serve(app, 8080, limits)
 NagiのAPIは[標準moduleの登録](../compiler/src/stdlib.rs)と[HTTP runtime](../runtime/src/http_server.rs)で実装しています。通信はHyperのHTTP/1、実行と接続taskの管理はTokio、pathの照合はmatchit、JSON変換はSerdeです。AxumのHTTP型も使いますが、このAPIのroute処理はAxum Routerではありません。
 
 [HTTP runtimeのテスト](../runtime/src/http_server/tests.rs)には、実際のsocketを使う応答、制限、タイムアウト、接続終了の確認があります。[Rust連携](modules-and-rust.md)では独自のサーバーを作れますが、同じ制限や障害処理が自動で付くわけではありません。
+
+## 明示CORS route metadata（未リリースSF03候補）
+
+`CorsPolicy`は所有するopaque設定で、認証proofではありません。`CorsCredentials.OMIT`はAllow-Credentialsを省略し、`ALLOW`は`true`を出します。credentialの除去やPolicy/CSRFの免除はしません。`cors_policy(origins: List[str], request_headers: List[str], credentials: CorsCredentials, max_age_seconds: i64, max_origins: i64, max_origin_bytes: i64, max_headers: i64, max_header_bytes: i64) -> Result[CorsPolicy, Error]`で作成します。count/bytes上限は正のnative size、listは空も可能です。max-ageは明示した0..4294967295秒で、0はpositive lifetimeなしです。server側preflight cacheはありません。
+
+`cors_route[S,E](app: App[S,E], method: Method, registered_path: view[str], cors: CorsPolicy) -> Result[App[S,E], Error]`はapp/configを消費し、既存の正確なmethod/登録patternへ一度だけ設定します。未知record・二重付与は失敗します。GET fallbackのHEADは継承し、明示HEAD/OPTIONSは別recordです。省略はcross-origin読取denyです。origin/header wildcardとCORS methodの`*`・CONNECT・TRACE・TRACKは拒否します。通常routeとframework管理routeで同じ設定操作を使います。
+
+```nagi
+cors = try http.cors_policy(["https://app.example.invalid"], ["content-type"], http.CorsCredentials.ALLOW, 0, 2, 128, 2, 64)
+app = try http.cors_route[State, Error](app, http.Method.GET, "/items/{id}", cors)
+```
+
+originはhttp/https scheme・ASCII host・effective portのcanonical exact一致です。DNS case/default port/IP表記は正規化します。null・wildcard・userinfo・Unicode・末尾DNS dot・空白・percent・path/query/fragment・複数Originは不可です。既存security用ExternalOriginはHTTPS専用のままです。返すgrantは設定済canonical値です。
+
+OPTIONSにAccess-Control-Request-MethodまたはAccess-Control-Request-Headersがあればtarget routeのmetadataだけを使います。成功は空204と要求method/header・明示Max-Age・no-storeで、verifier/handler/proof/Session/DB処理なしです。通常OPTIONSは独自Policyが必要です。未知path/methodは404/405とgrantなしを保持します。重複/不正metadataは400、valid未許可origin/header・既定denyは403です。admission・宣言bodyの503/413を優先し、preflight bodyは400とcloseです。
+
+actualの未許可/不正/欠落OriginはCORS grantなしで、通常認証・CSRF・status・handler動作を変えません。許可cross-origin preflightでもunsafe Session POSTの外部HTTPS Origin/token条件は免除されません。外側finalizerはCookie一回配送・no-store・CSP・nosniff・challenge・framingを保持し、選択済early errorでも有限typed Vary依存をunionします。認証/Sessionの304は秘密なし500、公的DTOの304は既存statusを保持します。source APIだけでnative/4OSや実TLS/browser受理を主張しません。この候補は未リリースでB1へ依存します。

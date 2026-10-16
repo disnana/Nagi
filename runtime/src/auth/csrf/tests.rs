@@ -214,7 +214,11 @@ impl Fixture {
 
 #[tokio::test]
 async fn same_queue_reopen_reuses_data_context_without_refreshing_token_expiry() {
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    let observer = crate::auth::stage_observer::Guard::new(1);
     let mut f = Fixture::new(2, 176).await;
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    observer.attach(&f.inner.stage_slot);
     assert!(f.inner.native.same_private_queue(&f.pool));
     // Startup is real and completes before issue: this branch proves compatible
     // reopened-context acceptance while UTC is controlled, not real-wall speed.
@@ -240,6 +244,8 @@ async fn same_queue_reopen_reuses_data_context_without_refreshing_token_expiry()
         inner.native.same_private_queue(&f.pool),
         "same_queue_fixture phase=SameQueue"
     );
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    observer.attach(&inner.stage_slot);
     let o = TokenOwner::new(owner());
     let b = f.binding(&o.lease.lease).await;
     // No further Session lookup/request may advance persisted wall after W.
@@ -340,6 +346,8 @@ async fn same_queue_reopen_reuses_data_context_without_refreshing_token_expiry()
     f.assert_original_token_row(digest, expiry).await;
     drop(o);
     f.stop().await;
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    observer.emit();
 }
 
 #[tokio::test]
@@ -548,7 +556,12 @@ async fn checkpoint_accepts_before_and_refuses_at_or_after_original_token_expiry
             );
         }
         if delta == -1 && mono_delta == -1 {
-            assert!(result.is_ok());
+            assert!(
+                result.is_ok(),
+                "csrf_checkpoint_boundary phase=PositiveCheckpoint kind={:?} outcome={:?}",
+                result.as_ref().err().map(kind),
+                result.as_ref().err().map(outcome),
+            );
         } else {
             assert!(result
                 .is_err_and(|e| kind(&e) == FailureKind::Denied

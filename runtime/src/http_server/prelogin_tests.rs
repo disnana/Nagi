@@ -191,7 +191,7 @@ async fn explicit_head_has_zero_entropy_business_sql_cookie_and_token() {
     assert!(head
         .headers
         .get(names::VARY)
-        .is_some_and(|v| v == "Cookie, Authorization, Origin"));
+        .is_some_and(|v| v == "Authorization, Cookie, Origin"));
     assert!(head
         .headers
         .get(names::CONTENT_LENGTH)
@@ -214,7 +214,7 @@ async fn get_commits_one_row_and_only_fixed_json_host_only_cookie_reaches_wire()
     assert!(reply
         .headers
         .get(names::VARY)
-        .is_some_and(|v| v == "Cookie, Authorization, Origin"));
+        .is_some_and(|v| v == "Authorization, Cookie, Origin"));
     assert!(reply
         .headers
         .get(names::CACHE_CONTROL)
@@ -280,6 +280,8 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
         denied.status() == StatusCode::GATEWAY_TIMEOUT
             && !denied.headers().contains_key(names::SET_COOKIE)
     );
+    // Apply the same outer Vary projection as the actual dispatcher.
+    let denied = vary::finish(denied);
     no_terminal_material(&denied, StatusCode::GATEWAY_TIMEOUT, &first);
     drop(first);
     assert!(!weak.has_live_owner());
@@ -426,7 +428,7 @@ fn no_terminal_material(
     assert!(response
         .headers()
         .get(names::VARY)
-        .is_some_and(|v| v == "Cookie, Authorization, Origin"));
+        .is_some_and(|v| v == "Authorization, Cookie, Origin"));
     assert!(owner.seal().is_err());
     assert!(!owner.has_wire_material_for_test());
 }
@@ -454,6 +456,8 @@ async fn earlier_security_deadline_rejects_finite_non_yielding_ready_as_504() {
         },
     )
     .await;
+    // Apply the same outer Vary projection as the actual dispatcher.
+    let response = vary::finish(response);
     no_terminal_material(&response, StatusCode::GATEWAY_TIMEOUT, &owner);
     assert!(f.count().await == 1);
     // Commit already happened; terminal status does not imply rollback.
@@ -473,6 +477,8 @@ async fn real_security_gate_expiring_after_seal_is_504_and_clears_material() {
         .unwrap();
     tokio::time::sleep(Duration::from_millis(20)).await;
     let response = finalize_prelogin(PreloginCompletion::Ready(seal), &owner, false, &f.pool);
+    // Apply the same outer Vary projection as the actual dispatcher.
+    let response = vary::finish(response);
     no_terminal_material(&response, StatusCode::GATEWAY_TIMEOUT, &owner);
     assert!(f.count().await == 1);
     f.stop().await;
@@ -497,6 +503,8 @@ async fn controlled_wire_clock_backstep_is_503_before_and_after_serialization() 
                 }
             });
         let response = finalize_prelogin(PreloginCompletion::Ready(seal), &owner, false, &f.pool);
+        // Apply the same outer Vary projection as the actual dispatcher.
+        let response = vary::finish(response);
         no_terminal_material(&response, StatusCode::SERVICE_UNAVAILABLE, &owner);
         assert!(f.count().await == 1);
         f.stop().await;
@@ -522,6 +530,8 @@ async fn controlled_wire_absolute_expiry_is_504_before_and_after_serialization()
                 }
             });
         let response = finalize_prelogin(PreloginCompletion::Ready(seal), &owner, false, &f.pool);
+        // Apply the same outer Vary projection as the actual dispatcher.
+        let response = vary::finish(response);
         no_terminal_material(&response, StatusCode::GATEWAY_TIMEOUT, &owner);
         assert!(f.count().await == 1);
         f.stop().await;

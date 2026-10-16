@@ -247,6 +247,23 @@ async fn published_bearer_issue_wire_and_safe_session_read_after_real_commit() {
         },
     )
     .unwrap();
+    let app = http::cors_route(
+        app,
+        http::Method::GET,
+        "/read",
+        http::cors_policy(
+            vec!["https://app.example.invalid".to_owned()],
+            vec![],
+            http::CorsCredentials::ALLOW,
+            0,
+            1,
+            64,
+            1,
+            16,
+        )
+        .unwrap(),
+    )
+    .unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     // HTTP-only owned wire test; Secure is serialization, not a browser/TLS proof.
@@ -266,16 +283,30 @@ async fn published_bearer_issue_wire_and_safe_session_read_after_real_commit() {
         let issued = request(address, "/issue", "Authorization: Bearer owned\r\n").await;
         assert_eq!(issued.status, 200);
         assert_eq!(issued.values("cache-control"), vec!["no-store"]);
-        assert_eq!(issued.values("vary"), vec!["Cookie, Authorization"]);
+        assert_eq!(issued.values("vary"), vec!["Authorization, Cookie"]);
         assert_eq!(
             count(&pool, "SELECT count(*) AS n FROM __nagi_session_rows").await,
             1
         );
         let owned = issued.cookie();
-        let read = request_method(address, "GET", "/read", &format!("Cookie: {owned}\r\n")).await;
+        let read = request_method(
+            address,
+            "GET",
+            "/read",
+            &format!("Cookie: {owned}\r\nOrigin: https://app.example.invalid\r\n"),
+        )
+        .await;
         assert!(read.status == 200 && read.values("set-cookie").is_empty());
         assert_eq!(read.values("cache-control"), vec!["no-store"]);
-        assert_eq!(read.values("vary"), vec!["Cookie"]);
+        assert_eq!(read.values("vary"), vec!["Authorization, Cookie, Origin"]);
+        assert_eq!(
+            read.values("access-control-allow-origin"),
+            vec!["https://app.example.invalid"]
+        );
+        assert_eq!(
+            read.values("access-control-allow-credentials"),
+            vec!["true"]
+        );
         assert_eq!(
             count(&pool, "SELECT count(*) AS n FROM __nagi_session_rows").await,
             1

@@ -1,6 +1,9 @@
 //! Compiler-owned standard definitions. Serialized Low names this registry;
 //! it cannot choose native paths, capabilities, or callback contracts.
 use crate::ast::*;
+mod cors;
+#[cfg(test)]
+mod cors_contract_tests;
 mod csrf;
 mod html;
 #[cfg(test)]
@@ -153,6 +156,8 @@ pub enum Resource {
     SessionResponse,
     SessionSameSite,
     CsrfOptions,
+    CorsPolicy,
+    CorsCredentials,
     CsrfStore,
     CsrfFailure,
     Grant,
@@ -209,6 +214,8 @@ pub enum Operation {
     AuthorizedPolicy,
     SessionAuthenticatedPolicy,
     SessionAuthorizedPolicy,
+    CorsPolicy,
+    CorsRoute,
     SessionCsrfTokens,
     SessionCsrfPolicy,
     CsrfOptions,
@@ -435,6 +442,8 @@ pub const RESOURCES: &[Resource] = &[
     Resource::SessionResponse,
     Resource::SessionSameSite,
     Resource::CsrfOptions,
+    Resource::CorsPolicy,
+    Resource::CorsCredentials,
     Resource::CsrfStore,
     Resource::CsrfFailure,
     Resource::Grant,
@@ -485,6 +494,8 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::AuthorizedPolicy,
     Operation::SessionAuthenticatedPolicy,
     Operation::SessionAuthorizedPolicy,
+    Operation::CorsPolicy,
+    Operation::CorsRoute,
     Operation::SessionCsrfTokens,
     Operation::SessionCsrfPolicy,
     Operation::CsrfOptions,
@@ -1231,6 +1242,7 @@ static CONTRACT_EVENT: ResourceContract = ResourceContract::new(
 
 fn resource_contract(resource: Resource) -> &'static ResourceContract {
     match resource {
+        Resource::CorsPolicy | Resource::CorsCredentials => cors::resource_contract(resource),
         Resource::HtmlPolicy
         | Resource::HtmlAttributes
         | Resource::NavigationUrl
@@ -1312,6 +1324,7 @@ pub(crate) fn native_serde_supported(resource: Resource) -> bool {
 
 pub fn operation_info(operation: Operation) -> &'static OperationInfo {
     match operation {
+        Operation::CorsPolicy | Operation::CorsRoute => cors::operation_info(operation),
         Operation::HtmlPolicy
         | Operation::HtmlLimits
         | Operation::HtmlEmpty
@@ -1885,6 +1898,7 @@ pub fn constants(resource: Resource) -> &'static [ConstantInfo] {
 
     match resource {
         Resource::HtmlTag => html::TAG_CONSTANTS,
+        Resource::CorsCredentials => cors::CREDENTIAL_CONSTANTS,
         Resource::SqliteBeginMode | Resource::SqliteFailureKind | Resource::SqliteOutcome => {
             sqlite::constants(resource)
         }

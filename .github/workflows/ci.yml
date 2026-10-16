@@ -111,6 +111,120 @@ jobs:
               if not re.search(pattern, text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
+      - name: Capture bounded Session auth stages before broad checks
+        id: auth_stage_diag
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -e
+          python scripts/tests/test_auth_stage_diagnostic.py
+          set +e
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-csrf.raw" 2>&1
+          csrf_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-prelogin.raw" 2>&1
+          prelogin_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
+          broad_rc=$?
+          python -B scripts/tests/test_browser_login_stage_coverage.py
+          stage_unit_rc=$?
+          python -B scripts/ci/browser_login_stage_coverage.py "$RUNNER_TEMP/auth-stage-broad.raw" "$broad_rc" "$RUNNER_TEMP/auth-stage-browser-native.json"
+          stage_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2>&1
+          cases_rc=$?
+          python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc" "$cases_rc"
+          sanitize_rc=$?
+          if [ "$stage_unit_rc" -ne 0 ] || [ "$stage_rc" -ne 0 ]; then sanitize_rc=1; fi
+          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw" "$RUNNER_TEMP/auth-stage-cases.raw"
+          exit "$sanitize_rc"
+      - name: Preserve bounded Session auth-stage traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-stage-linux
+          path: |
+            ${{ runner.temp }}/auth-stage-csrf.trace
+            ${{ runner.temp }}/auth-stage-prelogin.trace
+            ${{ runner.temp }}/auth-stage-broad.trace
+            ${{ runner.temp }}/auth-stage-browser-native.json
+          if-no-files-found: ignore
+      - name: Capture bounded Session deadline public tests
+        id: session_deadline_diag
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/tests/test_session_deadline_diagnostic.py
+          set +e
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-session.raw"
+          pipeline_status=("${PIPESTATUS[@]}")
+          session_rc=${pipeline_status[0]}
+          if [ "${pipeline_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-session.raw"; fi
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --test browser_login_public_api 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-browser.raw"
+          pipeline_status=("${PIPESTATUS[@]}")
+          browser_rc=${pipeline_status[0]}
+          if [ "${pipeline_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-browser.raw"; fi
+          python scripts/ci/session_deadline_diagnostic.py "$RUNNER_TEMP" "$session_rc" "$browser_rc" "$RUNNER_TEMP/session-deadline-diagnostic.json"
+          diagnose_rc=$?
+          rm -f "$RUNNER_TEMP/session-deadline-session.raw" "$RUNNER_TEMP/session-deadline-browser.raw"
+          delivery_fail=0
+          while read -r delivery_label delivery_name; do
+            CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib "$delivery_name" -- --exact 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining>0:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"
+            delivery_status=("${PIPESTATUS[@]}")
+            delivery_rc=${delivery_status[0]}
+            if [ "${delivery_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"; fi
+            python -B scripts/ci/session_deadline_diagnostic.py --delivery "$delivery_label" "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw" "$delivery_rc" "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.json"
+            if [ "$?" -ne 0 ]; then delivery_fail=1; fi
+            rm -f "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"
+          done <<'DELIVERY_CASES'
+          applied auth::session::http_bridge::delivery_tests::applied_real_issue_commit_has_exactly_one_wire_cookie
+          not_modified auth::session::http_bridge::delivery_tests::applied_304_and_private_cache_conflict_are_fixed_no_cookie_500
+          head auth::session::http_bridge::delivery_tests::head_applied_response_transfers_cookie_once_without_body
+          expiry auth::session::http_bridge::delivery_tests::expiry_after_real_commit_retires_applied_material_without_cookie
+          DELIVERY_CASES
+          if [ "$delivery_fail" -ne 0 ]; then diagnose_rc=1; fi
+          exit "$diagnose_rc"
+      - name: Preserve sanitized Session deadline diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: session-deadline-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            ${{ runner.temp }}/session-deadline-diagnostic.json
+            ${{ runner.temp }}/session-deadline-delivery-applied.json
+            ${{ runner.temp }}/session-deadline-delivery-not_modified.json
+            ${{ runner.temp }}/session-deadline-delivery-head.json
+            ${{ runner.temp }}/session-deadline-delivery-expiry.json
+          if-no-files-found: ignore
       - name: Check owned BrowserLogin business stage and cancellation witnesses
         shell: bash
         run: |
@@ -121,13 +235,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python -B scripts/tests/test_csrf_deadline_mutations.py
           cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-core.log"
           cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-deadline.log"
           cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-public.log"
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":14, "sf03-b1-csrf-deadline.log":9, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":14, "sf03-b1-csrf-deadline.log":12, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
@@ -143,6 +258,17 @@ jobs:
               if len(passed)!=1:
                   raise AssertionError("CSRF capacity oracle missing, duplicate, or unsuccessful")
           PYCODE
+          python -B scripts/ci/csrf_deadline_mutations.py --coverage "$RUNNER_TEMP/sf03-b1-csrf-deadline.log" 0 "$RUNNER_TEMP/csrf-deadline-coverage.json"
+      - name: Compile and run CSRF deadline semantic mutants
+        shell: bash
+        run: python -B scripts/ci/csrf_deadline_mutations.py . "$RUNNER_TEMP/csrf-deadline-mutations.json"
+      - name: Preserve closed CSRF deadline mutation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: csrf-deadline-compiled-mutations-linux
+          path: ${{ runner.temp }}/csrf-deadline-mutations.json
+          if-no-files-found: ignore
       - name: Check B1 CSRF compiler metadata and High saved Low handwritten Low native
         shell: bash
         run: |
@@ -161,6 +287,41 @@ jobs:
           if len(generated)!=3 or any(not p.read_bytes() for p in generated):
               raise AssertionError(f"expected three unmodified generated Rust artifacts, found {generated}")
           PYCODE
+      - name: Check SF03 CORS runtime metadata socket and native compiler contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf03-cors-evidence"
+          cargo test --locked -p nagi-runtime --lib http_server::cors::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-cors-runtime.log"
+          cargo test --locked -p nagi-runtime --test cors_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-cors-socket.log"
+          cargo test --locked -p nagic --lib stdlib::cors_contract_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-cors-metadata.log"
+          cargo test --locked -p nagic --test security_sf03_cors 2>&1 | tee "$RUNNER_TEMP/sf03-cors-compiler.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name,count in {'sf03-cors-runtime.log': 6, 'sf03-cors-socket.log': 7, 'sf03-cors-metadata.log': 2, 'sf03-cors-compiler.log': 5}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: positive exact selected cases required")
+          generated=list((root/'sf03-cors-evidence').glob('*sf03-cors-*-generated.rs'))
+          if len(generated)!=6 or any(not path.read_bytes() for path in generated):
+              raise AssertionError("expected six unmodified generated Rust artifacts")
+          PYCODE
+      - name: Capture current compiler resource goldens with assertions enabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAGI_GOLDEN_CAPTURE_DIR="$RUNNER_TEMP/sf03-cors-goldens" cargo test --locked -p nagic --lib resource_contract_goldens::
+      - name: Retain CORS native and actual golden capture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf03-cors-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            ${{ runner.temp }}/sf03-cors-*.log
+            ${{ runner.temp }}/sf03-cors-evidence/
+            ${{ runner.temp }}/sf03-cors-goldens/
+          if-no-files-found: ignore
       - name: Check canonical Session metadata and High Low native contracts
         shell: bash
         run: |
@@ -220,6 +381,14 @@ jobs:
       - run: python tests/route_integration.py
       - run: python tests/http_stdlib_integration.py
       - run: ./target/release/examples/fuzz-smoke
+      - name: Enforce Session auth-stage supplement after normal checks
+        if: always() && steps.auth_stage_diag.outcome != 'skipped'
+        shell: bash
+        run: test '${{ steps.auth_stage_diag.outcome }}' = success
+      - name: Enforce Session deadline diagnostic after normal checks
+        if: always() && steps.session_deadline_diag.outcome != 'skipped'
+        shell: bash
+        run: test '${{ steps.session_deadline_diag.outcome }}' = success
       - name: Preserve compiler and application failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
@@ -361,6 +530,67 @@ jobs:
           RELEASE_RUST_HOST: ${{ matrix.rust_host }}
         shell: bash
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
+      - name: Check native buffered send deadline and idle Keep-Alive early on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PYSOURCE'
+          import hashlib, pathlib
+          expected = {
+              'runtime/src/http_server.rs': '2941f52ab64ca0ef43612ff6cfdbfe14e0721bdaf86448598c5f52202e0dd755',
+              'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
+              'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
+              'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
+              'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
+          }
+          for name, digest in expected.items():
+              source = pathlib.Path(name).read_bytes()
+              if b"\r" in source.replace(b"\r\n", b"\n"):
+                  raise AssertionError("unexpected lone CR in native fixture source")
+              actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
+              if actual != digest:
+                  raise AssertionError("reviewed native send fixture source differs: " + name)
+              print("native send fixture sha256=" + actual + " file=" + name)
+          PYSOURCE
+          cargo test --locked -p nagi-runtime --lib http_server::tests::send_deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/http-send-deadline.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"http-send-deadline.log").read_text(encoding="utf-8")
+          required={
+              "header_flush_before_buffered_frame_keeps_original_send_end",
+              "empty_response_completion_does_not_expire_idle_keep_alive",
+              "buffered_response_completion_does_not_expire_idle_keep_alive",
+          }
+          summaries=re.findall(r"(?m)^test result: ok\. 3 passed; 0 failed; 0 ignored;.*$",text)
+          if len(summaries)!=1:
+              raise AssertionError("three actual native send-deadline cases required")
+          for name in required:
+              pattern=rf"(?m)^test http_server::tests::send_deadline_tests::{re.escape(name)} \.\.\. ok$"
+              if len(re.findall(pattern,text))!=1:
+                  raise AssertionError("native send-deadline case missing, duplicate or failed")
+          PYCODE
+      - name: Check stalled send permit release and graceful join early on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib stalled_response_send_ 2>&1 | tee "$RUNNER_TEMP/http-stalled-send.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"http-stalled-send.log").read_text(encoding="utf-8")
+          required={
+              "stalled_response_send_expires_and_releases_connection_permit",
+              "graceful_shutdown_preserves_stalled_response_send_deadline",
+          }
+          summaries=re.findall(r"(?m)^test result: ok\. 2 passed; 0 failed; 0 ignored;.*$",text)
+          if len(summaries)!=1:
+              raise AssertionError("two actual stalled-send lifecycle cases required")
+          for name in required:
+              pattern=rf"(?m)^test http_server::tests::{re.escape(name)} \.\.\. ok$"
+              if len(re.findall(pattern,text))!=1:
+                  raise AssertionError("stalled-send case missing, duplicate or failed")
+          PYCODE
       - name: Check call_member_ recovery first with exact result on the target platform
         shell: bash
         run: |
@@ -394,6 +624,131 @@ jobs:
               if not re.search(pattern, text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
+      - name: Diagnose private Session phase deadlines on Windows
+        if: always() && runner.os == 'Windows'
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          set +e
+          python -B scripts/tests/test_session_private_deadline_diagnostic.py
+          fake_rc=$?
+          python -B scripts/ci/session_private_deadline_diagnostic.py --run
+          native_rc=$?
+          if [ "$fake_rc" -ne 0 ] || [ "$native_rc" -ne 0 ]; then exit 1; fi
+      - name: Capture bounded Session auth stages before broad checks
+        id: auth_stage_diag
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -e
+          python scripts/tests/test_auth_stage_diagnostic.py
+          set +e
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-csrf.raw" 2>&1
+          csrf_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-prelogin.raw" 2>&1
+          prelogin_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
+          broad_rc=$?
+          python -B scripts/tests/test_browser_login_stage_coverage.py
+          stage_unit_rc=$?
+          python -B scripts/ci/browser_login_stage_coverage.py "$RUNNER_TEMP/auth-stage-broad.raw" "$broad_rc" "$RUNNER_TEMP/auth-stage-browser-native.json"
+          stage_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2>&1
+          cases_rc=$?
+          python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc" "$cases_rc"
+          sanitize_rc=$?
+          if [ "$stage_unit_rc" -ne 0 ] || [ "$stage_rc" -ne 0 ]; then sanitize_rc=1; fi
+          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw" "$RUNNER_TEMP/auth-stage-cases.raw"
+          exit "$sanitize_rc"
+      - name: Preserve bounded Session auth-stage traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-stage-${{ matrix.platform }}
+          path: |
+            ${{ runner.temp }}/auth-stage-csrf.trace
+            ${{ runner.temp }}/auth-stage-prelogin.trace
+            ${{ runner.temp }}/auth-stage-broad.trace
+            ${{ runner.temp }}/auth-stage-browser-native.json
+          if-no-files-found: ignore
+      - name: Capture bounded Session deadline public tests
+        id: session_deadline_diag
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/tests/test_session_deadline_diagnostic.py
+          set +e
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-session.raw"
+          pipeline_status=("${PIPESTATUS[@]}")
+          session_rc=${pipeline_status[0]}
+          if [ "${pipeline_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-session.raw"; fi
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --test browser_login_public_api 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-browser.raw"
+          pipeline_status=("${PIPESTATUS[@]}")
+          browser_rc=${pipeline_status[0]}
+          if [ "${pipeline_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-browser.raw"; fi
+          python scripts/ci/session_deadline_diagnostic.py "$RUNNER_TEMP" "$session_rc" "$browser_rc" "$RUNNER_TEMP/session-deadline-diagnostic.json"
+          diagnose_rc=$?
+          rm -f "$RUNNER_TEMP/session-deadline-session.raw" "$RUNNER_TEMP/session-deadline-browser.raw"
+          delivery_fail=0
+          while read -r delivery_label delivery_name; do
+            CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib "$delivery_name" -- --exact 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining>0:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"
+            delivery_status=("${PIPESTATUS[@]}")
+            delivery_rc=${delivery_status[0]}
+            if [ "${delivery_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"; fi
+            python -B scripts/ci/session_deadline_diagnostic.py --delivery "$delivery_label" "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw" "$delivery_rc" "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.json"
+            if [ "$?" -ne 0 ]; then delivery_fail=1; fi
+            rm -f "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"
+          done <<'DELIVERY_CASES'
+          applied auth::session::http_bridge::delivery_tests::applied_real_issue_commit_has_exactly_one_wire_cookie
+          not_modified auth::session::http_bridge::delivery_tests::applied_304_and_private_cache_conflict_are_fixed_no_cookie_500
+          head auth::session::http_bridge::delivery_tests::head_applied_response_transfers_cookie_once_without_body
+          expiry auth::session::http_bridge::delivery_tests::expiry_after_real_commit_retires_applied_material_without_cookie
+          DELIVERY_CASES
+          if [ "$delivery_fail" -ne 0 ]; then diagnose_rc=1; fi
+          exit "$diagnose_rc"
+      - name: Preserve sanitized Session deadline diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: session-deadline-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            ${{ runner.temp }}/session-deadline-diagnostic.json
+            ${{ runner.temp }}/session-deadline-delivery-applied.json
+            ${{ runner.temp }}/session-deadline-delivery-not_modified.json
+            ${{ runner.temp }}/session-deadline-delivery-head.json
+            ${{ runner.temp }}/session-deadline-delivery-expiry.json
+          if-no-files-found: ignore
       - name: Check owned BrowserLogin business stage and cancellation witnesses
         shell: bash
         run: |
@@ -404,13 +759,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python -B scripts/tests/test_csrf_deadline_mutations.py
           cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-core.log"
           cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-deadline.log"
           cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-public.log"
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":14, "sf03-b1-csrf-deadline.log":9, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":14, "sf03-b1-csrf-deadline.log":12, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
@@ -426,6 +782,7 @@ jobs:
               if len(passed)!=1:
                   raise AssertionError("CSRF capacity oracle missing, duplicate, or unsuccessful")
           PYCODE
+          python -B scripts/ci/csrf_deadline_mutations.py --coverage "$RUNNER_TEMP/sf03-b1-csrf-deadline.log" 0 "$RUNNER_TEMP/csrf-deadline-coverage.json"
       - name: Check B1 CSRF compiler metadata and High saved Low handwritten Low native
         shell: bash
         run: |
@@ -444,6 +801,41 @@ jobs:
           if len(generated)!=3 or any(not p.read_bytes() for p in generated):
               raise AssertionError(f"expected three unmodified generated Rust artifacts, found {generated}")
           PYCODE
+      - name: Check SF03 CORS runtime metadata socket and native compiler contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf03-cors-evidence"
+          cargo test --locked -p nagi-runtime --lib http_server::cors::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-cors-runtime.log"
+          cargo test --locked -p nagi-runtime --test cors_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-cors-socket.log"
+          cargo test --locked -p nagic --lib stdlib::cors_contract_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-cors-metadata.log"
+          cargo test --locked -p nagic --test security_sf03_cors 2>&1 | tee "$RUNNER_TEMP/sf03-cors-compiler.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name,count in {'sf03-cors-runtime.log': 6, 'sf03-cors-socket.log': 7, 'sf03-cors-metadata.log': 2, 'sf03-cors-compiler.log': 5}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: positive exact selected cases required")
+          generated=list((root/'sf03-cors-evidence').glob('*sf03-cors-*-generated.rs'))
+          if len(generated)!=6 or any(not path.read_bytes() for path in generated):
+              raise AssertionError("expected six unmodified generated Rust artifacts")
+          PYCODE
+      - name: Capture current compiler resource goldens with assertions enabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAGI_GOLDEN_CAPTURE_DIR="$RUNNER_TEMP/sf03-cors-goldens" cargo test --locked -p nagic --lib resource_contract_goldens::
+      - name: Retain CORS native and actual golden capture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf03-cors-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            ${{ runner.temp }}/sf03-cors-*.log
+            ${{ runner.temp }}/sf03-cors-evidence/
+            ${{ runner.temp }}/sf03-cors-goldens/
+          if-no-files-found: ignore
       - name: Check canonical Session metadata and High Low native contracts
         shell: bash
         run: |
@@ -568,6 +960,46 @@ jobs:
         run: cargo test --locked -p nagi-runtime panic_ -- --test-threads=1
       - name: Check HTTP handler deadlines on the target platform
         run: cargo test --locked -p nagi-runtime handler_timeout_ -- --test-threads=1
+      - name: Check native buffered send deadline and idle Keep-Alive on the target platform
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PYSOURCE'
+          import hashlib, pathlib
+          expected = {
+              'runtime/src/http_server.rs': '2941f52ab64ca0ef43612ff6cfdbfe14e0721bdaf86448598c5f52202e0dd755',
+              'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
+              'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
+              'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
+              'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
+          }
+          for name, digest in expected.items():
+              source = pathlib.Path(name).read_bytes()
+              if b"\r" in source.replace(b"\r\n", b"\n"):
+                  raise AssertionError("unexpected lone CR in native fixture source")
+              actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
+              if actual != digest:
+                  raise AssertionError("reviewed native send fixture source differs: " + name)
+              print("native send fixture sha256=" + actual + " file=" + name)
+          PYSOURCE
+          cargo test --locked -p nagi-runtime --lib http_server::tests::send_deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/http-send-deadline.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"http-send-deadline.log").read_text(encoding="utf-8")
+          required={
+              "header_flush_before_buffered_frame_keeps_original_send_end",
+              "empty_response_completion_does_not_expire_idle_keep_alive",
+              "buffered_response_completion_does_not_expire_idle_keep_alive",
+          }
+          summaries=re.findall(r"(?m)^test result: ok\. 3 passed; 0 failed; 0 ignored;.*$",text)
+          if len(summaries)!=1:
+              raise AssertionError("three actual native send-deadline cases required")
+          for name in required:
+              pattern=rf"(?m)^test http_server::tests::send_deadline_tests::{re.escape(name)} \.\.\. ok$"
+              if len(re.findall(pattern,text))!=1:
+                  raise AssertionError("native send-deadline case missing, duplicate or failed")
+          PYCODE
       - name: Check demo packaging with Windows PowerShell
         if: runner.os == 'Windows'
         shell: powershell
@@ -701,6 +1133,14 @@ jobs:
           name: http413-observation-${{ matrix.platform }}
           path: build/compiler-failures/http413-nodelay-*.json
           if-no-files-found: ignore
+      - name: Enforce Session auth-stage supplement after normal checks
+        if: always() && steps.auth_stage_diag.outcome != 'skipped'
+        shell: bash
+        run: test '${{ steps.auth_stage_diag.outcome }}' = success
+      - name: Enforce Session deadline diagnostic after normal checks
+        if: always() && steps.session_deadline_diag.outcome != 'skipped'
+        shell: bash
+        run: test '${{ steps.session_deadline_diag.outcome }}' = success
       - name: Preserve target-platform compiler, application, and HTTP observation evidence
         if: failure()
         uses: actions/upload-artifact@v4

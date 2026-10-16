@@ -13,10 +13,19 @@ struct Fixture {
     dir: std::path::PathBuf,
     pool: sqlite::Pool,
     store: session::Store,
+    probe: Arc<session::deadline_probe::Probe>,
     headers: HeaderMap,
 }
 impl Fixture {
     async fn new() -> Self {
+        Self::profile(1000, 10000, 10).await
+    }
+    // Only late-result setup uses the normal Session profile. The stage below
+    // still expires the same actual lease in 200ms, after native setup is done.
+    async fn normal() -> Self {
+        Self::profile(10000, 100000, 60).await
+    }
+    async fn profile(idle_ms: i64, absolute_ms: i64, credential_s: u64) -> Self {
         let dir = loop {
             let p = std::env::temp_dir().join(format!(
                 "b1-deadline-{}-{}",
@@ -35,16 +44,18 @@ impl Fixture {
         )
         .await
         .unwrap();
-        let store = session::open(
+        let mut store = session::open(
             &pool,
-            session::options(4, 5, 72, 1, 1000, 10000, 500, 2).unwrap(),
+            session::options(4, 5, 72, 1, idle_ms, absolute_ms, 500, 2).unwrap(),
             session::cookie_options("__Host-auth", session::SameSite::Strict).unwrap(),
         )
         .await
         .unwrap();
+        let probe = session::deadline_probe::install(&mut store);
         let owner = LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap();
         let scope = AuthScope::bind(
-            VerifiedIdentity::from_verified(7, Instant::now() + Duration::from_secs(10)).unwrap(),
+            VerifiedIdentity::from_verified(7, Instant::now() + Duration::from_secs(credential_s))
+                .unwrap(),
             Arc::clone(&owner.lease),
         )
         .unwrap();
@@ -71,8 +82,24 @@ impl Fixture {
             dir,
             pool,
             store,
+            probe,
             headers: cookie,
         }
+    }
+    async fn original_row(&self) -> DeadlineRow {
+        let tx = sqlite::begin(&self.pool, sqlite::BeginMode::Deferred)
+            .await
+            .unwrap();
+        let mut rows = sqlite::all::<DeadlineRow>(
+            &tx,
+            sqlite::literal("SELECT idle_ms,absolute_ms FROM __nagi_session_rows"),
+            sqlite::parameters(),
+        )
+        .await
+        .unwrap();
+        sqlite::commit(tx).await.unwrap();
+        assert_eq!(rows.len(), 1, "projection_requires_one_original_row");
+        rows.pop().unwrap()
     }
     fn request(&self) -> Request {
         Request {
@@ -87,6 +114,28 @@ impl Fixture {
         std::fs::remove_dir_all(self.dir).unwrap();
     }
 }
+struct DeadlineRow {
+    idle_ms: i64,
+    absolute_ms: i64,
+}
+impl crate::FromRow for DeadlineRow {
+    fn columns() -> &'static [&'static str] {
+        &["idle_ms", "absolute_ms"]
+    }
+    fn read(r: &crate::rusqlite::Row<'_>, i: &[usize]) -> crate::rusqlite::Result<Self> {
+        Ok(Self {
+            idle_ms: r.get(i[0])?,
+            absolute_ms: r.get(i[1])?,
+        })
+    }
+}
+struct Projection {
+    row: DeadlineRow,
+    probe: Arc<session::deadline_probe::Probe>,
+    lease: Arc<Lease>,
+    until: Instant,
+    late: bool,
+}
 #[derive(Clone, Copy)]
 enum Completion {
     Grant,
@@ -97,15 +146,34 @@ struct BarrierState {
     bound: Notify,
     release: Notify,
     completed: AtomicUsize,
+    bound_count: AtomicUsize,
+    stage_started: AtomicUsize,
+    stage_expired: AtomicUsize,
+    dropped: AtomicUsize,
+    projection: Option<Projection>,
     completion: Completion,
 }
 fn state(completion: Completion) -> Arc<BarrierState> {
+    projected_state(completion, None)
+}
+fn projected_state(completion: Completion, projection: Option<Projection>) -> Arc<BarrierState> {
     Arc::new(BarrierState {
         bound: Notify::new(),
         release: Notify::new(),
         completed: AtomicUsize::new(0),
+        bound_count: AtomicUsize::new(0),
+        stage_started: AtomicUsize::new(0),
+        stage_expired: AtomicUsize::new(0),
+        dropped: AtomicUsize::new(0),
+        projection,
         completion,
     })
+}
+struct AuthorizerDrop(Arc<BarrierState>);
+impl Drop for AuthorizerDrop {
+    fn drop(&mut self) {
+        self.0.dropped.fetch_add(1, Ordering::SeqCst);
+    }
 }
 fn factory(store: &session::Store) -> Arc<SessionPolicyFactory<BarrierState, Grant<()>>> {
     let policy = session_authorized_policy(
@@ -113,8 +181,59 @@ fn factory(store: &session::Store) -> Arc<SessionPolicyFactory<BarrierState, Gra
         |scope, _, state: Arc<BarrierState>| async move {
             // A real Session factory binds before invoking this callback.
             let grant = Grant::from_authorized(scope, 7)?;
+            let _drop = AuthorizerDrop(Arc::clone(&state));
+            if let Some(p) = &state.projection {
+                let c = p.probe.take();
+                assert!(c.floor_ms <= c.ceil_ms, "projection_sample_order");
+                assert!(
+                    p.row.idle_ms < p.row.absolute_ms,
+                    "projection_idle_before_absolute"
+                );
+                let remaining = p
+                    .row
+                    .idle_ms
+                    .min(p.row.absolute_ms)
+                    .checked_sub(c.ceil_ms)
+                    .filter(|n| *n > 0)
+                    .expect("projection_original_row_live");
+                let expected = c
+                    .monotonic
+                    .checked_add(Duration::from_millis(u64::try_from(remaining).unwrap()))
+                    .expect("projection_checked_deadline");
+                assert!(expected < p.until, "projection_original_before_request");
+                assert!(
+                    grant.belongs_to(&p.lease),
+                    "projection_same_real_grant_lease"
+                );
+                assert!(
+                    csrf::live_deadline(&p.lease).unwrap() == expected,
+                    "projection_deadline_equality"
+                );
+            }
+            assert_eq!(state.bound_count.fetch_add(1, Ordering::SeqCst), 0);
             state.bound.notify_one();
             state.release.notified().await;
+            if let Some(p) = state.projection.as_ref().filter(|p| p.late) {
+                // This continuation is polled only after await_preparation's
+                // live precheck. The same poll creates and exhausts the
+                // shorter bound, so only its post-poll check can win.
+                let original = csrf::live_deadline(&p.lease).unwrap();
+                let stage = Instant::now()
+                    .checked_add(Duration::from_millis(200))
+                    .unwrap();
+                assert!(stage < original, "late_stage_before_original");
+                csrf::constrain(&p.lease, stage).unwrap();
+                assert!(
+                    csrf::live_deadline(&p.lease).unwrap() == stage,
+                    "late_stage_same_gate"
+                );
+                assert_eq!(state.stage_started.fetch_add(1, Ordering::SeqCst), 0);
+                while let Some(remaining) = stage.checked_duration_since(Instant::now()) {
+                    std::thread::sleep(remaining);
+                }
+                assert!(p.lease.validate().is_err(), "late_stage_actual_expired");
+                assert_eq!(state.stage_expired.fetch_add(1, Ordering::SeqCst), 0);
+            }
             state.completed.fetch_add(1, Ordering::SeqCst);
             match state.completion {
                 Completion::Grant => Ok(grant),
@@ -128,46 +247,137 @@ fn factory(store: &session::Store) -> Arc<SessionPolicyFactory<BarrierState, Gra
         _ => panic!("expected fixed Session factory"),
     }
 }
+struct PreparationWake(Notify);
+impl std::task::Wake for PreparationWake {
+    fn wake(self: Arc<Self>) {
+        self.0.notify_one();
+    }
+    fn wake_by_ref(self: &Arc<Self>) {
+        self.0.notify_one();
+    }
+}
 #[tokio::test]
 async fn guarded_preparation_pending_uses_actual_session_deadline() {
+    // Keep the original 1000/10000 Session and 10s credential profile. This
+    // asserts its actual projection/timer, not load-independent 1s admission.
     let f = Fixture::new().await;
-    let state = state(Completion::Grant);
     let until = Instant::now() + Duration::from_secs(10);
     let owner = LeaseOwner::new(until).unwrap();
-    let future = factory(&f.store)(
-        f.request(),
-        Arc::clone(&state),
-        Arc::clone(&owner.lease),
-        PreparationProfile::GuardedSession,
+    let row = f.original_row().await;
+    f.probe.arm();
+    let state = projected_state(
+        Completion::Grant,
+        Some(Projection {
+            row,
+            probe: Arc::clone(&f.probe),
+            lease: Arc::clone(&owner.lease),
+            until,
+            late: false,
+        }),
     );
-    let wait = await_preparation(&owner, until, AssertUnwindSafe(future).catch_unwind());
-    tokio::pin!(wait);
-    tokio::select! {
-        _ = state.bound.notified() => {},
-        _ = &mut wait => panic!("preparation completed before barrier"),
+    {
+        let future = factory(&f.store)(
+            f.request(),
+            Arc::clone(&state),
+            Arc::clone(&owner.lease),
+            PreparationProfile::GuardedSession,
+        );
+        let mut wait = Box::pin(await_preparation(
+            &owner,
+            until,
+            AssertUnwindSafe(future).catch_unwind(),
+        ));
+        let wake = Arc::new(PreparationWake(Notify::new()));
+        let waker = std::task::Waker::from(Arc::clone(&wake));
+        // Native completion is also driven only by request-local notifications.
+        // The timeout/watchdog never receives or polls `wait`.
+        loop {
+            let polled = wait.as_mut().poll(&mut Context::from_waker(&waker));
+            assert!(polled.is_pending(), "pending_completed_before_bound");
+            if state.bound_count.load(Ordering::SeqCst) == 1 {
+                break;
+            }
+            assert!(
+                tokio::time::timeout_at(tokio::time::Instant::from_std(until), wake.0.notified())
+                    .await
+                    .is_ok(),
+                "pending_native_notification_watchdog"
+            );
+        }
+        let actual = csrf::live_deadline(&owner.lease).unwrap();
+        assert!(actual < until);
+        // Consume any notification already issued by the completed lookup.
+        // The authorizer's sole remaining source is its unreleased Notify.
+        while wake.0.notified().now_or_never().is_some() {}
+        loop {
+            let notification = tokio::time::timeout_at(
+                tokio::time::Instant::from_std(actual + Duration::from_millis(300)),
+                wake.0.notified(),
+            )
+            .await;
+            assert!(notification.is_ok(), "pending_actual_timer_wake_watchdog");
+            // Observe real time after a wake and before this explicit poll.
+            let expired = Instant::now() >= actual;
+            let polled = wait.as_mut().poll(&mut Context::from_waker(&waker));
+            if expired {
+                assert!(
+                    matches!(polled, Poll::Ready(Err(Status::GATEWAY_TIMEOUT))),
+                    "pending_actual_timer_outer_504"
+                );
+                break;
+            }
+            assert!(polled.is_pending(), "pending_before_actual_deadline");
+        }
     }
-    let actual = csrf::live_deadline(&owner.lease).unwrap();
-    assert!(actual < until);
-    let result = tokio::time::timeout_at(
-        tokio::time::Instant::from_std(actual + Duration::from_millis(300)),
-        &mut wait,
-    )
-    .await;
-    assert!(
-        matches!(result, Ok(Err(Status::GATEWAY_TIMEOUT))),
-        "pending preparation must expire at its actual bound lease without barrier release"
-    );
     assert_eq!(state.completed.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        state.dropped.load(Ordering::SeqCst),
+        1,
+        "pending_future_dropped_once"
+    );
     assert!(owner.lease.validate().is_err());
     f.stop().await;
 }
+// Retain the original aggregate name/three strict late branches for existing CI
+// filters. Separate exact cases below let compiled mutants reach every branch.
 #[tokio::test]
 async fn guarded_preparation_expiry_precedes_late_grant_denial_and_panic() {
     for completion in [Completion::Grant, Completion::Denied, Completion::Panic] {
-        let f = Fixture::new().await;
-        let state = state(completion);
-        let until = Instant::now() + Duration::from_secs(10);
-        let owner = LeaseOwner::new(until).unwrap();
+        preparation_result_case(completion, false).await;
+        preparation_result_case(completion, true).await;
+    }
+}
+#[tokio::test]
+async fn guarded_preparation_same_poll_late_grant_is_504() {
+    preparation_result_case(Completion::Grant, true).await;
+}
+#[tokio::test]
+async fn guarded_preparation_same_poll_late_denied_is_504() {
+    preparation_result_case(Completion::Denied, true).await;
+}
+#[tokio::test]
+async fn guarded_preparation_same_poll_late_panic_is_504() {
+    preparation_result_case(Completion::Panic, true).await;
+}
+async fn preparation_result_case(completion: Completion, late: bool) {
+    let f = Fixture::normal().await;
+    let until = Instant::now() + Duration::from_secs(20);
+    let owner = LeaseOwner::new(until).unwrap();
+    let row = f.original_row().await;
+    f.probe.arm();
+    let state = projected_state(
+        completion,
+        Some(Projection {
+            row,
+            probe: Arc::clone(&f.probe),
+            lease: Arc::clone(&owner.lease),
+            until,
+            late,
+        }),
+    );
+    // Own this one future in a lexical scope: even a Pending timeout result is
+    // dropped before DB close/join. No replacement owner, factory or proof.
+    {
         let future = factory(&f.store)(
             f.request(),
             Arc::clone(&state),
@@ -178,21 +388,62 @@ async fn guarded_preparation_expiry_precedes_late_grant_denial_and_panic() {
         tokio::pin!(wait);
         tokio::select! {
             _ = state.bound.notified() => {},
-            _ = &mut wait => panic!("preparation completed before barrier"),
+            result = &mut wait => match result {
+                Err(status) => panic!(
+                    "preparation completed before barrier: outer_status={}", status.value()
+                ),
+                Ok(Err(_)) => panic!("preparation completed before barrier: preparation_panicked"),
+                Ok(Ok(Err(error))) => panic!(
+                    "preparation completed before barrier: kind={:?}", error.kind()
+                ),
+                Ok(Ok(Ok(_))) => panic!("preparation completed before barrier: preparation_ready"),
+            },
         }
-        let actual = csrf::live_deadline(&owner.lease).unwrap();
-        // Stop polling preparation until the real gate expires, then make its
-        // completion ready in the same poll. No scheduler timing race is needed.
-        tokio::time::sleep_until(tokio::time::Instant::from_std(actual)).await;
-        assert!(owner.lease.validate().is_err());
         state.release.notify_one();
-        assert!(
-            matches!(wait.await, Err(Status::GATEWAY_TIMEOUT)),
-            "common gate expiry must precede every late completion branch"
-        );
-        assert!(state.completed.load(Ordering::SeqCst) <= 1);
-        f.stop().await;
+        let result = wait.await;
+        if late {
+            let outer_504 = matches!(result, Err(Status::GATEWAY_TIMEOUT));
+            match completion {
+                Completion::Grant => assert!(outer_504, "late_grant_outer_504"),
+                Completion::Denied => assert!(outer_504, "late_denied_outer_504"),
+                Completion::Panic => assert!(outer_504, "late_panic_outer_504"),
+            }
+            assert_eq!(
+                state.stage_started.load(Ordering::SeqCst),
+                1,
+                "late_stage_started_once"
+            );
+            assert_eq!(
+                state.stage_expired.load(Ordering::SeqCst),
+                1,
+                "late_stage_expired_once"
+            );
+            assert!(owner.lease.validate().is_err());
+        } else {
+            match completion {
+                Completion::Grant => assert!(matches!(result, Ok(Ok(Ok(_)))), "live_real_grant"),
+                Completion::Denied => assert!(
+                    matches!(result, Ok(Ok(Err(e))) if e.kind() == FailureKind::Denied),
+                    "live_real_denied"
+                ),
+                Completion::Panic => assert!(matches!(result, Ok(Err(_))), "live_real_panic"),
+            }
+            assert!(owner.lease.validate().is_ok(), "live_control_gate");
+            assert_eq!(state.stage_started.load(Ordering::SeqCst), 0);
+            assert_eq!(state.stage_expired.load(Ordering::SeqCst), 0);
+        }
     }
+    assert_eq!(
+        state.completed.load(Ordering::SeqCst),
+        1,
+        "authorizer_completed_once"
+    );
+    assert_eq!(
+        state.dropped.load(Ordering::SeqCst),
+        1,
+        "authorizer_dropped_once"
+    );
+    f.stop().await;
 }
 #[tokio::test]
 async fn guarded_preparation_initially_expired_session_still_challenges_401() {
@@ -272,11 +523,11 @@ async fn guarded_body_wire_preserves_absolute_deadline_and_strict_precedence() {
                             Ok(_) => panic!("incomplete Content-Length body must not complete"),
                             Err(status) => status,
                         };
-                        Ok::<_, std::convert::Infallible>(managed(
+                        Ok::<_, std::convert::Infallible>(vary::finish(managed(
                             transport(status, false, true),
                             false,
                             true,
-                        ))
+                        )))
                     }
                 },
             );
@@ -302,7 +553,7 @@ async fn guarded_body_wire_preserves_absolute_deadline_and_strict_precedence() {
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         let headers = wire.split("\r\n\r\n").next().unwrap().to_ascii_lowercase();
         assert!(headers.contains("cache-control: no-store"));
-        assert!(headers.contains("vary: cookie, authorization, origin, x-csrf-token"));
+        assert!(headers.contains("vary: authorization, cookie, origin, x-csrf-token"));
         assert!(!headers.contains("set-cookie:") && !headers.contains("www-authenticate:"));
         tokio::time::timeout(Duration::from_secs(2), connection)
             .await

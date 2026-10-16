@@ -34,3 +34,7 @@ tokio = { version = "1.48", features = ["io-util", "test-util"] }
 # Candidate private native-main witness; official cached binding, no raw API.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
+# The observer is a closed test-only cfg, not a public Cargo feature.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(nagi_auth_stage_diag)", "cfg(nagi_browser_login_diag)"] }

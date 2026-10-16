@@ -24,8 +24,16 @@ use std::{
 use tokio::{net::TcpListener, sync::Semaphore, task::JoinSet};
 
 mod closing_io;
+#[cfg(test)]
+mod lifecycle_probe;
+#[cfg(all(test, windows))]
+mod windows_native_fixture;
 use closing_io::ClosingIo;
 mod authority;
+mod cors;
+mod origin;
+mod vary;
+pub use cors::{cors_policy, cors_route, CorsCredentials, CorsPolicy};
 mod browser_login;
 mod csrf_http;
 mod prelogin_http;
@@ -428,7 +436,10 @@ impl Response {
             self.headers.insert(names::CONTENT_LENGTH, length);
         }
         let body = if head { Bytes::new() } else { self.body };
-        let mut response = axum::http::Response::new(BufferedBody { bytes: body });
+        let mut response = axum::http::Response::new(BufferedBody {
+            bytes: body,
+            sending: None,
+        });
         *response.status_mut() = code;
         *response.headers_mut() = self.headers;
         response
@@ -439,6 +450,7 @@ impl Response {
 /// representation avoids a dynamic body box on every response.
 struct BufferedBody {
     bytes: Bytes,
+    sending: Option<tokio::sync::watch::Sender<Sending>>,
 }
 impl hyper::body::Body for BufferedBody {
     type Data = Bytes;
@@ -451,9 +463,11 @@ impl hyper::body::Body for BufferedBody {
         if self.bytes.is_empty() {
             Poll::Ready(None)
         } else {
-            Poll::Ready(Some(Ok(hyper::body::Frame::data(std::mem::take(
-                &mut self.bytes,
-            )))))
+            let bytes = std::mem::take(&mut self.bytes);
+            if let Some(sending) = self.sending.take() {
+                sending.send_modify(|state| state.body_transferred = true);
+            }
+            Poll::Ready(Some(Ok(hyper::body::Frame::data(bytes))))
         }
     }
     fn is_end_stream(&self) -> bool {
@@ -563,6 +577,11 @@ pub struct Options {
     shutdown_deadline: Duration,
     connections: usize,
     requests: usize,
+    #[cfg(test)]
+    lifecycle_probe: Option<Arc<lifecycle_probe::Probe>>,
+    // Explicit protocol schedule for the two Windows stalled-send fixtures only.
+    #[cfg(all(test, windows))]
+    windows_stalled_fixture: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -579,6 +598,10 @@ impl Default for Options {
             shutdown_deadline: Duration::from_secs(10),
             connections: 1024,
             requests: 256,
+            #[cfg(test)]
+            lifecycle_probe: None,
+            #[cfg(all(test, windows))]
+            windows_stalled_fixture: false,
         }
     }
 }
@@ -1009,6 +1032,7 @@ struct Route<S> {
     source: PolicySource,
     method: Method,
     kind: RouteKind<S>,
+    cors: Option<CorsPolicy>,
 }
 pub struct App<S, E> {
     state: Arc<S>,
@@ -1184,6 +1208,7 @@ where
         },
     };
     routes.push(Route {
+        cors: None,
         source,
         method,
         kind,
@@ -1301,20 +1326,7 @@ fn finalize_authenticated(
     response
         .headers_mut()
         .insert(names::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    // Managed existing Vary can include the issuance dimension. Public user
-    // setters for Vary are forbidden; final cookie insertion extends it below.
-    if !response.headers().contains_key(names::VARY) {
-        response.headers_mut().insert(
-            names::VARY,
-            HeaderValue::from_static(match source {
-                PolicySource::Session => "Cookie",
-                PolicySource::Prelogin | PolicySource::BrowserLogin => {
-                    "Cookie, Authorization, Origin"
-                }
-                _ => "Authorization",
-            }),
-        );
-    }
+    vary::add(&mut response, vary::Dependencies::source(source));
     response
 }
 // A response can retain only a nonsecret seal; the unique request owner supplies
@@ -1367,12 +1379,7 @@ fn finalize_session_response(
     let mut wire = finalize_authenticated(response.into_http(head), effective_source, head);
     if let Some(cookie) = cookie {
         wire.headers_mut().append(names::SET_COOKIE, cookie);
-        if source == PolicySource::Bearer {
-            wire.headers_mut().insert(
-                names::VARY,
-                HeaderValue::from_static("Cookie, Authorization"),
-            );
-        }
+        vary::add(&mut wire, vary::Dependencies::COOKIE);
     }
     wire
 }
@@ -1393,26 +1400,45 @@ where
     };
     if let Err(status) = authority.check(request.version(), request.uri(), request.headers(), peer)
     {
-        return Ok(csrf_http::finalize_path(
-            authority_rejection(status, head),
-            &app,
-            request.method(),
-            request.uri().path(),
-            head,
-        ));
+        let preflight = cors::candidate(request.method(), request.headers());
+        let response = authority_rejection(status, head);
+        // Metadata-only failures carry no credential-source dependencies, even
+        // when an ordinary authenticated OPTIONS record exists at this path.
+        let response = if preflight {
+            response
+        } else {
+            csrf_http::finalize_path(response, &app, request.method(), request.uri().path(), head)
+        };
+        return Ok(cors::route_less(response, preflight));
     }
+    let preflight = cors::candidate(request.method(), request.headers());
+    let requested_method = if preflight {
+        match cors::requested_method(request.headers()) {
+            Ok(method) => method,
+            Err(status) => return Ok(cors::route_less(transport(status, false, true), true)),
+        }
+    } else {
+        request.method().clone()
+    };
+    let select_head = requested_method == Method::HEAD;
     let connect = request.method() == Method::CONNECT;
     let Ok(matched) = app.paths.at(request.uri().path()) else {
-        return Ok(transport(Status::NOT_FOUND, head, true));
+        return Ok(cors::route_less(
+            transport(Status::NOT_FOUND, head, true),
+            preflight,
+        ));
     };
     let Some(routes) = app.routes.get(matched.value) else {
-        return Ok(transport(Status::INTERNAL_SERVER_ERROR, head, true));
+        return Ok(cors::route_less(
+            transport(Status::INTERNAL_SERVER_ERROR, head, true),
+            preflight,
+        ));
     };
     let selected = routes
         .iter()
-        .find(|route| route.method == *request.method())
+        .find(|route| route.method == requested_method)
         .or_else(|| {
-            if head {
+            if select_head {
                 routes.iter().find(|route| route.method == Method::GET)
             } else {
                 None
@@ -1431,179 +1457,269 @@ where
         if let Ok(value) = HeaderValue::from_str(&allowed.join(", ")) {
             response.headers_mut().insert(names::ALLOW, value);
         }
-        return Ok(response);
+        return Ok(cors::route_less(response, preflight));
     };
-    let finish = |response| csrf_http::finalize_route(response, route, head);
-    let Ok(_permit) = requests.try_acquire_owned() else {
-        return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true)));
-    };
-    if let Some(length) = request.headers().get(names::CONTENT_LENGTH) {
-        if length
-            .to_str()
-            .ok()
-            .and_then(|length| length.parse::<u64>().ok())
-            .is_some_and(|length| length > options.body_bytes as u64)
-        {
-            return Ok(finish(transport(Status::CONTENT_TOO_LARGE, head, true)));
-        }
-    }
-    let (parts, body) = request.into_parts();
-    let total = options
-        .security_deadline
-        .checked_add(options.body_deadline)
-        .and_then(|t| t.checked_add(options.handler_deadline));
-    let admitted = Instant::now();
-    let Some(deadline) = total.and_then(|t| admitted.checked_add(t)) else {
-        return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true)));
-    };
-    let owner = match LeaseOwner::new(deadline) {
-        Ok(owner) => owner,
-        Err(_) => return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true))),
-    };
-    let prepare_route = match &route.kind {
-        RouteKind::CsrfTokens(store) => {
-            return Ok(csrf_http::dispatch_tokens(
-                store, parts, body, &options, owner, head, admitted,
-            )
-            .await)
-        }
-        RouteKind::Guarded { store, prepare } => {
-            return Ok(csrf_http::dispatch_guarded(
-                store,
-                prepare,
-                Arc::clone(&app.state),
-                parts,
-                body,
-                &options,
-                owner,
-                head,
-                admitted,
-            )
-            .await)
-        }
-        RouteKind::Browser { pool, prepare } => {
-            return Ok(browser_login::dispatch_browser(
-                pool,
-                prepare,
-                Arc::clone(&app.state),
-                axum::http::Request::from_parts(parts, body),
-                &options,
-                owner,
-                admitted,
-            )
-            .await);
-        }
-        RouteKind::Ordinary(prepare) => prepare,
-        RouteKind::Bootstrap(pool) => {
-            return Ok(prelogin_http::dispatch_bootstrap(
-                pool, parts, body, &options, owner, head, admitted,
-            )
-            .await);
-        }
-    };
-    // All terminal replacements discard the slot, including pending/ready/
-    // applied material; accepted SQL effects are not rolled back by this Drop.
-    let finish = |response| {
-        crate::auth::session::retire_http_delivery(&owner);
-        finalize_authenticated(response, route.source, head)
-    };
-    let snapshot = Request {
-        method: parts.method.clone(),
-        uri: parts.uri.clone(),
-        headers: parts.headers.clone(),
-        body: Bytes::new(),
-    };
-    let security_started = Instant::now();
-    let prepare = AssertUnwindSafe(async {
-        (prepare_route)(snapshot, Arc::clone(&app.state), Arc::clone(&owner.lease)).await
-    })
-    .catch_unwind();
-    let prepared = match tokio::time::timeout(options.security_deadline, prepare).await {
-        Ok(_) if security_started.elapsed() >= options.security_deadline => {
-            return Ok(finish(transport(Status::GATEWAY_TIMEOUT, head, true)))
-        }
-        Ok(Ok(Ok(prepared))) => prepared,
-        Ok(Ok(Err(error))) => {
-            let mut response = security_response(error, route.source).into_http(head);
-            response
-                .headers_mut()
-                .insert(names::CONNECTION, HeaderValue::from_static("close"));
-            return Ok(finish(response));
-        }
-        Ok(Err(_)) => return Ok(finish(transport(Status::INTERNAL_SERVER_ERROR, head, true))),
-        Err(_) => return Ok(finish(transport(Status::GATEWAY_TIMEOUT, head, true))),
-    };
-    let body = match tokio::time::timeout(
-        options.body_deadline,
-        receive_body(body, options.body_bytes),
-    )
-    .await
-    {
-        Ok(Ok(body)) => body,
-        Ok(Err(BodyFailure::TooLarge)) => {
-            return Ok(finish(transport(Status::CONTENT_TOO_LARGE, head, true)))
-        }
-        Ok(Err(BodyFailure::Invalid)) => {
-            return Ok(finish(transport(Status::BAD_REQUEST, head, true)))
-        }
-        Err(_) => return Ok(finish(transport(Status::REQUEST_TIMEOUT, head, true))),
-    };
-    let request = Request {
-        method: parts.method,
-        uri: parts.uri,
-        headers: parts.headers,
-        body,
-    };
-    // The constructor is synchronous for Rust hosts; both it and subsequent
-    // handler/error-mapper polling form one request failure boundary. Catching
-    // an unwind does not roll back application state or repair poisoned locks.
-    let future =
-        AssertUnwindSafe(async { prepared(request, Arc::clone(&app.state)).await }).catch_unwind();
-    let handler_started = tokio::time::Instant::now();
-    let response = match tokio::time::timeout(options.handler_deadline, future).await {
-        // Tokio polls the operation before its timer. A non-yielding poll can
-        // return Ready after the deadline; do not accept that late response.
-        Ok(Ok(_)) if handler_started.elapsed() >= options.handler_deadline => {
-            transport(Status::GATEWAY_TIMEOUT, head, false)
-        }
-        // A successful CONNECT changes the connection into a byte tunnel.
-        // This resource API has no tunnel operation or upgrade owner.
-        Ok(Ok(completion)) if connect && completion.is_success() => {
-            transport(Status::NOT_IMPLEMENTED, head, true)
-        }
-        Ok(Ok(PreparedCompletion::HandlerOk(response))) => {
-            finalize_session_response(response, &owner, route.source, head)
-        }
-        Ok(Ok(PreparedCompletion::Replacement(response))) => {
-            // Retire before conversion/mapping output reaches any wire path.
-            // The mapped status/body remain ordinary response data, but a
-            // same-request valid seal cannot make handler Err deliver a cookie.
-            crate::auth::session::retire_http_delivery(&owner);
-            let source = if response.has_session_seal() && route.source == PolicySource::Public {
-                PolicySource::Session
+    // Capture immutable CORS metadata before any credential stripping or await.
+    let cors_context = cors::Context::new(route, request.headers(), preflight);
+    let response = async {
+        let finish = |response| {
+            if preflight {
+                response
             } else {
-                route.source
-            };
-            finalize_authenticated(response.into_http(head), source, head)
+                csrf_http::finalize_route(response, route, head)
+            }
+        };
+        let Ok(_permit) = requests.try_acquire_owned() else {
+            return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true)));
+        };
+        if let Some(length) = request.headers().get(names::CONTENT_LENGTH) {
+            if length
+                .to_str()
+                .ok()
+                .and_then(|length| length.parse::<u64>().ok())
+                .is_some_and(|length| length > options.body_bytes as u64)
+            {
+                return Ok(finish(transport(Status::CONTENT_TOO_LARGE, head, true)));
+            }
         }
-        Ok(Err(_)) => transport(Status::INTERNAL_SERVER_ERROR, head, true),
-        Err(_) => transport(Status::GATEWAY_TIMEOUT, head, false),
-    };
-    Ok(finish(response))
+        if preflight {
+            return Ok(cors::preflight(
+                route,
+                &requested_method,
+                request.headers(),
+                request.body(),
+                &options,
+            ));
+        }
+        let (parts, body) = request.into_parts();
+        let total = options
+            .security_deadline
+            .checked_add(options.body_deadline)
+            .and_then(|t| t.checked_add(options.handler_deadline));
+        let admitted = Instant::now();
+        let Some(deadline) = total.and_then(|t| admitted.checked_add(t)) else {
+            return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true)));
+        };
+        let owner = match LeaseOwner::new(deadline) {
+            Ok(owner) => owner,
+            Err(_) => return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true))),
+        };
+        let prepare_route = match &route.kind {
+            RouteKind::CsrfTokens(store) => {
+                return Ok(csrf_http::dispatch_tokens(
+                    store, parts, body, &options, owner, head, admitted,
+                )
+                .await)
+            }
+            RouteKind::Guarded { store, prepare } => {
+                return Ok(csrf_http::dispatch_guarded(
+                    store,
+                    prepare,
+                    Arc::clone(&app.state),
+                    parts,
+                    body,
+                    &options,
+                    owner,
+                    head,
+                    admitted,
+                )
+                .await)
+            }
+            RouteKind::Browser { pool, prepare } => {
+                return Ok(browser_login::dispatch_browser(
+                    pool,
+                    prepare,
+                    Arc::clone(&app.state),
+                    axum::http::Request::from_parts(parts, body),
+                    &options,
+                    owner,
+                    admitted,
+                )
+                .await);
+            }
+            RouteKind::Ordinary(prepare) => prepare,
+            RouteKind::Bootstrap(pool) => {
+                return Ok(prelogin_http::dispatch_bootstrap(
+                    pool, parts, body, &options, owner, head, admitted,
+                )
+                .await);
+            }
+        };
+        // All terminal replacements discard the slot, including pending/ready/
+        // applied material; accepted SQL effects are not rolled back by this Drop.
+        let finish = |response| {
+            crate::auth::session::retire_http_delivery(&owner);
+            finalize_authenticated(response, route.source, head)
+        };
+        let snapshot = Request {
+            method: parts.method.clone(),
+            uri: parts.uri.clone(),
+            headers: parts.headers.clone(),
+            body: Bytes::new(),
+        };
+        let security_started = Instant::now();
+        let prepare = AssertUnwindSafe(async {
+            (prepare_route)(snapshot, Arc::clone(&app.state), Arc::clone(&owner.lease)).await
+        })
+        .catch_unwind();
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        let preparation_observer = security_started
+            .checked_add(options.security_deadline)
+            .map(|until| {
+                crate::auth::session_deadline_observer::Observer::new(security_started, until)
+            });
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        let prepare = async {
+            match &preparation_observer {
+                Some(observer) => {
+                    observer
+                        .scope(crate::auth::session_deadline_observer::observe(
+                            crate::auth::session_deadline_observer::Phase::Preparation,
+                            prepare,
+                        ))
+                        .await
+                }
+                None => prepare.await,
+            }
+        };
+        let prepared = match tokio::time::timeout(options.security_deadline, prepare).await {
+            Ok(_) if security_started.elapsed() >= options.security_deadline => {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                if let Some(observer) = &preparation_observer {
+                    observer.emit_private(crate::auth::session_deadline_observer::PrivateTerminal::PreparationLateReady);
+                }
+                return Ok(finish(transport(Status::GATEWAY_TIMEOUT, head, true)))
+            }
+            Ok(Ok(Ok(prepared))) => prepared,
+            Ok(Ok(Err(error))) => {
+                let mut response = security_response(error, route.source).into_http(head);
+                response
+                    .headers_mut()
+                    .insert(names::CONNECTION, HeaderValue::from_static("close"));
+                return Ok(finish(response));
+            }
+            Ok(Err(_)) => return Ok(finish(transport(Status::INTERNAL_SERVER_ERROR, head, true))),
+            Err(_) => {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                if let Some(observer) = &preparation_observer {
+                    observer.emit_private(crate::auth::session_deadline_observer::PrivateTerminal::PreparationTimer);
+                }
+                return Ok(finish(transport(Status::GATEWAY_TIMEOUT, head, true)));
+            }
+        };
+        let body = match tokio::time::timeout(
+            options.body_deadline,
+            receive_body(body, options.body_bytes),
+        )
+        .await
+        {
+            Ok(Ok(body)) => body,
+            Ok(Err(BodyFailure::TooLarge)) => {
+                return Ok(finish(transport(Status::CONTENT_TOO_LARGE, head, true)))
+            }
+            Ok(Err(BodyFailure::Invalid)) => {
+                return Ok(finish(transport(Status::BAD_REQUEST, head, true)))
+            }
+            Err(_) => return Ok(finish(transport(Status::REQUEST_TIMEOUT, head, true))),
+        };
+        let request = Request {
+            method: parts.method,
+            uri: parts.uri,
+            headers: parts.headers,
+            body,
+        };
+        // The constructor is synchronous for Rust hosts; both it and subsequent
+        // handler/error-mapper polling form one request failure boundary. Catching
+        // an unwind does not roll back application state or repair poisoned locks.
+        let future = AssertUnwindSafe(async { prepared(request, Arc::clone(&app.state)).await })
+            .catch_unwind();
+        let handler_started = tokio::time::Instant::now();
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        let handler_observer = handler_started
+            .checked_add(options.handler_deadline)
+            .map(|until| {
+                crate::auth::session_deadline_observer::Observer::new(
+                    handler_started.into_std(),
+                    until.into_std(),
+                )
+            });
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        let future = async {
+            match &handler_observer {
+                Some(observer) => {
+                    observer
+                        .scope(crate::auth::session_deadline_observer::observe(
+                            crate::auth::session_deadline_observer::Phase::Business,
+                            future,
+                        ))
+                        .await
+                }
+                None => future.await,
+            }
+        };
+        let response = match tokio::time::timeout(options.handler_deadline, future).await {
+            // Tokio polls the operation before its timer. A non-yielding poll can
+            // return Ready after the deadline; do not accept that late response.
+            Ok(Ok(_)) if handler_started.elapsed() >= options.handler_deadline => {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                if let Some(observer) = &handler_observer {
+                    observer.emit_private(crate::auth::session_deadline_observer::PrivateTerminal::HandlerLateReady);
+                }
+                transport(Status::GATEWAY_TIMEOUT, head, false)
+            }
+            // A successful CONNECT changes the connection into a byte tunnel.
+            // This resource API has no tunnel operation or upgrade owner.
+            Ok(Ok(completion)) if connect && completion.is_success() => {
+                transport(Status::NOT_IMPLEMENTED, head, true)
+            }
+            Ok(Ok(PreparedCompletion::HandlerOk(response))) => {
+                finalize_session_response(response, &owner, route.source, head)
+            }
+            Ok(Ok(PreparedCompletion::Replacement(response))) => {
+                // Retire before conversion/mapping output reaches any wire path.
+                // The mapped status/body remain ordinary response data, but a
+                // same-request valid seal cannot make handler Err deliver a cookie.
+                crate::auth::session::retire_http_delivery(&owner);
+                let source = if response.has_session_seal() && route.source == PolicySource::Public
+                {
+                    PolicySource::Session
+                } else {
+                    route.source
+                };
+                finalize_authenticated(response.into_http(head), source, head)
+            }
+            Ok(Err(_)) => transport(Status::INTERNAL_SERVER_ERROR, head, true),
+            Err(_) => {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                if let Some(observer) = &handler_observer {
+                    observer.emit_private(crate::auth::session_deadline_observer::PrivateTerminal::HandlerTimer);
+                }
+                transport(Status::GATEWAY_TIMEOUT, head, false)
+            }
+        };
+        Ok::<_, Infallible>(finish(response))
+    }
+    .await?;
+    Ok(cors_context.finish(response))
 }
 
-// All responses in this API contain one complete Bytes frame. Hyper calls
-// the underlying flush only after its pending headers/body buffers have been
-// written, so clearing the deadline here leaves idle keep-alive timing to its
-// independent header timer. Sending bytes does not reset the absolute limit.
+// Hyper can flush headers before pulling the body's one buffered frame.
+// Clearing the original deadline requires both frame handoff and a successful
+// native flush. Idle keep-alive timing then uses its independent header timer.
+// Sending bytes and intermediate flushes do not reset the absolute limit.
 #[derive(Clone, Copy, Default)]
 struct Sending {
     deadline: Option<tokio::time::Instant>,
     discard_remaining: bool,
+    body_transferred: bool,
 }
 struct TimedIo<T> {
     inner: T,
     sending: tokio::sync::watch::Sender<Sending>,
+    #[cfg(test)]
+    probe: Option<Arc<lifecycle_probe::Probe>>,
+    #[cfg(all(test, windows))]
+    windows_stalled_fixture: bool,
 }
 impl<T: hyper::rt::Read + Unpin> hyper::rt::Read for TimedIo<T> {
     fn poll_read(
@@ -1620,21 +1736,65 @@ impl<T: hyper::rt::Write + Unpin> hyper::rt::Write for TimedIo<T> {
         cx: &mut Context<'_>,
         buffer: &[u8],
     ) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.inner).poll_write(cx, buffer)
+        #[cfg(all(test, windows))]
+        let result = if self.windows_stalled_fixture {
+            let transferred = self.sending.borrow().body_transferred;
+            windows_native_fixture::poll_windows_scalar_once(
+                &mut self.inner,
+                cx,
+                buffer,
+                transferred,
+            )
+        } else {
+            Pin::new(&mut self.inner).poll_write(cx, buffer)
+        };
+        #[cfg(not(all(test, windows)))]
+        let result = Pin::new(&mut self.inner).poll_write(cx, buffer);
+        #[cfg(test)]
+        if result.is_pending() {
+            if let Some(probe) = &self.probe {
+                probe.pending(self.sending.borrow().deadline);
+            }
+        }
+        result
     }
     fn poll_write_vectored(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buffers: &[std::io::IoSlice<'_>],
     ) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.inner).poll_write_vectored(cx, buffers)
+        #[cfg(all(test, windows))]
+        let result = if self.windows_stalled_fixture {
+            let transferred = self.sending.borrow().body_transferred;
+            windows_native_fixture::poll_windows_vectored_once(
+                &mut self.inner,
+                cx,
+                buffers,
+                transferred,
+            )
+        } else {
+            Pin::new(&mut self.inner).poll_write_vectored(cx, buffers)
+        };
+        #[cfg(not(all(test, windows)))]
+        let result = Pin::new(&mut self.inner).poll_write_vectored(cx, buffers);
+        #[cfg(test)]
+        if result.is_pending() {
+            if let Some(probe) = &self.probe {
+                probe.pending(self.sending.borrow().deadline);
+            }
+        }
+        result
     }
     fn is_write_vectored(&self) -> bool {
         self.inner.is_write_vectored()
     }
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         let result = Pin::new(&mut self.inner).poll_flush(cx);
-        if matches!(result, Poll::Ready(Ok(()))) && self.sending.borrow().deadline.is_some() {
+        let state = *self.sending.borrow();
+        if matches!(result, Poll::Ready(Ok(())))
+            && state.deadline.is_some()
+            && state.body_transferred
+        {
             self.sending.send_modify(|state| state.deadline = None);
         }
         result
@@ -1716,7 +1876,13 @@ where
         tokio::select! {
             biased;
             _ = &mut shutdown_signal => break,
-            result = tasks.join_next(), if !tasks.is_empty() => { let _ = result; }
+            result = tasks.join_next(), if !tasks.is_empty() => {
+                #[cfg(test)]
+                if result.is_some() {
+                    if let Some(probe) = &options.lifecycle_probe { probe.joined(); }
+                }
+                let _ = result;
+            }
             accepted = listener.accept() => {
                 let (stream, peer) = match accepted {
                     Ok(accepted) => accepted,
@@ -1726,6 +1892,14 @@ where
                     }
                 };
                 let Ok(permit) = Arc::clone(&connections).try_acquire_owned() else { drop(stream); continue; };
+                #[cfg(all(test, windows))]
+                let windows_stalled_fixture = options.windows_stalled_fixture;
+                #[cfg(all(test, windows))]
+                if windows_stalled_fixture {
+                    let (_, after) = windows_native_fixture::accepted_send_buffer(&stream)
+                        .expect("owned accepted-socket buffer configuration");
+                    assert_eq!(after, 4096, "owned accepted-socket buffer readback");
+                }
                 let app = Arc::clone(&app);
                 let options = Arc::clone(&options);
                 let requests = Arc::clone(&requests);
@@ -1733,20 +1907,43 @@ where
                 let send_deadline = options.send_deadline;
                 let close_deadline = options.body_deadline;
                 let service_sending = sending.clone();
+                #[cfg(test)]
+                let probe = options.lifecycle_probe.clone();
+                #[cfg(test)]
+                let service_probe = probe.clone();
                 let service = service_fn(move |request| {
                     let may_have_body = !hyper::body::Body::is_end_stream(request.body());
                     let future = dispatch(Arc::clone(&app), request, Arc::clone(&options), Arc::clone(&requests), peer.ip());
                     let sending = service_sending.clone();
+                    #[cfg(test)]
+                    let probe = service_probe.clone();
                     async move {
-                        let response = future.await;
+                        let mut response = future.await;
                         let discard_remaining = may_have_body && response.as_ref().is_ok_and(|response| {
                             response.headers().get(names::CONNECTION).is_some_and(|value| value == "close")
                         });
-                        sending.send_replace(Sending { deadline: Some(tokio::time::Instant::now() + send_deadline), discard_remaining });
+                        let body_transferred = response.as_ref().is_ok_and(|response| response.body().bytes.is_empty());
+                        let state = Sending { deadline: Some(tokio::time::Instant::now() + send_deadline), discard_remaining, body_transferred };
+                        if let Ok(response) = &mut response {
+                            if !body_transferred {
+                                response.body_mut().sending = Some(sending.clone());
+                            }
+                        }
+                        #[cfg(test)]
+                        if let (Some(probe), Ok(response)) = (&probe, &response) {
+                            probe.arm(state.deadline.unwrap(), response.status().as_u16(), response.body().bytes.len());
+                        }
+                        sending.send_replace(state);
                         response
                     }
                 });
-                let connection = builder.serve_connection(TimedIo { inner: ClosingIo::new(TokioIo::new(stream), close_deadline, sent.clone()), sending }, service);
+                let connection = builder.serve_connection(TimedIo {
+                    inner: ClosingIo::new(TokioIo::new(stream), close_deadline, sent.clone()), sending,
+                    #[cfg(test)]
+                    probe: probe.clone(),
+                    #[cfg(all(test, windows))]
+                    windows_stalled_fixture,
+                }, service);
                 let mut stopped = shutdown.subscribe();
                 tasks.spawn(async move {
                     let _permit = permit;
@@ -1761,11 +1958,17 @@ where
                             biased;
                             _ = stopped.changed(), if !stopping => {
                                 stopping = true;
+                                #[cfg(test)]
+                                if let Some(probe) = &probe { probe.graceful(deadline); }
                                 connection.as_mut().graceful_shutdown();
                             }
                             _ = &mut connection => break,
                             _ = sent.changed() => {}
-                            _ = expires => break,
+                            _ = expires => {
+                                #[cfg(test)]
+                                if let Some(probe) = &probe { probe.expired(deadline); }
+                                break;
+                            },
                         }
                     }
                 });
@@ -1773,14 +1976,28 @@ where
         }
     }
     drop(listener);
+    #[cfg(test)]
+    if let Some(probe) = &options.lifecycle_probe {
+        probe.listener_closed();
+    }
     let _ = shutdown.send(true);
     let drained = tokio::time::timeout(options.shutdown_deadline, async {
-        while tasks.join_next().await.is_some() {}
+        while tasks.join_next().await.is_some() {
+            #[cfg(test)]
+            if let Some(probe) = &options.lifecycle_probe {
+                probe.joined();
+            }
+        }
     })
     .await;
     if drained.is_err() {
         tasks.abort_all();
-        while tasks.join_next().await.is_some() {}
+        while tasks.join_next().await.is_some() {
+            #[cfg(test)]
+            if let Some(probe) = &options.lifecycle_probe {
+                probe.joined();
+            }
+        }
     }
     Ok(())
 }
@@ -1814,6 +2031,16 @@ pub(crate) fn session_delivery_headers_for_test(
     response: Response,
     owner: &LeaseOwner,
 ) -> (StatusCode, axum::http::HeaderMap) {
-    let wire = finalize_session_response(response, owner, PolicySource::Session, false);
+    let wire = vary::finish(finalize_session_response(
+        response,
+        owner,
+        PolicySource::Session,
+        false,
+    ));
     (wire.status(), wire.into_parts().0.headers)
 }
+
+// Opt-in calibration is separate from the ordinary private Session fixtures.
+#[cfg(all(test, nagi_auth_stage_diag))]
+#[path = "http_server/private_deadline_calibration.rs"]
+mod private_deadline_calibration;

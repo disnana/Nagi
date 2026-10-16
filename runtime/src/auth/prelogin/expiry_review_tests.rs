@@ -291,3 +291,104 @@ async fn http_claim_tightened_gate_wakes_during_real_postcommit_maintenance_wait
     close(&p, 2000).await.unwrap();
     f.stop().await;
 }
+
+#[tokio::test]
+async fn consumed_missing_row_returns_403_while_original_request_gate_is_live() {
+    let f = Fixture::new().await;
+    let p = f.open(2, 3, 144).await.unwrap();
+    let bootstrap = owner();
+    p.bootstrap(&bootstrap, None).await.unwrap();
+    let first = owner();
+    drop(
+        p.claim_http(&first, browser_input(&p, &bootstrap))
+            .await
+            .unwrap(),
+    );
+    let consumed = first.was_consumed() && count(&p).await == 0;
+    let request = owner();
+    let original_until = request.request_until().unwrap();
+    let before = p.business_enqueues.load(Ordering::SeqCst);
+    let calls = AtomicUsize::new(0);
+    let result = tokio::time::timeout(
+        Duration::from_secs(2),
+        claim_then_verify(&p, &request, browser_input(&p, &bootstrap), &calls),
+    )
+    .await;
+    let denied = matches!(result, Ok(Err(ref error)) if
+        error.kind == FailureKind::Denied && matches!(error.origin, FailureOrigin::Core)
+        && error.login_status() == crate::http_server::Status::FORBIDDEN
+        && error.outcome == sqlite::Outcome::RolledBack && !error.business_committed);
+    let live = request
+        .request_until()
+        .is_ok_and(|until| until == original_until);
+    let unchanged = !request.was_consumed()
+        && calls.load(Ordering::SeqCst) == 0
+        && p.business_enqueues.load(Ordering::SeqCst) == before
+        && count(&p).await == 0;
+    close(&p, 2000).await.unwrap();
+    f.stop().await;
+    assert!(consumed && denied && live && unchanged);
+}
+
+#[tokio::test]
+async fn consumed_missing_row_restoration_queue_wait_obeys_real_gate_expiry_504() {
+    let f = Fixture::new().await;
+    let mut p = f.open(2, 3, 144).await.unwrap();
+    let bootstrap = owner();
+    p.bootstrap(&bootstrap, None).await.unwrap();
+    let first = owner();
+    drop(
+        p.claim_http(&first, browser_input(&p, &bootstrap))
+            .await
+            .unwrap(),
+    );
+    let consumed = first.was_consumed() && count(&p).await == 0;
+    let wait = Arc::new(PostcommitMaintenanceWait::new());
+    p.postcommit_wait = Some(Arc::clone(&wait));
+    let request = owner();
+    let original_until = request.request_until().unwrap();
+    let before = p.business_enqueues.load(Ordering::SeqCst);
+    let calls = AtomicUsize::new(0);
+    let mut operation = Box::pin(claim_then_verify(
+        &p,
+        &request,
+        browser_input(&p, &bootstrap),
+        &calls,
+    ));
+    let arrived = tokio::time::timeout(Duration::from_secs(2), async {
+        tokio::select! {
+            _ = wait.arrived.notified() => true,
+            _ = &mut operation => false,
+        }
+    })
+    .await
+    .is_ok_and(|arrived| arrived);
+    // Arrival proves the missing-row business Tx already rolled back and the
+    // unchanged restoration acquired a real Immediate Tx. Both real queue
+    // permits are retained and its actual maintenance future polled Pending.
+    let live_before = request
+        .request_until()
+        .is_ok_and(|until| until == original_until);
+    {
+        let mut gate = request.lease.lease.gate.lock().unwrap();
+        gate.expires_at = Instant::now();
+    }
+    // Explicitly poll after real gate invalidation; no elapsed-duration guess,
+    // release signal, changed public timeout, or synthetic ready error is used.
+    let result = tokio::time::timeout(Duration::from_secs(2), &mut operation).await;
+    let expired = matches!(result, Ok(Err(ref error)) if
+        error.kind == FailureKind::Expired && matches!(error.origin, FailureOrigin::Authority)
+        && error.login_status() == crate::http_server::Status::GATEWAY_TIMEOUT
+        && error.outcome == sqlite::Outcome::NotApplicable && !error.business_committed);
+    drop(operation);
+    wait.release.notify_one();
+    // Actual EOF rollback/checkout return must permit this new native acquire;
+    // timeout alone does not prove native cleanup or restore the consumed row.
+    let unchanged = !request.was_consumed()
+        && calls.load(Ordering::SeqCst) == 0
+        && p.business_enqueues.load(Ordering::SeqCst) == before
+        && count(&p).await == 0;
+    close(&p, 2000).await.unwrap();
+    f.stop().await;
+    assert!(consumed && arrived && live_before && expired && unchanged);
+}

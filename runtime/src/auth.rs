@@ -4,6 +4,34 @@
 pub mod csrf;
 #[path = "auth/session.rs"]
 pub mod session;
+#[cfg(nagi_auth_stage_diag)]
+#[path = "auth/session_deadline_observer.rs"]
+pub(crate) mod session_deadline_observer;
+#[cfg(all(test, nagi_auth_stage_diag))]
+#[path = "auth/auth_stage_observer.rs"]
+mod stage_observer;
+// Opt-in private failure witness for integration diagnostics; absent in stock builds.
+#[cfg(nagi_browser_login_diag)]
+#[path = "auth/browser_login_observer.rs"]
+pub(crate) mod browser_login_observer;
+macro_rules! browser_observe {
+    ($phase:ident, $future:expr) => {{
+        #[cfg(nagi_browser_login_diag)]
+        {
+            crate::auth::browser_login_observer::observe(
+                crate::auth::browser_login_observer::Phase::$phase,
+                $future,
+            )
+            .await
+        }
+        #[cfg(not(nagi_browser_login_diag))]
+        {
+            $future.await
+        }
+    }};
+}
+#[cfg(nagi_browser_login_diag)]
+pub(crate) use browser_observe;
 use std::{
     marker::PhantomData,
     sync::{

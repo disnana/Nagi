@@ -1,0 +1,84 @@
+name: BrowserLogin diagnostic observation
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/browser-login-observer.yml'
+      - 'scripts/ci/browser_login_phase_diagnostic.py'
+      - 'tests/test_browser_login_phase_diagnostic.py'
+      - 'runtime/src/auth/browser_login_observer.rs'
+      - 'runtime/src/auth/prelogin/browser.rs'
+      - 'runtime/src/http_server/browser_login.rs'
+      - 'runtime/tests/browser_login_public_api.rs'
+  workflow_dispatch:
+    inputs:
+      browser_login_phase_diagnostic:
+        description: Observe the exact BrowserLogin test without changing its deadline or assertions.
+        required: false
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: browser-login-observation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser-login-public-phase-diagnostic:
+    name: BrowserLogin phase diagnostic (${{ matrix.platform }})
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.browser_login_phase_diagnostic)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          - os: windows-latest
+            platform: windows-x86_64
+          - os: macos-15
+            platform: macos-arm64
+          - os: macos-15-intel
+            platform: macos-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+        id: rust
+      - name: Cache the target platform's Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**') }}
+          restore-keys: |
+            nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
+            nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check bounded BrowserLogin diagnostic collector controls
+        run: python -B -m unittest discover -s tests -p 'test_browser_login_phase_diagnostic.py'
+      - name: Capture the exact public test with manual phase diagnostics
+        shell: bash
+        run: |
+          set +e
+          RUSTFLAGS='--cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --test browser_login_public_api committed_claim_stays_consumed_on_verifier_error_panic_and_deadline -- --exact --nocapture > "$RUNNER_TEMP/browser-login-phase.raw" 2>&1
+          cargo_rc=$?
+          python scripts/ci/browser_login_phase_diagnostic.py "$RUNNER_TEMP/browser-login-phase.raw" "$cargo_rc" "$RUNNER_TEMP/browser-login-phase.json"
+          sanitize_rc=$?
+          rm -f "$RUNNER_TEMP/browser-login-phase.raw"
+          if (( cargo_rc != 0 )); then
+            exit "$cargo_rc"
+          fi
+          exit "$sanitize_rc"
+      - name: Preserve sanitized BrowserLogin phase records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-login-phase-${{ matrix.platform }}
+          path: ${{ runner.temp }}/browser-login-phase.json
+          if-no-files-found: error
+

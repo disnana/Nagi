@@ -78,6 +78,10 @@ pub mod http {
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::Policy as Policy;
     #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::CorsPolicy as CorsPolicy;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::CorsCredentials as CorsCredentials;
+    #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::status as status;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::method as method;
@@ -129,6 +133,10 @@ pub mod http {
     pub use ::nagi_runtime::http_server::session_authenticated_policy as session_authenticated_policy;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::session_authorized_policy as session_authorized_policy;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::cors_policy as cors_policy;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::cors_route as cors_route;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::session_csrf_tokens as session_csrf_tokens;
     #[allow(unused_imports)]
