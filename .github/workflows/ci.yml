@@ -532,7 +532,7 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': '544884754422a5177a3f12f688425be21b441e2d2ff7ded0477043e082f76dc5',
+              'runtime/src/http_server.rs': '2941f52ab64ca0ef43612ff6cfdbfe14e0721bdaf86448598c5f52202e0dd755',
               'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
               'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
@@ -618,6 +618,17 @@ jobs:
               if not re.search(pattern, text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
+      - name: Diagnose private Session phase deadlines on Windows
+        if: always() && runner.os == 'Windows'
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          set +e
+          python -B scripts/tests/test_session_private_deadline_diagnostic.py
+          fake_rc=$?
+          python -B scripts/ci/session_private_deadline_diagnostic.py --run
+          native_rc=$?
+          if [ "$fake_rc" -ne 0 ] || [ "$native_rc" -ne 0 ]; then exit 1; fi
       - name: Capture bounded Session auth stages before broad checks
         id: auth_stage_diag
         continue-on-error: true
@@ -945,7 +956,7 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': '544884754422a5177a3f12f688425be21b441e2d2ff7ded0477043e082f76dc5',
+              'runtime/src/http_server.rs': '2941f52ab64ca0ef43612ff6cfdbfe14e0721bdaf86448598c5f52202e0dd755',
               'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
               'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
