@@ -285,13 +285,16 @@ def sanitize(raw: bytes | None, cargo_exit: int) -> tuple[dict, int]:
         note_invalid(document, "summary_case_mismatch")
         invalid = True
 
-    # A passing run must show both known deadline cases. Failed runs retain any
-    # valid records observed before the test stopped, up to its ten requests.
+    # A passing run must show the two deliberately expiring cases. The exact
+    # test also accepts a guarded deadline on an initial claim or its consumed
+    # replay; those additional 504s remain observations, not business coverage.
+    # Five initial requests plus at most five replays bound the same ten rows.
+    # Failed runs retain any valid rows observed before the test stopped.
     if cargo_exit == 0:
         if summary_status != "passed":
             note_invalid(document, "passing_run_summary_mismatch")
             invalid = True
-        if len(records) != 2:
+        if not 2 <= len(records) <= MAX_RECORDS:
             note_invalid(document, "passing_run_observer_count_mismatch")
             invalid = True
     elif summary_status == "passed":

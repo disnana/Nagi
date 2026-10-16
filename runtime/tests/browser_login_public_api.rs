@@ -757,6 +757,7 @@ async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
             assert!(f.rows().await == 0);
             assert!(f.stats.verifier.load(Ordering::SeqCst) == 1);
             assert!(f.stats.handler.load(Ordering::SeqCst) == 0);
+            assert!(number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await == 0);
             s.stop().await;
             f.stop().await;
             continue;
@@ -879,9 +880,13 @@ async fn issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cook
             setup.stop().await;
             Server::new(&f, 256, security).await
         };
-        let r = request(s.address, "POST", "/login", &login_headers(&c, &t), b"{}").await;
+        let h = login_headers(&c, &t);
+        let r = request(s.address, "POST", "/login", &h, b"{}").await;
         if r.status == 504 {
-            assert_browser_deadline_state(&f, &r).await;
+            let row_absent = assert_browser_deadline_state(&f, &r).await;
+            if row_absent {
+                assert_consumed_browser_replay(&f, &s, &h).await;
+            }
             s.stop().await;
             f.stop().await;
             continue;

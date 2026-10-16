@@ -235,6 +235,12 @@ jobs:
             ${{ runner.temp }}/session-deadline-delivery-head.json
             ${{ runner.temp }}/session-deadline-delivery-expiry.json
           if-no-files-found: ignore
+      - name: Check owned BrowserLogin business stage and cancellation witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_browser_login_stage_backport.py
+          cargo test --locked -p nagi-runtime --lib http_server::browser_login::stage_tests:: 2>&1 | python -B scripts/tests/test_browser_login_stage_backport.py --native-summary
       - name: Check B1 Session CSRF runtime and public socket contracts
         shell: bash
         run: |
@@ -763,6 +769,12 @@ jobs:
             ${{ runner.temp }}/session-deadline-delivery-head.json
             ${{ runner.temp }}/session-deadline-delivery-expiry.json
           if-no-files-found: ignore
+      - name: Check owned BrowserLogin business stage and cancellation witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_browser_login_stage_backport.py
+          cargo test --locked -p nagi-runtime --lib http_server::browser_login::stage_tests:: 2>&1 | python -B scripts/tests/test_browser_login_stage_backport.py --native-summary
       - name: Check B1 Session CSRF runtime and public socket contracts
         shell: bash
         run: |
