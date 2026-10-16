@@ -2048,3 +2048,5 @@ mod private_deadline_calibration;
 // First SF07 bridge checkpoint: production attachment is a separate gate.
 #[cfg(test)]
 mod response_budget;
+#[cfg(test)]
+mod response_send;

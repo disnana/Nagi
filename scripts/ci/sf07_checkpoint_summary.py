@@ -39,6 +39,16 @@ EXPECTED = {
         'security_sf07_private::quota::tests::q09_poisoned_disposal_releases_claim_and_keeps_fault_latched',
         'security_sf07_private::quota::tests::q13_two_simultaneous_claims_have_one_winner',
     ),
+    'transport': (
+        'http_server::response_send::tests::head_and_empty_keep_native_cache_charge_at_ready_until_driver_drop',
+        'http_server::response_send::tests::keep_alive_cache_moves_to_same_shared_request_owner_past_native_shutdown',
+        'http_server::response_send::tests::pipelined_requests_keep_one_cache_slot_and_multiple_prior_map_owners',
+        'http_server::response_send::tests::fallback_is_independent_then_exhaustion_closes_real_transport_without_reallocation',
+        'http_server::response_send::tests::foreign_wire_fails_closed_and_native_connection_actually_ends',
+        'http_server::response_send::tests::parse_failure_does_not_release_pending_claim_at_ready',
+        'http_server::response_send::tests::abort_before_actual_join_and_handler_panic_release_only_on_native_destruction',
+        'http_server::response_send::tests::unpolled_and_ready_native_io_drop_before_cache_guard_and_connection_permit',
+    ),
 }
 
 

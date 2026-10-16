@@ -89,9 +89,11 @@ jobs:
         run: |
           set -euo pipefail
           python -B scripts/tests/test_sf07_wire_source.py
+          python -B scripts/tests/test_sf07_transport_source.py
           python -B scripts/tests/test_sf07_checkpoint_summary.py
           cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
           cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
+          cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -540,7 +542,7 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': 'efcea096cc65f65ee9cab5799aadd2089861d24ee301783a0e64231304cccdc8',
+              'runtime/src/http_server.rs': 'e6969a04326ed5fc4b3795f64a2909ffb5bbfae16f679589b93a819922084485',
               'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
               'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
@@ -604,9 +606,11 @@ jobs:
         run: |
           set -euo pipefail
           python -B scripts/tests/test_sf07_wire_source.py
+          python -B scripts/tests/test_sf07_transport_source.py
           python -B scripts/tests/test_sf07_checkpoint_summary.py
           cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
           cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
+          cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -972,7 +976,7 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': 'efcea096cc65f65ee9cab5799aadd2089861d24ee301783a0e64231304cccdc8',
+              'runtime/src/http_server.rs': 'e6969a04326ed5fc4b3795f64a2909ffb5bbfae16f679589b93a819922084485',
               'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
               'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',

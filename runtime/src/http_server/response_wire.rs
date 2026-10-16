@@ -62,6 +62,9 @@ impl WireLayout {
             size_of::<ChargedNativeHeaders>(),
             size_of::<WireLayout>(),
             size_of::<HeaderMap>(),
+            size_of::<super::super::response_send::SendLedger>(),
+            size_of::<super::super::response_send::ReceivedHeaders>(),
+            product(4, size_of::<usize>())?, // two Arc control blocks
             product(8, size_of::<usize>())?,
         ]
         .into_iter()
@@ -171,6 +174,31 @@ impl ChargedWire {
         // Deliberately returns the charged wrapper, never a native HeaderMap.
         (self.headers, self.body)
     }
+    // The only native-map handoff: the connection-owned slot is charged BEFORE
+    // the map escapes this wrapper. Driver/receive own its subsequent lifetime.
+    pub(in crate::http_server) fn transfer_native(
+        self,
+        ledger: &super::super::response_send::SendLedger,
+        status: axum::http::StatusCode,
+    ) -> Result<
+        axum::http::Response<super::super::BufferedBody>,
+        super::super::response_send::SendFault,
+    > {
+        use super::super::response_send::SendFault;
+        if !ledger.accepts(&self) {
+            return Err(SendFault::Foreign);
+        }
+        ledger.publish(Arc::clone(&self.headers.charge))?;
+        let (headers, body) = self.into_parts();
+        let ChargedNativeHeaders { map, .. } = headers;
+        let mut response = axum::http::Response::new(super::super::BufferedBody {
+            bytes: body,
+            sending: None,
+        });
+        *response.status_mut() = status;
+        *response.headers_mut() = map;
+        Ok(response)
+    }
     pub(in crate::http_server) fn suppress_body_for_head(&mut self) {
         // Header container retains the same claim even with an empty body.
         self.body = Bytes::new();
@@ -274,6 +302,14 @@ impl FallbackOutcome {
     }
 }
 impl FallbackLedger {
+    pub(in crate::http_server) fn allocation_attempts(&self) -> usize {
+        self.producer
+            .allocation_attempts
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+    pub(in crate::http_server) fn owns_wire(&self, wire: &ChargedWire) -> bool {
+        wire.is_owned_by(&self.producer)
+    }
     pub(in crate::http_server) fn checked(
         limits: FallbackLimits,
         accepted_connections: usize,
