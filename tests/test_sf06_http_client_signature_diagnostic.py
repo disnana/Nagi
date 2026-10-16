@@ -78,7 +78,7 @@ class SignatureDiagnosticTests(unittest.TestCase):
                     "level": "error", "code": {"code": "E0599"},
                     "rendered": "no method named `example` found at private/source.rs",
                 }}) + "\n", encoding="utf-8"
-            )
+            , newline="\n")
             record = DIAG.analyze(cargo_log("high backend Cargo build:"), root)
         self.assertEqual(record["status"], "classified")
         self.assertEqual(record["failure_stage"], "cargo_build")
@@ -142,12 +142,25 @@ class SignatureDiagnosticTests(unittest.TestCase):
                 "\n".join(json.dumps({"reason": "compiler-message", "message": {
                     "level": "error", "code": {"code": code}, "rendered": "private source"
                 }}) for code in ("E0599", "E0277")) + "\n", encoding="utf-8"
-            )
+            , newline="\n")
             record = DIAG.analyze(cargo_log("saved-low backend Cargo build:"), root)
         self.assertEqual(record["failure_stage"], "cargo_build")
         self.assertEqual(record["form"], "saved-low")
         self.assertEqual(record["rust_error_code"], None)
         self.assertEqual(record["rust_error_code_status"], "multiple")
+
+    def test_crlf_build_artifact_remains_unavailable_without_loosening_parser(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / f"explicit-move-{DIAG.CASE}-high-build.stdout"
+            payload = json.dumps({"reason": "compiler-message", "message": {
+                "level": "error", "code": {"code": "E0599"}
+            }}).encode() + b"\r\n"
+            path.write_bytes(payload)
+            result = DIAG.analyze(cargo_log("high backend Cargo build:"), root)
+        self.assertEqual(result["failure_stage"], "cargo_build")
+        self.assertEqual((result["rust_error_code"], result["rust_error_code_status"]),
+                         (None, "unavailable_crlf"))
 
     def test_unknown_compiler_code_shape_is_unavailable(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -155,7 +168,7 @@ class SignatureDiagnosticTests(unittest.TestCase):
             path = root / f"explicit-move-{DIAG.CASE}-high-build.stdout"
             path.write_text(json.dumps({"reason": "compiler-message", "message": {
                 "level": "error", "code": {"code": "rust-error"}
-            }}) + "\n", encoding="utf-8")
+            }}) + "\n", encoding="utf-8", newline="\n")
             result = DIAG.analyze(cargo_log("high backend Cargo build:"), root)
         self.assertEqual(result["failure_stage"], "cargo_build")
         self.assertEqual(result["rust_error_code"], None)
@@ -165,7 +178,7 @@ class SignatureDiagnosticTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             path = root / f"explicit-move-{DIAG.CASE}-high-build.stdout"
-            path.write_text(json.dumps({"reason": "build-script-executed", "stdout": "error[E0599]: echo"}) + "\n", encoding="utf-8")
+            path.write_text(json.dumps({"reason": "build-script-executed", "stdout": "error[E0599]: echo"}) + "\n", encoding="utf-8", newline="\n")
             result = DIAG.analyze(cargo_log("high backend Cargo build:"), root)
         self.assertEqual(result["failure_stage"], "cargo_build")
         self.assertEqual((result["rust_error_code"], result["rust_error_code_status"]), (None, "none"))
@@ -182,9 +195,9 @@ class SignatureDiagnosticTests(unittest.TestCase):
     def test_locked_dependency_form_uses_only_ordered_completed_capture(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            (root / f"explicit-move-{DIAG.CASE}-high.stdout").write_text("ok\n", encoding="utf-8")
+            (root / f"explicit-move-{DIAG.CASE}-high.stdout").write_text("ok\n", encoding="utf-8", newline="\n")
             for suffix in ("generated.rs", "build.stdout", "build.stderr"):
-                (root / f"explicit-move-{DIAG.CASE}-saved-low-{suffix}").write_text("bounded\n", encoding="utf-8")
+                (root / f"explicit-move-{DIAG.CASE}-saved-low-{suffix}").write_text("bounded\n", encoding="utf-8", newline="\n")
             record = DIAG.analyze(cargo_log('fixture changed locked dependency: ("serde", "1.0", None)'), root)
         self.assertEqual((record["failure_stage"], record["form"]), ("locked_dependencies", "saved-low"))
 
