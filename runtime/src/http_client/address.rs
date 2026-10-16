@@ -416,6 +416,21 @@ mod tests {
             classify(ip("::ffff:127.0.0.1")),
             AddressClass::Mapped(Ipv4Addr::new(127, 0, 0, 1))
         );
+        // Deprecated compatible forms must not become ordinary destinations.
+        for value in [
+            "::2",
+            "::127.0.0.1",
+            "::10.0.0.1",
+            "::8.8.8.8",
+            "::ffff:ffff",
+            "0:0:0:0:0:0:7f00:1",
+        ] {
+            assert_ne!(
+                classify(ip(value)),
+                AddressClass::Ordinary,
+                "sf06_deprecated_compatible_not_ordinary"
+            );
+        }
         for value in ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"] {
             assert_eq!(classify(ip(value)), AddressClass::Ordinary);
         }
@@ -432,6 +447,32 @@ mod tests {
         assert!(check(&p, &[ip("8.8.8.8"), ip("127.0.0.1")]).is_ok());
         assert_eq!(
             check(&p, &[ip("127.0.0.2")]).unwrap_err(),
+            AddressError::Disallowed
+        );
+        // Inspect the complete answer: one legacy destination rejects the set.
+        for value in [
+            "fec0::",
+            "fec0::1",
+            "feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+            "::2",
+            "::127.0.0.1",
+            "::10.0.0.1",
+            "::8.8.8.8",
+            "::ffff:ffff",
+        ] {
+            assert!(
+                matches!(
+                    check(&policy(&[], 8), &[ip("8.8.8.8"), ip(value)]),
+                    Err(AddressError::Disallowed)
+                ),
+                "sf06_legacy_ipv6_default_deny"
+            );
+        }
+        // The inherited test-network escape stays exact; production has none.
+        let legacy = policy(&["fec0::1"], 8);
+        assert!(check(&legacy, &[ip("fec0::1")]).is_ok());
+        assert_eq!(
+            check(&legacy, &[ip("fec0::2")]).unwrap_err(),
             AddressError::Disallowed
         );
     }
