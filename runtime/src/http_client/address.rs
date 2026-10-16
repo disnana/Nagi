@@ -137,6 +137,13 @@ fn classify(address: IpAddr) -> AddressClass {
                 .any(|&(base, prefix)| prefix_v6(bits, base, prefix))
             {
                 AddressClass::IanaSpecial
+            } else if prefix_v6(bits, 0, 96)
+                || prefix_v6(bits, 0xfec00000000000000000000000000000, 10)
+            {
+                // RFC 4291 section 2.5.5.1 deprecated IPv4-compatible forms;
+                // RFC 3879 deprecated site-local addresses. Neither is a
+                // ordinary destination form under this default-deny policy.
+                AddressClass::Reserved
             } else {
                 AddressClass::Ordinary
             }
