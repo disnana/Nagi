@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 from types import SimpleNamespace as NS
 import unittest
@@ -140,6 +141,14 @@ class IntegrationTests(unittest.TestCase):
             if kwargs.get('fail_browser'):
                 self.assertEqual((r['failure_stage'],r['failure_engine']),('engine_wrong_ca','firefox'))
                 self.assertEqual(json.loads((self.work/'browser-failure.json').read_text())['engine'],'firefox')
+
+        self.setUp()
+        stage='engine_wrong_ca_diag_bad_signature_present'
+        r,code,owner,stop,report=self.fake(fail_browser=True,failure_stage=stage)
+        self.assertEqual((code,r['failure_stage'],r['failure_engine']),(1,stage,'firefox'))
+        self.assertEqual((r['browser_executions_accepted'],r['resets_accepted']), (0,0))
+        self.assertTrue(r['actual_echild'])
+        self.assertEqual((stop.call_count,owner.closed,report.call_count),(1,1,0))
 
     def test_bad_ack_is_not_retried_and_closed_is_not_pass(self):
         r,code,owner,stop,report=self.fake(bad_ack=True)
@@ -632,6 +641,66 @@ class IntegrationTests(unittest.TestCase):
             'diagnostic':{'class':'unknown','rust_codes':[]}})
         self.assertEqual((record['browser_executions_accepted'],record['resets_accepted']), (0,0))
         self.assertTrue(record['actual_echild'])
+
+
+    def test_registered_js_python_stage_engine_cross_product_parity(self):
+        source = (c.HERE / 'browser_stage.mjs').read_text(encoding='utf-8')
+        stage_match = re.search(r'export const FAILURE_STAGES = \[(.*?)\];', source, re.S)
+        engine_match = re.search(r'export const FAILURE_ENGINES = \[(.*?)\];', source, re.S)
+        self.assertIsNotNone(stage_match)
+        self.assertIsNotNone(engine_match)
+        js_stages = set(re.findall(r"'([a-z_]+)'", stage_match.group(1)))
+        js_engines = set(re.findall(r"'([a-z]+)'", engine_match.group(1)))
+        self.assertEqual(js_stages, fc.STAGES)
+        self.assertEqual(js_engines, fc.ENGINES)
+
+        cases = [(stage, engine) for stage in sorted(js_stages | {'engine_wrong_ca_diag_unlisted'})
+                 for engine in sorted(js_engines)]
+        source_url = (c.HERE / 'browser_stage.mjs').as_uri()
+        script = (
+            'const {checkedFailure}=await import(' + json.dumps(source_url) + ');'
+            'const cases=JSON.parse(process.argv[1]);'
+            'const accepted=cases.map(([stage,engine])=>{try{checkedFailure(stage,engine);return true;}catch{return false;}});'
+            'console.log(JSON.stringify(accepted));'
+        )
+        result = subprocess.run(['node', '--input-type=module', '-e', script, json.dumps(cases)],
+                                check=True, capture_output=True, text=True)
+        js_accepted = json.loads(result.stdout)
+        py_accepted = []
+        for stage, engine in cases:
+            try:
+                fc.validate({'schema_version': 1, 'stage': stage, 'engine': engine})
+                py_accepted.append(True)
+            except ValueError:
+                py_accepted.append(False)
+        self.assertEqual(js_accepted, py_accepted)
+        for (stage, engine), js_ok in zip(cases, js_accepted):
+            try:
+                fc.validate({'schema_version': 1, 'stage': stage, 'engine': engine,
+                             'phase': 'browser'}, outer=True)
+                outer_ok = True
+            except ValueError:
+                outer_ok = False
+            self.assertEqual(outer_ok, js_ok)
+
+    def test_registered_python_checkpoint_exact_schema_and_no_input_echo(self):
+        good = {'schema_version': 1, 'stage': 'engine_wrong_ca_diag_bad_signature_present',
+                'engine': 'firefox'}
+        self.assertEqual(fc.validate(good), good)
+        for value in (dict(good, extra='PRIVATE_SENTINEL'),
+                      dict(good, phase='browser'),
+                      dict(good, path='https://private.invalid/?token=PRIVATE_SENTINEL'),
+                      dict(good, message='PRIVATE_SENTINEL')):
+            with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$') as caught:
+                fc.validate(value)
+            self.assertNotIn('PRIVATE_SENTINEL', str(caught.exception))
+
+    def test_registered_diagnostic_checkpoints_are_firefox_only_and_fixed_shape(self):
+        for stage in fc.FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES:
+            self.assertIn(stage, fc.STAGES)
+            for engine in ('chromium', 'webkit', 'none'):
+                with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                    fc.validate({'schema_version': 1, 'stage': stage, 'engine': engine})
 
 
 class ProvisionMountFlagsTests(unittest.TestCase):

@@ -59,6 +59,49 @@ function wrongCAFailureOutcome(error, name, probeURL) {
   }
 }
 
+function isASCIIIdentifierUnit(unit) {
+  return unit >= 48 && unit <= 57 || unit >= 65 && unit <= 90 ||
+    unit >= 97 && unit <= 122 || unit === 95;
+}
+
+// Failure-only lexical observation. This does not authenticate the source of a
+// code, alter the TLS oracle, or turn any new outcome into an accepted refusal.
+function firefoxWrongCADiagnosticOutcome(error) {
+  try {
+    if (!(error instanceof Error)) return 'shape_non_error';
+    const hasOwnMessage = Object.hasOwn(error, 'message');
+    const message = error.message;
+    if (!hasOwnMessage || typeof message !== 'string') return 'shape_non_string';
+    if (message.length > 8192) return 'shape_oversize';
+    const present = [];
+    for (const token of FIREFOX_PROTOCOL_TLS_TOKENS) {
+      let offset = 0;
+      while (offset < message.length) {
+        const index = message.indexOf(token, offset);
+        if (index < 0) break;
+        const end = index + token.length;
+        const before = index === 0 ? -1 : message.charCodeAt(index - 1);
+        const after = end === message.length ? -1 : message.charCodeAt(end);
+        if (!isASCIIIdentifierUnit(before) && !isASCIIIdentifierUnit(after)) {
+          present.push(token);
+          break;
+        }
+        offset = index + 1;
+      }
+    }
+    if (present.length > 1) return 'diag_multiple_codes';
+    if (present.length === 0) return 'diag_no_fixed_code';
+    switch (present[0]) {
+      case 'SEC_ERROR_BAD_SIGNATURE': return 'diag_bad_signature_present';
+      case 'SEC_ERROR_UNKNOWN_ISSUER': return 'diag_unknown_issuer_present';
+      case 'SSL_ERROR_BAD_CERT_DOMAIN': return 'diag_hostname_present';
+      default: return 'diag_other_tls_present';
+    }
+  } catch {
+    return 'shape_access_failed';
+  }
+}
+
 function wrongCAFailureStage(outcome) {
   switch (outcome) {
     case 'response_received': return 'engine_wrong_ca_response_received';
@@ -67,6 +110,16 @@ function wrongCAFailureStage(outcome) {
     case 'timeout': return 'engine_wrong_ca_timeout';
     case 'no_response': return 'engine_wrong_ca_no_response';
     case 'other_tls': return 'engine_wrong_ca_other_tls';
+    case 'diag_bad_signature_present': return 'engine_wrong_ca_diag_bad_signature_present';
+    case 'diag_unknown_issuer_present': return 'engine_wrong_ca_diag_unknown_issuer_present';
+    case 'diag_hostname_present': return 'engine_wrong_ca_diag_hostname_present';
+    case 'diag_other_tls_present': return 'engine_wrong_ca_diag_other_tls_present';
+    case 'diag_multiple_codes': return 'engine_wrong_ca_diag_multiple_codes';
+    case 'diag_no_fixed_code': return 'engine_wrong_ca_diag_no_fixed_code';
+    case 'shape_non_error': return 'engine_wrong_ca_shape_non_error';
+    case 'shape_non_string': return 'engine_wrong_ca_shape_non_string';
+    case 'shape_oversize': return 'engine_wrong_ca_shape_oversize';
+    case 'shape_access_failed': return 'engine_wrong_ca_shape_access_failed';
     default: return 'engine_wrong_ca_unknown';
   }
 }
@@ -235,9 +288,12 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
           if (reason === 'ca') failureOutcome = response === null || response === undefined
             ? 'no_response' : 'response_received';
         } catch (error) {
-          // Classify only a bounded exact first line; never emit raw browser text.
+          // Preserve the exact acceptance oracle; only failure gets finite facts.
           if (reason === 'ca') {
             failureOutcome = wrongCAFailureOutcome(error, name, probeURL);
+            if (failureOutcome === 'unknown' && name === 'firefox') {
+              failureOutcome = firefoxWrongCADiagnosticOutcome(error);
+            }
             rejected = failureOutcome === 'expected_rejection';
           } else {
             rejected = expectedTLSFailure(error, name, reason, probeURL);
