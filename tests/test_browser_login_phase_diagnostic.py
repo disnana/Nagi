@@ -177,7 +177,7 @@ class BrowserLoginPhaseDiagnosticTests(unittest.TestCase):
         self.assertNotIn("private.rs", json.dumps(document))
         self.assertNotIn("arbitrary failure text", json.dumps(document))
 
-    def test_extra_allowed_deadline_record_explains_fail_closed_pass_count(self):
+    def test_extra_allowed_deadline_record_keeps_actual_passing_test(self):
         raw = "\n".join(
             [
                 "test " + diagnostic.CASE + " ... ok",
@@ -188,17 +188,37 @@ class BrowserLoginPhaseDiagnosticTests(unittest.TestCase):
             ]
         )
         document, result = run_text(raw)
-        self.assertEqual(result, 1)
-        self.assertFalse(document["capture_valid"])
-        self.assertEqual(document["records"], [])
+        self.assertEqual(result, 0)
+        self.assertTrue(document["capture_valid"])
+        self.assertEqual(len(document["records"]), 3)
         self.assertEqual(document["observer_records_seen"], 3)
         self.assertEqual(
-            document["invalid_reason_counts"]["passing_run_observer_count_mismatch"], 1
+            document["invalid_reason_counts"]["passing_run_observer_count_mismatch"], 0
         )
         self.assertEqual(
-            sum(document["invalid_reason_counts"].values()), 1
+            sum(document["invalid_reason_counts"].values()), 0
         )
         self.assertNotIn("request=23", json.dumps(document))
+
+    def test_passing_record_bounds_preserve_missing_and_excess_witness_rejection(self):
+        # Five initial requests and at most five checked consumed-row replays.
+        # Extra 504s are permitted by the exact functional test, not inferred
+        # evidence that its normal business branches were exercised.
+        for count in (0, 1, 2, 3, 5, 10, 11):
+            with self.subTest(count=count):
+                raw = "\n".join(["test " + diagnostic.CASE + " ... ok"] +
+                                [observer_line(request=100+i) for i in range(count)] +
+                                [PASS_SUMMARY])
+                document, result = run_text(raw)
+                accepted = 2 <= count <= 10
+                self.assertEqual(result, 0 if accepted else 1)
+                self.assertEqual(document["capture_valid"], accepted)
+                self.assertEqual(len(document["records"]), count if accepted else 0)
+                self.assertEqual(document["observer_records_seen"], count)
+                if count < 2:
+                    self.assertEqual(document["invalid_reason_counts"]["passing_run_observer_count_mismatch"], 1)
+                if count == 11:
+                    self.assertEqual(document["invalid_reason_counts"]["observer_record_refused"], 1)
 
     def test_unknown_observer_field_invalidates_and_discards_all_records(self):
         line = observer_line(request=8) + " future_field=private-value"
@@ -482,14 +502,14 @@ class BrowserLoginPhaseDiagnosticTests(unittest.TestCase):
             with contextlib.redirect_stdout(captured):
                 result = diagnostic.main(["collector", str(source), "0", str(output)])
             lines = captured.getvalue().splitlines()
-            self.assertEqual(result, 1)
-            self.assertEqual(lines[0], "browser_login_phase_capture=invalid test_summary=passed cargo_exit=0")
+            self.assertEqual(result, 0)
+            self.assertEqual(lines[0], "browser_login_phase_capture=valid test_summary=passed cargo_exit=0")
             self.assertEqual(len(lines), 2)
             self.assertTrue(lines[1].startswith("browser_login_phase_counts observer_records_seen=3 "))
-            self.assertIn("passing_run_observer_count_mismatch=1", lines[1])
+            self.assertIn("passing_run_observer_count_mismatch=0", lines[1])
             self.assertNotIn("private", captured.getvalue())
             self.assertNotIn("never-publish", captured.getvalue())
-            self.assertEqual(json.loads(output.read_text())["records"], [])
+            self.assertEqual(len(json.loads(output.read_text())["records"]), 3)
             self.assertEqual(json.loads(output.read_text())["public_api_records"], [])
 
     def test_stdout_counts_rejects_malformed_values_and_bounds_without_echo(self):
