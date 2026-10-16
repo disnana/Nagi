@@ -75,6 +75,8 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: tests/requirements.txt
+      - name: Check SF06 signature diagnostic fake cases
+        run: python -m unittest discover -s tests -p 'test_sf06_http_client_signature_diagnostic.py'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -554,6 +556,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Check SF06 signature diagnostic fake cases
+        run: python -m unittest discover -s tests -p 'test_sf06_http_client_signature_diagnostic.py'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -875,6 +879,22 @@ jobs:
         with:
           name: sf06-http-client-native-${{ matrix.platform }}
           path: ${{ runner.temp }}/sf06-http-client-native/sf06-native-diagnostic.json
+          if-no-files-found: ignore
+      - name: Classify SF06 public signature failure from captured output
+        if: always()
+        shell: bash
+        run: |
+          if ! python scripts/ci/sf06_http_client_signature_diagnostic.py \
+            "$RUNNER_TEMP/sf06-native.log" \
+            "$RUNNER_TEMP/sf06-http-client-native" 2>/dev/null; then
+            printf '%s\n' 'sf06_http_client_signature_diag=v1 status=unavailable reason=invocation_error stage=unavailable form=unavailable rust_error_code=none code_status=not_applicable newline=unavailable artifact_saved=false'
+          fi
+      - name: Preserve closed SF06 signature failure diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf06-http-client-signature-${{ matrix.platform }}
+          path: ${{ runner.temp }}/sf06-http-client-native/sf06-signature-diagnostic.json
           if-no-files-found: ignore
       - name: Diagnose G3 generation-token failure before crypto checks
         shell: bash
