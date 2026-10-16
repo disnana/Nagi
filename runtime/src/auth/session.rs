@@ -840,6 +840,33 @@ impl PreloginContext {
             })
         }));
     }
+    // Per-fixture logical clock for boundary tests. Every supplied sample still
+    // passes the production validation in sample() and persisted-wall tracking.
+    #[cfg(test)]
+    pub(super) fn set_test_paired_clock_sequence(
+        &mut self,
+        values: Vec<(Instant, i64)>,
+    ) -> Arc<std::sync::atomic::AtomicUsize> {
+        assert!(!values.is_empty() && values.len() <= 16);
+        let consumed = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let observed = Arc::clone(&consumed);
+        let values = std::sync::Mutex::new(std::collections::VecDeque::from(values));
+        self.test_clock = Some(Arc::new(move || {
+            let (monotonic, wall) = values
+                .lock()
+                .map_err(|_| Failure::unavailable())?
+                .pop_front()
+                .ok_or_else(Failure::unavailable)?;
+            observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(ClockSample {
+                monotonic,
+                monotonic_after: monotonic,
+                floor_ms: wall,
+                ceil_ms: wall,
+            })
+        }));
+        consumed
+    }
     pub(super) async fn verify(
         &self,
         tx: &sqlite::Tx,
