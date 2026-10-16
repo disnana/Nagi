@@ -10,8 +10,8 @@ pub use ledger::operation::{
 pub mod startup {
     pub use super::ledger::operation::startup::{
         register_protected, register_public, FixedRequestHeaders, OperationLimits, Owner,
-        ProtectedSpec, PublicSpec, ServiceConfig, ServiceCredential, ServiceKey, ServiceSpec,
-        StartupCatalog,
+        ProtectedSpec, PublicSpec, RetentionLimits, ServiceConfig, ServiceCredential, ServiceKey,
+        ServiceSpec, StartupCatalog,
     };
     pub use super::ledger::operation::{
         BoundValues, FrozenInput, InputLimits, PreparedRequest, RequestLimits,

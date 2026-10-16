@@ -1,7 +1,14 @@
 //! Trusted Rust host startup boundary. No Nagi constructors or defaults.
 //! The host must retain Owner and await shutdown on every teardown path.
+use super::super::parent_drain::ParentError;
 use super::*;
 use address::socket_pin::tls_http1::FixedHeaders;
+#[path = "retention.rs"]
+mod retention;
+pub use retention::RetentionLimits;
+use retention::{header_charge, slots, sum, Retained, RetentionBudget};
+pub(in crate::http_client) use retention::{FrozenTrust, RetentionClaim};
+use std::mem::size_of;
 #[cfg(test)]
 use std::net::IpAddr;
 use std::net::SocketAddr;
@@ -29,55 +36,70 @@ pub struct ServiceConfig {
 }
 pub struct ServiceSpec {
     identity: ServiceIdentity,
-    name: String,
-    port: u16,
-    endpoint: SocketAddr,
-    roots: rustls::RootCertStore,
     policy: Arc<InternalPolicy>,
+    resolver: Arc<ResolverStartup>,
     max_candidates: usize,
+    // Drops after the service/resolver/policy payloads that its claim covers.
+    trust: Arc<FrozenTrust>,
 }
 impl ServiceSpec {
-    // Carry the audited narrow provider profile: exact canonical DNS name,
-    // Explicit endpoint/port/roots with the existing default-deny address policy.
-    // Production startup cannot authorize special/internal addresses.
-    pub fn checked(config: ServiceConfig) -> Result<Self, Failure> {
-        Self::checked_with_policy(config, Vec::new())
+    pub fn checked(catalog: &StartupCatalog, config: ServiceConfig) -> Result<Self, Failure> {
+        Self::checked_with_policy(catalog, config, Vec::new())
     }
-
-    // Test-network-admission seam only: TLS, Grant, owner and actual native joins
-    // still execute normally. This does not establish a production service profile.
     #[cfg(test)]
     pub(in crate::http_client) fn checked_for_test_network(
+        catalog: &StartupCatalog,
         config: ServiceConfig,
         exact_exceptions: Vec<IpAddr>,
     ) -> Result<Self, Failure> {
-        Self::checked_with_policy(config, exact_exceptions)
+        Self::checked_with_policy(catalog, config, exact_exceptions)
     }
-
     fn checked_with_policy(
+        catalog: &StartupCatalog,
         config: ServiceConfig,
         exact_exceptions: Vec<std::net::IpAddr>,
     ) -> Result<Self, Failure> {
-        ResolverStartup::checked(&config.canonical_dns_name, config.resolver_endpoint)
-            .map_err(|_| Failure::new(FailureKind::InvalidInput, false))?;
+        let extra_config = sum(&[
+            size_of::<Self>(),
+            size_of::<InternalPolicy>(),
+            size_of::<ResolverStartup>(),
+            slots::<std::net::IpAddr>(exact_exceptions.capacity())?,
+            config.canonical_dns_name.len(),
+        ])?;
         let identity = config.key.0;
-        let policy = Arc::new(
-            InternalPolicy::checked(
-                identity,
-                config.port,
-                config.max_candidates,
-                exact_exceptions,
-            )
-            .map_err(|_| Failure::new(FailureKind::InvalidInput, false))?,
-        );
+        let (trust, (policy, resolver)) = FrozenTrust::checked(
+            &catalog.budget,
+            identity,
+            url::Host::Domain(config.canonical_dns_name),
+            config.port,
+            config.roots,
+            extra_config,
+            |host| {
+                let url::Host::Domain(name) = host else {
+                    return Err(Failure::invalid_input());
+                };
+                let resolver = Arc::new(
+                    ResolverStartup::checked(name, config.resolver_endpoint)
+                        .map_err(|_| Failure::invalid_input())?,
+                );
+                let policy = Arc::new(
+                    InternalPolicy::checked(
+                        identity,
+                        config.port,
+                        config.max_candidates,
+                        exact_exceptions,
+                    )
+                    .map_err(|_| Failure::invalid_input())?,
+                );
+                Ok((policy, resolver))
+            },
+        )?;
         Ok(Self {
             identity,
-            name: config.canonical_dns_name,
-            port: config.port,
-            endpoint: config.resolver_endpoint,
-            roots: config.roots,
             policy,
+            resolver,
             max_candidates: config.max_candidates,
+            trust,
         })
     }
 }
@@ -164,19 +186,39 @@ impl OperationLimits {
     }
 }
 pub struct FixedRequestHeaders {
-    accept: Option<Vec<u8>>,
-    content_type: Option<Vec<u8>>,
+    fixed: FixedHeaders,
+    budget: Arc<RetentionBudget>,
 }
 impl FixedRequestHeaders {
     pub fn checked(
+        catalog: &StartupCatalog,
         accept: Option<Vec<u8>>,
         content_type: Option<Vec<u8>>,
     ) -> Result<Self, Failure> {
-        FixedHeaders::checked(accept.clone(), content_type.clone(), None)
-            .map_err(|_| Failure::new(FailureKind::InvalidInput, false))?;
+        // All supplied capacities are checked together before native acceptance.
+        let metadata = sum(&[size_of::<Self>(), size_of::<RetentionClaim>()])?;
+        let charge = |value: &Option<Vec<u8>>| {
+            value
+                .as_ref()
+                .map_or(Ok(0), |v| header_charge(v.capacity()))
+        };
+        let mut claim = catalog.budget.reserve(Retained {
+            config: sum(&[metadata, charge(&accept)?, charge(&content_type)?])?,
+            ..Retained::default()
+        })?;
+        let mut convert = |value: Vec<u8>| {
+            let part = claim.split(Retained {
+                config: header_charge(value.capacity())?,
+                ..Retained::default()
+            })?;
+            retention::owned_header(value, part)
+        };
+        let accept = accept.map(&mut convert).transpose()?;
+        let content_type = content_type.map(&mut convert).transpose()?;
+        let fixed = FixedHeaders::from_retained(accept, content_type, None, Arc::new(claim));
         Ok(Self {
-            accept,
-            content_type,
+            fixed,
+            budget: Arc::clone(&catalog.budget),
         })
     }
 }
@@ -187,30 +229,45 @@ pub struct ServiceCredential {
 }
 impl ServiceCredential {
     pub fn bearer(
+        catalog: &StartupCatalog,
         service: &Arc<ServiceSpec>,
         operation: u64,
         bytes: Vec<u8>,
     ) -> Result<Self, Failure> {
-        if operation == 0
+        if !Arc::ptr_eq(&catalog.budget, service.trust.budget())
+            || operation == 0
             || bytes.is_empty()
-            || bytes
-                .iter()
-                .any(|byte| !byte.is_ascii_alphanumeric() && !b"-._~+/=".contains(byte))
+        {
+            return Err(Failure::new(FailureKind::InvalidInput, false));
+        }
+        let len = 7usize
+            .checked_add(bytes.len())
+            .ok_or_else(Failure::invalid_input)?;
+        let mut claim = catalog.budget.reserve(Retained {
+            config: sum(&[size_of::<Self>(), header_charge(len)?])?,
+            ..Retained::default()
+        })?;
+        if bytes
+            .iter()
+            .any(|byte| !byte.is_ascii_alphanumeric() && !b"-._~+/=".contains(byte))
         {
             return Err(Failure::new(FailureKind::InvalidInput, false));
         }
         let mut value = Vec::new();
         value
-            .try_reserve_exact(
-                7usize
-                    .checked_add(bytes.len())
-                    .ok_or_else(|| Failure::new(FailureKind::InvalidInput, false))?,
-            )
-            .map_err(|_| Failure::new(FailureKind::Unavailable, false))?;
+            .try_reserve_exact(slots::<u8>(len)?)
+            .map_err(|_| Failure::unavailable())?;
+        claim.grow(Retained {
+            config: value
+                .capacity()
+                .checked_sub(len)
+                .ok_or_else(Failure::invalid_input)?,
+            ..Retained::default()
+        })?;
         value.extend_from_slice(b"Bearer ");
         value.extend_from_slice(&bytes);
-        let mut value = hyper::header::HeaderValue::from_bytes(&value)
-            .map_err(|_| Failure::new(FailureKind::InvalidInput, false))?;
+        drop(bytes);
+        let mut value = retention::owned_header(value, claim)?;
         value.set_sensitive(true);
         Ok(Self {
             service: Arc::clone(service),
@@ -225,6 +282,7 @@ struct Spec {
     method: Method,
     limits: OperationLimits,
     headers: FixedRequestHeaders,
+    retained: Arc<RetentionClaim>,
 }
 pub struct ProtectedSpec<P> {
     spec: Spec,
@@ -241,16 +299,43 @@ fn spec_checked(
     limits: OperationLimits,
     headers: FixedRequestHeaders,
 ) -> Result<Spec, Failure> {
+    service.trust.budget().ensure_open()?;
+    if !Arc::ptr_eq(service.trust.budget(), &headers.budget) {
+        return Err(Failure::invalid_input());
+    }
     limits.validate()?;
     if operation == 0 || method == Method::CONNECT || limits.attempts > service.max_candidates {
         return Err(Failure::new(FailureKind::InvalidInput, false));
     }
+    // Method/URL are opaque native representations: charge their logical
+    // retained inputs, plus the fixed Spec/Core metadata, before registration.
+    let origin_charge = sum(&[
+        8,
+        match service.trust.host() {
+            url::Host::Domain(n) => n.len(),
+            _ => return Err(Failure::invalid_input()),
+        },
+        1,
+        5,
+        1,
+    ])?;
+    let retained = Arc::new(service.trust.budget().reserve(Retained {
+        config: sum(&[
+            size_of::<Spec>(),
+            size_of::<Core>(),
+            size_of::<RetentionClaim>(),
+            method.as_str().len(),
+            origin_charge,
+        ])?,
+        ..Retained::default()
+    })?);
     Ok(Spec {
         service,
         operation,
         method,
         limits,
         headers,
+        retained,
     })
 }
 impl<P> ProtectedSpec<P> {
@@ -288,34 +373,111 @@ impl PublicSpec {
     }
 }
 
+pub(in crate::http_client) struct ReadyState {
+    value: AtomicBool,
+    _claim: Arc<RetentionClaim>,
+}
+impl ReadyState {
+    pub(super) fn load(&self, order: Ordering) -> bool {
+        self.value.load(order)
+    }
+    fn store(&self, value: bool, order: Ordering) {
+        self.value.store(value, order);
+    }
+    #[cfg(test)]
+    pub(super) fn for_test(retained: &Arc<RetentionClaim>) -> Arc<Self> {
+        Arc::new(Self {
+            value: AtomicBool::new(true),
+            _claim: Arc::clone(retained),
+        })
+    }
+}
+struct CatalogAuthority(Arc<RetentionBudget>);
+impl Drop for CatalogAuthority {
+    fn drop(&mut self) {
+        self.0.close();
+    }
+}
 pub struct StartupCatalog {
     parent: ParentDrain,
-    ready: Arc<AtomicBool>,
+    ready: Arc<ReadyState>,
     identities: Vec<(ServiceIdentity, u64)>,
     capacity: usize,
+    budget: Arc<RetentionBudget>,
+    _authority: CatalogAuthority,
+    // identities/ready are dropped before this reservation is returned.
+    _claim: RetentionClaim,
 }
 pub struct Owner {
     parent: ParentDrain,
 }
 impl StartupCatalog {
-    pub fn new(capacity: usize) -> Result<Self, Failure> {
-        let parent = ParentDrain::new(capacity)
-            .map_err(|_| Failure::new(FailureKind::InvalidInput, false))?;
+    pub fn new(capacity: usize, retention: RetentionLimits) -> Result<Self, Failure> {
+        let budget = RetentionBudget::new(retention)?;
+        let mut claim = budget.reserve(Retained {
+            config: sum(&[
+                size_of::<Self>(),
+                size_of::<ReadyState>(),
+                size_of::<RetentionClaim>(),
+                slots::<(ServiceIdentity, u64)>(capacity)?,
+            ])?,
+            ..Retained::default()
+        })?;
+        let parent = ParentDrain::new(capacity).map_err(|error| {
+            Failure::new(
+                match error {
+                    ParentError::InvalidCapacity => FailureKind::InvalidInput,
+                    ParentError::Allocation => FailureKind::Unavailable,
+                    _ => FailureKind::Internal,
+                },
+                false,
+            )
+        })?;
         let mut identities = Vec::new();
         identities
             .try_reserve_exact(capacity)
             .map_err(|_| Failure::new(FailureKind::Unavailable, false))?;
+        claim.grow(Retained {
+            config: slots::<(ServiceIdentity, u64)>(identities.capacity())?
+                .checked_sub(slots::<(ServiceIdentity, u64)>(capacity)?)
+                .ok_or_else(Failure::invalid_input)?,
+            ..Retained::default()
+        })?;
+        let ready_claim = claim.split(Retained {
+            config: sum(&[size_of::<ReadyState>(), size_of::<RetentionClaim>()])?,
+            ..Retained::default()
+        })?;
         Ok(Self {
             parent,
-            ready: Arc::new(AtomicBool::new(false)),
+            ready: Arc::new(ReadyState {
+                value: AtomicBool::new(false),
+                _claim: Arc::new(ready_claim),
+            }),
             identities,
             capacity,
+            _authority: CatalogAuthority(Arc::clone(&budget)),
+            budget,
+            _claim: claim,
         })
     }
     // Consuming freeze removes all mutable registration authority. The returned
     // owner retains the existing real monitor records, independently of handles.
+    #[cfg(test)]
+    pub(in crate::http_client) fn test_retained(&self) -> Arc<RetentionClaim> {
+        Arc::new(
+            self.budget
+                .reserve(Retained {
+                    config: sum(&[size_of::<RetentionClaim>(), size_of::<ReadyState>()]).unwrap(),
+                    ..Retained::default()
+                })
+                .unwrap(),
+        )
+    }
     pub fn freeze(self) -> Owner {
         self.ready.store(true, Ordering::Release);
+        self.budget.close();
+        // Only catalog-owned buffers disappear here. Service/header/native
+        // owners keep their own reservations until their actual final Drop.
         Owner {
             parent: self.parent,
         }
@@ -325,6 +487,18 @@ impl StartupCatalog {
         spec: Spec,
         credential: Option<ServiceCredential>,
     ) -> Result<Arc<Core>, Failure> {
+        self.budget.ensure_open()?;
+        if !Arc::ptr_eq(&self.budget, spec.service.trust.budget())
+            || !Arc::ptr_eq(&self.budget, &spec.headers.budget)
+            || !Arc::ptr_eq(&self.budget, spec.retained.budget())
+            || credential.as_ref().is_some_and(|value| {
+                !Arc::ptr_eq(&value.service, &spec.service)
+                    || value.operation != spec.operation
+                    || !Arc::ptr_eq(&self.budget, value.service.trust.budget())
+            })
+        {
+            return Err(Failure::invalid_input());
+        }
         let identity = spec.service.identity;
         if self.identities.len() >= self.capacity
             || self.identities.contains(&(identity, spec.operation))
@@ -332,23 +506,17 @@ impl StartupCatalog {
             return Err(Failure::new(FailureKind::Capacity, false));
         }
         let transport = spec.limits.transport()?;
-        let fixed_headers = FixedHeaders::checked(
-            spec.headers.accept,
-            spec.headers.content_type,
-            credential.map(|value| value.value),
-        )
-        .map_err(|_| Failure::new(FailureKind::InvalidInput, false))?;
+        let fixed_headers = spec
+            .headers
+            .fixed
+            .with_authorization(credential.map(|value| value.value));
         let profile = NativeProfile {
             identity,
             policy: Arc::clone(&spec.service.policy),
-            resolver: ResolverStartup::checked(&spec.service.name, spec.service.endpoint)
-                .map_err(|_| Failure::new(FailureKind::InvalidInput, false))?,
-            host: url::Host::Domain(spec.service.name.clone()),
-            port: spec.service.port,
-            roots: spec.service.roots.clone(),
+            resolver: Arc::clone(&spec.service.resolver),
             transport,
             quota: SocketQuota::checked(spec.limits.sockets)
-                .map_err(|_| Failure::new(FailureKind::InvalidInput, false))?,
+                .map_err(|_| Failure::invalid_input())?,
             whole: spec.limits.whole,
             connect: spec.limits.connect,
             attempts: spec.limits.attempts,
@@ -356,17 +524,14 @@ impl StartupCatalog {
             method: spec.method,
             #[cfg(test)]
             driver_hold: None,
+            trust: Arc::clone(&spec.service.trust),
+            retained: spec.retained,
         };
         let origin = startup_origin(&profile)?;
-        let authority = hyper::header::HeaderValue::from_str(if profile.port == 443 {
-            &spec.service.name
-        } else {
-            origin.authority()
-        })
-        .map_err(|_| Failure::new(FailureKind::InvalidInput, false))?;
+        let authority = profile.trust.authority();
         fixed_headers
             .validate(&authority, &transport)
-            .map_err(|_| Failure::new(FailureKind::InvalidInput, false))?;
+            .map_err(|_| Failure::invalid_input())?;
         let input_limits = InputLimits {
             max_bytes: profile.input_bytes,
         };

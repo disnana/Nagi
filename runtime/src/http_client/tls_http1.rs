@@ -7,6 +7,7 @@
 //! that ledger observes the driver's actual join and the final publish gate.
 
 use super::*;
+use crate::http_client::ledger::operation::startup::{FrozenTrust, RetentionClaim};
 use hyper::{
     body::{Body, Bytes, Frame, SizeHint},
     client::conn::http1::{self, Connection, SendRequest},
@@ -14,7 +15,6 @@ use hyper::{
     HeaderMap, Method, Request, StatusCode, Uri,
 };
 use hyper_util::rt::TokioIo;
-use rustls::{pki_types::ServerName, ClientConfig, RootCertStore};
 use std::{
     convert::Infallible,
     io,
@@ -23,8 +23,7 @@ use std::{
     task::{Context, Poll},
 };
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio_rustls::{client::TlsStream, TlsConnector};
-use url::Host;
+use tokio_rustls::client::TlsStream;
 
 const MAX_HEADERS: usize = 128;
 const MAX_HEADER_BYTES: usize = 64 * 1024;
@@ -32,7 +31,6 @@ const MIN_HYPER_BUF: usize = 8192;
 const MAX_HYPER_BUF: usize = 64 * 1024;
 const MAX_BODY_BYTES: usize = 1024 * 1024;
 const MAX_PATH_BYTES: usize = 4096;
-const MAX_HOST_BYTES: usize = 253;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::http_client) struct TransportLimits {
@@ -101,85 +99,34 @@ impl From<SocketError> for TransportError {
 }
 
 pub(in crate::http_client) struct TlsProfile {
-    identity: ServiceIdentity,
-    server_name: ServerName<'static>,
-    authority: hyper::header::HeaderValue,
-    port: u16,
-    config: Arc<ClientConfig>,
     whole_end: Instant,
     tls_end: Instant,
     limits: TransportLimits,
+    trust: Arc<FrozenTrust>,
+    retained: Arc<RetentionClaim>,
 }
-
 impl TlsProfile {
-    // `original_host` and `roots` must come from a trusted, frozen catalog.
-    // Fixture-specific roots are constructed only inside this file's tests.
+    // Identity/hostname/port/config always travel as one immutable service owner.
     pub(in crate::http_client) fn checked(
-        identity: ServiceIdentity,
-        original_host: Host<String>,
-        port: u16,
-        roots: RootCertStore,
+        trust: Arc<FrozenTrust>,
+        retained: Arc<RetentionClaim>,
         whole_end: Instant,
         tls_end: Instant,
         limits: TransportLimits,
     ) -> Result<Self, TransportError> {
-        if port == 0
-            || Instant::now() >= whole_end
+        if Instant::now() >= whole_end
             || Instant::now() >= tls_end
             || tls_end > whole_end
+            || !Arc::ptr_eq(trust.budget(), retained.budget())
         {
             return Err(TransportError::InvalidProfile);
         }
-        let (name, host_header, expect_ip) = match original_host {
-            Host::Domain(name) => {
-                if name.is_empty()
-                    || name.len() > MAX_HOST_BYTES
-                    || !name.is_ascii()
-                    || name.ends_with('.')
-                    || Host::parse(&name).ok() != Some(Host::Domain(name.clone()))
-                {
-                    return Err(TransportError::InvalidProfile);
-                }
-                (name.clone(), name, false)
-            }
-            Host::Ipv4(address) => {
-                let text = address.to_string();
-                (text.clone(), text, true)
-            }
-            Host::Ipv6(address) => (address.to_string(), format!("[{address}]"), true),
-        };
-        let server_name = ServerName::try_from(name).map_err(|_| TransportError::InvalidProfile)?;
-        // Rustls interprets a typed IP ServerName as an IP SAN identity and
-        // suppresses SNI. DNS origins retain their original canonical name.
-        if expect_ip != matches!(server_name, ServerName::IpAddress(_)) {
-            return Err(TransportError::InvalidProfile);
-        }
-        let authority = if port == 443 {
-            host_header
-        } else {
-            format!("{host_header}:{port}")
-        };
-        let authority = hyper::header::HeaderValue::from_str(&authority)
-            .map_err(|_| TransportError::InvalidProfile)?;
-        let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
-        let mut config = ClientConfig::builder_with_provider(provider)
-            .with_protocol_versions(&[&rustls::version::TLS13, &rustls::version::TLS12])
-            .map_err(|_| TransportError::InvalidProfile)?
-            .with_root_certificates(roots)
-            .with_no_client_auth();
-        config.alpn_protocols = vec![b"http/1.1".to_vec()];
-        config.enable_sni = true;
-        config.enable_early_data = false;
-        config.resumption = rustls::client::Resumption::disabled();
         Ok(Self {
-            identity,
-            server_name,
-            authority,
-            port,
-            config: Arc::new(config),
             whole_end,
             tls_end,
             limits,
+            trust,
+            retained,
         })
     }
 }
@@ -297,6 +244,7 @@ pub(in crate::http_client) struct FixedHeaders {
     accept: Option<hyper::header::HeaderValue>,
     content_type: Option<hyper::header::HeaderValue>,
     authorization: Option<hyper::header::HeaderValue>,
+    _retained: Option<Arc<RetentionClaim>>,
 }
 impl FixedHeaders {
     pub(in crate::http_client) fn empty() -> Self {
@@ -304,22 +252,32 @@ impl FixedHeaders {
             accept: None,
             content_type: None,
             authorization: None,
+            _retained: None,
         }
     }
-    pub(in crate::http_client) fn checked(
-        accept: Option<Vec<u8>>,
-        content_type: Option<Vec<u8>>,
+    pub(in crate::http_client) fn from_retained(
+        accept: Option<hyper::header::HeaderValue>,
+        content_type: Option<hyper::header::HeaderValue>,
         authorization: Option<hyper::header::HeaderValue>,
-    ) -> Result<Self, TransportError> {
-        let header = |bytes: Vec<u8>| {
-            hyper::header::HeaderValue::from_bytes(&bytes)
-                .map_err(|_| TransportError::InvalidProfile)
-        };
-        Ok(Self {
-            accept: accept.map(header).transpose()?,
-            content_type: content_type.map(header).transpose()?,
+        retained: Arc<RetentionClaim>,
+    ) -> Self {
+        Self {
+            accept,
+            content_type,
             authorization,
-        })
+            _retained: Some(retained),
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::http_client) fn test_accept(&self) -> Option<hyper::header::HeaderValue> {
+        self.accept.clone()
+    }
+    pub(in crate::http_client) fn with_authorization(
+        mut self,
+        value: Option<hyper::header::HeaderValue>,
+    ) -> Self {
+        self.authorization = value;
+        self
     }
     pub(in crate::http_client) fn validate(
         &self,
@@ -428,7 +386,50 @@ impl WireRequest {
     }
 }
 
-pub(in crate::http_client) type RawDriver = Connection<TokioIo<TlsStream<GatedIo>>, RequestBody>;
+// Rust drops fields in declaration order: the foreign TLS connection/config
+// goes first, then the service trust guard, then the operation metadata guard.
+// GatedIo alone cannot prove the outer TlsStream's Drop order.
+pub(in crate::http_client) struct TrustBoundTlsIo<S> {
+    stream: S,
+    _trust: Arc<FrozenTrust>,
+    _retained: Arc<RetentionClaim>,
+}
+impl<S: AsyncRead + Unpin> AsyncRead for TrustBoundTlsIo<S> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().stream).poll_read(cx, buf)
+    }
+}
+impl<S: AsyncWrite + Unpin> AsyncWrite for TrustBoundTlsIo<S> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bytes: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.get_mut().stream).poll_write(cx, bytes)
+    }
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().stream).poll_flush(cx)
+    }
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().stream).poll_shutdown(cx)
+    }
+    fn is_write_vectored(&self) -> bool {
+        self.stream.is_write_vectored()
+    }
+    fn poll_write_vectored(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bufs: &[io::IoSlice<'_>],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.get_mut().stream).poll_write_vectored(cx, bufs)
+    }
+}
+pub(in crate::http_client) type RawDriver =
+    Connection<TokioIo<TrustBoundTlsIo<TlsStream<GatedIo>>>, RequestBody>;
 
 pub(in crate::http_client) struct Http1Parts {
     pub(in crate::http_client) client: Http1Client,
@@ -464,16 +465,16 @@ pub(in crate::http_client) async fn establish(
     profile: &TlsProfile,
     control: Arc<DialControl>,
 ) -> Result<Http1Parts, TransportError> {
-    if pinned.identity != profile.identity
+    if pinned.identity != profile.trust.identity()
         || pinned.operation_end != profile.whole_end
-        || pinned.selected.port() != profile.port
+        || pinned.selected.port() != profile.trust.port()
     {
         return Err(TransportError::IdentityMismatch);
     }
     pinned.ready_for_tls(&control)?;
     let tls_end = profile.tls_end.min(profile.whole_end);
     phase_gate(&control, tls_end)?;
-    let connector = TlsConnector::from(Arc::clone(&profile.config));
+    let connector = profile.trust.connector();
     let gated_io = GatedIo {
         socket: pinned,
         control: Arc::clone(&control),
@@ -486,7 +487,12 @@ pub(in crate::http_client) async fn establish(
         biased;
         reason = wait_stop(&mut stopped) => return Err(reason.into()),
         _ = tokio::time::sleep_until(tls_end.into()) => return Err(TransportError::Deadline),
-        result = connector.connect(profile.server_name.clone(), gated_io) => result.map_err(|_| TransportError::Tls)?,
+        result = connector.connect(profile.trust.server_name(), gated_io) => result.map_err(|_| TransportError::Tls)?,
+    };
+    let tls = TrustBoundTlsIo {
+        stream: tls,
+        _trust: Arc::clone(&profile.trust),
+        _retained: Arc::clone(&profile.retained),
     };
     phase_gate(&control, profile.whole_end)?;
     let mut builder = http1::Builder::new();
@@ -505,7 +511,7 @@ pub(in crate::http_client) async fn establish(
         client: Http1Client {
             sender,
             control,
-            authority: profile.authority.clone(),
+            authority: profile.trust.authority(),
             whole_end: profile.whole_end,
             limits: profile.limits,
         },

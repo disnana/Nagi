@@ -112,7 +112,7 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 123, "sf06-private-transport.log": 79, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 135, "sf06-private-transport.log": 82, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
@@ -602,9 +602,24 @@ jobs:
               "http_client::ledger::operation::tests::operation_withholds_real_https_response_until_actual_driver_join",
               "http_client::ledger::tracked_dns::hickory::tests::owned_udp_two_families_actual_tracked_resolver_and_join",
               "http_client::ledger::admission::tests::drop_posts_stop_without_owner_or_waiter_lock",
+              'http_client::address::socket_pin::tls_http1::tests::equal_numeric_service_identity_does_not_union_trust_stores',
+              'http_client::address::socket_pin::tls_http1::tests::native_io_drops_stream_before_the_final_trust_claim',
+              'http_client::address::socket_pin::tls_http1::tests::unpolled_driver_drop_and_abort_actual_join_release_native_trust',
+              'http_client::ledger::operation::startup::retention::tests::all_three_exact_boundaries_aggregate_rollback_and_last_owner',
+              'http_client::ledger::operation::startup::retention::tests::bearer_is_sensitive_budgeted_and_bound_to_catalog_service_and_operation',
+              'http_client::ledger::operation::startup::retention::tests::explicit_positive_limits_and_checked_arithmetic_without_large_allocations',
+              'http_client::ledger::operation::startup::retention::tests::native_header_clone_keeps_measured_capacity_and_claim_after_descriptor_drop',
+              'http_client::ledger::operation::startup::retention::tests::normalized_der_keeps_order_and_some_empty_but_discards_hidden_capacity',
+              'http_client::ledger::operation::startup::retention::tests::oversized_header_and_string_capacity_are_rejected_and_invalid_payloads_refund',
+              'http_client::ledger::operation::startup::retention::tests::parent_no_runtime_refusal_and_cross_catalog_registration_refund_all_partial_config',
+              'http_client::ledger::operation::startup::retention::tests::partial_allocation_failures_refund_after_accepted_partial_data_is_dropped',
+              'http_client::ledger::operation::startup::retention::tests::root_byte_preflight_fails_before_der_copy_and_catalog_drop_closes_authority',
+              'http_client::ledger::operation::startup::retention::tests::same_service_operations_share_one_trust_and_duplicate_registration_refunds',
+              'http_client::ledger::operation::startup::retention::tests::unregistered_header_aggregate_uses_actual_capacity_and_refunds_rejected_constructor',
+              'http_client::ledger::operation::startup::retention::tests::unregistered_services_count_individually_before_root_copy_and_refund_on_drop',
           }
           SUITES = {
-              "runtime-http-client": (206, None, RUNTIME_CASES),
+              "runtime-http-client": (221, None, RUNTIME_CASES),
               "production-dns": (1, {
                   "production_public_handle_rejects_loopback_before_tcp_or_http",
               }, None),
@@ -889,7 +904,7 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 123, "sf06-private-transport.log": 79, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 135, "sf06-private-transport.log": 82, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)

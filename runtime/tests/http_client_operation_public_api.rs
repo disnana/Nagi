@@ -127,28 +127,39 @@ async fn production_public_handle_rejects_loopback_before_tcp_or_http() {
         }
         count
     });
+    let mut catalog = StartupCatalog::new(
+        1,
+        RetentionLimits {
+            max_root_anchors: 8,
+            max_root_bytes: 16 * 1024,
+            max_config_bytes: 128 * 1024,
+        },
+    )
+    .unwrap();
     let service = Arc::new(
-        ServiceSpec::checked(ServiceConfig {
-            key: ServiceKey::checked(1, 2, 3, 4).unwrap(),
-            canonical_dns_name: "api.example.test".into(),
-            port,
-            resolver_endpoint: endpoint,
-            roots: rustls::RootCertStore::empty(),
-            max_candidates: 8,
-        })
+        ServiceSpec::checked(
+            &catalog,
+            ServiceConfig {
+                key: ServiceKey::checked(1, 2, 3, 4).unwrap(),
+                canonical_dns_name: "api.example.test".into(),
+                port,
+                resolver_endpoint: endpoint,
+                roots: rustls::RootCertStore::empty(),
+                max_candidates: 8,
+            },
+        )
         .unwrap(),
     );
     let state = Arc::new(State {
         preparations: AtomicUsize::new(0),
     });
-    let mut catalog = StartupCatalog::new(1).unwrap();
     // PublicSpec has no credential argument and no caller-auth/header surface.
     let spec = PublicSpec::checked(
         service,
         1,
         hyper::Method::POST,
         limits(),
-        FixedRequestHeaders::checked(None, None).unwrap(),
+        FixedRequestHeaders::checked(&catalog, None, None).unwrap(),
     )
     .unwrap();
     let operation: client::PublicOperation<State, Vec<u8>> = register_public(

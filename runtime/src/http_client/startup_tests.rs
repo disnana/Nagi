@@ -22,6 +22,14 @@ use tokio::{
     task::JoinHandle,
 };
 
+// Explicit small-fixture settings, never host defaults or a measured support profile.
+pub(crate) fn retention_limits() -> RetentionLimits {
+    RetentionLimits {
+        max_root_anchors: 8,
+        max_root_bytes: 16 * 1024,
+        max_config_bytes: 128 * 1024,
+    }
+}
 pub(crate) fn limits() -> OperationLimits {
     OperationLimits {
         jobs: 1,
@@ -99,8 +107,9 @@ fn public_prepare(
         limits,
     )
 }
-pub(crate) fn fixed_headers() -> FixedRequestHeaders {
+pub(crate) fn fixed_headers(catalog: &StartupCatalog) -> FixedRequestHeaders {
     FixedRequestHeaders::checked(
+        catalog,
         Some(b"application/octet-stream".to_vec()),
         Some(b"application/octet-stream".to_vec()),
     )
@@ -118,10 +127,14 @@ pub(crate) struct Fixture {
     server: JoinHandle<()>,
 }
 impl Fixture {
-    pub(crate) async fn new(protected: bool) -> Self {
-        Self::with_hold(protected, None).await
+    pub(crate) async fn new(catalog: &StartupCatalog, protected: bool) -> Self {
+        Self::with_hold(catalog, protected, None).await
     }
-    pub(crate) async fn with_hold(protected: bool, hold: Option<Arc<tokio::sync::Notify>>) -> Self {
+    pub(crate) async fn with_hold(
+        catalog: &StartupCatalog,
+        protected: bool,
+        hold: Option<Arc<tokio::sync::Notify>>,
+    ) -> Self {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let dns = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
@@ -226,6 +239,7 @@ impl Fixture {
         let service_key = ServiceKey::checked(1, 2, 3, 4).unwrap();
         let service = Arc::new(
             ServiceSpec::checked_for_test_network(
+                catalog,
                 ServiceConfig {
                     key: service_key,
                     canonical_dns_name: "api.example.test".into(),
@@ -239,7 +253,10 @@ impl Fixture {
             .unwrap(),
         );
         let credential = if protected {
-            Some(ServiceCredential::bearer(&service, 1, b"owned-fixture-token".to_vec()).unwrap())
+            Some(
+                ServiceCredential::bearer(catalog, &service, 1, b"owned-fixture-token".to_vec())
+                    .unwrap(),
+            )
         } else {
             None
         };
@@ -281,17 +298,17 @@ fn inspect_response(response: client::Response, status: i64) {
 
 #[tokio::test]
 async fn public_registered_operation_uses_verified_https_without_grant_or_redirect() {
-    let fixture = Fixture::new(false).await;
+    let mut catalog = StartupCatalog::new(1, retention_limits()).unwrap();
+    let fixture = Fixture::new(&catalog, false).await;
     let state = Arc::new(State {
         preparations: AtomicUsize::new(0),
     });
-    let mut catalog = StartupCatalog::new(1).unwrap();
     let spec = PublicSpec::checked(
         Arc::clone(&fixture.service),
         1,
         hyper::Method::POST,
         limits(),
-        fixed_headers(),
+        fixed_headers(&catalog),
     )
     .unwrap();
     let operation = register_public(
@@ -425,17 +442,17 @@ async fn incoming(endpoint: std::net::SocketAddr, wire: &[u8]) -> Vec<u8> {
 #[tokio::test]
 async fn protected_registered_operation_preserves_actual_request_grant_target_and_startup_credential(
 ) {
-    let mut fixture = Fixture::new(true).await;
+    let mut catalog = StartupCatalog::new(1, retention_limits()).unwrap();
+    let mut fixture = Fixture::new(&catalog, true).await;
     let state = Arc::new(State {
         preparations: AtomicUsize::new(0),
     });
-    let mut catalog = StartupCatalog::new(1).unwrap();
     let spec = ProtectedSpec::checked(
         Arc::clone(&fixture.service),
         1,
         hyper::Method::POST,
         limits(),
-        fixed_headers(),
+        fixed_headers(&catalog),
         fixture.credential.take(),
     )
     .unwrap();
@@ -510,6 +527,7 @@ async fn protected_registered_operation_preserves_actual_request_grant_target_an
 #[tokio::test]
 async fn startup_refuses_duplicate_operation_wrong_credential_binding_and_invalid_limits_before_native_work(
 ) {
+    let mut catalog = StartupCatalog::new(2, retention_limits()).unwrap();
     // Exercise the production constructor, without the test-network exception.
     // Constructor acceptance is not production DNS/socket/TLS acceptance.
     for host in [
@@ -520,14 +538,17 @@ async fn startup_refuses_duplicate_operation_wrong_credential_binding_and_invali
         "2130706433",
         "0x7f000001",
     ] {
-        let failure = ServiceSpec::checked(ServiceConfig {
-            key: ServiceKey::checked(1, 2, 3, 4).unwrap(),
-            canonical_dns_name: host.to_owned(),
-            port: 443,
-            resolver_endpoint: "127.0.0.1:53".parse().unwrap(),
-            roots: rustls::RootCertStore::empty(),
-            max_candidates: 8,
-        })
+        let failure = ServiceSpec::checked(
+            &catalog,
+            ServiceConfig {
+                key: ServiceKey::checked(1, 2, 3, 4).unwrap(),
+                canonical_dns_name: host.to_owned(),
+                port: 443,
+                resolver_endpoint: "127.0.0.1:53".parse().unwrap(),
+                roots: rustls::RootCertStore::empty(),
+                max_candidates: 8,
+            },
+        )
         .err()
         .expect("sf06_public_canonical_startup_reject");
         assert_eq!(client::kind(&failure), client::FailureKind::InvalidInput);
@@ -536,23 +557,26 @@ async fn startup_refuses_duplicate_operation_wrong_credential_binding_and_invali
             client::Outcome::RequestNotStarted
         );
     }
-    assert!(ServiceSpec::checked(ServiceConfig {
-        key: ServiceKey::checked(1, 2, 3, 4).unwrap(),
-        canonical_dns_name: "api.example.test".to_owned(),
-        port: 443,
-        resolver_endpoint: "127.0.0.1:53".parse().unwrap(),
-        roots: rustls::RootCertStore::empty(),
-        max_candidates: 8,
-    })
+    assert!(ServiceSpec::checked(
+        &catalog,
+        ServiceConfig {
+            key: ServiceKey::checked(1, 2, 3, 4).unwrap(),
+            canonical_dns_name: "api.example.test".to_owned(),
+            port: 443,
+            resolver_endpoint: "127.0.0.1:53".parse().unwrap(),
+            roots: rustls::RootCertStore::empty(),
+            max_candidates: 8,
+        }
+    )
     .is_ok());
-    let mut first = Fixture::new(true).await;
-    let second = Fixture::new(false).await;
+    let mut first = Fixture::new(&catalog, true).await;
+    let second = Fixture::new(&catalog, false).await;
     let wrong = ProtectedSpec::<()>::checked(
         Arc::clone(&second.service),
         1,
         hyper::Method::POST,
         limits(),
-        fixed_headers(),
+        fixed_headers(&catalog),
         first.credential.take(),
     );
     assert_eq!(
@@ -568,14 +592,13 @@ async fn startup_refuses_duplicate_operation_wrong_credential_binding_and_invali
                 1,
                 hyper::Method::POST,
                 invalid,
-                fixed_headers()
+                fixed_headers(&catalog)
             )
             .err()
             .unwrap()
         ),
         client::FailureKind::InvalidInput
     );
-    let mut catalog = StartupCatalog::new(2).unwrap();
     let state = Arc::new(State {
         preparations: AtomicUsize::new(0),
     });
@@ -584,7 +607,7 @@ async fn startup_refuses_duplicate_operation_wrong_credential_binding_and_invali
         1,
         hyper::Method::POST,
         limits(),
-        fixed_headers(),
+        fixed_headers(&catalog),
     )
     .unwrap();
     let operation = register_public(
@@ -600,7 +623,7 @@ async fn startup_refuses_duplicate_operation_wrong_credential_binding_and_invali
         1,
         hyper::Method::POST,
         limits(),
-        fixed_headers(),
+        fixed_headers(&catalog),
     )
     .unwrap();
     let failure = register_public(
@@ -626,8 +649,9 @@ async fn startup_refuses_duplicate_operation_wrong_credential_binding_and_invali
 
 #[tokio::test]
 async fn live_native_socket_quota_refusal_is_capacity_before_http_submission() {
+    let mut catalog = StartupCatalog::new(1, retention_limits()).unwrap();
     let hold = Arc::new(tokio::sync::Notify::new());
-    let fixture = Fixture::with_hold(false, Some(Arc::clone(&hold))).await;
+    let fixture = Fixture::with_hold(&catalog, false, Some(Arc::clone(&hold))).await;
     let state = Arc::new(State {
         preparations: AtomicUsize::new(0),
     });
@@ -638,13 +662,12 @@ async fn live_native_socket_quota_refusal_is_capacity_before_http_submission() {
     config.dns_roots = 2;
     config.dns_children = 4;
     config.http_drivers = 2;
-    let mut catalog = StartupCatalog::new(1).unwrap();
     let spec = PublicSpec::checked(
         Arc::clone(&fixture.service),
         1,
         hyper::Method::POST,
         config,
-        fixed_headers(),
+        fixed_headers(&catalog),
     )
     .unwrap();
     let operation = register_public(

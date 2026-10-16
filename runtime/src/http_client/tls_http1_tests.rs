@@ -111,11 +111,20 @@ fn profile(
     whole_end: Instant,
     tls_end: Instant,
 ) -> TlsProfile {
+    let catalog = crate::http_client::startup::StartupCatalog::new(
+        1,
+        crate::http_client::startup_tests::retention_limits(),
+    )
+    .unwrap();
     TlsProfile::checked(
-        identity(),
-        url::Host::Domain(name.to_owned()),
-        port,
-        roots(trusted),
+        FrozenTrust::for_test(
+            &catalog,
+            identity(),
+            url::Host::Domain(name.to_owned()),
+            port,
+            roots(trusted),
+        ),
+        catalog.test_retained(),
         whole_end,
         tls_end,
         limits(),
@@ -215,6 +224,7 @@ async fn trusted_ca_original_name_and_host_http1_then_driver_actual_join() {
         .await
         .unwrap();
     let profile = profile(address.port(), "api.example.test", true, end, end);
+    let trust = Arc::downgrade(&profile.trust);
     let Http1Parts { client, driver } = establish(pinned, &profile, Arc::clone(&control))
         .await
         .unwrap();
@@ -222,6 +232,11 @@ async fn trusted_ca_original_name_and_host_http1_then_driver_actual_join() {
         quota.used(),
         1,
         "driver owns the pinned socket after handshake"
+    );
+    drop(profile);
+    assert!(
+        trust.upgrade().is_some(),
+        "unpolled native driver retains trust"
     );
     // Test-only owner. Production driver creation must go through the parent JobLedger gate.
     let driver_owner = tokio::spawn(driver);
@@ -241,6 +256,10 @@ async fn trusted_ca_original_name_and_host_http1_then_driver_actual_join() {
         .unwrap()
         .is_ok());
     assert_eq!(quota.used(), 0, "quota releases after actual driver join");
+    assert!(
+        trust.upgrade().is_none(),
+        "trust releases after actual native driver Drop"
+    );
     join_server(server).await;
     assert_eq!(
         seen.sni.lock().unwrap().as_deref(),
@@ -443,11 +462,20 @@ async fn ip_origin_requires_ip_san_and_never_guesses_dns_name() {
     let pinned = connect(snapshot(address.port(), end), end, &control, &quota)
         .await
         .unwrap();
+    let catalog = crate::http_client::startup::StartupCatalog::new(
+        1,
+        crate::http_client::startup_tests::retention_limits(),
+    )
+    .unwrap();
     let profile = TlsProfile::checked(
-        identity(),
-        url::Host::Ipv4(Ipv4Addr::LOCALHOST),
-        address.port(),
-        roots(true),
+        FrozenTrust::for_test(
+            &catalog,
+            identity(),
+            url::Host::Ipv4(Ipv4Addr::LOCALHOST),
+            address.port(),
+            roots(true),
+        ),
+        catalog.test_retained(),
         end,
         end,
         limits(),
@@ -562,4 +590,109 @@ async fn exact_hyper_dispatches_at_send_request_call_before_future_poll() {
         .unwrap()
         .unwrap()
         .is_ok());
+}
+
+#[test]
+fn native_io_drops_stream_before_the_final_trust_claim() {
+    struct StreamDrop {
+        trust: std::sync::Weak<FrozenTrust>,
+        observed: Arc<AtomicUsize>,
+    }
+    impl Drop for StreamDrop {
+        fn drop(&mut self) {
+            assert!(
+                self.trust.upgrade().is_some(),
+                "claim must survive stream destructor"
+            );
+            self.observed.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    let profile = profile(
+        443,
+        "api.example.test",
+        true,
+        Instant::now() + Duration::from_secs(3),
+        Instant::now() + Duration::from_secs(2),
+    );
+    let weak = Arc::downgrade(&profile.trust);
+    let observed = Arc::new(AtomicUsize::new(0));
+    let io = TrustBoundTlsIo {
+        stream: StreamDrop {
+            trust: weak.clone(),
+            observed: Arc::clone(&observed),
+        },
+        _trust: Arc::clone(&profile.trust),
+        _retained: Arc::clone(&profile.retained),
+    };
+    drop(profile);
+    assert!(weak.upgrade().is_some());
+    drop(io);
+    assert_eq!(observed.load(Ordering::SeqCst), 1);
+    assert!(weak.upgrade().is_none());
+}
+#[tokio::test]
+async fn unpolled_driver_drop_and_abort_actual_join_release_native_trust() {
+    for abort in [false, true] {
+        let (address, seen, server) = tls_server(&test_certificates().valid).await;
+        let end = Instant::now() + Duration::from_secs(4);
+        let quota = SocketQuota::checked(1).unwrap();
+        let control = Arc::new(DialControl::new());
+        let pinned = connect(snapshot(address.port(), end), end, &control, &quota)
+            .await
+            .unwrap();
+        let profile = profile(address.port(), "api.example.test", true, end, end);
+        let weak = Arc::downgrade(&profile.trust);
+        let Http1Parts { client, driver } = establish(pinned, &profile, control).await.unwrap();
+        drop(profile);
+        assert!(weak.upgrade().is_some());
+        if abort {
+            let (polled, observed_poll) = tokio::sync::oneshot::channel();
+            let owner = tokio::spawn(async move {
+                let mut driver = Box::pin(driver);
+                let mut polled = Some(polled);
+                std::future::poll_fn(|cx| {
+                    let result = std::future::Future::poll(driver.as_mut(), cx);
+                    if let Some(polled) = polled.take() {
+                        let _ = polled.send(());
+                    }
+                    result
+                })
+                .await
+            });
+            observed_poll.await.unwrap();
+            assert!(!owner.is_finished());
+            assert!(weak.upgrade().is_some());
+            owner.abort();
+            assert!(owner.await.unwrap_err().is_cancelled());
+        } else {
+            drop(driver);
+        }
+        assert!(weak.upgrade().is_none());
+        assert_eq!(quota.used(), 0);
+        drop(client);
+        join_server(server).await;
+        assert_eq!(seen.application_bytes.load(Ordering::SeqCst), 0);
+    }
+}
+#[tokio::test]
+async fn equal_numeric_service_identity_does_not_union_trust_stores() {
+    let (address, seen, server) = tls_server(&test_certificates().valid).await;
+    let end = Instant::now() + Duration::from_secs(4);
+    let control = Arc::new(DialControl::new());
+    let quota = SocketQuota::checked(1).unwrap();
+    let trusted = profile(address.port(), "api.example.test", true, end, end);
+    let untrusted = profile(address.port(), "api.example.test", false, end, end);
+    assert!(!Arc::ptr_eq(&trusted.trust, &untrusted.trust));
+    let pinned = connect(snapshot(address.port(), end), end, &control, &quota)
+        .await
+        .unwrap();
+    assert!(matches!(
+        establish(pinned, &untrusted, control).await,
+        Err(TransportError::Tls)
+    ));
+    assert_eq!(quota.used(), 0);
+    join_server(server).await;
+    assert_eq!(seen.application_bytes.load(Ordering::SeqCst), 0);
+    drop(trusted);
+    drop(untrusted);
 }

@@ -256,7 +256,7 @@ pub(super) fn run_three(high: &str, low: &str) {
 const ORACLE: &str = r#"
 use crate::{auth, http_client as client, http_server as http};
 use client::startup::*;
-use crate::http_client::startup_tests::{Fixture, fixed_headers, limits};
+use crate::http_client::startup_tests::{Fixture, fixed_headers, limits, retention_limits};
 use std::{sync::{Arc,atomic::Ordering}, time::{Duration,Instant}};
 use tokio::{net::{TcpListener,TcpStream},io::{AsyncReadExt,AsyncWriteExt},sync::oneshot};
 fn freeze(input: Vec<u8>, limits: &InputLimits) -> Result<FrozenInput,client::Failure> { FrozenInput::checked(input,limits) }
@@ -287,14 +287,14 @@ async fn handler(_:http::Request,state:Arc<AppState>,grant:auth::Grant<super::__
 async fn real_tls_and_grant(){
  // Only destination admission to this owned loopback service is a cfg(test)
  // seam. Compiler output, TLS, Grant, structured request, driver and joins are real.
- let fixture=Fixture::new(false).await;let mut catalog=StartupCatalog::new(1).unwrap();
- let spec=PublicSpec::checked(Arc::clone(&fixture.service),1,hyper::Method::POST,limits(),fixed_headers()).unwrap();
+ let mut catalog=StartupCatalog::new(1,retention_limits()).unwrap();let fixture=Fixture::new(&catalog,false).await;
+ let spec=PublicSpec::checked(Arc::clone(&fixture.service),1,hyper::Method::POST,limits(),fixed_headers(&catalog)).unwrap();
  let operation=register_public(&mut catalog,spec,Arc::new(super::__STATE__{n:42}),freeze,prepare_public).unwrap();let mut owner=catalog.freeze();
  let response=super::__CALL_PUBLIC__(&operation,b"dto".to_vec()).await;
  owner.shutdown().await; assert_eq!(fixture.dns_calls.load(Ordering::SeqCst),2);assert_eq!(fixture.http_calls.load(Ordering::SeqCst),1);fixture.finish().await;
  inspect(response.unwrap(),302);
- let mut fixture=Fixture::new(true).await;let mut catalog=StartupCatalog::new(1).unwrap();
- let spec=ProtectedSpec::checked(Arc::clone(&fixture.service),1,hyper::Method::POST,limits(),fixed_headers(),fixture.credential.take()).unwrap();
+ let mut catalog=StartupCatalog::new(1,retention_limits()).unwrap();let mut fixture=Fixture::new(&catalog,true).await;
+ let spec=ProtectedSpec::checked(Arc::clone(&fixture.service),1,hyper::Method::POST,limits(),fixed_headers(&catalog),fixture.credential.take()).unwrap();
  let operation=register_protected(&mut catalog,spec,Arc::new(super::__STATE__{n:42}),freeze,prepare_protected).unwrap();let mut owner=catalog.freeze();
  let app=http::route(http::app_default(AppState{operation}),http::Method::GET,"/",http::authorized_policy(verify,authorize),handler).unwrap();
  let listener=TcpListener::bind("127.0.0.1:0").await.unwrap();let endpoint=listener.local_addr().unwrap();let(stop,stopped)=oneshot::channel();

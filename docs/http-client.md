@@ -71,7 +71,25 @@ async def public_call(operation: view[client.PublicOperation[State, bytes]], inp
 
 全20個の`OperationLimits`値とcatalog／候補上限を起動adapterで指定します。値域に加え、input≤waiter_bytes、attempts≤候補上限、保持容量の積・和、期限の加算、固定headerの数・bytesをchecked検査します。表の最小値を機械的に組み合わせても、必要headerや容量を満たさず起動拒否になる場合があります。DNSにも累計IO 16回、送受信各128 KiB、records 128、CNAME hops 8などの有限な内部上限があります。これらは性能の推奨値やSLAではありません。
 
-設定・証明書の保持容量の対応付け、実測した小規模設定例、4 OSの本番constructor経路は受入作業として残っています。入力・応答のchecked式だけで全processのheap／RSSや実行時間を保証しません。未検証のテスト設定を本番推奨値として使わないでください。
+### catalog全体の設定保持予算
+
+C3として、trusted Rust startupは`StartupCatalog::new(operation_capacity, RetentionLimits)`へ次の3値を全て明示します。各値は正の有限な`usize`で、暗黙defaultや追加の固定数値上限はありません。必要な配列長と加算・乗算はchecked検査します。大きな有限値でも確保成功や性能は保証しません。20項目の`OperationLimits`は別に維持します。
+
+| 必須値 | 同じcatalogで保持する負担 |
+|---|---|
+| `max_root_anchors` | 受理済みanchor entryの合計。未登録service、別service、重複entryも含む |
+| `max_root_bytes` | 一回だけ正規化したanchorのsubject／SPKI／任意name constraintsの実Vec capacity合計。元X.509証明書全体のbytesではない |
+| `max_config_bytes` | 下記accounting modelの合計。root bytesも含め、3制約を同時に満たす |
+
+設定負担は、root vectorの実slot capacity、正規化DER、保持するDNS StringとそのTLS名コピー、ALPN vector/payload、authority／固定header／Bearerの実payload capacity、catalog identity vectorを数えます。加えてbudget state・catalog・service/trust・policy/resolver・header owner・readiness・Spec/Core/claimの固定`size_of`負担、opaqueなRustls/provider表現の固定構造体負担、resolverのcanonical入力長、Methodのtoken長、originの`DNS名長 + 15`の論理負担を予約します。15は`https://`、区切り、u16 portの最大5桁、末尾slashに由来します。共有payloadは一回計上します。opaqueな内部容量を実測bytesとは呼びません。
+
+`ServiceSpec::checked`、`FixedRequestHeaders::checked`、`ServiceCredential::bearer`とtest-network seamには同じcatalog参照が必須です。Protected/Public specと登録もcatalog/service/operationのbindingを確認します。旧引数の無budget入口はありません。登録前のspec/header/credentialも同じ残量を使い、受理・payload copy前に予約します。長さが短くても保持するString/Vecの余剰capacityが大きければ拒否されます。root DERの隠れた入力capacityは持ち込まず、小さいowned bufferへ一度だけコピーし、その実capacityを再検査します。
+
+同じserviceのoperation/TLSは一つの不変trust ownerを共有します。同じ数値identityや同じroot内容だけでは共有せず、別serviceのtrustを統合しません。headerのclaimはHyperのHeaderValue/Bytes cloneの末尾まで、trustのclaimはnative TLS stream/driverの実Dropまで残ります。失敗したpartial dataをDropしてから残量を返し、freezeはcatalog自身のidentity vectorを解放して作成authorityを閉じます。close/shutdownだけで生存中のservice、operation、native header/TLSの負担は消えません。
+
+budget不足は`Capacity`、無効設定・overflow・binding不一致は`InvalidInput`、明示的な確保失敗は`Unavailable`、閉鎖は`Closing`です。いずれもstartupでは`RequestNotStarted`、authは`None`です。計上不整合は`Internal`として閉鎖します。ホストが先に確保した入力、外部crateの隠れたheap、Arc/Bytesのallocator bookkeeping、allocator rounding/fragmentation、実行時DNS/TLS/HTTP bufferやFuture/stack、既存operation ledger、アプリstateはこのaccounting modelの総量保証に含みません。全malloc／heap／RSS上限や普遍的OOM回復を保証するAPIではありません。
+
+C3実装候補の受入には、Rust型検証、native所有fixture、4 OSのexact-head CIと独立reviewが残っています。実測した小規模設定例とproduction-positive profileも別の受入作業です。今回のsource/parse検査や未検証のfixture値を本番推奨値として使わないでください。
 
 保護操作では `execute` が実際の `Grant[P]` を消費します。ホストのレビュー済み adapter は、その Grant から得た subject/target を実際の要求へ結び付けます。呼び出し側から任意の URL、method/path の組み合わせ、raw header map、Cookie や cookie jar を渡す API はありません。ヘッダーは登録時の固定 `Accept` / `Content-Type` 宣言と、保護操作に結び付いた任意の Bearer 認証情報に限られます。公開操作は別の型で登録され、Grant や認証情報を受け取りません。`ProtectedOperation` を `execute_public` に渡して認可を迂回することは、型検査で拒否します。
 

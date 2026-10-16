@@ -138,10 +138,7 @@ pub fn headers<'r>(response: &'r Response, name: &str) -> Result<Vec<&'r [u8]>, 
 pub(super) struct NativeProfile {
     pub(super) identity: ServiceIdentity,
     pub(super) policy: Arc<InternalPolicy>,
-    pub(super) resolver: ResolverStartup,
-    pub(super) host: url::Host<String>,
-    pub(super) port: u16,
-    pub(super) roots: rustls::RootCertStore,
+    pub(super) resolver: Arc<ResolverStartup>,
     pub(super) transport: TransportLimits,
     pub(super) quota: SocketQuota,
     pub(super) whole: Duration,
@@ -151,6 +148,8 @@ pub(super) struct NativeProfile {
     pub(super) method: Method,
     #[cfg(test)]
     pub(super) driver_hold: Option<Arc<Notify>>,
+    pub(super) trust: Arc<startup::FrozenTrust>,
+    pub(super) retained: Arc<startup::RetentionClaim>,
 }
 pub struct InputLimits {
     max_bytes: usize,
@@ -275,12 +274,13 @@ impl PreparedRequest {
 struct Core {
     sender: ClientSender,
     runner: Arc<RunnerOwnerHandle>,
-    profile: NativeProfile,
     input_limits: InputLimits,
     request_limits: RequestLimits,
-    ready: Arc<AtomicBool>,
+    ready: Arc<startup::ReadyState>,
     operation_id: u64,
     fixed_headers: address::socket_pin::tls_http1::FixedHeaders,
+    // Includes the method/origin accounting guard; drop it after RequestLimits.
+    profile: NativeProfile,
 }
 pub struct ProtectedOperation<C, P, I> {
     core: Arc<Core>,
@@ -467,10 +467,8 @@ async fn native_request(
     plan.start_tls(Instant::now(), &AttemptControl::default())
         .map_err(|_| Failure::new(FailureKind::Deadline, false))?;
     let tls = TlsProfile::checked(
-        profile.identity,
-        profile.host.clone(),
-        profile.port,
-        profile.roots.clone(),
+        Arc::clone(&profile.trust),
+        Arc::clone(&profile.retained),
         end,
         end,
         profile.transport,
@@ -572,11 +570,11 @@ impl Drop for CancelOnDrop {
 }
 
 fn startup_origin(profile: &NativeProfile) -> Result<url::Url, Failure> {
-    let name = match &profile.host {
+    let name = match profile.trust.host() {
         url::Host::Domain(name) => name,
         _ => return Err(Failure::new(FailureKind::InvalidInput, false)),
     };
-    url::Url::parse(&format!("https://{name}:{}/", profile.port))
+    url::Url::parse(&format!("https://{name}:{}/", profile.trust.port()))
         .map_err(|_| Failure::new(FailureKind::InvalidInput, false))
 }
 
@@ -613,6 +611,7 @@ pub(super) fn register_private_protected<C: Send + Sync + 'static, P, I>(
         max_body_bytes: profile.transport.request_limit(),
         max_target_bytes: profile.transport.path_limit(),
     };
+    let ready = startup::ReadyState::for_test(&profile.retained);
     Ok(ProtectedOperation {
         core: Arc::new(Core {
             sender,
@@ -620,7 +619,7 @@ pub(super) fn register_private_protected<C: Send + Sync + 'static, P, I>(
             profile,
             input_limits,
             request_limits,
-            ready: Arc::new(AtomicBool::new(true)),
+            ready,
             operation_id: 1,
             fixed_headers: address::socket_pin::tls_http1::FixedHeaders::empty(),
         }),

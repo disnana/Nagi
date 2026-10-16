@@ -144,16 +144,23 @@ async fn https_case(scenario: Scenario) {
     });
     let hold = Arc::new(Notify::new());
     let identity = ServiceIdentity::from_startup(1, 2, 3, 4).unwrap();
+    let catalog =
+        startup::StartupCatalog::new(1, crate::http_client::startup_tests::retention_limits())
+            .unwrap();
+    let trust = startup::FrozenTrust::for_test(
+        &catalog,
+        identity,
+        url::Host::Domain("api.example.test".into()),
+        port,
+        roots,
+    );
     let profile = NativeProfile {
         identity,
         policy: Arc::new(
             InternalPolicy::checked(identity, port, 8, vec![IpAddr::V4(Ipv4Addr::LOCALHOST)])
                 .unwrap(),
         ),
-        resolver: ResolverStartup::checked("api.example.test", endpoint).unwrap(),
-        host: url::Host::Domain("api.example.test".into()),
-        port,
-        roots,
+        resolver: Arc::new(ResolverStartup::checked("api.example.test", endpoint).unwrap()),
         transport: TransportLimits::checked(16, 4096, 8192, 256, 4096, 1024).unwrap(),
         quota: SocketQuota::checked(1).unwrap(),
         whole: if matches!(scenario, Scenario::Deadline) {
@@ -170,6 +177,8 @@ async fn https_case(scenario: Scenario) {
         } else {
             Some(Arc::clone(&hold))
         },
+        trust,
+        retained: catalog.test_retained(),
     };
     let mut parent = ParentDrain::new(1).unwrap();
     let operation = register_private_protected(
@@ -357,16 +366,23 @@ async fn unsupported_encoding_is_unknown_and_never_replayed() {
 
 fn idle_profile(endpoint: std::net::SocketAddr) -> NativeProfile {
     let identity = ServiceIdentity::from_startup(1, 2, 3, 4).unwrap();
+    let catalog =
+        startup::StartupCatalog::new(1, crate::http_client::startup_tests::retention_limits())
+            .unwrap();
+    let trust = startup::FrozenTrust::for_test(
+        &catalog,
+        identity,
+        url::Host::Domain("api.example.test".into()),
+        443,
+        rustls::RootCertStore::empty(),
+    );
     NativeProfile {
         identity,
         policy: Arc::new(
             InternalPolicy::checked(identity, 443, 8, vec![IpAddr::V4(Ipv4Addr::LOCALHOST)])
                 .unwrap(),
         ),
-        resolver: ResolverStartup::checked("api.example.test", endpoint).unwrap(),
-        host: url::Host::Domain("api.example.test".into()),
-        port: 443,
-        roots: rustls::RootCertStore::empty(),
+        resolver: Arc::new(ResolverStartup::checked("api.example.test", endpoint).unwrap()),
         transport: TransportLimits::checked(16, 4096, 8192, 256, 4096, 1024).unwrap(),
         quota: SocketQuota::checked(1).unwrap(),
         whole: Duration::from_secs(5),
@@ -375,6 +391,8 @@ fn idle_profile(endpoint: std::net::SocketAddr) -> NativeProfile {
         input_bytes: 256,
         method: Method::POST,
         driver_hold: None,
+        trust,
+        retained: catalog.test_retained(),
     }
 }
 
