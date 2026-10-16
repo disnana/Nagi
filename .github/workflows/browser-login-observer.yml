@@ -59,6 +59,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Check bounded BrowserLogin diagnostic collector controls
+        run: python -B -m unittest discover -s tests -p 'test_browser_login_phase_diagnostic.py'
       - name: Capture the exact public test with manual phase diagnostics
         shell: bash
         run: |

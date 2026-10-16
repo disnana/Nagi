@@ -134,6 +134,27 @@ PUBLIC_BOOL_FIELDS = {
     "handler_unchanged",
 }
 
+# Closed aggregate reasons explain a refused capture without retaining any raw
+# line. Values saturate so a bounded input cannot create unbounded output.
+INVALID_REASON_NAMES = (
+    "input_refused",
+    "observer_record_refused",
+    "public_record_refused",
+    "summary_refused",
+    "case_row_refused",
+    "summary_case_mismatch",
+    "passing_run_summary_mismatch",
+    "passing_run_observer_count_mismatch",
+    "failed_run_pass_summary",
+    "passing_run_public_markers",
+)
+INVALID_REASON_LIMIT = MAX_PUBLIC_RECORDS + 1
+
+
+def note_invalid(document: dict, reason: str) -> None:
+    counts = document["invalid_reason_counts"]
+    counts[reason] = min(INVALID_REASON_LIMIT, counts[reason] + 1)
+
 
 def parse_public_record(line: str) -> dict | None:
     for case, (phase, pattern) in PUBLIC_MARKERS.items():
@@ -158,12 +179,14 @@ def parse_public_record(line: str) -> dict | None:
 
 def empty_document(cargo_exit: int) -> dict:
     return {
-        "schema": "nagi-browser-login-phase-diagnostic-v2",
+        "schema": "nagi-browser-login-phase-diagnostic-v3",
         "case": CASE,
         "command": COMMAND,
         "cargo_exit": cargo_exit,
         "capture_valid": False,
         "test_summary": "unavailable",
+        "observer_records_seen": 0,
+        "invalid_reason_counts": {name: 0 for name in INVALID_REASON_NAMES},
         "records": [],
         "public_api_records": [],
     }
@@ -172,12 +195,17 @@ def empty_document(cargo_exit: int) -> dict:
 def sanitize(raw: bytes | None, cargo_exit: int) -> tuple[dict, int]:
     """Return only constants, closed numbers/booleans, and parsed records."""
     document = empty_document(cargo_exit)
-    if raw is None or len(raw) > RAW_LIMIT:
+    if raw is None:
+        note_invalid(document, "input_refused")
+        return document, 1
+    if len(raw) > RAW_LIMIT:
+        note_invalid(document, "input_refused")
         return document, 1
 
     try:
         text = raw.decode("utf-8", errors="replace")
     except Exception:
+        note_invalid(document, "input_refused")
         return document, 1
 
     records: list[dict] = []
@@ -189,12 +217,17 @@ def sanitize(raw: bytes | None, cargo_exit: int) -> tuple[dict, int]:
     invalid = False
     for line in text.splitlines():
         if "browser_login_phase_diag" in line:
+            document["observer_records_seen"] = min(
+                MAX_RECORDS + 1, document["observer_records_seen"] + 1
+            )
             match = RECORD.fullmatch(line)
             if match is None or len(records) >= MAX_RECORDS:
+                note_invalid(document, "observer_record_refused")
                 invalid = True
                 continue
             values = [int(value) for value in match.groups()]
             if values[0] > U64_MAX or values[0] in request_ids:
+                note_invalid(document, "observer_record_refused")
                 invalid = True
                 continue
             request_ids.add(values[0])
@@ -204,10 +237,12 @@ def sanitize(raw: bytes | None, cargo_exit: int) -> tuple[dict, int]:
         if "browser_login_public_api_diag" in line:
             public_record = parse_public_record(line)
             if public_record is None or len(public_records) >= MAX_PUBLIC_RECORDS:
+                note_invalid(document, "public_record_refused")
                 invalid = True
                 continue
             record_id = (public_record["case"], public_record["iteration"])
             if record_id in public_record_ids:
+                note_invalid(document, "public_record_refused")
                 invalid = True
                 continue
             public_record_ids.add(record_id)
@@ -220,6 +255,7 @@ def sanitize(raw: bytes | None, cargo_exit: int) -> tuple[dict, int]:
                 None,
             )
             if matched_status is None:
+                note_invalid(document, "summary_refused")
                 invalid = True
             else:
                 summaries.append(matched_status)
@@ -228,30 +264,43 @@ def sanitize(raw: bytes | None, cargo_exit: int) -> tuple[dict, int]:
         if line.startswith("test ") and CASE_ROW_LIKE.fullmatch(line):
             match = CASE_ROW.fullmatch(line)
             if match is None:
+                note_invalid(document, "case_row_refused")
                 invalid = True
             else:
                 case_rows.append(match.group(1))
 
     summary_status = summaries[0] if len(summaries) == 1 else None
     row_status = case_rows[0] if len(case_rows) == 1 else None
-    if len(summaries) > 1 or len(case_rows) > 1:
+    if len(summaries) > 1:
+        note_invalid(document, "summary_refused")
+        invalid = True
+    if len(case_rows) > 1:
+        note_invalid(document, "case_row_refused")
         invalid = True
     if summary_status is None:
         if case_rows:
+            note_invalid(document, "case_row_refused")
             invalid = True
     elif row_status != ("ok" if summary_status == "passed" else "FAILED"):
+        note_invalid(document, "summary_case_mismatch")
         invalid = True
 
     # A passing run must show both known deadline cases. Failed runs retain any
     # valid records observed before the test stopped, up to its ten requests.
     if cargo_exit == 0:
-        if summary_status != "passed" or len(records) != 2:
+        if summary_status != "passed":
+            note_invalid(document, "passing_run_summary_mismatch")
+            invalid = True
+        if len(records) != 2:
+            note_invalid(document, "passing_run_observer_count_mismatch")
             invalid = True
     elif summary_status == "passed":
+        note_invalid(document, "failed_run_pass_summary")
         invalid = True
     if cargo_exit == 0 and public_records:
         # The public-test markers are printed only immediately before an
         # assertion failure in this exact source test.
+        note_invalid(document, "passing_run_public_markers")
         invalid = True
 
     document["test_summary"] = summary_status or "unavailable"
@@ -266,6 +315,25 @@ def sanitize(raw: bytes | None, cargo_exit: int) -> tuple[dict, int]:
     document["records"] = []
     document["public_api_records"] = []
     return document, 1
+
+
+def closed_count_line(document: dict) -> str:
+    unavailable = "browser_login_phase_counts unavailable"
+    expected = {"schema", "case", "command", "cargo_exit", "capture_valid",
+                "test_summary", "observer_records_seen", "invalid_reason_counts",
+                "records", "public_api_records"}
+    if type(document) is not dict or set(document) != expected:
+        return unavailable
+    seen = document["observer_records_seen"]
+    counts = document["invalid_reason_counts"]
+    if (type(seen) is not int or not 0 <= seen <= MAX_RECORDS + 1
+            or type(counts) is not dict or set(counts) != set(INVALID_REASON_NAMES)):
+        return unavailable
+    if any(type(counts[name]) is not int or not 0 <= counts[name] <= INVALID_REASON_LIMIT
+           for name in INVALID_REASON_NAMES):
+        return unavailable
+    return ("browser_login_phase_counts observer_records_seen=" + str(seen) + " "
+            + " ".join(name + "=" + str(counts[name]) for name in INVALID_REASON_NAMES))
 
 
 def main(argv: list[str]) -> int:
@@ -305,6 +373,7 @@ def main(argv: list[str]) -> int:
         + " cargo_exit="
         + str(cargo_exit)
     )
+    print(closed_count_line(document))
     return result
 
 

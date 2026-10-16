@@ -1,7 +1,9 @@
 //! Closed authenticated token delivery and one-budget guarded Session dispatch.
 use super::*;
 #[cfg(nagi_auth_stage_diag)]
-use crate::auth::session_deadline_observer::{self as deadline_observer, Exit, Observer, Phase};
+use crate::auth::session_deadline_observer::{
+    self as deadline_observer, Exit, Observer, Phase, TokenTerminal,
+};
 use crate::auth::{csrf, session::CsrfBinding};
 
 #[path = "csrf_body_deadline.rs"]
@@ -193,7 +195,7 @@ pub(super) async fn dispatch_tokens(
                     store, parts, body, options, lease, head, admitted,
                 ))
                 .await;
-            observer.emit(response.status().as_u16());
+            observer.emit_token(response.status().as_u16());
             return response;
         }
     }
@@ -213,6 +215,8 @@ async fn dispatch_tokens_inner(
         return token_terminal(&owner, Status::SERVICE_UNAVAILABLE, head);
     };
     if let Err(e) = csrf::constrain(&owner.lease.lease, until) {
+        #[cfg(nagi_auth_stage_diag)]
+        deadline_observer::token_terminal(TokenTerminal::Constrain);
         return token_terminal(&owner, e.http_status(), head);
     }
     if !hyper::body::Body::is_end_stream(&body)
@@ -264,12 +268,16 @@ async fn dispatch_tokens_inner(
         Ok(_) if Instant::now() >= until => {
             #[cfg(nagi_auth_stage_diag)]
             deadline_observer::exit(Exit::LateReady);
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::token_terminal(TokenTerminal::LateCompletion);
             token_terminal(&owner, Status::GATEWAY_TIMEOUT, head)
         }
         Ok(Ok(Ok((binding, seal)))) => {
             if let Err(status) = live_until(&owner.lease, until) {
                 #[cfg(nagi_auth_stage_diag)]
                 deadline_observer::exit(Exit::Gate);
+                #[cfg(nagi_auth_stage_diag)]
+                deadline_observer::token_terminal(TokenTerminal::LiveGate);
                 return token_terminal(&owner, status, head);
             }
             let body = if let Some(seal) = seal {
@@ -283,6 +291,8 @@ async fn dispatch_tokens_inner(
                     Err(e) => {
                         #[cfg(nagi_auth_stage_diag)]
                         deadline_observer::exit(Exit::Wire);
+                        #[cfg(nagi_auth_stage_diag)]
+                        deadline_observer::token_terminal(TokenTerminal::TakeWire);
                         return token_terminal(&owner, e.http_status(), false);
                     }
                 }
@@ -306,6 +316,8 @@ async fn dispatch_tokens_inner(
             managed(response, head, false)
         }
         Ok(Ok(Err(response))) => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::token_terminal(TokenTerminal::InnerRefusal);
             owner.retire();
             managed(response.into_http(head), head, false)
         }
@@ -313,6 +325,8 @@ async fn dispatch_tokens_inner(
         Err(_) => {
             #[cfg(nagi_auth_stage_diag)]
             deadline_observer::exit(Exit::Timer);
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::token_terminal(TokenTerminal::Timer);
             token_terminal(&owner, Status::GATEWAY_TIMEOUT, head)
         }
     }

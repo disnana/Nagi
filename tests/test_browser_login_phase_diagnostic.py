@@ -1,4 +1,7 @@
 import json
+import contextlib
+import io
+import tempfile
 import pathlib
 import sys
 import unittest
@@ -111,9 +114,14 @@ class BrowserLoginPhaseDiagnosticTests(unittest.TestCase):
         self.assertEqual(document["case"], diagnostic.CASE)
         self.assertEqual(
             set(document),
-            {"schema", "case", "command", "cargo_exit", "capture_valid", "test_summary", "records", "public_api_records"},
+            {"schema", "case", "command", "cargo_exit", "capture_valid", "test_summary", "observer_records_seen", "invalid_reason_counts", "records", "public_api_records"},
         )
-        self.assertEqual(document["schema"], "nagi-browser-login-phase-diagnostic-v2")
+        self.assertEqual(document["schema"], "nagi-browser-login-phase-diagnostic-v3")
+        self.assertEqual(set(document["invalid_reason_counts"]), set(diagnostic.INVALID_REASON_NAMES))
+        self.assertTrue(all(type(n) is int and 0 <= n <= diagnostic.INVALID_REASON_LIMIT
+                            for n in document["invalid_reason_counts"].values()))
+        self.assertEqual(document["observer_records_seen"], 2)
+        self.assertEqual(set(document["invalid_reason_counts"].values()), {0})
         self.assertEqual(document["command"], diagnostic.COMMAND)
         self.assertIs(type(document["capture_valid"]), bool)
         self.assertIs(type(document["cargo_exit"]), int)
@@ -169,6 +177,29 @@ class BrowserLoginPhaseDiagnosticTests(unittest.TestCase):
         self.assertNotIn("private.rs", json.dumps(document))
         self.assertNotIn("arbitrary failure text", json.dumps(document))
 
+    def test_extra_allowed_deadline_record_explains_fail_closed_pass_count(self):
+        raw = "\n".join(
+            [
+                "test " + diagnostic.CASE + " ... ok",
+                observer_line(request=21),
+                observer_line(request=22),
+                observer_line(request=23),
+                PASS_SUMMARY,
+            ]
+        )
+        document, result = run_text(raw)
+        self.assertEqual(result, 1)
+        self.assertFalse(document["capture_valid"])
+        self.assertEqual(document["records"], [])
+        self.assertEqual(document["observer_records_seen"], 3)
+        self.assertEqual(
+            document["invalid_reason_counts"]["passing_run_observer_count_mismatch"], 1
+        )
+        self.assertEqual(
+            sum(document["invalid_reason_counts"].values()), 1
+        )
+        self.assertNotIn("request=23", json.dumps(document))
+
     def test_unknown_observer_field_invalidates_and_discards_all_records(self):
         line = observer_line(request=8) + " future_field=private-value"
         raw = "\n".join(
@@ -181,6 +212,7 @@ class BrowserLoginPhaseDiagnosticTests(unittest.TestCase):
         self.assertEqual(document["public_api_records"], [])
         self.assertNotIn("future_field", json.dumps(document))
         self.assertNotIn("private-value", json.dumps(document))
+        self.assertEqual(document["invalid_reason_counts"]["observer_record_refused"], 1)
 
     def test_duplicate_field_and_incomplete_record_are_rejected(self):
         complete = observer_line(request=8)
@@ -299,6 +331,7 @@ class BrowserLoginPhaseDiagnosticTests(unittest.TestCase):
         self.assertEqual(document["records"], [])
         self.assertEqual(document["public_api_records"], [])
         self.assertNotIn("secret", json.dumps(document))
+        self.assertEqual(document["invalid_reason_counts"]["input_refused"], 1)
 
 
 
@@ -437,6 +470,49 @@ class BrowserLoginPhaseDiagnosticTests(unittest.TestCase):
         self.assertEqual(document["cargo_exit"], 0)
         self.assertEqual(document["records"], [])
         self.assertEqual(document["public_api_records"], [])
+
+    def test_cli_emits_only_closed_counts_after_original_aggregate(self):
+        raw = "\n".join(["test " + diagnostic.CASE + " ... ok",
+                         observer_line(request=21), observer_line(request=22),
+                         observer_line(request=23), "private-cookie-path=never-publish", PASS_SUMMARY])
+        with tempfile.TemporaryDirectory(prefix="nagi-owned-cli-counts-") as owned:
+            source, output = pathlib.Path(owned) / "input.raw", pathlib.Path(owned) / "output.json"
+            source.write_text(raw, encoding="utf-8")
+            captured = io.StringIO()
+            with contextlib.redirect_stdout(captured):
+                result = diagnostic.main(["collector", str(source), "0", str(output)])
+            lines = captured.getvalue().splitlines()
+            self.assertEqual(result, 1)
+            self.assertEqual(lines[0], "browser_login_phase_capture=invalid test_summary=passed cargo_exit=0")
+            self.assertEqual(len(lines), 2)
+            self.assertTrue(lines[1].startswith("browser_login_phase_counts observer_records_seen=3 "))
+            self.assertIn("passing_run_observer_count_mismatch=1", lines[1])
+            self.assertNotIn("private", captured.getvalue())
+            self.assertNotIn("never-publish", captured.getvalue())
+            self.assertEqual(json.loads(output.read_text())["records"], [])
+            self.assertEqual(json.loads(output.read_text())["public_api_records"], [])
+
+    def test_stdout_counts_rejects_malformed_values_and_bounds_without_echo(self):
+        import copy
+        document = diagnostic.empty_document(0)
+        document["observer_records_seen"] = diagnostic.MAX_RECORDS + 1
+        document["invalid_reason_counts"] = {name: diagnostic.INVALID_REASON_LIMIT
+                                              for name in diagnostic.INVALID_REASON_NAMES}
+        line = diagnostic.closed_count_line(document)
+        self.assertTrue(line.startswith("browser_login_phase_counts observer_records_seen=11 "))
+        self.assertLess(len(line), 512)
+        for value in (True, -1, 12, "private-cookie", 10 ** 100):
+            poisoned = copy.deepcopy(document); poisoned["observer_records_seen"] = value
+            self.assertEqual(diagnostic.closed_count_line(poisoned), "browser_login_phase_counts unavailable")
+        for value in (True, -1, 17, "private-cookie", 10 ** 100):
+            poisoned = copy.deepcopy(document); poisoned["invalid_reason_counts"][diagnostic.INVALID_REASON_NAMES[0]] = value
+            self.assertEqual(diagnostic.closed_count_line(poisoned), "browser_login_phase_counts unavailable")
+        for mutate in (lambda d: d["invalid_reason_counts"].update({"private-cookie": 1}),
+                       lambda d: d.update({"private-cookie": 1}),
+                       lambda d: d.pop("records"),
+                       lambda d: d.update({"invalid_reason_counts": None})):
+            poisoned = copy.deepcopy(document); mutate(poisoned)
+            self.assertEqual(diagnostic.closed_count_line(poisoned), "browser_login_phase_counts unavailable")
 
 if __name__ == "__main__":
     unittest.main()
