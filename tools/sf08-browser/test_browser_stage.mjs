@@ -40,9 +40,41 @@ test('same trust context and original deadlines/devices pass from preflight to b
   assert.equal(c.timeout, 45000); assert.equal(c.retries, 0); assert.equal(c.workers, 1);
   assert.equal(c.use.ignoreHTTPSErrors, false); assert.equal(c.use.launchOptions.env.HOME, home);
   assert.equal(c.projects[1].use.launchOptions.env.HOME, home);
-  assert.equal(c.projects[1].use.launchOptions.firefoxUserPrefs['browser.policies.alternatePath'], input().provisioned.firefox_policy);
+  assert.equal(c.projects[1].use.launchOptions.env.PLAYWRIGHT_FIREFOX_POLICIES_JSON, input().provisioned.firefox_policy);
+  assert.equal(Object.hasOwn(c.projects[1].use.launchOptions, 'firefoxUserPrefs'), false);
+  assert.equal(Object.hasOwn(c.projects[0].use, 'launchOptions'), false);
+  assert.equal(Object.hasOwn(c.projects[2].use, 'launchOptions'), false);
   assert.equal(c.projects[2].use.userAgent, 'unit-desktop-safari');
   assert.deepEqual(c.reporter, [['json', { outputFile: input().work + '/browser-report.json' }]]);
+});
+
+test('Firefox project startup env overwrites caller input without changing parent or worker env', async () => {
+  const key = 'PLAYWRIGHT_FIREFOX_POLICIES_JSON';
+  const previous = process.env[key];
+  const inherited = '/caller/untrusted-policies.json';
+  process.env[key] = inherited;
+  try {
+    const f = fake();
+    await stage(input(), f.deps);
+    const c = f.calls.config;
+    assert.equal(process.env[key], inherited);
+    assert.equal(f.calls.child.env[key], inherited);
+    assert.equal(c.use.launchOptions.env[key], inherited);
+    assert.equal(c.projects[1].use.launchOptions.env[key], input().provisioned.firefox_policy);
+    assert.equal(Object.hasOwn(c.projects[1].use.launchOptions, 'firefoxUserPrefs'), false);
+    assert.equal(Object.hasOwn(c.projects[0].use, 'launchOptions'), false);
+    assert.equal(Object.hasOwn(c.projects[2].use, 'launchOptions'), false);
+    delete process.env[key];
+    const noInherited = businessConfig({ home, policy: input().provisioned.firefox_policy,
+      origins: ['https://localhost:11001'] }, '/run/nagi-sf08/run-unit', '/owned/tests', devices);
+    assert.equal(Object.hasOwn(noInherited.use.launchOptions.env, key), false);
+    assert.equal(noInherited.projects[1].use.launchOptions.env[key], input().provisioned.firefox_policy);
+    assert.equal(Object.hasOwn(noInherited.projects[0].use, 'launchOptions'), false);
+    assert.equal(Object.hasOwn(noInherited.projects[2].use, 'launchOptions'), false);
+  } finally {
+    if (previous === undefined) delete process.env[key];
+    else process.env[key] = previous;
+  }
 });
 
 test('business helper import is fixed adjacent bound source, overriding inherited/caller input', async () => {

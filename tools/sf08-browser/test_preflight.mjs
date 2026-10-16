@@ -259,7 +259,9 @@ for (const name of Object.keys(versions)) {
     assert.equal(type.trace.closed && type.trace.contextClosed, true);
     assert.equal(type.trace.launch.env.HOME, provisioned.home);
     assert.equal(type.trace.launch.env.XDG_DATA_HOME, provisioned.home + '/.local/share');
-    if (name === 'firefox') assert.equal(type.trace.launch.firefoxUserPrefs['browser.policies.alternatePath'], provisioned.firefox_policy);
+    assert.equal(type.trace.launch.env.PLAYWRIGHT_FIREFOX_POLICIES_JSON,
+      name === 'firefox' ? provisioned.firefox_policy : process.env.PLAYWRIGHT_FIREFOX_POLICIES_JSON);
+    assert.equal(Object.hasOwn(type.trace.launch, 'firefoxUserPrefs'), false);
     assert.equal(type.trace.launch.args, undefined);
   });
   test(`${name}: accepted negatives/network errors/version mismatch fail closed and close`, async () => {
@@ -272,6 +274,26 @@ for (const name of Object.keys(versions)) {
   });
 }
 
+
+test('startup policy path is Firefox-child-only and overrides inherited value without mutating parent', async () => {
+  const key = 'PLAYWRIGHT_FIREFOX_POLICIES_JSON';
+  const previous = process.env[key];
+  const inherited = '/caller/untrusted-policies.json';
+  process.env[key] = inherited;
+  try {
+    const config = settings(provisioned, ready, negative);
+    for (const name of Object.keys(versions)) {
+      const type = fake(name);
+      await probeEngine(name, type, config);
+      assert.equal(type.trace.launch.env[key], name === 'firefox' ? config.policy : inherited);
+      assert.equal(Object.hasOwn(type.trace.launch, 'firefoxUserPrefs'), false);
+      assert.equal(process.env[key], inherited);
+    }
+  } finally {
+    if (previous === undefined) delete process.env[key];
+    else process.env[key] = previous;
+  }
+});
 
 test('all fixed TLS error grammars remain accepted by fake engines', async () => {
   for (const name of Object.keys(versions)) {

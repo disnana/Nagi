@@ -1,5 +1,7 @@
 //! Authenticated, reusable, finite Session-bound CSRF ledger.
 //! A data handle never carries token material or grants authority.
+#[cfg(all(test, nagi_auth_stage_diag))]
+use super::stage_observer::{Event, Op, Stage, Trace};
 use super::{session, FailureKind, Lease, LeaseOwner};
 use crate::{sqlite, FromRow};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
@@ -169,6 +171,8 @@ pub(crate) struct Inner {
     options: Options,
     incarnation: [u8; 32],
     origin: String,
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    stage_slot: std::sync::atomic::AtomicU8,
     #[cfg(test)]
     reserve_wait: Option<Arc<ReserveWait>>,
     #[cfg(test)]
@@ -394,6 +398,8 @@ pub async fn open(
             options,
             incarnation,
             origin,
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            stage_slot: std::sync::atomic::AtomicU8::new(0),
             #[cfg(test)]
             reserve_wait: None,
             #[cfg(test)]
@@ -700,6 +706,10 @@ impl Inner {
         owner: &TokenOwner,
         b: &session::CsrfBinding,
     ) -> Result<(), Failure> {
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        let mut trace = Trace::new(&self.stage_slot, Op::CsrfIssue);
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.record(Stage::Entry, Event::Seen, None, None);
         owner.lease.lease.validate().map_err(Failure::authority)?;
         let (token, mut digest) = fresh_token()?;
         owner.stage(token)?;
@@ -707,6 +717,8 @@ impl Inner {
         let tx = sqlite::begin(&self.native, sqlite::BeginMode::Immediate)
             .await
             .map_err(Failure::database)?;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.record(Stage::BeginAck, Event::Passed, None, None);
         let mut wall = None;
         let result=async {
             self.check(&tx,&mut wall).await?;
@@ -719,11 +731,19 @@ impl Inner {
             b.check_clock(&c,&owner.lease.lease).map_err(Failure::session)?;
             let expiry=c.floor_ms.checked_add(self.options.ttl_ms).ok_or_else(Failure::unavailable)?.min(b.absolute_ms());
             let deadline=project(&c,expiry)?.min(b.absolute_deadline());
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(Stage::Expiry, if c.floor_ms.checked_add(self.options.ttl_ms).is_some_and(|nominal| expiry < nominal) { Event::AbsoluteClamped } else { Event::Nominal }, Some((expiry,c.ceil_ms)), Some((deadline,c.monotonic)));
             for attempt in 0..self.options.collision_attempts {
                 if attempt>0 { let (token,next)=fresh_token()?;owner.stage(token)?;digest=next; }
                 let reserve=self.issue_reservation(&tx).await?;
                 let fresh=self.clock(&mut wall)?; b.check_clock(&fresh,&owner.lease.lease).map_err(Failure::session)?;
-                if fresh.ceil_ms>=expiry || Instant::now()>=deadline { return Err(Failure::denied()); }
+                if fresh.ceil_ms>=expiry || Instant::now()>=deadline {
+                    #[cfg(all(test, nagi_auth_stage_diag))]
+                    trace.record(Stage::Precommit, Event::Refused, Some((expiry,fresh.ceil_ms)), Some((deadline,fresh.monotonic)));
+                    return Err(Failure::denied());
+                }
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                trace.record(Stage::Precommit, Event::Passed, Some((expiry,fresh.ceil_ms)), Some((deadline,fresh.monotonic)));
                 let p=sqlite::bind_bytes(sqlite::parameters(),digest.to_vec());let p=b.token_parameters(p);let p=sqlite::bind_i64(p,expiry);
                 let p=self.context.bind_incarnation(p);let p=b.current_parameters(p,fresh.ceil_ms);
                 let reply={ let _gate=owner.lease.lease.checked_gate().map_err(Failure::authority)?;
@@ -733,7 +753,13 @@ impl Inner {
                 let affected=reply.await.map_err(Failure::database)?;
                 if affected==1 {
                     let fresh=self.clock(&mut wall)?;b.check_clock(&fresh,&owner.lease.lease).map_err(Failure::session)?;
-                    if fresh.ceil_ms>=expiry || Instant::now()>=deadline { return Err(Failure::denied()); }
+                    if fresh.ceil_ms>=expiry || Instant::now()>=deadline {
+                        #[cfg(all(test, nagi_auth_stage_diag))]
+                        trace.record(Stage::Precommit, Event::Refused, Some((expiry,fresh.ceil_ms)), Some((deadline,fresh.monotonic)));
+                        return Err(Failure::denied());
+                    }
+                    #[cfg(all(test, nagi_auth_stage_diag))]
+                    trace.record(Stage::Precommit, Event::Passed, Some((expiry,fresh.ceil_ms)), Some((deadline,fresh.monotonic)));
                     self.maintenance(&tx,wall.ok_or_else(Failure::unavailable)?,false).await?;
                     return Ok((expiry,deadline));
                 }
@@ -741,7 +767,24 @@ impl Inner {
             }
             Err(Failure::unavailable())
         }.await;
-        let (expiry, deadline) = self.finish(tx, result, &mut wall).await?;
+        let finished = self.finish(tx, result, &mut wall).await;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        {
+            trace.record(
+                Stage::FinishAck,
+                if finished.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                None,
+                None,
+            );
+            if let Err(e) = &finished {
+                trace.returned(Some((e.kind, e.outcome)), None, None);
+            }
+        }
+        let (expiry, deadline) = finished?;
         #[cfg(test)]
         if let Some(wait) = &self.postcommit_wait {
             // Real business commit has already completed. This finite fixture
@@ -750,16 +793,80 @@ impl Inner {
             wait.release.notified().await;
         }
         let final_result = async {
-            let sampled = self.clock(&mut wall).and_then(|c| {
-                b.check_clock(&c, &owner.lease.lease)
-                    .map_err(Failure::session)?;
+            let sampled_clock = self.clock(&mut wall);
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::FinalClock,
+                if sampled_clock.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                sampled_clock.as_ref().ok().map(|c| (expiry, c.ceil_ms)),
+                sampled_clock.as_ref().ok().map(|c| (deadline, c.monotonic)),
+            );
+            let sampled = sampled_clock.and_then(|c| {
+                let binding = b
+                    .check_clock(&c, &owner.lease.lease)
+                    .map_err(Failure::session);
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                trace.record(
+                    Stage::Binding,
+                    if binding.is_ok() {
+                        Event::Passed
+                    } else {
+                        Event::Refused
+                    },
+                    Some((expiry, c.ceil_ms)),
+                    Some((deadline, c.monotonic)),
+                );
+                binding?;
                 Ok(c)
             });
-            self.restore(&mut wall, false).await?;
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(Stage::RestoreBefore, Event::Seen, None, None);
+            let restored = self.restore(&mut wall, false).await;
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::RestoreAck,
+                if restored.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                None,
+                None,
+            );
+            restored?;
             sampled?;
-            let c = self.clock(&mut wall)?;
-            b.check_clock(&c, &owner.lease.lease)
-                .map_err(Failure::session)?;
+            let final_clock = self.clock(&mut wall);
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::FinalClock,
+                if final_clock.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                final_clock.as_ref().ok().map(|c| (expiry, c.ceil_ms)),
+                final_clock.as_ref().ok().map(|c| (deadline, c.monotonic)),
+            );
+            let c = final_clock?;
+            let binding = b
+                .check_clock(&c, &owner.lease.lease)
+                .map_err(Failure::session);
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::Binding,
+                if binding.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                Some((expiry, c.ceil_ms)),
+                Some((deadline, c.monotonic)),
+            );
+            binding?;
             owner.ready(
                 self.incarnation,
                 expiry,
@@ -768,11 +875,18 @@ impl Inner {
             )
         }
         .await;
-        final_result.map_err(|mut e| {
+        let final_result = final_result.map_err(|mut e| {
             e.outcome = sqlite::Outcome::Committed;
             e
-        })?;
+        });
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        if let Err(e) = &final_result {
+            trace.returned(Some((e.kind, e.outcome)), None, None);
+        }
+        final_result?;
         pending.1 = false;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.returned(None, None, None);
         Ok(())
     }
     pub(crate) async fn checkpoint(
@@ -781,6 +895,10 @@ impl Inner {
         b: &session::CsrfBinding,
         digest: [u8; 32],
     ) -> Result<(), Failure> {
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        let mut trace = Trace::new(&self.stage_slot, Op::CsrfCheckpoint);
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.record(Stage::Entry, Event::Seen, None, None);
         #[cfg(test)]
         self.checkpoint_phase(CheckpointPhase::EntryLease);
         lease.validate().map_err(Failure::authority)?;
@@ -789,6 +907,8 @@ impl Inner {
         let tx = sqlite::begin(&self.native, sqlite::BeginMode::Immediate)
             .await
             .map_err(Failure::database)?;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.record(Stage::BeginAck, Event::Passed, None, None);
         let mut wall = None;
         let result=async {
             #[cfg(test)]
@@ -801,7 +921,10 @@ impl Inner {
             self.checkpoint_sample(c.ceil_ms);
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::Binding);
-            self.context.verify_binding(&tx,b,&c,lease).await.map_err(Failure::session)?;
+            let binding=self.context.verify_binding(&tx,b,&c,lease).await.map_err(Failure::session);
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(Stage::Binding, if binding.is_ok() { Event::Passed } else { Event::Refused }, None, None);
+            binding?;
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::Cleanup);
             self.maintenance(&tx,c.ceil_ms,true).await?;
@@ -831,7 +954,17 @@ impl Inner {
             lease.validate().map_err(Failure::authority)?;
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::Matched);
-            if !bool::from(matched) || fresh.ceil_ms>=expiry { return Err(Failure::denied()); }
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            let trace_expiry = bool::from(matched).then_some((expiry, fresh.ceil_ms));
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(Stage::Row, if bool::from(matched) { Event::Match } else { Event::Miss }, trace_expiry, None);
+            if !bool::from(matched) || fresh.ceil_ms>=expiry {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                trace.record(Stage::Precommit, Event::Refused, trace_expiry, None);
+                return Err(Failure::denied());
+            }
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(Stage::Precommit, Event::Passed, Some((expiry,fresh.ceil_ms)), None);
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::Project);
             let deadline=project(&fresh,expiry)?.min(b.absolute_deadline());
@@ -844,37 +977,129 @@ impl Inner {
         self.checkpoint_refusal(result.is_err());
         #[cfg(test)]
         self.checkpoint_phase(CheckpointPhase::Finish);
-        let (expiry, deadline) = self.finish(tx, result, &mut wall).await?;
+        let finished = self.finish(tx, result, &mut wall).await;
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        {
+            trace.record(
+                Stage::FinishAck,
+                if finished.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                None,
+                None,
+            );
+            if let Err(e) = &finished {
+                trace.returned(Some((e.kind, e.outcome)), None, None);
+            }
+        }
+        let (expiry, deadline) = finished?;
         let result = async {
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::PostSample);
             let sampled = self.clock(&mut wall);
             #[cfg(test)]
             self.checkpoint_sample_result(&sampled);
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::FinalClock,
+                if sampled.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                sampled.as_ref().ok().map(|c| (expiry, c.ceil_ms)),
+                sampled.as_ref().ok().map(|c| (deadline, c.monotonic)),
+            );
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::Restore);
-            self.restore(&mut wall, false).await?;
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(Stage::RestoreBefore, Event::Seen, None, None);
+            let restored = self.restore(&mut wall, false).await;
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::RestoreAck,
+                if restored.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                None,
+                None,
+            );
+            restored?;
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::PostSampleResult);
             sampled?;
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::FinalSample);
-            let c = self.clock(&mut wall)?;
+            let final_clock = self.clock(&mut wall);
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::FinalClock,
+                if final_clock.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                final_clock.as_ref().ok().map(|c| (expiry, c.ceil_ms)),
+                final_clock.as_ref().ok().map(|c| (deadline, c.monotonic)),
+            );
+            let c = final_clock?;
             #[cfg(test)]
             self.checkpoint_sample(c.ceil_ms);
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::FinalBinding);
-            b.check_clock(&c, lease).map_err(Failure::session)?;
+            let binding = b.check_clock(&c, lease).map_err(Failure::session);
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::Binding,
+                if binding.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                Some((expiry, c.ceil_ms)),
+                Some((deadline, c.monotonic)),
+            );
+            binding?;
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::FinalLease);
-            lease.validate().map_err(Failure::authority)?;
+            let authority = lease.validate().map_err(Failure::authority);
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::Gate,
+                if authority.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                Some((expiry, c.ceil_ms)),
+                Some((deadline, c.monotonic)),
+            );
+            authority?;
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::FinalExpiry);
             if c.ceil_ms >= expiry || Instant::now() >= deadline {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                trace.record(
+                    Stage::Gate,
+                    Event::Refused,
+                    Some((expiry, c.ceil_ms)),
+                    Some((deadline, c.monotonic)),
+                );
                 #[cfg(test)]
                 self.checkpoint_actual((c.ceil_ms < expiry).then_some(true));
                 return Err(Failure::denied());
             }
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::Gate,
+                Event::Passed,
+                Some((expiry, c.ceil_ms)),
+                Some((deadline, c.monotonic)),
+            );
             #[cfg(test)]
             self.checkpoint_actual(Some(false));
             #[cfg(test)]
@@ -882,10 +1107,17 @@ impl Inner {
             Ok(())
         }
         .await;
-        result.map_err(|mut e| {
+        let result = result.map_err(|mut e| {
             e.outcome = sqlite::Outcome::Committed;
             e
-        })
+        });
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        trace.returned(
+            result.as_ref().err().map(|e| (e.kind, e.outcome)),
+            None,
+            None,
+        );
+        result
     }
     pub(crate) fn take_wire(
         &self,

@@ -153,11 +153,10 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
   let failed = true;
   try {
     checkpoint('engine_launch', name);
-    browser = await browserType.launch({ headless: true,
-      env: { ...process.env, HOME: config.home, XDG_DATA_HOME: config.home + '/.local/share',
-        XDG_CONFIG_HOME: config.home + '/.config', XDG_CACHE_HOME: config.home + '/.cache' },
-      ...(name === 'firefox' ? { firefoxUserPrefs: { 'browser.policies.alternatePath': config.policy } } : {}),
-    });
+    const env = { ...process.env, HOME: config.home, XDG_DATA_HOME: config.home + '/.local/share',
+      XDG_CONFIG_HOME: config.home + '/.config', XDG_CACHE_HOME: config.home + '/.cache' };
+    if (name === 'firefox') env.PLAYWRIGHT_FIREFOX_POLICIES_JSON = config.policy;
+    browser = await browserType.launch({ headless: true, env });
     if (browser.version() !== VERSIONS[name]) refuse();
     // Explicit false: neither request context nor launch gets an insecure flag.
     const context = await browser.newContext({ ignoreHTTPSErrors: false, serviceWorkers: 'block' });

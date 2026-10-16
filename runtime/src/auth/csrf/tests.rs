@@ -137,6 +137,40 @@ impl Fixture {
         sqlite::rollback(tx).await.unwrap();
         n
     }
+    async fn assert_original_token_row(&self, digest: [u8; 32], expiry: i64) {
+        let tx = sqlite::begin(&self.pool, sqlite::BeginMode::Immediate)
+            .await
+            .unwrap();
+        let rows = sqlite::all::<TokenRow>(
+            &tx,
+            sqlite::literal("SELECT digest,expiry_ms FROM __nagi_csrf_tokens"),
+            sqlite::parameters(),
+        )
+        .await
+        .unwrap();
+        assert!(
+            rows.len() == 1 && rows[0].digest.as_slice() == digest && rows[0].expiry_ms == expiry,
+            "same_queue_fixture phase=OriginalRowUnchanged",
+        );
+        sqlite::rollback(tx).await.unwrap();
+    }
+    async fn persisted_walls(&self) -> (i64, i64) {
+        let tx = sqlite::begin(&self.pool, sqlite::BeginMode::Immediate)
+            .await
+            .unwrap();
+        let session_wall = sqlite::query::<Count>(
+            &tx,
+            sqlite::literal("SELECT last_wall AS n FROM __nagi_session_meta WHERE id=1"),
+            sqlite::parameters(),
+        )
+        .await
+        .unwrap()
+        .unwrap()
+        .0;
+        let csrf_wall = metadata(&tx).await.unwrap().last_wall;
+        sqlite::rollback(tx).await.unwrap();
+        (session_wall, csrf_wall)
+    }
     async fn stop(self) {
         sqlite::close(&self.pool, 2000).await.unwrap();
         std::fs::remove_dir_all(self.dir).unwrap();
@@ -147,11 +181,12 @@ impl Fixture {
 async fn same_queue_reopen_reuses_data_context_without_refreshing_token_expiry() {
     #[cfg(all(test, nagi_auth_stage_diag))]
     let observer = crate::auth::stage_observer::Guard::new(1);
-    let f = Fixture::new(2, 176).await;
+    let mut f = Fixture::new(2, 176).await;
     #[cfg(all(test, nagi_auth_stage_diag))]
     observer.attach(&f.inner.stage_slot);
     assert!(f.inner.native.same_private_queue(&f.pool));
-    let (o, b, digest, expiry) = f.issue().await;
+    // Startup is real and completes before issue: this branch proves compatible
+    // reopened-context acceptance while UTC is controlled, not real-wall speed.
     let reopened = session::open(
         &f.pool,
         session::options(4, 5, 72, 1, 10000, 100000, 5000, 2).unwrap(),
@@ -159,17 +194,60 @@ async fn same_queue_reopen_reuses_data_context_without_refreshing_token_expiry()
     )
     .await
     .unwrap();
-    let probe = Arc::new(same_queue_probe::Probe::new(expiry));
-    let mut data = open(&reopened, options(2, 176, 1, 1000, 2).unwrap(), &checked())
+    let data = open(&reopened, options(2, 176, 1, 1000, 2).unwrap(), &checked())
         .await
         .unwrap();
-    Arc::get_mut(&mut data.inner)
-        .expect("same_queue_probe_requires_unshared_reopened_data")
-        .checkpoint_probe = Some(Arc::clone(&probe));
-    assert!(data.matches_store(&f.store));
+    assert!(
+        data.matches_store(&f.store),
+        "same_queue_fixture phase=CompatibleContext"
+    );
+    let mut inner = match Arc::try_unwrap(data.inner) {
+        Ok(inner) => inner,
+        Err(_) => panic!("same_queue_fixture phase=UnsharedReopenedContext"),
+    };
+    assert!(
+        inner.native.same_private_queue(&f.pool),
+        "same_queue_fixture phase=SameQueue"
+    );
     #[cfg(all(test, nagi_auth_stage_diag))]
-    observer.attach(&data.inner.stage_slot);
-    let result = data.inner.checkpoint(&o.lease.lease, &b, digest).await;
+    observer.attach(&inner.stage_slot);
+    let o = TokenOwner::new(owner());
+    let b = f.binding(&o.lease.lease).await;
+    // No further Session lookup/request may advance persisted wall after W.
+    let (session_wall, csrf_wall) = f.persisted_walls().await;
+    let sampled = f.inner.context.sample().unwrap();
+    let wall = sampled.ceil_ms;
+    assert!(
+        wall >= session_wall && wall >= csrf_wall,
+        "same_queue_fixture phase=WallPremise"
+    );
+    assert!(
+        b.check_clock(&sampled, &o.lease.lease).is_ok() && o.lease.lease.validate().is_ok(),
+        "same_queue_fixture phase=InitialAuthorityLive"
+    );
+    f.inner.context.set_test_clock_sequence(vec![wall; 16]);
+    inner.context.set_test_clock_sequence(vec![wall; 16]);
+    f.inner.issue(&o, &b).await.unwrap();
+    let (digest, expiry, deadline) = {
+        let cell = o.cell.lock().unwrap();
+        let mut headers = hyper::HeaderMap::new();
+        headers.insert(
+            "x-csrf-token",
+            hyper::header::HeaderValue::from_str(cell.token.as_ref().unwrap()).unwrap(),
+        );
+        (
+            token_digest(&headers).unwrap(),
+            cell.expiry.unwrap(),
+            cell.deadline.unwrap(),
+        )
+    };
+    assert!(
+        expiry == wall.checked_add(1000).unwrap(),
+        "same_queue_fixture phase=OriginalOneSecondTTL"
+    );
+    let probe = Arc::new(same_queue_probe::Probe::new(expiry));
+    inner.checkpoint_probe = Some(Arc::clone(&probe));
+    let result = inner.checkpoint(&o.lease.lease, &b, digest).await;
     if let Err(error) = &result {
         let observed = probe.failure();
         eprintln!(
@@ -179,23 +257,126 @@ async fn same_queue_reopen_reuses_data_context_without_refreshing_token_expiry()
             kind(error), outcome(error),
         );
     }
-    result.unwrap();
-    let tx = sqlite::begin(&f.pool, sqlite::BeginMode::Immediate)
-        .await
-        .unwrap();
-    let rows = sqlite::all::<TokenRow>(
-        &tx,
-        sqlite::literal("SELECT digest,expiry_ms FROM __nagi_csrf_tokens"),
-        sqlite::parameters(),
-    )
-    .await
-    .unwrap();
-    assert!(rows.len() == 1 && rows[0].expiry_ms == expiry);
-    sqlite::rollback(tx).await.unwrap();
+    assert!(
+        result.is_ok(),
+        "same_queue_fixture phase=PositiveCheckpoint kind={:?} outcome={:?}",
+        result.as_ref().err().map(kind),
+        result.as_ref().err().map(outcome)
+    );
+    f.assert_original_token_row(digest, expiry).await;
+    assert!(
+        {
+            let cell = o.cell.lock().unwrap();
+            cell.expiry == Some(expiry) && cell.deadline == Some(deadline)
+        },
+        "same_queue_fixture phase=PositiveOriginalDeadline"
+    );
+    tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)).await;
+    let sampled = f.inner.context.sample().unwrap();
+    assert!(
+        sampled.ceil_ms == wall && wall < expiry && Instant::now() >= deadline,
+        "same_queue_fixture phase=OriginalDeliveryDeadlineReached"
+    );
+    assert!(
+        b.check_clock(&sampled, &o.lease.lease).is_ok() && o.lease.lease.validate().is_ok(),
+        "same_queue_fixture phase=PreDeliveryAuthorityLive"
+    );
+    assert!(
+        {
+            let cell = o.cell.lock().unwrap();
+            cell.expiry == Some(expiry) && cell.deadline == Some(deadline)
+        },
+        "same_queue_fixture phase=DeliveryOriginalDeadline"
+    );
+    let seal = match o.seal() {
+        Ok(seal) => seal,
+        Err(_) => panic!("same_queue_fixture phase=SealBeforeDelivery"),
+    };
+    let result = f.inner.take_wire(&o, seal, &b);
+    assert!(
+        result.is_err_and(|error| kind(&error) == FailureKind::Denied),
+        "same_queue_fixture phase=OriginalDeliveryDeadlineDenied"
+    );
+    // take_wire refusal itself does not promise automatic material retirement.
+    o.retire();
+    assert!(
+        o.cell.lock().unwrap().token.is_none(),
+        "same_queue_fixture phase=MaterialRetired"
+    );
+    let sampled = f.inner.context.sample().unwrap();
+    assert!(
+        b.check_clock(&sampled, &o.lease.lease).is_ok() && o.lease.lease.validate().is_ok(),
+        "same_queue_fixture phase=PostDeliveryAuthorityLive"
+    );
+    f.assert_original_token_row(digest, expiry).await;
     drop(o);
     f.stop().await;
     #[cfg(all(test, nagi_auth_stage_diag))]
     observer.emit();
+}
+
+#[tokio::test]
+async fn reopened_context_preserves_original_token_expiry_and_rejects_after_deadline() {
+    let f = Fixture::new(2, 176).await;
+    assert!(f.inner.native.same_private_queue(&f.pool));
+    // This fresh fixture keeps the original real-clock issue -> reopen order.
+    let (o, b, digest, expiry) = f.issue().await;
+    let deadline = o.cell.lock().unwrap().deadline.unwrap();
+    f.assert_original_token_row(digest, expiry).await;
+    let reopened = session::open(
+        &f.pool,
+        session::options(4, 5, 72, 1, 10000, 100000, 5000, 2).unwrap(),
+        session::cookie_options("__Host-auth", session::SameSite::Strict).unwrap(),
+    )
+    .await
+    .unwrap();
+    let data = open(&reopened, options(2, 176, 1, 1000, 2).unwrap(), &checked())
+        .await
+        .unwrap();
+    assert!(
+        data.matches_store(&f.store),
+        "same_queue_fixture phase=RealCompatibleContext"
+    );
+    assert!(
+        data.inner.native.same_private_queue(&f.pool),
+        "same_queue_fixture phase=RealSameQueue"
+    );
+    // Opening must not refresh an existing row, even if startup exceeds its TTL.
+    f.assert_original_token_row(digest, expiry).await;
+    assert!(
+        {
+            let cell = o.cell.lock().unwrap();
+            cell.expiry == Some(expiry) && cell.deadline == Some(deadline)
+        },
+        "same_queue_fixture phase=ReopenOriginalDeadline"
+    );
+    tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)).await;
+    let sampled = data.inner.context.sample().unwrap();
+    assert!(
+        sampled.ceil_ms >= expiry && Instant::now() >= deadline,
+        "same_queue_fixture phase=RealOriginalExpiryReached"
+    );
+    assert!(
+        b.check_clock(&sampled, &o.lease.lease).is_ok() && o.lease.lease.validate().is_ok(),
+        "same_queue_fixture phase=PreExpiredCheckpointAuthorityLive"
+    );
+    let result = data.inner.checkpoint(&o.lease.lease, &b, digest).await;
+    assert!(
+        result.is_err_and(|error| kind(&error) == FailureKind::Denied
+            && outcome(&error) == sqlite::Outcome::RolledBack),
+        "same_queue_fixture phase=ExpiredCheckpointDeniedRolledBack"
+    );
+    let sampled = data.inner.context.sample().unwrap();
+    assert!(
+        b.check_clock(&sampled, &o.lease.lease).is_ok() && o.lease.lease.validate().is_ok(),
+        "same_queue_fixture phase=PostExpiredCheckpointAuthorityLive"
+    );
+    assert!(
+        f.count().await == 0,
+        "same_queue_fixture phase=ExpiredRowCleaned"
+    );
+    drop(o);
+    f.stop().await;
 }
 #[tokio::test]
 async fn bytes_limit_is_independent_and_expired_cleanup_spends_one_batch() {

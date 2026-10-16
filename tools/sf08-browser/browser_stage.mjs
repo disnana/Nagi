@@ -14,6 +14,7 @@ export function trustEnv(home, inherited) {
 
 export function businessConfig(config, work, testDir, devices) {
   const env = trustEnv(config.home, process.env);
+  const firefoxEnv = { ...env, PLAYWRIGHT_FIREFOX_POLICIES_JSON: config.policy };
   return { testDir, timeout: 45000, expect: { timeout: 3000 }, fullyParallel: false,
     workers: 1, forbidOnly: true, retries: 0,
     outputDir: path.join(work, 'private-test-output'),
@@ -23,8 +24,7 @@ export function businessConfig(config, work, testDir, devices) {
       serviceWorkers: 'block', launchOptions: { env } },
     projects: [
       { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-      { name: 'firefox', use: { ...devices['Desktop Firefox'],
-        launchOptions: { env, firefoxUserPrefs: { 'browser.policies.alternatePath': config.policy } } } },
+      { name: 'firefox', use: { ...devices['Desktop Firefox'], launchOptions: { env: firefoxEnv } } },
       { name: 'webkit', use: { ...devices['Desktop Safari'] } },
     ], metadata: { execution: 'real-browser-and-TLS-required', localOrigins: 3 } };
 }
