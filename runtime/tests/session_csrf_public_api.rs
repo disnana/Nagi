@@ -406,10 +406,10 @@ impl Reply {
     fn token(&self) -> String {
         assert!(
             self.status == 200 && self.body.len() == 60,
-            "csrf_public_assertion_diag phase=TokenReply status={} body_bytes={} set_cookie_count={}",
+            "token response status {}, body length {}, declared length {:?}",
             self.status,
             self.body.len(),
-            self.values("set-cookie").len(),
+            self.values("content-length")
         );
         assert!(self.values("set-cookie").is_empty());
         let v: nagi_runtime::serde_json::Value =

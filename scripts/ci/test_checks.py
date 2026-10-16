@@ -31,7 +31,16 @@ class ChangeTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def run_git(self, *args):
-        return subprocess.check_output(["git", *args], cwd=self.root, stderr=subprocess.PIPE).decode().strip()
+        return subprocess.check_output(
+            ["git", "-c", "gc.auto=0", "-c", "maintenance.auto=false", *args],
+            cwd=self.root, stderr=subprocess.PIPE,
+        ).decode().strip()
+
+    def test_run_git_disables_automatic_maintenance(self):
+        self.run_git("config", "gc.auto", "9999")
+        self.run_git("config", "maintenance.auto", "true")
+        self.assertEqual(self.run_git("config", "--get", "gc.auto"), "0")
+        self.assertEqual(self.run_git("config", "--get", "maintenance.auto"), "false")
 
     def write(self, name, text):
         path = self.root / name
@@ -591,6 +600,7 @@ class GateTests(unittest.TestCase):
         return {
             "changes": {"result": "success", "outputs": {"full_checks": full, "jetbrains_checks": jetbrains}},
             "linux": {"result": "success" if full == "true" else "skipped"},
+            "rust-1-88": {"result": "success" if full == "true" else "skipped"},
             "jetbrains": {"result": "success" if jetbrains == "true" or package_jetbrains == "true" else "skipped"},
             "release-plan": {"result": "success", "outputs": {
                 "package_nagi": package_nagi, "package_vscode": package_vscode,
@@ -630,6 +640,31 @@ class GateTests(unittest.TestCase):
             with self.subTest(result=result):
                 needs = self.needs("false")
                 needs["linux"]["result"] = result
+                self.assertTrue(gate.errors(needs))
+
+    def test_scoped_rust_1_88_job_tracks_the_full_check_plan(self):
+        for full, expected in (("true", "success"), ("false", "skipped")):
+            needs = self.needs(full)
+            self.assertEqual(needs["rust-1-88"]["result"], expected)
+            self.assertEqual(gate.errors(needs), [])
+            invalid_results = ("failure", "cancelled", "skipped", "") if full == "true" else (
+                "failure", "cancelled", "success", "",
+            )
+            for result in invalid_results:
+                with self.subTest(full=full, result=result):
+                    broken = copy.deepcopy(needs)
+                    broken["rust-1-88"]["result"] = result
+                    self.assertIn(f"rust-1-88: {result}, expected {expected}", gate.errors(broken))
+            missing = copy.deepcopy(needs)
+            del missing["rust-1-88"]
+            self.assertIn(f"rust-1-88: missing, expected {expected}", gate.errors(missing))
+
+    def test_invalid_full_check_plan_cannot_make_scoped_rust_job_optional(self):
+        for value in (None, "", "False", "TRUE", True, False):
+            with self.subTest(value=value):
+                needs = self.needs("false")
+                needs["changes"]["outputs"]["full_checks"] = value
+                needs["rust-1-88"]["result"] = "skipped"
                 self.assertTrue(gate.errors(needs))
 
     def test_required_rust_job_cannot_be_skipped(self):
@@ -707,6 +742,53 @@ class GateTests(unittest.TestCase):
                 needs = copy.deepcopy(valid)
                 del needs[job]["outputs"]
                 self.assertTrue(gate.errors(needs))
+
+
+class ScopedRustProfileWorkflowTests(unittest.TestCase):
+    workflow_path = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
+
+    def test_rust_1_88_job_is_linux_only_focused_and_rejects_zero_execution(self):
+        text = self.workflow_path.read_text(encoding="utf-8")
+        job = re.search(r"(?ms)^  rust-1-88:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
+        self.assertIsNotNone(job, "focused Rust 1.88.0 job missing")
+        block = job.group("body")
+        self.assertIn("    needs: changes\n", block)
+        self.assertIn("if: needs.changes.outputs.full_checks == 'true'", block)
+        self.assertIn("    runs-on: ubuntu-24.04\n", block)
+        self.assertIn("uses: dtolnay/rust-toolchain@1.88.0", block)
+        self.assertIn('test "$(uname -m)" = "x86_64"', block)
+        self.assertIn('rustc +1.88.0 -vV', block)
+        self.assertIn('cargo +1.88.0 --version', block)
+        self.assertIn("CARGO_TARGET_DIR: target/sf02-rust-1.88.0-linux-x86_64", block)
+        expected_commands = (
+            "cargo +1.88.0 test --locked -p nagi-runtime --lib auth::ed25519::",
+            "cargo +1.88.0 test --locked -p nagi-runtime --test ed25519_public_api",
+        )
+        for command in expected_commands:
+            with self.subTest(command=command):
+                self.assertEqual(block.count(command), 1)
+        self.assertIn('"sf02-ed25519-core.log": 14', block)
+        self.assertIn('"sf02-ed25519-public.log": 1', block)
+        self.assertIn("test_lines = re.findall(", block)
+        self.assertIn('if len(test_lines) != count or any(status != "ok" for status in test_lines):', block)
+        self.assertIn("if summaries != [(\"ok\", str(count), \"0\", \"0\")]:", block)
+
+    def test_ready_and_main_publish_require_the_focused_job_with_plugin_only_skip(self):
+        text = self.workflow_path.read_text(encoding="utf-8")
+        ready = re.search(r"(?ms)^  ready:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
+        publish = re.search(r"(?ms)^  publish-release:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
+        self.assertIsNotNone(ready)
+        self.assertIsNotNone(publish)
+        self.assertIn("rust-1-88", ready.group("body"))
+        publish_block = publish.group("body")
+        dependencies = re.search(r"^    needs: \[([^\]]+)\]$", publish_block, re.MULTILINE)
+        self.assertIsNotNone(dependencies)
+        self.assertIn("rust-1-88", [name.strip() for name in dependencies.group(1).split(",")])
+        self.assertIn("needs.rust-1-88.result == 'success'", publish_block)
+        self.assertIn("needs.rust-1-88.result == 'skipped'", publish_block)
+        self.assertIn("needs.release-plan.outputs.release_jetbrains == 'true'", publish_block)
+        self.assertIn("needs.release-plan.outputs.release_nagi != 'true'", publish_block)
+        self.assertIn("needs.release-plan.outputs.release_vscode != 'true'", publish_block)
 
 
 class JetBrainsWorkflowTests(unittest.TestCase):
@@ -831,7 +913,7 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         publish = re.search(r"^  publish-release:\n((?: {4,}[^\n]*\n|\n)+)", text, re.MULTILINE)
         self.assertIsNotNone(publish)
         block = publish.group(1)
-        self.assertIn("needs: [linux, release-plan, jetbrains, vscode-package, nagi-package]", block)
+        self.assertIn("needs: [linux, rust-1-88, release-plan, jetbrains, vscode-package, nagi-package]", block)
         self.assertIn("needs.release-plan.outputs.release_jetbrains != 'true' || needs.jetbrains.result == 'success'", block)
         self.assertIn("needs.release-plan.outputs.release_nagi != 'true'", block)
         self.assertIn("needs.release-plan.outputs.release_vscode != 'true'", block)

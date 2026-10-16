@@ -2,8 +2,11 @@
 //! Verifier assertions remain trusted; only the dispatcher creates leases.
 #[path = "auth/csrf.rs"]
 pub mod csrf;
+#[path = "auth/ed25519.rs"]
+pub mod ed25519;
 #[path = "auth/session.rs"]
 pub mod session;
+
 use std::{
     marker::PhantomData,
     sync::{

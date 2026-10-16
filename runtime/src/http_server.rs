@@ -739,7 +739,7 @@ fn security_response(failure: Failure, source: PolicySource) -> Response {
     }
     response
 }
-fn bearer_headers(request: &Request) -> Result<(), Failure> {
+pub(crate) fn bearer_token(request: &Request) -> Result<&str, Failure> {
     let mut credentials = request.headers.get_all(names::AUTHORIZATION).iter();
     let value = credentials.next().ok_or_else(Failure::invalid_credential)?;
     if credentials.next().is_some() || request.headers.contains_key(names::COOKIE) {
@@ -755,7 +755,66 @@ fn bearer_headers(request: &Request) -> Result<(), Failure> {
     {
         return Err(Failure::invalid_credential());
     }
-    Ok(())
+    Ok(token)
+}
+fn bearer_headers(request: &Request) -> Result<(), Failure> {
+    bearer_token(request).map(|_| ())
+}
+
+#[cfg(test)]
+mod g3_bearer_tests {
+    use super::*;
+    fn request() -> Request {
+        Request {
+            method: Method::GET,
+            uri: "/".parse().unwrap(),
+            headers: HeaderMap::new(),
+            body: Bytes::new(),
+        }
+    }
+    #[test]
+    fn borrowed_token_preserves_existing_credential_precedence() {
+        let mut r = request();
+        assert_eq!(
+            bearer_token(&r).unwrap_err().kind(),
+            FailureKind::InvalidCredential
+        );
+        // Existing source checks missing Authorization before Cookie; keep that order.
+        r.headers
+            .insert(names::COOKIE, HeaderValue::from_static("unrelated=owned"));
+        assert_eq!(
+            bearer_token(&r).unwrap_err().kind(),
+            FailureKind::InvalidCredential
+        );
+        r.headers.insert(
+            names::AUTHORIZATION,
+            HeaderValue::from_static("Bearer owned-fixture"),
+        );
+        assert_eq!(
+            bearer_token(&r).unwrap_err().kind(),
+            FailureKind::InvalidRequest
+        );
+        r.headers.remove(names::COOKIE);
+        assert_eq!(bearer_token(&r).unwrap(), "owned-fixture");
+        assert!(bearer_headers(&r).is_ok());
+        r.headers.append(
+            names::AUTHORIZATION,
+            HeaderValue::from_static("Bearer second"),
+        );
+        assert_eq!(
+            bearer_token(&r).unwrap_err().kind(),
+            FailureKind::InvalidRequest
+        );
+        for value in ["Basic owned", "Bearer", "Bearer ", "Bearer two words"] {
+            r.headers.remove(names::AUTHORIZATION);
+            r.headers
+                .insert(names::AUTHORIZATION, HeaderValue::from_str(value).unwrap());
+            assert_eq!(
+                bearer_token(&r).unwrap_err().kind(),
+                FailureKind::InvalidCredential
+            );
+        }
+    }
 }
 pub fn authenticated_policy<S, H, Fut>(verifier: H) -> Policy<S, AuthScope>
 where

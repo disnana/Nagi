@@ -1,5 +1,5 @@
 //! Finite real SQLite/socket one-use delivery; generated cookie bytes stay in RAM.
-use super::super::{self as session, Store};
+use crate::auth::session::{self, Store};
 use crate::{
     auth::{AuthScope, VerifiedIdentity},
     http_server::*,
