@@ -73,6 +73,7 @@ struct Counters {
     cancelled: AtomicUsize,
     sanitized: AtomicBool,
     claim_committed: AtomicBool,
+    issue_committed: AtomicBool,
 }
 struct CancelSeen(Arc<Counters>);
 impl Drop for CancelSeen {
@@ -144,6 +145,7 @@ async fn login_handler(
             Error::internal("session issue refused")
         }
     })?;
+    state.stats.issue_committed.store(true, Ordering::SeqCst);
     let response = session::apply(response, intent).unwrap();
     match state.stats.mode.load(Ordering::SeqCst) {
         10 => Err(Error::internal("owned handler Err")),
@@ -494,6 +496,60 @@ async fn input_and_strict_json_rejections_do_not_consume_or_call_verifier() {
     s.stop().await;
     f.stop().await;
 }
+// A socket timeout may precede the callback/issue stage. Prove the exact
+// externally observed state instead of assuming that native SQL fit the budget.
+// The mandatory broad native stage inventory separately exercises the completed
+// claim/verifier/issue faults; an early socket result cannot satisfy that guard.
+async fn assert_browser_deadline_state(f: &Fixture, r: &Reply) -> bool {
+    assert!(r.status == 504 && !r.auth_cookie());
+    r.guarded();
+    let prelogin_rows = f.rows().await;
+    let session_rows = number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await;
+    let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
+    let handler_calls = f.stats.handler.load(Ordering::SeqCst);
+    assert!((0..=1).contains(&prelogin_rows) && (0..=1).contains(&session_rows));
+    assert!(verifier_calls <= 1 && handler_calls <= verifier_calls);
+    if prelogin_rows == 1 {
+        // A cancelled claim may retain its original row. No trusted callback
+        // or Session issue can have run without the one-use claim completing.
+        assert!(verifier_calls == 0 && handler_calls == 0 && session_rows == 0);
+        assert!(!r.deletion());
+    }
+    if verifier_calls == 1 {
+        assert!(prelogin_rows == 0 && r.deletion());
+    }
+    if r.deletion() || f.stats.claim_committed.load(Ordering::SeqCst) {
+        assert!(prelogin_rows == 0);
+    }
+    if handler_calls == 0 {
+        assert!(session_rows == 0);
+    }
+    if session_rows == 1 {
+        assert!(handler_calls == 1 && verifier_calls == 1 && prelogin_rows == 0);
+        assert!(r.deletion());
+    }
+    if f.stats.issue_committed.load(Ordering::SeqCst) {
+        assert!(session_rows == 1 && handler_calls == 1);
+    }
+    prelogin_rows == 0
+}
+
+async fn assert_consumed_browser_replay(f: &Fixture, s: &Server, headers: &str) {
+    let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
+    let handler_calls = f.stats.handler.load(Ordering::SeqCst);
+    let session_rows = number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await;
+    let retry = request(s.address, "POST", "/login", headers, b"{}").await;
+    // A missing-row restoration may itself hit the unchanged security budget.
+    // The live403/expired504 native oracles are both mandatory in broad CI.
+    assert!(retry.status == 403 || retry.status == 504);
+    assert!(!retry.auth_cookie() && !retry.deletion());
+    retry.guarded();
+    assert!(f.rows().await == 0);
+    assert!(f.stats.verifier.load(Ordering::SeqCst) == verifier_calls);
+    assert!(f.stats.handler.load(Ordering::SeqCst) == handler_calls);
+    assert!(number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await == session_rows);
+}
+
 #[tokio::test]
 async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
     for (mode, status, security) in [
@@ -517,6 +573,16 @@ async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
         };
         let h = login_headers(&c, &t);
         let r = request(s.address, "POST", "/login", &h, b"{}").await;
+        if r.status == 504 {
+            let row_absent = assert_browser_deadline_state(&f, &r).await;
+            assert!(f.stats.handler.load(Ordering::SeqCst) == 0);
+            if row_absent {
+                assert_consumed_browser_replay(&f, &s, &h).await;
+            }
+            s.stop().await;
+            f.stop().await;
+            continue;
+        }
         assert_eq!(r.status, status, "committed_claim_status mode={mode}");
         assert!(!r.auth_cookie() && r.deletion());
         r.guarded();
@@ -529,6 +595,17 @@ async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
                 && f.stats.handler.load(Ordering::SeqCst) == 0
         );
         let retry = request(s.address, "POST", "/login", &h, b"{}").await;
+        if retry.status == 504 {
+            assert!(!retry.auth_cookie() && !retry.deletion());
+            retry.guarded();
+            assert!(f.rows().await == 0);
+            assert!(f.stats.verifier.load(Ordering::SeqCst) == 1);
+            assert!(f.stats.handler.load(Ordering::SeqCst) == 0);
+            assert!(number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await == 0);
+            s.stop().await;
+            f.stop().await;
+            continue;
+        }
         assert!(retry.status == 403 && !retry.auth_cookie() && !retry.deletion());
         s.stop().await;
         f.stop().await;
@@ -549,7 +626,17 @@ async fn issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cook
             setup.stop().await;
             Server::new(&f, 256, security).await
         };
-        let r = request(s.address, "POST", "/login", &login_headers(&c, &t), b"{}").await;
+        let h = login_headers(&c, &t);
+        let r = request(s.address, "POST", "/login", &h, b"{}").await;
+        if r.status == 504 {
+            let row_absent = assert_browser_deadline_state(&f, &r).await;
+            if row_absent {
+                assert_consumed_browser_replay(&f, &s, &h).await;
+            }
+            s.stop().await;
+            f.stop().await;
+            continue;
+        }
         assert_eq!(r.status, status, "issue_commit_status mode={mode}");
         assert!(!r.auth_cookie() && r.deletion());
         r.guarded();
