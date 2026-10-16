@@ -31,15 +31,26 @@ for (const [suffix, text] of fixtures) {
   test(`real ${suffix} standard symbols keep resource identity, virtual sources and UTF-16 targets`, async t => {
     const folder = fixture(t, suffix, text), file = path.join(folder, `main.${suffix}`), source = { file };
     const index = await symbols(folder, `main.${suffix}`);
+    const serverModule = index.standard_modules.find(item => item.name === 'std.http.server');
+    const clientModule = index.standard_modules.find(item => item.name === 'std.http.client');
+    assert.ok(serverModule, 'server catalog entry is selected by canonical module name');
+    assert.ok(clientModule, 'client catalog entry has its own canonical module name');
     const standard = index.standard_sources.find(item => item.file === virtual);
     assert.ok(standard);
-    assert.equal(index.standard_modules[0].name, 'std.http.server');
-    assert.ok(index.standard_modules[0].members.some(item => item.name === 'append_header_text'));
-    assert.ok(index.standard_modules[0].members.some(item => item.name === 'is_json_content_type'));
+    assert.ok(serverModule.members.some(item => item.name === 'append_header_text'));
+    assert.ok(serverModule.members.some(item => item.name === 'is_json_content_type'));
+    const clientResponse = clientModule.members.find(item => item.name === 'Response');
+    const serverResponse = serverModule.members.find(item => item.name === 'Response');
+    assert.ok(clientResponse && serverResponse, 'both canonical modules expose a Response resource');
+    assert.notDeepEqual(clientResponse.id, serverResponse.id, 'same basename retains module-qualified identity');
+    assert.equal(clientResponse.id.module, 'stdlib:std.http.client');
+    assert.equal(serverResponse.id.module, 'stdlib:std.http.server');
     assert.ok(!index.files.includes(virtual), 'standard library is not a writable project file');
     assert.deepEqual(index.definitions.filter(item => item.kind === 'resource').map(item => item.name), ['Request', 'Response', 'Method', 'Status', 'Options', 'App', 'Policy']);
     assert.ok(!index.definitions.some(item => item.name === 'UNAUTHORIZED'));
-    for (const spelling of ['std.http.server', 'Code.UNAUTHORIZED', 'http.text', 'http.is_json_content_type']) {
+    assert.deepEqual(index.definitions.find(item => item.kind === 'resource' && item.name === 'Response').id, serverResponse.id,
+      'the imported server Response definition remains canonical');
+    for (const spelling of ['std.http.server', 'http.Response', 'Code.UNAUTHORIZED', 'http.text', 'http.is_json_content_type']) {
       const start = text.indexOf(spelling) + (spelling === 'std.http.server' ? 2 : spelling.lastIndexOf('.') + 1);
       const target = targetAt(index, text, file, start + 1, folder);
       assert.equal(target.file, virtual, spelling);
@@ -61,6 +72,9 @@ for (const [suffix, text] of fixtures) {
     const typeStart = text.indexOf('http.Response') + 'http.'.length;
     const types = features.completionCandidates(index, text, typeStart + 2, suffix === 'low', source);
     assert.equal(types.find(item => item.name === 'Request').kind, 'resource');
+    const responseTypes = types.filter(item => item.name === 'Response');
+    assert.equal(responseTypes.length, 1, 'qualified completion uses only the imported server module');
+    assert.deepEqual(responseTypes[0].id, serverResponse.id);
     assert.ok(!types.some(item => item.name === 'text'));
     const pathStart = text.indexOf('request.path') + 'request.'.length;
     const members = features.completionCandidates(index, text, pathStart + 2, suffix === 'low', source);
@@ -95,12 +109,22 @@ test('an incomplete initial standard import uses the registry catalog from a sav
   const index = await symbols(folder, 'main.nagi');
   assert.ok(!index.definitions.some(item => item.kind === 'resource'), 'catalog does not introduce an import binding');
   const prefix = 'import std.http.';
-  const module = features.completionCandidates(index, prefix, prefix.length, false, { file, saved: true })[0];
-  assert.equal(module.name, 'std.http.server');
+  const moduleItems = features.completionCandidates(index, prefix, prefix.length, false, { file, saved: true });
+  assert.ok(moduleItems.some(item => item.name === 'std.http.client'));
+  const module = moduleItems.find(item => item.name === 'std.http.server');
+  assert.ok(module, 'incomplete module completion includes the canonical server path');
   const from = 'from std.http.server import Req';
   const resource = features.completionCandidates(index, from, from.length, false, { file, saved: true })[0];
   assert.equal(resource.name, 'Request');
   assert.equal(features.insertion(resource, ''), 'Request');
+  const serverResponse = features.completionCandidates(index, 'from std.http.server import Resp', 'from std.http.server import Resp'.length, false, { file, saved: true })
+    .find(item => item.name === 'Response');
+  const clientResponse = features.completionCandidates(index, 'from std.http.client import Resp', 'from std.http.client import Resp'.length, false, { file, saved: true })
+    .find(item => item.name === 'Response');
+  assert.ok(serverResponse && clientResponse);
+  assert.equal(serverResponse.id.module, 'stdlib:std.http.server');
+  assert.equal(clientResponse.id.module, 'stdlib:std.http.client');
+  assert.notDeepEqual(serverResponse.id, clientResponse.id);
 });
 
 test('shared receiver fields are read-only regardless of each field type', async t => {

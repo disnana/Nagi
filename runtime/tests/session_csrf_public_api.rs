@@ -397,9 +397,16 @@ impl Reply {
             .map(|(_, v)| v.as_str())
             .collect()
     }
+    #[track_caller]
     fn cookie(&self) -> String {
         let c = self.values("set-cookie");
-        assert!(c.len() == 1);
+        assert!(
+            c.len() == 1,
+            "csrf_public_assertion_diag phase=CookieReply status={} body_bytes={} set_cookie_count={}",
+            self.status,
+            self.body.len(),
+            c.len(),
+        );
         c[0].split(';').next().unwrap().to_owned()
     }
     #[track_caller]

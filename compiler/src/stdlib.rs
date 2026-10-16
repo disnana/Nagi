@@ -1,6 +1,7 @@
 //! Compiler-owned standard definitions. Serialized Low names this registry;
 //! it cannot choose native paths, capabilities, or callback contracts.
 use crate::ast::*;
+mod client;
 mod csrf;
 mod html;
 #[cfg(test)]
@@ -14,6 +15,8 @@ mod sqlite;
 pub const HTML_MODULE_NAME: &str = "std.html";
 pub const HTML_MODULE_ID: &str = "stdlib:std.html";
 
+pub const CLIENT_MODULE_NAME: &str = "std.http.client";
+pub const CLIENT_MODULE_ID: &str = "stdlib:std.http.client";
 pub const MODULE_NAME: &str = "std.http.server";
 pub const MODULE_ID: &str = "stdlib:std.http.server";
 pub const ACTOR_MODULE_NAME: &str = "std.actor";
@@ -35,6 +38,7 @@ pub const SQLITE_MODULE_ID: &str = "stdlib:std.db.sqlite";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StandardModule {
+    HttpClient,
     HttpServer,
     Actor,
     Result,
@@ -52,6 +56,7 @@ pub struct StandardModuleInfo {
     pub rust_namespace: &'static str,
 }
 pub const MODULES: &[StandardModule] = &[
+    StandardModule::HttpClient,
     StandardModule::HttpServer,
     StandardModule::Actor,
     StandardModule::Result,
@@ -65,6 +70,11 @@ pub const MODULES: &[StandardModule] = &[
 ];
 pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
     match module {
+        StandardModule::HttpClient => &StandardModuleInfo {
+            name: CLIENT_MODULE_NAME,
+            id: CLIENT_MODULE_ID,
+            rust_namespace: "::nagi_runtime::http_client",
+        },
         StandardModule::Html => &StandardModuleInfo {
             name: HTML_MODULE_NAME,
             id: HTML_MODULE_ID,
@@ -174,6 +184,12 @@ pub enum Resource {
     HtmlFragment,
     HtmlDocument,
     HtmlTag,
+    ProtectedOperation,
+    PublicOperation,
+    ClientResponse,
+    ClientFailure,
+    ClientFailureKind,
+    ClientOutcome,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Operation {
@@ -296,6 +312,16 @@ pub enum Operation {
     HtmlCopyFragment,
     HtmlDocument,
     HttpHtmlResponse,
+    ClientExecute,
+    ClientExecutePublic,
+    ClientStatus,
+    ClientHeaders,
+    ClientBody,
+    ClientTakeBody,
+    ClientKind,
+    ClientMessage,
+    ClientAuthKind,
+    ClientOutcome,
 }
 
 /// Compiler-owned operation behavior. Public declaration metadata remains a
@@ -456,6 +482,12 @@ pub const RESOURCES: &[Resource] = &[
     Resource::HtmlFragment,
     Resource::HtmlDocument,
     Resource::HtmlTag,
+    Resource::ProtectedOperation,
+    Resource::PublicOperation,
+    Resource::ClientResponse,
+    Resource::ClientFailure,
+    Resource::ClientFailureKind,
+    Resource::ClientOutcome,
 ];
 pub const OPERATIONS: &[Operation] = &[
     Operation::Status,
@@ -577,6 +609,16 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::HtmlCopyFragment,
     Operation::HtmlDocument,
     Operation::HttpHtmlResponse,
+    Operation::ClientExecute,
+    Operation::ClientExecutePublic,
+    Operation::ClientStatus,
+    Operation::ClientHeaders,
+    Operation::ClientBody,
+    Operation::ClientTakeBody,
+    Operation::ClientKind,
+    Operation::ClientMessage,
+    Operation::ClientAuthKind,
+    Operation::ClientOutcome,
 ];
 
 pub fn module(name: &str) -> Option<ModuleId> {
@@ -1231,6 +1273,12 @@ static CONTRACT_EVENT: ResourceContract = ResourceContract::new(
 
 fn resource_contract(resource: Resource) -> &'static ResourceContract {
     match resource {
+        Resource::ProtectedOperation
+        | Resource::PublicOperation
+        | Resource::ClientResponse
+        | Resource::ClientFailure
+        | Resource::ClientFailureKind
+        | Resource::ClientOutcome => client::resource_contract(resource),
         Resource::HtmlPolicy
         | Resource::HtmlAttributes
         | Resource::NavigationUrl
@@ -1312,6 +1360,16 @@ pub(crate) fn native_serde_supported(resource: Resource) -> bool {
 
 pub fn operation_info(operation: Operation) -> &'static OperationInfo {
     match operation {
+        Operation::ClientExecute
+        | Operation::ClientExecutePublic
+        | Operation::ClientStatus
+        | Operation::ClientHeaders
+        | Operation::ClientBody
+        | Operation::ClientTakeBody
+        | Operation::ClientKind
+        | Operation::ClientMessage
+        | Operation::ClientAuthKind
+        | Operation::ClientOutcome => client::operation_info(operation),
         Operation::HtmlPolicy
         | Operation::HtmlLimits
         | Operation::HtmlEmpty
@@ -1884,6 +1942,7 @@ pub fn constants(resource: Resource) -> &'static [ConstantInfo] {
     }
 
     match resource {
+        Resource::ClientFailureKind | Resource::ClientOutcome => client::constants(resource),
         Resource::HtmlTag => html::TAG_CONSTANTS,
         Resource::SqliteBeginMode | Resource::SqliteFailureKind | Resource::SqliteOutcome => {
             sqlite::constants(resource)
@@ -2219,6 +2278,8 @@ mod resource_contract_tests {
         use TypeArgumentRole::*;
         for &resource in RESOURCES {
             let expected: &[TypeArgumentRole] = match resource {
+                Resource::ProtectedOperation => &[SharedPayload, NominalPhantom, IndirectProtocol],
+                Resource::PublicOperation => &[SharedPayload, IndirectProtocol],
                 Resource::App => &[SharedPayload, CallbackSignature],
                 Resource::Supervisor => &[SharedPayload],
                 Resource::Actor => &[IndirectProtocol, IndirectProtocol, IndirectProtocol],

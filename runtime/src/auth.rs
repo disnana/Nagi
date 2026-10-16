@@ -268,6 +268,7 @@ struct ExecutionPermit<P, R> {
     subject: i64,
     resource: i64,
     reservation: R,
+    end: Instant,
     permission: PhantomData<fn() -> P>,
 }
 impl<P> Grant<P> {
@@ -290,6 +291,36 @@ impl<P> Grant<P> {
         let _gate = self.lease.checked_gate()?;
         self.credential.validate()
     }
+    // Both public submit and the private client path issue through this same
+    // lease gate. The private path fixes the original absolute ceiling while
+    // the gate is held; capacity reservation alone grants no authority.
+    fn issue_permit<R>(
+        self,
+        reservation: R,
+        whole_end: Option<Instant>,
+    ) -> Result<ExecutionPermit<P, R>, Failure> {
+        let gate = self.lease.checked_gate()?;
+        self.credential.validate()?;
+        let mut end = gate.expires_at.min(self.credential.original_expires_at);
+        if let Some(whole_end) = whole_end {
+            end = end.min(whole_end);
+            // The private absolute ceiling must still be live at the
+            // issuance point, not merely when capacity was reserved.
+            if end <= Instant::now() {
+                return Err(Failure::expired());
+            }
+        }
+        // Construct the one-use permit while the same lease guard is held.
+        // Revocation after this point cannot turn the accepted command into
+        // a pre-admission failure, matching public submit's existing ordering.
+        Ok(ExecutionPermit {
+            subject: self.subject,
+            resource: self.resource,
+            reservation,
+            end,
+            permission: PhantomData,
+        })
+    }
     /// Call AFTER awaiting bounded native capacity. Issuance under the lease gate
     /// is admission; merely reserving a slot is not. The reservation is consumed.
     /// The trusted callback synchronously submits the bound operation to that
@@ -301,23 +332,36 @@ impl<P> Grant<P> {
         reservation: R,
         submit: impl FnOnce(i64, i64, R) -> T,
     ) -> Result<T, Failure> {
-        let permit = {
-            let _gate = self.lease.checked_gate()?;
-            self.credential.validate()?;
-            ExecutionPermit::<P, R> {
-                subject: self.subject,
-                resource: self.resource,
-                reservation,
-                permission: PhantomData,
-            }
-        };
+        let permit = self.issue_permit(reservation, None)?;
         let ExecutionPermit {
             subject,
             resource,
             reservation,
+            end: _,
             permission: _,
         } = permit;
         Ok(submit(subject, resource, reservation))
+    }
+
+    // Only the trusted client adapter may call this while holding its short
+    // admission gate and immediately enqueueing the already reserved command.
+    // A returned Future or delayed callback is not protected by this method.
+    #[allow(dead_code)] // The private client adapter is a later integration slice.
+    pub(crate) fn submit_private<R, T>(
+        self,
+        reservation: R,
+        whole_end: Instant,
+        submit: impl FnOnce(i64, i64, Instant, R) -> T,
+    ) -> Result<T, Failure> {
+        let permit = self.issue_permit(reservation, Some(whole_end))?;
+        let ExecutionPermit {
+            subject,
+            resource,
+            reservation,
+            end,
+            permission: _,
+        } = permit;
+        Ok(submit(subject, resource, end, reservation))
     }
 }
 pub fn subject(scope: &AuthScope) -> i64 {
@@ -495,6 +539,10 @@ mod tests {
 #[cfg(test)]
 #[path = "auth/credential_metadata_tests.rs"]
 mod credential_metadata_tests;
+
+#[cfg(test)]
+#[path = "auth/admission_bridge_tests.rs"]
+mod admission_bridge_tests;
 
 // Checked startup/bootstrap; BrowserLogin/CSRF/compiler remain deferred.
 pub mod prelogin;
