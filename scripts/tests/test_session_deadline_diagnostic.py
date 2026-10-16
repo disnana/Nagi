@@ -37,7 +37,9 @@ class SessionDeliveryNativeDiagnosticTests(unittest.TestCase):
             fact = record["suites"]["delivery"]["session_deadline"][0]
             self.assertEqual((fact["test"], fact["phase"], fact["db"], fact["exit"]),
                              (self.CASE, 6, 4, 0))
-            self.assertTrue(console.getvalue().startswith("session_delivery_native="))
+            lines = console.getvalue().splitlines()
+            self.assertEqual(lines[0], "session_delivery_verdict status=tests_failed input=valid inventory=failed diagnostic=valid markers=1")
+            self.assertTrue(lines[1].startswith("session_delivery_native="))
             self.assertNotIn("PRIVATE_SENTINEL", output.read_text() + console.getvalue())
 
     def test_delivery_case_inventory_and_existing_normal_suite(self):
@@ -119,7 +121,10 @@ class SessionDeliveryNativeDiagnosticTests(unittest.TestCase):
                 console = io.StringIO()
                 with contextlib.redirect_stdout(console):
                     status = diag.main(["diag", "--delivery", "applied", str(raw), str(exit), str(output)])
-                self.assertEqual(console.getvalue(), "")
+                lines = console.getvalue().splitlines()
+                self.assertEqual(len(lines), 1)
+                self.assertTrue(lines[0].startswith("session_delivery_verdict status="))
+                self.assertNotIn("PRIVATE_SENTINEL", lines[0])
                 self.assertNotIn("PRIVATE_SENTINEL", output.read_text())
                 self.assertEqual(status, 0 if exit == 0 else 1)
             self.assertEqual(diag.main(["diag", "--delivery", "PRIVATE_SENTINEL", str(raw), "101", str(output)]), 2)
@@ -265,17 +270,23 @@ class SessionDeadlineDiagnosticTests(unittest.TestCase):
                     status = diag.main(["diag", str(root), "0", "101", str(root / "result.json")])
                 self.assertEqual(status, 1)
                 self.assertNotIn("PRIVATE_SENTINEL", output.getvalue())
+                lines = output.getvalue().splitlines()
                 if valid:
-                    self.assertTrue(output.getvalue().startswith("browser_login_phase="))
-                    parsed = json.loads(output.getvalue().split("=", 1)[1])
+                    self.assertEqual(len(lines), 2)
+                    self.assertTrue(lines[0].startswith("session_deadline_verdict status=tests_failed "))
+                    self.assertTrue(lines[1].startswith("browser_login_phase="))
+                    parsed = json.loads(lines[1].split("=", 1)[1])
                     self.assertEqual((parsed["request"], parsed["consumed"]), (1, 1))
                 else:
-                    self.assertEqual(output.getvalue(), "")
+                    self.assertEqual(len(lines), 1)
+                    self.assertTrue(lines[0].startswith("session_deadline_verdict status=diagnostic_invalid "))
             (root / "session-deadline-browser.raw").write_bytes(cargo_log(diag.BROWSER_CASES))
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 status = diag.main(["diag", str(root), "0", "0", str(root / "result.json")])
-            self.assertEqual((status, output.getvalue()), (0, ""))
+            self.assertEqual(status, 0)
+            self.assertEqual(len(output.getvalue().splitlines()), 1)
+            self.assertTrue(output.getvalue().startswith("session_deadline_verdict status=passed "))
 
     def test_bootstrap_selected_deadline_bounds_and_old_session_grammar(self):
         good = self.BOOTSTRAP_DEADLINE
@@ -574,7 +585,8 @@ class SessionDeadlineDiagnosticTests(unittest.TestCase):
             with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                 code = diag.main(["session_deadline_diagnostic.py", str(root), "101", "0", str(output)])
             self.assertEqual(code, 1)
-            self.assertEqual(stdout.getvalue(), "")
+            self.assertEqual(len(stdout.getvalue().splitlines()), 1)
+            self.assertIn("status=diagnostic_invalid", stdout.getvalue())
             self.assertEqual(stderr.getvalue(), "")
             cli_json = output.read_text(encoding="utf-8")
             self.assertNotIn(secret_name, cli_json)
@@ -974,11 +986,13 @@ class TokenFirstSliceTests(unittest.TestCase):
             with contextlib.redirect_stdout(output):
                 code = diag.main(['diag', str(root), '101', '0', str(root / 'record.json')])
             self.assertEqual(code, 1)
-            line = output.getvalue()
+            lines = output.getvalue().splitlines()
+            self.assertEqual(len(lines), 2)
+            self.assertTrue(lines[0].startswith('session_deadline_verdict status=tests_failed '))
+            line = lines[1]
             self.assertTrue(line.startswith('csrf_token_deadline='))
-            self.assertEqual(len(line.splitlines()), 1)
             self.assertLess(len(line.encode('ascii')), 512)
-            self.assertNotIn('PRIVATE_SENTINEL', line)
+            self.assertNotIn('PRIVATE_SENTINEL', output.getvalue())
             fact = json.loads(line.split('=', 1)[1])
             self.assertEqual((fact['test'], fact['terminal']), (self.CASE, 5))
             for raw, exit_code in ((cargo_log(diag.SESSION_CASES), 0),
@@ -988,7 +1002,112 @@ class TokenFirstSliceTests(unittest.TestCase):
                 with contextlib.redirect_stdout(output):
                     result = diag.main(['diag', str(root), str(exit_code), '0', str(root / 'record.json')])
                 self.assertEqual(result, 0 if exit_code == 0 else 1)
-                self.assertEqual(output.getvalue(), '')
+                self.assertEqual(len(output.getvalue().splitlines()), 1)
+                self.assertTrue(output.getvalue().startswith('session_deadline_verdict status='))
+
+
+class SessionVerdictStdoutTests(unittest.TestCase):
+    def test_main_emits_closed_status_for_pass_missing_and_no_test_execution(self):
+        expected_pass = (
+            "session_deadline_verdict status=passed session_input=valid session_inventory=passed "
+            "session_diagnostic=valid browser_input=valid browser_inventory=passed "
+            "browser_diagnostic=valid markers=0"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            (root / "session-deadline-session.raw").write_bytes(cargo_log(diag.SESSION_CASES))
+            (root / "session-deadline-browser.raw").write_bytes(cargo_log(diag.BROWSER_CASES))
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                status = diag.main(["diag", str(root), "0", "0", str(root / "result.json")])
+            self.assertEqual(status, 0)
+            self.assertEqual(stdout.getvalue().splitlines(), [expected_pass])
+            self.assertEqual(json.loads((root / "result.json").read_text())["status"], "passed")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                status = diag.main(["diag", str(root), "0", "0", str(root / "result.json")])
+            self.assertEqual(status, 1)
+            self.assertEqual(stdout.getvalue().splitlines(), [
+                "session_deadline_verdict status=diagnostic_invalid "
+                "session_input=missing session_inventory=input_unavailable session_diagnostic=valid "
+                "browser_input=missing browser_inventory=input_unavailable browser_diagnostic=valid markers=0"
+            ])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            (root / "session-deadline-session.raw").write_bytes(b"error: compile failed at /private/path PRIVATE_SENTINEL\n")
+            (root / "session-deadline-browser.raw").write_bytes(cargo_log(diag.BROWSER_CASES))
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                status = diag.main(["diag", str(root), "101", "0", str(root / "result.json")])
+            self.assertEqual(status, 1)
+            line = stdout.getvalue().strip()
+            self.assertIn("status=tests_not_run_or_incomplete", line)
+            self.assertIn("session_inventory=no_test_execution", line)
+            self.assertNotIn("PRIVATE_SENTINEL", line)
+            self.assertNotIn("/private/path", line)
+
+    def test_delivery_mode_emits_its_own_status_line_and_preserves_json(self):
+        case = diag.DELIVERY_CASES["applied"]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            raw, output = root / "input.raw", root / "record.json"
+            raw.write_bytes(cargo_log({case}))
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                status = diag.main(["diag", "--delivery", "applied", str(raw), "0", str(output)])
+            self.assertEqual(status, 0)
+            self.assertEqual(stdout.getvalue().splitlines(), [
+                "session_delivery_verdict status=passed input=valid inventory=passed diagnostic=valid markers=0"
+            ])
+            self.assertEqual(json.loads(output.read_text())["status"], "passed")
+
+    def test_verdict_projection_rejects_wrong_schema_types_unknown_keys_and_oversize(self):
+        import copy
+        record, _ = diag.diagnose(cargo_log(diag.SESSION_CASES), "valid", 0,
+                                  cargo_log(diag.BROWSER_CASES), "valid", 0)
+        valid_line = diag.closed_verdict_line(record)
+        self.assertTrue(valid_line.startswith("session_deadline_verdict status=passed "))
+        self.assertLessEqual(len(valid_line.encode("ascii")), diag.VERDICT_LINE_LIMIT)
+        mutations = (
+            lambda value: value.update({"private-cause": "PRIVATE_SENTINEL"}),
+            lambda value: value.update({"schema": "unknown-schema"}),
+            lambda value: value.update({"status": "private-failure"}),
+            lambda value: value.update({"marker_count": True}),
+            lambda value: value.update({"marker_count": diag.RAW_LIMIT + 1}),
+            lambda value: value["source_inventory"].update({"session_tests": True}),
+            lambda value: value["suites"]["session"].update({"inventory_status": "private-test"}),
+            lambda value: value["suites"]["browser"].update({"diagnostic_status": None}),
+            lambda value: value["suites"]["session"].update({"input_status": "private-path"}),
+            lambda value: value["suites"]["session"].update({"failed_cases": ["PRIVATE_SENTINEL"]}),
+            lambda value: value["suites"]["session"].update({"assertion": [{}] * 6000}),
+        )
+        for mutate in mutations:
+            poisoned = copy.deepcopy(record)
+            mutate(poisoned)
+            line = diag.closed_verdict_line(poisoned)
+            self.assertEqual(line, "session_deadline_verdict unavailable")
+            self.assertLessEqual(len(line.encode("ascii")), diag.VERDICT_LINE_LIMIT)
+            self.assertNotIn("PRIVATE_SENTINEL", line)
+
+        delivery, _ = diag.diagnose_delivery(cargo_log({diag.DELIVERY_CASES["applied"]}), "valid", 0, "applied")
+        delivery_line = diag.closed_verdict_line(delivery, delivery=True)
+        self.assertTrue(delivery_line.startswith("session_delivery_verdict status=passed "))
+        self.assertLessEqual(len(delivery_line.encode("ascii")), diag.DELIVERY_VERDICT_LINE_LIMIT)
+
+        case = diag.CLAIM_MARKER_TEST
+        marker = SessionDeadlineDiagnosticTests.BROWSER_PHASE
+        over_limit, _ = diag.diagnose(
+            cargo_log(diag.SESSION_CASES), "valid", 0,
+            cargo_log(diag.BROWSER_CASES, failed={case}, markers={case: [marker] * (diag.MARKER_LIMIT + 1)}),
+            "valid", 101,
+        )
+        over_limit_line = diag.closed_verdict_line(over_limit)
+        self.assertTrue(over_limit_line.startswith("session_deadline_verdict status=diagnostic_invalid "))
+        self.assertTrue(over_limit_line.endswith("markers=over_limit"))
 
 
 if __name__ == "__main__":

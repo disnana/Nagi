@@ -19,6 +19,8 @@ pub(crate) enum Phase {
     Business,
     Restore,
     Delivery,
+    #[cfg(test)]
+    Preparation,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -47,6 +49,16 @@ pub(crate) enum TokenTerminal {
     TakeWire,
     Timer,
     InnerRefusal,
+}
+// Unit-only ordinary dispatcher terminal, selected at the actual match arm.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub(crate) enum PrivateTerminal {
+    PreparationTimer = 1,
+    PreparationLateReady,
+    HandlerTimer,
+    HandlerLateReady,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -166,6 +178,14 @@ impl Observer {
             eprintln!("{closed}");
         }
     }
+    #[cfg(test)]
+    pub(crate) fn emit_private(&self, terminal: PrivateTerminal) {
+        // Copy the retained owner's record after selection. The scoped future
+        // may already be dropped; ACTIVE is deliberately not consulted here.
+        if let Some(closed) = self.closed(504) {
+            eprintln!("{}", PrivateClosed { closed, terminal });
+        }
+    }
     pub(crate) fn emit_token(&self, status: u16) {
         if let Some(closed) = self.closed(status) {
             eprintln!("{}", TokenClosed(closed));
@@ -241,6 +261,19 @@ impl fmt::Display for Closed {
         let r = self.record;
         write!(f,"session_deadline_diag status=504 phase={} event={} db={} exit={} polls={} begins={} commands={} commits={} budget_ms={} entry_remaining_ms={} phase_remaining_ms={} exit_remaining_ms={}",
             r.phase as u8,r.event as u8,r.db as u8,r.exit as u8,r.polls,r.begins,r.commands,r.commits,r.budget_ms,r.entry_remaining_ms,r.phase_remaining_ms,self.exit_remaining_ms)
+    }
+}
+#[cfg(test)]
+struct PrivateClosed {
+    closed: Closed,
+    terminal: PrivateTerminal,
+}
+#[cfg(test)]
+impl fmt::Display for PrivateClosed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let r = self.closed.record;
+        write!(f,"session_private_deadline_diag status=504 phase={} event={} db={} polls={} begins={} commands={} commits={} budget_ms={} entry_remaining_ms={} phase_remaining_ms={} exit_remaining_ms={} terminal={}",
+            r.phase as u8,r.event as u8,r.db as u8,r.polls,r.begins,r.commands,r.commits,r.budget_ms,r.entry_remaining_ms,r.phase_remaining_ms,self.closed.exit_remaining_ms,self.terminal as u8)
     }
 }
 // Reuses the existing request-owned phase/event/native snapshot. No new
@@ -348,6 +381,39 @@ mod tests {
             (record.begins, record.commands, record.commits),
             (1023, 1023, 1023)
         );
+    }
+    #[tokio::test]
+    async fn private_snapshot_survives_scope_without_cross_request_state() {
+        let admitted = Instant::now();
+        let first = Observer::new(admitted, admitted + Duration::from_secs(2));
+        let second = Observer::new(admitted, admitted + Duration::from_secs(2));
+        tokio::join!(
+            first.scope(observe(Phase::Preparation, async {})),
+            second.scope(observe(Phase::Business, async {}))
+        );
+        assert!(current().is_none());
+        let copied = PrivateClosed {
+            closed: first.closed(504).unwrap(),
+            terminal: PrivateTerminal::PreparationLateReady,
+        };
+        first.update(|record| record.phase = Phase::Entry);
+        assert_eq!(copied.closed.record.phase, Phase::Preparation);
+        assert_eq!(copied.closed.record.event, Event::Ready);
+        assert_eq!(second.closed(504).unwrap().record.phase, Phase::Business);
+        for status in [200, 400, 401, 408, 500] {
+            assert!(second.closed(status).is_none());
+        }
+        let output = copied.to_string();
+        assert!(output.starts_with("session_private_deadline_diag status=504 phase=9 event=2 "));
+        assert!(output.ends_with(" terminal=2"));
+        assert!(output.len() < 512);
+        assert!(output
+            .strip_prefix("session_private_deadline_diag ")
+            .unwrap()
+            .split(' ')
+            .all(|field| field.split_once('=').is_some_and(
+                |(_, value)| !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit())
+            )));
     }
     #[tokio::test]
     async fn token_terminal_is_request_owned_closed_and_504_only() {

@@ -1562,8 +1562,32 @@ where
             (prepare_route)(snapshot, Arc::clone(&app.state), Arc::clone(&owner.lease)).await
         })
         .catch_unwind();
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        let preparation_observer = security_started
+            .checked_add(options.security_deadline)
+            .map(|until| {
+                crate::auth::session_deadline_observer::Observer::new(security_started, until)
+            });
+        #[cfg(all(test, nagi_auth_stage_diag))]
+        let prepare = async {
+            match &preparation_observer {
+                Some(observer) => {
+                    observer
+                        .scope(crate::auth::session_deadline_observer::observe(
+                            crate::auth::session_deadline_observer::Phase::Preparation,
+                            prepare,
+                        ))
+                        .await
+                }
+                None => prepare.await,
+            }
+        };
         let prepared = match tokio::time::timeout(options.security_deadline, prepare).await {
             Ok(_) if security_started.elapsed() >= options.security_deadline => {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                if let Some(observer) = &preparation_observer {
+                    observer.emit_private(crate::auth::session_deadline_observer::PrivateTerminal::PreparationLateReady);
+                }
                 return Ok(finish(transport(Status::GATEWAY_TIMEOUT, head, true)))
             }
             Ok(Ok(Ok(prepared))) => prepared,
@@ -1575,7 +1599,13 @@ where
                 return Ok(finish(response));
             }
             Ok(Err(_)) => return Ok(finish(transport(Status::INTERNAL_SERVER_ERROR, head, true))),
-            Err(_) => return Ok(finish(transport(Status::GATEWAY_TIMEOUT, head, true))),
+            Err(_) => {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                if let Some(observer) = &preparation_observer {
+                    observer.emit_private(crate::auth::session_deadline_observer::PrivateTerminal::PreparationTimer);
+                }
+                return Ok(finish(transport(Status::GATEWAY_TIMEOUT, head, true)));
+            }
         };
         let body = match tokio::time::timeout(
             options.body_deadline,
@@ -1631,6 +1661,10 @@ where
             // Tokio polls the operation before its timer. A non-yielding poll can
             // return Ready after the deadline; do not accept that late response.
             Ok(Ok(_)) if handler_started.elapsed() >= options.handler_deadline => {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                if let Some(observer) = &handler_observer {
+                    observer.emit_private(crate::auth::session_deadline_observer::PrivateTerminal::HandlerLateReady);
+                }
                 transport(Status::GATEWAY_TIMEOUT, head, false)
             }
             // A successful CONNECT changes the connection into a byte tunnel.
@@ -1655,14 +1689,14 @@ where
                 finalize_authenticated(response.into_http(head), source, head)
             }
             Ok(Err(_)) => transport(Status::INTERNAL_SERVER_ERROR, head, true),
-            Err(_) => transport(Status::GATEWAY_TIMEOUT, head, false),
+            Err(_) => {
+                #[cfg(all(test, nagi_auth_stage_diag))]
+                if let Some(observer) = &handler_observer {
+                    observer.emit_private(crate::auth::session_deadline_observer::PrivateTerminal::HandlerTimer);
+                }
+                transport(Status::GATEWAY_TIMEOUT, head, false)
+            }
         };
-        #[cfg(all(test, nagi_auth_stage_diag))]
-        if let Some(observer) = handler_observer {
-            // The last observed poll/native stage is not a timer classification,
-            // an upper reply receipt, or proof that the worker has joined.
-            observer.emit(response.status().as_u16());
-        }
         Ok::<_, Infallible>(finish(response))
     }
     .await?;
@@ -2005,3 +2039,8 @@ pub(crate) fn session_delivery_headers_for_test(
     ));
     (wire.status(), wire.into_parts().0.headers)
 }
+
+// Opt-in calibration is separate from the ordinary private Session fixtures.
+#[cfg(all(test, nagi_auth_stage_diag))]
+#[path = "http_server/private_deadline_calibration.rs"]
+mod private_deadline_calibration;

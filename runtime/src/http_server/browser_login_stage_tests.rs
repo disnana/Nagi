@@ -126,6 +126,7 @@ struct Stats {
     handler_drops: AtomicUsize,
     sanitized: AtomicBool,
     issue_ack: AtomicBool,
+    fault_entered: AtomicUsize,
     release_issue: tokio::sync::Notify,
 }
 struct State {
@@ -148,8 +149,14 @@ async fn verifier(request: Request, state: Arc<State>) -> Result<VerifiedIdentit
         Ordering::SeqCst,
     );
     match state.mode {
-        Mode::PrepareErr => return Err(auth::invalid_credential()),
-        Mode::PreparePanic => panic!("owned stage verifier panic"),
+        Mode::PrepareErr => {
+            state.stats.fault_entered.store(1, Ordering::SeqCst);
+            return Err(auth::invalid_credential());
+        }
+        Mode::PreparePanic => {
+            state.stats.fault_entered.store(2, Ordering::SeqCst);
+            panic!("owned stage verifier panic");
+        }
         Mode::PreparePending => {
             let _drop = PendingDrop(&state.stats.verifier_drops);
             std::future::pending::<()>().await;
@@ -175,8 +182,14 @@ async fn handler(request: Request, state: Arc<State>, scope: AuthScope) -> Resul
     // returned. The original prepared_handler future retains the real response.
     state.stats.release_issue.notified().await;
     match state.mode {
-        Mode::HandlerErr => Err(Error::internal("owned stage handler Err")),
-        Mode::HandlerPanic => panic!("owned stage handler panic"),
+        Mode::HandlerErr => {
+            state.stats.fault_entered.store(3, Ordering::SeqCst);
+            Err(Error::internal("owned stage handler Err"))
+        }
+        Mode::HandlerPanic => {
+            state.stats.fault_entered.store(4, Ordering::SeqCst);
+            panic!("owned stage handler panic");
+        }
         Mode::HandlerPending => {
             let _drop = PendingDrop(&state.stats.handler_drops);
             std::future::pending::<()>().await;
@@ -229,7 +242,7 @@ fn request() -> Request {
 // No Clone or arbitrary authority constructor. All fields stay request-local.
 struct StageWitness {
     owner: HttpOwner,
-    input: Input<hyper::body::Incoming>,
+    input: Input<'static, hyper::body::Incoming>,
 }
 impl StageWitness {
     async fn claimed(pool: &Pool) -> Self {
@@ -313,15 +326,21 @@ async fn check(mode: Mode, security: i64, expected: u16, issued: bool) {
     // revived. This stage budget starts after the deliberately untimed SQL setup.
     assert!(stage_until < original_until);
     let mut operation = Box::pin(
-        AssertUnwindSafe(dispatch_owned(
-            &pool,
-            &prepare,
-            Arc::clone(&state),
-            witness.input,
-            &options,
-            witness.owner,
-            admitted,
-        ))
+        AssertUnwindSafe(async {
+            // Real owner remains inside the dispatched future, while the SAME
+            // production core borrows it; cancellation drops it before SQL reads.
+            let owner = witness.owner;
+            dispatch_owned(
+                &pool,
+                &prepare,
+                Arc::clone(&state),
+                witness.input,
+                &options,
+                &owner,
+                admitted,
+            )
+            .await
+        })
         .catch_unwind(),
     );
     let mut pending_progress = true;
@@ -430,6 +449,14 @@ async fn check(mode: Mode, security: i64, expected: u16, issued: bool) {
     let prelogin_rows = pool.row_count_for_test().await;
     let session_rows = count(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await;
     let retired = lease.validate().is_err();
+    let fault_entered = state.stats.fault_entered.load(Ordering::SeqCst);
+    let expected_fault = match mode {
+        Mode::PrepareErr => 1,
+        Mode::PreparePanic => 2,
+        Mode::HandlerErr => 3,
+        Mode::HandlerPanic => 4,
+        _ => 0,
+    };
     let verifier_calls = state.stats.verifier.load(Ordering::SeqCst);
     let handler_calls = state.stats.handler.load(Ordering::SeqCst);
     let sanitized = state.stats.sanitized.load(Ordering::SeqCst);
@@ -472,6 +499,12 @@ async fn check(mode: Mode, security: i64, expected: u16, issued: bool) {
     assert!(challenge == (expected == 401));
     assert!(verifier_drops == usize::from(mode == Mode::PreparePending));
     assert!(handler_drops == usize::from(mode == Mode::HandlerPending));
+    // A generic replacement 500 must not substitute for actually polling the
+    // post-issue handler Err/panic arm (whose call count was already one).
+    assert_eq!(
+        fault_entered, expected_fault,
+        "browser_stage_oracle phase=business_fault_entered"
+    );
 }
 
 #[tokio::test]
