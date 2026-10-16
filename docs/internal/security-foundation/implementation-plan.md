@@ -6,6 +6,16 @@
 
 2026-10-10 14:04 UTCのGitHub readbackでは、main checks `38055073417` のLinux、4 OS package、4つのIDE Stable/EAP、common ZIPが成功し、websiteも成功した。`publish-release`はCHANGELOGに必要な `## JetBrains 0.1.3` 見出しがなく失敗し、0.1.3のtag/Releaseは作成されていない。公開処理の再実行は承認まで行わない。CodeQL run `38055084000`はC/C++ extractionで `Extraction failed: No source files found` と報告した。全check成功とは扱わない。
 
+## 2026-10-16: SF07で採用済みの有限予算方針
+
+ユーザーの明示回答により、Q1の公開API・全route明示設定、Q2の予算必須設定、Q3の有限fallback方針を採用した。これは設計判断の記録であり、公開runtime・compiler接続や受入検証の完了宣言ではない。上記の2026-10-10のCI・公開状況は当時の履歴である。
+
+- 0.2.0は有限予算を必須の明示設定とする。必要な設定が欠ければlisten前に診断して拒否し、`default_options`にも新予算を黙って注入しない。
+- 4096を固定の公開上限にはしない。件数・保存byte・探索workと応答保持・fallback容量をchecked検査し、起動時の有限確保と実装上の受理範囲を検証する。設定可能は無制限を意味しない。
+- 日英Docsには実測した小規模構成例、測定条件、調整方法を用意する。説明用数値を暗黙default、全Appの推奨値、SLAとして扱わない。
+- 上限式、境界での拒否、予算保持と解放、有限fallback不足時の最終close、並行動作、4 OS性能を必要な検証として残す。既存の期限・取消・actual join・CORS/managed headersの契約とrelease gateは緩めない。
+- 公開Context/factory/mapper/rate接続とHigh・保存Low・手書きLow/nativeの実証、統合後の独立レビューが揃うまではSF07を完成扱いしない。常にHTTP応答できることやOOMからの普遍的回復は保証しない。
+
 ## 実装の分割と依存
 
 以下はPR候補IDでGitHubの実番号ではない。各PRは最新main向けとし、未マージ依存がある場合のみstacked baseを明記する。先行PRの契約/必須CI/独立reviewが完了するまで依存する実装を完成扱いしない。merge、tag、正式release、破壊的branch変更を自動実行しない。

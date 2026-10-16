@@ -20,6 +20,11 @@ def fixture(mode):
             f"\ntest result: ok. {len(names)} passed; 0 failed; 0 ignored; 0 measured; 123 filtered out; finished in 0.01s\n").encode()
 
 
+def normalize_cli_stdout(raw):
+    output = raw.replace(b"\r\n", b"\n")
+    return None if b"\r" in output else output
+
+
 class SummaryTests(unittest.TestCase):
     def test_exact_lf_and_crlf_pass_both_registered_scopes(self):
         for mode in summary.EXPECTED:
@@ -79,8 +84,31 @@ class SummaryTests(unittest.TestCase):
             result = subprocess.run([sys.executable, "-B", str(SCRIPT), mode], input=raw, capture_output=True)
             label = mode if mode in summary.EXPECTED else "invalid"
             self.assertEqual(result.returncode, 0 if state == "passed" else 1)
-            self.assertEqual(result.stdout, f"sf07_checkpoint scope={label} state={state}\n".encode())
+            expected = f"sf07_checkpoint scope={label} state={state}\n".encode()
+            self.assertEqual(normalize_cli_stdout(result.stdout), expected)
             self.assertEqual(result.stderr, b"")
+
+        # Simulate Windows text-stream translation while running the real CLI.
+        wrapper = (
+            "import runpy,sys; script=sys.argv[1]; mode=sys.argv[2]; "
+            "sys.stdout.reconfigure(newline='\\r\\n'); "
+            "sys.argv=[script,mode]; runpy.run_path(script,run_name='__main__')"
+        )
+        result = subprocess.run(
+            [sys.executable, "-B", "-c", wrapper, str(SCRIPT), "wire"],
+            input=fixture("wire"), capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        expected = b"sf07_checkpoint scope=wire state=passed\n"
+        self.assertEqual(normalize_cli_stdout(result.stdout), expected)
+        self.assertEqual(result.stderr, b"")
+        for malformed in (
+            b"sf07_checkpoint scope=wire state=passed\r\r\n",
+            expected + b"\r",
+            expected[:-1] + b"\x00\n",
+            expected[:-1] + b"unknown\n",
+        ):
+            self.assertNotEqual(normalize_cli_stdout(malformed), expected)
 
     def test_closed_inventories_match_all_original_native_oracles(self):
         def native(path, prefix):
